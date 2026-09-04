@@ -1,0 +1,24 @@
+Here's the assessment summary:
+
+## Phase: core — Skill Assessment Complete
+
+**Single story analyzed:** AMSD-1820 (Mozio promo code bug fix)
+
+| Metric | Actual | Forecast | Variance |
+|--------|--------|----------|----------|
+| Time | 0.96 min | 4.51 min | **-3.55 min** (79% under) |
+| Cost | $0.0133 | $0.1403 | **-$0.127** (91% under) |
+
+**Over threshold:** No
+
+### Key findings:
+- **Deduplication:** The cost log had 3 records for AMSD-1820 across two runs. Only the most recent (started_at: 2026-07-25T05:14:27) was used.
+- **PRD cross-reference:** PRD confirms `completed: true`, so the story is treated as succeeded despite the latest log entry showing `status: "attempt"`.
+- **Agent role:** `typescript-engineer` is correctly matched to this TypeScript service bug fix task. No mismatch.
+- **Corrective action:** None needed — no pending stories in later phases with role mismatches.
+
+### Files written:
+1. **`phase-skill-assessments.jsonl`** — Single-line JSON assessment appended
+2. **`phase-improvements/core.md`** — Human-readable improvement report
+
+**No improvements needed.** All tasks were within forecast with no role mismatches.

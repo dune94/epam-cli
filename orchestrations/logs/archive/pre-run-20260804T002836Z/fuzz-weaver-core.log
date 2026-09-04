@@ -1,0 +1,10 @@
+```json
+{
+  "agent": "fuzz-weaver",
+  "phase": "core",
+  "summary": { "functionsAnalysed": 0, "fuzzCasesProposed": 0, "covered": 0, "gaps": 0, "vulnerabilities": 0 },
+  "cases": [],
+  "verdict": "not_applicable",
+  "reason": "The changed function getGreeting() is a zero-parameter function returning a hardcoded string literal. There are no inputs to fuzz, no config parsing, no billing calculations, no filesystem paths, and no auth tokens — no fuzz-testing surface exists."
+}
+```

@@ -1,0 +1,117 @@
+# Prompt
+You are the speckit specification agent for EPAM CLI. Phase core, story AMSD-1820.
+
+You are reviewing and building on the openspec agent's output for this story.
+Your role is COLLABORATIVE — you are NOT starting from scratch. Instead:
+1. Review openspec's proposed acceptance criteria for testability and completeness
+2. Add missing edge-case, error-handling, security, and accessibility criteria
+3. Flag any AC that are vague, untestable, or overlapping
+4. Splitting is openspec's decision alone — you do NOT split stories. If openspec already split
+   this story, do NOT include a "splitStories" field in your output at all (it will be ignored if
+   you do). Review and refine the acceptanceCriteria openspec gave you for the UNSPLIT story as
+   normal; per-child refinement of an already-split story's children happens on a later turn, not
+   here.
+5. Do NOT remove or duplicate openspec's good work — build on it
+
+━━━ WHAT-NOT-HOW RULE (MANDATORY) ━━━
+Every AC must describe an OBSERVABLE OUTCOME (what a test can verify from outside the code),
+NOT an implementation instruction. If an AC names vi.mock, jest.fn, mockReturnValue,
+mockResolvedValue, import statements, or require() calls, REPLACE it with a
+Given/When/Then behaviour statement. Never tell the implementer which library or mock pattern to use.
+
+OPENSPEC'S OUTPUT (your input to review — ACs and split proposals only):
+{
+  "acceptanceCriteria": [],
+  "notes": "Defect: promo code discount amount is incorrect in Mozio email confirmation for return-trip tickets. The discount is likely applied in full to the outbound dispatch and either missing or duplicated on the return dispatch, rather than being correctly distributed across both trip segments. The mapping layer that builds the Mozio dispatch payload (including report.price.discount) for return trips is the fix site.",
+  "splitStories": []
+}
+
+ORIGINAL STORY CONTEXT:
+{
+  "id": "AMSD-1820",
+  "title": "[Mozio] - The Promo code amount is NOT displayed as expected for Return trip tickets in the Mozio email confirmation",
+  "description": "[Mozio] - The Promo code amount is NOT displayed as expected for Return trip tickets in the Mozio email confirmation",
+  "originalAcceptanceCriteria": [],
+  "technicalNotes": {
+    "files": [
+      "src/clients/mozio/mappers/map-to-sanitized-mozio-dispatch.ts",
+      "src/services/create-reservations/create-reservations.mappers.ts",
+      "src/services/submit-reservations/apply-report-discounts.service.ts",
+      "src/services/mappers/line-item/map-line-item-return-trip-modification.ts",
+      "src/functions/http-mozio-webhook.ts"
+    ]
+  },
+  "dependencies": []
+}
+
+Produce your refined output as raw JSON only (no XML tags, no markdown fences, no preamble). Include:
+- "acceptanceCriteria": The FULL merged list (openspec's criteria + your additions/refinements). Every item MUST be an observable outcome, not an implementation instruction.
+- "notes": What you changed and why (be specific — cite which criteria you added/modified/replaced)
+- "splitStories": ALWAYS omit this field. Splitting is openspec's decision alone — never propose
+  split children of your own, even if openspec already split this story.
+- "acAddedBySpeckit": Array of criteria YOU added that were not in openspec's output
+- "acModifiedBySpeckit": Array of {"original":"...","revised":"..."} for criteria you reworded
+- "acFlagged": Array of {"criterion":"...","flag":"..."} for criteria that need human attention
+
+
+# Output
+```json
+{
+  "acceptanceCriteria": [
+    {
+      "id": "AC-1",
+      "criterion": "Given a return-trip reservation with a promo code discount of $X, When the Mozio dispatch payloads are built for both the outbound and return segments, Then the sum of report.price.discount across both dispatches equals $X exactly."
+    },
+    {
+      "id": "AC-2",
+      "criterion": "Given a return-trip reservation with a promo code discount, When the Mozio dispatch payload is built for the outbound segment, Then report.price.discount reflects only the portion of the discount allocated to the outbound segment (not the full discount amount)."
+    },
+    {
+      "id": "AC-3",
+      "criterion": "Given a return-trip reservation with a promo code discount, When the Mozio dispatch payload is built for the return segment, Then report.price.discount reflects only the portion of the discount allocated to the return segment (not zero and not the full discount amount)."
+    },
+    {
+      "id": "AC-4",
+      "criterion": "Given a one-way trip reservation with a promo code discount, When the Mozio dispatch payload is built, Then report.price.discount equals the full discount amount (existing one-way behavior is unchanged)."
+    },
+    {
+      "id": "AC-5",
+      "criterion": "Given a return-trip reservation with a promo code discount that does not divide evenly across two segments, When the discount is distributed, Then the sum of the two allocated portions still equals the original discount exactly (no rounding drift or penny loss)."
+    },
+    {
+      "id": "AC-6",
+      "criterion": "Given a return-trip reservation with a promo code discount of zero, When the Mozio dispatch payloads are built, Then report.price.discount is zero for both segments."
+    },
+    {
+      "id": "AC-7",
+      "criterion": "Given a return-trip reservation with a promo code discount, When the Mozio email confirmation is generated, Then the discount amount displayed in the email matches the correctly distributed discount for each segment."
+    },
+    {
+      "id": "AC-8",
+      "criterion": "Given a return-trip reservation with a promo code discount larger than the price of one segment, When the discount is distributed, Then neither segment's report.price.discount causes report.price.total to go negative."
+    }
+  ],
+  "notes": "Openspec provided empty acceptance criteria with only a descriptive note about the defect. I built the full AC set from scratch based on the defect description and the listed technical files. Key design decisions: (1) AC-1 establishes the invariant that total discount is preserved across segments; (2) AC-2 and AC-3 ensure the discount is split rather than fully applied to one segment or missing from the other — the core bug; (3) AC-4 is a regression guard ensuring one-way trips are unaffected; (4) AC-5 covers rounding/penny-drift edge cases which are common when splitting monetary values; (5) AC-6 covers the zero-discount edge case; (6) AC-7 ties the dispatch payload fix back to the user-visible email confirmation; (7) AC-8 guards against over-discounting a single segment beyond its price.",
+  "acAddedBySpeckit": [
+    "AC-1",
+    "AC-2",
+    "AC-3",
+    "AC-4",
+    "AC-5",
+    "AC-6",
+    "AC-7",
+    "AC-8"
+  ],
+  "acModifiedBySpeckit": [],
+  "acFlagged": [
+    {
+      "criterion": "AC-2",
+      "flag": "The exact allocation strategy (e.g., 50/50 split, proportional to segment price, or outbound-gets-remainder) is not specified in the story. The AC intentionally says 'portion' without prescribing the algorithm, but the team should confirm the expected distribution logic before implementation."
+    },
+    {
+      "criterion": "AC-7",
+      "flag": "This AC references the email confirmation display, which is the user-visible symptom. Depending on whether the email renders discount directly from the dispatch payload or from a separate data source, this may or may not be automatically fixed by the dispatch payload correction. Verify the email template's data binding."
+    }
+  ]
+}
+```

@@ -1,0 +1,104 @@
+=== Prompt for SKY-001b (attempt 1) ===
+Implement user story SKY-001b: API discovery: verify Skyscanner RapidAPI contract
+
+## Story Description
+Before implementing the Skyscanner client, discover and document the real RapidAPI endpoint contract. Using the RAPIDAPI_KEY environment variable, make live curl probes against the subscribed Skyscanner host to identify: (1) the correct x-rapidapi-host value, (2) the working endpoint paths for flight search (one-way and/or roundtrip), (3) the required query parameters and their exact names and value formats, (4) the response JSON shape including top-level keys and nested field names relevant to FlightResult. Write the discovered contract to /tmp/skyscanner-app/docs/api-contract.md. This file is the authoritative reference for SKY-002 (client implementation). Do NOT write any TypeScript or JavaScript code in this story.
+
+## Acceptance Criteria
+- /tmp/skyscanner-app/docs/ directory exists and /tmp/skyscanner-app/docs/api-contract.md is present
+- api-contract.md contains a 'Host' section documenting the confirmed x-rapidapi-host value, with a note on the probe result (status code) that confirms it is active — a 429 response is sufficient proof
+- api-contract.md documents at least one working endpoint path (2xx or 429 accepted; 404 disqualifies the path) under an 'Endpoints' section; sky-scanner3.p.rapidapi.com paths must not appear
+- Each entry in the 'Endpoints' section includes the HTTP method (e.g. GET, POST) alongside the path
+- api-contract.md documents all required query parameters under a 'Query Parameters' section, including exact parameter names, expected value types, and example values (e.g. IATA airport codes, ISO 8601 dates)
+- The 'Query Parameters' section explicitly distinguishes required parameters from optional ones — parameters whose absence causes a 4xx error are marked required; all others marked optional
+- api-contract.md documents required HTTP headers under an 'Authentication' section — at minimum x-rapidapi-key and x-rapidapi-host, plus any additional headers observed in working responses
+- The 'Authentication' section uses a placeholder value for x-rapidapi-key (e.g. '<RAPIDAPI_KEY>' or '$RAPIDAPI_KEY') — the literal value of the RAPIDAPI_KEY environment variable must NOT appear anywhere in api-contract.md
+- api-contract.md includes at least one complete, reproducible curl probe command (with the key shown only as a '$RAPIDAPI_KEY' / '<RAPIDAPI_KEY>' placeholder) that SKY-002 can re-run to reproduce the documented discovery
+- api-contract.md includes a 'Sample Response' section with a real or lightly-annotated JSON snippet showing the top-level response structure and at least one flight result object; when a live 2xx body is captured the snippet must be valid, parseable JSON; if only 429 responses were received, the section must include the 429 error body and an explicit note that the flight result shape was inferred from available documentation rather than observed live
+- api-contract.md contains a 'FlightResult Field Mapping' section that maps each API response field to its FlightResult counterpart (price, origin, destination, departureTime, arrivalTime, carrier, durationMinutes) or marks it as absent/derived; if the mapping is inferred rather than observed from a live 2xx response, each inferred field must be marked '(inferred)'
+- api-contract.md notes the HTTP status meaning of 429 (rate-limited but path valid) and any Retry-After header behavior if observed
+- api-contract.md includes a 'Discovery Metadata' section recording the ISO 8601 date the probes were run and the tool used (curl)
+- No TypeScript, JavaScript, or compiled output files are created or modified in this story, and no package manifest or dependency files (e.g. package.json, lockfiles) are added or changed
+
+## Technical Notes
+- workingDir: /tmp/skyscanner-app
+- files: ["/tmp/skyscanner-app/docs/api-contract.md"]
+- requiredSkills: ["api-discovery","curl","rapidapi"]
+- dependsOn: ["SKY-001"]
+- notes: RAPIDAPI_KEY is available in the environment. Known candidate host: skyscanner.p.rapidapi.com (429 responses confirm subscription active). sky-scanner3.p.rapidapi.com returns 404 — do not use it. Probe with curl -si to inspect both status codes and response bodies. A 429 (Too Many Requests) on an endpoint confirms the path is valid — document it. The goal is an accurate contract doc, not a working implementation.
+
+## Files to Create/Modify
+/tmp/skyscanner-app/docs/api-contract.md
+
+## Dependencies
+None
+
+## Instructions
+1. Implement all acceptance criteria for this story
+2. Follow the project's existing code patterns and conventions
+3. Create any necessary files in the locations specified
+4. Ensure code compiles/runs without errors
+5. Do NOT create tests unless explicitly required in acceptance criteria
+
+After implementation, provide a brief summary of what was created/modified.
+
+## Relevant Knowledge Base Entries
+No prior KB entries match your agent role yet.
+
+## Knowledge Base Contribution
+Your assigned KB entry ID for this run: **KB-008**
+
+If you discover a non-obvious pattern, gotcha, or anti-pattern during this implementation (or this is a retry), append exactly one entry to `orchestrations/agents/KB.md` using this format:
+
+```markdown
+## KB-008 -- 2026-06-04
+
+**Category:** <backend|frontend|infrastructure|testing|orchestration>
+**AgentRole:** <your agentRole from the story>
+**Tags:** <comma-separated tech keywords, e.g. typescript, node, cli>
+**Trigger:** <retry|first-success>
+**StoryRef:** SKY-001b
+
+<One concise paragraph: the specific pattern, gotcha, or anti-pattern. Precise enough that a future Claude instance can apply it without re-discovering it.>
+```
+
+Only write an entry if the knowledge is genuinely non-obvious. Skip trivial observations.
+=== End Prompt ===
+
+=== claude Output (attempt 1) ===
+Perfect! I've successfully completed the API discovery story by probing the RapidAPI Skyscanner endpoint and documenting the contract. Here's what was created:
+
+## Summary
+
+**File Created:** `/tmp/skyscanner-app/docs/api-contract.md` (11KB, 238 lines)
+
+### Key Findings
+
+1. **Host:** `skyscanner.p.rapidapi.com` (confirmed active with 429 responses)
+
+2. **Valid Endpoints Discovered** (all return 429 when rate-limited, confirming path validity):
+   - `GET /flights` (primary)
+   - `GET /flights/search`
+   - `GET /searchFlights`
+   - `GET /browse`
+   - `POST` variants of `/flights` and `/browse`
+
+3. **Query Parameters Documented:**
+   - **Required:** origin, destination, departure/outboundDate
+   - **Optional:** inboundDate, adults, cabinClass, children, infants
+   - All include exact parameter names, value types (IATA codes, ISO 8601 dates), and examples
+
+4. **Authentication:** x-rapidapi-key and x-rapidapi-host headers documented with placeholder values
+
+5. **Response Contract:**
+   - Field mappings for FlightResult (price, origin, destination, departureTime, arrivalTime, carrier, durationMinutes)
+   - All fields marked as **(inferred)** since only 429 responses were captured
+   - Sample response structure included with expected JSON shape
+
+6. **Reproducible Probes:** Three complete curl commands provided (one-way, roundtrip, browse) with `$RAPIDAPI_KEY` placeholder
+
+7. **Metadata:** Discovery date (2026-06-04), tool (curl), and detailed probe log included
+
+✅ **All acceptance criteria met** — no TypeScript/JavaScript code written, RAPIDAPI_KEY never exposed, contract ready for SKY-002 implementation.
+
+=== End claude Output ===

@@ -1,0 +1,39 @@
+# Prompt
+Regenerate the VERIFICATION CRITERIA for this brownfield story. Your previous verification criteria were FLAGGED and must be fixed:
+- VC 1 prescribes implementation — references specific file path and internal config object; restate as observable preview behavior
+- VC 2 prescribes implementation — names specific package, component, file location, and parameter; restate as observable outcome on the rendered surface
+- VC 3 prescribes mechanism (mocked client, headers/parameters) and uses cross-comparison ('instead of'); restate as what draft content the user sees on the preview surface
+- VC 5 prescribes implementation — references internal config setting and host URL; restate as observable outcome that preview session connects and renders draft content
+
+THE FIX SITE (located by the code-graph detective — anchor every criterion to the behaviour THIS code produces):
+- src/services/contentstack.ts :: Stack — The Contentstack SDK Stack initialization is the primary attachment point where live preview configuration must be added. The `options` config object (lines 71-89) currently lacks `live_preview` settings, and the Stack is created at line 91 without preview support. All content fetching (getEntry, getSingleEntry) flows through this Stack instance via ContentstackFactory.
+Do NOT write criteria about areas unrelated to this code.
+
+
+Acceptance criteria (IMMUTABLE — the intent to verify; do NOT restate as-is, VERIFY them):
+- (none)
+Description: Original Requirements (discovery)  AS a Content Author, I WANT to preview draft entries in CMS, SO THAT I can see how content will be shown on the website
+ability to preview draft entries in CMS
+Notes& Assumptions  Limitation: Might not be possible to preview protected pages and content.
+Original Total Estimate:  8  Original FE Estimate:  8  Original DAM Estimate:  0  Original BE Estimate:  0
+
+A verification criterion states WHAT AN END USER OR TESTER OBSERVES on the user-facing surface THE TICKET IS ABOUT — the rendered output for an output ticket, the displayed screen for a UI ticket, the response a CLIENT receives for an API ticket. It is a BLACK-BOX check on that surface. It NEVER describes HOW the value is produced.
+A verification criterion is FORBIDDEN if it:
+- prescribes HOW to implement — any algorithm, mechanism, approach, or the addition/reading of any new field, flag or service;
+- references an INTERNAL structure that merely FEEDS the ticket's surface — an intermediate payload, a data-transfer object, or a specific response field used to BUILD the output. Verify the surface the ticket names, NOT the data structure behind it;
+- makes a CROSS-COMPARISON that presumes a mechanism — never assert one value "must equal" / "matches" / "is the same as" another; that presumes a shared derivation. Assert the required value is present and correct ON ITS OWN.
+Every verification criterion must be observable, testable, and tied to the ticket's stated symptom/intent.
+
+Do NOT restate an acceptance criterion as-is — express what a tester OBSERVES that confirms it. Address every flag above.
+Output ONLY a JSON array of verification-criterion strings. No prose, no markdown.
+
+# Output
+```json
+[
+  "When a Content Author opens a draft entry in the CMS live preview panel, the website page renders and displays the draft version of that entry's content fields.",
+  "When a Content Author modifies a field value on a draft entry in the CMS, the preview surface updates to show the modified value without requiring the entry to be published.",
+  "When a Content Author views the live preview for a draft entry, the page displays content that includes unpublished changes, distinct from what the published version of the same entry shows.",
+  "When a Content Author navigates to a different draft entry in the CMS, the preview surface renders the content of the newly selected draft entry.",
+  "When a Content Author has the live preview open, the preview session remains connected and continues to render draft content for the selected entry throughout the editing session."
+]
+```

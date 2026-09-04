@@ -1,0 +1,44 @@
+
+ RUN  v3.2.6 /home/bradleyjerome/projects/metrolinx/azure.commerce.cdts
+
+ ✓ src/utils/seconds-until-next-hour/seconds-until-next-hour.spec.ts (5 tests) 3ms
+ ✓ src/utils/__tests__/station-code.spec.ts (12 tests) 5ms
+ ✓ src/clients/big-commerce/axios/big-commerce.interceptors.spec.ts (2 tests) 4ms
+ ✓ src/controllers/helpers/product/__tests__/assert-product-modification.spec.ts (3 tests) 4ms
+ ✓ src/utils/logger/logger.spec.ts (9 tests) 7ms
+ ✓ src/utils/dedup/dedup.spec.ts (5 tests) 9ms
+ ✓ src/utils/error/api-error.spec.ts (2 tests) 6ms
+ ✓ src/utils/lowercase-properties/lowercase-properties.spec.ts (5 tests) 4ms
+ ✓ src/clients/mozio/submit-order/submit-order.spec.ts (1 test) 6ms
+ ✓ src/controllers/update-cart/__tests__/update-cart.mappers.spec.ts (13 tests) 12ms
+ ✓ src/clients/mozio/mappers/__tests__/map-to-sanitized-mozio-dispatch-customer.spec.ts (1 test) 4ms
+ ✓ src/clients/big-commerce/axios/axios.spec.ts (6 tests) 180ms
+ ✓ src/services/integration-permissions/get-permissions.spec.ts (5 tests) 31ms
+ ✓ src/controllers/create-cart/__tests__/create-cart.schemas.spec.ts (4 tests) 5ms
+ ✓ src/clients/big-commerce/mappers/__tests__/map-to-order-metafields-sanitized-payload.spec.ts (6 tests) 7ms
+ ✓ src/utils/cache/cache.spec.ts (6 tests) 23ms
+ ✓ src/clients/redis/get-connection.spec.ts (5 tests) 15ms
+ ✓ src/clients/mozio/schemas/order.schema.spec.ts (1 test) 4ms
+ ✓ src/services/order-staff-notes/__tests__/generate-staff-notes.helpers.spec.ts (3 tests) 30ms
+ ✓ src/services/mappers/cart/__tests__/cart-metafields.mappers.spec.ts (3 tests) 16ms
+ ✓ src/utils/__tests__/gql.spec.ts (4 tests) 4ms
+ ✓ src/services/helpers/error/__tests__/get-error-message.spec.ts (6 tests) 8ms
+ ✓ src/services/add-checkout-billing-address/add-checkout-billing-address.mappers.spec.ts (4 tests) 4ms
+ ✓ src/services/helpers/order/__tests__/get-product-validity-dates.spec.ts (11 tests) 13ms
+ ✓ src/clients/service-bus/service-bus-client.spec.ts (4 tests) 7ms
+ ✓ src/clients/mozio/mappers/__tests__/map-to-sanitized-mozio-dispatch.spec.ts (1 test) 6ms
+ ✓ src/controllers/create-order-from-checkout/create-order-from-checkout.helpers.spec.ts (19 tests) 14ms
+ ✓ src/utils/one-line/one-line.spec.ts (6 tests) 3ms
+ ✓ src/controllers/update-cart/__tests__/schemas.spec.ts (2 tests) 4ms
+ ✓ src/services/update-cart/__tests__/updateCartService.spec.ts (3 tests) 8ms
+ ✓ src/services/submit-reservations/apply-report-discounts.service.spec.ts (6 tests) 3ms
+ ✓ src/controllers/get-products/__tests__/get-products.controller.spec.ts (1 test) 2ms
+ ✓ src/controllers/create-checkout/create-checkout.controller.spec.ts (1 test) 3ms
+ ✓ src/controllers/create-cart/__tests__/create-cart.controller.spec.ts (1 test) 3ms
+ ✓ src/controllers/update-cart/__tests__/update-cart.controller.spec.ts (1 test) 3ms
+
+ Test Files  35 passed (35)
+      Tests  167 passed (167)
+   Start at  05:14:23
+   Duration  3.17s (transform 3.93s, setup 0ms, collect 19.31s, tests 463ms, environment 13ms, prepare 2.94s)
+

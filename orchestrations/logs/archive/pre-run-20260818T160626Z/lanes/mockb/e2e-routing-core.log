@@ -1,0 +1,3 @@
+=== Browser E2E Routing: core @ 2026-08-18T11:03:24-04:00 ===
+[2026-08-18T11:05:29-04:00] story=MOCK3-2 route=lightpanda-agent score=1 reason=complexity_low_or_medium
+Summary: runs=1 lightpanda=1 playwright=0 failed=0

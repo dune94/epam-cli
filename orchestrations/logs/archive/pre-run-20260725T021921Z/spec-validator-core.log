@@ -1,0 +1,37 @@
+{
+  "agent": "spec-validator",
+  "phase": "core",
+  "stories": [{
+    "storyId": "MOCK-HW-1",
+    "title": "Hello world greeting should say hello dolly",
+    "criteria": [
+      {
+        "text": "The getGreeting() function returns the exact string 'hello dolly'.",
+        "status": "met",
+        "evidence": "src/hello.ts contains: export function getGreeting(): string { return 'hello dolly'; } — the function literally returns the exact string 'hello dolly'.",
+        "gaps": ""
+      },
+      {
+        "text": "All existing tests that previously asserted getGreeting() returns 'hello world' are updated to assert 'hello dolly'.",
+        "status": "met",
+        "evidence": "src/hello.test.ts now contains: expect(getGreeting()).toBe('hello dolly'); — the test assertion is updated from 'hello world' to 'hello dolly'. Git diff shows 4 lines changed in hello.test.ts.",
+        "gaps": ""
+      },
+      {
+        "text": "No other strings or behaviors in the codebase are unintentionally modified.",
+        "status": "met",
+        "evidence": "Git diff shows only 2 functional source changes: src/hello.ts (greeting string) and src/hello.test.ts (test assertion). All other changes are infrastructure files (.epam/*.json, package.json, package-lock.json) which are scaffolding, not behavioral modifications.",
+        "gaps": ""
+      },
+      {
+        "text": "The full test suite passes after the change.",
+        "status": "met",
+        "evidence": "Test results: numTotal=1, numPassed=1, numFailed=0, numSkipped=0 — all tests pass.",
+        "gaps": ""
+      }
+    ],
+    "overallCompliance": 100,
+    "verdict": "pass"
+  }],
+  "overallVerdict": "pass"
+}

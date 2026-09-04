@@ -1,0 +1,18 @@
+Assessment complete. Summary of what was done:
+
+**Data analysis (phase `core`):**
+- Filtered 13 cost-log records for `phase_id="core"`; only one is a story-level task record: **MOCK-HW-1** (two entries — kept the latest by `started_at`: 17:45:20, elapsed 0.08 min, $0.0031; discarded the 17:45:14 duplicate)
+- PRD cross-reference: `completed: true` → treated as succeeded
+
+**Results:**
+| Metric | Forecast | Actual | Variance |
+|--------|----------|--------|----------|
+| Time | 2.256 min (0.0376 h) | 0.08 min | -2.176 min (96.5% under) |
+| Cost | $0.0700 | $0.0031 | -$0.0669 (95.6% under) |
+
+- `over_threshold: false` — **No improvements needed.**
+- No role mismatches: the TypeScript greeting fix was correctly assigned to `typescript-engineer`, and there are no pending stories in later phases, so the PRD was left unchanged.
+
+**Files written:**
+1. ✅ Single-line JSON assessment appended (with `flock`) to `orchestrations/logs/phase-skill-assessments.jsonl` — verified as valid JSON
+2. ✅ Human-readable report at `orchestrations/logs/phase-improvements/core.md` documenting methodology, totals, and the no-change corrective-action decision

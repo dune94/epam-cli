@@ -1,0 +1,94 @@
+[mint-step] codeline mocka: /home/bradleyjerome/projects/mock3/mock-a (2 declared deps)
+[mint-step] codeline mockb: /home/bradleyjerome/projects/mock3/mock-b (2 declared deps)
+[mint-step] plugins provisioned: 1 · mint tools: read_file,list_files,search,codegraph_query
+spec-mode: fast-path claude/claude-sonnet-5 (skipping MiniMax)
+[mint-step]   survey: mocka — in_scope (src, test)
+[mint-step]   survey: mockb — in_scope (src, test)
+[mint-step]   survey recommends an investigator for mocka: Trace the fare boundary logic in fareFor and its test coverage around the age-65 threshold.
+[mint-step]   survey recommends an investigator for mockb: Trace the stop-rendering loop in formatStops and its test coverage of the last stop.
+spec-mode: fast-path claude/claude-sonnet-5 (skipping MiniMax)
+[mint-step] proposed=4 minted=4 unchanged=0 rejected=0 superseded=0
+[mint-step]   + [investigator:mocka] mocka-fare-detective (profiles.json, kb, project-investigators, project-profiles) — MOCK3-1 lives entirely in mocka's src/fares.ts, and a dedicated reader of this codeline's actual comparison logic and test coverage prevents the implementer from acting on the unverified survey lead alone.
+[mint-step]   + [investigator:mockb] mockb-schedule-detective (profiles.json, kb, project-investigators, project-profiles) — MOCK3-2 lives entirely in mockb's src/schedule.ts, and a dedicated reader of this codeline's loop bounds and existing assertions prevents the implementer from acting on the unverified survey lead alone.
+[mint-step]   + [implementer] fare-boundary-fixer (profiles.json, kb, project-roles, project-profiles) — MOCK3-1 requires an actual code change to src/fares.ts's age comparison, which only an implementer with write access can make, since investigators in this roster are read-only by design.
+[mint-step]   + [implementer] stop-rendering-fixer (profiles.json, kb, project-roles, project-profiles) — MOCK3-2 requires an actual code change to src/schedule.ts's rendering loop, which only an implementer with write access can make, since investigators in this roster are read-only by design.
+spec-mode: fast-path claude/claude-sonnet-5 (skipping MiniMax)
+[mint-step] roster review (cycle 1): sound — 0 finding(s), 0 blocking
+[mint-step] [roster] rosterMode=canonical — 58 persona(s) adopted verbatim (4 minted for this project), no specialiser call
+[mint-step] project roster: 58 agent(s)
+spec-mode: fast-path claude/claude-sonnet-5 (skipping MiniMax)
+[mint-step]   MOCK3-1 -> fare-boundary-fixer (The bug is a fare age-boundary condition (age 65 not treated as concession), which is exactly the fare-boundary-fixer's domain.)
+[mint-step]   MOCK3-2 -> stop-rendering-fixer (The bug is in formatStops dropping the last stop when rendering the departure board, which is the stop-rendering-fixer's domain.)
+[mint-step] roster diff: 3 generated, 5 brief-changed, 0 missing vs canonical
+[mint-step] agent→seam cross-reference written for 53 agent(s)
+[mint-step] ✓ workflow is buildable: every required input has a producer
+[prompt-builder] prompt review is OFF — generated prompts are installed NOT REVIEWED (set EPAM_PROMPT_REVIEW_ENABLED=1 in the project config to turn it on)
+[prompt-builder] 39 template(s) need a project copy (seam-declared, plus bootstrap auxiliaries)
+[prompt-builder] copied agent-proposal
+[prompt-builder] copied project-prompt-generation
+[prompt-builder] templates read from /home/bradleyjerome/projects/ai/epam-cli/orchestrations/prompts/templates
+[prompt-builder] generated team-lead-review (attempt 1/3)
+[prompt-builder] ! code-review-cycle attempt 1/3 refused: the generated prompt dropped placeholder(s) the template requires: __REVIEW_PROFILE__. The evidence they carry would silently never reach the agent.
+[prompt-builder] generated code-review-cycle (attempt 2/3)
+[prompt-builder] failure-analyst: template declares seams ["impl-failure-analyst"]
+[prompt-builder] generated failure-analyst (attempt 1/3)
+[prompt-builder] reused repro-test-writer (inputs unchanged)
+[prompt-builder] ! tc-writer attempt 1/3 refused: the generated prompt dropped placeholder(s) the template requires: __STORY_CONTEXT__, __TC_WRITER_PROFILE__, __TEST_COMMAND__, __TEST_FILE_CONVENTIONS__. The evidence they carry would silently never reach the agent.
+[prompt-builder] generated tc-writer (attempt 2/3)
+[prompt-builder] generated cpa-inference (attempt 1/3)
+[prompt-builder] generated prd-change-reviewer (attempt 1/3)
+[prompt-builder] prd-change-summarizer-text: template declares seams ["prd-change-summarizer"]
+[prompt-builder] generated prd-change-summarizer-text (attempt 1/3)
+[prompt-builder] generated ac-classification (attempt 1/3)
+[prompt-builder] generated ac-elaboration (attempt 1/3)
+[prompt-builder] generated codeline-discovery (attempt 1/3)
+[prompt-builder] generated roster-review (attempt 1/3)
+[prompt-builder] generated code-graph-detective (attempt 1/3)
+[prompt-builder] generated guard-vocabulary (attempt 1/3)
+[prompt-builder] generated estate-survey (attempt 1/3)
+[prompt-builder] generated story-writer (attempt 1/3)
+[prompt-builder] generated vc-coverage (attempt 1/3)
+[prompt-builder] qa-sast-sentinel: template declares seams ["qa-gate:sast"]
+[prompt-builder] generated qa-sast-sentinel (attempt 1/3)
+[prompt-builder] qa-spec-validator: template declares seams ["qa-gate:spec-validator"]
+[prompt-builder] generated qa-spec-validator (attempt 1/3)
+[prompt-builder] qa-review-ranger: template declares seams ["qa-gate:review-ranger"]
+[prompt-builder] generated qa-review-ranger (attempt 1/3)
+[prompt-builder] qa-mutant-hunter: template declares seams ["qa-gate:mutant-hunter"]
+[prompt-builder] generated qa-mutant-hunter (attempt 1/3)
+[prompt-builder] qa-fuzz-weaver: template declares seams ["qa-gate:fuzz-weaver"]
+[prompt-builder] generated qa-fuzz-weaver (attempt 1/3)
+[prompt-builder] qa-perf-sentinel: template declares seams ["qa-gate:perf-sentinel"]
+[prompt-builder] generated qa-perf-sentinel (attempt 1/3)
+[prompt-builder] codeline-bridge: template declares seams ["codeline-bridge-agent"]
+[prompt-builder] generated codeline-bridge (attempt 1/3)
+[prompt-builder] e2e-route-check: template declares seams ["qa-gate:e2e"]
+[prompt-builder] generated e2e-route-check (attempt 1/3)
+[prompt-builder] assign-agent-roles: template declares seams ["role-assigner"]
+[prompt-builder] ! assign-agent-roles attempt 1/3 refused: the generated prompt dropped placeholder(s) the template requires: __ROLE_BLOCK__, __STORY_BLOCK__. The evidence they carry would silently never reach the agent.
+[prompt-builder] generated assign-agent-roles (attempt 2/3)
+[prompt-builder] ! spec-coordinator attempt 1/3 refused: the generated prompt dropped placeholder(s) the template requires: __PROFILE_PREFIX__. The evidence they carry would silently never reach the agent.
+[prompt-builder] generated spec-coordinator (attempt 2/3)
+[prompt-builder] spec-agent-openspec: template declares seams ["spec-agent"]
+[prompt-builder] generated spec-agent-openspec (attempt 1/3)
+[prompt-builder] spec-story-block: template declares seams ["ticket-links"]
+[prompt-builder] generated spec-story-block (attempt 1/3)
+[prompt-builder] skill-assessment-prephase: template declares seams ["phase-assessment"]
+[prompt-builder] ! skill-assessment-prephase attempt 1/3 refused: the generated prompt dropped output field(s) the template states: timestamp, phase_id, agent_role, event, skill_category, context, added_by. The consumer still reads them, so the agent would answer a shape nothing accepts.
+[prompt-builder] generated skill-assessment-prephase (attempt 2/3)
+[prompt-builder] generated prd-model-coordinator (attempt 1/3)
+[prompt-builder] generated prompt-review (attempt 1/3)
+[prompt-builder] generated survey-review (attempt 1/3)
+[prompt-builder] generated runtime-boundary-review (attempt 1/3)
+[prompt-builder] ! roster-specialisation attempt 1/3 refused: the generated prompt dropped placeholder(s) the template requires: __CODELINE_CONTEXT__, __PREVIOUS_REFUSAL__, __PROJECT_CONTEXT__. The evidence they carry would silently never reach the agent.
+[prompt-builder] generated roster-specialisation (attempt 2/3)
+[prompt-builder] ! project-roster-review attempt 1/3 refused: the generated prompt dropped placeholder(s) the template requires: __CODELINE_CONTEXT__. The evidence they carry would silently never reach the agent.
+[prompt-builder] generated project-roster-review (attempt 2/3)
+[prompt-builder] generated topology-router (attempt 1/3)
+[prompt-builder] blocker-discipline: template declares seams ["team-lead-review"]
+[prompt-builder] generated blocker-discipline (attempt 1/3)
+[prompt-builder] test-ownership: template declares seams ["team-lead-review"]
+[prompt-builder] generated test-ownership (attempt 1/3)
+[mint-step] ✓ prompts provisioned (generate): 2 copied (bootstrap), 39 generated → /home/bradleyjerome/projects/ai/epam-cli/orchestrations/projects/mock3/prompts
+[mint-step] ✓ prompts linked: 57 agent(s) across 11 seam(s) → /home/bradleyjerome/projects/ai/epam-cli/orchestrations/projects/mock3/prompt-agent-link.json
+[mint-step] ✓ roster and assignments written to /home/bradleyjerome/projects/ai/epam-cli/orchestrations/projects/mock3/prd.json

@@ -1,0 +1,7 @@
+spec-mode: fast-path qwen/z-ai/glm-5.2 (skipping MiniMax)
+spec-mode: fast-path qwen/z-ai/glm-5.1 (skipping MiniMax)
+spec-mode: AMSD-2041 — ACs are immutable (VC model); openspec AC edits redacted, verification captured in verificationCriteria
+spec-mode: ⚠️ VC could not be made mechanism-free for AMSD-2041 after 2 cycle(s) — using conservative fallback VC. Last flags: VC 2 prescribes an unrequested 2-second latency threshold — restate as draft content appearing automatically without manual refresh, per ticket intent
+spec-mode: AMSD-2041 — 2 verification criteria persisted (source: fallback, resolution: fallback)
+spec-mode: parent AMSD-2041 ACs redistributed → delegated to AMSD-2041-impl, AMSD-2041-test
+spec-mode: fast-path qwen/z-ai/glm-5.1 (skipping MiniMax)

@@ -1,0 +1,134 @@
+# Prompt
+You are the speckit specification agent for EPAM CLI. Phase core, story MOCK3-1.
+
+You are reviewing and building on the openspec agent's output for this story.
+Your role is COLLABORATIVE — you are NOT starting from scratch. Instead:
+1. Review openspec's proposed acceptance criteria for testability and completeness
+2. Add missing edge-case, error-handling, security, and accessibility criteria
+3. Flag any AC that are vague, untestable, or overlapping
+4. Splitting is openspec's decision alone — you do NOT split stories. If openspec already split
+   this story, do NOT include a "splitStories" field in your output at all (it will be ignored if
+   you do). Review and refine the acceptanceCriteria openspec gave you for the UNSPLIT story as
+   normal; per-child refinement of an already-split story's children happens on a later turn, not
+   here.
+5. Do NOT remove or duplicate openspec's good work — build on it
+
+━━━ WHAT-NOT-HOW RULE (MANDATORY) ━━━
+Every AC must describe an OBSERVABLE OUTCOME (what a test can verify from outside the code),
+NOT an implementation instruction. If an AC names vi.mock, jest.fn, mockReturnValue,
+mockResolvedValue, import statements, or require() calls, REPLACE it with a
+Given/When/Then behaviour statement. Never tell the implementer which library or mock pattern to use.
+
+OPENSPEC'S OUTPUT (your input to review — ACs and split proposals only):
+{
+  "acceptanceCriteria": [
+    "A rider aged exactly 65 with no pass is charged the concession fare.",
+    "A rider aged 64 with no pass is still charged the base fare.",
+    "The existing fare behaviour for children, pass holders and adults is unchanged."
+  ],
+  "notes": "Defect: fareFor uses strict > (now >= in code shown but the bug was >) at the senior boundary, so age 65 falls through to BASE_FARE_CENTS. Fix site is the comparison in fareFor. VCs are black-box checks on the fare value returned for each boundary case."
+}
+
+ORIGINAL STORY CONTEXT:
+{
+  "id": "MOCK3-1",
+  "title": "Riders aged exactly 65 are charged the adult fare",
+  "description": "The fare rules say riders aged 65 and over pay the concession fare. A rider aged exactly 65 is charged the full adult fare of 350 cents instead of 175. Riders aged 66 and above are charged correctly, so the boundary itself is wrong rather than the rule.",
+  "originalAcceptanceCriteria": [
+    "A rider aged exactly 65 with no pass is charged the concession fare.",
+    "A rider aged 64 with no pass is still charged the base fare.",
+    "The existing fare behaviour for children, pass holders and adults is unchanged."
+  ],
+  "technicalNotes": {
+    "files": [
+      "src/fares.ts",
+      "test/fares.test.ts"
+    ],
+    "perCodeline": {
+      "mocka": {
+        "files": [
+          "src/fares.ts",
+          "test/fares.test.ts"
+        ],
+        "resolved": [
+          {
+            "declared": "src/fares.ts",
+            "actual": "src/fares.ts",
+            "match": "exact",
+            "verified_against": "/home/bradleyjerome/projects/mock3/mock-a"
+          },
+          {
+            "declared": "test/fares.test.ts",
+            "actual": "test/fares.test.ts",
+            "match": "exact",
+            "verified_against": "/home/bradleyjerome/projects/mock3/mock-a"
+          }
+        ],
+        "unresolved": []
+      }
+    }
+  },
+  "dependencies": []
+}
+
+Produce your refined output as raw JSON only (no XML tags, no markdown fences, no preamble). Include:
+- "acceptanceCriteria": The FULL merged list (openspec's criteria + your additions/refinements). Every item MUST be an observable outcome, not an implementation instruction.
+- "notes": What you changed and why (be specific — cite which criteria you added/modified/replaced)
+- "splitStories": ALWAYS omit this field. Splitting is openspec's decision alone — never propose
+  split children of your own, even if openspec already split this story.
+- "acAddedBySpeckit": Array of criteria YOU added that were not in openspec's output
+- "acModifiedBySpeckit": Array of {"original":"...","revised":"..."} for criteria you reworded
+- "acFlagged": Array of {"criterion":"...","flag":"..."} for criteria that need human attention
+
+For a brownfield story with a real codeline, you may have read-only tools (read_file,
+list_files, search) available this turn — if so, USE them for real to check a file's
+actual contents before relying on it; do not invent what a tool would return. For a
+greenfield story with no existing codeline, you have none — give your best answer from
+the description, title and paths you were given, and say so in "notes" if the file
+contents would have changed your answer. Either way, never narrate an imagined tool
+result: a real answer with an honest caveat is worth everything; fabricated tool-call
+syntax (<tool_call>, <tool_use>, <function_call>) is worth nothing — it is discarded in
+full and the work is lost (observed live, 2026-07-28: exactly this, on an empty-criteria
+story that got no answer at all).
+
+
+# Output
+```json
+{
+  "acceptanceCriteria": [
+    "A rider aged exactly 65 with no pass is charged the concession fare.",
+    "A rider aged 64 with no pass is charged the base fare.",
+    "A rider aged 66 with no pass is charged the concession fare.",
+    "A child aged 12 with no pass is charged the concession fare.",
+    "A rider aged 13 with no pass is charged the base fare.",
+    "An adult aged 30 with no pass is charged the base fare.",
+    "A rider aged 65 who holds a pass is charged 0.",
+    "A child aged 12 who holds a pass is charged 0."
+  ],
+  "notes": "Read src/fares.ts and test/fares.test.ts to ground the review. The code has three fare paths: hasPass→0, age≥65→concession, age<13→concession, else base. The original AC 'The existing fare behaviour for children, pass holders and adults is unchanged' was too vague — it bundled three distinct categories into one untestable blanket statement. I decomposed it into four specific observable sub-cases (ACs 4–7) that each assert a concrete fare value for a concrete rider. I also added AC 3 (age 66) to confirm the senior boundary works above the fix point, and ACs 7–8 to cover the pass-priority interaction at both boundary ages (65 and 12), since the hasPass check short-circuits before the age checks and a regression could silently break that priority. No splitting proposed — that is openspec's decision alone.",
+  "acAddedBySpeckit": [
+    "A rider aged 66 with no pass is charged the concession fare.",
+    "A child aged 12 with no pass is charged the concession fare.",
+    "A rider aged 13 with no pass is charged the base fare.",
+    "An adult aged 30 with no pass is charged the base fare.",
+    "A rider aged 65 who holds a pass is charged 0.",
+    "A child aged 12 who holds a pass is charged 0."
+  ],
+  "acModifiedBySpeckit": [
+    {
+      "original": "A rider aged 64 with no pass is still charged the base fare.",
+      "revised": "A rider aged 64 with no pass is charged the base fare."
+    },
+    {
+      "original": "The existing fare behaviour for children, pass holders and adults is unchanged.",
+      "revised": "A child aged 12 with no pass is charged the concession fare."
+    }
+  ],
+  "acFlagged": [
+    {
+      "criterion": "The existing fare behaviour for children, pass holders and adults is unchanged.",
+      "flag": "VAGUE — bundles three categories into one untestable blanket statement. Replaced with six specific observable sub-cases (ACs 3–8) that each verify a concrete fare for a concrete rider at a meaningful boundary or mid-range point."
+    }
+  ]
+}
+```

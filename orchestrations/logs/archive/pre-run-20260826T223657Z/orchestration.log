@@ -1,0 +1,20 @@
+[mint-step] codeline mocka: /home/bradleyjerome/projects/mock3/mock-a (2 declared deps)
+[mint-step] codeline mockb: /home/bradleyjerome/projects/mock3/mock-b (2 declared deps)
+[mint-step] plugins provisioned: 1 · mint tools: read_file,list_files,search,codegraph_query
+spec-mode: fast-path claude/claude-sonnet-5 (skipping MiniMax)
+[mint-step]   survey: mocka — in_scope (src/fares.ts, fare calculation logic)
+[mint-step]   survey: mockb — in_scope (src/schedule.ts, departure board / stop formatting logic)
+spec-mode: fast-path claude/claude-sonnet-5 (skipping MiniMax)
+[mint-step] proposed=3 minted=3 unchanged=0 rejected=0 superseded=0
+[mint-step]   + [implementer] transit-logic-engineer (profiles.json, kb, project-roles, project-profiles) — Both MOCK3-1 and MOCK3-2 are single-line off-by-one logic bugs in plain TypeScript modules with no framework or database involved, so one implementer spanning both vitest/typescript codelines can author both fixes without redundant per-repo roles.
+[mint-step]   + [investigator:mocka] mocka-fare-detective (profiles.json, kb, project-investigators, project-profiles) — MOCK3-1 names src/fares.ts as the fix target, and a dedicated investigator confirms the exact boundary comparison and test gap in this specific small package before the implementer edits it.
+[mint-step]   + [investigator:mockb] mockb-schedule-detective (profiles.json, kb, project-investigators, project-profiles) — MOCK3-2 names src/schedule.ts in mockb as the fix target, and this codeline needs its own reader to verify the loop-bound claim and existing test coverage before the implementer changes formatStops.
+spec-mode: fast-path claude/claude-sonnet-5 (skipping MiniMax)
+[mint-step] roster review (cycle 1): defects_found — 1 finding(s), 0 blocking
+[mint-step]   [advisory] transit-logic-engineer: Work only within each codeline's src/ directory — do not touch test/ files; each codeline's tests live under test/ as *.test.ts and are executed via `vitest run` ... but authoring or editing those files is not your responsibility and belongs to a separate pipeline stage.
+[mint-step]      checked: Read all three briefs in this roster (transit-logic-engineer, mocka-fare-detective, mockb-schedule-detective) for any claim of test-authoring ownership; read mock-a/test/fares.test.ts and mock-b/test/schedule.test.ts to see whether the existing suites already cover the ticketed bugs.
+[mint-step]      found:   Neither investigator brief claims any editing responsibility — both state explicitly 'Do not modify any file — you only read and report.' No role in this three-agent roster owns writing or updating test files. This matters concretely here: mock-b/test/schedule.test.ts (lines 10-17) only asserts formatStops(LINE) contains '->' and contains 'Union' (the first stop) — it never asserts the last stop 'Eglinton' appears, so the MOCK3-2 fix to include the final stop will ship with zero regression coverage from this roster. Likewise mock-a/test/fares.test.ts (lines 4-17) exercises ages 30, 8, and 70 but never age 65, so the MOCK3-1 boundary fix is also unverified by any test this roster produces. The brief's assertion that test authoring 'belongs to a separate pipeline stage' names no such stage or role within this roster, so the work is unowned here.
+[mint-step]      remedy:  Either add a test-authoring role to this roster responsible for asserting age-65 concession pricing in mocka and last-stop presence in mockb, or have the roster's brief explicitly name the external stage/role that owns this so the gap is tracked rather than silently assumed.
+[mint-step] [roster] rosterMode=canonical — 54 persona(s) adopted verbatim, no specialiser call
+[mint-step] project roster: 54 agent(s)
+[mint-step] FAILED: [assign] no project implementation roles are registered for this project — nothing was minted, so there is no role any story could honestly be assigned.

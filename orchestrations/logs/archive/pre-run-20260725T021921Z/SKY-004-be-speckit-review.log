@@ -1,0 +1,187 @@
+# Prompt
+You are the speckit specification agent for EPAM CLI. Phase core, story SKY-004-be.
+
+You are reviewing and building on the openspec agent's output for this story.
+Your role is COLLABORATIVE — you are NOT starting from scratch. Instead:
+1. Review openspec's proposed acceptance criteria for testability and completeness
+2. Add missing edge-case, error-handling, security, and accessibility criteria
+3. Flag any AC that are vague, untestable, or overlapping
+4. Splitting is openspec's decision alone — you do NOT split stories. If openspec already split
+   this story, do NOT include a "splitStories" field in your output at all (it will be ignored if
+   you do). Review and refine the acceptanceCriteria openspec gave you for the UNSPLIT story as
+   normal; per-child refinement of an already-split story's children happens on a later turn, not
+   here.
+5. Do NOT remove or duplicate openspec's good work — build on it
+
+━━━ WHAT-NOT-HOW RULE (MANDATORY) ━━━
+Every AC must describe an OBSERVABLE OUTCOME (what a test can verify from outside the code),
+NOT an implementation instruction. If an AC names vi.mock, jest.fn, mockReturnValue,
+mockResolvedValue, import statements, or require() calls, REPLACE it with a
+Given/When/Then behaviour statement. Never tell the implementer which library or mock pattern to use.
+
+OPENSPEC'S OUTPUT (your input to review — ACs and split proposals only):
+{
+  "acceptanceCriteria": [
+    "src/server.ts exports a named `app` (Express instance) separately from the `listen()` call so supertest can import it without binding a port",
+    "The `listen()` call in src/server.ts is guarded by `import { pathToFileURL } from 'url'` and the condition `if (import.meta.url === pathToFileURL(process.argv[1]).href)` (ESM output) or `if (require.main === module)` (CJS output) — the guard form must match the tsup output format so that `vitest run` never binds a port",
+    "GET /health returns HTTP 200 with Content-Type application/json and body matching { status: 'ok', uptime: <positive number> }",
+    "GET /health returns HTTP 200 regardless of whether RAPIDAPI_KEY env var is set or absent — the health endpoint is never gated by API key presence",
+    "GET / returns HTTP 200 with Content-Type matching text/html and response body equal to the contents of src/public/index.html, READ FROM THAT FILE AT RUNTIME (e.g. fs.readFileSync) — a hardcoded/duplicated inline HTML string in server.ts that happens to match is NOT acceptable; this route is never gated by RAPIDAPI_KEY",
+    "When RAPIDAPI_KEY env var is absent at server initialisation, a single middleware (or equivalent) short-circuits GET /search and GET /cheapest with HTTP 503 Content-Type application/json body { error: 'RAPIDAPI_KEY not configured' }; GET /health and GET / are unaffected and return their normal responses",
+    "The FlightResult type used in src/server.ts is imported from the SKY-002 type export (e.g. src/skyscanner/client.ts) and not redeclared inline — type definitions must not diverge between the client and server layers",
+    "`npx tsc --noEmit` exits 0 with no type errors"
+  ],
+  "notes": "Split required per Rule 2: technicalNotes.files contains both an implementation file (src/server.ts) and a test file (src/server.test.ts). Split into impl child and test child.",
+  "splitStories": [
+    {
+      "id": "SKY-004-be-impl",
+      "title": "Implement Express REST API server with /health, /search, /cheapest, and static dashboard — BE (impl)",
+      "description": "Create src/server.ts — an Express HTTP server that exposes: (1) GET /health → { status: 'ok', uptime: number }, (2) GET /search?from=LHR&to=JFK&date=2026-08-01&adults=1 → { flights: FlightResult[], count: number, searchedAt: string }, (3) GET /cheapest?from=LHR&to=JFK&date=2026-08-01 → the single cheapest FlightResult or 404 JSON { error: string } if none found, (4) GET / → serves src/public/index.html by reading the file at runtime (e.g. fs.readFileSync). Server reads PORT from env (default 3000); reads RAPIDAPI_KEY from env and passes to SkyscannerClient. If RAPIDAPI_KEY is absent at startup all API routes (/search, /cheapest) return 503 { error: 'RAPIDAPI_KEY not configured' }; /health and / are never gated. The listen() call must be guarded so importing `app` in tests does not bind a port. Add 'start' script in package.json pointing to 'node dist/server.js'. The build script must copy src/public/ into dist/public/ as part of `npm run build`. Depends on SKY-002.",
+      "acceptanceCriteria": [
+        "src/server.ts exports a named `app` (Express instance) separately from the `listen()` call so supertest can import it without binding a port",
+        "The `listen()` call in src/server.ts is guarded by `import { pathToFileURL } from 'url'` and the condition `if (import.meta.url === pathToFileURL(process.argv[1]).href)` (ESM output) or `if (require.main === module)` (CJS output) — the guard form must match the tsup output format so that `vitest run` never binds a port",
+        "GET /health returns HTTP 200 with Content-Type application/json and body matching { status: 'ok', uptime: <positive number> }",
+        "GET /health returns HTTP 200 regardless of whether RAPIDAPI_KEY env var is set or absent — the health endpoint is never gated by API key presence",
+        "GET / returns HTTP 200 with Content-Type matching text/html and response body equal to the contents of src/public/index.html, READ FROM THAT FILE AT RUNTIME (e.g. fs.readFileSync) — a hardcoded/duplicated inline HTML string in server.ts that happens to match is NOT acceptable; this route is never gated by RAPIDAPI_KEY",
+        "When RAPIDAPI_KEY env var is absent at server initialisation, a single middleware (or equivalent) short-circuits GET /search and GET /cheapest with HTTP 503 Content-Type application/json body { error: 'RAPIDAPI_KEY not configured' }; GET /health and GET / are unaffected and return their normal responses",
+        "The FlightResult type used in src/server.ts is imported from the SKY-002 type export (e.g. src/skyscanner/client.ts) and not redeclared inline — type definitions must not diverge between the client and server layers",
+        "`npx tsc --noEmit` exits 0 with no type errors"
+      ],
+      "agentRole": "typescript-engineer",
+      "technicalNotes": {
+        "files": [
+          "/home/bradleyjerome/projects/skyscanner-app/src/server.ts"
+        ],
+        "dependsOn": [
+          "SKY-002"
+        ]
+      }
+    },
+    {
+      "id": "SKY-004-be-test",
+      "title": "Test Express REST API server — /health, /search, /cheapest, static dashboard, and RAPIDAPI_KEY gating — BE (test)",
+      "description": "Create src/server.test.ts using vitest + supertest with at least 8 tests covering all server endpoint scenarios: /health returns ok with uptime and is never gated; / returns HTML from src/public/index.html read at runtime and is never gated; /search and /cheapest return 503 when RAPIDAPI_KEY is absent; /search and /cheapest return correct data when RAPIDAPI_KEY is present and SkyscannerClient succeeds; /cheapest returns 404 when no flights found; the named `app` export is used by supertest without binding a port. Install supertest and @types/supertest as dev dependencies. Depends on SKY-004-be-impl.",
+      "acceptanceCriteria": [
+        "src/server.test.ts imports the named `app` export from src/server.ts and uses supertest(app) — no port is bound during test execution",
+        "At least 8 distinct test cases exist in src/server.test.ts covering: /health (200, correct body), /health ungated when RAPIDAPI_KEY absent, / (200, HTML body matches file), / ungated when RAPIDAPI_KEY absent, /search returns 503 when RAPIDAPI_KEY absent, /cheapest returns 503 when RAPIDAPI_KEY absent, /search returns flights when RAPIDAPI_KEY present, /cheapest returns cheapest or 404",
+        "Tests use vitest (describe/it/expect) and supertest — no other test frameworks or HTTP libraries",
+        "supertest and @types/supertest are listed as devDependencies in package.json",
+        "`npx vitest run src/server.test.ts` exits 0 with all tests passing"
+      ],
+      "agentRole": "test-engineer",
+      "technicalNotes": {
+        "files": [
+          "/home/bradleyjerome/projects/skyscanner-app/src/server.test.ts"
+        ],
+        "dependsOn": [
+          "SKY-004-be-impl",
+          "SKY-002"
+        ]
+      }
+    }
+  ]
+}
+
+ORIGINAL STORY CONTEXT:
+{
+  "id": "SKY-004-be",
+  "title": "Build Express REST API with /health, /search, /cheapest, and static dashboard endpoints — BE",
+  "description": "Create src/server.ts — an Express HTTP server that exposes: (1) GET /health → { status: 'ok', uptime: number }, (2) GET /search?from=LHR&to=JFK&date=2026-08-01&adults=1 → { flights: FlightResult[], count: number, searchedAt: string }, (3) GET /cheapest?from=LHR&to=JFK&date=2026-08-01 → the single cheapest FlightResult or 404 JSON { error: string } if none found, (4) GET / → serves src/public/index.html by reading the file at runtime (e.g. fs.readFileSync) — the handler must NOT hardcode a separate inline HTML string that merely happens to match; content and implementation must not be able to diverge. Server reads PORT from env (default 3000); reads RAPIDAPI_KEY from env and passes to SkyscannerClient. If RAPIDAPI_KEY is absent at startup all API routes (/search, /cheapest) return 503 { error: 'RAPIDAPI_KEY not configured' }; /health and / are never gated. The listen() call must be guarded so importing `app` in tests does not bind a port. Add 'start' script in package.json pointing to 'node dist/server.js'. The build script must copy src/public/ (or equivalent static assets) into dist/public/ as part of `npm run build`, since tsc alone does not copy non-.ts files — the file path used by the / route handler must resolve correctly both under `tsx src/server.ts` (dev) and `node dist/server.js` (built). Depends on SKY-002 (SkyscannerClient and FlightResult type must exist before this story is started).",
+  "originalAcceptanceCriteria": [
+    "Delegated to split children: SKY-004-be-impl, SKY-004-be-test"
+  ],
+  "technicalNotes": {
+    "workingDir": "/home/bradleyjerome/projects/skyscanner-app",
+    "files": [
+      "/home/bradleyjerome/projects/skyscanner-app/src/server.ts",
+      "/home/bradleyjerome/projects/skyscanner-app/src/server.test.ts"
+    ],
+    "dependsOn": [
+      "SKY-002"
+    ]
+  },
+  "dependencies": [
+    "SKY-002"
+  ]
+}
+
+Produce your refined output as raw JSON only (no XML tags, no markdown fences, no preamble). Include:
+- "acceptanceCriteria": The FULL merged list (openspec's criteria + your additions/refinements). Every item MUST be an observable outcome, not an implementation instruction.
+- "notes": What you changed and why (be specific — cite which criteria you added/modified/replaced)
+- "splitStories": ALWAYS omit this field. Splitting is openspec's decision alone — never propose
+  split children of your own, even if openspec already split this story.
+- "acAddedBySpeckit": Array of criteria YOU added that were not in openspec's output
+- "acModifiedBySpeckit": Array of {"original":"...","revised":"..."} for criteria you reworded
+- "acFlagged": Array of {"criterion":"...","flag":"..."} for criteria that need human attention
+
+
+# Output
+```json
+{
+  "acceptanceCriteria": [
+    "The server module exports a named `app` (Express application instance) and importing that export does not cause any port to be bound or server to start listening",
+    "When the server module is imported (not run directly), no HTTP port is bound — test execution completes without any process listening on the configured port",
+    "GET /health returns HTTP 200 with Content-Type application/json and body matching { status: 'ok', uptime: <positive number> }",
+    "GET /health returns HTTP 200 regardless of whether RAPIDAPI_KEY env var is set or absent — the health endpoint is never gated by API key presence",
+    "GET / returns HTTP 200 with Content-Type text/html and a response body that matches the current contents of src/public/index.html; if that file is modified, the response reflects the change without any code change to the server — this route is never gated by RAPIDAPI_KEY",
+    "When RAPIDAPI_KEY env var is absent at server initialisation, GET /search and GET /cheapest return HTTP 503 with Content-Type application/json and body { error: 'RAPIDAPI_KEY not configured' }; GET /health and GET / are unaffected and return their normal responses",
+    "GET /search with any required query parameter missing (from, to, or date) returns HTTP 400 with Content-Type application/json and a body containing an error message identifying the missing parameter(s)",
+    "GET /cheapest with any required query parameter missing (from, to, or date) returns HTTP 400 with Content-Type application/json and a body containing an error message identifying the missing parameter(s)",
+    "When SkyscannerClient throws an error during /search or /cheapest processing (with RAPIDAPI_KEY present and valid params), the endpoint returns HTTP 502 with Content-Type application/json and a body containing an error message — the server process does not crash and remains capable of serving subsequent requests",
+    "GET /search with RAPIDAPI_KEY present and all valid query parameters returns HTTP 200 with Content-Type application/json and body containing `flights` (array of FlightResult objects), `count` (number equal to flights.length), and `searchedAt` (ISO 8601 datetime string)",
+    "GET /cheapest with RAPIDAPI_KEY present, valid query parameters, and at least one flight found returns HTTP 200 with Content-Type application/json and body containing a single FlightResult object that has the lowest price among all results",
+    "GET /cheapest with RAPIDAPI_KEY present, valid query parameters, and no flights found returns HTTP 404 with Content-Type application/json and body { error: <non-empty string> }",
+    "The RAPIDAPI_KEY value is never present in any response header or body across all endpoints",
+    "The FlightResult shape in /search and /cheapest response payloads matches the type contract established by SKY-002 — no separate or divergent type declaration exists in the server module",
+    "After `npm run build`, the file dist/public/index.html exists and its contents match src/public/index.html — the / route handler resolves the HTML file correctly when running `node dist/server.js`",
+    "The / route handler's file path resolves correctly both when running via `tsx src/server.ts` (dev) and `node dist/server.js` (built) — GET / returns the HTML content in both execution modes",
+    "package.json contains a `start` script that executes `node dist/server.js`",
+    "`npx tsc --noEmit` exits 0 with no type errors"
+  ],
+  "notes": "Modified 5 of openspec's original 8 ACs and added 10 new ones. Changes:\n\nMODIFIED:\n- AC 1: Removed 'so supertest can import it' — supertest is an implementation detail, not an observable outcome. Reworded to focus on the export existing and no port being bound on import.\n- AC 2: Completely replaced — the original prescribed exact import statements (pathToFileURL, import.meta.url) and condition syntax, violating the what-not-how rule. Replaced with the observable outcome: importing the module does not bind a port.\n- AC 5: Removed 'READ FROM THAT FILE AT RUNTIME (e.g. fs.readFileSync)' — this prescribes implementation. Replaced with the testable property: modifying the file changes the response without code changes, which proves runtime file reading.\n- AC 6: Removed 'a single middleware (or equivalent) short-circuits' — this prescribes implementation architecture. Kept only the observable response behavior.\n- AC 7: Removed 'imported from the SKY-002 type export (e.g. src/skyscanner/client.ts) and not redeclared inline' — this prescribes import mechanics. Reworded to focus on the observable outcome: response shapes match the SKY-002 contract with no divergent declaration.\n\nADDED:\n- AC 7-8: Missing required query parameter validation for /search and /cheapest (400 responses) — critical edge case absent from original.\n- AC 9: SkyscannerClient error handling — when the upstream client throws, the server must return 502 and not crash. Original had no error-path coverage for the happy-path-beyond-503 scenarios.\n- AC 10-12: Success response shapes for /search and /cheapest (including 404 for no flights) — the description specified these shapes but no AC verified them.\n- AC 13: RAPIDAPI_KEY not leaked in responses — security criterion entirely absent from original.\n- AC 15-16: Build artifact and dual-mode file path resolution — the description explicitly required these but no AC verified them. Without these, the app works in dev but breaks in production.\n- AC 17: Start script in package.json — mentioned in description but not verified by any AC.",
+  "acAddedBySpeckit": [
+    "GET /search with any required query parameter missing (from, to, or date) returns HTTP 400 with Content-Type application/json and a body containing an error message identifying the missing parameter(s)",
+    "GET /cheapest with any required query parameter missing (from, to, or date) returns HTTP 400 with Content-Type application/json and a body containing an error message identifying the missing parameter(s)",
+    "When SkyscannerClient throws an error during /search or /cheapest processing (with RAPIDAPI_KEY present and valid params), the endpoint returns HTTP 502 with Content-Type application/json and a body containing an error message — the server process does not crash and remains capable of serving subsequent requests",
+    "GET /search with RAPIDAPI_KEY present and all valid query parameters returns HTTP 200 with Content-Type application/json and body containing `flights` (array of FlightResult objects), `count` (number equal to flights.length), and `searchedAt` (ISO 8601 datetime string)",
+    "GET /cheapest with RAPIDAPI_KEY present, valid query parameters, and at least one flight found returns HTTP 200 with Content-Type application/json and body containing a single FlightResult object that has the lowest price among all results",
+    "GET /cheapest with RAPIDAPI_KEY present, valid query parameters, and no flights found returns HTTP 404 with Content-Type application/json and body { error: <non-empty string> }",
+    "The RAPIDAPI_KEY value is never present in any response header or body across all endpoints",
+    "After `npm run build`, the file dist/public/index.html exists and its contents match src/public/index.html — the / route handler resolves the HTML file correctly when running `node dist/server.js`",
+    "The / route handler's file path resolves correctly both when running via `tsx src/server.ts` (dev) and `node dist/server.js` (built) — GET / returns the HTML content in both execution modes",
+    "package.json contains a `start` script that executes `node dist/server.js`"
+  ],
+  "acModifiedBySpeckit": [
+    {
+      "original": "src/server.ts exports a named `app` (Express instance) separately from the `listen()` call so supertest can import it without binding a port",
+      "revised": "The server module exports a named `app` (Express application instance) and importing that export does not cause any port to be bound or server to start listening"
+    },
+    {
+      "original": "The `listen()` call in src/server.ts is guarded by `import { pathToFileURL } from 'url'` and the condition `if (import.meta.url === pathToFileURL(process.argv[1]).href)` (ESM output) or `if (require.main === module)` (CJS output) — the guard form must match the tsup output format so that `vitest run` never binds a port",
+      "revised": "When the server module is imported (not run directly), no HTTP port is bound — test execution completes without any process listening on the configured port"
+    },
+    {
+      "original": "GET / returns HTTP 200 with Content-Type matching text/html and response body equal to the contents of src/public/index.html, READ FROM THAT FILE AT RUNTIME (e.g. fs.readFileSync) — a hardcoded/duplicated inline HTML string in server.ts that happens to match is NOT acceptable; this route is never gated by RAPIDAPI_KEY",
+      "revised": "GET / returns HTTP 200 with Content-Type text/html and a response body that matches the current contents of src/public/index.html; if that file is modified, the response reflects the change without any code change to the server — this route is never gated by RAPIDAPI_KEY"
+    },
+    {
+      "original": "When RAPIDAPI_KEY env var is absent at server initialisation, a single middleware (or equivalent) short-circuits GET /search and GET /cheapest with HTTP 503 Content-Type application/json body { error: 'RAPIDAPI_KEY not configured' }; GET /health and GET / are unaffected and return their normal responses",
+      "revised": "When RAPIDAPI_KEY env var is absent at server initialisation, GET /search and GET /cheapest return HTTP 503 with Content-Type application/json and body { error: 'RAPIDAPI_KEY not configured' }; GET /health and GET / are unaffected and return their normal responses"
+    },
+    {
+      "original": "The FlightResult type used in src/server.ts is imported from the SKY-002 type export (e.g. src/skyscanner/client.ts) and not redeclared inline — type definitions must not diverge between the client and server layers",
+      "revised": "The FlightResult shape in /search and /cheapest response payloads matches the type contract established by SKY-002 — no separate or divergent type declaration exists in the server module"
+    }
+  ],
+  "acFlagged": [
+    {
+      "criterion": "The FlightResult shape in /search and /cheapest response payloads matches the type contract established by SKY-002 — no separate or divergent type declaration exists in the server module",
+      "flag": "The 'no separate or divergent type declaration exists' portion requires code inspection to verify fully — it is not purely observable from outside behavior. The runtime response-shape ACs (10-12) and the tsc AC (18) provide partial coverage. Consider whether this criterion should remain or be dropped in favor of those alone."
+    },
+    {
+      "criterion": "When SkyscannerClient throws an error during /search or /cheapest processing (with RAPIDAPI_KEY present and valid params), the endpoint returns HTTP 502 with Content-Type application/json and a body containing an error message — the server process does not crash and remains capable of serving subsequent requests",
+      "flag": "HTTP 502 was chosen as the status for upstream (SkyscannerClient) errors, but the story description does not specify which 5xx status to use. 500 (generic server error) or 502 (bad gateway) are both reasonable. Human should confirm the intended status code."
+    }
+  ]
+}
+```

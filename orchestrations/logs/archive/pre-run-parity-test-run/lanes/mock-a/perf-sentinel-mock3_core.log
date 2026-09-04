@@ -1,0 +1,10 @@
+```json
+{
+  "agent": "perf-sentinel",
+  "phase": "mock3_core",
+  "summary": { "filesAnalysed": 2, "findingsCount": 0, "blockerCount": 0, "estimatedStartupImpactMs": 0 },
+  "findings": [],
+  "verdict": "not_applicable",
+  "reason": "Change is a string-literal update in a trivial synchronous function and its matching test — no algorithmic, memory, async, startup, or provider performance concerns apply."
+}
+```

@@ -1,0 +1,21 @@
+Assessment complete. Here's the summary:
+
+## Phase: core — Skill Assessment Results
+
+| Metric | Actual | Forecast | Variance |
+|--------|--------|----------|----------|
+| Time | 0.93 min | 3.37 min | -2.44 min (under) |
+| Cost | $0.0264 | $0.6505 | -$0.6241 (under) |
+
+**Key findings:**
+- **1 story assessed** (AMSD-1820) — completed successfully per PRD
+- **72% under time forecast**, 96% under cost forecast
+- **No threshold breach** — `over_threshold: false`
+- **Agent role correct** — `typescript-engineer` is the right match for a TypeScript service-layer bug fix
+- **No corrective actions needed** — no pending stories in later phases, no role mismatches found
+
+**Outputs written:**
+1. `/orchestrations/logs/phase-skill-assessments.jsonl` — single-line JSON assessment
+2. `/orchestrations/logs/phase-improvements/core.md` — human-readable improvement report
+
+No improvements needed.

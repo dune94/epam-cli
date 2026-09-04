@@ -1,0 +1,11 @@
+# Prompt
+A code investigation of a bug produced the analysis below. Extract the single most-likely causal fix site and output ONLY a JSON array — no prose, no markdown fences, then stop. If the analysis is incomplete, output your BEST hypothesis from what it contains (a best guess beats nothing).
+[{"file":"<repo-relative path>","function":"<symbol>","reason":"<why THIS computes the wrong value, not just displays it>","fix":"<the exact minimal change: which line/expression to change and which EXISTING helper (symbol) to reuse>","helper":"<bare existing symbol name to reuse, or empty>"}]
+
+=== INVESTIGATION ===
+All tests pass and TypeScript compiles cleanly. The fix is applied: the import of `parseDispatchLineItemKey` was added, and line 17 was changed from `lineItem.id === discount.lineItemId` to `parseDispatchLineItemKey(lineItem.id).id === discount.lineItemId`, so return-trip dispatch line items (whose IDs are suffixed with `#return`) now correctly match their discounts.
+
+# Output
+```json
+[{"file":"src/discount.ts","function":"<unknown>","reason":"lineItem.id includes a '#return' suffix for return-trip dispatch line items, so direct equality with discount.lineItemId fails to match","fix":"change `lineItem.id === discount.lineItemId` to `parseDispatchLineItemKey(lineItem.id).id === discount.lineItemId` and add import of parseDispatchLineItemKey","helper":"parseDispatchLineItemKey"}]
+```

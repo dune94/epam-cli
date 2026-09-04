@@ -1,0 +1,3 @@
+```json
+{"agent":"lightpanda-agent","storyId":"MOCK3-2","phase":"core","verdict":"pass","findings":[],"summary":"The departure board's formatStops function in src/schedule.ts previously used `i < stops.length - 1`, dropping the final stop. On the bugfix/AI-MOCK3-2 branch the loop condition is corrected to `i < stops.length`, so all stops including the final one are rendered. All 6 unit tests pass, including the test asserting the final stop 'Eglinton' appears in the output. No functional breakage remains."}
+```

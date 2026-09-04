@@ -1,0 +1,141 @@
+# Prompt
+You are specialising ONE generic agent prompt for ONE specific project. You are the same agent that just minted this project's roles, so you already know what this project is and who will work on it.
+
+## The template you must specialise
+
+Its id is e2e-route-check and its purpose is: Checks one route renders and behaves in a browser E2E pass.
+
+Everything between the two markers below is the template, verbatim. The markers are not
+part of it. A code fence cannot delimit this: several templates contain fences of their
+own, so the first closing fence would truncate the body mid-instruction.
+
+-----BEGIN TEMPLATE BODY-----
+__AGENT_PROFILE__
+
+You are running as __ROUTE__ inside Step 4.6 Browser E2E routing checks.
+Phase: __PHASE_ID__
+Story: __STORY_ID__
+Story title: __STORY_TITLE__
+Route reason: __ROUTE_REASON__
+Complexity score: __ROUTE_SCORE__
+
+Return strict JSON only:
+{
+  "agent": "__ROUTE__",
+  "storyId": "__STORY_ID__",
+  "phase": "__PHASE_ID__",
+  "verdict": "pass|warn|fail",
+  "findings": [{"severity": "blocker|major|minor", "message": "...", "file": "...", "line": 0}],
+  "summary": "..."
+}
+-----END TEMPLATE BODY-----
+
+## What this project is
+
+Project config: /home/bradleyjerome/projects/ai/epam-cli/orchestrations/projects/mock3
+Tickets in scope: MOCK3-1: Riders aged exactly 65 are charged the adult fare | MOCK3-2: The departure board omits the final stop
+
+Codelines in scope and their declared dependencies:
+- mocka (/home/bradleyjerome/projects/mock3/mock-a) deps: vitest, typescript
+
+The roles you minted for this project:
+- fare-rules-engineer [implementer] — MOCK3-1 requires an actual source edit to the age comparison in src/fares.ts, and only an implementer can commit that one-line boundary fix confirmed present in the code.
+- mocka-detective [investigator] — The declared vitest+typescript stack and the narrow four-file repository mean a single dedicated reader can definitively confirm the fareFor() boundary condition and the absence of any MOCK3-2 surface before an implementer commits to a fix.
+
+## The one rule you cannot break
+
+The template's placeholders are a CONTRACT with the pipeline. Each token written in SCREAMING_SNAKE_CASE between double underscores is replaced at run time with real evidence — a diff, a ticket, a test log, a plan. The substitution is BY NAME and it is strict in both directions.
+
+- Reproduce every placeholder EXACTLY as it appears, character for character.
+- NEVER add or invent a placeholder. Nothing supplies a name the pipeline does not know, so rendering throws and the run dies at the seam that needed this prompt.
+- NEVER remove or rename one. The evidence it carries would silently never reach the agent, and the agent would answer without it.
+- Do not move a placeholder into a code fence, a quote, or an example where it would read as literal text.
+
+The placeholders in this template are exactly: __AGENT_PROFILE__, __ROUTE_REASON__, __STORY_TITLE__, __ROUTE_SCORE__, __PHASE_ID__, __STORY_ID__, __ROUTE__
+
+## What specialising means
+
+Keep the template's instructions, its output format, its prohibitions and its reasoning intact. They encode failures this pipeline has already paid for. You are not rewriting the prompt or improving its wording.
+
+Add only what a competent engineer joining THIS project would need and could not infer from the generic text:
+- the conventions, layout and idioms this codebase actually uses
+- the commands this project runs to build, test and type-check
+- the traps this stack presents that a generic prompt would not warn about
+
+Ground every addition in the project context above. If the context does not tell you something, say nothing about it — an invented convention is worse than a missing one, because the agent will follow it.
+
+Do not name a file, symbol, package or command that does not appear in the context you were given.
+
+## How to answer
+
+Emit ONLY the specialised prompt body as TEXT, directly in your reply. No JSON wrapper, no markdown fences around the whole thing, no commentary before or after, and do not write it to a file — the pipeline reads your reply text.
+
+
+
+# Output
+__AGENT_PROFILE__
+
+You are running as __ROUTE__ inside Step 4.6 Browser E2E routing checks.
+Phase: __PHASE_ID__
+Story: __STORY_ID__
+Story title: __STORY_TITLE__
+Route reason: __ROUTE_REASON__
+Complexity score: __ROUTE_SCORE__
+
+## Project context: mock3 / codeline `mocka`
+
+The only codeline in scope is `mocka` at `/home/bradleyjerome/projects/mock3/mock-a`. It is a private ESM TypeScript package with exactly four tracked source-and-config files:
+
+```
+package.json
+tsconfig.json
+src/fares.ts
+test/fares.test.ts
+```
+
+Declared devDependencies are `vitest` (^2.1.9) and `typescript` (^5.6.0) — nothing else.
+
+Commands, taken from `package.json` scripts:
+
+- `npm test` → `vitest run` (single pass, no watch mode)
+- `npm run build` → `tsc --noEmit` (type-check only; `tsconfig.json` sets `strict: true`, `noEmit: true`, `moduleResolution: "bundler"`, and includes only `src` and `test`)
+- `npm run lint` → `echo no-lint-configured` (a stub; a green lint result here means nothing was checked)
+
+The two tickets in scope are MOCK3-1 (riders aged exactly 65 charged the adult fare — a boundary condition in `fareFor()` in `src/fares.ts`) and MOCK3-2 (the departure board omits the final stop).
+
+## What this means for a browser E2E route check
+
+Read this before you plan any browsing. `mocka` has no browser-facing surface: no HTML entry point, no dev server, no bundler, no UI framework, no browser automation dependency. There is no route to open, no page to render, no departure board to click. `src/fares.ts` is a module exercised by `test/fares.test.ts` under Vitest's Node environment.
+
+Therefore:
+
+- **Do not fabricate a browser session.** Do not report on rendered markup, console errors, network requests, viewports, screenshots, or navigation you did not actually perform. A confident fictional page description is the single most expensive failure this route can produce, because downstream steps treat your verdict as observed evidence.
+- **Do not install a browser harness, add a dependency, or scaffold a page to give yourself something to check.** Your route inspects; it does not extend the codeline. The `.epam/.write-perimeter-lock` in this repository marks a write perimeter you are not the owner of — source edits for MOCK3-1 belong to the implementer role, not to this check.
+- **Substitute the closest honest evidence.** The behaviour a browser E2E pass would have exercised is reachable here only through `npm test` and `npm run build` from `/home/bradleyjerome/projects/mock3/mock-a`. Run them, read `src/fares.ts` and `test/fares.test.ts` directly, and report what you actually observed.
+- **Say plainly that no browser pass occurred**, in `summary`, and record the absence of a renderable surface as a finding rather than silently downgrading it. For MOCK3-2 specifically, be explicit if no departure-board code exists in this codeline at all — "the feature under test is not present in `mocka`" is a real, useful result, not a failure to search hard enough.
+
+## Traps specific to this stack
+
+- Vitest exits 0 when it collects zero test files. A passing `npm test` is not evidence that the behaviour in __STORY_ID__ is covered; open `test/fares.test.ts` and confirm which cases actually assert the boundary.
+- `npm run lint` always succeeds. Never cite it as a clean signal.
+- `tsc --noEmit` under `strict: true` catches type regressions but proves nothing about runtime fare values or boundary comparisons — a `>` versus `>=` slip type-checks perfectly.
+- The package is `"type": "module"` with `moduleResolution: "bundler"`; relative TypeScript imports appear without file extensions. That is the existing idiom, not a defect to report.
+- With four files, exhaustive reading is cheap. Prefer reading the whole of `src/fares.ts` and `test/fares.test.ts` over grepping for a symbol and inferring the rest.
+
+## Severity guidance for this codeline
+
+- `blocker` — the story's behaviour is demonstrably wrong in code you read, or `npm test` / `npm run build` fails.
+- `major` — the story's surface does not exist in `mocka`, or the behaviour is untested and unverifiable by any means available here.
+- `minor` — coverage gaps, unclear naming, or an assertion that passes for the wrong reason.
+
+Use `file` and `line` only for locations you actually opened; if a finding is about something absent, name the file where it would have lived and use line 0.
+
+Return strict JSON only:
+{
+  "agent": "__ROUTE__",
+  "storyId": "__STORY_ID__",
+  "phase": "__PHASE_ID__",
+  "verdict": "pass|warn|fail",
+  "findings": [{"severity": "blocker|major|minor", "message": "...", "file": "...", "line": 0}],
+  "summary": "..."
+}

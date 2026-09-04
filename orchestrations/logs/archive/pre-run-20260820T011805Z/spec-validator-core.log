@@ -1,0 +1,49 @@
+{
+  "agent": "spec-validator",
+  "phase": "core",
+  "stories": [{
+    "storyId": "AMSD-2041",
+    "title": "[MX] Live Preview of Content in CMS (part 1)",
+    "criteria": [
+      {
+        "text": "Given the Contentstack client is mocked to signal a draft entry change for the MX Homepage, the rendered Homepage shows the draft entry content instead of the previously published content, without requiring a full page reload.",
+        "status": "partial",
+        "evidence": "_app.tsx wires ContentstackLivePreview.onEntryChange to re-fetch via getEntry/getSingleEntry and setLivePreviewContent; [[...slug]].tsx merges livePreviewContent over published content (lines: const mergedContent = livePreviewContent ? {...content, ...livePreviewContent} : content). contentstack.spec.ts tests getEntry returning draft data ({title:'Draft 1'}) but does NOT test the onEntryChange callback or the React merge path end-to-end.",
+        "gaps": "No test exercises the onEntryChange→setLivePreviewContent→[[...slug]].tsx merge flow for the MX Homepage. Service-layer only."
+      },
+      {
+        "text": "Given the Contentstack client is mocked to signal a draft entry change for a Discover Article page, the rendered Discover Article page shows the draft entry content instead of the previously published content, without requiring a full page reload.",
+        "status": "partial",
+        "evidence": "Same onEntryChange wiring applies to all content types via CONTENT_TYPE_CONTEXT_KEY fallback to 'page'. contentstack.spec.ts tests getSingleEntry for discover_article returning draft content. No test covers the Discover Article rendering path through [[...slug]].tsx.",
+        "gaps": "Discover Article-specific render path is untested; only getSingleEntry service layer is verified."
+      },
+      {
+        "text": "When no preview signal is active, the MX Homepage renders published content identically to its current behavior with no visual or functional regression.",
+        "status": "met",
+        "evidence": "_app.tsx onEntryChange returns early when !hash; [[...slug]].tsx falls back to `content` when livePreviewContent is null. contentstack.spec.ts has a test 'returns published content identically when no preview signal is active (no regression)' for getEntry.",
+        "gaps": ""
+      },
+      {
+        "text": "When no preview signal is active, Discover Article pages render published content identically to their current behavior with no visual or functional regression.",
+        "status": "met",
+        "evidence": "Same early-return and fallback logic applies. contentstack.spec.ts getEntry test covers discover_article returning published content with no preview signal.",
+        "gaps": ""
+      },
+      {
+        "text": "Given the Contentstack client is mocked to signal multiple successive draft entry changes for the same Homepage, the rendered Homepage updates to reflect each change in sequence without a full page reload.",
+        "status": "partial",
+        "evidence": "setLivePreviewContent uses functional updater (prev) => ({...prev, [contextKey]: [entry]}) supporting sequential updates. contentstack.spec.ts tests successive getEntry calls returning 'Draft 1' then 'Draft 2' for mx_homepage. However, no test verifies the React state update sequence or re-render behavior.",
+        "gaps": "Sequential React re-render path is untested; only service-layer sequential fetch is verified."
+      },
+      {
+        "text": "Given the Contentstack client is mocked to signal a draft entry change while the page is in a protected or gated state, the page does not render the draft content and continues to show the published content unchanged.",
+        "status": "unmet",
+        "evidence": "The onEntryChange callback in _app.tsx contains no check for protected/gated page state (no reference to session, auth, gating, or isSignedOut before calling setLivePreviewContent). [[...slug]].tsx merge logic applies livePreviewContent unconditionally regardless of page protection state.",
+        "gaps": "No gating/protected-state guard exists in the changed lines. Criterion 6 is not satisfied."
+      }
+    ],
+    "overallCompliance": 50,
+    "verdict": "warn"
+  }],
+  "overallVerdict": "warn"
+}

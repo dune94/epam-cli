@@ -1,0 +1,2 @@
+[coverage-gate] writer: no pre-flight has gated this run — standing down
+{"verdict":"not_applicable","issues":[],"summary":"Change is four additional jest/RTL test cases appended to an existing spec file, using only helpers, imports, and mocks already established earlier in the same file (renderCheckoutForm, getEmail, getConfirmEmail, getSubmitButton, DEFAULT_FORM_VALUES from @testing-library/*). No new imports, module-scope work, or config-dependent values were introduced, so there is no new runtime boundary to evaluate — this is not_applicable."}

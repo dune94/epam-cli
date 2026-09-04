@@ -1,0 +1,12 @@
+Based on the actual `git diff`, the change is a refactor of the Contentstack live-preview provider in `_app.tsx` (event-driven, CMS-editing-time path), a pure env-var rename + constant extraction in `contentstack.ts`, and a new test file. `package.json`/`package-lock.json` show no diff in this commit. I inspected the real changed lines.
+
+Key observations from the diff:
+- The `onEntryChange` callback now calls `getSingleEntry` (which routes through the SDK `fetchOptions` that already configure `timeout` and `retryCondition` at `contentstack.ts:88-95`) — no missing-timeout regression.
+- The change **adds** `ContentstackLivePreview.unsubscribeOnEntryChange(callbackUid)` cleanup in the effect return (`_app.tsx`), which is a perf **improvement** (prevents listener accumulation across remounts), not a regression.
+- The `{ ...content, page: previewPage }` spread in `LivePreviewContentProvider` only allocates a new reference when `previewPage` is truthy (active live preview, a dev/editing context); in production it passes `content` through unchanged, so no extra consumer re-renders on the hot path.
+- `useLivePreviewPage`'s init effect has `[]` deps → runs once on mount.
+- No loops, no unbounded iteration, no sequential fan-out, no module-load I/O added.
+
+There is nothing meaningful to report here; inventing a finding would violate the grounding rules.
+
+{"agent":"perf-sentinel","phase":"core","summary":{"filesAnalysed":3,"findingsCount":0,"blockerCount":0,"estimatedStartupImpactMs":0},"findings":[],"verdict":"not_applicable","reason":"No perf-relevant runtime change: the live-preview refactor is event-driven with proper listener cleanup added, SDK timeout/retry already configured, and the context spread is gated to active-preview-only (dev) path; contentstack.ts change is a pure rename/constant extraction with no runtime effect."}

@@ -1,0 +1,136 @@
+# Prompt
+You are the speckit specification agent for EPAM CLI. Phase core, story SKY-003.
+NOTE: This story 15 acceptance criteria (> 12) — MANDATORY split required (see SPLIT RULES below).
+
+Generate refined acceptance criteria, optionally updated title/description, and split stories where required. Output raw JSON only (no XML tags, no markdown fences, no preamble) using this schema:
+{
+  "storyId":"SKY-003",
+  "agent":"speckit",
+  "notes":"context",
+  "acceptanceCriteria":["..."],
+  "description":"...",
+  "title":"...",
+  "splitStories":[{"id":"optional","title":"...","description":"...","acceptanceCriteria":["..."],"agentRole":"...","technicalNotes":{"files":[]}}]
+}
+Use existing text when no change is needed.
+
+SPLIT RULES (mandatory, not optional — enforce these before refining AC):
+1. AC count > 12 → you MUST propose a split. Target ≤8 ACs per split child. Never leave a story with >12 ACs unsplit.
+2. Both implementation files AND test files in technicalNotes.files → split into one impl child (non-test files) and one test child (*.test.ts files). Assign agentRole "typescript-engineer" to impl, "test-engineer" to test.
+3. 3+ independent deliverable modules with no shared exports (e.g. client.ts, server.ts, cli.ts all in same story) → split per concern. Each split gets the files it owns.
+4. External API discovery + implementation in same story → split: first child discovers/documents the API contract, second child implements against that contract.
+5. technicalNotes.files contains BOTH frontend/template files (*.html, *.css, *.scss, *.jsx, *.tsx, *.vue, *.svelte) AND build/tooling files (vite.config.*, webpack.config.*, rollup.config.*, package.json, Makefile, Dockerfile, *.sh) → split: one child owns the frontend/template files, one child owns the build/tooling files. These have different runtime roles and different owners — bundling them causes token bloat and diffuse responsibility.
+6. Story covers multiple independent runtime roles in the same deliverable (e.g. HTTP server AND CLI binary AND HTML dashboard) → split by runtime role, one child per runtime target. Each child's agentRole should match what it produces (typescript-engineer for application code, test-engineer for test-only files).
+These rules apply only when splitDepth === 0. Never split a story that is already a split child.
+
+Story context:
+{
+  "id": "SKY-003",
+  "title": "Implement flight search CLI entry point with formatted table output",
+  "description": "Create `src/cli.ts` — a standalone Node entry point that accepts flight search arguments via `process.argv` and prints results as an aligned table. Parse flags manually (no commander, no yargs, zero new runtime deps). Require `RAPIDAPI_KEY` env var; exit 1 with a human-readable message if absent. Instantiate `SkyscannerClient` from `src/skyscanner/client.ts` (SKY-002), call `searchFlights` forwarding all parsed arguments including adults count, and render results in a dynamically-padded table with columns: Airline | Price | Departure | Arrival | Duration | Stops. Column widths are determined by the widest value in each column (including the header). A separator row of hyphen characters must appear between the header and data rows. Price is right-aligned and prefixed with the currency symbol returned by the API (default £ if absent); all other columns are left-aligned. If no flights are returned print `No flights found.` and exit 0. On any thrown error print the message to stderr and exit 1. Create `src/cli.test.ts` covering argument validation, successful render, empty-result render, missing env var, and error handling using vitest with `SkyscannerClient` mocked at the module boundary. The compiled output must be invokable as `node dist/cli.js ...` after `tsc`; `tsconfig.json` must have `outDir` set to `dist` and emit CommonJS-compatible output.",
+  "acceptanceCriteria": [
+    "`src/cli.ts` exists and `tsc --noEmit` reports zero errors",
+    "`tsconfig.json` sets `outDir` to `dist` and emits a module format compatible with `node dist/cli.js` invocation (CommonJS or ESM with .mjs extension consistently applied)",
+    "Flags `--from`, `--to`, and `--date` are all required; if any is absent the CLI prints a usage hint to stderr (showing correct flag names) and exits with code 2",
+    "The `--date` flag value must match the pattern `YYYY-MM-DD`; a value that does not match this format causes exit code 2 with a human-readable message written to stderr before any network call is made",
+    "Optional `--adults` flag defaults to 1 when omitted; a non-integer value, a value ≤ 0, or a non-numeric string causes exit code 2 with a human-readable message to stderr",
+    "The parsed `adults` value is forwarded as an argument to `SkyscannerClient.searchFlights` — the flag is not silently dropped",
+    "If `RAPIDAPI_KEY` env var is unset or empty, CLI prints 'Error: RAPIDAPI_KEY environment variable is required' to stderr and exits 1 before making any network call",
+    "When `searchFlights` resolves with one or more results, stdout contains: (a) a header row with columns Airline, Price, Departure, Arrival, Duration, Stops; (b) a separator row of hyphen characters whose width matches each column exactly; (c) one data row per result; all columns padded to the width of the widest value in that column (including the header label)",
+    "All columns except Price are left-aligned within their padded width; the Price column is right-aligned within its padded width",
+    "Price column values are prefixed with the currency symbol from the API response; if the API response omits a currency symbol, £ is used as the fallback",
+    "When `searchFlights` resolves with an empty array, stdout contains exactly the line `No flights found.` and process exits 0",
+    "When `searchFlights` rejects, the error message is written to stderr and process exits 1; stdout is empty",
+    "`src/cli.test.ts` contains at least 8 passing vitest tests covering: missing --from, missing --to, missing --date, invalid --adults value, missing RAPIDAPI_KEY env var, table rendered correctly for valid multi-row results (verify separator row present and column alignment), empty-array result renders 'No flights found.', and error path (client throws)",
+    "`vitest run` exits 0 with all tests green",
+    "No runtime dependency other than Node built-ins and packages already in `package.json` (from SKY-001/SKY-002) is added"
+  ],
+  "acCount": 15,
+  "technicalNotes": {
+    "workingDir": "/home/bradleyjerome/projects/skyscanner-app",
+    "files": [
+      "/home/bradleyjerome/projects/skyscanner-app/src/cli.ts",
+      "/home/bradleyjerome/projects/skyscanner-app/src/cli.test.ts"
+    ],
+    "dependsOn": [
+      "SKY-002"
+    ],
+    "implementationNotes": "CRITICAL — argument parsing pitfall: use Number() not parseInt() to parse --adults. parseInt('1.5', 10) silently truncates to 1 (a valid integer), making the non-integer validation impossible — Number.isInteger(1) is true so exit code 2 is never triggered. Number('1.5') returns 1.5, which correctly fails Number.isInteger() and triggers exit 2. The adults validation must reject: non-integer values (e.g. 1.5), zero, negative numbers, and non-numeric strings. All must exit with code 2.\n\nCRITICAL — separator row format: the table renders one hyphen-segment per column, padded to that column's width, separated by the same whitespace used between column values. The separator is NOT a single run of unbroken hyphens. A regex checking the separator must allow spaces: /^[-\\s]+$/ not /^-[-]+$/.\n\nCRITICAL — main() must be exported and guarded. Export the function: `export async function main()`. Guard execution: `if (require.main === module) { main(); }` or use the VITEST env var pattern. Unexported main cannot be tested via require('./cli').main."
+  },
+  "agentRole": "typescript-engineer",
+  "agentGroup": "primary",
+  "dependencies": [
+    "SKY-002"
+  ],
+  "splitDepth": 0
+}
+
+
+# Output
+```json
+{
+  "storyId": "SKY-003",
+  "agent": "speckit",
+  "notes": "15 ACs > 12 triggers mandatory split. Rule 2 also applies: both impl file (cli.ts) and test file (cli.test.ts) present → split into impl child and test child. Parent ACs condensed to 8 high-level criteria; children carry detailed ACs (≤8 each).",
+  "acceptanceCriteria": [
+    "`src/cli.ts` exists, compiles cleanly with `tsc --noEmit`, and `tsconfig.json` configures `outDir: \"dist\"` with CommonJS-compatible output invocable as `node dist/cli.js`",
+    "CLI validates required flags (`--from`, `--to`, `--date`) and optional `--adults` (defaults 1, rejects non-integer/≤0/non-numeric); invalid input prints human-readable message to stderr and exits code 2",
+    "`RAPIDAPI_KEY` env var is required; if unset or empty, prints error to stderr and exits 1 before any network call",
+    "Parsed arguments including `adults` count are forwarded to `SkyscannerClient.searchFlights`",
+    "Results render as a dynamically-padded table with columns Airline | Price | Departure | Arrival | Duration | Stops; separator row of hyphen segments between header and data; left-aligned except Price (right-aligned, currency-prefixed, fallback £)",
+    "Empty results print `No flights found.` and exit 0; errors print message to stderr and exit 1",
+    "`src/cli.test.ts` covers argument validation, successful render, empty-result render, missing env var, and error handling with ≥8 passing vitest tests; `vitest run` exits 0",
+    "No new runtime dependencies added beyond Node built-ins and existing packages"
+  ],
+  "description": "Create `src/cli.ts` — a standalone Node entry point that accepts flight search arguments via `process.argv` and prints results as an aligned table. Parse flags manually (no commander, no yargs, zero new runtime deps). Require `RAPIDAPI_KEY` env var; exit 1 with a human-readable message if absent. Instantiate `SkyscannerClient` from `src/skyscanner/client.ts` (SKY-002), call `searchFlights` forwarding all parsed arguments including adults count, and render results in a dynamically-padded table with columns: Airline | Price | Departure | Arrival | Duration | Stops. Column widths are determined by the widest value in each column (including the header). A separator row of hyphen characters must appear between the header and data rows. Price is right-aligned and prefixed with the currency symbol returned by the API (default £ if absent); all other columns are left-aligned. If no flights are returned print `No flights found.` and exit 0. On any thrown error print the message to stderr and exit 1. Create `src/cli.test.ts` covering argument validation, successful render, empty-result render, missing env var, and error handling using vitest with `SkyscannerClient` mocked at the module boundary. The compiled output must be invokable as `node dist/cli.js ...` after `tsc`; `tsconfig.json` must have `outDir` set to `dist` and emit CommonJS-compatible output.",
+  "title": "Implement flight search CLI entry point with formatted table output",
+  "splitStories": [
+    {
+      "id": "SKY-003-A",
+      "title": "Implement flight search CLI entry point (src/cli.ts)",
+      "description": "Create `src/cli.ts` — a standalone Node entry point that accepts flight search arguments via `process.argv` and prints results as an aligned table. Parse flags manually (no commander, no yargs, zero new runtime deps). Require `RAPIDAPI_KEY` env var; exit 1 with a human-readable message if absent. Instantiate `SkyscannerClient` from `src/skyscanner/client.ts` (SKY-002), call `searchFlights` forwarding all parsed arguments including adults count, and render results in a dynamically-padded table. Export `main()` and guard execution with `require.main === module` so it is testable. The compiled output must be invocable as `node dist/cli.js ...` after `tsc`.",
+      "acceptanceCriteria": [
+        "`src/cli.ts` exists and `tsc --noEmit` reports zero errors; `tsconfig.json` sets `outDir` to `dist` and emits CommonJS-compatible output invocable as `node dist/cli.js`",
+        "Flags `--from`, `--to`, and `--date` are all required; if any is absent the CLI prints a usage hint to stderr (showing correct flag names) and exits with code 2",
+        "`--date` value must match `YYYY-MM-DD`; invalid format causes exit code 2 with human-readable message to stderr before any network call",
+        "Optional `--adults` defaults to 1 when omitted; non-integer (use Number() not parseInt to catch 1.5), ≤0, or non-numeric string causes exit code 2 with human-readable message to stderr; parsed value is forwarded to `searchFlights`",
+        "If `RAPIDAPI_KEY` env var is unset or empty, prints 'Error: RAPIDAPI_KEY environment variable is required' to stderr and exits 1 before any network call",
+        "When results exist, stdout contains: header row (Airline, Price, Departure, Arrival, Duration, Stops), separator row of hyphen segments matching each column width separated by the same whitespace between columns, and one data row per result; all columns padded to widest value width (including header)",
+        "All columns except Price are left-aligned; Price is right-aligned and prefixed with currency symbol from API response (fallback £ if absent); empty results print `No flights found.` and exit 0; errors write message to stderr and exit 1 with empty stdout",
+        "No runtime dependency other than Node built-ins and existing packages is added; `main()` is exported and execution is guarded so the module is testable via import"
+      ],
+      "agentRole": "typescript-engineer",
+      "technicalNotes": {
+        "files": [
+          "/home/bradleyjerome/projects/skyscanner-app/src/cli.ts"
+        ],
+        "dependsOn": ["SKY-002"],
+        "implementationNotes": "CRITICAL — argument parsing pitfall: use Number() not parseInt() to parse --adults. parseInt('1.5', 10) silently truncates to 1 (a valid integer), making the non-integer validation impossible — Number.isInteger(1) is true so exit code 2 is never triggered. Number('1.5') returns 1.5, which correctly fails Number.isInteger() and triggers exit 2. The adults validation must reject: non-integer values (e.g. 1.5), zero, negative numbers, and non-numeric strings. All must exit with code 2.\n\nCRITICAL — separator row format: the table renders one hyphen-segment per column, padded to that column's width, separated by the same whitespace used between column values. The separator is NOT a single run of unbroken hyphens. A regex checking the separator must allow spaces: /^[-\\s]+$/ not /^-[-]+$/.\n\nCRITICAL — main() must be exported and guarded. Export the function: `export async function main()`. Guard execution: `if (require.main === module) { main(); }` or use the VITEST env var pattern. Unexported main cannot be tested via require('./cli').main."
+      }
+    },
+    {
+      "id": "SKY-003-B",
+      "title": "Test flight search CLI entry point (src/cli.test.ts)",
+      "description": "Create `src/cli.test.ts` covering argument validation, successful multi-row table render, empty-result render, missing env var, and error handling using vitest with `SkyscannerClient` mocked at the module boundary. Must contain at least 8 passing test cases.",
+      "acceptanceCriteria": [
+        "`src/cli.test.ts` exists and uses vitest with `SkyscannerClient` mocked at the module boundary (vi.mock or equivalent)",
+        "Tests for missing required flags: missing --from, missing --to, missing --date each cause exit code 2 and print usage hint to stderr",
+        "Test for invalid --adults values: non-integer (e.g. 1.5), zero, negative, and non-numeric string each cause exit code 2 with human-readable message to stderr",
+        "Test for missing RAPIDAPI_KEY env var: prints 'Error: RAPIDAPI_KEY environment variable is required' to stderr and exits 1",
+        "Test for valid multi-row results: verifies header row with correct column names, separator row present with hyphen segments per column (allowing inter-column spaces), left-aligned columns, right-aligned Price column, and currency symbol prefix (fallback £)",
+        "Test for empty-array result: stdout contains exactly `No flights found.` and process exits 0",
+        "Test for error path: when `searchFlights` rejects, error message is written to stderr, process exits 1, and stdout is empty",
+        "`vitest run` exits 0 with all tests green; at least 8 passing test cases total"
+      ],
+      "agentRole": "test-engineer",
+      "technicalNotes": {
+        "files": [
+          "/home/bradleyjerome/projects/skyscanner-app/src/cli.test.ts"
+        ],
+        "dependsOn": ["SKY-003-A"],
+        "implementationNotes": "Mock SkyscannerClient at the module boundary using vi.mock. Capture stdout/stderr via spy or buffer. Verify exit codes by mocking process.exit or using helper that catches the call. Ensure main() is imported from cli.ts (requires SKY-003-A to export it). Separator row regex must allow spaces between hyphen segments: /^[-\\s]+$/ not /^-[-]+$/."
+      }
+    }
+  ]
+}
+```

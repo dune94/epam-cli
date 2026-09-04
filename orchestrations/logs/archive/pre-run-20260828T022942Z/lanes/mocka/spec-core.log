@@ -1,0 +1,11 @@
+spec-mode: fast-path claude/claude-haiku-4-5-20251001 (skipping MiniMax)
+spec-mode: detective for mocka = mocka-detective (minted for this codeline)
+spec-mode: fast-path claude/claude-haiku-4-5-20251001 (skipping MiniMax)
+spec-mode: fast-path claude/claude-haiku-4-5-20251001 (skipping MiniMax)
+spec-mode: SPEC_AGENT: missing required field "storyId" — required by its own tool definition
+spec-mode: MOCK3-1 — ACs are immutable (VC model); openspec AC edits redacted, verification captured in verificationCriteria
+spec-mode: fast-path claude/claude-haiku-4-5-20251001 (skipping MiniMax)
+spec-mode: SPEC_AGENT: missing required field "storyId" — required by its own tool definition
+spec-mode-runner failed: Error: [engine-prompt] 'spec-coordinator-review' was given EMPTY values for: __CODELINE_SCOPE__. An empty payload renders as a blank section and the agent answers about silence. Supply it, or declare the placeholder in the template's `mayBeEmpty` if absent is a real state for it.
+    at renderEngineTemplate (/home/bradleyjerome/projects/ai/epam-cli/orchestrations/scripts/lib/engine-prompt.js:303:11)
+    at run (/home/bradleyjerome/projects/ai/epam-cli/orchestrations/scripts/spec-mode-runner.js:2241:26)

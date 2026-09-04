@@ -1,0 +1,8 @@
+{
+  "agent": "perf-sentinel",
+  "phase": "core",
+  "summary": { "filesAnalysed": 2, "findingsCount": 0, "blockerCount": 0, "estimatedStartupImpactMs": 0 },
+  "findings": [],
+  "verdict": "not_applicable",
+  "reason": "Change is a string-literal swap in a trivial function and its test — no loops, async, imports, caching, or provider patterns to evaluate for performance."
+}

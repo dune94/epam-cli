@@ -1,0 +1,62 @@
+# Prompt
+Regenerate the VERIFICATION CRITERIA for this brownfield story. Your previous verification criteria were FLAGGED and must be fixed:
+- VC 1 cross-compares draft vs published values ("not the previously published values") — restate as observable draft content on the page
+- VC 2 prescribes HOW ("re-renders") — restate as observable updated field value appearing without full page reload
+- VC 3 cross-compares to current behavior ("identically to the current behavior") — restate as observable published content on the page
+- VC 4 references internal mechanism ("live preview SDK is initialized") — restate precondition as observable live preview session state
+- VC 5 references internal config ("no preview token or host") and cross-compares ("no change from current behavior") — restate as observable published content with no errors
+
+THE FIX SITE (located by the code-graph detective — anchor every criterion to the behaviour THIS code produces):
+- src/services/contentstack.ts :: options — This is the Contentstack SDK initialization config where live_preview settings must be injected. The Stack is created from these options (line 91), and all content queries (getEntry, getSingleEntry, ContentstackFactory) flow through this Stack instance. Contentstack's Live Preview feature requires adding a live_preview config block to the Stack initialization options, making this the primary attachment point for the new preview capability.
+Do NOT write criteria about areas unrelated to this code.
+
+
+Acceptance criteria (IMMUTABLE — the intent to verify; do NOT restate as-is, VERIFY them):
+- (none)
+Description: Original Requirements (discovery)  AS a Content Author, I WANT to preview draft entries in CMS, SO THAT I can see how content will be shown on the website
+ability to preview draft entries in CMS
+Notes& Assumptions  Limitation: Might not be possible to preview protected pages and content.
+Original Total Estimate:  8  Original FE Estimate:  8  Original DAM Estimate:  0  Original BE Estimate:  0
+
+A verification criterion states WHAT AN END USER OR TESTER OBSERVES on the user-facing surface THE TICKET IS ABOUT — the rendered output for an output ticket, the displayed screen for a UI ticket, the response a CLIENT receives for an API ticket. It is a BLACK-BOX check on that surface. It NEVER describes HOW the value is produced.
+A verification criterion is FORBIDDEN if it:
+- prescribes HOW to implement — any algorithm, mechanism, approach, or the addition/reading of any new field, flag or service;
+- references an INTERNAL structure that merely FEEDS the ticket's surface — an intermediate payload, a data-transfer object, or a specific response field used to BUILD the output. Verify the surface the ticket names, NOT the data structure behind it;
+- makes a CROSS-COMPARISON that presumes a mechanism — never assert one value "must equal" / "matches" / "is the same as" another; that presumes a shared derivation. Assert the required value is present and correct ON ITS OWN.
+Every verification criterion must be observable, testable, and tied to the ticket's stated symptom/intent.
+
+EXAMPLES OF FORM (the angle-bracket words are placeholders — fill them from THIS story; never copy them literally):
+
+REJECTED: "the <config object> passed to <the client> includes a <key> entry"
+  — asserts INTERNAL STRUCTURE. A tester cannot see a config object.
+ACCEPTED: "when <the request> carries <the marker>, <the surface> shows <the draft state> instead of <the published state>"
+
+REJECTED: "when <internal function> is called with <argument>, the resulting <query> includes <field>"
+  — asserts an INTERNAL CALL PATH. Verify the surface the ticket is about, not the path behind it.
+ACCEPTED: "<the surface> shows <the value> that <the source of truth> currently holds"
+
+REJECTED: "an author edits <entity> in <the external tool> and <the surface> updates"
+  — begins OUTSIDE THE BOUNDARY this suite can drive. Nothing here can operate that tool.
+ACCEPTED: "given <the client> is mocked to signal <the change>, <the surface> re-renders without a reload"
+
+REJECTED: "<the value> matches what <the other place> shows"
+  — a CROSS-COMPARISON presumes a shared derivation. Assert the required value on its own.
+ACCEPTED: "<the surface> shows <the expected value> for <the stated condition>"
+
+REJECTED: "<the feature> works correctly with no regression"
+  — verifies nothing and cannot fail.
+ACCEPTED: "when <the feature> is inactive, <the surface> shows <the prior behaviour> unchanged"
+
+Do NOT restate an acceptance criterion as-is — express what a tester OBSERVES that confirms it. Address every flag above.
+Output ONLY a JSON array of verification-criterion strings. No prose, no markdown.
+
+# Output
+```json
+[
+  "When a live preview session is active, the page displays the draft content of the requested entry — for example, a field value that has been saved as a draft but not yet published.",
+  "When a draft entry field is modified during an active live preview session, the updated field value appears on the page without a full page reload.",
+  "When no live preview session is active, the page displays the published content for each entry.",
+  "When the page is accessed with a live preview session active, the page loads and renders the entry content successfully.",
+  "When the page is accessed without a live preview session, the published content is displayed and no content retrieval errors appear in the browser console."
+]
+```

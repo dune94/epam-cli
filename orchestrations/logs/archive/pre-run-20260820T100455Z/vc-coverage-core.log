@@ -1,0 +1,14 @@
+  [vc-coverage] UNCOVERED Given the Contentstack client is mocked to signal a draft entry change for the MX Homepage, the rendered Homep
+  [vc-coverage]           No test passes a preview hash or verifies that draft Homepage content is returned instead of published content
+  [vc-coverage] UNCOVERED Given the Contentstack client is mocked to signal a draft entry change for a Discover Article page, the render
+  [vc-coverage]           No test mocks a draft entry change for a Discover Article page or asserts that draft content replaces publishe
+  [vc-coverage] UNCOVERED When no preview signal is active, the MX Homepage renders published content identically to its current behavio
+  [vc-coverage]           The Homepage test only asserts return values (news and sorted events) without verifying that no preview-relate
+  [vc-coverage] UNCOVERED When no preview signal is active, Discover Article pages render published content identically to their current
+  [vc-coverage]           No test verifies that NewsArticle (Discover Article) page content is fetched or rendered identically without p
+  [vc-coverage] UNCOVERED Given the Contentstack client is mocked to signal multiple successive draft entry changes for the same Homepag
+  [vc-coverage]           No test mocks multiple successive draft entry changes for a Homepage or asserts sequential rendering updates w
+  [vc-coverage] UNCOVERED Given the Contentstack client is mocked to signal a draft entry change while the page is in a protected or gat
+  [vc-coverage]           No test simulates a draft entry change signal in a protected or gated page state and asserts that published co
+  [vc-coverage] VC_UNCOVERED=6 of 6
+  [vc-coverage] the change is still proven by the bug-reproduction gate — this is a COVERAGE gap, not a correctness one

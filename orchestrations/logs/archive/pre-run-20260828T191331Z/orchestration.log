@@ -1,0 +1,64 @@
+[mint-step] codeline mocka: /home/bradleyjerome/projects/mock3/mock-a (2 declared deps)
+[mint-step] codeline mockb: /home/bradleyjerome/projects/mock3/mock-b (2 declared deps)
+[mint-step] plugins provisioned: 1 · mint tools: read_file,list_files,search,codegraph_query
+spec-mode: fast-path claude/claude-haiku-4-5-20251001 (skipping MiniMax)
+[mint-step]   survey: mocka — in_scope (src/fares.ts, test/fares.test.ts)
+[mint-step]   survey: mockb — in_scope (src/schedule.ts, test/schedule.test.ts)
+[mint-step]   survey recommends an investigator for mocka: Fare calculation boundary conditions, particularly the age 65 boundary for senior concession fares
+[mint-step]   survey recommends an investigator for mockb: Stop sequence rendering logic and whether all stops (including the final one) should be included in the formatted output
+[mint-step] mint skipped (EPAM_SKIP_AGENT_MINT=1) — resuming from a checkpoint
+[mint-step] resumed roster — reviewed in the run being resumed, not re-reviewed here
+[mint-step] [roster] rosterMode=canonical — 58 persona(s) adopted verbatim (4 minted for this project), no specialiser call
+[mint-step] project roster: 58 agent(s)
+[mint-step]   MOCK3-1 -> fare-rules-engineer (pre-assigned (validated, not regenerated))
+[mint-step]   MOCK3-2 -> schedule-display-engineer (pre-assigned (validated, not regenerated))
+[mint-step] roster diff: 3 generated, 6 brief-changed, 0 missing vs canonical
+[mint-step] agent→seam cross-reference written for 53 agent(s)
+[mint-step] ✓ workflow is buildable: every required input has a producer
+[prompt-builder] prompt review ENABLED — each generated prompt is falsified before install
+[prompt-builder] 39 template(s) need a project copy (seam-declared, plus bootstrap auxiliaries)
+[prompt-builder] copied agent-proposal
+[prompt-builder] copied project-prompt-generation
+[prompt-builder] copied team-lead-review
+[prompt-builder] copied code-review-cycle
+[prompt-builder] copied failure-analyst
+[prompt-builder] copied repro-test-writer
+[prompt-builder] copied tc-writer
+[prompt-builder] copied cpa-inference
+[prompt-builder] copied prd-change-reviewer
+[prompt-builder] copied prd-change-summarizer-text
+[prompt-builder] copied ac-classification
+[prompt-builder] copied ac-elaboration
+[prompt-builder] copied codeline-discovery
+[prompt-builder] copied roster-review
+[prompt-builder] copied code-graph-detective
+[prompt-builder] copied guard-vocabulary
+[prompt-builder] copied estate-survey
+[prompt-builder] copied story-writer
+[prompt-builder] copied vc-coverage
+[prompt-builder] copied qa-sast-sentinel
+[prompt-builder] copied qa-spec-validator
+[prompt-builder] copied qa-review-ranger
+[prompt-builder] copied qa-mutant-hunter
+[prompt-builder] copied qa-fuzz-weaver
+[prompt-builder] copied qa-perf-sentinel
+[prompt-builder] copied codeline-bridge
+[prompt-builder] copied e2e-route-check
+[prompt-builder] copied assign-agent-roles
+[prompt-builder] copied spec-coordinator
+[prompt-builder] copied spec-agent-openspec
+[prompt-builder] copied spec-story-block
+[prompt-builder] copied skill-assessment-prephase
+[prompt-builder] copied prd-model-coordinator
+[prompt-builder] copied prompt-review
+[prompt-builder] copied survey-review
+[prompt-builder] copied runtime-boundary-review
+[prompt-builder] copied roster-specialisation
+[prompt-builder] copied project-roster-review
+[prompt-builder] copied topology-router
+[prompt-builder] copied blocker-discipline
+[prompt-builder] copied test-ownership
+[prompt-builder] templates read from /home/bradleyjerome/projects/ai/epam-cli/orchestrations/prompts/templates
+[mint-step] ✓ prompts provisioned (copy): 41 copied (bootstrap), 0 generated → /home/bradleyjerome/projects/ai/epam-cli/orchestrations/projects/mock3/prompts
+[mint-step] ✓ prompts linked: 57 agent(s) across 11 seam(s) → /home/bradleyjerome/projects/ai/epam-cli/orchestrations/projects/mock3/prompt-agent-link.json
+[mint-step] ✓ roster and assignments written to /home/bradleyjerome/projects/ai/epam-cli/orchestrations/projects/mock3/prd.json

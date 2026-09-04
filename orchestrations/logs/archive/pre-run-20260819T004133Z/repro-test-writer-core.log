@@ -1,0 +1,9 @@
+[repro-test-writer] target from the plan's fix site: src/services/contentstack.ts
+/home/bradleyjerome/projects/ai/epam-cli/orchestrations/scripts/brownfield-repro-test-writer.sh: line 283: render_engine_prompt: command not found
+/home/bradleyjerome/projects/ai/epam-cli/orchestrations/scripts/brownfield-repro-test-writer.sh: line 284: render_engine_prompt: command not found
+/home/bradleyjerome/projects/ai/epam-cli/orchestrations/scripts/brownfield-repro-test-writer.sh: line 285: render_engine_prompt: command not found
+[repro-test-writer] writing test for AMSD-2041 (kind: novel) → src/services/contentstack.spec.ts (convention: .spec.ts, example: src/services/__tests__/contactUsService.spec.ts)
+[repro-test-writer] test produced and validated on attempt 1 (model z-ai/glm-5.2)
+[repro-test-writer] committed reproducing test: src/services/contentstack.spec.ts
+[codegraph-reindex] index is DIRTY for /home/bradleyjerome/projects/metrolinx/next.metrolinx.com (e.g. .deepeval/.deepeval_telemetry.txt) — rebuilding (post-commit repro-test AMSD-2041)
+[codegraph-reindex] reindexed /home/bradleyjerome/projects/metrolinx/next.metrolinx.com in 0s (post-commit repro-test AMSD-2041) — reviewer's codegraph_query now sees this story's writes

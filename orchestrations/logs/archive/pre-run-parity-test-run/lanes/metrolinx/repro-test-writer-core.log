@@ -1,0 +1,5 @@
+[repro-test-writer] writing reproducing test for AMSD-2041 (kind: unclassified) → src/interface/contentstack.spec.ts (convention: .spec.ts, example: __tests__/next-sitemap.config.spec.ts)
+[repro-test-writer] test produced and validated on attempt 1 (model z-ai/glm-5.1)
+[repro-test-writer] committed reproducing test: src/interface/contentstack.spec.ts
+[codegraph-reindex] index is DIRTY for /home/bradleyjerome/projects/metrolinx/next.metrolinx.com (e.g. .epam/codeline-facts.json) — rebuilding (post-commit repro-test AMSD-2041)
+[codegraph-reindex] reindexed /home/bradleyjerome/projects/metrolinx/next.metrolinx.com in 0s (post-commit repro-test AMSD-2041) — reviewer's codegraph_query now sees this story's writes

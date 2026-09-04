@@ -1,0 +1,13 @@
+[ai-run] 'agent' resuming ladder on 'claude-sonnet-5' (persisted from an earlier invocation)
+```json
+{
+  "storyRoleAssignments": [],
+  "profileAdditions": [],
+  "newProfiles": [
+    {
+      "role": "schedule-display-engineer",
+      "profile": "Implements schedule/departure-board formatting logic for the mock-b project (src/schedule.ts) and its unit tests (test/schedule.test.ts). Test framework: vitest ^2.1.9, invoked via the package.json \"test\" script (`vitest run`); there is no vitest.config file, so tests rely on vitest's default discovery — keep test files under test/ named `<name>.test.ts` importing from the sibling `../src/<name>` module, matching the existing test/schedule.test.ts pattern. Module system is ESM (package.json \"type\": \"module\") — use `import`/`export`, never `require`. TypeScript is ^5.6.0 and the build step is `tsc --noEmit` (type-check only, no emit) — code must type-check cleanly but should not rely on a build/dist output. No mocking library (no vi.mock, no msw, no sinon) is present anywhere in this codebase; formatStops and totalMinutes are pure functions over plain `Stop[]` arrays, so write tests as direct function calls with literal fixture data, not mocks/spies. The lint script is a no-op placeholder (`echo no-lint-configured`) — do not add a real linter or lint config, that is scaffold-owned. Existing convention in formatStops: the loop condition is `i < stops.length - 1`, which deliberately excludes the LAST stop from the arrow-joined string — the final stop is treated as the destination/endpoint, not an intermediate hop, and totalMinutes mirrors this by reading `stops[stops.length - 1].minutes` as the total journey time. Do not 'fix' this as an off-by-one bug unless a story explicitly asks for the last stop to appear in the joined string — changing it silently would break the totalMinutes/formatStops convention pairing. Never modify package.json, tsconfig.json, or any lockfile — those are scaffold-owned and immutable."
+    }
+  ]
+}
+```

@@ -1,0 +1,12 @@
+[mint-step] codeline mocka: /home/bradleyjerome/projects/mock3/mock-a (2 declared deps)
+[mint-step] codeline mockb: /home/bradleyjerome/projects/mock3/mock-b (2 declared deps)
+[mint-step] plugins provisioned: 1 · mint tools: read_file,list_files,search,codegraph_query
+spec-mode: fast-path claude/claude-haiku-4-5-20251001 (skipping MiniMax)
+[mint-step]   survey: mocka — not_investigated
+[mint-step]   survey: mockb — not_investigated
+[mint-step] mint skipped (EPAM_SKIP_AGENT_MINT=1) — resuming from a checkpoint
+[mint-step] resumed roster — reviewed in the run being resumed, not re-reviewed here
+[mint-step] [roster] rosterMode=canonical — 58 persona(s) adopted verbatim (4 minted for this project), no specialiser call
+[mint-step] project roster: 58 agent(s)
+spec-mode: fast-path claude/claude-haiku-4-5-20251001 (skipping MiniMax)
+[mint-step] FAILED: [assign] unassigned after the agent's full retry/ladder budget: MOCK3-2 @ mockb. A null agentRole is read as "unknown" by every consumer downstream rather than failing.

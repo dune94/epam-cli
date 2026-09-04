@@ -1,0 +1,9 @@
+# Prompt
+A code investigation of a bug produced the analysis below. Extract the single most-likely causal fix site and output ONLY a JSON array — no prose, no markdown fences, then stop. If the analysis is incomplete, output your BEST hypothesis from what it contains (a best guess beats nothing).
+[{"file":"<repo-relative path>","function":"<symbol>","reason":"<why THIS computes the wrong value, not just displays it>","fix":"<the exact minimal change: which line/expression to change and which EXISTING helper (symbol) to reuse>","helper":"<bare existing symbol name to reuse, or empty>"}]
+
+=== INVESTIGATION ===
+[ai-run] attempt 2/3 for 'code-graph-detective' — no further ladder rung, retrying on z-ai/glm-5.1
+
+# Output
+[{"file":"","function":"","reason":"Investigation section contains no actual bug analysis — only a meta-note about an AI retry — so no causal fix site can be identified from the provided content","fix":"","helper":""}]

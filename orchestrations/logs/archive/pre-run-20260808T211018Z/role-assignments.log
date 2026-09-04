@@ -1,0 +1,32 @@
+# Prompt
+Assign an implementation agent role to every story below.
+
+AVAILABLE ROLES — these are this project's own engineering roles. Choose from these and
+nothing else; the name you return must match one of them verbatim:
+- contentstack-live-preview-sdk-engineer
+    You are a Contentstack Live Preview SDK integration engineer working across three Next.js codelines: gotransit, upexpress, and metrolinx. All three declare contentstack, @contentstack/utils, and @contentstack/management as dependencies. None currently declares @contentstack/live-preview-utils — you must install it in each codeline. Your primary responsibility is to configure the Contentstack Deliv
+- contentstack-live-preview-wiring-engineer
+    You are a React component integration engineer for Contentstack Live Preview, working across three Next.js codelines: gotransit, upexpress, and metrolinx. All three use React, Next.js (App Router), TypeScript, and contentstack as their CMS SDK. Your responsibility is to wire the onEntryChange callback exported from the live-preview initialization module (created by the SDK engineer) into page and 
+
+STORIES — a story listing more than one codeline needs ONE ASSIGNMENT PER CODELINE:
+- AMSD-2041: [GO, UP, MX] Live Preview of Content in CMS
+    codelines (assign one role for EACH): gotransit, upexpress, metrolinx
+    Original Requirements (discovery) AS a Content Author, I WANT to preview draft entries in CMS, SO THAT I can see how content will be shown on the website ability to preview draft entries in CMS Notes& Assumptions Limitation: Might not be possible to preview protected pages and content. Original Total Estimate: 8 Original FE Estimate: 8 Original DAM Estimate: 0 Original BE Estimate: 0
+
+Pick the role whose stated expertise actually covers the work the story describes. If two
+roles could plausibly own a story, prefer the one whose brief names the surface the story
+touches. Every story must be assigned exactly one role.
+
+THE OWNER MUST AUTHOR THE CODE. Assign the role that will EDIT THE FILES this story changes —
+the one whose brief names those files or directories. A role whose brief is about settings in
+a vendor's console, or about documentation, cannot deliver a story here: the agent's output is
+a change in a repository. Live 2026-08-07: this story went to the one role of three that owned
+no source files, and all such a role can produce is a configuration note. Where the story needs
+both console configuration and code, the code owner is the assignee.
+
+# Output
+{"assignments": [
+{"agentRole": "contentstack-live-preview-sdk-engineer", "codeline": "gotransit", "reason": "AMSD-2041 is the foundational live-preview enablement story: installing @contentstack/live-preview-utils, configuring the Contentstack Delivery SDK, and creating the live-preview initialization module. The SDK engineer's brief explicitly covers this surface. The wiring engineer's brief depends on the SDK engineer having already created the initialization module (it consumes the onEntryChange callback the SDK engineer exports), so the SDK engineer is the prerequisite owner. Without the SDK module, the wiring engineer has nothing to wire. The story needs code in the repository, and the SDK engineer is the role that authors those files.", "storyId": "AMSD-2041"},
+{"agentRole": "contentstack-live-preview-sdk-engineer", "codeline": "upexpress", "reason": "Same rationale as gotransit: AMSD-2041 is the foundational live-preview enablement story. The SDK engineer installs @contentstack/live-preview-utils, configures the Contentstack Delivery SDK, and creates the live-preview initialization module that the wiring engineer will later consume. The wiring engineer's brief explicitly states it depends on the module created by the SDK engineer, so the SDK engineer is the prerequisite owner for this story in every codeline.", "storyId": "AMSD-2041"},
+{"agentRole": "contentstack-live-preview-sdk-engineer", "codeline": "metrolinx", "reason": "Same rationale as gotransit and upexpress: AMSD-2041 is the foundational live-preview enablement story. The SDK engineer installs @contentstack/live-preview-utils, configures the Contentstack Delivery SDK, and creates the live-preview initialization module that the wiring engineer will later consume. The SDK engineer is the prerequisite owner for this story in every codeline.", "storyId": "AMSD-2041"}
+]}

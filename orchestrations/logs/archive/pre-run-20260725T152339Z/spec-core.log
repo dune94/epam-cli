@@ -1,0 +1,5 @@
+spec-mode: MOCK-HW-1-impl — 1 verification criteria persisted (source: acceptance, resolution: clean)
+spec-mode: MOCK-HW-1-test — 2 verification criteria persisted (source: acceptance, resolution: clean)
+spec-mode: LLM model review completed for 2 stories
+spec-mode: model set MOCK-HW-1-impl: MiniMax-M3 → MiniMax-M2.5 [LLM override]
+spec-mode: model set MOCK-HW-1-test: MiniMax-M3 → MiniMax-M2.5 [LLM override]

@@ -1,0 +1,575 @@
+=== Prompt for SKY-002-test (attempt 1) ===
+CRITICAL — WRITE FILES FIRST. Your FIRST tool call MUST be WriteFile.
+Do NOT output any text before calling WriteFile. Do NOT plan or say "I will...".
+Call WriteFile NOW for the EXACT ABSOLUTE PATHS listed below:
+
+   - WRITE /home/bradleyjerome/projects/skyscanner-app/src/skyscanner/client.test.ts first, before any other action
+---
+
+Implement user story SKY-002-test: Test Skyscanner API client module
+
+## Story Description
+Create src/skyscanner/client.test.ts with vitest tests covering constructor key resolution, fetch URL/header construction, successful response parsing, HTTP error handling, parse error handling, and mock mode behavior — all using mocked fetch with no real network calls.
+
+## Acceptance Criteria
+- 1. client.test.ts contains ≥5 vitest tests using mocked fetch (vi.stubGlobal or equivalent) with afterEach restoration, covering: (a) correct RapidAPI URL and header construction, (b) successful response parsed into FlightResult[], (c) HTTP 4xx rejection with status code in error message, (d) missing/empty API key constructor error, (e) malformed response body parse/validation error
+- 2. Tests verify mock mode: when MOCK_SKYSCANNER_API='true', assert fetch spy is never called and deterministic fixture is returned; when unset or non-'true' (e.g. 'false', '1', 'TRUE'), assert real fetch is invoked; assert real failures are never silently replaced with fixture data
+- 3. tsc --noEmit exits 0 with no type errors
+- 4. vitest run exits 0 with all tests passing
+
+
+## Test Criteria (ground truth — written from actual source; overrides any conflicting AC)
+- Class SkyscannerClient exported from module
+- Constructor signature: constructor({ apiKey }: { apiKey?: string } = {})
+- Constructor throws Error with exact message: 'SkyscannerClient: missing API key. Provide `apiKey` in the constructor or set the RAPIDAPI_KEY environment variable.' when both apiKey param and RAPIDAPI_KEY env are missing/empty
+- Constructor trims apiKey and RAPIDAPI_KEY before validation
+- Constructor prefers apiKey param over RAPIDAPI_KEY env when both provided
+- Method searchFlights signature: async searchFlights(params: SearchParams): Promise<FlightResult[]>
+- SearchParams interface: { origin: string; destination: string; date: string; adults?: number }
+- FlightResult interface: { price: number; currency: string; airline: string; departure: string; arrival: string; duration: number; stops: number }
+- Mock mode activated when env.MOCK_SKYSCANNER_API === 'true' (exact string match, case-sensitive)
+- Mock mode returns deterministic fixture from getMockFixture(params) without calling fetch
+- Non-'true' values for MOCK_SKYSCANNER_API (including 'false', '1', 'TRUE', '', undefined) trigger real fetch
+- Real API URL: https://skyscanner-skyscanner-flight-search-v1.p.rapidapi.com/flights/search
+- Query params built: origin, destination, date, adults (optional)
+- Request headers: 'X-RapidAPI-Key', 'X-RapidAPI-Host': 'skyscanner-skyscanner-flight-search-v1.p.rapidapi.com', 'Accept': 'application/json'
+- HTTP error message format: 'Skyscanner API request failed with status {status} {statusText}'.trim() + (bodyText ? `: ${bodyText}` : '')
+- JSON parse error message format: 'Skyscanner API response could not be parsed as JSON: {errorMessage}'
+- Response parsing attempts: payload as array, payload.results, payload.flights, payload.itineraries (in that order)
+- Validation error for missing flights array: 'Skyscanner API response was missing a flights/results array.'
+- Validation error for malformed entry: 'Skyscanner API response contained a malformed flight entry.'
+- Validation error for empty results: 'Skyscanner API response contained no flight results.'
+- No validation on adults lower bound - adults=0 is valid
+- No validation on date format - any string accepted
+- No validation on origin/destination format - any string accepted
+
+## Mock Strategy
+Use vi.stubGlobal('fetch', vi.fn()) to mock fetch; use vi.stubGlobal('process', { env: {} }) or vi.stubEnv to control environment variables; no vi.mock() needed since testing the class directly via import
+
+## Banned Patterns (must NOT appear in your file)
+origin, destination, vi.mock('./skyscanner/client'), vi.mock('./client'), @jest/globals, MOCK_SKYSCANNER_API === true, MOCK_SKYSCANNER_API == 'true', mock mode returns fixture for 'TRUE', mock mode returns fixture for '1', RapidAPI URL without 'skyscanner-skyscanner-flight-search-v1.p.rapidapi.com', X-RapidAPI-Key header missing, X-RapidAPI-Host header missing, Accept header missing, adults validation rejects 0, date format validation, IATA code validation
+
+## Technical Notes
+- files: ["/home/bradleyjerome/projects/skyscanner-app/src/skyscanner/client.test.ts"]
+- dependsOn: ["SKY-001"]
+
+## Files to Create/Modify (EXACT ABSOLUTE PATHS — write to these paths exactly)
+/home/bradleyjerome/projects/skyscanner-app/src/skyscanner/client.test.ts
+
+## Dependencies
+None
+
+
+## Instructions
+**CRITICAL — WRITE FILES FIRST:**
+   - WRITE /home/bradleyjerome/projects/skyscanner-app/src/skyscanner/client.test.ts first, before any other action
+**You MUST write every file listed above to its EXACT absolute path. Do NOT write to a different path, do NOT write to the current directory unless it matches the path above. Use your WriteFile or Edit tools with the full absolute path shown.**
+
+1. Write each required file to its exact absolute path listed above — do this FIRST before anything else
+2. Implement all acceptance criteria for this story
+3. Test Criteria facts above are ground truth — your test assertions MUST match them exactly
+4. Do NOT create tests unless explicitly required in acceptance criteria
+
+After implementation, provide a brief summary of what was created/modified.
+
+## Relevant Knowledge Base Entries
+The following was learned from previous story implementations and is relevant to your agent role. Apply this knowledge before writing any code:
+
+- [2026-07-06T17:45:30Z] Always resolve mocked fetch calls to a Response-shaped object with ok, status, statusText, and a json method returning a Promise.
+- [2026-07-06T17:50:20Z] Use valid module and moduleResolution pairs in tsconfig.json: CommonJS with Node, Node16 with Node16, ESNext with Bundler. Use CommonJS and Node for the stack. Mismatched pairs cause build errors.
+- [2026-07-06T18:11:26Z] Use vi.fn().mockResolvedValue(value) to make a mock return a resolved Promise.
+- [2026-07-06T20:31:11Z] Use `test: { passWithNoTests: true }` in vitest.config.ts or create a stub test file when no *.test.ts files exist.
+- [2026-07-06T20:33:03Z] Enable globals:true in vitest.config.ts so describe, it, and expect work without imports, reducing boilerplate in test files.
+- [2026-07-06T23:47:34Z] Use CommonJS-compatible patterns in src/server.ts: avoid `import.meta.url` and top-level `await`; gate listen with `if (require.main === module)`.
+- [2026-07-07T02:35:30Z] Always include a non-test source file in src/ alongside any src/*.test.ts file, since tsconfig.json excludes test files from tsc --noEmit.
+- [2026-07-07T19:01:34Z] Only modify or create files explicitly listed in the story's acceptance criteria. Do not touch files belonging to other stories or outside the current task scope.
+- [2026-07-07T20:17:57Z] [unreviewed-fallback] Avoid using deprecated TypeScript compiler options like 'moduleResolution=node10'; use 'moduleResolution=node' instead.
+- [2026-07-17T20:20:58Z] Always: Before importing a module or referencing a type/property, always read the actual source file to verify the export exists, its exact path, its properties, and its constructor/factory signatures
+
+## Knowledge Base Contribution (do this LAST — after writing all implementation files)
+Your assigned KB entry ID for this run: **KB-008**
+
+IMPORTANT: Write ALL implementation files first. Only AFTER writing every required file should you optionally append a KB entry.
+Do NOT read orchestrations/agents/KB.md before writing implementation files. The relevant KB entries are already injected above.
+
+If (and only if) you discover a non-obvious pattern during implementation, append one entry to `orchestrations/agents/KB.md`:
+
+```markdown
+## KB-008 -- 2026-07-18
+
+**Category:** <backend|frontend|infrastructure|testing|orchestration>
+**AgentRole:** <your agentRole from the story>
+**Tags:** <comma-separated tech keywords, e.g. typescript, node, cli>
+**Trigger:** <retry|first-success>
+**StoryRef:** SKY-002-test
+
+<One concise paragraph: the specific pattern, gotcha, or anti-pattern.>
+```
+
+Only write an entry if the knowledge is genuinely non-obvious. Skip trivial observations.
+=== End Prompt ===
+
+=== epam Output (attempt 1) ===
+
+
+
+=== epam exited with code 1 ===
+=== Prompt for SKY-002-test (attempt 2) ===
+CRITICAL — WRITE FILES FIRST. Your FIRST tool call MUST be WriteFile.
+Do NOT output any text before calling WriteFile. Do NOT plan or say "I will...".
+Call WriteFile NOW for the EXACT ABSOLUTE PATHS listed below:
+
+   - WRITE /home/bradleyjerome/projects/skyscanner-app/src/skyscanner/client.test.ts first, before any other action
+---
+
+Implement user story SKY-002-test: Test Skyscanner API client module
+
+## Story Description
+Create src/skyscanner/client.test.ts with vitest tests covering constructor key resolution, fetch URL/header construction, successful response parsing, HTTP error handling, parse error handling, and mock mode behavior — all using mocked fetch with no real network calls.
+
+## Acceptance Criteria
+- 1. client.test.ts contains ≥5 vitest tests using mocked fetch (vi.stubGlobal or equivalent) with afterEach restoration, covering: (a) correct RapidAPI URL and header construction, (b) successful response parsed into FlightResult[], (c) HTTP 4xx rejection with status code in error message, (d) missing/empty API key constructor error, (e) malformed response body parse/validation error
+- 2. Tests verify mock mode: when MOCK_SKYSCANNER_API='true', assert fetch spy is never called and deterministic fixture is returned; when unset or non-'true' (e.g. 'false', '1', 'TRUE'), assert real fetch is invoked; assert real failures are never silently replaced with fixture data
+- 3. tsc --noEmit exits 0 with no type errors
+- 4. vitest run exits 0 with all tests passing
+
+
+## Test Criteria (ground truth — written from actual source; overrides any conflicting AC)
+- Class SkyscannerClient exported from module
+- Constructor signature: constructor({ apiKey }: { apiKey?: string } = {})
+- Constructor throws Error with exact message: 'SkyscannerClient: missing API key. Provide `apiKey` in the constructor or set the RAPIDAPI_KEY environment variable.' when both apiKey param and RAPIDAPI_KEY env are missing/empty
+- Constructor trims apiKey and RAPIDAPI_KEY before validation
+- Constructor prefers apiKey param over RAPIDAPI_KEY env when both provided
+- Method searchFlights signature: async searchFlights(params: SearchParams): Promise<FlightResult[]>
+- SearchParams interface: { origin: string; destination: string; date: string; adults?: number }
+- FlightResult interface: { price: number; currency: string; airline: string; departure: string; arrival: string; duration: number; stops: number }
+- Mock mode activated when env.MOCK_SKYSCANNER_API === 'true' (exact string match, case-sensitive)
+- Mock mode returns deterministic fixture from getMockFixture(params) without calling fetch
+- Non-'true' values for MOCK_SKYSCANNER_API (including 'false', '1', 'TRUE', '', undefined) trigger real fetch
+- Real API URL: https://skyscanner-skyscanner-flight-search-v1.p.rapidapi.com/flights/search
+- Query params built: origin, destination, date, adults (optional)
+- Request headers: 'X-RapidAPI-Key', 'X-RapidAPI-Host': 'skyscanner-skyscanner-flight-search-v1.p.rapidapi.com', 'Accept': 'application/json'
+- HTTP error message format: 'Skyscanner API request failed with status {status} {statusText}'.trim() + (bodyText ? `: ${bodyText}` : '')
+- JSON parse error message format: 'Skyscanner API response could not be parsed as JSON: {errorMessage}'
+- Response parsing attempts: payload as array, payload.results, payload.flights, payload.itineraries (in that order)
+- Validation error for missing flights array: 'Skyscanner API response was missing a flights/results array.'
+- Validation error for malformed entry: 'Skyscanner API response contained a malformed flight entry.'
+- Validation error for empty results: 'Skyscanner API response contained no flight results.'
+- No validation on adults lower bound - adults=0 is valid
+- No validation on date format - any string accepted
+- No validation on origin/destination format - any string accepted
+
+## Mock Strategy
+Use vi.stubGlobal('fetch', vi.fn()) to mock fetch; use vi.stubGlobal('process', { env: {} }) or vi.stubEnv to control environment variables; no vi.mock() needed since testing the class directly via import
+
+## Banned Patterns (must NOT appear in your file)
+origin, destination, vi.mock('./skyscanner/client'), vi.mock('./client'), @jest/globals, MOCK_SKYSCANNER_API === true, MOCK_SKYSCANNER_API == 'true', mock mode returns fixture for 'TRUE', mock mode returns fixture for '1', RapidAPI URL without 'skyscanner-skyscanner-flight-search-v1.p.rapidapi.com', X-RapidAPI-Key header missing, X-RapidAPI-Host header missing, Accept header missing, adults validation rejects 0, date format validation, IATA code validation
+
+## Technical Notes
+- files: ["/home/bradleyjerome/projects/skyscanner-app/src/skyscanner/client.test.ts"]
+- dependsOn: ["SKY-001"]
+
+## Files to Create/Modify (EXACT ABSOLUTE PATHS — write to these paths exactly)
+/home/bradleyjerome/projects/skyscanner-app/src/skyscanner/client.test.ts
+
+## Dependencies
+None
+
+
+## Instructions
+**CRITICAL — WRITE FILES FIRST:**
+   - WRITE /home/bradleyjerome/projects/skyscanner-app/src/skyscanner/client.test.ts first, before any other action
+**You MUST write every file listed above to its EXACT absolute path. Do NOT write to a different path, do NOT write to the current directory unless it matches the path above. Use your WriteFile or Edit tools with the full absolute path shown.**
+
+1. Write each required file to its exact absolute path listed above — do this FIRST before anything else
+2. Implement all acceptance criteria for this story
+3. Test Criteria facts above are ground truth — your test assertions MUST match them exactly
+4. Do NOT create tests unless explicitly required in acceptance criteria
+
+After implementation, provide a brief summary of what was created/modified.
+
+## Relevant Knowledge Base Entries
+The following was learned from previous story implementations and is relevant to your agent role. Apply this knowledge before writing any code:
+
+- [2026-07-06T17:45:30Z] Always resolve mocked fetch calls to a Response-shaped object with ok, status, statusText, and a json method returning a Promise.
+- [2026-07-06T17:50:20Z] Use valid module and moduleResolution pairs in tsconfig.json: CommonJS with Node, Node16 with Node16, ESNext with Bundler. Use CommonJS and Node for the stack. Mismatched pairs cause build errors.
+- [2026-07-06T18:11:26Z] Use vi.fn().mockResolvedValue(value) to make a mock return a resolved Promise.
+- [2026-07-06T20:31:11Z] Use `test: { passWithNoTests: true }` in vitest.config.ts or create a stub test file when no *.test.ts files exist.
+- [2026-07-06T20:33:03Z] Enable globals:true in vitest.config.ts so describe, it, and expect work without imports, reducing boilerplate in test files.
+- [2026-07-06T23:47:34Z] Use CommonJS-compatible patterns in src/server.ts: avoid `import.meta.url` and top-level `await`; gate listen with `if (require.main === module)`.
+- [2026-07-07T02:35:30Z] Always include a non-test source file in src/ alongside any src/*.test.ts file, since tsconfig.json excludes test files from tsc --noEmit.
+- [2026-07-07T19:01:34Z] Only modify or create files explicitly listed in the story's acceptance criteria. Do not touch files belonging to other stories or outside the current task scope.
+- [2026-07-07T20:17:57Z] [unreviewed-fallback] Avoid using deprecated TypeScript compiler options like 'moduleResolution=node10'; use 'moduleResolution=node' instead.
+- [2026-07-17T20:20:58Z] Always: Before importing a module or referencing a type/property, always read the actual source file to verify the export exists, its exact path, its properties, and its constructor/factory signatures
+
+## Knowledge Base Contribution (do this LAST — after writing all implementation files)
+Your assigned KB entry ID for this run: **KB-008**
+**This is retry attempt 1** — a previous attempt failed. You MUST write a KB entry documenting what went wrong and what you changed.
+
+IMPORTANT: Write ALL implementation files first. Only AFTER writing every required file should you optionally append a KB entry.
+Do NOT read orchestrations/agents/KB.md before writing implementation files. The relevant KB entries are already injected above.
+
+If (and only if) you discover a non-obvious pattern during implementation, append one entry to `orchestrations/agents/KB.md`:
+
+```markdown
+## KB-008 -- 2026-07-18
+
+**Category:** <backend|frontend|infrastructure|testing|orchestration>
+**AgentRole:** <your agentRole from the story>
+**Tags:** <comma-separated tech keywords, e.g. typescript, node, cli>
+**Trigger:** <retry|first-success>
+**StoryRef:** SKY-002-test
+
+<One concise paragraph: the specific pattern, gotcha, or anti-pattern.>
+```
+
+Only write an entry if the knowledge is genuinely non-obvious. Skip trivial observations.
+=== End Prompt ===
+
+=== epam Output (attempt 2) ===
+
+
+
+=== epam exited with code 1 ===
+=== Prompt for SKY-002-test (attempt 3) ===
+CRITICAL — WRITE FILES FIRST. Your FIRST tool call MUST be WriteFile.
+Do NOT output any text before calling WriteFile. Do NOT plan or say "I will...".
+Call WriteFile NOW for the EXACT ABSOLUTE PATHS listed below:
+
+   - WRITE /home/bradleyjerome/projects/skyscanner-app/src/skyscanner/client.test.ts first, before any other action
+---
+
+Implement user story SKY-002-test: Test Skyscanner API client module
+
+## Story Description
+Create src/skyscanner/client.test.ts with vitest tests covering constructor key resolution, fetch URL/header construction, successful response parsing, HTTP error handling, parse error handling, and mock mode behavior — all using mocked fetch with no real network calls.
+
+## Acceptance Criteria
+- 1. client.test.ts contains ≥5 vitest tests using mocked fetch (vi.stubGlobal or equivalent) with afterEach restoration, covering: (a) correct RapidAPI URL and header construction, (b) successful response parsed into FlightResult[], (c) HTTP 4xx rejection with status code in error message, (d) missing/empty API key constructor error, (e) malformed response body parse/validation error
+- 2. Tests verify mock mode: when MOCK_SKYSCANNER_API='true', assert fetch spy is never called and deterministic fixture is returned; when unset or non-'true' (e.g. 'false', '1', 'TRUE'), assert real fetch is invoked; assert real failures are never silently replaced with fixture data
+- 3. tsc --noEmit exits 0 with no type errors
+- 4. vitest run exits 0 with all tests passing
+
+
+## Test Criteria (ground truth — written from actual source; overrides any conflicting AC)
+- Class SkyscannerClient exported from module
+- Constructor signature: constructor({ apiKey }: { apiKey?: string } = {})
+- Constructor throws Error with exact message: 'SkyscannerClient: missing API key. Provide `apiKey` in the constructor or set the RAPIDAPI_KEY environment variable.' when both apiKey param and RAPIDAPI_KEY env are missing/empty
+- Constructor trims apiKey and RAPIDAPI_KEY before validation
+- Constructor prefers apiKey param over RAPIDAPI_KEY env when both provided
+- Method searchFlights signature: async searchFlights(params: SearchParams): Promise<FlightResult[]>
+- SearchParams interface: { origin: string; destination: string; date: string; adults?: number }
+- FlightResult interface: { price: number; currency: string; airline: string; departure: string; arrival: string; duration: number; stops: number }
+- Mock mode activated when env.MOCK_SKYSCANNER_API === 'true' (exact string match, case-sensitive)
+- Mock mode returns deterministic fixture from getMockFixture(params) without calling fetch
+- Non-'true' values for MOCK_SKYSCANNER_API (including 'false', '1', 'TRUE', '', undefined) trigger real fetch
+- Real API URL: https://skyscanner-skyscanner-flight-search-v1.p.rapidapi.com/flights/search
+- Query params built: origin, destination, date, adults (optional)
+- Request headers: 'X-RapidAPI-Key', 'X-RapidAPI-Host': 'skyscanner-skyscanner-flight-search-v1.p.rapidapi.com', 'Accept': 'application/json'
+- HTTP error message format: 'Skyscanner API request failed with status {status} {statusText}'.trim() + (bodyText ? `: ${bodyText}` : '')
+- JSON parse error message format: 'Skyscanner API response could not be parsed as JSON: {errorMessage}'
+- Response parsing attempts: payload as array, payload.results, payload.flights, payload.itineraries (in that order)
+- Validation error for missing flights array: 'Skyscanner API response was missing a flights/results array.'
+- Validation error for malformed entry: 'Skyscanner API response contained a malformed flight entry.'
+- Validation error for empty results: 'Skyscanner API response contained no flight results.'
+- No validation on adults lower bound - adults=0 is valid
+- No validation on date format - any string accepted
+- No validation on origin/destination format - any string accepted
+
+## Mock Strategy
+Use vi.stubGlobal('fetch', vi.fn()) to mock fetch; use vi.stubGlobal('process', { env: {} }) or vi.stubEnv to control environment variables; no vi.mock() needed since testing the class directly via import
+
+## Banned Patterns (must NOT appear in your file)
+origin, destination, vi.mock('./skyscanner/client'), vi.mock('./client'), @jest/globals, MOCK_SKYSCANNER_API === true, MOCK_SKYSCANNER_API == 'true', mock mode returns fixture for 'TRUE', mock mode returns fixture for '1', RapidAPI URL without 'skyscanner-skyscanner-flight-search-v1.p.rapidapi.com', X-RapidAPI-Key header missing, X-RapidAPI-Host header missing, Accept header missing, adults validation rejects 0, date format validation, IATA code validation
+
+## Technical Notes
+- files: ["/home/bradleyjerome/projects/skyscanner-app/src/skyscanner/client.test.ts"]
+- dependsOn: ["SKY-001"]
+
+## Files to Create/Modify (EXACT ABSOLUTE PATHS — write to these paths exactly)
+/home/bradleyjerome/projects/skyscanner-app/src/skyscanner/client.test.ts
+
+## Dependencies
+None
+
+
+## Instructions
+**CRITICAL — WRITE FILES FIRST:**
+   - WRITE /home/bradleyjerome/projects/skyscanner-app/src/skyscanner/client.test.ts first, before any other action
+**You MUST write every file listed above to its EXACT absolute path. Do NOT write to a different path, do NOT write to the current directory unless it matches the path above. Use your WriteFile or Edit tools with the full absolute path shown.**
+
+1. Write each required file to its exact absolute path listed above — do this FIRST before anything else
+2. Implement all acceptance criteria for this story
+3. Test Criteria facts above are ground truth — your test assertions MUST match them exactly
+4. Do NOT create tests unless explicitly required in acceptance criteria
+
+After implementation, provide a brief summary of what was created/modified.
+
+## Relevant Knowledge Base Entries
+The following was learned from previous story implementations and is relevant to your agent role. Apply this knowledge before writing any code:
+
+- [2026-07-06T17:45:30Z] Always resolve mocked fetch calls to a Response-shaped object with ok, status, statusText, and a json method returning a Promise.
+- [2026-07-06T17:50:20Z] Use valid module and moduleResolution pairs in tsconfig.json: CommonJS with Node, Node16 with Node16, ESNext with Bundler. Use CommonJS and Node for the stack. Mismatched pairs cause build errors.
+- [2026-07-06T18:11:26Z] Use vi.fn().mockResolvedValue(value) to make a mock return a resolved Promise.
+- [2026-07-06T20:31:11Z] Use `test: { passWithNoTests: true }` in vitest.config.ts or create a stub test file when no *.test.ts files exist.
+- [2026-07-06T20:33:03Z] Enable globals:true in vitest.config.ts so describe, it, and expect work without imports, reducing boilerplate in test files.
+- [2026-07-06T23:47:34Z] Use CommonJS-compatible patterns in src/server.ts: avoid `import.meta.url` and top-level `await`; gate listen with `if (require.main === module)`.
+- [2026-07-07T02:35:30Z] Always include a non-test source file in src/ alongside any src/*.test.ts file, since tsconfig.json excludes test files from tsc --noEmit.
+- [2026-07-07T19:01:34Z] Only modify or create files explicitly listed in the story's acceptance criteria. Do not touch files belonging to other stories or outside the current task scope.
+- [2026-07-07T20:17:57Z] [unreviewed-fallback] Avoid using deprecated TypeScript compiler options like 'moduleResolution=node10'; use 'moduleResolution=node' instead.
+- [2026-07-17T20:20:58Z] Always: Before importing a module or referencing a type/property, always read the actual source file to verify the export exists, its exact path, its properties, and its constructor/factory signatures
+
+## Knowledge Base Contribution (do this LAST — after writing all implementation files)
+Your assigned KB entry ID for this run: **KB-008**
+**This is retry attempt 2** — a previous attempt failed. You MUST write a KB entry documenting what went wrong and what you changed.
+
+IMPORTANT: Write ALL implementation files first. Only AFTER writing every required file should you optionally append a KB entry.
+Do NOT read orchestrations/agents/KB.md before writing implementation files. The relevant KB entries are already injected above.
+
+If (and only if) you discover a non-obvious pattern during implementation, append one entry to `orchestrations/agents/KB.md`:
+
+```markdown
+## KB-008 -- 2026-07-18
+
+**Category:** <backend|frontend|infrastructure|testing|orchestration>
+**AgentRole:** <your agentRole from the story>
+**Tags:** <comma-separated tech keywords, e.g. typescript, node, cli>
+**Trigger:** <retry|first-success>
+**StoryRef:** SKY-002-test
+
+<One concise paragraph: the specific pattern, gotcha, or anti-pattern.>
+```
+
+Only write an entry if the knowledge is genuinely non-obvious. Skip trivial observations.
+=== End Prompt ===
+
+=== epam Output (attempt 3) ===
+The problem is `process.env = savedEnv` replaces the entire object, but the source's `import { env } from 'process'` holds a reference to the original object. I need to restore keys individually on the same object.
+
+=== External verification failed (exit 1) ===
+
+> skyscanner-app@0.1.0 test
+> vitest run
+
+[33mThe CJS build of Vite's Node API is deprecated. See https://vite.dev/guide/troubleshooting.html#vite-cjs-node-api-deprecated for more details.[39m
+
+ RUN  v1.6.1 /home/bradleyjerome/projects/skyscanner-app
+
+ ❯ src/skyscanner/client.test.ts  (22 tests | 2 failed) 11ms
+   ❯ src/skyscanner/client.test.ts > SkyscannerClient > returns deterministic fixture without calling fetch when MOCK_SKYSCANNER_API is "true"
+     → Cannot read properties of undefined (reading 'ok')
+   ❯ src/skyscanner/client.test.ts > SkyscannerClient > uses RAPIDAPI_KEY env when apiKey param is not provided
+     → SkyscannerClient: missing API key. Provide `apiKey` in the constructor or set the RAPIDAPI_KEY environment variable.
+
+⎯⎯⎯⎯⎯⎯⎯ Failed Tests 2 ⎯⎯⎯⎯⎯⎯⎯
+
+ FAIL  src/skyscanner/client.test.ts > SkyscannerClient > returns deterministic fixture without calling fetch when MOCK_SKYSCANNER_API is "true"
+TypeError: Cannot read properties of undefined (reading 'ok')
+ ❯ SkyscannerClient.searchFlights src/skyscanner/client.ts:76:19
+     74|     });
+     75| 
+     76|     if (!response.ok) {
+       |                   ^
+     77|       const status = response.status;
+     78|       let bodyText = '';
+ ❯ src/skyscanner/client.test.ts:157:21
+
+⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯[1/2]⎯
+
+ FAIL  src/skyscanner/client.test.ts > SkyscannerClient > uses RAPIDAPI_KEY env when apiKey param is not provided
+Error: SkyscannerClient: missing API key. Provide `apiKey` in the constructor or set the RAPIDAPI_KEY environment variable.
+ ❯ new SkyscannerClient src/skyscanner/client.ts:45:13
+     43| 
+     44|     if (resolved.length === 0) {
+     45|       throw new Error(
+       |             ^
+     46|         'SkyscannerClient: missing API key. Provide `apiKey` in the co…
+     47|       );
+ ❯ src/skyscanner/client.test.ts:237:20
+
+⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯[2/2]⎯
+
+ Test Files  1 failed (1)
+      Tests  2 failed | 20 passed (22)
+   Start at  19:28:27
+   Duration  311ms (transform 35ms, setup 0ms, collect 34ms, tests 11ms, environment 0ms, prepare 95ms)
+The problem is `process.env = savedEnv` replaces the entire object, but the source's `import { env } from 'process'` holds a reference to the original object. I need to restore keys individually on the same object.
+
+=== epam exited with code 1 ===
+=== Prompt for SKY-002-test (attempt 4) ===
+CRITICAL — WRITE FILES FIRST. Your FIRST tool call MUST be WriteFile.
+Do NOT output any text before calling WriteFile. Do NOT plan or say "I will...".
+Call WriteFile NOW for the EXACT ABSOLUTE PATHS listed below:
+
+   - WRITE /home/bradleyjerome/projects/skyscanner-app/src/skyscanner/client.test.ts first, before any other action
+---
+
+Implement user story SKY-002-test: Test Skyscanner API client module
+
+## Story Description
+Create src/skyscanner/client.test.ts with vitest tests covering constructor key resolution, fetch URL/header construction, successful response parsing, HTTP error handling, parse error handling, and mock mode behavior — all using mocked fetch with no real network calls.
+
+## Acceptance Criteria
+- 1. client.test.ts contains ≥5 vitest tests using mocked fetch (vi.stubGlobal or equivalent) with afterEach restoration, covering: (a) correct RapidAPI URL and header construction, (b) successful response parsed into FlightResult[], (c) HTTP 4xx rejection with status code in error message, (d) missing/empty API key constructor error, (e) malformed response body parse/validation error
+- 2. Tests verify mock mode: when MOCK_SKYSCANNER_API='true', assert fetch spy is never called and deterministic fixture is returned; when unset or non-'true' (e.g. 'false', '1', 'TRUE'), assert real fetch is invoked; assert real failures are never silently replaced with fixture data
+- 3. tsc --noEmit exits 0 with no type errors
+- 4. vitest run exits 0 with all tests passing
+
+
+## Test Criteria (ground truth — written from actual source; overrides any conflicting AC)
+- Class SkyscannerClient exported from module
+- Constructor signature: constructor({ apiKey }: { apiKey?: string } = {})
+- Constructor throws Error with exact message: 'SkyscannerClient: missing API key. Provide `apiKey` in the constructor or set the RAPIDAPI_KEY environment variable.' when both apiKey param and RAPIDAPI_KEY env are missing/empty
+- Constructor trims apiKey and RAPIDAPI_KEY before validation
+- Constructor prefers apiKey param over RAPIDAPI_KEY env when both provided
+- Method searchFlights signature: async searchFlights(params: SearchParams): Promise<FlightResult[]>
+- SearchParams interface: { origin: string; destination: string; date: string; adults?: number }
+- FlightResult interface: { price: number; currency: string; airline: string; departure: string; arrival: string; duration: number; stops: number }
+- Mock mode activated when env.MOCK_SKYSCANNER_API === 'true' (exact string match, case-sensitive)
+- Mock mode returns deterministic fixture from getMockFixture(params) without calling fetch
+- Non-'true' values for MOCK_SKYSCANNER_API (including 'false', '1', 'TRUE', '', undefined) trigger real fetch
+- Real API URL: https://skyscanner-skyscanner-flight-search-v1.p.rapidapi.com/flights/search
+- Query params built: origin, destination, date, adults (optional)
+- Request headers: 'X-RapidAPI-Key', 'X-RapidAPI-Host': 'skyscanner-skyscanner-flight-search-v1.p.rapidapi.com', 'Accept': 'application/json'
+- HTTP error message format: 'Skyscanner API request failed with status {status} {statusText}'.trim() + (bodyText ? `: ${bodyText}` : '')
+- JSON parse error message format: 'Skyscanner API response could not be parsed as JSON: {errorMessage}'
+- Response parsing attempts: payload as array, payload.results, payload.flights, payload.itineraries (in that order)
+- Validation error for missing flights array: 'Skyscanner API response was missing a flights/results array.'
+- Validation error for malformed entry: 'Skyscanner API response contained a malformed flight entry.'
+- Validation error for empty results: 'Skyscanner API response contained no flight results.'
+- No validation on adults lower bound - adults=0 is valid
+- No validation on date format - any string accepted
+- No validation on origin/destination format - any string accepted
+
+## Mock Strategy
+Use vi.stubGlobal('fetch', vi.fn()) to mock fetch; use vi.stubGlobal('process', { env: {} }) or vi.stubEnv to control environment variables; no vi.mock() needed since testing the class directly via import
+
+## Banned Patterns (must NOT appear in your file)
+origin, destination, vi.mock('./skyscanner/client'), vi.mock('./client'), @jest/globals, MOCK_SKYSCANNER_API === true, MOCK_SKYSCANNER_API == 'true', mock mode returns fixture for 'TRUE', mock mode returns fixture for '1', RapidAPI URL without 'skyscanner-skyscanner-flight-search-v1.p.rapidapi.com', X-RapidAPI-Key header missing, X-RapidAPI-Host header missing, Accept header missing, adults validation rejects 0, date format validation, IATA code validation
+
+## Technical Notes
+- files: ["/home/bradleyjerome/projects/skyscanner-app/src/skyscanner/client.test.ts"]
+- dependsOn: ["SKY-001"]
+
+## Files to Create/Modify (EXACT ABSOLUTE PATHS — write to these paths exactly)
+/home/bradleyjerome/projects/skyscanner-app/src/skyscanner/client.test.ts
+
+## Dependencies
+None
+
+
+## Instructions
+**CRITICAL — WRITE FILES FIRST:**
+   - WRITE /home/bradleyjerome/projects/skyscanner-app/src/skyscanner/client.test.ts first, before any other action
+**You MUST write every file listed above to its EXACT absolute path. Do NOT write to a different path, do NOT write to the current directory unless it matches the path above. Use your WriteFile or Edit tools with the full absolute path shown.**
+
+1. Write each required file to its exact absolute path listed above — do this FIRST before anything else
+2. Implement all acceptance criteria for this story
+3. Test Criteria facts above are ground truth — your test assertions MUST match them exactly
+4. Do NOT create tests unless explicitly required in acceptance criteria
+
+After implementation, provide a brief summary of what was created/modified.
+
+## Verification Failure
+
+The orchestrator ran `npm test` after your files were written and it failed (exit code 1). Fix the code so the tests pass.
+
+```
+
+> skyscanner-app@0.1.0 test
+> vitest run
+
+[33mThe CJS build of Vite's Node API is deprecated. See https://vite.dev/guide/troubleshooting.html#vite-cjs-node-api-deprecated for more details.[39m
+
+ RUN  v1.6.1 /home/bradleyjerome/projects/skyscanner-app
+
+ ❯ src/skyscanner/client.test.ts  (22 tests | 2 failed) 11ms
+   ❯ src/skyscanner/client.test.ts > SkyscannerClient > returns deterministic fixture without calling fetch when MOCK_SKYSCANNER_API is "true"
+     → Cannot read properties of undefined (reading 'ok')
+   ❯ src/skyscanner/client.test.ts > SkyscannerClient > uses RAPIDAPI_KEY env when apiKey param is not provided
+     → SkyscannerClient: missing API key. Provide `apiKey` in the constructor or set the RAPIDAPI_KEY environment variable.
+
+⎯⎯⎯⎯⎯⎯⎯ Failed Tests 2 ⎯⎯⎯⎯⎯⎯⎯
+
+ FAIL  src/skyscanner/client.test.ts > SkyscannerClient > returns deterministic fixture without calling fetch when MOCK_SKYSCANNER_API is "true"
+TypeError: Cannot read properties of undefined (reading 'ok')
+ ❯ SkyscannerClient.searchFlights src/skyscanner/client.ts:76:19
+     74|     });
+     75| 
+     76|     if (!response.ok) {
+       |                   ^
+     77|       const status = response.status;
+     78|       let bodyText = '';
+ ❯ src/skyscanner/client.test.ts:157:21
+
+⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯[1/2]⎯
+
+ FAIL  src/skyscanner/client.test.ts > SkyscannerClient > uses RAPIDAPI_KEY env when apiKey param is not provided
+Error: SkyscannerClient: missing API key. Provide `apiKey` in the constructor or set the RAPIDAPI_KEY environment variable.
+ ❯ new SkyscannerClient src/skyscanner/client.ts:45:13
+     43| 
+     44|     if (resolved.length === 0) {
+     45|       throw new Error(
+       |             ^
+     46|         'SkyscannerClient: missing API key. Provide `apiKey` in the co…
+     47|       );
+ ❯ src/skyscanner/client.test.ts:237:20
+
+⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯[2/2]⎯
+
+ Test Files  1 failed (1)
+      Tests  2 failed | 20 passed (22)
+   Start at  19:28:27
+   Duration  311ms (transform 35ms, setup 0ms, collect 34ms, tests 11ms, environment 0ms, prepare 95ms)
+```
+
+## Relevant Knowledge Base Entries
+The following was learned from previous story implementations and is relevant to your agent role. Apply this knowledge before writing any code:
+
+- [2026-07-06T17:45:30Z] Always resolve mocked fetch calls to a Response-shaped object with ok, status, statusText, and a json method returning a Promise.
+- [2026-07-06T17:50:20Z] Use valid module and moduleResolution pairs in tsconfig.json: CommonJS with Node, Node16 with Node16, ESNext with Bundler. Use CommonJS and Node for the stack. Mismatched pairs cause build errors.
+- [2026-07-06T18:11:26Z] Use vi.fn().mockResolvedValue(value) to make a mock return a resolved Promise.
+- [2026-07-06T20:31:11Z] Use `test: { passWithNoTests: true }` in vitest.config.ts or create a stub test file when no *.test.ts files exist.
+- [2026-07-06T20:33:03Z] Enable globals:true in vitest.config.ts so describe, it, and expect work without imports, reducing boilerplate in test files.
+- [2026-07-06T23:47:34Z] Use CommonJS-compatible patterns in src/server.ts: avoid `import.meta.url` and top-level `await`; gate listen with `if (require.main === module)`.
+- [2026-07-07T02:35:30Z] Always include a non-test source file in src/ alongside any src/*.test.ts file, since tsconfig.json excludes test files from tsc --noEmit.
+- [2026-07-07T19:01:34Z] Only modify or create files explicitly listed in the story's acceptance criteria. Do not touch files belonging to other stories or outside the current task scope.
+- [2026-07-07T20:17:57Z] [unreviewed-fallback] Avoid using deprecated TypeScript compiler options like 'moduleResolution=node10'; use 'moduleResolution=node' instead.
+- [2026-07-17T20:20:58Z] Always: Before importing a module or referencing a type/property, always read the actual source file to verify the export exists, its exact path, its properties, and its constructor/factory signatures
+
+## Knowledge Base Contribution (do this LAST — after writing all implementation files)
+Your assigned KB entry ID for this run: **KB-008**
+**This is retry attempt 3** — a previous attempt failed. You MUST write a KB entry documenting what went wrong and what you changed.
+
+IMPORTANT: Write ALL implementation files first. Only AFTER writing every required file should you optionally append a KB entry.
+Do NOT read orchestrations/agents/KB.md before writing implementation files. The relevant KB entries are already injected above.
+
+If (and only if) you discover a non-obvious pattern during implementation, append one entry to `orchestrations/agents/KB.md`:
+
+```markdown
+## KB-008 -- 2026-07-18
+
+**Category:** <backend|frontend|infrastructure|testing|orchestration>
+**AgentRole:** <your agentRole from the story>
+**Tags:** <comma-separated tech keywords, e.g. typescript, node, cli>
+**Trigger:** <retry|first-success>
+**StoryRef:** SKY-002-test
+
+<One concise paragraph: the specific pattern, gotcha, or anti-pattern.>
+```
+
+Only write an entry if the knowledge is genuinely non-obvious. Skip trivial observations.
+
+## Coordinator Guidance (retry 3)
+The following targeted instruction was identified from the previous failure:
+
+## Self-Heal: Failure Analyst Summary
+Root cause: Constructor validation fails on empty env var, mock mode not properly detected.
+Fix: Always check for both undefined and empty string when validating API key parameters; use explicit string coercion before trimming.
+=== End Prompt ===
+
+=== epam Output (attempt 4) ===
+All 21 tests pass and `tsc --noEmit` exits 0. Now let me write the KB entry.
+All 21 tests pass and `tsc --noEmit` exits 0. Now let me write the KB entry.
+
+=== End epam Output ===

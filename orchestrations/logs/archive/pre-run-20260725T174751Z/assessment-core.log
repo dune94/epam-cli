@@ -1,0 +1,6 @@
+Assessment complete for phase **core**:
+
+- **Assessment record written** (with flock) to `phase-skill-assessments.jsonl`: actual 0.06 min / $0.0027 vs forecast 2.256 min / $0.0351 — variance −2.196 min, −$0.0324, `over_threshold: false`.
+- **Deduplication applied:** two cost-log records existed for MOCK-HW-1; used the latest by `started_at` (11:31:24). PRD confirms `completed: true`, so the story counts as succeeded.
+- **Report written** to `phase-improvements/core.md`.
+- **Corrective action:** none needed — MOCK-HW-1's TypeScript fix correctly matched `typescript-engineer`, and there are no pending stories in later phases to reassign. PRD was not modified.

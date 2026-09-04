@@ -1,0 +1,78 @@
+# Prompt
+You are reviewing an estate survey before a team is assembled from it.
+
+You are reviewing an ESTATE SURVEY. A roster of agents is about to be minted from it, and every
+claim below will be inherited as a brief and re-checked by nothing.
+
+THE SURVEY UNDER REVIEW:
+- mocka: in_scope
+  evidence: Explored mocka for fare/concession/age symbols. CodeGraph returned src/fares.ts verbatim. fareFor (src/fares.ts:8) implements the fare boundary: line 10 reads 'if (rider.age > 65) return CONCESSION_FARE_CENTS' — strict greater-than means a rider aged exactly 65 does NOT get the concession fare and falls through to line 12 returning BASE_FARE_CENTS (350). The doc-comment on line 7 states 'Riders aged 65 AND OVER pay the concession fare,' confirming the intent is inclusive of 65. Read test/fares.test.ts: it tests age 30 (adult), age 8 (child), age 70 (senior well past boundary), and a pass-holder — but never age 65 exactly, which is why the boundary bug escaped. MOCK3-1 reaches this codeline. Also explored mocka for stops/formatStops/totalMinutes — no stop or departure-board symbols exist here; that work belongs to mockb.
+  filesRead: src/fares.ts, test/fares.test.ts
+- mockb: in_scope
+  evidence: Explored mockb for stops/formatStops/totalMinutes symbols. CodeGraph returned src/schedule.ts verbatim. formatStops (src/schedule.ts:4) builds a departure-board string: line 6 loops 'for (let i = 0; i < stops.length - 1; i++)' — the '- 1' means the last stop is never pushed, so a three-stop line renders only two. totalMinutes (src/schedule.ts:12) returns 'stops[stops.length - 1].minutes', correctly reading the final stop's time, which is why the journey length is right and the omission went unnoticed — exactly as MOCK3-2 describes. Read test/schedule.test.ts: the formatStops tests assert the output contains '->' and 'Union' (the first stop) but never assert the last stop ('Eglinton') appears, so the off-by-one was not caught. Also explored mockb for fare/concession/age — CodeGraph returned 'No relevant code found,' confirming MOCK3-1 does not reach this codeline.
+  filesRead: src/schedule.ts, test/schedule.test.ts
+
+THE CODELINES IN SCOPE, and where each is checked out:
+- mocka (/home/bradleyjerome/projects/mock3/mock-a)
+- mockb (/home/bradleyjerome/projects/mock3/mock-b)
+
+THE WORK THE PROJECT WAS ASKED TO DO:
+- MOCK3-1: Riders aged exactly 65 are charged the adult fare
+- MOCK3-2: The departure board omits the final stop
+
+You may open any file in the codelines above to check a claim.
+
+# What is in scope
+
+ONE QUESTION ONLY: does the survey state anything about these repositories that is FALSE?
+
+A claim is in scope when you can check it by opening a repository. Open them and check.
+
+- a file named in `filesRead` that the codeline does not contain
+- a file, module, function or symbol said to exist where it does not
+- a claim attributed to the WRONG codeline — the commonest and most damaging error, because the
+  brief built from it sends an implementer into a repository that has no such code
+- a dependency, script, framework or command the codeline does not declare
+- a codeline reported in_scope on evidence that belongs to a different one
+
+A codeline reported no_work_found or not_investigated is making a WEAK claim, not a false one.
+Check it only if you can show the work plainly does reach it.
+
+# What is NOT in scope
+
+Do not judge whether the survey looked hard enough, chose the right focus, or recommended the
+right team. Do not propose better wording. Do not supply a FIX SITE of your own — naming which
+file to edit is not yours to say here any more than it was the surveyor's, and a fix site you add
+for a repository you swept from the outside is how one codeline's file ends up in another's work.
+
+# Evidence
+
+For each finding, say what you CHECKED and what you FOUND, naming the repository and the path you
+opened. A finding without a check is an opinion, and an opinion about a survey is not a defect.
+
+If every claim checks out, return no findings. An empty finding list from a review that RAN is the
+correct answer for a sound survey.
+
+
+# Output
+## Findings
+
+**No false claims found.** Every checkable statement in the survey matches the repository contents.
+
+### What I checked
+
+**mocka (`/home/bradleyjerome/projects/mock3/mock-a`):**
+
+- `src/fares.ts` — `fareFor` is at line 8. Line 10 reads `if (rider.age > 65) return CONCESSION_FARE_CENTS;` (strict `>`, not `>=`). Line 12 reads `return BASE_FARE_CENTS;`. `BASE_FARE_CENTS` is 350. The doc-comment on line 7 reads `/** Riders aged 65 AND OVER pay the concession fare. */`. All match the survey.
+- `test/fares.test.ts` — Tests age 30 (adult), age 8 (child), age 70 (senior), and a pass-holder (`hasPass: true`). No test uses age 65 exactly. All match.
+- Searched mocka for `formatStops|totalMinutes|Stop|departure|schedule` — no matches in source files (only in orchestration logs). Confirms the survey's claim that no stop/departure-board symbols exist here.
+
+**mockb (`/home/bradleyjerome/projects/mock3/mock-b`):**
+
+- `src/schedule.ts` — `formatStops` is at line 4. Line 6 reads `for (let i = 0; i < stops.length - 1; i++)` (the off-by-one). `totalMinutes` is at line 12 and returns `stops[stops.length - 1].minutes` (line 13). All match.
+- `test/schedule.test.ts` — The `LINE` array has three stops: Union (0), Bloor (12), Eglinton (25). The `formatStops` tests assert `toContain('->')` and `toContain('Union')` but never assert `Eglinton` appears. All match.
+- Searched mockb for `fareFor|concession|FARE_CENTS|Rider|fares` — no matches found. Confirms the survey's claim that MOCK3-1 does not reach this codeline.
+
+### Result
+
+The survey is accurate. No file, symbol, line number, code snippet, test-assertion claim, or cross-codeline attribution is false.

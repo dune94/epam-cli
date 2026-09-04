@@ -1,0 +1,67 @@
+=== Prompt for SKY-003 (attempt 1) ===
+Implement user story SKY-003: Implement flight search CLI entry point with formatted table output
+
+## Story Description
+Create `src/cli.ts` — a standalone Node entry point that accepts flight search arguments via `process.argv` and prints results as an aligned table. Parse flags manually (no commander, no yargs, zero new runtime deps). Require `RAPIDAPI_KEY` env var; exit 1 with a human-readable message if absent. Instantiate `SkyscannerClient` from `src/skyscanner-client.ts` (SKY-002), call `searchFlights` forwarding all parsed arguments including adults count, and render results in a dynamically-padded table with columns in this fixed order: Airline | Price | Departure | Arrival | Duration | Stops. Columns are delimited by ` | ` (space-pipe-space). Column widths are determined by the widest value in each column (including the header). A separator row of hyphens must appear between the header and data rows; each column's separator segment contains exactly as many hyphens as that column's padded width, with segments joined by ` | `. Price is right-aligned and prefixed with the currency symbol returned by the API (default `£` if absent); all other columns are left-aligned. If no flights are returned print `No flights found.` and exit 0. On any thrown error print the message to stderr and exit 1. Create `src/cli.test.ts` covering argument validation, successful render, empty-result render, missing env var, and error handling using vitest with `SkyscannerClient` mocked at the module boundary. The compiled output must be invokable as `node dist/cli.js ...` after `tsc`; `tsconfig.json` must have `outDir` set to `dist` and emit CommonJS-compatible output.
+
+## Acceptance Criteria
+- `src/cli.ts` exists and `tsc --noEmit` reports zero errors
+- `tsconfig.json` sets `outDir` to `dist` and emits a module format compatible with `node dist/cli.js` invocation (CommonJS or ESM with `.mjs` extension consistently applied); after running `tsc`, `node dist/cli.js --help` or `node dist/cli.js` exits without a module-resolution or syntax error
+- Flags `--from`, `--to`, and `--date` are all required; if any is absent the CLI writes a usage hint to stderr (showing the correct flag names) and exits with code 2; stdout is empty when exiting with code 2
+- The `--date` flag value must match the pattern `^\d{4}-\d{2}-\d{2}$`; a value that does not match causes exit code 2 with a human-readable message written to stderr before any network call is made; stdout is empty
+- Optional `--adults` flag defaults to 1 when omitted; a non-integer value, a value ≤ 0, or a non-numeric string causes exit code 2 with a human-readable message to stderr; stdout is empty
+- The parsed `adults` value is forwarded as an argument to `SkyscannerClient.searchFlights`; the flag is not silently dropped
+- If `RAPIDAPI_KEY` env var is unset or empty, CLI writes a human-readable message containing 'RAPIDAPI_KEY' to stderr and exits 1 before making any network call; stdout is empty
+- When `searchFlights` resolves with one or more results, stdout contains: (a) a header row with columns in fixed order Airline, Price, Departure, Arrival, Duration, Stops joined by ` | `; (b) a separator row where each column segment consists of exactly as many `-` characters as that column's padded width, with segments joined by ` | `; (c) one data row per result with columns joined by ` | `; all columns padded to the width of the widest value in that column including the header label
+- All columns except Price are left-aligned within their padded width; the Price column is right-aligned within its padded width
+- Price column values are prefixed with the currency symbol from the API response; if the API response omits a currency symbol, `£` is used as the fallback
+- When `searchFlights` resolves with an empty array, stdout contains exactly the single line `No flights found.` and process exits 0
+- When `searchFlights` rejects with an error, the error's message is written to stderr and process exits 1; stdout is empty
+- `src/cli.test.ts` contains at least 9 passing vitest tests covering: (1) missing `--from`, (2) missing `--to`, (3) missing `--date`, (4) invalid `--date` format, (5) invalid `--adults` value, (6) missing `RAPIDAPI_KEY` env var — assert stderr contains 'RAPIDAPI_KEY' and exit code is 1, (7) table rendered correctly for valid multi-row results — assert separator row is present, each separator segment length matches its column width, and Price column is right-aligned, (8) empty-array result renders exactly `No flights found.`, (9) error path where client throws — assert stderr contains the error message and exit code is 1
+- `vitest run` exits 0 with all tests green
+- No runtime dependency other than Node built-ins and packages already present in `package.json` from SKY-001/SKY-002 is added
+
+## Technical Notes
+- workingDir: /tmp/skyscanner-app
+- files: ["/tmp/skyscanner-app/src/cli.ts","/tmp/skyscanner-app/src/cli.test.ts"]
+- dependsOn: ["SKY-002"]
+
+## Files to Create/Modify
+/tmp/skyscanner-app/src/cli.ts, /tmp/skyscanner-app/src/cli.test.ts
+
+## Dependencies
+None
+
+## Instructions
+1. Implement all acceptance criteria for this story
+2. Follow the project's existing code patterns and conventions
+3. Create any necessary files in the locations specified
+4. Ensure code compiles/runs without errors
+5. Do NOT create tests unless explicitly required in acceptance criteria
+
+After implementation, provide a brief summary of what was created/modified.
+
+## Relevant Knowledge Base Entries
+No prior KB entries match your agent role yet.
+
+## Knowledge Base Contribution
+Your assigned KB entry ID for this run: **KB-008**
+
+If you discover a non-obvious pattern, gotcha, or anti-pattern during this implementation (or this is a retry), append exactly one entry to `orchestrations/agents/KB.md` using this format:
+
+```markdown
+## KB-008 -- 2026-06-03
+
+**Category:** <backend|frontend|infrastructure|testing|orchestration>
+**AgentRole:** <your agentRole from the story>
+**Tags:** <comma-separated tech keywords, e.g. typescript, node, cli>
+**Trigger:** <retry|first-success>
+**StoryRef:** SKY-003
+
+<One concise paragraph: the specific pattern, gotcha, or anti-pattern. Precise enough that a future Claude instance can apply it without re-discovering it.>
+```
+
+Only write an entry if the knowledge is genuinely non-obvious. Skip trivial observations.
+=== End Prompt ===
+
+=== claude Output (attempt 1) ===

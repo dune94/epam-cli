@@ -1,0 +1,856 @@
+=== Prompt for AMSD-1820 (attempt 1) ===
+CRITICAL — WRITE FILES FIRST. Your FIRST tool call MUST be WriteFile.
+Do NOT output any text before calling WriteFile. Do NOT plan or say "I will...".
+Call WriteFile NOW for the EXACT ABSOLUTE PATHS listed below:
+
+   - WRITE /home/bradleyjerome/projects/metrolinx/azure.commerce.cdts/src/services/submit-reservations/apply-report-discounts.service.ts first, before any other action
+   - WRITE /home/bradleyjerome/projects/metrolinx/azure.commerce.cdts/src/services/submit-reservations/submit-reservations.mappers.ts first, before any other action
+   - WRITE /home/bradleyjerome/projects/metrolinx/azure.commerce.cdts/src/clients/mozio/mappers/map-to-sanitized-mozio-dispatch.ts first, before any other action
+---
+
+Implement user story AMSD-1820: [Mozio] - Promo code discount amount missing/incorrect for return-trip tickets in Mozio email confirmation dispatch report
+
+## Story Description
+[Mozio] - The Promo code amount is NOT displayed as expected for Return trip tickets in the Mozio email confirmation. The root cause is that when building the Mozio dispatch report for return-trip tickets, the discount amount is not correctly computed or propagated, resulting in the promo code discount being missing or zeroed in the email confirmation for the return leg.
+
+## Acceptance Criteria
+- Given a return-trip order with a promo code applied, when the Mozio dispatch report is built, the return-trip dispatch must include report.price.discount with the correct amount and currency matching the return leg's discount.
+- Given a return-trip order with a promo code applied to both outbound and return legs, each dispatch in the Mozio submit payload must contain its own independent report.price.discount reflecting that leg's promo amount.
+- Given a return-trip order with a promo code applied only to the return leg, the return-trip dispatch must include report.price.discount and the outbound dispatch must not include a discount field.
+- Given a return-trip order with a fixed-amount promo code, the return-trip dispatch report.price.discount.amount.value must equal the exact discounted currency amount for the return leg.
+- Given a return-trip order with a percentage-based promo code, the return-trip dispatch report.price.discount.amount.value must equal the calculated discount amount for the return leg.
+- Given a return-trip order with a promo code applied, the outbound dispatch report.price.discount must remain identical to the value produced before the return-trip discount fix (no regression).
+- The sanitized dispatch report payload used for logging must include the discount amount and name for both outbound and return dispatches when a promo code is applied, without dropping or zeroing the return-trip discount.
+- Given a return-trip order with no promo code applied, neither the outbound nor the return dispatch must include a discount field in the Mozio submit payload.
+- Given a return-trip order with a promo code applied, the report.price.discount.currency on the return-trip dispatch must match the currency of the return leg's trip price.
+- Given a return-trip order with a promo code that produces a fractional-cent discount amount, the return-trip dispatch report.price.discount.amount.value must follow the system's standard rounding convention (no unrounded or truncated values).
+
+
+
+
+
+## Technical Notes
+- files: ["src/services/submit-reservations/apply-report-discounts.service.ts","src/services/submit-reservations/submit-reservations.mappers.ts","src/clients/mozio/mappers/map-to-sanitized-mozio-dispatch.ts"]
+
+## Files to Create/Modify (EXACT ABSOLUTE PATHS — write to these paths exactly)
+src/services/submit-reservations/apply-report-discounts.service.ts, src/services/submit-reservations/submit-reservations.mappers.ts, src/clients/mozio/mappers/map-to-sanitized-mozio-dispatch.ts
+
+## Dependencies
+None
+
+
+
+## Instructions
+**CRITICAL — WRITE FILES FIRST:**
+   - WRITE /home/bradleyjerome/projects/metrolinx/azure.commerce.cdts/src/services/submit-reservations/apply-report-discounts.service.ts first, before any other action
+   - WRITE /home/bradleyjerome/projects/metrolinx/azure.commerce.cdts/src/services/submit-reservations/submit-reservations.mappers.ts first, before any other action
+   - WRITE /home/bradleyjerome/projects/metrolinx/azure.commerce.cdts/src/clients/mozio/mappers/map-to-sanitized-mozio-dispatch.ts first, before any other action
+**You MUST write every file listed above to its EXACT absolute path. Do NOT write to a different path, do NOT write to the current directory unless it matches the path above. Use your WriteFile or Edit tools with the full absolute path shown.**
+
+1. Write each required file to its exact absolute path listed above — do this FIRST before anything else
+2. Implement all acceptance criteria for this story
+3. Follow the project's existing code patterns and conventions
+4. Do NOT create tests unless explicitly required in acceptance criteria
+
+After implementation, provide a brief summary of what was created/modified.
+
+## Relevant Knowledge Base Entries
+The following was learned from previous story implementations and is relevant to your agent role. Apply this knowledge before writing any code:
+
+- [2026-07-06T18:11:26Z] Use vi.fn().mockResolvedValue(value) to make a mock return a resolved Promise.
+- [2026-07-06T20:31:11Z] Use `test: { passWithNoTests: true }` in vitest.config.ts or create a stub test file when no *.test.ts files exist.
+- [2026-07-06T20:33:03Z] Enable globals:true in vitest.config.ts so describe, it, and expect work without imports, reducing boilerplate in test files.
+- [2026-07-06T23:47:34Z] Use CommonJS-compatible patterns in src/server.ts: avoid `import.meta.url` and top-level `await`; gate listen with `if (require.main === module)`.
+- [2026-07-07T02:35:30Z] Always include a non-test source file in src/ alongside any src/*.test.ts file, since tsconfig.json excludes test files from tsc --noEmit.
+- [2026-07-07T19:01:34Z] Only modify or create files explicitly listed in the story's acceptance criteria. Do not touch files belonging to other stories or outside the current task scope.
+- [2026-07-07T20:17:57Z] [unreviewed-fallback] Avoid using deprecated TypeScript compiler options like 'moduleResolution=node10'; use 'moduleResolution=node' instead.
+- [2026-07-17T20:20:58Z] Always: Before importing a module or referencing a type/property, always read the actual source file to verify the export exists, its exact path, its properties, and its constructor/factory signatures
+- [2026-07-23T01:15:16Z] Always: In tsconfig.json, always use moduleResolution 'node' (not 'node10' or 'Node10') — 'node10' was removed in TypeScript 5.x. The correct value for CommonJS + Node resolution is 'node'.
+- [2026-07-23T14:30:00Z] CORRECTION to a prior entry (2026-07-23T01:17:52Z, now removed): that entry wrongly claimed 'moduleResolution: node' itself is removed and must become 'node16'/'nodenext'. Root-caused via mock1 (epam-cli orchestration test): 'node' is valid and correct through TypeScript 5.x (confirmed on 5.9.3) — it was only removed in TypeScript 7.x. The real defect was an unpinned `typescript` devDependency letting a fallback `npm install` pull latest (7.x) instead of the project's intended version. Do NOT rewrite a working tsconfig.json's moduleResolution in response to a TS5108 error — first check `node_modules/typescript/package.json`'s version; if it's 7.x and the rest of the project expects 5.x, the fix is pinning/reinstalling the correct typescript version, not changing moduleResolution.
+
+## Knowledge Base Contribution (do this LAST — after writing all implementation files)
+Your assigned KB entry ID for this run: **KB-012**
+
+IMPORTANT: Write ALL implementation files first. Only AFTER writing every required file should you optionally append a KB entry.
+Do NOT read orchestrations/agents/KB.md before writing implementation files. The relevant KB entries are already injected above.
+
+If (and only if) you discover a non-obvious pattern during implementation, append one entry to `orchestrations/agents/KB.md`:
+
+```markdown
+## KB-012 -- 2026-07-23
+
+**Category:** <backend|frontend|infrastructure|testing|orchestration>
+**AgentRole:** <your agentRole from the story>
+**Tags:** <comma-separated tech keywords, e.g. typescript, node, cli>
+**Trigger:** <retry|first-success>
+**StoryRef:** AMSD-1820
+
+<One concise paragraph: the specific pattern, gotcha, or anti-pattern.>
+```
+
+Only write an entry if the knowledge is genuinely non-obvious. Skip trivial observations.
+
+## Execution Plan
+Follow this plan step by step:
+1. In `src/services/submit-reservations/apply-report-discounts.service.ts`, inspect the current discount application logic to identify where return-trip discounts are dropped or incorrectly shared between outbound and return legs; trace how `report.price.discount` is populated for each dispatch.
+
+2. In `src/services/submit-reservations/apply-report-discounts.service.ts`, modify the discount application function so that it processes each leg (outbound and return) independently — extracting the per-leg promo amount, currency, and promo name from the reservation/order data and applying them to the corresponding dispatch's `report.price.discount` only when a promo exists for that specific leg.
+
+3. In `src/services/submit-reservations/apply-report-discounts.service.ts`, ensure that when no promo code is applied to a given leg, the `discount` field is omitted entirely from that dispatch's `report.price` (not zeroed), and that the outbound dispatch discount remains unchanged from its pre-fix value to prevent regression.
+
+4. In `src/services/submit-reservations/apply-report-discounts.service.ts`, apply the system's standard rounding convention to any fractional-cent discount amounts before setting `report.price.discount.amount.value`, covering both fixed-amount and percentage-based promo codes.
+
+5. In `src/services/submit-reservations/submit-reservations.mappers.ts`, update the mapping function that builds the Mozio submit payload so that each dispatch in a return-trip order carries its own independent `report.price.discount` (amount, currency, name) sourced from the per-leg discount data, rather than reusing or omitting the return-leg discount.
+
+6. In `src/clients/mozio/mappers/map-to-sanitized-mozio-dispatch.ts`, update the sanitization mapper to preserve the `report.price.discount` object (including `amount.value`, `amount.currency` or equivalent currency field, and discount name) for both outbound and return dispatches, ensuring the return-trip discount is not dropped or zeroed in the sanitized logging payload.
+
+7. Add or update unit tests covering: return-trip with promo on both legs (independent discounts), promo on return leg only (outbound has no discount field), promo on outbound only (no regression), fixed-amount promo, percentage-based promo, no promo on either leg (no discount field on either dispatch), currency matching per leg, and fractional-cent rounding — verifying both the submit payload and the sanitized dispatch payload.
+
+8. Run the full test suite for the affected modules and verify all acceptance criteria pass, confirming no regressions in outbound discount behavior.
+=== End Prompt ===
+
+=== epam Output (attempt 1) ===
+</think>
+</think>
+
+=== epam exited with code 1 ===
+=== Prompt for AMSD-1820 (attempt 2) ===
+CRITICAL — WRITE FILES FIRST. Your FIRST tool call MUST be WriteFile.
+Do NOT output any text before calling WriteFile. Do NOT plan or say "I will...".
+Call WriteFile NOW for the EXACT ABSOLUTE PATHS listed below:
+
+   - WRITE /home/bradleyjerome/projects/metrolinx/azure.commerce.cdts/src/services/submit-reservations/apply-report-discounts.service.ts first, before any other action
+   - WRITE /home/bradleyjerome/projects/metrolinx/azure.commerce.cdts/src/services/submit-reservations/submit-reservations.mappers.ts first, before any other action
+   - WRITE /home/bradleyjerome/projects/metrolinx/azure.commerce.cdts/src/clients/mozio/mappers/map-to-sanitized-mozio-dispatch.ts first, before any other action
+---
+
+Implement user story AMSD-1820: [Mozio] - Promo code discount amount missing/incorrect for return-trip tickets in Mozio email confirmation dispatch report
+
+## Story Description
+[Mozio] - The Promo code amount is NOT displayed as expected for Return trip tickets in the Mozio email confirmation. The root cause is that when building the Mozio dispatch report for return-trip tickets, the discount amount is not correctly computed or propagated, resulting in the promo code discount being missing or zeroed in the email confirmation for the return leg.
+
+## Acceptance Criteria
+- Given a return-trip order with a promo code applied, when the Mozio dispatch report is built, the return-trip dispatch must include report.price.discount with the correct amount and currency matching the return leg's discount.
+- Given a return-trip order with a promo code applied to both outbound and return legs, each dispatch in the Mozio submit payload must contain its own independent report.price.discount reflecting that leg's promo amount.
+- Given a return-trip order with a promo code applied only to the return leg, the return-trip dispatch must include report.price.discount and the outbound dispatch must not include a discount field.
+- Given a return-trip order with a fixed-amount promo code, the return-trip dispatch report.price.discount.amount.value must equal the exact discounted currency amount for the return leg.
+- Given a return-trip order with a percentage-based promo code, the return-trip dispatch report.price.discount.amount.value must equal the calculated discount amount for the return leg.
+- Given a return-trip order with a promo code applied, the outbound dispatch report.price.discount must remain identical to the value produced before the return-trip discount fix (no regression).
+- The sanitized dispatch report payload used for logging must include the discount amount and name for both outbound and return dispatches when a promo code is applied, without dropping or zeroing the return-trip discount.
+- Given a return-trip order with no promo code applied, neither the outbound nor the return dispatch must include a discount field in the Mozio submit payload.
+- Given a return-trip order with a promo code applied, the report.price.discount.currency on the return-trip dispatch must match the currency of the return leg's trip price.
+- Given a return-trip order with a promo code that produces a fractional-cent discount amount, the return-trip dispatch report.price.discount.amount.value must follow the system's standard rounding convention (no unrounded or truncated values).
+
+
+
+
+
+## Technical Notes
+- files: ["src/services/submit-reservations/apply-report-discounts.service.ts","src/services/submit-reservations/submit-reservations.mappers.ts","src/clients/mozio/mappers/map-to-sanitized-mozio-dispatch.ts"]
+
+## Files to Create/Modify (EXACT ABSOLUTE PATHS — write to these paths exactly)
+src/services/submit-reservations/apply-report-discounts.service.ts, src/services/submit-reservations/submit-reservations.mappers.ts, src/clients/mozio/mappers/map-to-sanitized-mozio-dispatch.ts
+
+## Dependencies
+None
+
+
+
+## Instructions
+**CRITICAL — WRITE FILES FIRST:**
+   - WRITE /home/bradleyjerome/projects/metrolinx/azure.commerce.cdts/src/services/submit-reservations/apply-report-discounts.service.ts first, before any other action
+   - WRITE /home/bradleyjerome/projects/metrolinx/azure.commerce.cdts/src/services/submit-reservations/submit-reservations.mappers.ts first, before any other action
+   - WRITE /home/bradleyjerome/projects/metrolinx/azure.commerce.cdts/src/clients/mozio/mappers/map-to-sanitized-mozio-dispatch.ts first, before any other action
+**You MUST write every file listed above to its EXACT absolute path. Do NOT write to a different path, do NOT write to the current directory unless it matches the path above. Use your WriteFile or Edit tools with the full absolute path shown.**
+
+1. Write each required file to its exact absolute path listed above — do this FIRST before anything else
+2. Implement all acceptance criteria for this story
+3. Follow the project's existing code patterns and conventions
+4. Do NOT create tests unless explicitly required in acceptance criteria
+
+After implementation, provide a brief summary of what was created/modified.
+
+## Relevant Knowledge Base Entries
+The following was learned from previous story implementations and is relevant to your agent role. Apply this knowledge before writing any code:
+
+- [2026-07-06T18:11:26Z] Use vi.fn().mockResolvedValue(value) to make a mock return a resolved Promise.
+- [2026-07-06T20:31:11Z] Use `test: { passWithNoTests: true }` in vitest.config.ts or create a stub test file when no *.test.ts files exist.
+- [2026-07-06T20:33:03Z] Enable globals:true in vitest.config.ts so describe, it, and expect work without imports, reducing boilerplate in test files.
+- [2026-07-06T23:47:34Z] Use CommonJS-compatible patterns in src/server.ts: avoid `import.meta.url` and top-level `await`; gate listen with `if (require.main === module)`.
+- [2026-07-07T02:35:30Z] Always include a non-test source file in src/ alongside any src/*.test.ts file, since tsconfig.json excludes test files from tsc --noEmit.
+- [2026-07-07T19:01:34Z] Only modify or create files explicitly listed in the story's acceptance criteria. Do not touch files belonging to other stories or outside the current task scope.
+- [2026-07-07T20:17:57Z] [unreviewed-fallback] Avoid using deprecated TypeScript compiler options like 'moduleResolution=node10'; use 'moduleResolution=node' instead.
+- [2026-07-17T20:20:58Z] Always: Before importing a module or referencing a type/property, always read the actual source file to verify the export exists, its exact path, its properties, and its constructor/factory signatures
+- [2026-07-23T01:15:16Z] Always: In tsconfig.json, always use moduleResolution 'node' (not 'node10' or 'Node10') — 'node10' was removed in TypeScript 5.x. The correct value for CommonJS + Node resolution is 'node'.
+- [2026-07-23T14:30:00Z] CORRECTION to a prior entry (2026-07-23T01:17:52Z, now removed): that entry wrongly claimed 'moduleResolution: node' itself is removed and must become 'node16'/'nodenext'. Root-caused via mock1 (epam-cli orchestration test): 'node' is valid and correct through TypeScript 5.x (confirmed on 5.9.3) — it was only removed in TypeScript 7.x. The real defect was an unpinned `typescript` devDependency letting a fallback `npm install` pull latest (7.x) instead of the project's intended version. Do NOT rewrite a working tsconfig.json's moduleResolution in response to a TS5108 error — first check `node_modules/typescript/package.json`'s version; if it's 7.x and the rest of the project expects 5.x, the fix is pinning/reinstalling the correct typescript version, not changing moduleResolution.
+
+## Knowledge Base Contribution (do this LAST — after writing all implementation files)
+Your assigned KB entry ID for this run: **KB-012**
+**This is retry attempt 1** — a previous attempt failed. You MUST write a KB entry documenting what went wrong and what you changed.
+
+IMPORTANT: Write ALL implementation files first. Only AFTER writing every required file should you optionally append a KB entry.
+Do NOT read orchestrations/agents/KB.md before writing implementation files. The relevant KB entries are already injected above.
+
+If (and only if) you discover a non-obvious pattern during implementation, append one entry to `orchestrations/agents/KB.md`:
+
+```markdown
+## KB-012 -- 2026-07-23
+
+**Category:** <backend|frontend|infrastructure|testing|orchestration>
+**AgentRole:** <your agentRole from the story>
+**Tags:** <comma-separated tech keywords, e.g. typescript, node, cli>
+**Trigger:** <retry|first-success>
+**StoryRef:** AMSD-1820
+
+<One concise paragraph: the specific pattern, gotcha, or anti-pattern.>
+```
+
+Only write an entry if the knowledge is genuinely non-obvious. Skip trivial observations.
+
+## Execution Plan
+Follow this plan step by step:
+1. In `src/services/submit-reservations/apply-report-discounts.service.ts`, inspect the current discount application logic to identify where return-trip discounts are dropped or incorrectly shared between outbound and return legs; trace how `report.price.discount` is populated for each dispatch.
+
+2. In `src/services/submit-reservations/apply-report-discounts.service.ts`, modify the discount application function so that it processes each leg (outbound and return) independently — extracting the per-leg promo amount, currency, and promo name from the reservation/order data and applying them to the corresponding dispatch's `report.price.discount` only when a promo exists for that specific leg.
+
+3. In `src/services/submit-reservations/apply-report-discounts.service.ts`, ensure that when no promo code is applied to a given leg, the `discount` field is omitted entirely from that dispatch's `report.price` (not zeroed), and that the outbound dispatch discount remains unchanged from its pre-fix value to prevent regression.
+
+4. In `src/services/submit-reservations/apply-report-discounts.service.ts`, apply the system's standard rounding convention to any fractional-cent discount amounts before setting `report.price.discount.amount.value`, covering both fixed-amount and percentage-based promo codes.
+
+5. In `src/services/submit-reservations/submit-reservations.mappers.ts`, update the mapping function that builds the Mozio submit payload so that each dispatch in a return-trip order carries its own independent `report.price.discount` (amount, currency, name) sourced from the per-leg discount data, rather than reusing or omitting the return-leg discount.
+
+6. In `src/clients/mozio/mappers/map-to-sanitized-mozio-dispatch.ts`, update the sanitization mapper to preserve the `report.price.discount` object (including `amount.value`, `amount.currency` or equivalent currency field, and discount name) for both outbound and return dispatches, ensuring the return-trip discount is not dropped or zeroed in the sanitized logging payload.
+
+7. Add or update unit tests covering: return-trip with promo on both legs (independent discounts), promo on return leg only (outbound has no discount field), promo on outbound only (no regression), fixed-amount promo, percentage-based promo, no promo on either leg (no discount field on either dispatch), currency matching per leg, and fractional-cent rounding — verifying both the submit payload and the sanitized dispatch payload.
+
+8. Run the full test suite for the affected modules and verify all acceptance criteria pass, confirming no regressions in outbound discount behavior.
+=== End Prompt ===
+
+=== epam Output (attempt 2) ===
+Now let me look at related files to understand the structure better.
+Now let me look at related files to understand the structure better.
+
+=== epam exited with code 1 ===
+=== Prompt for AMSD-1820 (attempt 3) ===
+CRITICAL — WRITE FILES FIRST. Your FIRST tool call MUST be WriteFile.
+Do NOT output any text before calling WriteFile. Do NOT plan or say "I will...".
+Call WriteFile NOW for the EXACT ABSOLUTE PATHS listed below:
+
+   - WRITE /home/bradleyjerome/projects/metrolinx/azure.commerce.cdts/src/services/submit-reservations/apply-report-discounts.service.ts first, before any other action
+   - WRITE /home/bradleyjerome/projects/metrolinx/azure.commerce.cdts/src/services/submit-reservations/submit-reservations.mappers.ts first, before any other action
+   - WRITE /home/bradleyjerome/projects/metrolinx/azure.commerce.cdts/src/clients/mozio/mappers/map-to-sanitized-mozio-dispatch.ts first, before any other action
+---
+
+Implement user story AMSD-1820: [Mozio] - Promo code discount amount missing/incorrect for return-trip tickets in Mozio email confirmation dispatch report
+
+## Story Description
+[Mozio] - The Promo code amount is NOT displayed as expected for Return trip tickets in the Mozio email confirmation. The root cause is that when building the Mozio dispatch report for return-trip tickets, the discount amount is not correctly computed or propagated, resulting in the promo code discount being missing or zeroed in the email confirmation for the return leg.
+
+## Acceptance Criteria
+- Given a return-trip order with a promo code applied, when the Mozio dispatch report is built, the return-trip dispatch must include report.price.discount with the correct amount and currency matching the return leg's discount.
+- Given a return-trip order with a promo code applied to both outbound and return legs, each dispatch in the Mozio submit payload must contain its own independent report.price.discount reflecting that leg's promo amount.
+- Given a return-trip order with a promo code applied only to the return leg, the return-trip dispatch must include report.price.discount and the outbound dispatch must not include a discount field.
+- Given a return-trip order with a fixed-amount promo code, the return-trip dispatch report.price.discount.amount.value must equal the exact discounted currency amount for the return leg.
+- Given a return-trip order with a percentage-based promo code, the return-trip dispatch report.price.discount.amount.value must equal the calculated discount amount for the return leg.
+- Given a return-trip order with a promo code applied, the outbound dispatch report.price.discount must remain identical to the value produced before the return-trip discount fix (no regression).
+- The sanitized dispatch report payload used for logging must include the discount amount and name for both outbound and return dispatches when a promo code is applied, without dropping or zeroing the return-trip discount.
+- Given a return-trip order with no promo code applied, neither the outbound nor the return dispatch must include a discount field in the Mozio submit payload.
+- Given a return-trip order with a promo code applied, the report.price.discount.currency on the return-trip dispatch must match the currency of the return leg's trip price.
+- Given a return-trip order with a promo code that produces a fractional-cent discount amount, the return-trip dispatch report.price.discount.amount.value must follow the system's standard rounding convention (no unrounded or truncated values).
+
+
+
+
+
+## Technical Notes
+- files: ["src/services/submit-reservations/apply-report-discounts.service.ts","src/services/submit-reservations/submit-reservations.mappers.ts","src/clients/mozio/mappers/map-to-sanitized-mozio-dispatch.ts"]
+
+## Files to Create/Modify (EXACT ABSOLUTE PATHS — write to these paths exactly)
+src/services/submit-reservations/apply-report-discounts.service.ts, src/services/submit-reservations/submit-reservations.mappers.ts, src/clients/mozio/mappers/map-to-sanitized-mozio-dispatch.ts
+
+## Dependencies
+None
+
+
+
+## Instructions
+**CRITICAL — WRITE FILES FIRST:**
+   - WRITE /home/bradleyjerome/projects/metrolinx/azure.commerce.cdts/src/services/submit-reservations/apply-report-discounts.service.ts first, before any other action
+   - WRITE /home/bradleyjerome/projects/metrolinx/azure.commerce.cdts/src/services/submit-reservations/submit-reservations.mappers.ts first, before any other action
+   - WRITE /home/bradleyjerome/projects/metrolinx/azure.commerce.cdts/src/clients/mozio/mappers/map-to-sanitized-mozio-dispatch.ts first, before any other action
+**You MUST write every file listed above to its EXACT absolute path. Do NOT write to a different path, do NOT write to the current directory unless it matches the path above. Use your WriteFile or Edit tools with the full absolute path shown.**
+
+1. Write each required file to its exact absolute path listed above — do this FIRST before anything else
+2. Implement all acceptance criteria for this story
+3. Follow the project's existing code patterns and conventions
+4. Do NOT create tests unless explicitly required in acceptance criteria
+
+After implementation, provide a brief summary of what was created/modified.
+
+## Relevant Knowledge Base Entries
+The following was learned from previous story implementations and is relevant to your agent role. Apply this knowledge before writing any code:
+
+- [2026-07-06T18:11:26Z] Use vi.fn().mockResolvedValue(value) to make a mock return a resolved Promise.
+- [2026-07-06T20:31:11Z] Use `test: { passWithNoTests: true }` in vitest.config.ts or create a stub test file when no *.test.ts files exist.
+- [2026-07-06T20:33:03Z] Enable globals:true in vitest.config.ts so describe, it, and expect work without imports, reducing boilerplate in test files.
+- [2026-07-06T23:47:34Z] Use CommonJS-compatible patterns in src/server.ts: avoid `import.meta.url` and top-level `await`; gate listen with `if (require.main === module)`.
+- [2026-07-07T02:35:30Z] Always include a non-test source file in src/ alongside any src/*.test.ts file, since tsconfig.json excludes test files from tsc --noEmit.
+- [2026-07-07T19:01:34Z] Only modify or create files explicitly listed in the story's acceptance criteria. Do not touch files belonging to other stories or outside the current task scope.
+- [2026-07-07T20:17:57Z] [unreviewed-fallback] Avoid using deprecated TypeScript compiler options like 'moduleResolution=node10'; use 'moduleResolution=node' instead.
+- [2026-07-17T20:20:58Z] Always: Before importing a module or referencing a type/property, always read the actual source file to verify the export exists, its exact path, its properties, and its constructor/factory signatures
+- [2026-07-23T01:15:16Z] Always: In tsconfig.json, always use moduleResolution 'node' (not 'node10' or 'Node10') — 'node10' was removed in TypeScript 5.x. The correct value for CommonJS + Node resolution is 'node'.
+- [2026-07-23T14:30:00Z] CORRECTION to a prior entry (2026-07-23T01:17:52Z, now removed): that entry wrongly claimed 'moduleResolution: node' itself is removed and must become 'node16'/'nodenext'. Root-caused via mock1 (epam-cli orchestration test): 'node' is valid and correct through TypeScript 5.x (confirmed on 5.9.3) — it was only removed in TypeScript 7.x. The real defect was an unpinned `typescript` devDependency letting a fallback `npm install` pull latest (7.x) instead of the project's intended version. Do NOT rewrite a working tsconfig.json's moduleResolution in response to a TS5108 error — first check `node_modules/typescript/package.json`'s version; if it's 7.x and the rest of the project expects 5.x, the fix is pinning/reinstalling the correct typescript version, not changing moduleResolution.
+
+## Knowledge Base Contribution (do this LAST — after writing all implementation files)
+Your assigned KB entry ID for this run: **KB-012**
+**This is retry attempt 2** — a previous attempt failed. You MUST write a KB entry documenting what went wrong and what you changed.
+
+IMPORTANT: Write ALL implementation files first. Only AFTER writing every required file should you optionally append a KB entry.
+Do NOT read orchestrations/agents/KB.md before writing implementation files. The relevant KB entries are already injected above.
+
+If (and only if) you discover a non-obvious pattern during implementation, append one entry to `orchestrations/agents/KB.md`:
+
+```markdown
+## KB-012 -- 2026-07-23
+
+**Category:** <backend|frontend|infrastructure|testing|orchestration>
+**AgentRole:** <your agentRole from the story>
+**Tags:** <comma-separated tech keywords, e.g. typescript, node, cli>
+**Trigger:** <retry|first-success>
+**StoryRef:** AMSD-1820
+
+<One concise paragraph: the specific pattern, gotcha, or anti-pattern.>
+```
+
+Only write an entry if the knowledge is genuinely non-obvious. Skip trivial observations.
+
+## Execution Plan
+Follow this plan step by step:
+1. In `src/services/submit-reservations/apply-report-discounts.service.ts`, inspect the current discount application logic to identify where return-trip discounts are dropped or incorrectly shared between outbound and return legs; trace how `report.price.discount` is populated for each dispatch.
+
+2. In `src/services/submit-reservations/apply-report-discounts.service.ts`, modify the discount application function so that it processes each leg (outbound and return) independently — extracting the per-leg promo amount, currency, and promo name from the reservation/order data and applying them to the corresponding dispatch's `report.price.discount` only when a promo exists for that specific leg.
+
+3. In `src/services/submit-reservations/apply-report-discounts.service.ts`, ensure that when no promo code is applied to a given leg, the `discount` field is omitted entirely from that dispatch's `report.price` (not zeroed), and that the outbound dispatch discount remains unchanged from its pre-fix value to prevent regression.
+
+4. In `src/services/submit-reservations/apply-report-discounts.service.ts`, apply the system's standard rounding convention to any fractional-cent discount amounts before setting `report.price.discount.amount.value`, covering both fixed-amount and percentage-based promo codes.
+
+5. In `src/services/submit-reservations/submit-reservations.mappers.ts`, update the mapping function that builds the Mozio submit payload so that each dispatch in a return-trip order carries its own independent `report.price.discount` (amount, currency, name) sourced from the per-leg discount data, rather than reusing or omitting the return-leg discount.
+
+6. In `src/clients/mozio/mappers/map-to-sanitized-mozio-dispatch.ts`, update the sanitization mapper to preserve the `report.price.discount` object (including `amount.value`, `amount.currency` or equivalent currency field, and discount name) for both outbound and return dispatches, ensuring the return-trip discount is not dropped or zeroed in the sanitized logging payload.
+
+7. Add or update unit tests covering: return-trip with promo on both legs (independent discounts), promo on return leg only (outbound has no discount field), promo on outbound only (no regression), fixed-amount promo, percentage-based promo, no promo on either leg (no discount field on either dispatch), currency matching per leg, and fractional-cent rounding — verifying both the submit payload and the sanitized dispatch payload.
+
+8. Run the full test suite for the affected modules and verify all acceptance criteria pass, confirming no regressions in outbound discount behavior.
+=== End Prompt ===
+
+=== epam Output (attempt 3) ===
+I'll first inspect the existing files to understand the current code patterns and conventions.
+I'll first inspect the existing files to understand the current code patterns and conventions.
+
+=== epam exited with code 1 ===
+=== Prompt for AMSD-1820 (attempt 4) ===
+CRITICAL — WRITE FILES FIRST. Your FIRST tool call MUST be WriteFile.
+Do NOT output any text before calling WriteFile. Do NOT plan or say "I will...".
+Call WriteFile NOW for the EXACT ABSOLUTE PATHS listed below:
+
+   - WRITE /home/bradleyjerome/projects/metrolinx/azure.commerce.cdts/src/services/submit-reservations/apply-report-discounts.service.ts first, before any other action
+   - WRITE /home/bradleyjerome/projects/metrolinx/azure.commerce.cdts/src/services/submit-reservations/submit-reservations.mappers.ts first, before any other action
+   - WRITE /home/bradleyjerome/projects/metrolinx/azure.commerce.cdts/src/clients/mozio/mappers/map-to-sanitized-mozio-dispatch.ts first, before any other action
+---
+
+Implement user story AMSD-1820: [Mozio] - Promo code discount amount missing/incorrect for return-trip tickets in Mozio email confirmation dispatch report
+
+## Story Description
+[Mozio] - The Promo code amount is NOT displayed as expected for Return trip tickets in the Mozio email confirmation. The root cause is that when building the Mozio dispatch report for return-trip tickets, the discount amount is not correctly computed or propagated, resulting in the promo code discount being missing or zeroed in the email confirmation for the return leg.
+
+## Acceptance Criteria
+- Given a return-trip order with a promo code applied, when the Mozio dispatch report is built, the return-trip dispatch must include report.price.discount with the correct amount and currency matching the return leg's discount.
+- Given a return-trip order with a promo code applied to both outbound and return legs, each dispatch in the Mozio submit payload must contain its own independent report.price.discount reflecting that leg's promo amount.
+- Given a return-trip order with a promo code applied only to the return leg, the return-trip dispatch must include report.price.discount and the outbound dispatch must not include a discount field.
+- Given a return-trip order with a fixed-amount promo code, the return-trip dispatch report.price.discount.amount.value must equal the exact discounted currency amount for the return leg.
+- Given a return-trip order with a percentage-based promo code, the return-trip dispatch report.price.discount.amount.value must equal the calculated discount amount for the return leg.
+- Given a return-trip order with a promo code applied, the outbound dispatch report.price.discount must remain identical to the value produced before the return-trip discount fix (no regression).
+- The sanitized dispatch report payload used for logging must include the discount amount and name for both outbound and return dispatches when a promo code is applied, without dropping or zeroing the return-trip discount.
+- Given a return-trip order with no promo code applied, neither the outbound nor the return dispatch must include a discount field in the Mozio submit payload.
+- Given a return-trip order with a promo code applied, the report.price.discount.currency on the return-trip dispatch must match the currency of the return leg's trip price.
+- Given a return-trip order with a promo code that produces a fractional-cent discount amount, the return-trip dispatch report.price.discount.amount.value must follow the system's standard rounding convention (no unrounded or truncated values).
+
+
+
+
+
+## Technical Notes
+- files: ["src/services/submit-reservations/apply-report-discounts.service.ts","src/services/submit-reservations/submit-reservations.mappers.ts","src/clients/mozio/mappers/map-to-sanitized-mozio-dispatch.ts"]
+
+## Files to Create/Modify (EXACT ABSOLUTE PATHS — write to these paths exactly)
+src/services/submit-reservations/apply-report-discounts.service.ts, src/services/submit-reservations/submit-reservations.mappers.ts, src/clients/mozio/mappers/map-to-sanitized-mozio-dispatch.ts
+
+## Dependencies
+None
+
+
+
+## Instructions
+**CRITICAL — WRITE FILES FIRST:**
+   - WRITE /home/bradleyjerome/projects/metrolinx/azure.commerce.cdts/src/services/submit-reservations/apply-report-discounts.service.ts first, before any other action
+   - WRITE /home/bradleyjerome/projects/metrolinx/azure.commerce.cdts/src/services/submit-reservations/submit-reservations.mappers.ts first, before any other action
+   - WRITE /home/bradleyjerome/projects/metrolinx/azure.commerce.cdts/src/clients/mozio/mappers/map-to-sanitized-mozio-dispatch.ts first, before any other action
+**You MUST write every file listed above to its EXACT absolute path. Do NOT write to a different path, do NOT write to the current directory unless it matches the path above. Use your WriteFile or Edit tools with the full absolute path shown.**
+
+1. Write each required file to its exact absolute path listed above — do this FIRST before anything else
+2. Implement all acceptance criteria for this story
+3. Follow the project's existing code patterns and conventions
+4. Do NOT create tests unless explicitly required in acceptance criteria
+
+After implementation, provide a brief summary of what was created/modified.
+
+## Relevant Knowledge Base Entries
+The following was learned from previous story implementations and is relevant to your agent role. Apply this knowledge before writing any code:
+
+- [2026-07-06T18:11:26Z] Use vi.fn().mockResolvedValue(value) to make a mock return a resolved Promise.
+- [2026-07-06T20:31:11Z] Use `test: { passWithNoTests: true }` in vitest.config.ts or create a stub test file when no *.test.ts files exist.
+- [2026-07-06T20:33:03Z] Enable globals:true in vitest.config.ts so describe, it, and expect work without imports, reducing boilerplate in test files.
+- [2026-07-06T23:47:34Z] Use CommonJS-compatible patterns in src/server.ts: avoid `import.meta.url` and top-level `await`; gate listen with `if (require.main === module)`.
+- [2026-07-07T02:35:30Z] Always include a non-test source file in src/ alongside any src/*.test.ts file, since tsconfig.json excludes test files from tsc --noEmit.
+- [2026-07-07T19:01:34Z] Only modify or create files explicitly listed in the story's acceptance criteria. Do not touch files belonging to other stories or outside the current task scope.
+- [2026-07-07T20:17:57Z] [unreviewed-fallback] Avoid using deprecated TypeScript compiler options like 'moduleResolution=node10'; use 'moduleResolution=node' instead.
+- [2026-07-17T20:20:58Z] Always: Before importing a module or referencing a type/property, always read the actual source file to verify the export exists, its exact path, its properties, and its constructor/factory signatures
+- [2026-07-23T01:15:16Z] Always: In tsconfig.json, always use moduleResolution 'node' (not 'node10' or 'Node10') — 'node10' was removed in TypeScript 5.x. The correct value for CommonJS + Node resolution is 'node'.
+- [2026-07-23T14:30:00Z] CORRECTION to a prior entry (2026-07-23T01:17:52Z, now removed): that entry wrongly claimed 'moduleResolution: node' itself is removed and must become 'node16'/'nodenext'. Root-caused via mock1 (epam-cli orchestration test): 'node' is valid and correct through TypeScript 5.x (confirmed on 5.9.3) — it was only removed in TypeScript 7.x. The real defect was an unpinned `typescript` devDependency letting a fallback `npm install` pull latest (7.x) instead of the project's intended version. Do NOT rewrite a working tsconfig.json's moduleResolution in response to a TS5108 error — first check `node_modules/typescript/package.json`'s version; if it's 7.x and the rest of the project expects 5.x, the fix is pinning/reinstalling the correct typescript version, not changing moduleResolution.
+
+## Knowledge Base Contribution (do this LAST — after writing all implementation files)
+Your assigned KB entry ID for this run: **KB-012**
+**This is retry attempt 3** — a previous attempt failed. You MUST write a KB entry documenting what went wrong and what you changed.
+
+IMPORTANT: Write ALL implementation files first. Only AFTER writing every required file should you optionally append a KB entry.
+Do NOT read orchestrations/agents/KB.md before writing implementation files. The relevant KB entries are already injected above.
+
+If (and only if) you discover a non-obvious pattern during implementation, append one entry to `orchestrations/agents/KB.md`:
+
+```markdown
+## KB-012 -- 2026-07-23
+
+**Category:** <backend|frontend|infrastructure|testing|orchestration>
+**AgentRole:** <your agentRole from the story>
+**Tags:** <comma-separated tech keywords, e.g. typescript, node, cli>
+**Trigger:** <retry|first-success>
+**StoryRef:** AMSD-1820
+
+<One concise paragraph: the specific pattern, gotcha, or anti-pattern.>
+```
+
+Only write an entry if the knowledge is genuinely non-obvious. Skip trivial observations.
+
+## Execution Plan
+Follow this plan step by step:
+1. In `src/services/submit-reservations/apply-report-discounts.service.ts`, inspect the current discount application logic to identify where return-trip discounts are dropped or incorrectly shared between outbound and return legs; trace how `report.price.discount` is populated for each dispatch.
+
+2. In `src/services/submit-reservations/apply-report-discounts.service.ts`, modify the discount application function so that it processes each leg (outbound and return) independently — extracting the per-leg promo amount, currency, and promo name from the reservation/order data and applying them to the corresponding dispatch's `report.price.discount` only when a promo exists for that specific leg.
+
+3. In `src/services/submit-reservations/apply-report-discounts.service.ts`, ensure that when no promo code is applied to a given leg, the `discount` field is omitted entirely from that dispatch's `report.price` (not zeroed), and that the outbound dispatch discount remains unchanged from its pre-fix value to prevent regression.
+
+4. In `src/services/submit-reservations/apply-report-discounts.service.ts`, apply the system's standard rounding convention to any fractional-cent discount amounts before setting `report.price.discount.amount.value`, covering both fixed-amount and percentage-based promo codes.
+
+5. In `src/services/submit-reservations/submit-reservations.mappers.ts`, update the mapping function that builds the Mozio submit payload so that each dispatch in a return-trip order carries its own independent `report.price.discount` (amount, currency, name) sourced from the per-leg discount data, rather than reusing or omitting the return-leg discount.
+
+6. In `src/clients/mozio/mappers/map-to-sanitized-mozio-dispatch.ts`, update the sanitization mapper to preserve the `report.price.discount` object (including `amount.value`, `amount.currency` or equivalent currency field, and discount name) for both outbound and return dispatches, ensuring the return-trip discount is not dropped or zeroed in the sanitized logging payload.
+
+7. Add or update unit tests covering: return-trip with promo on both legs (independent discounts), promo on return leg only (outbound has no discount field), promo on outbound only (no regression), fixed-amount promo, percentage-based promo, no promo on either leg (no discount field on either dispatch), currency matching per leg, and fractional-cent rounding — verifying both the submit payload and the sanitized dispatch payload.
+
+8. Run the full test suite for the affected modules and verify all acceptance criteria pass, confirming no regressions in outbound discount behavior.
+=== End Prompt ===
+
+=== epam Output (attempt 4) ===
+Now let me look at the existing test files and related models:
+Now let me look at the existing test files and related models:
+
+=== epam exited with code 1 ===
+=== Prompt for AMSD-1820 (attempt 5) ===
+CRITICAL — WRITE FILES FIRST. Your FIRST tool call MUST be WriteFile.
+Do NOT output any text before calling WriteFile. Do NOT plan or say "I will...".
+Call WriteFile NOW for the EXACT ABSOLUTE PATHS listed below:
+
+   - WRITE /home/bradleyjerome/projects/metrolinx/azure.commerce.cdts/src/services/submit-reservations/apply-report-discounts.service.ts first, before any other action
+   - WRITE /home/bradleyjerome/projects/metrolinx/azure.commerce.cdts/src/services/submit-reservations/submit-reservations.mappers.ts first, before any other action
+   - WRITE /home/bradleyjerome/projects/metrolinx/azure.commerce.cdts/src/clients/mozio/mappers/map-to-sanitized-mozio-dispatch.ts first, before any other action
+---
+
+Implement user story AMSD-1820: [Mozio] - Promo code discount amount missing/incorrect for return-trip tickets in Mozio email confirmation dispatch report
+
+## Story Description
+[Mozio] - The Promo code amount is NOT displayed as expected for Return trip tickets in the Mozio email confirmation. The root cause is that when building the Mozio dispatch report for return-trip tickets, the discount amount is not correctly computed or propagated, resulting in the promo code discount being missing or zeroed in the email confirmation for the return leg.
+
+## Acceptance Criteria
+- Given a return-trip order with a promo code applied, when the Mozio dispatch report is built, the return-trip dispatch must include report.price.discount with the correct amount and currency matching the return leg's discount.
+- Given a return-trip order with a promo code applied to both outbound and return legs, each dispatch in the Mozio submit payload must contain its own independent report.price.discount reflecting that leg's promo amount.
+- Given a return-trip order with a promo code applied only to the return leg, the return-trip dispatch must include report.price.discount and the outbound dispatch must not include a discount field.
+- Given a return-trip order with a fixed-amount promo code, the return-trip dispatch report.price.discount.amount.value must equal the exact discounted currency amount for the return leg.
+- Given a return-trip order with a percentage-based promo code, the return-trip dispatch report.price.discount.amount.value must equal the calculated discount amount for the return leg.
+- Given a return-trip order with a promo code applied, the outbound dispatch report.price.discount must remain identical to the value produced before the return-trip discount fix (no regression).
+- The sanitized dispatch report payload used for logging must include the discount amount and name for both outbound and return dispatches when a promo code is applied, without dropping or zeroing the return-trip discount.
+- Given a return-trip order with no promo code applied, neither the outbound nor the return dispatch must include a discount field in the Mozio submit payload.
+- Given a return-trip order with a promo code applied, the report.price.discount.currency on the return-trip dispatch must match the currency of the return leg's trip price.
+- Given a return-trip order with a promo code that produces a fractional-cent discount amount, the return-trip dispatch report.price.discount.amount.value must follow the system's standard rounding convention (no unrounded or truncated values).
+
+
+
+
+
+## Technical Notes
+- files: ["src/services/submit-reservations/apply-report-discounts.service.ts","src/services/submit-reservations/submit-reservations.mappers.ts","src/clients/mozio/mappers/map-to-sanitized-mozio-dispatch.ts"]
+
+## Files to Create/Modify (EXACT ABSOLUTE PATHS — write to these paths exactly)
+src/services/submit-reservations/apply-report-discounts.service.ts, src/services/submit-reservations/submit-reservations.mappers.ts, src/clients/mozio/mappers/map-to-sanitized-mozio-dispatch.ts
+
+## Dependencies
+None
+
+
+
+## Instructions
+**CRITICAL — WRITE FILES FIRST:**
+   - WRITE /home/bradleyjerome/projects/metrolinx/azure.commerce.cdts/src/services/submit-reservations/apply-report-discounts.service.ts first, before any other action
+   - WRITE /home/bradleyjerome/projects/metrolinx/azure.commerce.cdts/src/services/submit-reservations/submit-reservations.mappers.ts first, before any other action
+   - WRITE /home/bradleyjerome/projects/metrolinx/azure.commerce.cdts/src/clients/mozio/mappers/map-to-sanitized-mozio-dispatch.ts first, before any other action
+**You MUST write every file listed above to its EXACT absolute path. Do NOT write to a different path, do NOT write to the current directory unless it matches the path above. Use your WriteFile or Edit tools with the full absolute path shown.**
+
+1. Write each required file to its exact absolute path listed above — do this FIRST before anything else
+2. Implement all acceptance criteria for this story
+3. Follow the project's existing code patterns and conventions
+4. Do NOT create tests unless explicitly required in acceptance criteria
+
+After implementation, provide a brief summary of what was created/modified.
+
+## Relevant Knowledge Base Entries
+The following was learned from previous story implementations and is relevant to your agent role. Apply this knowledge before writing any code:
+
+- [2026-07-06T18:11:26Z] Use vi.fn().mockResolvedValue(value) to make a mock return a resolved Promise.
+- [2026-07-06T20:31:11Z] Use `test: { passWithNoTests: true }` in vitest.config.ts or create a stub test file when no *.test.ts files exist.
+- [2026-07-06T20:33:03Z] Enable globals:true in vitest.config.ts so describe, it, and expect work without imports, reducing boilerplate in test files.
+- [2026-07-06T23:47:34Z] Use CommonJS-compatible patterns in src/server.ts: avoid `import.meta.url` and top-level `await`; gate listen with `if (require.main === module)`.
+- [2026-07-07T02:35:30Z] Always include a non-test source file in src/ alongside any src/*.test.ts file, since tsconfig.json excludes test files from tsc --noEmit.
+- [2026-07-07T19:01:34Z] Only modify or create files explicitly listed in the story's acceptance criteria. Do not touch files belonging to other stories or outside the current task scope.
+- [2026-07-07T20:17:57Z] [unreviewed-fallback] Avoid using deprecated TypeScript compiler options like 'moduleResolution=node10'; use 'moduleResolution=node' instead.
+- [2026-07-17T20:20:58Z] Always: Before importing a module or referencing a type/property, always read the actual source file to verify the export exists, its exact path, its properties, and its constructor/factory signatures
+- [2026-07-23T01:15:16Z] Always: In tsconfig.json, always use moduleResolution 'node' (not 'node10' or 'Node10') — 'node10' was removed in TypeScript 5.x. The correct value for CommonJS + Node resolution is 'node'.
+- [2026-07-23T14:30:00Z] CORRECTION to a prior entry (2026-07-23T01:17:52Z, now removed): that entry wrongly claimed 'moduleResolution: node' itself is removed and must become 'node16'/'nodenext'. Root-caused via mock1 (epam-cli orchestration test): 'node' is valid and correct through TypeScript 5.x (confirmed on 5.9.3) — it was only removed in TypeScript 7.x. The real defect was an unpinned `typescript` devDependency letting a fallback `npm install` pull latest (7.x) instead of the project's intended version. Do NOT rewrite a working tsconfig.json's moduleResolution in response to a TS5108 error — first check `node_modules/typescript/package.json`'s version; if it's 7.x and the rest of the project expects 5.x, the fix is pinning/reinstalling the correct typescript version, not changing moduleResolution.
+
+## Knowledge Base Contribution (do this LAST — after writing all implementation files)
+Your assigned KB entry ID for this run: **KB-012**
+**This is retry attempt 4** — a previous attempt failed. You MUST write a KB entry documenting what went wrong and what you changed.
+
+IMPORTANT: Write ALL implementation files first. Only AFTER writing every required file should you optionally append a KB entry.
+Do NOT read orchestrations/agents/KB.md before writing implementation files. The relevant KB entries are already injected above.
+
+If (and only if) you discover a non-obvious pattern during implementation, append one entry to `orchestrations/agents/KB.md`:
+
+```markdown
+## KB-012 -- 2026-07-23
+
+**Category:** <backend|frontend|infrastructure|testing|orchestration>
+**AgentRole:** <your agentRole from the story>
+**Tags:** <comma-separated tech keywords, e.g. typescript, node, cli>
+**Trigger:** <retry|first-success>
+**StoryRef:** AMSD-1820
+
+<One concise paragraph: the specific pattern, gotcha, or anti-pattern.>
+```
+
+Only write an entry if the knowledge is genuinely non-obvious. Skip trivial observations.
+
+## Execution Plan
+Follow this plan step by step:
+1. In `src/services/submit-reservations/apply-report-discounts.service.ts`, inspect the current discount application logic to identify where return-trip discounts are dropped or incorrectly shared between outbound and return legs; trace how `report.price.discount` is populated for each dispatch.
+
+2. In `src/services/submit-reservations/apply-report-discounts.service.ts`, modify the discount application function so that it processes each leg (outbound and return) independently — extracting the per-leg promo amount, currency, and promo name from the reservation/order data and applying them to the corresponding dispatch's `report.price.discount` only when a promo exists for that specific leg.
+
+3. In `src/services/submit-reservations/apply-report-discounts.service.ts`, ensure that when no promo code is applied to a given leg, the `discount` field is omitted entirely from that dispatch's `report.price` (not zeroed), and that the outbound dispatch discount remains unchanged from its pre-fix value to prevent regression.
+
+4. In `src/services/submit-reservations/apply-report-discounts.service.ts`, apply the system's standard rounding convention to any fractional-cent discount amounts before setting `report.price.discount.amount.value`, covering both fixed-amount and percentage-based promo codes.
+
+5. In `src/services/submit-reservations/submit-reservations.mappers.ts`, update the mapping function that builds the Mozio submit payload so that each dispatch in a return-trip order carries its own independent `report.price.discount` (amount, currency, name) sourced from the per-leg discount data, rather than reusing or omitting the return-leg discount.
+
+6. In `src/clients/mozio/mappers/map-to-sanitized-mozio-dispatch.ts`, update the sanitization mapper to preserve the `report.price.discount` object (including `amount.value`, `amount.currency` or equivalent currency field, and discount name) for both outbound and return dispatches, ensuring the return-trip discount is not dropped or zeroed in the sanitized logging payload.
+
+7. Add or update unit tests covering: return-trip with promo on both legs (independent discounts), promo on return leg only (outbound has no discount field), promo on outbound only (no regression), fixed-amount promo, percentage-based promo, no promo on either leg (no discount field on either dispatch), currency matching per leg, and fractional-cent rounding — verifying both the submit payload and the sanitized dispatch payload.
+
+8. Run the full test suite for the affected modules and verify all acceptance criteria pass, confirming no regressions in outbound discount behavior.
+=== End Prompt ===
+
+=== epam Output (attempt 5) ===
+Agent reached maximum iterations (20) without completing.
+Agent reached maximum iterations (20) without completing.
+
+=== epam exited with code 1 ===
+=== Prompt for AMSD-1820 (attempt 6) ===
+CRITICAL — WRITE FILES FIRST. Your FIRST tool call MUST be WriteFile.
+Do NOT output any text before calling WriteFile. Do NOT plan or say "I will...".
+Call WriteFile NOW for the EXACT ABSOLUTE PATHS listed below:
+
+   - WRITE /home/bradleyjerome/projects/metrolinx/azure.commerce.cdts/src/services/submit-reservations/apply-report-discounts.service.ts first, before any other action
+   - WRITE /home/bradleyjerome/projects/metrolinx/azure.commerce.cdts/src/services/submit-reservations/submit-reservations.mappers.ts first, before any other action
+   - WRITE /home/bradleyjerome/projects/metrolinx/azure.commerce.cdts/src/clients/mozio/mappers/map-to-sanitized-mozio-dispatch.ts first, before any other action
+---
+
+Implement user story AMSD-1820: [Mozio] - Promo code discount amount missing/incorrect for return-trip tickets in Mozio email confirmation dispatch report
+
+## Story Description
+[Mozio] - The Promo code amount is NOT displayed as expected for Return trip tickets in the Mozio email confirmation. The root cause is that when building the Mozio dispatch report for return-trip tickets, the discount amount is not correctly computed or propagated, resulting in the promo code discount being missing or zeroed in the email confirmation for the return leg.
+
+## Acceptance Criteria
+- Given a return-trip order with a promo code applied, when the Mozio dispatch report is built, the return-trip dispatch must include report.price.discount with the correct amount and currency matching the return leg's discount.
+- Given a return-trip order with a promo code applied to both outbound and return legs, each dispatch in the Mozio submit payload must contain its own independent report.price.discount reflecting that leg's promo amount.
+- Given a return-trip order with a promo code applied only to the return leg, the return-trip dispatch must include report.price.discount and the outbound dispatch must not include a discount field.
+- Given a return-trip order with a fixed-amount promo code, the return-trip dispatch report.price.discount.amount.value must equal the exact discounted currency amount for the return leg.
+- Given a return-trip order with a percentage-based promo code, the return-trip dispatch report.price.discount.amount.value must equal the calculated discount amount for the return leg.
+- Given a return-trip order with a promo code applied, the outbound dispatch report.price.discount must remain identical to the value produced before the return-trip discount fix (no regression).
+- The sanitized dispatch report payload used for logging must include the discount amount and name for both outbound and return dispatches when a promo code is applied, without dropping or zeroing the return-trip discount.
+- Given a return-trip order with no promo code applied, neither the outbound nor the return dispatch must include a discount field in the Mozio submit payload.
+- Given a return-trip order with a promo code applied, the report.price.discount.currency on the return-trip dispatch must match the currency of the return leg's trip price.
+- Given a return-trip order with a promo code that produces a fractional-cent discount amount, the return-trip dispatch report.price.discount.amount.value must follow the system's standard rounding convention (no unrounded or truncated values).
+
+
+
+
+
+## Technical Notes
+- files: ["src/services/submit-reservations/apply-report-discounts.service.ts","src/services/submit-reservations/submit-reservations.mappers.ts","src/clients/mozio/mappers/map-to-sanitized-mozio-dispatch.ts"]
+
+## Files to Create/Modify (EXACT ABSOLUTE PATHS — write to these paths exactly)
+src/services/submit-reservations/apply-report-discounts.service.ts, src/services/submit-reservations/submit-reservations.mappers.ts, src/clients/mozio/mappers/map-to-sanitized-mozio-dispatch.ts
+
+## Dependencies
+None
+
+
+
+## Instructions
+**CRITICAL — WRITE FILES FIRST:**
+   - WRITE /home/bradleyjerome/projects/metrolinx/azure.commerce.cdts/src/services/submit-reservations/apply-report-discounts.service.ts first, before any other action
+   - WRITE /home/bradleyjerome/projects/metrolinx/azure.commerce.cdts/src/services/submit-reservations/submit-reservations.mappers.ts first, before any other action
+   - WRITE /home/bradleyjerome/projects/metrolinx/azure.commerce.cdts/src/clients/mozio/mappers/map-to-sanitized-mozio-dispatch.ts first, before any other action
+**You MUST write every file listed above to its EXACT absolute path. Do NOT write to a different path, do NOT write to the current directory unless it matches the path above. Use your WriteFile or Edit tools with the full absolute path shown.**
+
+1. Write each required file to its exact absolute path listed above — do this FIRST before anything else
+2. Implement all acceptance criteria for this story
+3. Follow the project's existing code patterns and conventions
+4. Do NOT create tests unless explicitly required in acceptance criteria
+
+After implementation, provide a brief summary of what was created/modified.
+
+## Relevant Knowledge Base Entries
+The following was learned from previous story implementations and is relevant to your agent role. Apply this knowledge before writing any code:
+
+- [2026-07-06T18:11:26Z] Use vi.fn().mockResolvedValue(value) to make a mock return a resolved Promise.
+- [2026-07-06T20:31:11Z] Use `test: { passWithNoTests: true }` in vitest.config.ts or create a stub test file when no *.test.ts files exist.
+- [2026-07-06T20:33:03Z] Enable globals:true in vitest.config.ts so describe, it, and expect work without imports, reducing boilerplate in test files.
+- [2026-07-06T23:47:34Z] Use CommonJS-compatible patterns in src/server.ts: avoid `import.meta.url` and top-level `await`; gate listen with `if (require.main === module)`.
+- [2026-07-07T02:35:30Z] Always include a non-test source file in src/ alongside any src/*.test.ts file, since tsconfig.json excludes test files from tsc --noEmit.
+- [2026-07-07T19:01:34Z] Only modify or create files explicitly listed in the story's acceptance criteria. Do not touch files belonging to other stories or outside the current task scope.
+- [2026-07-07T20:17:57Z] [unreviewed-fallback] Avoid using deprecated TypeScript compiler options like 'moduleResolution=node10'; use 'moduleResolution=node' instead.
+- [2026-07-17T20:20:58Z] Always: Before importing a module or referencing a type/property, always read the actual source file to verify the export exists, its exact path, its properties, and its constructor/factory signatures
+- [2026-07-23T01:15:16Z] Always: In tsconfig.json, always use moduleResolution 'node' (not 'node10' or 'Node10') — 'node10' was removed in TypeScript 5.x. The correct value for CommonJS + Node resolution is 'node'.
+- [2026-07-23T14:30:00Z] CORRECTION to a prior entry (2026-07-23T01:17:52Z, now removed): that entry wrongly claimed 'moduleResolution: node' itself is removed and must become 'node16'/'nodenext'. Root-caused via mock1 (epam-cli orchestration test): 'node' is valid and correct through TypeScript 5.x (confirmed on 5.9.3) — it was only removed in TypeScript 7.x. The real defect was an unpinned `typescript` devDependency letting a fallback `npm install` pull latest (7.x) instead of the project's intended version. Do NOT rewrite a working tsconfig.json's moduleResolution in response to a TS5108 error — first check `node_modules/typescript/package.json`'s version; if it's 7.x and the rest of the project expects 5.x, the fix is pinning/reinstalling the correct typescript version, not changing moduleResolution.
+
+## Knowledge Base Contribution (do this LAST — after writing all implementation files)
+Your assigned KB entry ID for this run: **KB-012**
+**This is retry attempt 5** — a previous attempt failed. You MUST write a KB entry documenting what went wrong and what you changed.
+
+IMPORTANT: Write ALL implementation files first. Only AFTER writing every required file should you optionally append a KB entry.
+Do NOT read orchestrations/agents/KB.md before writing implementation files. The relevant KB entries are already injected above.
+
+If (and only if) you discover a non-obvious pattern during implementation, append one entry to `orchestrations/agents/KB.md`:
+
+```markdown
+## KB-012 -- 2026-07-23
+
+**Category:** <backend|frontend|infrastructure|testing|orchestration>
+**AgentRole:** <your agentRole from the story>
+**Tags:** <comma-separated tech keywords, e.g. typescript, node, cli>
+**Trigger:** <retry|first-success>
+**StoryRef:** AMSD-1820
+
+<One concise paragraph: the specific pattern, gotcha, or anti-pattern.>
+```
+
+Only write an entry if the knowledge is genuinely non-obvious. Skip trivial observations.
+
+## Execution Plan
+Follow this plan step by step:
+1. In `src/services/submit-reservations/apply-report-discounts.service.ts`, inspect the current discount application logic to identify where return-trip discounts are dropped or incorrectly shared between outbound and return legs; trace how `report.price.discount` is populated for each dispatch.
+
+2. In `src/services/submit-reservations/apply-report-discounts.service.ts`, modify the discount application function so that it processes each leg (outbound and return) independently — extracting the per-leg promo amount, currency, and promo name from the reservation/order data and applying them to the corresponding dispatch's `report.price.discount` only when a promo exists for that specific leg.
+
+3. In `src/services/submit-reservations/apply-report-discounts.service.ts`, ensure that when no promo code is applied to a given leg, the `discount` field is omitted entirely from that dispatch's `report.price` (not zeroed), and that the outbound dispatch discount remains unchanged from its pre-fix value to prevent regression.
+
+4. In `src/services/submit-reservations/apply-report-discounts.service.ts`, apply the system's standard rounding convention to any fractional-cent discount amounts before setting `report.price.discount.amount.value`, covering both fixed-amount and percentage-based promo codes.
+
+5. In `src/services/submit-reservations/submit-reservations.mappers.ts`, update the mapping function that builds the Mozio submit payload so that each dispatch in a return-trip order carries its own independent `report.price.discount` (amount, currency, name) sourced from the per-leg discount data, rather than reusing or omitting the return-leg discount.
+
+6. In `src/clients/mozio/mappers/map-to-sanitized-mozio-dispatch.ts`, update the sanitization mapper to preserve the `report.price.discount` object (including `amount.value`, `amount.currency` or equivalent currency field, and discount name) for both outbound and return dispatches, ensuring the return-trip discount is not dropped or zeroed in the sanitized logging payload.
+
+7. Add or update unit tests covering: return-trip with promo on both legs (independent discounts), promo on return leg only (outbound has no discount field), promo on outbound only (no regression), fixed-amount promo, percentage-based promo, no promo on either leg (no discount field on either dispatch), currency matching per leg, and fractional-cent rounding — verifying both the submit payload and the sanitized dispatch payload.
+
+8. Run the full test suite for the affected modules and verify all acceptance criteria pass, confirming no regressions in outbound discount behavior.
+
+## Coordinator Guidance (retry 5)
+The following targeted instruction was identified from the previous failure:
+CRITICAL: The previous attempt exhausted all available turns without creating the required deliverable. Your FIRST action MUST be to call WriteFile to the exact absolute path listed under 'Files to Create/Modify' — do NOT read files, do NOT plan, do NOT investigate. Write the required file IMMEDIATELY as your very first action.
+=== End Prompt ===
+
+=== epam Output (attempt 6) ===
+Now let me check the types:
+  [tc-writer] No test stories need TCs in phase 'unknown' — skipping
+
+=== tsc --noEmit failed (exit 2) — new errors introduced by this story ===
+src/clients/mozio/mappers/map-to-sanitized-mozio-dispatch.ts(1,53): error TS2307: Cannot find module '../../services/submit-reservations/apply-report-discounts.service' or its corresponding type declarations.
+src/clients/mozio/mappers/map-to-sanitized-mozio-dispatch.ts(42,20): error TS17019: '!' at the end of a type is not valid TypeScript syntax. Did you mean to write '{ [key: string]: unknown; price?: { [key: string]: unknown; base?: unknown; discount?: { amount: { value: number; currency: string; }; name: string; } | undefined; total?: unknown; } | undefined; } | undefined'?
+src/clients/mozio/mappers/map-to-sanitized-mozio-dispatch.ts(42,20): error TS17019: '!' at the end of a type is not valid TypeScript syntax. Did you mean to write 'any'?
+src/clients/mozio/mappers/map-to-sanitized-mozio-dispatch.ts(42,54): error TS2339: Property 'price' does not exist on type '{ [key: string]: unknown; price?: { [key: string]: unknown; base?: unknown; discount?: { amount: { value: number; currency: string; }; name: string; } | undefined; total?: unknown; } | undefined; } | undefined'.
+src/services/submit-reservations/apply-report-discounts.service.ts(1,23): error TS2307: Cannot find module '@eps/utils/math' or its corresponding type declarations.
+src/services/submit-reservations/submit-reservations-mozio.service.ts(5,10): error TS2305: Module '"./submit-reservations.mappers"' has no exported member 'mapOrderDispatchesToMozioDispatches'.
+src/services/submit-reservations/submit-reservations.service.ts(6,3): error TS2305: Module '"./submit-reservations.mappers"' has no exported member 'mapServicePayloadPerProductProvider'.
+src/services/submit-reservations/submit-reservations.service.ts(7,3): error TS2305: Module '"./submit-reservations.mappers"' has no exported member 'mapSubmittedDispatchesToOrderDispatch'.
+Now let me check the types:
+
+=== epam exited with code 1 ===
+=== Prompt for AMSD-1820 (attempt 7) ===
+CRITICAL — WRITE FILES FIRST. Your FIRST tool call MUST be WriteFile.
+Do NOT output any text before calling WriteFile. Do NOT plan or say "I will...".
+Call WriteFile NOW for the EXACT ABSOLUTE PATHS listed below:
+
+   - WRITE /home/bradleyjerome/projects/metrolinx/azure.commerce.cdts/src/services/submit-reservations/apply-report-discounts.service.ts first, before any other action
+   - WRITE /home/bradleyjerome/projects/metrolinx/azure.commerce.cdts/src/services/submit-reservations/submit-reservations.mappers.ts first, before any other action
+   - WRITE /home/bradleyjerome/projects/metrolinx/azure.commerce.cdts/src/clients/mozio/mappers/map-to-sanitized-mozio-dispatch.ts first, before any other action
+---
+
+Implement user story AMSD-1820: [Mozio] - Promo code discount amount missing/incorrect for return-trip tickets in Mozio email confirmation dispatch report
+
+## Story Description
+[Mozio] - The Promo code amount is NOT displayed as expected for Return trip tickets in the Mozio email confirmation. The root cause is that when building the Mozio dispatch report for return-trip tickets, the discount amount is not correctly computed or propagated, resulting in the promo code discount being missing or zeroed in the email confirmation for the return leg.
+
+## Acceptance Criteria
+- Given a return-trip order with a promo code applied, when the Mozio dispatch report is built, the return-trip dispatch must include report.price.discount with the correct amount and currency matching the return leg's discount.
+- Given a return-trip order with a promo code applied to both outbound and return legs, each dispatch in the Mozio submit payload must contain its own independent report.price.discount reflecting that leg's promo amount.
+- Given a return-trip order with a promo code applied only to the return leg, the return-trip dispatch must include report.price.discount and the outbound dispatch must not include a discount field.
+- Given a return-trip order with a fixed-amount promo code, the return-trip dispatch report.price.discount.amount.value must equal the exact discounted currency amount for the return leg.
+- Given a return-trip order with a percentage-based promo code, the return-trip dispatch report.price.discount.amount.value must equal the calculated discount amount for the return leg.
+- Given a return-trip order with a promo code applied, the outbound dispatch report.price.discount must remain identical to the value produced before the return-trip discount fix (no regression).
+- The sanitized dispatch report payload used for logging must include the discount amount and name for both outbound and return dispatches when a promo code is applied, without dropping or zeroing the return-trip discount.
+- Given a return-trip order with no promo code applied, neither the outbound nor the return dispatch must include a discount field in the Mozio submit payload.
+- Given a return-trip order with a promo code applied, the report.price.discount.currency on the return-trip dispatch must match the currency of the return leg's trip price.
+- Given a return-trip order with a promo code that produces a fractional-cent discount amount, the return-trip dispatch report.price.discount.amount.value must follow the system's standard rounding convention (no unrounded or truncated values).
+
+
+
+
+
+## Technical Notes
+- files: ["src/services/submit-reservations/apply-report-discounts.service.ts","src/services/submit-reservations/submit-reservations.mappers.ts","src/clients/mozio/mappers/map-to-sanitized-mozio-dispatch.ts"]
+
+## Files to Create/Modify (EXACT ABSOLUTE PATHS — write to these paths exactly)
+src/services/submit-reservations/apply-report-discounts.service.ts, src/services/submit-reservations/submit-reservations.mappers.ts, src/clients/mozio/mappers/map-to-sanitized-mozio-dispatch.ts
+
+## Dependencies
+None
+
+
+
+## Instructions
+**CRITICAL — WRITE FILES FIRST:**
+   - WRITE /home/bradleyjerome/projects/metrolinx/azure.commerce.cdts/src/services/submit-reservations/apply-report-discounts.service.ts first, before any other action
+   - WRITE /home/bradleyjerome/projects/metrolinx/azure.commerce.cdts/src/services/submit-reservations/submit-reservations.mappers.ts first, before any other action
+   - WRITE /home/bradleyjerome/projects/metrolinx/azure.commerce.cdts/src/clients/mozio/mappers/map-to-sanitized-mozio-dispatch.ts first, before any other action
+**You MUST write every file listed above to its EXACT absolute path. Do NOT write to a different path, do NOT write to the current directory unless it matches the path above. Use your WriteFile or Edit tools with the full absolute path shown.**
+
+1. Write each required file to its exact absolute path listed above — do this FIRST before anything else
+2. Implement all acceptance criteria for this story
+3. Follow the project's existing code patterns and conventions
+4. Do NOT create tests unless explicitly required in acceptance criteria
+
+After implementation, provide a brief summary of what was created/modified.
+
+## Verification Failure
+
+The orchestrator ran `tsc --noEmit` after your files were written and it failed (exit code 2). Fix the type errors so tsc exits 0.
+
+```
+src/clients/mozio/mappers/map-to-sanitized-mozio-dispatch.ts(1,53): error TS2307: Cannot find module '../../services/submit-reservations/apply-report-discounts.service' or its corresponding type declarations.
+src/clients/mozio/mappers/map-to-sanitized-mozio-dispatch.ts(42,20): error TS17019: '!' at the end of a type is not valid TypeScript syntax. Did you mean to write '{ [key: string]: unknown; price?: { [key: string]: unknown; base?: unknown; discount?: { amount: { value: number; currency: string; }; name: string; } | undefined; total?: unknown; } | undefined; } | undefined'?
+src/clients/mozio/mappers/map-to-sanitized-mozio-dispatch.ts(42,20): error TS17019: '!' at the end of a type is not valid TypeScript syntax. Did you mean to write 'any'?
+src/clients/mozio/mappers/map-to-sanitized-mozio-dispatch.ts(42,54): error TS2339: Property 'price' does not exist on type '{ [key: string]: unknown; price?: { [key: string]: unknown; base?: unknown; discount?: { amount: { value: number; currency: string; }; name: string; } | undefined; total?: unknown; } | undefined; } | undefined'.
+src/services/submit-reservations/apply-report-discounts.service.ts(1,23): error TS2307: Cannot find module '@eps/utils/math' or its corresponding type declarations.
+src/services/submit-reservations/submit-reservations-mozio.service.ts(5,10): error TS2305: Module '"./submit-reservations.mappers"' has no exported member 'mapOrderDispatchesToMozioDispatches'.
+src/services/submit-reservations/submit-reservations.service.ts(6,3): error TS2305: Module '"./submit-reservations.mappers"' has no exported member 'mapServicePayloadPerProductProvider'.
+src/services/submit-reservations/submit-reservations.service.ts(7,3): error TS2305: Module '"./submit-reservations.mappers"' has no exported member 'mapSubmittedDispatchesToOrderDispatch'.
+```
+
+## Relevant Knowledge Base Entries
+The following was learned from previous story implementations and is relevant to your agent role. Apply this knowledge before writing any code:
+
+- [2026-07-06T18:11:26Z] Use vi.fn().mockResolvedValue(value) to make a mock return a resolved Promise.
+- [2026-07-06T20:31:11Z] Use `test: { passWithNoTests: true }` in vitest.config.ts or create a stub test file when no *.test.ts files exist.
+- [2026-07-06T20:33:03Z] Enable globals:true in vitest.config.ts so describe, it, and expect work without imports, reducing boilerplate in test files.
+- [2026-07-06T23:47:34Z] Use CommonJS-compatible patterns in src/server.ts: avoid `import.meta.url` and top-level `await`; gate listen with `if (require.main === module)`.
+- [2026-07-07T02:35:30Z] Always include a non-test source file in src/ alongside any src/*.test.ts file, since tsconfig.json excludes test files from tsc --noEmit.
+- [2026-07-07T19:01:34Z] Only modify or create files explicitly listed in the story's acceptance criteria. Do not touch files belonging to other stories or outside the current task scope.
+- [2026-07-07T20:17:57Z] [unreviewed-fallback] Avoid using deprecated TypeScript compiler options like 'moduleResolution=node10'; use 'moduleResolution=node' instead.
+- [2026-07-17T20:20:58Z] Always: Before importing a module or referencing a type/property, always read the actual source file to verify the export exists, its exact path, its properties, and its constructor/factory signatures
+- [2026-07-23T01:15:16Z] Always: In tsconfig.json, always use moduleResolution 'node' (not 'node10' or 'Node10') — 'node10' was removed in TypeScript 5.x. The correct value for CommonJS + Node resolution is 'node'.
+- [2026-07-23T14:30:00Z] CORRECTION to a prior entry (2026-07-23T01:17:52Z, now removed): that entry wrongly claimed 'moduleResolution: node' itself is removed and must become 'node16'/'nodenext'. Root-caused via mock1 (epam-cli orchestration test): 'node' is valid and correct through TypeScript 5.x (confirmed on 5.9.3) — it was only removed in TypeScript 7.x. The real defect was an unpinned `typescript` devDependency letting a fallback `npm install` pull latest (7.x) instead of the project's intended version. Do NOT rewrite a working tsconfig.json's moduleResolution in response to a TS5108 error — first check `node_modules/typescript/package.json`'s version; if it's 7.x and the rest of the project expects 5.x, the fix is pinning/reinstalling the correct typescript version, not changing moduleResolution.
+
+## Knowledge Base Contribution (do this LAST — after writing all implementation files)
+Your assigned KB entry ID for this run: **KB-012**
+**This is retry attempt 6** — a previous attempt failed. You MUST write a KB entry documenting what went wrong and what you changed.
+
+IMPORTANT: Write ALL implementation files first. Only AFTER writing every required file should you optionally append a KB entry.
+Do NOT read orchestrations/agents/KB.md before writing implementation files. The relevant KB entries are already injected above.
+
+If (and only if) you discover a non-obvious pattern during implementation, append one entry to `orchestrations/agents/KB.md`:
+
+```markdown
+## KB-012 -- 2026-07-23
+
+**Category:** <backend|frontend|infrastructure|testing|orchestration>
+**AgentRole:** <your agentRole from the story>
+**Tags:** <comma-separated tech keywords, e.g. typescript, node, cli>
+**Trigger:** <retry|first-success>
+**StoryRef:** AMSD-1820
+
+<One concise paragraph: the specific pattern, gotcha, or anti-pattern.>
+```
+
+Only write an entry if the knowledge is genuinely non-obvious. Skip trivial observations.
+
+## Execution Plan
+Follow this plan step by step:
+1. In `src/services/submit-reservations/apply-report-discounts.service.ts`, inspect the current discount application logic to identify where return-trip discounts are dropped or incorrectly shared between outbound and return legs; trace how `report.price.discount` is populated for each dispatch.
+
+2. In `src/services/submit-reservations/apply-report-discounts.service.ts`, modify the discount application function so that it processes each leg (outbound and return) independently — extracting the per-leg promo amount, currency, and promo name from the reservation/order data and applying them to the corresponding dispatch's `report.price.discount` only when a promo exists for that specific leg.
+
+3. In `src/services/submit-reservations/apply-report-discounts.service.ts`, ensure that when no promo code is applied to a given leg, the `discount` field is omitted entirely from that dispatch's `report.price` (not zeroed), and that the outbound dispatch discount remains unchanged from its pre-fix value to prevent regression.
+
+4. In `src/services/submit-reservations/apply-report-discounts.service.ts`, apply the system's standard rounding convention to any fractional-cent discount amounts before setting `report.price.discount.amount.value`, covering both fixed-amount and percentage-based promo codes.
+
+5. In `src/services/submit-reservations/submit-reservations.mappers.ts`, update the mapping function that builds the Mozio submit payload so that each dispatch in a return-trip order carries its own independent `report.price.discount` (amount, currency, name) sourced from the per-leg discount data, rather than reusing or omitting the return-leg discount.
+
+6. In `src/clients/mozio/mappers/map-to-sanitized-mozio-dispatch.ts`, update the sanitization mapper to preserve the `report.price.discount` object (including `amount.value`, `amount.currency` or equivalent currency field, and discount name) for both outbound and return dispatches, ensuring the return-trip discount is not dropped or zeroed in the sanitized logging payload.
+
+7. Add or update unit tests covering: return-trip with promo on both legs (independent discounts), promo on return leg only (outbound has no discount field), promo on outbound only (no regression), fixed-amount promo, percentage-based promo, no promo on either leg (no discount field on either dispatch), currency matching per leg, and fractional-cent rounding — verifying both the submit payload and the sanitized dispatch payload.
+
+8. Run the full test suite for the affected modules and verify all acceptance criteria pass, confirming no regressions in outbound discount behavior.
+
+## Coordinator Guidance (retry 6)
+The following targeted instruction was identified from the previous failure:
+CRITICAL: The previous attempt exhausted all available turns without creating the required deliverable. Your FIRST action MUST be to call WriteFile to the exact absolute path listed under 'Files to Create/Modify' — do NOT read files, do NOT plan, do NOT investigate. Write the required file IMMEDIATELY as your very first action.
+## Self-Heal: Failure Analyst Summary
+Root cause: Agent wrote invalid TS syntax (! in type position), wrong import paths, referenced non-existent exports and missing @eps/utils/math module.
+The spec is correct — the model made a code-level mistake. Write correct code this time.
+=== End Prompt ===
+
+=== epam Output (attempt 7) ===
+
+Error: All providers exhausted without a successful response. Attempted: qwen/moonshotai/kimi-k3: OpenRouter/Qwen API error: 429 {"error":{"message":"Provider returned error","code":429,"metadata":{"raw":"moonshotai/kimi-k3 is temporarily rate-limited upstream. Please retry shortly, or add your own key to accumulate your rate limits: https://openrouter.ai/settings/integrations","provider_name":"Moonshot AI","is_byok":false,"retry_after_seconds":1,"retry_after_seconds_raw":1,"headers":{"Retry-After":"1"}}},"user_id":"user_3AUkZb4U3GtDoHp22mL4y23ohej"}.
+Now let me check the types:
+
+=== epam exited with code 1 ===

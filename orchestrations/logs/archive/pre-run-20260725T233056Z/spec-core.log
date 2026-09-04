@@ -1,0 +1,11 @@
+spec-mode: fast-path qwen/z-ai/glm-5.2 (skipping MiniMax)
+spec-mode: fast-path qwen/z-ai/glm-5.1 (skipping MiniMax)
+spec-mode: AMSD-1820 — ACs are immutable (VC model); openspec AC edits redacted, verification captured in verificationCriteria
+spec-mode: ⚠️ VC could not be made mechanism-free for AMSD-1820 after 2 cycle(s) — using conservative fallback VC. Last flags: VC 5 references internal 'null or undefined discount data' — restate as observable email rendering condition (e.g. a return trip with no discount shows no discount line) without presuming the underlying data structure
+spec-mode: AMSD-1820 — 2 verification criteria persisted (source: fallback, resolution: fallback)
+spec-mode: fast-path qwen/z-ai/glm-5.1 (skipping MiniMax)
+spec-mode: fast-path qwen/z-ai/glm-5.2 (skipping MiniMax)
+spec-mode: fast-path qwen/z-ai/glm-5.2 (skipping MiniMax)
+spec-mode: LLM model review completed for 1 stories
+spec-mode: model set AMSD-1820: MiniMax-M3 → MiniMax-M2.5 [LLM override]
+spec-mode: completed for phase core (run 20260725T225612Z)

@@ -1,0 +1,43 @@
+```json
+{
+  "agent": "mutant-hunter",
+  "phase": "core",
+  "summary": {
+    "mutationsProposed": 3,
+    "killed": 3,
+    "survived": 0,
+    "noCoverage": 0,
+    "mutationScore": 100
+  },
+  "mutations": [
+    {
+      "file": "src/hello.ts",
+      "line": 2,
+      "originalCode": "return 'hello dolly';",
+      "mutatedCode": "return 'hello world';",
+      "status": "killed",
+      "relatedTest": "src/hello.test.ts: returns hello dolly (toBe strict equality)",
+      "recommendation": "No action needed — test catches this mutation."
+    },
+    {
+      "file": "src/hello.ts",
+      "line": 2,
+      "originalCode": "return 'hello dolly';",
+      "mutatedCode": "return '';",
+      "status": "killed",
+      "relatedTest": "src/hello.test.ts: returns hello dolly (toBe strict equality)",
+      "recommendation": "No action needed — test catches this mutation."
+    },
+    {
+      "file": "src/hello.ts",
+      "line": 2,
+      "originalCode": "return 'hello dolly';",
+      "mutatedCode": "return 'HELLO DOLLY';",
+      "status": "killed",
+      "relatedTest": "src/hello.test.ts: returns hello dolly (toBe strict equality)",
+      "recommendation": "No action needed — test catches this mutation."
+    }
+  ],
+  "verdict": "pass"
+}
+```

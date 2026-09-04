@@ -1,0 +1,4 @@
+[mint-step] codeline mocka: /home/bradleyjerome/projects/mock3/mock-a (2 declared deps)
+[mint-step] codeline mockb: /home/bradleyjerome/projects/mock3/mock-b (2 declared deps)
+[mint-step] plugins provisioned: 1 · mint tools: read_file,list_files,search,codegraph_query
+spec-mode: fast-path claude/claude-haiku-4-5-20251001 (skipping MiniMax)

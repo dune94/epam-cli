@@ -1,0 +1,73 @@
+SKY-001 now has all three fields set. The PRD has been written back atomically.
+
+{"assigned_count":1,"stories":["SKY-001"],"reason":"Added missing reasoningEffort to scaffold story"}
+The PRD has been updated. SKY-001 was the only pending scaffold story; it already had `model` and `aiProvider` but was missing `reasoningEffort`, which was set to `low` (mapped from its `effort: "low"`).
+
+{"assigned_count":1,"stories":["SKY-001"],"reason":"added reasoningEffort=low to SKY-001"}
+{"assigned_count":1,"stories":["SKY-001"],"reason":"Added missing reasoningEffort=low to SKY-001"}
+SKY-001 is the only pending story in the scaffold phase. It already had `model` and `aiProvider` set but was missing `reasoningEffort`. I added `reasoningEffort: "low"` (mapped from `effort: "low"`).
+
+{"assigned_count":1,"stories":["SKY-001"],"reason":"Added missing reasoningEffort to SKY-001"}
+SKY-001 now has all three fields set. The existing `model` and `aiProvider` were preserved (rule 1), and only the missing `reasoningEffort` was added as `"low"` (mapped from `effort=low` per rule 3).
+
+{"assigned_count":1,"stories":["SKY-001"],"reason":"added reasoningEffort=low to SKY-001"}
+SKY-001 now has all three fields set. The other scaffold-phase stories (none in this case) were not affected. SKY-002/003/004 belong to the "core" phase, not "scaffold".
+
+{"assigned_count":1,"stories":["SKY-001"],"reason":"Added missing reasoningEffort=low to SKY-001"}
+SKY-001 now has all three fields set. The existing `model` and `aiProvider` were left untouched (rule 1), and only the missing `reasoningEffort` was added as "low" (mapped from effort="low" per rule 3).
+
+{"assigned_count":1,"stories":["SKY-001"],"reason":"added missing reasoningEffort=low"}
+Both stories now have all three fields set. The existing model/aiProvider were preserved, and only the missing reasoningEffort was added.
+
+{"assigned_count":2,"stories":["SKY-001-A","SKY-001-B"],"reason":"Added missing reasoningEffort=low to both scaffold stories"}
+{"assigned_count":4,"stories":["SKY-001","SKY-002","SKY-003","SKY-004"],"reason":"All pending stories missing reasoningEffort; added from effort mapping."}
+All four pending stories now have `model`, `aiProvider`, and `reasoningEffort` set. Each was missing `reasoningEffort` (mapped from their `effort` field); existing `model` and `aiProvider` were left untouched.
+
+{"assigned_count":4,"stories":["SKY-001","SKY-002","SKY-003","SKY-004"],"reason":"All four pending stories lacked reasoningEffort; set from effort field."}
+All four pending stories had `reasoningEffort` missing (model and aiProvider were already set). Each was assigned `reasoningEffort` based on its `effort` field. Existing `model` and `aiProvider` values were preserved.
+
+{"assigned_count":4,"stories":["SKY-001","SKY-002","SKY-003","SKY-004"],"reason":"Added missing reasoningEffort to four pending stories"}
+All four pending stories had `reasoningEffort` missing (model and aiProvider were already explicitly set on each). I filled in `reasoningEffort` from each story's `effort` field without touching any existing assignments.
+
+{"assigned_count":4,"stories":["SKY-001","SKY-002","SKY-003","SKY-004"],"reason":"All pending stories lacked reasoningEffort; filled from effort field."}
+{"assigned_count":1,"stories":["SKY-001"],"reason":"Set missing reasoningEffort for scaffold phase story"}
+{"assigned_count":3,"stories":["SKY-002","SKY-003","SKY-004-be"],"reason":"Added missing reasoningEffort for 3 pending stories in scaffold phase"}
+{"assigned_count":1,"stories":["SKY-001"],"reason":"Set reasoningEffort=medium for pending scaffold story"}
+{"assigned_count":4,"stories":["SKY-001","SKY-002","SKY-003","SKY-004-be"],"reason":"Assigned missing reasoningEffort for all pending scaffold stories"}
+All four pending stories were missing `reasoningEffort`. Each already had `model` and `aiProvider` set, so those were preserved. The `reasoningEffort` was assigned based on each story's `effort` field: medium→medium for SKY-001/002/003, high→high for SKY-004-be.
+
+{"assigned_count":4,"stories":["SKY-001","SKY-002","SKY-003","SKY-004-be"],"reason":"All four pending stories lacked reasoningEffort; set from effort field."}
+{"assigned_count":4,"stories":["SKY-001","SKY-002","SKY-003","SKY-004-be"],"reason":"All pending stories lacked reasoningEffort; filled from effort mapping."}
+SKY-001 already had `model` and `aiProvider` set but was missing `reasoningEffort`. I added `reasoningEffort: "medium"` (mapped from `effort: "medium"`). All other scaffold-phase stories were already fully assigned.
+
+{"assigned_count":1,"stories":["SKY-001"],"reason":"Added missing reasoningEffort to SKY-001"}
+{"assigned_count":4,"stories":["SKY-001","SKY-002","SKY-003","SKY-004-be"],"reason":"Added reasoningEffort to all four pending stories from effort field"}
+All four pending stories now have explicit `model`, `aiProvider`, and `reasoningEffort` fields. SKY-001 already had model and aiProvider set (only reasoningEffort was missing). SKY-002, SKY-003, and SKY-004-be similarly had model and aiProvider but were missing reasoningEffort, which was derived from each story's effort field.
+
+{"assigned_count":4,"stories":["SKY-001","SKY-002","SKY-003","SKY-004-be"],"reason":"Added missing reasoningEffort to all four pending stories"}
+{"assigned_count":4,"stories":["SKY-001","SKY-002","SKY-003","SKY-004"],"reason":"All four pending stories lacked reasoningEffort; added from effort mapping."}
+All four pending stories had `reasoningEffort` missing (model and aiProvider were already set). I applied the effort-based default mapping for each. No other fields were touched.
+
+{"assigned_count":4,"stories":["SKY-001","SKY-002","SKY-003","SKY-004"],"reason":"All pending stories lacked reasoningEffort; set from effort field"}
+{"assigned_count":1,"stories":["SKY-001"],"reason":"Set reasoningEffort on SKY-001; model/provider already present"}
+{"assigned_count":4,"stories":["SKY-001","SKY-002","SKY-003","SKY-004"],"reason":"Set reasoningEffort on all pending stories missing it"}
+All four pending stories had `reasoningEffort` missing (model and aiProvider were already set). I filled in `reasoningEffort` from each story's effort field, preserving existing model/aiProvider assignments.
+
+{"assigned_count":4,"stories":["SKY-001","SKY-002","SKY-003","SKY-004"],"reason":"All pending stories lacked reasoningEffort; filled from effort field"}
+{"assigned_count":3,"stories":["SKY-002","SKY-003","SKY-004"],"reason":"Added missing reasoningEffort to three pending stories"}
+All four pending stories now have `model`, `aiProvider`, and `reasoningEffort` set. Existing `model` and `aiProvider` were preserved; only the missing `reasoningEffort` was added (mapped from each story's `effort` field).
+
+{"assigned_count":4,"stories":["SKY-001","SKY-002","SKY-003","SKY-004"],"reason":"Added missing reasoningEffort to four pending stories from effort field"}
+All four pending stories had `model` and `aiProvider` set but were missing `reasoningEffort`. I added `reasoningEffort` to each based on their `effort` field (medium→medium, high→high) and wrote the updated PRD back atomically.
+
+{"assigned_count":4,"stories":["SKY-001","SKY-002","SKY-003","SKY-004"],"reason":"Added missing reasoningEffort to all four pending stories"}
+All four pending stories had `reasoningEffort` missing (model and aiProvider were already set). Each was assigned `reasoningEffort` based on its effort field. The PRD has been written back atomically.
+
+```json
+{"assigned_count":4,"stories":["SKY-001","SKY-002","SKY-003","SKY-004"],"reason":"Added missing reasoningEffort to all four pending stories"}
+```
+All four pending stories now have `reasoningEffort` set (previously `null`). The existing `model` and `aiProvider` values were preserved — only the missing `reasoningEffort` field was filled in for each story, mapped from the story's `effort` field.
+
+{"assigned_count":4,"stories":["SKY-001","SKY-002","SKY-003","SKY-004"],"reason":"Added missing reasoningEffort to all four pending stories"}
+{"assigned_count":1,"stories":["SKY-001"],"reason":"SKY-001 missing reasoningEffort; defaulted from effort=medium"}
+{"assigned_count":1,"stories":["SKY-001"],"reason":"Added missing reasoningEffort=medium to SKY-001"}

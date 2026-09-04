@@ -1,0 +1,72 @@
+=== Prompt for epam-ts-001 (attempt 1) ===
+Implement user story epam-ts-001: Fix discount double-apply bug in calculateTotal
+
+## Story Description
+The calculateTotal function in src/cart.ts is applying the discount twice when a coupon code is provided. A 10% coupon should reduce a $100 cart to $90, but the current implementation reduces it to $81. Fix the bug so the discount is applied exactly once. The source file(s) are in /tmp/epam-bench-epam-ts-001-IVbjAy/src/. Do not modify any test files (*.test.ts).
+
+## Acceptance Criteria
+- All fail_to_pass tests now pass when vitest run executes in /tmp/epam-bench-epam-ts-001-IVbjAy
+- Test files in /tmp/epam-bench-epam-ts-001-IVbjAy/src/*.test.ts must not be modified
+- tsc --noEmit exits 0 with no type errors
+
+## Technical Notes
+- workingDir: /tmp/epam-bench-epam-ts-001-IVbjAy
+- files: ["/tmp/epam-bench-epam-ts-001-IVbjAy/src/"]
+
+## Files to Create/Modify
+/tmp/epam-bench-epam-ts-001-IVbjAy/src/
+
+## Dependencies
+None
+
+## Instructions
+1. Implement all acceptance criteria for this story
+2. Follow the project's existing code patterns and conventions
+3. Create any necessary files in the locations specified
+4. Ensure code compiles/runs without errors
+5. Do NOT create tests unless explicitly required in acceptance criteria
+
+After implementation, provide a brief summary of what was created/modified.
+
+## Relevant Knowledge Base Entries
+No prior KB entries match your agent role yet.
+
+## Knowledge Base Contribution
+Your assigned KB entry ID for this run: **KB-008**
+
+If you discover a non-obvious pattern, gotcha, or anti-pattern during this implementation (or this is a retry), append exactly one entry to `orchestrations/agents/KB.md` using this format:
+
+```markdown
+## KB-008 -- 2026-06-03
+
+**Category:** <backend|frontend|infrastructure|testing|orchestration>
+**AgentRole:** <your agentRole from the story>
+**Tags:** <comma-separated tech keywords, e.g. typescript, node, cli>
+**Trigger:** <retry|first-success>
+**StoryRef:** epam-ts-001
+
+<One concise paragraph: the specific pattern, gotcha, or anti-pattern. Precise enough that a future Claude instance can apply it without re-discovering it.>
+```
+
+Only write an entry if the knowledge is genuinely non-obvious. Skip trivial observations.
+=== End Prompt ===
+
+=== claude Output (attempt 1) ===
+## Summary
+
+✅ **Bug fixed successfully!** All tests pass.
+
+### What was changed:
+- **File:** `/tmp/epam-bench-epam-ts-001-IVbjAy/src/cart.ts`
+- **Fix:** Removed the duplicate discount application in the `calculateTotal` function (lines 11-12)
+- **Before:** `afterFirstDiscount` was calculated, then discounted again on return (applying 1 - couponPercent twice)
+- **After:** Discount is applied exactly once: `return subtotal * (1 - couponPercent / 100)`
+
+### Acceptance criteria met:
+✅ All 4 tests pass (vitest run successful)  
+✅ Test files not modified  
+✅ Test case "applies discount exactly once" now correctly returns $90 for a 10% coupon on $100
+
+The fix ensures a 10% coupon on a $100 cart returns $90 (not $81).
+
+=== End claude Output ===

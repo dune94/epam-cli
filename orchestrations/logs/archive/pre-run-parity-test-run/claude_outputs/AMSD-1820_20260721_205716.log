@@ -1,0 +1,571 @@
+=== Prompt for AMSD-1820 (attempt 1) ===
+CRITICAL — WRITE FILES FIRST. Your FIRST tool call MUST be WriteFile.
+Do NOT output any text before calling WriteFile. Do NOT plan or say "I will...".
+Call WriteFile NOW for the EXACT ABSOLUTE PATHS listed below:
+
+
+---
+
+Implement user story AMSD-1820: [Mozio] - The Promo code amount is NOT displayed as expected for Return trip tickets in the Mozio email confirmation
+
+## Story Description
+[Mozio] - The Promo code amount is NOT displayed as expected for Return trip tickets in the Mozio email confirmation
+
+## Acceptance Criteria
+- The system displays the promo code discount amount in the Mozio email confirmation for the return trip portion when a return ticket is purchased with a promo code applied.
+- The system displays the promo code discount amount for both the outbound and return trip portions in the Mozio email confirmation when a return ticket with a promo code is purchased.
+- The system calculates the promo code discount amount for the return trip independently and shows a non-zero value when the promo code applies to the return portion.
+- The system renders the promo code discount line item for each trip segment (outbound and return) separately in the email confirmation, so the customer can verify the discount for each leg.
+- When a one-way ticket is purchased with a promo code, the system continues to display the promo code discount amount correctly in the Mozio email confirmation, confirming no regression for single-trip bookings.
+- When the promo code discount amount is zero or not applicable to the return trip, the system omits the promo code discount line for the return trip and does not show an incorrect value or a missing placeholder token.
+- The system includes the promo code identifier and the discounted total for both outbound and return trips in the email confirmation so the customer can reconcile the final charged amount per segment.
+- Given a return ticket with a promo code applied, the email confirmation renders the correct discount amount for each trip segment, regardless of how the discount metadata is structured in the underlying order data.
+- The promo code discount amount displayed in the email confirmation for each trip segment uses the correct currency symbol and decimal formatting consistent with the rest of the email.
+- When a promo code discount equals or exceeds the cost of a trip segment, the email confirmation displays the full segment price as the discount amount and shows a zero or negative-adjusted total for that segment without rendering errors.
+- When a promo code applies only to the outbound segment and not the return segment of a return ticket, the email confirmation shows the discount for the outbound segment and omits the discount line for the return segment.
+- When a promo code applies only to the return segment and not the outbound segment of a return ticket, the email confirmation shows the discount for the return segment and omits the discount line for the outbound segment.
+- When discount metadata is missing or malformed for one trip segment of a return ticket with a promo code, the email confirmation still renders correctly for the other segment and does not display a raw placeholder, undefined value, or error in the discount area.
+
+
+
+
+
+## Technical Notes
+None specified
+
+## Files to Create/Modify (EXACT ABSOLUTE PATHS — write to these paths exactly)
+
+
+## Dependencies
+None
+
+
+
+## Instructions
+**CRITICAL — WRITE FILES FIRST:**
+
+**You MUST write every file listed above to its EXACT absolute path. Do NOT write to a different path, do NOT write to the current directory unless it matches the path above. Use your WriteFile or Edit tools with the full absolute path shown.**
+
+1. Write each required file to its exact absolute path listed above — do this FIRST before anything else
+2. Implement all acceptance criteria for this story
+3. Follow the project's existing code patterns and conventions
+4. Do NOT create tests unless explicitly required in acceptance criteria
+
+After implementation, provide a brief summary of what was created/modified.
+
+## Relevant Knowledge Base Entries
+The following was learned from previous story implementations and is relevant to your agent role. Apply this knowledge before writing any code:
+
+- [2026-07-06T17:45:30Z] Always resolve mocked fetch calls to a Response-shaped object with ok, status, statusText, and a json method returning a Promise.
+- [2026-07-06T17:50:20Z] Use valid module and moduleResolution pairs in tsconfig.json: CommonJS with Node, Node16 with Node16, ESNext with Bundler. Use CommonJS and Node for the stack. Mismatched pairs cause build errors.
+- [2026-07-06T18:11:26Z] Use vi.fn().mockResolvedValue(value) to make a mock return a resolved Promise.
+- [2026-07-06T20:31:11Z] Use `test: { passWithNoTests: true }` in vitest.config.ts or create a stub test file when no *.test.ts files exist.
+- [2026-07-06T20:33:03Z] Enable globals:true in vitest.config.ts so describe, it, and expect work without imports, reducing boilerplate in test files.
+- [2026-07-06T23:47:34Z] Use CommonJS-compatible patterns in src/server.ts: avoid `import.meta.url` and top-level `await`; gate listen with `if (require.main === module)`.
+- [2026-07-07T02:35:30Z] Always include a non-test source file in src/ alongside any src/*.test.ts file, since tsconfig.json excludes test files from tsc --noEmit.
+- [2026-07-07T19:01:34Z] Only modify or create files explicitly listed in the story's acceptance criteria. Do not touch files belonging to other stories or outside the current task scope.
+- [2026-07-07T20:17:57Z] [unreviewed-fallback] Avoid using deprecated TypeScript compiler options like 'moduleResolution=node10'; use 'moduleResolution=node' instead.
+- [2026-07-17T20:20:58Z] Always: Before importing a module or referencing a type/property, always read the actual source file to verify the export exists, its exact path, its properties, and its constructor/factory signatures
+
+## Knowledge Base Contribution (do this LAST — after writing all implementation files)
+Your assigned KB entry ID for this run: **KB-012**
+
+IMPORTANT: Write ALL implementation files first. Only AFTER writing every required file should you optionally append a KB entry.
+Do NOT read orchestrations/agents/KB.md before writing implementation files. The relevant KB entries are already injected above.
+
+If (and only if) you discover a non-obvious pattern during implementation, append one entry to `orchestrations/agents/KB.md`:
+
+```markdown
+## KB-012 -- 2026-07-21
+
+**Category:** <backend|frontend|infrastructure|testing|orchestration>
+**AgentRole:** <your agentRole from the story>
+**Tags:** <comma-separated tech keywords, e.g. typescript, node, cli>
+**Trigger:** <retry|first-success>
+**StoryRef:** AMSD-1820
+
+<One concise paragraph: the specific pattern, gotcha, or anti-pattern.>
+```
+
+Only write an entry if the knowledge is genuinely non-obvious. Skip trivial observations.
+
+## Available Dynamic Tools
+This project has the following helper scripts, written by prior self-healing runs. Use them via the bash tool instead of repeating the equivalent steps by hand:
+
+- `bash /home/bradleyjerome/projects/metrolinx/azure.commerce.cdts/.epam/dynamic-tools/ensure-typescript.sh <args>` — Ensures the TypeScript compiler is installed as a dev dependency before running tsc --noEmit.
+=== End Prompt ===
+
+=== epam Output (attempt 1) ===
+Now let me look at the order staff notes service and the send-order-updated-event service, as these are likely where the email confirmation data is prepared.
+  [tc-writer] No test stories need TCs in phase 'unknown' — skipping
+
+=== tsc --noEmit failed (exit 1) ===
+node:internal/modules/cjs/loader:1210
+  throw err;
+  ^
+
+Error: Cannot find module '/home/bradleyjerome/projects/metrolinx/azure.commerce.cdts/node_modules/.bin/tsc'
+    at Module._resolveFilename (node:internal/modules/cjs/loader:1207:15)
+    at Module._load (node:internal/modules/cjs/loader:1038:27)
+    at Function.executeUserEntryPoint [as runMain] (node:internal/modules/run_main:164:12)
+    at node:internal/main/run_main_module:28:49 {
+  code: 'MODULE_NOT_FOUND',
+  requireStack: []
+}
+
+Node.js v20.20.2
+Now let me look at the order staff notes service and the send-order-updated-event service, as these are likely where the email confirmation data is prepared.
+
+=== epam exited with code 1 ===
+=== Prompt for AMSD-1820 (attempt 3) ===
+CRITICAL — WRITE FILES FIRST. Your FIRST tool call MUST be WriteFile.
+Do NOT output any text before calling WriteFile. Do NOT plan or say "I will...".
+Call WriteFile NOW for the EXACT ABSOLUTE PATHS listed below:
+
+
+---
+
+Implement user story AMSD-1820: [Mozio] - The Promo code amount is NOT displayed as expected for Return trip tickets in the Mozio email confirmation
+
+## Story Description
+[Mozio] - The Promo code amount is NOT displayed as expected for Return trip tickets in the Mozio email confirmation
+
+## Acceptance Criteria
+- The system displays the promo code discount amount in the Mozio email confirmation for the return trip portion when a return ticket is purchased with a promo code applied.
+- The system displays the promo code discount amount for both the outbound and return trip portions in the Mozio email confirmation when a return ticket with a promo code is purchased.
+- The system calculates the promo code discount amount for the return trip independently and shows a non-zero value when the promo code applies to the return portion.
+- The system renders the promo code discount line item for each trip segment (outbound and return) separately in the email confirmation, so the customer can verify the discount for each leg.
+- When a one-way ticket is purchased with a promo code, the system continues to display the promo code discount amount correctly in the Mozio email confirmation, confirming no regression for single-trip bookings.
+- When the promo code discount amount is zero or not applicable to the return trip, the system omits the promo code discount line for the return trip and does not show an incorrect value or a missing placeholder token.
+- The system includes the promo code identifier and the discounted total for both outbound and return trips in the email confirmation so the customer can reconcile the final charged amount per segment.
+- Given a return ticket with a promo code applied, the email confirmation renders the correct discount amount for each trip segment, regardless of how the discount metadata is structured in the underlying order data.
+- The promo code discount amount displayed in the email confirmation for each trip segment uses the correct currency symbol and decimal formatting consistent with the rest of the email.
+- When a promo code discount equals or exceeds the cost of a trip segment, the email confirmation displays the full segment price as the discount amount and shows a zero or negative-adjusted total for that segment without rendering errors.
+- When a promo code applies only to the outbound segment and not the return segment of a return ticket, the email confirmation shows the discount for the outbound segment and omits the discount line for the return segment.
+- When a promo code applies only to the return segment and not the outbound segment of a return ticket, the email confirmation shows the discount for the return segment and omits the discount line for the outbound segment.
+- When discount metadata is missing or malformed for one trip segment of a return ticket with a promo code, the email confirmation still renders correctly for the other segment and does not display a raw placeholder, undefined value, or error in the discount area.
+
+
+
+
+
+## Technical Notes
+None specified
+
+## Files to Create/Modify (EXACT ABSOLUTE PATHS — write to these paths exactly)
+
+
+## Dependencies
+None
+
+
+
+## Instructions
+**CRITICAL — WRITE FILES FIRST:**
+
+**You MUST write every file listed above to its EXACT absolute path. Do NOT write to a different path, do NOT write to the current directory unless it matches the path above. Use your WriteFile or Edit tools with the full absolute path shown.**
+
+1. Write each required file to its exact absolute path listed above — do this FIRST before anything else
+2. Implement all acceptance criteria for this story
+3. Follow the project's existing code patterns and conventions
+4. Do NOT create tests unless explicitly required in acceptance criteria
+
+After implementation, provide a brief summary of what was created/modified.
+
+## Verification Failure
+
+The orchestrator ran `tsc --noEmit` after your files were written and it failed (exit code 1). Fix the type errors so tsc exits 0.
+
+```
+node:internal/modules/cjs/loader:1210
+  throw err;
+  ^
+
+Error: Cannot find module '/home/bradleyjerome/projects/metrolinx/azure.commerce.cdts/node_modules/.bin/tsc'
+    at Module._resolveFilename (node:internal/modules/cjs/loader:1207:15)
+    at Module._load (node:internal/modules/cjs/loader:1038:27)
+    at Function.executeUserEntryPoint [as runMain] (node:internal/modules/run_main:164:12)
+    at node:internal/main/run_main_module:28:49 {
+  code: 'MODULE_NOT_FOUND',
+  requireStack: []
+}
+
+Node.js v20.20.2
+```
+
+## Relevant Knowledge Base Entries
+The following was learned from previous story implementations and is relevant to your agent role. Apply this knowledge before writing any code:
+
+- [2026-07-06T17:45:30Z] Always resolve mocked fetch calls to a Response-shaped object with ok, status, statusText, and a json method returning a Promise.
+- [2026-07-06T17:50:20Z] Use valid module and moduleResolution pairs in tsconfig.json: CommonJS with Node, Node16 with Node16, ESNext with Bundler. Use CommonJS and Node for the stack. Mismatched pairs cause build errors.
+- [2026-07-06T18:11:26Z] Use vi.fn().mockResolvedValue(value) to make a mock return a resolved Promise.
+- [2026-07-06T20:31:11Z] Use `test: { passWithNoTests: true }` in vitest.config.ts or create a stub test file when no *.test.ts files exist.
+- [2026-07-06T20:33:03Z] Enable globals:true in vitest.config.ts so describe, it, and expect work without imports, reducing boilerplate in test files.
+- [2026-07-06T23:47:34Z] Use CommonJS-compatible patterns in src/server.ts: avoid `import.meta.url` and top-level `await`; gate listen with `if (require.main === module)`.
+- [2026-07-07T02:35:30Z] Always include a non-test source file in src/ alongside any src/*.test.ts file, since tsconfig.json excludes test files from tsc --noEmit.
+- [2026-07-07T19:01:34Z] Only modify or create files explicitly listed in the story's acceptance criteria. Do not touch files belonging to other stories or outside the current task scope.
+- [2026-07-07T20:17:57Z] [unreviewed-fallback] Avoid using deprecated TypeScript compiler options like 'moduleResolution=node10'; use 'moduleResolution=node' instead.
+- [2026-07-17T20:20:58Z] Always: Before importing a module or referencing a type/property, always read the actual source file to verify the export exists, its exact path, its properties, and its constructor/factory signatures
+
+## Knowledge Base Contribution (do this LAST — after writing all implementation files)
+Your assigned KB entry ID for this run: **KB-012**
+**This is retry attempt 2** — a previous attempt failed. You MUST write a KB entry documenting what went wrong and what you changed.
+
+IMPORTANT: Write ALL implementation files first. Only AFTER writing every required file should you optionally append a KB entry.
+Do NOT read orchestrations/agents/KB.md before writing implementation files. The relevant KB entries are already injected above.
+
+If (and only if) you discover a non-obvious pattern during implementation, append one entry to `orchestrations/agents/KB.md`:
+
+```markdown
+## KB-012 -- 2026-07-21
+
+**Category:** <backend|frontend|infrastructure|testing|orchestration>
+**AgentRole:** <your agentRole from the story>
+**Tags:** <comma-separated tech keywords, e.g. typescript, node, cli>
+**Trigger:** <retry|first-success>
+**StoryRef:** AMSD-1820
+
+<One concise paragraph: the specific pattern, gotcha, or anti-pattern.>
+```
+
+Only write an entry if the knowledge is genuinely non-obvious. Skip trivial observations.
+
+## Available Dynamic Tools
+This project has the following helper scripts, written by prior self-healing runs. Use them via the bash tool instead of repeating the equivalent steps by hand:
+
+- `bash /home/bradleyjerome/projects/metrolinx/azure.commerce.cdts/.epam/dynamic-tools/ensure-tsc.sh <args>` — Ensures typescript is installed so tsc --noEmit can run
+- `bash /home/bradleyjerome/projects/metrolinx/azure.commerce.cdts/.epam/dynamic-tools/ensure-typescript.sh <args>` — Ensures the TypeScript compiler is installed as a dev dependency before running tsc --noEmit.
+
+## Coordinator Guidance (retry 2)
+The following targeted instruction was identified from the previous failure:
+
+## Self-Heal: Failure Analyst Summary
+Root cause: TypeScript compiler not installed — tsc binary missing from node_modules
+=== End Prompt ===
+
+=== epam Output (attempt 3) ===
+I need to understand the project structure first. Let me explore the codebase to find relevant files for the Mozio email confirmation and promo code handling.
+  [tc-writer] No test stories need TCs in phase 'unknown' — skipping
+
+=== tsc --noEmit failed (exit 1) ===
+node:internal/modules/cjs/loader:1210
+  throw err;
+  ^
+
+Error: Cannot find module '/home/bradleyjerome/projects/metrolinx/azure.commerce.cdts/node_modules/.bin/tsc'
+    at Module._resolveFilename (node:internal/modules/cjs/loader:1207:15)
+    at Module._load (node:internal/modules/cjs/loader:1038:27)
+    at Function.executeUserEntryPoint [as runMain] (node:internal/modules/run_main:164:12)
+    at node:internal/main/run_main_module:28:49 {
+  code: 'MODULE_NOT_FOUND',
+  requireStack: []
+}
+
+Node.js v20.20.2
+I need to understand the project structure first. Let me explore the codebase to find relevant files for the Mozio email confirmation and promo code handling.
+
+=== epam exited with code 1 ===
+=== Prompt for AMSD-1820 (attempt 5) ===
+CRITICAL — WRITE FILES FIRST. Your FIRST tool call MUST be WriteFile.
+Do NOT output any text before calling WriteFile. Do NOT plan or say "I will...".
+Call WriteFile NOW for the EXACT ABSOLUTE PATHS listed below:
+
+
+---
+
+Implement user story AMSD-1820: [Mozio] - The Promo code amount is NOT displayed as expected for Return trip tickets in the Mozio email confirmation
+
+## Story Description
+[Mozio] - The Promo code amount is NOT displayed as expected for Return trip tickets in the Mozio email confirmation
+
+## Acceptance Criteria
+- The system displays the promo code discount amount in the Mozio email confirmation for the return trip portion when a return ticket is purchased with a promo code applied.
+- The system displays the promo code discount amount for both the outbound and return trip portions in the Mozio email confirmation when a return ticket with a promo code is purchased.
+- The system calculates the promo code discount amount for the return trip independently and shows a non-zero value when the promo code applies to the return portion.
+- The system renders the promo code discount line item for each trip segment (outbound and return) separately in the email confirmation, so the customer can verify the discount for each leg.
+- When a one-way ticket is purchased with a promo code, the system continues to display the promo code discount amount correctly in the Mozio email confirmation, confirming no regression for single-trip bookings.
+- When the promo code discount amount is zero or not applicable to the return trip, the system omits the promo code discount line for the return trip and does not show an incorrect value or a missing placeholder token.
+- The system includes the promo code identifier and the discounted total for both outbound and return trips in the email confirmation so the customer can reconcile the final charged amount per segment.
+- Given a return ticket with a promo code applied, the email confirmation renders the correct discount amount for each trip segment, regardless of how the discount metadata is structured in the underlying order data.
+- The promo code discount amount displayed in the email confirmation for each trip segment uses the correct currency symbol and decimal formatting consistent with the rest of the email.
+- When a promo code discount equals or exceeds the cost of a trip segment, the email confirmation displays the full segment price as the discount amount and shows a zero or negative-adjusted total for that segment without rendering errors.
+- When a promo code applies only to the outbound segment and not the return segment of a return ticket, the email confirmation shows the discount for the outbound segment and omits the discount line for the return segment.
+- When a promo code applies only to the return segment and not the outbound segment of a return ticket, the email confirmation shows the discount for the return segment and omits the discount line for the outbound segment.
+- When discount metadata is missing or malformed for one trip segment of a return ticket with a promo code, the email confirmation still renders correctly for the other segment and does not display a raw placeholder, undefined value, or error in the discount area.
+
+
+
+
+
+## Technical Notes
+None specified
+
+## Files to Create/Modify (EXACT ABSOLUTE PATHS — write to these paths exactly)
+
+
+## Dependencies
+None
+
+
+
+## Instructions
+**CRITICAL — WRITE FILES FIRST:**
+
+**You MUST write every file listed above to its EXACT absolute path. Do NOT write to a different path, do NOT write to the current directory unless it matches the path above. Use your WriteFile or Edit tools with the full absolute path shown.**
+
+1. Write each required file to its exact absolute path listed above — do this FIRST before anything else
+2. Implement all acceptance criteria for this story
+3. Follow the project's existing code patterns and conventions
+4. Do NOT create tests unless explicitly required in acceptance criteria
+
+After implementation, provide a brief summary of what was created/modified.
+
+## Verification Failure
+
+The orchestrator ran `tsc --noEmit` after your files were written and it failed (exit code 1). Fix the type errors so tsc exits 0.
+
+```
+node:internal/modules/cjs/loader:1210
+  throw err;
+  ^
+
+Error: Cannot find module '/home/bradleyjerome/projects/metrolinx/azure.commerce.cdts/node_modules/.bin/tsc'
+    at Module._resolveFilename (node:internal/modules/cjs/loader:1207:15)
+    at Module._load (node:internal/modules/cjs/loader:1038:27)
+    at Function.executeUserEntryPoint [as runMain] (node:internal/modules/run_main:164:12)
+    at node:internal/main/run_main_module:28:49 {
+  code: 'MODULE_NOT_FOUND',
+  requireStack: []
+}
+
+Node.js v20.20.2
+```
+
+## Relevant Knowledge Base Entries
+The following was learned from previous story implementations and is relevant to your agent role. Apply this knowledge before writing any code:
+
+- [2026-07-06T17:45:30Z] Always resolve mocked fetch calls to a Response-shaped object with ok, status, statusText, and a json method returning a Promise.
+- [2026-07-06T17:50:20Z] Use valid module and moduleResolution pairs in tsconfig.json: CommonJS with Node, Node16 with Node16, ESNext with Bundler. Use CommonJS and Node for the stack. Mismatched pairs cause build errors.
+- [2026-07-06T18:11:26Z] Use vi.fn().mockResolvedValue(value) to make a mock return a resolved Promise.
+- [2026-07-06T20:31:11Z] Use `test: { passWithNoTests: true }` in vitest.config.ts or create a stub test file when no *.test.ts files exist.
+- [2026-07-06T20:33:03Z] Enable globals:true in vitest.config.ts so describe, it, and expect work without imports, reducing boilerplate in test files.
+- [2026-07-06T23:47:34Z] Use CommonJS-compatible patterns in src/server.ts: avoid `import.meta.url` and top-level `await`; gate listen with `if (require.main === module)`.
+- [2026-07-07T02:35:30Z] Always include a non-test source file in src/ alongside any src/*.test.ts file, since tsconfig.json excludes test files from tsc --noEmit.
+- [2026-07-07T19:01:34Z] Only modify or create files explicitly listed in the story's acceptance criteria. Do not touch files belonging to other stories or outside the current task scope.
+- [2026-07-07T20:17:57Z] [unreviewed-fallback] Avoid using deprecated TypeScript compiler options like 'moduleResolution=node10'; use 'moduleResolution=node' instead.
+- [2026-07-17T20:20:58Z] Always: Before importing a module or referencing a type/property, always read the actual source file to verify the export exists, its exact path, its properties, and its constructor/factory signatures
+
+## Knowledge Base Contribution (do this LAST — after writing all implementation files)
+Your assigned KB entry ID for this run: **KB-012**
+**This is retry attempt 4** — a previous attempt failed. You MUST write a KB entry documenting what went wrong and what you changed.
+
+IMPORTANT: Write ALL implementation files first. Only AFTER writing every required file should you optionally append a KB entry.
+Do NOT read orchestrations/agents/KB.md before writing implementation files. The relevant KB entries are already injected above.
+
+If (and only if) you discover a non-obvious pattern during implementation, append one entry to `orchestrations/agents/KB.md`:
+
+```markdown
+## KB-012 -- 2026-07-21
+
+**Category:** <backend|frontend|infrastructure|testing|orchestration>
+**AgentRole:** <your agentRole from the story>
+**Tags:** <comma-separated tech keywords, e.g. typescript, node, cli>
+**Trigger:** <retry|first-success>
+**StoryRef:** AMSD-1820
+
+<One concise paragraph: the specific pattern, gotcha, or anti-pattern.>
+```
+
+Only write an entry if the knowledge is genuinely non-obvious. Skip trivial observations.
+
+## Available Dynamic Tools
+This project has the following helper scripts, written by prior self-healing runs. Use them via the bash tool instead of repeating the equivalent steps by hand:
+
+- `bash /home/bradleyjerome/projects/metrolinx/azure.commerce.cdts/.epam/dynamic-tools/ensure-tsc.sh <args>` — Ensures typescript is installed so tsc --noEmit can run
+- `bash /home/bradleyjerome/projects/metrolinx/azure.commerce.cdts/.epam/dynamic-tools/ensure-typescript-installed.sh <args>` — Ensure TypeScript is installed locally so tsc --noEmit can run successfully.
+- `bash /home/bradleyjerome/projects/metrolinx/azure.commerce.cdts/.epam/dynamic-tools/ensure-typescript.sh <args>` — Ensures the TypeScript compiler is installed as a dev dependency before running tsc --noEmit.
+
+## Coordinator Guidance (retry 4)
+The following targeted instruction was identified from the previous failure:
+
+## Self-Heal: Failure Analyst Summary
+Root cause: TypeScript compiler not installed — tsc binary missing from node_modules
+## Self-Heal: Failure Analyst Summary
+Root cause: TypeScript compiler (tsc) not installed in node_modules — orchestrator ran tsc --noEmit but the binary is missing.
+=== End Prompt ===
+
+=== epam Output (attempt 5) ===
+I need to find the relevant files for this story. Let me search the project for Mozio email confirmation and promo code related code.
+  [tc-writer] No test stories need TCs in phase 'unknown' — skipping
+
+=== tsc --noEmit failed (exit 1) ===
+node:internal/modules/cjs/loader:1210
+  throw err;
+  ^
+
+Error: Cannot find module '/home/bradleyjerome/projects/metrolinx/azure.commerce.cdts/node_modules/.bin/tsc'
+    at Module._resolveFilename (node:internal/modules/cjs/loader:1207:15)
+    at Module._load (node:internal/modules/cjs/loader:1038:27)
+    at Function.executeUserEntryPoint [as runMain] (node:internal/modules/run_main:164:12)
+    at node:internal/main/run_main_module:28:49 {
+  code: 'MODULE_NOT_FOUND',
+  requireStack: []
+}
+
+Node.js v20.20.2
+I need to find the relevant files for this story. Let me search the project for Mozio email confirmation and promo code related code.
+
+=== epam exited with code 1 ===
+=== Prompt for AMSD-1820 (attempt 7) ===
+CRITICAL — WRITE FILES FIRST. Your FIRST tool call MUST be WriteFile.
+Do NOT output any text before calling WriteFile. Do NOT plan or say "I will...".
+Call WriteFile NOW for the EXACT ABSOLUTE PATHS listed below:
+
+
+---
+
+Implement user story AMSD-1820: [Mozio] - The Promo code amount is NOT displayed as expected for Return trip tickets in the Mozio email confirmation
+
+## Story Description
+[Mozio] - The Promo code amount is NOT displayed as expected for Return trip tickets in the Mozio email confirmation
+
+## Acceptance Criteria
+- The system displays the promo code discount amount in the Mozio email confirmation for the return trip portion when a return ticket is purchased with a promo code applied.
+- The system displays the promo code discount amount for both the outbound and return trip portions in the Mozio email confirmation when a return ticket with a promo code is purchased.
+- The system calculates the promo code discount amount for the return trip independently and shows a non-zero value when the promo code applies to the return portion.
+- The system renders the promo code discount line item for each trip segment (outbound and return) separately in the email confirmation, so the customer can verify the discount for each leg.
+- When a one-way ticket is purchased with a promo code, the system continues to display the promo code discount amount correctly in the Mozio email confirmation, confirming no regression for single-trip bookings.
+- When the promo code discount amount is zero or not applicable to the return trip, the system omits the promo code discount line for the return trip and does not show an incorrect value or a missing placeholder token.
+- The system includes the promo code identifier and the discounted total for both outbound and return trips in the email confirmation so the customer can reconcile the final charged amount per segment.
+- Given a return ticket with a promo code applied, the email confirmation renders the correct discount amount for each trip segment, regardless of how the discount metadata is structured in the underlying order data.
+- The promo code discount amount displayed in the email confirmation for each trip segment uses the correct currency symbol and decimal formatting consistent with the rest of the email.
+- When a promo code discount equals or exceeds the cost of a trip segment, the email confirmation displays the full segment price as the discount amount and shows a zero or negative-adjusted total for that segment without rendering errors.
+- When a promo code applies only to the outbound segment and not the return segment of a return ticket, the email confirmation shows the discount for the outbound segment and omits the discount line for the return segment.
+- When a promo code applies only to the return segment and not the outbound segment of a return ticket, the email confirmation shows the discount for the return segment and omits the discount line for the outbound segment.
+- When discount metadata is missing or malformed for one trip segment of a return ticket with a promo code, the email confirmation still renders correctly for the other segment and does not display a raw placeholder, undefined value, or error in the discount area.
+
+
+
+
+
+## Technical Notes
+None specified
+
+## Files to Create/Modify (EXACT ABSOLUTE PATHS — write to these paths exactly)
+
+
+## Dependencies
+None
+
+
+
+## Instructions
+**CRITICAL — WRITE FILES FIRST:**
+
+**You MUST write every file listed above to its EXACT absolute path. Do NOT write to a different path, do NOT write to the current directory unless it matches the path above. Use your WriteFile or Edit tools with the full absolute path shown.**
+
+1. Write each required file to its exact absolute path listed above — do this FIRST before anything else
+2. Implement all acceptance criteria for this story
+3. Follow the project's existing code patterns and conventions
+4. Do NOT create tests unless explicitly required in acceptance criteria
+
+After implementation, provide a brief summary of what was created/modified.
+
+## Verification Failure
+
+The orchestrator ran `tsc --noEmit` after your files were written and it failed (exit code 1). Fix the type errors so tsc exits 0.
+
+```
+node:internal/modules/cjs/loader:1210
+  throw err;
+  ^
+
+Error: Cannot find module '/home/bradleyjerome/projects/metrolinx/azure.commerce.cdts/node_modules/.bin/tsc'
+    at Module._resolveFilename (node:internal/modules/cjs/loader:1207:15)
+    at Module._load (node:internal/modules/cjs/loader:1038:27)
+    at Function.executeUserEntryPoint [as runMain] (node:internal/modules/run_main:164:12)
+    at node:internal/main/run_main_module:28:49 {
+  code: 'MODULE_NOT_FOUND',
+  requireStack: []
+}
+
+Node.js v20.20.2
+```
+
+## Relevant Knowledge Base Entries
+The following was learned from previous story implementations and is relevant to your agent role. Apply this knowledge before writing any code:
+
+- [2026-07-06T17:45:30Z] Always resolve mocked fetch calls to a Response-shaped object with ok, status, statusText, and a json method returning a Promise.
+- [2026-07-06T17:50:20Z] Use valid module and moduleResolution pairs in tsconfig.json: CommonJS with Node, Node16 with Node16, ESNext with Bundler. Use CommonJS and Node for the stack. Mismatched pairs cause build errors.
+- [2026-07-06T18:11:26Z] Use vi.fn().mockResolvedValue(value) to make a mock return a resolved Promise.
+- [2026-07-06T20:31:11Z] Use `test: { passWithNoTests: true }` in vitest.config.ts or create a stub test file when no *.test.ts files exist.
+- [2026-07-06T20:33:03Z] Enable globals:true in vitest.config.ts so describe, it, and expect work without imports, reducing boilerplate in test files.
+- [2026-07-06T23:47:34Z] Use CommonJS-compatible patterns in src/server.ts: avoid `import.meta.url` and top-level `await`; gate listen with `if (require.main === module)`.
+- [2026-07-07T02:35:30Z] Always include a non-test source file in src/ alongside any src/*.test.ts file, since tsconfig.json excludes test files from tsc --noEmit.
+- [2026-07-07T19:01:34Z] Only modify or create files explicitly listed in the story's acceptance criteria. Do not touch files belonging to other stories or outside the current task scope.
+- [2026-07-07T20:17:57Z] [unreviewed-fallback] Avoid using deprecated TypeScript compiler options like 'moduleResolution=node10'; use 'moduleResolution=node' instead.
+- [2026-07-17T20:20:58Z] Always: Before importing a module or referencing a type/property, always read the actual source file to verify the export exists, its exact path, its properties, and its constructor/factory signatures
+
+## Knowledge Base Contribution (do this LAST — after writing all implementation files)
+Your assigned KB entry ID for this run: **KB-012**
+**This is retry attempt 6** — a previous attempt failed. You MUST write a KB entry documenting what went wrong and what you changed.
+
+IMPORTANT: Write ALL implementation files first. Only AFTER writing every required file should you optionally append a KB entry.
+Do NOT read orchestrations/agents/KB.md before writing implementation files. The relevant KB entries are already injected above.
+
+If (and only if) you discover a non-obvious pattern during implementation, append one entry to `orchestrations/agents/KB.md`:
+
+```markdown
+## KB-012 -- 2026-07-21
+
+**Category:** <backend|frontend|infrastructure|testing|orchestration>
+**AgentRole:** <your agentRole from the story>
+**Tags:** <comma-separated tech keywords, e.g. typescript, node, cli>
+**Trigger:** <retry|first-success>
+**StoryRef:** AMSD-1820
+
+<One concise paragraph: the specific pattern, gotcha, or anti-pattern.>
+```
+
+Only write an entry if the knowledge is genuinely non-obvious. Skip trivial observations.
+
+## Available Dynamic Tools
+This project has the following helper scripts, written by prior self-healing runs. Use them via the bash tool instead of repeating the equivalent steps by hand:
+
+- `bash /home/bradleyjerome/projects/metrolinx/azure.commerce.cdts/.epam/dynamic-tools/ensure-tsc.sh <args>` — Ensures typescript is installed so tsc --noEmit can run
+- `bash /home/bradleyjerome/projects/metrolinx/azure.commerce.cdts/.epam/dynamic-tools/ensure-typescript-installed.sh <args>` — Ensure TypeScript is installed locally so tsc --noEmit can run successfully.
+- `bash /home/bradleyjerome/projects/metrolinx/azure.commerce.cdts/.epam/dynamic-tools/ensure-typescript.sh <args>` — Ensure the TypeScript compiler is installed in node_modules before running tsc --noEmit.
+
+## Coordinator Guidance (retry 6)
+The following targeted instruction was identified from the previous failure:
+
+## Self-Heal: Failure Analyst Summary
+Root cause: TypeScript compiler not installed — tsc binary missing from node_modules
+## Self-Heal: Failure Analyst Summary
+Root cause: TypeScript compiler (tsc) not installed in node_modules — orchestrator ran tsc --noEmit but the binary is missing.
+## Self-Heal: Failure Analyst Summary
+Root cause: tsc binary missing from node_modules — TypeScript was never installed as a devDependency.
+=== End Prompt ===
+
+=== epam Output (attempt 7) ===
+Let me read the rest of the file:
+  [tc-writer] No test stories need TCs in phase 'unknown' — skipping
+
+=== tsc --noEmit failed (exit 1) ===
+node:internal/modules/cjs/loader:1210
+  throw err;
+  ^
+
+Error: Cannot find module '/home/bradleyjerome/projects/metrolinx/azure.commerce.cdts/node_modules/.bin/tsc'
+    at Module._resolveFilename (node:internal/modules/cjs/loader:1207:15)
+    at Module._load (node:internal/modules/cjs/loader:1038:27)
+    at Function.executeUserEntryPoint [as runMain] (node:internal/modules/run_main:164:12)
+    at node:internal/main/run_main_module:28:49 {
+  code: 'MODULE_NOT_FOUND',
+  requireStack: []
+}
+
+Node.js v20.20.2
+Let me read the rest of the file:
+
+=== epam exited with code 1 ===

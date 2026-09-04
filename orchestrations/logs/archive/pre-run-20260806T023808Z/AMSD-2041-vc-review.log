@@ -1,0 +1,28 @@
+# Prompt
+You are a STRICT verification-criteria reviewer for a brownfield fix. REVIEW ONLY — do NOT rewrite anything.
+
+Acceptance criteria (IMMUTABLE ticket intent):
+- (none)
+Description: [GO, UP, MX] Live Preview of Content in CMS
+
+Proposed verification criteria:
+1. When a content entry's published value is changed in the CMS live preview session, the page immediately reflects the updated value in the area of the page that displays that entry's content.
+2. When a content entry's published value is changed in the CMS live preview session, areas of the page displaying content from other entries remain unchanged.
+3. When a content entry's published value is changed in the CMS live preview session, the page's navigation bar immediately reflects the updated value.
+4. When the page is viewed outside a CMS live preview session, all content on the page displays the current published values.
+5. If the live preview session disconnects or encounters an error, the page continues to display the content values that were last shown.
+6. When multiple content entries' published values are changed in the CMS live preview session in quick succession, the page reflects each update in order without stale or missing values.
+
+Apply these rules EXACTLY (the producer is held to the same text — do not invent stricter or looser criteria):
+A verification criterion states WHAT AN END USER OR TESTER OBSERVES on the user-facing surface THE TICKET IS ABOUT — the rendered email for an email ticket, the displayed screen/UI for a UI ticket, the API response a CLIENT receives for an API ticket. It is a BLACK-BOX check on that surface. It NEVER describes HOW the value is produced.
+A verification criterion is FORBIDDEN if it:
+- prescribes HOW to implement — any algorithm, mechanism, or approach: "split", "halve", "×0.5", "calculate independently", "per segment", "for each line item", or adding/reading any new field, flag, or service;
+- references an INTERNAL structure that merely FEEDS the ticket's surface — an intermediate payload, a "confirmation data"/DTO object, or a specific response field used to BUILD the output. Verify the surface the ticket names, NOT the data structure behind it;
+- makes a CROSS-COMPARISON that presumes a mechanism — never assert one value "must equal" / "matches" / "is the same as" another (e.g. "the return amount equals the outbound amount"); that presumes a copy/split. Assert the required value is present and correct ON ITS OWN.
+Every verification criterion must be observable, testable, and tied to the ticket's stated symptom/intent.
+
+FLAG any verification criterion that violates ANY rule above, OR that fails to cover the intent of an acceptance criterion.
+Output ONLY a JSON array of short flag strings, e.g. ["VC 2 prescribes halving — restate as observable outcome"]. Output [] if every VC is clean. No prose, no markdown.
+
+# Output
+["VC 6 'reflects each update in order' prescribes a sequential-processing mechanism and cross-compares update display order to change order — restate as observable outcome (e.g., all updated values are present and correct)"]

@@ -1,0 +1,14 @@
+spec-mode: fast-path qwen/z-ai/glm-5.2 (skipping MiniMax)
+Failed to parse JSON for tag SPEC_ASSIGNMENTS: Unexpected token '<', "</think>I'"... is not valid JSON
+spec-mode: fast-path qwen/z-ai/glm-5.1 (skipping MiniMax)
+spec-mode: AMSD-2041 — 8 verification criteria persisted (source: description, resolution: regenerated)
+spec-mode: fast-path qwen/z-ai/glm-5.1 (skipping MiniMax)
+spec-mode: AMSD-2041 — ACs are immutable (VC model); openspec AC edits redacted, verification captured in verificationCriteria
+spec-mode: AMSD-2041 — 8 verification criteria persisted (source: description, resolution: regenerated)
+spec-mode: fast-path qwen/z-ai/glm-5.1 (skipping MiniMax)
+spec-mode: AMSD-2041 — ACs are immutable (VC model); openspec AC edits redacted, verification captured in verificationCriteria
+spec-mode: AMSD-2041 — 7 verification criteria persisted (source: description, resolution: regenerated)
+spec-mode: fast-path qwen/z-ai/glm-5.1 (skipping MiniMax)
+spec-mode: fast-path qwen/z-ai/glm-5.2 (skipping MiniMax)
+spec-mode: fast-path qwen/z-ai/glm-5.2 (skipping MiniMax)
+spec-mode: completed for phase core (run 20260728T103005Z)

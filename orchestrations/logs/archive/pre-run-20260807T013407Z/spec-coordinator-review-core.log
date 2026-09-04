@@ -1,0 +1,413 @@
+# Prompt
+You are the specification coordinator for the epam-cli orchestration system. Before every phase you read orchestrations/prd.json (implementationOrder and stories), evaluate risk, dependencies, and technical readiness, then assign the correct specification runners: OpenSpec, Speckit, both, or none. You write assignments into each story's specification.assignedAgents field along with coordinatorNotes, target provider/model, and timestamps. You understand the provider policy ledger (configuration.aiRuntime.providerPolicies), token guardrails, and know when to skip stories that were already hand-curated. When you plan a run you emit JSON compliant with spec-mode-runner.js so that automation can apply deltas deterministically. You never invent story IDs or mutate acceptance criteria directly; only delegate to spec agents and record their status.
+
+You are the EPAM CLI specification coordinator reviewing the completed spec outputs for phase core.
+
+Each story was processed by a sequential agent pipeline:
+  1. openspec elaborated requirements (AC refinement, story splits, technical depth)
+  2. speckit reviewed openspec's output (testability, security, edge cases, gap analysis)
+
+For each story, evaluate the quality of the collaborative spec work:
+1. Did both agents add meaningful, non-overlapping value?
+2. Flag any story needing human review.
+3. PLAN ALIGNMENT — where planAlignmentEvidence is present, it tells you what the
+   code-graph-detective SAID it would investigate (detectivePlan) and a deterministic,
+   cheap signal (aligned: true/false) for whether the final fixSiteAnalysis shares any
+   named symbol/file with that plan. This signal is NOT your verdict — it is evidence, the
+   same as MANIFEST EVIDENCE below. A plan can legitimately turn out wrong once real
+   exploration starts. Read detectivePlan and fixSiteAnalysis yourself and judge: did the
+   detective explain WHY it moved from its plan to its final answer (a stated pivot,
+   reasoning that connects the two), or did the answer just change with no explanation?
+   The latter is a real defect (a fix has shipped that shared no term with the detective's
+   own stated plan, with no explanation, more than once on the same ticket) — set
+   planAlignment to justified_deviation when the detective justifies its pivot, or
+   unexplained_mismatch when it does not, and say why in reviewNotes. aligned:true needs
+   no action.
+
+(Brownfield tickets never split and their acceptance criteria are immutable —
+do not evaluate split quality or AC completeness; there is nothing there for
+either agent to have changed.
+
+EXPECTED, NOT A DEFECT: an agent's notes may describe acceptance criteria it
+authored while the story's acceptanceCriteria array is empty, and report
+acceptanceChanged=false. That is this pipeline REDACTING them on purpose: on a
+brownfield ticket the ACs are the ticket's own, and a thin ticket legitimately
+has none. The observable checks live in verificationCriteria — judge THOSE.
+Do not report the mismatch as a hallucination, a persistence failure or a
+metadata inconsistency, and do not lower qualityScore for it. An empty
+acceptanceCriteria array on a brownfield story is correct by policy.)
+
+MANIFEST EVIDENCE (checked against the repository, not asserted):
+  AMSD-2041: EXISTS  src/services/contentstack.ts
+  AMSD-2041: EXISTS  src/context/contentstackContext.tsx
+  AMSD-2041: EXISTS  src/interface/content/page.ts
+  AMSD-2041: EXISTS  src/components/contentstack/ContentstackAttention/content.mock.ts
+  AMSD-2041: EXISTS  src/components/contentstack/ContentStackGallery/ContentStackGallery.mock.ts
+
+ANSWER IN THIS RESPONSE. Your <SPEC_REVIEW> verdict must appear in THIS reply — an
+empty <SPEC_REVIEW></SPEC_REVIEW>, or a promise to verify and answer later, is
+discarded and the review does not happen. There is no follow-up turn to come back in.
+
+You DO have read-only tools this turn (read_file, list_files, search). Use them for
+real if something is genuinely unclear — but never narrate an imagined tool result,
+and never spend the whole turn exploring and run out before writing the verdict.
+Budget is small and the verdict is mandatory: gather at most what you need, then answer.
+
+MANIFEST EVIDENCE has already been gathered from the repository for you and appears
+above. Every declared path was checked with a real filesystem stat, so re-checking
+paths is wasted budget — that part is done and is more reliable than a tool call.
+  - A story with any MISSING path CANNOT be implemented: the writer is sent to edit a
+    file that is not there, and every retry reproduces that. Mark it needs_review, name
+    the exact path in reviewNotes, and add the flag "missing_manifest_path".
+  - Where the evidence names a real neighbour ("the directory holds X instead"), say so
+    — that is what makes the report actionable.
+  - Never silently correct a path. The manifest is the artefact under review; a
+    correction living only in your prose reaches nobody.
+
+Judge what the evidence cannot: are the acceptance criteria testable, is the declared
+file set plausible for this change, is anything obviously missing. If you are unsure,
+lower qualityScore and add a flag — do not withhold the verdict. A missing review is
+worse than an uncertain one: it means nothing was checked at all.
+
+QUALITY SCORE — what the number has to mean. It is enforced: below 0.7 halts the run
+before implementation, so an unanchored guess stops real work.
+  0.9-1.0  the spec is ready to implement; criteria are observable and the file set fits.
+  0.7-0.89 ready to implement, with ordinary open questions a competent writer resolves.
+  0.5-0.69 NOT ready: something concrete is wrong or missing — criteria that cannot be
+           observed, a file set that cannot deliver what is described, contradictions.
+  below 0.5 the spec would send a writer somewhere useless.
+Score what IS in front of you. Do NOT lower the score because an agent could not read the
+source files, or because a human "might want to check" — that is true of every ticket and
+is not a defect in this spec. If your notes cannot name something concretely wrong, the
+score belongs at 0.7 or above.
+
+Respond with JSON between <SPEC_REVIEW> and </SPEC_REVIEW> using this schema:
+[
+  {"storyId":"REM-xxx","verdict":"approved|needs_review","reviewNotes":"coordinator observations","qualityScore":0.0-1.0,"flags":[],"planAlignment":"aligned|justified_deviation|unexplained_mismatch|not_applicable"}
+]
+
+Stories to review:
+[
+  {
+    "id": "AMSD-2041",
+    "title": "[GO, UP, MX] Live Preview of Content in CMS",
+    "acceptanceCriteria": [],
+    "verificationCriteria": [
+      "When a content author views a page in preview mode, the page renders draft (unpublished) content from the CMS, displaying content that has been saved but not yet published.",
+      "Protected pages and protected content are not rendered in preview mode."
+    ],
+    "technicalNotes": {
+      "files": [
+        "src/services/contentstack.ts",
+        "src/context/contentstackContext.tsx",
+        "src/interface/content/page.ts",
+        "src/components/contentstack/ContentstackAttention/content.mock.ts",
+        "src/components/contentstack/ContentStackGallery/ContentStackGallery.mock.ts"
+      ],
+      "perCodeline": {
+        "metrolinx": {
+          "files": [
+            "src/services/contentstack.ts",
+            "src/context/contentstackContext.tsx",
+            "src/interface/content/page.ts",
+            "src/components/contentstack/ContentstackAttention/content.mock.ts",
+            "src/components/contentstack/ContentStackGallery/ContentStackGallery.mock.ts"
+          ],
+          "resolved": [
+            {
+              "declared": "src/services/contentstack.ts",
+              "actual": "src/services/contentstack.ts",
+              "match": "exact",
+              "verified_against": "/home/bradleyjerome/projects/metrolinx/next.metrolinx.com"
+            },
+            {
+              "declared": "src/context/contentstackContext.tsx",
+              "actual": "src/context/contentstackContext.tsx",
+              "match": "exact",
+              "verified_against": "/home/bradleyjerome/projects/metrolinx/next.metrolinx.com"
+            },
+            {
+              "declared": "src/interface/content/page.ts",
+              "actual": "src/interface/content/page.ts",
+              "match": "exact",
+              "verified_against": "/home/bradleyjerome/projects/metrolinx/next.metrolinx.com"
+            },
+            {
+              "declared": "src/components/contentstack/ContentstackAttention/content.mock.ts",
+              "actual": "src/components/contentstack/ContentstackAttention/content.mock.ts",
+              "match": "exact",
+              "verified_against": "/home/bradleyjerome/projects/metrolinx/next.metrolinx.com"
+            },
+            {
+              "declared": "src/components/contentstack/ContentStackGallery/ContentStackGallery.mock.ts",
+              "actual": "src/components/contentstack/ContentStackGallery/ContentStackGallery.mock.ts",
+              "match": "exact",
+              "verified_against": "/home/bradleyjerome/projects/metrolinx/next.metrolinx.com"
+            }
+          ],
+          "unresolved": []
+        }
+      }
+    },
+    "specification": {
+      "referencedDocs": [
+        {
+          "url": "https://www.contentstack.com/docs/headless-cms/live-preview-implementation-for-nextjs-csr-app-router",
+          "classification": "vendor_documentation",
+          "relevant": true,
+          "reason": "",
+          "quotes": [
+            "This guide is for Next.js CSR (Client-Side Rendering) with the App Router.",
+            "The Live Preview SDK provides real-time preview of draft content in your application.",
+            "Live Preview is available only for the Web App and Mobile Apps."
+          ],
+          "scopeCaveat": "The guide targets Next.js CSR with App Router. The codeline may use a different rendering strategy (SSR/SSG) — confirm before following literally.",
+          "fetchStatus": "fetched",
+          "contradictsStory": "The story assumes previewing draft entries in CMS is possible. The doc states Live Preview works for Web App and Mobile Apps only — protected pages may not be previewable, which aligns with the story's own noted limitation."
+        },
+        {
+          "url": "https://www.contentstack.com/docs/headless-cms/custom-preview-urls#configure-custom-preview-urls",
+          "classification": "vendor_documentation",
+          "relevant": true,
+          "reason": "",
+          "quotes": [
+            "Custom Preview URLs allow you to configure URLs for previewing content entries within the Contentstack CMS.",
+            "You can configure custom preview URLs from the Contentstack dashboard."
+          ],
+          "scopeCaveat": "This describes configuration performed in the Contentstack CMS UI, not in application code.",
+          "fetchStatus": "fetched",
+          "contradictsStory": "The story is estimated as FE-only (FE estimate 8, BE estimate 0). If preview is configured via Contentstack's UI rather than application code, the implementation may be configuration work, not front-end development — this contradicts the FE-only estimate assumption."
+        }
+      ],
+      "guardVocabulary": {
+        "blacklist": [
+          {
+            "term": "live_preview",
+            "reason": "Criterion 1 asserts the shape of an internal config object — the `live_preview` key with `enable_by_default` and `host` properties — which is an implementation mechanism (how the SDK is configured), not an observable user-facing surface. The ticket's surface is the rendered draft content, not the config object passed to the SDK constructor."
+          },
+          {
+            "term": "enable_by_default",
+            "reason": "Criterion 1 references a specific property of the internal config object. This is an implementation detail of how the SDK is configured, not something an end user or tester observes on the rendered surface."
+          },
+          {
+            "term": "host",
+            "reason": "Criterion 1 references a specific property of the internal config object. This is an implementation detail of how the SDK is configured, not an observable surface."
+          },
+          {
+            "term": "options config object",
+            "reason": "Criterion 1 names the internal configuration object passed to the SDK constructor. This is an internal structure that feeds the ticket's surface, not the surface itself."
+          },
+          {
+            "term": "contentstack.stack()",
+            "reason": "Criterion 1 names the SDK initialization call site — an internal mechanism. The ticket's surface is the rendered draft content, not the SDK constructor invocation."
+          },
+          {
+            "term": "onentrychange callback",
+            "reason": "Criterion 2 asserts the registration of a specific SDK callback (`onEntryChange`) — an implementation mechanism. The observable surface is the re-render of components consuming `useContent()`, not the callback registration itself."
+          },
+          {
+            "term": "onentrychange method",
+            "reason": "Criterion 5 asserts calling a specific SDK method (`onEntryChange`) returns an unsubscribe function — an implementation mechanism. The observable surface is that the subscription is cleanable and does not leak, not the method name or its return value."
+          },
+          {
+            "term": "unsubscribe function",
+            "reason": "Criterion 5 asserts that calling a specific SDK method returns an unsubscribe function — an internal mechanism. The observable surface is that no listener leaks on unmount, not the return value of the method."
+          },
+          {
+            "term": "event listener",
+            "reason": "Criterion 5 references the internal event listener mechanism — how the SDK delivers updates. The observable surface is the absence of leaks/errors, not the listener itself."
+          },
+          {
+            "term": "mocked event dispatch",
+            "reason": "Criterion 2 prescribes a test mechanism (mocked event dispatch) — this is HOW the test verifies the behavior, not WHAT is observed on the user-facing surface."
+          },
+          {
+            "term": "contentstack client mocked",
+            "reason": "Criterion 3 prescribes a test mechanism (mocking the Contentstack client) — this is HOW the test produces the scenario, not WHAT is observed on the rendered surface."
+          },
+          {
+            "term": "draft payload",
+            "reason": "Criterion 3 references an intermediate data structure (a draft payload) that feeds the rendered output. The observable surface is the updated text/media appearing in the rendered output, not the payload behind it."
+          },
+          {
+            "term": "usecontent()",
+            "reason": "Criteria 2 and 3 reference the internal React context hook (`useContent()`) — an implementation mechanism for consuming content. The observable surface is the re-rendered draft content, not the hook invocation."
+          },
+          {
+            "term": "contentstackcontext",
+            "reason": "Criteria reference the internal React context provider — an implementation structure that feeds the rendered output. The observable surface is the rendered draft content, not the context object."
+          },
+          {
+            "term": "delivery api responses",
+            "reason": "Criterion 4 references the internal API response shape — an intermediate structure that feeds the rendered output. The observable surface is that content renders identically in production mode, not the API response itself."
+          },
+          {
+            "term": "live_preview config",
+            "reason": "Criterion 4 references the internal config object — an implementation mechanism. The observable surface is that content renders identically when preview is inactive, not the config key."
+          }
+        ],
+        "whitelist": [
+          {
+            "term": "draft content",
+            "reason": "Observable surface: what the user sees — draft content appearing in the rendered output (Criteria 3, 6). This is the rendered content the ticket is about."
+          },
+          {
+            "term": "rendered output",
+            "reason": "Observable surface: the rendered output is what the user/tester perceives (Criterion 3). This is the black-box surface the ticket names."
+          },
+          {
+            "term": "re-render",
+            "reason": "Observable surface: the user/tester perceives components re-rendering with updated content without a full page navigation (Criteria 2, 3). This is a visible behavior on the surface."
+          },
+          {
+            "term": "full page navigation",
+            "reason": "Observable surface: the absence of a full page navigation is something a tester perceives (Criterion 3). This is a black-box observation of the user-facing surface."
+          },
+          {
+            "term": "published content",
+            "reason": "Observable surface: the user sees published content rendered on the page (Criterion 6). This is what is displayed on the screen."
+          },
+          {
+            "term": "preview is unavailable",
+            "reason": "Observable surface: a user-visible indication that preview is unavailable for a protected page (Criterion 6). This is what the user sees."
+          },
+          {
+            "term": "updated text or media",
+            "reason": "Observable surface: the updated text or media appearing in the rendered output (Criterion 3). This is what the user/tester observes."
+          },
+          {
+            "term": "content is fetched and rendered",
+            "reason": "Observable surface: content being fetched and rendered is what the user perceives (Criterion 4). This is the black-box behavior on the surface."
+          },
+          {
+            "term": "does not throw an unhandled error",
+            "reason": "Observable surface: the absence of an unhandled error is observable by a tester (Criterion 6). This is a black-box check on the surface."
+          },
+          {
+            "term": "live preview query parameters",
+            "reason": "Observable surface: the presence or absence of Live Preview query parameters in the URL is what a tester/user perceives in the browser (Criterion 4). This is a black-box observation of the URL surface."
+          },
+          {
+            "term": "preview mode is inactive",
+            "reason": "Observable surface: the active/inactive state of preview mode is observable via URL parameters and rendered content behavior (Criterion 4). This is what the user/tester perceives."
+          },
+          {
+            "term": "live preview is active",
+            "reason": "Observable surface: the active state of Live Preview is observable via URL parameters and rendered content (Criterion 6). This is what the user/tester perceives."
+          },
+          {
+            "term": "protected page",
+            "reason": "Observable surface: a protected page is a page the user/tester can identify and navigate to (Criterion 6). This is part of the observable surface the ticket names."
+          },
+          {
+            "term": "subscription is cleanable",
+            "reason": "Observable surface: the subscription being cleanable and not leaking is observable as the absence of errors or duplicate renders after unmount (Criterion 5). This is a black-box behavior on the surface."
+          },
+          {
+            "term": "does not leak on unmount",
+            "reason": "Observable surface: the absence of a leak on unmount is observable by a tester as the absence of errors or duplicate renders (Criterion 5). This is a black-box check on the surface."
+          },
+          {
+            "term": "components that consume",
+            "reason": "Observable surface: components consuming content and re-rendering is what the user/tester perceives (Criterion 2). The re-render is the visible behavior."
+          }
+        ]
+      },
+      "runId": "20260807T010410Z",
+      "assignedAgents": [
+        "openspec",
+        "speckit"
+      ],
+      "coordinatorNotes": "Acceptance criteria array is empty — openspec needed to elaborate requirements and define concrete AC for cross-platform (GO, UP, MX) live preview of draft CMS entries. Speckit needed to harden criteria around preview security boundaries, protected-page/content handling, unauthorized access edge cases, and testability. Both agents warranted given complexity and security implications.",
+      "status": "completed",
+      "updatedAt": "2026-08-07T01:13:49.506Z",
+      "appliedAgents": [
+        "openspec",
+        "speckit"
+      ],
+      "agentContributions": [
+        {
+          "agent": "openspec",
+          "applied": true,
+          "notes": "Novel capability — Live Preview does not exist in the codebase. The app uses Next.js Pages Router (src/pages/_app.tsx), NOT App Router, so the Contentstack App Router CSR guide cannot be followed literally. The contentstack SDK v3.15.2 accepts a live_preview config key. The @contentstack/live-preview-utils package is NOT installed and must be added. The ContentstackContext is a simple createContext with no provider in _app.tsx — the provider is mounted at the page level. Two attachment points: (1) the options config + Stack creation in contentstack.ts where live_preview config must be added, and (2) the context provider where Live Preview event listeners must trigger reactive re-renders for useContent() consumers. Custom Preview URLs are CMS dashboard configuration, not application code — that portion of the story is configuration work, not FE development, which partially explains the FE-only estimate contradiction.",
+          "acceptanceChanged": false,
+          "splitCount": 0,
+          "timestamp": "2026-08-07T01:12:33.163Z"
+        },
+        {
+          "agent": "speckit",
+          "applied": true,
+          "notes": "Openspec provided zero ACs but excellent technical notes. I built the full AC list from scratch, grounded in the actual code I read. Key observations from code review: (1) contentstack.ts creates Stack with a plain options object — AC-1/AC-2 cover the live_preview config addition with graceful fallback. (2) ContentstackContext is a bare createContext with no Provider or hook — the story's mention of 'useContent() consumers' likely refers to any component using useContext(ContentstackContext), so AC-4 is phrased generically around context consumers re-rendering. (3) The context has no provider component in the file; search for ContentstackContext.Provider returned zero matches, confirming the provider is mounted elsewhere (page-level). AC-4/AC-8 assume the provider will be enhanced to subscribe to LP events. (4) @contentstack/live-preview-utils is confirmed NOT in package.json. (5) AC-5 ensures SSR safety since the app uses Next.js Pages Router with SSR/SSG. (6) AC-9 addresses the stated limitation about protected pages. (7) AC-10 covers the Custom Preview URL configuration — this is partly CMS dashboard config but the app must correctly handle the preview URL with hash params. (8) AC-11 covers error handling for malformed LP data. (9) AC-12 addresses bundle impact — important because the LP utils should not bloat production for regular visitors.",
+          "acceptanceChanged": false,
+          "splitCount": 0,
+          "timestamp": "2026-08-07T01:13:49.506Z"
+        }
+      ]
+    },
+    "fixSiteAnalysis": [
+      {
+        "file": "src/services/contentstack.ts",
+        "function": "options",
+        "reason": "This is the Contentstack SDK initialization config where `live_preview` settings must be added to enable draft/preview content delivery. The `contentstack.Stack(options)` call at line 91 is the single point where the SDK client is created — Live Preview requires a `live_preview` key in this config object, and all downstream data fetching (getEntry, ContentstackFactory) flows through this Stack instance.",
+        "fix": "Add a `live_preview` property to the `options` object (between line 71 and the closing brace at line 89). The Contentstack JS SDK accepts `live_preview: { management_token, enable: true }` or can be toggled via env var. Also add env vars (e.g. CONTENTSTACK_PREVIEW_TOKEN, CONTENTSTACK_ENABLE_LIVE_PREVIEW) to the destructuring at lines 23-36. In `getEntry` and `getSingleEntry`, pass the live-preview hash/token from the request context so queries return draft content when preview mode is active. The `contentstack` package (already imported at line 2) natively supports this — no new package needed.",
+        "helper": "",
+        "brokenLine": "export const options: contentstack.Config = {",
+        "fixVerified": null,
+        "evidenceVerified": true,
+        "prescriptionNote": "",
+        "prescriptionUnderspecified": false
+      },
+      {
+        "file": "src/context/contentstackContext.tsx",
+        "function": "ContentstackContext",
+        "reason": "The React context that provides Contentstack content to all components via `useContent`. When Live Preview pushes updates, the context value must be refreshed reactively so every component reading from `useContent()` re-renders with the new draft data. This is the consumer-side attachment point — the context provider wrapper must subscribe to Contentstack Live Preview events and update its value.",
+        "fix": "Wrap the ContentstackContext.Provider (wherever it mounts) with a Live Preview listener that calls the Contentstack SDK's `livePreview` callback (provided by the `contentstack` package already installed) and updates the context value with the refreshed entry data. The `IContentstackContext` interface may need a `isPreviewMode` flag so components can conditionally render draft-only UI.",
+        "helper": "",
+        "brokenLine": "export const ContentstackContext = createContext<IContentstackContext>({});",
+        "fixVerified": null,
+        "evidenceVerified": true,
+        "prescriptionNote": "",
+        "prescriptionUnderspecified": false
+      }
+    ],
+    "planAlignmentEvidence": {
+      "detectivePlan": "**PLAN:**\n\nThis is a NOVEL capability — Live Preview of draft CMS content in Contentstack. The attachment point is wherever the app initializes the Contentstack SDK and fetches content, since Live Preview requires hooking into the Contentstack client's `live_preview` config and responding to preview events.\n\nThe pre-computed explore surfaced data model interfaces (`PageComponent`, `PageComponents`) but not the integration layer. I need to find:\n1. The Contentstack SDK initialization/configuration (likely a `contentstack` or `stack` setup with API key, delivery token, environment)\n2. The data fetching functions that query Contentstack entries — these are where `live_preview` params and preview hooks would attach\n3. Any existing preview-related code or configuration\n\nI'll `explore` with \"contentstack stack client sdk delivery\" to find the initialization layer, then trace to the actual content fetching functions. If that surfaces a Contentstack client setup, I'll `show` it to find the exact configuration object where `live_preview` settings would be added. I'll also check for any existing `preview` or `draft` related code. Convergence = same initialization/config file at rank 1 across two queries.",
+      "aligned": true,
+      "planTerms": [
+        "livepreview",
+        "pagecomponent",
+        "pagecomponents",
+        "contentstack",
+        "stack",
+        "explore",
+        "show",
+        "preview",
+        "draft",
+        "plan",
+        "novel"
+      ],
+      "findingTerms": [
+        "contentstack",
+        "options",
+        "contentstackcontext"
+      ]
+    }
+  }
+]
+
+<SPEC_REVIEW>
+</SPEC_REVIEW>
+
+# Output
+<SPEC_REVIEW>
+[
+  {
+    "storyId": "AMSD-2041",
+    "verdict": "approved",
+    "reviewNotes": "Both agents added meaningful, non-overlapping value. OpenSpec performed genuine technical discovery: identified that the app uses Next.js Pages Router (not App Router as the vendor doc assumes), surfaced two distinct attachment points (SDK config in contentstack.ts and context provider in contentstackContext.tsx), and noted the missing @contentstack/live-preview-utils package. Speckit then built the full verification-criteria set from scratch based on actual code reading, hardening security boundaries (protected pages), SSR safety (Pages Router), error handling for malformed preview data, and bundle-impact concerns. The work is complementary — OpenSpec explored, Speckit hardened. Brownfield story with empty acceptanceCriteria array is correct by policy; verificationCriteria are observable and testable (draft content renders in preview mode; protected pages/content not rendered in preview). All 5 manifest paths confirmed EXISTS — no missing paths. Plan alignment is aligned: the detective planned to find the Contentstack SDK initialization/config layer and fixSiteAnalysis identifies exactly contentstack.ts (options/Stack creation) and contentstackContext.tsx, sharing the term 'contentstack' and 'options' — no unexplained pivot. One minor open question: OpenSpec states @contentstack/live-preview-utils 'must be added' while fixSiteAnalysis asserts 'no new package needed — the contentstack package natively supports this.' This is a contradiction but is an ordinary open question a competent writer resolves by checking the installed SDK version (v3.15.2) against Contentstack's live-preview support — not a blocking defect. The scopeCaveat on the vendor doc (CSR App Router vs actual Pages Router) is correctly flagged and does not block implementation since the fixSiteAnalysis is grounded in the actual codebase.",
+    "qualityScore": 0.82,
+    "flags": [],
+    "planAlignment": "aligned"
+  }
+]
+</SPEC_REVIEW>

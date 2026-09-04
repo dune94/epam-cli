@@ -1,0 +1,144 @@
+# Prompt
+You are the speckit specification agent for EPAM CLI. Phase core, story MOCK-HW-1.
+
+You are reviewing and building on the openspec agent's output for this story.
+Your role is COLLABORATIVE — you are NOT starting from scratch. Instead:
+1. Review openspec's proposed acceptance criteria for testability and completeness
+2. Add missing edge-case, error-handling, security, and accessibility criteria
+3. Flag any AC that are vague, untestable, or overlapping
+4. Splitting is openspec's decision alone — you do NOT split stories. If openspec already split
+   this story, do NOT include a "splitStories" field in your output at all (it will be ignored if
+   you do). Review and refine the acceptanceCriteria openspec gave you for the UNSPLIT story as
+   normal; per-child refinement of an already-split story's children happens on a later turn, not
+   here.
+5. Do NOT remove or duplicate openspec's good work — build on it
+
+━━━ WHAT-NOT-HOW RULE (MANDATORY) ━━━
+Every AC must describe an OBSERVABLE OUTCOME (what a test can verify from outside the code),
+NOT an implementation instruction. If an AC names vi.mock, jest.fn, mockReturnValue,
+mockResolvedValue, import statements, or require() calls, REPLACE it with a
+Given/When/Then behaviour statement. Never tell the implementer which library or mock pattern to use.
+
+OPENSPEC'S OUTPUT (your input to review — ACs and split proposals only):
+{
+  "acceptanceCriteria": [],
+  "notes": "Defect story: getGreeting() currently returns 'hello world' but must return 'hello dolly'. The fix site is src/hello.ts :: getGreeting (computes the value) and src/hello.test.ts (asserts the old value and must be updated to match)."
+}
+
+ORIGINAL STORY CONTEXT:
+{
+  "id": "MOCK-HW-1",
+  "title": "getGreeting should return hello dolly",
+  "description": "The getGreeting() function in this codebase currently returns the string 'hello world'. It should instead return 'hello dolly'. Update any test that asserts the old value to match the new one. The change is a one-line edit in src/hello.ts plus its test.",
+  "originalAcceptanceCriteria": [],
+  "technicalNotes": {
+    "files": [
+      "src/hello.ts",
+      "src/hello.test.ts"
+    ],
+    "perCodeline": {
+      "mockhelloworld": {
+        "files": [
+          "src/hello.ts",
+          "src/hello.test.ts"
+        ],
+        "resolved": [
+          {
+            "declared": "src/hello.ts",
+            "actual": "src/hello.ts",
+            "match": "exact",
+            "verified_against": "/home/bradleyjerome/.epam/mock1-paused/20260812T155700Z/workspace/codelines/mock-hello-world"
+          },
+          {
+            "declared": "src/hello.test.ts",
+            "actual": "src/hello.test.ts",
+            "match": "exact",
+            "verified_against": "/home/bradleyjerome/.epam/mock1-paused/20260812T155700Z/workspace/codelines/mock-hello-world"
+          }
+        ],
+        "unresolved": []
+      }
+    }
+  },
+  "dependencies": []
+}
+
+Produce your refined output as raw JSON only (no XML tags, no markdown fences, no preamble). Include:
+- "acceptanceCriteria": The FULL merged list (openspec's criteria + your additions/refinements). Every item MUST be an observable outcome, not an implementation instruction.
+- "notes": What you changed and why (be specific — cite which criteria you added/modified/replaced)
+- "splitStories": ALWAYS omit this field. Splitting is openspec's decision alone — never propose
+  split children of your own, even if openspec already split this story.
+- "acAddedBySpeckit": Array of criteria YOU added that were not in openspec's output
+- "acModifiedBySpeckit": Array of {"original":"...","revised":"..."} for criteria you reworded
+- "acFlagged": Array of {"criterion":"...","flag":"..."} for criteria that need human attention
+
+For a brownfield story with a real codeline, you may have read-only tools (read_file,
+list_files, search) available this turn — if so, USE them for real to check a file's
+actual contents before relying on it; do not invent what a tool would return. For a
+greenfield story with no existing codeline, you have none — give your best answer from
+the description, title and paths you were given, and say so in "notes" if the file
+contents would have changed your answer. Either way, never narrate an imagined tool
+result: a real answer with an honest caveat is worth everything; fabricated tool-call
+syntax (<tool_call>, <tool_use>, <function_call>) is worth nothing — it is discarded in
+full and the work is lost (observed live, 2026-07-28: exactly this, on an empty-criteria
+story that got no answer at all).
+
+
+# Output
+{
+  "acceptanceCriteria": [
+    {
+      "id": "AC-1",
+      "given": "the getGreeting function is called",
+      "when": "the return value is inspected",
+      "then": "it returns the exact string 'hello dolly'"
+    },
+    {
+      "id": "AC-2",
+      "given": "the test suite for src/hello.test.ts is executed",
+      "when": "all tests are run",
+      "then": "every test passes with no failures"
+    },
+    {
+      "id": "AC-3",
+      "given": "the test file src/hello.test.ts",
+      "when": "its assertion for getGreeting's return value is inspected",
+      "then": "it expects the exact string 'hello dolly' (not 'hello world')"
+    },
+    {
+      "id": "AC-4",
+      "given": "the getGreeting function is called",
+      "when": "the return value is compared to the old string 'hello world'",
+      "then": "they are not equal"
+    }
+  ],
+  "notes": "Openspec provided empty acceptanceCriteria with a helpful descriptive note. I read both src/hello.ts (exports getGreeting returning 'hello world') and src/hello.test.ts (single vitest test asserting 'hello world') to confirm the current state. I added four ACs: AC-1 captures the core behavior change (returns 'hello dolly'), AC-2 ensures the test suite passes (no regressions), AC-3 ensures the test assertion is updated to match the new value (prevents a stale test from falsely passing or failing), AC-4 explicitly guards against the old value persisting. All ACs are observable outcomes expressed as Given/When/Then, with no implementation instructions.",
+  "acAddedBySpeckit": [
+    {
+      "id": "AC-1",
+      "given": "the getGreeting function is called",
+      "when": "the return value is inspected",
+      "then": "it returns the exact string 'hello dolly'"
+    },
+    {
+      "id": "AC-2",
+      "given": "the test suite for src/hello.test.ts is executed",
+      "when": "all tests are run",
+      "then": "every test passes with no failures"
+    },
+    {
+      "id": "AC-3",
+      "given": "the test file src/hello.test.ts",
+      "when": "its assertion for getGreeting's return value is inspected",
+      "then": "it expects the exact string 'hello dolly' (not 'hello world')"
+    },
+    {
+      "id": "AC-4",
+      "given": "the getGreeting function is called",
+      "when": "the return value is compared to the old string 'hello world'",
+      "then": "they are not equal"
+    }
+  ],
+  "acModifiedBySpeckit": [],
+  "acFlagged": []
+}

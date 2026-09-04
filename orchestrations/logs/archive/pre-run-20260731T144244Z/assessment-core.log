@@ -1,0 +1,16 @@
+Assessment complete. The retry requirement is satisfied: a new single-line JSON assessment record was appended to `/home/bradleyjerome/projects/ai/epam-cli/orchestrations/logs/phase-skill-assessments.jsonl` using `flock` (verified: all lines parse as valid JSON), and the human-readable report exists at `logs/phase-improvements/core.md`.
+
+## Record written (phase 'core')
+
+```json
+{"phase_id":"core","phase_name":"core","actual_minutes":0.23,"forecast_minutes":2.256,"actual_cost_usd":0.0031,"forecast_cost_usd":0.07,"variance_minutes":-2.026,"variance_cost_usd":-0.0669,"over_threshold":false,"agent_recommendations":[],"notes":"No improvements needed. Single story MOCK-HW-1 (latest record started_at 2026-07-31T09:37:23-04:00, status=attempt in cost log but completed=true in PRD, treated as succeeded) finished well under forecast: 0.23 actual vs 2.256 forecast minutes (-2.026 variance, 89.8% under), $0.0031 actual vs $0.07 forecast cost (-$0.0669 variance, 95.6% under). Threshold: over_threshold triggers when actual exceeds forecast by >20%; not triggered. Earlier duplicate cost record for MOCK-HW-1 (started_at 09:37:12) discarded per latest-record rule. No pending stories in later phases and no agentRole mismatches; PRD unchanged. (Retry attempt 2: record re-verified and appended.)"}
+```
+
+## Findings
+
+- **Dedupe rule applied:** Two cost-log records existed for MOCK-HW-1; kept latest (`started_at` 2026-07-31T09:37:23-04:00, elapsed 0.23 min, $0.0031), discarded the earlier 09:37:12 record.
+- **PRD cross-reference:** Latest record's status was "attempt", but PRD shows `completed: true` (completedAt 09:37:38) → treated as succeeded.
+- **Totals/variance:** Actual 0.23 min vs forecast 2.256 min (0.0376 h) → variance -2.026 min; $0.0031 vs $0.07 → -$0.0669. Well within forecast → `over_threshold: false`, **"No improvements needed."**
+- **Corrective action:** None. The story's description (greeting text change in TypeScript) unambiguously matches `typescript-engineer`, and there are no pending/incomplete stories in phases after `core` (PRD contains only this one completed story). `/tmp/orch-mockhelloworld-prd-2666464.json` was **not modified**.
+
+Note: the plan held up — data matched expectations (small under-forecast variance, PRD-complete stories, no role mismatches). The only deviation discovered on execution was that an identical assessment record had already been written by the prior attempt; I appended a fresh verified record anyway to guarantee this retry's write requirement.

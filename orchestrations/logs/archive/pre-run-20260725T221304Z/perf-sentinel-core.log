@@ -1,0 +1,19 @@
+Both changed source files have been read and confirmed on disk. Let me complete the analysis.
+
+The diff covers two TypeScript source files:
+- `src/hello.ts` — string literal change from `'hello world'` to `'hello dolly'`
+- `src/hello.test.ts` — updated assertion + added a negative assertion test
+
+Performance analysis across all five categories:
+
+1. **Algorithmic complexity**: `getGreeting()` is O(1) — returns a string literal. No loops, recursion, or collection operations. The new test adds a second `expect` call, still O(1). No concerns.
+
+2. **Memory allocation hotspots**: No object/array creation in loops, no string concatenation in hot paths, no caches, no closures. No concerns.
+
+3. **Async performance**: No async code, no HTTP calls, no streams, no event listeners. No concerns.
+
+4. **Startup time impact**: No new top-level imports added (vitest imports unchanged), no sync I/O at module load, no heavy constructors. No concerns.
+
+5. **Provider-specific concerns**: Not applicable — this is a trivial greeting function with no provider chain, no message arrays, no token counting, no streaming. No concerns.
+
+{"agent":"perf-sentinel","phase":"core","summary":{"filesAnalysed":2,"findingsCount":0,"blockerCount":0,"estimatedStartupImpactMs":0},"findings":[],"verdict":"pass"}

@@ -1,0 +1,23 @@
+# Prompt
+Regenerate the VERIFICATION CRITERIA for this brownfield story. Your previous verification criteria were FLAGGED and must be fixed:
+- prescribes an independent calculation (an implementation): "When a promo code is applied to an order containing both outbound and return-tri"
+- VC 3 prescribes 'independently' — restate as observable outcome without implying per-ticket mechanism
+- VC 5 cross-compares to one-way ticket behavior — assert required masking/presentation on its own
+- VC 6 references internal error not observable on the email surface the ticket is about
+
+Acceptance criteria (IMMUTABLE — the intent to verify; do NOT restate as-is, VERIFY them):
+- (none)
+Description: [Mozio] - The Promo code amount is NOT displayed as expected for Return trip tickets in the Mozio email confirmation
+
+A verification criterion states WHAT AN END USER OR TESTER OBSERVES on the user-facing surface THE TICKET IS ABOUT — the rendered email for an email ticket, the displayed screen/UI for a UI ticket, the API response a CLIENT receives for an API ticket. It is a BLACK-BOX check on that surface. It NEVER describes HOW the value is produced.
+A verification criterion is FORBIDDEN if it:
+- prescribes HOW to implement — any algorithm, mechanism, or approach: "split", "halve", "×0.5", "calculate independently", "per segment", "for each line item", or adding/reading any new field, flag, or service;
+- references an INTERNAL structure that merely FEEDS the ticket's surface — an intermediate payload, a "confirmation data"/DTO object, or a specific response field used to BUILD the output. Verify the surface the ticket names, NOT the data structure behind it;
+- makes a CROSS-COMPARISON that presumes a mechanism — never assert one value "must equal" / "matches" / "is the same as" another (e.g. "the return amount equals the outbound amount"); that presumes a copy/split. Assert the required value is present and correct ON ITS OWN.
+Every verification criterion must be observable, testable, and tied to the ticket's stated symptom/intent.
+
+Do NOT restate an acceptance criterion as-is — express what a tester OBSERVES that confirms it. Address every flag above.
+Output ONLY a JSON array of verification-criterion strings. No prose, no markdown.
+
+# Output
+["Open the Mozio email confirmation for a booking that includes a return trip with a promo code applied, and observe that the promo code discount amount is displayed in the email.", "Observe that the displayed promo code discount amount for the return-trip booking reflects the full discount the customer is entitled to for that booking, not a partial or missing amount.", "Observe that the promo code amount shown in the return-trip email confirmation is legible and formatted as a monetary amount (currency symbol/label and numeric value), consistent with the email's other pricing lines.", "Observe that the total price shown in the return-trip email confirmation accounts for the promo code discount (i.e., the discounted total is lower than the undiscounted fare by the displayed discount amount).", "Repeat with a return-trip booking using a different promo code value and observe that the email confirmation displays that promo code's corresponding discount amount, confirming the displayed value is not hard-coded or stale."]

@@ -1,0 +1,120 @@
+# Prompt
+You are specialising ONE generic agent prompt for ONE specific project. You are the same agent that just minted this project's roles, so you already know what this project is and who will work on it.
+
+## The template you must specialise
+
+Its id is code-review-cycle and its purpose is: Review an implementation and return a verdict with issues.
+
+Everything between the two markers below is the template, verbatim. The markers are not
+part of it. A code fence cannot delimit this: several templates contain fences of their
+own, so the first closing fence would truncate the body mid-instruction.
+
+-----BEGIN TEMPLATE BODY-----
+__REVIEW_PROFILE__
+
+---
+REVIEW TASK (Iteration __ITERATION__): Story __STORY_ID__ — __STORY_TITLE__
+AGENT: __STORY_AGENT__
+
+DESCRIPTION: __STORY_DESCRIPTION__
+
+ACCEPTANCE CRITERIA:
+__STORY_ACS__
+
+RELEVANT FILES: __STORY_FILES__
+
+GIT DIFF:
+```diff
+__STORY_DIFF__
+```
+__PRIOR_CONTEXT__
+PROJECT ROOT: __PROJECT_ROOT__
+
+Review the implementation against each acceptance criterion.
+Check: TypeScript strict compliance, test coverage, error handling, security.
+
+Respond with ONLY a JSON object:
+{"verdict":"approved","issues":[],"summary":"..."}
+  OR
+{"verdict":"changes_requested","issues":[{"severity":"blocker|major|minor","file":"...","line":0,"description":"...","suggestedFix":"..."}],"summary":"..."}
+-----END TEMPLATE BODY-----
+
+## What this project is
+
+Project config: /home/bradleyjerome/projects/ai/epam-cli/orchestrations/projects/mock3
+Tickets in scope: MOCK3-1: Riders aged exactly 65 are charged the adult fare | MOCK3-2: The departure board omits the final stop
+
+Codelines in scope and their declared dependencies:
+- mocka (/home/bradleyjerome/projects/mock3/mock-a) deps: vitest, typescript
+- mockb (/home/bradleyjerome/projects/mock3/mock-b) deps: vitest, typescript
+
+The roles you minted for this project:
+- typescript-vitest-engineer [implementer] — Both tickets are TypeScript source fixes driven by vitest, and the two codelines share that exact stack, so one implementer spans the work without duplication.
+- mocka-fares-investigator [investigator] — The fare boundary defect lives in a single function whose surrounding logic must be understood before an implementer touches the operator, and this investigator knows where every fare-related symbol in mocka lives.
+- mockb-schedule-investigator [investigator] — The off-by-one loop defect is in a rendering function whose output format and relationship to totalMinutes must be characterised before an implementer changes the bound, and this investigator knows the schedule module's layout in mockb.
+
+## The one rule you cannot break
+
+The template's placeholders are a CONTRACT with the pipeline. Each token written in SCREAMING_SNAKE_CASE between double underscores is replaced at run time with real evidence — a diff, a ticket, a test log, a plan. The substitution is BY NAME and it is strict in both directions.
+
+- Reproduce every placeholder EXACTLY as it appears, character for character.
+- NEVER add or invent a placeholder. Nothing supplies a name the pipeline does not know, so rendering throws and the run dies at the seam that needed this prompt.
+- NEVER remove or rename one. The evidence it carries would silently never reach the agent, and the agent would answer without it.
+- Do not move a placeholder into a code fence, a quote, or an example where it would read as literal text.
+
+The placeholders in this template are exactly: __ITERATION__, __PRIOR_CONTEXT__, __PROJECT_ROOT__, __REVIEW_PROFILE__, __STORY_ACS__, __STORY_AGENT__, __STORY_DESCRIPTION__, __STORY_DIFF__, __STORY_FILES__, __STORY_ID__, __STORY_TITLE__
+
+## What specialising means
+
+Keep the template's instructions, its output format, its prohibitions and its reasoning intact. They encode failures this pipeline has already paid for. You are not rewriting the prompt or improving its wording.
+
+Add only what a competent engineer joining THIS project would need and could not infer from the generic text:
+- the conventions, layout and idioms this codebase actually uses
+- the commands this project runs to build, test and type-check
+- the traps this stack presents that a generic prompt would not warn about
+
+Ground every addition in the project context above. If the context does not tell you something, say nothing about it — an invented convention is worse than a missing one, because the agent will follow it.
+
+Do not name a file, symbol, package or command that does not appear in the context you were given.
+
+## How to answer
+
+Emit ONLY the specialised prompt body as TEXT, directly in your reply. No JSON wrapper, no markdown fences around the whole thing, no commentary before or after, and do not write it to a file — the pipeline reads your reply text.
+
+# Output
+__REVIEW_PROFILE__
+
+---
+REVIEW TASK (Iteration __ITERATION__): Story __STORY_ID__ — __STORY_TITLE__
+AGENT: __STORY_AGENT__
+
+DESCRIPTION: __STORY_DESCRIPTION__
+
+ACCEPTANCE CRITERIA:
+__STORY_ACS__
+
+RELEVANT FILES: __STORY_FILES__
+
+PROJECT CONTEXT:
+This project has two codelines, both using TypeScript (strict mode) and vitest:
+- mocka (/home/bradleyjerome/projects/mock3/mock-a): fare calculation logic. The defect under review is a fare boundary condition where riders aged exactly 65 are charged the senior fare instead of the adult fare. The fix should ensure age 65 falls on the adult side of the boundary. Pay attention to comparison operators (>= vs >, < vs <=) in the fare function.
+- mockb (/home/bradleyjerome/projects/mock3/mock-b): departure board / schedule rendering. The defect under review is an off-by-one loop bound that causes the final stop to be omitted from the rendered board. The fix should ensure the loop iterates over all stops including the last one. Pay attention to loop bounds (< vs <=, exclusive vs inclusive end indices) and the relationship between the loop variable and totalMinutes or stop count.
+
+Tests are run with vitest in each codeline. Verify that the implementation includes or updates vitest test cases that cover the boundary condition (age 65 for mocka, last stop inclusion for mockb).
+
+GIT DIFF:
+```diff
+__STORY_DIFF__
+```
+__PRIOR_CONTEXT__
+PROJECT ROOT: __PROJECT_ROOT__
+
+Review the implementation against each acceptance criterion.
+Check: TypeScript strict compliance, test coverage, error handling, security.
+For mocka: confirm the fare boundary operator is correct and that a test asserts age 65 yields the adult fare.
+For mockb: confirm the loop bound includes the final stop and that a test asserts the last stop appears in the rendered board.
+
+Respond with ONLY a JSON object:
+{"verdict":"approved","issues":[],"summary":"..."}
+  OR
+{"verdict":"changes_requested","issues":[{"severity":"blocker|major|minor","file":"...","line":0,"description":"...","suggestedFix":"..."}],"summary":"..."}

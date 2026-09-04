@@ -1,0 +1,1 @@
+[repro-gate] ⛔ BLOCK (AMSD-1820): no test file accompanies the change — every brownfield change must ship a test that reproduces the fixed behavior.

@@ -1,0 +1,4 @@
+[coverage-gate] writer: no pre-flight has gated this run — standing down
+```json
+{"notes":"No improvements needed.","agent_recommendations":[],"role_reassignments":[]}
+```

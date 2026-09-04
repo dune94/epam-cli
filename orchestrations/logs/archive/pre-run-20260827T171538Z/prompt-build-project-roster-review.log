@@ -1,0 +1,179 @@
+# Prompt
+You are specialising ONE generic agent prompt for ONE specific project. You are the same agent that just minted this project's roles, so you already know what this project is and who will work on it.
+
+## The template you must specialise
+
+Its id is project-roster-review and its purpose is: 
+
+Everything between the two markers below is the template, verbatim. The markers are not
+part of it. A code fence cannot delimit this: several templates contain fences of their
+own, so the first closing fence would truncate the body mid-instruction.
+
+-----BEGIN TEMPLATE BODY-----
+A project roster has been derived from the canonical roster. Your job is to FALSIFY it, not to admire it.
+
+The derived roster:
+
+  __ROSTER_PATH__
+
+The canonical roster it derives from:
+
+  __CANONICAL_PATH__
+
+The codelines it claims to be specialised for:
+__CODELINE_CONTEXT__
+
+THE ENTRIES UNDER REVIEW ARE BELOW, canonical text and derived text side by side. You are given
+them directly because a roster is far too large to read through tools in one pass — that is what
+made an earlier review answer that there was nothing to review. Judge what is here. This is a
+BATCH: other entries are judged in their own passes, so never report that agents are missing.
+
+__PAIR_BLOCK__
+
+Use your tools for one thing only: checking whether a claim a derived persona makes about a
+codeline is actually true. You have the source and the code; a judgement you could have made without opening either is not a review.
+
+## What makes a roster defective
+
+A RULE WAS WEAKENED. The derived persona may change what an agent KNOWS. It may not change what an agent is REQUIRED TO DO. If the canonical persona forbids something, demands evidence for a finding, or names a check that must pass, and the derived one softens or drops it, that is a blocking defect. Compare the two texts; do not rely on the derived one reading sensibly on its own.
+
+A CLAIM ABOUT THE CODELINE IS FALSE. A persona asserting a framework, a directory, a helper or a command that is not there is worse than a generic sentence, because the agent will act on it and the next reader cannot tell which claims were verified. Check the ones you can; report the ones you checked.
+
+AN ANCESTOR IS NOT CLOSE. Every entry names a canonical ancestor and inherits its ladder, its tool grant and its output contract from it. An entry whose work is nothing like its ancestor’s has inherited a budget and a set of tools that do not fit the job.
+
+AN AGENT LOST ITS PURPOSE. Specialisation replaces what an agent knows, never what it is for. A derived persona that has become a different agent means the pipeline will invoke it for the original work.
+
+## What is NOT a defect
+
+Content that differs from canonical. That is the point of the exercise, and difference alone is never a finding.
+
+A persona that is shorter, plainer, or omits a generic aside that does not apply to this codeline.
+
+An agent you judge irrelevant to this project. You cannot know which seams a run will reach, and the roster must cover every canonical agent.
+
+## Evidence
+
+Every finding names the agent, states which of the four defects it is, and quotes what you read — the canonical line and the derived line, or the path you opened and what was there. A finding without that is discarded before anyone sees it, so an unsupported one costs you the finding.
+
+Return no findings if you find none. An empty finding list from a review that RAN is the correct answer for a sound roster.
+
+THE VERDICT AND THE FINDINGS MUST AGREE. If you answer 'defects_found' you must list what you found — a verdict condemning the roster while naming nothing cannot be acted on or argued with, and it is discarded as a review that did not substantiate itself. If nothing you checked failed, the honest answer is 'sound' with no findings; that is a real result, not a weaker one.
+
+-----END TEMPLATE BODY-----
+
+## What this project is
+
+Project config: /home/bradleyjerome/projects/ai/epam-cli/orchestrations/projects/mock3
+Tickets in scope: MOCK3-1: Riders aged exactly 65 are charged the adult fare | MOCK3-2: The departure board omits the final stop
+
+Codelines in scope and their declared dependencies:
+- mocka (/home/bradleyjerome/projects/mock3/mock-a) deps: vitest, typescript
+- mockb (/home/bradleyjerome/projects/mock3/mock-b) deps: vitest, typescript
+
+The roles you minted for this project:
+- mocka-fares-investigator [investigator] — MOCK3-1 is scoped to mocka's fare logic, and a dedicated reader who verifies the exact comparison operator and the test file's actual age coverage (rather than inheriting the survey's belief) prevents the implementer from fixing the wrong line.
+- mockb-schedule-investigator [investigator] — MOCK3-2 is scoped to mockb's rendering logic, and a dedicated reader who confirms the loop bound and totalMinutes()'s independent indexing firsthand prevents the implementer from misjudging the blast radius of the fix.
+- fare-boundary-engineer [implementer] — MOCK3-1 requires an actual code change to the fare-rule boundary in src/fares.ts within the mocka codeline, and only an implementer can author that fix.
+- departure-board-engineer [implementer] — MOCK3-2 requires an actual code change to the stop-rendering loop bound in src/schedule.ts within the mockb codeline, and only an implementer can author that fix.
+
+## The one rule you cannot break
+
+The template's placeholders are a CONTRACT with the pipeline. Each token written in SCREAMING_SNAKE_CASE between double underscores is replaced at run time with real evidence — a diff, a ticket, a test log, a plan. The substitution is BY NAME and it is strict in both directions.
+
+- Reproduce every placeholder EXACTLY as it appears, character for character.
+- NEVER add or invent a placeholder. Nothing supplies a name the pipeline does not know, so rendering throws and the run dies at the seam that needed this prompt.
+- NEVER remove or rename one. The evidence it carries would silently never reach the agent, and the agent would answer without it.
+- Do not move a placeholder into a code fence, a quote, or an example where it would read as literal text.
+
+The placeholders in this template are exactly: __CANONICAL_PATH__, __CODELINE_CONTEXT__, __PAIR_BLOCK__, __ROSTER_PATH__
+
+## The other rule you cannot break
+
+The template's OUTPUT SHAPE is a contract too. Every field name the template states in its response
+format is read by a consumer that will reject an answer without it — the agent would produce work
+nothing accepts, and the seam fails after the model has already been paid for.
+
+- Reproduce every field name EXACTLY, in the same shape the template states it.
+- NEVER drop one because it looks redundant, and NEVER rename one to something clearer.
+- NEVER add a field. A consumer reads by name and has no place to put an invention.
+
+The output fields this template states are exactly: (none)
+
+## Before you answer
+
+Check your reply against both lists above. Every placeholder, and every output field, must appear
+in what you are about to send. A specialisation that drops one is refused and the work is redone,
+so the check costs you nothing and the omission costs an attempt.
+
+## What specialising means
+
+Keep the template's instructions, its output format, its prohibitions and its reasoning intact. They encode failures this pipeline has already paid for. You are not rewriting the prompt or improving its wording.
+
+Add only what a competent engineer joining THIS project would need and could not infer from the generic text:
+- the conventions, layout and idioms this codebase actually uses
+- the commands this project runs to build, test and type-check
+- the traps this stack presents that a generic prompt would not warn about
+
+Ground every addition in the project context above. If the context does not tell you something, say nothing about it — an invented convention is worse than a missing one, because the agent will follow it.
+
+Do not name a file, symbol, package or command that does not appear in the context you were given.
+
+## How to answer
+
+Emit ONLY the specialised prompt body as TEXT, directly in your reply. No JSON wrapper, no markdown fences around the whole thing, no commentary before or after, and do not write it to a file — the pipeline reads your reply text.
+
+
+
+# Output
+A project roster has been derived from the canonical roster. Your job is to FALSIFY it, not to admire it.
+
+The derived roster:
+
+  __ROSTER_PATH__
+
+The canonical roster it derives from:
+
+  __CANONICAL_PATH__
+
+The codelines it claims to be specialised for:
+__CODELINE_CONTEXT__
+
+The project contains two codelines in scope:
+- mocka (/home/bradleyjerome/projects/mock3/mock-a): TypeScript with vitest. MOCK3-1 concerns fare-rule logic in src/fares.ts, specifically how age 65 is compared against fare boundaries and what the test suite actually verifies about that boundary.
+- mockb (/home/bradleyjerome/projects/mock3/mock-b): TypeScript with vitest. MOCK3-2 concerns stop-rendering logic in src/schedule.ts, specifically the loop bound used to render stops and how totalMinutes() indexes into the data independently.
+
+THE ENTRIES UNDER REVIEW ARE BELOW, canonical text and derived text side by side. You are given
+them directly because a roster is far too large to read through tools in one pass — that is what
+made an earlier review answer that there was nothing to review. Judge what is here. This is a
+BATCH: other entries are judged in their own passes, so never report that agents are missing.
+
+__PAIR_BLOCK__
+
+Use your tools for one thing only: checking whether a claim a derived persona makes about a
+codeline is actually true. You have the source and the code; a judgement you could have made without opening either is not a review. For the mocka codeline, open src/fares.ts and verify the comparison operator and test coverage assertions. For the mockb codeline, open src/schedule.ts and verify the loop bounds and totalMinutes() indexing.
+
+## What makes a roster defective
+
+A RULE WAS WEAKENED. The derived persona may change what an agent KNOWS. It may not change what an agent is REQUIRED TO DO. If the canonical persona forbids something, demands evidence for a finding, or names a check that must pass, and the derived one softens or drops it, that is a blocking defect. Compare the two texts; do not rely on the derived one reading sensibly on its own.
+
+A CLAIM ABOUT THE CODELINE IS FALSE. A persona asserting a framework, a directory, a helper or a command that is not there is worse than a generic sentence, because the agent will act on it and the next reader cannot tell which claims were verified. Check the ones you can; report the ones you checked.
+
+AN ANCESTOR IS NOT CLOSE. Every entry names a canonical ancestor and inherits its ladder, its tool grant and its output contract from it. An entry whose work is nothing like its ancestor's has inherited a budget and a set of tools that do not fit the job.
+
+AN AGENT LOST ITS PURPOSE. Specialisation replaces what an agent knows, never what it is for. A derived persona that has become a different agent means the pipeline will invoke it for the original work.
+
+## What is NOT a defect
+
+Content that differs from canonical. That is the point of the exercise, and difference alone is never a finding.
+
+A persona that is shorter, plainer, or omits a generic aside that does not apply to this codeline.
+
+An agent you judge irrelevant to this project. You cannot know which seams a run will reach, and the roster must cover every canonical agent.
+
+## Evidence
+
+Every finding names the agent, states which of the four defects it is, and quotes what you read — the canonical line and the derived line, or the path you opened and what was there. A finding without that is discarded before anyone sees it, so an unsupported one costs you the finding.
+
+Return no findings if you find none. An empty finding list from a review that RAN is the correct answer for a sound roster.
+
+THE VERDICT AND THE FINDINGS MUST AGREE. If you answer 'defects_found' you must list what you found — a verdict condemning the roster while naming nothing cannot be acted on or argued with, and it is discarded as a review that did not substantiate itself. If nothing you checked failed, the honest answer is 'sound' with no findings; that is a real result, not a weaker one.

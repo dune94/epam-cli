@@ -1,0 +1,33 @@
+# Prompt
+Regenerate the VERIFICATION CRITERIA for this brownfield story. Your previous verification criteria were FLAGGED and must be fixed:
+- VC 2 prescribes internal test assertion content ('with assertions expecting hello dolly') — restate as observable outcome: test suite passes
+
+THE FIX SITE (located by the code-graph detective — anchor every criterion to the behaviour THIS code produces):
+- src/hello.ts :: getGreeting — This function computes the greeting string that is returned; it is the single source of truth for the value, not a consumer or display layer
+Do NOT write criteria about areas unrelated to this code.
+
+
+Acceptance criteria (IMMUTABLE — the intent to verify; do NOT restate as-is, VERIFY them):
+- getGreeting() returns exactly 'hello dolly'
+- The existing test file's assertion on the return value is updated to match the new value and passes under vitest
+- tsc --noEmit exits 0
+Description: The getGreeting() function currently returns the string 'hello world'. It should instead return 'hello dolly'. Update any test that asserts the old value to match the new one. This change is required independently in each codeline named on this story — the codelines do not share code.
+
+A verification criterion states WHAT AN END USER OR TESTER OBSERVES on the user-facing surface THE TICKET IS ABOUT — the rendered email for an email ticket, the displayed screen/UI for a UI ticket, the API response a CLIENT receives for an API ticket. It is a BLACK-BOX check on that surface. It NEVER describes HOW the value is produced.
+A verification criterion is FORBIDDEN if it:
+- prescribes HOW to implement — any algorithm, mechanism, or approach: "split", "halve", "×0.5", "calculate independently", "per segment", "for each line item", or adding/reading any new field, flag, or service;
+- references an INTERNAL structure that merely FEEDS the ticket's surface — an intermediate payload, a "confirmation data"/DTO object, or a specific response field used to BUILD the output. Verify the surface the ticket names, NOT the data structure behind it;
+- makes a CROSS-COMPARISON that presumes a mechanism — never assert one value "must equal" / "matches" / "is the same as" another (e.g. "the return amount equals the outbound amount"); that presumes a copy/split. Assert the required value is present and correct ON ITS OWN.
+Every verification criterion must be observable, testable, and tied to the ticket's stated symptom/intent.
+
+Do NOT restate an acceptance criterion as-is — express what a tester OBSERVES that confirms it. Address every flag above.
+Output ONLY a JSON array of verification-criterion strings. No prose, no markdown.
+
+# Output
+```json
+[
+  "Invoking getGreeting() returns the string 'hello dolly'",
+  "The vitest test suite passes with no failures",
+  "Running tsc --noEmit exits with code 0"
+]
+```

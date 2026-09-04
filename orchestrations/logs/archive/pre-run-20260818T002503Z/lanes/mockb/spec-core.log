@@ -1,0 +1,29 @@
+spec-mode: fast-path qwen/z-ai/glm-5.2 (skipping MiniMax)
+Failed to parse JSON for tag SPEC_ASSIGNMENTS: Unexpected token 'T', "The code c"... is not valid JSON
+spec-mode: detective for mockb = mockb-schedule-investigator (minted for this codeline)
+spec-mode: fast-path qwen/z-ai/glm-5.2 (skipping MiniMax)
+spec-mode: search-term vocabulary unavailable for MOCK3-2 (Cannot read properties of null (reading 'cmd')) — seeding with an unfiltered query
+spec-mode: fast-path qwen/z-ai/glm-5.1 (skipping MiniMax)
+spec-mode: fast-path qwen/z-ai/glm-5.2 (skipping MiniMax)
+spec-mode: GUARD_VOCABULARY: missing required field "blacklist" — required by its own tool definition
+spec-mode: openspec run failed for MOCK3-2: VC guard could not be armed for MOCK3-2: the guard-vocabulary agent returned no usable terms after its full retry/ladder budget. A guard with no vocabulary checks nothing; refusing to proceed.
+spec-mode: openspec returned null for MOCK3-2 (attempt 2/3) — retrying transient failure
+spec-mode: detective for mockb = mockb-schedule-investigator (minted for this codeline)
+spec-mode: fast-path qwen/z-ai/glm-5.2 (skipping MiniMax)
+spec-mode: search-term vocabulary unavailable for MOCK3-2 (Cannot read properties of null (reading 'cmd')) — seeding with an unfiltered query
+spec-mode: fast-path qwen/z-ai/glm-5.1 (skipping MiniMax)
+spec-mode: fast-path qwen/z-ai/glm-5.2 (skipping MiniMax)
+spec-mode: VC guard flagged mechanism in MOCK3-2 VC: [Internal function name in src/schedule.ts that produces the rendered output; naming it in a criterion describes the mechanism (HOW), not the user-facing surface (the departure board). Traceable to code evidence: src/schedule.ts :: formatStops.] "Calling formatStops with an empty array returns an empty string without throwing"
+spec-mode: MOCK3-2 — 5 verification criteria persisted (source: both, resolution: regenerated)
+spec-mode: fast-path qwen/z-ai/glm-5.1 (skipping MiniMax)
+Failed to parse JSON for tag SPEC_AGENT: Unexpected token 'I', "I don't ha"... is not valid JSON
+spec-mode: SPEC_AGENT: no parseable output — the tag was missing, empty, or contained prose instead of JSON
+spec-mode: speckit returned null for MOCK3-2 (attempt 2/3) — retrying transient failure
+spec-mode: fast-path qwen/z-ai/glm-5.1 (skipping MiniMax)
+spec-mode: SPEC_AGENT: missing required field "storyId" — required by its own tool definition
+spec-mode: brownfield — ignoring 5 AC(s) speckit produced for MOCK3-2; ACs are out of scope and VCs come from the description
+spec-mode: fast-path qwen/z-ai/glm-5.2 (skipping MiniMax)
+spec-mode: fast-path qwen/z-ai/glm-5.2 (skipping MiniMax)
+spec-mode: MODEL_REVIEW: the array is empty — a report about nothing is not a report
+spec-mode: LLM model review completed for 0 stories
+spec-mode: completed for phase core (run 20260817T231306Z)

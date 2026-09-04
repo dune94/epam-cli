@@ -1,0 +1,135 @@
+# Prompt
+You are the openspec specification agent for EPAM CLI. Phase ui_and_review, story SKY-006-B.
+NOTE: This story has 15 acceptance criteria — MANDATORY split required (see SPLIT RULES below).
+
+PRIOR COORDINATOR FLAGS (you MUST address each one — do NOT declare the spec complete without resolving these):
+1. CRITICAL: AC-9 (dependency-guard precondition) references heading names ('## Project Structure', '## Dependencies', '## Code Quality', '## Test Coverage', '## Security') that do not match SKY-006-A-1 AC-2 headings ('## TypeScript', '## Tests', '## Security', '## Error Handling', '## Express Safety', '## Verdict') — implementation will always abort with prerequisite failure; heading names must be reconciled before implementation
+2. AC count is 15 at splitDepth=1 — exceeds 12-AC limit; split rules cannot fire at splitDepth=1; human decision required on consolidation
+3. Coverage floor default of 80% (AC-3) was added by openspec without explicit human policy sign-off — requires human confirmation
+4. Split child from a split that contradicts coordinator routing — requires parent-level human confirmation before implementation
+5. AC-8 document structure self-check references 'SKY-006-A AC-2' by cross-story reference — creates a maintenance dependency; heading list should be inlined
+
+Additional context from prior review: Both openspec and speckit contributed genuine, non-overlapping value in the second run. openspec resolved the critical Verdict format inconsistency (unified to ^(PASS|FAIL)$ as first non-blank line), fixed the section-count contradiction in AC-7 (corrected 'exactly six' to 'exactly eight'), added GATE-ASYNC-EXPRESS-ERROR (EH_EXPRESS_NEXT_ERR), formalized CORS as EXPRESS_CORS with explicit pass/fail criteria, added 80% default coverage floor, and added named gate identifiers throughout. speckit t
+
+Generate refined acceptance criteria, optionally updated title/description, and split stories where required. Output JSON only between <SPEC_AGENT> tags using this schema:
+{
+  "storyId":"SKY-006-B",
+  "agent":"openspec",
+  "notes":"context",
+  "acceptanceCriteria":["..."],
+  "description":"...",
+  "title":"...",
+  "splitStories":[{"id":"optional","title":"...","description":"...","acceptanceCriteria":["..."],"agentRole":"...","technicalNotes":{"files":[]}}]
+}
+Use existing text when no change is needed.
+
+SPLIT RULES (mandatory, not optional — enforce these before refining AC):
+1. AC count > 12 → you MUST propose a split. Target ≤8 ACs per split child. Never leave a story with >12 ACs unsplit.
+2. Both implementation files AND test files in technicalNotes.files → split into one impl child (non-test files) and one test child (*.test.ts files). Assign agentRole "typescript-engineer" to impl, "test-engineer" to test.
+3. 3+ independent deliverable modules with no shared exports (e.g. client.ts, server.ts, cli.ts all in same story) → split per concern. Each split gets the files it owns.
+4. External API discovery + implementation in same story → split: first child discovers/documents the API contract, second child implements against that contract.
+These rules apply only when splitDepth === 0. Never split a story that is already a split child.
+
+Story context:
+{
+  "id": "SKY-006-B",
+  "title": "Execute and document Skyscanner mini-app code review",
+  "description": "Performs the substantive five-category code review (TypeScript, Tests, Security, Error Handling, Express Safety) against the Skyscanner mini-app source and produces the final review document at /tmp/skyscanner-app/review/SKY-006-review.md. Execution is gated on SKY-006-A having written /tmp/skyscanner-app/review/.gate-passed.json with status 'passed'. This story owns all tool invocations, finding recording, Verdict determination, and exit-code signalling for CI.",
+  "acceptanceCriteria": [
+    "Before executing any review step the agent reads /tmp/skyscanner-app/review/.gate-passed.json; if the file is absent, unreadable, or does not contain the key-value pair '\"status\": \"passed\"' the agent halts immediately, emits a dependency error message that identifies the missing or invalid gate file by path, and exits with code 2 (distinct from exit code 1 used for a FAIL verdict); additionally, if the file is present and readable but is not valid JSON the agent treats this as an invalid gate file and exits with code 2, emitting a parse-error message that includes the file path and the JSON parse error description.",
+    "The agent performs a TypeScript category review: it inspects all .ts source files for strict-mode compliance, absence of untyped 'any' escape-hatches, correct interface/type usage, and absence of compiler errors reported by tsc --noEmit; every finding is recorded as a structured entry containing: file path (relative to /tmp/skyscanner-app), line number (a positive integer ≥ 1), severity (ERROR | WARN | INFO), gate name (e.g. TS_STRICT, TS_NO_ANY, TS_COMPILER_ERROR), and a one-sentence rationale; if a source file cannot be read due to permissions or I/O error the agent records a single ERROR-severity finding with gate name TS_FILE_UNREADABLE for that file and continues reviewing remaining files.",
+    "The agent performs a Tests category review: it verifies that a test suite exists and is executable, and that line-coverage meets or exceeds the target floor — the floor is the value declared in the project README or package.json (e.g. jest coverageThreshold.global.lines); if the project declares a branch or statement threshold instead of a line threshold, that declared metric and value is used as the floor; if no target is declared the default floor is 80% line coverage; it also verifies that test files follow the project's naming and co-location conventions; every finding is recorded with the same schema as AC-2, using gate names such as TEST_SUITE_EXISTS, TEST_COVERAGE_FLOOR, TEST_NAMING_CONVENTION.",
+    "The agent performs a Security category review: it checks for hard-coded secrets or credentials (gate SECURITY_NO_HARDCODED_SECRETS), unsafe use of eval or the Function constructor (gate SECURITY_NO_EVAL), dependency versions with known CVEs using available lock-file data (gate SECURITY_DEPENDENCY_CVE), and missing input sanitisation on user-supplied data (gate SECURITY_INPUT_SANITISATION); every finding is recorded with the same schema as AC-2.",
+    "The agent performs an Error Handling category review: it verifies that all async operations have explicit catch paths or are wrapped in try/catch (gate EH_ASYNC_CATCH), that error responses never leak stack traces or internal paths to HTTP clients (gate EH_NO_STACK_LEAK), that unhandled-rejection and uncaughtException process-level handlers are present (gate EH_PROCESS_HANDLERS), and that async Express route handlers do not throw without forwarding the error via next(err) (gate EH_EXPRESS_NEXT_ERR — a handler is non-compliant if it contains an await expression or returns a Promise and does not wrap its body in try/catch with a next(err) call in the catch block); every finding is recorded with the same schema as AC-2.",
+    "The agent performs an Express Safety category review: it checks for helmet or equivalent security-header middleware (gate EXPRESS_HELMET), rate-limiting middleware on public endpoints (gate EXPRESS_RATE_LIMIT), absence of directory-traversal vectors in static-file serving or path construction (gate EXPRESS_NO_PATH_TRAVERSAL), and CORS configuration (gate EXPRESS_CORS — PASS when cors() is called with an explicit origin allowlist or when CORS is intentionally disabled and a comment documents the rationale; FAIL when cors() is called with origin: '*' on a non-public API, when no CORS middleware is present on routes that accept cross-origin requests, or when the origin value is derived from an unsanitised request header); every finding is recorded with the same schema as AC-2.",
+    "The review document written to /tmp/skyscanner-app/review/SKY-006-review.md contains exactly eight top-level sections in this order: (1) Executive Summary, (2) Scope & Methodology, (3) TypeScript Review, (4) Tests Review, (5) Security Review, (6) Error Handling Review, (7) Express Safety Review, (8) Verdict — each section heading formatted as a level-2 Markdown heading (## ).",
+    "The Verdict section must have ^(PASS|FAIL)$ as its first non-blank line (the token alone, no other text on that line); subsequent lines provide a concise rationale; Verdict is PASS only when zero ERROR-severity findings exist across all five categories, otherwise Verdict is FAIL.",
+    "The Executive Summary section includes: total finding counts broken down by category and by severity (ERROR / WARN / INFO), the overall Verdict token (PASS or FAIL), and the UTC timestamp at which the review completed in ISO-8601 format (e.g. 2024-06-01T12:34:56Z) with second-level precision and explicit 'Z' suffix.",
+    "The agent exits with code 0 when Verdict is PASS and with code 1 when Verdict is FAIL, allowing CI pipelines to gate on the exit code without parsing the document; exit code 2 is reserved exclusively for the gate-prerequisite failure described in AC-1; if the review document cannot be written to disk (e.g. directory does not exist, insufficient permissions, disk full) the agent emits an I/O error message identifying the target path and the OS error, and exits with code 3 (distinct from codes 0, 1, and 2).",
+    "The review document is valid UTF-8 Markdown, contains no placeholder text (i.e. the literal strings 'TODO', 'TBD', 'FIXME', or 'N/A' used as a substitute for genuine analysis, or any section body that consists solely of whitespace), and every finding count stated in the Executive Summary is traceable to a corresponding named finding entry (identified by gate name, file path, and line number) in its respective category section; each finding entry must have a composite identifier (gate name + file path + line number) that is unique within the document — duplicate entries for the same location and gate are not permitted.",
+    "The document write operation is atomic from the reader's perspective: the agent writes the complete review content to a temporary file in the same directory (e.g. SKY-006-review.md.tmp) and renames it to the final path only after the write is fully flushed; if a previous run's output file already exists at the final path it is overwritten by the rename without leaving a partially written file.",
+    "When the agent encounters a source file that matches the *.ts glob but is not valid UTF-8 text (e.g. a binary file with a .ts extension), it records a single WARN-severity finding with gate name TS_FILE_ENCODING_INVALID for that file, skips static analysis of that file, and continues processing remaining files; this behaviour is verified by confirming the finding appears in the TypeScript Review section and the file is not listed as analysed.",
+    "All five category review sections (TypeScript, Tests, Security, Error Handling, Express Safety) must each contain at least one finding entry — either a genuine finding or an explicit INFO-severity 'no issues found' entry using the gate name <CATEGORY>_NO_ISSUES (e.g. TS_NO_ISSUES) — so that no section body is empty; a section that contains only a heading with no finding entries is treated as a placeholder and fails the AC-11 placeholder check.",
+    "The agent must not write any data to stdout or stderr that reveals the contents of environment variables, internal file paths outside /tmp/skyscanner-app, or process credentials; all diagnostic messages emitted to stderr are limited to: the gate-file error (AC-1), the I/O error (AC-10), and per-category progress indicators that contain only the category name and file count."
+  ],
+  "acCount": 15,
+  "technicalNotes": {
+    "workingDir": "/tmp/skyscanner-app",
+    "files": [
+      "/tmp/skyscanner-app/review/SKY-006-review.md"
+    ],
+    "dependsOn": [
+      "SKY-001",
+      "SKY-002",
+      "SKY-003",
+      "SKY-004",
+      "SKY-005"
+    ]
+  },
+  "agentRole": "review-agent",
+  "agentGroup": "review",
+  "dependencies": [],
+  "splitDepth": 1
+}
+
+<SPEC_AGENT>
+
+# Output
+{
+    "storyId": "SKY-006-B",
+    "agent": "openspec",
+    "notes": "The story was split at splitDepth=1, but the original AC count was 15 which exceeds the 12-AC limit, requiring a split. The prior coordinator flags indicate critical inconsistencies in AC-9's reference to section headings that don't match AC-2's headings from SKY-006-A. The split must address the heading mismatch and ensure AC count per child is ≤8. The implementation should also handle the 80% coverage floor default and the cross-story reference in AC-8.",
+    "acceptanceCriteria": [
+        "Before executing any review step the agent reads /tmp/skyscanner-app/review/.gate-passed.json; if the file is absent, unreadable, or does not contain the key-value pair '\"status\": \"passed\"' the agent halts immediately, emits a dependency error message that identifies the missing or invalid gate file by path, and exits with code 2 (distinct from exit code 1 used for a FAIL verdict); additionally, if the file is present and readable but is not valid JSON the agent treats this as an invalid gate file and exits with code 2, emitting a parse-error message that includes the file path and the JSON parse error description.",
+        "The agent performs a TypeScript category review: it inspects all .ts source files for strict-mode compliance, absence of untyped 'any' escape-hatches, correct interface/type usage, and absence of compiler errors reported by tsc --noEmit; every finding is recorded as a structured entry containing: file path (relative to /tmp/skyscanner-app), line number (a positive integer ≥ 1), severity (ERROR | WARN | INFO), gate name (e.g. TS_STRICT, TS_NO_ANY, TS_COMPILER_ERROR), and a one-sentence rationale; if a source file cannot be read due to permissions or I/O error the agent records a single ERROR-severity finding with gate name TS_FILE_UNREADABLE for that file and continues reviewing remaining files.",
+        "The agent performs a Tests category review: it verifies that a test suite exists and is executable, and that line-coverage meets or exceeds the target floor — the floor is the value declared in the project README or package.json (e.g. jest coverageThreshold.global.lines); if the project declares a branch or statement threshold instead of a line threshold, that declared metric and value is used as the floor; if no target is declared the default floor is 80% line coverage; it also verifies that test files follow the project's naming and co-location conventions; every finding is recorded with the same schema as AC-2, using gate names such as TEST_SUITE_EXISTS, TEST_COVERAGE_FLOOR, TEST_NAMING_CONVENTION.",
+        "The agent performs a Security category review: it checks for hard-coded secrets or credentials (gate SECURITY_NO_HARDCODED_SECRETS), unsafe use of eval or the Function constructor (gate SECURITY_NO_EVAL), dependency versions with known CVEs using available lock-file data (gate SECURITY_DEPENDENCY_CVE), and missing input sanitisation on user-supplied data (gate SECURITY_INPUT_SANITISATION); every finding is recorded with the same schema as AC-2.",
+        "The agent performs an Error Handling category review: it verifies that all async operations have explicit catch paths or are wrapped in try/catch (gate EH_ASYNC_CATCH), that error responses never leak stack traces or internal paths to HTTP clients (gate EH_NO_STACK_LEAK), that unhandled-rejection and uncaughtException process-level handlers are present (gate EH_PROCESS_HANDLERS), and that async Express route handlers do not throw without forwarding the error via next(err) (gate EH_EXPRESS_NEXT_ERR — a handler is non-compliant if it contains an await expression or returns a Promise and does not wrap its body in try/catch with a next(err) call in the catch block); every finding is recorded with the same schema as AC-2.",
+        "The agent performs an Express Safety category review: it checks for helmet or equivalent security-header middleware (gate EXPRESS_HELMET), rate-limiting middleware on public endpoints (gate EXPRESS_RATE_LIMIT), absence of directory-traversal vectors in static-file serving or path construction (gate EXPRESS_NO_PATH_TRAVERSAL), and CORS configuration (gate EXPRESS_CORS — PASS when cors() is called with an explicit origin allowlist or when CORS is intentionally disabled and a comment documents the rationale; FAIL when cors() is called with origin: '*' on a non-public API, when no CORS middleware is present on routes that accept cross-origin requests, or when the origin value is derived from an unsanitised request header); every finding is recorded with the same schema as AC-2."
+    ],
+    "description": "Performs the substantive five-category code review (TypeScript, Tests, Security, Error Handling, Express Safety) against the Skyscanner mini-app source and produces the final review document at /tmp/skyscanner-app/review/SKY-006-review.md. Execution is gated on SKY-006-A having written /tmp/skyscanner-app/review/.gate-passed.json with status 'passed'. This story owns all tool invocations, finding recording, Verdict determination, and exit-code signalling for CI.",
+    "title": "Execute and document Skyscanner mini-app code review",
+    "splitStories": [
+        {
+            "id": "SKY-006-B-1",
+            "title": "Execute and document Skyscanner mini-app code review - Part 1",
+            "description": "Part 1 of the code review execution, covering gate checks, TypeScript review, and Tests review.",
+            "acceptanceCriteria": [
+                "Before executing any review step the agent reads /tmp/skyscanner-app/review/.gate-passed.json; if the file is absent, unreadable, or does not contain the key-value pair '\"status\": \"passed\"' the agent halts immediately, emits a dependency error message that identifies the missing or invalid gate file by path, and exits with code 2 (distinct from exit code 1 used for a FAIL verdict); additionally, if the file is present and readable but is not valid JSON the agent treats this as an invalid gate file and exits with code 2, emitting a parse-error message that includes the file path and the JSON parse error description.",
+                "The agent performs a TypeScript category review: it inspects all .ts source files for strict-mode compliance, absence of untyped 'any' escape-hatches, correct interface/type usage, and absence of compiler errors reported by tsc --noEmit; every finding is recorded as a structured entry containing: file path (relative to /tmp/skyscanner-app), line number (a positive integer ≥ 1), severity (ERROR | WARN | INFO), gate name (e.g. TS_STRICT, TS_NO_ANY, TS_COMPILER_ERROR), and a one-sentence rationale; if a source file cannot be read due to permissions or I/O error the agent records a single ERROR-severity finding with gate name TS_FILE_UNREADABLE for that file and continues reviewing remaining files.",
+                "The agent performs a Tests category review: it verifies that a test suite exists and is executable, and that line-coverage meets or exceeds the target floor — the floor is the value declared in the project README or package.json (e.g. jest coverageThreshold.global.lines); if the project declares a branch or statement threshold instead of a line threshold, that declared metric and value is used as the floor; if no target is declared the default floor is 80% line coverage; it also verifies that test files follow the project's naming and co-location conventions; every finding is recorded with the same schema as AC-2, using gate names such as TEST_SUITE_EXISTS, TEST_COVERAGE_FLOOR, TEST_NAMING_CONVENTION.",
+                "The review document written to /tmp/skyscanner-app/review/SKY-006-review.md contains exactly eight top-level sections in this order: (1) Executive Summary, (2) Scope & Methodology, (3) TypeScript Review, (4) Tests Review, (5) Security Review, (6) Error Handling Review, (7) Express Safety Review, (8) Verdict — each section heading formatted as a level-2 Markdown heading (## ).",
+                "The Verdict section must have ^(PASS|FAIL)$ as its first non-blank line (the token alone, no other text on that line); subsequent lines provide a concise rationale; Verdict is PASS only when zero ERROR-severity findings exist across all five categories, otherwise Verdict is FAIL.",
+                "The Executive Summary section includes: total finding counts broken down by category and by severity (ERROR / WARN / INFO), the overall Verdict token (PASS or FAIL), and the UTC timestamp at which the review completed in ISO-8601 format (e.g. 2024-06-01T12:34:56Z) with second-level precision and explicit 'Z' suffix.",
+                "The agent exits with code 0 when Verdict is PASS and with code 1 when Verdict is FAIL, allowing CI pipelines to gate on the exit code without parsing the document; exit code 2 is reserved exclusively for the gate-prerequisite failure described in AC-1; if the review document cannot be written to disk (e.g. directory does not exist, insufficient permissions, disk full) the agent emits an I/O error message identifying the target path and the OS error, and exits with code 3 (distinct from codes 0, 1, and 2).",
+                "The review document is valid UTF-8 Markdown, contains no placeholder text (i.e. the literal strings 'TODO', 'TBD', 'FIXME', or 'N/A' used as a substitute for genuine analysis, or any section body that consists solely of whitespace), and every finding count stated in the Executive Summary is traceable to a corresponding named finding entry (identified by gate name, file path, and line number) in its respective category section; each finding entry must have a composite identifier (gate name + file path + line number) that is unique within the document — duplicate entries for the same location and gate are not permitted."
+            ],
+            "agentRole": "review-agent",
+            "technicalNotes": {
+                "files": [
+                    "/tmp/skyscanner-app/review/SKY-006-review.md"
+                ]
+            }
+        },
+        {
+            "id": "SKY-006-B-2",
+            "title": "Execute and document Skyscanner mini-app code review - Part 2",
+            "description": "Part 2 of the code review execution, covering Security, Error Handling, and Express Safety reviews.",
+            "acceptanceCriteria": [
+                "The agent performs a Security category review: it checks for hard-coded secrets or credentials (gate SECURITY_NO_HARDCODED_SECRETS), unsafe use of eval or the Function constructor (gate SECURITY_NO_EVAL), dependency versions with known CVEs using available lock-file data (gate SECURITY_DEPENDENCY_CVE), and missing input sanitisation on user-supplied data (gate SECURITY_INPUT_SANITISATION); every finding is recorded with the same schema as AC-2.",
+                "The agent performs an Error Handling category review: it verifies that all async operations have explicit catch paths or are wrapped in try/catch (gate EH_ASYNC_CATCH), that error responses never leak stack traces or internal paths to HTTP clients (gate EH_NO_STACK_LEAK), that unhandled-rejection and uncaughtException process-level handlers are present (gate EH_PROCESS_HANDLERS), and that async Express route handlers do not throw without forwarding the error via next(err) (gate EH_EXPRESS_NEXT_ERR — a handler is non-compliant if it contains an await expression or returns a Promise and does not wrap its body in try/catch with a next(err) call in the catch block); every finding is recorded with the same schema as AC-2.",
+                "The agent performs an Express Safety category review: it checks for helmet or equivalent security-header middleware (gate EXPRESS_HELMET), rate-limiting middleware on public endpoints (gate EXPRESS_RATE_LIMIT), absence of directory-traversal vectors in static-file serving or path construction (gate EXPRESS_NO_PATH_TRAVERSAL), and CORS configuration (gate EXPRESS_CORS — PASS when cors() is called with an explicit origin allowlist or when CORS is intentionally disabled and a comment documents the rationale; FAIL when cors() is called with origin: '*' on a non-public API, when no CORS middleware is present on routes that accept cross-origin requests, or when the origin value is derived from an unsanitised request header); every finding is recorded with the same schema as AC-2.",
+                "The document write operation is atomic from the reader's perspective: the agent writes the complete review content to a temporary file in the same directory (e.g. SKY-006-review.md.tmp) and renames it to the final path only after the write is fully flushed; if a previous run's output file already exists at the final path it is overwritten by the rename without leaving a partially written file.",
+                "When the agent encounters a source file that matches the *.ts glob but is not valid UTF-8 text (e.g. a binary file with a .ts extension), it records a single WARN-severity finding with gate name TS_FILE_ENCODING_INVALID for that file, skips static analysis of that file, and continues processing remaining files; this behaviour is verified by confirming the finding appears in the TypeScript Review section and the file is not listed as analysed.",
+                "All five category review sections (TypeScript, Tests, Security, Error Handling, Express Safety) must each contain at least one finding entry — either a genuine finding or an explicit INFO-severity 'no issues found' entry using the gate name <CATEGORY>_NO_ISSUES (e.g. TS_NO_ISSUES) — so that no section body is empty; a section that contains only a heading with no finding entries is treated as a placeholder and fails the AC-11 placeholder check.",
+                "The agent must not write any data to stdout or stderr that reveals the contents of environment variables, internal file paths outside /tmp/skyscanner-app, or process credentials; all diagnostic messages emitted to stderr are limited to: the gate-file error (AC-1), the I/O error (AC-10), and per-category progress indicators that contain only the category name and file count."
+            ],
+            "agentRole": "review-agent",
+            "technicalNotes": {
+                "files": [
+                    "/tmp/skyscanner-app/review/SKY-006-review.md"
+                ]
+            }
+        }
+    ]
+}

@@ -1,0 +1,68 @@
+[update-invalidated-tests] suite already green — no invalidated tests, nothing to do
+[update-invalidated-tests] suite already green — no invalidated tests, nothing to do
+[update-invalidated-tests] suite already green — no invalidated tests, nothing to do
+[update-invalidated-tests] suite already green — no invalidated tests, nothing to do
+[update-invalidated-tests] suite is RED after the fix — deciding whether the failures are invalidated expectations or a real regression
+[update-invalidated-tests] BLOCKED — reported as a REGRESSION, not an invalidated expectation:
+    REGRESSION: The test suite is failing due to missing 'lodash-es' dependency, not due to the Contentstack live preview fix.
+[update-invalidated-tests] the fix is suspect; NOT rewriting any test to hide it
+[update-invalidated-tests] suite already green — no invalidated tests, nothing to do
+[update-invalidated-tests] suite is RED after the fix — deciding whether the failures are invalidated expectations or a real regression
+[update-invalidated-tests] BLOCKED — suite still RED after the update attempt (the fix or the update is wrong)
+           99 |     it("should return date of format DD mon YYYY", () => {
+        > 100 |       expect(getDateString("05/08/2021 GMT", "fr")).toEqual("8 mai 2021");
+              |                                                     ^
+          101 |     });
+          102 |
+          103 |     it("should return Invalid Date", () => {
+    
+          at Object.toEqual (src/utils/__tests__/common.spec.ts:100:53)
+    
+    
+    Test Suites: 2 failed, 1 skipped, 242 passed, 244 of 245 total
+    Tests:       2 failed, 6 skipped, 791 passed, 799 total
+    Snapshots:   12 passed, 12 total
+    Time:        8.267 s
+    Ran all test suites.[update-invalidated-tests] suite is RED after the fix — deciding whether the failures are invalidated expectations or a real regression
+[update-invalidated-tests] BLOCKED — reported as a REGRESSION, not an invalidated expectation:
+    REGRESSION: Date formatting tests fail due to timezone handling changes that may have introduced unintended side effects in date conversion logic
+[update-invalidated-tests] the fix is suspect; NOT rewriting any test to hide it
+[update-invalidated-tests] suite already green — no invalidated tests, nothing to do
+[update-invalidated-tests] suite already green — no invalidated tests, nothing to do
+[update-invalidated-tests] suite already green — no invalidated tests, nothing to do
+[update-invalidated-tests] suite already green — no invalidated tests, nothing to do
+[update-invalidated-tests] suite already green — no invalidated tests, nothing to do
+[update-invalidated-tests] suite is RED after the fix — deciding whether the failures are invalidated expectations or a real regression
+[update-invalidated-tests] BLOCKED — reported as a REGRESSION, not an invalidated expectation:
+    REGRESSION: The test failures are due to console warnings about Image components that now correctly don't have width/height properties when using layout='fill', but these are not actual test assertion failures. The warnings indicate the fix is working correctly, and the actual test functionality appears intact. The test file should not be modified because there are no failing assertions that reflect the old buggy behavior.
+[update-invalidated-tests] the fix is suspect; NOT rewriting any test to hide it
+[update-invalidated-tests] suite already green — no invalidated tests, nothing to do
+[update-invalidated-tests] suite is RED after the fix — deciding whether the failures are invalidated expectations or a real regression
+[update-invalidated-tests] BLOCKED — reported as a REGRESSION, not an invalidated expectation:
+    REGRESSION: The provided output shows no test failures but indicates the test suite should be RED, making it impossible to determine if this represents old buggy behavior or a regression without actual failing tests to analyze.
+[update-invalidated-tests] the fix is suspect; NOT rewriting any test to hide it
+[update-invalidated-tests] suite already green — no invalidated tests, nothing to do
+[update-invalidated-tests] suite already green — no invalidated tests, nothing to do
+[update-invalidated-tests] suite already green — no invalidated tests, nothing to do
+[update-invalidated-tests] suite already green — no invalidated tests, nothing to do
+[update-invalidated-tests] suite already green — no invalidated tests, nothing to do
+[update-invalidated-tests] suite already green — no invalidated tests, nothing to do
+[update-invalidated-tests] suite already green — no invalidated tests, nothing to do
+[update-invalidated-tests] suite already green — no invalidated tests, nothing to do
+[update-invalidated-tests] suite already green — no invalidated tests, nothing to do
+[update-invalidated-tests] suite already green — no invalidated tests, nothing to do
+[update-invalidated-tests] suite already green — no invalidated tests, nothing to do
+[update-invalidated-tests] suite already green — no invalidated tests, nothing to do
+[update-invalidated-tests] suite already green — no invalidated tests, nothing to do
+[update-invalidated-tests] suite already green — no invalidated tests, nothing to do
+[update-invalidated-tests] suite already green — no invalidated tests, nothing to do
+[update-invalidated-tests] suite already green — no invalidated tests, nothing to do
+[update-invalidated-tests] suite already green — no invalidated tests, nothing to do
+[update-invalidated-tests] suite already green — no invalidated tests, nothing to do
+[update-invalidated-tests] suite already green — no invalidated tests, nothing to do
+[update-invalidated-tests] suite already green — no invalidated tests, nothing to do
+[update-invalidated-tests] suite already green — no invalidated tests, nothing to do
+[update-invalidated-tests] suite already green — no invalidated tests, nothing to do
+[update-invalidated-tests] suite already green — no invalidated tests, nothing to do
+[update-invalidated-tests] suite already green — no invalidated tests, nothing to do
+[update-invalidated-tests] suite already green — no invalidated tests, nothing to do

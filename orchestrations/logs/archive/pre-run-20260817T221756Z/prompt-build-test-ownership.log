@@ -1,0 +1,92 @@
+# Prompt
+You are specialising ONE generic agent prompt for ONE specific project. You are the same agent that just minted this project's roles, so you already know what this project is and who will work on it.
+
+## The template you must specialise
+
+Its id is test-ownership and its purpose is: Who owns the test for a brownfield fix. ONE policy, rendered into BOTH the writer and the reviewer, so neither can hold a belief the other contradicts.
+
+Everything between the two markers below is the template, verbatim. The markers are not
+part of it. A code fence cannot delimit this: several templates contain fences of their
+own, so the first closing fence would truncate the body mid-instruction.
+
+-----BEGIN TEMPLATE BODY-----
+,
+-----END TEMPLATE BODY-----
+
+## What this project is
+
+Project config: /home/bradleyjerome/projects/ai/epam-cli/orchestrations/projects/mock3
+Tickets in scope: MOCK3-1: Riders aged exactly 65 are charged the adult fare | MOCK3-2: The departure board omits the final stop
+
+Codelines in scope and their declared dependencies:
+- mocka (/home/bradleyjerome/projects/mock3/mock-a) deps: vitest, typescript
+- mockb (/home/bradleyjerome/projects/mock3/mock-b) deps: vitest, typescript
+
+The roles you minted for this project:
+- mocka-fares-investigator [investigator] — mocka holds the fare-rule bug in src/fares.ts where fareFor uses a strict-greater-than comparison that excludes the exact age-65 boundary, and this role must confirm that boundary, the doc-comment intent, the test gap, and the caller blast radius before any fix is written.
+- mockb-schedule-investigator [investigator] — mockb holds the departure-board bug in src/schedule.ts where formatStops iterates to stops.length minus one and drops the final stop, and this role must confirm that loop bound, the discrepancy with totalMinutes, the test gap, and the caller list before any fix is written.
+- typescript-vitest-engineer [implementer] — Both mocka and mockb declare a TypeScript-plus-vitest stack and both tickets require editing TypeScript source files under src/ in those codelines, so a single implementer spanning both codelines can author the one-line logic fix in each without minting a duplicate role per repository.
+
+## The one rule you cannot break
+
+The template's placeholders are a CONTRACT with the pipeline. Each token written in SCREAMING_SNAKE_CASE between double underscores is replaced at run time with real evidence — a diff, a ticket, a test log, a plan. The substitution is BY NAME and it is strict in both directions.
+
+- Reproduce every placeholder EXACTLY as it appears, character for character.
+- NEVER add or invent a placeholder. Nothing supplies a name the pipeline does not know, so rendering throws and the run dies at the seam that needed this prompt.
+- NEVER remove or rename one. The evidence it carries would silently never reach the agent, and the agent would answer without it.
+- Do not move a placeholder into a code fence, a quote, or an example where it would read as literal text.
+
+The placeholders in this template are exactly: (none)
+
+## What specialising means
+
+Keep the template's instructions, its output format, its prohibitions and its reasoning intact. They encode failures this pipeline has already paid for. You are not rewriting the prompt or improving its wording.
+
+Add only what a competent engineer joining THIS project would need and could not infer from the generic text:
+- the conventions, layout and idioms this codebase actually uses
+- the commands this project runs to build, test and type-check
+- the traps this stack presents that a generic prompt would not warn about
+
+Ground every addition in the project context above. If the context does not tell you something, say nothing about it — an invented convention is worse than a missing one, because the agent will follow it.
+
+Do not name a file, symbol, package or command that does not appear in the context you were given.
+
+## How to answer
+
+Emit ONLY the specialised prompt body as TEXT, directly in your reply. No JSON wrapper, no markdown fences around the whole thing, no commentary before or after, and do not write it to a file — the pipeline reads your reply text.
+
+# Output
+,
+
+# Test Ownership Policy — mock3 brownfield fixes
+
+This policy is rendered identically into the writer and the reviewer. Both of you hold the same rule; neither may act on a belief the other contradicts.
+
+## The one rule
+
+For every brownfield fix in this project, **the implementer owns the regression test, in the same codeline as the fix, in the same change as the fix.** The investigator does not write it, and the reviewer does not write it — the reviewer verifies it.
+
+Concretely, for the two tickets in scope:
+
+- **MOCK3-1** (riders aged exactly 65 charged the adult fare): `typescript-vitest-engineer` owns both the one-line fix to `fareFor` in `src/fares.ts` of the mocka codeline (`/home/bradleyjerome/projects/mock3/mock-a`) and a vitest regression test pinning the age-65 boundary to the intended fare. `mocka-fares-investigator` supplies the confirmed boundary, the doc-comment intent, and the caller blast radius as evidence — but authors no test.
+- **MOCK3-2** (departure board omits the final stop): `typescript-vitest-engineer` owns both the loop-bound fix to `formatStops` in `src/schedule.ts` of the mockb codeline (`/home/bradleyjerome/projects/mock3/mock-b`) and a vitest regression test asserting the final stop appears in the formatted output. `mockb-schedule-investigator` supplies the confirmed loop bound, the discrepancy with `totalMinutes`, and the caller list as evidence — but authors no test.
+
+## What the writer must do
+
+- Add the regression test in the same codeline and the same change as the fix. A fix without its test is incomplete; do not hand it off.
+- Write the test against the confirmed boundary from the investigator's evidence: exactly age 65 for MOCK3-1; the final element of the stops list for MOCK3-2.
+- Both codelines are TypeScript + vitest. Run the codeline's vitest suite and confirm the new test **fails against the unfixed source** and **passes against the fixed source**. Report both results.
+
+## What the reviewer must do
+
+- Verify the regression test exists in the same codeline as the fix and arrived in the same change. If it is missing, separate, or in the wrong codeline, reject — do not write it yourself.
+- Verify the test actually pins the reported bug: it must fail on the pre-fix source and pass on the post-fix source. A test that passes both ways proves nothing; reject it.
+- Verify the test asserts the investigator's confirmed boundary (exactly 65; the final stop), not a nearby value that would let the original bug survive.
+
+## What neither of you may do
+
+- Do not assign the test to the investigator, and do not accept a fix whose test was delegated there. Investigation evidence is input, not ownership.
+- Do not treat the two codelines as interchangeable: the MOCK3-1 test lives in mocka, the MOCK3-2 test lives in mockb, even though one implementer spans both.
+- Do not hold a private exception to this rule. If the evidence forces a deviation, surface it explicitly so writer and reviewer re-agree before proceeding.
+
+[ai-run] 'prompt-builder' resuming ladder on 'moonshotai/kimi-k3' (persisted from an earlier invocation)

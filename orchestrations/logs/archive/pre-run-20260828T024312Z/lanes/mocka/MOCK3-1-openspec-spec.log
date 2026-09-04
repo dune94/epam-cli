@@ -1,0 +1,159 @@
+# Prompt
+You are the openspec specification agent for EPAM CLI. Phase core, story MOCK3-1.
+
+LOCATED FIX SITE(S) — traced in this repository before you were asked. Anchor every criterion to the behaviour THIS code produces:
+- src/fares.ts :: fareFor — This function computes the fare for a rider. The comparison `rider.age > 65` on line 10 excludes age 65 from the concession tier, causing riders aged exactly 65 to fall through to the base fare. Changing `>` to `>=` makes age 65 satisfy the condition, producing the concession fare as the rules require.
+- test/fares.test.ts :: fareFor — This test file exercises fareFor but does not cover age 65 (the boundary). Existing tests use ages 8, 30, and 70. After the production fix, all existing tests still pass, but age 65 remains untested. This file needs no edit (test agent owns it), only verification that existing tests continue to pass.
+
+
+DECLARED FILES — the actual contents of the files this story names or the detective located. Base every observable criterion on what THIS code does, not on what the title suggests:
+--- src/fares.ts
+/** Fare rules for a transit line. Ages are whole years. */
+export type Rider = { age: number; hasPass: boolean };
+
+export const BASE_FARE_CENTS = 350;
+export const CONCESSION_FARE_CENTS = 175;
+
+/** Riders aged 65 AND OVER pay the concession fare. */
+export function fareFor(rider: Rider): number {
+  if (rider.hasPass) return 0;
+  if (rider.age > 65) return CONCESSION_FARE_CENTS;
+  if (rider.age < 13) return CONCESSION_FARE_CENTS;
+  return BASE_FARE_CENTS;
+}
+
+export function totalFor(riders: Rider[]): number {
+  return riders.reduce((sum, r) => sum + fareFor(r), 0);
+}
+
+--- test/fares.test.ts
+import { describe, it, expect } from 'vitest';
+import { fareFor, BASE_FARE_CENTS, CONCESSION_FARE_CENTS } from '../src/fares';
+
+describe('fareFor', () => {
+  it('charges the base fare for an adult', () => {
+    expect(fareFor({ age: 30, hasPass: false })).toBe(BASE_FARE_CENTS);
+  });
+  it('charges nothing when the rider holds a pass', () => {
+    expect(fareFor({ age: 30, hasPass: true })).toBe(0);
+  });
+  it('charges the concession fare for a child', () => {
+    expect(fareFor({ age: 8, hasPass: false })).toBe(CONCESSION_FARE_CENTS);
+  });
+  it('charges the concession fare well past the senior boundary', () => {
+    expect(fareFor({ age: 70, hasPass: false })).toBe(CONCESSION_FARE_CENTS);
+  });
+});
+
+
+
+BROWNFIELD MODE — answer as JSON.
+You MAY use read_file on any path named in this prompt (declared files, located fix sites, and any
+document persisted under the run's docs/ directory) when you need more than the excerpt shown.
+Looking is allowed; inventing is not — a file you have neither been shown nor read is a fabrication.
+
+STEP 1 — CLASSIFY THIS STORY. Set "storyKind":
+- "defect" if it reports that EXISTING behavior is wrong, broken, or produces an incorrect/missing result (a bug).
+- "novel" if it asks for a NEW capability that does not exist in the codebase yet. A brownfield story is not always a bug — genuinely new work is "novel".
+
+STEP 2 — LOCATE (always, for both kinds — but the question differs).
+Use ONLY the EXISTING CODE block already present in this prompt (injected above via CodeGraph or Semble).
+
+- If storyKind is "defect": find the FIX SITE — the file/function that COMPUTES the wrong value, not the one that displays it.
+- If storyKind is "novel": there is no fix site, and inventing one produces a confident wrong answer. Find the ATTACHMENT POINT instead — the existing file/function this new capability plugs INTO (the provider, hook, route, config or component it must integrate with), plus anything already present that the implementation should REUSE rather than rewrite. This is what keeps the change as small as possible: you cannot reuse what you have not found.
+
+Set "locationHint" to [{"file":"<repo-relative path>","function":"<function name>","reason":"<why this location — the fix site for a defect, the attachment point for a novel story>"}].
+If no relevant code appears above, set locationHint to []. Do NOT invent a plausible file: a named file whose contents you cannot see in this prompt is a fabrication, and an empty locationHint is a usable answer while a fabricated one is not.
+
+For EACH criterion also declare WHO observes it (end user, tester, api client, operator) and
+WHAT SURFACE they look at — the rendered page, the API response, the CLI output, a generated
+file. If no person or client can see it, it is not a verification criterion. A precondition
+the test establishes (for example a mocked client signalling a change) goes in "setup": that
+is allowed and is not implementation prescription.
+
+STEP 3 — VERIFICATION CRITERIA (do NOT touch the acceptance criteria).
+The acceptanceCriteria are the IMMUTABLE ticket intent — copy the existing array through VERBATIM: never reword, split, add, remove, re-scope, or inject any implementation mechanism into them.
+Instead, PRODUCE a "verificationCriteriaDetail" array — concrete, OBSERVABLE checks that confirm the change is correct — derived from the acceptance criteria AND the description. Apply these rules to EVERY verification criterion (a strict reviewer holds you to this SAME text, so a VC that breaks any rule will be flagged and rejected):
+A verification criterion states WHAT AN END USER OR TESTER OBSERVES on the user-facing surface THE TICKET IS ABOUT — the rendered output for an output ticket, the displayed screen for a UI ticket, the response a CLIENT receives for an API ticket. It is a BLACK-BOX check on that surface. It NEVER describes HOW the value is produced.
+A verification criterion is FORBIDDEN if it:
+- prescribes HOW to implement — any algorithm, mechanism, approach, or the addition/reading of any new field, flag or service;
+- references an INTERNAL structure that merely FEEDS the ticket's surface — an intermediate payload, a data-transfer object, or a specific response field used to BUILD the output. Verify the surface the ticket names, NOT the data structure behind it;
+- makes a CROSS-COMPARISON that presumes a mechanism — never assert one value "must equal" / "matches" / "is the same as" another; that presumes a shared derivation. Assert the required value is present and correct ON ITS OWN.
+Every verification criterion must be observable, testable, and tied to the ticket's stated symptom/intent.
+- If the ticket describes a SYMPTOM, the VCs verify that symptom is resolved AND that related existing behavior does not regress.
+Set "vcSource" to one of "acceptance", "description", "both" — where you actually derived the VCs from.
+
+Generate refined acceptance criteria and optionally updated title/description. Output raw JSON only (no XML tags, no markdown fences, no preamble) using this schema:
+{
+  "storyId":"MOCK3-1",
+  "agent":"openspec",
+  "notes":"context",
+  "acceptanceCriteria":["..."],
+  "description":"...",
+  "title":"...",
+  "storyKind":"defect|novel",
+  "verificationCriteriaDetail":[{"criterion":"<observable check>","observer":"end user|tester|api client|operator","surface":"<what they look at>","setup":"<optional precondition, e.g. a mocked client signalling a change>"}],
+  "vcSource":"acceptance|description|both",
+  "locationHint":[{"file":"path/relative/to/repo","function":"functionName","reason":"why this location — the fix site for a defect, the attachment point it integrates with for a novel story"}]
+}
+Use existing text when no change is needed.
+
+Story context:
+{
+  "id": "MOCK3-1",
+  "title": "Riders aged exactly 65 are charged the adult fare",
+  "description": "The fare rules say riders aged 65 and over pay the concession fare. A rider aged exactly 65 is charged the full adult fare of 350 cents instead of 175. Riders aged 66 and above are charged correctly, so the boundary itself is wrong rather than the rule.",
+  "acceptanceCriteria": [
+    "A rider aged exactly 65 with no pass is charged the concession fare.",
+    "A rider aged 64 with no pass is still charged the base fare.",
+    "The existing fare behaviour for children, pass holders and adults is unchanged."
+  ],
+  "acCount": 3,
+  "agentRole": "fare-rules-engineer",
+  "dependencies": [],
+  "splitDepth": 0
+}
+
+# Output — THIS IS A CONTRACT, NOT A PREFERENCE
+
+Emit EXACTLY one <SPEC_AGENT> block and nothing else that matters. Prose outside it is DISCARDED
+unread, however correct it is — the pipeline parses the block and never the commentary.
+
+<SPEC_AGENT>
+{
+  "storyId": <string>,
+  "agent": <string>,
+  "notes": <string>   (optional),
+  "storyKind": <string> one of "defect" | "novel"   (optional),
+  "verificationCriteriaDetail": [ {
+      "criterion": <string>
+         // The observable check, as a sentence.,
+      "observer": <string> one of "end user" | "tester" | "api client" | "operator"
+         // WHO sees it. If no human or client can see it, the criterion is not observable.,
+      "surface": <string>
+         // WHAT they look at — the rendered page, the API response, the CLI output, the generated file. Never an internal object, argument, query or call.,
+      "setup": <string>
+         // Optional precondition the test establishes before observing — for example a mocked client signalling a change. Preconditions are allowed and are NOT implementation prescription; state them here rather than inside the criterion.   (optional),
+  } ]
+  "acceptanceCriteria": <array>,
+  "description": <string>   (optional),
+  "title": <string>   (optional),
+  "acAddedBySpeckit": <array>   (optional),
+  "acModifiedBySpeckit": <array>   (optional),
+  "acFlagged": <array>   (optional),
+  "splitStories": [ {
+      "id": <string>   (optional),
+      "title": <string>   (optional),
+      "description": <string>   (optional),
+      "acceptanceCriteria": <array>   (optional),
+      "agentRole": <string>   (optional),
+      "technicalNotes": <object>   (optional),
+  } ]
+}
+</SPEC_AGENT>
+
+Submit the specification analysis result for one story.
+
+
+# Output
+{"storyId":"stand-in for spec-agent","agent":"fare-rules-engineer","acceptanceCriteria":[]}

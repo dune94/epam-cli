@@ -1,0 +1,89 @@
+=== Prompt for HW-002 (attempt 1) ===
+Implement user story HW-002: Verify all tests pass
+
+## Story Description
+Run the project test suite using the correct Node 20 vitest binary and confirm all 3 vitest tests in greet.test.ts pass. Do not modify any files. Report the full test output verbatim.
+
+## Acceptance Criteria
+- Tests are executed with: ~/.local/share/fnm/node-versions/v20.20.2/installation/bin/node ./node_modules/.bin/vitest run
+- The command exits with code 0
+- Output contains the token 'Test Files: 1 passed (1)'
+- Output contains the token 'Tests: 3 passed (3)'
+- Output contains no 'failed', 'skipped', 'todo', or 'only' test tokens
+- No source or test files are modified during this story (verified via a clean 'git status' for tracked source/test files before and after the run)
+- The full, unedited vitest output is included verbatim in the story report
+
+## Technical Notes
+- files: []
+- requiredSkills: ["TypeScript","vitest"]
+
+## Files to Create/Modify
+
+
+## Dependencies
+HW-001
+
+## Instructions
+1. Implement all acceptance criteria for this story
+2. Follow the project's existing code patterns and conventions
+3. Create any necessary files in the locations specified
+4. Ensure code compiles/runs without errors
+5. Do NOT create tests unless explicitly required in acceptance criteria
+
+After implementation, provide a brief summary of what was created/modified.
+
+## Relevant Knowledge Base Entries
+No prior KB entries match your agent role yet.
+
+## Knowledge Base Contribution
+Your assigned KB entry ID for this run: **KB-008**
+
+If you discover a non-obvious pattern, gotcha, or anti-pattern during this implementation (or this is a retry), append exactly one entry to `orchestrations/agents/KB.md` using this format:
+
+```markdown
+## KB-008 -- 2026-06-04
+
+**Category:** <backend|frontend|infrastructure|testing|orchestration>
+**AgentRole:** <your agentRole from the story>
+**Tags:** <comma-separated tech keywords, e.g. typescript, node, cli>
+**Trigger:** <retry|first-success>
+**StoryRef:** HW-002
+
+<One concise paragraph: the specific pattern, gotcha, or anti-pattern. Precise enough that a future Claude instance can apply it without re-discovering it.>
+```
+
+Only write an entry if the knowledge is genuinely non-obvious. Skip trivial observations.
+=== End Prompt ===
+
+=== claude Output (attempt 1) ===
+Perfect! All tests pass. Here's the complete test output verbatim:
+
+## Full Test Output
+
+```
+ RUN  v2.1.9 /home/bradleyjerome/projects/ai/epam-test-apps/hello-world
+
+ ✓ greet.test.ts (3 tests) 2ms
+
+ Test Files  1 passed (1)
+      Tests  3 passed (3)
+   Start at  12:18:56
+   Duration  235ms (transform 31ms, setup 0ms, collect 27ms, tests 2ms, environment 0ms, prepare 63ms)
+```
+
+## Verification Summary
+
+✅ **All Acceptance Criteria Met:**
+- Executed with: `~/.local/share/fnm/node-versions/v20.20.2/installation/bin/node ./node_modules/.bin/vitest run`
+- Exit code: **0**
+- Test Files: **1 passed (1)**
+- Tests: **3 passed (3)**
+  - greet returns Hello, <name>! ✓
+  - works with any name ✓
+  - does not return empty string ✓
+- No failed, skipped, todo, or only test tokens
+- No source or test files modified
+
+The test suite executed successfully with all 3 tests in greet.test.ts passing.
+
+=== End claude Output ===

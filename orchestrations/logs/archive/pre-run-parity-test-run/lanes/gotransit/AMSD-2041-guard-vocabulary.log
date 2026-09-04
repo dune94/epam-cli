@@ -1,0 +1,141 @@
+# Prompt
+You are the Guard Vocabulary Agent for the epam-cli orchestration pipeline.
+
+A deterministic guard is about to check a set of statements against a RULE. Your sole job is to derive, for THIS story, the concrete terms that would VIOLATE that rule — and the terms that name its legitimate observable surface. The guard holds no vocabulary of its own; it applies exactly what you return, and nothing else.
+
+## Why you exist
+
+Every guard in this pipeline used to carry a hardcoded list of terms, each list reverse-engineered from a single past incident. A list catches that one incident and nothing else, while reporting "clean" forever — which is worse than no guard, because it converts "unchecked" into "checked" and nobody looks again. You replace those lists. If you answer badly, the guard is blind; if you answer well, it catches violations nobody has seen yet.
+
+## Your inputs
+
+1. THE RULE — a principle stating what it means to violate this guard. It names no domain, no product and no past incident. It is the only definition of correctness you are given.
+2. THE STATEMENTS — the items the guard will check (for example, a story's verification criteria or acceptance criteria).
+3. CODE EVIDENCE — real findings from the repository: files, functions, symbols, and the reasoning that located them. This is ground truth.
+4. STORY CONTEXT — the ticket's title and description.
+
+## Your process
+
+1. Read the rule and restate to yourself, in one sentence, what distinguishes a violating statement from a compliant one. Everything you return must trace to that sentence.
+2. Read the CODE EVIDENCE and identify the implementation vocabulary of this story: the symbols, functions, SDK entry points, internal structures and configuration keys that describe HOW the behaviour is produced. These come from the evidence, never from the ticket prose and never from your own knowledge of the technology.
+3. Read the STORY CONTEXT and identify the observable surface: what an end user or tester perceives. That is the whitelist.
+4. Emit both lists.
+
+## Hard requirements
+
+- DERIVE FROM THE EVIDENCE. Every blacklist term must be traceable to a symbol, file, function or structure present in the supplied code evidence, or to a construction verb present in the statements themselves. Do not contribute terms from your general knowledge of a library, framework or vendor: that is how an agent invents a signature that does not exist.
+- NEVER include a term that names the observable surface. If a term describes what a user sees, it belongs in the whitelist, even when it also appears in code.
+- PREFER THE SPECIFIC. a term naming ONE identifiable thing is useful; a generic category word is not — it will fire on unrelated statements and train people to ignore the guard.
+- WHOLE TERMS ONLY. Return terms as they would appear in a sentence. Do not return regular expressions, wildcards or fragments.
+- LOWERCASE every term.
+- The whitelist WINS. A term appearing in both lists is treated as observable and never flagged, so do not rely on the blacklist to override it.
+- If the rule genuinely admits no violating vocabulary for this story, return an empty blacklist. Do not pad it. An empty list is a real answer and is reported as such — it is not treated as success.
+
+## Verifying a term against the index
+
+At some seams you are given a real CodeGraph index of the repository and the command to
+query it. When you are, USE IT — do not assert that a term is meaningful, check it. A
+candidate that resolves to nothing in the index is noise and belongs in the blacklist,
+however unusual or technical the word looks. A candidate that resolves to real symbols is
+evidence-backed and can be trusted.
+
+Be aware of what your list feeds. Where the consumer is a BM25/IDF ranker, that ranker
+DEMOTES terms which are common in the corpus and AMPLIFIES terms which are rare. A rare but
+meaningless token — a bracketed brand tag, a ticket label, a person's name, a status word —
+is therefore not diluted by the ranker; it is promoted to a top discriminator and drags the
+search away from the real code. Rarity is not signal. Mistaking the two is the specific
+failure you exist to prevent, so when a term is unusual AND resolves to nothing, blacklist
+it with confidence.
+
+When no index is available to you, say what you can support from the evidence you were
+given and no more. An honest short list beats a padded one: every term you return is
+applied deterministically, and a wrong term is enforced as rigorously as a right one.
+
+## Output
+
+Call the submit_guard_vocabulary tool. Structured output only. Do not answer in prose, do not wrap the call in commentary, and do not explain your reasoning outside the per-term reason fields. A prose answer is discarded in full and the guard is left with nothing to apply.
+
+GUARD SEAM: verification-criteria
+
+THE RULE THIS GUARD ENFORCES:
+A verification criterion states WHAT AN END USER OR TESTER OBSERVES on the user-facing surface THE TICKET IS ABOUT — the rendered output for an output ticket, the displayed screen for a UI ticket, the response a CLIENT receives for an API ticket. It is a BLACK-BOX check on that surface. It NEVER describes HOW the value is produced.
+A verification criterion is FORBIDDEN if it:
+- prescribes HOW to implement — any algorithm, mechanism, approach, or the addition/reading of any new field, flag or service;
+- references an INTERNAL structure that merely FEEDS the ticket's surface — an intermediate payload, a data-transfer object, or a specific response field used to BUILD the output. Verify the surface the ticket names, NOT the data structure behind it;
+- makes a CROSS-COMPARISON that presumes a mechanism — never assert one value "must equal" / "matches" / "is the same as" another; that presumes a shared derivation. Assert the required value is present and correct ON ITS OWN.
+Every verification criterion must be observable, testable, and tied to the ticket's stated symptom/intent.
+
+THE STATEMENTS THE GUARD WILL CHECK:
+1. Given the Contentstack client is mocked to return a draft entry when a preview session marker is present in the request context, the rendered page surface displays the draft content values (e.g. a draft heading, draft body text) rather than the published values for the same entry
+2. Given no preview session marker is present in the request context, the rendered page surface displays the published content values identical to the current production behaviour
+3. Given the Live Preview client-side SDK is initialised and signals an update to a content field, the rendered page surface reflects the updated field value without requiring a full page navigation
+4. Given a preview session marker is present, a page whose content is fetched through a service that calls Stack.ContentType directly (e.g. partners/promotions listing) displays the draft version of that content on the rendered page surface
+5. Given a preview session targets a protected or authenticated page, the rendered page surface shows an appropriate state (e.g. the published version, a fallback, or a clear indication that preview is unavailable) rather than an error or blank screen
+
+DECLARED MANIFEST (the files this story says it will touch):
+- (none declared)
+
+CODE EVIDENCE (real findings from this repository — ground truth; derive from these, not from your own knowledge of any library):
+- src/services/contentstack.ts :: options — Central Contentstack Stack initialization. The `options` object passed to `contentstack.Stack(options)` is where `live_preview` config (preview_token, host) must be added. Currently has no live_preview config at all — this is the primary attachment point for enabling Live Preview SDK support. [existing helper: options]
+- src/services/pageService.ts :: getPageContent — The main page-level data fetcher that calls getEntry/getSingletonEntry/findSingletonEntry for all page content types. Preview mode must be detected at the page level and threaded through these calls so draft entries are returned during Live Preview sessions. [existing helper: getEntry]
+- src/pages/[[...slug]].tsx — The catch-all Pages Router page that renders all Contentstack-driven pages. This is where preview-mode detection must occur (checking for Contentstack live-preview query parameters like live_preview and content_type_uid) and where the preview context gets passed into the data-fetching layer.
+- src/services/partnersPromotionsService.ts — Bypasses the centralized ContentstackFactory by calling `Stack.ContentType(type)` directly. These direct Stack calls also need `.includeDraft()` in preview mode. Same pattern applies to stationService.ts, blogService.ts, and userAccountService.ts which also call Stack.ContentType directly. [existing helper: getEntry]
+- src/interface/contentstack.ts :: ICreateQueryConfig — The TypeScript interfaces that define the shape of query configurations. `ICreateQueryConfig`, `ICreateEntryConfig`, `IContentstackGetEntry`, `IContentstackGetSingleEntry`, `IContentstackGetSingletonEntry` must all be extended with an optional `includeDraft` boolean so the draft flag can flow throug
+
+STORY CONTEXT:
+Title: [GO, UP, MX] Live Preview of Content in CMS
+Description: Original Requirements (discovery)  AS a Content Author, I WANT to preview draft entries in CMS, SO THAT I can see how content will be shown on the website
+ability to preview draft entries in CMS
+Notes& Assumptions  Limitation: Might not be possible to preview protected pages and content.
+Original Total Estimate:  8  Original FE Estimate:  8  Original DAM Estimate:  0  Original BE Estimate:  0
+
+
+# Output
+{
+"blacklist": [
+{ "reason": "Internal Contentstack SDK entry point from code evidence (src/services/contentstack.ts); naming it in a criterion prescribes the initialization mechanism rather than the rendered surface.", "term": "contentstack.stack(options)" },
+{ "reason": "Configuration key from code evidence that must be added to the options object; referencing it prescribes HOW live preview is enabled, not what the user sees.", "term": "live_preview" },
+{ "reason": "Configuration sub-key under live_preview config per code evidence; an internal credential/flag, not an observable surface element.", "term": "preview_token" },
+{ "reason": "Internal query parameter mentioned in code evidence for live-preview detection in [[...slug]].tsx; prescribes the detection mechanism.", "term": "content_type_uid" },
+{ "reason": "Internal page-level data fetcher identified in code evidence (pageService.ts); naming it prescribes the fetch mechanism.", "term": "getpagecontent" },
+{ "reason": "Internal Contentstack query helper identified in code evidence; naming it prescribes the data-fetch mechanism.", "term": "getentry" },
+{ "reason": "Internal singleton-entry fetcher from code evidence; prescribes the fetch mechanism.", "term": "getsingletonentry" },
+{ "reason": "Internal singleton-entry finder from code evidence; prescribes the fetch mechanism.", "term": "findsingletonentry" },
+{ "reason": "Direct Contentstack SDK call identified in code evidence as the pattern used by partnersPromotionsService and others; naming it prescribes the internal API path.", "term": "stack.contenttype" },
+{ "reason": "Internal boolean flag that code evidence says must be added to ICreateQueryConfig and related interfaces; referencing it prescribes the draft-inclusion mechanism.", "term": "includedraft" },
+{ "reason": "Internal TypeScript interface from code evidence that must be extended; naming it prescribes the type-level implementation.", "term": "icreatequeryconfig" },
+{ "reason": "Internal TypeScript interface from code evidence; prescribes the type-level implementation.", "term": "icreateentryconfig" },
+{ "reason": "Internal TypeScript interface from code evidence; prescribes the type-level implementation.", "term": "icontentstackgetentry" },
+{ "reason": "Internal TypeScript interface from code evidence; prescribes the type-level implementation.", "term": "icontentstackgetsingleentry" },
+{ "reason": "Internal TypeScript interface from code evidence; prescribes the type-level implementation.", "term": "icontentstackgetsingletonentry" },
+{ "reason": "Internal factory identified in code evidence as the centralized Stack accessor that partnersPromotionsService bypasses; naming it prescribes the internal architecture.", "term": "contentstackfactory" },
+{ "reason": "Construction verb in statement 1 describing a test setup mechanism (mocking the client) rather than what the rendered surface shows.", "term": "mocked" },
+{ "reason": "Internal flag/structure referenced in statements 1, 2, 4 as the thing present in the request context; it feeds the surface but is not itself observable by an end user or tester.", "term": "preview session marker" },
+{ "reason": "Internal runtime structure referenced in statements 1 and 2; it is an intermediate that feeds the rendered surface, not the surface itself.", "term": "request context" },
+{ "reason": "Internal service component named in statement 1 as the thing being mocked; prescribes the specific service implementation rather than the observable surface.", "term": "contentstack client" },
+{ "reason": "Internal Contentstack data entity referenced in statement 1; an entry is the data structure that feeds the rendered surface, not the surface itself. The observable surface shows 'draft content values,' not 'draft entries.'", "term": "draft entry" },
+{ "reason": "Mechanism reference in statement 3; the SDK and its initialization state are HOW updates are delivered, not what the user observes on the page.", "term": "live preview client-side sdk" },
+{ "reason": "Construction/mechanism phrase in statement 3 describing the SDK signalling pathway; prescribes the update-delivery mechanism.", "term": "signals an update" },
+{ "reason": "Mechanism phrase in statement 4 describing the fetch pathway; prescribes HOW content is retrieved rather than what appears on the rendered surface.", "term": "fetched through a service" },
+{ "reason": "Cross-comparison phrase in statement 2 ('identical to the current production behaviour'); the rule forbids cross-comparisons that presume a shared derivation.", "term": "identical to" }
+],
+"whitelist": [
+{ "reason": "The user-facing surface the ticket is about; explicitly named in every statement as the thing being verified.", "term": "rendered page surface" },
+{ "reason": "Observable content a user sees on the page during preview; the ticket's stated intent.", "term": "draft content values" },
+{ "reason": "Concrete observable content element a user reads on the rendered page.", "term": "draft heading" },
+{ "reason": "Concrete observable content element a user reads on the rendered page.", "term": "draft body text" },
+{ "reason": "Observable content a user sees when not in preview mode; the baseline surface behaviour.", "term": "published content values" },
+{ "reason": "Observable version of content displayed on the page; what the user perceives.", "term": "published version" },
+{ "reason": "Observable version of content displayed on the page during preview; what the user perceives.", "term": "draft version" },
+{ "reason": "Observable updated value the user sees reflected on the rendered page in statement 3.", "term": "updated field value" },
+{ "reason": "Observable user action; statement 3 asserts no full navigation is required, which is a black-box behavioural check.", "term": "full page navigation" },
+{ "reason": "Observable page category named in statement 5 and in the ticket description; part of the surface the user encounters.", "term": "protected page" },
+{ "reason": "Observable page category named in statement 5; part of the surface the user encounters.", "term": "authenticated page" },
+{ "reason": "Observable error state on the rendered surface that statement 5 says must not appear.", "term": "error" },
+{ "reason": "Observable blank state on the rendered surface that statement 5 says must not appear.", "term": "blank screen" },
+{ "reason": "Observable fallback state on the rendered surface mentioned in statement 5.", "term": "fallback" },
+{ "reason": "Observable indication on the rendered surface mentioned in statement 5.", "term": "preview is unavailable" },
+{ "reason": "Observable page surface named in statement 4 as an example of content displayed to the user.", "term": "partners/promotions listing" },
+{ "reason": "Observable user-initiated context for preview; the ticket title and description frame preview as a user-facing activity.", "term": "preview session" }
+]
+}

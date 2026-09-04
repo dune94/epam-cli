@@ -1,0 +1,28 @@
+Assessment complete. Here's a summary of what was done:
+
+## Phase: core — Skill Assessment Results
+
+### Data Processing
+- **Filtered** `phase-cost.jsonl` for `phase_id="core"` task records (with `forecast_hours`)
+- **Deduplicated** by `story_id`, keeping only the most recent record (highest `started_at`):
+  - AMSD-1820 had two records (attempt at 12:21:20, completed at 12:21:19) — kept the completed record
+- **Cross-referenced** with PRD: AMSD-1820 has `"completed": true` → treated as succeeded
+
+### Phase Totals
+
+| Metric | Actual | Forecast | Variance |
+|--------|--------|----------|----------|
+| Time | 0.25 min | 3.10 min | **-2.85 min** (92% under) |
+| Cost | $0.0088 | $0.5996 | **-$0.5908** (98.5% under) |
+
+- **Over threshold:** No (actual well below forecast)
+
+### Agent Role Check
+- AMSD-1820: `typescript-engineer` assigned → task is a TypeScript service-layer fix → **no mismatch**
+- No pending stories exist in future phases (`ui_and_review`) → no corrective actions needed
+
+### Files Written
+1. **`phase-skill-assessments.jsonl`** — single-line JSON assessment appended (with flock)
+2. **`phase-improvements/core.md`** — human-readable improvement report
+
+**No improvements needed.** The single core-phase task was completed efficiently with the correct agent role.

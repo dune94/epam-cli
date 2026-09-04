@@ -1,0 +1,71 @@
+[coverage-gate] writer: no pre-flight has gated this run — standing down
+Based on my analysis of the changed files, I can now provide the fuzz-weaver assessment. The change is focused on email case-insensitive comparison in the CheckoutForm validator function.
+
+```json
+{
+  "agent": "fuzz-weaver",
+  "phase": "core",
+  "summary": {
+    "functionsAnalysed": 1,
+    "fuzzCasesProposed": 5,
+    "covered": 3,
+    "gaps": 2,
+    "vulnerabilities": 0
+  },
+  "cases": [
+    {
+      "function": "confirmEmail validator (lines 305-309)",
+      "file": "src/components/pages/CheckoutPage/CheckoutForm.tsx",
+      "line": 306,
+      "property": "Case-insensitive email string comparison",
+      "generator": "ASCII email addresses with case variants: lowercase, UPPERCASE, MiXeD case",
+      "invariant": "Validation passes iff value.toLowerCase() === email.toLowerCase()",
+      "status": "covered",
+      "recommendation": "Verified by added tests: (1) lowercase email + UPPERCASE confirm (line 262), (2) UPPERCASE email + lowercase confirm (line 274), (3) form submission without blocking (line 298)"
+    },
+    {
+      "function": "confirmEmail validator (lines 305-309)",
+      "file": "src/components/pages/CheckoutPage/CheckoutForm.tsx",
+      "line": 306,
+      "property": "Rejection of genuinely different email addresses regardless of case",
+      "generator": "Distinct email pairs: (scooby@dooby.com, shaggy@dooby.com) with case variants",
+      "invariant": "Validation fails if emails differ in content, even with matching case patterns",
+      "status": "covered",
+      "recommendation": "Verified by test: 'should still show a mismatch error when the emails are genuinely different regardless of case' (line 286)"
+    },
+    {
+      "function": "confirmEmail validator (lines 305-309)",
+      "file": "src/components/pages/CheckoutPage/CheckoutForm.tsx",
+      "line": 306,
+      "property": "Falsy email or confirmEmail value prevents validation from running",
+      "generator": "Falsy values: empty string '', null, undefined for email and value",
+      "invariant": "If email or value is falsy, function returns undefined (no validation error)",
+      "status": "covered",
+      "recommendation": "Protected by line 306 guard: if (email && value && ...). Covered by existing test 'should trigger validation error on blur only when confirmEmail field is not empty' (line 248)"
+    },
+    {
+      "function": "confirmEmail validator (lines 305-309)",
+      "file": "src/components/pages/CheckoutPage/CheckoutForm.tsx",
+      "line": 306,
+      "property": "Whitespace preservation in email comparison",
+      "generator": "Email variants with leading/trailing whitespace: ' test@example.com', 'test@example.com ', etc.",
+      "invariant": "Emails differing only by leading/trailing whitespace should match if content is identical after trim",
+      "status": "gap",
+      "recommendation": "Not explicitly tested. HTML input type='text' .value property typically does not preserve trailing whitespace entered by users, mitigating this in practice. However, if emails are initialized with whitespace via defaultFormValues, validation would reject them. Consider adding defensive trim() if whitespace robustness is required: value.trim().toLowerCase() !== email.trim().toLowerCase()"
+    },
+    {
+      "function": "confirmEmail validator (lines 305-309)",
+      "file": "src/components/pages/CheckoutPage/CheckoutForm.tsx",
+      "line": 306,
+      "property": "Unicode normalization in email addresses with combining characters",
+      "generator": "International email addresses with unicode: 'tëst@example.com' (precomposed) vs 'tëst@example.com' (combining diacritics)",
+      "invariant": "Email comparison should succeed regardless of unicode normalization form (NFC vs NFD)",
+      "status": "gap",
+      "recommendation": "Not tested. JavaScript toLowerCase() operates on string value without unicode normalization. For emails with international characters or combining marks, this could theoretically cause case-sensitive comparison to fail. Very low likelihood for standard email addresses. If international domain support is required, consider: value.toLowerCase().normalize('NFC') !== email.toLowerCase().normalize('NFC'). Pre-existing consideration, not introduced by this change."
+    }
+  ],
+  "verdict": "pass"
+}
+```
+
+The change is safe and well-tested for its intended purpose. The validator correctly normalizes email comparison to case-insensitive matching via `.toLowerCase()` on both operands. The added test coverage comprehensively validates the main use cases (case-insensitive matching, rejection of different emails, form submission). Two edge cases (whitespace, unicode) are uncovered but represent gaps rather than vulnerabilities—the code won't throw or corrupt state in either scenario; it would simply fail to match if those edge cases occurred (which is low-probability for typical email input).

@@ -1,0 +1,127 @@
+=== Prompt for SKY-002-impl (attempt 1) ===
+CRITICAL — WRITE FILES FIRST. Your FIRST tool call MUST be WriteFile.
+Do NOT output any text before calling WriteFile. Do NOT plan or say "I will...".
+Call WriteFile NOW for the EXACT ABSOLUTE PATHS listed below:
+
+   - WRITE /home/bradleyjerome/projects/skyscanner-app/src/skyscanner/client.ts first, before any other action
+---
+
+Implement user story SKY-002-impl: Implement Skyscanner API client module
+
+## Story Description
+Create src/skyscanner/client.ts implementing the SkyscannerClient class, SearchParams/FlightResult interfaces, global-fetch-based searchFlights method, API key resolution with precedence and validation, HTTP error handling, response parsing with validation, and strict opt-in mock mode via MOCK_SKYSCANNER_API env var.
+
+## Acceptance Criteria
+- 1. src/skyscanner/client.ts exports a SkyscannerClient class whose constructor signature is constructor({ apiKey }: { apiKey?: string })
+- 2. SearchParams interface is exported with exactly: origin: string, destination: string, date: string, adults?: number
+- 3. FlightResult interface is exported with exactly: price: number, currency: string, airline: string, departure: string, arrival: string, duration: number, stops: number
+- 4. searchFlights uses the Node.js global fetch exclusively — no axios, node-fetch, or other HTTP dependency imported
+- 5. When no apiKey is passed, or apiKey is empty string (''), and RAPIDAPI_KEY env var is unset or empty string, constructing SkyscannerClient throws an Error whose message references the missing key; when both constructor apiKey and RAPIDAPI_KEY are present, constructor-provided apiKey takes precedence
+- 6. When the API returns a 4xx or 5xx status, searchFlights rejects with an Error that includes the HTTP status code but does NOT include the apiKey value anywhere in its message string
+- 7. When the API response body is malformed or missing expected fields, searchFlights rejects with a descriptive parse/validation Error
+- 8. When MOCK_SKYSCANNER_API env var equals exactly 'true', searchFlights resolves with a deterministic, non-empty FlightResult[] fixture (at least 2 results, valid shape matching FlightResult interface, varying prices for cheapest-selection in SKY-004) without calling fetch; when MOCK_SKYSCANNER_API is unset, empty, or any value other than exact 'true' (e.g. 'false', '1', 'TRUE'), searchFlights performs the real fetch call; a real HTTP/API failure is NEVER silently replaced with mock/fixture data — mock mode only activates via explicit MOCK_SKYSCANNER_API='true'
+
+
+
+
+
+## Technical Notes
+- files: ["/home/bradleyjerome/projects/skyscanner-app/src/skyscanner/client.ts"]
+- dependsOn: ["SKY-001"]
+
+## Files to Create/Modify (EXACT ABSOLUTE PATHS — write to these paths exactly)
+/home/bradleyjerome/projects/skyscanner-app/src/skyscanner/client.ts
+
+## Dependencies
+None
+
+
+## Instructions
+**CRITICAL — WRITE FILES FIRST:**
+   - WRITE /home/bradleyjerome/projects/skyscanner-app/src/skyscanner/client.ts first, before any other action
+**You MUST write every file listed above to its EXACT absolute path. Do NOT write to a different path, do NOT write to the current directory unless it matches the path above. Use your WriteFile or Edit tools with the full absolute path shown.**
+
+1. Write each required file to its exact absolute path listed above — do this FIRST before anything else
+2. Implement all acceptance criteria for this story
+3. Follow the project's existing code patterns and conventions
+4. Do NOT create tests unless explicitly required in acceptance criteria
+
+After implementation, provide a brief summary of what was created/modified.
+
+## Relevant Knowledge Base Entries
+The following was learned from previous story implementations and is relevant to your agent role. Apply this knowledge before writing any code:
+
+- [2026-07-06T17:45:30Z] Always resolve mocked fetch calls to a Response-shaped object with ok, status, statusText, and a json method returning a Promise.
+- [2026-07-06T17:50:20Z] Use valid module and moduleResolution pairs in tsconfig.json: CommonJS with Node, Node16 with Node16, ESNext with Bundler. Use CommonJS and Node for the stack. Mismatched pairs cause build errors.
+- [2026-07-06T18:11:26Z] Use vi.fn().mockResolvedValue(value) to make a mock return a resolved Promise.
+- [2026-07-06T20:31:11Z] Use `test: { passWithNoTests: true }` in vitest.config.ts or create a stub test file when no *.test.ts files exist.
+- [2026-07-06T20:33:03Z] Enable globals:true in vitest.config.ts so describe, it, and expect work without imports, reducing boilerplate in test files.
+- [2026-07-06T23:47:34Z] Use CommonJS-compatible patterns in src/server.ts: avoid `import.meta.url` and top-level `await`; gate listen with `if (require.main === module)`.
+- [2026-07-07T02:35:30Z] Always include a non-test source file in src/ alongside any src/*.test.ts file, since tsconfig.json excludes test files from tsc --noEmit.
+- [2026-07-07T19:01:34Z] Only modify or create files explicitly listed in the story's acceptance criteria. Do not touch files belonging to other stories or outside the current task scope.
+- [2026-07-07T20:17:57Z] [unreviewed-fallback] Avoid using deprecated TypeScript compiler options like 'moduleResolution=node10'; use 'moduleResolution=node' instead.
+- [2026-07-17T20:20:58Z] Always: Before importing a module or referencing a type/property, always read the actual source file to verify the export exists, its exact path, its properties, and its constructor/factory signatures
+
+## Knowledge Base Contribution (do this LAST — after writing all implementation files)
+Your assigned KB entry ID for this run: **KB-008**
+
+IMPORTANT: Write ALL implementation files first. Only AFTER writing every required file should you optionally append a KB entry.
+Do NOT read orchestrations/agents/KB.md before writing implementation files. The relevant KB entries are already injected above.
+
+If (and only if) you discover a non-obvious pattern during implementation, append one entry to `orchestrations/agents/KB.md`:
+
+```markdown
+## KB-008 -- 2026-07-18
+
+**Category:** <backend|frontend|infrastructure|testing|orchestration>
+**AgentRole:** <your agentRole from the story>
+**Tags:** <comma-separated tech keywords, e.g. typescript, node, cli>
+**Trigger:** <retry|first-success>
+**StoryRef:** SKY-002-impl
+
+<One concise paragraph: the specific pattern, gotcha, or anti-pattern.>
+```
+
+Only write an entry if the knowledge is genuinely non-obvious. Skip trivial observations.
+
+## Execution Plan
+Follow this plan step by step:
+1. Create `/home/bradleyjerome/projects/skyscanner-app/src/skyscanner/client.ts` and define exported interfaces `SearchParams` (origin: string, destination: string, date: string, adults?: number) and `FlightResult` (price: number, currency: string, airline: string, departure: string, arrival: string, duration: number, stops: number) exactly as specified.
+2. Implement the `SkyscannerClient` class with constructor signature `constructor({ apiKey }: { apiKey?: string })`; store the resolved key on a private field by preferring the constructor argument when it is a non-empty string, otherwise falling back to `process.env.RAPIDAPI_KEY` when it is a non-empty string.
+3. In the constructor, after resolution, if no usable key exists (both constructor arg and env var are undefined or empty string), throw an `Error` whose message references the missing API key (e.g., "Missing RapidAPI key: provide apiKey or set RAPIDAPI_KEY").
+4. Implement `async searchFlights(params: SearchParams): Promise<FlightResult[]>` that first checks `process.env.MOCK_SKYSCANNER_API`; if it equals exactly the string `'true'`, return a deterministic fixture array of at least 2 `FlightResult` objects with valid shapes and varying prices, without calling `fetch`.
+5. In the real-fetch path of `searchFlights`, call the Node.js global `fetch` (no HTTP library imports) with the Skyscanner endpoint URL, appropriate headers including the resolved API key, and a body derived from `params`.
+6. After `fetch` resolves, if `response.status` is >= 400, reject with an `Error` whose message includes the numeric HTTP status code but does NOT include the API key value anywhere; ensure the key is never interpolated into error messages.
+7. Parse the successful response JSON and validate that required `FlightResult` fields exist with correct types; if the body is malformed or fields are missing/invalid, reject with a descriptive `Error` (e.g., "Invalid Skyscanner response: missing field 'price'").
+8. Map the validated API response into a `FlightResult[]` and return it from `searchFlights`.
+9. Verify the file compiles with `npx tsc --noEmit` and that all exports (`SkyscannerClient`, `SearchParams`, `FlightResult`) are present with exact signatures.
+=== End Prompt ===
+
+=== epam Output (attempt 1) ===
+The KB file doesn't exist in this environment. The instructions say to skip if trivial and only write if non-obvious — but the file also doesn't exist. Given the file path is relative (`orchestrations/agents/KB.md`) and we have no clear evidence it exists in the current workspace, and the instruction says "If (and only if) you discover a non-obvious pattern," I'll skip the KB write since the patterns here (mock mode strict equality, error message sanitization) are explicitly spelled out in the AC and not surprising discoveries.
+
+## Summary
+
+Created `/home/bradleyjerome/projects/skyscanner-app/src/skyscanner/client.ts` implementing the Skyscanner API client:
+
+- **Exports:** `SearchParams` `FlightResult` interfaces with the exact field shapes specified, plus the `SkyscannerClient` class (and default export).
+- **API key resolution:** Constructor `apiKey` takes precedence; otherwise falls back to `process.env.RAPIDAPI_KEY`. Throws a descriptive `Error` when both are missing or empty.
+- **`searchFlights(params)`:** Strict opt-in mock mode (`process.env.MOCK_SKYSCANNER_API === 'true'` returns a deterministic 2-result fixture with varying prices, no `fetch` call). For all other values (including `'false'`, `'1'`, `'TRUE'`, unset), the real global `fetch` is invoked against the Skyscanner endpoint with proper RapidAPI headers.
+- **HTTP error handling:** 4xx/5xx responses throw an `Error` the numeric status code; the API key is never interpolated into any error message string.
+- **Response validation:** Parses JSON, accepts either a bare array or `{ results }` / `{ flights }` envelopes, and validates each entry has correctly-typed `price`, `currency`, `airline`, `departure`, `arrival`, `duration`, `stops` fields — throwing descriptive errors that name the missing/invalid field and its index.
+- **No external dependencies:** Uses only the Node.js global `fetch` (no axios, node-fetch, etc.). Verified with `npx tsc --noEmit` — clean compile.
+  [tc-writer] No test stories need TCs in phase 'unknown' — skipping
+The KB file doesn't exist in this environment. The instructions say to skip if trivial and only write if non-obvious — but the file also doesn't exist. Given the file path is relative (`orchestrations/agents/KB.md`) and we have no clear evidence it exists in the current workspace, and the instruction says "If (and only if) you discover a non-obvious pattern," I'll skip the KB write since the patterns here (mock mode strict equality, error message sanitization) are explicitly spelled out in the AC and not surprising discoveries.
+
+## Summary
+
+Created `/home/bradleyjerome/projects/skyscanner-app/src/skyscanner/client.ts` implementing the Skyscanner API client:
+
+- **Exports:** `SearchParams` `FlightResult` interfaces with the exact field shapes specified, plus the `SkyscannerClient` class (and default export).
+- **API key resolution:** Constructor `apiKey` takes precedence; otherwise falls back to `process.env.RAPIDAPI_KEY`. Throws a descriptive `Error` when both are missing or empty.
+- **`searchFlights(params)`:** Strict opt-in mock mode (`process.env.MOCK_SKYSCANNER_API === 'true'` returns a deterministic 2-result fixture with varying prices, no `fetch` call). For all other values (including `'false'`, `'1'`, `'TRUE'`, unset), the real global `fetch` is invoked against the Skyscanner endpoint with proper RapidAPI headers.
+- **HTTP error handling:** 4xx/5xx responses throw an `Error` the numeric status code; the API key is never interpolated into any error message string.
+- **Response validation:** Parses JSON, accepts either a bare array or `{ results }` / `{ flights }` envelopes, and validates each entry has correctly-typed `price`, `currency`, `airline`, `departure`, `arrival`, `duration`, `stops` fields — throwing descriptive errors that name the missing/invalid field and its index.
+- **No external dependencies:** Uses only the Node.js global `fetch` (no axios, node-fetch, etc.). Verified with `npx tsc --noEmit` — clean compile.
+
+=== End epam Output ===

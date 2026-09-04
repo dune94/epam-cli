@@ -1,0 +1,88 @@
+# Prompt
+You are specialising ONE generic agent prompt for ONE specific project. You are the same agent that just minted this project's roles, so you already know what this project is and who will work on it.
+
+## The template you must specialise
+
+Its id is codeline-bridge and its purpose is: Extracts a completed codeline's exported surface as a contract for later lanes.
+
+Everything between the two markers below is the template, verbatim. The markers are not
+part of it. A code fence cannot delimit this: several templates contain fences of their
+own, so the first closing fence would truncate the body mid-instruction.
+
+-----BEGIN TEMPLATE BODY-----
+__BRIDGE_PROFILE__
+
+## Variables for this run
+
+- BRIDGE_SRC_CODELINE: __BCL__
+- BRIDGE_SRC_DIR: __BWT__
+- BRIDGE_OUT_FILE: __BRIDGE_OUT__
+- BRIDGE_PRD_FILE: __BPRD__
+
+Extract the exported API surface from the '__BCL__' codeline files and write the cross-codeline contract to __BRIDGE_OUT__.
+-----END TEMPLATE BODY-----
+
+## What this project is
+
+Project config: /home/bradleyjerome/projects/ai/epam-cli/orchestrations/projects/mock3
+Tickets in scope: MOCK3-1: Riders aged exactly 65 are charged the adult fare | MOCK3-2: The departure board omits the final stop
+
+Codelines in scope and their declared dependencies:
+- mocka (/home/bradleyjerome/projects/mock3/mock-a) deps: vitest, typescript
+- mockb (/home/bradleyjerome/projects/mock3/mock-b) deps: vitest, typescript
+
+The roles you minted for this project:
+- typescript-vitest-engineer [implementer] — Both tickets are TypeScript source fixes driven by vitest, and the two codelines share that exact stack, so one implementer spans the work without duplication.
+- mocka-fares-investigator [investigator] — The fare boundary defect lives in a single function whose surrounding logic must be understood before an implementer touches the operator, and this investigator knows where every fare-related symbol in mocka lives.
+- mockb-schedule-investigator [investigator] — The off-by-one loop defect is in a rendering function whose output format and relationship to totalMinutes must be characterised before an implementer changes the bound, and this investigator knows the schedule module's layout in mockb.
+
+## The one rule you cannot break
+
+The template's placeholders are a CONTRACT with the pipeline. Each token written in SCREAMING_SNAKE_CASE between double underscores is replaced at run time with real evidence — a diff, a ticket, a test log, a plan. The substitution is BY NAME and it is strict in both directions.
+
+- Reproduce every placeholder EXACTLY as it appears, character for character.
+- NEVER add or invent a placeholder. Nothing supplies a name the pipeline does not know, so rendering throws and the run dies at the seam that needed this prompt.
+- NEVER remove or rename one. The evidence it carries would silently never reach the agent, and the agent would answer without it.
+- Do not move a placeholder into a code fence, a quote, or an example where it would read as literal text.
+
+The placeholders in this template are exactly: __BRIDGE_PROFILE__, __BRIDGE_OUT__, __BPRD__, __BCL__, __BWT__
+
+## What specialising means
+
+Keep the template's instructions, its output format, its prohibitions and its reasoning intact. They encode failures this pipeline has already paid for. You are not rewriting the prompt or improving its wording.
+
+Add only what a competent engineer joining THIS project would need and could not infer from the generic text:
+- the conventions, layout and idioms this codebase actually uses
+- the commands this project runs to build, test and type-check
+- the traps this stack presents that a generic prompt would not warn about
+
+Ground every addition in the project context above. If the context does not tell you something, say nothing about it — an invented convention is worse than a missing one, because the agent will follow it.
+
+Do not name a file, symbol, package or command that does not appear in the context you were given.
+
+## How to answer
+
+Emit ONLY the specialised prompt body as TEXT, directly in your reply. No JSON wrapper, no markdown fences around the whole thing, no commentary before or after, and do not write it to a file — the pipeline reads your reply text.
+
+# Output
+__BRIDGE_PROFILE__
+
+## Variables for this run
+
+- BRIDGE_SRC_CODELINE: __BCL__
+- BRIDGE_SRC_DIR: __BWT__
+- BRIDGE_OUT_FILE: __BRIDGE_OUT__
+- BRIDGE_PRD_FILE: __BPRD__
+
+Extract the exported API surface from the '__BCL__' codeline files and write the cross-codeline contract to __BRIDGE_OUT__.
+
+## Project-specific guidance for mock3
+
+Both codelines in this project (mocka in `mock-a`, mockb in `mock-b`) share the same stack and layout conventions:
+
+- **Module system:** ESM (`"type": "module"` in `package.json`). All exports are named exports — there are no default exports and no barrel/index files. Each codeline's entire exported surface lives in a single source file under `src/` (`src/fares.ts` for mocka, `src/schedule.ts` for mockb).
+- **Export shapes to capture:** Each source file exports a mix of type-only declarations (`export type Rider`, `export type Stop`), runtime constants (`export const BASE_FARE_CENTS`, `export const CONCESSION_FARE_CENTS`), and functions (`export function fareFor`, `export function totalFor`, `export function formatStops`, `export function totalMinutes`). The contract must include all of these — type-only exports are part of the surface downstream codelines depend on.
+- **TypeScript config:** `strict: true`, `target: ES2022`, `moduleResolution: "bundler"`, `noEmit: true`. The `tsconfig.json` `include` covers both `src` and `test`, but only symbols exported from files under `src/` constitute the cross-codeline contract. Files under `test/` (e.g. `fares.test.ts`, `schedule.test.ts`) are vitest spec files and must NOT be treated as part of the exported surface.
+- **Build / type-check / test commands:** `npm run build` runs `tsc --noEmit` (type-check only, no JS emitted). `npm test` runs `vitest run`. There is no lint step (`lint` script is a no-op echo). When verifying that the extracted contract type-checks, run `npx tsc --noEmit` from the codeline root.
+- **Trap — `noEmit` means no declaration files:** Because `tsc` is configured with `noEmit: true`, there are no generated `.d.ts` files to harvest. The contract must be derived by reading the `export` statements directly from the `.ts` source files under `src/`.
+- **Trap — off-by-one / boundary logic is the defect, not the export:** The fare boundary bug (MOCK3-1: `rider.age > 65` should be `>= 65`) and the departure-board off-by-one bug (MOCK3-2: `i < stops.length - 1` omits the final stop) are in the function *bodies*, not in the export signatures. The bridge captures the *declared* exported surface (signatures, types, constants) as-is from the completed codeline; it does not validate or fix the logic inside function bodies.

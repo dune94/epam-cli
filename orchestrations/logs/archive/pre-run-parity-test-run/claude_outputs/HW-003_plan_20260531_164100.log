@@ -1,0 +1,522 @@
+I'll start by reading the PRD to get the full details for HW-003.
+
+<tool_call>
+{"name": "read_file", "parameters": {"path": "/home/bradleyjerome/projects/ai/epam-cli/orchestrations/prd.json"}}
+</tool_call>
+<tool_response>
+{
+  "project": {
+    "name": "epam-cli",
+    "description": "A CLI tool for EPAM (Enhanced Project and Asset Management) that provides command-line interface for managing projects, tasks, and team collaboration.",
+    "version": "1.0.0",
+    "tech_stack": {
+      "language": "Python",
+      "cli_framework": "Click",
+      "config_format": "YAML",
+      "testing": "pytest",
+      "package_manager": "pip",
+      "python_version": "3.9+"
+    }
+  },
+  "epics": [
+    {
+      "id": "E-001",
+      "title": "Hello World Foundation",
+      "description": "Establish the foundational CLI structure with basic Hello World functionality to validate the project setup and development workflow.",
+      "stories": [
+        {
+          "id": "HW-001",
+          "title": "Project Scaffolding & Hello World CLI",
+          "status": "complete",
+          "estimatedHours": 2,
+          "description": "Create the initial project structure with a working CLI that outputs 'Hello, World!'",
+          "acceptance_criteria": [
+            "Running `python -m epam_cli` outputs 'Hello, World!'",
+            "Running `epam hello` (after pip install -e .) outputs 'Hello, World!'",
+            "Project has setup.py or pyproject.toml with correct entry points",
+            "Basic project structure: epam_cli/__init__.py, epam_cli/main.py",
+            "README.md with installation and usage instructions"
+          ],
+          "dependencies": []
+        },
+        {
+          "id": "HW-002",
+          "title": "Configuration & Named Greeting",
+          "status": "complete",
+          "estimatedHours": 3,
+          "description": "Add YAML configuration support and a `greet` command that accepts a name argument.",
+          "acceptance_criteria": [
+            "Running `epam greet --name Alice` outputs 'Hello, Alice!'",
+            "Running `epam greet` (no args) outputs 'Hello, World!'",
+            "Config file support: epam_cli/config.yaml with default_name field",
+            "If config has default_name: Bob, then `epam greet` outputs 'Hello, Bob!'",
+            "Unit test for greet command covering named and default cases",
+            "Config loading utility in epam_cli/config.py"
+          ],
+          "dependencies": ["HW-001"]
+        },
+        {
+          "id": "HW-003",
+          "title": "Verbose Mode & Logging",
+          "status": "ready",
+          "estimatedHours": 3,
+          "description": "Add a --verbose flag to the CLI and implement structured logging throughout the application.",
+          "acceptance_criteria": [
+            "Global `--verbose` / `-v` flag available on all commands",
+            "When `--verbose` is passed, debug-level messages are printed to stderr",
+            "Normal (non-verbose) output remains on stdout, clean (no debug noise)",
+            "Logging configured via `epam_cli/logging_config.py`",
+            "Logger named `epam_cli` used throughout the codebase",
+            "Unit tests cover verbose=True and verbose=False behavior",
+            "Integration test: `epam --verbose greet --name Alice` shows debug output + 'Hello, Alice!'"
+          ],
+          "dependencies": ["HW-002"]
+        },
+        {
+          "id": "HW-004",
+          "title": "Error Handling & Exit Codes",
+          "status": "backlog",
+          "estimatedHours": 3,
+          "description": "Implement robust error handling with appropriate exit codes and user-friendly error messages.",
+          "acceptance_criteria": [
+            "Invalid commands return exit code 2",
+            "Application errors return exit code 1",
+            "Success returns exit code 0",
+            "Error messages printed to stderr",
+            "Custom exception classes in epam_cli/exceptions.py",
+            "Unit tests for each exit code scenario"
+          ],
+          "dependencies": ["HW-003"]
+        }
+      ]
+    }
+  ]
+}
+</tool_response>
+
+Now let me inspect the current project structure to understand what already exists:
+
+<tool_call>
+{"name": "list_directory", "parameters": {"path": "/home/bradleyjerome/projects/ai/epam-cli"}}
+</tool_call>
+<tool_response>
+  epam_cli/
+  orchestrations/
+  tests/
+  .git/
+  README.md
+  pyproject.toml
+  setup.py
+</tool_response>
+
+<tool_call>
+{"name": "list_directory", "parameters": {"path": "/home/bradleyjerome/projects/ai/epam-cli/epam_cli"}}
+</tool_call>
+<tool_response>
+  __init__.py
+  main.py
+  config.py
+  config.yaml
+</tool_response>
+
+<tool_call>
+{"name": "list_directory", "parameters": {"path": "/home/bradleyjerome/projects/ai/epam-cli/tests"}}
+</tool_call>
+<tool_response>
+  __init__.py
+  test_main.py
+  test_config.py
+</tool_response>
+
+<tool_call>
+{"name": "read_file", "parameters": {"path": "/home/bradleyjerome/projects/ai/epam-cli/epam_cli/main.py"}}
+</tool_call>
+<tool_response>
+import click
+from epam_cli.config import load_config
+
+@click.group()
+def cli():
+    """EPAM CLI - Enhanced Project and Asset Management."""
+    pass
+
+@cli.command()
+def hello():
+    """Output Hello, World!"""
+    click.echo("Hello, World!")
+
+@cli.command()
+@click.option('--name', default=None, help='Name to greet')
+def greet(name):
+    """Greet a user by name."""
+    if name is None:
+        config = load_config()
+        name = config.get('default_name', 'World')
+    click.echo(f"Hello, {name}!")
+
+if __name__ == "__main__":
+    cli()
+</tool_response>
+
+<tool_call>
+{"name": "read_file", "parameters": {"path": "/home/bradleyjerome/projects/ai/epam-cli/epam_cli/config.py"}}
+</tool_call>
+<tool_response>
+import yaml
+import os
+
+DEFAULT_CONFIG_PATH = os.path.join(os.path.dirname(__file__), 'config.yaml')
+
+def load_config(path=None):
+    """Load configuration from a YAML file."""
+    if path is None:
+        path = DEFAULT_CONFIG_PATH
+    if not os.path.exists(path):
+        return {}
+    with open(path, 'r') as f:
+        return yaml.safe_load(f) or {}
+</tool_response>
+
+<tool_call>
+{"name": "read_file", "parameters": {"path": "/home/bradleyjerome/projects/ai/epam-cli/epam_cli/__init__.py"}}
+</tool_call>
+<tool_response>
+from epam_cli.main import cli
+
+__all__ = ['cli']
+</tool_call>
+</tool_response>
+
+<tool_call>
+{"name": "read_file", "parameters": {"path": "/home/bradleyjerome/projects/ai/epam-cli/tests/test_main.py"}}
+</tool_call>
+<tool_response>
+from click.testing import CliRunner
+from epam_cli.main import cli
+
+def test_hello():
+    runner = CliRunner()
+    result = runner.invoke(cli, ['hello'])
+    assert result.exit_code == 0
+    assert "Hello, World!" in result.output
+
+def test_greet_with_name():
+    runner = CliRunner()
+    result = runner.invoke(cli, ['greet', '--name', 'Alice'])
+    assert result.exit_code == 0
+    assert "Hello, Alice!" in result.output
+
+def test_greet_default():
+    runner = CliRunner()
+    result = runner.invoke(cli, ['greet'])
+    assert result.exit_code == 0
+    assert "Hello," in result.output
+</tool_response>
+
+<tool_call>
+{"name": "read_file", "parameters": {"path": "/home/bradleyjerome/projects/ai/epam-cli/tests/test_config.py"}}
+</tool_call>
+<tool_response>
+import pytest
+import tempfile
+import os
+import yaml
+from epam_cli.config import load_config
+
+def test_load_config_default():
+    config = load_config()
+    assert isinstance(config, dict)
+
+def test_load_config_custom_path():
+    with tempfile.NamedTemporaryFile(mode='w', suffix='.yaml', delete=False) as f:
+        yaml.dump({'default_name': 'TestUser'}, f)
+        temp_path = f.name
+    try:
+        config = load_config(temp_path)
+        assert config['default_name'] == 'TestUser'
+    finally:
+        os.unlink(temp_path)
+
+def test_load_config_missing_file():
+    config = load_config('/nonexistent/path/config.yaml')
+    assert config == {}
+</tool_response>
+
+<tool_call>
+{"name": "read_file", "parameters": {"path": "/home/bradleyjerome/projects/ai/epam-cli/pyproject.toml"}}
+</tool_call>
+<tool_response>
+[build-system]
+requires = ["setuptools>=45", "wheel"]
+build-backend = "setuptools.backends.legacy:build"
+
+[project]
+name = "epam-cli"
+version = "1.0.0"
+description = "EPAM CLI tool"
+requires-python = ">=3.9"
+dependencies = [
+    "click>=8.0",
+    "pyyaml>=6.0",
+]
+
+[project.scripts]
+epam = "epam_cli.main:cli"
+</tool_call>
+</tool_response>
+
+<tool_call>
+{"name": "read_file", "parameters": {"path": "/home/bradleyjerome/projects/ai/epam-cli/epam_cli/config.yaml"}}
+</tool_call>
+<tool_response>
+default_name: World
+</tool_response>
+
+Now let me check the orchestrations directory for context:
+
+<tool_call>
+{"name": "list_directory", "parameters": {"path": "/home/bradleyjerome/projects/ai/epam-cli/orchestrations"}}
+</tool_call>
+<tool_response>
+  logs/
+  prd.json
+  stories/
+</tool_call>
+</tool_response>
+
+<tool_call>
+{"name": "list_directory", "parameters": {"path": "/home/bradleyjerome/projects/ai/epam-cli/orchestrations/logs"}}
+</tool_call>
+<tool_response>
+  agent-messages.jsonl
+</tool_call>
+</tool_response>
+
+I now have everything I need. Here is the full execution-ready plan for **HW-003**.
+
+---
+
+# Execution-Ready Plan — HW-003: Verbose Mode & Logging
+
+---
+
+## 1. Implementation Steps
+
+### Step 1 — Create `epam_cli/logging_config.py`
+**File:** `epam_cli/logging_config.py`
+
+Introduce a module that owns all logging setup. It must:
+- Define a factory function `configure_logging(verbose: bool) -> None`
+- Create/retrieve a logger named `epam_cli`
+- When `verbose=True`: set level to `DEBUG`; attach a `StreamHandler` targeting `sys.stderr` with format `[%(levelname)s] %(name)s: %(message)s`
+- When `verbose=False`: set level to `WARNING` (or higher) so no debug noise leaks to stdout or stderr
+- Guard against duplicate handler registration (idempotent call)
+
+```
+epam_cli/logging_config.py   ← NEW FILE
+```
+
+---
+
+### Step 2 — Add global `--verbose / -v` flag to the Click group in `epam_cli/main.py`
+**File:** `epam_cli/main.py` *(modify)*
+
+- Add `@click.option('--verbose', '-v', is_flag=True, default=False, help='Enable debug output on stderr')` to the `cli` group
+- Use a `@click.pass_context` + `context_settings` or the `pass_context` pattern to store `verbose` in `ctx.obj`
+- Call `configure_logging(verbose)` inside the group callback
+- Add `import logging` and obtain `logger = logging.getLogger('epam_cli')` at module level
+- Emit `logger.debug(...)` messages at key points in both `hello` and `greet` commands (e.g., "Invoking hello command", "Resolved name: {name}")
+- Ensure `click.echo(...)` (stdout) is never replaced — normal output stays clean
+
+---
+
+### Step 3 — Propagate `verbose` context to sub-commands
+**File:** `epam_cli/main.py` *(part of Step 2)*
+
+- Decorate `cli` group with `@click.pass_context` + `invoke_without_command=True` is not needed, but the context object (`ctx.ensure_object(dict)`) should carry `{'verbose': verbose}` so future sub-commands can read it if needed.
+- For HW-003 scope, wiring logger in the group callback is sufficient; sub-commands obtain it via `logging.getLogger('epam_cli')`.
+
+---
+
+### Step 4 — Write unit tests: `tests/test_logging_config.py`
+**File:** `tests/test_logging_config.py` ← **NEW FILE**
+
+Tests required:
+| Test ID | Description |
+|---|---|
+| `test_verbose_true_sets_debug_level` | After `configure_logging(True)`, `logging.getLogger('epam_cli').level == logging.DEBUG` |
+| `test_verbose_false_sets_warning_level` | After `configure_logging(False)`, `logging.getLogger('epam_cli').level >= logging.WARNING` |
+| `test_verbose_handler_targets_stderr` | When verbose, the handler stream is `sys.stderr` |
+| `test_idempotent_handler_registration` | Calling `configure_logging(True)` twice does not duplicate handlers |
+
+---
+
+### Step 5 — Write unit tests: `tests/test_verbose.py`
+**File:** `tests/test_verbose.py` ← **NEW FILE**
+
+Tests required:
+| Test ID | Description |
+|---|---|
+| `test_greet_verbose_stderr_has_debug` | `runner.invoke(cli, ['--verbose','greet','--name','Alice'])` — `result.output` contains "Hello, Alice!"; stderr/mix contains debug text |
+| `test_greet_no_verbose_no_debug_noise` | `runner.invoke(cli, ['greet','--name','Alice'])` — `result.output` == "Hello, Alice!\n"; no `[DEBUG]` in output |
+| `test_hello_verbose_stderr_has_debug` | `runner.invoke(cli, ['--verbose','hello'])` — output contains "Hello, World!" |
+| `test_hello_no_verbose_clean` | `runner.invoke(cli, ['hello'])` — output is exactly "Hello, World!\n" |
+
+> **Note on Click test runner:** Use `CliRunner(mix_stderr=False)` to get `result.stderr` separately where needed. For verbose tests assert `[DEBUG]` appears in `result.stderr`; for non-verbose assert it does not.
+
+---
+
+### Step 6 — Integration test: `tests/test_integration_verbose.py`
+**File:** `tests/test_integration_verbose.py` ← **NEW FILE**
+
+| Test ID | Description |
+|---|---|
+| `test_integration_verbose_greet_alice` | Full invocation: `epam --verbose greet --name Alice` → stdout contains "Hello, Alice!", stderr contains debug lines |
+
+This maps directly to AC-7 (the explicit integration test criterion).
+
+---
+
+### Step 7 — (Optional, low-risk) Update `README.md`
+**File:** `README.md` *(modify — minor)*
+
+Add a section documenting the `--verbose / -v` flag with a usage example. This is not an explicit AC but supports maintainability.
+
+---
+
+## 2. Dependency Validation
+
+| Dependency | Satisfied? | Reason |
+|---|---|---|
+| **HW-001** (Project scaffolding) | ✅ Yes | `status: complete`; `epam_cli/main.py`, `pyproject.toml`, entry point `epam` all exist |
+| **HW-002** (Config & Named Greeting) | ✅ Yes | `status: complete`; `config.py`, `config.yaml`, `greet` command all present and tested |
+| **Python ≥ 3.9** | ✅ Yes | `pyproject.toml` declares `requires-python = ">=3.9"`; `logging` stdlib available |
+| **Click ≥ 8.0** | ✅ Yes | `pyproject.toml` declares `click>=8.0`; `CliRunner(mix_stderr=False)` available in Click 8 |
+| **PyYAML ≥ 6.0** | ✅ Yes | Declared and used by HW-002; no new YAML usage in HW-003 but still available |
+| **pytest** | ✅ Yes | Used by existing test suite in `tests/`; assumed installed in dev env |
+
+No unsatisfied dependencies. Safe to begin implementation.
+
+---
+
+## 3. Risk Register
+
+### Risk 1 — Click CliRunner stderr capture requires `mix_stderr=False`
+- **Likelihood:** High (common oversight)
+- **Impact:** Medium — tests pass but don't actually validate that debug output goes to stderr vs stdout
+- **Mitigation:** Explicitly instantiate `CliRunner(mix_stderr=False)` in all verbose tests; assert on `result.stderr` for `[DEBUG]` lines and `result.output` for clean stdout. Add a comment in tests explaining the flag.
+
+---
+
+### Risk 2 — Duplicate logging handlers across test runs
+- **Likelihood:** Medium — Python's logging module is global; multiple test calls can stack handlers
+- **Impact:** Medium — tests may see duplicate output, causing false positives or interfering with level assertions
+- **Mitigation:** `configure_logging()` must check `logger.handlers` before adding; use a guard (e.g., `if not logger.handlers:`) or `logger.handlers.clear()` at the top of `configure_logging`. Test `test_idempotent_handler_registration` explicitly covers this.
+
+---
+
+### Risk 3 — Verbose flag placement breaks existing test invocations
+- **Likelihood:** Low-Medium — existing tests in `test_main.py` invoke `cli` without `--verbose`; adding a required option would break them, but `--verbose` is a flag with `default=False` so it's safe
+- **Impact:** Low if implemented as `is_flag=True, default=False`; High if accidentally made required
+- **Mitigation:** Implement strictly as an optional flag (`is_flag=True, default=False`). Run full regression (`pytest tests/`) before committing. Existing tests should pass unchanged.
+
+---
+
+## 4. Test Plan
+
+### New Tests Required
+
+| File | Test Name | What It Validates |
+|---|---|---|
+| `tests/test_logging_config.py` | `test_verbose_true_sets_debug_level` | Logger level = DEBUG when verbose |
+| `tests/test_logging_config.py` | `test_verbose_false_sets_warning_level` | Logger level ≥ WARNING when not verbose |
+| `tests/test_logging_config.py` | `test_verbose_handler_targets_stderr` | Handler stream is stderr |
+| `tests/test_logging_config.py` | `test_idempotent_handler_registration` | No duplicate handlers on repeated calls |
+| `tests/test_verbose.py` | `test_greet_verbose_stderr_has_debug` | Debug lines on stderr; clean stdout |
+| `tests/test_verbose.py` | `test_greet_no_verbose_no_debug_noise` | No debug noise in non-verbose mode |
+| `tests/test_verbose.py` | `test_hello_verbose_stderr_has_debug` | Hello command emits debug in verbose |
+| `tests/test_verbose.py` | `test_hello_no_verbose_clean` | Hello command clean in non-verbose |
+| `tests/test_integration_verbose.py` | `test_integration_verbose_greet_alice` | Full AC-7 integration check |
+
+**Total new tests: 9**
+
+### Regression Scope
+
+| File | Risk Level | Reason |
+|---|---|---|
+| `tests/test_main.py` | Low | Existing `hello` and `greet` tests; `--verbose` defaults to False so output unchanged |
+| `tests/test_config.py` | Minimal | No CLI invocation; pure config unit tests; unaffected |
+
+**Full regression command:** `pytest tests/ -v`
+
+---
+
+## 5. Acceptance Criteria Mapping
+
+| # | Acceptance Criterion | Implementation Step |
+|---|---|---|
+| AC-1 | Global `--verbose` / `-v` flag available on all commands | **Step 2** — Add `--verbose/-v` option to `cli` group in `main.py` |
+| AC-2 | When `--verbose` passed, debug-level messages printed to stderr | **Step 1** (`logging_config.py` StreamHandler → stderr) + **Step 2** (`logger.debug()` calls) |
+| AC-3 | Normal (non-verbose) output remains on stdout, clean | **Step 2** — `click.echo()` unchanged; logger level ≥ WARNING in non-verbose mode |
+| AC-4 | Logging configured via `epam_cli/logging_config.py` | **Step 1** — new file with `configure_logging()` function |
+| AC-5 | Logger named `epam_cli` used throughout the codebase | **Step 1** + **Step 2** — `logging.getLogger('epam_cli')` in both files |
+| AC-6 | Unit tests cover verbose=True and verbose=False behavior | **Step 4** (`test_logging_config.py`) + **Step 5** (`test_verbose.py`) |
+| AC-7 | Integration test: `epam --verbose greet --name Alice` shows debug + 'Hello, Alice!' | **Step 6** (`test_integration_verbose.py`) |
+
+All 7 acceptance criteria are fully covered.
+
+---
+
+## 6. Cost / Effort Forecast
+
+| Task | Estimated Hours |
+|---|---|
+| Step 1: Write `logging_config.py` | 0.3 h |
+| Step 2+3: Modify `main.py` (verbose flag + debug calls) | 0.5 h |
+| Step 4: `test_logging_config.py` (4 unit tests) | 0.4 h |
+| Step 5: `test_verbose.py` (4 unit tests) | 0.5 h |
+| Step 6: `test_integration_verbose.py` (1 test) | 0.2 h |
+| Step 7: README update | 0.1 h |
+| Regression run + fixes buffer | 0.5 h |
+| **Total** | **2.5 h** |
+
+**Verdict:** The PRD estimate of **3 hours** is confirmed reasonable (slightly generous, providing comfortable buffer). No adjustment needed.
+
+---
+
+Now I'll append the completion record to the agent-messages log:
+
+<tool_call>
+{"name": "run_terminal_cmd", "parameters": {"command": "(flock -w 10 9 >> /home/bradleyjerome/projects/ai/epam-cli/orchestrations/logs/agent-messages.jsonl; printf '%s\\n' '{\"id\":\"plan_HW-003_'$(date +%s)'\",\"timestamp\":\"'$(date -Iseconds)'\",\"from_agent\":\"plan-agent\",\"to_agent\":\"review-agent\",\"story_id\":\"HW-003\",\"phase_id\":\"unknown\",\"message_type\":\"plan_summary\",\"priority\":\"normal\",\"subject\":\"Plan ready for HW-003\",\"body\":\"9-new tests across 3 files cover all 7 ACs; primary risks are Click stderr capture, duplicate logging handlers, and verbose flag breaking existing tests—all mitigated in the plan.\",\"status\":\"new\"}' >&9) 9>>/home/bradleyjerome/projects/ai/epam-cli/orchestrations/logs/agent-messages.jsonl", "is_background": false, "explanation": "Atomically append plan summary JSON record to agent-messages.jsonl using flock"}}
+</tool_call>
+<tool_response>
+</tool_response>
+
+Let me verify the record was written correctly:
+
+<tool_call>
+{"name": "run_terminal_cmd", "parameters": {"command": "tail -3 /home/bradleyjerome/projects/ai/epam-cli/orchestrations/logs/agent-messages.jsonl", "is_background": false, "explanation": "Verify the JSON record was appended correctly"}}
+</tool_call>
+<tool_response>
+{"id":"plan_HW-003_1753377551","timestamp":"2025-07-24T11:59:11-05:00","from_agent":"plan-agent","to_agent":"review-agent","story_id":"HW-003","phase_id":"unknown","message_type":"plan_summary","priority":"normal","subject":"Plan ready for HW-003","body":"9-new tests across 3 files cover all 7 ACs; primary risks are Click stderr capture, duplicate logging handlers, and verbose flag breaking existing tests—all mitigated in the plan.","status":"new"}
+</tool_response>
+
+The record is written. Here's a final summary of the complete plan:
+
+---
+
+## Plan Summary — HW-003
+
+### What gets built (7 steps → 3 new files, 2 modified)
+| Action | File |
+|---|---|
+| **NEW** | `epam_cli/logging_config.py` — `configure_logging(verbose)` factory |
+| **MODIFY** | `epam_cli/main.py` — add `--verbose/-v` flag to group, call `configure_logging`, add `logger.debug()` calls |
+| **NEW** | `tests/test_logging_config.py` — 4 unit tests |
+| **NEW** | `tests/test_verbose.py` — 4 unit tests |
+| **NEW** | `tests/test_integration_verbose.py` — 1 integration test |
+| **MODIFY** | `README.md` — document `--verbose` flag |
+
+### All 7 ACs covered, all 2 dependencies satisfied, 3 risks mitigated
+### Effort: 2.5 h actual vs. 3.0 h estimated ✅ (within budget)
+### Handoff: `plan-agent → review-agent` logged atomically ✅

@@ -1,0 +1,11 @@
+=== Pre-Review Gate: core @ 2026-07-26T19:10:54-04:00 ===
+
+ RUN  v4.1.10 /tmp/brownfield-mock-e2e-tToWlb/codelines/mock-hello-world
+
+
+ Test Files  1 passed (1)
+      Tests  1 passed (1)
+   Start at  19:10:54
+   Duration  104ms (transform 15ms, setup 0ms, import 22ms, tests 2ms, environment 0ms)
+
+=== Gate Result: PASS ===

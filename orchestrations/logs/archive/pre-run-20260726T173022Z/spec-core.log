@@ -1,0 +1,10 @@
+spec-mode: fast-path qwen/z-ai/glm-5.2 (skipping MiniMax)
+spec-mode: fast-path qwen/z-ai/glm-5.1 (skipping MiniMax)
+spec-mode: ⚠️ code-graph-detective answer for AMSD-1820 is UNGROUNDED (attempt 1/3) — 1 finding(s) quote code that is NOT in the file they name (e.g. src/services/submit-reservations/apply-report-discounts.service.ts: "lineItemKey === orderLineItem.id") — the diagnosis is not backed by real code.
+spec-mode: code-graph-detective ladder escalation for AMSD-1820 (attempt 2/3) — model z-ai/glm-5.1 → moonshotai/kimi-k3
+spec-mode: AMSD-1820 — 3 verification criteria persisted (source: description, resolution: clean)
+spec-mode: fast-path qwen/z-ai/glm-5.1 (skipping MiniMax)
+spec-mode: fast-path qwen/z-ai/glm-5.2 (skipping MiniMax)
+spec-mode: fast-path qwen/z-ai/glm-5.2 (skipping MiniMax)
+spec-mode: LLM model review completed for 0 stories
+spec-mode: completed for phase core (run 20260726T165757Z)

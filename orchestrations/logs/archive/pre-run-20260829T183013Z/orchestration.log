@@ -1,0 +1,15 @@
+[mint-step] codeline mocka: /home/bradleyjerome/projects/mock3/mock-a (2 declared deps)
+[mint-step] codeline mockb: /home/bradleyjerome/projects/mock3/mock-b (2 declared deps)
+[mint-step] plugins provisioned: 1 · mint tools: read_file,list_files,search,codegraph_query
+spec-mode: fast-path claude/claude-haiku-4-5-20251001 (skipping MiniMax)
+[mint-step]   survey: mocka — not_investigated
+[mint-step]   survey: mockb — not_investigated
+spec-mode: fast-path claude/claude-haiku-4-5-20251001 (skipping MiniMax)
+spec-mode: fast-path claude/claude-haiku-4-5-20251001 (skipping MiniMax)
+[mint-step] proposed=2 minted=0 unchanged=0 rejected=1 superseded=0
+[mint-step]   ! no investigator minted for codeline "mocka" — it will use the canonical detective
+[mint-step]   ! no investigator minted for codeline "mockb" — it will use the canonical detective
+[mint-step]   ! refused stand-in-agent-mint: the name "stand-in-agent-mint" resolves to no seam, so nothing can run this role. An agent of kind "implementer" must be named ending in "-engineer" or "-fixer".
+[mint-step] [roster] rosterMode=canonical — 55 persona(s) adopted verbatim, no specialiser call
+[mint-step] project roster: 55 agent(s)
+[mint-step] FAILED: [assign] no project implementation roles are registered for this project — nothing was minted, so there is no role any story could honestly be assigned.

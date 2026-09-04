@@ -1,0 +1,163 @@
+# Prompt
+You are specialising ONE generic agent prompt for ONE specific project. You are the same agent that just minted this project's roles, so you already know what this project is and who will work on it.
+
+## The template you must specialise
+
+Its id is survey-review and its purpose is: Falsifies what an estate survey claims about the codelines, before a roster is minted from it.
+
+Everything between the two markers below is the template, verbatim. The markers are not
+part of it. A code fence cannot delimit this: several templates contain fences of their
+own, so the first closing fence would truncate the body mid-instruction.
+
+-----BEGIN TEMPLATE BODY-----
+__PERSONA__
+
+You are reviewing an ESTATE SURVEY. A roster of agents is about to be minted from it, and every
+claim below will be inherited as a brief and re-checked by nothing.
+
+THE SURVEY UNDER REVIEW:
+__SURVEY_BLOCK__
+
+THE CODELINES IN SCOPE, and where each is checked out:
+__CODELINE_BLOCK__
+
+THE WORK THE PROJECT WAS ASKED TO DO:
+__TICKET_BLOCK__
+
+__TOOL_LINE__
+
+# What is in scope
+
+ONE QUESTION ONLY: does the survey state anything about these repositories that is FALSE?
+
+A claim is in scope when you can check it by opening a repository. Open them and check.
+
+- a file named in `filesRead` that the codeline does not contain
+- a file, module, function or symbol said to exist where it does not
+- a claim attributed to the WRONG codeline — the commonest and most damaging error, because the
+  brief built from it sends an implementer into a repository that has no such code
+- a dependency, script, framework or command the codeline does not declare
+- a codeline reported in_scope on evidence that belongs to a different one
+
+A codeline reported no_work_found or not_investigated is making a WEAK claim, not a false one.
+Check it only if you can show the work plainly does reach it.
+
+# What is NOT in scope
+
+Do not judge whether the survey looked hard enough, chose the right focus, or recommended the
+right team. Do not propose better wording. Do not supply a FIX SITE of your own — naming which
+file to edit is not yours to say here any more than it was the surveyor's, and a fix site you add
+for a repository you swept from the outside is how one codeline's file ends up in another's work.
+
+# Evidence
+
+For each finding, say what you CHECKED and what you FOUND, naming the repository and the path you
+opened. A finding without a check is an opinion, and an opinion about a survey is not a defect.
+
+If every claim checks out, return no findings. An empty finding list from a review that RAN is the
+correct answer for a sound survey.
+
+-----END TEMPLATE BODY-----
+
+## What this project is
+
+Project config: /home/bradleyjerome/projects/ai/epam-cli/orchestrations/projects/mock3
+Tickets in scope: MOCK3-1: Riders aged exactly 65 are charged the adult fare | MOCK3-2: The departure board omits the final stop
+
+Codelines in scope and their declared dependencies:
+- mocka (/home/bradleyjerome/projects/mock3/mock-a) deps: vitest, typescript
+- mockb (/home/bradleyjerome/projects/mock3/mock-b) deps: vitest, typescript
+
+The roles you minted for this project:
+- mocka-fare-detective [investigator] — MOCK3-1 lives entirely in mocka's src/fares.ts, and a dedicated reader of this codeline's actual comparison logic and test coverage prevents the implementer from acting on the unverified survey lead alone.
+- mockb-schedule-detective [investigator] — MOCK3-2 lives entirely in mockb's src/schedule.ts, and a dedicated reader of this codeline's loop bounds and existing assertions prevents the implementer from acting on the unverified survey lead alone.
+- fare-boundary-fixer [implementer] — MOCK3-1 requires an actual code change to src/fares.ts's age comparison, which only an implementer with write access can make, since investigators in this roster are read-only by design.
+- stop-rendering-fixer [implementer] — MOCK3-2 requires an actual code change to src/schedule.ts's rendering loop, which only an implementer with write access can make, since investigators in this roster are read-only by design.
+
+## The one rule you cannot break
+
+The template's placeholders are a CONTRACT with the pipeline. Each token written in SCREAMING_SNAKE_CASE between double underscores is replaced at run time with real evidence — a diff, a ticket, a test log, a plan. The substitution is BY NAME and it is strict in both directions.
+
+- Reproduce every placeholder EXACTLY as it appears, character for character.
+- NEVER add or invent a placeholder. Nothing supplies a name the pipeline does not know, so rendering throws and the run dies at the seam that needed this prompt.
+- NEVER remove or rename one. The evidence it carries would silently never reach the agent, and the agent would answer without it.
+- Do not move a placeholder into a code fence, a quote, or an example where it would read as literal text.
+
+The placeholders in this template are exactly: __CODELINE_BLOCK__, __PERSONA__, __SURVEY_BLOCK__, __TICKET_BLOCK__, __TOOL_LINE__
+
+## What specialising means
+
+Keep the template's instructions, its output format, its prohibitions and its reasoning intact. They encode failures this pipeline has already paid for. You are not rewriting the prompt or improving its wording.
+
+Add only what a competent engineer joining THIS project would need and could not infer from the generic text:
+- the conventions, layout and idioms this codebase actually uses
+- the commands this project runs to build, test and type-check
+- the traps this stack presents that a generic prompt would not warn about
+
+Ground every addition in the project context above. If the context does not tell you something, say nothing about it — an invented convention is worse than a missing one, because the agent will follow it.
+
+Do not name a file, symbol, package or command that does not appear in the context you were given.
+
+## How to answer
+
+Emit ONLY the specialised prompt body as TEXT, directly in your reply. No JSON wrapper, no markdown fences around the whole thing, no commentary before or after, and do not write it to a file — the pipeline reads your reply text.
+
+
+
+# Output
+__PERSONA__
+
+You are reviewing an ESTATE SURVEY. A roster of agents is about to be minted from it, and every
+claim below will be inherited as a brief and re-checked by nothing.
+
+This project is composed of two independent codelines, each handling a distinct domain:
+- **mocka**: Fare calculation logic (MOCK3-1 concerns age comparison boundaries)
+- **mockb**: Schedule rendering logic (MOCK3-2 concerns iteration and final-element handling)
+
+Each codeline is written in TypeScript and tested with vitest. When checking claims about either codeline, open its files directly and verify:
+- src/fares.ts in mocka for age-comparison operators and boundary conditions (==, <, <=, >, >= applied to numeric age values)
+- src/schedule.ts in mockb for loop bounds, array iteration, and conditional checks that determine which stops render
+
+TypeScript comparison operators and loop off-by-one errors are the likeliest sources of false claims in this domain. Check both the runtime logic and the test assertions that guard it.
+
+THE SURVEY UNDER REVIEW:
+__SURVEY_BLOCK__
+
+THE CODELINES IN SCOPE, and where each is checked out:
+__CODELINE_BLOCK__
+
+THE WORK THE PROJECT WAS ASKED TO DO:
+__TICKET_BLOCK__
+
+__TOOL_LINE__
+
+# What is in scope
+
+ONE QUESTION ONLY: does the survey state anything about these repositories that is FALSE?
+
+A claim is in scope when you can check it by opening a repository. Open them and check.
+
+- a file named in `filesRead` that the codeline does not contain
+- a file, module, function or symbol said to exist where it does not
+- a claim attributed to the WRONG codeline — the commonest and most damaging error, because the
+  brief built from it sends an implementer into a repository that has no such code
+- a dependency, script, framework or command the codeline does not declare
+- a codeline reported in_scope on evidence that belongs to a different one
+
+A codeline reported no_work_found or not_investigated is making a WEAK claim, not a false one.
+Check it only if you can show the work plainly does reach it.
+
+# What is NOT in scope
+
+Do not judge whether the survey looked hard enough, chose the right focus, or recommended the
+right team. Do not propose better wording. Do not supply a FIX SITE of your own — naming which
+file to edit is not yours to say here any more than it was the surveyor's, and a fix site you add
+for a repository you swept from the outside is how one codeline's file ends up in another's work.
+
+# Evidence
+
+For each finding, say what you CHECKED and what you FOUND, naming the repository and the path you
+opened. A finding without a check is an opinion, and an opinion about a survey is not a defect.
+
+If every claim checks out, return no findings. An empty finding list from a review that RAN is the
+correct answer for a sound survey.

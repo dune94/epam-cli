@@ -1,0 +1,1162 @@
+# Prompt
+You are the openspec specification agent for EPAM CLI. Phase core, story AMSD-2041.
+EXISTING CODE — CodeGraph static analysis (exact symbols, callers, blast radius):
+**Dynamic-dispatch links among your symbols**
+(synthesized — the indirect hops grep/Read would reconstruct; the `@file:line` is the wiring site)
+
+- Header → NavigationBar   [dynamic: renders <NavigationBar>]
+- NavigationBar → Close   [dynamic: renders <Close>]
+- NavigationBar → Menu   [dynamic: renders <Menu>]
+- NavigationBar → Onboarding   [dynamic: renders <Onboarding>]
+- NavigationBar → ButtonWithIcon   [dynamic: renders <ButtonWithIcon>]
+- NavigationBar → ContentstackLink   [dynamic: renders <ContentstackLink>]
+
+> Full source for these symbols is below — the call flow among them, followed by their bodies.
+**Exploration: applies handles processes resolves [MX] Live Preview  Content  CMS (part 1)**
+
+Found 12 symbols across 4 files.
+
+**Blast radius — what depends on these (update/verify before editing)**
+
+- `content` (src/components/contentstack/ContentstackAttention/content.mock.ts:1) — 1 caller; tests: `src/components/contentstack/ContentstackAttention/ContentstackAttention.spec.tsx`
+- `content` (src/components/contentstack/ContentStackGallery/ContentStackGallery.mock.ts:110) — 1 caller; tests: `src/components/contentstack/ContentStackGallery/ContentStackGallery.spec.tsx`
+- `IContentCard` (src/interface/content/contentCard.ts:7) — 6 callers in `src/components/contentstack/ContentstackContentCards/utils.ts`, `src/interface/content/mixedCard.ts`, `src/interface/content/contentCard.ts`; ⚠️ no covering tests found
+- `IContentCardProps` (src/components/contentstack/ContentstackMixedCards/ContentstackMixedCards.tsx:23) — 1 caller in `src/components/contentstack/ContentstackMixedCards/ContentstackMixedCards.tsx`; ⚠️ no covering tests found
+
+**Relationships**
+
+**references:**
+- content → galleryItems
+- content → IImageGallery
+- IImageGallery → IGalleryItem
+- invalidContent → IImageGallery
+- renderContentStackGallery → IImageGallery
+- PageComponent → IImageGallery
+- IContentstackPage → IImageGallery
+- invalidContent → invalidGalleryItems
+- PageComponent → IVideo
+- PageComponent → IContentstackImage
+- ... and 54 more
+
+**calls:**
+- renderContentStackGallery → render
+- useContent → getValue
+- CookiesBanner → useContent
+- DynamicEventsListContainer → useContent
+- FeatureListing → useContent
+- Footer → useContent
+- MobileNav → useContent
+- NavigationBar → useContent
+- QuickMenu → useContent
+- TopBar → useContent
+- ... and 28 more
+
+**Source Code**
+
+> The code below is the **verbatim, current on-disk source** of these files — re-read from disk on this call and line-numbered, byte-for-byte identical to what the Read tool returns. It is NOT a summary, outline, or stale cache. Treat each block as a Read you have already performed: do not Read a file shown here.
+
+**`src/components/contentstack/ContentstackText/ContentstackText.tsx`** — IContentstackText(interface), ContentstackText(function), ContentstackText.tsx(file)
+
+```tsx
+1	import { FC } from "react";
+2	import { useContent } from "hooks/useContent";
+3	
+4	export interface IContentstackText {
+5	  contentKey: string;
+6	}
+7	
+8	export const ContentstackText: FC<IContentstackText> = ({ contentKey }) => {
+9	  const { getContentByKey } = useContent();
+10	
+11	  return <>{getContentByKey<string>(contentKey, "")}</>;
+12	};
+```
+
+**`src/components/contentstack/ContentstackAttention/content.mock.ts`** — content(constant)
+
+```typescript
+1	export const content = {
+2	  page: [
+3	    {
+4	      _version: 45,
+5	      locale: "en-ca",
+6	      uid: "bltf6d0508381eee7d8",
+7	      ACL: {},
+8	      _in_progress: false,
+9	      content_base: {
+10	        promotional_description:
+11	          "Metrolinx is undertaking the largest transportation investment in Ontario's history",
+12	      },
+13	      created_at: "2022-04-06T19:30:53.056Z",
+14	      created_by: "bltc09223c5ca0e7543",
+15	      page_components: [
+16	        {
+17	          Attention_Block: {
+18	            attention_block_type: "Notice",
+19	            attention_block_heading: "Notice",
+20	            _metadata: {
+21	              uid: "cs8833f7b30db5c6ce",
+22	            },
+23	            attention_block_copy: {
+24	              uid: "2f739b0522d04041b30c922fb60159c8",
+25	              attrs: {},
+26	              children: [
+27	                {
+28	                  uid: "48053903dd164bedb5707546ea7cf916",
+29	                  type: "p",
+30	                  attrs: {},
+31	                  children: [
+32	                    {
+33	                      text: "We’re growing by leaps and bounds every year, and transit needs to grow along with us. Metrolinx and our partners are delivering a bold plan backed by the single largest transit infrastructure investment in Canadian history. You can already see the difference it’s starting to make.",
+34	                    },
+35	                  ],
+36	                },
+37	                {
+38	                  uid: "cabd460bc43644b893e173f7b8f27d5b",
+39	                  type: "p",
+40	                  attrs: {},
+41	                  children: [
+42	                    {
+43	                      text: "",
+44	                    },
+45	                  ],
+46	                },
+47	              ],
+48	              type: "doc",
+49	              _version: 45,
+50	            },
+51	            attention_block_link: {
+52	              title: "View Details",
+53	              href: "https://www.metrolinx.com/en/greaterregion/default.aspx",
+54	            },
+55	          },
+56	        },
+57	      ],
+58	      seo: {
+59	        seo_title: "Welcome to Metrolinx",
+60	        seo_meta_description:
+61	          "Metrolinx, an agency of the Government of Ontario, works to get you where you need to go better, faster, easier.",
+62	        seo_keywords: "transportation investment community ontario transit",
+63	        canonical_url: "",
+64	      },
+65	      site_architecture: [
+66	        {
+67	          uid: "bltde0c737e571c0520",
+68	          _content_type_uid: "site_architecture",
+69	        },
+70	      ],
+71	      subtitle: "We’re undertaking the largest transportation investment in Ontario’s history",
+72	      tags: [],
+73	      title: "About Metrolinx",
+74	      updated_at: "2022-04-16T10:01:14.854Z",
+75	      updated_by: "blt8ab502e9e42526e5",
+76	      url: "/about",
+77	      publish_details: {
+78	        environment: "blt31cd81aa028a947d",
+79	        locale: "en-ca",
+80	        time: "2022-04-16T10:01:19.626Z",
+81	        user: "blt8ab502e9e42526e5",
+82	      },
+83	      _owner: {
+84	        uid: "bltc09223c5ca0e7543",
+85	        created_at: "2022-03-22T21:29:24.736Z",
+86	        updated_at: "2022-04-18T12:59:34.217Z",
+87	        email: "v-epam-gillian.rosheuvel@metrolinx.com",
+88	        username: "v-epam-gillian_blt9c68cb9d",
+89	        first_name: "Gillian",
+90	        last_name: "Rosheuvel",
+91	        org_uid: [],
+92	        shared_org_uid: ["blt63cb7dd69809ef75"],
+93	        active: true,
+94	        profile_type: "business",
+95	        failed_attempts: 0,
+96	        settings: {
+97	          preferences: {
+98	            global: [],
+99	            stack: [],
+100	          },
+101	        },
+102	        last_login_at: "Mon Apr 18 2022 12:59:34 GMT+0000 (Coordinated Universal Time)",
+103	      },
+104	    },
+105	  ],
+106	};
+```
+
+**`src/components/ContentCard/ContentCard.tsx`** — IContentCardProps(interface)
+
+```tsx
+1	import { FC, useState, ReactNode } from "react";
+2	import { useTranslation } from "next-i18next";
+3	import { twTheme } from "@metrolinx/cx-shared/build/src/constants/tailwind";
+4	import { cn } from "@metrolinx/cx-shared/build/src/utils/cn";
+5	import CustomLink from "components/CustomLink/CustomLink";
+6	import { Image } from "components/Image";
+7	import { useNextLocale } from "hooks/useNextLocale";
+8	import { IContentCard } from "interface/content/news";
+9	import { getMetaDataInfoBasedOnLocale } from "utils/common";
+10	import { getLocaleByNextLocale } from "utils/locale";
+11	
+12	export interface IContentCardProps extends IContentCard {
+13	  children?: ReactNode;
+14	  linkContentType?: string;
+15	}
+16	
+17	export const ContentCard: FC<IContentCardProps> = ({
+18	  url,
+19	  image,
+20	  title,
+21	  description,
+22	  linkContentType,
+23	  withStroke = false,
+24	  shadow = "dark",
+25	  children,
+26	  type,
+27	  tags,
+28	}) => {
+29	  const locale = useNextLocale();
+30	  const { t } = useTranslation();
+31	
+32	  const [hasError, setHasError] = useState(false);
+33	
+34	  const currentLocale = getLocaleByNextLocale(locale);
+35	  const { description: altText } = getMetaDataInfoBasedOnLocale(image?.metadata, currentLocale);
+36	
+37	  const imageFallback =
+38	    !image?.public_id || hasError
+39	      ? `url(/images/image-placeholder.svg) no-repeat center, ${twTheme.colors.neutral[400]}`
+40	      : twTheme.colors.global.white;
+41	  const translatedType = type && t(`contentCardPill${type}`, "");
+42	
+43	  const renderCardContent = () => (
+44	    <div
+45	      className={cn(
+46	        "h-full w-[272px] sm:w-[304px]",
+47	        { "border border-solid border-neutral-300": withStroke, "hover:shadow-sm": url },
+48	        shadow === "light" ? "hover:shadow-global-white/30" : "hover:shadow-global-black/10",
+49	      )}
+50	    >
+51	      <div
+52	        className="relative h-[200px]"
+53	        style={{
+54	          background: imageFallback,
+55	        }}
+56	      >
+57	        {image?.public_id && (
+58	          <Image
+59	            src={encodeURI(image?.public_id)}
+60	            alt={altText || ""}
+61	            objectFit="cover"
+62	            objectPosition="center"
+63	            layout="fill"
+64	            onImageError={() => setHasError(true)}
+65	            data-testid="content-card-image"
+66	          />
+67	        )}
+68	      </div>
+69	      <div className="p-24 w-full text-left break-words" role="group">
+70	        {translatedType && (
+71	          <span className="inline-block py-[6px] px-8 cx-overline text-global-black bg-neutral-200 rounded-[4px] mb-12 font-normal">
+72	            {translatedType}
+73	          </span>
+74	        )}
+75	        {title && (
+76	          <strong
+77	            className="w-full block cx-headline-500 text-global-black mb-12"
+78	            data-testid="content-card-heading"
+79	          >
+80	            {title}
+81	          </strong>
+82	        )}
+83	        {description && (
+84	          <p className="cx-body-text text-neutral-700" data-testid="content-card-description">
+85	            {description}
+86	          </p>
+87	        )}
+88	        {children}
+89	
+90	        {/* Tags */}
+91	        {tags && tags?.length > 0 ? (
+92	          <div className="mt-12 flex flex-wrap gap-x-8 gap-y-12">
+93	            {tags.map((tag, index) => (
+94	              <span
+95	                key={index}
+96	                className="inline-block text-center py-[4px] px-8 cx-body-text-xsmall text-global-black bg-neutral-200 rounded-[4px]"
+97	              >
+98	                {tag.toUpperCase()}
+99	              </span>
+100	            ))}
+101	          </div>
+102	        ) : null}
+103	      </div>
+104	    </div>
+105	  );
+106	
+107	  if (!title || (!description && !children)) return null;
+108	
+109	  return (
+110	    <>
+111	      {url ? (
+112	        <CustomLink
+113	          tabIndex={0}
+114	          href={url}
+115	          className="content-card block h-full w-fit bg-global-white cx-focus-outline"
+116	          data-ga-select-content={linkContentType}
+117	          data-testid="content-card-container"
+118	        >
+119	          {renderCardContent()}
+120	        </CustomLink>
+121	      ) : (
+122	        <div
+123	          aria-disabled
+124	          role="link"
+125	          tabIndex={0}
+126	          className="content-card block h-full w-fit bg-global-white cx-focus-outline"
+127	        >
+128	          {renderCardContent()}
+129	        </div>
+130	      )}
+131	    </>
+132	  );
+133	};
+```
+
+
+
+EXISTING CODE (brownfield fallback via Semble — identify the code path that handles this behavior, then specify how to fix it; do not propose new abstractions):
+// src/components/pages/ProjectNewsPage.tsx (lines 32–45, relevance: 0.0155)
+<div className="mx-0 lg:mx-40 xl:mx-auto cx-container">
+          <div className="col-span-full xl:col-start-2 xl:col-span-14 bg-global-white">
+            <ProjectHubNavigation page={page} />
+            <section className="mx-24 sm:mx-40 lg:mx-0 mt-24 sm:mt-40 cx-inner-container">
+              <div className="lg:col-start-2 xl:col-start-2 lg:col-span-10 xl:col-span-12 lg:-mx-16 xl:mx-0 mb-56 lg:mb-64">
+                <div className="mb-56 lg:mb-48 peer empty:m-0">
+                  <ContentstackBreadcrumbs />
+                </div>
+                <h2 className="cx-headline-300 mb-24">{title}</h2>
+                <InTheNews />
+              </div>
+            </section>
+          </div>
+        </div>
+
+---
+
+// src/components/Podcast/content.mock.ts (lines 79–80, relevance: 0.0119)
+contentSnippet:
+        "On this week's episode: Metrolinx President and CEO Phil Verster weighs in on how inflationary pressures are impacting Metrolinx's day to day operations and capital projects. We also ask him if Metrolinx can play a role in helping to solve some of the labour shortage issues in the industry.\nHost:\nMatt Llewellyn (@mattrolinx)\nGuest:\nPhil Verster, Metrolinx President & CEO\nProducer/Social:\nJames Wattie (@jameswattie)\nLearn more at https://blog.metrolinx.com/podcast/\nCredits:\nCzar Donic / Red Red Shoes / courtesy of www.epidemicsound.com\nDusty Decks / Golden Crates / courtesy of www.epidemicsound.com\n\n--- \n\nSend in a voice message: https://anchor.fm/metrolinx/message",
+
+---
+
+// src/components/contentstack/ContentstackAttention/content.mock.ts (lines 26–36, relevance: 0.0109)
+[
+                {
+                  uid: "48053903dd164bedb5707546ea7cf916",
+                  type: "p",
+                  attrs: {},
+                  children: [
+                    {
+                      text: "We’re growing by leaps and bounds every year, and transit needs to grow along with us. Metrolinx and our partners are delivering a bold plan backed by the single largest transit infrastructure investment in Canadian history. You can already see the difference it’s starting to make.",
+                    },
+                  ],
+                },
+
+---
+
+// src/components/pages/ProjectContactUsPage.tsx (lines 268–280, relevance: 0.0100)
+<div className="mx-0 lg:mx-40 xl:mx-auto cx-container">
+          <div className="col-span-full xl:col-start-2 xl:col-span-14 bg-global-white">
+            <ProjectHubNavigation page={page} />
+            <section
+              ref={pageContainerRef}
+              className="mx-24 sm:mx-40 lg:mx-0 mt-24 sm:mt-40 cx-inner-container"
+            >
+              <div className="mb-56 lg:mb-64 col-span-full lg:col-start-1 lg:col-span-9 bg-global-white">
+                <div className="mb-56 sm:mb-48 lg:ml-[80px]">
+                  <ContentstackBreadcrumbs />
+                </div>
+
+                {/* Heading, Subtitle */}
+
+---
+
+// src/components/pages/EventPage/EventPage.tsx (lines 51–64, relevance: 0.0097)
+<div className="col-span-full xl:col-start-2 xl:col-span-14 bg-global-white">
+            <section className="mt-24 sm:mt-40 cx-inner-container">
+              <div className="mx-24 sm:mx-40 col-span-full lg:col-start-2 lg:col-span-10 lg:-mx-16 xl:mx-0 xl:col-start-2 xl:col-span-12">
+                <div className="mb-24 sm:mb-48">
+                  <ContentstackBreadcrumbs pageSpecificProps={{ title }} />
+                </div>
+                <div className="mb-56 sm:mb-64 empty:hidden">
+                  <ContentstackJoinEvent
+                    contentKey={paths.joinEvent}
+                    specificProps={{ description: promotionalDescription }}
+                  />
+                </div>
+              </div>
+            </section>
+
+---
+
+// src/components/pages/RegionTopicPage/RegionTopicPage.tsx (lines 50–58, relevance: 0.0097)
+<div className="py-28 sm:py-32 col-span-full lg:col-start-2 lg:col-span-10 lg:-mx-16 xl:col-start-2 xl:col-span-14 xl:mx-0 bg-global-white empty:hidden">
+            <div className="cx-inner-container">
+              <div className="col-span-full xl:col-start-2 xl:col-span-12">
+                <ContentstackSubscribeBlock contentKey={paths.subscribeBlock} />
+              </div>
+            </div>
+          </div>
+        </div>
+      </div>
+
+---
+
+// src/components/pages/ProjectDetailsPage.tsx (lines 80–90, relevance: 0.0096)
+<div
+                className={cn(
+                  "order-1 lg:col-start-2 xl:col-start-2 lg:-mx-16 xl:mx-0 mb-56 lg:mb-64",
+                  isOnPageNavigationShown
+                    ? "lg:col-span-7 xl:col-span-8"
+                    : "lg:col-span-10 xl:col-span-12",
+                )}
+              >
+                <div className="mb-24 peer empty:m-0">
+                  <ContentstackBreadcrumbs />
+                </div>
+
+---
+
+// src/components/pages/NewsDetails.tsx (lines 225–245, relevance: 0.0094)
+<SubscribeCard
+                  classes={{ container: "w-auto mx-24 sm:w-full sm:max-w-[390px] sm:mx-0" }}
+                />
+              </aside>
+            </div>
+          </div>
+        </div>
+      </div>
+      {withRecentNews && (
+        <section className="w-full mx-0 xl:mx-auto cx-container bg-neutral-200">
+          <div className="w-full col-span-full xl:col-start-2 xl:col-end-14">
+            <ContentstackRecentNews heading={recentNewsHeading} />
+          </div>
+        </section>
+      )}
+      <div className="w-full">
+        <ContentStackLandAcknowledgement />
+      </div>
+    </div>
+  );
+
+---
+
+// src/components/RelatedProjects/RelatedProjects.tsx (lines 45–64, relevance: 0.0159)
+return (
+    <section className={classNames("w-full sm:w-fit max-w-full", wrapperClasses)}>
+      <h2
+        className="mb-24 sm:mb-32 mx-24 sm:mx-40 xl:mx-0 cx-headline-300 sm:cx-headline-200 text-global-black"
+        data-testid="recent-news-heading"
+      >
+        {t("relatedProjects")}
+      </h2>
+      <div className="mx-auto sm:mx-0">
+        <CardsSlider>
+          {mappedProjects.map((item) => (
+            <SwiperSlide key={item.title}>
+              <ContentCard {...item} shadow="dark" />
+            </SwiperSlide>
+          ))}
+        </CardsSlider>
+      </div>
+    </section>
+  );
+};
+
+---
+
+// src/components/pages/NewsLandingPage.tsx (lines 53–68, relevance: 0.0150)
+<div className="col-span-full -mx-24 sm:-mx-40 lg:mx-0 xl:col-start-2 xl:col-span-14 bg-global-black">
+            <div className="cx-inner-container">
+              <div className="col-span-full lg:col-start-2 lg:col-span-10 lg:-mx-16 xl:col-start-2 xl:col-span-12 xl:mx-0 bg-global-black">
+                <SearchWidget
+                  pageType={PageType.news}
+                  pageUrl={getPageBaseURL(ContentTypes.NewsSearchResultsPage)}
+                  labels={{
+                    heading: t("TRM347"),
+                  }}
+                  tags={FILTERS.news.join(",")}
+                  isClearable
+                />
+              </div>
+            </div>
+          </div>
+        </div>
+
+---
+
+// src/styles/base/font.css (lines 65–90, relevance: 0.0101)
+@font-face {
+    font-family: "MX Sans";
+    font-style: italic;
+    font-weight: 700;
+    font-display: swap;
+    src: url("../assets/fonts/mx-sans/mx-sans-italic.otf") format("opentype");
+  }
+  @font-face {
+    font-family: "MX Sans";
+    font-style: normal;
+    font-weight: 900;
+    font-display: swap;
+    src: url("../assets/fonts/mx-sans/mx-sans-bold.otf") format("opentype");
+  }
+  @font-face {
+    font-family: "MX Sans";
+    font-style: italic;
+    font-weight: 900;
+    font-display: swap;
+    src: url("../assets/fonts/mx-sans/mx-sans-italic.otf") format("opentype");
+  }
+
+  body {
+    font-family: "MX Sans", Arial, sans-serif;
+  }
+}
+
+---
+
+// src/components/LinkedEvents/LinkedEvents.tsx (lines 44–61, relevance: 0.0094)
+return {
+          title,
+          description,
+          date,
+          time,
+          image: image,
+          url: getFullResourceUrl(url, directory?.[0]?.uid),
+          tags: [regionTag, ...topicsTags].filter(Boolean) as string[],
+        };
+      })
+      .filter(({ title, date, time }) => Boolean(title) && Boolean(date) && Boolean(time));
+  };
+
+  const mappedCards = mapCardsData(upcomingAndLiveEvents, locale);
+
+  return mappedCards.length > 0 ? (
+    <div className="py-28 sm:py-32 pb-28 last:pb-56 sm:pb-32 sm:last:pb-64 col-span-full lg:col-start-2 lg:col-span-10 lg:-mx-16 xl:col-start-2 xl:col-span-14 xl:mx-0 bg-global-white empty:hidden">
+      <div className="cx-inner-container">
+
+
+LOCATED FIX SITE(S) — traced in this repository before you were asked. Anchor every criterion to the behaviour THIS code produces:
+- src/services/contentstack.ts :: options — This is the Stack configuration site — the single contentstack.Stack(options) call at line 91 that every data fetch flows through (via ContentstackFactory). The options object (lines 71-89) currently contains api_key, delivery_token, environment, branch, fetchOptions but NO live_preview block. Adding live_preview here is what enables the SDK to detect preview mode and return draft entries — without it, no downstream consumer can ever receive preview data.
+- src/pages/_app.tsx :: ContentstackContext.Provider — This is the app-wide provider site where ContentstackContext.Provider wraps the application and sets the context value from server-side page props (header, footer, onboarding, page). For live preview, @contentstack/live-preview-utils must be initialized here with an onEntryChange callback that receives updated entry data from the CMS and pushes it into React state, causing the provider value and all 147+ useContent consumers to re-render. This callback is the PRODUCER of live preview entry data on the client.
+- src/context/contentstackContext.tsx :: ContentstackContext — The React context that distributes Contentstack data to all components via the useContent hook. Currently createContext<IContentstackContext>({}) with a static interface — the Provider value is set once from server-side props and never updated. For live preview, this context must CARRY reactive state so that when onEntryChange in _app.tsx fires with updated entry data, all useContent consumers re-render with new values.
+- src/components/pages/Homepage.tsx :: Homepage — Target page per acceptance criteria (MX Homepage). Receives page prop (IContentstackPage[]) and renders ContentStackHomePageHeroBanner, HomepageComponentMapper, ContentstackRecentNews, ContentStackLandAcknowledgement. Child components use useContent hook which reads from ContentstackContext. Once the context becomes reactive via onEntryChange, Homepage and all its children will automatically re-render with preview data — no direct edit needed.
+- src/services/pageService.ts :: PageService.getPageEntry — Server-side data fetcher (lines 166-229) that populates the page prop passed to ContentstackContext.Provider. Calls getSinglePageEntry (line 211) or getSingletonPageEntry (line 212) which delegate to getSingleEntry/getSingletonEntry from contentstack.ts. This is the existing server-side pipeline that live preview augments client-side. The getSinglePageEntry function (line 75-88) uses getSingleEntry with contentstackConfig lookup — this same pattern should be reused in the onEntryChange callback for client-side re-fetching of preview entries.
+
+
+DECLARED FILES — the actual contents of the files this story names or the detective located. Base every observable criterion on what THIS code does, not on what the title suggests:
+--- src/services/contentstack.ts (truncated)
+import * as Utils from "@contentstack/utils";
+import contentstack from "contentstack";
+import { HttpStatusCode } from "@metrolinx/cx-shared/build/src/constants/common";
+import { HttpError } from "@metrolinx/cx-shared/build/src/utils/common/HttpError";
+import { ContentstackDebugLevel } from "constants/contentstack";
+import { IInteractiveMapsConstructionNotice } from "interface/constructionNotice";
+import { IContentstackContentType } from "interface/content/contentType";
+import { IContentstackPage } from "interface/content/page";
+import { isTestEnv } from "utils/envs";
+import { InteractiveMapsContentType } from "../constants/constructionNotice";
+import {
+  ICommonContentstackConfig,
+  IContentstackGetEntry,
+  IContentstackGetInteractiveMapsStackEntry,
+  IContentstackGetSingleEntry,
+  IContentstackGetSingletonEntry,
+  ICreateEntryConfig,
+  ICreateQueryConfig,
+} from "../interface/contentstack";
+import { isContentstackApiError } from "../utils/isContentstackApiError";
+import logger from "./logger";
+
+const {
+  API_KEY = "",
+  DELIVERY_TOKEN = "",
+  INTERACTIVE_MAPS_STACK_API_KEY = "",
+  INTERACTIVE_MAPS_STACK_DELIVERY_TOKEN = "",
+  INTERACTIVE_MAPS_STACK_ENVIRONMENT = "",
+  INTERACTIVE_MAPS_STACK_BRANCH = "",
+  ENVIRONMENT = "",
+  CONTENTSTACK_API_HOST = "",
+  CONTENTSTACK_BRANCH = "",
+  CONTENTSTACK_FETCH_TIMEOUT = "",
+  CONTENTSTACK_DEBUG = "",
+  CONTENTSTACK_DEBUG_LEVEL = "error",
+} = process?.env || {};
+
+const filterDebugLevel = (item: string): item is ContentstackDebugLevel =>
+  [ContentstackDebugLevel.INFO, ContentstackDebugLevel.ERROR].includes(
+    item as ContentstackDebugLevel,
+  );
+
+const contentstackDebugLevel = CONTENTSTACK_DEBUG_LEVEL.split(",")
+  .map((item) => item.trim())
+  .filter(filterDebugLevel);
+
+const QUERY_RESPONSE_LIMIT = 100;
+
+if (!isTestEnv()) {
+  if (!API_KEY) {
+    logger.error("Contentstack API key not provided");
+  }
+
+  if (!DELIVERY_TOKEN) {
+    logger.error("Contentstack delivery token not provided");
+  }
+
+  if (!ENVIRONMENT) {
+    logger.error("Contentstack environment not provided");
+  }
+
+  if (!CONTENTSTACK_BRANCH) {
+    logger.error("Contentstack branch not provided");
+  }
+
+  if (!API_KEY || !DELIVERY_TOKEN || !ENVIRONMENT || !CONTENTSTACK_BRANCH) {
+    throw new Error("Missing required environment variables");
+  }
+}
+
+export const options: contentstack.Config = {
+  api_key: API_KEY,
+  delivery_token: DELIVERY_TOKEN,
+  environment: ENVIRONMENT,
+  branch: CONTENTSTACK_BRANCH,
+  fetchOptions: {
+    debug: CONTENTSTACK_DEBUG === "true",
+    logHandler: (level, data) => {
+      const logLevel = level as ContentstackDebugLevel;
+
+      if (contentstackDebugLevel.includes(logLevel)) {
+        console[logLevel]("Contentstack SDK:", level, data);
+      }
+    },
+    // https://www.contentstack.com/docs/developers/apis/content-delivery-api#errors
+    retryCondition: (error) => [408, 429, 504].includes(error.status),
+    ...(CONTENTSTACK_FETCH_TIMEOUT ? { timeout: Number(CONTENTSTACK_FETCH_TIMEOUT) } : {}),
+  },
+};
+
+export const Stack = contentstack.Stack(options);
+
+if (CONTENTSTACK_API_HOST) {
+  Stack.setHost(CONTENTSTACK_API_HOST);
+}
+
+const renderOption = {
+  span: (node: { children: any }, next: (arg0: any) => any) => next(node.children),
+};
+
+export const excludedFields = [
+  "created_at",
+  "created_by",
+  "updated_at",
+  "updated_by",
+  "publish_details.user",
+];
+
+class ContentstackFactory {
+  private stack: contentstack.Stack;
+
+  constructor({ stack }: { stack: contentstack.Stack }) {
+    this.stack = stack;
+  }
+
+  private setCommonConfig({
+    query,
+    ...config
+  }: ICommonContentstackConfig & {
+    query: contentstack.Query | contentstack.Entry;
+  }) {
+    const { referenceFieldPath, cachePolicy, only, except } = config;
+
+    if (referenceFieldPath) {
+      query.includeReference(referenceFieldPath);
+    }
+
+    if (cachePolicy) {
+      query.setCachePolicy(cachePolicy);
+    }
+
+    if (!Array.isArray(except) && !Array.isArray(only)) {
+      query.except(excludedFields);
+    }
+
+    if (only) {
+     
+--- src/pages/_app.tsx
+import "@metrolinx/cx-shared/build/bundle.css";
+import "styles/globals.css";
+import type { AppProps } from "next/app";
+import { useRouter } from "next/router";
+import { useEffect, ComponentType } from "react";
+import { SessionProvider } from "next-auth/react";
+import { appWithTranslation } from "next-i18next";
+import { ErrorBoundary, FallbackProps } from "react-error-boundary";
+import { ToastNotification } from "@metrolinx/cx-shared/build/src/components/ToastNotification/ToastNotification";
+import { AppEnvironmentProvider } from "@metrolinx/cx-shared/build/src/context/AppEnvironmentContext";
+import { AppImage } from "components/AppImage";
+import { AppLink } from "components/AppLink";
+import { ClientSideErrorFallback } from "components/ClientSideErrorFallback";
+import { CommonAnalytics } from "components/CommonAnalytics";
+import { SuccessfulSignInToast } from "components/SuccessfulSignInToast";
+import { OnlineChatContextWrapper } from "context/OnlineChatContext";
+import { UserProfileProvider } from "context/UserProfileContext";
+import { useAuthRefetchInterval } from "hooks/useAuthRefetchInterval";
+import { useClearStoragesOnSignOut } from "hooks/useClearStoragesOnSignOut";
+import { getPathname } from "utils/url/getPathname";
+import packageJSON from "../../package.json";
+
+const initAppSettings = () => {
+  window.appSettings = { version: packageJSON.version };
+};
+
+function MyApp({ Component, pageProps }: AppProps) {
+  const { asPath } = useRouter();
+  const { refetchInterval, isLoading, session } = useAuthRefetchInterval();
+
+  const isSignedOut = !isLoading && !session;
+
+  useEffect(() => {
+    initAppSettings();
+
+    const root = document.getElementById("__next");
+    root?.setAttribute("tabindex", "-1");
+  }, []);
+
+  useClearStoragesOnSignOut(isSignedOut);
+
+  const path = getPathname(asPath);
+
+  return (
+    <AppEnvironmentProvider linkAs={AppLink} imageAs={AppImage}>
+      <UserProfileProvider>
+        <SessionProvider refetchInterval={refetchInterval} refetchOnWindowFocus>
+          <OnlineChatContextWrapper>
+            <ErrorBoundary
+              FallbackComponent={ClientSideErrorFallback as ComponentType<FallbackProps>}
+            >
+              {/* The key is passed to force page update on route change in some specific cases https://github.com/vercel/next.js/discussions/22512 */}
+              <Component {...pageProps} key={path} />
+              <SuccessfulSignInToast />
+              <ToastNotification />
+            </ErrorBoundary>
+            <CommonAnalytics contentTypeUid={pageProps.contentTypeUid} />
+          </OnlineChatContextWrapper>
+        </SessionProvider>
+      </UserProfileProvider>
+    </AppEnvironmentProvider>
+  );
+}
+
+export default appWithTranslation(MyApp);
+
+--- src/context/contentstackContext.tsx
+import { createContext } from "react";
+import { ContentTypes } from "constants/contentstack";
+import { IContentstackHeader } from "interface/content/header";
+import { IContentstackPage } from "interface/content/page";
+import { IDirectoryData } from "interface/directory";
+import { IOnboarding } from "interface/onboarding";
+
+export interface IContentstackContext {
+  header?: [IContentstackHeader];
+  footer?: [any];
+  onboarding?: [IOnboarding];
+  page?: [IContentstackPage];
+  pagesBaseURLs?: {
+    [key in ContentTypes]?: string;
+  };
+  directories?: IDirectoryData;
+  languageAlternativePageSlug?: string[];
+}
+
+export const ContentstackContext = createContext<IContentstackContext>({});
+
+--- src/components/pages/Homepage.tsx
+import { HomepageComponentMapper } from "components/componentMappers/HomepageComponentMapper";
+import { ContentStackHomePageHeroBanner } from "components/contentstack/ContentStackHomePageHeroBanner";
+import { ContentStackLandAcknowledgement } from "components/contentstack/ContentStackLankAck";
+import { ContentstackRecentNews } from "components/contentstack/ContentstackRecentNews";
+import { IRecentNews } from "interface/content/news";
+import { IContentstackPage, PageComponents } from "interface/content/page";
+import { getValue } from "utils";
+
+export interface IHomepageProps {
+  page: [IContentstackPage];
+}
+
+const paths = {
+  title: "0.title",
+  seo: "0.content_seo",
+  pageComponents: "0.modular_blocks",
+  recentNews: "0.recent_news",
+};
+
+export const Homepage: React.FC<IHomepageProps> = (props) => {
+  const { page } = props;
+  const { include_recent_news: withRecentNews, recent_news_heading: recentNewsHeading } =
+    getValue<IRecentNews>(page, paths.recentNews, {} as IRecentNews);
+  const pageComponents = getValue<PageComponents>(page, paths.pageComponents, []);
+
+  return (
+    <div className="bg-global-white lg:bg-neutral-200">
+      <div className="w-full relative overflow-hidden">
+        <ContentStackHomePageHeroBanner />
+      </div>
+      <div className="relative z-10 lg:-mt-[128px] bg-global-white lg:bg-transparent">
+        <div className="cx-container lg:bg-global-white xl:bg-transparent">
+          <HomepageComponentMapper pageComponents={pageComponents} />
+        </div>
+      </div>
+
+      {withRecentNews && (
+        <section className="w-full mx-0 xl:mx-auto cx-container bg-neutral-200">
+          <div className="w-full col-span-full xl:col-start-2 xl:col-end-14">
+            <ContentstackRecentNews heading={recentNewsHeading} />
+          </div>
+        </section>
+      )}
+
+      <div className="w-full">
+        <ContentStackLandAcknowledgement />
+      </div>
+    </div>
+  );
+};
+
+--- src/services/pageService.ts (truncated)
+import { CachePolicy } from "contentstack";
+import { contentstackConfig, ContentstackLocales, ContentTypes } from "constants/contentstack";
+import { ONLY_FIELDS as NEWS_ONLY_FIELDS } from "constants/news";
+import { INewsDetailsPageBaseInfo } from "interface/content/news";
+import {
+  IContentStackConstructionNoticePage,
+  IContentstackPage,
+  INewsArticlePage,
+  IRegionPage,
+  IShallowReference,
+  ITopicPage,
+} from "interface/content/page";
+import { TRelatedProjects } from "interface/content/project";
+import { IEnrichedPublishedPage } from "interface/contentstack";
+import { IDirectoryData, IMappedByLocaleDirectories } from "interface/directory";
+import { IMappedByLocaleEvents } from "interface/events";
+import { IMappedByLocalePageSlugs } from "interface/page";
+import { IMappedByLocaleProjects, IProject } from "interface/projects";
+import { IRegionWithProjects } from "interface/regions";
+import { ITopicProjectData, ITopicWithProjects } from "interface/topics";
+import logger from "services/logger";
+import { isDevelopmentEnv } from "utils/envs";
+import { readFromFs } from "utils/fsCache";
+import { getValue } from "utils/getValue";
+import { getFullSlug, transformSlugIntoUrl } from "utils/slug";
+import { contactUsService } from "./contactUsService";
+import {
+  findSingletonEntry,
+  getEntry,
+  getInteractiveMapsConstructionNoticeEntry,
+  getPageContentTypes,
+  getSingleEntry,
+  getSingletonEntry,
+} from "./contentstack";
+import {
+  getRelatedProjectsList,
+  mapBasicPageToContentCard,
+  mapEventToLinkedEventsData,
+  mapProjectNavigationToLinks,
+  mapProjectToRelatedProjectsData,
+} from "./mappers";
+import { newsService } from "./newsService";
+import { podcastService } from "./podcastService";
+import { projectsSearchService } from "./projectsSearchService";
+import { regionService } from "./regionService";
+import { topicService } from "./topicService";
+
+interface IMappedByLocaleData {
+  // eslint-disable-next-line @typescript-eslint/no-explicit-any
+  [locale: string]: any;
+}
+
+export const nonPageContentTypes = ["project_hub_page"];
+
+const getHeaderEntry = (lang: ContentstackLocales) =>
+  getEntry({
+    contentTypeUid: ContentTypes.GlobalHeader,
+    referenceFieldPath: [],
+    lang,
+  });
+
+const getFooterEntry = (lang: ContentstackLocales) =>
+  getEntry({ contentTypeUid: ContentTypes.GlobalFooter, lang });
+
+const getOnboardingEntry = (lang: ContentstackLocales) =>
+  getEntry({
+    contentTypeUid: ContentTypes.Onboarding,
+    referenceFieldPath: ["subscriptions.subscription_configuration"],
+    lang,
+  });
+
+const getCookiesBannerEntry = (lang: ContentstackLocales) =>
+  getEntry({ contentTypeUid: ContentTypes.CookiesBlock, lang });
+
+const getSinglePageEntry = (
+  contentTypeUid: string,
+  entryUid: string,
+  lang: ContentstackLocales,
+) => {
+  const config = contentstackConfig[contentTypeUid];
+
+  return getSingleEntry({
+    contentTypeUid,
+    entryUid,
+    lang,
+    ...config,
+  });
+};
+
+const getSingletonPageEntry = (contentTypeUid: string, lang: ContentstackLocales) => {
+  const config = contentstackConfig[contentTypeUid];
+
+  return getSingletonEntry({
+    contentTypeUid,
+    lang,
+    ...config,
+  });
+};
+
+class PageService {
+  private isDevelopment = isDevelopmentEnv();
+
+  async getAllPublishedPages(): Promise<IEnrichedPublishedPage[]> {
+    const contentTypes = await getPageContentTypes();
+
+    const contentTypesUids = contentTypes
+      .map((contentType) => contentType.uid)
+      .filter((uid) => !nonPageContentTypes.includes(uid));
+
+    const handlePageEntriesError = (contentTypeUid: string, locale: string) => (error: unknown) => {
+      logger.error(
+        error,
+        `Error retrieving page entries of content type: ${contentTypeUid} of locale: ${locale}`,
+      );
+      throw error;
+    };
+
+    const pageEntriesPromises = contentTypesUids.reduce((acc, contentTypeUid) => {
+      const enSpecificPageTypeEntriesPromise = getEntry<IContentstackPage[]>({
+        contentTypeUid,
+        lang: ContentstackLocales.EN,
+      }).then(
+--- src/hooks/useContent.ts
+import { useCallback, useContext } from "react";
+import { ContentstackContext } from "context/contentstackContext";
+import { getValue } from "utils/getValue";
+
+export const useContent = () => {
+  const content = useContext(ContentstackContext);
+
+  const getContentByKey = useCallback(
+    <T>(path: string, defaultValue: T) => getValue<T>(content, path, defaultValue),
+    [content],
+  );
+
+  return {
+    getContentByKey,
+  };
+};
+
+
+
+BROWNFIELD MODE — answer as JSON.
+You MAY use read_file on any path named in this prompt (declared files, located fix sites, and any
+document persisted under the run's docs/ directory) when you need more than the excerpt shown.
+Looking is allowed; inventing is not — a file you have neither been shown nor read is a fabrication.
+
+STEP 1 — CLASSIFY THIS STORY. Set "storyKind":
+- "defect" if it reports that EXISTING behavior is wrong, broken, or produces an incorrect/missing result (a bug).
+- "novel" if it asks for a NEW capability that does not exist in the codebase yet. A brownfield story is not always a bug — genuinely new work is "novel".
+
+STEP 2 — LOCATE (always, for both kinds — but the question differs).
+Use ONLY the EXISTING CODE block already present in this prompt (injected above via CodeGraph or Semble).
+
+- If storyKind is "defect": find the FIX SITE — the file/function that COMPUTES the wrong value, not the one that displays it.
+- If storyKind is "novel": there is no fix site, and inventing one produces a confident wrong answer. Find the ATTACHMENT POINT instead — the existing file/function this new capability plugs INTO (the provider, hook, route, config or component it must integrate with), plus anything already present that the implementation should REUSE rather than rewrite. This is what keeps the change as small as possible: you cannot reuse what you have not found.
+
+Set "locationHint" to [{"file":"<repo-relative path>","function":"<function name>","reason":"<why this location — the fix site for a defect, the attachment point for a novel story>"}].
+If no relevant code appears above, set locationHint to []. Do NOT invent a plausible file: a named file whose contents you cannot see in this prompt is a fabrication, and an empty locationHint is a usable answer while a fabricated one is not.
+
+For EACH criterion also declare WHO observes it (end user, tester, api client, operator) and
+WHAT SURFACE they look at — the rendered page, the API response, the CLI output, a generated
+file. If no person or client can see it, it is not a verification criterion. A precondition
+the test establishes (for example a mocked client signalling a change) goes in "setup": that
+is allowed and is not implementation prescription.
+
+STEP 3 — VERIFICATION CRITERIA (do NOT touch the acceptance criteria).
+The acceptanceCriteria are the IMMUTABLE ticket intent — copy the existing array through VERBATIM: never reword, split, add, remove, re-scope, or inject any implementation mechanism into them.
+Instead, PRODUCE a "verificationCriteriaDetail" array — concrete, OBSERVABLE checks that confirm the change is correct — derived from the acceptance criteria AND the description. Apply these rules to EVERY verification criterion (a strict reviewer holds you to this SAME text, so a VC that breaks any rule will be flagged and rejected):
+A verification criterion states WHAT AN END USER OR TESTER OBSERVES on the user-facing surface THE TICKET IS ABOUT — the rendered output for an output ticket, the displayed screen for a UI ticket, the response a CLIENT receives for an API ticket. It is a BLACK-BOX check on that surface. It NEVER describes HOW the value is produced.
+A verification criterion is FORBIDDEN if it:
+- prescribes HOW to implement — any algorithm, mechanism, approach, or the addition/reading of any new field, flag or service;
+- references an INTERNAL structure that merely FEEDS the ticket's surface — an intermediate payload, a data-transfer object, or a specific response field used to BUILD the output. Verify the surface the ticket names, NOT the data structure behind it;
+- makes a CROSS-COMPARISON that presumes a mechanism — never assert one value "must equal" / "matches" / "is the same as" another; that presumes a shared derivation. Assert the required value is present and correct ON ITS OWN.
+Every verification criterion must be observable, testable, and tied to the ticket's stated symptom/intent.
+
+EXAMPLES OF FORM (the angle-bracket words are placeholders — fill them from THIS story; never copy them literally):
+
+REJECTED: "the <config object> passed to <the client> includes a <key> entry"
+  — asserts INTERNAL STRUCTURE. A tester cannot see a config object.
+ACCEPTED: "when <the request> carries <the marker>, <the surface> shows <the draft state> instead of <the published state>"
+
+REJECTED: "when <internal function> is called with <argument>, the resulting <query> includes <field>"
+  — asserts an INTERNAL CALL PATH. Verify the surface the ticket is about, not the path behind it.
+ACCEPTED: "<the surface> shows <the value> that <the source of truth> currently holds"
+
+REJECTED: "an author edits <entity> in <the external tool> and <the surface> updates"
+  — begins OUTSIDE THE BOUNDARY this suite can drive. Nothing here can operate that tool.
+ACCEPTED: "given <the client> is mocked to signal <the change>, <the surface> re-renders without a reload"
+
+REJECTED: "<the value> matches what <the other place> shows"
+  — a CROSS-COMPARISON presumes a shared derivation. Assert the required value on its own.
+ACCEPTED: "<the surface> shows <the expected value> for <the stated condition>"
+
+REJECTED: "<the feature> works correctly with no regression"
+  — verifies nothing and cannot fail.
+ACCEPTED: "when <the feature> is inactive, <the surface> shows <the prior behaviour> unchanged"
+
+- If the ticket describes a SYMPTOM, the VCs verify that symptom is resolved AND that related existing behavior does not regress.
+Set "vcSource" to one of "acceptance", "description", "both" — where you actually derived the VCs from.
+
+UNREACHABLE EXTERNAL SERVICE — write criteria to the boundary, not past it.
+This project cannot reach the following hosts at test time: contentstack.io, contentstack.com, api.contentstack.io, cdn.contentstack.io.
+There are no credentials for them and no local substitute, so any criterion that
+asserts their real behaviour is unprovable and will fail verification no matter
+how correct the code is.
+
+Write criteria that stop at OUR side of that boundary and are therefore provable:
+what request our code makes, with what parameters, under what conditions; how it
+handles the responses and failures those services can return; what it renders or
+returns given a known response. State the assumption explicitly, e.g. "given the
+<service> client is mocked, ...", so a reader knows the claim's limits.
+
+SCOPE — this applies ONLY to the hosts listed above. Every other integration
+keeps its real coverage: internal APIs, this codeline's own services, databases,
+and anything else reachable are exercised for real exactly as normal. Do NOT mock
+a dependency merely because mocking it would be more convenient. Removing
+coverage from something we CAN test trades a real defect for a green tick, which
+is the opposite of why this constraint exists.
+
+Generate refined acceptance criteria and optionally updated title/description. Output raw JSON only (no XML tags, no markdown fences, no preamble) using this schema:
+{
+  "storyId":"AMSD-2041",
+  "agent":"openspec",
+  "notes":"context",
+  "acceptanceCriteria":["..."],
+  "description":"...",
+  "title":"...",
+  "storyKind":"defect|novel",
+  "verificationCriteriaDetail":[{"criterion":"<observable check>","observer":"end user|tester|api client|operator","surface":"<what they look at>","setup":"<optional precondition, e.g. a mocked client signalling a change>"}],
+  "vcSource":"acceptance|description|both",
+  "locationHint":[{"file":"path/relative/to/repo","function":"functionName","reason":"why this location — the fix site for a defect, the attachment point it integrates with for a novel story"}]
+}
+Use existing text when no change is needed.
+
+Story context:
+{
+  "id": "AMSD-2041",
+  "title": "[MX] Live Preview of Content in CMS (part 1)",
+  "description": "AS a  Content Author,  I WANT  to preview draft entries in CMS for the MX Homepage and Discover Article pages  SO THAT  I can see how content will be shown on the website\nAcceptance Criteria:\nSee in:\n\n\n\n\nOriginal Requirements:\nBullet points:\n \n\n AS a Content Author, I WANT to preview draft entries in CMS, SO THAT I can see how content will be shown on the website\nability to preview draft entries in CMS\nNotes& Assumptions  Limitation: Might not be possible to preview protected pages and content.\nOriginal Total Estimate:  8  Original FE Estimate:  8  Original DAM Estimate:  0  Original BE Estimate:  0",
+  "acceptanceCriteria": [
+    "See in:"
+  ],
+  "acCount": 1,
+  "agentRole": "contentstack-live-preview-engineer",
+  "agentGroup": "main",
+  "dependencies": [],
+  "splitDepth": 0
+}
+
+
+# Output
+```json
+{
+  "storyId": "AMSD-2041",
+  "agent": "openspec",
+  "notes": "Novel capability — live preview does not exist in the codebase. The options object in contentstack.ts has no live_preview block, _app.tsx has no live-preview-utils initialization, and ContentstackContext is static (set once from SSR, never updated client-side). Attachment points are the SDK config, the app-wide provider, the React context, and the existing server-side fetch pattern to reuse for client-side re-fetching. VCs are derived from the description since the AC ('See in:') carries no testable content.",
+  "acceptanceCriteria": [
+    "See in:"
+  ],
+  "description": "AS a  Content Author,  I WANT  to preview draft entries in CMS for the MX Homepage and Discover Article pages  SO THAT  I can see how content will be shown on the website\nAcceptance Criteria:\nSee in:\n\n\n\n\nOriginal Requirements:\nBullet points:\n \n\n AS a Content Author, I WANT to preview draft entries in CMS, SO THAT I can see how content will be shown on the website\nability to preview draft entries in CMS\nNotes& Assumptions  Limitation: Might not be possible to preview protected pages and content.\nOriginal Total Estimate:  8  Original FE Estimate:  8  Original DAM Estimate:  0  Original BE Estimate:  0",
+  "title": "[MX] Live Preview of Content in CMS (part 1)",
+  "storyKind": "novel",
+  "verificationCriteriaDetail": [
+    {
+      "criterion": "Given the Contentstack client is mocked to signal a draft entry change for the MX Homepage, the rendered Homepage shows the draft entry content instead of the previously published content, without requiring a full page reload.",
+      "observer": "tester",
+      "surface": "rendered MX Homepage in the browser",
+      "setup": "Contentstack client is mocked to invoke the onEntryChange callback with draft entry data for the Homepage content type"
+    },
+    {
+      "criterion": "Given the Contentstack client is mocked to signal a draft entry change for a Discover Article page, the rendered Discover Article page shows the draft entry content instead of the previously published content, without requiring a full page reload.",
+      "observer": "tester",
+      "surface": "rendered Discover Article page in the browser",
+      "setup": "Contentstack client is mocked to invoke the onEntryChange callback with draft entry data for the Discover Article content type"
+    },
+    {
+      "criterion": "When no preview signal is active, the MX Homepage renders published content identically to its current behavior with no visual or functional regression.",
+      "observer": "tester",
+      "surface": "rendered MX Homepage in the browser",
+      "setup": "No preview mode signal is present; the application runs under normal published-content conditions"
+    },
+    {
+      "criterion": "When no preview signal is active, Discover Article pages render published content identically to their current behavior with no visual or functional regression.",
+      "observer": "tester",
+      "surface": "rendered Discover Article page in the browser",
+      "setup": "No preview mode signal is present; the application runs under normal published-content conditions"
+    },
+    {
+      "criterion": "Given the Contentstack client is mocked to signal multiple successive draft entry changes for the same Homepage, the rendered Homepage updates to reflect each change in sequence without a full page reload.",
+      "observer": "tester",
+      "surface": "rendered MX Homepage in the browser",
+      "setup": "Contentstack client is mocked to invoke the onEntryChange callback multiple times with different draft entry data for the Homepage content type"
+    },
+    {
+      "criterion": "Given the Contentstack client is mocked to signal a draft entry change while the page is in a protected or gated state, the page does not render the draft content and continues to show the published content unchanged.",
+      "observer": "tester",
+      "surface": "rendered protected page in the browser",
+      "setup": "Contentstack client is mocked to invoke the onEntryChange callback for a protected page content type"
+    }
+  ],
+  "vcSource": "description",
+  "locationHint": [
+    {
+      "file": "src/services/contentstack.ts",
+      "function": "options",
+      "reason": "Attachment point — the Stack configuration object passed to contentstack.Stack(). Currently contains api_key, delivery_token, environment, branch, fetchOptions but no live_preview block. The live_preview configuration must be added here for the SDK to detect preview mode and return draft entries."
+    },
+    {
+      "file": "src/pages/_app.tsx",
+      "function": "MyApp",
+      "reason": "Attachment point — the app-wide component that wraps the application. The @contentstack/live-preview-utils initialization with an onEntryChange callback must be wired here so that updated entry data from the CMS is pushed into React state, causing the ContentstackContext.Provider value and all useContent consumers to re-render."
+    },
+    {
+      "file": "src/context/contentstackContext.tsx",
+      "function": "ContentstackContext",
+      "reason": "Attachment point — the React context that distributes Contentstack data to all components via the useContent hook. Currently createContext with a static interface; the Provider value is set once from server-side props and never updated. This context must carry reactive state so that when onEntryChange fires with updated entry data, all useContent consumers re-render with new values."
+    },
+    {
+      "file": "src/services/pageService.ts",
+      "function": "getSinglePageEntry",
+      "reason": "Attachment point — the existing server-side fetch pattern (getSingleEntry with contentstackConfig lookup) that should be reused for client-side re-fetching of preview entries when onEntryChange fires, rather than reimplementing a separate fetch pipeline."
+    }
+  ]
+}
+```

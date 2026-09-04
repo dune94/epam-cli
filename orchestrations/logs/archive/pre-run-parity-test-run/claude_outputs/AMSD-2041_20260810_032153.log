@@ -1,0 +1,554 @@
+=== Prompt for AMSD-2041 (attempt 5) ===
+CRITICAL — these files already exist. Their real content is injected below (## Existing File Contents) — you do NOT need to ReadFile them to see what's already there.
+Do NOT import or reference anything that doesn't appear in the injected content below — a plausible-sounding module name is not a real one.
+Only call ReadFile yourself if you need to see MORE of a file than what's shown (e.g. it was truncated), or a file not listed below.
+
+
+---
+
+Implement user story AMSD-2041: [GO, UP, MX] Live Preview of Content in CMS
+
+## Story Description
+Original Requirements (discovery)  AS a Content Author, I WANT to preview draft entries in CMS, SO THAT I can see how content will be shown on the website
+ability to preview draft entries in CMS
+Notes& Assumptions  Limitation: Might not be possible to preview protected pages and content.
+Original Total Estimate:  8  Original FE Estimate:  8  Original DAM Estimate:  0  Original BE Estimate:  0
+
+## Acceptance Criteria
+- 
+
+
+
+## Reviewer Feedback — ADDRESS THESE (a prior code review requested changes)
+The team-lead reviewer examined your previous attempt and requested the changes below. This is the highest priority.
+
+A BLOCKER is a required deliverable, not advice. If a blocker says something is MISSING — a test, a file, a case — the only way to resolve it is to CREATE it; leaving it out repeats the rejection. Minimality governs HOW MUCH you write, never WHETHER you write it.
+
+For advisory points: make the smallest edits that resolve each one, and where a point says the change is over-engineered or an existing helper would do, REMOVE the excess rather than adding more.
+
+If you genuinely cannot satisfy a blocker — no seam exists to test against, the behaviour lives entirely in a third-party package — say so explicitly in your final message, naming the blocker and why. An unexplained omission reads as a refusal and will be rejected again.
+### BLOCKERS — this attempt is REJECTED until every one is resolved
+- [blocker] Both required dependencies @contentstack/live-preview-sdk and @contentstack/live-preview-utils are ABSENT — not declared in package.json and not present in node_modules (verified via dependency_available tool). The implementation calls require('@contentstack/live-preview-sdk') inside a try/catch that silently swallows the ModuleNotFoundError, meaning live preview will silently never initialize in any environment. The prescribed fix explicitly requires these packages. (package.json)
+  - Suggested fix: Add @contentstack/live-preview-sdk and @contentstack/live-preview-utils to package.json dependencies and install them. Replace the require() try/catch with a proper ES import so a missing dependency is a build error, not a silent runtime failure.
+- [blocker] ContentstackProvider was NOT modified at all (git_state confirms no change to this file). The prescribed minimal fix requires: (1) adding onEntryChange prop to IContentStackProviderProps, (2) switching from useMemo to useState + merge logic so that when Contentstack pushes draft entry updates via the callback, the context state updates and all consuming components re-render. Without this, even if the SDK initializes and pushes draft data, no component will ever display it. This directly fails AC: 'When the page request includes live preview parameters, the rendered page displays the draft content values for the entry being previewed.' (src/context/ContentstackContext.tsx)
+  - Suggested fix: Add onEntryChange?: (callback: (entry: IContentstackContent) => void) => void to IContentStackProviderProps. Replace useMemo with useState<IContentstackContent>(defaultContent). In a useEffect, register the onEntryChange callback to merge/replace content state. This is the CARRIER — without it, the entire live preview feature is non-functional.
+- [blocker] pageService was NOT modified at all (git_state confirms no change). The prescribed fix requires: (1) adding preview and live_preview parameters to pageService methods, (2) passing live_preview: true through to getEntry/getSingleEntry/findSingletonEntry when preview is enabled, (3) importing onEntryChange from @contentstack/live-preview-utils and returning it alongside page data so consuming pages can wire it into ContentstackProvider. Without this, pages have no way to pass preview params to the contentstack service or receive the onEntryChange callback. This fails AC: 'When the page request includes live preview parameters, the rendered page displays the draft content values.' (src/services/pageService.ts)
+  - Suggested fix: Extend pageService method signatures with preview?: boolean and live_preview?: boolean params. When preview is enabled, forward live_preview to the contentstack service calls. Import onEntryChange from @contentstack/live-preview-utils and include it in the return payload so pages can pass it to ContentstackProvider.
+- [blocker] The live_preview parameter is destructured in getEntry (line ~150), getSingleEntry (line ~180), and findSingletonEntry (line ~210) but is NEVER actually passed to the Contentstack Query or Entry objects. The ContentstackFactory.createContentTypeQuery and createContentTypeEntryQuery methods do not receive or forward live_preview. This means even with the param in the interface, the SDK will never fetch draft content — the param is dead code. This fails AC: 'When the page request includes live preview parameters, the rendered page displays the draft content values for the entry being previewed.' (src/services/contentstack.ts)
+  - Suggested fix: Pass live_preview into the ContentstackFactory methods and call the SDK's query param forwarding (e.g., query.addParam('live_preview', 'true') or the SDK's native .live_preview() chain method — verify the exact API via resolve_package_symbol on the installed package). The param must reach the actual HTTP request to Contentstack.
+- [blocker] No logic exists to suppress live preview draft content for unauthenticated visitors on protected pages. AC requires: 'For a page that requires authentication, draft content does not appear on the rendered page when live preview parameters are present and the visitor is unauthenticated.' Since pageService was not modified, there is no guard that checks authentication state before forwarding live_preview params. An unauthenticated visitor on a protected page with live_preview params in the URL would receive draft content if the rest of the pipeline were wired. (src/services/pageService.ts)
+  - Suggested fix: In pageService, before forwarding live_preview to contentstack service calls, check whether the page requires authentication and whether the visitor is authenticated. If the page is protected and the visitor is unauthenticated, do NOT forward live_preview (fetch published content only). This may also require coordination with applyMiddlewares or the auth middleware.
+- [blocker] No unit tests exist for any of the live preview changes. git_state shows zero test file changes. The prescribed fix touches 3 source files (contentstack.ts, ContentstackContext.tsx, pageService.ts) and none have corresponding vitest tests. All 4 verification criteria lack test coverage: (1) draft content displayed when preview params present, (2) published content displayed when preview not active, (3) unauthenticated visitor cannot view protected page content, (4) draft content does not appear for unauthenticated visitor on protected page. Searched via resolve_test_file conventions and git_state — no test files found or changed. (test/unit/)
+  - Suggested fix: Add vitest unit tests mirroring src/ paths: test for contentstack.ts verifying live_preview param forwarding to SDK queries; test for ContentstackContext.tsx verifying onEntryChange callback updates content state and triggers re-render; test for pageService.ts verifying preview param forwarding and auth-gated suppression of live_preview for protected pages. All 4 verification criteria must have explicit it()/test() blocks.
+### Advisory — apply where it makes the change smaller or clearer
+- [major] Hardcoded string 'api.contentstack.io' used as fallback for CONTENTSTACK_PREVIEW_HOST. This violates the review criterion: 'No hardcoded strings for model names, endpoint URLs, or file paths — all use named constants from src/config/constants.ts.' (src/services/contentstack.ts)
+  - Suggested fix: Add a named constant (e.g., CONTENTSTACK_DEFAULT_PREVIEW_HOST) in src/config/constants.ts and reference it instead of the inline string literal.
+- [major] Uses require() inside a try/catch to load @contentstack/live-preview-sdk, which is an anti-pattern: (1) it bypasses TypeScript type checking, (2) the try/catch silently swallows all errors (not just module-not-found), masking real initialization failures, (3) it prevents tree-shaking. The eslint-disable comment confirms this is intentional but unjustified. (src/services/contentstack.ts)
+  - Suggested fix: Use a proper ES import: import ContentstackLivePreview from '@contentstack/live-preview-sdk'. Guard initialization with the env var check (CONTENTSTACK_LIVE_PREVIEW === 'true') only, not a try/catch. If the package is absent, the build should fail — that is correct behavior for a missing required dependency.
+- [minor] The live_preview parameter in the interface types (IContentstackGetEntry, IContentstackGetSingleEntry, IContentstackGetSingletonEntry) is added but its type is not visible in the source read — ensure it is explicitly typed as boolean | undefined (or the SDK's LivePreviewConfig type), not implicit any. (src/services/contentstack.ts)
+  - Suggested fix: Verify the interface in src/interface/contentstack.ts explicitly types live_preview as boolean | undefined or the appropriate SDK type.
+
+
+
+## Codeline-Specific Facts (real, curated gotchas for THIS codeline — read before assuming local tooling behaves like a fully-configured environment)
+- Local dev/pre-commit hooks require real Contentstack env vars (CONTENTSTACK_API_KEY, CONTENTSTACK_DELIVERY_TOKEN, CONTENTSTACK_ENVIRONMENT, CONTENTSTACK_BRANCH) to be set — next.config.js throws 'Missing required environment variables' at import time if they're absent, which breaks tsc/next-lint inside the husky pre-commit hook even when the source change itself is correct.
+- Date/locale tests assert UTC-rendered dates (this project's CI runs in UTC) — running with a non-UTC TZ produces off-by-one-day test failures unrelated to any real code change.
+
+## Project Tools (registered by THIS codeline — call them directly, NOT via Bash)
+Each reports REAL state discovered from this repository or its installed dependencies. Call the relevant one instead of assuming — an assumption that contradicts one of these is a defect:
+- codegraph_query: Query this codebase's real, static symbol index (CodeGraph) instead of grepping. Modes: "explore <domain nouns>" (START HERE for an unfamiliar bug/feature — ranked symbols + blast radius + callers/callees; use domain nouns like "discount refund", never symptom/UI words like "displayed wrong"); "helpers <term>" (ALWAYS run before writing a new function — finds existing exported util/parser/formatter/mapper functions to reuse, with exact symbol + import path); "query <symbol>" (exact definition site of a known symbol name); "callers <symbol>" (who calls this — trace a symptom back to its cause); "callees <symbol>" (what this calls — trace forward); "impact <symbol>" (blast radius if you change this symbol); "show <file> [startLine] [endLine]" (read REAL verbatim source lines — required before quoting any line as evidence, capped at 300 lines per call if no end line given). Call this iteratively (5-10 times is normal), refining your query based on each result, until you converge on the real fix site.
+- resolve_test_file: Given a source file path (relative to the project root), report which test file(s) ALREADY EXIST for it on disk, checked against this codeline's real conventions — co-located __tests__/, sibling .spec/.test files, and mirrored test/ directories. Use this BEFORE creating a new test file: extending an existing test file at its real, established path is almost always correct; inventing a new path/directory is almost always wrong.
+- codeline_facts: Return known, real, project-operator-curated facts and gotchas about the codeline currently being worked in — e.g. required local environment variables, known dependency quirks, test-environment requirements. These are facts that could not otherwise be discovered by reading the code alone; check this before assuming local tooling (lint, tsc, pre-commit hooks) will behave the same as in a fully-configured environment.
+- git_state: Report the REAL current git state of this codeline: branch, HEAD SHA, and whether the working tree is dirty (with the list of changed files). Use this instead of assuming a clean baseline.
+- check_anti_patterns: Check a piece of code you are about to write (or have just written) against this project's list of known, previously-diagnosed wrong patterns — rules operators have configured because a model has regressed to them before. Call this before finishing your implementation whenever you touch an area that might have a documented gotcha; it is advisory (nothing blocks you from writing), so treat any match as a real defect to fix, not a suggestion to weigh.
+- resolve_package_symbol: Given a package name and a symbol (method/function/property), reports the symbol's REAL declared shape from the package's actually-installed .d.ts files — including whether it is an instance method requiring instantiation (e.g. `new SomeClass()`) or a direct export — and separately reports whether the package's own README documents real usage of that symbol. Use this BEFORE calling a third-party SDK method you have not seen used in this codebase: a symbol that technically exists in a .d.ts file is not the same as the package's intended, documented usage — an internal class-instance method the README never calls directly is exactly the kind of near-miss that produces code that type-checks and fails at runtime.
+- dependency_contract: Before writing configuration for an installed dependency, check which option keys that dependency ACTUALLY consumes. Reports per key: "consumed" (read by the package's runtime source), "declared_only" (present only in a .d.ts type declaration — the types are STALE and the runtime ignores this key, so satisfying the type is the wrong fix), "absent" (appears nowhere — a typo or invented option), or "undetermined" (package not installed/readable). Call this whenever you add or change an options object passed to a third-party library; a key that is not "consumed" will silently do nothing at runtime.
+- dependency_available: Check whether packages are usable in THIS codeline before prescribing or writing work that needs them. Reports per package: "available" (declared in the manifest and installed), "installed_undeclared" (present in node_modules but MISSING from the manifest — the build passes and real users break, never treat this as usable), "declared_not_installed", or "absent" (nowhere — a plan that requires this cannot be implemented as written; say so instead of working around it). Call this before proposing a fix that depends on any third-party package.
+- scan_secrets: Examine a diff for credentials that have been PASTED INTO the code, and report them. Distinguishes a literal (a quoted, long, high-entropy value — what a leaked key looks like) from a reference (an identifier, a member expression, a process.env read — which is the correct practice and is never reported). Returns findings for you to judge; it does not block anything.
+
+## Tests are NOT your job this turn
+A dedicated test-writer agent runs immediately after your fix commits and owns the bug-reproducing test. Do NOT write, edit, or create any test file (*.test.*, *.spec.*, __tests__/). Write ONLY the fix. Adding a test here wastes your turn budget and has caused repeated failures.
+
+## CodeGraph Tool — find EXISTING functions to reuse (do this BEFORE writing any new helper)
+A codegraph_query tool is available — call it directly (NOT via Bash) to discover reusable functions instead of inventing new ones:
+  codegraph_query(mode="helpers", args="<domain nouns>")   # existing util/parser/formatter to REUSE (symbol + import path)
+  codegraph_query(mode="query", args="<SymbolName>")       # exact definition site of a symbol
+  codegraph_query(mode="callees", args="<SymbolName>")     # what a function already calls
+RULE: Before you add ANY new function, run `helpers` for what it would do. If a suitable function already exists, import and call it — do NOT duplicate it. Fewer lines of code is always better.
+
+
+
+
+
+
+## Technical Notes
+None specified
+
+
+## Files to Create/Modify (EXACT ABSOLUTE PATHS — write to these paths exactly)
+
+
+## Dependencies
+None
+
+## Module resolution in this codeline
+A bare import that names a file under any of these directories is INTERNAL source, not a dependency — never add it to the dependency manifest:
+  __tests__, migration-scripts, public, src
+Source extensions here: .ts, .tsx, .js, .jsx, .mjs, .cjs
+Write imports the way the existing files in this codeline write them; read a neighbouring file before inventing a path.
+
+
+## Instructions
+CRITICAL — these files already exist. Their real content is injected below (## Existing File Contents) — you do NOT need to ReadFile them to see what's already there.
+Do NOT import or reference anything that doesn't appear in the injected content below — a plausible-sounding module name is not a real one.
+Only call ReadFile yourself if you need to see MORE of a file than what's shown (e.g. it was truncated), or a file not listed below.
+
+**The content of every file listed above is already shown in ## Existing File Contents — use that, do not spend a tool call re-reading them. Use Edit for targeted changes to existing files — do NOT overwrite an existing file wholesale with WriteFile.**
+
+1. Use the injected ## Existing File Contents above to verify what actually exists (exports, types, existing utilities) before writing any code — do not guess, and do not re-read a file already shown in full
+2. Implement all acceptance criteria for this story
+3. Follow the project's existing code patterns and conventions
+4. Do NOT create tests unless explicitly required in acceptance criteria
+
+After implementation, provide a brief summary of what was created/modified.
+
+## Relevant Knowledge Base Entries
+The following was learned from previous story implementations and is relevant to your agent role. Apply this knowledge before writing any code:
+
+- [2026-08-09T21:31:58Z] Always: DO import and use the existing `options` export from `src/services/contentstack.ts` (line 55) — it already encapsulates api_key, delivery_token, environment, branch, and fetchOptions. Do NOT
+- [2026-08-09T22:06:54Z] Always: DO import and use the existing `options` helper from `src/services/contentstack.ts` (line 55: `export const options`) — it already constructs the Contentstack SDK config from env vars. Do NO
+- [2026-08-10T00:10:39Z] Always: DO add live_preview?: boolean to IContentstackGetEntry, ICreateQueryConfig, and ICreateEntryConfig in src/interface/contentstack.ts before destructuring live_preview from those types. DON'T de
+- [2026-08-10T00:13:09Z] Always: Do import { options } from "@/services/contentstack" (or the correct relative path to src/services/contentstack.ts) and use it directly — do NOT re-implement the api_key/delivery_token/envir
+- [2026-08-10T00:20:36Z] Use the existing options export from src/services/contentstack.ts instead of re-implementing the Contentstack configuration objects, and pass it directly to contentstack.Stack() or live-preview configurations.
+- [2026-08-10T03:11:19Z] Always: The Contentstack SDK's `LivePreview` interface requires `host: string` and `management_token: string` as non-optional fields. Do NOT use `|| undefined` when assigning these — pass the string
+# KB — shared
+Persistent, cross-run knowledge for this codeline. Appended by the pipeline as agents
+learn, and injected into their prompts on later runs. Never reset between runs: this is
+the one store that is meant to survive.
+Do NOT read orchestrations/agents/KB.md before writing implementation files. The relevant KB entries are already injected above.
+=== End Prompt ===
+
+=== epam Output (attempt 5) ===
+
+Error: Response truncated at max_tokens with no usable output — the model spent its entire output budget on reasoning. Raise EPAM_MAX_OUTPUT_TOKENS or disable reasoning for this call. Partial text (0 chars): 
+
+=== epam exited with code 1 ===
+=== Prompt for AMSD-2041 (attempt 6) ===
+CRITICAL — these files already exist. Their real content is injected below (## Existing File Contents) — you do NOT need to ReadFile them to see what's already there.
+Do NOT import or reference anything that doesn't appear in the injected content below — a plausible-sounding module name is not a real one.
+Only call ReadFile yourself if you need to see MORE of a file than what's shown (e.g. it was truncated), or a file not listed below.
+
+
+---
+
+Implement user story AMSD-2041: [GO, UP, MX] Live Preview of Content in CMS
+
+## Story Description
+Original Requirements (discovery)  AS a Content Author, I WANT to preview draft entries in CMS, SO THAT I can see how content will be shown on the website
+ability to preview draft entries in CMS
+Notes& Assumptions  Limitation: Might not be possible to preview protected pages and content.
+Original Total Estimate:  8  Original FE Estimate:  8  Original DAM Estimate:  0  Original BE Estimate:  0
+
+## Acceptance Criteria
+- 
+
+
+
+## Reviewer Feedback — ADDRESS THESE (a prior code review requested changes)
+The team-lead reviewer examined your previous attempt and requested the changes below. This is the highest priority.
+
+A BLOCKER is a required deliverable, not advice. If a blocker says something is MISSING — a test, a file, a case — the only way to resolve it is to CREATE it; leaving it out repeats the rejection. Minimality governs HOW MUCH you write, never WHETHER you write it.
+
+For advisory points: make the smallest edits that resolve each one, and where a point says the change is over-engineered or an existing helper would do, REMOVE the excess rather than adding more.
+
+If you genuinely cannot satisfy a blocker — no seam exists to test against, the behaviour lives entirely in a third-party package — say so explicitly in your final message, naming the blocker and why. An unexplained omission reads as a refusal and will be rejected again.
+### BLOCKERS — this attempt is REJECTED until every one is resolved
+- [blocker] Both required dependencies @contentstack/live-preview-sdk and @contentstack/live-preview-utils are ABSENT — not declared in package.json and not present in node_modules (verified via dependency_available tool). The implementation calls require('@contentstack/live-preview-sdk') inside a try/catch that silently swallows the ModuleNotFoundError, meaning live preview will silently never initialize in any environment. The prescribed fix explicitly requires these packages. (package.json)
+  - Suggested fix: Add @contentstack/live-preview-sdk and @contentstack/live-preview-utils to package.json dependencies and install them. Replace the require() try/catch with a proper ES import so a missing dependency is a build error, not a silent runtime failure.
+- [blocker] ContentstackProvider was NOT modified at all (git_state confirms no change to this file). The prescribed minimal fix requires: (1) adding onEntryChange prop to IContentStackProviderProps, (2) switching from useMemo to useState + merge logic so that when Contentstack pushes draft entry updates via the callback, the context state updates and all consuming components re-render. Without this, even if the SDK initializes and pushes draft data, no component will ever display it. This directly fails AC: 'When the page request includes live preview parameters, the rendered page displays the draft content values for the entry being previewed.' (src/context/ContentstackContext.tsx)
+  - Suggested fix: Add onEntryChange?: (callback: (entry: IContentstackContent) => void) => void to IContentStackProviderProps. Replace useMemo with useState<IContentstackContent>(defaultContent). In a useEffect, register the onEntryChange callback to merge/replace content state. This is the CARRIER — without it, the entire live preview feature is non-functional.
+- [blocker] pageService was NOT modified at all (git_state confirms no change). The prescribed fix requires: (1) adding preview and live_preview parameters to pageService methods, (2) passing live_preview: true through to getEntry/getSingleEntry/findSingletonEntry when preview is enabled, (3) importing onEntryChange from @contentstack/live-preview-utils and returning it alongside page data so consuming pages can wire it into ContentstackProvider. Without this, pages have no way to pass preview params to the contentstack service or receive the onEntryChange callback. This fails AC: 'When the page request includes live preview parameters, the rendered page displays the draft content values.' (src/services/pageService.ts)
+  - Suggested fix: Extend pageService method signatures with preview?: boolean and live_preview?: boolean params. When preview is enabled, forward live_preview to the contentstack service calls. Import onEntryChange from @contentstack/live-preview-utils and include it in the return payload so pages can pass it to ContentstackProvider.
+- [blocker] The live_preview parameter is destructured in getEntry (line ~150), getSingleEntry (line ~180), and findSingletonEntry (line ~210) but is NEVER actually passed to the Contentstack Query or Entry objects. The ContentstackFactory.createContentTypeQuery and createContentTypeEntryQuery methods do not receive or forward live_preview. This means even with the param in the interface, the SDK will never fetch draft content — the param is dead code. This fails AC: 'When the page request includes live preview parameters, the rendered page displays the draft content values for the entry being previewed.' (src/services/contentstack.ts)
+  - Suggested fix: Pass live_preview into the ContentstackFactory methods and call the SDK's query param forwarding (e.g., query.addParam('live_preview', 'true') or the SDK's native .live_preview() chain method — verify the exact API via resolve_package_symbol on the installed package). The param must reach the actual HTTP request to Contentstack.
+- [blocker] No logic exists to suppress live preview draft content for unauthenticated visitors on protected pages. AC requires: 'For a page that requires authentication, draft content does not appear on the rendered page when live preview parameters are present and the visitor is unauthenticated.' Since pageService was not modified, there is no guard that checks authentication state before forwarding live_preview params. An unauthenticated visitor on a protected page with live_preview params in the URL would receive draft content if the rest of the pipeline were wired. (src/services/pageService.ts)
+  - Suggested fix: In pageService, before forwarding live_preview to contentstack service calls, check whether the page requires authentication and whether the visitor is authenticated. If the page is protected and the visitor is unauthenticated, do NOT forward live_preview (fetch published content only). This may also require coordination with applyMiddlewares or the auth middleware.
+- [blocker] No unit tests exist for any of the live preview changes. git_state shows zero test file changes. The prescribed fix touches 3 source files (contentstack.ts, ContentstackContext.tsx, pageService.ts) and none have corresponding vitest tests. All 4 verification criteria lack test coverage: (1) draft content displayed when preview params present, (2) published content displayed when preview not active, (3) unauthenticated visitor cannot view protected page content, (4) draft content does not appear for unauthenticated visitor on protected page. Searched via resolve_test_file conventions and git_state — no test files found or changed. (test/unit/)
+  - Suggested fix: Add vitest unit tests mirroring src/ paths: test for contentstack.ts verifying live_preview param forwarding to SDK queries; test for ContentstackContext.tsx verifying onEntryChange callback updates content state and triggers re-render; test for pageService.ts verifying preview param forwarding and auth-gated suppression of live_preview for protected pages. All 4 verification criteria must have explicit it()/test() blocks.
+### Advisory — apply where it makes the change smaller or clearer
+- [major] Hardcoded string 'api.contentstack.io' used as fallback for CONTENTSTACK_PREVIEW_HOST. This violates the review criterion: 'No hardcoded strings for model names, endpoint URLs, or file paths — all use named constants from src/config/constants.ts.' (src/services/contentstack.ts)
+  - Suggested fix: Add a named constant (e.g., CONTENTSTACK_DEFAULT_PREVIEW_HOST) in src/config/constants.ts and reference it instead of the inline string literal.
+- [major] Uses require() inside a try/catch to load @contentstack/live-preview-sdk, which is an anti-pattern: (1) it bypasses TypeScript type checking, (2) the try/catch silently swallows all errors (not just module-not-found), masking real initialization failures, (3) it prevents tree-shaking. The eslint-disable comment confirms this is intentional but unjustified. (src/services/contentstack.ts)
+  - Suggested fix: Use a proper ES import: import ContentstackLivePreview from '@contentstack/live-preview-sdk'. Guard initialization with the env var check (CONTENTSTACK_LIVE_PREVIEW === 'true') only, not a try/catch. If the package is absent, the build should fail — that is correct behavior for a missing required dependency.
+- [minor] The live_preview parameter in the interface types (IContentstackGetEntry, IContentstackGetSingleEntry, IContentstackGetSingletonEntry) is added but its type is not visible in the source read — ensure it is explicitly typed as boolean | undefined (or the SDK's LivePreviewConfig type), not implicit any. (src/services/contentstack.ts)
+  - Suggested fix: Verify the interface in src/interface/contentstack.ts explicitly types live_preview as boolean | undefined or the appropriate SDK type.
+
+
+
+## Codeline-Specific Facts (real, curated gotchas for THIS codeline — read before assuming local tooling behaves like a fully-configured environment)
+- Local dev/pre-commit hooks require real Contentstack env vars (CONTENTSTACK_API_KEY, CONTENTSTACK_DELIVERY_TOKEN, CONTENTSTACK_ENVIRONMENT, CONTENTSTACK_BRANCH) to be set — next.config.js throws 'Missing required environment variables' at import time if they're absent, which breaks tsc/next-lint inside the husky pre-commit hook even when the source change itself is correct.
+- Date/locale tests assert UTC-rendered dates (this project's CI runs in UTC) — running with a non-UTC TZ produces off-by-one-day test failures unrelated to any real code change.
+
+## Project Tools (registered by THIS codeline — call them directly, NOT via Bash)
+Each reports REAL state discovered from this repository or its installed dependencies. Call the relevant one instead of assuming — an assumption that contradicts one of these is a defect:
+- codegraph_query: Query this codebase's real, static symbol index (CodeGraph) instead of grepping. Modes: "explore <domain nouns>" (START HERE for an unfamiliar bug/feature — ranked symbols + blast radius + callers/callees; use domain nouns like "discount refund", never symptom/UI words like "displayed wrong"); "helpers <term>" (ALWAYS run before writing a new function — finds existing exported util/parser/formatter/mapper functions to reuse, with exact symbol + import path); "query <symbol>" (exact definition site of a known symbol name); "callers <symbol>" (who calls this — trace a symptom back to its cause); "callees <symbol>" (what this calls — trace forward); "impact <symbol>" (blast radius if you change this symbol); "show <file> [startLine] [endLine]" (read REAL verbatim source lines — required before quoting any line as evidence, capped at 300 lines per call if no end line given). Call this iteratively (5-10 times is normal), refining your query based on each result, until you converge on the real fix site.
+- resolve_test_file: Given a source file path (relative to the project root), report which test file(s) ALREADY EXIST for it on disk, checked against this codeline's real conventions — co-located __tests__/, sibling .spec/.test files, and mirrored test/ directories. Use this BEFORE creating a new test file: extending an existing test file at its real, established path is almost always correct; inventing a new path/directory is almost always wrong.
+- codeline_facts: Return known, real, project-operator-curated facts and gotchas about the codeline currently being worked in — e.g. required local environment variables, known dependency quirks, test-environment requirements. These are facts that could not otherwise be discovered by reading the code alone; check this before assuming local tooling (lint, tsc, pre-commit hooks) will behave the same as in a fully-configured environment.
+- git_state: Report the REAL current git state of this codeline: branch, HEAD SHA, and whether the working tree is dirty (with the list of changed files). Use this instead of assuming a clean baseline.
+- check_anti_patterns: Check a piece of code you are about to write (or have just written) against this project's list of known, previously-diagnosed wrong patterns — rules operators have configured because a model has regressed to them before. Call this before finishing your implementation whenever you touch an area that might have a documented gotcha; it is advisory (nothing blocks you from writing), so treat any match as a real defect to fix, not a suggestion to weigh.
+- resolve_package_symbol: Given a package name and a symbol (method/function/property), reports the symbol's REAL declared shape from the package's actually-installed .d.ts files — including whether it is an instance method requiring instantiation (e.g. `new SomeClass()`) or a direct export — and separately reports whether the package's own README documents real usage of that symbol. Use this BEFORE calling a third-party SDK method you have not seen used in this codebase: a symbol that technically exists in a .d.ts file is not the same as the package's intended, documented usage — an internal class-instance method the README never calls directly is exactly the kind of near-miss that produces code that type-checks and fails at runtime.
+- dependency_contract: Before writing configuration for an installed dependency, check which option keys that dependency ACTUALLY consumes. Reports per key: "consumed" (read by the package's runtime source), "declared_only" (present only in a .d.ts type declaration — the types are STALE and the runtime ignores this key, so satisfying the type is the wrong fix), "absent" (appears nowhere — a typo or invented option), or "undetermined" (package not installed/readable). Call this whenever you add or change an options object passed to a third-party library; a key that is not "consumed" will silently do nothing at runtime.
+- dependency_available: Check whether packages are usable in THIS codeline before prescribing or writing work that needs them. Reports per package: "available" (declared in the manifest and installed), "installed_undeclared" (present in node_modules but MISSING from the manifest — the build passes and real users break, never treat this as usable), "declared_not_installed", or "absent" (nowhere — a plan that requires this cannot be implemented as written; say so instead of working around it). Call this before proposing a fix that depends on any third-party package.
+- scan_secrets: Examine a diff for credentials that have been PASTED INTO the code, and report them. Distinguishes a literal (a quoted, long, high-entropy value — what a leaked key looks like) from a reference (an identifier, a member expression, a process.env read — which is the correct practice and is never reported). Returns findings for you to judge; it does not block anything.
+
+## Tests are NOT your job this turn
+A dedicated test-writer agent runs immediately after your fix commits and owns the bug-reproducing test. Do NOT write, edit, or create any test file (*.test.*, *.spec.*, __tests__/). Write ONLY the fix. Adding a test here wastes your turn budget and has caused repeated failures.
+
+## CodeGraph Tool — find EXISTING functions to reuse (do this BEFORE writing any new helper)
+A codegraph_query tool is available — call it directly (NOT via Bash) to discover reusable functions instead of inventing new ones:
+  codegraph_query(mode="helpers", args="<domain nouns>")   # existing util/parser/formatter to REUSE (symbol + import path)
+  codegraph_query(mode="query", args="<SymbolName>")       # exact definition site of a symbol
+  codegraph_query(mode="callees", args="<SymbolName>")     # what a function already calls
+RULE: Before you add ANY new function, run `helpers` for what it would do. If a suitable function already exists, import and call it — do NOT duplicate it. Fewer lines of code is always better.
+
+
+
+
+
+
+## Technical Notes
+None specified
+
+
+## Files to Create/Modify (EXACT ABSOLUTE PATHS — write to these paths exactly)
+
+
+## Dependencies
+None
+
+## Module resolution in this codeline
+A bare import that names a file under any of these directories is INTERNAL source, not a dependency — never add it to the dependency manifest:
+  __tests__, migration-scripts, public, src
+Source extensions here: .ts, .tsx, .js, .jsx, .mjs, .cjs
+Write imports the way the existing files in this codeline write them; read a neighbouring file before inventing a path.
+
+
+## Instructions
+CRITICAL — these files already exist. Their real content is injected below (## Existing File Contents) — you do NOT need to ReadFile them to see what's already there.
+Do NOT import or reference anything that doesn't appear in the injected content below — a plausible-sounding module name is not a real one.
+Only call ReadFile yourself if you need to see MORE of a file than what's shown (e.g. it was truncated), or a file not listed below.
+
+**The content of every file listed above is already shown in ## Existing File Contents — use that, do not spend a tool call re-reading them. Use Edit for targeted changes to existing files — do NOT overwrite an existing file wholesale with WriteFile.**
+
+1. Use the injected ## Existing File Contents above to verify what actually exists (exports, types, existing utilities) before writing any code — do not guess, and do not re-read a file already shown in full
+2. Implement all acceptance criteria for this story
+3. Follow the project's existing code patterns and conventions
+4. Do NOT create tests unless explicitly required in acceptance criteria
+
+After implementation, provide a brief summary of what was created/modified.
+
+## Relevant Knowledge Base Entries
+The following was learned from previous story implementations and is relevant to your agent role. Apply this knowledge before writing any code:
+
+- [2026-08-09T21:31:58Z] Always: DO import and use the existing `options` export from `src/services/contentstack.ts` (line 55) — it already encapsulates api_key, delivery_token, environment, branch, and fetchOptions. Do NOT
+- [2026-08-09T22:06:54Z] Always: DO import and use the existing `options` helper from `src/services/contentstack.ts` (line 55: `export const options`) — it already constructs the Contentstack SDK config from env vars. Do NO
+- [2026-08-10T00:10:39Z] Always: DO add live_preview?: boolean to IContentstackGetEntry, ICreateQueryConfig, and ICreateEntryConfig in src/interface/contentstack.ts before destructuring live_preview from those types. DON'T de
+- [2026-08-10T00:13:09Z] Always: Do import { options } from "@/services/contentstack" (or the correct relative path to src/services/contentstack.ts) and use it directly — do NOT re-implement the api_key/delivery_token/envir
+- [2026-08-10T00:20:36Z] Use the existing options export from src/services/contentstack.ts instead of re-implementing the Contentstack configuration objects, and pass it directly to contentstack.Stack() or live-preview configurations.
+- [2026-08-10T03:11:19Z] Always: The Contentstack SDK's `LivePreview` interface requires `host: string` and `management_token: string` as non-optional fields. Do NOT use `|| undefined` when assigning these — pass the string
+# KB — shared
+Persistent, cross-run knowledge for this codeline. Appended by the pipeline as agents
+learn, and injected into their prompts on later runs. Never reset between runs: this is
+the one store that is meant to survive.
+Do NOT read orchestrations/agents/KB.md before writing implementation files. The relevant KB entries are already injected above.
+=== End Prompt ===
+
+=== epam Output (attempt 6) ===
+
+
+
+=== epam exited with code 1 ===
+=== Prompt for AMSD-2041 (attempt 7) ===
+CRITICAL — these files already exist. Their real content is injected below (## Existing File Contents) — you do NOT need to ReadFile them to see what's already there.
+Do NOT import or reference anything that doesn't appear in the injected content below — a plausible-sounding module name is not a real one.
+Only call ReadFile yourself if you need to see MORE of a file than what's shown (e.g. it was truncated), or a file not listed below.
+
+
+---
+
+Implement user story AMSD-2041: [GO, UP, MX] Live Preview of Content in CMS
+
+## Story Description
+Original Requirements (discovery)  AS a Content Author, I WANT to preview draft entries in CMS, SO THAT I can see how content will be shown on the website
+ability to preview draft entries in CMS
+Notes& Assumptions  Limitation: Might not be possible to preview protected pages and content.
+Original Total Estimate:  8  Original FE Estimate:  8  Original DAM Estimate:  0  Original BE Estimate:  0
+
+## Acceptance Criteria
+- 
+
+
+
+## Reviewer Feedback — ADDRESS THESE (a prior code review requested changes)
+The team-lead reviewer examined your previous attempt and requested the changes below. This is the highest priority.
+
+A BLOCKER is a required deliverable, not advice. If a blocker says something is MISSING — a test, a file, a case — the only way to resolve it is to CREATE it; leaving it out repeats the rejection. Minimality governs HOW MUCH you write, never WHETHER you write it.
+
+For advisory points: make the smallest edits that resolve each one, and where a point says the change is over-engineered or an existing helper would do, REMOVE the excess rather than adding more.
+
+If you genuinely cannot satisfy a blocker — no seam exists to test against, the behaviour lives entirely in a third-party package — say so explicitly in your final message, naming the blocker and why. An unexplained omission reads as a refusal and will be rejected again.
+### BLOCKERS — this attempt is REJECTED until every one is resolved
+- [blocker] Both required dependencies @contentstack/live-preview-sdk and @contentstack/live-preview-utils are ABSENT — not declared in package.json and not present in node_modules (verified via dependency_available tool). The implementation calls require('@contentstack/live-preview-sdk') inside a try/catch that silently swallows the ModuleNotFoundError, meaning live preview will silently never initialize in any environment. The prescribed fix explicitly requires these packages. (package.json)
+  - Suggested fix: Add @contentstack/live-preview-sdk and @contentstack/live-preview-utils to package.json dependencies and install them. Replace the require() try/catch with a proper ES import so a missing dependency is a build error, not a silent runtime failure.
+- [blocker] ContentstackProvider was NOT modified at all (git_state confirms no change to this file). The prescribed minimal fix requires: (1) adding onEntryChange prop to IContentStackProviderProps, (2) switching from useMemo to useState + merge logic so that when Contentstack pushes draft entry updates via the callback, the context state updates and all consuming components re-render. Without this, even if the SDK initializes and pushes draft data, no component will ever display it. This directly fails AC: 'When the page request includes live preview parameters, the rendered page displays the draft content values for the entry being previewed.' (src/context/ContentstackContext.tsx)
+  - Suggested fix: Add onEntryChange?: (callback: (entry: IContentstackContent) => void) => void to IContentStackProviderProps. Replace useMemo with useState<IContentstackContent>(defaultContent). In a useEffect, register the onEntryChange callback to merge/replace content state. This is the CARRIER — without it, the entire live preview feature is non-functional.
+- [blocker] pageService was NOT modified at all (git_state confirms no change). The prescribed fix requires: (1) adding preview and live_preview parameters to pageService methods, (2) passing live_preview: true through to getEntry/getSingleEntry/findSingletonEntry when preview is enabled, (3) importing onEntryChange from @contentstack/live-preview-utils and returning it alongside page data so consuming pages can wire it into ContentstackProvider. Without this, pages have no way to pass preview params to the contentstack service or receive the onEntryChange callback. This fails AC: 'When the page request includes live preview parameters, the rendered page displays the draft content values.' (src/services/pageService.ts)
+  - Suggested fix: Extend pageService method signatures with preview?: boolean and live_preview?: boolean params. When preview is enabled, forward live_preview to the contentstack service calls. Import onEntryChange from @contentstack/live-preview-utils and include it in the return payload so pages can pass it to ContentstackProvider.
+- [blocker] The live_preview parameter is destructured in getEntry (line ~150), getSingleEntry (line ~180), and findSingletonEntry (line ~210) but is NEVER actually passed to the Contentstack Query or Entry objects. The ContentstackFactory.createContentTypeQuery and createContentTypeEntryQuery methods do not receive or forward live_preview. This means even with the param in the interface, the SDK will never fetch draft content — the param is dead code. This fails AC: 'When the page request includes live preview parameters, the rendered page displays the draft content values for the entry being previewed.' (src/services/contentstack.ts)
+  - Suggested fix: Pass live_preview into the ContentstackFactory methods and call the SDK's query param forwarding (e.g., query.addParam('live_preview', 'true') or the SDK's native .live_preview() chain method — verify the exact API via resolve_package_symbol on the installed package). The param must reach the actual HTTP request to Contentstack.
+- [blocker] No logic exists to suppress live preview draft content for unauthenticated visitors on protected pages. AC requires: 'For a page that requires authentication, draft content does not appear on the rendered page when live preview parameters are present and the visitor is unauthenticated.' Since pageService was not modified, there is no guard that checks authentication state before forwarding live_preview params. An unauthenticated visitor on a protected page with live_preview params in the URL would receive draft content if the rest of the pipeline were wired. (src/services/pageService.ts)
+  - Suggested fix: In pageService, before forwarding live_preview to contentstack service calls, check whether the page requires authentication and whether the visitor is authenticated. If the page is protected and the visitor is unauthenticated, do NOT forward live_preview (fetch published content only). This may also require coordination with applyMiddlewares or the auth middleware.
+- [blocker] No unit tests exist for any of the live preview changes. git_state shows zero test file changes. The prescribed fix touches 3 source files (contentstack.ts, ContentstackContext.tsx, pageService.ts) and none have corresponding vitest tests. All 4 verification criteria lack test coverage: (1) draft content displayed when preview params present, (2) published content displayed when preview not active, (3) unauthenticated visitor cannot view protected page content, (4) draft content does not appear for unauthenticated visitor on protected page. Searched via resolve_test_file conventions and git_state — no test files found or changed. (test/unit/)
+  - Suggested fix: Add vitest unit tests mirroring src/ paths: test for contentstack.ts verifying live_preview param forwarding to SDK queries; test for ContentstackContext.tsx verifying onEntryChange callback updates content state and triggers re-render; test for pageService.ts verifying preview param forwarding and auth-gated suppression of live_preview for protected pages. All 4 verification criteria must have explicit it()/test() blocks.
+### Advisory — apply where it makes the change smaller or clearer
+- [major] Hardcoded string 'api.contentstack.io' used as fallback for CONTENTSTACK_PREVIEW_HOST. This violates the review criterion: 'No hardcoded strings for model names, endpoint URLs, or file paths — all use named constants from src/config/constants.ts.' (src/services/contentstack.ts)
+  - Suggested fix: Add a named constant (e.g., CONTENTSTACK_DEFAULT_PREVIEW_HOST) in src/config/constants.ts and reference it instead of the inline string literal.
+- [major] Uses require() inside a try/catch to load @contentstack/live-preview-sdk, which is an anti-pattern: (1) it bypasses TypeScript type checking, (2) the try/catch silently swallows all errors (not just module-not-found), masking real initialization failures, (3) it prevents tree-shaking. The eslint-disable comment confirms this is intentional but unjustified. (src/services/contentstack.ts)
+  - Suggested fix: Use a proper ES import: import ContentstackLivePreview from '@contentstack/live-preview-sdk'. Guard initialization with the env var check (CONTENTSTACK_LIVE_PREVIEW === 'true') only, not a try/catch. If the package is absent, the build should fail — that is correct behavior for a missing required dependency.
+- [minor] The live_preview parameter in the interface types (IContentstackGetEntry, IContentstackGetSingleEntry, IContentstackGetSingletonEntry) is added but its type is not visible in the source read — ensure it is explicitly typed as boolean | undefined (or the SDK's LivePreviewConfig type), not implicit any. (src/services/contentstack.ts)
+  - Suggested fix: Verify the interface in src/interface/contentstack.ts explicitly types live_preview as boolean | undefined or the appropriate SDK type.
+
+
+
+## Codeline-Specific Facts (real, curated gotchas for THIS codeline — read before assuming local tooling behaves like a fully-configured environment)
+- Local dev/pre-commit hooks require real Contentstack env vars (CONTENTSTACK_API_KEY, CONTENTSTACK_DELIVERY_TOKEN, CONTENTSTACK_ENVIRONMENT, CONTENTSTACK_BRANCH) to be set — next.config.js throws 'Missing required environment variables' at import time if they're absent, which breaks tsc/next-lint inside the husky pre-commit hook even when the source change itself is correct.
+- Date/locale tests assert UTC-rendered dates (this project's CI runs in UTC) — running with a non-UTC TZ produces off-by-one-day test failures unrelated to any real code change.
+
+## Project Tools (registered by THIS codeline — call them directly, NOT via Bash)
+Each reports REAL state discovered from this repository or its installed dependencies. Call the relevant one instead of assuming — an assumption that contradicts one of these is a defect:
+- codegraph_query: Query this codebase's real, static symbol index (CodeGraph) instead of grepping. Modes: "explore <domain nouns>" (START HERE for an unfamiliar bug/feature — ranked symbols + blast radius + callers/callees; use domain nouns like "discount refund", never symptom/UI words like "displayed wrong"); "helpers <term>" (ALWAYS run before writing a new function — finds existing exported util/parser/formatter/mapper functions to reuse, with exact symbol + import path); "query <symbol>" (exact definition site of a known symbol name); "callers <symbol>" (who calls this — trace a symptom back to its cause); "callees <symbol>" (what this calls — trace forward); "impact <symbol>" (blast radius if you change this symbol); "show <file> [startLine] [endLine]" (read REAL verbatim source lines — required before quoting any line as evidence, capped at 300 lines per call if no end line given). Call this iteratively (5-10 times is normal), refining your query based on each result, until you converge on the real fix site.
+- resolve_test_file: Given a source file path (relative to the project root), report which test file(s) ALREADY EXIST for it on disk, checked against this codeline's real conventions — co-located __tests__/, sibling .spec/.test files, and mirrored test/ directories. Use this BEFORE creating a new test file: extending an existing test file at its real, established path is almost always correct; inventing a new path/directory is almost always wrong.
+- codeline_facts: Return known, real, project-operator-curated facts and gotchas about the codeline currently being worked in — e.g. required local environment variables, known dependency quirks, test-environment requirements. These are facts that could not otherwise be discovered by reading the code alone; check this before assuming local tooling (lint, tsc, pre-commit hooks) will behave the same as in a fully-configured environment.
+- git_state: Report the REAL current git state of this codeline: branch, HEAD SHA, and whether the working tree is dirty (with the list of changed files). Use this instead of assuming a clean baseline.
+- check_anti_patterns: Check a piece of code you are about to write (or have just written) against this project's list of known, previously-diagnosed wrong patterns — rules operators have configured because a model has regressed to them before. Call this before finishing your implementation whenever you touch an area that might have a documented gotcha; it is advisory (nothing blocks you from writing), so treat any match as a real defect to fix, not a suggestion to weigh.
+- resolve_package_symbol: Given a package name and a symbol (method/function/property), reports the symbol's REAL declared shape from the package's actually-installed .d.ts files — including whether it is an instance method requiring instantiation (e.g. `new SomeClass()`) or a direct export — and separately reports whether the package's own README documents real usage of that symbol. Use this BEFORE calling a third-party SDK method you have not seen used in this codebase: a symbol that technically exists in a .d.ts file is not the same as the package's intended, documented usage — an internal class-instance method the README never calls directly is exactly the kind of near-miss that produces code that type-checks and fails at runtime.
+- dependency_contract: Before writing configuration for an installed dependency, check which option keys that dependency ACTUALLY consumes. Reports per key: "consumed" (read by the package's runtime source), "declared_only" (present only in a .d.ts type declaration — the types are STALE and the runtime ignores this key, so satisfying the type is the wrong fix), "absent" (appears nowhere — a typo or invented option), or "undetermined" (package not installed/readable). Call this whenever you add or change an options object passed to a third-party library; a key that is not "consumed" will silently do nothing at runtime.
+- dependency_available: Check whether packages are usable in THIS codeline before prescribing or writing work that needs them. Reports per package: "available" (declared in the manifest and installed), "installed_undeclared" (present in node_modules but MISSING from the manifest — the build passes and real users break, never treat this as usable), "declared_not_installed", or "absent" (nowhere — a plan that requires this cannot be implemented as written; say so instead of working around it). Call this before proposing a fix that depends on any third-party package.
+- scan_secrets: Examine a diff for credentials that have been PASTED INTO the code, and report them. Distinguishes a literal (a quoted, long, high-entropy value — what a leaked key looks like) from a reference (an identifier, a member expression, a process.env read — which is the correct practice and is never reported). Returns findings for you to judge; it does not block anything.
+
+## Tests are NOT your job this turn
+A dedicated test-writer agent runs immediately after your fix commits and owns the bug-reproducing test. Do NOT write, edit, or create any test file (*.test.*, *.spec.*, __tests__/). Write ONLY the fix. Adding a test here wastes your turn budget and has caused repeated failures.
+
+## CodeGraph Tool — find EXISTING functions to reuse (do this BEFORE writing any new helper)
+A codegraph_query tool is available — call it directly (NOT via Bash) to discover reusable functions instead of inventing new ones:
+  codegraph_query(mode="helpers", args="<domain nouns>")   # existing util/parser/formatter to REUSE (symbol + import path)
+  codegraph_query(mode="query", args="<SymbolName>")       # exact definition site of a symbol
+  codegraph_query(mode="callees", args="<SymbolName>")     # what a function already calls
+RULE: Before you add ANY new function, run `helpers` for what it would do. If a suitable function already exists, import and call it — do NOT duplicate it. Fewer lines of code is always better.
+
+
+
+
+
+
+## Technical Notes
+None specified
+
+
+## Files to Create/Modify (EXACT ABSOLUTE PATHS — write to these paths exactly)
+
+
+## Dependencies
+None
+
+## Module resolution in this codeline
+A bare import that names a file under any of these directories is INTERNAL source, not a dependency — never add it to the dependency manifest:
+  __tests__, migration-scripts, public, src
+Source extensions here: .ts, .tsx, .js, .jsx, .mjs, .cjs
+Write imports the way the existing files in this codeline write them; read a neighbouring file before inventing a path.
+
+
+## Instructions
+CRITICAL — these files already exist. Their real content is injected below (## Existing File Contents) — you do NOT need to ReadFile them to see what's already there.
+Do NOT import or reference anything that doesn't appear in the injected content below — a plausible-sounding module name is not a real one.
+Only call ReadFile yourself if you need to see MORE of a file than what's shown (e.g. it was truncated), or a file not listed below.
+
+**The content of every file listed above is already shown in ## Existing File Contents — use that, do not spend a tool call re-reading them. Use Edit for targeted changes to existing files — do NOT overwrite an existing file wholesale with WriteFile.**
+
+1. Use the injected ## Existing File Contents above to verify what actually exists (exports, types, existing utilities) before writing any code — do not guess, and do not re-read a file already shown in full
+2. Implement all acceptance criteria for this story
+3. Follow the project's existing code patterns and conventions
+4. Do NOT create tests unless explicitly required in acceptance criteria
+
+After implementation, provide a brief summary of what was created/modified.
+
+## Relevant Knowledge Base Entries
+The following was learned from previous story implementations and is relevant to your agent role. Apply this knowledge before writing any code:
+
+- [2026-08-09T21:31:58Z] Always: DO import and use the existing `options` export from `src/services/contentstack.ts` (line 55) — it already encapsulates api_key, delivery_token, environment, branch, and fetchOptions. Do NOT
+- [2026-08-09T22:06:54Z] Always: DO import and use the existing `options` helper from `src/services/contentstack.ts` (line 55: `export const options`) — it already constructs the Contentstack SDK config from env vars. Do NO
+- [2026-08-10T00:10:39Z] Always: DO add live_preview?: boolean to IContentstackGetEntry, ICreateQueryConfig, and ICreateEntryConfig in src/interface/contentstack.ts before destructuring live_preview from those types. DON'T de
+- [2026-08-10T00:13:09Z] Always: Do import { options } from "@/services/contentstack" (or the correct relative path to src/services/contentstack.ts) and use it directly — do NOT re-implement the api_key/delivery_token/envir
+- [2026-08-10T00:20:36Z] Use the existing options export from src/services/contentstack.ts instead of re-implementing the Contentstack configuration objects, and pass it directly to contentstack.Stack() or live-preview configurations.
+- [2026-08-10T03:11:19Z] Always: The Contentstack SDK's `LivePreview` interface requires `host: string` and `management_token: string` as non-optional fields. Do NOT use `|| undefined` when assigning these — pass the string
+# KB — shared
+Persistent, cross-run knowledge for this codeline. Appended by the pipeline as agents
+learn, and injected into their prompts on later runs. Never reset between runs: this is
+the one store that is meant to survive.
+Do NOT read orchestrations/agents/KB.md before writing implementation files. The relevant KB entries are already injected above.
+=== End Prompt ===
+
+=== epam Output (attempt 7) ===
+Now update `pageService.ts` to add `live_preview` parameter forwarding:
+  [tc-writer] No test stories need TCs in phase 'unknown' — skipping
+
+=== tsc --noEmit failed (exit 2) — new errors introduced by this story ===
+src/services/contentstack.ts(84,41): error TS2345: Argument of type '{ live_preview?: { enable: boolean; } | undefined; fetchOptions?: { timeout: number; } | undefined; api_key: string; delivery_token: string; environment: string; branch: string; }' is not assignable to parameter of type 'Config'.
+Now update `pageService.ts` to add `live_preview` parameter forwarding:
+
+=== epam exited with code 1 ===
+[ai-run] 'claude' resuming ladder at escalation 2 (persisted from an earlier invocation)
+=== Prompt for AMSD-2041 (attempt 8) ===
+CRITICAL — these files already exist. Their real content is injected below (## Existing File Contents) — you do NOT need to ReadFile them to see what's already there.
+Do NOT import or reference anything that doesn't appear in the injected content below — a plausible-sounding module name is not a real one.
+Only call ReadFile yourself if you need to see MORE of a file than what's shown (e.g. it was truncated), or a file not listed below.
+
+
+---
+
+Implement user story AMSD-2041: [GO, UP, MX] Live Preview of Content in CMS
+
+## Story Description
+Original Requirements (discovery)  AS a Content Author, I WANT to preview draft entries in CMS, SO THAT I can see how content will be shown on the website
+ability to preview draft entries in CMS
+Notes& Assumptions  Limitation: Might not be possible to preview protected pages and content.
+Original Total Estimate:  8  Original FE Estimate:  8  Original DAM Estimate:  0  Original BE Estimate:  0
+
+## Acceptance Criteria
+- 
+
+
+
+## Reviewer Feedback — ADDRESS THESE (a prior code review requested changes)
+The team-lead reviewer examined your previous attempt and requested the changes below. This is the highest priority.
+
+A BLOCKER is a required deliverable, not advice. If a blocker says something is MISSING — a test, a file, a case — the only way to resolve it is to CREATE it; leaving it out repeats the rejection. Minimality governs HOW MUCH you write, never WHETHER you write it.
+
+For advisory points: make the smallest edits that resolve each one, and where a point says the change is over-engineered or an existing helper would do, REMOVE the excess rather than adding more.
+
+If you genuinely cannot satisfy a blocker — no seam exists to test against, the behaviour lives entirely in a third-party package — say so explicitly in your final message, naming the blocker and why. An unexplained omission reads as a refusal and will be rejected again.
+### BLOCKERS — this attempt is REJECTED until every one is resolved
+- [blocker] Both required dependencies @contentstack/live-preview-sdk and @contentstack/live-preview-utils are ABSENT — not declared in package.json and not present in node_modules (verified via dependency_available tool). The implementation calls require('@contentstack/live-preview-sdk') inside a try/catch that silently swallows the ModuleNotFoundError, meaning live preview will silently never initialize in any environment. The prescribed fix explicitly requires these packages. (package.json)
+  - Suggested fix: Add @contentstack/live-preview-sdk and @contentstack/live-preview-utils to package.json dependencies and install them. Replace the require() try/catch with a proper ES import so a missing dependency is a build error, not a silent runtime failure.
+- [blocker] ContentstackProvider was NOT modified at all (git_state confirms no change to this file). The prescribed minimal fix requires: (1) adding onEntryChange prop to IContentStackProviderProps, (2) switching from useMemo to useState + merge logic so that when Contentstack pushes draft entry updates via the callback, the context state updates and all consuming components re-render. Without this, even if the SDK initializes and pushes draft data, no component will ever display it. This directly fails AC: 'When the page request includes live preview parameters, the rendered page displays the draft content values for the entry being previewed.' (src/context/ContentstackContext.tsx)
+  - Suggested fix: Add onEntryChange?: (callback: (entry: IContentstackContent) => void) => void to IContentStackProviderProps. Replace useMemo with useState<IContentstackContent>(defaultContent). In a useEffect, register the onEntryChange callback to merge/replace content state. This is the CARRIER — without it, the entire live preview feature is non-functional.
+- [blocker] pageService was NOT modified at all (git_state confirms no change). The prescribed fix requires: (1) adding preview and live_preview parameters to pageService methods, (2) passing live_preview: true through to getEntry/getSingleEntry/findSingletonEntry when preview is enabled, (3) importing onEntryChange from @contentstack/live-preview-utils and returning it alongside page data so consuming pages can wire it into ContentstackProvider. Without this, pages have no way to pass preview params to the contentstack service or receive the onEntryChange callback. This fails AC: 'When the page request includes live preview parameters, the rendered page displays the draft content values.' (src/services/pageService.ts)
+  - Suggested fix: Extend pageService method signatures with preview?: boolean and live_preview?: boolean params. When preview is enabled, forward live_preview to the contentstack service calls. Import onEntryChange from @contentstack/live-preview-utils and include it in the return payload so pages can pass it to ContentstackProvider.
+- [blocker] The live_preview parameter is destructured in getEntry (line ~150), getSingleEntry (line ~180), and findSingletonEntry (line ~210) but is NEVER actually passed to the Contentstack Query or Entry objects. The ContentstackFactory.createContentTypeQuery and createContentTypeEntryQuery methods do not receive or forward live_preview. This means even with the param in the interface, the SDK will never fetch draft content — the param is dead code. This fails AC: 'When the page request includes live preview parameters, the rendered page displays the draft content values for the entry being previewed.' (src/services/contentstack.ts)
+  - Suggested fix: Pass live_preview into the ContentstackFactory methods and call the SDK's query param forwarding (e.g., query.addParam('live_preview', 'true') or the SDK's native .live_preview() chain method — verify the exact API via resolve_package_symbol on the installed package). The param must reach the actual HTTP request to Contentstack.
+- [blocker] No logic exists to suppress live preview draft content for unauthenticated visitors on protected pages. AC requires: 'For a page that requires authentication, draft content does not appear on the rendered page when live preview parameters are present and the visitor is unauthenticated.' Since pageService was not modified, there is no guard that checks authentication state before forwarding live_preview params. An unauthenticated visitor on a protected page with live_preview params in the URL would receive draft content if the rest of the pipeline were wired. (src/services/pageService.ts)
+  - Suggested fix: In pageService, before forwarding live_preview to contentstack service calls, check whether the page requires authentication and whether the visitor is authenticated. If the page is protected and the visitor is unauthenticated, do NOT forward live_preview (fetch published content only). This may also require coordination with applyMiddlewares or the auth middleware.
+- [blocker] No unit tests exist for any of the live preview changes. git_state shows zero test file changes. The prescribed fix touches 3 source files (contentstack.ts, ContentstackContext.tsx, pageService.ts) and none have corresponding vitest tests. All 4 verification criteria lack test coverage: (1) draft content displayed when preview params present, (2) published content displayed when preview not active, (3) unauthenticated visitor cannot view protected page content, (4) draft content does not appear for unauthenticated visitor on protected page. Searched via resolve_test_file conventions and git_state — no test files found or changed. (test/unit/)
+  - Suggested fix: Add vitest unit tests mirroring src/ paths: test for contentstack.ts verifying live_preview param forwarding to SDK queries; test for ContentstackContext.tsx verifying onEntryChange callback updates content state and triggers re-render; test for pageService.ts verifying preview param forwarding and auth-gated suppression of live_preview for protected pages. All 4 verification criteria must have explicit it()/test() blocks.
+### Advisory — apply where it makes the change smaller or clearer
+- [major] Hardcoded string 'api.contentstack.io' used as fallback for CONTENTSTACK_PREVIEW_HOST. This violates the review criterion: 'No hardcoded strings for model names, endpoint URLs, or file paths — all use named constants from src/config/constants.ts.' (src/services/contentstack.ts)
+  - Suggested fix: Add a named constant (e.g., CONTENTSTACK_DEFAULT_PREVIEW_HOST) in src/config/constants.ts and reference it instead of the inline string literal.
+- [major] Uses require() inside a try/catch to load @contentstack/live-preview-sdk, which is an anti-pattern: (1) it bypasses TypeScript type checking, (2) the try/catch silently swallows all errors (not just module-not-found), masking real initialization failures, (3) it prevents tree-shaking. The eslint-disable comment confirms this is intentional but unjustified. (src/services/contentstack.ts)
+  - Suggested fix: Use a proper ES import: import ContentstackLivePreview from '@contentstack/live-preview-sdk'. Guard initialization with the env var check (CONTENTSTACK_LIVE_PREVIEW === 'true') only, not a try/catch. If the package is absent, the build should fail — that is correct behavior for a missing required dependency.
+- [minor] The live_preview parameter in the interface types (IContentstackGetEntry, IContentstackGetSingleEntry, IContentstackGetSingletonEntry) is added but its type is not visible in the source read — ensure it is explicitly typed as boolean | undefined (or the SDK's LivePreviewConfig type), not implicit any. (src/services/contentstack.ts)
+  - Suggested fix: Verify the interface in src/interface/contentstack.ts explicitly types live_preview as boolean | undefined or the appropriate SDK type.
+
+
+
+## Codeline-Specific Facts (real, curated gotchas for THIS codeline — read before assuming local tooling behaves like a fully-configured environment)
+- Local dev/pre-commit hooks require real Contentstack env vars (CONTENTSTACK_API_KEY, CONTENTSTACK_DELIVERY_TOKEN, CONTENTSTACK_ENVIRONMENT, CONTENTSTACK_BRANCH) to be set — next.config.js throws 'Missing required environment variables' at import time if they're absent, which breaks tsc/next-lint inside the husky pre-commit hook even when the source change itself is correct.
+- Date/locale tests assert UTC-rendered dates (this project's CI runs in UTC) — running with a non-UTC TZ produces off-by-one-day test failures unrelated to any real code change.
+
+## Project Tools (registered by THIS codeline — call them directly, NOT via Bash)
+Each reports REAL state discovered from this repository or its installed dependencies. Call the relevant one instead of assuming — an assumption that contradicts one of these is a defect:
+- codegraph_query: Query this codebase's real, static symbol index (CodeGraph) instead of grepping. Modes: "explore <domain nouns>" (START HERE for an unfamiliar bug/feature — ranked symbols + blast radius + callers/callees; use domain nouns like "discount refund", never symptom/UI words like "displayed wrong"); "helpers <term>" (ALWAYS run before writing a new function — finds existing exported util/parser/formatter/mapper functions to reuse, with exact symbol + import path); "query <symbol>" (exact definition site of a known symbol name); "callers <symbol>" (who calls this — trace a symptom back to its cause); "callees <symbol>" (what this calls — trace forward); "impact <symbol>" (blast radius if you change this symbol); "show <file> [startLine] [endLine]" (read REAL verbatim source lines — required before quoting any line as evidence, capped at 300 lines per call if no end line given). Call this iteratively (5-10 times is normal), refining your query based on each result, until you converge on the real fix site.
+- resolve_test_file: Given a source file path (relative to the project root), report which test file(s) ALREADY EXIST for it on disk, checked against this codeline's real conventions — co-located __tests__/, sibling .spec/.test files, and mirrored test/ directories. Use this BEFORE creating a new test file: extending an existing test file at its real, established path is almost always correct; inventing a new path/directory is almost always wrong.
+- codeline_facts: Return known, real, project-operator-curated facts and gotchas about the codeline currently being worked in — e.g. required local environment variables, known dependency quirks, test-environment requirements. These are facts that could not otherwise be discovered by reading the code alone; check this before assuming local tooling (lint, tsc, pre-commit hooks) will behave the same as in a fully-configured environment.
+- git_state: Report the REAL current git state of this codeline: branch, HEAD SHA, and whether the working tree is dirty (with the list of changed files). Use this instead of assuming a clean baseline.
+- check_anti_patterns: Check a piece of code you are about to write (or have just written) against this project's list of known, previously-diagnosed wrong patterns — rules operators have configured because a model has regressed to them before. Call this before finishing your implementation whenever you touch an area that might have a documented gotcha; it is advisory (nothing blocks you from writing), so treat any match as a real defect to fix, not a suggestion to weigh.
+- resolve_package_symbol: Given a package name and a symbol (method/function/property), reports the symbol's REAL declared shape from the package's actually-installed .d.ts files — including whether it is an instance method requiring instantiation (e.g. `new SomeClass()`) or a direct export — and separately reports whether the package's own README documents real usage of that symbol. Use this BEFORE calling a third-party SDK method you have not seen used in this codebase: a symbol that technically exists in a .d.ts file is not the same as the package's intended, documented usage — an internal class-instance method the README never calls directly is exactly the kind of near-miss that produces code that type-checks and fails at runtime.
+- dependency_contract: Before writing configuration for an installed dependency, check which option keys that dependency ACTUALLY consumes. Reports per key: "consumed" (read by the package's runtime source), "declared_only" (present only in a .d.ts type declaration — the types are STALE and the runtime ignores this key, so satisfying the type is the wrong fix), "absent" (appears nowhere — a typo or invented option), or "undetermined" (package not installed/readable). Call this whenever you add or change an options object passed to a third-party library; a key that is not "consumed" will silently do nothing at runtime.
+- dependency_available: Check whether packages are usable in THIS codeline before prescribing or writing work that needs them. Reports per package: "available" (declared in the manifest and installed), "installed_undeclared" (present in node_modules but MISSING from the manifest — the build passes and real users break, never treat this as usable), "declared_not_installed", or "absent" (nowhere — a plan that requires this cannot be implemented as written; say so instead of working around it). Call this before proposing a fix that depends on any third-party package.
+- scan_secrets: Examine a diff for credentials that have been PASTED INTO the code, and report them. Distinguishes a literal (a quoted, long, high-entropy value — what a leaked key looks like) from a reference (an identifier, a member expression, a process.env read — which is the correct practice and is never reported). Returns findings for you to judge; it does not block anything.
+
+## Tests are NOT your job this turn
+A dedicated test-writer agent runs immediately after your fix commits and owns the bug-reproducing test. Do NOT write, edit, or create any test file (*.test.*, *.spec.*, __tests__/). Write ONLY the fix. Adding a test here wastes your turn budget and has caused repeated failures.
+
+## CodeGraph Tool — find EXISTING functions to reuse (do this BEFORE writing any new helper)
+A codegraph_query tool is available — call it directly (NOT via Bash) to discover reusable functions instead of inventing new ones:
+  codegraph_query(mode="helpers", args="<domain nouns>")   # existing util/parser/formatter to REUSE (symbol + import path)
+  codegraph_query(mode="query", args="<SymbolName>")       # exact definition site of a symbol
+  codegraph_query(mode="callees", args="<SymbolName>")     # what a function already calls
+RULE: Before you add ANY new function, run `helpers` for what it would do. If a suitable function already exists, import and call it — do NOT duplicate it. Fewer lines of code is always better.
+
+
+
+
+
+
+## Technical Notes
+None specified
+
+
+## Files to Create/Modify (EXACT ABSOLUTE PATHS — write to these paths exactly)
+
+
+## Dependencies
+None
+
+## Module resolution in this codeline
+A bare import that names a file under any of these directories is INTERNAL source, not a dependency — never add it to the dependency manifest:
+  __tests__, migration-scripts, public, src
+Source extensions here: .ts, .tsx, .js, .jsx, .mjs, .cjs
+Write imports the way the existing files in this codeline write them; read a neighbouring file before inventing a path.
+
+
+## Instructions
+CRITICAL — these files already exist. Their real content is injected below (## Existing File Contents) — you do NOT need to ReadFile them to see what's already there.
+Do NOT import or reference anything that doesn't appear in the injected content below — a plausible-sounding module name is not a real one.
+Only call ReadFile yourself if you need to see MORE of a file than what's shown (e.g. it was truncated), or a file not listed below.
+
+**The content of every file listed above is already shown in ## Existing File Contents — use that, do not spend a tool call re-reading them. Use Edit for targeted changes to existing files — do NOT overwrite an existing file wholesale with WriteFile.**
+
+1. Use the injected ## Existing File Contents above to verify what actually exists (exports, types, existing utilities) before writing any code — do not guess, and do not re-read a file already shown in full
+2. Implement all acceptance criteria for this story
+3. Follow the project's existing code patterns and conventions
+4. Do NOT create tests unless explicitly required in acceptance criteria
+
+After implementation, provide a brief summary of what was created/modified.
+
+## Verification Failure
+
+The orchestrator ran `tsc --noEmit` after your files were written and it failed (exit code 2). Fix the type errors so tsc exits 0.
+
+```
+src/services/contentstack.ts(84,41): error TS2345: Argument of type '{ live_preview?: { enable: boolean; } | undefined; fetchOptions?: { timeout: number; } | undefined; api_key: string; delivery_token: string; environment: string; branch: string; }' is not assignable to parameter of type 'Config'.
+```
+
+## Relevant Knowledge Base Entries
+The following was learned from previous story implementations and is relevant to your agent role. Apply this knowledge before writing any code:
+
+- [2026-08-09T22:06:54Z] Always: DO import and use the existing `options` helper from `src/services/contentstack.ts` (line 55: `export const options`) — it already constructs the Contentstack SDK config from env vars. Do NO
+- [2026-08-10T00:10:39Z] Always: DO add live_preview?: boolean to IContentstackGetEntry, ICreateQueryConfig, and ICreateEntryConfig in src/interface/contentstack.ts before destructuring live_preview from those types. DON'T de
+- [2026-08-10T00:13:09Z] Always: Do import { options } from "@/services/contentstack" (or the correct relative path to src/services/contentstack.ts) and use it directly — do NOT re-implement the api_key/delivery_token/envir
+- [2026-08-10T00:20:36Z] Use the existing options export from src/services/contentstack.ts instead of re-implementing the Contentstack configuration objects, and pass it directly to contentstack.Stack() or live-preview configurations.
+- [2026-08-10T03:11:19Z] Always: The Contentstack SDK's `LivePreview` interface requires `host: string` and `management_token: string` as non-optional fields. Do NOT use `|| undefined` when assigning these — pass the string
+- [2026-08-10T04:03:55Z] Always: When passing live_preview to contentstack.Stack() Config, the SDK's LivePreview interface requires ALL of { enable: boolean, host: string, management_token: string } — { enable: true } alone
+# KB — shared
+Persistent, cross-run knowledge for this codeline. Appended by the pipeline as agents
+learn, and injected into their prompts on later runs. Never reset between runs: this is
+the one store that is meant to survive.
+Do NOT read orchestrations/agents/KB.md before writing implementation files. The relevant KB entries are already injected above.
+
+## Coordinator Guidance (retry 7, showing most recent up to 3 — full retry history: /home/bradleyjerome/projects/ai/epam-cli/orchestrations/logs/kb-scratchpad/AMSD-2041-attempt-8.md)
+## Self-Heal: Failure Analyst Summary
+Root cause: Config.live_preview object missing required host and management_token fields; LivePreview interface requires all three.
+Fix: Always: When passing live_preview to contentstack.Stack() Config, the SDK's LivePreview interface requires ALL of { enable: boolean, host: string, management_token: string } — { enable: true } alone
+=== End Prompt ===
+
+=== epam Output (attempt 8) ===

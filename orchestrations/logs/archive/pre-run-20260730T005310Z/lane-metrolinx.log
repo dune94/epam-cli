@@ -1,0 +1,103 @@
+[0;34m[00:30:06][0m Resetting story completed flags in /tmp/orch-metrolinx-prd-3245363.json...
+[0;32m[SUCCESS][0m Stories reset to pending (phase: core)
+[0;36m[INFO][0m Control plane started (PID 3247193, port 8094)
+
+[0;35m━━━ Pipeline Step Checklist ━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━[0m
+  Step   Name                             Planned
+  ------ -------------------------------- --------
+  1      Specification pass               [0;32mACTIVE (EPAM_SPEC_MODE=0)[0m
+  1a       openspec (elaboration)         [0;32mACTIVE (z-ai/glm-5.2)[0m
+  1b       speckit (verification)         [0;32mACTIVE (z-ai/glm-5.1)[0m
+  2      CPA pre-pass                     [0;32mACTIVE (SKIP_CPA=1)[0m
+  3      Pre-phase skill assess           [0;32mACTIVE[0m
+  4      Hybrid pre-coord                 [1;33mSKIP (ORCH_MODE≠hybrid)[0m
+  5      Regression guard                 [0;32mACTIVE (SKIP_REGRESSION_GUARD=true)[0m
+  6      mkdir src/ dirs                  [0;32mACTIVE[0m
+  7      PRD model coordinator            [0;32mACTIVE[0m
+  8      Main-branch stories              [0;32mACTIVE[0m
+  9      Auto-commit                      [0;36mCOND (if uncommitted changes)[0m
+  10     TC writer gate                   [0;36mCOND (SKIP_TC_WRITER=1 or no test stories)[0m
+  11     Skills coordinator audit         [0;32mACTIVE (SKIP_SKILLS_AUDIT=1)[0m
+  12     Tools coordinator audit          [0;32mACTIVE (SKIP_TOOLS_AUDIT=1)[0m
+  13     Create worktrees                 [0;36mCOND (if parallel stories exist)[0m
+  14     Primary agent                    [0;36mCOND (if primary stories)[0m
+  15     Independent agent                [0;36mCOND (if independent stories)[0m
+  16     Worktree health check            [0;36mCOND (if worktrees created)[0m
+  17     Merge worktrees                  [0;36mCOND (if worktrees created)[0m
+  18     Post-parallel assessment         [0;32mACTIVE[0m
+  19     Pre-review gate                  [0;32mACTIVE (SKIP_PRE_REVIEW_GATE=true)[0m
+  20     Lint gate                        [0;32mACTIVE (SKIP_LINT_GATE=true)[0m
+  21     Review stories                   [0;36mCOND (if review stories exist)[0m
+  22a    SAST sentinel                    [0;32mACTIVE (SKIP_TESTING_GATES=true)[0m
+  22b    Spec validator                   [0;32mACTIVE (SKIP_TESTING_GATES=true)[0m
+  22c    Review ranger                    [0;32mACTIVE (SKIP_TESTING_GATES=true)[0m
+  22d    Mutant hunter                    [0;32mACTIVE (SKIP_TESTING_GATES=true)[0m
+  22e    Fuzz-weaver                      [0;32mACTIVE (SKIP_TESTING_GATES=true)[0m
+  22f    Perf sentinel                    [0;32mACTIVE (SKIP_TESTING_GATES=true)[0m
+  23     Browser E2E routing              [1;33mSKIP (SKIP_BROWSER_E2E_ROUTING=true)[0m
+
+  [1;33mSKIP bypass env vars active: SKIP_TESTING_GATES=false  SKIP_CPA=0  SKIP_TC_WRITER=0  SKIP_REGRESSION_GUARD=false[0m
+[0;35m━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━[0m
+
+[0;36m  ▶[0m Step 1: Specification pass
+[0;34m[00:30:07][0m Step 1: Running specification pass for phase 'core'...
+spec-mode: fast-path qwen/z-ai/glm-5.2 (skipping MiniMax)
+spec-mode: fast-path qwen/z-ai/glm-5.1 (skipping MiniMax)
+spec-mode: ⚠️ VC could not be made mechanism-free for AMSD-2041 after 2 cycle(s) — using conservative fallback VC. Last flags: VC 7 is developer-facing (adding a content area 'using the app's standard content-display approach') rather than a black-box observation on the user-facing preview surface — restate as an observable outcome: any CMS-managed content area on the page shows its draft edits in Live Preview
+spec-mode: AMSD-2041 — 2 verification criteria persisted (source: fallback, resolution: fallback)
+spec-mode: fast-path qwen/z-ai/glm-5.1 (skipping MiniMax)
+spec-mode: AMSD-2041 — ACs are immutable (VC model); openspec AC edits redacted, verification captured in verificationCriteria
+spec-mode: AMSD-2041 — 10 verification criteria persisted (source: both, resolution: regenerated)
+spec-mode: fast-path qwen/z-ai/glm-5.1 (skipping MiniMax)
+spec-mode: AMSD-2041 — ACs are immutable (VC model); openspec AC edits redacted, verification captured in verificationCriteria
+spec-mode: ⚠️ VC could not be made mechanism-free for AMSD-2041 after 2 cycle(s) — using conservative fallback VC. Last flags: VC 1 is internally contradictory and permits manual refresh — "appears automatically, manually refreshing the browser" defeats the real-time "as they edit" intent; restate so edits appear on the page without any browser refresh
+spec-mode: AMSD-2041 — 2 verification criteria persisted (source: fallback, resolution: fallback)
+spec-mode: fast-path qwen/z-ai/glm-5.1 (skipping MiniMax)
+spec-mode: fast-path qwen/z-ai/glm-5.2 (skipping MiniMax)
+spec-mode: fast-path qwen/z-ai/glm-5.2 (skipping MiniMax)
+spec-mode: LLM model review completed for 0 stories
+spec-mode: completed for phase core (run 20260730T002915Z)
+[0;32m  ✓[0m Step 1: Specification pass
+[0;32m  ✓[0m   openspec (elaboration) [1;33m[z-ai/glm-5.2, 1 stor(y/ies)][0m
+[0;32m  ✓[0m   speckit (verification) [1;33m[z-ai/glm-5.1, 1 stor(y/ies)][0m
+[0;32m[SUCCESS][0m Step 1: Specification pass completed for 'core'
+[0;36m  ▶[0m Step 2: CPA pre-pass
+[0;34m[00:45:56][0m Step 2: Running CPA pre-pass for phase 'core'...
+[0;35m[CPA][0m Retrieval: TF-IDF
+[0;36m[00:45:56][0m Loading stories from orch-metrolinx-prd-3245363.json...
+[0;36m[00:45:56][0m Found 1 stories to contextualize
+
+[0;35m[CPA][0m Processing AMSD-2041...
+[0;35m[CPA][0m   AMSD-2041: formula baseline from calibration[low:implementation:cli](n=29): 4.5178418971594745min $0.1404333618569382
+[1mAMSD-2041[0m  [GO, UP, MX] Live Preview of Content in CMS  [0;32m[PASS][0m
+  Machine time:              4.52 min  →      4.52 min  (conf: 0.70, adj: 1.00x)
+  Cost (story):          $0.1404     →  $0.1403   
+  Escalation:            +$0.2804      (r2@15%=+$0.1650 r3@5%=+$0.0565 k3@1.0%=+$0.0589)
+  Self-heal:             +$0.0309      (p=20%)
+  Retries (exp):          0.32  
+  Total (est):           $0.4632         (story+esc+heal=$0.4516 × pipeline 1.03x)
+  KB coverage:           5     chunks retrieved   0     cited   cov: 0%
+
+[0;36m=== CPA Gate Summary ===[0m
+
+Phase                    Pass   Review    Block    Total
+------------------------------------------------------
+jq: error: Could not open file /tmp/orch-metrolinx-prd-3245363.json: No such file or directory
+------------------------------------------------------
+[1mTOTAL                       1        0        0        1[0m
+
+[0;32m[CPA OK][0m All 1 stories passed the CPA gate
+
+[0;36m[00:47:58][0m Appended 1 CPA records to /home/bradleyjerome/projects/ai/epam-cli/orchestrations/logs/cpa-review.jsonl
+[0;36m[00:47:58][0m Applying blended estimates to prd.json...
+cp: cannot stat '/tmp/orch-metrolinx-prd-3245363.json': No such file or directory
+[1;33m[WARNING][0m Step 2: CPA script exited with code 1 (non-critical — continuing)
+
+[0;35m============================================[0m
+[0;35m  EPAM CLI Agent Orchestration[0m
+[0;35m  Phase: [1;37mcore[0m
+[0;35m  Mode:  [1;37mLIVE[0m
+[0;35m  Orch:  [1;37mbash (bash-only)[0m
+[0;35m============================================[0m
+
+jq: error: Could not open file /tmp/orch-metrolinx-prd-3245363.json: No such file or directory

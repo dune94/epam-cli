@@ -1,0 +1,12 @@
+The diff shows only trivial test assertion changes (renaming a test, changing an expected string value, adding a negative assertion). There are no loops, async patterns, memory allocations, heavy imports, or provider-specific code in the changed lines. Perf-sentinel has nothing meaningful to flag.
+
+```json
+{
+  "agent": "perf-sentinel",
+  "phase": "core",
+  "summary": { "filesAnalysed": 2, "findingsCount": 0, "blockerCount": 0, "estimatedStartupImpactMs": 0 },
+  "findings": [],
+  "verdict": "not_applicable",
+  "reason": "Changed lines are trivial test assertions (string comparison in vitest) — no algorithmic complexity, async patterns, memory hotspots, startup impact, or provider-specific concerns to evaluate."
+}
+```

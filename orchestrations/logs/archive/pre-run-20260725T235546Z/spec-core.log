@@ -1,0 +1,10 @@
+spec-mode: fast-path qwen/z-ai/glm-5.2 (skipping MiniMax)
+spec-mode: fast-path qwen/z-ai/glm-5.1 (skipping MiniMax)
+spec-mode: AMSD-1820 — 4 verification criteria persisted (source: description, resolution: clean)
+spec-mode: fast-path qwen/z-ai/glm-5.1 (skipping MiniMax)
+spec-mode: AMSD-1820 — 4 verification criteria persisted (source: description, resolution: regenerated)
+spec-mode: fast-path qwen/z-ai/glm-5.1 (skipping MiniMax)
+spec-mode: fast-path qwen/z-ai/glm-5.2 (skipping MiniMax)
+spec-mode: fast-path qwen/z-ai/glm-5.2 (skipping MiniMax)
+Failed to parse JSON for tag MODEL_REVIEW: Unexpected token '<', "<function_"... is not valid JSON
+spec-mode: completed for phase core (run 20260725T233117Z)

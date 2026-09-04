@@ -1,0 +1,112 @@
+---
+
+# Execution Plan: SKY-003-b — Flight Result Table Renderer
+
+## Story Summary
+Create `src/table.ts` exporting `renderTable(flights: Flight[], currency?: string): string` — a pure rendering function that produces a pipe-delimited table with fixed columns, computed column widths, a hyphen separator row, right-aligned Price, and an empty-array sentinel. Wire it into `src/cli.ts` (replacing the current inline `formatTable`). Write comprehensive Vitest tests.
+
+---
+
+## 1. Implementation Steps with Target File Paths
+
+| Step | Action | Target File(s) | Details |
+|------|--------|----------------|---------|
+| **S1** | Create `renderTable` function | `/home/bradleyjerome/projects/skyscanner-app/src/table.ts` | Export `renderTable(flights: Flight[], currency?: string): string`. Import `FlightResult` from `./skyscanner/client`. Columns in fixed order: Airline, Price, Departure, Arrival, Duration, Stops. |
+| **S2** | Implement column-width computation | `src/table.ts` | For each column, width = `max(headerLabel.length, longestDataValue.length)`. Data values for Price include the currency symbol prefix. Duration formatted as `Xh Ym`. Stops as string. |
+| **S3** | Implement header row | `src/table.ts` | Pipe-delimited: ` Airline | Price | Departure | Arrival | Duration | Stops ` — each cell padded to column width with one leading + one trailing space. |
+| **S4** | Implement separator row | `src/table.ts` | One segment per column, each exactly N hyphens (N = column width), separated by ` | ` (space-pipe-space). |
+| **S5** | Implement data rows | `src/table.ts` | All columns left-aligned (trailing-space pad) except Price which is right-aligned (leading-space pad). Currency symbol prepended to price; fallback `£` when `currency` arg is absent or empty string. |
+| **S6** | Implement empty-array sentinel | `src/table.ts` | `renderTable([])` returns exact string `No flights found.` — no table output. |
+| **S7** | Wire `renderTable` into `cli.ts` | `/home/bradleyjerome/projects/skyscanner-app/src/cli.ts` | Remove inline `formatTable` function. Import `renderTable` from `./table`. Call `renderTable(results, results[0]?.currency)` (or pass currency from the first result). Print returned string to stdout. Ensure error path writes to stderr and exits 1 with no stdout output. |
+| **S8** | Write Vitest test suite | `/home/bradleyjerome/projects/skyscanner-app/src/table.test.ts` | Tests for: multi-row table (separator present, segment lengths = column widths, Price right-aligned), single-row table, empty array → `No flights found.`, currency fallback to `£`, explicit currency symbol. |
+| **S9** | Write/extend CLI integration tests | `/home/bradleyjerome/projects/skyscanner-app/src/cli.test.ts` | Tests for: `renderTable` is called with search results and output goes to stdout; `searchFlights` rejection → stderr + exit 1 + no stdout. (Note: `cli.test.ts` does not currently exist — must be created.) |
+| **S10** | Verify compilation & tests | Project root | Run `npx tsc --noEmit` (must exit 0) and `npx vitest run` (all tests must pass). |
+
+---
+
+## 2. Dependency Validation
+
+| Dependency | Status | Reason |
+|------------|--------|--------|
+| **SKY-001** (scaffold) | ✅ Satisfied | Project exists at `/home/bradleyjerome/projects/skyscanner-app` with `package.json`, `tsconfig.json`, `node_modules/`, `tsc` and `vitest` installed. `tsc --noEmit` passes cleanly. |
+| **SKY-002** (API client) | ✅ Satisfied | `src/skyscanner/client.ts` exists, exports `FlightResult` interface with fields: `price`, `currency`, `airline`, `departure`, `arrival`, `duration`, `stops`. `SkyscannerClient.searchFlights()` returns `Promise<FlightResult[]>`. |
+| **SKY-003a** (CLI arg parsing) | ✅ Satisfied | `src/cli.ts` exists with argument parsing, env-var guard, `SkyscannerClient` wiring, and a happy-path that calls `searchFlights`. Currently uses an inline `formatTable` that must be replaced by `renderTable`. |
+
+**Note:** The PRD `technicalNotes.dependsOn` lists only `SKY-002`, but SKY-003a is a practical dependency since `cli.ts` must be modified to wire in `renderTable`. SKY-003a is marked completed.
+
+---
+
+## 3. Risk Register (Top 3)
+
+| # | Risk | Likelihood | Impact | Mitigation |
+|---|------|-----------|--------|------------|
+| **R1** | **`cli.test.ts` does not exist** — SKY-003a's tests were never written to disk (only `client.test.ts` exists). The AC requires CLI integration tests covering the rejection path and `renderTable` wiring. | High | High | Create `src/cli.test.ts` from scratch in S9. Mock `SkyscannerClient.searchFlights` via `vi.mock('./skyscanner/client')`. Test both happy-path (stdout contains table) and rejection-path (stderr + exit 1). |
+| **R2** | **`tsconfig.json` excludes `**/*.test.ts`** from compilation — test files won't be type-checked by `tsc --noEmit`. If tests have type errors, they'll only surface at `vitest run` time. | Medium | Medium | Run both `tsc --noEmit` and `vitest run` as verification gates. Consider temporarily removing the exclude pattern or adding a separate `tsconfig.test.json` — but simplest: just ensure `vitest run` catches type errors at runtime. |
+| **R3** | **Currency symbol handling mismatch** — `FlightResult.currency` is a string like `"USD"` but the AC says "currency symbol" (e.g. `£`). The current `cli.ts` uses `r.currency || '£'` which would produce `"USD299"` not `"$299"`. The `renderTable` function's `currency` param is a symbol string, not an ISO code. | Medium | Medium | `renderTable` should accept a currency *symbol* string (e.g. `"£"`, `"$"`) and prepend it directly. The caller in `cli.ts` should pass a symbol, not the raw `FlightResult.currency` ISO code. If no symbol mapping exists, default to `£`. Document this clearly in the function signature. |
+
+---
+
+## 4. Test Plan
+
+### New Tests Required
+
+| Test File | Test Name | Description |
+|-----------|-----------|-------------|
+| `src/table.test.ts` | `renders multi-row table with correct separator` | 3+ flights; verify header row, separator row (each segment length = column width), data rows present |
+| `src/table.test.ts` | `right-aligns Price column` | Price values have leading spaces to fill column width; other columns have trailing spaces |
+| `src/table.test.ts` | `renders single-row table` | 1 flight; verify header + separator + 1 data row |
+| `src/table.test.ts` | `returns "No flights found." for empty array` | `renderTable([])` returns exact string `No flights found.` |
+| `src/table.test.ts` | `uses £ as fallback currency` | No `currency` arg → prices prefixed with `£` |
+| `src/table.test.ts` | `uses provided currency symbol` | Pass `currency="$"` → prices prefixed with `$` |
+| `src/table.test.ts` | `falls back to £ when currency is empty string` | `currency=""` → `£` used |
+| `src/table.test.ts` | `column widths are max of header and data` | Verify each column width = `max(header.length, longest data value length)` |
+| `src/cli.test.ts` | `calls renderTable and prints to stdout on success` | Mock `searchFlights` to return flights; verify stdout contains table output |
+| `src/cli.test.ts` | `writes error to stderr and exits 1 on searchFlights rejection` | Mock `searchFlights` to reject; verify stderr has error message, exit code 1, stdout is empty |
+
+### Regression Scope
+- **`src/skyscanner/client.test.ts`** — must still pass (no changes to client.ts)
+- **`tsc --noEmit`** — must still pass with zero errors after adding `table.ts` and `table.test.ts`
+- **Existing `cli.ts` behavior** — argument parsing, env-var guard, date/adults validation must remain unchanged; only the table rendering portion is refactored
+
+---
+
+## 5. Acceptance Criteria Mapping
+
+| AC # | Criterion | Implementation Step(s) |
+|------|-----------|----------------------|
+| AC-1 | `src/table.ts` exists, exports `renderTable(flights: Flight[], currency?: string): string`, `tsc --noEmit` zero errors | S1, S10 |
+| AC-2 | Header row pipe-delimited in fixed order, one space padding each side | S3 |
+| AC-3 | Column width = `max(header.length, longestDataValue.length)` | S2 |
+| AC-4 | Separator row: N hyphens per column, ` | ` delimited | S4 |
+| AC-5 | Non-Price columns left-aligned (trailing spaces) | S5 |
+| AC-6 | Price column right-aligned (leading spaces, after currency symbol) | S5 |
+| AC-7 | Currency symbol from `currency` arg; fallback `£` when absent/empty | S5, S6 |
+| AC-8 | `renderTable([])` returns exact `No flights found.` | S6 |
+| AC-9 | `src/cli.ts` calls `renderTable` and prints result to stdout | S7 |
+| AC-10 | `searchFlights` rejection → stderr + exit 1 + no stdout | S7 (preserve existing error handling) |
+| AC-11 | Vitest tests cover all cases and pass | S8, S9, S10 |
+
+---
+
+## 6. Cost / Effort Forecast
+
+| Parameter | PRD Estimate | Adjusted | Rationale |
+|-----------|-------------|----------|-----------|
+| **estimatedHours** | 15 | **12** | The rendering function is pure logic (~60 lines). The main effort is creating `cli.test.ts` from scratch (it doesn't exist) and ensuring the mock setup is correct. 15h was estimated when the full CLI + table + tests were one story; as a split, 12h is more accurate. |
+| **Complexity** | Medium | Medium | Pure function + test wiring; no network/async complexity in `table.ts` itself |
+| **Risk multiplier** | — | 1.2× | R1 (missing cli.test.ts) and R3 (currency symbol vs ISO code) add ~20% overhead |
+
+**Final adjusted estimate: 12 hours** (down from 15 — the split reduced scope; the rendering logic is straightforward, but test creation from scratch adds effort).
+
+---
+
+## Key Observations for the Implementing Agent
+
+1. **`src/table.ts` does NOT exist yet** — it must be created from scratch.
+2. **`src/table.test.ts` does NOT exist** — must be created from scratch.
+3. **`src/cli.test.ts` does NOT exist** — must be created from scratch (SKY-003a's tests were never persisted to disk).
+4. **`cli.ts` currently has an inline `formatTable` function** (lines 42–73) that must be removed and replaced with an import of `renderTable` from `./table`.
+5. **`cli.ts` currently uses 2-space delimiters** (`join('  ')`) not pipe-delimiters — this must change to ` | ` per the AC.
+6. **`FlightResult.currency` is an ISO code** (e.g. `"USD"`) but `renderTable`'s `currency` parameter expects a symbol — the caller must map or default to `£`.
+7. **`tsconfig.json` excludes `**/*.test.ts`** from `tsc` — test type errors won't surface until `vitest run`.
+

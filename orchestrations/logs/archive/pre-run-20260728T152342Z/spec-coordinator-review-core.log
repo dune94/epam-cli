@@ -1,0 +1,134 @@
+# Prompt
+You are the specification coordinator for the epam-cli orchestration system. Before every phase you read orchestrations/prd.json (implementationOrder and stories), evaluate risk, dependencies, and technical readiness, then assign the correct specification runners: OpenSpec, Speckit, both, or none. You write assignments into each story's specification.assignedAgents field along with coordinatorNotes, target provider/model, and timestamps. You understand the provider policy ledger (configuration.aiRuntime.providerPolicies), token guardrails, and know when to skip stories that were already hand-curated. When you plan a run you emit JSON compliant with spec-mode-runner.js so that automation can apply deltas deterministically. You never invent story IDs or mutate acceptance criteria directly; only delegate to spec agents and record their status.
+
+You are the EPAM CLI specification coordinator reviewing the completed spec outputs for phase core.
+
+Each story was processed by a sequential agent pipeline:
+  1. openspec elaborated requirements (AC refinement, story splits, technical depth)
+  2. speckit reviewed openspec's output (testability, security, edge cases, gap analysis)
+
+For each story, evaluate the quality of the collaborative spec work:
+1. Did both agents add meaningful, non-overlapping value?
+2. Are the acceptance criteria complete, testable, and non-overlapping?
+3. Are story splits logical and properly scoped?
+4. Flag any story needing human review.
+
+Respond with JSON between <SPEC_REVIEW> and </SPEC_REVIEW> using this schema:
+[
+  {"storyId":"REM-xxx","verdict":"approved|needs_review","reviewNotes":"coordinator observations","qualityScore":0.0-1.0,"flags":[]}
+]
+
+Stories to review:
+[
+  {
+    "id": "AMSD-2041",
+    "title": "[GO, UP, MX] Live Preview of Content in CMS",
+    "acceptanceCriteria": [
+      "Delegated to split children: AMSD-2041-A, AMSD-2041-B"
+    ],
+    "specification": {
+      "runId": "20260728T131424Z",
+      "assignedAgents": [
+        "openspec"
+      ],
+      "coordinatorNotes": "Both openspec and speckit already completed (status: completed). Coordinator review verdict is needs_review with qualityScore 0.55. Core blocker is human-in-the-loop: original story had empty acceptance criteria, all 13 ACs are agent-derived assumptions flagged as requiring product owner validation. Openspec underperformed (zero AC output) but re-running on the same thin input without product owner guidance would reproduce the same gap. No story split was proposed despite complexity (236+ consumers, real-time updates, security, accessibility). Spec agents cannot resolve the missing product owner validation — this must be unblocked by a human before further spec work is productive.",
+      "status": "completed",
+      "updatedAt": "2026-07-28T13:46:41.615Z",
+      "appliedAgents": [
+        "openspec"
+      ],
+      "agentContributions": [
+        {
+          "agent": "openspec",
+          "applied": true,
+          "notes": "Original ACs were empty — all criteria derived from the description. This is a novel capability (Contentstack Live Preview) with a blast radius of 236+ consumers via useContent. Split into core infrastructure (hook/context) and site integration (GO/UP/MX wiring) to limit per-story scope. Contentstack hosts are unreachable at test time; VCs stop at our boundary and assume a mocked Live Preview client. Product owner validation is required because all ACs are agent-derived from a thin description.",
+          "acceptanceChanged": false,
+          "splitCount": 2,
+          "timestamp": "2026-07-28T13:46:41.614Z",
+          "splitIds": [
+            "AMSD-2041-A",
+            "AMSD-2041-B"
+          ]
+        }
+      ],
+      "coordinatorReview": {
+        "verdict": "needs_review",
+        "reviewNotes": "Value distribution between agents was severely lopsided: openspec identified attachment points (useContent, ContentstackContext) but produced zero ACs from an empty starting set, while speckit derived all 13 ACs from the thin story title and openspec's notes. The agents did not overlap (positive), but openspec failed in its primary role of requirement elaboration. All 13 ACs are agent-derived assumptions explicitly flagged by speckit as needing product owner validation — the original story had empty acceptance criteria, meaning no human-validated baseline exists. No story splits were proposed despite this being a complex feature touching 236+ consumer components with real-time updates, security (XSS/authorization), accessibility (live-region), connection lifecycle, and resource cleanup concerns. This is almost certainly too large for a single story. Speckit's individual ACs are well-constructed and testable, but the foundation is unvalidated. Product owner must confirm scope and acceptance criteria before implementation.",
+        "qualityScore": 0.55,
+        "flags": [
+          "empty_original_acs_all_agent_derived",
+          "no_story_split_despite_high_complexity",
+          "openspec_underperformed_zero_ac_output",
+          "requires_product_owner_validation",
+          "potential_oversized_story_236_plus_consumers"
+        ],
+        "reviewedAt": "2026-07-28T13:32:31.862Z"
+      }
+    },
+    "splitChildren": [
+      {
+        "id": "AMSD-2041-A",
+        "title": "[Core] Live Preview Infrastructure — useContent Hook and ContentstackContext",
+        "acceptanceCriteria": [
+          "When Live Preview query parameters are present, useContent returns data sourced from the Live Preview context",
+          "When Live Preview query parameters are absent, useContent returns data identical to current production behavior",
+          "ContentstackContext provides Live Preview state and update mechanism to all nested consumers",
+          "Components consuming useContent re-render when Live Preview content updates are received, without full page reload",
+          "If the Live Preview connection is interrupted, the last received content continues to be displayed without errors"
+        ]
+      },
+      {
+        "id": "AMSD-2041-B",
+        "title": "[GO, UP, MX] Site-Level Live Preview Integration",
+        "acceptanceCriteria": [
+          "The GO site enters Live Preview mode when Live Preview query parameters are present in the URL",
+          "The UP site enters Live Preview mode when Live Preview query parameters are present in the URL",
+          "The MX site enters Live Preview mode when Live Preview query parameters are present in the URL",
+          "Each site preserves current rendering behavior when Live Preview query parameters are absent"
+        ]
+      }
+    ]
+  }
+]
+
+<SPEC_REVIEW>
+</SPEC_REVIEW>
+
+# Output
+<SPEC_REVIEW>
+[
+  {
+    "storyId": "AMSD-2041",
+    "verdict": "needs_review",
+    "reviewNotes": "Parent story correctly delegated to split children AMSD-2041-A and AMSD-2041-B. The split into core infrastructure (hook/context) and site-level integration (GO/UP/MX wiring) is logical and addresses the earlier coordinator flag about no story split despite high complexity. However, the root problem persists: the original story had empty acceptance criteria, meaning all derived ACs are agent assumptions with no human-validated baseline. Openspec underperformed by producing zero ACs from the primary story; speckit was not assigned to the parent. Product owner validation is required before implementation can proceed. The split children are well-constructed but the foundation remains unvalidated.",
+    "qualityScore": 0.6,
+    "flags": [
+      "empty_original_acs_all_agent_derived",
+      "requires_product_owner_validation",
+      "openspec_underperformed_zero_ac_output",
+      "split_addresses_earlier_no_split_flag"
+    ]
+  },
+  {
+    "storyId": "AMSD-2041-A",
+    "verdict": "needs_review",
+    "reviewNotes": "Five ACs covering: (1) Live Preview data sourcing when params present, (2) production behavior when params absent, (3) context provision to nested consumers, (4) re-rendering without full page reload, (5) graceful degradation on connection interruption. Criteria are testable, non-overlapping, and properly scoped to core infrastructure. The split correctly isolates the 236+ consumer concern from site-level wiring. Connection lifecycle and fallback behavior are addressed. However, all ACs are agent-derived from an empty original — no human-validated baseline exists. The ACs are solid engineering assumptions but require product owner confirmation before implementation.",
+    "qualityScore": 0.75,
+    "flags": [
+      "agent_derived_acs_no_human_baseline",
+      "requires_product_owner_validation"
+    ]
+  },
+  {
+    "storyId": "AMSD-2041-B",
+    "verdict": "needs_review",
+    "reviewNotes": "Four ACs covering GO, UP, MX entering Live Preview mode when params are present, plus one AC for preserving current rendering behavior when params are absent. Criteria are simple, testable, non-overlapping, and properly scoped to site-level integration. The split boundary is clean — no infrastructure concerns bleed into this story. Same agent-derivation concern as the parent and sibling: ACs are reasonable but unvalidated by a product owner. The per-site ACs are somewhat repetitive (same criterion repeated for each site) which could potentially be collapsed, but the explicit per-site enumeration is acceptable for traceability.",
+    "qualityScore": 0.75,
+    "flags": [
+      "agent_derived_acs_no_human_baseline",
+      "requires_product_owner_validation",
+      "repetitive_per_site_acs_acceptable_for_traceability"
+    ]
+  }
+]
+</SPEC_REVIEW>

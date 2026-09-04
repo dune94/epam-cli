@@ -1,0 +1,38 @@
+[0;35m[CPA][0m Retrieval: TF-IDF
+[0;36m[20:00:45][0m Loading stories from orch-cdts-prd-2779890.json...
+[0;36m[20:00:45][0m Found 1 stories to contextualize
+
+[0;35m[CPA][0m Processing AMSD-1820...
+[0;35m[CPA][0m   AMSD-1820: formula baseline from calibration[medium:implementation:cli:sonnet](n=9): 2.808398113839453min $0.54208529935815
+[1mAMSD-1820[0m  [Mozio] - Promo code amount not displayed for Return trip tickets in Mozio email confirmation  [0;32m[PASS][0m
+  Machine time:              2.81 min  →      3.09 min  (conf: 0.75, adj: 1.10x)
+  Cost (story):          $0.5421     →  $0.6000   
+  Escalation:            +$1.2240      (r2@35%=+$0.6445 r3@15%=+$0.2836 k3@3.0%=+$0.2959)
+  Self-heal:             +$0.0463      (p=30%)
+  Retries (exp):          0.81  
+  Total (est):           $4.1541         (story+esc+heal=$1.8703 × pipeline 2.22x)
+  KB coverage:           5     chunks retrieved   2     cited   cov: 40%
+  [1;33m⚠[0m  Story previously failed and was retried multiple times per AGENTS.md log
+  [1;33m⚠[0m  No acceptance criteria provided for verification of promo discount display
+  [1;33m⚠[0m  Return trip discount logic spans 5 files requiring cross-file coordination
+
+[0;36m=== CPA Gate Summary ===[0m
+
+Phase                    Pass   Review    Block    Total
+------------------------------------------------------
+core                        1        0        0        1
+------------------------------------------------------
+[1mTOTAL                       1        0        0        1[0m
+
+[0;32m[CPA OK][0m All 1 stories passed the CPA gate
+
+[0;36m[20:01:23][0m Appended 1 CPA records to /home/bradleyjerome/projects/ai/epam-cli/orchestrations/logs/cpa-review.jsonl
+[0;36m[20:01:23][0m Applying blended estimates to prd.json...
+[0;32m[CPA OK][0m Backed up prd.json → orch-cdts-prd-2779890.json.before-cpa
+[0;32m[CPA OK][0m Applied CPA blended estimates to 1 stories
+
+  Review:   git diff /tmp/orch-cdts-prd-2779890.json
+  Restore:  cp /tmp/orch-cdts-prd-2779890.json.before-cpa /tmp/orch-cdts-prd-2779890.json
+
+No calibrated categories (need >= min-n completed stories per category).
+[0;36m[20:01:26][0m Calibration updated from actuals

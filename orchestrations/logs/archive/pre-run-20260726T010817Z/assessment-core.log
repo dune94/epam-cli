@@ -1,0 +1,22 @@
+Assessment complete. Here's a summary of what was done:
+
+**Phase: core — Skill Assessment Results**
+
+1. **Data filtering:** Identified 2 cost-log records for story AMSD-1820 (plus 2 infrastructure records for `core` and `pipeline` story IDs). Used only the most recent record (started_at `2026-07-25T20:41:45`).
+
+2. **PRD cross-reference:** Confirmed AMSD-1820 has `completed: true` in the PRD → treated as succeeded.
+
+3. **Time/cost comparison:**
+   - **Time:** 1.51 min actual vs 2.958 min forecast → **1.448 min under** forecast
+   - **Cost:** $0.0152 actual vs $0.5729 forecast → **$0.5577 under** forecast
+   - `over_threshold: false`
+
+4. **Skill-domain check:** The task is a TypeScript defect fix in a Node.js/Express codebase. The assigned `typescript-engineer` role is an unambiguous match. No mismatches found.
+
+5. **Corrective action:** No pending stories exist in later phases (`ui_and_review` has no stories in the PRD). No role reassignments needed.
+
+6. **Outputs written:**
+   - `/orchestrations/logs/phase-skill-assessments.jsonl` — single-line JSON assessment (appended with flock)
+   - `/orchestrations/logs/phase-improvements/core.md` — human-readable improvement report
+
+**Conclusion:** No improvements needed. The single task was completed within forecast on both time and cost, with a correctly matched agent role.

@@ -1,0 +1,8 @@
+{
+  "agent": "perf-sentinel",
+  "phase": "mock3_core",
+  "summary": { "filesAnalysed": 2, "findingsCount": 0, "blockerCount": 0, "estimatedStartupImpactMs": 0 },
+  "findings": [],
+  "verdict": "not_applicable",
+  "reason": "Changed lines are a test description and assertion string literal update (hello world → hello dolly) — no algorithmic, async, memory, startup, or provider performance concerns apply."
+}

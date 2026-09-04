@@ -1,0 +1,43 @@
+{
+  "agent": "spec-validator",
+  "phase": "core",
+  "stories": [{
+    "storyId": "AMSD-2041",
+    "title": "[GO, UP, MX] Live Preview of Content in CMS",
+    "criteria": [
+      {
+        "text": "The page displays content field values from the draft version of the entry when viewed in preview mode.",
+        "status": "partial",
+        "evidence": "src/services/contentstack.ts adds live_preview config: `...(CONTENTSTACK_PREVIEW_TOKEN && CONTENTSTACK_PREVIEW_HOST ? { live_preview: { management_token: CONTENTSTACK_PREVIEW_TOKEN, host: CONTENTSTACK_PREVIEW_HOST, enable: true } } : {})`. This enables the Contentstack SDK to fetch draft entries when preview tokens are present — necessary infrastructure for draft content retrieval. However, 'displays' implies a UI component that renders the fetched draft values; no component-level changes are in this diff.",
+        "gaps": "No UI rendering changes to actually display draft content field values on the page. The change only configures the SDK to be capable of fetching drafts."
+      },
+      {
+        "text": "The page displays a visual indicator identifying it as a preview when draft content is shown.",
+        "status": "untestable",
+        "evidence": "No component or UI changes in this run's diff. The modified files are src/services/contentstack.ts (service layer) and two .contracts/ documentation files. A visual preview indicator would require component-level implementation.",
+        "gaps": "Cannot evaluate — no UI code in scope of this change."
+      },
+      {
+        "text": "The page does not display the preview indicator when viewed outside of preview mode.",
+        "status": "untestable",
+        "evidence": "No component or UI changes in this run's diff. Conditional rendering of a preview indicator is a UI concern not present in the service-layer config change.",
+        "gaps": "Cannot evaluate — no UI code in scope of this change."
+      },
+      {
+        "text": "The page displays draft content field values for each of the GO, UP, and MX brands.",
+        "status": "untestable",
+        "evidence": "The live_preview config in contentstack.ts is brand-agnostic — it applies to whatever brand context the SDK is initialized with. No brand-specific logic or UI rendering changes are in this diff.",
+        "gaps": "Cannot evaluate brand-specific draft display behavior from a service-layer config change alone."
+      },
+      {
+        "text": "The page renders content field values when no draft version of the entry is available.",
+        "status": "untestable",
+        "evidence": "No fallback rendering logic or UI changes in this diff. The live_preview config enables draft fetching but does not address what happens when no draft exists — that would be in the data-fetching or component layer.",
+        "gaps": "Cannot evaluate fallback rendering behavior from this change."
+      }
+    ],
+    "overallCompliance": 20,
+    "verdict": "warn"
+  }],
+  "overallVerdict": "warn"
+}

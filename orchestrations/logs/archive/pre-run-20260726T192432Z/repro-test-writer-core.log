@@ -1,0 +1,15 @@
+[repro-test-writer] writing reproducing test for AMSD-1820 → src/services/submit-reservations/apply-report-discounts.service.spec.ts (convention: .spec.ts, example: apps/background/src/core/health/health.controller.spec.ts)
+  [SelfHeal/KB] constraints applied for repro-test-writer (story:AMSD-1820): repro-test-writer-class-invalid-test,repro-test-writer-ts2532
+[repro-test-writer] written test FAILS TYPECHECK — rejecting so the writer can retry:
+    src/services/submit-reservations/apply-report-discounts.service.spec.ts(18,7): error TS2322: Type 'string' is not assignable to type 'number'.
+    src/services/submit-reservations/apply-report-discounts.service.spec.ts(19,7): error TS2322: Type '"ticket"' is not assignable to type 'ProductType'.
+    src/services/submit-reservations/apply-report-discounts.service.spec.ts(20,7): error TS2322: Type '{}' is not assignable to type 'ProductTicketModification | ProductPassModification'.
+    src/services/submit-reservations/apply-report-discounts.service.spec.ts(21,7): error TS2322: Type '{}' is not assignable to type 'TicketContent | PassContent | undefined'.
+    src/services/submit-reservations/apply-report-discounts.service.spec.ts(25,9): error TS2353: Object literal may only specify known properties, and 'isReturn' does not exist in type '(ProductTicketMetadata & { trips: ProductTripMetadata[]; }) | (ProductPassMetadata & { trips: ProductTripMetadata[]; })'.
+[repro-test-writer] attempt 1: test was written but does NOT parse/run — discarding it (class=invalid_test)
+[repro-test-writer] attempt 1 failed (class=invalid_test) — invoking self-heal analyst
+[repro-test-writer]   self-heal analyst ran for attempt 2 — enforcement applied from the KB
+[repro-test-writer] ladder escalation (attempt 2/3) — z-ai/glm-5.1 → moonshotai/kimi-k3
+  [SelfHeal/KB] constraints applied for repro-test-writer (story:AMSD-1820): repro-test-writer-class-invalid-test,repro-test-writer-ts2532,repro-test-writer-ts2322
+[repro-test-writer] test produced and validated on attempt 2 (model moonshotai/kimi-k3)
+[repro-test-writer] committed reproducing test: src/services/submit-reservations/apply-report-discounts.service.spec.ts

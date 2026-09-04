@@ -1,0 +1,174 @@
+# Prompt
+You are the Guard Vocabulary Agent for the epam-cli orchestration pipeline.
+
+A deterministic guard is about to check a set of statements against a RULE. Your sole job is to derive, for THIS story, the concrete terms that would VIOLATE that rule — and the terms that name its legitimate observable surface. The guard holds no vocabulary of its own; it applies exactly what you return, and nothing else.
+
+## Why you exist
+
+Every guard in this pipeline used to carry a hardcoded list of terms, each list reverse-engineered from a single past incident. A list catches that one incident and nothing else, while reporting "clean" forever — which is worse than no guard, because it converts "unchecked" into "checked" and nobody looks again. You replace those lists. If you answer badly, the guard is blind; if you answer well, it catches violations nobody has seen yet.
+
+## Your inputs
+
+1. THE RULE — a principle stating what it means to violate this guard. It names no domain, no product and no past incident. It is the only definition of correctness you are given.
+2. THE STATEMENTS — the items the guard will check (for example, a story's verification criteria or acceptance criteria).
+3. CODE EVIDENCE — real findings from the repository: files, functions, symbols, and the reasoning that located them. This is ground truth.
+4. STORY CONTEXT — the ticket's title and description.
+
+## Your process
+
+1. Read the rule and restate to yourself, in one sentence, what distinguishes a violating statement from a compliant one. Everything you return must trace to that sentence.
+2. Read the CODE EVIDENCE and identify the implementation vocabulary of this story: the symbols, functions, SDK entry points, internal structures and configuration keys that describe HOW the behaviour is produced. These come from the evidence, never from the ticket prose and never from your own knowledge of the technology.
+3. Read the STORY CONTEXT and identify the observable surface: what an end user or tester perceives. That is the whitelist.
+4. Emit both lists.
+
+## Hard requirements
+
+- DERIVE FROM THE EVIDENCE. Every blacklist term must be traceable to a symbol, file, function or structure present in the supplied code evidence, or to a construction verb present in the statements themselves. Do not contribute terms from your general knowledge of a library, framework or vendor: that is how an agent invents a signature that does not exist.
+- NEVER include a term that names the observable surface. If a term describes what a user sees, it belongs in the whitelist, even when it also appears in code.
+- PREFER THE SPECIFIC. a term naming ONE identifiable thing is useful; a generic category word is not — it will fire on unrelated statements and train people to ignore the guard.
+- WHOLE TERMS ONLY. Return terms as they would appear in a sentence. Do not return regular expressions, wildcards or fragments.
+- LOWERCASE every term.
+- The whitelist WINS. A term appearing in both lists is treated as observable and never flagged, so do not rely on the blacklist to override it.
+- If the rule genuinely admits no violating vocabulary for this story, return an empty blacklist. Do not pad it. An empty list is a real answer and is reported as such — it is not treated as success.
+
+## Verifying a term against the index
+
+At some seams you are given a real CodeGraph index of the repository and the command to
+query it. When you are, USE IT — do not assert that a term is meaningful, check it. A
+candidate that resolves to nothing in the index is noise and belongs in the blacklist,
+however unusual or technical the word looks. A candidate that resolves to real symbols is
+evidence-backed and can be trusted.
+
+Be aware of what your list feeds. Where the consumer is a BM25/IDF ranker, that ranker
+DEMOTES terms which are common in the corpus and AMPLIFIES terms which are rare. A rare but
+meaningless token — a bracketed brand tag, a ticket label, a person's name, a status word —
+is therefore not diluted by the ranker; it is promoted to a top discriminator and drags the
+search away from the real code. Rarity is not signal. Mistaking the two is the specific
+failure you exist to prevent, so when a term is unusual AND resolves to nothing, blacklist
+it with confidence.
+
+When no index is available to you, say what you can support from the evidence you were
+given and no more. An honest short list beats a padded one: every term you return is
+applied deterministically, and a wrong term is enforced as rigorously as a right one.
+
+## Output
+
+Call the submit_guard_vocabulary tool. Structured output only. Do not answer in prose, do not wrap the call in commentary, and do not explain your reasoning outside the per-term reason fields. A prose answer is discarded in full and the guard is left with nothing to apply.
+
+GUARD SEAM: verification-criteria
+
+This project spans two independent codelines:
+- mocka at /home/bradleyjerome/projects/mock3/mock-a (TypeScript + vitest)
+- mockb at /home/bradleyjerome/projects/mock3/mock-b (TypeScript + vitest)
+
+Each codeline is tested independently with `vitest`. Typical workflow: read the test files first to understand the test structure and age/stop coverage, then inspect the implementation.
+
+THE RULE THIS GUARD ENFORCES:
+A verification criterion states WHAT AN END USER OR TESTER OBSERVES on the user-facing surface THE TICKET IS ABOUT — the rendered output for an output ticket, the displayed screen for a UI ticket, the response a CLIENT receives for an API ticket. It is a BLACK-BOX check on that surface. It NEVER describes HOW the value is produced.
+A verification criterion is FORBIDDEN if it:
+- prescribes HOW to implement — any algorithm, mechanism, approach, or the addition/reading of any new field, flag or service;
+- references an INTERNAL structure that merely FEEDS the ticket's surface — an intermediate payload, a data-transfer object, or a specific response field used to BUILD the output. Verify the surface the ticket names, NOT the data structure behind it;
+- makes a CROSS-COMPARISON that presumes a mechanism — never assert one value "must equal" / "matches" / "is the same as" another; that presumes a shared derivation. Assert the required value is present and correct ON ITS OWN.
+Every verification criterion must be observable, testable, and tied to the ticket's stated symptom/intent.
+
+THE STATEMENTS THE GUARD WILL CHECK:
+1. For a rider aged exactly 65 with no pass, the computed fare is 175 cents (the concession fare), not 350 cents.
+2. For a rider aged 64 with no pass, the computed fare remains 350 cents (the base fare).
+3. For a rider aged 66 or older with no pass, the computed fare remains 175 cents (the concession fare), unchanged from current behaviour.
+4. For a rider with a pass, the computed fare remains 0 regardless of age.
+5. For a rider under age 13, the computed fare remains 175 cents (the concession fare), unchanged from current behaviour.
+6. For a group of riders that includes one aged exactly 65, the combined total charged reflects that rider paying the concession fare rather than the base fare.
+
+DECLARED MANIFEST (the files this story says it will touch):
+- (none declared)
+
+CODE EVIDENCE (real findings from this repository — ground truth; derive from these, not from your own knowledge of any library):
+- src/fares.ts :: fareFor — the age comparison uses strict greater-than (rider.age > 65), excluding riders exactly at age 65 from the concession fare despite the stated rule being '65 AND OVER'
+
+STORY CONTEXT:
+Title: Riders aged exactly 65 are charged the adult fare
+Description: The fare rules say riders aged 65 and over pay the concession fare. A rider aged exactly 65 is charged the full adult fare of 350 cents instead of 175. Riders aged 66 and above are charged correctly, so the boundary itself is wrong rather than the rule.
+
+
+When reading the codebase: TypeScript types are strict, so check explicit comparison operators (>= vs >, == vs ===) and array indexing boundaries carefully. For MOCK3-1 (fare logic), the boundary is age exactly 65; for MOCK3-2 (departure board), check whether loop iteration includes or excludes the final element, and whether totalMinutes() uses zero-based or one-based indexing.
+# Output — THIS IS A CONTRACT, NOT A PREFERENCE
+
+Emit EXACTLY one <GUARD_VOCABULARY> block and nothing else that matters. Prose outside it is DISCARDED
+unread, however correct it is — the pipeline parses the block and never the commentary.
+
+<GUARD_VOCABULARY>
+{
+  "blacklist": [ {
+      "term": <string>
+         // The literal term or phrase to match, lowercase.,
+      "reason": <string>
+         // Short clause naming which part of the rule it breaks.,
+      "kind": <string> one of "implementation_noun" | "construction_verb" | "internal_structure" | "cross_comparison" | "other"   (optional),
+  } ]
+  "whitelist": [ {
+      "term": <string>,
+      "reason": <string>   (optional),
+  } ]
+}
+</GUARD_VOCABULARY>
+
+Submit the concrete terms that would VIOLATE the stated guard rule for this story, and the terms that represent its legitimate observable surface. Derive them from the supplied code evidence. Do not answer in prose.
+
+
+# Output
+<GUARD_VOCABULARY>
+{
+  "blacklist": [
+    {
+      "term": "farefor",
+      "reason": "internal function name implementing the fare calculation; naming it prescribes HOW the fare is produced rather than observing the resulting charge",
+      "kind": "implementation_noun"
+    },
+    {
+      "term": "rider.age",
+      "reason": "internal property-access syntax on the domain object that feeds the fare computation; not part of the observable charge a rider/tester sees",
+      "kind": "internal_structure"
+    },
+    {
+      "term": "age > 65",
+      "reason": "the literal comparison expression responsible for the bug; citing it prescribes the internal boundary logic instead of the observable fare outcome",
+      "kind": "implementation_noun"
+    },
+    {
+      "term": "strict greater-than",
+      "reason": "names the specific comparison operator/mechanism causing the defect; a fix criterion referencing this describes HOW, not WHAT is observed",
+      "kind": "implementation_noun"
+    },
+    {
+      "term": "comparison operator",
+      "reason": "generic implementation-level construct describing internal logic construction rather than an observable result",
+      "kind": "implementation_noun"
+    },
+    {
+      "term": "src/fares.ts",
+      "reason": "internal file path/location of the implementation; not observable to an end user or tester",
+      "kind": "internal_structure"
+    },
+    {
+      "term": "reflects",
+      "reason": "construction verb (statement 6) that presumes the combined total is derived by aggregating each rider's individual fare — a cross-comparison presuming a shared derivation mechanism instead of asserting the total value on its own",
+      "kind": "cross_comparison"
+    }
+  ],
+  "whitelist": [
+    { "term": "computed fare", "reason": "the fare charged to the rider is the ticket's stated observable surface (what a rider/tester is billed)" },
+    { "term": "fare", "reason": "the charged amount, directly observable by rider/tester" },
+    { "term": "concession fare", "reason": "named observable fare tier from the ticket's stated rule" },
+    { "term": "base fare", "reason": "named observable fare tier from the ticket's stated rule" },
+    { "term": "adult fare", "reason": "named observable fare tier referenced in the ticket description" },
+    { "term": "175 cents", "reason": "observable concrete output value" },
+    { "term": "350 cents", "reason": "observable concrete output value" },
+    { "term": "pass", "reason": "observable rider attribute affecting the charged fare, stated in the ticket's rule" },
+    { "term": "age", "reason": "observable rider attribute that determines the fare tier, central to the ticket's stated symptom" },
+    { "term": "rider", "reason": "the user-facing subject of the fare charge" },
+    { "term": "combined total charged", "reason": "the observable amount a group is billed, the surface for statement 6" },
+    { "term": "total charged", "reason": "observable billed amount" },
+    { "term": "group of riders", "reason": "observable scenario grouping, not an internal structure" }
+  ]
+}
+</GUARD_VOCABULARY>

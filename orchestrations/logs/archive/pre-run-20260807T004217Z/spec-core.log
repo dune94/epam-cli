@@ -1,0 +1,27 @@
+spec-mode: fast-path qwen/z-ai/glm-5.2 (skipping MiniMax)
+spec-mode: AMSD-2041 — ticket documents: 2/2 fetched into /home/bradleyjerome/projects/ai/epam-cli/orchestrations/logs/docs
+spec-mode: fast-path qwen/z-ai/glm-5.2 (skipping MiniMax)
+spec-mode: ⚠️ AMSD-2041 — linked documentation CONTRADICTS this story on 2 point(s): https://www.contentstack.com/docs/headless-cms/live-preview-implementation-for-nextjs-csr-app-router, https://www.contentstack.com/docs/headless-cms/custom-preview-urls#configure-custom-preview-urls
+spec-mode: fast-path qwen/z-ai/glm-5.2 (skipping MiniMax)
+spec-mode: search-term vocabulary unavailable for AMSD-2041 (Cannot read properties of null (reading 'cmd')) — seeding with an unfiltered query
+spec-mode: ⚠️ code-graph-detective plan/execution MISMATCH for AMSD-2041 — plan named [dependencyavailable, plan, novel, attachment, point], final answer named [contentstackcontext], no shared term and no stated reason for the change.
+spec-mode: fast-path qwen/z-ai/glm-5.1 (skipping MiniMax)
+spec-mode: AMSD-2041 — ACs are immutable (VC model); openspec AC edits redacted, verification captured in verificationCriteria
+spec-mode: fast-path qwen/z-ai/glm-5.2 (skipping MiniMax)
+spec-mode: GUARD_VOCABULARY: missing required field "whitelist" — required by its own tool definition
+spec-mode: VC guard flagged mechanism in AMSD-2041 VC: [SDK callback mechanism referenced in statements 1 and 4; names an internal event handler wiring detail, not the rendered output a user observes.] "Given the Contentstack Live Preview SDK client is mocked to invoke the registere"
+spec-mode: VC guard flagged mechanism in AMSD-2041 VC: [SDK callback mechanism referenced in statements 1 and 4; names an internal event handler wiring detail, not the rendered output a user observes.] "The onEntryChange callback is registered exactly once during the ContentstackCon"
+spec-mode: VC guard flagged mechanism in AMSD-2041 VC: [SDK callback mechanism referenced in statements 1 and 4; names an internal event handler wiring detail, not the rendered output a user observes.] "Given the Contentstack Live Preview SDK client is mocked and onEntryChange fires"
+spec-mode: VC guard flagged mechanism in AMSD-2041 VC: [SDK callback mechanism referenced in statements 1 and 4; names an internal event handler wiring detail, not the rendered output a user observes.] "Given the Contentstack Live Preview SDK client is mocked to invoke the registere"
+spec-mode: VC guard flagged mechanism in AMSD-2041 VC: [SDK callback mechanism referenced in statements 1 and 4; names an internal event handler wiring detail, not the rendered output a user observes.] "The onEntryChange callback is registered exactly once during the ContentstackCon"
+spec-mode: VC guard flagged mechanism in AMSD-2041 VC: [SDK callback mechanism referenced in statements 1 and 4; names an internal event handler wiring detail, not the rendered output a user observes.] "Given the Contentstack Live Preview SDK client is mocked and onEntryChange fires"
+spec-mode: ⚠️ VC review DISPUTED for AMSD-2041 — the reviewer's flags would leave 0/6 criteria, below the floor of 3. Keeping the 3 the deterministic guard certified; a review that condemns most of a set is treated as an outlier. Flags: SDK callback mechanism referenced in statements 1 and 4; names an internal event handler wiring detail, not the rendered output a user observes.: "Given the Contentstack Live Preview SDK client is mocked to invoke the registere" | SDK callback mechanism referenced in statements 1 and 4; names an internal event handler wiring detail, not the rendered output a user observes.: "The onEntryChange callback is registered exactly once during the ContentstackCon" | SDK callback mechanism referenced in statements 1 and 4; names an internal event handler wiring detail, not the rendered output a user observes.: "Given the Contentstack Live Preview SDK client is mocked and onEntryChange fires"
+spec-mode: AMSD-2041 — 3 verification criteria persisted (source: both, resolution: disputed)
+spec-mode: fast-path qwen/z-ai/glm-5.1 (skipping MiniMax)
+spec-mode: SPEC_AGENT: missing required field "storyId" — required by its own tool definition
+spec-mode: brownfield — ignoring 14 AC(s) speckit produced for AMSD-2041; ACs are out of scope and VCs come from the description
+spec-mode: fast-path qwen/z-ai/glm-5.2 (skipping MiniMax)
+spec-mode: fast-path qwen/z-ai/glm-5.2 (skipping MiniMax)
+spec-mode: MODEL_REVIEW: the array is empty — a report about nothing is not a report
+spec-mode: LLM model review completed for 0 stories
+spec-mode: completed for phase core (run 20260807T000054Z)

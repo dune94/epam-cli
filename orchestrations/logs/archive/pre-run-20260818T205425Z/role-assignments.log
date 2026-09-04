@@ -1,0 +1,40 @@
+# Prompt
+Assign an implementation agent role to every story below.
+
+AVAILABLE ROLES — these are this project's own engineering roles. Choose from these and
+nothing else; the name you return must match one of them verbatim:
+- contentstack-live-preview-engineer
+    You are the implementer for Contentstack Live Preview integration on the metrolinx codeline, a Next.js + React + TypeScript project whose headless CMS data flows through a ContentstackFactory class in src/services/contentstack.ts and page-level fetch functions in src/services/pageService.ts. Your scope is the metrolinx codeline only. The Stack is initialized at src/services/contentstack.ts via contentstack.Stack(options) where options currently contains api_key, delivery_token, environment, branch, and fetchOptions but NO live_preview block. The manifest declares contentstack and @contentstack/utils but NOT @contentstack/live-preview-utils — you must install it. The linked Contentstack documentation states the init() call accepts stackSdk, enable, ssr, editButton, stackDetails, and clientUrlParams; verify every option name and export against the installed @contentstack/live-preview-utils package before relying on it, and do not assume any option is correct or incorrect from memory. You must: (1) add a live_preview config block to the existing contentstack.Stack() options in src/services/contentstack.ts, introducing a new environment variable for the preview token read via process.env; (2) install @contentstack/live-preview-utils and create a new initialization module that calls ContentstackLivePreview.init() with the Stack instance and exports onEntryChange — place it in a separate file as the docs recommend to avoid rerender reset; (3) wire onEntryChange into the data-fetch paths for the Homepage (src/components/pages/Homepage.tsx) and the Discover Article page so draft entry changes trigger a re-fetch and re-render. Determine whether each page uses getStaticProps/getServerSideProps or client-side fetching, and integrate without breaking existing SSR/SSG flows. The ContentstackFactory exposes createContentTypeQuery and createContentTypeEntryQuery methods; the useContent hook distributes content to components — understand both before wiring onEntryChange. This codeline's tests live alongside source with a .test. or .spec. suffix and run under Jest with jest-environment-jsdom and @testing-library/react. A dedicated test agent owns reproducing tests; you must not create or edit test files. Focus on the source implementation only.
+
+STORIES — a story listing more than one codeline needs ONE ASSIGNMENT PER CODELINE:
+- AMSD-2041: [MX] Live Preview of Content in CMS (part 1)
+    codeline: metrolinx
+    AS a Content Author, I WANT to preview draft entries in CMS for the MX Homepage and Discover Article pages SO THAT I can see how content will be shown on the website Acceptance Criteria: See in: Original Requirements: Bullet points: AS a Content Author, I WANT to preview draft entries in CMS, SO THAT I can see how content will be shown on the website ability to preview draft entries in CMS Notes& Assumptions Limitation: Might not be possible to preview protected pages and content. Original Total Estimate: 8 Original FE Estimate: 8 Original DAM Estimate: 0 Original BE Estimate: 0
+
+Pick the role whose stated expertise actually covers the work the story describes. If two
+roles could plausibly own a story, prefer the one whose brief names the surface the story
+touches.
+
+THE UNIT OF ASSIGNMENT IS A (STORY, CODELINE) PAIR, NOT A STORY. A story listing three
+codelines needs THREE assignments — the repositories differ, so the right owner can differ.
+Count the codelines listed against each story and return exactly that many assignments for it,
+naming the codeline on every one. A story is not assigned until every codeline it lists is.
+
+THE OWNER MUST AUTHOR THE CODE. Assign the role that will EDIT THE FILES this story changes —
+the one whose brief names those files or directories. A role whose brief is about settings in
+a vendor's console, or about documentation, cannot deliver a story here: the agent's output is
+a change in a repository. Live 2026-08-07: this story went to the one role of three that owned
+no source files, and all such a role can produce is a configuration note. Where the story needs
+both console configuration and code, 
+
+# Output
+{
+"assignments": [
+{
+"agentRole": "contentstack-live-preview-engineer",
+"codeline": "metrolinx",
+"reason": "AMSD-2041 lists exactly one codeline (metrolinx) and requires implementing Contentstack Live Preview for the MX Homepage and Discover Article pages. The work is purely front-end code: (1) adding a live_preview config block to the existing contentstack.Stack() options in src/services/contentstack.ts with a new environment variable for the preview token; (2) installing @contentstack/live-preview-utils and creating a separate initialization module that calls ContentstackLivePreview.init() and exports onEntryChange; (3) wiring onEntryChange into the data-fetch paths for Homepage (src/components/pages/Homepage.tsx) and the Discover Article page so draft entry changes trigger re-fetch and re-render. The contentstack-live-preview-engineer role is explicitly scoped to the metrolinx codeline, and its brief names every file and surface this story touches — contentstack.ts, pageService.ts, Homepage.tsx, the ContentstackFactory class, the useContent hook, and the ContentstackLivePreview.init() integration. No other available role owns source files on this codeline, and the story's estimates (FE 8, BE 0, DAM 0) confirm it is a code-implementation story. The role that authors the code is the correct and only assignment.",
+"storyId": "AMSD-2041"
+}
+]
+}

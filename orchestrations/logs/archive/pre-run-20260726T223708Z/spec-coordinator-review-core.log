@@ -1,0 +1,88 @@
+# Prompt
+You are the specification coordinator for the epam-cli orchestration system. Before every phase you read orchestrations/prd.json (implementationOrder and stories), evaluate risk, dependencies, and technical readiness, then assign the correct specification runners: OpenSpec, Speckit, both, or none. You write assignments into each story's specification.assignedAgents field along with coordinatorNotes, target provider/model, and timestamps. You understand the provider policy ledger (configuration.aiRuntime.providerPolicies), token guardrails, and know when to skip stories that were already hand-curated. When you plan a run you emit JSON compliant with spec-mode-runner.js so that automation can apply deltas deterministically. You never invent story IDs or mutate acceptance criteria directly; only delegate to spec agents and record their status.
+
+You are the EPAM CLI specification coordinator reviewing the completed spec outputs for phase core.
+
+Each story was processed by a sequential agent pipeline:
+  1. openspec elaborated requirements (AC refinement, story splits, technical depth)
+  2. speckit reviewed openspec's output (testability, security, edge cases, gap analysis)
+
+For each story, evaluate the quality of the collaborative spec work:
+1. Did both agents add meaningful, non-overlapping value?
+2. Are the acceptance criteria complete, testable, and non-overlapping?
+3. Are story splits logical and properly scoped?
+4. Flag any story needing human review.
+
+Respond with JSON between <SPEC_REVIEW> and </SPEC_REVIEW> using this schema:
+[
+  {"storyId":"REM-xxx","verdict":"approved|needs_review","reviewNotes":"coordinator observations","qualityScore":0.0-1.0,"flags":[]}
+]
+
+Stories to review:
+[
+  {
+    "id": "MOCK-HW-1",
+    "title": "Hello world greeting should say hello dolly",
+    "acceptanceCriteria": [
+      "Delegated to split children: MOCK-HW-1-impl, MOCK-HW-1-test"
+    ],
+    "specification": {
+      "runId": "20260726T220936Z",
+      "assignedAgents": [
+        "openspec"
+      ],
+      "coordinatorNotes": "Trivial string-change story; title/description is self-evident AC. No elaboration or hardening warranted — assigning agents would be over-engineering.",
+      "status": "completed",
+      "updatedAt": "2026-07-26T22:13:56.511Z",
+      "appliedAgents": [
+        "openspec"
+      ],
+      "agentContributions": [
+        {
+          "agent": "openspec",
+          "applied": true,
+          "notes": "Defect: getGreeting() returns 'hello world' but should return 'hello dolly'. Fix site is src/hello.ts. Split required per Rule 2: impl files + test file in same story.",
+          "acceptanceChanged": false,
+          "splitCount": 2,
+          "timestamp": "2026-07-26T22:13:56.510Z",
+          "splitIds": [
+            "MOCK-HW-1-impl",
+            "MOCK-HW-1-test"
+          ]
+        }
+      ]
+    },
+    "splitChildren": [
+      {
+        "id": "MOCK-HW-1-impl",
+        "title": "Change getGreeting to return 'hello dolly'",
+        "acceptanceCriteria": [
+          "getGreeting() returns 'hello dolly'"
+        ]
+      },
+      {
+        "id": "MOCK-HW-1-test",
+        "title": "Update test to expect 'hello dolly'",
+        "acceptanceCriteria": [
+          "The test for getGreeting expects the return value 'hello dolly'"
+        ]
+      }
+    ]
+  }
+]
+
+<SPEC_REVIEW>
+</SPEC_REVIEW>
+
+# Output
+<SPEC_REVIEW>
+[
+  {
+    "storyId": "MOCK-HW-1",
+    "verdict": "approved",
+    "reviewNotes": "Openspec added meaningful value by identifying the defect site (src/hello.ts) and applying Rule 2 to split impl from test — a standard, well-scoped decomposition. Speckit was intentionally skipped by the coordinator for this trivial one-line string change, which was a reasonable call; there are no security, edge-case, or testability concerns warranting hardening review. Child ACs are each single, testable, and non-overlapping: impl child asserts getGreeting() returns 'hello dolly'; test child asserts the test expects that value. Parent AC is a delegation pointer to children, which is acceptable for a split story. Minor deduction for lack of any speckit pass (appropriate skip, but means no gap analysis occurred) and for parent AC being purely structural rather than substantive.",
+    "qualityScore": 0.85,
+    "flags": ["speckit_intentionally_skipped"]
+  }
+]
+</SPEC_REVIEW>

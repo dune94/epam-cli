@@ -1,0 +1,17 @@
+Done. I've written a bug-reproducing test at `/home/bradleyjerome/projects/mock3/mock-b/src/schedule.test.ts` that verifies the fix.
+
+**Test results:**
+- ✅ All 4 tests pass with the fixed code
+- ❌ 3 of 4 tests fail with the buggy code (`i < stops.length - 1`):
+  - "includes the final stop" fails: Eglinton missing from output
+  - "includes all stops" fails: Station C missing from output  
+  - "separates consecutive stops" fails: only 1 arrow instead of 2
+
+**Coverage of verification criteria:**
+1. Final stop appears in output — test 1 (`toContain('Eglinton (25m)')`)
+2. Every stop appears in output — test 2 (asserts all three stops present)
+3. Consecutive stops separated by arrows — test 3 (counts arrows: 3 stops = 2 arrows)
+4. Empty input handled — test 4 (returns empty string without error)
+
+The test file compiles with vitest and matches the repo's framework conventions.
+{"numTotalTestSuites":2,"numPassedTestSuites":2,"numFailedTestSuites":0,"numPendingTestSuites":0,"numTotalTests":4,"numPassedTests":4,"numFailedTests":0,"numPendingTests":0,"numTodoTests":0,"snapshot":{"added":0,"failure":false,"filesAdded":0,"filesRemoved":0,"filesRemovedList":[],"filesUnmatched":0,"filesUpdated":0,"matched":0,"total":0,"unchecked":0,"uncheckedKeysByFile":[],"unmatched":0,"updated":0,"didUpdate":false},"startTime":1787946150595,"success":true,"testResults":[{"assertionResults":[{"ancestorTitles":["formatStops"],"fullName":"formatStops includes the final stop in the output","status":"passed","title":"includes the final stop in the output","duration":0.7348520000000178,"failureMessages":[],"meta":{}},{"ancestorTitles":["formatStops"],"fullName":"formatStops includes all stops in the output","status":"passed","title":"includes all stops in the output","duration":0.24981399999998644,"failureMessages":[],"meta":{}},{"ancestorTitles":["formatStops"],"fullName":"formatStops separates consecutive stops with arrow separators","status":"passed","title":"separates consecutive stops with arrow separators","duration":0.18779200000000174,"failureMessages":[],"meta":{}},{"ancestorTitles":["formatStops"],"fullName":"formatStops handles an empty input without error","status":"passed","title":"handles an empty input without error","duration":0.12486899999998968,"failureMessages":[],"meta":{}}],"startTime":1787946150828,"endTime":1787946150830.1248,"status":"passed","message":"","name":"/home/bradleyjerome/projects/mock3/mock-b/src/schedule.test.ts"}]}

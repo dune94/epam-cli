@@ -1,0 +1,6 @@
+[0;35m[CPA][0m Retrieval: TF-IDF
+[0;36m[19:20:37][0m Loading stories from orch-cdts-prd-2505258.json...
+[0;36m[19:20:37][0m Found 1 stories to contextualize
+
+[0;35m[CPA][0m Processing AMSD-1820...
+[0;35m[CPA][0m   AMSD-1820: formula baseline from calibration[medium:implementation:cli](n=9): 2.808398113839453min $0.54208529935815

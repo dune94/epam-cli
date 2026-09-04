@@ -1,0 +1,190 @@
+# Prompt
+You are the Guard Vocabulary Agent for the epam-cli orchestration pipeline.
+
+A deterministic guard is about to check a set of statements against a RULE. Your sole job is to derive, for THIS story, the concrete terms that would VIOLATE that rule — and the terms that name its legitimate observable surface. The guard holds no vocabulary of its own; it applies exactly what you return, and nothing else.
+
+## Why you exist
+
+Every guard in this pipeline used to carry a hardcoded list of terms, each list reverse-engineered from a single past incident. A list catches that one incident and nothing else, while reporting "clean" forever — which is worse than no guard, because it converts "unchecked" into "checked" and nobody looks again. You replace those lists. If you answer badly, the guard is blind; if you answer well, it catches violations nobody has seen yet.
+
+## Your inputs
+
+1. THE RULE — a principle stating what it means to violate this guard. It names no domain, no product and no past incident. It is the only definition of correctness you are given.
+2. THE STATEMENTS — the items the guard will check (for example, a story's verification criteria or acceptance criteria).
+3. CODE EVIDENCE — real findings from the repository: files, functions, symbols, and the reasoning that located them. This is ground truth.
+4. STORY CONTEXT — the ticket's title and description.
+
+## Your process
+
+1. Read the rule and restate to yourself, in one sentence, what distinguishes a violating statement from a compliant one. Everything you return must trace to that sentence.
+2. Read the CODE EVIDENCE and identify the implementation vocabulary of this story: the symbols, functions, SDK entry points, internal structures and configuration keys that describe HOW the behaviour is produced. These come from the evidence, never from the ticket prose and never from your own knowledge of the technology.
+3. Read the STORY CONTEXT and identify the observable surface: what an end user or tester perceives. That is the whitelist.
+4. Emit both lists.
+
+## Hard requirements
+
+- DERIVE FROM THE EVIDENCE. Every blacklist term must be traceable to a symbol, file, function or structure present in the supplied code evidence, or to a construction verb present in the statements themselves. Do not contribute terms from your general knowledge of a library, framework or vendor: that is how an agent invents a signature that does not exist.
+- NEVER include a term that names the observable surface. If a term describes what a user sees, it belongs in the whitelist, even when it also appears in code.
+- PREFER THE SPECIFIC. a term naming ONE identifiable thing is useful; a generic category word is not — it will fire on unrelated statements and train people to ignore the guard.
+- WHOLE TERMS ONLY. Return terms as they would appear in a sentence. Do not return regular expressions, wildcards or fragments.
+- LOWERCASE every term.
+- The whitelist WINS. A term appearing in both lists is treated as observable and never flagged, so do not rely on the blacklist to override it.
+- If the rule genuinely admits no violating vocabulary for this story, return an empty blacklist. Do not pad it. An empty list is a real answer and is reported as such — it is not treated as success.
+
+## Verifying a term against the index
+
+At some seams you are given a real CodeGraph index of the repository and the command to
+query it. When you are, USE IT — do not assert that a term is meaningful, check it. A
+candidate that resolves to nothing in the index is noise and belongs in the blacklist,
+however unusual or technical the word looks. A candidate that resolves to real symbols is
+evidence-backed and can be trusted.
+
+Be aware of what your list feeds. Where the consumer is a BM25/IDF ranker, that ranker
+DEMOTES terms which are common in the corpus and AMPLIFIES terms which are rare. A rare but
+meaningless token — a bracketed brand tag, a ticket label, a person's name, a status word —
+is therefore not diluted by the ranker; it is promoted to a top discriminator and drags the
+search away from the real code. Rarity is not signal. Mistaking the two is the specific
+failure you exist to prevent, so when a term is unusual AND resolves to nothing, blacklist
+it with confidence.
+
+When no index is available to you, say what you can support from the evidence you were
+given and no more. An honest short list beats a padded one: every term you return is
+applied deterministically, and a wrong term is enforced as rigorously as a right one.
+
+## Output
+
+Call the submit_guard_vocabulary tool. Structured output only. Do not answer in prose, do not wrap the call in commentary, and do not explain your reasoning outside the per-term reason fields. A prose answer is discarded in full and the guard is left with nothing to apply.
+
+GUARD SEAM: verification-criteria
+
+This project spans two independent codelines:
+- mocka at /home/bradleyjerome/projects/mock3/mock-a (TypeScript + vitest)
+- mockb at /home/bradleyjerome/projects/mock3/mock-b (TypeScript + vitest)
+
+Each codeline is tested independently with `vitest`. Typical workflow: read the test files first to understand the test structure and age/stop coverage, then inspect the implementation.
+
+THE RULE THIS GUARD ENFORCES:
+A verification criterion states WHAT AN END USER OR TESTER OBSERVES on the user-facing surface THE TICKET IS ABOUT — the rendered output for an output ticket, the displayed screen for a UI ticket, the response a CLIENT receives for an API ticket. It is a BLACK-BOX check on that surface. It NEVER describes HOW the value is produced.
+A verification criterion is FORBIDDEN if it:
+- prescribes HOW to implement — any algorithm, mechanism, approach, or the addition/reading of any new field, flag or service;
+- references an INTERNAL structure that merely FEEDS the ticket's surface — an intermediate payload, a data-transfer object, or a specific response field used to BUILD the output. Verify the surface the ticket names, NOT the data structure behind it;
+- makes a CROSS-COMPARISON that presumes a mechanism — never assert one value "must equal" / "matches" / "is the same as" another; that presumes a shared derivation. Assert the required value is present and correct ON ITS OWN.
+Every verification criterion must be observable, testable, and tied to the ticket's stated symptom/intent.
+
+THE STATEMENTS THE GUARD WILL CHECK:
+1. For a multi-stop line, the rendered board string includes the final stop's name and its minute value, not just the earlier stops.
+2. The rendered board string still includes the first and middle stops alongside the final stop.
+3. Every pair of adjacent stops in the rendered board, including the pair ending at the final stop, is separated by the arrow separator ('->').
+4. Calling the render with an empty line produces an empty string and does not throw an error.
+
+DECLARED MANIFEST (the files this story says it will touch):
+- (none declared)
+
+CODE EVIDENCE (real findings from this repository — ground truth; derive from these, not from your own knowledge of any library):
+- src/schedule.ts :: formatStops — This is the loop that builds the rendered board string; its bound directly computes which stops appear in the output. totalMinutes independently reads stops[stops.length - 1] and is unaffected, which is why the journey length stays correct while the last stop is missing from the rendering.
+- test/schedule.test.ts :: formatStops — Existing assertions only check for the arrow separator and that the first stop ('Union') appears; none assert the last stop ('Eglinton') is present, which is why this omission went undetected. The file needs no edit to make the fix work, but it is the coverage gap the implementer should be aware of.
+
+STORY CONTEXT:
+Title: The departure board omits the final stop
+Description: formatStops renders every stop except the last one, so a three-stop line shows two. The journey length reported by totalMinutes is correct, which is why the omission has gone unnoticed.
+
+
+When reading the codebase: TypeScript types are strict, so check explicit comparison operators (>= vs >, == vs ===) and array indexing boundaries carefully. For MOCK3-1 (fare logic), the boundary is age exactly 65; for MOCK3-2 (departure board), check whether loop iteration includes or excludes the final element, and whether totalMinutes() uses zero-based or one-based indexing.
+# Output — THIS IS A CONTRACT, NOT A PREFERENCE
+
+Emit EXACTLY one <GUARD_VOCABULARY> block and nothing else that matters. Prose outside it is DISCARDED
+unread, however correct it is — the pipeline parses the block and never the commentary.
+
+<GUARD_VOCABULARY>
+{
+  "blacklist": [ {
+      "term": <string>
+         // The literal term or phrase to match, lowercase.,
+      "reason": <string>
+         // Short clause naming which part of the rule it breaks.,
+      "kind": <string> one of "implementation_noun" | "construction_verb" | "internal_structure" | "cross_comparison" | "other"   (optional),
+  } ]
+  "whitelist": [ {
+      "term": <string>,
+      "reason": <string>   (optional),
+  } ]
+}
+</GUARD_VOCABULARY>
+
+Submit the concrete terms that would VIOLATE the stated guard rule for this story, and the terms that represent its legitimate observable surface. Derive them from the supplied code evidence. Do not answer in prose.
+
+
+# Output
+<GUARD_VOCABULARY>
+{
+  "blacklist": [
+    {
+      "term": "formatstops",
+      "reason": "names the internal function that builds the board string; a criterion referencing it prescribes HOW rather than checking the rendered output",
+      "kind": "implementation_noun"
+    },
+    {
+      "term": "totalminutes",
+      "reason": "internal function noted in evidence as independently computing journey length; referencing it, or asserting it against the board string, would be a cross-comparison presuming shared derivation rather than checking the board surface on its own",
+      "kind": "internal_structure"
+    },
+    {
+      "term": "stops.length - 1",
+      "reason": "the internal loop bound identified in the evidence as the actual defect; naming it prescribes the fix mechanism instead of observing rendered output",
+      "kind": "implementation_noun"
+    },
+    {
+      "term": "stops array",
+      "reason": "internal data structure that feeds the rendered board string; the ticket's surface is the board string, not the array behind it",
+      "kind": "internal_structure"
+    },
+    {
+      "term": "loop bound",
+      "reason": "names the implementation mechanism (loop iteration limit) responsible for the omission, not an observable property of the output",
+      "kind": "implementation_noun"
+    },
+    {
+      "term": "off-by-one",
+      "reason": "names the class of implementation bug being fixed, not anything a tester observes on the board",
+      "kind": "implementation_noun"
+    },
+    {
+      "term": "array index",
+      "reason": "internal indexing detail of the stops collection, not part of the observable rendered string",
+      "kind": "internal_structure"
+    },
+    {
+      "term": "must equal",
+      "reason": "cross-comparison phrasing the rule explicitly forbids: asserting one value against another presumes a shared derivation instead of checking the board string on its own",
+      "kind": "cross_comparison"
+    },
+    {
+      "term": "matches",
+      "reason": "cross-comparison phrasing the rule explicitly forbids",
+      "kind": "cross_comparison"
+    },
+    {
+      "term": "is the same as",
+      "reason": "cross-comparison phrasing the rule explicitly forbids",
+      "kind": "cross_comparison"
+    }
+  ],
+  "whitelist": [
+    { "term": "rendered board string", "reason": "the ticket's stated user-facing surface" },
+    { "term": "board string", "reason": "the observable output surface" },
+    { "term": "final stop", "reason": "observable content of the rendered output" },
+    { "term": "last stop", "reason": "observable content of the rendered output" },
+    { "term": "first stop", "reason": "observable content of the rendered output" },
+    { "term": "middle stop", "reason": "observable content of the rendered output" },
+    { "term": "middle stops", "reason": "observable content of the rendered output" },
+    { "term": "stop's name", "reason": "observable displayed value" },
+    { "term": "minute value", "reason": "observable displayed value" },
+    { "term": "arrow separator", "reason": "observable character in the rendered string" },
+    { "term": "->", "reason": "the literal observable separator token in the rendered string" },
+    { "term": "empty string", "reason": "observable return value" },
+    { "term": "empty line", "reason": "describes the black-box input condition being tested, not an internal structure" },
+    { "term": "throws an error", "reason": "observable behavior (or absence of it) at the black-box boundary" },
+    { "term": "render", "reason": "generic black-box action verb describing calling the observable surface" }
+  ]
+}
+</GUARD_VOCABULARY>

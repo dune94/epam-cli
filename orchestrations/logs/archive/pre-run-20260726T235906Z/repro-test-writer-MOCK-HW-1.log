@@ -1,0 +1,19 @@
+No type errors in `src/hello.test.ts` (grep found nothing).
+
+Wrote `/tmp/brownfield-mock-e2e-KPdxRz/codelines/mock-hello-world/src/hello.test.ts`:
+
+```ts
+import { describe, it, expect } from 'vitest';
+import { getGreeting } from './hello';
+
+describe('getGreeting', () => {
+  it('returns hello dolly', () => {
+    expect(getGreeting()).toBe('hello dolly');
+  });
+});
+```
+
+- Asserts the post-fix observable value `'hello dolly'` — FAILS against pre-fix code (`'hello world'`) and PASSES with the committed fix.
+- Mirrors the repo's example exactly (vitest, same imports, co-located `.test.ts` convention).
+- Typechecks cleanly — no mock objects, no extra files.
+{"numTotalTestSuites":2,"numPassedTestSuites":2,"numFailedTestSuites":0,"numPendingTestSuites":0,"numTotalTests":1,"numPassedTests":1,"numFailedTests":0,"numPendingTests":0,"numTodoTests":0,"snapshot":{"added":0,"failure":false,"filesAdded":0,"filesRemoved":0,"filesRemovedList":[],"filesUnmatched":0,"filesUpdated":0,"matched":0,"total":0,"unchecked":0,"uncheckedKeysByFile":[],"unmatched":0,"updated":0,"didUpdate":false},"startTime":1785109658323,"success":true,"testResults":[{"assertionResults":[{"ancestorTitles":["getGreeting"],"fullName":"getGreeting returns hello dolly","status":"passed","title":"returns hello dolly","duration":0.8171150000000011,"failureMessages":[],"meta":{},"tags":[]}],"startTime":1785109658423,"endTime":1785109658423.8171,"status":"passed","message":"","name":"/tmp/brownfield-mock-e2e-KPdxRz/codelines/mock-hello-world/src/hello.test.ts"}]}

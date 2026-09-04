@@ -1,0 +1,109 @@
+=== Prompt for SKY-006-A (attempt 1) ===
+Implement user story SKY-006-A: Prerequisite gate: verify SKY-001–SKY-005 outputs before review
+
+## Story Description
+Isolates the dependency-checking step from the substantive code review. This story succeeds when the /tmp/skyscanner-app workspace is confirmed to be in a reviewable state (src/ tree present, package.json present, tsconfig.json present, all five prior stories marked complete in the tracker). On success it emits a machine-readable gate-passed signal that SKY-006-B depends on. On failure it emits a BLOCKED signal and halts the pipeline without creating a partial review document.
+
+## Acceptance Criteria
+- Before any other action, the agent verifies the existence of all four required paths in order: /tmp/skyscanner-app (directory), /tmp/skyscanner-app/src (directory), /tmp/skyscanner-app/package.json (file), and /tmp/skyscanner-app/tsconfig.json (file). Checks are performed sequentially and stop at the first missing path.
+- If the /tmp/skyscanner-app/review directory does not exist, the agent creates it (including any intermediate directories) before writing any output files, regardless of whether the gate passes or fails.
+- If any required path is absent, the agent writes exactly one line to /tmp/skyscanner-app/review/SKY-006-review.md in the format `BLOCKED: dependency <missing-path> not satisfied` (where <missing-path> is the first failing path), writes the identical message to stderr, and exits with code 1. No additional content is appended to the review document.
+- If all required paths are present, the agent writes a JSON file at /tmp/skyscanner-app/review/.gate-passed.json containing exactly the keys `story` (string, value `"SKY-006-A"`), `timestamp` (string, ISO-8601 UTC format), and `status` (string, value `"passed"`), then exits with code 0. No other keys are written to this file.
+- The gate check is idempotent: executing it multiple times against a fully valid workspace always exits with code 0 and overwrites /tmp/skyscanner-app/review/.gate-passed.json with an updated timestamp on each run, without duplicating or appending content.
+- The agent does not write any content to /tmp/skyscanner-app/review/SKY-006-review.md when the gate passes; that file is reserved exclusively for failure output and subsequent review content written by SKY-006-B.
+- All filesystem errors (e.g. permission denied when creating the review directory or writing output files) are caught, reported to stderr with a descriptive message prefixed `ERROR:`, and cause the agent to exit with code 2 to distinguish infrastructure failures from dependency failures.
+- The agent produces no stdout output under any execution path; all human-readable messaging is directed exclusively to stderr.
+
+## Technical Notes
+- workingDir: /tmp/skyscanner-app
+- files: ["/tmp/skyscanner-app/review/SKY-006-review.md"]
+- dependsOn: ["SKY-001","SKY-002","SKY-003","SKY-004","SKY-005"]
+
+## Files to Create/Modify
+/tmp/skyscanner-app/review/SKY-006-review.md
+
+## Dependencies
+None
+
+## Instructions
+**IMPORTANT: You MUST use your file-writing and bash tools to create all required files. Do NOT just describe or plan what you will do — call tools immediately and write the files.**
+
+1. Implement all acceptance criteria for this story
+2. Follow the project's existing code patterns and conventions
+3. Create any necessary files in the locations specified
+4. Ensure code compiles/runs without errors
+5. Do NOT create tests unless explicitly required in acceptance criteria
+
+After implementation, provide a brief summary of what was created/modified.
+
+## Relevant Knowledge Base Entries
+The following was learned from previous story implementations and is relevant to your agent role. Apply this knowledge before writing any code:
+
+## KB-003 -- 2026-03-01
+
+**Category:** backend
+**AgentRole:** review-agent
+**Tags:** typescript, async, cancellation, abort-controller
+**Trigger:** first-success
+**StoryRef:** EPAM-014
+
+When implementing multi-agent parallel execution with cancellation support, registering an AbortController in a task registry is insufficient. The abort signal must be threaded through the entire call chain: TaskRegistry → caller → AgentRunOptions → AgentRunner → provider.stream(). Without adding `abortSignal?: AbortSignal` to AgentRunOptions and checking it in the agent loop, calling `abortController.abort()` will update task status but leave the underlying LLM stream and agent execution running. Always ensure cancellation signals propagate to the lowest-level async operation (the provider stream) to avoid resource leaks and unbounded execution.
+
+
+## KB-004 -- 2026-03-01
+
+**Category:** orchestration
+**AgentRole:** review-agent
+**Tags:** typescript, prompt-injection, session-history, agent-runner
+**Trigger:** first-success
+**StoryRef:** EPAM-018
+
+For one-turn consultation or override prompts, consuming a pending flag is not enough if you also persist the injected text into the turn history. If the transformed message is stored in the same message array that becomes future history, the consultation silently bleeds into later turns. Keep a separate transient message list for the model-facing request and preserve the original user message in the persisted session history.
+
+## Knowledge Base Contribution
+Your assigned KB entry ID for this run: **KB-008**
+
+If you discover a non-obvious pattern, gotcha, or anti-pattern during this implementation (or this is a retry), append exactly one entry to `orchestrations/agents/KB.md` using this format:
+
+```markdown
+## KB-008 -- 2026-06-18
+
+**Category:** <backend|frontend|infrastructure|testing|orchestration>
+**AgentRole:** <your agentRole from the story>
+**Tags:** <comma-separated tech keywords, e.g. typescript, node, cli>
+**Trigger:** <retry|first-success>
+**StoryRef:** SKY-006-A
+
+<One concise paragraph: the specific pattern, gotcha, or anti-pattern. Precise enough that a future Claude instance can apply it without re-discovering it.>
+```
+
+Only write an entry if the knowledge is genuinely non-obvious. Skip trivial observations.
+=== End Prompt ===
+
+=== epam Output (attempt 1) ===
+I have implemented the SKY-006-A prerequisite gate as a Node.js script at /tmp/skyscanner-app/sky-006-a-check.js.
+
+- It checks sequentially for the presence of /tmp/skyscanner-app (directory), /tmp/skyscanner-app/src (directory), /tmp/skyscanner-app/package.json (file), and /tmp/skyscanner-app/tsconfig.json (file).
+- It creates /tmp/skyscanner-app/review directory if missing.
+- If any required path is missing, it writes a BLOCKED message to /tmp/skyscanner-app/review/SKY-006-review.md, outputs the message to stderr, and exits 1.
+- If all paths are present, it writes a JSON gate-passed file /tmp/skyscanner-app/review/.gate-passed.json with the specified keys and exits 0.
+- Filesystem errors cause an ERROR message to stderr and exit 2.
+- No stdout output is produced.
+
+I ran the script and it passed with no output and generated the .gate-passed.json file correctly. The review markdown file is empty as expected.
+
+Let me know if you want me to do anything else with this.
+I have implemented the SKY-006-A prerequisite gate as a Node.js script at /tmp/skyscanner-app/sky-006-a-check.js.
+
+- It checks sequentially for the presence of /tmp/skyscanner-app (directory), /tmp/skyscanner-app/src (directory), /tmp/skyscanner-app/package.json (file), and /tmp/skyscanner-app/tsconfig.json (file).
+- It creates /tmp/skyscanner-app/review directory if missing.
+- If any required path is missing, it writes a BLOCKED message to /tmp/skyscanner-app/review/SKY-006-review.md, outputs the message to stderr, and exits 1.
+- If all paths are present, it writes a JSON gate-passed file /tmp/skyscanner-app/review/.gate-passed.json with the specified keys and exits 0.
+- Filesystem errors cause an ERROR message to stderr and exit 2.
+- No stdout output is produced.
+
+I ran the script and it passed with no output and generated the .gate-passed.json file correctly. The review markdown file is empty as expected.
+
+Let me know if you want me to do anything else with this.
+
+=== End epam Output ===

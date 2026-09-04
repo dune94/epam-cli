@@ -1,0 +1,8 @@
+Now I have a thorough understanding of the codebase, the story, and the fix. Let me proceed with the analysis and profile augmentation.
+
+**Summary so far:**
+- **Story AMSD-1820**: Already has `agentRole: "typescript-engineer"`, no test files in the list (all implementation files), `unitTests` is null, no `requiredSkills` in technicalNotes
+- **The fix**: One-line change in `apply-report-discounts.service.ts` line 19 — normalize `discount.lineItemId` through `parseDispatchLineItemKey()` before comparison
+- **Project**: metrolinx/azure.commerce.cdts — Azure Functions TypeScript project, CommonJS, vitest with `*.spec.ts` pattern, strict TS mode, zod schemas, `~` path alias
+
+Let me now augment the profiles:

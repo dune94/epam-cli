@@ -1,0 +1,82 @@
+# Prompt
+You are the specification coordinator for the epam-cli orchestration system. Before every phase you read orchestrations/prd.json (implementationOrder and stories), evaluate risk, dependencies, and technical readiness, then assign the correct specification runners: OpenSpec, Speckit, both, or none. You write assignments into each story's specification.assignedAgents field along with coordinatorNotes, target provider/model, and timestamps. You understand the provider policy ledger (configuration.aiRuntime.providerPolicies), token guardrails, and know when to skip stories that were already hand-curated. When you plan a run you emit JSON compliant with spec-mode-runner.js so that automation can apply deltas deterministically. You never invent story IDs or mutate acceptance criteria directly; only delegate to spec agents and record their status.
+
+You are the EPAM CLI specification coordinator reviewing the completed spec outputs for phase core.
+
+Each story was processed by a sequential agent pipeline:
+  1. openspec elaborated requirements (AC refinement, story splits, technical depth)
+  2. speckit reviewed openspec's output (testability, security, edge cases, gap analysis)
+
+For each story, evaluate the quality of the collaborative spec work:
+1. Did both agents add meaningful, non-overlapping value?
+2. Are the acceptance criteria complete, testable, and non-overlapping?
+3. Are story splits logical and properly scoped?
+4. Flag any story needing human review.
+
+Respond with JSON between <SPEC_REVIEW> and </SPEC_REVIEW> using this schema:
+[
+  {"storyId":"REM-xxx","verdict":"approved|needs_review","reviewNotes":"coordinator observations","qualityScore":0.0-1.0,"flags":[]}
+]
+
+Stories to review:
+[
+  {
+    "id": "AMSD-2041",
+    "title": "[GO, UP, MX] Live Preview of Content in CMS",
+    "acceptanceCriteria": [],
+    "specification": {
+      "runId": "20260728T122522Z",
+      "assignedAgents": [
+        "openspec",
+        "speckit"
+      ],
+      "coordinatorNotes": "Empty AC and null spec — openspec needed to elaborate requirements, propose acceptance criteria, and add technical depth for multi-market live preview. Live preview carries security surface (iframe sandboxing, XSS, content injection) and edge cases (multi-market content resolution, permission boundaries) requiring speckit hardening after openspec. Both agents assigned; openspec runs first.",
+      "status": "completed",
+      "updatedAt": "2026-07-28T12:45:10.193Z",
+      "appliedAgents": [
+        "openspec",
+        "speckit"
+      ],
+      "agentContributions": [
+        {
+          "agent": "openspec",
+          "applied": true,
+          "notes": "Novel capability — Live Preview does not exist in the codebase. The central content hook (useContent, 236 callers) and the Contentstack service layer are the integration points. ACs were empty; VCs derived entirely from the description. Contentstack hosts are unreachable at test time, so VCs stop at our request boundary and mock assumptions.",
+          "acceptanceChanged": false,
+          "splitCount": 0,
+          "timestamp": "2026-07-28T12:44:27.040Z"
+        },
+        {
+          "agent": "speckit",
+          "applied": true,
+          "notes": "Openspec produced empty acceptanceCriteria with a note that this is a novel capability. I derived all 18 ACs from scratch based on the story description and the codebase context (useContent hook with 236 callers, Contentstack service layer). ACs cover: core live-preview behaviour (AC-1, AC-2, AC-3), opt-out/fallback (AC-4), partial field merging (AC-5), rapid-update resilience (AC-6), SDK failure fallback (AC-7), connection loss (AC-8), unsupported content types (AC-9), preview token security (AC-10), session persistence (AC-11), entry mismatch guard (AC-12), unknown field guard (AC-13), publish transition (AC-14), multi-hook isolation (AC-15), render efficiency (AC-16), complex field types (AC-17), and null/empty payload guard (AC-18). All ACs are written as observable outcomes (Given/When/Then) with no implementation instructions. Per openspec's note, Contentstack hosts are unreachable at test time, so ACs are scoped to observable behaviour at the application boundary.",
+          "acceptanceChanged": false,
+          "splitCount": 0,
+          "timestamp": "2026-07-28T12:45:10.193Z"
+        }
+      ]
+    },
+    "splitChildren": []
+  }
+]
+
+<SPEC_REVIEW>
+</SPEC_REVIEW>
+
+# Output
+<SPEC_REVIEW>
+[
+  {
+    "storyId": "AMSD-2041",
+    "verdict": "needs_review",
+    "reviewNotes": "Both agents failed to produce persisted acceptance criteria. Openspec's contribution was purely contextual — it identified integration points (useContent hook, Contentstack service layer) and noted that Contentstack hosts are unreachable at test time, but delivered zero ACs (acceptanceChanged: false, splitCount: 0). Speckit then claims to have derived 18 ACs from scratch covering core behavior, fallback, security, and edge cases, but acceptanceChanged is also false and the story's acceptanceCriteria array remains empty []. This means neither agent actually wrote ACs into the story — speckit described them in notes only. The collaborative pipeline broke down: openspec produced no elaboration for speckit to review, and speckit's proposed ACs were never persisted. Additionally, no story splits were proposed despite this being a novel capability touching 236 callers across 3 markets (GO, UP, MX) — a split is likely warranted. Human review required to: (1) determine why ACs were not persisted, (2) validate speckit's 18 proposed ACs against the actual story requirements, (3) evaluate whether story splits are needed for this scope.",
+    "qualityScore": 0.35,
+    "flags": [
+      "openspec_non_delivery: openspec produced no acceptance criteria despite being assigned to elaborate requirements for an empty-AC story",
+      "speckit_acs_not_persisted: speckit describes 18 ACs in notes but acceptanceChanged=false and acceptanceCriteria array is empty",
+      "missing_story_split: novel capability touching 236 callers across 3 markets with no split evaluation",
+      "pipeline_breakdown: no collaborative refinement occurred — speckit worked in isolation without openspec's elaboration output"
+    ]
+  }
+]
+</SPEC_REVIEW>

@@ -1,0 +1,18 @@
+Perfect! The test file compiles and all 5 tests pass.
+
+## Summary
+
+I've written `/home/bradleyjerome/projects/mock3/mock-b/src/schedule.test.ts` with five focused tests:
+
+1. **"includes the final stop in the output"** — This is the core bug-reproducer. With the old code (`i < stops.length - 1`), the loop would exit before processing the last element, so 'Eglinton (25m)' would not appear in the result. With the fix (`i < stops.length`), it does. This test would **FAIL** against the buggy code and **PASS** with the fix.
+
+2. **"includes all stops in the output"** — Verifies the complete set is rendered.
+
+3. **"separates consecutive stops with arrow separators"** — Confirms the join format works.
+
+4. **"handles empty input without throwing"** — Edge case for robustness.
+
+5. **"returns empty string for empty input"** — Validates the empty case output.
+
+All tests pass (✓ 5 tests), TypeScript is clean, and the test file follows the vitest conventions of the existing codebase.
+{"numTotalTestSuites":2,"numPassedTestSuites":2,"numFailedTestSuites":0,"numPendingTestSuites":0,"numTotalTests":5,"numPassedTests":5,"numFailedTests":0,"numPendingTests":0,"numTodoTests":0,"snapshot":{"added":0,"failure":false,"filesAdded":0,"filesRemoved":0,"filesRemovedList":[],"filesUnmatched":0,"filesUpdated":0,"matched":0,"total":0,"unchecked":0,"uncheckedKeysByFile":[],"unmatched":0,"updated":0,"didUpdate":false},"startTime":1787946951704,"success":true,"testResults":[{"assertionResults":[{"ancestorTitles":["formatStops"],"fullName":"formatStops includes the final stop in the output","status":"passed","title":"includes the final stop in the output","duration":0.691112000000004,"failureMessages":[],"meta":{}},{"ancestorTitles":["formatStops"],"fullName":"formatStops includes all stops in the output","status":"passed","title":"includes all stops in the output","duration":0.14847199999999816,"failureMessages":[],"meta":{}},{"ancestorTitles":["formatStops"],"fullName":"formatStops separates consecutive stops with arrow separators","status":"passed","title":"separates consecutive stops with arrow separators","duration":0.14446000000000936,"failureMessages":[],"meta":{}},{"ancestorTitles":["formatStops"],"fullName":"formatStops handles empty input without throwing an error","status":"passed","title":"handles empty input without throwing an error","duration":0.44670999999999594,"failureMessages":[],"meta":{}},{"ancestorTitles":["formatStops"],"fullName":"formatStops returns empty string for empty input","status":"passed","title":"returns empty string for empty input","duration":0.11702999999999975,"failureMessages":[],"meta":{}}],"startTime":1787946951966,"endTime":1787946951967.4468,"status":"passed","message":"","name":"/home/bradleyjerome/projects/mock3/mock-b/src/schedule.test.ts"}]}

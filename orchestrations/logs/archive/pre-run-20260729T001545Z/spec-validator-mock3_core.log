@@ -1,0 +1,31 @@
+{
+  "agent": "spec-validator",
+  "phase": "mock3_core",
+  "stories": [{
+    "storyId": "SPAN-1",
+    "title": "Change the greeting from hello world to hello dolly in every affected codeline",
+    "criteria": [
+      {
+        "text": "Calling getGreeting() produces the exact string 'hello dolly'",
+        "status": "met",
+        "evidence": "src/hello.ts shows `return 'hello dolly';` — the function returns the exact required string.",
+        "gaps": ""
+      },
+      {
+        "text": "Running vitest on the existing test file results in all tests passing",
+        "status": "met",
+        "evidence": "Test oracle: numTotal=1, numPassed=1, numFailed=0, numSkipped=0. The single test asserts `expect(getGreeting()).toBe('hello dolly')` and passes.",
+        "gaps": ""
+      },
+      {
+        "text": "Running tsc --noEmit exits with code 0",
+        "status": "untestable",
+        "evidence": "No tsc output was injected. The changed code is trivially valid TypeScript (a function returning a string literal matching its declared return type), so failure is implausible, but no hard evidence is available.",
+        "gaps": "No tsc execution result in injected evidence"
+      }
+    ],
+    "overallCompliance": 100,
+    "verdict": "pass"
+  }],
+  "overallVerdict": "pass"
+}

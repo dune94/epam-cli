@@ -1,0 +1,47 @@
+The plan for SKY-003-b is complete and saved at `orchestrations/plans/SKY-003-b-plan.md`. Here's a summary:
+
+---
+
+## Plan Summary — SKY-003-b: Flight Result Table Renderer
+
+### 1. Implementation Steps (5 steps)
+
+| Step | Target File | Action |
+|------|-------------|--------|
+| 1 | `/tmp/skyscanner-app/src/table.ts` | Create pure `renderTable(flights: Flight[], currency?: string): string` — column widths, header, separator, alignment, currency fallback, empty-array guard |
+| 2 | `/tmp/skyscanner-app/src/table.test.ts` | 6 unit tests: multi-row, single-row, empty array, currency fallback (omitted + empty), explicit currency |
+| 3 | `/tmp/skyscanner-app/src/cli.ts` | Wire `renderTable` into CLI; add error-rejection handler (stderr + exit 1) |
+| 4 | `/tmp/skyscanner-app/src/cli.test.ts` | 2 integration tests: rejection path, happy-path with table output |
+| 5 | Project root | `tsc --noEmit` + `vitest run` verification |
+
+### 2. Dependency Validation
+
+| Dep | Satisfied? | Reason |
+|-----|-----------|--------|
+| SKY-001 (Scaffold) | ❌ **No** | Status: pending. `/tmp/skyscanner-app` does not exist. **Blocking.** |
+| SKY-002 (API Client) | ✅ Yes | Completed. Exports `FlightResult` interface from `src/skyscanner/client.ts`. |
+| SKY-003a (CLI parsing) | ✅ Yes | Completed. `src/cli.ts` has flag parsing, env guard, client wiring. |
+
+### 3. Risk Register (Top 3)
+
+1. **SKY-001 scaffold missing** (High/Critical) — `/tmp/skyscanner-app` doesn't exist. Mitigation: Block start until SKY-001 completes; pre-flight check `test -d /tmp/skyscanner-app`.
+2. **AC-10 scope leak** (Medium/Medium) — "searchFlights rejection → stderr + exit 1" is CLI behavior, not table.ts. Mitigation: Implement in `cli.ts` (Step 3), keep `table.ts` pure.
+3. **Flight type import mismatch** (Low/Medium) — SKY-002 exports `FlightResult`, AC references `Flight[]`. Mitigation: Verify export name, use type alias if needed.
+
+### 4. Test Plan
+
+- **8 new tests**: 6 in `table.test.ts` (pure function, no mocks) + 2 in `cli.test.ts` (mocked SkyscannerClient)
+- **Regression scope**: All existing SKY-003a CLI tests must still pass; SKY-002 client unchanged; `tsc --noEmit` clean
+
+### 5. Acceptance Criteria Mapping
+
+All 11 ACs mapped to implementation steps — AC-1 through AC-8 → Step 1 (table.ts); AC-9, AC-10 → Step 3 (cli.ts wiring); AC-11 → Steps 2+4 (tests).
+
+### 6. Cost/Effort Forecast
+
+**15 hours — confirmed, no adjustment needed.** Breakdown: table.ts (~4h), table.test.ts (~3h), cli.ts wiring (~2h), cli.test.ts additions (~2h), verification (~2h), buffer (~2h).
+
+---
+
+The agent message has been atomically appended to `agent-messages.jsonl`.
+

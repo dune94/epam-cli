@@ -1,0 +1,83 @@
+# Prompt
+You are the PRD change reviewer for the epam-cli orchestration pipeline. You are called after EVERY automated write to prd.json (AC patches, TC patches) or profiles.json (skill notes, profile addenda). Your only job is to validate the change just made and emit a structured verdict.
+
+You receive: (1) the BEFORE state of the relevant story/profile section, (2) the AFTER state, (3) the change type (ac_patch|tc_patch|skill_note|profile_addendum).
+
+For AC patches — reject if:
+- New AC text is vague (no measurable criterion: 'works correctly', 'handles errors', etc.)
+- New AC contradicts an existing AC in the same story
+- New AC duplicates an existing AC verbatim
+- AC list now exceeds 12 items (split the story instead)
+- AC text contains implementation instructions (HOW to implement, not WHAT to verify)
+
+For TC patches — reject if:
+- TC fact makes a claim that cannot be verified by reading source code
+- TC fact contradicts another TC fact in the same story
+- mockStrategy references a module path that does not exist in technicalNotes.files
+- bannedPatterns entry would ban a pattern that MUST appear (e.g. banning 'describe' in a test file)
+- TC fact is identical to an existing AC (duplication — facts must add information beyond ACs)
+
+For skill notes — reject if:
+- Skill note is longer than 200 characters
+- Skill note is not a concrete do/don't instruction (must start with 'Do', 'Never', 'Always', or similar imperative)
+- Skill note duplicates an existing [Self-Heal] line in the same profile
+- Skill note references a specific story ID (must be generalizable)
+
+For profile addenda — reject if:
+- Addition exceeds 500 characters
+- Addition introduces a technology this project does not already use (judge from the manifests, config and source actually present in THIS codeline — never from a fixed list of technologies)
+- Addition contradicts an existing instruction in the same profile
+
+Output ONLY a single compact JSON: {"verdict":"pass|fail","issues":["<issue1>","<issue2>"],"reason":"<15 words max>"}
+
+CRITICAL output constraint: a "fail" verdict MUST include at least one specific, actionable string in the issues array that names exactly what rule was violated and what the text must change to satisfy it. Emitting {"verdict":"fail","issues":[]} is invalid — an empty issues array gives the summarizer nothing to fix, making every rejection irreversible. If you cannot articulate a specific violation, output "pass" instead.
+
+For model_assignment changes (from prd-model-coordinator) — reject if:
+- A story's PRE-EXISTING model, aiProvider, or reasoningEffort value was changed or removed (coordinator must only fill gaps, never overwrite)
+- A split child's assigned model/aiProvider does not match its parent's (createdFrom) values, when the parent has explicit values
+- Any field other than model, aiProvider, or reasoningEffort was modified on any story
+
+For spec_pass changes (from the specification pass — openspec/speckit rewriting acceptanceCriteria, description, title, or creating split children) — reject if:
+- Any AC in the AFTER state is vague or unmeasurable ("works correctly", "handles errors properly", "is well-tested")
+- The description no longer matches what the story VERIFIES (contradiction between description and the verification set)
+- verificationCriteria is empty while the description names concrete testable behaviour (this is the real "said nothing" failure)
+
+acceptanceCriteria under the VC model: ACs are IMMUTABLE and are NOT the spec pass's output. They come from upstream and are frequently ABSENT there, so an empty acceptanceCriteria array is a NORMAL, VALID state and is NEVER on its own a reason to reject. The spec pass is explicitly forbidden from writing them — its AC edits are redacted before you see them. Verification is captured in verificationCriteria, so judge the description against THAT. Rejecting because ACs are empty asks the spec pass for the one thing it is not permitted to produce, and the story can never satisfy you.
+- Any AC contains implementation instructions (HOW to implement, not WHAT to verify)
+- The title is generic or uninformative (does not name what the story concretely delivers)
+- Any AC is duplicated verbatim within the same story
+
+For cpa_estimate changes (from the CPA pre-pass writing estimatedAiMinutes/estimatedCost/estimatedTokens/estimatedTurns/estimatedHours/effort/cpaConfidence/cpaGate) — reject if:
+- effort is not one of: low, medium, high
+- cpaGate is not one of: pass, review, block
+- Any numeric estimate (cost, tokens, turns, hours, minutes) is negative or zero when the story clearly requires work
+- cpaConfidence is outside the 0-1 range
+
+For profile_creation changes (from the pre-phase skill assessment agent creating a brand-new agent profile key in profiles.json) — reject if:
+- The new profile does not instruct the agent on its file-writing scope (which files it may create/modify)
+- The new profile introduces a technology this project does not already use (judge from the manifests, config and source actually present in THIS codeline — never from a fixed list of technologies)
+- A test-engineer-role profile does not explicitly forbid writing implementation files
+- The new profile duplicates an existing profile's role (same responsibilities already covered by another key)
+
+For tool_creation changes (from the failure analyst, target=tool — synthesizing a small shell helper script to automate a repeated mechanical step) — reject if:
+- The recipe is not idempotent (would fail or cause damage if run twice)
+- The recipe does anything beyond the stated purpose (e.g. modifying files unrelated to the mechanical step described)
+- The recipe deletes files, force-pushes git, or modifies anything outside the project's own working directory
+- The purpose describes a knowledge/judgment problem rather than a pure mechanical step (that belongs in a KB entry or skill note, not a tool)
+- The script has no shebang or does not set `-e` (silent partial failure)
+
+STORY: AMSD-2041
+CHANGE TYPE: spec_pass
+
+BEFORE:
+{"acceptanceCriteria":[],"description":"Original Requirements (discovery)  AS a Content Author, I WANT to preview draft entries in CMS, SO THAT I can see how content will be shown on the website\nability to preview draft entries in CMS\nNotes& Assumptions  Limitation: Might not be possible to preview protected pages and content.\nOriginal Total Estimate:  8  Original FE Estimate:  8  Original DAM Estimate:  0  Original BE Estimate:  0","title":"[GO, UP, MX] Live Preview of Content in CMS","technicalNotes":null,"verificationCriteria":[]}
+
+AFTER:
+{"acceptanceCriteria":[],"description":"Original Requirements (discovery)  AS a Content Author, I WANT to preview draft entries in CMS, SO THAT I can see how content will be shown on the website\nability to preview draft entries in CMS\nNotes& Assumptions  Limitation: Might not be possible to preview protected pages and content.\nOriginal Total Estimate:  8  Original FE Estimate:  8  Original DAM Estimate:  0  Original BE Estimate:  0","title":"[GO, UP, MX] Live Preview of Content in CMS","technicalNotes":{"files":["src/services/contentstack.ts","src/pages/_app.tsx","src/interface/content/page.ts","src/components/contentstack/ContentstackAttention/content.mock.ts","src/components/contentstack/ContentStackGallery/ContentStackGallery.mock.ts"],"perCodeline":{"gotransit":{"files":["src/services/contentstack.ts","src/pages/_app.tsx","src/interface/content/page.ts","src/components/contentstack/ContentStackGallery/ContentStackGallery.mock.ts"],"resolved":[{"declared":"src/services/contentstack.ts","actual":"src/services/contentstack.ts","match":"exact","verified_against":"/home/bradleyjerome/projects/metrolinx/next.gotransit.com"},{"declared":"src/pages/_app.tsx","actual":"src/pages/_app.tsx","match":"exact","verified_against":"/home/bradleyjerome/projects/metrolinx/next.gotransit.com"},{"declared":"src/interface/content/page.ts","actual":"src/interface/content/page.ts","match":"exact","verified_against":"/home/bradleyjerome/projects/metrolinx/next.gotransit.com"},{"declared":"src/components/contentstack/ContentStackGallery/ContentStackGallery.mock.ts","actual":"src/components/contentstack/ContentStackGallery/ContentStackGallery.mock.ts","match":"exact","verified_against":"/home/bradleyjerome/projects/metrolinx/next.gotransit.com"}],"unresolved":[{"declared":"src/components/contentstack/ContentstackAttention/content.mock.ts","candidates_checked":["src/components/contentstack/ContentstackAttention/content.mock.ts"],"reason":"directory 'src/components/contentstack/ContentstackAttention' does not exist in this codeline"}]},"upexpress":{"files":["src/services/contentstack.ts","src/pages/_app.tsx","src/interface/content/page.ts","src/components/contentstack/ContentStackGallery/ContentStackGallery.mock.ts"],"resolved":[{"declared":"src/services/contentstack.ts","actual":"src/services/contentstack.ts","match":"exact","verified_against":"/home/bradleyjerome/projects/metrolinx/next.upexpress.com"},{"declared":"src/pages/_app.tsx","actual":"src/pages/_app.tsx","match":"exact","verified_against":"/home/bradleyjerome/projects/metrolinx/next.upexpress.com"},{"declared":"src/interface/content/page.ts","actual":"src/interface/content/page.ts","match":"exact","verified_against":"/home/bradleyjerome/projects/metrolinx/next.upexpress.com"},{"declared":"src/components/contentstack/ContentStackGallery/ContentStackGallery.mock.ts","actual":"src/components/contentstack/ContentStackGallery/ContentStackGallery.mock.ts","match":"exact","verified_against":"/home/bradleyjerome/projects/metrolinx/next.upexpress.com"}],"unresolved":[{"declared":"src/components/contentstack/ContentstackAttention/content.mock.ts","candidates_checked":["src/components/contentstack/ContentstackAttention/content.mock.ts"],"reason":"directory 'src/components/contentstack/ContentstackAttention' does not exist in this codeline"}]},"metrolinx":{"files":["src/services/contentstack.ts","src/pages/_app.tsx","src/interface/content/page.ts","src/components/contentstack/ContentstackAttention/content.mock.ts","src/components/contentstack/ContentStackGallery/ContentStackGallery.mock.ts"],"resolved":[{"declared":"src/services/contentstack.ts","actual":"src/services/contentstack.ts","match":"exact","verified_against":"/home/bradleyjerome/projects/metrolinx/next.metrolinx.com"},{"declared":"src/pages/_app.tsx","actual":"src/pages/_app.tsx","match":"exact","verified_against":"/home/bradleyjerome/projects/metrolinx/next.metrolinx.com"},{"declared":"src/interface/content/page.ts","actual":"src/interface/content/page.ts","match":"exact","verified_against":"/home/bradleyjerome/projects/metrolinx/next.metrolinx.com"},{"declared":"src/components/contentstack/ContentstackAttention/content.mock.ts","actual":"src/components/contentstack/ContentstackAttention/content.mock.ts","match":"exact","verified_against":"/home/bradleyjerome/projects/metrolinx/next.metrolinx.com"},{"declared":"src/components/contentstack/ContentStackGallery/ContentStackGallery.mock.ts","actual":"src/components/contentstack/ContentStackGallery/ContentStackGallery.mock.ts","match":"exact","verified_against":"/home/bradleyjerome/projects/metrolinx/next.metrolinx.com"}],"unresolved":[]}}},"verificationCriteria":["When a Contentstack Live Preview session is active for an entry, the rendered page displays the draft version of that entry's content.","When a draft entry's field value is modified while live preview is active, the page displays the updated draft content without a full browser page reload.","The page loads without Contentstack authentication or connection errors when the live preview capability is enabled.","When live preview is active for a draft entry that contains field values not yet published, the page displays those unpublished field values.","When live preview is not active, the page renders published entry content with all fields present and correctly displayed."]}
+
+You have read-only tools available (list/search/read files, run read-only shell commands). Several of your rejection rules ("introduces a technology this project does not already use," "TC fact cannot be verified by reading source code") require checking a claim against the real manifests/config/source of THIS codeline — do not judge those from the before/after snapshots alone. Verify before rejecting on that basis. Your tool budget is small — check the ONE fact your verdict depends on, not the whole codebase.
+
+Emit ONLY: {"verdict":"pass|fail","issues":["<issue1>"],"reason":"<15 words max>"}
+
+# Output
+{"verdict":"pass","issues":[],"reason":"Valid spec pass change with testable criteria"}

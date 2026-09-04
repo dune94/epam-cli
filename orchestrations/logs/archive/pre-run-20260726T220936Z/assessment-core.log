@@ -1,0 +1,19 @@
+Assessment complete. Here's a summary of what was done:
+
+**Data Analysis:**
+- Filtered `phase-cost.jsonl` for `phase_id="core"` → found 2 records for MOCK-HW-1 (deduplicated to latest `started_at` = `2026-07-26T17:51:40`)
+- PRD confirms `completed: true` for MOCK-HW-1
+- Orchestration overhead entries (spec-pass, team-lead, qa-gates) have no `forecast_hours` — excluded from story-level variance
+
+**Results:**
+| Metric | Actual | Forecast | Variance |
+|--------|--------|----------|----------|
+| Time | 0.21 min | 2.256 min | −2.046 (90.7% under) |
+| Cost | $0.0031 | $0.0351 | −$0.032 (91.2% under) |
+
+**Outputs written:**
+1. ✅ `phase-skill-assessments.jsonl` — appended single-line JSON assessment (with `flock`)
+2. ✅ `phase-improvements/core.md` — human-readable improvement report
+3. ✅ **No corrective role reassignments** — MOCK-HW-1's `typescript-engineer` role correctly matches the TypeScript task, and no pending future-phase stories exist to reassign
+
+**Conclusion:** No improvements needed.

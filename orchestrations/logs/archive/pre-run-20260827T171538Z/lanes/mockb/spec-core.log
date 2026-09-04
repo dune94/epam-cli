@@ -1,0 +1,11 @@
+spec-mode: fast-path claude/claude-sonnet-5 (skipping MiniMax)
+spec-mode: detective for mockb = mockb-schedule-investigator (minted for this codeline)
+spec-mode: fast-path claude/claude-sonnet-5 (skipping MiniMax)
+spec-mode: fast-path claude/claude-sonnet-5 (skipping MiniMax)
+spec-mode: fast-path claude/claude-sonnet-5 (skipping MiniMax)
+spec-mode: MOCK3-2 — 4 verification criteria persisted (source: both, resolution: regenerated)
+spec-mode-runner failed: Error: [engine-prompt] 'prd-change-reviewer-spec' was given EMPTY values for: __SPLIT_NOTE__. An empty payload renders as a blank section and the agent answers about silence. Supply it, or declare the placeholder in the template's `mayBeEmpty` if absent is a real state for it.
+    at renderEngineTemplate (/home/bradleyjerome/projects/ai/epam-cli/orchestrations/scripts/lib/engine-prompt.js:303:11)
+    at reviewPrdChange (/home/bradleyjerome/projects/ai/epam-cli/orchestrations/scripts/spec-mode-runner.js:9267:18)
+    at run (/home/bradleyjerome/projects/ai/epam-cli/orchestrations/scripts/spec-mode-runner.js:1851:34)
+    at process.processTicksAndRejections (node:internal/process/task_queues:95:5)

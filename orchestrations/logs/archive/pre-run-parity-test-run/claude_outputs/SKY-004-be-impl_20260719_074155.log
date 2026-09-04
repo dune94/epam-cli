@@ -1,0 +1,148 @@
+=== Prompt for SKY-004-be-impl (attempt 1) ===
+CRITICAL — WRITE FILES FIRST. Your FIRST tool call MUST be WriteFile.
+Do NOT output any text before calling WriteFile. Do NOT plan or say "I will...".
+Call WriteFile NOW for the EXACT ABSOLUTE PATHS listed below:
+
+   - WRITE /home/bradleyjerome/projects/skyscanner-app/src/server.ts first, before any other action
+---
+
+Implement user story SKY-004-be-impl: Implement Express REST API server with /health, /search, /cheapest, and static dashboard route
+
+## Story Description
+Create src/server.ts — an Express HTTP server exposing GET /health, GET /search, GET /cheapest, and GET / (static HTML). Implements RAPIDAPI_KEY gating, guarded listen(), env-based config, and correct static asset path resolution for both dev and built modes. Build script must copy src/public/ to dist/public/.
+
+## Acceptance Criteria
+- Express app exports `app` without calling `listen()`; listen() is guarded so importing app in tests does not bind a port
+- GET /health returns 200 with JSON { status: 'ok', uptime: <number> }
+- GET /search with query params from, to, date, adults calls SkyscannerClient.search and returns 200 with { flights: FlightResult[], count: number, searchedAt: string }
+- GET /cheapest with query params from, to, date returns 200 with the single cheapest FlightResult by price; returns 404 with { error: string } when no flights found
+- When RAPIDAPI_KEY is absent at startup, /search and /cheapest return 503 with { error: 'RAPIDAPI_KEY not configured' }; /health and / are never gated regardless of key presence
+- GET / reads and serves src/public/index.html via fs.readFileSync (not a hardcoded inline string); file path resolves correctly under both tsx src/server.ts and node dist/server.js
+- Server reads PORT from env (default 3000) and RAPIDAPI_KEY from env, passing RAPIDAPI_KEY to SkyscannerClient constructor
+- Build script copies src/public/ to dist/public/; package.json contains 'start' script pointing to 'node dist/server.js'
+
+
+
+
+
+## Technical Notes
+- files: ["/home/bradleyjerome/projects/skyscanner-app/src/server.ts"]
+- dependsOn: ["SKY-002"]
+
+## Files to Create/Modify (EXACT ABSOLUTE PATHS — write to these paths exactly)
+/home/bradleyjerome/projects/skyscanner-app/src/server.ts
+
+## Dependencies
+SKY-002
+
+
+## Instructions
+**CRITICAL — WRITE FILES FIRST:**
+   - WRITE /home/bradleyjerome/projects/skyscanner-app/src/server.ts first, before any other action
+**You MUST write every file listed above to its EXACT absolute path. Do NOT write to a different path, do NOT write to the current directory unless it matches the path above. Use your WriteFile or Edit tools with the full absolute path shown.**
+
+1. Write each required file to its exact absolute path listed above — do this FIRST before anything else
+2. Implement all acceptance criteria for this story
+3. Follow the project's existing code patterns and conventions
+4. Do NOT create tests unless explicitly required in acceptance criteria
+
+After implementation, provide a brief summary of what was created/modified.
+
+## Relevant Knowledge Base Entries
+The following was learned from previous story implementations and is relevant to your agent role. Apply this knowledge before writing any code:
+
+- [2026-07-06T17:45:30Z] Always resolve mocked fetch calls to a Response-shaped object with ok, status, statusText, and a json method returning a Promise.
+- [2026-07-06T17:50:20Z] Use valid module and moduleResolution pairs in tsconfig.json: CommonJS with Node, Node16 with Node16, ESNext with Bundler. Use CommonJS and Node for the stack. Mismatched pairs cause build errors.
+- [2026-07-06T18:11:26Z] Use vi.fn().mockResolvedValue(value) to make a mock return a resolved Promise.
+- [2026-07-06T20:31:11Z] Use `test: { passWithNoTests: true }` in vitest.config.ts or create a stub test file when no *.test.ts files exist.
+- [2026-07-06T20:33:03Z] Enable globals:true in vitest.config.ts so describe, it, and expect work without imports, reducing boilerplate in test files.
+- [2026-07-06T23:47:34Z] Use CommonJS-compatible patterns in src/server.ts: avoid `import.meta.url` and top-level `await`; gate listen with `if (require.main === module)`.
+- [2026-07-07T02:35:30Z] Always include a non-test source file in src/ alongside any src/*.test.ts file, since tsconfig.json excludes test files from tsc --noEmit.
+- [2026-07-07T19:01:34Z] Only modify or create files explicitly listed in the story's acceptance criteria. Do not touch files belonging to other stories or outside the current task scope.
+- [2026-07-07T20:17:57Z] [unreviewed-fallback] Avoid using deprecated TypeScript compiler options like 'moduleResolution=node10'; use 'moduleResolution=node' instead.
+- [2026-07-17T20:20:58Z] Always: Before importing a module or referencing a type/property, always read the actual source file to verify the export exists, its exact path, its properties, and its constructor/factory signatures
+
+## Knowledge Base Contribution (do this LAST — after writing all implementation files)
+Your assigned KB entry ID for this run: **KB-001**
+
+IMPORTANT: Write ALL implementation files first. Only AFTER writing every required file should you optionally append a KB entry.
+Do NOT read orchestrations/agents/KB.md before writing implementation files. The relevant KB entries are already injected above.
+
+If (and only if) you discover a non-obvious pattern during implementation, append one entry to `orchestrations/agents/KB.md`:
+
+```markdown
+## KB-001 -- 2026-07-19
+
+**Category:** <backend|frontend|infrastructure|testing|orchestration>
+**AgentRole:** <your agentRole from the story>
+**Tags:** <comma-separated tech keywords, e.g. typescript, node, cli>
+**Trigger:** <retry|first-success>
+**StoryRef:** SKY-004-be-impl
+
+<One concise paragraph: the specific pattern, gotcha, or anti-pattern.>
+```
+
+Only write an entry if the knowledge is genuinely non-obvious. Skip trivial observations.
+
+## Execution Plan
+Follow this plan step by step:
+1. Read SkyscannerClient source, FlightResult type definition, package.json, and src/public/index.html to understand the search() method signature, return types, existing dependencies, and static file location.
+2. Write /home/bradleyjerome/projects/skyscanner-app/src/server.ts: import express, fs, path, SkyscannerClient, and FlightResult; create and export `const app = express()`; add `express.json()` middleware; read RAPIDAPI_KEY from process.env and instantiate `new SkyscannerClient(RAPIDAPI_KEY)`.
+3. In server.ts, implement key-gating middleware applied only to /search and /cheapest: if RAPIDAPI_KEY is falsy at startup, return 503 `{ error: 'RAPIDAPI_KEY not configured' }`; /health and / must never be gated.
+4. In server.ts, implement GET /health → 200 `{ status: 'ok', uptime: process.uptime() }` and GET / → read and serve `src/public/index.html` via `fs.readFileSync` using `path.join(__dirname, 'public', 'index.html')` so it resolves under both tsx (src/public) and node (dist/public).
+5. In server.ts, implement GET /search: extract from, to, date, adults from req.query; call `client.search({ from, to, date, adults })`; return 200 `{ flights: FlightResult[], count: flights.length, searchedAt: new Date().toISOString() }`.
+6. In server.ts, implement GET /cheapest: extract from, to, date from req.query; call `client.search()`; if results empty return 404 `{ error: 'No flights found' }`; otherwise return 200 with the single cheapest FlightResult by price.
+7. In server.ts, guard `app.listen()` behind `if (require.main === module)` reading PORT from process.env (default 3000); ensure `export const app` is at module scope so importing in tests never binds a port.
+8. Verify package.json contains `"start": "node dist/server.js"` and a build script that copies src/public/ to dist/public/; run tests confirming /health, /search, /cheapest, /, and 503 key-gating behavior.
+=== End Prompt ===
+
+=== epam Output (attempt 1) ===
+## Summary
+
+**Created:** `/home/bradleyjerome/projects/skyscanner-app/src/server.ts`
+
+**Implementation details:**
+- Exports `app = express()` at module scope so tests can import without binding a port
+- `listen()` is guarded by `if (require.main === module)` (per the project's CommonJS module setup)
+- `GET /health` → `200 { status: 'ok', uptime: process.uptime() }`, never gated
+- `GET /` → serves `src/public/index.html` via `fs.readFileSync`, path resolved as `path.resolve(__dirname, 'public', 'index.html')` so it works under both `tsx src/server.ts` (`__dirname` is `src/`) and `node dist/server.js` (`__dirname` is `dist/`); never gated
+- `GET /search` → calls `SkyscannerClient.searchFlights()`, returns `{ flights, count, searchedAt }`
+- `GET /cheapest` → returns single cheapest `FlightResult` by price, `404 { error: 'No flights found' }` when empty
+- `requireRapidApiKey` middleware applied only to `/search` and `/cheapest`; returns `503 { error: 'RAPIDAPI_KEY not configured' }` when `RAPIDAPI_KEY` is absent
+- Reads `PORT` from env (default 3000); constructs `new SkyscannerClient()` which reads `RAPIDAPI_KEY` from env internally
+
+**Pre-existing infrastructure verified:**
+- `package.json` already contains `"start": "node dist/server.js"`
+- `scripts/copy-public.js` already copies `src/public/` → `dist/public/`
+
+**Verification:** `npx tsc --noEmit` passes cleanly.
+
+**Note:** The story spec referenced `client.search()`, but the actual `SkyscannerClient` exports `searchFlights()` — used the real method name per the KB guidance to verify exports before importing.
+
+**KB entry appended:** Documented the CJS main-module guard pattern and `__dirname`-based static path resolution for Express servers in this codebase.
+  [tc-writer] No test stories need TCs in phase 'unknown' — skipping
+## Summary
+
+**Created:** `/home/bradleyjerome/projects/skyscanner-app/src/server.ts`
+
+**Implementation details:**
+- Exports `app = express()` at module scope so tests can import without binding a port
+- `listen()` is guarded by `if (require.main === module)` (per the project's CommonJS module setup)
+- `GET /health` → `200 { status: 'ok', uptime: process.uptime() }`, never gated
+- `GET /` → serves `src/public/index.html` via `fs.readFileSync`, path resolved as `path.resolve(__dirname, 'public', 'index.html')` so it works under both `tsx src/server.ts` (`__dirname` is `src/`) and `node dist/server.js` (`__dirname` is `dist/`); never gated
+- `GET /search` → calls `SkyscannerClient.searchFlights()`, returns `{ flights, count, searchedAt }`
+- `GET /cheapest` → returns single cheapest `FlightResult` by price, `404 { error: 'No flights found' }` when empty
+- `requireRapidApiKey` middleware applied only to `/search` and `/cheapest`; returns `503 { error: 'RAPIDAPI_KEY not configured' }` when `RAPIDAPI_KEY` is absent
+- Reads `PORT` from env (default 3000); constructs `new SkyscannerClient()` which reads `RAPIDAPI_KEY` from env internally
+
+**Pre-existing infrastructure verified:**
+- `package.json` already contains `"start": "node dist/server.js"`
+- `scripts/copy-public.js` already copies `src/public/` → `dist/public/`
+
+**Verification:** `npx tsc --noEmit` passes cleanly.
+
+**Note:** The story spec referenced `client.search()`, but the actual `SkyscannerClient` exports `searchFlights()` — used the real method name per the KB guidance to verify exports before importing.
+
+**KB entry appended:** Documented the CJS main-module guard pattern and `__dirname`-based static path resolution for Express servers in this codebase.
+
+=== End epam Output ===

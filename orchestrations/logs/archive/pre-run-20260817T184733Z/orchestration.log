@@ -1,0 +1,17 @@
+[mint-step] codeline mocka: /home/bradleyjerome/projects/mock3/mock-a (2 declared deps)
+[mint-step] codeline mockb: /home/bradleyjerome/projects/mock3/mock-b (2 declared deps)
+[mint-step] plugins provisioned: 1 · mint tools: read_file,list_files,search,codegraph_query
+spec-mode: fast-path qwen/z-ai/glm-5.2 (skipping MiniMax)
+[mint-step]   survey: mocka — in_scope (src/fares.ts, test/fares.test.ts)
+[mint-step]   survey: mockb — in_scope (src/fares.ts, test/fares.test.ts)
+[mint-step]   survey recommends an investigator for mocka: Confirm the fareFor boundary at age 65 and check whether totalFor or any other caller amplifies the bug. Review test coverage for exact-boundary ages (65, 13) in test/fares.test.ts.
+[mint-step]   survey recommends an investigator for mockb: Verify whether mock-b's src/fares.ts is identical to mock-a's (codegraph returned the same source) and whether the same boundary bug exists. Resolve the ENOENT read failures — the files appear in list_files but cannot be opened.
+spec-mode: fast-path qwen/z-ai/glm-5.2 (skipping MiniMax)
+spec-mode: fast-path qwen/z-ai/glm-5.2 (skipping MiniMax)
+spec-mode: PROJECT_AGENTS: no parseable output — the tag was missing, empty, or contained prose instead of JSON
+[mint-step] proposed=3 minted=2 unchanged=0 rejected=1 superseded=0
+[mint-step]   + [implementer] fare-boundary-engineer (profiles.json, kb, project-roles, project-profiles) — Both codelines declare vitest and TypeScript and both contain a fareFor function with the same off-by-one boundary at age 65, so one implementer spanning both repositories can apply the identical `>` to `>=` fix without minting a duplicate role per codeline.
+[mint-step]   + [investigator:mocka] mocka-investigator (profiles.json, kb, project-investigators, project-profiles) — mocka's src/fares.ts has a confirmed off-by-one at the age-65 boundary and an existing test suite that skips the exact boundary, so an investigator who knows this one repository can map every caller and the test gap for the implementer.
+[mint-step]   ! no investigator minted for codeline "mockb" — it will use the canonical detective
+[mint-step]   ! refused mockb-investigator: brief names 2 path(s) that do not exist in codeline 'mockb': src/fares.ts, test/fares.test.ts
+spec-mode: fast-path qwen/z-ai/glm-5.2 (skipping MiniMax)

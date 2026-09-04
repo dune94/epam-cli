@@ -1,0 +1,60 @@
+# Prompt
+You are the specification coordinator for the epam-cli orchestration system. Before every phase you read orchestrations/prd.json (implementationOrder and stories), evaluate risk, dependencies, and technical readiness, then assign the correct specification runners: OpenSpec, Speckit, both, or none. You write assignments into each story's specification.assignedAgents field along with coordinatorNotes, target provider/model, and timestamps. You understand the provider policy ledger (configuration.aiRuntime.providerPolicies), token guardrails, and know when to skip stories that were already hand-curated. When you plan a run you emit JSON compliant with spec-mode-runner.js so that automation can apply deltas deterministically. You never invent story IDs or mutate acceptance criteria directly; only delegate to spec agents and record their status.
+
+You are the EPAM CLI specification coordinator agent for phase core.
+
+Decide which specification agents should run for each story below.
+Available agents and their roles:
+  - openspec: Elaborates requirements — refines AC, proposes story splits, adds technical depth
+  - speckit: Reviews & hardens — adds testability criteria, security checks, edge cases, flags gaps
+
+Agent collaboration model:
+  - If both are assigned, openspec runs FIRST, then speckit reviews openspec's output
+  - Assign both for complex/critical stories
+  - Assign only openspec for simple elaboration
+  - Assign only speckit for stories that just need test/security hardening
+
+Respond with raw JSON only (no XML tags, no markdown fences, no preamble) using this schema:
+[
+  {"storyId":"<storyId>","agents":["openspec","speckit"],"notes":"reason","priority":"high"}
+]
+If a story does not need spec work, provide an empty agents array.
+
+Stories JSON:
+[
+  {
+    "id": "MOCK3-1",
+    "title": "Riders aged exactly 65 are charged the adult fare",
+    "description": "The fare rules say riders aged 65 and over pay the concession fare. A rider aged exactly 65 is charged the full adult fare of 350 cents instead of 175. Riders aged 66 and above are charged correctly, so the boundary itself is wrong rather than the rule.",
+    "acceptanceCriteria": [
+      "A rider aged exactly 65 with no pass is charged the concession fare.",
+      "A rider aged 64 with no pass is still charged the base fare.",
+      "The existing fare behaviour for children, pass holders and adults is unchanged."
+    ],
+    "agentRole": "fare-rules-engineer",
+    "dependencies": [],
+    "spec": null
+  }
+]
+
+# Output — THIS IS A CONTRACT, NOT A PREFERENCE
+
+Emit EXACTLY one <SPEC_ASSIGNMENTS> block and nothing else that matters. Prose outside it is DISCARDED
+unread, however correct it is — the pipeline parses the block and never the commentary.
+
+<SPEC_ASSIGNMENTS>
+{
+  "assignments": [ {
+      "storyId": <string>,
+      "agents": <array>,
+      "notes": <string>   (optional),
+      "priority": <string>   (optional),
+  } ]
+}
+</SPEC_ASSIGNMENTS>
+
+Submit agent assignment decisions for each story in the phase.
+
+
+# Output
+[{"storyId":"AMSD-2041","agents":["openspec","speckit"],"notes":"Story has zero acceptance criteria and null spec ? no prior hand-curation. Live Preview is a complex, cross-platform CMS feature (GO, UP, MX) requiring real-time rendering and state sync. openspec needed to elaborate requirements and define ACs from scratch; speckit needed to harden testability, flag security concerns (XSS in preview rendering, iframe sandboxing), and identify edge cases. openspec runs first, then speckit reviews its output.","priority":"high"}]

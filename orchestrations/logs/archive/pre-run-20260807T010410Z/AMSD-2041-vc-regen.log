@@ -1,0 +1,34 @@
+# Prompt
+Regenerate the VERIFICATION CRITERIA for this brownfield story. Your previous verification criteria were FLAGGED and must be fixed:
+- Internal helper function in src/services/contentstack.ts per code evidence; referencing it in a verification criterion describes an internal code path, not the rendered surface.: "Given the Contentstack client is mocked, when getEntry, getSingleEntry, or findS"
+- VC 1 references internal Stack options object and prescribes SDK initialization mechanism — restate as observable rendered output
+- VC 2 cross-compares draft vs published content ('rather than') and prescribes query-parameter mechanism — restate as draft content is visible on the rendered page
+- VC 3 cross-compares to 'before this change' — restate as published content renders correctly on its own
+- VC 4 references internal SDK query/API request and prescribes specific function calls — entirely internal, restate as observable page output
+- VC 5 cross-compares to published version and asserts draft is 'not surfaced' — restate as protected page shows access-restricted indication or published content on its own
+- VC 6 prescribes environment-variable mechanism and cross-compares to production behavior — restate as non-preview pages render published content correctly
+
+THE FIX SITE (located by the code-graph detective — anchor every criterion to the behaviour THIS code produces):
+- src/services/contentstack.ts :: options — Primary attachment point: this is where the Contentstack SDK Stack is configured and initialized. Live Preview requires adding live_preview config to the options object passed to contentstack.Stack(), and the getEntry/getSingleEntry/getSingletonEntry functions here must accept and forward preview/draft query parameters. All 147+ components consume content via useContent → ContentstackContext, which is populated by data fetched through these functions.
+Do NOT write criteria about areas unrelated to this code.
+
+
+Acceptance criteria (IMMUTABLE — the intent to verify; do NOT restate as-is, VERIFY them):
+- (none)
+Description: Original Requirements (discovery)  AS a Content Author, I WANT to preview draft entries in CMS, SO THAT I can see how content will be shown on the website
+ability to preview draft entries in CMS
+Notes& Assumptions  Limitation: Might not be possible to preview protected pages and content.
+Original Total Estimate:  8  Original FE Estimate:  8  Original DAM Estimate:  0  Original BE Estimate:  0
+
+A verification criterion states WHAT AN END USER OR TESTER OBSERVES on the user-facing surface THE TICKET IS ABOUT — the rendered output for an output ticket, the displayed screen for a UI ticket, the response a CLIENT receives for an API ticket. It is a BLACK-BOX check on that surface. It NEVER describes HOW the value is produced.
+A verification criterion is FORBIDDEN if it:
+- prescribes HOW to implement — any algorithm, mechanism, approach, or the addition/reading of any new field, flag or service;
+- references an INTERNAL structure that merely FEEDS the ticket's surface — an intermediate payload, a data-transfer object, or a specific response field used to BUILD the output. Verify the surface the ticket names, NOT the data structure behind it;
+- makes a CROSS-COMPARISON that presumes a mechanism — never assert one value "must equal" / "matches" / "is the same as" another; that presumes a shared derivation. Assert the required value is present and correct ON ITS OWN.
+Every verification criterion must be observable, testable, and tied to the ticket's stated symptom/intent.
+
+Do NOT restate an acceptance criterion as-is — express what a tester OBSERVES that confirms it. Address every flag above.
+Output ONLY a JSON array of verification-criterion strings. No prose, no markdown.
+
+# Output
+Agent reached maximum iterations (2) without completing.

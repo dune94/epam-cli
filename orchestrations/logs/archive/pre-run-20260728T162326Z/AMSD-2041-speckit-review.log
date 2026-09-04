@@ -1,0 +1,127 @@
+# Prompt
+You are the speckit specification agent for EPAM CLI. Phase core, story AMSD-2041.
+
+You are reviewing and building on the openspec agent's output for this story.
+Your role is COLLABORATIVE — you are NOT starting from scratch. Instead:
+1. Review openspec's proposed acceptance criteria for testability and completeness
+2. Add missing edge-case, error-handling, security, and accessibility criteria
+3. Flag any AC that are vague, untestable, or overlapping
+4. Splitting is openspec's decision alone — you do NOT split stories. If openspec already split
+   this story, do NOT include a "splitStories" field in your output at all (it will be ignored if
+   you do). Review and refine the acceptanceCriteria openspec gave you for the UNSPLIT story as
+   normal; per-child refinement of an already-split story's children happens on a later turn, not
+   here.
+5. Do NOT remove or duplicate openspec's good work — build on it
+
+━━━ WHAT-NOT-HOW RULE (MANDATORY) ━━━
+Every AC must describe an OBSERVABLE OUTCOME (what a test can verify from outside the code),
+NOT an implementation instruction. If an AC names vi.mock, jest.fn, mockReturnValue,
+mockResolvedValue, import statements, or require() calls, REPLACE it with a
+Given/When/Then behaviour statement. Never tell the implementer which library or mock pattern to use.
+
+OPENSPEC'S OUTPUT (your input to review — ACs and split proposals only):
+{
+  "acceptanceCriteria": [],
+  "notes": "Story requests Live Preview integration with Contentstack CMS — a novel capability. No acceptance criteria provided; VCs derived from description alone. The primary attachment point is useContent (236 callers), the central content-resolution hook. Live Preview SDK initialization and event wiring are secondary attachment points not yet visible in the indexed code. VCs are written to the boundary: they assert what the app renders/does given known Contentstack responses, not what Contentstack's real API returns.",
+  "splitStories": []
+}
+
+ORIGINAL STORY CONTEXT:
+{
+  "id": "AMSD-2041",
+  "title": "[GO, UP, MX] Live Preview of Content in CMS",
+  "description": "[GO, UP, MX] Live Preview of Content in CMS",
+  "originalAcceptanceCriteria": [],
+  "technicalNotes": null,
+  "dependencies": []
+}
+
+Produce your refined output as raw JSON only (no XML tags, no markdown fences, no preamble). Include:
+- "acceptanceCriteria": The FULL merged list (openspec's criteria + your additions/refinements). Every item MUST be an observable outcome, not an implementation instruction.
+- "notes": What you changed and why (be specific — cite which criteria you added/modified/replaced)
+- "splitStories": ALWAYS omit this field. Splitting is openspec's decision alone — never propose
+  split children of your own, even if openspec already split this story.
+- "acAddedBySpeckit": Array of criteria YOU added that were not in openspec's output
+- "acModifiedBySpeckit": Array of {"original":"...","revised":"..."} for criteria you reworded
+- "acFlagged": Array of {"criterion":"...","flag":"..."} for criteria that need human attention
+
+
+# Output
+{
+  "acceptanceCriteria": [
+    {
+      "id": "AC-1",
+      "criterion": "Given the application is running with Live Preview enabled, When a CMS editor modifies a field value in Contentstack, Then the application renders the updated field value within the preview iframe without a full page reload."
+    },
+    {
+      "id": "AC-2",
+      "criterion": "Given the application is running with Live Preview enabled, When a CMS editor modifies multiple fields simultaneously in Contentstack, Then the application renders all updated field values in a single coherent update without intermediate partial renders."
+    },
+    {
+      "id": "AC-3",
+      "criterion": "Given the application is running with Live Preview disabled, When the application loads, Then it renders content using the standard content-resolution path with no Live Preview connection attempted and no degradation in functionality."
+    },
+    {
+      "id": "AC-4",
+      "criterion": "Given the application is running with Live Preview enabled, When the Live Preview connection is lost or times out, Then the application continues rendering the last successfully received content and displays no error to the end user."
+    },
+    {
+      "id": "AC-5",
+      "criterion": "Given the application is running with Live Preview enabled, When a Live Preview event is received with malformed or incomplete content data, Then the application continues rendering the last known good content without crashing or showing a blank state."
+    },
+    {
+      "id": "AC-6",
+      "criterion": "Given the application is running with Live Preview enabled, When a CMS editor navigates to a different entry in Contentstack, Then the application renders the content of the newly selected entry."
+    },
+    {
+      "id": "AC-7",
+      "criterion": "Given the application is running with Live Preview enabled, When multiple rapid content-change events are received in quick succession, Then the application renders only the final state without visual flickering or stale intermediate states."
+    },
+    {
+      "id": "AC-8",
+      "criterion": "Given the application is running in a production environment, When the application loads, Then Live Preview is not active and no Live Preview connection is established unless explicitly enabled via configuration."
+    },
+    {
+      "id": "AC-9",
+      "criterion": "Given the application is running with Live Preview enabled, When a CMS editor modifies a content field that does not exist in the current content type schema, Then the application ignores the unknown field and continues rendering known fields without error."
+    },
+    {
+      "id": "AC-10",
+      "criterion": "Given the application is running with Live Preview enabled, When the application initially loads, Then it renders the published content first and then overlays any Live Preview changes once the connection is established, avoiding a blank or loading state during connection setup."
+    },
+    {
+      "id": "AC-11",
+      "criterion": "Given the application is running with Live Preview enabled, When a CMS editor modifies a reference or rich-text field, Then the application renders the updated reference or rich-text content including any nested entries."
+    },
+    {
+      "id": "AC-12",
+      "criterion": "Given the application is running with Live Preview enabled, When the Live Preview connection is re-established after a disconnection, Then the application resumes rendering live updates without requiring a manual page refresh."
+    }
+  ],
+  "notes": "Openspec provided zero acceptance criteria, so all ACs are new. I created 12 criteria covering: happy-path single-field update (AC-1), multi-field simultaneous update (AC-2), disabled/fallback behavior (AC-3), connection loss resilience (AC-4), malformed event handling (AC-5), entry navigation (AC-6), rapid-update debouncing (AC-7), production security gate (AC-8), unknown-field resilience (AC-9), initial-load progressive enhancement (AC-10), reference/rich-text field support (AC-11), and reconnection recovery (AC-12). All criteria are written as observable Given/When/Then outcomes with no implementation details. The production security gate (AC-8) ensures Live Preview is not accidentally exposed to end users. AC-10 addresses the startup race condition where content must render before the Live Preview connection is ready.",
+  "acAddedBySpeckit": [
+    "AC-1",
+    "AC-2",
+    "AC-3",
+    "AC-4",
+    "AC-5",
+    "AC-6",
+    "AC-7",
+    "AC-8",
+    "AC-9",
+    "AC-10",
+    "AC-11",
+    "AC-12"
+  ],
+  "acModifiedBySpeckit": [],
+  "acFlagged": [
+    {
+      "criterion": "AC-8",
+      "flag": "The definition of 'production environment' and 'explicitly enabled via configuration' needs product-owner clarification — what is the default-off mechanism? Environment variable? Feature flag? The AC asserts the observable outcome (no connection unless enabled) but the threshold for 'enabled' should be agreed upon."
+    },
+    {
+      "criterion": "AC-11",
+      "flag": "Reference and rich-text field handling may have significantly different complexity than scalar fields. If this proves too large in scope, it could be descoped to a follow-up story. Needs product-owner prioritization."
+    }
+  ]
+}

@@ -1,0 +1,53 @@
+# Prompt
+You are the specification coordinator for the epam-cli orchestration system. Before every phase you read orchestrations/prd.json (implementationOrder and stories), evaluate risk, dependencies, and technical readiness, then assign the correct specification runners: OpenSpec, Speckit, both, or none. You write assignments into each story's specification.assignedAgents field along with coordinatorNotes, target provider/model, and timestamps. You understand the provider policy ledger (configuration.aiRuntime.providerPolicies), token guardrails, and know when to skip stories that were already hand-curated. When you plan a run you emit JSON compliant with spec-mode-runner.js so that automation can apply deltas deterministically. You never invent story IDs or mutate acceptance criteria directly; only delegate to spec agents and record their status.
+
+You are the EPAM CLI specification coordinator agent for phase core.
+
+Decide which specification agents should run for each story below.
+Available agents and their roles:
+  - openspec: Elaborates requirements — refines AC, proposes story splits, adds technical depth
+  - speckit: Reviews & hardens — adds testability criteria, security checks, edge cases, flags gaps
+
+Agent collaboration model:
+  - If both are assigned, openspec runs FIRST, then speckit reviews openspec's output
+  - Assign both for complex/critical stories
+  - Assign only openspec for simple elaboration
+  - Assign only speckit for stories that just need test/security hardening
+
+Respond with raw JSON only (no XML tags, no markdown fences, no preamble) using this schema:
+[
+  {"storyId":"EPAM-123","agents":["openspec","speckit"],"notes":"reason","priority":"high"}
+]
+If a story does not need spec work, provide an empty agents array.
+
+Stories JSON:
+[
+  {
+    "id": "AMSD-2041",
+    "title": "[GO, UP, MX] Live Preview of Content in CMS",
+    "description": "Original Requirements (discovery)  AS a Content Author, I WANT to preview draft entries in CMS, SO THAT I can see how content will be shown on the website\nability to preview draft entries in CMS\nNotes& Assumptions  Limitation: Might not be possible to preview protected pages and content.\nOriginal Total Estimate:  8  Original FE Estimate:  8  Original DAM Estimate:  0  Original BE Estimate:  0",
+    "acceptanceCriteria": [],
+    "agentRole": "typescript-engineer",
+    "agentGroup": "main",
+    "dependencies": [],
+    "spec": null
+  }
+]
+
+
+# Output
+Based on my investigation: `orchestrations/prd.json` and `configuration.aiRuntime.providerPolicies` do not exist in this repository, so I cannot consult them for hand-curation status or provider/model constraints. However, the story data provided in the prompt is clear:
+
+- **`spec: null`** → no prior spec work, not hand-curated
+- **`acceptanceCriteria: []`** → completely empty, needs elaboration
+- **`dependencies: []`** → not blocked, ready for spec work
+- **Security surface**: "Might not be possible to preview protected pages and content" → needs hardening
+- **Multi-platform (GO, UP, MX)** → complex, cross-platform concern
+
+Both agents should run: openspec to elaborate requirements and fill the empty ACs, then speckit to harden the security/edge-case surface around protected page preview limitations.
+
+```json
+[
+  {"storyId":"AMSD-2041","agents":["openspec","speckit"],"notes":"Story has empty acceptance criteria and null spec — no prior hand-curation detected. Multi-platform (GO, UP, MX) CMS live-preview feature with explicit security limitation around protected pages/content preview. openspec must elaborate ACs and propose technical approach for draft preview across three platforms; speckit must then harden with testability criteria, security checks for protected content access control, and edge cases (auth boundaries, partial publish states, cross-platform rendering differences). No dependencies blocking spec work. Note: orchestrations/prd.json and configuration.aiRuntime.providerPolicies were not found in the repository — provider/model and token guardrails could not be evaluated; default policy assumed.","priority":"high"}
+]
+```

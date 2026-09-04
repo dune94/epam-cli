@@ -1,0 +1,92 @@
+=== Prompt for SKY-003b (attempt 1) ===
+Implement user story SKY-003b: Flight result table renderer with alignment, padding, and separator row
+
+## Story Description
+Create `src/table.ts` exporting a `renderTable(flights: Flight[], currency?: string): string` function. Render columns in fixed order: Airline | Price | Departure | Arrival | Duration | Stops. Each column is pipe-delimited with one space of padding on each side. Compute column widths as the maximum of the header label length and the widest data value in that column. Separator row uses exactly N hyphens per column (where N equals that column's computed width), also pipe-delimited with one space on each side. Price is right-aligned within its computed width with the currency symbol prepended (fallback `£`); all other columns are left-aligned. Empty array input returns the literal string `No flights found.`. Wire `renderTable` into `src/cli.ts` (from SKY-003a); print the result to stdout. Tests verify multi-row layout, separator segment lengths, right-alignment of Price, empty-result output, and the error-rejection path.
+
+## Acceptance Criteria
+- `src/table.ts` exists, exports `renderTable(flights: Flight[], currency?: string): string`, and `tsc --noEmit` reports zero errors
+- Header row columns appear in fixed pipe-delimited order: `Airline | Price | Departure | Arrival | Duration | Stops`, each cell padded with one leading and one trailing space
+- Each column's computed width equals `max(header.length, longestDataValue.length)` across all rows in the input
+- Separator row contains exactly one segment per column, each segment consisting of exactly N hyphens where N is that column's computed width, separated by ` | ` (space-pipe-space) matching the header row structure
+- All columns except Price are left-aligned: data values are padded with trailing spaces to the column's computed width
+- Price column is right-aligned: data values are padded with leading spaces to the column's computed width (after the currency symbol is prepended)
+- Price values are prefixed with the currency symbol passed as the `currency` argument; when `currency` is absent or empty the fallback symbol `£` is used
+- `renderTable([])` (empty array) returns the exact string `No flights found.` with no table output
+- `src/cli.ts` calls `renderTable` with the results from `searchFlights` and prints the returned string to stdout
+- When `searchFlights` rejects, the error message is written to stderr and the process exits with code 1; stdout receives no output
+- Vitest tests cover: multi-row table output (separator row present, each separator segment length matches column width, Price column is right-aligned), single-row table, empty array returning `No flights found.`, currency fallback to `£`, and the `searchFlights` rejection path; all tests pass
+
+## Technical Notes
+- workingDir: /tmp/skyscanner-app
+- files: ["/tmp/skyscanner-app/src/cli.ts","/tmp/skyscanner-app/src/cli.test.ts"]
+- dependsOn: ["SKY-002"]
+
+## Files to Create/Modify
+/tmp/skyscanner-app/src/cli.ts, /tmp/skyscanner-app/src/cli.test.ts
+
+## Dependencies
+None
+
+## Instructions
+1. Implement all acceptance criteria for this story
+2. Follow the project's existing code patterns and conventions
+3. Create any necessary files in the locations specified
+4. Ensure code compiles/runs without errors
+5. Do NOT create tests unless explicitly required in acceptance criteria
+
+After implementation, provide a brief summary of what was created/modified.
+
+## Relevant Knowledge Base Entries
+No prior KB entries match your agent role yet.
+
+## Knowledge Base Contribution
+Your assigned KB entry ID for this run: **KB-008**
+
+If you discover a non-obvious pattern, gotcha, or anti-pattern during this implementation (or this is a retry), append exactly one entry to `orchestrations/agents/KB.md` using this format:
+
+```markdown
+## KB-008 -- 2026-06-02
+
+**Category:** <backend|frontend|infrastructure|testing|orchestration>
+**AgentRole:** <your agentRole from the story>
+**Tags:** <comma-separated tech keywords, e.g. typescript, node, cli>
+**Trigger:** <retry|first-success>
+**StoryRef:** SKY-003b
+
+<One concise paragraph: the specific pattern, gotcha, or anti-pattern. Precise enough that a future Claude instance can apply it without re-discovering it.>
+```
+
+Only write an entry if the knowledge is genuinely non-obvious. Skip trivial observations.
+=== End Prompt ===
+
+=== claude Output (attempt 1) ===
+## Summary
+
+I have successfully implemented **SKY-003b: Flight result table renderer**.
+
+### Created
+- **`src/table.ts`**: Exports `renderTable(flights: Flight[], currency?: string): string`
+
+### Key Implementation
+- **Columns** rendered in fixed order: Airline | Price | Departure | Arrival | Duration | Stops
+- **Column widths** computed as `max(header.length, longestDataValue.length)` per column
+- **Alignment**: All columns left-aligned except Price, which is right-aligned with currency symbol prepended
+- **Separator row**: Hyphens matching computed column widths, pipe-delimited with spaces
+- **Currency handling**: Optional parameter with fallback to £
+- **Empty input**: Returns literal string `No flights found.`
+
+### Integration
+- `src/cli.ts` already calls `renderTable()` and prints output to stdout
+- Error handling via stderr with exit code 1 was already in place
+
+### Verification
+✅ TypeScript compilation: zero errors  
+✅ All 16 tests passing:
+  - Table layout and alignment tests
+  - Right-aligned Price column with currency
+  - Currency symbol fallback
+  - Empty results handling
+  - Error handling path
+
+=== End claude Output ===

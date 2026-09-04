@@ -1,0 +1,10 @@
+```json
+{
+  "agent": "sast-sentinel",
+  "phase": "core",
+  "summary": { "filesScanned": 1, "findingsCount": 0, "blockerCount": 0 },
+  "findings": [],
+  "verdict": "not_applicable",
+  "reason": "tsc clean (0 errors), npm audit clean (0 CVEs), Semgrep skipped — no security-relevant patterns to report for this mock-hello-world change"
+}
+```

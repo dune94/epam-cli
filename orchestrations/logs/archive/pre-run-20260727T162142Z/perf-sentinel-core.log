@@ -1,0 +1,1 @@
+{"agent":"perf-sentinel","phase":"core","summary":{"filesAnalysed":2,"findingsCount":0,"blockerCount":0,"estimatedStartupImpactMs":0},"findings":[],"verdict":"not_applicable"}

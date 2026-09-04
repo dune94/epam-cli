@@ -1,0 +1,15 @@
+spec-mode: fast-path qwen/z-ai/glm-5.2 (skipping MiniMax)
+spec-mode: fast-path qwen/z-ai/glm-5.1 (skipping MiniMax)
+spec-mode: AMSD-2041 — 5 verification criteria persisted (source: description, resolution: regenerated)
+spec-mode: fast-path qwen/z-ai/glm-5.1 (skipping MiniMax)
+spec-mode: AMSD-2041 — ACs are immutable (VC model); openspec AC edits redacted, verification captured in verificationCriteria
+spec-mode: AMSD-2041 — 6 verification criteria persisted (source: both, resolution: regenerated)
+spec-mode: fast-path qwen/z-ai/glm-5.1 (skipping MiniMax)
+rnal useContent hook — restate as observable rendered content from the live preview | VC 2 prescribes an internal event-emission mechanism — restate as observable UI update when previewed content changes | VC 3 inspects preview URL/request parameters (internal plumbing) rather than the rendered UI — restate as observable brand/locale content displayed in preview for GO
+spec-mode: AMSD-2041 — 2 verification criteria persisted (source: fallback, resolution: fallback)
+spec-mode: fast-path qwen/z-ai/glm-5.1 (skipping MiniMax)
+pping MiniMax)
+spec-mode: fast-path qwen/z-ai/glm-5.2 (skipping MiniMax)
+spec-mode: fast-path qwen/z-ai/glm-5.2 (skipping MiniMax)
+spec-mode: LLM model review completed for 0 stories
+spec-mode: completed for phase core (run 20260729T012000Z)

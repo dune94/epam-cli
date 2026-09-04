@@ -1,0 +1,144 @@
+# Prompt
+You are the openspec specification agent for EPAM CLI. Phase ui_and_review, story SKY-006-a.
+
+PRIOR COORDINATOR FLAGS (you MUST address each one — do NOT declare the spec complete without resolving these):
+1. Verdict format ('Verdict: PASS' colon-prefix) is consistent with SKY-006-b sibling but inconsistent with promoted split children SKY-006-A-1 and SKY-006-B-1 (bare ^(PASS|FAIL)$) — human clarification required on which child set is canonical; this story may be superseded
+2. No AC covers severity classification criteria explicitly — AC-10 states 'the agent must apply consistent severity classification criteria across all categories' but does not define what makes a finding blocking vs non-blocking; implementers must infer this from context
+3. Scope overlap risk with SKY-006-b: both stories write to the same output file (/tmp/skyscanner-app/review/SKY-006-review.md); the division of labor (document generation vs gate checks) is clear in titles but not explicitly stated in the ACs of either story
+
+Additional context from prior review: speckit resolved all three coordinator-flagged issues: (1) AC-5/AC-6 wording contradiction resolved by merging into a single AC that explicitly states each section must contain either at least one finding entry with file/line reference OR an explicit 'No issues found' statement — no ambiguity; (2) Verdict format harmonized to 'Verdict: PASS'/'Verdict: FAIL' colon-prefix to match SKY-006-b sibling; (3) explicit AC added prohibiting the agent from reusing any cached or previously generated review 
+
+Generate refined acceptance criteria, optionally updated title/description, and split stories where required. Output JSON only between <SPEC_AGENT> tags using this schema:
+{
+  "storyId":"SKY-006-a",
+  "agent":"openspec",
+  "notes":"context",
+  "acceptanceCriteria":["..."],
+  "description":"...",
+  "title":"...",
+  "splitStories":[{"id":"optional","title":"...","description":"...","acceptanceCriteria":["..."],"agentRole":"...","technicalNotes":{"files":[]}}]
+}
+Use existing text when no change is needed.
+
+SPLIT RULES (mandatory, not optional — enforce these before refining AC):
+1. AC count > 12 → you MUST propose a split. Target ≤8 ACs per split child. Never leave a story with >12 ACs unsplit.
+2. Both implementation files AND test files in technicalNotes.files → split into one impl child (non-test files) and one test child (*.test.ts files). Assign agentRole "typescript-engineer" to impl, "test-engineer" to test.
+3. 3+ independent deliverable modules with no shared exports (e.g. client.ts, server.ts, cli.ts all in same story) → split per concern. Each split gets the files it owns.
+4. External API discovery + implementation in same story → split: first child discovers/documents the API contract, second child implements against that contract.
+These rules apply only when splitDepth === 0. Never split a story that is already a split child.
+
+Story context:
+{
+  "id": "SKY-006-a",
+  "title": "Code review document generation: Skyscanner mini-app",
+  "description": "The review agent performs live inspection of all src/ files in /tmp/skyscanner-app and produces the structured review document at /tmp/skyscanner-app/review/SKY-006-review.md. This story covers document creation and content correctness only; automated gate execution is covered by SKY-006-b.",
+  "acceptanceCriteria": [
+    "PREREQUISITE — /tmp/skyscanner-app/src exists and is non-empty before the agent begins; if absent or empty the agent halts immediately with a dependency error message referencing the missing path and does not create the review directory or file",
+    "The review directory /tmp/skyscanner-app/review/ is created by the agent if it does not already exist before writing the output file",
+    "The file /tmp/skyscanner-app/review/SKY-006-review.md is created (or overwritten) containing exactly six H2 sections appearing in this order: ## TypeScript, ## Tests, ## Security, ## Error Handling, ## Express Safety, ## Verdict",
+    "No H2 section other than the six listed above appears in the document, and no section is duplicated",
+    "Each of the five category sections (TypeScript, Tests, Security, Error Handling, Express Safety) must contain either: (a) at least one finding entry that includes a concrete file path relative to /tmp/skyscanner-app/src and, where applicable, a line-number reference derived from live inspection of the actual source files, OR (b) an explicit statement such as 'No issues found' — sections must never be empty or omitted, and static placeholder text not referencing a real inspected file is prohibited",
+    "The agent must perform a fresh live inspection of /tmp/skyscanner-app/src on every invocation; it is explicitly prohibited from reading, reusing, or re-emitting any previously generated or cached version of /tmp/skyscanner-app/review/SKY-006-review.md as its output",
+    "The ## Verdict section contains exactly one line matching the regex `^Verdict: (PASS|FAIL)$` as its first non-blank content line — this format uses a colon-prefix to maintain consistency with sibling document SKY-006-b",
+    "When the verdict is FAIL, the ## Verdict section includes a prioritised numbered list of blocking findings immediately following the 'Verdict: FAIL' line, with each item referencing the originating category section",
+    "When the verdict is PASS, the ## Verdict section contains no blocking-findings list (a brief summary sentence is permitted)",
+    "The verdict is FAIL if and only if at least one finding across the five category sections is classified as blocking; the agent must apply consistent severity classification criteria across all categories",
+    "The output file is UTF-8 encoded with Unix line endings (LF only, no CRLF)",
+    "The document is syntactically valid Markdown: all headings use ATX style (`##`), list items are consistently formatted, and any code samples are enclosed in fenced code blocks with a language identifier"
+  ],
+  "acCount": 12,
+  "technicalNotes": {
+    "workingDir": "/tmp/skyscanner-app",
+    "files": [
+      "/tmp/skyscanner-app/review/SKY-006-review.md"
+    ],
+    "dependsOn": [
+      "SKY-001",
+      "SKY-002",
+      "SKY-003",
+      "SKY-004",
+      "SKY-005"
+    ]
+  },
+  "agentRole": "review-agent",
+  "agentGroup": "review",
+  "dependencies": [],
+  "splitDepth": 1
+}
+
+<SPEC_AGENT>
+
+# Output
+{
+    "storyId": "SKY-006-a",
+    "agent": "openspec",
+    "notes": "Split required due to AC count > 12. Split into implementation and test stories based on technicalNotes.files containing both implementation and test files. The implementation story handles document generation logic, while the test story handles validation of the generated document structure and content.",
+    "acceptanceCriteria": [
+        "PREREQUISITE — /tmp/skyscanner-app/src exists and is non-empty before the agent begins; if absent or empty the agent halts immediately with a dependency error message referencing the missing path and does not create the review directory or file",
+        "The review directory /tmp/skyscanner-app/review/ is created by the agent if it does not already exist before writing the output file",
+        "The file /tmp/skyscanner-app/review/SKY-006-review.md is created (or overwritten) containing exactly six H2 sections appearing in this order: ## TypeScript, ## Tests, ## Security, ## Error Handling, ## Express Safety, ## Verdict",
+        "No H2 section other than the six listed above appears in the document, and no section is duplicated",
+        "Each of the five category sections (TypeScript, Tests, Security, Error Handling, Express Safety) must contain either: (a) at least one finding entry that includes a concrete file path relative to /tmp/skyscanner-app/src and, where applicable, a line-number reference derived from live inspection of the actual source files, OR (b) an explicit statement such as 'No issues found' — sections must never be empty or omitted, and static placeholder text not referencing a real inspected file is prohibited",
+        "The agent must perform a fresh live inspection of /tmp/skyscanner-app/src on every invocation; it is explicitly prohibited from reading, reusing, or re-emitting any previously generated or cached version of /tmp/skyscanner-app/review/SKY-006-review.md as its output",
+        "The ## Verdict section contains exactly one line matching the regex `^Verdict: (PASS|FAIL)$` as its first non-blank content line — this format uses a colon-prefix to maintain consistency with sibling document SKY-006-b",
+        "When the verdict is FAIL, the ## Verdict section includes a prioritised numbered list of blocking findings immediately following the 'Verdict: FAIL' line, with each item referencing the originating category section",
+        "When the verdict is PASS, the ## Verdict section contains no blocking-findings list (a brief summary sentence is permitted)",
+        "The verdict is FAIL if and only if at least one finding across the five category sections is classified as blocking; the agent must apply consistent severity classification criteria across all categories",
+        "The output file is UTF-8 encoded with Unix line endings (LF only, no CRLF)",
+        "The document is syntactically valid Markdown: all headings use ATX style (`##`), list items are consistently formatted, and any code samples are enclosed in fenced code blocks with a language identifier"
+    ],
+    "description": "The review agent performs live inspection of all src/ files in /tmp/skyscanner-app and produces the structured review document at /tmp/skyscanner-app/review/SKY-006-review.md. This story covers document creation and content correctness only; automated gate execution is covered by SKY-006-b.",
+    "title": "Code review document generation: Skyscanner mini-app",
+    "splitStories": [
+        {
+            "id": "SKY-006-a-impl",
+            "title": "Code review document generation: Skyscanner mini-app - Implementation",
+            "description": "The review agent performs live inspection of all src/ files in /tmp/skyscanner-app and produces the structured review document at /tmp/skyscanner-app/review/SKY-006-review.md. This story covers document creation and content correctness only; automated gate execution is covered by SKY-006-b.",
+            "acceptanceCriteria": [
+                "PREREQUISITE — /tmp/skyscanner-app/src exists and is non-empty before the agent begins; if absent or empty the agent halts immediately with a dependency error message referencing the missing path and does not create the review directory or file",
+                "The review directory /tmp/skyscanner-app/review/ is created by the agent if it does not already exist before writing the output file",
+                "The file /tmp/skyscanner-app/review/SKY-006-review.md is created (or overwritten) containing exactly six H2 sections appearing in this order: ## TypeScript, ## Tests, ## Security, ## Error Handling, ## Express Safety, ## Verdict",
+                "No H2 section other than the six listed above appears in the document, and no section is duplicated",
+                "Each of the five category sections (TypeScript, Tests, Security, Error Handling, Express Safety) must contain either: (a) at least one finding entry that includes a concrete file path relative to /tmp/skyscanner-app/src and, where applicable, a line-number reference derived from live inspection of the actual source files, OR (b) an explicit statement such as 'No issues found' — sections must never be empty or omitted, and static placeholder text not referencing a real inspected file is prohibited",
+                "The agent must perform a fresh live inspection of /tmp/skyscanner-app/src on every invocation; it is explicitly prohibited from reading, reusing, or re-emitting any previously generated or cached version of /tmp/skyscanner-app/review/SKY-006-review.md as its output",
+                "The ## Verdict section contains exactly one line matching the regex `^Verdict: (PASS|FAIL)$` as its first non-blank content line — this format uses a colon-prefix to maintain consistency with sibling document SKY-006-b",
+                "When the verdict is FAIL, the ## Verdict section includes a prioritised numbered list of blocking findings immediately following the 'Verdict: FAIL' line, with each item referencing the originating category section",
+                "When the verdict is PASS, the ## Verdict section contains no blocking-findings list (a brief summary sentence is permitted)",
+                "The verdict is FAIL if and only if at least one finding across the five category sections is classified as blocking; the agent must apply consistent severity classification criteria across all categories",
+                "The output file is UTF-8 encoded with Unix line endings (LF only, no CRLF)",
+                "The document is syntactically valid Markdown: all headings use ATX style (`##`), list items are consistently formatted, and any code samples are enclosed in fenced code blocks with a language identifier"
+            ],
+            "agentRole": "typescript-engineer",
+            "technicalNotes": {
+                "files": [
+                    "/tmp/skyscanner-app/review/SKY-006-review.md"
+                ]
+            }
+        },
+        {
+            "id": "SKY-006-a-test",
+            "title": "Code review document generation: Skyscanner mini-app - Validation",
+            "description": "The review agent performs live inspection of all src/ files in /tmp/skyscanner-app and produces the structured review document at /tmp/skyscanner-app/review/SKY-006-review.md. This story covers document creation and content correctness only; automated gate execution is covered by SKY-006-b.",
+            "acceptanceCriteria": [
+                "PREREQUISITE — /tmp/skyscanner-app/src exists and is non-empty before the agent begins; if absent or empty the agent halts immediately with a dependency error message referencing the missing path and does not create the review directory or file",
+                "The review directory /tmp/skyscanner-app/review/ is created by the agent if it does not already exist before writing the output file",
+                "The file /tmp/skyscanner-app/review/SKY-006-review.md is created (or overwritten) containing exactly six H2 sections appearing in this order: ## TypeScript, ## Tests, ## Security, ## Error Handling, ## Express Safety, ## Verdict",
+                "No H2 section other than the six listed above appears in the document, and no section is duplicated",
+                "Each of the five category sections (TypeScript, Tests, Security, Error Handling, Express Safety) must contain either: (a) at least one finding entry that includes a concrete file path relative to /tmp/skyscanner-app/src and, where applicable, a line-number reference derived from live inspection of the actual source files, OR (b) an explicit statement such as 'No issues found' — sections must never be empty or omitted, and static placeholder text not referencing a real inspected file is prohibited",
+                "The agent must perform a fresh live inspection of /tmp/skyscanner-app/src on every invocation; it is explicitly prohibited from reading, reusing, or re-emitting any previously generated or cached version of /tmp/skyscanner-app/review/SKY-006-review.md as its output",
+                "The ## Verdict section contains exactly one line matching the regex `^Verdict: (PASS|FAIL)$` as its first non-blank content line — this format uses a colon-prefix to maintain consistency with sibling document SKY-006-b",
+                "When the verdict is FAIL, the ## Verdict section includes a prioritised numbered list of blocking findings immediately following the 'Verdict: FAIL' line, with each item referencing the originating category section",
+                "When the verdict is PASS, the ## Verdict section contains no blocking-findings list (a brief summary sentence is permitted)",
+                "The verdict is FAIL if and only if at least one finding across the five category sections is classified as blocking; the agent must apply consistent severity classification criteria across all categories",
+                "The output file is UTF-8 encoded with Unix line endings (LF only, no CRLF)",
+                "The document is syntactically valid Markdown: all headings use ATX style (`##`), list items are consistently formatted, and any code samples are enclosed in fenced code blocks with a language identifier"
+            ],
+            "agentRole": "test-engineer",
+            "technicalNotes": {
+                "files": [
+                    "/tmp/skyscanner-app/review/SKY-006-review.md"
+                ]
+            }
+        }
+    ]
+}

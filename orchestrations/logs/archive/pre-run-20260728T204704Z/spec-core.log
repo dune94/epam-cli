@@ -1,0 +1,3 @@
+spec-mode: fast-path qwen/z-ai/glm-5.2 (skipping MiniMax)
+Failed to parse JSON for tag SPEC_ASSIGNMENTS: Expected ',' or '}' after property value in JSON at position 26
+spec-mode: fast-path qwen/z-ai/glm-5.1 (skipping MiniMax)

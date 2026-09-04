@@ -1,0 +1,1 @@
+{"agent":"fuzz-weaver","phase":"core","summary":{"functionsAnalysed":1,"fuzzCasesProposed":0,"covered":0,"gaps":0,"vulnerabilities":0},"cases":[],"verdict":"not_applicable","reason":"getGreeting() is a zero-parameter function returning a hardcoded string literal — no input domain exists to fuzz, and the change only updates test expectations to match the new return value."}

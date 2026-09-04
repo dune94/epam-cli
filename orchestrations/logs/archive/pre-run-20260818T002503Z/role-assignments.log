@@ -1,0 +1,34 @@
+# Prompt
+Assign an implementation agent role to every story below.
+
+AVAILABLE ROLES — these are this project's own engineering roles. Choose from these and
+nothing else; the name you return must match one of them verbatim:
+- typescript-vitest-engineer
+    You are a TypeScript engineer who fixes source bugs across two codelines, mocka and mockb, that both declare vitest and typescript as their dependencies. You edit source files only — never test files; a separate pipeline agent owns reproducing tests and you are forbidden from creating or editing any file under a test directory. Codeline mocka holds the fare engine. The relevant source is src/fares.ts, where the fareFor function decides concession eligibility by age. The rule documented in the code is that riders aged 65 and over receive the concession fare, but the comparison operator currently excludes exactly 65. Your job is to correct that operator so the boundary is inclusive, preserving the existing fare values and return type. Read the function before editing and confirm the operator is the only defect — do not refactor surrounding logic. Codeline mockb holds the schedule renderer. The relevant source is src/schedule.ts, where formatStops builds a human-readable stop list. The loop bound currently stops one element short, omitting the final stop from the rendered string. Correct the loop so every stop appears, and confirm that totalMinutes — which already reads the last element correctly — is unaffected by your change. For both codelines: run the test suite with the vitest runner declared in each manifest before declaring work done. Test files live alongside source under test/ and follow the pattern <module>.test.ts (e.g. test/fares.test.ts, test/schedule.test.ts). The pipeline's test agent will add boundary cases after your fix is committed; your responsibility is to make the existing suite pass and the source correct. Do not name or rely on any SDK, API, or package symbol you have not confirmed exists in the codeline's own manifest or node_modules.
+
+STORIES — a story listing more than one codeline needs ONE ASSIGNMENT PER CODELINE:
+- MOCK3-1: Riders aged exactly 65 are charged the adult fare
+    codeline: mocka
+    The fare rules say riders aged 65 and over pay the concession fare. A rider aged exactly 65 is charged the full adult fare of 350 cents instead of 175. Riders aged 66 and above are charged correctly, so the boundary itself is wrong rather than the rule.
+- MOCK3-2: The departure board omits the final stop
+    codeline: mockb
+    formatStops renders every stop except the last one, so a three-stop line shows two. The journey length reported by totalMinutes is correct, which is why the omission has gone unnoticed.
+
+Pick the role whose stated expertise actually covers the work the story describes. If two
+roles could plausibly own a story, prefer the one whose brief names the surface the story
+touches.
+
+THE UNIT OF ASSIGNMENT IS A (STORY, CODELINE) PAIR, NOT A STORY. A story listing three
+codelines needs THREE assignments — the repositories differ, so the right owner can differ.
+Count the codelines listed against each story and return exactly that many assignments for it,
+naming the codeline on every one. A story is not assigned until every codeline it lists is.
+
+THE OWNER MUST AUTHOR THE CODE. Assign the role that will EDIT THE FILES this story changes —
+the one whose brief names those files or directories. A role whose brief is about settings in
+a vendor's console, or about documentation, cannot deliver a story here: the agent's output is
+a change in a repository. Live 2026-08-07: this story went to the one role of three that owned
+no source files, and all such a role can produce is a configuration note. Where the story needs
+both console configuration and code, 
+
+# Output
+{ "assignments": [ { "agentRole": "typescript-vitest-engineer", "codeline": "mocka", "reason": "The story requires editing src/fares.ts to correct the age comparison operator in fareFor so that riders aged exactly 65 receive the concession fare. The typescript-vitest-engineer role explicitly owns source fixes across both mocka and mockb, names src/fares.ts as the relevant source, and is responsible for making the vitest suite pass. No other role is available, and no other role's brief names source-file editing.", "storyId": "MOCK3-1" }, { "agentRole": "typescript-vitest-engineer", "codeline": "mockb", "reason": "The story requires editing src/schedule.ts to correct the loop bound in formatStops so the final stop is rendered. The typescript-vitest-engineer role explicitly owns source fixes in mockb, names src/schedule.ts as the relevant source, and is responsible for running the vitest suite declared in mockb's manifest. No other role is available, and the brief directly names the surface this story touches.", "storyId": "MOCK3-2" } ] }

@@ -1,0 +1,51 @@
+[mint-step] dependency-check.json declares no manifestFile/manifestKeys — no dependency evidence
+[mint-step] codeline mocka: /home/bradleyjerome/projects/mock3/mock-a (0 declared deps)
+[mint-step] dependency-check.json declares no manifestFile/manifestKeys — no dependency evidence
+[mint-step] codeline mockb: /home/bradleyjerome/projects/mock3/mock-b (0 declared deps)
+[mint-step] plugins provisioned: 1 · mint tools: read_file,list_files,search,codegraph_query
+spec-mode: fast-path qwen/z-ai/glm-5.2 (skipping MiniMax)
+[mint-step]   survey: mocka — in_scope (src/fares.ts, test/fares.test.ts)
+[mint-step]   survey: mockb — in_scope (src/schedule.ts, test/schedule.test.ts)
+[mint-step]   survey recommends an investigator for mocka: The MOCK3-1 fare boundary bug in src/fares.ts fareFor(): the age-65 comparison on line 10 uses strict > instead of >=, so age 65 returns the adult fare. The test file has no age-65 case — an investigator should add boundary coverage at exactly 65 and verify the fix makes 65 return CONCESSION_FARE_CENTS while 64 still returns BASE_FARE_CENTS.
+[mint-step]   survey recommends an investigator for mockb: The MOCK3-2 final-stop omission in src/schedule.ts formatStops(): the loop bound 'i < stops.length - 1' on line 7 skips the last stop. An investigator should fix the loop bound and add a test asserting the final stop name appears in the output.
+spec-mode: fast-path qwen/z-ai/glm-5.2 (skipping MiniMax)
+spec-mode: fast-path qwen/z-ai/glm-5.2 (skipping MiniMax)
+[mint-step] proposed=6 minted=4 unchanged=0 rejected=1 superseded=0 UNACCOUNTED=1
+[mint-step]   + [investigator:mocka] mocka-fares-investigator (profiles.json, kb, project-investigators, project-profiles) — An investigator dedicated to mocka confirms the exact fareFor boundary operator on line 10, the surrounding fare constants, and the gap in test coverage at age 65, giving the implementer a precise change target.
+[mint-step]   + [investigator:mockb] mockb-schedule-investigator (profiles.json, kb, project-investigators, project-profiles) — An investigator dedicated to mockb confirms the formatStops loop bound on line 7 skips the last stop, that totalMinutes is correct, and that existing tests never assert the final stop name, giving the implementer a precise change target.
+[mint-step]   + [investigator:mocka] mocka-investigator (profiles.json, kb, project-investigators, project-profiles) — An investigator dedicated to mocka can confirm the exact fareFor boundary logic and test coverage gaps in that repository before the implementer acts.
+[mint-step]   + [investigator:mockb] mockb-investigator (profiles.json, kb, project-investigators, project-profiles) — An investigator dedicated to mockb can confirm the exact formatStops loop bound and test coverage gaps in that repository before the implementer acts.
+[mint-step]   ! refused typescript-fare-schedule-engineer: brief names 1 path(s) that do not exist in any codeline: mock-a/src/fares.ts
+spec-mode: fast-path qwen/z-ai/glm-5.2 (skipping MiniMax)
+[mint-step] roster review (cycle 1): defects_found — 3 finding(s), 2 blocking
+[mint-step]   [advisory] mockb-schedule-investigator: report the loop bound on line 7 ('i < stops.length - 1')
+[mint-step]      checked: read_file mock-b/src/schedule.ts and counted lines from the top.
+[mint-step]      found:   The loop bound 'i < stops.length - 1' is on line 6, not line 7. Line 7 is 'parts.push(`${stops[i].name} (${stops[i].minutes}m)`);'. The brief's content description is correct but the line number is off by one.
+[mint-step]      remedy:  Change 'line 7' to 'line 6' for the loop bound.
+[mint-step]   [blocking] mocka-fares-investigator: Do not propose test changes — a separate test agent owns tests.
+[mint-step]      checked: Reviewed all four briefs in the roster for a test agent role.
+[mint-step]      found:   No test agent exists in this roster. All four briefs are investigators who 'never write or edit files.' Ticket MOCK3-1 requires adding a test for age 65, but no role owns test changes. The brief's assertion that 'a separate test agent owns tests' is false.
+[mint-step]      remedy:  Either add a test-agent brief to the roster that owns test/fares.test.ts for mocka, or remove the claim that a separate test agent exists and assign test ownership to an existing role.
+[mint-step]   [blocking] mockb-schedule-investigator: Do not propose test changes — a separate test agent owns tests.
+[mint-step]      checked: Reviewed all four briefs in the roster for a test agent role.
+[mint-step]      found:   No test agent exists in this roster. All four briefs are investigators who 'never write or edit files.' Ticket MOCK3-2 requires adding a test verifying 'Eglinton' appears in formatStops output, but no role owns test changes. The brief's assertion that 'a separate test agent owns tests' is false.
+[mint-step]      remedy:  Either add a test-agent brief to the roster that owns test/schedule.test.ts for mockb, or remove the claim that a separate test agent exists and assign test ownership to an existing role.
+[mint-step] cycle 1: 2 blocking finding(s) — 2 agent(s) indicted, 2 retained
+[mint-step]   − mocka-fares-investigator (indicted, being replaced)
+[mint-step]   − mockb-schedule-investigator (indicted, being replaced)
+[mint-step]   = mocka-investigator (passed review, kept)
+[mint-step]   = mockb-investigator (passed review, kept)
+spec-mode: fast-path qwen/z-ai/glm-5.2 (skipping MiniMax)
+spec-mode: fast-path qwen/z-ai/glm-5.2 (skipping MiniMax)
+[mint-step]   + [implementer] transit-logic-engineer — Both tickets are small boundary/loop bugs in transit-domain source files across mocka and mockb, so one implementer who knows both codebases can fix both without duplicating a role.
+spec-mode: fast-path qwen/z-ai/glm-5.2 (skipping MiniMax)
+spec-mode: roster finding DISCARDED — path_exists: the brief says "test/fares.test.ts" is present in mocka, and it is — the brief is correct, so this is not a defect
+[mint-step] roster review (cycle 2): defects_found — 2 finding(s), 2 blocking
+[mint-step]   [blocking] transit-logic-engineer: THE CODELINES THESE BRIEFS DESCRIBE, and what each one declares: mocka … declares: (no manifest configuration); mockb … declares: (no manifest configuration)
+[mint-step]      checked: I read package.json in both /home/bradleyjerome/projects/mock3/mock-a and /home/bradleyjerome/projects/mock3/mock-b.
+[mint-step]      found:   Both codelines have a package.json. mock-a declares devDependencies vitest ^2.1.9 and typescript ^5.6.0, with scripts test (vitest run), build (tsc --noEmit), and lint. mock-b declares the same. The 'declares: (no manifest configuration)' metadata is factually wrong. The transit-logic-engineer brief says 'run the project's build or type-check command if one exists in the manifest; if none is declared, skip this step and note it.' An engineer trusting the metadata would skip tsc --noEmit verification even though it is available.
+[mint-step]   [blocking] transit-logic-engineer: THE CODELINES THESE BRIEFS DESCRIBE … mockb … declares: (no manifest configuration)
+[mint-step]      checked: I read package.json in /home/bradleyjerome/projects/mock3/mock-b.
+[mint-step]      found:   mock-b/package.json exists and declares devDependencies vitest ^2.1.9 and typescript ^5.6.0, with scripts test (vitest run), build (tsc --noEmit), and lint. The metadata is wrong for this codeline as well.
+[mint-step] 2 blocking finding(s) remain after 2 cycle(s)
+[mint-step] FAILED: roster review: 2 blocking finding(s) survive after 2 correction cycle(s), and no roster pause is configured for anyone to see them. Refusing to hand these briefs to implementers. See roster-review.json.

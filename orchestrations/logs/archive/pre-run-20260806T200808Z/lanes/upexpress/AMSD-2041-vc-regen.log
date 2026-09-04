@@ -1,0 +1,39 @@
+# Prompt
+Regenerate the VERIFICATION CRITERIA for this brownfield story. Your previous verification criteria were FLAGGED and must be fixed:
+- VC1: 'preview/draft content indication' prescribes mechanism — restate as observable user-facing condition
+- VC1: 'renders content from the draft version of the entry' references internal data source — restate as what the user sees on the page
+- VC1: 'rather than the published version' is a cross-comparison — assert the required output on its own
+- VC2: 'renders from published entries' references internal data source — restate as observable page output
+- VC2: 'identical to current production behavior' is a cross-comparison — assert the required output on its own
+- VC3: 'Given the Contentstack API is mocked' prescribes test mechanism — remove
+- VC3: 'using the draft data' references internal data source — restate as what the user sees
+- VC3: 'same layout and component structure used for published content' is a cross-comparison — assert the required layout on its own
+- VC4: 'Given the Contentstack API is mocked' prescribes test mechanism — remove
+- VC4: 'reflects the draft navigation structure' references internal data source — restate as what the user sees in the navigation bar
+- VC5: 'Given the Contentstack API is mocked' prescribes test mechanism — remove
+- VC5: 'reflects the draft footer content' references internal data source — restate as what the user sees in the footer
+
+THE FIX SITE (located by the code-graph detective — anchor every criterion to the behaviour THIS code produces):
+- src/context/ContentstackContext.ts :: ContentstackContext — Primary attachment point for Contentstack live preview. This is the React context that holds all CMS content (header, footer, page, directories) and distributes it to every component via useContent(). Live preview requires injecting draft/preview content into this context, so the Provider's value assignment is where preview data must flow in. The IContentstackContext interface may also need preview metadata fields.
+Do NOT write criteria about areas unrelated to this code.
+
+
+Acceptance criteria (IMMUTABLE — the intent to verify; do NOT restate as-is, VERIFY them):
+- (none)
+Description: Original Requirements (discovery)  AS a Content Author, I WANT to preview draft entries in CMS, SO THAT I can see how content will be shown on the website
+ability to preview draft entries in CMS
+Notes& Assumptions  Limitation: Might not be possible to preview protected pages and content.
+Original Total Estimate:  8  Original FE Estimate:  8  Original DAM Estimate:  0  Original BE Estimate:  0
+
+A verification criterion states WHAT AN END USER OR TESTER OBSERVES on the user-facing surface THE TICKET IS ABOUT — the rendered output for an output ticket, the displayed screen for a UI ticket, the response a CLIENT receives for an API ticket. It is a BLACK-BOX check on that surface. It NEVER describes HOW the value is produced.
+A verification criterion is FORBIDDEN if it:
+- prescribes HOW to implement — any algorithm, mechanism, approach, or the addition/reading of any new field, flag or service;
+- references an INTERNAL structure that merely FEEDS the ticket's surface — an intermediate payload, a data-transfer object, or a specific response field used to BUILD the output. Verify the surface the ticket names, NOT the data structure behind it;
+- makes a CROSS-COMPARISON that presumes a mechanism — never assert one value "must equal" / "matches" / "is the same as" another; that presumes a shared derivation. Assert the required value is present and correct ON ITS OWN.
+Every verification criterion must be observable, testable, and tied to the ticket's stated symptom/intent.
+
+Do NOT restate an acceptance criterion as-is — express what a tester OBSERVES that confirms it. Address every flag above.
+Output ONLY a JSON array of verification-criterion strings. No prose, no markdown.
+
+# Output
+Agent reached maximum iterations (2) without completing.

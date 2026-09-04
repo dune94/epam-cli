@@ -1,0 +1,5 @@
+The story MOCK-HW-1 in the core phase already has all three fields set (`model: "MiniMax-M3"`, `aiProvider: "minimax"`, `reasoningEffort: "low"`). Rule 1 applies — leave it untouched. No changes needed to the PRD.
+
+```json
+{"assigned_count":0,"stories":[],"reason":"All pending core stories already have model/aiProvider/reasoningEffort"}
+```

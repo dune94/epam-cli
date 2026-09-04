@@ -1,0 +1,144 @@
+# Prompt
+You are the speckit specification agent for EPAM CLI. Phase core, story AMSD-2041.
+
+You are reviewing and building on the openspec agent's output for this story.
+Your role is COLLABORATIVE — you are NOT starting from scratch. Instead:
+1. Review openspec's proposed acceptance criteria for testability and completeness
+2. Add missing edge-case, error-handling, security, and accessibility criteria
+3. Flag any AC that are vague, untestable, or overlapping
+4. Splitting is openspec's decision alone — you do NOT split stories. If openspec already split
+   this story, do NOT include a "splitStories" field in your output at all (it will be ignored if
+   you do). Review and refine the acceptanceCriteria openspec gave you for the UNSPLIT story as
+   normal; per-child refinement of an already-split story's children happens on a later turn, not
+   here.
+5. Do NOT remove or duplicate openspec's good work — build on it
+
+━━━ WHAT-NOT-HOW RULE (MANDATORY) ━━━
+Every AC must describe an OBSERVABLE OUTCOME (what a test can verify from outside the code),
+NOT an implementation instruction. If an AC names vi.mock, jest.fn, mockReturnValue,
+mockResolvedValue, import statements, or require() calls, REPLACE it with a
+Given/When/Then behaviour statement. Never tell the implementer which library or mock pattern to use.
+
+OPENSPEC'S OUTPUT (your input to review — ACs and split proposals only):
+{
+  "acceptanceCriteria": [],
+  "notes": "ACs were empty; derived from description promises of 'real-time content preview' and 'without a full page reload' for GO/UP/MX. Location hints target the content-fetching layer where preview wiring would integrate.",
+  "splitStories": []
+}
+
+ORIGINAL STORY CONTEXT:
+{
+  "id": "AMSD-2041",
+  "title": "[GO, UP, MX] Live Preview of Content in CMS",
+  "description": "[GO, UP, MX] Live Preview of Content in CMS — Enable real-time content preview so that editors editing content in Contentstack CMS see their changes reflected immediately in the running application without a full page reload.",
+  "originalAcceptanceCriteria": [],
+  "technicalNotes": {
+    "files": [
+      "src/hooks/useContent.ts",
+      "src/context/ContentstackContext.tsx",
+      "src/components/contentstack/ContentstackLink/ContentstackLink.tsx",
+      "src/interface/content/contentCard.ts"
+    ]
+  },
+  "dependencies": []
+}
+
+Produce your refined output as raw JSON only (no XML tags, no markdown fences, no preamble). Include:
+- "acceptanceCriteria": The FULL merged list (openspec's criteria + your additions/refinements). Every item MUST be an observable outcome, not an implementation instruction.
+- "notes": What you changed and why (be specific — cite which criteria you added/modified/replaced)
+- "splitStories": ALWAYS omit this field. Splitting is openspec's decision alone — never propose
+  split children of your own, even if openspec already split this story.
+- "acAddedBySpeckit": Array of criteria YOU added that were not in openspec's output
+- "acModifiedBySpeckit": Array of {"original":"...","revised":"..."} for criteria you reworded
+- "acFlagged": Array of {"criterion":"...","flag":"..."} for criteria that need human attention
+
+
+# Output
+{
+  "acceptanceCriteria": [
+    {
+      "id": "AC-1",
+      "criterion": "Given an editor updates a content entry in Contentstack CMS, When the change is saved, Then the running application reflects the updated content within 5 seconds without a full page reload."
+    },
+    {
+      "id": "AC-2",
+      "criterion": "Given an editor updates content for the GO market, When the change is saved, Then the GO-market application instance displays the updated content without a full page reload."
+    },
+    {
+      "id": "AC-3",
+      "criterion": "Given an editor updates content for the UP market, When the change is saved, Then the UP-market application instance displays the updated content without a full page reload."
+    },
+    {
+      "id": "AC-4",
+      "criterion": "Given an editor updates content for the MX market, When the change is saved, Then the MX-market application instance displays the updated content without a full page reload."
+    },
+    {
+      "id": "AC-5",
+      "criterion": "Given the live preview connection is interrupted or lost, When the application is in preview mode, Then the application displays a visible indicator that live preview is unavailable and previously loaded content remains visible and functional."
+    },
+    {
+      "id": "AC-6",
+      "criterion": "Given the live preview connection is re-established after an interruption, When the connection resumes, Then the application automatically refreshes to show the latest content without requiring a full page reload."
+    },
+    {
+      "id": "AC-7",
+      "criterion": "Given a user navigates between client-side routes while in live preview mode, When navigation completes, Then the live preview remains active and content updates continue to be reflected on the new route."
+    },
+    {
+      "id": "AC-8",
+      "criterion": "Given an editor updates a content card entry, When the change is saved, Then the content card component in the running application reflects the updated fields (title, description, image, link) without a full page reload."
+    },
+    {
+      "id": "AC-9",
+      "criterion": "Given an editor updates a ContentstackLink entry, When the change is saved, Then the link component in the running application reflects the updated href and display text without a full page reload."
+    },
+    {
+      "id": "AC-10",
+      "criterion": "Given the application is running outside of live preview mode (i.e., normal production mode), When content is fetched, Then no live-preview-specific network connections are established and the application behaves identically to the current production behavior."
+    },
+    {
+      "id": "AC-11",
+      "criterion": "Given multiple editors update different content entries simultaneously, When each change is saved, Then each update is reflected independently in the running application without overwriting unrelated content."
+    },
+    {
+      "id": "AC-12",
+      "criterion": "Given an editor publishes a content change, When the live preview is active, Then only draft/preview content is shown in the preview session — published content remains unchanged for non-preview users."
+    },
+    {
+      "id": "AC-13",
+      "criterion": "Given the live preview feature is active, When content is rendered, Then all interactive elements (links, buttons) remain keyboard-navigable and screen-reader accessible with no loss of ARIA attributes or focus management compared to non-preview mode."
+    },
+    {
+      "id": "AC-14",
+      "criterion": "Given an editor updates content that includes a reference to another content type (e.g., a card referencing an image asset), When the change is saved, Then the referenced content is also updated in the live preview without a full page reload."
+    }
+  ],
+  "notes": "Openspec provided empty ACs, so all criteria were derived from the story description and technical file hints. AC-1 covers the core 'real-time preview without full reload' promise. AC-2 through AC-4 ensure multi-market (GO/UP/MX) coverage. AC-5 and AC-6 address connection interruption and recovery edge cases. AC-7 ensures preview survives client-side navigation. AC-8 and AC-9 cover specific content types mentioned in the technical notes (contentCard, ContentstackLink). AC-10 ensures no performance or behavioral regression in production mode. AC-11 addresses concurrent edit scenarios. AC-12 addresses the security/boundary concern that preview content must not leak to production users. AC-13 covers accessibility preservation. AC-14 covers referenced/linked content updates.",
+  "acAddedBySpeckit": [
+    "AC-1",
+    "AC-2",
+    "AC-3",
+    "AC-4",
+    "AC-5",
+    "AC-6",
+    "AC-7",
+    "AC-8",
+    "AC-9",
+    "AC-10",
+    "AC-11",
+    "AC-12",
+    "AC-13",
+    "AC-14"
+  ],
+  "acModifiedBySpeckit": [],
+  "acFlagged": [
+    {
+      "criterion": "AC-1",
+      "flag": "The 5-second threshold is a reasonable starting assumption but should be validated with the team — the actual SLA for 'real-time' may need to be tighter (e.g., 2s) or relaxed based on Contentstack's webhook/event delivery latency."
+    },
+    {
+      "criterion": "AC-12",
+      "flag": "This criterion assumes a clear boundary between preview and published content. If the Contentstack preview mechanism doesn't natively isolate draft vs. published content in the running app, this may need refinement or removal."
+    }
+  ]
+}

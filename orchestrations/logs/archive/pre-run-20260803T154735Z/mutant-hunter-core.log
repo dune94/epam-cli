@@ -1,0 +1,10 @@
+```json
+{
+  "agent": "mutant-hunter",
+  "phase": "core",
+  "summary": { "mutationsProposed": 0, "killed": 0, "survived": 0, "noCoverage": 0, "mutationScore": 100 },
+  "mutations": [],
+  "verdict": "not_applicable",
+  "reason": "The changed file is a single-line constant-return function with no operators, control flow, null checks, or critical paths (auth, failover, billing, agent state) to mutate; the existing exact-match assertion kills all trivial string-literal mutations, leaving no survivable gap to report."
+}
+```

@@ -1,0 +1,883 @@
+# Prompt
+You are the specification coordinator for the epam-cli orchestration system. Before every phase you read orchestrations/prd.json (implementationOrder and stories), evaluate risk, dependencies, and technical readiness, then assign the correct specification runners: OpenSpec, Speckit, both, or none. You write assignments into each story's specification.assignedAgents field along with coordinatorNotes, target provider/model, and timestamps. You understand the provider policy ledger (configuration.aiRuntime.providerPolicies), token guardrails, and know when to skip stories that were already hand-curated. When you plan a run you emit JSON compliant with spec-mode-runner.js so that automation can apply deltas deterministically. You never invent story IDs or mutate acceptance criteria directly; only delegate to spec agents and record their status.
+
+You are the EPAM CLI specification coordinator reviewing the completed spec outputs for phase core.
+
+Each story was processed by a sequential agent pipeline:
+  1. openspec elaborated requirements (AC refinement, story splits, technical depth)
+  2. speckit reviewed openspec's output (testability, security, edge cases, gap analysis)
+
+For each story, evaluate the quality of the collaborative spec work:
+1. Did both agents add meaningful, non-overlapping value?
+2. Flag any story needing human review.
+3. PLAN ALIGNMENT — where planAlignmentEvidence is present, it tells you what the
+   code-graph-detective SAID it would investigate (detectivePlan) and a deterministic,
+   cheap signal (aligned: true/false) for whether the final fixSiteAnalysis shares any
+   named symbol/file with that plan. This signal is NOT your verdict — it is evidence, the
+   same as MANIFEST EVIDENCE below. A plan can legitimately turn out wrong once real
+   exploration starts. Read detectivePlan and fixSiteAnalysis yourself and judge: did the
+   detective explain WHY it moved from its plan to its final answer (a stated pivot,
+   reasoning that connects the two), or did the answer just change with no explanation?
+   The latter is a real defect (a fix has shipped that shared no term with the detective's
+   own stated plan, with no explanation, more than once on the same ticket) — set
+   planAlignment to justified_deviation when the detective justifies its pivot, or
+   unexplained_mismatch when it does not, and say why in reviewNotes. aligned:true needs
+   no action.
+
+(Brownfield tickets never split and their acceptance criteria are immutable —
+do not evaluate split quality or AC completeness; there is nothing there for
+either agent to have changed.
+
+EXPECTED, NOT A DEFECT: an agent's notes may describe acceptance criteria it
+authored while the story's acceptanceCriteria array is empty, and report
+acceptanceChanged=false. That is this pipeline REDACTING them on purpose: on a
+brownfield ticket the ACs are the ticket's own, and a thin ticket legitimately
+has none. The observable checks live in verificationCriteria — judge THOSE.
+Do not report the mismatch as a hallucination, a persistence failure or a
+metadata inconsistency, and do not lower qualityScore for it. An empty
+acceptanceCriteria array on a brownfield story is correct by policy.)
+
+MANIFEST EVIDENCE (checked against the repository, not asserted):
+  AMSD-2041: EXISTS  src/services/contentstack.ts
+  AMSD-2041: EXISTS  src/context/contentstackContext.tsx
+  AMSD-2041: EXISTS  src/pages/_app.tsx
+  AMSD-2041: EXISTS  src/services/pageService.ts
+  AMSD-2041: EXISTS  src/interface/content/page.ts
+  AMSD-2041: EXISTS  src/hooks/useContent.ts
+  AMSD-2041: EXISTS  .env.local
+  AMSD-2041: EXISTS  src/components/contentstack/ContentStackGallery/ContentStackGallery.tsx
+  AMSD-2041: EXISTS  src/components/contentstack/ContentStackStaticMaps/ContentStackStaticMaps.tsx
+  AMSD-2041: EXISTS  src/components/contentstack/ContentStackVideoPlayer/ContentStackVideoPlayer.tsx
+  AMSD-2041: EXISTS  src/context/contentstackContext.tsx
+  AMSD-2041: EXISTS  .env.local.sample
+  AMSD-2041: EXISTS  src/components/contentstack/ContentstackQuote/ContentstackQuote.tsx
+
+CODELINE SCOPE — you are reviewing ONE lane.
+
+This spec pass ran against 'metrolinx' only, using that codeline's own checkout. The story
+also spans: gotransit, upexpress. Each of those is specified by its own pass, against its own
+checkout, and the results are recorded per codeline and merged afterwards. You are not seeing
+their work and it is not missing.
+
+So: judge whether this specification is correct, observable and implementable IN 'metrolinx'.
+Do not penalise it because a file, function or criterion it names does not exist in
+gotransit or upexpress — those codelines wire the same behaviour at their own sites, which
+their own lane locates.
+
+A cross-codeline concern IS in scope, and you should raise it, when 'metrolinx's own change
+depends on one: a shared contract it consumes, a payload shape another codeline produces, or
+work that cannot function unless another lane changes too. The distinction is dependency, not
+absence.
+
+
+ANSWER IN THIS RESPONSE. Your <SPEC_REVIEW> verdict must appear in THIS reply — an
+empty <SPEC_REVIEW></SPEC_REVIEW>, or a promise to verify and answer later, is
+discarded and the review does not happen. There is no follow-up turn to come back in.
+
+You DO have read-only tools this turn (read_file, list_files, search). Use them for
+real if something is genuinely unclear — but never narrate an imagined tool result,
+and never spend the whole turn exploring and run out before writing the verdict.
+Budget is small and the verdict is mandatory: gather at most what you need, then answer.
+
+MANIFEST EVIDENCE has already been gathered from the repository for you and appears
+above. Every declared path was checked with a real filesystem stat, so re-checking
+paths is wasted budget — that part is done and is more reliable than a tool call.
+  - A story with any MISSING path CANNOT be implemented: the writer is sent to edit a
+    file that is not there, and every retry reproduces that. Mark it needs_review, name
+    the exact path in reviewNotes, and add the flag "missing_manifest_path".
+  - Where the evidence names a real neighbour ("the directory holds X instead"), say so
+    — that is what makes the report actionable.
+  - Never silently correct a path. The manifest is the artefact under review; a
+    correction living only in your prose reaches nobody.
+
+Judge what the evidence cannot: are the acceptance criteria testable, is the declared
+file set plausible for this change, is anything obviously missing. If you are unsure,
+lower qualityScore and add a flag — do not withhold the verdict. A missing review is
+EVERY FLAG CARRIES A SEVERITY. It ranks your objections for whoever reads them; it does not
+decide whether the run stops — a computed check or a project-declared flag does that. Mark
+blocking when an implementer following this spec would produce work that CANNOT FUNCTION,
+and advisory for uncertainty about what you could not see. Report both honestly: nothing is
+gained by inflating uncertainty into a defect, and nothing is lost by naming a real one.
+worse than an uncertain one: it means nothing was checked at all.
+
+QUALITY SCORE — what the number has to mean. It is enforced: below 0.7 halts the run
+before implementation, so an unanchored guess stops real work.
+  0.9-1.0  the spec is ready to implement; criteria are observable and the file set fits.
+  0.7-0.89 ready to implement, with ordinary open questions a competent writer resolves.
+  0.5-0.69 NOT ready: something concrete is wrong or missing — criteria that cannot be
+           observed, a file set that cannot deliver what is described, contradictions.
+  below 0.5 the spec would send a writer somewhere useless.
+Score what IS in front of you. Do NOT lower the score because an agent could not read the
+source files, or because a human "might want to check" — that is true of every ticket and
+is not a defect in this spec. If your notes cannot name something concretely wrong, the
+score belongs at 0.7 or above.
+
+Respond with JSON between <SPEC_REVIEW> and </SPEC_REVIEW> using this schema:
+[
+  {"storyId":"REM-xxx","verdict":"approved|needs_review","reviewNotes":"coordinator observations","qualityScore":0.0-1.0,"flags":[{"flag":"short-slug","severity":"blocking|advisory","why":"what you checked and what you found"}],"planAlignment":"aligned|justified_deviation|unexplained_mismatch|not_applicable"}
+]
+
+Stories to review:
+[
+  {
+    "id": "AMSD-2041",
+    "title": "[GO, UP, MX] Live Preview of Content in CMS",
+    "acceptanceCriteria": [],
+    "verificationCriteria": [
+      "When the Live Preview SDK signals a draft entry, the page renders the draft field values — such as updated text, headings, and images — corresponding to the unpublished state of that entry.",
+      "When the Live Preview feature is not active, the page renders all published content — headings, text blocks, images, and layout — completely and without visible errors.",
+      "When the Live Preview SDK signals a change to a draft entry, the page updates to show the new draft content without a full browser page reload.",
+      "When the preview environment is configured and Live Preview is active, the page renders all content and layout without visible rendering errors, broken elements, or missing sections.",
+      "When the documented preview environment variables are set to valid values, the page loads successfully and displays draft content for entries with unpublished changes.",
+      "For pages that require authentication, draft content preview may not render even when the Live Preview SDK signals a draft entry update."
+    ],
+    "technicalNotes": {
+      "files": [
+        "src/services/contentstack.ts",
+        "src/context/contentstackContext.tsx",
+        "src/pages/_app.tsx",
+        "src/services/pageService.ts",
+        "src/interface/content/page.ts",
+        "src/hooks/useContent.ts",
+        ".env.local",
+        "src/components/contentstack/ContentStackGallery/ContentStackGallery.tsx",
+        "src/components/contentstack/ContentStackStaticMaps/ContentStackStaticMaps.tsx",
+        "src/components/contentstack/ContentStackVideoPlayer/ContentStackVideoPlayer.tsx",
+        "src/context/contentstackContext.tsx",
+        ".env.local.sample",
+        "src/components/contentstack/ContentstackQuote/ContentstackQuote.tsx"
+      ],
+      "perCodeline": {
+        "gotransit": {
+          "files": [
+            "src/services/contentstack.ts",
+            "src/context/ContentstackContext.tsx",
+            "src/pages/_app.tsx",
+            "src/services/pageService.ts",
+            "src/interface/content/page.ts",
+            "src/hooks/useContent.ts",
+            ".env.local",
+            "src/components/contentstack/ContentStackGallery/ContentStackGallery.tsx",
+            "src/components/contentstack/ContentStackStaticMaps/ContentStackStaticMaps.tsx",
+            "src/components/contentstack/ContentStackVideoPlayer/ContentStackVideoPlayer.tsx",
+            "src/context/ContentstackContext.tsx",
+            ".env.local.sample"
+          ],
+          "resolved": [
+            {
+              "declared": "src/services/contentstack.ts",
+              "actual": "src/services/contentstack.ts",
+              "match": "exact",
+              "verified_against": "/home/bradleyjerome/projects/metrolinx/next.gotransit.com"
+            },
+            {
+              "declared": "src/context/contentstackContext.tsx",
+              "actual": "src/context/ContentstackContext.tsx",
+              "match": "case_variant",
+              "verified_against": "/home/bradleyjerome/projects/metrolinx/next.gotransit.com"
+            },
+            {
+              "declared": "src/pages/_app.tsx",
+              "actual": "src/pages/_app.tsx",
+              "match": "exact",
+              "verified_against": "/home/bradleyjerome/projects/metrolinx/next.gotransit.com"
+            },
+            {
+              "declared": "src/services/pageService.ts",
+              "actual": "src/services/pageService.ts",
+              "match": "exact",
+              "verified_against": "/home/bradleyjerome/projects/metrolinx/next.gotransit.com"
+            },
+            {
+              "declared": "src/interface/content/page.ts",
+              "actual": "src/interface/content/page.ts",
+              "match": "exact",
+              "verified_against": "/home/bradleyjerome/projects/metrolinx/next.gotransit.com"
+            },
+            {
+              "declared": "src/hooks/useContent.ts",
+              "actual": "src/hooks/useContent.ts",
+              "match": "exact",
+              "verified_against": "/home/bradleyjerome/projects/metrolinx/next.gotransit.com"
+            },
+            {
+              "declared": ".env.local",
+              "actual": ".env.local",
+              "match": "exact",
+              "verified_against": "/home/bradleyjerome/projects/metrolinx/next.gotransit.com"
+            },
+            {
+              "declared": "src/components/contentstack/ContentStackGallery/ContentStackGallery.tsx",
+              "actual": "src/components/contentstack/ContentStackGallery/ContentStackGallery.tsx",
+              "match": "exact",
+              "verified_against": "/home/bradleyjerome/projects/metrolinx/next.gotransit.com"
+            },
+            {
+              "declared": "src/components/contentstack/ContentStackStaticMaps/ContentStackStaticMaps.tsx",
+              "actual": "src/components/contentstack/ContentStackStaticMaps/ContentStackStaticMaps.tsx",
+              "match": "exact",
+              "verified_against": "/home/bradleyjerome/projects/metrolinx/next.gotransit.com"
+            },
+            {
+              "declared": "src/components/contentstack/ContentStackVideoPlayer/ContentStackVideoPlayer.tsx",
+              "actual": "src/components/contentstack/ContentStackVideoPlayer/ContentStackVideoPlayer.tsx",
+              "match": "exact",
+              "verified_against": "/home/bradleyjerome/projects/metrolinx/next.gotransit.com"
+            },
+            {
+              "declared": "src/context/contentstackContext.tsx",
+              "actual": "src/context/ContentstackContext.tsx",
+              "match": "case_variant",
+              "verified_against": "/home/bradleyjerome/projects/metrolinx/next.gotransit.com"
+            },
+            {
+              "declared": ".env.local.sample",
+              "actual": ".env.local.sample",
+              "match": "exact",
+              "verified_against": "/home/bradleyjerome/projects/metrolinx/next.gotransit.com"
+            }
+          ],
+          "unresolved": [
+            {
+              "declared": "src/components/contentstack/ContentstackQuote/ContentstackQuote.tsx",
+              "candidates_checked": [
+                "src/components/contentstack/ContentstackQuote/ContentstackQuote.tsx"
+              ],
+              "reason": "directory 'src/components/contentstack/ContentstackQuote' does not exist in this codeline"
+            }
+          ]
+        },
+        "upexpress": {
+          "files": [
+            "src/services/contentstack.ts",
+            "src/context/ContentstackContext.ts",
+            "src/pages/_app.tsx",
+            "src/services/pageService.ts",
+            "src/interface/content/page.ts",
+            "src/hooks/useContent.ts",
+            ".env.local",
+            "src/components/contentstack/ContentStackGallery/ContentStackGallery.tsx",
+            "src/components/contentstack/ContentStackStaticMaps/ContentStackStaticMaps.tsx",
+            "src/components/contentstack/ContentStackVideoPlayer/ContentStackVideoPlayer.tsx",
+            "src/context/ContentstackContext.ts"
+          ],
+          "resolved": [
+            {
+              "declared": "src/services/contentstack.ts",
+              "actual": "src/services/contentstack.ts",
+              "match": "exact",
+              "verified_against": "/home/bradleyjerome/projects/metrolinx/next.upexpress.com"
+            },
+            {
+              "declared": "src/context/contentstackContext.tsx",
+              "actual": "src/context/ContentstackContext.ts",
+              "match": "extension_variant",
+              "verified_against": "/home/bradleyjerome/projects/metrolinx/next.upexpress.com"
+            },
+            {
+              "declared": "src/pages/_app.tsx",
+              "actual": "src/pages/_app.tsx",
+              "match": "exact",
+              "verified_against": "/home/bradleyjerome/projects/metrolinx/next.upexpress.com"
+            },
+            {
+              "declared": "src/services/pageService.ts",
+              "actual": "src/services/pageService.ts",
+              "match": "exact",
+              "verified_against": "/home/bradleyjerome/projects/metrolinx/next.upexpress.com"
+            },
+            {
+              "declared": "src/interface/content/page.ts",
+              "actual": "src/interface/content/page.ts",
+              "match": "exact",
+              "verified_against": "/home/bradleyjerome/projects/metrolinx/next.upexpress.com"
+            },
+            {
+              "declared": "src/hooks/useContent.ts",
+              "actual": "src/hooks/useContent.ts",
+              "match": "exact",
+              "verified_against": "/home/bradleyjerome/projects/metrolinx/next.upexpress.com"
+            },
+            {
+              "declared": ".env.local",
+              "actual": ".env.local",
+              "match": "exact",
+              "verified_against": "/home/bradleyjerome/projects/metrolinx/next.upexpress.com"
+            },
+            {
+              "declared": "src/components/contentstack/ContentStackGallery/ContentStackGallery.tsx",
+              "actual": "src/components/contentstack/ContentStackGallery/ContentStackGallery.tsx",
+              "match": "exact",
+              "verified_against": "/home/bradleyjerome/projects/metrolinx/next.upexpress.com"
+            },
+            {
+              "declared": "src/components/contentstack/ContentStackStaticMaps/ContentStackStaticMaps.tsx",
+              "actual": "src/components/contentstack/ContentStackStaticMaps/ContentStackStaticMaps.tsx",
+              "match": "exact",
+              "verified_against": "/home/bradleyjerome/projects/metrolinx/next.upexpress.com"
+            },
+            {
+              "declared": "src/components/contentstack/ContentStackVideoPlayer/ContentStackVideoPlayer.tsx",
+              "actual": "src/components/contentstack/ContentStackVideoPlayer/ContentStackVideoPlayer.tsx",
+              "match": "exact",
+              "verified_against": "/home/bradleyjerome/projects/metrolinx/next.upexpress.com"
+            },
+            {
+              "declared": "src/context/contentstackContext.tsx",
+              "actual": "src/context/ContentstackContext.ts",
+              "match": "extension_variant",
+              "verified_against": "/home/bradleyjerome/projects/metrolinx/next.upexpress.com"
+            }
+          ],
+          "unresolved": [
+            {
+              "declared": ".env.local.sample",
+              "candidates_checked": [
+                ".env.local.sample",
+                ".codegraph",
+                ".editorconfig",
+                ".env.local",
+                ".epam",
+                ".eslintignore",
+                ".eslintrc.js",
+                ".git",
+                ".github",
+                ".gitignore",
+                ".husky",
+                ".lintstagedrc.js",
+                ".next",
+                ".npmrc",
+                ".nvmrc",
+                ".prettierignore",
+                ".prettierrc.json",
+                ".swc",
+                "CODEOWNERS",
+                "README.md",
+                "USE_SSL.md",
+                "__tests__",
+                "commitlint.config.js",
+                "docs",
+                "global.d.ts",
+                "i18next-scanner.config.js",
+                "jest.config.js",
+                "migration-scripts",
+                "next-env.d.ts",
+                "next-i18next.config.js",
+                "next-sitemap.config.ts",
+                "next.config.js",
+                "next.config.ts",
+                "node_modules",
+                "package-lock.json",
+                "package.json",
+                "postbuild.ts",
+                "postcss.config.js",
+                "public",
+                "review",
+                "server.js",
+                "src",
+                "stylelint.config.js",
+                "tailwind.config.js",
+                "tsconfig.json",
+                "tsconfig.migration-scripts.json",
+                "tsconfig.tsbuildinfo",
+                "zap_hooks"
+              ],
+              "reason": "no exact, case-variant or extension-variant match exists in this codeline"
+            },
+            {
+              "declared": "src/components/contentstack/ContentstackQuote/ContentstackQuote.tsx",
+              "candidates_checked": [
+                "src/components/contentstack/ContentstackQuote/ContentstackQuote.tsx"
+              ],
+              "reason": "directory 'src/components/contentstack/ContentstackQuote' does not exist in this codeline"
+            }
+          ]
+        },
+        "metrolinx": {
+          "files": [
+            "src/services/contentstack.ts",
+            "src/context/contentstackContext.tsx",
+            "src/pages/_app.tsx",
+            "src/services/pageService.ts",
+            "src/interface/content/page.ts",
+            "src/hooks/useContent.ts",
+            ".env.local",
+            "src/components/contentstack/ContentStackGallery/ContentStackGallery.tsx",
+            "src/components/contentstack/ContentStackStaticMaps/ContentStackStaticMaps.tsx",
+            "src/components/contentstack/ContentStackVideoPlayer/ContentStackVideoPlayer.tsx",
+            "src/context/contentstackContext.tsx",
+            ".env.local.sample",
+            "src/components/contentstack/ContentstackQuote/ContentstackQuote.tsx"
+          ],
+          "resolved": [
+            {
+              "declared": "src/services/contentstack.ts",
+              "actual": "src/services/contentstack.ts",
+              "match": "exact",
+              "verified_against": "/home/bradleyjerome/projects/metrolinx/next.metrolinx.com"
+            },
+            {
+              "declared": "src/context/contentstackContext.tsx",
+              "actual": "src/context/contentstackContext.tsx",
+              "match": "exact",
+              "verified_against": "/home/bradleyjerome/projects/metrolinx/next.metrolinx.com"
+            },
+            {
+              "declared": "src/pages/_app.tsx",
+              "actual": "src/pages/_app.tsx",
+              "match": "exact",
+              "verified_against": "/home/bradleyjerome/projects/metrolinx/next.metrolinx.com"
+            },
+            {
+              "declared": "src/services/pageService.ts",
+              "actual": "src/services/pageService.ts",
+              "match": "exact",
+              "verified_against": "/home/bradleyjerome/projects/metrolinx/next.metrolinx.com"
+            },
+            {
+              "declared": "src/interface/content/page.ts",
+              "actual": "src/interface/content/page.ts",
+              "match": "exact",
+              "verified_against": "/home/bradleyjerome/projects/metrolinx/next.metrolinx.com"
+            },
+            {
+              "declared": "src/hooks/useContent.ts",
+              "actual": "src/hooks/useContent.ts",
+              "match": "exact",
+              "verified_against": "/home/bradleyjerome/projects/metrolinx/next.metrolinx.com"
+            },
+            {
+              "declared": ".env.local",
+              "actual": ".env.local",
+              "match": "exact",
+              "verified_against": "/home/bradleyjerome/projects/metrolinx/next.metrolinx.com"
+            },
+            {
+              "declared": "src/components/contentstack/ContentStackGallery/ContentStackGallery.tsx",
+              "actual": "src/components/contentstack/ContentStackGallery/ContentStackGallery.tsx",
+              "match": "exact",
+              "verified_against": "/home/bradleyjerome/projects/metrolinx/next.metrolinx.com"
+            },
+            {
+              "declared": "src/components/contentstack/ContentStackStaticMaps/ContentStackStaticMaps.tsx",
+              "actual": "src/components/contentstack/ContentStackStaticMaps/ContentStackStaticMaps.tsx",
+              "match": "exact",
+              "verified_against": "/home/bradleyjerome/projects/metrolinx/next.metrolinx.com"
+            },
+            {
+              "declared": "src/components/contentstack/ContentStackVideoPlayer/ContentStackVideoPlayer.tsx",
+              "actual": "src/components/contentstack/ContentStackVideoPlayer/ContentStackVideoPlayer.tsx",
+              "match": "exact",
+              "verified_against": "/home/bradleyjerome/projects/metrolinx/next.metrolinx.com"
+            },
+            {
+              "declared": "src/context/contentstackContext.tsx",
+              "actual": "src/context/contentstackContext.tsx",
+              "match": "exact",
+              "verified_against": "/home/bradleyjerome/projects/metrolinx/next.metrolinx.com"
+            },
+            {
+              "declared": ".env.local.sample",
+              "actual": ".env.local.sample",
+              "match": "exact",
+              "verified_against": "/home/bradleyjerome/projects/metrolinx/next.metrolinx.com"
+            },
+            {
+              "declared": "src/components/contentstack/ContentstackQuote/ContentstackQuote.tsx",
+              "actual": "src/components/contentstack/ContentstackQuote/ContentstackQuote.tsx",
+              "match": "exact",
+              "verified_against": "/home/bradleyjerome/projects/metrolinx/next.metrolinx.com"
+            }
+          ],
+          "unresolved": []
+        }
+      }
+    },
+    "specification": {
+      "referencedDocs": [
+        {
+          "url": "https://www.contentstack.com/docs/headless-cms/live-preview-implementation-for-nextjs-csr-app-router",
+          "classification": "vendor_documentation",
+          "relevant": true,
+          "reason": "",
+          "quotes": [
+            "The onEntryChange method is used to re-render the page whenever a change is made to the entry in the CMS. This method does not take any arguments.",
+            "Initialize the Live Preview SDK on the client side by calling the livePreviewUtils.init() method.",
+            "import { livePreviewUtils } from '@contentstack/live-preview-utils'; livePreviewUtils.init();",
+            "To enable live preview, you need to add the live_preview object to the Stack initialization. The live_preview object should contain the following properties: enable (boolean) and host (string)."
+          ],
+          "scopeCaveat": "The document title and URL indicate it targets Next.js CSR with the App Router. The story description says 'Next.js CSR (Pages Router)'. The SDK init and onEntryChange contract are likely framework-agnostic, but any router-specific wiring steps in this doc may not apply directly to a Pages Router codebase. Verify which router the codeline actually uses before following router-specific steps.",
+          "fetchStatus": "fetched",
+          "contradictsStory": "The story description says 'wiring an onEntryChange callback to re-render with draft content through the existing ContentstackContext/useContent pipeline.' The documentation states onEntryChange 'does not take any arguments.' If the implementation assumes onEntryChange passes the updated entry as an argument, that assumption contradicts the documented contract. The re-render must instead rely on the SDK's internal state update, not a callback parameter."
+        },
+        {
+          "url": "https://www.contentstack.com/docs/headless-cms/custom-preview-urls#configure-custom-preview-urls",
+          "classification": "vendor_documentation",
+          "relevant": true,
+          "reason": "",
+          "quotes": [
+            "Custom preview URLs allow you to configure the URL pattern that Contentstack uses to generate preview links for your entries.",
+            "You can configure custom preview URLs from the Contentstack dashboard by navigating to Settings > Stack > Live Preview."
+          ],
+          "scopeCaveat": "This document describes configuration performed in the Contentstack dashboard UI, not in application code. It is relevant to the story's mention of 'documenting the required preview environment variables' and the limitation about protected pages, but the work it describes is vendor-side configuration, not code the developer writes.",
+          "fetchStatus": "fetched",
+          "contradictsStory": "The story says to 'document the required preview environment variables,' implying preview URL configuration is done via environment variables in the application. The documentation states custom preview URLs are configured in the Contentstack dashboard UI (Settings > Stack > Live Preview), not via application environment variables. This is a partial contradiction: the preview URL pattern is a vendor-side setting, not an app env var, though the live_preview host/enable config in Stack init may still use env vars."
+        }
+      ],
+      "guardVocabulary": {
+        "blacklist": [
+          {
+            "term": "onentrychange",
+            "reason": "SDK callback method from @contentstack/live-preview-utils (documented vendor contract). In statement 1 'signals an entry change' references this internal mechanism. A tester cannot observe a callback firing; they observe content updating."
+          },
+          {
+            "term": "livepreviewutils",
+            "reason": "SDK utility object from @contentstack/live-preview-utils. 'livePreviewUtils.init()' is the internal initialization call prescribed in _app.tsx. Not observable on the user-facing surface."
+          },
+          {
+            "term": "contentstacklivepreview",
+            "reason": "SDK initialization call referenced in _app.tsx code evidence (ContentstackLivePreview.init). This is the HOW — the mechanism that starts live preview — not what a user sees."
+          },
+          {
+            "term": "live_preview",
+            "reason": "Internal config block to be added to the Stack initialization in src/services/contentstack.ts. Contains enable (boolean) and host (string) properties. Statements 2 and 5 reference its fields; asserting its shape is prescribing implementation."
+          },
+          {
+            "term": "contentstackcontext",
+            "reason": "React context in src/context/contentstackContext.tsx that carries CMS content internally. An intermediate data pipeline structure that feeds the rendered output — not the surface itself."
+          },
+          {
+            "term": "usecontent",
+            "reason": "Internal hook in src/hooks/useContent.ts that 20+ components use to read CMS content. Part of the internal data pipeline triggered by onEntryChange — not observable."
+          },
+          {
+            "term": "getcontentbykey",
+            "reason": "Internal function within useContent that retrieves content by key. Implementation detail of the data pipeline — not user-facing."
+          },
+          {
+            "term": "contentstack_management_token",
+            "reason": "Environment variable to be added to .env.local.sample. Internal configuration — a tester does not observe environment variables on the rendered surface."
+          },
+          {
+            "term": "contentstack_preview_host",
+            "reason": "Environment variable to be added to .env.local.sample. Internal configuration key for the live_preview host property — not observable."
+          },
+          {
+            "term": "contentstack_preview_enabled",
+            "reason": "Environment variable to be added to .env.local.sample. Internal configuration key for the live_preview enable property — not observable."
+          },
+          {
+            "term": ".env.local.sample",
+            "reason": "Internal configuration file (statement 5 checks its contents). The ticket's surface is the rendered web page, not a developer config file. Checking file contents is not a black-box test of the user-facing surface."
+          },
+          {
+            "term": "applymiddlewares",
+            "reason": "Internal middleware utility in src/api/utils/applyMiddlewares.ts listed in the manifest. Implementation mechanism for request processing — not observable on the rendered surface."
+          },
+          {
+            "term": "live preview sdk is initialized",
+            "reason": "Phrase from statement 1 prescribing the implementation mechanism (SDK initialization). A tester cannot observe SDK initialization; they observe that draft content appears. Describes HOW, not WHAT."
+          },
+          {
+            "term": "signals an entry change",
+            "reason": "Phrase from statement 1 referencing the onEntryChange callback mechanism. The SDK 'signaling' is internal; the observable surface is content updating. Presumes a specific mechanism."
+          },
+          {
+            "term": "enable configuration",
+            "reason": "Phrase from statement 2 referencing the internal 'enable' boolean field of the live_preview config object. Asserts the shape/contents of an internal configuration structure rather than observable behavior."
+          },
+          {
+            "term": "live preview host",
+            "reason": "Phrase from statement 5 referencing the internal 'host' string property of the live_preview config object. Asserts the shape of an internal configuration structure."
+          }
+        ],
+        "whitelist": [
+          {
+            "term": "live preview",
+            "reason": "The feature name from the ticket title. A content author or tester can observe whether live preview is functioning — draft content appearing on the page. This is the surface the ticket is about."
+          },
+          {
+            "term": "rendered page",
+            "reason": "Observable output — what a user or tester sees rendered in the browser. Appears in statements 1 and 2."
+          },
+          {
+            "term": "rendered output",
+            "reason": "Observable output — what a user or tester sees. Appears in statement 4."
+          },
+          {
+            "term": "published content",
+            "reason": "Observable content state — the content a user sees when not in preview mode. Appears in statements 2 and 4."
+          },
+          {
+            "term": "draft content",
+            "reason": "Observable content state — what a content author expects to see when previewing. The end-user-perceivable result of the live preview feature."
+          },
+          {
+            "term": "page reload",
+            "reason": "Observable browser behavior — a tester can see whether a full page reload occurs or not. Appears in statement 1."
+          },
+          {
+            "term": "content re-renders",
+            "reason": "Observable behavior — content updating on the screen without reload. Appears in statement 1."
+          },
+          {
+            "term": "field values",
+            "reason": "Observable content values displayed on the page. A tester can see and compare field values visually. Appears in statement 1."
+          },
+          {
+            "term": "published values",
+            "reason": "Observable content state — the values displayed before preview updates. Appears in statement 1."
+          },
+          {
+            "term": "authentication gate",
+            "reason": "Observable UI element — the authentication/login screen presented to unauthenticated users. Appears in statement 3."
+          },
+          {
+            "term": "query parameters",
+            "reason": "Observable URL elements — a tester can see query parameters in the browser address bar. Appears in statements 3 and 4."
+          },
+          {
+            "term": "console errors",
+            "reason": "Observable browser console output — a tester can open dev tools and check for errors. Appears in statements 2 and 4."
+          },
+          {
+            "term": "layout distortion",
+            "reason": "Observable visual defect — a tester can see layout problems on the rendered page. Appears in statement 2."
+          },
+          {
+            "term": "missing sections",
+            "reason": "Observable visual defect — a tester can see sections missing from the rendered page. Appears in statement 2."
+          }
+        ]
+      },
+      "runId": "20260809T045158Z",
+      "assignedAgents": [
+        "openspec",
+        "speckit"
+      ],
+      "coordinatorNotes": "coordinatorReview.verdict is 'needs_review' (qualityScore 0.78), not 'approved' as coordinatorNotes falsely claim. The 'speckit-not-applied' flag explicitly confirms speckit never ran despite being claimed. Openspec already ran and its output is applied and solid — re-running it risks destabilizing good work. Speckit is the missing piece: it provides testability criteria, security checks, and edge-case analysis (onEntryChange firing before initial render, malformed preview hashes, partial SDK entries requiring merge logic) that the flags call out as absent. The 'coordinator-review-wrong-lane' flag (review was done for gotransit not upexpress) and 'pageservice-integration-underspecified' flag further justify hardening. Not a skip case because verdict is 'needs_review' with actionable flags.",
+      "status": "completed",
+      "updatedAt": "2026-08-09T11:20:47.534Z",
+      "appliedAgents": [
+        "openspec",
+        "speckit"
+      ],
+      "agentContributions": [
+        {
+          "agent": "openspec",
+          "applied": true,
+          "notes": "Novel story — Live Preview capability does not exist in the codebase. Three prior coordinator flags were received as opaque [object Object] and could not be read; the substantive review concerns (documentation contradictions, guardVocabulary, verification criteria) are addressed directly below. KEY RESOLUTION of documentation contradictions: (1) The Contentstack docs state onEntryChange 'does not take any arguments' — the re-render must rely on the SDK's internal state update mechanism, not a callback parameter carrying the updated entry. VCs assert observable re-render behavior, not callback signatures. (2) Custom preview URLs are configured in the Contentstack dashboard UI, not via application environment variables. However, the live_preview.enable and live_preview.host properties on the Stack initialization ARE app-side configuration that can be driven by env vars. VCs about env vars are scoped to these Stack-init properties only, not to dashboard-side preview URL configuration. The upexpress codeline lacks .env.local.sample; env var documentation VCs apply only to codelines where that file exists (gotransit, metrolinx).",
+          "acceptanceChanged": false,
+          "splitCount": 0,
+          "timestamp": "2026-08-09T11:18:54.437Z"
+        },
+        {
+          "agent": "speckit",
+          "applied": true,
+          "notes": "Openspec provided empty acceptanceCriteria with valuable notes about documentation contradictions. I built all ACs from scratch informed by those notes and by direct codebase examination. KEY FINDINGS FROM CODE REVIEW: (1) src/services/contentstack.ts exports a `contentstack.Config` options object and a `Stack` created from it — the live_preview block must be added to this options object. (2) ContentstackContext is a simple createContext with no state setter — the onEntryChange callback must trigger a context value update for useContent consumers to re-render. (3) _app.tsx currently has no ContentstackContext provider and no live preview SDK initialization. (4) @contentstack/live-preview-utils is installed in node_modules but NOT declared in package.json — AC-7 addresses this. (5) The SDK's onEntryChange takes a callback of type OnEntryChangeCallback (no arguments) confirming openspec's note that re-render relies on SDK internal state, not callback parameters. (6) .env.local.sample exists for metrolinx and gotransit but NOT for upexpress — AC-6 is scoped accordingly. (7) No existing live preview code was found anywhere in the codebase (search returned zero matches). AC-5 (SSR safety) and AC-8 (SDK failure graceful degradation) address the most likely integration pitfalls. AC-9 formalizes the protected-page limitation from the story description. AC-11 covers the edge case where enable is true but host is missing. AC-12 ensures backward compatibility since the context interface must change to support re-render.",
+          "acceptanceChanged": false,
+          "splitCount": 0,
+          "timestamp": "2026-08-09T11:20:47.534Z"
+        }
+      ],
+      "manifestCheck": {
+        "missing": [],
+        "checkedAt": "2026-08-09T11:01:14.036Z"
+      },
+      "coordinatorReview": {
+        "verdict": "needs_review",
+        "reviewNotes": "The underlying spec content is correct and implementable for the upexpress lane: all 13 declared manifest paths are confirmed EXISTS, the 4 verification criteria are purely black-box observable (draft field values rendered, published content fallback when env vars missing, auth gate on protected pages, no errors/missing sections/layout distortion without preview params), and the guardVocabulary correctly blacklists all internal mechanism terms (onentrychange, live_preview, contentstackcontext, usecontent, etc.) with none appearing in the criteria. The fixSiteAnalysis prescribes concrete, file-verified changes for 4 upexpress files: contentstack.ts (add live_preview block to options object, conditionally on env vars), _app.tsx (wire onEntryChange via useState+useEffect replacing static content prop), ContentstackContext.ts (optionally extend IContentstackContext for preview-augmented data), and useContent.ts (verify propagation, no change expected). I confirmed ContentstackContext.ts is a simple createContext<IContentstackContext>({}) matching the prescription. The spec correctly identifies @contentstack/live-preview-utils as not installed (confirmed: not in package.json, only referenced in docs and a rejected prior attempt in git lost-found). Plan alignment is clean — detectivePlan and fixSiteAnalysis share the same named symbols (options, upapp, contentstackcontext, icontentstackcontext, usecontent) with aligned:true and no unexplained pivot. Two concrete problems require human attention: (1) The embedded coordinatorReview.reviewNotes were written for the GOTRANSIT lane — they reference 'All 8 declared manifest paths for the gotransit codeline exist' and 'the gotransit spec is self-contained and implementable within its own checkout,' explicitly treating upexpress as out of scope. For this upexpress review, no coordinator review was actually performed. (2) Only openspec appears in appliedAgents and agentContributions; speckit never ran, yet coordinatorNotes falsely state 'Both openspec and speckit have applied:true.' Speckit's security/edge-case/gap analysis is absent — edge cases like onEntryChange firing before initial render, malformed preview hashes, or SDK returning partial entries are not analyzed. The spec is implementable as-is — a competent writer can follow the fixSiteAnalysis — but the review layer is unreliable and should be re-validated for the upexpress lane.",
+        "qualityScore": 0.78,
+        "flags": [
+          {
+            "flag": "coordinator-review-wrong-lane",
+            "severity": "advisory",
+            "why": "The coordinatorReview.reviewNotes embedded in the specification were written for the gotransit codeline, not upexpress. They state 'All 8 declared manifest paths for the gotransit codeline exist' and 'the gotransit spec is self-contained and implementable within its own checkout,' explicitly treating upexpress as out of scope. For the upexpress lane, no coordinator review was performed. The underlying fixSiteAnalysis and manifest data ARE correct for upexpress (all 13 paths confirmed EXISTS, each fix site tagged codeline:upexpress), so this is a review-layer defect, not a spec-content defect."
+          },
+          {
+            "flag": "speckit-not-applied",
+            "severity": "advisory",
+            "why": "appliedAgents contains only ['openspec'] and agentContributions has only one entry (openspec, applied:true). coordinatorNotes falsely claim 'Both openspec and speckit have applied:true, spec.status is completed.' Speckit's testability review, security analysis, and edge-case gap analysis did not run for this story. Openspec's output is solid, but the second-pipeline review that would catch missed edge cases (onEntryChange firing before initial render, malformed preview hash handling, SDK returning partial entries requiring merge logic) is absent."
+          },
+          {
+            "flag": "pageservice-integration-underspecified",
+            "severity": "advisory",
+            "why": "pageService.ts is in the upexpress manifest (confirmed EXISTS) but has no fixSiteAnalysis entry. The fixSiteAnalysis for useContent.ts notes 'No code change expected' and defers the question of whether the SDK returns partial entries requiring merge logic to 'be validated during implementation, not assumed.' The interaction between client-side onEntryChange (firing in _app.tsx) and server-side pageService data fetching (getEntry/getSingletonEntry) is not addressed. This is an ordinary open question a competent writer resolves, not a blocking gap."
+          }
+        ],
+        "planAlignment": "aligned",
+        "reviewedAt": "2026-08-09T11:01:14.036Z"
+      }
+    },
+    "fixSiteAnalysis": [
+      {
+        "file": "src/services/contentstack.ts",
+        "function": "options",
+        "reason": "This is the Contentstack Delivery SDK Stack initialization config. It currently lacks a live_preview block. Adding live_preview here enables the SDK to fetch draft/preview content. The Stack instance exported on line 91 is what live-preview-utils will wrap.",
+        "fix": "Add a live_preview block to the options object (line 71): live_preview: { management_token: process.env.CONTENTSTACK_MANAGEMENT_TOKEN, enable: true, host: process.env.CONTENTSTACK_PREVIEW_HOST }. Also add CONTENTSTACK_MANAGEMENT_TOKEN and CONTENTSTACK_PREVIEW_HOST to the destructured env vars at line 23. After Stack creation on line 91, call ContentstackLivePreview.init({ stack: Stack }) from @contentstack/live-preview-utils.",
+        "helper": "Stack",
+        "brokenLine": "",
+        "fixVerified": true,
+        "evidenceVerified": null,
+        "fileVerified": true,
+        "prescriptionNote": "",
+        "prescriptionUnderspecified": false,
+        "codeline": "metrolinx"
+      },
+      {
+        "file": "src/context/contentstackContext.tsx",
+        "function": "ContentstackContext",
+        "reason": "This is the React context that carries all CMS content to the component tree. The onEntryChange callback from live-preview-utils must update the value of this context so that every consumer of useContent re-renders with draft content. The context value is currently a static object — it needs to become reactive to live-preview updates.",
+        "fix": "The provider of ContentstackContext (wherever it renders <ContentstackContext.Provider value={...}>) must subscribe to onEntryChange from live-preview-utils and re-set the context value with the updated draft entry data. The IContentstackContext interface may need no change if the live-preview SDK merges draft data into the same shape; the provider just needs to trigger a state update that causes useContent consumers to re-render.",
+        "helper": "ContentstackContext",
+        "brokenLine": "",
+        "fixVerified": true,
+        "evidenceVerified": null,
+        "fileVerified": true,
+        "prescriptionNote": "",
+        "prescriptionUnderspecified": false,
+        "codeline": "metrolinx"
+      },
+      {
+        "file": "src/pages/_app.tsx",
+        "function": "MyApp",
+        "reason": "This is the root App component for the Pages Router. It is the correct place to initialize @contentstack/live-preview-utils on the client side (ContentstackLivePreview.init) and to wire the onEntryChange callback that will push draft content updates into ContentstackContext, causing re-renders through the existing useContent pipeline.",
+        "fix": "In MyApp (or a dedicated wrapper component rendered inside it), call ContentstackLivePreview.init() once on mount (client-side only, guarded by typeof window !== 'undefined'). Register onEntryChange to update the ContentstackContext value so that all 20+ useContent consumers (CookiesBanner, Footer, FeatureListing, NewsListingContainer, etc.) re-render with draft content. The existing ContentstackContext and useContent hook need no changes — only the Provider's value must become reactive to onEntryChange.",
+        "helper": "useContent",
+        "brokenLine": "",
+        "fixVerified": true,
+        "evidenceVerified": null,
+        "fileVerified": true,
+        "prescriptionNote": "",
+        "prescriptionUnderspecified": false,
+        "codeline": "metrolinx"
+      },
+      {
+        "file": ".env.local.sample",
+        "function": "",
+        "reason": "This file documents the required environment variables for developers. New variables needed for Live Preview (CONTENTSTACK_MANAGEMENT_TOKEN, CONTENTSTACK_PREVIEW_HOST, CONTENTSTACK_PREVIEW_ENABLED) must be documented here so the team can configure preview environments.",
+        "fix": "Add entries for CONTENTSTACK_MANAGEMENT_TOKEN (Contentstack management token for live preview), CONTENTSTACK_PREVIEW_HOST (e.g., rest.contentstack.com), and CONTENTSTACK_PREVIEW_ENABLED (boolean flag to enable/disable live preview). Mirror these in the destructured env vars in src/services/contentstack.ts so the options.live_preview block can reference them.",
+        "helper": "",
+        "brokenLine": "",
+        "fixVerified": null,
+        "evidenceVerified": null,
+        "fileVerified": true,
+        "prescriptionNote": "",
+        "prescriptionUnderspecified": false,
+        "codeline": "metrolinx"
+      },
+      {
+        "file": "src/hooks/useContent.ts",
+        "function": "useContent",
+        "reason": "This is the shared hook that 20+ components use to read CMS content from ContentstackContext. It is the downstream pipeline that onEntryChange must ultimately trigger — when the context value updates (via onEntryChange), useContent's useContext(ContentstackContext) will return the new draft data, and getContentByKey will resolve the updated paths. No code change is needed here, but it is the consumption endpoint the live-preview wiring targets.",
+        "fix": "No change required in this file. It already reads from ContentstackContext via useContext. Once the Provider's value is updated by onEntryChange, getContentByKey will automatically return draft content. This hook is the reuse point — all live-preview re-rendering flows through it without modification.",
+        "helper": "getContentByKey",
+        "brokenLine": "",
+        "fixVerified": true,
+        "evidenceVerified": null,
+        "fileVerified": true,
+        "prescriptionNote": "",
+        "prescriptionUnderspecified": false,
+        "codeline": "metrolinx"
+      }
+    ],
+    "planAlignmentEvidence": {
+      "detectivePlan": "I now have all the data needed. Let me compile the structured findings.\n\n**Summary of investigation:**\n\n1. **Pages Router** confirmed (`src/pages/`, no `app/` dir). Top-level src subdirs: `__tests__`, `api`, `assets`, `components`, `constants`, `context`, `hooks`, `interface`, `pages`, `services`, `styles`, `utils`.\n\n2. **Stack init** at `src/services/contentstack.ts:55-69`: `options` has `api_key`, `delivery_token`, `environment`, `branch`, optional `fetchOptions`. **No `live_preview` block**.\n\n3. **Context provider** at `src/pages/_app.tsx:59`: `<ContentstackContext.Provider value={content}>` where `content` comes from `pageProps`. The context (`src/context/ContentstackContext.ts`) is a simple `createContext<IContentstackContext>({})`. `useContent` hook reads it.\n\n4. **Env vars**: `CONTENTSTACK_API_KEY`, `CONTENTSTACK_DELIVERY_TOKEN`, `CONTENTSTACK_ENVIRONMENT`, `CONTENTSTACK_API_HOST`, `CONTENTSTACK_BRANCH`, `CONTENTSTACK_FETCH_TIMEOUT` — all in `src/services/contentstack.ts:17-24`.\n\n5. **`@contentstack/live-preview-utils`**: NOT installed, not in package.json.\n\n6. **Test infra**: Jest ^29.5.0, `*.spec.tsx` in `__tests__/` dirs.\n\nNow the attachment points as JSON:\n\n```json\n[\n  {\n    \"file\": \"src/services/contentstack.ts\",\n    \"function\": \"options\",\n    \"reason\": \"WHERE IT IS SET UP — this is the Stack initialization config object passed to contentstack.Stack(). The live_preview block must be added here (enable: true, host, preview_token) to activate the Delivery SDK's live preview mode. Without this, the SDK will not include preview hashes in API responses.\",\n    \"brokenLine\": \"\",\n    \"fix\": \"Add a live_preview key to the exported options object (around line 55-67). Conditionally include it when CONTENTSTACK_PREVIEW_TOKEN and CONTENTSTACK_PREVIEW_HOST env vars are present: live_preview: { enable: true, host: CONTENTSTACK_PREVIEW_HOST, preview_token: CONTENTSTACK_PREVIEW_TOKEN }. Also destructure CONTENTSTACK_PREVIEW_TOKEN and CONTENTSTACK_PREVIEW_HOST from process.env alongside the existing vars at lines 17-24.\",\n    \"helper\": \"options\",\n    \"requiredPackages\": [\"@contentstack/live-preview-utils\"]\n  },\n  {\n    \"file\": \"src/pages/_app.tsx\",\n    \"function\": \"UpApp\",\n    \"reason\": \"WHAT CARRIES IT — this is the app-level component that wraps the entire tree with ContentstackContext.Provider value={content}. The onEntryChange callback from @contentstack/live-preview-utils must be wired here to update the context value when Contentstack pushes draft content changes, causing all useContent consumers to re-render with updated data.\",\n    \"brokenLine\": \"\",\n    \"fix\": \"Import ContentstackLivePreview from @contentstack/live-preview-utils and call ContentstackLivePreview.init() once (in a useEffect or at module level). Add state for the content value (useState with the initial pageProps.content). Register onEntryChange callback that updates that state with the new draft entry data. Pass the state value to ContentstackContext.Provider instead of the static content prop. The init call should reference the same Stack instance from services/contentstack.\",\n    \"helper\": \"ContentstackContext\",\n    \"requiredPackages\": [\"@contentstack/live-preview-utils\"]\n  },\n  {\n    \"file\": \"src/context/ContentstackContext.ts\",\n    \"function\": \"IContentstackContext\",\n    \"reason\": \"WHAT CARRIES IT — the TypeScript interface defining the context shape. If live preview adds new top-level keys to the entry data (e.g. live_preview metadata), this interface may need to be extended to avoid type errors when the onEntryChange callback updates the context value with draft content that includes preview-specific fields.\",\n    \"brokenLine\": \"\",\n    \"fix\": \"Optionally extend IContentstackContext to include an index signature or a live_preview field if the SDK attaches preview metadata to the context payload. At minimum, ensure the interface is compatible with the augmented entry shape that onEntryChange delivers. This may be a no-op if the SDK only mutates existing field values.\",\n    \"helper\": \"IContentstackContext\",\n    \"requiredPackages\": []\n  },\n  {\n    \"file\": \"src/hooks/useContent.ts\",\n    \"function\": \"useContent\",\n    \"reason\": \"EVERYWHERE IT IS USED — this hook is the single consumer-side pipe for all CMS data. 101+ components call useContent to read from ContentstackContext. Because it reads from the React context, any state update triggered by onEntryChange in _app.tsx will automatically propagate to all consumers — no changes needed here unless the SDK requires a different data-merge strategy.\",\n    \"brokenLine\": \"\",\n    \"fix\": \"No code change expected. Verify that getValue (imported from utils/getValue) correctly resolves nested paths on the updated draft content object. If the live preview SDK returns a partial entry (only changed fields), getValue may need to merge with the previous full entry rather than replace — but this depends on SDK behavior and should be validated, not assumed.\",\n    \"helper\": \"getValue\",\n    \"requiredPackages\": []\n  }\n]\n```",
+      "aligned": true,
+      "planTerms": [
+        "tests",
+        "assets",
+        "components",
+        "constants",
+        "context",
+        "hooks",
+        "interface",
+        "pages",
+        "services",
+        "styles",
+        "utils",
+        "options",
+        "apikey",
+        "deliverytoken",
+        "environment",
+        "branch",
+        "fetchoptions",
+        "livepreview",
+        "content",
+        "pageprops",
+        "usecontent",
+        "contentstackapikey",
+        "contentstackdeliverytoken",
+        "contentstackenvironment",
+        "contentstackapihost",
+        "contentstackbranch",
+        "contentstackfetchtimeout",
+        "contentstack",
+        "contentstackcontext",
+        "createcontext",
+        "icontentstackcontext",
+        "package",
+        "spec",
+        "json",
+        "where",
+        "brokenline",
+        "contentstackpreviewtoken",
+        "contentstackpreviewhost",
+        "process",
+        "requiredpackages",
+        "upapp",
+        "what",
+        "carries",
+        "onentrychange",
+        "contentstacklivepreview",
+        "useeffect",
+        "usestate",
+        "typescript",
+        "everywhere",
+        "used",
+        "getvalue"
+      ],
+      "findingTerms": [
+        "contentstack",
+        "options",
+        "contentstackcontext",
+        "myapp",
+        "envlocalsample",
+        "usecontent"
+      ]
+    }
+  }
+]
+
+<SPEC_REVIEW>
+</SPEC_REVIEW>
+
+# Output
+<SPEC_REVIEW>
+[
+  {
+    "storyId": "AMSD-2041",
+    "verdict": "approved",
+    "reviewNotes": "Reviewing the metrolinx lane only. All 13 declared manifest paths confirmed EXISTS — no missing paths. Both agents added meaningful, non-overlapping value: openspec resolved two real documentation contradictions (onEntryChange takes no arguments per vendor docs, so re-render must rely on SDK internal state; custom preview URLs are dashboard-side, not app env vars) and built a correct guardVocabulary that blacklists all internal mechanism terms. Speckit performed genuine codebase examination — confirmed the `options` object shape in contentstack.ts, verified ContentstackContext is a bare `createContext<IContentstackContext>({})` with no reactive state, found that @contentstack/live-preview-utils is NOT declared in package.json, and found zero existing live-preview code. I independently verified all three claims against the real checkout: contentstack.ts exports `options: contentstack.Config` with api_key/delivery_token/environment/branch/fetchOptions and no live_preview block; `Stack = contentstack.Stack(options)` follows; contentstackContext.tsx is a simple createContext with no setter; package.json has no live-preview-utils entry. The 6 verification criteria are all black-box observable (draft field values rendered, published fallback, no-reload updates, no rendering errors, env var configuration, auth-gate limitation). Plan alignment is clean: detectivePlan and fixSiteAnalysis share the same core symbols (options, contentstackcontext, usecontent, _app/MyApp). The detectivePlan was written against upexpress naming (UpApp, ContentstackContext.ts) while fixSiteAnalysis correctly adapts to metrolinx naming (MyApp, contentstackContext.tsx) — a legitimate codeline adaptation, not an unexplained pivot. Three advisory items noted below; none are blocking because a competent writer resolves each during implementation.",
+    "qualityScore": 0.85,
+    "flags": [
+      {
+        "flag": "env-var-naming-inconsistency",
+        "severity": "advisory",
+        "why": "fixSiteAnalysis for contentstack.ts prescribes CONTENTSTACK_MANAGEMENT_TOKEN while the detectivePlan prescribes CONTENTSTACK_PREVIEW_TOKEN. The referenced vendor docs state live_preview needs `enable` (boolean) and `host` (string) but do not name the token field. I verified the actual env var destructuring in contentstack.ts (lines 23-36) uses CONTENTSTACK_API_KEY, DELIVERY_TOKEN, etc. — none of the preview-related vars exist yet. A writer should confirm the correct field name against the installed @contentstack/live-preview-utils SDK before finalizing env var names."
+      },
+      {
+        "flag": "npm-install-not-in-fixsite",
+        "severity": "advisory",
+        "why": "Speckit correctly identified that @contentstack/live-preview-utils is not in package.json (I confirmed: zero matches in package.json). However, the fixSiteAnalysis for contentstack.ts prescribes calling ContentstackLivePreview.init({ stack: Stack }) from this package without an explicit npm install step. Speckit's notes reference an AC-7 for this, but the prescription itself omits it. A writer will naturally install the package first, but it should be explicit."
+      },
+      {
+        "flag": "coordinator-review-layer-confusion",
+        "severity": "advisory",
+        "why": "The embedded coordinatorReview.reviewNotes and coordinatorNotes reference other codelines (gotransit, upexpress) and contain stale flags from a prior lane review ('speckit-not-applied', 'coordinator-review-wrong-lane'). For the metrolinx lane, both openspec and speckit show applied:true in agentContributions with detailed, code-verified notes. The underlying fixSiteAnalysis entries are all tagged codeline:metrolinx and the manifest data is correct. This is a review-layer artefact issue, not a spec-content defect."
+      }
+    ],
+    "planAlignment": "aligned"
+  }
+]
+</SPEC_REVIEW>

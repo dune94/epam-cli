@@ -1,0 +1,72 @@
+# Prompt
+You are reviewing an estate survey before a team is assembled from it.
+
+You are reviewing an ESTATE SURVEY. A roster of agents is about to be minted from it, and every
+claim below will be inherited as a brief and re-checked by nothing.
+
+THE SURVEY UNDER REVIEW:
+- mocka: in_scope
+  evidence: src/fares.ts contains the fare logic. fareFor (line 8) checks `if (rider.age > 65) return CONCESSION_FARE_CENTS` on line 10 — the boundary is strictly greater-than, so a rider aged exactly 65 falls through to BASE_FARE_CENTS (350) instead of the concession fare (175). This is MOCK3-1. Tests in test/fares.test.ts cover ages 30, 8, and 70 but do not test age 65, so the boundary gap is uncaught. No schedule or departure-board symbols were found in this codeline.
+  filesRead: src/fares.ts, test/fares.test.ts
+- mockb: in_scope
+  evidence: src/schedule.ts contains the departure-board logic. formatStops (line 4) loops `for (let i = 0; i < stops.length - 1; i++)` on line 6, which iterates up to the second-to-last stop, omitting the final stop entirely. totalMinutes (line 12) correctly reads the last element's minutes, so the journey length is right while the rendered list is short. This is MOCK3-2. Tests in test/schedule.test.ts assert the arrow separator and the first stop name but never assert the last stop appears, so the omission is uncaught. No fare-related symbols were found in this codeline.
+  filesRead: src/schedule.ts, test/schedule.test.ts
+
+THE CODELINES IN SCOPE, and where each is checked out:
+- mocka (/home/bradleyjerome/projects/mock3/mock-a)
+- mockb (/home/bradleyjerome/projects/mock3/mock-b)
+
+THE WORK THE PROJECT WAS ASKED TO DO:
+- MOCK3-1: Riders aged exactly 65 are charged the adult fare
+- MOCK3-2: The departure board omits the final stop
+
+You may open any file in the codelines above to check a claim.
+
+# What is in scope
+
+ONE QUESTION ONLY: does the survey state anything about these repositories that is FALSE?
+
+A claim is in scope when you can check it by opening a repository. Open them and check.
+
+- a file named in `filesRead` that the codeline does not contain
+- a file, module, function or symbol said to exist where it does not
+- a claim attributed to the WRONG codeline — the commonest and most damaging error, because the
+  brief built from it sends an implementer into a repository that has no such code
+- a dependency, script, framework or command the codeline does not declare
+- a codeline reported in_scope on evidence that belongs to a different one
+
+A codeline reported no_work_found or not_investigated is making a WEAK claim, not a false one.
+Check it only if you can show the work plainly does reach it.
+
+# What is NOT in scope
+
+Do not judge whether the survey looked hard enough, chose the right focus, or recommended the
+right team. Do not propose better wording. Do not supply a FIX SITE of your own — naming which
+file to edit is not yours to say here any more than it was the surveyor's, and a fix site you add
+for a repository you swept from the outside is how one codeline's file ends up in another's work.
+
+# Evidence
+
+For each finding, say what you CHECKED and what you FOUND, naming the repository and the path you
+opened. A finding without a check is an opinion, and an opinion about a survey is not a defect.
+
+If every claim checks out, return no findings. An empty finding list from a review that RAN is the
+correct answer for a sound survey.
+
+
+# Output
+Every concrete claim in the survey checks out against the repositories. Here is what I verified:
+
+**mocka (`/home/bradleyjerome/projects/mock3/mock-a`)**
+- `src/fares.ts` exists and contains the fare logic. `fareFor` is declared on line 8. Line 10 reads `if (rider.age > 65) return CONCESSION_FARE_CENTS;` — strictly greater-than, exactly as claimed. `BASE_FARE_CENTS` is 350 and `CONCESSION_FARE_CENTS` is 175, matching the survey.
+- `test/fares.test.ts` exists and tests ages 30, 30 (with pass), 8, and 70. Age 65 is never tested, confirming the boundary-gap claim.
+- A search for schedule/departure-board symbols (`schedule`, `formatStops`, `departure`, `totalMinutes`, `Stop`) across mocka returned only orchestration log files — no source symbols. The "no schedule or departure-board symbols" claim holds.
+
+**mockb (`/home/bradleyjerome/projects/mock3/mock-b`)**
+- `src/schedule.ts` exists and contains the departure-board logic. `formatStops` is declared on line 4. Line 6 reads `for (let i = 0; i < stops.length - 1; i++)`, omitting the last stop as claimed. `totalMinutes` is declared on line 12 and reads `stops[stops.length - 1].minutes`, correctly returning the journey length.
+- `test/schedule.test.ts` exists and asserts the arrow separator (`->`) and the first stop name (`Union`), but never asserts the last stop (`Eglinton`) appears in the formatted output.
+- A search for fare-related symbols (`fare`, `fareFor`, `Rider`, `BASE_FARE`, `CONCESSION_FARE`) across mockb returned no matches, confirming the "no fare-related symbols" claim.
+
+No file was misnamed, no symbol was misattributed to the wrong codeline, no line number or code snippet was inaccurate, and no test-coverage claim was wrong.
+
+**Findings: none.** The survey is sound.

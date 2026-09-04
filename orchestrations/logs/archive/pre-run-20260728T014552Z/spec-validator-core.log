@@ -1,0 +1,35 @@
+{
+  "agent": "spec-validator",
+  "phase": "core",
+  "stories": [
+    {
+      "storyId": "MOCK-HW-1-impl",
+      "title": "Update getGreeting to return hello dolly",
+      "criteria": [
+        {
+          "text": "Calling getGreeting() returns the string 'hello dolly'",
+          "status": "met",
+          "evidence": "src/hello.ts exports getGreeting() with body 'return \"hello dolly\";', confirmed by git diff and file excerpt.",
+          "gaps": ""
+        }
+      ],
+      "overallCompliance": 100,
+      "verdict": "pass"
+    },
+    {
+      "storyId": "MOCK-HW-1-test",
+      "title": "Update hello.test.ts to assert hello dolly",
+      "criteria": [
+        {
+          "text": "Calling getGreeting() returns the string 'hello dolly'",
+          "status": "met",
+          "evidence": "src/hello.test.ts contains 'expect(getGreeting()).toBe(\"hello dolly\")'; vitest results: 1 passed, 0 failed.",
+          "gaps": ""
+        }
+      ],
+      "overallCompliance": 100,
+      "verdict": "pass"
+    }
+  ],
+  "overallVerdict": "pass"
+}

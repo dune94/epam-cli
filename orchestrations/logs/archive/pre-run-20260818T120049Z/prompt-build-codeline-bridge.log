@@ -1,0 +1,93 @@
+# Prompt
+You are specialising ONE generic agent prompt for ONE specific project. You are the same agent that just minted this project's roles, so you already know what this project is and who will work on it.
+
+## The template you must specialise
+
+Its id is codeline-bridge and its purpose is: Extracts a completed codeline's exported surface as a contract for later lanes.
+
+Everything between the two markers below is the template, verbatim. The markers are not
+part of it. A code fence cannot delimit this: several templates contain fences of their
+own, so the first closing fence would truncate the body mid-instruction.
+
+-----BEGIN TEMPLATE BODY-----
+__BRIDGE_PROFILE__
+
+## Variables for this run
+
+- BRIDGE_SRC_CODELINE: __BCL__
+- BRIDGE_SRC_DIR: __BWT__
+- BRIDGE_OUT_FILE: __BRIDGE_OUT__
+- BRIDGE_PRD_FILE: __BPRD__
+
+Extract the exported API surface from the '__BCL__' codeline files and write the cross-codeline contract to __BRIDGE_OUT__.
+-----END TEMPLATE BODY-----
+
+## What this project is
+
+Project config: /home/bradleyjerome/projects/ai/epam-cli/orchestrations/projects/mock3
+Tickets in scope: MOCK3-1: Riders aged exactly 65 are charged the adult fare | MOCK3-2: The departure board omits the final stop
+
+Codelines in scope and their declared dependencies:
+- mocka (/home/bradleyjerome/projects/mock3/mock-a) deps: vitest, typescript
+- mockb (/home/bradleyjerome/projects/mock3/mock-b) deps: vitest, typescript
+
+The roles you minted for this project:
+- typescript-logic-fixer [implementer] — Both tickets are off-by-one / boundary bugs in pure TypeScript modules with no external dependencies, so one implementer who knows the two source files and the shared vitest+typescript stack can fix both.
+- fares-investigator [investigator] — The fare bug is a one-line boundary comparison, but the implementer needs to know exactly where the age check lives, what the fare constants are, and what the existing test already covers before touching it.
+- schedule-investigator [investigator] — The omitted-stop bug is in a rendering loop, but the implementer needs to know the exact function signature, the data shape, and how the loop truncates before editing.
+
+## The one rule you cannot break
+
+The template's placeholders are a CONTRACT with the pipeline. Each token written in SCREAMING_SNAKE_CASE between double underscores is replaced at run time with real evidence — a diff, a ticket, a test log, a plan. The substitution is BY NAME and it is strict in both directions.
+
+- Reproduce every placeholder EXACTLY as it appears, character for character.
+- NEVER add or invent a placeholder. Nothing supplies a name the pipeline does not know, so rendering throws and the run dies at the seam that needed this prompt.
+- NEVER remove or rename one. The evidence it carries would silently never reach the agent, and the agent would answer without it.
+- Do not move a placeholder into a code fence, a quote, or an example where it would read as literal text.
+
+The placeholders in this template are exactly: __BRIDGE_PROFILE__, __BRIDGE_OUT__, __BPRD__, __BCL__, __BWT__
+
+## What specialising means
+
+Keep the template's instructions, its output format, its prohibitions and its reasoning intact. They encode failures this pipeline has already paid for. You are not rewriting the prompt or improving its wording.
+
+Add only what a competent engineer joining THIS project would need and could not infer from the generic text:
+- the conventions, layout and idioms this codebase actually uses
+- the commands this project runs to build, test and type-check
+- the traps this stack presents that a generic prompt would not warn about
+
+Ground every addition in the project context above. If the context does not tell you something, say nothing about it — an invented convention is worse than a missing one, because the agent will follow it.
+
+Do not name a file, symbol, package or command that does not appear in the context you were given.
+
+## How to answer
+
+Emit ONLY the specialised prompt body as TEXT, directly in your reply. No JSON wrapper, no markdown fences around the whole thing, no commentary before or after, and do not write it to a file — the pipeline reads your reply text.
+
+# Output
+__BRIDGE_PROFILE__
+
+## Variables for this run
+
+- BRIDGE_SRC_CODELINE: __BCL__
+- BRIDGE_SRC_DIR: __BWT__
+- BRIDGE_OUT_FILE: __BRIDGE_OUT__
+- BRIDGE_PRD_FILE: __BPRD__
+
+Extract the exported API surface from the '__BCL__' codeline files and write the cross-codeline contract to __BRIDGE_OUT__.
+
+## Project-specific context
+
+This workspace has two independent TypeScript codelines that share no imports between them:
+
+- **mocka** (`/home/bradleyjerome/projects/mock3/mock-a`) — transit fare rules. Source: `src/fares.ts`. Exports: `Rider` (type), `BASE_FARE_CENTS` and `CONCESSION_FARE_CENTS` (const numbers), `fareFor(rider: Rider): number`, `totalFor(riders: Rider[]): number`.
+- **mockb** (`/home/bradleyjerome/projects/mock3/mock-b`) — departure board rendering. Source: `src/schedule.ts`. Exports: `Stop` (type), `formatStops(stops: Stop[]): string`, `totalMinutes(stops: Stop[]): number`.
+
+### Conventions to respect when extracting the contract
+
+- **ESM only.** Both codelines set `"type": "module"` in `package.json`. All exports are named exports — there are no default exports anywhere in this workspace. The contract must list each exported symbol by name.
+- **Directory layout is fixed:** source lives in `src/`, tests in `test/`. Tests import source via relative path (`../src/<module>`). The contract should reference the source file path relative to the codeline root (e.g. `src/fares.ts`).
+- **TypeScript strict mode** is enabled (`"strict": true`, target `ES2022`, `moduleResolution: "bundler"`). Preserve exact type signatures in the contract — parameter names, union types, and return types matter because downstream lanes will type-check against them with `tsc --noEmit`.
+- **Type-check command:** `npx tsc --noEmit` (aliased as `npm run build`). **Test command:** `npx vitest run` (aliased as `npm test`). The contract is only useful if these still pass after the source codeline is modified.
+- **No barrel files or re-exports.** Each codeline has exactly one source module. The exported surface is whatever `export` declarations appear in that single `src/*.ts` file — nothing else.
+- **Constants are part of the API.** `BASE_FARE_CENTS` and `CONCESSION_FARE_CENTS` are exported and consumed by tests and potentially by downstream codelines. Include exported constants with their current values in the contract, not just functions and types.

@@ -1,0 +1,98 @@
+# Prompt
+You are specialising ONE generic agent prompt for ONE specific project. You are the same agent that just minted this project's roles, so you already know what this project is and who will work on it.
+
+## The template you must specialise
+
+Its id is blocker-discipline and its purpose is: What a reviewer may and may not raise as a BLOCKER. Bounds a rejection to the plan of record and to what the implementer can actually do.
+
+Everything between the two markers below is the template, verbatim. The markers are not
+part of it. A code fence cannot delimit this: several templates contain fences of their
+own, so the first closing fence would truncate the body mid-instruction.
+
+-----BEGIN TEMPLATE BODY-----
+,
+-----END TEMPLATE BODY-----
+
+## What this project is
+
+Project config: /home/bradleyjerome/projects/ai/epam-cli/orchestrations/projects/mock3
+Tickets in scope: MOCK3-1: Riders aged exactly 65 are charged the adult fare | MOCK3-2: The departure board omits the final stop
+
+Codelines in scope and their declared dependencies:
+- mocka (/home/bradleyjerome/projects/mock3/mock-a) deps: vitest, typescript
+- mockb (/home/bradleyjerome/projects/mock3/mock-b) deps: vitest, typescript
+
+The roles you minted for this project:
+- typescript-bugfix-engineer [implementer] — Both tickets are small boundary/off-by-one fixes in TypeScript source files exercised by vitest, so a single implementer spanning both codelines is the correct scope rather than two near-duplicate roles.
+- mocka-investigator [investigator] — The fare-boundary fix is a one-line change, but the investigator must confirm no caller of fareFor or totalFor relies on the current incorrect boundary and characterise what test coverage for age 65 should look like — work that requires reading mocka specifically.
+- mockb-investigator [investigator] — The loop-bound fix in formatStops is small, but the investigator must verify no caller compensates for the missing last stop and describe what the test suite currently asserts about stop rendering — work that requires reading mockb specifically.
+
+## The one rule you cannot break
+
+The template's placeholders are a CONTRACT with the pipeline. Each token written in SCREAMING_SNAKE_CASE between double underscores is replaced at run time with real evidence — a diff, a ticket, a test log, a plan. The substitution is BY NAME and it is strict in both directions.
+
+- Reproduce every placeholder EXACTLY as it appears, character for character.
+- NEVER add or invent a placeholder. Nothing supplies a name the pipeline does not know, so rendering throws and the run dies at the seam that needed this prompt.
+- NEVER remove or rename one. The evidence it carries would silently never reach the agent, and the agent would answer without it.
+- Do not move a placeholder into a code fence, a quote, or an example where it would read as literal text.
+
+The placeholders in this template are exactly: (none)
+
+## What specialising means
+
+Keep the template's instructions, its output format, its prohibitions and its reasoning intact. They encode failures this pipeline has already paid for. You are not rewriting the prompt or improving its wording.
+
+Add only what a competent engineer joining THIS project would need and could not infer from the generic text:
+- the conventions, layout and idioms this codebase actually uses
+- the commands this project runs to build, test and type-check
+- the traps this stack presents that a generic prompt would not warn about
+
+Ground every addition in the project context above. If the context does not tell you something, say nothing about it — an invented convention is worse than a missing one, because the agent will follow it.
+
+Do not name a file, symbol, package or command that does not appear in the context you were given.
+
+## How to answer
+
+Emit ONLY the specialised prompt body as TEXT, directly in your reply. No JSON wrapper, no markdown fences around the whole thing, no commentary before or after, and do not write it to a file — the pipeline reads your reply text.
+
+# Output
+,
+
+## Blocker discipline for this project
+
+A BLOCKER is a defect that prevents merge. It must be grounded in the plan of record — the ticket description and the investigator's findings — and it must be something the typescript-bugfix-engineer can fix within the scope of a boundary or off-by-one correction in TypeScript source exercised by vitest.
+
+### What a reviewer MAY raise as a blocker
+
+1. **The fix does not satisfy the ticket.**
+   - MOCK3-1: a rider aged exactly 65 must be charged the adult fare. If the submitted change still charges the wrong fare at age 65, that is a blocker.
+   - MOCK3-2: the departure board must include the final stop. If the submitted change still omits it, that is a blocker.
+
+2. **The fix introduces a regression at a neighbouring boundary.**
+   - For MOCK3-1: if correcting age 65 causes age 64 or age 66 to be charged the wrong fare, that is a blocker.
+   - For MOCK3-2: if correcting the last-stop omission causes an earlier stop to disappear or a duplicate stop to appear, that is a blocker.
+
+3. **The fix relies on loose equality where strict equality is required.** TypeScript boundary fixes commonly involve `>=`, `>`, `<`, `<=` operators or array index arithmetic. If the submitted code uses `==`/`!=` where `===`/`!==` is the project idiom, or if the comparison operator is off by one, that is a blocker.
+
+4. **The fix changes a public function signature or return type.** The implementer's scope is a minimal boundary correction. If the diff alters the signature of `fareFor`, `totalFor`, `formatStops`, or any other exported symbol, that is a blocker — it exceeds the plan of record.
+
+5. **A vitest test that should pass after the fix still fails, or a vitest test that previously passed now fails.** The test suite is the source of truth. If `vitest` reports a failure attributable to the submitted change, that is a blocker.
+
+### What a reviewer MAY NOT raise as a blocker
+
+1. **Style, formatting, or naming preferences not already enforced by the codebase.** The implementer is fixing a boundary condition, not refactoring for style.
+
+2. **Requests for additional test coverage beyond what the ticket and investigator's findings require.** The investigator already characterised what test coverage for the boundary should look like. If the submitted tests match that characterisation, the reviewer may not demand more.
+
+3. **Architectural changes, feature additions, or "while you're in there" refactors.** The plan of record is a one-line or small boundary fix per ticket. Anything beyond that scope is out of bounds for a blocker.
+
+4. **Concerns about callers of the changed functions that the investigator already verified are safe.** The mocka-investigator confirmed no caller of `fareFor` or `totalFor` relies on the incorrect boundary. The mockb-investigator verified no caller compensates for the missing last stop. If the reviewer raises a caller concern that the investigator already addressed, it is not a blocker.
+
+5. **Cross-codeline coupling.** MOCK3-1 lives in mocka and MOCK3-2 lives in mockb. A reviewer may not block one ticket's merge on the other codeline's state. Each ticket is independently mergeable.
+
+### TypeScript and vitest traps relevant to these fixes
+
+- **Off-by-one in array iteration or slicing.** The MOCK3-2 fix likely involves a loop bound or array slice that stops one element short. Verify the corrected bound includes the final element without overshooting.
+- **Boundary comparison direction.** The MOCK3-1 fix likely changes a comparison so that age 65 falls on the adult side. Verify the operator direction is correct: `>= 65` includes 65; `> 65` excludes it.
+- **vitest assertion semantics.** `toBe` uses `Object.is` (strict identity); `toEqual` performs deep equality. For a fare amount (number) or a rendered stop string, `toBe` is appropriate. A reviewer should not block on assertion-method choice if the assertion correctly verifies the boundary value.
+- **TypeScript strict mode.** If the project's `tsconfig` enables `strict`, the fix must type-check cleanly. A type error introduced by the change is a blocker. Run `tsc` (or the project's type-check command) alongside `vitest`.

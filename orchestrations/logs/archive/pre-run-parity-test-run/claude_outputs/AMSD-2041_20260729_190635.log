@@ -1,0 +1,2018 @@
+=== Prompt for AMSD-2041 (attempt 1) ===
+CRITICAL — these files already exist. Their real content is injected below (## Existing File Contents) — you do NOT need to ReadFile them to see what's already there.
+Do NOT import or reference anything that doesn't appear in the injected content below — a plausible-sounding module name is not a real one.
+Only call ReadFile yourself if you need to see MORE of a file than what's shown (e.g. it was truncated), or a file not listed below.
+
+   - /home/bradleyjerome/projects/metrolinx/next.upexpress.com/src/hooks/useContent.ts (ReadFile this only if you need it — not a fix site; content omitted to keep the prompt small)
+   - /home/bradleyjerome/projects/metrolinx/next.upexpress.com/src/pages/[[...slug]].tsx (content already injected below — do not ReadFile it unless you need lines beyond what's shown)
+   - /home/bradleyjerome/projects/metrolinx/next.upexpress.com/src/interface/content/contentCard.ts (ReadFile this only if you need it — not a fix site; content omitted to keep the prompt small)
+   - /home/bradleyjerome/projects/metrolinx/next.upexpress.com/src/components/contentstack/ContentstackLink/ContentstackLink.tsx (ReadFile this only if you need it — not a fix site; content omitted to keep the prompt small)
+---
+
+Implement user story AMSD-2041: [GO, UP, MX] Live Preview of Content in CMS
+
+## Story Description
+[GO, UP, MX] Live Preview of Content in CMS — enable content authors to preview draft/unpublished content from Contentstack within the application before it is published, so they can verify layout and data appearance in context.
+
+## Acceptance Criteria
+- 
+
+
+## Root Cause Analysis & Prescribed Fix (AUTHORITATIVE — start here, do not re-trace)
+A code investigation already traced this bug to its cause and prescribed the minimal fix below. This is the plan of record. Apply it; do NOT re-read the whole codebase to re-derive it.
+
+The Acceptance Criteria above describe the desired END BEHAVIOR to VERIFY — they are NOT an implementation blueprint. Do not re-architect, split values, or add new fields/abstractions to satisfy an AC literally when the prescribed minimal fix already makes that AC pass. Implement the fix below; the ACs are how you check you got it right.
+
+HARD RULES:
+- Make the SMALLEST change that fixes the root cause. Fewer lines of code is always better.
+- REUSE existing functions. Before writing any new helper, search the repo for an existing util/parser/formatter that already does what you need (use the CodeGraph tool documented below) and call it. Writing novel code when a helper already exists is a defect to be rejected in review.
+- **src/pages/[[...slug]].tsx** (`getStaticProps`): This is the gateway that assembles all page content. It currently reads exclusively from the filesystem cache (readCachedPageDataFromFs) and has fallback:false in getStaticPaths, which together block any Contentstack Live Preview flow. For live preview to work, getStaticProps must detect preview mode (Contentstack preview token in query params) and fetch live/draft content from the Contentstack SDK instead of the static cache. The companion getStaticPaths must allow non-pre-built paths (fallback:'blocking') so preview URLs can resolve.
+  - **Minimal fix:** Change `fallback: false` to `fallback: 'blocking'` in getStaticPaths (line 63) so that Contentstack preview URLs not in the static path list can still be resolved. Then in getStaticProps (line 66), before calling readCachedPageDataFromFs, check for Contentstack preview parameters (e.g. context.preview or query params like live_preview / contentstack_preview). When present, skip the filesystem cache and instead call the existing Contentstack SDK entry-fetching helpers (getSingletonEntry / getSingleEntry, already used in src/pages/find-a-station/[stationCode]/[contentstackUrl].tsx) with the preview token to fetch draft content directly. Pass that live content through the same refineClientData pipeline and return it as props. This reuses the existing SDK helpers rather than introducing new fetching logic.
+
+
+## Verification Criteria (what a tester will CONFIRM — your change must satisfy every one)
+These are observable checks, derived from the acceptance criteria and description. They describe WHAT is observed, not how to build it. Make the minimal change that makes all of these true; your accompanying test should assert them:
+- Given a preview URL containing a valid Contentstack preview token, when a tester opens that URL in a browser, then the page renders successfully instead of returning a 404 'page not found' error.
+- Given an editor has saved an unpublished draft change to a page's content in Contentstack, when a tester opens that page's preview URL with a valid preview token, then the rendered page displays the draft content, including the unpublished change.
+- Given an editor has saved an unpublished draft change to a page's content in Contentstack, when a tester opens the same page's normal URL without preview parameters, then the rendered page displays the currently published content and does not show the unpublished draft change.
+- Given preview mode is enabled, when a tester opens preview URLs for multiple different pages on the site, then each page renders its own draft content without requiring any per-page setup or configuration by the tester.
+- Given a tester opens a page in preview mode, when the page renders, then all of the page's existing sections and components display normally with the draft content, with no missing, broken, or visibly altered layout compared to how those sections appear on the published page.
+- Given a tester opens a preview URL for which no draft content is available (e.g. an invalid or expired preview token, or content that does not exist in Contentstack), then the tester sees a graceful error or fallback page rather than an application crash, blank screen, or unhandled error stack.
+
+## Tests are NOT your job this turn
+A dedicated test-writer agent runs immediately after your fix commits and owns the bug-reproducing test. Do NOT write, edit, or create any test file (*.test.*, *.spec.*, __tests__/). Write ONLY the fix. Adding a test here wastes your turn budget and has caused repeated failures.
+
+## The helper to reuse is ALREADY identified — do NOT search
+The Root Cause Analysis above names the exact existing helper to reuse (`getSingletonEntry`). Do NOT run CodeGraph or explore the codebase to re-find it — that wastes your turn budget. Import it, apply the prescribed minimal fix, write your file(s), and stop. Only search if you hit something the prescribed fix genuinely does not cover.
+
+
+
+
+
+## Technical Notes
+- files: ["src/hooks/useContent.ts","src/pages/[[...slug]].tsx","src/interface/content/contentCard.ts","src/components/contentstack/ContentstackLink/ContentstackLink.tsx"]
+
+## Existing File Contents (injected once, deterministically — do NOT ReadFile these unless you need more than shown)
+
+### /home/bradleyjerome/projects/metrolinx/next.upexpress.com/src/pages/[[...slug]].tsx
+```
+import { PropsWithChildren } from "react";
+import { GetStaticPaths, GetStaticProps, NextPage } from "next";
+import { serverSideTranslations } from "next-i18next/serverSideTranslations";
+import { resolvePageComponent, resolveStationPageComponent } from "services/pageComponentResolver";
+import { pageService } from "services/pageService";
+import { staticPathsResolver } from "services/staticPathsResolver";
+import { Layout } from "components/Layout/Layout";
+import { PageHead } from "components/pages/PageHead";
+import { readFromFs } from "utils/fsCache";
+import { getLocaleByNextLocale, NextLocales } from "utils/locale";
+import { readCachedPageDataFromFs } from "utils/pageDataCache";
+import { refineClientData } from "utils/refineClientData";
+import { ContentTypes } from "constants/contentstack";
+import { IContentstackPage } from "interface/content/page";
+import { IDirectoryData, IMappedByLocaleDirectories } from "interface/directory";
+
+interface IDynamicSlugParams {
+  slug: string[];
+}
+
+export interface IPageProps {
+  content: {
+    // TODO(devteam): define types for header and footer
+    header: [any];
+    footer: [any];
+    page: [IContentstackPage];
+    directories: IDirectoryData;
+    languageAlternativePageSlug?: string[];
+    pageSpecificData?: Record<string, any>;
+    pagesBaseURLs?: {
+      [key in ContentTypes]?: string;
+    };
+  };
+  contentTypeUid: string;
+}
+
+const DefaultLayout = ({ children }: PropsWithChildren) => children;
+
+const Page: NextPage<IPageProps> = (props) => {
+  const { content, contentTypeUid } = props;
+  const PageComponent = resolvePageComponent(contentTypeUid);
+  const StationDetailsLayout = resolveStationPageComponent(contentTypeUid) ?? DefaultLayout;
+
+  return (
+    <>
+      <PageHead page={content?.page} contentTypeUid={contentTypeUid} />
+      <Layout contentTypeUid={contentTypeUid}>
+        <StationDetailsLayout page={content?.page}>
+          {PageComponent ? <PageComponent {...content} /> : <h1>Page not implemented</h1>}
+        </StationDetailsLayout>
+      </Layout>
+    </>
+  );
+};
+
+export const getStaticPaths: GetStaticPaths = async () => {
+  const { MAINTENANCE_MODE } = process.env;
+
+  if (MAINTENANCE_MODE === "true") {
+    return { paths: [], fallback: false };
+  }
+
+  const paths = await staticPathsResolver.resolveStaticPaths();
+
+  return {
+    paths,
+    fallback: false,
+  };
+};
+
+export const getStaticProps: GetStaticProps = async (context) => {
+  const { locale: nextLocale = "" } = context;
+  const { slug = [] } = (context?.params as unknown as IDynamicSlugParams) || {};
+  const contentstackLocale = getLocaleByNextLocale(nextLocale);
+
+  const cachedHeaderData = readFromFs<{ [locale: string]: any }>({
+    fileName: "header",
+  });
+  const cachedFooterData = readFromFs<{ [locale: string]: any }>({
+    fileName: "footer",
+  });
+  const cachedPagesBaseURLs = readFromFs<{ [locale: string]: Record<string, string> }>({
+    fileName: "pagesBaseURLs",
+  });
+
+  const header = cachedHeaderData?.[contentstackLocale];
+  const footer = cachedFooterData?.[contentstackLocale];
+  const pagesBaseURLs = cachedPagesBaseURLs?.[contentstackLocale];
+
+  const {
+    uid: pageUid,
+    contentTypeUid,
+    languageAlternativePageSlug,
+    entry: pageContent,
+  } = readCachedPageDataFromFs([nextLocale, ...slug]);
+
+  const directories = readFromFs<IMappedByLocaleDirectories>({ fileName: "directories" });
+  const currentLocaleDirectories = directories?.[contentstackLocale] || {};
+
+  const pageSpecificData = await pageService.getPageSpecificData({
+    recentNews: pageContent.recent_news,
+    contentTypeUid,
+    entryUid: pageUid,
+    lang: contentstackLocale,
+  });
+
+  const rawContent: IPageProps["content"] = {
+    header,
+    page: [pageContent],
+    footer,
+    pageSpecificData,
+    directories: currentLocaleDirectories,
+    languageAlternativePageSlug,
+    pagesBaseURLs,
+  };
+
+  return {
+    props: {
+      contentTypeUid,
+      content: refineClientData(rawContent, nextLocale as NextLocales),
+      ...(await serverSideTranslations(nextLocale, ["common"])),
+    },
+  };
+};
+
+export default Page;
+```
+
+## Files to Create/Modify (EXACT ABSOLUTE PATHS — write to these paths exactly)
+src/hooks/useContent.ts, src/pages/[[...slug]].tsx, src/interface/content/contentCard.ts, src/components/contentstack/ContentstackLink/ContentstackLink.tsx
+
+## Dependencies
+None
+
+## Module resolution in this codeline
+A bare import that names a file under any of these directories is INTERNAL source, not a dependency — never add it to the dependency manifest:
+  __tests__, migration-scripts, public, review, src, zap_hooks
+Source extensions here: .ts, .tsx, .js, .jsx, .mjs, .cjs
+Write imports the way the existing files in this codeline write them; read a neighbouring file before inventing a path.
+
+
+## Instructions
+CRITICAL — these files already exist. Their real content is injected below (## Existing File Contents) — you do NOT need to ReadFile them to see what's already there.
+Do NOT import or reference anything that doesn't appear in the injected content below — a plausible-sounding module name is not a real one.
+Only call ReadFile yourself if you need to see MORE of a file than what's shown (e.g. it was truncated), or a file not listed below.
+   - /home/bradleyjerome/projects/metrolinx/next.upexpress.com/src/hooks/useContent.ts (ReadFile this only if you need it — not a fix site; content omitted to keep the prompt small)
+   - /home/bradleyjerome/projects/metrolinx/next.upexpress.com/src/pages/[[...slug]].tsx (content already injected below — do not ReadFile it unless you need lines beyond what's shown)
+   - /home/bradleyjerome/projects/metrolinx/next.upexpress.com/src/interface/content/contentCard.ts (ReadFile this only if you need it — not a fix site; content omitted to keep the prompt small)
+   - /home/bradleyjerome/projects/metrolinx/next.upexpress.com/src/components/contentstack/ContentstackLink/ContentstackLink.tsx (ReadFile this only if you need it — not a fix site; content omitted to keep the prompt small)
+**The content of every file listed above is already shown in ## Existing File Contents — use that, do not spend a tool call re-reading them. Use Edit for targeted changes to existing files — do NOT overwrite an existing file wholesale with WriteFile.**
+
+1. Use the injected ## Existing File Contents above to verify what actually exists (exports, types, existing utilities) before writing any code — do not guess, and do not re-read a file already shown in full
+2. Implement all acceptance criteria for this story
+3. Follow the project's existing code patterns and conventions
+4. Do NOT create tests unless explicitly required in acceptance criteria
+
+After implementation, provide a brief summary of what was created/modified.
+
+## Relevant Knowledge Base Entries
+The following was learned from previous story implementations and is relevant to your agent role. Apply this knowledge before writing any code:
+
+- [2026-07-06T18:11:26Z] Use vi.fn().mockResolvedValue(value) to make a mock return a resolved Promise.
+- [2026-07-06T20:31:11Z] Use `test: { passWithNoTests: true }` in vitest.config.ts or create a stub test file when no *.test.ts files exist.
+- [2026-07-06T20:33:03Z] Enable globals:true in vitest.config.ts so describe, it, and expect work without imports, reducing boilerplate in test files.
+- [2026-07-06T23:47:34Z] Use CommonJS-compatible patterns in src/server.ts: avoid `import.meta.url` and top-level `await`; gate listen with `if (require.main === module)`.
+- [2026-07-07T02:35:30Z] Always include a non-test source file in src/ alongside any src/*.test.ts file, since tsconfig.json excludes test files from tsc --noEmit.
+- [2026-07-07T19:01:34Z] Only modify or create files explicitly listed in the story's acceptance criteria. Do not touch files belonging to other stories or outside the current task scope.
+- [2026-07-07T20:17:57Z] [unreviewed-fallback] Avoid using deprecated TypeScript compiler options like 'moduleResolution=node10'; use 'moduleResolution=node' instead.
+- [2026-07-17T20:20:58Z] Always: Before importing a module or referencing a type/property, always read the actual source file to verify the export exists, its exact path, its properties, and its constructor/factory signatures
+- [2026-07-23T01:15:16Z] Always: In tsconfig.json, always use moduleResolution 'node' (not 'node10' or 'Node10') — 'node10' was removed in TypeScript 5.x. The correct value for CommonJS + Node resolution is 'node'.
+- [2026-07-23T14:30:00Z] CORRECTION to a prior entry (2026-07-23T01:17:52Z, now removed): that entry wrongly claimed 'moduleResolution: node' itself is removed and must become 'node16'/'nodenext'. Root-caused via mock1 (epam-cli orchestration test): 'node' is valid and correct through TypeScript 5.x (confirmed on 5.9.3) — it was only removed in TypeScript 7.x. The real defect was an unpinned `typescript` devDependency letting a fallback `npm install` pull latest (7.x) instead of the project's intended version. Do NOT rewrite a working tsconfig.json's moduleResolution in response to a TS5108 error — first check `node_modules/typescript/package.json`'s version; if it's 7.x and the rest of the project expects 5.x, the fix is pinning/reinstalling the correct typescript version, not changing moduleResolution.
+
+## Knowledge Base Contribution (do this LAST — after writing all implementation files)
+Your assigned KB entry ID for this run: **KB-015**
+
+IMPORTANT: Write ALL implementation files first. Only AFTER writing every required file should you optionally append a KB entry.
+Do NOT read orchestrations/agents/KB.md before writing implementation files. The relevant KB entries are already injected above.
+
+If (and only if) you discover a non-obvious pattern during implementation, append one entry to `orchestrations/agents/KB.md`:
+
+```markdown
+## KB-015 -- 2026-07-29
+
+**Category:** <backend|frontend|infrastructure|testing|orchestration>
+**AgentRole:** <your agentRole from the story>
+**Tags:** <comma-separated tech keywords, e.g. typescript, node, cli>
+**Trigger:** <retry|first-success>
+**StoryRef:** AMSD-2041
+
+<One concise paragraph: the specific pattern, gotcha, or anti-pattern.>
+```
+
+Only write an entry if the knowledge is genuinely non-obvious. Skip trivial observations.
+
+## Execution Plan
+Follow this plan step by step:
+1. Read `src/interface/content/contentCard.ts` to understand the current `ContentCard` interface shape, then add optional preview metadata fields: `preview_id?: string`, `preview_environment?: string`, and `preview_url?: string` to support live preview data from Contentstack.
+
+2. Read `src/hooks/useContent.ts` to inspect the existing content-fetching hook signature and patterns. Modify the hook to accept an optional `previewOptions?: { preview?: boolean; previewEnvironment?: string; contentType?: string }` parameter and include Contentstack live preview headers (`preview`, `preview-environment`) in the Contentstack SDK fetch call when preview mode is active.
+
+3. Read `src/pages/[[...slug]].tsx` to understand the current catch-all page structure, data-fetching method (getStaticProps/getServerSideProps), and how `useContent` is invoked. Add logic to read `preview` and `preview-environment` query parameters from the Next.js context and pass them as `previewOptions` into the `useContent` hook call.
+
+4. In `src/pages/[[...slug]].tsx`, initialize the Contentstack Live Preview SDK (e.g., `LivePreviewUtils.init({ stackDetails, enable: process.env.CONTENTSTACK_LIVE_PREVIEW === 'true' })`) at the module or app level if not already present, and ensure the page re-renders on preview edit events by subscribing to the SDK's `onEntryChange` callback.
+
+5. Read `src/components/contentstack/ContentstackLink/ContentstackLink.tsx` to inspect the current link component props and href construction. Modify the component to accept an optional `previewUrl?: string` prop and, when present and preview mode is active, render the `previewUrl` as the href instead of the standard slug-based URL.
+
+6. In `src/components/contentstack/ContentstackLink/ContentstackLink.tsx`, ensure the component reads preview state (either via a prop passed from the page or via a context/flag) so that internal links rendered during live preview point to the correct preview-environment URLs rather than production paths.
+
+7. Write unit tests for `src/hooks/useContent.ts` covering: (a) default fetch without preview options sends no preview headers, (b) fetch with `previewOptions.preview === true` includes `preview: 'true'` and `preview-environment` headers, (c) hook returns correctly typed `ContentCard` data including optional preview fields.
+
+8. Write unit tests for `src/components/contentstack/ContentstackLink/ContentstackLink.tsx` covering: (a) renders standard href when no `previewUrl` is provided, (b) renders `previewUrl` as href when provided and preview mode is active, (c) falls back to standard href when `previewUrl` is provided but preview mode is inactive.
+
+9. Verify the full integration by running the existing test suite (`npm test` or equivalent) and confirming that all four modified files compile without TypeScript errors (`npm run build` or `tsc --noEmit`). Manually verify that enabling `CONTENTSTACK_LIVE_PREVIEW=true` with a valid preview environment causes content edits in Contentstack to reflect in the browser without a full page reload.
+=== End Prompt ===
+
+=== epam Output (attempt 1) ===
+The `getSingletonEntry`/`getSingleEntry` helpers referenced in the RCA don't appear to exist in the codebase, and neither does `src/pages/find-a-station/[stationCode]/[contentstackUrl].tsx`. The injection note says "do NOT import or reference anything that doesn't appear in the injected content" — and these helpers aren't injected. They are plausible-sounding but not real.
+
+Let me re-read the prescribed fix more carefully: it says to reuse `getSingletonEntry / getSingleEntry, already used in src/pages/find-a-station/[stationCode]/[contentstackUrl].tsx`. But that file does not exist. Per the hard rules: "Do NOT import or reference anything that doesn't appear in the injected content below — a plausible-sounding module name is not a real one."
+
+This is exactly the situation warns against. The helper the RCA names does not exist in this codebase. I must NOT fabricate an import. Let me also check what helpers DO exist for fetching Contentstack entries (to find a real one to reuse), and check `pageService` and `pageDataCache`.
+The `getSingletonEntry`/`getSingleEntry` helpers referenced in the RCA don't appear to exist in the codebase, and neither does `src/pages/find-a-station/[stationCode]/[contentstackUrl].tsx`. The injection note says "do NOT import or reference anything that doesn't appear in the injected content" — and these helpers aren't injected. They are plausible-sounding but not real.
+
+Let me re-read the prescribed fix more carefully: it says to reuse `getSingletonEntry / getSingleEntry, already used in src/pages/find-a-station/[stationCode]/[contentstackUrl].tsx`. But that file does not exist. Per the hard rules: "Do NOT import or reference anything that doesn't appear in the injected content below — a plausible-sounding module name is not a real one."
+
+This is exactly the situation warns against. The helper the RCA names does not exist in this codebase. I must NOT fabricate an import. Let me also check what helpers DO exist for fetching Contentstack entries (to find a real one to reuse), and check `pageService` and `pageDataCache`.
+
+=== epam exited with code 1 ===
+=== Prompt for AMSD-2041 (attempt 2) ===
+CRITICAL — these files already exist. Their real content is injected below (## Existing File Contents) — you do NOT need to ReadFile them to see what's already there.
+Do NOT import or reference anything that doesn't appear in the injected content below — a plausible-sounding module name is not a real one.
+Only call ReadFile yourself if you need to see MORE of a file than what's shown (e.g. it was truncated), or a file not listed below.
+
+   - /home/bradleyjerome/projects/metrolinx/next.upexpress.com/src/hooks/useContent.ts (ReadFile this only if you need it — not a fix site; content omitted to keep the prompt small)
+   - /home/bradleyjerome/projects/metrolinx/next.upexpress.com/src/pages/[[...slug]].tsx (content already injected below — do not ReadFile it unless you need lines beyond what's shown)
+   - /home/bradleyjerome/projects/metrolinx/next.upexpress.com/src/interface/content/contentCard.ts (ReadFile this only if you need it — not a fix site; content omitted to keep the prompt small)
+   - /home/bradleyjerome/projects/metrolinx/next.upexpress.com/src/components/contentstack/ContentstackLink/ContentstackLink.tsx (ReadFile this only if you need it — not a fix site; content omitted to keep the prompt small)
+---
+
+Implement user story AMSD-2041: [GO, UP, MX] Live Preview of Content in CMS
+
+## Story Description
+[GO, UP, MX] Live Preview of Content in CMS — enable content authors to preview draft/unpublished content from Contentstack within the application before it is published, so they can verify layout and data appearance in context.
+
+## Acceptance Criteria
+- 
+
+
+## Root Cause Analysis & Prescribed Fix (AUTHORITATIVE — start here, do not re-trace)
+A code investigation already traced this bug to its cause and prescribed the minimal fix below. This is the plan of record. Apply it; do NOT re-read the whole codebase to re-derive it.
+
+The Acceptance Criteria above describe the desired END BEHAVIOR to VERIFY — they are NOT an implementation blueprint. Do not re-architect, split values, or add new fields/abstractions to satisfy an AC literally when the prescribed minimal fix already makes that AC pass. Implement the fix below; the ACs are how you check you got it right.
+
+HARD RULES:
+- Make the SMALLEST change that fixes the root cause. Fewer lines of code is always better.
+- REUSE existing functions. Before writing any new helper, search the repo for an existing util/parser/formatter that already does what you need (use the CodeGraph tool documented below) and call it. Writing novel code when a helper already exists is a defect to be rejected in review.
+- **src/pages/[[...slug]].tsx** (`getStaticProps`): This is the gateway that assembles all page content. It currently reads exclusively from the filesystem cache (readCachedPageDataFromFs) and has fallback:false in getStaticPaths, which together block any Contentstack Live Preview flow. For live preview to work, getStaticProps must detect preview mode (Contentstack preview token in query params) and fetch live/draft content from the Contentstack SDK instead of the static cache. The companion getStaticPaths must allow non-pre-built paths (fallback:'blocking') so preview URLs can resolve.
+  - **Minimal fix:** Change `fallback: false` to `fallback: 'blocking'` in getStaticPaths (line 63) so that Contentstack preview URLs not in the static path list can still be resolved. Then in getStaticProps (line 66), before calling readCachedPageDataFromFs, check for Contentstack preview parameters (e.g. context.preview or query params like live_preview / contentstack_preview). When present, skip the filesystem cache and instead call the existing Contentstack SDK entry-fetching helpers (getSingletonEntry / getSingleEntry, already used in src/pages/find-a-station/[stationCode]/[contentstackUrl].tsx) with the preview token to fetch draft content directly. Pass that live content through the same refineClientData pipeline and return it as props. This reuses the existing SDK helpers rather than introducing new fetching logic.
+
+
+## Verification Criteria (what a tester will CONFIRM — your change must satisfy every one)
+These are observable checks, derived from the acceptance criteria and description. They describe WHAT is observed, not how to build it. Make the minimal change that makes all of these true; your accompanying test should assert them:
+- Given a preview URL containing a valid Contentstack preview token, when a tester opens that URL in a browser, then the page renders successfully instead of returning a 404 'page not found' error.
+- Given an editor has saved an unpublished draft change to a page's content in Contentstack, when a tester opens that page's preview URL with a valid preview token, then the rendered page displays the draft content, including the unpublished change.
+- Given an editor has saved an unpublished draft change to a page's content in Contentstack, when a tester opens the same page's normal URL without preview parameters, then the rendered page displays the currently published content and does not show the unpublished draft change.
+- Given preview mode is enabled, when a tester opens preview URLs for multiple different pages on the site, then each page renders its own draft content without requiring any per-page setup or configuration by the tester.
+- Given a tester opens a page in preview mode, when the page renders, then all of the page's existing sections and components display normally with the draft content, with no missing, broken, or visibly altered layout compared to how those sections appear on the published page.
+- Given a tester opens a preview URL for which no draft content is available (e.g. an invalid or expired preview token, or content that does not exist in Contentstack), then the tester sees a graceful error or fallback page rather than an application crash, blank screen, or unhandled error stack.
+
+## Tests are NOT your job this turn
+A dedicated test-writer agent runs immediately after your fix commits and owns the bug-reproducing test. Do NOT write, edit, or create any test file (*.test.*, *.spec.*, __tests__/). Write ONLY the fix. Adding a test here wastes your turn budget and has caused repeated failures.
+
+## The helper to reuse is ALREADY identified — do NOT search
+The Root Cause Analysis above names the exact existing helper to reuse (`getSingletonEntry`). Do NOT run CodeGraph or explore the codebase to re-find it — that wastes your turn budget. Import it, apply the prescribed minimal fix, write your file(s), and stop. Only search if you hit something the prescribed fix genuinely does not cover.
+
+
+
+
+
+## Technical Notes
+- files: ["src/hooks/useContent.ts","src/pages/[[...slug]].tsx","src/interface/content/contentCard.ts","src/components/contentstack/ContentstackLink/ContentstackLink.tsx"]
+
+## Existing File Contents (injected once, deterministically — do NOT ReadFile these unless you need more than shown)
+
+### /home/bradleyjerome/projects/metrolinx/next.upexpress.com/src/pages/[[...slug]].tsx
+```
+import { PropsWithChildren } from "react";
+import { GetStaticPaths, GetStaticProps, NextPage } from "next";
+import { serverSideTranslations } from "next-i18next/serverSideTranslations";
+import { resolvePageComponent, resolveStationPageComponent } from "services/pageComponentResolver";
+import { pageService } from "services/pageService";
+import { staticPathsResolver } from "services/staticPathsResolver";
+import { Layout } from "components/Layout/Layout";
+import { PageHead } from "components/pages/PageHead";
+import { readFromFs } from "utils/fsCache";
+import { getLocaleByNextLocale, NextLocales } from "utils/locale";
+import { readCachedPageDataFromFs } from "utils/pageDataCache";
+import { refineClientData } from "utils/refineClientData";
+import { ContentTypes } from "constants/contentstack";
+import { IContentstackPage } from "interface/content/page";
+import { IDirectoryData, IMappedByLocaleDirectories } from "interface/directory";
+
+interface IDynamicSlugParams {
+  slug: string[];
+}
+
+export interface IPageProps {
+  content: {
+    // TODO(devteam): define types for header and footer
+    header: [any];
+    footer: [any];
+    page: [IContentstackPage];
+    directories: IDirectoryData;
+    languageAlternativePageSlug?: string[];
+    pageSpecificData?: Record<string, any>;
+    pagesBaseURLs?: {
+      [key in ContentTypes]?: string;
+    };
+  };
+  contentTypeUid: string;
+}
+
+const DefaultLayout = ({ children }: PropsWithChildren) => children;
+
+const Page: NextPage<IPageProps> = (props) => {
+  const { content, contentTypeUid } = props;
+  const PageComponent = resolvePageComponent(contentTypeUid);
+  const StationDetailsLayout = resolveStationPageComponent(contentTypeUid) ?? DefaultLayout;
+
+  return (
+    <>
+      <PageHead page={content?.page} contentTypeUid={contentTypeUid} />
+      <Layout contentTypeUid={contentTypeUid}>
+        <StationDetailsLayout page={content?.page}>
+          {PageComponent ? <PageComponent {...content} /> : <h1>Page not implemented</h1>}
+        </StationDetailsLayout>
+      </Layout>
+    </>
+  );
+};
+
+export const getStaticPaths: GetStaticPaths = async () => {
+  const { MAINTENANCE_MODE } = process.env;
+
+  if (MAINTENANCE_MODE === "true") {
+    return { paths: [], fallback: false };
+  }
+
+  const paths = await staticPathsResolver.resolveStaticPaths();
+
+  return {
+    paths,
+    fallback: false,
+  };
+};
+
+export const getStaticProps: GetStaticProps = async (context) => {
+  const { locale: nextLocale = "" } = context;
+  const { slug = [] } = (context?.params as unknown as IDynamicSlugParams) || {};
+  const contentstackLocale = getLocaleByNextLocale(nextLocale);
+
+  const cachedHeaderData = readFromFs<{ [locale: string]: any }>({
+    fileName: "header",
+  });
+  const cachedFooterData = readFromFs<{ [locale: string]: any }>({
+    fileName: "footer",
+  });
+  const cachedPagesBaseURLs = readFromFs<{ [locale: string]: Record<string, string> }>({
+    fileName: "pagesBaseURLs",
+  });
+
+  const header = cachedHeaderData?.[contentstackLocale];
+  const footer = cachedFooterData?.[contentstackLocale];
+  const pagesBaseURLs = cachedPagesBaseURLs?.[contentstackLocale];
+
+  const {
+    uid: pageUid,
+    contentTypeUid,
+    languageAlternativePageSlug,
+    entry: pageContent,
+  } = readCachedPageDataFromFs([nextLocale, ...slug]);
+
+  const directories = readFromFs<IMappedByLocaleDirectories>({ fileName: "directories" });
+  const currentLocaleDirectories = directories?.[contentstackLocale] || {};
+
+  const pageSpecificData = await pageService.getPageSpecificData({
+    recentNews: pageContent.recent_news,
+    contentTypeUid,
+    entryUid: pageUid,
+    lang: contentstackLocale,
+  });
+
+  const rawContent: IPageProps["content"] = {
+    header,
+    page: [pageContent],
+    footer,
+    pageSpecificData,
+    directories: currentLocaleDirectories,
+    languageAlternativePageSlug,
+    pagesBaseURLs,
+  };
+
+  return {
+    props: {
+      contentTypeUid,
+      content: refineClientData(rawContent, nextLocale as NextLocales),
+      ...(await serverSideTranslations(nextLocale, ["common"])),
+    },
+  };
+};
+
+export default Page;
+```
+
+## Files to Create/Modify (EXACT ABSOLUTE PATHS — write to these paths exactly)
+src/hooks/useContent.ts, src/pages/[[...slug]].tsx, src/interface/content/contentCard.ts, src/components/contentstack/ContentstackLink/ContentstackLink.tsx
+
+## Dependencies
+None
+
+## Module resolution in this codeline
+A bare import that names a file under any of these directories is INTERNAL source, not a dependency — never add it to the dependency manifest:
+  __tests__, migration-scripts, public, review, src, zap_hooks
+Source extensions here: .ts, .tsx, .js, .jsx, .mjs, .cjs
+Write imports the way the existing files in this codeline write them; read a neighbouring file before inventing a path.
+
+
+## Instructions
+CRITICAL — these files already exist. Their real content is injected below (## Existing File Contents) — you do NOT need to ReadFile them to see what's already there.
+Do NOT import or reference anything that doesn't appear in the injected content below — a plausible-sounding module name is not a real one.
+Only call ReadFile yourself if you need to see MORE of a file than what's shown (e.g. it was truncated), or a file not listed below.
+   - /home/bradleyjerome/projects/metrolinx/next.upexpress.com/src/hooks/useContent.ts (ReadFile this only if you need it — not a fix site; content omitted to keep the prompt small)
+   - /home/bradleyjerome/projects/metrolinx/next.upexpress.com/src/pages/[[...slug]].tsx (content already injected below — do not ReadFile it unless you need lines beyond what's shown)
+   - /home/bradleyjerome/projects/metrolinx/next.upexpress.com/src/interface/content/contentCard.ts (ReadFile this only if you need it — not a fix site; content omitted to keep the prompt small)
+   - /home/bradleyjerome/projects/metrolinx/next.upexpress.com/src/components/contentstack/ContentstackLink/ContentstackLink.tsx (ReadFile this only if you need it — not a fix site; content omitted to keep the prompt small)
+**The content of every file listed above is already shown in ## Existing File Contents — use that, do not spend a tool call re-reading them. Use Edit for targeted changes to existing files — do NOT overwrite an existing file wholesale with WriteFile.**
+
+1. Use the injected ## Existing File Contents above to verify what actually exists (exports, types, existing utilities) before writing any code — do not guess, and do not re-read a file already shown in full
+2. Implement all acceptance criteria for this story
+3. Follow the project's existing code patterns and conventions
+4. Do NOT create tests unless explicitly required in acceptance criteria
+
+After implementation, provide a brief summary of what was created/modified.
+
+## Relevant Knowledge Base Entries
+The following was learned from previous story implementations and is relevant to your agent role. Apply this knowledge before writing any code:
+
+- [2026-07-06T18:11:26Z] Use vi.fn().mockResolvedValue(value) to make a mock return a resolved Promise.
+- [2026-07-06T20:31:11Z] Use `test: { passWithNoTests: true }` in vitest.config.ts or create a stub test file when no *.test.ts files exist.
+- [2026-07-06T20:33:03Z] Enable globals:true in vitest.config.ts so describe, it, and expect work without imports, reducing boilerplate in test files.
+- [2026-07-06T23:47:34Z] Use CommonJS-compatible patterns in src/server.ts: avoid `import.meta.url` and top-level `await`; gate listen with `if (require.main === module)`.
+- [2026-07-07T02:35:30Z] Always include a non-test source file in src/ alongside any src/*.test.ts file, since tsconfig.json excludes test files from tsc --noEmit.
+- [2026-07-07T19:01:34Z] Only modify or create files explicitly listed in the story's acceptance criteria. Do not touch files belonging to other stories or outside the current task scope.
+- [2026-07-07T20:17:57Z] [unreviewed-fallback] Avoid using deprecated TypeScript compiler options like 'moduleResolution=node10'; use 'moduleResolution=node' instead.
+- [2026-07-17T20:20:58Z] Always: Before importing a module or referencing a type/property, always read the actual source file to verify the export exists, its exact path, its properties, and its constructor/factory signatures
+- [2026-07-23T01:15:16Z] Always: In tsconfig.json, always use moduleResolution 'node' (not 'node10' or 'Node10') — 'node10' was removed in TypeScript 5.x. The correct value for CommonJS + Node resolution is 'node'.
+- [2026-07-23T14:30:00Z] CORRECTION to a prior entry (2026-07-23T01:17:52Z, now removed): that entry wrongly claimed 'moduleResolution: node' itself is removed and must become 'node16'/'nodenext'. Root-caused via mock1 (epam-cli orchestration test): 'node' is valid and correct through TypeScript 5.x (confirmed on 5.9.3) — it was only removed in TypeScript 7.x. The real defect was an unpinned `typescript` devDependency letting a fallback `npm install` pull latest (7.x) instead of the project's intended version. Do NOT rewrite a working tsconfig.json's moduleResolution in response to a TS5108 error — first check `node_modules/typescript/package.json`'s version; if it's 7.x and the rest of the project expects 5.x, the fix is pinning/reinstalling the correct typescript version, not changing moduleResolution.
+
+## Knowledge Base Contribution (do this LAST — after writing all implementation files)
+Your assigned KB entry ID for this run: **KB-015**
+**This is retry attempt 1** — a previous attempt failed. You MUST write a KB entry documenting what went wrong and what you changed.
+
+IMPORTANT: Write ALL implementation files first. Only AFTER writing every required file should you optionally append a KB entry.
+Do NOT read orchestrations/agents/KB.md before writing implementation files. The relevant KB entries are already injected above.
+
+If (and only if) you discover a non-obvious pattern during implementation, append one entry to `orchestrations/agents/KB.md`:
+
+```markdown
+## KB-015 -- 2026-07-29
+
+**Category:** <backend|frontend|infrastructure|testing|orchestration>
+**AgentRole:** <your agentRole from the story>
+**Tags:** <comma-separated tech keywords, e.g. typescript, node, cli>
+**Trigger:** <retry|first-success>
+**StoryRef:** AMSD-2041
+
+<One concise paragraph: the specific pattern, gotcha, or anti-pattern.>
+```
+
+Only write an entry if the knowledge is genuinely non-obvious. Skip trivial observations.
+
+## Execution Plan
+Follow this plan step by step:
+1. Read `src/interface/content/contentCard.ts` to understand the current `ContentCard` interface shape, then add optional preview metadata fields: `preview_id?: string`, `preview_environment?: string`, and `preview_url?: string` to support live preview data from Contentstack.
+
+2. Read `src/hooks/useContent.ts` to inspect the existing content-fetching hook signature and patterns. Modify the hook to accept an optional `previewOptions?: { preview?: boolean; previewEnvironment?: string; contentType?: string }` parameter and include Contentstack live preview headers (`preview`, `preview-environment`) in the Contentstack SDK fetch call when preview mode is active.
+
+3. Read `src/pages/[[...slug]].tsx` to understand the current catch-all page structure, data-fetching method (getStaticProps/getServerSideProps), and how `useContent` is invoked. Add logic to read `preview` and `preview-environment` query parameters from the Next.js context and pass them as `previewOptions` into the `useContent` hook call.
+
+4. In `src/pages/[[...slug]].tsx`, initialize the Contentstack Live Preview SDK (e.g., `LivePreviewUtils.init({ stackDetails, enable: process.env.CONTENTSTACK_LIVE_PREVIEW === 'true' })`) at the module or app level if not already present, and ensure the page re-renders on preview edit events by subscribing to the SDK's `onEntryChange` callback.
+
+5. Read `src/components/contentstack/ContentstackLink/ContentstackLink.tsx` to inspect the current link component props and href construction. Modify the component to accept an optional `previewUrl?: string` prop and, when present and preview mode is active, render the `previewUrl` as the href instead of the standard slug-based URL.
+
+6. In `src/components/contentstack/ContentstackLink/ContentstackLink.tsx`, ensure the component reads preview state (either via a prop passed from the page or via a context/flag) so that internal links rendered during live preview point to the correct preview-environment URLs rather than production paths.
+
+7. Write unit tests for `src/hooks/useContent.ts` covering: (a) default fetch without preview options sends no preview headers, (b) fetch with `previewOptions.preview === true` includes `preview: 'true'` and `preview-environment` headers, (c) hook returns correctly typed `ContentCard` data including optional preview fields.
+
+8. Write unit tests for `src/components/contentstack/ContentstackLink/ContentstackLink.tsx` covering: (a) renders standard href when no `previewUrl` is provided, (b) renders `previewUrl` as href when provided and preview mode is active, (c) falls back to standard href when `previewUrl` is provided but preview mode is inactive.
+
+9. Verify the full integration by running the existing test suite (`npm test` or equivalent) and confirming that all four modified files compile without TypeScript errors (`npm run build` or `tsc --noEmit`). Manually verify that enabling `CONTENTSTACK_LIVE_PREVIEW=true` with a valid preview environment causes content edits in Contentstack to reflect in the browser without a full page reload.
+=== End Prompt ===
+
+=== epam Output (attempt 2) ===
+Confirmed: `getSingleEntry` needs `entryUid`, `getSingletonEntry` needs `where` (no `entryUid`). From `readCachedPageDataFromFs` we already get `pageUid` and `contentTypeUid`, so the preview branch will call `getSingleEntry({ contentTypeUid, entryUid: pageUid, lang })` directly using the cached page's uid.
+
+For the `ContentstackLocales` typing — `getLocaleByNextLocale` returns `ContentstackLocales` so that's fine.
+
+Now let me look at the `preview` token configuration. Contentstack Live Preview uses `preview` query param + `contentstack_preview` header. Let me check if any preview-related env var exists:
+Confirmed: `getSingleEntry` needs `entryUid`, `getSingletonEntry` needs `where` (no `entryUid`). From `readCachedPageDataFromFs` we already get `pageUid` and `contentTypeUid`, so the preview branch will call `getSingleEntry({ contentTypeUid, entryUid: pageUid, lang })` directly using the cached page's uid.
+
+For the `ContentstackLocales` typing — `getLocaleByNextLocale` returns `ContentstackLocales` so that's fine.
+
+Now let me look at the `preview` token configuration. Contentstack Live Preview uses `preview` query param + `contentstack_preview` header. Let me check if any preview-related env var exists:
+
+=== epam exited with code 1 ===
+=== Prompt for AMSD-2041 (attempt 3) ===
+CRITICAL — these files already exist. Their real content is injected below (## Existing File Contents) — you do NOT need to ReadFile them to see what's already there.
+Do NOT import or reference anything that doesn't appear in the injected content below — a plausible-sounding module name is not a real one.
+Only call ReadFile yourself if you need to see MORE of a file than what's shown (e.g. it was truncated), or a file not listed below.
+
+   - /home/bradleyjerome/projects/metrolinx/next.upexpress.com/src/hooks/useContent.ts (ReadFile this only if you need it — not a fix site; content omitted to keep the prompt small)
+   - /home/bradleyjerome/projects/metrolinx/next.upexpress.com/src/pages/[[...slug]].tsx (content already injected below — do not ReadFile it unless you need lines beyond what's shown)
+   - /home/bradleyjerome/projects/metrolinx/next.upexpress.com/src/interface/content/contentCard.ts (ReadFile this only if you need it — not a fix site; content omitted to keep the prompt small)
+   - /home/bradleyjerome/projects/metrolinx/next.upexpress.com/src/components/contentstack/ContentstackLink/ContentstackLink.tsx (ReadFile this only if you need it — not a fix site; content omitted to keep the prompt small)
+---
+
+Implement user story AMSD-2041: [GO, UP, MX] Live Preview of Content in CMS
+
+## Story Description
+[GO, UP, MX] Live Preview of Content in CMS — enable content authors to preview draft/unpublished content from Contentstack within the application before it is published, so they can verify layout and data appearance in context.
+
+## Acceptance Criteria
+- 
+
+
+## Root Cause Analysis & Prescribed Fix (AUTHORITATIVE — start here, do not re-trace)
+A code investigation already traced this bug to its cause and prescribed the minimal fix below. This is the plan of record. Apply it; do NOT re-read the whole codebase to re-derive it.
+
+The Acceptance Criteria above describe the desired END BEHAVIOR to VERIFY — they are NOT an implementation blueprint. Do not re-architect, split values, or add new fields/abstractions to satisfy an AC literally when the prescribed minimal fix already makes that AC pass. Implement the fix below; the ACs are how you check you got it right.
+
+HARD RULES:
+- Make the SMALLEST change that fixes the root cause. Fewer lines of code is always better.
+- REUSE existing functions. Before writing any new helper, search the repo for an existing util/parser/formatter that already does what you need (use the CodeGraph tool documented below) and call it. Writing novel code when a helper already exists is a defect to be rejected in review.
+- **src/pages/[[...slug]].tsx** (`getStaticProps`): This is the gateway that assembles all page content. It currently reads exclusively from the filesystem cache (readCachedPageDataFromFs) and has fallback:false in getStaticPaths, which together block any Contentstack Live Preview flow. For live preview to work, getStaticProps must detect preview mode (Contentstack preview token in query params) and fetch live/draft content from the Contentstack SDK instead of the static cache. The companion getStaticPaths must allow non-pre-built paths (fallback:'blocking') so preview URLs can resolve.
+  - **Minimal fix:** Change `fallback: false` to `fallback: 'blocking'` in getStaticPaths (line 63) so that Contentstack preview URLs not in the static path list can still be resolved. Then in getStaticProps (line 66), before calling readCachedPageDataFromFs, check for Contentstack preview parameters (e.g. context.preview or query params like live_preview / contentstack_preview). When present, skip the filesystem cache and instead call the existing Contentstack SDK entry-fetching helpers (getSingletonEntry / getSingleEntry, already used in src/pages/find-a-station/[stationCode]/[contentstackUrl].tsx) with the preview token to fetch draft content directly. Pass that live content through the same refineClientData pipeline and return it as props. This reuses the existing SDK helpers rather than introducing new fetching logic.
+
+
+## Verification Criteria (what a tester will CONFIRM — your change must satisfy every one)
+These are observable checks, derived from the acceptance criteria and description. They describe WHAT is observed, not how to build it. Make the minimal change that makes all of these true; your accompanying test should assert them:
+- Given a preview URL containing a valid Contentstack preview token, when a tester opens that URL in a browser, then the page renders successfully instead of returning a 404 'page not found' error.
+- Given an editor has saved an unpublished draft change to a page's content in Contentstack, when a tester opens that page's preview URL with a valid preview token, then the rendered page displays the draft content, including the unpublished change.
+- Given an editor has saved an unpublished draft change to a page's content in Contentstack, when a tester opens the same page's normal URL without preview parameters, then the rendered page displays the currently published content and does not show the unpublished draft change.
+- Given preview mode is enabled, when a tester opens preview URLs for multiple different pages on the site, then each page renders its own draft content without requiring any per-page setup or configuration by the tester.
+- Given a tester opens a page in preview mode, when the page renders, then all of the page's existing sections and components display normally with the draft content, with no missing, broken, or visibly altered layout compared to how those sections appear on the published page.
+- Given a tester opens a preview URL for which no draft content is available (e.g. an invalid or expired preview token, or content that does not exist in Contentstack), then the tester sees a graceful error or fallback page rather than an application crash, blank screen, or unhandled error stack.
+
+## Tests are NOT your job this turn
+A dedicated test-writer agent runs immediately after your fix commits and owns the bug-reproducing test. Do NOT write, edit, or create any test file (*.test.*, *.spec.*, __tests__/). Write ONLY the fix. Adding a test here wastes your turn budget and has caused repeated failures.
+
+## The helper to reuse is ALREADY identified — do NOT search
+The Root Cause Analysis above names the exact existing helper to reuse (`getSingletonEntry`). Do NOT run CodeGraph or explore the codebase to re-find it — that wastes your turn budget. Import it, apply the prescribed minimal fix, write your file(s), and stop. Only search if you hit something the prescribed fix genuinely does not cover.
+
+
+
+
+
+## Technical Notes
+- files: ["src/hooks/useContent.ts","src/pages/[[...slug]].tsx","src/interface/content/contentCard.ts","src/components/contentstack/ContentstackLink/ContentstackLink.tsx"]
+
+## Existing File Contents (injected once, deterministically — do NOT ReadFile these unless you need more than shown)
+
+### /home/bradleyjerome/projects/metrolinx/next.upexpress.com/src/pages/[[...slug]].tsx
+```
+import { PropsWithChildren } from "react";
+import { GetStaticPaths, GetStaticProps, NextPage } from "next";
+import { serverSideTranslations } from "next-i18next/serverSideTranslations";
+import { resolvePageComponent, resolveStationPageComponent } from "services/pageComponentResolver";
+import { pageService } from "services/pageService";
+import { staticPathsResolver } from "services/staticPathsResolver";
+import { Layout } from "components/Layout/Layout";
+import { PageHead } from "components/pages/PageHead";
+import { readFromFs } from "utils/fsCache";
+import { getLocaleByNextLocale, NextLocales } from "utils/locale";
+import { readCachedPageDataFromFs } from "utils/pageDataCache";
+import { refineClientData } from "utils/refineClientData";
+import { ContentTypes } from "constants/contentstack";
+import { IContentstackPage } from "interface/content/page";
+import { IDirectoryData, IMappedByLocaleDirectories } from "interface/directory";
+
+interface IDynamicSlugParams {
+  slug: string[];
+}
+
+export interface IPageProps {
+  content: {
+    // TODO(devteam): define types for header and footer
+    header: [any];
+    footer: [any];
+    page: [IContentstackPage];
+    directories: IDirectoryData;
+    languageAlternativePageSlug?: string[];
+    pageSpecificData?: Record<string, any>;
+    pagesBaseURLs?: {
+      [key in ContentTypes]?: string;
+    };
+  };
+  contentTypeUid: string;
+}
+
+const DefaultLayout = ({ children }: PropsWithChildren) => children;
+
+const Page: NextPage<IPageProps> = (props) => {
+  const { content, contentTypeUid } = props;
+  const PageComponent = resolvePageComponent(contentTypeUid);
+  const StationDetailsLayout = resolveStationPageComponent(contentTypeUid) ?? DefaultLayout;
+
+  return (
+    <>
+      <PageHead page={content?.page} contentTypeUid={contentTypeUid} />
+      <Layout contentTypeUid={contentTypeUid}>
+        <StationDetailsLayout page={content?.page}>
+          {PageComponent ? <PageComponent {...content} /> : <h1>Page not implemented</h1>}
+        </StationDetailsLayout>
+      </Layout>
+    </>
+  );
+};
+
+export const getStaticPaths: GetStaticPaths = async () => {
+  const { MAINTENANCE_MODE } = process.env;
+
+  if (MAINTENANCE_MODE === "true") {
+    return { paths: [], fallback: false };
+  }
+
+  const paths = await staticPathsResolver.resolveStaticPaths();
+
+  return {
+    paths,
+    fallback: false,
+  };
+};
+
+export const getStaticProps: GetStaticProps = async (context) => {
+  const { locale: nextLocale = "" } = context;
+  const { slug = [] } = (context?.params as unknown as IDynamicSlugParams) || {};
+  const contentstackLocale = getLocaleByNextLocale(nextLocale);
+
+  const cachedHeaderData = readFromFs<{ [locale: string]: any }>({
+    fileName: "header",
+  });
+  const cachedFooterData = readFromFs<{ [locale: string]: any }>({
+    fileName: "footer",
+  });
+  const cachedPagesBaseURLs = readFromFs<{ [locale: string]: Record<string, string> }>({
+    fileName: "pagesBaseURLs",
+  });
+
+  const header = cachedHeaderData?.[contentstackLocale];
+  const footer = cachedFooterData?.[contentstackLocale];
+  const pagesBaseURLs = cachedPagesBaseURLs?.[contentstackLocale];
+
+  const {
+    uid: pageUid,
+    contentTypeUid,
+    languageAlternativePageSlug,
+    entry: pageContent,
+  } = readCachedPageDataFromFs([nextLocale, ...slug]);
+
+  const directories = readFromFs<IMappedByLocaleDirectories>({ fileName: "directories" });
+  const currentLocaleDirectories = directories?.[contentstackLocale] || {};
+
+  const pageSpecificData = await pageService.getPageSpecificData({
+    recentNews: pageContent.recent_news,
+    contentTypeUid,
+    entryUid: pageUid,
+    lang: contentstackLocale,
+  });
+
+  const rawContent: IPageProps["content"] = {
+    header,
+    page: [pageContent],
+    footer,
+    pageSpecificData,
+    directories: currentLocaleDirectories,
+    languageAlternativePageSlug,
+    pagesBaseURLs,
+  };
+
+  return {
+    props: {
+      contentTypeUid,
+      content: refineClientData(rawContent, nextLocale as NextLocales),
+      ...(await serverSideTranslations(nextLocale, ["common"])),
+    },
+  };
+};
+
+export default Page;
+```
+
+## Files to Create/Modify (EXACT ABSOLUTE PATHS — write to these paths exactly)
+src/hooks/useContent.ts, src/pages/[[...slug]].tsx, src/interface/content/contentCard.ts, src/components/contentstack/ContentstackLink/ContentstackLink.tsx
+
+## Dependencies
+None
+
+## Module resolution in this codeline
+A bare import that names a file under any of these directories is INTERNAL source, not a dependency — never add it to the dependency manifest:
+  __tests__, migration-scripts, public, review, src, zap_hooks
+Source extensions here: .ts, .tsx, .js, .jsx, .mjs, .cjs
+Write imports the way the existing files in this codeline write them; read a neighbouring file before inventing a path.
+
+
+## Instructions
+CRITICAL — these files already exist. Their real content is injected below (## Existing File Contents) — you do NOT need to ReadFile them to see what's already there.
+Do NOT import or reference anything that doesn't appear in the injected content below — a plausible-sounding module name is not a real one.
+Only call ReadFile yourself if you need to see MORE of a file than what's shown (e.g. it was truncated), or a file not listed below.
+   - /home/bradleyjerome/projects/metrolinx/next.upexpress.com/src/hooks/useContent.ts (ReadFile this only if you need it — not a fix site; content omitted to keep the prompt small)
+   - /home/bradleyjerome/projects/metrolinx/next.upexpress.com/src/pages/[[...slug]].tsx (content already injected below — do not ReadFile it unless you need lines beyond what's shown)
+   - /home/bradleyjerome/projects/metrolinx/next.upexpress.com/src/interface/content/contentCard.ts (ReadFile this only if you need it — not a fix site; content omitted to keep the prompt small)
+   - /home/bradleyjerome/projects/metrolinx/next.upexpress.com/src/components/contentstack/ContentstackLink/ContentstackLink.tsx (ReadFile this only if you need it — not a fix site; content omitted to keep the prompt small)
+**The content of every file listed above is already shown in ## Existing File Contents — use that, do not spend a tool call re-reading them. Use Edit for targeted changes to existing files — do NOT overwrite an existing file wholesale with WriteFile.**
+
+1. Use the injected ## Existing File Contents above to verify what actually exists (exports, types, existing utilities) before writing any code — do not guess, and do not re-read a file already shown in full
+2. Implement all acceptance criteria for this story
+3. Follow the project's existing code patterns and conventions
+4. Do NOT create tests unless explicitly required in acceptance criteria
+
+After implementation, provide a brief summary of what was created/modified.
+
+## Relevant Knowledge Base Entries
+The following was learned from previous story implementations and is relevant to your agent role. Apply this knowledge before writing any code:
+
+- [2026-07-06T18:11:26Z] Use vi.fn().mockResolvedValue(value) to make a mock return a resolved Promise.
+- [2026-07-06T20:31:11Z] Use `test: { passWithNoTests: true }` in vitest.config.ts or create a stub test file when no *.test.ts files exist.
+- [2026-07-06T20:33:03Z] Enable globals:true in vitest.config.ts so describe, it, and expect work without imports, reducing boilerplate in test files.
+- [2026-07-06T23:47:34Z] Use CommonJS-compatible patterns in src/server.ts: avoid `import.meta.url` and top-level `await`; gate listen with `if (require.main === module)`.
+- [2026-07-07T02:35:30Z] Always include a non-test source file in src/ alongside any src/*.test.ts file, since tsconfig.json excludes test files from tsc --noEmit.
+- [2026-07-07T19:01:34Z] Only modify or create files explicitly listed in the story's acceptance criteria. Do not touch files belonging to other stories or outside the current task scope.
+- [2026-07-07T20:17:57Z] [unreviewed-fallback] Avoid using deprecated TypeScript compiler options like 'moduleResolution=node10'; use 'moduleResolution=node' instead.
+- [2026-07-17T20:20:58Z] Always: Before importing a module or referencing a type/property, always read the actual source file to verify the export exists, its exact path, its properties, and its constructor/factory signatures
+- [2026-07-23T01:15:16Z] Always: In tsconfig.json, always use moduleResolution 'node' (not 'node10' or 'Node10') — 'node10' was removed in TypeScript 5.x. The correct value for CommonJS + Node resolution is 'node'.
+- [2026-07-23T14:30:00Z] CORRECTION to a prior entry (2026-07-23T01:17:52Z, now removed): that entry wrongly claimed 'moduleResolution: node' itself is removed and must become 'node16'/'nodenext'. Root-caused via mock1 (epam-cli orchestration test): 'node' is valid and correct through TypeScript 5.x (confirmed on 5.9.3) — it was only removed in TypeScript 7.x. The real defect was an unpinned `typescript` devDependency letting a fallback `npm install` pull latest (7.x) instead of the project's intended version. Do NOT rewrite a working tsconfig.json's moduleResolution in response to a TS5108 error — first check `node_modules/typescript/package.json`'s version; if it's 7.x and the rest of the project expects 5.x, the fix is pinning/reinstalling the correct typescript version, not changing moduleResolution.
+
+## Knowledge Base Contribution (do this LAST — after writing all implementation files)
+Your assigned KB entry ID for this run: **KB-015**
+**This is retry attempt 2** — a previous attempt failed. You MUST write a KB entry documenting what went wrong and what you changed.
+
+IMPORTANT: Write ALL implementation files first. Only AFTER writing every required file should you optionally append a KB entry.
+Do NOT read orchestrations/agents/KB.md before writing implementation files. The relevant KB entries are already injected above.
+
+If (and only if) you discover a non-obvious pattern during implementation, append one entry to `orchestrations/agents/KB.md`:
+
+```markdown
+## KB-015 -- 2026-07-29
+
+**Category:** <backend|frontend|infrastructure|testing|orchestration>
+**AgentRole:** <your agentRole from the story>
+**Tags:** <comma-separated tech keywords, e.g. typescript, node, cli>
+**Trigger:** <retry|first-success>
+**StoryRef:** AMSD-2041
+
+<One concise paragraph: the specific pattern, gotcha, or anti-pattern.>
+```
+
+Only write an entry if the knowledge is genuinely non-obvious. Skip trivial observations.
+
+## Execution Plan
+Follow this plan step by step:
+1. Read `src/interface/content/contentCard.ts` to understand the current `ContentCard` interface shape, then add optional preview metadata fields: `preview_id?: string`, `preview_environment?: string`, and `preview_url?: string` to support live preview data from Contentstack.
+
+2. Read `src/hooks/useContent.ts` to inspect the existing content-fetching hook signature and patterns. Modify the hook to accept an optional `previewOptions?: { preview?: boolean; previewEnvironment?: string; contentType?: string }` parameter and include Contentstack live preview headers (`preview`, `preview-environment`) in the Contentstack SDK fetch call when preview mode is active.
+
+3. Read `src/pages/[[...slug]].tsx` to understand the current catch-all page structure, data-fetching method (getStaticProps/getServerSideProps), and how `useContent` is invoked. Add logic to read `preview` and `preview-environment` query parameters from the Next.js context and pass them as `previewOptions` into the `useContent` hook call.
+
+4. In `src/pages/[[...slug]].tsx`, initialize the Contentstack Live Preview SDK (e.g., `LivePreviewUtils.init({ stackDetails, enable: process.env.CONTENTSTACK_LIVE_PREVIEW === 'true' })`) at the module or app level if not already present, and ensure the page re-renders on preview edit events by subscribing to the SDK's `onEntryChange` callback.
+
+5. Read `src/components/contentstack/ContentstackLink/ContentstackLink.tsx` to inspect the current link component props and href construction. Modify the component to accept an optional `previewUrl?: string` prop and, when present and preview mode is active, render the `previewUrl` as the href instead of the standard slug-based URL.
+
+6. In `src/components/contentstack/ContentstackLink/ContentstackLink.tsx`, ensure the component reads preview state (either via a prop passed from the page or via a context/flag) so that internal links rendered during live preview point to the correct preview-environment URLs rather than production paths.
+
+7. Write unit tests for `src/hooks/useContent.ts` covering: (a) default fetch without preview options sends no preview headers, (b) fetch with `previewOptions.preview === true` includes `preview: 'true'` and `preview-environment` headers, (c) hook returns correctly typed `ContentCard` data including optional preview fields.
+
+8. Write unit tests for `src/components/contentstack/ContentstackLink/ContentstackLink.tsx` covering: (a) renders standard href when no `previewUrl` is provided, (b) renders `previewUrl` as href when provided and preview mode is active, (c) falls back to standard href when `previewUrl` is provided but preview mode is inactive.
+
+9. Verify the full integration by running the existing test suite (`npm test` or equivalent) and confirming that all four modified files compile without TypeScript errors (`npm run build` or `tsc --noEmit`). Manually verify that enabling `CONTENTSTACK_LIVE_PREVIEW=true` with a valid preview environment causes content edits in Contentstack to reflect in the browser without a full page reload.
+=== End Prompt ===
+
+=== epam Output (attempt 3) ===
+Now I have a complete picture. Let me design the minimal fix:
+
+**Plan:**
+1. Add a `preview` field to `IContentstackGetEntry` / `IContentstackGetSingleEntry` / `IContentstackGetSingletonEntry` interfaces (so it threads through the SDK helpers).
+2. In `contentstack.ts`, when `preview` is true, build a separate `Stack` with the preview token (from a new env var `CONTENTSTACK_PREVIEW_TOKEN`) and use a query parameter on the underlying `contentstack` SDK's `Stack` to fetch the preview version. The Contentstack Delivery SDK supports `preview()` on a Stack instance which switches it to preview mode.
+3. In `[[...slug]].tsx`:
+   - Change `fallback: false` → `fallback: 'blocking'`
+   - In `getStaticProps`, detect preview mode from `context.preview` (set by Next.js preview mode) or query params
+   - If preview and we have the cached entry (most preview URLs are for existing pages), use the cached entry UID but re-fetch from Contentstack with preview=true; if no cache hit, look up by URL slug
+   - Return `{ props, revalidate: 1 }` for preview paths so they stay in blocking-fallback mode
+
+Let me check how the contentstack SDK exposes preview mode and look at one more thing — whether there's a `setPreview` or similar.
+Now I have a complete picture. Let me design the minimal fix:
+
+**Plan:**
+1. Add a `preview` field to `IContentstackGetEntry` / `IContentstackGetSingleEntry` / `IContentstackGetSingletonEntry` interfaces (so it threads through the SDK helpers).
+2. In `contentstack.ts`, when `preview` is true, build a separate `Stack` with the preview token (from a new env var `CONTENTSTACK_PREVIEW_TOKEN`) and use a query parameter on the underlying `contentstack` SDK's `Stack` to fetch the preview version. The Contentstack Delivery SDK supports `preview()` on a Stack instance which switches it to preview mode.
+3. In `[[...slug]].tsx`:
+   - Change `fallback: false` → `fallback: 'blocking'`
+   - In `getStaticProps`, detect preview mode from `context.preview` (set by Next.js preview mode) or query params
+   - If preview and we have the cached entry (most preview URLs are for existing pages), use the cached entry UID but re-fetch from Contentstack with preview=true; if no cache hit, look up by URL slug
+   - Return `{ props, revalidate: 1 }` for preview paths so they stay in blocking-fallback mode
+
+Let me check how the contentstack SDK exposes preview mode and look at one more thing — whether there's a `setPreview` or similar.
+
+=== epam exited with code 1 ===
+=== Prompt for AMSD-2041 (attempt 4) ===
+CRITICAL — these files already exist. Their real content is injected below (## Existing File Contents) — you do NOT need to ReadFile them to see what's already there.
+Do NOT import or reference anything that doesn't appear in the injected content below — a plausible-sounding module name is not a real one.
+Only call ReadFile yourself if you need to see MORE of a file than what's shown (e.g. it was truncated), or a file not listed below.
+
+   - /home/bradleyjerome/projects/metrolinx/next.upexpress.com/src/hooks/useContent.ts (ReadFile this only if you need it — not a fix site; content omitted to keep the prompt small)
+   - /home/bradleyjerome/projects/metrolinx/next.upexpress.com/src/pages/[[...slug]].tsx (content already injected below — do not ReadFile it unless you need lines beyond what's shown)
+   - /home/bradleyjerome/projects/metrolinx/next.upexpress.com/src/interface/content/contentCard.ts (ReadFile this only if you need it — not a fix site; content omitted to keep the prompt small)
+   - /home/bradleyjerome/projects/metrolinx/next.upexpress.com/src/components/contentstack/ContentstackLink/ContentstackLink.tsx (ReadFile this only if you need it — not a fix site; content omitted to keep the prompt small)
+---
+
+Implement user story AMSD-2041: [GO, UP, MX] Live Preview of Content in CMS
+
+## Story Description
+[GO, UP, MX] Live Preview of Content in CMS — enable content authors to preview draft/unpublished content from Contentstack within the application before it is published, so they can verify layout and data appearance in context.
+
+## Acceptance Criteria
+- 
+
+
+## Root Cause Analysis & Prescribed Fix (AUTHORITATIVE — start here, do not re-trace)
+A code investigation already traced this bug to its cause and prescribed the minimal fix below. This is the plan of record. Apply it; do NOT re-read the whole codebase to re-derive it.
+
+The Acceptance Criteria above describe the desired END BEHAVIOR to VERIFY — they are NOT an implementation blueprint. Do not re-architect, split values, or add new fields/abstractions to satisfy an AC literally when the prescribed minimal fix already makes that AC pass. Implement the fix below; the ACs are how you check you got it right.
+
+HARD RULES:
+- Make the SMALLEST change that fixes the root cause. Fewer lines of code is always better.
+- REUSE existing functions. Before writing any new helper, search the repo for an existing util/parser/formatter that already does what you need (use the CodeGraph tool documented below) and call it. Writing novel code when a helper already exists is a defect to be rejected in review.
+- **src/pages/[[...slug]].tsx** (`getStaticProps`): This is the gateway that assembles all page content. It currently reads exclusively from the filesystem cache (readCachedPageDataFromFs) and has fallback:false in getStaticPaths, which together block any Contentstack Live Preview flow. For live preview to work, getStaticProps must detect preview mode (Contentstack preview token in query params) and fetch live/draft content from the Contentstack SDK instead of the static cache. The companion getStaticPaths must allow non-pre-built paths (fallback:'blocking') so preview URLs can resolve.
+  - **Minimal fix:** Change `fallback: false` to `fallback: 'blocking'` in getStaticPaths (line 63) so that Contentstack preview URLs not in the static path list can still be resolved. Then in getStaticProps (line 66), before calling readCachedPageDataFromFs, check for Contentstack preview parameters (e.g. context.preview or query params like live_preview / contentstack_preview). When present, skip the filesystem cache and instead call the existing Contentstack SDK entry-fetching helpers (getSingletonEntry / getSingleEntry, already used in src/pages/find-a-station/[stationCode]/[contentstackUrl].tsx) with the preview token to fetch draft content directly. Pass that live content through the same refineClientData pipeline and return it as props. This reuses the existing SDK helpers rather than introducing new fetching logic.
+
+
+## Verification Criteria (what a tester will CONFIRM — your change must satisfy every one)
+These are observable checks, derived from the acceptance criteria and description. They describe WHAT is observed, not how to build it. Make the minimal change that makes all of these true; your accompanying test should assert them:
+- Given a preview URL containing a valid Contentstack preview token, when a tester opens that URL in a browser, then the page renders successfully instead of returning a 404 'page not found' error.
+- Given an editor has saved an unpublished draft change to a page's content in Contentstack, when a tester opens that page's preview URL with a valid preview token, then the rendered page displays the draft content, including the unpublished change.
+- Given an editor has saved an unpublished draft change to a page's content in Contentstack, when a tester opens the same page's normal URL without preview parameters, then the rendered page displays the currently published content and does not show the unpublished draft change.
+- Given preview mode is enabled, when a tester opens preview URLs for multiple different pages on the site, then each page renders its own draft content without requiring any per-page setup or configuration by the tester.
+- Given a tester opens a page in preview mode, when the page renders, then all of the page's existing sections and components display normally with the draft content, with no missing, broken, or visibly altered layout compared to how those sections appear on the published page.
+- Given a tester opens a preview URL for which no draft content is available (e.g. an invalid or expired preview token, or content that does not exist in Contentstack), then the tester sees a graceful error or fallback page rather than an application crash, blank screen, or unhandled error stack.
+
+## Tests are NOT your job this turn
+A dedicated test-writer agent runs immediately after your fix commits and owns the bug-reproducing test. Do NOT write, edit, or create any test file (*.test.*, *.spec.*, __tests__/). Write ONLY the fix. Adding a test here wastes your turn budget and has caused repeated failures.
+
+## The helper to reuse is ALREADY identified — do NOT search
+The Root Cause Analysis above names the exact existing helper to reuse (`getSingletonEntry`). Do NOT run CodeGraph or explore the codebase to re-find it — that wastes your turn budget. Import it, apply the prescribed minimal fix, write your file(s), and stop. Only search if you hit something the prescribed fix genuinely does not cover.
+
+
+
+
+
+## Technical Notes
+- files: ["src/hooks/useContent.ts","src/pages/[[...slug]].tsx","src/interface/content/contentCard.ts","src/components/contentstack/ContentstackLink/ContentstackLink.tsx"]
+
+## Existing File Contents (injected once, deterministically — do NOT ReadFile these unless you need more than shown)
+
+### /home/bradleyjerome/projects/metrolinx/next.upexpress.com/src/pages/[[...slug]].tsx
+```
+import { PropsWithChildren } from "react";
+import { GetStaticPaths, GetStaticProps, NextPage } from "next";
+import { serverSideTranslations } from "next-i18next/serverSideTranslations";
+import { resolvePageComponent, resolveStationPageComponent } from "services/pageComponentResolver";
+import { pageService } from "services/pageService";
+import { staticPathsResolver } from "services/staticPathsResolver";
+import { Layout } from "components/Layout/Layout";
+import { PageHead } from "components/pages/PageHead";
+import { readFromFs } from "utils/fsCache";
+import { getLocaleByNextLocale, NextLocales } from "utils/locale";
+import { readCachedPageDataFromFs } from "utils/pageDataCache";
+import { refineClientData } from "utils/refineClientData";
+import { ContentTypes } from "constants/contentstack";
+import { IContentstackPage } from "interface/content/page";
+import { IDirectoryData, IMappedByLocaleDirectories } from "interface/directory";
+
+interface IDynamicSlugParams {
+  slug: string[];
+}
+
+export interface IPageProps {
+  content: {
+    // TODO(devteam): define types for header and footer
+    header: [any];
+    footer: [any];
+    page: [IContentstackPage];
+    directories: IDirectoryData;
+    languageAlternativePageSlug?: string[];
+    pageSpecificData?: Record<string, any>;
+    pagesBaseURLs?: {
+      [key in ContentTypes]?: string;
+    };
+  };
+  contentTypeUid: string;
+}
+
+const DefaultLayout = ({ children }: PropsWithChildren) => children;
+
+const Page: NextPage<IPageProps> = (props) => {
+  const { content, contentTypeUid } = props;
+  const PageComponent = resolvePageComponent(contentTypeUid);
+  const StationDetailsLayout = resolveStationPageComponent(contentTypeUid) ?? DefaultLayout;
+
+  return (
+    <>
+      <PageHead page={content?.page} contentTypeUid={contentTypeUid} />
+      <Layout contentTypeUid={contentTypeUid}>
+        <StationDetailsLayout page={content?.page}>
+          {PageComponent ? <PageComponent {...content} /> : <h1>Page not implemented</h1>}
+        </StationDetailsLayout>
+      </Layout>
+    </>
+  );
+};
+
+export const getStaticPaths: GetStaticPaths = async () => {
+  const { MAINTENANCE_MODE } = process.env;
+
+  if (MAINTENANCE_MODE === "true") {
+    return { paths: [], fallback: false };
+  }
+
+  const paths = await staticPathsResolver.resolveStaticPaths();
+
+  return {
+    paths,
+    fallback: false,
+  };
+};
+
+export const getStaticProps: GetStaticProps = async (context) => {
+  const { locale: nextLocale = "" } = context;
+  const { slug = [] } = (context?.params as unknown as IDynamicSlugParams) || {};
+  const contentstackLocale = getLocaleByNextLocale(nextLocale);
+
+  const cachedHeaderData = readFromFs<{ [locale: string]: any }>({
+    fileName: "header",
+  });
+  const cachedFooterData = readFromFs<{ [locale: string]: any }>({
+    fileName: "footer",
+  });
+  const cachedPagesBaseURLs = readFromFs<{ [locale: string]: Record<string, string> }>({
+    fileName: "pagesBaseURLs",
+  });
+
+  const header = cachedHeaderData?.[contentstackLocale];
+  const footer = cachedFooterData?.[contentstackLocale];
+  const pagesBaseURLs = cachedPagesBaseURLs?.[contentstackLocale];
+
+  const {
+    uid: pageUid,
+    contentTypeUid,
+    languageAlternativePageSlug,
+    entry: pageContent,
+  } = readCachedPageDataFromFs([nextLocale, ...slug]);
+
+  const directories = readFromFs<IMappedByLocaleDirectories>({ fileName: "directories" });
+  const currentLocaleDirectories = directories?.[contentstackLocale] || {};
+
+  const pageSpecificData = await pageService.getPageSpecificData({
+    recentNews: pageContent.recent_news,
+    contentTypeUid,
+    entryUid: pageUid,
+    lang: contentstackLocale,
+  });
+
+  const rawContent: IPageProps["content"] = {
+    header,
+    page: [pageContent],
+    footer,
+    pageSpecificData,
+    directories: currentLocaleDirectories,
+    languageAlternativePageSlug,
+    pagesBaseURLs,
+  };
+
+  return {
+    props: {
+      contentTypeUid,
+      content: refineClientData(rawContent, nextLocale as NextLocales),
+      ...(await serverSideTranslations(nextLocale, ["common"])),
+    },
+  };
+};
+
+export default Page;
+```
+
+## Files to Create/Modify (EXACT ABSOLUTE PATHS — write to these paths exactly)
+src/hooks/useContent.ts, src/pages/[[...slug]].tsx, src/interface/content/contentCard.ts, src/components/contentstack/ContentstackLink/ContentstackLink.tsx
+
+## Dependencies
+None
+
+## Module resolution in this codeline
+A bare import that names a file under any of these directories is INTERNAL source, not a dependency — never add it to the dependency manifest:
+  __tests__, migration-scripts, public, review, src, zap_hooks
+Source extensions here: .ts, .tsx, .js, .jsx, .mjs, .cjs
+Write imports the way the existing files in this codeline write them; read a neighbouring file before inventing a path.
+
+
+## Instructions
+CRITICAL — these files already exist. Their real content is injected below (## Existing File Contents) — you do NOT need to ReadFile them to see what's already there.
+Do NOT import or reference anything that doesn't appear in the injected content below — a plausible-sounding module name is not a real one.
+Only call ReadFile yourself if you need to see MORE of a file than what's shown (e.g. it was truncated), or a file not listed below.
+   - /home/bradleyjerome/projects/metrolinx/next.upexpress.com/src/hooks/useContent.ts (ReadFile this only if you need it — not a fix site; content omitted to keep the prompt small)
+   - /home/bradleyjerome/projects/metrolinx/next.upexpress.com/src/pages/[[...slug]].tsx (content already injected below — do not ReadFile it unless you need lines beyond what's shown)
+   - /home/bradleyjerome/projects/metrolinx/next.upexpress.com/src/interface/content/contentCard.ts (ReadFile this only if you need it — not a fix site; content omitted to keep the prompt small)
+   - /home/bradleyjerome/projects/metrolinx/next.upexpress.com/src/components/contentstack/ContentstackLink/ContentstackLink.tsx (ReadFile this only if you need it — not a fix site; content omitted to keep the prompt small)
+**The content of every file listed above is already shown in ## Existing File Contents — use that, do not spend a tool call re-reading them. Use Edit for targeted changes to existing files — do NOT overwrite an existing file wholesale with WriteFile.**
+
+1. Use the injected ## Existing File Contents above to verify what actually exists (exports, types, existing utilities) before writing any code — do not guess, and do not re-read a file already shown in full
+2. Implement all acceptance criteria for this story
+3. Follow the project's existing code patterns and conventions
+4. Do NOT create tests unless explicitly required in acceptance criteria
+
+After implementation, provide a brief summary of what was created/modified.
+
+## Relevant Knowledge Base Entries
+The following was learned from previous story implementations and is relevant to your agent role. Apply this knowledge before writing any code:
+
+- [2026-07-06T18:11:26Z] Use vi.fn().mockResolvedValue(value) to make a mock return a resolved Promise.
+- [2026-07-06T20:31:11Z] Use `test: { passWithNoTests: true }` in vitest.config.ts or create a stub test file when no *.test.ts files exist.
+- [2026-07-06T20:33:03Z] Enable globals:true in vitest.config.ts so describe, it, and expect work without imports, reducing boilerplate in test files.
+- [2026-07-06T23:47:34Z] Use CommonJS-compatible patterns in src/server.ts: avoid `import.meta.url` and top-level `await`; gate listen with `if (require.main === module)`.
+- [2026-07-07T02:35:30Z] Always include a non-test source file in src/ alongside any src/*.test.ts file, since tsconfig.json excludes test files from tsc --noEmit.
+- [2026-07-07T19:01:34Z] Only modify or create files explicitly listed in the story's acceptance criteria. Do not touch files belonging to other stories or outside the current task scope.
+- [2026-07-07T20:17:57Z] [unreviewed-fallback] Avoid using deprecated TypeScript compiler options like 'moduleResolution=node10'; use 'moduleResolution=node' instead.
+- [2026-07-17T20:20:58Z] Always: Before importing a module or referencing a type/property, always read the actual source file to verify the export exists, its exact path, its properties, and its constructor/factory signatures
+- [2026-07-23T01:15:16Z] Always: In tsconfig.json, always use moduleResolution 'node' (not 'node10' or 'Node10') — 'node10' was removed in TypeScript 5.x. The correct value for CommonJS + Node resolution is 'node'.
+- [2026-07-23T14:30:00Z] CORRECTION to a prior entry (2026-07-23T01:17:52Z, now removed): that entry wrongly claimed 'moduleResolution: node' itself is removed and must become 'node16'/'nodenext'. Root-caused via mock1 (epam-cli orchestration test): 'node' is valid and correct through TypeScript 5.x (confirmed on 5.9.3) — it was only removed in TypeScript 7.x. The real defect was an unpinned `typescript` devDependency letting a fallback `npm install` pull latest (7.x) instead of the project's intended version. Do NOT rewrite a working tsconfig.json's moduleResolution in response to a TS5108 error — first check `node_modules/typescript/package.json`'s version; if it's 7.x and the rest of the project expects 5.x, the fix is pinning/reinstalling the correct typescript version, not changing moduleResolution.
+
+## Knowledge Base Contribution (do this LAST — after writing all implementation files)
+Your assigned KB entry ID for this run: **KB-015**
+**This is retry attempt 3** — a previous attempt failed. You MUST write a KB entry documenting what went wrong and what you changed.
+
+IMPORTANT: Write ALL implementation files first. Only AFTER writing every required file should you optionally append a KB entry.
+Do NOT read orchestrations/agents/KB.md before writing implementation files. The relevant KB entries are already injected above.
+
+If (and only if) you discover a non-obvious pattern during implementation, append one entry to `orchestrations/agents/KB.md`:
+
+```markdown
+## KB-015 -- 2026-07-29
+
+**Category:** <backend|frontend|infrastructure|testing|orchestration>
+**AgentRole:** <your agentRole from the story>
+**Tags:** <comma-separated tech keywords, e.g. typescript, node, cli>
+**Trigger:** <retry|first-success>
+**StoryRef:** AMSD-2041
+
+<One concise paragraph: the specific pattern, gotcha, or anti-pattern.>
+```
+
+Only write an entry if the knowledge is genuinely non-obvious. Skip trivial observations.
+
+## Execution Plan
+Follow this plan step by step:
+1. Read `src/interface/content/contentCard.ts` to understand the current `ContentCard` interface shape, then add optional preview metadata fields: `preview_id?: string`, `preview_environment?: string`, and `preview_url?: string` to support live preview data from Contentstack.
+
+2. Read `src/hooks/useContent.ts` to inspect the existing content-fetching hook signature and patterns. Modify the hook to accept an optional `previewOptions?: { preview?: boolean; previewEnvironment?: string; contentType?: string }` parameter and include Contentstack live preview headers (`preview`, `preview-environment`) in the Contentstack SDK fetch call when preview mode is active.
+
+3. Read `src/pages/[[...slug]].tsx` to understand the current catch-all page structure, data-fetching method (getStaticProps/getServerSideProps), and how `useContent` is invoked. Add logic to read `preview` and `preview-environment` query parameters from the Next.js context and pass them as `previewOptions` into the `useContent` hook call.
+
+4. In `src/pages/[[...slug]].tsx`, initialize the Contentstack Live Preview SDK (e.g., `LivePreviewUtils.init({ stackDetails, enable: process.env.CONTENTSTACK_LIVE_PREVIEW === 'true' })`) at the module or app level if not already present, and ensure the page re-renders on preview edit events by subscribing to the SDK's `onEntryChange` callback.
+
+5. Read `src/components/contentstack/ContentstackLink/ContentstackLink.tsx` to inspect the current link component props and href construction. Modify the component to accept an optional `previewUrl?: string` prop and, when present and preview mode is active, render the `previewUrl` as the href instead of the standard slug-based URL.
+
+6. In `src/components/contentstack/ContentstackLink/ContentstackLink.tsx`, ensure the component reads preview state (either via a prop passed from the page or via a context/flag) so that internal links rendered during live preview point to the correct preview-environment URLs rather than production paths.
+
+7. Write unit tests for `src/hooks/useContent.ts` covering: (a) default fetch without preview options sends no preview headers, (b) fetch with `previewOptions.preview === true` includes `preview: 'true'` and `preview-environment` headers, (c) hook returns correctly typed `ContentCard` data including optional preview fields.
+
+8. Write unit tests for `src/components/contentstack/ContentstackLink/ContentstackLink.tsx` covering: (a) renders standard href when no `previewUrl` is provided, (b) renders `previewUrl` as href when provided and preview mode is active, (c) falls back to standard href when `previewUrl` is provided but preview mode is inactive.
+
+9. Verify the full integration by running the existing test suite (`npm test` or equivalent) and confirming that all four modified files compile without TypeScript errors (`npm run build` or `tsc --noEmit`). Manually verify that enabling `CONTENTSTACK_LIVE_PREVIEW=true` with a valid preview environment causes content edits in Contentstack to reflect in the browser without a full page reload.
+=== End Prompt ===
+
+=== epam Output (attempt 4) ===
+Now I have enough context. The cleanest minimal approach that respects the ACs and the hard-rules:
+
+- AC #1 (preview URL doesn't 404): `fallback: 'blocking'`
+- AC #2 (draft content renders in preview): when preview, fetch via existing SDK (`getEntry` with `where: { url: ... }`) — but only if we can identify the contentType. Since the page component resolves contentType from the page's own `contentTypeUid`, and cached fs lookup currently bails when slug unknown, we need a fallback that tries each page content type.
+
+Actually let me reconsider. The simpler & smaller fix: use the existing fs cache path resolution logic via `staticPathsResolver`, but in preview mode allow lookup by URL even outside prebuilt paths. The fs cache key is `hash([nextLocale, ...slug])`. In preview, the entry may not be in the cache at all (it's a new draft). So we need to actually hit Contentstack.
+
+Given the complexity of URL→contentType lookup (would require trying each page content type), and that the prescribed fix is "minimal," the minimum that satisfies all ACs and the RCA is:
+
+1. Switch `fallback: false` → `fallback: 'blocking'`.
+2. Detect preview via `context.preview` or query string (`live_preview` / `contentstack_preview`). When preview:
+   - Resolve page data by querying the Contentstack SDK by URL across content types using the existing helpers.
+   - Pass through `refineClientData`.
+
+Given that the **pageSpecificData** function in `pageService` requires `contentTypeUid` and `entryUid`, and we won't know `contentTypeUid` from URL alone without trying each type, this is non-trivial. But the prescribed helper `getSingleton handles the "singleton" page types (like `Homepage`, `StationOrder`, `GlobalHeader`, `GlobalFooter`). For regular page types we need `getEntry` with a `where` filter.
+
+Let me check what's exposed for `where` lookups in the interface:
+Now I have enough context. The cleanest minimal approach that respects the ACs and the hard-rules:
+
+- AC #1 (preview URL doesn't 404): `fallback: 'blocking'`
+- AC #2 (draft content renders in preview): when preview, fetch via existing SDK (`getEntry` with `where: { url: ... }`) — but only if we can identify the contentType. Since the page component resolves contentType from the page's own `contentTypeUid`, and cached fs lookup currently bails when slug unknown, we need a fallback that tries each page content type.
+
+Actually let me reconsider. The simpler & smaller fix: use the existing fs cache path resolution logic via `staticPathsResolver`, but in preview mode allow lookup by URL even outside prebuilt paths. The fs cache key is `hash([nextLocale, ...slug])`. In preview, the entry may not be in the cache at all (it's a new draft). So we need to actually hit Contentstack.
+
+Given the complexity of URL→contentType lookup (would require trying each page content type), and that the prescribed fix is "minimal," the minimum that satisfies all ACs and the RCA is:
+
+1. Switch `fallback: false` → `fallback: 'blocking'`.
+2. Detect preview via `context.preview` or query string (`live_preview` / `contentstack_preview`). When preview:
+   - Resolve page data by querying the Contentstack SDK by URL across content types using the existing helpers.
+   - Pass through `refineClientData`.
+
+Given that the **pageSpecificData** function in `pageService` requires `contentTypeUid` and `entryUid`, and we won't know `contentTypeUid` from URL alone without trying each type, this is non-trivial. But the prescribed helper `getSingleton handles the "singleton" page types (like `Homepage`, `StationOrder`, `GlobalHeader`, `GlobalFooter`). For regular page types we need `getEntry` with a `where` filter.
+
+Let me check what's exposed for `where` lookups in the interface:
+
+=== epam exited with code 1 ===
+=== Prompt for AMSD-2041 (attempt 5) ===
+CRITICAL — these files already exist. Their real content is injected below (## Existing File Contents) — you do NOT need to ReadFile them to see what's already there.
+Do NOT import or reference anything that doesn't appear in the injected content below — a plausible-sounding module name is not a real one.
+Only call ReadFile yourself if you need to see MORE of a file than what's shown (e.g. it was truncated), or a file not listed below.
+
+   - /home/bradleyjerome/projects/metrolinx/next.upexpress.com/src/hooks/useContent.ts (ReadFile this only if you need it — not a fix site; content omitted to keep the prompt small)
+   - /home/bradleyjerome/projects/metrolinx/next.upexpress.com/src/pages/[[...slug]].tsx (content already injected below — do not ReadFile it unless you need lines beyond what's shown)
+   - /home/bradleyjerome/projects/metrolinx/next.upexpress.com/src/interface/content/contentCard.ts (ReadFile this only if you need it — not a fix site; content omitted to keep the prompt small)
+   - /home/bradleyjerome/projects/metrolinx/next.upexpress.com/src/components/contentstack/ContentstackLink/ContentstackLink.tsx (ReadFile this only if you need it — not a fix site; content omitted to keep the prompt small)
+---
+
+Implement user story AMSD-2041: [GO, UP, MX] Live Preview of Content in CMS
+
+## Story Description
+[GO, UP, MX] Live Preview of Content in CMS — enable content authors to preview draft/unpublished content from Contentstack within the application before it is published, so they can verify layout and data appearance in context.
+
+## Acceptance Criteria
+- 
+
+
+## Root Cause Analysis & Prescribed Fix (AUTHORITATIVE — start here, do not re-trace)
+A code investigation already traced this bug to its cause and prescribed the minimal fix below. This is the plan of record. Apply it; do NOT re-read the whole codebase to re-derive it.
+
+The Acceptance Criteria above describe the desired END BEHAVIOR to VERIFY — they are NOT an implementation blueprint. Do not re-architect, split values, or add new fields/abstractions to satisfy an AC literally when the prescribed minimal fix already makes that AC pass. Implement the fix below; the ACs are how you check you got it right.
+
+HARD RULES:
+- Make the SMALLEST change that fixes the root cause. Fewer lines of code is always better.
+- REUSE existing functions. Before writing any new helper, search the repo for an existing util/parser/formatter that already does what you need (use the CodeGraph tool documented below) and call it. Writing novel code when a helper already exists is a defect to be rejected in review.
+- **src/pages/[[...slug]].tsx** (`getStaticProps`): This is the gateway that assembles all page content. It currently reads exclusively from the filesystem cache (readCachedPageDataFromFs) and has fallback:false in getStaticPaths, which together block any Contentstack Live Preview flow. For live preview to work, getStaticProps must detect preview mode (Contentstack preview token in query params) and fetch live/draft content from the Contentstack SDK instead of the static cache. The companion getStaticPaths must allow non-pre-built paths (fallback:'blocking') so preview URLs can resolve.
+  - **Minimal fix:** Change `fallback: false` to `fallback: 'blocking'` in getStaticPaths (line 63) so that Contentstack preview URLs not in the static path list can still be resolved. Then in getStaticProps (line 66), before calling readCachedPageDataFromFs, check for Contentstack preview parameters (e.g. context.preview or query params like live_preview / contentstack_preview). When present, skip the filesystem cache and instead call the existing Contentstack SDK entry-fetching helpers (getSingletonEntry / getSingleEntry, already used in src/pages/find-a-station/[stationCode]/[contentstackUrl].tsx) with the preview token to fetch draft content directly. Pass that live content through the same refineClientData pipeline and return it as props. This reuses the existing SDK helpers rather than introducing new fetching logic.
+
+
+## Verification Criteria (what a tester will CONFIRM — your change must satisfy every one)
+These are observable checks, derived from the acceptance criteria and description. They describe WHAT is observed, not how to build it. Make the minimal change that makes all of these true; your accompanying test should assert them:
+- Given a preview URL containing a valid Contentstack preview token, when a tester opens that URL in a browser, then the page renders successfully instead of returning a 404 'page not found' error.
+- Given an editor has saved an unpublished draft change to a page's content in Contentstack, when a tester opens that page's preview URL with a valid preview token, then the rendered page displays the draft content, including the unpublished change.
+- Given an editor has saved an unpublished draft change to a page's content in Contentstack, when a tester opens the same page's normal URL without preview parameters, then the rendered page displays the currently published content and does not show the unpublished draft change.
+- Given preview mode is enabled, when a tester opens preview URLs for multiple different pages on the site, then each page renders its own draft content without requiring any per-page setup or configuration by the tester.
+- Given a tester opens a page in preview mode, when the page renders, then all of the page's existing sections and components display normally with the draft content, with no missing, broken, or visibly altered layout compared to how those sections appear on the published page.
+- Given a tester opens a preview URL for which no draft content is available (e.g. an invalid or expired preview token, or content that does not exist in Contentstack), then the tester sees a graceful error or fallback page rather than an application crash, blank screen, or unhandled error stack.
+
+## Tests are NOT your job this turn
+A dedicated test-writer agent runs immediately after your fix commits and owns the bug-reproducing test. Do NOT write, edit, or create any test file (*.test.*, *.spec.*, __tests__/). Write ONLY the fix. Adding a test here wastes your turn budget and has caused repeated failures.
+
+## The helper to reuse is ALREADY identified — do NOT search
+The Root Cause Analysis above names the exact existing helper to reuse (`getSingletonEntry`). Do NOT run CodeGraph or explore the codebase to re-find it — that wastes your turn budget. Import it, apply the prescribed minimal fix, write your file(s), and stop. Only search if you hit something the prescribed fix genuinely does not cover.
+
+
+
+
+
+## Technical Notes
+- files: ["src/hooks/useContent.ts","src/pages/[[...slug]].tsx","src/interface/content/contentCard.ts","src/components/contentstack/ContentstackLink/ContentstackLink.tsx"]
+
+## Existing File Contents (injected once, deterministically — do NOT ReadFile these unless you need more than shown)
+
+### /home/bradleyjerome/projects/metrolinx/next.upexpress.com/src/pages/[[...slug]].tsx
+```
+import { PropsWithChildren } from "react";
+import { GetStaticPaths, GetStaticProps, NextPage } from "next";
+import { serverSideTranslations } from "next-i18next/serverSideTranslations";
+import { resolvePageComponent, resolveStationPageComponent } from "services/pageComponentResolver";
+import { pageService } from "services/pageService";
+import { staticPathsResolver } from "services/staticPathsResolver";
+import { Layout } from "components/Layout/Layout";
+import { PageHead } from "components/pages/PageHead";
+import { readFromFs } from "utils/fsCache";
+import { getLocaleByNextLocale, NextLocales } from "utils/locale";
+import { readCachedPageDataFromFs } from "utils/pageDataCache";
+import { refineClientData } from "utils/refineClientData";
+import { ContentTypes } from "constants/contentstack";
+import { IContentstackPage } from "interface/content/page";
+import { IDirectoryData, IMappedByLocaleDirectories } from "interface/directory";
+
+interface IDynamicSlugParams {
+  slug: string[];
+}
+
+export interface IPageProps {
+  content: {
+    // TODO(devteam): define types for header and footer
+    header: [any];
+    footer: [any];
+    page: [IContentstackPage];
+    directories: IDirectoryData;
+    languageAlternativePageSlug?: string[];
+    pageSpecificData?: Record<string, any>;
+    pagesBaseURLs?: {
+      [key in ContentTypes]?: string;
+    };
+  };
+  contentTypeUid: string;
+}
+
+const DefaultLayout = ({ children }: PropsWithChildren) => children;
+
+const Page: NextPage<IPageProps> = (props) => {
+  const { content, contentTypeUid } = props;
+  const PageComponent = resolvePageComponent(contentTypeUid);
+  const StationDetailsLayout = resolveStationPageComponent(contentTypeUid) ?? DefaultLayout;
+
+  return (
+    <>
+      <PageHead page={content?.page} contentTypeUid={contentTypeUid} />
+      <Layout contentTypeUid={contentTypeUid}>
+        <StationDetailsLayout page={content?.page}>
+          {PageComponent ? <PageComponent {...content} /> : <h1>Page not implemented</h1>}
+        </StationDetailsLayout>
+      </Layout>
+    </>
+  );
+};
+
+export const getStaticPaths: GetStaticPaths = async () => {
+  const { MAINTENANCE_MODE } = process.env;
+
+  if (MAINTENANCE_MODE === "true") {
+    return { paths: [], fallback: false };
+  }
+
+  const paths = await staticPathsResolver.resolveStaticPaths();
+
+  return {
+    paths,
+    fallback: false,
+  };
+};
+
+export const getStaticProps: GetStaticProps = async (context) => {
+  const { locale: nextLocale = "" } = context;
+  const { slug = [] } = (context?.params as unknown as IDynamicSlugParams) || {};
+  const contentstackLocale = getLocaleByNextLocale(nextLocale);
+
+  const cachedHeaderData = readFromFs<{ [locale: string]: any }>({
+    fileName: "header",
+  });
+  const cachedFooterData = readFromFs<{ [locale: string]: any }>({
+    fileName: "footer",
+  });
+  const cachedPagesBaseURLs = readFromFs<{ [locale: string]: Record<string, string> }>({
+    fileName: "pagesBaseURLs",
+  });
+
+  const header = cachedHeaderData?.[contentstackLocale];
+  const footer = cachedFooterData?.[contentstackLocale];
+  const pagesBaseURLs = cachedPagesBaseURLs?.[contentstackLocale];
+
+  const {
+    uid: pageUid,
+    contentTypeUid,
+    languageAlternativePageSlug,
+    entry: pageContent,
+  } = readCachedPageDataFromFs([nextLocale, ...slug]);
+
+  const directories = readFromFs<IMappedByLocaleDirectories>({ fileName: "directories" });
+  const currentLocaleDirectories = directories?.[contentstackLocale] || {};
+
+  const pageSpecificData = await pageService.getPageSpecificData({
+    recentNews: pageContent.recent_news,
+    contentTypeUid,
+    entryUid: pageUid,
+    lang: contentstackLocale,
+  });
+
+  const rawContent: IPageProps["content"] = {
+    header,
+    page: [pageContent],
+    footer,
+    pageSpecificData,
+    directories: currentLocaleDirectories,
+    languageAlternativePageSlug,
+    pagesBaseURLs,
+  };
+
+  return {
+    props: {
+      contentTypeUid,
+      content: refineClientData(rawContent, nextLocale as NextLocales),
+      ...(await serverSideTranslations(nextLocale, ["common"])),
+    },
+  };
+};
+
+export default Page;
+```
+
+## Files to Create/Modify (EXACT ABSOLUTE PATHS — write to these paths exactly)
+src/hooks/useContent.ts, src/pages/[[...slug]].tsx, src/interface/content/contentCard.ts, src/components/contentstack/ContentstackLink/ContentstackLink.tsx
+
+## Dependencies
+None
+
+## Module resolution in this codeline
+A bare import that names a file under any of these directories is INTERNAL source, not a dependency — never add it to the dependency manifest:
+  __tests__, migration-scripts, public, review, src, zap_hooks
+Source extensions here: .ts, .tsx, .js, .jsx, .mjs, .cjs
+Write imports the way the existing files in this codeline write them; read a neighbouring file before inventing a path.
+
+
+## Instructions
+CRITICAL — these files already exist. Their real content is injected below (## Existing File Contents) — you do NOT need to ReadFile them to see what's already there.
+Do NOT import or reference anything that doesn't appear in the injected content below — a plausible-sounding module name is not a real one.
+Only call ReadFile yourself if you need to see MORE of a file than what's shown (e.g. it was truncated), or a file not listed below.
+   - /home/bradleyjerome/projects/metrolinx/next.upexpress.com/src/hooks/useContent.ts (ReadFile this only if you need it — not a fix site; content omitted to keep the prompt small)
+   - /home/bradleyjerome/projects/metrolinx/next.upexpress.com/src/pages/[[...slug]].tsx (content already injected below — do not ReadFile it unless you need lines beyond what's shown)
+   - /home/bradleyjerome/projects/metrolinx/next.upexpress.com/src/interface/content/contentCard.ts (ReadFile this only if you need it — not a fix site; content omitted to keep the prompt small)
+   - /home/bradleyjerome/projects/metrolinx/next.upexpress.com/src/components/contentstack/ContentstackLink/ContentstackLink.tsx (ReadFile this only if you need it — not a fix site; content omitted to keep the prompt small)
+**The content of every file listed above is already shown in ## Existing File Contents — use that, do not spend a tool call re-reading them. Use Edit for targeted changes to existing files — do NOT overwrite an existing file wholesale with WriteFile.**
+
+1. Use the injected ## Existing File Contents above to verify what actually exists (exports, types, existing utilities) before writing any code — do not guess, and do not re-read a file already shown in full
+2. Implement all acceptance criteria for this story
+3. Follow the project's existing code patterns and conventions
+4. Do NOT create tests unless explicitly required in acceptance criteria
+
+After implementation, provide a brief summary of what was created/modified.
+
+## Relevant Knowledge Base Entries
+The following was learned from previous story implementations and is relevant to your agent role. Apply this knowledge before writing any code:
+
+- [2026-07-06T18:11:26Z] Use vi.fn().mockResolvedValue(value) to make a mock return a resolved Promise.
+- [2026-07-06T20:31:11Z] Use `test: { passWithNoTests: true }` in vitest.config.ts or create a stub test file when no *.test.ts files exist.
+- [2026-07-06T20:33:03Z] Enable globals:true in vitest.config.ts so describe, it, and expect work without imports, reducing boilerplate in test files.
+- [2026-07-06T23:47:34Z] Use CommonJS-compatible patterns in src/server.ts: avoid `import.meta.url` and top-level `await`; gate listen with `if (require.main === module)`.
+- [2026-07-07T02:35:30Z] Always include a non-test source file in src/ alongside any src/*.test.ts file, since tsconfig.json excludes test files from tsc --noEmit.
+- [2026-07-07T19:01:34Z] Only modify or create files explicitly listed in the story's acceptance criteria. Do not touch files belonging to other stories or outside the current task scope.
+- [2026-07-07T20:17:57Z] [unreviewed-fallback] Avoid using deprecated TypeScript compiler options like 'moduleResolution=node10'; use 'moduleResolution=node' instead.
+- [2026-07-17T20:20:58Z] Always: Before importing a module or referencing a type/property, always read the actual source file to verify the export exists, its exact path, its properties, and its constructor/factory signatures
+- [2026-07-23T01:15:16Z] Always: In tsconfig.json, always use moduleResolution 'node' (not 'node10' or 'Node10') — 'node10' was removed in TypeScript 5.x. The correct value for CommonJS + Node resolution is 'node'.
+- [2026-07-23T14:30:00Z] CORRECTION to a prior entry (2026-07-23T01:17:52Z, now removed): that entry wrongly claimed 'moduleResolution: node' itself is removed and must become 'node16'/'nodenext'. Root-caused via mock1 (epam-cli orchestration test): 'node' is valid and correct through TypeScript 5.x (confirmed on 5.9.3) — it was only removed in TypeScript 7.x. The real defect was an unpinned `typescript` devDependency letting a fallback `npm install` pull latest (7.x) instead of the project's intended version. Do NOT rewrite a working tsconfig.json's moduleResolution in response to a TS5108 error — first check `node_modules/typescript/package.json`'s version; if it's 7.x and the rest of the project expects 5.x, the fix is pinning/reinstalling the correct typescript version, not changing moduleResolution.
+
+## Knowledge Base Contribution (do this LAST — after writing all implementation files)
+Your assigned KB entry ID for this run: **KB-015**
+**This is retry attempt 4** — a previous attempt failed. You MUST write a KB entry documenting what went wrong and what you changed.
+
+IMPORTANT: Write ALL implementation files first. Only AFTER writing every required file should you optionally append a KB entry.
+Do NOT read orchestrations/agents/KB.md before writing implementation files. The relevant KB entries are already injected above.
+
+If (and only if) you discover a non-obvious pattern during implementation, append one entry to `orchestrations/agents/KB.md`:
+
+```markdown
+## KB-015 -- 2026-07-29
+
+**Category:** <backend|frontend|infrastructure|testing|orchestration>
+**AgentRole:** <your agentRole from the story>
+**Tags:** <comma-separated tech keywords, e.g. typescript, node, cli>
+**Trigger:** <retry|first-success>
+**StoryRef:** AMSD-2041
+
+<One concise paragraph: the specific pattern, gotcha, or anti-pattern.>
+```
+
+Only write an entry if the knowledge is genuinely non-obvious. Skip trivial observations.
+
+## Execution Plan
+Follow this plan step by step:
+1. Read `src/interface/content/contentCard.ts` to understand the current `ContentCard` interface shape, then add optional preview metadata fields: `preview_id?: string`, `preview_environment?: string`, and `preview_url?: string` to support live preview data from Contentstack.
+
+2. Read `src/hooks/useContent.ts` to inspect the existing content-fetching hook signature and patterns. Modify the hook to accept an optional `previewOptions?: { preview?: boolean; previewEnvironment?: string; contentType?: string }` parameter and include Contentstack live preview headers (`preview`, `preview-environment`) in the Contentstack SDK fetch call when preview mode is active.
+
+3. Read `src/pages/[[...slug]].tsx` to understand the current catch-all page structure, data-fetching method (getStaticProps/getServerSideProps), and how `useContent` is invoked. Add logic to read `preview` and `preview-environment` query parameters from the Next.js context and pass them as `previewOptions` into the `useContent` hook call.
+
+4. In `src/pages/[[...slug]].tsx`, initialize the Contentstack Live Preview SDK (e.g., `LivePreviewUtils.init({ stackDetails, enable: process.env.CONTENTSTACK_LIVE_PREVIEW === 'true' })`) at the module or app level if not already present, and ensure the page re-renders on preview edit events by subscribing to the SDK's `onEntryChange` callback.
+
+5. Read `src/components/contentstack/ContentstackLink/ContentstackLink.tsx` to inspect the current link component props and href construction. Modify the component to accept an optional `previewUrl?: string` prop and, when present and preview mode is active, render the `previewUrl` as the href instead of the standard slug-based URL.
+
+6. In `src/components/contentstack/ContentstackLink/ContentstackLink.tsx`, ensure the component reads preview state (either via a prop passed from the page or via a context/flag) so that internal links rendered during live preview point to the correct preview-environment URLs rather than production paths.
+
+7. Write unit tests for `src/hooks/useContent.ts` covering: (a) default fetch without preview options sends no preview headers, (b) fetch with `previewOptions.preview === true` includes `preview: 'true'` and `preview-environment` headers, (c) hook returns correctly typed `ContentCard` data including optional preview fields.
+
+8. Write unit tests for `src/components/contentstack/ContentstackLink/ContentstackLink.tsx` covering: (a) renders standard href when no `previewUrl` is provided, (b) renders `previewUrl` as href when provided and preview mode is active, (c) falls back to standard href when `previewUrl` is provided but preview mode is inactive.
+
+9. Verify the full integration by running the existing test suite (`npm test` or equivalent) and confirming that all four modified files compile without TypeScript errors (`npm run build` or `tsc --noEmit`). Manually verify that enabling `CONTENTSTACK_LIVE_PREVIEW=true` with a valid preview environment causes content edits in Contentstack to reflect in the browser without a full page reload.
+=== End Prompt ===
+
+=== epam Output (attempt 5) ===
+Now let me look at how the Contentstack SDK handles preview mode and what the `context.preview` looks like in Next.js:
+Now let me look at how the Contentstack SDK handles preview mode and what the `context.preview` looks like in Next.js:
+
+=== epam exited with code 1 ===
+=== Prompt for AMSD-2041 (attempt 6) ===
+CRITICAL — these files already exist. Their real content is injected below (## Existing File Contents) — you do NOT need to ReadFile them to see what's already there.
+Do NOT import or reference anything that doesn't appear in the injected content below — a plausible-sounding module name is not a real one.
+Only call ReadFile yourself if you need to see MORE of a file than what's shown (e.g. it was truncated), or a file not listed below.
+
+   - /home/bradleyjerome/projects/metrolinx/next.upexpress.com/src/hooks/useContent.ts (ReadFile this only if you need it — not a fix site; content omitted to keep the prompt small)
+   - /home/bradleyjerome/projects/metrolinx/next.upexpress.com/src/pages/[[...slug]].tsx (content already injected below — do not ReadFile it unless you need lines beyond what's shown)
+   - /home/bradleyjerome/projects/metrolinx/next.upexpress.com/src/interface/content/contentCard.ts (ReadFile this only if you need it — not a fix site; content omitted to keep the prompt small)
+   - /home/bradleyjerome/projects/metrolinx/next.upexpress.com/src/components/contentstack/ContentstackLink/ContentstackLink.tsx (ReadFile this only if you need it — not a fix site; content omitted to keep the prompt small)
+---
+
+Implement user story AMSD-2041: [GO, UP, MX] Live Preview of Content in CMS
+
+## Story Description
+[GO, UP, MX] Live Preview of Content in CMS — enable content authors to preview draft/unpublished content from Contentstack within the application before it is published, so they can verify layout and data appearance in context.
+
+## Acceptance Criteria
+- 
+
+
+## Root Cause Analysis & Prescribed Fix (AUTHORITATIVE — start here, do not re-trace)
+A code investigation already traced this bug to its cause and prescribed the minimal fix below. This is the plan of record. Apply it; do NOT re-read the whole codebase to re-derive it.
+
+The Acceptance Criteria above describe the desired END BEHAVIOR to VERIFY — they are NOT an implementation blueprint. Do not re-architect, split values, or add new fields/abstractions to satisfy an AC literally when the prescribed minimal fix already makes that AC pass. Implement the fix below; the ACs are how you check you got it right.
+
+HARD RULES:
+- Make the SMALLEST change that fixes the root cause. Fewer lines of code is always better.
+- REUSE existing functions. Before writing any new helper, search the repo for an existing util/parser/formatter that already does what you need (use the CodeGraph tool documented below) and call it. Writing novel code when a helper already exists is a defect to be rejected in review.
+- **src/pages/[[...slug]].tsx** (`getStaticProps`): This is the gateway that assembles all page content. It currently reads exclusively from the filesystem cache (readCachedPageDataFromFs) and has fallback:false in getStaticPaths, which together block any Contentstack Live Preview flow. For live preview to work, getStaticProps must detect preview mode (Contentstack preview token in query params) and fetch live/draft content from the Contentstack SDK instead of the static cache. The companion getStaticPaths must allow non-pre-built paths (fallback:'blocking') so preview URLs can resolve.
+  - **Minimal fix:** Change `fallback: false` to `fallback: 'blocking'` in getStaticPaths (line 63) so that Contentstack preview URLs not in the static path list can still be resolved. Then in getStaticProps (line 66), before calling readCachedPageDataFromFs, check for Contentstack preview parameters (e.g. context.preview or query params like live_preview / contentstack_preview). When present, skip the filesystem cache and instead call the existing Contentstack SDK entry-fetching helpers (getSingletonEntry / getSingleEntry, already used in src/pages/find-a-station/[stationCode]/[contentstackUrl].tsx) with the preview token to fetch draft content directly. Pass that live content through the same refineClientData pipeline and return it as props. This reuses the existing SDK helpers rather than introducing new fetching logic.
+
+
+## Verification Criteria (what a tester will CONFIRM — your change must satisfy every one)
+These are observable checks, derived from the acceptance criteria and description. They describe WHAT is observed, not how to build it. Make the minimal change that makes all of these true; your accompanying test should assert them:
+- Given a preview URL containing a valid Contentstack preview token, when a tester opens that URL in a browser, then the page renders successfully instead of returning a 404 'page not found' error.
+- Given an editor has saved an unpublished draft change to a page's content in Contentstack, when a tester opens that page's preview URL with a valid preview token, then the rendered page displays the draft content, including the unpublished change.
+- Given an editor has saved an unpublished draft change to a page's content in Contentstack, when a tester opens the same page's normal URL without preview parameters, then the rendered page displays the currently published content and does not show the unpublished draft change.
+- Given preview mode is enabled, when a tester opens preview URLs for multiple different pages on the site, then each page renders its own draft content without requiring any per-page setup or configuration by the tester.
+- Given a tester opens a page in preview mode, when the page renders, then all of the page's existing sections and components display normally with the draft content, with no missing, broken, or visibly altered layout compared to how those sections appear on the published page.
+- Given a tester opens a preview URL for which no draft content is available (e.g. an invalid or expired preview token, or content that does not exist in Contentstack), then the tester sees a graceful error or fallback page rather than an application crash, blank screen, or unhandled error stack.
+
+## Tests are NOT your job this turn
+A dedicated test-writer agent runs immediately after your fix commits and owns the bug-reproducing test. Do NOT write, edit, or create any test file (*.test.*, *.spec.*, __tests__/). Write ONLY the fix. Adding a test here wastes your turn budget and has caused repeated failures.
+
+## The helper to reuse is ALREADY identified — do NOT search
+The Root Cause Analysis above names the exact existing helper to reuse (`getSingletonEntry`). Do NOT run CodeGraph or explore the codebase to re-find it — that wastes your turn budget. Import it, apply the prescribed minimal fix, write your file(s), and stop. Only search if you hit something the prescribed fix genuinely does not cover.
+
+
+
+
+
+## Technical Notes
+- files: ["src/hooks/useContent.ts","src/pages/[[...slug]].tsx","src/interface/content/contentCard.ts","src/components/contentstack/ContentstackLink/ContentstackLink.tsx"]
+
+## Existing File Contents (injected once, deterministically — do NOT ReadFile these unless you need more than shown)
+
+### /home/bradleyjerome/projects/metrolinx/next.upexpress.com/src/pages/[[...slug]].tsx
+```
+import { PropsWithChildren } from "react";
+import { GetStaticPaths, GetStaticProps, NextPage } from "next";
+import { serverSideTranslations } from "next-i18next/serverSideTranslations";
+import { resolvePageComponent, resolveStationPageComponent } from "services/pageComponentResolver";
+import { pageService } from "services/pageService";
+import { staticPathsResolver } from "services/staticPathsResolver";
+import { Layout } from "components/Layout/Layout";
+import { PageHead } from "components/pages/PageHead";
+import { readFromFs } from "utils/fsCache";
+import { getLocaleByNextLocale, NextLocales } from "utils/locale";
+import { readCachedPageDataFromFs } from "utils/pageDataCache";
+import { refineClientData } from "utils/refineClientData";
+import { ContentTypes } from "constants/contentstack";
+import { IContentstackPage } from "interface/content/page";
+import { IDirectoryData, IMappedByLocaleDirectories } from "interface/directory";
+
+interface IDynamicSlugParams {
+  slug: string[];
+}
+
+export interface IPageProps {
+  content: {
+    // TODO(devteam): define types for header and footer
+    header: [any];
+    footer: [any];
+    page: [IContentstackPage];
+    directories: IDirectoryData;
+    languageAlternativePageSlug?: string[];
+    pageSpecificData?: Record<string, any>;
+    pagesBaseURLs?: {
+      [key in ContentTypes]?: string;
+    };
+  };
+  contentTypeUid: string;
+}
+
+const DefaultLayout = ({ children }: PropsWithChildren) => children;
+
+const Page: NextPage<IPageProps> = (props) => {
+  const { content, contentTypeUid } = props;
+  const PageComponent = resolvePageComponent(contentTypeUid);
+  const StationDetailsLayout = resolveStationPageComponent(contentTypeUid) ?? DefaultLayout;
+
+  return (
+    <>
+      <PageHead page={content?.page} contentTypeUid={contentTypeUid} />
+      <Layout contentTypeUid={contentTypeUid}>
+        <StationDetailsLayout page={content?.page}>
+          {PageComponent ? <PageComponent {...content} /> : <h1>Page not implemented</h1>}
+        </StationDetailsLayout>
+      </Layout>
+    </>
+  );
+};
+
+export const getStaticPaths: GetStaticPaths = async () => {
+  const { MAINTENANCE_MODE } = process.env;
+
+  if (MAINTENANCE_MODE === "true") {
+    return { paths: [], fallback: false };
+  }
+
+  const paths = await staticPathsResolver.resolveStaticPaths();
+
+  return {
+    paths,
+    fallback: false,
+  };
+};
+
+export const getStaticProps: GetStaticProps = async (context) => {
+  const { locale: nextLocale = "" } = context;
+  const { slug = [] } = (context?.params as unknown as IDynamicSlugParams) || {};
+  const contentstackLocale = getLocaleByNextLocale(nextLocale);
+
+  const cachedHeaderData = readFromFs<{ [locale: string]: any }>({
+    fileName: "header",
+  });
+  const cachedFooterData = readFromFs<{ [locale: string]: any }>({
+    fileName: "footer",
+  });
+  const cachedPagesBaseURLs = readFromFs<{ [locale: string]: Record<string, string> }>({
+    fileName: "pagesBaseURLs",
+  });
+
+  const header = cachedHeaderData?.[contentstackLocale];
+  const footer = cachedFooterData?.[contentstackLocale];
+  const pagesBaseURLs = cachedPagesBaseURLs?.[contentstackLocale];
+
+  const {
+    uid: pageUid,
+    contentTypeUid,
+    languageAlternativePageSlug,
+    entry: pageContent,
+  } = readCachedPageDataFromFs([nextLocale, ...slug]);
+
+  const directories = readFromFs<IMappedByLocaleDirectories>({ fileName: "directories" });
+  const currentLocaleDirectories = directories?.[contentstackLocale] || {};
+
+  const pageSpecificData = await pageService.getPageSpecificData({
+    recentNews: pageContent.recent_news,
+    contentTypeUid,
+    entryUid: pageUid,
+    lang: contentstackLocale,
+  });
+
+  const rawContent: IPageProps["content"] = {
+    header,
+    page: [pageContent],
+    footer,
+    pageSpecificData,
+    directories: currentLocaleDirectories,
+    languageAlternativePageSlug,
+    pagesBaseURLs,
+  };
+
+  return {
+    props: {
+      contentTypeUid,
+      content: refineClientData(rawContent, nextLocale as NextLocales),
+      ...(await serverSideTranslations(nextLocale, ["common"])),
+    },
+  };
+};
+
+export default Page;
+```
+
+## Files to Create/Modify (EXACT ABSOLUTE PATHS — write to these paths exactly)
+src/hooks/useContent.ts, src/pages/[[...slug]].tsx, src/interface/content/contentCard.ts, src/components/contentstack/ContentstackLink/ContentstackLink.tsx
+
+## Dependencies
+None
+
+## Module resolution in this codeline
+A bare import that names a file under any of these directories is INTERNAL source, not a dependency — never add it to the dependency manifest:
+  __tests__, migration-scripts, public, review, src, zap_hooks
+Source extensions here: .ts, .tsx, .js, .jsx, .mjs, .cjs
+Write imports the way the existing files in this codeline write them; read a neighbouring file before inventing a path.
+
+
+## Instructions
+CRITICAL — these files already exist. Their real content is injected below (## Existing File Contents) — you do NOT need to ReadFile them to see what's already there.
+Do NOT import or reference anything that doesn't appear in the injected content below — a plausible-sounding module name is not a real one.
+Only call ReadFile yourself if you need to see MORE of a file than what's shown (e.g. it was truncated), or a file not listed below.
+   - /home/bradleyjerome/projects/metrolinx/next.upexpress.com/src/hooks/useContent.ts (ReadFile this only if you need it — not a fix site; content omitted to keep the prompt small)
+   - /home/bradleyjerome/projects/metrolinx/next.upexpress.com/src/pages/[[...slug]].tsx (content already injected below — do not ReadFile it unless you need lines beyond what's shown)
+   - /home/bradleyjerome/projects/metrolinx/next.upexpress.com/src/interface/content/contentCard.ts (ReadFile this only if you need it — not a fix site; content omitted to keep the prompt small)
+   - /home/bradleyjerome/projects/metrolinx/next.upexpress.com/src/components/contentstack/ContentstackLink/ContentstackLink.tsx (ReadFile this only if you need it — not a fix site; content omitted to keep the prompt small)
+**The content of every file listed above is already shown in ## Existing File Contents — use that, do not spend a tool call re-reading them. Use Edit for targeted changes to existing files — do NOT overwrite an existing file wholesale with WriteFile.**
+
+1. Use the injected ## Existing File Contents above to verify what actually exists (exports, types, existing utilities) before writing any code — do not guess, and do not re-read a file already shown in full
+2. Implement all acceptance criteria for this story
+3. Follow the project's existing code patterns and conventions
+4. Do NOT create tests unless explicitly required in acceptance criteria
+
+After implementation, provide a brief summary of what was created/modified.
+
+## Relevant Knowledge Base Entries
+The following was learned from previous story implementations and is relevant to your agent role. Apply this knowledge before writing any code:
+
+- [2026-07-06T18:11:26Z] Use vi.fn().mockResolvedValue(value) to make a mock return a resolved Promise.
+- [2026-07-06T20:31:11Z] Use `test: { passWithNoTests: true }` in vitest.config.ts or create a stub test file when no *.test.ts files exist.
+- [2026-07-06T20:33:03Z] Enable globals:true in vitest.config.ts so describe, it, and expect work without imports, reducing boilerplate in test files.
+- [2026-07-06T23:47:34Z] Use CommonJS-compatible patterns in src/server.ts: avoid `import.meta.url` and top-level `await`; gate listen with `if (require.main === module)`.
+- [2026-07-07T02:35:30Z] Always include a non-test source file in src/ alongside any src/*.test.ts file, since tsconfig.json excludes test files from tsc --noEmit.
+- [2026-07-07T19:01:34Z] Only modify or create files explicitly listed in the story's acceptance criteria. Do not touch files belonging to other stories or outside the current task scope.
+- [2026-07-07T20:17:57Z] [unreviewed-fallback] Avoid using deprecated TypeScript compiler options like 'moduleResolution=node10'; use 'moduleResolution=node' instead.
+- [2026-07-17T20:20:58Z] Always: Before importing a module or referencing a type/property, always read the actual source file to verify the export exists, its exact path, its properties, and its constructor/factory signatures
+- [2026-07-23T01:15:16Z] Always: In tsconfig.json, always use moduleResolution 'node' (not 'node10' or 'Node10') — 'node10' was removed in TypeScript 5.x. The correct value for CommonJS + Node resolution is 'node'.
+- [2026-07-23T14:30:00Z] CORRECTION to a prior entry (2026-07-23T01:17:52Z, now removed): that entry wrongly claimed 'moduleResolution: node' itself is removed and must become 'node16'/'nodenext'. Root-caused via mock1 (epam-cli orchestration test): 'node' is valid and correct through TypeScript 5.x (confirmed on 5.9.3) — it was only removed in TypeScript 7.x. The real defect was an unpinned `typescript` devDependency letting a fallback `npm install` pull latest (7.x) instead of the project's intended version. Do NOT rewrite a working tsconfig.json's moduleResolution in response to a TS5108 error — first check `node_modules/typescript/package.json`'s version; if it's 7.x and the rest of the project expects 5.x, the fix is pinning/reinstalling the correct typescript version, not changing moduleResolution.
+
+## Knowledge Base Contribution (do this LAST — after writing all implementation files)
+Your assigned KB entry ID for this run: **KB-015**
+**This is retry attempt 5** — a previous attempt failed. You MUST write a KB entry documenting what went wrong and what you changed.
+
+IMPORTANT: Write ALL implementation files first. Only AFTER writing every required file should you optionally append a KB entry.
+Do NOT read orchestrations/agents/KB.md before writing implementation files. The relevant KB entries are already injected above.
+
+If (and only if) you discover a non-obvious pattern during implementation, append one entry to `orchestrations/agents/KB.md`:
+
+```markdown
+## KB-015 -- 2026-07-29
+
+**Category:** <backend|frontend|infrastructure|testing|orchestration>
+**AgentRole:** <your agentRole from the story>
+**Tags:** <comma-separated tech keywords, e.g. typescript, node, cli>
+**Trigger:** <retry|first-success>
+**StoryRef:** AMSD-2041
+
+<One concise paragraph: the specific pattern, gotcha, or anti-pattern.>
+```
+
+Only write an entry if the knowledge is genuinely non-obvious. Skip trivial observations.
+
+## Execution Plan
+Follow this plan step by step:
+1. Read `src/interface/content/contentCard.ts` to understand the current `ContentCard` interface shape, then add optional preview metadata fields: `preview_id?: string`, `preview_environment?: string`, and `preview_url?: string` to support live preview data from Contentstack.
+
+2. Read `src/hooks/useContent.ts` to inspect the existing content-fetching hook signature and patterns. Modify the hook to accept an optional `previewOptions?: { preview?: boolean; previewEnvironment?: string; contentType?: string }` parameter and include Contentstack live preview headers (`preview`, `preview-environment`) in the Contentstack SDK fetch call when preview mode is active.
+
+3. Read `src/pages/[[...slug]].tsx` to understand the current catch-all page structure, data-fetching method (getStaticProps/getServerSideProps), and how `useContent` is invoked. Add logic to read `preview` and `preview-environment` query parameters from the Next.js context and pass them as `previewOptions` into the `useContent` hook call.
+
+4. In `src/pages/[[...slug]].tsx`, initialize the Contentstack Live Preview SDK (e.g., `LivePreviewUtils.init({ stackDetails, enable: process.env.CONTENTSTACK_LIVE_PREVIEW === 'true' })`) at the module or app level if not already present, and ensure the page re-renders on preview edit events by subscribing to the SDK's `onEntryChange` callback.
+
+5. Read `src/components/contentstack/ContentstackLink/ContentstackLink.tsx` to inspect the current link component props and href construction. Modify the component to accept an optional `previewUrl?: string` prop and, when present and preview mode is active, render the `previewUrl` as the href instead of the standard slug-based URL.
+
+6. In `src/components/contentstack/ContentstackLink/ContentstackLink.tsx`, ensure the component reads preview state (either via a prop passed from the page or via a context/flag) so that internal links rendered during live preview point to the correct preview-environment URLs rather than production paths.
+
+7. Write unit tests for `src/hooks/useContent.ts` covering: (a) default fetch without preview options sends no preview headers, (b) fetch with `previewOptions.preview === true` includes `preview: 'true'` and `preview-environment` headers, (c) hook returns correctly typed `ContentCard` data including optional preview fields.
+
+8. Write unit tests for `src/components/contentstack/ContentstackLink/ContentstackLink.tsx` covering: (a) renders standard href when no `previewUrl` is provided, (b) renders `previewUrl` as href when provided and preview mode is active, (c) falls back to standard href when `previewUrl` is provided but preview mode is inactive.
+
+9. Verify the full integration by running the existing test suite (`npm test` or equivalent) and confirming that all four modified files compile without TypeScript errors (`npm run build` or `tsc --noEmit`). Manually verify that enabling `CONTENTSTACK_LIVE_PREVIEW=true` with a valid preview environment causes content edits in Contentstack to reflect in the browser without a full page reload.
+=== End Prompt ===
+
+=== epam Output (attempt 6) ===
+Now I have a thorough understanding of the codebase. Let me look at the Contentstack SDK's live preview support:
+Now I have a thorough understanding of the codebase. Let me look at the Contentstack SDK's live preview support:
+
+=== epam exited with code 1 ===
+=== Prompt for AMSD-2041 (attempt 7) ===
+CRITICAL — these files already exist. Their real content is injected below (## Existing File Contents) — you do NOT need to ReadFile them to see what's already there.
+Do NOT import or reference anything that doesn't appear in the injected content below — a plausible-sounding module name is not a real one.
+Only call ReadFile yourself if you need to see MORE of a file than what's shown (e.g. it was truncated), or a file not listed below.
+
+   - /home/bradleyjerome/projects/metrolinx/next.upexpress.com/src/hooks/useContent.ts (ReadFile this only if you need it — not a fix site; content omitted to keep the prompt small)
+   - /home/bradleyjerome/projects/metrolinx/next.upexpress.com/src/pages/[[...slug]].tsx (content already injected below — do not ReadFile it unless you need lines beyond what's shown)
+   - /home/bradleyjerome/projects/metrolinx/next.upexpress.com/src/interface/content/contentCard.ts (ReadFile this only if you need it — not a fix site; content omitted to keep the prompt small)
+   - /home/bradleyjerome/projects/metrolinx/next.upexpress.com/src/components/contentstack/ContentstackLink/ContentstackLink.tsx (ReadFile this only if you need it — not a fix site; content omitted to keep the prompt small)
+---
+
+Implement user story AMSD-2041: [GO, UP, MX] Live Preview of Content in CMS
+
+## Story Description
+[GO, UP, MX] Live Preview of Content in CMS — enable content authors to preview draft/unpublished content from Contentstack within the application before it is published, so they can verify layout and data appearance in context.
+
+## Acceptance Criteria
+- 
+
+
+## Root Cause Analysis & Prescribed Fix (AUTHORITATIVE — start here, do not re-trace)
+A code investigation already traced this bug to its cause and prescribed the minimal fix below. This is the plan of record. Apply it; do NOT re-read the whole codebase to re-derive it.
+
+The Acceptance Criteria above describe the desired END BEHAVIOR to VERIFY — they are NOT an implementation blueprint. Do not re-architect, split values, or add new fields/abstractions to satisfy an AC literally when the prescribed minimal fix already makes that AC pass. Implement the fix below; the ACs are how you check you got it right.
+
+HARD RULES:
+- Make the SMALLEST change that fixes the root cause. Fewer lines of code is always better.
+- REUSE existing functions. Before writing any new helper, search the repo for an existing util/parser/formatter that already does what you need (use the CodeGraph tool documented below) and call it. Writing novel code when a helper already exists is a defect to be rejected in review.
+- **src/pages/[[...slug]].tsx** (`getStaticProps`): This is the gateway that assembles all page content. It currently reads exclusively from the filesystem cache (readCachedPageDataFromFs) and has fallback:false in getStaticPaths, which together block any Contentstack Live Preview flow. For live preview to work, getStaticProps must detect preview mode (Contentstack preview token in query params) and fetch live/draft content from the Contentstack SDK instead of the static cache. The companion getStaticPaths must allow non-pre-built paths (fallback:'blocking') so preview URLs can resolve.
+  - **Minimal fix:** Change `fallback: false` to `fallback: 'blocking'` in getStaticPaths (line 63) so that Contentstack preview URLs not in the static path list can still be resolved. Then in getStaticProps (line 66), before calling readCachedPageDataFromFs, check for Contentstack preview parameters (e.g. context.preview or query params like live_preview / contentstack_preview). When present, skip the filesystem cache and instead call the existing Contentstack SDK entry-fetching helpers (getSingletonEntry / getSingleEntry, already used in src/pages/find-a-station/[stationCode]/[contentstackUrl].tsx) with the preview token to fetch draft content directly. Pass that live content through the same refineClientData pipeline and return it as props. This reuses the existing SDK helpers rather than introducing new fetching logic.
+
+
+## Verification Criteria (what a tester will CONFIRM — your change must satisfy every one)
+These are observable checks, derived from the acceptance criteria and description. They describe WHAT is observed, not how to build it. Make the minimal change that makes all of these true; your accompanying test should assert them:
+- Given a preview URL containing a valid Contentstack preview token, when a tester opens that URL in a browser, then the page renders successfully instead of returning a 404 'page not found' error.
+- Given an editor has saved an unpublished draft change to a page's content in Contentstack, when a tester opens that page's preview URL with a valid preview token, then the rendered page displays the draft content, including the unpublished change.
+- Given an editor has saved an unpublished draft change to a page's content in Contentstack, when a tester opens the same page's normal URL without preview parameters, then the rendered page displays the currently published content and does not show the unpublished draft change.
+- Given preview mode is enabled, when a tester opens preview URLs for multiple different pages on the site, then each page renders its own draft content without requiring any per-page setup or configuration by the tester.
+- Given a tester opens a page in preview mode, when the page renders, then all of the page's existing sections and components display normally with the draft content, with no missing, broken, or visibly altered layout compared to how those sections appear on the published page.
+- Given a tester opens a preview URL for which no draft content is available (e.g. an invalid or expired preview token, or content that does not exist in Contentstack), then the tester sees a graceful error or fallback page rather than an application crash, blank screen, or unhandled error stack.
+
+## Tests are NOT your job this turn
+A dedicated test-writer agent runs immediately after your fix commits and owns the bug-reproducing test. Do NOT write, edit, or create any test file (*.test.*, *.spec.*, __tests__/). Write ONLY the fix. Adding a test here wastes your turn budget and has caused repeated failures.
+
+## The helper to reuse is ALREADY identified — do NOT search
+The Root Cause Analysis above names the exact existing helper to reuse (`getSingletonEntry`). Do NOT run CodeGraph or explore the codebase to re-find it — that wastes your turn budget. Import it, apply the prescribed minimal fix, write your file(s), and stop. Only search if you hit something the prescribed fix genuinely does not cover.
+
+
+
+
+
+## Technical Notes
+- files: ["src/hooks/useContent.ts","src/pages/[[...slug]].tsx","src/interface/content/contentCard.ts","src/components/contentstack/ContentstackLink/ContentstackLink.tsx"]
+
+## Existing File Contents (injected once, deterministically — do NOT ReadFile these unless you need more than shown)
+
+### /home/bradleyjerome/projects/metrolinx/next.upexpress.com/src/pages/[[...slug]].tsx
+```
+import { PropsWithChildren } from "react";
+import { GetStaticPaths, GetStaticProps, NextPage } from "next";
+import { serverSideTranslations } from "next-i18next/serverSideTranslations";
+import { resolvePageComponent, resolveStationPageComponent } from "services/pageComponentResolver";
+import { pageService } from "services/pageService";
+import { staticPathsResolver } from "services/staticPathsResolver";
+import { Layout } from "components/Layout/Layout";
+import { PageHead } from "components/pages/PageHead";
+import { readFromFs } from "utils/fsCache";
+import { getLocaleByNextLocale, NextLocales } from "utils/locale";
+import { readCachedPageDataFromFs } from "utils/pageDataCache";
+import { refineClientData } from "utils/refineClientData";
+import { ContentTypes } from "constants/contentstack";
+import { IContentstackPage } from "interface/content/page";
+import { IDirectoryData, IMappedByLocaleDirectories } from "interface/directory";
+
+interface IDynamicSlugParams {
+  slug: string[];
+}
+
+export interface IPageProps {
+  content: {
+    // TODO(devteam): define types for header and footer
+    header: [any];
+    footer: [any];
+    page: [IContentstackPage];
+    directories: IDirectoryData;
+    languageAlternativePageSlug?: string[];
+    pageSpecificData?: Record<string, any>;
+    pagesBaseURLs?: {
+      [key in ContentTypes]?: string;
+    };
+  };
+  contentTypeUid: string;
+}
+
+const DefaultLayout = ({ children }: PropsWithChildren) => children;
+
+const Page: NextPage<IPageProps> = (props) => {
+  const { content, contentTypeUid } = props;
+  const PageComponent = resolvePageComponent(contentTypeUid);
+  const StationDetailsLayout = resolveStationPageComponent(contentTypeUid) ?? DefaultLayout;
+
+  return (
+    <>
+      <PageHead page={content?.page} contentTypeUid={contentTypeUid} />
+      <Layout contentTypeUid={contentTypeUid}>
+        <StationDetailsLayout page={content?.page}>
+          {PageComponent ? <PageComponent {...content} /> : <h1>Page not implemented</h1>}
+        </StationDetailsLayout>
+      </Layout>
+    </>
+  );
+};
+
+export const getStaticPaths: GetStaticPaths = async () => {
+  const { MAINTENANCE_MODE } = process.env;
+
+  if (MAINTENANCE_MODE === "true") {
+    return { paths: [], fallback: false };
+  }
+
+  const paths = await staticPathsResolver.resolveStaticPaths();
+
+  return {
+    paths,
+    fallback: false,
+  };
+};
+
+export const getStaticProps: GetStaticProps = async (context) => {
+  const { locale: nextLocale = "" } = context;
+  const { slug = [] } = (context?.params as unknown as IDynamicSlugParams) || {};
+  const contentstackLocale = getLocaleByNextLocale(nextLocale);
+
+  const cachedHeaderData = readFromFs<{ [locale: string]: any }>({
+    fileName: "header",
+  });
+  const cachedFooterData = readFromFs<{ [locale: string]: any }>({
+    fileName: "footer",
+  });
+  const cachedPagesBaseURLs = readFromFs<{ [locale: string]: Record<string, string> }>({
+    fileName: "pagesBaseURLs",
+  });
+
+  const header = cachedHeaderData?.[contentstackLocale];
+  const footer = cachedFooterData?.[contentstackLocale];
+  const pagesBaseURLs = cachedPagesBaseURLs?.[contentstackLocale];
+
+  const {
+    uid: pageUid,
+    contentTypeUid,
+    languageAlternativePageSlug,
+    entry: pageContent,
+  } = readCachedPageDataFromFs([nextLocale, ...slug]);
+
+  const directories = readFromFs<IMappedByLocaleDirectories>({ fileName: "directories" });
+  const currentLocaleDirectories = directories?.[contentstackLocale] || {};
+
+  const pageSpecificData = await pageService.getPageSpecificData({
+    recentNews: pageContent.recent_news,
+    contentTypeUid,
+    entryUid: pageUid,
+    lang: contentstackLocale,
+  });
+
+  const rawContent: IPageProps["content"] = {
+    header,
+    page: [pageContent],
+    footer,
+    pageSpecificData,
+    directories: currentLocaleDirectories,
+    languageAlternativePageSlug,
+    pagesBaseURLs,
+  };
+
+  return {
+    props: {
+      contentTypeUid,
+      content: refineClientData(rawContent, nextLocale as NextLocales),
+      ...(await serverSideTranslations(nextLocale, ["common"])),
+    },
+  };
+};
+
+export default Page;
+```
+
+## Files to Create/Modify (EXACT ABSOLUTE PATHS — write to these paths exactly)
+src/hooks/useContent.ts, src/pages/[[...slug]].tsx, src/interface/content/contentCard.ts, src/components/contentstack/ContentstackLink/ContentstackLink.tsx
+
+## Dependencies
+None
+
+## Module resolution in this codeline
+A bare import that names a file under any of these directories is INTERNAL source, not a dependency — never add it to the dependency manifest:
+  __tests__, migration-scripts, public, review, src, zap_hooks
+Source extensions here: .ts, .tsx, .js, .jsx, .mjs, .cjs
+Write imports the way the existing files in this codeline write them; read a neighbouring file before inventing a path.
+
+
+## Instructions
+CRITICAL — these files already exist. Their real content is injected below (## Existing File Contents) — you do NOT need to ReadFile them to see what's already there.
+Do NOT import or reference anything that doesn't appear in the injected content below — a plausible-sounding module name is not a real one.
+Only call ReadFile yourself if you need to see MORE of a file than what's shown (e.g. it was truncated), or a file not listed below.
+   - /home/bradleyjerome/projects/metrolinx/next.upexpress.com/src/hooks/useContent.ts (ReadFile this only if you need it — not a fix site; content omitted to keep the prompt small)
+   - /home/bradleyjerome/projects/metrolinx/next.upexpress.com/src/pages/[[...slug]].tsx (content already injected below — do not ReadFile it unless you need lines beyond what's shown)
+   - /home/bradleyjerome/projects/metrolinx/next.upexpress.com/src/interface/content/contentCard.ts (ReadFile this only if you need it — not a fix site; content omitted to keep the prompt small)
+   - /home/bradleyjerome/projects/metrolinx/next.upexpress.com/src/components/contentstack/ContentstackLink/ContentstackLink.tsx (ReadFile this only if you need it — not a fix site; content omitted to keep the prompt small)
+**The content of every file listed above is already shown in ## Existing File Contents — use that, do not spend a tool call re-reading them. Use Edit for targeted changes to existing files — do NOT overwrite an existing file wholesale with WriteFile.**
+
+1. Use the injected ## Existing File Contents above to verify what actually exists (exports, types, existing utilities) before writing any code — do not guess, and do not re-read a file already shown in full
+2. Implement all acceptance criteria for this story
+3. Follow the project's existing code patterns and conventions
+4. Do NOT create tests unless explicitly required in acceptance criteria
+
+After implementation, provide a brief summary of what was created/modified.
+
+## Relevant Knowledge Base Entries
+The following was learned from previous story implementations and is relevant to your agent role. Apply this knowledge before writing any code:
+
+- [2026-07-06T18:11:26Z] Use vi.fn().mockResolvedValue(value) to make a mock return a resolved Promise.
+- [2026-07-06T20:31:11Z] Use `test: { passWithNoTests: true }` in vitest.config.ts or create a stub test file when no *.test.ts files exist.
+- [2026-07-06T20:33:03Z] Enable globals:true in vitest.config.ts so describe, it, and expect work without imports, reducing boilerplate in test files.
+- [2026-07-06T23:47:34Z] Use CommonJS-compatible patterns in src/server.ts: avoid `import.meta.url` and top-level `await`; gate listen with `if (require.main === module)`.
+- [2026-07-07T02:35:30Z] Always include a non-test source file in src/ alongside any src/*.test.ts file, since tsconfig.json excludes test files from tsc --noEmit.
+- [2026-07-07T19:01:34Z] Only modify or create files explicitly listed in the story's acceptance criteria. Do not touch files belonging to other stories or outside the current task scope.
+- [2026-07-07T20:17:57Z] [unreviewed-fallback] Avoid using deprecated TypeScript compiler options like 'moduleResolution=node10'; use 'moduleResolution=node' instead.
+- [2026-07-17T20:20:58Z] Always: Before importing a module or referencing a type/property, always read the actual source file to verify the export exists, its exact path, its properties, and its constructor/factory signatures
+- [2026-07-23T01:15:16Z] Always: In tsconfig.json, always use moduleResolution 'node' (not 'node10' or 'Node10') — 'node10' was removed in TypeScript 5.x. The correct value for CommonJS + Node resolution is 'node'.
+- [2026-07-23T14:30:00Z] CORRECTION to a prior entry (2026-07-23T01:17:52Z, now removed): that entry wrongly claimed 'moduleResolution: node' itself is removed and must become 'node16'/'nodenext'. Root-caused via mock1 (epam-cli orchestration test): 'node' is valid and correct through TypeScript 5.x (confirmed on 5.9.3) — it was only removed in TypeScript 7.x. The real defect was an unpinned `typescript` devDependency letting a fallback `npm install` pull latest (7.x) instead of the project's intended version. Do NOT rewrite a working tsconfig.json's moduleResolution in response to a TS5108 error — first check `node_modules/typescript/package.json`'s version; if it's 7.x and the rest of the project expects 5.x, the fix is pinning/reinstalling the correct typescript version, not changing moduleResolution.
+
+## Knowledge Base Contribution (do this LAST — after writing all implementation files)
+Your assigned KB entry ID for this run: **KB-016**
+**This is retry attempt 6** — a previous attempt failed. You MUST write a KB entry documenting what went wrong and what you changed.
+
+IMPORTANT: Write ALL implementation files first. Only AFTER writing every required file should you optionally append a KB entry.
+Do NOT read orchestrations/agents/KB.md before writing implementation files. The relevant KB entries are already injected above.
+
+If (and only if) you discover a non-obvious pattern during implementation, append one entry to `orchestrations/agents/KB.md`:
+
+```markdown
+## KB-016 -- 2026-07-29
+
+**Category:** <backend|frontend|infrastructure|testing|orchestration>
+**AgentRole:** <your agentRole from the story>
+**Tags:** <comma-separated tech keywords, e.g. typescript, node, cli>
+**Trigger:** <retry|first-success>
+**StoryRef:** AMSD-2041
+
+<One concise paragraph: the specific pattern, gotcha, or anti-pattern.>
+```
+
+Only write an entry if the knowledge is genuinely non-obvious. Skip trivial observations.
+
+## Execution Plan
+Follow this plan step by step:
+1. Read `src/interface/content/contentCard.ts` to understand the current `ContentCard` interface shape, then add optional preview metadata fields: `preview_id?: string`, `preview_environment?: string`, and `preview_url?: string` to support live preview data from Contentstack.
+
+2. Read `src/hooks/useContent.ts` to inspect the existing content-fetching hook signature and patterns. Modify the hook to accept an optional `previewOptions?: { preview?: boolean; previewEnvironment?: string; contentType?: string }` parameter and include Contentstack live preview headers (`preview`, `preview-environment`) in the Contentstack SDK fetch call when preview mode is active.
+
+3. Read `src/pages/[[...slug]].tsx` to understand the current catch-all page structure, data-fetching method (getStaticProps/getServerSideProps), and how `useContent` is invoked. Add logic to read `preview` and `preview-environment` query parameters from the Next.js context and pass them as `previewOptions` into the `useContent` hook call.
+
+4. In `src/pages/[[...slug]].tsx`, initialize the Contentstack Live Preview SDK (e.g., `LivePreviewUtils.init({ stackDetails, enable: process.env.CONTENTSTACK_LIVE_PREVIEW === 'true' })`) at the module or app level if not already present, and ensure the page re-renders on preview edit events by subscribing to the SDK's `onEntryChange` callback.
+
+5. Read `src/components/contentstack/ContentstackLink/ContentstackLink.tsx` to inspect the current link component props and href construction. Modify the component to accept an optional `previewUrl?: string` prop and, when present and preview mode is active, render the `previewUrl` as the href instead of the standard slug-based URL.
+
+6. In `src/components/contentstack/ContentstackLink/ContentstackLink.tsx`, ensure the component reads preview state (either via a prop passed from the page or via a context/flag) so that internal links rendered during live preview point to the correct preview-environment URLs rather than production paths.
+
+7. Write unit tests for `src/hooks/useContent.ts` covering: (a) default fetch without preview options sends no preview headers, (b) fetch with `previewOptions.preview === true` includes `preview: 'true'` and `preview-environment` headers, (c) hook returns correctly typed `ContentCard` data including optional preview fields.
+
+8. Write unit tests for `src/components/contentstack/ContentstackLink/ContentstackLink.tsx` covering: (a) renders standard href when no `previewUrl` is provided, (b) renders `previewUrl` as href when provided and preview mode is active, (c) falls back to standard href when `previewUrl` is provided but preview mode is inactive.
+
+9. Verify the full integration by running the existing test suite (`npm test` or equivalent) and confirming that all four modified files compile without TypeScript errors (`npm run build` or `tsc --noEmit`). Manually verify that enabling `CONTENTSTACK_LIVE_PREVIEW=true` with a valid preview environment causes content edits in Contentstack to reflect in the browser without a full page reload.
+=== End Prompt ===
+
+=== epam Output (attempt 7) ===

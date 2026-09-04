@@ -1,0 +1,68 @@
+# Prompt
+Regenerate the VERIFICATION CRITERIA for this brownfield story. Your previous verification criteria were FLAGGED and must be fixed:
+- VC 1 prescribes Stack config object, live_preview property, management_token, and env var name — restate as observable outcome
+- VC 2 prescribes calling ContentstackLivePreview.init with Stack instance — restate as observable outcome
+- VC 3 prescribes component re-render mechanism — restate as observable outcome (updated draft content appears without full page reload)
+- VC 4 cross-compares to current production behavior — assert rendered content is correct on its own
+- VC 5 references internal env var name and cross-compares to current behavior — restate as observable outcome
+- VC 6 prescribes package.json dependency listing — restate as observable outcome
+- VC 7 cross-compares draft values to published values — assert draft field values are present and correct on their own
+- VC 8 cross-compares to previous behavior (no regression) — assert pages render correctly on their own
+
+THE FIX SITE (located by the code-graph detective — anchor every criterion to the behaviour THIS code produces):
+- src/services/contentstack.ts :: options — This is the sole Contentstack.Stack() initialization site. The exported `options` config object lacks the `live_preview` property required by Contentstack Live Preview SDK. All Contentstack data fetching across the entire site flows through the `Stack` export created from this config (line 91: `export const Stack = contentstack.Stack(options)`). Adding `live_preview` here is the mandatory first step for AMSD-2041 — it is the attachment point the new capability must plug into.
+Do NOT write criteria about areas unrelated to this code.
+
+
+Acceptance criteria (IMMUTABLE — the intent to verify; do NOT restate as-is, VERIFY them):
+- (none)
+Description: Original Requirements (discovery)  AS a Content Author, I WANT to preview draft entries in CMS, SO THAT I can see how content will be shown on the website
+ability to preview draft entries in CMS
+Notes& Assumptions  Limitation: Might not be possible to preview protected pages and content.
+Original Total Estimate:  8  Original FE Estimate:  8  Original DAM Estimate:  0  Original BE Estimate:  0
+
+A verification criterion states WHAT AN END USER OR TESTER OBSERVES on the user-facing surface THE TICKET IS ABOUT — the rendered output for an output ticket, the displayed screen for a UI ticket, the response a CLIENT receives for an API ticket. It is a BLACK-BOX check on that surface. It NEVER describes HOW the value is produced.
+A verification criterion is FORBIDDEN if it:
+- prescribes HOW to implement — any algorithm, mechanism, approach, or the addition/reading of any new field, flag or service;
+- references an INTERNAL structure that merely FEEDS the ticket's surface — an intermediate payload, a data-transfer object, or a specific response field used to BUILD the output. Verify the surface the ticket names, NOT the data structure behind it;
+- makes a CROSS-COMPARISON that presumes a mechanism — never assert one value "must equal" / "matches" / "is the same as" another; that presumes a shared derivation. Assert the required value is present and correct ON ITS OWN.
+Every verification criterion must be observable, testable, and tied to the ticket's stated symptom/intent.
+
+EXAMPLES OF FORM (the angle-bracket words are placeholders — fill them from THIS story; never copy them literally):
+
+REJECTED: "the <config object> passed to <the client> includes a <key> entry"
+  — asserts INTERNAL STRUCTURE. A tester cannot see a config object.
+ACCEPTED: "when <the request> carries <the marker>, <the surface> shows <the draft state> instead of <the published state>"
+
+REJECTED: "when <internal function> is called with <argument>, the resulting <query> includes <field>"
+  — asserts an INTERNAL CALL PATH. Verify the surface the ticket is about, not the path behind it.
+ACCEPTED: "<the surface> shows <the value> that <the source of truth> currently holds"
+
+REJECTED: "an author edits <entity> in <the external tool> and <the surface> updates"
+  — begins OUTSIDE THE BOUNDARY this suite can drive. Nothing here can operate that tool.
+ACCEPTED: "given <the client> is mocked to signal <the change>, <the surface> re-renders without a reload"
+
+REJECTED: "<the value> matches what <the other place> shows"
+  — a CROSS-COMPARISON presumes a shared derivation. Assert the required value on its own.
+ACCEPTED: "<the surface> shows <the expected value> for <the stated condition>"
+
+REJECTED: "<the feature> works correctly with no regression"
+  — verifies nothing and cannot fail.
+ACCEPTED: "when <the feature> is inactive, <the surface> shows <the prior behaviour> unchanged"
+
+Do NOT restate an acceptance criterion as-is — express what a tester OBSERVES that confirms it. Address every flag above.
+Output ONLY a JSON array of verification-criterion strings. No prose, no markdown.
+
+# Output
+```json
+[
+  "When a Contentstack Live Preview session is active for an entry, the rendered page displays the draft version of that entry's content.",
+  "The page renders the entry content indicated by the Contentstack Live Preview session, showing the content the preview session specifies.",
+  "When a draft entry's field value is modified while live preview is active, the page displays the updated draft content without a full browser page reload.",
+  "When live preview is active for an entry, the page renders all content fields from the draft version of that entry — including text fields, reference fields, and rich-text fields — with each field value present and correctly displayed.",
+  "The page loads without Contentstack authentication or connection errors when the live preview capability is enabled.",
+  "The Contentstack Live Preview client functionality is present on the page, enabling draft content to be displayed during a preview session.",
+  "When live preview is active for a draft entry that contains field values not yet published, the page displays those unpublished field values.",
+  "When live preview is not active, the page renders published entry content with all fields present and correctly displayed."
+]
+```

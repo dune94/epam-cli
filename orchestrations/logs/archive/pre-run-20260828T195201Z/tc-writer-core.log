@@ -1,0 +1,25 @@
+```json
+{
+  "MOCK3-1": {
+    "verifiedAt": "2026-08-28T00:00:00Z",
+    "sourceFiles": [
+      "src/fares.ts"
+    ],
+    "facts": [
+      "Function signature: fareFor(rider: Rider): number where Rider = { age: number; hasPass: boolean }",
+      "BASE_FARE_CENTS constant equals 350",
+      "CONCESSION_FARE_CENTS constant equals 175",
+      "Fare returned for any rider with hasPass=true is 0, regardless of age",
+      "Fare returned for rider with age >= 65 and hasPass=false is CONCESSION_FARE_CENTS (175)",
+      "Fare returned for rider with age < 13 and hasPass=false is CONCESSION_FARE_CENTS (175)",
+      "Fare returned for rider with age between 13 and 64 (inclusive) and hasPass=false is BASE_FARE_CENTS (350)",
+      "Senior boundary is age >= 65, not > 65 or >= 66",
+      "Child boundary is age < 13, not <= 12",
+      "Function logic order: check hasPass first (returns 0), then age >= 65 (returns 175), then age < 13 (returns 175), then BASE_FARE_CENTS (returns 350)",
+      "totalFor(riders: Rider[]): number function exists and sums fareFor results across all riders"
+    ],
+    "mockStrategy": "Call fareFor() directly with Rider object literals { age: <number>, hasPass: <boolean> }; use imported constants BASE_FARE_CENTS and CONCESSION_FARE_CENTS in expect assertions; the vitest framework (describe, it, expect) is already in use",
+    "bannedPatterns": []
+  }
+}
+```

@@ -1,0 +1,91 @@
+=== Prompt for SKY-006-a (attempt 1) ===
+Implement user story SKY-006-a: Code review document generation: Skyscanner mini-app
+
+## Story Description
+The review agent performs live inspection of all src/ files in /tmp/skyscanner-app and produces the structured review document at /tmp/skyscanner-app/review/SKY-006-review.md. This story covers document creation and content correctness only; automated gate execution is covered by SKY-006-b.
+
+## Acceptance Criteria
+- PREREQUISITE — /tmp/skyscanner-app/src exists and is non-empty before the agent begins; if absent or empty the agent halts immediately with a dependency error message referencing the missing path and does not create the review directory or file
+- The review directory /tmp/skyscanner-app/review/ is created by the agent if it does not already exist before writing the output file
+- The file /tmp/skyscanner-app/review/SKY-006-review.md is created (or overwritten) containing exactly six H2 sections appearing in this order: ## TypeScript, ## Tests, ## Security, ## Error Handling, ## Express Safety, ## Verdict
+- No H2 section other than the six listed above appears in the document, and no section is duplicated
+- Each of the five category sections (TypeScript, Tests, Security, Error Handling, Express Safety) must contain either: (a) at least one finding entry that includes a concrete file path relative to /tmp/skyscanner-app/src and, where applicable, a line-number reference derived from live inspection of the actual source files, OR (b) an explicit statement such as 'No issues found' — sections must never be empty or omitted, and static placeholder text not referencing a real inspected file is prohibited
+- The agent must perform a fresh live inspection of /tmp/skyscanner-app/src on every invocation; it is explicitly prohibited from reading, reusing, or re-emitting any previously generated or cached version of /tmp/skyscanner-app/review/SKY-006-review.md as its output
+- The ## Verdict section contains exactly one line matching the regex `^Verdict: (PASS|FAIL)$` as its first non-blank content line — this format uses a colon-prefix to maintain consistency with sibling document SKY-006-b
+- When the verdict is FAIL, the ## Verdict section includes a prioritised numbered list of blocking findings immediately following the 'Verdict: FAIL' line, with each item referencing the originating category section
+- When the verdict is PASS, the ## Verdict section contains no blocking-findings list (a brief summary sentence is permitted)
+- The verdict is FAIL if and only if at least one finding across the five category sections is classified as blocking; the agent must apply consistent severity classification criteria across all categories
+- The output file is UTF-8 encoded with Unix line endings (LF only, no CRLF)
+- The document is syntactically valid Markdown: all headings use ATX style (`##`), list items are consistently formatted, and any code samples are enclosed in fenced code blocks with a language identifier
+
+## Technical Notes
+- workingDir: /tmp/skyscanner-app
+- files: ["/tmp/skyscanner-app/review/SKY-006-review.md"]
+- dependsOn: ["SKY-001","SKY-002","SKY-003","SKY-004","SKY-005"]
+
+## Files to Create/Modify
+/tmp/skyscanner-app/review/SKY-006-review.md
+
+## Dependencies
+None
+
+## Instructions
+**IMPORTANT: You MUST use your file-writing and bash tools to create all required files. Do NOT just describe or plan what you will do — call tools immediately and write the files.**
+
+1. Implement all acceptance criteria for this story
+2. Follow the project's existing code patterns and conventions
+3. Create any necessary files in the locations specified
+4. Ensure code compiles/runs without errors
+5. Do NOT create tests unless explicitly required in acceptance criteria
+
+After implementation, provide a brief summary of what was created/modified.
+
+## Relevant Knowledge Base Entries
+The following was learned from previous story implementations and is relevant to your agent role. Apply this knowledge before writing any code:
+
+## KB-003 -- 2026-03-01
+
+**Category:** backend
+**AgentRole:** review-agent
+**Tags:** typescript, async, cancellation, abort-controller
+**Trigger:** first-success
+**StoryRef:** EPAM-014
+
+When implementing multi-agent parallel execution with cancellation support, registering an AbortController in a task registry is insufficient. The abort signal must be threaded through the entire call chain: TaskRegistry → caller → AgentRunOptions → AgentRunner → provider.stream(). Without adding `abortSignal?: AbortSignal` to AgentRunOptions and checking it in the agent loop, calling `abortController.abort()` will update task status but leave the underlying LLM stream and agent execution running. Always ensure cancellation signals propagate to the lowest-level async operation (the provider stream) to avoid resource leaks and unbounded execution.
+
+
+## KB-004 -- 2026-03-01
+
+**Category:** orchestration
+**AgentRole:** review-agent
+**Tags:** typescript, prompt-injection, session-history, agent-runner
+**Trigger:** first-success
+**StoryRef:** EPAM-018
+
+For one-turn consultation or override prompts, consuming a pending flag is not enough if you also persist the injected text into the turn history. If the transformed message is stored in the same message array that becomes future history, the consultation silently bleeds into later turns. Keep a separate transient message list for the model-facing request and preserve the original user message in the persisted session history.
+
+## Knowledge Base Contribution
+Your assigned KB entry ID for this run: **KB-008**
+
+If you discover a non-obvious pattern, gotcha, or anti-pattern during this implementation (or this is a retry), append exactly one entry to `orchestrations/agents/KB.md` using this format:
+
+```markdown
+## KB-008 -- 2026-06-18
+
+**Category:** <backend|frontend|infrastructure|testing|orchestration>
+**AgentRole:** <your agentRole from the story>
+**Tags:** <comma-separated tech keywords, e.g. typescript, node, cli>
+**Trigger:** <retry|first-success>
+**StoryRef:** SKY-006-a
+
+<One concise paragraph: the specific pattern, gotcha, or anti-pattern. Precise enough that a future Claude instance can apply it without re-discovering it.>
+```
+
+Only write an entry if the knowledge is genuinely non-obvious. Skip trivial observations.
+=== End Prompt ===
+
+=== epam Output (attempt 1) ===
+Now let me get line numbers for key findings by running a detailed analysis:
+Now let me get line numbers for key findings by running a detailed analysis:
+
+=== End epam Output ===

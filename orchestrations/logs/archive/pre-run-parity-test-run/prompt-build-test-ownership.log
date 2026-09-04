@@ -1,0 +1,101 @@
+# Prompt
+You are specialising ONE generic agent prompt for ONE specific project. You are the same agent that just minted this project's roles, so you already know what this project is and who will work on it.
+
+## The template you must specialise
+
+Its id is test-ownership and its purpose is: Who owns the test for a brownfield fix. ONE policy, rendered into BOTH the writer and the reviewer, so neither can hold a belief the other contradicts.
+
+Everything between the two markers below is the template, verbatim. The markers are not
+part of it. A code fence cannot delimit this: several templates contain fences of their
+own, so the first closing fence would truncate the body mid-instruction.
+
+-----BEGIN TEMPLATE BODY-----
+,
+-----END TEMPLATE BODY-----
+
+## What this project is
+
+Project config: /home/bradleyjerome/projects/ai/epam-cli/orchestrations/projects/mock3
+Tickets in scope: MOCK3-1: Riders aged exactly 65 are charged the adult fare | MOCK3-2: The departure board omits the final stop
+
+Codelines in scope and their declared dependencies:
+- mocka (/home/bradleyjerome/projects/mock3/mock-a) deps: vitest, typescript
+- mockb (/home/bradleyjerome/projects/mock3/mock-b) deps: vitest, typescript
+
+The roles you minted for this project:
+- transit-fare-engineer [implementer] — The fare-boundary defect in mocka is a one-line TypeScript comparison fix in src/fares.ts, and this codeline's stack (vitest, typescript) is shared with mockb, so one implementer covers both.
+- transit-schedule-engineer [implementer] — The departure-board omission in mockb is a loop-bound fix in src/schedule.ts, and this codeline shares the vitest/typescript stack with mocka, so one implementer role covers the schedule domain.
+- mocka-investigator [investigator] — mocka needs an investigator who can read src/fares.ts and test/fares.test.ts precisely, confirming the boundary operator and the test coverage gaps before and after the fix.
+- mockb-investigator [investigator] — mockb needs an investigator who can read src/schedule.ts and test/schedule.test.ts precisely, confirming the loop bound, the totalMinutes behavior, and the test coverage gap for the final stop.
+
+## The one rule you cannot break
+
+The template's placeholders are a CONTRACT with the pipeline. Each token written in SCREAMING_SNAKE_CASE between double underscores is replaced at run time with real evidence — a diff, a ticket, a test log, a plan. The substitution is BY NAME and it is strict in both directions.
+
+- Reproduce every placeholder EXACTLY as it appears, character for character.
+- NEVER add or invent a placeholder. Nothing supplies a name the pipeline does not know, so rendering throws and the run dies at the seam that needed this prompt.
+- NEVER remove or rename one. The evidence it carries would silently never reach the agent, and the agent would answer without it.
+- Do not move a placeholder into a code fence, a quote, or an example where it would read as literal text.
+
+The placeholders in this template are exactly: (none)
+
+## What specialising means
+
+Keep the template's instructions, its output format, its prohibitions and its reasoning intact. They encode failures this pipeline has already paid for. You are not rewriting the prompt or improving its wording.
+
+Add only what a competent engineer joining THIS project would need and could not infer from the generic text:
+- the conventions, layout and idioms this codebase actually uses
+- the commands this project runs to build, test and type-check
+- the traps this stack presents that a generic prompt would not warn about
+
+Ground every addition in the project context above. If the context does not tell you something, say nothing about it — an invented convention is worse than a missing one, because the agent will follow it.
+
+Do not name a file, symbol, package or command that does not appear in the context you were given.
+
+## How to answer
+
+Emit ONLY the specialised prompt body as TEXT, directly in your reply. No JSON wrapper, no markdown fences around the whole thing, no commentary before or after, and do not write it to a file — the pipeline reads your reply text.
+
+# Output
+## Test-Ownership Policy (shared by writer and reviewer)
+
+This policy governs who owns the test for a brownfield fix in this project. It is rendered identically into the implementer (writer) and the investigator (reviewer) so that neither role can hold a belief the other contradicts.
+
+### Scope
+
+Two tickets are in play, each in its own codeline but sharing the same vitest + typescript stack:
+
+- **MOCK3-1** (mocka): `fareFor` in `src/fares.ts` charges the adult fare at age exactly 65 because the boundary operator is `>` instead of `>=`. The existing test suite in `test/fares.test.ts` has no case for age 65.
+- **MOCK3-2** (mockb): `formatStops` in `src/schedule.ts` omits the final stop because the loop bound is `i < stops.length - 1`. The existing test suite in `test/schedule.test.ts` never asserts that the last stop name appears in the output.
+
+### Ownership rule
+
+**The implementer owns the test.** The implementer (transit-fare-engineer for MOCK3-1, transit-schedule-engineer for MOCK3-2) is responsible for:
+
+1. Adding a failing test case to the existing `test/*.test.ts` file that reproduces the defect **before** applying the source fix. For MOCK3-1 this is a `fareFor({ age: 65, hasPass: false })` assertion expecting `CONCESSION_FARE_CENTS`. For MOCK3-2 this is an assertion that `formatStops(LINE)` contains the final stop name (`'Eglinton'`).
+2. Running `npm test` (which executes `vitest run`) to confirm the new test fails against the unfixed source.
+3. Applying the one-line source fix in `src/fares.ts` or `src/schedule.ts`.
+4. Running `npm test` again to confirm all tests pass, including the new case.
+5. Running `npm run build` (which executes `tsc --noEmit`) to confirm the change type-checks.
+
+**The investigator owns coverage confirmation, not test authorship.** The investigator (mocka-investigator for MOCK3-1, mockb-investigator for MOCK3-2) is responsible for:
+
+1. Confirming **before** the fix that the existing `test/*.test.ts` lacks a case at the defect boundary — age exactly 65 for MOCK3-1, the final stop for MOCK3-2.
+2. Confirming **after** the fix that the implementer's new test case exists, that it would have failed against the old source, and that it passes against the fixed source.
+3. The investigator does **not** write or edit test code. If the investigator finds the test missing or insufficient, it reports the gap back to the implementer; it does not silently add the test itself.
+
+### What "owns the test" means concretely
+
+- The test file lives at `test/fares.test.ts` (mocka) or `test/schedule.test.ts` (mockb). Tests are never co-located with source.
+- Tests use vitest's `describe` / `it` / `expect` imports, matching the existing style in those files.
+- The implementer adds the reproducing case inside the existing `describe` block — no new describe blocks, no new test files.
+- Both roles agree that a fix without a reproducing test case is incomplete, and a reproducing test case without the fix is incomplete. The investigator blocks on either condition.
+
+### Commands both roles use
+
+- `npm test` — runs `vitest run` across the codeline's test directory.
+- `npm run build` — runs `tsc --noEmit` for type-checking.
+
+### Trap specific to this stack
+
+vitest exits non-zero on any failing test, so the implementer can verify the "test fails before fix, passes after fix" cycle with the same `npm test` command. There is no separate "watch" or "coverage" script configured; do not invent one.

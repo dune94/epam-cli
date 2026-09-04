@@ -1,0 +1,110 @@
+=== Prompt for SKY-004-B (attempt 1) ===
+CRITICAL — WRITE FILES FIRST. Your FIRST tool call MUST be WriteFile.
+Do NOT output any text before calling WriteFile. Do NOT plan or say "I will...".
+Call WriteFile NOW for the EXACT ABSOLUTE PATHS listed below:
+
+   - WRITE /home/bradleyjerome/projects/skyscanner-app/src/public/index.html first, before any other action
+   - WRITE /home/bradleyjerome/projects/skyscanner-app/package.json first, before any other action
+---
+
+Implement user story SKY-004-B: Dashboard HTML and build configuration
+
+## Story Description
+Create src/public/index.html as a styled single-page dashboard with search form and client-side JS. Configure package.json with start/build scripts, ensure build copies static assets to dist/public/, and add supertest devDependencies. Depends on SKY-004-A for the server that serves this file.
+
+## Acceptance Criteria
+- src/public/index.html has a full-width blue (#1a73e8) header bar with bold white title 'Skyscanner Dashboard' and subtitle line below it
+- Dashboard contains a centered white card (max-width ~700px, rounded corners, padding) with 2-column grid: From/To text inputs (row 1), Date/Adults inputs (row 2), each with label above the input
+- Dashboard has a full-width blue search button (same color as header) and status area: pink/red banner for errors, gray text for empty results, count on success
+- Client-side JS submits form via GET /search (no page reload), disables button during request, renders flights into results table in the same page
+- package.json has 'start' script ('node dist/server.js') and 'build' script that produces dist/server.js and copies src/public/ to dist/public/; after `npm run build && npm run start`, dist/public/index.html exists, GET / serves the dashboard, and GET /health returns 200
+- supertest and @types/supertest listed in devDependencies; `npx tsc --noEmit` exits 0
+
+
+
+
+
+## Technical Notes
+- files: ["/home/bradleyjerome/projects/skyscanner-app/src/public/index.html","/home/bradleyjerome/projects/skyscanner-app/package.json"]
+- dependsOn: ["SKY-002"]
+
+## Files to Create/Modify (EXACT ABSOLUTE PATHS — write to these paths exactly)
+/home/bradleyjerome/projects/skyscanner-app/src/public/index.html, /home/bradleyjerome/projects/skyscanner-app/package.json
+
+## Dependencies
+SKY-002
+
+
+
+## Instructions
+**CRITICAL — WRITE FILES FIRST:**
+   - WRITE /home/bradleyjerome/projects/skyscanner-app/src/public/index.html first, before any other action
+   - WRITE /home/bradleyjerome/projects/skyscanner-app/package.json first, before any other action
+**You MUST write every file listed above to its EXACT absolute path. Do NOT write to a different path, do NOT write to the current directory unless it matches the path above. Use your WriteFile or Edit tools with the full absolute path shown.**
+
+1. Write each required file to its exact absolute path listed above — do this FIRST before anything else
+2. Implement all acceptance criteria for this story
+3. Follow the project's existing code patterns and conventions
+4. Do NOT create tests unless explicitly required in acceptance criteria
+
+After implementation, provide a brief summary of what was created/modified.
+
+## Relevant Knowledge Base Entries
+The following was learned from previous story implementations and is relevant to your agent role. Apply this knowledge before writing any code:
+
+- [2026-07-06T17:45:30Z] Always resolve mocked fetch calls to a Response-shaped object with ok, status, statusText, and a json method returning a Promise.
+- [2026-07-06T17:50:20Z] Use valid module and moduleResolution pairs in tsconfig.json: CommonJS with Node, Node16 with Node16, ESNext with Bundler. Use CommonJS and Node for the stack. Mismatched pairs cause build errors.
+- [2026-07-06T18:11:26Z] Use vi.fn().mockResolvedValue(value) to make a mock return a resolved Promise.
+- [2026-07-06T20:31:11Z] Use `test: { passWithNoTests: true }` in vitest.config.ts or create a stub test file when no *.test.ts files exist.
+- [2026-07-06T20:33:03Z] Enable globals:true in vitest.config.ts so describe, it, and expect work without imports, reducing boilerplate in test files.
+- [2026-07-06T23:47:34Z] Use CommonJS-compatible patterns in src/server.ts: avoid `import.meta.url` and top-level `await`; gate listen with `if (require.main === module)`.
+- [2026-07-07T02:35:30Z] Always include a non-test source file in src/ alongside any src/*.test.ts file, since tsconfig.json excludes test files from tsc --noEmit.
+- [2026-07-07T19:01:34Z] Only modify or create files explicitly listed in the story's acceptance criteria. Do not touch files belonging to other stories or outside the current task scope.
+- [2026-07-07T20:17:57Z] [unreviewed-fallback] Avoid using deprecated TypeScript compiler options like 'moduleResolution=node10'; use 'moduleResolution=node' instead.
+- [2026-07-17T20:20:58Z] Always: Before importing a module or referencing a type/property, always read the actual source file to verify the export exists, its exact path, its properties, and its constructor/factory signatures
+
+## Knowledge Base Contribution (do this LAST — after writing all implementation files)
+Your assigned KB entry ID for this run: **KB-009**
+
+IMPORTANT: Write ALL implementation files first. Only AFTER writing every required file should you optionally append a KB entry.
+Do NOT read orchestrations/agents/KB.md before writing implementation files. The relevant KB entries are already injected above.
+
+If (and only if) you discover a non-obvious pattern during implementation, append one entry to `orchestrations/agents/KB.md`:
+
+```markdown
+## KB-009 -- 2026-07-20
+
+**Category:** <backend|frontend|infrastructure|testing|orchestration>
+**AgentRole:** <your agentRole from the story>
+**Tags:** <comma-separated tech keywords, e.g. typescript, node, cli>
+**Trigger:** <retry|first-success>
+**StoryRef:** SKY-004-B
+
+<One concise paragraph: the specific pattern, gotcha, or anti-pattern.>
+```
+
+Only write an entry if the knowledge is genuinely non-obvious. Skip trivial observations.
+
+## Execution Plan
+Follow this plan step by step:
+1. Update `/home/bradleyjerome/projects/skyscanner-app/package.json`: add `"start": "node dist/server.js"` and `"build": "tsc && npm run copy-assets"` scripts; add `"copy-assets": "cp -r src/public dist/public"` script; add `supertest` and `@types/supertest` to `devDependencies`.
+
+2. Create `/home/bradleyjerome/projects/skyscanner-app/src/public/index.html` with a full-width header bar (background `#1a73e8`, bold white title "Skyscanner Dashboard", subtitle line below).
+
+3. In the same `index.html`, add a centered white card (max-width ~700px, rounded corners, padding) containing a 2-column grid form: row 1 has From/To text inputs with labels above; row 2 has Date/Adults inputs with labels above.
+
+4. In the same `index.html`, add a full-width blue search button (`#1a73e8`), a status area (pink/red banner for errors, gray text for empty results, count on success), and a results table. Add inline `<script>` that: attaches a submit handler performing `GET /search` via `fetch` without page reload, disables the button during the request, renders flight rows into the results table, and shows appropriate status messages.
+
+5. Verify `npx tsc --noEmit` exits 0 (ensure no type errors in existing server code; if a server file needs a `/health` route or static serving of `dist/public`, note that those changes are outside the listed paths but the plan assumes the server already supports or will support `GET /` and `GET /health`).
+
+6. Run `npm run build` and confirm `dist/server.js` and `dist/public/index.html` both exist.
+
+7. Run `npm run start` and verify `GET /` serves the dashboard HTML, `GET /health` returns 200, and the dashboard form submits to `GET /search` without a page reload.
+=== End Prompt ===
+
+=== epam Output (attempt 1) ===
+Yes, three corruptions. The `$` chars in shell heredoc didn't break things (I used single-quoted delim), but my source already had broken content. Let me check at line 222 too.
+  [tc-writer] No test stories need TCs in phase 'unknown' — skipping
+Yes, three corruptions. The `$` chars in shell heredoc didn't break things (I used single-quoted delim), but my source already had broken content. Let me check at line 222 too.
+
+=== End epam Output ===

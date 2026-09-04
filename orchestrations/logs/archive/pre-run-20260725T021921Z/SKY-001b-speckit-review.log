@@ -1,0 +1,129 @@
+# Prompt
+You are the speckit specification agent for EPAM CLI. Phase scaffold, story SKY-001b.
+
+You are reviewing and building on the openspec agent's output for this story.
+Your role is COLLABORATIVE — you are NOT starting from scratch. Instead:
+1. Review openspec's proposed acceptance criteria for testability and completeness
+2. Add missing edge-case, error-handling, security, and accessibility criteria
+3. Flag any AC that are vague, untestable, or overlapping
+4. If openspec proposed story splits, validate the decomposition and refine AC per split
+5. Do NOT remove or duplicate openspec's good work — build on it
+
+OPENSPEC'S OUTPUT (your input to review):
+{
+  "storyId": "SKY-001b",
+  "agent": "openspec",
+  "notes": "Tightened AC to be more precise and verifiable. Added structural requirements for the contract doc, clarified 429 semantics explicitly, added IATA format note, and required FlightResult-relevant field mapping to be explicit. No split needed — scope is coherent and bounded.",
+  "title": "API discovery: verify Skyscanner RapidAPI contract",
+  "description": "Before implementing the Skyscanner client, discover and document the real RapidAPI endpoint contract. Using the RAPIDAPI_KEY environment variable, make live curl probes against the subscribed Skyscanner host to identify: (1) the correct x-rapidapi-host value, (2) the working endpoint paths for flight search (one-way and/or roundtrip), (3) the required query parameters and their exact names and value formats, (4) the response JSON shape including top-level keys and nested field names relevant to FlightResult. Write the discovered contract to /tmp/skyscanner-app/docs/api-contract.md. This file is the authoritative reference for SKY-002 (client implementation). Do NOT write any TypeScript or JavaScript code in this story.",
+  "acceptanceCriteria": [
+    "/tmp/skyscanner-app/docs/ directory exists and /tmp/skyscanner-app/docs/api-contract.md is present",
+    "api-contract.md contains a 'Host' section documenting the confirmed x-rapidapi-host value, with a note on the probe result (status code) that confirms it is active — a 429 response is sufficient proof",
+    "api-contract.md documents at least one working endpoint path (2xx or 429 accepted; 404 disqualifies the path) under an 'Endpoints' section; sky-scanner3.p.rapidapi.com paths must not appear",
+    "api-contract.md documents all required query parameters under a 'Query Parameters' section, including exact parameter names, expected value types, and example values (e.g. IATA airport codes, ISO 8601 dates)",
+    "api-contract.md documents required HTTP headers under an 'Authentication' section — at minimum x-rapidapi-key and x-rapidapi-host, plus any additional headers observed in working responses",
+    "api-contract.md includes a 'Sample Response' section with a real or lightly-annotated JSON snippet showing the top-level response structure and at least one flight result object",
+    "api-contract.md contains a 'FlightResult Field Mapping' section that maps each API response field to its FlightResult counterpart (price, origin, destination, departureTime, arrivalTime, carrier, durationMinutes) or marks it as absent/derived",
+    "api-contract.md notes the HTTP status meaning of 429 (rate-limited but path valid) and any Retry-After header behavior if observed",
+    "No TypeScript, JavaScript, or compiled output files are created or modified in this story"
+  ],
+  "splitStories": [],
+  "runId": "20260603T180809Z"
+}
+
+ORIGINAL STORY CONTEXT:
+{
+  "id": "SKY-001b",
+  "title": "API discovery: verify Skyscanner RapidAPI contract",
+  "description": "Before implementing the Skyscanner client, discover and document the real RapidAPI endpoint contract. Using the RAPIDAPI_KEY environment variable, make live curl probes against the subscribed Skyscanner host to identify: (1) the correct x-rapidapi-host value, (2) the working endpoint paths for flight search (one-way and/or roundtrip), (3) the required query parameters and their exact names and value formats, (4) the response JSON shape including top-level keys and nested field names relevant to FlightResult. Write the discovered contract to /tmp/skyscanner-app/docs/api-contract.md. This file is the authoritative reference for SKY-002 (client implementation). Do NOT write any TypeScript or JavaScript code in this story.",
+  "originalAcceptanceCriteria": [
+    "/tmp/skyscanner-app/docs/ directory exists and /tmp/skyscanner-app/docs/api-contract.md is present",
+    "api-contract.md contains a 'Host' section documenting the confirmed x-rapidapi-host value, with a note on the probe result (status code) that confirms it is active — a 429 response is sufficient proof",
+    "api-contract.md documents at least one working endpoint path (2xx or 429 accepted; 404 disqualifies the path) under an 'Endpoints' section; sky-scanner3.p.rapidapi.com paths must not appear",
+    "api-contract.md documents all required query parameters under a 'Query Parameters' section, including exact parameter names, expected value types, and example values (e.g. IATA airport codes, ISO 8601 dates)",
+    "api-contract.md documents required HTTP headers under an 'Authentication' section — at minimum x-rapidapi-key and x-rapidapi-host, plus any additional headers observed in working responses",
+    "api-contract.md includes a 'Sample Response' section with a real or lightly-annotated JSON snippet showing the top-level response structure and at least one flight result object",
+    "api-contract.md contains a 'FlightResult Field Mapping' section that maps each API response field to its FlightResult counterpart (price, origin, destination, departureTime, arrivalTime, carrier, durationMinutes) or marks it as absent/derived",
+    "api-contract.md notes the HTTP status meaning of 429 (rate-limited but path valid) and any Retry-After header behavior if observed",
+    "No TypeScript, JavaScript, or compiled output files are created or modified in this story"
+  ],
+  "technicalNotes": {
+    "workingDir": "/tmp/skyscanner-app",
+    "files": [
+      "/tmp/skyscanner-app/docs/api-contract.md"
+    ],
+    "requiredSkills": [
+      "api-discovery",
+      "curl",
+      "rapidapi"
+    ],
+    "dependsOn": [
+      "SKY-001"
+    ],
+    "notes": "RAPIDAPI_KEY is available in the environment. Known candidate host: skyscanner.p.rapidapi.com (429 responses confirm subscription active). sky-scanner3.p.rapidapi.com returns 404 — do not use it. Probe with curl -si to inspect both status codes and response bodies. A 429 (Too Many Requests) on an endpoint confirms the path is valid — document it. The goal is an accurate contract doc, not a working implementation."
+  },
+  "dependencies": []
+}
+
+Produce your refined output between <SPEC_AGENT> tags. Include:
+- "acceptanceCriteria": The FULL merged list (openspec's criteria + your additions/refinements)
+- "notes": What you changed and why (be specific — cite which criteria you added/modified)
+- "splitStories": Include if you refined openspec's splits, otherwise omit or pass through
+- "acAddedBySpeckit": Array of criteria YOU added that were not in openspec's output
+- "acModifiedBySpeckit": Array of {"original":"...","revised":"..."} for criteria you reworded
+- "acFlagged": Array of {"criterion":"...","flag":"..."} for criteria that need human attention
+
+<SPEC_AGENT>
+
+# Output
+<SPEC_AGENT>
+```json
+{
+  "storyId": "SKY-001b",
+  "agent": "speckit",
+  "notes": "openspec's AC set is well-structured and testable. I added three criteria: (1) API key redaction to prevent credential leakage into the doc, (2) HTTP method documentation per endpoint, (3) required-vs-optional parameter classification. I also flagged the Sample Response + FlightResult Mapping pairing for human review — if all probes return 429, the sample will be an error body and the field mapping will be inferred rather than observed, which SKY-002 implementors need to know explicitly.",
+  "acceptanceCriteria": [
+    "/tmp/skyscanner-app/docs/ directory exists and /tmp/skyscanner-app/docs/api-contract.md is present",
+    "api-contract.md contains a 'Host' section documenting the confirmed x-rapidapi-host value, with a note on the probe result (status code) that confirms it is active — a 429 response is sufficient proof",
+    "api-contract.md documents at least one working endpoint path (2xx or 429 accepted; 404 disqualifies the path) under an 'Endpoints' section; sky-scanner3.p.rapidapi.com paths must not appear",
+    "Each entry in the 'Endpoints' section includes the HTTP method (e.g. GET, POST) alongside the path",
+    "api-contract.md documents all required query parameters under a 'Query Parameters' section, including exact parameter names, expected value types, and example values (e.g. IATA airport codes, ISO 8601 dates)",
+    "The 'Query Parameters' section explicitly distinguishes required parameters from optional ones — parameters whose absence causes a 4xx error are marked required; all others marked optional",
+    "api-contract.md documents required HTTP headers under an 'Authentication' section — at minimum x-rapidapi-key and x-rapidapi-host, plus any additional headers observed in working responses",
+    "The 'Authentication' section uses a placeholder value for x-rapidapi-key (e.g. '<RAPIDAPI_KEY>' or '$RAPIDAPI_KEY') — the literal value of the RAPIDAPI_KEY environment variable must NOT appear anywhere in api-contract.md",
+    "api-contract.md includes a 'Sample Response' section with a real or lightly-annotated JSON snippet showing the top-level response structure and at least one flight result object; if only 429 responses were received, the section must include the 429 error body and an explicit note that the flight result shape was inferred from available documentation rather than observed live",
+    "api-contract.md contains a 'FlightResult Field Mapping' section that maps each API response field to its FlightResult counterpart (price, origin, destination, departureTime, arrivalTime, carrier, durationMinutes) or marks it as absent/derived; if the mapping is inferred rather than observed from a live 2xx response, each inferred field must be marked '(inferred)'",
+    "api-contract.md notes the HTTP status meaning of 429 (rate-limited but path valid) and any Retry-After header behavior if observed",
+    "api-contract.md includes a 'Discovery Metadata' section recording the ISO 8601 date the probes were run and the tool used (curl)",
+    "No TypeScript, JavaScript, or compiled output files are created or modified in this story"
+  ],
+  "acAddedBySpeckit": [
+    "Each entry in the 'Endpoints' section includes the HTTP method (e.g. GET, POST) alongside the path",
+    "The 'Query Parameters' section explicitly distinguishes required parameters from optional ones — parameters whose absence causes a 4xx error are marked required; all others marked optional",
+    "The 'Authentication' section uses a placeholder value for x-rapidapi-key (e.g. '<RAPIDAPI_KEY>' or '$RAPIDAPI_KEY') — the literal value of the RAPIDAPI_KEY environment variable must NOT appear anywhere in api-contract.md",
+    "api-contract.md includes a 'Discovery Metadata' section recording the ISO 8601 date the probes were run and the tool used (curl)"
+  ],
+  "acModifiedBySpeckit": [
+    {
+      "original": "api-contract.md includes a 'Sample Response' section with a real or lightly-annotated JSON snippet showing the top-level response structure and at least one flight result object",
+      "revised": "api-contract.md includes a 'Sample Response' section with a real or lightly-annotated JSON snippet showing the top-level response structure and at least one flight result object; if only 429 responses were received, the section must include the 429 error body and an explicit note that the flight result shape was inferred from available documentation rather than observed live"
+    },
+    {
+      "original": "api-contract.md contains a 'FlightResult Field Mapping' section that maps each API response field to its FlightResult counterpart (price, origin, destination, departureTime, arrivalTime, carrier, durationMinutes) or marks it as absent/derived",
+      "revised": "api-contract.md contains a 'FlightResult Field Mapping' section that maps each API response field to its FlightResult counterpart (price, origin, destination, departureTime, arrivalTime, carrier, durationMinutes) or marks it as absent/derived; if the mapping is inferred rather than observed from a live 2xx response, each inferred field must be marked '(inferred)'"
+    }
+  ],
+  "acFlagged": [
+    {
+      "criterion": "Sample Response + FlightResult Field Mapping (revised pair)",
+      "flag": "If all probe responses are 429, neither section can be verified against live flight data. The '(inferred)' marker makes the gap visible to SKY-002 implementors, but product/tech lead should decide whether inferred mapping is sufficient to unblock SKY-002 or whether a successful 2xx probe is a hard prerequisite before this story can be closed."
+    },
+    {
+      "criterion": "No TypeScript, JavaScript, or compiled output files are created or modified in this story",
+      "flag": "This criterion is correct but unenforceable by automated test without a file-diff check. Recommend the SKY-002 story's pre-conditions reference git diff output from SKY-001b to confirm no .ts/.js files were touched, or add an explicit CI gate."
+    }
+  ],
+  "splitStories": []
+}
+```
+</SPEC_AGENT>

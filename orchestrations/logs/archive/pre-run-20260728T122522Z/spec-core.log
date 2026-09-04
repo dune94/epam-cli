@@ -1,0 +1,7 @@
+spec-mode: fast-path qwen/z-ai/glm-5.2 (skipping MiniMax)
+spec-mode: fast-path qwen/z-ai/glm-5.1 (skipping MiniMax)
+spec-mode: ⚠️ VC could not be made mechanism-free for AMSD-2041 after 2 cycle(s) — using conservative fallback VC. Last flags: VC 5 bundle-size clause is not observable on the rendered page surface — it inspects build artifacts/internals; keep only the observable part (content static after load, no preview indicators in production)
+spec-mode: AMSD-2041 — 2 verification criteria persisted (source: fallback, resolution: fallback)
+spec-mode: fast-path qwen/z-ai/glm-5.1 (skipping MiniMax)
+spec-mode: fast-path qwen/z-ai/glm-5.2 (skipping MiniMax)
+spec-mode: fast-path qwen/z-ai/glm-5.2 (skipping MiniMax)

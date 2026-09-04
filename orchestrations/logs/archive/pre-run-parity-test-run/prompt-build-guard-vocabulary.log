@@ -1,0 +1,121 @@
+# Prompt
+You are specialising ONE generic agent prompt for ONE specific project. You are the same agent that just minted this project's roles, so you already know what this project is and who will work on it.
+
+## The template you must specialise
+
+Its id is guard-vocabulary and its purpose is: Derive the vocabulary a guard uses, verified against the repository index.
+
+Everything between the two markers below is the template, verbatim. The markers are not
+part of it. A code fence cannot delimit this: several templates contain fences of their
+own, so the first closing fence would truncate the body mid-instruction.
+
+-----BEGIN TEMPLATE BODY-----
+__PERSONA_PREFIX__GUARD SEAM: __SEAM__
+
+THE RULE THIS GUARD ENFORCES:
+__RULE__
+
+THE STATEMENTS THE GUARD WILL CHECK:
+__STATEMENT_LIST__
+
+DECLARED MANIFEST (the files this story says it will touch):
+__MANIFEST__
+
+__DOC_SECTION__CODE EVIDENCE (real findings from this repository — ground truth; derive from these, not from your own knowledge of any library):
+__EVIDENCE__
+
+STORY CONTEXT:
+Title: __STORY_TITLE__
+Description: __STORY_DESCRIPTION__
+__CODEGRAPH_SECTION__
+-----END TEMPLATE BODY-----
+
+## What this project is
+
+Project config: /home/bradleyjerome/projects/ai/epam-cli/orchestrations/projects/mock3
+Tickets in scope: MOCK3-1: Riders aged exactly 65 are charged the adult fare | MOCK3-2: The departure board omits the final stop
+
+Codelines in scope and their declared dependencies:
+- mocka (/home/bradleyjerome/projects/mock3/mock-a) deps: vitest, typescript
+- mockb (/home/bradleyjerome/projects/mock3/mock-b) deps: vitest, typescript
+
+The roles you minted for this project:
+- transit-fare-engineer [implementer] — The fare-boundary defect in mocka is a one-line TypeScript comparison fix in src/fares.ts, and this codeline's stack (vitest, typescript) is shared with mockb, so one implementer covers both.
+- transit-schedule-engineer [implementer] — The departure-board omission in mockb is a loop-bound fix in src/schedule.ts, and this codeline shares the vitest/typescript stack with mocka, so one implementer role covers the schedule domain.
+- mocka-investigator [investigator] — mocka needs an investigator who can read src/fares.ts and test/fares.test.ts precisely, confirming the boundary operator and the test coverage gaps before and after the fix.
+- mockb-investigator [investigator] — mockb needs an investigator who can read src/schedule.ts and test/schedule.test.ts precisely, confirming the loop bound, the totalMinutes behavior, and the test coverage gap for the final stop.
+
+## The one rule you cannot break
+
+The template's placeholders are a CONTRACT with the pipeline. Each token written in SCREAMING_SNAKE_CASE between double underscores is replaced at run time with real evidence — a diff, a ticket, a test log, a plan. The substitution is BY NAME and it is strict in both directions.
+
+- Reproduce every placeholder EXACTLY as it appears, character for character.
+- NEVER add or invent a placeholder. Nothing supplies a name the pipeline does not know, so rendering throws and the run dies at the seam that needed this prompt.
+- NEVER remove or rename one. The evidence it carries would silently never reach the agent, and the agent would answer without it.
+- Do not move a placeholder into a code fence, a quote, or an example where it would read as literal text.
+
+The placeholders in this template are exactly: __CODEGRAPH_SECTION__, __DOC_SECTION__, __EVIDENCE__, __MANIFEST__, __PERSONA_PREFIX__, __RULE__, __SEAM__, __STATEMENT_LIST__, __STORY_DESCRIPTION__, __STORY_TITLE__
+
+## What specialising means
+
+Keep the template's instructions, its output format, its prohibitions and its reasoning intact. They encode failures this pipeline has already paid for. You are not rewriting the prompt or improving its wording.
+
+Add only what a competent engineer joining THIS project would need and could not infer from the generic text:
+- the conventions, layout and idioms this codebase actually uses
+- the commands this project runs to build, test and type-check
+- the traps this stack presents that a generic prompt would not warn about
+
+Ground every addition in the project context above. If the context does not tell you something, say nothing about it — an invented convention is worse than a missing one, because the agent will follow it.
+
+Do not name a file, symbol, package or command that does not appear in the context you were given.
+
+## How to answer
+
+Emit ONLY the specialised prompt body as TEXT, directly in your reply. No JSON wrapper, no markdown fences around the whole thing, no commentary before or after, and do not write it to a file — the pipeline reads your reply text.
+
+# Output
+__PERSONA_PREFIX__GUARD SEAM: __SEAM__
+
+THE RULE THIS GUARD ENFORCES:
+__RULE__
+
+THE STATEMENTS THE GUARD WILL CHECK:
+__STATEMENT_LIST__
+
+DECLARED MANIFEST (the files this story says it will touch):
+__MANIFEST__
+
+__DOC_SECTION__CODE EVIDENCE (real findings from this repository — ground truth; derive from these, not from your own knowledge of any library):
+__EVIDENCE__
+
+STORY CONTEXT:
+Title: __STORY_TITLE__
+Description: __STORY_DESCRIPTION__
+__CODEGRAPH_SECTION__
+
+PROJECT CONVENTIONS (mock3 — two codelines: mocka and mockb, both TypeScript + vitest):
+
+Build and test commands (identical in both package.json files):
+- Tests: `vitest run` (the `test` script). Do not assume `npm test` or `npx vitest` — the script is `vitest run`.
+- Type-check / build: `tsc --noEmit` (the `build` script). Both tsconfig.json files set `"strict": true` and `"noEmit": true`, so the compiler is a type-checker only; there is no emitted JS.
+- Lint: the `lint` script is `echo no-lint-configured` — there is no linter. Do not reference a lint command or lint output as evidence.
+
+Module and import style:
+- Both projects are ESM (`"type": "module"` in package.json, `"module": "ES2022"` in tsconfig). Test files import source via relative paths, e.g. `import { fareFor } from '../src/fares'` and `import { formatStops, totalMinutes } from '../src/schedule'`. There is no path alias or barrel file.
+
+Test idiom:
+- Tests use vitest's `describe` / `it` / `expect` from `'vitest'`. Assertions are `expect(value).toBe(expected)` — strict equality. There are no snapshot tests, no mocks, no parameterised tests in either suite.
+
+Boundary idioms to watch for (these are the defect sites the guard's vocabulary must cover):
+
+mocka — src/fares.ts:
+- `fareFor` uses `rider.age > 65` for the senior concession boundary. The comment above it says "Riders aged 65 AND OVER pay the concession fare," so the correct operator is `>=`, not `>`. A rider aged exactly 65 currently falls through to `BASE_FARE_CENTS` instead of `CONCESSION_FARE_CENTS`.
+- The test suite in test/fares.test.ts tests age 70 (well past the boundary) but does NOT test age exactly 65. When verifying vocabulary, treat the absence of an exact-boundary test as a coverage gap.
+- `totalFor` sums `fareFor` over an array via `reduce`; it is not a defect site.
+
+mockb — src/schedule.ts:
+- `formatStops` loops with `for (let i = 0; i < stops.length - 1; i++)`, which omits the final stop. The correct bound is `i < stops.length` (or `<= stops.length - 1`).
+- The test suite in test/schedule.test.ts checks that the output contains `'->'` and the first stop name (`'Union'`), but does NOT assert the presence of the final stop (`'Eglinton'`). Treat the absence of a final-stop assertion as a coverage gap.
+- `totalMinutes` returns `stops[stops.length - 1].minutes` (or 0 for an empty array); it is not a defect site.
+
+When deriving the guard's vocabulary, anchor every term in the symbols and files above: `fareFor`, `Rider`, `BASE_FARE_CENTS`, `CONCESSION_FARE_CENTS`, `formatStops`, `Stop`, `totalMinutes`, and the test files that exercise them. Do not introduce symbols, packages, or commands that do not appear in this repository.

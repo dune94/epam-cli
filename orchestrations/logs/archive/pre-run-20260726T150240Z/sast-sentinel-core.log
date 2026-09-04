@@ -1,0 +1,122 @@
+```json
+{
+  "agent": "sast-sentinel",
+  "phase": "core",
+  "summary": { "filesScanned": 852, "findingsCount": 14, "blockerCount": 0 },
+  "findings": [
+    {
+      "severity": "major",
+      "rule": "dependency-cve",
+      "file": "package.json",
+      "line": 0,
+      "description": "Runtime dependency @opentelemetry/auto-instrumentations-node has a HIGH severity CVE affecting @opentelemetry/sdk-node. This package runs in production and the vulnerability could be exploited at runtime.",
+      "suggestedFix": "Upgrade @opentelemetry/auto-instrumentations-node to a version that pulls in a patched @opentelemetry/sdk-node. Run npm audit fix or manually bump the version in package.json."
+    },
+    {
+      "severity": "minor",
+      "rule": "dependency-cve",
+      "file": "package.json",
+      "line": 0,
+      "description": "Runtime dependency @azure/monitor-opentelemetry-exporter has a MODERATE severity CVE affecting @opentelemetry/core and @opentelemetry/sdk-logs.",
+      "suggestedFix": "Upgrade @azure/monitor-opentelemetry-exporter to a version with patched transitive dependencies."
+    },
+    {
+      "severity": "minor",
+      "rule": "dependency-cve",
+      "file": "package.json",
+      "line": 0,
+      "description": "Transitive dependency @azure/msal-node has a MODERATE severity CVE affecting uuid.",
+      "suggestedFix": "Upgrade @azure/msal-node or force a patched uuid version via npm overrides."
+    },
+    {
+      "severity": "minor",
+      "rule": "dependency-cve",
+      "file": "package.json",
+      "line": 0,
+      "description": "Dev dependency @cucumber/cucumber has a MODERATE severity CVE affecting @cucumber/gherkin and @cucumber/gherkin-utils. Dev-only — does not affect production.",
+      "suggestedFix": "Upgrade @cucumber/cucumber to a patched version at next maintenance window."
+    },
+    {
+      "severity": "minor",
+      "rule": "dependency-cve",
+      "file": "package.json",
+      "line": 0,
+      "description": "Transitive dependency @cucumber/gherkin has a MODERATE severity CVE affecting @cucumber/messages. Dev-only chain.",
+      "suggestedFix": "Upgrade @cucumber/cucumber to resolve transitive chain."
+    },
+    {
+      "severity": "minor",
+      "rule": "dependency-cve",
+      "file": "package.json",
+      "line": 0,
+      "description": "Transitive dependency @cucumber/gherkin-utils has a MODERATE severity CVE. Dev-only chain.",
+      "suggestedFix": "Upgrade @cucumber/cucumber to resolve transitive chain."
+    },
+    {
+      "severity": "minor",
+      "rule": "dependency-cve",
+      "file": "package.json",
+      "line": 0,
+      "description": "Transitive dependency @cucumber/messages has a MODERATE severity CVE affecting uuid. Dev-only chain.",
+      "suggestedFix": "Upgrade @cucumber/cucumber to resolve transitive chain."
+    },
+    {
+      "severity": "minor",
+      "rule": "dependency-cve",
+      "file": "package.json",
+      "line": 0,
+      "description": "Dev dependency @metrolinx/cx-shared has MODERATE severity CVEs affecting react-tooltip and uuid. Dev-only — does not affect production.",
+      "suggestedFix": "Upgrade @metrolinx/cx-shared to a patched version at next maintenance window."
+    },
+    {
+      "severity": "minor",
+      "rule": "dependency-cve",
+      "file": "package.json",
+      "line": 0,
+      "description": "Transitive dependency @opentelemetry/core has a MODERATE severity CVE: Unbounded memory allocation in W3C Baggage propagation.",
+      "suggestedFix": "Upgrade OpenTelemetry packages to pull in a patched @opentelemetry/core."
+    },
+    {
+      "severity": "minor",
+      "rule": "dependency-cve",
+      "file": "package.json",
+      "line": 0,
+      "description": "Transitive dependency @opentelemetry/exporter-trace-otlp-http has MODERATE severity CVEs affecting @opentelemetry/core and @opentelemetry/otlp-exporter-base.",
+      "suggestedFix": "Upgrade OpenTelemetry exporter packages to patched versions."
+    },
+    {
+      "severity": "minor",
+      "rule": "dependency-cve",
+      "file": "package.json",
+      "line": 0,
+      "description": "Transitive dependency @opentelemetry/otlp-exporter-base has MODERATE severity CVEs.",
+      "suggestedFix": "Upgrade OpenTelemetry exporter packages to patched versions."
+    },
+    {
+      "severity": "minor",
+      "rule": "dependency-cve",
+      "file": "package.json",
+      "line": 0,
+      "description": "Transitive dependency @opentelemetry/otlp-transformer has MODERATE severity CVEs.",
+      "suggestedFix": "Upgrade OpenTelemetry transformer packages to patched versions."
+    },
+    {
+      "severity": "minor",
+      "rule": "dependency-cve",
+      "file": "package.json",
+      "line": 0,
+      "description": "Transitive dependency @opentelemetry/propagator-jaeger has a HIGH severity CVE: Denial of service in JaegerPropagator via unhandled exception on malformed input. Classified as minor because it is transitive (not directly listed in package.json dependencies).",
+      "suggestedFix": "Upgrade @opentelemetry/auto-instrumentations-node to a version that pulls in a patched @opentelemetry/propagator-jaeger."
+    },
+    {
+      "severity": "minor",
+      "rule": "dependency-cve",
+      "file": "package.json",
+      "line": 0,
+      "description": "Transitive dependencies @opentelemetry/resources and @opentelemetry/sdk-logs have MODERATE severity CVEs. An additional 20 packages with moderate/low CVEs were reported by npm audit but not individually listed.",
+      "suggestedFix": "Run npm audit fix to upgrade all OpenTelemetry transitive dependencies to patched versions."
+    }
+  ],
+  "verdict": "pass"
+}
+```

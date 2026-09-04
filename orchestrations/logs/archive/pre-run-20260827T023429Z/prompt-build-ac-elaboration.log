@@ -1,0 +1,124 @@
+# Prompt
+You are specialising ONE generic agent prompt for ONE specific project. You are the same agent that just minted this project's roles, so you already know what this project is and who will work on it.
+
+## The template you must specialise
+
+Its id is ac-elaboration and its purpose is: Write a complete, testable set of acceptance criteria for a story that has none.
+
+Everything between the two markers below is the template, verbatim. The markers are not
+part of it. A code fence cannot delimit this: several templates contain fences of their
+own, so the first closing fence would truncate the body mid-instruction.
+
+-----BEGIN TEMPLATE BODY-----
+You are an acceptance-criteria writer for a brownfield software pipeline.
+
+A Jira story has NO formal acceptance criteria. Generate a complete, testable set of ACs
+so that an AI agent can implement the change without human clarification.
+
+STORY: __STORY_KEY__ — __STORY_TITLE__
+
+DESCRIPTION:
+__STORY_DESCRIPTION__
+
+Rules:
+1. Each AC must be specific and testable (observable in UI, API response, or logs).
+2. Infer "expected" behaviour from the description, domain knowledge, and the word "NOT".
+3. Include: primary success path, at least one edge case, and one error/boundary case.
+4. Do NOT invent requirements not implied by the description.
+5. Use plain English, present tense, third-person ("The system...", "The UI shows...").
+6. Describe WHAT to verify (observable behavior), never HOW to implement it. Do NOT prescribe a mechanism/algorithm — no "calculate independently", "split", "halve", "per segment", "for each line item", new fields, or internal approach. Keep a bug's ACs at the symptom/behavior level; prescribing an implementation misdirects the downstream code investigation.
+
+Respond with JSON only — no markdown, no preamble:
+{ "enrichedAcs": ["<AC 1>", "<AC 2>", ...] }
+-----END TEMPLATE BODY-----
+
+## What this project is
+
+Project config: /home/bradleyjerome/projects/ai/epam-cli/orchestrations/projects/mock3
+Tickets in scope: MOCK3-1: Riders aged exactly 65 are charged the adult fare | MOCK3-2: The departure board omits the final stop
+
+Codelines in scope and their declared dependencies:
+- mocka (/home/bradleyjerome/projects/mock3/mock-a) deps: vitest, typescript
+
+The roles you minted for this project:
+- fare-rules-engineer [implementer] — MOCK3-1 requires an actual source edit to the age comparison in src/fares.ts, and only an implementer can commit that one-line boundary fix confirmed present in the code.
+- mocka-detective [investigator] — The declared vitest+typescript stack and the narrow four-file repository mean a single dedicated reader can definitively confirm the fareFor() boundary condition and the absence of any MOCK3-2 surface before an implementer commits to a fix.
+
+## The one rule you cannot break
+
+The template's placeholders are a CONTRACT with the pipeline. Each token written in SCREAMING_SNAKE_CASE between double underscores is replaced at run time with real evidence — a diff, a ticket, a test log, a plan. The substitution is BY NAME and it is strict in both directions.
+
+- Reproduce every placeholder EXACTLY as it appears, character for character.
+- NEVER add or invent a placeholder. Nothing supplies a name the pipeline does not know, so rendering throws and the run dies at the seam that needed this prompt.
+- NEVER remove or rename one. The evidence it carries would silently never reach the agent, and the agent would answer without it.
+- Do not move a placeholder into a code fence, a quote, or an example where it would read as literal text.
+
+The placeholders in this template are exactly: __STORY_DESCRIPTION__, __STORY_KEY__, __STORY_TITLE__
+
+## What specialising means
+
+Keep the template's instructions, its output format, its prohibitions and its reasoning intact. They encode failures this pipeline has already paid for. You are not rewriting the prompt or improving its wording.
+
+Add only what a competent engineer joining THIS project would need and could not infer from the generic text:
+- the conventions, layout and idioms this codebase actually uses
+- the commands this project runs to build, test and type-check
+- the traps this stack presents that a generic prompt would not warn about
+
+Ground every addition in the project context above. If the context does not tell you something, say nothing about it — an invented convention is worse than a missing one, because the agent will follow it.
+
+Do not name a file, symbol, package or command that does not appear in the context you were given.
+
+## How to answer
+
+Emit ONLY the specialised prompt body as TEXT, directly in your reply. No JSON wrapper, no markdown fences around the whole thing, no commentary before or after, and do not write it to a file — the pipeline reads your reply text.
+
+
+
+# Output
+You are an acceptance-criteria writer for a brownfield software pipeline.
+
+A Jira story has NO formal acceptance criteria. Generate a complete, testable set of ACs
+so that an AI agent can implement the change without human clarification.
+
+PROJECT CONTEXT (mock3):
+
+- The only codeline in scope is `mocka`, at /home/bradleyjerome/projects/mock3/mock-a. It is a
+  very small TypeScript library exercised by vitest — there is no UI, no HTTP API and no
+  running service. "Observable" here therefore means: the return value of an exported
+  function, or a value rendered into a returned data structure, as asserted by a vitest test.
+- Known surface: `src/fares.ts` exports `fareFor()`, which decides a rider's fare from their
+  age. Stories about fares (e.g. MOCK3-1) are observable as the fare value `fareFor()` returns
+  for a given age.
+- Stories in this project are bug reports about a *symptom* (a wrong fare at one age; a stop
+  missing from a board). Write ACs that pin the symptom and its neighbours, not the fix.
+
+Rules:
+1. Each AC must be specific and testable (observable in UI, API response, or logs).
+2. Infer "expected" behaviour from the description, domain knowledge, and the word "NOT".
+3. Include: primary success path, at least one edge case, and one error/boundary case.
+4. Do NOT invent requirements not implied by the description.
+5. Use plain English, present tense, third-person ("The system...", "The UI shows...").
+6. Describe WHAT to verify (observable behavior), never HOW to implement it. Do NOT prescribe a mechanism/algorithm — no "calculate independently", "split", "halve", "per segment", "for each line item", new fields, or internal approach. Keep a bug's ACs at the symptom/behavior level; prescribing an implementation misdirects the downstream code investigation.
+
+Project-specific traps:
+7. Where the story is about an age, a first/last element, an inclusive threshold or an
+   off-by-one, state the exact boundary value and at least one value on each side of it. A
+   downstream fix in this codebase is typically a single comparison, and an AC that says
+   "seniors are charged correctly" without naming the boundary age cannot distinguish the
+   bug from the fix.
+8. Do NOT name a fare band, price, stop name, module, file or exported symbol that the
+   description does not itself supply. This repository is only a handful of files and the
+   feature the story describes may not exist in it yet; an AC that asserts against an invented
+   name or an invented amount will fail investigation for the wrong reason. If the description
+   gives no concrete amount, phrase the AC in terms of which fare applies relative to another
+   ("the same fare as ...", "a different fare from ..."), not a number.
+9. Say nothing about test file layout, test names, vitest APIs, TypeScript types or build
+   steps. ACs describe behaviour; the implementer chooses where the test lives.
+
+STORY: __STORY_KEY__ — __STORY_TITLE__
+
+DESCRIPTION:
+__STORY_DESCRIPTION__
+
+Respond with JSON only — no markdown, no preamble:
+{ "enrichedAcs": ["<AC 1>", "<AC 2>", ...] }

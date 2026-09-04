@@ -1,0 +1,29 @@
+# Prompt
+Regenerate the VERIFICATION CRITERIA for this brownfield story. Your previous verification criteria were FLAGGED and must be fixed:
+- VC1 cross-compares draft vs published values and prescribes HOW via URL query parameters — restate as observable draft content on the rendered page
+- VC2 cross-compares to previous rendering — restate as observable published content on the rendered page
+- VC3 references internal request/query-parameter structure to Contentstack — verify the rendered page surface, not the intermediate requests
+- VC5 cross-compares draft vs stale published content and references internal content-rendering components — restate as observable draft values on the rendered page
+- VC6 prescribes HOW by forbidding page reload or cache clear — restate as observable published content appearing after parameters are removed
+
+THE FIX SITE (located by the code-graph detective — anchor every criterion to the behaviour THIS code produces):
+- src/services/contentstack.ts :: ContentstackFactory.createContentTypeQuery — This is where Contentstack SDK queries are built and executed. The method constructs queries via this.stack.ContentType(contentTypeUid).Query().language(lang).toJSON() with no support for draft/live-preview parameters. The Stack is also initialized at line 69 without live_preview config. All 236+ components that call useContent ultimately flow through getEntry → ContentstackFactory.createContentTypeQuery, so injecting preview support here propagates to the entire app.
+Do NOT write criteria about areas unrelated to this code.
+
+
+Acceptance criteria (IMMUTABLE — the intent to verify; do NOT restate as-is, VERIFY them):
+- (none)
+Description: [GO, UP, MX] Live Preview of Content in CMS — Enable Contentstack Live Preview so that content editors can see draft/unpublished content in real time within the CMS preview pane. When preview parameters are present, the app fetches and renders draft content; when absent, published content renders as today.
+
+A verification criterion states WHAT AN END USER OR TESTER OBSERVES on the user-facing surface THE TICKET IS ABOUT — the rendered email for an email ticket, the displayed screen/UI for a UI ticket, the API response a CLIENT receives for an API ticket. It is a BLACK-BOX check on that surface. It NEVER describes HOW the value is produced.
+A verification criterion is FORBIDDEN if it:
+- prescribes HOW to implement — any algorithm, mechanism, or approach: "split", "halve", "×0.5", "calculate independently", "per segment", "for each line item", or adding/reading any new field, flag, or service;
+- references an INTERNAL structure that merely FEEDS the ticket's surface — an intermediate payload, a "confirmation data"/DTO object, or a specific response field used to BUILD the output. Verify the surface the ticket names, NOT the data structure behind it;
+- makes a CROSS-COMPARISON that presumes a mechanism — never assert one value "must equal" / "matches" / "is the same as" another (e.g. "the return amount equals the outbound amount"); that presumes a copy/split. Assert the required value is present and correct ON ITS OWN.
+Every verification criterion must be observable, testable, and tied to the ticket's stated symptom/intent.
+
+Do NOT restate an acceptance criterion as-is — express what a tester OBSERVES that confirms it. Address every flag above.
+Output ONLY a JSON array of verification-criterion strings. No prose, no markdown.
+
+# Output
+["With Live Preview active in the CMS preview pane, the tester observes draft (unpublished) content rendered on the page for the entry being edited.", "With Live Preview active, an unpublished edit made by the content editor (e.g., a changed title or body field) is observed on the rendered page without the entry being published.", "When the page is viewed outside of a Live Preview session, the tester observes the currently published content rendered on the page.", "After the Live Preview session ends and the page is viewed normally, the tester observes published content on the rendered page rather than the draft edits seen during preview.", "Draft content observed during Live Preview is rendered in the same page layout and locations where the corresponding published content normally appears.", "The Live Preview behaviour is observed consistently across pages for the GO, UP, and MX locales, with each locale's rendered page showing its own draft content during preview and its own published content otherwise."]

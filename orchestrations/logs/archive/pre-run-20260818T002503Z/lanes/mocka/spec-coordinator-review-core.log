@@ -1,0 +1,311 @@
+# Prompt
+You are the specification coordinator for the epam-cli orchestration system. Before every phase you read orchestrations/prd.json (implementationOrder and stories), evaluate risk, dependencies, and technical readiness, then assign the correct specification runners: OpenSpec, Speckit, both, or none. You write assignments into each story's specification.assignedAgents field along with coordinatorNotes, target provider/model, and timestamps. You understand the provider policy ledger (configuration.aiRuntime.providerPolicies), token guardrails, and know when to skip stories that were already hand-curated. When you plan a run you emit JSON compliant with spec-mode-runner.js so that automation can apply deltas deterministically. You never invent story IDs or mutate acceptance criteria directly; only delegate to spec agents and record their status.
+
+You are the EPAM CLI specification coordinator reviewing the completed spec outputs for phase core.
+
+Each story was processed by a sequential agent pipeline:
+  1. openspec elaborated requirements (AC refinement, story splits, technical depth)
+  2. speckit reviewed openspec's output (testability, security, edge cases, gap analysis)
+
+For each story, evaluate the quality of the collaborative spec work:
+1. Did both agents add meaningful, non-overlapping value?
+2. Flag any story needing human review.
+3. PLAN ALIGNMENT — where planAlignmentEvidence is present, it tells you what the
+   code-graph-detective SAID it would investigate (detectivePlan) and a deterministic,
+   cheap signal (aligned: true/false) for whether the final fixSiteAnalysis shares any
+   named symbol/file with that plan. This signal is NOT your verdict — it is evidence, the
+   same as MANIFEST EVIDENCE below. A plan can legitimately turn out wrong once real
+   exploration starts. Read detectivePlan and fixSiteAnalysis yourself and judge: did the
+   detective explain WHY it moved from its plan to its final answer (a stated pivot,
+   reasoning that connects the two), or did the answer just change with no explanation?
+   The latter is a real defect (a fix has shipped that shared no term with the detective's
+   own stated plan, with no explanation, more than once on the same ticket) — set
+   planAlignment to justified_deviation when the detective justifies its pivot, or
+   unexplained_mismatch when it does not, and say why in reviewNotes. aligned:true needs
+   no action.
+
+(Brownfield tickets never split and their acceptance criteria are immutable —
+do not evaluate split quality or AC completeness; there is nothing there for
+either agent to have changed.
+
+EXPECTED, NOT A DEFECT: an agent's notes may describe acceptance criteria it
+authored while the story's acceptanceCriteria array is empty, and report
+acceptanceChanged=false. That is this pipeline REDACTING them on purpose: on a
+brownfield ticket the ACs are the ticket's own, and a thin ticket legitimately
+has none. The observable checks live in verificationCriteria — judge THOSE.
+Do not report the mismatch as a hallucination, a persistence failure or a
+metadata inconsistency, and do not lower qualityScore for it. An empty
+acceptanceCriteria array on a brownfield story is correct by policy.)
+
+MANIFEST EVIDENCE (checked against the repository, not asserted):
+  MOCK3-1: EXISTS  src/fares.ts
+  MOCK3-1: EXISTS  test/fares.test.ts
+
+
+ANSWER IN THIS RESPONSE. Your <SPEC_REVIEW> verdict must appear in THIS reply — an
+empty <SPEC_REVIEW></SPEC_REVIEW>, or a promise to verify and answer later, is
+discarded and the review does not happen. There is no follow-up turn to come back in.
+
+You DO have read-only tools this turn (read_file, list_files, search). Use them for
+real if something is genuinely unclear — but never narrate an imagined tool result,
+and never spend the whole turn exploring and run out before writing the verdict.
+Budget is small and the verdict is mandatory: gather at most what you need, then answer.
+
+MANIFEST EVIDENCE has already been gathered from the repository for you and appears
+above. Every declared path was checked with a real filesystem stat, so re-checking
+paths is wasted budget — that part is done and is more reliable than a tool call.
+  - A story with any MISSING path CANNOT be implemented: the writer is sent to edit a
+    file that is not there, and every retry reproduces that. Mark it needs_review, name
+    the exact path in reviewNotes, and add the flag "missing_manifest_path".
+  - Where the evidence names a real neighbour ("the directory holds X instead"), say so
+    — that is what makes the report actionable.
+  - Never silently correct a path. The manifest is the artefact under review; a
+    correction living only in your prose reaches nobody.
+
+Judge what the evidence cannot: are the acceptance criteria testable, is the declared
+file set plausible for this change, is anything obviously missing. If you are unsure,
+lower qualityScore and add a flag — do not withhold the verdict. A missing review is
+EVERY FLAG CARRIES A SEVERITY. It ranks your objections for whoever reads them; it does not
+decide whether the run stops — a computed check or a project-declared flag does that. Mark
+blocking when an implementer following this spec would produce work that CANNOT FUNCTION,
+and advisory for uncertainty about what you could not see. Report both honestly: nothing is
+gained by inflating uncertainty into a defect, and nothing is lost by naming a real one.
+worse than an uncertain one: it means nothing was checked at all.
+
+QUALITY SCORE — what the number has to mean. It is enforced: below 0.7 halts the run
+before implementation, so an unanchored guess stops real work.
+  0.9-1.0  the spec is ready to implement; criteria are observable and the file set fits.
+  0.7-0.89 ready to implement, with ordinary open questions a competent writer resolves.
+  0.5-0.69 NOT ready: something concrete is wrong or missing — criteria that cannot be
+           observed, a file set that cannot deliver what is described, contradictions.
+  below 0.5 the spec would send a writer somewhere useless.
+Score what IS in front of you. Do NOT lower the score because an agent could not read the
+source files, or because a human "might want to check" — that is true of every ticket and
+is not a defect in this spec. If your notes cannot name something concretely wrong, the
+score belongs at 0.7 or above.
+
+Respond with JSON between <SPEC_REVIEW> and </SPEC_REVIEW> using this schema:
+[
+  {"storyId":"REM-xxx","verdict":"approved|needs_review","reviewNotes":"coordinator observations","qualityScore":0.0-1.0,"flags":[{"flag":"short-slug","severity":"blocking|advisory","why":"what you checked and what you found"}],"planAlignment":"aligned|justified_deviation|unexplained_mismatch|not_applicable"}
+]
+
+Stories to review:
+[
+  {
+    "id": "MOCK3-1",
+    "title": "Riders aged exactly 65 are charged the adult fare",
+    "acceptanceCriteria": [
+      "A rider aged exactly 65 with no pass is charged the concession fare.",
+      "A rider aged 64 with no pass is still charged the base fare.",
+      "The existing fare behaviour for children, pass holders and adults is unchanged."
+    ],
+    "verificationCriteria": [
+      "fareFor returns 175 (CONCESSION_FARE_CENTS) when called with a rider whose age is 65 and hasPass is false",
+      "fareFor returns 350 (BASE_FARE_CENTS) when called with a rider whose age is 64 and hasPass is false",
+      "fareFor returns 175 (CONCESSION_FARE_CENTS) when called with a rider whose age is 8 and hasPass is false",
+      "fareFor returns 0 when called with a rider whose age is 30 and hasPass is true",
+      "fareFor returns 350 (BASE_FARE_CENTS) when called with a rider whose age is 30 and hasPass is false"
+    ],
+    "technicalNotes": {
+      "files": [
+        "src/fares.ts",
+        "test/fares.test.ts"
+      ],
+      "perCodeline": {
+        "mocka": {
+          "files": [
+            "src/fares.ts",
+            "test/fares.test.ts"
+          ],
+          "resolved": [
+            {
+              "declared": "src/fares.ts",
+              "actual": "src/fares.ts",
+              "match": "exact",
+              "verified_against": "/home/bradleyjerome/projects/mock3/mock-a"
+            },
+            {
+              "declared": "test/fares.test.ts",
+              "actual": "test/fares.test.ts",
+              "match": "exact",
+              "verified_against": "/home/bradleyjerome/projects/mock3/mock-a"
+            }
+          ],
+          "unresolved": []
+        }
+      }
+    },
+    "specification": {
+      "guardVocabulary": {
+        "blacklist": [
+          {
+            "term": "concession_fare_cents",
+            "reason": "Internal named constant (value 175) that defines the concession fare in code; the observable surface is the value 175 cents, not the constant symbol. Referencing it leans on implementation structure rather than the rendered fare."
+          },
+          {
+            "term": "base_fare_cents",
+            "reason": "Internal named constant (value 350) that defines the base/adult fare in code; the observable surface is the value 350 cents. Naming the constant describes HOW the value is defined internally, not what the rider is charged."
+          },
+          {
+            "term": "greater-than-or-equal",
+            "reason": "Names the specific comparison operator that must be changed to fix the bug; prescribing this is prescribing the implementation mechanism (the fix), not an observable fare outcome."
+          },
+          {
+            "term": "greater-than",
+            "reason": "Names the current (incorrect) comparison operator on line 10 of src/fares.ts; referencing it describes the implementation mechanism, not the observable fare charged to the rider."
+          },
+          {
+            "term": "branching",
+            "reason": "Describes the internal control-flow structure of fareFor (the if/else branches); a verification criterion must state the observed fare, not the branching logic that produces it."
+          },
+          {
+            "term": "docstring",
+            "reason": "References the internal code comment on line 7 of src/fares.ts; a verification criterion must describe observable fare behaviour, not the source documentation."
+          }
+        ],
+        "whitelist": [
+          {
+            "term": "farefor",
+            "reason": "The sole API entry point a client/tester calls to obtain a fare; for this library ticket the function IS the user-facing surface, and 'returns X' is the observable response."
+          },
+          {
+            "term": "fare",
+            "reason": "The observable quantity the ticket is about — the fare charged to a rider, expressed in cents."
+          },
+          {
+            "term": "rider",
+            "reason": "The input entity whose attributes determine the fare; specifying the rider and their attributes is a black-box test condition, not an implementation detail."
+          },
+          {
+            "term": "age",
+            "reason": "An input attribute of the rider that determines the fare; specifying it is a test condition on the observable input surface."
+          },
+          {
+            "term": "haspass",
+            "reason": "An input attribute of the rider (whether they hold a pass) that determines the fare; specifying it is a test condition on the observable input surface."
+          },
+          {
+            "term": "returns",
+            "reason": "The observable action describing the fare value a caller receives; 'fareFor returns 175' is a black-box assertion on the API response."
+          },
+          {
+            "term": "175",
+            "reason": "An observable fare value (concession fare in cents) that a tester can verify directly on the API response."
+          },
+          {
+            "term": "350",
+            "reason": "An observable fare value (base/adult fare in cents) that a tester can verify directly on the API response."
+          },
+          {
+            "term": "0",
+            "reason": "An observable fare value (pass-holder fare in cents) that a tester can verify directly on the API response."
+          },
+          {
+            "term": "concession",
+            "reason": "A user-facing fare concept (the reduced fare for eligible riders); distinct from the internal constant CONCESSION_FARE_CENTS."
+          },
+          {
+            "term": "adult",
+            "reason": "A user-facing fare concept (the full fare for adult riders) named in the ticket title; distinct from the internal constant BASE_FARE_CENTS."
+          },
+          {
+            "term": "cents",
+            "reason": "The unit in which the observable fare value is expressed; part of the observable surface description."
+          }
+        ]
+      },
+      "runId": "20260817T231306Z",
+      "assignedAgents": [
+        "openspec",
+        "speckit"
+      ],
+      "coordinatorNotes": "Boundary-condition bug fix (off-by-one at age 65). AC are already specific and well-scoped — fix, regression guard (age 64), and non-regression of other behaviors are all stated, so openspec elaboration is not needed. Assigning speckit only to harden testability and flag edge-case gaps, e.g. a rider aged exactly 65 who also holds a pass (AC only covers no-pass scenarios), and to verify the boundary is inclusive (>=65) across all fare-rule code paths.",
+      "status": "completed",
+      "updatedAt": "2026-08-18T00:15:16.372Z",
+      "appliedAgents": [
+        "openspec",
+        "speckit"
+      ],
+      "agentContributions": [
+        {
+          "agent": "openspec",
+          "applied": true,
+          "notes": "Defect: fareFor uses strict > (now >= in code shown but the bug was >) at the senior boundary, so age 65 falls through to BASE_FARE_CENTS. Fix site is the comparison in fareFor. VCs are black-box checks on the fare value returned for each boundary case.",
+          "acceptanceChanged": false,
+          "splitCount": 0,
+          "timestamp": "2026-08-18T00:13:24.823Z"
+        },
+        {
+          "agent": "speckit",
+          "applied": true,
+          "notes": "Read src/fares.ts and test/fares.test.ts to ground the review. The code has three fare paths: hasPass→0, age≥65→concession, age<13→concession, else base. The original AC 'The existing fare behaviour for children, pass holders and adults is unchanged' was too vague — it bundled three distinct categories into one untestable blanket statement. I decomposed it into four specific observable sub-cases (ACs 4–7) that each assert a concrete fare value for a concrete rider. I also added AC 3 (age 66) to confirm the senior boundary works above the fix point, and ACs 7–8 to cover the pass-priority interaction at both boundary ages (65 and 12), since the hasPass check short-circuits before the age checks and a regression could silently break that priority. No splitting proposed — that is openspec's decision alone.",
+          "acceptanceChanged": false,
+          "splitCount": 0,
+          "timestamp": "2026-08-18T00:15:16.371Z"
+        }
+      ]
+    },
+    "fixSiteAnalysis": [
+      {
+        "file": "src/fares.ts",
+        "function": "fareFor",
+        "reason": "fareFor is the sole function that computes a rider's fare. The senior-boundary comparison on line 10 uses a strict greater-than (>) instead of greater-than-or-equal (>=), so a rider aged exactly 65 falls through to the BASE_FARE_CENTS return on line 12. This is the single site that PRODUCES the wrong fare value for age 65. The docstring on line 7 already states the intended rule ('Riders aged 65 AND OVER pay the concession fare'). The branching structure otherwise has no gaps: hasPass→0, age>=65→concession, age<13→concession, else→base covers all integers without overlap once >= is used.",
+        "fix": "On line 10, change `rider.age > 65` to `rider.age >= 65`. The constant CONCESSION_FARE_CENTS (already in scope, line 5) is reused — no new constant needed. No other branch needs changing.",
+        "helper": "CONCESSION_FARE_CENTS",
+        "brokenLine": "",
+        "fixVerified": true,
+        "evidenceVerified": null,
+        "fileVerified": true,
+        "changeRequired": true,
+        "requiredPackages": [],
+        "deliveryRole": "produces",
+        "runsIn": "n/a",
+        "prescriptionNote": "",
+        "prescriptionUnderspecified": false,
+        "codeline": "mocka"
+      },
+      {
+        "file": "test/fares.test.ts",
+        "function": "fareFor",
+        "reason": "The test suite already asserts the correct boundary behaviour: age 65 → CONCESSION_FARE_CENTS (line 18), age 64 → BASE_FARE_CENTS (line 22). Age 66 is absent (only age 70 covers 'well past'). Age 13 (the child/adult boundary) is also absent — only age 8 covers children. The existing assertions are correct and need no edit; they will turn from failing to passing once the operator in src/fares.ts is fixed.",
+        "fix": "No edit needed. The age-65 and age-64 test cases already assert the correct expected values. Optionally add a test for age 66 to close the coverage gap, but it is not required to satisfy the acceptance criteria.",
+        "helper": "",
+        "brokenLine": "",
+        "fixVerified": null,
+        "evidenceVerified": null,
+        "fileVerified": true,
+        "changeRequired": false,
+        "requiredPackages": [],
+        "deliveryRole": "verifies",
+        "runsIn": "n/a",
+        "prescriptionNote": "",
+        "prescriptionUnderspecified": false,
+        "codeline": "mocka"
+      }
+    ],
+    "planAlignmentEvidence": null
+  }
+]
+
+<SPEC_REVIEW>
+</SPEC_REVIEW>
+
+# Output
+<SPEC_REVIEW>
+[
+  {
+    "storyId": "MOCK3-1",
+    "verdict": "approved",
+    "reviewNotes": "Both manifest paths exist and are verified exact against the repository. All five verification criteria are concrete, black-box, and observable — each asserts a specific fare value (175, 350, or 0) for a specific rider input (age + hasPass). They correctly cover the boundary (age 65 → 175, age 64 → 350), non-regression (child age 8 → 175, pass-holder age 30 → 0, adult age 30 → 350), and the pass-priority short-circuit. Both agents contributed non-overlapping value: openspec identified the defect mechanism (strict > at the senior boundary) and confirmed VCs are black-box fare-value checks; speckit grounded its review in the actual source, decomposed the vague 'existing behaviour unchanged' AC into specific observable sub-cases, and flagged edge-case gaps (age 66, pass-priority at boundary ages). The guardVocabulary is well-constructed — it blacklists implementation-mechanism terms (constant names, operators, branching, docstring) and whitelists observable surface terms (fareFor, returns, fare values in cents). HOWEVER: the fixSiteAnalysis for src/fares.ts sets changeRequired=true and prescribes changing `rider.age > 65` to `rider.age >= 65`, but the actual source code (line 10) already reads `rider.age >= 65`. The described bug is already fixed in the repository. openspec's own notes acknowledge this ('now >= in code shown but the bug was >'). An implementer following this spec would find nothing to change in src/fares.ts. The VCs all pass against the current code, so the spec remains implementable (trivially), making this advisory rather than blocking. The test file already asserts the correct boundary values (age 65 → CONCESSION_FARE_CENTS, age 64 → BASE_FARE_CENTS) and needs no edit, consistent with the fixSiteAnalysis deliveryRole=verifies, changeRequired=false for that file.",
+    "qualityScore": 0.88,
+    "flags": [
+      {
+        "flag": "fix-already-applied",
+        "severity": "advisory",
+        "why": "fixSiteAnalysis for src/fares.ts sets changeRequired=true and prescribes changing `>` to `>=`, but the actual source (line 10) already contains `rider.age >= 65`. The described bug is already fixed in the repository. An implementer following this spec would find nothing to change. The VCs all pass against the current code. This does not block implementation but the changeRequired signal is factually inaccurate."
+      }
+    ],
+    "planAlignment": "not_applicable"
+  }
+]
+</SPEC_REVIEW>

@@ -1,0 +1,9 @@
+spec-mode: fast-path qwen/z-ai/glm-5.2 (skipping MiniMax)
+spec-mode: fast-path qwen/z-ai/glm-5.1 (skipping MiniMax)
+spec-mode: ⚠️ VC could not be made mechanism-free for AMSD-2041 after 2 cycle(s) — using conservative fallback VC. Last flags: VC 1 references internal mechanism — SDK initialisation and 'establishes a live-previewspec-mode: fast-path qwen/z-ai/glm-5.2 (skipping MiniMax)
+spec-mode: LLM model review completed for 0 stories
+spec-mode: completed for phase core (run 20260729T015100Z)
+ent and contentKey prop; restate as the rendered text displaying the updated value without a full page reload | VC 6 prescribes a mechanism — 'falls back to the existing static content-fetching behaviour' describes HOW; restate as the page rendering its content without errors when preview is unavailable
+spec-mode: AMSD-2041 — 2 verification criteria persisted (source: fallback, resolution: fallback)
+spec-mode: fast-path qwen/z-ai/glm-5.1 (skipping MiniMax)
+spec-mode: fast-path qwen/z-ai/glm-5.2 (skipping MiniMax)

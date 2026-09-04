@@ -1,0 +1,148 @@
+# Prompt
+You are the speckit specification agent for EPAM CLI. Phase core, story AMSD-2041.
+
+You are reviewing and building on the openspec agent's output for this story.
+Your role is COLLABORATIVE — you are NOT starting from scratch. Instead:
+1. Review openspec's proposed acceptance criteria for testability and completeness
+2. Add missing edge-case, error-handling, security, and accessibility criteria
+3. Flag any AC that are vague, untestable, or overlapping
+4. Splitting is openspec's decision alone — you do NOT split stories. If openspec already split
+   this story, do NOT include a "splitStories" field in your output at all (it will be ignored if
+   you do). Review and refine the acceptanceCriteria openspec gave you for the UNSPLIT story as
+   normal; per-child refinement of an already-split story's children happens on a later turn, not
+   here.
+5. Do NOT remove or duplicate openspec's good work — build on it
+
+━━━ WHAT-NOT-HOW RULE (MANDATORY) ━━━
+Every AC must describe an OBSERVABLE OUTCOME (what a test can verify from outside the code),
+NOT an implementation instruction. If an AC names vi.mock, jest.fn, mockReturnValue,
+mockResolvedValue, import statements, or require() calls, REPLACE it with a
+Given/When/Then behaviour statement. Never tell the implementer which library or mock pattern to use.
+
+OPENSPEC'S OUTPUT (your input to review — ACs and split proposals only):
+{
+  "acceptanceCriteria": [],
+  "notes": "Classified as novel — Live Preview is a new capability with no existing wiring. The useContent hook is the primary attachment point: 10+ components (NavigationBar, Footer, TopBar, ContentstackText, etc.) call it to fetch CMS content. Live Preview SDK integration must augment or wrap this hook to inject real-time content updates. ContentstackText is the simplest consumer for validation. Contentstack APIs are unreachable at test time, so VCs are scoped to our side of the boundary with explicit mock assumptions.",
+  "splitStories": []
+}
+
+ORIGINAL STORY CONTEXT:
+{
+  "id": "AMSD-2041",
+  "title": "[GO, UP, MX] Live Preview of Content in CMS",
+  "description": "[GO, UP, MX] Live Preview of Content in CMS — enable real-time content preview so that when a CMS editor modifies content in Contentstack, the previewed page reflects those changes without a full page reload. Must apply across GO Transit, UP Express, and Metrolinx (MX) brands.",
+  "originalAcceptanceCriteria": [],
+  "technicalNotes": {
+    "files": [
+      "hooks/useContent",
+      "src/components/contentstack/ContentstackText/ContentstackText.tsx",
+      "src/pages/[[...slug]].tsx",
+      "src/components/contentstack/ContentstackAttention/content.mock.ts",
+      "src/components/contentstack/ContentStackGallery/ContentStackGallery.mock.ts",
+      "src/interface/content/contentCard.ts"
+    ]
+  },
+  "dependencies": []
+}
+
+Produce your refined output as raw JSON only (no XML tags, no markdown fences, no preamble). Include:
+- "acceptanceCriteria": The FULL merged list (openspec's criteria + your additions/refinements). Every item MUST be an observable outcome, not an implementation instruction.
+- "notes": What you changed and why (be specific — cite which criteria you added/modified/replaced)
+- "splitStories": ALWAYS omit this field. Splitting is openspec's decision alone — never propose
+  split children of your own, even if openspec already split this story.
+- "acAddedBySpeckit": Array of criteria YOU added that were not in openspec's output
+- "acModifiedBySpeckit": Array of {"original":"...","revised":"..."} for criteria you reworded
+- "acFlagged": Array of {"criterion":"...","flag":"..."} for criteria that need human attention
+
+You have NO tools in this request and cannot call any — do not emit a tool call in any
+syntax (<tool_call>, <tool_use>, <function_call>). Nothing executes them, so a response
+containing one is discarded in full and the work is lost. Live AMSD-2041 (2026-07-28)
+died exactly this way: asked to review a story with an empty criteria list, the model
+requested the four files named above via <tool_call>read_file(...) and produced no answer
+at all. Everything you may use is already in this prompt. File PATHS are given without
+their contents by design — if the contents would have changed your answer, say so in
+"notes" and give your best answer from the description, title and paths you were given.
+An answer with a caveat is worth everything; a tool call is worth nothing.
+
+
+# Output
+```json
+{
+  "acceptanceCriteria": [
+    {
+      "id": "AC-1",
+      "criterion": "Given a page is rendered with CMS content via useContent, When the CMS editor modifies that content in Contentstack's live preview mode, Then the rendered page reflects the updated content without a full page reload."
+    },
+    {
+      "id": "AC-2",
+      "criterion": "Given a page is rendered under the GO Transit brand, When live preview content updates are received, Then the GO-branded components (NavigationBar, Footer, TopBar, ContentstackText, etc.) display the updated content. The same behavior applies for UP Express and Metrolinx (MX) brands respectively."
+    },
+    {
+      "id": "AC-3",
+      "criterion": "Given a page is rendered with ContentstackText consuming useContent, When a live preview content update is received for the field ContentstackText renders, Then ContentstackText re-renders with the new value and the previous value is no longer displayed."
+    },
+    {
+      "id": "AC-4",
+      "criterion": "Given live preview is not active (e.g., the page is viewed outside the Contentstack preview iframe or preview mode is disabled), When the page loads, Then useContent returns content via the standard fetch path and no live preview connection is attempted."
+    },
+    {
+      "id": "AC-5",
+      "criterion": "Given a live preview session is active, When the connection to the Contentstack live preview stream is lost, Then the page continues to display the last successfully received content (no blank or broken state) and an appropriate indication of the connection issue is surfaced."
+    },
+    {
+      "id": "AC-6",
+      "criterion": "Given a live preview connection was lost, When the connection is re-established, Then the page resumes receiving real-time content updates and displays the latest content from the CMS without requiring a manual page refresh."
+    },
+    {
+      "id": "AC-7",
+      "criterion": "Given the Contentstack Live Preview SDK fails to initialize (e.g., invalid configuration, missing required parameters), When the page loads in preview mode, Then the page falls back to standard content fetching and renders correctly without JavaScript errors or a blank page."
+    },
+    {
+      "id": "AC-8",
+      "criterion": "Given a live preview session is active, When multiple rapid content changes are published by the CMS editor in quick succession, Then the page converges to the latest content state without intermediate stale renders causing visual flicker or layout breakage."
+    },
+    {
+      "id": "AC-9",
+      "criterion": "Given the live preview integration is included in the client-side bundle, When the page is inspected in a browser's developer tools, Then no Contentstack API keys, tokens, or secrets are exposed in the client-side JavaScript bundle or network requests originating from the browser."
+    },
+    {
+      "id": "AC-10",
+      "criterion": "Given a live preview content update changes visible text on the page, When the update is rendered, Then assistive technologies (screen readers) are notified of the content change via an appropriate ARIA live region or equivalent mechanism, so users relying on accessibility tools are aware of the update."
+    },
+    {
+      "id": "AC-11",
+      "criterion": "Given a page is rendered with multiple components consuming useContent (NavigationBar, Footer, TopBar, ContentstackText, etc.), When a live preview update affects content consumed by more than one component, Then all affected components update to reflect the new content in the same render cycle."
+    },
+    {
+      "id": "AC-12",
+      "criterion": "Given a page is rendered in live preview mode, When the CMS editor navigates away from preview or closes the preview session, Then the page gracefully stops listening for live updates and continues to display the last received content without errors."
+    }
+  ],
+  "notes": "Openspec provided an empty acceptanceCriteria array with valuable context about useContent as the primary attachment point and ContentstackText as the simplest validation consumer. I created all ACs from scratch based on the story description, openspec's notes, and the listed file paths. File contents were unavailable, so ACs are inferred from story context alone — specific field-level behaviors in ContentstackText or useContent may need adjustment once implementation details are known. AC-1/2/3 cover core live preview behavior and multi-brand applicability. AC-4 covers the inactive-preview fallback path. AC-5/6 cover connection loss and reconnection edge cases. AC-7 covers SDK initialization failure. AC-8 covers rapid-update debouncing/convergence. AC-9 covers credential leakage prevention. AC-10 covers accessibility notification of dynamic content changes. AC-11 covers multi-component update consistency. AC-12 covers session teardown.",
+  "acAddedBySpeckit": [
+    "AC-1",
+    "AC-2",
+    "AC-3",
+    "AC-4",
+    "AC-5",
+    "AC-6",
+    "AC-7",
+    "AC-8",
+    "AC-9",
+    "AC-10",
+    "AC-11",
+    "AC-12"
+  ],
+  "acModifiedBySpeckit": [],
+  "acFlagged": [
+    {
+      "criterion": "AC-8",
+      "flag": "The definition of 'rapid' and 'converges to latest state' may need a specific time threshold (e.g., within 500ms of the last update) to be precisely testable. Consider tightening during implementation planning."
+    },
+    {
+      "criterion": "AC-10",
+      "flag": "The specific ARIA mechanism (aria-live region, aria-relevant, etc.) should be confirmed with the accessibility team. The AC intentionally leaves the mechanism open to avoid implementation prescription, but testability may require naming the expected behavior more precisely (e.g., 'the updated text is announced by a screen reader within 2 seconds')."
+    }
+  ]
+}
+```

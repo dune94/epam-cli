@@ -1,0 +1,215 @@
+# Prompt
+You are the speckit specification agent for EPAM CLI. Phase core, story AMSD-2041.
+
+You are reviewing and building on the openspec agent's output for this story.
+Your role is COLLABORATIVE — you are NOT starting from scratch. Instead:
+1. Review openspec's proposed acceptance criteria for testability and completeness
+2. Add missing edge-case, error-handling, security, and accessibility criteria
+3. Flag any AC that are vague, untestable, or overlapping
+4. Splitting is openspec's decision alone — you do NOT split stories. If openspec already split
+   this story, do NOT include a "splitStories" field in your output at all (it will be ignored if
+   you do). Review and refine the acceptanceCriteria openspec gave you for the UNSPLIT story as
+   normal; per-child refinement of an already-split story's children happens on a later turn, not
+   here.
+5. Do NOT remove or duplicate openspec's good work — build on it
+
+━━━ WHAT-NOT-HOW RULE (MANDATORY) ━━━
+Every AC must describe an OBSERVABLE OUTCOME (what a test can verify from outside the code),
+NOT an implementation instruction. If an AC names vi.mock, jest.fn, mockReturnValue,
+mockResolvedValue, import statements, or require() calls, REPLACE it with a
+Given/When/Then behaviour statement. Never tell the implementer which library or mock pattern to use.
+
+OPENSPEC'S OUTPUT (your input to review — ACs and split proposals only):
+{
+  "acceptanceCriteria": [],
+  "notes": "Novel capability — no live_preview config exists anywhere in the codebase (grep returned zero matches). The Contentstack SDK Stack initialization in src/services/contentstack.ts has no live_preview property, and none of the query-building methods accept preview tokens or content_type UIDs for draft fetching. The attachment point is the options object passed to contentstack.Stack() and the ContentstackFactory methods that construct all queries. The vendor documentation confirms that for App Router CSR, the SDK init needs a live_preview config object and individual queries must receive preview parameters (content_type_uid, live_preview_token) from the request context — this is application code, not just dashboard configuration. The 8-point estimate likely includes: (1) SDK config change, (2) threading preview params through getEntry/getSingleEntry/findSingletonEntry, (3) extracting preview params from the request URL on the client side, and (4) client-side re-rendering when Contentstack pushes preview updates. Protected pages are out of scope per the story's own limitation note. No getServerSideProps/getStaticProps were found — the project appears to use App Router CSR, which aligns with the referenced documentation's target architecture."
+}
+
+ORIGINAL STORY CONTEXT:
+{
+  "id": "AMSD-2041",
+  "title": "[GO, UP, MX] Live Preview of Content in CMS",
+  "description": "AS a Content Author, I WANT to preview draft entries in CMS, SO THAT I can see how content will be shown on the website. This requires adding live_preview configuration to the Contentstack SDK Stack initialization and threading preview query parameters (live_preview, live_preview_token, content_type_uid) through the existing data-fetching pipeline (getEntry, getSingleEntry, findSingletonEntry → ContentstackFactory) so that draft entries are fetched and rendered when preview mode is active. Limitation: Protected pages may not support preview.",
+  "originalAcceptanceCriteria": [],
+  "technicalNotes": {
+    "files": [
+      "src/services/contentstack.ts",
+      "src/interface/contentstack.ts",
+      "src/interface/content/page.ts",
+      "src/components/contentstack/ContentstackAttention/content.mock.ts",
+      "src/components/contentstack/ContentStackGallery/ContentStackGallery.mock.ts"
+    ],
+    "perCodeline": {
+      "metrolinx": {
+        "files": [
+          "src/services/contentstack.ts",
+          "src/interface/contentstack.ts",
+          "src/interface/content/page.ts",
+          "src/components/contentstack/ContentstackAttention/content.mock.ts",
+          "src/components/contentstack/ContentStackGallery/ContentStackGallery.mock.ts"
+        ],
+        "resolved": [
+          {
+            "declared": "src/services/contentstack.ts",
+            "actual": "src/services/contentstack.ts",
+            "match": "exact",
+            "verified_against": "/home/bradleyjerome/projects/metrolinx/next.metrolinx.com"
+          },
+          {
+            "declared": "src/interface/contentstack.ts",
+            "actual": "src/interface/contentstack.ts",
+            "match": "exact",
+            "verified_against": "/home/bradleyjerome/projects/metrolinx/next.metrolinx.com"
+          },
+          {
+            "declared": "src/interface/content/page.ts",
+            "actual": "src/interface/content/page.ts",
+            "match": "exact",
+            "verified_against": "/home/bradleyjerome/projects/metrolinx/next.metrolinx.com"
+          },
+          {
+            "declared": "src/components/contentstack/ContentstackAttention/content.mock.ts",
+            "actual": "src/components/contentstack/ContentstackAttention/content.mock.ts",
+            "match": "exact",
+            "verified_against": "/home/bradleyjerome/projects/metrolinx/next.metrolinx.com"
+          },
+          {
+            "declared": "src/components/contentstack/ContentStackGallery/ContentStackGallery.mock.ts",
+            "actual": "src/components/contentstack/ContentStackGallery/ContentStackGallery.mock.ts",
+            "match": "exact",
+            "verified_against": "/home/bradleyjerome/projects/metrolinx/next.metrolinx.com"
+          }
+        ],
+        "unresolved": []
+      }
+    }
+  },
+  "dependencies": []
+}
+
+Produce your refined output as raw JSON only (no XML tags, no markdown fences, no preamble). Include:
+- "acceptanceCriteria": The FULL merged list (openspec's criteria + your additions/refinements). Every item MUST be an observable outcome, not an implementation instruction.
+- "notes": What you changed and why (be specific — cite which criteria you added/modified/replaced)
+- "splitStories": ALWAYS omit this field. Splitting is openspec's decision alone — never propose
+  split children of your own, even if openspec already split this story.
+- "acAddedBySpeckit": Array of criteria YOU added that were not in openspec's output
+- "acModifiedBySpeckit": Array of {"original":"...","revised":"..."} for criteria you reworded
+- "acFlagged": Array of {"criterion":"...","flag":"..."} for criteria that need human attention
+
+For a brownfield story with a real codeline, you may have read-only tools (read_file,
+list_files, search) available this turn — if so, USE them for real to check a file's
+actual contents before relying on it; do not invent what a tool would return. For a
+greenfield story with no existing codeline, you have none — give your best answer from
+the description, title and paths you were given, and say so in "notes" if the file
+contents would have changed your answer. Either way, never narrate an imagined tool
+result: a real answer with an honest caveat is worth everything; fabricated tool-call
+syntax (<tool_call>, <tool_use>, <function_call>) is worth nothing — it is discarded in
+full and the work is lost (observed live, 2026-07-28: exactly this, on an empty-criteria
+story that got no answer at all).
+
+
+# Output
+```json
+{
+  "acceptanceCriteria": [
+    {
+      "id": "AC-1",
+      "criterion": "Given the Contentstack SDK Stack is initialized, When the live_preview configuration is present in the application environment, Then the Stack initialization includes a live_preview config object containing enable: true and the management_token value from environment configuration."
+    },
+    {
+      "id": "AC-2",
+      "criterion": "Given a page request URL contains live_preview, live_preview_token, and content_type_uid query parameters, When the data-fetching pipeline executes, Then those preview parameters are extracted from the request context and made available to getEntry, getSingleEntry, and findSingletonEntry."
+    },
+    {
+      "id": "AC-3",
+      "criterion": "Given preview parameters are available in the request context, When getEntry is called, Then the resulting Contentstack query includes the live_preview, live_preview_token, and content_type_uid parameters so that the Contentstack Delivery API returns the draft entry instead of the published one."
+    },
+    {
+      "id": "AC-4",
+      "criterion": "Given preview parameters are available in the request context, When getSingleEntry is called, Then the resulting Contentstack query includes the live_preview, live_preview_token, and content_type_uid parameters so that the Contentstack Delivery API returns the draft entry instead of the published one."
+    },
+    {
+      "id": "AC-5",
+      "criterion": "Given preview parameters are available in the request context, When findSingletonEntry is called, Then the resulting Contentstack query includes the live_preview, live_preview_token, and content_type_uid parameters so that the Contentstack Delivery API returns the draft entry instead of the published one."
+    },
+    {
+      "id": "AC-6",
+      "criterion": "Given a page request URL does NOT contain live_preview query parameters, When any data-fetching method (getEntry, getSingleEntry, findSingletonEntry) is called, Then the query is constructed without preview parameters and published content is returned, preserving the current behavior."
+    },
+    {
+      "id": "AC-7",
+      "criterion": "Given the live_preview configuration is absent or enable is false in the application environment, When the Stack is initialized, Then the Stack operates without live_preview and all queries return published content only."
+    },
+    {
+      "id": "AC-8",
+      "criterion": "Given a request with an invalid or expired live_preview_token, When a data-fetching method is called with preview parameters, Then the Contentstack API error is caught by the existing error-handling path, a descriptive error is logged, and the error is propagated to the caller rather than silently returning stale or empty data."
+    },
+    {
+      "id": "AC-9",
+      "criterion": "Given a request with live_preview parameters but a missing or empty content_type_uid, When a data-fetching method is called, Then the system logs a warning about the missing parameter and falls back to returning published content for that request."
+    },
+    {
+      "id": "AC-10",
+      "criterion": "Given preview mode is active, When a data-fetching method is called, Then the response is NOT cached by any client-side or server-side cache policy, ensuring subsequent non-preview requests receive published content and preview requests always receive fresh draft data."
+    },
+    {
+      "id": "AC-11",
+      "criterion": "Given the application is running in production, When a page is rendered with preview parameters, Then the live_preview_token value does not appear in any client-side JavaScript bundles, browser-visible HTML attributes, or client-side log output."
+    },
+    {
+      "id": "AC-12",
+      "criterion": "Given a page that requires authentication or is a protected page, When preview parameters are present in the request, Then the preview functionality does not bypass the existing authentication or authorization checks for that page."
+    },
+    {
+      "id": "AC-13",
+      "criterion": "Given the IContentstackGetEntry, IContentstackGetSingleEntry, and IContentstackGetSingletonEntry interfaces, When preview parameters are added to the data-fetching pipeline, Then the interface contracts are extended to accept optional preview-related fields (live_preview, live_preview_token, content_type_uid) without breaking existing callers that do not supply them."
+    },
+    {
+      "id": "AC-14",
+      "criterion": "Given the interactive maps stack (INTERACTIVE_MAPS_STACK_*), When live_preview is enabled on the primary stack, Then the interactive maps stack continues to function independently and is not affected by preview configuration on the primary stack."
+    },
+    {
+      "id": "AC-15",
+      "criterion": "Given preview mode is active and Contentstack pushes a content update, When the preview iframe or client-side listener receives the update event, Then the page re-renders with the updated draft content without requiring a full page reload."
+    },
+    {
+      "id": "AC-16",
+      "criterion": "Given the application is running, When the live_preview management_token environment variable is not set but live_preview is enabled, Then a warning is logged at startup indicating the management token is missing, and the Stack initializes with live_preview.enable set to false as a safe default."
+    }
+  ],
+  "notes": "Openspec provided an empty acceptanceCriteria array with detailed technical analysis. All 16 criteria above are new. I read src/services/contentstack.ts and src/interface/contentstack.ts to ground the criteria in the actual codebase: (1) The options object at line ~55 has no live_preview property — AC-1 and AC-7 address config presence/absence. (2) ContentstackFactory.createContentTypeQuery and createContentTypeEntryQuery build all queries — AC-3/4/5 ensure preview params reach these query builders. (3) The three public methods getEntry, getSingleEntry, findSingletonEntry are the API surface — each gets its own AC for completeness. (4) The IContentstackGetEntry/GetSingleEntry/GetSingletonEntry interfaces lack preview fields — AC-13 covers the interface extension. (5) There is a separate interactive-maps Stack — AC-14 ensures it is not impacted. (6) The existing error handling uses try/catch with logger.error and re-throw — AC-8 follows the same pattern. (7) Cache policies exist via setCachePolicy — AC-10 prevents draft caching. (8) The management_token is a secret that must not leak — AC-11 addresses security. (9) The story explicitly notes protected pages as a limitation — AC-12 ensures preview doesn't bypass auth. (10) Contentstack live preview requires client-side re-rendering on push — AC-15 covers this. (11) AC-9 handles the edge case of partial preview params. (12) AC-16 handles the missing-management-token startup scenario, consistent with the existing pattern of startup validation in the file.",
+  "acAddedBySpeckit": [
+    "AC-1",
+    "AC-2",
+    "AC-3",
+    "AC-4",
+    "AC-5",
+    "AC-6",
+    "AC-7",
+    "AC-8",
+    "AC-9",
+    "AC-10",
+    "AC-11",
+    "AC-12",
+    "AC-13",
+    "AC-14",
+    "AC-15",
+    "AC-16"
+  ],
+  "acModifiedBySpeckit": [],
+  "acFlagged": [
+    {
+      "criterion": "AC-15",
+      "flag": "This AC assumes client-side re-rendering on Contentstack push events (per the vendor docs for App Router CSR). If the project's CSR architecture does not use the Contentstack preview SDK's client-side listener, this AC may need adjustment. Verify with the team whether live-preview real-time push updates are in scope for this story or a follow-up."
+    },
+    {
+      "criterion": "AC-10",
+      "flag": "The current code supports CachePolicy via setCommonConfig. In preview mode, cache policy must be bypassed, but the exact mechanism (e.g., setting CachePolicy.NETWORK_ONLY or skipping setCachePolicy entirely) is an implementation detail. The AC states the observable outcome (no caching of draft data) — the implementer chooses the mechanism."
+    },
+    {
+      "criterion": "AC-2",
+      "flag": "The extraction of preview params from the request URL depends on whether this is CSR (useSearchParams) or SSR (NextRequest.nextUrl.searchParams). The story description and openspec's analysis suggest App Router CSR, but the AC is intentionally implementation-agnostic. The implementer should confirm the rendering model."
+    }
+  ]
+}
+```

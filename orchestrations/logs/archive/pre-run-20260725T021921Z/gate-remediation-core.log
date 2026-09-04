@@ -1,0 +1,186 @@
+**Verbatim log line proving the finding:**
+
+```
+"file": "src/cli.ts",
+"line": 35,
+"originalCode": "parsed <= 0",
+"mutatedCode": "parsed < 0",
+"status": "survived",
+```
+
+This is the first mutation in the `mutations` array with `"status": "survived"`, meaning the test suite did not kill it — a blocking finding that contributed to the `"verdict": "fail"`.
+
+The file `src/cli.ts` maps to story **SKY-003-impl** (whose `technicalNotes.files` contains `/home/bradleyjerome/projects/skyscanner-app/src/cli.ts`).
+
+```json
+{
+  "gate": "mutant-hunter",
+  "story_id": "SKY-003-impl",
+  "file": "src/cli.ts",
+  "line": 35,
+  "rule": "survived-mutation",
+  "message": "Mutation 'parsed <= 0' → 'parsed < 0' survived — no test catches the adults=0 boundary",
+  "suggested_fix": "Add a test that passes --adults 0 and asserts adultsInvalid is set or an error is returned."
+}
+```
+```json
+{
+  "story_id": "SKY-003-impl",
+  "acs_added": 2,
+  "acs": [
+    "src/cli.ts MUST NOT use a strict less-than comparison (`< 0`) for adults validation that allows adults=0 to pass through; the boundary check MUST use `<= 0` or equivalent so that zero is rejected (rule: survived-mutation). Machine verification: `grep -nP 'parsed\\s*<\\s*0(?!=)' src/cli.ts` must return zero matches.",
+    "The test suite MUST NOT omit a test case that invokes the CLI with `--adults 0` and asserts an error is printed to stderr with exit code 1; at least one such test must exist (rule: survived-mutation). Machine verification: `grep -rn -- '--adults 0' test/ tests/ src/*.test.ts 2>/dev/null | head -1` must return at least one match."
+  ]
+}
+```
+```json
+{
+  "profile": "typescript-engineer",
+  "profile_updated": true,
+  "rule_id": "survived-mutation",
+  "rule_text": "**Rule: survived-mutation** — A mutation that changes `parsed <= 0` to `parsed < 0` survived, meaning no test covers the boundary where `--adults 0` is passed. You MUST add a test case that passes `--adults 0` and asserts the value is rejected (e.g., `adultsInvalid` is set or an error is returned). Never use `<= 0` for integer validation without a corresponding test for the exact zero boundary. Grep check: `grep -rn 'adults.*0' src/ --include='*.test.ts'` should return at least one match; if it does not, the boundary is untested."
+}
+```
+Done.
+Done. The finding has been written to `/home/bradleyjerome/projects/ai/epam-cli/orchestrations/logs/spec-validator-finding.json`.
+Agent reached maximum iterations (20) without completing.
+Verbatim log line proving the finding:
+
+> "The test confirms the vulnerability: 6 of 7 tests fail because the server doesn't properly validate `adults` for zero, negative, fractional, or Infinity values. The only passing test is `adults=Infinity` (which `Number.isFinite` catches). This proves the vulnerability is real."
+
+The log is a single prose line with no structured findings array, no explicit file path, no line number, and no rule ID. However, the finding clearly maps to `src/server.ts` (the server's `adults` query-param validation), which is owned by story **SKY-004-A** in the core phase.
+
+```json
+{
+  "gate": "fuzz-weaver",
+  "story_id": "SKY-004-A",
+  "file": "src/server.ts",
+  "line": null,
+  "rule": "input-validation-adults",
+  "message": "Server does not properly validate `adults` query param for zero, negative, fractional, or Infinity values — 6 of 7 fuzz tests fail",
+  "suggested_fix": "Add validation in the /search and /cheapest route handlers to reject `adults` values that are zero, negative, fractional, or non-finite, returning HTTP 400 with an error message."
+}
+```
+```json
+{
+  "story_id": "SKY-004-A",
+  "acs_added": 2,
+  "acs": [
+    "src/server.ts MUST NOT pass `adults` values of zero, negative, fractional, or non-finite (Infinity, NaN) through validation in /search or /cheapest — must return 400 { error } for each. Rule: input-validation-adults. Verify: `grep -nE 'isInteger|adults' src/server.ts | grep -iE 'integer|>\\s*0|<\\s*1|positive'` returns ≥1 match.",
+    "src/server.ts MUST NOT use `Number.isFinite` as the sole guard for `adults` — must also enforce `Number.isInteger(adults) && adults > 0` or equivalent so zero, negative, and fractional values are rejected. Rule: input-validation-adults. Verify: `node -e \"const fs=require('fs');const s=fs.readFileSync('src/server.ts','utf8');const hasInt=s.includes('isInteger');const hasPos=/>\\s*0/.test(s)||/<\\s*1/.test(s)||s.includes('positive');console.log(hasInt&&hasPos?'PASS':'FAIL')\"` outputs PASS."
+  ]
+}
+```
+```json
+{
+  "profile": "typescript-engineer",
+  "profile_updated": true,
+  "rule_id": "input-validation-adults",
+  "rule_text": "### Rule: input-validation-adults\n**Anti-pattern:** Express route handlers (e.g. /search, /cheapest) accept an `adults` query param without validating that it is a positive finite integer — zero, negative, fractional, or Infinity values pass through unchecked, causing downstream logic errors or API misuse. **MUST NOT** pass `req.query.adults` directly to business logic or API calls without validation. **MUST** validate with `Number.isInteger(Number(adults)) && Number(adults) > 0 && Number.isFinite(Number(adults))` and return HTTP 400 with a descriptive error message when validation fails.\n**Grep check:** `grep -n 'req.query.adults' src/server.ts` — every hit must be followed by a validation guard before the value is used; if any hit flows directly into a function call or response, the rule is violated."
+}
+```
+I have all the information needed. Here is the analysis:
+
+**Verbatim log line proving the finding:**
+
+```
+"text": "src/public/index.html is a real, styled single-page dashboard matching this layout: (1) full-width solid-color header bar with bold white title and subtitle; (2) centered white card with 2-column grid form; (3) full-width colored button; (4) status area with error/empty/success; (5) client-side JS that GETs /search, disables button, renders results table",
+          "status": "unmet",
+          "evidence": "Git diff shows `src/public/index.html | 6 +` (6 lines added, 0 removed). File excerpt confirms only 6 lines of HTML boilerplate: `<!DOCTYPE html>`, `<html>`, `<head>`, two `<meta>` tags, and `<title>`. No body element, no CSS styles, no form inputs, no button, no status area, no client-side JavaScript. The file is a bare HTML skeleton, not a styled dashboard.",
+          "gaps": "Missing: header bar with background color, card container, form with From/To/Date/Adults inputs, Search Flights button, status area (error banner, empty-result line, success count), client-side JS for fetching /search and rendering results table. The entire dashboard UI is absent."
+```
+
+```json
+{
+  "gate": "spec-validator",
+  "story_id": "SKY-004-b",
+  "file": "src/public/index.html",
+  "line": null,
+  "rule": "SKY-004-b-criterion-1",
+  "message": "src/public/index.html is only 6 lines of HTML boilerplate — missing header bar, card form, search button, status area, and client-side JS for the styled dashboard",
+  "suggested_fix": "Implement the full styled single-page dashboard in src/public/index.html with header bar, centered card form, search button, status area, and client-side JavaScript that fetches /search and renders a results table."
+}
+```
+```json
+{
+  "story_id": "SKY-004-b",
+  "acs_added": 2,
+  "acs": [
+    "src/public/index.html MUST NOT be a bare HTML skeleton — it must contain at least one <form> element, at least one <button> element, at least one <style> or inline style attribute, and at least one <script> tag within the file. Verify: `grep -cE '<form|<button|<script|style=' src/public/index.html` returns ≥4. (Rule: SKY-004-b-criterion-1)",
+    "src/public/index.html MUST NOT contain fewer than 50 lines — a real styled dashboard with header bar, card form, status area, and client-side JS requires substantial markup. Verify: `[ $(wc -l < src/public/index.html) -ge 50 ] && echo pass || echo fail` outputs 'pass'. (Rule: SKY-004-b-criterion-1)"
+  ]
+}
+```
+Agent reached maximum iterations (20) without completing.
+The gate log file contains only the text "The file has been written and validated as proper JSON." — there is no JSON structure, no findings array, no BLOCKER finding, no file path, no rule, and no message that could constitute a grounded finding.
+
+The verbatim content of the log file is:
+```
+The file has been written and validated as proper JSON.
+```
+
+This line does not contain any finding, blocker, file path, rule, or message. It is a placeholder/status message, not a gate result with a FAIL verdict and structured findings.
+
+{"gate": "fuzz-weaver", "story_id": null, "error": "no grounded finding"}
+The gate log file at `/home/bradleyjerome/projects/ai/epam-cli/orchestrations/logs/perf-sentinel-core.log` contains only the text:
+
+```
+The file has been written successfully.
+```
+
+This is not a valid gate log — it contains no JSON, no `findings` array, no `verdict` field, and no BLOCKER finding. The actual perf-sentinel results (found at `/home/bradleyjerome/projects/skyscanner-app/perf-sentinel-results.json`) show `"verdict": "pass"` with `"blockerCount": 0`, meaning the gate did not fail.
+
+There is no grounded BLOCKER finding in the specified gate log file.
+
+```json
+{"gate": "perf-sentinel", "story_id": null, "error": "no grounded finding"}
+```
+**Verbatim log line proving the finding:**
+
+```
+"verdict": "fail"
+```
+
+and the first mutation in the `mutations` array:
+
+```
+      "file": "src/services/mozio/email-promo-discount.ts",
+      "line": 52,
+      "originalCode": "if (!promo) return false;",
+      "mutatedCode": "return true;",
+      "status": "no-coverage",
+      "relatedTest": null,
+      "recommendation": "Add unit test for promoAppliesToLineItem with null/undefined promo to verify it returns false."
+```
+
+The PRD contains a single story in the `core` phase — `AMSD-1820` — which is the Mozio email promo discount story. The file `src/services/mozio/email-promo-discount.ts` is directly owned by this story (no `technicalNotes.files` array exists, but the story is the sole story in the core phase and its subject matter matches the file).
+
+```json
+{
+  "gate": "mutant-hunter",
+  "story_id": "AMSD-1820",
+  "file": "src/services/mozio/email-promo-discount.ts",
+  "line": 52,
+  "rule": "no-coverage",
+  "message": "Mutation changing 'if (!promo) return false;' to 'return true;' survived with no test coverage — no unit test verifies null/undefined promo returns false.",
+  "suggested_fix": "Add a unit test for promoAppliesToLineItem with a null or undefined promo argument asserting it returns false."
+}
+```
+```json
+{
+  "story_id": "AMSD-1820",
+  "acs_added": 2,
+  "acs": [
+    "The test suite for `src/services/mozio/email-promo-discount.ts` MUST NOT omit a test case that passes `null` or `undefined` as the `promo` argument to `promoAppliesToLineItem` and asserts a `false` return value (rule: no-coverage). Verify with: `grep -rn 'promoAppliesToLineItem' test/ --include='*.ts' | grep -E 'null|undefined' | wc -l` — result must be ≥ 1.",
+    "The function `promoAppliesToLineItem` in `src/services/mozio/email-promo-discount.ts` MUST NOT return a truthy value when the `promo` argument is `null` or `undefined` (rule: no-coverage). Verify with: `node -e \"const m=require('./src/services/mozio/email-promo-discount'); process.exit(m.promoAppliesToLineItem(null)===false && m.promoAppliesToLineItem(undefined)===false ? 0 : 1)\"` — exit code must be 0."
+  ]
+}
+```
+```json
+{
+  "profile": "typescript-engineer",
+  "profile_updated": true,
+  "rule_id": "no-coverage",
+  "rule_text": "## Self-Healing Addendum\n\n### Rule: no-coverage (mutant-hunter)\nAnti-pattern: A guard clause such as `if (!promo) return false;` is mutated to `return true;` and survives because no unit test exercises the null/undefined input path. You MUST NOT leave any early-return guard clause untested — for every guard that returns a falsy/default value, add a unit test that passes null or undefined and asserts the expected return value. What MUST be done: after writing a guard clause, immediately add a corresponding test case (e.g. `it('returns false when promo is null/undefined')`) that verifies the guard fires correctly.\nVERIFIABLE: `grep -n 'if (!promo) return false' src/services/mozio/email-promo-discount.ts` must have a matching test: `grep -rn 'null.*\\|.*undefined' src/services/mozio/email-promo-discount.test.ts` should return at least one hit asserting `false`."
+}
+```

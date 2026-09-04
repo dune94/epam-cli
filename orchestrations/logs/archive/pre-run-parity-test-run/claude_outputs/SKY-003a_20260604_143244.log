@@ -1,0 +1,106 @@
+=== Prompt for SKY-003a (attempt 1) ===
+Implement user story SKY-003a: CLI argument parsing, env-var guard, and SkyscannerClient wiring
+
+## Story Description
+Create `src/cli.ts` with manual `process.argv` flag parsing (no commander, yargs, or minimist). Validate required flags `--from`, `--to`, `--date` (exit 2 if absent or date format invalid). Validate optional `--adults` (default 1; exit 2 on bad value). Guard on `RAPIDAPI_KEY` (exit 1 if absent or empty string). Instantiate `SkyscannerClient` and call `searchFlights` forwarding all parsed args. Pass raw result array to `renderTable` exported from `src/table.ts` (stub acceptable). Tests in `src/cli.test.ts` cover all validation, env-var, and happy-path scenarios, and the full Vitest suite passes.
+
+## Acceptance Criteria
+- `src/cli.ts` exists and `tsc --noEmit` reports zero errors on the project; no third-party flag-parsing library (commander, yargs, minimist, etc.) is imported anywhere in `src/cli.ts`
+- Flag values are read from the space-separated token immediately following each flag (e.g. `--from CDG` yields `from === 'CDG'`); parsing is order-independent: `--to LHR --from CDG --date 2025-09-01` produces the same parsed values as `--from CDG --to LHR --date 2025-09-01`
+- Unrecognized/unknown flags do not crash parsing or alter the exit code on an otherwise-valid invocation (silently ignoring them is acceptable for this story's scope)
+- Argument validation runs before env-var validation; if both a required flag is missing AND `RAPIDAPI_KEY` is absent, the process exits 2 (not 1) and prints the argument error to stderr — the env-var error is never emitted in this case
+- When more than one argument-validation error is present (e.g. a missing required flag and an invalid `--adults`), exactly one argument error is reported and the exit code is 2; the implementation reports the first failure it encounters in its documented check order and does not emit multiple conflicting exit codes
+- Each of `--from`, `--to`, and `--date` is individually required; omitting any one of them causes the process to exit 2, writes a usage hint to stderr that includes the name of the missing flag, and writes nothing to stdout
+- `--date` value must match `/^\d{4}-\d{2}-\d{2}$/`; a value that fails this pattern causes exit 2 with a descriptive stderr message before any network I/O; stdout is empty
+- `--adults` is optional and defaults to `1` when absent; a value that is non-numeric, explicitly non-integer (e.g. `'1.5'` — detected by checking `Number.isInteger(parsed)`, not just `isNaN`), zero, or negative causes exit 2 with a descriptive stderr message; stdout is empty
+- The parsed `adults` integer (including the implicit default of `1`) is forwarded verbatim to `SkyscannerClient.searchFlights`; it is never silently coerced to a different value or omitted from the call
+- If `RAPIDAPI_KEY` is unset or resolves to an empty string after argument validation passes, the process writes to stderr a line whose exact content is `Error: RAPIDAPI_KEY environment variable is required` (no additional text on that line), exits 1, writes nothing to stdout, and makes no network call
+- `renderTable` from `src/table.ts` is called with the raw array returned by `searchFlights`; `renderTable` may be a stub for this story and its return value is not required to produce visible output
+- Exit-code behavior is implemented in a way that is unit-testable without aborting the Vitest process (e.g. setting `process.exitCode`, returning a code from an exported `main`/`run` function, or throwing a typed error the test can catch) rather than relying solely on an unconditional `process.exit` at module top level; the chosen mechanism still yields the documented exit codes 0/1/2 when run as a real CLI
+- Network errors and non-2xx API responses from `SkyscannerClient` are out of scope for this story; no error handling for those cases is required
+- All Vitest tests in `src/cli.test.ts` pass; the suite covers: missing `--from`, missing `--to`, missing `--date`, invalid `--date` format, invalid `--adults` value (non-numeric), invalid `--adults` value (float like `1.5`), invalid `--adults` value (zero), invalid `--adults` value (negative), absent `RAPIDAPI_KEY`, empty-string `RAPIDAPI_KEY`, `--adults` absent (asserts `searchFlights` receives `adults: 1`), and a happy-path invocation that asserts both `searchFlights` is called with the exact parsed arguments and `renderTable` is called exactly once with the value `searchFlights` returned
+
+## Technical Notes
+- workingDir: /tmp/skyscanner-app
+- files: ["/tmp/skyscanner-app/src/cli.ts","/tmp/skyscanner-app/src/cli.test.ts"]
+- dependsOn: ["SKY-002"]
+
+## Files to Create/Modify
+/tmp/skyscanner-app/src/cli.ts, /tmp/skyscanner-app/src/cli.test.ts
+
+## Dependencies
+None
+
+## Instructions
+1. Implement all acceptance criteria for this story
+2. Follow the project's existing code patterns and conventions
+3. Create any necessary files in the locations specified
+4. Ensure code compiles/runs without errors
+5. Do NOT create tests unless explicitly required in acceptance criteria
+
+After implementation, provide a brief summary of what was created/modified.
+
+## Relevant Knowledge Base Entries
+No prior KB entries match your agent role yet.
+
+## Knowledge Base Contribution
+Your assigned KB entry ID for this run: **KB-008**
+
+If you discover a non-obvious pattern, gotcha, or anti-pattern during this implementation (or this is a retry), append exactly one entry to `orchestrations/agents/KB.md` using this format:
+
+```markdown
+## KB-008 -- 2026-06-04
+
+**Category:** <backend|frontend|infrastructure|testing|orchestration>
+**AgentRole:** <your agentRole from the story>
+**Tags:** <comma-separated tech keywords, e.g. typescript, node, cli>
+**Trigger:** <retry|first-success>
+**StoryRef:** SKY-003a
+
+<One concise paragraph: the specific pattern, gotcha, or anti-pattern. Precise enough that a future Claude instance can apply it without re-discovering it.>
+```
+
+Only write an entry if the knowledge is genuinely non-obvious. Skip trivial observations.
+=== End Prompt ===
+
+=== claude Output (attempt 1) ===
+Perfect! SKY-003a is now fully implemented. Here's a summary of what was completed:
+
+## Implementation Summary
+
+### Files Created/Modified:
+
+1. **Created `src/table.ts`**
+   - Exports `renderTable(results: FlightResult[]): string`
+   - Takes raw flight results array and formats it into an aligned table with columns for Airline, Price, Departure, Arrival, Duration, and Stops
+   - Handles right-alignment for price column and left-alignment for others
+
+2. **Updated `src/cli.ts`**
+   - Now imports and uses `renderTable` from `src/table.ts` instead of inline table formatting
+   - Removed the inline `formatTable` function and `Column` interface
+   - Maintains all existing CLI argument parsing logic:
+     - Manual `process.argv` parsing (no third-party libraries)
+     - Required flags: `--from`, `--to`, `--date` (exit code 2 if missing)
+     - Optional flag: `--adults` (default 1)
+     - `--date` format validation: `/^\d{4}-\d{2}-\d{2}$/`
+     - `--adults` validation: non-numeric, float, zero, or negative all exit code 2
+     - Argument validation runs before env-var validation
+     - `RAPIDAPI_KEY` check (exit code 1 if absent or empty)
+     - Proper exit codes via thrown errors (testable without aborting process)
+
+3. **Updated `src/cli.test.ts`**
+   - Added 4 new test cases:
+     - Float `--adults` value (e.g., `1.5`)
+     - Zero `--adults` value
+     - Negative `--adults` value
+     - Empty-string `RAPIDAPI_KEY`
+   - Total of 16 CLI tests now covering all acceptance criteria
+
+### Verification:
+✅ All 42 Vitest tests pass (16 CLI + 26 server)
+✅ TypeScript compilation: zero errors
+✅ No third-party flag-parsing libraries used
+✅ Exit codes: 0 (success), 1 (env-var error), 2 (argument validation error)
+✅ Exact error message: `Error: RAPIDAPI_KEY environment variable is required`
+
+=== End claude Output ===

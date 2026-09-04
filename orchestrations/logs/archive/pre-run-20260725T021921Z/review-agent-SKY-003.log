@@ -1,0 +1,1429 @@
+<tool_call>
+<tool_name>read_file</tool_name>
+<arguments>
+<path>/tmp/skyscanner-app/src/cli.ts</path>
+</arguments>
+</tool_call>
+<tool_call>
+<tool_name>read_file</tool_name>
+<arguments>
+<path>/tmp/skyscanner-app/src/cli.test.ts</path>
+</arguments>
+</tool_call>
+<tool_call>
+<tool_name>read_file</tool_name>
+<arguments>
+<path>/tmp/skyscanner-app/tsconfig.json</path>
+</arguments>
+</tool_call>
+<tool_call>
+<tool_name>read_file</tool_name>
+<arguments>
+<path>/tmp/skyscanner-app/package.json</path>
+</arguments>
+</tool_call>
+<tool_call>
+<tool_name>read_file</tool_name>
+<arguments>
+<path>/tmp/skyscanner-app/src/skyscanner-client.ts</path>
+</arguments>
+</tool_call>
+
+<tool_result>
+import { SkyscannerClient, FlightResult } from './skyscanner-client';
+
+const REQUIRED_FLAGS = ['--from', '--to', '--date'] as const;
+const DATE_PATTERN = /^\d{4}-\d{2}-\d{2}$/;
+const DEFAULT_CURRENCY_SYMBOL = '£';
+const DEFAULT_ADULTS = 1;
+
+interface ParsedArgs {
+  from: string;
+  to: string;
+  date: string;
+  adults: number;
+}
+
+function parseArgs(argv: string[]): ParsedArgs | { error: string; exitCode: number } {
+  const args = argv.slice(2);
+  const flags: Record<string, string | undefined> = {};
+
+  for (let i = 0; i < args.length; i++) {
+    if (args[i]?.startsWith('--')) {
+      const key = args[i] as string;
+      const value = args[i + 1];
+      if (value === undefined || value.startsWith('--')) {
+        return { error: `Missing value for ${key}`, exitCode: 2 };
+      }
+      flags[key] = value;
+      i++;
+    }
+  }
+
+  for (const flag of REQUIRED_FLAGS) {
+    if (!flags[flag]) {
+      return {
+        error: `Missing required flag: ${flag}\nUsage: cli.ts --from <IATA> --to <IATA> --date <YYYY-MM-DD> [--adults <N>]`,
+        exitCode: 2,
+      };
+    }
+  }
+
+  const from = flags['--from']!;
+  const to = flags['--to']!;
+  const date = flags['--date']!;
+
+  if (!DATE_PATTERN.test(date)) {
+    return {
+      error: `Invalid --date format: "${date}". Expected YYYY-MM-DD.`,
+      exitCode: 2,
+    };
+  }
+
+  let adults: number = DEFAULT_ADULTS;
+  const adultsStr = flags['--adults'];
+  if (adultsStr !== undefined) {
+    const parsed = Number(adultsStr);
+    if (!Number.isInteger(parsed) || parsed <= 0) {
+      return {
+        error: `Invalid --adults value: "${adultsStr}". Expected a positive integer.`,
+        exitCode: 2,
+      };
+    }
+    adults = parsed;
+  }
+
+  return { from, to, date, adults };
+}
+
+function padLeft(str: string, width: number): string {
+  return str.padStart(width);
+}
+
+function padRight(str: string, width: number): string {
+  return str.padEnd(width);
+}
+
+function renderTable(flights: FlightResult[], currencySymbol: string): string {
+  const headers = ['Airline', 'Price', 'Departure', 'Arrival', 'Duration', 'Stops'];
+  const colWidths = headers.map((h, i) => {
+    const headerWidth = h.length;
+    const dataWidths = flights.map((f) => {
+      const val = formatValue(f, i, currencySymbol);
+      return val.length;
+    });
+    return Math.max(headerWidth, ...dataWidths);
+  });
+
+  const lines: string[] = [];
+
+  // Header row
+  const headerLine = headers
+    .map((h, i) => (i === 1 ? padLeft(h, colWidths[i]!) : padRight(h, colWidths[i]!)))
+    .join(' | ');
+  lines.push(headerLine);
+
+  // Separator row
+  const separatorLine = colWidths.map((w) => '-'.repeat(w)).join(' | ');
+  lines.push(separatorLine);
+
+  // Data rows
+  for (const flight of flights) {
+    const row = headers
+      .map((_, i) => {
+        const val = formatValue(flight, i, currencySymbol);
+        return i === 1 ? padLeft(val, colWidths[i]!) : padRight(val, colWidths[i]!);
+      })
+      .join(' | ');
+    lines.push(row);
+  }
+
+  return lines.join('\n');
+}
+
+function formatValue(flight: FlightResult, colIndex: number, currencySymbol: string): string {
+  switch (colIndex) {
+    case 0:
+      return flight.airline;
+    case 1:
+      return `${currencySymbol}${flight.price}`;
+    case 2:
+      return flight.departure;
+    case 3:
+      return flight.arrival;
+    case 4:
+      return flight.duration;
+    case 5:
+      return String(flight.stops);
+    default:
+      return '';
+  }
+}
+
+async function main(): Promise<void> {
+  const apiKey = process.env.RAPIDAPI_KEY;
+  if (!apiKey || apiKey.trim() === '') {
+    process.stderr.write('Error: RAPIDAPI_KEY environment variable is not set.\n');
+    process.exit(1);
+  }
+
+  const parsed = parseArgs(process.argv);
+  if ('error' in parsed) {
+    process.stderr.write(`${parsed.error}\n`);
+    process.exit(parsed.exitCode);
+  }
+
+  const client = new SkyscannerClient(apiKey);
+  try {
+    const results = await client.searchFlights(parsed.from, parsed.to, parsed.date, parsed.adults);
+    if (results.length === 0) {
+      process.stdout.write('No flights found.\n');
+      process.exit(0);
+    }
+    const currencySymbol = (results as any).currencySymbol ?? DEFAULT_CURRENCY_SYMBOL;
+    const table = renderTable(results, currencySymbol);
+    process.stdout.write(`${table}\n`);
+  } catch (err: unknown) {
+    const message = err instanceof Error ? err.message : String(err);
+    process.stderr.write(`${message}\n`);
+    process.exit(1);
+  }
+}
+
+main();
+</tool_result>
+
+<tool_result>
+import { describe, it, expect, vi, beforeEach, afterEach } from 'vitest';
+import { FlightResult } from './skyscanner-client';
+
+vi.mock('./skyscanner-client', () => {
+  const mockSearchFlights = vi.fn();
+  return {
+    SkyscannerClient: vi.fn().mockImplementation(() => ({
+      searchFlights: mockSearchFlights,
+    })),
+    FlightResult: undefined,
+    __mockSearchFlights: mockSearchFlights,
+  };
+});
+
+let mockSearchFlights: ReturnType<typeof vi.fn>;
+
+describe('cli', () => {
+  let originalExit: typeof process.exit;
+  let originalStdout: typeof process.stdout.write;
+  let originalStderr: typeof process.stderr.write;
+  let exitCode: number | undefined;
+  let stdoutOutput: string;
+  let stderrOutput: string;
+
+  beforeEach(() => {
+    vi.resetModules();
+    vi.restoreAllMocks();
+
+    originalExit = process.exit;
+    originalStdout = process.stdout.write;
+    originalStderr = process.stderr.write;
+
+    exitCode = undefined;
+    stdoutOutput = '';
+    stderrOutput = '';
+
+    process.exit = ((code?: number) => {
+      exitCode = code ?? 0;
+      throw new Error(`PROCESS_EXIT_${code}`);
+    }) as typeof process.exit;
+
+    process.stdout.write = ((data: string | Buffer) => {
+      stdoutOutput += String(data);
+      return true;
+    }) as typeof process.stdout.write;
+
+    process.stderr.write = ((data: string | Buffer) => {
+      stderrOutput += String(data);
+      return true;
+    }) as typeof process.stderr.write;
+
+    process.env.RAPIDAPI_KEY = 'test-api-key';
+  });
+
+  afterEach(() => {
+    process.exit = originalExit;
+    process.stdout.write = originalStdout;
+    process.stderr.write = originalStderr;
+    delete process.env.RAPIDAPI_KEY;
+  });
+
+  async function runCli(args: string[]): Promise<void> {
+    process.argv = ['node', 'cli.js', ...args];
+    try {
+      await import('./cli');
+    } catch (e: unknown) {
+      if (e instanceof Error && e.message.startsWith('PROCESS_EXIT_')) {
+        return;
+      }
+      throw e;
+    }
+  }
+
+  it('exits with code 2 when --from is missing', async () => {
+    await runCli(['--to', 'LHR', '--date', '2025-01-01']);
+    expect(exitCode).toBe(2);
+    expect(stderrOutput).toContain('--from');
+    expect(stdoutOutput).toBe('');
+  });
+
+  it('exits with code 2 when --to is missing', async () => {
+    await runCli(['--from', 'JFK', '--date', '2025-01-01']);
+    expect(exitCode).toBe(2);
+    expect(stderrOutput).toContain('--to');
+    expect(stdoutOutput).toBe('');
+  });
+
+  it('exits with code 2 when --date is missing', async () => {
+    await runCli(['--from', 'JFK', '--to', 'LHR']);
+    expect(exitCode).toBe(2);
+    expect(stderrOutput).toContain('--date');
+    expect(stdoutOutput).toBe('');
+  });
+
+  it('exits with code 2 when --date format is invalid', async () => {
+    await runCli(['--from', 'JFK', '--to', 'LHR', '--date', '01-01-2025']);
+    expect(exitCode).toBe(2);
+    expect(stderrOutput).toContain('date');
+    expect(stdoutOutput).toBe('');
+  });
+
+  it('exits with code 2 when --adults is invalid', async () => {
+    await runCli(['--from', 'JFK', '--to', 'LHR', '--date', '2025-01-01', '--adults', 'abc']);
+    expect(exitCode).toBe(2);
+    expect(stderrOutput).toContain('adults');
+    expect(stdoutOutput).toBe('');
+  });
+
+  it('exits with code 1 when RAPIDAPI_KEY is missing', async () => {
+    delete process.env.RAPIDAPI_KEY;
+    await runCli(['--from', 'JFK', '--to', 'LHR', '--date', '2025-01-01']);
+    expect(exitCode).toBe(1);
+    expect(stderrOutput).toContain('RAPIDAPI_KEY');
+    expect(stdoutOutput).toBe('');
+  });
+
+  it('renders table correctly for valid multi-row results', async () => {
+    const flights: FlightResult[] = [
+      { airline: 'British Airways', price: 199, departure: '10:00', arrival: '22:00', duration: '12h', stops: 0 },
+      { airline: 'Delta', price: 250, departure: '08:00', arrival: '20:00', duration: '12h', stops: 1 },
+    ];
+    const { SkyscannerClient } = await import('./skyscanner-client');
+    const inst = new SkyscannerClient('key');
+    mockSearchFlights = (inst as any).searchFlights;
+    mockSearchFlights.mockResolvedValue(Object.assign(flights, { currencySymbol: '£' }));
+
+    await runCli(['--from', 'JFK', '--to', 'LHR', '--date', '2025-01-01', '--adults', '2']);
+    expect(exitCode).toBeUndefined();
+    expect(stdoutOutput).toContain('Airline');
+    expect(stdoutOutput).toContain('Price');
+    expect(stdoutOutput).toContain('British Airways');
+    expect(stdoutOutput).toContain('£199');
+
+    // Verify separator row
+    const lines = stdoutOutput.trim().split('\n');
+    expect(lines.length).toBeGreaterThanOrEqual(3);
+    const separatorLine = lines[1]!;
+    const separatorSegments = separatorLine.split(' | ');
+    const headerLine = lines[0]!;
+    const headerSegments = headerLine.split(' | ');
+    expect(separatorSegments.length).toBe(6);
+    for (let i = 0; i < separatorSegments.length; i++) {
+      expect(separatorSegments[i]!.length).toBe(headerSegments[i]!.length);
+    }
+
+    // Verify Price column is right-aligned
+    const dataLine = lines[2]!;
+    const dataSegments = dataLine.split(' | ');
+    const priceSegment = dataSegments[1]!;
+    expect(priceSegment).toMatch(/^\s*£/);
+  });
+
+  it('renders "No flights found." for empty results', async () => {
+    const { SkyscannerClient } = await import('./skyscanner-client');
+    const inst = new SkyscannerClient('key');
+    mockSearchFlights = (inst as any).searchFlights;
+    mockSearchFlights.mockResolvedValue([]);
+
+    await runCli(['--from', 'JFK', '--to', 'LHR', '--date', '2025-01-01']);
+    expect(stdoutOutput.trim()).toBe('No flights found.');
+  });
+
+  it('writes error message to stderr and exits 1 when client throws', async () => {
+    const { SkyscannerClient } = await import('./skyscanner-client');
+    const inst = new SkyscannerClient('key');
+    mockSearchFlights = (inst as any).searchFlights;
+    mockSearchFlights.mockRejectedValue(new Error('API rate limit exceeded'));
+
+    await runCli(['--from', 'JFK', '--to', 'LHR', '--date', '2025-01-01']);
+    expect(exitCode).toBe(1);
+    expect(stderrOutput).toContain('API rate limit exceeded');
+    expect(stdoutOutput).toBe('');
+  });
+});
+</tool_result>
+
+<tool_result>
+{
+  "compilerOptions": {
+    "target": "ES2020",
+    "module": "commonjs",
+    "outDir": "dist",
+    "rootDir": "src",
+    "strict": true,
+    "noImplicitAny": true,
+    "strictNullChecks": true,
+    "noUncheckedIndexedAccess": true,
+    "esModuleInterop": true,
+    "skipLibCheck": true,
+    "forceConsistentCasingInFileNames": true,
+    "declaration": true,
+    "resolveJsonModule": true
+  },
+  "include": ["src/**/*"],
+  "exclude": ["node_modules", "dist"]
+}
+</tool_result>
+
+<tool_result>
+{
+  "name": "skyscanner-app",
+  "version": "1.0.0",
+  "description": "Skyscanner flight search mini-app",
+  "main": "dist/cli.js",
+  "scripts": {
+    "build": "tsc",
+    "test": "vitest run",
+    "start": "node dist/cli.js"
+  },
+  "dependencies": {
+    "node-fetch": "^2.7.0"
+  },
+  "devDependencies": {
+    "typescript": "^5.5.0",
+    "vitest": "^2.0.0",
+    "@types/node": "^20.14.0"
+  }
+}
+</tool_result>
+
+<tool_result>
+import nodeFetch from 'node-fetch';
+
+const SKYSCANNER_API_HOST = 'skyscanner-skyscanner-flight-search-v1.p.rapidapi.com';
+const SKYSCANNER_SEARCH_ENDPOINT = '/services/reference/v1.0/currencies';
+
+export interface FlightResult {
+  airline: string;
+  price: number;
+  departure: string;
+  arrival: string;
+  duration: string;
+  stops: number;
+}
+
+export interface SearchFlightsResponse {
+  flights: FlightResult[];
+  currencySymbol?: string;
+}
+
+export class SkyscannerClient {
+  private apiKey: string;
+  private readonly host = SKYSCANNER_API_HOST;
+
+  constructor(apiKey: string) {
+    this.apiKey = apiKey;
+  }
+
+  async searchFlights(
+    from: string,
+    to: string,
+    date: string,
+    adults: number = 1,
+  ): Promise<FlightResult[]> {
+    const url = `https://${this.host}/services/reference/v1.0/homesearch/${from}/${to}/${date}`;
+    const response = await nodeFetch(url, {
+      method: 'GET',
+      headers: {
+        'X-RapidAPI-Key': this.apiKey,
+        'X-RapidAPI-Host': this.host,
+      },
+    });
+
+    if (!response.ok) {
+      throw new Error(`Skyscanner API error: ${response.status} ${response.statusText}`);
+    }
+
+    const data = (await response.json()) as SearchFlightsResponse;
+    const flights = data.flights ?? [];
+    const result = flights as FlightResult[];
+    (result as any).currencySymbol = data.currencySymbol ?? '£';
+    return result;
+  }
+}
+</tool_result>
+
+<tool_call>
+<tool_name>execute_command</tool_name>
+<arguments>
+<command>cd /tmp/skyscanner-app && ~/.nvm/versions/node/v20.20.0/bin/node ./node_modules/.bin/vitest run 2>&1; echo "EXIT_CODE=$?"</command>
+</arguments>
+</tool_call>
+
+<tool_call>
+<tool_name>execute_command</tool_name>
+<arguments>
+<command>cd /tmp/skyscanner-app && npx tsc --noEmit 2>&1; echo "EXIT_CODE=$?"</command>
+</arguments>
+</tool_call>
+
+<tool_call>
+<tool_name>execute_command</tool_name>
+<arguments>
+<command>cd /tmp/skyscanner-app && grep -rn "RAPIDAPI_KEY" src/ 2>&1</command>
+</arguments>
+</tool_call>
+
+<tool_result>
+<tool_name>execute_command</tool_name>
+<arguments>
+<command>cd /tmp/skyscanner-app && ~/.nvm/versions/node/v20.20.0/bin/node ./node_modules/.bin/vitest run 2>&1; echo "EXIT_CODE=$?"</command>
+</arguments>
+</tool_call>
+
+<tool_result>
+<tool_name>execute_command</tool_name>
+<arguments>
+<command>cd /tmp/skyscanner-app && npx tsc --noEmit 2>&1; echo "EXIT_CODE=$?"</command>
+</arguments>
+</tool_call>
+
+<tool_result>
+<tool_name>execute_command</tool_name>
+<arguments>
+<command>cd /tmp/skyscanner-app && grep -rn "RAPIDAPI_KEY" src/ 2>&1</command>
+</arguments>
+</tool_call>
+
+<tool_call>
+<tool_name>execute_command</tool_name>
+<arguments>
+<command>cd /tmp/skyscanner-app && cat src/config/constants.ts 2>/dev/null || echo "FILE_NOT_FOUND"</command>
+</arguments>
+</tool_call>
+
+<tool_call>
+<tool_name>execute_command</tool_name>
+<arguments>
+<command>cd /tmp/skyscanner-app && ls -la src/ 2>&1</command>
+</arguments>
+</tool_call>
+
+<tool_result>
+<tool_name>execute_command</tool_name>
+<arguments>
+<command>cd /tmp/skyscanner-app && ~/.nvm/versions/node/v20.20.0/bin/node ./node_modules/.bin/vitest run 2>&1; echo "EXIT_CODE=$?"</command>
+</arguments>
+</tool_call>
+
+<tool_result>
+<tool_name>execute_command</tool_name>
+<arguments>
+<command>cd /tmp/skyscanner-app && npx tsc --noEmit 2>&1; echo "EXIT_CODE=$?"</command>
+</arguments>
+</tool_call>
+
+<tool_result>
+<tool_name>execute_command</tool_name>
+<arguments>
+<command>cd /tmp/skyscanner-app && grep -rn "RAPIDAPI_KEY" src/ 2>&1</command>
+</arguments>
+</tool_call>
+
+<tool_result>
+FILE_NOT_FOUND
+</tool_result>
+
+<tool_result>
+total 28
+drwxrwxr-x 2 user user 4096 Jul 16 10:00 .
+drwxrwxr-x 2 user user 4096 Jul 16 10:00 ..
+-rw-rw-r-- 1 user user  820 Jul 16 10:00 cli.test.ts
+-rw-rw-r-- 1 user user  2100 Jul 16 10:00 cli.ts
+-rw-rw-r-- 1 user user  1500 Jul 16 10:00 skyscanner-client.ts
+</tool_result>
+
+<tool_call>
+<tool_name>execute_command</tool_name>
+<arguments>
+<command>cd /tmp/skyscanner-app && ~/.nvm/versions/node/v20.20.0/bin/node ./node_modules/.bin/vitest run 2>&1; echo "EXIT_CODE=$?"</command>
+</arguments>
+</tool_call>
+
+<tool_result>
+<tool_name>execute_command</tool_name>
+<arguments>
+<command>cd /tmp/skyscanner-app && ~/.nvm/versions/node/v20.20.0/bin/node ./node_modules/.bin/vitest run 2>&1; echo "EXIT_CODE=$?"</command>
+</arguments>
+</tool_call>
+
+<tool_result>
+<tool_name>execute_command</tool_name>
+<arguments>
+<command>cd /tmp/skyscanner-app && PATH="$HOME/.nvm/versions/node/v20.20.0/bin:$PATH" npx vitest run 2>&1; echo "EXIT_CODE=$?"</command>
+</arguments>
+</tool_call>
+
+<tool_result>
+<tool_name>execute_command</tool_name>
+<arguments>
+<command>cd /tmp/skyscanner-app && ls node_modules/.bin/vitest 2>&1 && node -e "console.log(process.version)"</command>
+</arguments>
+</tool_call>
+
+<tool_result>
+<tool_name>execute_command</tool_name>
+<arguments>
+<command>cd /tmp/skyscanner-app && npm install 2>&1 | tail -5</command>
+</arguments>
+</tool_call>
+
+<tool_result>
+<tool_name>execute_command</tool_name>
+<arguments>
+<command>cd /tmp/skyscanner-app && npm install 2>&1 | tail -20</command>
+</arguments>
+</tool_call>
+
+<tool_result>
+<tool_name>execute_command</tool_name>
+<arguments>
+<command>cd /tmp/skyscanner-app && cat package.json</command>
+</arguments>
+</tool_call>
+
+<tool_result>
+<tool_name>execute_command</tool_name>
+<arguments>
+<command>cd /tmp/skyscanner-app && npm install 2>&1</command>
+</arguments>
+</tool_call>
+
+<tool_result>
+<tool_name>execute_command</tool_name>
+<arguments>
+<command>cd /tmp/skyscanner-app && ~/.nvm/versions/node/v20.20.0/bin/npm install 2>&1 | tail -20</command>
+</arguments>
+</tool_call>
+
+<tool_result>
+<tool_name>execute_command</tool_name>
+<arguments>
+<command>cd /tmp/skyscanner-app && ls node_modules 2>&1 | head -5</command>
+</arguments>
+</tool_call>
+
+<tool_result>
+<tool_name>execute_command</tool_name>
+<arguments>
+<command>cd /tmp/skyscanner-app && ~/.nvm/versions/node/v20.20.0/bin/node -e "try { require('./node_modules/vitest/package.json'); console.log('vitest found'); } catch(e) { console.log('vitest not found:', e.message); }"</command>
+</arguments>
+</tool_call>
+
+<tool_result>
+<tool_name>execute_command</tool_name>
+<arguments>
+<command>cd /tmp/skyscanner-app && ~/.nvm/versions/node/v20.20.0/bin/npm install 2>&1 | tail -30</command>
+</arguments>
+</tool_call>
+
+<tool_result>
+<tool_name>execute_command</tool_name>
+<arguments>
+<command>cd /tmp/skyscanner-app && cat package-lock.json 2>/dev/null | head -5 || echo "NO_LOCK_FILE"</command>
+</arguments>
+</tool_call>
+
+<tool_result>
+<tool_name>execute_command</tool_name>
+<arguments>
+<command>cd /tmp/skyscanner-app && ~/.nvm/versions/node/v20.20.0/bin/npm install --legacy-peer-deps 2>&1 | tail -30</command>
+</arguments>
+</tool_call>
+
+<tool_result>
+<tool_name>execute_command</tool_name>
+<arguments>
+<command>cd /tmp/skyscanner-app && ~/.nvm/versions/node/v20.20.0/bin/node ./node_modules/.bin/vitest run 2>&1; echo "EXIT_CODE=$?"</command>
+</arguments>
+</tool_call>
+
+<tool_result>
+<tool_name>execute_command</tool_name>
+<arguments>
+<command>cd /tmp/skyscanner-app && ~/.nvm/versions/node/v20.20.0/bin/npx tsc --noEmit 2>&1; echo "EXIT_CODE=$?"</command>
+</arguments>
+</tool_call>
+
+<tool_result>
+<tool_name>execute_command</tool_name>
+<arguments>
+<command>cd /tmp/skyscanner-app && grep -rn "RAPIDAPI_KEY" src/ 2>&1</command>
+</arguments>
+</tool_call>
+
+<tool_result>
+<tool_name>execute_command</tool_name>
+<arguments>
+<command>cd /tmp/skyscanner-app && grep -rn "RAPIDAPI_KEY" src/ 2>&1</command>
+</arguments>
+</tool_call>
+
+Let me try running the tests and type checking properly.
+
+<tool_call>
+<tool_name>execute_command</tool_name>
+<arguments>
+<command>cd /tmp/skyscanner-app && ls -la node_modules/.bin/vitest 2>&1 && ls -la node_modules/.bin/tsc 2>&1</command>
+</arguments>
+</tool_call>
+
+<tool_result>
+<tool_name>execute_command</tool_name>
+<arguments>
+<command>cd /tmp/skyscanner-app && ls -la node_modules/.bin/vitest 2>&1 && ls -la node_modules/.bin/tsc 2>&1</command>
+</arguments>
+</tool_call>
+
+<tool_call>
+<tool_name>execute_command</tool_name>
+<arguments>
+<command>ls -la /tmp/skyscanner-app/ 2>&1</command>
+</arguments>
+</tool_call>
+
+<tool_result>
+<tool_name>execute_command</tool_name>
+<arguments>
+<command>ls -la /tmp/skyscanner-app/ 2>&1</command>
+</arguments>
+</tool_call>
+
+<tool_call>
+<tool_name>execute_command</tool_name>
+<arguments>
+<command>ls -la /tmp/ 2>&1 | grep sky</command>
+</arguments>
+</tool_call>
+
+<tool_result>
+<tool_name>execute_command</tool_name>
+<arguments>
+<command>ls -la /tmp/ 2>&1 | grep sky</command>
+</arguments>
+</tool_call>
+
+The project directory doesn't seem to exist at /tmp/skyscanner-app. Let me check the actual location.
+
+<tool_call>
+<tool_name>execute_command</tool_name>
+<arguments>
+<command>find / -name "skyscanner-app" -type d 2>/dev/null | head -5</command>
+</arguments>
+</tool_call>
+
+<tool_result>
+<tool_name>execute_command</tool_name>
+<arguments>
+<command>find / -name "skyscanner-app" -type d 2>/dev/null | head -5</command>
+</arguments>
+</tool_call>
+
+<tool_call>
+<tool_name>execute_command</tool_name>
+<arguments>
+<command>find / -path "*/src/cli.ts" 2>/dev/null | head -10</command>
+</arguments>
+</tool_call>
+
+<tool_result>
+<tool_name>execute_command</tool_name>
+<arguments>
+<command>find / -path "*/src/cli.ts" 2>/dev/null | head -10</command>
+</arguments>
+</tool_call>
+
+The files don't exist on disk yet. I need to work with the file contents I already read. Let me do a thorough static review based on the code I've already read.
+
+Let me re-read the files carefully and analyze each acceptance criterion.
+
+<tool_call>
+<tool_name>read_file</tool_name>
+<arguments>
+<path>/tmp/skyscanner-app/src/cli.ts</path>
+</arguments>
+</tool_call>
+
+<tool_result>
+import { SkyscannerClient, FlightResult } from './skyscanner-client';
+
+const REQUIRED_FLAGS = ['--from', '--to', '--date'] as const;
+const DATE_PATTERN = /^\d{4}-\d{2}-\d{2}$/;
+const DEFAULT_CURRENCY_SYMBOL = '£';
+const DEFAULT_ADULTS = 1;
+
+interface ParsedArgs {
+  from: string;
+  to: string;
+  date: string;
+  adults: number;
+}
+
+function parseArgs(argv: string[]): ParsedArgs | { error: string; exitCode: number } {
+  const args = argv.slice(2);
+  const flags: Record<string, string | undefined> = {};
+
+  for (let i = 0; i < args.length; i++) {
+    if (args[i]?.startsWith('--')) {
+      const key = args[i] as string;
+      const value = args[i + 1];
+      if (value === undefined || value.startsWith('--')) {
+        return { error: `Missing value for ${key}`, exitCode: 2 };
+      }
+      flags[key] = value;
+      i++;
+    }
+  }
+
+  for (const flag of REQUIRED_FLAGS) {
+    if (!flags[flag]) {
+      return {
+        error: `Missing required flag: ${flag}\nUsage: cli.ts --from <IATA> --to <IATA> --date <YYYY-MM-DD> [--adults <N>]`,
+        exitCode: 2,
+      };
+    }
+  }
+
+  const from = flags['--from']!;
+  const to = flags['--to']!;
+  const date = flags['--date']!;
+
+  if (!DATE_PATTERN.test(date)) {
+    return {
+      error: `Invalid --date format: "${date}". Expected YYYY-MM-DD.`,
+      exitCode: 2,
+    };
+  }
+
+  let adults: number = DEFAULT_ADULTS;
+  const adultsStr = flags['--adults'];
+  if (adultsStr !== undefined) {
+    const parsed = Number(adultsStr);
+    if (!Number.isInteger(parsed) || parsed <= 0) {
+      return {
+        error: `Invalid --adults value: "${adultsStr}". Expected a positive integer.`,
+        exitCode: 2,
+      };
+    }
+    adults = parsed;
+  }
+
+  return { from, to, date, adults };
+}
+
+function padLeft(str: string, width: number): string {
+  return str.padStart(width);
+}
+
+function padRight(str: string, width: number): string {
+  return str.padEnd(width);
+}
+
+function renderTable(flights: FlightResult[], currencySymbol: string): string {
+  const headers = ['Airline', 'Price', 'Departure', 'Arrival', 'Duration', 'Stops'];
+  const colWidths = headers.map((h, i) => {
+    const headerWidth = h.length;
+    const dataWidths = flights.map((f) => {
+      const val = formatValue(f, i, currencySymbol);
+      return val.length;
+    });
+    return Math.max(headerWidth, ...dataWidths);
+  });
+
+  const lines: string[] = [];
+
+  // Header row
+  const headerLine = headers
+    .map((h, i) => (i === 1 ? padLeft(h, colWidths[i]!) : padRight(h, colWidths[i]!)))
+    .join(' | ');
+  lines.push(headerLine);
+
+  // Separator row
+  const separatorLine = colWidths.map((w) => '-'.repeat(w)).join(' | ');
+  lines.push(separatorLine);
+
+  // Data rows
+  for (const flight of flights) {
+    const row = headers
+      .map((_, i) => {
+        const val = formatValue(flight, i, currencySymbol);
+        return i === 1 ? padLeft(val, colWidths[i]!) : padRight(val, colWidths[i]!);
+      })
+      .join(' | ');
+    lines.push(row);
+  }
+
+  return lines.join('\n');
+}
+
+function formatValue(flight: FlightResult, colIndex: number, currencySymbol: string): string {
+  switch (colIndex) {
+    case 0:
+      return flight.airline;
+    case 1:
+      return `${currencySymbol}${flight.price}`;
+    case 2:
+      return flight.departure;
+    case 3:
+      return flight.arrival;
+    case 4:
+      return flight.duration;
+    case 5:
+      return String(flight.stops);
+    default:
+      return '';
+  }
+}
+
+async function main(): Promise<void> {
+  const apiKey = process.env.RAPIDAPI_KEY;
+  if (!apiKey || apiKey.trim() === '') {
+    process.stderr.write('Error: RAPIDAPI_KEY environment variable is not set.\n');
+    process.exit(1);
+  }
+
+  const parsed = parseArgs(process.argv);
+  if ('error' in parsed) {
+    process.stderr.write(`${parsed.error}\n`);
+    process.exit(parsed.exitCode);
+  }
+
+  const client = new SkyscannerClient(apiKey);
+  try {
+    const results = await client.searchFlights(parsed.from, parsed.to, parsed.date, parsed.adults);
+    if (results.length === 0) {
+      process.stdout.write('No flights found.\n');
+      process.exit(0);
+    }
+    const currencySymbol = (results as any).currencySymbol ?? DEFAULT_CURRENCY_SYMBOL;
+    const table = renderTable(results, currencySymbol);
+    process.stdout.write(`${table}\n`);
+  } catch (err: unknown) {
+    const message = err instanceof Error ? err.message : String(err);
+    process.stderr.write(`${message}\n`);
+    process.exit(1);
+  }
+}
+
+main();
+</tool_result>
+
+Now let me do a thorough analysis against each acceptance criterion:
+
+**AC1**: `src/cli.ts` exists and `tsc --noEmit` reports zero errors — Need to verify tsc. The code looks TypeScript-compliant but I need to check for strict issues.
+
+**AC2**: `tsconfig.json` sets `outDir` to `dist` and emits CommonJS — ✅ tsconfig has `"module": "commonjs"` and `"outDir": "dist"`.
+
+**AC3**: Flags `--from`, `--to`, `--date` are all required; exit code 2 — ✅ The code checks all three and exits with code 2. The usage hint includes all flag names.
+
+**AC4**: `--date` must match `^\d{4}-\d{2}-\d{2}$` — ✅ DATE_PATTERN is correct.
+
+**AC5**: `--adults` defaults to 1; non-integer, ≤0, or non-numeric causes exit 2 — ✅ The code checks `Number.isInteger(parsed) || parsed <= 0`.
+
+**AC6**: Parsed `adults` value is forwarded to `searchFlights` — ✅ `parsed.adults` is passed.
+
+**AC7**: RAPIDAPI_KEY env var check — ✅ Checks for unset or empty, writes to stderr, exits 1.
+
+**AC8**: Table format — Need to verify carefully. The header row, separator row, and data rows are all present. Columns are joined by ` | `. Separator segments have exactly as many hyphens as the column's padded width. ✅
+
+**AC9**: All columns except Price are left-aligned; Price is right-aligned — ✅ `padLeft` (padStart) for Price, `padRight` (padEnd) for others.
+
+**AC10**: Price prefixed with currency symbol from API; fallback `£` — The code reads `(results as any).currencySymbol`. This is a **blocker** issue: it uses `as any` without an explanatory comment, and more importantly, the `currencySymbol` is attached as a property on the array object (a hack in `skyscanner-client.ts`), which is not a clean interface. But functionally it works.
+
+**AC11**: Empty array → `No flights found.` and exit 0 — ✅
+
+**AC12**: Error → stderr message, exit 1 — ✅
+
+**AC13**: At least 9 tests covering specific scenarios — Let me count the tests:
+1. missing `--from` ✅
+2. missing `--to` ✅
+3. missing `--date` ✅
+4. invalid `--date` format ✅
+5. invalid `--adults` value ✅
+6. missing RAPIDAPI_KEY ✅
+7. table rendered correctly ✅
+8. empty-array result ✅
+9. error path ✅
+
+That's 9 tests. ✅
+
+**AC14**: `vitest run` exits 0 — Can't verify without running.
+
+**AC15**: No new runtime dependencies — ✅ Only uses node built-ins and existing packages.
+
+Now let me check for specific issues:
+
+1. **`(results as any).currencySymbol`** — This is an untyped `any` without an explanatory comment. The `FlightResult[]` type doesn't have a `currencySymbol` property. The `skyscanner-client.ts` attaches it as `(result as any).currencySymbol = data.currencySymbol ?? '£'` which is a hack. This violates TypeScript strict compliance (no untyped `any` without explanatory comment).
+
+2. **RAPIDAPI_KEY security**: The key is read from `process.env.RAPIDAPI_KEY` and passed to `SkyscannerClient`. It's never logged or returned in HTTP responses. ✅
+
+3. **Error handling**: The `main()` function catches errors properly. ✅
+
+4. **The `main()` function is called at module level** — `main()` is called as a fire-and-forget promise. If it rejects, it would be an unhandled promise rejection. However, the function has a try/catch that should catch everything. But the `process.exit()` calls inside the try block throw in the test mock, and the `main()` call at the bottom doesn't have a `.catch()`. This is a potential unhandled rejection if something unexpected happens before the try/catch.
+
+5. **`args[i]?.startsWith('--')`** — With `noUncheckedIndexedAccess`, `args[i]` would be `string | undefined`, so the `?.` is correct. ✅
+
+6. **`const key = args[i] as string`** — This assertion is safe because we just checked `args[i]?.startsWith('--')` which means it's not undefined. But with strict mode, this is fine.
+
+7. **The `parseArgs` function returns a union type** — The discriminated union with `'error' in parsed` is a good pattern. ✅
+
+8. **`Number(adultsStr)` for `--adults` validation** — `Number("0")` returns 0, which is ≤ 0, so it would be caught. `Number("abc")` returns NaN, and `Number.isInteger(NaN)` is false, so it's caught. `Number("1.5")` returns 1.5, and `Number.isInteger(1.5)` is false, so it's caught. ✅
+
+9. **Missing `--adults` with value `0`** — `Number("0")` = 0, `Number.isInteger(0)` = true, `0 <= 0` = true, so it's caught. ✅
+
+10. **The test file uses `vi.mock` at module level** — This is the correct pattern for vitest module mocking. ✅
+
+11. **Test for `--adults` with value `0`** — The test only checks `"abc"`, not `0` or `-1` or `1.5`. The AC says "a non-integer value, a value ≤ 0, or a non-numeric string causes exit code 2". The test covers one case (non-numeric). This is acceptable since the test requirement says "invalid `--adults` value" which is one test case.
+
+12. **The `__mockSearchFlights` export in the mock** — This is defined but never used in the test file. The test instead gets the mock function from the constructed instance. This is a minor issue.
+
+13. **The test for table rendering** — It checks separator row presence and segment lengths, and Price right-alignment. ✅
+
+14. **The `main()` call at the bottom has no `.catch()`** — This is a potential unhandled promise rejection. If `main()` throws before entering the try/catch (e.g., the `process.exit` mock throws), the promise rejection would be unhandled. In the test, this is handled by the try/catch around `import`. But in production, if `main()` somehow rejects (which shouldn't happen given the try/catch), it would be an unhandled rejection.
+
+Let me look more carefully at the `main()` function:
+
+```typescript
+async function main(): Promise<void> {
+  const apiKey = process.env.RAPIDAPI_KEY;
+  if (!apiKey || apiKey.trim() === '') {
+    process.stderr.write('Error: RAPIDAPI_KEY environment variable is not set.\n');
+    process.exit(1);
+  }
+  // ...
+}
+
+main();
+```
+
+The `main()` call returns a Promise that is not awaited and not `.catch()`-ed. If any unexpected error occurs before the try/catch block, it would be an unhandled rejection. This is a **major** issue.
+
+Actually, looking more carefully, the `process.exit(1)` calls inside `main()` would terminate the process before the promise could reject. And the try/catch inside should catch all errors from `searchFlights`. The only way `main()` could reject is if `process.stderr.write` or `process.stdout.write` throws, which is extremely unlikely. But still, best practice is to add `.catch()`.
+
+15. **`(results as any).currencySymbol`** — This is the most significant TypeScript strict compliance issue. The `any` cast is used to access a property that doesn't exist on the `FlightResult[]` type. The proper fix would be to have `searchFlights` return an object with both `flights` and `currencySymbol`, rather than attaching the currency symbol as an expando property on the array.
+
+16. **The `skyscanner-client.ts` also uses `(result as any).currencySymbol`** — Same issue in the client.
+
+17. **No `src/config/constants.ts`** — The review criteria say "No hardcoded strings for model names, endpoint URLs, or file paths — all use named constants from `src/config/constants.ts`". The `skyscanner-client.ts` has `SKYSCANNER_API_HOST` as a named constant, which is good. But there's no `src/config/constants.ts` file. The constants are defined locally in each file. This is a minor issue for this story since the constants are properly named and not hardcoded inline.
+
+18. **The `FlightResult` export from `skyscanner-client.ts`** — It's exported as an interface, which is correct. But in the test mock, `FlightResult: undefined` is exported, which means the test can't use `FlightResult` as a type from the mock. However, the test imports `FlightResult` directly from the module before the mock takes effect (at the top of the file). Wait, actually with `vi.mock`, the mock replaces the module. Let me re-check...
+
+The test file has:
+```typescript
+import { FlightResult } from './skyscanner-client';
+```
+
+But `vi.mock` is hoisted above imports in vitest. So `FlightResult` would come from the mock, which exports `FlightResult: undefined`. This means the `FlightResult` type in the test would be `undefined`, not the interface. However, TypeScript types are erased at runtime, so this might still work for type annotations. But it's a code smell.
+
+Actually, in vitest, `vi.mock` factory functions replace the runtime module, but TypeScript type imports still resolve to the original types. Since `FlightResult` is used as a type (not a value), it should be fine. The `FlightResult: undefined` in the mock is just providing a runtime value for the named export, which is never used as a value.
+
+19. **The test for multi-row results** — It checks that `mockSearchFlights` is called, but doesn't verify that `adults` is forwarded. AC6 says "The parsed `adults` value is forwarded as an argument to `SkyscannerClient.searchFlights`". The test passes `--adults 2` but doesn't assert that `searchFlights` was called with `adults=2`. This is a **major** gap.
+
+Wait, let me re-read the test:
+
+```typescript
+await runCli(['--from', 'JFK', '--to', 'LHR', '--date', '2025-01-01', '--adults', '2']);
+```
+
+It passes `--adults 2` but doesn't check `mockSearchFlights` was called with `(JFK, LHR, 2025-01-01, 2)`. The AC6 criterion is not demonstrably met by the test.
+
+20. **The `RAPIDAPI_KEY` check happens before argument parsing** — Looking at the code:
+
+```typescript
+async function main(): Promise<void> {
+  const apiKey = process.env.RAPIDAPI_KEY;
+  if (!apiKey || apiKey.trim() === '') {
+    process.stderr.write('Error: RAPIDAPI_KEY environment variable is not set.\n');
+    process.exit(1);
+  }
+
+  const parsed = parseArgs(process.argv);
+```
+
+The RAPIDAPI_KEY check happens BEFORE argument parsing. AC7 says "exits 1 before making any network call" — this is satisfied. But AC3 says missing required flags should exit with code 2. If RAPIDAPI_KEY is missing AND flags are missing, the user gets exit code 1 instead of 2. This is arguably correct per AC7 (which takes precedence for the RAPIDAPI_KEY case), but it means the user doesn't see the usage hint for missing flags. This is a minor UX issue, not a blocker.
+
+Actually, re-reading AC7: "If RAPIDAPI_KEY env var is unset or empty, CLI writes a human-readable message containing 'RAPIDAPI_KEY' to stderr and exits 1 before making any network call". This doesn't say it should happen before argument validation. The current order (RAPIDAPI_KEY check first) means that if both RAPIDAPI_KEY is missing and flags are wrong, the user gets the RAPIDAPI_KEY error instead of the flag error. This is a minor issue.
+
+21. **The `main()` function is not properly handling the case where `process.exit` is not mocked** — In production, `process.exit(1)` would terminate the process immediately, so the `main()` promise would never resolve or reject. The `main()` call at the bottom would just be a dangling promise. This is fine for a CLI entry point.
+
+22. **The test for `--adults` with value `0`** — Not tested. AC5 says "a value ≤ 0" should cause exit 2. The test only checks `"abc"`. This is a gap in test coverage but the code handles it correctly.
+
+23. **The `formatValue` function's `default` case returns `''`** — This is unreachable since `colIndex` is always 0-5, but it's good defensive coding. ✅
+
+24. **The `renderTable` function uses `colWidths[i]!`** — With `noUncheckedIndexedAccess`, `colWidths[i]` would be `number | undefined`, so the `!` assertion is needed. This is correct since we know `i` is always a valid index. ✅
+
+Let me now compile my findings:
+
+**BLOCKER issues:**
+
+1. **`(results as any).currencySymbol`** — Untyped `any` without explanatory comment, violating TypeScript strict compliance. The `currencySymbol` should be part of the return type of `searchFlights`, not an expando property on the array.
+
+**MAJOR issues:**
+
+1. **Test doesn't verify `adults` is forwarded to `searchFlights`** — AC6 says "The parsed `adults` value is forwarded as an argument to `SkyscannerClient.searchFlights`; the flag is not silently dropped". The test passes `--adults 2` but never asserts `mockSearchFlights` was called with `adults=2`. This acceptance criterion is not demonstrably met.
+
+2. **Unhandled promise rejection on `main()` call** — `main()` is called without `.catch()`. If any unexpected error occurs, it would be an unhandled promise rejection. Should be `main().catch(...)`.
+
+3. **`skyscanner-client.ts` uses `(result as any).currencySymbol`** — Same untyped `any` issue in the client, attaching currencySymbol as an expando property on the array instead of returning a proper typed object.
+
+**MINOR issues:**
+
+1. **RAPIDAPI_KEY check before argument validation** — If RAPIDAPI_KEY is missing and flags are also missing, user gets RAPIDAPI_KEY error (exit 1) instead of usage hint (exit 2). Argument validation should come first for better UX.
+
+2. **Test doesn't cover `--adults` with value `0` or negative** — Only tests `"abc"`, not `0`, `-1`, or `1.5`.
+
+3. **`__mockSearchFlights` export in mock is unused** — Dead code in the mock factory.
+
+4. **No `src/config/constants.ts`** — Constants like `DEFAULT_CURRENCY_SYMBOL`, `DATE_PATTERN`, `REQUIRED_FLAGS` are defined locally. Per review criteria, these should be in `src/config/constants.ts`.
+
+Let me also verify the test count more carefully. The AC says "at least 9 passing vitest tests". I count exactly 9 `it()` blocks in the test file. ✅
+
+Now let me also check: does the test for "table rendered correctly" verify that the separator segment length matches the column width? Yes:
+
+```typescript
+for (let i = 0; i < separatorSegments.length; i++) {
+  expect(separatorSegments[i]!.length).toBe(headerSegments[i]!.length);
+}
+```
+
+This checks that each separator segment length matches the header segment length (which equals the column width since headers are padded). ✅
+
+Does it verify Price is right-aligned? Yes:
+```typescript
+expect(priceSegment).toMatch(/^\s*£/);
+```
+
+This checks that the price segment starts with optional whitespace then `£`, which means it's right-aligned (padded on the left). ✅
+
+One more thing: the AC says "stdout is empty when exiting with code 2". The tests check `expect(stdoutOutput).toBe('')` for the flag validation cases. ✅
+
+And "stdout is empty" for the error path (AC12). The test checks `expect(stdoutOutput).toBe('')`. ✅
+
+Let me also check: does the `--adults` test for invalid value check that stdout is empty? Yes: `expect(stdoutOutput).toBe('')`. ✅
+
+And the RAPIDAPI_KEY test checks `expect(stdoutOutput).toBe('')`. ✅
+
+Now, one more important thing: the `searchFlights` method signature in `skyscanner-client.ts` has `adults: number = 1` as a default parameter. The CLI passes `parsed.adults` which defaults to 1. So the `adults` value IS forwarded. But the test doesn't assert this.
+
+Let me also check if there's a test for `--adults` with a valid value (like `2`) that verifies it's forwarded. The "table rendered correctly" test passes `--adults 2` but doesn't check the mock call arguments. This is the AC6 gap.
+
+Let me finalize my review.
+
+Actually, I want to double-check one more thing about the `(results as any).currencySymbol` pattern. In `skyscanner-client.ts`:
+
+```typescript
+const result = flights as FlightResult[];
+(result as any).currencySymbol = data.currencySymbol ?? '£';
+return result;
+```
+
+And in `cli.ts`:
+```typescript
+const currencySymbol = (results as any).currencySymbol ?? DEFAULT_CURRENCY_SYMBOL;
+```
+
+This is a well-known anti-pattern in TypeScript — using expando properties on arrays. The proper approach would be to return `{ flights: FlightResult[], currencySymbol: string }` from `searchFlights`. This would:
+1. Remove the `any` cast
+2. Make the type system aware of `currencySymbol`
+3. Follow TypeScript strict compliance
+
+This is a blocker because it involves untyped `any` without an explanatory comment.
+
+Wait, let me re-read the review criteria: "no untyped `any` without an explanatory comment". There IS no explanatory comment on either `as any` usage. So this is a blocker.
+
+But also, the `skyscanner-client.ts` is from SKY-002, not SKY-003. The SKY-003 story only creates `src/cli.ts` and `src/cli.test.ts`. However, the `cli.ts` file introduces its own `(results as any).currencySymbol` which is a new `any` usage in the SKY-003 code.
+
+Let me also check: is there a comment explaining the `any`? No, there isn't. So this is a blocker per the review criteria.
+
+Let me also verify: does the `main()` function properly handle the case where `searchFlights` returns results but `currencySymbol` is undefined? The code does:
+```typescript
+const currencySymbol = (results as any).currencySymbol ?? DEFAULT_CURRENCY_SYMBOL;
+```
+
+If `currencySymbol` is `undefined`, it falls back to `£`. ✅ (AC10)
+
+One more thing: the AC says "Price column values are prefixed with the currency symbol from the API response; if the API response omits a currency symbol, `£` is used as the fallback". The current code gets `currencySymbol` from the results array's expando property, which is set by `skyscanner-client.ts` to `data.currencySymbol ?? '£'`. So there's a double fallback: first in the client (`'£'`), then in the CLI (`DEFAULT_CURRENCY_SYMBOL`). This means the CLI fallback would never trigger because the client already provides a fallback. But it's still correct behavior.
+
+OK, I think I have a comprehensive review now. Let me also check one more thing about the test structure.
+
+The test uses `vi.resetModules()` and `await import('./cli')` in each test. This is the correct pattern for testing a module that has side effects at import time (like `main()` being called). ✅
+
+But wait — there's a subtle issue. The `vi.mock('./skyscanner-client')` call at the top of the file is hoisted by vitest. When `vi.resetModules()` is called in `beforeEach`, it resets the module registry, but the mock should still be in effect because `vi.mock` is persistent until `vi.restoreAllMocks()` or the test suite ends. Actually, `vi.resetModules()` resets the module cache but not the mocks. So the mock should still be active when `import('./cli')` is called. ✅
+
+However, there's a problem: `vi.restoreAllMocks()` is called in `beforeEach`, which restores all mocked implementations. But the mock factory creates a new `SkyscannerClient` constructor each time. Wait, `vi.restoreAllMocks()` restores spy implementations but doesn't remove mocks created with `vi.mock`. The `vi.mock` factory function is called once (or per test if `vi.mock` is called inside `beforeEach`). Since `vi.mock` is at the module level, it's called once and the mock module is cached.
+
+Actually, there's a subtle bug: `vi.resetModules()` in `beforeEach` will cause the module to be re-imported, but the mock factory from `vi.mock` at the top level will be re-applied. The `mockSearchFlights` variable captured in the test might not be the same as the one used by the newly imported `cli` module.
+
+Let me trace through the test flow:
+
+1. `vi.mock('./skyscanner-client')` is hoisted and the mock module is created
+2. In `beforeEach`, `vi.resetModules()` clears the module cache
+3. In the test, `await import('./cli')` re-imports `cli.ts`, which imports from `./skyscanner-client`, which gets the mock
+4. The mock's `SkyscannerClient` constructor creates instances with `searchFlights: mockSearchFlights`
+5. But `mockSearchFlights` is the one from the mock factory, which was created once
+
+Wait, the mock factory creates `mockSearchFlights` with `vi.fn()`, and the constructor returns `{ searchFlights: mockSearchFlights }`. So every `new SkyscannerClient()` instance shares the same `mockSearchFlights` function. This should work.
+
+But in the test, the code does:
+```typescript
+const { SkyscannerClient } = await import('./skyscanner-client');
+const inst = new SkyscannerClient('key');
+mockSearchFlights = (inst as any).searchFlights;
+mockSearchFlights.mockResolvedValue(Object.assign(flights, { currencySymbol: '£' }));
+```
+
+This gets the `searchFlights` from a new instance, which should be the same `mockSearchFlights` from the factory. Then it sets up the mock resolution. This should work. ✅
+
+But there's a problem: `vi.restoreAllMocks()` in `beforeEach` will restore `mockSearchFlights` to its default implementation (which returns `undefined`). So the mock setup from a previous test won't leak. ✅
+
+Actually wait, `vi.restoreAllMocks()` restores mock implementations but the `vi.mock` factory is still in effect. The `mockSearchFlights` will still be a `vi.fn()`, just with its implementation cleared. So each test needs to set up `mockSearchFlights.mockResolvedValue(...)` or `mockSearchFlights.mockRejectedValue(...)`.
+
+In the "missing --from" test, `mockSearchFlights` is never set up, but it's never called either (because the CLI exits before reaching the API call). ✅
+
+In the "table rendered correctly" test, `mockSearchFlights.mockResolvedValue(...)` is set up. ✅
+
+OK, I think the test structure is sound.
+
+One more issue I want to flag: the test for "table rendered correctly" uses `Object.assign(flights, { currencySymbol: '£' })` to attach `currencySymbol` to the array, mirroring the hack in `skyscanner-client.ts`. This means the test is coupled to the implementation detail of how `currencySymbol` is passed. If the implementation changes to return a proper object, the test would break. But this is acceptable for a unit test.
+
+Let me also check: does the test verify that the `adults` parameter is forwarded? Looking at the "table rendered correctly" test:
+
+```typescript
+await runCli(['--from', 'JFK', '--to', 'LHR', '--date', '2025-01-01', '--adults', '2']);
+```
+
+It passes `--adults 2` but doesn't check `mockSearchFlights` was called with `(JFK, LHR, 2025-01-01, 2)`. This is a **major** gap for AC6.
+
+OK, I'm confident in my review now. Let me compile the final JSON.
+
+Actually, one more thing. Let me re-check the `main()` unhandled rejection issue more carefully.
+
+```typescript
+async function main(): Promise<void> {
+  // ... all paths either call process.exit() or are inside try/catch
+}
+
+main();
+```
+
+The `main()` function returns a Promise. If `main()` completes normally (after writing the table), the Promise resolves with `undefined`. If `main()` throws inside the try/catch, the catch block calls `process.exit(1)`. If `process.exit` is not mocked (production), it terminates the process. If `process.exit` is mocked (test), it throws, and the thrown error propagates up through the `main()` Promise, which rejects.
+
+In the test, the `runCli` function catches the `PROCESS_EXIT_*` error:
+```typescript
+async function runCli(args: string[]): Promise<void> {
+  process.argv = ['node', 'cli.js', ...args];
+  try {
+    await import('./cli');
+  } catch (e: unknown) {
+    if (e instanceof Error && e.message.startsWith('PROCESS_EXIT_')) {
+      return;
+    }
+    throw e;
+  }
+}
+```
+
+But `import('./cli')` returns a Promise that resolves when the module is loaded. The `main()` call at the bottom of `cli.ts` starts an async operation. The `import()` Promise resolves immediately after the module body executes, but `main()` is still running asynchronously. So `await import('./cli')` doesn't wait for `main()` to complete.
+
+Wait, that's not right. `main()` is called at the top level of the module. The module body executes synchronously until it hits `main()`, which returns a Promise. The `main()` function starts executing synchronously until it hits the first `await` (which is `await client.searchFlights(...)`). At that point, the function suspends and the module body continues (there's nothing after `main()`, so the module finishes loading). The `import()` Promise resolves, but `main()` is still running.
+
+So in the test, `await import('./cli')` resolves before `main()` completes. The `main()` Promise is floating. If `main()` eventually calls `process.exit(1)` (which throws in the test), that throw happens in an unhandled Promise rejection context, not in the `runCli` try/catch.
+
+Hmm, but actually, let me think about this more carefully. The `process.exit` mock throws `PROCESS_EXIT_*`. When `main()` calls `process.exit(1)`, it throws inside the `main()` async function. This causes the `main()` Promise to reject. Since `main()` is called without `.catch()`, this is an unhandled Promise rejection.
+
+But wait, in the test, the `process.exit` mock throws synchronously. So when `main()` calls `process.exit(1)`, the throw happens synchronously within the `main()` async function's execution context. The throw propagates up through `main()` and causes the returned Promise to reject.
+
+Actually, let me trace through more carefully for the "missing --from" test:
+
+1. `runCli(['--to', 'LHR', '--date', '2025-01-01'])` is called
+2. `process.argv` is set
+3. `await import('./cli')` starts loading the module
+4. The module body executes:
+   - `main()` is called
+   - `main()` checks `RAPIDAPI_KEY` — it's set to `'test-api-key'`, so it passes
+   - `parseArgs(process.argv)` is called — it returns `{ error: 'Missing required flag: --from...', exitCode: 2 }`
+   - `process.stderr.write(...)` is called — captured by mock
+   - `process.exit(2)` is called — mock throws `new Error('PROCESS_EXIT_2')`
+   - The throw propagates up through `main()` — the `main()` Promise rejects with `Error('PROCESS_EXIT_2')`
+5. The `import('./cli')` Promise resolves (module loading is complete)
+6. The `runCli` function's try/catch doesn't catch the `PROCESS_EXIT_2` error because it happened inside `main()`, not inside `import()`
+
+Wait, actually, I need to think about this more carefully. When `main()` is called at the top level of the module, it starts executing synchronously. The `process.exit(2)` call happens synchronously within `main()`. The mock throws, and this throw propagates up through `main()`. But `main()` is an async function, so the throw causes the returned Promise to reject. The throw doesn't propagate to the module body.
+
+Actually, no. In an async function, a synchronous throw (before any `await`) causes the returned Promise to reject. The module body continues executing after `main()` returns the Promise. Since there's nothing after `main()`, the module finishes loading, and `import('./cli')` resolves.
+
+So the `PROCESS_EXIT_2` error is NOT caught by the `runCli` try/catch. It's an unhandled Promise rejection.
+
+But wait, the test still works because:
+1. `process.exit` was called with code 2, so `exitCode` is set to 2
+2. `process.stderr.write` was called, so `stderrOutput` is set
+3. The unhandled rejection might cause vitest to fail, or it might be silently ignored
+
+Actually, in Node.js 20, unhandled Promise rejections cause the process to exit with code 1 by default. But vitest might handle this differently.
+
+Hmm, but the test file seems to work (it was written by the developer). Let me re-examine...
+
+Actually, I think I was wrong. Let me re-trace:
+
+When `main()` is called, it's an async function. The function body starts executing synchronously. When it hits `process.exit(2)`, the mock throws `new Error('PROCESS_EXIT_2')`. This throw happens synchronously within the async function body. In an async function, a synchronous throw causes the returned Promise to reject immediately.
+
+But the key question is: does the throw propagate to the caller of `main()`? No, it doesn't. The caller gets a rejected Promise. The module body continues after `main()` returns the Promise (which is already rejected at this point, but the rejection is not observed until someone calls `.then()` or `.catch()` on it).
+
+So the `import('./cli')` Promise resolves normally (the module loaded successfully), and the `main()` Promise rejection is unhandled.
+
+This means the test's `runCli` function doesn't catch the `PROCESS_EXIT_2` error. The `exitCode` and `stderrOutput` are set by the side effects of `process.exit` and `process.stderr.write` mocks, but the error itself is an unhandled rejection.
+
+In practice, this might work in vitest because:
+1. vitest might suppress unhandled rejections
+2. The `exitCode` and `stderrOutput` are still set correctly
+3. The test assertions pass
+
+But this is still a code quality issue. The `main()` call should have a `.catch()` handler.
+
+Wait, actually, I need to reconsider. Let me look at the `process.exit` mock more carefully:
+
+```typescript
+process.exit = ((code?: number) => {
+  exitCode = code ?? 0;
+  throw new Error(`PROCESS_EXIT_${code}`);
+}) as typeof process.exit;
+```
+
+When `process.exit(2)` is called inside `main()`, it throws `Error('PROCESS_EXIT_2')`. This throw happens inside the async function. The async function's Promise rejects.
+
+But what if the `process.exit` call happens BEFORE any `await` in `main()`? In that case, the function is still executing synchronously. The throw would propagate up the call stack... but wait, no. In an async function, even synchronous throws are caught and turned into Promise rejections. That's how async functions work.
+
+Let me verify: in an async function, if you throw before the first `await`, the returned Promise rejects. The throw does NOT propagate to the caller. The caller gets a rejected Promise.
+
+So yes, the `PROCESS_EXIT_2` error is an unhandled Promise rejection.
+
+But the test still works because the side effects (setting `exitCode` and `stderrOutput`) happen before the throw. The assertions check these side effects, not the error itself.
+
+This is a fragile test pattern, but it works. The unhandled rejection is a real issue though.
+
+OK, I think I've been thorough enough. Let me compile the final review.
+
+Actually, one more thing. Let me check if the `main()` function properly handles the case where `searchFlights` returns results. After writing the table, the function just returns (the Promise resolves). There's no explicit `process.exit(0)`. This means the process would stay alive if there are any pending timers or handles. But since this is a simple CLI with no persistent connections, the process should exit naturally. ✅
+
+Wait, but `node-fetch` might keep the process alive if there are pending connections. After `searchFlights` completes, the HTTP connection should be closed. So the process should exit naturally. ✅
+
+OK, final review:
+
+Let me also check one more subtle thing about the test. The test for "missing RAPIDAPI_KEY" does:
+
+```typescript
+it('exits with code 1 when RAPIDAPI_KEY is missing', async () => {
+    delete process.env.RAPIDAPI_KEY;
+    await runCli(['--from', 'JFK', '--to', 'LHR', '--date', '2025-01-01']);
+    expect(exitCode).toBe(1);
+    expect(stderrOutput).toContain('RAPIDAPI_KEY');
+    expect(stdoutOutput).toBe('');
+  });
+```
+
+This test deletes `RAPIDAPI_KEY` and then runs the CLI. The CLI should check for RAPIDAPI_KEY before making any network call. Since the RAPIDAPI_KEY check happens before argument parsing in the current code, and the arguments are valid in this test, the CLI should exit with code 1. ✅
+
+But wait, the RAPIDAPI_KEY check happens BEFORE argument parsing. So even if the arguments are invalid, the RAPIDAPI_KEY error takes precedence. This is a minor UX issue but not a bug per the AC.
+
+OK, I'm done. Let me write the final review JSON.
+
+Actually, I realize I should also check: does the `parseArgs` function handle the case where `--from`, `--to`, or `--date` is provided but with an empty value? For example, `--from --to LHR`. In this case, `args[i+1]` would be `'--to'`, which starts with `--`, so the function returns `{ error: 'Missing value for --from', exitCode: 2 }`. ✅
+
+And what about `--from ""` — an empty string value? `args[i+1]` would be `''`, which doesn't start with `--`, so it's accepted as the value. The `from` would be an empty string. This is technically valid per the current validation, but it would likely fail at the API level. The AC doesn't require validation of IATA code format, so this is fine.
+
+One more thing: the AC says "if any is absent the CLI writes a usage hint to stderr (showing the correct flag names)". The current error message for a missing flag is:
+
+```
+Missing required flag: --from
+Usage: cli.ts --from <IATA> --to <IATA> --date <YYYY-MM-DD> [--adults <N>]
+```
+
+This shows all the correct flag names. ✅
+
+OK, truly final review now.
+
+Let me also verify: the `renderTable` function handles the case where `flights` has one row. The column widths would be determined by the header and the single data row. The separator would have the correct number of hyphens. ✅
+
+And the case where all values in a column are shorter than the header. For example, if all airlines are 3 characters but the header "Airline" is 7 characters, the column width would be 7. ✅
+
+And the case where a data value is longer than the header. For example, "British Airways" (15 chars) vs "Airline" (7 chars). The column width would be 15. ✅
+
+OK, I'm confident in my review. Let me write the JSON.
+
+Wait, I want to double-check one more thing about the `as any` usage. The review criteria say "no untyped `any` without an explanatory comment". Let me check if there's a comment:
+
+In `cli.ts`:
+```typescript
+const currencySymbol = (results as any).currencySymbol ?? DEFAULT_CURRENCY_SYMBOL;
+```
+
+No comment. ❌
+
+In `skyscanner-client.ts`:
+```typescript
+(result as any).currencySymbol = data.currencySymbol ?? '£';
+```
+
+No comment. ❌
+
+Both are blockers per the review criteria.
+
+But wait, `skyscanner-client.ts` is from SKY-002, not SKY-003. Should I flag it? The review task is for SKY-003, but the `cli.ts` file introduces a new `as any` usage. The `skyscanner-client.ts` issue is pre-existing. I'll flag the `cli.ts` issue as a blocker and mention the `skyscanner-client.ts` issue as a major (since it affects the SKY-003 code's correctness).
+
+Actually, the `cli.ts` `as any` is directly in the SKY-003 code, so it's a blocker. The `skyscanner-client.ts` `as any` is pre-existing but affects SKY-003's ability to properly type the currency symbol. I'll flag both.
+
+Let me finalize.
+
+Hmm, actually I realize I should also check: does the test for "table rendered correctly" verify that the `adults` parameter is forwarded? Let me re-read:
+
+```typescript
+it('renders table correctly for valid multi-row results', async () => {
+    const flights: FlightResult[] = [
+      { airline: 'British Airways', price: 199, departure: '10:00', arrival: '22:00', duration: '12h', stops: 0 },
+      { airline: 'Delta', price: 250, departure: '08:00', arrival: '20:00', duration: '12h', stops: 1 },
+    ];
+    const { SkyscannerClient } = await import('./skyscanner-client');
+    const inst = new SkyscannerClient('key');
+    mockSearchFlights = (inst as any).searchFlights;
+    mockSearchFlights.mockResolvedValue(Object.assign(flights, { currencySymbol: '£' }));
+
+    await runCli(['--from', 'JFK', '--to', 'LHR', '--date', '2025-01-01', '--adults', '2']);
+    // ... assertions about table format ...
+  });
+```
+
+The test passes `--adults 2` but doesn't assert:
+```typescript
+expect(mockSearchFlights).toHaveBeenCalledWith('JFK', 'LHR', '2025-01-01', 2);
+```
+
+This is a clear gap for AC6.
+
+OK, truly truly final now.{"verdict":"changes_requested","issues":[{"severity":"blocker","file":"/tmp/skyscanner-app/src/cli.ts","line":97,"description":"Untyped `any` without explanatory comment: `(results as any).currencySymbol` violates TypeScript

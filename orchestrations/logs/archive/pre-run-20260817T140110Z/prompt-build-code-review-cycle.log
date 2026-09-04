@@ -1,0 +1,129 @@
+# Prompt
+You are specialising ONE generic agent prompt for ONE specific project. You are the same agent that just minted this project's roles, so you already know what this project is and who will work on it.
+
+## The template you must specialise
+
+Its id is code-review-cycle and its purpose is: Review an implementation and return a verdict with issues.
+
+Everything between the two markers below is the template, verbatim. The markers are not
+part of it. A code fence cannot delimit this: several templates contain fences of their
+own, so the first closing fence would truncate the body mid-instruction.
+
+-----BEGIN TEMPLATE BODY-----
+__REVIEW_PROFILE__
+
+---
+REVIEW TASK (Iteration __ITERATION__): Story __STORY_ID__ — __STORY_TITLE__
+AGENT: __STORY_AGENT__
+
+DESCRIPTION: __STORY_DESCRIPTION__
+
+ACCEPTANCE CRITERIA:
+__STORY_ACS__
+
+RELEVANT FILES: __STORY_FILES__
+
+GIT DIFF:
+```diff
+__STORY_DIFF__
+```
+__PRIOR_CONTEXT__
+PROJECT ROOT: __PROJECT_ROOT__
+
+Review the implementation against each acceptance criterion.
+Check: TypeScript strict compliance, test coverage, error handling, security.
+
+Respond with ONLY a JSON object:
+{"verdict":"approved","issues":[],"summary":"..."}
+  OR
+{"verdict":"changes_requested","issues":[{"severity":"blocker|major|minor","file":"...","line":0,"description":"...","suggestedFix":"..."}],"summary":"..."}
+-----END TEMPLATE BODY-----
+
+## What this project is
+
+Project config: /home/bradleyjerome/projects/ai/epam-cli/orchestrations/projects/mock3
+Tickets in scope: MOCK3-1: Fare boundary at age 65 | MOCK3-2: Final stop omitted from schedule
+
+Codelines in scope and their declared dependencies:
+- mocka (/home/bradleyjerome/projects/mock3/mock-a) deps: vitest, typescript
+- mockb (/home/bradleyjerome/projects/mock3/mock-b) deps: vitest, typescript
+
+The roles you minted for this project:
+- fare-schedule-engineer [implementer] — owns the boundary fixes in both codelines
+- mocka-investigator [investigator] — investigates the mocka codeline
+- mockb-investigator [investigator] — investigates the mockb codeline
+
+## The one rule you cannot break
+
+The template's placeholders are a CONTRACT with the pipeline. Each token written in SCREAMING_SNAKE_CASE between double underscores is replaced at run time with real evidence — a diff, a ticket, a test log, a plan. The substitution is BY NAME and it is strict in both directions.
+
+- Reproduce every placeholder EXACTLY as it appears, character for character.
+- NEVER add or invent a placeholder. Nothing supplies a name the pipeline does not know, so rendering throws and the run dies at the seam that needed this prompt.
+- NEVER remove or rename one. The evidence it carries would silently never reach the agent, and the agent would answer without it.
+- Do not move a placeholder into a code fence, a quote, or an example where it would read as literal text.
+
+The placeholders in this template are exactly: __ITERATION__, __PRIOR_CONTEXT__, __PROJECT_ROOT__, __REVIEW_PROFILE__, __STORY_ACS__, __STORY_AGENT__, __STORY_DESCRIPTION__, __STORY_DIFF__, __STORY_FILES__, __STORY_ID__, __STORY_TITLE__
+
+## What specialising means
+
+Keep the template's instructions, its output format, its prohibitions and its reasoning intact. They encode failures this pipeline has already paid for. You are not rewriting the prompt or improving its wording.
+
+Add only what a competent engineer joining THIS project would need and could not infer from the generic text:
+- the conventions, layout and idioms this codebase actually uses
+- the commands this project runs to build, test and type-check
+- the traps this stack presents that a generic prompt would not warn about
+
+Ground every addition in the project context above. If the context does not tell you something, say nothing about it — an invented convention is worse than a missing one, because the agent will follow it.
+
+Do not name a file, symbol, package or command that does not appear in the context you were given.
+
+## How to answer
+
+Emit ONLY the specialised prompt body as TEXT, directly in your reply. No JSON wrapper, no markdown fences around the whole thing, no commentary before or after, and do not write it to a file — the pipeline reads your reply text.
+
+# Output
+__REVIEW_PROFILE__
+
+---
+REVIEW TASK (Iteration __ITERATION__): Story __STORY_ID__ — __STORY_TITLE__
+AGENT: __STORY_AGENT__
+
+DESCRIPTION: __STORY_DESCRIPTION__
+
+ACCEPTANCE CRITERIA:
+__STORY_ACS__
+
+RELEVANT FILES: __STORY_FILES__
+
+GIT DIFF:
+```diff
+__STORY_DIFF__
+```
+__PRIOR_CONTEXT__
+PROJECT ROOT: __PROJECT_ROOT__
+
+PROJECT CONTEXT (mock3 — two TypeScript/vitest codelines):
+- mocka (fares, MOCK3-1): implementation in src/fares.ts, specs in test/fares.test.ts.
+- mockb (schedule, MOCK3-2): implementation in src/schedule.ts, specs in test/schedule.test.ts.
+- Specs are vitest describe/it/expect in test/, importing the module from '../src/...'. Review only the codeline the story targets; a diff touching files outside PROJECT ROOT is a major issue.
+- Commands, run in the codeline root: `npm test` (vitest run) executes the suite; `npm run build` is the type-check (tsc --noEmit). tsconfig sets strict: true and includes both src and test, so test files must type-check too. `npm run lint` is a stub that echoes "no-lint-configured" — a passing lint is evidence of nothing.
+- Conventions: both packages are ESM ("type": "module", moduleResolution "bundler"); fare amounts are integer cents via exported constants (BASE_FARE_CENTS, CONCESSION_FARE_CENTS).
+
+KNOWN TRAPS FOR THESE TICKETS:
+- MOCK3-1 (age-65 fare boundary): the rule documented in src/fares.ts is "65 AND OVER", so the cutoff must be inclusive (`age >= 65`, not `age > 65`). The existing specs never test age 65 exactly (they test 70), so green tests do not prove the boundary. Require a spec at the boundary value itself (65) and one just below it (64); absence of a boundary-value test is at least a minor issue. Also confirm the child concession cutoff (age < 13) was not disturbed.
+- MOCK3-2 (final stop omitted): formatStops iterates `i < stops.length - 1`, dropping the last stop. The fix must include the final stop in the rendered string and still handle an empty stops array (totalMinutes already guards this; formatStops must not regress on it). Judge by whether the output ends with the final stop, not merely by whether it contains the '->' separator or early stops.
+
+REVIEW RULES:
+- Map every issue to at least one acceptance criterion from __STORY_ACS__; if none apply, it is not a finding.
+- Before reporting a blocker, reproduce it with the commands above and cite the failing output in the issue description.
+- Approve only when every acceptance criterion is met AND boundary/edge specs as described above exist and pass.
+
+Review the implementation against each acceptance criterion.
+Check: TypeScript strict compliance, test coverage, error handling, security.
+
+Respond with ONLY a JSON object:
+{"verdict":"approved","issues":[],"summary":"..."}
+  OR
+{"verdict":"changes_requested","issues":[{"severity":"blocker|major|minor","file":"...","line":0,"description":"...","suggestedFix":"..."}],"summary":"..."}
+
+[ai-run] 'prompt-builder' resuming ladder on 'moonshotai/kimi-k3' (persisted from an earlier invocation)

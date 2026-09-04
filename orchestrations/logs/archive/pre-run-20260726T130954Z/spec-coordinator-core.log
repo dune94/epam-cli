@@ -1,0 +1,101 @@
+# Prompt
+You are the specification coordinator for the epam-cli orchestration system. Before every phase you read orchestrations/prd.json (implementationOrder and stories), evaluate risk, dependencies, and technical readiness, then assign the correct specification runners: OpenSpec, Speckit, both, or none. You write assignments into each story's specification.assignedAgents field along with coordinatorNotes, target provider/model, and timestamps. You understand the provider policy ledger (configuration.aiRuntime.providerPolicies), token guardrails, and know when to skip stories that were already hand-curated. When you plan a run you emit JSON compliant with spec-mode-runner.js so that automation can apply deltas deterministically. You never invent story IDs or mutate acceptance criteria directly; only delegate to spec agents and record their status.
+
+You are the EPAM CLI specification coordinator agent for phase core.
+
+Decide which specification agents should run for each story below.
+Available agents and their roles:
+  - openspec: Elaborates requirements — refines AC, proposes story splits, adds technical depth
+  - speckit: Reviews & hardens — adds testability criteria, security checks, edge cases, flags gaps
+
+Agent collaboration model:
+  - If both are assigned, openspec runs FIRST, then speckit reviews openspec's output
+  - Assign both for complex/critical stories
+  - Assign only openspec for simple elaboration
+  - Assign only speckit for stories that just need test/security hardening
+
+Respond with raw JSON only (no XML tags, no markdown fences, no preamble) using this schema:
+[
+  {"storyId":"EPAM-123","agents":["openspec","speckit"],"notes":"reason","priority":"high"}
+]
+If a story does not need spec work, provide an empty agents array.
+
+Stories JSON:
+[
+  {
+    "id": "AMSD-1820",
+    "title": "[Mozio] - Promo code amount not displayed as expected for Return trip tickets in Mozio email confirmation",
+    "description": "[Mozio] - The Promo code amount is NOT displayed as expected for Return trip tickets in the Mozio email confirmation",
+    "acceptanceCriteria": [
+      {
+        "text": "AMSD-1820 MUST NOT ship without a unit test that exercises the zero-discount early-return branch in src/services/submit-reservations/apply-report-discounts.service.ts (line 22, `discountsForDispatch.length === 0`). Compliance: `grep -rl 'discountsForDispatch.*length.*0\\|empty.*discount\\|zero.*discount' src/services/submit-reservations/__tests__/ | wc -l` must return >= 1. [rule: no-coverage]",
+        "status": "pending"
+      },
+      {
+        "text": "AMSD-1820 MUST NOT ship without a unit test that verifies dispatches with one or more matching discounts are processed (non-empty path) in src/services/submit-reservations/apply-report-discounts.service.ts. Compliance: `grep -rl 'discountsForDispatch.*length.*[1-9]\\|one or more.*discount\\|matching.*discount.*process' src/services/submit-reservations/__tests__/ | wc -l` must return >= 1. [rule: no-coverage]",
+        "status": "pending"
+      }
+    ],
+    "technicalNotes": {
+      "files": [
+        "src/clients/mozio/mappers/map-to-sanitized-mozio-dispatch.ts",
+        "src/services/create-reservations/create-reservations.mappers.ts",
+        "src/services/order-staff-notes/generate-staff-notes.helpers.ts",
+        "src/services/submit-reservations/apply-report-discounts.service.ts",
+        "src/services/mappers/line-item/map-line-item-return-trip-modification.ts",
+        "src/functions/http-mozio-webhook.ts"
+      ]
+    },
+    "agentRole": "typescript-engineer",
+    "agentGroup": "primary",
+    "dependencies": [],
+    "spec": {
+      "runId": "20260726T120606Z",
+      "assignedAgents": [
+        "openspec",
+        "speckit"
+      ],
+      "coordinatorNotes": "Bug fix with empty acceptance criteria — openspec needed to elaborate expected promo code behavior for return trips and define proper AC; speckit needed to add testability criteria and edge cases around promo code amount calculations for multi-leg/return bookings.",
+      "status": "completed",
+      "updatedAt": "2026-07-26T12:10:08.284Z",
+      "appliedAgents": [
+        "openspec",
+        "speckit"
+      ],
+      "agentContributions": [
+        {
+          "agent": "openspec",
+          "applied": true,
+          "notes": "Defect: promo/discount amount is missing or incorrect for return-trip tickets in the Mozio email confirmation. The mapping path from dispatch discount data through mapToSanitizedMozioDispatch (which feeds the Mozio order submission and subsequent email) likely does not carry the discount amount correctly when the dispatch is a return trip. The create-reservations mappers already special-case return trips (swapping from/to stations), suggesting return-trip dispatches follow a different code path that may omit or miscalculate the discount.",
+          "acceptanceChanged": false,
+          "splitCount": 0,
+          "timestamp": "2026-07-26T12:09:48.889Z"
+        },
+        {
+          "agent": "speckit",
+          "applied": true,
+          "notes": "Openspec provided no acceptance criteria (empty array), only a descriptive note about the defect. I built the full AC set from scratch based on the defect description and the listed technical files. Key areas covered: (1) Core fix — return-trip discount appears correctly in email (AC-1). (2) Regression — one-way trips unchanged (AC-2). (3) Edge cases — no discount, zero discount, over-discount (AC-3, AC-5, AC-7). (4) Root-cause-adjacent — discount preserved through station-swap logic (AC-4), mapper output parity between trip types (AC-8), different data paths for return trips (AC-9). (5) End-to-end — webhook payload consistency (AC-6). AC-4 and AC-9 specifically target the likely root cause described in openspec's notes: the return-trip code path (which swaps stations) may omit or miscalculate the discount.",
+          "acceptanceChanged": false,
+          "splitCount": 0,
+          "timestamp": "2026-07-26T12:10:08.284Z"
+        }
+      ],
+      "coordinatorReview": {
+        "verdict": "needs_review",
+        "reviewNotes": "Openspec provided a useful root-cause hypothesis (return-trip station-swap path in mapToSanitizedMozioDispatch likely omits/miscalculates discount) but failed to produce any acceptance criteria — acceptanceChanged is false and AC array remains empty. Speckit then claims to have built a comprehensive AC set from scratch (core fix, regression, edge cases, root-cause-adjacent, end-to-end), but the story's acceptanceCriteria array is still empty and acceptanceChanged is also false. This is a critical data inconsistency: speckit's notes describe 9 acceptance criteria (AC-1 through AC-9) in prose, but none were actually written into the story's acceptanceCriteria field. The collaborative dynamic was functional in principle (openspec diagnosed, speckit attempted to formalize), but the automation failed to persist speckit's AC deltas. A human must verify whether the ACs exist in another artifact or need to be re-applied. No story splits were proposed, which is appropriate for a single bug fix.",
+        "qualityScore": 0.45,
+        "flags": [
+          "acceptance_criteria_empty_despite_agent_claims",
+          "speckit_acceptanceChanged_false_contradicts_notes",
+          "openspec_did_not_elaborate_AC",
+          "AC_deltas_not_persisted"
+        ],
+        "reviewedAt": "2026-07-26T12:10:20.992Z"
+      }
+    }
+  }
+]
+
+
+# Output
+[{"storyId":"AMSD-1820","agents":["openspec","speckit"],"notes":"Previous spec run completed but coordinator review flagged 'needs_review' due to data inconsistency: openspec did not elaborate any behavioral AC, and speckit's claimed AC-1 through AC-9 were not persisted. Current ACs are only grep-based coverage compliance checks — no behavioral criteria defining expected promo code display behavior for return trips. Re-running both agents: openspec must elaborate the expected discount/promo code behavior for return-trip Mozio email confirmations (including station-swap path impact on discount mapping), then speckit must harden with testability, edge cases, and security checks. Priority is high because this is a customer-facing defect with incomplete specification.","priority":"high"}]

@@ -1,0 +1,134 @@
+# Prompt
+You are the speckit specification agent for EPAM CLI. Phase hello_world_test, story HW-003.
+
+You are reviewing and building on the openspec agent's output for this story.
+Your role is COLLABORATIVE — you are NOT starting from scratch. Instead:
+1. Review openspec's proposed acceptance criteria for testability and completeness
+2. Add missing edge-case, error-handling, security, and accessibility criteria
+3. Flag any AC that are vague, untestable, or overlapping
+4. If openspec proposed story splits, validate the decomposition and refine AC per split
+5. Do NOT remove or duplicate openspec's good work — build on it
+
+OPENSPEC'S OUTPUT (your input to review):
+{
+  "storyId": "HW-003",
+  "agent": "openspec",
+  "notes": "Refined criteria to be fully testable and unambiguous. Added output path, npm test evidence requirement, and clarified fail conditions to cover both blocker findings and unmet HW-001 criteria. Removed ambiguity around 'suggested fix' being optional when no fix applies.",
+  "title": "Code review greet.ts",
+  "description": "Review greet.ts against all acceptance criteria defined in HW-001. Produce a structured markdown review report saved to review/HW-003-review.md with findings by severity (blocker, major, minor). Explicitly verify every HW-001 criterion and record npm test output. Do not modify greet.ts.",
+  "acceptanceCriteria": [
+    "Review report is saved to review/HW-003-review.md",
+    "Report contains a Summary section and a Findings section",
+    "Summary section records the result of running npm test (pass or fail with output snippet)",
+    "Overall verdict field is present and set to exactly 'pass' or 'fail' — never omitted or ambiguous",
+    "Each finding entry includes: severity (blocker | major | minor), file, line number (if applicable), description, and suggested fix (or 'N/A' if none applies)",
+    "All 10 acceptance criteria from HW-001 are listed individually and each is marked as 'met' or 'not met' with a one-line rationale",
+    "Verdict is 'fail' if any HW-001 criterion is marked 'not met' OR if any blocker finding exists",
+    "No blocker findings are present when verdict is 'pass'",
+    "greet.ts is not modified at any point during the review"
+  ],
+  "splitStories": [],
+  "runId": "20260530T214802Z"
+}
+
+ORIGINAL STORY CONTEXT:
+{
+  "id": "HW-003",
+  "title": "Code review greet.ts",
+  "description": "Review greet.ts against all acceptance criteria defined in HW-001. Produce a structured markdown review report saved to review/HW-003-review.md with findings by severity (blocker, major, minor). Explicitly verify every HW-001 criterion and record npm test output. Do not modify greet.ts.",
+  "originalAcceptanceCriteria": [
+    "Review report is saved to review/HW-003-review.md",
+    "Report contains a Summary section and a Findings section",
+    "Summary section records the result of running npm test (pass or fail with output snippet)",
+    "Overall verdict field is present and set to exactly 'pass' or 'fail' — never omitted or ambiguous",
+    "Each finding entry includes: severity (blocker | major | minor), file, line number (if applicable), description, and suggested fix (or 'N/A' if none applies)",
+    "All 10 acceptance criteria from HW-001 are listed individually and each is marked as 'met' or 'not met' with a one-line rationale",
+    "Verdict is 'fail' if any HW-001 criterion is marked 'not met' OR if any blocker finding exists",
+    "No blocker findings are present when verdict is 'pass'",
+    "greet.ts is not modified at any point during the review"
+  ],
+  "technicalNotes": {
+    "files": [],
+    "requiredSkills": [
+      "TypeScript",
+      "code-review",
+      "vitest"
+    ]
+  },
+  "dependencies": [
+    "HW-001",
+    "HW-002"
+  ]
+}
+
+Produce your refined output between <SPEC_AGENT> tags. Include:
+- "acceptanceCriteria": The FULL merged list (openspec's criteria + your additions/refinements)
+- "notes": What you changed and why (be specific — cite which criteria you added/modified)
+- "splitStories": Include if you refined openspec's splits, otherwise omit or pass through
+- "acAddedBySpeckit": Array of criteria YOU added that were not in openspec's output
+- "acModifiedBySpeckit": Array of {"original":"...","revised":"..."} for criteria you reworded
+- "acFlagged": Array of {"criterion":"...","flag":"..."} for criteria that need human attention
+
+<SPEC_AGENT>
+
+# Output
+Good — the HW-001 AC count is confirmed at 10 (the hardcoded number is accurate). `greet.ts` does not exist yet, which means the review agent will encounter a missing file unless HW-001 and HW-002 complete first (dependencies are correctly modeled). Let me now produce the speckit output.
+
+<SPEC_AGENT>
+```json
+{
+  "storyId": "HW-003",
+  "agent": "speckit",
+  "title": "Code review greet.ts",
+  "description": "Review greet.ts against all acceptance criteria defined in HW-001. Produce a structured markdown review report saved to review/HW-003-review.md with findings by severity (blocker, major, minor). Explicitly verify every HW-001 criterion and record test output. Do not modify greet.ts.",
+  "notes": "Openspec's 9 criteria are solid and well-scoped. Made 4 targeted additions and 2 modifications: (1) Added directory-creation guard — review/ does not exist yet and the agent must create it; (2) Added greet.ts absence handling — greet.ts is confirmed absent right now and this must be a fail-fast blocker, not silent behavior; (3) Tightened 'output snippet' to require the test result summary line specifically; (4) Added 'No findings' explicit statement requirement to prevent ambiguous empty sections; (5) Modified AC #3 to mandate the Node 20 test command from CLAUDE.md rather than bare 'npm test' (system node is v14, which breaks vitest); (6) Modified AC #6 to lock the 10 HW-001 criteria to exact verbatim reproduction from game-prd.json — preventing silent paraphrasing drift. Flagged AC #8 as logically redundant with AC #7 (it is the contrapositive) but harmless as a positive assertion.",
+  "acceptanceCriteria": [
+    "Review report is saved to review/HW-003-review.md; the review/ directory is created if it does not already exist",
+    "If greet.ts does not exist at review time, the report records a single blocker finding ('greet.ts not found'), all HW-001 criteria are marked 'not met', and the verdict is 'fail'",
+    "Report is a valid markdown file containing at minimum a top-level Summary section (## Summary) and a top-level Findings section (## Findings)",
+    "Summary section records the result of running the project-mandated test command (~/.nvm/versions/node/v20.20.0/bin/node ./node_modules/.bin/vitest run), and includes at minimum the final summary line (e.g. '3 passed | 0 failed') from its output",
+    "Overall verdict field is present in the Summary section and set to exactly 'pass' or 'fail' — never omitted or ambiguous",
+    "Each finding entry includes: severity (blocker | major | minor), file, line number (or 'N/A' if not applicable), description, and suggested fix (or 'N/A' if none applies)",
+    "The Findings section explicitly states 'No findings' when no issues are identified — it is never empty, absent, or omitted",
+    "All 10 acceptance criteria from HW-001 are listed individually using their verbatim text from the story definition (no paraphrasing), each marked as 'met' or 'not met' with a one-line rationale",
+    "Verdict is 'fail' if any HW-001 criterion is marked 'not met' OR if any blocker finding exists",
+    "No blocker findings are present when verdict is 'pass'",
+    "greet.ts is not modified at any point during the review"
+  ],
+  "acAddedBySpeckit": [
+    "If greet.ts does not exist at review time, the report records a single blocker finding ('greet.ts not found'), all HW-001 criteria are marked 'not met', and the verdict is 'fail'",
+    "The Findings section explicitly states 'No findings' when no issues are identified — it is never empty, absent, or omitted"
+  ],
+  "acModifiedBySpeckit": [
+    {
+      "original": "Review report is saved to review/HW-003-review.md",
+      "revised": "Review report is saved to review/HW-003-review.md; the review/ directory is created if it does not already exist",
+      "reason": "review/ directory is confirmed absent in the repo right now; without this, file write will fail silently or error"
+    },
+    {
+      "original": "Summary section records the result of running npm test (pass or fail with output snippet)",
+      "revised": "Summary section records the result of running the project-mandated test command (~/.nvm/versions/node/v20.20.0/bin/node ./node_modules/.bin/vitest run), and includes at minimum the final summary line (e.g. '3 passed | 0 failed') from its output",
+      "reason": "CLAUDE.md mandates Node 20 binary path — bare 'npm test' uses system node v14 which breaks vitest. 'output snippet' was also under-specified; minimum content is now explicit."
+    },
+    {
+      "original": "All 10 acceptance criteria from HW-001 are listed individually and each is marked as 'met' or 'not met' with a one-line rationale",
+      "revised": "All 10 acceptance criteria from HW-001 are listed individually using their verbatim text from the story definition (no paraphrasing), each marked as 'met' or 'not met' with a one-line rationale",
+      "reason": "Without 'verbatim text' guard, a review agent could paraphrase criteria in ways that change their meaning or omit edge cases — this pins them to game-prd.json as the source of truth"
+    }
+  ],
+  "acFlagged": [
+    {
+      "criterion": "No blocker findings are present when verdict is 'pass'",
+      "flag": "Logically redundant with 'Verdict is fail if any blocker finding exists' (this is its contrapositive). Harmless as a positive assertion and may aid implementors as a checklist item, but human should decide if it earns a slot or can be dropped."
+    }
+  ],
+  "splitStories": []
+}
+```
+</SPEC_AGENT>
+
+**Summary of speckit changes:**
+
+- **2 criteria added**: missing-file fail-fast behavior (greet.ts is confirmed absent in the repo today, so this is a real runtime path), and explicit "No findings" requirement to prevent ambiguous empty sections.
+- **3 criteria modified**: directory creation guard (review/ doesn't exist), Node 20 test command specificity (CLAUDE.md explicitly prohibits bare `npm test`), and verbatim HW-001 AC reproduction to prevent paraphrasing drift against `game-prd.json`.
+- **1 criterion flagged**: AC #8 is the logical contrapositive of AC #7 — redundant but harmless; left for human judgment.

@@ -1,0 +1,54 @@
+
+  RUN NUMBER: 20260806T200808Z
+
+[0;34m[20:11:29][0m Resetting story completed flags in /home/bradleyjerome/projects/ai/epam-cli/orchestrations/projects/metrolinx/runs/20260806T200808Z/work/nextmetrolinxcom-prd.json...
+[0;32m[SUCCESS][0m Stories reset to pending (phase: core)
+[0;36m[INFO][0m Control plane started (PID 2644962, port 8096)
+
+[0;35m━━━ Pipeline Step Checklist ━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━[0m
+  Step   Name                             Planned
+  ------ -------------------------------- --------
+  1      Specification pass               [0;32mACTIVE (EPAM_SPEC_MODE=0)[0m
+  1a       openspec (elaboration)         [0;32mACTIVE (z-ai/glm-5.2)[0m
+  1b       speckit (verification)         [0;32mACTIVE (z-ai/glm-5.1)[0m
+  2      CPA pre-pass                     [0;32mACTIVE (SKIP_CPA=1)[0m
+  3      Pre-phase skill assess           [0;32mACTIVE[0m
+  4      Hybrid pre-coord                 [1;33mSKIP (ORCH_MODE≠hybrid)[0m
+  5      Regression guard                 [1;33mSKIP (SKIP_REGRESSION_GUARD=true)[0m
+  6      mkdir src/ dirs                  [0;32mACTIVE[0m
+  7      PRD model coordinator            [0;32mACTIVE[0m
+  8      Main-branch stories              [0;32mACTIVE[0m
+  9      Auto-commit                      [0;36mCOND (if uncommitted changes)[0m
+  10     TC writer gate                   [0;36mCOND (SKIP_TC_WRITER=1 or no test stories)[0m
+  11     Skills coordinator audit         [0;32mACTIVE (SKIP_SKILLS_AUDIT=1)[0m
+  12     Tools coordinator audit          [0;32mACTIVE (SKIP_TOOLS_AUDIT=1)[0m
+  13     Create worktrees                 [0;36mCOND (if parallel stories exist)[0m
+  14     Primary agent                    [0;36mCOND (if primary stories)[0m
+  15     Independent agent                [0;36mCOND (if independent stories)[0m
+  16     Worktree health check            [0;36mCOND (if worktrees created)[0m
+  17     Merge worktrees                  [0;36mCOND (if worktrees created)[0m
+  18     Post-parallel assessment         [0;32mACTIVE[0m
+  19     Pre-review gate                  [0;32mACTIVE (SKIP_PRE_REVIEW_GATE=true)[0m
+  20     Lint gate                        [0;32mACTIVE (SKIP_LINT_GATE=true)[0m
+  21     Review stories                   [0;36mCOND (if review stories exist)[0m
+  22a    SAST sentinel                    [0;32mACTIVE (SKIP_TESTING_GATES=true)[0m
+  22b    Spec validator                   [0;32mACTIVE (SKIP_TESTING_GATES=true)[0m
+  22c    Review ranger                    [0;32mACTIVE (SKIP_TESTING_GATES=true)[0m
+  22d    Mutant hunter                    [0;32mACTIVE (SKIP_TESTING_GATES=true)[0m
+  22e    Fuzz-weaver                      [0;32mACTIVE (SKIP_TESTING_GATES=true)[0m
+  22f    Perf sentinel                    [0;32mACTIVE (SKIP_TESTING_GATES=true)[0m
+  23     Browser E2E routing              [1;33mSKIP (SKIP_BROWSER_E2E_ROUTING=true)[0m
+
+  [1;33mSKIP bypass env vars active: SKIP_TESTING_GATES=false  SKIP_CPA=0  SKIP_TC_WRITER=0  SKIP_REGRESSION_GUARD=true[0m
+[0;35m━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━[0m
+
+[0;36m  ▶[0m Step 1: Specification pass
+[0;34m[20:11:29][0m Step 1: Running specification pass for phase 'core'...
+spec-mode: fast-path qwen/z-ai/glm-5.2 (skipping MiniMax)
+Failed to parse JSON for tag SPEC_ASSIGNMENTS: Unexpected token 'B', "Based on m"... is not valid JSON
+spec-mode: fast-path qwen/z-ai/glm-5.2 (skipping MiniMax)
+spec-mode: TICKET_LINKS: missing required field "url" — required by its own tool definition
+spec-mode: fast-path qwen/z-ai/glm-5.2 (skipping MiniMax)
+spec-mode: search-term vocabulary unavailable for AMSD-2041 (Cannot read properties of null (reading 'cmd')) — seeding with an unfiltered query
+spec-mode: ⚠️ code-graph-detective plan/execution MISMATCH for AMSD-2041 — plan named [pagecomponent, pagecomponents, preview, draft, plan, novel, getentry, fetchcontent, next], final answer named [contentstack, options], no shared term and no stated reason for the change.
+spec-mode: fast-path qwen/z-ai/glm-5.1 (skipping MiniMax)

@@ -1,0 +1,94 @@
+# Prompt
+A code investigation of a bug produced the analysis below. Extract the single most-likely causal fix site and output ONLY a JSON array — no prose, no markdown fences, then stop. If the analysis is incomplete, output your BEST hypothesis from what it contains (a best guess beats nothing).
+[{"file":"<repo-relative path>","function":"<symbol>","reason":"<why THIS computes the wrong value, not just displays it>","fix":"<the exact minimal change: which line/expression to change and which EXISTING helper (symbol) to reuse>","helper":"<bare existing symbol name to reuse, or empty>"}]
+
+=== INVESTIGATION ===
+## Characterization Report — Checkout Email/Confirm Email Case Sensitivity
+
+### 1. `CheckoutForm.tsx` — confirmEmail validate rule (TRM774)
+
+Path: `src/components/pages/CheckoutPage/CheckoutForm.tsx`
+
+- `email` and `confirmEmail` are watched via `useWatch` at lines 126–131:
+```tsx
+126  const email = useWatch<ICheckoutFormValues, "email">({
+127    name: "email",
+128  });
+129  const confirmEmail = useWatch<ICheckoutFormValues, "confirmEmail">({
+130    name: "confirmEmail",
+131  });
+```
+- The confirmEmail `FormInput` (lines 289–322) carries the `validate` rule at **lines 305–309**:
+```tsx
+305    validate: (value: string) => {
+306      if (email && value && value !== email) {
+307        return t("TRM774");
+308      }
+309    },
+```
+This is a direct, case-sensitive strict-inequality string comparison (`value !== email`) with no `.toLowerCase()`/`.toLowerCase() === .toLowerCase()` or any other normalization. This matches the survey's claim exactly — line numbers 305–309 are confirmed current, unchanged.
+- Additional related wiring: email field's `onBlur` (line 263–265) triggers re-validation of `confirmEmail` only if `confirmEmail` is already populated; email field's `onChange` (line 283–285) clears `confirmEmail` errors on every keystroke in the email field. Both are orthogonal to the case-sensitivity bug (they control *when* validation reruns, not *how* values are compared).
+
+### 2. `CheckoutFormProvider.tsx` — default value seeding
+
+Path: `src/components/pages/CheckoutPage/CheckoutFormProvider.tsx`
+
+- `DEFAULT_FORM_VALUES` (lines 21–28) seeds `email: ""` and `confirmEmail: ""`.
+- For authenticated users, `formValues` (lines 41–60) prefills both fields **directly from `user.email`** with no transformation:
+```tsx
+46    return {
+47      ...defaultFormValues,
+48      ...(user
+49        ? {
+50            firstName: user.firstName,
+51            lastName: user.lastName,
+52            email: user.email,
+53            confirmEmail: user.email,
+54          }
+55        : {}),
+```
+Since both are prefilled from the *same* `user.email` string, this path itself never produces a same-email-different-case mismatch on its own — the bug manifests only when a user manually edits one of the two fields after prefill, or types both manually as a guest. No case-folding is applied anywhere in this file.
+
+### 3. `types.ts` — `ICheckoutFormValues`
+
+Path: `src/components/pages/CheckoutPage/types.ts` (full file, 11 lines)
+```ts
+export interface ICheckoutFormValues {
+  firstName: string;
+  lastName: string;
+  email: string;
+  confirmEmail: string;
+  emailConsent: boolean;
+  ticketDelivery: TicketDeliveryOption;
+}
+```
+Both `email` and `confirmEmail` are plain `string`. No branded/normalized type, no runtime transform declared here. Confirms no normalization exists at the type layer.
+
+### 4. `CheckoutForm.spec.tsx` — current test coverage
+
+Path: `src/components/pages/CheckoutPage/__tests__/CheckoutForm.spec.tsx`
+
+Enumerated scenarios touching email/confirmEmail:
+- **Render check** (line 174–180): both fields render with correct `data-testid`.
+- **Empty-fields submit validation** (line 191–199): expects 4 validation errors when all required fields are empty.
+- **Per-field update** (`it.each`, lines 201–231): typing a value into `email` or `confirmEmail` updates the field — includes a `confirmEmail` case using the *same* value as would be typed into `email` (`"garfield@test.com"`), but each field is tested independently/in isolation in this table, not against each other.
+- **Paste prevention on confirmEmail** (lines 233–246): `onPaste` handler blocks paste; asserts field value remains unchanged after a paste attempt.
+- **Blur-triggered TRM774 mismatch** (lines 248–260): types `"scooby@dooby.com"` into email, tabs, then types a *different* email `"shaggy@dooby.com"` into confirmEmail, tabs, and asserts a validation error with text `"TRM774"` appears.
+- **Authenticated prefill** (lines 262–277): asserts both `email` and `confirmEmail` are prefilled with `user.email` on authenticated session.
+
+**No case-difference scenario exists today.** There is no test that enters the same email address with differing letter casing into `email` vs `confirmEmail` and asserts pass/fail behavior. The only "same value" case in the `it.each` table types the identical literal string into each field independently — it never sets both fields together to compare mismatch/match behavior, and never varies casing.
+
+### 5. Server-side interaction — `src/pages/api/v1/ecommerce/checkouts`
+
+Checked both handler files:
+- `src/pages/api/v1/ecommerce/checkouts/index.ts` — `createCheckoutSchema.validate(...)` validates only `cartId`, `locale`, `correlationId`, `isTest` (per `IValidationResult` type, lines 21–29). No `email`/`confirmEmail` field anywhere.
+- `src/pages/api/v1/ecommerce/checkouts/[checkoutId].ts` — `getCheckoutSchema` validates `checkoutId`/`correlationId`/`isTest`; `updateCheckoutSchema` validates `checkoutId`/`locale`/`correlationId`/`isTest`. No email fields here either.
+- Grep for `email`/`Email` inside `src/pages/api/v1/ecommerce/checkouts/` returned zero matches in both files.
+- Traced the consumer: `CheckoutFormContainer.tsx` line 137–145 destructures `onSubmit(values: ICheckoutFormValues)` and pulls out `{ firstName, lastName, email, ticketDelivery, emailConsent }` — **`confirmEmail` is not destructured and is never forwarded** past this point (not present in any of the downstream payload objects at lines 174, 192, 204, 210, 213, 239, 255). `confirmEmail` is purely a client-side UX confirmation field discarded after form validation; only `email` is submitted onward.
+
+**Conclusion on scope:** The `/checkouts` API surface (create/get/update-checkout Joi schemas) has no knowledge of email or confirmEmail at all, and `confirmEmail` is never transmitted server-side in this codepath. Nothing found contradicts a client-only fix confined to `CheckoutForm.tsx`'s `validate` rule (lines 305–309) — server-side Joi schemas in this directory are not a factor for this specific mismatch check. (I did not trace the order/payment-submission endpoint that presumably consumes `email` further downstream, since `confirmEmail` doesn't reach it and it's outside the requested `checkouts` directory scope — flagging this as an area not covered if broader server-side email handling needs review.)
+
+# Output
+[{"file":"src/components/pages/CheckoutPage/CheckoutForm.tsx","function":"confirmEmail FormInput validate rule","reason":"The validate callback compares value !== email with raw case-sensitive strings, so identical emails differing only in letter case are incorrectly flagged as mismatched","fix":"Change line 306 comparison to compare normalized values, e.g. value.toLowerCase() !== email.toLowerCase()","helper":"toLowerCase"}]
+
+[coverage-gate] writer: no pre-flight has gated this run — standing down

@@ -1,0 +1,28 @@
+# Prompt
+Assign an implementation agent role to every story below.
+
+AVAILABLE ROLES — these are this project's own engineering roles. Choose from these and
+nothing else; the name you return must match one of them verbatim:
+- contentstack-live-preview-engineer
+    You are a senior frontend engineer specializing in Contentstack headless CMS integration with Next.js Pages Router applications. You implement Contentstack Live Preview across three codelines: nextgotransitcom, nextupexpresscom, and nextmetrolinxcom. All three use Next.js Pages Router with getStaticProps (SSG) and filesystem-cached content, NOT the CSR App Router pattern described in the linked Co
+- nextjs-preview-mode-engineer
+    You are a senior Next.js engineer specializing in Pages Router preview and SSG/ISR data flow. You work alongside the contentstack-live-preview-engineer to implement the Next.js routing and preview-mode layer for Contentstack Live Preview across nextgotransitcom, nextupexpresscom, and nextmetrolinxcom. All three codelines use Next.js Pages Router with getStaticProps and filesystem caching (readCach
+
+STORIES — a story listing more than one codeline needs ONE ASSIGNMENT PER CODELINE:
+- AMSD-2041: [GO, UP, MX] Live Preview of Content in CMS
+    codelines (assign one role for EACH): gotransit, upexpress, metrolinx
+    Original Requirements (discovery) AS a Content Author, I WANT to preview draft entries in CMS, SO THAT I can see how content will be shown on the website ability to preview draft entries in CMS Notes& Assumptions Limitation: Might not be possible to preview protected pages and content. Original Total Estimate: 8 Original FE Estimate: 8 Original DAM Estimate: 0 Original BE Estimate: 0
+
+Pick the role whose stated expertise actually covers the work the story describes. If two
+roles could plausibly own a story, prefer the one whose brief names the surface the story
+touches. Every story must be assigned exactly one role.
+
+THE OWNER MUST AUTHOR THE CODE. Assign the role that will EDIT THE FILES this story changes —
+the one whose brief names those files or directories. A role whose brief is about settings in
+a vendor's console, or about documentation, cannot deliver a story here: the agent's output is
+a change in a repository. Live 2026-08-07: this story went to the one role of three that owned
+no source files, and all such a role can produce is a configuration note. Where the story needs
+both console configuration and code, the code owner is the assignee.
+
+# Output
+{"assignments": [{"storyId": "AMSD-2041", "codeline": "gotransit", "agentRole": "contentstack-live-preview-engineer", "reason": "The story implements Contentstack Live Preview (previewing draft entries in CMS) on the gotransit codeline. The contentstack-live-preview-engineer's brief explicitly states they 'implement Contentstack Live Preview across three codelines' including nextgotransitcom, using Next.js Pages Router with getStaticProps and filesystem-cached content. This directly matches the story's requirement to enable Content Authors to preview draft entries in the CMS. The nextjs-preview-mode-engineer works 'alongside' this role as a supporting layer, but the story's primary surface is the Contentstack Live Preview integration itself, which is the contentstack-live-preview-engineer's domain. The contentstack-live-preview-engineer owns the source files that implement the live preview SDK integration, content delivery, and preview rendering — they are the code owner who will edit the files this story changes."}, {"storyId": "AMSD-2041", "codeline": "upexpress", "agentRole": "contentstack-live-preview-engineer", "reason": "Same rationale as gotransit: the contentstack-live-preview-engineer's brief explicitly names nextupexpresscom as one of the three codelines they implement Contentstack Live Preview on, using Next.js Pages Router with getStaticProps and filesystem-cached content. The story requires implementing live preview of draft CMS content, which is precisely this role's stated specialization. The nextjs-preview-mode-engineer provides the supporting Next.js preview-mode routing layer but does not own the Contentstack Live Preview integration code itself. The contentstack-live-preview-engineer is the code owner who will edit the files implementing live preview on this codeline."}, {"storyId": "AMSD-2041", "codeline": "metrolinx", "agentRole": "contentstack-live-preview-engineer", "reason": "Same rationale as the other two codelines: the contentstack-live-preview-engineer's brief explicitly names nextmetrolinxcom as one of the three codelines they implement Contentstack Live Preview on, using Next.js Pages Router with getStaticProps and filesystem-cached content. The story requires implementing live preview of draft CMS content — the core of this role's stated expertise. The nextjs-preview-mode-engineer works alongside as a supporting layer but the Contentstack Live Preview integration is the contentstack-live-preview-engineer's primary domain and they own the source files this story changes."}]}

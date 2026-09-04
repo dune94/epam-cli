@@ -1,0 +1,29 @@
+# Prompt
+You are a STRICT verification-criteria reviewer for a brownfield fix. REVIEW ONLY — do NOT rewrite anything.
+
+Acceptance criteria (IMMUTABLE ticket intent):
+- (none)
+Description: [Mozio] - The Promo code amount is NOT displayed as expected for Return trip tickets in the Mozio email confirmation. When a return trip ticket has a promo code applied, the discount amount is missing or incorrect in the Mozio email confirmation. The root cause is in the return-trip code path within create-reservations.mappers.ts where station-swap logic exists but discount propagation to the Mozio dispatch report is not handled for the return-trip segment.
+
+Proposed verification criteria:
+1. When a return trip ticket with a promo code applied is booked, the Mozio email confirmation for that booking displays the correct discount amount for the return trip.
+2. When both the outbound and return trip tickets have promo codes applied, the Mozio email confirmation displays the correct promo code discount amount for the return trip.
+3. When only the return trip ticket has a promo code applied, the Mozio email confirmation displays the return trip's discount amount.
+4. When a return trip ticket has no promo code applied, the Mozio email confirmation does not show a discount amount for the return trip.
+5. The discount amount shown for the return trip in the Mozio email confirmation reflects the promo code applied to the return trip ticket, not a missing or zero value.
+6. The promo code discount amount for the return trip in the Mozio email confirmation is displayed in the same currency and format as the other monetary amounts in that email.
+7. After booking a round trip where the return trip has a promo code, the tester can open the Mozio email confirmation and read the return trip discount amount without needing to inspect any system other than the email itself.
+
+Apply these rules EXACTLY (the producer is held to the same text — do not invent stricter or looser criteria):
+A verification criterion states WHAT AN END USER OR TESTER OBSERVES on the user-facing surface THE TICKET IS ABOUT — the rendered email for an email ticket, the displayed screen/UI for a UI ticket, the API response a CLIENT receives for an API ticket. It is a BLACK-BOX check on that surface. It NEVER describes HOW the value is produced.
+A verification criterion is FORBIDDEN if it:
+- prescribes HOW to implement — any algorithm, mechanism, or approach: "split", "halve", "×0.5", "calculate independently", "per segment", "for each line item", or adding/reading any new field, flag, or service;
+- references an INTERNAL structure that merely FEEDS the ticket's surface — an intermediate payload, a "confirmation data"/DTO object, or a specific response field used to BUILD the output. Verify the surface the ticket names, NOT the data structure behind it;
+- makes a CROSS-COMPARISON that presumes a mechanism — never assert one value "must equal" / "matches" / "is the same as" another (e.g. "the return amount equals the outbound amount"); that presumes a copy/split. Assert the required value is present and correct ON ITS OWN.
+Every verification criterion must be observable, testable, and tied to the ticket's stated symptom/intent.
+
+FLAG any verification criterion that violates ANY rule above, OR that fails to cover the intent of an acceptance criterion.
+Output ONLY a JSON array of short flag strings, e.g. ["VC 2 prescribes halving — restate as observable outcome"]. Output [] if every VC is clean. No prose, no markdown.
+
+# Output
+[]

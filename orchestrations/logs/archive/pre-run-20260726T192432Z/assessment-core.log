@@ -1,0 +1,18 @@
+All deliverables are complete. Here's a summary:
+
+## Assessment Complete — Phase: core
+
+### Key Findings
+| Metric | Actual | Forecast | Variance |
+|--------|--------|----------|----------|
+| Time | 0.80 min | 3.03 min | **-2.23 min (-73.6%)** |
+| Cost | $0.0304 | $0.5836 | **-$0.5532 (-94.8%)** |
+
+- **over_threshold**: `true` (variance exceeds 25% on both dimensions, but in the under-spend direction)
+- **Single story** (AMSD-1820): A precisely-prescribed single-line bug fix completed in under a minute vs ~3 min forecast
+- **No agentRole mismatches** found — `typescript-engineer` correctly matches the TypeScript bug-fix task
+- **No pending stories in later phases** — core is the only phase, so no role reassignments were needed
+
+### Files Written
+1. **`phase-skill-assessments.jsonl`** — Single-line JSON assessment record (deduplicated, stale prior record removed)
+2. **`phase-improvements/core.md`** — Human-readable improvement report with 3 recommendations focused on forecast calibration for well-prescribed defect fixes

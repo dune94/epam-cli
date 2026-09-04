@@ -1,0 +1,791 @@
+=== Prompt for AMSD-2041 (attempt 1) ===
+CRITICAL — these files already exist. Their real content is injected below (## Existing File Contents) — you do NOT need to ReadFile them to see what's already there.
+Do NOT import or reference anything that doesn't appear in the injected content below — a plausible-sounding module name is not a real one.
+Only call ReadFile yourself if you need to see MORE of a file than what's shown (e.g. it was truncated), or a file not listed below.
+
+
+---
+
+Implement user story AMSD-2041: [GO, UP, MX] Live Preview of Content in CMS
+
+## Story Description
+[GO, UP, MX] Live Preview of Content in CMS
+
+## Acceptance Criteria
+- 
+
+
+## Root Cause Analysis & Prescribed Fix (AUTHORITATIVE — start here, do not re-trace)
+A code investigation already traced this bug to its cause and prescribed the minimal fix below. This is the plan of record. Apply it; do NOT re-read the whole codebase to re-derive it.
+
+The Acceptance Criteria above describe the desired END BEHAVIOR to VERIFY — they are NOT an implementation blueprint. Do not re-architect, split values, or add new fields/abstractions to satisfy an AC literally when the prescribed minimal fix already makes that AC pass. Implement the fix below; the ACs are how you check you got it right.
+
+HARD RULES:
+- Make the SMALLEST change that fixes the root cause. Fewer lines of code is always better.
+- REUSE existing functions. Before writing any new helper, search the repo for an existing util/parser/formatter that already does what you need (use the CodeGraph tool documented below) and call it. Writing novel code when a helper already exists is a defect to be rejected in review.
+- **src/context/ContentstackContext.tsx** (`ContentstackProvider`): This is where content is PROVIDED to all 236 useContent consumers. It currently creates a STATIC context value from defaultContent via useMemo — content never updates after initial render. For Live Preview to deliver draft content in real-time, this provider must subscribe to Contentstack Live Preview SDK events and update the content state when they fire. All downstream consumers (useContent → getContentByKey) read from this single context, so fixing the provider fixes delivery to every consumer.
+  - **Minimal fix:** Replace the useMemo with useState(initialized from defaultContent) so content can be updated at runtime. Add a useEffect that, only when running inside the CMS editor iframe (detect via Contentstack Live Preview SDK's isLivePreviewEnabled or window.__CONTENTSTACK_LIVE_PREVIEW__), calls the SDK's onLivePreview callback to setState with the incoming draft content. The provider already receives defaultContent and wraps it in context — the only change is making that context value mutable via live-preview events instead of frozen via useMemo. The useContent hook and all 236 consumers require zero changes because they already read from ContentstackContext.
+
+
+## Verification Criteria (what a tester will CONFIRM — your change must satisfy every one)
+These are observable checks, derived from the acceptance criteria and description. They describe WHAT is observed, not how to build it. Make the minimal change that makes all of these true; your accompanying test should assert them:
+- When the application page is opened inside the Contentstack CMS editor's preview panel, the rendered page displays the draft (unpublished) version of the content being edited, not the last published version.
+- When the application page is opened outside the CMS editor (e.g., in a normal browser tab), the rendered page displays the published content, with no draft or unpublished changes visible.
+- While the page is open in the CMS editor's preview panel, when a content author edits a text field in the CMS, the edited text appears on the rendered page without the author publishing the entry or manually reloading the page.
+- While the page is open in the CMS editor's preview panel, when a content author makes several successive edits to content, each successive change becomes visible on the rendered page, reflecting the latest edit.
+- When a content author edits content that appears in multiple places on the rendered page, every visible instance of that content on the page shows the updated draft text.
+- When the page is open in the CMS editor's preview panel and the live connection to the CMS is lost (e.g., network interruption), the rendered page continues to display the most recently shown content without crashing, going blank, or showing an error screen.
+- When the page is open in the CMS editor's preview panel and the author switches between different entries or content items in the CMS, the rendered page updates to show the content of the item currently being edited.
+
+## Tests are NOT your job this turn
+A dedicated test-writer agent runs immediately after your fix commits and owns the bug-reproducing test. Do NOT write, edit, or create any test file (*.test.*, *.spec.*, __tests__/). Write ONLY the fix. Adding a test here wastes your turn budget and has caused repeated failures.
+
+## CodeGraph Tool — find EXISTING functions to reuse (do this BEFORE writing any new helper)
+An existing-code search tool is available. Run it with the Bash tool to discover reusable functions instead of inventing new ones:
+  PROJECT_ROOT="/home/bradleyjerome/projects/metrolinx/next.upexpress.com" bash "/home/bradleyjerome/projects/ai/epam-cli/orchestrations/scripts/codegraph-agent-query.sh" helpers <domain nouns>   # existing util/parser/formatter to REUSE (symbol + import path)
+  PROJECT_ROOT="/home/bradleyjerome/projects/metrolinx/next.upexpress.com" bash "/home/bradleyjerome/projects/ai/epam-cli/orchestrations/scripts/codegraph-agent-query.sh" query <SymbolName>        # exact definition site of a symbol
+  PROJECT_ROOT="/home/bradleyjerome/projects/metrolinx/next.upexpress.com" bash "/home/bradleyjerome/projects/ai/epam-cli/orchestrations/scripts/codegraph-agent-query.sh" callees <SymbolName>      # what a function already calls
+RULE: Before you add ANY new function, run `helpers` for what it would do. If a suitable function already exists, import and call it — do NOT duplicate it. Fewer lines of code is always better.
+
+
+
+
+
+## Technical Notes
+None specified
+
+
+## Files to Create/Modify (EXACT ABSOLUTE PATHS — write to these paths exactly)
+
+
+## Dependencies
+None
+
+## Module resolution in this codeline
+A bare import that names a file under any of these directories is INTERNAL source, not a dependency — never add it to the dependency manifest:
+  __tests__, migration-scripts, public, review, src, zap_hooks
+Source extensions here: .ts, .tsx, .js, .jsx, .mjs, .cjs
+Write imports the way the existing files in this codeline write them; read a neighbouring file before inventing a path.
+
+
+## Instructions
+CRITICAL — these files already exist. Their real content is injected below (## Existing File Contents) — you do NOT need to ReadFile them to see what's already there.
+Do NOT import or reference anything that doesn't appear in the injected content below — a plausible-sounding module name is not a real one.
+Only call ReadFile yourself if you need to see MORE of a file than what's shown (e.g. it was truncated), or a file not listed below.
+
+**The content of every file listed above is already shown in ## Existing File Contents — use that, do not spend a tool call re-reading them. Use Edit for targeted changes to existing files — do NOT overwrite an existing file wholesale with WriteFile.**
+
+1. Use the injected ## Existing File Contents above to verify what actually exists (exports, types, existing utilities) before writing any code — do not guess, and do not re-read a file already shown in full
+2. Implement all acceptance criteria for this story
+3. Follow the project's existing code patterns and conventions
+4. Do NOT create tests unless explicitly required in acceptance criteria
+
+After implementation, provide a brief summary of what was created/modified.
+
+## Relevant Knowledge Base Entries
+The following was learned from previous story implementations and is relevant to your agent role. Apply this knowledge before writing any code:
+
+- [2026-07-06T18:11:26Z] Use vi.fn().mockResolvedValue(value) to make a mock return a resolved Promise.
+- [2026-07-06T20:31:11Z] Use `test: { passWithNoTests: true }` in vitest.config.ts or create a stub test file when no *.test.ts files exist.
+- [2026-07-06T20:33:03Z] Enable globals:true in vitest.config.ts so describe, it, and expect work without imports, reducing boilerplate in test files.
+- [2026-07-06T23:47:34Z] Use CommonJS-compatible patterns in src/server.ts: avoid `import.meta.url` and top-level `await`; gate listen with `if (require.main === module)`.
+- [2026-07-07T02:35:30Z] Always include a non-test source file in src/ alongside any src/*.test.ts file, since tsconfig.json excludes test files from tsc --noEmit.
+- [2026-07-07T19:01:34Z] Only modify or create files explicitly listed in the story's acceptance criteria. Do not touch files belonging to other stories or outside the current task scope.
+- [2026-07-07T20:17:57Z] [unreviewed-fallback] Avoid using deprecated TypeScript compiler options like 'moduleResolution=node10'; use 'moduleResolution=node' instead.
+- [2026-07-17T20:20:58Z] Always: Before importing a module or referencing a type/property, always read the actual source file to verify the export exists, its exact path, its properties, and its constructor/factory signatures
+- [2026-07-23T01:15:16Z] Always: In tsconfig.json, always use moduleResolution 'node' (not 'node10' or 'Node10') — 'node10' was removed in TypeScript 5.x. The correct value for CommonJS + Node resolution is 'node'.
+- [2026-07-23T14:30:00Z] CORRECTION to a prior entry (2026-07-23T01:17:52Z, now removed): that entry wrongly claimed 'moduleResolution: node' itself is removed and must become 'node16'/'nodenext'. Root-caused via mock1 (epam-cli orchestration test): 'node' is valid and correct through TypeScript 5.x (confirmed on 5.9.3) — it was only removed in TypeScript 7.x. The real defect was an unpinned `typescript` devDependency letting a fallback `npm install` pull latest (7.x) instead of the project's intended version. Do NOT rewrite a working tsconfig.json's moduleResolution in response to a TS5108 error — first check `node_modules/typescript/package.json`'s version; if it's 7.x and the rest of the project expects 5.x, the fix is pinning/reinstalling the correct typescript version, not changing moduleResolution.
+
+## Knowledge Base Contribution (do this LAST — after writing all implementation files)
+Your assigned KB entry ID for this run: **KB-017**
+
+IMPORTANT: Write ALL implementation files first. Only AFTER writing every required file should you optionally append a KB entry.
+Do NOT read orchestrations/agents/KB.md before writing implementation files. The relevant KB entries are already injected above.
+
+If (and only if) you discover a non-obvious pattern during implementation, append one entry to `orchestrations/agents/KB.md`:
+
+```markdown
+## KB-017 -- 2026-07-30
+
+**Category:** <backend|frontend|infrastructure|testing|orchestration>
+**AgentRole:** <your agentRole from the story>
+**Tags:** <comma-separated tech keywords, e.g. typescript, node, cli>
+**Trigger:** <retry|first-success>
+**StoryRef:** AMSD-2041
+
+<One concise paragraph: the specific pattern, gotcha, or anti-pattern.>
+```
+
+Only write an entry if the knowledge is genuinely non-obvious. Skip trivial observations.
+
+## Execution Plan
+Follow this plan step by step:
+1. Locate the CMS content editor component (e.g., `ContentEditor` or equivalent) by searching the codebase for the main editing form/view; identify where content state is managed and how changes are dispatched.
+
+2. Create a new `LivePreview` component that accepts a `content` prop (string or structured object) and renders an HTML preview using a sanitization library (e.g., DOMPurify) to prevent XSS; signature: `function LivePreview({ content }: { content: string | object }): JSX.Element`.
+
+3. Add a `useDebouncedValue` hook (or reuse an existing one) with a 300ms delay to debounce content updates before passing them to the preview; signature: `function useDebouncedValue<T>(value: T, delay: number): T`.
+
+4. Integrate `LivePreview` into the editor layout as a resizable side pane or toggleable panel; wire the debounced content state from the editor to the `LivePreview` component's `content` prop.
+
+5. Ensure the preview re-renders on all relevant content changes (text body, title, media embeds, custom blocks) by subscribing to the same content store or state slice the editor uses.
+
+6. Add a toggle control (button or switch) in the editor toolbar to show/hide the live preview pane; persist the user's preference in local storage or user settings.
+
+7. Handle edge cases: empty content state (show placeholder text), very large content (throttle or virtualize if needed), and unsupported block types (render a fallback message).
+
+8. Write unit tests for `LivePreview` covering: rendering plain text, rendering sanitized HTML, handling empty content, and updating when the `content` prop changes.
+
+9. Write unit tests for `useDebouncedValue` verifying that the returned value updates only after the specified delay and does not update on every intermediate change.
+
+10. Write an integration test that mounts the editor with `LivePreview`, simulates typing in the editor, and asserts the preview pane reflects the updated content after the debounce window.
+=== End Prompt ===
+
+=== epam Output (attempt 1) ===
+Agent reached maximum iterations (12) without completing.
+Agent reached maximum iterations (12) without completing.
+
+=== epam exited with code 1 ===
+=== Prompt for AMSD-2041 (attempt 2) ===
+CRITICAL — these files already exist. Their real content is injected below (## Existing File Contents) — you do NOT need to ReadFile them to see what's already there.
+Do NOT import or reference anything that doesn't appear in the injected content below — a plausible-sounding module name is not a real one.
+Only call ReadFile yourself if you need to see MORE of a file than what's shown (e.g. it was truncated), or a file not listed below.
+
+
+---
+
+Implement user story AMSD-2041: [GO, UP, MX] Live Preview of Content in CMS
+
+## Story Description
+[GO, UP, MX] Live Preview of Content in CMS
+
+## Acceptance Criteria
+- 
+
+
+## Root Cause Analysis & Prescribed Fix (AUTHORITATIVE — start here, do not re-trace)
+A code investigation already traced this bug to its cause and prescribed the minimal fix below. This is the plan of record. Apply it; do NOT re-read the whole codebase to re-derive it.
+
+The Acceptance Criteria above describe the desired END BEHAVIOR to VERIFY — they are NOT an implementation blueprint. Do not re-architect, split values, or add new fields/abstractions to satisfy an AC literally when the prescribed minimal fix already makes that AC pass. Implement the fix below; the ACs are how you check you got it right.
+
+HARD RULES:
+- Make the SMALLEST change that fixes the root cause. Fewer lines of code is always better.
+- REUSE existing functions. Before writing any new helper, search the repo for an existing util/parser/formatter that already does what you need (use the CodeGraph tool documented below) and call it. Writing novel code when a helper already exists is a defect to be rejected in review.
+- **src/context/ContentstackContext.tsx** (`ContentstackProvider`): This is where content is PROVIDED to all 236 useContent consumers. It currently creates a STATIC context value from defaultContent via useMemo — content never updates after initial render. For Live Preview to deliver draft content in real-time, this provider must subscribe to Contentstack Live Preview SDK events and update the content state when they fire. All downstream consumers (useContent → getContentByKey) read from this single context, so fixing the provider fixes delivery to every consumer.
+  - **Minimal fix:** Replace the useMemo with useState(initialized from defaultContent) so content can be updated at runtime. Add a useEffect that, only when running inside the CMS editor iframe (detect via Contentstack Live Preview SDK's isLivePreviewEnabled or window.__CONTENTSTACK_LIVE_PREVIEW__), calls the SDK's onLivePreview callback to setState with the incoming draft content. The provider already receives defaultContent and wraps it in context — the only change is making that context value mutable via live-preview events instead of frozen via useMemo. The useContent hook and all 236 consumers require zero changes because they already read from ContentstackContext.
+
+
+## Verification Criteria (what a tester will CONFIRM — your change must satisfy every one)
+These are observable checks, derived from the acceptance criteria and description. They describe WHAT is observed, not how to build it. Make the minimal change that makes all of these true; your accompanying test should assert them:
+- When the application page is opened inside the Contentstack CMS editor's preview panel, the rendered page displays the draft (unpublished) version of the content being edited, not the last published version.
+- When the application page is opened outside the CMS editor (e.g., in a normal browser tab), the rendered page displays the published content, with no draft or unpublished changes visible.
+- While the page is open in the CMS editor's preview panel, when a content author edits a text field in the CMS, the edited text appears on the rendered page without the author publishing the entry or manually reloading the page.
+- While the page is open in the CMS editor's preview panel, when a content author makes several successive edits to content, each successive change becomes visible on the rendered page, reflecting the latest edit.
+- When a content author edits content that appears in multiple places on the rendered page, every visible instance of that content on the page shows the updated draft text.
+- When the page is open in the CMS editor's preview panel and the live connection to the CMS is lost (e.g., network interruption), the rendered page continues to display the most recently shown content without crashing, going blank, or showing an error screen.
+- When the page is open in the CMS editor's preview panel and the author switches between different entries or content items in the CMS, the rendered page updates to show the content of the item currently being edited.
+
+## Tests are NOT your job this turn
+A dedicated test-writer agent runs immediately after your fix commits and owns the bug-reproducing test. Do NOT write, edit, or create any test file (*.test.*, *.spec.*, __tests__/). Write ONLY the fix. Adding a test here wastes your turn budget and has caused repeated failures.
+
+## CodeGraph Tool — find EXISTING functions to reuse (do this BEFORE writing any new helper)
+An existing-code search tool is available. Run it with the Bash tool to discover reusable functions instead of inventing new ones:
+  PROJECT_ROOT="/home/bradleyjerome/projects/metrolinx/next.upexpress.com" bash "/home/bradleyjerome/projects/ai/epam-cli/orchestrations/scripts/codegraph-agent-query.sh" helpers <domain nouns>   # existing util/parser/formatter to REUSE (symbol + import path)
+  PROJECT_ROOT="/home/bradleyjerome/projects/metrolinx/next.upexpress.com" bash "/home/bradleyjerome/projects/ai/epam-cli/orchestrations/scripts/codegraph-agent-query.sh" query <SymbolName>        # exact definition site of a symbol
+  PROJECT_ROOT="/home/bradleyjerome/projects/metrolinx/next.upexpress.com" bash "/home/bradleyjerome/projects/ai/epam-cli/orchestrations/scripts/codegraph-agent-query.sh" callees <SymbolName>      # what a function already calls
+RULE: Before you add ANY new function, run `helpers` for what it would do. If a suitable function already exists, import and call it — do NOT duplicate it. Fewer lines of code is always better.
+
+
+
+
+
+## Technical Notes
+None specified
+
+
+## Files to Create/Modify (EXACT ABSOLUTE PATHS — write to these paths exactly)
+
+
+## Dependencies
+None
+
+## Module resolution in this codeline
+A bare import that names a file under any of these directories is INTERNAL source, not a dependency — never add it to the dependency manifest:
+  __tests__, migration-scripts, public, review, src, zap_hooks
+Source extensions here: .ts, .tsx, .js, .jsx, .mjs, .cjs
+Write imports the way the existing files in this codeline write them; read a neighbouring file before inventing a path.
+
+
+## Instructions
+CRITICAL — these files already exist. Their real content is injected below (## Existing File Contents) — you do NOT need to ReadFile them to see what's already there.
+Do NOT import or reference anything that doesn't appear in the injected content below — a plausible-sounding module name is not a real one.
+Only call ReadFile yourself if you need to see MORE of a file than what's shown (e.g. it was truncated), or a file not listed below.
+
+**The content of every file listed above is already shown in ## Existing File Contents — use that, do not spend a tool call re-reading them. Use Edit for targeted changes to existing files — do NOT overwrite an existing file wholesale with WriteFile.**
+
+1. Use the injected ## Existing File Contents above to verify what actually exists (exports, types, existing utilities) before writing any code — do not guess, and do not re-read a file already shown in full
+2. Implement all acceptance criteria for this story
+3. Follow the project's existing code patterns and conventions
+4. Do NOT create tests unless explicitly required in acceptance criteria
+
+After implementation, provide a brief summary of what was created/modified.
+
+## Relevant Knowledge Base Entries
+The following was learned from previous story implementations and is relevant to your agent role. Apply this knowledge before writing any code:
+
+- [2026-07-06T18:11:26Z] Use vi.fn().mockResolvedValue(value) to make a mock return a resolved Promise.
+- [2026-07-06T20:31:11Z] Use `test: { passWithNoTests: true }` in vitest.config.ts or create a stub test file when no *.test.ts files exist.
+- [2026-07-06T20:33:03Z] Enable globals:true in vitest.config.ts so describe, it, and expect work without imports, reducing boilerplate in test files.
+- [2026-07-06T23:47:34Z] Use CommonJS-compatible patterns in src/server.ts: avoid `import.meta.url` and top-level `await`; gate listen with `if (require.main === module)`.
+- [2026-07-07T02:35:30Z] Always include a non-test source file in src/ alongside any src/*.test.ts file, since tsconfig.json excludes test files from tsc --noEmit.
+- [2026-07-07T19:01:34Z] Only modify or create files explicitly listed in the story's acceptance criteria. Do not touch files belonging to other stories or outside the current task scope.
+- [2026-07-07T20:17:57Z] [unreviewed-fallback] Avoid using deprecated TypeScript compiler options like 'moduleResolution=node10'; use 'moduleResolution=node' instead.
+- [2026-07-17T20:20:58Z] Always: Before importing a module or referencing a type/property, always read the actual source file to verify the export exists, its exact path, its properties, and its constructor/factory signatures
+- [2026-07-23T01:15:16Z] Always: In tsconfig.json, always use moduleResolution 'node' (not 'node10' or 'Node10') — 'node10' was removed in TypeScript 5.x. The correct value for CommonJS + Node resolution is 'node'.
+- [2026-07-23T14:30:00Z] CORRECTION to a prior entry (2026-07-23T01:17:52Z, now removed): that entry wrongly claimed 'moduleResolution: node' itself is removed and must become 'node16'/'nodenext'. Root-caused via mock1 (epam-cli orchestration test): 'node' is valid and correct through TypeScript 5.x (confirmed on 5.9.3) — it was only removed in TypeScript 7.x. The real defect was an unpinned `typescript` devDependency letting a fallback `npm install` pull latest (7.x) instead of the project's intended version. Do NOT rewrite a working tsconfig.json's moduleResolution in response to a TS5108 error — first check `node_modules/typescript/package.json`'s version; if it's 7.x and the rest of the project expects 5.x, the fix is pinning/reinstalling the correct typescript version, not changing moduleResolution.
+
+## Knowledge Base Contribution (do this LAST — after writing all implementation files)
+Your assigned KB entry ID for this run: **KB-017**
+**This is retry attempt 1** — a previous attempt failed. You MUST write a KB entry documenting what went wrong and what you changed.
+
+IMPORTANT: Write ALL implementation files first. Only AFTER writing every required file should you optionally append a KB entry.
+Do NOT read orchestrations/agents/KB.md before writing implementation files. The relevant KB entries are already injected above.
+
+If (and only if) you discover a non-obvious pattern during implementation, append one entry to `orchestrations/agents/KB.md`:
+
+```markdown
+## KB-017 -- 2026-07-30
+
+**Category:** <backend|frontend|infrastructure|testing|orchestration>
+**AgentRole:** <your agentRole from the story>
+**Tags:** <comma-separated tech keywords, e.g. typescript, node, cli>
+**Trigger:** <retry|first-success>
+**StoryRef:** AMSD-2041
+
+<One concise paragraph: the specific pattern, gotcha, or anti-pattern.>
+```
+
+Only write an entry if the knowledge is genuinely non-obvious. Skip trivial observations.
+
+## Execution Plan
+Follow this plan step by step:
+1. Locate the CMS content editor component (e.g., `ContentEditor` or equivalent) by searching the codebase for the main editing form/view; identify where content state is managed and how changes are dispatched.
+
+2. Create a new `LivePreview` component that accepts a `content` prop (string or structured object) and renders an HTML preview using a sanitization library (e.g., DOMPurify) to prevent XSS; signature: `function LivePreview({ content }: { content: string | object }): JSX.Element`.
+
+3. Add a `useDebouncedValue` hook (or reuse an existing one) with a 300ms delay to debounce content updates before passing them to the preview; signature: `function useDebouncedValue<T>(value: T, delay: number): T`.
+
+4. Integrate `LivePreview` into the editor layout as a resizable side pane or toggleable panel; wire the debounced content state from the editor to the `LivePreview` component's `content` prop.
+
+5. Ensure the preview re-renders on all relevant content changes (text body, title, media embeds, custom blocks) by subscribing to the same content store or state slice the editor uses.
+
+6. Add a toggle control (button or switch) in the editor toolbar to show/hide the live preview pane; persist the user's preference in local storage or user settings.
+
+7. Handle edge cases: empty content state (show placeholder text), very large content (throttle or virtualize if needed), and unsupported block types (render a fallback message).
+
+8. Write unit tests for `LivePreview` covering: rendering plain text, rendering sanitized HTML, handling empty content, and updating when the `content` prop changes.
+
+9. Write unit tests for `useDebouncedValue` verifying that the returned value updates only after the specified delay and does not update on every intermediate change.
+
+10. Write an integration test that mounts the editor with `LivePreview`, simulates typing in the editor, and asserts the preview pane reflects the updated content after the debounce window.
+
+## Coordinator Guidance (retry 1)
+The following targeted instruction was identified from the previous failure:
+CRITICAL: The previous attempt exhausted all available turns without creating the required deliverable. These files already exist — their real content is injected in ## Existing File Contents; do not spend turns re-reading them. Use Edit for a targeted, minimal change and act on it immediately — do not re-explore the codebase beyond what's already injected.
+=== End Prompt ===
+
+=== epam Output (attempt 2) ===
+Agent reached maximum iterations (12) without completing.
+Agent reached maximum iterations (12) without completing.
+
+=== epam exited with code 1 ===
+=== Prompt for AMSD-2041 (attempt 3) ===
+CRITICAL — these files already exist. Their real content is injected below (## Existing File Contents) — you do NOT need to ReadFile them to see what's already there.
+Do NOT import or reference anything that doesn't appear in the injected content below — a plausible-sounding module name is not a real one.
+Only call ReadFile yourself if you need to see MORE of a file than what's shown (e.g. it was truncated), or a file not listed below.
+
+
+---
+
+Implement user story AMSD-2041: [GO, UP, MX] Live Preview of Content in CMS
+
+## Story Description
+[GO, UP, MX] Live Preview of Content in CMS
+
+## Acceptance Criteria
+- 
+
+
+## Root Cause Analysis & Prescribed Fix (AUTHORITATIVE — start here, do not re-trace)
+A code investigation already traced this bug to its cause and prescribed the minimal fix below. This is the plan of record. Apply it; do NOT re-read the whole codebase to re-derive it.
+
+The Acceptance Criteria above describe the desired END BEHAVIOR to VERIFY — they are NOT an implementation blueprint. Do not re-architect, split values, or add new fields/abstractions to satisfy an AC literally when the prescribed minimal fix already makes that AC pass. Implement the fix below; the ACs are how you check you got it right.
+
+HARD RULES:
+- Make the SMALLEST change that fixes the root cause. Fewer lines of code is always better.
+- REUSE existing functions. Before writing any new helper, search the repo for an existing util/parser/formatter that already does what you need (use the CodeGraph tool documented below) and call it. Writing novel code when a helper already exists is a defect to be rejected in review.
+- **src/context/ContentstackContext.tsx** (`ContentstackProvider`): This is where content is PROVIDED to all 236 useContent consumers. It currently creates a STATIC context value from defaultContent via useMemo — content never updates after initial render. For Live Preview to deliver draft content in real-time, this provider must subscribe to Contentstack Live Preview SDK events and update the content state when they fire. All downstream consumers (useContent → getContentByKey) read from this single context, so fixing the provider fixes delivery to every consumer.
+  - **Minimal fix:** Replace the useMemo with useState(initialized from defaultContent) so content can be updated at runtime. Add a useEffect that, only when running inside the CMS editor iframe (detect via Contentstack Live Preview SDK's isLivePreviewEnabled or window.__CONTENTSTACK_LIVE_PREVIEW__), calls the SDK's onLivePreview callback to setState with the incoming draft content. The provider already receives defaultContent and wraps it in context — the only change is making that context value mutable via live-preview events instead of frozen via useMemo. The useContent hook and all 236 consumers require zero changes because they already read from ContentstackContext.
+
+
+## Verification Criteria (what a tester will CONFIRM — your change must satisfy every one)
+These are observable checks, derived from the acceptance criteria and description. They describe WHAT is observed, not how to build it. Make the minimal change that makes all of these true; your accompanying test should assert them:
+- When the application page is opened inside the Contentstack CMS editor's preview panel, the rendered page displays the draft (unpublished) version of the content being edited, not the last published version.
+- When the application page is opened outside the CMS editor (e.g., in a normal browser tab), the rendered page displays the published content, with no draft or unpublished changes visible.
+- While the page is open in the CMS editor's preview panel, when a content author edits a text field in the CMS, the edited text appears on the rendered page without the author publishing the entry or manually reloading the page.
+- While the page is open in the CMS editor's preview panel, when a content author makes several successive edits to content, each successive change becomes visible on the rendered page, reflecting the latest edit.
+- When a content author edits content that appears in multiple places on the rendered page, every visible instance of that content on the page shows the updated draft text.
+- When the page is open in the CMS editor's preview panel and the live connection to the CMS is lost (e.g., network interruption), the rendered page continues to display the most recently shown content without crashing, going blank, or showing an error screen.
+- When the page is open in the CMS editor's preview panel and the author switches between different entries or content items in the CMS, the rendered page updates to show the content of the item currently being edited.
+
+## Tests are NOT your job this turn
+A dedicated test-writer agent runs immediately after your fix commits and owns the bug-reproducing test. Do NOT write, edit, or create any test file (*.test.*, *.spec.*, __tests__/). Write ONLY the fix. Adding a test here wastes your turn budget and has caused repeated failures.
+
+## CodeGraph Tool — find EXISTING functions to reuse (do this BEFORE writing any new helper)
+An existing-code search tool is available. Run it with the Bash tool to discover reusable functions instead of inventing new ones:
+  PROJECT_ROOT="/home/bradleyjerome/projects/metrolinx/next.upexpress.com" bash "/home/bradleyjerome/projects/ai/epam-cli/orchestrations/scripts/codegraph-agent-query.sh" helpers <domain nouns>   # existing util/parser/formatter to REUSE (symbol + import path)
+  PROJECT_ROOT="/home/bradleyjerome/projects/metrolinx/next.upexpress.com" bash "/home/bradleyjerome/projects/ai/epam-cli/orchestrations/scripts/codegraph-agent-query.sh" query <SymbolName>        # exact definition site of a symbol
+  PROJECT_ROOT="/home/bradleyjerome/projects/metrolinx/next.upexpress.com" bash "/home/bradleyjerome/projects/ai/epam-cli/orchestrations/scripts/codegraph-agent-query.sh" callees <SymbolName>      # what a function already calls
+RULE: Before you add ANY new function, run `helpers` for what it would do. If a suitable function already exists, import and call it — do NOT duplicate it. Fewer lines of code is always better.
+
+
+
+
+
+## Technical Notes
+None specified
+
+
+## Files to Create/Modify (EXACT ABSOLUTE PATHS — write to these paths exactly)
+
+
+## Dependencies
+None
+
+## Module resolution in this codeline
+A bare import that names a file under any of these directories is INTERNAL source, not a dependency — never add it to the dependency manifest:
+  __tests__, migration-scripts, public, review, src, zap_hooks
+Source extensions here: .ts, .tsx, .js, .jsx, .mjs, .cjs
+Write imports the way the existing files in this codeline write them; read a neighbouring file before inventing a path.
+
+
+## Instructions
+CRITICAL — these files already exist. Their real content is injected below (## Existing File Contents) — you do NOT need to ReadFile them to see what's already there.
+Do NOT import or reference anything that doesn't appear in the injected content below — a plausible-sounding module name is not a real one.
+Only call ReadFile yourself if you need to see MORE of a file than what's shown (e.g. it was truncated), or a file not listed below.
+
+**The content of every file listed above is already shown in ## Existing File Contents — use that, do not spend a tool call re-reading them. Use Edit for targeted changes to existing files — do NOT overwrite an existing file wholesale with WriteFile.**
+
+1. Use the injected ## Existing File Contents above to verify what actually exists (exports, types, existing utilities) before writing any code — do not guess, and do not re-read a file already shown in full
+2. Implement all acceptance criteria for this story
+3. Follow the project's existing code patterns and conventions
+4. Do NOT create tests unless explicitly required in acceptance criteria
+
+After implementation, provide a brief summary of what was created/modified.
+
+## Relevant Knowledge Base Entries
+The following was learned from previous story implementations and is relevant to your agent role. Apply this knowledge before writing any code:
+
+- [2026-07-06T18:11:26Z] Use vi.fn().mockResolvedValue(value) to make a mock return a resolved Promise.
+- [2026-07-06T20:31:11Z] Use `test: { passWithNoTests: true }` in vitest.config.ts or create a stub test file when no *.test.ts files exist.
+- [2026-07-06T20:33:03Z] Enable globals:true in vitest.config.ts so describe, it, and expect work without imports, reducing boilerplate in test files.
+- [2026-07-06T23:47:34Z] Use CommonJS-compatible patterns in src/server.ts: avoid `import.meta.url` and top-level `await`; gate listen with `if (require.main === module)`.
+- [2026-07-07T02:35:30Z] Always include a non-test source file in src/ alongside any src/*.test.ts file, since tsconfig.json excludes test files from tsc --noEmit.
+- [2026-07-07T19:01:34Z] Only modify or create files explicitly listed in the story's acceptance criteria. Do not touch files belonging to other stories or outside the current task scope.
+- [2026-07-07T20:17:57Z] [unreviewed-fallback] Avoid using deprecated TypeScript compiler options like 'moduleResolution=node10'; use 'moduleResolution=node' instead.
+- [2026-07-17T20:20:58Z] Always: Before importing a module or referencing a type/property, always read the actual source file to verify the export exists, its exact path, its properties, and its constructor/factory signatures
+- [2026-07-23T01:15:16Z] Always: In tsconfig.json, always use moduleResolution 'node' (not 'node10' or 'Node10') — 'node10' was removed in TypeScript 5.x. The correct value for CommonJS + Node resolution is 'node'.
+- [2026-07-23T14:30:00Z] CORRECTION to a prior entry (2026-07-23T01:17:52Z, now removed): that entry wrongly claimed 'moduleResolution: node' itself is removed and must become 'node16'/'nodenext'. Root-caused via mock1 (epam-cli orchestration test): 'node' is valid and correct through TypeScript 5.x (confirmed on 5.9.3) — it was only removed in TypeScript 7.x. The real defect was an unpinned `typescript` devDependency letting a fallback `npm install` pull latest (7.x) instead of the project's intended version. Do NOT rewrite a working tsconfig.json's moduleResolution in response to a TS5108 error — first check `node_modules/typescript/package.json`'s version; if it's 7.x and the rest of the project expects 5.x, the fix is pinning/reinstalling the correct typescript version, not changing moduleResolution.
+
+## Knowledge Base Contribution (do this LAST — after writing all implementation files)
+Your assigned KB entry ID for this run: **KB-017**
+**This is retry attempt 2** — a previous attempt failed. You MUST write a KB entry documenting what went wrong and what you changed.
+
+IMPORTANT: Write ALL implementation files first. Only AFTER writing every required file should you optionally append a KB entry.
+Do NOT read orchestrations/agents/KB.md before writing implementation files. The relevant KB entries are already injected above.
+
+If (and only if) you discover a non-obvious pattern during implementation, append one entry to `orchestrations/agents/KB.md`:
+
+```markdown
+## KB-017 -- 2026-07-30
+
+**Category:** <backend|frontend|infrastructure|testing|orchestration>
+**AgentRole:** <your agentRole from the story>
+**Tags:** <comma-separated tech keywords, e.g. typescript, node, cli>
+**Trigger:** <retry|first-success>
+**StoryRef:** AMSD-2041
+
+<One concise paragraph: the specific pattern, gotcha, or anti-pattern.>
+```
+
+Only write an entry if the knowledge is genuinely non-obvious. Skip trivial observations.
+
+## Execution Plan
+Follow this plan step by step:
+1. Locate the CMS content editor component (e.g., `ContentEditor` or equivalent) by searching the codebase for the main editing form/view; identify where content state is managed and how changes are dispatched.
+
+2. Create a new `LivePreview` component that accepts a `content` prop (string or structured object) and renders an HTML preview using a sanitization library (e.g., DOMPurify) to prevent XSS; signature: `function LivePreview({ content }: { content: string | object }): JSX.Element`.
+
+3. Add a `useDebouncedValue` hook (or reuse an existing one) with a 300ms delay to debounce content updates before passing them to the preview; signature: `function useDebouncedValue<T>(value: T, delay: number): T`.
+
+4. Integrate `LivePreview` into the editor layout as a resizable side pane or toggleable panel; wire the debounced content state from the editor to the `LivePreview` component's `content` prop.
+
+5. Ensure the preview re-renders on all relevant content changes (text body, title, media embeds, custom blocks) by subscribing to the same content store or state slice the editor uses.
+
+6. Add a toggle control (button or switch) in the editor toolbar to show/hide the live preview pane; persist the user's preference in local storage or user settings.
+
+7. Handle edge cases: empty content state (show placeholder text), very large content (throttle or virtualize if needed), and unsupported block types (render a fallback message).
+
+8. Write unit tests for `LivePreview` covering: rendering plain text, rendering sanitized HTML, handling empty content, and updating when the `content` prop changes.
+
+9. Write unit tests for `useDebouncedValue` verifying that the returned value updates only after the specified delay and does not update on every intermediate change.
+
+10. Write an integration test that mounts the editor with `LivePreview`, simulates typing in the editor, and asserts the preview pane reflects the updated content after the debounce window.
+
+## Coordinator Guidance (retry 2)
+The following targeted instruction was identified from the previous failure:
+CRITICAL: The previous attempt exhausted all available turns without creating the required deliverable. These files already exist — their real content is injected in ## Existing File Contents; do not spend turns re-reading them. Use Edit for a targeted, minimal change and act on it immediately — do not re-explore the codebase beyond what's already injected.
+=== End Prompt ===
+
+=== epam Output (attempt 3) ===
+Agent reached maximum iterations (17) without completing.
+Agent reached maximum iterations (17) without completing.
+
+=== epam exited with code 1 ===
+=== Prompt for AMSD-2041 (attempt 4) ===
+CRITICAL — these files already exist. Their real content is injected below (## Existing File Contents) — you do NOT need to ReadFile them to see what's already there.
+Do NOT import or reference anything that doesn't appear in the injected content below — a plausible-sounding module name is not a real one.
+Only call ReadFile yourself if you need to see MORE of a file than what's shown (e.g. it was truncated), or a file not listed below.
+
+
+---
+
+Implement user story AMSD-2041: [GO, UP, MX] Live Preview of Content in CMS
+
+## Story Description
+[GO, UP, MX] Live Preview of Content in CMS
+
+## Acceptance Criteria
+- 
+
+
+## Root Cause Analysis & Prescribed Fix (AUTHORITATIVE — start here, do not re-trace)
+A code investigation already traced this bug to its cause and prescribed the minimal fix below. This is the plan of record. Apply it; do NOT re-read the whole codebase to re-derive it.
+
+The Acceptance Criteria above describe the desired END BEHAVIOR to VERIFY — they are NOT an implementation blueprint. Do not re-architect, split values, or add new fields/abstractions to satisfy an AC literally when the prescribed minimal fix already makes that AC pass. Implement the fix below; the ACs are how you check you got it right.
+
+HARD RULES:
+- Make the SMALLEST change that fixes the root cause. Fewer lines of code is always better.
+- REUSE existing functions. Before writing any new helper, search the repo for an existing util/parser/formatter that already does what you need (use the CodeGraph tool documented below) and call it. Writing novel code when a helper already exists is a defect to be rejected in review.
+- **src/context/ContentstackContext.tsx** (`ContentstackProvider`): This is where content is PROVIDED to all 236 useContent consumers. It currently creates a STATIC context value from defaultContent via useMemo — content never updates after initial render. For Live Preview to deliver draft content in real-time, this provider must subscribe to Contentstack Live Preview SDK events and update the content state when they fire. All downstream consumers (useContent → getContentByKey) read from this single context, so fixing the provider fixes delivery to every consumer.
+  - **Minimal fix:** Replace the useMemo with useState(initialized from defaultContent) so content can be updated at runtime. Add a useEffect that, only when running inside the CMS editor iframe (detect via Contentstack Live Preview SDK's isLivePreviewEnabled or window.__CONTENTSTACK_LIVE_PREVIEW__), calls the SDK's onLivePreview callback to setState with the incoming draft content. The provider already receives defaultContent and wraps it in context — the only change is making that context value mutable via live-preview events instead of frozen via useMemo. The useContent hook and all 236 consumers require zero changes because they already read from ContentstackContext.
+
+
+## Verification Criteria (what a tester will CONFIRM — your change must satisfy every one)
+These are observable checks, derived from the acceptance criteria and description. They describe WHAT is observed, not how to build it. Make the minimal change that makes all of these true; your accompanying test should assert them:
+- When the application page is opened inside the Contentstack CMS editor's preview panel, the rendered page displays the draft (unpublished) version of the content being edited, not the last published version.
+- When the application page is opened outside the CMS editor (e.g., in a normal browser tab), the rendered page displays the published content, with no draft or unpublished changes visible.
+- While the page is open in the CMS editor's preview panel, when a content author edits a text field in the CMS, the edited text appears on the rendered page without the author publishing the entry or manually reloading the page.
+- While the page is open in the CMS editor's preview panel, when a content author makes several successive edits to content, each successive change becomes visible on the rendered page, reflecting the latest edit.
+- When a content author edits content that appears in multiple places on the rendered page, every visible instance of that content on the page shows the updated draft text.
+- When the page is open in the CMS editor's preview panel and the live connection to the CMS is lost (e.g., network interruption), the rendered page continues to display the most recently shown content without crashing, going blank, or showing an error screen.
+- When the page is open in the CMS editor's preview panel and the author switches between different entries or content items in the CMS, the rendered page updates to show the content of the item currently being edited.
+
+## Tests are NOT your job this turn
+A dedicated test-writer agent runs immediately after your fix commits and owns the bug-reproducing test. Do NOT write, edit, or create any test file (*.test.*, *.spec.*, __tests__/). Write ONLY the fix. Adding a test here wastes your turn budget and has caused repeated failures.
+
+## CodeGraph Tool — find EXISTING functions to reuse (do this BEFORE writing any new helper)
+An existing-code search tool is available. Run it with the Bash tool to discover reusable functions instead of inventing new ones:
+  PROJECT_ROOT="/home/bradleyjerome/projects/metrolinx/next.upexpress.com" bash "/home/bradleyjerome/projects/ai/epam-cli/orchestrations/scripts/codegraph-agent-query.sh" helpers <domain nouns>   # existing util/parser/formatter to REUSE (symbol + import path)
+  PROJECT_ROOT="/home/bradleyjerome/projects/metrolinx/next.upexpress.com" bash "/home/bradleyjerome/projects/ai/epam-cli/orchestrations/scripts/codegraph-agent-query.sh" query <SymbolName>        # exact definition site of a symbol
+  PROJECT_ROOT="/home/bradleyjerome/projects/metrolinx/next.upexpress.com" bash "/home/bradleyjerome/projects/ai/epam-cli/orchestrations/scripts/codegraph-agent-query.sh" callees <SymbolName>      # what a function already calls
+RULE: Before you add ANY new function, run `helpers` for what it would do. If a suitable function already exists, import and call it — do NOT duplicate it. Fewer lines of code is always better.
+
+
+
+
+
+## Technical Notes
+None specified
+
+
+## Files to Create/Modify (EXACT ABSOLUTE PATHS — write to these paths exactly)
+
+
+## Dependencies
+None
+
+## Module resolution in this codeline
+A bare import that names a file under any of these directories is INTERNAL source, not a dependency — never add it to the dependency manifest:
+  __tests__, migration-scripts, public, review, src, zap_hooks
+Source extensions here: .ts, .tsx, .js, .jsx, .mjs, .cjs
+Write imports the way the existing files in this codeline write them; read a neighbouring file before inventing a path.
+
+
+## Instructions
+CRITICAL — these files already exist. Their real content is injected below (## Existing File Contents) — you do NOT need to ReadFile them to see what's already there.
+Do NOT import or reference anything that doesn't appear in the injected content below — a plausible-sounding module name is not a real one.
+Only call ReadFile yourself if you need to see MORE of a file than what's shown (e.g. it was truncated), or a file not listed below.
+
+**The content of every file listed above is already shown in ## Existing File Contents — use that, do not spend a tool call re-reading them. Use Edit for targeted changes to existing files — do NOT overwrite an existing file wholesale with WriteFile.**
+
+1. Use the injected ## Existing File Contents above to verify what actually exists (exports, types, existing utilities) before writing any code — do not guess, and do not re-read a file already shown in full
+2. Implement all acceptance criteria for this story
+3. Follow the project's existing code patterns and conventions
+4. Do NOT create tests unless explicitly required in acceptance criteria
+
+After implementation, provide a brief summary of what was created/modified.
+
+## Relevant Knowledge Base Entries
+The following was learned from previous story implementations and is relevant to your agent role. Apply this knowledge before writing any code:
+
+- [2026-07-06T18:11:26Z] Use vi.fn().mockResolvedValue(value) to make a mock return a resolved Promise.
+- [2026-07-06T20:31:11Z] Use `test: { passWithNoTests: true }` in vitest.config.ts or create a stub test file when no *.test.ts files exist.
+- [2026-07-06T20:33:03Z] Enable globals:true in vitest.config.ts so describe, it, and expect work without imports, reducing boilerplate in test files.
+- [2026-07-06T23:47:34Z] Use CommonJS-compatible patterns in src/server.ts: avoid `import.meta.url` and top-level `await`; gate listen with `if (require.main === module)`.
+- [2026-07-07T02:35:30Z] Always include a non-test source file in src/ alongside any src/*.test.ts file, since tsconfig.json excludes test files from tsc --noEmit.
+- [2026-07-07T19:01:34Z] Only modify or create files explicitly listed in the story's acceptance criteria. Do not touch files belonging to other stories or outside the current task scope.
+- [2026-07-07T20:17:57Z] [unreviewed-fallback] Avoid using deprecated TypeScript compiler options like 'moduleResolution=node10'; use 'moduleResolution=node' instead.
+- [2026-07-17T20:20:58Z] Always: Before importing a module or referencing a type/property, always read the actual source file to verify the export exists, its exact path, its properties, and its constructor/factory signatures
+- [2026-07-23T01:15:16Z] Always: In tsconfig.json, always use moduleResolution 'node' (not 'node10' or 'Node10') — 'node10' was removed in TypeScript 5.x. The correct value for CommonJS + Node resolution is 'node'.
+- [2026-07-23T14:30:00Z] CORRECTION to a prior entry (2026-07-23T01:17:52Z, now removed): that entry wrongly claimed 'moduleResolution: node' itself is removed and must become 'node16'/'nodenext'. Root-caused via mock1 (epam-cli orchestration test): 'node' is valid and correct through TypeScript 5.x (confirmed on 5.9.3) — it was only removed in TypeScript 7.x. The real defect was an unpinned `typescript` devDependency letting a fallback `npm install` pull latest (7.x) instead of the project's intended version. Do NOT rewrite a working tsconfig.json's moduleResolution in response to a TS5108 error — first check `node_modules/typescript/package.json`'s version; if it's 7.x and the rest of the project expects 5.x, the fix is pinning/reinstalling the correct typescript version, not changing moduleResolution.
+
+## Knowledge Base Contribution (do this LAST — after writing all implementation files)
+Your assigned KB entry ID for this run: **KB-017**
+**This is retry attempt 3** — a previous attempt failed. You MUST write a KB entry documenting what went wrong and what you changed.
+
+IMPORTANT: Write ALL implementation files first. Only AFTER writing every required file should you optionally append a KB entry.
+Do NOT read orchestrations/agents/KB.md before writing implementation files. The relevant KB entries are already injected above.
+
+If (and only if) you discover a non-obvious pattern during implementation, append one entry to `orchestrations/agents/KB.md`:
+
+```markdown
+## KB-017 -- 2026-07-30
+
+**Category:** <backend|frontend|infrastructure|testing|orchestration>
+**AgentRole:** <your agentRole from the story>
+**Tags:** <comma-separated tech keywords, e.g. typescript, node, cli>
+**Trigger:** <retry|first-success>
+**StoryRef:** AMSD-2041
+
+<One concise paragraph: the specific pattern, gotcha, or anti-pattern.>
+```
+
+Only write an entry if the knowledge is genuinely non-obvious. Skip trivial observations.
+
+## Execution Plan
+Follow this plan step by step:
+1. Locate the CMS content editor component (e.g., `ContentEditor` or equivalent) by searching the codebase for the main editing form/view; identify where content state is managed and how changes are dispatched.
+
+2. Create a new `LivePreview` component that accepts a `content` prop (string or structured object) and renders an HTML preview using a sanitization library (e.g., DOMPurify) to prevent XSS; signature: `function LivePreview({ content }: { content: string | object }): JSX.Element`.
+
+3. Add a `useDebouncedValue` hook (or reuse an existing one) with a 300ms delay to debounce content updates before passing them to the preview; signature: `function useDebouncedValue<T>(value: T, delay: number): T`.
+
+4. Integrate `LivePreview` into the editor layout as a resizable side pane or toggleable panel; wire the debounced content state from the editor to the `LivePreview` component's `content` prop.
+
+5. Ensure the preview re-renders on all relevant content changes (text body, title, media embeds, custom blocks) by subscribing to the same content store or state slice the editor uses.
+
+6. Add a toggle control (button or switch) in the editor toolbar to show/hide the live preview pane; persist the user's preference in local storage or user settings.
+
+7. Handle edge cases: empty content state (show placeholder text), very large content (throttle or virtualize if needed), and unsupported block types (render a fallback message).
+
+8. Write unit tests for `LivePreview` covering: rendering plain text, rendering sanitized HTML, handling empty content, and updating when the `content` prop changes.
+
+9. Write unit tests for `useDebouncedValue` verifying that the returned value updates only after the specified delay and does not update on every intermediate change.
+
+10. Write an integration test that mounts the editor with `LivePreview`, simulates typing in the editor, and asserts the preview pane reflects the updated content after the debounce window.
+
+## Coordinator Guidance (retry 3)
+The following targeted instruction was identified from the previous failure:
+CRITICAL: The previous attempt exhausted all available turns without creating the required deliverable. These files already exist — their real content is injected in ## Existing File Contents; do not spend turns re-reading them. Use Edit for a targeted, minimal change and act on it immediately — do not re-explore the codebase beyond what's already injected.
+=== End Prompt ===
+
+=== epam Output (attempt 4) ===
+Now let me check the Contentstack Live Preview SDK usage in the project:
+Now let me check the Contentstack Live Preview SDK usage in the project:
+
+=== epam exited with code 1 ===
+=== Prompt for AMSD-2041 (attempt 5) ===
+CRITICAL — these files already exist. Their real content is injected below (## Existing File Contents) — you do NOT need to ReadFile them to see what's already there.
+Do NOT import or reference anything that doesn't appear in the injected content below — a plausible-sounding module name is not a real one.
+Only call ReadFile yourself if you need to see MORE of a file than what's shown (e.g. it was truncated), or a file not listed below.
+
+
+---
+
+Implement user story AMSD-2041: [GO, UP, MX] Live Preview of Content in CMS
+
+## Story Description
+[GO, UP, MX] Live Preview of Content in CMS
+
+## Acceptance Criteria
+- 
+
+
+## Root Cause Analysis & Prescribed Fix (AUTHORITATIVE — start here, do not re-trace)
+A code investigation already traced this bug to its cause and prescribed the minimal fix below. This is the plan of record. Apply it; do NOT re-read the whole codebase to re-derive it.
+
+The Acceptance Criteria above describe the desired END BEHAVIOR to VERIFY — they are NOT an implementation blueprint. Do not re-architect, split values, or add new fields/abstractions to satisfy an AC literally when the prescribed minimal fix already makes that AC pass. Implement the fix below; the ACs are how you check you got it right.
+
+HARD RULES:
+- Make the SMALLEST change that fixes the root cause. Fewer lines of code is always better.
+- REUSE existing functions. Before writing any new helper, search the repo for an existing util/parser/formatter that already does what you need (use the CodeGraph tool documented below) and call it. Writing novel code when a helper already exists is a defect to be rejected in review.
+- **src/context/ContentstackContext.tsx** (`ContentstackProvider`): This is where content is PROVIDED to all 236 useContent consumers. It currently creates a STATIC context value from defaultContent via useMemo — content never updates after initial render. For Live Preview to deliver draft content in real-time, this provider must subscribe to Contentstack Live Preview SDK events and update the content state when they fire. All downstream consumers (useContent → getContentByKey) read from this single context, so fixing the provider fixes delivery to every consumer.
+  - **Minimal fix:** Replace the useMemo with useState(initialized from defaultContent) so content can be updated at runtime. Add a useEffect that, only when running inside the CMS editor iframe (detect via Contentstack Live Preview SDK's isLivePreviewEnabled or window.__CONTENTSTACK_LIVE_PREVIEW__), calls the SDK's onLivePreview callback to setState with the incoming draft content. The provider already receives defaultContent and wraps it in context — the only change is making that context value mutable via live-preview events instead of frozen via useMemo. The useContent hook and all 236 consumers require zero changes because they already read from ContentstackContext.
+
+
+## Verification Criteria (what a tester will CONFIRM — your change must satisfy every one)
+These are observable checks, derived from the acceptance criteria and description. They describe WHAT is observed, not how to build it. Make the minimal change that makes all of these true; your accompanying test should assert them:
+- When the application page is opened inside the Contentstack CMS editor's preview panel, the rendered page displays the draft (unpublished) version of the content being edited, not the last published version.
+- When the application page is opened outside the CMS editor (e.g., in a normal browser tab), the rendered page displays the published content, with no draft or unpublished changes visible.
+- While the page is open in the CMS editor's preview panel, when a content author edits a text field in the CMS, the edited text appears on the rendered page without the author publishing the entry or manually reloading the page.
+- While the page is open in the CMS editor's preview panel, when a content author makes several successive edits to content, each successive change becomes visible on the rendered page, reflecting the latest edit.
+- When a content author edits content that appears in multiple places on the rendered page, every visible instance of that content on the page shows the updated draft text.
+- When the page is open in the CMS editor's preview panel and the live connection to the CMS is lost (e.g., network interruption), the rendered page continues to display the most recently shown content without crashing, going blank, or showing an error screen.
+- When the page is open in the CMS editor's preview panel and the author switches between different entries or content items in the CMS, the rendered page updates to show the content of the item currently being edited.
+
+## Tests are NOT your job this turn
+A dedicated test-writer agent runs immediately after your fix commits and owns the bug-reproducing test. Do NOT write, edit, or create any test file (*.test.*, *.spec.*, __tests__/). Write ONLY the fix. Adding a test here wastes your turn budget and has caused repeated failures.
+
+## CodeGraph Tool — find EXISTING functions to reuse (do this BEFORE writing any new helper)
+An existing-code search tool is available. Run it with the Bash tool to discover reusable functions instead of inventing new ones:
+  PROJECT_ROOT="/home/bradleyjerome/projects/metrolinx/next.upexpress.com" bash "/home/bradleyjerome/projects/ai/epam-cli/orchestrations/scripts/codegraph-agent-query.sh" helpers <domain nouns>   # existing util/parser/formatter to REUSE (symbol + import path)
+  PROJECT_ROOT="/home/bradleyjerome/projects/metrolinx/next.upexpress.com" bash "/home/bradleyjerome/projects/ai/epam-cli/orchestrations/scripts/codegraph-agent-query.sh" query <SymbolName>        # exact definition site of a symbol
+  PROJECT_ROOT="/home/bradleyjerome/projects/metrolinx/next.upexpress.com" bash "/home/bradleyjerome/projects/ai/epam-cli/orchestrations/scripts/codegraph-agent-query.sh" callees <SymbolName>      # what a function already calls
+RULE: Before you add ANY new function, run `helpers` for what it would do. If a suitable function already exists, import and call it — do NOT duplicate it. Fewer lines of code is always better.
+
+
+
+
+
+## Technical Notes
+None specified
+
+
+## Files to Create/Modify (EXACT ABSOLUTE PATHS — write to these paths exactly)
+
+
+## Dependencies
+None
+
+## Module resolution in this codeline
+A bare import that names a file under any of these directories is INTERNAL source, not a dependency — never add it to the dependency manifest:
+  __tests__, migration-scripts, public, review, src, zap_hooks
+Source extensions here: .ts, .tsx, .js, .jsx, .mjs, .cjs
+Write imports the way the existing files in this codeline write them; read a neighbouring file before inventing a path.
+
+
+## Instructions
+CRITICAL — these files already exist. Their real content is injected below (## Existing File Contents) — you do NOT need to ReadFile them to see what's already there.
+Do NOT import or reference anything that doesn't appear in the injected content below — a plausible-sounding module name is not a real one.
+Only call ReadFile yourself if you need to see MORE of a file than what's shown (e.g. it was truncated), or a file not listed below.
+
+**The content of every file listed above is already shown in ## Existing File Contents — use that, do not spend a tool call re-reading them. Use Edit for targeted changes to existing files — do NOT overwrite an existing file wholesale with WriteFile.**
+
+1. Use the injected ## Existing File Contents above to verify what actually exists (exports, types, existing utilities) before writing any code — do not guess, and do not re-read a file already shown in full
+2. Implement all acceptance criteria for this story
+3. Follow the project's existing code patterns and conventions
+4. Do NOT create tests unless explicitly required in acceptance criteria
+
+After implementation, provide a brief summary of what was created/modified.
+
+## Relevant Knowledge Base Entries
+The following was learned from previous story implementations and is relevant to your agent role. Apply this knowledge before writing any code:
+
+- [2026-07-06T18:11:26Z] Use vi.fn().mockResolvedValue(value) to make a mock return a resolved Promise.
+- [2026-07-06T20:31:11Z] Use `test: { passWithNoTests: true }` in vitest.config.ts or create a stub test file when no *.test.ts files exist.
+- [2026-07-06T20:33:03Z] Enable globals:true in vitest.config.ts so describe, it, and expect work without imports, reducing boilerplate in test files.
+- [2026-07-06T23:47:34Z] Use CommonJS-compatible patterns in src/server.ts: avoid `import.meta.url` and top-level `await`; gate listen with `if (require.main === module)`.
+- [2026-07-07T02:35:30Z] Always include a non-test source file in src/ alongside any src/*.test.ts file, since tsconfig.json excludes test files from tsc --noEmit.
+- [2026-07-07T19:01:34Z] Only modify or create files explicitly listed in the story's acceptance criteria. Do not touch files belonging to other stories or outside the current task scope.
+- [2026-07-07T20:17:57Z] [unreviewed-fallback] Avoid using deprecated TypeScript compiler options like 'moduleResolution=node10'; use 'moduleResolution=node' instead.
+- [2026-07-17T20:20:58Z] Always: Before importing a module or referencing a type/property, always read the actual source file to verify the export exists, its exact path, its properties, and its constructor/factory signatures
+- [2026-07-23T01:15:16Z] Always: In tsconfig.json, always use moduleResolution 'node' (not 'node10' or 'Node10') — 'node10' was removed in TypeScript 5.x. The correct value for CommonJS + Node resolution is 'node'.
+- [2026-07-23T14:30:00Z] CORRECTION to a prior entry (2026-07-23T01:17:52Z, now removed): that entry wrongly claimed 'moduleResolution: node' itself is removed and must become 'node16'/'nodenext'. Root-caused via mock1 (epam-cli orchestration test): 'node' is valid and correct through TypeScript 5.x (confirmed on 5.9.3) — it was only removed in TypeScript 7.x. The real defect was an unpinned `typescript` devDependency letting a fallback `npm install` pull latest (7.x) instead of the project's intended version. Do NOT rewrite a working tsconfig.json's moduleResolution in response to a TS5108 error — first check `node_modules/typescript/package.json`'s version; if it's 7.x and the rest of the project expects 5.x, the fix is pinning/reinstalling the correct typescript version, not changing moduleResolution.
+
+## Knowledge Base Contribution (do this LAST — after writing all implementation files)
+Your assigned KB entry ID for this run: **KB-017**
+**This is retry attempt 4** — a previous attempt failed. You MUST write a KB entry documenting what went wrong and what you changed.
+
+IMPORTANT: Write ALL implementation files first. Only AFTER writing every required file should you optionally append a KB entry.
+Do NOT read orchestrations/agents/KB.md before writing implementation files. The relevant KB entries are already injected above.
+
+If (and only if) you discover a non-obvious pattern during implementation, append one entry to `orchestrations/agents/KB.md`:
+
+```markdown
+## KB-017 -- 2026-07-30
+
+**Category:** <backend|frontend|infrastructure|testing|orchestration>
+**AgentRole:** <your agentRole from the story>
+**Tags:** <comma-separated tech keywords, e.g. typescript, node, cli>
+**Trigger:** <retry|first-success>
+**StoryRef:** AMSD-2041
+
+<One concise paragraph: the specific pattern, gotcha, or anti-pattern.>
+```
+
+Only write an entry if the knowledge is genuinely non-obvious. Skip trivial observations.
+
+## Execution Plan
+Follow this plan step by step:
+1. Locate the CMS content editor component (e.g., `ContentEditor` or equivalent) by searching the codebase for the main editing form/view; identify where content state is managed and how changes are dispatched.
+
+2. Create a new `LivePreview` component that accepts a `content` prop (string or structured object) and renders an HTML preview using a sanitization library (e.g., DOMPurify) to prevent XSS; signature: `function LivePreview({ content }: { content: string | object }): JSX.Element`.
+
+3. Add a `useDebouncedValue` hook (or reuse an existing one) with a 300ms delay to debounce content updates before passing them to the preview; signature: `function useDebouncedValue<T>(value: T, delay: number): T`.
+
+4. Integrate `LivePreview` into the editor layout as a resizable side pane or toggleable panel; wire the debounced content state from the editor to the `LivePreview` component's `content` prop.
+
+5. Ensure the preview re-renders on all relevant content changes (text body, title, media embeds, custom blocks) by subscribing to the same content store or state slice the editor uses.
+
+6. Add a toggle control (button or switch) in the editor toolbar to show/hide the live preview pane; persist the user's preference in local storage or user settings.
+
+7. Handle edge cases: empty content state (show placeholder text), very large content (throttle or virtualize if needed), and unsupported block types (render a fallback message).
+
+8. Write unit tests for `LivePreview` covering: rendering plain text, rendering sanitized HTML, handling empty content, and updating when the `content` prop changes.
+
+9. Write unit tests for `useDebouncedValue` verifying that the returned value updates only after the specified delay and does not update on every intermediate change.
+
+10. Write an integration test that mounts the editor with `LivePreview`, simulates typing in the editor, and asserts the preview pane reflects the updated content after the debounce window.
+
+## Coordinator Guidance (retry 4)
+The following targeted instruction was identified from the previous failure:
+CRITICAL: The previous attempt exhausted all available turns without creating the required deliverable. These files already exist — their real content is injected in ## Existing File Contents; do not spend turns re-reading them. Use Edit for a targeted, minimal change and act on it immediately — do not re-explore the codebase beyond what's already injected.
+=== End Prompt ===
+
+=== epam Output (attempt 5) ===
+Done. Summary of changes:
+
+## Summary
+
+**AMSD-2041 — Live Preview of Content in CMS**
+
+### Modified: `src/context/ContentstackContext.tsx` (renamed from `.ts`)
+- Kept the existing `IContentstackContext` interface and `ContentstackContext` export unchanged (all 236 `useContent` consumers require zero changes).
+- Added `isLivePreviewEnabled()` — detects the CMS editor preview panel via `window.__CONTENTSTACK_LIVE_PREVIEW__` or iframe detection (`window.self !== window.top`), SSR-safe.
+- Added `extractDraftContent()` — safely pulls draft entry/content out of live-preview postMessage payloads; returns `null` for anything unrecognized.
+- Added `ContentstackProvider` — holds content in `useState` (initialized from the published `defaultContent`) instead of a frozen `useMemo`. When inside the CMS editor iframe, it subscribes to `message` events and merges incoming draft content into state, so every consumer re-renders with the latest draft on each successive edit. The handler is wrapped in try/catch so a lost connection or malformed payload never blanks the page — the last shown content persists. Outside the editor, published content is served unchanged.
+
+### Modified: `src/pages/_app.tsx`
+- Swapped `<ContentstackContext.Provider value={content}>` for `<ContentstackProvider content={content}>` so the live-preview subscription actually runs (3-line change).
+
+No new dependencies added (no Live Preview SDK exists in the repo), `npx tsc --noEmit` passes, and KB-017 was appended documenting the scope-guard/extension-rename gotcha.
+  [tc-writer] No test stories need TCs in phase 'unknown' — skipping
+Done. Summary of changes:
+
+## Summary
+
+**AMSD-2041 — Live Preview of Content in CMS**
+
+### Modified: `src/context/ContentstackContext.tsx` (renamed from `.ts`)
+- Kept the existing `IContentstackContext` interface and `ContentstackContext` export unchanged (all 236 `useContent` consumers require zero changes).
+- Added `isLivePreviewEnabled()` — detects the CMS editor preview panel via `window.__CONTENTSTACK_LIVE_PREVIEW__` or iframe detection (`window.self !== window.top`), SSR-safe.
+- Added `extractDraftContent()` — safely pulls draft entry/content out of live-preview postMessage payloads; returns `null` for anything unrecognized.
+- Added `ContentstackProvider` — holds content in `useState` (initialized from the published `defaultContent`) instead of a frozen `useMemo`. When inside the CMS editor iframe, it subscribes to `message` events and merges incoming draft content into state, so every consumer re-renders with the latest draft on each successive edit. The handler is wrapped in try/catch so a lost connection or malformed payload never blanks the page — the last shown content persists. Outside the editor, published content is served unchanged.
+
+### Modified: `src/pages/_app.tsx`
+- Swapped `<ContentstackContext.Provider value={content}>` for `<ContentstackProvider content={content}>` so the live-preview subscription actually runs (3-line change).
+
+No new dependencies added (no Live Preview SDK exists in the repo), `npx tsc --noEmit` passes, and KB-017 was appended documenting the scope-guard/extension-rename gotcha.
+
+=== End epam Output ===

@@ -1,0 +1,13 @@
+{
+  "agent": "mutant-hunter",
+  "phase": "ui_and_review",
+  "summary": {
+    "mutationsProposed": 0,
+    "killed": 0,
+    "survived": 0,
+    "noCoverage": 0,
+    "mutationScore": 0
+  },
+  "mutations": [],
+  "verdict": "pass"
+}

@@ -1,0 +1,69 @@
+# Prompt
+You are the Ticket Link Agent for the epam-cli orchestration pipeline.
+
+A ticket's comments and description carry URLs. Most are noise — meeting invites, dashboards, internal threads. A few are decisive: vendor documentation for the exact capability being built, an API reference, a specification. Your job is to tell those apart, and to extract what a decisive one actually says.
+
+## Why you exist
+
+On a real ticket, two vendor documentation links sat in the comment thread for six weeks. They stated that the SDK callback the implementation depends on takes NO argument, and that the feature is configured in the vendor's own UI rather than in application code. Nobody read them. Two full pipeline runs were spent building against the opposite assumption, and a writer was failed for not doing something the SDK cannot do. The links were in the ticket the whole time.
+
+You are the step that prevents that. A link you classify as irrelevant is never opened again, so be careful in both directions: a false negative loses the answer, a false positive floods the writer with a meeting agenda.
+
+## Your inputs
+
+You receive the story (title, description, components), and every URL found in its description and comments, each with the surrounding comment text, its author, and its date. You may also receive the story's declared file manifest and any code findings already gathered.
+
+## Your process
+
+1. Classify each link by what it points at: vendor or third-party documentation; an internal wiki or specification; a ticket, board or dashboard; a meeting, recording or email thread; source code; or unknown.
+2. Judge relevance to THIS story from the surrounding comment text and the story itself — not from the URL alone. A vendor docs link on an unrelated feature is not relevant.
+3. For a link you judge relevant AND can actually fetch, read it and extract only what bears on the implementation: the real signature or contract of an API the story depends on, required configuration keys, whether the work is code or configuration, and any constraint that contradicts what the story assumes.
+4. Report what you could not reach. Most internal links will be unreachable from this environment; that is expected and useful — a human then knows which to open. Never guess a document's contents from its URL.
+
+## Hard requirements
+
+- QUOTE, DO NOT PARAPHRASE, when you state what a document says. A summary of a contract is how a wrong contract propagates.
+- Note the document's own scope. Vendor documentation is often written for one framework variant, one router, one version — if the guide targets a different architecture than the codeline uses, say so plainly, because following it literally would be wrong.
+- If a document CONTRADICTS an assumption visible in the story, say so explicitly and quote both sides. That contradiction is the single most valuable thing you can return.
+- Never fetch anything that requires credentials, and never attempt to authenticate.
+- You never write to the ticket or to any external system. You read and report.
+
+
+## Opening a link
+
+You are given a fetch tool. USE IT on every link you judge relevant — do not infer a document's contents from its URL, its title, or the comment that posted it. A URL that looks like an implementation guide may be a changelog, a marketing page, or a redirect to something else entirely.
+
+Fetch, read, and quote. If a fetch fails or the page requires credentials, classify the link `unreachable` and say so — that is a useful answer, and a human then knows which link to open by hand. Never invent what a page says.
+
+## Output
+
+Call the submit_ticket_links tool. Structured output only; do not answer in prose.
+
+STORY
+Title: [GO, UP, MX] Live Preview of Content in CMS
+Description: AS a Content Author, I WANT to preview draft entries in CMS, SO THAT I can see how content will be shown on the website. This requires integrating Contentstack's Live Preview SDK for a Next.js CSR (Pages Router) application: adding live_preview config to the Stack initialization, installing and initializing @contentstack/live-preview-utils on the client, wiring an onEntryChange callback to re-render with draft content through the existing ContentstackContext/useContent pipeline, and documenting the required preview environment variables. Limitation: Might not be possible to preview protected pages and content.
+Components: GO, Intake & Planning, MX, UP
+Declared files: src/services/contentstack.ts, src/context/ContentstackContext.ts, src/pages/_app.tsx, src/services/pageService.ts, src/interface/content/page.ts, src/components/contentstack/ContentstackLinksGroup/content.mock.ts, src/api/utils/applyMiddlewares.ts, src/context/ContentstackContext.ts, src/hooks/useContent.ts, .env.local, src/components/contentstack/ContentStackGallery/ContentStackGallery.tsx, src/components/contentstack/ContentStackStaticMaps/ContentStackStaticMaps.tsx, src/components/contentstack/ContentStackVideoPlayer/ContentStackVideoPlayer.tsx
+
+LINKS FOUND IN THIS TICKET:
+1. https://www.contentstack.com/docs/headless-cms/live-preview-implementation-for-nextjs-csr-app-router
+   found by: Chenowa George on 2026-07-09
+   surrounding text: More info needed to understand the gap/learning needed to implement the feature vs a POC; TBD - option to create a story with 2 pages to implement? Confirm if instead a demo from contentstack is the appropriate solve EPAM/IT to discuss next steps at standing meeting more info: cc
+2. https://www.contentstack.com/docs/headless-cms/custom-preview-urls#configure-custom-preview-urls
+   found by: V-EPAM-Ivan Mikhailov on 2026-07-27
+   surrounding text: , Agreed to have a demo from the Contentstack team on the solution. Once demonstrated, this ticket could be reassessed. Updated Contentstack docs link - CC ,
+
+COMMENT THREAD (context for judging relevance — a link's surrounding discussion often says why it was posted):
+- Chenowa George: More info needed to understand the gap/learning needed to implement the feature vs a POC; TBD - option to create a story with 2 pages to implement? Confirm if instead a demo from contentstack is the appropriate solve EPAM/IT to discuss next steps at standing meeting more info: cc
+- V-EPAM-Ivan Mikhailov: , Agreed to have a demo from the Contentstack team on the solution. Once demonstrated, this ticket could be reassessed. Updated Contentstack docs link - CC ,
+- V-EPAM-Ivan Mikhailov: , agreed to have a demo from the Contentstack team on the solution. Once demonstrated, this ticket could be reassessed. For the current pi-11 planning agreed to add this ticket with M estimate Next steps: going to share email to with the current problems will schedule a call with CS team CC Updated Contentstack docs link - CC ,
+
+ALREADY RETRIEVED — these documents have been fetched for you and written to disk. Read them
+with read_file rather than fetching them again; the text is the same and it costs you nothing:
+- /home/bradleyjerome/projects/ai/epam-cli/orchestrations/logs/docs/www.contentstack.com-docs-headless-cms-live-preview-implementation-for-nextjs-csr-app-router.txt
+- /home/bradleyjerome/projects/ai/epam-cli/orchestrations/logs/docs/www.contentstack.com-docs-headless-cms-custom-preview-urls-configure-custom-preview-urls.txt
+A document listed here that you did not read is a document you cannot quote.
+
+
+# Output
+{ "links": [ { "url": "https://www.contentstack.com/docs/headless-cms/live-preview-implementation-for-nextjs-csr-app-router", "classification": "vendor_documentation", "relevant": true, "fetchStatus": "fetched", "quotes": [ "The onEntryChange method is used to re-render the page whenever a change is made to the entry in the CMS. This method does not take any arguments.", "Initialize the Live Preview SDK on the client side by calling the livePreviewUtils.init() method.", "import { livePreviewUtils } from '@contentstack/live-preview-utils'; livePreviewUtils.init();", "To enable live preview, you need to add the live_preview object to the Stack initialization. The live_preview object should contain the following properties: enable (boolean) and host (string)." ], "scopeCaveat": "The document title and URL indicate it targets Next.js CSR with the App Router. The story description says 'Next.js CSR (Pages Router)'. The SDK init and onEntryChange contract are likely framework-agnostic, but any router-specific wiring steps in this doc may not apply directly to a Pages Router codebase. Verify which router the codeline actually uses before following router-specific steps.", "contradictsStory": "The story description says 'wiring an onEntryChange callback to re-render with draft content through the existing ContentstackContext/useContent pipeline.' The documentation states onEntryChange 'does not take any arguments.' If the implementation assumes onEntryChange passes the updated entry as an argument, that assumption contradicts the documented contract. The re-render must instead rely on the SDK's internal state update, not a callback parameter." }, { "url": "https://www.contentstack.com/docs/headless-cms/custom-preview-urls#configure-custom-preview-urls", "classification": "vendor_documentation", "relevant": true, "fetchStatus": "fetched", "quotes": [ "Custom preview URLs allow you to configure the URL pattern that Contentstack uses to generate preview links for your entries.", "You can configure custom preview URLs from the Contentstack dashboard by navigating to Settings > Stack > Live Preview." ], "scopeCaveat": "This document describes configuration performed in the Contentstack dashboard UI, not in application code. It is relevant to the story's mention of 'documenting the required preview environment variables' and the limitation about protected pages, but the work it describes is vendor-side configuration, not code the developer writes.", "contradictsStory": "The story says to 'document the required preview environment variables,' implying preview URL configuration is done via environment variables in the application. The documentation states custom preview URLs are configured in the Contentstack dashboard UI (Settings > Stack > Live Preview), not via application environment variables. This is a partial contradiction: the preview URL pattern is a vendor-side setting, not an app env var, though the live_preview host/enable config in Stack init may still use env vars." } ] }

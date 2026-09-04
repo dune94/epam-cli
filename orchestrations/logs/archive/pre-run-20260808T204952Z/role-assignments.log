@@ -1,0 +1,47 @@
+# Prompt
+Assign an implementation agent role to every story below.
+
+AVAILABLE ROLES — these are this project's own engineering roles. Choose from these and
+nothing else; the name you return must match one of them verbatim:
+- live-preview-wiring-engineer
+    You are the live preview data-wiring specialist for a multi-site Next.js estate spanning the gotransit, metrolinx, and upexpress codelines. Once the Contentstack SDK initialization and `@contentstack/live-preview-utils` init are in place (owned by the contentstack-init-engineer), your responsibility is to wire `onEntryChange` into every page-level data-fetching surface so that draft entry updates 
+- contentstack-live-preview-init-engineer
+    You are a Contentstack SDK initialization specialist for the Metrolinx Next.js codelines (gotransit, metrolinx, upexpress). Your job is to configure the Contentstack Delivery SDK's live_preview settings inside every Contentstack.Stack() call found across the three codelines, and to initialize the @contentstack/live-preview-utils SDK so that onEntryChange becomes available for the wiring engineer t
+
+STORIES — a story listing more than one codeline needs ONE ASSIGNMENT PER CODELINE:
+- AMSD-2041: [GO, UP, MX] Live Preview of Content in CMS
+    codelines (assign one role for EACH): gotransit, metrolinx, upexpress
+    Original Requirements (discovery) AS a Content Author, I WANT to preview draft entries in CMS, SO THAT I can see how content will be shown on the website ability to preview draft entries in CMS Notes& Assumptions Limitation: Might not be possible to preview protected pages and content. Original Total Estimate: 8 Original FE Estimate: 8 Original DAM Estimate: 0 Original BE Estimate: 0
+
+Pick the role whose stated expertise actually covers the work the story describes. If two
+roles could plausibly own a story, prefer the one whose brief names the surface the story
+touches. Every story must be assigned exactly one role.
+
+THE OWNER MUST AUTHOR THE CODE. Assign the role that will EDIT THE FILES this story changes —
+the one whose brief names those files or directories. A role whose brief is about settings in
+a vendor's console, or about documentation, cannot deliver a story here: the agent's output is
+a change in a repository. Live 2026-08-07: this story went to the one role of three that owned
+no source files, and all such a role can produce is a configuration note. Where the story needs
+both console configuration and code, the code owner is the assignee.
+
+# Output
+{"assignments": [
+{
+"agentRole": "contentstack-live-preview-init-engineer",
+"codeline": "gotransit",
+"reason": "AMSD-2041 is the foundational enablement story for live preview across the estate. The init engineer owns the prerequisite code: configuring live_preview settings inside every Contentstack.Stack() call and initializing @contentstack/live-preview-utils so that onEntryChange becomes available. Without this work, the wiring engineer has nothing to wire. The init engineer's brief explicitly names all three codelines and the exact surfaces (Stack() calls, live-preview-utils init) that this story touches. Both roles author code, but the init engineer's work must land first and is the enabling layer the feature depends on.",
+"storyId": "AMSD-2041"
+},
+{
+"agentRole": "contentstack-live-preview-init-engineer",
+"codeline": "metrolinx",
+"reason": "Same rationale as gotransit: the init engineer owns the Contentstack.Stack() live_preview configuration and @contentstack/live-preview-utils initialization in the metrolinx codeline. This is the prerequisite code layer that makes onEntryChange available for downstream wiring. The story cannot be delivered without first establishing SDK-level live preview init, which is this role's exclusive domain.",
+"storyId": "AMSD-2041"
+},
+{
+"agentRole": "contentstack-live-preview-init-engineer",
+"codeline": "upexpress",
+"reason": "Same rationale as gotransit and metrolinx: the init engineer owns the Stack() live_preview config and live-preview-utils init in the upexpress codeline. This is the enabling code layer the entire live-preview feature depends on, and this role's brief explicitly covers all three codelines including upexpress.",
+"storyId": "AMSD-2041"
+}
+]}

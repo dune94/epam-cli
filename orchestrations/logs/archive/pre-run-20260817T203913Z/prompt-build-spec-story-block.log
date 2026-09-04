@@ -1,0 +1,131 @@
+# Prompt
+You are specialising ONE generic agent prompt for ONE specific project. You are the same agent that just minted this project's roles, so you already know what this project is and who will work on it.
+
+## The template you must specialise
+
+Its id is spec-story-block and its purpose is: The labelled story block handed to a spec agent, and its retrieved-documents notice.
+
+Everything between the two markers below is the template, verbatim. The markers are not
+part of it. A code fence cannot delimit this: several templates contain fences of their
+own, so the first closing fence would truncate the body mid-instruction.
+
+-----BEGIN TEMPLATE BODY-----
+,
+-----END TEMPLATE BODY-----
+
+## What this project is
+
+Project config: /home/bradleyjerome/projects/ai/epam-cli/orchestrations/projects/mock3
+Tickets in scope: MOCK3-1: Riders aged exactly 65 are charged the adult fare | MOCK3-2: The departure board omits the final stop
+
+Codelines in scope and their declared dependencies:
+- mocka (/home/bradleyjerome/projects/mock3/mock-a) deps: vitest, typescript
+- mockb (/home/bradleyjerome/projects/mock3/mock-b) deps: vitest, typescript
+
+The roles you minted for this project:
+- typescript-bugfix-engineer [implementer] — Both tickets are small boundary/off-by-one fixes in TypeScript source files exercised by vitest, so a single implementer spanning both codelines is the correct scope rather than two near-duplicate roles.
+- mocka-investigator [investigator] — The fare-boundary fix is a one-line change, but the investigator must confirm no caller of fareFor or totalFor relies on the current incorrect boundary and characterise what test coverage for age 65 should look like — work that requires reading mocka specifically.
+- mockb-investigator [investigator] — The loop-bound fix in formatStops is small, but the investigator must verify no caller compensates for the missing last stop and describe what the test suite currently asserts about stop rendering — work that requires reading mockb specifically.
+
+## The one rule you cannot break
+
+The template's placeholders are a CONTRACT with the pipeline. Each token written in SCREAMING_SNAKE_CASE between double underscores is replaced at run time with real evidence — a diff, a ticket, a test log, a plan. The substitution is BY NAME and it is strict in both directions.
+
+- Reproduce every placeholder EXACTLY as it appears, character for character.
+- NEVER add or invent a placeholder. Nothing supplies a name the pipeline does not know, so rendering throws and the run dies at the seam that needed this prompt.
+- NEVER remove or rename one. The evidence it carries would silently never reach the agent, and the agent would answer without it.
+- Do not move a placeholder into a code fence, a quote, or an example where it would read as literal text.
+
+The placeholders in this template are exactly: __PERSONA__, __TITLE__, __DESCRIPTION__, __COMPONENTS__, __DECLARED_FILES__, __LINK_BLOCK__, __COMMENT_BLOCK__, __RETRIEVED_DOCS__, __DOC_PATHS__
+
+## What specialising means
+
+Keep the template's instructions, its output format, its prohibitions and its reasoning intact. They encode failures this pipeline has already paid for. You are not rewriting the prompt or improving its wording.
+
+Add only what a competent engineer joining THIS project would need and could not infer from the generic text:
+- the conventions, layout and idioms this codebase actually uses
+- the commands this project runs to build, test and type-check
+- the traps this stack presents that a generic prompt would not warn about
+
+Ground every addition in the project context above. If the context does not tell you something, say nothing about it — an invented convention is worse than a missing one, because the agent will follow it.
+
+Do not name a file, symbol, package or command that does not appear in the context you were given.
+
+## How to answer
+
+Emit ONLY the specialised prompt body as TEXT, directly in your reply. No JSON wrapper, no markdown fences around the whole thing, no commentary before or after, and do not write it to a file — the pipeline reads your reply text.
+
+## Your previous attempt was REFUSED
+
+the generated prompt dropped placeholder(s) the template requires: __COMMENT_BLOCK__, __COMPONENTS__, __DECLARED_FILES__, __DESCRIPTION__, __DOC_PATHS__, __LINK_BLOCK__, __PERSONA__, __RETRIEVED_DOCS__, __TITLE__. The evidence they carry would silently never reach the agent.
+
+Produce the prompt again, correcting exactly this. Change nothing else.
+
+# Output
+,
+You are __PERSONA__.
+
+## Story
+
+__TITLE__
+
+__DESCRIPTION__
+
+## Components in scope
+
+__COMPONENTS__
+
+## Declared files
+
+__DECLARED_FILES__
+
+## Links
+
+__LINK_BLOCK__
+
+## Comments
+
+__COMMENT_BLOCK__
+
+## Retrieved documents
+
+__RETRIEVED_DOCS__
+
+## Document paths
+
+__DOC_PATHS__
+
+---
+
+## Project-specific guidance for this codebase
+
+This project has two codelines, both TypeScript projects tested with vitest:
+
+- **mocka** at `/home/bradleyjerome/projects/mock3/mock-a` — dependencies: vitest, typescript
+- **mockb** at `/home/bradleyjerome/projects/mock3/mock-b` — dependencies: vitest, typescript
+
+### Tickets in scope
+
+- **MOCK3-1**: Riders aged exactly 65 are charged the adult fare. This is a boundary/off-by-one fix in mocka. The fare function currently treats age 65 incorrectly (likely charging a non-adult fare). The fix is expected to be small — confirm the boundary condition and ensure age 65 maps to the adult fare bracket.
+- **MOCK3-2**: The departure board omits the final stop. This is a loop-bound fix in mockb. The `formatStops` rendering logic drops the last stop, likely due to an off-by-one in iteration. The fix is expected to be small — confirm the loop bound and ensure all stops including the last are rendered.
+
+### Roles minted for this project
+
+- **typescript-bugfix-engineer** (implementer): spans both codelines for these small boundary fixes.
+- **mocka-investigator** (investigator): reads mocka to confirm no caller of `fareFor` or `totalFor` relies on the current incorrect boundary and to characterise what test coverage for age 65 should look like.
+- **mockb-investigator** (investigator): reads mockb to verify no caller compensates for the missing last stop and to describe what the test suite currently asserts about stop rendering.
+
+### Stack-specific traps
+
+- **vitest**: Test files must follow vitest's discovery conventions (files named `*.test.ts` or `*.spec.ts` in the project). When writing or updating tests for the boundary fixes, ensure the test file is picked up by vitest's default glob.
+- **TypeScript strictness**: Boundary fixes in fare calculations and loop bounds are exactly the kind of code where TypeScript's type system will not catch an off-by-one. Review the numeric comparisons manually — `>=` vs `>`, `<` vs `<=` — and ensure the boundary value (65 for fares, last index for stops) is included on the correct side.
+- **Both codelines are independent**: mocka and mockb have no declared dependency on each other. Changes in one codeline should not reference or import from the other.
+
+### Commands
+
+Both codelines use vitest and typescript. The standard commands for this stack are:
+
+- Run tests: `npx vitest run` (or `npx vitest` for watch mode) in the respective codeline directory.
+- Type-check: `npx tsc --noEmit` in the respective codeline directory.
+
+Run these from the codeline root (`/home/bradleyjerom/projects/mock3/mock-a` or `/home/bradleyjerom/projects/mock3/mock-b`) as appropriate for the ticket being worked.

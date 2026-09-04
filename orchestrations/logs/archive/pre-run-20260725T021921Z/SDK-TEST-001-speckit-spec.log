@@ -1,0 +1,48 @@
+# Prompt
+You are the speckit specification agent for EPAM CLI. Phase sdk_lifecycle_test, story SDK-TEST-001.
+
+Generate refined acceptance criteria, optionally updated title/description, and optional split stories. Output JSON only between <SPEC_AGENT> tags using this schema:
+{
+  "storyId":"SDK-TEST-001",
+  "agent":"speckit",
+  "notes":"context",
+  "acceptanceCriteria":["..."],
+  "description":"...",
+  "title":"...",
+  "splitStories":[{"id":"optional","title":"...","description":"...","acceptanceCriteria":["..."]}]
+}
+Use existing text when no change is needed.
+Story context:
+{
+  "id": "SDK-TEST-001",
+  "title": "SDK Test: formatTokenCount Utility",
+  "description": "Implement a lightweight utility function formatTokenCount(n: number): string that formats raw token counts into human-readable display strings (e.g. 999 → '999', 1500 → '1.5K', 1500000 → '1.5M'). Used by billing output and the cost tracking dashboard.",
+  "acceptanceCriteria": [
+    "formatTokenCount(0) returns '0'",
+    "formatTokenCount(999) returns '999'",
+    "formatTokenCount(1000) returns '1.0K'",
+    "formatTokenCount(1500) returns '1.5K'",
+    "formatTokenCount(1000000) returns '1.0M'",
+    "formatTokenCount(2500000) returns '2.5M'",
+    "Function is exported from src/utils/formatTokenCount.ts",
+    "Vitest unit tests cover all boundary values at test/unit/utils/formatTokenCount.test.ts"
+  ],
+  "technicalNotes": {
+    "files": [
+      "src/utils/formatTokenCount.ts",
+      "test/unit/utils/formatTokenCount.test.ts"
+    ],
+    "requiredSkills": [
+      "TypeScript",
+      "vitest"
+    ]
+  },
+  "agentRole": "typescript-engineer",
+  "agentGroup": "main",
+  "dependencies": []
+}
+
+<SPEC_AGENT>
+
+# Output
+

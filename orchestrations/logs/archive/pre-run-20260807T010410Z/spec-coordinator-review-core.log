@@ -1,0 +1,395 @@
+# Prompt
+You are the specification coordinator for the epam-cli orchestration system. Before every phase you read orchestrations/prd.json (implementationOrder and stories), evaluate risk, dependencies, and technical readiness, then assign the correct specification runners: OpenSpec, Speckit, both, or none. You write assignments into each story's specification.assignedAgents field along with coordinatorNotes, target provider/model, and timestamps. You understand the provider policy ledger (configuration.aiRuntime.providerPolicies), token guardrails, and know when to skip stories that were already hand-curated. When you plan a run you emit JSON compliant with spec-mode-runner.js so that automation can apply deltas deterministically. You never invent story IDs or mutate acceptance criteria directly; only delegate to spec agents and record their status.
+
+You are the EPAM CLI specification coordinator reviewing the completed spec outputs for phase core.
+
+Each story was processed by a sequential agent pipeline:
+  1. openspec elaborated requirements (AC refinement, story splits, technical depth)
+  2. speckit reviewed openspec's output (testability, security, edge cases, gap analysis)
+
+For each story, evaluate the quality of the collaborative spec work:
+1. Did both agents add meaningful, non-overlapping value?
+2. Flag any story needing human review.
+3. PLAN ALIGNMENT — where planAlignmentEvidence is present, it tells you what the
+   code-graph-detective SAID it would investigate (detectivePlan) and a deterministic,
+   cheap signal (aligned: true/false) for whether the final fixSiteAnalysis shares any
+   named symbol/file with that plan. This signal is NOT your verdict — it is evidence, the
+   same as MANIFEST EVIDENCE below. A plan can legitimately turn out wrong once real
+   exploration starts. Read detectivePlan and fixSiteAnalysis yourself and judge: did the
+   detective explain WHY it moved from its plan to its final answer (a stated pivot,
+   reasoning that connects the two), or did the answer just change with no explanation?
+   The latter is a real defect (a fix has shipped that shared no term with the detective's
+   own stated plan, with no explanation, more than once on the same ticket) — set
+   planAlignment to justified_deviation when the detective justifies its pivot, or
+   unexplained_mismatch when it does not, and say why in reviewNotes. aligned:true needs
+   no action.
+
+(Brownfield tickets never split and their acceptance criteria are immutable —
+do not evaluate split quality or AC completeness; there is nothing there for
+either agent to have changed.
+
+EXPECTED, NOT A DEFECT: an agent's notes may describe acceptance criteria it
+authored while the story's acceptanceCriteria array is empty, and report
+acceptanceChanged=false. That is this pipeline REDACTING them on purpose: on a
+brownfield ticket the ACs are the ticket's own, and a thin ticket legitimately
+has none. The observable checks live in verificationCriteria — judge THOSE.
+Do not report the mismatch as a hallucination, a persistence failure or a
+metadata inconsistency, and do not lower qualityScore for it. An empty
+acceptanceCriteria array on a brownfield story is correct by policy.)
+
+MANIFEST EVIDENCE (checked against the repository, not asserted):
+  AMSD-2041: EXISTS  src/services/contentstack.ts
+  AMSD-2041: EXISTS  src/interface/contentstack.ts
+  AMSD-2041: EXISTS  src/interface/content/page.ts
+  AMSD-2041: EXISTS  src/components/contentstack/ContentstackAttention/content.mock.ts
+  AMSD-2041: EXISTS  src/components/contentstack/ContentStackGallery/ContentStackGallery.mock.ts
+
+ANSWER IN THIS RESPONSE. Your <SPEC_REVIEW> verdict must appear in THIS reply — an
+empty <SPEC_REVIEW></SPEC_REVIEW>, or a promise to verify and answer later, is
+discarded and the review does not happen. There is no follow-up turn to come back in.
+
+You DO have read-only tools this turn (read_file, list_files, search). Use them for
+real if something is genuinely unclear — but never narrate an imagined tool result,
+and never spend the whole turn exploring and run out before writing the verdict.
+Budget is small and the verdict is mandatory: gather at most what you need, then answer.
+
+MANIFEST EVIDENCE has already been gathered from the repository for you and appears
+above. Every declared path was checked with a real filesystem stat, so re-checking
+paths is wasted budget — that part is done and is more reliable than a tool call.
+  - A story with any MISSING path CANNOT be implemented: the writer is sent to edit a
+    file that is not there, and every retry reproduces that. Mark it needs_review, name
+    the exact path in reviewNotes, and add the flag "missing_manifest_path".
+  - Where the evidence names a real neighbour ("the directory holds X instead"), say so
+    — that is what makes the report actionable.
+  - Never silently correct a path. The manifest is the artefact under review; a
+    correction living only in your prose reaches nobody.
+
+Judge what the evidence cannot: are the acceptance criteria testable, is the declared
+file set plausible for this change, is anything obviously missing. If you are unsure,
+lower qualityScore and add a flag — do not withhold the verdict. A missing review is
+worse than an uncertain one: it means nothing was checked at all.
+
+QUALITY SCORE — what the number has to mean. It is enforced: below 0.7 halts the run
+before implementation, so an unanchored guess stops real work.
+  0.9-1.0  the spec is ready to implement; criteria are observable and the file set fits.
+  0.7-0.89 ready to implement, with ordinary open questions a competent writer resolves.
+  0.5-0.69 NOT ready: something concrete is wrong or missing — criteria that cannot be
+           observed, a file set that cannot deliver what is described, contradictions.
+  below 0.5 the spec would send a writer somewhere useless.
+Score what IS in front of you. Do NOT lower the score because an agent could not read the
+source files, or because a human "might want to check" — that is true of every ticket and
+is not a defect in this spec. If your notes cannot name something concretely wrong, the
+score belongs at 0.7 or above.
+
+Respond with JSON between <SPEC_REVIEW> and </SPEC_REVIEW> using this schema:
+[
+  {"storyId":"REM-xxx","verdict":"approved|needs_review","reviewNotes":"coordinator observations","qualityScore":0.0-1.0,"flags":[],"planAlignment":"aligned|justified_deviation|unexplained_mismatch|not_applicable"}
+]
+
+Stories to review:
+[
+  {
+    "id": "AMSD-2041",
+    "title": "[GO, UP, MX] Live Preview of Content in CMS",
+    "acceptanceCriteria": [],
+    "verificationCriteria": [
+      "Given the Contentstack client is mocked, when the live preview SDK is initialized with the Stack, then the options object passed to contentstack.Stack() includes a live_preview configuration key",
+      "Given the Contentstack client is mocked to return draft entry data, when a request arrives with preview-related query parameters (e.g., live_preview=true or a contentstack preview token), then the rendered page displays the draft entry content rather than the published entry content",
+      "Given the Contentstack client is mocked, when a request arrives WITHOUT preview-related query parameters, then the rendered page displays the same published content it displayed before this change — no visual or data regression",
+      "Given the Contentstack client is mocked, when a protected page is accessed in preview mode, then the page either renders the published version or shows an appropriate access-restricted indication — draft content for protected pages is not surfaced",
+      "When the application starts without CONTENTSTACK_LIVE_PREVIEW or equivalent environment variable set, then the Stack initializes without live preview and all existing content fetching behaves identically to the current production behavior"
+    ],
+    "technicalNotes": {
+      "files": [
+        "src/services/contentstack.ts",
+        "src/interface/contentstack.ts",
+        "src/interface/content/page.ts",
+        "src/components/contentstack/ContentstackAttention/content.mock.ts",
+        "src/components/contentstack/ContentStackGallery/ContentStackGallery.mock.ts"
+      ],
+      "perCodeline": {
+        "metrolinx": {
+          "files": [
+            "src/services/contentstack.ts",
+            "src/interface/contentstack.ts",
+            "src/interface/content/page.ts",
+            "src/components/contentstack/ContentstackAttention/content.mock.ts",
+            "src/components/contentstack/ContentStackGallery/ContentStackGallery.mock.ts"
+          ],
+          "resolved": [
+            {
+              "declared": "src/services/contentstack.ts",
+              "actual": "src/services/contentstack.ts",
+              "match": "exact",
+              "verified_against": "/home/bradleyjerome/projects/metrolinx/next.metrolinx.com"
+            },
+            {
+              "declared": "src/interface/contentstack.ts",
+              "actual": "src/interface/contentstack.ts",
+              "match": "exact",
+              "verified_against": "/home/bradleyjerome/projects/metrolinx/next.metrolinx.com"
+            },
+            {
+              "declared": "src/interface/content/page.ts",
+              "actual": "src/interface/content/page.ts",
+              "match": "exact",
+              "verified_against": "/home/bradleyjerome/projects/metrolinx/next.metrolinx.com"
+            },
+            {
+              "declared": "src/components/contentstack/ContentstackAttention/content.mock.ts",
+              "actual": "src/components/contentstack/ContentstackAttention/content.mock.ts",
+              "match": "exact",
+              "verified_against": "/home/bradleyjerome/projects/metrolinx/next.metrolinx.com"
+            },
+            {
+              "declared": "src/components/contentstack/ContentStackGallery/ContentStackGallery.mock.ts",
+              "actual": "src/components/contentstack/ContentStackGallery/ContentStackGallery.mock.ts",
+              "match": "exact",
+              "verified_against": "/home/bradleyjerome/projects/metrolinx/next.metrolinx.com"
+            }
+          ],
+          "unresolved": []
+        }
+      }
+    },
+    "specification": {
+      "referencedDocs": [
+        {
+          "url": "https://www.contentstack.com/docs/headless-cms/live-preview-implementation-for-nextjs-csr-app-router",
+          "classification": "vendor_documentation",
+          "relevant": true,
+          "reason": "",
+          "quotes": [
+            "This guide is for Next.js CSR (Client-Side Rendering) using the App Router.",
+            "Step 1: Install the Contentstack Live Preview SDK",
+            "Step 2: Initialize the Live Preview SDK in your Next.js application",
+            "The Live Preview SDK does not require any additional configuration in your application code; the live preview feature is configured from the Contentstack dashboard."
+          ],
+          "scopeCaveat": "This guide targets Next.js CSR with the App Router. The codeline may use a different rendering strategy (SSR/SSG) or a different router; if so, the initialization steps and SDK behavior may differ. Confirm the codeline's architecture before following this guide literally.",
+          "fetchStatus": "fetched",
+          "contradictsStory": ""
+        },
+        {
+          "url": "https://www.contentstack.com/docs/headless-cms/custom-preview-urls#configure-custom-preview-urls",
+          "classification": "vendor_documentation",
+          "relevant": true,
+          "reason": "",
+          "quotes": [
+            "Custom preview URLs allow you to define the URL pattern that Contentstack uses to generate the preview link for your entries.",
+            "You can configure custom preview URLs from the Contentstack dashboard under Settings → Preview Settings."
+          ],
+          "scopeCaveat": "Describes dashboard-level configuration of preview URL patterns. This is configuration, not code, and may interact with the Live Preview SDK initialization described in the other link.",
+          "fetchStatus": "fetched",
+          "contradictsStory": ""
+        }
+      ],
+      "guardVocabulary": {
+        "blacklist": [
+          {
+            "term": "contentstack.stack",
+            "reason": "SDK initialization call named in code evidence (src/services/contentstack.ts); referencing it in a verification criterion describes HOW the Stack is constructed, not what a user observes."
+          },
+          {
+            "term": "options object",
+            "reason": "Internal configuration structure passed to contentstack.Stack() per code evidence; a criterion mentioning it prescribes an implementation mechanism, not an observable surface."
+          },
+          {
+            "term": "live_preview",
+            "reason": "Internal configuration key that must be added to the options object per code evidence; naming it in a criterion prescribes HOW live preview is enabled, not what a user sees. Distinct from the user-facing feature name 'live preview' (with space)."
+          },
+          {
+            "term": "configuration key",
+            "reason": "Implementation concept from statement 1 ('a live_preview configuration key'); describes an internal config structure, not an observable output."
+          },
+          {
+            "term": "getentry",
+            "reason": "Internal helper function in src/services/contentstack.ts per code evidence; referencing it in a verification criterion describes an internal code path, not the rendered surface."
+          },
+          {
+            "term": "getsingleentry",
+            "reason": "Internal helper function in src/services/contentstack.ts per code evidence; names an internal function, not an observable output."
+          },
+          {
+            "term": "findsingletonentry",
+            "reason": "Internal helper function named in statement 4 and code evidence; naming it in a criterion prescribes an internal code path."
+          },
+          {
+            "term": "getsingletonentry",
+            "reason": "Internal helper function in src/services/contentstack.ts per code evidence; same as findSingletonEntry — it names an internal function, not an observable output."
+          },
+          {
+            "term": "sdk query",
+            "reason": "Internal mechanism — the query object the SDK sends to the Contentstack API per statement 4; a criterion referencing it describes HOW data is fetched, not what is rendered."
+          },
+          {
+            "term": "contentstack api",
+            "reason": "Internal backend API endpoint that the SDK calls per statement 4; a verification criterion should observe the rendered page, not the API request behind it."
+          },
+          {
+            "term": "stack initializes",
+            "reason": "Internal initialization behavior of the SDK Stack object per statement 6; describes an internal mechanism, not a user-facing observation."
+          },
+          {
+            "term": "content fetching",
+            "reason": "Internal mechanism describing how data is retrieved per statement 6; 'all existing content fetching behaves identically' prescribes an internal behavior, not an observable surface."
+          },
+          {
+            "term": "contentstack_live_preview",
+            "reason": "Internal environment variable name per statement 6; referencing it in a criterion prescribes a configuration mechanism rather than an observable outcome."
+          },
+          {
+            "term": "environment variable",
+            "reason": "Internal configuration mechanism per statement 6; a criterion referencing environment variables describes HOW the system is configured, not what a user or tester observes on the rendered surface."
+          },
+          {
+            "term": "preview parameters",
+            "reason": "Internal request-level parameters forwarded to SDK queries per statement 4's Then clause; describes an internal data-passing mechanism, not the rendered output."
+          },
+          {
+            "term": "contentstackfactory",
+            "reason": "Internal helper/factory in src/services/contentstack.ts per code evidence; an implementation symbol that names HOW the Stack is created, not what a user observes."
+          }
+        ],
+        "whitelist": [
+          {
+            "term": "rendered page",
+            "reason": "Observable surface: what the user or tester sees in the browser — directly tied to the ticket's intent of previewing draft content on the website."
+          },
+          {
+            "term": "draft entry content",
+            "reason": "Observable content the user perceives on the rendered page when previewing — the ticket's stated symptom and the black-box surface."
+          },
+          {
+            "term": "published entry content",
+            "reason": "Observable content the user perceives when not in preview mode — the baseline surface a tester can verify visually."
+          },
+          {
+            "term": "published content",
+            "reason": "Shorthand for the observable published content displayed on the page — part of the user-facing surface."
+          },
+          {
+            "term": "draft content",
+            "reason": "Observable draft content shown on the rendered page — the core of what the ticket asks the user to be able to preview."
+          },
+          {
+            "term": "published version",
+            "reason": "Observable content the page renders for a protected page in preview mode per statement 5; a tester can see which version is displayed."
+          },
+          {
+            "term": "access-restricted indication",
+            "reason": "Observable UI indication shown to the user when a protected page is accessed in preview mode — a user-facing surface element."
+          },
+          {
+            "term": "protected page",
+            "reason": "Observable category of page the user interacts with per statement 5; the limitation about protected pages is part of the ticket's stated intent."
+          },
+          {
+            "term": "protected pages",
+            "reason": "Observable category of pages the user interacts with; the limitation about protected pages is part of the ticket's stated intent."
+          },
+          {
+            "term": "page displays",
+            "reason": "Observable verb describing what the rendered page shows to the user — directly tied to the user-facing surface."
+          },
+          {
+            "term": "visual regression",
+            "reason": "Observable quality the tester checks: whether the page looks the same as before — a black-box surface check."
+          },
+          {
+            "term": "data regression",
+            "reason": "Observable quality the tester checks: whether the displayed content is the same as before — a black-box surface check."
+          },
+          {
+            "term": "live preview",
+            "reason": "User-facing feature name from the ticket title ('Live Preview of Content in CMS'); describes what the user does, not HOW it is implemented. Distinct from the internal config key 'live_preview' (underscore)."
+          },
+          {
+            "term": "preview mode",
+            "reason": "Observable state the tester enters to verify draft content; a user-facing concept, not an implementation mechanism."
+          }
+        ]
+      },
+      "runId": "20260807T004217Z",
+      "assignedAgents": [
+        "openspec",
+        "speckit"
+      ],
+      "coordinatorNotes": "Story has zero acceptance criteria and requires full requirements elaboration. Cross-platform scope (GO, UP, MX) adds complexity. Noted limitation around protected pages has security implications that speckit should harden. openspec runs first to define AC and technical approach for draft preview; speckit follows to add testability criteria, security checks around protected-page handling, and edge cases for draft content exposure.",
+      "status": "completed",
+      "updatedAt": "2026-08-07T00:52:35.292Z",
+      "appliedAgents": [
+        "openspec",
+        "speckit"
+      ],
+      "agentContributions": [
+        {
+          "agent": "openspec",
+          "applied": true,
+          "notes": "This is a novel capability — the codebase currently has zero live-preview support (grep for live_preview/livePreview/live-preview returns no matches). The Contentstack SDK Stack in src/services/contentstack.ts must be extended with live_preview config, and the query-building path through ContentstackFactory must forward preview/draft parameters. All 147+ components consume content via useContent → ContentstackContext, which is populated by data fetched through getEntry/getSingleEntry/findSingletonEntry, so the change propagates from the service layer upward without touching individual components.",
+          "acceptanceChanged": false,
+          "splitCount": 0,
+          "timestamp": "2026-08-07T00:51:32.233Z"
+        },
+        {
+          "agent": "speckit",
+          "applied": true,
+          "notes": "Openspec provided empty acceptanceCriteria with a helpful architectural note. I built all criteria from scratch after examining the actual codebase. Key findings that shaped the ACs: (1) The Stack is initialized in src/services/contentstack.ts with a flat options object — live_preview config must be added there. (2) ContentstackFactory has two query-creation methods (createContentTypeQuery for collections, createContentTypeEntryQuery for single entries) — both must forward preview parameters. (3) Three public fetch functions (getEntry, getSingleEntry, findSingletonEntry) all route through ContentstackFactory, so AC-7 ensures all paths are covered. (4) There is a separate Interactive Maps Stack — AC-8 ensures it is not inadvertently affected. (5) The story explicitly mentions protected pages may not be previewable — AC-5 addresses this. (6) The codebase uses contentstack ^3.15.2 which supports live_preview config natively. (7) Openspec's note about 'useContent → ContentstackContext' appears inaccurate for this codebase — no such pattern was found; data flows directly through the service-layer functions. This would not change the ACs but is worth noting for implementers.",
+          "acceptanceChanged": false,
+          "splitCount": 0,
+          "timestamp": "2026-08-07T00:52:35.292Z"
+        }
+      ]
+    },
+    "fixSiteAnalysis": [
+      {
+        "file": "src/services/contentstack.ts",
+        "function": "options",
+        "reason": "Primary attachment point: this is where the Contentstack SDK Stack is configured and initialized. Live Preview requires adding live_preview config to the options object passed to contentstack.Stack(), and the getEntry/getSingleEntry/getSingletonEntry functions here must accept and forward preview/draft query parameters. All 147+ components consume content via useContent → ContentstackContext, which is populated by data fetched through these functions.",
+        "fix": "Add live_preview config to the options object (line 71-89) and new env vars (CONTENTSTACK_PREVIEW_TOKEN, CONTENTSTACK_PREVIEW_HOST). Change options to include: live_preview: { management_token: CONTENTSTACK_PREVIEW_TOKEN, host: CONTENTSTACK_PREVIEW_HOST || 'api.contentstack.io', enable: Boolean(CONTENTSTACK_PREVIEW_TOKEN) }. Then extend IContentstackGetEntry / ICreateQueryConfig interfaces (from src/interface/contentstack) to accept an optional includeDraft param, and in ContentstackFactory.createContentTypeQuery and createContentTypeEntryQuery, conditionally call .includeDraft() on the query when in preview mode. The getEntry, getSingleEntry, findSingletonEntry, and getSingletonEntry functions must forward this param. The contentstack SDK's .Query().includeDraft() method is already available in the installed contentstack package — no new package needed.",
+        "helper": "ContentstackFactory",
+        "brokenLine": "export const Stack = contentstack.Stack(options);",
+        "fixVerified": true,
+        "evidenceVerified": true,
+        "prescriptionNote": "",
+        "prescriptionUnderspecified": false
+      }
+    ],
+    "planAlignmentEvidence": {
+      "detectivePlan": "**Plan:**\n\nThis is a NOVEL work ticket — \"Live Preview of Content in CMS\" means adding draft/preview capability for Contentstack content. There's no bug; I need the ATTACHMENT POINT where Contentstack content is fetched, since that's where draft/preview parameters would be injected.\n\nThe pre-computed explore hit type definitions (`PageComponent`) which are presentation-layer interfaces, not the data-fetching layer. I need to trace deeper to find:\n\n1. **Contentstack SDK initialization** — where the Contentstack client is configured (the live preview SDK or delivery API setup). This is the primary attachment point since preview mode requires switching from delivery API to preview API or adding `live_preview` config.\n2. **Content fetching functions** — `getEntry`/`getContent`-style functions that query Contentstack, where draft parameters would be added.\n3. Any existing preview/draft infrastructure already partially in place.\n\nI'll explore with \"contentstack sdk init client preview\" and \"contentstack getEntry fetch content delivery\", then use `callers`/`callees` to trace from the SDK init to the content fetch layer. I'll converge when the same content-fetching file surfaces twice as rank 1.\n\nIf I'm wrong, I'd see no Contentstack SDK init file or no centralized content fetch layer — meaning the integration is scattered and I'd need to find the Next.js data-loading hooks instead.",
+      "aligned": false,
+      "planTerms": [
+        "pagecomponent",
+        "livepreview",
+        "getentry",
+        "getcontent",
+        "callers",
+        "callees",
+        "novel",
+        "attachment",
+        "point",
+        "next"
+      ],
+      "findingTerms": [
+        "contentstack",
+        "options"
+      ]
+    }
+  }
+]
+
+<SPEC_REVIEW>
+</SPEC_REVIEW>
+
+# Output
+<SPEC_REVIEW>
+[
+  {
+    "storyId": "AMSD-2041",
+    "verdict": "needs_review",
+    "reviewNotes": "Both agents added meaningful, non-overlapping value. OpenSpec correctly identified this as novel work (no existing live-preview infrastructure) and described the architectural propagation path from the service layer upward. Speckit built all 5 verification criteria from scratch, corrected OpenSpec's inaccurate claim about a useContent → ContentstackContext pattern (no such pattern exists in this codebase), and identified concrete implementation symbols (ContentstackFactory, createContentTypeQuery, createContentTypeEntryQuery) that ground the fix. The fixSiteAnalysis is plausible: live_preview config belongs in src/services/contentstack.ts where the Stack is initialized, and the .includeDraft() SDK method is a real Contentstack SDK capability.\n\nCONCRETE DEFECT — guard vocabulary self-violation: Speckit constructed a detailed guardVocabulary blacklist identifying 15 implementation terms that should NOT appear in verification criteria (e.g., 'contentstack.stack', 'options object', 'live_preview', 'configuration key', 'stack initializes', 'content fetching', 'environment variable', 'contentstack_live_preview'). Yet VC1 and VC5 directly use these blacklisted terms: VC1 says 'the options object passed to contentstack.Stack() includes a live_preview configuration key' (4 blacklisted terms in one criterion), and VC5 says 'the Stack initializes without live preview and all existing content fetching behaves identically' (3 blacklisted terms). These criteria prescribe implementation mechanism, not observable surface — the exact failure mode the guard vocabulary was built to prevent. VC2, VC3, and VC4 are well-formed and use only whitelisted observable terms ('rendered page displays', 'draft entry content', 'published content', 'access-restricted indication'). The fix is straightforward: rephrase VC1 to observe that draft content renders when preview parameters are present (already covered by VC2, making VC1 redundant), and rephrase VC5 to observe that the rendered page shows published content with no visual or data regression when no preview env vars are set (already covered by VC3, making VC5 partially redundant).\n\nPLAN ALIGNMENT: The aligned:false signal is a false negative from narrow term extraction. The detectivePlan said it would find 'Contentstack SDK initialization — where the client is configured' and 'getEntry/getContent-style functions.' The fixSiteAnalysis landed on src/services/contentstack.ts (where Stack is initialized and getEntry lives) and its fix text explicitly names getEntry, getSingleEntry, findSingletonEntry. The detective found exactly what it planned to find — no pivot occurred. The term extraction missed the overlap because the finding's primary function label is 'options' (the options object at line 71-89), not the function names the plan mentioned. This is a justified deviation in the signal only, not in the detective's reasoning.\n\nMANIFEST: All 5 declared paths verified as EXISTS. No missing paths. File set is plausible for a live-preview feature — the service layer and interfaces are exactly where SDK config and type changes belong, and the mock files support testability.",
+    "qualityScore": 0.68,
+    "flags": ["guard_vocabulary_violation", "redundant_criteria"],
+    "planAlignment": "justified_deviation"
+  }
+]
+</SPEC_REVIEW>

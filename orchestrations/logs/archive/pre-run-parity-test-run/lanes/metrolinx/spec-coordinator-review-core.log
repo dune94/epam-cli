@@ -1,0 +1,707 @@
+# Prompt
+You are the specification coordinator for the epam-cli orchestration system. Before every phase you read orchestrations/prd.json (implementationOrder and stories), evaluate risk, dependencies, and technical readiness, then assign the correct specification runners: OpenSpec, Speckit, both, or none. You write assignments into each story's specification.assignedAgents field along with coordinatorNotes, target provider/model, and timestamps. You understand the provider policy ledger (configuration.aiRuntime.providerPolicies), token guardrails, and know when to skip stories that were already hand-curated. When you plan a run you emit JSON compliant with spec-mode-runner.js so that automation can apply deltas deterministically. You never invent story IDs or mutate acceptance criteria directly; only delegate to spec agents and record their status.
+
+You are the EPAM CLI specification coordinator reviewing the completed spec outputs for phase core.
+
+Each story was processed by a sequential agent pipeline:
+  1. openspec elaborated requirements (AC refinement, story splits, technical depth)
+  2. speckit reviewed openspec's output (testability, security, edge cases, gap analysis)
+
+For each story, evaluate the quality of the collaborative spec work:
+1. Did both agents add meaningful, non-overlapping value?
+2. Flag any story needing human review.
+3. PLAN ALIGNMENT — where planAlignmentEvidence is present, it tells you what the
+   code-graph-detective SAID it would investigate (detectivePlan) and a deterministic,
+   cheap signal (aligned: true/false) for whether the final fixSiteAnalysis shares any
+   named symbol/file with that plan. This signal is NOT your verdict — it is evidence, the
+   same as MANIFEST EVIDENCE below. A plan can legitimately turn out wrong once real
+   exploration starts. Read detectivePlan and fixSiteAnalysis yourself and judge: did the
+   detective explain WHY it moved from its plan to its final answer (a stated pivot,
+   reasoning that connects the two), or did the answer just change with no explanation?
+   The latter is a real defect (a fix has shipped that shared no term with the detective's
+   own stated plan, with no explanation, more than once on the same ticket) — set
+   planAlignment to justified_deviation when the detective justifies its pivot, or
+   unexplained_mismatch when it does not, and say why in reviewNotes. aligned:true needs
+   no action.
+
+(Brownfield tickets never split and their acceptance criteria are immutable —
+do not evaluate split quality or AC completeness; there is nothing there for
+either agent to have changed.
+
+EXPECTED, NOT A DEFECT: an agent's notes may describe acceptance criteria it
+authored while the story's acceptanceCriteria array is empty, and report
+acceptanceChanged=false. That is this pipeline REDACTING them on purpose: on a
+brownfield ticket the ACs are the ticket's own, and a thin ticket legitimately
+has none. The observable checks live in verificationCriteria — judge THOSE.
+Do not report the mismatch as a hallucination, a persistence failure or a
+metadata inconsistency, and do not lower qualityScore for it. An empty
+acceptanceCriteria array on a brownfield story is correct by policy.)
+
+MANIFEST EVIDENCE (checked against the repository, not asserted):
+  AMSD-2041: EXISTS  src/services/contentstack.ts
+  AMSD-2041: EXISTS  src/pages/[[...slug]].tsx
+  AMSD-2041: EXISTS  src/services/newsService.ts
+  AMSD-2041: EXISTS  src/api/getEventsList.ts
+  AMSD-2041: EXISTS  src/api/utils/_contentstack_getNewsArticles.ts
+  AMSD-2041: EXISTS  src/interface/content/page.ts
+  AMSD-2041: EXISTS  src/components/contentstack/ContentstackAttention/content.mock.ts
+  AMSD-2041: EXISTS  src/components/contentstack/ContentStackGallery/ContentStackGallery.mock.ts
+
+ANSWER IN THIS RESPONSE. Your <SPEC_REVIEW> verdict must appear in THIS reply — an
+empty <SPEC_REVIEW></SPEC_REVIEW>, or a promise to verify and answer later, is
+discarded and the review does not happen. There is no follow-up turn to come back in.
+
+You DO have read-only tools this turn (read_file, list_files, search). Use them for
+real if something is genuinely unclear — but never narrate an imagined tool result,
+and never spend the whole turn exploring and run out before writing the verdict.
+Budget is small and the verdict is mandatory: gather at most what you need, then answer.
+
+MANIFEST EVIDENCE has already been gathered from the repository for you and appears
+above. Every declared path was checked with a real filesystem stat, so re-checking
+paths is wasted budget — that part is done and is more reliable than a tool call.
+  - A story with any MISSING path CANNOT be implemented: the writer is sent to edit a
+    file that is not there, and every retry reproduces that. Mark it needs_review, name
+    the exact path in reviewNotes, and add the flag "missing_manifest_path".
+  - Where the evidence names a real neighbour ("the directory holds X instead"), say so
+    — that is what makes the report actionable.
+  - Never silently correct a path. The manifest is the artefact under review; a
+    correction living only in your prose reaches nobody.
+
+Judge what the evidence cannot: are the acceptance criteria testable, is the declared
+file set plausible for this change, is anything obviously missing. If you are unsure,
+lower qualityScore and add a flag — do not withhold the verdict. A missing review is
+EVERY FLAG CARRIES A SEVERITY. It ranks your objections for whoever reads them; it does not
+decide whether the run stops — a computed check or a project-declared flag does that. Mark
+blocking when an implementer following this spec would produce work that CANNOT FUNCTION,
+and advisory for uncertainty about what you could not see. Report both honestly: nothing is
+gained by inflating uncertainty into a defect, and nothing is lost by naming a real one.
+worse than an uncertain one: it means nothing was checked at all.
+
+QUALITY SCORE — what the number has to mean. It is enforced: below 0.7 halts the run
+before implementation, so an unanchored guess stops real work.
+  0.9-1.0  the spec is ready to implement; criteria are observable and the file set fits.
+  0.7-0.89 ready to implement, with ordinary open questions a competent writer resolves.
+  0.5-0.69 NOT ready: something concrete is wrong or missing — criteria that cannot be
+           observed, a file set that cannot deliver what is described, contradictions.
+  below 0.5 the spec would send a writer somewhere useless.
+Score what IS in front of you. Do NOT lower the score because an agent could not read the
+source files, or because a human "might want to check" — that is true of every ticket and
+is not a defect in this spec. If your notes cannot name something concretely wrong, the
+score belongs at 0.7 or above.
+
+Respond with JSON between <SPEC_REVIEW> and </SPEC_REVIEW> using this schema:
+[
+  {"storyId":"REM-xxx","verdict":"approved|needs_review","reviewNotes":"coordinator observations","qualityScore":0.0-1.0,"flags":[{"flag":"short-slug","severity":"blocking|advisory","why":"what you checked and what you found"}],"planAlignment":"aligned|justified_deviation|unexplained_mismatch|not_applicable"}
+]
+
+Stories to review:
+[
+  {
+    "id": "AMSD-2041",
+    "title": "[GO, UP, MX] Live Preview of Content in CMS",
+    "acceptanceCriteria": [],
+    "verificationCriteria": [
+      "When a content page entry with unpublished draft changes is being previewed, the rendered slug page displays the draft entry's content including any unpublished field values.",
+      "When a news article entry with unpublished draft changes is being previewed, the rendered page displays the draft article's title, body, and metadata as they exist in the draft entry.",
+      "When a published content page entry is viewed, the rendered slug page displays the published entry's content correctly with all expected fields and values.",
+      "When an event entry with unpublished draft changes is being previewed, the rendered events listing displays the draft event's details as they exist in the draft entry.",
+      "When a news article entry with unpublished draft changes is being previewed, the rendered news listing displays the draft article along with its associated category information as it exists in the draft entry.",
+      "When a page is viewed without a draft preview, the page displays only published content and does not show any unpublished draft changes.",
+      "After a draft preview session ends and the page is viewed again, the page displays the published version of the content.",
+      "All content pages (slug pages, news listings, and event listings) render their published content without errors when the live preview feature is available but not in use."
+    ],
+    "technicalNotes": {
+      "files": [
+        "src/services/contentstack.ts",
+        "src/pages/[[...slug]].tsx",
+        "src/services/newsService.ts",
+        "src/api/getEventsList.ts",
+        "src/api/utils/_contentstack_getNewsArticles.ts",
+        "src/interface/content/page.ts",
+        "src/components/contentstack/ContentstackAttention/content.mock.ts",
+        "src/components/contentstack/ContentStackGallery/ContentStackGallery.mock.ts"
+      ],
+      "perCodeline": {
+        "gotransit": {
+          "files": [
+            "src/services/contentstack.ts",
+            "src/pages/[[...slug]].tsx",
+            "src/interface/content/page.ts",
+            "src/components/contentstack/ContentStackGallery/ContentStackGallery.mock.ts"
+          ],
+          "resolved": [
+            {
+              "declared": "src/services/contentstack.ts",
+              "actual": "src/services/contentstack.ts",
+              "match": "exact",
+              "verified_against": "/home/bradleyjerome/projects/metrolinx/next.gotransit.com"
+            },
+            {
+              "declared": "src/pages/[[...slug]].tsx",
+              "actual": "src/pages/[[...slug]].tsx",
+              "match": "exact",
+              "verified_against": "/home/bradleyjerome/projects/metrolinx/next.gotransit.com"
+            },
+            {
+              "declared": "src/interface/content/page.ts",
+              "actual": "src/interface/content/page.ts",
+              "match": "exact",
+              "verified_against": "/home/bradleyjerome/projects/metrolinx/next.gotransit.com"
+            },
+            {
+              "declared": "src/components/contentstack/ContentStackGallery/ContentStackGallery.mock.ts",
+              "actual": "src/components/contentstack/ContentStackGallery/ContentStackGallery.mock.ts",
+              "match": "exact",
+              "verified_against": "/home/bradleyjerome/projects/metrolinx/next.gotransit.com"
+            }
+          ],
+          "unresolved": [
+            {
+              "declared": "src/services/newsService.ts",
+              "candidates_checked": [
+                "src/services/newsService.ts",
+                "src/services/__tests__",
+                "src/services/abandonedCartPromptService.ts",
+                "src/services/akamai.ts",
+                "src/services/blogService.ts",
+                "src/services/contentstack.ts",
+                "src/services/directoryService.ts",
+                "src/services/getNsbConfigurationFiltersService.ts",
+                "src/services/go-transit",
+                "src/services/gtm",
+                "src/services/logger.ts",
+                "src/services/onBoardingService.ts",
+                "src/services/pageComponentResolver.ts",
+                "src/services/pageService.ts",
+                "src/services/partnersPromotionsService.ts",
+                "src/services/redirectsService.ts",
+                "src/services/serviceUpdatesService.ts",
+                "src/services/staticPathsResolver.ts",
+                "src/services/stationService.ts",
+                "src/services/urlRewritesService.ts",
+                "src/services/userAccountService.ts",
+                "src/services/userProfileService.ts",
+                "src/services/userSignUpService.ts",
+                "src/services/v1-api"
+              ],
+              "reason": "no exact, case-variant or extension-variant match exists in this codeline"
+            },
+            {
+              "declared": "src/api/getEventsList.ts",
+              "candidates_checked": [
+                "src/api/getEventsList.ts",
+                "src/api/__tests__",
+                "src/api/algolia.ts",
+                "src/api/emailSignUp.ts",
+                "src/api/enums",
+                "src/api/getNearbyStations.ts",
+                "src/api/getStationDetails.ts",
+                "src/api/getSubscriptionPreferencesHandler.ts",
+                "src/api/logger.ts",
+                "src/api/middlewares",
+                "src/api/retrieveUserProfile.ts",
+                "src/api/schedules.ts",
+                "src/api/services",
+                "src/api/updateSubscriptionPreferencesHandler.ts",
+                "src/api/updateUserProfile.ts",
+                "src/api/utils",
+                "src/api/verifyRecaptcha.ts"
+              ],
+              "reason": "no exact, case-variant or extension-variant match exists in this codeline"
+            },
+            {
+              "declared": "src/api/utils/_contentstack_getNewsArticles.ts",
+              "candidates_checked": [
+                "src/api/utils/_contentstack_getNewsArticles.ts",
+                "src/api/utils/applyMiddlewares.ts",
+                "src/api/utils/contentstack_getBlogArticles.ts",
+                "src/api/utils/contentstack_getPromotions.ts",
+                "src/api/utils/createSignature.ts",
+                "src/api/utils/decodeJwtToken.ts",
+                "src/api/utils/getBearerToken.ts",
+                "src/api/utils/getJwtToken.ts",
+                "src/api/utils/helper.ts",
+                "src/api/utils/interface.ts",
+                "src/api/utils/parseRequestBody.ts",
+                "src/api/utils/parseRequestBodyAsJson.ts",
+                "src/api/utils/parseRequestBodyAsMultipart.ts",
+                "src/api/utils/response.ts",
+                "src/api/utils/schema.ts",
+                "src/api/utils/schemas",
+                "src/api/utils/search.ts"
+              ],
+              "reason": "no exact, case-variant or extension-variant match exists in this codeline"
+            },
+            {
+              "declared": "src/components/contentstack/ContentstackAttention/content.mock.ts",
+              "candidates_checked": [
+                "src/components/contentstack/ContentstackAttention/content.mock.ts"
+              ],
+              "reason": "directory 'src/components/contentstack/ContentstackAttention' does not exist in this codeline"
+            }
+          ]
+        },
+        "upexpress": {
+          "files": [
+            "src/services/contentstack.ts",
+            "src/pages/[[...slug]].tsx",
+            "src/interface/content/page.ts",
+            "src/components/contentstack/ContentStackGallery/ContentStackGallery.mock.ts"
+          ],
+          "resolved": [
+            {
+              "declared": "src/services/contentstack.ts",
+              "actual": "src/services/contentstack.ts",
+              "match": "exact",
+              "verified_against": "/home/bradleyjerome/projects/metrolinx/next.upexpress.com"
+            },
+            {
+              "declared": "src/pages/[[...slug]].tsx",
+              "actual": "src/pages/[[...slug]].tsx",
+              "match": "exact",
+              "verified_against": "/home/bradleyjerome/projects/metrolinx/next.upexpress.com"
+            },
+            {
+              "declared": "src/interface/content/page.ts",
+              "actual": "src/interface/content/page.ts",
+              "match": "exact",
+              "verified_against": "/home/bradleyjerome/projects/metrolinx/next.upexpress.com"
+            },
+            {
+              "declared": "src/components/contentstack/ContentStackGallery/ContentStackGallery.mock.ts",
+              "actual": "src/components/contentstack/ContentStackGallery/ContentStackGallery.mock.ts",
+              "match": "exact",
+              "verified_against": "/home/bradleyjerome/projects/metrolinx/next.upexpress.com"
+            }
+          ],
+          "unresolved": [
+            {
+              "declared": "src/services/newsService.ts",
+              "candidates_checked": [
+                "src/services/newsService.ts",
+                "src/services/__tests__",
+                "src/services/blogService.ts",
+                "src/services/contentstack.ts",
+                "src/services/directoryService.ts",
+                "src/services/facilitiesService.ts",
+                "src/services/gtm.ts",
+                "src/services/logger.ts",
+                "src/services/pageComponentResolver.tsx",
+                "src/services/pageService.ts",
+                "src/services/redirectsService.ts",
+                "src/services/staticPathsResolver.ts",
+                "src/services/up-api",
+                "src/services/userProfileService.ts",
+                "src/services/userSignUpService.ts",
+                "src/services/v1-api"
+              ],
+              "reason": "no exact, case-variant or extension-variant match exists in this codeline"
+            },
+            {
+              "declared": "src/api/getEventsList.ts",
+              "candidates_checked": [
+                "src/api/getEventsList.ts",
+                "src/api/__tests__",
+                "src/api/enums",
+                "src/api/interfaces",
+                "src/api/logger.ts",
+                "src/api/middlewares",
+                "src/api/passes.ts",
+                "src/api/retrieveUserProfile.ts",
+                "src/api/services",
+                "src/api/tickets.ts",
+                "src/api/updateUserProfile.ts",
+                "src/api/utils"
+              ],
+              "reason": "no exact, case-variant or extension-variant match exists in this codeline"
+            },
+            {
+              "declared": "src/api/utils/_contentstack_getNewsArticles.ts",
+              "candidates_checked": [
+                "src/api/utils/_contentstack_getNewsArticles.ts",
+                "src/api/utils/__tests__",
+                "src/api/utils/applyMiddlewares.ts",
+                "src/api/utils/bytemark.ts",
+                "src/api/utils/bytemarkCookie.ts",
+                "src/api/utils/cookies.ts",
+                "src/api/utils/decodeJwtToken.ts",
+                "src/api/utils/domain.ts",
+                "src/api/utils/getBearerToken.ts",
+                "src/api/utils/getJwtToken.ts",
+                "src/api/utils/handleApimError.ts",
+                "src/api/utils/handleCrmError.ts",
+                "src/api/utils/helper.ts",
+                "src/api/utils/interface.ts",
+                "src/api/utils/passes.ts",
+                "src/api/utils/response.ts",
+                "src/api/utils/schema.ts",
+                "src/api/utils/search.ts",
+                "src/api/utils/tickets.ts"
+              ],
+              "reason": "no exact, case-variant or extension-variant match exists in this codeline"
+            },
+            {
+              "declared": "src/components/contentstack/ContentstackAttention/content.mock.ts",
+              "candidates_checked": [
+                "src/components/contentstack/ContentstackAttention/content.mock.ts"
+              ],
+              "reason": "directory 'src/components/contentstack/ContentstackAttention' does not exist in this codeline"
+            }
+          ]
+        },
+        "metrolinx": {
+          "files": [
+            "src/services/contentstack.ts",
+            "src/pages/[[...slug]].tsx",
+            "src/services/newsService.ts",
+            "src/api/getEventsList.ts",
+            "src/api/utils/_contentstack_getNewsArticles.ts",
+            "src/interface/content/page.ts",
+            "src/components/contentstack/ContentstackAttention/content.mock.ts",
+            "src/components/contentstack/ContentStackGallery/ContentStackGallery.mock.ts"
+          ],
+          "resolved": [
+            {
+              "declared": "src/services/contentstack.ts",
+              "actual": "src/services/contentstack.ts",
+              "match": "exact",
+              "verified_against": "/home/bradleyjerome/projects/metrolinx/next.metrolinx.com"
+            },
+            {
+              "declared": "src/pages/[[...slug]].tsx",
+              "actual": "src/pages/[[...slug]].tsx",
+              "match": "exact",
+              "verified_against": "/home/bradleyjerome/projects/metrolinx/next.metrolinx.com"
+            },
+            {
+              "declared": "src/services/newsService.ts",
+              "actual": "src/services/newsService.ts",
+              "match": "exact",
+              "verified_against": "/home/bradleyjerome/projects/metrolinx/next.metrolinx.com"
+            },
+            {
+              "declared": "src/api/getEventsList.ts",
+              "actual": "src/api/getEventsList.ts",
+              "match": "exact",
+              "verified_against": "/home/bradleyjerome/projects/metrolinx/next.metrolinx.com"
+            },
+            {
+              "declared": "src/api/utils/_contentstack_getNewsArticles.ts",
+              "actual": "src/api/utils/_contentstack_getNewsArticles.ts",
+              "match": "exact",
+              "verified_against": "/home/bradleyjerome/projects/metrolinx/next.metrolinx.com"
+            },
+            {
+              "declared": "src/interface/content/page.ts",
+              "actual": "src/interface/content/page.ts",
+              "match": "exact",
+              "verified_against": "/home/bradleyjerome/projects/metrolinx/next.metrolinx.com"
+            },
+            {
+              "declared": "src/components/contentstack/ContentstackAttention/content.mock.ts",
+              "actual": "src/components/contentstack/ContentstackAttention/content.mock.ts",
+              "match": "exact",
+              "verified_against": "/home/bradleyjerome/projects/metrolinx/next.metrolinx.com"
+            },
+            {
+              "declared": "src/components/contentstack/ContentStackGallery/ContentStackGallery.mock.ts",
+              "actual": "src/components/contentstack/ContentStackGallery/ContentStackGallery.mock.ts",
+              "match": "exact",
+              "verified_against": "/home/bradleyjerome/projects/metrolinx/next.metrolinx.com"
+            }
+          ],
+          "unresolved": []
+        }
+      }
+    },
+    "specification": {
+      "referencedDocs": [
+        {
+          "url": "https://www.contentstack.com/docs/headless-cms/live-preview-implementation-for-nextjs-csr-app-router",
+          "classification": "vendor_documentation",
+          "relevant": true,
+          "reason": "",
+          "quotes": [
+            "Live Preview is a feature that allows content authors to view draft and unpublished entries of a content type in real time, directly within the Contentstack CMS."
+          ],
+          "scopeCaveat": "",
+          "fetchStatus": "fetched",
+          "contradictsStory": ""
+        },
+        {
+          "url": "https://www.contentstack.com/docs/headless-cms/custom-preview-urls#configure-custom-preview-urls",
+          "classification": "vendor_documentation",
+          "relevant": true,
+          "reason": "",
+          "quotes": [
+            "Custom Preview URLs allow you to configure specific URLs to preview your content entries."
+          ],
+          "scopeCaveat": "",
+          "fetchStatus": "fetched",
+          "contradictsStory": ""
+        }
+      ],
+      "guardVocabulary": {
+        "blacklist": [
+          {
+            "term": "preview cookie",
+            "reason": "Describes an internal HTTP mechanism (cookie manipulation) rather than the observable surface. A tester should observe draft content being served, not inspect cookies. The cookie is the mechanism by which Next.js tracks preview state internally."
+          },
+          {
+            "term": "live_preview config",
+            "reason": "Names the internal Contentstack Stack configuration key (management_token, preview_token, host) identified in code evidence at src/services/contentstack.ts options. A verification criterion referencing this config object is prescribing HOW the Stack is built, not what a user sees."
+          },
+          {
+            "term": "preview_token",
+            "reason": "Internal configuration env var identified in code evidence as part of the live_preview attachment point. Referencing it in a criterion describes the implementation mechanism, not observable behaviour."
+          },
+          {
+            "term": "management_token",
+            "reason": "Internal configuration env var identified in code evidence as part of the live_preview attachment point. Referencing it in a criterion describes the implementation mechanism, not observable behaviour."
+          },
+          {
+            "term": "livepreviewquery",
+            "reason": "Internal function named in code evidence that must be applied to Stack.ContentType().Query() calls in newsService.ts, getEventsList.ts, and _contentstack_getNewsArticles.ts to include draft content. A criterion referencing it prescribes HOW draft content is fetched."
+          },
+          {
+            "term": "contentstackfactory",
+            "reason": "Internal structure named in code evidence that newsService, getEventsList, and _contentstack_getNewsArticles bypass. Referencing it in a criterion describes the internal query architecture, not what a user observes."
+          },
+          {
+            "term": "getstaticprops",
+            "reason": "Internal Next.js SSG function in src/pages/[[...slug]].tsx identified in code evidence. A criterion referencing it prescribes the rendering mechanism rather than the observable rendered output."
+          },
+          {
+            "term": "catch-all page",
+            "reason": "Internal route structure (src/pages/[[...slug]].tsx) identified in code evidence. Naming the catch-all page in a criterion describes the internal routing architecture rather than the observable page content."
+          },
+          {
+            "term": "preview api route",
+            "reason": "Internal API route referenced in statements as the mechanism that sets preview cookies. A criterion should observe the effect (draft content served) not name the internal route that produces it."
+          },
+          {
+            "term": "contentstack client",
+            "reason": "Internal service/client identified in code evidence (src/services/contentstack.ts) through which all queries flow. Referencing the client in a criterion describes the data-fetching mechanism, not the observable surface."
+          },
+          {
+            "term": "preview mode",
+            "reason": "Internal Next.js framework state mechanism identified in code evidence via req.preview and preview context. Statements verify 'Preview Mode activation' and 'deactivation' — these are internal mechanism states, not user-facing observations. The observable surface is draft content being displayed."
+          },
+          {
+            "term": "stack",
+            "reason": "Internal Contentstack SDK object identified in code evidence (newsService.ts, getEventsList.ts, _contentstack_getNewsArticles.ts) from which queries are built. A criterion referencing Stack creation or configuration prescribes HOW data is fetched."
+          }
+        ],
+        "whitelist": [
+          {
+            "term": "draft content",
+            "reason": "Observable content state a content author or tester perceives on the rendered page — the core observable surface of this ticket."
+          },
+          {
+            "term": "draft entry",
+            "reason": "Observable content entity whose title and body the tester sees on the rendered page."
+          },
+          {
+            "term": "published content",
+            "reason": "Observable content state representing the non-draft baseline a tester perceives on the rendered page."
+          },
+          {
+            "term": "published version",
+            "reason": "Observable content baseline the tester compares against; names what is displayed, not how it is fetched."
+          },
+          {
+            "term": "rendered page",
+            "reason": "The observable output surface — what the tester sees rendered in the browser."
+          },
+          {
+            "term": "title",
+            "reason": "Observable text content displayed on the page that the tester can read and verify."
+          },
+          {
+            "term": "body text",
+            "reason": "Observable text content displayed on the page that the tester can read and verify."
+          },
+          {
+            "term": "description",
+            "reason": "Observable text content displayed on the page that the tester can read and verify."
+          },
+          {
+            "term": "event details",
+            "reason": "Observable content fields displayed on the events listing page that the tester can read and verify."
+          },
+          {
+            "term": "error status",
+            "reason": "Observable HTTP response status a client receives, visible to a tester without knowledge of internal mechanisms."
+          },
+          {
+            "term": "page displays",
+            "reason": "Observable behaviour — the page showing content to the tester; names the surface, not the mechanism."
+          },
+          {
+            "term": "page requests",
+            "reason": "Observable action a tester performs and observes the resulting content; describes the interaction surface."
+          },
+          {
+            "term": "news article",
+            "reason": "Observable content type (news article) whose draft title and description the tester sees displayed; names what is shown, not how it is fetched."
+          },
+          {
+            "term": "event",
+            "reason": "Observable content type (event) whose draft details the tester sees displayed; names what is shown, not how it is fetched."
+          }
+        ]
+      },
+      "runId": "20260808T205736Z",
+      "assignedAgents": [
+        "openspec",
+        "speckit"
+      ],
+      "coordinatorNotes": "Empty acceptance criteria require full requirements elaboration by openspec first. Multi-platform scope (GO, UP, MX) and third-party SDK integration (ContentStack Live Preview) add technical complexity. The explicit limitation around protected pages/content has security implications (unauthorized draft access) and edge cases (dynamic data, partial content states, cross-platform consistency) that speckit must harden. No existing spec or prior hand-curation found in the codebase — this is a greenfield story needing both agents, openspec first then speckit reviews.",
+      "status": "completed",
+      "updatedAt": "2026-08-09T00:10:58.637Z",
+      "appliedAgents": [
+        "openspec",
+        "speckit"
+      ],
+      "agentContributions": [
+        {
+          "agent": "openspec",
+          "applied": true,
+          "notes": "Novel capability — no live_preview config, no preview API route, no context.preview handling, and no livePreviewQuery() usage exist anywhere in the codebase. The Contentstack SDK's live_preview feature requires: (1) live_preview config block on the Stack, (2) a preview API route to receive Contentstack's webhook/polling callbacks, (3) passing preview context through to queries so they return draft content. All queries currently use SSG via getStaticProps with fallback:false, so Next.js Preview Mode must be enabled to serve dynamic draft content. Direct Stack consumers in newsService, getEventsList, and _contentstack_getNewsArticles bypass ContentstackFactory and each need live preview query support.",
+          "acceptanceChanged": false,
+          "splitCount": 0,
+          "timestamp": "2026-08-09T00:08:37.200Z"
+        },
+        {
+          "agent": "speckit",
+          "applied": true,
+          "notes": "Openspec provided an empty acceptanceCriteria array with detailed notes about the current codebase state. I created all 17 ACs from scratch, informed by reading the actual source files. Key observations from code review: (1) contentstack.ts exports a singleton `Stack` initialized without any `live_preview` config and a `ContentstackFactory` class that wraps it — both need live preview support; (2) [[...slug]].tsx uses getStaticProps with fallback:false and no preview handling; (3) newsService.ts, getEventsList.ts, and _contentstack_getNewsArticles.ts all import `Stack` directly and bypass ContentstackFactory, each constructing queries inline — all three need live preview query support; (4) No live_preview/preview/setPreviewData references exist anywhere. ACs are organized into: config (AC1), preview API route success/failure/validation (AC2-4), draft content rendering (AC5-6), query-path coverage for factory and direct consumers (AC7-10), exit preview (AC11), security/no-leak (AC12), graceful degradation (AC13), SSG regression (AC14), protected pages limitation (AC15), missing-entry edge case (AC16), and multi-codeline consistency (AC17). I flagged AC15 (protected pages) because the story acknowledges this limitation but does not define expected behavior. I also flagged the interactive maps stack (separate Stack instance in contentstack.ts) which may need its own live preview config but is not mentioned in the story.",
+          "acceptanceChanged": false,
+          "splitCount": 0,
+          "timestamp": "2026-08-09T00:10:58.637Z"
+        }
+      ]
+    },
+    "fixSiteAnalysis": [
+      {
+        "file": "src/services/contentstack.ts",
+        "function": "options",
+        "reason": "Central Contentstack Stack configuration object — THE attachment point for adding live_preview config (management_token, preview_token, host). All queries flow through the Stack created from this config.",
+        "fix": "Add live_preview key to the exported `options` object (after branch), reading CONTENTSTACK_PREVIEW_TOKEN and CONTENTSTACK_MANAGEMENT_TOKEN from process.env. The live_preview object needs { enable: true, preview_token, management_token, host } per Contentstack SDK v3 docs. Also add the same live_preview config to the Interactive Maps Stack initialization at line ~409 (the second contentstack.Stack() call using INTERACTIVE_MAPS_STACK_* env vars).",
+        "helper": "options",
+        "brokenLine": "",
+        "fixVerified": true,
+        "evidenceVerified": null,
+        "fileVerified": true,
+        "prescriptionNote": "",
+        "prescriptionUnderspecified": false
+      },
+      {
+        "file": "src/pages/[[...slug]].tsx",
+        "function": "getStaticProps",
+        "reason": "The catch-all page that renders all Contentstack content pages. It uses getStaticProps (SSG), so Live Preview requires Next.js Preview Mode to bypass static generation and serve draft content on demand. The preview context (req.preview) must be passed through to the service layer so queries include draft data.",
+        "fix": "In getStaticProps, check context.preview and pass a flag (e.g., isPreview: context.preview ?? false) down to pageService/contentstack queries. When isPreview is true, queries should use CachePolicy.NETWORK_ONLY and include draft entries. Also create a new API route at src/pages/api/enable-preview.ts (and disable-preview.ts) to set Next.js preview mode cookies, following the Next.js Preview Mode pattern.",
+        "helper": "getStaticProps",
+        "brokenLine": "",
+        "fixVerified": true,
+        "evidenceVerified": null,
+        "fileVerified": true,
+        "prescriptionNote": "",
+        "prescriptionUnderspecified": false
+      },
+      {
+        "file": "src/services/newsService.ts",
+        "function": "Stack",
+        "reason": "newsService imports Stack directly and calls Stack.ContentType().Query() at lines 68, 109-110, 140-141, 157-158. These bypass ContentstackFactory and need livePreviewQuery() applied to include draft content during preview.",
+        "fix": "After each Stack.ContentType(...).Query() call, apply Stack.livePreviewQuery() to the query object before chaining .find(). Alternatively, refactor these calls to use ContentstackFactory which handles preview params centrally.",
+        "helper": "Stack",
+        "brokenLine": "",
+        "fixVerified": true,
+        "evidenceVerified": null,
+        "fileVerified": true,
+        "prescriptionNote": "",
+        "prescriptionUnderspecified": false
+      },
+      {
+        "file": "src/api/getEventsList.ts",
+        "function": "Stack",
+        "reason": "Directly calls Stack.ContentType(ContentTypes.EventPage).Query() at line 26, bypassing ContentstackFactory. Needs livePreviewQuery() for preview support.",
+        "fix": "Apply Stack.livePreviewQuery() to the query after construction, or refactor to use ContentstackFactory.createContentTypeQuery.",
+        "helper": "Stack",
+        "brokenLine": "",
+        "fixVerified": true,
+        "evidenceVerified": null,
+        "fileVerified": true,
+        "prescriptionNote": "",
+        "prescriptionUnderspecified": false
+      },
+      {
+        "file": "src/api/utils/_contentstack_getNewsArticles.ts",
+        "function": "Stack",
+        "reason": "Directly calls Stack.ContentType(ContentTypes.NewsArticle).Query() at lines 24, 50-51, bypassing ContentstackFactory. Needs livePreviewQuery() for preview support.",
+        "fix": "Apply Stack.livePreviewQuery() to each query after construction, or refactor to use ContentstackFactory.createContentTypeQuery.",
+        "helper": "Stack",
+        "brokenLine": "",
+        "fixVerified": true,
+        "evidenceVerified": null,
+        "fileVerified": true,
+        "prescriptionNote": "",
+        "prescriptionUnderspecified": false
+      }
+    ],
+    "planAlignmentEvidence": {
+      "detectivePlan": "**PLAN:**\n\nThe Live Preview capability must plug into the Contentstack Stack initialization (to add `live_preview` config) and every data-fetching call (to inject preview parameters). My primary targets:\n\n1. **Stack initialization file** — where `Contentstack.Stack()` is called with `api_key`, `environment`, etc. This is THE attachment point for adding `live_preview` config.\n2. **All service/wrapper files** that call `.Query()`, `.entry()`, `.entries()` — each must pass preview query params.\n3. **Router type** — determines whether Live Preview uses a middleware (App Router) or API route (Pages Router).\n4. **@metrolinx/cx-shared** — if it exports Contentstack utilities, it could centralize the init.\n5. **Existing preview code/env vars** — anything already present to build on.\n6. **SDK version** from package.json — Live Preview requires contentstack SDK v3+.\n\nI'll use my 6 calls to: (1) search for Stack() init and contentstack imports, (2) search data-fetching patterns, (3) check router type, (4) search preview-related code, (5) examine cx-shared Contentstack exports, (6) check package.json + test conventions. If Stack init is centralized in one file, the fix is narrow there but broad across all query sites.",
+      "aligned": false,
+      "planTerms": [
+        "livepreview",
+        "apikey",
+        "environment",
+        "plan",
+        "package"
+      ],
+      "findingTerms": [
+        "contentstack",
+        "options",
+        "getstaticprops",
+        "slug",
+        "newsservice",
+        "stack",
+        "geteventslist",
+        "contentstackgetnewsarticles"
+      ]
+    }
+  }
+]
+
+<SPEC_REVIEW>
+</SPEC_REVIEW>
+
+# Output
+<SPEC_REVIEW>
+[
+  {
+    "storyId": "AMSD-2041",
+    "verdict": "needs_review",
+    "reviewNotes": "Both agents added meaningful, non-overlapping value. Openspec identified the novel capability gap with technical depth: no live_preview config, no preview API route, no context.preview handling, no livePreviewQuery() usage anywhere, and three direct Stack consumers (newsService, getEventsList, _contentstack_getNewsArticles) bypassing ContentstackFactory. Speckit read the actual source files, authored 8 observable verification criteria (all describe what a tester sees on rendered pages, not internal mechanisms), constructed a thorough guardVocabulary blacklist/whitelist, and flagged two real gaps: (1) protected pages behavior is acknowledged but undefined, (2) the interactive maps Stack instance (second contentstack.Stack() call in contentstack.ts) may need its own live_preview config but is not mentioned in the story. The fixSiteAnalysis prescribes 5 specific, actionable fix sites — all 8 declared paths verified to EXIST in the metrolinx codeline. BLOCKING ISSUE: the story title is '[GO, UP, MX]' (multi-codeline), but the perCodeline resolution data shows that 3 of the 5 prescribed fix-site files do not exist in the gotransit or upexpress codelines: src/services/newsService.ts (GO has blogService.ts instead; UP has blogService.ts), src/api/getEventsList.ts (absent in both GO and UP), and src/api/utils/_contentstack_getNewsArticles.ts (GO has contentstack_getBlogArticles.ts; UP has no equivalent). A fourth file, src/components/contentstack/ContentstackAttention/content.mock.ts, is also absent in GO and UP (the directory itself does not exist in either codeline). An implementer following this spec in GO or UP would be directed to edit nonexistent files and every retry would reproduce that failure. The spec is ready for MX implementation alone (~0.85 quality) but is NOT ready as a multi-codeline story. If implementation is intended to be MX-only in this phase with GO/UP deferred, the blocking flag can be downgraded to advisory. Speckit's note about '17 ACs' while only 8 verificationCriteria are shown is the expected brownfield redaction pattern — not a defect, not scored against. The empty acceptanceCriteria array is correct by brownfield policy.",
+    "qualityScore": 0.65,
+    "flags": [
+      {
+        "flag": "missing_cross_codeline_paths",
+        "severity": "blocking",
+        "why": "The story targets [GO, UP, MX] but 3 of 5 prescribed fixSiteAnalysis files do not exist in gotransit or upexpress: src/services/newsService.ts (GO/UP have blogService.ts instead), src/api/getEventsList.ts (absent in both), src/api/utils/_contentstack_getNewsArticles.ts (GO has contentstack_getBlogArticles.ts; UP has no equivalent). A fourth file, src/components/contentstack/ContentstackAttention/content.mock.ts, is also absent in GO/UP (directory does not exist). All 8 declared paths DO exist in metrolinx. An implementer sent to GO or UP cannot function. If this phase is MX-only, downgrade to advisory."
+      },
+      {
+        "flag": "protected_pages_behavior_undefined",
+        "severity": "advisory",
+        "why": "Speckit itself flagged that the story acknowledges a limitation around protected pages but does not define expected behavior when a draft preview is requested for a protected/restricted page. No verification criterion covers this edge case. A writer can proceed but should clarify expected behavior (e.g., redirect, error, or no draft served)."
+      },
+      {
+        "flag": "interactive_maps_separate_stack",
+        "severity": "advisory",
+        "why": "Speckit identified that contentstack.ts initializes a second Stack instance for interactive maps (using INTERACTIVE_MAPS_STACK_* env vars) which may need its own live_preview config. The fixSiteAnalysis for contentstack.ts mentions adding live_preview to this second Stack call, but no verification criterion covers interactive maps preview behavior. A writer should confirm whether interactive maps are in scope."
+      }
+    ],
+    "planAlignment": "justified_deviation"
+  }
+]
+</SPEC_REVIEW>

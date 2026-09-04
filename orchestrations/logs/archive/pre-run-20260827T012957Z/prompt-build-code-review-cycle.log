@@ -1,0 +1,145 @@
+# Prompt
+You are specialising ONE generic agent prompt for ONE specific project. You are the same agent that just minted this project's roles, so you already know what this project is and who will work on it.
+
+## The template you must specialise
+
+Its id is code-review-cycle and its purpose is: Review an implementation and return a verdict with issues.
+
+Everything between the two markers below is the template, verbatim. The markers are not
+part of it. A code fence cannot delimit this: several templates contain fences of their
+own, so the first closing fence would truncate the body mid-instruction.
+
+-----BEGIN TEMPLATE BODY-----
+__REVIEW_PROFILE__
+
+---
+REVIEW TASK (Iteration __ITERATION__): Story __STORY_ID__ — __STORY_TITLE__
+AGENT: __STORY_AGENT__
+
+DESCRIPTION: __STORY_DESCRIPTION__
+
+ACCEPTANCE CRITERIA:
+__STORY_ACS__
+
+RELEVANT FILES: __STORY_FILES__
+
+GIT DIFF:
+```diff
+__STORY_DIFF__
+```
+__PRIOR_CONTEXT__
+PROJECT ROOT: __PROJECT_ROOT__
+
+Review the implementation against each acceptance criterion.
+Check: TypeScript strict compliance, test coverage, error handling, security.
+
+Respond with ONLY a JSON object:
+{"verdict":"approved","issues":[],"summary":"..."}
+  OR
+{"verdict":"changes_requested","issues":[{"severity":"blocker|major|minor","file":"...","line":0,"description":"...","evidence":"<path>:<line> you read, or the command you ran and its result","suggestedFix":"..."}],"summary":"..."}
+
+Every issue MUST carry an `evidence` field: the exact thing you READ that establishes it — `<path>:<line>` you opened, or the command you ran and what it returned. Not a restatement of the claim, not a plan reference: what you looked at. An issue without evidence is DISCARDED before it reaches anyone, so an unsupported finding is worse than no finding — it costs you the issue. If a claim is about a library's API, the evidence is that library's installed types or source in this repository, and the installed contract beats the plan.
+
+-----END TEMPLATE BODY-----
+
+## What this project is
+
+Project config: /home/bradleyjerome/projects/ai/epam-cli/orchestrations/projects/mock3
+Tickets in scope: MOCK3-1: Riders aged exactly 65 are charged the adult fare | MOCK3-2: The departure board omits the final stop
+
+Codelines in scope and their declared dependencies:
+- mocka (/home/bradleyjerome/projects/mock3/mock-a) deps: vitest, typescript
+- mockb (/home/bradleyjerome/projects/mock3/mock-b) deps: vitest, typescript
+
+The roles you minted for this project:
+- fare-schedule-engineer [implementer] — Both MOCK3-1 and MOCK3-2 are single-line pure-function logic fixes in the same declared typescript/vitest stack, so one implementer spanning src/fares.ts (mocka) and src/schedule.ts (mockb) is sufficient and avoids minting redundant near-duplicate engineers per codeline.
+- mocka-detective [investigator] — MOCK3-1 is scoped entirely to mocka's fare logic, so a dedicated investigator confirming the exact comparison operator and current test boundary coverage in src/fares.ts and test/fares.test.ts prevents the implementer from acting on the unverified survey lead alone.
+- mockb-detective [investigator] — MOCK3-2 is scoped entirely to mockb's schedule rendering, so a dedicated investigator confirming the actual loop bound in formatStops and the current test coverage in test/schedule.test.ts prevents the implementer from acting on the unverified survey lead alone.
+
+## The one rule you cannot break
+
+The template's placeholders are a CONTRACT with the pipeline. Each token written in SCREAMING_SNAKE_CASE between double underscores is replaced at run time with real evidence — a diff, a ticket, a test log, a plan. The substitution is BY NAME and it is strict in both directions.
+
+- Reproduce every placeholder EXACTLY as it appears, character for character.
+- NEVER add or invent a placeholder. Nothing supplies a name the pipeline does not know, so rendering throws and the run dies at the seam that needed this prompt.
+- NEVER remove or rename one. The evidence it carries would silently never reach the agent, and the agent would answer without it.
+- Do not move a placeholder into a code fence, a quote, or an example where it would read as literal text.
+
+The placeholders in this template are exactly: __ITERATION__, __PRIOR_CONTEXT__, __PROJECT_ROOT__, __REVIEW_PROFILE__, __STORY_ACS__, __STORY_AGENT__, __STORY_DESCRIPTION__, __STORY_DIFF__, __STORY_FILES__, __STORY_ID__, __STORY_TITLE__
+
+## What specialising means
+
+Keep the template's instructions, its output format, its prohibitions and its reasoning intact. They encode failures this pipeline has already paid for. You are not rewriting the prompt or improving its wording.
+
+Add only what a competent engineer joining THIS project would need and could not infer from the generic text:
+- the conventions, layout and idioms this codebase actually uses
+- the commands this project runs to build, test and type-check
+- the traps this stack presents that a generic prompt would not warn about
+
+Ground every addition in the project context above. If the context does not tell you something, say nothing about it — an invented convention is worse than a missing one, because the agent will follow it.
+
+Do not name a file, symbol, package or command that does not appear in the context you were given.
+
+## How to answer
+
+Emit ONLY the specialised prompt body as TEXT, directly in your reply. No JSON wrapper, no markdown fences around the whole thing, no commentary before or after, and do not write it to a file — the pipeline reads your reply text.
+
+
+
+# Output
+__REVIEW_PROFILE__
+
+---
+REVIEW TASK (Iteration __ITERATION__): Story __STORY_ID__ — __STORY_TITLE__
+AGENT: __STORY_AGENT__
+
+DESCRIPTION: __STORY_DESCRIPTION__
+
+ACCEPTANCE CRITERIA:
+__STORY_ACS__
+
+RELEVANT FILES: __STORY_FILES__
+
+GIT DIFF:
+```diff
+__STORY_DIFF__
+```
+__PRIOR_CONTEXT__
+PROJECT ROOT: __PROJECT_ROOT__
+
+PROJECT CONTEXT — mock3
+
+Two independent codelines, each a self-contained ESM TypeScript package with its own package.json, tsconfig.json, src/ and test/. There is no root workspace: every command runs from inside one codeline directory, not from the project root.
+
+- mocka — /home/bradleyjerome/projects/mock3/mock-a — src/fares.ts, test/fares.test.ts. Scope of MOCK3-1 (rider aged exactly 65 charged the adult fare).
+- mockb — /home/bradleyjerome/projects/mock3/mock-b — src/schedule.ts, test/schedule.test.ts. Scope of MOCK3-2 (departure board omits the final stop).
+
+Commands (identical in both codelines; run with the codeline directory as cwd):
+- `npm test` → `vitest run`
+- `npm run build` → `tsc --noEmit` (this is the type-check; there is no emit step)
+- `npm run lint` → `echo no-lint-configured`. It is a no-op. A green lint is not evidence of anything; never cite it.
+
+tsconfig in both: `strict: true`, `noEmit: true`, `target`/`module` ES2022, `moduleResolution: "bundler"`, `include: ["src", "test"]`. Tests import extensionless (`from '../src/fares'`) — that is the established idiom here and is correct under bundler resolution; do not raise it as an issue. Both packages are `"type": "module"`. There is no vitest.config file; vitest picks up test/*.test.ts by default. Style in these files is plain exported functions on explicit `type` aliases — no classes, no framework.
+
+WHAT THIS CODEBASE'S BUGS LOOK LIKE
+
+Both tickets are off-by-one boundary defects in a pure function, and in both cases the pre-existing test suite passes with the bug present because every existing test sits away from the boundary. mocka's suite exercises ages 30, 8 and 70; mockb's asserts only that the output contains `->` and contains the first stop. Therefore:
+
+- "The suite is green" is NOT evidence that an acceptance criterion is met. A diff that changes the operator or the loop bound without adding a test that pins the exact boundary case leaves the regression unguarded — treat missing boundary coverage as a real finding, not a nitpick, and quote the test file line range you read to show it is absent.
+- Check the fix in the correct direction. A boundary fix can be over-applied: verify the neighbouring cases still behave (the case just outside the boundary, and the other branches of the same function — the pass-holder short-circuit and the child branch in fareFor, the empty-array path in totalMinutes) are unchanged by the diff.
+- Check the doc comment above the changed function still states what the code now does. In these files the comment is the specification of intent.
+- Watch for a "fix" that mutates the input array or changes an exported signature or exported constant. Callers here are exported (`totalFor` calls `fareFor`; `totalMinutes` shares the Stop type with `formatStops`), so a signature or semantics change ripples.
+
+EVIDENCE IN THIS PROJECT
+
+Evidence means one of: a path:line you actually opened under mock-a/ or mock-b/, or a command you ran from inside the right codeline directory together with what it printed. `cd` into the codeline before running `npm test` or `npm run build` — running from the project root will not resolve either package. If your claim is about vitest or tsc behaviour, the evidence is that tool's installed types or source under the codeline's node_modules, and the installed contract beats the plan.
+
+Review the implementation against each acceptance criterion.
+Check: TypeScript strict compliance, test coverage, error handling, security.
+
+Respond with ONLY a JSON object:
+{"verdict":"approved","issues":[],"summary":"..."}
+  OR
+{"verdict":"changes_requested","issues":[{"severity":"blocker|major|minor","file":"...","line":0,"description":"...","evidence":"<path>:<line> you read, or the command you ran and its result","suggestedFix":"..."}],"summary":"..."}
+
+Every issue MUST carry an `evidence` field: the exact thing you READ that establishes it — `<path>:<line>` you opened, or the command you ran and what it returned. Not a restatement of the claim, not a plan reference: what you looked at. An issue without evidence is DISCARDED before it reaches anyone, so an unsupported finding is worse than no finding — it costs you the issue. If a claim is about a library's API, the evidence is that library's installed types or source in this repository, and the installed contract beats the plan.

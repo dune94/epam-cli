@@ -1,0 +1,25 @@
+{
+  "agent": "spec-validator",
+  "phase": "core",
+  "stories": [{
+    "storyId": "MOCK-HW-1",
+    "title": "Hello world greeting should say hello dolly",
+    "criteria": [
+      {
+        "text": "src/hello.ts contains return 'hello dolly' (not 'hello world')",
+        "status": "met",
+        "evidence": "src/hello.ts line 2: `return 'hello dolly';` — the function getGreeting() returns the exact string 'hello dolly' and does not contain 'hello world'",
+        "gaps": "none"
+      },
+      {
+        "text": "src/hello.test.ts contains toBe('hello dolly') (not toBe('hello world'))",
+        "status": "met",
+        "evidence": "src/hello.test.ts line 5: `expect(getGreeting()).toBe('hello dolly');` and lines 9-10: `expect(getGreeting()).not.toBe('hello world')` / `expect(getGreeting()).not.toContain('hello world')`. Vitest results: 2/2 tests passed.",
+        "gaps": "none"
+      }
+    ],
+    "overallCompliance": 100,
+    "verdict": "pass"
+  }],
+  "overallVerdict": "pass"
+}

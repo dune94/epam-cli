@@ -1,0 +1,9 @@
+  [vc-coverage] COVERED   When the page request includes live preview parameters, the rendered page displays the draft content
+  [vc-coverage]           ↳ displays draft content values after onEntryChange triggers a re-render
+  [vc-coverage] COVERED   When live preview is not active, the rendered page displays the correct published content for every 
+  [vc-coverage]           ↳ renders correct published content for every entry
+  [vc-coverage] COVERED   For a page that requires authentication, an unauthenticated visitor cannot view the page's content.
+  [vc-coverage]           ↳ prevents unauthenticated visitors from viewing page content
+  [vc-coverage] COVERED   For a page that requires authentication, draft content does not appear on the rendered page when liv
+  [vc-coverage]           ↳ draft content does not appear when live preview is active but visitor is unauthenticated
+  [vc-coverage] VC_UNCOVERED=0 of 4

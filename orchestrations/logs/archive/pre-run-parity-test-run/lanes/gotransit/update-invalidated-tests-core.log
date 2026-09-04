@@ -1,0 +1,218 @@
+[update-invalidated-tests] suite already green — no invalidated tests, nothing to do
+[update-invalidated-tests] suite is RED after the fix — deciding whether the failures are invalidated expectations or a real regression
+[update-invalidated-tests] BLOCKED — reported as a REGRESSION, not an invalidated expectation:
+    REGRESSION: Cannot determine specific test failures from provided output - requires examination of actual assertion errors to distinguish between legitimate test updates and regressions.
+[update-invalidated-tests] the fix is suspect; NOT rewriting any test to hide it
+[update-invalidated-tests] suite is RED after the fix — deciding whether the failures are invalidated expectations or a real regression
+[update-invalidated-tests] BLOCKED — reported as a REGRESSION, not an invalidated expectation:
+    REGRESSION: Cannot analyze test failures without seeing the actual failing tests from the test output.
+[update-invalidated-tests] the fix is suspect; NOT rewriting any test to hide it
+[update-invalidated-tests] suite is RED after the fix — deciding whether the failures are invalidated expectations or a real regression
+[update-invalidated-tests] BLOCKED — suite still RED after the update attempt (the fix or the update is wrong)
+          320 |
+          321 |     fireEvent.click(accordionToggle);
+          322 |
+    
+          at Object.getElementError (node_modules/@testing-library/dom/dist/config.js:37:19)
+          at node_modules/@testing-library/dom/dist/query-helpers.js:76:38
+          at node_modules/@testing-library/dom/dist/query-helpers.js:109:15
+          at Object.getAllByTestId (src/components/Schedules/__tests__/schedules.spec.tsx:319:36)
+    
+    
+    Test Suites: 1 failed, 740 passed, 741 total
+    Tests:       2 failed, 4 skipped, 21 todo, 3310 passed, 3337 total
+    Snapshots:   19 passed, 19 total
+    Time:        463.633 s
+    Ran all test suites.[update-invalidated-tests] suite is RED after the fix — deciding whether the failures are invalidated expectations or a real regression
+[update-invalidated-tests] BLOCKED — suite still RED after the update attempt (the fix or the update is wrong)
+          139 |
+          140 |   it("should NOT show the eligibility banner when the trip is eligible", async () => {
+    
+          at Object.getElementError (node_modules/@testing-library/dom/dist/config.js:37:19)
+          at node_modules/@testing-library/dom/dist/query-helpers.js:76:38
+          at node_modules/@testing-library/dom/dist/query-helpers.js:52:17
+          at node_modules/@testing-library/dom/dist/query-helpers.js:95:19
+          at Object.getByTestId (src/components/pages/ServiceGuaranteeWebformPage/check-trip-eligibility/__tests__/CheckTripEligibilityFormContainer.spec.tsx:137:19)
+    
+    
+    Test Suites: 3 failed, 738 passed, 741 total
+    Tests:       4 failed, 4 skipped, 21 todo, 3308 passed, 3337 total
+    Snapshots:   19 passed, 19 total
+    Time:        108.935 s
+    Ran all test suites.[update-invalidated-tests] suite is RED after the fix — deciding whether the failures are invalidated expectations or a real regression
+[update-invalidated-tests] suite went green with no test edits
+[update-invalidated-tests] suite is RED after the fix — deciding whether the failures are invalidated expectations or a real regression
+[update-invalidated-tests] BLOCKED — reported as a REGRESSION, not an invalidated expectation:
+    REGRESSION: The OTG alerts resume functionality is broken, throwing "Something went wrong" error in ResumeOtgAlertsContainer.spec.tsx
+[update-invalidated-tests] the fix is suspect; NOT rewriting any test to hide it
+[update-invalidated-tests] suite is RED after the fix — deciding whether the failures are invalidated expectations or a real regression
+[update-invalidated-tests] BLOCKED — suite still RED after the update attempt (the fix or the update is wrong)
+        > 73 |   it("should call onToggle when control button is clicked", async () => {
+             |   ^
+          74 |     const { user } = renderNetworkStatusLineAccordion();
+          75 |
+          76 |     await user.click(getControlButton());
+    
+          at it (src/components/NetworkStatusLine/__tests__/NetworkStatusLineAccordion.spec.tsx:73:3)
+          at Object.describe (src/components/NetworkStatusLine/__tests__/NetworkStatusLineAccordion.spec.tsx:41:1)
+    
+    
+    Test Suites: 2 failed, 739 passed, 741 total
+    Tests:       2 failed, 4 skipped, 21 todo, 3311 passed, 3338 total
+    Snapshots:   19 passed, 19 total
+    Time:        172.723 s
+    Ran all test suites.[update-invalidated-tests] suite is RED after the fix — deciding whether the failures are invalidated expectations or a real regression
+[update-invalidated-tests] BLOCKED — suite still RED after the update attempt (the fix or the update is wrong)
+          320 |
+          321 |     fireEvent.click(accordionToggle);
+          322 |
+    
+          at Object.getElementError (node_modules/@testing-library/dom/dist/config.js:37:19)
+          at node_modules/@testing-library/dom/dist/query-helpers.js:76:38
+          at node_modules/@testing-library/dom/dist/query-helpers.js:109:15
+          at Object.getAllByTestId (src/components/Schedules/__tests__/schedules.spec.tsx:319:36)
+    
+    
+    Test Suites: 1 failed, 740 passed, 741 total
+    Tests:       2 failed, 4 skipped, 21 todo, 3311 passed, 3338 total
+    Snapshots:   19 passed, 19 total
+    Time:        30.444 s
+    Ran all test suites.[update-invalidated-tests] suite is RED after the fix — deciding whether the failures are invalidated expectations or a real regression
+[update-invalidated-tests] BLOCKED — reported as a REGRESSION, not an invalidated expectation:
+    REGRESSION: The fix broke form submission in AddOtgAlertFormContainer.tsx, causing "Something went wrong" error during live preview functionality tests.
+[update-invalidated-tests] the fix is suspect; NOT rewriting any test to hide it
+[update-invalidated-tests] suite is RED after the fix — deciding whether the failures are invalidated expectations or a real regression
+[update-invalidated-tests] BLOCKED — reported as a REGRESSION, not an invalidated expectation:
+    REGRESSION: The fix introduced a breaking change that causes a runtime error when handling form submissions in the OTG alerts functionality, specifically in the AddOtgAlertFormContainer component.
+[update-invalidated-tests] the fix is suspect; NOT rewriting any test to hide it
+[update-invalidated-tests] suite already green — no invalidated tests, nothing to do
+[update-invalidated-tests] suite already green — no invalidated tests, nothing to do
+[update-invalidated-tests] suite already green — no invalidated tests, nothing to do
+[update-invalidated-tests] suite already green — no invalidated tests, nothing to do
+[update-invalidated-tests] suite already green — no invalidated tests, nothing to do
+[update-invalidated-tests] suite is RED after the fix — deciding whether the failures are invalidated expectations or a real regression
+[update-invalidated-tests] BLOCKED — reported as a REGRESSION, not an invalidated expectation:
+    REGRESSION: The test failure indicates a duplicate key issue that was previously allowed but is now properly caught by the fix, suggesting either the test was asserting incorrect behavior or the fix introduced a regression that needs investigation.
+    REGRESSION: The test failure shows a duplicate key error that the fix now properly handles, but without seeing the specific test assertion, I cannot determine if the test was correctly asserting the old buggy behavior or if this represents a genuine regression in the fix.
+[update-invalidated-tests] the fix is suspect; NOT rewriting any test to hide it
+[update-invalidated-tests] suite already green — no invalidated tests, nothing to do
+[update-invalidated-tests] suite is RED after the fix — deciding whether the failures are invalidated expectations or a real regression
+[update-invalidated-tests] BLOCKED — non-test file(s) modified at the test-update step: .epam/codeline-facts.json 
+[update-invalidated-tests] suite is RED after the fix — deciding whether the failures are invalidated expectations or a real regression
+[update-invalidated-tests] BLOCKED — reported as a REGRESSION, not an invalidated expectation:
+    REGRESSION: The TransferCartContext test is failing with HTTP 500 errors on cart operations, indicating the fix has broken existing cart functionality that wasn't part of the intended change scope.
+[update-invalidated-tests] the fix is suspect; NOT rewriting any test to hide it
+[update-invalidated-tests] suite already green — no invalidated tests, nothing to do
+[update-invalidated-tests] suite already green — no invalidated tests, nothing to do
+[update-invalidated-tests] suite already green — no invalidated tests, nothing to do
+[update-invalidated-tests] suite is RED after the fix — deciding whether the failures are invalidated expectations or a real regression
+[update-invalidated-tests] BLOCKED — reported as a REGRESSION, not an invalidated expectation:
+    REGRESSION: The Contentstack dependency upgrade introduced a breaking change that affects form submission in the OTG alerts feature, causing a runtime error instead of the expected behavior.
+[update-invalidated-tests] the fix is suspect; NOT rewriting any test to hide it
+[update-invalidated-tests] suite is RED after the fix — deciding whether the failures are invalidated expectations or a real regression
+[update-invalidated-tests] BLOCKED — reported as a REGRESSION, not an invalidated expectation:
+    REGRESSION: The test suite failures are due to JSDOM environment issues (window.focus not implemented) unrelated to the contentstack live preview configuration changes. The actual contentstack fix is correct and the new tests added for live preview should pass.
+[update-invalidated-tests] the fix is suspect; NOT rewriting any test to hide it
+[update-invalidated-tests] suite is RED after the fix — deciding whether the failures are invalidated expectations or a real regression
+[update-invalidated-tests] BLOCKED — reported as a REGRESSION, not an invalidated expectation:
+    REGRESSION: The failing test is unrelated to the contract changes shown in the diff and appears to be a jsdom environment issue with window.focus implementation.
+[update-invalidated-tests] the fix is suspect; NOT rewriting any test to hide it
+[update-invalidated-tests] suite is RED after the fix — deciding whether the failures are invalidated expectations or a real regression
+[update-invalidated-tests] BLOCKED — suite still RED after the update attempt (the fix or the update is wrong)
+          at Object.949 (node_modules/contentstack/dist/node/contentstack.js:240:37)
+          at __webpack_require__ (node_modules/contentstack/dist/node/contentstack.js:4352:41)
+          at node_modules/contentstack/dist/node/contentstack.js:4363:37
+          at Object.<anonymous> (node_modules/contentstack/dist/node/contentstack.js:4366:12)
+          at Object.<anonymous> (src/services/contentstack.ts:38:62)
+          at Object.<anonymous> (src/services/getNsbConfigurationFiltersService.ts:12:24)
+          at Object.<anonymous> (src/pages/find-a-station/[stationCode]/service-alerts.tsx:38:44)
+          at Object.<anonymous> (src/__tests__/pages/find-a-station/[stationCode]/service-alerts.spec.tsx:24:63)
+    
+    
+    Test Suites: 11 failed, 730 passed, 741 total
+    Tests:       2 failed, 4 skipped, 21 todo, 3290 passed, 3317 total
+    Snapshots:   19 passed, 19 total
+    Time:        351.44 s
+    Ran all test suites.[update-invalidated-tests] suite is RED after the fix — deciding whether the failures are invalidated expectations or a real regression
+[update-invalidated-tests] BLOCKED — suite still RED after the update attempt (the fix or the update is wrong)
+          at __webpack_require__ (node_modules/contentstack/dist/node/contentstack.js:4352:41)
+          at Object.949 (node_modules/contentstack/dist/node/contentstack.js:240:37)
+          at __webpack_require__ (node_modules/contentstack/dist/node/contentstack.js:4352:41)
+          at node_modules/contentstack/dist/node/contentstack.js:4363:37
+          at Object.<anonymous> (node_modules/contentstack/dist/node/contentstack.js:4366:12)
+          at Object.<anonymous> (src/services/contentstack.ts:38:62)
+          at Object.<anonymous> (src/pages/find-a-station/[stationCode]/[contentstackUrl].tsx:31:24)
+          at Object.<anonymous> (src/__tests__/pages/find-a-station/[stationCode]/[contentstackUrl].spec.tsx:37:66)
+    
+    
+    Test Suites: 11 failed, 730 passed, 741 total
+    Tests:       2 failed, 4 skipped, 21 todo, 3290 passed, 3317 total
+    Snapshots:   19 passed, 19 total
+    Time:        33.624 s
+    Ran all test suites.[update-invalidated-tests] suite is RED after the fix — deciding whether the failures are invalidated expectations or a real regression
+[update-invalidated-tests] BLOCKED — reported as a REGRESSION, not an invalidated expectation:
+    REGRESSION: Test failures appear to be unrelated to the interface contract changes shown in the diff and likely represent pre-existing issues or environment setup problems rather than test invalidation from the committed fix.
+[update-invalidated-tests] the fix is suspect; NOT rewriting any test to hide it
+[update-invalidated-tests] suite is RED after the fix — deciding whether the failures are invalidated expectations or a real regression
+[update-invalidated-tests] BLOCKED — suite still RED after the update attempt (the fix or the update is wrong)
+          at Object.949 (node_modules/contentstack/dist/node/contentstack.js:240:37)
+          at __webpack_require__ (node_modules/contentstack/dist/node/contentstack.js:4352:41)
+          at node_modules/contentstack/dist/node/contentstack.js:4363:37
+          at Object.<anonymous> (node_modules/contentstack/dist/node/contentstack.js:4366:12)
+          at Object.<anonymous> (src/services/contentstack.ts:38:62)
+          at Object.<anonymous> (src/services/stationService.ts:20:24)
+          at Object.<anonymous> (src/pages/find-a-station/[stationCode]/facilities-services-fare-sales.tsx:36:25)
+          at Object.<anonymous> (src/__tests__/pages/find-a-station/[stationCode]/facilities-services-fare-sales.spec.tsx:31:77)
+    
+    
+    Test Suites: 11 failed, 730 passed, 741 total
+    Tests:       2 failed, 4 skipped, 21 todo, 3290 passed, 3317 total
+    Snapshots:   19 passed, 19 total
+    Time:        30.943 s
+    Ran all test suites.[update-invalidated-tests] suite already green — no invalidated tests, nothing to do
+[update-invalidated-tests] suite already green — no invalidated tests, nothing to do
+[update-invalidated-tests] suite already green — no invalidated tests, nothing to do
+[update-invalidated-tests] suite is RED after the fix — deciding whether the failures are invalidated expectations or a real regression
+[update-invalidated-tests] BLOCKED — suite still RED after the update attempt (the fix or the update is wrong)
+        > 117 |   it("should display the favorite stations heading correctly", async () => {
+              |   ^
+          118 |     await act(async () => {
+          119 |       renderFavoritesTab();
+          120 |     });
+    
+          at it (src/components/UserAccount/__tests__/Favorites.spec.tsx:117:3)
+          at Object.describe (src/components/UserAccount/__tests__/Favorites.spec.tsx:112:1)
+    
+    
+    Test Suites: 4 failed, 737 passed, 741 total
+    Tests:       4 failed, 4 skipped, 21 todo, 3309 passed, 3338 total
+    Snapshots:   19 passed, 19 total
+    Time:        271.732 s
+    Ran all test suites.[update-invalidated-tests] suite is RED after the fix — deciding whether the failures are invalidated expectations or a real regression
+[update-invalidated-tests] BLOCKED — reported as a REGRESSION, not an invalidated expectation:
+    REGRESSION: Cannot determine specific test failures without seeing actual test output to verify whether failures are due to legitimate test updates or actual broken functionality.
+[update-invalidated-tests] the fix is suspect; NOT rewriting any test to hide it
+[update-invalidated-tests] suite is RED after the fix — deciding whether the failures are invalidated expectations or a real regression
+[update-invalidated-tests] BLOCKED — reported as a REGRESSION, not an invalidated expectation:
+    REGRESSION: Test failures are due to React act warnings unrelated to the Contentstack live preview configuration fix, not because of any behavioral change in the application logic.
+[update-invalidated-tests] the fix is suspect; NOT rewriting any test to hide it
+[update-invalidated-tests] suite is RED after the fix — deciding whether the failures are invalidated expectations or a real regression
+[update-invalidated-tests] BLOCKED — suite still RED after the update attempt (the fix or the update is wrong)
+          139 |
+          140 |   it("should NOT show the eligibility banner when the trip is eligible", async () => {
+    
+          at Object.getElementError (node_modules/@testing-library/dom/dist/config.js:37:19)
+          at node_modules/@testing-library/dom/dist/query-helpers.js:76:38
+          at node_modules/@testing-library/dom/dist/query-helpers.js:52:17
+          at node_modules/@testing-library/dom/dist/query-helpers.js:95:19
+          at Object.getByTestId (src/components/pages/ServiceGuaranteeWebformPage/check-trip-eligibility/__tests__/CheckTripEligibilityFormContainer.spec.tsx:137:19)
+    
+    
+    Test Suites: 11 failed, 731 passed, 742 total
+    Tests:       36 failed, 4 skipped, 21 todo, 3280 passed, 3341 total
+    Snapshots:   19 passed, 19 total
+    Time:        44.321 s
+    Ran all test suites.[update-invalidated-tests] suite is RED after the fix — deciding whether the failures are invalidated expectations or a real regression
+[update-invalidated-tests] BLOCKED — reported as a REGRESSION, not an invalidated expectation:
+    REGRESSION: The isPreviewMode function in useContent.ts fails when window.location.hash is undefined, breaking tests that don't mock this properly.
+[update-invalidated-tests] the fix is suspect; NOT rewriting any test to hide it

@@ -1,0 +1,29 @@
+[ai-run] attempt 2/3 for 'qa-gate:perf-sentinel' — escalating z-ai/glm-5.2 -> moonshotai/kimi-k3
+{
+  "agent": "perf-sentinel",
+  "phase": "core",
+  "summary": { "filesAnalysed": 7, "findingsCount": 2, "blockerCount": 0, "estimatedStartupImpactMs": 0 },
+  "findings": [
+    {
+      "severity": "minor",
+      "category": "startup",
+      "file": "src/pages/_app.tsx",
+      "line": 6,
+      "codeSnippet": "import ContentstackLivePreview, { type IStackSdk } from \"@contentstack/live-preview-utils\";",
+      "description": "Static top-level import of @contentstack/live-preview-utils in the root _app bundles the SDK (~585 KB unminified, ~118 KB gzipped measured from the installed dist/modern) into the common client chunk for every page load, even though the feature only does anything when live-preview query params are present. The init itself is correctly deferred to a useEffect (line 47), so the regression is bundle weight / parse time, not runtime work.",
+      "estimatedImpact": "medium",
+      "suggestedFix": "Load the SDK lazily inside the useEffect: `const { default: ContentstackLivePreview } = await import(\"@contentstack/live-preview-utils\")` (optionally gated on the presence of the live_preview query param), so the chunk is only fetched and parsed in preview sessions."
+    },
+    {
+      "severity": "minor",
+      "category": "async",
+      "file": "src/pages/_app.tsx",
+      "line": 88,
+      "codeSnippet": "ContentstackLivePreview.onEntryChange(reFetchEntry);",
+      "description": "reFetchEntry issues an unthrottled getSingleEntry/getSingletonEntry network call on every onEntryChange event, and the calls to services/contentstack.ts have no timeout unless the CONTENTSTACK_FETCH_TIMEOUT env var is set (src/services/contentstack.ts line 33 leaves the SDK timeout unset by default). Rapid successive draft edits can queue overlapping fetches whose responses may arrive out of order, and a hung request has no cancellation. Impact is bounded because the handler no-ops unless the live_preview and content_type_uid params are present (line 61-63).",
+      "estimatedImpact": "low",
+      "suggestedFix": "Debounce or coalesce reFetchEntry (e.g. trailing-edge debounce of a few hundred ms) and track the latest in-flight call so stale responses are discarded; consider passing an explicit timeout via the existing CONTENTSTACK_FETCH_TIMEOUT path."
+    }
+  ],
+  "verdict": "pass"
+}

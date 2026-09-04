@@ -1,0 +1,1 @@
+{"agent":"perf-sentinel","phase":"core","summary":{"filesAnalysed":1,"findingsCount":0,"blockerCount":0,"estimatedStartupImpactMs":0},"findings":[],"verdict":"not_applicable","reason":"Change is a trivial test-string update ('hello world' → 'hello dolly') in a unit test — no algorithmic complexity, memory, async, startup, or provider performance concerns apply."}

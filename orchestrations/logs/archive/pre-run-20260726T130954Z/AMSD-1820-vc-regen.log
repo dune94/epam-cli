@@ -1,0 +1,29 @@
+# Prompt
+Regenerate the VERIFICATION CRITERIA for this brownfield story. Your previous verification criteria were FLAGGED and must be fixed:
+- VC 1 references internal dispatch data (report.price.discount field) — the ticket surface is the rendered Mozio email, not the intermediate payload
+- VC 2 references internal dispatch data — same violation as VC 1; verify the rendered email, not the dispatch payload
+- VC 3 references internal dispatch data — same violation as VC 1; verify the rendered email, not the dispatch payload
+- VC 4 references order staff notes — the ticket surface is the Mozio email confirmation, not staff notes; wrong surface entirely
+
+THE FIX SITE (located by the code-graph detective — anchor every criterion to the behaviour THIS code produces):
+- src/services/submit-reservations/apply-report-discounts.service.ts :: applyReportDiscountsService — This is the function that COMPUTES and assigns the promo/discount amount into the Mozio dispatch report.price.discount. It matches orderLineItems to mozioDispatches to apply discounts. For return trip tickets, line item keys contain a '#return' suffix (created by getDispatchLineItemKey), and the matching logic in this function fails to account for that suffix, causing the discount to not be applied to return-trip dispatches — which is why the promo amount is missing in the email confirmation for return trips.
+Do NOT write criteria about areas unrelated to this code.
+
+
+Acceptance criteria (IMMUTABLE — the intent to verify; do NOT restate as-is, VERIFY them):
+- [object Object]
+- [object Object]
+Description: [Mozio] - The Promo code amount is NOT displayed as expected for Return trip tickets in the Mozio email confirmation
+
+A verification criterion states WHAT AN END USER OR TESTER OBSERVES on the user-facing surface THE TICKET IS ABOUT — the rendered email for an email ticket, the displayed screen/UI for a UI ticket, the API response a CLIENT receives for an API ticket. It is a BLACK-BOX check on that surface. It NEVER describes HOW the value is produced.
+A verification criterion is FORBIDDEN if it:
+- prescribes HOW to implement — any algorithm, mechanism, or approach: "split", "halve", "×0.5", "calculate independently", "per segment", "for each line item", or adding/reading any new field, flag, or service;
+- references an INTERNAL structure that merely FEEDS the ticket's surface — an intermediate payload, a "confirmation data"/DTO object, or a specific response field used to BUILD the output. Verify the surface the ticket names, NOT the data structure behind it;
+- makes a CROSS-COMPARISON that presumes a mechanism — never assert one value "must equal" / "matches" / "is the same as" another (e.g. "the return amount equals the outbound amount"); that presumes a copy/split. Assert the required value is present and correct ON ITS OWN.
+Every verification criterion must be observable, testable, and tied to the ticket's stated symptom/intent.
+
+Do NOT restate an acceptance criterion as-is — express what a tester OBSERVES that confirms it. Address every flag above.
+Output ONLY a JSON array of verification-criterion strings. No prose, no markdown.
+
+# Output
+["Given a booking that includes a return trip and valid promo code, when the Mozio email confirmation is rendered, then the email displays the promo code discount amount for the return trip", "When a tester views the Mozio email confirmation for a return-trip booking with a promo code applied, then the discounted price shown in the email reflects the promo code reduction rather than the full undiscounted price", "Given a round-trip Mozio booking with a promo code, when the email confirmation is received, then both the outbound and return trip sections of the email each display the promo discount amount applied to them", "When a promo code is applied to a return-trip booking, then the Mozio email confirmation shows the promo code and its discount amount in the pricing summary visible to the customer", "Given a return-trip booking without any promo code, when the Mozio email confirmation is rendered, then no discount amount is displayed, confirming the discount appears only when a promo code is applied"]

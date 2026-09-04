@@ -1,0 +1,122 @@
+Handshake record appended. Here is the execution-ready plan.
+
+---
+
+# Execution Plan — HW-003: Code review of `greet.ts` against HW-001 acceptance criteria
+
+**Story type:** review · **Role:** review-agent · **Effort (declared):** low · **Single deliverable:** `<git-root>/review/HW-003-review.md`
+
+> ⚠️ **Note:** In `prd.test.json` this story is already marked `status: completed`. This plan is produced as requested *before* implementation. The two environment blockers below mean a fresh run today would not pass as-specified without fallback logic — flagging to the review-agent/coordinator.
+
+## Environment findings (verified this run)
+| Fact | State |
+|---|---|
+| `greet.ts`, `greet.test.ts`, `package.json`, `tsconfig.json`, `main.ts` | ✅ all present |
+| `node_modules/.bin/vitest` | ✅ resolvable (symlink → vitest 2.1.9) |
+| `vitest run` | ✅ **3/3 pass, exit code 0** (274 ms) |
+| `review/` dir | ✅ exists, empty (no pre-existing `HW-003-review.md`) |
+| `.git` ancestor | ❌ **none found** anywhere up the tree |
+| `~/.nvm/versions/node/v20.20.0/bin/node` | ❌ **absent** (actual: `node v24.14.1` on PATH) |
+| HW-001 ACs | ✅ 15 criteria retrievable from payload |
+
+---
+
+## 1. Implementation steps (with target paths)
+
+The "implementation" is the review-agent procedure that produces one Markdown artifact. Steps execute in this exact order to honor the AC ordering constraints.
+
+| # | Step | Target / command |
+|---|---|---|
+| S1 | **Resolve git root** — walk ancestors for `.git/`. If none, apply fallback root = `PROJECT_ROOT` and record the deviation (see Risk R1). | cwd → `/home/bradleyjerome/projects/ai/epam-test-apps/hello-world` |
+| S2 | **Create `review/` unconditionally** (idempotent), then **check for pre-existing report** `review/HW-003-review.md`. If present → Blocker, FAIL, exit ≠0, do not write. | `<root>/review/HW-003-review.md` |
+| S3 | **Load HW-001 ACs verbatim** from the orchestration payload (AC-1…AC-15) — copy, never paraphrase. | from invocation payload |
+| S4 | **Pre-flight gates:** if `greet.ts`/`greet.test.ts` missing → Blocker(s), exact body `Test suite not executed (missing source files)`, FAIL, exit≠0, skip tests. If vitest binary unresolvable → Blocker, exact body `Test suite not executed (vitest binary not found)`, FAIL, exit≠0. | `<root>/greet.ts`, `greet.test.ts`, `node_modules/.bin/vitest` |
+| S5 | **Run tests with 60 s wall-clock timeout**; capture combined stdout+stderr + numeric exit code (or `timeout` after SIGTERM). Resolve the node binary via PATH, not the dead hardcoded path (Risk R2). | `node ./node_modules/.bin/vitest run` |
+| S6 | **Evaluate each HW-001 AC** → per-criterion PASS/FAIL against current `greet.ts`. | analysis of `greet.ts` |
+| S7 | **Compute verdict** — PASS iff (all HW-001 ACs PASS) ∧ (exit 0) ∧ (zero Blockers); else FAIL. | logic |
+| S8 | **Render report** (templated, format-exact): `## Summary` (one word) → `## Criteria Checklist` (AC-1…AC-N verbatim + PASS/FAIL) → `## Findings` (severity-sorted, 4 fields, or `No findings`) → `## Test Output` (fenced block + `Exit code: <int>`). | write `<root>/review/HW-003-review.md` |
+| S9 | **Immutability check** — confirm `greet.ts`, `greet.test.ts`, `package.json` unmodified. `git diff` if git root real; else checksum/mtime comparison fallback (Risk R1). | git diff / hash compare |
+| S10 | **Exit** with OS status 0 (PASS) or ≥1 (FAIL). | process exit |
+
+**Protected-path compliance:** only `review/HW-003-review.md` is written. `greet.ts`, `greet.test.ts`, `package.json`, `tsconfig.json`, `main.ts`, `.epam/`, `orchestrations/` are never touched.
+
+---
+
+## 2. Dependency validation
+
+| Dependency | Satisfied | Reason |
+|---|---|---|
+| **HW-001** (declared) | ✅ Yes | `completed: true`; `greet.ts` present with exact signature `export function greet(name: string): string`; 15 ACs available in payload for verbatim copy. |
+| **HW-002** (declared) | ✅ Yes | `completed: true`; vitest suite verified green this run (3/3, exit 0). |
+| vitest binary (implicit) | ✅ Yes | Symlink `node_modules/.bin/vitest` → vitest 2.1.9 resolvable; executes successfully. |
+| Writable `review/` (implicit) | ✅ Yes | Directory exists, empty, writable; no pre-existing report → happy path for S2. |
+| **Git repository** (implicit, AC-1/AC-13) | ❌ **No** | No `.git/` in any ancestor. AC-1 git-root resolution and AC-13 `git diff` immutability check cannot be satisfied literally — requires fallback or `git init`. |
+| **Node at hardcoded path** (description, AC-9 run) | ❌ **No** | `~/.nvm/versions/node/v20.20.0/bin/node` does not exist; only `node v24.14.1` on PATH. Literal command in the description fails to launch. |
+
+---
+
+## 3. Risk register (top 3)
+
+**R1 — No `.git` ancestor breaks AC-1 (git-root resolution) and AC-13 (`git diff` immutability).** *Likelihood: certain · Impact: high.*
+→ *Mitigation:* implement a deterministic fallback — when no `.git` is found, treat `PROJECT_ROOT` as the root and substitute a SHA-256/mtime snapshot comparison for the `git diff` postcondition; record an explicit Minor finding documenting the non-git environment. Escalate to coordinator that AC-1/AC-13 either need `git init` in the test fixture or an AC relaxation.
+
+**R2 — Dead hardcoded node path produces a *false FAIL*.** *Likelihood: high · Impact: high.* Running `~/.nvm/.../v20.20.0/bin/node ...` exits non-zero with "No such file or directory", which a naive agent records as a failing test run (exit≠0 → FAIL) even though tests are actually green.
+→ *Mitigation:* resolve node via `command -v node`/PATH; distinguish *binary-launch failure* (ENOENT) from *test failure* (vitest non-zero). Do not let an interpreter-not-found error masquerade as a test exit code.
+
+**R3 — Byte-exact formatting drift causes a self-inconsistent / non-conformant report.** *Likelihood: medium · Impact: medium.* Many ACs demand exact strings: single verdict word with no whitespace (AC-6), exact skip messages (AC-4/AC-5), `Exit code: <integer>` outside the fence (AC-9), severity-descending + file-alphabetical ordering (AC-7), and verbatim HW-001 AC copy numbered AC-1…AC-N (AC-8).
+→ *Mitigation:* generate the report from a fixed template; pull HW-001 AC text programmatically from the payload (never from memory); add self-assertions on verdict-line regex, section order, and finding-sort before write.
+
+---
+
+## 4. Test plan
+
+**New tests required:** None — HW-003 produces a review artifact, not shippable code; it adds no source under test. Its "tests" are self-verification assertions on its own output (R3 mitigation), not vitest specs.
+
+**Validation the agent must perform on its own deliverable:**
+- `## Summary` verdict line matches `^(PASS|FAIL)$` exactly.
+- Four sections present in order: Summary → Criteria Checklist → Findings → Test Output.
+- Checklist contains all 15 HW-001 ACs verbatim, numbered AC-1…AC-15, each with PASS/FAIL.
+- Findings sorted Blocker→Major→Minor, then file-alphabetical; each entry has severity, file, description, suggested fix (or exactly `No findings`).
+- `## Test Output` = fenced block + a separate `Exit code: 0` line.
+- OS exit code agrees with verdict.
+
+**Regression scope:**
+- Re-run `node ./node_modules/.bin/vitest run` → expect 3/3 green, exit 0 (baseline established this run).
+- Immutability: `greet.ts`, `greet.test.ts`, `package.json` unchanged after the agent completes (diff/hash empty).
+- No writes outside `<root>/review/`; `.epam/` and `orchestrations/` untouched.
+
+---
+
+## 5. Acceptance-criteria mapping (HW-003, 13 ACs → steps)
+
+| HW-003 AC | Step(s) | Risk |
+|---|---|---|
+| AC-1 resolve git root | S1 | R1 |
+| AC-2 create `review/` unconditionally, then pre-existing check | S2 | — |
+| AC-3 pre-existing report → Blocker/FAIL/exit≠0, no overwrite | S2 | — |
+| AC-4 missing source files → exact skip body, FAIL | S4 | R3 |
+| AC-5 vitest binary unresolvable → exact skip body, FAIL | S4 | R3 |
+| AC-6 `## Summary` single verdict word | S8 | R3 |
+| AC-7 `## Findings` 4 fields, severity-sorted / `No findings` | S8 | R3 |
+| AC-8 HW-001 ACs verbatim, AC-1…AC-N + PASS/FAIL | S3, S6, S8 | R3 |
+| AC-9 60 s timeout, combined output fenced + `Exit code:` line | S5, S8 | R2, R3 |
+| AC-10 PASS iff all ACs PASS ∧ exit 0 ∧ zero Blockers | S7 | — |
+| AC-11 FAIL on any failing condition | S7 | — |
+| AC-12 OS exit 0 (PASS) / ≥1 (FAIL) | S10 | R2 |
+| AC-13 `git diff` of 3 files empty | S9 | R1 |
+
+All 13 ACs covered; the at-risk ACs (1, 9, 13) are exactly those exposed by the two environment blockers.
+
+---
+
+## 6. Cost / effort forecast
+
+**Declared:** `estimatedHours 0.0701` (~4.2 AI min) · 8 turns · ~33.6k tokens · ~$0.16 · `cpaConfidence 0.72`.
+
+**Assessment — adjust upward.** The estimate assumes a clean git repo and the specified node binary; both are absent, so the agent must add git-root + node-resolution fallback logic and an escalation note rather than a straight-line review. That is roughly +50–75% turns.
+
+**Recommended:** `estimatedHours ≈ 0.11` (~6.5 AI min) · ~11–12 turns · ~$0.24. If the coordinator instead fixes the fixture (`git init` + correct the node path/command in the description), the original `0.0701` estimate holds and confidence rises to ~0.9.
+
+---
+
+**Handshake:** plan_summary record `plan_HW-003_1780590262` appended atomically (flock) to `epam-cli/orchestrations/logs/agent-messages.jsonl`, routed to **review-agent**. Ready for hand-off.

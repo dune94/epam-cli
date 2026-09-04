@@ -1,0 +1,84 @@
+# Prompt
+You are the specification coordinator for the epam-cli orchestration system. Before every phase you read orchestrations/prd.json (implementationOrder and stories), evaluate risk, dependencies, and technical readiness, then assign the correct specification runners: OpenSpec, Speckit, both, or none. You write assignments into each story's specification.assignedAgents field along with coordinatorNotes, target provider/model, and timestamps. You understand the provider policy ledger (configuration.aiRuntime.providerPolicies), token guardrails, and know when to skip stories that were already hand-curated. When you plan a run you emit JSON compliant with spec-mode-runner.js so that automation can apply deltas deterministically. You never invent story IDs or mutate acceptance criteria directly; only delegate to spec agents and record their status.
+
+You are the EPAM CLI specification coordinator agent for phase core.
+
+Decide which specification agents should run for each story below.
+Available agents and their roles:
+  - openspec: Elaborates requirements — refines AC, proposes story splits, adds technical depth
+  - speckit: Reviews & hardens — adds testability criteria, security checks, edge cases, flags gaps
+
+Agent collaboration model:
+  - If both are assigned, openspec runs FIRST, then speckit reviews openspec's output
+  - Assign both for complex/critical stories
+  - Assign only openspec for simple elaboration
+  - Assign only speckit for stories that just need test/security hardening
+
+Respond with raw JSON only (no XML tags, no markdown fences, no preamble) using this schema:
+[
+  {"storyId":"EPAM-123","agents":["openspec","speckit"],"notes":"reason","priority":"high"}
+]
+If a story does not need spec work, provide an empty agents array.
+
+Stories JSON:
+[
+  {
+    "id": "AMSD-2041",
+    "title": "[GO, UP, MX] Live Preview of Content in CMS",
+    "description": "[GO, UP, MX] Live Preview of Content in CMS",
+    "acceptanceCriteria": [],
+    "technicalNotes": null,
+    "agentRole": "typescript-engineer",
+    "agentGroup": "main",
+    "dependencies": [],
+    "spec": {
+      "runId": "20260728T131424Z",
+      "assignedAgents": [
+        "openspec",
+        "speckit"
+      ],
+      "coordinatorNotes": "",
+      "status": "completed",
+      "updatedAt": "2026-07-28T13:31:59.766Z",
+      "appliedAgents": [
+        "openspec",
+        "speckit"
+      ],
+      "agentContributions": [
+        {
+          "agent": "openspec",
+          "applied": true,
+          "notes": "Novel capability — no live preview mechanism exists. Attachment points are useContent (called by 236+ components) and ContentstackContext (the provider). ACs were empty, so derived from the description's claim of 'real-time updates to content rendered in a preview context'. VCs stop at the Contentstack boundary (mocked client).",
+          "acceptanceChanged": false,
+          "splitCount": 0,
+          "timestamp": "2026-07-28T13:31:07.862Z"
+        },
+        {
+          "agent": "speckit",
+          "applied": true,
+          "notes": "Openspec produced empty ACs with a note identifying useContent (236+ consumers) and ContentstackContext as attachment points. I derived all 13 ACs from the story title's claim of 'Live Preview of Content in CMS' and openspec's note about 'real-time updates to content rendered in a preview context'. Key additions: AC-2 (backward compatibility — critical given 236+ consumers), AC-3/4 (connection lifecycle), AC-5 (malformed payload handling), AC-6 (rapid update debouncing), AC-7 (XSS/injection prevention), AC-8 (authorization), AC-9 (accessibility live-region), AC-10 (stale data on reconnect), AC-11 (multi-component shared content), AC-12 (resource cleanup), AC-13 (graceful degradation without provider). The original story description is extremely thin — these ACs are derived assumptions that need product owner validation.",
+          "acceptanceChanged": false,
+          "splitCount": 0,
+          "timestamp": "2026-07-28T13:31:59.766Z"
+        }
+      ],
+      "coordinatorReview": {
+        "verdict": "needs_review",
+        "reviewNotes": "Value distribution between agents was severely lopsided: openspec identified attachment points (useContent, ContentstackContext) but produced zero ACs from an empty starting set, while speckit derived all 13 ACs from the thin story title and openspec's notes. The agents did not overlap (positive), but openspec failed in its primary role of requirement elaboration. All 13 ACs are agent-derived assumptions explicitly flagged by speckit as needing product owner validation — the original story had empty acceptance criteria, meaning no human-validated baseline exists. No story splits were proposed despite this being a complex feature touching 236+ consumer components with real-time updates, security (XSS/authorization), accessibility (live-region), connection lifecycle, and resource cleanup concerns. This is almost certainly too large for a single story. Speckit's individual ACs are well-constructed and testable, but the foundation is unvalidated. Product owner must confirm scope and acceptance criteria before implementation.",
+        "qualityScore": 0.55,
+        "flags": [
+          "empty_original_acs_all_agent_derived",
+          "no_story_split_despite_high_complexity",
+          "openspec_underperformed_zero_ac_output",
+          "requires_product_owner_validation",
+          "potential_oversized_story_236_plus_consumers"
+        ],
+        "reviewedAt": "2026-07-28T13:32:31.862Z"
+      }
+    }
+  }
+]
+
+
+# Output
+[{"storyId":"AMSD-2041","agents":[],"notes":"Both openspec and speckit already completed (status: completed). Coordinator review verdict is needs_review with qualityScore 0.55. Core blocker is human-in-the-loop: original story had empty acceptance criteria, all 13 ACs are agent-derived assumptions flagged as requiring product owner validation. Openspec underperformed (zero AC output) but re-running on the same thin input without product owner guidance would reproduce the same gap. No story split was proposed despite complexity (236+ consumers, real-time updates, security, accessibility). Spec agents cannot resolve the missing product owner validation — this must be unblocked by a human before further spec work is productive.","priority":"high"}]

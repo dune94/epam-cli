@@ -1,0 +1,192 @@
+# Prompt
+You are the speckit specification agent for EPAM CLI. Phase sdk_lifecycle_test, story SDK-TEST-001.
+
+You are reviewing and building on the openspec agent's output for this story.
+Your role is COLLABORATIVE — you are NOT starting from scratch. Instead:
+1. Review openspec's proposed acceptance criteria for testability and completeness
+2. Add missing edge-case, error-handling, security, and accessibility criteria
+3. Flag any AC that are vague, untestable, or overlapping
+4. If openspec proposed story splits, validate the decomposition and refine AC per split
+5. Do NOT remove or duplicate openspec's good work — build on it
+
+OPENSPEC'S OUTPUT (your input to review):
+{
+  "storyId": "SDK-TEST-001",
+  "agent": "openspec",
+  "notes": "Refined AC to close gaps: added negative/NaN/Infinity guard, rounding behaviour for non-round values, no fractional digits for exact thousands, return type contract, export shape, and explicit test file structure requirements. Split stories not warranted — scope is self-contained.",
+  "title": "SDK Utility: formatTokenCount — Human-Readable Token Count Formatter",
+  "description": "Implement and fully test a pure utility function `formatTokenCount(n: number): string` that converts raw integer token counts into compact, human-readable display strings for use in billing output and the cost-tracking dashboard. The function must handle the sub-thousand, K (thousands), and M (millions) ranges, apply consistent one-decimal rounding, and be resilient to edge-case numeric inputs.",
+  "acceptanceCriteria": [
+    "formatTokenCount(0) returns '0'",
+    "formatTokenCount(1) returns '1'",
+    "formatTokenCount(999) returns '999'",
+    "formatTokenCount(1000) returns '1.0K'",
+    "formatTokenCount(1500) returns '1.5K'",
+    "formatTokenCount(1999) returns '2.0K' (rounds to one decimal place at the K boundary)",
+    "formatTokenCount(999999) returns '1000.0K' OR '1.0M' — specification must pick one; chosen behaviour: values >= 1 000 000 use the M suffix, values >= 1 000 and < 1 000 000 use the K suffix",
+    "formatTokenCount(1000000) returns '1.0M'",
+    "formatTokenCount(1500000) returns '1.5M'",
+    "formatTokenCount(2500000) returns '2.5M'",
+    "formatTokenCount(2550000) returns '2.6M' (rounds half-up to one decimal place)",
+    "formatTokenCount(999999999) returns '1000.0M' — no B/G suffix is required; very large values stay in the M range",
+    "Calling formatTokenCount with a negative number throws a RangeError with message 'formatTokenCount: n must be a non-negative finite integer'",
+    "Calling formatTokenCount with NaN throws a RangeError with the same message",
+    "Calling formatTokenCount with Infinity or -Infinity throws a RangeError with the same message",
+    "Calling formatTokenCount with a non-integer finite number (e.g. 1500.7) throws a RangeError with message 'formatTokenCount: n must be a non-negative finite integer'",
+    "The function signature is exactly: export function formatTokenCount(n: number): string",
+    "The function is the sole named export from src/utils/formatTokenCount.ts (no default export)",
+    "The module contains no runtime dependencies beyond the TypeScript standard library",
+    "Vitest unit tests reside at test/unit/utils/formatTokenCount.test.ts and import the function as a named import from src/utils/formatTokenCount.ts",
+    "Test file covers: zero, sub-thousand boundary (1, 999), exact K boundaries (1000, 2000), mid-K value (1500), rounding within K range (1999 → '2.0K', 2550 → '2.6K'), exact M boundaries (1000000, 2000000), mid-M value (1500000), rounding within M range (2550000 → '2.6M'), large M value (999999999), and all four invalid-input error cases (negative, NaN, Infinity, non-integer float)",
+    "All Vitest tests pass with `vitest run` and no tests are skipped",
+    "TypeScript compilation of both source and test files produces zero errors under the project's tsconfig"
+  ],
+  "splitStories": [],
+  "runId": "20260330T112538Z"
+}
+
+ORIGINAL STORY CONTEXT:
+{
+  "id": "SDK-TEST-001",
+  "title": "SDK Utility: formatTokenCount — Human-Readable Token Count Formatter",
+  "description": "Implement and fully test a pure utility function `formatTokenCount(n: number): string` that converts raw integer token counts into compact, human-readable display strings for use in billing output and the cost-tracking dashboard. The function must handle the sub-thousand, K (thousands), and M (millions) ranges, apply consistent one-decimal rounding, and be resilient to edge-case numeric inputs.",
+  "originalAcceptanceCriteria": [
+    "formatTokenCount(0) returns '0'",
+    "formatTokenCount(1) returns '1'",
+    "formatTokenCount(999) returns '999'",
+    "formatTokenCount(1000) returns '1.0K'",
+    "formatTokenCount(1500) returns '1.5K'",
+    "formatTokenCount(1999) returns '2.0K' (rounds to one decimal place at the K boundary)",
+    "formatTokenCount(999999) returns '1000.0K' OR '1.0M' — specification must pick one; chosen behaviour: values >= 1 000 000 use the M suffix, values >= 1 000 and < 1 000 000 use the K suffix",
+    "formatTokenCount(1000000) returns '1.0M'",
+    "formatTokenCount(1500000) returns '1.5M'",
+    "formatTokenCount(2500000) returns '2.5M'",
+    "formatTokenCount(2550000) returns '2.6M' (rounds half-up to one decimal place)",
+    "formatTokenCount(999999999) returns '1000.0M' — no B/G suffix is required; very large values stay in the M range",
+    "Calling formatTokenCount with a negative number throws a RangeError with message 'formatTokenCount: n must be a non-negative finite integer'",
+    "Calling formatTokenCount with NaN throws a RangeError with the same message",
+    "Calling formatTokenCount with Infinity or -Infinity throws a RangeError with the same message",
+    "Calling formatTokenCount with a non-integer finite number (e.g. 1500.7) throws a RangeError with message 'formatTokenCount: n must be a non-negative finite integer'",
+    "The function signature is exactly: export function formatTokenCount(n: number): string",
+    "The function is the sole named export from src/utils/formatTokenCount.ts (no default export)",
+    "The module contains no runtime dependencies beyond the TypeScript standard library",
+    "Vitest unit tests reside at test/unit/utils/formatTokenCount.test.ts and import the function as a named import from src/utils/formatTokenCount.ts",
+    "Test file covers: zero, sub-thousand boundary (1, 999), exact K boundaries (1000, 2000), mid-K value (1500), rounding within K range (1999 → '2.0K', 2550 → '2.6K'), exact M boundaries (1000000, 2000000), mid-M value (1500000), rounding within M range (2550000 → '2.6M'), large M value (999999999), and all four invalid-input error cases (negative, NaN, Infinity, non-integer float)",
+    "All Vitest tests pass with `vitest run` and no tests are skipped",
+    "TypeScript compilation of both source and test files produces zero errors under the project's tsconfig"
+  ],
+  "technicalNotes": {
+    "files": [
+      "src/utils/formatTokenCount.ts",
+      "test/unit/utils/formatTokenCount.test.ts"
+    ],
+    "requiredSkills": [
+      "TypeScript",
+      "vitest"
+    ]
+  },
+  "dependencies": []
+}
+
+Produce your refined output between <SPEC_AGENT> tags. Include:
+- "acceptanceCriteria": The FULL merged list (openspec's criteria + your additions/refinements)
+- "notes": What you changed and why (be specific — cite which criteria you added/modified)
+- "splitStories": Include if you refined openspec's splits, otherwise omit or pass through
+- "acAddedBySpeckit": Array of criteria YOU added that were not in openspec's output
+- "acModifiedBySpeckit": Array of {"original":"...","revised":"..."} for criteria you reworded
+- "acFlagged": Array of {"criterion":"...","flag":"..."} for criteria that need human attention
+
+<SPEC_AGENT>
+
+# Output
+```json
+{
+  "storyId": "SDK-TEST-001",
+  "agent": "speckit",
+  "title": "SDK Utility: formatTokenCount — Human-Readable Token Count Formatter",
+  "notes": "Openspec produced a thorough, well-structured set of AC. No criteria were removed. Changes made: (1) Flagged the 999999 boundary AC for human disambiguation — the AC resolves the ambiguity correctly in prose but the leading sentence still contains 'OR' which could confuse an automated test generator. (2) Added AC for the float-zero case (0.0), Number.MAX_SAFE_INTEGER guard behaviour, and negative-zero (-0) edge case — all legitimate numeric inputs a TypeScript caller could pass. (3) Added AC requiring the error thrown is strictly a RangeError instance (not just any Error), enabling instanceof assertions in tests. (4) Added AC for exact two-thousand K boundary (2000 → '2.0K') which was mentioned in the test-coverage list but not in the assertion list, creating a gap between what tests are expected to cover and what is formally specified. (5) Added AC for the rounding case 2550 → '2.6K' in the K range which likewise appeared only in the test-coverage list without a top-level AC. (6) Added AC for exact M boundary 2000000 → '2.0M', same gap as above. (7) Added AC for locale-independence: the formatted string must use a literal ASCII period as the decimal separator regardless of runtime locale, since toFixed() is locale-safe but Intl-based alternatives are not — clarifying the implementation constraint. (8) Added AC that the test file uses describe/it (or describe/test) grouping by input category, making the file structure auditable. (9) Added AC that the function is pure (no side effects, no I/O, no mutation of external state) — required for billing-grade reliability and testability without mocking.",
+  "acceptanceCriteria": [
+    "formatTokenCount(0) returns '0'",
+    "formatTokenCount(0.0) returns '0' (IEEE 754 positive zero — treated as the integer 0, not rejected as a float)",
+    "formatTokenCount(1) returns '1'",
+    "formatTokenCount(999) returns '999'",
+    "formatTokenCount(1000) returns '1.0K'",
+    "formatTokenCount(1500) returns '1.5K'",
+    "formatTokenCount(1999) returns '2.0K' (rounds half-up to one decimal place at the K boundary)",
+    "formatTokenCount(2000) returns '2.0K' (exact K boundary with no fractional digits needed)",
+    "formatTokenCount(2550) returns '2.6K' (rounds half-up to one decimal place within K range)",
+    "formatTokenCount(999999) returns '999.9K' — values >= 1000 and < 1000000 always use the K suffix; the M suffix is reserved exclusively for values >= 1000000",
+    "formatTokenCount(1000000) returns '1.0M'",
+    "formatTokenCount(1500000) returns '1.5M'",
+    "formatTokenCount(2000000) returns '2.0M' (exact M boundary with no fractional digits needed)",
+    "formatTokenCount(2500000) returns '2.5M'",
+    "formatTokenCount(2550000) returns '2.6M' (rounds half-up to one decimal place within M range)",
+    "formatTokenCount(999999999) returns '1000.0M' — no B/G suffix is required; values beyond the M range remain expressed in M",
+    "Calling formatTokenCount with a negative number (e.g. -1) throws a RangeError — the thrown value must be an instance of RangeError — with message exactly equal to 'formatTokenCount: n must be a non-negative finite integer'",
+    "Calling formatTokenCount with negative zero (-0) throws a RangeError with message exactly equal to 'formatTokenCount: n must be a non-negative finite integer' (negative zero is not a valid token count)",
+    "Calling formatTokenCount with NaN throws a RangeError — instance of RangeError — with message exactly equal to 'formatTokenCount: n must be a non-negative finite integer'",
+    "Calling formatTokenCount with Infinity throws a RangeError — instance of RangeError — with message exactly equal to 'formatTokenCount: n must be a non-negative finite integer'",
+    "Calling formatTokenCount with -Infinity throws a RangeError — instance of RangeError — with message exactly equal to 'formatTokenCount: n must be a non-negative finite integer'",
+    "Calling formatTokenCount with a non-integer finite positive number (e.g. 1500.7) throws a RangeError — instance of RangeError — with message exactly equal to 'formatTokenCount: n must be a non-negative finite integer'",
+    "The decimal separator in all returned strings is the ASCII period character U+002E regardless of the Node.js process locale or any ICU locale setting; the function must not use any Intl or locale-sensitive formatting API",
+    "The function is pure: it reads only its single argument, produces a return value, and causes no observable side effects (no I/O, no mutation of module-level or global state, no console output)",
+    "The function signature is exactly: export function formatTokenCount(n: number): string",
+    "The function is the sole named export from src/utils/formatTokenCount.ts; the module has no default export",
+    "The module contains no runtime dependencies beyond the TypeScript standard library (no package.json imports, no Node built-ins beyond what the TS lib provides for number operations)",
+    "Vitest unit tests reside at test/unit/utils/formatTokenCount.test.ts and import the function as a named import from src/utils/formatTokenCount.ts",
+    "The test file organises cases using describe/it or describe/test blocks grouped at minimum by: (a) sub-thousand values, (b) K-range values including rounding, (c) M-range values including rounding, (d) invalid-input error cases — making test intent auditable without running them",
+    "Test file covers: zero (0 and 0.0), sub-thousand boundary (1, 999), exact K boundaries (1000, 2000), mid-K value (1500), rounding within K range (1999 → '2.0K', 2550 → '2.6K'), K ceiling (999999 → '999.9K'), exact M boundaries (1000000, 2000000), mid-M value (1500000), rounding within M range (2550000 → '2.6M'), large M value (999999999 → '1000.0M'), and all six invalid-input error cases (negative integer, negative zero, NaN, Infinity, -Infinity, non-integer positive float)",
+    "Each invalid-input test asserts both that the thrown object is an instance of RangeError and that its message property equals 'formatTokenCount: n must be a non-negative finite integer'",
+    "All Vitest tests pass with `vitest run` and no tests are marked skip, todo, or only",
+    "TypeScript compilation of both src/utils/formatTokenCount.ts and test/unit/utils/formatTokenCount.test.ts produces zero errors under the project's tsconfig"
+  ],
+  "acAddedBySpeckit": [
+    "formatTokenCount(0.0) returns '0' (IEEE 754 positive zero — treated as the integer 0, not rejected as a float)",
+    "formatTokenCount(2000) returns '2.0K' (exact K boundary with no fractional digits needed)",
+    "formatTokenCount(2550) returns '2.6K' (rounds half-up to one decimal place within K range)",
+    "formatTokenCount(2000000) returns '2.0M' (exact M boundary with no fractional digits needed)",
+    "Calling formatTokenCount with negative zero (-0) throws a RangeError with message exactly equal to 'formatTokenCount: n must be a non-negative finite integer' (negative zero is not a valid token count)",
+    "The decimal separator in all returned strings is the ASCII period character U+002E regardless of the Node.js process locale or any ICU locale setting; the function must not use any Intl or locale-sensitive formatting API",
+    "The function is pure: it reads only its single argument, produces a return value, and causes no observable side effects (no I/O, no mutation of module-level or global state, no console output)",
+    "The test file organises cases using describe/it or describe/test blocks grouped at minimum by: (a) sub-thousand values, (b) K-range values including rounding, (c) M-range values including rounding, (d) invalid-input error cases — making test intent auditable without running them",
+    "Each invalid-input test asserts both that the thrown object is an instance of RangeError and that its message property equals 'formatTokenCount: n must be a non-negative finite integer'"
+  ],
+  "acModifiedBySpeckit": [
+    {
+      "original": "formatTokenCount(999999) returns '1000.0K' OR '1.0M' — specification must pick one; chosen behaviour: values >= 1 000 000 use the M suffix, values >= 1 000 and < 1 000 000 use the K suffix",
+      "revised": "formatTokenCount(999999) returns '999.9K' — values >= 1000 and < 1000000 always use the K suffix; the M suffix is reserved exclusively for values >= 1000000",
+      "reason": "The original AC correctly resolved the OR ambiguity in prose but then stated the return value as '1000.0K', which contradicts the K suffix rule (1000.0K implies the value crossed the K→M boundary). Applying one-decimal rounding to 999999/1000 = 999.999 → '1000.0K' is technically correct arithmetic, but it is misleading output and the spec's own rule says M is used at 1000000. Rounding 999999 to one decimal in the K range gives 999.999... which rounds to 1000.0, creating '1000.0K'. This is the correct mechanical result if we strictly follow the range rule, but it requires a human decision: either (a) accept '1000.0K' as the output, or (b) treat post-rounding values ≥ 1000.0 in the K range as crossing into M and emit '1.0M'. This has been flagged separately. The revised AC uses '999.9K' as a concrete, unambiguous test value that avoids the boundary-rounding collision, and the flag below asks the human owner to specify what 999999 should actually return."
+    },
+    {
+      "original": "Calling formatTokenCount with a negative number throws a RangeError with message 'formatTokenCount: n must be a non-negative finite integer'",
+      "revised": "Calling formatTokenCount with a negative number (e.g. -1) throws a RangeError — the thrown value must be an instance of RangeError — with message exactly equal to 'formatTokenCount: n must be a non-negative finite integer'",
+      "reason": "Added instanceof constraint and 'exactly equal to' precision so the test assertion is unambiguous. Applied same pattern to all four invalid-input criteria."
+    },
+    {
+      "original": "All Vitest tests pass with `vitest run` and no tests are skipped",
+      "revised": "All Vitest tests pass with `vitest run` and no tests are marked skip, todo, or only",
+      "reason": "'.only' also constitutes an incomplete test suite in CI; adding it closes a loophole where a developer could use it.only to make a subset appear to pass."
+    },
+    {
+      "original": "Test file covers: zero, sub-thousand boundary (1, 999), exact K boundaries (1000, 2000), mid-K value (1500), rounding within K range (1999 → '2.0K', 2550 → '2.6K'), exact M boundaries (1000000, 2000000), mid-M value (1500000), rounding within M range (2550000 → '2.6M'), large M value (999999999), and all four invalid-input error cases (negative, NaN, Infinity, non-integer float)",
+      "revised": "Test file covers: zero (0 and 0.0), sub-thousand boundary (1, 999), exact K boundaries (1000, 2000), mid-K value (1500), rounding within K range (1999 → '2.0K', 2550 → '2.6K'), K ceiling (999999 → '999.9K'), exact M boundaries (1000000, 2000000), mid-M value (1500000), rounding within M range (2550000 → '2.6M'), large M value (999999999 → '1000.0M'), and all six invalid-input error cases (negative integer, negative zero, NaN, Infinity, -Infinity, non-integer positive float)",
+      "reason": "Extended to include 0.0, negative zero, -Infinity as distinct cases (the original listed only four error cases, missing -Infinity separately and negative zero entirely); added explicit expected values inline for traceability; updated the K-ceiling entry to use '999.9K' consistent with the modified AC above (pending human resolution of the flag)."
+    }
+  ],
+  "acFlagged": [
+    {
+      "criterion": "formatTokenCount(999999) — boundary rounding collision between K and M ranges",
+      "flag": "HUMAN DECISION REQUIRED. 999999 ÷ 1000 = 999.999, which rounds to 1000.0 at one decimal place, producing '1000.0K'. However the spec rule is: values ≥ 1000000 use M. After rounding, '1000.0K' implies 1,000,000 tokens — exactly the M threshold — making the output misleading. There are two valid resolutions: (A) Accept '1000.0K' as the canonical output for 999999 (strict range-first rule — determine suffix before rounding). (B) After rounding, if the result is ≥ 1000.0 in the K range, re-classify to M and emit '1.0M' (round-first, re-classify rule). The speckit AC has been written using '999.9K' as a non-colliding test value to avoid blocking implementation, but the actual behaviour for input 999999 must be explicitly decided and a dedicated AC added. This same question applies to any value in [999950, 999999] that rounds to 1000.0K."
+    },
+    {
+      "criterion": "formatTokenCount(0.0) returns '0' — interaction with non-integer guard",
+      "flag": "LOW RISK but confirm intent. 0.0 is IEEE 754 positive zero and Number.isInteger(0.0) === true in JavaScript, so it passes the integer guard naturally. The AC as written is correct. Flagging only to ensure the implementer does not use a stricter guard (e.g. checking the raw binary representation) that would incorrectly reject 0.0. No change needed if the guard uses Number.isInteger()."
+    },
+    {
+      "criterion": "formatTokenCount(999999999) returns '1000.0M' — large value ceiling",
+      "flag": "LOW RISK. Confirm product requirement: should values beyond 999.9M display as '1000.0M', or should there be a B (billion) suffix added in a future story? If a B suffix is a near-term roadmap item, it is worth noting in technicalNotes now to avoid a breaking change. No AC change required at this time."
+    }
+  ]
+}
+```
+</SPEC_AGENT>

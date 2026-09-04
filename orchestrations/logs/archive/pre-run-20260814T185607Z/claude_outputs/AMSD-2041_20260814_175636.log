@@ -1,0 +1,185 @@
+=== Prompt for AMSD-2041 (attempt 3) ===
+CRITICAL — these files already exist. Their real content is injected below (## Existing File Contents) — you do NOT need to ReadFile them to see what's already there.
+Do NOT import or reference anything that doesn't appear in the injected content below — a plausible-sounding module name is not a real one.
+Only call ReadFile yourself if you need to see MORE of a file than what's shown (e.g. it was truncated), or a file not listed below.
+
+
+---
+
+Implement user story AMSD-2041: [MX] Live Preview of Content in CMS (part 1)
+
+## Story Description
+Bullet points:
+ 
+
+
+
+Original Requirements (discovery)  AS a Content Author, I WANT to preview draft entries in CMS, SO THAT I can see how content will be shown on the website
+ability to preview draft entries in CMS
+Notes& Assumptions  Limitation: Might not be possible to preview protected pages and content.
+Original Total Estimate:  8  Original FE Estimate:  8  Original DAM Estimate:  0  Original BE Estimate:  0
+
+## Acceptance Criteria
+- 
+
+
+
+
+
+
+## Codeline-Specific Facts (real, curated gotchas for THIS codeline — read before assuming local tooling behaves like a fully-configured environment)
+- Local dev/pre-commit hooks require real Contentstack env vars (CONTENTSTACK_API_KEY, CONTENTSTACK_DELIVERY_TOKEN, CONTENTSTACK_ENVIRONMENT, CONTENTSTACK_BRANCH) to be set — next.config.js throws 'Missing required environment variables' at import time if they're absent, which breaks tsc/next-lint inside the husky pre-commit hook even when the source change itself is correct.
+- Date/locale tests assert UTC-rendered dates (this project's CI runs in UTC) — running with a non-UTC TZ produces off-by-one-day test failures unrelated to any real code change.
+
+## Project Tools (registered by THIS codeline — call them directly, NOT via Bash)
+Each reports REAL state discovered from this repository or its installed dependencies. Call the relevant one instead of assuming — an assumption that contradicts one of these is a defect:
+- codegraph_query: Query this codebase's real, static symbol index (CodeGraph) instead of grepping. Modes: "explore <domain nouns>" (START HERE for an unfamiliar bug/feature — ranked symbols + blast radius + callers/callees; use domain nouns like "discount refund", never symptom/UI words like "displayed wrong"); "helpers <term>" (ALWAYS run before writing a new function — finds existing exported util/parser/formatter/mapper functions to reuse, with exact symbol + import path); "query <symbol>" (exact definition site of a known symbol name); "callers <symbol>" (who calls this — trace a symptom back to its cause); "callees <symbol>" (what this calls — trace forward); "impact <symbol>" (blast radius if you change this symbol); "show <file> [startLine] [endLine]" (read REAL verbatim source lines — required before quoting any line as evidence, capped at 300 lines per call if no end line given). Call this iteratively (5-10 times is normal), refining your query based on each result, until you converge on the real fix site.
+- resolve_test_file: Given a source file path (relative to the project root), report which test file(s) ALREADY EXIST for it on disk, checked against this codeline's real conventions — co-located __tests__/, sibling .spec/.test files, and mirrored test/ directories. Use this BEFORE creating a new test file: extending an existing test file at its real, established path is almost always correct; inventing a new path/directory is almost always wrong.
+- codeline_facts: Return known, real, project-operator-curated facts and gotchas about the codeline currently being worked in — e.g. required local environment variables, known dependency quirks, test-environment requirements. These are facts that could not otherwise be discovered by reading the code alone; check this before assuming local tooling (lint, tsc, pre-commit hooks) will behave the same as in a fully-configured environment.
+- git_state: Report the REAL current git state of this codeline: branch, HEAD SHA, and whether the working tree is dirty (with the list of changed files). Use this instead of assuming a clean baseline.
+- check_anti_patterns: Check a piece of code you are about to write (or have just written) against this project's list of known, previously-diagnosed wrong patterns — rules operators have configured because a model has regressed to them before. Call this before finishing your implementation whenever you touch an area that might have a documented gotcha; it is advisory (nothing blocks you from writing), so treat any match as a real defect to fix, not a suggestion to weigh.
+- resolve_package_symbol: Given a package name and a symbol (method/function/property), reports the symbol's REAL declared shape from the package's actually-installed .d.ts files — including whether it is an instance method requiring instantiation (e.g. `new SomeClass()`) or a direct export — and separately reports whether the package's own README documents real usage of that symbol. Use this BEFORE calling a third-party SDK method you have not seen used in this codebase: a symbol that technically exists in a .d.ts file is not the same as the package's intended, documented usage — an internal class-instance method the README never calls directly is exactly the kind of near-miss that produces code that type-checks and fails at runtime.
+- dependency_contract: Before writing configuration for an installed dependency, check which option keys that dependency ACTUALLY consumes. Reports per key: "consumed" (read by the package's runtime source), "declared_only" (present only in a .d.ts type declaration — the types are STALE and the runtime ignores this key, so satisfying the type is the wrong fix), "absent" (appears nowhere — a typo or invented option), or "undetermined" (package not installed/readable). Call this whenever you add or change an options object passed to a third-party library; a key that is not "consumed" will silently do nothing at runtime.
+- dependency_available: Check whether packages are usable in THIS codeline before prescribing or writing work that needs them. Reports per package: "available" (declared in the manifest and installed), "installed_undeclared" (present in node_modules but MISSING from the manifest — the build passes and real users break, never treat this as usable), "declared_not_installed", or "absent" (nowhere — a plan that requires this cannot be implemented as written; say so instead of working around it). Call this before proposing a fix that depends on any third-party package.
+- scan_secrets: Examine a diff for credentials that have been PASTED INTO the code, and report them. Distinguishes a literal (a quoted, long, high-entropy value — what a leaked key looks like) from a reference (an identifier, a member expression, a process.env read — which is the correct practice and is never reported). Returns findings for you to judge; it does not block anything.
+
+## Tests are NOT your job this turn
+A dedicated test-writer agent runs immediately after your fix commits and owns the bug-reproducing test. Do NOT write, edit, or create any test file (*.test.*, *.spec.*, __tests__/). Write ONLY the fix.
+
+This is not a suggestion you can trade against a review comment: the reviewer has been given the same rule and will not reject you for absent tests. If a prior review comment appears to demand a test, it is stale — resolve it by making the fix correct, and say in your final message that test authorship belongs to the test-writer.
+
+Adding a test here wastes your turn budget and has caused repeated failures.
+
+## CodeGraph Tool — find EXISTING functions to reuse (do this BEFORE writing any new helper)
+A codegraph_query tool is available — call it directly (NOT via Bash) to discover reusable functions instead of inventing new ones:
+  codegraph_query(mode="helpers", args="<domain nouns>")   # existing util/parser/formatter to REUSE (symbol + import path)
+  codegraph_query(mode="query", args="<SymbolName>")       # exact definition site of a symbol
+  codegraph_query(mode="callees", args="<SymbolName>")     # what a function already calls
+RULE: Before you add ANY new function, run `helpers` for what it would do. If a suitable function already exists, import and call it — do NOT duplicate it. Fewer lines of code is always better.
+
+
+
+
+
+
+
+## Technical Notes
+None specified
+
+
+## Files to Create/Modify (EXACT ABSOLUTE PATHS — start here; this list is not exhaustive)
+These are the files the analysis identified. Use these exact paths for them. The list is a
+STARTING POINT, not a fence: it is derived from the ticket and may be incomplete or may name
+a path this repository spells differently. If your change genuinely requires another file in
+this repository, write it — the only files closed to you are ones another story OWNS, and
+attempting one of those returns a specific refusal saying so. Do NOT work around a refusal by
+repeatedly rewriting a file you can already write; that is never the fix. When you write a
+file that is not listed here, say which file and why in your final message, so the reviewer
+sees the whole change.
+
+
+## Dependencies
+None
+
+## Module resolution in this codeline
+A bare import that names a file under any of these directories is INTERNAL source, not a dependency — never add it to the dependency manifest:
+  __tests__, docs, migration-scripts, public, src
+Source extensions here: .ts, .tsx, .js, .jsx, .mjs, .cjs
+Write imports the way the existing files in this codeline write them; read a neighbouring file before inventing a path.
+
+
+## Instructions
+CRITICAL — these files already exist. Their real content is injected below (## Existing File Contents) — you do NOT need to ReadFile them to see what's already there.
+Do NOT import or reference anything that doesn't appear in the injected content below — a plausible-sounding module name is not a real one.
+Only call ReadFile yourself if you need to see MORE of a file than what's shown (e.g. it was truncated), or a file not listed below.
+
+**The content of every file listed above is already shown in ## Existing File Contents — use that, do not spend a tool call re-reading them. Use Edit for targeted changes to existing files — do NOT overwrite an existing file wholesale with WriteFile.**
+
+1. Use the injected ## Existing File Contents above to verify what actually exists (exports, types, existing utilities) before writing any code — do not guess, and do not re-read a file already shown in full
+2. Implement all acceptance criteria for this story
+3. Follow the project's existing code patterns and conventions
+4. Do NOT create tests unless explicitly required in acceptance criteria
+
+After implementation, provide a brief summary of what was created/modified.
+
+## Relevant Knowledge Base Entries
+No prior KB entries match your agent role yet.
+Do NOT read orchestrations/agents/KB.md before writing implementation files. The relevant KB entries are already injected above.
+=== End Prompt ===
+
+=== epam Output (attempt 3) ===
+[epam] Plugin load warning: /home/bradleyjerome/projects/ai/epam-cli/orchestrations/plugins/verification-plugin.js — plugin missing required field: name
+[codegraph-agent-query] show: file not found: src/context/contentstackContext.ts
+The import ordering follows the project convention: external packages first, then internal imports grouped by component/context/interface/service/utils.
+
+Here's a summary of the implementation for **AMSD-2041: [MX] Live Preview of Content in CMS (part 1)**:
+
+---
+
+## Summary
+
+This implementation enables Content Authors to preview draft entries from the Contentstack CMS by leveraging the built-in `live_preview` support in the `contentstack` SDK v3.16.1 (no new packages required — the SDK already supports this via its `Config.live_preview` and `Stack.livePreviewQuery()` API).
+
+### Files Modified
+
+1. **`src/services/contentstack.ts`** — Added two new env vars (`CONTENTSTACK_MANAGEMENT_TOKEN`, `CONTENTSTACK_APP_HOST`) to the destructured `process.env`. Added an `isLivePreviewEnabled` export that is `true` only when both are present. Conditionally spreads a `live_preview` config block (`{ enable: true, host, management_token }`) into the Stack options so the SDK routes preview requests to the Contentstack management API instead of the delivery CDN.
+
+2. **`src/pages/[[...slug]].tsx`** — Imported `Stack` and `isLivePreviewEnabled` from the contentstack service. Changed `getStaticPaths` to use `fallback: "blocking"` when live preview is enabled (so draft pages not in the static path list can still be rendered on-demand). In `getStaticProps`, added a check for `context.preview` / `context.previewData`; when active, calls `Stack.livePreviewQuery({ live_preview, content_type_uid })` before fetching page content so the SDK returns draft data instead of published data.
+
+3. **`.env.local.sample`** — Added `CONTENTSTACK_APP_HOST` and `CONTENTSTACK_MANAGEMENT_TOKEN` documentation entries.
+
+4. **`.env.local`** — Added sandbox placeholder values for the new env vars (consistent with existing sandbox pattern).
+
+### Files Created
+
+5. **`src/pages/api/preview.ts`** — Next.js API route that enables Preview Mode. When Contentstack's editor opens the site in an iframe, it calls this route with `live_preview` and `content_type_uid` query params. The route stores them via `res.setPreviewData()` and redirects to the target page, causing `getStaticProps` to run on every request with draft data.
+
+6. **`src/pages/api/clear-preview.ts`** — Companion API route that calls `res.clearPreviewData()` to exit Preview Mode when the editor is closed, returning subsequent requests to normal static behavior.
+
+### How It Works
+
+1. Content Author opens a draft entry in Contentstack CMS → the editor iframe loads `/api/preview?live_preview=<token>&content_type_uid=<uid>&slug=<path>`
+2. The preview route stores the token in Next.js Preview Mode cookies and redirects to the page
+3. `getStaticProps` detects `context.preview === true`, calls `Stack.livePreviewQuery()` with the stored token, then fetches the entry — the SDK uses the management token to return the **draft** version
+4. When the editor closes, `/api/clear-preview` clears Preview Mode so the site returns to serving statically generated pages
+
+### Note
+Test authorship belongs to the dedicated test-writer agent (existing test files: `src/services/__tests__/contentstack.spec.ts` and `src/__tests__/[[...slug]].spec.ts`).
+  [tc-writer] No test stories need TCs in phase 'unknown' — skipping
+The import ordering follows the project convention: external packages first, then internal imports grouped by component/context/interface/service/utils.
+
+Here's a summary of the implementation for **AMSD-2041: [MX] Live Preview of Content in CMS (part 1)**:
+
+---
+
+## Summary
+
+This implementation enables Content Authors to preview draft entries from the Contentstack CMS by leveraging the built-in `live_preview` support in the `contentstack` SDK v3.16.1 (no new packages required — the SDK already supports this via its `Config.live_preview` and `Stack.livePreviewQuery()` API).
+
+### Files Modified
+
+1. **`src/services/contentstack.ts`** — Added two new env vars (`CONTENTSTACK_MANAGEMENT_TOKEN`, `CONTENTSTACK_APP_HOST`) to the destructured `process.env`. Added an `isLivePreviewEnabled` export that is `true` only when both are present. Conditionally spreads a `live_preview` config block (`{ enable: true, host, management_token }`) into the Stack options so the SDK routes preview requests to the Contentstack management API instead of the delivery CDN.
+
+2. **`src/pages/[[...slug]].tsx`** — Imported `Stack` and `isLivePreviewEnabled` from the contentstack service. Changed `getStaticPaths` to use `fallback: "blocking"` when live preview is enabled (so draft pages not in the static path list can still be rendered on-demand). In `getStaticProps`, added a check for `context.preview` / `context.previewData`; when active, calls `Stack.livePreviewQuery({ live_preview, content_type_uid })` before fetching page content so the SDK returns draft data instead of published data.
+
+3. **`.env.local.sample`** — Added `CONTENTSTACK_APP_HOST` and `CONTENTSTACK_MANAGEMENT_TOKEN` documentation entries.
+
+4. **`.env.local`** — Added sandbox placeholder values for the new env vars (consistent with existing sandbox pattern).
+
+### Files Created
+
+5. **`src/pages/api/preview.ts`** — Next.js API route that enables Preview Mode. When Contentstack's editor opens the site in an iframe, it calls this route with `live_preview` and `content_type_uid` query params. The route stores them via `res.setPreviewData()` and redirects to the target page, causing `getStaticProps` to run on every request with draft data.
+
+6. **`src/pages/api/clear-preview.ts`** — Companion API route that calls `res.clearPreviewData()` to exit Preview Mode when the editor is closed, returning subsequent requests to normal static behavior.
+
+### How It Works
+
+1. Content Author opens a draft entry in Contentstack CMS → the editor iframe loads `/api/preview?live_preview=<token>&content_type_uid=<uid>&slug=<path>`
+2. The preview route stores the token in Next.js Preview Mode cookies and redirects to the page
+3. `getStaticProps` detects `context.preview === true`, calls `Stack.livePreviewQuery()` with the stored token, then fetches the entry — the SDK uses the management token to return the **draft** version
+4. When the editor closes, `/api/clear-preview` clears Preview Mode so the site returns to serving statically generated pages
+
+### Note
+Test authorship belongs to the dedicated test-writer agent (existing test files: `src/services/__tests__/contentstack.spec.ts` and `src/__tests__/[[...slug]].spec.ts`).
+
+=== End epam Output ===

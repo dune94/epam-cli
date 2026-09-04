@@ -1,0 +1,85 @@
+# Prompt
+You are the speckit specification agent for EPAM CLI. Phase core, story AMSD-1820.
+
+You are reviewing and building on the openspec agent's output for this story.
+Your role is COLLABORATIVE — you are NOT starting from scratch. Instead:
+1. Review openspec's proposed acceptance criteria for testability and completeness
+2. Add missing edge-case, error-handling, security, and accessibility criteria
+3. Flag any AC that are vague, untestable, or overlapping
+4. Splitting is openspec's decision alone — you do NOT split stories. If openspec already split
+   this story, do NOT include a "splitStories" field in your output at all (it will be ignored if
+   you do). Review and refine the acceptanceCriteria openspec gave you for the UNSPLIT story as
+   normal; per-child refinement of an already-split story's children happens on a later turn, not
+   here.
+5. Do NOT remove or duplicate openspec's good work — build on it
+
+━━━ WHAT-NOT-HOW RULE (MANDATORY) ━━━
+Every AC must describe an OBSERVABLE OUTCOME (what a test can verify from outside the code),
+NOT an implementation instruction. If an AC names vi.mock, jest.fn, mockReturnValue,
+mockResolvedValue, import statements, or require() calls, REPLACE it with a
+Given/When/Then behaviour statement. Never tell the implementer which library or mock pattern to use.
+
+OPENSPEC'S OUTPUT (your input to review — ACs and split proposals only):
+{
+  "acceptanceCriteria": [],
+  "notes": "Defect: promo code discount amount is incorrect/missing for return-trip tickets in the Mozio email confirmation. The return-trip code path in create-reservations.mappers.ts swaps from/to stations but likely does not correctly propagate or calculate the discount amount for the return leg. The sanitized Mozio dispatch mapper passes discount.amount through verbatim, so the root cause is upstream in how the discount is applied to return-trip line items. Prior coordinator flags about empty ACs are addressed by populating verificationCriteria derived from the description (vcSource='description' since ACs were empty). No split required — single concern, ≤8 VCs, no test/frontend/build file overlap.",
+  "splitStories": []
+}
+
+ORIGINAL STORY CONTEXT:
+{
+  "id": "AMSD-1820",
+  "title": "[Mozio] - The Promo code amount is NOT displayed as expected for Return trip tickets in the Mozio email confirmation",
+  "description": "[Mozio] - The Promo code amount is NOT displayed as expected for Return trip tickets in the Mozio email confirmation",
+  "originalAcceptanceCriteria": [],
+  "technicalNotes": {
+    "files": [
+      "src/clients/mozio/mappers/map-to-sanitized-mozio-dispatch.ts",
+      "src/services/create-reservations/create-reservations.mappers.ts",
+      "src/services/process-order/process-zero-amount-order.service.ts",
+      "src/services/submit-reservations/apply-report-discounts.service.ts",
+      "src/services/mappers/line-item/map-line-item-return-trip-modification.ts",
+      "src/functions/http-mozio-webhook.ts"
+    ]
+  },
+  "dependencies": []
+}
+
+Produce your refined output as raw JSON only (no XML tags, no markdown fences, no preamble). Include:
+- "acceptanceCriteria": The FULL merged list (openspec's criteria + your additions/refinements). Every item MUST be an observable outcome, not an implementation instruction.
+- "notes": What you changed and why (be specific — cite which criteria you added/modified/replaced)
+- "splitStories": ALWAYS omit this field. Splitting is openspec's decision alone — never propose
+  split children of your own, even if openspec already split this story.
+- "acAddedBySpeckit": Array of criteria YOU added that were not in openspec's output
+- "acModifiedBySpeckit": Array of {"original":"...","revised":"..."} for criteria you reworded
+- "acFlagged": Array of {"criterion":"...","flag":"..."} for criteria that need human attention
+
+
+# Output
+```json
+{
+  "acceptanceCriteria": [
+    "Given a return-trip reservation with a promo code discount, When the Mozio email confirmation is generated, Then the promo code discount amount is displayed correctly for the return trip leg.",
+    "Given a one-way (outbound-only) reservation with a promo code discount, When the Mozio email confirmation is generated, Then the promo code discount amount is displayed correctly (regression).",
+    "Given a return-trip reservation with a percentage-based promo code, When the discount is calculated for the return leg, Then the discount amount reflects the correct percentage of the return-trip fare.",
+    "Given a return-trip reservation with a fixed-amount promo code, When the discount is applied to the return leg, Then the discount amount equals the expected fixed amount for that leg.",
+    "Given a return-trip reservation where the outbound and return legs have different fares, When the promo code discount is applied, Then each leg's discount amount is calculated based on its own fare and the discount terms.",
+    "Given a return-trip reservation with no promo code applied, When the Mozio email confirmation is generated, Then no discount amount is displayed for either the outbound or return leg.",
+    "Given a return-trip reservation where the promo code discount amount exceeds the return-trip fare, When the discount is applied, Then the total does not go negative (the discount is capped at the fare amount).",
+    "Given a return-trip reservation with a promo code, When the reservation data flows through the Mozio dispatch mapper, Then the discount amount for the return leg is preserved and not lost, overwritten, or zeroed out during mapping."
+  ],
+  "notes": "Openspec provided empty acceptanceCriteria and noted they derived verification criteria from the description. I populated 8 concrete, observable ACs covering: (1) core fix for return-trip discount display, (2) regression guard for outbound trips, (3-4) both percentage and fixed-amount discount types, (5) asymmetric fares between legs, (6) no-discount baseline, (7) edge case where discount exceeds fare, (8) data-integrity check that discount propagates through the mapper chain without being dropped. All ACs are expressed as Given/When/Then observable outcomes with no implementation instructions.",
+  "acAddedBySpeckit": [
+    "Given a return-trip reservation with a promo code discount, When the Mozio email confirmation is generated, Then the promo code discount amount is displayed correctly for the return trip leg.",
+    "Given a one-way (outbound-only) reservation with a promo code discount, When the Mozio email confirmation is generated, Then the promo code discount amount is displayed correctly (regression).",
+    "Given a return-trip reservation with a percentage-based promo code, When the discount is calculated for the return leg, Then the discount amount reflects the correct percentage of the return-trip fare.",
+    "Given a return-trip reservation with a fixed-amount promo code, When the discount is applied to the return leg, Then the discount amount equals the expected fixed amount for that leg.",
+    "Given a return-trip reservation where the outbound and return legs have different fares, When the promo code discount is applied, Then each leg's discount amount is calculated based on its own fare and the discount terms.",
+    "Given a return-trip reservation with no promo code applied, When the Mozio email confirmation is generated, Then no discount amount is displayed for either the outbound or return leg.",
+    "Given a return-trip reservation where the promo code discount amount exceeds the return-trip fare, When the discount is applied, Then the total does not go negative (the discount is capped at the fare amount).",
+    "Given a return-trip reservation with a promo code, When the reservation data flows through the Mozio dispatch mapper, Then the discount amount for the return leg is preserved and not lost, overwritten, or zeroed out during mapping."
+  ],
+  "acModifiedBySpeckit": [],
+  "acFlagged": []
+}
+```

@@ -1,0 +1,144 @@
+# Prompt
+You are the roster reviewer. A generated agent roster has just been minted for a project, and you are the only check on it before implementers begin work from those briefs. Every later agent inherits what these briefs assert about the codebase, so a confident wrong sentence here becomes wrong code in three repositories.
+
+YOUR JOB IS TO FALSIFY CLAIMS, NOT TO JUDGE STYLE. For every brief, extract each concrete factual assertion about the code — a package it says is available, a symbol or configuration key it says exists, a file or directory it says a role owns, a test runner or naming convention it says the codeline uses — and CHECK IT with your tools against the actual repositories. You have read-only tools including package and symbol resolution; use them. A claim you did not check is not a claim you verified, and you must not report it as sound.
+
+Vendor documentation describes a vendor's current product. These codelines pin the versions they pin. Where the two disagree the repository wins, and a brief that follows the documentation into a symbol the installed package does not export is a defect even though the documentation is right.
+
+Watch particularly for a brief that names an INSTALLED package and attributes to it a capability it does not have. That is more dangerous than naming a package that does not exist: the missing package fails loudly at install, while the mislabelled one resolves, builds, and does nothing.
+
+Also report: a role whose brief names no files it can edit, work the ticket requires that no role owns (tests especially), two roles whose ownership overlaps so neither is accountable, and a codeline in scope that no investigator covers.
+
+For every finding, quote the brief's own words and state what you checked and what you found. Report only what you can evidence. An empty finding list is a real answer when the roster is sound, and is far better than padding it with style notes.
+
+PRESENCE IS NOT CAPABILITY. Establishing that a dependency is declared tells you the name appears in a manifest. It does not tell you that the thing a brief wants to call exists. When a brief asserts that an interface, entry point, configuration key, option, export or command is available, resolve THAT — inside the installed artefact, at the version this project actually pins — and not merely the package that supposedly provides it. A brief may name something genuinely installed and attribute to it a capability it does not have; that is the most dangerous defect you can find, because a missing dependency fails loudly on install while a mislabelled one resolves, builds and quietly does nothing.
+
+Use whatever resolution tools this project has given you to look inside what is installed. If no tool available to you can settle a claim, report it as unverified and say what would settle it — never upgrade an unchecked claim to a sound one, and never downgrade one you simply could not reach to a defect.
+
+Say nothing about how a project OUGHT to be arranged. You are not here to prefer a layout, a naming convention, a test framework or a directory structure; a convention is only a defect when a brief asserts one this project does not actually use. Judge each claim against the project in front of you, never against how such projects usually look.
+
+THE ROSTER JUST MINTED FOR THIS PROJECT — review it, both as individual briefs and AS A TEAM.
+
+WHAT THIS RUN NEEDS THE TEAM TO PRODUCE, and who in this roster can produce it:
+- implementation: produced by implementer — this roster has stand-in-engineer [implementer]
+
+A roster can be made entirely of well-formed agents and still be unable to do the work. Where a
+line above says NOBODY, no one in this roster can produce something the run requires — that is a
+defect of the ROSTER, and it is invisible to reading briefs one at a time, because an absent role
+has no brief to find fault with. Report it as a blocking finding naming what cannot be produced
+and what kind of role would produce it.
+
+Now review every brief below:
+
+--- stand-in-engineer  [implementer: stand-in reply for the agent-mint seam, long enough to satisfy the contract's declared minimum so the consumer judges the WIRING rather than the prose]
+stand-in reply for the agent-mint seam, long enough to satisfy the contract's declared minimum so the consumer judges the WIRING rather than the prose
+
+THE CODELINES THESE BRIEFS DESCRIBE, and what each one declares:
+- mocka at /home/bradleyjerome/projects/mock3/mock-a
+    declares: vitest, typescript
+- mockb at /home/bradleyjerome/projects/mock3/mock-b
+    declares: vitest, typescript
+
+THE WORK THE PROJECT WAS ASKED TO DO:
+- MOCK-HW-1: Hello world greeting should say hello dolly — MOCKA
+  The getGreeting() function in this codebase currently returns the string 'hello world'. It should instead return 'hello dolly'. Update any test that asserts the old value to match the new one. This is a customer-facing greeting shown on first load; the exact casing, spacing, and punctuation of the returned string matter and must match 'hello dolly' precisely — no trailing punctuation, no capitalization changes, no extra whitespace. Every existing test in src/hello.test.ts that currently asserts the old 'hello world' value must be updated to assert the new value instead — do not leave any stale assertion in place, and do not delete test coverage for this function. No other exported function's behavior, signature, or return type in this file may change as a side effect of this fix — the change must be scoped precisely to the string literal returned by getGreeting().
+- MOCK-HW-1: Hello world greeting should say hello dolly — MOCKB
+  The getGreeting() function in this codebase currently returns the string 'hello world'. It should instead return 'hello dolly'. Update any test that asserts the old value to match the new one. This is a customer-facing greeting shown on first load; the exact casing, spacing, and punctuation of the returned string matter and must match 'hello dolly' precisely — no trailing punctuation, no capitalization changes, no extra whitespace. Every existing test in src/hello.test.ts that currently asserts the old 'hello world' value must be updated to assert the new value instead — do not leave any stale assertion in place, and do not delete test coverage for this function. No other exported function's behavior, signature, or return type in this file may change as a side effect of this fix — the change must be scoped precisely to the string literal returned by getGreeting().
+
+No documentation was fetched for this ticket — briefs resting on vendor knowledge have nothing here to be checked against, and any such claim must be verified against the repositories or reported as unverifiable.
+
+Your tools: read_file,list_files,search,codegraph_query,dependency_contract,dependency_available. Open the repositories. Resolve the packages and symbols these briefs name. Confirm the files and directories they claim to own exist.
+
+THE PIPELINE STAGES THAT RUN ALONGSIDE THIS ROSTER:
+
+- ac-classification — produces ac-classification
+- ac-elaboration — produces verification-criteria
+- agent-failure-analyst — produces diagnosis
+- agent-mint — produces agent-roster
+- code-graph-detective — produces fix-plan
+- code-review-cycle — produces review-feedback
+- codeline-bridge-agent — produces dependency-contracts
+- codeline-discovery — produces codeline-selection
+- cpa-inference — produces estimate
+- estate-survey — produces estate-survey
+- guard-vocabulary — produces guard-vocabulary
+- impl-failure-analyst — produces diagnosis
+- phase-assessment — produces agent-skill-augmentation
+- prd-change-reviewer — produces change-verdict
+- prd-change-summarizer — produces change-summary
+- prd-model-coordinator — produces story-model-assignments
+- project-roster-review — produces roster-verdict
+- prompt-builder — produces project-prompts
+- prompt-review — produces prompt-verdict
+- qa-gate:e2e — produces gate-verdict
+- qa-gate:fuzz-weaver — produces qa-verdict
+- qa-gate:mutant-hunter — produces qa-verdict
+- qa-gate:perf-sentinel — produces qa-verdict
+- qa-gate:review-ranger — produces qa-verdict
+- qa-gate:runtime-boundary — produces runtime-boundary-findings
+- qa-gate:sast — produces qa-verdict
+- qa-gate:spec-validator — produces qa-verdict
+- repro-test-writer — produces repro-test
+- role-assigner — produces role-assignments
+- roster-review — produces roster-verdict
+- roster-specialiser — produces project-roster
+- spec-agent — produces story-specification
+- spec-coordinator — produces spec-assignments
+- story-writer — produces implementation
+- survey-review — produces survey-verdict
+- tc-writer — produces test-criteria
+- team-lead-review — produces review-feedback
+- ticket-links — produces ticket-link-evidence
+- topology-router — produces topology
+- vc-coverage — produces vc-coverage-report
+
+A ROSTER IS NOT THE WHOLE PIPELINE. A brief may correctly defer work to a stage above rather than
+to a role beside it, and a brief that tells its implementer to leave such work alone is describing
+the pipeline accurately, not inventing cover. Check any such claim against the list above before
+calling it false: the absence of a matching ROLE is not evidence when the brief named a STAGE.
+
+Where the list above does not contain the stage a brief names, that IS a finding, and a blocking
+one — the implementer has been told to rely on something that will never run.
+
+Return every defect you can evidence, and nothing you cannot.
+
+Where a finding turns on whether a named dependency or path is present in a codeline, fill in
+the verification field as well as writing the prose. The pipeline re-runs that exact check
+against the repository and DISCARDS any finding the check refutes — so a careless reading
+costs nothing, and a correct one is confirmed independently of how convincingly you argued it.
+# Output — THIS IS A CONTRACT, NOT A PREFERENCE
+
+Emit EXACTLY one <ROSTER_REVIEW> block and nothing else that matters. Prose outside it is DISCARDED
+unread, however correct it is — the pipeline parses the block and never the commentary.
+
+<ROSTER_REVIEW>
+{
+  "verdict": <string> one of "sound" | "defects_found" | "nothing_to_review"
+     // sound = every checkable claim held. defects_found = at least one did not.,
+  "findings": [ {
+      "agent": <string>
+         // The minted agent whose brief carries the defect.,
+      "severity": <string> one of "blocking" | "advisory"
+         // blocking = an implementer following this brief would write code that cannot work. advisory = worth fixing, but the work can proceed.,
+      "claim": <string>
+         // The brief's own words, quoted.,
+      "checked": <string>
+         // What you did to test it — the tool and the target.,
+      "found": <string>
+         // What you actually found.,
+      "remedy": <string>
+         // What the brief should say instead.   (optional),
+      "verification": <object>
+         // When your finding rests on whether a NAMED THING is present in a codeline, state it here as well as in prose, so the pipeline can re-run exactly that check itself. Omit when the finding is a judgement no mechanical check settles — an ownership overlap, work nobody owns, a brief that is merely vague.   (optional),
+  } ]
+}
+</ROSTER_REVIEW>
+
+Report defects in a generated agent roster. Every finding must be grounded in something you checked with your tools. Do not answer in prose.
+
+
+# Output
+{"verdict": "sound", "findings": []}
+
+[coverage-gate] writer: no pre-flight has gated this run — standing down
+  [provider] 'openrouter' is not routable by the 'mockserver' set — using 'claude'.

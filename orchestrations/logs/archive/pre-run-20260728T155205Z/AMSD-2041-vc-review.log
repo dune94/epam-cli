@@ -1,0 +1,29 @@
+# Prompt
+You are a STRICT verification-criteria reviewer for a brownfield fix. REVIEW ONLY — do NOT rewrite anything.
+
+Acceptance criteria (IMMUTABLE ticket intent):
+- (none)
+Description: [GO, UP, MX] Live Preview of Content in CMS
+
+Proposed verification criteria:
+1. When the site is opened in Live Preview mode, the page displays draft (unpublished) content from the CMS instead of the currently published version.
+2. After a tester edits and saves content in the CMS while Live Preview is active, the updated draft content appears on the previewed page within 2 seconds without any manual browser refresh.
+3. When Live Preview is not active, the site displays published content identically to current production behavior, with no visible differences in rendered pages.
+4. If the Live Preview connection is unavailable or fails, the page still renders the published content normally, with no blank screen, broken layout, or visible error state shown to the user.
+5. Draft content updates made in the CMS are displayed correctly on pages for each of the GO, UP, and MX brand sites when previewed.
+6. Live Preview displays draft content correctly for every page and content type covered by the GO, UP, and MX sites, with no page showing stale published content while in preview mode.
+7. After navigating between multiple pages while in Live Preview mode, subsequent draft edits in the CMS continue to appear on the currently viewed page, with no duplicated, stale, or missing content displayed.
+
+Apply these rules EXACTLY (the producer is held to the same text — do not invent stricter or looser criteria):
+A verification criterion states WHAT AN END USER OR TESTER OBSERVES on the user-facing surface THE TICKET IS ABOUT — the rendered email for an email ticket, the displayed screen/UI for a UI ticket, the API response a CLIENT receives for an API ticket. It is a BLACK-BOX check on that surface. It NEVER describes HOW the value is produced.
+A verification criterion is FORBIDDEN if it:
+- prescribes HOW to implement — any algorithm, mechanism, or approach: "split", "halve", "×0.5", "calculate independently", "per segment", "for each line item", or adding/reading any new field, flag, or service;
+- references an INTERNAL structure that merely FEEDS the ticket's surface — an intermediate payload, a "confirmation data"/DTO object, or a specific response field used to BUILD the output. Verify the surface the ticket names, NOT the data structure behind it;
+- makes a CROSS-COMPARISON that presumes a mechanism — never assert one value "must equal" / "matches" / "is the same as" another (e.g. "the return amount equals the outbound amount"); that presumes a copy/split. Assert the required value is present and correct ON ITS OWN.
+Every verification criterion must be observable, testable, and tied to the ticket's stated symptom/intent.
+
+FLAG any verification criterion that violates ANY rule above, OR that fails to cover the intent of an acceptance criterion.
+Output ONLY a JSON array of short flag strings, e.g. ["VC 2 prescribes halving — restate as observable outcome"]. Output [] if every VC is clean. No prose, no markdown.
+
+# Output
+["VC 2 prescribes an unrequested 2-second latency threshold — restate as draft content appearing automatically without manual refresh, per ticket intent"]

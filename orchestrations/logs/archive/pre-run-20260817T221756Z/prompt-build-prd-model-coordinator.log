@@ -1,0 +1,77 @@
+# Prompt
+You are specialising ONE generic agent prompt for ONE specific project. You are the same agent that just minted this project's roles, so you already know what this project is and who will work on it.
+
+## The template you must specialise
+
+Its id is prd-model-coordinator and its purpose is: Assigns models to stories from the PRD, under the project's own coordinator profile.
+
+Everything between the two markers below is the template, verbatim. The markers are not
+part of it. A code fence cannot delimit this: several templates contain fences of their
+own, so the first closing fence would truncate the body mid-instruction.
+
+-----BEGIN TEMPLATE BODY-----
+__PROFILE__
+
+PRD file: __MC_PRD_TARGET__
+Phase: __MC_PHASE__
+
+Assign model, aiProvider, and reasoningEffort to every pending story in this phase that is missing one or more of these fields. Write the updated PRD back to the file, then emit the JSON summary.
+-----END TEMPLATE BODY-----
+
+## What this project is
+
+Project config: /home/bradleyjerome/projects/ai/epam-cli/orchestrations/projects/mock3
+Tickets in scope: MOCK3-1: Riders aged exactly 65 are charged the adult fare | MOCK3-2: The departure board omits the final stop
+
+Codelines in scope and their declared dependencies:
+- mocka (/home/bradleyjerome/projects/mock3/mock-a) deps: vitest, typescript
+- mockb (/home/bradleyjerome/projects/mock3/mock-b) deps: vitest, typescript
+
+The roles you minted for this project:
+- mocka-fares-investigator [investigator] — mocka holds the fare-rule bug in src/fares.ts where fareFor uses a strict-greater-than comparison that excludes the exact age-65 boundary, and this role must confirm that boundary, the doc-comment intent, the test gap, and the caller blast radius before any fix is written.
+- mockb-schedule-investigator [investigator] — mockb holds the departure-board bug in src/schedule.ts where formatStops iterates to stops.length minus one and drops the final stop, and this role must confirm that loop bound, the discrepancy with totalMinutes, the test gap, and the caller list before any fix is written.
+- typescript-vitest-engineer [implementer] — Both mocka and mockb declare a TypeScript-plus-vitest stack and both tickets require editing TypeScript source files under src/ in those codelines, so a single implementer spanning both codelines can author the one-line logic fix in each without minting a duplicate role per repository.
+
+## The one rule you cannot break
+
+The template's placeholders are a CONTRACT with the pipeline. Each token written in SCREAMING_SNAKE_CASE between double underscores is replaced at run time with real evidence — a diff, a ticket, a test log, a plan. The substitution is BY NAME and it is strict in both directions.
+
+- Reproduce every placeholder EXACTLY as it appears, character for character.
+- NEVER add or invent a placeholder. Nothing supplies a name the pipeline does not know, so rendering throws and the run dies at the seam that needed this prompt.
+- NEVER remove or rename one. The evidence it carries would silently never reach the agent, and the agent would answer without it.
+- Do not move a placeholder into a code fence, a quote, or an example where it would read as literal text.
+
+The placeholders in this template are exactly: __PROFILE__, __MC_PRD_TARGET__, __MC_PHASE__
+
+## What specialising means
+
+Keep the template's instructions, its output format, its prohibitions and its reasoning intact. They encode failures this pipeline has already paid for. You are not rewriting the prompt or improving its wording.
+
+Add only what a competent engineer joining THIS project would need and could not infer from the generic text:
+- the conventions, layout and idioms this codebase actually uses
+- the commands this project runs to build, test and type-check
+- the traps this stack presents that a generic prompt would not warn about
+
+Ground every addition in the project context above. If the context does not tell you something, say nothing about it — an invented convention is worse than a missing one, because the agent will follow it.
+
+Do not name a file, symbol, package or command that does not appear in the context you were given.
+
+## How to answer
+
+Emit ONLY the specialised prompt body as TEXT, directly in your reply. No JSON wrapper, no markdown fences around the whole thing, no commentary before or after, and do not write it to a file — the pipeline reads your reply text.
+
+# Output
+__PROFILE__
+
+PRD file: __MC_PRD_TARGET__
+Phase: __MC_PHASE__
+
+Assign model, aiProvider, and reasoningEffort to every pending story in this phase that is missing one or more of these fields. Write the updated PRD back to the file, then emit the JSON summary.
+
+Project context for your assignments:
+
+- This project spans two codelines, mocka and mockb, both on a TypeScript + vitest stack. The single implementer role, typescript-vitest-engineer, covers stories in both codelines, so implementer stories do not need per-repo model differentiation — one consistent assignment is appropriate.
+- The two investigator roles (mocka-fares-investigator, mockb-schedule-investigator) do read-only analysis: confirming the age-65 boundary comparison in mocka's src/fares.ts, the loop bound in mockb's src/schedule.ts, the test gaps, and the caller blast radius. The implementer role writes the one-line logic fixes plus vitest coverage. You may use this read-only-vs-code-writing distinction when setting reasoningEffort, but stay within whatever model/provider/effort values the coordinator profile above permits.
+- Only fill fields that are missing, and only on pending stories in this phase. Do not alter any other content of the PRD — story text, ids, statuses, existing assignments, and the file's overall structure must survive the write-back byte-for-byte, because downstream pipeline steps parse this file.
+
+[ai-run] 'prompt-builder' resuming ladder on 'moonshotai/kimi-k3' (persisted from an earlier invocation)

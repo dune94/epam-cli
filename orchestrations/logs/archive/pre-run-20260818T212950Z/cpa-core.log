@@ -1,0 +1,7 @@
+[0;35m[CPA][0m Retrieval: TF-IDF
+[0;36m[21:19:06][0m Loading stories from metrolinx-prd.json...
+[0;36m[21:19:06][0m Found 1 stories to contextualize
+
+[0;35m[CPA][0m Processing AMSD-2041...
+[0;35m[CPA][0m   AMSD-2041: formula baseline from calibration[medium:implementation:cli:sonnet](n=9): 2.808398113839453min $0.54208529935815
+/home/bradleyjerome/projects/ai/epam-cli/orchestrations/scripts/contextualize-stories.sh: line 756: /home/bradleyjerome/.local/bin/jq: Argument list too long

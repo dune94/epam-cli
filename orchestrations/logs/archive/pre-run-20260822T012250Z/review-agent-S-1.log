@@ -1,0 +1,5 @@
+[1;33m[WARN][0m   review-agent has NO ladder escalation available — model 'test-model' is NOT on the ladder — escalation impossible (renamed model or stale map?)
+[1;33m[WARN][0m   review-agent produced NO verdict (thrash/empty) on attempt 1/2
+[1;33m[WARN][0m   review-agent produced NO verdict (thrash/empty) on attempt 2/2
+[1;33m[WARN][0m   review-agent failed to produce a verdict after 2 attempt(s) (incl. ladder escalation) — emitting review-incomplete (NOT approved)
+{"verdict":"changes_requested","reviewIncomplete":true,"issues":[{"severity":"blocker","description":"review-agent did not complete — it thrashed/stalled and produced no verdict even after ladder escalation. The change was NOT reviewed; blocking rather than auto-approving.","suggestedFix":"Re-run the reviewer, or review manually before merge."}],"summary":"review incomplete — not reviewed"}

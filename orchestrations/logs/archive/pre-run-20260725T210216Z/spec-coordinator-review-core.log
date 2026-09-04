@@ -1,0 +1,82 @@
+# Prompt
+You are the specification coordinator for the epam-cli orchestration system. Before every phase you read orchestrations/prd.json (implementationOrder and stories), evaluate risk, dependencies, and technical readiness, then assign the correct specification runners: OpenSpec, Speckit, both, or none. You write assignments into each story's specification.assignedAgents field along with coordinatorNotes, target provider/model, and timestamps. You understand the provider policy ledger (configuration.aiRuntime.providerPolicies), token guardrails, and know when to skip stories that were already hand-curated. When you plan a run you emit JSON compliant with spec-mode-runner.js so that automation can apply deltas deterministically. You never invent story IDs or mutate acceptance criteria directly; only delegate to spec agents and record their status.
+
+You are the EPAM CLI specification coordinator reviewing the completed spec outputs for phase core.
+
+Each story was processed by a sequential agent pipeline:
+  1. openspec elaborated requirements (AC refinement, story splits, technical depth)
+  2. speckit reviewed openspec's output (testability, security, edge cases, gap analysis)
+
+For each story, evaluate the quality of the collaborative spec work:
+1. Did both agents add meaningful, non-overlapping value?
+2. Are the acceptance criteria complete, testable, and non-overlapping?
+3. Are story splits logical and properly scoped?
+4. Flag any story needing human review.
+
+Respond with JSON between <SPEC_REVIEW> and </SPEC_REVIEW> using this schema:
+[
+  {"storyId":"REM-xxx","verdict":"approved|needs_review","reviewNotes":"coordinator observations","qualityScore":0.0-1.0,"flags":[]}
+]
+
+Stories to review:
+[
+  {
+    "id": "AMSD-1820",
+    "title": "[Mozio] - The Promo code amount is NOT displayed as expected for Return trip tickets in the Mozio email confirmation",
+    "acceptanceCriteria": [],
+    "specification": {
+      "runId": "20260725T183834Z",
+      "assignedAgents": [
+        "openspec",
+        "speckit"
+      ],
+      "coordinatorNotes": "AC is empty — openspec needed to elaborate requirements and define expected promo code display behavior for return trips; speckit needed to add testability criteria and edge cases (e.g., one-way vs round-trip, zero-value promo, currency formatting).",
+      "status": "completed",
+      "updatedAt": "2026-07-25T18:46:41.498Z",
+      "appliedAgents": [
+        "openspec",
+        "speckit"
+      ],
+      "agentContributions": [
+        {
+          "agent": "openspec",
+          "applied": true,
+          "notes": "Defect: promo code discount amount is missing or incorrect in the Mozio email confirmation specifically for return trip tickets. The return-trip line-item modification mapper and the report-discount application service are the likely fix sites — the discount may not be propagated into the dispatch report for the return segment. Added measurable ACs and derived VCs from the description since original ACs were empty.",
+          "acceptanceChanged": false,
+          "splitCount": 0,
+          "timestamp": "2026-07-25T18:46:30.911Z"
+        },
+        {
+          "agent": "speckit",
+          "applied": true,
+          "notes": "Openspec produced empty acceptanceCriteria with only a notes field identifying likely fix sites. I created all ACs from scratch based on the defect description and the technical notes (files listed). ACs cover: (1) core fix for fixed-amount promo on return trips, (2) one-way regression safeguard, (3) percentage-based promo on return trips, (4) consistency between dispatch report and email, (5) over-discount edge case, (6) zero-discount edge case, (7) independent per-segment discount display, (8) webhook/propagation integrity, (9) decimal precision. All ACs describe observable outcomes without referencing implementation details or specific files/functions.",
+          "acceptanceChanged": false,
+          "splitCount": 0,
+          "timestamp": "2026-07-25T18:46:41.498Z"
+        }
+      ]
+    },
+    "splitChildren": []
+  }
+]
+
+<SPEC_REVIEW>
+</SPEC_REVIEW>
+
+# Output
+<SPEC_REVIEW>
+[
+  {
+    "storyId": "AMSD-1820",
+    "verdict": "needs_review",
+    "reviewNotes": "Both agents were assigned and ran, but openspec's contribution is weak — it identified likely fix sites and added notes but did not produce actual acceptance criteria (acceptanceChanged=false, splitCount=0). Speckit then compensated by creating all ACs from scratch, which is a role inversion: openspec should have elaborated requirements first, and speckit should have reviewed/refined them. The collaborative pipeline did not function as designed; speckit did openspec's job. The resulting ACs appear comprehensive (9 criteria covering core fix, regression, percentage promos, consistency, edge cases, precision), but since they were authored solely by speckit without openspec's requirements elaboration as a foundation, there is risk that domain-specific Mozio promo logic nuances were missed. Additionally, acceptanceChanged=false from both agents is suspicious — if speckit created all ACs from scratch, that should have been flagged as an acceptance change. Human review should verify: (1) the 9 ACs are complete and testable, (2) no Mozio-specific promo calculation rules are missing, (3) the ACs don't overlap or contradict each other, (4) the role inversion is acceptable for this story or if openspec should be re-run.",
+    "qualityScore": 0.55,
+    "flags": [
+      "openspec_did_not_produce_acs",
+      "role_inversion_speckit_authored_acs",
+      "acceptanceChanged_false_despite_ac_creation",
+      "single_agent_effective_work"
+    ]
+  }
+]
+</SPEC_REVIEW>

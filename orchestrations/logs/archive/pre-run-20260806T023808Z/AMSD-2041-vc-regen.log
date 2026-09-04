@@ -1,0 +1,39 @@
+# Prompt
+Regenerate the VERIFICATION CRITERIA for this brownfield story. Your previous verification criteria were FLAGGED and must be fixed:
+- VC 1 prescribes internal mechanism ("mocked to emit a content update event") and references internal component structure ("component that consumes that entry's content") — restate as observable outcome on the rendered page
+- VC 2 prescribes internal mechanism ("mocked to emit a content update event") and references internal component structure ("components that consume unrelated content") — restate as observable outcome on the rendered page
+- VC 3 prescribes internal mechanism ("mocked to emit a content update event") and references internal content entry structure ("NavigationBar content entry") — restate as observable outcome on the rendered page
+- VC 4 references internal state ("no Live Preview SDK connected or no preview session") and makes cross-comparison ("identically to the current published behavior") — restate as observable outcome without referencing internal SDK or presuming a comparison mechanism
+- VC 5 prescribes internal mechanism ("client is disconnected or emits an error event") and references internal state ("last known published content") — restate as observable outcome on the rendered page
+- VC 6 prescribes internal mechanism ("mocked to emit a content update event") — restate as observable outcome on the rendered page
+
+THE FIX SITE (located by the code-graph detective — anchor every criterion to the behaviour THIS code produces):
+- src/context/contentstackContext.tsx :: ContentstackContext — Attachment point for Live Preview: this is the single React context that holds all CMS content and feeds every Contentstack component via useContent(). Live Preview data from Contentstack's real-time SDK must be injected here — the context value is what all components read from, so updating it with live preview payload instantly propagates to every consumer.
+Do NOT write criteria about areas unrelated to this code.
+
+
+Acceptance criteria (IMMUTABLE — the intent to verify; do NOT restate as-is, VERIFY them):
+- (none)
+Description: [GO, UP, MX] Live Preview of Content in CMS
+
+A verification criterion states WHAT AN END USER OR TESTER OBSERVES on the user-facing surface THE TICKET IS ABOUT — the rendered email for an email ticket, the displayed screen/UI for a UI ticket, the API response a CLIENT receives for an API ticket. It is a BLACK-BOX check on that surface. It NEVER describes HOW the value is produced.
+A verification criterion is FORBIDDEN if it:
+- prescribes HOW to implement — any algorithm, mechanism, or approach: "split", "halve", "×0.5", "calculate independently", "per segment", "for each line item", or adding/reading any new field, flag, or service;
+- references an INTERNAL structure that merely FEEDS the ticket's surface — an intermediate payload, a "confirmation data"/DTO object, or a specific response field used to BUILD the output. Verify the surface the ticket names, NOT the data structure behind it;
+- makes a CROSS-COMPARISON that presumes a mechanism — never assert one value "must equal" / "matches" / "is the same as" another (e.g. "the return amount equals the outbound amount"); that presumes a copy/split. Assert the required value is present and correct ON ITS OWN.
+Every verification criterion must be observable, testable, and tied to the ticket's stated symptom/intent.
+
+Do NOT restate an acceptance criterion as-is — express what a tester OBSERVES that confirms it. Address every flag above.
+Output ONLY a JSON array of verification-criterion strings. No prose, no markdown.
+
+# Output
+```json
+[
+  "When a content entry's published value is changed in the CMS live preview session, the page immediately reflects the updated value in the area of the page that displays that entry's content.",
+  "When a content entry's published value is changed in the CMS live preview session, areas of the page displaying content from other entries remain unchanged.",
+  "When a content entry's published value is changed in the CMS live preview session, the page's navigation bar immediately reflects the updated value.",
+  "When the page is viewed outside a CMS live preview session, all content on the page displays the current published values.",
+  "If the live preview session disconnects or encounters an error, the page continues to display the content values that were last shown.",
+  "When multiple content entries' published values are changed in the CMS live preview session in quick succession, the page reflects each update in order without stale or missing values."
+]
+```

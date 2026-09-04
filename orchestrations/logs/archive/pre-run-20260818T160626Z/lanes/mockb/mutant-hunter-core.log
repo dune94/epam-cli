@@ -1,0 +1,80 @@
+{
+  "agent": "mutant-hunter",
+  "phase": "core",
+  "summary": { "mutationsProposed": 8, "killed": 5, "survived": 3, "noCoverage": 0, "mutationScore": 62 },
+  "mutations": [
+    {
+      "file": "src/schedule.ts",
+      "line": 6,
+      "originalCode": "  for (let i = 0; i < stops.length; i++) {",
+      "mutatedCode": "  for (let i = 0; i <= stops.length; i++) {",
+      "status": "killed",
+      "relatedTest": "schedule.test.ts — formatStops > 'handles an empty line'",
+      "recommendation": "No action needed; the empty-array test catches the off-by-one because i=0 satisfies 0<=0 and pushes 'undefined (undefinedm)' instead of returning ''."
+    },
+    {
+      "file": "src/schedule.ts",
+      "line": 6,
+      "originalCode": "  for (let i = 0; i < stops.length; i++) {",
+      "mutatedCode": "  for (let i = 1; i < stops.length; i++) {",
+      "status": "killed",
+      "relatedTest": "schedule.test.ts — formatStops > 'names the first stop'",
+      "recommendation": "No action needed; skipping index 0 drops 'Union' from output, caught by toContain('Union')."
+    },
+    {
+      "file": "src/schedule.ts",
+      "line": 7,
+      "originalCode": "    parts.push(`${stops[i].name} (${stops[i].minutes}m)`);",
+      "mutatedCode": "    parts.push(`${stops[i].minutes} (${stops[i].name}m)`);",
+      "status": "survived",
+      "relatedTest": "schedule.test.ts — formatStops suite (all four tests)",
+      "recommendation": "Add an assertion that verifies the exact formatted string, e.g. expect(formatStops(LINE)).toBe('Union (0m) -> Bloor (12m) -> Eglinton (25m)'). The current toContain checks for 'Union', 'Eglinton', and '->' all still pass because the names remain present in the output."
+    },
+    {
+      "file": "src/schedule.ts",
+      "line": 9,
+      "originalCode": "  return parts.join(' -> ');",
+      "mutatedCode": "  return parts.join('->');",
+      "status": "survived",
+      "relatedTest": "schedule.test.ts — formatStops > 'separates stops with an arrow'",
+      "recommendation": "Tighten the separator test to expect the exact join string or use toBe with the full expected output. toContain('->') matches both ' -> ' and '->'."
+    },
+    {
+      "file": "src/schedule.ts",
+      "line": 7,
+      "originalCode": "    parts.push(`${stops[i].name} (${stops[i].minutes}m)`);",
+      "mutatedCode": "    parts.push(`${stops[i].name} (${stops[i].minutes}min)`);",
+      "status": "survived",
+      "relatedTest": "schedule.test.ts — formatStops suite (all four tests)",
+      "recommendation": "No test asserts the minutes-suffix format. Add an exact-match assertion or a regex like /\\(\\d+m\\)/ to verify the 'm' suffix is correct."
+    },
+    {
+      "file": "src/schedule.ts",
+      "line": 13,
+      "originalCode": "  return stops.length ? stops[stops.length - 1].minutes : 0;",
+      "mutatedCode": "  return stops.length ? stops[0].minutes : 0;",
+      "status": "killed",
+      "relatedTest": "schedule.test.ts — totalMinutes > 'reports the journey length'",
+      "recommendation": "No action needed; returns 0 (first stop) instead of 25, caught by toBe(25)."
+    },
+    {
+      "file": "src/schedule.ts",
+      "line": 13,
+      "originalCode": "  return stops.length ? stops[stops.length - 1].minutes : 0;",
+      "mutatedCode": "  return stops[stops.length - 1].minutes;",
+      "status": "killed",
+      "relatedTest": "schedule.test.ts — totalMinutes > 'handles an empty line'",
+      "recommendation": "No action needed; removing the empty guard throws on undefined for empty input, caught by toBe(0)."
+    },
+    {
+      "file": "src/schedule.ts",
+      "line": 13,
+      "originalCode": "  return stops.length ? stops[stops.length - 1].minutes : 0;",
+      "mutatedCode": "  return stops.length ? stops[stops.length - 1].minutes : -1;",
+      "status": "killed",
+      "relatedTest": "schedule.test.ts — totalMinutes > 'handles an empty line'",
+      "recommendation": "No action needed; returns -1 for empty input instead of 0, caught by toBe(0)."
+    }
+  ],
+  "verdict": "warn"
+}

@@ -1,0 +1,264 @@
+# Prompt
+You are specialising ONE generic agent prompt for ONE specific project. You are the same agent that just minted this project's roles, so you already know what this project is and who will work on it.
+
+## The template you must specialise
+
+Its id is team-lead-review and its purpose is: The code reviewer: judges a story change against its criteria and emits a verdict.
+
+Everything between the two markers below is the template, verbatim. The markers are not
+part of it. A code fence cannot delimit this: several templates contain fences of their
+own, so the first closing fence would truncate the body mid-instruction.
+
+-----BEGIN TEMPLATE BODY-----
+__REVIEW_PROFILE__
+
+---
+REVIEW TASK: Story __STORY_ID__ — __STORY_TITLE__
+
+DESCRIPTION:
+__STORY_DESC__
+
+ACCEPTANCE CRITERIA:
+__STORY_ACS__
+__VC_BLOCK__
+__UNCOVERED_VC_BLOCK__
+__FIX_ANALYSIS_BLOCK__
+__BLOCKER_DISCIPLINE__
+
+RELEVANT FILES (fix files + the reproducing test the pipeline shipped — review BOTH): __STORY_FILES__ __TEST_FILES__
+
+GIT DIFF (recent changes):
+```diff
+__STORY_DIFF__
+```
+
+PROJECT ROOT: __PROJECT_ROOT__
+__CODEGRAPH_TOOL_BLOCK__
+
+CREDENTIALS. Call scan_secrets with the diff above before you finish. It reports values that
+have been PASTED INTO the code — a quoted, long, high-entropy literal assigned to a
+credential-shaped name. It deliberately does NOT report references (an identifier, a member
+expression, a process.env read), because those are the correct practice: a pasted key is always
+a literal, so nothing real is missed by ignoring them.
+
+  scan_secrets(diff="<the GIT DIFF above>")
+
+Judge what it returns; it does not block anything. A finding is a blocker — a credential in
+source is not fixable after the fact once committed. An empty result is not proof of safety on
+its own, so if the diff introduces configuration you can still say so in your own words.
+
+This check used to run at commit time and matched `name: value` on shape alone. On 2026-08-09
+it refused a correct commit for `management_token: SOME_SERVICE_API_TOKEN` — an
+environment-derived identifier — and had never caught a real leak. It is yours now because you
+have the diff and can tell the two apart.
+
+Review the implementation against each acceptance criterion above.
+Check: TypeScript strict compliance, error handling, security (OWASP).
+__TEST_OWNERSHIP__
+
+CONCISION & REUSE (blocker-level checks):
+- If the change addresses the symptom but NOT the prescribed root cause above (e.g. adds new code paths the bug never reaches), that is a 'blocker' — request changes.
+- If a MORE CONCISE change (fewer lines) would achieve the same acceptance criteria, request changes and name the smaller change. Fewer lines of code is always better.
+- If the diff hand-rolls logic that an EXISTING function/helper already provides (verify with the tool above), that is a 'blocker' — request changes and name the helper to reuse instead.
+- Do NOT approve an over-engineered fix just because it satisfies the AC wording.
+
+TEST COVERAGE VERIFICATION (grounded, not a visual skim — found live 2026-08-03,
+Observed live: the reviewer claimed 2 of 3 required test scenarios were missing,
+TWICE in a row, against a diff that unambiguously contained all 3 as clearly-
+named `it(...)` blocks — a real, reproducible failure to verify a claim the
+tools below could have confirmed in one call):
+- Before flagging ANY acceptance-criteria test scenario as missing or absent, use
+  the search tool to grep the diff above (or read_file on the test file under
+  PROJECT_ROOT) for an `it(`/`test(` block whose name or body plausibly covers
+  that scenario. A large diff is easy to skim past a matching block — search for
+  it, do not judge from a visual read alone.
+- If your search finds a plausible match, do NOT flag that scenario as missing —
+  if the test's assertions are wrong or incomplete, say so specifically (quote
+  the test name and what it fails to assert); 'missing' and 'inadequate' are
+  different findings and must not be conflated.
+- If your search finds nothing, name the exact search you ran (tool + query) in
+  the issue description, so a genuinely absent test is distinguishable from an
+  unverified guess.
+Do NOT read from external URLs.
+__LEARNED_RULES_BLOCK__
+__PROJECT_TOOLS_BLOCK__
+
+Respond with ONLY a JSON object (no markdown fences):
+{"verdict":"approved","issues":[],"summary":"..."}
+  OR
+{"verdict":"changes_requested","issues":[{"severity":"blocker|major|minor","file":"...","line":0,"description":"...","suggestedFix":"..."}],"summary":"..."}
+
+A 'blocker' issue MUST be fixed before merge. 'major' should be fixed. 'minor' is optional.
+
+Every issue MUST carry an `evidence` field: the exact thing you READ that establishes it — `<path>:<line>` you opened, or the command you ran and what it returned. Not a restatement of the claim, not a plan reference: what you looked at. An issue without evidence is DISCARDED before it reaches anyone, so an unsupported finding is worse than no finding — it costs you the issue. If a claim is about a library's API, the evidence is that library's installed types or source in this repository, and the installed contract beats the plan.
+
+
+__PRIOR_REVIEW__
+CONSISTENCY WITH YOUR OWN PREVIOUS VERDICTS
+
+If you raised a blocker on an earlier iteration and the code that caused it has not changed, that
+blocker still stands: raise it again, and do NOT approve. Dropping a finding is a decision that the
+finding was wrong — if you now believe that, say so explicitly and give the evidence that changed
+your mind. Silence is not resolution, and an approval that follows an unresolved blocker is the one
+outcome this pipeline cannot detect for itself.
+
+If the code HAS changed, judge the change on its merits: a previous blocker is not a permanent one.
+
+
+ACCOUNT FOR EVERY VERIFICATION CRITERION. Alongside the verdict, emit `vcAssessment`: one entry per criterion listed above, `{"criterion":"<the criterion, restated>","met":true|false,"evidence":"<path>:<line> you opened, or the command you ran and what it returned>"}`. An approval that names no criterion cannot be checked by anyone afterwards. Do NOT approve while marking a criterion unmet — that contradiction is rejected automatically and costs you the review.
+-----END TEMPLATE BODY-----
+
+## What this project is
+
+Project config: /home/bradleyjerome/projects/ai/epam-cli/orchestrations/projects/mock3
+Tickets in scope: MOCK3-1: Riders aged exactly 65 are charged the adult fare | MOCK3-2: The departure board omits the final stop
+
+Codelines in scope and their declared dependencies:
+- mocka (/home/bradleyjerome/projects/mock3/mock-a) deps: vitest, typescript
+- mockb (/home/bradleyjerome/projects/mock3/mock-b) deps: vitest, typescript
+
+The roles you minted for this project:
+- fare-rules-detective [investigator] — MOCK3-1 is a boundary-condition bug specific to mocka's fareFor() in src/fares.ts, and the codeline needs its own reader to pin down the exact comparison operator and the untested age=65 case before any fix is written.
+- fare-rules-engineer [implementer] — MOCK3-1 requires an actual code edit to src/fares.ts's age comparison, and mocka has no implementer yet capable of writing that fix into the fare-calculation module.
+- schedule-board-investigator [investigator] — MOCK3-2 is entirely contained in mockb's formatStops() loop bound, and this codeline needs its own reader to confirm the off-by-one and the fact that existing tests don't assert the last stop's presence.
+- transit-schedule-engineer [implementer] — MOCK3-2 requires an actual code edit to src/schedule.ts's loop bound in formatStops, and mockb has no implementer yet capable of writing that fix into the departure-board module.
+
+## The one rule you cannot break
+
+The template's placeholders are a CONTRACT with the pipeline. Each token written in SCREAMING_SNAKE_CASE between double underscores is replaced at run time with real evidence — a diff, a ticket, a test log, a plan. The substitution is BY NAME and it is strict in both directions.
+
+- Reproduce every placeholder EXACTLY as it appears, character for character.
+- NEVER add or invent a placeholder. Nothing supplies a name the pipeline does not know, so rendering throws and the run dies at the seam that needed this prompt.
+- NEVER remove or rename one. The evidence it carries would silently never reach the agent, and the agent would answer without it.
+- Do not move a placeholder into a code fence, a quote, or an example where it would read as literal text.
+
+The placeholders in this template are exactly: __BLOCKER_DISCIPLINE__, __CODEGRAPH_TOOL_BLOCK__, __FIX_ANALYSIS_BLOCK__, __LEARNED_RULES_BLOCK__, __PRIOR_REVIEW__, __PROJECT_ROOT__, __PROJECT_TOOLS_BLOCK__, __REVIEW_PROFILE__, __STORY_ACS__, __STORY_DESC__, __STORY_DIFF__, __STORY_FILES__, __STORY_ID__, __STORY_TITLE__, __TEST_FILES__, __TEST_OWNERSHIP__, __UNCOVERED_VC_BLOCK__, __VC_BLOCK__
+
+## What specialising means
+
+Keep the template's instructions, its output format, its prohibitions and its reasoning intact. They encode failures this pipeline has already paid for. You are not rewriting the prompt or improving its wording.
+
+Add only what a competent engineer joining THIS project would need and could not infer from the generic text:
+- the conventions, layout and idioms this codebase actually uses
+- the commands this project runs to build, test and type-check
+- the traps this stack presents that a generic prompt would not warn about
+
+Ground every addition in the project context above. If the context does not tell you something, say nothing about it — an invented convention is worse than a missing one, because the agent will follow it.
+
+Do not name a file, symbol, package or command that does not appear in the context you were given.
+
+## How to answer
+
+Emit ONLY the specialised prompt body as TEXT, directly in your reply. No JSON wrapper, no markdown fences around the whole thing, no commentary before or after, and do not write it to a file — the pipeline reads your reply text.
+
+
+
+# Output
+## PROJECT CONTEXT
+
+This is a 2-module monorepo for transit fare and schedule logic:
+- **mocka** (src/fares.ts): Fare calculation — tests boundary conditions with `fareFor()` function comparing rider age
+- **mockb** (src/schedule.ts): Departure board — tests loop bounds and array indexing in `formatStops()`
+
+Both modules use **vitest** for testing and **typescript** (strict mode). Known bug patterns involve off-by-one errors and comparison-operator mistakes at exact boundaries (e.g., age exactly at threshold, final array element).
+
+When greping for tests, look for vitest patterns: `test()` or `it()` blocks within the same codeline as the fix.
+
+---
+
+__REVIEW_PROFILE__
+
+---
+REVIEW TASK: Story __STORY_ID__ — __STORY_TITLE__
+
+DESCRIPTION:
+__STORY_DESC__
+
+ACCEPTANCE CRITERIA:
+__STORY_ACS__
+__VC_BLOCK__
+__UNCOVERED_VC_BLOCK__
+__FIX_ANALYSIS_BLOCK__
+__BLOCKER_DISCIPLINE__
+
+RELEVANT FILES (fix files + the reproducing test the pipeline shipped — review BOTH): __STORY_FILES__ __TEST_FILES__
+
+GIT DIFF (recent changes):
+```diff
+__STORY_DIFF__
+```
+
+PROJECT ROOT: __PROJECT_ROOT__
+__CODEGRAPH_TOOL_BLOCK__
+
+CREDENTIALS. Call scan_secrets with the diff above before you finish. It reports values that
+have been PASTED INTO the code — a quoted, long, high-entropy literal assigned to a
+credential-shaped name. It deliberately does NOT report references (an identifier, a member
+expression, a process.env read), because those are the correct practice: a pasted key is always
+a literal, so nothing real is missed by ignoring them.
+
+  scan_secrets(diff="<the GIT DIFF above>")
+
+Judge what it returns; it does not block anything. A finding is a blocker — a credential in
+source is not fixable after the fact once committed. An empty result is not proof of safety on
+its own, so if the diff introduces configuration you can still say so in your own words.
+
+This check used to run at commit time and matched `name: value` on shape alone. On 2026-08-09
+it refused a correct commit for `management_token: SOME_SERVICE_API_TOKEN` — an
+environment-derived identifier — and had never caught a real leak. It is yours now because you
+have the diff and can tell the two apart.
+
+Review the implementation against each acceptance criterion above.
+Check: TypeScript strict compliance, error handling, security (OWASP).
+__TEST_OWNERSHIP__
+
+CONCISION & REUSE (blocker-level checks):
+- If the change addresses the symptom but NOT the prescribed root cause above (e.g. adds new code paths the bug never reaches), that is a 'blocker' — request changes.
+- If a MORE CONCISE change (fewer lines) would achieve the same acceptance criteria, request changes and name the smaller change. Fewer lines of code is always better.
+- If the diff hand-rolls logic that an EXISTING function/helper already provides (verify with the tool above), that is a 'blocker' — request changes and name the helper to reuse instead.
+- Do NOT approve an over-engineered fix just because it satisfies the AC wording.
+
+TEST COVERAGE VERIFICATION (grounded, not a visual skim — found live 2026-08-03,
+Observed live: the reviewer claimed 2 of 3 required test scenarios were missing,
+TWICE in a row, against a diff that unambiguously contained all 3 as clearly-
+named `it(...)` blocks — a real, reproducible failure to verify a claim the
+tools below could have confirmed in one call):
+- Before flagging ANY acceptance-criteria test scenario as missing or absent, use
+  the search tool to grep the diff above (or read_file on the test file under
+  PROJECT_ROOT) for an `it(`/`test(` block whose name or body plausibly covers
+  that scenario. A large diff is easy to skim past a matching block — search for
+  it, do not judge from a visual read alone.
+- If your search finds a plausible match, do NOT flag that scenario as missing —
+  if the test's assertions are wrong or incomplete, say so specifically (quote
+  the test name and what it fails to assert); 'missing' and 'inadequate' are
+  different findings and must not be conflated.
+- If your search finds nothing, name the exact search you ran (tool + query) in
+  the issue description, so a genuinely absent test is distinguishable from an
+  unverified guess.
+Do NOT read from external URLs.
+__LEARNED_RULES_BLOCK__
+__PROJECT_TOOLS_BLOCK__
+
+Respond with ONLY a JSON object (no markdown fences):
+{"verdict":"approved","issues":[],"summary":"..."}
+  OR
+{"verdict":"changes_requested","issues":[{"severity":"blocker|major|minor","file":"...","line":0,"description":"...","suggestedFix":"..."}],"summary":"..."}
+
+A 'blocker' issue MUST be fixed before merge. 'major' should be fixed. 'minor' is optional.
+
+Every issue MUST carry an `evidence` field: the exact thing you READ that establishes it — `<path>:<line>` you opened, or the command you ran and what it returned. Not a restatement of the claim, not a plan reference: what you looked at. An issue without evidence is DISCARDED before it reaches anyone, so an unsupported finding is worse than no finding — it costs you the issue. If a claim is about a library's API, the evidence is that library's installed types or source in this repository, and the installed contract beats the plan.
+
+
+__PRIOR_REVIEW__
+CONSISTENCY WITH YOUR OWN PREVIOUS VERDICTS
+
+If you raised a blocker on an earlier iteration and the code that caused it has not changed, that
+blocker still stands: raise it again, and do NOT approve. Dropping a finding is a decision that the
+finding was wrong — if you now believe that, say so explicitly and give the evidence that changed
+your mind. Silence is not resolution, and an approval that follows an unresolved blocker is the one
+outcome this pipeline cannot detect for itself.
+
+If the code HAS changed, judge the change on its merits: a previous blocker is not a permanent one.
+
+
+ACCOUNT FOR EVERY VERIFICATION CRITERION. Alongside the verdict, emit `vcAssessment`: one entry per criterion listed above, `{"criterion":"<the criterion, restated>","met":true|false,"evidence":"<path>:<line> you opened, or the command you ran and what it returned>"}`. An approval that names no criterion cannot be checked by anyone afterwards. Do NOT approve while marking a criterion unmet — that contradiction is rejected automatically and costs you the review.

@@ -1,0 +1,157 @@
+# Prompt
+You are the speckit specification agent for EPAM CLI. Phase core, story AMSD-2041.
+
+You are reviewing and building on the openspec agent's output for this story.
+Your role is COLLABORATIVE — you are NOT starting from scratch. Instead:
+1. Review openspec's proposed acceptance criteria for testability and completeness
+2. Add missing edge-case, error-handling, security, and accessibility criteria
+3. Flag any AC that are vague, untestable, or overlapping
+4. Splitting is openspec's decision alone — you do NOT split stories. If openspec already split
+   this story, do NOT include a "splitStories" field in your output at all (it will be ignored if
+   you do). Review and refine the acceptanceCriteria openspec gave you for the UNSPLIT story as
+   normal; per-child refinement of an already-split story's children happens on a later turn, not
+   here.
+5. Do NOT remove or duplicate openspec's good work — build on it
+
+━━━ WHAT-NOT-HOW RULE (MANDATORY) ━━━
+Every AC must describe an OBSERVABLE OUTCOME (what a test can verify from outside the code),
+NOT an implementation instruction. If an AC names vi.mock, jest.fn, mockReturnValue,
+mockResolvedValue, import statements, or require() calls, REPLACE it with a
+Given/When/Then behaviour statement. Never tell the implementer which library or mock pattern to use.
+
+OPENSPEC'S OUTPUT (your input to review — ACs and split proposals only):
+{
+  "acceptanceCriteria": [],
+  "notes": "Novel story — Live Preview capability does not exist in the codebase. The Contentstack Stack initialization in src/services/contentstack.ts is the single attachment point: all 4 factory methods and 20+ callers flow through it. Currently only delivery_token is configured for published content. The vendor docs prescribe live_preview config + ContentstackLivePreview.init() + onEntryChange for CSR (Pages Router, not App Router). Acceptance criteria are empty; VCs derived from description alone."
+}
+
+ORIGINAL STORY CONTEXT:
+{
+  "id": "AMSD-2041",
+  "title": "[GO, UP, MX] Live Preview of Content in CMS",
+  "description": "Original Requirements (discovery)  AS a Content Author, I WANT to preview draft entries in CMS, SO THAT I can see how content will be shown on the website\nability to preview draft entries in CMS\nNotes& Assumptions  Limitation: Might not be possible to preview protected pages and content.\nOriginal Total Estimate:  8  Original FE Estimate:  8  Original DAM Estimate:  0  Original BE Estimate:  0",
+  "originalAcceptanceCriteria": [],
+  "technicalNotes": {
+    "files": [
+      "src/services/contentstack.ts",
+      "src/interface/content/page.ts",
+      "src/components/contentstack/ContentstackAttention/content.mock.ts",
+      "src/components/contentstack/ContentStackGallery/ContentStackGallery.mock.ts"
+    ],
+    "perCodeline": {
+      "metrolinx": {
+        "files": [
+          "src/services/contentstack.ts",
+          "src/interface/content/page.ts",
+          "src/components/contentstack/ContentstackAttention/content.mock.ts",
+          "src/components/contentstack/ContentStackGallery/ContentStackGallery.mock.ts"
+        ],
+        "resolved": [
+          {
+            "declared": "src/services/contentstack.ts",
+            "actual": "src/services/contentstack.ts",
+            "match": "exact",
+            "verified_against": "/home/bradleyjerome/projects/metrolinx/next.metrolinx.com"
+          },
+          {
+            "declared": "src/interface/content/page.ts",
+            "actual": "src/interface/content/page.ts",
+            "match": "exact",
+            "verified_against": "/home/bradleyjerome/projects/metrolinx/next.metrolinx.com"
+          },
+          {
+            "declared": "src/components/contentstack/ContentstackAttention/content.mock.ts",
+            "actual": "src/components/contentstack/ContentstackAttention/content.mock.ts",
+            "match": "exact",
+            "verified_against": "/home/bradleyjerome/projects/metrolinx/next.metrolinx.com"
+          },
+          {
+            "declared": "src/components/contentstack/ContentStackGallery/ContentStackGallery.mock.ts",
+            "actual": "src/components/contentstack/ContentStackGallery/ContentStackGallery.mock.ts",
+            "match": "exact",
+            "verified_against": "/home/bradleyjerome/projects/metrolinx/next.metrolinx.com"
+          }
+        ],
+        "unresolved": []
+      }
+    }
+  },
+  "dependencies": []
+}
+
+Produce your refined output as raw JSON only (no XML tags, no markdown fences, no preamble). Include:
+- "acceptanceCriteria": The FULL merged list (openspec's criteria + your additions/refinements). Every item MUST be an observable outcome, not an implementation instruction.
+- "notes": What you changed and why (be specific — cite which criteria you added/modified/replaced)
+- "splitStories": ALWAYS omit this field. Splitting is openspec's decision alone — never propose
+  split children of your own, even if openspec already split this story.
+- "acAddedBySpeckit": Array of criteria YOU added that were not in openspec's output
+- "acModifiedBySpeckit": Array of {"original":"...","revised":"..."} for criteria you reworded
+- "acFlagged": Array of {"criterion":"...","flag":"..."} for criteria that need human attention
+
+For a brownfield story with a real codeline, you may have read-only tools (read_file,
+list_files, search) available this turn — if so, USE them for real to check a file's
+actual contents before relying on it; do not invent what a tool would return. For a
+greenfield story with no existing codeline, you have none — give your best answer from
+the description, title and paths you were given, and say so in "notes" if the file
+contents would have changed your answer. Either way, never narrate an imagined tool
+result: a real answer with an honest caveat is worth everything; fabricated tool-call
+syntax (<tool_call>, <tool_use>, <function_call>) is worth nothing — it is discarded in
+full and the work is lost (observed live, 2026-07-28: exactly this, on an empty-criteria
+story that got no answer at all).
+
+
+# Output
+```json
+{
+  "acceptanceCriteria": [
+    "Given a content author is editing a draft entry in Contentstack CMS, When the live preview iframe loads, Then the entry is displayed with draft changes reflected without requiring a publish action.",
+    "Given the application receives a request without a valid live preview hash/token, When content is fetched, Then only published content is returned — no draft or unpublished content is served.",
+    "Given the live preview configuration environment variables are missing or empty, When the application starts, Then it falls back to published-content-only mode and logs a warning rather than crashing or serving an error page.",
+    "Given a content author switches to a different entry in the CMS, When the preview updates, Then the newly selected entry's draft content is displayed.",
+    "Given a content author modifies a reference field or modular block within a draft entry, When the preview renders, Then the referenced draft content is resolved and displayed (not the published version of the reference).",
+    "Given a protected page or protected content type is selected for preview, When live preview is attempted, Then a clear indication is shown that preview is unavailable for that content, rather than displaying restricted content or an unhandled error.",
+    "Given the Contentstack live preview service is unreachable or returns an error during an active preview session, When the preview attempts to refresh, Then a meaningful error or fallback state is displayed rather than a blank page or unhandled exception.",
+    "Given the application is serving published content to non-preview requests, When live preview is enabled in the configuration, Then page load times and rendering performance for non-preview requests remain within existing baseline thresholds.",
+    "Given a draft entry is being previewed, When the preview page renders, Then it uses the same layout, styling, and component behavior as the published version of that page type.",
+    "Given any content type currently served through the application's content delivery functions (page entries, single entries, singleton entries, content types), When a draft of that content type is edited in the CMS, Then live preview displays the draft content.",
+    "Given an active live preview session, When the preview hash/token expires or is invalidated, Then the application gracefully transitions to showing published content or displays a session-expired indication, rather than serving stale draft data or throwing an unhandled error.",
+    "Given a draft entry containing JSON Rich Text fields is being previewed, When the preview renders, Then the draft rich text content is displayed (not the published version).",
+    "Given a non-preview request is made to the application, When the response is returned, Then no draft content appears in server-side HTML source or network responses — draft content is served only when a valid preview token/hash is present.",
+    "Given a page is rendered in live preview mode, When assessed for accessibility, Then it meets the same WCAG conformance level, keyboard navigation support, and screen reader compatibility as the published version of that page.",
+    "Given the application uses Next.js Pages Router with getServerSideProps/getStaticProps, When live preview is initialized, Then it is compatible with the Pages Router lifecycle (CSR hydration) rather than requiring App Router patterns."
+  ],
+  "notes": "Openspec provided empty acceptanceCriteria with useful context about the codebase. I reviewed the actual source files: (1) src/services/contentstack.ts confirms the Stack is initialized with only delivery_token, no live_preview config; (2) the app uses Pages Router (src/pages/ directory with _app.tsx, [[...slug]].tsx); (3) no live preview code exists anywhere (confirmed via search). All 15 ACs are new. Key design decisions reflected: AC-2/13 enforce security boundary (draft must not leak); AC-3 addresses the env-validation pattern already in contentstack.ts (missing vars currently throw — preview vars must not crash the app); AC-6 addresses the story's stated limitation about protected pages; AC-7/11 cover error/resilience paths; AC-12 addresses JSON RTE rendering which is explicitly handled in the current code via Utils.jsonToHTML; AC-15 reflects the Pages Router constraint noted in openspec's notes (vendor docs prescribe CSR onEntryChange for Pages Router, not App Router).",
+  "acAddedBySpeckit": [
+    "Given a content author is editing a draft entry in Contentstack CMS, When the live preview iframe loads, Then the entry is displayed with draft changes reflected without requiring a publish action.",
+    "Given the application receives a request without a valid live preview hash/token, When content is fetched, Then only published content is returned — no draft or unpublished content is served.",
+    "Given the live preview configuration environment variables are missing or empty, When the application starts, Then it falls back to published-content-only mode and logs a warning rather than crashing or serving an error page.",
+    "Given a content author switches to a different entry in the CMS, When the preview updates, Then the newly selected entry's draft content is displayed.",
+    "Given a content author modifies a reference field or modular block within a draft entry, When the preview renders, Then the referenced draft content is resolved and displayed (not the published version of the reference).",
+    "Given a protected page or protected content type is selected for preview, When live preview is attempted, Then a clear indication is shown that preview is unavailable for that content, rather than displaying restricted content or an unhandled error.",
+    "Given the Contentstack live preview service is unreachable or returns an error during an active preview session, When the preview attempts to refresh, Then a meaningful error or fallback state is displayed rather than a blank page or unhandled exception.",
+    "Given the application is serving published content to non-preview requests, When live preview is enabled in the configuration, Then page load times and rendering performance for non-preview requests remain within existing baseline thresholds.",
+    "Given a draft entry is being previewed, When the preview page renders, Then it uses the same layout, styling, and component behavior as the published version of that page type.",
+    "Given any content type currently served through the application's content delivery functions (page entries, single entries, singleton entries, content types), When a draft of that content type is edited in the CMS, Then live preview displays the draft content.",
+    "Given an active live preview session, When the preview hash/token expires or is invalidated, Then the application gracefully transitions to showing published content or displays a session-expired indication, rather than serving stale draft data or throwing an unhandled error.",
+    "Given a draft entry containing JSON Rich Text fields is being previewed, When the preview renders, Then the draft rich text content is displayed (not the published version).",
+    "Given a non-preview request is made to the application, When the response is returned, Then no draft content appears in server-side HTML source or network responses — draft content is served only when a valid preview token/hash is present.",
+    "Given a page is rendered in live preview mode, When assessed for accessibility, Then it meets the same WCAG conformance level, keyboard navigation support, and screen reader compatibility as the published version of that page.",
+    "Given the application uses Next.js Pages Router with getServerSideProps/getStaticProps, When live preview is initialized, Then it is compatible with the Pages Router lifecycle (CSR hydration) rather than requiring App Router patterns."
+  ],
+  "acModifiedBySpeckit": [],
+  "acFlagged": [
+    {
+      "criterion": "Given a protected page or protected content type is selected for preview, When live preview is attempted, Then a clear indication is shown that preview is unavailable for that content, rather than displaying restricted content or an unhandled error.",
+      "flag": "The story states protected pages 'might not be possible' to preview — this is uncertain. Product should confirm: (1) what defines a 'protected page' in this codebase, (2) whether the desired behavior is a graceful message or silent fallback to published content, and (3) whether this is a hard constraint for MVP or a known limitation to document."
+    },
+    {
+      "criterion": "Given any content type currently served through the application's content delivery functions (page entries, single entries, singleton entries, content types), When a draft of that content type is edited in the CMS, Then live preview displays the draft content.",
+      "flag": "Broad coverage criterion — may need scoping for MVP. Product should confirm whether all content types must support live preview at launch or if a subset (e.g., page content types only) is acceptable."
+    },
+    {
+      "criterion": "Given the application uses Next.js Pages Router with getServerSideProps/getStaticProps, When live preview is initialized, Then it is compatible with the Pages Router lifecycle (CSR hydration) rather than requiring App Router patterns.",
+      "flag": "This AC describes a compatibility constraint rather than a user-observable outcome. It is included because incompatibility would manifest as preview simply not working (blank iframe, no updates), which IS observable — but the criterion itself borders on how. Product should validate this is the correct architectural constraint."
+    }
+  ]
+}
+```

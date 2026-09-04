@@ -1,0 +1,1 @@
+{"agent":"fuzz-weaver","phase":"core","summary":{"functionsAnalysed":1,"fuzzCasesProposed":0,"covered":0,"gaps":0,"vulnerabilities":0},"cases":[],"verdict":"not_applicable","reason":"getGreeting() is a zero-parameter constant-return function with no input domain to fuzz — no config parsing, auth, cost calculation, or file-path surface exists in the changed code."}

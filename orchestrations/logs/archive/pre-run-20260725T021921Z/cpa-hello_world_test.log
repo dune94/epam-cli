@@ -1,0 +1,94 @@
+[0;35m[CPA][0m Retrieval: semantic-search (text-embedding-3-small)
+[0;36m[08:45:12][0m Loading stories from hello-world-prd.json...
+[0;36m[08:45:12][0m Found 6 stories to contextualize
+
+[0;35m[CPA][0m Processing HW-001...
+[0;35m[CPA][0m   HW-001: formula baseline from calibration[low:implementation:cli:deepseek](n=31): 0.6370967741935484min $0.0024870967741935485
+[1mHW-001[0m  Implement greet() function  [0;32m[PASS][0m
+  Machine time:              0.64 min  →      0.51 min  (conf: 0.95, adj: 0.80x)
+  Cost:                  $0.00       →  $0.00     
+  Total (est):           $0.00           (incl. pipeline ×1.13)
+  KB coverage:           5     chunks retrieved   0     cited   cov: 0%
+  [1;33m⚠[0m  Story duplicates existing greet.ts implementation
+  [1;33m⚠[0m  No new test file created per acceptance criteria
+
+[0;35m[CPA][0m Processing HW-002...
+[0;35m[CPA][0m   HW-002: formula baseline from calibration[low:verification:cli:deepseek](n=8): 0.32625000000000004min $0.0019375
+[1mHW-002[0m  Verify all tests pass  [0;32m[PASS][0m
+  Machine time:              0.33 min  →      0.36 min  (conf: 0.90, adj: 1.10x)
+  Cost:                  $0.00       →  $0.00     
+  Total (est):           $0.00           (incl. pipeline ×1.13)
+  KB coverage:           5     chunks retrieved   2     cited   cov: 40%
+  [1;33m⚠[0m  Dependency HW-001 not yet completed; tests may fail if greet() not implemented
+  [1;33m⚠[0m  Story targets new code with no existing files; execution environment setup uncertain
+
+[0;35m[CPA][0m Processing HW-003...
+[0;35m[CPA][0m   HW-003: formula baseline from calibration[low:review:cli:deepseek](n=3): 0.6233333333333334min $0.0037
+[1mHW-003[0m  Code review greet.ts  [0;32m[PASS][0m
+  Machine time:              0.62 min  →      0.69 min  (conf: 0.85, adj: 1.10x)
+  Cost:                  $0.00       →  $0.00     
+  Total (est):           $0.00           (incl. pipeline ×1.13)
+  KB coverage:           5     chunks retrieved   1     cited   cov: 20%
+  [1;33m⚠[0m  Target file greet.ts does not exist yet
+  [1;33m⚠[0m  Requires reading HW-001 criteria from authoritative source
+  [1;33m⚠[0m  Must handle multiple node binary resolution paths for test command
+
+[0;35m[CPA][0m Processing HW-004...
+[0;35m[CPA][0m   HW-004: formula baseline from calibration[low:implementation:cli:deepseek](n=31): 0.6370967741935484min $0.0024870967741935485
+[1mHW-004[0m  Implement formatDate() utility with vitest tests  [0;32m[PASS][0m
+  Machine time:              0.64 min  →      0.70 min  (conf: 0.85, adj: 1.10x)
+  Cost:                  $0.00       →  $0.00     
+  Total (est):           $0.00           (incl. pipeline ×1.13)
+  KB coverage:           5     chunks retrieved   0     cited   cov: 0%
+  [1;33m⚠[0m  Target files formatDate.ts and formatDate.test.ts do not exist yet
+  [1;33m⚠[0m  Story depends on HW-001 which may affect implementation details
+
+[0;35m[CPA][0m Processing HW-005...
+[0;35m[CPA][0m   HW-005: formula baseline from calibration[low:implementation:cli:deepseek](n=31): 0.6370967741935484min $0.0024870967741935485
+[1mHW-005[0m  Implement truncate() utility with structured output  [0;32m[PASS][0m
+  Machine time:              0.64 min  →      0.70 min  (conf: 0.85, adj: 1.10x)
+  Cost:                  $0.00       →  $0.00     
+  Total (est):           $0.00           (incl. pipeline ×1.13)
+  KB coverage:           5     chunks retrieved   0     cited   cov: 0%
+  [1;33m⚠[0m  Target files truncate.ts and truncate.test.ts do not exist yet
+  [1;33m⚠[0m  No KB coverage for truncate utility implementation patterns
+
+[0;35m[CPA][0m Processing HW-006...
+[0;35m[CPA][0m   HW-006: formula baseline from calibration[low:implementation:cli:deepseek](n=31): 0.6370967741935484min $0.0024870967741935485
+[1mHW-006[0m  Implement slugify() utility via Qwen/OpenRouter  [0;32m[PASS][0m
+  Machine time:              0.64 min  →      0.70 min  (conf: 0.85, adj: 1.10x)
+  Cost:                  $0.00       →  $0.00     
+  Total (est):           $0.00           (incl. pipeline ×1.13)
+  KB coverage:           5     chunks retrieved   0     cited   cov: 0%
+  [1;33m⚠[0m  Target files slugify.ts and slugify.test.ts do not exist yet
+  [1;33m⚠[0m  Story depends on HW-001 which may affect implementation
+
+[0;36m=== CPA Gate Summary ===[0m
+
+Phase                    Pass   Review    Block    Total
+------------------------------------------------------
+hello_world_test            6        0        0        6
+------------------------------------------------------
+[1mTOTAL                       6        0        0        6[0m
+
+[0;32m[CPA OK][0m All 6 stories passed the CPA gate
+
+[0;36m[08:45:41][0m Appended 6 CPA records to /home/bradleyjerome/projects/ai/epam-cli/orchestrations/logs/cpa-review.jsonl
+[0;36m[08:45:41][0m Applying blended estimates to prd.json...
+[0;32m[CPA OK][0m Backed up prd.json → hello-world-prd.json.before-cpa
+[0;32m[CPA OK][0m Applied CPA blended estimates to 6 stories
+
+  Review:   git diff /home/bradleyjerome/projects/ai/epam-cli/orchestrations/hello-world-prd.json
+  Restore:  cp /home/bradleyjerome/projects/ai/epam-cli/orchestrations/hello-world-prd.json.before-cpa /home/bradleyjerome/projects/ai/epam-cli/orchestrations/hello-world-prd.json
+
+Category                                n   Min (EMA)    Tokens (EMA)    Cost (EMA)   Turns
+-------------------------------------------------------------------------------------------
+low:implementation:cli:haiku           57        1.81       1,091,929  $     0.2042    28.3
+low:implementation:cli:sonnet         111        0.45           5,667  $     0.0024     0.0
+low:implementation:sdk:haiku            5        0.15           2,242  $     0.0020     1.0
+low:review:cli:haiku                    4        6.45         320,494  $     0.5872     8.7
+low:review:cli:sonnet                  10        1.32         203,171  $     0.5242     0.0
+low:verification:cli:haiku              4        0.13          43,281  $     0.0108     1.7
+low:verification:cli:sonnet            36        0.34          10,418  $     0.0197     0.0
+medium:implementation:cli:sonnet        9        2.81         913,363  $     0.5421    26.6
+[0;36m[08:45:42][0m Calibration updated from actuals

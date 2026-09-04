@@ -1,0 +1,1 @@
+{"agent":"perf-sentinel","phase":"core","summary":{"filesAnalysed":2,"findingsCount":0,"blockerCount":0,"estimatedStartupImpactMs":0},"findings":[],"verdict":"not_applicable","reason":"Change is a string literal update in a trivial function and its test — no loops, async, memory hotspots, or provider patterns to evaluate"}

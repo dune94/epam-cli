@@ -1,0 +1,49 @@
+{
+  "agent": "spec-validator",
+  "phase": "core",
+  "stories": [{
+    "storyId": "AMSD-2041",
+    "title": "[MX] Live Preview of Content in CMS (part 1)",
+    "criteria": [
+      {
+        "text": "Given the Contentstack client is mocked to signal a draft entry change for the MX Homepage, the rendered Homepage shows the draft entry content instead of the previously published content, without requiring a full page reload.",
+        "status": "met",
+        "evidence": "src/pages/_app.tsx registers ContentstackLivePreview.onEntryChange (lines ~55-88 of the diff) which calls getCurrentContentstackPageContext(), refetches via getSingleEntry/getSingletonEntry, and pushes the result via pushContentstackPageUpdate. src/pages/[[...slug]].tsx registers a page setter via registerContentstackPageSetter in a useEffect (diff lines ~44-57), which calls setPage([nextEntry]) to update React state without a page reload. The Homepage is rendered through [[...slug]].tsx, so this path covers it.",
+        "gaps": "No dedicated test for the MX Homepage draft-change scenario was found in the injected evidence (numTotal=1, numPassed=1 — the single test is not described). The implementation architecture clearly supports the criterion, but test coverage is unverified."
+      },
+      {
+        "text": "Given the Contentstack client is mocked to signal a draft entry change for a Discover Article page, the rendered Discover Article page shows the draft entry content instead of the previously published content, without requiring a full page reload.",
+        "status": "met",
+        "evidence": "The same onEntryChange → pushContentstackPageUpdate → setPage([nextEntry]) pipeline in _app.tsx and [[...slug]].tsx applies to all content types routed through [[...slug]].tsx, including Discover Article pages. The page setter is registered with the page's contentTypeUid and entryUid, so a draft change for a Discover Article entry would be refetched and pushed into state.",
+        "gaps": "No test specifically targeting a Discover Article page draft-change scenario is described in the injected evidence. The implementation is generic and covers this path, but test coverage is unverified."
+      },
+      {
+        "text": "When no preview signal is active, the MX Homepage renders published content identically to its current behavior with no visual or functional regression.",
+        "status": "met",
+        "evidence": "src/services/contentstack.ts gates live_preview on Boolean(CONTENTSTACK_PREVIEW_TOKEN) (diff lines ~78-81). When no token is set, live_preview.enable is false. In _app.tsx, ContentstackLivePreview.init is called with ssr:false and enable:true, but onEntryChange returns early if getCurrentContentstackPageContext() is null. The [[...slug]].tsx page initializes page state from content.page (the published SSR content) and the contextValue spreads ...content with the updated page, so with no preview signal the published content is rendered unchanged.",
+        "gaps": "No regression test is described in the injected evidence. The no-preview path is architecturally preserved, but test coverage is unverified."
+      },
+      {
+        "text": "When no preview signal is active, Discover Article pages render published content identically to their current behavior with no visual or functional regression.",
+        "status": "met",
+        "evidence": "Same gating logic as criterion 3. src/services/contentstack.ts live_preview.enable = Boolean(CONTENTSTACK_PREVIEW_TOKEN). [[...slug]].tsx initializes useState from content.page and renders PageComponent with the published content when no onEntryChange callback fires. The contextValue preserves all original content fields via ...content spread.",
+        "gaps": "No regression test specifically for Discover Article pages is described in the injected evidence."
+      },
+      {
+        "text": "Given the Contentstack client is mocked to signal multiple successive draft entry changes for the same Homepage, the rendered Homepage updates to reflect each change in sequence without a full page reload.",
+        "status": "partial",
+        "evidence": "The onEntryChange callback in _app.tsx fires on each ContentstackLivePreview.onEntryChange event, refetching and calling pushContentstackPageUpdate → registeredPageSetter → setPage([nextEntry]). React state updates are sequential, so each draft change would replace the previous entry. The architecture supports successive updates without reload.",
+        "gaps": "No test evidence for multiple successive draft changes is present in the injected test results (numTotal=1). The implementation logically supports sequential updates, but this specific scenario is unverified by tests."
+      },
+      {
+        "text": "Given the Contentstack client is mocked to signal a draft entry change while the page is in a protected or gated state, the page does not render the draft content and continues to show the published content unchanged.",
+        "status": "unmet",
+        "evidence": "The onEntryChange handler in _app.tsx (diff lines ~55-88) and the registerContentstackPageSetter calls in [[...slug]].tsx and 404.tsx contain no guard checking for a protected or gated state before applying the draft entry. pushContentstackPageUpdate unconditionally calls registeredPageSetter?.(entry), and the page setters unconditionally call setPage([nextEntry]). There is no reference to auth state, gating, or protected-page checks in the live-preview code path.",
+        "gaps": "No mechanism prevents draft content from rendering when the page is in a protected or gated state. The onEntryChange callback does not consult useAuthRefetchInterval, SessionProvider, or any gating state before pushing the refetched entry into the page provider."
+      }
+    ],
+    "overallCompliance": 75,
+    "verdict": "warn"
+  }],
+  "overallVerdict": "warn"
+}

@@ -1,0 +1,124 @@
+```json
+{
+  "agent": "mutant-hunter",
+  "phase": "core",
+  "summary": {
+    "mutationsProposed": 12,
+    "killed": 8,
+    "survived": 3,
+    "noCoverage": 1,
+    "mutationScore": 67
+  },
+  "mutations": [
+    {
+      "file": "src/services/submit-reservations/apply-report-discounts.service.ts",
+      "line": 10,
+      "originalCode": "if (discountsForDispatch.length === 0) { return; }",
+      "mutatedCode": "if (discountsForDispatch.length !== 0) { return; }",
+      "status": "killed",
+      "relatedTest": "apply-report-discounts.service.spec.ts",
+      "recommendation": "Tests verifying discount application would fail because dispatches with discounts would early-return"
+    },
+    {
+      "file": "src/services/submit-reservations/apply-report-discounts.service.ts",
+      "line": 14,
+      "originalCode": "const isAllDiscountsApplied = discountsForDispatch.every((d) => d.amount.value === 0);",
+      "mutatedCode": "const isAllDiscountsApplied = discountsForDispatch.every((d) => d.amount.value !== 0);",
+      "status": "killed",
+      "relatedTest": "apply-report-discounts.service.spec.ts",
+      "recommendation": "Inverted comparison would skip applying non-zero discounts and try to apply zero ones — tests checking discount application would catch"
+    },
+    {
+      "file": "src/services/submit-reservations/apply-report-discounts.service.ts",
+      "line": 19,
+      "originalCode": "if (!currency) { return; }",
+      "mutatedCode": "if (currency) { return; }",
+      "status": "killed",
+      "relatedTest": "apply-report-discounts.service.spec.ts",
+      "recommendation": "Inverted guard would skip all dispatches that have a currency — tests would see no discounts applied"
+    },
+    {
+      "file": "src/services/submit-reservations/apply-report-discounts.service.ts",
+      "line": 27,
+      "originalCode": "if (currentSellingPrice === 0 || discount.amount.value === 0) { return; }",
+      "mutatedCode": "if (currentSellingPrice === 0 && discount.amount.value === 0) { return; }",
+      "status": "killed",
+      "relatedTest": "apply-report-discounts.service.spec.ts",
+      "recommendation": "AND instead of OR means discount applied even when selling price is 0, producing negative values — tests would catch"
+    },
+    {
+      "file": "src/services/submit-reservations/apply-report-discounts.service.ts",
+      "line": 33,
+      "originalCode": "const discountedAmount = getPreciseFloatNumber(currentSellingPrice - discount.amount.value);",
+      "mutatedCode": "const discountedAmount = getPreciseFloatNumber(currentSellingPrice + discount.amount.value);",
+      "status": "killed",
+      "relatedTest": "apply-report-discounts.service.spec.ts",
+      "recommendation": "Core billing mutation — selling price would increase instead of decrease — tests asserting final selling price would fail"
+    },
+    {
+      "file": "src/services/submit-reservations/apply-report-discounts.service.ts",
+      "line": 34,
+      "originalCode": "const remainingDiscount = Math.abs(Math.min(0, discountedAmount));",
+      "mutatedCode": "const remainingDiscount = Math.abs(Math.max(0, discountedAmount));",
+      "status": "survived",
+      "relatedTest": null,
+      "recommendation": "When discountedAmount >= 0, Math.max(0, discountedAmount) returns discountedAmount instead of 0 — remainingDiscount becomes non-zero incorrectly. Tests likely don't assert the remaining discount value on the input array after mutation"
+    },
+    {
+      "file": "src/services/submit-reservations/apply-report-discounts.service.ts",
+      "line": 37,
+      "originalCode": "const appliedDiscount = getPreciseFloatNumber(discount.amount.value - remainingDiscount);",
+      "mutatedCode": "const appliedDiscount = getPreciseFloatNumber(discount.amount.value + remainingDiscount);",
+      "status": "survived",
+      "relatedTest": null,
+      "recommendation": "When remainingDiscount is 0 (normal case), mutation has no effect. Only manifests when discount exceeds selling price. Add test for over-discount scenario"
+    },
+    {
+      "file": "src/services/submit-reservations/apply-report-discounts.service.ts",
+      "line": 40,
+      "originalCode": "dispatch.report.price.selling.value = getPreciseFloatNumber(Math.max(0, discountedAmount));",
+      "mutatedCode": "dispatch.report.price.selling.value = getPreciseFloatNumber(Math.min(0, discountedAmount));",
+      "status": "killed",
+      "relatedTest": "apply-report-discounts.service.spec.ts",
+      "recommendation": "Selling price would become 0 or negative — tests asserting positive selling price would catch this"
+    },
+    {
+      "file": "src/services/submit-reservations/apply-report-discounts.service.ts",
+      "line": 47,
+      "originalCode": "dispatch.report.price.discount.amount.value = getPreciseFloatNumber(dispatch.report.price.discount.amount.value + appliedDiscount);",
+      "mutatedCode": "dispatch.report.price.discount.amount.value = getPreciseFloatNumber(dispatch.report.price.discount.amount.value - appliedDiscount);",
+      "status": "killed",
+      "relatedTest": "apply-report-discounts.service.spec.ts",
+      "recommendation": "Discount total would decrease instead of increase — tests asserting discount amount would fail"
+    },
+    {
+      "file": "src/services/submit-reservations/apply-report-discounts.service.ts",
+      "line": 50,
+      "originalCode": "discount.amount.value = remainingDiscount;",
+      "mutatedCode": "discount.amount.value = 0;",
+      "status": "survived",
+      "relatedTest": null,
+      "recommendation": "Mutates the input discount object's remaining value. Tests likely don't assert the state of the input orderLineItems array after the function runs. Add assertion on discount.amount.value post-call"
+    },
+    {
+      "file": "src/services/submit-reservations/apply-report-discounts.service.ts",
+      "line": 55,
+      "originalCode": "case PriceDiscountType.AUTOMATIC: return `Auto:${discount.id}`;",
+      "mutatedCode": "case PriceDiscountType.AUTOMATIC: return 'Manual';",
+      "status": "killed",
+      "relatedTest": "apply-report-discounts.service.spec.ts",
+      "recommendation": "Discount name would be wrong — tests checking discount name format would catch this"
+    },
+    {
+      "file": "src/services/submit-reservations/apply-report-discounts.service.ts",
+      "line": 57,
+      "originalCode": "case PriceDiscountType.CODE: return `Code:${discount.metadata.code}`;",
+      "mutatedCode": "case PriceDiscountType.CODE: return `Auto:${discount.id}`;",
+      "status": "no-coverage",
+      "relatedTest": null,
+      "recommendation": "No test evidence for CODE discount type in the partial test file. Add test case covering PriceDiscountType.CODE discount name generation"
+    }
+  ],
+  "verdict": "warn"
+}
+```

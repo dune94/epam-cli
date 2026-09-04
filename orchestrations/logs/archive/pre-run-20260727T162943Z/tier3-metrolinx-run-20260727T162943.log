@@ -1,0 +1,136 @@
+[1;33m[tier3-metrolinx][0m Tier 3 Metrolinx brownfield run — GLM + Kimi multi-model pipeline (USES CREDITS)
+[1;33m[tier3-metrolinx][0m   Jira:    https://metrolinx.atlassian.net / project AMSD
+[1;33m[tier3-metrolinx][0m   Codeline root: /home/bradleyjerome/projects/metrolinx
+[1;33m[tier3-metrolinx][0m   Baseline: develop
+[1;33m[tier3-metrolinx][0m   Mode:    BROWNFIELD (existing codeline, no teardown)
+[1;33m[tier3-metrolinx][0m   Log:     /tmp/tier3-metrolinx-jira-20260727T122943-3110258.log
+
+[1;33m[tier3-metrolinx][0m Auto-confirmed (--yes flag)
+[1;33m[tier3-metrolinx][0m OpenRouter usage before: $307.017552843
+
+[1;33m[tier3-metrolinx][0m profiles.json restored from canonical original
+
+[1;33m[tier3-metrolinx][0m Predictable teardown: resetting codelines to last verified baseline...
+[brownfield-preflight-reset] resetting /home/bradleyjerome/projects/metrolinx/Api.Departures.UPExpress.com to baseline branch develop (89e33e052de257587b9607c445bf3996eccf0717) — discarding any prior-run fix on top (current: 89e33e052de257587b9607c445bf3996eccf0717, dirty: yes)
+[brownfield-preflight-reset] reset complete — /home/bradleyjerome/projects/metrolinx/Api.Departures.UPExpress.com is now at baseline develop (89e33e052de257587b9607c445bf3996eccf0717)
+[brownfield-preflight-reset] resetting /home/bradleyjerome/projects/metrolinx/Api.ServiceUpdates.UPExpress.com to baseline branch develop (4bba7437af3ba24c96928e2cdf0bdf8de1f8c217) — discarding any prior-run fix on top (current: 4bba7437af3ba24c96928e2cdf0bdf8de1f8c217, dirty: yes)
+[brownfield-preflight-reset] reset complete — /home/bradleyjerome/projects/metrolinx/Api.ServiceUpdates.UPExpress.com is now at baseline develop (4bba7437af3ba24c96928e2cdf0bdf8de1f8c217)
+[brownfield-preflight-reset] resetting /home/bradleyjerome/projects/metrolinx/Api.Stations.UPExpress.com to baseline branch develop (8e54f0a32ff07b47164f4c2f47a92bda20f42f47) — discarding any prior-run fix on top (current: 8e54f0a32ff07b47164f4c2f47a92bda20f42f47, dirty: yes)
+[brownfield-preflight-reset] reset complete — /home/bradleyjerome/projects/metrolinx/Api.Stations.UPExpress.com is now at baseline develop (8e54f0a32ff07b47164f4c2f47a92bda20f42f47)
+[brownfield-preflight-reset] resetting /home/bradleyjerome/projects/metrolinx/UPExpress.com to baseline branch develop (70938a9843133990dce969a79cecc1f40a025957) — discarding any prior-run fix on top (current: 70938a9843133990dce969a79cecc1f40a025957, dirty: yes)
+[brownfield-preflight-reset] reset complete — /home/bradleyjerome/projects/metrolinx/UPExpress.com is now at baseline develop (70938a9843133990dce969a79cecc1f40a025957)
+[brownfield-preflight-reset] resetting /home/bradleyjerome/projects/metrolinx/api.commonlib.gotransit.com to baseline branch develop (e1c61913a21bf3a85460b925e1ae151bd22e8d7b) — discarding any prior-run fix on top (current: e1c61913a21bf3a85460b925e1ae151bd22e8d7b, dirty: yes)
+[brownfield-preflight-reset] reset complete — /home/bradleyjerome/projects/metrolinx/api.commonlib.gotransit.com is now at baseline develop (e1c61913a21bf3a85460b925e1ae151bd22e8d7b)
+[brownfield-preflight-reset] resetting /home/bradleyjerome/projects/metrolinx/api.composer.gotransit.com to baseline branch develop (6c7765a6045e95bf6c2e3ebbcc234cade1d88d3e) — discarding any prior-run fix on top (current: 6c7765a6045e95bf6c2e3ebbcc234cade1d88d3e, dirty: yes)
+[brownfield-preflight-reset] reset complete — /home/bradleyjerome/projects/metrolinx/api.composer.gotransit.com is now at baseline develop (6c7765a6045e95bf6c2e3ebbcc234cade1d88d3e)
+[brownfield-preflight-reset] resetting /home/bradleyjerome/projects/metrolinx/api.departures.gotransit.com to baseline branch develop (b234adffe5d42b697b28fc56983d88cc664627ef) — discarding any prior-run fix on top (current: b234adffe5d42b697b28fc56983d88cc664627ef, dirty: yes)
+[brownfield-preflight-reset] reset complete — /home/bradleyjerome/projects/metrolinx/api.departures.gotransit.com is now at baseline develop (b234adffe5d42b697b28fc56983d88cc664627ef)
+[brownfield-preflight-reset] resetting /home/bradleyjerome/projects/metrolinx/api.farecalculator.gotransit.com to baseline branch develop (e72154baffcc4e72919c47a16f93df48e8a6dcd1) — discarding any prior-run fix on top (current: e72154baffcc4e72919c47a16f93df48e8a6dcd1, dirty: yes)
+[brownfield-preflight-reset] reset complete — /home/bradleyjerome/projects/metrolinx/api.farecalculator.gotransit.com is now at baseline develop (e72154baffcc4e72919c47a16f93df48e8a6dcd1)
+[brownfield-preflight-reset] resetting /home/bradleyjerome/projects/metrolinx/api.schedules.gotransit.com to baseline branch develop (f668166de227294efc986f6e8aacd9b0a39319b6) — discarding any prior-run fix on top (current: f668166de227294efc986f6e8aacd9b0a39319b6, dirty: yes)
+[brownfield-preflight-reset] reset complete — /home/bradleyjerome/projects/metrolinx/api.schedules.gotransit.com is now at baseline develop (f668166de227294efc986f6e8aacd9b0a39319b6)
+[brownfield-preflight-reset] resetting /home/bradleyjerome/projects/metrolinx/api.serviceguarantee.gotransit.com to baseline branch develop (255c16fbe2dfb79253b7568df50e73fe8991c4b3) — discarding any prior-run fix on top (current: 255c16fbe2dfb79253b7568df50e73fe8991c4b3, dirty: yes)
+[brownfield-preflight-reset] reset complete — /home/bradleyjerome/projects/metrolinx/api.serviceguarantee.gotransit.com is now at baseline develop (255c16fbe2dfb79253b7568df50e73fe8991c4b3)
+[brownfield-preflight-reset] resetting /home/bradleyjerome/projects/metrolinx/api.serviceupdates.gotransit.com to baseline branch develop (802c286a775955779f8a53d922b7ae96ae52a9cd) — discarding any prior-run fix on top (current: 802c286a775955779f8a53d922b7ae96ae52a9cd, dirty: yes)
+[brownfield-preflight-reset] reset complete — /home/bradleyjerome/projects/metrolinx/api.serviceupdates.gotransit.com is now at baseline develop (802c286a775955779f8a53d922b7ae96ae52a9cd)
+[brownfield-preflight-reset] resetting /home/bradleyjerome/projects/metrolinx/api.stations.gotransit.com to baseline branch develop (811c78057c918be591a2f21ed275a33428a03971) — discarding any prior-run fix on top (current: 811c78057c918be591a2f21ed275a33428a03971, dirty: yes)
+[brownfield-preflight-reset] reset complete — /home/bradleyjerome/projects/metrolinx/api.stations.gotransit.com is now at baseline develop (811c78057c918be591a2f21ed275a33428a03971)
+[brownfield-preflight-reset] resetting /home/bradleyjerome/projects/metrolinx/api.tripplanner.gotransit.com to baseline branch develop (626bccbb0e6dae5bb6595689d29ab50c1f5b535f) — discarding any prior-run fix on top (current: 626bccbb0e6dae5bb6595689d29ab50c1f5b535f, dirty: yes)
+[brownfield-preflight-reset] reset complete — /home/bradleyjerome/projects/metrolinx/api.tripplanner.gotransit.com is now at baseline develop (626bccbb0e6dae5bb6595689d29ab50c1f5b535f)
+[brownfield-preflight-reset] /home/bradleyjerome/projects/metrolinx/azure.commerce.cdts already at baseline branch develop (36e289aa7522abe0902e1437f1d7b2c5dff0b88c) with a clean tree — nothing to do
+[brownfield-preflight-reset] resetting /home/bradleyjerome/projects/metrolinx/azure.gotransit.com to baseline branch develop (0863f2ffb8916f94969f0ee2f11f156c5aa7c30c) — discarding any prior-run fix on top (current: 0863f2ffb8916f94969f0ee2f11f156c5aa7c30c, dirty: yes)
+[brownfield-preflight-reset] reset complete — /home/bradleyjerome/projects/metrolinx/azure.gotransit.com is now at baseline develop (0863f2ffb8916f94969f0ee2f11f156c5aa7c30c)
+[brownfield-preflight-reset] resetting /home/bradleyjerome/projects/metrolinx/azure.metrolinx.com to baseline branch develop (acf693791e8ffd02a8ceff6c7ccc7285d7ced4e8) — discarding any prior-run fix on top (current: acf693791e8ffd02a8ceff6c7ccc7285d7ced4e8, dirty: yes)
+[brownfield-preflight-reset] reset complete — /home/bradleyjerome/projects/metrolinx/azure.metrolinx.com is now at baseline develop (acf693791e8ffd02a8ceff6c7ccc7285d7ced4e8)
+[brownfield-preflight-reset] baseline branch 'develop' not found in /home/bradleyjerome/projects/metrolinx/azure.metrolinx.psme.com — falling back to verified-marker logic
+[brownfield-preflight-reset] no verified-baseline marker yet for /home/bradleyjerome/projects/metrolinx/azure.metrolinx.psme.com — nothing known-good to reset to, leaving as-is
+[brownfield-preflight-reset] resetting /home/bradleyjerome/projects/metrolinx/azure.upexpress.com to baseline branch develop (49b33c9da98909f475db79044665eb8e3b599974) — discarding any prior-run fix on top (current: 49b33c9da98909f475db79044665eb8e3b599974, dirty: yes)
+[brownfield-preflight-reset] reset complete — /home/bradleyjerome/projects/metrolinx/azure.upexpress.com is now at baseline develop (49b33c9da98909f475db79044665eb8e3b599974)
+[brownfield-preflight-reset] baseline branch 'develop' not found in /home/bradleyjerome/projects/metrolinx/c365 — falling back to verified-marker logic
+[brownfield-preflight-reset] no verified-baseline marker yet for /home/bradleyjerome/projects/metrolinx/c365 — nothing known-good to reset to, leaving as-is
+[brownfield-preflight-reset] baseline branch 'develop' not found in /home/bradleyjerome/projects/metrolinx/construction-notice-pdf-service — falling back to verified-marker logic
+[brownfield-preflight-reset] no verified-baseline marker yet for /home/bradleyjerome/projects/metrolinx/construction-notice-pdf-service — nothing known-good to reset to, leaving as-is
+[brownfield-preflight-reset] baseline branch 'develop' not found in /home/bradleyjerome/projects/metrolinx/cx-shared — falling back to verified-marker logic
+[brownfield-preflight-reset] no verified-baseline marker yet for /home/bradleyjerome/projects/metrolinx/cx-shared — nothing known-good to reset to, leaving as-is
+[brownfield-preflight-reset] baseline branch 'develop' not found in /home/bradleyjerome/projects/metrolinx/docs.ads.com — falling back to verified-marker logic
+[brownfield-preflight-reset] no verified-baseline marker yet for /home/bradleyjerome/projects/metrolinx/docs.ads.com — nothing known-good to reset to, leaving as-is
+[brownfield-preflight-reset] baseline branch 'develop' not found in /home/bradleyjerome/projects/metrolinx/docs.tools.com — falling back to verified-marker logic
+[brownfield-preflight-reset] no verified-baseline marker yet for /home/bradleyjerome/projects/metrolinx/docs.tools.com — nothing known-good to reset to, leaving as-is
+[brownfield-preflight-reset] resetting /home/bradleyjerome/projects/metrolinx/gotransit.webservices to baseline branch develop (6b6f1154cd873986c2ff579178881106d173278e) — discarding any prior-run fix on top (current: 6b6f1154cd873986c2ff579178881106d173278e, dirty: yes)
+[brownfield-preflight-reset] reset complete — /home/bradleyjerome/projects/metrolinx/gotransit.webservices is now at baseline develop (6b6f1154cd873986c2ff579178881106d173278e)
+[brownfield-preflight-reset] baseline branch 'develop' not found in /home/bradleyjerome/projects/metrolinx/login.metrolinx.com — falling back to verified-marker logic
+[brownfield-preflight-reset] no verified-baseline marker yet for /home/bradleyjerome/projects/metrolinx/login.metrolinx.com — nothing known-good to reset to, leaving as-is
+[brownfield-preflight-reset] baseline branch 'develop' not found in /home/bradleyjerome/projects/metrolinx/metrolinx.estimations.com — falling back to verified-marker logic
+[brownfield-preflight-reset] no verified-baseline marker yet for /home/bradleyjerome/projects/metrolinx/metrolinx.estimations.com — nothing known-good to reset to, leaving as-is
+[brownfield-preflight-reset] baseline branch 'develop' not found in /home/bradleyjerome/projects/metrolinx/metrolinx.powerbi.com — falling back to verified-marker logic
+[brownfield-preflight-reset] no verified-baseline marker yet for /home/bradleyjerome/projects/metrolinx/metrolinx.powerbi.com — nothing known-good to reset to, leaving as-is
+[brownfield-preflight-reset] resetting /home/bradleyjerome/projects/metrolinx/next.gotransit.com to baseline branch develop (b52fcecc62cf50f14484b033ceaf324e0e1d0250) — discarding any prior-run fix on top (current: b52fcecc62cf50f14484b033ceaf324e0e1d0250, dirty: yes)
+[brownfield-preflight-reset] reset complete — /home/bradleyjerome/projects/metrolinx/next.gotransit.com is now at baseline develop (b52fcecc62cf50f14484b033ceaf324e0e1d0250)
+[brownfield-preflight-reset] resetting /home/bradleyjerome/projects/metrolinx/next.metrolinx.com to baseline branch develop (42b81c442d342219e232a14e9620134d91f3c6b3) — discarding any prior-run fix on top (current: 42b81c442d342219e232a14e9620134d91f3c6b3, dirty: yes)
+[brownfield-preflight-reset] reset complete — /home/bradleyjerome/projects/metrolinx/next.metrolinx.com is now at baseline develop (42b81c442d342219e232a14e9620134d91f3c6b3)
+[brownfield-preflight-reset] resetting /home/bradleyjerome/projects/metrolinx/next.upexpress.com to baseline branch develop (1f7974812ff3d2d9d7e9dbe2e6835a73977283fb) — discarding any prior-run fix on top (current: 1f7974812ff3d2d9d7e9dbe2e6835a73977283fb, dirty: yes)
+[brownfield-preflight-reset] reset complete — /home/bradleyjerome/projects/metrolinx/next.upexpress.com is now at baseline develop (1f7974812ff3d2d9d7e9dbe2e6835a73977283fb)
+[brownfield-preflight-reset] resetting /home/bradleyjerome/projects/metrolinx/react.gotransit.com to baseline branch develop (09acdfcf4e5a3a66c0d10a1a89c99fdb6af68149) — discarding any prior-run fix on top (current: 09acdfcf4e5a3a66c0d10a1a89c99fdb6af68149, dirty: yes)
+[brownfield-preflight-reset] reset complete — /home/bradleyjerome/projects/metrolinx/react.gotransit.com is now at baseline develop (09acdfcf4e5a3a66c0d10a1a89c99fdb6af68149)
+[brownfield-preflight-reset] resetting /home/bradleyjerome/projects/metrolinx/secure.gotransit.com to baseline branch develop (bf3877eb9e01f9c9d557c2842f454dfd8059079f) — discarding any prior-run fix on top (current: bf3877eb9e01f9c9d557c2842f454dfd8059079f, dirty: yes)
+[brownfield-preflight-reset] reset complete — /home/bradleyjerome/projects/metrolinx/secure.gotransit.com is now at baseline develop (bf3877eb9e01f9c9d557c2842f454dfd8059079f)
+[brownfield-preflight-reset] resetting /home/bradleyjerome/projects/metrolinx/tools.gotransit.com to baseline branch develop (9c273e1e3272cc36255d438546d0767db72fd542) — discarding any prior-run fix on top (current: 9c273e1e3272cc36255d438546d0767db72fd542, dirty: yes)
+[brownfield-preflight-reset] reset complete — /home/bradleyjerome/projects/metrolinx/tools.gotransit.com is now at baseline develop (9c273e1e3272cc36255d438546d0767db72fd542)
+
+[1;33m[tier3-metrolinx][0m Wiring dashboard to serve this run's live PRD + logs...
+[0;32m[pre-run-reset] ✓[0m PRD: /home/bradleyjerome/projects/ai/epam-cli/orchestrations/projects/metrolinx/prd.json
+[0;32m[pre-run-reset] ✓[0m Log dir: /home/bradleyjerome/projects/ai/epam-cli/orchestrations/logs
+[1;33m[pre-run-reset][0m Configuring agent-monitor to serve: prd.json...
+[0;32m[pre-run-reset] ✓[0m agent-monitor restarted → /prd-dir = /home/bradleyjerome/projects/ai/epam-cli/orchestrations/projects/metrolinx (serving prd.json), /logs-dir = /home/bradleyjerome/projects/ai/epam-cli/orchestrations/logs
+[1;33m[pre-run-reset][0m Archiving and clearing run logs...
+[0;32m[pre-run-reset] ✓[0m Moved 5 stale *.log / manifest / baseline-cache file(s) → /home/bradleyjerome/projects/ai/epam-cli/orchestrations/logs/archive/pre-run-20260727T162943Z (absence now means 'this run did not write it')
+[0;32m[pre-run-reset] ✓[0m Archived 1 log files → /home/bradleyjerome/projects/ai/epam-cli/orchestrations/logs/archive/pre-run-20260727T162943Z
+[1;33m[pre-run-reset][0m   KB scratchpad already empty
+[1;33m[pre-run-reset][0m Resetting agent-status.json...
+[0;32m[pre-run-reset] ✓[0m agent-status.json reset
+
+[0;32m[pre-run-reset] ✓[0m Pre-run reset complete.
+  PRD:         /home/bradleyjerome/projects/ai/epam-cli/orchestrations/projects/metrolinx/prd.json
+  Log dir:     /home/bradleyjerome/projects/ai/epam-cli/orchestrations/logs
+  Dashboard:   http://localhost:8092/monitor.html
+  PRD Viewer:  http://localhost:8092/prd-viewer.html
+  Langfuse:    http://localhost:3100
+
+
+[1;33m[tier3-metrolinx][0m CodeGraph preflight: verifying every codeline is indexed...
+[codegraph-preflight] Checked 31 repo(s): 31 already indexed, 0 indexed just now, 0 failure(s).
+
+[1;33m[tier3-metrolinx][0m ━━━ Phase: core ━━━
+[0;34m[12:29:46][0m [jira] https://metrolinx.atlassian.net (project: AMSD) → /tmp/orch-20260727T122946.log
+[0;32m[ingest][0m Pulling tickets from https://metrolinx.atlassian.net — project: AMSD, status: 'To Do'
+[0;32m[ingest][0m Found 1 issues.
+[0;32m[ingest][0m Brownfield: running codeline discovery against /home/bradleyjerome/projects/metrolinx...
+[codeline-discovery] Scanning /home/bradleyjerome/projects/metrolinx for git repositories...
+[codeline-discovery] Skipping docs repo (not in maintenance scope): docs.ads.com
+[codeline-discovery] Skipping docs repo (not in maintenance scope): docs.tools.com
+[codeline-discovery] Found 31 git repo(s) in codeline root.
+[codeline-discovery] Tier-2 cross-repo scoring (7 term(s) over 31 indexed repo(s)): UPExpress.com=15.7, next.gotransit.com=15.2, c365=14.4 | top1/top2=1.04 (CLOSE — genuine ambiguity, LLM judgment matters)
+[codeline-discovery]   top candidate 'UPExpress.com' driven by: author(hits=30, in 10/31 repos), content(hits=200, in 25/31 repos), original(hits=19, in 20/31 repos)
+[codeline-discovery] Repo scoring: top 8 candidate(s) from 31 repos (scores: UPExpress.com=157, next.gotransit.com=152, c365=144, secure.gotransit.com=124, cx-shared=112, next.metrolinx.com=109, azure.commerce.cdts=85, next.upexpress.com=84)
+[codeline-discovery] Calling LLM (z-ai/glm-5.2) to match 1 ticket(s) to 8 candidate repo(s)...
+[codeline-discovery]   → codeline 'upexpress' = /home/bradleyjerome/projects/metrolinx/UPExpress.com (The ticket is tagged [GO, UP, MX] and concerns CMS live-preview for content authors, with UPExpress.com being the top-ranked candidate and the UP tag directly mapping to the UP Express site.)
+[codeline-discovery] Discovery complete. 1 codeline(s) identified.
+[0;32m[ingest][0m Codeline discovery complete: JIRA_CODELINES=upexpress
+[0;32m[ingest][0m Running AC sufficiency gate...
+[ac-gate] Classifying 1 issues (model: z-ai/glm-5.2)
+[ac-gate] Codelines: [upexpress]
+[ac-gate]   AMSD-2041 — [GO, UP, MX] Live Preview of Content in CMS
+[ac-gate]     verdict: insufficient — The story has no acceptance criteria at all (the AC section explicitly says '(none)') and the description is too vague for an agent to implement without human clarification.
+[ac-gate]     AUTO_ELABORATE: generating ACs from description (no Jira write)...
+[ac-gate]     elaborated 7 AC(s) → enrichable, pipeline continues
+[ac-gate] Results written to /tmp/ingest-nKQenB/ac-gate.json
+
+[ac-gate] ✅ All stories classified. Pipeline may proceed.
+  🔶 AMSD-2041 — enrichable: Auto-elaborated from description (original verdict: insufficient). The story has no acceptance criteria at all (the AC section explicitly says '(none)') and the description is too vague for an agent to implement without human clarification.
+[0;32m[ingest][0m Synthesizing PRD from classified tickets...
+[0;32m[ingest][0m Using PRD template: /home/bradleyjerome/projects/ai/epam-cli/orchestrations/projects/metrolinx/prd.canonical.json
+[ingest] No codelines found in classifications. Check Jira codeline labels or set JIRA_DEFAULT_CODELINE.
+[0;31m[ERROR][0m [jira] Ingestion failed (exit 1).
+
+[0;31m[tier3-metrolinx] ✗[0m Phase 'core' failed (exit 1) — aborting pipeline
+[1;33m[tier3-metrolinx][0m Run artefacts + reports: /home/bradleyjerome/projects/ai/epam-cli/orchestrations/scripts/../projects/metrolinx/runs/20260727T162943Z

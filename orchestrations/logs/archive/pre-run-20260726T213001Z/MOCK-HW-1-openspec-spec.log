@@ -1,0 +1,144 @@
+# Prompt
+CRITICAL — YOUR PREVIOUS OUTPUT WAS REJECTED BY REVIEW: quality issues found. Fix this and try again. Do not repeat the same mistake.
+
+You are the openspec specification agent for EPAM CLI. Phase core, story MOCK-HW-1.
+NOTE: This story combines 2 implementation file(s) and 1 test file(s) — MANDATORY split required (see SPLIT RULES below).
+EXISTING CODE (brownfield fallback via Semble — identify the code path that handles this behavior, then specify how to fix it; do not propose new abstractions):
+// src/hello.ts (lines 1–3, relevance: 0.0226)
+export function getGreeting(): string {
+  return 'hello world';
+}
+
+---
+
+// .codegraph/.gitignore (lines 1–5, relevance: 0.0095)
+# CodeGraph data files — local to each machine, not for committing.
+# Ignore everything in .codegraph/ except this file itself, so transient
+# files (the database, daemon.pid, sockets, logs) never show up in git.
+*
+!.gitignore
+
+---
+
+// src/hello.test.ts (lines 1–8, relevance: 0.0069)
+import { describe, it, expect } from 'vitest';
+import { getGreeting } from './hello';
+
+describe('getGreeting', () => {
+  it('returns hello world', () => {
+    expect(getGreeting()).toBe('hello world');
+  });
+});
+
+
+BROWNFIELD MODE — output JSON only, no tools, no search.
+
+STEP 1 — CLASSIFY THIS STORY. Set "storyKind":
+- "defect" if it reports that EXISTING behavior is wrong, broken, or produces an incorrect/missing result (a bug).
+- "novel" if it asks for a NEW capability that does not exist in the codebase yet. A brownfield story is not always a bug — genuinely new work is "novel".
+
+STEP 2 — LOCATE (always, for both kinds). Using ONLY the EXISTING CODE block already present in this prompt (injected above via CodeGraph or Semble), identify which file(s) and function(s) currently handle the behavior this story is about. Set "locationHint" to [{"file":"<repo-relative path>","function":"<function name>","reason":"<why this is the fix site>"}]. If no relevant code appears above, set locationHint to [].
+
+STEP 3 — VERIFICATION CRITERIA (do NOT touch the acceptance criteria).
+The acceptanceCriteria are the IMMUTABLE ticket intent — copy the existing array through VERBATIM: never reword, split, add, remove, re-scope, or inject any implementation mechanism into them.
+Instead, PRODUCE a "verificationCriteria" array — concrete, OBSERVABLE checks that confirm the change is correct — derived from the acceptance criteria AND the description (lean on the description when the ACs are sparse or missing). Apply these rules to EVERY verification criterion (a strict reviewer holds you to this SAME text, so a VC that breaks any rule will be flagged and rejected):
+A verification criterion states WHAT AN END USER OR TESTER OBSERVES on the user-facing surface THE TICKET IS ABOUT — the rendered email for an email ticket, the displayed screen/UI for a UI ticket, the API response a CLIENT receives for an API ticket. It is a BLACK-BOX check on that surface. It NEVER describes HOW the value is produced.
+A verification criterion is FORBIDDEN if it:
+- prescribes HOW to implement — any algorithm, mechanism, or approach: "split", "halve", "×0.5", "calculate independently", "per segment", "for each line item", or adding/reading any new field, flag, or service;
+- references an INTERNAL structure that merely FEEDS the ticket's surface — an intermediate payload, a "confirmation data"/DTO object, or a specific response field used to BUILD the output. Verify the surface the ticket names, NOT the data structure behind it;
+- makes a CROSS-COMPARISON that presumes a mechanism — never assert one value "must equal" / "matches" / "is the same as" another (e.g. "the return amount equals the outbound amount"); that presumes a copy/split. Assert the required value is present and correct ON ITS OWN.
+Every verification criterion must be observable, testable, and tied to the ticket's stated symptom/intent.
+- If the ticket describes a SYMPTOM, the VCs verify that symptom is resolved AND that related existing behavior does not regress.
+Set "vcSource" to "acceptance", "description", or "both" — where you derived the VCs from (use "description" when the ACs were too sparse to derive from).
+
+Generate refined acceptance criteria, optionally updated title/description, and split stories where required. Output raw JSON only (no XML tags, no markdown fences, no preamble) using this schema:
+{
+  "storyId":"MOCK-HW-1",
+  "agent":"openspec",
+  "notes":"context",
+  "acceptanceCriteria":["..."],
+  "description":"...",
+  "title":"...",
+  "storyKind":"defect|novel",
+  "verificationCriteria":["<observable check a tester can confirm>"],
+  "vcSource":"acceptance|description|both",
+  "locationHint":[{"file":"path/relative/to/repo","function":"functionName","reason":"why this is the fix site"}],
+  "splitStories":[{"id":"optional","title":"...","description":"...","acceptanceCriteria":["..."],"agentRole":"...","technicalNotes":{"files":[]}}]
+}
+Use existing text when no change is needed.
+
+SPLIT RULES (mandatory, not optional — enforce these before refining AC):
+1. AC count > 12 → you MUST propose a split. Target ≤8 ACs per split child. Never leave a story with >12 ACs unsplit.
+2. Both implementation files AND test files in technicalNotes.files → split into one impl child (non-test files) and one test child (*.test.ts files). Assign agentRole "typescript-engineer" to impl, "test-engineer" to test.
+3. 3+ independent deliverable modules with no shared exports (e.g. client.ts, server.ts, cli.ts all in same story) → split per concern. Each split gets the files it owns.
+4. External API discovery + implementation in same story → split: first child discovers/documents the API contract, second child implements against that contract.
+5. technicalNotes.files contains BOTH frontend/template files (*.html, *.css, *.scss, *.jsx, *.tsx, *.vue, *.svelte) AND build/tooling files (vite.config.*, webpack.config.*, rollup.config.*, package.json, Makefile, Dockerfile, *.sh) → split: one child owns the frontend/template files, one child owns the build/tooling files. These have different runtime roles and different owners — bundling them causes token bloat and diffuse responsibility.
+6. Story covers multiple independent runtime roles in the same deliverable (e.g. HTTP server AND CLI binary AND HTML dashboard) → split by runtime role, one child per runtime target. Each child's agentRole should match what it produces (typescript-engineer for application code, test-engineer for test-only files).
+These rules apply only when splitDepth === 0. Never split a story that is already a split child.
+
+Story context:
+{
+  "id": "MOCK-HW-1",
+  "title": "Hello world greeting should say hello dolly",
+  "description": "Hello world greeting should say hello dolly",
+  "acceptanceCriteria": [],
+  "acCount": 0,
+  "technicalNotes": {
+    "files": [
+      "src/hello.ts",
+      "src/hello.test.ts",
+      ".codegraph/.gitignore"
+    ]
+  },
+  "agentRole": "typescript-engineer",
+  "agentGroup": "main",
+  "dependencies": [],
+  "splitDepth": 0
+}
+
+
+# Output
+```json
+{
+  "storyId": "MOCK-HW-1",
+  "agent": "openspec",
+  "notes": "Story requests changing the greeting from 'hello world' to 'hello dolly'. This is a defect in existing behavior. Mandatory split triggered by SPLIT RULE 2: technicalNotes.files contains both an implementation file and a test file.",
+  "acceptanceCriteria": [],
+  "description": "Hello world greeting should say hello dolly",
+  "title": "Hello world greeting should say hello dolly",
+  "storyKind": "defect",
+  "verificationCriteria": [
+    "Calling getGreeting() returns the string 'hello dolly'"
+  ],
+  "vcSource": "description",
+  "locationHint": [
+    {
+      "file": "src/hello.ts",
+      "function": "getGreeting",
+      "reason": "This function currently returns 'hello world' and is the sole source of the greeting value that needs to be changed to 'hello dolly'"
+    }
+  ],
+  "splitStories": [
+    {
+      "id": "MOCK-HW-1-impl",
+      "title": "Change getGreeting to return hello dolly",
+      "description": "Update the getGreeting function in src/hello.ts so it returns 'hello dolly' instead of 'hello world'.",
+      "acceptanceCriteria": [],
+      "agentRole": "typescript-engineer",
+      "technicalNotes": {
+        "files": ["src/hello.ts"]
+      }
+    },
+    {
+      "id": "MOCK-HW-1-test",
+      "title": "Update test to expect hello dolly",
+      "description": "Update the existing test in src/hello.test.ts so the assertion expects 'hello dolly' instead of 'hello world'.",
+      "acceptanceCriteria": [],
+      "agentRole": "test-engineer",
+      "technicalNotes": {
+        "files": ["src/hello.test.ts"]
+      }
+    }
+  ]
+}
+```

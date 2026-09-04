@@ -1,0 +1,15 @@
+spec-mode: fast-path openrouter/z-ai/glm-5.2 (skipping MiniMax)
+spec-mode: fast-path openrouter/z-ai/glm-5.2 (skipping MiniMax)
+spec-mode: code-graph-detective unavailable for MOCK-HW-1 (prompt 'code-graph-detective' was given EMPTY values for: __STORY_ACS__. An empty payload renders as a blank section and the agent answers about silence — it cannot tell a failed lookup from a genuinely absent one. Supply the value, or declare the placeholder in the template's `mayBeEmpty` if absent is a real state for it.) — continuing ungrounded
+spec-mode: fast-path openrouter/z-ai/glm-5.2 (skipping MiniMax)
+spec-mode: MOCK-HW-1 is Jira type "Bug" — anchoring storyKind=defect (overriding model judgment)
+spec-mode: ⛔ DEFECT MOCK-HW-1 has NO fixSiteAnalysis after the spec pass — the implementer gets symptom ACs with no root cause. This is a defect-fidelity risk; investigate the detective before trusting this run's fix.
+spec-mode: MOCK-HW-1 — 2 declared file(s) do NOT exist in codeline 'mockb': src/fares.ts, test/fares.test.ts
+spec-mode: fast-path openrouter/z-ai/glm-5.1 (skipping MiniMax)
+spec-mode: SPEC_AGENT: missing required field "storyId" — required by its own tool definition
+spec-mode: MOCK-HW-1 — 2 declared file(s) do NOT exist in codeline 'mockb': src/fares.ts, test/fares.test.ts
+spec-mode: fast-path openrouter/z-ai/glm-5.2 (skipping MiniMax)
+spec-mode: SPEC_REVIEW: missing required field "storyId" — required by its own tool definition
+spec-mode: fast-path openrouter/z-ai/glm-5.2 (skipping MiniMax)
+spec-mode: MODEL_REVIEW: missing required field "storyId" — required by its own tool definition
+spec-mode: completed for phase core (run 20260901T100123Z)

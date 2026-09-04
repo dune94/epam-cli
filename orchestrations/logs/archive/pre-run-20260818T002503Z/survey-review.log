@@ -1,0 +1,74 @@
+# Prompt
+You are reviewing an estate survey before a team is assembled from it.
+
+You are reviewing an ESTATE SURVEY. A roster of agents is about to be minted from it, and every
+claim below will be inherited as a brief and re-checked by nothing.
+
+THE SURVEY UNDER REVIEW:
+- mocka: in_scope
+  evidence: Opened src/fares.ts via codegraph_query. The fareFor function (line 8-13) uses `rider.age > 65` on line 10 to decide the concession fare, so a rider aged exactly 65 falls through to the base fare (350 cents) instead of the concession fare (175 cents). This matches MOCK3-1 precisely. The test file test/fares.test.ts was also read: it tests ages 30, 8, and 70 but has no test case for age 65 exactly, which is why the boundary bug went unnoticed. No schedule/formatStops symbols exist in this codeline — MOCK3-2 does not reach it.
+  filesRead: src/fares.ts, test/fares.test.ts
+- mockb: in_scope
+  evidence: Opened src/schedule.ts via codegraph_query. The formatStops function (line 4-10) loops `for (let i = 0; i < stops.length - 1; i++)`, which stops one element short of the end, omitting the final stop from the rendered string. This matches MOCK3-2 precisely. The test file test/schedule.test.ts was also read: it checks that the output contains '->' and 'Union' (the first stop) but never asserts the last stop ('Eglinton') appears, which is why the omission went unnoticed. totalMinutes (line 12-13) correctly reads the last element, confirming the ticket's note that journey length is correct. No fare/age/concession symbols exist in this codeline — MOCK3-1 does not reach it.
+  filesRead: src/schedule.ts, test/schedule.test.ts
+
+THE CODELINES IN SCOPE, and where each is checked out:
+- mocka (/home/bradleyjerome/projects/mock3/mock-a)
+- mockb (/home/bradleyjerome/projects/mock3/mock-b)
+
+THE WORK THE PROJECT WAS ASKED TO DO:
+- MOCK3-1: Riders aged exactly 65 are charged the adult fare
+- MOCK3-2: The departure board omits the final stop
+
+You may open any file in the codelines above to check a claim.
+
+# What is in scope
+
+ONE QUESTION ONLY: does the survey state anything about these repositories that is FALSE?
+
+A claim is in scope when you can check it by opening a repository. Open them and check.
+
+- a file named in `filesRead` that the codeline does not contain
+- a file, module, function or symbol said to exist where it does not
+- a claim attributed to the WRONG codeline — the commonest and most damaging error, because the
+  brief built from it sends an implementer into a repository that has no such code
+- a dependency, script, framework or command the codeline does not declare
+- a codeline reported in_scope on evidence that belongs to a different one
+
+A codeline reported no_work_found or not_investigated is making a WEAK claim, not a false one.
+Check it only if you can show the work plainly does reach it.
+
+# What is NOT in scope
+
+Do not judge whether the survey looked hard enough, chose the right focus, or recommended the
+right team. Do not propose better wording. Do not supply a FIX SITE of your own — naming which
+file to edit is not yours to say here any more than it was the surveyor's, and a fix site you add
+for a repository you swept from the outside is how one codeline's file ends up in another's work.
+
+# Evidence
+
+For each finding, say what you CHECKED and what you FOUND, naming the repository and the path you
+opened. A finding without a check is an opinion, and an opinion about a survey is not a defect.
+
+If every claim checks out, return no findings. An empty finding list from a review that RAN is the
+correct answer for a sound survey.
+
+
+# Output
+## Findings
+
+No false claims found.
+
+**What I checked:**
+
+**mock-a** (`/home/bradleyjerome/projects/mock3/mock-a`):
+- `src/fares.ts`: `fareFor` exists at lines 8–13; line 10 reads `if (rider.age > 65) return CONCESSION_FARE_CENTS;`; base fare is 350 cents, concession is 175 cents. A rider aged exactly 65 does fall through to the base fare. All claims confirmed.
+- `test/fares.test.ts`: Tests ages 30, 8, and 70; no test for age 65. Confirmed.
+- Searched `src/` for `formatStops` and `schedule` — no matches. Confirmed no schedule/formatStops symbols exist in this codeline.
+
+**mock-b** (`/home/bradleyjerome/projects/mock3/mock-b`):
+- `src/schedule.ts`: `formatStops` exists at lines 4–10; line 6 reads `for (let i = 0; i < stops.length - 1; i++)`, omitting the final stop. `totalMinutes` at lines 12–13 reads `stops[stops.length - 1].minutes`, correctly accessing the last element. All claims confirmed.
+- `test/schedule.test.ts`: Asserts output contains `->` and `Union`; does not assert `Eglinton` appears. Confirmed.
+- Searched `src/` for `fareFor`, `fare`, `concession`, and `age` — no matches. Confirmed no fare/age/concession symbols exist in this codeline.
+
+Every concrete claim in the survey is accurate.

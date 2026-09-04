@@ -1,0 +1,51 @@
+**Verbatim log line proving the finding:**
+
+```json
+"verdict": "fail"
+```
+
+and the first blocker mutation:
+
+```json
+{
+  "file": "src/services/submit-reservations/apply-report-discounts.service.ts",
+  "line": 22,
+  "originalCode": "if (discountsForDispatch.length === 0) { return; }",
+  "mutatedCode": "if (discountsForDispatch.length === 1) { return; }",
+  "status": "no-coverage",
+  "relatedTest": null,
+  "recommendation": "Add a unit test for applyReportDiscountsService that verifies dispatches with zero matching discounts are skipped and dispatches with one or more matching discounts are processed."
+}
+```
+
+The file `src/services/submit-reservations/apply-report-discounts.service.ts` is owned by story **AMSD-1820** (listed in its `technicalNotes.files` array and present in `implementationOrder.core`).
+
+```json
+{
+  "gate": "mutant-hunter",
+  "story_id": "AMSD-1820",
+  "file": "src/services/submit-reservations/apply-report-discounts.service.ts",
+  "line": 22,
+  "rule": "no-coverage",
+  "message": "Mutation changing `discountsForDispatch.length === 0` to `=== 1` was not killed — no test coverage for this branch.",
+  "suggested_fix": "Add a unit test for applyReportDiscountsService that verifies dispatches with zero matching discounts are skipped and dispatches with one or more matching discounts are processed."
+}
+```
+```json
+{
+  "story_id": "AMSD-1820",
+  "acs_added": 2,
+  "acs": [
+    "AMSD-1820 MUST NOT ship without a unit test that exercises the zero-discount early-return branch in src/services/submit-reservations/apply-report-discounts.service.ts (line 22, `discountsForDispatch.length === 0`). Compliance: `grep -rl 'discountsForDispatch.*length.*0\\|empty.*discount\\|zero.*discount' src/services/submit-reservations/__tests__/ | wc -l` must return >= 1. [rule: no-coverage]",
+    "AMSD-1820 MUST NOT ship without a unit test that verifies dispatches with one or more matching discounts are processed (non-empty path) in src/services/submit-reservations/apply-report-discounts.service.ts. Compliance: `grep -rl 'discountsForDispatch.*length.*[1-9]\\|one or more.*discount\\|matching.*discount.*process' src/services/submit-reservations/__tests__/ | wc -l` must return >= 1. [rule: no-coverage]"
+  ]
+}
+```
+```json
+{
+  "profile": "typescript-engineer",
+  "profile_updated": true,
+  "rule_id": "no-coverage",
+  "rule_text": "### Rule: no-coverage (mutant-hunter)\nWhen writing early-return guards that check array length (e.g. `if (arr.length === 0) { return; }`), you MUST ensure a unit test covers BOTH the zero-length skip path AND the non-empty processing path. A mutation that changes `=== 0` to `=== 1` must be killed by a test that asserts dispatches with zero matching discounts are skipped and dispatches with one or more matching discounts are processed. Do NOT leave branch conditions untested — every boundary comparison in a guard clause needs at least two test cases (the matching and non-matching case).\n\nGrep to verify coverage exists: `grep -rn 'length === 0' src/services/ | while read line; do file=$(echo \"$line\" | cut -d: -f1); test_file=\"${file%.ts}.test.ts\"; [ -f \"$test_file\" ] && grep -q 'length.*0\\|length.*1\\|empty\\|zero' \"$test_file\" || echo \"MISSING COVERAGE: $line\"; done`"
+}
+```

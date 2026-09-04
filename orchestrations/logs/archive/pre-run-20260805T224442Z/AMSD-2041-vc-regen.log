@@ -1,0 +1,39 @@
+# Prompt
+Regenerate the VERIFICATION CRITERIA for this brownfield story. Your previous verification criteria were FLAGGED and must be fixed:
+- VC1 Given clause references internal mechanism (live-preview client mocked to emit event) — restate as user-level action (e.g., content is edited in the CMS)
+- VC2 'statically fetched content' prescribes HOW content is obtained; 'exactly as it did before this feature was added' is a cross-comparison — restate as observable outcome (page displays expected content) on its own
+- VC3 Given clause references internal mechanism; 'useContent-consuming components' references internal structure — name only user-facing UI elements; 'in the order received' prescribes mechanism — restate as each edit being reflected in the rendered output
+- VC4 Given clause references internal mechanism (live-preview client mocked to emit event) — restate as user-level action
+- VC5 Given clause references internal mechanism (live-preview client mocked to send event) — restate as user-level scenario (e.g., live-preview connection is lost)
+- VC6 Given clause references internal mechanism (live-preview client mocked to emit event) — restate as user-level action (e.g., a populated content field is cleared in the CMS)
+
+THE FIX SITE (located by the code-graph detective — anchor every criterion to the behaviour THIS code produces):
+- src/pages/[[...slug]].tsx :: Page — Attachment point for Live Preview: this is where ContentstackContext.Provider wraps the entire page (line 39) and where getStaticProps fetches CMS data (line 74). Live Preview must intercept/update the content value passed to the provider when the CMS emits real-time edits. The 147 consumers via useContent will automatically re-render when the context value changes.
+Do NOT write criteria about areas unrelated to this code.
+
+
+Acceptance criteria (IMMUTABLE — the intent to verify; do NOT restate as-is, VERIFY them):
+- (none)
+Description: [GO, UP, MX] Live Preview of Content in CMS
+
+A verification criterion states WHAT AN END USER OR TESTER OBSERVES on the user-facing surface THE TICKET IS ABOUT — the rendered email for an email ticket, the displayed screen/UI for a UI ticket, the API response a CLIENT receives for an API ticket. It is a BLACK-BOX check on that surface. It NEVER describes HOW the value is produced.
+A verification criterion is FORBIDDEN if it:
+- prescribes HOW to implement — any algorithm, mechanism, or approach: "split", "halve", "×0.5", "calculate independently", "per segment", "for each line item", or adding/reading any new field, flag, or service;
+- references an INTERNAL structure that merely FEEDS the ticket's surface — an intermediate payload, a "confirmation data"/DTO object, or a specific response field used to BUILD the output. Verify the surface the ticket names, NOT the data structure behind it;
+- makes a CROSS-COMPARISON that presumes a mechanism — never assert one value "must equal" / "matches" / "is the same as" another (e.g. "the return amount equals the outbound amount"); that presumes a copy/split. Assert the required value is present and correct ON ITS OWN.
+Every verification criterion must be observable, testable, and tied to the ticket's stated symptom/intent.
+
+Do NOT restate an acceptance criterion as-is — express what a tester OBSERVES that confirms it. Address every flag above.
+Output ONLY a JSON array of verification-criterion strings. No prose, no markdown.
+
+# Output
+```json
+[
+  "Given content is edited in the CMS, the rendered page reflects the edited content in real time",
+  "Given the page is initially loaded, the rendered page displays the CMS content",
+  "Given multiple content edits are made in the CMS, each edit is reflected in the rendered page output",
+  "Given a new content field is populated in the CMS, the rendered page displays the newly populated content",
+  "Given the live-preview connection is lost, the rendered page retains the last displayed content",
+  "Given a populated content field is cleared in the CMS, the rendered page reflects the cleared state"
+]
+```

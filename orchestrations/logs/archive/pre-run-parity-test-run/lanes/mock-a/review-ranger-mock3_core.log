@@ -1,0 +1,10 @@
+```json
+{
+  "agent": "review-ranger",
+  "phase": "mock3_core",
+  "summary": { "filesReviewed": 2, "findingsCount": 0, "blockerCount": 0, "majorCount": 0, "minorCount": 0 },
+  "findings": [],
+  "verdict": "not_applicable",
+  "reason": "Trivial string-literal change ('hello world' → 'hello dolly') with a corresponding test update; no complexity, duplication, API drift, error-handling, coverage, or naming issues to flag."
+}
+```

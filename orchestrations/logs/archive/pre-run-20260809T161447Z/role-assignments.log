@@ -1,0 +1,50 @@
+# Prompt
+Assign an implementation agent role to every story below.
+
+AVAILABLE ROLES — these are this project's own engineering roles. Choose from these and
+nothing else; the name you return must match one of them verbatim:
+- contentstack-live-preview-integration-engineer
+    You are an implementer who works across all three codelines in scope: gotransit, upexpress, and metrolinx. Your task is to implement Contentstack Live Preview (AMSD-2041) so content authors can preview draft entries in the CMS. ## What you build You add live-preview support to each codeline. The work has three parts pe
+
+STORIES — a story listing more than one codeline needs ONE ASSIGNMENT PER CODELINE:
+- AMSD-2041: [GO, UP, MX] Live Preview of Content in CMS
+    codelines — 3 assignments required, one for EACH of: gotransit, upexpress, metrolinx
+    Original Requirements (discovery) AS a Content Author, I WANT to preview draft entries in CMS, SO THAT I can see how content will be shown on the website ability to preview draft entries in CMS Notes& Assumptions Limitation: Might not be possible to preview protected pages and content. Original Total Estimate: 8 Original FE Estimate: 8 Original DAM Estimate: 0 Original BE Estimate: 0
+
+Pick the role whose stated expertise actually covers the work the story describes. If two
+roles could plausibly own a story, prefer the one whose brief names the surface the story
+touches.
+
+THE UNIT OF ASSIGNMENT IS A (STORY, CODELINE) PAIR, NOT A STORY. A story listing three
+codelines needs THREE assignments — the repositories differ, so the right owner can differ.
+Count the codelines listed against each story and return exactly that many assignments for it,
+naming the codeline on every one. A story is not assigned until every codeline it lists is.
+
+THE OWNER MUST AUTHOR THE CODE. Assign the role that will EDIT THE FILES this story changes —
+the one whose brief names those files or directories. A role whose brief is about settings in
+a vendor's console, or about documentation, cannot deliver a story here: the agent's output is
+a change in a repository. Live 2026-08-07: this story went to the one role of three that owned
+no source files, and all such a role can produce is a configuration note. Where the story needs
+both console configuration and code, the code owner is the assignee.
+
+# Output
+{ "assignments": [
+  {
+    "agentRole": "contentstack-live-preview-integration-engineer",
+    "codeline": "gotransit",
+    "reason": "The only available role, and its brief explicitly covers implementing Contentstack Live Preview (AMSD-2041) across all three codelines including gotransit by adding live-preview support to the codebase.",
+    "storyId": "AMSD-2041"
+  },
+  {
+    "agentRole": "contentstack-live-preview-integration-engineer",
+    "codeline": "upexpress",
+    "reason": "The only available role, and its brief explicitly covers implementing Contentstack Live Preview (AMSD-2041) across all three codelines including upexpress by adding live-preview support to the codebase.",
+    "storyId": "AMSD-2041"
+  },
+  {
+    "agentRole": "contentstack-live-preview-integration-engineer",
+    "codeline": "metrolinx",
+    "reason": "The only available role, and its brief explicitly covers implementing Contentstack Live Preview (AMSD-2041) across all three codelines including metrolinx by adding live-preview support to the codebase.",
+    "storyId": "AMSD-2041"
+  }
+] }

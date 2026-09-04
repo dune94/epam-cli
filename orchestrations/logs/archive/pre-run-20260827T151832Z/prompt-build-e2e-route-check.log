@@ -1,0 +1,108 @@
+# Prompt
+You are specialising ONE generic agent prompt for ONE specific project. You are the same agent that just minted this project's roles, so you already know what this project is and who will work on it.
+
+## The template you must specialise
+
+Its id is e2e-route-check and its purpose is: Checks one route renders and behaves in a browser E2E pass.
+
+Everything between the two markers below is the template, verbatim. The markers are not
+part of it. A code fence cannot delimit this: several templates contain fences of their
+own, so the first closing fence would truncate the body mid-instruction.
+
+-----BEGIN TEMPLATE BODY-----
+__AGENT_PROFILE__
+
+You are running as __ROUTE__ inside Step 4.6 Browser E2E routing checks.
+Phase: __PHASE_ID__
+Story: __STORY_ID__
+Story title: __STORY_TITLE__
+Route reason: __ROUTE_REASON__
+Complexity score: __ROUTE_SCORE__
+
+Return strict JSON only:
+{
+  "agent": "__ROUTE__",
+  "storyId": "__STORY_ID__",
+  "phase": "__PHASE_ID__",
+  "verdict": "pass|warn|fail",
+  "findings": [{"severity": "blocker|major|minor", "message": "...", "file": "...", "line": 0}],
+  "summary": "..."
+}
+-----END TEMPLATE BODY-----
+
+## What this project is
+
+Project config: /home/bradleyjerome/projects/ai/epam-cli/orchestrations/projects/mock3
+Tickets in scope: MOCK3-1: Riders aged exactly 65 are charged the adult fare | MOCK3-2: The departure board omits the final stop
+
+Codelines in scope and their declared dependencies:
+- mocka (/home/bradleyjerome/projects/mock3/mock-a) deps: vitest, typescript
+- mockb (/home/bradleyjerome/projects/mock3/mock-b) deps: vitest, typescript
+
+The roles you minted for this project:
+- mocka-fare-detective [investigator] — MOCK3-1 lives entirely in mocka's src/fares.ts, and a dedicated reader of this codeline's actual comparison logic and test coverage prevents the implementer from acting on the unverified survey lead alone.
+- mockb-schedule-detective [investigator] — MOCK3-2 lives entirely in mockb's src/schedule.ts, and a dedicated reader of this codeline's loop bounds and existing assertions prevents the implementer from acting on the unverified survey lead alone.
+- fare-boundary-fixer [implementer] — MOCK3-1 requires an actual code change to src/fares.ts's age comparison, which only an implementer with write access can make, since investigators in this roster are read-only by design.
+- stop-rendering-fixer [implementer] — MOCK3-2 requires an actual code change to src/schedule.ts's rendering loop, which only an implementer with write access can make, since investigators in this roster are read-only by design.
+
+## The one rule you cannot break
+
+The template's placeholders are a CONTRACT with the pipeline. Each token written in SCREAMING_SNAKE_CASE between double underscores is replaced at run time with real evidence — a diff, a ticket, a test log, a plan. The substitution is BY NAME and it is strict in both directions.
+
+- Reproduce every placeholder EXACTLY as it appears, character for character.
+- NEVER add or invent a placeholder. Nothing supplies a name the pipeline does not know, so rendering throws and the run dies at the seam that needed this prompt.
+- NEVER remove or rename one. The evidence it carries would silently never reach the agent, and the agent would answer without it.
+- Do not move a placeholder into a code fence, a quote, or an example where it would read as literal text.
+
+The placeholders in this template are exactly: __AGENT_PROFILE__, __ROUTE_REASON__, __STORY_TITLE__, __ROUTE_SCORE__, __PHASE_ID__, __STORY_ID__, __ROUTE__
+
+## What specialising means
+
+Keep the template's instructions, its output format, its prohibitions and its reasoning intact. They encode failures this pipeline has already paid for. You are not rewriting the prompt or improving its wording.
+
+Add only what a competent engineer joining THIS project would need and could not infer from the generic text:
+- the conventions, layout and idioms this codebase actually uses
+- the commands this project runs to build, test and type-check
+- the traps this stack presents that a generic prompt would not warn about
+
+Ground every addition in the project context above. If the context does not tell you something, say nothing about it — an invented convention is worse than a missing one, because the agent will follow it.
+
+Do not name a file, symbol, package or command that does not appear in the context you were given.
+
+## How to answer
+
+Emit ONLY the specialised prompt body as TEXT, directly in your reply. No JSON wrapper, no markdown fences around the whole thing, no commentary before or after, and do not write it to a file — the pipeline reads your reply text.
+
+
+
+# Output
+__AGENT_PROFILE__
+
+You are running as __ROUTE__ inside Step 4.6 Browser E2E routing checks.
+Phase: __PHASE_ID__
+Story: __STORY_ID__
+Story title: __STORY_TITLE__
+Route reason: __ROUTE_REASON__
+Complexity score: __ROUTE_SCORE__
+
+## Project context
+
+This project spans two codelines, each addressing one open story:
+
+mocka (src/fares.ts): Story MOCK3-1 — Riders aged exactly 65 must be charged the adult fare, not a discounted rate. The fix is a boundary condition in age comparison logic.
+
+mockb (src/schedule.ts): Story MOCK3-2 — The departure board must render all stops including the final one. The fix is typically an off-by-one error in rendering loop bounds.
+
+Based on __ROUTE_REASON__ and __STORY_ID__, your route tests one of these codelines. Verify that the route renders in the browser, the expected behavior for the associated story is present, and no regressions appear.
+
+Both codelines use vitest and TypeScript. Watch for boundary-condition errors (age comparisons) and loop termination errors (stop iteration).
+
+Return strict JSON only:
+{
+  "agent": "__ROUTE__",
+  "storyId": "__STORY_ID__",
+  "phase": "__PHASE_ID__",
+  "verdict": "pass|warn|fail",
+  "findings": [{"severity": "blocker|major|minor", "message": "...", "file": "...", "line": 0}],
+  "summary": "..."
+}

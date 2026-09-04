@@ -1,0 +1,377 @@
+=== Prompt for HW-004 (attempt 1) ===
+Implement user story HW-004: Implement formatDate() utility with vitest tests
+
+## Story Description
+Create formatDate.ts in the project root. Export a single function `export function formatDate(date: Date, format: 'short' | 'long'): string` that returns: 'short' → 'YYYY-MM-DD' (e.g. '2026-06-04'); 'long' → 'Month DD, YYYY' (e.g. 'June 4, 2026'). Use UTC date components so results are deterministic regardless of host timezone (new Date('2026-06-04') is UTC midnight). For an invalid Date (e.g. new Date('not-a-date')), throw a descriptive Error rather than returning 'NaN'-laden output. Create formatDate.test.ts in the project root with at least 6 vitest tests covering both formats, edge cases (month boundaries, single-digit days), and invalid-Date input. Do not modify any existing files.
+
+## Acceptance Criteria
+- formatDate.ts exists in the project root and exports `function formatDate(date: Date, format: 'short' | 'long'): string` (named export, exact signature)
+- formatDate(new Date('2026-06-04'), 'short') returns '2026-06-04'
+- formatDate(new Date('2026-06-04'), 'long') returns 'June 4, 2026'
+- Short format zero-pads month and day: formatDate(new Date('2026-01-05'), 'short') returns '2026-01-05'
+- Long format does not pad the day: formatDate(new Date('2026-01-05'), 'long') returns 'January 5, 2026'
+- Date components are derived via UTC accessors (getUTCFullYear/getUTCMonth/getUTCDate or equivalent) so tests pass in any host timezone
+- Passing an invalid Date throws an Error whose message identifies the problem, and a test asserts the message content with expect(...).toThrow(/invalid date/i) (or an equivalent matcher on the message), not just a bare expect(...).toThrow()
+- formatDate.test.ts exists in the project root with at least 6 vitest tests, including at least one month-boundary case (e.g. Dec 31 / Jan 1) and one single-digit-day case in each format
+- npx tsc --noEmit exits 0
+- vitest run exits 0 with all tests passing (the new tests pass and no pre-existing tests break)
+- git status shows no modifications to existing files — only formatDate.ts and formatDate.test.ts are added
+- Long-format month names come from a fixed English month-name array (or a formatter explicitly pinned to locale 'en-US' and timeZone 'UTC'), so output does not vary with the host's ICU/locale build; at least one test covers a month other than January or June (e.g. December)
+- Invalid-Date detection works for any Invalid Date regardless of construction: both new Date('not-a-date') and new Date(NaN) throw (i.e. detection is based on Number.isNaN(date.getTime()) or equivalent, not on parsing the input string)
+- A leap-day case is covered: formatDate(new Date('2024-02-29'), 'short') returns '2024-02-29' and formatDate(new Date('2024-02-29'), 'long') returns 'February 29, 2024'
+- vitest run reports at least 6 more passing tests than the pre-change baseline (i.e. formatDate.test.ts is actually discovered by the existing vitest include patterns, not silently skipped — a green run with an unchanged test count does NOT satisfy this criterion)
+
+## Technical Notes
+- dependsOn: ["HW-001"]
+- files: ["formatDate.ts","formatDate.test.ts"]
+
+## Files to Create/Modify
+formatDate.ts, formatDate.test.ts
+
+## Dependencies
+HW-001
+
+## Instructions
+1. Implement all acceptance criteria for this story
+2. Follow the project's existing code patterns and conventions
+3. Create any necessary files in the locations specified
+4. Ensure code compiles/runs without errors
+5. Do NOT create tests unless explicitly required in acceptance criteria
+
+After implementation, provide a brief summary of what was created/modified.
+
+## Relevant Knowledge Base Entries
+No prior KB entries match your agent role yet.
+
+## Knowledge Base Contribution
+Your assigned KB entry ID for this run: **KB-008**
+
+If you discover a non-obvious pattern, gotcha, or anti-pattern during this implementation (or this is a retry), append exactly one entry to `orchestrations/agents/KB.md` using this format:
+
+```markdown
+## KB-008 -- 2026-06-11
+
+**Category:** <backend|frontend|infrastructure|testing|orchestration>
+**AgentRole:** <your agentRole from the story>
+**Tags:** <comma-separated tech keywords, e.g. typescript, node, cli>
+**Trigger:** <retry|first-success>
+**StoryRef:** HW-004
+
+<One concise paragraph: the specific pattern, gotcha, or anti-pattern. Precise enough that a future Claude instance can apply it without re-discovering it.>
+```
+
+Only write an entry if the knowledge is genuinely non-obvious. Skip trivial observations.
+=== End Prompt ===
+
+=== epam Output (attempt 1) ===
+Agent reached maximum iterations (6) without completing.
+
+=== External verification failed (exit 1) ===
+
+> hello-world-test-app@1.0.0 test
+> vitest run
+
+
+[1m[30m[46m RUN [49m[39m[22m [36mv4.1.8 [39m[90m/home/bradleyjerome/projects/ai/epam-test-apps/hello-world-wt-independent[39m
+
+ [32m✓[39m test-example.test.ts [2m([22m[2m1 test[22m[2m)[22m[32m 2[2mms[22m[39m
+ [31m❯[39m greet.test.ts [2m([22m[2m0 test[22m[2m)[22m
+ [32m✓[39m formatDate.test.ts [2m([22m[2m5 tests[22m[2m)[22m[32m 2[2mms[22m[39m
+
+[31m⎯⎯⎯⎯⎯⎯[39m[1m[41m Failed Suites 1 [49m[22m[31m⎯⎯⎯⎯⎯⎯⎯[39m
+
+[41m[1m FAIL [22m[49m greet.test.ts[2m [ greet.test.ts ][22m
+[31m[1mError[22m: Cannot find module './greet.js' imported from /home/bradleyjerome/projects/ai/epam-test-apps/hello-world-wt-independent/greet.test.ts[39m
+[36m [2m❯[22m greet.test.ts:[2m2:1[22m[39m
+    [90m  1|[39m [35mimport[39m { describe[33m,[39m it[33m,[39m expect } [35mfrom[39m [32m'vitest'[39m[33m;[39m
+    [90m  2|[39m [35mimport[39m { greet } [35mfrom[39m [32m'./greet.js'[39m[33m;[39m
+    [90m   |[39m [31m^[39m
+    [90m  3|[39m
+    [90m  4|[39m [34mdescribe[39m([32m'greet'[39m[33m,[39m () [33m=>[39m {
+
+[31m[2m⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯[1/1]⎯[22m[39m
+
+
+[2m Test Files [22m [1m[31m1 failed[39m[22m[2m | [22m[1m[32m2 passed[39m[22m[90m (3)[39m
+[2m      Tests [22m [1m[32m6 passed[39m[22m[90m (6)[39m
+[2m   Start at [22m 15:00:53
+[2m   Duration [22m 130ms[2m (transform 54ms, setup 0ms, import 53ms, tests 4ms, environment 0ms)[22m
+Agent reached maximum iterations (6) without completing.
+
+=== epam exited with code 1 ===
+=== Prompt for HW-004 (attempt 2) ===
+Implement user story HW-004: Implement formatDate() utility with vitest tests
+
+## Story Description
+Create formatDate.ts in the project root. Export a single function `export function formatDate(date: Date, format: 'short' | 'long'): string` that returns: 'short' → 'YYYY-MM-DD' (e.g. '2026-06-04'); 'long' → 'Month DD, YYYY' (e.g. 'June 4, 2026'). Use UTC date components so results are deterministic regardless of host timezone (new Date('2026-06-04') is UTC midnight). For an invalid Date (e.g. new Date('not-a-date')), throw a descriptive Error rather than returning 'NaN'-laden output. Create formatDate.test.ts in the project root with at least 6 vitest tests covering both formats, edge cases (month boundaries, single-digit days), and invalid-Date input. Do not modify any existing files.
+
+## Acceptance Criteria
+- formatDate.ts exists in the project root and exports `function formatDate(date: Date, format: 'short' | 'long'): string` (named export, exact signature)
+- formatDate(new Date('2026-06-04'), 'short') returns '2026-06-04'
+- formatDate(new Date('2026-06-04'), 'long') returns 'June 4, 2026'
+- Short format zero-pads month and day: formatDate(new Date('2026-01-05'), 'short') returns '2026-01-05'
+- Long format does not pad the day: formatDate(new Date('2026-01-05'), 'long') returns 'January 5, 2026'
+- Date components are derived via UTC accessors (getUTCFullYear/getUTCMonth/getUTCDate or equivalent) so tests pass in any host timezone
+- Passing an invalid Date throws an Error whose message identifies the problem, and a test asserts the message content with expect(...).toThrow(/invalid date/i) (or an equivalent matcher on the message), not just a bare expect(...).toThrow()
+- formatDate.test.ts exists in the project root with at least 6 vitest tests, including at least one month-boundary case (e.g. Dec 31 / Jan 1) and one single-digit-day case in each format
+- npx tsc --noEmit exits 0
+- vitest run exits 0 with all tests passing (the new tests pass and no pre-existing tests break)
+- git status shows no modifications to existing files — only formatDate.ts and formatDate.test.ts are added
+- Long-format month names come from a fixed English month-name array (or a formatter explicitly pinned to locale 'en-US' and timeZone 'UTC'), so output does not vary with the host's ICU/locale build; at least one test covers a month other than January or June (e.g. December)
+- Invalid-Date detection works for any Invalid Date regardless of construction: both new Date('not-a-date') and new Date(NaN) throw (i.e. detection is based on Number.isNaN(date.getTime()) or equivalent, not on parsing the input string)
+- A leap-day case is covered: formatDate(new Date('2024-02-29'), 'short') returns '2024-02-29' and formatDate(new Date('2024-02-29'), 'long') returns 'February 29, 2024'
+- vitest run reports at least 6 more passing tests than the pre-change baseline (i.e. formatDate.test.ts is actually discovered by the existing vitest include patterns, not silently skipped — a green run with an unchanged test count does NOT satisfy this criterion)
+
+## Technical Notes
+- dependsOn: ["HW-001"]
+- files: ["formatDate.ts","formatDate.test.ts"]
+
+## Files to Create/Modify
+formatDate.ts, formatDate.test.ts
+
+## Dependencies
+HW-001
+
+## Instructions
+1. Implement all acceptance criteria for this story
+2. Follow the project's existing code patterns and conventions
+3. Create any necessary files in the locations specified
+4. Ensure code compiles/runs without errors
+5. Do NOT create tests unless explicitly required in acceptance criteria
+
+After implementation, provide a brief summary of what was created/modified.
+
+## Verification Failure
+
+The orchestrator ran `npm test` after your files were written and it failed (exit code 1). Fix the code so the tests pass.
+
+```
+
+> hello-world-test-app@1.0.0 test
+> vitest run
+
+
+[1m[30m[46m RUN [49m[39m[22m [36mv4.1.8 [39m[90m/home/bradleyjerome/projects/ai/epam-test-apps/hello-world-wt-independent[39m
+
+ [32m✓[39m test-example.test.ts [2m([22m[2m1 test[22m[2m)[22m[32m 2[2mms[22m[39m
+ [31m❯[39m greet.test.ts [2m([22m[2m0 test[22m[2m)[22m
+ [32m✓[39m formatDate.test.ts [2m([22m[2m5 tests[22m[2m)[22m[32m 2[2mms[22m[39m
+
+[31m⎯⎯⎯⎯⎯⎯[39m[1m[41m Failed Suites 1 [49m[22m[31m⎯⎯⎯⎯⎯⎯⎯[39m
+
+[41m[1m FAIL [22m[49m greet.test.ts[2m [ greet.test.ts ][22m
+[31m[1mError[22m: Cannot find module './greet.js' imported from /home/bradleyjerome/projects/ai/epam-test-apps/hello-world-wt-independent/greet.test.ts[39m
+[36m [2m❯[22m greet.test.ts:[2m2:1[22m[39m
+    [90m  1|[39m [35mimport[39m { describe[33m,[39m it[33m,[39m expect } [35mfrom[39m [32m'vitest'[39m[33m;[39m
+    [90m  2|[39m [35mimport[39m { greet } [35mfrom[39m [32m'./greet.js'[39m[33m;[39m
+    [90m   |[39m [31m^[39m
+    [90m  3|[39m
+    [90m  4|[39m [34mdescribe[39m([32m'greet'[39m[33m,[39m () [33m=>[39m {
+
+[31m[2m⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯[1/1]⎯[22m[39m
+
+
+[2m Test Files [22m [1m[31m1 failed[39m[22m[2m | [22m[1m[32m2 passed[39m[22m[90m (3)[39m
+[2m      Tests [22m [1m[32m6 passed[39m[22m[90m (6)[39m
+[2m   Start at [22m 15:00:53
+[2m   Duration [22m 130ms[2m (transform 54ms, setup 0ms, import 53ms, tests 4ms, environment 0ms)[22m
+```
+
+## Relevant Knowledge Base Entries
+No prior KB entries match your agent role yet.
+
+## Knowledge Base Contribution
+Your assigned KB entry ID for this run: **KB-008**
+**This is retry attempt 1** — a previous attempt failed. You MUST write a KB entry documenting what went wrong and what you changed.
+
+If you discover a non-obvious pattern, gotcha, or anti-pattern during this implementation (or this is a retry), append exactly one entry to `orchestrations/agents/KB.md` using this format:
+
+```markdown
+## KB-008 -- 2026-06-11
+
+**Category:** <backend|frontend|infrastructure|testing|orchestration>
+**AgentRole:** <your agentRole from the story>
+**Tags:** <comma-separated tech keywords, e.g. typescript, node, cli>
+**Trigger:** <retry|first-success>
+**StoryRef:** HW-004
+
+<One concise paragraph: the specific pattern, gotcha, or anti-pattern. Precise enough that a future Claude instance can apply it without re-discovering it.>
+```
+
+Only write an entry if the knowledge is genuinely non-obvious. Skip trivial observations.
+=== End Prompt ===
+
+=== epam Output (attempt 2) ===
+Agent reached maximum iterations (6) without completing.
+
+=== External verification failed (exit 1) ===
+
+> hello-world-test-app@1.0.0 test
+> vitest run
+
+
+[1m[30m[46m RUN [49m[39m[22m [36mv4.1.8 [39m[90m/home/bradleyjerome/projects/ai/epam-test-apps/hello-world-wt-independent[39m
+
+ [32m✓[39m test-example.test.ts [2m([22m[2m1 test[22m[2m)[22m[32m 2[2mms[22m[39m
+ [31m❯[39m greet.test.ts [2m([22m[2m0 test[22m[2m)[22m
+ [32m✓[39m formatDate.test.ts [2m([22m[2m5 tests[22m[2m)[22m[32m 2[2mms[22m[39m
+
+[31m⎯⎯⎯⎯⎯⎯[39m[1m[41m Failed Suites 1 [49m[22m[31m⎯⎯⎯⎯⎯⎯⎯[39m
+
+[41m[1m FAIL [22m[49m greet.test.ts[2m [ greet.test.ts ][22m
+[31m[1mError[22m: Cannot find module './greet.js' imported from /home/bradleyjerome/projects/ai/epam-test-apps/hello-world-wt-independent/greet.test.ts[39m
+[36m [2m❯[22m greet.test.ts:[2m2:1[22m[39m
+    [90m  1|[39m [35mimport[39m { describe[33m,[39m it[33m,[39m expect } [35mfrom[39m [32m'vitest'[39m[33m;[39m
+    [90m  2|[39m [35mimport[39m { greet } [35mfrom[39m [32m'./greet.js'[39m[33m;[39m
+    [90m   |[39m [31m^[39m
+    [90m  3|[39m
+    [90m  4|[39m [34mdescribe[39m([32m'greet'[39m[33m,[39m () [33m=>[39m {
+
+[31m[2m⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯[1/1]⎯[22m[39m
+
+
+[2m Test Files [22m [1m[31m1 failed[39m[22m[2m | [22m[1m[32m2 passed[39m[22m[90m (3)[39m
+[2m      Tests [22m [1m[32m6 passed[39m[22m[90m (6)[39m
+[2m   Start at [22m 15:00:59
+[2m   Duration [22m 144ms[2m (transform 70ms, setup 0ms, import 67ms, tests 4ms, environment 0ms)[22m
+Agent reached maximum iterations (6) without completing.
+
+=== epam exited with code 1 ===
+=== Prompt for HW-004 (attempt 3) ===
+Implement user story HW-004: Implement formatDate() utility with vitest tests
+
+## Story Description
+Create formatDate.ts in the project root. Export a single function `export function formatDate(date: Date, format: 'short' | 'long'): string` that returns: 'short' → 'YYYY-MM-DD' (e.g. '2026-06-04'); 'long' → 'Month DD, YYYY' (e.g. 'June 4, 2026'). Use UTC date components so results are deterministic regardless of host timezone (new Date('2026-06-04') is UTC midnight). For an invalid Date (e.g. new Date('not-a-date')), throw a descriptive Error rather than returning 'NaN'-laden output. Create formatDate.test.ts in the project root with at least 6 vitest tests covering both formats, edge cases (month boundaries, single-digit days), and invalid-Date input. Do not modify any existing files.
+
+## Acceptance Criteria
+- formatDate.ts exists in the project root and exports `function formatDate(date: Date, format: 'short' | 'long'): string` (named export, exact signature)
+- formatDate(new Date('2026-06-04'), 'short') returns '2026-06-04'
+- formatDate(new Date('2026-06-04'), 'long') returns 'June 4, 2026'
+- Short format zero-pads month and day: formatDate(new Date('2026-01-05'), 'short') returns '2026-01-05'
+- Long format does not pad the day: formatDate(new Date('2026-01-05'), 'long') returns 'January 5, 2026'
+- Date components are derived via UTC accessors (getUTCFullYear/getUTCMonth/getUTCDate or equivalent) so tests pass in any host timezone
+- Passing an invalid Date throws an Error whose message identifies the problem, and a test asserts the message content with expect(...).toThrow(/invalid date/i) (or an equivalent matcher on the message), not just a bare expect(...).toThrow()
+- formatDate.test.ts exists in the project root with at least 6 vitest tests, including at least one month-boundary case (e.g. Dec 31 / Jan 1) and one single-digit-day case in each format
+- npx tsc --noEmit exits 0
+- vitest run exits 0 with all tests passing (the new tests pass and no pre-existing tests break)
+- git status shows no modifications to existing files — only formatDate.ts and formatDate.test.ts are added
+- Long-format month names come from a fixed English month-name array (or a formatter explicitly pinned to locale 'en-US' and timeZone 'UTC'), so output does not vary with the host's ICU/locale build; at least one test covers a month other than January or June (e.g. December)
+- Invalid-Date detection works for any Invalid Date regardless of construction: both new Date('not-a-date') and new Date(NaN) throw (i.e. detection is based on Number.isNaN(date.getTime()) or equivalent, not on parsing the input string)
+- A leap-day case is covered: formatDate(new Date('2024-02-29'), 'short') returns '2024-02-29' and formatDate(new Date('2024-02-29'), 'long') returns 'February 29, 2024'
+- vitest run reports at least 6 more passing tests than the pre-change baseline (i.e. formatDate.test.ts is actually discovered by the existing vitest include patterns, not silently skipped — a green run with an unchanged test count does NOT satisfy this criterion)
+
+## Technical Notes
+- dependsOn: ["HW-001"]
+- files: ["formatDate.ts","formatDate.test.ts"]
+
+## Files to Create/Modify
+formatDate.ts, formatDate.test.ts
+
+## Dependencies
+HW-001
+
+## Instructions
+1. Implement all acceptance criteria for this story
+2. Follow the project's existing code patterns and conventions
+3. Create any necessary files in the locations specified
+4. Ensure code compiles/runs without errors
+5. Do NOT create tests unless explicitly required in acceptance criteria
+
+After implementation, provide a brief summary of what was created/modified.
+
+## Verification Failure
+
+The orchestrator ran `npm test` after your files were written and it failed (exit code 1). Fix the code so the tests pass.
+
+```
+
+> hello-world-test-app@1.0.0 test
+> vitest run
+
+
+[1m[30m[46m RUN [49m[39m[22m [36mv4.1.8 [39m[90m/home/bradleyjerome/projects/ai/epam-test-apps/hello-world-wt-independent[39m
+
+ [32m✓[39m test-example.test.ts [2m([22m[2m1 test[22m[2m)[22m[32m 2[2mms[22m[39m
+ [31m❯[39m greet.test.ts [2m([22m[2m0 test[22m[2m)[22m
+ [32m✓[39m formatDate.test.ts [2m([22m[2m5 tests[22m[2m)[22m[32m 2[2mms[22m[39m
+
+[31m⎯⎯⎯⎯⎯⎯[39m[1m[41m Failed Suites 1 [49m[22m[31m⎯⎯⎯⎯⎯⎯⎯[39m
+
+[41m[1m FAIL [22m[49m greet.test.ts[2m [ greet.test.ts ][22m
+[31m[1mError[22m: Cannot find module './greet.js' imported from /home/bradleyjerome/projects/ai/epam-test-apps/hello-world-wt-independent/greet.test.ts[39m
+[36m [2m❯[22m greet.test.ts:[2m2:1[22m[39m
+    [90m  1|[39m [35mimport[39m { describe[33m,[39m it[33m,[39m expect } [35mfrom[39m [32m'vitest'[39m[33m;[39m
+    [90m  2|[39m [35mimport[39m { greet } [35mfrom[39m [32m'./greet.js'[39m[33m;[39m
+    [90m   |[39m [31m^[39m
+    [90m  3|[39m
+    [90m  4|[39m [34mdescribe[39m([32m'greet'[39m[33m,[39m () [33m=>[39m {
+
+[31m[2m⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯[1/1]⎯[22m[39m
+
+
+[2m Test Files [22m [1m[31m1 failed[39m[22m[2m | [22m[1m[32m2 passed[39m[22m[90m (3)[39m
+[2m      Tests [22m [1m[32m6 passed[39m[22m[90m (6)[39m
+[2m   Start at [22m 15:00:59
+[2m   Duration [22m 144ms[2m (transform 70ms, setup 0ms, import 67ms, tests 4ms, environment 0ms)[22m
+```
+
+## Relevant Knowledge Base Entries
+No prior KB entries match your agent role yet.
+
+## Knowledge Base Contribution
+Your assigned KB entry ID for this run: **KB-008**
+**This is retry attempt 2** — a previous attempt failed. You MUST write a KB entry documenting what went wrong and what you changed.
+
+If you discover a non-obvious pattern, gotcha, or anti-pattern during this implementation (or this is a retry), append exactly one entry to `orchestrations/agents/KB.md` using this format:
+
+```markdown
+## KB-008 -- 2026-06-11
+
+**Category:** <backend|frontend|infrastructure|testing|orchestration>
+**AgentRole:** <your agentRole from the story>
+**Tags:** <comma-separated tech keywords, e.g. typescript, node, cli>
+**Trigger:** <retry|first-success>
+**StoryRef:** HW-004
+
+<One concise paragraph: the specific pattern, gotcha, or anti-pattern. Precise enough that a future Claude instance can apply it without re-discovering it.>
+```
+
+Only write an entry if the knowledge is genuinely non-obvious. Skip trivial observations.
+=== End Prompt ===
+
+=== epam Output (attempt 3) ===
+
+
+=== External verification failed (exit 1) ===
+
+> hello-world-test-app@1.0.0 test
+> vitest run
+
+
+[1m[30m[46m RUN [49m[39m[22m [36mv4.1.8 [39m[90m/home/bradleyjerome/projects/ai/epam-test-apps/hello-world-wt-independent[39m
+
+ [31m❯[39m greet.test.ts [2m([22m[2m0 test[22m[2m)[22m
+ [32m✓[39m test-example.test.ts [2m([22m[2m1 test[22m[2m)[22m[32m 2[2mms[22m[39m
+ [32m✓[39m formatDate.test.ts [2m([22m[2m5 tests[22m[2m)[22m[32m 3[2mms[22m[39m
+
+[31m⎯⎯⎯⎯⎯⎯[39m[1m[41m Failed Suites 1 [49m[22m[31m⎯⎯⎯⎯⎯⎯⎯[39m
+
+[41m[1m FAIL [22m[49m greet.test.ts[2m [ greet.test.ts ][22m
+[31m[1mError[22m: Cannot find module './greet.js' imported from /home/bradleyjerome/projects/ai/epam-test-apps/hello-world-wt-independent/greet.test.ts[39m
+[36m [2m❯[22m greet.test.ts:[2m2:1[22m[39m
+    [90m  1|[39m [35mimport[39m { describe[33m,[39m it[33m,[39m expect } [35mfrom[39m [32m'vitest'[39m[33m;[39m
+    [90m  2|[39m [35mimport[39m { greet } [35mfrom[39m [32m'./greet.js'[39m[33m;[39m
+    [90m   |[39m [31m^[39m
+    [90m  3|[39m
+    [90m  4|[39m [34mdescribe[39m([32m'greet'[39m[33m,[39m () [33m=>[39m {
+
+[31m[2m⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯[1/1]⎯[22m[39m
+
+
+[2m Test Files [22m [1m[31m1 failed[39m[22m[2m | [22m[1m[32m2 passed[39m[22m[90m (3)[39m
+[2m      Tests [22m [1m[32m6 passed[39m[22m[90m (6)[39m
+[2m   Start at [22m 15:01:05
+[2m   Duration [22m 127ms[2m (transform 62ms, setup 0ms, import 63ms, tests 4ms, environment 0ms)[22m
+
+
+=== epam exited with code 1 ===

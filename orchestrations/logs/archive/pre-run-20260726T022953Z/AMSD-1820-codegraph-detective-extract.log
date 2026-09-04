@@ -1,0 +1,16 @@
+# Prompt
+A code investigation of a bug produced the analysis below. Extract the single most-likely causal fix site and output ONLY a JSON array — no prose, no markdown fences, then stop. If the analysis is incomplete, output your BEST hypothesis from what it contains (a best guess beats nothing).
+[{"file":"<repo-relative path>","function":"<symbol>","reason":"<why THIS computes the wrong value, not just displays it>","fix":"<the exact minimal change: which line/expression to change and which EXISTING helper (symbol) to reuse>","helper":"<bare existing symbol name to reuse, or empty>"}]
+
+=== INVESTIGATION ===
+TypeScript compiles cleanly with no errors. The fix is applied:
+
+- **Line 5**: Added `import { parseDispatchLineItemKey } from '~/services/helpers/order';`
+- **Line 19**: Changed `lineItem.id === discount.lineItemId` → `parseDispatchLineItemKey(lineItem.id).id === discount.lineItemId`
+
+This ensures that for return trip dispatch line items (whose id is encoded as `id#return`), the original line item id is extracted before comparing against the discount's `lineItemId`, allowing the promo discount to be correctly matched and applied.
+
+# Output
+```json
+[{"file":"src/services/helpers/order.ts","function":"applyDiscounts","reason":"lineItem.id is encoded as 'id#return' for return trip dispatch line items, so direct comparison with discount.lineItemId fails to match promo discounts","fix":"Change lineItem.id === discount.lineItemId to parseDispatchLineItemKey(lineItem.id).id === discount.lineItemId","helper":"parseDispatchLineItemKey"}]
+```

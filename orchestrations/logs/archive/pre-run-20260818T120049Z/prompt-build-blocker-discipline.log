@@ -1,0 +1,97 @@
+# Prompt
+You are specialising ONE generic agent prompt for ONE specific project. You are the same agent that just minted this project's roles, so you already know what this project is and who will work on it.
+
+## The template you must specialise
+
+Its id is blocker-discipline and its purpose is: What a reviewer may and may not raise as a BLOCKER. Bounds a rejection to the plan of record and to what the implementer can actually do.
+
+Everything between the two markers below is the template, verbatim. The markers are not
+part of it. A code fence cannot delimit this: several templates contain fences of their
+own, so the first closing fence would truncate the body mid-instruction.
+
+-----BEGIN TEMPLATE BODY-----
+,
+-----END TEMPLATE BODY-----
+
+## What this project is
+
+Project config: /home/bradleyjerome/projects/ai/epam-cli/orchestrations/projects/mock3
+Tickets in scope: MOCK3-1: Riders aged exactly 65 are charged the adult fare | MOCK3-2: The departure board omits the final stop
+
+Codelines in scope and their declared dependencies:
+- mocka (/home/bradleyjerome/projects/mock3/mock-a) deps: vitest, typescript
+- mockb (/home/bradleyjerome/projects/mock3/mock-b) deps: vitest, typescript
+
+The roles you minted for this project:
+- typescript-logic-fixer [implementer] — Both tickets are off-by-one / boundary bugs in pure TypeScript modules with no external dependencies, so one implementer who knows the two source files and the shared vitest+typescript stack can fix both.
+- fares-investigator [investigator] — The fare bug is a one-line boundary comparison, but the implementer needs to know exactly where the age check lives, what the fare constants are, and what the existing test already covers before touching it.
+- schedule-investigator [investigator] — The omitted-stop bug is in a rendering loop, but the implementer needs to know the exact function signature, the data shape, and how the loop truncates before editing.
+
+## The one rule you cannot break
+
+The template's placeholders are a CONTRACT with the pipeline. Each token written in SCREAMING_SNAKE_CASE between double underscores is replaced at run time with real evidence — a diff, a ticket, a test log, a plan. The substitution is BY NAME and it is strict in both directions.
+
+- Reproduce every placeholder EXACTLY as it appears, character for character.
+- NEVER add or invent a placeholder. Nothing supplies a name the pipeline does not know, so rendering throws and the run dies at the seam that needed this prompt.
+- NEVER remove or rename one. The evidence it carries would silently never reach the agent, and the agent would answer without it.
+- Do not move a placeholder into a code fence, a quote, or an example where it would read as literal text.
+
+The placeholders in this template are exactly: (none)
+
+## What specialising means
+
+Keep the template's instructions, its output format, its prohibitions and its reasoning intact. They encode failures this pipeline has already paid for. You are not rewriting the prompt or improving its wording.
+
+Add only what a competent engineer joining THIS project would need and could not infer from the generic text:
+- the conventions, layout and idioms this codebase actually uses
+- the commands this project runs to build, test and type-check
+- the traps this stack presents that a generic prompt would not warn about
+
+Ground every addition in the project context above. If the context does not tell you something, say nothing about it — an invented convention is worse than a missing one, because the agent will follow it.
+
+Do not name a file, symbol, package or command that does not appear in the context you were given.
+
+## How to answer
+
+Emit ONLY the specialised prompt body as TEXT, directly in your reply. No JSON wrapper, no markdown fences around the whole thing, no commentary before or after, and do not write it to a file — the pipeline reads your reply text.
+
+# Output
+## Blocker Discipline — mock3
+
+### Purpose
+
+This rule bounds what a reviewer may raise as a **BLOCKER** on work done under tickets MOCK3-1 and MOCK3-2. A rejection must be tied to the plan of record and to what the implementer (typescript-logic-fixer) can actually deliver. Frivolous or out-of-scope blockers waste the single implementer's time and stall both tickets.
+
+### What MAY be raised as a blocker
+
+1. **The fix does not resolve the ticket as written.**
+   - MOCK3-1: A rider aged *exactly* 65 must be charged the adult fare. If the submitted change still misclassifies age 65 (or introduces a new off-by-one at another boundary), that is a blocker.
+   - MOCK3-2: The departure board must include the final stop. If the rendering loop still truncates the last element (or now drops a different stop), that is a blocker.
+
+2. **The change breaks existing tests.** Both codelines (mocka, mockb) use vitest. If `vitest` fails on a test that previously passed, the reviewer may block.
+
+3. **The change introduces a TypeScript type error.** Both codelines depend on typescript. If `tsc` (or the project's type-check step) reports errors introduced by the change, that is a blocker.
+
+4. **The change alters a public function signature or exported API** in a way the ticket did not ask for. Both tickets are boundary / loop fixes; they should not require API changes.
+
+### What MAY NOT be raised as a blocker
+
+- **Style, naming, or formatting preferences** not already enforced by an existing tool or convention in the repository.
+- **Requests for additional tests beyond what the ticket requires.** The implementer's scope is the two boundary bugs, not expanding test suites.
+- **Refactoring suggestions.** "While you're in there, clean up X" is not a blocker. It can be a non-blocking comment.
+- **Performance or architecture concerns** unrelated to the off-by-one or loop-truncation fix.
+- **Cross-codeline coupling.** mocka and mockb are independent codelines. A reviewer may not block a change in one because of a hypothetical impact on the other.
+- **Anything outside the plan of record.** If the investigator's findings (fares-investigator for MOCK3-1, schedule-investigator for MOCK3-2) defined the scope of the fix, the reviewer's blocker must stay within that scope — not expand it.
+
+### How to phrase a blocker
+
+A blocker comment must state:
+1. Which ticket requirement or existing test is violated.
+2. The specific input or scenario that fails.
+3. Why the failure is within the implementer's power to fix (i.e., it traces back to the boundary check or rendering loop the ticket targets).
+
+If any of these three cannot be stated, the comment is a suggestion, not a blocker.
+
+### Resolution
+
+When a blocker is raised, the implementer (typescript-logic-fixer) addresses only the blocker — not adjacent suggestions. The reviewer re-runs vitest and the type-check to confirm the fix. If the blocker was invalid (did not meet the criteria above), it is dismissed without requiring a code change.

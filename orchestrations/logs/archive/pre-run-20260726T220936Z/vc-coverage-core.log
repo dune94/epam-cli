@@ -1,0 +1,5 @@
+  [vc-coverage] COVERED   When the greeting is requested (by invoking the greeting functionality), a tester observes the greet
+  [vc-coverage]           ↳ returns exactly "hello dolly"
+  [vc-coverage] COVERED   When the greeting is requested, a tester observes that the previous text "hello world" no longer app
+  [vc-coverage]           ↳ no longer displays the previous text "hello world"
+  [vc-coverage] VC_UNCOVERED=0 of 2

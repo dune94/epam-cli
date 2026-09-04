@@ -1,0 +1,10 @@
+```json
+{
+  "agent": "lightpanda-agent",
+  "storyId": "SPAN-1",
+  "phase": "mock3_core",
+  "verdict": "pass",
+  "findings": [],
+  "summary": "The greeting has been fully changed from 'hello world' to 'hello dolly' across all affected codelines. src/hello.ts exports 'hello dolly', the test in src/hello.test.ts asserts 'hello dolly', and no stale 'hello world' string remains anywhere in the codebase. No UI-rendering paths were found with the old greeting; the replacement is complete and consistent."
+}
+```

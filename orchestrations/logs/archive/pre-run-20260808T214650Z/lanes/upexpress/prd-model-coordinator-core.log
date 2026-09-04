@@ -1,0 +1,5 @@
+The story AMSD-2041 already has `model="MiniMax-M3"`, `aiProvider="minimax"`, and `reasoningEffort="medium"` explicitly set. Per rule 1, it must be left completely untouched. No changes are needed — my earlier plan was incorrect.
+
+No PRD modification is required.
+
+{"assigned_count":0,"stories":[],"reason":"all pending core stories already had explicit model assignments"}

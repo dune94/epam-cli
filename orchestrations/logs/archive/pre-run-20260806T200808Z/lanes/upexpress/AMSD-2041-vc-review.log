@@ -1,0 +1,32 @@
+# Prompt
+You are a STRICT verification-criteria reviewer for a brownfield fix. REVIEW ONLY — do NOT rewrite anything.
+
+Acceptance criteria (IMMUTABLE ticket intent):
+- (none)
+Description: Original Requirements (discovery)  AS a Content Author, I WANT to preview draft entries in CMS, SO THAT I can see how content will be shown on the website
+ability to preview draft entries in CMS
+Notes& Assumptions  Limitation: Might not be possible to preview protected pages and content.
+Original Total Estimate:  8  Original FE Estimate:  8  Original DAM Estimate:  0  Original BE Estimate:  0
+
+Proposed verification criteria:
+1. When the website is accessed with a preview/draft content indication, the page renders content from the draft version of the entry rather than the published version.
+2. When the website is accessed without any preview/draft indication, all content renders from published entries — behavior is identical to current production behavior with no visual or functional regression.
+3. Given the Contentstack API is mocked to return draft content for a page entry containing rich text, images, and component blocks, the website renders those elements using the draft data, displaying the same layout and component structure used for published content.
+4. Given the Contentstack API is mocked to return draft content for a header/navigation entry, the website's navigation bar reflects the draft navigation structure (links, labels, and icons).
+5. Given the Contentstack API is mocked to return draft content for a footer entry, the website's footer reflects the draft footer content (links, text, and layout).
+
+Apply these rules EXACTLY (the producer is held to the same text — do not invent stricter or looser criteria):
+A verification criterion states WHAT AN END USER OR TESTER OBSERVES on the user-facing surface THE TICKET IS ABOUT — the rendered output for an output ticket, the displayed screen for a UI ticket, the response a CLIENT receives for an API ticket. It is a BLACK-BOX check on that surface. It NEVER describes HOW the value is produced.
+A verification criterion is FORBIDDEN if it:
+- prescribes HOW to implement — any algorithm, mechanism, approach, or the addition/reading of any new field, flag or service;
+- references an INTERNAL structure that merely FEEDS the ticket's surface — an intermediate payload, a data-transfer object, or a specific response field used to BUILD the output. Verify the surface the ticket names, NOT the data structure behind it;
+- makes a CROSS-COMPARISON that presumes a mechanism — never assert one value "must equal" / "matches" / "is the same as" another; that presumes a shared derivation. Assert the required value is present and correct ON ITS OWN.
+Every verification criterion must be observable, testable, and tied to the ticket's stated symptom/intent.
+
+FLAG any verification criterion that violates ANY rule above, OR that fails to cover the intent of an acceptance criterion.
+Output ONLY a JSON array of short flag strings, e.g. ["VC 2 prescribes halving — restate as observable outcome"]. Output [] if every VC is clean. No prose, no markdown.
+
+# Output
+```json
+["VC 1 prescribes mechanism (\"preview/draft content indication\") and cross-compares (\"rather than the published version\") — restate as observable outcome of draft content on the page surface","VC 2 prescribes mechanism (\"without any preview/draft indication\") and cross-compares (\"identical to current production behavior\") — restate as observable outcome of published content rendering","VC 3 prescribes mechanism (\"API is mocked\"), references internal structure (\"draft data\"), and cross-compares (\"same layout and component structure used for published content\") — restate as observable content on the rendered page","VC 4 prescribes mechanism (\"API is mocked\") and references internal structure (\"draft navigation structure\") — restate as observable navigation bar content","VC 5 prescribes mechanism (\"API is mocked\") and references internal structure (\"draft footer content\") — restate as observable footer content"]
+```

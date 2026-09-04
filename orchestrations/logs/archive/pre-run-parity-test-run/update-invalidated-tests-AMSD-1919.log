@@ -1,0 +1,4 @@
+[coverage-gate] writer: no pre-flight has gated this run — standing down
+  [provider] 'openrouter' is not routable by the 'claude' set — using 'claude'.
+  [provider] The set is the launch's own choice; the env value was left by something else.
+Prompt is too long · the request is ~1228017 tokens (limit 1000000) but this conversation is only ~691642 tokens — the rest is system prompt, tool definitions, and attachment content. A single-exchange conversation cannot be compacted; reduce attached files/tools or start with less context.

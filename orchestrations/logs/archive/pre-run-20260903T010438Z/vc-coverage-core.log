@@ -1,0 +1,17 @@
+  [vc-coverage] no model resolved for this seam — its ladder declares none, or the tier's chain is unset.
+  [vc-coverage] Refusing to substitute one: NO coverage verdict this run, rather than a guessed model's.
+  [vc-coverage] UNKNOWN   When the user types the same email address into the Email field in lowercase and into the Confirm Em
+  [vc-coverage]           the checker returned no usable verdict — not counted either way
+  [vc-coverage] no model resolved for this seam — its ladder declares none, or the tier's chain is unset.
+  [vc-coverage] Refusing to substitute one: NO coverage verdict this run, rather than a guessed model's.
+  [vc-coverage] UNKNOWN   When the user types the same email address into the Email field in uppercase and into the Confirm Em
+  [vc-coverage]           the checker returned no usable verdict — not counted either way
+  [vc-coverage] no model resolved for this seam — its ladder declares none, or the tier's chain is unset.
+  [vc-coverage] Refusing to substitute one: NO coverage verdict this run, rather than a guessed model's.
+  [vc-coverage] UNKNOWN   When the user types genuinely different email addresses into the Email and Confirm Email fields (reg
+  [vc-coverage]           the checker returned no usable verdict — not counted either way
+  [vc-coverage] no model resolved for this seam — its ladder declares none, or the tier's chain is unset.
+  [vc-coverage] Refusing to substitute one: NO coverage verdict this run, rather than a guessed model's.
+  [vc-coverage] UNKNOWN   With matching-but-differently-cased email and confirm-email values entered, the checkout form's subm
+  [vc-coverage]           the checker returned no usable verdict — not counted either way
+  [vc-coverage] VC_UNCOVERED=0 of 4

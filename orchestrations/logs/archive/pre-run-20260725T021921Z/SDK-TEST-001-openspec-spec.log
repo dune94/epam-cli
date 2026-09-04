@@ -1,0 +1,83 @@
+# Prompt
+You are the openspec specification agent for EPAM CLI. Phase sdk_lifecycle_test, story SDK-TEST-001.
+
+Generate refined acceptance criteria, optionally updated title/description, and optional split stories. Output JSON only between <SPEC_AGENT> tags using this schema:
+{
+  "storyId":"SDK-TEST-001",
+  "agent":"openspec",
+  "notes":"context",
+  "acceptanceCriteria":["..."],
+  "description":"...",
+  "title":"...",
+  "splitStories":[{"id":"optional","title":"...","description":"...","acceptanceCriteria":["..."]}]
+}
+Use existing text when no change is needed.
+Story context:
+{
+  "id": "SDK-TEST-001",
+  "title": "SDK Test: formatTokenCount Utility",
+  "description": "Implement a lightweight utility function formatTokenCount(n: number): string that formats raw token counts into human-readable display strings (e.g. 999 → '999', 1500 → '1.5K', 1500000 → '1.5M'). Used by billing output and the cost tracking dashboard.",
+  "acceptanceCriteria": [
+    "formatTokenCount(0) returns '0'",
+    "formatTokenCount(999) returns '999'",
+    "formatTokenCount(1000) returns '1.0K'",
+    "formatTokenCount(1500) returns '1.5K'",
+    "formatTokenCount(1000000) returns '1.0M'",
+    "formatTokenCount(2500000) returns '2.5M'",
+    "Function is exported from src/utils/formatTokenCount.ts",
+    "Vitest unit tests cover all boundary values at test/unit/utils/formatTokenCount.test.ts"
+  ],
+  "technicalNotes": {
+    "files": [
+      "src/utils/formatTokenCount.ts",
+      "test/unit/utils/formatTokenCount.test.ts"
+    ],
+    "requiredSkills": [
+      "TypeScript",
+      "vitest"
+    ]
+  },
+  "agentRole": "typescript-engineer",
+  "agentGroup": "main",
+  "dependencies": []
+}
+
+<SPEC_AGENT>
+
+# Output
+```json
+{
+  "storyId": "SDK-TEST-001",
+  "agent": "openspec",
+  "notes": "Refined AC to close gaps: added negative/NaN/Infinity guard, rounding behaviour for non-round values, no fractional digits for exact thousands, return type contract, export shape, and explicit test file structure requirements. Split stories not warranted — scope is self-contained.",
+  "title": "SDK Utility: formatTokenCount — Human-Readable Token Count Formatter",
+  "description": "Implement and fully test a pure utility function `formatTokenCount(n: number): string` that converts raw integer token counts into compact, human-readable display strings for use in billing output and the cost-tracking dashboard. The function must handle the sub-thousand, K (thousands), and M (millions) ranges, apply consistent one-decimal rounding, and be resilient to edge-case numeric inputs.",
+  "acceptanceCriteria": [
+    "formatTokenCount(0) returns '0'",
+    "formatTokenCount(1) returns '1'",
+    "formatTokenCount(999) returns '999'",
+    "formatTokenCount(1000) returns '1.0K'",
+    "formatTokenCount(1500) returns '1.5K'",
+    "formatTokenCount(1999) returns '2.0K' (rounds to one decimal place at the K boundary)",
+    "formatTokenCount(999999) returns '1000.0K' OR '1.0M' — specification must pick one; chosen behaviour: values >= 1 000 000 use the M suffix, values >= 1 000 and < 1 000 000 use the K suffix",
+    "formatTokenCount(1000000) returns '1.0M'",
+    "formatTokenCount(1500000) returns '1.5M'",
+    "formatTokenCount(2500000) returns '2.5M'",
+    "formatTokenCount(2550000) returns '2.6M' (rounds half-up to one decimal place)",
+    "formatTokenCount(999999999) returns '1000.0M' — no B/G suffix is required; very large values stay in the M range",
+    "Calling formatTokenCount with a negative number throws a RangeError with message 'formatTokenCount: n must be a non-negative finite integer'",
+    "Calling formatTokenCount with NaN throws a RangeError with the same message",
+    "Calling formatTokenCount with Infinity or -Infinity throws a RangeError with the same message",
+    "Calling formatTokenCount with a non-integer finite number (e.g. 1500.7) throws a RangeError with message 'formatTokenCount: n must be a non-negative finite integer'",
+    "The function signature is exactly: export function formatTokenCount(n: number): string",
+    "The function is the sole named export from src/utils/formatTokenCount.ts (no default export)",
+    "The module contains no runtime dependencies beyond the TypeScript standard library",
+    "Vitest unit tests reside at test/unit/utils/formatTokenCount.test.ts and import the function as a named import from src/utils/formatTokenCount.ts",
+    "Test file covers: zero, sub-thousand boundary (1, 999), exact K boundaries (1000, 2000), mid-K value (1500), rounding within K range (1999 → '2.0K', 2550 → '2.6K'), exact M boundaries (1000000, 2000000), mid-M value (1500000), rounding within M range (2550000 → '2.6M'), large M value (999999999), and all four invalid-input error cases (negative, NaN, Infinity, non-integer float)",
+    "All Vitest tests pass with `vitest run` and no tests are skipped",
+    "TypeScript compilation of both source and test files produces zero errors under the project's tsconfig"
+  ],
+  "splitStories": []
+}
+```
+</SPEC_AGENT>

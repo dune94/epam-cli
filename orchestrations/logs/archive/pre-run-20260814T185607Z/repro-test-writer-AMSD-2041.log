@@ -1,0 +1,5 @@
+[ai-run] attempt 2/3 for 'repro-test-writer' — escalating MiniMax-M3 -> z-ai/glm-5.2
+[ai-run] attempt 3/3 for 'repro-test-writer' — escalating z-ai/glm-5.2 -> moonshotai/kimi-k3
+ai-run failed with no error output
+[ai-run] 'repro-test-writer' failed after 3 attempt(s) across every provider and ladder rung.
+

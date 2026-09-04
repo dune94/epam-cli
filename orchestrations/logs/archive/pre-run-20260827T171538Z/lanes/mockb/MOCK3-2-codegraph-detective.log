@@ -1,0 +1,177 @@
+# Prompt
+You investigate the mockb codeline (departure board / schedule domain) and report findings — you never write code. Your job is to characterize src/schedule.ts and test/schedule.test.ts precisely enough for an implementer to act without re-reading the codebase. Open src/schedule.ts and trace formatStops(): read the loop's initialization, condition, and increment exactly as written, identify the array being iterated (stops), and determine precisely which indices are included versus excluded in the rendered output — verify this yourself rather than assuming the survey's description is correct. Also read totalMinutes() and note how it accesses the final element, so you can confirm whether it shares the same bound as formatStops() or is independent. Cross-check test/schedule.test.ts: list exactly what each existing assertion checks (e.g. substring checks, which stop names are and are not asserted) so the implementer knows the real gap in coverage, without editing the test file yourself. Check package.json to confirm the declared vitest/typescript devDependencies and the test invocation. Report file:line references and literal code snippets, not paraphrase. Do not speculate about mocka or any other codeline.
+
+You are investigating this ticket. The repository is at: /home/bradleyjerome/projects/mock3/mock-b
+\nJIRA DOES NOT CLASSIFY THIS AS A BUG (issue type: unset). This is a HINT, not a certainty — if the ticket's own text below clearly describes existing behavior that is wrong, trust the ticket over this hint. Assuming novel: there is likely NO existing bug and no wrong value to trace. Inventing a "cause" for a capability that does not exist yet produces a confident wrong answer. Your job is the ATTACHMENT POINT — the existing file/function/provider/hook/route/component this new capability must plug into, and anything already present the implementation should REUSE — not a fix site.\n
+TICKET (read it, then decide for YOURSELF which few domain nouns matter — do not treat every word as a search term):
+Title: The departure board omits the final stop
+Description: formatStops renders every stop except the last one, so a three-stop line shows two. The journey length reported by totalMinutes is correct, which is why the omission has gone unnoticed.
+Acceptance criteria:
+- Every stop on the line appears on the rendered board, including the final one.
+- Stops remain separated by the existing arrow separator.
+- An empty line still renders without error.
+
+This repository is a small monorepo of independent codelines, each with its own TypeScript sources and its own vitest suite (`vitest`, `typescript` are the only declared dependencies) — there is no shared build step and no cross-codeline imports, so confine your search to the single codeline this ticket's repo path points into (`mock-a` for fare logic, `mock-b` for schedule/departure-board logic) rather than searching the sibling codeline for the same domain nouns. Do not assume test runner config, lint config, or CI wiring beyond what CodeGraph and `show` actually surface — this project does not declare those, so don't invent commands for them.
+
+Your CodeGraph tool is the shell script at: /home/bradleyjerome/projects/ai/epam-cli/orchestrations/scripts/codegraph-agent-query.sh
+Invoke it with the Bash tool, always passing PROJECT_ROOT:
+  PROJECT_ROOT="/home/bradleyjerome/projects/mock3/mock-b" bash "/home/bradleyjerome/projects/ai/epam-cli/orchestrations/scripts/codegraph-agent-query.sh" explore <domain nouns>
+  PROJECT_ROOT="/home/bradleyjerome/projects/mock3/mock-b" bash "/home/bradleyjerome/projects/ai/epam-cli/orchestrations/scripts/codegraph-agent-query.sh" callers <SymbolName>
+  PROJECT_ROOT="/home/bradleyjerome/projects/mock3/mock-b" bash "/home/bradleyjerome/projects/ai/epam-cli/orchestrations/scripts/codegraph-agent-query.sh" callees <SymbolName>
+  PROJECT_ROOT="/home/bradleyjerome/projects/mock3/mock-b" bash "/home/bradleyjerome/projects/ai/epam-cli/orchestrations/scripts/codegraph-agent-query.sh" show <file> [startLine] [endLine]
+
+
+
+YOUR FIRST `explore` HAS ALREADY BEEN RUN FOR YOU — these are its real results (domain nouns only, symptom/presentation words stripped). Treat this as call 1 of your budget; do NOT re-run it. Start from step 2: decide whether the top hit COMPUTES the wrong value or only READS it, and trace from there.
+
+=== PRE-COMPUTED `explore` RESULTS ===
+**Exploration: the departure board omits final stop formatstops renders every except last one so a three line shows two journey length reported by totalminutes is correct which why omission has gone unnoticed on appears rendered including stops remain separated existing arrow separator an empty still without error**
+
+Found 5 symbols across 2 files.
+
+**Blast radius — what depends on these (update/verify before editing)**
+
+- `Stop` (src/schedule.ts:2) — 2 callers in `src/schedule.ts`; ⚠️ no covering tests found
+- `formatStops` (src/schedule.ts:4) — 1 caller; tests: `test/schedule.test.ts`
+- `totalMinutes` (src/schedule.ts:12) — 1 caller; tests: `test/schedule.test.ts`
+
+**Source Code**
+
+> The code below is the **verbatim, current on-disk source** of these files — re-read from disk on this call and line-numbered, byte-for-byte identical to what the Read tool returns. It is NOT a summary, outline, or stale cache. Treat each block as a Read you have already performed: do not Read a file shown here.
+
+**`src/schedule.ts`** — Stop(type_alias), formatStops(function), totalMinutes(function)
+
+```typescript
+1	/** Renders a stop sequence for a departure board. */
+2	export type Stop = { name: string; minutes: number };
+3	
+4	export function formatStops(stops: Stop[]): string {
+5	  const parts: string[] = [];
+6	  for (let i = 0; i < stops.length - 1; i++) {
+7	    parts.push(`${stops[i].name} (${stops[i].minutes}m)`);
+8	  }
+9	  return parts.join(' -> ');
+10	}
+11	
+12	export function totalMinutes(stops: Stop[]): number {
+13	  return stops.length ? stops[stops.length - 1].minutes : 0;
+14	}
+```
+
+**`test/schedule.test.ts`** — LINE(constant), schedule.test.ts(file)
+
+```typescript
+1	import { describe, it, expect } from 'vitest';
+2	import { formatStops, totalMinutes } from '../src/schedule';
+3	
+4	const LINE = [
+5	  { name: 'Union', minutes: 0 },
+6	  { name: 'Bloor', minutes: 12 },
+7	  { name: 'Eglinton', minutes: 25 },
+8	];
+9	
+10	describe('formatStops', () => {
+11	  it('separates stops with an arrow', () => {
+12	    expect(formatStops(LINE)).toContain('->');
+13	  });
+14	  it('names the first stop', () => {
+15	    expect(formatStops(LINE)).toContain('Union');
+16	  });
+17	});
+18	
+19	describe('totalMinutes', () => {
+20	  it('reports the journey length', () => { expect(totalMinutes(LINE)).toBe(25); });
+21	  it('handles an empty line', () => { expect(totalMinutes([])).toBe(0); });
+22	});
+```
+=== END PRE-COMPUTED RESULTS ===
+
+CONVERGE FAST — HARD LIMIT: 6 tool calls total. This is not a suggestion.
+By your 6th tool call you MUST stop querying and emit the JSON answer. A partial map of the attachment points is infinitely better than no answer.
+1. First call: `explore` with the DOMAIN NOUNS only (drop symptom/presentation words).
+2. NOTHING IS BROKEN HERE. This story asks for a capability that does not exist yet, so there is no wrong value to trace and no line to quote. Do not hunt for a cause — you will invent one.
+3. FIND EVERY PLACE THIS WORK MUST TOUCH. This is the most important output, and returning only ONE is the known failure of this step. A new capability almost never lands in a single file. Trace the SHAPE of it through this repository, in whatever terms this repository uses:
+   - WHERE IT IS SET UP — the place the thing being enabled is created, configured or registered. Start here.
+   - WHAT CARRIES IT — anything between that setup and the code that uses it: a shared module, a wrapper, an app-wide registration, a passed-down value. There may be none; there may be several.
+   - EVERYWHERE IT IS USED — every place that reads the affected data or must react when it changes. There is usually MORE THAN ONE. Name them all.
+   Do not force this repository into a shape it does not have, and do not skip a place because it has no obvious name. Describe each site in the vocabulary the codebase itself uses, which you have seen in the tool output — not in the vocabulary of some other project's architecture.
+4. COVER THE ACCEPTANCE CRITERIA. Read them again and check your site list against them: every criterion describing observable behaviour needs a site where that behaviour becomes possible. A criterion with no corresponding site means your map is incomplete — go back and find it.
+5. NAME WHAT TO REUSE at each site — whatever already exists there that the implementation should build on rather than duplicating. Use `explore`/`callers`/`callees` to find it; you cannot reuse what you have not found.
+6. `brokenLine` is NOT required for this story and must be left "" — there is no broken expression to quote.
+7. DO NOT INVENT A PATH OR A SYMBOL. Your grounding here is provenance, not a quoted line: every file and symbol you name must have been returned to you by a tool. If you believe something exists and the tools did not show it, PROVE it with ripgrep-search.sh before naming it, or report it absent.
+
+
+
+## CONFIGURATION THAT GOVERNS THIS BEHAVIOUR
+
+This codeline carries these configuration files:
+(this codeline declares no configuration this engine recognises)
+
+A change can be written perfectly and still be impossible, because configuration decides what the
+code is PERMITTED to do — which origins may embed or be contacted, what reaches the browser, what
+the build emits. If the behaviour this story asks for depends on any of them, name that file in
+your fix sites alongside the source, and say in one line what must change there and why. If it
+does not, say nothing about them: an irrelevant configuration file in the fix sites costs a writer
+a wasted edit.
+
+
+READ THE FILE BEFORE YOU QUOTE IT. Once you have a candidate file, run `show <file>` and look at the real lines. Your "brokenLine" must be COPIED EXACTLY from that output — it is checked character-for-character against the file, after whitespace normalisation. Do NOT reconstruct the line from symbol names: on 2026-07-26 that produced `lineItemKey === orderLineItem.id`, a plausible-looking expression using an identifier that exists nowhere in the repository, and the answer was rejected. `show` accepts a line range so you can read just the region you care about.
+
+CRITICAL REALITY ANCHOR: if the CodeGraph tool does not return a file or symbol, it does NOT exist in this codebase. Do not infer, assume, or extrapolate file paths, function signatures, or variable names from naming patterns — that is exactly how `lineItemKey` was invented. The index answers only for what it parsed, so a miss is a question, not an answer. If you believe something exists and CodeGraph did not return it, PROVE it before reasoning about it:
+
+    bash orchestrations/scripts/ripgrep-search.sh --string "<exact symbol>" [--glob "*.ts"]
+    bash orchestrations/scripts/ripgrep-search.sh --file "<part of a filename>"
+
+If your fix calls a method or function from a THIRD-PARTY package (not this repo's own code), a name existing somewhere in that package is not the same as it being the RIGHT way to call it — a symbol can be a real, internal implementation detail the package's own docs never call directly, or a static class method vs. an instance method, and picking the wrong one produces code that type-checks and fails at runtime. PROVE the real shape before naming it:
+
+    bash orchestrations/scripts/resolve-package-symbol.sh "<package name>" "<method or function name>"
+
+It reports whether the symbol is a direct/static call or needs an instance, and surfaces the package's own documented usage examples (README and JSDoc) so you can prefer the intended pattern over an internal detail that happens to exist.
+
+That searches the real working tree, so a hit is ground truth and "NOT FOUND" is definitive absence. If both tools come back empty, the thing does not exist — say so and revise your hypothesis. Never write a name into your answer that no tool has shown you. Since this project's own dependency lists are only `vitest` and `typescript`, treat any other package name your fix might reach for as suspect by default and confirm it with resolve-package-symbol.sh before naming it in `requiredPackages`.
+
+CRITICAL — HOW TO ANSWER: Emit the JSON array as TEXT directly in your reply. Do NOT call WriteFile and do NOT write your answer to any file — the pipeline reads your reply text, not a file. If you write your answer to a file, it is LOST and the whole investigation is wasted. Use the Bash tool ONLY to run the CodeGraph query script above (including its `show` subcommand, which you MUST use before quoting a line); use no other tool.
+
+NAME THE FORMAT, DO NOT DESCRIBE IT. If your fix depends on the SHAPE of a string — a prefix, suffix, separator, delimiter — you must QUOTE THE EXACT LITERAL (e.g. '#') or name the constant that defines it (e.g. DIVIDER). Saying "a prefix match that accounts for the suffix" without stating the suffix is not implementable: on 2026-07-26 exactly that wording made the implementer guess '-' where the repository uses '#', and the fix could never match. This is machine-checked. The same discipline applies to numeric boundaries: if the ticket turns on an off-by-one or an inclusive/exclusive comparison (an age threshold, a loop bound, a stop count), quote the exact operator and literal you saw in `show` output — do not describe it as "the comparison" or "the boundary check".
+
+PREFER THE PARSER OVER THE WRITER. If a helper CONSTRUCTS the value (getX/buildX/toX) and another READS it (parseX/fromX), prescribe the reader. Naming the writer invites the implementer to reconstruct the format by hand — which is how the above happened. The best fix does no string surgery at all, because the helper owns the format.
+
+VERIFY THIRD-PARTY METHOD CALLS with resolve-package-symbol.sh before prescribing them (see above) — a name existing in a package is not proof it is called the way you assume.
+
+SAY WHAT EACH CHANGE DOES TO THE VALUE — "deliveryRole" is REQUIRED, and it is the field this
+prompt exists to get right. Exactly one of:
+
+  "produces"  this change is what makes the new or corrected value EXIST. It reads it, fetches
+              it, queries it, computes it, or changes configuration so that an existing call
+              starts returning it. If you removed only this change, the value would never come
+              into being.
+  "carries"   this change moves, stores, re-renders or re-exposes a value that something ELSE
+              produced, or it subscribes to a signal saying the value changed. Reacting to a
+              change is NOT obtaining one.
+  "verifies"  this change does nothing to the value; the file only needs confirming once the
+              other sites change. Use it with changeRequired:false.
+
+A PLAN IN WHICH NOTHING PRODUCES IS NOT A PLAN. If every site you name carries or verifies, you
+have described the delivery of a value nobody obtains, and the implementation will do visibly
+nothing while looking correct — a subscription firing, state updating, a view re-rendering, and
+the same stale value on the screen. Before you answer, find the site that PRODUCES. If the
+capability genuinely needs no new value, say so in "reason"; if you cannot find where the value
+would come from, say THAT rather than naming a carrier and hoping.
+
+SAY WHERE EACH CHANGE RUNS — "runsIn" is REQUIRED. One of "server", "browser", "both", "n/a".
+An API that only exists in one of those cannot be called from the other, and a prescription that
+puts it in the wrong place cannot be implemented at all: the implementer either fails or quietly
+does something different. Check what the surrounding function is — an entry point that runs
+before a response is sent is not the same place as code running after it is displayed. If a
+change subscribes to something, subscribing usually runs where the events happen; obtaining the
+value may run somewhere else, and those are then TWO sites, not one.
+
+SAY WHETHER THE FILE MUST BE EDITED — "changeRequired" is REQUIRED. Set it true when your fix means editing THIS file. Set it FALSE when the file is genuinely part of the fix but needs no edit of its own: it already does the right thing, and will simply behave correctly once the other sites change. A consumer that reads state from a provider you are fixing is the usual case. This is not a lesser finding and must not be dropped — a downstream gate requires a real diff in every site you mark true, so marking a verify-only file true makes the story impossible to complete: the implementer changes nothing (correctly), the gate rejects it, and every retry repeats. Saying it in the "fix" prose is not enough; nothing reads prose.
+
+DECLARE ANY PACKAGE YOUR FIX NEEDS — "requiredPackages" is REQUIRED and is machine-verified. List the BARE package names, exactly as they appear in this project's manifest (e.g. "some-sdk", "@scope/pkg"), for every third-party package your fix imports or configures. Use [] when the fix needs none — that is the common case and is not a failure. Each name is checked against what this codeline actually declares and installs: a package that is not there means your fix CANNOT be implemented as written, and prescribing it produces a change that type-checks, passes tests, and fails for a real user. Prefer a fix built on what is already installed; if the work genuinely requires a package this project does not have, still declare it — that is the honest answer and the pipeline needs to see it, whereas an approach invented to avoid naming it is the failure this field exists to prevent.
+
+Output ONLY a JSON array (no prose, no markdown fences), then stop. The "fix" field is REQUIRED and must be a concrete, minimal instruction naming the exact change and any existing helper to reuse. The "helper" field must be the BARE SYMBOL NAME of the existing function you are telling the implementer to reuse (so it can be machine-verified to actually exist) — leave it "" if the fix genuinely needs no existing helper. Do NOT invent a helper name; only put a symbol you actually saw in the tool output:
+[{"file":"<repo-relative path>","function":"<symbol>","reason":"<why THIS computes the value, not just displays it>","brokenLine":"<the exact existing expression that is wrong, copied verbatim from that file>","fix":"<the exact minimal change: which line/expression to change, to what, and which EXISTING helper (symbol + import path) to reuse — never 'write a new function' if one already exists>","helper":"<bare existing symbol name to reuse, or empty>","changeRequired":<true if this file must be EDITED; false if it is implicated but needs NO edit — it already behaves correctly and only needs to be VERIFIED once the other sites change>,"requiredPackages":["<bare package name this fix needs>"],"deliveryRole":"produces|carries|verifies","runsIn":"server|browser|both|n/a"}]
+
+# Output
+[{"file":"src/schedule.ts","function":"formatStops","reason":"This is the loop that builds the rendered board string; its bound directly computes which stops appear in the output. totalMinutes independently reads stops[stops.length - 1] and is unaffected, which is why the journey length stays correct while the last stop is missing from the rendering.","brokenLine":"for (let i = 0; i < stops.length - 1; i++) {","fix":"Change the loop bound from `i < stops.length - 1` to `i < stops.length` so the final stop's index (stops.length - 1) is included in the iteration and pushed into `parts`. No new helper is needed — this is a one-token change to the existing loop condition; the `parts.join(' -> ')` separator logic is unchanged and already satisfies the arrow-separator and empty-line criteria (an empty `stops` array yields `parts.length === 0` and `[].join(' -> ')` returns '' without error).","helper":"","changeRequired":true,"requiredPackages":[],"deliveryRole":"produces","runsIn":"n/a"},{"file":"test/schedule.test.ts","function":"formatStops","reason":"Existing assertions only check for the arrow separator and that the first stop ('Union') appears; none assert the last stop ('Eglinton') is present, which is why this omission went undetected. The file needs no edit to make the fix work, but it is the coverage gap the implementer should be aware of.","brokenLine":"","fix":"No change required for the fix itself; note as a gap that no assertion currently checks `formatStops(LINE)` contains 'Eglinton' (the last stop).","helper":"","changeRequired":false,"requiredPackages":[],"deliveryRole":"verifies","runsIn":"n/a"}]

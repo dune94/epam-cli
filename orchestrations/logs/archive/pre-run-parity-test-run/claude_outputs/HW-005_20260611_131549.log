@@ -1,0 +1,62 @@
+=== Prompt for HW-005 (attempt 1) ===
+Implement user story HW-005: Implement truncate() utility with structured output
+
+## Story Description
+Create truncate.ts in the project root. Export a single function `export function truncate(text: string, maxLength: number, suffix?: string): string` that truncates text to maxLength characters appending suffix (default '...'). If text.length <= maxLength return text unchanged. Create truncate.test.ts with at least 5 vitest tests. Do not modify any existing files.
+
+## Acceptance Criteria
+- truncate.ts exists and exports truncate with correct signature: export function truncate(text: string, maxLength: number, suffix?: string): string
+- truncate('hello world', 5) returns 'he...'
+- truncate('hi', 10) returns 'hi' unchanged
+- truncate('hello', 5, '!') returns 'hell!'
+- truncate.test.ts exists with at least 5 passing vitest tests covering edge cases (empty string, maxLength=0, suffix overridden, exact match, Unicode characters)
+- tsc --noEmit exits 0
+- vitest run exits 0 with all tests passing
+
+## Technical Notes
+- dependsOn: ["HW-001"]
+- files: ["truncate.ts","truncate.test.ts"]
+
+## Files to Create/Modify
+truncate.ts, truncate.test.ts
+
+## Dependencies
+HW-001
+
+## Instructions
+1. Implement all acceptance criteria for this story
+2. Follow the project's existing code patterns and conventions
+3. Create any necessary files in the locations specified
+4. Ensure code compiles/runs without errors
+5. Do NOT create tests unless explicitly required in acceptance criteria
+
+After implementation, provide a brief summary of what was created/modified.
+
+## Relevant Knowledge Base Entries
+No prior KB entries match your agent role yet.
+
+## Knowledge Base Contribution
+Your assigned KB entry ID for this run: **KB-008**
+
+If you discover a non-obvious pattern, gotcha, or anti-pattern during this implementation (or this is a retry), append exactly one entry to `orchestrations/agents/KB.md` using this format:
+
+```markdown
+## KB-008 -- 2026-06-11
+
+**Category:** <backend|frontend|infrastructure|testing|orchestration>
+**AgentRole:** <your agentRole from the story>
+**Tags:** <comma-separated tech keywords, e.g. typescript, node, cli>
+**Trigger:** <retry|first-success>
+**StoryRef:** HW-005
+
+<One concise paragraph: the specific pattern, gotcha, or anti-pattern. Precise enough that a future Claude instance can apply it without re-discovering it.>
+```
+
+Only write an entry if the knowledge is genuinely non-obvious. Skip trivial observations.
+=== End Prompt ===
+
+=== epam Output (attempt 1) ===
+Agent reached maximum iterations (6) without completing.
+Agent reached maximum iterations (6) without completing.
+
+=== End epam Output ===

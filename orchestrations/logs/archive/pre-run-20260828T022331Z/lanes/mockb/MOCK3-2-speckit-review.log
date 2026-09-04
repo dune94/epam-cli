@@ -1,0 +1,137 @@
+# Prompt
+You are the speckit specification agent for EPAM CLI. Phase core, story MOCK3-2.
+
+You are reviewing and building on the openspec agent's output for this story.
+Your role is COLLABORATIVE — you are NOT starting from scratch. Instead:
+1. Review openspec's proposed acceptance criteria for testability and completeness
+2. Add missing edge-case, error-handling, security, and accessibility criteria
+3. Flag any AC that are vague, untestable, or overlapping
+4. Splitting is openspec's decision alone — you do NOT split stories. If openspec already split
+   this story, do NOT include a "splitStories" field in your output at all (it will be ignored if
+   you do). Review and refine the acceptanceCriteria openspec gave you for the UNSPLIT story as
+   normal; per-child refinement of an already-split story's children happens on a later turn, not
+   here.
+5. Do NOT remove or duplicate openspec's good work — build on it
+
+━━━ WHAT-NOT-HOW RULE (MANDATORY) ━━━
+Every AC must describe an OBSERVABLE OUTCOME (what a test can verify from outside the code),
+NOT an implementation instruction. If an AC names vi.mock, jest.fn, mockReturnValue,
+mockResolvedValue, import statements, or require() calls, REPLACE it with a
+Given/When/Then behaviour statement. Never tell the implementer which library or mock pattern to use.
+
+OPENSPEC'S OUTPUT (your input to review — ACs and split proposals only):
+{
+  "acceptanceCriteria": [
+    "Every stop on the line appears on the rendered board, including the final one.",
+    "Stops remain separated by the existing arrow separator.",
+    "An empty line still renders without error."
+  ],
+  "notes": ""
+}
+
+ORIGINAL STORY CONTEXT:
+{
+  "id": "MOCK3-2",
+  "title": "The departure board omits the final stop",
+  "description": "formatStops renders every stop except the last one, so a three-stop line shows two. The journey length reported by totalMinutes is correct, which is why the omission has gone unnoticed.",
+  "originalAcceptanceCriteria": [
+    "Every stop on the line appears on the rendered board, including the final one.",
+    "Stops remain separated by the existing arrow separator.",
+    "An empty line still renders without error."
+  ],
+  "technicalNotes": {
+    "files": [
+      "src/fares.ts",
+      "test/fares.test.ts"
+    ],
+    "perCodeline": {
+      "mockb": {
+        "files": [],
+        "resolved": [],
+        "unresolved": [
+          {
+            "declared": "src/fares.ts",
+            "candidates_checked": [
+              "src/fares.ts",
+              "src/schedule.ts"
+            ],
+            "reason": "no exact, case-variant or extension-variant match exists in this codeline"
+          },
+          {
+            "declared": "test/fares.test.ts",
+            "candidates_checked": [
+              "test/fares.test.ts",
+              "test/schedule.test.ts"
+            ],
+            "reason": "no exact, case-variant or extension-variant match exists in this codeline"
+          }
+        ]
+      }
+    }
+  },
+  "dependencies": []
+}
+
+Produce your refined output as raw JSON only (no XML tags, no markdown fences, no preamble). Include:
+- "acceptanceCriteria": The FULL merged list (openspec's criteria + your additions/refinements). Every item MUST be an observable outcome, not an implementation instruction.
+- "notes": What you changed and why (be specific — cite which criteria you added/modified/replaced)
+- "splitStories": ALWAYS omit this field. Splitting is openspec's decision alone — never propose
+  split children of your own, even if openspec already split this story.
+- "acAddedBySpeckit": Array of criteria YOU added that were not in openspec's output
+- "acModifiedBySpeckit": Array of {"original":"...","revised":"..."} for criteria you reworded
+- "acFlagged": Array of {"criterion":"...","flag":"..."} for criteria that need human attention
+
+For a brownfield story with a real codeline, you may have read-only tools (read_file,
+list_files, search) available this turn — if so, USE them for real to check a file's
+actual contents before relying on it; do not invent what a tool would return. For a
+greenfield story with no existing codeline, you have none — give your best answer from
+the description, title and paths you were given, and say so in "notes" if the file
+contents would have changed your answer. Either way, never narrate an imagined tool
+result: a real answer with an honest caveat is worth everything; fabricated tool-call
+syntax (<tool_call>, <tool_use>, <function_call>) is worth nothing — it is discarded in
+full and the work is lost (observed live, 2026-07-28: exactly this, on an empty-criteria
+story that got no answer at all).
+
+# Output — THIS IS A CONTRACT, NOT A PREFERENCE
+
+Emit EXACTLY one <SPEC_AGENT> block and nothing else that matters. Prose outside it is DISCARDED
+unread, however correct it is — the pipeline parses the block and never the commentary.
+
+<SPEC_AGENT>
+{
+  "storyId": <string>,
+  "agent": <string>,
+  "notes": <string>   (optional),
+  "storyKind": <string> one of "defect" | "novel"   (optional),
+  "verificationCriteriaDetail": [ {
+      "criterion": <string>
+         // The observable check, as a sentence.,
+      "observer": <string> one of "end user" | "tester" | "api client" | "operator"
+         // WHO sees it. If no human or client can see it, the criterion is not observable.,
+      "surface": <string>
+         // WHAT they look at — the rendered page, the API response, the CLI output, the generated file. Never an internal object, argument, query or call.,
+      "setup": <string>
+         // Optional precondition the test establishes before observing — for example a mocked client signalling a change. Preconditions are allowed and are NOT implementation prescription; state them here rather than inside the criterion.   (optional),
+  } ]
+  "acceptanceCriteria": <array>,
+  "description": <string>   (optional),
+  "title": <string>   (optional),
+  "acAddedBySpeckit": <array>   (optional),
+  "acModifiedBySpeckit": <array>   (optional),
+  "acFlagged": <array>   (optional),
+  "splitStories": [ {
+      "id": <string>   (optional),
+      "title": <string>   (optional),
+      "description": <string>   (optional),
+      "acceptanceCriteria": <array>   (optional),
+      "agentRole": <string>   (optional),
+      "technicalNotes": <object>   (optional),
+  } ]
+}
+</SPEC_AGENT>
+
+Submit the specification analysis result for one story.
+
+
+# Output
+{}

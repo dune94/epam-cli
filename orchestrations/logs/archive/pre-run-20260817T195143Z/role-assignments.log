@@ -1,0 +1,34 @@
+# Prompt
+Assign an implementation agent role to every story below.
+
+AVAILABLE ROLES — these are this project's own engineering roles. Choose from these and
+nothing else; the name you return must match one of them verbatim:
+- typescript-logic-engineer
+    You are a TypeScript application-logic engineer working across two codelines, mocka and mockb, both of which declare vitest and typescript as their only dependencies. Your job is to fix source bugs, not to write or edit tests — a separate pipeline agent owns all test files. In mocka you edit src/fares.ts. The function fareFor applies a concession fare with a strict greater-than comparison on rider age; the doc comment states the rule is '65 and over', so the comparison must include the exact boundary. Audit every comparison operator in the fare rules (child, adult, concession, pass) for off-by-one boundaries before changing anything. In mockb you edit src/schedule.ts. The function formatStops loops with an upper bound of stops.length - 1, which drops the final stop from the rendered list. The fix is the loop bound so every stop renders. Check whether totalMinutes or any other consumer depends on the loop structure before changing it. Conventions: source lives under src/, tests under test/ named <module>.test.ts. The test runner is vitest — run `npx vitest run` from the codeline root to verify a change compiles and existing tests pass. Do not create or modify any file under test/; that work is owned elsewhere. Keep changes minimal: one operator or bound per bug, no refactors. TypeScript strictness is whatever the codeline's tsconfig declares — match existing style.
+
+STORIES — a story listing more than one codeline needs ONE ASSIGNMENT PER CODELINE:
+- MOCK3-1: Riders aged exactly 65 are charged the adult fare
+    codeline: mocka
+    The fare rules say riders aged 65 and over pay the concession fare. A rider aged exactly 65 is charged the full adult fare of 350 cents instead of 175. Riders aged 66 and above are charged correctly, so the boundary itself is wrong rather than the rule.
+- MOCK3-2: The departure board omits the final stop
+    codeline: mockb
+    formatStops renders every stop except the last one, so a three-stop line shows two. The journey length reported by totalMinutes is correct, which is why the omission has gone unnoticed.
+
+Pick the role whose stated expertise actually covers the work the story describes. If two
+roles could plausibly own a story, prefer the one whose brief names the surface the story
+touches.
+
+THE UNIT OF ASSIGNMENT IS A (STORY, CODELINE) PAIR, NOT A STORY. A story listing three
+codelines needs THREE assignments — the repositories differ, so the right owner can differ.
+Count the codelines listed against each story and return exactly that many assignments for it,
+naming the codeline on every one. A story is not assigned until every codeline it lists is.
+
+THE OWNER MUST AUTHOR THE CODE. Assign the role that will EDIT THE FILES this story changes —
+the one whose brief names those files or directories. A role whose brief is about settings in
+a vendor's console, or about documentation, cannot deliver a story here: the agent's output is
+a change in a repository. Live 2026-08-07: this story went to the one role of three that owned
+no source files, and all such a role can produce is a configuration note. Where the story needs
+both console configuration and code, 
+
+# Output
+{"assignments":[{"agentRole":"typescript-logic-engineer","codeline":"mocka","reason":"MOCK3-1 fixes an off-by-one boundary in fareFor (src/fares.ts) so riders aged exactly 65 get the concession fare; the role's brief explicitly owns src/fares.ts in mocka and names the concession boundary comparison.","storyId":"MOCK3-1"},{"agentRole":"typescript-logic-engineer","codeline":"mockb","reason":"MOCK3-2 fixes the loop upper bound in formatStops (src/schedule.ts) so the final stop renders; the role's brief explicitly owns src/schedule.ts in mockb and names the stops.length - 1 bound bug.","storyId":"MOCK3-2"}]}

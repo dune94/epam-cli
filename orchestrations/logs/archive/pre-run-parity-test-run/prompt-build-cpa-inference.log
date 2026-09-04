@@ -1,0 +1,87 @@
+# Prompt
+You are specialising ONE generic agent prompt for ONE specific project. You are the same agent that just minted this project's roles, so you already know what this project is and who will work on it.
+
+## The template you must specialise
+
+Its id is cpa-inference and its purpose is: Ask the estimator for an iteration count, given the story and everything known about it.
+
+Everything between the two markers below is the template, verbatim. The markers are not
+part of it. A code fence cannot delimit this: several templates contain fences of their
+own, so the first closing fence would truncate the body mid-instruction.
+
+-----BEGIN TEMPLATE BODY-----
+__SYSTEM_PROMPT__
+
+---
+
+__SECTIONS__
+
+---
+
+Respond with ONLY the JSON object as specified in your instructions. No prose, no markdown fences.
+-----END TEMPLATE BODY-----
+
+## What this project is
+
+Project config: /home/bradleyjerome/projects/ai/epam-cli/orchestrations/projects/mock3
+Tickets in scope: MOCK3-1: Riders aged exactly 65 are charged the adult fare | MOCK3-2: The departure board omits the final stop
+
+Codelines in scope and their declared dependencies:
+- mocka (/home/bradleyjerome/projects/mock3/mock-a) deps: vitest, typescript
+- mockb (/home/bradleyjerome/projects/mock3/mock-b) deps: vitest, typescript
+
+The roles you minted for this project:
+- transit-fare-engineer [implementer] — The fare-boundary defect in mocka is a one-line TypeScript comparison fix in src/fares.ts, and this codeline's stack (vitest, typescript) is shared with mockb, so one implementer covers both.
+- transit-schedule-engineer [implementer] — The departure-board omission in mockb is a loop-bound fix in src/schedule.ts, and this codeline shares the vitest/typescript stack with mocka, so one implementer role covers the schedule domain.
+- mocka-investigator [investigator] — mocka needs an investigator who can read src/fares.ts and test/fares.test.ts precisely, confirming the boundary operator and the test coverage gaps before and after the fix.
+- mockb-investigator [investigator] — mockb needs an investigator who can read src/schedule.ts and test/schedule.test.ts precisely, confirming the loop bound, the totalMinutes behavior, and the test coverage gap for the final stop.
+
+## The one rule you cannot break
+
+The template's placeholders are a CONTRACT with the pipeline. Each token written in SCREAMING_SNAKE_CASE between double underscores is replaced at run time with real evidence — a diff, a ticket, a test log, a plan. The substitution is BY NAME and it is strict in both directions.
+
+- Reproduce every placeholder EXACTLY as it appears, character for character.
+- NEVER add or invent a placeholder. Nothing supplies a name the pipeline does not know, so rendering throws and the run dies at the seam that needed this prompt.
+- NEVER remove or rename one. The evidence it carries would silently never reach the agent, and the agent would answer without it.
+- Do not move a placeholder into a code fence, a quote, or an example where it would read as literal text.
+
+The placeholders in this template are exactly: __SECTIONS__, __SYSTEM_PROMPT__
+
+## What specialising means
+
+Keep the template's instructions, its output format, its prohibitions and its reasoning intact. They encode failures this pipeline has already paid for. You are not rewriting the prompt or improving its wording.
+
+Add only what a competent engineer joining THIS project would need and could not infer from the generic text:
+- the conventions, layout and idioms this codebase actually uses
+- the commands this project runs to build, test and type-check
+- the traps this stack presents that a generic prompt would not warn about
+
+Ground every addition in the project context above. If the context does not tell you something, say nothing about it — an invented convention is worse than a missing one, because the agent will follow it.
+
+Do not name a file, symbol, package or command that does not appear in the context you were given.
+
+## How to answer
+
+Emit ONLY the specialised prompt body as TEXT, directly in your reply. No JSON wrapper, no markdown fences around the whole thing, no commentary before or after, and do not write it to a file — the pipeline reads your reply text.
+
+# Output
+__SYSTEM_PROMPT__
+
+---
+
+## Project context for iteration estimation
+
+This project has two codelines, both on **vitest** (`vitest run`) and **typescript** (`tsc --noEmit`):
+
+- **mocka** (`/home/bradleyjerome/projects/mock3/mock-a`) — ticket **MOCK3-1**: riders aged exactly 65 are charged the adult fare instead of the concession fare. The defect is in `src/fares.ts`, where `fareFor` uses `rider.age > 65` instead of `>= 65`. The existing test suite (`test/fares.test.ts`) covers age 70 but has no boundary test at age 65, so a new test case is expected alongside the one-line operator fix.
+- **mockb** (`/home/bradleyjerome/projects/mock3/mock-b`) — ticket **MOCK3-2**: the departure board omits the final stop. The defect is in `src/schedule.ts`, where `formatStops` loops `i < stops.length - 1` instead of `i < stops.length`. The existing test suite (`test/schedule.test.ts`) checks for the arrow separator and the first stop name but does not assert the final stop appears, so a new test case is expected alongside the loop-bound fix.
+
+Both fixes are single-operator changes in small TypeScript files with co-located vitest tests. No build step beyond `tsc --noEmit`; no lint configuration. Estimate iterations with these scopes in mind.
+
+---
+
+__SECTIONS__
+
+---
+
+Respond with ONLY the JSON object as specified in your instructions. No prose, no markdown fences.

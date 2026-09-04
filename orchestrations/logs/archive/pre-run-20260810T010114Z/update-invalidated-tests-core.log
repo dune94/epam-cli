@@ -1,0 +1,17 @@
+[update-invalidated-tests] suite is RED after the fix — deciding whether the failures are invalidated expectations or a real regression
+[update-invalidated-tests] BLOCKED — suite still RED after the update attempt (the fix or the update is wrong)
+          320 |
+          321 |     fireEvent.click(accordionToggle);
+          322 |
+    
+          at Object.getElementError (node_modules/@testing-library/dom/dist/config.js:37:19)
+          at node_modules/@testing-library/dom/dist/query-helpers.js:76:38
+          at node_modules/@testing-library/dom/dist/query-helpers.js:109:15
+          at Object.getAllByTestId (src/components/Schedules/__tests__/schedules.spec.tsx:319:36)
+    
+    
+    Test Suites: 1 failed, 743 passed, 744 total
+    Tests:       2 failed, 4 skipped, 21 todo, 3344 passed, 3371 total
+    Snapshots:   19 passed, 19 total
+    Time:        34.959 s
+    Ran all test suites.

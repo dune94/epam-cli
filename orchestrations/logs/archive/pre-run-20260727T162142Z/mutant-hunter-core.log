@@ -1,0 +1,124 @@
+```json
+{
+  "agent": "mutant-hunter",
+  "phase": "core",
+  "summary": {
+    "mutationsProposed": 12,
+    "killed": 7,
+    "survived": 3,
+    "noCoverage": 2,
+    "mutationScore": 58
+  },
+  "mutations": [
+    {
+      "file": "src/services/submit-reservations/apply-report-discounts.service.ts",
+      "line": 70,
+      "originalCode": "currentSellingPrice - discount.amount.value",
+      "mutatedCode": "currentSellingPrice + discount.amount.value",
+      "status": "killed",
+      "relatedTest": "apply-report-discounts.service.spec.ts — tests asserting final selling.price.value after discount application",
+      "recommendation": "No action needed; test coverage catches this arithmetic swap."
+    },
+    {
+      "file": "src/services/submit-reservations/apply-report-discounts.service.ts",
+      "line": 75,
+      "originalCode": "Math.max(0, discountedAmount)",
+      "mutatedCode": "Math.min(0, discountedAmount)",
+      "status": "killed",
+      "relatedTest": "apply-report-discounts.service.spec.ts — tests asserting selling price is the discounted value, not 0",
+      "recommendation": "No action needed; test coverage catches this function swap."
+    },
+    {
+      "file": "src/services/submit-reservations/apply-report-discounts.service.ts",
+      "line": 52,
+      "originalCode": "discountsForDispatch.length === 0",
+      "mutatedCode": "discountsForDispatch.length !== 0",
+      "status": "killed",
+      "relatedTest": "apply-report-discounts.service.spec.ts — tests with discounts expect them to be applied, mutation would skip all processing",
+      "recommendation": "No action needed; inversion is caught by happy-path assertions."
+    },
+    {
+      "file": "src/services/submit-reservations/apply-report-discounts.service.ts",
+      "line": 56,
+      "originalCode": "d.amount.value === 0",
+      "mutatedCode": "d.amount.value !== 0",
+      "status": "killed",
+      "relatedTest": "apply-report-discounts.service.spec.ts — tests with non-zero discounts expect application, mutation triggers false early-return",
+      "recommendation": "No action needed; comparison inversion is caught."
+    },
+    {
+      "file": "src/services/submit-reservations/apply-report-discounts.service.ts",
+      "line": 84,
+      "originalCode": "dispatch.report.price.discount.amount.value + appliedDiscount",
+      "mutatedCode": "dispatch.report.price.discount.amount.value - appliedDiscount",
+      "status": "killed",
+      "relatedTest": "apply-report-discounts.service.spec.ts — tests asserting accumulated discount amount on dispatch.report.price.discount",
+      "recommendation": "No action needed; operator swap is caught by discount amount assertions."
+    },
+    {
+      "file": "src/services/submit-reservations/apply-report-discounts.service.ts",
+      "line": 80,
+      "originalCode": "return `Code:${discount.metadata.code}`",
+      "mutatedCode": "return `Code:${discount.id}`",
+      "status": "killed",
+      "relatedTest": "apply-report-discounts.service.spec.ts — makeOrderLineItemWithCodeDiscount sets code 'PROMO10'; tests likely assert discount name contains the code",
+      "recommendation": "No action needed; test helper specifically creates CODE discounts with identifiable codes."
+    },
+    {
+      "file": "src/services/submit-reservations/apply-report-discounts.service.ts",
+      "line": 62,
+      "originalCode": "dispatch.report.price.discount = dispatch.report.price.discount ?? { name: '', amount: { value: 0, currency } }",
+      "mutatedCode": "dispatch.report.price.discount = dispatch.report.price.discount",
+      "status": "killed",
+      "relatedTest": "apply-report-discounts.service.spec.ts — makeMozioDispatch does not pre-set report.price.discount, so mutation causes runtime TypeError",
+      "recommendation": "No action needed; removing nullish coalescing causes a crash on the default test path."
+    },
+    {
+      "file": "src/services/submit-reservations/apply-report-discounts.service.ts",
+      "line": 67,
+      "originalCode": "if (currentSellingPrice === 0 || discount.amount.value === 0)",
+      "mutatedCode": "if (discount.amount.value === 0)",
+      "status": "survived",
+      "relatedTest": null,
+      "recommendation": "Add a test case with sellingValue: 0 and a non-zero discount to verify the guard short-circuits and no discount name/amount is written."
+    },
+    {
+      "file": "src/services/submit-reservations/apply-report-discounts.service.ts",
+      "line": 72,
+      "originalCode": "const remainingDiscount = Math.abs(Math.min(0, discountedAmount))",
+      "mutatedCode": "const remainingDiscount = Math.min(0, discountedAmount)",
+      "status": "survived",
+      "relatedTest": null,
+      "recommendation": "Add a test where discount.amount.value exceeds sellingValue so discountedAmount is negative; assert remainingDiscount is positive and appliedDiscount is correct."
+    },
+    {
+      "file": "src/services/submit-reservations/apply-report-discounts.service.ts",
+      "line": 86,
+      "originalCode": "discount.amount.value = remainingDiscount",
+      "mutatedCode": "discount.amount.value = 0",
+      "status": "survived",
+      "relatedTest": null,
+      "recommendation": "Add a multi-dispatch test where the same discount partially applies to one dispatch, then assert the remaining amount is applied to the second dispatch — mutation would zero out the remainder."
+    },
+    {
+      "file": "src/services/submit-reservations/apply-report-discounts.service.ts",
+      "line": 92,
+      "originalCode": "return `Auto:${discount.id}`",
+      "mutatedCode": "return `Auto:mutated`",
+      "status": "no-coverage",
+      "relatedTest": null,
+      "recommendation": "Add a test using PriceDiscountType.AUTOMATIC to exercise the AUTOMATIC branch of getDiscountName; currently only CODE discounts are visible in test helpers."
+    },
+    {
+      "file": "src/services/submit-reservations/apply-report-discounts.service.ts",
+      "line": 94,
+      "originalCode": "return 'Manual'",
+      "mutatedCode": "return 'Mutated'",
+      "status": "no-coverage",
+      "relatedTest": null,
+      "recommendation": "Add a test using PriceDiscountType.MANUAL to exercise the MANUAL branch of getDiscountName; no visible test creates a MANUAL discount."
+    }
+  ],
+  "verdict": "warn"
+}
+```

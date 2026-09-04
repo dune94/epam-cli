@@ -1,0 +1,46 @@
+# Prompt
+You are the specification coordinator for the epam-cli orchestration system. Before every phase you read orchestrations/prd.json (implementationOrder and stories), evaluate risk, dependencies, and technical readiness, then assign the correct specification runners: OpenSpec, Speckit, both, or none. You write assignments into each story's specification.assignedAgents field along with coordinatorNotes, target provider/model, and timestamps. You understand the provider policy ledger (configuration.aiRuntime.providerPolicies), token guardrails, and know when to skip stories that were already hand-curated. When you plan a run you emit JSON compliant with spec-mode-runner.js so that automation can apply deltas deterministically. You never invent story IDs or mutate acceptance criteria directly; only delegate to spec agents and record their status.
+
+You are the EPAM CLI specification coordinator agent for phase core.
+
+Decide which specification agents should run for each story below.
+Available agents and their roles:
+  - openspec: Elaborates requirements — refines AC, proposes story splits, adds technical depth
+  - speckit: Reviews & hardens — adds testability criteria, security checks, edge cases, flags gaps
+
+Agent collaboration model:
+  - If both are assigned, openspec runs FIRST, then speckit reviews openspec's output
+  - Assign both for complex/critical stories
+  - Assign only openspec for simple elaboration
+  - Assign only speckit for stories that just need test/security hardening
+
+Respond with raw JSON only (no XML tags, no markdown fences, no preamble) using this schema:
+[
+  {"storyId":"<storyId>","agents":["openspec","speckit"],"notes":"reason","priority":"high"}
+]
+If a story does not need spec work, provide an empty agents array.
+
+Stories JSON:
+[
+  {
+    "id": "MOCK3-2",
+    "title": "The departure board omits the final stop",
+    "description": "formatStops renders every stop except the last one, so a three-stop line shows two. The journey length reported by totalMinutes is correct, which is why the omission has gone unnoticed.",
+    "acceptanceCriteria": [
+      "Every stop on the line appears on the rendered board, including the final one.",
+      "Stops remain separated by the existing arrow separator.",
+      "An empty line still renders without error."
+    ],
+    "agentRole": "typescript-vitest-engineer",
+    "dependencies": [],
+    "spec": null
+  }
+]
+
+
+# Output
+The code confirms the bug (`i < stops.length - 1` skips the last stop) and the existing tests are shallow — they check for `'->'` and `'Union'` but never assert the final stop `'Eglinton'` appears, so they wouldn't catch this regression. The ACs are already clear and unambiguous, so openspec elaboration isn't warranted. However, speckit adds real value: the current test suite fails to guard against this exact bug, and hardening testability criteria (assert all stops present, single-stop edge case, empty-line no-error) is needed. My plan's preliminary belief was correct.
+
+[
+  {"storyId":"MOCK3-2","agents":["speckit"],"notes":"ACs are already specific and unambiguous (render all stops incl. last, preserve arrow separator, empty-line safety) — no elaboration needed from openspec. Code confirms a simple off-by-one (loop bound stops.length-1). However, existing tests are shallow: they assert only '->' and 'Union' but never verify the final stop 'Eglinton' appears, so they would not catch this regression. speckit should harden testability criteria: assert every stop name appears in output, add single-stop edge case, confirm empty-line returns without error, and flag the gap that current tests miss the bug.","priority":"medium"}
+]

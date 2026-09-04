@@ -1,0 +1,37 @@
+# Prompt
+You are a STRICT verification-criteria reviewer for a brownfield fix. REVIEW ONLY — do NOT rewrite anything.
+
+Acceptance criteria (IMMUTABLE ticket intent):
+- (none)
+Description: AS a Content Author, I WANT to preview draft entries in CMS, SO THAT I can see how content will be shown on the website. This requires integrating Contentstack's Live Preview SDK for a Next.js CSR (Pages Router) application: adding live_preview config to the Stack initialization, installing and initializing @contentstack/live-preview-utils on the client, wiring an onEntryChange callback to re-render with draft content through the existing ContentstackContext/useContent pipeline, and documenting the required preview environment variables. Limitation: Might not be possible to preview protected pages and content.
+
+Proposed verification criteria:
+1. When the Live Preview SDK signals a draft entry, the page renders the draft field values — such as updated text, headings, and images — corresponding to the unpublished state of that entry.
+2. When the Live Preview feature is not active, the page renders all published content — headings, text blocks, images, and layout — completely and without visible errors.
+3. When the Live Preview SDK signals a change to a draft entry, the page updates to show the new draft content without a full browser page reload.
+4. When the preview environment is configured and Live Preview is active, the page renders all content and layout without visible rendering errors, broken elements, or missing sections.
+5. When the documented preview environment variables are set to valid values, the page loads successfully and displays draft content for entries with unpublished changes.
+6. For pages that require authentication, draft content preview may not render even when the Live Preview SDK signals a draft entry update.
+
+Apply these rules EXACTLY (the producer is held to the same text — do not invent stricter or looser criteria):
+A verification criterion states WHAT AN END USER OR TESTER OBSERVES on the user-facing surface THE TICKET IS ABOUT — the rendered output for an output ticket, the displayed screen for a UI ticket, the response a CLIENT receives for an API ticket. It is a BLACK-BOX check on that surface. It NEVER describes HOW the value is produced.
+A verification criterion is FORBIDDEN if it:
+- prescribes HOW to implement — any algorithm, mechanism, approach, or the addition/reading of any new field, flag or service;
+- references an INTERNAL structure that merely FEEDS the ticket's surface — an intermediate payload, a data-transfer object, or a specific response field used to BUILD the output. Verify the surface the ticket names, NOT the data structure behind it;
+- makes a CROSS-COMPARISON that presumes a mechanism — never assert one value "must equal" / "matches" / "is the same as" another; that presumes a shared derivation. Assert the required value is present and correct ON ITS OWN.
+Every verification criterion must be observable, testable, and tied to the ticket's stated symptom/intent.
+
+A criterion may declare a PRECONDITION the test establishes (for example a mocked client
+signalling a change). A declared precondition is NOT implementation prescription — do not flag
+it. Flag what the criterion ASSERTS, not what it sets up.
+
+FLAG any verification criterion that violates ANY rule above, OR that fails to cover the intent of an acceptance criterion.
+Output ONLY a JSON array of short flag strings, e.g. ["VC 2 prescribes <an approach> — restate as observable outcome"]. Output [] if every VC is clean. No prose, no markdown.
+
+# Output
+```json
+[
+  "VC 1 asserts rendered values 'corresponding to the unpublished state' — cross-comparison; restate as observable outcome on its own",
+  "No VC verifies that required preview environment variables are documented — coverage gap for ticket intent"
+]
+```

@@ -1,0 +1,203 @@
+  LLMSettings: loaded fallback defaults from /home/bradleyjerome/projects/ai/epam-cli/orchestrations/projects/mock3/llm-settings.json
+[0;32m[SUCCESS][0m Prerequisites check passed
+[0;34m[2026-08-18 07:34:32][0m ======================================
+[0;34m[2026-08-18 07:34:32][0m EPAM CLI Orchestration Loop Starting
+[0;34m[2026-08-18 07:34:32][0m Stories to implement: MOCK3-2
+[0;34m[2026-08-18 07:34:32][0m ======================================
+
+Project: mock3
+Description: A two-codeline transit-fares and departure-board workspace used to exercise the orchestration pipeline end to end.
+Tech Stack: 
+
+
+
+[0;34m[2026-08-18 07:34:32][0m --------------------------------------
+[0;32m+ No dependencies for MOCK3-2[0m
+[0;34m[2026-08-18 07:34:32][0m Implementing story: MOCK3-2 - The departure board omits the final stop
+[0;34m[2026-08-18 07:34:32][0m   EffortTier[CPA] -> upgrading low → medium (cpaEffortTier=medium coverageComplete=true)
+[0;34m[2026-08-18 07:34:32][0m   Effort[medium] -> turns=unlimited maxIter=10 maxOutTok=6144
+[0;34m[2026-08-18 07:34:32][0m   BrownfieldEffortFloor: reasoning-model headroom -> maxIter=16 maxOutTok=24576 (think + write must fit one response)
+[0;34m[2026-08-18 07:34:32][0m   Effort[final] -> maxIter=16 maxOutTok=24576
+[0;34m[2026-08-18 07:34:32][0m   Provider[minimax] -> CLI=epam
+[0;34m[2026-08-18 07:34:32][0m   Model[prd.json] -> MiniMax-M3 (overrides effort default)
+[0;34m[2026-08-18 07:34:32][0m   BrownfieldEffortFloor(reasoning): low -> medium (story-point-derived LOW is not enough for a brownfield fix)
+[0;34m[2026-08-18 07:34:32][0m   ReasoningEffort[prd.json] -> medium
+[0;34m[2026-08-18 07:34:32][0m Invoking epam (attempt 1/12)...
+[1;33m[WARNING][0m   [dependency-scan] not performed: dependency declaration is incomplete — missing: manifestFile, manifestKeys, scanFileExtensions, importPattern, vendorDirs
+[0;34m[2026-08-18 07:34:32][0m   ReuseGuard: 'formatStops' enforced at write time on /home/bradleyjerome/projects/mock3/mock-b/test/schedule.test.ts
+[0;34m[2026-08-18 07:34:33][0m   ModelOverride[MiniMax-M3]: effort=high temp=0.2 maxIter=120 compaction=token-threshold (tokenThreshold=180000)
+[0;34m[2026-08-18 07:35:10][0m   Cost[MOCK3-2] model=MiniMax-M3 in=35209 (cached 27520 = 78.2%) out=2301 cost=$0.0133[full-rate est] elapsed=.63min status=attempt
+[0;32m[SUCCESS][0m Verified 2 declared deliverable(s) for MOCK3-2
+[1;33m[WARNING][0m   [tsc-verify] MOCK3-2: TypeScript errors — feeding into retry loop
+[1;33m[WARNING][0m epam deliverables written but the project type check failed
+[0;34m[2026-08-18 07:35:10][0m   Coordinator[L1]: quality failure (agent ran, result produced) — escalation tentatively approved
+[0;34m[2026-08-18 07:35:10][0m   [FailureAnalyst] Analyzing test failure for MOCK3-2 (gate=z-ai/glm-5.2)...
+[0;31m[ERROR][0m   [FailureAnalyst] cannot build prompt: [prompt-library] prompt 'failure-analyst' is missing values for: __MANIFEST_FILE__
+[1;33m[WARNING][0m epam failed, retrying in 5s...
+[0;34m[2026-08-18 07:35:15][0m   InferenceLadder[Rung0/R1]: same rung — no escalation, self-heal guidance active
+[1;33m[WARNING][0m   [PromptScratchpad] Prompt exceeded 16000 chars (18735 actual) — full history written to /home/bradleyjerome/projects/ai/epam-cli/orchestrations/logs/kb-scratchpad/MOCK3-2-attempt-2.md, trimming to most recent guidance (up to 3)
+[0;34m[2026-08-18 07:35:16][0m Invoking epam (attempt 2/12)...
+[1;33m[WARNING][0m   [dependency-scan] not performed: dependency declaration is incomplete — missing: manifestFile, manifestKeys, scanFileExtensions, importPattern, vendorDirs
+[0;34m[2026-08-18 07:35:16][0m   ReuseGuard: 'formatStops' enforced at write time on /home/bradleyjerome/projects/mock3/mock-b/test/schedule.test.ts
+[0;34m[2026-08-18 07:35:16][0m   [EffortEscalation] model unchanged (MiniMax-M3) — effort high → max
+[0;34m[2026-08-18 07:35:16][0m   ModelOverride[MiniMax-M3]: effort=high temp=0.2 maxIter=120 compaction=token-threshold (tokenThreshold=180000)
+[0;34m[2026-08-18 07:36:16][0m   Cost[MOCK3-2] model=MiniMax-M3 in=151049 (cached 138880 = 91.9%) out=3331 cost=$0.0493[full-rate est] elapsed=1.00min status=attempt
+[0;32m[SUCCESS][0m Verified 2 declared deliverable(s) for MOCK3-2
+[1;33m[WARNING][0m   [tsc-verify] MOCK3-2: TypeScript errors — feeding into retry loop
+[1;33m[WARNING][0m epam deliverables written but the project type check failed
+[0;34m[2026-08-18 07:36:16][0m   Coordinator[L1]: quality failure (agent ran, result produced) — escalation tentatively approved
+[0;34m[2026-08-18 07:36:16][0m   [FailureAnalyst] Analyzing test failure for MOCK3-2 (gate=z-ai/glm-5.2)...
+[0;31m[ERROR][0m   [FailureAnalyst] cannot build prompt: [prompt-library] prompt 'failure-analyst' is missing values for: __MANIFEST_FILE__
+[1;33m[WARNING][0m epam failed, retrying in 5s...
+[0;34m[2026-08-18 07:36:21][0m   InferenceLadder[Rung1/R2]: model 'MiniMax-M3' → 'z-ai/glm-5.2'
+[0;34m[2026-08-18 07:36:21][0m   WorktreeReset[MOCK3-2]: skipped — the attempt changed at least one file the spec says MUST change; partial work preserved
+[1;33m[WARNING][0m   [PromptScratchpad] Prompt exceeded 16000 chars (23624 actual) — full history written to /home/bradleyjerome/projects/ai/epam-cli/orchestrations/logs/kb-scratchpad/MOCK3-2-attempt-3.md, trimming to most recent guidance (up to 3)
+[0;34m[2026-08-18 07:36:22][0m Invoking epam (attempt 3/12)...
+[1;33m[WARNING][0m   [dependency-scan] not performed: dependency declaration is incomplete — missing: manifestFile, manifestKeys, scanFileExtensions, importPattern, vendorDirs
+[0;34m[2026-08-18 07:36:22][0m   ReuseGuard: 'formatStops' enforced at write time on /home/bradleyjerome/projects/mock3/mock-b/test/schedule.test.ts
+[0;34m[2026-08-18 07:36:22][0m   ModelOverride[z-ai/glm-5.2]: effort=high temp=0.9 maxIter=125 compaction=token-threshold (tokenThreshold=180000)
+[0;34m[2026-08-18 07:36:23][0m   Cost[MOCK3-2] model=z-ai/glm-5.2 in=151049 (cached 138880 = 91.9%) out=3331 cost=$0.0493[full-rate est] elapsed=.01min status=attempt
+[1;33m[WARNING][0m   Coordinator[L1]: environment failure detected (raw=0 bytes, exit=1) — diagnosing before escalation decision
+[0;34m[2026-08-18 07:36:23][0m   Coordinator[Diag]: OpenRouter key OK (label=sk-or-v1-f16...dfa)
+[0;34m[2026-08-18 07:36:23][0m   Coordinator[Diag]: binary and key are healthy — model/timeout issue; allowing escalation to retryModel
+[0;34m[2026-08-18 07:36:23][0m   [FailureAnalyst] Analyzing test failure for MOCK3-2 (gate=z-ai/glm-5.2)...
+[0;31m[ERROR][0m   [FailureAnalyst] cannot build prompt: [prompt-library] prompt 'failure-analyst' is missing values for: __MANIFEST_FILE__
+[1;33m[WARNING][0m epam failed, retrying in 5s...
+[0;34m[2026-08-18 07:36:28][0m   InferenceLadder[Rung1/R3]: same rung — no escalation, self-heal guidance active
+[1;33m[WARNING][0m   [PromptScratchpad] Prompt exceeded 16000 chars (23888 actual) — full history written to /home/bradleyjerome/projects/ai/epam-cli/orchestrations/logs/kb-scratchpad/MOCK3-2-attempt-4.md, trimming to most recent guidance (up to 3)
+[0;34m[2026-08-18 07:36:29][0m Invoking epam (attempt 4/12)...
+[1;33m[WARNING][0m   [dependency-scan] not performed: dependency declaration is incomplete — missing: manifestFile, manifestKeys, scanFileExtensions, importPattern, vendorDirs
+[0;34m[2026-08-18 07:36:29][0m   ReuseGuard: 'formatStops' enforced at write time on /home/bradleyjerome/projects/mock3/mock-b/test/schedule.test.ts
+[0;34m[2026-08-18 07:36:29][0m   [EffortEscalation] model unchanged (z-ai/glm-5.2) — effort already at ceiling (high)
+[0;34m[2026-08-18 07:36:29][0m   ModelOverride[z-ai/glm-5.2]: effort=high temp=0.9 maxIter=125 compaction=token-threshold (tokenThreshold=180000)
+[0;34m[2026-08-18 07:36:30][0m   Cost[MOCK3-2] model=z-ai/glm-5.2 in=151049 (cached 138880 = 91.9%) out=3331 cost=$0.0493[full-rate est] elapsed=.01min status=attempt
+[1;33m[WARNING][0m   Coordinator[L1]: environment failure detected (raw=0 bytes, exit=1) — diagnosing before escalation decision
+[0;34m[2026-08-18 07:36:30][0m   Coordinator[Diag]: OpenRouter key OK (label=sk-or-v1-f16...dfa)
+[0;34m[2026-08-18 07:36:30][0m   Coordinator[Diag]: binary and key are healthy — model/timeout issue; allowing escalation to retryModel
+[0;34m[2026-08-18 07:36:30][0m   [FailureAnalyst] Analyzing test failure for MOCK3-2 (gate=z-ai/glm-5.2)...
+[0;31m[ERROR][0m   [FailureAnalyst] cannot build prompt: [prompt-library] prompt 'failure-analyst' is missing values for: __MANIFEST_FILE__
+[1;33m[WARNING][0m epam failed, retrying in 5s...
+[0;34m[2026-08-18 07:36:35][0m   InferenceLadder[Rung2/R4]: tier=medium
+[0;34m[2026-08-18 07:36:35][0m   InferenceLadder[Rung2/R4]: no ladder step — keeping model, effort → medium
+[0;34m[2026-08-18 07:36:35][0m   WorktreeReset[MOCK3-2]: skipped — the attempt changed at least one file the spec says MUST change; partial work preserved
+[1;33m[WARNING][0m   [PromptScratchpad] Prompt exceeded 16000 chars (24152 actual) — full history written to /home/bradleyjerome/projects/ai/epam-cli/orchestrations/logs/kb-scratchpad/MOCK3-2-attempt-5.md, trimming to most recent guidance (up to 3)
+[0;34m[2026-08-18 07:36:36][0m Invoking epam (attempt 5/12)...
+[1;33m[WARNING][0m   [dependency-scan] not performed: dependency declaration is incomplete — missing: manifestFile, manifestKeys, scanFileExtensions, importPattern, vendorDirs
+[0;34m[2026-08-18 07:36:36][0m   ReuseGuard: 'formatStops' enforced at write time on /home/bradleyjerome/projects/mock3/mock-b/test/schedule.test.ts
+[0;34m[2026-08-18 07:36:36][0m   [EffortEscalation] model unchanged (z-ai/glm-5.2) — effort already at ceiling (high)
+[0;34m[2026-08-18 07:36:36][0m   ModelOverride[z-ai/glm-5.2]: effort=high temp=0.9 maxIter=130 compaction=token-threshold (tokenThreshold=180000)
+[0;34m[2026-08-18 07:36:37][0m   Cost[MOCK3-2] model=z-ai/glm-5.2 in=151049 (cached 138880 = 91.9%) out=3331 cost=$0.0493[full-rate est] elapsed=.01min status=attempt
+[1;33m[WARNING][0m   Coordinator[L1]: environment failure detected (raw=0 bytes, exit=1) — diagnosing before escalation decision
+[0;34m[2026-08-18 07:36:37][0m   Coordinator[Diag]: OpenRouter key OK (label=sk-or-v1-f16...dfa)
+[0;34m[2026-08-18 07:36:37][0m   Coordinator[Diag]: binary and key are healthy — model/timeout issue; allowing escalation to retryModel
+[0;34m[2026-08-18 07:36:37][0m   [FailureAnalyst] Analyzing test failure for MOCK3-2 (gate=z-ai/glm-5.2)...
+[0;31m[ERROR][0m   [FailureAnalyst] cannot build prompt: [prompt-library] prompt 'failure-analyst' is missing values for: __MANIFEST_FILE__
+[1;33m[WARNING][0m epam failed, retrying in 5s...
+[0;34m[2026-08-18 07:36:42][0m   InferenceLadder[Rung2/R5]: same rung — no escalation, self-heal guidance active
+[1;33m[WARNING][0m   [PromptScratchpad] Prompt exceeded 16000 chars (24416 actual) — full history written to /home/bradleyjerome/projects/ai/epam-cli/orchestrations/logs/kb-scratchpad/MOCK3-2-attempt-6.md, trimming to most recent guidance (up to 3)
+[0;34m[2026-08-18 07:36:43][0m Invoking epam (attempt 6/12)...
+[1;33m[WARNING][0m   [dependency-scan] not performed: dependency declaration is incomplete — missing: manifestFile, manifestKeys, scanFileExtensions, importPattern, vendorDirs
+[0;34m[2026-08-18 07:36:43][0m   ReuseGuard: 'formatStops' enforced at write time on /home/bradleyjerome/projects/mock3/mock-b/test/schedule.test.ts
+[0;34m[2026-08-18 07:36:43][0m   [EffortEscalation] model unchanged (z-ai/glm-5.2) — effort already at ceiling (high)
+[0;34m[2026-08-18 07:36:43][0m   ModelOverride[z-ai/glm-5.2]: effort=high temp=0.9 maxIter=130 compaction=token-threshold (tokenThreshold=180000)
+[0;34m[2026-08-18 07:36:44][0m   Cost[MOCK3-2] model=z-ai/glm-5.2 in=151049 (cached 138880 = 91.9%) out=3331 cost=$0.0493[full-rate est] elapsed=.01min status=attempt
+[1;33m[WARNING][0m   Coordinator[L1]: environment failure detected (raw=0 bytes, exit=1) — diagnosing before escalation decision
+[0;34m[2026-08-18 07:36:44][0m   Coordinator[Diag]: OpenRouter key OK (label=sk-or-v1-f16...dfa)
+[0;34m[2026-08-18 07:36:44][0m   Coordinator[Diag]: binary and key are healthy — model/timeout issue; allowing escalation to retryModel
+[0;34m[2026-08-18 07:36:44][0m   [FailureAnalyst] Analyzing test failure for MOCK3-2 (gate=z-ai/glm-5.2)...
+[0;31m[ERROR][0m   [FailureAnalyst] cannot build prompt: [prompt-library] prompt 'failure-analyst' is missing values for: __MANIFEST_FILE__
+[1;33m[WARNING][0m epam failed, retrying in 5s...
+[0;34m[2026-08-18 07:36:49][0m   InferenceLadder[Rung3/R6]: tier=medium
+[0;34m[2026-08-18 07:36:49][0m   InferenceLadder[Rung3/R6]: model='z-ai/glm-5.2' — effort → high
+[0;34m[2026-08-18 07:36:49][0m   WorktreeReset[MOCK3-2]: skipped — the attempt changed at least one file the spec says MUST change; partial work preserved
+[1;33m[WARNING][0m   [PromptScratchpad] Prompt exceeded 16000 chars (24680 actual) — full history written to /home/bradleyjerome/projects/ai/epam-cli/orchestrations/logs/kb-scratchpad/MOCK3-2-attempt-7.md, trimming to most recent guidance (up to 3)
+[0;34m[2026-08-18 07:36:50][0m Invoking epam (attempt 7/12)...
+[1;33m[WARNING][0m   [dependency-scan] not performed: dependency declaration is incomplete — missing: manifestFile, manifestKeys, scanFileExtensions, importPattern, vendorDirs
+[0;34m[2026-08-18 07:36:50][0m   ReuseGuard: 'formatStops' enforced at write time on /home/bradleyjerome/projects/mock3/mock-b/test/schedule.test.ts
+[0;34m[2026-08-18 07:36:50][0m   [EffortEscalation] model unchanged (z-ai/glm-5.2) — effort already at ceiling (high)
+[0;34m[2026-08-18 07:36:50][0m   ModelOverride[z-ai/glm-5.2]: effort=high temp=0.9 maxIter=135 compaction=token-threshold (tokenThreshold=180000)
+[0;34m[2026-08-18 07:36:51][0m   Cost[MOCK3-2] model=z-ai/glm-5.2 in=151049 (cached 138880 = 91.9%) out=3331 cost=$0.0493[full-rate est] elapsed=.01min status=attempt
+[1;33m[WARNING][0m   Coordinator[L1]: environment failure detected (raw=0 bytes, exit=1) — diagnosing before escalation decision
+[0;34m[2026-08-18 07:36:51][0m   Coordinator[Diag]: OpenRouter key OK (label=sk-or-v1-f16...dfa)
+[0;34m[2026-08-18 07:36:51][0m   Coordinator[Diag]: binary and key are healthy — model/timeout issue; allowing escalation to retryModel
+[0;34m[2026-08-18 07:36:51][0m   [FailureAnalyst] Analyzing test failure for MOCK3-2 (gate=z-ai/glm-5.2)...
+[0;31m[ERROR][0m   [FailureAnalyst] cannot build prompt: [prompt-library] prompt 'failure-analyst' is missing values for: __MANIFEST_FILE__
+[1;33m[WARNING][0m epam failed, retrying in 5s...
+[0;34m[2026-08-18 07:36:56][0m   InferenceLadder[Rung3/R7]: same rung — no escalation, self-heal guidance active
+[1;33m[WARNING][0m   [PromptScratchpad] Prompt exceeded 16000 chars (24944 actual) — full history written to /home/bradleyjerome/projects/ai/epam-cli/orchestrations/logs/kb-scratchpad/MOCK3-2-attempt-8.md, trimming to most recent guidance (up to 3)
+[0;34m[2026-08-18 07:36:57][0m Invoking epam (attempt 8/12)...
+[1;33m[WARNING][0m   [dependency-scan] not performed: dependency declaration is incomplete — missing: manifestFile, manifestKeys, scanFileExtensions, importPattern, vendorDirs
+[0;34m[2026-08-18 07:36:57][0m   ReuseGuard: 'formatStops' enforced at write time on /home/bradleyjerome/projects/mock3/mock-b/test/schedule.test.ts
+[0;34m[2026-08-18 07:36:57][0m   [EffortEscalation] model unchanged (z-ai/glm-5.2) — effort already at ceiling (high)
+[0;34m[2026-08-18 07:36:57][0m   ModelOverride[z-ai/glm-5.2]: effort=high temp=0.9 maxIter=135 compaction=token-threshold (tokenThreshold=180000)
+[0;34m[2026-08-18 07:36:58][0m   Cost[MOCK3-2] model=z-ai/glm-5.2 in=151049 (cached 138880 = 91.9%) out=3331 cost=$0.0493[full-rate est] elapsed=.01min status=attempt
+[1;33m[WARNING][0m   Coordinator[L1]: environment failure detected (raw=0 bytes, exit=1) — diagnosing before escalation decision
+[0;34m[2026-08-18 07:36:58][0m   Coordinator[Diag]: OpenRouter key OK (label=sk-or-v1-f16...dfa)
+[0;34m[2026-08-18 07:36:58][0m   Coordinator[Diag]: binary and key are healthy — model/timeout issue; allowing escalation to retryModel
+[0;34m[2026-08-18 07:36:58][0m   [FailureAnalyst] Analyzing test failure for MOCK3-2 (gate=z-ai/glm-5.2)...
+[0;31m[ERROR][0m   [FailureAnalyst] cannot build prompt: [prompt-library] prompt 'failure-analyst' is missing values for: __MANIFEST_FILE__
+[1;33m[WARNING][0m epam failed, retrying in 5s...
+[0;34m[2026-08-18 07:37:03][0m   InferenceLadder[Rung3/R8]: tier=medium
+[0;34m[2026-08-18 07:37:03][0m   InferenceLadder[Rung3/R8]: model='z-ai/glm-5.2' — effort → high
+[0;34m[2026-08-18 07:37:03][0m   WorktreeReset[MOCK3-2]: skipped — the attempt changed at least one file the spec says MUST change; partial work preserved
+[1;33m[WARNING][0m   [PromptScratchpad] Prompt exceeded 16000 chars (25208 actual) — full history written to /home/bradleyjerome/projects/ai/epam-cli/orchestrations/logs/kb-scratchpad/MOCK3-2-attempt-9.md, trimming to most recent guidance (up to 3)
+[0;34m[2026-08-18 07:37:04][0m Invoking epam (attempt 9/12)...
+[1;33m[WARNING][0m   [dependency-scan] not performed: dependency declaration is incomplete — missing: manifestFile, manifestKeys, scanFileExtensions, importPattern, vendorDirs
+[0;34m[2026-08-18 07:37:04][0m   ReuseGuard: 'formatStops' enforced at write time on /home/bradleyjerome/projects/mock3/mock-b/test/schedule.test.ts
+[0;34m[2026-08-18 07:37:04][0m   [EffortEscalation] model unchanged (z-ai/glm-5.2) — effort already at ceiling (high)
+[0;34m[2026-08-18 07:37:04][0m   ModelOverride[z-ai/glm-5.2]: effort=high temp=0.9 maxIter=140 compaction=token-threshold (tokenThreshold=180000)
+[0;34m[2026-08-18 07:37:05][0m   Cost[MOCK3-2] model=z-ai/glm-5.2 in=151049 (cached 138880 = 91.9%) out=3331 cost=$0.0493[full-rate est] elapsed=.01min status=attempt
+[1;33m[WARNING][0m   Coordinator[L1]: environment failure detected (raw=0 bytes, exit=1) — diagnosing before escalation decision
+[0;34m[2026-08-18 07:37:05][0m   Coordinator[Diag]: OpenRouter key OK (label=sk-or-v1-f16...dfa)
+[0;34m[2026-08-18 07:37:05][0m   Coordinator[Diag]: binary and key are healthy — model/timeout issue; allowing escalation to retryModel
+[0;34m[2026-08-18 07:37:05][0m   [FailureAnalyst] Analyzing test failure for MOCK3-2 (gate=z-ai/glm-5.2)...
+[0;31m[ERROR][0m   [FailureAnalyst] cannot build prompt: [prompt-library] prompt 'failure-analyst' is missing values for: __MANIFEST_FILE__
+[1;33m[WARNING][0m epam failed, retrying in 5s...
+[0;34m[2026-08-18 07:37:10][0m   InferenceLadder[Rung4/R9]: same rung — no escalation, self-heal guidance active
+[1;33m[WARNING][0m   [PromptScratchpad] Prompt exceeded 16000 chars (25472 actual) — full history written to /home/bradleyjerome/projects/ai/epam-cli/orchestrations/logs/kb-scratchpad/MOCK3-2-attempt-10.md, trimming to most recent guidance (up to 3)
+[0;34m[2026-08-18 07:37:11][0m Invoking epam (attempt 10/12)...
+[1;33m[WARNING][0m   [dependency-scan] not performed: dependency declaration is incomplete — missing: manifestFile, manifestKeys, scanFileExtensions, importPattern, vendorDirs
+[0;34m[2026-08-18 07:37:11][0m   ReuseGuard: 'formatStops' enforced at write time on /home/bradleyjerome/projects/mock3/mock-b/test/schedule.test.ts
+[0;34m[2026-08-18 07:37:11][0m   [EffortEscalation] model unchanged (z-ai/glm-5.2) — effort already at ceiling (high)
+[0;34m[2026-08-18 07:37:11][0m   ModelOverride[z-ai/glm-5.2]: effort=high temp=0.9 maxIter=140 compaction=token-threshold (tokenThreshold=180000)
+[0;34m[2026-08-18 07:37:12][0m   Cost[MOCK3-2] model=z-ai/glm-5.2 in=151049 (cached 138880 = 91.9%) out=3331 cost=$0.0493[full-rate est] elapsed=.01min status=attempt
+[1;33m[WARNING][0m   Coordinator[L1]: environment failure detected (raw=0 bytes, exit=1) — diagnosing before escalation decision
+[0;34m[2026-08-18 07:37:12][0m   Coordinator[Diag]: OpenRouter key OK (label=sk-or-v1-f16...dfa)
+[0;34m[2026-08-18 07:37:12][0m   Coordinator[Diag]: binary and key are healthy — model/timeout issue; allowing escalation to retryModel
+[0;34m[2026-08-18 07:37:12][0m   [FailureAnalyst] Analyzing test failure for MOCK3-2 (gate=z-ai/glm-5.2)...
+[0;31m[ERROR][0m   [FailureAnalyst] cannot build prompt: [prompt-library] prompt 'failure-analyst' is missing values for: __MANIFEST_FILE__
+[1;33m[WARNING][0m epam failed, retrying in 5s...
+[0;34m[2026-08-18 07:37:17][0m   InferenceLadder[Rung3/R10]: tier=medium
+[0;34m[2026-08-18 07:37:17][0m   InferenceLadder[Rung3/R10]: model='z-ai/glm-5.2' — effort → high
+[0;34m[2026-08-18 07:37:17][0m   WorktreeReset[MOCK3-2]: skipped — the attempt changed at least one file the spec says MUST change; partial work preserved
+[1;33m[WARNING][0m   [PromptScratchpad] Prompt exceeded 16000 chars (25737 actual) — full history written to /home/bradleyjerome/projects/ai/epam-cli/orchestrations/logs/kb-scratchpad/MOCK3-2-attempt-11.md, trimming to most recent guidance (up to 3)
+[0;34m[2026-08-18 07:37:18][0m Invoking epam (attempt 11/12)...
+[1;33m[WARNING][0m   [dependency-scan] not performed: dependency declaration is incomplete — missing: manifestFile, manifestKeys, scanFileExtensions, importPattern, vendorDirs
+[0;34m[2026-08-18 07:37:18][0m   ReuseGuard: 'formatStops' enforced at write time on /home/bradleyjerome/projects/mock3/mock-b/test/schedule.test.ts
+[0;34m[2026-08-18 07:37:18][0m   [EffortEscalation] model unchanged (z-ai/glm-5.2) — effort already at ceiling (high)
+[0;34m[2026-08-18 07:37:18][0m   ModelOverride[z-ai/glm-5.2]: effort=high temp=0.9 maxIter=145 compaction=token-threshold (tokenThreshold=180000)
+[0;34m[2026-08-18 07:37:19][0m   Cost[MOCK3-2] model=z-ai/glm-5.2 in=151049 (cached 138880 = 91.9%) out=3331 cost=$0.0493[full-rate est] elapsed=.01min status=attempt
+[1;33m[WARNING][0m   Coordinator[L1]: environment failure detected (raw=0 bytes, exit=1) — diagnosing before escalation decision
+[0;34m[2026-08-18 07:37:19][0m   Coordinator[Diag]: OpenRouter key OK (label=sk-or-v1-f16...dfa)
+[0;34m[2026-08-18 07:37:19][0m   Coordinator[Diag]: binary and key are healthy — model/timeout issue; allowing escalation to retryModel
+[0;34m[2026-08-18 07:37:19][0m   [FailureAnalyst] Analyzing test failure for MOCK3-2 (gate=z-ai/glm-5.2)...
+[0;31m[ERROR][0m   [FailureAnalyst] cannot build prompt: [prompt-library] prompt 'failure-analyst' is missing values for: __MANIFEST_FILE__
+[1;33m[WARNING][0m epam failed, retrying in 5s...
+[0;34m[2026-08-18 07:37:24][0m   InferenceLadder[Rung5/R11]: same rung — no escalation, self-heal guidance active
+[1;33m[WARNING][0m   [PromptScratchpad] Prompt exceeded 16000 chars (26001 actual) — full history written to /home/bradleyjerome/projects/ai/epam-cli/orchestrations/logs/kb-scratchpad/MOCK3-2-attempt-12.md, trimming to most recent guidance (up to 3)
+[0;34m[2026-08-18 07:37:25][0m Invoking epam (attempt 12/12)...
+[1;33m[WARNING][0m   [dependency-scan] not performed: dependency declaration is incomplete — missing: manifestFile, manifestKeys, scanFileExtensions, importPattern, vendorDirs
+[0;34m[2026-08-18 07:37:25][0m   ReuseGuard: 'formatStops' enforced at write time on /home/bradleyjerome/projects/mock3/mock-b/test/schedule.test.ts
+[0;34m[2026-08-18 07:37:25][0m   [EffortEscalation] model unchanged (z-ai/glm-5.2) — effort already at ceiling (high)
+[0;34m[2026-08-18 07:37:25][0m   ModelOverride[z-ai/glm-5.2]: effort=high temp=0.9 maxIter=145 compaction=token-threshold (tokenThreshold=180000)
+[0;34m[2026-08-18 07:37:25][0m   Cost[MOCK3-2] model=z-ai/glm-5.2 in=151049 (cached 138880 = 91.9%) out=3331 cost=$0.0493[full-rate est] elapsed=0min status=attempt
+[1;33m[WARNING][0m   Coordinator[L1]: environment failure detected (raw=0 bytes, exit=1) — diagnosing before escalation decision
+[0;34m[2026-08-18 07:37:26][0m   Coordinator[Diag]: OpenRouter key OK (label=sk-or-v1-f16...dfa)
+[0;34m[2026-08-18 07:37:26][0m   Coordinator[Diag]: binary and key are healthy — model/timeout issue; allowing escalation to retryModel
+[0;31m[ERROR][0m Failed to implement MOCK3-2 after 12 attempts
+[0;34m[2026-08-18 07:37:29][0m   Cost[MOCK3-2] model=z-ai/glm-5.2 in=151049 (cached 138880 = 91.9%) out=3331 cost=$0.0493[full-rate est] elapsed=2.95min status=failed
+[1;33m[WARNING][0m Story MOCK3-2 marked as failed
+[0;34m[2026-08-18 07:37:29][0m ======================================
+[0;34m[2026-08-18 07:37:29][0m EPAM CLI Orchestration Loop Complete
+[0;34m[2026-08-18 07:37:29][0m Implemented: 0, Failed: 1, Skipped: 0
+[0;34m[2026-08-18 07:37:29][0m ======================================

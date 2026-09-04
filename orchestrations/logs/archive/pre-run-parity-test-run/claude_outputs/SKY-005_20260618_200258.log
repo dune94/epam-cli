@@ -1,0 +1,137 @@
+=== Prompt for SKY-005 (attempt 1) ===
+Generate file for story SKY-005: Build HTML dashboard at src/public/index.html
+
+## Story Description
+Create src/public/index.html — a clean, self-contained single-file HTML dashboard (no build step, no npm, just HTML+CSS+vanilla JS). The dashboard must: (1) have a search form with fields: From (IATA code), To (IATA code), Date (date picker), Adults (number input, default 1, min 1); (2) on form submit, call GET /search?from=&to=&date=&adults= on the same origin and render results; (3) display results in a styled table with columns: Airline, Price, Departure, Arrival, Duration, Stops; (4) include a 'Find Cheapest' button that calls GET /cheapest?from=&to=&date=&adults= on the same origin using the current form field values, and highlights or separately labels the cheapest row; (5) show a loading indicator while requests are in-flight and display error messages when requests fail; (6) support dark mode via CSS custom properties and prefers-color-scheme; (7) be mobile-responsive via responsive CSS (flexbox/grid or media queries). The file must be entirely self-contained — no external CDN links, no imported scripts or stylesheets.
+
+## Acceptance Criteria
+- src/public/index.html exists and is served by the Express app as a static file at the root path
+- The document declares <meta charset='utf-8'>, contains <meta name='viewport' content='width=device-width, initial-scale=1'>, has a <title> element, and the root <html> element carries a lang attribute (e.g. lang='en')
+- The four search fields are contained in a <form> element; each field has a corresponding <label> associated via matching for/id attributes: From (type=text, IATA placeholder), To (type=text, IATA placeholder), Date (type=date), Adults (type=number, default value 1, min 1)
+- The form's submit handler calls event.preventDefault(); pressing Enter within any field triggers the same search as clicking the submit button, and no full-page reload or URL navigation occurs
+- The From, To, and Date fields carry the native required attribute (or equivalent JS validation is applied before any fetch is issued); submitting with any of those fields empty does NOT issue a network request — a validation message (native browser or inline) is shown instead
+- Field values for From and To are trimmed of leading/trailing whitespace before being encoded into query parameters; an input containing only whitespace is treated as empty and triggers the same validation message as a blank field
+- Submitting the form issues GET /search?from=&to=&date=&adults= on the same origin with field values encoded via URLSearchParams or encodeURIComponent
+- The 'Find Cheapest' button issues GET /cheapest?from=&to=&date=&adults= on the same origin, passing the same four parameter values currently present in the search form fields at the time of the click; the button is keyboard-operable (focusable and activatable via Enter/Space) and is not a plain <div> or <span>
+- The search submit button is disabled (disabled attribute set) while a /search request is in-flight; the 'Find Cheapest' button is disabled (disabled attribute set) while a /cheapest request is in-flight — preventing duplicate concurrent requests for each respective action; both buttons are re-enabled once their respective request resolves (success or error)
+- A loading indicator (spinner or 'Searching...' text) is visible while a /search request is in-flight and is hidden (display:none or equivalent) once the request resolves (success or error); a separate or shared loading indicator is visible while a /cheapest request is in-flight and hidden once it resolves
+- Loading indicators and error messages are placed in or associated with an aria-live='polite' region or role='alert' element so screen reader users are notified of state changes without requiring focus movement
+- On a successful /search response the results table renders one row per flight with columns: Airline, Price, Departure, Arrival, Duration, Stops
+- The results table uses <thead> containing <th scope='col'> elements for each column header (Airline, Price, Departure, Arrival, Duration, Stops) and a <tbody> for data rows, so screen readers can associate cells with headers
+- If /search returns an empty flights array (data.flights.length === 0), a 'No results found' (or equivalent) message is displayed and no stale rows or header-only empty table from a prior search remain visible
+- If /search returns an HTTP error or the fetch rejects (network failure), an error message is displayed inline in the UI (not just logged to console.log)
+- If /cheapest returns an HTTP error or the fetch rejects (network failure), an error message is displayed inline in the UI (not just logged to console.log)
+- A previously displayed error message is cleared when the next /search or /cheapest request begins, so stale error text does not persist alongside fresh results
+- Submitting a new search clears any previously rendered results table rows and any existing cheapest highlight before rendering the new response
+- The row in the results table matching the /cheapest response is visually distinguished (e.g. highlighted background or 'Cheapest' badge) and carries an accessible label (e.g. aria-label or a visually-hidden text node indicating it is the cheapest option); if no table results are currently displayed, the cheapest flight details (Airline, Price, Departure, Arrival, Duration, Stops) are shown in a separate clearly labelled summary section
+- All flight data from API responses is rendered using safe DOM methods (e.g. textContent, createElement, setAttribute) rather than by interpolating API-supplied strings directly into innerHTML — this prevents XSS if an upstream API field contains HTML or script content
+- When a second /search request is submitted while a prior /search request is still in-flight, the earlier request is aborted via AbortController and its response is discarded; when a second /cheapest request is submitted while a prior /cheapest request is still in-flight, the earlier request is aborted via AbortController — out-of-order responses must never overwrite results from a newer request
+- The page applies distinct background and foreground colors when the OS/browser prefers dark mode (via @media (prefers-color-scheme: dark) using CSS custom properties defined on :root); at minimum, background-color and color values differ meaningfully from light-mode values
+- On a viewport width of 375px the form fields and results table are usable without horizontal scrolling of the page body — the table either scrolls horizontally within its own container (overflow-x: auto on a wrapper) or its columns stack/reflow appropriately
+- The HTML file contains no <link rel='stylesheet' href='...'> pointing to external origins and no <script src='...'> pointing to external origins — all CSS is in a <style> block and all JS is in a <script> block within the single file
+
+## Technical Notes
+- workingDir: /tmp/skyscanner-app
+- files: ["/tmp/skyscanner-app/src/public/index.html"]
+- dependsOn: ["SKY-004"]
+
+## Files to Create
+/tmp/skyscanner-app/src/public/index.html
+
+## Dependencies (already implemented — do NOT read them)
+SKY-004
+
+## GENERATOR CONTRACT — READ THIS FIRST
+You are a FILE GENERATOR. Your ONLY job is to write the file listed under "Files to Create".
+
+**MANDATORY FIRST ACTION: Call WriteFile immediately. Do NOT call any other tool first.**
+
+Rules:
+1. Your FIRST tool call MUST be WriteFile to the target path above.
+2. Do NOT call ReadFile, ListFiles, Bash, Search, or any other tool before WriteFile.
+3. Write the COMPLETE file content in a single WriteFile call.
+4. After WriteFile succeeds, you are done. No verification reads, no follow-up patches.
+5. All information you need is in this prompt. The spec is authoritative — do NOT read existing files for context.
+
+Generation approach: read every acceptance criterion once, hold them all in mind, then write a file that satisfies all of them in one shot.
+
+## Relevant Knowledge Base Entries
+No prior KB entries match your agent role yet.
+
+## Knowledge Base Contribution
+Your assigned KB entry ID for this run: **KB-008**
+
+If you discover a non-obvious pattern, gotcha, or anti-pattern during this implementation (or this is a retry), append exactly one entry to `orchestrations/agents/KB.md` using this format:
+
+```markdown
+## KB-008 -- 2026-06-18
+
+**Category:** <backend|frontend|infrastructure|testing|orchestration>
+**AgentRole:** <your agentRole from the story>
+**Tags:** <comma-separated tech keywords, e.g. typescript, node, cli>
+**Trigger:** <retry|first-success>
+**StoryRef:** SKY-005
+
+<One concise paragraph: the specific pattern, gotcha, or anti-pattern. Precise enough that a future Claude instance can apply it without re-discovering it.>
+```
+
+Only write an entry if the knowledge is genuinely non-obvious. Skip trivial observations.
+=== End Prompt ===
+
+=== epam Output (attempt 1) ===
+The file `/tmp/skyscanner-app/src/public/index.html` has been written. Here's a summary of how every acceptance criterion is satisfied:
+
+### Key implementation decisions
+
+| Requirement | Implementation |
+|---|---|
+| `lang`, `charset`, `viewport`, `title` | All present on `<html lang="en">` and in `<head>` |
+| Four labelled form fields with `for`/`id` | `<label for="from">` etc., all wired up |
+| `required` on From/To/Date | Native `required` attribute + JS `setCustomValidity`/`reportValidity` for trimmed-empty check |
+| Whitespace trimming | `.trim()` applied before validation and before `URLSearchParams` encoding |
+| `event.preventDefault()` | Called in `form.addEventListener('submit', ...)` |
+| `/search` & `/cheapest` fetch calls | `GET /search?...` and `GET /cheapest?...` via `URLSearchParams` |
+| Buttons disabled while in-flight | `searchBtn.disabled = true` / `cheapestBtn.disabled = true` in flight, reset in `.finally()` |
+| Loading indicators show/hide | `.visible` class toggled; hidden by default via `display:none` |
+| `aria-live="polite"` region | Single `#status-region` wraps both spinners and both error divs |
+| Results table with `<thead>/<th scope="col">/<tbody>` | Full semantic table structure |
+| "No results found" message | `#no-results` shown when `flights.length === 0` |
+| Inline error messages (not just console) | `showSearchError` / `showCheapestError` display in `role="alert"` divs |
+| Errors cleared on new request | `clearErrors()` called at start of each request |
+| New search clears old results | `clearResults()` called before each search |
+| Cheapest highlight + accessible label | `aria-label`, `.cheapest-badge`, `.sr-only` text node |
+| Cheapest summary when no table | `#cheapest-summary` section with `<dl>` |
+| Safe DOM (no innerHTML with data) | All data via `textContent`, `createElement`, `setAttribute` |
+| AbortController for race conditions | Unconditional abort-and-replace pattern for both slots |
+| Dark mode | `@media (prefers-color-scheme: dark)` overrides all `--custom-properties` |
+| Mobile responsive at 375px | `overflow-x: auto` on `.table-wrapper`, `grid-template-columns` with `auto-fit`, responsive button stacking |
+| No external CDN/scripts | All CSS in `<style>`, all JS in `<script>` — zero external links |
+The file `/tmp/skyscanner-app/src/public/index.html` has been written. Here's a summary of how every acceptance criterion is satisfied:
+
+### Key implementation decisions
+
+| Requirement | Implementation |
+|---|---|
+| `lang`, `charset`, `viewport`, `title` | All present on `<html lang="en">` and in `<head>` |
+| Four labelled form fields with `for`/`id` | `<label for="from">` etc., all wired up |
+| `required` on From/To/Date | Native `required` attribute + JS `setCustomValidity`/`reportValidity` for trimmed-empty check |
+| Whitespace trimming | `.trim()` applied before validation and before `URLSearchParams` encoding |
+| `event.preventDefault()` | Called in `form.addEventListener('submit', ...)` |
+| `/search` & `/cheapest` fetch calls | `GET /search?...` and `GET /cheapest?...` via `URLSearchParams` |
+| Buttons disabled while in-flight | `searchBtn.disabled = true` / `cheapestBtn.disabled = true` in flight, reset in `.finally()` |
+| Loading indicators show/hide | `.visible` class toggled; hidden by default via `display:none` |
+| `aria-live="polite"` region | Single `#status-region` wraps both spinners and both error divs |
+| Results table with `<thead>/<th scope="col">/<tbody>` | Full semantic table structure |
+| "No results found" message | `#no-results` shown when `flights.length === 0` |
+| Inline error messages (not just console) | `showSearchError` / `showCheapestError` display in `role="alert"` divs |
+| Errors cleared on new request | `clearErrors()` called at start of each request |
+| New search clears old results | `clearResults()` called before each search |
+| Cheapest highlight + accessible label | `aria-label`, `.cheapest-badge`, `.sr-only` text node |
+| Cheapest summary when no table | `#cheapest-summary` section with `<dl>` |
+| Safe DOM (no innerHTML with data) | All data via `textContent`, `createElement`, `setAttribute` |
+| AbortController for race conditions | Unconditional abort-and-replace pattern for both slots |
+| Dark mode | `@media (prefers-color-scheme: dark)` overrides all `--custom-properties` |
+| Mobile responsive at 375px | `overflow-x: auto` on `.table-wrapper`, `grid-template-columns` with `auto-fit`, responsive button stacking |
+| No external CDN/scripts | All CSS in `<style>`, all JS in `<script>` — zero external links |
+
+=== End epam Output ===

@@ -1,0 +1,29 @@
+# Prompt
+Regenerate the VERIFICATION CRITERIA for this brownfield story. Your previous verification criteria were FLAGGED and must be fixed:
+- VC 1 prescribes internal mechanism 'Contentstack client is mocked' — restate as observable outcome on the page
+- VC 2 prescribes internal mechanism 'Contentstack client is mocked' — restate as observable outcome per brand
+- VC 3 references internal structure 'useContent' — restate as what the user sees on the page without live preview
+- VC 4 prescribes internal mechanism 'Contentstack client is mocked' — restate as observable error/fallback state
+- VC 5 prescribes implementation mechanism 'opt-in or environment-gated' — restate as observable absence of live-preview behavior and bundle-size impact in production
+
+THE FIX SITE (located by the code-graph detective — anchor every criterion to the behaviour THIS code produces):
+- src/services/contentstack.ts :: Stack — This is where the Contentstack SDK Stack client is initialized (contentstack.Stack(options)). Live Preview requires adding live_preview config to the Stack initialization options — this is the single point where the SDK is wired, and without live_preview enabled here, no downstream component or hook can receive preview content updates. The ContentstackProvider and useContent hook only read what this Stack provides.
+Do NOT write criteria about areas unrelated to this code.
+
+
+Acceptance criteria (IMMUTABLE — the intent to verify; do NOT restate as-is, VERIFY them):
+- (none)
+Description: [GO, UP, MX] Live Preview of Content in CMS
+
+A verification criterion states WHAT AN END USER OR TESTER OBSERVES on the user-facing surface THE TICKET IS ABOUT — the rendered email for an email ticket, the displayed screen/UI for a UI ticket, the API response a CLIENT receives for an API ticket. It is a BLACK-BOX check on that surface. It NEVER describes HOW the value is produced.
+A verification criterion is FORBIDDEN if it:
+- prescribes HOW to implement — any algorithm, mechanism, or approach: "split", "halve", "×0.5", "calculate independently", "per segment", "for each line item", or adding/reading any new field, flag, or service;
+- references an INTERNAL structure that merely FEEDS the ticket's surface — an intermediate payload, a "confirmation data"/DTO object, or a specific response field used to BUILD the output. Verify the surface the ticket names, NOT the data structure behind it;
+- makes a CROSS-COMPARISON that presumes a mechanism — never assert one value "must equal" / "matches" / "is the same as" another (e.g. "the return amount equals the outbound amount"); that presumes a copy/split. Assert the required value is present and correct ON ITS OWN.
+Every verification criterion must be observable, testable, and tied to the ticket's stated symptom/intent.
+
+Do NOT restate an acceptance criterion as-is — express what a tester OBSERVES that confirms it. Address every flag above.
+Output ONLY a JSON array of verification-criterion strings. No prose, no markdown.
+
+# Output
+["When a tester edits a published content entry in the Contentstack CMS and then views the corresponding page, the updated content appears on the rendered page without requiring a redeploy of the application.", "The live content-update behavior is observable on each of the three brand market sites — GO, UP, and MX — with each brand's page displaying its own market-specific CMS content and reflecting CMS edits made for that market.", "A visitor viewing the page in a normal (non-preview) session sees the currently published CMS content rendered correctly, with no preview toolbars, editing overlays, or other preview-only artifacts visible on the page.", "When CMS content cannot be retrieved, the page presents a visible fallback or error state (such as a friendly error message or default content) instead of a blank screen or broken layout.", "In the production build, the page content remains static after initial load (no content changes triggered by CMS edits during the session, no preview indicators appear), and the production JavaScript bundle size is not meaningfully increased compared to a build without live-preview support."]

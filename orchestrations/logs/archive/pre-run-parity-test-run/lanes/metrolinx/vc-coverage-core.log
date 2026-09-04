@@ -1,0 +1,27 @@
+  [vc-coverage] no verification criteria — nothing to check
+  [vc-coverage] no verification criteria — nothing to check
+  [vc-coverage] no verification criteria — nothing to check
+  [vc-coverage] no verification criteria — nothing to check
+  [vc-coverage] no test file — skipping
+  [vc-coverage] no verification criteria — nothing to check
+  [vc-coverage] no test file — skipping
+  [vc-coverage] no test file — skipping
+  [vc-coverage] no test file — skipping
+  [vc-coverage] no test file — skipping
+  [vc-coverage] COVERED   When a content author edits a field value in the Contentstack Live Preview sidebar, the correspondin
+  [vc-coverage]           ↳ reflects a new live-preview value on re-render without requiring a full page reload
+  [vc-coverage] UNCOVERED When a content author changes an image field in the Contentstack Live Preview sidebar, the corresponding image
+  [vc-coverage]           The test file exclusively tests ContentstackLink (href and title updates), with no tests exercising image fiel
+  [vc-coverage] UNCOVERED When a content author modifies a link's URL or display text in the Contentstack Live Preview sidebar, the rend
+  [vc-coverage]           The re-render test only asserts that href updates without page reload, but no test re-renders and asserts that
+  [vc-coverage] UNCOVERED When a content author edits a card's title or description in the Contentstack Live Preview sidebar, the render
+  [vc-coverage]           The test file exercises ContentstackLink (anchor href and aria-label), not a card component, so no test assert
+  [vc-coverage] COVERED   When the Contentstack Live Preview connection is unavailable or the preview session is not active, t
+  [vc-coverage]           ↳ falls back to published content when livePreview is undefined (production)
+  [vc-coverage] COVERED   On a production page with no Contentstack Live Preview session active, the page renders all content 
+  [vc-coverage]           ↳ renders published content with no live-preview indicators when preview is not active
+  [vc-coverage] UNCOVERED When a content author adds, removes, or reorders cards in a card list via the Contentstack Live Preview sideba
+  [vc-coverage]           The test file exclusively tests a single ContentstackLink component and never renders a card list, so no asser
+  [vc-coverage] VC_UNCOVERED=4 of 7
+  [vc-coverage] the change is still proven by the bug-reproduction gate — this is a COVERAGE gap, not a correctness one
+  [vc-coverage] no test file — skipping

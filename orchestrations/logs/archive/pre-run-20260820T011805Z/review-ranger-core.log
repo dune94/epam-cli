@@ -1,0 +1,26 @@
+{
+  "agent": "review-ranger",
+  "phase": "core",
+  "summary": { "filesReviewed": 7, "findingsCount": 2, "blockerCount": 0, "majorCount": 1, "minorCount": 1 },
+  "findings": [
+    {
+      "severity": "major",
+      "category": "test coverage gaps",
+      "file": "src/pages/_app.tsx",
+      "line": 56,
+      "codeSnippet": "ContentstackLivePreview.onEntryChange(async () => {",
+      "description": "The new onEntryChange callback in _app.tsx is the core runtime path of this change — it re-fetches draft entries, maps content types to context keys, and merges results into context — but it has no accompanying test. The spec file added (src/services/contentstack.spec.ts) only covers the Stack live_preview wiring and the getEntry/getSingleEntry/getPageContentTypes helpers; the entry-change handler logic (CONTENT_TYPE_CONTEXT_KEY mapping, hash gating, draft overlay) is untested. This is the most behaviorally significant new public entry point in the diff.",
+      "suggestedFix": "Add a test that mounts the app (or extracts the onEntryChange handler into a testable service function) and verifies: (a) no-op when hash is absent, (b) re-fetch via getSingleEntry when entryUid present, (c) re-fetch via getEntry otherwise, (d) setLivePreviewContent receives {[contextKey]: [entry]} for both 'page' and the CONTENT_TYPE_CONTEXT_KEY-mapped types."
+    },
+    {
+      "severity": "minor",
+      "category": "error handling",
+      "file": "src/pages/_app.tsx",
+      "line": 96,
+      "codeSnippet": "} catch (e) {\n        logger.error(e, `Error re-fetching live preview entry for content type: ${contentTypeUid}`);\n      }",
+      "description": "The catch logs and swallows the error on the live-preview re-fetch path. For a preview-only feature this is defensible (draft fetch failures should not crash the page), but the handler neither clears a stale livePreviewContent entry nor signals the user that the preview is stale, so a failed re-fetch leaves the previously-merged draft content in context — a silent staleness window. Acceptable for preview scope, flagged as minor.",
+      "suggestedFix": "On catch, optionally reset the relevant contextKey to undefined (or clear livePreviewContent for that content type) so consumers don't render stale draft data after a fetch failure."
+    }
+  ],
+  "verdict": "pass"
+}

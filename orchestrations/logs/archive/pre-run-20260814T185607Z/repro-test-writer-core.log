@@ -1,0 +1,7 @@
+[repro-test-writer] WARNING: target choice '"...slug"' is not testable source — ignoring
+[repro-test-writer] writing reproducing test for AMSD-2041 (kind: unclassified) → src/pages/[[...slug]].spec.ts (convention: .spec.ts, example: __tests__/next-sitemap.config.spec.ts)
+[repro-test-writer] test produced and validated on attempt 1 (model MiniMax-M3)
+[repro-test-writer] committed reproducing test: src/pages/[[...slug]].spec.ts
+[codegraph-reindex] index is DIRTY for /home/bradleyjerome/projects/metrolinx/next.metrolinx.com (e.g. .epam/codeline-facts.json) — rebuilding (post-commit repro-test AMSD-2041)
+[codegraph-reindex] reindexed /home/bradleyjerome/projects/metrolinx/next.metrolinx.com in 0s (post-commit repro-test AMSD-2041) — reviewer's codegraph_query now sees this story's writes
+[repro-test-writer] a test already accompanies the change (src/services/__tests__/contentstack.spec.ts) — nothing to write

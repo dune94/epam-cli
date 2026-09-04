@@ -1,0 +1,19 @@
+{
+  "agent": "spec-validator",
+  "phase": "core",
+  "stories": [{
+    "storyId": "AMSD-1820",
+    "title": "[Mozio] - Promo code amount not displayed as expected for Return trip tickets in Mozio email confirmation",
+    "criteria": [
+      {
+        "text": "Promo code discount amount should be correctly applied to return trip dispatches in Mozio email confirmations (composite line item keys like `<id>#return` must be parsed back to match order line item discounts)",
+        "status": "met",
+        "evidence": "apply-report-discounts.service.ts was modified to use parseDispatchLineItemKey(lineItem.id) to extract the original orderLineItemId from composite keys (e.g. `line-item-1#return`). The filter now compares the parsed id against discount.lineItemId instead of the raw composite key. A new spec file (apply-report-discounts.service.spec.ts, 151 lines) covers three scenarios: (1) return-trip dispatch gets discount applied with correct amount (10), selling price adjusted (100→90), and name set to `Code:SAVE10`; (2) outbound (non-return) dispatch continues to work; (3) round trip with both outbound and return dispatches each receive their respective discounts. All 164 tests pass (numPassed=164, numFailed=0).",
+        "gaps": "No formal acceptance criteria were defined in prd.json for this story (criteria array is empty). Assessment is based on the story title intent and implementation evidence. The fix is narrowly scoped to apply-report-discounts.service.ts; other expected files listed in technicalNotes (map-to-sanitized-mozio-dispatch.ts, create-reservations.mappers.ts, generate-staff-notes.helpers.ts, map-line-item-return-trip-modification.ts, http-mozio-webhook.ts) show no changes in the git diff, but the core bug — discount not matching for return-trip composite keys — is resolved."
+      }
+    ],
+    "overallCompliance": 100,
+    "verdict": "pass"
+  }],
+  "overallVerdict": "pass"
+}

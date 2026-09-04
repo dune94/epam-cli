@@ -1,0 +1,61 @@
+```json
+{
+  "agent": "mutant-hunter",
+  "phase": "core",
+  "summary": {
+    "mutationsProposed": 5,
+    "killed": 0,
+    "survived": 0,
+    "noCoverage": 5,
+    "mutationScore": 0
+  },
+  "mutations": [
+    {
+      "file": "src/services/contentstack.ts",
+      "line": 92,
+      "originalCode": "retryCondition: (error) => [408, 429, 504].includes(error.status),",
+      "mutatedCode": "retryCondition: (error) => [408, 504].includes(error.status),",
+      "status": "no-coverage",
+      "relatedTest": null,
+      "recommendation": "Retry/failover logic is untested. Removing 429 (rate-limit) from retryable statuses would silently degrade resilience under throttling. Add a unit test that asserts which HTTP statuses trigger a retry."
+    },
+    {
+      "file": "src/services/contentstack.ts",
+      "line": 92,
+      "originalCode": "retryCondition: (error) => [408, 429, 504].includes(error.status),",
+      "mutatedCode": "retryCondition: (error) => [408, 429, 503].includes(error.status),",
+      "status": "no-coverage",
+      "relatedTest": null,
+      "recommendation": "Swapping 504→503 changes which gateway errors are retried. No test verifies the exact retryable status set. Add an assertion covering the full expected status list."
+    },
+    {
+      "file": "src/services/contentstack.ts",
+      "line": 100,
+      "originalCode": "host: CONTENTSTACK_PREVIEW_HOST || \"api.contentstack.io\",",
+      "mutatedCode": "host: CONTENTSTACK_PREVIEW_HOST,",
+      "status": "no-coverage",
+      "relatedTest": null,
+      "recommendation": "Removing the fallback host would cause live preview to fail silently when CONTENTSTACK_PREVIEW_HOST is unset. No test exercises this default. Add a test verifying the fallback host is applied when the env var is absent."
+    },
+    {
+      "file": "src/hooks/useContent.ts",
+      "line": 9,
+      "originalCode": "const effectiveContent = previewPage ? { ...content, page: previewPage } : content;",
+      "mutatedCode": "const effectiveContent = !previewPage ? { ...content, page: previewPage } : content;",
+      "status": "no-coverage",
+      "relatedTest": null,
+      "recommendation": "Negating the preview-page condition would serve stale content during live preview and preview content in production. No test exercises useContent with and without a previewPage. Add a test that renders the hook under both states and asserts the returned page."
+    },
+    {
+      "file": "src/services/contentstack.ts",
+      "line": 72,
+      "originalCode": "if (!API_KEY || !DELIVERY_TOKEN || !ENVIRONMENT || !CONTENTSTACK_BRANCH) {",
+      "mutatedCode": "if (!API_KEY || !DELIVERY_TOKEN || !ENVIRONMENT) {",
+      "status": "no-coverage",
+      "relatedTest": null,
+      "recommendation": "Removing the CONTENTSTACK_BRANCH guard would allow startup with a missing branch — a silent misconfiguration. No test verifies the validation throws on each missing variable. Add a test that sets each variable to empty and asserts the throw."
+    }
+  ],
+  "verdict": "warn"
+}
+```

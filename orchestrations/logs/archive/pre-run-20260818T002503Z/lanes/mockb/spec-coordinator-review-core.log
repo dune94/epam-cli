@@ -1,0 +1,290 @@
+# Prompt
+You are the specification coordinator for the epam-cli orchestration system. Before every phase you read orchestrations/prd.json (implementationOrder and stories), evaluate risk, dependencies, and technical readiness, then assign the correct specification runners: OpenSpec, Speckit, both, or none. You write assignments into each story's specification.assignedAgents field along with coordinatorNotes, target provider/model, and timestamps. You understand the provider policy ledger (configuration.aiRuntime.providerPolicies), token guardrails, and know when to skip stories that were already hand-curated. When you plan a run you emit JSON compliant with spec-mode-runner.js so that automation can apply deltas deterministically. You never invent story IDs or mutate acceptance criteria directly; only delegate to spec agents and record their status.
+
+You are the EPAM CLI specification coordinator reviewing the completed spec outputs for phase core.
+
+Each story was processed by a sequential agent pipeline:
+  1. openspec elaborated requirements (AC refinement, story splits, technical depth)
+  2. speckit reviewed openspec's output (testability, security, edge cases, gap analysis)
+
+For each story, evaluate the quality of the collaborative spec work:
+1. Did both agents add meaningful, non-overlapping value?
+2. Flag any story needing human review.
+3. PLAN ALIGNMENT — where planAlignmentEvidence is present, it tells you what the
+   code-graph-detective SAID it would investigate (detectivePlan) and a deterministic,
+   cheap signal (aligned: true/false) for whether the final fixSiteAnalysis shares any
+   named symbol/file with that plan. This signal is NOT your verdict — it is evidence, the
+   same as MANIFEST EVIDENCE below. A plan can legitimately turn out wrong once real
+   exploration starts. Read detectivePlan and fixSiteAnalysis yourself and judge: did the
+   detective explain WHY it moved from its plan to its final answer (a stated pivot,
+   reasoning that connects the two), or did the answer just change with no explanation?
+   The latter is a real defect (a fix has shipped that shared no term with the detective's
+   own stated plan, with no explanation, more than once on the same ticket) — set
+   planAlignment to justified_deviation when the detective justifies its pivot, or
+   unexplained_mismatch when it does not, and say why in reviewNotes. aligned:true needs
+   no action.
+
+(Brownfield tickets never split and their acceptance criteria are immutable —
+do not evaluate split quality or AC completeness; there is nothing there for
+either agent to have changed.
+
+EXPECTED, NOT A DEFECT: an agent's notes may describe acceptance criteria it
+authored while the story's acceptanceCriteria array is empty, and report
+acceptanceChanged=false. That is this pipeline REDACTING them on purpose: on a
+brownfield ticket the ACs are the ticket's own, and a thin ticket legitimately
+has none. The observable checks live in verificationCriteria — judge THOSE.
+Do not report the mismatch as a hallucination, a persistence failure or a
+metadata inconsistency, and do not lower qualityScore for it. An empty
+acceptanceCriteria array on a brownfield story is correct by policy.)
+
+MANIFEST EVIDENCE (checked against the repository, not asserted):
+  MOCK3-2: EXISTS  src/schedule.ts
+  MOCK3-2: EXISTS  test/schedule.test.ts
+
+
+ANSWER IN THIS RESPONSE. Your <SPEC_REVIEW> verdict must appear in THIS reply — an
+empty <SPEC_REVIEW></SPEC_REVIEW>, or a promise to verify and answer later, is
+discarded and the review does not happen. There is no follow-up turn to come back in.
+
+You DO have read-only tools this turn (read_file, list_files, search). Use them for
+real if something is genuinely unclear — but never narrate an imagined tool result,
+and never spend the whole turn exploring and run out before writing the verdict.
+Budget is small and the verdict is mandatory: gather at most what you need, then answer.
+
+MANIFEST EVIDENCE has already been gathered from the repository for you and appears
+above. Every declared path was checked with a real filesystem stat, so re-checking
+paths is wasted budget — that part is done and is more reliable than a tool call.
+  - A story with any MISSING path CANNOT be implemented: the writer is sent to edit a
+    file that is not there, and every retry reproduces that. Mark it needs_review, name
+    the exact path in reviewNotes, and add the flag "missing_manifest_path".
+  - Where the evidence names a real neighbour ("the directory holds X instead"), say so
+    — that is what makes the report actionable.
+  - Never silently correct a path. The manifest is the artefact under review; a
+    correction living only in your prose reaches nobody.
+
+Judge what the evidence cannot: are the acceptance criteria testable, is the declared
+file set plausible for this change, is anything obviously missing. If you are unsure,
+lower qualityScore and add a flag — do not withhold the verdict. A missing review is
+EVERY FLAG CARRIES A SEVERITY. It ranks your objections for whoever reads them; it does not
+decide whether the run stops — a computed check or a project-declared flag does that. Mark
+blocking when an implementer following this spec would produce work that CANNOT FUNCTION,
+and advisory for uncertainty about what you could not see. Report both honestly: nothing is
+gained by inflating uncertainty into a defect, and nothing is lost by naming a real one.
+worse than an uncertain one: it means nothing was checked at all.
+
+QUALITY SCORE — what the number has to mean. It is enforced: below 0.7 halts the run
+before implementation, so an unanchored guess stops real work.
+  0.9-1.0  the spec is ready to implement; criteria are observable and the file set fits.
+  0.7-0.89 ready to implement, with ordinary open questions a competent writer resolves.
+  0.5-0.69 NOT ready: something concrete is wrong or missing — criteria that cannot be
+           observed, a file set that cannot deliver what is described, contradictions.
+  below 0.5 the spec would send a writer somewhere useless.
+Score what IS in front of you. Do NOT lower the score because an agent could not read the
+source files, or because a human "might want to check" — that is true of every ticket and
+is not a defect in this spec. If your notes cannot name something concretely wrong, the
+score belongs at 0.7 or above.
+
+Respond with JSON between <SPEC_REVIEW> and </SPEC_REVIEW> using this schema:
+[
+  {"storyId":"REM-xxx","verdict":"approved|needs_review","reviewNotes":"coordinator observations","qualityScore":0.0-1.0,"flags":[{"flag":"short-slug","severity":"blocking|advisory","why":"what you checked and what you found"}],"planAlignment":"aligned|justified_deviation|unexplained_mismatch|not_applicable"}
+]
+
+Stories to review:
+[
+  {
+    "id": "MOCK3-2",
+    "title": "The departure board omits the final stop",
+    "acceptanceCriteria": [
+      "Every stop on the line appears on the rendered board, including the final one.",
+      "Stops remain separated by the existing arrow separator.",
+      "An empty line still renders without error."
+    ],
+    "verificationCriteria": [
+      "Given a three-stop line with stops named Union, Bloor, and Eglinton, the rendered departure board includes the text 'Union'",
+      "Given a three-stop line with stops named Union, Bloor, and Eglinton, the rendered departure board includes the text 'Bloor'",
+      "Given a three-stop line with stops named Union, Bloor, and Eglinton, the rendered departure board includes the text 'Eglinton'",
+      "Given a three-stop line with stops named Union, Bloor, and Eglinton, the rendered departure board contains the arrow separator '->'",
+      "Given a line with no stops, the rendered departure board produces an empty string without throwing an error"
+    ],
+    "technicalNotes": {
+      "files": [
+        "src/schedule.ts",
+        "test/schedule.test.ts"
+      ],
+      "perCodeline": {
+        "mockb": {
+          "files": [
+            "src/schedule.ts",
+            "test/schedule.test.ts"
+          ],
+          "resolved": [
+            {
+              "declared": "src/schedule.ts",
+              "actual": "src/schedule.ts",
+              "match": "exact",
+              "verified_against": "/home/bradleyjerome/projects/mock3/mock-b"
+            },
+            {
+              "declared": "test/schedule.test.ts",
+              "actual": "test/schedule.test.ts",
+              "match": "exact",
+              "verified_against": "/home/bradleyjerome/projects/mock3/mock-b"
+            }
+          ],
+          "unresolved": []
+        }
+      }
+    },
+    "specification": {
+      "guardVocabulary": {
+        "blacklist": [
+          {
+            "term": "formatstops",
+            "reason": "Internal function name in src/schedule.ts that produces the rendered output; naming it in a criterion describes the mechanism (HOW), not the user-facing surface (the departure board). Traceable to code evidence: src/schedule.ts :: formatStops."
+          },
+          {
+            "term": "parts",
+            "reason": "Internal accumulator array in formatStops that stop names are pushed into before being joined; it is an intermediate structure that merely feeds the ticket's surface. Traceable to code evidence: 'parts' variable in src/schedule.ts."
+          },
+          {
+            "term": "stops.length",
+            "reason": "Loop bound expression in formatStops (i < stops.length - 1); referencing it prescribes the implementation mechanism. Traceable to code evidence: src/schedule.ts loop bound."
+          },
+          {
+            "term": "parts.join",
+            "reason": "Internal join mechanism that builds the output string from the parts array; it is HOW the output is produced, not what the user observes. Traceable to code evidence: parts.join(' -> ') in src/schedule.ts."
+          }
+        ],
+        "whitelist": [
+          {
+            "term": "departure board",
+            "reason": "The user-facing surface named in the ticket title; this is what the end user or tester observes."
+          },
+          {
+            "term": "stop",
+            "reason": "The observable unit displayed on the departure board — stop names are what the user sees. The ticket is about stops being omitted from the rendered output."
+          },
+          {
+            "term": "->",
+            "reason": "The visible separator between stops on the departure board; an end user or tester perceives this on the rendered surface. Whitelist wins over its code-level occurrence."
+          },
+          {
+            "term": "eglinton",
+            "reason": "A specific stop name that appears in the test evidence; it is an observable value on the departure board surface, not an internal structure."
+          },
+          {
+            "term": "union",
+            "reason": "A specific stop name that appears in the test evidence; it is an observable value on the departure board surface, not an internal structure."
+          }
+        ]
+      },
+      "runId": "20260817T231306Z",
+      "assignedAgents": [
+        "openspec",
+        "speckit"
+      ],
+      "coordinatorNotes": "",
+      "status": "completed",
+      "updatedAt": "2026-08-18T00:15:53.532Z",
+      "appliedAgents": [
+        "openspec",
+        "speckit"
+      ],
+      "agentContributions": [
+        {
+          "agent": "openspec",
+          "applied": true,
+          "notes": "Defect: formatStops loop bound i < stops.length - 1 skips the last stop. The fix site is the loop bound in formatStops. Verification criteria are black-box checks on the string formatStops returns.",
+          "acceptanceChanged": false,
+          "splitCount": 0,
+          "timestamp": "2026-08-18T00:12:50.849Z"
+        },
+        {
+          "agent": "speckit",
+          "applied": true,
+          "notes": "Read src/schedule.ts and test/schedule.test.ts to ground refinements in actual code. Key findings: (1) The bug is i < stops.length - 1 in formatStops, which omits the last stop entirely — both name and minutes. (2) Each stop is formatted as 'Name (Xm)' with minutes — this per-stop format must survive the fix, so AC5 was added as a regression guard. (3) The existing test only checks for the arrow and first stop name, never the last stop — confirming the bug is real and untested. (4) A single-stop line is an edge case the fix must handle (no separator needed). (5) Openspec's AC1 was refined to Given/When/Then and made explicit about 'N stop names' for precise testability. (6) Openspec's AC2 was refined to specify no leading/trailing separator (the bug fix could introduce a trailing separator if done naively). (7) Openspec's AC3 was refined to state the expected output (empty string) rather than the vague 'renders without error'.",
+          "acceptanceChanged": false,
+          "splitCount": 0,
+          "timestamp": "2026-08-18T00:15:53.532Z"
+        }
+      ]
+    },
+    "fixSiteAnalysis": [
+      {
+        "file": "src/schedule.ts",
+        "function": "formatStops",
+        "reason": "The loop bound `i < stops.length - 1` iterates only through index stops.length-2, omitting the final stop. Changing it to `i < stops.length` makes every stop, including the last, get pushed into parts. The separator `' -> '` and per-stop template `${stops[i].name} (${stops[i].minutes}m)` are already correct — the loop bound is the sole defect. For an empty array, length is 0 so the loop body never executes and parts.join(' -> ') returns '', satisfying the empty-line criterion.",
+        "fix": "Change the loop condition from `i < stops.length - 1` to `i < stops.length` so the final stop is included. No other changes to string construction are needed — the `' -> '` separator and the per-element template `${stops[i].name} (${stops[i].minutes}m)` are correct.",
+        "helper": "",
+        "brokenLine": "for (let i = 0; i < stops.length - 1; i++) {",
+        "fixVerified": null,
+        "evidenceVerified": true,
+        "fileVerified": true,
+        "changeRequired": true,
+        "requiredPackages": [],
+        "deliveryRole": "produces",
+        "runsIn": "both",
+        "prescriptionNote": "",
+        "prescriptionUnderspecified": false,
+        "codeline": "mockb"
+      },
+      {
+        "file": "test/schedule.test.ts",
+        "function": "formatStops",
+        "reason": "The existing tests assert the output contains '->' and 'Union' (the first stop) but never assert the final stop ('Eglinton') appears, never assert the full expected output string, and never test formatStops with an empty array. These gaps must be filled to verify the acceptance criteria: every stop appears, arrow separator is used, and empty input renders without error.",
+        "fix": "Add test assertions: (1) that formatStops(LINE) contains the final stop name 'Eglinton', (2) that formatStops(LINE) equals the full expected string 'Union (0m) -> Bloor (12m) -> Eglinton (25m)', and (3) that formatStops([]) returns '' without throwing. Reuse the existing LINE constant and the existing import of formatStops.",
+        "helper": "LINE",
+        "brokenLine": "",
+        "fixVerified": true,
+        "evidenceVerified": null,
+        "fileVerified": true,
+        "changeRequired": true,
+        "requiredPackages": [],
+        "deliveryRole": "verifies",
+        "runsIn": "both",
+        "prescriptionNote": "",
+        "prescriptionUnderspecified": false,
+        "codeline": "mockb"
+      }
+    ],
+    "planAlignmentEvidence": {
+      "detectivePlan": "**Plan:** The pre-computed explore results already gave me the full source of both files, so I have everything I need. The defect is in `formatStops`'s loop bound: `i < stops.length - 1` skips the last element. `totalMinutes` reads the last element directly via `stops[stops.length - 1]`, so it's independent and unaffected. The test suite checks for the arrow separator and the first stop but never asserts the final stop appears, nor does it test `formatStops` with an empty array. I will produce the JSON answer now.\n\n```json\n[{\"file\":\"src/schedule.ts\",\"function\":\"formatStops\",\"reason\":\"The loop bound `i < stops.length - 1` iterates only through index stops.length-2, omitting the final stop. Changing it to `i < stops.length` makes every stop, including the last, get pushed into parts. The separator `' -> '` and per-stop format `${stops[i].name} (${stops[i].minutes}m)` are already correct — the loop bound is the sole defect. For an empty array, length is 0 so the loop body never executes and parts.join(' -> ') returns '', satisfying the empty-line criterion.\",\"brokenLine\":\"for (let i = 0; i < stops.length - 1; i++) {\",\"fix\":\"Change the loop condition from `i < stops.length - 1` to `i < stops.length` so the final stop is included. No other changes to string construction are needed — the `' -> '` separator and the per-element template `${stops[i].name} (${stops[i].minutes}m)` are correct.\",\"helper\":\"\",\"changeRequired\":true,\"requiredPackages\":[],\"deliveryRole\":\"produces\",\"runsIn\":\"both\"},{\"file\":\"test/schedule.test.ts\",\"function\":\"formatStops\",\"reason\":\"The existing tests assert the output contains `'->'` and `'Union'` (the first stop) but never assert the final stop ('Eglinton') appears, never assert the full expected output string, and never test formatStops with an empty array. Once formatStops is fixed, these gaps should be filled to verify the acceptance criteria: every stop appears, arrow separator is used, and empty input renders without error.\",\"brokenLine\":\"\",\"fix\":\"Add test assertions: (1) that formatStops(LINE) contains the final stop name 'Eglinton', (2) that formatStops(LINE) equals the full expected string 'Union (0m) -> Bloor (12m) -> Eglinton (25m)', and (3) that formatStops([]) returns '' without throwing. Reuse the existing LINE constant and the existing import of formatStops.\",\"helper\":\"LINE\",\"changeRequired\":true,\"requiredPackages\":[],\"deliveryRole\":\"verifies\",\"runsIn\":\"both\"},{\"file\":\"src/schedule.ts\",\"function\":\"totalMinutes\",\"reason\":\"totalMinutes reads stops[stops.length - 1].minutes directly — it does not depend on formatStops or its loop at all. The ticket confirms journey length is already correct. No change needed; this file is implicated only to confirm independence.\",\"brokenLine\":\"\",\"fix\":\"No change needed. totalMinutes already reads the last element independently of formatStops, so fixing the formatStops loop will not affect it.\",\"helper\":\"\",\"changeRequired\":false,\"requiredPackages\":[],\"deliveryRole\":\"verifies\",\"runsIn\":\"both\"}]\n```",
+      "aligned": true,
+      "planTerms": [
+        "formatstops",
+        "totalminutes",
+        "json",
+        "schedule",
+        "parts",
+        "brokenline",
+        "changerequired",
+        "requiredpackages",
+        "deliveryrole",
+        "runsin",
+        "line"
+      ],
+      "findingTerms": [
+        "schedule",
+        "formatstops",
+        "scheduletest"
+      ]
+    }
+  }
+]
+
+<SPEC_REVIEW>
+</SPEC_REVIEW>
+
+# Output
+<SPEC_REVIEW>
+[
+  {
+    "storyId": "MOCK3-2",
+    "verdict": "approved",
+    "reviewNotes": "Both agents added meaningful, non-overlapping value. OpenSpec identified the root cause (loop bound `i < stops.length - 1` in formatStops skips the final stop) and framed verification as black-box string checks. SpecKit grounded the analysis in actual source code, adding depth OpenSpec lacked: the per-stop `Name (Xm)` format must survive the fix (regression guard), the existing test never asserts the final stop (confirming the bug is real and untested), the single-stop edge case, and refinement of vague ACs toward Given/When/Then testability. No redundancy between the two.\n\nManifest evidence confirmed both declared paths (src/schedule.ts, test/schedule.test.ts) exist. I independently read both files and every code-level claim in the spec is accurate: `formatStops` has exactly `for (let i = 0; i < stops.length - 1; i++)`, the per-stop template is `${stops[i].name} (${stops[i].minutes}m)`, the separator is `' -> '`, and `totalMinutes` reads `stops[stops.length - 1].minutes` directly (independent of the bug). The test file's `LINE` constant holds Union/Bloor/Eglinton, and existing tests assert only `'->'` and `'Union'` — never `'Eglinton'` or `'Bloor'`, never the full expected string, never `formatStops([])`. The prescribed test additions are valid and reuse the existing LINE constant and formatStops import.\n\nVerification criteria are fully observable: specific stop names (Union, Bloor, Eglinton), the arrow separator, and empty-string-for-empty-input. The fix prescription is surgical — one loop-bound change, no string-construction changes needed.\n\nPlan alignment: aligned:true is correct. The detectivePlan investigated formatStops loop bound, totalMinutes independence, and test gaps; the final fixSiteAnalysis addresses the first two with changes and correctly omits totalMinutes (no change needed). No unexplained pivot — the plan and final answer share the same symbols and consistent reasoning.\n\nThe acceptanceChanged:false with notes describing AC refinement is the expected brownfield redaction behavior — not flagged. The guardVocabulary is well-constructed: blacklists internal mechanism terms and whitelists user-facing surface terms.",
+    "qualityScore": 0.95,
+    "flags": [],
+    "planAlignment": "aligned"
+  }
+]
+</SPEC_REVIEW>

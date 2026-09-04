@@ -1,0 +1,9 @@
+No type errors in the test file. Exit code 1 is from `grep` finding no matches (i.e., no errors containing `src/hello.test.ts`), which is the desired outcome.
+
+The test file is written and verified:
+
+- **`'says hello dolly'`** — reproduces the bug: asserts `getGreeting()` returns `'hello dolly'` (fails against old `'hello world'` code, passes with the fix)
+- **`'returns a string greeting'`** — regression check: confirms the function still returns a string
+- **Typechecks cleanly** with `tsc --noEmit`
+- **All tests pass** with vitest
+{"numTotalTestSuites":2,"numPassedTestSuites":2,"numFailedTestSuites":0,"numPendingTestSuites":0,"numTotalTests":2,"numPassedTests":2,"numFailedTests":0,"numPendingTests":0,"numTodoTests":0,"snapshot":{"added":0,"failure":false,"filesAdded":0,"filesRemoved":0,"filesRemovedList":[],"filesUnmatched":0,"filesUpdated":0,"matched":0,"total":0,"unchecked":0,"uncheckedKeysByFile":[],"unmatched":0,"updated":0,"didUpdate":false},"startTime":1785513576896,"success":true,"testResults":[{"assertionResults":[{"ancestorTitles":["getGreeting"],"fullName":"getGreeting says hello dolly","status":"passed","title":"says hello dolly","duration":0.8217640000000017,"failureMessages":[],"meta":{},"tags":[]},{"ancestorTitles":["getGreeting"],"fullName":"getGreeting returns a string greeting","status":"passed","title":"returns a string greeting","duration":0.2549360000000007,"failureMessages":[],"meta":{},"tags":[]}],"startTime":1785513577003,"endTime":1785513577004.255,"status":"passed","message":"","name":"/tmp/brownfield-mock-e2e-XdlKCz/codelines/mock-hello-world/src/hello.test.ts"}]}

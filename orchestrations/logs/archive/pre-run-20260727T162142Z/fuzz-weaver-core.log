@@ -1,0 +1,11 @@
+```json
+{
+  "agent": "fuzz-weaver",
+  "phase": "core",
+  "summary": { "functionsAnalysed": 0, "fuzzCasesProposed": 0, "covered": 0, "gaps": 0, "vulnerabilities": 0 },
+  "cases": [],
+  "verdict": "not_applicable"
+}
+```
+
+The diff to `apply-report-discounts.service.ts` is purely cosmetic (import reordering, line-wrap reformatting, trailing newline). No functional logic was changed, so there is nothing new to fuzz-test. The new spec file adds hand-written tests for pre-existing behavior, not new code paths.

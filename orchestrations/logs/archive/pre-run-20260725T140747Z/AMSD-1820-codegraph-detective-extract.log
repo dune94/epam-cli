@@ -1,0 +1,11 @@
+# Prompt
+A code investigation of a bug produced the analysis below. Extract the single most-likely causal fix site and output ONLY a JSON array — no prose, no markdown fences, then stop. If the analysis is incomplete, output your BEST hypothesis from what it contains (a best guess beats nothing).
+[{"file":"<repo-relative path>","function":"<symbol>","reason":"<why THIS computes the wrong value, not just displays it>","fix":"<the exact minimal change: which line/expression to change and which EXISTING helper (symbol) to reuse>","helper":"<bare existing symbol name to reuse, or empty>"}]
+
+=== INVESTIGATION ===
+The investigation result file has been written to `/home/bradleyjerome/projects/ai/epam-cli/investigation-result.json`.
+
+# Output
+```json
+[{"file":"src/core/prompt.ts","function":"buildSystemPrompt","reason":"The function concatenates role and context strings without inserting a newline separator between them, causing the last line of the role section and the first line of the context section to merge into a single line, which breaks directive parsing downstream","fix":"Change the concatenation expression from `role + context` to `role + '\\n' + context` (or use the existing `joinSections` helper if available)","helper":"joinSections"}]
+```

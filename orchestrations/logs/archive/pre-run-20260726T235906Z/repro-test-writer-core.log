@@ -1,0 +1,9 @@
+[repro-test-writer] writing reproducing test for MOCK-HW-1 → src/hello.test.ts (convention: .test.ts, example: src/hello.test.ts)
+[repro-test-writer] written test FAILS against the committed fix (1/1) — rejecting so the writer can retry
+[repro-test-writer] attempt 1: test was written but does NOT parse/run — discarding it (class=invalid_test)
+[repro-test-writer] attempt 1 failed (class=invalid_test) — invoking self-heal analyst
+[repro-test-writer]   self-heal analyst ran for attempt 2 — enforcement applied from the KB
+[repro-test-writer] WARNING: NO ladder escalation on attempt 2/3 — ladder is EMPTY/unset — NO escalation configured for this run
+  [SelfHeal/KB] constraints applied for repro-test-writer (story:MOCK-HW-1): repro-test-writer-test-failure
+[repro-test-writer] test produced and validated on attempt 2 (model moonshotai/kimi-k3)
+[repro-test-writer] committed reproducing test: src/hello.test.ts

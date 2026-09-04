@@ -1,0 +1,40 @@
+# Prompt
+You are a STRICT verification-criteria reviewer for a brownfield fix. REVIEW ONLY — do NOT rewrite anything.
+
+Acceptance criteria (IMMUTABLE ticket intent):
+- (none)
+Description: Original Requirements (discovery)  AS a Content Author, I WANT to preview draft entries in CMS, SO THAT I can see how content will be shown on the website
+ability to preview draft entries in CMS
+Notes& Assumptions  Limitation: Might not be possible to preview protected pages and content.
+Original Total Estimate:  8  Original FE Estimate:  8  Original DAM Estimate:  0  Original BE Estimate:  0
+
+Proposed verification criteria:
+1. Given the Contentstack client is mocked, when the live preview SDK is initialized with the Stack, then the options object passed to contentstack.Stack() includes a live_preview configuration key
+2. Given the Contentstack client is mocked to return draft entry data, when a request arrives with preview-related query parameters (e.g., live_preview=true or a contentstack preview token), then the rendered page displays the draft entry content rather than the published entry content
+3. Given the Contentstack client is mocked, when a request arrives WITHOUT preview-related query parameters, then the rendered page displays the same published content it displayed before this change — no visual or data regression
+4. Given the Contentstack client is mocked, when getEntry, getSingleEntry, or findSingletonEntry is called with preview parameters, then the resulting SDK query includes those preview parameters in its request to the Contentstack API
+5. Given the Contentstack client is mocked, when a protected page is accessed in preview mode, then the page either renders the published version or shows an appropriate access-restricted indication — draft content for protected pages is not surfaced
+6. When the application starts without CONTENTSTACK_LIVE_PREVIEW or equivalent environment variable set, then the Stack initializes without live preview and all existing content fetching behaves identically to the current production behavior
+
+Apply these rules EXACTLY (the producer is held to the same text — do not invent stricter or looser criteria):
+A verification criterion states WHAT AN END USER OR TESTER OBSERVES on the user-facing surface THE TICKET IS ABOUT — the rendered output for an output ticket, the displayed screen for a UI ticket, the response a CLIENT receives for an API ticket. It is a BLACK-BOX check on that surface. It NEVER describes HOW the value is produced.
+A verification criterion is FORBIDDEN if it:
+- prescribes HOW to implement — any algorithm, mechanism, approach, or the addition/reading of any new field, flag or service;
+- references an INTERNAL structure that merely FEEDS the ticket's surface — an intermediate payload, a data-transfer object, or a specific response field used to BUILD the output. Verify the surface the ticket names, NOT the data structure behind it;
+- makes a CROSS-COMPARISON that presumes a mechanism — never assert one value "must equal" / "matches" / "is the same as" another; that presumes a shared derivation. Assert the required value is present and correct ON ITS OWN.
+Every verification criterion must be observable, testable, and tied to the ticket's stated symptom/intent.
+
+FLAG any verification criterion that violates ANY rule above, OR that fails to cover the intent of an acceptance criterion.
+Output ONLY a JSON array of short flag strings, e.g. ["VC 2 prescribes halving — restate as observable outcome"]. Output [] if every VC is clean. No prose, no markdown.
+
+# Output
+```json
+[
+  "VC 1 prescribes SDK initialization mechanism and references internal options object — restate as observable outcome on rendered page",
+  "VC 2 cross-compares draft vs published content ('rather than') — assert draft content is displayed on its own",
+  "VC 3 cross-compares to 'before this change' — assert published content is displayed on its own",
+  "VC 4 prescribes internal SDK query construction and references intermediate API request — restate as observable outcome on rendered page",
+  "VC 5 cross-compares to 'published version' — assert what the page displays on its own without referencing published content",
+  "VC 6 prescribes environment variable mechanism, references internal Stack initialization, and cross-compares to production behavior — restate as observable outcome on rendered page"
+]
+```

@@ -1,0 +1,139 @@
+# Prompt
+You are specialising a generic agent roster for ONE project. The roster you produce IS this project's roster: every agent in this run gets its identity from the file you write, and nothing falls back to the generic source if you leave something out.
+
+## What you are given
+
+The canonical roster, verbatim, at:
+
+  /home/bradleyjerome/projects/ai/epam-cli/orchestrations/logs/roster-canonical-copy.json
+
+Read it with your tools. Each key is an agent name; each value is that agent's generic persona — what it does, stated without reference to any codebase.
+
+The project:
+Project config: /home/bradleyjerome/projects/ai/epam-cli/orchestrations/scripts/../projects/metrolinx
+Tickets in scope: AMSD-1919: Go‑Checkout Page - Email & Confirm Email Case Sensitivity
+Agents this project minted: checkout-flow-detective [investigator], checkout-payments-fixer [implementer]
+
+The codelines it works on:
+- gotransit (/home/bradleyjerome/projects/metrolinx/next.gotransit.com) deps: @algolia/autocomplete-js, @azure/search-documents, @contentstack/utils, @googlemaps/js-api-loader, @hookform/error-message, @metrolinx/cx-shared, @react-aria/focus, @stripe/react-stripe-js, @stripe/stripe-js, @uniformdev/context, @uniformdev/context-gtag, @uniformdev/context-react, akamai-edgegrid, algoliasearch, aria-hidden, axios, body-scroll-lock, busboy, classnames, cloudinary, contentstack, core-js, country-state-city, date-fns, html-react-parser, i18next, joi, jsonwebtoken, lodash.capitalize, lodash.chunk, lodash.clonedeep, lodash.debounce, lodash.filter, lodash.isempty, lodash.isequal, lodash.isnil, lodash.isnumber, lodash.isobject, lodash.isstring, lodash.isundefined, lodash.keyby, lodash.mergewith, lodash.noop, lodash.omit, lodash.omitby, lodash.orderby, lodash.reject, micro, next, next-auth, next-i18next, next-sitemap, object-hash, pino, qs, react, react-autosuggest, react-beforeunload, react-dom, react-dropzone, react-error-boundary, react-focus-lock, react-hook-form, react-i18next, react-select, react-youtube, resize-observer-polyfill, swiper, swr, uuid, @commitlint/cli, @contentstack/management, @next/bundle-analyzer, @tailwindcss/aspect-ratio, @tailwindcss/line-clamp, @testing-library/jest-dom, @testing-library/react, @testing-library/user-event, @trivago/prettier-plugin-sort-imports, @types/busboy, @types/form-data, @types/google.maps, @types/html-to-text, @types/jsonwebtoken, @types/lodash.capitalize, @types/lodash.chunk, @types/lodash.clonedeep, @types/lodash.debounce, @types/lodash.filter, @types/lodash.isempty, @types/lodash.isequal, @types/lodash.isnil, @types/lodash.isnumber, @types/lodash.isobject, @types/lodash.isstring, @types/lodash.isundefined, @types/lodash.keyby, @types/lodash.mergewith, @types/lodash.noop, @types/lodash.omit, @types/lodash.omitby, @types/lodash.orderby, @types/lodash.reject, @types/node, @types/object-hash, @types/qs, @types/react, @types/react-autosuggest, @types/react-beforeunload, @types/react-dom, @types/react-google-recaptcha, @types/react-input-mask, @types/uuid, @typescript-eslint/eslint-plugin, @typescript-eslint/parser, @uniformdev/cli, autoprefixer, babel-jest, commitlint-config-jira, commitlint-plugin-jira-rules, cssnano, dotenv, esbuild, eslint, eslint-config-next, eslint-config-prettier, eslint-plugin-jest, eslint-plugin-prettier, form-data, husky, i18next-scanner, i18next-scanner-typescript, jest, jest-environment-jsdom, jest-environment-node, jest-transform-css, lint-staged, node-mocks-http, pino-pretty, postcss, postcss-import, prettier, rimraf, stylelint, stylelint-config-prettier, stylelint-config-standard, tailwindcss, ts-jest, typescript
+
+The stack in use:
+node
+
+## What to write
+
+Write a JSON file to:
+
+  /home/bradleyjerome/projects/ai/epam-cli/orchestrations/projects/metrolinx/roster.json
+
+of exactly this shape:
+
+{"agents": {"<agent name>": {"persona": "...", "kind": "implementer|investigator|seam", "ancestor": "<canonical agent name>", "derivedFromSha256": "<sha256 of the ancestor's persona text>", "seam": "<one of the DECLARED SEAMS listed below — required only for an agent you ADD; omit it and the resolver derives it from the name>"}}}
+
+## The declared seams
+
+THESE ARE THE ONLY VALID VALUES for "seam". It is a closed list, and a value outside it is
+refused. Note that "kind" above and "seam" here are DIFFERENT questions: kind says what sort of
+agent this is, seam says which invocation contract it enters by. An agent of kind "implementer"
+does not have seam "implementer".
+
+- ac-classification
+- ac-elaboration
+- agent-failure-analyst
+- agent-mint
+- code-graph-detective
+- code-review-cycle
+- codeline-bridge-agent
+- codeline-discovery
+- cpa-inference
+- estate-survey
+- guard-vocabulary
+- impl-failure-analyst
+- phase-assessment
+- prd-change-reviewer
+- prd-change-summarizer
+- prd-model-coordinator
+- project-roster-review
+- prompt-builder
+- prompt-review
+- qa-gate:e2e
+- qa-gate:fuzz-weaver
+- qa-gate:mutant-hunter
+- qa-gate:perf-sentinel
+- qa-gate:review-ranger
+- qa-gate:runtime-boundary
+- qa-gate:sast
+- qa-gate:spec-validator
+- repro-test-writer
+- role-assigner
+- roster-review
+- roster-specialiser
+- spec-agent
+- spec-coordinator
+- story-writer
+- survey-review
+- tc-writer
+- team-lead-review
+- ticket-links
+- topology-router
+- vc-coverage
+
+If none of them fits, OMIT the seam field. The resolver derives one from the agent's name, and
+omitting is always safer than inventing.
+
+EVERY AGENT IN THE CANONICAL ROSTER MUST APPEAR. A missing agent is not a smaller roster — it is an agent with no identity at the moment the pipeline invokes it, and the run has nowhere else to look. Do not decide that an agent is irrelevant to this project; you cannot know which seams a run will reach.
+
+## How to specialise
+
+For each agent, keep WHAT IT DOES and replace WHAT IT KNOWS. The generic persona states a role; your version states that same role against this codeline — its language, its frameworks, its layout, the helpers and conventions that already exist, the commands it actually runs. Read the code to find these. An assertion about the codeline that you did not verify is worse than a generic sentence, because the next reader cannot tell which is which.
+
+Do not weaken a rule while specialising it. If the generic persona forbids something, says a finding must carry evidence, or names a check that must pass, that survives verbatim in meaning — you are changing what the agent knows, never what it is required to do.
+
+KEEP EACH PERSONA AT THE LENGTH THE WORK NEEDS. A persona that lists every file in the repository is not more specialised, it is less usable: the agent reads it before every invocation.
+
+## Ancestry
+
+Each entry names the canonical agent it derives from. For an agent that exists in the canonical roster, that is the agent itself.
+
+If this project needs an agent the canonical roster does not have, you may add one — but it MUST name the canonical agent it is closest to as its ancestor. That is not bookkeeping: an agent inherits its ladder, its tool grant and its output contract from its ancestor, so an agent invented from nothing has no budget, no tools and no way for the pipeline to receive what it returns.
+
+`derivedFromSha256` is the SHA-256 of the ancestor's persona text exactly as it appears in the canonical copy you were given. It records what you derived from, so that a later change to the canonical roster is detectable rather than silent.
+
+## Which seam an agent enters by
+
+An agent does not run on its own. It enters the pipeline through a SEAM, which decides its ladder, its tool grant, its output contract and the prompt it executes. For an agent that exists in the canonical roster, the seam is already known and you do not state it.
+
+For an agent you ADD, name the seam in the `seam` field. It must be one the pipeline already declares — you are choosing which existing door this agent comes through, not inventing one. If none fits, the agent you are adding is doing work the pipeline has no place for, and adding it will not create that place.
+
+Omitting it does not leave the question open: the name is matched against patterns instead, and a pattern is a guess about what an agent does based on how it is spelled. That is how an agent named for review came to enter through an inference seam, with another seam's budget and tools.
+
+## What you are not doing
+
+You are not editing the canonical roster. You are not judging whether an agent should exist. You are not writing prompts — an agent's persona says who it is; its instructions for a task live in that task's prompt.
+
+
+## Your previous attempt was REFUSED
+
+typescript-engineer: Derived Scaffold Immutability Rule: "NEVER create, overwrite, or modify package.json, tsconfig.json, jest.config.js, or .gitignore outside of an explicit dependency-install step covered by the MANDATORY DEPENDENCY CHECK above." — Canonical states an unconditional, unqualified prohibition: after scaffold, an implementer must NEVER touch package.json even to add a dependency the story needs — the required action is to add a code comment instead and leave the file alone ('do NOT run npm install or touch package.json'). The derived version deletes that sentence and replaces it with a carve-out that legitimizes exactly the action canonical forbids: package.json/tsconfig.json/jest.config.js may be modified whenever it happens 'as an explicit dependency-install step covered by the MANDATORY DEPENDENCY CHECK' — and the MANDATORY DEPENDENCY CHECK earlier in the same derived brief is unconditional (applies to any missing package, any phase). An implementer following the derived brief will run npm install and edit package.json post-scaffold for any missing dependency; an implementer following canonical would not — it would add a comment and leave package.json to the scaffold phase alone. This is a forbidding rule that was softened into its own exception. — Diffed this section against the canonical typescript-engineer's Scaffold Immutability Rule, which reads: "NEVER create, overwrite, or modify package.json, tsconfig.json, vitest.config.ts, or .gitignore in any phase after scaffold. These files are owned exclusively by the scaffold phase. If your story appears to require dependency changes, add a comment in the code explaining what is needed — do NOT run npm install or touch package.json." Also read src/pages/api/v1/search.ts to confirm the codeline facts elsewhere in the brief are otherwise accurately grounded, so this is not a case of the whole section being fabricated — only this one clause was altered.; code-graph-detective: This has already played out on this codeline: for AMSD-2041 (a Contentstack live-preview ticket), the tool traced the symptom through src/pages/_app.tsx's onEntryChange subscription, src/context/ContentstackContext.tsx, src/hooks/useContent.ts (the hook 147+ components use to read Contentstack data), and src/services/pageService.ts's PageService.getPageEntry / getSinglePageEntry (which delegates to getSingleEntry/getSingletonEntry in src/services/contentstack.ts) to find the real reactive-data pipeline, rather than stopping at the component that merely renders the page. — onEntryChange appears nowhere in the repository. src/context/ContentstackContext.tsx contains no subscription or live-preview logic at all — it is a plain React Context populated once via useMemo from a defaultContent prop passed in from _app.tsx, with no listener or reactive mechanism. PageService has no method named getPageEntry or getSinglePageEntry — its real methods are getAllPublishedPages, getHeaderAndFooter, getStaticUpdates, getPageLevelServiceAlerts, getCookiesBanner, getGlobalDictionary, getPageSpecificData, getStationDetailPages, getServiceUpdatesPage, getPagesBaseURLs, getSingletonSlug, findSingletonSlug, getAllLineColors. src/services/contentstack.ts does export getSingleEntry, getEntry, findSingletonEntry, getSingletonEntry, but nothing in pageService.ts calls getSingleEntry, and no getSinglePageEntry exists to do so. This entire passage is a fabricated trace presented as an already-proven result — directly violating this same brief's own 'CRITICAL: Never invent a module or symbol name' rule and its instruction to output only symbols actually surfaced by the tool. — grep -rn "onEntryChange" across the whole repo (all .ts/.tsx, node_modules excluded); grep -n "getPageEntry\|getSinglePageEntry\|getSingleEntry\b" src/services/pageService.ts src/services/contentstack.ts; read src/pages/_app.tsx and src/context/ContentstackContext.tsx in full; grep -n "^\s*async \|^export " src/services/pageService.ts to enumerate every actual PageService method.
+
+Produce the roster again, correcting exactly this. Change nothing else: the rest of your previous attempt was accepted, and rewriting it invites a second refusal for a different reason.
+
+
+
+# Output
+The roster is regenerated and both refused issues are corrected.
+
+`/home/bradleyjerome/projects/ai/epam-cli/orchestrations/projects/metrolinx/roster.json` now holds all 47 canonical agents specialised for the gotransit codeline. Validated: 47 agents, exact `derivedFromSha256` match against the canonical personas, self-referential `ancestor`, `kind` split 14 implementer / 8 investigator / 25 seam, and no `seam` field on any agent (none was added — the two minted project agents live in `agent-profiles.json`, not here).
+
+The two corrections, made without touching anything else:
+
+- **typescript-engineer** — the Scaffold Immutability Rule is restored to its canonical, unconditional force: *"NEVER create, overwrite, or modify package.json, tsconfig.json, jest.config.js, or .gitignore in any phase after scaffold… add a comment… do NOT run npm install or touch package.json."* The prior carve-out that legitimized editing package.json "as an explicit dependency-install step covered by the MANDATORY DEPENDENCY CHECK" is gone. Only `vitest.config.ts` → `jest.config.js` was swapped (this repo's real runner config), which is a knowledge fact, not a weakening of the rule.
+
+- **code-graph-detective** — the fabricated "this has already played out" trace with invented symbols (`onEntryChange`, `PageService.getPageEntry/getSinglePageEntry`, a live-preview subscription in `ContentstackContext`) is not present. The persona now grounds only in verified repo structure (defect-computing layers live in `src/services`, `src/utils/ecommerce`, `src/hooks`, `src/pages/api`, `src/api`; symptom words match `src/components`) and keeps the canonical grounding rules verbatim, including "Never invent a module or symbol name."
+
+Specialisation facts I verified against the repo before asserting them: Jest via `next/jest` (not vitest), commands `npm run check-types` / `npm run lint` / `npm run build` / `npm run test`, Next.js file-based API handlers under `src/pages/api` plus modules in `src/api` (not Express), the Jira commitlint preset (not Conventional Commits), Node 22.x, and the `src/` layout including `src/context/*Context.tsx`, `src/services/contentstack.ts`, and the checkout paths relevant to AMSD-1919.
+
+[coverage-gate] writer: no pre-flight has gated this run — standing down
+  [provider] 'openrouter' is not routable by the 'claude' set — using 'claude'.
+  [provider] The set is the launch's own choice; the env value was left by something else.
+  [provider] 'openrouter' is not routable by the 'claude' set — using 'claude'.

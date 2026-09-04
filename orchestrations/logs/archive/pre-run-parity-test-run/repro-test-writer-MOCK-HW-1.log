@@ -1,0 +1,2 @@
+No type errors — the grep returned nothing (exit code 1 just means grep found no matches, which is the success condition). The test is clean and typechecks.
+

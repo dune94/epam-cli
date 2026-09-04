@@ -1,0 +1,4 @@
+[1;33m[WARN][0m   review-agent has NO ladder escalation available — ladder is EMPTY/unset — NO escalation configured for this run
+```json
+{"verdict":"approved","issues":[],"summary":"The diff implements exactly the prescribed minimal fix: two single-line string literal changes ('hello world' → 'hello dolly') in src/hello.ts:2 and src/hello.test.ts:5. All acceptance criteria are met: (1) getGreeting() returns 'hello dolly' (confirmed by source read), (2) the test assertion is updated and passes (vitest: 1 passed, 0 failed), (3) tsc --noEmit exits 0. No existing helper is bypassed (codegraph_query helpers for 'greeting' shows getGreeting is the only symbol). No over-engineering, no new code paths, no hardcoded constants to extract, no security concerns. The change is maximally concise — it cannot be done in fewer lines."}
+```

@@ -1,0 +1,1 @@
+{"agent":"perf-sentinel","phase":"core","summary":{"filesAnalysed":4,"findingsCount":0,"blockerCount":0,"estimatedStartupImpactMs":0},"findings":[],"verdict":"not_applicable","notes":["Change is a string-literal update in getGreeting() and an additional test case — no algorithmic, memory, async, startup, or provider performance surface exists to evaluate."]}

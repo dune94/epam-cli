@@ -1,0 +1,9 @@
+[repro-test-writer] writing reproducing test for AMSD-1820 → src/services/submit-reservations/apply-report-discounts.service.spec.ts (convention: .spec.ts, example: apps/background/src/core/health/health.controller.spec.ts)
+[repro-test-writer] attempt 1 failed (class=max_iterations) — invoking self-heal analyst
+[repro-test-writer]   self-heal analyst ran for attempt 2 — enforcement applied from the KB
+[repro-test-writer] ladder escalation (attempt 2/3) — z-ai/glm-5.1 → moonshotai/kimi-k3
+  [SelfHeal/KB] constraints applied for repro-test-writer (story:AMSD-1820): repro-test-writer-class-max-iterations
+[repro-test-writer] attempt 2 failed (class=no_file) — invoking self-heal analyst
+[repro-test-writer] WARNING:   self-heal analyst FAILED (class=no_file) — attempt 3 retries WITHOUT corrective guidance
+[repro-test-writer] ladder escalation (attempt 3/3) — z-ai/glm-5.1 → moonshotai/kimi-k3
+  [SelfHeal/KB] constraints applied for repro-test-writer (story:AMSD-1820): repro-test-writer-class-max-iterations

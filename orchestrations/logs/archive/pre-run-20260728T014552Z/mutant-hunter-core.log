@@ -1,0 +1,10 @@
+```json
+{
+  "agent": "mutant-hunter",
+  "phase": "core",
+  "summary": { "mutationsProposed": 0, "killed": 0, "survived": 0, "noCoverage": 0, "mutationScore": 100 },
+  "mutations": [],
+  "verdict": "not_applicable",
+  "reason": "The changed source (src/hello.ts) is a single pure function returning a string literal with no operators, conditionals, comparisons, or critical paths (no provider failover, auth, billing, agent state) — mutation testing has nothing meaningful to stress here."
+}
+```

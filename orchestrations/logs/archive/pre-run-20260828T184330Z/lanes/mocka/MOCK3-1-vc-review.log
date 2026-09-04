@@ -1,0 +1,36 @@
+# Prompt
+You are a STRICT verification-criteria reviewer for a brownfield fix. REVIEW ONLY — do NOT rewrite anything.
+
+Acceptance criteria (IMMUTABLE ticket intent):
+- A rider aged exactly 65 with no pass is charged the concession fare.
+- A rider aged 64 with no pass is still charged the base fare.
+- The existing fare behaviour for children, pass holders and adults is unchanged.
+Description: The fare rules say riders aged 65 and over pay the concession fare. A rider aged exactly 65 is charged the full adult fare of 350 cents instead of 175. Riders aged 66 and above are charged correctly, so the boundary itself is wrong rather than the rule.
+
+Proposed verification criteria:
+1. The fare returned for a rider aged 65 with no pass is 175 cents
+2. The fare returned for a rider aged 64 with no pass is 350 cents
+3. The fare returned for any rider with a transit pass is 0 cents, regardless of age
+4. The fare returned for a child aged 12 with no pass is 175 cents
+5. The fare returned for an adult aged 45 with no pass is 350 cents
+6. The fare returned for a rider aged 66 with no pass is 175 cents
+
+Apply these rules EXACTLY (the producer is held to the same text — do not invent stricter or looser criteria):
+A verification criterion states WHAT AN END USER OR TESTER OBSERVES on the user-facing surface THE TICKET IS ABOUT — the rendered output for an output ticket, the displayed screen for a UI ticket, the response a CLIENT receives for an API ticket. It is a BLACK-BOX check on that surface. It NEVER describes HOW the value is produced.
+A verification criterion is FORBIDDEN if it:
+- prescribes HOW to implement — any algorithm, mechanism, approach, or the addition/reading of any new field, flag or service;
+- references an INTERNAL structure that merely FEEDS the ticket's surface — an intermediate payload, a data-transfer object, or a specific response field used to BUILD the output. Verify the surface the ticket names, NOT the data structure behind it;
+- makes a CROSS-COMPARISON that presumes a mechanism — never assert one value "must equal" / "matches" / "is the same as" another; that presumes a shared derivation. Assert the required value is present and correct ON ITS OWN.
+Every verification criterion must be observable, testable, and tied to the ticket's stated symptom/intent.
+
+A criterion may declare a PRECONDITION the test establishes (for example a mocked client
+signalling a change). A declared precondition is NOT implementation prescription — do not flag
+it. Flag what the criterion ASSERTS, not what it sets up.
+
+FLAG any verification criterion that violates ANY rule above, OR that fails to cover the intent of an acceptance criterion.
+Output ONLY a JSON array of short flag strings, e.g. ["VC 2 prescribes <an approach> — restate as observable outcome"]. Output [] if every VC is clean. No prose, no markdown.
+
+# Output
+```json
+[]
+```

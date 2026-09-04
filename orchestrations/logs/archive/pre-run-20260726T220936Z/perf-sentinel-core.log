@@ -1,0 +1,1 @@
+{"agent":"perf-sentinel","phase":"core","summary":{"filesAnalysed":2,"findingsCount":0,"blockerCount":0,"estimatedStartupImpactMs":0},"findings":[],"verdict":"not_applicable","notes":["Changed lines are a string-literal return value and test assertions — no algorithmic, memory, async, startup, or provider performance concerns apply."]}

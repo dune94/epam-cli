@@ -1,0 +1,67 @@
+=== Prompt for SKY-004-B (attempt 1) ===
+Implement user story SKY-004-B: Search and cheapest API routes with full input validation and complete test suite
+
+## Story Description
+Implement GET /search and GET /cheapest in src/server.ts, importing FlightResult from the SKY-002 export. Add all input validation (required params, adults range, date format regex). Expand src/server.test.ts to at least 8 total tests with SkyscannerClient fully mocked. **Depends on SKY-002 and SKY-004-A.**
+
+## Acceptance Criteria
+- GET /search with valid query params (from, to, date, adults) returns HTTP 200 with body { flights: FlightResult[], count: number, searchedAt: ISO-8601 string } where count strictly equals flights.length
+- GET /search missing any required param (from, to, or date) — including an empty string value — returns HTTP 400 with Content-Type application/json and body { error: string }
+- When `adults` is absent on GET /search, the request succeeds (HTTP 200) with a default value of 1 passed to SkyscannerClient
+- When `adults` is present but non-numeric (e.g. 'abc', '') on GET /search, the route returns HTTP 400 with Content-Type application/json and body { error: string }
+- When `adults` is zero or negative on GET /search, the route returns HTTP 400 with Content-Type application/json and body { error: string }
+- When `date` does not match /^\d{4}-\d{2}-\d{2}$/ on GET /search or GET /cheapest, the route returns HTTP 400 with Content-Type application/json and body { error: string }
+- GET /cheapest with valid required params returns HTTP 200 with a single FlightResult whose price is ≤ every FlightResult in the mocked client response; adults defaults to 1 if absent, is forwarded if present
+- Adults validation on GET /cheapest is identical to /search: non-numeric or ≤0 returns HTTP 400
+- GET /cheapest returns HTTP 404 with Content-Type application/json and body { error: string } when SkyscannerClient returns an empty array
+- GET /cheapest missing any required param (from, to, or date) — including empty string — returns HTTP 400 with Content-Type application/json and body { error: string }
+- The `searchedAt` field in GET /search is an ISO-8601 datetime string; tests assert `isNaN(new Date(searchedAt).getTime()) === false`
+- The FlightResult type in src/server.ts is imported from the SKY-002 export and not redeclared inline
+- src/server.test.ts contains at least 8 vitest tests each covering a distinct scenario, with SkyscannerClient mocked via vi.mock so no real HTTP calls are made
+- `npx tsc --noEmit` exits 0 with no type errors
+- `vitest run` exits 0 with all tests passing
+
+## Technical Notes
+- workingDir: /tmp/skyscanner-app
+- files: ["/tmp/skyscanner-app/src/server.ts","/tmp/skyscanner-app/src/server.test.ts"]
+- dependsOn: ["SKY-002"]
+
+## Files to Create/Modify
+/tmp/skyscanner-app/src/server.ts, /tmp/skyscanner-app/src/server.test.ts
+
+## Dependencies
+None
+
+## Instructions
+1. Implement all acceptance criteria for this story
+2. Follow the project's existing code patterns and conventions
+3. Create any necessary files in the locations specified
+4. Ensure code compiles/runs without errors
+5. Do NOT create tests unless explicitly required in acceptance criteria
+
+After implementation, provide a brief summary of what was created/modified.
+
+## Relevant Knowledge Base Entries
+No prior KB entries match your agent role yet.
+
+## Knowledge Base Contribution
+Your assigned KB entry ID for this run: **KB-008**
+
+If you discover a non-obvious pattern, gotcha, or anti-pattern during this implementation (or this is a retry), append exactly one entry to `orchestrations/agents/KB.md` using this format:
+
+```markdown
+## KB-008 -- 2026-06-03
+
+**Category:** <backend|frontend|infrastructure|testing|orchestration>
+**AgentRole:** <your agentRole from the story>
+**Tags:** <comma-separated tech keywords, e.g. typescript, node, cli>
+**Trigger:** <retry|first-success>
+**StoryRef:** SKY-004-B
+
+<One concise paragraph: the specific pattern, gotcha, or anti-pattern. Precise enough that a future Claude instance can apply it without re-discovering it.>
+```
+
+Only write an entry if the knowledge is genuinely non-obvious. Skip trivial observations.
+=== End Prompt ===
+
+=== claude Output (attempt 1) ===

@@ -1,0 +1,76 @@
+# Prompt
+You are the openspec specification agent for EPAM CLI. Phase core, story SKY-003b.
+
+Generate refined acceptance criteria, optionally updated title/description, and optional split stories. Output JSON only between <SPEC_AGENT> tags using this schema:
+{
+  "storyId":"SKY-003b",
+  "agent":"openspec",
+  "notes":"context",
+  "acceptanceCriteria":["..."],
+  "description":"...",
+  "title":"...",
+  "splitStories":[{"id":"optional","title":"...","description":"...","acceptanceCriteria":["..."]}]
+}
+Use existing text when no change is needed.
+Story context:
+{
+  "id": "SKY-003b",
+  "title": "Flight result table renderer with alignment, padding, and separator row",
+  "description": "Create `src/table.ts` exporting a `renderTable(flights: Flight[], currency?: string): string` function. Render columns in fixed order: Airline | Price | Departure | Arrival | Duration | Stops. Cells are joined by the inter-column delimiter ` | ` (space-pipe-space); there is no leading or trailing pipe on any row. Compute column widths as the maximum of the header label length and the widest formatted data value in that column (for Price, the formatted value includes the currency symbol). Separator row uses exactly N hyphens per column (where N equals that column's computed width), joined by the same ` | ` delimiter. Price is right-aligned within its computed width with the currency symbol prepended (fallback `£`); all other columns are left-aligned. Empty array input returns the literal string `No flights found.`. Wire `renderTable` into `src/cli.ts` (from SKY-003a); print the result to stdout.",
+  "acceptanceCriteria": [
+    "`src/table.ts` exists, exports `renderTable(flights: Flight[], currency?: string): string`, imports the `Flight` type from the existing types module (from SKY-002) without redeclaring it, and `tsc --noEmit` reports zero errors",
+    "Header row columns appear in exactly this order: `Airline`, `Price`, `Departure`, `Arrival`, `Duration`, `Stops`; cells are joined by the delimiter ` | ` (one space, pipe, one space); the row has no leading and no trailing `|`",
+    "For every column except Price the computed column width W equals `Math.max(header.length, max(formattedValue.length for all rows))`; the raw field value (string as-is) is used as the formatted value for non-Price columns",
+    "For the Price column each data cell is formatted as `<currencySymbol><numericValue>` (the numeric value rendered via its plain string form, with no injected thousands separators or forced decimal places) before width computation; the computed width W equals `Math.max('Price'.length, max(formattedPrice.length for all rows))` so the symbol contributes to W",
+    "The separator row contains exactly one segment per column in the same column order; each segment is exactly W hyphens (using each column's computed W, Price included) with no spaces inside the segment; segments are joined by ` | ` (space-pipe-space), matching the inter-column delimiter used in header and data rows — no leading or trailing `|`",
+    "All columns except Price are left-aligned: each data cell value is padded with trailing spaces until its length equals W for that column",
+    "Price column is right-aligned: each formatted price string (`<symbol><value>`) is padded with leading spaces until its length equals W; no trailing spaces are added to Price cells",
+    "When the `currency` argument is a non-empty string it is used verbatim as the currency symbol prepended to the numeric price; when `currency` is absent, `undefined`, `null`, or an empty string `''` the symbol defaults to `£`",
+    "`renderTable([])` (empty array) returns the exact string `No flights found.` as the function's return value — no header row, no separator row, no data rows, and no trailing newline embedded in the returned string (any newline added at print time by `console.log` is out of scope of the return value)",
+    "`src/cli.ts` passes the `Flight[]` result of `searchFlights` and any `currency` CLI option to `renderTable`, then writes the returned string to stdout via a single `console.log` or `process.stdout.write` call; no additional formatting is applied to the returned string",
+    "When `searchFlights` rejects, `src/cli.ts` writes the rejection `.message` (or string representation when no `.message` is present) to stderr, exits the process with code `1`, and writes nothing to stdout",
+    "Vitest unit tests in `src/table.test.ts` (or co-located) cover at minimum: (a) multi-row input — separator segment lengths each equal their column's computed W, a wider Price value causes all Price cells to widen, right-alignment holds; (b) single-row input — header, separator, and one data row present; (c) empty array returns exactly `No flights found.`; (d) currency fallback: omitting the argument uses `£`, passing a non-empty string uses that string, passing `''` falls back to `£`; (e) `searchFlights` rejection: stderr receives the message, process exits with code `1`, stdout is empty — all tests pass under `vitest run`"
+  ],
+  "technicalNotes": {
+    "workingDir": "/tmp/skyscanner-app",
+    "files": [
+      "/tmp/skyscanner-app/src/cli.ts",
+      "/tmp/skyscanner-app/src/cli.test.ts"
+    ],
+    "dependsOn": [
+      "SKY-002"
+    ],
+    "testCommand": "npx vitest run src/cli.test.ts"
+  },
+  "agentRole": "typescript-engineer",
+  "agentGroup": "independent",
+  "dependencies": []
+}
+
+<SPEC_AGENT>
+
+# Output
+```json
+{
+  "storyId": "SKY-003b",
+  "agent": "openspec",
+  "notes": "context",
+  "acceptanceCriteria": [
+    "`src/table.ts` exists, exports `renderTable(flights: Flight[], currency?: string): string`, imports the `Flight` type from the existing types module (from SKY-002) without redeclaring it, and `tsc --noEmit` reports zero errors",
+    "Header row columns appear in exactly this order: `Airline`, `Price`, `Departure`, `Arrival`, `Duration`, `Stops`; cells are joined by the delimiter ` | ` (one space, pipe, one space); the row has no leading and no trailing `|`",
+    "For every column except Price the computed column width W equals `Math.max(header.length, max(formattedValue.length for all rows))`; the raw field value (string as-is) is used as the formatted value for non-Price columns",
+    "For the Price column each data cell is formatted as `<currencySymbol><numericValue>` (the numeric value rendered via its plain string form, with no injected thousands separators or forced decimal places) before width computation; the computed width W equals `Math.max('Price'.length, max(formattedPrice.length for all rows))` so the symbol contributes to W",
+    "The separator row contains exactly one segment per column in the same column order; each segment is exactly W hyphens (using each column's computed W, Price included) with no spaces inside the segment; segments are joined by ` | ` (space-pipe-space), matching the inter-column delimiter used in header and data rows — no leading or trailing `|`",
+    "All columns except Price are left-aligned: each data cell value is padded with trailing spaces until its length equals W for that column",
+    "Price column is right-aligned: each formatted price string (`<symbol><value>`) is padded with leading spaces until its length equals W; no trailing spaces are added to Price cells",
+    "When the `currency` argument is a non-empty string it is used verbatim as the currency symbol prepended to the numeric price; when `currency` is absent, `undefined`, `null`, or an empty string `''` the symbol defaults to `£`",
+    "`renderTable([])` (empty array) returns the exact string `No flights found.` as the function's return value — no header row, no separator row, no data rows, and no trailing newline embedded in the returned string (any newline added at print time by `console.log` is out of scope of the return value)",
+    "`src/cli.ts` passes the `Flight[]` result of `searchFlights` and any `currency` CLI option to `renderTable`, then writes the returned string to stdout via a single `console.log` or `process.stdout.write` call; no additional formatting is applied to the returned string",
+    "When `searchFlights` rejects, `src/cli.ts` writes the rejection `.message` (or string representation when no `.message` is present) to stderr, exits the process with code `1`, and writes nothing to stdout",
+    "Vitest unit tests in `src/table.test.ts` (or co-located) cover at minimum: (a) multi-row input — separator segment lengths each equal their column's computed W, a wider Price value causes all Price cells to widen, right-alignment holds; (b) single-row input — header, separator, and one data row present; (c) empty array returns exactly `No flights found.`; (d) currency fallback: omitting the argument uses `£`, passing a non-empty string uses that string, passing `''` falls back to `£`; (e) `searchFlights` rejection: stderr receives the message, process exits with code `1`, stdout is empty — all tests pass under `vitest run`"
+  ],
+  "description": "Create `src/table.ts` exporting a `renderTable(flights: Flight[], currency?: string): string` function. Render columns in fixed order: Airline | Price | Departure | Arrival | Duration | Stops. Cells are joined by the inter-column delimiter ` | ` (space-pipe-space); there is no leading or trailing pipe on any row. Compute column widths as the maximum of the header label length and the widest formatted data value in that column (for Price, the formatted value includes the currency symbol). Separator row uses exactly N hyphens per column (where N equals that column's computed width), joined by the same ` | ` delimiter. Price is right-aligned within its computed width with the currency symbol prepended (fallback `£`); all other columns are left-aligned. Empty array input returns the literal string `No flights found.`. Wire `renderTable` into `src/cli.ts` (from SKY-003a); print the result to stdout.",
+  "title": "Flight result table renderer with alignment, padding, and separator row",
+  "splitStories": []
+}
+```

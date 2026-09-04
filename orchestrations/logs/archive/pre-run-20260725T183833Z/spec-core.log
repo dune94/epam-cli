@@ -1,0 +1,13 @@
+spec-mode: fast-path qwen/z-ai/glm-5.2 (skipping MiniMax)
+spec-mode: fast-path qwen/z-ai/glm-5.1 (skipping MiniMax)
+spec-mode: AMSD-1820 — 5 verification criteria persisted (source: description, resolution: clean)
+spec-mode: code-graph-detective phase-2 extraction recovered 1 fix-site(s) for AMSD-1820 from a narrative phase-1 answer.
+spec-mode: fast-path qwen/z-ai/glm-5.1 (skipping MiniMax)
+spec-mode: AMSD-1820 — 4 verification criteria persisted (source: description, resolution: clean)
+spec-mode: code-graph-detective invocation failed for AMSD-1820 (attempt 1/3): prompt runner exited with code null
+spec-mode: code-graph-detective ladder escalation for AMSD-1820 (attempt 2/3) — model z-ai/glm-5.1 → moonshotai/kimi-k3
+spec-mode: code-graph-detective invocation failed for AMSD-1820 (attempt 2/3): prompt runner exited with code null
+spec-mode: code-graph-detective ladder escalation for AMSD-1820 (attempt 3/3) — model z-ai/glm-5.1 → moonshotai/kimi-k3
+spec-mode: code-graph-detective invocation failed for AMSD-1820 (attempt 3/3): prompt runner exited with code null
+spec-mode: ⛔ code-graph-detective found NO fix site for AMSD-1820 after 3 attempts — the implementer will proceed WITHOUT root-cause guidance (defect-fidelity risk).
+spec-mode: fast-path qwen/z-ai/glm-5.1 (skipping MiniMax)

@@ -1,0 +1,6 @@
+[mint-step] codeline mocka: /home/bradleyjerome/projects/mock3/mock-a (2 declared deps)
+[mint-step] codeline mockb: /home/bradleyjerome/projects/mock3/mock-b (2 declared deps)
+[mint-step] plugins provisioned: 1 · mint tools: read_file,list_files,search,codegraph_query
+[survey] estate survey failed: prompt runner exited with code 1
+[mint-step]   survey did not run — the roster is minted from the ticket alone
+[mint-step] FAILED: prompt runner exited with code 1

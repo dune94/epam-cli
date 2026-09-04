@@ -1,0 +1,1 @@
+{"agent":"perf-sentinel","phase":"mock3_core","summary":{"filesAnalysed":3,"findingsCount":0,"blockerCount":0,"estimatedStartupImpactMs":0},"findings":[],"verdict":"not_applicable","reason":"Changed lines are a string-constant update and a matching test assertion — no loops, async, allocations, or runtime imports to evaluate for performance impact."}

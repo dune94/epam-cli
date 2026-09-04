@@ -1,0 +1,139 @@
+# Prompt
+You are the speckit specification agent for EPAM CLI. Phase core, story AMSD-2041.
+
+You are reviewing and building on the openspec agent's output for this story.
+Your role is COLLABORATIVE — you are NOT starting from scratch. Instead:
+1. Review openspec's proposed acceptance criteria for testability and completeness
+2. Add missing edge-case, error-handling, security, and accessibility criteria
+3. Flag any AC that are vague, untestable, or overlapping
+4. Splitting is openspec's decision alone — you do NOT split stories. If openspec already split
+   this story, do NOT include a "splitStories" field in your output at all (it will be ignored if
+   you do). Review and refine the acceptanceCriteria openspec gave you for the UNSPLIT story as
+   normal; per-child refinement of an already-split story's children happens on a later turn, not
+   here.
+5. Do NOT remove or duplicate openspec's good work — build on it
+
+━━━ WHAT-NOT-HOW RULE (MANDATORY) ━━━
+Every AC must describe an OBSERVABLE OUTCOME (what a test can verify from outside the code),
+NOT an implementation instruction. If an AC names vi.mock, jest.fn, mockReturnValue,
+mockResolvedValue, import statements, or require() calls, REPLACE it with a
+Given/When/Then behaviour statement. Never tell the implementer which library or mock pattern to use.
+
+OPENSPEC'S OUTPUT (your input to review — ACs and split proposals only):
+{
+  "acceptanceCriteria": [],
+  "notes": "Story has zero acceptance criteria and a description that merely repeats the title. 'Live Preview of Content in CMS' is a novel capability — the codebase currently has no live-preview mechanism. The central integration point is useContent (236 callers), which is the sole hook through which all Contentstack content flows. VCs are derived from the description alone and are framed at our boundary since Contentstack services are unreachable at test time. This story is underspecified — product should define what 'live preview' means (WebSocket push? polling? Contentstack's built-in Live Preview SDK? manual refresh?) before implementation begins.",
+  "splitStories": []
+}
+
+ORIGINAL STORY CONTEXT:
+{
+  "id": "AMSD-2041",
+  "title": "[GO, UP, MX] Live Preview of Content in CMS",
+  "description": "[GO, UP, MX] Live Preview of Content in CMS",
+  "originalAcceptanceCriteria": [],
+  "technicalNotes": {
+    "files": [
+      "src/hooks/useContent.ts",
+      "src/components/contentstack/ContentstackLink/ContentstackLink.tsx",
+      "src/components/contentstack/ContentstackImage/ContentstackImage.tsx",
+      "src/services/contentstack.ts",
+      "src/interface/content/contentCard.ts"
+    ]
+  },
+  "dependencies": []
+}
+
+Produce your refined output as raw JSON only (no XML tags, no markdown fences, no preamble). Include:
+- "acceptanceCriteria": The FULL merged list (openspec's criteria + your additions/refinements). Every item MUST be an observable outcome, not an implementation instruction.
+- "notes": What you changed and why (be specific — cite which criteria you added/modified/replaced)
+- "splitStories": ALWAYS omit this field. Splitting is openspec's decision alone — never propose
+  split children of your own, even if openspec already split this story.
+- "acAddedBySpeckit": Array of criteria YOU added that were not in openspec's output
+- "acModifiedBySpeckit": Array of {"original":"...","revised":"..."} for criteria you reworded
+- "acFlagged": Array of {"criterion":"...","flag":"..."} for criteria that need human attention
+
+
+# Output
+{
+  "acceptanceCriteria": [
+    {
+      "id": "AC-1",
+      "criterion": "Given the application is running in live-preview mode, When a content author edits a field in the CMS, Then the corresponding rendered component in the application updates to reflect the new value without a full page reload."
+    },
+    {
+      "id": "AC-2",
+      "criterion": "Given the application is running in live-preview mode, When a content author edits a field in the CMS, Then the updated content is visible in the application within 5 seconds of the edit being saved in the CMS."
+    },
+    {
+      "id": "AC-3",
+      "criterion": "Given the application is NOT running in live-preview mode (e.g., production build), When the application renders content, Then it fetches and displays content using the standard published-content flow with no live-preview overhead or network requests."
+    },
+    {
+      "id": "AC-4",
+      "criterion": "Given the application is in live-preview mode, When the live-preview connection is lost (e.g., network interruption), Then the application displays a visible indicator to the user that live preview is disconnected and the last-received content remains displayed."
+    },
+    {
+      "id": "AC-5",
+      "criterion": "Given the live-preview connection was lost, When the connection is re-established, Then the application resumes receiving content updates automatically and the visible disconnection indicator is removed."
+    },
+    {
+      "id": "AC-6",
+      "criterion": "Given the application is in live-preview mode, When a content update is received that contains malformed or incomplete data, Then the application continues displaying the last valid content and logs an error without crashing or rendering broken content."
+    },
+    {
+      "id": "AC-7",
+      "criterion": "Given the application is in live-preview mode, When a content author edits a ContentstackImage field, Then the image component re-renders with the updated image URL/alt text without a full page reload."
+    },
+    {
+      "id": "AC-8",
+      "criterion": "Given the application is in live-preview mode, When a content author edits a ContentstackLink field, Then the link component re-renders with the updated href/display text without a full page reload."
+    },
+    {
+      "id": "AC-9",
+      "criterion": "Given the application is in live-preview mode, When content is updated via live preview, Then screen-reader users are notified of the content change via an ARIA live region or equivalent accessible announcement."
+    },
+    {
+      "id": "AC-10",
+      "criterion": "Given the application is in live-preview mode, When multiple content fields are updated simultaneously, Then all affected components update in a single coherent render cycle without intermediate partial-update states being visible."
+    },
+    {
+      "id": "AC-11",
+      "criterion": "Given the application is in live-preview mode, When a content author navigates to a different entry in the CMS, Then the application renders the newly selected entry's content in place of the previous entry."
+    },
+    {
+      "id": "AC-12",
+      "criterion": "Given the application is in live-preview mode, When live-preview data is received, Then no unpublished/draft content from other entries (not being previewed) is leaked into the application."
+    }
+  ],
+  "notes": "Openspec produced zero ACs and correctly flagged the story as underspecified. I added 12 acceptance criteria from scratch based on the story title, the listed technical files (useContent, ContentstackImage, ContentstackLink, contentstack service), and reasonable expectations for a CMS live-preview feature. AC-1/2 cover core happy-path preview behavior. AC-3 ensures preview mode is opt-in and doesn't affect production. AC-4/5 cover connection lifecycle (disconnect indicator + auto-reconnect). AC-6 covers malformed data resilience. AC-7/8 address the two specific component types listed in technical notes. AC-9 covers accessibility (screen-reader announcement of dynamic content). AC-10 prevents torn-write visual glitches. AC-11 covers entry-switching in the CMS. AC-12 covers a security boundary (no draft content leakage). All criteria are framed as observable outcomes without prescribing implementation.",
+  "acAddedBySpeckit": [
+    "AC-1: Given the application is running in live-preview mode, When a content author edits a field in the CMS, Then the corresponding rendered component in the application updates to reflect the new value without a full page reload.",
+    "AC-2: Given the application is running in live-preview mode, When a content author edits a field in the CMS, Then the updated content is visible in the application within 5 seconds of the edit being saved in the CMS.",
+    "AC-3: Given the application is NOT running in live-preview mode (e.g., production build), When the application renders content, Then it fetches and displays content using the standard published-content flow with no live-preview overhead or network requests.",
+    "AC-4: Given the application is in live-preview mode, When the live-preview connection is lost (e.g., network interruption), Then the application displays a visible indicator to the user that live preview is disconnected and the last-received content remains displayed.",
+    "AC-5: Given the live-preview connection was lost, When the connection is re-established, Then the application resumes receiving content updates automatically and the visible disconnection indicator is removed.",
+    "AC-6: Given the application is in live-preview mode, When a content update is received that contains malformed or incomplete data, Then the application continues displaying the last valid content and logs an error without crashing or rendering broken content.",
+    "AC-7: Given the application is in live-preview mode, When a content author edits a ContentstackImage field, Then the image component re-renders with the updated image URL/alt text without a full page reload.",
+    "AC-8: Given the application is in live-preview mode, When a content author edits a ContentstackLink field, Then the link component re-renders with the updated href/display text without a full page reload.",
+    "AC-9: Given the application is in live-preview mode, When content is updated via live preview, Then screen-reader users are notified of the content change via an ARIA live region or equivalent accessible announcement.",
+    "AC-10: Given the application is in live-preview mode, When multiple content fields are updated simultaneously, Then all affected components update in a single coherent render cycle without intermediate partial-update states being visible.",
+    "AC-11: Given the application is in live-preview mode, When a content author navigates to a different entry in the CMS, Then the application renders the newly selected entry's content in place of the previous entry.",
+    "AC-12: Given the application is in live-preview mode, When live-preview data is received, Then no unpublished/draft content from other entries (not being previewed) is leaked into the application."
+  ],
+  "acModifiedBySpeckit": [],
+  "acFlagged": [
+    {
+      "criterion": "AC-2 (5-second latency threshold)",
+      "flag": "The 5-second threshold is a placeholder — product must define the acceptable latency SLA for live preview updates. This value directly impacts architecture (polling interval vs push)."
+    },
+    {
+      "criterion": "All ACs",
+      "flag": "Openspec correctly flagged that this story is underspecified: 'Live Preview of Content in CMS' does not define the delivery mechanism. Contentstack offers a built-in Live Preview SDK (WebSocket-based), but the story could also mean polling or manual refresh. Product must clarify before implementation. The ACs above are written to be mechanism-agnostic but assume push-style updates; if polling is chosen, AC-2's threshold and AC-4/5's connection semantics would need revision."
+    },
+    {
+      "criterion": "AC-3 (no live-preview overhead in production)",
+      "flag": "Needs product input on how live-preview mode is activated (environment variable? URL parameter? build flag?). The activation strategy affects how this AC is tested."
+    }
+  ]
+}

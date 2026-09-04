@@ -1,0 +1,82 @@
+# Prompt
+You are the specification coordinator for the epam-cli orchestration system. Before every phase you read orchestrations/prd.json (implementationOrder and stories), evaluate risk, dependencies, and technical readiness, then assign the correct specification runners: OpenSpec, Speckit, both, or none. You write assignments into each story's specification.assignedAgents field along with coordinatorNotes, target provider/model, and timestamps. You understand the provider policy ledger (configuration.aiRuntime.providerPolicies), token guardrails, and know when to skip stories that were already hand-curated. When you plan a run you emit JSON compliant with spec-mode-runner.js so that automation can apply deltas deterministically. You never invent story IDs or mutate acceptance criteria directly; only delegate to spec agents and record their status.
+
+You are the EPAM CLI specification coordinator reviewing the completed spec outputs for phase core.
+
+Each story was processed by a sequential agent pipeline:
+  1. openspec elaborated requirements (AC refinement, story splits, technical depth)
+  2. speckit reviewed openspec's output (testability, security, edge cases, gap analysis)
+
+For each story, evaluate the quality of the collaborative spec work:
+1. Did both agents add meaningful, non-overlapping value?
+2. Are the acceptance criteria complete, testable, and non-overlapping?
+3. Are story splits logical and properly scoped?
+4. Flag any story needing human review.
+
+Respond with JSON between <SPEC_REVIEW> and </SPEC_REVIEW> using this schema:
+[
+  {"storyId":"REM-xxx","verdict":"approved|needs_review","reviewNotes":"coordinator observations","qualityScore":0.0-1.0,"flags":[]}
+]
+
+Stories to review:
+[
+  {
+    "id": "AMSD-1820",
+    "title": "[Mozio] - The Promo code amount is NOT displayed as expected for Return trip tickets in the Mozio email confirmation",
+    "acceptanceCriteria": [],
+    "specification": {
+      "runId": "20260726T023016Z",
+      "assignedAgents": [
+        "openspec",
+        "speckit"
+      ],
+      "coordinatorNotes": "Bug fix with empty acceptance criteria — openspec needed to elaborate AC around promo code display logic for return trips; speckit needed to harden edge cases (multi-leg, currency formatting, zero-value promo, expired promo) and verify email rendering testability.",
+      "status": "completed",
+      "updatedAt": "2026-07-26T02:40:30.479Z",
+      "appliedAgents": [
+        "openspec",
+        "speckit"
+      ],
+      "agentContributions": [
+        {
+          "agent": "openspec",
+          "applied": true,
+          "notes": "Defect: applyReportDiscountsService mutates discount.amount.value (line 81) after applying to the first dispatch, so the outbound dispatch consumes the full discount and the return dispatch gets zero/remaining — causing missing or incorrect discount in the Mozio email for return trips. ACs were empty; derived from description.",
+          "acceptanceChanged": false,
+          "splitCount": 0,
+          "timestamp": "2026-07-26T02:40:08.140Z"
+        },
+        {
+          "agent": "speckit",
+          "applied": true,
+          "notes": "Openspec provided empty acceptanceCriteria but identified the root cause: applyReportDiscountsService mutates discount.amount.value at line 81 after applying to the first dispatch, causing the return dispatch to receive zero/remaining. I derived all ACs from this root cause and the story description. AC-1 and AC-4 address the core mutation defect. AC-2 addresses the email display symptom. AC-3 guards against regression on one-way trips. AC-5, AC-6, AC-7 cover edge cases (zero-value, multiple discounts, over-discount). All criteria are framed as observable outcomes without prescribing implementation.",
+          "acceptanceChanged": false,
+          "splitCount": 0,
+          "timestamp": "2026-07-26T02:40:30.479Z"
+        }
+      ]
+    },
+    "splitChildren": []
+  }
+]
+
+<SPEC_REVIEW>
+</SPEC_REVIEW>
+
+# Output
+<SPEC_REVIEW>
+[
+  {
+    "storyId": "AMSD-1820",
+    "verdict": "needs_review",
+    "reviewNotes": "Both agents contributed meaningfully with non-overlapping roles: openspec identified the root cause (mutation of discount.amount.value at line 81 in applyReportDiscountsService) and speckit derived 7 acceptance criteria from that root cause covering the core defect, email symptom, one-way regression guard, and edge cases (zero-value, multiple discounts, over-discount). However, the final acceptanceCriteria array in the story is still empty — the agents noted they derived ACs but acceptanceChanged is false for both, meaning no ACs were actually written back to the story record. This is a critical gap: the spec work describes ACs in notes but never persisted them. The story cannot be considered spec-complete without the actual AC text in the acceptanceCriteria field. Additionally, no story split was performed despite the defect potentially warranting separate stories for the service-layer fix vs. the email-rendering verification. Recommend human review to (1) extract the 7 ACs from speckit's notes into the acceptanceCriteria array, (2) confirm the ACs are complete and non-overlapping, and (3) evaluate whether a split into service-fix and email-verification stories is warranted.",
+    "qualityScore": 0.55,
+    "flags": [
+      "acceptance_criteria_not_persisted",
+      "acceptanceChanged_false_despite_derived_acs",
+      "potential_story_split_needed",
+      "empty_acceptanceCriteria_array"
+    ]
+  }
+]
+</SPEC_REVIEW>

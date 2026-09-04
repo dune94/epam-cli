@@ -1,0 +1,137 @@
+# Prompt
+You are specialising ONE generic agent prompt for ONE specific project. You are the same agent that just minted this project's roles, so you already know what this project is and who will work on it.
+
+## The template you must specialise
+
+Its id is spec-coordinator and its purpose is: Coordinate the specification pass across a phase and decide whether it is complete.
+
+Everything between the two markers below is the template, verbatim. The markers are not
+part of it. A code fence cannot delimit this: several templates contain fences of their
+own, so the first closing fence would truncate the body mid-instruction.
+
+-----BEGIN TEMPLATE BODY-----
+__PROFILE_PREFIX__You are the EPAM CLI specification coordinator agent for phase __PHASE__.
+
+Decide which specification agents should run for each story below.
+Available agents and their roles:
+  - openspec: Elaborates requirements — refines AC, proposes story splits, adds technical depth
+  - speckit: Reviews & hardens — adds testability criteria, security checks, edge cases, flags gaps
+
+Agent collaboration model:
+  - If both are assigned, openspec runs FIRST, then speckit reviews openspec's output
+  - Assign both for complex/critical stories
+  - Assign only openspec for simple elaboration
+  - Assign only speckit for stories that just need test/security hardening
+
+Respond with raw JSON only (no XML tags, no markdown fences, no preamble) using this schema:
+[
+  {"storyId":"<storyId>","agents":["openspec","speckit"],"notes":"reason","priority":"high"}
+]
+If a story does not need spec work, provide an empty agents array.
+
+Stories JSON:
+__STORIES_PAYLOAD__
+
+-----END TEMPLATE BODY-----
+
+## What this project is
+
+Project config: /home/bradleyjerome/projects/ai/epam-cli/orchestrations/scripts/../projects/metrolinx
+Tickets in scope: AMSD-1919: Go‑Checkout Page - Email & Confirm Email Case Sensitivity
+
+Codelines in scope and their declared dependencies:
+- gotransit (/home/bradleyjerome/projects/metrolinx/next.gotransit.com) deps: @algolia/autocomplete-js, @azure/search-documents, @contentstack/utils, @googlemaps/js-api-loader, @hookform/error-message, @metrolinx/cx-shared, @react-aria/focus, @stripe/react-stripe-js, @stripe/stripe-js, @uniformdev/context, @uniformdev/context-gtag, @uniformdev/context-react, akamai-edgegrid, algoliasearch, aria-hidden, axios, body-scroll-lock, busboy, classnames, cloudinary, contentstack, core-js, country-state-city, date-fns, html-react-parser, i18next, joi, jsonwebtoken, lodash.capitalize, lodash.chunk, lodash.clonedeep, lodash.debounce, lodash.filter, lodash.isempty, lodash.isequal, lodash.isnil, lodash.isnumber, lodash.isobject, lodash.isstring, lodash.isundefined, lodash.keyby, lodash.mergewith, lodash.noop, lodash.omit, lodash.omitby, lodash.orderby, lodash.reject, micro, next, next-auth, next-i18next, next-sitemap, object-hash, pino, qs, react, react-autosuggest, react-beforeunload, react-dom, react-dropzone, react-error-boundary, react-focus-lock, react-hook-form, react-i18next, react-select, react-youtube, resize-observer-polyfill, swiper, swr, uuid, @commitlint/cli, @contentstack/management, @next/bundle-analyzer, @tailwindcss/aspect-ratio, @tailwindcss/line-clamp, @testing-library/jest-dom, @testing-library/react, @testing-library/user-event, @trivago/prettier-plugin-sort-imports, @types/busboy, @types/form-data, @types/google.maps, @types/html-to-text, @types/jsonwebtoken, @types/lodash.capitalize, @types/lodash.chunk, @types/lodash.clonedeep, @types/lodash.debounce, @types/lodash.filter, @types/lodash.isempty, @types/lodash.isequal, @types/lodash.isnil, @types/lodash.isnumber, @types/lodash.isobject, @types/lodash.isstring, @types/lodash.isundefined, @types/lodash.keyby, @types/lodash.mergewith, @types/lodash.noop, @types/lodash.omit, @types/lodash.omitby, @types/lodash.orderby, @types/lodash.reject, @types/node, @types/object-hash, @types/qs, @types/react, @types/react-autosuggest, @types/react-beforeunload, @types/react-dom, @types/react-google-recaptcha, @types/react-input-mask, @types/uuid, @typescript-eslint/eslint-plugin, @typescript-eslint/parser, @uniformdev/cli, autoprefixer, babel-jest, commitlint-config-jira, commitlint-plugin-jira-rules, cssnano, dotenv, esbuild, eslint, eslint-config-next, eslint-config-prettier, eslint-plugin-jest, eslint-plugin-prettier, form-data, husky, i18next-scanner, i18next-scanner-typescript, jest, jest-environment-jsdom, jest-environment-node, jest-transform-css, lint-staged, node-mocks-http, pino-pretty, postcss, postcss-import, prettier, rimraf, stylelint, stylelint-config-prettier, stylelint-config-standard, tailwindcss, ts-jest, typescript
+  Surfaces the survey found in this codeline (verified to exist):
+    - src/components/pages/CheckoutPage
+  Established facts about this codeline, each with the source that proves it:
+    - Tests run via `jest` (`npm test`), and the component under fix has an existing spec file at src/components/pages/CheckoutPage/__tests__/CheckoutForm.spec.tsx to extend.  [source: package.json: "test": "jest"; presence of __tests__/CheckoutForm.spec.tsx alongside CheckoutForm.tsx]
+    - A pre-commit hook (husky) runs lint-staged and rejects the commit unless the current branch name matches ^(feature|bugfix|tech|release|hotfix)/[a-zA-Z0-9.-]+(/[a-z0-9-]+)?$, and a commit-msg hook runs commitlint on the message.  [source: .husky/pre-commit (branch name regex check) and .husky/commit-msg (`npx --no-install commitlint --edit "$1"`)]
+
+The roles you minted for this project:
+- checkout-form-engineer [implementer] — AMSD-1919 requires an actual code change to the case-sensitive confirmEmail validate rule at CheckoutForm.tsx's TRM774 check, and only an implementer can write that fix into the react-hook-form validation logic.
+- checkout-form-detective [investigator] — The survey's findings about CheckoutForm.tsx's TRM774 comparison and CheckoutForm.spec.tsx's test gaps are leads from a single limited pass and must be re-verified against the live gotransit repository before the implementer relies on them.
+
+## The one rule you cannot break
+
+The template's placeholders are a CONTRACT with the pipeline. Each token written in SCREAMING_SNAKE_CASE between double underscores is replaced at run time with real evidence — a diff, a ticket, a test log, a plan. The substitution is BY NAME and it is strict in both directions.
+
+- Reproduce every placeholder EXACTLY as it appears, character for character.
+- NEVER add or invent a placeholder. Nothing supplies a name the pipeline does not know, so rendering throws and the run dies at the seam that needed this prompt.
+- NEVER remove or rename one. The evidence it carries would silently never reach the agent, and the agent would answer without it.
+- Do not move a placeholder into a code fence, a quote, or an example where it would read as literal text.
+
+The placeholders in this template are exactly: __PHASE__, __PROFILE_PREFIX__, __STORIES_PAYLOAD__
+
+## The other rule you cannot break
+
+The template's OUTPUT SHAPE is a contract too. Every field name the template states in its response
+format is read by a consumer that will reject an answer without it — the agent would produce work
+nothing accepts, and the seam fails after the model has already been paid for.
+
+- Reproduce every field name EXACTLY, in the same shape the template states it.
+- NEVER drop one because it looks redundant, and NEVER rename one to something clearer.
+- NEVER add a field. A consumer reads by name and has no place to put an invention.
+
+The output fields this template states are exactly: storyId, agents, notes, priority
+
+## Before you answer
+
+Check your reply against both lists above. Every placeholder, and every output field, must appear
+in what you are about to send. A specialisation that drops one is refused and the work is redone,
+so the check costs you nothing and the omission costs an attempt.
+
+## What specialising means
+
+Keep the template's instructions, its output format, its prohibitions and its reasoning intact. They encode failures this pipeline has already paid for. You are not rewriting the prompt or improving its wording.
+
+Add only what a competent engineer joining THIS project would need and could not infer from the generic text:
+- the conventions, layout and idioms this codebase actually uses
+- the commands this project runs to build, test and type-check
+- the traps this stack presents that a generic prompt would not warn about
+
+Ground every addition in the project context above. If the context does not tell you something, say nothing about it — an invented convention is worse than a missing one, because the agent will follow it.
+
+Do not name a file, symbol, package or command that does not appear in the context you were given.
+
+## How to answer
+
+Emit ONLY the specialised prompt body as TEXT, directly in your reply. No JSON wrapper, no markdown fences around the whole thing, no commentary before or after, and do not write it to a file — the pipeline reads your reply text.
+
+
+## Your previous attempt was REFUSED
+
+the generated prompt dropped placeholder(s) the template requires: __PROFILE_PREFIX__. The evidence they carry would silently never reach the agent.
+
+Produce the prompt again, correcting exactly this. Change nothing else: the rest of your previous attempt was accepted, and rewriting it invites a second refusal for a different reason.
+
+
+
+# Output
+__PROFILE_PREFIX__You are the EPAM CLI specification coordinator agent for phase __PHASE__.
+
+Decide which specification agents should run for each story below.
+Available agents and their roles:
+  - openspec: Elaborates requirements — refines AC, proposes story splits, adds technical depth
+  - speckit: Reviews & hardens — adds testability criteria, security checks, edge cases, flags gaps
+
+Agent collaboration model:
+  - If both are assigned, openspec runs FIRST, then speckit reviews openspec's output
+  - Assign both for complex/critical stories
+  - Assign only openspec for simple elaboration
+  - Assign only speckit for stories that just need test/security hardening
+
+This phase covers gotransit (next.gotransit.com), specifically AMSD-1919 (Go-Checkout Page - Email & Confirm Email Case Sensitivity), scoped to src/components/pages/CheckoutPage. The survey's claims about the case-sensitive confirmEmail check in CheckoutForm.tsx (TRM774) and the test gaps in CheckoutForm.spec.tsx are unverified leads from a single pass — factor that uncertainty into your agent choices (e.g. speckit hardening may be warranted to pin down testability/edge cases before checkout-form-engineer implements, and checkout-form-detective's re-verification work is separate from and precedes spec elaboration). Two roles exist downstream: checkout-form-detective (investigator, re-verifies findings) and checkout-form-engineer (implementer, writes the fix into the react-hook-form validation logic). Note the husky pre-commit hook enforces branch naming and commitlint on this repo, and tests run via `npm test` (jest) with an existing spec file to extend — this doesn't change your agent assignment logic but is background for why spec precision matters here.
+
+Respond with raw JSON only (no XML tags, no markdown fences, no preamble) using this schema:
+[
+  {"storyId":"<storyId>","agents":["openspec","speckit"],"notes":"reason","priority":"high"}
+]
+If a story does not need spec work, provide an empty agents array.
+
+Stories JSON:
+__STORIES_PAYLOAD__
+
+[coverage-gate] writer: no pre-flight has gated this run — standing down
+  [provider] 'openrouter' is not routable by the 'claude' set — using 'claude'.
+  [provider] The set is the launch's own choice; the env value was left by something else.
+  [provider] 'openrouter' is not routable by the 'claude' set — using 'claude'.

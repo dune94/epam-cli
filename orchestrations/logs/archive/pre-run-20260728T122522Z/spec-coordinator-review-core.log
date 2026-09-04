@@ -1,0 +1,82 @@
+# Prompt
+You are the specification coordinator for the epam-cli orchestration system. Before every phase you read orchestrations/prd.json (implementationOrder and stories), evaluate risk, dependencies, and technical readiness, then assign the correct specification runners: OpenSpec, Speckit, both, or none. You write assignments into each story's specification.assignedAgents field along with coordinatorNotes, target provider/model, and timestamps. You understand the provider policy ledger (configuration.aiRuntime.providerPolicies), token guardrails, and know when to skip stories that were already hand-curated. When you plan a run you emit JSON compliant with spec-mode-runner.js so that automation can apply deltas deterministically. You never invent story IDs or mutate acceptance criteria directly; only delegate to spec agents and record their status.
+
+You are the EPAM CLI specification coordinator reviewing the completed spec outputs for phase core.
+
+Each story was processed by a sequential agent pipeline:
+  1. openspec elaborated requirements (AC refinement, story splits, technical depth)
+  2. speckit reviewed openspec's output (testability, security, edge cases, gap analysis)
+
+For each story, evaluate the quality of the collaborative spec work:
+1. Did both agents add meaningful, non-overlapping value?
+2. Are the acceptance criteria complete, testable, and non-overlapping?
+3. Are story splits logical and properly scoped?
+4. Flag any story needing human review.
+
+Respond with JSON between <SPEC_REVIEW> and </SPEC_REVIEW> using this schema:
+[
+  {"storyId":"REM-xxx","verdict":"approved|needs_review","reviewNotes":"coordinator observations","qualityScore":0.0-1.0,"flags":[]}
+]
+
+Stories to review:
+[
+  {
+    "id": "AMSD-2041",
+    "title": "[GO, UP, MX] Live Preview of Content in CMS",
+    "acceptanceCriteria": [],
+    "specification": {
+      "runId": "20260728T120230Z",
+      "assignedAgents": [
+        "openspec",
+        "speckit"
+      ],
+      "coordinatorNotes": "Empty acceptance criteria on a complex multi-platform (GO, UP, MX) live preview feature requiring real-time rendering and CMS integration. openspec must elaborate requirements and define AC first; speckit then hardens testability, security (untrusted content rendering, real-time state exposure), and edge cases. spec is null — no prior hand-curation to skip.",
+      "status": "completed",
+      "updatedAt": "2026-07-28T12:11:50.955Z",
+      "appliedAgents": [
+        "openspec",
+        "speckit"
+      ],
+      "agentContributions": [
+        {
+          "agent": "openspec",
+          "applied": true,
+          "notes": "Story has zero acceptance criteria and a description that merely repeats the title. 'Live Preview of Content in CMS' is a novel capability — the codebase currently has no live-preview mechanism. The central integration point is useContent (236 callers), which is the sole hook through which all Contentstack content flows. VCs are derived from the description alone and are framed at our boundary since Contentstack services are unreachable at test time. This story is underspecified — product should define what 'live preview' means (WebSocket push? polling? Contentstack's built-in Live Preview SDK? manual refresh?) before implementation begins.",
+          "acceptanceChanged": false,
+          "splitCount": 0,
+          "timestamp": "2026-07-28T12:11:06.013Z"
+        },
+        {
+          "agent": "speckit",
+          "applied": true,
+          "notes": "Openspec produced zero ACs and correctly flagged the story as underspecified. I added 12 acceptance criteria from scratch based on the story title, the listed technical files (useContent, ContentstackImage, ContentstackLink, contentstack service), and reasonable expectations for a CMS live-preview feature. AC-1/2 cover core happy-path preview behavior. AC-3 ensures preview mode is opt-in and doesn't affect production. AC-4/5 cover connection lifecycle (disconnect indicator + auto-reconnect). AC-6 covers malformed data resilience. AC-7/8 address the two specific component types listed in technical notes. AC-9 covers accessibility (screen-reader announcement of dynamic content). AC-10 prevents torn-write visual glitches. AC-11 covers entry-switching in the CMS. AC-12 covers a security boundary (no draft content leakage). All criteria are framed as observable outcomes without prescribing implementation.",
+          "acceptanceChanged": false,
+          "splitCount": 0,
+          "timestamp": "2026-07-28T12:11:50.955Z"
+        }
+      ]
+    },
+    "splitChildren": []
+  }
+]
+
+<SPEC_REVIEW>
+</SPEC_REVIEW>
+
+# Output
+<SPEC_REVIEW>
+[
+  {
+    "storyId": "AMSD-2041",
+    "verdict": "needs_review",
+    "reviewNotes": "Pipeline breakdown: OpenSpec correctly identified the story as underspecified — zero ACs, description repeats title, and the fundamental question of what 'live preview' means (WebSocket? polling? Contentstack SDK? manual refresh?) is unresolved. OpenSpec flagged this for product input, which was the right call. However, SpecKit then bypassed that quality gate by authoring 12 ACs from scratch based on assumptions about the title and technical files, rather than reviewing hardened OpenSpec output. This is a role inversion: SpecKit is meant to review and harden, not originate requirements. The 12 ACs are individually well-structured (observable outcomes, no implementation prescription, covers security/accessibility/edge cases), but they rest on unvalidated assumptions about the preview mechanism — AC-4/5 (connection lifecycle, auto-reconnect) may not even apply if the intended approach is, e.g., Contentstack's built-in SDK with no persistent connection. No story split was performed despite the complexity (multi-platform GO/UP/MX, real-time rendering, CMS integration). The story needs product clarification on scope and mechanism before any ACs — whether OpenSpec's or SpecKit's — can be considered valid.",
+    "qualityScore": 0.4,
+    "flags": [
+      "underspecified",
+      "pipeline_inversion",
+      "unvalidated_assumptions",
+      "missing_split_analysis"
+    ]
+  }
+]
+</SPEC_REVIEW>

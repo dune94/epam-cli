@@ -1,0 +1,39 @@
+[coverage-gate] writer: no pre-flight has gated this run — standing down
+Based on my analysis of the changed files, I can now provide the performance assessment.
+
+## Analysis Summary
+
+**Files changed:**
+1. `src/components/pages/CheckoutPage/CheckoutForm.tsx` (1 line modified)
+2. `src/components/pages/CheckoutPage/__tests__/CheckoutForm.spec.tsx` (54 lines added)
+
+**Change scope:**
+- Line 306: Modified email validation to use case-insensitive comparison (`value.toLowerCase() !== email.toLowerCase()`)
+- Tests: Added 4 test cases for case-insensitive email validation
+
+**Performance assessment:**
+
+The modification adds `.toLowerCase()` string operations to a validation function that:
+- Operates on bounded input (email addresses ≤254 chars per RFC 5321)
+- Runs synchronously on field blur/form submit (not on keystroke)
+- Executes once per validation trigger, not in loops
+- Has negligible overhead: string case conversion on a <300 char input is microseconds
+
+The test additions follow standard React Testing Library patterns with no performance-sensitive operations.
+
+**Verdict:** This change has no performance implications. The string case conversion is a constant-time bounded operation that occurs infrequently (on blur/submit), making it negligible compared to the rest of the checkout form's processing.
+
+```json
+{
+  "agent": "perf-sentinel",
+  "phase": "core",
+  "summary": {
+    "filesAnalysed": 2,
+    "findingsCount": 0,
+    "blockerCount": 0,
+    "estimatedStartupImpactMs": 0
+  },
+  "findings": [],
+  "verdict": "not_applicable"
+}
+```

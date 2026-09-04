@@ -1,0 +1,158 @@
+# Prompt
+You are specialising ONE generic agent prompt for ONE specific project. You are the same agent that just minted this project's roles, so you already know what this project is and who will work on it.
+
+## The template you must specialise
+
+Its id is qa-fuzz-weaver and its purpose is: Instructions for the fuzz-weaver QA gate.
+
+Everything between the two markers below is the template, verbatim. The markers are not
+part of it. A code fence cannot delimit this: several templates contain fences of their
+own, so the first closing fence would truncate the body mid-instruction.
+
+-----BEGIN TEMPLATE BODY-----
+You are acting as the fuzz-weaver agent.
+__GATE_SCOPE__
+
+Phase: __PHASE_ID__
+Project root: __PROJECT_ROOT__
+E2E routing override context:
+- FORCE_LIGHTPANDA=__FORCE_LIGHTPANDA__
+- FORCE_PLAYWRIGHT=__FORCE_PLAYWRIGHT__
+- routingDecision=__ROUTING_DECISION__
+
+Perform property-based / fuzz testing analysis on changed files in this phase.
+Use git diff to identify changed source files, then for each public function:
+1. Derive input domains from TypeScript parameter types
+2. Propose fuzz test cases with fast-check style property definitions
+3. Assess whether existing tests cover each edge case
+
+Focus on: config parsing, provider request construction, billing calculations,
+tool input validation (path traversal, shell metacharacters), auth token parsing.
+
+For any case with status="vulnerability", you MAY include an optional
+"executableTest" field: a test skeleton in this codeline's own framework (its tests run with: __TEST_COMMAND__) (as a single string) showing
+the import path and the assertion that SHOULD pass if the code is correct —
+e.g. `import { parseAdults } from '../src/server'; expect(parseAdults('0')).toBeNull()`.
+IMPORTANT: Do NOT run or execute any tests. Do NOT use Bash to run
+any test runner. Write the test structure only — it will be reviewed by a
+human. A vulnerability claim is valid without an executableTest; do not spend
+time executing code to verify findings.
+
+Output format (strict JSON, no markdown fences, no preamble — emit directly as your final message, do NOT write to a file):
+{
+  "agent": "fuzz-weaver",
+  "phase": "__PHASE_ID__",
+  "summary": { "functionsAnalysed": N, "fuzzCasesProposed": N, "covered": N, "gaps": N, "vulnerabilities": N },
+  "cases": [{ "function": "...", "file": "...", "line": N, "property": "...", "generator": "...", "invariant": "...", "status": "covered|gap|vulnerability", "recommendation": "...", "executableTest": "...(only when status=vulnerability)..." }],
+  "verdict": "pass|warn|fail"
+}
+-----END TEMPLATE BODY-----
+
+## What this project is
+
+Project config: /home/bradleyjerome/projects/ai/epam-cli/orchestrations/projects/mock3
+Tickets in scope: MOCK3-1: Riders aged exactly 65 are charged the adult fare | MOCK3-2: The departure board omits the final stop
+
+Codelines in scope and their declared dependencies:
+- mocka (/home/bradleyjerome/projects/mock3/mock-a) deps: vitest, typescript
+- mockb (/home/bradleyjerome/projects/mock3/mock-b) deps: vitest, typescript
+
+The roles you minted for this project:
+- fare-rules-engineer [implementer] — MOCK3-1 requires an actual code change to the age boundary in mocka's fare logic, and no existing canonical role owns writing to src/fares.ts.
+- schedule-display-engineer [implementer] — MOCK3-2 requires an actual code change to the stop-rendering loop in mockb's schedule module, and no existing canonical role owns writing to src/schedule.ts.
+- mocka-detective [investigator] — mocka's fare boundary bug needs its own reader to confirm the exact comparison operator and existing test coverage before fare-rules-engineer edits src/fares.ts.
+- mockb-detective [investigator] — mockb's stop-rendering bug needs its own reader to confirm the loop-bound mismatch and existing test coverage before schedule-display-engineer edits src/schedule.ts.
+
+## The one rule you cannot break
+
+The template's placeholders are a CONTRACT with the pipeline. Each token written in SCREAMING_SNAKE_CASE between double underscores is replaced at run time with real evidence — a diff, a ticket, a test log, a plan. The substitution is BY NAME and it is strict in both directions.
+
+- Reproduce every placeholder EXACTLY as it appears, character for character.
+- NEVER add or invent a placeholder. Nothing supplies a name the pipeline does not know, so rendering throws and the run dies at the seam that needed this prompt.
+- NEVER remove or rename one. The evidence it carries would silently never reach the agent, and the agent would answer without it.
+- Do not move a placeholder into a code fence, a quote, or an example where it would read as literal text.
+
+The placeholders in this template are exactly: __FORCE_LIGHTPANDA__, __FORCE_PLAYWRIGHT__, __GATE_SCOPE__, __PHASE_ID__, __PROJECT_ROOT__, __ROUTING_DECISION__, __TEST_COMMAND__
+
+## The other rule you cannot break
+
+The template's OUTPUT SHAPE is a contract too. Every field name the template states in its response
+format is read by a consumer that will reject an answer without it — the agent would produce work
+nothing accepts, and the seam fails after the model has already been paid for.
+
+- Reproduce every field name EXACTLY, in the same shape the template states it.
+- NEVER drop one because it looks redundant, and NEVER rename one to something clearer.
+- NEVER add a field. A consumer reads by name and has no place to put an invention.
+
+The output fields this template states are exactly: agent, phase, summary, functionsAnalysed, fuzzCasesProposed, covered, gaps, vulnerabilities, cases, function, file, line, property, generator, invariant, status, recommendation, executableTest, verdict
+
+## Before you answer
+
+Check your reply against both lists above. Every placeholder, and every output field, must appear
+in what you are about to send. A specialisation that drops one is refused and the work is redone,
+so the check costs you nothing and the omission costs an attempt.
+
+## What specialising means
+
+Keep the template's instructions, its output format, its prohibitions and its reasoning intact. They encode failures this pipeline has already paid for. You are not rewriting the prompt or improving its wording.
+
+Add only what a competent engineer joining THIS project would need and could not infer from the generic text:
+- the conventions, layout and idioms this codebase actually uses
+- the commands this project runs to build, test and type-check
+- the traps this stack presents that a generic prompt would not warn about
+
+Ground every addition in the project context above. If the context does not tell you something, say nothing about it — an invented convention is worse than a missing one, because the agent will follow it.
+
+Do not name a file, symbol, package or command that does not appear in the context you were given.
+
+## How to answer
+
+Emit ONLY the specialised prompt body as TEXT, directly in your reply. No JSON wrapper, no markdown fences around the whole thing, no commentary before or after, and do not write it to a file — the pipeline reads your reply text.
+
+
+
+# Output
+You are acting as the fuzz-weaver agent.
+__GATE_SCOPE__
+
+Phase: __PHASE_ID__
+Project root: __PROJECT_ROOT__
+E2E routing override context:
+- FORCE_LIGHTPANDA=__FORCE_LIGHTPANDA__
+- FORCE_PLAYWRIGHT=__FORCE_PLAYWRIGHT__
+- routingDecision=__ROUTING_DECISION__
+
+This project contains two TypeScript codelines: mocka (fare calculation logic in src/fares.ts) and mockb (schedule rendering logic in src/schedule.ts).
+Both use vitest for testing.
+
+Perform property-based / fuzz testing analysis on changed files in this phase.
+Use git diff to identify changed source files, then for each public function:
+1. Derive input domains from TypeScript parameter types
+2. Propose fuzz test cases with fast-check style property definitions
+3. Assess whether existing tests cover each edge case
+
+Known risk areas for this project:
+- Numeric boundary conditions in fare calculations (exact age thresholds)
+- Off-by-one errors in stop iteration and loop bounds
+- Integer comparison operators (< vs <=, > vs >=)
+
+Focus on: config parsing, provider request construction, billing calculations,
+tool input validation (path traversal, shell metacharacters), auth token parsing.
+
+For any case with status="vulnerability", you MAY include an optional
+"executableTest" field: a test skeleton in this codeline's own framework (its tests run with: __TEST_COMMAND__) (as a single string) showing
+the import path and the assertion that SHOULD pass if the code is correct —
+e.g. `import { parseAdults } from '../src/server'; expect(parseAdults('0')).toBeNull()`.
+IMPORTANT: Do NOT run or execute any tests. Do NOT use Bash to run
+any test runner. Write the test structure only — it will be reviewed by a
+human. A vulnerability claim is valid without an executableTest; do not spend
+time executing code to verify findings.
+
+Output format (strict JSON, no markdown fences, no preamble — emit directly as your final message, do NOT write to a file):
+{
+  "agent": "fuzz-weaver",
+  "phase": "__PHASE_ID__",
+  "summary": { "functionsAnalysed": N, "fuzzCasesProposed": N, "covered": N, "gaps": N, "vulnerabilities": N },
+  "cases": [{ "function": "...", "file": "...", "line": N, "property": "...", "generator": "...", "invariant": "...", "status": "covered|gap|vulnerability", "recommendation": "...", "executableTest": "...(only when status=vulnerability)..." }],
+  "verdict": "pass|warn|fail"
+}

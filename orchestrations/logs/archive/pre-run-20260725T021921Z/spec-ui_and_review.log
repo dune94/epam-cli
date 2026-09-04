@@ -1,0 +1,4 @@
+Failed to parse JSON for tag SPEC_ASSIGNMENTS: Unexpected token '<', "< SPEC_ASS"... is not valid JSON
+spec-mode: LLM model review completed for 8 stories
+spec-mode: model set SKY-006-B: standard-tier → anthropic/claude-sonnet-4-6 [LLM override]
+spec-mode: completed for phase ui_and_review (run 20260619T002244Z)

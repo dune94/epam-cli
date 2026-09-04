@@ -1,0 +1,83 @@
+# Prompt
+You are the speckit specification agent for EPAM CLI. Phase core, story SKY-003a.
+
+Generate refined acceptance criteria, optionally updated title/description, and optional split stories. Output JSON only between <SPEC_AGENT> tags using this schema:
+{
+  "storyId":"SKY-003a",
+  "agent":"speckit",
+  "notes":"context",
+  "acceptanceCriteria":["..."],
+  "description":"...",
+  "title":"...",
+  "splitStories":[{"id":"optional","title":"...","description":"...","acceptanceCriteria":["..."]}]
+}
+Use existing text when no change is needed.
+Story context:
+{
+  "id": "SKY-003a",
+  "title": "CLI argument parsing, env-var guard, and SkyscannerClient wiring",
+  "description": "Create `src/cli.ts` with manual `process.argv` flag parsing (no commander, yargs, or minimist). Validate required flags `--from`, `--to`, `--date` (exit 2 if absent or date format invalid). Validate optional `--adults` (default 1; exit 2 on bad value). Guard on `RAPIDAPI_KEY` (exit 1 if absent or empty string). Instantiate `SkyscannerClient` and call `searchFlights` forwarding all parsed args. Pass raw result array to `renderTable` exported from `src/table.ts` (stub acceptable). Tests in `src/cli.test.ts` cover all validation, env-var, and happy-path scenarios, and the full Vitest suite passes.",
+  "acceptanceCriteria": [
+    "`src/cli.ts` exists and `tsc --noEmit` reports zero errors on the project; no third-party flag-parsing library (commander, yargs, minimist, etc.) is imported anywhere in `src/cli.ts`",
+    "Flag values are read from the space-separated token immediately following each flag (e.g. `--from CDG` yields `from === 'CDG'`); parsing is order-independent: `--to LHR --from CDG --date 2025-09-01` produces the same parsed values as `--from CDG --to LHR --date 2025-09-01`",
+    "A recognized flag that appears with no following value token (it is the last argv element, or is immediately followed by another `--flag`) is treated as that flag being absent/invalid and is reported through the normal validation path (exit 2 for required flags or invalid `--adults`); it does not silently consume the following flag token as its value",
+    "Unrecognized/unknown flags do not crash parsing or alter the exit code on an otherwise-valid invocation (silently ignoring them is acceptable for this story's scope)",
+    "Validation follows a single documented check order: required-flag presence/validity is checked first (`--from`, then `--to`, then `--date` format), then `--adults` validity, and only then `RAPIDAPI_KEY`. Argument validation always runs before env-var validation; if both a required flag is missing AND `RAPIDAPI_KEY` is absent, the process exits 2 (not 1) and prints the argument error to stderr — the env-var error is never emitted in this case",
+    "When more than one argument-validation error is present (e.g. a missing required flag and an invalid `--adults`), exactly one argument error is reported and the exit code is 2; the implementation reports the first failure it encounters in the documented check order above and does not emit multiple conflicting exit codes",
+    "Each of `--from`, `--to`, and `--date` is individually required; omitting any one of them causes the process to exit 2, writes a usage hint to stderr that includes the name of the missing flag, and writes nothing to stdout",
+    "`--date` value must match `/^\\d{4}-\\d{2}-\\d{2}$/`; a value that fails this pattern causes exit 2 with a descriptive stderr message before any network I/O; stdout is empty",
+    "`--adults` is optional and defaults to `1` when absent; a value that is non-numeric, explicitly non-integer (e.g. `'1.5'` — detected by checking `Number.isInteger(parsed)`, not just `isNaN`), zero, or negative causes exit 2 with a descriptive stderr message; stdout is empty",
+    "The parsed `adults` integer (including the implicit default of `1`) is forwarded verbatim to `SkyscannerClient.searchFlights`; it is never silently coerced to a different value or omitted from the call",
+    "If `RAPIDAPI_KEY` is unset or resolves to an empty string after argument validation passes, the process writes to stderr a line whose exact content is `Error: RAPIDAPI_KEY environment variable is required` (no additional text on that line), exits 1, writes nothing to stdout, and makes no network call",
+    "`renderTable` from `src/table.ts` is called with the raw array returned by `searchFlights`; `renderTable` may be a stub for this story and its return value is not required to produce visible output",
+    "Exit-code behavior is implemented in a way that is unit-testable without aborting the Vitest process (e.g. setting `process.exitCode`, returning a code from an exported `main`/`run` function, or throwing a typed error the test can catch) rather than relying solely on an unconditional `process.exit` at module top level; the chosen mechanism still yields the documented exit codes 0/1/2 when run as a real CLI",
+    "Network errors and non-2xx API responses from `SkyscannerClient` are out of scope for this story; no error handling for those cases is required",
+    "All Vitest tests in `src/cli.test.ts` pass; the suite covers: missing `--from`, missing `--to`, missing `--date`, invalid `--date` format, invalid `--adults` value (non-numeric), invalid `--adults` value (float like `1.5`), invalid `--adults` value (zero), invalid `--adults` value (negative), absent `RAPIDAPI_KEY`, empty-string `RAPIDAPI_KEY`, `--adults` absent (asserts `searchFlights` receives `adults: 1`), and a happy-path invocation that asserts both `searchFlights` is called with the exact parsed arguments and `renderTable` is called exactly once with the value `searchFlights` returned"
+  ],
+  "technicalNotes": {
+    "workingDir": "/tmp/skyscanner-app",
+    "files": [
+      "/tmp/skyscanner-app/src/cli.ts",
+      "/tmp/skyscanner-app/src/cli.test.ts"
+    ],
+    "dependsOn": [
+      "SKY-002"
+    ],
+    "testCommand": "npx vitest run src/cli.test.ts"
+  },
+  "agentRole": "typescript-engineer",
+  "agentGroup": "independent",
+  "dependencies": []
+}
+
+<SPEC_AGENT>
+
+# Output
+```json
+{
+  "storyId": "SKY-003a",
+  "agent": "speckit",
+  "notes": "context",
+  "acceptanceCriteria": [
+    "`src/cli.ts` exists and `tsc --noEmit` reports zero errors on the project; no third-party flag-parsing library (commander, yargs, minimist, etc.) is imported anywhere in `src/cli.ts`",
+    "Flag values are read from the space-separated token immediately following each flag (e.g. `--from CDG` yields `from === 'CDG'`); parsing is order-independent: `--to LHR --from CDG --date 2025-09-01` produces the same parsed values as `--from CDG --to LHR --date 2025-09-01`",
+    "A recognized flag that appears with no following value token (it is the last argv element, or is immediately followed by another `--flag`) is treated as that flag being absent/invalid and is reported through the normal validation path (exit 2 for required flags or invalid `--adults`); it does not silently consume the following flag token as its value",
+    "Unrecognized/unknown flags do not crash parsing or alter the exit code on an otherwise-valid invocation (silently ignoring them is acceptable for this story's scope)",
+    "Validation follows a single documented check order: required-flag presence/validity is checked first (`--from`, then `--to`, then `--date` format), then `--adults` validity, and only then `RAPIDAPI_KEY`. Argument validation always runs before env-var validation; if both a required flag is missing AND `RAPIDAPI_KEY` is absent, the process exits 2 (not 1) and prints the argument error to stderr — the env-var error is never emitted in this case",
+    "When more than one argument-validation error is present (e.g. a missing required flag and an invalid `--adults`), exactly one argument error is reported and the exit code is 2; the implementation reports the first failure it encounters in the documented check order above and does not emit multiple conflicting exit codes",
+    "Each of `--from`, `--to`, and `--date` is individually required; omitting any one of them causes the process to exit 2, writes a usage hint to stderr that includes the name of the missing flag, and writes nothing to stdout",
+    "`--date` value must match `/^\\d{4}-\\d{2}-\\d{2}$/`; a value that fails this pattern causes exit 2 with a descriptive stderr message before any network I/O; stdout is empty",
+    "`--adults` is optional and defaults to `1` when absent; a value that is non-numeric, explicitly non-integer (e.g. `'1.5'` — detected by checking `Number.isInteger(parsed)`, not just `isNaN`), zero, or negative causes exit 2 with a descriptive stderr message; stdout is empty",
+    "The parsed `adults` integer (including the implicit default of `1`) is forwarded verbatim to `SkyscannerClient.searchFlights`; it is never silently coerced to a different value or omitted from the call",
+    "If `RAPIDAPI_KEY` is unset or resolves to an empty string after argument validation passes, the process writes to stderr a line whose exact content is `Error: RAPIDAPI_KEY environment variable is required` (no additional text on that line), exits 1, writes nothing to stdout, and makes no network call",
+    "`renderTable` from `src/table.ts` is called with the raw array returned by `searchFlights`; `renderTable` may be a stub for this story and its return value is not required to produce visible output",
+    "Exit-code behavior is implemented in a way that is unit-testable without aborting the Vitest process (e.g. setting `process.exitCode`, returning a code from an exported `main`/`run` function, or throwing a typed error the test can catch) rather than relying solely on an unconditional `process.exit` at module top level; the chosen mechanism still yields the documented exit codes 0/1/2 when run as a real CLI",
+    "Network errors and non-2xx API responses from `SkyscannerClient` are out of scope for this story; no error handling for those cases is required",
+    "All Vitest tests in `src/cli.test.ts` pass; the suite covers: missing `--from`, missing `--to`, missing `--date`, invalid `--date` format, invalid `--adults` value (non-numeric), invalid `--adults` value (float like `1.5`), invalid `--adults` value (zero), invalid `--adults` value (negative), absent `RAPIDAPI_KEY`, empty-string `RAPIDAPI_KEY`, `--adults` absent (asserts `searchFlights` receives `adults: 1`), and a happy-path invocation that asserts both `searchFlights` is called with the exact parsed arguments and `renderTable` is called exactly once with the value `searchFlights` returned"
+  ],
+  "description": "Create `src/cli.ts` with manual `process.argv` flag parsing (no commander, yargs, or minimist). Validate required flags `--from`, `--to`, `--date` (exit 2 if absent or date format invalid). Validate optional `--adults` (default 1; exit 2 on bad value). Guard on `RAPIDAPI_KEY` (exit 1 if absent or empty string). Instantiate `SkyscannerClient` and call `searchFlights` forwarding all parsed args. Pass raw result array to `renderTable` exported from `src/table.ts` (stub acceptable). Tests in `src/cli.test.ts` cover all validation, env-var, and happy-path scenarios, and the full Vitest suite passes.",
+  "title": "CLI argument parsing, env-var guard, and SkyscannerClient wiring",
+  "splitStories": []
+}
+```
+<SPEC_AGENT>

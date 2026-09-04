@@ -1,0 +1,44 @@
+{
+  "agent": "fuzz-weaver",
+  "phase": "core",
+  "summary": {
+    "functionsAnalysed": 1,
+    "fuzzCasesProposed": 3,
+    "covered": 3,
+    "gaps": 0,
+    "vulnerabilities": 0
+  },
+  "cases": [
+    {
+      "function": "getGreeting",
+      "file": "src/hello.ts",
+      "line": 1,
+      "property": "getGreeting is a pure function with zero parameters — repeated invocations always return the identical string value (determinism invariant)",
+      "generator": "fc.constant(undefined) — no input domain exists since the function takes no arguments; property verified by invoking N times and asserting referential equality of results",
+      "invariant": "∀ n ≥ 1 invocations: getGreeting() === getGreeting() (idempotent, no hidden state)",
+      "status": "covered",
+      "recommendation": "Existing tests in src/hello.test.ts call getGreeting() multiple times across two test blocks and assert consistent values. Determinism is implicitly covered. No additional fuzz cases needed for a zero-parameter constant function."
+    },
+    {
+      "function": "getGreeting",
+      "file": "src/hello.ts",
+      "line": 2,
+      "property": "getGreeting returns a non-empty, well-formed string (type-safety invariant)",
+      "generator": "fc.constant(undefined) — assert typeof result === 'string', result.length > 0, and result does not contain null bytes (\\u0000) or control characters",
+      "invariant": "return value is a printable non-empty string with no control characters",
+      "status": "covered",
+      "recommendation": "Return value is a compile-time constant literal 'hello dolly' — TypeScript guarantees string type, and existing tests assert exact content and absence of 'hello world'. The literal is a safe printable ASCII string. No gap."
+    },
+    {
+      "function": "getGreeting",
+      "file": "src/hello.ts",
+      "line": 2,
+      "property": "getGreeting must not return the legacy greeting 'hello world' (regression invariant from MOCK-HW-1 bug)",
+      "generator": "fc.constant(undefined) — assert result !== 'hello world' and result does not contain it as substring",
+      "invariant": "return value never equals or contains 'hello world'",
+      "status": "covered",
+      "recommendation": "Explicitly covered by the new test 'no longer returns the old hello world greeting' added in the current diff (git diff HEAD~1 shows the regression test). This is a pure constant function — no fuzzable input domain exists (no string/number/array/object parameters, no config parsing, no provider payloads, no tool-input validation, no auth-token parsing in this diff)."
+    }
+  ],
+  "verdict": "pass"
+}

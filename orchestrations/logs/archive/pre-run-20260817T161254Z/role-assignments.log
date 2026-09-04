@@ -1,0 +1,51 @@
+# Prompt
+Assign an implementation agent role to every story below.
+
+AVAILABLE ROLES — these are this project's own engineering roles. Choose from these and
+nothing else; the name you return must match one of them verbatim:
+- fares-engineer
+    You are a TypeScript engineer responsible for fare-calculation logic across the mocka and mockb codelines. Both codelines declare vitest and typescript as their dependencies. Your job is to fix defects in fare and pricing logic by editing source files — never test files. A dedicated test agent owns reproducing tests and takes its own turn after your fix is committed; you are separately forbidden from creating or editing any test file. In mocka, you own src/fares.ts. The fareFor function (line 8) computes rider fares. Line 10 currently reads `if (rider.age > 65) return CONCESSION_FARE_CENTS;`. The doc comment on line 7 states 'Riders aged 65 AND OVER pay the concession fare,' so the correct comparison is `rider.age >= 65`. A rider aged exactly 65 must receive the concession fare (175 cents), not the base fare (350 cents). Fix the comparison operator on line 10 from `>` to `>=`. The constants CONCESSION_FARE_CENTS and BASE_FARE_CENTS, and the Rider type, are defined in this same file — do not invent new symbols. The totalFor function on line 16 calls fareFor, so your fix propagates correctly. Tests in this codeline live in test/ and are run with vitest. You do not write, own, or maintain them. Your deliverable is the corrected src/fares.ts.
+- schedule-rendering-engineer
+    You are a TypeScript engineer responsible for stop-schedule rendering logic across the mocka and mockb codelines. Both codelines declare vitest and typescript as their dependencies. Your job is to fix defects in schedule formatting by editing source files — never test files. A dedicated test agent owns reproducing tests and takes its own turn after your fix is committed; you are separately forbidden from creating or editing any test file. In mockb, you own src/schedule.ts. The formatStops function (line 4) builds a display string from a stops array. Line 6 currently reads `for (let i = 0; i < stops.length - 1; i++)`, which iterates up to but excluding the last index, so the final stop is never appended to the parts array and is omitted from the rendered string. The ticket MOCK3-2 confirms totalMinutes (line 11) is correct because it reads `stops[stops.length - 1].minutes` directly — the bug is only in formatStops. Fix the loop bound so every stop including the last is rendered. Each stop has a `name` property that formatStops pushes into parts, joined with ' -> '. Do not invent new symbols or change totalMinutes. Tests in this codeline live in test/ and are run with vitest. You do not write, own, or maintain them. Your deliverable is the corrected src/schedule.ts.
+
+STORIES — a story listing more than one codeline needs ONE ASSIGNMENT PER CODELINE:
+- MOCK3-1: Riders aged exactly 65 are charged the adult fare
+    codeline: mocka
+    The fare rules say riders aged 65 and over pay the concession fare. A rider aged exactly 65 is charged the full adult fare of 350 cents instead of 175. Riders aged 66 and above are charged correctly, so the boundary itself is wrong rather than the rule.
+- MOCK3-2: The departure board omits the final stop
+    codeline: mockb
+    formatStops renders every stop except the last one, so a three-stop line shows two. The journey length reported by totalMinutes is correct, which is why the omission has gone unnoticed.
+
+Pick the role whose stated expertise actually covers the work the story describes. If two
+roles could plausibly own a story, prefer the one whose brief names the surface the story
+touches.
+
+THE UNIT OF ASSIGNMENT IS A (STORY, CODELINE) PAIR, NOT A STORY. A story listing three
+codelines needs THREE assignments — the repositories differ, so the right owner can differ.
+Count the codelines listed against each story and return exactly that many assignments for it,
+naming the codeline on every one. A story is not assigned until every codeline it lists is.
+
+THE OWNER MUST AUTHOR THE CODE. Assign the role that will EDIT THE FILES this story changes —
+the one whose brief names those files or directories. A role whose brief is about settings in
+a vendor's console, or about documentation, cannot deliver a story here: the agent's output is
+a change in a repository. Live 2026-08-07: this story went to the one role of three that owned
+no source files, and all such a role can produce is a configuration note. Where the story needs
+both console configuration and code, 
+
+# Output
+{ "assignments": [
+  {
+    "agentRole": "fares-engineer",
+    "codeline": "mocka",
+    "reason": "MOCK3-1 is a fare-calculation boundary defect in `src/fares.ts` — the `fareFor` comparison operator on line 10. The fares-engineer brief names `src/fares.ts` in mocka and the `fareFor` function directly, so this role owns the file the story changes."
+ ,
+  "storyId": "MOCK3-1"
+  },
+  {
+    "agentRole": "schedule-rendering-engineer",
+    "codeline": "mockb",
+    "reason": "MOCK3-2 is a stop-schedule rendering defect in `src/schedule.ts` — the `formatStops` loop bound. The schedule-rendering-engineer brief names `src/schedule.ts` in mockb and the `formatStops` function directly, so this role owns the file the story changes."
+  ,
+  "storyId": "MOCK3-2"
+  }
+] }

@@ -1,0 +1,25 @@
+  [vc-coverage] no verification criteria — nothing to check
+  [vc-coverage] no verification criteria — nothing to check
+  [vc-coverage] no verification criteria — nothing to check
+  [vc-coverage] no verification criteria — nothing to check
+  [vc-coverage] no verification criteria — nothing to check
+  [vc-coverage] no verification criteria — nothing to check
+  [vc-coverage] no verification criteria — nothing to check
+  [vc-coverage] no verification criteria — nothing to check
+  [vc-coverage] no test file — skipping
+  [vc-coverage] no test file — skipping
+  [vc-coverage] no test file — skipping
+  [vc-coverage] no test file — skipping
+  [vc-coverage] no test file — skipping
+  [vc-coverage] no test file — skipping
+  [vc-coverage] UNCOVERED For content fields that remain unchanged in the CMS live preview editor, the displayed values on the page show
+  [vc-coverage]           All assertions merely verify that freshly constructed plain objects retain their literal property values, with
+  [vc-coverage] UNCOVERED When an invalid or malformed content update is applied in the CMS live preview editor, the page continues to d
+  [vc-coverage]           The tests manually construct context and card objects with malformed live preview metadata and then assert the
+  [vc-coverage] UNCOVERED When the page is accessed outside of a live preview session, all displayed content values are correct and comp
+  [vc-coverage]           The tests construct plain object literals and assert those same values back without exercising any application
+  [vc-coverage] UNCOVERED After exiting a live preview session, all displayed content values on the page show the correct values.
+  [vc-coverage]           The tests manually construct objects with cleared live preview fields and assert on those same literals, never
+  [vc-coverage] VC_UNCOVERED=4 of 4
+  [vc-coverage] the change is still proven by the bug-reproduction gate — this is a COVERAGE gap, not a correctness one
+  [vc-coverage] no test file — skipping

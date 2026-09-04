@@ -1,0 +1,28 @@
+# Prompt
+You are a STRICT verification-criteria reviewer for a brownfield fix. REVIEW ONLY — do NOT rewrite anything.
+
+Acceptance criteria (IMMUTABLE ticket intent):
+- (none)
+Description: [GO, UP, MX] Live Preview of Content in CMS — enable real-time content updates from Contentstack CMS to be reflected in the running application without a full page reload, so content editors can see their changes instantly during editing sessions.
+
+Proposed verification criteria:
+1. After a content editor changes and saves an entry in the CMS, the rendered page shows the updated content on its own, without the tester manually refreshing or reloading the browser.
+2. When link, image, table, and content-card entries are edited in the CMS, each corresponding element on the rendered page updates in place to show the new link target, image, table data, and card content without a page reload.
+3. When the live preview feature is not in use, the page renders the currently published CMS content correctly and completely, with all expected sections, links, images, and cards present and matching the published entries.
+4. When the connection to the CMS is interrupted while the page is open, the page continues to display the last shown content; the tester sees no blank screen, error page, or persistent loading indicator in place of the content.
+5. After an interrupted connection to the CMS resumes, if the content editor then makes and saves another edit, the updated content appears on the page on its own, without a manual reload.
+6. With live preview not active, edits saved in the CMS are visible on the page only after a full reload, whereas with live preview active, the same edits appear on the page without any reload.
+
+Apply these rules EXACTLY (the producer is held to the same text — do not invent stricter or looser criteria):
+A verification criterion states WHAT AN END USER OR TESTER OBSERVES on the user-facing surface THE TICKET IS ABOUT — the rendered email for an email ticket, the displayed screen/UI for a UI ticket, the API response a CLIENT receives for an API ticket. It is a BLACK-BOX check on that surface. It NEVER describes HOW the value is produced.
+A verification criterion is FORBIDDEN if it:
+- prescribes HOW to implement — any algorithm, mechanism, or approach: "split", "halve", "×0.5", "calculate independently", "per segment", "for each line item", or adding/reading any new field, flag, or service;
+- references an INTERNAL structure that merely FEEDS the ticket's surface — an intermediate payload, a "confirmation data"/DTO object, or a specific response field used to BUILD the output. Verify the surface the ticket names, NOT the data structure behind it;
+- makes a CROSS-COMPARISON that presumes a mechanism — never assert one value "must equal" / "matches" / "is the same as" another (e.g. "the return amount equals the outbound amount"); that presumes a copy/split. Assert the required value is present and correct ON ITS OWN.
+Every verification criterion must be observable, testable, and tied to the ticket's stated symptom/intent.
+
+FLAG any verification criterion that violates ANY rule above, OR that fails to cover the intent of an acceptance criterion.
+Output ONLY a JSON array of short flag strings, e.g. ["VC 2 prescribes halving — restate as observable outcome"]. Output [] if every VC is clean. No prose, no markdown.
+
+# Output
+[]

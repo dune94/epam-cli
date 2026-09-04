@@ -1,0 +1,54 @@
+TC_WRITER_DONE[Langfuse SDK] Network error:  LangfuseFetchNetworkError: Network error while fetching Langfuse
+    at retriable (/home/bradleyjerome/projects/ai/epam-cli/node_modules/langfuse-core/lib/index.cjs.js:1742:15)
+    at process.processTicksAndRejections (node:internal/process/task_queues:104:5)
+    at async retriable (/home/bradleyjerome/projects/ai/epam-cli/node_modules/langfuse-core/lib/index.cjs.js:359:19)
+    at async Langfuse.fetchWithRetry (/home/bradleyjerome/projects/ai/epam-cli/node_modules/langfuse-core/lib/index.cjs.js:1733:12) {
+  error: [TypeError: fetch failed] {
+    [cause]: Error: connect ECONNREFUSED 127.0.0.1:3100
+        at TCPConnectWrap.afterConnect [as oncomplete] (node:net:1645:16) {
+      errno: -111,
+      code: 'ECONNREFUSED',
+      syscall: 'connect',
+      address: '127.0.0.1',
+      port: 3100
+    }
+  },
+  [cause]: [TypeError: fetch failed] {
+    [cause]: Error: connect ECONNREFUSED 127.0.0.1:3100
+        at TCPConnectWrap.afterConnect [as oncomplete] (node:net:1645:16) {
+      errno: -111,
+      code: 'ECONNREFUSED',
+      syscall: 'connect',
+      address: '127.0.0.1',
+      port: 3100
+    }
+  }
+}
+[Langfuse SDK] Network error:  LangfuseFetchNetworkError: Network error while fetching Langfuse
+    at retriable (/home/bradleyjerome/projects/ai/epam-cli/node_modules/langfuse-core/lib/index.cjs.js:1742:15)
+    at process.processTicksAndRejections (node:internal/process/task_queues:104:5)
+    at async retriable (/home/bradleyjerome/projects/ai/epam-cli/node_modules/langfuse-core/lib/index.cjs.js:359:19)
+    at async Langfuse.fetchWithRetry (/home/bradleyjerome/projects/ai/epam-cli/node_modules/langfuse-core/lib/index.cjs.js:1733:12) {
+  error: [TypeError: fetch failed] {
+    [cause]: Error: connect ECONNREFUSED 127.0.0.1:3100
+        at TCPConnectWrap.afterConnect [as oncomplete] (node:net:1645:16) {
+      errno: -111,
+      code: 'ECONNREFUSED',
+      syscall: 'connect',
+      address: '127.0.0.1',
+      port: 3100
+    }
+  },
+  [cause]: [TypeError: fetch failed] {
+    [cause]: Error: connect ECONNREFUSED 127.0.0.1:3100
+        at TCPConnectWrap.afterConnect [as oncomplete] (node:net:1645:16) {
+      errno: -111,
+      code: 'ECONNREFUSED',
+      syscall: 'connect',
+      address: '127.0.0.1',
+      port: 3100
+    }
+  }
+}
+  [tc-writer] Applied TCs to 1 stories: ['MOCK-HW-1-test']
+  [tc-writer] Gate PASSED — all test stories have verified TCs

@@ -1,0 +1,53 @@
+```json
+{
+  "agent": "spec-validator",
+  "phase": "core",
+  "stories": [
+    {
+      "storyId": "MOCK3-1",
+      "title": "Riders aged exactly 65 are charged the adult fare",
+      "criteria": [
+        {
+          "text": "The fare returned for a rider aged 65 with no pass is 175 cents",
+          "status": "met",
+          "evidence": "src/fares.ts line 10 (`if (rider.age >= 65) return CONCESSION_FARE_CENTS;` where CONCESSION_FARE_CENTS=175). Test: src/fares.test.ts lines 4-6 ('charges the concession fare for a rider aged exactly 65 with no pass'). Test result: passed.",
+          "gaps": ""
+        },
+        {
+          "text": "The fare returned for a rider aged 64 with no pass is 350 cents",
+          "status": "met",
+          "evidence": "src/fares.ts lines 10-12 (age 64 does not satisfy `>= 65` or `< 13`, falls through to `return BASE_FARE_CENTS;` where BASE_FARE_CENTS=350). Test: src/fares.test.ts lines 15-17 ('charges the base fare for a rider aged 64 with no pass'). Test result: passed.",
+          "gaps": ""
+        },
+        {
+          "text": "The fare returned for any rider with a transit pass is 0 cents, regardless of age",
+          "status": "met",
+          "evidence": "src/fares.ts line 9 (`if (rider.hasPass) return 0;` executes before age checks). Test: src/fares.test.ts lines 18-20 ('charges nothing when a rider holds a pass'). Test result: passed.",
+          "gaps": ""
+        },
+        {
+          "text": "The fare returned for a child aged 12 with no pass is 175 cents",
+          "status": "met",
+          "evidence": "src/fares.ts line 11 (`if (rider.age < 13) return CONCESSION_FARE_CENTS;` where age 12 satisfies this condition). Test: src/fares.test.ts lines 21-23 ('charges the concession fare for a child aged 12 with no pass'). Test result: passed.",
+          "gaps": ""
+        },
+        {
+          "text": "The fare returned for an adult aged 45 with no pass is 350 cents",
+          "status": "met",
+          "evidence": "src/fares.ts lines 10-12 (age 45 satisfies neither `>= 65` nor `< 13`, falls through to `return BASE_FARE_CENTS;` where BASE_FARE_CENTS=350). Test: src/fares.test.ts lines 24-26 ('charges the base fare for an adult aged 45 with no pass'). Test result: passed.",
+          "gaps": ""
+        },
+        {
+          "text": "The fare returned for a rider aged 66 with no pass is 175 cents",
+          "status": "met",
+          "evidence": "src/fares.ts line 10 (`if (rider.age >= 65)` is true for age 66, returns CONCESSION_FARE_CENTS=175). Test: src/fares.test.ts lines 8-10 ('charges the concession fare for a rider aged 66 with no pass'). Test result: passed.",
+          "gaps": ""
+        }
+      ],
+      "overallCompliance": 100,
+      "verdict": "pass"
+    }
+  ],
+  "overallVerdict": "pass"
+}
+```

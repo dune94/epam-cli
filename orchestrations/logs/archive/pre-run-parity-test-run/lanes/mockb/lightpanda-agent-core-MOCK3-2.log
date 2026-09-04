@@ -1,0 +1,10 @@
+```json
+{
+  "agent": "lightpanda-agent",
+  "storyId": "MOCK3-2",
+  "phase": "core",
+  "verdict": "pass",
+  "findings": [],
+  "summary": "Bug fix validated: loop condition corrected from `i < stops.length - 1` to `i < stops.length` to include the final stop in departure board output. All 9 unit tests pass, TypeScript compilation succeeds, and comprehensive test coverage confirms final stops are rendered correctly."
+}
+```

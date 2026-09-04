@@ -206,8 +206,8 @@
         "OPENROUTER_TOKEN"
       ],
       "$whyUnsetEnv": "A REHEARSAL MUST NOT BE ABLE TO SPEND SOMEWHERE ELSE. Under this set the writer once ran provider=minimax with MINIMAX_API_KEY present: the mockBaseUrl redirect covers Anthropic traffic and nothing else, so any other vendor's credential is a live route out. Those are removed. ANTHROPIC_API_KEY and CLAUDE_* are deliberately NOT removed: Claude Code falls back to the OAuth credentials on disk when it finds no key, and that bills for real \u2014 the exact inversion this is meant to prevent, recorded in seam-the-subscription-pays-not-the-api-key. The operator's fake key stays, and the redirect is what makes it harmless. The vendors come from llm-channel.json's credentialPattern, so one added there is covered without editing this.",
-      "emitsTraces": false,
-      "$emitsTraces": "Whether model calls made through this runner reach Langfuse. Traces are written by wrapWithTracing (src/observability/TracedProvider.ts), which only runs inside the epam CLI. A runner that shells out to a vendor CLI (claude, codemie-claude) never reaches it, so the observability preflight must not demand Langfuse for it \u2014 gating a run on a service nothing writes to aborts healthy launches (live 2026-09-04)."
+      "emitsTraces": true,
+      "$emitsTraces": "Whether model calls made through this runner reach Langfuse. TRUE for every runner: traces are emitted by lib/cost-emitter.js at the cost seam \u2014 the point every arm passes through with its model, tokens, cost and timing resolved \u2014 not by the TypeScript provider decorator, which only the epam arm reaches. Verified end-to-end 2026-09-04 by driving the real emitter and reading the session back out of Langfuse."
     }
   },
   "mockBaseUrl": "http://localhost:1080",

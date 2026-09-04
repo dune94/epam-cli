@@ -160,6 +160,57 @@ describe.skipIf(!haveInstall)('the three surfaces an operator actually looks at'
         .toContain(code);
     });
 
+    it('the EMITTER the pipeline calls puts a real trace in a real session — read back, not assumed', async () => {
+      // THE ONE THAT ACTUALLY MATTERS. Posting a hand-built payload proves the endpoint accepts
+      // JSON; it does not prove the pipeline's own emitter resolves this install's Langfuse, builds
+      // a valid body, and produces something an operator can SEE. This drives the real
+      // lib/langfuse-emit.js and then asks Langfuse for the session back.
+      //
+      // Live 2026-09-04: no sessions, no traces, on an install whose Langfuse was healthy and whose
+      // keys had reached the run — because langfuse-emit.js read LANGFUSE_BASE_URL and nothing
+      // else, and that literal had been removed as wrong for an isolated install. It failed
+      // silently by contract, so every other check stayed green.
+      const emit = path.join(INSTALL, 'orchestrations/scripts/lib/langfuse-emit.js');
+      expect(fs.existsSync(emit), 'this install has no langfuse emitter').toBe(true);
+
+      const env = Object.fromEntries(
+        fs.readFileSync(path.join(INSTALL, '.env'), 'utf8').split('\n')
+          .filter((l) => /^LANGFUSE_(PUBLIC|SECRET)_KEY=/.test(l))
+          .map((l) => l.split('=')) as Array<[string, string]>,
+      );
+      const session = `e2e-emitter-${Date.now()}`;
+      execFileSync(process.execPath, ['-e', `
+        const m = require(${JSON.stringify(emit)});
+        m.emitGeneration({
+          agent: 'e2e-probe', storyId: 'S1', phase: 'core',
+          model: 'claude-sonnet-5', provider: 'claude', turns: 1, rung: 0,
+          startedAt: new Date(Date.now() - 1500).toISOString(), endedAt: new Date().toISOString(),
+          input: 'does a trace land?', output: 'read it back and see',
+          costUsd: 0.01, tokensIn: 10, tokensOut: 20, cacheRead: 0, cacheCreate: 0,
+        });
+        setTimeout(() => {}, 2000);
+      `], {
+        cwd: INSTALL, timeout: 30_000,
+        env: { ...process.env, ...env, EPAM_RUN_ID: session },
+      });
+
+      // Ingestion is asynchronous — poll rather than assume it landed instantly.
+      const auth = Buffer.from(`${env.LANGFUSE_PUBLIC_KEY}:${env.LANGFUSE_SECRET_KEY}`).toString('base64');
+      let found = 0;
+      for (let i = 0; i < 15 && found === 0; i++) {
+        await new Promise((r) => setTimeout(r, 1000));
+        try {
+          const out = execFileSync('curl', ['-s', '-H', `Authorization: Basic ${auth}`,
+            `http://localhost:${S.OBS_LANGFUSE_PORT}/api/public/traces?sessionId=${session}`],
+            { encoding: 'utf8', timeout: 20_000 });
+          found = (JSON.parse(out).data ?? []).length;
+        } catch { /* keep polling */ }
+      }
+      expect(found,
+        'the pipeline\'s own emitter produced NO trace — an operator watching Langfuse sees nothing, exactly as reported')
+        .toBeGreaterThan(0);
+    }, 90_000);
+
     it('and the pipeline is HONEST about whether this stack will ever send one', () => {
       // Langfuse being empty on the claude stack is correct, not a fault — traces come from
       // wrapWithTracing inside the epam CLI and every declared runner shells out to a vendor CLI.

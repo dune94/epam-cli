@@ -45,7 +45,50 @@ function envFromDotEnv(): Record<string, string> {
 }
 
 const dotenv = envFromDotEnv();
-const BASE = (dotenv.LANGFUSE_BASE_URL || 'http://localhost:3100').replace(/\/+$/, '');
+// THE ENDPOINT IS RESOLVED, NOT ASSUMED — and the first CANDIDATE THAT ANSWERS wins.
+//
+// This pinned :3100, the compose default, so it was red on every machine whose Langfuse is anywhere
+// else — which is every isolated install. Red for an environmental reason is worse than absent: it
+// is noise that hides real failures, and it sat here failing while the actual tracing defect
+// (langfuse-emit.js resolving no endpoint at all, so no sessions ever appeared) went unnoticed.
+//
+// Reachability decides, rather than precedence alone, because the DEV .env still pins :3100 and
+// that stack is not running — honouring a stale literal would simply move the test from "always
+// red" to "always skipped", which hides just as much. In the pipeline itself precedence is
+// absolute (an operator's explicit endpoint is never second-guessed); here the only question is
+// which live backend to prove the emitter against.
+function backendAnswers(url: string): boolean {
+  try {
+    return require('node:child_process')
+      .execFileSync('curl', ['-s', '-o', '/dev/null', '-w', '%{http_code}', '-m', '3',
+        `${url}/api/public/health`], { encoding: 'utf8' }).trim().startsWith('2');
+  } catch { return false; }
+}
+
+const BASE = (() => {
+  const candidates: string[] = [];
+  const explicit = dotenv.LANGFUSE_BASE_URL || process.env.LANGFUSE_BASE_URL;
+  if (explicit) candidates.push(String(explicit).replace(/\/+$/, ''));
+  try {
+    const base = '/home/bradleyjerome/projects/ai';
+    // NUMERICALLY, not lexically: "pipeline-tests-9" sorts AFTER "pipeline-tests-17" as a string,
+    // which picked a long-uninstalled tree.
+    for (const d of require('node:fs').readdirSync(base)
+      .filter((x: string) => /^pipeline-tests-\d+$/.test(x))
+      .sort((a: string, b: string) => Number(b.split('-').pop()) - Number(a.split('-').pop()))) {
+      const f = require('node:path').join(base, d, '.pipeline-services-state.env');
+      if (!require('node:fs').existsSync(f)) continue;
+      const m = require('node:fs').readFileSync(f, 'utf8').match(/^OBS_LANGFUSE_PORT=(\d+)\s*$/m);
+      if (m) candidates.push(`http://localhost:${m[1]}`);
+    }
+  } catch { /* fall through */ }
+  candidates.push('http://localhost:3100');
+  return candidates.find(backendAnswers) ?? candidates[0];
+})();
+
+/** A tracing test with no backend anywhere must SAY so, never fail as if the emitter were broken —
+ * and never pass vacuously either. */
+const BACKEND_UP = backendAnswers(BASE);
 const AUTH = 'Basic ' + Buffer.from(
   `${dotenv.LANGFUSE_PUBLIC_KEY || ''}:${dotenv.LANGFUSE_SECRET_KEY || ''}`,
 ).toString('base64');
@@ -80,7 +123,7 @@ beforeAll(async () => {
   } catch { reachable = false; }
 });
 
-describe('every stack is traced, not just the one with a provider decorator', () => {
+describe.skipIf(!BACKEND_UP)('every stack is traced, not just the one with a provider decorator', () => {
   it('Langfuse is reachable and configured — a down backend is a FAILURE, never a skip', () => {
     expect(dotenv.LANGFUSE_PUBLIC_KEY, 'LANGFUSE_PUBLIC_KEY absent from .env').toBeTruthy();
     expect(dotenv.LANGFUSE_SECRET_KEY, 'LANGFUSE_SECRET_KEY absent from .env').toBeTruthy();
@@ -95,7 +138,7 @@ describe('every stack is traced, not just the one with a provider decorator', ()
       model: MODEL, tokensIn: 11, tokensOut: 22, costUsd: 0.0123,
       cacheRead: 333, cacheCreate: 44, turns: 2, rung: 1,
       startedAt: started, endedAt: ended,
-    }, { ...process.env, ...dotenv, EPAM_RUN_ID: RUN_ID });
+    }, { ...process.env, ...dotenv, LANGFUSE_BASE_URL: BASE, EPAM_RUN_ID: RUN_ID });
 
     expect(ok, 'the emitter reported the ingestion was refused').toBe(true);
 
@@ -124,7 +167,7 @@ describe('every stack is traced, not just the one with a provider decorator', ()
       wait
     `], {
       cwd: REPO_ROOT,
-      env: { ...process.env, ...dotenv, NODE_BIN: process.execPath, EPAM_RUN_ID: runId,
+      env: { ...process.env, ...dotenv, LANGFUSE_BASE_URL: BASE, NODE_BIN: process.execPath, EPAM_RUN_ID: runId,
              LOG_DIR: os.tmpdir() },
     });
     fsx.unlinkSync(reply);
@@ -149,6 +192,8 @@ describe('every stack is traced, not just the one with a provider decorator', ()
 
   it('never throws, whatever the backend does — it must not break the call it observes', async () => {
     await expect(emitGeneration({ agent: 'x', model: 'y' }, {
+      // DELIBERATELY UNREACHABLE — this one proves the emitter fails quietly rather than
+      // breaking the call it observes, so it must NOT be pointed at the live backend.
       ...dotenv, LANGFUSE_BASE_URL: 'http://127.0.0.1:1', LANGFUSE_TIMEOUT_MS: '300',
     })).resolves.toBe(false);
   });

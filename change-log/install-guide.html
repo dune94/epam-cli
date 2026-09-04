@@ -105,6 +105,45 @@ to describe that real mechanism. Every command below was read directly out of
 <h2 id="install">1. Install — <code>npx amsd-pipeline</code></h2>
 <p>No git commands required. This clones the repo itself, packages the requested ref into a fresh
 tree at <code>--dest</code>, then runs every step below against that tree.</p>
+
+<div class="warn">
+<strong>SEED YOUR <code>.env</code> FILES INTO <code>--dest</code> FIRST — before you run the
+installer, not after.</strong> This is the difference between an install that works in one run and
+one that silently does not.
+
+<p><code>install.sh</code> starts two long-lived host daemons as part of the install, and
+<strong>runner-host</strong> reads its credentials once, at startup, from the <code>.env</code>
+files as they stand <em>at that moment</em>. Install first and fill the files in afterwards and the
+daemon keeps the blank values it started with: Langfuse traces silently never appear, and the
+installer reports <code>✓ ready</code> the whole time, because nothing is wrong with the install —
+only with what the daemon is holding.</p>
+
+<p>So do this, in this order:</p>
+<pre><code>DEST=~/amsd-pipeline
+
+# 1. Create the tree and seed the credentials BEFORE installing.
+mkdir -p "$DEST/launch-dashboard" "$DEST/orchestrations/jira"
+cp /path/to/your/.env                    "$DEST/.env"
+cp /path/to/your/launch-dashboard.env    "$DEST/launch-dashboard/.env"
+cp /path/to/your/&lt;project&gt;.env           "$DEST/orchestrations/jira/&lt;project&gt;.env"
+
+# 2. Now install. It packages around the files you placed and never overwrites them.
+npx amsd-pipeline --dest "$DEST"</code></pre>
+
+<p><code>install.sh</code> only creates a <code>.env</code> from its template when one is
+<strong>absent</strong>, so seeding first is safe: your file is used as-is, and you will not see the
+<code>! .env created from .env.example — FILL IT IN</code> warning, which is itself the signal that
+you installed before seeding.</p>
+
+<p>If you have already installed and are fixing it up afterwards, that is recoverable — edit the
+<code>.env</code> files and <strong>re-run <code>install.sh</code> against the same
+<code>--dest</code></strong>. It compares the daemon's startup environment against the files as they
+stand now and restarts it when they differ (saying so: <code>restarting runner-host … its .env has
+changed since it started</code>). Nothing else restarts daemons: not by hand, not with
+<code>pipeline-services.sh</code> — the installer owns them.</p>
+</div>
+
+<p>The plain form, once your files are in place:</p>
 <pre><code>npx amsd-pipeline --dest ~/amsd-pipeline</code></pre>
 <p>From an existing checkout, the same script works directly, in place:</p>
 <pre><code>./orchestrations-installer/install.sh                    # install for the default stack, with dashboards if docker is up
@@ -137,6 +176,15 @@ deterministically, so two installs (or an install alongside a hand-run dev check
 on the same machine.</p>
 
 <h2 id="env">3. The <code>.env</code> files</h2>
+
+<div class="warn">
+<strong>Order matters:</strong> place these into <code>--dest</code> <em>before</em> running the
+installer — see <a href="#install">§1</a>. The runner-host daemon reads them once at startup, so
+filling them in afterwards leaves it holding blank credentials while the install still reports
+<code>✓ ready</code>. Recoverable by re-running <code>install.sh</code>, but seeding first makes it
+one run.
+</div>
+
 <p>Several separate files, each scoped to a different concern — documented here in full because an
 earlier version of this install flow omitted some of them entirely and it caused real confusion
 mid-run:</p>

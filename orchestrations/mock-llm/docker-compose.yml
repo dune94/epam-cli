@@ -1,6 +1,11 @@
 services:
   mock-llm:
     build: .
+    # Bounded: an unbounded container is entitled to the whole host, and on WSL the OOM
+    # victim is the environment, not the container. memswap_limit matches mem_limit so a
+    # throttled process cannot escape the ceiling into swap.
+    mem_limit: 1g
+    memswap_limit: 1g
     ports:
       - "4000:4000"
     environment:

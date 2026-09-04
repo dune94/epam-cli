@@ -5,6 +5,11 @@ services:
   # ── Primary Database ──────────────────────────────────────────────
   postgres:
     image: postgres:16-alpine
+    # Bounded: an unbounded container is entitled to the whole host, and on WSL the OOM
+    # victim is the environment, not the container. memswap_limit matches mem_limit so a
+    # throttled process cannot escape the ceiling into swap.
+    mem_limit: 512m
+    memswap_limit: 512m
     environment:
       POSTGRES_USER: epam
       POSTGRES_PASSWORD: epam_dev
@@ -22,6 +27,11 @@ services:
   # ── Cache / Rate-limiting / OAuth state ──────────────────────────
   redis:
     image: redis:7-alpine
+    # Bounded: an unbounded container is entitled to the whole host, and on WSL the OOM
+    # victim is the environment, not the container. memswap_limit matches mem_limit so a
+    # throttled process cannot escape the ceiling into swap.
+    mem_limit: 256m
+    memswap_limit: 256m
     ports:
       - "6379:6379"
     volumes:
@@ -35,6 +45,11 @@ services:
   # ── OAuth 2.0 / OIDC Server (Ory Hydra) ─────────────────────────
   hydra-migrate:
     image: oryd/hydra:v2.3.0
+    # Bounded: an unbounded container is entitled to the whole host, and on WSL the OOM
+    # victim is the environment, not the container. memswap_limit matches mem_limit so a
+    # throttled process cannot escape the ceiling into swap.
+    mem_limit: 256m
+    memswap_limit: 256m
     command: migrate sql -e --yes
     environment:
       DSN: postgres://epam:epam_dev@postgres:5432/epam?sslmode=disable
@@ -45,6 +60,11 @@ services:
 
   hydra:
     image: oryd/hydra:v2.3.0
+    # Bounded: an unbounded container is entitled to the whole host, and on WSL the OOM
+    # victim is the environment, not the container. memswap_limit matches mem_limit so a
+    # throttled process cannot escape the ceiling into swap.
+    mem_limit: 256m
+    memswap_limit: 256m
     command: serve all --dev
     ports:
       - "4444:4444"
@@ -71,6 +91,11 @@ services:
   # ── Identity / Login UI (Ory Kratos) ────────────────────────────
   kratos-migrate:
     image: oryd/kratos:v1.3.1
+    # Bounded: an unbounded container is entitled to the whole host, and on WSL the OOM
+    # victim is the environment, not the container. memswap_limit matches mem_limit so a
+    # throttled process cannot escape the ceiling into swap.
+    mem_limit: 256m
+    memswap_limit: 256m
     command: migrate sql -e --yes
     environment:
       DSN: postgres://epam:epam_dev@postgres:5432/epam?sslmode=disable
@@ -81,6 +106,11 @@ services:
 
   kratos:
     image: oryd/kratos:v1.3.1
+    # Bounded: an unbounded container is entitled to the whole host, and on WSL the OOM
+    # victim is the environment, not the container. memswap_limit matches mem_limit so a
+    # throttled process cannot escape the ceiling into swap.
+    mem_limit: 256m
+    memswap_limit: 256m
     command: serve -c /etc/config/kratos.yml --dev --watch-courier
     ports:
       - "4433:4433"
@@ -100,6 +130,11 @@ services:
   # ── Login / Consent UI ───────────────────────────────────────────
   login-ui:
     image: node:20-alpine
+    # Bounded: an unbounded container is entitled to the whole host, and on WSL the OOM
+    # victim is the environment, not the container. memswap_limit matches mem_limit so a
+    # throttled process cannot escape the ceiling into swap.
+    mem_limit: 256m
+    memswap_limit: 256m
     working_dir: /app
     command: sh -c "npm install && node server.js"
     ports:
@@ -117,6 +152,11 @@ services:
   # ── Email Testing ────────────────────────────────────────────────
   mailhog:
     image: mailhog/mailhog:v1.0.1
+    # Bounded: an unbounded container is entitled to the whole host, and on WSL the OOM
+    # victim is the environment, not the container. memswap_limit matches mem_limit so a
+    # throttled process cannot escape the ceiling into swap.
+    mem_limit: 128m
+    memswap_limit: 128m
     ports:
       - "1025:1025"
       - "8025:8025"
@@ -124,6 +164,11 @@ services:
   # ── Backend API Stub ─────────────────────────────────────────────
   backend-stub:
     image: node:20-alpine
+    # Bounded: an unbounded container is entitled to the whole host, and on WSL the OOM
+    # victim is the environment, not the container. memswap_limit matches mem_limit so a
+    # throttled process cannot escape the ceiling into swap.
+    mem_limit: 256m
+    memswap_limit: 256m
     working_dir: /app
     command: sh -c "npm install && node server.js"
     ports:
@@ -152,6 +197,11 @@ services:
   # Open monitor.html, prd-viewer.html, agent-profiles.html, etc.
   agent-monitor:
     image: nginx:alpine
+    # Bounded: an unbounded container is entitled to the whole host, and on WSL the OOM
+    # victim is the environment, not the container. memswap_limit matches mem_limit so a
+    # throttled process cannot escape the ceiling into swap.
+    mem_limit: 256m
+    memswap_limit: 256m
     ports:
       - "8092:80"
     volumes:
@@ -182,6 +232,11 @@ services:
   # Traces every LLM call: tokens, cost, latency, prompts
   langfuse-server:
     image: langfuse/langfuse:2
+    # Bounded: an unbounded container is entitled to the whole host, and on WSL the OOM
+    # victim is the environment, not the container. memswap_limit matches mem_limit so a
+    # throttled process cannot escape the ceiling into swap.
+    mem_limit: 1g
+    memswap_limit: 1g
     ports:
       - "3100:3000"
     environment:
@@ -214,6 +269,11 @@ services:
 
   langfuse-worker:
     image: langfuse/langfuse:2
+    # Bounded: an unbounded container is entitled to the whole host, and on WSL the OOM
+    # victim is the environment, not the container. memswap_limit matches mem_limit so a
+    # throttled process cannot escape the ceiling into swap.
+    mem_limit: 768m
+    memswap_limit: 768m
     command: ["node", "packages/worker/dist/app.js"]
     environment:
       DATABASE_URL: postgres://epam:epam_dev@postgres:5432/epam
@@ -233,6 +293,11 @@ services:
 
   clickhouse:
     image: clickhouse/clickhouse-server:24
+    # Bounded: an unbounded container is entitled to the whole host, and on WSL the OOM
+    # victim is the environment, not the container. memswap_limit matches mem_limit so a
+    # throttled process cannot escape the ceiling into swap.
+    mem_limit: 1g
+    memswap_limit: 1g
     ports:
       - "8123:8123"
       - "9000:9000"

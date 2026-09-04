@@ -46,6 +46,11 @@ services:
 
   postgres:
     image: postgres:16-alpine
+    # Bounded: an unbounded container is entitled to the whole host, and on WSL the OOM
+    # victim is the environment, not the container. memswap_limit matches mem_limit so a
+    # throttled process cannot escape the ceiling into swap.
+    mem_limit: 512m
+    memswap_limit: 512m
     environment:
       POSTGRES_USER: epam
       POSTGRES_PASSWORD: epam_dev
@@ -59,6 +64,11 @@ services:
 
   redis:
     image: redis:7-alpine
+    # Bounded: an unbounded container is entitled to the whole host, and on WSL the OOM
+    # victim is the environment, not the container. memswap_limit matches mem_limit so a
+    # throttled process cannot escape the ceiling into swap.
+    mem_limit: 256m
+    memswap_limit: 256m
     volumes:
       - obs_redis_data:/data
     command: redis-server --appendonly yes
@@ -103,6 +113,11 @@ services:
 
   langfuse-server:
     image: langfuse/langfuse:2
+    # Bounded: an unbounded container is entitled to the whole host, and on WSL the OOM
+    # victim is the environment, not the container. memswap_limit matches mem_limit so a
+    # throttled process cannot escape the ceiling into swap.
+    mem_limit: 1g
+    memswap_limit: 1g
     ports:
       - "${EPAM_OBS_LANGFUSE_PORT:-3100}:3000"
     environment:
@@ -151,6 +166,11 @@ services:
 
   agent-monitor:
     image: nginx:alpine
+    # Bounded: an unbounded container is entitled to the whole host, and on WSL the OOM
+    # victim is the environment, not the container. memswap_limit matches mem_limit so a
+    # throttled process cannot escape the ceiling into swap.
+    mem_limit: 256m
+    memswap_limit: 256m
     ports:
       - "${EPAM_OBS_DASHBOARD_PORT:-8092}:80"
     volumes:
@@ -178,6 +198,11 @@ services:
 
   grafana:
     image: grafana/grafana:11.4.0
+    # Bounded: an unbounded container is entitled to the whole host, and on WSL the OOM
+    # victim is the environment, not the container. memswap_limit matches mem_limit so a
+    # throttled process cannot escape the ceiling into swap.
+    mem_limit: 512m
+    memswap_limit: 512m
     ports:
       - "${EPAM_OBS_GRAFANA_PORT:-3001}:3000"
     environment:

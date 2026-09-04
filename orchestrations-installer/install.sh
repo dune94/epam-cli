@@ -926,12 +926,20 @@ if [ "$CHECK_ONLY" != "1" ] && [ "$FAILED" != "1" ] && [ -f "$INSTALLER_DIR/pipe
     if bash "$INSTALLER_DIR/pipeline-health.sh" --dest "$ROOT" 2>&1 | sed 's/^/  /'; then
         _ok "health check passed"
     else
-        _warn "health check reported problems above — the install itself completed, but this machine is not ready to launch"
-        _warn "re-run it any time: bash orchestrations-installer/pipeline-health.sh"
+        # THE FINAL WORD MUST NOT CONTRADICT THE CHECK ABOVE IT. Printing "not healthy" and then
+        # "✓ ready" two lines later leaves an operator to guess which one to believe; the whole
+        # point of running the probe here is that its answer is the install's answer.
+        HEALTH_FAILED=1
+        _warn "health check reported problems above — the install completed, but this machine is not ready to launch"
+        _warn "re-run it any time: bash orchestrations-installer/pipeline-health.sh --dest \"$ROOT\""
     fi
 fi
 
 _head "Result"
+if [ "$FAILED" != "1" ] && [ "${HEALTH_FAILED:-0}" = "1" ]; then
+    _warn "installed, but NOT ready to launch — see the health check above"
+    exit 1
+fi
 if [ "$FAILED" = "1" ]; then
     _bad "install incomplete — fix the items marked ✗ above"
     exit 1

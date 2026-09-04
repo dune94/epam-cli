@@ -83,14 +83,23 @@ exit 0
 `);
   fs.chmodSync(path.join(bin, 'docker'), 0o755);
 
-  // A stub runner-host.js: writes its own PID to a marker file, then stays alive (a real event
-  // loop, same as the real one's setInterval poll) until killed. Proves install.sh's own
-  // spawn/idempotency/stop logic without needing the real one's spool-watching behavior.
+  // A stub runner-host.js: writes its own PID AND the env vars it actually received to a marker
+  // file, then stays alive (a real event loop, same as the real one's setInterval poll) until
+  // killed. Proves install.sh's own spawn/idempotency/stop logic AND that it hands the daemon a
+  // usable environment — found live, twice, that it did not: LAUNCH_PASSWORD was never exported
+  // (Docker Compose auto-loads a service's .env; a bare host process gets none of that for free),
+  // and SPOOL_DIR/RUNS_DB defaulted to the CONTAINER's bind-mount paths ('/spool', '/data/...'),
+  // meaningless — and unwritable — on the host.
   fs.mkdirSync(path.join(dir, 'launch-dashboard/backend/src'), { recursive: true });
   const runnerHostMarker = path.join(dir, 'runner-host-started.marker');
   fs.writeFileSync(path.join(dir, 'launch-dashboard/backend/src/runner-host.js'), `
 const fs = require('fs');
-fs.appendFileSync(${JSON.stringify(runnerHostMarker)}, process.pid + '\\n');
+fs.appendFileSync(${JSON.stringify(runnerHostMarker)}, JSON.stringify({
+  pid: process.pid,
+  LAUNCH_PASSWORD: process.env.LAUNCH_PASSWORD || null,
+  SPOOL_DIR: process.env.SPOOL_DIR || null,
+  RUNS_DB: process.env.RUNS_DB || null,
+}) + '\\n');
 setInterval(() => {}, 60000);
 `);
 
@@ -363,6 +372,16 @@ describe('install.sh starts and stops runner-host.js (the process that launches 
     cleanups.push(() => { try { process.kill(pid, 'SIGKILL'); } catch { /* already gone */ } });
     expect(alive, 'pidfile does not point at a real running process').toBe(true);
     expect(fs.existsSync(f.runnerHostMarker), 'the stub runner-host.js was never actually executed').toBe(true);
+
+    const seen = JSON.parse(fs.readFileSync(f.runnerHostMarker, 'utf8').trim().split('\n')[0]);
+    // LAUNCH_PASSWORD: Docker Compose auto-loads a service's .env; a bare host process does not —
+    // install.sh must source launch-dashboard/.env itself before spawning, or the real config.js
+    // (which hard-requires this) crashes the daemon instantly on every real install.
+    expect(seen.LAUNCH_PASSWORD, 'LAUNCH_PASSWORD from launch-dashboard/.env never reached the daemon').toBe('test');
+    // SPOOL_DIR/RUNS_DB: their code defaults ('/spool', '/data/runs.db') are the CONTAINER's
+    // bind-mount paths — meaningless, and unwritable, for a bare host process.
+    expect(seen.SPOOL_DIR, 'SPOOL_DIR was left at its container-only default').toBe(path.join(f.dir, 'launch-dashboard/spool'));
+    expect(seen.RUNS_DB, 'RUNS_DB was left at its container-only default').toBe(path.join(f.dir, 'launch-dashboard/data/runs.db'));
   });
 
   it('is idempotent — a second install.sh run does not spawn a second runner-host', async () => {

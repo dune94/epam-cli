@@ -211,10 +211,27 @@ async function langfuseObservationPool(get) {
         : (out && (out.content || out.text || JSON.stringify(out)));
       if (!inp || inp.length < MINIMUM_PROMPT_CHARS) continue;   // no prompt, nothing to match on
       if (typeof text !== 'string' || text.trim().length < MINIMUM_REPLY_CHARS) continue;
-      _lfPool.push({ inp, text, id: o.id });
+      // traceId travels with the observation: ownership is decided per SESSION, and an
+      // observation that cannot say which run it came from is indistinguishable from
+      // another project's — which is how every fingerprint match was rejected as foreign.
+      _lfPool.push({ inp, text, id: o.id, traceId: o.traceId });
     }
   }
   return _lfPool;
+}
+
+
+/** Which run a trace belongs to. Cached: the same few traces are asked about repeatedly. */
+const _traceSession = new Map();
+async function sessionOfTrace(traceId, get) {
+  if (_traceSession.has(traceId)) return _traceSession.get(traceId);
+  let sid;
+  try {
+    const tr = await get(`/api/public/traces/${encodeURIComponent(traceId)}`);
+    sid = tr && tr.sessionId;
+  } catch { sid = undefined; }
+  _traceSession.set(traceId, sid);
+  return sid;
 }
 
 async function langfuseByFingerprint(seam, template, get) {
@@ -243,7 +260,8 @@ async function langfuseByFingerprint(seam, template, get) {
   if (!hit) return null;
   let parsed = false;
   try { JSON.parse(hit.text); parsed = true; } catch { parsed = /\{[\s\S]*\}/.test(hit.text); }
-  return { body: hit.text, file: `langfuse:${hit.id}`, parsed, calls: [] };
+  return { body: hit.text, file: `langfuse:${hit.id}`, parsed, calls: [],
+    session: hit.traceId ? await sessionOfTrace(hit.traceId, get) : undefined };
 }
 
 
@@ -367,6 +385,9 @@ async function langfuseReply(seam) {
   if (bestSession && bestSession.turns.length > 1) {
     const turns = bestSession.turns;
     return { turns, multi: true,
+      // The session travels with the capture: captureIsOwned needs it to tell this project's
+      // recording from another run's, and the file string is an id that cannot say.
+      session: turns[0].session,
       file: `langfuse:session ${turns[0].session || '?'} (${turns.length} turns, `
         + `${turns.reduce((n, t) => n + ((t.calls || []).length), 0)} tool call(s))`,
       body: turns[turns.length - 1].body,
@@ -656,7 +677,75 @@ function put(urlPath, payload) {
   });
 }
 
+
+/**
+ * WHICH LANGFUSE SESSIONS RAN THIS PROJECT — derived from the traces themselves.
+ *
+ * A Langfuse trace carries no project name. Checked against the live API, its fields are
+ * sessionId, tags and metadata{phase, provider, story_id, ladder_rung}. What it DOES carry is
+ * story_id, and the PRD says which stories are this project's — so a session holding a trace for
+ * one of them is this project's run, and every trace in that session is this project's answer.
+ *
+ * Measured on the real recording of 2026-09-04: session 20260904T163822Z holds 97 of 100 traces,
+ * 8 tagged AMSD-1919, which is exactly what the PRD declares. Other sessions carry STORY-1/STORY-9
+ * and stay foreign — the rule discriminates rather than accepting everything.
+ */
+function ownedSessionsFromTraces(traces, storyIds) {
+  const wanted = new Set((storyIds || []).filter(Boolean).map(String));
+  const owned = new Set();
+  if (!wanted.size) return owned;
+  for (const t of (traces || [])) {
+    const sid = t && t.sessionId;
+    const story = String(((t && t.metadata) || {}).story_id || '');
+    if (sid && story && wanted.has(story)) owned.add(sid);
+  }
+  return owned;
+}
+
+/**
+ * Does this capture belong to THIS project?
+ *
+ * Two routes, because captures arrive from two kinds of source and only one of them has a path:
+ *   - a capture read off DISK is matched by its path, exactly as before (the 2026-08-27 leak guard:
+ *     mock3's spec pass was served metrolinx's answer and declared a metrolinx file);
+ *   - a capture mined from LANGFUSE has an id for a name — `langfuse:session 20260904T163822Z` —
+ *     which can never contain the project name, so it was reported foreign ALWAYS and the whole
+ *     replay capability was dead on arrival. It is matched by its session instead.
+ */
+function captureIsOwned(cap, ctx) {
+  const project = (ctx && ctx.project) || '';
+  if (!project || !cap) return false;
+  if (String(cap.file || '').includes(project)) return true;
+  const owned = (ctx && ctx.ownedSessions) || new Set();
+  return !!(cap.session && owned.has(cap.session));
+}
+
+
+/**
+ * The sessions this project owns, resolved ONCE per process from Langfuse and the PRD.
+ *
+ * Cheap: one trace listing, reused for every seam. Empty whenever Langfuse is unreachable or the
+ * project declares no stories, which leaves ownership exactly as it was before — path matching.
+ */
+let _ownedSessionsCache = null;
+async function ownedLangfuseSessions() {
+  if (_ownedSessionsCache) return _ownedSessionsCache;
+  _ownedSessionsCache = new Set();
+  try {
+    const get = langfuseGet();
+    if (!get) return _ownedSessionsCache;
+    const stories = projectStories().map((s) => (typeof s === 'string' ? s : s && s.id)).filter(Boolean);
+    if (!stories.length) return _ownedSessionsCache;
+    const page = await get(`/api/public/traces?limit=${LANGFUSE_PAGE_SIZE * 2}`);
+    const traces = (page && page.data) || [];
+    _ownedSessionsCache = ownedSessionsFromTraces(traces, stories);
+  } catch { /* Langfuse unreachable — ownership falls back to path matching */ }
+  return _ownedSessionsCache;
+}
+
 module.exports = {
+  ownedSessionsFromTraces,
+  captureIsOwned,
   sse, sseToolCalls, anthropicSse, anthropicSseToolCalls,
   // Exported so a test can put the stand-in through the CONSUMER'S OWN GATE, without a run.
   contractStandIn, expectsARole, standInRoleName,
@@ -1244,6 +1333,7 @@ function endsInToolCall(cap, seam) {
     // is kept only if nothing better exists, and a seam with no parseable reply anywhere falls
     // through to its contract stand-in.
     const _lfGet = langfuseGet();
+    const _ownedSessions = await ownedLangfuseSessions();
     const _sources = [
       _lfGet ? await langfuseByFingerprint(seam, template, _lfGet) : null,
       await langfuseReply(seam),
@@ -1263,8 +1353,14 @@ function endsInToolCall(cap, seam) {
     // So a source belonging to THIS project outranks a better-parsed one from another. Ownership is
     // read from the source's own name against the project's directory name — no project is named
     // here, and a project with no captures of its own still falls back rather than stalling.
+    // WIRED THROUGH captureIsOwned so a LANGFUSE capture can be recognised at all. Matching a
+    // project name against `langfuse:session 20260904T163822Z` never succeeds, so every recording
+    // of this project's own paid run was reported foreign and replaced by an invented stand-in —
+    // the replay capability could not work by construction. Disk captures are matched by path
+    // exactly as before; the leak guard above is unchanged.
     const _project = path.basename(process.env.EPAM_PROJECT_CONFIG_DIR || '');
-    const _mine = (c) => !!_project && String(c.file || '').includes(_project);
+    const _ownCtx = { project: _project, ownedSessions: _ownedSessions };
+    const _mine = (c) => captureIsOwned(c, _ownCtx);
     let cap = _sources.find((c) => _mine(c) && c.parsed)
       || _sources.find((c) => _mine(c))
       || _sources.find((c) => c.parsed)

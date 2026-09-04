@@ -920,7 +920,10 @@ fi
 # the install has already failed, where a second wall of red helps nobody.
 if [ "$CHECK_ONLY" != "1" ] && [ "$FAILED" != "1" ] && [ -f "$INSTALLER_DIR/pipeline-health.sh" ]; then
     _head "Post-install health check"
-    if bash "$INSTALLER_DIR/pipeline-health.sh" 2>&1 | sed 's/^/  /'; then
+    # --dest "$ROOT": the tree that was INSTALLED, never the installer's own location. Under
+    # `npx amsd-pipeline` install.sh runs from a temp clone, so without this the check inspects
+    # /tmp/tmp.XXXX and reports failures about a directory nobody installed into.
+    if bash "$INSTALLER_DIR/pipeline-health.sh" --dest "$ROOT" 2>&1 | sed 's/^/  /'; then
         _ok "health check passed"
     else
         _warn "health check reported problems above — the install itself completed, but this machine is not ready to launch"

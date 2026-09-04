@@ -13,7 +13,26 @@
 set -u
 
 HERE="$(cd "$(dirname "${BASH_SOURCE[0]}")" && pwd)"
+# THE TREE TO CHECK IS AN ARGUMENT, not wherever this script happens to live.
+#
+# Resolving ROOT from $HERE/.. is right when an operator runs this from inside their install, and
+# WRONG the moment anything else runs it: `npx amsd-pipeline` executes install.sh out of a temp
+# clone, so install.sh's own post-install health check inspected /tmp/tmp.XXXX — reporting missing
+# daemons and an absent .env for a directory that is not the install, while the real install was
+# fine. Found immediately on the first install that ran it (2026-09-04, pipeline-tests-14).
 ROOT="$(cd "$HERE/.." && pwd)"
+while [ $# -gt 0 ]; do
+    case "$1" in
+        --dest|--root) ROOT="${2:-}"; shift 2 ;;
+        --help|-h) sed -n '2,12p' "$0" | sed 's/^# \{0,1\}//'; exit 0 ;;
+        *) shift ;;
+    esac
+done
+if [ -z "$ROOT" ] || [ ! -d "$ROOT" ]; then
+    printf '\033[0;31m  ✗\033[0m no such install root: %s\n' "$ROOT" >&2
+    exit 1
+fi
+ROOT="$(cd "$ROOT" && pwd)"
 CONFIG="$ROOT/orchestrations/config"
 NODE_BIN="${NODE_BIN:-node}"
 FAILED=0
@@ -364,11 +383,20 @@ EOF
     # healthy install. Derived from the same registry entry, never a second URL literal.
     _DASH_URL="$(service_url dashboard 2>/dev/null || true)"
     if [ -n "$_DASH_URL" ]; then
+        # BEFORE THE FIRST RUN THERE IS NO MOUNT TO FIND, and saying "NOT serving" about that makes
+        # a healthy fresh install read as broken. pre-run-reset.sh writes the compose override that
+        # mounts this run's LOG_DIR, and it has not run yet. After a run it is a real failure — the
+        # dashboards genuinely have nothing to read — so the two are distinguished by whether the
+        # override exists, not by guessing.
         _lc="$(_probe_code "$_DASH_URL/logs/agent-status.json")"
         case "$_lc" in
             2??|3??) _ok "dashboard /logs mount: serving (HTTP $_lc)" ;;
-            *) _bad "dashboard /logs mount: NOT serving (HTTP $_lc) — agent-activity.html and health.html have nothing to read"
-               _fix "bash orchestrations/scripts/pre-run-reset.sh --prd <prd> --log-dir <dir>" ;;
+            *) if [ -f "$ROOT/docker-compose.observability.override.yml" ]; then
+                   _bad "dashboard /logs mount: NOT serving (HTTP $_lc) — agent-activity.html and health.html have nothing to read"
+                   _fix "bash orchestrations-installer/install.sh --dest \"$ROOT\""
+               else
+                   _warn "dashboard /logs mount: not mounted yet (HTTP $_lc) — normal before the first run; pre-run-reset.sh mounts this run's log dir at launch"
+               fi ;;
         esac
         _pc="$(_probe_code "$_DASH_URL/prd.json")"
         case "$_pc" in

@@ -77,8 +77,9 @@ orchestrations/
 # Run specific story
 ./orchestrations/scripts/claude.sh EPAM-001
 
-# View dashboards (requires agent-monitor Docker service)
-docker compose -f docker-compose.epam-cli.yml up agent-monitor -d
+# View dashboards (requires the observability docker stack)
+# Installed automatically by orchestrations-installer/install.sh (or npx amsd-pipeline);
+# to bring it up by hand instead: docker compose -f docker-compose.observability.yml up -d
 # Then open: http://localhost:8092/monitor.html
 
 ### Dashboard builds (Eleventy)

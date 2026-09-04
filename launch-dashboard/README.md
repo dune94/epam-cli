@@ -24,15 +24,25 @@ enforced where the truth is rather than in the API.
 
 ## Running it
 
-    cp .env.example .env      # fill in LAUNCH_PASSWORD
-    docker compose up -d      # or: podman compose up -d
+`orchestrations-installer/install.sh` (or `npx amsd-pipeline`) does all of this for you — creates
+`launch-dashboard/.env` with a fixed default `LAUNCH_PASSWORD=abcd1234` (the same on every fresh
+install; change it via the dashboard's own change-password flow after your first login, not by
+hand-editing the file), brings the docker stack up isolated per-install (a deterministic project
+name, subnet and port — never colliding with another install or the dev checkout on the same
+machine), and starts `backend/src/runner-host.js` itself as a managed HOST daemon: pidfile-tracked
+and idempotent, so re-running the installer never launches a second one, and `--uninstall` stops it
+along with everything else.
 
-    # on the HOST, next to the pipeline — this is the only thing that starts a run:
-    node backend/src/runner-host.js --dry     # proves the install, spends nothing
-    node backend/src/runner-host.js           # for real
+To bounce the docker stack and both host daemons (this one and `snapshot-watch.js`) WITHOUT losing
+any data — a WSL restart, or just wanting to restart cleanly:
 
-`--dry` walks every path and launches nothing, writing a status that names exactly what it WOULD
-have run. Use it before spending anything.
+    bash orchestrations-installer/pipeline-services.sh --stop
+    bash orchestrations-installer/pipeline-services.sh --start
+
+Manually running `docker compose up -d` or `node backend/src/runner-host.js` yourself is no longer
+the supported path — it bypasses the isolation the installer sets up, and a manually-started
+`runner-host.js` has no pidfile coordination with the one the installer already manages, so the two
+would race the same spool directory.
 
 ## What the backend guarantees
 

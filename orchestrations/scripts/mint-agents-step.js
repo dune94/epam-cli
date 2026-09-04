@@ -1297,6 +1297,17 @@ if (require.main !== module) return;
       : await buildProjectPrompts({
       templatesDir,
       bootstrapFile,
+      // ONE UNLUCKY PROMPT MUST NOT ABORT AN OTHERWISE COMPLETE RUN, and raising the budget must
+      // not mean editing a shipped file. Live 2026-09-04, pipeline-tests-18: 'runtime-boundary-
+      // review' exhausted its 3 attempts, the mint refused (correctly — no agent, no story), and
+      // the run died after ~75 minutes and ~$9 with ~34 good prompts already generated and
+      // discarded. The roster mint has had EPAM_ROSTER_ATTEMPTS for exactly this reason; prompt
+      // generation had no equivalent, so the only lever was a literal in the library.
+      //
+      // Default 5, not 3: 3 is the number the live failure exhausted. This does not FIX the
+      // rejections — the reviewer and generator changes in this same commit do — it stops a
+      // residual unlucky draw from costing the whole run.
+      attempts: Number(process.env.EPAM_PROMPT_ATTEMPTS || 5),
       // The seam registry decides what needs a project copy — a seam that runs a template needs
       // one, or it executes the generic parent. bootstrap still supplies auxiliary prompts.
       registryFile: path.join(AGENTS_DIR, 'invocation-profiles.json'),

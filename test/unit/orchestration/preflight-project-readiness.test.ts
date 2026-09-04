@@ -155,11 +155,26 @@ describe('a PRD synthesized later is deferred, not failed', () => {
     expect(out).toMatch(/✗.*outputDir/);
   });
 
-  it('a populated PRD is checked exactly as before, ingest or not', () => {
+  it('a populated PRD is DEFERRED too when ingest will replace it — the value on disk is stale by definition', () => {
+    // SUPERSEDED 2026-09-04. This asserted the opposite — that a populated outputDir is "checked
+    // exactly as before, ingest or not" — and that assertion WAS the defect, not a guard against
+    // it: pre-flight runs BEFORE ingest, so when ingest is pending, the value on disk belongs to
+    // whatever ran last (or to the file the install shipped), never to this run. Live
+    // pipeline-tests-10: a run targeting the test codelines reported a REAL CLIENT PATH as
+    // "✓ PRD project.outputDir", read out of the committed prd.json, and the comparison below it
+    // turned the same dead value into a hard FAILURE for a run whose real target simply differed.
+    //
+    // The requirement this test was actually written for — "deferral is not a loophole that
+    // disables checking" — is unchanged and still enforced, by the test above (an empty PRD that
+    // nothing will synthesize still fails) and by
+    // preflight-never-reads-a-prd-the-run-replaces.test.ts (a genuinely declared outputDir, with
+    // no resolver to write one later, is still verified).
     const out = runWith(JSON.stringify({ project: { outputDir: '/somewhere' }, stories: [] }), {
       JIRA_SYNTH_PRD_PATH: 'SELF',
     });
-    expect(out).toMatch(/outputDir = \/somewhere/);
+    expect(out, 'a stale outputDir was reported for a run that is about to overwrite it')
+      .not.toMatch(/outputDir = \/somewhere/);
+    expect(out, 'and it must SAY it deferred, rather than going silent').toMatch(/deferred/i);
   });
 });
 

@@ -202,10 +202,23 @@ else
   fi
 
   # outputDir must be set
-  OUTPUT_DIR_VAL=$(python3 -c "import json; d=json.load(open('$PRD_FILE')); print(d.get('project',{}).get('outputDir',''))" 2>/dev/null || true)
-  if [[ -n "$OUTPUT_DIR_VAL" ]]; then
-    ok "PRD project.outputDir = $OUTPUT_DIR_VAL"
-  elif [[ "$_prd_pending_ingest" == "1" ]]; then
+  #
+  # THE CONDITION IS TESTED BEFORE THE VALUE, and that ordering is the whole point.
+  #
+  # This read the field FIRST and reported whatever it found, so both deferral branches below were
+  # unreachable whenever the file on disk happened to carry a value. That is every fresh install:
+  # pre-flight runs BEFORE ingest, so prd.json at this moment is not this run's PRD at all — it is
+  # the file the install shipped, or the PREVIOUS run's output, and the run overwrites it minutes
+  # later (resolve-codeline-scope.sh -> apply-codeline-scope.js).
+  #
+  # Live 2026-09-04, pipeline-tests-10: a run correctly targeting the test codelines reported
+  # "✓ PRD project.outputDir = /home/…/metrolinx/next.gotransit.com" — a REAL CLIENT PATH, out of a
+  # dead file — and the comparison below it turns the same stale value into a HARD FAILURE
+  # ("does NOT match PRD outputDir") for a run whose real target is simply different.
+  #
+  # When the run resolves scope, the field is not read, not reported, and not compared.
+  OUTPUT_DIR_VAL=""
+  if [[ "$_prd_pending_ingest" == "1" ]]; then
     ok "PRD content is pending Jira ingest for this run — outputDir check deferred"
   elif [[ -n "$_codeline_root" ]]; then
     # DEFERRED FOR THE SAME REASON, ARRIVED AT DIFFERENTLY.
@@ -221,7 +234,14 @@ else
     # whether its PRD arrived from Jira or was authored by hand.
     ok "codeline scope is resolved during the run (root: $_codeline_root) — outputDir check deferred"
   else
-    fail "PRD project.outputDir is NOT set, and no codeline root is declared to resolve it from"
+    # NOTHING WILL RESOLVE THIS LATER, so the PRD's own declared value is the answer and IS checked.
+    # Read here rather than above, so a deferred run never touches the field at all.
+    OUTPUT_DIR_VAL=$(python3 -c "import json; d=json.load(open('$PRD_FILE')); print(d.get('project',{}).get('outputDir',''))" 2>/dev/null || true)
+    if [[ -n "$OUTPUT_DIR_VAL" ]]; then
+      ok "PRD project.outputDir = $OUTPUT_DIR_VAL"
+    else
+      fail "PRD project.outputDir is NOT set, and no codeline root is declared to resolve it from"
+    fi
   fi
 
   # The RESOLVED OUTPUT_DIR must agree with the PRD's. This used to scrape `OUTPUT_DIR=`

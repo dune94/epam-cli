@@ -44,8 +44,16 @@ start_runner_host() {
     # runner-host.js's own config.js hard-requires LAUNCH_PASSWORD ("gates a button that spends
     # real money"). SPOOL_DIR/RUNS_DB are exported to the REAL host paths — their code defaults
     # ('/spool', '/data/runs.db') are the CONTAINER's bind-mount paths, unwritable on the host.
+    #
+    # THE ROOT .env TOO — a SEPARATE file, sourced FIRST so launch-dashboard/.env's own values can
+    # still override on a genuine conflict. LANGFUSE_SECRET_KEY/PUBLIC_KEY live there (.env.example's
+    # own declared shape), never in launch-dashboard/.env (not even in its own .env.example
+    # template). Confirmed live 2026-09-04: a real launch-dashboard-triggered run produced zero
+    # Langfuse traces despite both keys being correctly filled in at the root — this daemon never
+    # saw them, so runner-host.js's own langfuse-passthrough logic (deliberately explicit, so an
+    # ambient credential cannot leak into a launch) always found them unset.
     ( exec </dev/null >>"$_log" 2>&1
-      cd "$_root" && set -a && . "$_launch_dir/.env" 2>/dev/null; set +a
+      cd "$_root" && set -a && . "$_root/.env" 2>/dev/null; . "$_launch_dir/.env" 2>/dev/null; set +a
       EPAM_HOME="$_root" SPOOL_DIR="$_launch_dir/spool" RUNS_DB="$_launch_dir/data/runs.db" \
           exec $_daemonize "${NODE_BIN:-node}" "$_launch_dir/backend/src/runner-host.js" ) &
     echo $! > "$_pidfile"

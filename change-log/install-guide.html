@@ -73,502 +73,129 @@ footer{margin-top:64px;padding-top:18px;border-top:1px solid var(--line);color:v
 
 <header class="top">
 <h1>epam-cli — Install &amp; Run Guide</h1>
-<p class="sub">Deploying the orchestration pipeline without the TypeScript source. Five flows, each complete on its own.</p>
+<p class="sub">The real, current install path — verified against the actual installer scripts, 2026-09-04.</p>
 </header>
 
-<div class="warn">
-<strong>Read this first.</strong> This guide describes a deployment that <em>has not been built yet</em>.
-It is grounded in the real scripts, paths and variable names in the repository, and every step marked
-<span class="tag tag-ver">verified</span> was read out of the code. Steps marked
-<span class="tag tag-unver">unverified</span> are reasoned but not executed — the installer
-(<code>install.sh</code>) and the release builder do not yet do everything described here.
-Treat this as the target, not a record of something that already works.
+<div class="ok">
+<strong>Superseded notice.</strong> This guide previously described a manual tarball-release
+deployment (<code>epam-cli-1.6.0.tar.gz</code>, <code>/opt/epam-cli/releases/</code>,
+<code>ln -sfn ... /opt/epam-cli/current</code>) that <strong>was never built</strong> — the page
+said so itself at the time. The installer that actually shipped took a different shape entirely:
+a single <code>install.sh</code> script that self-clones, packages a git ref into a fresh tree, and
+provisions everything else (docker, dashboards, host daemons) itself. This page has been rewritten
+to describe that real mechanism. Every command below was read directly out of
+<code>orchestrations-installer/install.sh</code>, <code>pipeline-services.sh</code> and
+<code>pipeline-health.sh</code> as they stand today, or run live against a fresh install.
 </div>
 
 <nav class="toc">
 <h4>Contents</h4>
 <ol>
-<li><a href="#env">The <code>.env</code> file — do this first</a></li>
-<li><a href="#a">Flow A — Windows + Docker (via WSL2)</a></li>
-<li><a href="#b">Flow B — Windows without Docker (via WSL2)</a></li>
-<li><a href="#c">Flow C — Ubuntu / WSL + Docker</a></li>
-<li><a href="#d">Flow D — Ubuntu / WSL without Docker</a></li>
-<li><a href="#e">Flow E — HTTP / Postman: steering a run today, launching one (designed)</a></li>
-<li><a href="#trouble">Troubleshooting</a></li>
+<li><a href="#install">1. Install — <code>npx amsd-pipeline</code></a></li>
+<li><a href="#docker">2. Docker or Podman — no Docker Desktop license needed</a></li>
+<li><a href="#env">3. The <code>.env</code> files</a></li>
+<li><a href="#dashboard">4. The launch dashboard &amp; runner</a></li>
+<li><a href="#services">5. Bouncing services — <code>pipeline-services.sh</code></a></li>
+<li><a href="#health">6. Checking readiness — <code>pipeline-health.sh</code></a></li>
+<li><a href="#uninstall">7. Uninstalling</a></li>
+<li><a href="#trouble">8. Troubleshooting</a></li>
 </ol>
 </nav>
 
-<h2 id="env">1. The <code>.env</code> file — do this first</h2>
+<h2 id="install">1. Install — <code>npx amsd-pipeline</code></h2>
+<p>No git commands required. This clones the repo itself, packages the requested ref into a fresh
+tree at <code>--dest</code>, then runs every step below against that tree.</p>
+<pre><code>npx amsd-pipeline --dest ~/amsd-pipeline</code></pre>
+<p>From an existing checkout, the same script works directly, in place:</p>
+<pre><code>./orchestrations-installer/install.sh                    # install for the default stack, with dashboards if docker is up
+./orchestrations-installer/install.sh --stack codemie     # install for a specific stack
+./orchestrations-installer/install.sh --no-docker         # skip dashboards entirely
+./orchestrations-installer/install.sh --check             # verify an existing install, change nothing
+./orchestrations-installer/install.sh --dest ~/somewhere --ref v1.7   # package that ref into a NEW tree, then install it</code></pre>
+<p>Re-running <code>install.sh</code> against an existing <code>--dest</code> is an UPDATE, not a
+fresh install: app code updates, but an operator's edited project config
+(<code>config.env</code>, <code>llm-settings.json</code>, five engine-wide
+<code>orchestrations/config/*.json</code> files) and accumulated run state
+(<code>orchestrations/logs</code>, <code>phase-cost.jsonl</code>, KB files) both survive untouched.</p>
+<p>Prerequisites <code>install.sh</code> checks for: <code>git</code>, <code>jq</code>,
+<code>node</code>, <code>python3</code> (88 pipeline handlers are pure-stdlib python3), and the
+declared stack's own runner (<code>claude</code>, or an internal EPAM tool
+<code>codemie-claude</code> obtained through your organization's own distribution — this repo does
+not install either CLI itself).</p>
 
-<p>Every credential lives in <strong>one file</strong>, written by hand. The installer never prompts for a
-secret, never writes one, and never creates per-project credential files. It copies
-<code>.env.example</code> to <code>.env</code> and asks you to fill it in.</p>
+<h2 id="docker">2. Docker or Podman — no Docker Desktop license needed</h2>
+<p><code>install.sh</code> discovers whichever is on <code>PATH</code> — Docker first, Podman as a
+fallback (<code>EPAM_CONTAINER_RUNTIME</code> to force one). Docker <em>Desktop</em> requires a paid
+subscription above 250 employees or $10M revenue — that is a procurement conversation, not a
+technical requirement, and this installer never needs it: install Docker Engine directly inside a
+WSL2 Ubuntu distro (the standard <code>apt</code>-based Docker CE install), or use Podman, either is
+fully supported and tested (<code>test/unit/orchestration/the-installer-installs-on-podman.test.ts</code>).
+Neither docker nor podman is required at all — pass <code>--no-docker</code> and the pipeline itself
+still runs; only dashboards and the launch UI are unavailable.</p>
+<p>Every docker resource — container names, network subnet, ports — is isolated per install,
+deterministically, so two installs (or an install alongside a hand-run dev checkout) never collide
+on the same machine.</p>
 
-<div class="ok">
-<strong>On the <code>claude</code> and <code>codemie</code> stacks you need exactly two values.</strong>
-Neither stack requires an LLM API key: <code>claude</code> authenticates through its own OAuth
-session on disk, and <code>codemie-claude</code> through CodeMie SSO. This is declared in
-<code>orchestrations/config/provider-sets.json</code>, where both sets have
-<code>"credentials": []</code>. <span class="tag tag-ver">verified</span>
-</div>
-
-<p>A complete, working <code>.env</code> for the claude stack:</p>
-<pre><code>JIRA_EMAIL=you@yourcompany.com
-JIRA_TOKEN=your-atlassian-api-token</code></pre>
-
-<h4>What each key is for</h4>
+<h2 id="env">3. The <code>.env</code> files</h2>
+<p>Several separate files, each scoped to a different concern — documented here in full because an
+earlier version of this install flow omitted some of them entirely and it caused real confusion
+mid-run:</p>
 <table>
-<tr><th>Key</th><th>claude</th><th>codemie</th><th>Why</th></tr>
-<tr><td><code>JIRA_EMAIL</code></td><td>required</td><td>required</td><td><code>ingest-jira-tickets.sh:81-85</code> exits 1 without it</td></tr>
-<tr><td><code>JIRA_TOKEN</code></td><td>required</td><td>required</td><td>same check; also the project's <code>REQUIRED_KEYS</code></td></tr>
-<tr><td><code>ANTHROPIC_API_KEY</code></td><td colspan="2"><strong>do not set</strong></td><td>See the warning below</td></tr>
-<tr><td><code>OPENROUTER_API_KEY</code></td><td>not needed</td><td>not needed</td><td>Only the <code>openrouter</code> stack declares it</td></tr>
-<tr><td><code>MINIMAX_API_KEY</code></td><td>not needed</td><td>not needed</td><td>Only the <code>openrouter</code> stack declares it</td></tr>
-<tr><td><code>LANGFUSE_SECRET_KEY</code><br><code>LANGFUSE_PUBLIC_KEY</code></td><td>optional</td><td>optional</td><td>Tracing. Disables itself cleanly when unset</td></tr>
+<tr><th>File</th><th>Holds</th></tr>
+<tr><td>Root <code>.env</code></td><td>Provider credentials (<code>OPENROUTER_API_KEY</code>, <code>MINIMAX_API_KEY</code> — only for the <code>openrouter</code> stack) plus feature-scoped vars (<code>JIRA_EMAIL</code>/<code>JIRA_TOKEN</code>, <code>LANGFUSE_SECRET_KEY</code>/<code>LANGFUSE_PUBLIC_KEY</code>, <code>GITHUB_PERSONAL_ACCESS_TOKEN</code>). Generated by <code>install.sh</code> from <code>provider-sets.json</code> + <code>env-vars.json</code> — a var added to either needs no installer edit. The <code>claude</code> stack needs none of these: it authenticates via <code>claude login</code> (an OAuth session on disk), and an <code>ANTHROPIC_API_KEY</code> present here <strong>outranks</strong> that session and silently bills the API account instead — leave it unset for the claude stack.</td></tr>
+<tr><td><code>launch-dashboard/.env</code></td><td><code>LAUNCH_PASSWORD</code> (a fixed default, <code>abcd1234</code>, the same on every fresh install — change it via the dashboard's own change-password flow after your first login) and <code>LAUNCH_UI_PORT</code>.</td></tr>
+<tr><td>A project's own <code>config.env</code></td><td>Operational settings, not secrets — <code>JIRA_URL</code>, <code>JIRA_PROJECT_KEY</code>, <code>JIRA_CODELINE_ROOT</code> (the brownfield discovery root — a real host path to the client repos), etc. Preserved across installer updates.</td></tr>
+<tr><td>A project's own <code>orchestrations/jira/&lt;project&gt;.env</code></td><td>Per-project Jira credentials, when a project's <code>config.env</code> declares <code>SECRETS_FILE=</code> pointing at it — an opt-in override of the root <code>.env</code> defaults, for running against multiple clients' Jira instances without sharing credentials. <strong>Not provisioned by <code>install.sh</code> at all</strong> — supply it yourself per project, or Jira ingestion fails at launch.</td></tr>
 </table>
 
-<div class="bad">
-<strong>Do not put <code>ANTHROPIC_API_KEY</code> in <code>.env</code>.</strong> Claude Code prefers an
-API key over the OAuth session on disk, so setting it bills an API account while the subscription
-you pay for goes unused. This is not hypothetical: <code>llm-defaults.claude.json</code> records
-seven runs billed to the wrong account before anyone noticed, and it surfaced only when the credits
-ran out mid-run. The runner now scrubs the variable, but the safe state is not writing it at all.
-<span class="tag tag-ver">verified</span>
-</div>
+<h2 id="dashboard">4. The launch dashboard &amp; runner</h2>
+<p><code>install.sh</code> provisions the launch dashboard (Flutter frontend + Node backend) fully
+by itself: builds and isolates its docker stack, creates <code>launch-dashboard/.env</code> with
+the default password, and starts <code>runner-host.js</code> — the HOST process (not dockerized;
+a container cannot exec a host process) that actually polls the spool and launches real pipeline
+runs — as a managed, pidfile-tracked daemon. A second daemon, <code>snapshot-watch.js</code>, is
+also started automatically: it keeps <code>agent-monitor</code>'s <code>build-info.json</code>
+fresh, and without it every launched run's own pre-flight hard-fails immediately.</p>
 
-<div class="note">
-Where the file lives depends on the layout you install into. In the versioned layout it is
-<code>/opt/epam-cli/state/.env</code>; in a flat install it sits at the install root. It is loaded
-first by <code>orchestrate.sh:107</code> either way.
-</div>
+<h2 id="services">5. Bouncing services — <code>pipeline-services.sh</code></h2>
+<p>For a WSL restart, or just wanting to restart cleanly, without losing any data (never
+<code>-v</code>, never <code>--rmi</code> — this is a pause, not an uninstall):</p>
+<pre><code>bash orchestrations-installer/pipeline-services.sh --stop
+bash orchestrations-installer/pipeline-services.sh --start</code></pre>
+<p><code>--start</code> reconnects to the exact subnet/ports/project identity the original install
+resolved (persisted in <code>.pipeline-services-state.env</code>), never re-rolling a different one.</p>
 
-<h2 id="a">2. Flow A — Windows + Docker (via WSL2)</h2>
+<h2 id="health">6. Checking readiness — <code>pipeline-health.sh</code></h2>
+<p>A different question from <code>install.sh --check</code> ("did the install complete") — this
+asks "can I launch a real run from here, right now":</p>
+<pre><code>bash orchestrations-installer/pipeline-health.sh</code></pre>
+<p>Checks platform/tooling, probes the container runtime rather than trusting <code>command -v</code>,
+reads the active provider set live and flags the API-key-outranks-OAuth trap explicitly, checks
+memory/disk headroom, verifies a selected project's codeline-discovery root actually resolves to
+git repos, and confirms both host daemons (<code>runner-host.js</code>, <code>snapshot-watch.js</code>)
+are actually running — reporting unhealthy, not just a warning, if either is declared but not
+running.</p>
 
-<div class="note">
-The pipeline runs inside WSL2. PowerShell is only a front door. This is not a preference — the
-engine is ~52,000 lines of bash using <code>flock</code>, <code>setsid</code>, POSIX process
-groups and <code>/proc</code>, none of which have native Windows equivalents.
-<span class="tag tag-ver">verified</span>
-</div>
+<h2 id="uninstall">7. Uninstalling</h2>
+<pre><code>bash orchestrations-installer/install.sh --uninstall --dest ~/amsd-pipeline</code></pre>
+<p>Removes this install's docker footprint — containers, network, volumes, locally-built images —
+and stops both host daemons. Structurally incapable of touching another install or the dev
+checkout: an isolated install's project names never share the dev checkout's own naming shape, by
+construction. Files on disk are never touched; remove the directory yourself once you are done
+with it.</p>
 
-<div class="flow">
-<h4>Prerequisites</h4>
-<ul>
-<li>Windows 10 build 19041+ or Windows 11</li>
-<li>Administrator rights (for the one-time WSL2 install)</li>
-<li>Docker Desktop, with the WSL2 backend enabled</li>
-<li>The release <code>.zip</code></li>
-</ul>
-
-<h4>Steps</h4>
+<h2 id="trouble">8. Troubleshooting</h2>
 <table>
-<tr><th>#</th><th>Do this</th><th>Success looks like</th></tr>
-<tr><td>1</td><td>Extract the <code>.zip</code>. Right-click &rarr; <em>Extract All</em>.</td><td>A folder containing <code>install.ps1</code> and a <code>.tar.gz</code></td></tr>
-<tr><td>2</td><td>Open PowerShell <strong>as Administrator</strong> and run:<pre><code>wsl --install -d Ubuntu</code></pre></td><td>Ubuntu installs. <strong>A reboot is usually required.</strong> Reboot before continuing</td></tr>
-<tr><td>3</td><td>After reboot, launch Ubuntu once from the Start menu</td><td>You are asked to create a UNIX username and password. Do so</td></tr>
-<tr><td>4</td><td>In Docker Desktop: <em>Settings &rarr; Resources &rarr; WSL Integration</em>, enable your Ubuntu distro, Apply &amp; Restart</td><td>In Ubuntu, <code>docker info</code> succeeds</td></tr>
-<tr><td>5</td><td>In the extracted folder, right-click <code>install.ps1</code> &rarr; <em>Run with PowerShell</em></td><td>It reports what it will do before doing it <span class="tag tag-unver">unverified</span></td></tr>
-<tr><td>6</td><td><em>(installer)</em> copies the tarball into the distro and expands it <strong>inside Linux</strong></td><td>Symlinks and file modes survive. Expanding on the Windows side would break them</td></tr>
-<tr><td>7</td><td><em>(installer)</em> installs prerequisites inside Ubuntu:<pre><code>sudo apt-get update
-sudo apt-get install -y git jq python3 python3-pip shellcheck</code></pre></td><td>All five resolve. <code>shellcheck</code> is the one people forget and it is a hard requirement</td></tr>
-<tr><td>8</td><td><em>(installer)</em> installs the runner — <code>claude</code> or <code>codemie-claude</code></td><td><code>claude --version</code> prints a version <em>inside Ubuntu</em></td></tr>
-<tr><td>9</td><td><strong>Edit <code>.env</code></strong> — see <a href="#env">section 1</a></td><td>Two lines for the claude stack</td></tr>
-<tr><td>10</td><td>Run the installer's verification</td><td>Every check <code>&#10003;</code>, ending in <code>ready</code></td></tr>
-<tr><td>11</td><td>Start the dashboards:<pre><code>docker compose -f docker-compose.observability.yml up -d</code></pre></td><td>Containers start. Open <code>http://localhost:8092</code></td></tr>
-</table>
-
-<h4>Verify it actually works</h4>
-<p>Not "files exist" — make it do something:</p>
-<pre><code># 1. The SDK bundle loads. This is the exact call the engine makes.
-node -e "console.log(Object.keys(require('/opt/epam-cli/current/dist/sdk.js').FIXED_AGENT_ROLES).length)"
-# → a non-zero number
-
-# 2. The executor can see the projects
-/opt/epam-cli/current/orchestrations/scripts/pipeline --list
-# → a table of PROJECT / PREFIX / CODELINE
-
-# 3. Full validation, spends nothing
-/opt/epam-cli/current/orchestrations/scripts/pipeline --jira AMSD-1234 --dry-run
-# → "✓ ready", then ticket/project/stack/docker lines, then "--dry-run: nothing started"</code></pre>
-<div class="warn">
-Checking that <code>dist/epam.js</code> exists is <strong>not</strong> a valid verification. In the
-current repository that file is a 188-byte stub that prints <code>Hello, World!</code>. Always
-execute something. <span class="tag tag-ver">verified</span>
-</div>
-</div>
-
-<h2 id="b">3. Flow B — Windows without Docker (via WSL2)</h2>
-
-<div class="ok">
-<strong>Docker is genuinely optional.</strong> No container takes part in producing a result — every
-one is somewhere the pipeline <em>reports to</em>. The dashboards are rendered by a normal process
-on the host and written to disk as static HTML; Docker only serves them over HTTP. Without Docker
-you lose the web view, not the data. <span class="tag tag-ver">verified</span>
-</div>
-
-<div class="flow">
-<h4>Steps</h4>
-<p>Identical to <a href="#a">Flow A</a>, with these differences:</p>
-<ul>
-<li><strong>Skip steps 4 and 11 entirely.</strong> Docker Desktop is not needed.</li>
-<li>At step 5, run the installer in explicit no-docker mode so the choice is recorded rather than inferred:
-<pre><code>.\install.ps1 -NoDocker</code></pre>
-<span class="tag tag-unver">unverified — the PowerShell wrapper does not exist yet</span></li>
-</ul>
-
-<h4>What you will see, and should not try to fix</h4>
-<p>The executor prints this line, and it is <strong>correct and expected</strong>:</p>
-<pre><code>docker    dashboards unavailable (docker not running) — the run itself does not need them</code></pre>
-<p>That text comes from <code>orchestrations/scripts/pipeline:124</code>. It is informational.
-The run proceeds. <span class="tag tag-ver">verified</span></p>
-
-<div class="warn">
-<strong>One real caveat.</strong> Most of the older launchers (the <code>tier3-*-run.sh</code> family)
-run a pre-flight that <em>hard-fails</em> when the dashboard, Langfuse and Grafana are not answering
-— it will <code>exit 1</code> before starting. The <code>pipeline</code> executor avoids this because
-it hands off to <code>orchestrate.sh</code>, which does not run that pre-flight.
-<strong>On a no-Docker install, use <code>pipeline</code> and do not call the
-<code>tier3-*</code> scripts directly.</strong> <span class="tag tag-ver">verified</span>
-</div>
-</div>
-
-<h2 id="c">4. Flow C — Ubuntu / WSL + Docker</h2>
-
-<div class="flow">
-<h4>Prerequisites</h4>
-<ul>
-<li>Ubuntu 22.04+ (native, or as a WSL2 distro)</li>
-<li><code>sudo</code> rights</li>
-<li>Docker with the compose plugin</li>
-<li>The release <code>.tar.gz</code> and its <code>.sha256</code></li>
-</ul>
-
-<h4>Steps</h4>
-<table>
-<tr><th>#</th><th>Command</th><th>Success looks like</th></tr>
-<tr><td>1</td><td><pre><code>sha256sum -c epam-cli-1.6.0.tar.gz.sha256</code></pre></td><td><code>epam-cli-1.6.0.tar.gz: OK</code>. Anything else — <strong>stop</strong></td></tr>
-<tr><td>2</td><td><pre><code>sudo apt-get update
-sudo apt-get install -y git jq python3 python3-pip shellcheck</code></pre></td><td>All five install</td></tr>
-<tr><td>3</td><td><pre><code>sudo mkdir -p /opt/epam-cli/releases /opt/epam-cli/state
-sudo chown -R "$USER" /opt/epam-cli</code></pre></td><td>Both directories exist and are yours</td></tr>
-<tr><td>4</td><td><pre><code>tar xzf epam-cli-1.6.0.tar.gz -C /opt/epam-cli/releases/</code></pre></td><td><code>/opt/epam-cli/releases/1.6.0/</code> exists</td></tr>
-<tr><td>5</td><td><pre><code>tar tvzf epam-cli-1.6.0.tar.gz | grep -c '^l'</code></pre></td><td><code>3</code> — the three symlinks survived. A different number means the archive is damaged</td></tr>
-<tr><td>6</td><td>Install the runner (<code>claude</code> or <code>codemie-claude</code>) and sign in</td><td><code>claude --version</code> works, and one real prompt returns text</td></tr>
-<tr><td>7</td><td><pre><code>cp /opt/epam-cli/releases/1.6.0/.env.example \
-   /opt/epam-cli/state/.env
-nano /opt/epam-cli/state/.env</code></pre></td><td>See <a href="#env">section 1</a></td></tr>
-<tr><td>8</td><td><pre><code>cd /opt/epam-cli/releases/1.6.0
-./install.sh --stack claude --docker</code></pre></td><td>Checks pass, ends in <code>ready</code></td></tr>
-<tr><td>9</td><td><pre><code>ln -sfn /opt/epam-cli/releases/1.6.0 /opt/epam-cli/current</code></pre></td><td><code>readlink /opt/epam-cli/current</code> &rarr; <code>...1.6.0</code></td></tr>
-<tr><td>10</td><td><pre><code>docker compose -f docker-compose.observability.yml up -d</code></pre></td><td><code>http://localhost:8092</code> serves the dashboard</td></tr>
-</table>
-
-<div class="warn">
-<strong>Use <code>-f</code> with compose.</strong> There is no plain <code>docker-compose.yml</code> at
-the repository root — only <code>docker-compose.epam-cli.yml</code>,
-<code>docker-compose.observability.yml</code> and an override. A bare <code>docker compose up -d</code>
-does nothing useful. Also, the first two files both claim host port <strong>3001</strong>, so they are
-alternatives — never start both. <span class="tag tag-ver">verified</span>
-</div>
-
-<h4>Verify</h4>
-<pre><code>node -e "console.log(Object.keys(require('/opt/epam-cli/current/dist/sdk.js').FIXED_AGENT_ROLES).length)"
-/opt/epam-cli/current/orchestrations/scripts/pipeline --list
-/opt/epam-cli/current/orchestrations/scripts/pipeline --jira AMSD-1234 --dry-run
-curl -sf http://localhost:8092/ >/dev/null &amp;&amp; echo "dashboard OK"</code></pre>
-
-<h4>Run it for real</h4>
-<pre><code>/opt/epam-cli/current/orchestrations/scripts/pipeline --jira AMSD-1234</code></pre>
-<div class="note">
-You will be asked to confirm spending before anything starts. If the project enables the human
-review points (<code>EPAM_PAUSE_AFTER_AGENT_MINT</code>, <code>EPAM_PAUSE_BEFORE_WRITER</code>), the
-run will also <strong>stop twice</strong> and wait for you — once after the agent roster is built,
-once before any code is written. That is intended behaviour, not a hang.
-<span class="tag tag-ver">verified</span>
-</div>
-</div>
-
-<h2 id="d">5. Flow D — Ubuntu / WSL without Docker</h2>
-
-<div class="flow">
-<h4>Steps</h4>
-<p>Identical to <a href="#c">Flow C</a>, except:</p>
-<ul>
-<li><strong>Skip step 10.</strong></li>
-<li>At step 8, be explicit:
-<pre><code>cd /opt/epam-cli/releases/1.6.0
-./install.sh --stack claude --no-docker</code></pre></li>
-</ul>
-
-<h4>Verify</h4>
-<pre><code>node -e "console.log(Object.keys(require('/opt/epam-cli/current/dist/sdk.js').FIXED_AGENT_ROLES).length)"
-/opt/epam-cli/current/orchestrations/scripts/pipeline --jira AMSD-1234 --dry-run</code></pre>
-<p>Expect <code>✓ ready</code> and the <code>dashboards unavailable</code> note. Both are correct.</p>
-
-<h4>Getting at the dashboards without Docker</h4>
-<p>The pipeline still renders dashboard HTML to disk during a run, at
-<code>orchestrations/dashboards/live/</code>. You can open those files directly in a browser. To turn
-the renderer off entirely:</p>
-<pre><code>export EPAM_DASH_AUTO_SERVE=0</code></pre>
-<div class="note">
-On first use the renderer may try to fetch its own dependency with <code>npx</code>, which needs
-network access. If the machine is offline and you do not want dashboards, set
-<code>EPAM_DASH_AUTO_SERVE=0</code>. <span class="tag tag-ver">verified</span>
-</div>
-</div>
-
-<h2 id="e">6. Flow E — Driving a run over HTTP / Postman</h2>
-
-<div class="bad">
-<strong>Today you cannot start a run from Postman.</strong> The HTTP API that exists is a
-<em>run-control</em> API, not a <em>run-invocation</em> API. None of its six routes launches a
-pipeline. The Jira webhook route queues an event and eventually writes a
-<code>webhook-prd-*.json</code> file that <strong>nothing reads</strong> — the queue module imports
-only <code>fs</code> and <code>path</code>, with no process-spawning code anywhere in it.
-<span class="tag tag-ver">verified</span>
-</div>
-
-<p>This section has two halves. <a href="#e-now">6.1</a> is what works today. <a href="#e-soon">6.2</a>
-is the launch capability that has been <em>designed but not built</em> — read it as a specification,
-not as instructions.</p>
-
-<h3 id="e-now">6.1 What works today — steering a run in flight</h3>
-
-<div class="flow">
-<h4>Prerequisites</h4>
-<ul>
-<li><strong>A run must already be in progress.</strong> The server is started by the orchestrator and
-stops when the run stops.</li>
-<li>You need the port (see below) and, for signed webhooks, <code>JIRA_WEBHOOK_SECRET</code>.</li>
-</ul>
-
-<h4>Finding the port</h4>
-<table>
-<tr><th>Situation</th><th>Port</th></tr>
-<tr><td><code>CONTROL_PLANE_PORT</code> set explicitly</td><td>That value — an override always wins</td></tr>
-<tr><td>Single-codeline run</td><td><code>8094</code></td></tr>
-<tr><td><strong>Jira / brownfield run (the normal case)</strong></td><td><code>8095</code>, <code>8096</code>, <code>8097</code>… — <strong>one per codeline</strong>. <code>8094</code> is <em>not</em> used</td></tr>
-</table>
-<div class="warn">
-On a Jira run the parent orchestrator exits before it would start a control plane, so nothing ever
-binds 8094. Each parallel codeline lane runs its own server at
-<code>8094 + 1 + &lt;lane index&gt;</code>. There is no aggregate endpoint across lanes — you talk to
-one lane at a time. <span class="tag tag-ver">verified</span>
-</div>
-<p>Confirm what is actually listening:</p>
-<pre><code>ss -ltnp | grep -E '809[4-9]'
-# or
-curl -sf http://localhost:8095/health &amp;&amp; echo " ← alive"</code></pre>
-
-<h4>The endpoints</h4>
-<table>
-<tr><th>Method</th><th>Path</th><th>What it does</th></tr>
-<tr><td>GET</td><td><code>/health</code></td><td><code>200</code>, empty body</td></tr>
-<tr><td>GET</td><td><code>/status</code></td><td><code>{ paused, pendingRedirects[] }</code></td></tr>
-<tr><td>POST</td><td><code>/pause</code></td><td>Run blocks at the next story boundary</td></tr>
-<tr><td>POST</td><td><code>/resume</code></td><td>Run continues</td></tr>
-<tr><td>POST</td><td><code>/redirect/:storyId</code></td><td>Reassign a story to a different agent</td></tr>
-<tr><td>POST</td><td><code>/webhook/jira</code></td><td>Queues an event. <strong>Starts nothing.</strong></td></tr>
-</table>
-
-<h4>Postman-ready examples</h4>
-<pre><code>GET http://localhost:8095/status
-→ 200
-  { "paused": false, "pendingRedirects": [] }
-
-
-POST http://localhost:8095/pause
-  Content-Type: application/json
-  (no body needed)
-→ 200
-  { "paused": true }
-
-
-POST http://localhost:8095/resume
-→ 200
-  { "paused": false }
-
-
-POST http://localhost:8095/redirect/AI-1234
-  Content-Type: application/json
-
-  { "targetAgent": "backend-implementation-agent" }
-
-→ 200
-  { "storyId": "AI-1234",
-    "targetAgent": "backend-implementation-agent",
-    "requestedAt": "2026-09-02T10:00:00.000Z" }
-→ 400 if "targetAgent" is missing or blank
-
-
-POST http://localhost:8095/webhook/jira
-  Content-Type: application/json
-  X-Hub-Signature-256: sha256=&lt;hmac&gt;      (only checked if JIRA_WEBHOOK_SECRET is set)
-
-  { "webhookEvent": "jira:issue_created",
-    "issue": { "key": "AMSD-1234", "fields": { "summary": "..." } } }
-
-→ 202  { "status": "queued", "jiraKey": "AMSD-1234", "urgent": false }
-→ 202  { "status": "ignored", "reason": "unrecognised event type" }</code></pre>
-<p class="sub">Response shapes were read from the source, not round-trip tested — exercising
-<code>/pause</code> means interfering with a live paid run. <span class="tag tag-unver">unverified at runtime</span></p>
-
-<h4>Calling it from Windows against a WSL2 run</h4>
-<p>The server binds <code>0.0.0.0</code> deliberately, and a test asserts this is for WSL2
-reachability. <code>http://localhost:8095</code> from Windows usually works via WSL2's localhost
-forwarding. If it does not, get the distro's address:</p>
-<pre><code>wsl hostname -I     # → e.g. 172.24.83.191
-# then use http://172.24.83.191:8095</code></pre>
-<p><span class="tag tag-unver">unverified — the forwarding path was not tested</span></p>
-
-
-<h3 id="e-soon">6.2 Launching a run over HTTP — DESIGNED, NOT BUILT</h3>
-
-<div class="bad">
-<strong>None of this section works yet.</strong> There is no launch service in the repository. The
-endpoint, the payload and the responses below are a <em>design</em>, recorded so the intent is
-reviewable before anyone writes code. Do not try these calls — nothing is listening.
-<span class="tag tag-unver">not implemented</span>
-</div>
-
-<h4>Why it needs a new service</h4>
-<p>The control plane in 6.1 is started <em>by</em> the orchestrator and dies with it. Something
-started by the orchestrator cannot start the orchestrator — when no run is going there is nothing
-listening. Launching therefore needs a second, small, <strong>always-on</strong> service whose
-lifetime is the machine's rather than a run's. The two do not overlap:</p>
-
-<table>
-<tr><th></th><th>Launch service (new)</th><th>Control plane (exists)</th></tr>
-<tr><td>Lifetime</td><td>always on</td><td>one run</td></tr>
-<tr><td>Started by</td><td>the OS, as your user</td><td>the orchestrator</td></tr>
-<tr><td>Port</td><td>one, fixed</td><td>8095+, one per codeline</td></tr>
-<tr><td>Can start a run</td><td><strong>yes</strong></td><td>no</td></tr>
-<tr><td>Can steer a run</td><td>no</td><td>yes</td></tr>
-</table>
-
-<h4>The planned endpoint</h4>
-<pre><code>POST http://127.0.0.1:8099/launch
-  Authorization: Bearer &lt;EPAM_LAUNCH_TOKEN&gt;
-  Content-Type: application/json
-
-  { "ticket": "AMSD-2041" }
-
-→ 202 Accepted
-  { "status": "launching",
-    "ticket": "AMSD-2041",
-    "resolvedJql": "issue = AMSD-2041",
-    "project": "metrolinx",
-    "providerSet": "claude",
-    "runId": "20260902T101500Z",
-    "pidFile": "/tmp/tier3-metrolinx-run.pid",
-    "logFile": "/tmp/tier3-metrolinx-20260902T101500.log",
-    "controlPlanePortBase": 8095 }
-
-→ 409  a run is already in flight for that project
-→ 401  missing or wrong token
-→ 422  no project declares that ticket prefix
-→ 400  the ticket id is malformed
-→ 503  pre-launch validation refused (problems listed)</code></pre>
-
-<div class="warn">
-<strong>Why <code>202 launching</code> and never <code>200 started</code>.</strong> The launchers
-detach into their own session with <code>setsid</code>. Measured against that exact pattern: the
-caller gets exit code <strong>0 after 0 seconds</strong>, before the run has written even its first
-log line. The exit code says "the fork happened" and nothing more. So the service reports
-<em>launching</em>, then confirms real liveness from the pid file. It can never report
-"finished" — it is not the run's parent and cannot see its exit status.
-<span class="tag tag-ver">measured</span>
-</div>
-
-<h4>Planned read-only routes</h4>
-<pre><code>GET /health
-GET /projects                       # the ticket-prefix table
-GET /runs                           # every live /tmp/tier3-*.pid
-GET /runs/metrolinx                 # { running, pid, runId, logFile, controlPlanePorts[] }
-GET /runs/metrolinx/log?tail=200    # tail the run's log</code></pre>
-<p>To follow a run after launching it, poll <code>GET /runs/&lt;project&gt;</code>, then use the
-6.1 routes on <code>controlPlanePorts</code> to pause, resume or redirect it.</p>
-
-<h4>Auth — deliberately minimal</h4>
-<p>One shared secret, one line in your <code>.env</code>, exactly like every other credential:</p>
-<pre><code>EPAM_LAUNCH_TOKEN=<em>generate with: openssl rand -hex 32</em></code></pre>
-<ul>
-<li>Checked on <strong>every</strong> route as <code>Authorization: Bearer &lt;token&gt;</code>.</li>
-<li>The service <strong>refuses to start</strong> if the variable is missing — it does not warn and carry on.</li>
-<li>Binds <code>127.0.0.1</code> by default. Exposing it to the Windows host is an explicit opt-in.</li>
-</ul>
-<div class="bad">
-<strong>Why the token is not optional.</strong> The pipeline normally asks you to confirm spending
-before it starts, and only an explicit opt-in skips that prompt. A launch API has no terminal, so
-the API call <em>becomes</em> your "yes". An unauthenticated launch endpoint is therefore an
-unauthenticated way to spend money on your LLM account. The existing control plane's
-"accept everything when no secret is set" default must <strong>not</strong> be copied here.
-</div>
-
-<h4>What it will deliberately refuse to do</h4>
-<ul>
-<li>Run any command you supply. The only input reaching a process is a ticket id, validated against
-<code>^[A-Z][A-Z0-9]+-[0-9]+$</code> first, passed as an argument and never through a shell.</li>
-<li>Skip pre-flight, or set any of the pre-flight bypass variables.</li>
-<li>Skip the human review pauses.</li>
-<li>Run as root.</li>
-<li>Start a second run for a project that already has one — it returns <code>409</code>, using the
-same <code>/tmp/tier3-*.pid</code> file the kill script already relies on.</li>
-</ul>
-
-<div class="warn">
-<strong>The one defect that must be fixed before this is safe.</strong> Today the executor accepts a
-ticket id and then ignores it: the ticket actually run comes from the project's configured
-<code>JIRA_JQL</code>. Over HTTP that is far worse than at a terminal, because the response would
-confirm the ticket you asked for while a different one ran — a machine-generated, authoritative
-answer that is wrong, costing real money. That plumbing must be fixed first, and the
-<code>202</code> body deliberately echoes <code>resolvedJql</code> so the mismatch cannot hide.
-<span class="tag tag-ver">verified defect</span>
-</div>
-
-<p class="sub">Rough effort for the whole capability: about five to six working days, of which the
-ticket-plumbing fix is a mandatory half-day that must come first.</p>
-
-<h3>6.3 Security of the API that exists today</h3>
-<div class="bad">
-<strong>Security: there is no authentication by default.</strong> Five of the six routes never check a
-signature. The sixth checks one only if <code>JIRA_WEBHOOK_SECRET</code> is set, and if it is unset the
-code explicitly accepts everything (<code>// dev mode — accept all</code>). The socket is bound to all
-interfaces. <code>/pause</code> and <code>/redirect</code> change the behaviour of a paid run in
-flight. On a laptop this is usually fine; <strong>on a shared or client network, do not expose these
-ports.</strong> <span class="tag tag-ver">verified</span>
-</div>
-</div>
-
-<h2 id="trouble">7. Troubleshooting</h2>
-<p>These are failure modes found in the code, not generic advice.</p>
-
-<table>
-<tr><th>Symptom</th><th>Cause &amp; fix</th></tr>
-<tr><td><code>jq is not installed</code></td><td>The engine parses JSON with <code>jq</code> in roughly 700 places. <code>sudo apt-get install -y jq</code></td></tr>
-<tr><td>Pre-flight fails mentioning <code>shellcheck</code></td><td>A hard pre-flight dependency that runtime checks miss. <code>sudo apt-get install -y shellcheck</code></td></tr>
-<tr><td><code>the '&lt;stack&gt;' stack runs 'claude', which is not on PATH</code></td><td>The runner is missing, or installed for a different user/shell. Check with <code>command -v claude</code> <em>inside WSL</em>, not in PowerShell</td></tr>
-<tr><td>Runner found, but every call fails</td><td><code>--version</code> proves the binary, not the session. Sign in: run <code>claude</code> once interactively, or re-authenticate CodeMie SSO</td></tr>
-<tr><td>Run starts, then dies with a credit or billing error</td><td><code>ANTHROPIC_API_KEY</code> is set somewhere and outranks your OAuth session. Remove it from <code>.env</code> and your shell profile</td></tr>
-<tr><td>A <code>tier3-*</code> script exits immediately, complaining about Langfuse, Grafana or the dashboard</td><td>That pre-flight requires Docker services. On a no-Docker install use <code>pipeline</code> instead</td></tr>
-<tr><td><code>MINIMAX_API_KEY is not set</code> on a claude install</td><td>You are running <code>tier3-metrolinx-run.sh</code>, which demands two vendor keys unconditionally regardless of stack. Use <code>pipeline</code> — it asks the active stack what it actually needs, and the claude stack needs none</td></tr>
-<tr><td><code>no project declares the ticket prefix 'XXX'</code></td><td>Each project declares <code>JIRA_PROJECT_KEY</code> in its <code>config.env</code>. Run <code>pipeline --list</code> to see the mapping</td></tr>
-<tr><td>Jira ingest returns nothing</td><td>Check <code>JIRA_URL</code>, <code>JIRA_EMAIL</code>, <code>JIRA_TOKEN</code>. Also check the project's <code>JIRA_JQL</code> — if it is pinned to a specific issue, that is what runs</td></tr>
-<tr><td><code>docker compose up -d</code> appears to do nothing</td><td>There is no root <code>docker-compose.yml</code>. Pass <code>-f docker-compose.observability.yml</code></td></tr>
-<tr><td>Port 3001 conflict</td><td><code>docker-compose.epam-cli.yml</code> and <code>docker-compose.observability.yml</code> both claim it. Start one, never both</td></tr>
-<tr><td><code>wsl --install</code> seems to do nothing</td><td>It usually needs a reboot. Reboot, launch Ubuntu once from the Start menu to create your UNIX user, then continue</td></tr>
-<tr><td>Windows cannot reach <code>localhost:8095</code></td><td>Use <code>wsl hostname -I</code> and address the distro IP directly</td></tr>
-<tr><td>Dashboards never appear during a run</td><td>The renderer may need <code>npx</code> and network access on first use. Set <code>EPAM_DASH_AUTO_SERVE=0</code> if you do not want them</td></tr>
-<tr><td>The run stops and appears to hang, twice</td><td>Those are the human review points. Resume with <code>EPAM_RESUME_RUN=&lt;run-id&gt;</code></td></tr>
-<tr><td>Install "succeeded" but nothing runs</td><td>Do not trust file-existence checks. Run the three verification commands in your flow — especially the <code>FIXED_AGENT_ROLES</code> one</td></tr>
+<tr><th>Symptom</th><th>What it means</th></tr>
+<tr><td>Install reports "ready" but the dashboard login fails</td><td>The running container may have started before a <code>.env</code> edit — the file and the live process can desync. Restart with <code>pipeline-services.sh --stop</code> then <code>--start</code> to pick up the current file.</td></tr>
+<tr><td>A launched run fails pre-flight instantly</td><td>Run <code>pipeline-health.sh</code> first — it checks exactly the things a run's own pre-flight also checks (both host daemons, credentials, memory), before you spend anything.</td></tr>
+<tr><td>"MINIMAX_API_KEY is not set" on the <code>claude</code> stack</td><td>A known gap in some project launcher scripts that check for every vendor's key unconditionally, regardless of the active stack — not something <code>install.sh</code> itself requires for <code>claude</code>.</td></tr>
+<tr><td>A saved run stays "pending" forever after it actually failed</td><td>The dashboard's database and the pipeline's own status file can desync — check <code>launch-dashboard/spool/status/&lt;id&gt;.json</code> for the real outcome.</td></tr>
 </table>
 
 <footer>
-<p>Companion to <code>change-log/INSTALLER-EXECUTOR-PLAN.md</code>, which carries the file-and-line
-evidence behind every claim here. Written 2026-09-02 against the repository as it then stood.</p>
-<p><strong>Nothing in this guide has been executed end to end.</strong> The installer and release
-builder described do not yet exist. Steps tagged <em>verified</em> were read from the code; steps
-tagged <em>unverified</em> are reasoned and untested.</p>
+<p>Supersedes the tarball/release-based flow this page previously described, which was never built.
+See <code>change-log/INSTALLER-EXECUTOR-PLAN.md</code> for the earlier design discussion.</p>
 </footer>
 
 </div>

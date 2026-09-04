@@ -1,0 +1,11 @@
+```json
+{
+  "agent": "mutant-hunter",
+  "phase": "core",
+  "summary": { "mutationsProposed": 0, "killed": 0, "survived": 0, "noCoverage": 0, "mutationScore": 100 },
+  "mutations": [],
+  "verdict": "not_applicable"
+}
+```
+
+Reason: The changed source is a single static-return function `getGreeting()` with no critical-path surface (no failover, auth, billing, agent state, or branching logic). Mutation testing a string literal against an exact-match assertion is tautological — every string mutation is trivially killed, and no mutation reveals a real test gap. There is nothing meaningful for mutant-hunter to evaluate on this change.

@@ -1,0 +1,12 @@
+All three deliverables are complete:
+
+1. **Assessment JSONL** (`phase-skill-assessments.jsonl`): Single-line JSON record written with:
+   - `phase_id`: "core", `actual_minutes`: 0.63, `forecast_minutes`: 3.03
+   - `actual_cost_usd`: 0.0434, `forecast_cost_usd`: 0.5836
+   - `variance_minutes`: -2.4, `variance_cost_usd`: -0.5402
+   - `over_threshold`: false (79.2% under forecast)
+   - 3 agent recommendations about forecast tightening, model-aware pricing, and attempt record clarity
+
+2. **Improvement Report** (`phase-improvements/core.md`): Human-readable report with summary table, story details, observations, and recommendations.
+
+3. **Corrective Actions**: No role reassignments needed — `typescript-engineer` is appropriate for the TypeScript bug fix, and there are no pending stories in future phases (core is the only phase defined in the PRD).

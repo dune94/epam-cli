@@ -1,0 +1,26 @@
+# Prompt
+Regenerate the VERIFICATION CRITERIA for this brownfield story. Your previous verification criteria were FLAGGED and must be fixed:
+- VC 1 prescribes 'for that trip segment' — restate as observable outcome without implying per-segment mechanism
+- VC 4 prescribes 'for its segment' — restate as observable outcome without implying per-segment mechanism
+
+THE FIX SITE (located by the code-graph detective — anchor every criterion to the behaviour THIS code produces):
+- src/services/submit-reservations/apply-report-discounts.service.ts :: applyReportDiscountsService — This function computes and assigns the discount amount on dispatch.report.price.discount for Mozio dispatches. On line 19, it matches discounts to dispatches by comparing parseDispatchLineItemKey(lineItem.id).id (which strips the '#return' suffix) against discount.lineItemId (which comes raw from getUniqDiscounts via lineItem.id). For return-trip order line items whose id already contains the '#return' suffix (e.g. '123#return'), the stripped dispatch id '123' will NOT equal the raw discount.lineItemId '123#return', so the discount is never matched and never applied to the return-trip dispatch — exactly the reported symptom.
+Do NOT write criteria about areas unrelated to this code.
+
+
+Acceptance criteria (IMMUTABLE — the intent to verify; do NOT restate as-is, VERIFY them):
+- (none)
+Description: [Mozio] - The Promo code amount is NOT displayed as expected for Return trip tickets in the Mozio email confirmation
+
+A verification criterion states WHAT AN END USER OR TESTER OBSERVES on the user-facing surface THE TICKET IS ABOUT — the rendered email for an email ticket, the displayed screen/UI for a UI ticket, the API response a CLIENT receives for an API ticket. It is a BLACK-BOX check on that surface. It NEVER describes HOW the value is produced.
+A verification criterion is FORBIDDEN if it:
+- prescribes HOW to implement — any algorithm, mechanism, or approach: "split", "halve", "×0.5", "calculate independently", "per segment", "for each line item", or adding/reading any new field, flag, or service;
+- references an INTERNAL structure that merely FEEDS the ticket's surface — an intermediate payload, a "confirmation data"/DTO object, or a specific response field used to BUILD the output. Verify the surface the ticket names, NOT the data structure behind it;
+- makes a CROSS-COMPARISON that presumes a mechanism — never assert one value "must equal" / "matches" / "is the same as" another (e.g. "the return amount equals the outbound amount"); that presumes a copy/split. Assert the required value is present and correct ON ITS OWN.
+Every verification criterion must be observable, testable, and tied to the ticket's stated symptom/intent.
+
+Do NOT restate an acceptance criterion as-is — express what a tester OBSERVES that confirms it. Address every flag above.
+Output ONLY a JSON array of verification-criterion strings. No prose, no markdown.
+
+# Output
+["When a customer books a Mozio round trip and applies a valid promo code, the email confirmation for the return trip displays the promo code discount amount.", "The promo code discount amount shown in the return trip section of the Mozio email confirmation reflects the full discount the customer is entitled to for that booking, with no amount missing or shown as zero.", "When no promo code is applied to a Mozio booking, the email confirmation renders normally with no erroneous discount line appearing.", "For a Mozio one-way booking with a promo code, the email confirmation continues to display the promo code discount amount correctly (no regression)."]

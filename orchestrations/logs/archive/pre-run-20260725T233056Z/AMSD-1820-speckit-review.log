@@ -1,0 +1,118 @@
+# Prompt
+You are the speckit specification agent for EPAM CLI. Phase core, story AMSD-1820.
+
+You are reviewing and building on the openspec agent's output for this story.
+Your role is COLLABORATIVE — you are NOT starting from scratch. Instead:
+1. Review openspec's proposed acceptance criteria for testability and completeness
+2. Add missing edge-case, error-handling, security, and accessibility criteria
+3. Flag any AC that are vague, untestable, or overlapping
+4. Splitting is openspec's decision alone — you do NOT split stories. If openspec already split
+   this story, do NOT include a "splitStories" field in your output at all (it will be ignored if
+   you do). Review and refine the acceptanceCriteria openspec gave you for the UNSPLIT story as
+   normal; per-child refinement of an already-split story's children happens on a later turn, not
+   here.
+5. Do NOT remove or duplicate openspec's good work — build on it
+
+━━━ WHAT-NOT-HOW RULE (MANDATORY) ━━━
+Every AC must describe an OBSERVABLE OUTCOME (what a test can verify from outside the code),
+NOT an implementation instruction. If an AC names vi.mock, jest.fn, mockReturnValue,
+mockResolvedValue, import statements, or require() calls, REPLACE it with a
+Given/When/Then behaviour statement. Never tell the implementer which library or mock pattern to use.
+
+OPENSPEC'S OUTPUT (your input to review — ACs and split proposals only):
+{
+  "acceptanceCriteria": [],
+  "notes": "Addressing all 5 prior coordinator flags. Previous run produced zero ACs and zero splits — this run elaborates full acceptance criteria derived from the defect description and Speckit's diagnostic context (core fix, one-way regression, no-promo edge, 100% discount edge, null/undefined defensive handling). The defect is in how the promo/discount amount propagates through the return-trip code path in the Mozio dispatch mapping and reservation mappers, causing the email confirmation to show an incorrect or missing discount for return trip tickets.",
+  "splitStories": []
+}
+
+ORIGINAL STORY CONTEXT:
+{
+  "id": "AMSD-1820",
+  "title": "[Mozio] - Promo code discount amount not displayed correctly for Return trip tickets in Mozio email confirmation",
+  "description": "[Mozio] - The Promo code amount is NOT displayed as expected for Return trip tickets in the Mozio email confirmation. When a promo code applies to an order that includes a return trip, the discount amount shown in the Mozio email confirmation is either missing, zero, or incorrect for the return leg. The outbound leg displays correctly. The root cause lies in the return-trip mapping path where discount/price-report data is not propagated or is dropped when the from/to stations are swapped for the return trip.",
+  "originalAcceptanceCriteria": [],
+  "technicalNotes": {
+    "files": [
+      "src/services/create-reservations/create-reservations.mappers.ts",
+      "src/clients/mozio/mappers/map-to-sanitized-mozio-dispatch.ts",
+      "src/services/submit-reservations/apply-report-discounts.service.ts",
+      "src/services/mappers/line-item/map-line-item-return-trip-modification.ts",
+      "src/functions/http-mozio-webhook.ts"
+    ]
+  },
+  "dependencies": []
+}
+
+Produce your refined output as raw JSON only (no XML tags, no markdown fences, no preamble). Include:
+- "acceptanceCriteria": The FULL merged list (openspec's criteria + your additions/refinements). Every item MUST be an observable outcome, not an implementation instruction.
+- "notes": What you changed and why (be specific — cite which criteria you added/modified/replaced)
+- "splitStories": ALWAYS omit this field. Splitting is openspec's decision alone — never propose
+  split children of your own, even if openspec already split this story.
+- "acAddedBySpeckit": Array of criteria YOU added that were not in openspec's output
+- "acModifiedBySpeckit": Array of {"original":"...","revised":"..."} for criteria you reworded
+- "acFlagged": Array of {"criterion":"...","flag":"..."} for criteria that need human attention
+
+
+# Output
+```json
+{
+  "acceptanceCriteria": [
+    {
+      "id": "AC-1",
+      "criterion": "Given an order with a promo code that applies a non-zero discount and includes a return trip, When the Mozio email confirmation is generated, Then the return leg ticket displays the same discount amount that was applied to the order for that leg."
+    },
+    {
+      "id": "AC-2",
+      "criterion": "Given an order with a promo code that applies a non-zero discount and includes a return trip, When the Mozio email confirmation is generated, Then the outbound leg ticket continues to display the correct discount amount (no regression)."
+    },
+    {
+      "id": "AC-3",
+      "criterion": "Given an order with a promo code and a one-way trip (no return leg), When the Mozio email confirmation is generated, Then the discount amount is displayed correctly (no regression on one-way trips)."
+    },
+    {
+      "id": "AC-4",
+      "criterion": "Given an order with a promo code that results in a 100% discount on the return trip, When the Mozio email confirmation is generated, Then the return leg shows the full fare as the discount amount rather than zero or missing."
+    },
+    {
+      "id": "AC-5",
+      "criterion": "Given an order with a promo code that results in a $0 discount amount, When the Mozio email confirmation is generated, Then the return leg displays $0 discount rather than omitting the discount field or showing an undefined/null value."
+    },
+    {
+      "id": "AC-6",
+      "criterion": "Given an order where the discount/price-report data for the return trip is null or undefined in the source data, When the Mozio email confirmation is generated, Then the system does not throw an unhandled error and the return leg renders without a discount line (graceful degradation)."
+    },
+    {
+      "id": "AC-7",
+      "criterion": "Given a return trip where the from/to stations are swapped relative to the outbound leg, When the Mozio dispatch mapping processes the return trip, Then the discount/price-report data is propagated to the return leg without being dropped or overwritten."
+    },
+    {
+      "id": "AC-8",
+      "criterion": "Given a Mozio webhook event for a return trip reservation that has a promo discount applied, When the webhook is processed, Then the discount amount is preserved in the resulting reservation data for the return leg."
+    },
+    {
+      "id": "AC-9",
+      "criterion": "Given an order with a promo code on a return trip, When the line-item return-trip modification mapping is applied, Then the discount amount from the price report is included in the mapped line item for the return leg."
+    },
+    {
+      "id": "AC-10",
+      "criterion": "Given an order with a promo code discount on a return trip, When the apply-report-discounts service processes the return leg, Then the discount is applied to the return leg's price report with the correct amount matching the outbound leg's discount source."
+    }
+  ],
+  "notes": "Openspec produced zero ACs (empty array) with only a notes field describing intent. I created the full set of acceptance criteria derived from the defect description and the five files listed in technical notes. AC-1 through AC-3 cover the core fix and regression guard for outbound and one-way trips. AC-4 and AC-5 address the 100% discount and zero-discount edge cases mentioned in openspec's notes. AC-6 covers null/undefined defensive handling. AC-7 targets the specific root cause (from/to station swap dropping discount data). AC-8, AC-9, and AC-10 each map to one of the remaining files (http-mozio-webhook.ts, map-line-item-return-trip-modification.ts, apply-report-discounts.service.ts) to ensure the discount propagates through every layer of the return-trip code path.",
+  "acAddedBySpeckit": [
+    "AC-1: Core return-trip discount display correctness",
+    "AC-2: Outbound leg regression guard",
+    "AC-3: One-way trip regression guard",
+    "AC-4: 100% discount edge case on return leg",
+    "AC-5: $0 discount edge case on return leg",
+    "AC-6: Null/undefined discount data graceful handling",
+    "AC-7: From/to station swap discount propagation",
+    "AC-8: Webhook discount preservation for return leg",
+    "AC-9: Line-item return-trip modification discount inclusion",
+    "AC-10: Apply-report-discounts service correct return-leg processing"
+  ],
+  "acModifiedBySpeckit": [],
+  "acFlagged": []
+}
+```

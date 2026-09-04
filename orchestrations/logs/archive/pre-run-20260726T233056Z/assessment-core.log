@@ -1,0 +1,18 @@
+Assessment complete. The plan held up — the data confirmed dedup was needed (attempt vs. completed records per story), and both stories verified as completed in the PRD.
+
+## Summary
+
+**Phase `core` assessment written** to `phase-skill-assessments.jsonl` (via `flock`):
+
+| Metric | Forecast | Actual | Variance |
+|---|---|---|---|
+| Time | 4.74 min | 0.96 min | **-3.78 min (-80%)** |
+| Cost | $0.1053 | $0.0138 | **-$0.0915 (-87%)** |
+
+- `over_threshold: false` — all tasks **within forecast**
+- Task detail: MOCK-HW-1-impl (typescript-engineer) 0.18m vs 2.26m; MOCK-HW-1-test (test-engineer) 0.78m vs 2.48m — latest `started_at` record per story used, attempt records discarded per dedup rule
+- PRD cross-check confirmed both stories `completed: true`
+
+**Report written** to `phase-improvements/core.md` — verdict: "No improvements needed," with two non-blocking observations (forecasts over-estimate trivial one-line changes ~5–13x; test story needed 2 attempts).
+
+**Corrective action: none taken.** No unambiguous skill-domain mismatches (impl story → typescript-engineer, test story → test-engineer, both correct), and the PRD's `implementationOrder` contains only the `core` phase — no future-phase pending stories exist to reassign. PRD file unmodified.

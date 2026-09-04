@@ -1,0 +1,14 @@
+spec-mode: fast-path qwen/z-ai/glm-5.2 (skipping MiniMax)
+spec-mode: fast-path qwen/z-ai/glm-5.1 (skipping MiniMax)
+spec-mode: AMSD-1820 — ACs are immutable (VC model); openspec AC edits redacted, verification captured in verificationCriteria
+spec-mode: ⚠️ VC could not be made mechanism-free for AMSD-1820 after 2 cycle(s) — using conservative fallback VC. Last flags: VC 3 addresses station names, which is unrelated to the ticket's stated symptom (promo code amount in return trip email)
+spec-mode: AMSD-1820 — 2 verification criteria persisted (source: fallback, resolution: fallback)
+spec-mode: fast-path qwen/z-ai/glm-5.1 (skipping MiniMax)
+spec-mode: AMSD-1820 — ACs are immutable (VC model); openspec AC edits redacted, verification captured in verificationCriteria
+spec-mode: AMSD-1820 — 6 verification criteria persisted (source: both, resolution: regenerated)
+spec-mode: fast-path qwen/z-ai/glm-5.1 (skipping MiniMax)
+spec-mode: AMSD-1820 — ACs are immutable (VC model); openspec AC edits redacted, verification captured in verificationCriteria
+spec-mode: VC guard flagged mechanism in AMSD-1820 VC: [prescribes an independent calculation (an implementation)] "When both outbound and return trip tickets have promo codes, each ticket's disco"
+spec-mode: AMSD-1820 — 7 verification criteria persisted (source: both, resolution: regenerated)
+spec-mode: ⚠️ code-graph-detective produced NO parseable JSON for AMSD-1820 (attempt 1/3) even after the extraction phase. Phase-1 head: "Agent reached maximum iterations (25) without completing."
+spec-mode: code-graph-detective ladder escalation for AMSD-1820 (attempt 2/3) — model z-ai/glm-5.1 → moonshotai/kimi-k3

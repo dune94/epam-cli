@@ -1,0 +1,87 @@
+# Prompt
+You are specialising ONE generic agent prompt for ONE specific project. You are the same agent that just minted this project's roles, so you already know what this project is and who will work on it.
+
+## The template you must specialise
+
+Its id is spec-story-block and its purpose is: The labelled story block handed to a spec agent, and its retrieved-documents notice.
+
+Everything between the two markers below is the template, verbatim. The markers are not
+part of it. A code fence cannot delimit this: several templates contain fences of their
+own, so the first closing fence would truncate the body mid-instruction.
+
+-----BEGIN TEMPLATE BODY-----
+,
+-----END TEMPLATE BODY-----
+
+## What this project is
+
+Project config: /home/bradleyjerome/projects/ai/epam-cli/orchestrations/projects/mock3
+Tickets in scope: MOCK3-1: Riders aged exactly 65 are charged the adult fare | MOCK3-2: The departure board omits the final stop
+
+Codelines in scope and their declared dependencies:
+- mocka (/home/bradleyjerome/projects/mock3/mock-a) deps: vitest, typescript
+- mockb (/home/bradleyjerome/projects/mock3/mock-b) deps: vitest, typescript
+
+The roles you minted for this project:
+- mocka-fares-investigator [investigator] — mocka holds the fare-rule bug in src/fares.ts where fareFor uses a strict-greater-than comparison that excludes the exact age-65 boundary, and this role must confirm that boundary, the doc-comment intent, the test gap, and the caller blast radius before any fix is written.
+- mockb-schedule-investigator [investigator] — mockb holds the departure-board bug in src/schedule.ts where formatStops iterates to stops.length minus one and drops the final stop, and this role must confirm that loop bound, the discrepancy with totalMinutes, the test gap, and the caller list before any fix is written.
+- typescript-vitest-engineer [implementer] — Both mocka and mockb declare a TypeScript-plus-vitest stack and both tickets require editing TypeScript source files under src/ in those codelines, so a single implementer spanning both codelines can author the one-line logic fix in each without minting a duplicate role per repository.
+
+## The one rule you cannot break
+
+The template's placeholders are a CONTRACT with the pipeline. Each token written in SCREAMING_SNAKE_CASE between double underscores is replaced at run time with real evidence — a diff, a ticket, a test log, a plan. The substitution is BY NAME and it is strict in both directions.
+
+- Reproduce every placeholder EXACTLY as it appears, character for character.
+- NEVER add or invent a placeholder. Nothing supplies a name the pipeline does not know, so rendering throws and the run dies at the seam that needed this prompt.
+- NEVER remove or rename one. The evidence it carries would silently never reach the agent, and the agent would answer without it.
+- Do not move a placeholder into a code fence, a quote, or an example where it would read as literal text.
+
+The placeholders in this template are exactly: __PERSONA__, __TITLE__, __DESCRIPTION__, __COMPONENTS__, __DECLARED_FILES__, __LINK_BLOCK__, __COMMENT_BLOCK__, __RETRIEVED_DOCS__, __DOC_PATHS__
+
+## What specialising means
+
+Keep the template's instructions, its output format, its prohibitions and its reasoning intact. They encode failures this pipeline has already paid for. You are not rewriting the prompt or improving its wording.
+
+Add only what a competent engineer joining THIS project would need and could not infer from the generic text:
+- the conventions, layout and idioms this codebase actually uses
+- the commands this project runs to build, test and type-check
+- the traps this stack presents that a generic prompt would not warn about
+
+Ground every addition in the project context above. If the context does not tell you something, say nothing about it — an invented convention is worse than a missing one, because the agent will follow it.
+
+Do not name a file, symbol, package or command that does not appear in the context you were given.
+
+## How to answer
+
+Emit ONLY the specialised prompt body as TEXT, directly in your reply. No JSON wrapper, no markdown fences around the whole thing, no commentary before or after, and do not write it to a file — the pipeline reads your reply text.
+
+# Output
+You are working in the mock3 project, which spans two TypeScript-plus-vitest codelines:
+- mocka (/home/bradleyjerome/projects/mock3/mock-a) — declares vitest and typescript; contains src/fares.ts, whose fareFor function is suspected of using a strict-greater-than comparison that wrongly charges the adult fare to riders aged exactly 65 (ticket MOCK3-1).
+- mockb (/home/bradleyjerome/projects/mock3/mock-b) — declares vitest and typescript; contains src/schedule.ts, whose formatStops function is suspected of iterating to stops.length minus one and dropping the final stop from the departure board (ticket MOCK3-2), while totalMinutes is reported to still account for that stop.
+
+When reading the story block below, treat src/fares.ts (fareFor) and src/schedule.ts (formatStops) as the primary suspects unless the evidence says otherwise, and keep any discussion of callers, doc comments, and test gaps anchored to those files and their vitest test suites in the same codeline.
+
+__PERSONA__
+
+Here is the story you are to work on:
+
+Title: __TITLE__
+
+Description: __DESCRIPTION__
+
+Components: __COMPONENTS__
+
+Declared files: __DECLARED_FILES__
+
+__LINK_BLOCK__
+
+__COMMENT_BLOCK__
+,
+The following documents were retrieved for this story. Treat them as supporting evidence only; where they conflict with the code in the two codelines above, the code wins.
+
+__RETRIEVED_DOCS__
+
+Document paths: __DOC_PATHS__
+
+[ai-run] attempt 2/3 for 'prompt-builder' — escalating z-ai/glm-5.2 -> moonshotai/kimi-k3

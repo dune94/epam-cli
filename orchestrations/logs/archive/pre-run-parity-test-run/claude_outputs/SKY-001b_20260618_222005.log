@@ -1,0 +1,77 @@
+=== Prompt for SKY-001b (attempt 1) ===
+Implement user story SKY-001b: API Discovery: Verify and Document Skyscanner RapidAPI Contract
+
+## Story Description
+Before implementing the Skyscanner client, discover and document the real RapidAPI endpoint contract. Using the RAPIDAPI_KEY environment variable, make live curl probes (via the Bash tool only — FetchUrl and WebSearch are prohibited) against the subscribed Skyscanner host to identify: (1) the correct x-rapidapi-host value, (2) working endpoint paths for flight search (one-way and/or roundtrip), (3) required query parameters with exact names and value formats, and (4) the response JSON shape including top-level keys and nested field names relevant to FlightResult. Write the discovered contract to /tmp/skyscanner-app/docs/api-contract.md. This file is the authoritative reference for SKY-002 (client implementation). Probe with `curl -si` so both status codes and response bodies are captured. A 429 (Too Many Requests) confirms a path is valid even when no 2xx body is obtained. Do NOT write any TypeScript, JavaScript, or compiled output in this story.
+
+## Acceptance Criteria
+- /tmp/skyscanner-app/docs/ directory exists and /tmp/skyscanner-app/docs/api-contract.md is present and non-empty.
+- The probe sequence is executed in order: (1) `mkdir -p /tmp/skyscanner-app/docs`, (2) two or more `curl -si` probes against candidate endpoints on skyscanner.p.rapidapi.com, (3) write api-contract.md with all required sections — no section may be written before the relevant probes have been run.
+- api-contract.md contains a 'Host' section documenting the confirmed x-rapidapi-host value (must be skyscanner.p.rapidapi.com) with the observed HTTP status code of the confirming probe; a 429 response is sufficient proof of an active subscription.
+- api-contract.md documents at least one working endpoint path under an 'Endpoints' section; a path is considered working if the probe returned 2xx or 429 — any path returning 404 must not be listed as working; paths on sky-scanner3.p.rapidapi.com must not appear anywhere in the document.
+- Each entry in the 'Endpoints' section includes the HTTP method (e.g. GET, POST), the full path, and the observed status code from the probe.
+- api-contract.md documents query parameters under a 'Query Parameters' section with exact parameter names, expected value types, and at least one concrete example value (e.g. IATA airport codes, ISO 8601 date strings).
+- The 'Query Parameters' section explicitly distinguishes required parameters from optional ones — parameters whose absence causes a 4xx response are marked 'required'; all others are marked 'optional'; the basis for each classification (observed probe result or inferred from documentation) must be stated.
+- api-contract.md documents required HTTP headers under an 'Authentication' section — at minimum x-rapidapi-key and x-rapidapi-host — plus any additional headers observed in probe responses.
+- The 'Authentication' section uses only a placeholder value for x-rapidapi-key (e.g. '$RAPIDAPI_KEY' or '<RAPIDAPI_KEY>'); the literal value of the RAPIDAPI_KEY environment variable, or any substring of it longer than 4 characters, must not appear anywhere in api-contract.md.
+- api-contract.md includes at least one complete, reproducible curl command example targeting a documented working endpoint, with the key shown only as '$RAPIDAPI_KEY' or '<RAPIDAPI_KEY>', such that SKY-002 implementers can re-run it verbatim to reproduce the discovery.
+- api-contract.md includes a 'Sample Response' section. If a live 2xx body was captured, the section must contain a valid, parseable JSON snippet showing the top-level response structure and at least one flight result object. If only 429 responses were received, the section must include the raw 429 error body and an explicit note stating 'Flight result shape inferred from available documentation — no live 2xx response was obtained.'
+- api-contract.md contains a 'FlightResult Field Mapping' section that maps each API response field to its FlightResult counterpart (price, origin, destination, departureTime, arrivalTime, carrier, durationMinutes) or explicitly marks it as 'absent' or 'derived'; any field mapping not confirmed by a live 2xx response must be individually marked '(inferred)'.
+- api-contract.md includes a note explaining that HTTP 429 means the endpoint path is valid but the request was rate-limited; if a Retry-After header was observed in any probe response, its value and semantics must be documented.
+- api-contract.md includes a 'Discovery Metadata' section containing: the ISO 8601 date the probes were run, the tool used (curl with version if obtainable), and a table or list of every host+path probed with the HTTP status code observed — this section must be structured such that each row/entry is unambiguously parseable (e.g. a Markdown table or a bullet list with consistent formatting).
+- No TypeScript, JavaScript, compiled output, package.json, lockfiles, or any dependency manifest files are created or modified as part of this story.
+- api-contract.md must not contain sensitive information such as actual API keys, tokens, or passwords; a final automated or manual scan of the file must confirm no string matching the pattern of the RAPIDAPI_KEY value (or any prefix/suffix longer than 4 characters) is present.
+- All documented API paths conform to RESTful conventions where applicable — HTTP verbs are used semantically (GET for retrieval, POST for submission), and paths use predictable, noun-based resource naming without redundant or ambiguous segments.
+
+## Technical Notes
+- workingDir: /tmp/skyscanner-app
+- files: ["/tmp/skyscanner-app/docs/api-contract.md"]
+- requiredSkills: ["api-discovery","curl","rapidapi"]
+- dependsOn: ["SKY-001"]
+- notes: CRITICAL: Use your Bash tool to run curl commands directly. Do NOT use FetchUrl, WebSearch, or any web browsing tool. Do NOT look up external documentation. Run curl -si probes immediately using the Bash tool. RAPIDAPI_KEY is available in the environment. Known candidate host: skyscanner.p.rapidapi.com (429 responses confirm subscription active). sky-scanner3.p.rapidapi.com returns 404 — do not use it. A 429 (Too Many Requests) on an endpoint confirms the path is valid — document it. The goal is an accurate contract doc, not a working implementation. Probe sequence: (1) mkdir -p /tmp/skyscanner-app/docs, (2) run 2-3 curl -si probes to candidate endpoints, (3) write /tmp/skyscanner-app/docs/api-contract.md with all required sections.
+
+## Files to Create/Modify
+/tmp/skyscanner-app/docs/api-contract.md
+
+## Dependencies
+SKY-001
+
+## Instructions
+**IMPORTANT: You MUST use your file-writing and bash tools to create all required files. Do NOT just describe or plan what you will do — call tools immediately and write the files.**
+
+1. Implement all acceptance criteria for this story
+2. Follow the project's existing code patterns and conventions
+3. Create any necessary files in the locations specified
+4. Ensure code compiles/runs without errors
+5. Do NOT create tests unless explicitly required in acceptance criteria
+
+After implementation, provide a brief summary of what was created/modified.
+
+## Relevant Knowledge Base Entries
+No prior KB entries match your agent role yet.
+
+## Knowledge Base Contribution
+Your assigned KB entry ID for this run: **KB-008**
+
+If you discover a non-obvious pattern, gotcha, or anti-pattern during this implementation (or this is a retry), append exactly one entry to `orchestrations/agents/KB.md` using this format:
+
+```markdown
+## KB-008 -- 2026-06-18
+
+**Category:** <backend|frontend|infrastructure|testing|orchestration>
+**AgentRole:** <your agentRole from the story>
+**Tags:** <comma-separated tech keywords, e.g. typescript, node, cli>
+**Trigger:** <retry|first-success>
+**StoryRef:** SKY-001b
+
+<One concise paragraph: the specific pattern, gotcha, or anti-pattern. Precise enough that a future Claude instance can apply it without re-discovering it.>
+```
+
+Only write an entry if the knowledge is genuinely non-obvious. Skip trivial observations.
+=== End Prompt ===
+
+=== epam Output (attempt 1) ===
+I'll implement this story by following the required probe sequence: first create the directory, then run curl probes, then write the documentation.
+I'll implement this story by following the required probe sequence: first create the directory, then run curl probes, then write the documentation.
+
+=== End epam Output ===

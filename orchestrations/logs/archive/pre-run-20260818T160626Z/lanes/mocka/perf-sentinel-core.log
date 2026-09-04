@@ -1,0 +1,3 @@
+The change is a single boundary-condition fix (`>` → `>=`) plus one test case. No loops, no collections, no async, no module-load work, no allocation. Nothing meaningful for perf-sentinel to assess.
+
+{"agent":"perf-sentinel","phase":"core","summary":{"filesAnalysed":2,"findingsCount":0,"blockerCount":0,"estimatedStartupImpactMs":0},"findings":[],"verdict":"not_applicable"}

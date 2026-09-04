@@ -1,0 +1,589 @@
+[11ty] Writing /home/bradleyjerome/projects/ai/epam-cli/orchestrations/dashboards/live/build-info.json from ../../ai/epam-cli/orchestrations/dashboards/build-info.11ty.js
+[11ty] Copied 20 Wrote 1 file in 0.62 seconds (v3.1.6)
+[11ty] Watching…
+[11ty] Server at http://192.168.2.18:8093/ or http://172.22.0.1:8093/ or http://172.18.0.1:8093/ or http://172.20.0.1:8093/ or http://172.19.0.1:8093/ or http://172.21.0.1:8093/ or http://100.64.77.9:8093/ or http://localhost:8093/
+[11ty] File changed: /home/bradleyjerome/projects/ai/epam-cli/orchestrations/logs/step-status.json
+[11ty] Writing /home/bradleyjerome/projects/ai/epam-cli/orchestrations/dashboards/live/build-info.json from ../../ai/epam-cli/orchestrations/dashboards/build-info.11ty.js
+[11ty] File changed: /home/bradleyjerome/projects/ai/epam-cli/orchestrations/logs/spec-baseline.json
+[11ty] File changed: /home/bradleyjerome/projects/ai/epam-cli/orchestrations/logs/spec-run-latest.json
+[11ty] File added: /home/bradleyjerome/projects/ai/epam-cli/orchestrations/logs/spec-runs/20260728T204704Z/prd.before.json
+[11ty] Copied 20 Wrote 1 file in 1.71 seconds (v3.1.6)
+[11ty] You saved while Eleventy was running, let’s run again. (3 changes)
+[11ty] Writing /home/bradleyjerome/projects/ai/epam-cli/orchestrations/dashboards/live/build-info.json from ../../ai/epam-cli/orchestrations/dashboards/build-info.11ty.js
+[11ty] Copied 20 Wrote 1 file in 0.89 seconds (v3.1.6)
+[11ty] Watching…
+[11ty] File changed: /home/bradleyjerome/projects/ai/epam-cli/orchestrations/logs/plans-core.jsonl
+[11ty] Writing /home/bradleyjerome/projects/ai/epam-cli/orchestrations/dashboards/live/build-info.json from ../../ai/epam-cli/orchestrations/dashboards/build-info.11ty.js
+[11ty] Copied 20 Wrote 1 file in 0.48 seconds (v3.1.6)
+[11ty] Watching…
+[11ty] File changed: /home/bradleyjerome/projects/ai/epam-cli/orchestrations/logs/agent-status.json
+[11ty] File changed: /home/bradleyjerome/projects/ai/epam-cli/orchestrations/dashboards/logs/agent-status.json
+[11ty] Writing /home/bradleyjerome/projects/ai/epam-cli/orchestrations/dashboards/live/build-info.json from ../../ai/epam-cli/orchestrations/dashboards/build-info.11ty.js
+[11ty] File changed: /home/bradleyjerome/projects/ai/epam-cli/orchestrations/logs/agent-activity.jsonl
+[11ty] Copied 20 Wrote 1 file in 2.30 seconds (v3.1.6)
+[11ty] You saved while Eleventy was running, let’s run again. (1 change)
+[11ty] Writing /home/bradleyjerome/projects/ai/epam-cli/orchestrations/dashboards/live/build-info.json from ../../ai/epam-cli/orchestrations/dashboards/build-info.11ty.js
+[11ty] Copied 20 Wrote 1 file in 0.62 seconds (v3.1.6)
+[11ty] Watching…
+[11ty] File changed: /home/bradleyjerome/projects/ai/epam-cli/orchestrations/logs/plans-core.jsonl
+[11ty] Writing /home/bradleyjerome/projects/ai/epam-cli/orchestrations/dashboards/live/build-info.json from ../../ai/epam-cli/orchestrations/dashboards/build-info.11ty.js
+[11ty] Copied 20 Wrote 1 file in 0.39 seconds (v3.1.6)
+[11ty] Watching…
+[11ty] File changed: /home/bradleyjerome/projects/ai/epam-cli/orchestrations/logs/agent-status.json
+[11ty] File changed: /home/bradleyjerome/projects/ai/epam-cli/orchestrations/dashboards/logs/agent-status.json
+[11ty] Writing /home/bradleyjerome/projects/ai/epam-cli/orchestrations/dashboards/live/build-info.json from ../../ai/epam-cli/orchestrations/dashboards/build-info.11ty.js
+[11ty] File changed: /home/bradleyjerome/projects/ai/epam-cli/orchestrations/logs/agent-activity.jsonl
+[11ty] Copied 20 Wrote 1 file in 2.28 seconds (v3.1.6)
+[11ty] You saved while Eleventy was running, let’s run again. (1 change)
+[11ty] Writing /home/bradleyjerome/projects/ai/epam-cli/orchestrations/dashboards/live/build-info.json from ../../ai/epam-cli/orchestrations/dashboards/build-info.11ty.js
+[11ty] Copied 20 Wrote 1 file in 0.39 seconds (v3.1.6)
+[11ty] Watching…
+[11ty] File changed: /home/bradleyjerome/projects/ai/epam-cli/orchestrations/logs/agent-activity.jsonl
+[11ty] File changed: /home/bradleyjerome/projects/ai/epam-cli/orchestrations/logs/agent-status.json
+[11ty] File changed: /home/bradleyjerome/projects/ai/epam-cli/orchestrations/dashboards/logs/agent-status.json
+[11ty] Writing /home/bradleyjerome/projects/ai/epam-cli/orchestrations/dashboards/live/build-info.json from ../../ai/epam-cli/orchestrations/dashboards/build-info.11ty.js
+[11ty] Copied 20 Wrote 1 file in 2.61 seconds (v3.1.6)
+[11ty] Watching…
+[11ty] File changed: /home/bradleyjerome/projects/ai/epam-cli/orchestrations/logs/plans-core.jsonl
+[11ty] Writing /home/bradleyjerome/projects/ai/epam-cli/orchestrations/dashboards/live/build-info.json from ../../ai/epam-cli/orchestrations/dashboards/build-info.11ty.js
+[11ty] Copied 20 Wrote 1 file in 0.48 seconds (v3.1.6)
+[11ty] Watching…
+[11ty] File changed: /home/bradleyjerome/projects/ai/epam-cli/orchestrations/logs/plans-core.jsonl
+[11ty] Writing /home/bradleyjerome/projects/ai/epam-cli/orchestrations/dashboards/live/build-info.json from ../../ai/epam-cli/orchestrations/dashboards/build-info.11ty.js
+[11ty] Copied 20 Wrote 1 file in 0.49 seconds (v3.1.6)
+[11ty] Watching…
+[11ty] File changed: /home/bradleyjerome/projects/ai/epam-cli/orchestrations/logs/plans-core.jsonl
+[11ty] Writing /home/bradleyjerome/projects/ai/epam-cli/orchestrations/dashboards/live/build-info.json from ../../ai/epam-cli/orchestrations/dashboards/build-info.11ty.js
+[11ty] Copied 20 Wrote 1 file in 0.53 seconds (v3.1.6)
+[11ty] Watching…
+[11ty] File changed: /home/bradleyjerome/projects/ai/epam-cli/orchestrations/logs/plans-core.jsonl
+[11ty] Writing /home/bradleyjerome/projects/ai/epam-cli/orchestrations/dashboards/live/build-info.json from ../../ai/epam-cli/orchestrations/dashboards/build-info.11ty.js
+[11ty] Copied 20 Wrote 1 file in 0.51 seconds (v3.1.6)
+[11ty] Watching…
+[11ty] File changed: /home/bradleyjerome/projects/ai/epam-cli/orchestrations/logs/plans-core.jsonl
+[11ty] Writing /home/bradleyjerome/projects/ai/epam-cli/orchestrations/dashboards/live/build-info.json from ../../ai/epam-cli/orchestrations/dashboards/build-info.11ty.js
+[11ty] Copied 20 Wrote 1 file in 0.52 seconds (v3.1.6)
+[11ty] Watching…
+[11ty] File changed: /home/bradleyjerome/projects/ai/epam-cli/orchestrations/logs/agent-status.json
+[11ty] File changed: /home/bradleyjerome/projects/ai/epam-cli/orchestrations/dashboards/logs/agent-status.json
+[11ty] File changed: /home/bradleyjerome/projects/ai/epam-cli/orchestrations/logs/agent-activity.jsonl
+[11ty] Writing /home/bradleyjerome/projects/ai/epam-cli/orchestrations/dashboards/live/build-info.json from ../../ai/epam-cli/orchestrations/dashboards/build-info.11ty.js
+[11ty] Copied 20 Wrote 1 file in 2.92 seconds (v3.1.6)
+[11ty] Watching…
+[11ty] File changed: /home/bradleyjerome/projects/ai/epam-cli/orchestrations/logs/plans-core.jsonl
+[11ty] Writing /home/bradleyjerome/projects/ai/epam-cli/orchestrations/dashboards/live/build-info.json from ../../ai/epam-cli/orchestrations/dashboards/build-info.11ty.js
+[11ty] Copied 20 Wrote 1 file in 0.51 seconds (v3.1.6)
+[11ty] Watching…
+[11ty] File changed: /home/bradleyjerome/projects/ai/epam-cli/orchestrations/logs/agent-status.json
+[11ty] File changed: /home/bradleyjerome/projects/ai/epam-cli/orchestrations/dashboards/logs/agent-status.json
+[11ty] File changed: /home/bradleyjerome/projects/ai/epam-cli/orchestrations/logs/agent-activity.jsonl
+[11ty] Writing /home/bradleyjerome/projects/ai/epam-cli/orchestrations/dashboards/live/build-info.json from ../../ai/epam-cli/orchestrations/dashboards/build-info.11ty.js
+[11ty] Copied 20 Wrote 1 file in 2.79 seconds (v3.1.6)
+[11ty] Watching…
+[11ty] File changed: /home/bradleyjerome/projects/ai/epam-cli/orchestrations/logs/plans-core.jsonl
+[11ty] Writing /home/bradleyjerome/projects/ai/epam-cli/orchestrations/dashboards/live/build-info.json from ../../ai/epam-cli/orchestrations/dashboards/build-info.11ty.js
+[11ty] Copied 20 Wrote 1 file in 0.50 seconds (v3.1.6)
+[11ty] Watching…
+[11ty] File changed: /home/bradleyjerome/projects/ai/epam-cli/orchestrations/logs/plans-core.jsonl
+[11ty] Writing /home/bradleyjerome/projects/ai/epam-cli/orchestrations/dashboards/live/build-info.json from ../../ai/epam-cli/orchestrations/dashboards/build-info.11ty.js
+[11ty] Copied 20 Wrote 1 file in 0.52 seconds (v3.1.6)
+[11ty] Watching…
+[11ty] File changed: /home/bradleyjerome/projects/ai/epam-cli/orchestrations/logs/plans-core.jsonl
+[11ty] Writing /home/bradleyjerome/projects/ai/epam-cli/orchestrations/dashboards/live/build-info.json from ../../ai/epam-cli/orchestrations/dashboards/build-info.11ty.js
+[11ty] Copied 20 Wrote 1 file in 0.49 seconds (v3.1.6)
+[11ty] Watching…
+[11ty] File changed: /home/bradleyjerome/projects/ai/epam-cli/orchestrations/logs/plans-core.jsonl
+[11ty] Writing /home/bradleyjerome/projects/ai/epam-cli/orchestrations/dashboards/live/build-info.json from ../../ai/epam-cli/orchestrations/dashboards/build-info.11ty.js
+[11ty] Copied 20 Wrote 1 file in 0.47 seconds (v3.1.6)
+[11ty] Watching…
+[11ty] File changed: /home/bradleyjerome/projects/ai/epam-cli/orchestrations/logs/plans-core.jsonl
+[11ty] Writing /home/bradleyjerome/projects/ai/epam-cli/orchestrations/dashboards/live/build-info.json from ../../ai/epam-cli/orchestrations/dashboards/build-info.11ty.js
+[11ty] Copied 20 Wrote 1 file in 0.40 seconds (v3.1.6)
+[11ty] Watching…
+[11ty] File changed: /home/bradleyjerome/projects/ai/epam-cli/orchestrations/logs/agent-status.json
+[11ty] File changed: /home/bradleyjerome/projects/ai/epam-cli/orchestrations/dashboards/logs/agent-status.json
+[11ty] Writing /home/bradleyjerome/projects/ai/epam-cli/orchestrations/dashboards/live/build-info.json from ../../ai/epam-cli/orchestrations/dashboards/build-info.11ty.js
+[11ty] File changed: /home/bradleyjerome/projects/ai/epam-cli/orchestrations/logs/agent-activity.jsonl
+[11ty] Copied 20 Wrote 1 file in 2.86 seconds (v3.1.6)
+[11ty] You saved while Eleventy was running, let’s run again. (1 change)
+[11ty] Writing /home/bradleyjerome/projects/ai/epam-cli/orchestrations/dashboards/live/build-info.json from ../../ai/epam-cli/orchestrations/dashboards/build-info.11ty.js
+[11ty] Copied 20 Wrote 1 file in 0.38 seconds (v3.1.6)
+[11ty] Watching…
+[11ty] File changed: /home/bradleyjerome/projects/ai/epam-cli/orchestrations/logs/plans-core.jsonl
+[11ty] Writing /home/bradleyjerome/projects/ai/epam-cli/orchestrations/dashboards/live/build-info.json from ../../ai/epam-cli/orchestrations/dashboards/build-info.11ty.js
+[11ty] Copied 20 Wrote 1 file in 0.48 seconds (v3.1.6)
+[11ty] Watching…
+[11ty] File changed: /home/bradleyjerome/projects/ai/epam-cli/orchestrations/logs/agent-status.json
+[11ty] File changed: /home/bradleyjerome/projects/ai/epam-cli/orchestrations/dashboards/logs/agent-status.json
+[11ty] File changed: /home/bradleyjerome/projects/ai/epam-cli/orchestrations/logs/agent-activity.jsonl
+[11ty] Writing /home/bradleyjerome/projects/ai/epam-cli/orchestrations/dashboards/live/build-info.json from ../../ai/epam-cli/orchestrations/dashboards/build-info.11ty.js
+[11ty] Copied 20 Wrote 1 file in 3.08 seconds (v3.1.6)
+[11ty] Watching…
+[11ty] File changed: /home/bradleyjerome/projects/ai/epam-cli/orchestrations/logs/plans-core.jsonl
+[11ty] Writing /home/bradleyjerome/projects/ai/epam-cli/orchestrations/dashboards/live/build-info.json from ../../ai/epam-cli/orchestrations/dashboards/build-info.11ty.js
+[11ty] Copied 20 Wrote 1 file in 0.51 seconds (v3.1.6)
+[11ty] Watching…
+[11ty] File changed: /home/bradleyjerome/projects/ai/epam-cli/orchestrations/logs/plans-core.jsonl
+[11ty] Writing /home/bradleyjerome/projects/ai/epam-cli/orchestrations/dashboards/live/build-info.json from ../../ai/epam-cli/orchestrations/dashboards/build-info.11ty.js
+[11ty] Copied 20 Wrote 1 file in 0.51 seconds (v3.1.6)
+[11ty] Watching…
+[11ty] File changed: /home/bradleyjerome/projects/ai/epam-cli/orchestrations/logs/plans-core.jsonl
+[11ty] Writing /home/bradleyjerome/projects/ai/epam-cli/orchestrations/dashboards/live/build-info.json from ../../ai/epam-cli/orchestrations/dashboards/build-info.11ty.js
+[11ty] Copied 20 Wrote 1 file in 0.52 seconds (v3.1.6)
+[11ty] Watching…
+[11ty] File changed: /home/bradleyjerome/projects/ai/epam-cli/orchestrations/logs/plans-core.jsonl
+[11ty] Writing /home/bradleyjerome/projects/ai/epam-cli/orchestrations/dashboards/live/build-info.json from ../../ai/epam-cli/orchestrations/dashboards/build-info.11ty.js
+[11ty] Copied 20 Wrote 1 file in 0.51 seconds (v3.1.6)
+[11ty] Watching…
+[11ty] File changed: /home/bradleyjerome/projects/ai/epam-cli/orchestrations/logs/agent-activity.jsonl
+[11ty] File changed: /home/bradleyjerome/projects/ai/epam-cli/orchestrations/logs/guarded-step-retries.jsonl
+[11ty] File changed: /home/bradleyjerome/projects/ai/epam-cli/orchestrations/logs/guarded-step-retries-history.jsonl
+[11ty] File changed: /home/bradleyjerome/projects/ai/epam-cli/orchestrations/logs/spec-phase.jsonl
+[11ty] File changed: /home/bradleyjerome/projects/ai/epam-cli/orchestrations/logs/agent-status.json
+[11ty] File changed: /home/bradleyjerome/projects/ai/epam-cli/orchestrations/dashboards/logs/agent-status.json
+[11ty] Writing /home/bradleyjerome/projects/ai/epam-cli/orchestrations/dashboards/live/build-info.json from ../../ai/epam-cli/orchestrations/dashboards/build-info.11ty.js
+[11ty] File changed: /home/bradleyjerome/projects/ai/epam-cli/orchestrations/logs/agent-activity.jsonl
+[11ty] File changed: /home/bradleyjerome/projects/ai/epam-cli/orchestrations/logs/agent-status.json
+[11ty] File changed: /home/bradleyjerome/projects/ai/epam-cli/orchestrations/dashboards/logs/agent-status.json
+[11ty] Copied 20 Wrote 1 file in 7.26 seconds (v3.1.6)
+[11ty] You saved while Eleventy was running, let’s run again. (3 changes)
+[11ty] Writing /home/bradleyjerome/projects/ai/epam-cli/orchestrations/dashboards/live/build-info.json from ../../ai/epam-cli/orchestrations/dashboards/build-info.11ty.js
+[11ty] Copied 20 Wrote 1 file in 0.41 seconds (v3.1.6)
+[11ty] Watching…
+[11ty] File changed: /home/bradleyjerome/projects/ai/epam-cli/orchestrations/logs/plans-core.jsonl
+[11ty] Writing /home/bradleyjerome/projects/ai/epam-cli/orchestrations/dashboards/live/build-info.json from ../../ai/epam-cli/orchestrations/dashboards/build-info.11ty.js
+[11ty] Copied 20 Wrote 1 file in 0.50 seconds (v3.1.6)
+[11ty] Watching…
+[11ty] File changed: /home/bradleyjerome/projects/ai/epam-cli/orchestrations/logs/spec-phase.jsonl
+[11ty] File changed: /home/bradleyjerome/projects/ai/epam-cli/orchestrations/logs/agent-status.json
+[11ty] File changed: /home/bradleyjerome/projects/ai/epam-cli/orchestrations/dashboards/logs/agent-status.json
+[11ty] Writing /home/bradleyjerome/projects/ai/epam-cli/orchestrations/dashboards/live/build-info.json from ../../ai/epam-cli/orchestrations/dashboards/build-info.11ty.js
+[11ty] File changed: /home/bradleyjerome/projects/ai/epam-cli/orchestrations/logs/agent-activity.jsonl
+[11ty] Copied 20 Wrote 1 file in 3.55 seconds (v3.1.6)
+[11ty] You saved while Eleventy was running, let’s run again. (1 change)
+[11ty] Writing /home/bradleyjerome/projects/ai/epam-cli/orchestrations/dashboards/live/build-info.json from ../../ai/epam-cli/orchestrations/dashboards/build-info.11ty.js
+[11ty] Copied 20 Wrote 1 file in 0.38 seconds (v3.1.6)
+[11ty] Watching…
+[11ty] File changed: /home/bradleyjerome/projects/ai/epam-cli/orchestrations/logs/plans-core.jsonl
+[11ty] Writing /home/bradleyjerome/projects/ai/epam-cli/orchestrations/dashboards/live/build-info.json from ../../ai/epam-cli/orchestrations/dashboards/build-info.11ty.js
+[11ty] Copied 20 Wrote 1 file in 0.48 seconds (v3.1.6)
+[11ty] Watching…
+[11ty] File changed: /home/bradleyjerome/projects/ai/epam-cli/orchestrations/logs/plans-core.jsonl
+[11ty] Writing /home/bradleyjerome/projects/ai/epam-cli/orchestrations/dashboards/live/build-info.json from ../../ai/epam-cli/orchestrations/dashboards/build-info.11ty.js
+[11ty] Copied 20 Wrote 1 file in 0.52 seconds (v3.1.6)
+[11ty] Watching…
+[11ty] File changed: /home/bradleyjerome/projects/ai/epam-cli/orchestrations/logs/spec-summary.json
+[11ty] File changed: /home/bradleyjerome/projects/ai/epam-cli/orchestrations/dashboards/logs/spec-summary.json
+[11ty] File changed: /home/bradleyjerome/projects/ai/epam-cli/orchestrations/logs/agent-status.json
+[11ty] File changed: /home/bradleyjerome/projects/ai/epam-cli/orchestrations/dashboards/logs/agent-status.json
+[11ty] Writing /home/bradleyjerome/projects/ai/epam-cli/orchestrations/dashboards/live/build-info.json from ../../ai/epam-cli/orchestrations/dashboards/build-info.11ty.js
+[11ty] File changed: /home/bradleyjerome/projects/ai/epam-cli/orchestrations/logs/phase-cost.jsonl
+[11ty] File added: /home/bradleyjerome/projects/ai/epam-cli/orchestrations/logs/spec-runs/20260728T204704Z/summary.json
+[11ty] File added: /home/bradleyjerome/projects/ai/epam-cli/orchestrations/dashboards/logs/spec-runs/20260728T204704Z/summary.json
+[11ty] File changed: /home/bradleyjerome/projects/ai/epam-cli/orchestrations/logs/step-status.json
+[11ty] File changed: /home/bradleyjerome/projects/ai/epam-cli/orchestrations/dashboards/logs/step-status.json
+[11ty] File changed: /home/bradleyjerome/projects/ai/epam-cli/orchestrations/logs/agent-status.json
+[11ty] File changed: /home/bradleyjerome/projects/ai/epam-cli/orchestrations/dashboards/logs/agent-status.json
+[11ty] File changed: /home/bradleyjerome/projects/ai/epam-cli/orchestrations/logs/agent-activity.jsonl
+[11ty] Copied 20 Wrote 1 file in 10.56 seconds (v3.1.6)
+[11ty] You saved while Eleventy was running, let’s run again. (8 changes)
+[11ty] Writing /home/bradleyjerome/projects/ai/epam-cli/orchestrations/dashboards/live/build-info.json from ../../ai/epam-cli/orchestrations/dashboards/build-info.11ty.js
+[11ty] Copied 20 Wrote 1 file in 0.51 seconds (v3.1.6)
+[11ty] Watching…
+[11ty] File changed: /home/bradleyjerome/projects/ai/epam-cli/orchestrations/logs/plans-core.jsonl
+[11ty] Writing /home/bradleyjerome/projects/ai/epam-cli/orchestrations/dashboards/live/build-info.json from ../../ai/epam-cli/orchestrations/dashboards/build-info.11ty.js
+[11ty] Copied 20 Wrote 1 file in 0.52 seconds (v3.1.6)
+[11ty] Watching…
+[11ty] File changed: /home/bradleyjerome/projects/ai/epam-cli/orchestrations/logs/cpa-review.jsonl
+[11ty] Writing /home/bradleyjerome/projects/ai/epam-cli/orchestrations/dashboards/live/build-info.json from ../../ai/epam-cli/orchestrations/dashboards/build-info.11ty.js
+[11ty] Copied 20 Wrote 1 file in 0.50 seconds (v3.1.6)
+[11ty] Watching…
+[11ty] File changed: /home/bradleyjerome/projects/ai/epam-cli/orchestrations/logs/plans-core.jsonl
+[11ty] Writing /home/bradleyjerome/projects/ai/epam-cli/orchestrations/dashboards/live/build-info.json from ../../ai/epam-cli/orchestrations/dashboards/build-info.11ty.js
+[11ty] Copied 20 Wrote 1 file in 0.52 seconds (v3.1.6)
+[11ty] Watching…
+[11ty] File changed: /home/bradleyjerome/projects/ai/epam-cli/orchestrations/logs/calibration.json
+[11ty] File changed: /home/bradleyjerome/projects/ai/epam-cli/orchestrations/dashboards/logs/calibration.json
+[11ty] File changed: /home/bradleyjerome/projects/ai/epam-cli/orchestrations/logs/step-status.json
+[11ty] File changed: /home/bradleyjerome/projects/ai/epam-cli/orchestrations/dashboards/logs/step-status.json
+[11ty] File changed: /home/bradleyjerome/projects/ai/epam-cli/orchestrations/logs/agent-status.json
+[11ty] File changed: /home/bradleyjerome/projects/ai/epam-cli/orchestrations/dashboards/logs/agent-status.json
+[11ty] Writing /home/bradleyjerome/projects/ai/epam-cli/orchestrations/dashboards/live/build-info.json from ../../ai/epam-cli/orchestrations/dashboards/build-info.11ty.js
+[11ty] File changed: /home/bradleyjerome/projects/ai/epam-cli/orchestrations/logs/agent-activity.jsonl
+[11ty] File changed: /home/bradleyjerome/projects/ai/epam-cli/orchestrations/logs/phase-cost.jsonl
+[11ty] File changed: /home/bradleyjerome/projects/ai/epam-cli/orchestrations/logs/agent-status.json
+[11ty] File changed: /home/bradleyjerome/projects/ai/epam-cli/orchestrations/dashboards/logs/agent-status.json
+[11ty] File changed: /home/bradleyjerome/projects/ai/epam-cli/orchestrations/logs/step-status.json
+[11ty] File changed: /home/bradleyjerome/projects/ai/epam-cli/orchestrations/dashboards/logs/step-status.json
+[11ty] File changed: /home/bradleyjerome/projects/ai/epam-cli/orchestrations/logs/profiles-audit.jsonl
+[11ty] Copied 20 Wrote 1 file in 5.68 seconds (v3.1.6)
+[11ty] You saved while Eleventy was running, let’s run again. (7 changes)
+[11ty] Writing /home/bradleyjerome/projects/ai/epam-cli/orchestrations/dashboards/live/build-info.json from ../../ai/epam-cli/orchestrations/dashboards/build-info.11ty.js
+[11ty] Copied 20 Wrote 1 file in 0.49 seconds (v3.1.6)
+[11ty] Watching…
+[11ty] File changed: /home/bradleyjerome/projects/ai/epam-cli/orchestrations/logs/plans-core.jsonl
+[11ty] Writing /home/bradleyjerome/projects/ai/epam-cli/orchestrations/dashboards/live/build-info.json from ../../ai/epam-cli/orchestrations/dashboards/build-info.11ty.js
+[11ty] Copied 20 Wrote 1 file in 0.55 seconds (v3.1.6)
+[11ty] Watching…
+[11ty] File changed: /home/bradleyjerome/projects/ai/epam-cli/orchestrations/logs/phase-cost.jsonl
+[11ty] File changed: /home/bradleyjerome/projects/ai/epam-cli/orchestrations/logs/agent-status.json
+[11ty] File changed: /home/bradleyjerome/projects/ai/epam-cli/orchestrations/dashboards/logs/agent-status.json
+[11ty] Writing /home/bradleyjerome/projects/ai/epam-cli/orchestrations/dashboards/live/build-info.json from ../../ai/epam-cli/orchestrations/dashboards/build-info.11ty.js
+[11ty] File changed: /home/bradleyjerome/projects/ai/epam-cli/orchestrations/logs/agent-activity.jsonl
+[11ty] File changed: /home/bradleyjerome/projects/ai/epam-cli/orchestrations/logs/step-status.json
+[11ty] File changed: /home/bradleyjerome/projects/ai/epam-cli/orchestrations/dashboards/logs/step-status.json
+[11ty] File changed: /home/bradleyjerome/projects/ai/epam-cli/orchestrations/logs/guarded-step-retries.jsonl
+[11ty] File changed: /home/bradleyjerome/projects/ai/epam-cli/orchestrations/logs/guarded-step-retries-history.jsonl
+[11ty] Copied 20 Wrote 1 file in 3.27 seconds (v3.1.6)
+[11ty] You saved while Eleventy was running, let’s run again. (5 changes)
+[11ty] Writing /home/bradleyjerome/projects/ai/epam-cli/orchestrations/dashboards/live/build-info.json from ../../ai/epam-cli/orchestrations/dashboards/build-info.11ty.js
+[11ty] File changed: /home/bradleyjerome/projects/ai/epam-cli/orchestrations/logs/step-status.json
+[11ty] File changed: /home/bradleyjerome/projects/ai/epam-cli/orchestrations/dashboards/logs/step-status.json
+[11ty] Copied 20 Wrote 1 file in 2.02 seconds (v3.1.6)
+[11ty] You saved while Eleventy was running, let’s run again. (2 changes)
+[11ty] Writing /home/bradleyjerome/projects/ai/epam-cli/orchestrations/dashboards/live/build-info.json from ../../ai/epam-cli/orchestrations/dashboards/build-info.11ty.js
+[11ty] Copied 20 Wrote 1 file in 1.83 seconds (v3.1.6)
+[11ty] Watching…
+[11ty] File changed: /home/bradleyjerome/projects/ai/epam-cli/orchestrations/logs/step-status.json
+[11ty] File changed: /home/bradleyjerome/projects/ai/epam-cli/orchestrations/dashboards/logs/step-status.json
+[11ty] Writing /home/bradleyjerome/projects/ai/epam-cli/orchestrations/dashboards/live/build-info.json from ../../ai/epam-cli/orchestrations/dashboards/build-info.11ty.js
+[11ty] Copied 20 Wrote 1 file in 15.73 seconds (v3.1.6)
+[11ty] Watching…
+[11ty] File changed: /home/bradleyjerome/projects/ai/epam-cli/orchestrations/scripts/run-agent-orchestration.sh
+[11ty] Writing /home/bradleyjerome/projects/ai/epam-cli/orchestrations/dashboards/live/build-info.json from ../../ai/epam-cli/orchestrations/dashboards/build-info.11ty.js
+[11ty] Copied 20 Wrote 1 file in 3.96 seconds (v3.1.6)
+[11ty] Watching…
+[11ty] File changed: /home/bradleyjerome/projects/ai/epam-cli/orchestrations/scripts/run-agent-orchestration.sh
+[11ty] Writing /home/bradleyjerome/projects/ai/epam-cli/orchestrations/dashboards/live/build-info.json from ../../ai/epam-cli/orchestrations/dashboards/build-info.11ty.js
+[11ty] Copied 20 Wrote 1 file in 0.80 seconds (v3.1.6)
+[11ty] Watching…
+[11ty] File changed: /home/bradleyjerome/projects/ai/epam-cli/orchestrations/scripts/run-agent-orchestration.sh
+[11ty] Writing /home/bradleyjerome/projects/ai/epam-cli/orchestrations/dashboards/live/build-info.json from ../../ai/epam-cli/orchestrations/dashboards/build-info.11ty.js
+[11ty] Copied 20 Wrote 1 file in 0.81 seconds (v3.1.6)
+[11ty] Watching…
+[11ty] File changed: /home/bradleyjerome/projects/ai/epam-cli/orchestrations/logs/agent-status.json
+[11ty] File changed: /home/bradleyjerome/projects/ai/epam-cli/orchestrations/dashboards/logs/agent-status.json
+[11ty] File changed: /home/bradleyjerome/projects/ai/epam-cli/orchestrations/logs/agent-activity.jsonl
+
+<--- Last few GCs --->
+
+[545882:0x36be1000]  5114414 ms: Scavenge (interleaved) 2040.9 (2046.8) -> 2039.8 (2051.0) MB, pooled: 0 MB, 5.96 / 0.00 ms  (average mu = 0.303, current mu = 0.268) allocation failure; 
+[545882:0x36be1000]  5115027 ms: Mark-Compact (reduce) 2044.4 (2052.3) -> 2041.1 (2046.0) MB, pooled: 0 MB, 127.19 / 0.00 ms  (+ 361.0 ms in 72 steps since start of marking, biggest step 5.0 ms, walltime since start of marking 536 ms) (average mu = 0.285,
+FATAL ERROR: Ineffective mark-compacts near heap limit Allocation failed - JavaScript heap out of memory
+----- Native stack trace -----
+
+ 1: 0x735eec node::OOMErrorHandler(char const*, v8::OOMDetails const&) [node]
+ 2: 0xbafbd0  [node]
+ 3: 0xbafcbf  [node]
+ 4: 0xe49875  [node]
+ 5: 0xe498a2  [node]
+ 6: 0xe49b9a  [node]
+ 7: 0xe5a89a  [node]
+ 8: 0xe5ec40  [node]
+ 9: 0x18f3681  [node]
+Aborted (core dumped)
+[11ty] Writing /home/bradleyjerome/projects/ai/epam-cli/orchestrations/dashboards/live/build-info.json from ../../../home/bradleyjerome/projects/ai/epam-cli/orchestrations/dashboards/build-info.11ty.js
+[11ty] Copied 20 Wrote 1 file in 0.67 seconds (v3.1.6)
+[11ty] Watching…
+[11ty] Server at http://192.168.2.18:8093/ or http://172.22.0.1:8093/ or http://172.18.0.1:8093/ or http://172.20.0.1:8093/ or http://172.19.0.1:8093/ or http://172.21.0.1:8093/ or http://100.64.77.9:8093/ or http://localhost:8093/
+[11ty] File changed: /home/bradleyjerome/projects/ai/epam-cli/orchestrations/logs/step-status.json
+[11ty] File changed: /home/bradleyjerome/projects/ai/epam-cli/orchestrations/logs/spec-baseline.json
+[11ty] Writing /home/bradleyjerome/projects/ai/epam-cli/orchestrations/dashboards/live/build-info.json from ../../../home/bradleyjerome/projects/ai/epam-cli/orchestrations/dashboards/build-info.11ty.js
+[11ty] File changed: /home/bradleyjerome/projects/ai/epam-cli/orchestrations/logs/spec-run-latest.json
+[11ty] Copied 20 Wrote 1 file in 1.63 seconds (v3.1.6)
+[11ty] You saved while Eleventy was running, let’s run again. (1 change)
+[11ty] Writing /home/bradleyjerome/projects/ai/epam-cli/orchestrations/dashboards/live/build-info.json from ../../../home/bradleyjerome/projects/ai/epam-cli/orchestrations/dashboards/build-info.11ty.js
+[11ty] File added: /home/bradleyjerome/projects/ai/epam-cli/orchestrations/logs/spec-runs/20260728T225030Z/prd.before.json
+[11ty] Copied 20 Wrote 1 file in 0.46 seconds (v3.1.6)
+[11ty] You saved while Eleventy was running, let’s run again. (1 change)
+[11ty] Writing /home/bradleyjerome/projects/ai/epam-cli/orchestrations/dashboards/live/build-info.json from ../../../home/bradleyjerome/projects/ai/epam-cli/orchestrations/dashboards/build-info.11ty.js
+[11ty] Copied 20 Wrote 1 file in 0.44 seconds (v3.1.6)
+[11ty] Watching…
+[11ty] File added: /home/bradleyjerome/projects/ai/epam-cli/orchestrations/logs/plans-mock3_core.jsonl
+[11ty] Writing /home/bradleyjerome/projects/ai/epam-cli/orchestrations/dashboards/live/build-info.json from ../../../home/bradleyjerome/projects/ai/epam-cli/orchestrations/dashboards/build-info.11ty.js
+[11ty] Copied 20 Wrote 1 file in 0.45 seconds (v3.1.6)
+[11ty] Watching…
+[11ty] File changed: /home/bradleyjerome/projects/ai/epam-cli/orchestrations/logs/agent-status.json
+[11ty] File changed: /home/bradleyjerome/projects/ai/epam-cli/orchestrations/logs/agent-activity.jsonl
+[11ty] Writing /home/bradleyjerome/projects/ai/epam-cli/orchestrations/dashboards/live/build-info.json from ../../../home/bradleyjerome/projects/ai/epam-cli/orchestrations/dashboards/build-info.11ty.js
+[11ty] File changed: /home/bradleyjerome/projects/ai/epam-cli/orchestrations/logs/plans-mock3_core.jsonl
+
+<--- Last few GCs --->
+
+[927407:0x3b5da000]    40720 ms: Mark-Compact 2042.7 (2053.8) -> 2039.8 (2062.8) MB, pooled: 0 MB, 505.03 / 0.00 ms  (average mu = 0.156, current mu = 0.011) allocation failure; scavenge might not succeed
+[927407:0x3b5da000]    41237 ms: Mark-Compact (reduce) 2047.9 (2062.8) -> 2043.3 (2051.1) MB, pooled: 0 MB, 207.24 / 0.00 ms  (+ 164.6 ms in 127 steps since start of marking, biggest step 5.5 ms, walltime since start of marking 419 ms) (average mu = 0.217
+FATAL ERROR: Reached heap limit Allocation failed - JavaScript heap out of memory
+----- Native stack trace -----
+
+ 1: 0x735eec node::OOMErrorHandler(char const*, v8::OOMDetails const&) [node]
+ 2: 0xbafbd0  [node]
+ 3: 0xbafcbf  [node]
+ 4: 0xe49875  [node]
+ 5: 0xe5b1dc  [node]
+ 6: 0xe30693  [node]
+ 7: 0xe1eadd  [node]
+ 8: 0xbab785  [node]
+ 9: 0xbac7f6  [node]
+10: 0xc0e93b  [node]
+11: 0xc0ee5d  [node]
+12: 0x7a4ac6e368f6 
+Aborted (core dumped)
+[11ty] Writing /home/bradleyjerome/projects/ai/epam-cli/orchestrations/dashboards/live/build-info.json from ../../../home/bradleyjerome/projects/ai/epam-cli/orchestrations/dashboards/build-info.11ty.js
+[11ty] Copied 20 Wrote 1 file in 1.01 seconds (v3.1.6)
+[11ty] Watching…
+[11ty] Server at http://192.168.2.18:8093/ or http://172.22.0.1:8093/ or http://172.18.0.1:8093/ or http://172.20.0.1:8093/ or http://172.19.0.1:8093/ or http://172.21.0.1:8093/ or http://100.64.77.9:8093/ or http://localhost:8093/
+[11ty] File changed: /home/bradleyjerome/projects/ai/epam-cli/orchestrations/logs/plans-mock3_core.jsonl
+[11ty] Writing /home/bradleyjerome/projects/ai/epam-cli/orchestrations/dashboards/live/build-info.json from ../../../home/bradleyjerome/projects/ai/epam-cli/orchestrations/dashboards/build-info.11ty.js
+[11ty] Copied 20 Wrote 1 file in 0.43 seconds (v3.1.6)
+[11ty] Watching…
+[11ty] File changed: /home/bradleyjerome/projects/ai/epam-cli/orchestrations/logs/agent-status.json
+[11ty] File changed: /home/bradleyjerome/projects/ai/epam-cli/orchestrations/logs/agent-activity.jsonl
+[11ty] Writing /home/bradleyjerome/projects/ai/epam-cli/orchestrations/dashboards/live/build-info.json from ../../../home/bradleyjerome/projects/ai/epam-cli/orchestrations/dashboards/build-info.11ty.js
+[11ty] Copied 20 Wrote 1 file in 6.65 seconds (v3.1.6)
+[11ty] Watching…
+[11ty] File changed: /home/bradleyjerome/projects/ai/epam-cli/orchestrations/logs/plans-mock3_core.jsonl
+[11ty] Writing /home/bradleyjerome/projects/ai/epam-cli/orchestrations/dashboards/live/build-info.json from ../../../home/bradleyjerome/projects/ai/epam-cli/orchestrations/dashboards/build-info.11ty.js
+[11ty] Copied 20 Wrote 1 file in 0.45 seconds (v3.1.6)
+[11ty] Watching…
+[11ty] File changed: /home/bradleyjerome/projects/ai/epam-cli/orchestrations/logs/agent-status.json
+[11ty] Writing /home/bradleyjerome/projects/ai/epam-cli/orchestrations/dashboards/live/build-info.json from ../../../home/bradleyjerome/projects/ai/epam-cli/orchestrations/dashboards/build-info.11ty.js
+[11ty] File changed: /home/bradleyjerome/projects/ai/epam-cli/orchestrations/logs/agent-activity.jsonl
+[11ty] Copied 20 Wrote 1 file in 6.46 seconds (v3.1.6)
+[11ty] You saved while Eleventy was running, let’s run again. (1 change)
+[11ty] Writing /home/bradleyjerome/projects/ai/epam-cli/orchestrations/dashboards/live/build-info.json from ../../../home/bradleyjerome/projects/ai/epam-cli/orchestrations/dashboards/build-info.11ty.js
+[11ty] Copied 20 Wrote 1 file in 0.35 seconds (v3.1.6)
+[11ty] Watching…
+[11ty] File changed: /home/bradleyjerome/projects/ai/epam-cli/orchestrations/logs/plans-mock3_core.jsonl
+[11ty] Writing /home/bradleyjerome/projects/ai/epam-cli/orchestrations/dashboards/live/build-info.json from ../../../home/bradleyjerome/projects/ai/epam-cli/orchestrations/dashboards/build-info.11ty.js
+[11ty] Copied 20 Wrote 1 file in 0.52 seconds (v3.1.6)
+[11ty] Watching…
+[11ty] File changed: /home/bradleyjerome/projects/ai/epam-cli/orchestrations/logs/agent-status.json
+[11ty] Writing /home/bradleyjerome/projects/ai/epam-cli/orchestrations/dashboards/live/build-info.json from ../../../home/bradleyjerome/projects/ai/epam-cli/orchestrations/dashboards/build-info.11ty.js
+[11ty] File changed: /home/bradleyjerome/projects/ai/epam-cli/orchestrations/logs/agent-activity.jsonl
+[11ty] Copied 20 Wrote 1 file in 6.79 seconds (v3.1.6)
+[11ty] You saved while Eleventy was running, let’s run again. (1 change)
+[11ty] Writing /home/bradleyjerome/projects/ai/epam-cli/orchestrations/dashboards/live/build-info.json from ../../../home/bradleyjerome/projects/ai/epam-cli/orchestrations/dashboards/build-info.11ty.js
+[11ty] Copied 20 Wrote 1 file in 0.40 seconds (v3.1.6)
+[11ty] Watching…
+[11ty] File changed: /home/bradleyjerome/projects/ai/epam-cli/orchestrations/logs/plans-mock3_core.jsonl
+[11ty] Writing /home/bradleyjerome/projects/ai/epam-cli/orchestrations/dashboards/live/build-info.json from ../../../home/bradleyjerome/projects/ai/epam-cli/orchestrations/dashboards/build-info.11ty.js
+[11ty] Copied 20 Wrote 1 file in 0.47 seconds (v3.1.6)
+[11ty] Watching…
+[11ty] File changed: /home/bradleyjerome/projects/ai/epam-cli/orchestrations/logs/agent-activity.jsonl
+[11ty] File changed: /home/bradleyjerome/projects/ai/epam-cli/orchestrations/logs/spec-phase.jsonl
+[11ty] File changed: /home/bradleyjerome/projects/ai/epam-cli/orchestrations/logs/agent-status.json
+[11ty] Writing /home/bradleyjerome/projects/ai/epam-cli/orchestrations/dashboards/live/build-info.json from ../../../home/bradleyjerome/projects/ai/epam-cli/orchestrations/dashboards/build-info.11ty.js
+[11ty] File changed: /home/bradleyjerome/projects/ai/epam-cli/orchestrations/logs/agent-activity.jsonl
+[11ty] Copied 20 Wrote 1 file in 7.62 seconds (v3.1.6)
+[11ty] You saved while Eleventy was running, let’s run again. (1 change)
+[11ty] Writing /home/bradleyjerome/projects/ai/epam-cli/orchestrations/dashboards/live/build-info.json from ../../../home/bradleyjerome/projects/ai/epam-cli/orchestrations/dashboards/build-info.11ty.js
+[11ty] Copied 20 Wrote 1 file in 0.39 seconds (v3.1.6)
+[11ty] Watching…
+[11ty] File changed: /home/bradleyjerome/projects/ai/epam-cli/orchestrations/logs/plans-mock3_core.jsonl
+[11ty] Writing /home/bradleyjerome/projects/ai/epam-cli/orchestrations/dashboards/live/build-info.json from ../../../home/bradleyjerome/projects/ai/epam-cli/orchestrations/dashboards/build-info.11ty.js
+[11ty] Copied 20 Wrote 1 file in 0.52 seconds (v3.1.6)
+[11ty] Watching…
+[11ty] File changed: /home/bradleyjerome/projects/ai/epam-cli/orchestrations/logs/plans-mock3_core.jsonl
+[11ty] Writing /home/bradleyjerome/projects/ai/epam-cli/orchestrations/dashboards/live/build-info.json from ../../../home/bradleyjerome/projects/ai/epam-cli/orchestrations/dashboards/build-info.11ty.js
+[11ty] Copied 20 Wrote 1 file in 0.48 seconds (v3.1.6)
+[11ty] Watching…
+[11ty] File changed: /home/bradleyjerome/projects/ai/epam-cli/orchestrations/logs/spec-runs/20260728T225030Z/summary.json
+[11ty] File changed: /home/bradleyjerome/projects/ai/epam-cli/orchestrations/logs/spec-summary.json
+[11ty] File changed: /home/bradleyjerome/projects/ai/epam-cli/orchestrations/logs/agent-status.json
+[11ty] Writing /home/bradleyjerome/projects/ai/epam-cli/orchestrations/dashboards/live/build-info.json from ../../../home/bradleyjerome/projects/ai/epam-cli/orchestrations/dashboards/build-info.11ty.js
+[11ty] File changed: /home/bradleyjerome/projects/ai/epam-cli/orchestrations/logs/agent-activity.jsonl
+[11ty] File changed: /home/bradleyjerome/projects/ai/epam-cli/orchestrations/logs/agent-status.json
+[11ty] File changed: /home/bradleyjerome/projects/ai/epam-cli/orchestrations/logs/step-status.json
+[11ty] File changed: /home/bradleyjerome/projects/ai/epam-cli/orchestrations/logs/phase-cost.jsonl
+[11ty] Copied 20 Wrote 1 file in 16.64 seconds (v3.1.6)
+[11ty] You saved while Eleventy was running, let’s run again. (4 changes)
+[11ty] Writing /home/bradleyjerome/projects/ai/epam-cli/orchestrations/dashboards/live/build-info.json from ../../../home/bradleyjerome/projects/ai/epam-cli/orchestrations/dashboards/build-info.11ty.js
+[11ty] Copied 20 Wrote 1 file in 0.38 seconds (v3.1.6)
+[11ty] Watching…
+[11ty] File changed: /home/bradleyjerome/projects/ai/epam-cli/orchestrations/logs/plans-mock3_core.jsonl
+[11ty] Writing /home/bradleyjerome/projects/ai/epam-cli/orchestrations/dashboards/live/build-info.json from ../../../home/bradleyjerome/projects/ai/epam-cli/orchestrations/dashboards/build-info.11ty.js
+[11ty] Copied 20 Wrote 1 file in 0.50 seconds (v3.1.6)
+[11ty] Watching…
+[11ty] File changed: /home/bradleyjerome/projects/ai/epam-cli/orchestrations/logs/plans-mock3_core.jsonl
+[11ty] Writing /home/bradleyjerome/projects/ai/epam-cli/orchestrations/dashboards/live/build-info.json from ../../../home/bradleyjerome/projects/ai/epam-cli/orchestrations/dashboards/build-info.11ty.js
+[11ty] Copied 20 Wrote 1 file in 0.50 seconds (v3.1.6)
+[11ty] Watching…
+[11ty] File changed: /home/bradleyjerome/projects/ai/epam-cli/orchestrations/logs/cpa-review.jsonl
+[11ty] Writing /home/bradleyjerome/projects/ai/epam-cli/orchestrations/dashboards/live/build-info.json from ../../../home/bradleyjerome/projects/ai/epam-cli/orchestrations/dashboards/build-info.11ty.js
+[11ty] Copied 20 Wrote 1 file in 0.66 seconds (v3.1.6)
+[11ty] Watching…
+[11ty] File changed: /home/bradleyjerome/projects/ai/epam-cli/orchestrations/logs/plans-mock3_core.jsonl
+[11ty] Writing /home/bradleyjerome/projects/ai/epam-cli/orchestrations/dashboards/live/build-info.json from ../../../home/bradleyjerome/projects/ai/epam-cli/orchestrations/dashboards/build-info.11ty.js
+[11ty] Copied 20 Wrote 1 file in 0.46 seconds (v3.1.6)
+[11ty] Watching…
+[11ty] File changed: /home/bradleyjerome/projects/ai/epam-cli/orchestrations/logs/plans-mock3_core.jsonl
+[11ty] Writing /home/bradleyjerome/projects/ai/epam-cli/orchestrations/dashboards/live/build-info.json from ../../../home/bradleyjerome/projects/ai/epam-cli/orchestrations/dashboards/build-info.11ty.js
+[11ty] Copied 20 Wrote 1 file in 0.47 seconds (v3.1.6)
+[11ty] Watching…
+[11ty] File changed: /home/bradleyjerome/projects/ai/epam-cli/orchestrations/logs/calibration.json
+[11ty] Writing /home/bradleyjerome/projects/ai/epam-cli/orchestrations/dashboards/live/build-info.json from ../../../home/bradleyjerome/projects/ai/epam-cli/orchestrations/dashboards/build-info.11ty.js
+[11ty] File changed: /home/bradleyjerome/projects/ai/epam-cli/orchestrations/logs/step-status.json
+[11ty] File changed: /home/bradleyjerome/projects/ai/epam-cli/orchestrations/logs/agent-status.json
+[11ty] File changed: /home/bradleyjerome/projects/ai/epam-cli/orchestrations/logs/agent-activity.jsonl
+[11ty] File changed: /home/bradleyjerome/projects/ai/epam-cli/orchestrations/logs/phase-cost.jsonl
+[11ty] File changed: /home/bradleyjerome/projects/ai/epam-cli/orchestrations/logs/step-status.json
+[11ty] File changed: /home/bradleyjerome/projects/ai/epam-cli/orchestrations/logs/profiles-audit.jsonl
+[11ty] Copied 20 Wrote 1 file in 9.42 seconds (v3.1.6)
+[11ty] You saved while Eleventy was running, let’s run again. (6 changes)
+[11ty] Writing /home/bradleyjerome/projects/ai/epam-cli/orchestrations/dashboards/live/build-info.json from ../../../home/bradleyjerome/projects/ai/epam-cli/orchestrations/dashboards/build-info.11ty.js
+[11ty] Copied 20 Wrote 1 file in 0.47 seconds (v3.1.6)
+[11ty] Watching…
+[11ty] File changed: /home/bradleyjerome/projects/ai/epam-cli/orchestrations/logs/phase-cost.jsonl
+[11ty] File changed: /home/bradleyjerome/projects/ai/epam-cli/orchestrations/agents/profiles.json
+[11ty] File changed: /home/bradleyjerome/projects/ai/epam-cli/orchestrations/dashboards/profiles.json
+[11ty] File changed: /home/bradleyjerome/projects/ai/epam-cli/orchestrations/logs/agent-status.json
+[11ty] Writing /home/bradleyjerome/projects/ai/epam-cli/orchestrations/dashboards/live/build-info.json from ../../../home/bradleyjerome/projects/ai/epam-cli/orchestrations/dashboards/build-info.11ty.js
+[11ty] File changed: /home/bradleyjerome/projects/ai/epam-cli/orchestrations/logs/agent-activity.jsonl
+[11ty] Copied 20 Wrote 1 file in 2.28 seconds (v3.1.6)
+[11ty] You saved while Eleventy was running, let’s run again. (1 change)
+[11ty] Writing /home/bradleyjerome/projects/ai/epam-cli/orchestrations/dashboards/live/build-info.json from ../../../home/bradleyjerome/projects/ai/epam-cli/orchestrations/dashboards/build-info.11ty.js
+[11ty] Copied 20 Wrote 1 file in 0.40 seconds (v3.1.6)
+[11ty] Watching…
+[11ty] File changed: /home/bradleyjerome/projects/ai/epam-cli/orchestrations/logs/plans-mock3_core.jsonl
+[11ty] Writing /home/bradleyjerome/projects/ai/epam-cli/orchestrations/dashboards/live/build-info.json from ../../../home/bradleyjerome/projects/ai/epam-cli/orchestrations/dashboards/build-info.11ty.js
+[11ty] Copied 20 Wrote 1 file in 0.48 seconds (v3.1.6)
+[11ty] Watching…
+[11ty] File changed: /home/bradleyjerome/projects/ai/epam-cli/orchestrations/agents/profiles.json
+[11ty] File changed: /home/bradleyjerome/projects/ai/epam-cli/orchestrations/dashboards/profiles.json
+[11ty] Writing /home/bradleyjerome/projects/ai/epam-cli/orchestrations/dashboards/live/build-info.json from ../../../home/bradleyjerome/projects/ai/epam-cli/orchestrations/dashboards/build-info.11ty.js
+[11ty] Copied 20 Wrote 1 file in 0.49 seconds (v3.1.6)
+[11ty] Watching…
+[11ty] File changed: /home/bradleyjerome/projects/ai/epam-cli/orchestrations/logs/phase-cost.jsonl
+[11ty] File changed: /home/bradleyjerome/projects/ai/epam-cli/orchestrations/logs/agent-activity.jsonl
+[11ty] Writing /home/bradleyjerome/projects/ai/epam-cli/orchestrations/dashboards/live/build-info.json from ../../../home/bradleyjerome/projects/ai/epam-cli/orchestrations/dashboards/build-info.11ty.js
+[11ty] File changed: /home/bradleyjerome/projects/ai/epam-cli/orchestrations/agents/profiles.json
+[11ty] File changed: /home/bradleyjerome/projects/ai/epam-cli/orchestrations/dashboards/profiles.json
+[11ty] Copied 20 Wrote 1 file in 0.85 seconds (v3.1.6)
+[11ty] You saved while Eleventy was running, let’s run again. (2 changes)
+[11ty] Writing /home/bradleyjerome/projects/ai/epam-cli/orchestrations/dashboards/live/build-info.json from ../../../home/bradleyjerome/projects/ai/epam-cli/orchestrations/dashboards/build-info.11ty.js
+[11ty] Copied 20 Wrote 1 file in 0.42 seconds (v3.1.6)
+[11ty] Watching…
+[11ty] File changed: /home/bradleyjerome/projects/ai/epam-cli/orchestrations/logs/plans-mock3_core.jsonl
+[11ty] Writing /home/bradleyjerome/projects/ai/epam-cli/orchestrations/dashboards/live/build-info.json from ../../../home/bradleyjerome/projects/ai/epam-cli/orchestrations/dashboards/build-info.11ty.js
+[11ty] Copied 20 Wrote 1 file in 0.49 seconds (v3.1.6)
+[11ty] Watching…
+[11ty] File changed: /home/bradleyjerome/projects/ai/epam-cli/orchestrations/logs/step-status.json
+[11ty] Writing /home/bradleyjerome/projects/ai/epam-cli/orchestrations/dashboards/live/build-info.json from ../../../home/bradleyjerome/projects/ai/epam-cli/orchestrations/dashboards/build-info.11ty.js
+[11ty] File changed: /home/bradleyjerome/projects/ai/epam-cli/orchestrations/logs/spec-run-latest.json
+[11ty] File changed: /home/bradleyjerome/projects/ai/epam-cli/orchestrations/logs/spec-baseline.json
+[11ty] File added: /home/bradleyjerome/projects/ai/epam-cli/orchestrations/logs/spec-runs/20260728T233530Z/prd.before.json
+[11ty] Copied 20 Wrote 1 file in 3.15 seconds (v3.1.6)
+[11ty] You saved while Eleventy was running, let’s run again. (3 changes)
+[11ty] Writing /home/bradleyjerome/projects/ai/epam-cli/orchestrations/dashboards/live/build-info.json from ../../../home/bradleyjerome/projects/ai/epam-cli/orchestrations/dashboards/build-info.11ty.js
+[11ty] Copied 20 Wrote 1 file in 0.38 seconds (v3.1.6)
+[11ty] Watching…
+[11ty] File changed: /home/bradleyjerome/projects/ai/epam-cli/orchestrations/logs/plans-mock3_core.jsonl
+[11ty] Writing /home/bradleyjerome/projects/ai/epam-cli/orchestrations/dashboards/live/build-info.json from ../../../home/bradleyjerome/projects/ai/epam-cli/orchestrations/dashboards/build-info.11ty.js
+[11ty] Copied 20 Wrote 1 file in 0.40 seconds (v3.1.6)
+[11ty] Watching…
+[11ty] File changed: /home/bradleyjerome/projects/ai/epam-cli/orchestrations/logs/agent-status.json
+[11ty] Writing /home/bradleyjerome/projects/ai/epam-cli/orchestrations/dashboards/live/build-info.json from ../../../home/bradleyjerome/projects/ai/epam-cli/orchestrations/dashboards/build-info.11ty.js
+[11ty] File changed: /home/bradleyjerome/projects/ai/epam-cli/orchestrations/logs/agent-activity.jsonl
+[11ty] Copied 20 Wrote 1 file in 1.86 seconds (v3.1.6)
+[11ty] You saved while Eleventy was running, let’s run again. (1 change)
+[11ty] Writing /home/bradleyjerome/projects/ai/epam-cli/orchestrations/dashboards/live/build-info.json from ../../../home/bradleyjerome/projects/ai/epam-cli/orchestrations/dashboards/build-info.11ty.js
+[11ty] Copied 20 Wrote 1 file in 0.39 seconds (v3.1.6)
+[11ty] Watching…
+[11ty] File changed: /home/bradleyjerome/projects/ai/epam-cli/orchestrations/logs/plans-mock3_core.jsonl
+[11ty] Writing /home/bradleyjerome/projects/ai/epam-cli/orchestrations/dashboards/live/build-info.json from ../../../home/bradleyjerome/projects/ai/epam-cli/orchestrations/dashboards/build-info.11ty.js
+[11ty] Copied 20 Wrote 1 file in 0.48 seconds (v3.1.6)
+[11ty] Watching…
+[11ty] File changed: /home/bradleyjerome/projects/ai/epam-cli/orchestrations/logs/agent-status.json
+[11ty] File changed: /home/bradleyjerome/projects/ai/epam-cli/orchestrations/logs/agent-activity.jsonl
+[11ty] Writing /home/bradleyjerome/projects/ai/epam-cli/orchestrations/dashboards/live/build-info.json from ../../../home/bradleyjerome/projects/ai/epam-cli/orchestrations/dashboards/build-info.11ty.js
+[11ty] Copied 20 Wrote 1 file in 1.95 seconds (v3.1.6)
+[11ty] Watching…
+[11ty] File changed: /home/bradleyjerome/projects/ai/epam-cli/orchestrations/logs/plans-mock3_core.jsonl
+[11ty] Writing /home/bradleyjerome/projects/ai/epam-cli/orchestrations/dashboards/live/build-info.json from ../../../home/bradleyjerome/projects/ai/epam-cli/orchestrations/dashboards/build-info.11ty.js
+[11ty] Copied 20 Wrote 1 file in 0.46 seconds (v3.1.6)
+[11ty] Watching…
+[11ty] File changed: /home/bradleyjerome/projects/ai/epam-cli/orchestrations/logs/agent-status.json
+[11ty] Writing /home/bradleyjerome/projects/ai/epam-cli/orchestrations/dashboards/live/build-info.json from ../../../home/bradleyjerome/projects/ai/epam-cli/orchestrations/dashboards/build-info.11ty.js
+[11ty] File changed: /home/bradleyjerome/projects/ai/epam-cli/orchestrations/logs/agent-activity.jsonl
+[11ty] Copied 20 Wrote 1 file in 2.09 seconds (v3.1.6)
+[11ty] You saved while Eleventy was running, let’s run again. (1 change)
+[11ty] Writing /home/bradleyjerome/projects/ai/epam-cli/orchestrations/dashboards/live/build-info.json from ../../../home/bradleyjerome/projects/ai/epam-cli/orchestrations/dashboards/build-info.11ty.js
+[11ty] Copied 20 Wrote 1 file in 0.38 seconds (v3.1.6)
+[11ty] Watching…
+[11ty] File changed: /home/bradleyjerome/projects/ai/epam-cli/orchestrations/logs/plans-mock3_core.jsonl
+[11ty] Writing /home/bradleyjerome/projects/ai/epam-cli/orchestrations/dashboards/live/build-info.json from ../../../home/bradleyjerome/projects/ai/epam-cli/orchestrations/dashboards/build-info.11ty.js
+[11ty] Copied 20 Wrote 1 file in 0.46 seconds (v3.1.6)
+[11ty] Watching…
+[11ty] File changed: /home/bradleyjerome/projects/ai/epam-cli/orchestrations/logs/plans-mock3_core.jsonl
+[11ty] Writing /home/bradleyjerome/projects/ai/epam-cli/orchestrations/dashboards/live/build-info.json from ../../../home/bradleyjerome/projects/ai/epam-cli/orchestrations/dashboards/build-info.11ty.js
+[11ty] Copied 20 Wrote 1 file in 0.50 seconds (v3.1.6)
+[11ty] Watching…
+[11ty] File changed: /home/bradleyjerome/projects/ai/epam-cli/orchestrations/logs/agent-activity.jsonl
+[11ty] File changed: /home/bradleyjerome/projects/ai/epam-cli/orchestrations/logs/guarded-step-retries.jsonl
+[11ty] File changed: /home/bradleyjerome/projects/ai/epam-cli/orchestrations/logs/guarded-step-retries-history.jsonl
+[11ty] File changed: /home/bradleyjerome/projects/ai/epam-cli/orchestrations/logs/spec-phase.jsonl
+[11ty] File changed: /home/bradleyjerome/projects/ai/epam-cli/orchestrations/logs/agent-status.json
+[11ty] Writing /home/bradleyjerome/projects/ai/epam-cli/orchestrations/dashboards/live/build-info.json from ../../../home/bradleyjerome/projects/ai/epam-cli/orchestrations/dashboards/build-info.11ty.js
+[11ty] Copied 20 Wrote 1 file in 2.81 seconds (v3.1.6)
+[11ty] Watching…
+[11ty] File changed: /home/bradleyjerome/projects/ai/epam-cli/orchestrations/logs/plans-mock3_core.jsonl
+[11ty] Writing /home/bradleyjerome/projects/ai/epam-cli/orchestrations/dashboards/live/build-info.json from ../../../home/bradleyjerome/projects/ai/epam-cli/orchestrations/dashboards/build-info.11ty.js
+[11ty] Copied 20 Wrote 1 file in 0.45 seconds (v3.1.6)
+[11ty] Watching…
+[11ty] File changed: /home/bradleyjerome/projects/ai/epam-cli/orchestrations/logs/plans-mock3_core.jsonl
+[11ty] Writing /home/bradleyjerome/projects/ai/epam-cli/orchestrations/dashboards/live/build-info.json from ../../../home/bradleyjerome/projects/ai/epam-cli/orchestrations/dashboards/build-info.11ty.js
+[11ty] Copied 20 Wrote 1 file in 0.49 seconds (v3.1.6)
+[11ty] Watching…
+[11ty] File changed: /home/bradleyjerome/projects/ai/epam-cli/orchestrations/logs/spec-summary.json
+[11ty] File changed: /home/bradleyjerome/projects/ai/epam-cli/orchestrations/logs/agent-status.json
+[11ty] File changed: /home/bradleyjerome/projects/ai/epam-cli/orchestrations/logs/agent-activity.jsonl
+[11ty] File added: /home/bradleyjerome/projects/ai/epam-cli/orchestrations/logs/spec-runs/20260728T233530Z/summary.json
+[11ty] File deleted: ./.gitignore
+[11ty] File deleted: ./package.json
+[11ty] Writing /home/bradleyjerome/projects/ai/epam-cli/orchestrations/dashboards/live/build-info.json from ../../../home/bradleyjerome/projects/ai/epam-cli/orchestrations/dashboards/build-info.11ty.js
+[11ty] Copied 20 Wrote 1 file in 3.13 seconds (v3.1.6)
+[11ty] You saved while Eleventy was running, let’s run again. (1 change)
+[11ty] Writing /home/bradleyjerome/projects/ai/epam-cli/orchestrations/dashboards/live/build-info.json from ../../../home/bradleyjerome/projects/ai/epam-cli/orchestrations/dashboards/build-info.11ty.js
+[11ty] Copied 20 Wrote 1 file in 0.41 seconds (v3.1.6)
+[11ty] Watching…
+[11ty] File changed: /home/bradleyjerome/projects/ai/epam-cli/orchestrations/scripts/run-agent-orchestration.sh
+[11ty] Writing /home/bradleyjerome/projects/ai/epam-cli/orchestrations/dashboards/live/build-info.json from ../../../home/bradleyjerome/projects/ai/epam-cli/orchestrations/dashboards/build-info.11ty.js
+[11ty] Copied 20 Wrote 1 file in 0.60 seconds (v3.1.6)
+[11ty] Watching…
+[11ty] File changed: /home/bradleyjerome/projects/ai/epam-cli/orchestrations/scripts/run-agent-orchestration.sh
+[11ty] Writing /home/bradleyjerome/projects/ai/epam-cli/orchestrations/dashboards/live/build-info.json from ../../../home/bradleyjerome/projects/ai/epam-cli/orchestrations/dashboards/build-info.11ty.js
+[11ty] Copied 20 Wrote 1 file in 0.53 seconds (v3.1.6)
+[11ty] Watching…
+[11ty] File changed: /home/bradleyjerome/projects/ai/epam-cli/orchestrations/scripts/run-agent-orchestration.sh
+[11ty] Writing /home/bradleyjerome/projects/ai/epam-cli/orchestrations/dashboards/live/build-info.json from ../../../home/bradleyjerome/projects/ai/epam-cli/orchestrations/dashboards/build-info.11ty.js
+[11ty] Copied 20 Wrote 1 file in 0.48 seconds (v3.1.6)
+[11ty] Watching…
+[11ty] File changed: /home/bradleyjerome/projects/ai/epam-cli/orchestrations/scripts/run-agent-orchestration.sh
+[11ty] Writing /home/bradleyjerome/projects/ai/epam-cli/orchestrations/dashboards/live/build-info.json from ../../../home/bradleyjerome/projects/ai/epam-cli/orchestrations/dashboards/build-info.11ty.js
+[11ty] Copied 20 Wrote 1 file in 0.62 seconds (v3.1.6)
+[11ty] Watching…
+[11ty] File changed: /home/bradleyjerome/projects/ai/epam-cli/orchestrations/scripts/run-agent-orchestration.sh
+[11ty] Writing /home/bradleyjerome/projects/ai/epam-cli/orchestrations/dashboards/live/build-info.json from ../../../home/bradleyjerome/projects/ai/epam-cli/orchestrations/dashboards/build-info.11ty.js
+[11ty] Copied 20 Wrote 1 file in 0.71 seconds (v3.1.6)
+[11ty] Watching…
+[11ty] File changed: /home/bradleyjerome/projects/ai/epam-cli/orchestrations/logs/agent-status.json
+[11ty] File changed: /home/bradleyjerome/projects/ai/epam-cli/orchestrations/logs/agent-activity.jsonl
+[11ty] Writing /home/bradleyjerome/projects/ai/epam-cli/orchestrations/dashboards/live/build-info.json from ../../../home/bradleyjerome/projects/ai/epam-cli/orchestrations/dashboards/build-info.11ty.js
+
+<--- Last few GCs --->
+
+[973144:0x1714d000]  2788714 ms: Mark-Compact (reduce) 2047.2 (2054.2) -> 2044.6 (2048.7) MB, pooled: 0 MB, 193.51 / 0.00 ms  (+ 280.9 ms in 56 steps since start of marking, biggest step 5.1 ms, walltime since start of marking 523 ms) (average mu = 0.308,[973144:0x1714d000]  2789375 ms: Mark-Compact 2045.6 (2048.7) -> 2044.4 (2052.0) MB, pooled: 0 MB, 659.37 / 0.00 ms  (average mu = 0.160, current mu = 0.002) allocation failure; scavenge might not succeed
+
+FATAL ERROR: Ineffective mark-compacts near heap limit Allocation failed - JavaScript heap out of memory
+----- Native stack trace -----
+
+ 1: 0x735eec node::OOMErrorHandler(char const*, v8::OOMDetails const&) [node]
+ 2: 0xbafbd0  [node]
+ 3: 0xbafcbf  [node]
+ 4: 0xe49875  [node]
+ 5: 0xe498a2  [node]
+ 6: 0xe49b9a  [node]
+ 7: 0xe5a89a  [node]
+ 8: 0xe5ec40  [node]
+ 9: 0x18f3681  [node]
+Aborted (core dumped)

@@ -1,0 +1,140 @@
+# Prompt
+You are the Guard Vocabulary Agent for the epam-cli orchestration pipeline.
+
+A deterministic guard is about to check a set of statements against a RULE. Your sole job is to derive, for THIS story, the concrete terms that would VIOLATE that rule — and the terms that name its legitimate observable surface. The guard holds no vocabulary of its own; it applies exactly what you return, and nothing else.
+
+## Why you exist
+
+Every guard in this pipeline used to carry a hardcoded list of terms, each list reverse-engineered from a single past incident. A list catches that one incident and nothing else, while reporting "clean" forever — which is worse than no guard, because it converts "unchecked" into "checked" and nobody looks again. You replace those lists. If you answer badly, the guard is blind; if you answer well, it catches violations nobody has seen yet.
+
+## Your inputs
+
+1. THE RULE — a principle stating what it means to violate this guard. It names no domain, no product and no past incident. It is the only definition of correctness you are given.
+2. THE STATEMENTS — the items the guard will check (for example, a story's verification criteria or acceptance criteria).
+3. CODE EVIDENCE — real findings from the repository: files, functions, symbols, and the reasoning that located them. This is ground truth.
+4. STORY CONTEXT — the ticket's title and description.
+
+## Your process
+
+1. Read the rule and restate to yourself, in one sentence, what distinguishes a violating statement from a compliant one. Everything you return must trace to that sentence.
+2. Read the CODE EVIDENCE and identify the implementation vocabulary of this story: the symbols, functions, SDK entry points, internal structures and configuration keys that describe HOW the behaviour is produced. These come from the evidence, never from the ticket prose and never from your own knowledge of the technology.
+3. Read the STORY CONTEXT and identify the observable surface: what an end user or tester perceives. That is the whitelist.
+4. Emit both lists.
+
+## Hard requirements
+
+- DERIVE FROM THE EVIDENCE. Every blacklist term must be traceable to a symbol, file, function or structure present in the supplied code evidence, or to a construction verb present in the statements themselves. Do not contribute terms from your general knowledge of a library, framework or vendor: that is how an agent invents a signature that does not exist.
+- NEVER include a term that names the observable surface. If a term describes what a user sees, it belongs in the whitelist, even when it also appears in code.
+- PREFER THE SPECIFIC. "onEntryChange" is a useful blacklist term; "callback" is not — it will fire on unrelated statements and train people to ignore the guard.
+- WHOLE TERMS ONLY. Return terms as they would appear in a sentence. Do not return regular expressions, wildcards or fragments.
+- LOWERCASE every term.
+- The whitelist WINS. A term appearing in both lists is treated as observable and never flagged, so do not rely on the blacklist to override it.
+- If the rule genuinely admits no violating vocabulary for this story, return an empty blacklist. Do not pad it. An empty list is a real answer and is reported as such — it is not treated as success.
+
+## Verifying a term against the index
+
+At some seams you are given a real CodeGraph index of the repository and the command to
+query it. When you are, USE IT — do not assert that a term is meaningful, check it. A
+candidate that resolves to nothing in the index is noise and belongs in the blacklist,
+however unusual or technical the word looks. A candidate that resolves to real symbols is
+evidence-backed and can be trusted.
+
+Be aware of what your list feeds. Where the consumer is a BM25/IDF ranker, that ranker
+DEMOTES terms which are common in the corpus and AMPLIFIES terms which are rare. A rare but
+meaningless token — a bracketed brand tag, a ticket label, a person's name, a status word —
+is therefore not diluted by the ranker; it is promoted to a top discriminator and drags the
+search away from the real code. Rarity is not signal. Mistaking the two is the specific
+failure you exist to prevent, so when a term is unusual AND resolves to nothing, blacklist
+it with confidence.
+
+When no index is available to you, say what you can support from the evidence you were
+given and no more. An honest short list beats a padded one: every term you return is
+applied deterministically, and a wrong term is enforced as rigorously as a right one.
+
+## Output
+
+Call the submit_guard_vocabulary tool. Structured output only. Do not answer in prose, do not wrap the call in commentary, and do not explain your reasoning outside the per-term reason fields. A prose answer is discarded in full and the guard is left with nothing to apply.
+
+GUARD SEAM: acceptance-criteria
+
+THE RULE THIS GUARD ENFORCES:
+An acceptance criterion states WHAT MUST BE TRUE for the story to be done, observed from outside the implementation. It NEVER dictates the code that produces it.
+An acceptance criterion is FORBIDDEN if it names a specific library, framework, test double, API call, import, or code construct the implementation must use. Naming a required OUTCOME is correct; naming the machinery that achieves it is not.
+
+THE STATEMENTS THE GUARD WILL CHECK:
+1. [object Object]
+2. [object Object]
+3. [object Object]
+4. [object Object]
+5. [object Object]
+6. [object Object]
+7. [object Object]
+8. [object Object]
+9. [object Object]
+10. [object Object]
+11. [object Object]
+12. [object Object]
+
+DECLARED MANIFEST (the files this story says it will touch):
+- src/context/ContentstackContext.ts
+- src/hooks/useContent.ts
+- src/interface/content/page.ts
+- src/components/contentstack/ContentstackAccordion/content.mock.ts
+- src/components/contentstack/ContentstackColorComponent/content.mock.ts
+
+CODE EVIDENCE (real findings from this repository — ground truth; derive from these, not from your own knowledge of any library):
+- src/context/ContentstackContext.ts :: ContentstackContext — Primary attachment point for Contentstack live preview. This is the React context that holds all CMS content (header, footer, page, directories) and distributes it to every component via useContent(). Live preview requires injecting draft/preview content into this context, so the Provider's value as [existing helper: useContent]
+
+STORY CONTEXT:
+Title: [GO, UP, MX] Live Preview of Content in CMS
+Description: Original Requirements (discovery)  AS a Content Author, I WANT to preview draft entries in CMS, SO THAT I can see how content will be shown on the website
+ability to preview draft entries in CMS
+Notes& Assumptions  Limitation: Might not be possible to preview protected pages and content.
+Original Total Estimate:  8  Original FE Estimate:  8  Original DAM Estimate:  0  Original BE Estimate:  0
+
+
+# Output
+Based on my analysis of the code evidence, here is the guard vocabulary:
+
+**Rule restated:** An acceptance criterion violates if it names a code construct (library, hook, context, interface, import, internal field, mock file) instead of stating what a user perceives (draft content appearing in preview).
+
+**Blacklist** (implementation vocabulary — traceable to code evidence):
+
+| Term | Reason |
+|------|--------|
+| `contentstackcontext` | React context symbol exported from `src/context/ContentstackContext.ts`; naming it in an AC dictates the implementation mechanism for distributing CMS content. |
+| `usecontent` | Custom hook in `src/hooks/useContent.ts`; wraps `useContext(ContentstackContext)` and returns `getContentByKey`. Naming it prescribes the consumption pattern. |
+| `createcontext` | React API call in `ContentstackContext.ts` (`createContext<IContentstackContext>({})`); naming it dictates the context-creation mechanism. |
+| `usecontext` | React hook imported and called in `useContent.ts`; naming it prescribes the React API used to read context. |
+| `usecallback` | React hook imported and used in `useContent.ts` to memoize `getContentByKey`; naming it dictates a React optimization construct. |
+| `getcontentbykey` | Internal function returned by `useContent()`; naming it prescribes the specific retrieval API rather than the outcome of content being available. |
+| `getvalue` | Utility imported from `utils/getValue` in `useContent.ts`; naming it dictates the internal path-resolution utility. |
+| `icontentstackcontext` | TypeScript interface in `ContentstackContext.ts` defining the context shape; naming it prescribes the internal type contract. |
+| `icontentstackpage` | TypeScript interface in `src/interface/content/page.ts`; naming it dictates the internal page type rather than the observable page content. |
+| `contenttypes` | Constant imported from `constants/contentstack` in `ContentstackContext.ts`; naming it prescribes an internal enum/key type. |
+| `modular_blocks` | Internal Contentstack data-structure field name on `IDetailPageStandard` and `IStationFlexiblePage`; naming it dictates the CMS schema field rather than the visible component. |
+| `sidebar_modular_blocks_bottom` | Internal Contentstack data-structure field name visible in `content.mock.ts`; naming it prescribes the schema path for sidebar content. |
+| `entryembedable` | Type imported from `@contentstack/utils` in `page.ts`; naming it dictates a specific vendor SDK type. |
+| `content.mock` | Mock data file referenced in the manifest (`ContentstackAccordion/content.mock.ts`, `ContentstackColorComponent/content.mock.ts`); naming a test double is explicitly forbidden by the rule. |
+
+**Whitelist** (observable surface — what a content author or tester perceives):
+
+| Term | Reason |
+|------|--------|
+| `live preview` | The observable feature: a content author sees draft content rendered as it will appear. |
+| `draft` | Observable state of content being authored but not yet published. |
+| `draft content` | Observable: unpublished content the author is editing. |
+| `draft entries` | Observable: unpublished CMS entries the author wants to preview. |
+| `cms` | The system the content author interacts with; part of the observable surface. |
+| `content` | What the user sees on the website; the observable payload. |
+| `website` | Where content is displayed to end users; observable destination. |
+| `content author` | The user role described in the story; observable persona. |
+| `preview` | The observable behavior of seeing content before publishing. |
+| `header` | Observable content area a user sees (also a field on `IContentstackContext`, but whitelist wins). |
+| `footer` | Observable content area a user sees (also a field on `IContentstackContext`, but whitelist wins). |
+| `page` | Observable content area a user navigates and sees. |
+| `directories` | Observable directory listings a user browses (also a field on `IContentstackContext`, but whitelist wins). |
+| `accordion` | Observable UI component a user interacts with (appears in mock data but is user-facing). |
+| `color card` | Observable UI component a user sees (appears in mock data but is user-facing). |
+| `protected pages` | Observable limitation noted in story context: certain pages cannot be previewed. |
+| `protected content` | Observable limitation noted in story context: certain content cannot be previewed. |

@@ -1,0 +1,31 @@
+# Prompt
+Regenerate the VERIFICATION CRITERIA for this brownfield story. Your previous verification criteria were FLAGGED and must be fixed:
+- VC 1 prescribes HOW — 'preview-mode parameters (e.g., a preview token or preview flag in the URL)' dictates the activation mechanism; restate as observable outcome on the rendered page
+- VC 2 prescribes HOW — 'without preview-mode parameters' dictates mechanism; cross-compares 'identical to current production behavior' presuming sameness check
+- VC 3 prescribes HOW and references internal structures — 'Contentstack client is mocked,' 'preview API call,' 'useContent,' component names are implementation details, not user-facing observations
+- VC 4 prescribes HOW and references internal structures — same as VC 3; 'the same component' is a cross-comparison presuming a mechanism
+- VC 5 prescribes HOW — 'removing preview parameters and reloading' dictates exit mechanism; 'rather than the previously shown draft content' is a cross-comparison
+- VC 6 prescribes HOW — 'opt into preview mode' implies a specific participation mechanism; restate as observable outcome
+- VC 7 references internal structure — API endpoint selection (Preview API vs Delivery API) is not observable on the user-facing surface; restate as what the user sees rendered
+
+THE FIX SITE (located by the code-graph detective — anchor every criterion to the behaviour THIS code produces):
+- src/services/contentstack.ts :: options — This is where the Contentstack Stack initialization config is computed. It currently lacks live_preview configuration, so the Stack only fetches published content via delivery_token — CMS authors cannot see draft/preview content. Every downstream query (getEntry, getSingleEntry, ContentstackFactory) uses this Stack, so adding live_preview here propagates to all content fetching.
+Do NOT write criteria about areas unrelated to this code.
+
+
+Acceptance criteria (IMMUTABLE — the intent to verify; do NOT restate as-is, VERIFY them):
+- (none)
+Description: [GO, UP, MX] Live Preview of Content in CMS
+
+A verification criterion states WHAT AN END USER OR TESTER OBSERVES on the user-facing surface THE TICKET IS ABOUT — the rendered email for an email ticket, the displayed screen/UI for a UI ticket, the API response a CLIENT receives for an API ticket. It is a BLACK-BOX check on that surface. It NEVER describes HOW the value is produced.
+A verification criterion is FORBIDDEN if it:
+- prescribes HOW to implement — any algorithm, mechanism, or approach: "split", "halve", "×0.5", "calculate independently", "per segment", "for each line item", or adding/reading any new field, flag, or service;
+- references an INTERNAL structure that merely FEEDS the ticket's surface — an intermediate payload, a "confirmation data"/DTO object, or a specific response field used to BUILD the output. Verify the surface the ticket names, NOT the data structure behind it;
+- makes a CROSS-COMPARISON that presumes a mechanism — never assert one value "must equal" / "matches" / "is the same as" another (e.g. "the return amount equals the outbound amount"); that presumes a copy/split. Assert the required value is present and correct ON ITS OWN.
+Every verification criterion must be observable, testable, and tied to the ticket's stated symptom/intent.
+
+Do NOT restate an acceptance criterion as-is — express what a tester OBSERVES that confirms it. Address every flag above.
+Output ONLY a JSON array of verification-criterion strings. No prose, no markdown.
+
+# Output
+["A CMS author who has saved a draft edit to an entry (not yet published) sees that draft version of the content rendered on the page when viewing it from the CMS's preview experience.", "A regular site visitor viewing the same page sees only the currently published content, with no unpublished draft material displayed anywhere on the page.", "After the author saves a further change to the draft in the CMS, the newly edited draft content appears on the page the author is previewing.", "Pages across the site continue to render their published content correctly for visitors, with no missing or broken content on any page that draws from the CMS.", "When the author views the page outside of the CMS preview experience, the page displays the published version of the content.", "A CMS author in the GO, UP, or MX markets can begin previewing draft content on the actual site page directly from the CMS, without any developer intervention or code changes.", "The content shown to the author during preview reflects the most recently saved draft in the CMS, with no outdated or previously superseded draft content displayed."]

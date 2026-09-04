@@ -1,0 +1,5 @@
+  [vc-coverage] COVERED   The behavior described in the ticket is observed to be correct after the change: "Hello world greeti
+  [vc-coverage]           ↳ returns hello dolly
+  [vc-coverage] COVERED   Existing behavior related to this area is unchanged (no regression).
+  [vc-coverage]           ↳ returns hello dolly
+  [vc-coverage] VC_UNCOVERED=0 of 2

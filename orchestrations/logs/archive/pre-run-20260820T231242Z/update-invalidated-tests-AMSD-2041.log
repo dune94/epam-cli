@@ -1,0 +1,5 @@
+[ai-run] attempt 2/3 for 'repro-test-writer' — at the top of its declared chain (default), retrying the same rung
+[ai-run] attempt 3/3 for 'repro-test-writer' — at the top of its declared chain (default), retrying the same rung
+
+Error: All providers exhausted without a successful response. Attempted: qwen/z-ai/glm-5.2: fetch failed.
+[ai-run] 'repro-test-writer' failed after 3 attempt(s) across every provider and ladder rung.

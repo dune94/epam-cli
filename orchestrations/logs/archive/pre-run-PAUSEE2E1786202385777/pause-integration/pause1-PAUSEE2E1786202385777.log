@@ -1,0 +1,60 @@
+[0;32m[pre-run-reset] ✓[0m Moved 5 stale *.log / manifest / baseline-cache file(s) → /home/bradleyjerome/projects/ai/epam-cli/orchestrations/logs/archive/pre-run-PAUSEE2E1786202385777 (absence now means 'this run did not write it')
+[0;32m[pre-run-reset] ✓[0m Archived 1 log files → /home/bradleyjerome/projects/ai/epam-cli/orchestrations/logs/archive/pre-run-PAUSEE2E1786202385777
+[1;33m[pre-run-reset][0m   KB scratchpad already empty (all lanes)
+[0;32m[pre-run-reset] ✓[0m KB.md restored from canonical (within-run entries do not carry across runs)
+[1;33m[pre-run-reset][0m Resetting agent-status.json...
+[0;32m[pre-run-reset] ✓[0m agent-status.json reset
+
+[0;32m[pre-run-reset] ✓[0m Pre-run reset complete.
+  PRD:         /tmp/pause-e2e-Ld4IDZ/workspace/synthesized-prd.json
+  Log dir:     /home/bradleyjerome/projects/ai/epam-cli/orchestrations/logs
+  Dashboard:   http://localhost:8092/monitor.html
+  PRD Viewer:  http://localhost:8092/prd-viewer.html
+  Langfuse:    http://localhost:3100
+
+[1;33m[tier3-mock][0m Log: /tmp/tier3-mock-run-20260808T151945-1336292.log
+[1;33m[tier3-mock][0m CodeGraph preflight: verifying every codeline is indexed...
+── Pre-flight assessment ─────────────────────────────────────────────────────
+
+━━━ Pre-flight checks ━━━
+[ Runner script ]
+  ✓ Runner exists: tier3-mock-run.sh
+  ✓ shellcheck clean
+[ Critical variables ]
+  ✓ PRD_FILE is resolved
+  – OUTPUT_DIR unset — set per lane by run-agent-orchestration.sh for multi-codeline projects; absent in the launcher is normal there
+  ✓ PROJECT_ROOT is resolved
+  ✓ ORCH_GATE_MODEL is resolved
+  ✓ ORCH_GATE_PROVIDER is resolved
+[ PRD integrity ]
+  ✓ PRD integrity OK — ? base user stories (canonical/pre-spec-pass — strict phase checks deferred until after spec pass elaboration)
+[ PRD file ]
+  ✓ PRD exists: synthesized-prd.json
+  ✓ PRD valid JSON
+  ✓ PRD content is pending Jira ingest for this run — outputDir check deferred
+  ✓ Story field checks deferred — canonical PRD has no implementation stories yet
+[ API keys ]
+  ✓ OPENROUTER_API_KEY is set
+  ✓ OPENAI_API_KEY is set
+[ Dashboard ]
+  ✓ Dashboard serving prd.json at http://localhost:8092
+[ Self-heal observability ]
+  ✓ LOG_DIR (/home/bradleyjerome/projects/ai/epam-cli/orchestrations/logs) is writable — healing-events.jsonl will land here
+  ✓ healing-events.jsonl is empty/absent — clean slate for this run
+  ✓ nginx serves /logs/healing-events.jsonl — agent-activity.html and health.html will read it
+  ✓ build-info.json has metrics.selfHealing — health.html will render correctly
+  ✓ snapshot-watch.js is running — build-info.json will refresh every 10s
+  ✓ build-info.json is 4s old — snapshot watcher is actively refreshing
+[ Project readiness ]
+  ✓ dist/ is newer than src/
+  ✗ no prd.canonical.json in /tmp/pause-e2e-Ld4IDZ/projectcfg — synthesis will fall back to ANOTHER project's template and this run will be labelled with that project's name
+  ✓ langfuse serving (HTTP 200)
+  ✓ grafana serving (HTTP 302)
+
+
+━━━ ✗ 1 check(s) FAILED — DO NOT run pipeline ━━━
+
+  ✗ Pre-flight FAILED — aborting before spending. Fix the items above.
+[0;31m[tier3-mock] ✗[0m Pre-flight assessment failed
+
+# exit=1

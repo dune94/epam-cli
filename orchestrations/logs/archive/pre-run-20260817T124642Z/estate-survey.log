@@ -1,0 +1,861 @@
+# Prompt
+You are surveying an estate of repositories BEFORE its agent team is assembled.
+
+THE WORK (real tickets from the tracker):
+- MOCK3-1: Riders aged exactly 65 are charged the adult fare
+    The fare rules say riders aged 65 and over pay the concession fare. A rider aged exactly 65 is charged the full adult fare of 350 cents instead of 175. Riders aged 66 and above are charged correctly, so the boundary itself is wrong rather than the rule.
+- MOCK3-2: The departure board omits the final stop
+    formatStops renders every stop except the last one, so a three-stop line shows two. The journey length reported by totalMinutes is correct, which is why the omission has gone unnoticed.
+
+DOCUMENTS LINKED ON THOSE TICKETS:
+- https://www.contentstack.com/docs/headless-cms/live-preview-implementation-for-nextjs-csr-app-router [fetched]
+SOURCE: https://www.contentstack.com/docs/headless-cms/live-preview-implementation-for-nextjs-csr-app-router
+
+HTTP 200
+
+Live preview Implementation for NextJS CSR App router | Contentstack 
+ Get inspired at ContentCon. Learn more and register today 
+
+ Get inspired at ContentCon. Learn more and register today 
+
+ Contentstack.com Academy Login 
+
+ Changelog 
+ APIs 
+ SDKs 
+ menu 
+
+ Home 
+ Developers 
+ Set Up Live Preview 
+ Live Preview Implementation for NextJS CSR App Router
+ content_copy Copy for LLM Copy for LLM markdown View as Markdown 
+ update Last updated July 22, 2026 
+
+ Client-side rendering (CSR) means your website loads data and builds pages directly inside the browser using JavaScript. This guide walks you through setting up Contentstack Live Preview for CSR websites using REST APIs.
+ Prerequisites
+ link 
+
+ Contentstack account 
+ Access to stack settings 
+ Preview token 
+ Website that uses Contentstack Delivery SDKs 
+ IFrame-compatible website to avoid CORS errors
+ Follow these steps to configure Live Preview for your NextJS CSR App router:
+ Set Up the Website
+ link 
+
+ To enable Live Preview on your website, begin by setting up the essentials.
+ Generate a Preview Token
+ link 
+
+ Create a preview token by navigating to Settings > Tokens > Delivery Tokens (press “alt + O” for Windows or “option key + O” for Mac) . 
+ Note It is recommended to use a preview token for Live Preview instead of a previously utilized, read-only management token.
+ Each preview token is associated with a delivery token and shares access to the specific environment. If a delivery token doesn&#x27;t exist, create one and enable the Create Preview Token toggle. For an existing delivery token, use the + Create Preview Token option and copy the generated token.
+ Click to enlarge 
+
+ Update Contentstack&#x27;s Delivery SDK:
+ link 
+
+ Add the Live Preview configuration inside the Contentstack.Stack() method when configuring Contentstack’s Delivery SDK. For example, here’s a sample configuration using the JavaScript Delivery SDK :
+ 
+ 1 2 3 4 5 6 7 8 9 10 11 12 
+ // utils.js
+import Contentstack from 'contentstack'
+const Stack = Contentstack.Stack({ 
+ ...
+ // update your configs here
+ live_preview: {
+ preview_token: preview_token,
+ enable: true,
+ host: 'rest-preview.contentstack.com' //recommended
+ },
+ ...
+})
+
+ Note For the North America endpoint, set the host parameter to  rest-preview.contentstack.com . For other data centers:  
+ AWS EU : eu-rest-preview.contentstack.com 
+ Azure NA : azure-na-rest-preview.contentstack.com 
+ Azure EU : azure-eu-rest-preview.contentstack.com 
+ GCP NA  gcp-na-rest-preview.contentstack.com 
+ GCP EU  gcp-eu-rest-preview.contentstack.com 
+
+ Migrate to New Preview Service (recommended)
+ link 
+
+ Upgrade the Contentstack SDK to its latest version. Find the Contentstack.Stack() initialization method and replace the management_token parameter with the preview_token as shown below:
+ 
+ 1 2 3 4 5 6 7 8 
+ // utils.js
+Contentstack.Stack({
+ ...
+ live_preview: {
+ enable: true,
+ host: "rest-preview.contentstack.com", // optional preview_token: "csxxxxxxxxxxxx"
+ }
+})
+
+ Additional Resource For detailed information on migrating to the preview service refer to the  Migrate to Preview Service documentation.
+ Warning Upgrading to the latest SDK version won&#x27;t disrupt your existing configuration, but you might notice suboptimal performance in live preview within references and other operations. To enhance efficiency, update the host and replace management_token with preview_token .
+
+ Install and Initialize the Live Preview Utils SDK:
+ link 
+
+ Use the Live Preview Utils SDK to listen for content updates and fetch real-time preview data on the client side.
+ You can either use npm or yarn  to install the Live Preview Utils SDK . 
+ To install the package via npm  use the following command:
+ 
+ 1 
+ npm install @contentstack/live-preview-utils@contentstack/utils
+
+ Initialize the SDK using the init() method to set up event listeners for content updates:
+ 
+ 1 2 3 4 5 6 7 8 9 10 11 12 13 14 15 16 17 18 19 20 21 22 
+ // utils.js
+...
+import ContentstackLivePreview from "@contentstack/live-preview-utils";
+ContentstackLivePreview.init({
+ stackSdk: Stack,
+ enable: true,
+ ssr: false,
+ // Recommended: Enables Edit Tags
+ editButton: { enable: true },
+ stackDetails: {
+ apiKey: "your api key",
+ environment: "your environment value",
+ branch: "your branch",
+ },
+ clientUrlParams: {
+ protocol: "https",
+ host: "app.contentstack.com", // Use region-specific host if applicable
+ port: 443,
+ },
+});
+export const onEntryChange = ContentstackLivePreview.onEntryChange;
+...
+
+ Note To avoid configuration reset errors due to rerendering, place the initialization code in a separate JavaScript file.
+
+ Configure Live Preview across Each Webpage
+ link 
+
+ When you update an entry, the onEntryChange() method detects the change and runs your defined logic to fetch updated data. In a React-based setup, each page typically includes a function that retrieves data and updates the component state.
+ In the example below, an updateData() function handles the data fetch and state update. Pass this function to onEntryChange() inside a useEffect() hook to automatically refresh the data whenever the entry content changes.
+ 
+ 1 2 3 4 5 6 7 8 9 10 11 12 13 14 
+ // Footer.js
+ import React from "react";
+ import { onEntryChange } from "./utils.js";
+ const Footer = () => {
+ const [data, setData] = React.useState({});
+ const updateData = async () => {
+ const fetchedData = await getCMSData();
+ setData(fetchedData);
+};
+ React.useEffect(() => {
+ onEntryChange(updateData);
+ }, []);
+ return <div>{data.company_name}</div>;
+ };
+
+ Host the Website
+ link 
+
+ To host a website, you can simply use launch or any other website hosting service.
+
+ Update Stack Settings
+ link 
+
+ To set up Live Preview for the entries of your stack, perform the following steps:
+ Navigate to Settings and select Environments .
+ Set the base URL s for different locales, and click Update .  Click to enlarge 
+ 
+ Select Visual Experience from the stack settings.
+ In the General tab, select the Enable Live Preview checkbox.
+ Set the Default Preview Environment and click Save to save the settings. Tip You can also update the preview URL and environment from the preview settings available on the entry page.
+
+ Enable the Display Setup Status toggle to display the configuration status.        Click to enlarge 
+ You can now see the Live Preview icon within all the entries of your stack and the feature previews data from the hosted website.
+
+ Live Edit Tags for Entries (recommended)
+ link 
+
+ Live Edit tags allow editors to directly jump from the Live Preview pane to the corresponding content fields in the entry editor. Clicking the Edit button next to a content block automatically opens the relevant field. If the field refers to another entry, you’ll be redirected to that entry’s editor page.
+ Additional Resource For detailed information on how to set up Live Edit tags, please refer to our documentation on Set Up Live Edit Tags for Entries with REST 
+
+ expand_less 
+ Platform
+ Solution Center 
+ Marketplace 
+ Changelog 
+ Developers & IT 
+ Business users 
+ Digital leaders 
+ Developer Fast Track 
+ Plans & Pricing 
+ 
+ Solutions
+ Retail 
+ Travel and tourism 
+ Financial services 
+ Technology 
+ Manufacturing 
+ E-commerce 
+ Localization 
+ Personalization 
+ Portals and knowledge bases 
+ 
+ Resources
+ Academy 
+ Docs 
+ Product updates 
+ Contentstack on Contentstack 
+ Blog 
+ Insights and analyst reports 
+ Webinars 
+ Podcasts 
+ Glossary 
+ Content generative library 
+ Community 
+ Headless CMS 
+ Composable AXP 
+ Personalization 
+ CDP 
+ 
+ Customers
+ Case Studies 
+ Customer Care 
+ Contentstack Experience Awards 
+ Customer support 
+ 
+ Partners
+ Overview 
+ Find a partner 
+ Login 
+
+ Company
+ About us 
+ News 
+ Customer support portal 
+ Contact 
+ 
+ Social
+ Facebook 
+ LinkedIn 
+ Instagram 
+ GitHub 
+ YouTube 
+ Discord 
+ X 
+
+ arrow_outward Full AXP by Contentstack Legal Terms Privacy Trust Center Cookie settings
+
+ Copyright © 2026 Contentstack Inc. All rights reserved.
+
+ /
+
+- https://www.contentstack.com/docs/headless-cms/custom-preview-urls#configure-custom-preview-urls [fetched]
+SOURCE: https://www.contentstack.com/docs/headless-cms/custom-preview-urls#configure-custom-preview-urls
+
+HTTP 200
+
+Custom Preview URLs | Contentstack 
+ Get inspired at ContentCon. Learn more and register today 
+
+ Get inspired at ContentCon. Learn more and register today 
+
+ Contentstack.com Academy Login 
+
+ Changelog 
+ APIs 
+ SDKs 
+ menu 
+
+ Home 
+ Headless CMS 
+ Custom Preview URLs
+ content_copy Copy for LLM Copy for LLM markdown View as Markdown 
+ update Last updated July 22, 2026 
+
+ Note Custom Preview URLs is available on select plans. Contact Contentstack support for more information.
+ Custom Preview URLs allow you to define dynamic, pattern-based paths for Live Preview. These paths align preview behavior with your website’s routing logic, including nested routes, taxonomies, multiple domains, and non-native URL fields.
+ By enabling Custom Preview URLs, you can generate preview URLs dynamically using custom patterns and contextual data.
+ Previously, Live Preview used a fixed pattern:
+ 
+ 1 
+ <environment base URL> + <entry's native URL field>
+
+ This approach works for simple scenarios but does not support advanced routing setups.
+ When to Use Custom Preview URLs
+ link 
+
+ Use Custom Preview URLs when:
+ Your application uses nested or hierarchical routing
+ URLs depend on taxonomy or reference fields
+ You manage multiple domains or regional sites
+ URL structures vary by locale, environment, or branch
+ You need to transform or normalize field values before generating URLs
+ How Custom Preview URLs Work
+ link 
+
+ Custom Preview URLs resolve the final preview URL through the following phases:
+ Pattern selection: Selects the matching configuration based on branch and content type.
+ Pattern resolution: Replaces placeholders in the pattern using entry data, environment context, locale, and taxonomy values.
+ Preview rendering: Loads the resolved URL in the Live Preview iframe.
+ Fallback behavior: Reverts to the default preview URL if resolution fails.
+ Custom Preview URLs in Visual Editor
+ link 
+
+ Custom Preview URLs resolve in Visual Editor the same way they do in Live Preview. After you configure a pattern under Settings → Visual Experience → Preview URL , Visual Editor uses that configuration to resolve entry URLs on the canvas. No additional setup is required.
+ To resolve a custom URL, Visual Editor follows the same phases as Live Preview: 
+ Selects the matching configuration for the branch and content type
+ Replaces the placeholders with entry, environment, locale, and taxonomy values
+ Loads the resolved URL on the canvas. 
+ If any required value is missing, Visual Editor displays the unresolved fields so you can complete the entry before previewing it.
+ When an entry relies on a custom URL pattern, its preview URL is generated from the pattern instead of a single URL field. As a result, Visual Editor cannot identify the entry from the target URL alone. 
+ To open the correct entry, the Start editing button passes the entry UID and content type UID as page context. Configure this context once in your front-end code.
+ For setup steps, refer to setPageContext(context) in the Live Preview Utils SDK config reference.
+ Note For internal navigation, such as opening an entry from the entry list or the Tasks page, no extra setup is required, because Contentstack already passes the entry UID and content type UID in the URL.
+ Locale Selection in Visual Editor
+ link 
+
+ In Visual Editor, the locale selector lists all locales available for your custom URL configuration, not just the locales mapped to a base URL in your environment settings. Select a locale to preview and edit the entry in that language.
+ 
+ Configure Custom Preview URLs
+ link 
+
+ To configure Custom Preview URLs, log in to your Contentstack Account and perform the following steps:
+ Go to your stack and click “Settings”.
+ Navigate to Visual Experience and select the Preview URL tab.
+ Enable the Custom Preview URL toggle. Click to enlarge 
+ 
+ Under Base URL , define one or more aliases. Aliases allow you to define multiple hostnames for the same content. Each alias contains a name (identifier) and a base URL pattern . Tip Use aliases to preview the same content across multiple domains or brand-specific hostnames.
+ Click to enlarge 
+ 
+ Define the URL Path : Enter a path name for the preview route.
+ Select the Branch where the configuration applies.
+ Choose whether the pattern applies to All content types or only to Specific content types .
+ Click to enlarge 
+ 
+ Build preview URLs using dynamic placeholders in the pattern. Placeholders use the  {{...}}  syntax and can reference: Entry fields : {{entry.slug}}, {{entry.title}}, {{entry.uid}} 
+ Custom fields : {{entry.custom_field_id}} 
+ Context variables : {{environment}}, {{locale}}, {{branch}}, {{contentTypeUid}} 
+ Reference fields : {{entry.author.name}}, {{entry.parent.url}} 
+ Taxonomy values :  {{taxonomy:brand}} Tip Use {{entry.<field_uid>}} to access any field dynamically, including nested reference fields.
+
+ Click Save after testing your URLs and applying any advanced configurations described in the following sections. Note If multiple configurations exist, Live Preview evaluates them in order and applies the first matching configuration.
+
+ Test Your Configuration
+ link 
+
+ Use the URL Test Console to validate your configuration:
+ Select a content type, environment, and locale.
+ Choose a base URL alias.
+ Preview the resolved URL.
+ Click to enlarge 
+ This helps identify issues early and ensures that patterns resolve as expected.
+ Advanced Configuration
+ link 
+
+ Use the Advanced Config section to define transformations and fallback logic through a guided UI.
+ You can:
+ Transform values (for example, lowercase or regex replacements)
+ Define default values for missing fields
+ Apply custom logic beyond basic pattern matching
+ The UI generates the configuration automatically, reducing the need for manual JSON editing.
+ Click to enlarge 
+ Use advanced configuration when preview URLs depend on transforming or normalizing field values before constructing the final URL.
+ Supported operations include:
+ Text case transformation : Convert values to a consistent format. lowercase: Technology → technology 
+ uppercase: blog → BLOG 
+ 
+ Array handling : Process multi-value fields such as taxonomies or references. join values → ["Technology", "Cloud Computing"] → technology/cloud-computing 
+ 
+ Value mapping : Map values to custom outputs (useful for locales, environments, or categories). "en-us" → "en" 
+ "Artificial Intelligence" → "ai" 
+ 
+ Regex transformations : Modify values using pattern-based replacements. Replace spaces with hyphens: "hello world" → "hello-world" 
+ Remove special characters: "AI & ML!" → "ai-ml" 
+ Normalize accented characters: "Crème Brûlée" → "creme-brulee" 
+ 
+ Default values: Provide fallback values when fields are missing or empty. null → "uncategorized" 
+ 
+ Chained transformations: Apply multiple operations sequentially to achieve the desired output. "Blog Article" → "blog article" → "blog-article" 
+ 
+ Supported Use Cases
+ link 
+
+ Custom Preview URLs support a wide range of routing scenarios, from simple paths to complex, data-driven URL structures.
+ Routing Patterns
+ link 
+
+ Use routing patterns to define URL structures based on entry fields and static path segments. This approach is useful when your website follows predictable URL hierarchies, such as blogs, product pages, or category-based navigation.
+ Nested Routing
+ Define nested paths using multiple entry fields.
+ Pattern Example :
+ 
+ 1 
+ /blog/{{entry.category}}/{{entry.slug}}
+
+ Example Entry :
+ 
+ 1 2 3 4 
+ {
+ "category": "food",
+ "slug": "ramen-recipe"
+}
+
+ Result :
+ 
+ 1 
+ /blog/food/ramen-recipe
+
+ This approach helps create clean, hierarchical URLs that reflect your content structure.
+ Prefix or Suffix-Based URLs
+ Add static segments to enforce consistent URL structures.
+ Examples :
+ 
+ 1 2 
+ /shop/product/{{entry.slug}}
+/blog/{{entry.slug}}-{{locale}}
+
+ Taxonomy and Data-Driven URLs
+ link 
+
+ Use taxonomy and data-driven URLs when your routing depends on classification systems such as categories, regions, or tags. This approach helps you generate consistent URLs dynamically without duplicating content across multiple structures.
+ Taxonomy-Driven URLs
+ Use taxonomy values to dynamically construct both domain and path-based URL structures. This is useful for scenarios such as region- or market-specific routing without duplicating content.
+ Pattern Example (Path-based): 
+ 
+ 1 
+ /articles/{{taxonomy:category}}/{{entry.slug}}
+
+ Pattern Example (Domain + Path): 
+ 
+ 1 
+ https://{{taxonomy:region}}.example.com/articles/{{taxonomy:category}}/{{entry.slug}}
+
+ Result: 
+ 
+ 1 2 
+ /articles/technology/cloud-computing/ai-revolution
+https://us.example.com/articles/technology/cloud-computing/ai-revolution
+
+ This approach enables:
+ Hierarchical URLs using taxonomy values (e.g., category, subcategory)
+ Region-specific domains using taxonomy (e.g., us , eu , apac )
+ Reuse of the same content across multiple markets
+ Fallback values can be applied when taxonomy data is missing, ensuring URLs remain valid and consistent.
+ Dynamic Parameter-Based URLs
+ Use dynamic parameter-based URLs when your routing relies on system-generated or custom identifiers, such as entry IDs or external reference values. This is useful for applications that require stable, ID-driven URL structures.
+ Examples :
+ 
+ 1 2 
+ /news/{{entry.uid}}
+/articles/{{entry.article_id}}/{{entry.slug}}
+
+ Localization and Environment-Based URLs
+ link 
+
+ Use localization and environment-based URLs when your content needs to adapt across locales or environments. This approach helps you dynamically construct URLs for multilingual sites or environment-specific previews without hardcoding values.
+ Locale-Based URLs
+ Position locale codes anywhere in the URL.
+ Examples :
+ 
+ 1 2 3 
+ /{{locale}}/blog/{{entry.slug}}
+/blog/{{locale}}/{{entry.slug}}
+/blog/{{entry.slug}}-{{locale}}
+
+ Environment- and Locale-Based URLs
+ Dynamically resolve URLs without hardcoding environments.
+ Example :
+ 
+ 1 
+ https://{{environment}}.example.com/{{locale}}/{{entry.slug}}
+
+ Multi-Domain and Host-Based URLs
+ link 
+
+ Use multi-domain and host-based URLs when you need to preview the same content across different domains or brand-specific hostnames. This is especially useful for multi-brand, regional, or localized deployments.
+ Preview the same content across multiple domains using aliases.
+ Examples :
+ 
+ 1 2 
+ example.com
+example.co.in
+
+ This is useful for multi-brand, regional, or localized websites.
+ Transformations and Clean URLs
+ link 
+
+ Use transformations to standardize and sanitize URL values generated from entry data. This ensures that URLs remain consistent, readable, and optimized for SEO, even when source data contains special characters or inconsistent formatting.
+ Sanitized and SEO-Friendly URLs
+ Use transformations to clean and standardize values.
+ Example :
+ 
+ 1 
+ /recipes/{{entry.title}}
+
+ Transforms :
+ "Crème Brûlée" → /recipes/creme-brulee 
+ Advanced Config JSON :
+ 
+ 1 2 3 4 5 6 7 8 9 10 11 12 13 14 15 16 17 18 19 20 21 22 23 24 25 26 27 28 29 30 31 32 33 34 35 36 37 38 39 40 41 42 43 44 45 46 47 48 49 50 51 52 53 54 55 56 57 58 59 60 61 62 63 64 65 66 67 68 69 70 71 72 73 74 75 76 77 78 79 80 81 82 83 84 85 86 
+ {
+ "fields": {
+ "entry.title": {
+ "operations": [
+ { "type": "lowercase" },
+ { 
+ "type": "regex", 
+ "config": { 
+ "pattern": "[àáâãäåæ]", 
+ "replace": "a" 
+ } 
+ },
+ { 
+ "type": "regex", 
+ "config": { 
+ "pattern": "[èéêë]", 
+ "replace": "e" 
+ } 
+ },
+ { 
+ "type": "regex", 
+ "config": { 
+ "pattern": "[ìíîï]", 
+ "replace": "i" 
+ } 
+ },
+ { 
+ "type": "regex", 
+ "config": { 
+ "pattern": "[òóôõö]", 
+ "replace": "o" 
+ } 
+ },
+ { 
+ "type": "regex", 
+ "config": { 
+ "pattern": "[ùúûü]", 
+ "replace": "u" 
+ } 
+ },
+ { 
+ "type": "regex", 
+ "config": { 
+ "pattern": "[ñ]", 
+ "replace": "n" 
+ } 
+ },
+ { 
+ "type": "regex", 
+ "config": { 
+ "pattern": "[ç]", 
+ "replace": "c" 
+ } 
+ },
+ { 
+ "type": "regex", 
+ "config": { 
+ "pattern": "\\s+", 
+ "replace": "-" 
+ } 
+ },
+ { 
+ "type": "regex", 
+ "config": { 
+ "pattern": "[^a-z0-9-]", 
+ "replace": "" 
+ } 
+ },
+ { 
+ "type": "regex", 
+ "config": { 
+ "pattern": "-+", 
+ "replace": "-" 
+ } 
+ },
+ { 
+ "type": "regex", 
+ "config": { 
+ "pattern": "^-|-$", 
+ "replace": "" 
+ } 
+ }
+ ]
+ }
+ }
+}
+
+ Mapped or Shortened Values
+ Convert values into predefined formats.
+ Example :
+ {{entry.topic}} → ai (from "Artificial Intelligence")
+ Advanced Config JSON :
+ 
+ 1 2 3 4 5 6 7 8 9 10 11 12 13 14 15 16 17 
+ {
+ "fields": {
+ "entry.topic": {
+ "operations": [
+ {
+ "type": "map",
+ "config": {
+ "Artificial Intelligence": "ai",
+ "Machine Learning": "ml",
+ "Cloud Computing": "cloud",
+ "Data Science": "data-science"
+ }
+ }
+ ]
+ }
+ }
+}
+
+ Custom Field-Driven URLs
+ link 
+
+ Use custom field-driven URLs when you need full control over URL generation. This approach allows you to define complete URLs within structured fields, making it suitable for highly customized routing logic.
+ Fully Custom URL Definitions
+ Use structured fields to define complete URLs dynamically.
+ Example :
+ 
+ 1 
+ {{entry.customUrl[environment][locale]}}
+
+ This enables full control over URLs across environments and locales.
+ Advanced Dynamic URLs
+ link 
+
+ Use advanced dynamic URLs when your routing requires combining multiple fields and transformations. This approach helps generate complex, multi-level URL structures that reflect detailed content relationships.
+ Complex Multi-Field URLs
+ Combine multiple fields with transformations to generate rich URL structures.
+ Example :
+ 
+ 1 
+ /{{entry.content_type}}/{{entry.category}}/{{entry.topic}}/
+
+ Result :
+ 
+ 1 
+ /blog-article/technology/agent-os/ai/
+
+ Fallback and Error Handling
+ link 
+
+ Fallback and error handling ensure that preview URLs continue to work even when data is missing or patterns fail to resolve. This helps maintain a consistent preview experience while clearly surfacing configuration issues.
+ Live Preview handles URL resolution failures through a combination of defaults, error feedback, and fallback behavior.
+ Resolution Flow: 
+ Pattern Resolution : The system attempts to resolve all placeholders using entry data, locale, environment, and taxonomy values.
+ Default Value Handling: If a required value is missing, the system checks for a default value defined in Advanced Config and uses it if available.
+ Error Handling: If a required value is still missing after applying defaults, Live Preview displays an error screen indicating which value could not be resolved. This helps identify gaps in the configuration.
+ System Fallback: In cases where URL resolution fails due to processing errors (such as invalid transformations), Live Preview falls back to the traditional behavior: 
+ 1 
+ <base URL> + <entry URL field>
+
+ Base URL Fallback: If the entry does not contain a URL field value, only the base URL is loaded.
+ This layered approach ensures that:
+ Missing values are handled gracefully using defaults
+ Configuration issues are surfaced clearly through error messages
+ Preview functionality remains available through fallback mechanisms when resolution fails
+ Best Practices
+ link 
+
+ To ensure scalable, accurate, and maintainable custom preview configurations, follow these best practices:
+ Start with simple patterns, then add advanced configuration only when needed.
+ Use base URL aliases for multi-domain setups instead of duplicating patterns.
+ Always define defaults for optional fields.
+ Test preview behavior across environments and locales.
+ Use custom fields for highly complex URL logic.
+ Custom Preview URLs provide control over how preview URLs are generated in Live Preview. This is especially useful for complex routing, multi-domain setups, and dynamic URL structures.
+ Combine pattern-based configuration with optional transformations to create scalable and consistent preview experiences across content types, locales, and environments.
+
+ expand_less 
+ Platform
+ Solution Center 
+ Marketplace 
+ Changelog 
+ Developers & IT 
+ Business users 
+ Digital leaders 
+ Developer Fast Track 
+ Plans & Pricing 
+ 
+ Solutions
+ Retail 
+ Travel and tourism 
+ Financial services 
+ Technology 
+ Manufacturing 
+ E-commerce 
+ Localization 
+ Personalization 
+ Portals and knowledge bases 
+ 
+ Resources
+ Academy 
+ Docs 
+ Product updates 
+ Contentstack on Contentstack 
+ Blog 
+ Insights and analyst reports 
+ Webinars 
+ Podcasts 
+ Glossary 
+ Content generative library 
+ Community 
+ Headless CMS 
+ Composable AXP 
+ Personalization 
+ CDP 
+ 
+ Customers
+ Case Studies 
+ Customer Care 
+ Contentstack Experience Awards 
+ Customer support 
+ 
+ Partners
+ Overview 
+ Find a partner 
+ Login 
+
+ Company
+ About us 
+ News 
+ Customer support portal 
+ Contact 
+ 
+ Social
+ Facebook 
+ LinkedIn 
+ Instagram 
+ GitHub 
+ YouTube 
+ Discord 
+ X 
+
+ arrow_outward Full AXP by Contentstack Legal Terms Privacy Trust Center Cookie settings
+
+ Copyright © 2026 Contentstack Inc. All rights reserved.
+
+ /
+
+WHAT EACH CODELINE DECLARES IT DEPENDS ON (its own manifest — ground truth about
+the stack, not inference from ticket text):
+- vitest
+- typescript
+
+THE CODELINES IN SCOPE, and where each is checked out:
+- mocka: /home/bradleyjerome/projects/mock3/mock-a
+- mockb: /home/bradleyjerome/projects/mock3/mock-b
+
+HOW TO LOOK — USE THE SYMBOL INDEX, NOT TEXT SEARCH.
+
+Every codeline above is already indexed in CodeGraph. Use codegraph_query as your PRIMARY
+instrument, and call it iteratively — 5-10 calls is normal:
+  - codegraph_query explore "<domain nouns from the ticket>"  — START HERE, per codeline
+  - codegraph_query query|callers|callees "<symbol>"          — trace what explore surfaced
+  - codegraph_query show "<file> [start] [end]"               — read the real lines before
+                                                                quoting anything as evidence
+It returns real symbols, their definition sites, who calls them, and which have tests. That is
+the question you are actually asking: where does this codeline wire the thing the ticket is
+about. Text search cannot answer it and ranks a vendored copy of a package alongside the one
+line that initialises it.
+
+Reserve 'search' for what a symbol index cannot hold — a config key, an environment variable
+name, a literal string. Then treat its result with suspicion:
+
+  A SEARCH THAT RETURNS NOTHING IS NOT EVIDENCE THAT NOTHING IS THERE.
+
+On 2026-08-08 this survey reported "searched for seven patterns, all returned zero matches, no
+existing infrastructure was found, meaning this is greenfield work" about three codelines
+holding 243, 102 and 158 matching source files. The search tool was silently broken and every
+call returned "(no matches found)". The reasoning was sound and the premise was false. If a
+search comes back empty, confirm with codegraph_query before concluding absence — and if the
+two disagree, say so in your evidence rather than picking one.
+
+YOUR JOB, and its limits:
+
+1. For EVERY codeline above, OPEN IT and decide whether this work reaches it. The ticket's
+   labels and components are a claim, not evidence — they are frequently wrong about which
+   repositories are involved, which is why you exist. Report what you actually looked at.
+
+2. "I looked and this work does not reach this codeline" is a VALUABLE answer. Report it as
+   no_work_found, with the evidence. It is not the same as not having looked, and reporting
+   the two as one is how an unexamined repository comes to read as a clean bill of health.
+
+3. Recommend which codelines need their own investigator agent, and what each should focus on.
+   Keep that recommendation OUT of your findings: findings are what you saw, recommendations
+   are about the team.
+
+REPORT THE EXACT FILES YOU OPENED, in "filesRead". If you report a codeline as in_scope you
+must name AT LEAST ONE FILE you opened in it: saying the work reaches a repository you did not
+read is an assertion, and an assertion of exactly that kind produced "no existing
+infrastructure, this is greenfield work" about an estate with 243 matching source files.
+Looking and finding nothing is different, and is a valuable answer — report that as
+no_work_found with what you read. A directory tells a later reader almost
+nothing — src/context/ exists in most codelines — and a claim about it cannot be checked. A
+file path can be verified, and a brief built on one is grounded. Report what you read even
+where you conclude the work does not reach that codeline.
+
+WHAT YOU MUST NOT DO. You are not fixing anything and you are not choosing files to change.
+Do not say which file to edit, which function to patch, or what the change should be. Naming a
+file as something you READ is evidence and is wanted; naming one as the place to fix is a
+decision that is not yours. Each codeline gets its own investigator working inside that
+repository, and it decides. A fix site you supply for a repository you swept from the outside
+is how one codeline's file ends up in another's work — so report what you saw, state where to
+look, and let the investigator look.
+
+Respond with ONLY valid JSON (no markdown fences, no report, no commentary before or after):
+{
+  "codelines": [
+    {
+      "codeline": "<exactly as named in scope above>",
+      "state": "in_scope | no_work_found | not_investigated | failed",
+      "evidence": "<what you opened and what you saw>",
+      "surfaces": ["<directory or module>"],
+      "filesRead": ["<exact path of a file you opened>"]
+    }
+  ],
+  "recommendedInvestigators": [
+    { "codeline": "<name>", "focus": "<what it should concentrate on>", "why": "<what you saw>" }
+  ]
+}
+
+One entry in "codelines" for EVERY codeline listed in scope. Everything you want to say goes
+inside these fields — a prose report outside this JSON is discarded unread, however good it is.
+
+# Output
+{
+  "codelines": [
+    {
+      "codeline": "mocka",
+      "state": "in_scope",
+      "evidence": "Opened src/fares.ts and test/fares.test.ts. The fareFor function (line 10) uses `rider.age > 65` to decide concession fare, but the JSDoc on line 7 states 'Riders aged 65 AND OVER pay the concession fare.' A rider aged exactly 65 falls through to line 12 and gets BASE_FARE_CENTS (350) instead of CONCESSION_FARE_CENTS (175). This is exactly MOCK3-1. The test file tests age 70 (passes) but has no boundary test at age 65, so the bug is uncaught. The codeline contains only fares.ts and its test — no schedule/stop logic.",
+      "surfaces": ["src/fares.ts", "test/fares.test.ts"],
+      "filesRead": ["/home/bradleyjerome/projects/mock3/mock-a/src/fares.ts", "/home/bradleyjerome/projects/mock3/mock-a/test/fares.test.ts"]
+    },
+    {
+      "codeline": "mockb",
+      "state": "in_scope",
+      "evidence": "Opened src/schedule.ts and test/schedule.test.ts. The formatStops function (line 6) loops `for (let i = 0; i < stops.length - 1; i++)`, which skips the last stop entirely — a three-stop line renders only two. This is exactly MOCK3-2. totalMinutes (line 11) correctly reads the last element, confirming the ticket's note that the omission went unnoticed because journey length is correct. The test file checks for arrow separator and first-stop name but never asserts the last stop appears. The codeline contains only schedule.ts and its test — no fare logic.",
+      "surfaces": ["src/schedule.ts", "test/schedule.test.ts"],
+      "filesRead": ["/home/bradleyjerome/projects/mock3/mock-b/src/schedule.ts", "/home/bradleyjerome/projects/mock3/mock-b/test/schedule.test.ts"]
+    }
+  ],
+  "recommendedInvestigators": [
+    {
+      "codeline": "mocka",
+      "focus": "The boundary condition in fareFor at src/fares.ts line 10: `rider.age > 65` should be `>= 65` per the documented rule. Add a test at age 65 to the existing test/fares.test.ts.",
+      "why": "The code and its own JSDoc disagree on the boundary; the existing test suite has no age-65 case so the regression is invisible."
+    },
+    {
+      "codeline": "mockb",
+      "focus": "The loop bound in formatStops at src/schedule.ts line 6: `i < stops.length - 1` drops the final stop. It should iterate through all stops. Add a test asserting the last stop name appears in the output.",
+      "why": "The off-by-one is in the rendering loop; totalMinutes is correct, which masked the bug. The existing tests only check for the first stop and arrow, never the last."
+    }
+  ]
+}

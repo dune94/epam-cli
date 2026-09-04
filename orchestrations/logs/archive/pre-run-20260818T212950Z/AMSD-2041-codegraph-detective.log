@@ -1,0 +1,412 @@
+# Prompt
+You are the investigator for the metrolinx codeline, a Next.js + React + TypeScript project. You read and report on this repository only; you never write code and never make claims about other codelines.
+
+Your task is to characterize the Contentstack data-fetch architecture so the implementer can integrate Live Preview. Focus on these areas:
+
+1. Stack configuration: Read src/services/contentstack.ts. Document how contentstack.Stack() is initialized — every option passed, the ContentstackFactory class, and its createContentTypeQuery / createContentTypeEntryQuery methods. Confirm whether any live_preview block, preview_token, or onEntryChange reference exists.
+
+2. Page data fetching: Read src/services/pageService.ts. Document getPageEntry and getSinglePageEntry — their signatures, whether they run server-side (getStaticProps/getServerSideProps) or client-side, and how they call the factory.
+
+3. Content distribution: Find and read the useContent hook. Document how it receives data from page-level fetch functions and distributes it to child components, and whether it supports reactivity/refetch.
+
+4. Target pages: Read src/components/pages/Homepage.tsx and find the Discover Article page component. Document which components each renders, how they consume content, and whether rendering is SSR, SSG, or CSR.
+
+5. Routing model: Determine whether the project uses Next.js Pages Router or App Router by checking for the presence of a src/pages/ directory and by inspecting next.config.js for any appDir settings. The linked Contentstack doc targets CSR App Router — report which router is actually in use so the implementer knows whether the doc's pattern applies directly or needs adaptation.
+
+6. Dependencies: The manifest declares contentstack and @contentstack/utils but NOT @contentstack/live-preview-utils. Confirm this by reading package.json. Report the installed contentstack SDK version.
+
+Report findings as facts about what the code contains, with file paths and line numbers. Do not speculate about SDK APIs you have not verified in the installed packages.
+
+You are investigating this ticket. The repository is at: /home/bradleyjerome/projects/metrolinx/next.metrolinx.com
+\nJIRA DOES NOT CLASSIFY THIS AS A BUG (issue type: Story). This is a HINT, not a certainty — if the ticket's own text below clearly describes existing behavior that is wrong, trust the ticket over this hint. Assuming novel: there is likely NO existing bug and no wrong value to trace. Inventing a "cause" for a capability that does not exist yet produces a confident wrong answer. Your job is the ATTACHMENT POINT — the existing file/function/provider/hook/route/component this new capability must plug into, and anything already present the implementation should REUSE — not a fix site.\n
+TICKET (read it, then decide for YOURSELF which few domain nouns matter — do not treat every word as a search term):
+Title: [MX] Live Preview of Content in CMS (part 1)
+Description: AS a  Content Author,  I WANT  to preview draft entries in CMS for the MX Homepage and Discover Article pages  SO THAT  I can see how content will be shown on the website
+Acceptance Criteria:
+See in:
+
+
+
+
+Original Requirements:
+Bullet points:
+ 
+
+ AS a Content Author, I WANT to preview draft entries in CMS, SO THAT I can see how content will be shown on the website
+ability to preview draft entries in CMS
+Notes& Assumptions  Limitation: Might not be possible to preview protected pages and content.
+Original Total Estimate:  8  Original FE Estimate:  8  Original DAM Estimate:  0  Original BE Estimate:  0
+Acceptance criteria:
+- See in:
+
+Your CodeGraph tool is the shell script at: /home/bradleyjerome/projects/ai/epam-cli/orchestrations/scripts/codegraph-agent-query.sh
+Invoke it with the Bash tool, always passing PROJECT_ROOT:
+  PROJECT_ROOT="/home/bradleyjerome/projects/metrolinx/next.metrolinx.com" bash "/home/bradleyjerome/projects/ai/epam-cli/orchestrations/scripts/codegraph-agent-query.sh" explore <domain nouns>
+  PROJECT_ROOT="/home/bradleyjerome/projects/metrolinx/next.metrolinx.com" bash "/home/bradleyjerome/projects/ai/epam-cli/orchestrations/scripts/codegraph-agent-query.sh" callers <SymbolName>
+  PROJECT_ROOT="/home/bradleyjerome/projects/metrolinx/next.metrolinx.com" bash "/home/bradleyjerome/projects/ai/epam-cli/orchestrations/scripts/codegraph-agent-query.sh" callees <SymbolName>
+  PROJECT_ROOT="/home/bradleyjerome/projects/metrolinx/next.metrolinx.com" bash "/home/bradleyjerome/projects/ai/epam-cli/orchestrations/scripts/codegraph-agent-query.sh" show <file> [startLine] [endLine]
+
+
+WHAT THE ESTATE SURVEY ALREADY FOUND IN THIS CODELINE — a HYPOTHESIS, not a conclusion.
+
+This was read from the repository before your story was specified. It may be right, partial,
+or aimed at a different story. VERIFY it against the index before you rely on it, and discard
+it if the code does not agree — you own the fix site, not the survey.
+
+Opened src/services/contentstack.ts (lines 1-95). The Contentstack Stack is initialized at line 91 via `contentstack.Stack(options)` where `options` (lines 78-90) contains api_key, delivery_token, environment, branch, and fetchOptions — but NO `live_preview` block. Searched for `live_preview`, `preview_token`, `onEntryChange`, and `live-preview-utils` across the entire repo: all returned zero matches in source files (only orchestration log hits). The manifest lists `contentstack` and `@contentstack/utils` but NOT `@contentstack/live-preview-utils`. The codebase uses a `ContentstackFactory` class (line 109) with `createContentTypeQuery` and `createContentTypeEntryQuery` methods for data fetching, and components consume data via a `useContent` hook. Homepage is at src/components/pages/Homepage.tsx (renders ContentStackHomePageHeroBanner, HomepageComponentMapper, ContentstackRecentNews). Page service functions `getPageEntry` and `getSinglePageEntry` exist in src/services/pageService.ts. None of these are wired to any live-preview callback. The three integration points from the docs (live_preview config in Stack(), @contentstack/live-preview-utils init with onEntryChange, and page-level onEntryChange subscription) are all absent, confirming this work has not been started.
+
+Files it named: src/services/contentstack.ts, src/services/pageService.ts, src/components/pages/Homepage.tsx, src/components/contentstack/
+
+
+YOUR FIRST `explore` HAS ALREADY BEEN RUN FOR YOU — these are its real results (domain nouns only, symptom/presentation words stripped). Treat this as call 1 of your budget; do NOT re-run it. Start from step 2: decide whether the top hit COMPUTES the wrong value or only READS it, and trace from there.
+
+=== PRE-COMPUTED `explore` RESULTS ===
+**Dynamic-dispatch links among your symbols**
+(synthesized — the indirect hops grep/Read would reconstruct; the `@file:line` is the wiring site)
+
+- EventRegistrationForm → FormInput   [dynamic: renders <FormInput>]
+- AccountInformationForm → FormInput   [dynamic: renders <FormInput>]
+- SubscribeToEmailForm → FormInput   [dynamic: renders <FormInput>]
+- FormInput → InputField   [dynamic: renders <InputField>]
+- Homepage → ContentStackHomePageHeroBanner   [dynamic: renders <ContentStackHomePageHeroBanner>]
+- Homepage → HomepageComponentMapper   [dynamic: renders <HomepageComponentMapper>]
+
+> Full source for these symbols is below — the call flow among them, followed by their bodies.
+**Exploration: mx live preview of content in cms part 1 as a author i want to draft entries for the homepage and discover article pages so that can see how will be shown on website acceptance criteria original requirements bullet points ability notes assumptions limitation might not possible protected total estimate 8 fe dam 0**
+
+Found 36 symbols across 3 files.
+
+**Blast radius — what depends on these (update/verify before editing)**
+
+- `PageService` (src/services/pageService.ts:100) — 1 caller in `src/services/pageService.ts`; ⚠️ no covering tests found
+- `getContentStackNewsArticles` (src/api/utils/_contentstack_getNewsArticles.ts:5) — 2 callers in `src/pages/api/v1/news-articles.ts`; ⚠️ no covering tests found
+- `PageComponent` (src/interface/content/page.ts:98) — 7 callers in `src/components/componentMappers/ConstructionNoticeComponentMapper.tsx`, `src/components/componentMappers/HomepageComponentMapper.tsx`, `src/components/componentMappers/HomepageModularBlocksMapper.tsx`, `src/components/componentMappers/ProjectDetailsComponentMapper.tsx` +1 more; ⚠️ no covering tests found
+
+**Relationships**
+
+**calls:**
+- Homepage → getValue
+- Homepage → ContentStackHomePageHeroBanner
+- Homepage → HomepageComponentMapper
+- Homepage → ContentstackRecentNews
+- Homepage → ContentStackLandAcknowledgement
+- getValue → isEmpty
+- Footer → getValue
+- mapFeaturedCardContentToProps → getValue
+- LinkedProjects → getValue
+- ProjectHubNavigation → getValue
+- ... and 102 more
+
+**references:**
+- getAllPublishedPages → nonPageContentTypes
+- getAllPublishedPages → IEnrichedPublishedPage
+- getMappedByLocalePageSlugs → IEnrichedPublishedPage
+- getMappedByLocalePageSlugs → IMappedByLocaleDirectories
+- getMappedByLocalePageSlugs → IMappedByLocalePageSlugs
+- getContentStackNewsArticles → ContentstackLocales
+- getEventsList → ContentstackLocales
+- mapSubBrandCardContentToProps → ContentstackLocales
+- IContentstackRedirect → ContentstackLocales
+- IContentstackGetEntry → ContentstackLocales
+- ... and 65 more
+
+**instantiates:**
+- newsArticlesHandler → CreateResponse
+- newsArticlesHandler → Failure
+- newsArticlesHandler → Success
+
+**Source Code**
+
+> The code below is the **verbatim, current on-disk source** of these files — re-read from disk on this call and line-numbered, byte-for-byte identical to what the Read tool returns. It is NOT a summary, outline, or stale cache. Treat each block as a Read you have already performed: do not Read a file shown here.
+
+**`src/interface/content/page.ts`** — PageComponent(interface), PageComponents(type_alias), IVideo(interface), IValues(interface), IAttentionBlock(interface), ISocialMediaEmbed(interface), IPageLevelCTA(interface), IBannerWithImage(interface), IQuote(interface), IStaticMaps(interface), +6 more
+
+```typescript
+1	import { EntryEmbedable } from "@contentstack/utils";
+2	import { ICloudinaryImage } from "@metrolinx/cx-shared/build/src/interface/content/global";
+3	import { IPersonListingProps } from "components/PersonListing/PersonListing";
+4	import { IContentstackArcGisMap } from "interface/content/arcGisMap";
+5	import { IBrandRibbon } from "interface/content/brandRibbon";
+6	import { IAccordion } from "./accordion";
+7	import { IBookAMeeting } from "./bookAMeeting";
+8	import { IClickthroughMap } from "./clickthroughMap";
+9	import { IColorComponent } from "./colorCard";
+10	import { IContentCardsList } from "./contentCard";
+11	import { IDataPoint } from "./datapoints";
+12	import { IContentstackDirectory } from "./directory";
+13	import { IEventCardsContent, IJoinEventContent } from "./event";
+14	import { IFeaturedListingCards } from "./featureListing";
+15	import { IContentstackImage, IContentstackLink, IContentstackRef } from "./global";
+16	import { IHeroBanner } from "./hero";
+17	import { IContentstackInfoCards } from "./infoCard";
+18	import { IMixedCards } from "./mixedCard";
+19	import { IPodcast } from "./podcast";
+20	import { IContentstackProjectHub } from "./project";
+21	import { IRelatedLinks } from "./relatedLinks";
+22	import { ISlidoEmbedWithHeight } from "./slidoEmbed";
+23	import { ISubscribeCard } from "./subscribeCard";
+24	import { ITableFixedColumn } from "./table";
+25	import { ITimelineItem, TimelineChronologyEnum } from "./timeline";
+26	
+27	interface IYoutubeVideo {
+28	  items: IYoutubeVideoItem[];
+29	}
+30	
+31	interface IYoutubeVideoItem {
+32	  id: {
+33	    videoId: string;
+34	  };
+35	}
+36	
+37	interface IVideo {
+38	  video_heading?: string;
+39	  youtube_video?: IYoutubeVideo;
+40	  video_caption?: string;
+41	}
+42	
+43	export interface IValues {
+44	  heading: string;
+45	  introduction: string;
+46	}
+47	
+48	export interface IQuote {
+49	  text: string;
+50	  citation?: string;
+51	  citationLink?: string;
+52	}
+53	
+54	export interface IAttentionBlock {
+55	  contentKey: string;
+56	}
+57	
+58	export interface ISocialMediaEmbed {
+59	  social_embed_url?: string;
+60	}
+61	
+62	export interface IPageLevelCTA {
+63	  cta_name_and_url: IContentstackLink;
+64	  internal_link: IContentstackPage[];
+65	}
+66	
+67	export interface ITimelineItemComponent {
+68	  item_chronology: TimelineChronologyEnum;
+69	  item_date: string;
+70	  item_description: string;
+71	}
+72	
+73	export type DirectionType = "Left:Right" | "Right:Left";
+74	
+75	export interface IBannerWithImage {
+76	  banner_image: ICloudinaryImage[];
+77	  banner_heading: string;
+78	  banner_introduction: EntryEmbedable | EntryEmbedable[];
+79	  banner_direction: DirectionType;
+80	  color_selection: string;
+81	}
+82	
+83	export interface IStaticMaps {
+84	  static_map: ICloudinaryImage[];
+85	}
+86	
+87	export interface ISubscribeBlock {
+88	  subscription_signup_heading: string;
+89	  subscription_signup_copy: string;
+90	  subscribe_cta: IContentstackLink;
+91	}
+92	
+93	export interface IInteractiveMap {
+94	  map_image: ICloudinaryImage[];
+95	  map_url: IContentstackLink;
+96	}
+97	
+98	export interface PageComponent {
+99	  Video?: IVideo;
+100	  Image?: IContentstackImage;
+101	  image_component?: IContentstackImage;
+102	  Feature_Listing_Cards?: IFeaturedListingCards;
+103	  Feature_Listing?: IFeaturedListingCards;
+104	  Table_Fixed_Column?: ITableFixedColumn;
+105	  Table?: ITableFixedColumn;
+106	  Rich_Text_Complex?: any;
+107	  Rich_Text_Basic?: any;
+108	  Person_Listing?: IPersonListingProps;
+109	  Person_Listing_with_Bios?: IPersonListingProps;
+110	  Values?: IValues;
+111	  Brands?: IBrandRibbon;
+112	  Promo_Ribbon?: IBrandRibbon;
+113	  promo_ribbon?: IBrandRibbon;
+114	  brand_ribbon?: IBrandRibbon;
+115	  Timeline?: ITimelineItem[];
+116	  Data_Points?: IDataPoint[];
+117	  data_points?: IDataPoint[];
+118	  Attention_Block?: IAttentionBlock;
+119	  Podcast_Component?: IPodcast;
+120	  Content_Cards?: IContentCardsList;
+121	  content_cards?: IContentCardsList;
+122	  Social_Media_Embed?: ISocialMediaEmbed;
+123	  Page_Level_CTA?: IPageLevelCTA;
+124	  page_level_cta?: IPageLevelCTA;
+125	  Color_Cards?: IColorComponent;
+126	  Card_and_Icon_Color_Component?: IColorComponent;
+127	  Card_Cards?: IColorComponent;
+128	  Banner_with_Image?: IBannerWithImage;
+129	  Quote?: IQuote;
+130	  quote_component?: IQuote;
+131	  Static_Map_Component?: IStaticMaps;
+132	  static_map_component?: IStaticMaps;
+133	  Static_Map?: IStaticMaps;
+134	  Accordion?: IAccordion;
+135	  Clickthrough_Map?: IClickthroughMa
+… (truncated — re-run explore yourself if you need the rest)
+=== END PRE-COMPUTED RESULTS ===
+
+CONVERGE FAST — HARD LIMIT: 6 tool calls total. This is not a suggestion.
+By your 6th tool call you MUST stop querying and emit the JSON answer. A partial map of the attachment points is infinitely better than no answer.
+1. First call: `explore` with the DOMAIN NOUNS only (drop symptom/presentation words).
+2. NOTHING IS BROKEN HERE. This story asks for a capability that does not exist yet, so there is no wrong value to trace and no line to quote. Do not hunt for a cause — you will invent one.
+3. FIND EVERY PLACE THIS WORK MUST TOUCH. This is the most important output, and returning only ONE is the known failure of this step. A new capability almost never lands in a single file. Trace the SHAPE of it through this repository, in whatever terms this repository uses:
+   - WHERE IT IS SET UP — the place the thing being enabled is created, configured or registered. Start here.
+   - WHAT CARRIES IT — anything between that setup and the code that uses it: a shared module, a wrapper, an app-wide registration, a passed-down value. There may be none; there may be several.
+   - EVERYWHERE IT IS USED — every place that reads the affected data or must react when it changes. There is usually MORE THAN ONE. Name them all.
+   Do not force this repository into a shape it does not have, and do not skip a place because it has no obvious name. Describe each site in the vocabulary the codebase itself uses, which you have seen in the tool output — not in the vocabulary of some other project's architecture.
+4. COVER THE ACCEPTANCE CRITERIA. Read them again and check your site list against them: every criterion describing observable behaviour needs a site where that behaviour becomes possible. A criterion with no corresponding site means your map is incomplete — go back and find it.
+5. NAME WHAT TO REUSE at each site — whatever already exists there that the implementation should build on rather than duplicating. Use `explore`/`callers`/`callees` to find it; you cannot reuse what you have not found.
+6. `brokenLine` is NOT required for this story and must be left "" — there is no broken expression to quote.
+7. DO NOT INVENT A PATH OR A SYMBOL. Your grounding here is provenance, not a quoted line: every file and symbol you name must have been returned to you by a tool. If you believe something exists and the tools did not show it, PROVE it with ripgrep-search.sh before naming it, or report it absent.
+
+
+READ THE FILE BEFORE YOU QUOTE IT. Once you have a candidate file, run `show <file>` and look at the real lines. Your "brokenLine" must be COPIED EXACTLY from that output — it is checked character-for-character against the file, after whitespace normalisation. Do NOT reconstruct the line from symbol names: on 2026-07-26 that produced `lineItemKey === orderLineItem.id`, a plausible-looking expression using an identifier that exists nowhere in the repository, and the answer was rejected. `show` accepts a line range so you can read just the region you care about.
+
+CRITICAL REALITY ANCHOR: if the CodeGraph tool does not return a file or symbol, it does NOT exist in this codebase. Do not infer, assume, or extrapolate file paths, function signatures, or variable names from naming patterns — that is exactly how `lineItemKey` was invented. The index answers only for what it parsed, so a miss is a question, not an answer. If you believe something exists and CodeGraph did not return it, PROVE it before reasoning about it:
+
+    bash orchestrations/scripts/ripgrep-search.sh --string "<exact symbol>" [--glob "*.ts"]
+    bash orchestrations/scripts/ripgrep-search.sh --file "<part of a filename>"
+
+If your fix calls a method or function from a THIRD-PARTY package (not this repo's own code), a name existing somewhere in that package is not the same as it being the RIGHT way to call it — a symbol can be a real, internal implementation detail the package's own docs never call directly, or a static class method vs. an instance method, and picking the wrong one produces code that type-checks and fails at runtime. PROVE the real shape before naming it:
+
+    bash orchestrations/scripts/resolve-package-symbol.sh "<package name>" "<method or function name>"
+
+It reports whether the symbol is a direct/static call or needs an instance, and surfaces the package's own documented usage examples (README and JSDoc) so you can prefer the intended pattern over an internal detail that happens to exist.
+
+That searches the real working tree, so a hit is ground truth and "NOT FOUND" is definitive absence. If both tools come back empty, the thing does not exist — say so and revise your hypothesis. Never write a name into your answer that no tool has shown you.
+
+CRITICAL — HOW TO ANSWER: Emit the JSON array as TEXT directly in your reply. Do NOT call WriteFile and do NOT write your answer to any file — the pipeline reads your reply text, not a file. If you write your answer to a file, it is LOST and the whole investigation is wasted. Use the Bash tool ONLY to run the CodeGraph query script above (including its `show` subcommand, which you MUST use before quoting a line); use no other tool.
+
+NAME THE FORMAT, DO NOT DESCRIBE IT. If your fix depends on the SHAPE of a string — a prefix, suffix, separator, delimiter — you must QUOTE THE EXACT LITERAL (e.g. '#') or name the constant that defines it (e.g. DIVIDER). Saying "a prefix match that accounts for the suffix" without stating the suffix is not implementable: on 2026-07-26 exactly that wording made the implementer guess '-' where the repository uses '#', and the fix could never match. This is machine-checked.
+
+PREFER THE PARSER OVER THE WRITER. If a helper CONSTRUCTS the value (getX/buildX/toX) and another READS it (parseX/fromX), prescribe the reader. Naming the writer invites the implementer to reconstruct the format by hand — which is how the above happened. The best fix does no string surgery at all, because the helper owns the format.
+
+VERIFY THIRD-PARTY METHOD CALLS with resolve-package-symbol.sh before prescribing them (see above) — a name existing in a package is not proof it is called the way you assume.
+
+SAY WHAT EACH CHANGE DOES TO THE VALUE — "deliveryRole" is REQUIRED, and it is the field this
+prompt exists to get right. Exactly one of:
+
+  "produces"  this change is what makes the new or corrected value EXIST. It reads it, fetches
+              it, queries it, computes it, or changes configuration so that an existing call
+              starts returning it. If you removed only this change, the value would never come
+              into being.
+  "carries"   this change moves, stores, re-renders or re-exposes a value that something ELSE
+              produced, or it subscribes to a signal saying the value changed. Reacting to a
+              change is NOT obtaining one.
+  "verifies"  this change does nothing to the value; the file only needs confirming once the
+              other sites change. Use it with changeRequired:false.
+
+A PLAN IN WHICH NOTHING PRODUCES IS NOT A PLAN. If every site you name carries or verifies, you
+have described the delivery of a value nobody obtains, and the implementation will do visibly
+nothing while looking correct — a subscription firing, state updating, a view re-rendering, and
+the same stale value on the screen. Before you answer, find the site that PRODUCES. If the
+capability genuinely needs no new value, say so in "reason"; if you cannot find where the value
+would come from, say THAT rather than naming a carrier and hoping.
+
+SAY WHERE EACH CHANGE RUNS — "runsIn" is REQUIRED. One of "server", "browser", "both", "n/a".
+An API that only exists in one of those cannot be called from the other, and a prescription that
+puts it in the wrong place cannot be implemented at all: the implementer either fails or quietly
+does something different. Check what the surrounding function is — an entry point that runs
+before a response is sent is not the same place as code running after it is displayed. If a
+change subscribes to something, subscribing usually runs where the events happen; obtaining the
+value may run somewhere else, and those are then TWO sites, not one.
+
+SAY WHETHER THE FILE MUST BE EDITED — "changeRequired" is REQUIRED. Set it true when your fix means editing THIS file. Set it FALSE when the file is genuinely part of the fix but needs no edit of its own: it already does the right thing, and will simply behave correctly once the other sites change. A consumer that reads state from a provider you are fixing is the usual case. This is not a lesser finding and must not be dropped — a downstream gate requires a real diff in every site you mark true, so marking a verify-only file true makes the story impossible to complete: the implementer changes nothing (correctly), the gate rejects it, and every retry repeats. Saying it in the "fix" prose is not enough; nothing reads prose.
+
+DECLARE ANY PACKAGE YOUR FIX NEEDS — "requiredPackages" is REQUIRED and is machine-verified. List the BARE package names, exactly as they appear in this project's manifest (e.g. "some-sdk", "@scope/pkg"), for every third-party package your fix imports or configures. Use [] when the fix needs none — that is the common case and is not a failure. Each name is checked against what this codeline actually declares and installs: a package that is not there means your fix CANNOT be implemented as written, and prescribing it produces a change that type-checks, passes tests, and fails for a real user. Prefer a fix built on what is already installed; if the work genuinely requires a package this project does not have, still declare it — that is the honest answer and the pipeline needs to see it, whereas an approach invented to avoid naming it is the failure this field exists to prevent.
+
+Output ONLY a JSON array (no prose, no markdown fences), then stop. The "fix" field is REQUIRED and must be a concrete, minimal instruction naming the exact change and any existing helper to reuse. The "helper" field must be the BARE SYMBOL NAME of the existing function you are telling the implementer to reuse (so it can be machine-verified to actually exist) — leave it "" if the fix genuinely needs no existing helper. Do NOT invent a helper name; only put a symbol you actually saw in the tool output:
+[{"file":"<repo-relative path>","function":"<symbol>","reason":"<why THIS computes the value, not just displays it>","brokenLine":"<the exact existing expression that is wrong, copied verbatim from that file>","fix":"<the exact minimal change: which line/expression to change, to what, and which EXISTING helper (symbol + import path) to reuse — never 'write a new function' if one already exists>","helper":"<bare existing symbol name to reuse, or empty>","changeRequired":<true if this file must be EDITED; false if it is implicated but needs NO edit — it already behaves correctly and only needs to be VERIFIED once the other sites change>,"requiredPackages":["<bare package name this fix needs>"],"deliveryRole":"produces|carries|verifies","runsIn":"server|browser|both|n/a"}]
+
+# Output
+```json
+[
+  {
+    "file": "src/services/contentstack.ts",
+    "function": "options",
+    "reason": "This is the Stack configuration site — the single contentstack.Stack(options) call at line 91 that every data fetch flows through (via ContentstackFactory). The options object (lines 71-89) currently contains api_key, delivery_token, environment, branch, fetchOptions but NO live_preview block. Adding live_preview here is what enables the SDK to detect preview mode and return draft entries — without it, no downstream consumer can ever receive preview data.",
+    "brokenLine": "",
+    "fix": "Add a live_preview block to the options object (lines 71-89): live_preview: { enable: true, preview_token: process.env.CONTENTSTACK_PREVIEW_TOKEN || '' }. Also add CONTENTSTACK_PREVIEW_TOKEN to the env destructuring block (lines 23-36). The existing Stack = contentstack.Stack(options) at line 91 and ContentstackFactory class (line 109) are reused as-is.",
+    "helper": "options",
+    "changeRequired": true,
+    "requiredPackages": ["@contentstack/live-preview-utils"],
+    "deliveryRole": "produces",
+    "runsIn": "both"
+  },
+  {
+    "file": "src/pages/_app.tsx",
+    "function": "ContentstackContext.Provider",
+    "reason": "This is the app-wide provider site where ContentstackContext.Provider wraps the application and sets the context value from server-side page props (header, footer, onboarding, page). For live preview, @contentstack/live-preview-utils must be initialized here with an onEntryChange callback that receives updated entry data from the CMS and pushes it into React state, causing the provider value and all 147+ useContent consumers to re-render. This callback is the PRODUCER of live preview entry data on the client.",
+    "brokenLine": "",
+    "fix": "Import and initialize ContentstackLivePreview from @contentstack/live-preview-utils with { stackSdk: Stack (from src/services/contentstack.ts line 91), onEntryChange: callback }. In the onEntryChange callback, re-fetch the changed entry using the same Stack ContentType/Entry pattern used by ContentstackFactory.createContentTypeEntryQuery (line 185) and update React state (useState) that feeds the ContentstackContext.Provider value. The existing getSingleEntry / getSinglePageEntry pattern from pageService.ts (line 75-88) should be reused for the client-side re-fetch shape.",
+    "helper": "ContentstackFactory",
+    "changeRequired": true,
+    "requiredPackages": ["@contentstack/live-preview-utils"],
+    "deliveryRole": "produces",
+    "runsIn": "browser"
+  },
+  {
+    "file": "src/context/contentstackContext.tsx",
+    "function": "ContentstackContext",
+    "reason": "The React context that distributes Contentstack data to all components via the useContent hook. Currently createContext<IContentstackContext>({}) with a static interface — the Provider value is set once from server-side props and never updated. For live preview, this context must CARRY reactive state so that when onEntryChange in _app.tsx fires with updated entry data, all useContent consumers re-render with new values.",
+    "brokenLine": "",
+    "fix": "Add a setContent or updatePage callback field to IContentstackContext (line 8-18) so the onEntryChange subscriber in _app.tsx can push updated entry data into the context. The existing context shape (header, footer, onboarding, page, pagesBaseURLs, directories, languageAlternativePageSlug) is reused — only an updater mechanism is added.",
+    "helper": "ContentstackContext",
+    "changeRequired": true,
+    "requiredPackages": [],
+    "deliveryRole": "carries",
+    "runsIn": "browser"
+  },
+  {
+    "file": "src/components/pages/Homepage.tsx",
+    "function": "Homepage",
+    "reason": "Target page per acceptance criteria (MX Homepage). Receives page prop (IContentstackPage[]) and renders ContentStackHomePageHeroBanner, HomepageComponentMapper, ContentstackRecentNews, ContentStackLandAcknowledgement. Child components use useContent hook which reads from ContentstackContext. Once the context becomes reactive via onEntryChange, Homepage and all its children will automatically re-render with preview data — no direct edit needed.",
+    "brokenLine": "",
+    "fix": "No code change required. Homepage reads page data from props at line 21 and its children consume useContent from ContentstackContext. When the context value updates (from onEntryChange subscription in _app.tsx), Homepage re-renders automatically. Verify that the page prop and context page data stay synchronized when live preview updates arrive — the context page field (IContentstackContext.page at line 12) must reflect the updated entry.",
+    "helper": "useContent",
+    "changeRequired": false,
+    "requiredPackages": [],
+    "deliveryRole": "verifies",
+    "runsIn": "browser"
+  },
+  {
+    "file": "src/services/pageService.ts",
+    "function": "PageService.getPageEntry",
+    "reason": "Server-side data fetcher (lines 166-229) that populates the page prop passed to ContentstackContext.Provider. Calls getSinglePageEntry (line 211) or getSingletonPageEntry (line 212) which delegate to getSingleEntry/getSingletonEntry from contentstack.ts. This is the existing server-side pipeline that live preview augments client-side. The getSinglePageEntry function (line 75-88) uses getSingleEntry with contentstackConfig lookup — this same pattern should be reused in the onEntryChange callback for client-side re-fetching of preview entries.",
+    "brokenLine": "",
+    "fix": "No code change needed for server-side fetching. The onEntryChange callback in _app.tsx should reuse the same getSingleEntry pattern (via ContentstackFactory.createContentTypeEntryQuery from src/services/contentstack.ts line 185) for client-side re-fetches. Verify that contentstackConfig (referenced at line 80) and ContentTypes constants are accessible client-side for the callback to resolve contentTypeUid config.",
+    "helper": "getSinglePageEntry",
+    "changeRequired": false,
+    "requiredPackages": [],
+    "deliveryRole": "verifies",
+    "runsIn": "server"
+  },
+  {
+    "file": "src/hooks/useContent.ts",
+    "function": "useContent",
+    "reason": "The hook used by 147+ components to read Contentstack data via ContentstackContext. Returns getContentByKey which path-navigates the context value using getValue. Once the context value becomes reactive (updated by onEntryChange in _app.tsx), all useContent consumers will automatically re-render — no change needed here. This is the verification point to confirm the full pipeline works end-to-end.",
+    "brokenLine": "",
+    "fix": "No code change needed. useContent reads from ContentstackContext via useContext (line 6). When the provider value updates from onEntryChange, the useCallback dependency on content (line 9) causes getContentByKey to return updated data, triggering re-renders in all consuming components.",
+    "helper": "",
+    "changeRequired": false,
+    "requiredPackages": [],
+    "deliveryRole": "verifies",
+    "runsIn": "browser"
+  }
+]
+```

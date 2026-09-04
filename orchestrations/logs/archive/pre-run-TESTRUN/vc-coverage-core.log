@@ -1,0 +1,10 @@
+  [vc-coverage] UNCOVERED When a live preview session is active, the page displays the draft content of the requested entry — for exampl
+  [vc-coverage]           No test exercises a live preview session or verifies that draft content is returned; all tests mock standard C
+  [vc-coverage] UNCOVERED When a draft entry field is modified during an active live preview session, the updated field value appears on
+  [vc-coverage]           The test file only verifies Contentstack SDK method calls, environment variable validation, and fetch timeout 
+  [vc-coverage] UNCOVERED When no live preview session is active, the page displays the published content for each entry.
+  [vc-coverage]           No test in the file sets up or asserts on live preview session state or verifies that published content is ret
+  [vc-coverage] UNCOVERED When the page is accessed with a live preview session active, the page loads and renders the entry content suc
+  [vc-coverage]           No test simulates or asserts behavior under a live preview session; all tests cover environment variable valid
+  [vc-coverage] VC_UNCOVERED=4 of 4
+  [vc-coverage] the change is still proven by the bug-reproduction gate — this is a COVERAGE gap, not a correctness one

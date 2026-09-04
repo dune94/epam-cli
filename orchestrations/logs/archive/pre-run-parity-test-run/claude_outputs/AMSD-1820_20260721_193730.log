@@ -1,0 +1,101 @@
+=== Prompt for AMSD-1820 (attempt 1) ===
+CRITICAL — WRITE FILES FIRST. Your FIRST tool call MUST be WriteFile.
+Do NOT output any text before calling WriteFile. Do NOT plan or say "I will...".
+Call WriteFile NOW for the EXACT ABSOLUTE PATHS listed below:
+
+
+---
+
+Implement user story AMSD-1820: [Mozio] - Fix promo code discount amount display for return trip in email confirmation
+
+## Story Description
+When a return trip ticket with a promo code is purchased, the Mozio email confirmation fails to display the promo code discount amount for the return trip line item. The outbound trip discount displays correctly, but the return trip discount is either missing or rendered incorrectly. This story fixes the email confirmation template to consistently display promo code discount amounts for both outbound and return trip line items, matching the discount values recorded in the order payload.
+
+## Acceptance Criteria
+- Given a return trip ticket with a promo code is purchased, the Mozio email confirmation displays the promo code discount amount for the outbound trip line item.
+- Given a return trip ticket with a promo code is purchased, the Mozio email confirmation displays the promo code discount amount for the return trip line item.
+- The promo code discount amount shown for the return trip in the email confirmation equals the discount value applied to the return portion of the order as recorded in the order payload.
+- Given multiple line items share the same date range and a promo code is applied, the Mozio email confirmation displays the promo code discount amount for both outbound and return trip line items.
+- Given no promo code is applied to the order, the Mozio email confirmation does not display a promo code discount amount for either the outbound or return trip line item.
+- Given the promo code discount value for the return portion is zero, the Mozio email confirmation displays a discount amount of zero for the return trip without omitting the discount line.
+- The promo code discount amount for the return trip is rendered in the same currency format (symbol placement, decimal precision) and same relative position within the return line item section as the outbound trip discount appears within the outbound line item section in the Mozio email confirmation.
+- Given the promo code discount amount for the return trip includes a fractional currency value, the Mozio email confirmation displays the discount with the correct number of decimal places matching the currency's standard format.
+- Given the order payload contains a promo code discount for the return trip with a negative or unexpectedly large value, the email confirmation renders the discount amount as recorded in the order payload without silently suppressing or modifying it.
+- Given the email confirmation is viewed in a text-only email client, the promo code discount amount for the return trip remains readable and correctly surfaced alongside the return trip line item.
+- Given a promo code applies only to the outbound portion of a return trip order (return discount is absent from the order payload), the Mozio email confirmation does not display a promo code discount line for the return trip.
+
+
+
+
+
+## Technical Notes
+None specified
+
+## Files to Create/Modify (EXACT ABSOLUTE PATHS — write to these paths exactly)
+
+
+## Dependencies
+None
+
+
+
+## Instructions
+**CRITICAL — WRITE FILES FIRST:**
+
+**You MUST write every file listed above to its EXACT absolute path. Do NOT write to a different path, do NOT write to the current directory unless it matches the path above. Use your WriteFile or Edit tools with the full absolute path shown.**
+
+1. Write each required file to its exact absolute path listed above — do this FIRST before anything else
+2. Implement all acceptance criteria for this story
+3. Follow the project's existing code patterns and conventions
+4. Do NOT create tests unless explicitly required in acceptance criteria
+
+After implementation, provide a brief summary of what was created/modified.
+
+## Relevant Knowledge Base Entries
+The following was learned from previous story implementations and is relevant to your agent role. Apply this knowledge before writing any code:
+
+- [2026-07-06T17:45:30Z] Always resolve mocked fetch calls to a Response-shaped object with ok, status, statusText, and a json method returning a Promise.
+- [2026-07-06T17:50:20Z] Use valid module and moduleResolution pairs in tsconfig.json: CommonJS with Node, Node16 with Node16, ESNext with Bundler. Use CommonJS and Node for the stack. Mismatched pairs cause build errors.
+- [2026-07-06T18:11:26Z] Use vi.fn().mockResolvedValue(value) to make a mock return a resolved Promise.
+- [2026-07-06T20:31:11Z] Use `test: { passWithNoTests: true }` in vitest.config.ts or create a stub test file when no *.test.ts files exist.
+- [2026-07-06T20:33:03Z] Enable globals:true in vitest.config.ts so describe, it, and expect work without imports, reducing boilerplate in test files.
+- [2026-07-06T23:47:34Z] Use CommonJS-compatible patterns in src/server.ts: avoid `import.meta.url` and top-level `await`; gate listen with `if (require.main === module)`.
+- [2026-07-07T02:35:30Z] Always include a non-test source file in src/ alongside any src/*.test.ts file, since tsconfig.json excludes test files from tsc --noEmit.
+- [2026-07-07T19:01:34Z] Only modify or create files explicitly listed in the story's acceptance criteria. Do not touch files belonging to other stories or outside the current task scope.
+- [2026-07-07T20:17:57Z] [unreviewed-fallback] Avoid using deprecated TypeScript compiler options like 'moduleResolution=node10'; use 'moduleResolution=node' instead.
+- [2026-07-17T20:20:58Z] Always: Before importing a module or referencing a type/property, always read the actual source file to verify the export exists, its exact path, its properties, and its constructor/factory signatures
+
+## Knowledge Base Contribution (do this LAST — after writing all implementation files)
+Your assigned KB entry ID for this run: **KB-012**
+
+IMPORTANT: Write ALL implementation files first. Only AFTER writing every required file should you optionally append a KB entry.
+Do NOT read orchestrations/agents/KB.md before writing implementation files. The relevant KB entries are already injected above.
+
+If (and only if) you discover a non-obvious pattern during implementation, append one entry to `orchestrations/agents/KB.md`:
+
+```markdown
+## KB-012 -- 2026-07-21
+
+**Category:** <backend|frontend|infrastructure|testing|orchestration>
+**AgentRole:** <your agentRole from the story>
+**Tags:** <comma-separated tech keywords, e.g. typescript, node, cli>
+**Trigger:** <retry|first-success>
+**StoryRef:** AMSD-1820
+
+<One concise paragraph: the specific pattern, gotcha, or anti-pattern.>
+```
+
+Only write an entry if the knowledge is genuinely non-obvious. Skip trivial observations.
+
+## Execution Plan
+Follow this plan step by step:
+1. Search the codebase for the Mozio email confirmation template and related rendering logic (e.g., grep for "promo", "discount", "return trip", "Mozio", "email confirmation") to identify the exact files responsible for building the email line items.
+2. Read the identified email template/serializer file(s) to understand how the outbound trip promo code discount is currently rendered and why the return trip discount is missing or incorrect.
+3. Locate the order payload parsing logic that extracts promo code discount values for outbound and return trips; verify the return-trip discount field name in the payload (e.g., `return_promo_discount`, `return_discount_amount`, or similar).
+4. Modify the email rendering/serializer logic so that the return trip line item section includes a promo code discount line, mirroring the outbound section's structure — using the return-trip discount value from the order payload, applying the same currency formatting helper, and rendering zero values without omitting the line.
+5. Ensure the return-trip discount line is conditionally rendered only when a return discount key exists in the payload (absent key → no discount line; zero value → discount line shown with "0.00").
+6. Add or update unit tests covering: outbound+return discount both shown, return discount zero shown, return discount absent (no line), no promo at all (no lines), fractional currency value formatting, negative/large value rendered as-is, and multiple line items sharing the same date range.
+7. Run the test suite for the affected module and verify all new and existing tests pass.
+8. Manually verify the rendered email output (HTML and text-only) for a sample return-trip order with a promo code to confirm correct currency symbol placement, decimal precision, and relative position within the return line item section.
+=== End Prompt ===
+

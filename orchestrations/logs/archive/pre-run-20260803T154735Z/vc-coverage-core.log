@@ -1,0 +1,6 @@
+  [vc-coverage] COVERED   When the greeting is displayed to the user, it reads "hello dolly".
+  [vc-coverage]           ↳ returns hello dolly
+  [vc-coverage] UNCOVERED The displayed greeting no longer shows "hello world" anywhere on the greeting surface.
+  [vc-coverage]           The test asserts the greeting is not exactly equal to 'hello world', but the requirement forbids the substring
+  [vc-coverage] VC_UNCOVERED=1 of 2
+  [vc-coverage] the change is still proven by the bug-reproduction gate — this is a COVERAGE gap, not a correctness one

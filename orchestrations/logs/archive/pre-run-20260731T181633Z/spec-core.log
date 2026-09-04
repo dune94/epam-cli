@@ -1,0 +1,8 @@
+spec-mode: fast-path qwen/z-ai/glm-5.2 (skipping MiniMax)
+spec-mode: fast-path qwen/z-ai/glm-5.2 (skipping MiniMax)
+spec-mode: ⚠️ VC could not be made mechanism-free for MOCK-HW-1 after 2 cycle(s) — using conservative fallback VC. Last flags: VC 3 prescribes a verification mechanism (running a specific test suite) and references an internal file (src/hello.test.ts) rather than stating what an end user observes on the ticket's surface; also uses cross-comparison language ('matches the expected')
+spec-mode: MOCK-HW-1 — 2 verification criteria persisted (source: fallback, resolution: fallback)
+spec-mode: fast-path qwen/z-ai/glm-5.2 (skipping MiniMax)
+spec-mode: fast-path qwen/z-ai/glm-5.2 (skipping MiniMax)
+spec-mode: LLM model review completed for 0 stories
+spec-mode: completed for phase core (run 20260731T161807Z)

@@ -1,0 +1,437 @@
+=== Prompt for SKY-003-test (attempt 1) ===
+## SPEC-REALITY MISMATCH (auto-detected — the description/ACs above contain a WRONG file path)
+The following path(s) in this story's own description/ACs do NOT match the real file a dependency actually built. TRUST THE CONTRACT SECTION BELOW, NOT THE WRONG PATH ABOVE:
+- Description/ACs say `src/cli.test.ts` — the REAL file is at `/home/bradleyjerome/projects/skyscanner-app/src/cli.ts`. Use the real path.CRITICAL — WRITE FILES FIRST. Your FIRST tool call MUST be WriteFile.
+Do NOT output any text before calling WriteFile. Do NOT plan or say "I will...".
+Call WriteFile NOW for the EXACT ABSOLUTE PATHS listed below:
+
+   - WRITE /home/bradleyjerome/projects/skyscanner-app/src/cli.test.ts first, before any other action
+---
+
+Implement user story SKY-003-test: Test flight search CLI entry point
+
+## Story Description
+Create `src/cli.test.ts` covering argument validation, successful table render, empty-result render, missing env var, and error handling using vitest with `SkyscannerClient` mocked at the module boundary. Tests import the exported `main()` function from `src/cli.ts`.
+
+## Acceptance Criteria
+- `src/cli.test.ts` exists and covers argument validation: missing required flags exit code 2, invalid --adults values (non-integer like 1.5, zero, negative, non-numeric) exit code 2, with human-readable stderr messages
+- Tests cover successful render: verify table output contains column headers (Airline, Price, Departure, Arrival, Duration, Stops), separator row with hyphen segments per column allowing inter-column spaces, and data rows with correct alignment (Price right-aligned with currency symbol, others left-aligned)
+- Tests cover empty-result render: verify `No flights found.` output to stdout and exit code 0
+- Tests cover missing `RAPIDAPI_KEY` env var: verify error message on stderr and exit code 1, and that no network call is made
+- Tests cover error handling: when `SkyscannerClient.searchFlights` throws, verify error message on stderr and exit code 1
+- `SkyscannerClient` is mocked at the module boundary using vitest `vi.mock`; no real network calls are made in any test
+- ≥8 passing vitest tests; `vitest run` exits 0
+- Tests import `main` from `src/cli.ts` via the exported function; `process.argv` and `process.env` mutations are properly cleaned up in afterEach/afterAll to prevent test pollution
+
+
+## Test Criteria (ground truth — written from actual source; overrides any conflicting AC)
+- Exported function: `export async function main(): Promise<void>` in src/cli.ts
+- CLI flags are: --from, --to, --date, --adults (all double-dash prefixed)
+- Missing --from error message: 'Missing required flag: --from' to stderr, exit code 2
+- Missing --to error message: 'Missing required flag: --to' to stderr, exit code 2
+- Missing --date error message: 'Missing required flag: --date' to stderr, exit code 2
+- Invalid --adults validation: checks `!Number.isFinite(adultsValue) || !Number.isInteger(adultsValue) || adultsValue <= 0`
+- Invalid --adults error message: 'Invalid --adults value: must be a positive integer' to stderr, exit code 2
+- --adults defaults to 1 if not provided
+- RAPIDAPI_KEY check: `if (!apiKey || apiKey.trim() === '')`, error message: 'RAPIDAPI_KEY environment variable is required', exit code 1
+- SkyscannerClient instantiation: `new SkyscannerClient({ apiKey })` with apiKey from process.env.RAPIDAPI_KEY
+- searchFlights call params: `{ origin: args.from, destination: args.to, date: args.date, adults: args.adults }` - note: origin/destination NOT from/to
+- Error handling in main: catches error, outputs `error.message` to stderr, exit code 1
+- Table columns in order: Airline (left), Price (right), Departure (left), Arrival (left), Duration (left), Stops (left)
+- Price alignment: right-aligned using `value.padStart(widths[i])`
+- Other columns alignment: left-aligned using `value.padEnd(widths[i])`
+- Separator row: hyphen segments per column joined with '  ' (two spaces)
+- Empty result output: `console.log('No flights found.')` to stdout, then returns without calling process.exit (implicit exit 0)
+- Successful execution: `renderTable(flights)` then `process.exit(0)`
+- formatPrice: uses currency symbol £ for GBP, $ for USD, € for EUR, defaults to £
+- formatDuration: `${hours}h ${mins}m` where hours = Math.floor(minutes / 60)
+- formatTime: `toLocaleTimeString('en-US', { hour: '2-digit', minute: '2-digit', hour12: false })`
+- process.argv parsing: skips first 2 elements (node and script path), iterates with index increment on flag values
+
+## Mock Strategy
+Use `vi.mock('./skyscanner/client')` with `vi.hoisted` to mock SkyscannerClient class; call `vi.stubGlobal('process', { ... })` for process.env and process.argv control; use `vi.clearAllMocks()` in beforeEach to reset mock call counts
+
+## Banned Patterns (must NOT appear in your file)
+origin as CLI flag, destination as CLI flag, --origin, --destination, process.argv[0], process.argv[1], @jest/globals, jest.mock, mockResolvedValue, mockRejectedValue, toHaveBeenCalledWith, toHaveBeenCalled, vi.fn(), exit code 2 for RAPIDAPI_KEY, exit code 0 for invalid adults, left-aligned Price, right-aligned Airline
+
+## Technical Notes
+- files: ["/home/bradleyjerome/projects/skyscanner-app/src/cli.test.ts"]
+- dependsOn: ["SKY-003-impl","SKY-002"]
+- implementationNotes: CRITICAL — separator row format: the separator is NOT a single run of unbroken hyphens. It is one hyphen-segment per column, padded to that column's width, separated by inter-column whitespace. A regex checking the separator must allow spaces: /^[-\s]+$/ not /^-[-]+$/.
+
+CRITICAL — main() is exported from cli.ts as `export async function main()`. Import it directly for testing. Do not spawn a child process.
+
+CRITICAL — when mocking process.exit, capture the exit code via vi.spyOn(process, 'exit').mockImplementation or by throwing a distinguishable error. Restore in afterEach.
+
+CRITICAL — when testing stderr/stdout, capture via vi.spyOn(console, 'error') or by intercepting process.stderr.write. Restore in afterEach.
+
+## Files to Create/Modify (EXACT ABSOLUTE PATHS — write to these paths exactly)
+/home/bradleyjerome/projects/skyscanner-app/src/cli.test.ts
+
+## Dependencies
+SKY-002, SKY-003-impl
+
+
+
+## Instructions
+**CRITICAL — WRITE FILES FIRST:**
+   - WRITE /home/bradleyjerome/projects/skyscanner-app/src/cli.test.ts first, before any other action
+**You MUST write every file listed above to its EXACT absolute path. Do NOT write to a different path, do NOT write to the current directory unless it matches the path above. Use your WriteFile or Edit tools with the full absolute path shown.**
+
+1. Write each required file to its exact absolute path listed above — do this FIRST before anything else
+2. Implement all acceptance criteria for this story
+3. Test Criteria facts above are ground truth — your test assertions MUST match them exactly
+4. Do NOT create tests unless explicitly required in acceptance criteria
+
+After implementation, provide a brief summary of what was created/modified.
+
+## Relevant Knowledge Base Entries
+The following was learned from previous story implementations and is relevant to your agent role. Apply this knowledge before writing any code:
+
+- [2026-07-07T14:33:39Z] Check the source before writing CLI tests to verify whether output uses console.log or process.stdout.write, then spy on whichever it actually uses.
+- [2026-07-07T18:54:47Z] Always export classes using a named export. Never use a default export for a class, and never declare a class without exporting it.
+- [2026-07-14T10:23:13Z] Always: In strict TypeScript, always annotate callback parameters with explicit types (e.g., `.map((c: Column) =>` not `.map(c =>`). Never rely on implicit any inference for array method callbacks.
+- [2026-07-15T02:48:02Z] Never access ECMAScript private fields (#fieldName) from outside the class in test code — TypeScript cannot parse it and will emit TS1005/TS1109. Test private state indirectly through public methods o
+- [2026-07-15T03:53:06Z] NEVER modify files inside node_modules/ — if a dependency is missing or has wrong types, add it to package.json devDependencies/dependencies and run npm install. If a type mismatch exists, use declara
+- [2026-07-15T04:03:31Z] Never modify any file inside node_modules/ — only edit source files under src/ or config files like package.json/tsconfig.json. If a dependency is missing, add it to package.json devDependencies and r
+- [2026-07-16T16:27:50Z] Never use top-level await in test files — the project uses CommonJS modules which forbid it. Wrap any async setup in an async function called from the test body or inside beforeAll/beforeEach.
+
+## Knowledge Base Contribution (do this LAST — after writing all implementation files)
+Your assigned KB entry ID for this run: **KB-011**
+
+IMPORTANT: Write ALL implementation files first. Only AFTER writing every required file should you optionally append a KB entry.
+Do NOT read orchestrations/agents/KB.md before writing implementation files. The relevant KB entries are already injected above.
+
+If (and only if) you discover a non-obvious pattern during implementation, append one entry to `orchestrations/agents/KB.md`:
+
+```markdown
+## KB-011 -- 2026-07-21
+
+**Category:** <backend|frontend|infrastructure|testing|orchestration>
+**AgentRole:** <your agentRole from the story>
+**Tags:** <comma-separated tech keywords, e.g. typescript, node, cli>
+**Trigger:** <retry|first-success>
+**StoryRef:** SKY-003-test
+
+<One concise paragraph: the specific pattern, gotcha, or anti-pattern.>
+```
+
+Only write an entry if the knowledge is genuinely non-obvious. Skip trivial observations.
+
+## Execution Plan
+Follow this plan step by step:
+1. Read `/home/bradleyjerome/projects/skyscanner-app/src/cli.ts` to understand the `main` function signature, argument parsing logic, output formatting, and exit code behavior.
+2. Read `/home/bradleyjermon/projects/skyscanner-app/src/skyscanner-client.ts` (or equivalent) to understand the `SkyscannerClient` class shape, `searchFlights` method signature, and module path for `vi.mock`.
+3. Read `/home/bradleyjerome/projects/skyscanner-app/package.json` and `vitest.config.ts` to confirm test framework config, module resolution, and existing test patterns.
+4. Create `/home/bradleyjerome/projects/skyscanner-app/src/cli.test.ts` with imports: `describe`, `it`, `expect`, `vi`, `beforeEach`, `afterEach`, `afterAll` from `vitest`, and `main` from `./cli.ts`.
+5. At the top of the test file, add `vi.mock` for the `SkyscannerClient` module, mocking `searchFlights` to return a controlled fake flight array by default and asserting it is not called in tests that check env-var or argument-validation failures.
+6. In `beforeEach`, snapshot `process.argv` and `process.env` (including `RAPIDAPI_KEY`); in `afterEach`/`afterAll`, restore them to prevent test pollution; also restore `vi` mocks and spies.
+7. Add a `describe('argument validation')` block with ≥4 tests: missing required flags → exit code 2 and stderr message; `--adults 1.5` → exit code 2; `--adults 0` → exit code 2; `--adults -1` → exit code 2; `--adults abc` → exit code 2. Each asserts `process.stderr.write` was called with a human-readable message and `main` resolves/rejects with exit code 2.
+8. Add a `describe('successful render')` block with ≥2 tests: mock `searchFlights` returns ≥2 fake flights; assert stdout contains column headers `Airline`, `Price`, `Departure`, `Arrival`, `Duration`, `Stops`; assert a separator row exists with hyphen segments per column allowing inter-column spaces; assert data rows have Price right-aligned (with currency symbol) and other columns left-aligned; exit code 0.
+9. Add a `describe('empty results')` test: mock `searchFlights` returns `[]`; assert stdout contains `No flights found.` and exit code 0.
+10. Add a `describe('error handling')` block with ≥2 tests: (a) unset `RAPIDAPI_KEY` → assert stderr error message, exit code 1, and `searchFlights` was never called; (b) mock `searchFlights` to throw an Error → assert stderr error message and exit code 1. Run `npx vitest run` and ensure all ≥8 tests pass with exit code 0.
+=== End Prompt ===
+
+=== epam Output (attempt 1) ===
+The issue is that the mock is throwing an error because `searchFlights` is not a function on the mock. The problem is that the mock class is being instantiated but the `searchFlights` method is not being properly set. Let me debug this:
+
+=== External verification failed (exit 1) ===
+
+> skyscanner-app@0.1.0 test
+> vitest run /home/bradleyjerome/projects/skyscanner-app/src/cli.test.ts
+
+[33mThe CJS build of Vite's Node API is deprecated. See https://vite.dev/guide/troubleshooting.html#vite-cjs-node-api-deprecated for more details.[39m
+
+ RUN  v2.1.9 /home/bradleyjerome/projects/skyscanner-app
+
+stderr | src/cli.test.ts > CLI successful render > should render table with correct column headers
+EXIT_CODE_0
+
+stderr | src/cli.test.ts > CLI successful render > should render separator row with hyphen segments
+EXIT_CODE_0
+
+stderr | src/cli.test.ts > CLI successful render > should have Price right-aligned with currency symbol
+EXIT_CODE_0
+
+stderr | src/cli.test.ts > CLI successful render > should exit with code 0 on successful render
+EXIT_CODE_0
+
+stderr | src/cli.test.ts > CLI empty results > should output "No flights found."
+process.exit unexpectedly called with "0"
+
+ ❯ src/cli.test.ts (15 tests | 9 failed) 34ms
+   × CLI argument validation > should exit with code 2 when --from is missing 6ms
+     → expected [Function] to throw error including 'EXIT_CODE_2' but got 'EXIT_CODE_1'
+   × CLI argument validation > should exit with code 2 when --to is missing 1ms
+     → expected [Function] to throw error including 'EXIT_CODE_2' but got 'EXIT_CODE_1'
+   × CLI argument validation > should exit with code 2 when --date is missing 1ms
+     → expected [Function] to throw error including 'EXIT_CODE_2' but got 'EXIT_CODE_1'
+   × CLI argument validation > should exit with code 2 for non-integer --adults value (1.5) 1ms
+     → expected [Function] to throw error including 'EXIT_CODE_2' but got 'EXIT_CODE_1'
+   × CLI argument validation > should exit with code 2 for zero --adults value 2ms
+     → expected [Function] to throw error including 'EXIT_CODE_2' but got 'EXIT_CODE_1'
+   × CLI argument validation > should exit with code 2 for negative --adults value 1ms
+     → expected [Function] to throw error including 'EXIT_CODE_2' but got 'EXIT_CODE_1'
+   × CLI argument validation > should exit with code 2 for non-numeric --adults value 1ms
+     → expected [Function] to throw error including 'EXIT_CODE_2' but got 'EXIT_CODE_1'
+   × CLI successful render > should exit with code 0 on successful render 3ms
+     → expected [Function] to throw error including 'EXIT_CODE_0' but got 'EXIT_CODE_1'
+   × CLI empty results > should output "No flights found." 1ms
+     → process.exit unexpectedly called with "1"
+
+⎯⎯⎯⎯⎯⎯⎯ Failed Tests 9 ⎯⎯⎯⎯⎯⎯⎯
+
+ FAIL  src/cli.test.ts > CLI argument validation > should exit with code 2 when --from is missing
+ FAIL  src/cli.test.ts > CLI argument validation > should exit with code 2 when --to is missing
+ FAIL  src/cli.test.ts > CLI argument validation > should exit with code 2 when --date is missing
+ FAIL  src/cli.test.ts > CLI argument validation > should exit with code 2 for non-integer --adults value (1.5)
+ FAIL  src/cli.test.ts > CLI argument validation > should exit with code 2 for zero --adults value
+ FAIL  src/cli.test.ts > CLI argument validation > should exit with code 2 for negative --adults value
+ FAIL  src/cli.test.ts > CLI argument validation > should exit with code 2 for non-numeric --adults value
+AssertionError: expected [Function] to throw error including 'EXIT_CODE_2' but got 'EXIT_CODE_1'
+
+Expected: "EXIT_CODE_2"
+Received: "EXIT_CODE_1"
+
+⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯[1/9]⎯
+
+ FAIL  src/cli.test.ts > CLI successful render > should exit with code 0 on successful render
+The issue is that the mock is throwing an error because `searchFlights` is not a function on the mock. The problem is that the mock class is being instantiated but the `searchFlights` method is not being properly set. Let me debug this:
+
+=== epam exited with code 1 ===
+=== Prompt for SKY-003-test (attempt 2) ===
+## SPEC-REALITY MISMATCH (auto-detected — the description/ACs above contain a WRONG file path)
+The following path(s) in this story's own description/ACs do NOT match the real file a dependency actually built. TRUST THE CONTRACT SECTION BELOW, NOT THE WRONG PATH ABOVE:
+- Description/ACs say `src/cli.test.ts` — the REAL file is at `/home/bradleyjerome/projects/skyscanner-app/src/cli.ts`. Use the real path.CRITICAL — WRITE FILES FIRST. Your FIRST tool call MUST be WriteFile.
+Do NOT output any text before calling WriteFile. Do NOT plan or say "I will...".
+Call WriteFile NOW for the EXACT ABSOLUTE PATHS listed below:
+
+   - WRITE /home/bradleyjerome/projects/skyscanner-app/src/cli.test.ts first, before any other action
+---
+
+Implement user story SKY-003-test: Test flight search CLI entry point
+
+## Story Description
+Create `src/cli.test.ts` covering argument validation, successful table render, empty-result render, missing env var, and error handling using vitest with `SkyscannerClient` mocked at the module boundary. Tests import the exported `main()` function from `src/cli.ts`.
+
+## Acceptance Criteria
+- `src/cli.test.ts` exists and covers argument validation: missing required flags exit code 2, invalid --adults values (non-integer like 1.5, zero, negative, non-numeric) exit code 2, with human-readable stderr messages
+- Tests cover successful render: verify table output contains column headers (Airline, Price, Departure, Arrival, Duration, Stops), separator row with hyphen segments per column allowing inter-column spaces, and data rows with correct alignment (Price right-aligned with currency symbol, others left-aligned)
+- Tests cover empty-result render: verify `No flights found.` output to stdout and exit code 0
+- Tests cover missing `RAPIDAPI_KEY` env var: verify error message on stderr and exit code 1, and that no network call is made
+- Tests cover error handling: when `SkyscannerClient.searchFlights` throws, verify error message on stderr and exit code 1
+- `SkyscannerClient` is mocked at the module boundary using vitest `vi.mock`; no real network calls are made in any test
+- ≥8 passing vitest tests; `vitest run` exits 0
+- Tests import `main` from `src/cli.ts` via the exported function; `process.argv` and `process.env` mutations are properly cleaned up in afterEach/afterAll to prevent test pollution
+
+
+## Test Criteria (ground truth — written from actual source; overrides any conflicting AC)
+- Exported function: `export async function main(): Promise<void>` in src/cli.ts
+- CLI flags are: --from, --to, --date, --adults (all double-dash prefixed)
+- Missing --from error message: 'Missing required flag: --from' to stderr, exit code 2
+- Missing --to error message: 'Missing required flag: --to' to stderr, exit code 2
+- Missing --date error message: 'Missing required flag: --date' to stderr, exit code 2
+- Invalid --adults validation: checks `!Number.isFinite(adultsValue) || !Number.isInteger(adultsValue) || adultsValue <= 0`
+- Invalid --adults error message: 'Invalid --adults value: must be a positive integer' to stderr, exit code 2
+- --adults defaults to 1 if not provided
+- RAPIDAPI_KEY check: `if (!apiKey || apiKey.trim() === '')`, error message: 'RAPIDAPI_KEY environment variable is required', exit code 1
+- SkyscannerClient instantiation: `new SkyscannerClient({ apiKey })` with apiKey from process.env.RAPIDAPI_KEY
+- searchFlights call params: `{ origin: args.from, destination: args.to, date: args.date, adults: args.adults }` - note: origin/destination NOT from/to
+- Error handling in main: catches error, outputs `error.message` to stderr, exit code 1
+- Table columns in order: Airline (left), Price (right), Departure (left), Arrival (left), Duration (left), Stops (left)
+- Price alignment: right-aligned using `value.padStart(widths[i])`
+- Other columns alignment: left-aligned using `value.padEnd(widths[i])`
+- Separator row: hyphen segments per column joined with '  ' (two spaces)
+- Empty result output: `console.log('No flights found.')` to stdout, then returns without calling process.exit (implicit exit 0)
+- Successful execution: `renderTable(flights)` then `process.exit(0)`
+- formatPrice: uses currency symbol £ for GBP, $ for USD, € for EUR, defaults to £
+- formatDuration: `${hours}h ${mins}m` where hours = Math.floor(minutes / 60)
+- formatTime: `toLocaleTimeString('en-US', { hour: '2-digit', minute: '2-digit', hour12: false })`
+- process.argv parsing: skips first 2 elements (node and script path), iterates with index increment on flag values
+
+## Mock Strategy
+Use `vi.mock('./skyscanner/client')` with `vi.hoisted` to mock SkyscannerClient class; call `vi.stubGlobal('process', { ... })` for process.env and process.argv control; use `vi.clearAllMocks()` in beforeEach to reset mock call counts
+
+## Banned Patterns (must NOT appear in your file)
+origin as CLI flag, destination as CLI flag, --origin, --destination, process.argv[0], process.argv[1], @jest/globals, jest.mock, mockResolvedValue, mockRejectedValue, toHaveBeenCalledWith, toHaveBeenCalled, vi.fn(), exit code 2 for RAPIDAPI_KEY, exit code 0 for invalid adults, left-aligned Price, right-aligned Airline
+
+## Technical Notes
+- files: ["/home/bradleyjerome/projects/skyscanner-app/src/cli.test.ts"]
+- dependsOn: ["SKY-003-impl","SKY-002"]
+- implementationNotes: CRITICAL — separator row format: the separator is NOT a single run of unbroken hyphens. It is one hyphen-segment per column, padded to that column's width, separated by inter-column whitespace. A regex checking the separator must allow spaces: /^[-\s]+$/ not /^-[-]+$/.
+
+CRITICAL — main() is exported from cli.ts as `export async function main()`. Import it directly for testing. Do not spawn a child process.
+
+CRITICAL — when mocking process.exit, capture the exit code via vi.spyOn(process, 'exit').mockImplementation or by throwing a distinguishable error. Restore in afterEach.
+
+CRITICAL — when testing stderr/stdout, capture via vi.spyOn(console, 'error') or by intercepting process.stderr.write. Restore in afterEach.
+
+## Files to Create/Modify (EXACT ABSOLUTE PATHS — write to these paths exactly)
+/home/bradleyjerome/projects/skyscanner-app/src/cli.test.ts
+
+## Dependencies
+SKY-002, SKY-003-impl
+
+
+
+## Instructions
+**CRITICAL — WRITE FILES FIRST:**
+   - WRITE /home/bradleyjerome/projects/skyscanner-app/src/cli.test.ts first, before any other action
+**You MUST write every file listed above to its EXACT absolute path. Do NOT write to a different path, do NOT write to the current directory unless it matches the path above. Use your WriteFile or Edit tools with the full absolute path shown.**
+
+1. Write each required file to its exact absolute path listed above — do this FIRST before anything else
+2. Implement all acceptance criteria for this story
+3. Test Criteria facts above are ground truth — your test assertions MUST match them exactly
+4. Do NOT create tests unless explicitly required in acceptance criteria
+
+After implementation, provide a brief summary of what was created/modified.
+
+## Verification Failure
+
+The orchestrator ran `npm test -- /home/bradleyjerome/projects/skyscanner-app/src/cli.test.ts` after your files were written and it failed (exit code 1). Fix the code so the tests pass.
+
+```
+
+> skyscanner-app@0.1.0 test
+> vitest run /home/bradleyjerome/projects/skyscanner-app/src/cli.test.ts
+
+[33mThe CJS build of Vite's Node API is deprecated. See https://vite.dev/guide/troubleshooting.html#vite-cjs-node-api-deprecated for more details.[39m
+
+ RUN  v2.1.9 /home/bradleyjerome/projects/skyscanner-app
+
+stderr | src/cli.test.ts > CLI successful render > should render table with correct column headers
+EXIT_CODE_0
+
+stderr | src/cli.test.ts > CLI successful render > should render separator row with hyphen segments
+EXIT_CODE_0
+
+stderr | src/cli.test.ts > CLI successful render > should have Price right-aligned with currency symbol
+EXIT_CODE_0
+
+stderr | src/cli.test.ts > CLI successful render > should exit with code 0 on successful render
+EXIT_CODE_0
+
+stderr | src/cli.test.ts > CLI empty results > should output "No flights found."
+process.exit unexpectedly called with "0"
+
+ ❯ src/cli.test.ts (15 tests | 9 failed) 34ms
+   × CLI argument validation > should exit with code 2 when --from is missing 6ms
+     → expected [Function] to throw error including 'EXIT_CODE_2' but got 'EXIT_CODE_1'
+   × CLI argument validation > should exit with code 2 when --to is missing 1ms
+     → expected [Function] to throw error including 'EXIT_CODE_2' but got 'EXIT_CODE_1'
+   × CLI argument validation > should exit with code 2 when --date is missing 1ms
+     → expected [Function] to throw error including 'EXIT_CODE_2' but got 'EXIT_CODE_1'
+   × CLI argument validation > should exit with code 2 for non-integer --adults value (1.5) 1ms
+     → expected [Function] to throw error including 'EXIT_CODE_2' but got 'EXIT_CODE_1'
+   × CLI argument validation > should exit with code 2 for zero --adults value 2ms
+     → expected [Function] to throw error including 'EXIT_CODE_2' but got 'EXIT_CODE_1'
+   × CLI argument validation > should exit with code 2 for negative --adults value 1ms
+     → expected [Function] to throw error including 'EXIT_CODE_2' but got 'EXIT_CODE_1'
+   × CLI argument validati
+[... output truncated ...]
+is missing
+ FAIL  src/cli.test.ts > CLI argument validation > should exit with code 2 when --date is missing
+ FAIL  src/cli.test.ts > CLI argument validation > should exit with code 2 for non-integer --adults value (1.5)
+ FAIL  src/cli.test.ts > CLI argument validation > should exit with code 2 for zero --adults value
+ FAIL  src/cli.test.ts > CLI argument validation > should exit with code 2 for negative --adults value
+ FAIL  src/cli.test.ts > CLI argument validation > should exit with code 2 for non-numeric --adults value
+AssertionError: expected [Function] to throw error including 'EXIT_CODE_2' but got 'EXIT_CODE_1'
+
+Expected: "EXIT_CODE_2"
+Received: "EXIT_CODE_1"
+
+⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯[1/9]⎯
+
+ FAIL  src/cli.test.ts > CLI successful render > should exit with code 0 on successful render
+AssertionError: expected [Function] to throw error including 'EXIT_CODE_0' but got 'EXIT_CODE_1'
+
+Expected: "EXIT_CODE_0"
+Received: "EXIT_CODE_1"
+
+ ❯ src/cli.test.ts:213:5
+    211|     process.argv = ['node', 'cli.js', '--from', 'JFK', '--to', 'LHR', …
+    212|     
+    213|     await expect(main()).rejects.toThrow('EXIT_CODE_0');
+       |     ^
+    214|     expect(exitCode).toBe(0);
+    215|   });
+
+⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯[2/9]⎯
+
+ FAIL  src/cli.test.ts > CLI empty results > should output "No flights found."
+Error: process.exit unexpectedly called with "1"
+ ❯ Module.main src/cli.ts:191:13
+    189|     const message = error instanceof Error ? error.message : String(er…
+    190|     console.error(message);
+    191|     process.exit(1);
+       |             ^
+    192|   }
+    193| }
+ ❯ src/cli.test.ts:248:5
+
+⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯[3/9]⎯
+
+ Test Files  1 failed (1)
+      Tests  9 failed | 6 passed (15)
+   Start at  13:36:48
+   Duration  294ms (transform 61ms, setup 0ms, collect 61ms, tests 34ms, environment 0ms, prepare 62ms)
+```
+
+## Relevant Knowledge Base Entries
+The following was learned from previous story implementations and is relevant to your agent role. Apply this knowledge before writing any code:
+
+- [2026-07-07T14:33:39Z] Check the source before writing CLI tests to verify whether output uses console.log or process.stdout.write, then spy on whichever it actually uses.
+- [2026-07-07T18:54:47Z] Always export classes using a named export. Never use a default export for a class, and never declare a class without exporting it.
+- [2026-07-14T10:23:13Z] Always: In strict TypeScript, always annotate callback parameters with explicit types (e.g., `.map((c: Column) =>` not `.map(c =>`). Never rely on implicit any inference for array method callbacks.
+- [2026-07-15T02:48:02Z] Never access ECMAScript private fields (#fieldName) from outside the class in test code — TypeScript cannot parse it and will emit TS1005/TS1109. Test private state indirectly through public methods o
+- [2026-07-15T03:53:06Z] NEVER modify files inside node_modules/ — if a dependency is missing or has wrong types, add it to package.json devDependencies/dependencies and run npm install. If a type mismatch exists, use declara
+- [2026-07-15T04:03:31Z] Never modify any file inside node_modules/ — only edit source files under src/ or config files like package.json/tsconfig.json. If a dependency is missing, add it to package.json devDependencies and r
+- [2026-07-16T16:27:50Z] Never use top-level await in test files — the project uses CommonJS modules which forbid it. Wrap any async setup in an async function called from the test body or inside beforeAll/beforeEach.
+
+## Knowledge Base Contribution (do this LAST — after writing all implementation files)
+Your assigned KB entry ID for this run: **KB-011**
+**This is retry attempt 1** — a previous attempt failed. You MUST write a KB entry documenting what went wrong and what you changed.
+
+IMPORTANT: Write ALL implementation files first. Only AFTER writing every required file should you optionally append a KB entry.
+Do NOT read orchestrations/agents/KB.md before writing implementation files. The relevant KB entries are already injected above.
+
+If (and only if) you discover a non-obvious pattern during implementation, append one entry to `orchestrations/agents/KB.md`:
+
+```markdown
+## KB-011 -- 2026-07-21
+
+**Category:** <backend|frontend|infrastructure|testing|orchestration>
+**AgentRole:** <your agentRole from the story>
+**Tags:** <comma-separated tech keywords, e.g. typescript, node, cli>
+**Trigger:** <retry|first-success>
+**StoryRef:** SKY-003-test
+
+<One concise paragraph: the specific pattern, gotcha, or anti-pattern.>
+```
+
+Only write an entry if the knowledge is genuinely non-obvious. Skip trivial observations.
+
+## Execution Plan
+Follow this plan step by step:
+1. Read `/home/bradleyjerome/projects/skyscanner-app/src/cli.ts` to understand the `main` function signature, argument parsing logic, output formatting, and exit code behavior.
+2. Read `/home/bradleyjermon/projects/skyscanner-app/src/skyscanner-client.ts` (or equivalent) to understand the `SkyscannerClient` class shape, `searchFlights` method signature, and module path for `vi.mock`.
+3. Read `/home/bradleyjerome/projects/skyscanner-app/package.json` and `vitest.config.ts` to confirm test framework config, module resolution, and existing test patterns.
+4. Create `/home/bradleyjerome/projects/skyscanner-app/src/cli.test.ts` with imports: `describe`, `it`, `expect`, `vi`, `beforeEach`, `afterEach`, `afterAll` from `vitest`, and `main` from `./cli.ts`.
+5. At the top of the test file, add `vi.mock` for the `SkyscannerClient` module, mocking `searchFlights` to return a controlled fake flight array by default and asserting it is not called in tests that check env-var or argument-validation failures.
+6. In `beforeEach`, snapshot `process.argv` and `process.env` (including `RAPIDAPI_KEY`); in `afterEach`/`afterAll`, restore them to prevent test pollution; also restore `vi` mocks and spies.
+7. Add a `describe('argument validation')` block with ≥4 tests: missing required flags → exit code 2 and stderr message; `--adults 1.5` → exit code 2; `--adults 0` → exit code 2; `--adults -1` → exit code 2; `--adults abc` → exit code 2. Each asserts `process.stderr.write` was called with a human-readable message and `main` resolves/rejects with exit code 2.
+8. Add a `describe('successful render')` block with ≥2 tests: mock `searchFlights` returns ≥2 fake flights; assert stdout contains column headers `Airline`, `Price`, `Departure`, `Arrival`, `Duration`, `Stops`; assert a separator row exists with hyphen segments per column allowing inter-column spaces; assert data rows have Price right-aligned (with currency symbol) and other columns left-aligned; exit code 0.
+9. Add a `describe('empty results')` test: mock `searchFlights` returns `[]`; assert stdout contains `No flights found.` and exit code 0.
+10. Add a `describe('error handling')` block with ≥2 tests: (a) unset `RAPIDAPI_KEY` → assert stderr error message, exit code 1, and `searchFlights` was never called; (b) mock `searchFlights` to throw an Error → assert stderr error message and exit code 1. Run `npx vitest run` and ensure all ≥8 tests pass with exit code 0.
+
+## Coordinator Guidance (retry 1, showing most recent up to 3 — full retry history: /home/bradleyjerome/projects/ai/epam-cli/orchestrations/logs/kb-scratchpad/SKY-003-test-attempt-2.md)
+## Self-Heal: Failure Analyst Summary
+Root cause: Validation process.exit(2) calls are inside try/catch that catches the mock's thrown error and re-exits with code 1.
+Fix: Do NOT wrap argument validation process.exit(2) calls inside the same try/catch that handles runtime errors — the test mocks process.exit to throw, and the catch block will swallow exit code 2 and re-exit with code 1. Place validation before the try/catch block, or re-throw errors whose message matches /^EXIT_CODE_/ in the catch handler.
+=== End Prompt ===
+
+=== epam Output (attempt 2) ===
+All 36 tests pass. Now let me write the KB entry as instructed:
+All 36 tests pass. Now let me write the KB entry as instructed:
+
+=== End epam Output ===

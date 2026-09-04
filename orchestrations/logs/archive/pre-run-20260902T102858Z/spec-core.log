@@ -1,0 +1,9 @@
+spec-mode: fast-path claude/claude-sonnet-5 (skipping MiniMax)
+spec-mode: AMSD-1919 — ticket documents: 4/4 fetched into /home/bradleyjerome/projects/ai/epam-cli/orchestrations/logs/docs
+spec-mode: ticket-link review skipped for AMSD-1919 (prompt 'spec-story-block' is missing values for: __COMMENT_BLOCK__, __COMPONENTS__, __DECLARED_FILES__, __DESCRIPTION__, __LINK_BLOCK__, __PERSONA__, __RETRIEVED_DOCS__, __TITLE__)
+spec-mode: detective for gotransit = checkout-form-detective (minted for this codeline)
+spec-mode: fast-path claude/claude-sonnet-5 (skipping MiniMax)
+[prompt-library] 'code-graph-detective' was given values it does not use: __STORY_ACS__. That evidence is being DROPPED — the prompt has no placeholder for it. Add the placeholder to this project prompt, or stop supplying the value.
+spec-mode: code-graph-detective phase-2 extraction recovered 1 fix-site(s) for AMSD-1919 from a narrative phase-1 answer.
+spec-mode: ⚠️ code-graph-detective answer for AMSD-1919 is UNGROUNDED (attempt 1/3, defect) — no finding quoted an existing broken expression, and a defect must name the wrong line.
+spec-mode: code-graph-detective ladder escalation for AMSD-1919 (attempt 2/3) — model claude-sonnet-5 → claude-opus-5

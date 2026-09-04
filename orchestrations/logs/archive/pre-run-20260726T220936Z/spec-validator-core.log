@@ -1,0 +1,25 @@
+{
+  "agent": "spec-validator",
+  "phase": "core",
+  "stories": [{
+    "storyId": "MOCK-HW-1",
+    "title": "Hello world greeting should say hello dolly",
+    "criteria": [
+      {
+        "text": "When the greeting is requested (by invoking the greeting functionality), a tester observes the greeting reads exactly \"hello dolly\".",
+        "status": "met",
+        "evidence": "src/hello.ts exports getGreeting() returning 'hello dolly'; src/hello.test.ts asserts expect(getGreeting()).toBe('hello dolly') which passes (2/2 tests pass).",
+        "gaps": ""
+      },
+      {
+        "text": "When the greeting is requested, a tester observes that the previous text \"hello world\" no longer appears anywhere in the displayed greeting.",
+        "status": "met",
+        "evidence": "The function returns 'hello dolly' (no 'hello world' substring); src/hello.test.ts asserts expect(getGreeting()).not.toContain('hello world') which passes.",
+        "gaps": ""
+      }
+    ],
+    "overallCompliance": 100,
+    "verdict": "pass"
+  }],
+  "overallVerdict": "pass"
+}

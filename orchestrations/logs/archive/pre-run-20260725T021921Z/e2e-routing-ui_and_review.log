@@ -1,0 +1,5 @@
+=== Browser E2E Routing: ui_and_review @ 2026-06-18T20:42:23-04:00 ===
+[2026-06-18T20:44:49-04:00] story=SKY-005 route=lightpanda-agent score=1 reason=complexity_low_or_medium
+[2026-06-18T20:44:52-04:00] story=SKY-006 route=lightpanda-agent score=1 reason=complexity_low_or_medium
+[2026-06-18T20:44:55-04:00] story=SKY-006-A-1 route=lightpanda-agent score=1 reason=complexity_low_or_medium
+Summary: runs=3 lightpanda=3 playwright=0 failed=0

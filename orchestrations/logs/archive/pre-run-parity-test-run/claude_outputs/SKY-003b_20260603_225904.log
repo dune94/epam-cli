@@ -1,0 +1,64 @@
+=== Prompt for SKY-003b (attempt 1) ===
+Implement user story SKY-003b: Flight result table renderer with alignment, padding, and separator row
+
+## Story Description
+Create `src/table.ts` exporting a `renderTable(flights: Flight[], currency?: string): string` function. Render columns in fixed order: Airline | Price | Departure | Arrival | Duration | Stops. Each column is pipe-delimited with one space of padding on each side. Compute column widths as the maximum of the header label length and the widest formatted data value in that column (for Price, the formatted value includes the currency symbol). Separator row uses exactly N hyphens per column (where N equals that column's computed width), pipe-delimited with one space on each side. Price is right-aligned within its computed width with the currency symbol prepended (fallback `£`); all other columns are left-aligned. Empty array input returns the literal string `No flights found.`. Wire `renderTable` into `src/cli.ts` (from SKY-003a); print the result to stdout.
+
+## Acceptance Criteria
+- `src/table.ts` exists, exports `renderTable(flights: Flight[], currency?: string): string`, imports the `Flight` type from the existing types module without redeclaring it, and `tsc --noEmit` reports zero errors
+- Header row columns appear in exactly this pipe-delimited order: `Airline | Price | Departure | Arrival | Duration | Stops`; each cell is padded with exactly one leading space and one trailing space before the `|` delimiter (i.e. the inter-column delimiter is ` | `)
+- For every column except Price the computed column width W equals `Math.max(header.length, max(formattedValue.length for all rows))`; the raw field value (string as-is) is used as the formatted value for non-Price columns
+- For the Price column each data cell is formatted as `<currencySymbol><numericValue>` before width computation; the computed width W equals `Math.max('Price'.length, max(formattedPrice.length for all rows))` so the symbol contributes to W
+- Separator row contains exactly one segment per column in the same column order; each segment is exactly W hyphens with no spaces inside the segment; segments are joined by ` | ` (space-pipe-space), matching the inter-column delimiter used in header and data rows — no leading or trailing `|`
+- All columns except Price are left-aligned: each data cell value is padded with trailing spaces until its length equals W for that column
+- Price column is right-aligned: each formatted price string (`<symbol><value>`) is padded with leading spaces until its length equals W; no trailing spaces are added to Price cells
+- When the `currency` argument is a non-empty string it is used verbatim as the currency symbol prepended to the numeric price; when `currency` is absent, `undefined`, `null`, or an empty string `''` the symbol defaults to `£`
+- `renderTable([])` (empty array) returns the exact string `No flights found.` — no header row, no separator row, no data rows, and no trailing newline beyond what `console.log` would add
+- `src/cli.ts` passes the `Flight[]` result of `searchFlights` and any `currency` CLI option to `renderTable`, then writes the returned string to stdout via a single `console.log` or `process.stdout.write` call; no additional formatting is applied to the returned string
+- When `searchFlights` rejects, `src/cli.ts` writes the rejection `.message` (or string representation) to stderr, exits the process with code `1`, and writes nothing to stdout
+- Vitest unit tests in `src/table.test.ts` (or co-located) cover at minimum: (a) multi-row input — separator segment lengths each equal their column's computed W, a wider Price value causes all Price cells to widen, right-alignment holds; (b) single-row input — header, separator, and one data row present; (c) empty array returns exactly `No flights found.`; (d) currency fallback: omitting the argument uses `£`; passing a non-empty string uses that string; passing `''` falls back to `£`; (e) `searchFlights` rejection: stderr receives the message, process exits with code `1`, stdout is empty — all tests pass under `vitest run`
+
+## Technical Notes
+- workingDir: /tmp/skyscanner-app
+- files: ["/tmp/skyscanner-app/src/cli.ts","/tmp/skyscanner-app/src/cli.test.ts"]
+- dependsOn: ["SKY-002"]
+
+## Files to Create/Modify
+/tmp/skyscanner-app/src/cli.ts, /tmp/skyscanner-app/src/cli.test.ts
+
+## Dependencies
+None
+
+## Instructions
+1. Implement all acceptance criteria for this story
+2. Follow the project's existing code patterns and conventions
+3. Create any necessary files in the locations specified
+4. Ensure code compiles/runs without errors
+5. Do NOT create tests unless explicitly required in acceptance criteria
+
+After implementation, provide a brief summary of what was created/modified.
+
+## Relevant Knowledge Base Entries
+No prior KB entries match your agent role yet.
+
+## Knowledge Base Contribution
+Your assigned KB entry ID for this run: **KB-008**
+
+If you discover a non-obvious pattern, gotcha, or anti-pattern during this implementation (or this is a retry), append exactly one entry to `orchestrations/agents/KB.md` using this format:
+
+```markdown
+## KB-008 -- 2026-06-03
+
+**Category:** <backend|frontend|infrastructure|testing|orchestration>
+**AgentRole:** <your agentRole from the story>
+**Tags:** <comma-separated tech keywords, e.g. typescript, node, cli>
+**Trigger:** <retry|first-success>
+**StoryRef:** SKY-003b
+
+<One concise paragraph: the specific pattern, gotcha, or anti-pattern. Precise enough that a future Claude instance can apply it without re-discovering it.>
+```
+
+Only write an entry if the knowledge is genuinely non-obvious. Skip trivial observations.
+=== End Prompt ===
+
+=== claude Output (attempt 1) ===

@@ -1,0 +1,1 @@
+[repro-gate] ⛔ BLOCK (AMSD-2041): the new test(s) PASS even without the fix — they do NOT reproduce the bug. A reproducing test must fail on the pre-fix baseline.

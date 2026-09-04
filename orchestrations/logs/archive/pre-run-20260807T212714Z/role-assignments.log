@@ -1,0 +1,47 @@
+# Prompt
+Assign an implementation agent role to every story below.
+
+AVAILABLE ROLES — these are this project's own engineering roles. Choose from these and
+nothing else; the name you return must match one of them verbatim:
+- contentstack-live-preview-engineer
+    You are a Contentstack Live Preview integration engineer for a Next.js project spanning the gotransit, upexpress, and metrolinx codelines. Your expertise is configuring the Contentstack Delivery SDK (the `contentstack` package) and `@contentstack/utils` to enable real-time draft preview inside the CMS. You own the Stack initialization modules — search each codeline for files importing `contentstac
+- nextjs-preview-page-engineer
+    You are a Next.js frontend engineer responsible for wiring Contentstack Live Preview into page components across the gotransit, upexpress, and metrolinx codelines. Your expertise is React hooks, CSR data fetching, and the Next.js routing. You own page and component files — search each codeline under `pages/`, `app/`, `components/`, or `src/` for files that fetch CMS content and render it. For each
+
+STORIES — a story listing more than one codeline needs ONE ASSIGNMENT PER CODELINE:
+- AMSD-2041: [GO, UP, MX] Live Preview of Content in CMS
+    codelines (assign one role for EACH): gotransit, upexpress, metrolinx
+    Original Requirements (discovery) AS a Content Author, I WANT to preview draft entries in CMS, SO THAT I can see how content will be shown on the website ability to preview draft entries in CMS Notes& Assumptions Limitation: Might not be possible to preview protected pages and content. Original Total Estimate: 8 Original FE Estimate: 8 Original DAM Estimate: 0 Original BE Estimate: 0
+
+Pick the role whose stated expertise actually covers the work the story describes. If two
+roles could plausibly own a story, prefer the one whose brief names the surface the story
+touches. Every story must be assigned exactly one role.
+
+THE OWNER MUST AUTHOR THE CODE. Assign the role that will EDIT THE FILES this story changes —
+the one whose brief names those files or directories. A role whose brief is about settings in
+a vendor's console, or about documentation, cannot deliver a story here: the agent's output is
+a change in a repository. Live 2026-08-07: this story went to the one role of three that owned
+no source files, and all such a role can produce is a configuration note. Where the story needs
+both console configuration and code, the code owner is the assignee.
+
+# Output
+{"assignments": [
+  {
+    "storyId": "AMSD-2041",
+    "codeline": "gotransit",
+    "agentRole": "contentstack-live-preview-engineer",
+    "reason": "The story enables real-time draft preview of CMS content. The contentstack-live-preview-engineer owns the Stack initialization modules that configure the Contentstack Delivery SDK and @contentstack/utils for live preview — the foundational code change required to enable preview of draft entries."
+  },
+  {
+    "storyId": "AMSD-2041",
+    "codeline": "upexpress",
+    "agentRole": "contentstack-live-preview-engineer",
+    "reason": "Same rationale: the upexpress codeline needs its Stack initialization module configured with live preview settings; that file is owned by the contentstack-live-preview-engineer."
+  },
+  {
+    "storyId": "AMSD-2041",
+    "codeline": "metrolinx",
+    "agentRole": "contentstack-live-preview-engineer",
+    "reason": "Same rationale: the metrolinx codeline needs its Stack initialization module configured with live preview settings; that file is owned by the contentstack-live-preview-engineer."
+  }
+]}

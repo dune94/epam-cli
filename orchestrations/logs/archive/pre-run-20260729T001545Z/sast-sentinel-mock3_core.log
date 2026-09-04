@@ -1,0 +1,10 @@
+```json
+{
+  "agent": "sast-sentinel",
+  "phase": "mock3_core",
+  "summary": { "filesScanned": 2, "findingsCount": 0, "blockerCount": 0 },
+  "findings": [],
+  "verdict": "not_applicable",
+  "reason": "TypeScript compiler passed clean, npm audit reports 0 CVEs, Semgrep was skipped, and no text-scan patterns (command injection, path traversal, hardcoded secrets, unsafe eval, top-level-listener, promise-no-reject) can be verified without grep access — the changed files (hello.ts, hello.test.ts, package.json, package-lock.json) are a simple module+test with no verifiable security or type-safety findings."
+}
+```

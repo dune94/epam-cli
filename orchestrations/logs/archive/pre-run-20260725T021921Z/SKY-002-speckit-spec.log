@@ -1,0 +1,132 @@
+# Prompt
+You are the speckit specification agent for EPAM CLI. Phase core, story SKY-002.
+NOTE: This story 18 acceptance criteria (> 12) — MANDATORY split required (see SPLIT RULES below).
+
+Generate refined acceptance criteria, optionally updated title/description, and split stories where required. Output raw JSON only (no XML tags, no markdown fences, no preamble) using this schema:
+{
+  "storyId":"SKY-002",
+  "agent":"speckit",
+  "notes":"context",
+  "acceptanceCriteria":["..."],
+  "description":"...",
+  "title":"...",
+  "splitStories":[{"id":"optional","title":"...","description":"...","acceptanceCriteria":["..."],"agentRole":"...","technicalNotes":{"files":[]}}]
+}
+Use existing text when no change is needed.
+
+SPLIT RULES (mandatory, not optional — enforce these before refining AC):
+1. AC count > 12 → you MUST propose a split. Target ≤8 ACs per split child. Never leave a story with >12 ACs unsplit.
+2. Both implementation files AND test files in technicalNotes.files → split into one impl child (non-test files) and one test child (*.test.ts files). Assign agentRole "typescript-engineer" to impl, "test-engineer" to test.
+3. 3+ independent deliverable modules with no shared exports (e.g. client.ts, server.ts, cli.ts all in same story) → split per concern. Each split gets the files it owns.
+4. External API discovery + implementation in same story → split: first child discovers/documents the API contract, second child implements against that contract.
+5. technicalNotes.files contains BOTH frontend/template files (*.html, *.css, *.scss, *.jsx, *.tsx, *.vue, *.svelte) AND build/tooling files (vite.config.*, webpack.config.*, rollup.config.*, package.json, Makefile, Dockerfile, *.sh) → split: one child owns the frontend/template files, one child owns the build/tooling files. These have different runtime roles and different owners — bundling them causes token bloat and diffuse responsibility.
+6. Story covers multiple independent runtime roles in the same deliverable (e.g. HTTP server AND CLI binary AND HTML dashboard) → split by runtime role, one child per runtime target. Each child's agentRole should match what it produces (typescript-engineer for application code, test-engineer for test-only files).
+These rules apply only when splitDepth === 0. Never split a story that is already a split child.
+
+Story context:
+{
+  "id": "SKY-002",
+  "title": "Implement typed Skyscanner API client",
+  "description": "Create src/skyscanner/client.ts that wraps the Skyscanner RapidAPI. The client must: (1) export a SkyscannerClient class whose constructor accepts { apiKey: string }; if apiKey is omitted, fall back to the RAPIDAPI_KEY environment variable — throw a descriptive Error if neither is present; (2) implement searchFlights(params: SearchParams): Promise<FlightResult[]> using the Node.js 18+ global fetch (no third-party HTTP library); (3) export TypeScript interfaces SearchParams { origin: string; destination: string; date: string; adults?: number } and FlightResult { price: number; currency: string; airline: string; departure: string; arrival: string; duration: number; stops: number }; (4) throw on HTTP 4xx/5xx responses, including the status code in the message; (5) throw a descriptive parse error when the response body does not match the expected shape. Also create src/skyscanner/client.test.ts with vitest tests that mock the global fetch — no real network calls. (6) Support an explicit mock mode: when the environment variable MOCK_SKYSCANNER_API is set to the exact string 'true', searchFlights must return deterministic fixture FlightResult[] data WITHOUT making any network call (no fetch invocation at all) — this is an opt-in-only behavior; when MOCK_SKYSCANNER_API is unset, empty, or any value other than 'true', searchFlights must behave exactly as it does today (real fetch call, real failures surfaced, no silent fallback to mock data on real-call failure).",
+  "acceptanceCriteria": [
+    "src/skyscanner/client.ts exports a SkyscannerClient class whose constructor signature is constructor({ apiKey }: { apiKey?: string })",
+    "SearchParams interface is exported with exactly: origin: string, destination: string, date: string, adults?: number",
+    "FlightResult interface is exported with exactly: price: number, currency: string, airline: string, departure: string, arrival: string, duration: number, stops: number",
+    "searchFlights uses the Node.js global fetch exclusively — no axios, node-fetch, or other HTTP dependency imported",
+    "When no apiKey is passed to the constructor and RAPIDAPI_KEY env var is unset, constructing SkyscannerClient throws an Error whose message references the missing key",
+    "When the API returns a 4xx or 5xx status, searchFlights rejects with an Error that includes the HTTP status code",
+    "When the API response body is malformed or missing expected fields, searchFlights rejects with a descriptive parse/validation Error",
+    "client.test.ts contains at least 5 vitest tests, each using a mocked fetch (vi.stubGlobal or equivalent) with afterEach fetch restoration, covering: (a) correct RapidAPI URL and header construction, (b) successful response parsed into FlightResult[], (c) HTTP 4xx rejection with status code in error message, (d) missing API key constructor error, (e) malformed/missing-fields response body rejects with a parse/validation error",
+    "tsc --noEmit exits 0 with no type errors",
+    "vitest run exits 0 with all tests passing",
+    "The apiKey is stored as a private field (private or # prefix) on the SkyscannerClient instance and is not publicly readable",
+    "When apiKey is passed as an empty string ('') to the constructor, SkyscannerClient throws the same missing-key Error as when apiKey is omitted entirely",
+    "When RAPIDAPI_KEY is set to an empty string in the environment and no apiKey is provided to the constructor, SkyscannerClient throws the missing-key Error",
+    "When an apiKey is provided to the constructor and RAPIDAPI_KEY is also set in the environment, the constructor-provided apiKey takes precedence",
+    "The Error thrown by searchFlights on HTTP 4xx/5xx does not include the apiKey value anywhere in its message string",
+    "When MOCK_SKYSCANNER_API env var equals exactly 'true', searchFlights resolves with a deterministic, non-empty FlightResult[] fixture (at least 2 results, valid shape matching the FlightResult interface, varying price so cheapest-selection logic in SKY-004 is exercisable) and does not call fetch — verified in a test that stubs/spies on global fetch and asserts it was never invoked",
+    "When MOCK_SKYSCANNER_API is unset, empty string, or any value other than the exact string 'true' (e.g. 'false', '1', 'TRUE'), searchFlights performs the real fetch call exactly as when the env var did not exist — mock mode is strict opt-in, not a fuzzy truthy check",
+    "A real HTTP/API failure (4xx, 5xx, network error, malformed body) is NEVER silently replaced with mock/fixture data — mock mode only ever activates via the explicit MOCK_SKYSCANNER_API='true' env var, never as an automatic fallback"
+  ],
+  "acCount": 18,
+  "technicalNotes": {
+    "workingDir": "/home/bradleyjerome/projects/skyscanner-app",
+    "files": [
+      "/home/bradleyjerome/projects/skyscanner-app/src/skyscanner/client.ts",
+      "/home/bradleyjerome/projects/skyscanner-app/src/skyscanner/client.test.ts"
+    ],
+    "dependsOn": [
+      "SKY-001"
+    ]
+  },
+  "agentRole": "typescript-engineer",
+  "agentGroup": "primary",
+  "dependencies": [],
+  "splitDepth": 0
+}
+
+
+# Output
+```json
+{
+  "storyId": "SKY-002",
+  "agent": "speckit",
+  "notes": "18 ACs > 12 → mandatory split. Rule 2 applies: both impl (client.ts) and test (client.test.ts) files present → split into impl child + test child. Impl ACs consolidated from 16 to 8 by merging related concerns (apiKey validation, error handling, mock mode). Test ACs expanded to 8 to specify per-behavior test coverage.",
+  "acceptanceCriteria": [
+    "src/skyscanner/client.ts exports a SkyscannerClient class whose constructor signature is constructor({ apiKey }: { apiKey?: string }); the apiKey is stored as a private field (private or # prefix) and is not publicly readable",
+    "SearchParams interface is exported with exactly: origin: string, destination: string, date: string, adults?: number; FlightResult interface is exported with exactly: price: number, currency: string, airline: string, departure: string, arrival: string, duration: number, stops: number",
+    "searchFlights uses the Node.js global fetch exclusively — no axios, node-fetch, or other HTTP dependency imported",
+    "When no apiKey is passed, or an empty string is passed, and RAPIDAPI_KEY env var is unset or empty, constructing SkyscannerClient throws an Error whose message references the missing key; when an apiKey is provided and RAPIDAPI_KEY is also set, the constructor-provided apiKey takes precedence",
+    "When the API returns a 4xx or 5xx status, searchFlights rejects with an Error that includes the HTTP status code but does not include the apiKey value anywhere in its message string",
+    "When the API response body is malformed or missing expected fields, searchFlights rejects with a descriptive parse/validation Error",
+    "When MOCK_SKYSCANNER_API env var equals exactly 'true', searchFlights resolves with a deterministic, non-empty FlightResult[] fixture (at least 2 results, valid shape, varying prices) without calling fetch; when MOCK_SKYSCANNER_API is unset, empty, or any value other than 'true', searchFlights performs the real fetch call; a real HTTP/API failure is NEVER silently replaced with mock/fixture data — mock mode only activates via explicit MOCK_SKYSCANNER_API='true'",
+    "tsc --noEmit exits 0 with no type errors"
+  ],
+  "description": "Create src/skyscanner/client.ts that wraps the Skyscanner RapidAPI. The client must: (1) export a SkyscannerClient class whose constructor accepts { apiKey: string }; if apiKey is omitted, fall back to the RAPIDAPI_KEY environment variable — throw a descriptive Error if neither is present; (2) implement searchFlights(params: SearchParams): Promise<FlightResult[]> using the Node.js 18+ global fetch (no third-party HTTP library); (3) export TypeScript interfaces SearchParams { origin: string; destination: string; date: string; adults?: number } and FlightResult { price: number; currency: string; airline: string; departure: string; arrival: string; duration: number; stops: number }; (4) throw on HTTP 4xx/5xx responses, including the status code in the message; (5) throw a descriptive parse error when the response body does not match the expected shape. Also create src/skyscanner/client.test.ts with vitest tests that mock the global fetch — no real network calls. (6) Support an explicit mock mode: when the environment variable MOCK_SKYSCANNER_API is set to the exact string 'true', searchFlights must return deterministic fixture FlightResult[] data WITHOUT making any network call (no fetch invocation at all) — this is an opt-in-only behavior; when MOCK_SKYSCANNER_API is unset, empty, or any value other than 'true', searchFlights must behave exactly as it does today (real fetch call, real failures surfaced, no silent fallback to mock data on real-call failure).",
+  "title": "Implement typed Skyscanner API client",
+  "splitStories": [
+    {
+      "id": "SKY-002-a",
+      "title": "Implement SkyscannerClient class with typed interfaces, fetch, and mock mode",
+      "description": "Create src/skyscanner/client.ts implementing the SkyscannerClient class with constructor key validation, searchFlights using global fetch, typed SearchParams/FlightResult interfaces, HTTP error handling, parse validation, and strict opt-in mock mode via MOCK_SKYSCANNER_API='true' env var.",
+      "acceptanceCriteria": [
+        "src/skyscanner/client.ts exports a SkyscannerClient class whose constructor signature is constructor({ apiKey }: { apiKey?: string }); the apiKey is stored as a private field (private or # prefix) and is not publicly readable",
+        "SearchParams interface is exported with exactly: origin: string, destination: string, date: string, adults?: number; FlightResult interface is exported with exactly: price: number, currency: string, airline: string, departure: string, arrival: string, duration: number, stops: number",
+        "searchFlights uses the Node.js global fetch exclusively — no axios, node-fetch, or other HTTP dependency imported",
+        "When no apiKey is passed, or an empty string is passed, and RAPIDAPI_KEY env var is unset or empty, constructing SkyscannerClient throws an Error whose message references the missing key; when an apiKey is provided and RAPIDAPI_KEY is also set, the constructor-provided apiKey takes precedence",
+        "When the API returns a 4xx or 5xx status, searchFlights rejects with an Error that includes the HTTP status code but does not include the apiKey value anywhere in its message string",
+        "When the API response body is malformed or missing expected fields, searchFlights rejects with a descriptive parse/validation Error",
+        "When MOCK_SKYSCANNER_API env var equals exactly 'true', searchFlights resolves with a deterministic, non-empty FlightResult[] fixture (at least 2 results, valid shape, varying prices) without calling fetch; when MOCK_SKYSCANNER_API is unset, empty, or any value other than 'true', searchFlights performs the real fetch call; a real HTTP/API failure is NEVER silently replaced with mock/fixture data — mock mode only activates via explicit MOCK_SKYSCANNER_API='true'",
+        "tsc --noEmit exits 0 with no type errors"
+      ],
+      "agentRole": "typescript-engineer",
+      "technicalNotes": {
+        "files": [
+          "/home/bradleyjerome/projects/skyscanner-app/src/skyscanner/client.ts"
+        ]
+      }
+    },
+    {
+      "id": "SKY-002-b",
+      "title": "Vitest tests for SkyscannerClient covering all behaviors and mock mode",
+      "description": "Create src/skyscanner/client.test.ts with vitest tests that mock the global fetch (no real network calls). Tests must cover: URL/header construction, successful response parsing, HTTP error rejection, missing/empty API key errors, malformed body rejection, apiKey precedence, error message key leakage prevention, and mock mode activation/non-activation boundaries.",
+      "acceptanceCriteria": [
+        "client.test.ts contains at least 5 vitest tests using mocked fetch (vi.stubGlobal or equivalent) with afterEach fetch restoration, covering: (a) correct RapidAPI URL and header construction, (b) successful response parsed into FlightResult[], (c) HTTP 4xx rejection with status code in error message, (d) missing API key constructor error, (e) malformed/missing-fields response body rejects with a parse/validation error",
+        "Tests verify that when no apiKey is passed and RAPIDAPI_KEY is unset, constructing SkyscannerClient throws an Error referencing the missing key",
+        "Tests verify that an empty-string apiKey and an empty-string RAPIDAPI_KEY both trigger the missing-key Error",
+        "Tests verify that a constructor-provided apiKey takes precedence over RAPIDAPI_KEY env var",
+        "Tests verify that HTTP 4xx/5xx error messages do not include the apiKey value",
+        "Tests verify that MOCK_SKYSCANNER_API='true' returns deterministic fixture data without invoking fetch (fetch spy asserted never called)",
+        "Tests verify that MOCK_SKYSCANNER_API values other than 'true' (unset, '', 'false', '1', 'TRUE') result in real fetch calls, not mock data",
+        "vitest run exits 0 with all tests passing"
+      ],
+      "agentRole": "test-engineer",
+      "technicalNotes": {
+        "files": [
+          "/home/bradleyjerome/projects/skyscanner-app/src/skyscanner/client.test.ts"
+        ]
+      }
+    }
+  ]
+}
+```

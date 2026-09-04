@@ -1,0 +1,50 @@
+```json
+{
+  "agent": "sast-sentinel",
+  "phase": "scaffold",
+  "summary": { "filesScanned": 1, "findingsCount": 5, "blockerCount": 0 },
+  "findings": [
+    {
+      "severity": "minor",
+      "rule": "dependency-cve",
+      "file": "package.json",
+      "line": 0,
+      "description": "vitest (@vitest/mocker): When Vitest UI server is listening, arbitrary file can be read and executed. CVSS: critical. Classified as minor because vitest is a dev-only dependency and never runs in production.",
+      "suggestedFix": "Upgrade vitest to a patched version when available. No production impact."
+    },
+    {
+      "severity": "minor",
+      "rule": "dependency-cve",
+      "file": "package.json",
+      "line": 0,
+      "description": "vite: Vulnerable to Path Traversal in Optimized Deps .map Handling. CVSS: high. Classified as minor because vite is a dev-only build tool.",
+      "suggestedFix": "Upgrade vite to a patched version when available. No production impact."
+    },
+    {
+      "severity": "minor",
+      "rule": "dependency-cve",
+      "file": "package.json",
+      "line": 0,
+      "description": "vite (launch-editor): NTLMv2 hash disclosure. CVSS: high. Classified as minor because launch-editor is a dev-only dependency used by vite during development.",
+      "suggestedFix": "Upgrade vite to a patched version when available. No production impact."
+    },
+    {
+      "severity": "minor",
+      "rule": "dependency-cve",
+      "file": "package.json",
+      "line": 0,
+      "description": "esbuild: Enables any website to send requests to the development server and read the response. CVSS: moderate. Classified as minor because esbuild is a dev-only build tool.",
+      "suggestedFix": "Upgrade esbuild to a patched version when available. No production impact."
+    },
+    {
+      "severity": "minor",
+      "rule": "dependency-cve",
+      "file": "package.json",
+      "line": 0,
+      "description": "vite-node (@vitest/mocker): Affected by vite vulnerability. CVSS: moderate. Classified as minor because vite-node is a dev-only test runner dependency.",
+      "suggestedFix": "Upgrade vite-node to a patched version when available. No production impact."
+    }
+  ],
+  "verdict": "pass"
+}
+```

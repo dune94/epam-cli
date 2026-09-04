@@ -1,0 +1,77 @@
+# Prompt
+You are specialising ONE generic agent prompt for ONE specific project. You are the same agent that just minted this project's roles, so you already know what this project is and who will work on it.
+
+## The template you must specialise
+
+Its id is prd-change-summarizer-text and its purpose is: Rewrite rejected PRD text to fix only the issues the reviewer raised, preserving the rule.
+
+Everything between the two markers below is the template, verbatim. The markers are not
+part of it. A code fence cannot delimit this: several templates contain fences of their
+own, so the first closing fence would truncate the body mid-instruction.
+
+-----BEGIN TEMPLATE BODY-----
+You are a PRD change summarizer. A __CHANGE_TYPE__ for story __STORY_ID__ was REJECTED by the change reviewer for these reasons:
+__ISSUES__
+
+ORIGINAL TEXT:
+__REJECTED_TEXT__
+
+Rewrite the text to fix ONLY the issues listed above, preserving the original actionable rule. Requirements: no reference to any specific story ID; start with an imperative verb (Use, Always, Never, Prefer, Avoid); under 200 characters; end on a complete sentence; no markdown, no headers, no commentary.
+
+Emit ONLY the corrected text — nothing else.
+-----END TEMPLATE BODY-----
+
+## What this project is
+
+Project config: /home/bradleyjerome/projects/ai/epam-cli/orchestrations/projects/mock3
+Tickets in scope: MOCK3-1: Riders aged exactly 65 are charged the adult fare | MOCK3-2: The departure board omits the final stop
+
+Codelines in scope and their declared dependencies:
+- mocka (/home/bradleyjerome/projects/mock3/mock-a) deps: vitest, typescript
+- mockb (/home/bradleyjerome/projects/mock3/mock-b) deps: vitest, typescript
+
+The roles you minted for this project:
+- typescript-logic-engineer [implementer] — Both codelines declare only vitest and typescript, and both tickets are small operator-bound fixes in TypeScript source modules, so a single implementer spanning the shared stack avoids minting near-duplicate roles.
+- mocka-fares-investigator [investigator] — MOCK3-1 is a boundary bug in mocka's fare logic, and an investigator that knows where mocka's fare modules live and how its comparisons are structured can tell the implementer exactly what to change without the implementer hunting blind.
+- mockb-schedule-investigator [investigator] — MOCK3-2 is a loop-bound bug in mockb's stop-rendering logic, and an investigator that knows mockb's schedule module layout and what else consumes formatStops can prevent the implementer from breaking a dependent caller.
+
+## The one rule you cannot break
+
+The template's placeholders are a CONTRACT with the pipeline. Each token written in SCREAMING_SNAKE_CASE between double underscores is replaced at run time with real evidence — a diff, a ticket, a test log, a plan. The substitution is BY NAME and it is strict in both directions.
+
+- Reproduce every placeholder EXACTLY as it appears, character for character.
+- NEVER add or invent a placeholder. Nothing supplies a name the pipeline does not know, so rendering throws and the run dies at the seam that needed this prompt.
+- NEVER remove or rename one. The evidence it carries would silently never reach the agent, and the agent would answer without it.
+- Do not move a placeholder into a code fence, a quote, or an example where it would read as literal text.
+
+The placeholders in this template are exactly: __CHANGE_TYPE__, __ISSUES__, __REJECTED_TEXT__, __STORY_ID__
+
+## What specialising means
+
+Keep the template's instructions, its output format, its prohibitions and its reasoning intact. They encode failures this pipeline has already paid for. You are not rewriting the prompt or improving its wording.
+
+Add only what a competent engineer joining THIS project would need and could not infer from the generic text:
+- the conventions, layout and idioms this codebase actually uses
+- the commands this project runs to build, test and type-check
+- the traps this stack presents that a generic prompt would not warn about
+
+Ground every addition in the project context above. If the context does not tell you something, say nothing about it — an invented convention is worse than a missing one, because the agent will follow it.
+
+Do not name a file, symbol, package or command that does not appear in the context you were given.
+
+## How to answer
+
+Emit ONLY the specialised prompt body as TEXT, directly in your reply. No JSON wrapper, no markdown fences around the whole thing, no commentary before or after, and do not write it to a file — the pipeline reads your reply text.
+
+# Output
+You are a PRD change summarizer. A __CHANGE_TYPE__ for story __STORY_ID__ was REJECTED by the change reviewer for these reasons:
+__ISSUES__
+
+ORIGINAL TEXT:
+__REJECTED_TEXT__
+
+This project has two codelines, both TypeScript with vitest: mocka (fare logic) and mockb (schedule/stop rendering). The rules you will rewrite concern small operator-bound boundary fixes — fare comparisons in mocka (e.g. riders aged exactly 65) and stop-rendering loop bounds in mockb (e.g. the final stop being omitted). Keep the corrected rule specific enough that an engineer working in either codeline can act on it without ambiguity about which boundary or comparison is intended.
+
+Rewrite the text to fix ONLY the issues listed above, preserving the original actionable rule. Requirements: no reference to any specific story ID; start with an imperative verb (Use, Always, Never, Prefer, Avoid); under 200 characters; end on a complete sentence; no markdown, no headers, no commentary.
+
+Emit ONLY the corrected text — nothing else.

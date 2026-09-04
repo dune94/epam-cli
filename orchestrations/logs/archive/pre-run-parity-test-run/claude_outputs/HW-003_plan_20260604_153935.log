@@ -1,0 +1,77 @@
+Handoff record appended. Here is the execution-ready plan.
+
+---
+
+# Execution Plan — HW-003: Code review `greet.ts`
+
+**Story type:** review (not code-change). **Sole deliverable:** `review/HW-003-review.md`. **Hard constraint:** `greet.ts` must not be read-locked, modified, truncated, or re-timestamped.
+
+**Canonical sources read:**
+- PRD: `/home/bradleyjerome/projects/ai/epam-cli/orchestrations/hello-world-prd.json` (active copy; identical HW-003 also in project `dashboards/prd.json`). Note: the story text says "read `orchestrations/prd.json`" but the project's `orchestrations/` has no prd — the authoritative file is the epam-cli `hello-world-prd.json`. **Review-agent must re-read HW-001's criteria from this same file at review time.**
+- Current state verified: `greet.ts` (correct signature, no default export), `greet.test.ts` (3 tests), `review/` exists and is empty.
+
+## 1. Implementation steps (with target paths)
+
+| # | Step | Target |
+|---|------|--------|
+| S1 | Ensure `review/` exists (idempotent `mkdir -p` semantics; already present). | `review/` |
+| S2 | Resolve Node binary by ordered fallback: fnm `~/.local/share/fnm/.../v20.20.2/.../node` (✓ exists → used) → nvm `~/.nvm/.../v20.20.0/bin/node` → `node` on PATH. Record which resolved. | n/a |
+| S3 | Execute mandated test from project root: `<node> ./node_modules/.bin/vitest run`; capture full stdout/stderr + exit code. (Pre-validated: exit 0, `Tests 3 passed (3)`.) | n/a |
+| S4 | Re-read HW-001 acceptance criteria **verbatim** from `hello-world-prd.json` (do not rely on memory). Count = **17** at this snapshot — recount at runtime. | reads PRD |
+| S5 | Statically review `greet.ts` content against each HW-001 criterion + general code quality; collect findings by severity. | reads `greet.ts` (read-only) |
+| S6 | Compose report with the three required H2 sections + verdict, write UTF-8. | `review/HW-003-review.md` |
+| S7 | Confirm `greet.ts` content + mtime unchanged (capture mtime before S5, compare after S6). | verification |
+
+## 2. Dependency validation
+
+| Dep | Satisfied | Reason |
+|-----|-----------|--------|
+| HW-001 (implement `greet()`) | **Yes** | `status: completed`. `greet.ts` present with exact signature `export function greet(name: string): string`, no default export, correct returns. |
+| HW-002 (verify tests pass) | **Yes** | `status: completed`. Re-confirmed live: mandated fnm-node command exits 0, `Test Files 1 passed (1)`, `Tests 3 passed (3)`. |
+| Tooling: fnm Node v20.20.2 | **Yes** | Binary exists and runs vitest successfully. (PATH `node` is v24.14.1 — irrelevant; fnm resolves first.) |
+| Write access to `review/` & log file | **Yes** | `review/` writable; `agent-messages.jsonl` writable (handoff already appended). |
+
+## 3. Risk register (top 3)
+
+| Risk | Severity | Mitigation |
+|------|----------|------------|
+| **R1 — Accidental mutation of `greet.ts`** (violates AC #14 + behavioral contract). | High | Treat as read-only. Capture `stat`/sha before review, diff after S6. Never open in write mode; review-agent uses Read only. |
+| **R2 — HW-001 checklist drift** (paraphrasing, or count ≠ actual; AC #8/#9). | Med | Programmatically extract HW-001 `acceptanceCriteria[]` from the PRD JSON and emit each verbatim; assert rendered count == array length (17 now, recount at runtime — never hardcode). |
+| **R3 — Verdict-logic inconsistency** (AC #5/#10/#11/#12). | Med | Derive verdict deterministically: `fail` if any criterion "not met" OR any blocker finding OR any test failed/non-zero exit; else `pass`. Single source of truth; assert no blocker present when `pass`. |
+
+## 4. Test plan
+
+- **New tests required:** None. HW-003 produces a report; it does not add product code or test files.
+- **Command the review must run & record:** `<resolved-node> ./node_modules/.bin/vitest run` from project root — captured into `## Summary` with the verbatim summary line.
+- **Regression scope:** Zero source/test changes expected. Guard: `greet.ts`, `greet.test.ts`, `package.json`, `tsconfig.json`, `main.ts` must be byte-identical before/after. Re-run idempotency check: running the review twice overwrites `review/HW-003-review.md` cleanly (AC #15).
+
+## 5. Acceptance-criteria → step mapping (15 criteria)
+
+| HW-003 AC (abbrev) | Step |
+|---|---|
+| 1 — report saved to `review/HW-003-review.md`, dir created idempotently | S1, S6 |
+| 2 — missing-`greet.ts` fallback (blocker, all criteria "not met", verdict fail) | S5/S6 (branch; not triggered — file exists) |
+| 3 — required sections `## Summary`/`## Findings`/`## HW-001 Criteria Checklist` | S6 |
+| 4 — Summary records test run via ordered Node resolution + verbatim summary line | S2, S3, S6 |
+| 5 — verdict exactly `pass`/`fail`, never omitted | S6 (R3 logic) |
+| 6 — each finding has severity/file/line/description/suggested-fix | S5, S6 |
+| 7 — Findings says `No findings` when empty | S5, S6 |
+| 8 — re-read canonical HW-001 text, not from memory | S4 |
+| 9 — every HW-001 criterion verbatim as checkbox; count parity | S4, S6 (R2) |
+| 10 — verdict `fail` if any "not met" OR any blocker | S6 (R3) |
+| 11 — failed test run ⇒ `fail` | S3, S6 |
+| 12 — no blocker findings when verdict `pass` | S6 (R3 assert) |
+| 13 — UTF-8, no stray control chars | S6 |
+| 14 — `greet.ts` unchanged (content + mtime) | S5, S7 (R1) |
+| 15 — idempotent overwrite on re-run | S6 |
+
+*(Expected outcome given current state: all 17 HW-001 criteria met, tests 3/3 pass → verdict **`pass`**, Findings likely `No findings` or minor-only.)*
+
+## 6. Cost / effort forecast
+
+- **PRD `estimatedHours`: 0.0643 h (~3.9 min); `effort: low`.**
+- **Assessment: confirm — no adjustment.** Single markdown artifact, one short test run (~0.3 s observed), no code changes, all deps green, inputs small. The only non-trivial work is verbatim extraction of 17 criteria, which is mechanical. The estimate holds; if anything it is slightly generous. **Keep `estimatedHours: 0.0643`.**
+
+---
+
+**Handoff:** `plan_summary` record `plan_HW-003_1780602046` appended atomically (flock) to `orchestrations/logs/agent-messages.jsonl`, routed `plan-agent → review-agent`, `status:new`. Ready for implementation.

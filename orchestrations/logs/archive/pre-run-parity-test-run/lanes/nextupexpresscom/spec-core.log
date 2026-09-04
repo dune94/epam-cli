@@ -1,0 +1,12 @@
+spec-mode: fast-path qwen/z-ai/glm-5.2 (skipping MiniMax)
+spec-mode: AMSD-2041 — ticket documents: 2/2 fetched into /home/bradleyjerome/projects/ai/epam-cli/orchestrations/logs/lanes/nextupexpresscom/docs
+spec-mode: fast-path qwen/z-ai/glm-5.2 (skipping MiniMax)
+spec-mode: fast-path qwen/z-ai/glm-5.2 (skipping MiniMax)
+spec-mode: search-term vocabulary unavailable for AMSD-2041 (Cannot read properties of null (reading 'cmd')) — seeding with an unfiltered query
+spec-mode: code-graph-detective invocation failed for AMSD-2041 (attempt 1/3): grounded is not defined
+spec-mode: code-graph-detective invocation failed for AMSD-2041 (attempt 2/3): grounded is not defined
+spec-mode: code-graph-detective invocation failed for AMSD-2041 (attempt 3/3): grounded is not defined
+spec-mode: ⛔ code-graph-detective found NO fix site for AMSD-2041 after 3 attempts — the implementer will proceed WITHOUT root-cause guidance (defect-fidelity risk).
+spec-mode: fast-path qwen/z-ai/glm-5.1 (skipping MiniMax)
+spec-mode: AMSD-2041 — ACs are immutable (VC model); openspec AC edits redacted, verification captured in verificationCriteria
+spec-mode: fast-path qwen/z-ai/glm-5.2 (skipping MiniMax)

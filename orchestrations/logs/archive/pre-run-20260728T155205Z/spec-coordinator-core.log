@@ -1,0 +1,93 @@
+# Prompt
+You are the specification coordinator for the epam-cli orchestration system. Before every phase you read orchestrations/prd.json (implementationOrder and stories), evaluate risk, dependencies, and technical readiness, then assign the correct specification runners: OpenSpec, Speckit, both, or none. You write assignments into each story's specification.assignedAgents field along with coordinatorNotes, target provider/model, and timestamps. You understand the provider policy ledger (configuration.aiRuntime.providerPolicies), token guardrails, and know when to skip stories that were already hand-curated. When you plan a run you emit JSON compliant with spec-mode-runner.js so that automation can apply deltas deterministically. You never invent story IDs or mutate acceptance criteria directly; only delegate to spec agents and record their status.
+
+You are the EPAM CLI specification coordinator agent for phase core.
+
+Decide which specification agents should run for each story below.
+Available agents and their roles:
+  - openspec: Elaborates requirements — refines AC, proposes story splits, adds technical depth
+  - speckit: Reviews & hardens — adds testability criteria, security checks, edge cases, flags gaps
+
+Agent collaboration model:
+  - If both are assigned, openspec runs FIRST, then speckit reviews openspec's output
+  - Assign both for complex/critical stories
+  - Assign only openspec for simple elaboration
+  - Assign only speckit for stories that just need test/security hardening
+
+Respond with raw JSON only (no XML tags, no markdown fences, no preamble) using this schema:
+[
+  {"storyId":"EPAM-123","agents":["openspec","speckit"],"notes":"reason","priority":"high"}
+]
+If a story does not need spec work, provide an empty agents array.
+
+Stories JSON:
+[
+  {
+    "id": "AMSD-2041",
+    "title": "[GO, UP, MX] Live Preview of Content in CMS",
+    "description": "[GO, UP, MX] Live Preview of Content in CMS",
+    "acceptanceCriteria": [],
+    "technicalNotes": {
+      "files": [
+        "src/hooks/useContent.ts",
+        "src/components/contentstack/ContentstackLink/ContentstackLink.tsx",
+        "src/components/contentstack/ContentstackImage/ContentstackImage.tsx",
+        "src/components/contentstack/ContentstackTable/ContentstackTable.tsx",
+        "src/api/utils/contentstack_getPromotions.ts",
+        "src/interface/content/contentCard.ts"
+      ]
+    },
+    "agentRole": "typescript-engineer",
+    "agentGroup": "main",
+    "dependencies": [],
+    "spec": {
+      "runId": "20260728T152342Z",
+      "assignedAgents": [
+        "openspec",
+        "speckit"
+      ],
+      "coordinatorNotes": "Complex multi-market CMS live preview feature with no acceptance criteria. Needs openspec to elaborate requirements and define ACs, then speckit to harden testability, security, and edge cases around real-time rendering and multi-locale content.",
+      "status": "completed",
+      "updatedAt": "2026-07-28T15:29:46.695Z",
+      "appliedAgents": [
+        "openspec",
+        "speckit"
+      ],
+      "agentContributions": [
+        {
+          "agent": "openspec",
+          "applied": true,
+          "notes": "Story requests a new Live Preview capability — novel story. The primary attachment point is useContent (236 callers), the central hook all Contentstack components use to resolve content. Live Preview plugs into how this hook decides which content source to read (published vs. draft). Downstream components (ContentstackLink, ContentstackImage, ContentstackTable, ContentstackContentCards, etc.) are passive consumers that automatically benefit. ACs are empty; VCs derived entirely from the description. Contentstack is unreachable at test time, so VCs stop at our side of the boundary — what requests our code makes and what it renders given known mock data.",
+          "acceptanceChanged": false,
+          "splitCount": 0,
+          "timestamp": "2026-07-28T15:29:24.995Z"
+        },
+        {
+          "agent": "speckit",
+          "applied": true,
+          "notes": "Openspec provided an empty acceptanceCriteria array with a note that VCs are derived from the description. I built the full AC list from scratch based on my review of useContent.ts (the central hook with 236 callers), the downstream components, and the API utilities. Key architectural insight: useContent is the single integration point — all downstream components are passive consumers. ACs are structured around: (1-2) Live Preview detection and normal-mode preservation, (3) real-time updates, (4-5) error/malformed data handling, (6) production security (no draft leakage), (7) passive downstream benefit, (8) deep reference resolution, (9) mode exit/cleanup, (10) API error fallback, (11) performance under rapid updates, (12) null/undefined edge cases. All ACs are observable Given/When/Then outcomes with no implementation instructions.",
+          "acceptanceChanged": false,
+          "splitCount": 0,
+          "timestamp": "2026-07-28T15:29:46.695Z"
+        }
+      ],
+      "coordinatorReview": {
+        "verdict": "needs_review",
+        "reviewNotes": "Openspec provided valuable architectural analysis (identifying useContent as the 236-caller integration point, passive downstream consumers, and the Contentstack test-boundary limitation) but failed to produce its primary deliverable: acceptance criteria. acceptanceChanged is false and splitCount is 0, meaning openspec did not elaborate requirements into ACs as intended. Speckit compensated by building all 12 ACs from scratch — covering detection, real-time updates, error handling, production security, downstream benefit, deep references, cleanup, performance, and edge cases — but this means speckit performed openspec's job rather than reviewing and hardening existing ACs. The pipeline did not function as designed (elaborate → review/harden); instead it was (analyze → create from scratch). Additionally, the story's acceptanceCriteria array remains empty [], which is a critical gap — either ACs were not persisted to the story object or were only captured in agent notes. The 12 ACs described in speckit's notes appear comprehensive and well-structured (Given/When/Then, no implementation instructions), but without the actual AC text in the story record, completeness, testability, and non-overlap cannot be fully verified. No story splits were proposed despite the coordinator noting this is a 'complex multi-market' feature — at minimum a split evaluation should have been documented. Human review needed to: (1) verify ACs are actually persisted to the story, (2) confirm the 12 ACs are non-overlapping and fully testable, (3) assess whether this complex feature should be split, and (4) determine if openspec's pipeline role needs adjustment for stories with empty starting ACs.",
+        "qualityScore": 0.6,
+        "flags": [
+          "openspec_did_not_produce_acs",
+          "speckit_overcompensated_for_openspec",
+          "acceptance_criteria_array_still_empty",
+          "no_split_evaluation_despite_complexity",
+          "cannot_verify_ac_text_quality"
+        ],
+        "reviewedAt": "2026-07-28T15:30:22.238Z"
+      }
+    }
+  }
+]
+
+
+# Output
+[{"storyId":"AMSD-2041","agents":["openspec","speckit"],"notes":"Prior spec run (runId 20260728T152342Z) completed but coordinator review verdict is needs_review with qualityScore 0.6. Critical flags: openspec_did_not_produce_acs, acceptance_criteria_array_still_empty, no_split_evaluation_despite_complexity. Re-running both agents — openspec first to actually elaborate and persist acceptance criteria (and evaluate story splits given multi-market complexity), then speckit to review and harden the resulting ACs rather than creating them from scratch. This remediates the failed elaborate→review pipeline from the prior run.","priority":"high"}]

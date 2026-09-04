@@ -1,0 +1,145 @@
+=== Prompt for AMSD-1820 (attempt 1) ===
+CRITICAL — WRITE FILES FIRST. Your FIRST tool call MUST be WriteFile.
+Do NOT output any text before calling WriteFile. Do NOT plan or say "I will...".
+Call WriteFile NOW for the EXACT ABSOLUTE PATHS listed below:
+
+
+---
+
+Implement user story AMSD-1820: [Mozio] - The Promo code amount is NOT displayed as expected for Return trip tickets in the Mozio email confirmation
+
+## Story Description
+[Mozio] - The Promo code amount is NOT displayed as expected for Return trip tickets in the Mozio email confirmation
+
+## Acceptance Criteria
+- The function `promoAppliesToLineItem` in `src/services/mozio/email-promo-discount.ts` MUST return `false` when the `promo` argument is `null` or `undefined` (rule: no-coverage). Verify with: `node -e "const m=require('./src/services/mozio/email-promo-discount'); process.exit(m.promoAppliesToLineItem(null)===false && m.promoAppliesToLineItem(undefined)===false ? 0 : 1)"` — exit code must be 0.
+- The test suite for `src/services/mozio/email-promo-discount.ts` MUST include a test case that passes `null` or `undefined` as the `promo` argument to `promoAppliesToLineItem` and asserts a `false` return value (rule: no-coverage). Verify with: `grep -rn 'promoAppliesToLineItem' test/ --include='*.ts' | grep -E 'null|undefined' | wc -l` — result must be ≥ 1.
+- The email confirmation rendering logic for Mozio MUST display the promo code discount amount for return trip line items when a promo code is applied to a return ticket. A unit or integration test MUST construct a sample order payload with outbound and return line items and a valid promo, render the email, and assert that the discount amount appears for BOTH the outbound and return trip sections.
+- The test suite MUST include a test case where the promo applies only to the return trip leg, asserting that the discount is rendered for the return leg and not for the outbound leg (or vice versa), to confirm per-leg promo applicability is respected.
+- The test suite MUST include a test case with a multi-leg return order where the promo discount amount shown in the email matches the expected monetary value from the order payload for each applicable leg.
+
+## CRITICAL COMPLIANCE: STRING INVARIANTS
+The Acceptance Criteria above contain exact string matches required by the test suite.
+You are FORBIDDEN from paraphrasing, summarizing, or optimizing these strings — reproduce them character-for-character, including case and spacing, wherever the AC requires them.
+
+LITERAL STRINGS TO USE VERBATIM:
+- "const m=require('./src/services/mozio/email-promo-discount'); process.exit(m.promoAppliesToLineItem(null)===false && m.promoAppliesToLineItem(undefined)===false ? 0 : 1)"
+
+
+
+
+## Technical Notes
+None specified
+
+## Files to Create/Modify (EXACT ABSOLUTE PATHS — write to these paths exactly)
+
+
+## Dependencies
+None
+
+
+
+## Instructions
+**CRITICAL — WRITE FILES FIRST:**
+
+**You MUST write every file listed above to its EXACT absolute path. Do NOT write to a different path, do NOT write to the current directory unless it matches the path above. Use your WriteFile or Edit tools with the full absolute path shown.**
+
+1. Write each required file to its exact absolute path listed above — do this FIRST before anything else
+2. Implement all acceptance criteria for this story
+3. Follow the project's existing code patterns and conventions
+4. Do NOT create tests unless explicitly required in acceptance criteria
+
+After implementation, provide a brief summary of what was created/modified.
+
+## Relevant Knowledge Base Entries
+The following was learned from previous story implementations and is relevant to your agent role. Apply this knowledge before writing any code:
+
+- [2026-07-06T17:45:30Z] Always resolve mocked fetch calls to a Response-shaped object with ok, status, statusText, and a json method returning a Promise.
+- [2026-07-06T17:50:20Z] Use valid module and moduleResolution pairs in tsconfig.json: CommonJS with Node, Node16 with Node16, ESNext with Bundler. Use CommonJS and Node for the stack. Mismatched pairs cause build errors.
+- [2026-07-06T18:11:26Z] Use vi.fn().mockResolvedValue(value) to make a mock return a resolved Promise.
+- [2026-07-06T20:31:11Z] Use `test: { passWithNoTests: true }` in vitest.config.ts or create a stub test file when no *.test.ts files exist.
+- [2026-07-06T20:33:03Z] Enable globals:true in vitest.config.ts so describe, it, and expect work without imports, reducing boilerplate in test files.
+- [2026-07-06T23:47:34Z] Use CommonJS-compatible patterns in src/server.ts: avoid `import.meta.url` and top-level `await`; gate listen with `if (require.main === module)`.
+- [2026-07-07T02:35:30Z] Always include a non-test source file in src/ alongside any src/*.test.ts file, since tsconfig.json excludes test files from tsc --noEmit.
+- [2026-07-07T19:01:34Z] Only modify or create files explicitly listed in the story's acceptance criteria. Do not touch files belonging to other stories or outside the current task scope.
+- [2026-07-07T20:17:57Z] [unreviewed-fallback] Avoid using deprecated TypeScript compiler options like 'moduleResolution=node10'; use 'moduleResolution=node' instead.
+- [2026-07-17T20:20:58Z] Always: Before importing a module or referencing a type/property, always read the actual source file to verify the export exists, its exact path, its properties, and its constructor/factory signatures
+
+## Knowledge Base Contribution (do this LAST — after writing all implementation files)
+Your assigned KB entry ID for this run: **KB-012**
+
+IMPORTANT: Write ALL implementation files first. Only AFTER writing every required file should you optionally append a KB entry.
+Do NOT read orchestrations/agents/KB.md before writing implementation files. The relevant KB entries are already injected above.
+
+If (and only if) you discover a non-obvious pattern during implementation, append one entry to `orchestrations/agents/KB.md`:
+
+```markdown
+## KB-012 -- 2026-07-22
+
+**Category:** <backend|frontend|infrastructure|testing|orchestration>
+**AgentRole:** <your agentRole from the story>
+**Tags:** <comma-separated tech keywords, e.g. typescript, node, cli>
+**Trigger:** <retry|first-success>
+**StoryRef:** AMSD-1820
+
+<One concise paragraph: the specific pattern, gotcha, or anti-pattern.>
+```
+
+Only write an entry if the knowledge is genuinely non-obvious. Skip trivial observations.
+
+## Execution Plan
+Follow this plan step by step:
+1. Read `src/services/mozio/email-promo-discount.ts` to understand the current implementation of `promoAppliesToLineItem` and related promo discount rendering logic.
+
+2. Modify `src/services/mozio/email-promo-discount.ts` to add a null/undefined guard at the top of `promoAppliesToLineItem`: if `promo` is `null` or `undefined`, return `false` immediately before any property access.
+
+3. Read the Mozio email rendering code (search for where `promoAppliesToLineItem` is called during email template rendering) to identify how return trip line items are handled and why the promo discount amount is not displayed for return legs.
+
+4. Fix the email rendering logic so that the promo discount amount is rendered for return trip line items when `promoAppliesToLineItem` returns `true` for those items — ensure the same discount-rendering path used for outbound legs is applied to return legs.
+
+5. Read existing test files under `test/` that cover `email-promo-discount` to understand the test patterns and fixtures used.
+
+6. Add a unit test case in the appropriate test file (e.g., `test/services/mozio/email-promo-discount.test.ts`) that passes `null` and `undefined` as the `promo` argument to `promoAppliesToLineItem` and asserts the return value is `false`.
+
+7. Add an integration test that constructs a sample order payload with outbound and return line items and a valid promo, renders the Mozio email, and asserts the discount amount appears in BOTH the outbound and return trip sections of the rendered output.
+
+8. Add a test case where the promo applies only to the return trip leg (or only to the outbound leg), rendering the email and asserting the discount is shown for the applicable leg and not shown for the non-applicable leg, confirming per-leg promo applicability is respected.
+
+9. Add a test case with a multi-leg return order where the promo discount amount rendered in the email matches the expected monetary value from the order payload for each applicable leg.
+
+10. Run the verification commands from the acceptance criteria: the `node -e` null/undefined guard check (exit code 0), the `grep` test-coverage check (result ≥ 1), and the full test suite to confirm all tests pass.
+=== End Prompt ===
+
+=== epam Output (attempt 1) ===
+</think>
+  [tc-writer] No test stories need TCs in phase 'unknown' — skipping
+
+=== tsc --noEmit failed (exit 2) ===
+migration-scripts/client.ts(1,24): error TS2307: Cannot find module '@metrolinx/cx-shared/migration-tool-build' or its corresponding type declarations.
+migration-scripts/content_types/e_ticket/e_ticket.v3.ts(1,29): error TS2307: Cannot find module '@metrolinx/cx-shared/migration-tool-build' or its corresponding type declarations.
+migration-scripts/content_types/pass/pass.v3.ts(1,29): error TS2307: Cannot find module '@metrolinx/cx-shared/migration-tool-build' or its corresponding type declarations.
+migration-scripts/index.ts(4,8): error TS2307: Cannot find module '@metrolinx/cx-shared/migration-tool-build' or its corresponding type declarations.
+src/clients/redis/get-credentials.ts(1,49): error TS7016: Could not find a declaration file for module '@redis/entraid'. '/home/bradleyjerome/projects/metrolinx/azure.commerce.cdts/node_modules/@redis/entraid/dist/index.js' implicitly has an 'any' type.
+  Try `npm i --save-dev @types/redis__entraid` if it exists or add a new declaration (.d.ts) file containing `declare module '@redis/entraid';`
+src/clients/redis/get-credentials.ts(2,51): error TS7016: Could not find a declaration file for module '@redis/entraid'. '/home/bradleyjerome/projects/metrolinx/azure.commerce.cdts/node_modules/@redis/entraid/dist/index.js' implicitly has an 'any' type.
+  Try `npm i --save-dev @types/redis__entraid` if it exists or add a new declaration (.d.ts) file containing `declare module '@redis/entraid';`
+src/clients/stripe/stripe.ts(7,3): error TS2322: Type '"2024-10-28.acacia"' is not assignable to type '"2025-02-24.acacia"'.
+src/otel/otel.ts(9,8): error TS7016: Could not find a declaration file for module '@opentelemetry/auto-instrumentations-node'. '/home/bradleyjerome/projects/metrolinx/azure.commerce.cdts/node_modules/@opentelemetry/auto-instrumentations-node/build/src/index.js' implicitly has an 'any' type.
+  Try `npm i --save-dev @types/opentelemetry__auto-instrumentations-node` if it exists or add a new declaration (.d.ts) file containing `declare module '@opentelemetry/auto-instrumentations-node';`
+src/otel/otel.ts(19,8): error TS7016: Could not find a declaration file for module '@opentelemetry/sdk-trace-node'. '/home/bradleyjerome/projects/metrolinx/azure.commerce.cdts/node_modules/@opentelemetry/sdk-trace-node/build/src/index.js' implicitly has an 'any' type.
+  Try `npm i --save-dev @types/opentelemetry__sdk-trace-node` if it exists or add a new declaration (.d.ts) file containing `declare module '@opentelemetry/sdk-trace-node';`
+src/otel/otel.ts(65,5): error TS2353: Object literal may only specify known properties, and 'processors' does not exist in type 'LoggerProviderConfig'.
+tests/bootstrap.ts(112,3): error TS2739: Type 'SetupServer' is missing the following properties from type 'SetupServerApi': #private, network
+tests/features/common/common.mocks.ts(21,10): error TS2769: No overload matches this call.
+  Overload 1 of 5, '(payload: string | object | Buffer<ArrayBufferLike>, secretOrPrivateKey: null, options?: (SignOptions & { algorithm: "none"; }) | undefined): string', gave the following error.
+    Argument of type '"very-secure-secret"' is not assignable to parameter of type 'null'.
+  Overload 2 of 5, '(payload: string | object | Buffer<ArrayBufferLike>, secretOrPrivateKey: Buffer<ArrayBufferLike> | Secret | PrivateKeyInput | JsonWebKeyInput, options?: SignOptions | undefined): string', gave the following error.
+    Argument of type '{ expiresIn: string; }' is not assignable to parameter of type 'SignOptions'.
+      Types of property 'expiresIn' are incompatible.
+        Type 'string' is not assignable to type 'number | StringValue | undefined'.
+  Overload 3 of 5, '(payload: string | object | Buffer<ArrayBufferLike>, secretOrPrivateKey: Buffer<ArrayBufferLike> | Secret | PrivateKeyInput | JsonWebKeyInput, callback: SignCallback): void', gave the following error.
+    Argument of type '{ expiresIn: string; }' is not assignable to parameter of type 'SignCallback'.
+      Type '{ expiresIn: string; }' provides no match for the signature '(error: Error | null, encoded?: string | undefined): void'.
+</think>
+
+=== epam exited with code 1 ===

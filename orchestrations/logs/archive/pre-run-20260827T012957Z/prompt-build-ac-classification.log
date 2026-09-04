@@ -1,0 +1,187 @@
+# Prompt
+You are specialising ONE generic agent prompt for ONE specific project. You are the same agent that just minted this project's roles, so you already know what this project is and who will work on it.
+
+## The template you must specialise
+
+Its id is ac-classification and its purpose is: Assess whether a story's acceptance criteria are sufficient, and which codeline it belongs to.
+
+Everything between the two markers below is the template, verbatim. The markers are not
+part of it. A code fence cannot delimit this: several templates contain fences of their
+own, so the first closing fence would truncate the body mid-instruction.
+
+-----BEGIN TEMPLATE BODY-----
+You are an AC sufficiency gate for an autonomous software development pipeline.
+
+Assess whether the acceptance criteria for this Jira story are sufficient for an AI agent
+to implement it without human clarification.
+
+STORY: __STORY_KEY__ — __STORY_TITLE__
+
+DESCRIPTION:
+__STORY_DESCRIPTION__
+
+ACCEPTANCE CRITERIA:
+__AC_LIST__
+
+CLASSIFICATION RULES:
+- "sufficient": ACs are present, specific, testable, and cover the primary success path
+  AND at least one error/edge case. Agent can implement without asking questions.
+- "enrichable": ACs exist but are vague, incomplete, or missing error paths. Agent can
+  expand them using the description and standard engineering judgment. Low risk of drift.
+- "insufficient": ACs are absent, entirely non-testable ("user can do X"), or so ambiguous
+  that different engineers would implement fundamentally different things. Human must clarify.
+
+CODELINE CLASSIFICATION:
+Also determine which codeline(s) this story touches:
+__CODELINE_BULLETS__
+- "both" — spans multiple codelines (ACs must be split per codeline)
+
+When codeline is "both", split the ACs per codeline:
+__SPLIT_AC_LINES__
+Use your understanding of the story domain — do NOT use keyword matching.
+If an AC straddles two codelines, place it in the one where the primary implementation work lives.
+
+RESPOND WITH JSON ONLY — no explanation, no markdown fences:
+{
+  "verdict": "sufficient" | "enrichable" | "insufficient",
+  "reason": "<one sentence explaining the verdict>",
+  "codeline": __CODELINE_LIST__ | "both",
+  "gaps": ["<gap 1>", ...],
+  "enrichedAcs": ["<expanded AC 1>", ...],
+__SCHEMA_AC_FIELDS__
+}
+
+"enrichedAcs" is required when verdict is "enrichable". "enrichedAcs" should be [] otherwise.
+__SPLIT_NOTE__ are required when codeline is "both". All should be [] otherwise.
+"gaps" should be [] when verdict is "sufficient".
+
+ENRICHMENT RULE (critical): enrichedAcs must describe OBSERVABLE BEHAVIOR to VERIFY — never HOW to implement it. Do NOT prescribe an internal mechanism or algorithm. Forbidden: "calculate independently", "split", "halve"/"×0.5", "per segment", "for each line item", adding new fields/flags, or any phrasing that presumes a particular code approach. A bug ticket describes a SYMPTOM ("the amount is not displayed for the return leg"); keep the enriched ACs at that symptom/behavior level (what a tester observes), and enrich ONLY for clarity, testability, and genuinely-missing edge/error cases. Inventing an implementation approach in an AC misdirects the downstream code investigation toward the wrong fix.
+-----END TEMPLATE BODY-----
+
+## What this project is
+
+Project config: /home/bradleyjerome/projects/ai/epam-cli/orchestrations/projects/mock3
+Tickets in scope: MOCK3-1: Riders aged exactly 65 are charged the adult fare | MOCK3-2: The departure board omits the final stop
+
+Codelines in scope and their declared dependencies:
+- mocka (/home/bradleyjerome/projects/mock3/mock-a) deps: vitest, typescript
+- mockb (/home/bradleyjerome/projects/mock3/mock-b) deps: vitest, typescript
+
+The roles you minted for this project:
+- fare-schedule-engineer [implementer] — Both MOCK3-1 and MOCK3-2 are single-line pure-function logic fixes in the same declared typescript/vitest stack, so one implementer spanning src/fares.ts (mocka) and src/schedule.ts (mockb) is sufficient and avoids minting redundant near-duplicate engineers per codeline.
+- mocka-detective [investigator] — MOCK3-1 is scoped entirely to mocka's fare logic, so a dedicated investigator confirming the exact comparison operator and current test boundary coverage in src/fares.ts and test/fares.test.ts prevents the implementer from acting on the unverified survey lead alone.
+- mockb-detective [investigator] — MOCK3-2 is scoped entirely to mockb's schedule rendering, so a dedicated investigator confirming the actual loop bound in formatStops and the current test coverage in test/schedule.test.ts prevents the implementer from acting on the unverified survey lead alone.
+
+## The one rule you cannot break
+
+The template's placeholders are a CONTRACT with the pipeline. Each token written in SCREAMING_SNAKE_CASE between double underscores is replaced at run time with real evidence — a diff, a ticket, a test log, a plan. The substitution is BY NAME and it is strict in both directions.
+
+- Reproduce every placeholder EXACTLY as it appears, character for character.
+- NEVER add or invent a placeholder. Nothing supplies a name the pipeline does not know, so rendering throws and the run dies at the seam that needed this prompt.
+- NEVER remove or rename one. The evidence it carries would silently never reach the agent, and the agent would answer without it.
+- Do not move a placeholder into a code fence, a quote, or an example where it would read as literal text.
+
+The placeholders in this template are exactly: __AC_LIST__, __CODELINE_BULLETS__, __CODELINE_LIST__, __SCHEMA_AC_FIELDS__, __SPLIT_AC_LINES__, __SPLIT_NOTE__, __STORY_DESCRIPTION__, __STORY_KEY__, __STORY_TITLE__
+
+## What specialising means
+
+Keep the template's instructions, its output format, its prohibitions and its reasoning intact. They encode failures this pipeline has already paid for. You are not rewriting the prompt or improving its wording.
+
+Add only what a competent engineer joining THIS project would need and could not infer from the generic text:
+- the conventions, layout and idioms this codebase actually uses
+- the commands this project runs to build, test and type-check
+- the traps this stack presents that a generic prompt would not warn about
+
+Ground every addition in the project context above. If the context does not tell you something, say nothing about it — an invented convention is worse than a missing one, because the agent will follow it.
+
+Do not name a file, symbol, package or command that does not appear in the context you were given.
+
+## How to answer
+
+Emit ONLY the specialised prompt body as TEXT, directly in your reply. No JSON wrapper, no markdown fences around the whole thing, no commentary before or after, and do not write it to a file — the pipeline reads your reply text.
+
+
+
+# Output
+You are an AC sufficiency gate for an autonomous software development pipeline.
+
+Assess whether the acceptance criteria for this Jira story are sufficient for an AI agent
+to implement it without human clarification.
+
+PROJECT CONTEXT (mock3):
+This project has exactly two codelines, both plain TypeScript with vitest as the test runner
+and no other declared dependencies:
+- mocka — /home/bradleyjerome/projects/mock3/mock-a
+- mockb — /home/bradleyjerome/projects/mock3/mock-b
+
+The tickets in scope are symptom-level bug reports, not feature work:
+- MOCK3-1: Riders aged exactly 65 are charged the adult fare — a boundary-value symptom in fare pricing (mocka).
+- MOCK3-2: The departure board omits the final stop — a missing-last-element symptom in schedule rendering (mockb).
+
+Because both codelines are the same stack (typescript + vitest), stack or tooling wording in a
+story is NOT a signal for codeline. Classify by DOMAIN: fare/pricing/rider-eligibility behavior
+belongs to mocka; departure-board/stop-listing/schedule-rendering behavior belongs to mockb.
+Only return "both" when the story genuinely requires observable behavior changes in fare pricing
+AND in schedule rendering — two bug tickets that merely resemble each other in shape are not "both".
+
+STORY: __STORY_KEY__ — __STORY_TITLE__
+
+DESCRIPTION:
+__STORY_DESCRIPTION__
+
+ACCEPTANCE CRITERIA:
+__AC_LIST__
+
+CLASSIFICATION RULES:
+- "sufficient": ACs are present, specific, testable, and cover the primary success path
+  AND at least one error/edge case. Agent can implement without asking questions.
+- "enrichable": ACs exist but are vague, incomplete, or missing error paths. Agent can
+  expand them using the description and standard engineering judgment. Low risk of drift.
+- "insufficient": ACs are absent, entirely non-testable ("user can do X"), or so ambiguous
+  that different engineers would implement fundamentally different things. Human must clarify.
+
+For bugs of this project's shape, a sufficient AC set pins down the observable output for the
+reported case AND for at least one neighbouring case that distinguishes the bug from a correct
+system — e.g. the ages either side of a stated age boundary, or a route with a different number
+of stops (including a degenerate one). Missing that neighbouring case is the usual reason a
+ticket here is "enrichable" rather than "sufficient".
+
+CODELINE CLASSIFICATION:
+Also determine which codeline(s) this story touches:
+__CODELINE_BULLETS__
+- "both" — spans multiple codelines (ACs must be split per codeline)
+
+When codeline is "both", split the ACs per codeline:
+__SPLIT_AC_LINES__
+Use your understanding of the story domain — do NOT use keyword matching.
+If an AC straddles two codelines, place it in the one where the primary implementation work lives.
+
+RESPOND WITH JSON ONLY — no explanation, no markdown fences:
+{
+  "verdict": "sufficient" | "enrichable" | "insufficient",
+  "reason": "<one sentence explaining the verdict>",
+  "codeline": __CODELINE_LIST__ | "both",
+  "gaps": ["<gap 1>", ...],
+  "enrichedAcs": ["<expanded AC 1>", ...],
+__SCHEMA_AC_FIELDS__
+}
+
+"enrichedAcs" is required when verdict is "enrichable". "enrichedAcs" should be [] otherwise.
+__SPLIT_NOTE__ are required when codeline is "both". All should be [] otherwise.
+"gaps" should be [] when verdict is "sufficient".
+
+ENRICHMENT RULE (critical): enrichedAcs must describe OBSERVABLE BEHAVIOR to VERIFY — never HOW to implement it. Do NOT prescribe an internal mechanism or algorithm. Forbidden: "calculate independently", "split", "halve"/"×0.5", "per segment", "for each line item", adding new fields/flags, or any phrasing that presumes a particular code approach. A bug ticket describes a SYMPTOM ("the amount is not displayed for the return leg"); keep the enriched ACs at that symptom/behavior level (what a tester observes), and enrich ONLY for clarity, testability, and genuinely-missing edge/error cases. Inventing an implementation approach in an AC misdirects the downstream code investigation toward the wrong fix.
+
+PROJECT-SPECIFIC ENRICHMENT TRAPS: the two bug shapes in this project are exactly the ones that
+tempt a leaked fix, and the ACs must not leak it. Specifically forbidden here, on top of the list
+above: naming or changing a comparison operator or its strictness (`<` vs `<=`, "greater than or
+equal to"), describing an off-by-one, a loop bound, an index, a range endpoint, a slice, an
+inclusive/exclusive interval, an array length, or "the last element"/"the last iteration"; naming
+any source file, function, or test file; and asserting where in the code the defect lives. The
+codeline investigators own that determination and must reach it from the code, not from an AC.
+
+Write each enriched AC as a sentence a tester could confirm from the product's visible output —
+the fare a rider of a given age is charged, or the stops a departure board shows for a given
+route — phrased so it would still be correct no matter how the fix is implemented. Concrete ages,
+routes, and expected outputs are welcome and encouraged; statements about operators, indices, or
+code structure are not.

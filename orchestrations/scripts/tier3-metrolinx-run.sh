@@ -485,7 +485,7 @@ echo ""
 # DECLARED, NOT INFERRED: each runner in llm-defaults.<set>.json carries emitsTraces. A runner that
 # does route through the epam CLI sets it true and gets the gate back, with no edit here.
 _traces_expected=0
-_traces_expected="$("$NODE_BIN" -e '
+_traces_expected="$("${NODE_BIN:-node}" -e '
   const fs = require("fs"), path = require("path");
   try {
     const reg = JSON.parse(fs.readFileSync(process.argv[1], "utf8"));

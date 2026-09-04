@@ -1,0 +1,39 @@
+=== Lint Gate: core @ 2026-08-19T12:57:35+00:00 ===
+
+> metrolinx-starter@0.1.0 check-types
+> tsc
+
+
+src/context/contentstackContext.tsx:10:13  @typescript-eslint/no-explicit-any  Unexpected any. Specify a different type.
+src/pages/404.tsx:24:14  @typescript-eslint/no-explicit-any  Unexpected any. Specify a different type.
+src/pages/404.tsx:48:6  react-hooks/exhaustive-deps  React Hook useEffect has a missing dependency: 'page'. Either include it or remove the dependency array.
+src/pages/[[...slug]].tsx:32:14  @typescript-eslint/no-explicit-any  Unexpected any. Specify a different type.
+src/pages/[[...slug]].tsx:60:6  react-hooks/exhaustive-deps  React Hook useEffect has a missing dependency: 'currentPage'. Either include it or remove the dependency array.
+src/pages/_app.tsx:49:24  @typescript-eslint/no-explicit-any  Unexpected any. Specify a different type.
+src/services/contentstack.ts:80:8  @typescript-eslint/no-explicit-any  Unexpected any. Specify a different type.
+src/services/contentstack.ts:103:28  @typescript-eslint/no-explicit-any  Unexpected any. Specify a different type.
+src/services/contentstack.ts:103:48  @typescript-eslint/no-explicit-any  Unexpected any. Specify a different type.
+src/services/contentstack.ts:103:56  @typescript-eslint/no-explicit-any  Unexpected any. Specify a different type.
+src/services/contentstack.ts:211:17  @typescript-eslint/no-explicit-any  Unexpected any. Specify a different type.
+src/services/contentstack.ts:241:25  @typescript-eslint/no-explicit-any  Unexpected any. Specify a different type.
+src/services/contentstack.ts:255:15  @typescript-eslint/no-explicit-any  Unexpected any. Specify a different type.
+src/services/contentstack.ts:298:15  @typescript-eslint/no-explicit-any  Unexpected any. Specify a different type.
+src/services/contentstack.ts:401:15  @typescript-eslint/no-explicit-any  Unexpected any. Specify a different type.
+NEW_FINDINGS=15
+UNATTRIBUTABLE (baseline unavailable): src/context/contentstackContext.tsx:10:13  @typescript-eslint/no-explicit-any  Unexpected any. Specify a different type.
+src/pages/404.tsx:24:14  @typescript-eslint/no-explicit-any  Unexpected any. Specify a different type.
+src/pages/404.tsx:48:6  react-hooks/exhaustive-deps  React Hook useEffect has a missing dependency: 'page'. Either include it or remove the dependency array.
+src/pages/[[...slug]].tsx:32:14  @typescript-eslint/no-explicit-any  Unexpected any. Specify a different type.
+src/pages/[[...slug]].tsx:60:6  react-hooks/exhaustive-deps  React Hook useEffect has a missing dependency: 'currentPage'. Either include it or remove the dependency array.
+src/pages/_app.tsx:49:24  @typescript-eslint/no-explicit-any  Unexpected any. Specify a different type.
+src/services/contentstack.ts:80:8  @typescript-eslint/no-explicit-any  Unexpected any. Specify a different type.
+src/services/contentstack.ts:103:28  @typescript-eslint/no-explicit-any  Unexpected any. Specify a different type.
+src/services/contentstack.ts:103:48  @typescript-eslint/no-explicit-any  Unexpected any. Specify a different type.
+src/services/contentstack.ts:103:56  @typescript-eslint/no-explicit-any  Unexpected any. Specify a different type.
+src/services/contentstack.ts:211:17  @typescript-eslint/no-explicit-any  Unexpected any. Specify a different type.
+src/services/contentstack.ts:241:25  @typescript-eslint/no-explicit-any  Unexpected any. Specify a different type.
+src/services/contentstack.ts:255:15  @typescript-eslint/no-explicit-any  Unexpected any. Specify a different type.
+src/services/contentstack.ts:298:15  @typescript-eslint/no-explicit-any  Unexpected any. Specify a different type.
+src/services/contentstack.ts:401:15  @typescript-eslint/no-explicit-any  Unexpected any. Specify a different type.
+NEW_FINDINGS=15
+=== Gate Result: PASS ===

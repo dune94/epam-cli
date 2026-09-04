@@ -1,0 +1,4 @@
+spec-mode: SPAN-1 — 4 verification criteria persisted (source: both, resolution: clean)
+spec-mode: ⚠️ SPAN-1 — fixSiteAnalysis does not cover 1 verification criterion/criteria (e.g. "tsc --noEmit exits with code 0"). The prescribed fix may be structurally incomplete.
+spec-mode: LLM model review completed for 0 stories
+spec-mode: completed for phase mock3_core (run 20260804T005635Z)

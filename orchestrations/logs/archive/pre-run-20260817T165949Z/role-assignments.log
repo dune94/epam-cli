@@ -1,0 +1,36 @@
+# Prompt
+Assign an implementation agent role to every story below.
+
+AVAILABLE ROLES — these are this project's own engineering roles. Choose from these and
+nothing else; the name you return must match one of them verbatim:
+- fare-logic-engineer
+    You are a TypeScript engineer who implements fare-calculation logic in a transit pricing codebase. The project spans two codelines — mocka and mockb — that both declare vitest and typescript and share an identical fare module structure. Your primary source file is src/fares.ts in each codeline; it exports a function fareFor that takes a rider object (with an age field) and returns a fare in cents, using constants like BASE_FARE_CENTS and a concession fare constant. The known defect (MOCK3-1) is on line 10 of src/fares.ts: the comparison rider.age > 65 excludes riders aged exactly 65 from the concession fare; the fix is to change it to rider.age >= 65. Read the file in each codeline before editing to confirm the exact line and surrounding context, because the survey that identified this bug was a limited pass and may be wrong about line numbers or variable names. Keep changes minimal: flip the comparison operator, do not refactor unrelated code. Follow existing TypeScript conventions already present in the file — no new imports, no formatting changes, no comment rewrites unless the doc comment explicitly contradicts the fix. You edit src/fares.ts in both mocka and mockb. You do NOT write, edit, or own any test file — a separate pipeline agent owns all reproducing tests. When you are done, the fareFor function must return the concession fare for a rider whose age is exactly 65. Verify your change compiles by running the TypeScript compiler (npx tsc --noEmit) if a tsconfig is present. Report exactly which lines you changed in each codeline.
+- departure-board-engineer
+    You are a TypeScript engineer who implements departure-board rendering logic in a transit scheduling codebase. The project spans two codelines — mocka and mockb — that both declare vitest and typescript. The relevant ticket (MOCK3-2) reports that a function named formatStops renders every stop except the last one (a three-stop line shows only two), while a companion function totalMinutes correctly reports the journey length. You must locate these functions by searching the source tree of each codeline — they may live in a file whose name you do not yet know, so use search and codegraph_query to find symbols named formatStops and totalMinutes before editing. Read the implementation to understand how the stop list is iterated (the likely bug is an off-by-one in a slice, loop bound, or index comparison that drops the final element). Fix the iteration so all stops including the last are rendered, without changing totalMinutes or any other function. Keep the fix minimal and consistent with the existing code style. You edit source files (likely under src/) in both mocka and mockb. You do NOT write, edit, or own any test file — a separate pipeline agent owns all reproducing tests. After your change, a line with N stops must display N stops. If formatStops or totalMinutes cannot be found in a codeline after thorough search, report that the ticket does not reach that codeline rather than creating new files. Verify your change compiles with the TypeScript compiler (npx tsc --noEmit) if a tsconfig is present.
+
+STORIES — a story listing more than one codeline needs ONE ASSIGNMENT PER CODELINE:
+- MOCK3-1: Riders aged exactly 65 are charged the adult fare
+    codeline: mocka
+    The fare rules say riders aged 65 and over pay the concession fare. A rider aged exactly 65 is charged the full adult fare of 350 cents instead of 175. Riders aged 66 and above are charged correctly, so the boundary itself is wrong rather than the rule.
+- MOCK3-2: The departure board omits the final stop
+    codeline: mockb
+    formatStops renders every stop except the last one, so a three-stop line shows two. The journey length reported by totalMinutes is correct, which is why the omission has gone unnoticed.
+
+Pick the role whose stated expertise actually covers the work the story describes. If two
+roles could plausibly own a story, prefer the one whose brief names the surface the story
+touches.
+
+THE UNIT OF ASSIGNMENT IS A (STORY, CODELINE) PAIR, NOT A STORY. A story listing three
+codelines needs THREE assignments — the repositories differ, so the right owner can differ.
+Count the codelines listed against each story and return exactly that many assignments for it,
+naming the codeline on every one. A story is not assigned until every codeline it lists is.
+
+THE OWNER MUST AUTHOR THE CODE. Assign the role that will EDIT THE FILES this story changes —
+the one whose brief names those files or directories. A role whose brief is about settings in
+a vendor's console, or about documentation, cannot deliver a story here: the agent's output is
+a change in a repository. Live 2026-08-07: this story went to the one role of three that owned
+no source files, and all such a role can produce is a configuration note. Where the story needs
+both console configuration and code, 
+
+# Output
+{ "assignments": [ { "agentRole": "fare-logic-engineer", "codeline": "mocka", "reason": "MOCK3-1 is a fare-calculation boundary bug in src/fares.ts — fareFor uses `rider.age > 65` on line 10, excluding riders aged exactly 65 from the concession fare. The fare-logic-engineer role explicitly names MOCK3-1, src/fares.ts, and the `> 65` → `>= 65` fix. It is the only role that edits fare logic." , "storyId": "MOCK3-1" }, { "agentRole": "departure-board-engineer", "codeline": "mockb", "reason": "MOCK3-2 is a departure-board rendering bug where formatStops omits the last stop while totalMinutes is correct. The departure-board-engineer role explicitly names MOCK3-2, formatStops, and totalMinutes. It is the only role that edits departure-board rendering. (formatStops was not found in mock-a/src, confirming the story is scoped to mockb.)" , "storyId": "MOCK3-2" } ] }

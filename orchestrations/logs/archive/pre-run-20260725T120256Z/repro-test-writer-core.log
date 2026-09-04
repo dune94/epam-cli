@@ -1,0 +1,8 @@
+[repro-test-writer] writing reproducing test for AMSD-1820 → src/services/submit-reservations/apply-report-discounts.service.spec.ts (convention: .spec.ts, example: apps/background/src/core/health/health.controller.spec.ts)
+[repro-test-writer] test produced and validated on attempt 1 (model z-ai/glm-5.1)
+[repro-test-writer] committed reproducing test: src/services/submit-reservations/apply-report-discounts.service.spec.ts
+[repro-test-writer] writing reproducing test for AMSD-1820 → src/services/submit-reservations/apply-report-discounts.service.spec.ts (convention: .spec.ts, example: apps/background/src/core/health/health.controller.spec.ts)
+[repro-test-writer] attempt 1 failed (class=max_iterations) — invoking self-heal analyst
+[repro-test-writer] ladder escalation (attempt 2/3) — z-ai/glm-5.1 → moonshotai/kimi-k3
+[repro-test-writer] test produced and validated on attempt 2 (model moonshotai/kimi-k3)
+[repro-test-writer] committed reproducing test: src/services/submit-reservations/apply-report-discounts.service.spec.ts

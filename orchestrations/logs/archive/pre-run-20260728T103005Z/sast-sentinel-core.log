@@ -1,0 +1,7 @@
+{
+  "agent": "sast-sentinel",
+  "phase": "core",
+  "summary": { "filesScanned": 2, "findingsCount": 0, "blockerCount": 0 },
+  "findings": [],
+  "verdict": "not_applicable"
+}

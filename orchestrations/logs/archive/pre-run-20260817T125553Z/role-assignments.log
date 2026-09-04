@@ -1,0 +1,49 @@
+# Prompt
+Assign an implementation agent role to every story below.
+
+AVAILABLE ROLES — these are this project's own engineering roles. Choose from these and
+nothing else; the name you return must match one of them verbatim:
+- transit-fare-engineer
+    You are engineer working across two codelines in this project: mocka and mockb. Both declare vitest and typescript as their dependencies. You implement source-code fixes for transit fare and departure-board logic. In mocka, you own src/fares.ts. The function fareFor determines the fare for a rider based on age. The doc comment states riders aged 65 and over pay the concession fare. The comparison on the age-65 branch uses a strict greater-than operator that excludes riders aged exactly 65, causing them to be charged the adult fare instead of the concession fare. Your fix is to adjust that comparison so age 65 is inclusive, matching the documented rule. Read the doc comment before changing the operator; the comment is the specification. In mockb, you own src/schedule.ts. The function formatStops renders a list of stops as a board string. Its loop bound uses `stops.length - 1` as the exclusive upper limit, which skips the final stop entirely. The function totalMinutes reads the last element correctly, so journey length is unaffected. Your fix is to adjust the loop bound so every stop including the last is rendered. Coding conventions: both codelines use TypeScript with simple exported functions and named constants at module scope. Prefer minimal, surgical edits — change the operator or bound, do not refactor surrounding code. Read the existing pattern in the file you are editing and match it. Test responsibility: Tests are written by a dedicated test agent in a separate pipeline turn after your fix is committed. You do not create, edit, or own test files. Test files live in the test/ directory at each codeline root (e.g., test/fares.test.ts in mocka, test/schedule.test.ts in mockb) and are executed with vitest. When you describe your change, reference the test file path so the test agent knows where the reproducing case belongs, but do not write it yourself.
+
+STORIES — a story listing more than one codeline needs ONE ASSIGNMENT PER CODELINE:
+- MOCK3-1: Riders aged exactly 65 are charged the adult fare
+    codeline: mocka
+    The fare rules say riders aged 65 and over pay the concession fare. A rider aged exactly 65 is charged the full adult fare of 350 cents instead of 175. Riders aged 66 and above are charged correctly, so the boundary itself is wrong rather than the rule.
+- MOCK3-2: The departure board omits the final stop
+    codeline: mockb
+    formatStops renders every stop except the last one, so a three-stop line shows two. The journey length reported by totalMinutes is correct, which is why the omission has gone unnoticed.
+
+Pick the role whose stated expertise actually covers the work the story describes. If two
+roles could plausibly own a story, prefer the one whose brief names the surface the story
+touches.
+
+THE UNIT OF ASSIGNMENT IS A (STORY, CODELINE) PAIR, NOT A STORY. A story listing three
+codelines needs THREE assignments — the repositories differ, so the right owner can differ.
+Count the codelines listed against each story and return exactly that many assignments for it,
+naming the codeline on every one. A story is not assigned until every codeline it lists is.
+
+THE OWNER MUST AUTHOR THE CODE. Assign the role that will EDIT THE FILES this story changes —
+the one whose brief names those files or directories. A role whose brief is about settings in
+a vendor's console, or about documentation, cannot deliver a story here: the agent's output is
+a change in a repository. Live 2026-08-07: this story went to the one role of three that owned
+no source files, and all such a role can produce is a configuration note. Where the story needs
+both console configuration and code, 
+
+# Output
+{
+  "assignments": [
+    {
+      "storyId": "MOCK3-1",
+      "codeline": "mocka",
+      "agentRole": "transit-fare-engineer",
+      "reason": "The transit-fare-engineer brief owns src/fares.ts in mocka and explicitly names the fareFor age-65 boundary defect: the strict greater-than operator excludes riders aged exactly 65 from the concession fare, contradicting the doc comment that specifies age 65 and over. This is exactly the defect MOCK3-1 describes. The fix is to make the comparison inclusive (>= 65) so riders aged exactly 65 receive the concession fare, matching the documented rule. The reproducing test belongs in mocka/test/fares.test.ts, to be written by the test agent."
+    },
+    {
+      "storyId": "MOCK3-2",
+      "codeline": "mockb",
+      "agentRole": "transit-fare-engineer",
+      "reason": "The transit-fare-engineer brief owns src/schedule.ts in mockb and explicitly names the formatStops loop-bound defect: using stops.length - 1 as the exclusive upper limit skips the final stop, while totalMinutes reads the last element correctly so journey length is unaffected. This matches MOCK3-2 exactly. The fix is to adjust the loop bound so every stop including the last is rendered. The reproducing test belongs in mockb/test/schedule.test.ts, to be written by the test agent."
+    }
+  ]
+}

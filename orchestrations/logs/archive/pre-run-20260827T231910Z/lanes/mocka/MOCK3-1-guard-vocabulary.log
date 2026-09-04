@@ -1,0 +1,217 @@
+# Prompt
+You are the Guard Vocabulary Agent for the epam-cli orchestration pipeline.
+
+A deterministic guard is about to check a set of statements against a RULE. Your sole job is to derive, for THIS story, the concrete terms that would VIOLATE that rule — and the terms that name its legitimate observable surface. The guard holds no vocabulary of its own; it applies exactly what you return, and nothing else.
+
+## Why you exist
+
+Every guard in this pipeline used to carry a hardcoded list of terms, each list reverse-engineered from a single past incident. A list catches that one incident and nothing else, while reporting "clean" forever — which is worse than no guard, because it converts "unchecked" into "checked" and nobody looks again. You replace those lists. If you answer badly, the guard is blind; if you answer well, it catches violations nobody has seen yet.
+
+## Your inputs
+
+1. THE RULE — a principle stating what it means to violate this guard. It names no domain, no product and no past incident. It is the only definition of correctness you are given.
+2. THE STATEMENTS — the items the guard will check (for example, a story's verification criteria or acceptance criteria).
+3. CODE EVIDENCE — real findings from the repository: files, functions, symbols, and the reasoning that located them. This is ground truth.
+4. STORY CONTEXT — the ticket's title and description.
+
+## Your process
+
+1. Read the rule and restate to yourself, in one sentence, what distinguishes a violating statement from a compliant one. Everything you return must trace to that sentence.
+2. Read the CODE EVIDENCE and identify the implementation vocabulary of this story: the symbols, functions, SDK entry points, internal structures and configuration keys that describe HOW the behaviour is produced. These come from the evidence, never from the ticket prose and never from your own knowledge of the technology.
+3. Read the STORY CONTEXT and identify the observable surface: what an end user or tester perceives. That is the whitelist.
+4. Emit both lists.
+
+## Hard requirements
+
+- DERIVE FROM THE EVIDENCE. Every blacklist term must be traceable to a symbol, file, function or structure present in the supplied code evidence, or to a construction verb present in the statements themselves. Do not contribute terms from your general knowledge of a library, framework or vendor: that is how an agent invents a signature that does not exist.
+- NEVER include a term that names the observable surface. If a term describes what a user sees, it belongs in the whitelist, even when it also appears in code.
+- PREFER THE SPECIFIC. a term naming ONE identifiable thing is useful; a generic category word is not — it will fire on unrelated statements and train people to ignore the guard.
+- WHOLE TERMS ONLY. Return terms as they would appear in a sentence. Do not return regular expressions, wildcards or fragments.
+- LOWERCASE every term.
+- The whitelist WINS. A term appearing in both lists is treated as observable and never flagged, so do not rely on the blacklist to override it.
+- If the rule genuinely admits no violating vocabulary for this story, return an empty blacklist. Do not pad it. An empty list is a real answer and is reported as such — it is not treated as success.
+
+## Verifying a term against the index
+
+At some seams you are given a real CodeGraph index of the repository and the command to
+query it. When you are, USE IT — do not assert that a term is meaningful, check it. A
+candidate that resolves to nothing in the index is noise and belongs in the blacklist,
+however unusual or technical the word looks. A candidate that resolves to real symbols is
+evidence-backed and can be trusted.
+
+Be aware of what your list feeds. Where the consumer is a BM25/IDF ranker, that ranker
+DEMOTES terms which are common in the corpus and AMPLIFIES terms which are rare. A rare but
+meaningless token — a bracketed brand tag, a ticket label, a person's name, a status word —
+is therefore not diluted by the ranker; it is promoted to a top discriminator and drags the
+search away from the real code. Rarity is not signal. Mistaking the two is the specific
+failure you exist to prevent, so when a term is unusual AND resolves to nothing, blacklist
+it with confidence.
+
+When no index is available to you, say what you can support from the evidence you were
+given and no more. An honest short list beats a padded one: every term you return is
+applied deterministically, and a wrong term is enforced as rigorously as a right one.
+
+## Output
+
+Call the submit_guard_vocabulary tool. Structured output only. Do not answer in prose, do not wrap the call in commentary, and do not explain your reasoning outside the per-term reason fields. A prose answer is discarded in full and the guard is left with nothing to apply.
+
+GUARD SEAM: search-query
+
+THE RULE THIS GUARD ENFORCES:
+A search term is USEFUL when it names something that exists in the repository being searched — a symbol, function, file, module, or a domain noun the code itself uses. It is NOISE when it names the ticket's packaging rather than its subject: routing tags, brand or product labels, ticket prefixes, status words, people, or generic prose.
+Return as BLACKLIST every candidate that names packaging rather than subject, or that resolves to nothing in the index. Return as WHITELIST the terms that name the capability or code under discussion.
+
+THE STATEMENTS THE GUARD WILL CHECK:
+1. Riders aged exactly 65 are charged the adult fare
+2. The fare rules say riders aged 65 and over pay the concession fare. A rider aged exactly 65 is charged the full adult fare of 350 cents instead of 175. Riders aged 66 and above are charged correctly, so the boundary itself is wrong rather than the rule.
+
+DECLARED MANIFEST (the files this story says it will touch):
+- (none declared)
+
+CODE EVIDENCE (real findings from this repository — ground truth; derive from these, not from your own knowledge of any library):
+- (none available)
+
+STORY CONTEXT:
+Title: Riders aged exactly 65 are charged the adult fare
+Description: The fare rules say riders aged 65 and over pay the concession fare. A rider aged exactly 65 is charged the full adult fare of 350 cents instead of 175. Riders aged 66 and above are charged correctly, so the boundary itself is wrong rather than the rule.
+
+VERIFY BEFORE YOU ANSWER — you have a real index of this repository.
+
+  PROJECT_ROOT="/home/bradleyjerome/projects/mock3/mock-a" bash "/home/bradleyjerome/projects/ai/epam-cli/orchestrations/scripts/codegraph-agent-query.sh" query <SymbolName>
+  PROJECT_ROOT="/home/bradleyjerome/projects/mock3/mock-a" bash "/home/bradleyjerome/projects/ai/epam-cli/orchestrations/scripts/codegraph-agent-query.sh" explore <terms>
+
+Run it via Bash. A candidate term that resolves to NOTHING in this index is noise and
+belongs in the blacklist, however unusual the word looks. Do not assert that a term is
+meaningful — check it.
+
+WHY THIS MATTERS HERE: the list you return feeds a BM25/IDF ranker. That ranker DEMOTES
+terms which are common in the corpus and AMPLIFIES terms which are rare. So a rare,
+meaningless token — a bracketed brand tag, a ticket label, a person's name — is not
+diluted, it is promoted to a top discriminator and drags the search away from the real
+code. Rare-and-meaningless is the failure mode you exist to prevent; do not mistake
+rarity for signal.
+
+# Output — THIS IS A CONTRACT, NOT A PREFERENCE
+
+Emit EXACTLY one <GUARD_VOCABULARY> block and nothing else that matters. Prose outside it is DISCARDED
+unread, however correct it is — the pipeline parses the block and never the commentary.
+
+<GUARD_VOCABULARY>
+{
+  "blacklist": [ {
+      "term": <string>
+         // The literal term or phrase to match, lowercase.,
+      "reason": <string>
+         // Short clause naming which part of the rule it breaks.,
+      "kind": <string> one of "implementation_noun" | "construction_verb" | "internal_structure" | "cross_comparison" | "other"   (optional),
+  } ]
+  "whitelist": [ {
+      "term": <string>,
+      "reason": <string>   (optional),
+  } ]
+}
+</GUARD_VOCABULARY>
+
+Submit the concrete terms that would VIOLATE the stated guard rule for this story, and the terms that represent its legitimate observable surface. Derive them from the supplied code evidence. Do not answer in prose.
+
+
+# Output
+<GUARD_VOCABULARY>
+{
+  "blacklist": [
+    {
+      "term": "exactly",
+      "reason": "Modifier describing precision of the condition; not a code symbol or domain noun—does not resolve to searchable entity"
+    },
+    {
+      "term": "are",
+      "reason": "Generic verb connector; not domain-specific"
+    },
+    {
+      "term": "the",
+      "reason": "Article; generic prose with no domain meaning"
+    },
+    {
+      "term": "say",
+      "reason": "Generic verb used to describe rule statements; not a code symbol or observable behavior"
+    },
+    {
+      "term": "rules",
+      "reason": "Generic noun; does not resolve to a code symbol (no 'rules' type/function/constant in evidence)"
+    },
+    {
+      "term": "instead of",
+      "reason": "Generic comparison phrase; prose connector without domain reference"
+    },
+    {
+      "term": "rather than",
+      "reason": "Generic comparison phrase; prose connector without domain reference"
+    },
+    {
+      "term": "correctly",
+      "reason": "Generic adverb describing expected behavior; not a code term or observable entity"
+    },
+    {
+      "term": "wrong",
+      "reason": "Generic adjective describing error state; not a code symbol or observable entity name"
+    },
+    {
+      "term": "itself",
+      "reason": "Pronoun for emphasis; generic prose with no domain reference"
+    }
+  ],
+  "whitelist": [
+    {
+      "term": "fare"
+    },
+    {
+      "term": "rider"
+    },
+    {
+      "term": "riders"
+    },
+    {
+      "term": "age"
+    },
+    {
+      "term": "aged"
+    },
+    {
+      "term": "65"
+    },
+    {
+      "term": "charged"
+    },
+    {
+      "term": "adult"
+    },
+    {
+      "term": "adult fare"
+    },
+    {
+      "term": "concession"
+    },
+    {
+      "term": "concession fare"
+    },
+    {
+      "term": "boundary"
+    },
+    {
+      "term": "350"
+    },
+    {
+      "term": "350 cents"
+    },
+    {
+      "term": "175"
+    },
+    {
+      "term": "175 cents"
+    },
+    {
+      "term": "66"
+    }
+  ]
+}
+</GUARD_VOCABULARY>

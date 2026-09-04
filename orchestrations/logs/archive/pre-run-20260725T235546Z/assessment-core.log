@@ -1,0 +1,26 @@
+Assessment complete. Here's a summary of what was done:
+
+## Phase: core — Skill Assessment Complete
+
+### Data Processing
+- **Filtered** `phase-cost.jsonl` for `phase_id="core"` → 4 records found
+- **Deduplicated** by `story_id` using most recent `started_at`:
+  - `core` (spec-pass) — infrastructure, no forecast
+  - `pipeline` (team-lead-agent) — infrastructure, no forecast  
+  - `AMSD-1820` — 2 records (attempt + completed), used the completed record (latest)
+- **Cross-referenced** PRD: AMSD-1820 has `completed: true` → treated as succeeded
+
+### Key Findings
+| Metric | Actual | Forecast | Variance |
+|---|---|---|---|
+| Time | 3.61 min | 2.36 min | +1.25 min (53% over) |
+| Cost | $0.0263 | $0.4524 | -$0.43 (94% under) |
+
+- **Over threshold:** No — time variance is minor in absolute terms (1.25 min)
+- **Skill-domain mismatch:** None — `typescript-engineer` is correct for a TypeScript bug fix
+- **Corrective actions:** None needed — no pending stories in later phases, no role mismatches
+
+### Outputs Written
+1. **JSONL assessment** → `/home/bradleyjerome/projects/ai/epam-cli/orchestrations/logs/phase-skill-assessments.jsonl` (appended with flock)
+2. **Improvement report** → `/home/bradleyjerome/projects/ai/epam-cli/orchestrations/logs/phase-improvements/core.md`
+3. **PRD modifications:** None required (no mismatches, no pending future-phase stories)

@@ -1,0 +1,157 @@
+# Prompt
+You are the specification coordinator for the epam-cli orchestration system. Before every phase you read orchestrations/prd.json (implementationOrder and stories), evaluate risk, dependencies, and technical readiness, then assign the correct specification runners: OpenSpec, Speckit, both, or none. You write assignments into each story's specification.assignedAgents field along with coordinatorNotes, target provider/model, and timestamps. You understand the provider policy ledger (configuration.aiRuntime.providerPolicies), token guardrails, and know when to skip stories that were already hand-curated. When you plan a run you emit JSON compliant with spec-mode-runner.js so that automation can apply deltas deterministically. You never invent story IDs or mutate acceptance criteria directly; only delegate to spec agents and record their status.
+
+You are the EPAM CLI specification coordinator reviewing the completed spec outputs for phase scaffold.
+
+Each story was processed by a sequential agent pipeline:
+  1. openspec elaborated requirements (AC refinement, story splits, technical depth)
+  2. speckit reviewed openspec's output (testability, security, edge cases, gap analysis)
+
+For each story, evaluate the quality of the collaborative spec work:
+1. Did both agents add meaningful, non-overlapping value?
+2. Are the acceptance criteria complete, testable, and non-overlapping?
+3. Are story splits logical and properly scoped?
+4. Flag any story needing human review.
+
+Respond with JSON between <SPEC_REVIEW> and </SPEC_REVIEW> using this schema:
+[
+  {"storyId":"REM-xxx","verdict":"approved|needs_review","reviewNotes":"coordinator observations","qualityScore":0.0-1.0,"flags":[]}
+]
+
+Stories to review:
+[
+  {
+    "id": "SKY-001",
+    "title": "Scaffold TypeScript project with Vitest and Express",
+    "acceptanceCriteria": [
+      "Delegated to split children: SKY-001-A, SKY-001-B"
+    ],
+    "specification": {
+      "runId": "20260717T192025Z",
+      "assignedAgents": [
+        "speckit"
+      ],
+      "coordinatorNotes": "Scaffolding story with already highly detailed, hand-curated AC (13 criteria with exact field values, compiler options, and verification commands). No elaboration needed — openspec would add no value. Assign speckit only for a light hardening pass: verify edge cases (package-lock.json handling, .env in .gitignore, idempotency if re-run), confirm no security gaps in scaffold, and flag any missing testability criteria. Foundation story so a quick review is warranted despite low complexity.",
+      "status": "completed",
+      "updatedAt": "2026-07-17T19:22:19.838Z",
+      "appliedAgents": [
+        "speckit"
+      ],
+      "agentContributions": [
+        {
+          "agent": "speckit",
+          "applied": true,
+          "notes": "13 ACs exceeds the 12-AC threshold. Split into two logical children: (1) package.json initialization and dependency installation, (2) config files, directory structure, and build/test verification. No test files present so no impl/test split needed. No frontend or multi-runtime concerns.",
+          "acceptanceChanged": true,
+          "splitCount": 0,
+          "timestamp": "2026-07-17T19:21:44.703Z",
+          "acBefore": [
+            "/home/bradleyjerome/projects/skyscanner-app/package.json exists and the 'name' field equals exactly 'skyscanner-app'",
+            "package.json 'scripts' object contains exactly: build='tsc', test='vitest run', start='node dist/server.js', dev='tsx src/server.ts' — and 'main' equals 'dist/server.js'",
+            "package.json 'dependencies' includes 'express'",
+            "package.json 'devDependencies' includes all of: typescript, tsx, vitest, @types/express, @types/node",
+            "package.json contains no dependency whose name includes 'skyscanner', 'rapidapi', or any Skyscanner SDK",
+            "/home/bradleyjerome/projects/skyscanner-app/tsconfig.json exists with compilerOptions: strict=true, target='ES2022', module='CommonJS', outDir='dist/'",
+            "/home/bradleyjerome/projects/skyscanner-app/vitest.config.ts exists, imports defineConfig from 'vitest/config', exports a default config object, and sets test.globals to true (so test files can use describe/it/expect/vi/beforeEach/afterEach without importing them explicitly)",
+            "/home/bradleyjerome/projects/skyscanner-app/.gitignore exists and contains entries for both 'node_modules' and 'dist'",
+            "/home/bradleyjerome/projects/skyscanner-app/src/ directory exists",
+            "/home/bradleyjerome/projects/skyscanner-app/node_modules/ directory exists (npm install completed successfully)",
+            "Running ~/.nvm/versions/node/v20.20.0/bin/node ./node_modules/.bin/tsc --noEmit inside /home/bradleyjerome/projects/skyscanner-app exits with code 0 and produces no output",
+            "Running ~/.nvm/versions/node/v20.20.0/bin/node ./node_modules/.bin/vitest run inside /home/bradleyjerome/projects/skyscanner-app exits with code 0 (no test files is an acceptable passing state)",
+            "package.json contains no reference anywhere to 'index.ts' or 'index.js' (the real entry point is src/server.ts, built by a later story)"
+          ],
+          "acAfter": [
+            "/home/bradleyjerome/projects/skyscanner-app/package.json exists and the 'name' field equals exactly 'skyscanner-app'",
+            "package.json 'scripts' object contains exactly: build='tsc', test='vitest run', start='node dist/server.js', dev='tsx src/server.ts' — and 'main' equals 'dist/server.js'",
+            "package.json 'dependencies' includes 'express'",
+            "package.json 'devDependencies' includes all of: typescript, tsx, vitest, @types/express, @types/node",
+            "package.json contains no dependency whose name includes 'skyscanner', 'rapidapi', or any Skyscanner SDK",
+            "/home/bradleyjerome/projects/skyscanner-app/tsconfig.json exists with compilerOptions: strict=true, target='ES2022', module='CommonJS', outDir='dist/'",
+            "/home/bradleyjerome/projects/skyscanner-app/vitest.config.ts exists, imports defineConfig from 'vitest/config', exports a default config object, and sets test.globals to true",
+            "/home/bradleyjerome/projects/skyscanner-app/.gitignore exists and contains entries for both 'node_modules' and 'dist'",
+            "/home/bradleyjerome/projects/skyscanner-app/src/ directory exists",
+            "/home/bradleyjerome/projects/skyscanner-app/node_modules/ directory exists (npm install completed successfully)",
+            "Running ~/.nvm/versions/node/v20.20.0/bin/node ./node_modules/.bin/tsc --noEmit inside /home/bradleyjerome/projects/skyscanner-app exits with code 0 and produces no output",
+            "Running ~/.nvm/versions/node/v20.20.0/bin/node ./node_modules/.bin/vitest run inside /home/bradleyjerome/projects/skyscanner-app exits with code 0 (no test files is an acceptable passing state)",
+            "package.json contains no reference anywhere to 'index.ts' or 'index.js' (the real entry point is src/server.ts, built by a later story)"
+          ],
+          "acAdded": [
+            "/home/bradleyjerome/projects/skyscanner-app/vitest.config.ts exists, imports defineConfig from 'vitest/config', exports a default config object, and sets test.globals to true"
+          ],
+          "acRemoved": [
+            "/home/bradleyjerome/projects/skyscanner-app/vitest.config.ts exists, imports defineConfig from 'vitest/config', exports a default config object, and sets test.globals to true (so test files can use describe/it/expect/vi/beforeEach/afterEach without importing them explicitly)"
+          ]
+        }
+      ]
+    },
+    "splitChildren": [
+      {
+        "id": "SKY-001-A",
+        "title": "Configure package.json with scripts, dependencies, and entry point",
+        "acceptanceCriteria": [
+          "/home/bradleyjerome/projects/skyscanner-app/package.json exists and the 'name' field equals exactly 'skyscanner-app'",
+          "package.json 'scripts' object contains exactly: build='tsc', test='vitest run', start='node dist/server.js', dev='tsx src/server.ts' — and 'main' equals 'dist/server.js'",
+          "package.json 'dependencies' includes 'express'",
+          "package.json 'devDependencies' includes all of: typescript, tsx, vitest, @types/express, @types/node",
+          "package.json contains no dependency whose name includes 'skyscanner', 'rapidapi', or any Skyscanner SDK",
+          "package.json contains no reference anywhere to 'index.ts' or 'index.js' (the real entry point is src/server.ts, built by a later story)"
+        ]
+      },
+      {
+        "id": "SKY-001-B",
+        "title": "Create config files, project structure, and verify compilation",
+        "acceptanceCriteria": [
+          "/home/bradleyjerome/projects/skyscanner-app/tsconfig.json exists with compilerOptions: strict=true, target='ES2022', module='CommonJS', outDir='dist/'",
+          "/home/bradleyjerome/projects/skyscanner-app/vitest.config.ts exists, imports defineConfig from 'vitest/config', exports a default config object, and sets test.globals to true",
+          "/home/bradleyjerome/projects/skyscanner-app/.gitignore exists and contains entries for both 'node_modules' and 'dist'",
+          "/home/bradleyjerome/projects/skyscanner-app/src/ directory exists",
+          "/home/bradleyjerome/projects/skyscanner-app/node_modules/ directory exists (npm install completed successfully)",
+          "Running ~/.nvm/versions/node/v20.20.0/bin/node ./node_modules/.bin/tsc --noEmit inside /home/bradleyjerome/projects/skyscanner-app exits with code 0 and produces no output",
+          "Running ~/.nvm/versions/node/v20.20.0/bin/node ./node_modules/.bin/vitest run inside /home/bradleyjerome/projects/skyscanner-app exits with code 0 (no test files is an acceptable passing state)"
+        ]
+      }
+    ]
+  }
+]
+
+<SPEC_REVIEW>
+</SPEC_REVIEW>
+
+# Output
+<SPEC_REVIEW>
+[
+  {
+    "storyId": "SKY-001",
+    "verdict": "needs_review",
+    "reviewNotes": "Split logic is sound — SKY-001-A (package.json, 6 ACs) and SKY-001-B (config/structure/verification, 7 ACs) are clean, non-overlapping, and well-scoped. Coordinator correctly skipped openspec given hand-curated ACs. However, speckit's hardening pass fell short of the coordinator's explicit requests: (1) no AC added for package-lock.json existence after npm install, (2) no AC for .env in .gitignore (coordinator flagged this as an edge case to verify), (3) no idempotency criterion for re-running scaffold. The only AC change was cosmetic — shortening the vitest.config.ts parenthetical — which adds negligible value. The implicit dependency ordering (A must complete before B since npm install requires package.json) is natural but undocumented. Foundation story deserves a complete hardening pass before implementation proceeds.",
+    "qualityScore": 0.68,
+    "flags": [
+      "speckit_did_not_address_coordinator_requested_edge_cases",
+      "missing_package-lock_json_ac",
+      "missing_env_gitignore_ac",
+      "missing_idempotency_ac",
+      "implicit_dependency_ordering_between_children_undocumented",
+      "ac_change_was_cosmetic_only"
+    ]
+  },
+  {
+    "storyId": "SKY-001-A",
+    "verdict": "approved",
+    "reviewNotes": "6 ACs covering package.json are precise, testable, and non-overlapping. Each criterion specifies exact field values or absence constraints. Well-scoped for a single implementation pass.",
+    "qualityScore": 0.88,
+    "flags": []
+  },
+  {
+    "storyId": "SKY-001-B",
+    "verdict": "needs_review",
+    "reviewNotes": "7 ACs are individually testable but the set is incomplete relative to coordinator's hardening request. Missing: package-lock.json existence verification, .env in .gitignore, and idempotency if scaffold is re-run. The node_modules AC depends on SKY-001-A completing first — this ordering should be explicit in the story metadata.",
+    "qualityScore": 0.65,
+    "flags": [
+      "missing_package_lock_json_ac",
+      "missing_env_gitignore_ac",
+      "missing_idempotency_ac",
+      "implicit_dependency_on_sky_001_a"
+    ]
+  }
+]
+</SPEC_REVIEW>

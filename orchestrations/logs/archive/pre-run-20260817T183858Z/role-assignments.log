@@ -1,0 +1,34 @@
+# Prompt
+Assign an implementation agent role to every story below.
+
+AVAILABLE ROLES — these are this project's own engineering roles. Choose from these and
+nothing else; the name you return must match one of them verbatim:
+- typescript-vitest-implementer
+    You are a TypeScript engineer who writes and fixes source code across this project's codelines. Both codelines (mocka and mockb) declare TypeScript and vitest as their stack; no other frameworks or SDKs are in scope. Your work is confined to source files under each codeline's src/ directory. For MOCK3-1 in codeline mocka, you will edit src/fares.ts. The defect is a boundary comparison: fareFor uses `if (rider.age > 65)` where the fare rule requires riders aged 65 and over to receive the concession fare, so the operator must be `>= 65`. Confirm the exact line and the surrounding constants (CONCESSION_FARE_CENTS, BASE_FARE_CENTS) before editing. Do not change any other logic or constant values. For MOCK3-2 in codeline mockb, you will edit src/schedule.ts. The defect is in formatStops: the loop `for (let i = 0; i < stops.length - 1; i++)` skips the final stop. Change the bound so every stop is rendered. Do not alter totalMinutes, which correctly reads stops[stops.length - 1].minutes and is independent of the rendering bug. Tests in this project live in each codeline's test/ directory and are named *.test.ts. They are executed with vitest. A separate pipeline agent owns all test authorship and editing; you must not create, modify, or delete any test file. Your responsibility is source code only. After your fix, run vitest from the codeline root to confirm existing tests still pass. Do not reference or integrate Contentstack, NextJS, live-preview, or any package not declared in the codeline manifests. If a ticket mentions such things, treat them as out of scope noise.
+
+STORIES — a story listing more than one codeline needs ONE ASSIGNMENT PER CODELINE:
+- MOCK3-1: Riders aged exactly 65 are charged the adult fare
+    codeline: mocka
+    The fare rules say riders aged 65 and over pay the concession fare. A rider aged exactly 65 is charged the full adult fare of 350 cents instead of 175. Riders aged 66 and above are charged correctly, so the boundary itself is wrong rather than the rule.
+- MOCK3-2: The departure board omits the final stop
+    codeline: mockb
+    formatStops renders every stop except the last one, so a three-stop line shows two. The journey length reported by totalMinutes is correct, which is why the omission has gone unnoticed.
+
+Pick the role whose stated expertise actually covers the work the story describes. If two
+roles could plausibly own a story, prefer the one whose brief names the surface the story
+touches.
+
+THE UNIT OF ASSIGNMENT IS A (STORY, CODELINE) PAIR, NOT A STORY. A story listing three
+codelines needs THREE assignments — the repositories differ, so the right owner can differ.
+Count the codelines listed against each story and return exactly that many assignments for it,
+naming the codeline on every one. A story is not assigned until every codeline it lists is.
+
+THE OWNER MUST AUTHOR THE CODE. Assign the role that will EDIT THE FILES this story changes —
+the one whose brief names those files or directories. A role whose brief is about settings in
+a vendor's console, or about documentation, cannot deliver a story here: the agent's output is
+a change in a repository. Live 2026-08-07: this story went to the one role of three that owned
+no source files, and all such a role can produce is a configuration note. Where the story needs
+both console configuration and code, 
+
+# Output
+{"assignments":[{"agentRole":"typescript-vitest-implementer","codeline":"mocka","reason":"The defect is in src/fares.ts where fareFor uses `if (rider.age > 65)` but the fare rule requires `>= 65` for the concession fare. This is TypeScript source code work in codeline mocka's src/ directory, which is exactly the typescript-vitest-implementer's scope.","storyId":"MOCK3-1"},{"agentRole":"typescript-vitest-implementer","codeline":"mockb","reason":"The defect is in src/schedule.ts where formatStops loop `for (let i = 0; i < stops.length - 1; i++)` skips the final stop. This is TypeScript source code work in codeline mockb's src/ directory, which is exactly the typescript-vitest-implementer's scope.","storyId":"MOCK3-2"}]}

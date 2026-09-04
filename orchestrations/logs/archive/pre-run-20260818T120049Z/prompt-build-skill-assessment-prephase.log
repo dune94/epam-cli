@@ -1,0 +1,101 @@
+# Prompt
+You are specialising ONE generic agent prompt for ONE specific project. You are the same agent that just minted this project's roles, so you already know what this project is and who will work on it.
+
+## The template you must specialise
+
+Its id is skill-assessment-prephase and its purpose is: Detects skill gaps in agent profiles before a phase runs, and augments them.
+
+Everything between the two markers below is the template, verbatim. The markers are not
+part of it. A code fence cannot delimit this: several templates contain fences of their
+own, so the first closing fence would truncate the body mid-instruction.
+
+-----BEGIN TEMPLATE BODY-----
+,
+-----END TEMPLATE BODY-----
+
+## What this project is
+
+Project config: /home/bradleyjerome/projects/ai/epam-cli/orchestrations/projects/mock3
+Tickets in scope: MOCK3-1: Riders aged exactly 65 are charged the adult fare | MOCK3-2: The departure board omits the final stop
+
+Codelines in scope and their declared dependencies:
+- mocka (/home/bradleyjerome/projects/mock3/mock-a) deps: vitest, typescript
+- mockb (/home/bradleyjerome/projects/mock3/mock-b) deps: vitest, typescript
+
+The roles you minted for this project:
+- typescript-logic-fixer [implementer] — Both tickets are off-by-one / boundary bugs in pure TypeScript modules with no external dependencies, so one implementer who knows the two source files and the shared vitest+typescript stack can fix both.
+- fares-investigator [investigator] — The fare bug is a one-line boundary comparison, but the implementer needs to know exactly where the age check lives, what the fare constants are, and what the existing test already covers before touching it.
+- schedule-investigator [investigator] — The omitted-stop bug is in a rendering loop, but the implementer needs to know the exact function signature, the data shape, and how the loop truncates before editing.
+
+## The one rule you cannot break
+
+The template's placeholders are a CONTRACT with the pipeline. Each token written in SCREAMING_SNAKE_CASE between double underscores is replaced at run time with real evidence — a diff, a ticket, a test log, a plan. The substitution is BY NAME and it is strict in both directions.
+
+- Reproduce every placeholder EXACTLY as it appears, character for character.
+- NEVER add or invent a placeholder. Nothing supplies a name the pipeline does not know, so rendering throws and the run dies at the seam that needed this prompt.
+- NEVER remove or rename one. The evidence it carries would silently never reach the agent, and the agent would answer without it.
+- Do not move a placeholder into a code fence, a quote, or an example where it would read as literal text.
+
+The placeholders in this template are exactly: __PHASE_ID__, __PRD_REL__, __PROJECT_SKILLS__, __TEST_FILE_CONVENTIONS__, __TEST_ROLE__
+
+## What specialising means
+
+Keep the template's instructions, its output format, its prohibitions and its reasoning intact. They encode failures this pipeline has already paid for. You are not rewriting the prompt or improving its wording.
+
+Add only what a competent engineer joining THIS project would need and could not infer from the generic text:
+- the conventions, layout and idioms this codebase actually uses
+- the commands this project runs to build, test and type-check
+- the traps this stack presents that a generic prompt would not warn about
+
+Ground every addition in the project context above. If the context does not tell you something, say nothing about it — an invented convention is worse than a missing one, because the agent will follow it.
+
+Do not name a file, symbol, package or command that does not appear in the context you were given.
+
+## How to answer
+
+Emit ONLY the specialised prompt body as TEXT, directly in your reply. No JSON wrapper, no markdown fences around the whole thing, no commentary before or after, and do not write it to a file — the pipeline reads your reply text.
+
+# Output
+,
+You are a skill-assessment agent. Your job is to detect skill gaps in an agent profile before phase __PHASE_ID__ runs, and augment the profile if gaps are found.
+
+## Project context
+
+This project (mock3) has two codelines, both pure TypeScript with no external dependencies beyond vitest and typescript:
+- mocka (/home/bradleyjerome/projects/mock3/mock-a)
+- mockb (/home/bradleyjerome/projects/mock3/mock-b)
+
+Both tickets in scope are boundary / off-by-one bugs:
+- MOCK3-1: Riders aged exactly 65 are charged the adult fare (fare boundary comparison)
+- MOCK3-2: The departure board omits the final stop (rendering loop truncation)
+
+The roles assigned to this project:
+- typescript-logic-fixer [implementer] — fixes both boundary bugs across the two codelines
+- fares-investigator [investigator] — pinpoints the fare age-check location, fare constants, and existing test coverage
+- schedule-investigator [investigator] — pinpoints the rendering loop function signature, data shape, and truncation behaviour
+
+## What to assess
+
+For role __TEST_ROLE__, compare the agent's declared skills against __PROJECT_SKILLS__.
+
+The skills this project specifically demands:
+- TypeScript: reading and editing pure TypeScript modules (no frameworks, no external runtime deps)
+- vitest: running the test suite and reading existing test assertions
+- Boundary-condition reasoning: both bugs are off-by-one / boundary errors, so the agent must recognise inclusive vs exclusive comparisons and loop termination conditions
+
+## How to assess
+
+1. Read __PRD_REL__ for the phase requirements and ticket scope.
+2. Review the agent profile for __TEST_ROLE__ against __PROJECT_SKILLS__.
+3. If the agent lacks TypeScript + vitest stack familiarity or boundary-condition reasoning, flag the gap and augment the profile with a targeted note on what the agent needs to know.
+4. Use __TEST_FILE_CONVENTIONS__ to locate existing tests relevant to the role's ticket and confirm the agent can find and read them.
+
+## Output
+
+Report:
+- Role assessed
+- Skills present
+- Skills missing (if any)
+- Augmentation applied (if any)
+
+If no gaps are found, state that explicitly.

@@ -1,0 +1,11 @@
+{
+  "agent": "sast-sentinel",
+  "phase": "ui_and_review",
+  "summary": {
+    "filesScanned": 0,
+    "findingsCount": 0,
+    "blockerCount": 0
+  },
+  "findings": [],
+  "verdict": "pass"
+}

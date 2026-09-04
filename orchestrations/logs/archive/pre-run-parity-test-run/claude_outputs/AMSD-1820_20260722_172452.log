@@ -1,0 +1,103 @@
+=== Prompt for AMSD-1820 (attempt 1) ===
+CRITICAL — WRITE FILES FIRST. Your FIRST tool call MUST be WriteFile.
+Do NOT output any text before calling WriteFile. Do NOT plan or say "I will...".
+Call WriteFile NOW for the EXACT ABSOLUTE PATHS listed below:
+
+
+---
+
+Implement user story AMSD-1820: [Mozio] - Promo code discount amount missing from return trip dispatch in Mozio email confirmation
+
+## Story Description
+The promo code discount amount is not displayed for return trip tickets in the Mozio email confirmation. The root cause is that when return-trip dispatches are assembled (in the reservation/submit mapping layer), the report.price.discount is not propagated from the order's promo code data into the return dispatch, unlike the outbound dispatch which receives it correctly. The sanitization mapper (mapToSanitizedMozioDispatch) passes discount through faithfully, so the fix must ensure the discount is present in the return dispatch payload before sanitization.
+
+## Acceptance Criteria
+- When a return trip dispatch is constructed, the report.price.discount field contains the same promo code discount name and amount as the outbound dispatch's report.price.discount field.
+- When mapToSanitizedMozioDispatch processes a return-trip dispatch that contains report.price.discount, the discount name and amount are preserved in the SanitizedMozioDispatch output (no data loss during sanitization).
+- When a one-way trip ticket with a promo code is processed, the outbound dispatch's report.price.discount name and amount remain identical to their values before this change (no regression in one-way trip discount propagation).
+- When a return trip order contains multiple line items (e.g., different fare types), each return line item's dispatch includes the applicable promo code discount amount, not just the first return line item.
+- When the promo code discount amount is zero or undefined for the return portion, the discount field is omitted from the return dispatch's report.price (not set to a zero-value or null entry), consistent with how the outbound dispatch handles zero or undefined discounts.
+- When a return trip order has no promo code applied, the return dispatch's report.price does not contain a discount field, matching the behavior of the outbound dispatch for orders without promo codes.
+- When the promo code data for a return trip contains a discount name but the amount is missing or non-numeric, the entire discount field is omitted from the return dispatch's report.price (no partial discount objects with a name but no valid amount).
+- When a return trip dispatch is constructed, the discount name in report.price.discount matches the promo code display name, consistent with how the outbound dispatch populates the discount name (not just the amount is propagated).
+
+
+
+
+
+## Technical Notes
+None specified
+
+## Files to Create/Modify (EXACT ABSOLUTE PATHS — write to these paths exactly)
+
+
+## Dependencies
+None
+
+
+
+## Instructions
+**CRITICAL — WRITE FILES FIRST:**
+
+**You MUST write every file listed above to its EXACT absolute path. Do NOT write to a different path, do NOT write to the current directory unless it matches the path above. Use your WriteFile or Edit tools with the full absolute path shown.**
+
+1. Write each required file to its exact absolute path listed above — do this FIRST before anything else
+2. Implement all acceptance criteria for this story
+3. Follow the project's existing code patterns and conventions
+4. Do NOT create tests unless explicitly required in acceptance criteria
+
+After implementation, provide a brief summary of what was created/modified.
+
+## Relevant Knowledge Base Entries
+The following was learned from previous story implementations and is relevant to your agent role. Apply this knowledge before writing any code:
+
+- [2026-07-06T17:45:30Z] Always resolve mocked fetch calls to a Response-shaped object with ok, status, statusText, and a json method returning a Promise.
+- [2026-07-06T17:50:20Z] Use valid module and moduleResolution pairs in tsconfig.json: CommonJS with Node, Node16 with Node16, ESNext with Bundler. Use CommonJS and Node for the stack. Mismatched pairs cause build errors.
+- [2026-07-06T18:11:26Z] Use vi.fn().mockResolvedValue(value) to make a mock return a resolved Promise.
+- [2026-07-06T20:31:11Z] Use `test: { passWithNoTests: true }` in vitest.config.ts or create a stub test file when no *.test.ts files exist.
+- [2026-07-06T20:33:03Z] Enable globals:true in vitest.config.ts so describe, it, and expect work without imports, reducing boilerplate in test files.
+- [2026-07-06T23:47:34Z] Use CommonJS-compatible patterns in src/server.ts: avoid `import.meta.url` and top-level `await`; gate listen with `if (require.main === module)`.
+- [2026-07-07T02:35:30Z] Always include a non-test source file in src/ alongside any src/*.test.ts file, since tsconfig.json excludes test files from tsc --noEmit.
+- [2026-07-07T19:01:34Z] Only modify or create files explicitly listed in the story's acceptance criteria. Do not touch files belonging to other stories or outside the current task scope.
+- [2026-07-07T20:17:57Z] [unreviewed-fallback] Avoid using deprecated TypeScript compiler options like 'moduleResolution=node10'; use 'moduleResolution=node' instead.
+- [2026-07-17T20:20:58Z] Always: Before importing a module or referencing a type/property, always read the actual source file to verify the export exists, its exact path, its properties, and its constructor/factory signatures
+
+## Knowledge Base Contribution (do this LAST — after writing all implementation files)
+Your assigned KB entry ID for this run: **KB-012**
+
+IMPORTANT: Write ALL implementation files first. Only AFTER writing every required file should you optionally append a KB entry.
+Do NOT read orchestrations/agents/KB.md before writing implementation files. The relevant KB entries are already injected above.
+
+If (and only if) you discover a non-obvious pattern during implementation, append one entry to `orchestrations/agents/KB.md`:
+
+```markdown
+## KB-012 -- 2026-07-22
+
+**Category:** <backend|frontend|infrastructure|testing|orchestration>
+**AgentRole:** <your agentRole from the story>
+**Tags:** <comma-separated tech keywords, e.g. typescript, node, cli>
+**Trigger:** <retry|first-success>
+**StoryRef:** AMSD-1820
+
+<One concise paragraph: the specific pattern, gotcha, or anti-pattern.>
+```
+
+Only write an entry if the knowledge is genuinely non-obvious. Skip trivial observations.
+
+## Execution Plan
+Follow this plan step by step:
+1. Search the codebase for `mapToSanitizedMozioDispatch` and the outbound dispatch construction logic that populates `report.price.discount` (search for `price.discount`, `promo`, `discount` in Mozio-related modules) to identify the files and functions responsible for building Mozio dispatch objects for outbound vs. return trips.
+2. Locate the return-trip dispatch construction path (search for return-trip handling, e.g., `return`, `roundTrip`, `returnTrip`, `lineItems` iteration near the Mozio dispatch builder) and compare it against the outbound path to confirm where `report.price.discount` is omitted or only partially propagated for return trips.
+3. Modify the return-trip dispatch construction so that, for each return line item, it derives `report.price.discount` using the same logic/source as the outbound dispatch — copying both the promo code display name and the discount amount from the order's promo code data, applied per line item rather than only the first.
+4. Ensure the discount-omission rules are applied identically to return dispatches: omit `report.price.discount` entirely when there is no promo code, when the amount is zero/undefined, or when the amount is missing/non-numeric (even if a name exists); never emit a partial discount object.
+5. Update/extend `mapToSanitizedMozioDispatch` (or its discount-handling branch) so that when a return-trip dispatch contains a valid `report.price.discount`, both `name` and `amount` are preserved in the `SanitizedMozioDispatch` output with no field stripping or data loss.
+6. Add or update unit tests covering: (a) return trip with valid promo code propagates both name and amount to each return line item's dispatch; (b) one-way trip with promo code unchanged (regression); (c) return trip with zero/undefined amount omits discount; (d) return trip with no promo code omits discount; (e) return trip with name but non-numeric/missing amount omits discount; (f) `mapToSanitizedMozioDispatch` preserves discount name and amount for return-trip input.
+7. Run the Mozio dispatch and sanitization test suites plus any email confirmation rendering tests to verify no regressions and that all acceptance criteria pass.
+=== End Prompt ===
+
+=== epam Output (attempt 1) ===
+Now let me look at the Mozio dispatch models:
+  [tc-writer] No test stories need TCs in phase 'unknown' — skipping
+Now let me look at the Mozio dispatch models:
+
+=== End epam Output ===

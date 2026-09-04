@@ -1,0 +1,108 @@
+# Prompt
+You are specialising ONE generic agent prompt for ONE specific project. You are the same agent that just minted this project's roles, so you already know what this project is and who will work on it.
+
+## The template you must specialise
+
+Its id is prd-change-reviewer and its purpose is: Validate a proposed PRD change against the codebase and pass or fail it.
+
+Everything between the two markers below is the template, verbatim. The markers are not
+part of it. A code fence cannot delimit this: several templates contain fences of their
+own, so the first closing fence would truncate the body mid-instruction.
+
+-----BEGIN TEMPLATE BODY-----
+__REVIEWER_PROFILE__
+
+STORY: __STORY_ID__
+CHANGE TYPE: __CHANGE_TYPE__
+
+BEFORE:
+__BEFORE__
+
+AFTER:
+__AFTER__
+
+You have read-only tools available (list/search/read files, run read-only shell commands). Several of your rejection rules (introduces a technology this project does not already use; TC fact cannot be verified by reading source code) require checking a claim against the real manifests/config/source of THIS codeline — do not judge those from the before/after excerpts alone. Verify before rejecting on that basis; a wrong rejection blocks a correct change and is worse than a slower correct one. Your tool budget is small — check the ONE fact your verdict depends on, not the whole codebase.
+
+Emit ONLY: {"verdict":"pass|fail","issues":["<issue1>"],"reason":"<15 words max>"}
+-----END TEMPLATE BODY-----
+
+## What this project is
+
+Project config: /home/bradleyjerome/projects/ai/epam-cli/orchestrations/projects/mock3
+Tickets in scope: MOCK3-1: Riders aged exactly 65 are charged the adult fare | MOCK3-2: The departure board omits the final stop
+
+Codelines in scope and their declared dependencies:
+- mocka (/home/bradleyjerome/projects/mock3/mock-a) deps: vitest, typescript
+
+The roles you minted for this project:
+- fare-rules-engineer [implementer] — MOCK3-1 requires an actual source edit to the age comparison in src/fares.ts, and only an implementer can commit that one-line boundary fix confirmed present in the code.
+- mocka-detective [investigator] — The declared vitest+typescript stack and the narrow four-file repository mean a single dedicated reader can definitively confirm the fareFor() boundary condition and the absence of any MOCK3-2 surface before an implementer commits to a fix.
+
+## The one rule you cannot break
+
+The template's placeholders are a CONTRACT with the pipeline. Each token written in SCREAMING_SNAKE_CASE between double underscores is replaced at run time with real evidence — a diff, a ticket, a test log, a plan. The substitution is BY NAME and it is strict in both directions.
+
+- Reproduce every placeholder EXACTLY as it appears, character for character.
+- NEVER add or invent a placeholder. Nothing supplies a name the pipeline does not know, so rendering throws and the run dies at the seam that needed this prompt.
+- NEVER remove or rename one. The evidence it carries would silently never reach the agent, and the agent would answer without it.
+- Do not move a placeholder into a code fence, a quote, or an example where it would read as literal text.
+
+The placeholders in this template are exactly: __AFTER__, __BEFORE__, __CHANGE_TYPE__, __REVIEWER_PROFILE__, __STORY_ID__
+
+## What specialising means
+
+Keep the template's instructions, its output format, its prohibitions and its reasoning intact. They encode failures this pipeline has already paid for. You are not rewriting the prompt or improving its wording.
+
+Add only what a competent engineer joining THIS project would need and could not infer from the generic text:
+- the conventions, layout and idioms this codebase actually uses
+- the commands this project runs to build, test and type-check
+- the traps this stack presents that a generic prompt would not warn about
+
+Ground every addition in the project context above. If the context does not tell you something, say nothing about it — an invented convention is worse than a missing one, because the agent will follow it.
+
+Do not name a file, symbol, package or command that does not appear in the context you were given.
+
+## How to answer
+
+Emit ONLY the specialised prompt body as TEXT, directly in your reply. No JSON wrapper, no markdown fences around the whole thing, no commentary before or after, and do not write it to a file — the pipeline reads your reply text.
+
+
+
+# Output
+__REVIEWER_PROFILE__
+
+STORY: __STORY_ID__
+CHANGE TYPE: __CHANGE_TYPE__
+
+BEFORE:
+__BEFORE__
+
+AFTER:
+__AFTER__
+
+You have read-only tools available (list/search/read files, run read-only shell commands). Several of your rejection rules (introduces a technology this project does not already use; TC fact cannot be verified by reading source code) require checking a claim against the real manifests/config/source of THIS codeline — do not judge those from the before/after excerpts alone. Verify before rejecting on that basis; a wrong rejection blocks a correct change and is worse than a slower correct one. Your tool budget is small — check the ONE fact your verdict depends on, not the whole codebase.
+
+PROJECT CONTEXT — mock3
+
+There is exactly one codeline in scope: `mocka`, rooted at `/home/bradleyjerome/projects/mock3/mock-a`. Any path you resolve, grep or read must be under that root. If a proposed change names a codeline or a directory that is not `mocka`/`mock-a`, that is not a mystery to investigate — it is a change pointing at nothing in this project.
+
+The repository is tiny — on the order of four files. That is the single most important fact for your tool budget. You are not sampling a large codebase; a `ls -R` of the root plus one `cat` of the relevant source file is usually the entire investigation, and it is cheap enough that "I could not verify" is almost never an honest verdict here. Read the file before you reject a claim about it.
+
+Declared dependencies are exactly `vitest` and `typescript`. That is the whole stack. Before rejecting on "introduces a technology this project does not already use", confirm against the real manifest in the codeline root rather than against this list — but treat anything outside vitest/TypeScript (a runner, an assertion library, a framework, a date/money library, a build tool, a persistence layer) as a claim that must be positively found in the manifest before it can pass. Conversely, do not reject a change merely for naming `vitest` or TypeScript constructs; both are already here.
+
+Do not name or require a package script you have not seen. If the change's testability hinges on how tests or type-checks are actually invoked, read the manifest's scripts section and judge against what is written there, not against what a TypeScript project usually has.
+
+Known ticket surface, and the trap it sets:
+
+- MOCK3-1 (riders aged exactly 65 charged the adult fare) has a confirmed home in source: the age comparison inside `fareFor()` in `src/fares.ts`. A TC or AC for this story is verifiable — the boundary operator and the threshold are both readable in that function. Reading it is the check.
+- MOCK3-2 (departure board omits the final stop) has **no confirmed implementing surface in this codeline**. If a change asserts a concrete fact about departure-board code — a function, a module, an off-by-one in a loop, a field on a returned object — search for it before accepting it. A confidently-worded TC about code that does not exist is the exact failure this review catches; absence of the surface is grounds to fail the TC-verifiability rule, not a reason to give the change the benefit of the doubt.
+
+Boundary-condition traps specific to this stack, which a generic prompt would not warn you about:
+
+- The MOCK3-1 defect is an inclusive/exclusive comparison at a single integer. A TC that exercises only ages like 60 and 70, or that says "senior fare applies to riders over 65", does not pin the defect and does not distinguish the buggy code from the fixed code. The boundary value itself must appear.
+- TypeScript's type checker will not catch this class of bug — `>` and `>=` both typecheck. Do not accept "the compiler/type-check would catch it" as verification for a fare-boundary claim; only the source comparison or a vitest case at the boundary verifies it.
+- The fix in `src/fares.ts` is a one-line operator change. A change that inflates it into new modules, new abstractions or new configuration is proposing scope this codeline does not contain — judge it against what `fareFor()` actually does.
+
+Verify the one fact, then decide.
+
+Emit ONLY: {"verdict":"pass|fail","issues":["<issue1>"],"reason":"<15 words max>"}

@@ -1,0 +1,163 @@
+# Prompt
+You are the openspec specification agent for EPAM CLI. Phase core, story MOCK3-2.
+
+LOCATED FIX SITE(S) — traced in this repository before you were asked. Anchor every criterion to the behaviour THIS code produces:
+- src/schedule.ts :: formatStops — The loop bound `i < stops.length - 1` iterates only through index stops.length-2, omitting the final stop. Changing it to `i < stops.length` makes every stop, including the last, get pushed into parts. The separator `' -> '` and per-stop template `${stops[i].name} (${stops[i].minutes}m)` are already correct — the loop bound is the sole defect. For an empty array, length is 0 so the loop body never executes and parts.join(' -> ') returns '', satisfying the empty-line criterion.
+- test/schedule.test.ts :: formatStops — The existing tests assert the output contains '->' and 'Union' (the first stop) but never assert the final stop ('Eglinton') appears, never assert the full expected output string, and never test formatStops with an empty array. These gaps must be filled to verify the acceptance criteria: every stop appears, arrow separator is used, and empty input renders without error.
+
+
+DECLARED FILES — the actual contents of the files this story names or the detective located. Base every observable criterion on what THIS code does, not on what the title suggests:
+--- src/schedule.ts
+/** Renders a stop sequence for a departure board. */
+export type Stop = { name: string; minutes: number };
+
+export function formatStops(stops: Stop[]): string {
+  const parts: string[] = [];
+  for (let i = 0; i < stops.length - 1; i++) {
+    parts.push(`${stops[i].name} (${stops[i].minutes}m)`);
+  }
+  return parts.join(' -> ');
+}
+
+export function totalMinutes(stops: Stop[]): number {
+  return stops.length ? stops[stops.length - 1].minutes : 0;
+}
+
+--- test/schedule.test.ts
+import { describe, it, expect } from 'vitest';
+import { formatStops, totalMinutes } from '../src/schedule';
+
+const LINE = [
+  { name: 'Union', minutes: 0 },
+  { name: 'Bloor', minutes: 12 },
+  { name: 'Eglinton', minutes: 25 },
+];
+
+describe('formatStops', () => {
+  it('separates stops with an arrow', () => {
+    expect(formatStops(LINE)).toContain('->');
+  });
+  it('names the first stop', () => {
+    expect(formatStops(LINE)).toContain('Union');
+  });
+});
+
+describe('totalMinutes', () => {
+  it('reports the journey length', () => { expect(totalMinutes(LINE)).toBe(25); });
+  it('handles an empty line', () => { expect(totalMinutes([])).toBe(0); });
+});
+
+
+
+BROWNFIELD MODE — answer as JSON.
+You MAY use read_file on any path named in this prompt (declared files, located fix sites, and any
+document persisted under the run's docs/ directory) when you need more than the excerpt shown.
+Looking is allowed; inventing is not — a file you have neither been shown nor read is a fabrication.
+
+STEP 1 — CLASSIFY THIS STORY. Set "storyKind":
+- "defect" if it reports that EXISTING behavior is wrong, broken, or produces an incorrect/missing result (a bug).
+- "novel" if it asks for a NEW capability that does not exist in the codebase yet. A brownfield story is not always a bug — genuinely new work is "novel".
+
+STEP 2 — LOCATE (always, for both kinds — but the question differs).
+Use ONLY the EXISTING CODE block already present in this prompt (injected above via CodeGraph or Semble).
+
+- If storyKind is "defect": find the FIX SITE — the file/function that COMPUTES the wrong value, not the one that displays it.
+- If storyKind is "novel": there is no fix site, and inventing one produces a confident wrong answer. Find the ATTACHMENT POINT instead — the existing file/function this new capability plugs INTO (the provider, hook, route, config or component it must integrate with), plus anything already present that the implementation should REUSE rather than rewrite. This is what keeps the change as small as possible: you cannot reuse what you have not found.
+
+Set "locationHint" to [{"file":"<repo-relative path>","function":"<function name>","reason":"<why this location — the fix site for a defect, the attachment point for a novel story>"}].
+If no relevant code appears above, set locationHint to []. Do NOT invent a plausible file: a named file whose contents you cannot see in this prompt is a fabrication, and an empty locationHint is a usable answer while a fabricated one is not.
+
+For EACH criterion also declare WHO observes it (end user, tester, api client, operator) and
+WHAT SURFACE they look at — the rendered page, the API response, the CLI output, a generated
+file. If no person or client can see it, it is not a verification criterion. A precondition
+the test establishes (for example a mocked client signalling a change) goes in "setup": that
+is allowed and is not implementation prescription.
+
+STEP 3 — VERIFICATION CRITERIA (do NOT touch the acceptance criteria).
+The acceptanceCriteria are the IMMUTABLE ticket intent — copy the existing array through VERBATIM: never reword, split, add, remove, re-scope, or inject any implementation mechanism into them.
+Instead, PRODUCE a "verificationCriteriaDetail" array — concrete, OBSERVABLE checks that confirm the change is correct — derived from the acceptance criteria AND the description. Apply these rules to EVERY verification criterion (a strict reviewer holds you to this SAME text, so a VC that breaks any rule will be flagged and rejected):
+A verification criterion states WHAT AN END USER OR TESTER OBSERVES on the user-facing surface THE TICKET IS ABOUT — the rendered output for an output ticket, the displayed screen for a UI ticket, the response a CLIENT receives for an API ticket. It is a BLACK-BOX check on that surface. It NEVER describes HOW the value is produced.
+A verification criterion is FORBIDDEN if it:
+- prescribes HOW to implement — any algorithm, mechanism, approach, or the addition/reading of any new field, flag or service;
+- references an INTERNAL structure that merely FEEDS the ticket's surface — an intermediate payload, a data-transfer object, or a specific response field used to BUILD the output. Verify the surface the ticket names, NOT the data structure behind it;
+- makes a CROSS-COMPARISON that presumes a mechanism — never assert one value "must equal" / "matches" / "is the same as" another; that presumes a shared derivation. Assert the required value is present and correct ON ITS OWN.
+Every verification criterion must be observable, testable, and tied to the ticket's stated symptom/intent.
+- If the ticket describes a SYMPTOM, the VCs verify that symptom is resolved AND that related existing behavior does not regress.
+Set "vcSource" to one of "acceptance", "description", "both" — where you actually derived the VCs from.
+
+Generate refined acceptance criteria and optionally updated title/description. Output raw JSON only (no XML tags, no markdown fences, no preamble) using this schema:
+{
+  "storyId":"MOCK3-2",
+  "agent":"openspec",
+  "notes":"context",
+  "acceptanceCriteria":["..."],
+  "description":"...",
+  "title":"...",
+  "storyKind":"defect|novel",
+  "verificationCriteriaDetail":[{"criterion":"<observable check>","observer":"end user|tester|api client|operator","surface":"<what they look at>","setup":"<optional precondition, e.g. a mocked client signalling a change>"}],
+  "vcSource":"acceptance|description|both",
+  "locationHint":[{"file":"path/relative/to/repo","function":"functionName","reason":"why this location — the fix site for a defect, the attachment point it integrates with for a novel story"}]
+}
+Use existing text when no change is needed.
+
+Story context:
+{
+  "id": "MOCK3-2",
+  "title": "The departure board omits the final stop",
+  "description": "formatStops renders every stop except the last one, so a three-stop line shows two. The journey length reported by totalMinutes is correct, which is why the omission has gone unnoticed.",
+  "acceptanceCriteria": [
+    "Every stop on the line appears on the rendered board, including the final one.",
+    "Stops remain separated by the existing arrow separator.",
+    "An empty line still renders without error."
+  ],
+  "acCount": 3,
+  "agentRole": "typescript-vitest-engineer",
+  "dependencies": [],
+  "splitDepth": 0
+}
+
+
+# Output
+```json
+{
+  "storyId": "MOCK3-2",
+  "agent": "openspec",
+  "notes": "Defect: formatStops loop bound i < stops.length - 1 skips the last stop. The fix site is the loop bound in formatStops. Verification criteria are black-box checks on the string formatStops returns.",
+  "acceptanceCriteria": [
+    "Every stop on the line appears on the rendered board, including the final one.",
+    "Stops remain separated by the existing arrow separator.",
+    "An empty line still renders without error."
+  ],
+  "description": "formatStops renders every stop except the last one, so a three-stop line shows two. The journey length reported by totalMinutes is correct, which is why the omission has gone unnoticed.",
+  "title": "The departure board omits the final stop",
+  "storyKind": "defect",
+  "verificationCriteriaDetail": [
+    {
+      "criterion": "The string returned by formatStops contains the name of every stop in the input array, including the last one",
+      "observer": "tester",
+      "surface": "formatStops return value",
+      "setup": "Provide a non-empty array of stops including a distinct final stop name"
+    },
+    {
+      "criterion": "The string returned by formatStops separates consecutive stops with ' -> '",
+      "observer": "tester",
+      "surface": "formatStops return value",
+      "setup": "Provide an array of two or more stops"
+    },
+    {
+      "criterion": "Calling formatStops with an empty array returns an empty string without throwing an error",
+      "observer": "tester",
+      "surface": "formatStops return value",
+      "setup": ""
+    }
+  ],
+  "vcSource": "both",
+  "locationHint": [
+    {
+      "file": "src/schedule.ts",
+      "function": "formatStops",
+      "reason": "The loop bound i < stops.length - 1 iterates only through index stops.length-2, omitting the final stop. This is the sole defect — the separator and per-stop template are already correct."
+    }
+  ]
+}
+```

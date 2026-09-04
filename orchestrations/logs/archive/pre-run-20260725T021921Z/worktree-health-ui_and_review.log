@@ -1,0 +1,3 @@
+[1;33m[wt-health WARN][0m Worktree 'primary' does not exist at /home/bradleyjerome/projects/ai/epam-cli/../epam-cli-wt-primary -- skipped
+[1;33m[wt-health WARN][0m Worktree 'independent' does not exist at /home/bradleyjerome/projects/ai/epam-cli/../epam-cli-wt-independent -- skipped
+[0;32m[wt-health OK][0m All worktrees healthy

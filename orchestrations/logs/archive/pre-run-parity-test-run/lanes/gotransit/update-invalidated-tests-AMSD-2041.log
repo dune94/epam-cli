@@ -1,0 +1,1 @@
+REGRESSION: The isPreviewMode function in useContent.ts fails when window.location.hash is undefined, breaking tests that don't mock this properly.

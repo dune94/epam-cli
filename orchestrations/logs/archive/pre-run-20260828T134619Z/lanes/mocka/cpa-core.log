@@ -1,0 +1,36 @@
+[0;35m[CPA][0m Retrieval: TF-IDF
+[0;36m[09:38:31][0m Loading stories from mocka-prd.json...
+[0;36m[09:38:31][0m Found 1 stories to contextualize
+
+[0;35m[CPA][0m Processing MOCK3-1...
+[0;35m[CPA][0m   MOCK3-1: formula baseline from calibration[low:implementation:cli](n=29): 4.5178418971594745min $0.1404333618569382
+[1mMOCK3-1[0m  Riders aged exactly 65 are charged the adult fare  [0;32m[PASS][0m
+  Machine time:              4.52 min  →      4.52 min  (conf: 0.70, adj: 1.00x)
+  Cost (story):          $0.1404     →  $0.1403   
+  Escalation:            +$0.0000      (r2@15%=+$0.0000 r3@5%=+$0.0000 k3@1.0%=+$0.0000)
+  Self-heal:             +$0.0000      (p=20%)
+  Retries (exp):          0.32  
+  Total (est):           $51.0682        (story+esc+heal=$0.1403 × pipeline 363.99x)
+  KB coverage:           3     chunks retrieved   0     cited   cov: 0%
+
+[0;36m=== CPA Gate Summary ===[0m
+
+Phase                    Pass   Review    Block    Total
+------------------------------------------------------
+core                        1        0        0        1
+------------------------------------------------------
+[1mTOTAL                       1        0        0        1[0m
+
+[0;32m[CPA OK][0m All 1 stories passed the CPA gate
+
+[0;36m[09:38:34][0m Appended 1 CPA records to /home/bradleyjerome/projects/ai/epam-cli/orchestrations/logs/cpa-review.jsonl
+[0;36m[09:38:34][0m Applying blended estimates to prd.json...
+[0;32m[CPA OK][0m Backed up prd.json → mocka-prd.json.before-cpa
+[1;33m[CPA WARN][0m   MOCK3-1: CPA estimate REJECTED by reviewer — reverting to pre-CPA values
+[0;32m[CPA OK][0m Applied CPA blended estimates to 1 stories
+
+  Review:   git diff /home/bradleyjerome/projects/ai/epam-cli/orchestrations/projects/mock3/runs/20260828T133739Z/work/mocka-prd.json
+  Restore:  cp /home/bradleyjerome/projects/ai/epam-cli/orchestrations/projects/mock3/runs/20260828T133739Z/work/mocka-prd.json.before-cpa /home/bradleyjerome/projects/ai/epam-cli/orchestrations/projects/mock3/runs/20260828T133739Z/work/mocka-prd.json
+
+No calibrated categories (need >= min-n completed stories per category).
+[0;36m[09:38:37][0m Calibration updated from actuals

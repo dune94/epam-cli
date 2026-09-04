@@ -1,0 +1,19 @@
+[mint-step] codeline mocka: /home/bradleyjerome/projects/mock3/mock-a (2 declared deps)
+[mint-step] codeline mockb: /home/bradleyjerome/projects/mock3/mock-b (2 declared deps)
+[mint-step] plugins provisioned: 1 · mint tools: read_file,list_files,search,codegraph_query
+spec-mode: fast-path claude/claude-sonnet-5 (skipping MiniMax)
+[mint-step]   survey: mocka — in_scope (src/fares.ts, test/fares.test.ts)
+[mint-step]   survey: mockb — in_scope (src/schedule.ts, test/schedule.test.ts)
+[mint-step]   survey recommends an investigator for mocka: Confirm the age-65 boundary condition in fareFor and review whether any other code paths or callers depend on the current `> 65` behaviour.
+[mint-step]   survey recommends an investigator for mockb: Confirm the loop bound in formatStops and check whether any caller or display path compensates for the missing last stop.
+spec-mode: fast-path claude/claude-sonnet-5 (skipping MiniMax)
+[mint-step] proposed=3 minted=3 unchanged=0 rejected=0 superseded=0
+[mint-step]   + [implementer] typescript-logic-fixer (profiles.json, kb, project-roles, project-profiles) — Both tickets are off-by-one / boundary bugs in pure TypeScript modules with no external dependencies, so one implementer who knows the two source files and the shared vitest+typescript stack can fix both.
+[mint-step]   + [investigator:mocka] fares-investigator (profiles.json, kb, project-investigators, project-profiles) — The fare bug is a one-line boundary comparison, but the implementer needs to know exactly where the age check lives, what the fare constants are, and what the existing test already covers before touching it.
+[mint-step]   + [investigator:mockb] schedule-investigator (profiles.json, kb, project-investigators, project-profiles) — The omitted-stop bug is in a rendering loop, but the implementer needs to know the exact function signature, the data shape, and how the loop truncates before editing.
+spec-mode: fast-path claude/claude-sonnet-5 (skipping MiniMax)
+[mint-step] roster review (cycle 1): sound — 0 finding(s), 0 blocking
+[mint-step] [roster] attempt 1/3 CALL FAILED: the specialiser call failed: prompt runner exited with code 1
+[mint-step] [roster] attempt 2/3 CALL FAILED: the specialiser call failed: prompt runner exited with code 1
+[mint-step] [roster] attempt 3/3 CALL FAILED: the specialiser call failed: prompt runner exited with code 1
+[mint-step] FAILED: [roster] could not produce an accepted roster in 3 attempt(s). Last: the specialiser call failed: prompt runner exited with code 1

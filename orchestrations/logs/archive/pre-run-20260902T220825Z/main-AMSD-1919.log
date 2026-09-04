@@ -1,0 +1,112 @@
+  LLMSettings: loaded fallback defaults from /home/bradleyjerome/projects/ai/epam-cli/orchestrations/scripts/../projects/metrolinx/llm-settings.json
+[0;32m[SUCCESS][0m Prerequisites check passed
+[0;34m[2026-09-02 21:56:28][0m ======================================
+[0;34m[2026-09-02 21:56:28][0m EPAM CLI Orchestration Loop Starting
+[0;34m[2026-09-02 21:56:28][0m Stories to implement: AMSD-1919
+[0;34m[2026-09-02 21:56:28][0m ======================================
+
+Project: metrolinx
+Description: null
+Tech Stack: 
+
+
+
+[0;34m[2026-09-02 21:56:28][0m --------------------------------------
+[0;32m+ No dependencies for AMSD-1919[0m
+[0;34m[2026-09-02 21:56:29][0m Implementing story: AMSD-1919 - Go-Checkout Page - Email & Confirm Email Case Sensitivity
+[0;34m[2026-09-02 21:56:29][0m   EffortTier[CPA] -> upgrading medium → high (cpaEffortTier=high coverageComplete=true)
+[0;34m[2026-09-02 21:56:29][0m   Effort[high] -> maxIter=15 maxOutTok=6144
+[0;34m[2026-09-02 21:56:29][0m   BrownfieldEffortFloor: reasoning-model headroom -> maxIter=16 maxOutTok=24576 (think + write must fit one response)
+[0;34m[2026-09-02 21:56:29][0m   Effort[final] -> maxIter=16 maxOutTok=24576
+[0;34m[2026-09-02 21:56:29][0m   Provider[minimax] -> CLI=epam
+[0;34m[2026-09-02 21:56:29][0m   Model[prd.json] -> claude-haiku-4-5-20251001 (overrides effort default)
+[0;34m[2026-09-02 21:56:29][0m   ReasoningEffort[prd.json] -> medium
+[1;33m[WARNING][0m   --autocompact=80000 is below what claude accepts (100000-1000000) — using 100000.
+[0;34m[2026-09-02 21:56:30][0m Invoking epam (attempt 1/12)...
+[1;33m[WARNING][0m   [dependency-scan] malformed import capture (NOT a package): components/RoutesAndDepartures
+[0;34m[2026-09-02 21:58:21][0m   Provider[follows-model] -> claude (was minimax; model is claude-haiku-4-5-20251001)
+[0;34m[2026-09-02 21:58:21][0m   Attempt[1] provider=claude model=claude-haiku-4-5-20251001
+[0;34m[2026-09-02 21:59:05][0m   Cost[AMSD-1919] model=claude-haiku-4-5-20251001 in=352606 (cached 323686 = 91.8%) out=2788 cost=$0.1178316[full-rate est] elapsed=.73min status=attempt
+[1;33m[WARNING][0m Story AMSD-1919: 4/5 declared candidate file(s) were unchanged (real work landed in the others) — informational, not a failure:
+[1;33m[WARNING][0m   src/components/pages/CheckoutPage/__tests__/CheckoutForm.spec.tsx
+[1;33m[WARNING][0m   src/components/componentMappers/CheckoutPageComponentMapper.tsx
+[1;33m[WARNING][0m   src/components/componentMappers/PurchaseConfirmationPageComponentMapper.tsx
+[1;33m[WARNING][0m   src/components/pages/CheckoutPage/CheckoutPage.tsx
+[0;32m[SUCCESS][0m Verified 5 declared deliverable(s) for AMSD-1919
+[0;32m[SUCCESS][0m   [tsc-verify] AMSD-1919: the project type check passed
+[0;34m[2026-09-02 21:59:08][0m   [repo-lint] AMSD-1919: no changed files to lint
+[1;33m[WARNING][0m   [dependency-scan] malformed import capture (NOT a package): components/RoutesAndDepartures
+[1;33m[WARNING][0m   [named-import-check] Broken import outside this story's scope (not blocking): next.config.source.ts: imports 'i18n' from './next-i18next.config' which is not exported there.
+[1;33m[WARNING][0m   [named-import-check] Broken import outside this story's scope (not blocking): src/components/componentMappers/TicketsSearchResultsComponentsTopMapper.tsx: imports 'ContentstackAccordion' from '../contentstack/ContentstackAccordion' which is not exported there.
+[1;33m[WARNING][0m   [named-import-check] Broken import outside this story's scope (not blocking): src/components/OnPageNavigationComponents/DesktopOnPageNavigation/DesktopOnPageNavigation.spec.tsx: imports 'DesktopOnPageNavigation' from '.' which is not exported there.
+[1;33m[WARNING][0m   [named-import-check] Broken import outside this story's scope (not blocking): src/components/FormAlgoliaTripPlanning/FormAlgoliaTripPlanning.tsx: imports 'AlgoliaTripPlanning' from '../AlgoliaTripPlanning' which is not exported there.
+[1;33m[WARNING][0m   [named-import-check] Broken import outside this story's scope (not blocking): src/components/FormAlgoliaTripPlanning/FormAlgoliaTripPlanning.tsx: imports 'IAlgoliaTripPlanningProps' from '../AlgoliaTripPlanning' which is not exported there.
+[1;33m[WARNING][0m   [named-import-check] Broken import outside this story's scope (not blocking): src/components/UserAccount/UserAccountWrapper.tsx: imports 'ContentstackHeroBanner' from '../contentstack/ContentstackHeroBanner' which is not exported there.
+[1;33m[WARNING][0m   [named-import-check] Broken import outside this story's scope (not blocking): src/components/UserAccount/Tab/AboutMe.tsx: imports 'RouterChangeLock' from '../../RouterChangeLock' which is not exported there.
+[1;33m[WARNING][0m   [named-import-check] Broken import outside this story's scope (not blocking): src/components/UserAccount/Tab/AccountInformation.tsx: imports 'RouterChangeLock' from '../../RouterChangeLock' which is not exported there.
+[1;33m[WARNING][0m   [named-import-check] Broken import outside this story's scope (not blocking): src/components/UserAccount/__tests__/SubscriptionPreferences/SubscriptionPreferences.spec.tsx: imports 'SubscriptionPreferences' from '../../Tab/SubscriptionPreferences' which is not exported there.
+[1;33m[WARNING][0m   [named-import-check] Broken import outside this story's scope (not blocking): src/components/NetworkStatusLines/NetworkStatusLines.tsx: imports 'INetworkStatusLineAccordionOnToggleProps' from '../NetworkStatusLine/NetworkStatusLineAccordion' which is not exported there.
+[1;33m[WARNING][0m   [named-import-check] Broken import outside this story's scope (not blocking): src/components/NetworkStatusLines/NetworkStatusLines.tsx: imports 'NetworkStatusLineAccordion' from '../NetworkStatusLine/NetworkStatusLineAccordion' which is not exported there.
+[1;33m[WARNING][0m   [named-import-check] Broken import outside this story's scope (not blocking): src/components/NetworkStatusLines/NetworkStatusLines.tsx: imports 'NetworkStatusLineBody' from '../NetworkStatusLine/NetworkStatusLineBody' which is not exported there.
+[1;33m[WARNING][0m   [named-import-check] Broken import outside this story's scope (not blocking): src/components/NetworkStatusLines/NetworkStatusLines.tsx: imports 'NetworkStatusLineDivider' from '../NetworkStatusLine/NetworkStatusLineDivider' which is not exported there.
+[1;33m[WARNING][0m   [named-import-check] Broken import outside this story's scope (not blocking): src/components/NetworkStatusLines/NetworkStatusLines.tsx: imports 'NetworkStatusLineLink' from '../NetworkStatusLine/NetworkStatusLineLink' which is not exported there.
+[1;33m[WARNING][0m   [named-import-check] Broken import outside this story's scope (not blocking): src/components/NetworkStatusLines/NetworkStatusLines.tsx: imports 'NetworkStatusLinePunctuality' from '../NetworkStatusLine/NetworkStatusLinePunctuality' which is not exported there.
+[1;33m[WARNING][0m   [named-import-check] Broken import outside this story's scope (not blocking): src/components/NetworkStatusLines/NetworkStatusLines.tsx: imports 'NetworkStatusLineStatus' from '../NetworkStatusLine/NetworkStatusLineStatus' which is not exported there.
+[1;33m[WARNING][0m   [named-import-check] Broken import outside this story's scope (not blocking): src/components/NetworkStatusLines/NetworkStatusLines.tsx: imports 'NetworkStatusLineTitle' from '../NetworkStatusLine/NetworkStatusLineTitle' which is not exported there.
+[1;33m[WARNING][0m   [named-import-check] Broken import outside this story's scope (not blocking): src/components/NetworkStatusLine/NetworkStatusLineAccordion/NetworkStatusLineAccordionHeader.tsx: imports 'NetworkStatusLineDivider' from '../NetworkStatusLineDivider' which is not exported there.
+[1;33m[WARNING][0m   [named-import-check] Broken import outside this story's scope (not blocking): src/components/NetworkStatusLine/NetworkStatusLineStatus/NetworkStatusLineStatus.tsx: imports 'NetworkStatusLineStatusIcon' from '../NetworkStatusLineStatusIcon' which is not exported there.
+[1;33m[WARNING][0m   [named-import-check] Broken import outside this story's scope (not blocking): src/components/NetworkStatusLine/NetworkStatusLineLink/NetworkStatusLineLink.tsx: imports 'NetworkStatusLineDivider' from '../NetworkStatusLineDivider' which is not exported there.
+[1;33m[WARNING][0m   [named-import-check] Broken import outside this story's scope (not blocking): src/components/NetworkStatusLine/__tests__/NetworkStatusLineLink.spec.tsx: imports 'INetworkStatusLineLinkProps' from '../NetworkStatusLineLink' which is not exported there.
+[1;33m[WARNING][0m   [named-import-check] Broken import outside this story's scope (not blocking): src/components/NetworkStatusLine/__tests__/NetworkStatusLineLink.spec.tsx: imports 'NetworkStatusLineLink' from '../NetworkStatusLineLink' which is not exported there.
+[1;33m[WARNING][0m   [named-import-check] Broken import outside this story's scope (not blocking): src/components/NetworkStatusLine/__tests__/NetworkStatusLinePunctuality.spec.tsx: imports 'INetworkStatusLinePunctualityProps' from '../NetworkStatusLinePunctuality' which is not exported there.
+[1;33m[WARNING][0m   [named-import-check] Broken import outside this story's scope (not blocking): src/components/NetworkStatusLine/__tests__/NetworkStatusLinePunctuality.spec.tsx: imports 'NetworkStatusLinePunctuality' from '../NetworkStatusLinePunctuality' which is not exported there.
+[1;33m[WARNING][0m   [named-import-check] Broken import outside this story's scope (not blocking): src/components/NetworkStatusLine/__tests__/NetworkStatusLineTitle.spec.tsx: imports 'INetworkStatusLineTitleProps' from '../NetworkStatusLineTitle' which is not exported there.
+[1;33m[WARNING][0m   [named-import-check] Broken import outside this story's scope (not blocking): src/components/NetworkStatusLine/__tests__/NetworkStatusLineTitle.spec.tsx: imports 'NetworkStatusLineTitle' from '../NetworkStatusLineTitle' which is not exported there.
+[1;33m[WARNING][0m   [named-import-check] Broken import outside this story's scope (not blocking): src/components/NetworkStatusLine/__tests__/NetworkStatusLineAccordion.spec.tsx: imports 'INetworkStatusLineAccordionProps' from '../NetworkStatusLineAccordion' which is not exported there.
+[1;33m[WARNING][0m   [named-import-check] Broken import outside this story's scope (not blocking): src/components/NetworkStatusLine/__tests__/NetworkStatusLineAccordion.spec.tsx: imports 'NetworkStatusLineAccordion' from '../NetworkStatusLineAccordion' which is not exported there.
+[1;33m[WARNING][0m   [named-import-check] Broken import outside this story's scope (not blocking): src/components/NetworkStatusLine/__tests__/NetworkStatusLineStatusIcon.spec.tsx: imports 'INetworkStatusLineStatusIconProps' from '../NetworkStatusLineStatusIcon' which is not exported there.
+[1;33m[WARNING][0m   [named-import-check] Broken import outside this story's scope (not blocking): src/components/NetworkStatusLine/__tests__/NetworkStatusLineStatusIcon.spec.tsx: imports 'NetworkStatusLineStatusIcon' from '../NetworkStatusLineStatusIcon' which is not exported there.
+[1;33m[WARNING][0m   [named-import-check] Broken import outside this story's scope (not blocking): src/components/NetworkStatusLine/__tests__/NetworkStatusLineStatus.spec.tsx: imports 'INetworkStatusLineStatusProps' from '../NetworkStatusLineStatus' which is not exported there.
+[1;33m[WARNING][0m   [named-import-check] Broken import outside this story's scope (not blocking): src/components/NetworkStatusLine/__tests__/NetworkStatusLineStatus.spec.tsx: imports 'NetworkStatusLineStatus' from '../NetworkStatusLineStatus' which is not exported there.
+[1;33m[WARNING][0m   [named-import-check] Broken import outside this story's scope (not blocking): src/components/NetworkStatusLine/__tests__/NetworkStatusLineBody.spec.tsx: imports 'INetworkStatusLineBodyProps' from '../NetworkStatusLineBody' which is not exported there.
+[1;33m[WARNING][0m   [named-import-check] Broken import outside this story's scope (not blocking): src/components/NetworkStatusLine/__tests__/NetworkStatusLineBody.spec.tsx: imports 'NetworkStatusLineBody' from '../NetworkStatusLineBody' which is not exported there.
+[1;33m[WARNING][0m   [named-import-check] Broken import outside this story's scope (not blocking): src/components/RoutesAndDepartures/constants.ts: imports 'direction' from '../../utils' which is not exported there.
+[1;33m[WARNING][0m   [named-import-check] Broken import outside this story's scope (not blocking): src/components/RoutesAndDepartures/DeparturesTab/DeparturesFlyOut.tsx: imports 'DeparturesDetailsSection' from './DepartureDetailsSection' which is not exported there.
+[1;33m[WARNING][0m   [named-import-check] Broken import outside this story's scope (not blocking): src/components/RoutesAndDepartures/DeparturesTab/DeparturesList.tsx: imports 'DepartureAccordion' from './DepartureAccordion' which is not exported there.
+[1;33m[WARNING][0m   [named-import-check] Broken import outside this story's scope (not blocking): src/components/RoutesAndDepartures/DeparturesTab/DeparturesList.tsx: imports 'DepartureAccordionTrigger' from './DepartureAccordion' which is not exported there.
+[1;33m[WARNING][0m   [named-import-check] Broken import outside this story's scope (not blocking): src/components/pages/TripSearchResults/utils.tsx: imports 'ContentstackSVGIcon' from '../../contentstack/ContentstackSVGIcon' which is not exported there.
+[1;33m[WARNING][0m   [named-import-check] Broken import outside this story's scope (not blocking): src/components/pages/__tests__/StationDetails.spec.tsx: imports 'IStationDetailsProps' from '../StationDetails' which is not exported there.
+[1;33m[WARNING][0m   [named-import-check] Broken import outside this story's scope (not blocking): src/components/pages/__tests__/StationDetails.spec.tsx: imports 'StationDetails' from '../StationDetails' which is not exported there.
+[1;33m[WARNING][0m   [named-import-check] Broken import outside this story's scope (not blocking): src/components/pages/__tests__/PoliciesAndLegalPage.spec.tsx: imports 'PoliciesAndLegalPage' from '../PoliciesAndLegalPage' which is not exported there.
+[1;33m[WARNING][0m   [named-import-check] Broken import outside this story's scope (not blocking): src/components/pages/__tests__/HomePage.spec.tsx: imports 'HomePage' from '../HomePage' which is not exported there.
+[1;33m[WARNING][0m   [named-import-check] Broken import outside this story's scope (not blocking): src/components/pages/__tests__/HomePage.spec.tsx: imports 'IHomePageProps' from '../HomePage' which is not exported there.
+[1;33m[WARNING][0m   [named-import-check] Broken import outside this story's scope (not blocking): src/components/TripPricing/PricingBreakdown/__tests__/PricingBreakdown.spec.tsx: imports 'PricingBreakdown' from '../index' which is not exported there.
+[1;33m[WARNING][0m   [named-import-check] Broken import outside this story's scope (not blocking): src/components/Header/Header.tsx: imports 'NavigationBar' from './NavigationBar' which is not exported there.
+[1;33m[WARNING][0m   [named-import-check] Broken import outside this story's scope (not blocking): src/components/Header/Header.tsx: imports 'TopBar' from './TopBar' which is not exported there.
+[1;33m[WARNING][0m   [named-import-check] Broken import outside this story's scope (not blocking): src/components/Header/MobileNav/MobileNav.tsx: imports 'QuickMenu' from '../QuickMenu' which is not exported there.
+[1;33m[WARNING][0m   [named-import-check] Broken import outside this story's scope (not blocking): src/components/Header/NavigationBar/MobileMenu.tsx: imports 'MobileNav' from '../MobileNav' which is not exported there.
+[1;33m[WARNING][0m   [named-import-check] Broken import outside this story's scope (not blocking): src/components/Header/NavigationBar/NavigationBar.tsx: imports 'DesktopNav' from '../DesktopNav' which is not exported there.
+[1;33m[WARNING][0m   [named-import-check] Broken import outside this story's scope (not blocking): src/components/Header/NavigationBar/NavigationBar.tsx: imports 'ServiceUpdates' from '../ServiceUpdates' which is not exported there.
+[1;33m[WARNING][0m   [named-import-check] Broken import outside this story's scope (not blocking): src/components/Header/DesktopNav/DesktopNav.tsx: imports 'NavigationButton' from '../NavigationButton' which is not exported there.
+[1;33m[WARNING][0m   [named-import-check] Broken import outside this story's scope (not blocking): src/components/Header/DesktopNav/DesktopNav.tsx: imports 'QuickMenu' from '../QuickMenu' which is not exported there.
+[1;33m[WARNING][0m   [named-import-check] Broken import outside this story's scope (not blocking): src/components/Header/__tests__/QuickMenu.spec.tsx: imports 'QuickMenu' from '../QuickMenu' which is not exported there.
+[1;33m[WARNING][0m   [named-import-check] Broken import outside this story's scope (not blocking): src/components/Header/__tests__/QuickMenu.spec.tsx: imports 'IQuickMenuProps' from '../QuickMenu' which is not exported there.
+[1;33m[WARNING][0m   [named-import-check] Broken import outside this story's scope (not blocking): src/components/Header/__tests__/MobileNav.spec.tsx: imports 'MobileNav' from '../MobileNav' which is not exported there.
+[1;33m[WARNING][0m   [named-import-check] Broken import outside this story's scope (not blocking): src/components/Header/__tests__/ServiceUpdates.spec.tsx: imports 'IServiceUpdatesProps' from '../ServiceUpdates' which is not exported there.
+[1;33m[WARNING][0m   [named-import-check] Broken import outside this story's scope (not blocking): src/components/Header/__tests__/ServiceUpdates.spec.tsx: imports 'ServiceUpdates' from '../ServiceUpdates' which is not exported there.
+[1;33m[WARNING][0m   [named-import-check] Broken import outside this story's scope (not blocking): src/components/Header/__tests__/utils.spec.ts: imports 'getAbTestTargets' from '../NavigationBar' which is not exported there.
+[1;33m[WARNING][0m   [named-import-check] Broken import outside this story's scope (not blocking): src/components/Header/__tests__/utils.spec.ts: imports 'mapToNavItemsWithAbTests' from '../NavigationBar' which is not exported there.
+[1;33m[WARNING][0m   [named-import-check] Broken import outside this story's scope (not blocking): src/components/Header/__tests__/utils.spec.ts: imports 'mapToNavItems' from '../NavigationBar' which is not exported there.
+[1;33m[WARNING][0m   [named-import-check] Broken import outside this story's scope (not blocking): src/components/Header/__tests__/DesktopNav.spec.tsx: imports 'DesktopNav' from '../DesktopNav' which is not exported there.
+[1;33m[WARNING][0m   [named-import-check] Broken import outside this story's scope (not blocking): src/components/ContactUsForm/ContactUsForm.tsx: imports 'FormDatePicker' from '../FormDatePicker' which is not exported there.
+[1;33m[WARNING][0m   [named-import-check] Broken import outside this story's scope (not blocking): src/components/ContactUsForm/ContactUsForm.tsx: imports 'FormSelect' from '../FormSelect' which is not exported there.
+[1;33m[WARNING][0m   [named-import-check] Broken import outside this story's scope (not blocking): src/components/ContactUsForm/ContactUsForm.tsx: imports 'FormTimeInput' from '../FormTimeInput' which is not exported there.
+[1;33m[WARNING][0m   [named-import-check] Broken import outside this story's scope (not blocking): src/components/contentstack/ContentstackPromotionsRibbon/ContentstackPromotionsRibbon.tsx: imports 'promoComponentPaths' from '../ContentstackPromoCards' which is not exported there.
+[1;33m[WARNING][0m   [named-import-check] Broken import outside this story's scope (not blocking): src/services/__tests__/gtm.spec.tsx: imports 'trackAbandonedCartPromptImpression' from '../gtm' which is not exported there.
+[1;33m[WARNING][0m   [named-import-check] Broken import outside this story's scope (not blocking): src/services/__tests__/gtm.spec.tsx: imports 'trackAbandonedCartPromptInteractionClick' from '../gtm' which is not exported there.
+[1;33m[WARNING][0m   [named-import-check] Broken import outside this story's scope (not blocking): src/services/__tests__/gtm.spec.tsx: imports 'trackAbandonedCartPromptInteractionDismiss' from '../gtm' which is not exported there.
+[1;33m[WARNING][0m   [named-import-check] Broken import outside this story's scope (not blocking): src/hooks/__tests__/useConcessionsFareChange.spec.ts: imports 'IPriceBreakDownResponse' from '../useAllConcessionsFare' which is not exported there.
+[1;33m[WARNING][0m   [named-import-check] Broken import outside this story's scope (not blocking): src/interface/trips.ts: imports 'IPriceBreakDownResponse' from '../hooks' which is not exported there.
+[1;33m[WARNING][0m   [named-import-check] Broken import outside this story's scope (not blocking): src/utils/common/ApimHttpError.ts: imports 'HttpError' from './HttpError' which is not exported there.
+[1;33m[WARNING][0m   [named-import-check] Broken import outside this story's scope (not blocking): src/utils/common/__tests__/HttpError.spec.ts: imports 'HttpError' from '../HttpError' which is not exported there.
+[0;34m[2026-09-02 22:01:04][0m   Running external verification: npm run test

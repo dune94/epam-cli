@@ -1,0 +1,64 @@
+# Prompt
+YOUR PREVIOUS ANSWER WAS REJECTED: the response could not be parsed as JSON at all — a review must arrive inside its tags, not as prose
+
+This is what you sent, and it could not be used:
+---
+
+---
+Answer again in exactly the format requested. Change nothing else.
+
+You are reviewing an estate survey before a team is assembled from it.
+
+You are reviewing an ESTATE SURVEY. A roster of agents is about to be minted from it, and every
+claim below will be inherited as a brief and re-checked by nothing.
+
+THE SURVEY UNDER REVIEW:
+- metrolinx: in_scope
+  evidence: Opened src/services/contentstack.ts (lines 1-95). The Contentstack Stack is initialized at line 91 via `contentstack.Stack(options)` where `options` (lines 78-90) contains api_key, delivery_token, environment, branch, and fetchOptions — but NO `live_preview` block. Searched for `live_preview`, `preview_token`, `onEntryChange`, and `live-preview-utils` across the entire repo: all returned zero matches in source files (only orchestration log hits). The manifest lists `contentstack` and `@contentstack/utils` but NOT `@contentstack/live-preview-utils`. The codebase uses a `ContentstackFactory` class (line 109) with `createContentTypeQuery` and `createContentTypeEntryQuery` methods for data fetching, and components consume data via a `useContent` hook. Homepage is at src/components/pages/Homepage.tsx (renders ContentStackHomePageHeroBanner, HomepageComponentMapper, ContentstackRecentNews). Page service functions `getPageEntry` and `getSinglePageEntry` exist in src/services/pageService.ts. None of these are wired to any live-preview callback. The three integration points from the docs (live_preview config in Stack(), @contentstack/live-preview-utils init with onEntryChange, and page-level onEntryChange subscription) are all absent, confirming this work has not been started.
+  filesRead: src/services/contentstack.ts, src/components/contentstack/ContentStackHomePageHeroBanner/ContentStackHomePageHeroBanner.tsx, src/interface/content/page.ts, src/components/contentstack/ContentstackQuote/ContentstackQuote.tsx, src/components/contentstack/ContentstackText/ContentstackText.tsx, src/components/contentstack/ContentstackLink/ContentstackLink.tsx, src/components/contentstack/ContentStackStaticMaps/ContentStackStaticMaps.tsx, src/components/contentstack/ContentStackGallery/ContentStackGallery.tsx, src/components/contentstack/ContentStackValues/ContentStackValues.tsx, src/utils/events.ts
+
+THE CODELINES IN SCOPE, and where each is checked out:
+- metrolinx (/home/bradleyjerome/projects/metrolinx/next.metrolinx.com)
+
+THE WORK THE PROJECT WAS ASKED TO DO:
+- AMSD-2041: [MX] Live Preview of Content in CMS (part 1)
+
+You may open any file in the codelines above to check a claim.
+
+# What is in scope
+
+ONE QUESTION ONLY: does the survey state anything about these repositories that is FALSE?
+
+A claim is in scope when you can check it by opening a repository. Open them and check.
+
+- a file named in `filesRead` that the codeline does not contain
+- a file, module, function or symbol said to exist where it does not
+- a claim attributed to the WRONG codeline — the commonest and most damaging error, because the
+  brief built from it sends an implementer into a repository that has no such code
+- a dependency, script, framework or command the codeline does not declare
+- a codeline reported in_scope on evidence that belongs to a different one
+
+A codeline reported no_work_found or not_investigated is making a WEAK claim, not a false one.
+Check it only if you can show the work plainly does reach it.
+
+# What is NOT in scope
+
+Do not judge whether the survey looked hard enough, chose the right focus, or recommended the
+right team. Do not propose better wording. Do not supply a FIX SITE of your own — naming which
+file to edit is not yours to say here any more than it was the surveyor's, and a fix site you add
+for a repository you swept from the outside is how one codeline's file ends up in another's work.
+
+# Evidence
+
+For each finding, say what you CHECKED and what you FOUND, naming the repository and the path you
+opened. A finding without a check is an opinion, and an opinion about a survey is not a defect.
+
+If every claim checks out, return no findings. An empty finding list from a review that RAN is the
+correct answer for a sound survey.
+
+
+# Output
+<review>
+<findings>
+</findings>
+</review>

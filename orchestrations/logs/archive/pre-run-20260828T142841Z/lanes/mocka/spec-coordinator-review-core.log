@@ -1,0 +1,302 @@
+# Prompt
+You are the specification coordinator for the epam-cli orchestration system. Before every phase you read orchestrations/prd.json (implementationOrder and stories), evaluate risk, dependencies, and technical readiness, then assign the correct specification runners: OpenSpec, Speckit, both, or none. You write assignments into each story's specification.assignedAgents field along with coordinatorNotes, target provider/model, and timestamps. You understand the provider policy ledger (configuration.aiRuntime.providerPolicies), token guardrails, and know when to skip stories that were already hand-curated. When you plan a run you emit JSON compliant with spec-mode-runner.js so that automation can apply deltas deterministically. You never invent story IDs or mutate acceptance criteria directly; only delegate to spec agents and record their status.
+
+You are the EPAM CLI specification coordinator reviewing the completed spec outputs for phase core.
+
+Each story was processed by a sequential agent pipeline:
+  1. openspec elaborated requirements (AC refinement, story splits, technical depth)
+  2. speckit reviewed openspec's output (testability, security, edge cases, gap analysis)
+
+For each story, evaluate the quality of the collaborative spec work:
+1. Did both agents add meaningful, non-overlapping value?
+2. Flag any story needing human review.
+3. PLAN ALIGNMENT — where planAlignmentEvidence is present, it tells you what the
+   code-graph-detective SAID it would investigate (detectivePlan) and a deterministic,
+   cheap signal (aligned: true/false) for whether the final fixSiteAnalysis shares any
+   named symbol/file with that plan. This signal is NOT your verdict — it is evidence, the
+   same as MANIFEST EVIDENCE below. A plan can legitimately turn out wrong once real
+   exploration starts. Read detectivePlan and fixSiteAnalysis yourself and judge: did the
+   detective explain WHY it moved from its plan to its final answer (a stated pivot,
+   reasoning that connects the two), or did the answer just change with no explanation?
+   The latter is a real defect (a fix has shipped that shared no term with the detective's
+   own stated plan, with no explanation, more than once on the same ticket) — set
+   planAlignment to justified_deviation when the detective justifies its pivot, or
+   unexplained_mismatch when it does not, and say why in reviewNotes. aligned:true needs
+   no action.
+
+(Brownfield tickets never split and their acceptance criteria are immutable —
+do not evaluate split quality or AC completeness; there is nothing there for
+either agent to have changed.
+
+EXPECTED, NOT A DEFECT: an agent's notes may describe acceptance criteria it
+authored while the story's acceptanceCriteria array is empty, and report
+acceptanceChanged=false. That is this pipeline REDACTING them on purpose: on a
+brownfield ticket the ACs are the ticket's own, and a thin ticket legitimately
+has none. The observable checks live in verificationCriteria — judge THOSE.
+Do not report the mismatch as a hallucination, a persistence failure or a
+metadata inconsistency, and do not lower qualityScore for it. An empty
+acceptanceCriteria array on a brownfield story is correct by policy.)
+
+MANIFEST EVIDENCE (checked against the repository, not asserted):
+  MOCK3-1: EXISTS  src/fares.ts
+  MOCK3-1: EXISTS  test/fares.test.ts
+
+
+ANSWER IN THIS RESPONSE. Your <SPEC_REVIEW> verdict must appear in THIS reply — an
+empty <SPEC_REVIEW></SPEC_REVIEW>, or a promise to verify and answer later, is
+discarded and the review does not happen. There is no follow-up turn to come back in.
+
+You DO have read-only tools this turn (read_file, list_files, search). Use them for
+real if something is genuinely unclear — but never narrate an imagined tool result,
+and never spend the whole turn exploring and run out before writing the verdict.
+Budget is small and the verdict is mandatory: gather at most what you need, then answer.
+
+MANIFEST EVIDENCE has already been gathered from the repository for you and appears
+above. Every declared path was checked with a real filesystem stat, so re-checking
+paths is wasted budget — that part is done and is more reliable than a tool call.
+  - A story with any MISSING path CANNOT be implemented: the writer is sent to edit a
+    file that is not there, and every retry reproduces that. Mark it needs_review, name
+    the exact path in reviewNotes, and add the flag "missing_manifest_path".
+  - Where the evidence names a real neighbour ("the directory holds X instead"), say so
+    — that is what makes the report actionable.
+  - Never silently correct a path. The manifest is the artefact under review; a
+    correction living only in your prose reaches nobody.
+
+Judge what the evidence cannot: are the acceptance criteria testable, is the declared
+file set plausible for this change, is anything obviously missing. If you are unsure,
+lower qualityScore and add a flag — do not withhold the verdict. A missing review is
+EVERY FLAG CARRIES A SEVERITY. It ranks your objections for whoever reads them; it does not
+decide whether the run stops — a computed check or a project-declared flag does that. Mark
+blocking when an implementer following this spec would produce work that CANNOT FUNCTION,
+and advisory for uncertainty about what you could not see. Report both honestly: nothing is
+gained by inflating uncertainty into a defect, and nothing is lost by naming a real one.
+worse than an uncertain one: it means nothing was checked at all.
+
+QUALITY SCORE — what the number has to mean. It is enforced: below 0.7 halts the run
+before implementation, so an unanchored guess stops real work.
+  0.9-1.0  the spec is ready to implement; criteria are observable and the file set fits.
+  0.7-0.89 ready to implement, with ordinary open questions a competent writer resolves.
+  0.5-0.69 NOT ready: something concrete is wrong or missing — criteria that cannot be
+           observed, a file set that cannot deliver what is described, contradictions.
+  below 0.5 the spec would send a writer somewhere useless.
+Score what IS in front of you. Do NOT lower the score because an agent could not read the
+source files, or because a human "might want to check" — that is true of every ticket and
+is not a defect in this spec. If your notes cannot name something concretely wrong, the
+score belongs at 0.7 or above.
+
+Respond with JSON between <SPEC_REVIEW> and </SPEC_REVIEW> using this schema:
+[
+  {"storyId":"REM-xxx","verdict":"approved|needs_review","reviewNotes":"coordinator observations","qualityScore":<0.0-1.0>,"flags":[{"flag":"short-slug","severity":"blocking|advisory","why":"what you checked and what you found"}],"planAlignment":"aligned|justified_deviation|unexplained_mismatch|not_applicable"}
+]
+
+Stories to review:
+[
+  {
+    "id": "MOCK3-1",
+    "title": "Riders aged exactly 65 are charged the adult fare",
+    "acceptanceCriteria": [
+      "A rider aged exactly 65 with no pass is charged the concession fare.",
+      "A rider aged 64 with no pass is still charged the base fare.",
+      "The existing fare behaviour for children, pass holders and adults is unchanged."
+    ],
+    "verificationCriteria": [
+      "fareFor returns 175 when called with a rider aged 65 who does not hold a pass",
+      "fareFor returns 350 when called with a rider aged 64 who does not hold a pass",
+      "fareFor returns 175 when called with a rider aged 8 who does not hold a pass",
+      "fareFor returns 0 when called with a rider aged 30 who holds a pass",
+      "fareFor returns 350 when called with a rider aged 30 who does not hold a pass",
+      "fareFor returns 175 when called with a rider aged 70 who does not hold a pass"
+    ],
+    "technicalNotes": {
+      "files": [
+        "src/fares.ts",
+        "test/fares.test.ts"
+      ],
+      "perCodeline": {
+        "mocka": {
+          "files": [
+            "src/fares.ts",
+            "test/fares.test.ts"
+          ],
+          "resolved": [
+            {
+              "declared": "src/fares.ts",
+              "actual": "src/fares.ts",
+              "match": "exact",
+              "verified_against": "/home/bradleyjerome/projects/mock3/mock-a"
+            },
+            {
+              "declared": "test/fares.test.ts",
+              "actual": "test/fares.test.ts",
+              "match": "exact",
+              "verified_against": "/home/bradleyjerome/projects/mock3/mock-a"
+            }
+          ],
+          "unresolved": []
+        }
+      }
+    },
+    "specification": {
+      "guardVocabulary": {
+        "blacklist": [
+          {
+            "term": "concession_fare_cents",
+            "reason": "Internal constant that feeds the fare output; naming it in a criterion describes HOW the fare is produced, not what the caller observes. Evidence: src/fares.ts helper CONCESSION_FARE_CENTS."
+          },
+          {
+            "term": "rider.age > 65",
+            "reason": "The internal comparison logic that produces the bug; a criterion referencing this prescribes the mechanism rather than the observed result. Evidence: src/fares.ts line 10."
+          }
+        ],
+        "whitelist": [
+          {
+            "term": "farefor",
+            "reason": "The public function the ticket's surface is about ? the API a client calls to receive a fare. Evidence: src/fares.ts fareFor."
+          },
+          {
+            "term": "fare",
+            "reason": "The observable value a caller receives from fareFor; the ticket's stated symptom is the charged fare amount."
+          },
+          {
+            "term": "rider",
+            "reason": "The input parameter a caller supplies; part of the observable input surface, not an internal structure."
+          },
+          {
+            "term": "age",
+            "reason": "The rider attribute a caller provides; observable input on the ticket's surface, not an internal field used to build output."
+          },
+          {
+            "term": "pass",
+            "reason": "The pass-holding status a caller supplies; observable input on the ticket's surface."
+          },
+          {
+            "term": "175",
+            "reason": "A specific observable fare value the caller receives; the correct concession fare the ticket requires."
+          },
+          {
+            "term": "350",
+            "reason": "A specific observable fare value the caller receives; the adult fare the ticket says is wrongly charged at age 65."
+          },
+          {
+            "term": "0",
+            "reason": "A specific observable fare value the caller receives when a pass is held; observable output."
+          }
+        ]
+      },
+      "runId": "20260828T141137Z",
+      "assignedAgents": [
+        "openspec",
+        "speckit"
+      ],
+      "coordinatorNotes": "",
+      "status": "completed",
+      "updatedAt": "2026-08-28T14:12:56.681Z",
+      "appliedAgents": [
+        "openspec",
+        "speckit"
+      ],
+      "agentContributions": [
+        {
+          "agent": "openspec",
+          "applied": true,
+          "notes": "Defect: the comparison rider.age > 65 in fareFor excludes age 65 from the concession tier. Changing to >= fixes the boundary. VCs are derived from the acceptance criteria and observe only the function's return value.",
+          "acceptanceChanged": false,
+          "splitCount": 0,
+          "timestamp": "2026-08-28T14:12:49.380Z"
+        },
+        {
+          "agent": "speckit",
+          "applied": true,
+          "notes": "Defect: the comparison rider.age > 65 in fareFor excludes age 65 from the concession tier. Changing to >= fixes the boundary. VCs are derived from the acceptance criteria and observe only the function's return value.",
+          "acceptanceChanged": false,
+          "splitCount": 0,
+          "timestamp": "2026-08-28T14:12:56.680Z"
+        }
+      ]
+    },
+    "fixSiteAnalysis": [
+      {
+        "file": "src/fares.ts",
+        "function": "fareFor",
+        "reason": "This function computes the fare for a rider. The comparison `rider.age > 65` on line 10 excludes age 65 from the concession tier, causing riders aged exactly 65 to fall through to the base fare. Changing `>` to `>=` makes age 65 satisfy the condition, producing the concession fare as the rules require.",
+        "fix": "Change `rider.age > 65` to `rider.age >= 65` on line 10 of src/fares.ts. Reuse the existing constant CONCESSION_FARE_CENTS (already imported/declared in this file) ? no new helper needed.",
+        "helper": "CONCESSION_FARE_CENTS",
+        "brokenLine": "if (rider.age > 65) return CONCESSION_FARE_CENTS;",
+        "fixVerified": true,
+        "evidenceVerified": true,
+        "fileVerified": true,
+        "changeRequired": true,
+        "requiredPackages": [],
+        "deliveryRole": "produces",
+        "runsIn": "server",
+        "prescriptionNote": "",
+        "prescriptionUnderspecified": false,
+        "codeline": "mocka"
+      },
+      {
+        "file": "test/fares.test.ts",
+        "function": "fareFor",
+        "reason": "This test file exercises fareFor but does not cover age 65 (the boundary). Existing tests use ages 8, 30, and 70. After the production fix, all existing tests still pass, but age 65 remains untested. This file needs no edit (test agent owns it), only verification that existing tests continue to pass.",
+        "fix": "No edit required. Verify that existing tests still pass after the production change. The test suite does not yet cover age 65 ? that coverage gap is for the test agent to address separately.",
+        "helper": "",
+        "brokenLine": "",
+        "fixVerified": null,
+        "evidenceVerified": null,
+        "fileVerified": true,
+        "changeRequired": false,
+        "requiredPackages": [],
+        "deliveryRole": "verifies",
+        "runsIn": "server",
+        "prescriptionNote": "",
+        "prescriptionUnderspecified": false,
+        "codeline": "mocka"
+      }
+    ],
+    "planAlignmentEvidence": {
+      "detectivePlan": "[{\"file\":\"src/fares.ts\",\"function\":\"fareFor\",\"reason\":\"This function computes the fare for a rider. The comparison `rider.age > 65` on line 10 excludes age 65 from the concession tier, causing riders aged exactly 65 to fall through to the base fare. Changing `>` to `>=` makes age 65 satisfy the condition, producing the concession fare as the rules require.\",\"brokenLine\":\"if (rider.age > 65) return CONCESSION_FARE_CENTS;\",\"fix\":\"Change `rider.age > 65` to `rider.age >= 65` on line 10 of src/fares.ts. Reuse the existing constant CONCESSION_FARE_CENTS (already imported/declared in this file) ? no new helper needed.\",\"helper\":\"CONCESSION_FARE_CENTS\",\"changeRequired\":true,\"requiredPackages\":[],\"deliveryRole\":\"produces\",\"runsIn\":\"server\"},{\"file\":\"test/fares.test.ts\",\"function\":\"fareFor\",\"reason\":\"This test file exercises fareFor but does not cover age 65 (the boundary). Existing tests use ages 8, 30, and 70. After the production fix, all existing tests still pass, but age 65 remains untested. This file needs no edit (test agent owns it), only verification that existing tests continue to pass.\",\"brokenLine\":\"\",\"fix\":\"No edit required. Verify that existing tests still pass after the production change. The test suite does not yet cover age 65 ? that coverage gap is for the test agent to address separately.\",\"helper\":\"\",\"changeRequired\":false,\"requiredPackages\":[],\"deliveryRole\":\"verifies\",\"runsIn\":\"server\"}]",
+      "aligned": true,
+      "planTerms": [
+        "fares",
+        "farefor",
+        "rider",
+        "brokenline",
+        "concessionfarecents",
+        "changerequired",
+        "requiredpackages",
+        "deliveryrole",
+        "runsin"
+      ],
+      "findingTerms": [
+        "fares",
+        "farefor",
+        "farestest"
+      ]
+    }
+  }
+]
+
+<SPEC_REVIEW>
+</SPEC_REVIEW>
+# Output — THIS IS A CONTRACT, NOT A PREFERENCE
+
+Emit EXACTLY one <SPEC_REVIEW> block and nothing else that matters. Prose outside it is DISCARDED
+unread, however correct it is — the pipeline parses the block and never the commentary.
+
+<SPEC_REVIEW>
+{
+  "items": [ {
+      "storyId": <string>,
+      "verdict": <string>,
+      "reviewNotes": <string>   (optional),
+      "qualityScore": <number>   (optional),
+      "flags": <array>
+         // Each flag is either a bare string (advisory) or an object carrying severity. Severity RANKS your objections for the human reading them; it does not decide whether the run stops. Mark blocking when an implementer following this spec would produce work that cannot function, and advisory for uncertainty about what you could not see. What halts a run is a computed check or a flag this project has declared blocking — not your assessment of your own output.   (optional),
+  } ]
+}
+</SPEC_REVIEW>
+
+Submit coordinator quality review results for all stories.
+
+
+# Output
+{}

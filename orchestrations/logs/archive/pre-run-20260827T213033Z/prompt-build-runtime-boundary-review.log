@@ -1,0 +1,213 @@
+# Prompt
+You are specialising ONE generic agent prompt for ONE specific project. You are the same agent that just minted this project's roles, so you already know what this project is and who will work on it.
+
+## The template you must specialise
+
+Its id is runtime-boundary-review and its purpose is: Asks whether a change can execute in the runtime it targets, given the codeline's own configuration.
+
+Everything between the two markers below is the template, verbatim. The markers are not
+part of it. A code fence cannot delimit this: several templates contain fences of their
+own, so the first closing fence would truncate the body mid-instruction.
+
+-----BEGIN TEMPLATE BODY-----
+__REVIEW_PROFILE__
+
+---
+RUNTIME BOUNDARY REVIEW: __STORY_ID__ — __STORY_TITLE__
+
+PROJECT ROOT: __PROJECT_ROOT__
+
+CONFIGURATION THIS CODELINE CARRIES:
+__CONFIG_SURFACE__
+
+THE CHANGE:
+```diff
+__STORY_DIFF__
+```
+
+## The only question you answer
+
+CAN THIS CHANGE EXECUTE, WHERE IT WILL EXECUTE, AS THIS CODELINE IS CONFIGURED?
+
+Not whether it is well written. Not whether it is tested. Not whether it is secure. Whether it
+runs. A change that type-checks, lints, passes its tests and is approved by every other reviewer
+can still be inert or fatal at runtime, and that is the only failure you exist to catch.
+
+## What to examine
+
+1. EXECUTION CONTEXT. For each changed file, establish where its code actually runs in this
+   project — which parts execute on a server, which are shipped to and executed by a client, which
+   run only at build time, and which only under a test runner. Determine this from the project's
+   own structure and configuration, not from assumption.
+
+2. FOLLOW THE IMPORTS. A file is not only its own contents. Open what the changed files import, at
+   least one level deep, and ask what that module does WHEN IT LOADS — not only when its functions
+   are called. Module-scope work travels wherever the import travels: reads of external
+   configuration, connections, registrations, and anything that can throw. An import added inside
+   code that runs in a different context from the existing imports is the case to look hardest at.
+
+3. WHAT THE CONFIGURATION PERMITS. Read the configuration files listed above. They decide what the
+   code is ALLOWED to do: which external origins may be contacted or may embed this application,
+   what is exposed to a client bundle and under what naming, what the build emits. If this change
+   requires something the configuration currently forbids or does not provide, that is a finding,
+   and the fix belongs in that file.
+
+4. VALUES THAT CROSS A BOUNDARY. Configuration read in one context and consumed in another is a
+   silent failure: it does not error, it is simply absent, and the code takes the wrong branch
+   forever. Check that every value this change depends on is actually available where it is read.
+
+## Output
+
+Respond with ONLY a JSON object:
+
+{"verdict":"approved","issues":[],"summary":"..."}
+  OR
+{"verdict":"changes_requested","issues":[{"severity":"blocker|major|minor","file":"...","line":0,"description":"...","evidence":"<path>:<line> you read, or the command you ran and its result","suggestedFix":"..."}],"summary":"..."}
+
+Every issue MUST carry `evidence`: the exact thing you READ that establishes it. An issue without
+evidence is discarded before it reaches anyone, so an unsupported finding costs you the finding.
+
+WHERE YOU CANNOT TELL, SAY NOTHING. If this project's structure or configuration does not let you
+establish where code runs, return approved with a summary saying which question you could not
+answer and why. Do not invent a finding, and do not guess a convention from another project — a
+wrong blocker here costs a writer a real attempt at correct code.
+
+-----END TEMPLATE BODY-----
+
+## What this project is
+
+Project config: /home/bradleyjerome/projects/ai/epam-cli/orchestrations/projects/mock3
+Tickets in scope: MOCK3-1: Riders aged exactly 65 are charged the adult fare | MOCK3-2: The departure board omits the final stop
+
+Codelines in scope and their declared dependencies:
+- mocka (/home/bradleyjerome/projects/mock3/mock-a) deps: vitest, typescript
+- mockb (/home/bradleyjerome/projects/mock3/mock-b) deps: vitest, typescript
+
+The roles you minted for this project:
+- fare-rules-engineer [implementer] — MOCK3-1 requires an actual code change to the age boundary in mocka's fare logic, and no existing canonical role owns writing to src/fares.ts.
+- schedule-display-engineer [implementer] — MOCK3-2 requires an actual code change to the stop-rendering loop in mockb's schedule module, and no existing canonical role owns writing to src/schedule.ts.
+- mocka-detective [investigator] — mocka's fare boundary bug needs its own reader to confirm the exact comparison operator and existing test coverage before fare-rules-engineer edits src/fares.ts.
+- mockb-detective [investigator] — mockb's stop-rendering bug needs its own reader to confirm the loop-bound mismatch and existing test coverage before schedule-display-engineer edits src/schedule.ts.
+
+## The one rule you cannot break
+
+The template's placeholders are a CONTRACT with the pipeline. Each token written in SCREAMING_SNAKE_CASE between double underscores is replaced at run time with real evidence — a diff, a ticket, a test log, a plan. The substitution is BY NAME and it is strict in both directions.
+
+- Reproduce every placeholder EXACTLY as it appears, character for character.
+- NEVER add or invent a placeholder. Nothing supplies a name the pipeline does not know, so rendering throws and the run dies at the seam that needed this prompt.
+- NEVER remove or rename one. The evidence it carries would silently never reach the agent, and the agent would answer without it.
+- Do not move a placeholder into a code fence, a quote, or an example where it would read as literal text.
+
+The placeholders in this template are exactly: __STORY_ID__, __STORY_TITLE__, __STORY_DIFF__, __CONFIG_SURFACE__, __PROJECT_ROOT__, __REVIEW_PROFILE__
+
+## The other rule you cannot break
+
+The template's OUTPUT SHAPE is a contract too. Every field name the template states in its response
+format is read by a consumer that will reject an answer without it — the agent would produce work
+nothing accepts, and the seam fails after the model has already been paid for.
+
+- Reproduce every field name EXACTLY, in the same shape the template states it.
+- NEVER drop one because it looks redundant, and NEVER rename one to something clearer.
+- NEVER add a field. A consumer reads by name and has no place to put an invention.
+
+The output fields this template states are exactly: verdict, issues, summary, severity, file, line, description, evidence, suggestedFix
+
+## Before you answer
+
+Check your reply against both lists above. Every placeholder, and every output field, must appear
+in what you are about to send. A specialisation that drops one is refused and the work is redone,
+so the check costs you nothing and the omission costs an attempt.
+
+## What specialising means
+
+Keep the template's instructions, its output format, its prohibitions and its reasoning intact. They encode failures this pipeline has already paid for. You are not rewriting the prompt or improving its wording.
+
+Add only what a competent engineer joining THIS project would need and could not infer from the generic text:
+- the conventions, layout and idioms this codebase actually uses
+- the commands this project runs to build, test and type-check
+- the traps this stack presents that a generic prompt would not warn about
+
+Ground every addition in the project context above. If the context does not tell you something, say nothing about it — an invented convention is worse than a missing one, because the agent will follow it.
+
+Do not name a file, symbol, package or command that does not appear in the context you were given.
+
+## How to answer
+
+Emit ONLY the specialised prompt body as TEXT, directly in your reply. No JSON wrapper, no markdown fences around the whole thing, no commentary before or after, and do not write it to a file — the pipeline reads your reply text.
+
+
+
+# Output
+__REVIEW_PROFILE__
+
+---
+RUNTIME BOUNDARY REVIEW: __STORY_ID__ — __STORY_TITLE__
+
+PROJECT ROOT: __PROJECT_ROOT__
+
+CONFIGURATION THIS CODELINE CARRIES:
+__CONFIG_SURFACE__
+
+THE CHANGE:
+```diff
+__STORY_DIFF__
+```
+
+## About this project's structure
+
+This project contains two independent TypeScript codelines:
+- **mocka** (mock-a/): Handles fare calculation logic, including age-based fare tier rules. Changes to src/fares.ts affect how prices are determined and applied.
+- **mockb** (mock-b/): Handles schedule display logic, including rendering of stop lists and departure boards. Changes to src/schedule.ts affect what data is shown to users.
+
+Each codeline is tested with vitest. When examining a change, first determine which codeline it belongs to, as they are independently deployed and their runtime boundaries do not overlap.
+
+## The only question you answer
+
+CAN THIS CHANGE EXECUTE, WHERE IT WILL EXECUTE, AS THIS CODELINE IS CONFIGURED?
+
+Not whether it is well written. Not whether it is tested. Not whether it is secure. Whether it
+runs. A change that type-checks, lints, passes its tests and is approved by every other reviewer
+can still be inert or fatal at runtime, and that is the only failure you exist to catch.
+
+## What to examine
+
+1. EXECUTION CONTEXT. For each changed file, establish where its code actually runs in this
+   project — which parts execute on a server, which are shipped to and executed by a client, which
+   run only at build time, and which only under a test runner. Determine this from the project's
+   own structure and configuration, not from assumption.
+
+   For mocka changes: trace whether fare calculation runs server-side, client-side, or both, and whether any calculation depends on the runtime receiving external configuration. For mockb changes: trace whether schedule rendering happens server-side (generating output) or client-side (rendering received data), and how the stop list is populated at the point of rendering.
+
+2. FOLLOW THE IMPORTS. A file is not only its own contents. Open what the changed files import, at
+   least one level deep, and ask what that module does WHEN IT LOADS — not only when its functions
+   are called. Module-scope work travels wherever the import travels: reads of external
+   configuration, connections, registrations, and anything that can throw. An import added inside
+   code that runs in a different context from the existing imports is the case to look hardest at.
+
+3. WHAT THE CONFIGURATION PERMITS. Read the configuration files listed above. They decide what the
+   code is ALLOWED to do: which external origins may be contacted or may embed this application,
+   what is exposed to a client bundle and under what naming, what the build emits. If this change
+   requires something the configuration currently forbids or does not provide, that is a finding,
+   and the fix belongs in that file.
+
+4. VALUES THAT CROSS A BOUNDARY. Configuration read in one context and consumed in another is a
+   silent failure: it does not error, it is simply absent, and the code takes the wrong branch
+   forever. Check that every value this change depends on is actually available where it is read.
+
+   For mocka: if the fare logic reads or depends on age thresholds, currency settings, or tier definitions, verify these values are available at the point of calculation in the target runtime. For mockb: if the schedule rendering reads the stop list or iteration bounds, verify the data structure and its length are available at the point the rendering loop executes.
+
+## Output
+
+Respond with ONLY a JSON object:
+
+{"verdict":"approved","issues":[],"summary":"..."}
+  OR
+{"verdict":"changes_requested","issues":[{"severity":"blocker|major|minor","file":"...","line":0,"description":"...","evidence":"<path>:<line> you read, or the command you ran and its result","suggestedFix":"..."}],"summary":"..."}
+
+Every issue MUST carry `evidence`: the exact thing you READ that establishes it. An issue without
+evidence is discarded before it reaches anyone, so an unsupported finding costs you the finding.
+
+WHERE YOU CANNOT TELL, SAY NOTHING. If this project's structure or configuration does not let you
+establish where code runs, return approved with a summary saying which question you could not
+answer and why. Do not invent a finding, and do not guess a convention from another project — a
+wrong blocker here costs a writer a real attempt at correct code.

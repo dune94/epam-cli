@@ -1,0 +1,22 @@
+spec-mode: fast-path qwen/z-ai/glm-5.2 (skipping MiniMax)
+Failed to parse JSON for tag SPEC_ASSIGNMENTS: Unexpected token 'T', "The plan w"... is not valid JSON
+spec-mode: SPEC_ASSIGNMENTS (story MOCK-HW-1): missing required field "agents" — required by its own tool definition
+spec-mode: detective for mockhelloworld = mockhelloworld-investigator (minted for this codeline)
+[seam-invocation] agent 'guard-vocabulary' resolved to seam 'guard-vocabulary' which asks for ladder 'HIGHEST', but EPAM_MODEL_LADDER_HIGHEST is unset in this process — no model or escalation chain will be applied
+spec-mode: fast-path qwen/z-ai/glm-5.2 (skipping MiniMax)
+spec-mode: search-term vocabulary unavailable for MOCK-HW-1 (Cannot read properties of null (reading 'cmd')) — seeding with an unfiltered query
+[seam-invocation] agent 'code-graph-detective' resolved to seam 'code-graph-detective' which asks for ladder 'HIGHEST', but EPAM_MODEL_LADDER_HIGHEST is unset in this process — no model or escalation chain will be applied
+spec-mode: fast-path qwen/z-ai/glm-5.2 (skipping MiniMax)
+spec-mode: MOCK-HW-1 — ACs are immutable (VC model); openspec AC edits redacted, verification captured in verificationCriteria
+[seam-invocation] agent 'guard-vocabulary' resolved to seam 'guard-vocabulary' which asks for ladder 'HIGHEST', but EPAM_MODEL_LADDER_HIGHEST is unset in this process — no model or escalation chain will be applied
+spec-mode: fast-path qwen/z-ai/glm-5.2 (skipping MiniMax)
+spec-mode: ⚠️ VC still flagged for MOCK-HW-1 after 2 cycle(s) — dropping 1 flagged criterion/criteria, retaining 2 clean. Dropped: "The greeting output produced by the codebase is 'hello dolly"
+spec-mode: MOCK-HW-1 — 2 verification criteria persisted (source: description, resolution: partial)
+spec-mode: fast-path qwen/z-ai/glm-5.1 (skipping MiniMax)
+spec-mode: SPEC_AGENT: missing required field "storyId" — required by its own tool definition
+spec-mode: brownfield — ignoring 4 AC(s) speckit produced for MOCK-HW-1; ACs are out of scope and VCs come from the description
+spec-mode: fast-path qwen/z-ai/glm-5.2 (skipping MiniMax)
+spec-mode: fast-path qwen/z-ai/glm-5.2 (skipping MiniMax)
+spec-mode: MODEL_REVIEW: the array is empty — a report about nothing is not a report
+spec-mode: LLM model review completed for 0 stories
+spec-mode: completed for phase core (run 20260812T155700Z)

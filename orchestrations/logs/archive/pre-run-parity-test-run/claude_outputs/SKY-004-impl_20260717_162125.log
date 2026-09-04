@@ -1,0 +1,119 @@
+=== Prompt for SKY-004-impl (attempt 1) ===
+CRITICAL — WRITE FILES FIRST. Your FIRST tool call MUST be WriteFile.
+Do NOT output any text before calling WriteFile. Do NOT plan or say "I will...".
+Call WriteFile NOW for the EXACT ABSOLUTE PATHS listed below:
+
+   - WRITE /home/bradleyjerome/projects/skyscanner-app/src/server.ts first, before any other action
+   - WRITE /home/bradleyjerome/projects/skyscanner-app/src/public/index.html first, before any other action
+   - WRITE /home/bradleyjerome/projects/skyscanner-app/package.json first, before any other action
+---
+
+Implement user story SKY-004-impl: Implement Express REST API server with /health, /search, /cheapest, and static dashboard
+
+## Story Description
+Create src/server.ts with Express app exporting named `app`, all route handlers (/health, /search, /cheapest, /), RAPIDAPI_KEY gating middleware, error handling, and guarded listen(). Create src/public/index.html as a styled dashboard. Configure package.json with start/build scripts, build-time public/ copy, and supertest devDependency. FlightResult must be imported from SKY-002.
+
+## Acceptance Criteria
+- src/server.ts exports a named `app` (Express instance) separately from `listen()`; listen is guarded by main-module check matching the tsup output format so `vitest run` never binds a port
+- GET /health returns HTTP 200 JSON { status: 'ok', uptime: <positive number> } regardless of RAPIDAPI_KEY presence — health is never gated
+- GET / returns HTTP 200 text/html with body equal to contents of src/public/index.html read from file at runtime via fs.readFileSync (not hardcoded inline); never gated by RAPIDAPI_KEY
+- src/public/index.html is a styled dashboard with: full-width blue (#1a73e8) header bar with bold white 'Skyscanner Dashboard' title and subtitle; centered white card (max-width ~700px, rounded corners, border, padding) with 2-column grid form (From/To IATA inputs row 1, Date/Adults inputs row 2 with labels); full-width blue 'Search Flights' button; status area with pink error banner, gray empty message, success count; client-side JS fetching GET /search without page reload, disabling button during request, rendering results table
+- GET /search with valid params returns 200 { flights: FlightResult[], count, searchedAt } where count === flights.length and searchedAt is ISO-8601 distinct per request; missing from/to/date → 400 { error }; adults defaults to 1 if absent, non-numeric adults → 400 { error }
+- GET /cheapest with valid params returns 200 with cheapest FlightResult (price ≤ all others); empty results → 404 { error }; missing from/to/date → 400 { error }; adults forwarded or defaults to 1
+- RAPIDAPI_KEY absent → /search and /cheapest return 503 { error: 'RAPIDAPI_KEY not configured' }; SkyscannerClient throws → 500 { error: string } without crash or unhandled rejection; /health and / unaffected
+- FlightResult imported from SKY-002 type export (not redeclared); package.json has 'start': 'node dist/server.js', build script producing dist/server.js + copying src/public/ to dist/public/; supertest and @types/supertest in devDeps; `npx tsc --noEmit` exits 0
+
+
+
+
+
+## Technical Notes
+- files: ["/home/bradleyjerome/projects/skyscanner-app/src/server.ts","/home/bradleyjerome/projects/skyscanner-app/src/public/index.html","/home/bradleyjerome/projects/skyscanner-app/package.json"]
+- dependsOn: ["SKY-002"]
+
+## Files to Create/Modify (EXACT ABSOLUTE PATHS — write to these paths exactly)
+/home/bradleyjerome/projects/skyscanner-app/src/server.ts, /home/bradleyjerome/projects/skyscanner-app/src/public/index.html, /home/bradleyjerome/projects/skyscanner-app/package.json
+
+## Dependencies
+SKY-002
+
+
+## Instructions
+**CRITICAL — WRITE FILES FIRST:**
+   - WRITE /home/bradleyjerome/projects/skyscanner-app/src/server.ts first, before any other action
+   - WRITE /home/bradleyjerome/projects/skyscanner-app/src/public/index.html first, before any other action
+   - WRITE /home/bradleyjerome/projects/skyscanner-app/package.json first, before any other action
+**You MUST write every file listed above to its EXACT absolute path. Do NOT write to a different path, do NOT write to the current directory unless it matches the path above. Use your WriteFile or Edit tools with the full absolute path shown.**
+
+1. Write each required file to its exact absolute path listed above — do this FIRST before anything else
+2. Implement all acceptance criteria for this story
+3. Follow the project's existing code patterns and conventions
+4. Do NOT create tests unless explicitly required in acceptance criteria
+
+After implementation, provide a brief summary of what was created/modified.
+
+## Relevant Knowledge Base Entries
+The following was learned from previous story implementations and is relevant to your agent role. Apply this knowledge before writing any code:
+
+- [2026-07-06T17:45:30Z] Always resolve mocked fetch calls to a Response-shaped object with ok, status, statusText, and a json method returning a Promise.
+- [2026-07-06T17:50:20Z] Use valid module and moduleResolution pairs in tsconfig.json: CommonJS with Node, Node16 with Node16, ESNext with Bundler. Use CommonJS and Node for the stack. Mismatched pairs cause build errors.
+- [2026-07-06T18:11:26Z] Use vi.fn().mockResolvedValue(value) to make a mock return a resolved Promise.
+- [2026-07-06T20:31:11Z] Use `test: { passWithNoTests: true }` in vitest.config.ts or create a stub test file when no *.test.ts files exist.
+- [2026-07-06T20:33:03Z] Enable globals:true in vitest.config.ts so describe, it, and expect work without imports, reducing boilerplate in test files.
+- [2026-07-06T23:47:34Z] Use CommonJS-compatible patterns in src/server.ts: avoid `import.meta.url` and top-level `await`; gate listen with `if (require.main === module)`.
+- [2026-07-07T02:35:30Z] Always include a non-test source file in src/ alongside any src/*.test.ts file, since tsconfig.json excludes test files from tsc --noEmit.
+- [2026-07-07T19:01:34Z] Only modify or create files explicitly listed in the story's acceptance criteria. Do not touch files belonging to other stories or outside the current task scope.
+- [2026-07-07T20:17:57Z] [unreviewed-fallback] Avoid using deprecated TypeScript compiler options like 'moduleResolution=node10'; use 'moduleResolution=node' instead.
+- [2026-07-17T20:20:58Z] Always: Before importing a module or referencing a type/property, always read the actual source file to verify the export exists, its exact path, its properties, and its constructor/factory signatures
+
+## Knowledge Base Contribution (do this LAST — after writing all implementation files)
+Your assigned KB entry ID for this run: **KB-008**
+
+IMPORTANT: Write ALL implementation files first. Only AFTER writing every required file should you optionally append a KB entry.
+Do NOT read orchestrations/agents/KB.md before writing implementation files. The relevant KB entries are already injected above.
+
+If (and only if) you discover a non-obvious pattern during implementation, append one entry to `orchestrations/agents/KB.md`:
+
+```markdown
+## KB-008 -- 2026-07-17
+
+**Category:** <backend|frontend|infrastructure|testing|orchestration>
+**AgentRole:** <your agentRole from the story>
+**Tags:** <comma-separated tech keywords, e.g. typescript, node, cli>
+**Trigger:** <retry|first-success>
+**StoryRef:** SKY-004-impl
+
+<One concise paragraph: the specific pattern, gotcha, or anti-pattern.>
+```
+
+Only write an entry if the knowledge is genuinely non-obvious. Skip trivial observations.
+
+## Execution Plan
+Follow this plan step by step:
+1. Update `/home/bradleyjerome/projects/skyscanner-app/package.json`: add `express` to dependencies; add `supertest` and `@types/supertest` to devDependencies; add `"start": "node dist/server.js"` script; ensure build script copies `src/public/` to `dist/public/` (e.g., add `&& cp -r src/public dist/public` or use a copy plugin in tsup config).
+
+2. Create `/home/bradleyjerome/projects/skyscanner-app/src/public/index.html`: full-width blue (`#1a73e8`) header bar with bold white "Skyscanner Dashboard" title and subtitle; centered white card (max-width ~700px, rounded corners, border, padding) containing a 2-column grid form — row 1: From/To IATA text inputs, row 2: Date input + Adults number input, all with labels; full-width blue "Search Flights" button; status area with pink error banner, gray empty message, success count; client-side JS that on button click fetches `GET /search?from=…&to=…&date=…&adults=…` without page reload, disables button during request, renders results table in a container.
+
+3. Create `/home/bradleyjerome/projects/skyscanner-app/src/server.ts`: import `express`, `fs`, `path`; import `FlightResult` from the SKY-002 type export module (not redeclared); import `SkyscannerClient` from SKY-003; create `const app = express()` and export named `{ app }`.
+
+4. In `/home/bradleyjerome/projects/skyscanner-app/src/server.ts`, add `GET /health` route returning `res.json({ status: 'ok', uptime: process.uptime() })` — always HTTP 200, never gated by RAPIDAPI_KEY.
+
+5. In `/home/bradleyjerome/projects/skyscanner-app/src/server.ts`, add `GET /` route that reads `src/public/index.html` via `fs.readFileSync(path.resolve(__dirname, 'public/index.html'), 'utf-8')` and returns it with `res.type('html').send(html)` — always HTTP 200, never gated by RAPIDAPI_KEY.
+
+6. In `/home/bradleyjerome/projects/skyscanner-app/src/server.ts`, add `GET /search` route: validate `from`, `to`, `date` are present (400 `{ error }` if missing); validate `adults` is numeric if present, default to 1 if absent (400 `{ error }` if non-numeric); if `!process.env.RAPIDAPI_KEY` return 503 `{ error: 'RAPIDAPI_KEY not configured' }`; call `SkyscannerClient.searchFlights` wrapped in try/catch — on throw return 500 `{ error: <message> }`; on success return 200 `{ flights, count: flights.length, searchedAt: new Date().toISOString() }`.
+
+7. In `/home/bradleyjerome/projects/skyscanner-app/src/server.ts`, add `GET /cheapest` route: same validation as /search (missing from/to/date → 400, non-numeric adults → 400, default adults to 1, RAPIDAPI_KEY absent → 503); on success if `flights.length === 0` return 404 `{ error }`; otherwise find flight with minimum price and return 200 with that single `FlightResult`; wrap in try/catch for 500 on SkyscannerClient throw.
+
+8. In `/home/bradleyjerome/projects/skyscanner-app/src/server.ts`, add `listen()` call guarded by main-module check compatible with tsup output format: `if (import.meta.url === \`file://\${process.argv[1]}\` || process.argv[1]?.endsWith('server.js'))` — so `vitest run` never binds a port; export `listen` separately if needed.
+
+9. Run `npx tsc --noEmit` and fix any type errors; verify `process.uptime()` return type is `number`, `FlightResult` import resolves, and all route handler signatures match Express types.
+
+10. Run `npm run build` and verify `dist/server.js` is produced and `dist/public/index.html` exists; run `npm test` (vitest) to confirm no port-binding side effects and existing tests still pass.
+=== End Prompt ===
+
+=== epam Output (attempt 1) ===
+`tsup`, `supertest`, `@types/supertest`, `@types/express` aren't installed. Let me install them.
+  [tc-writer] No test stories need TCs in phase 'unknown' — skipping
+`tsup`, `supertest`, `@types/supertest`, `@types/express` aren't installed. Let me install them.
+
+=== End epam Output ===

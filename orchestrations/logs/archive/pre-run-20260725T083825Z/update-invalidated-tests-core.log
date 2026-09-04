@@ -1,0 +1,4 @@
+[update-invalidated-tests] suite is RED after the fix — deciding whether the failures are invalidated expectations or a real regression
+[update-invalidated-tests] BLOCKED — reported as a REGRESSION, not an invalidated expectation:
+    REGRESSION: The promo code discount is no longer being applied to return-trip dispatches with composite keys, breaking the intended functionality for return-trip bookings with promo codes.
+[update-invalidated-tests] the fix is suspect; NOT rewriting any test to hide it

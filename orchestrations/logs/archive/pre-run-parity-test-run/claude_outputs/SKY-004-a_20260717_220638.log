@@ -1,0 +1,110 @@
+=== Prompt for SKY-004-a (attempt 1) ===
+CRITICAL — WRITE FILES FIRST. Your FIRST tool call MUST be WriteFile.
+Do NOT output any text before calling WriteFile. Do NOT plan or say "I will...".
+Call WriteFile NOW for the EXACT ABSOLUTE PATHS listed below:
+
+   - WRITE /home/bradleyjerome/projects/skyscanner-app/src/server.ts first, before any other action
+---
+
+Implement user story SKY-004-a: Express server routes and middleware implementation
+
+## Story Description
+Implement src/server.ts with Express app exporting named `app`, guarded listen(), and four route handlers: GET /health (JSON status), GET / (HTML dashboard from file), GET /search (flight search via SkyscannerClient), GET /cheapest (cheapest flight). Include RAPIDAPI_KEY gate middleware for /search and /cheapest (503 when absent), error handling for SkyscannerClient throws (500), and input validation (400 for missing/invalid params). The searchedAt field in /search responses must be an ISO-8601 datetime reflecting request time. The FlightResult type must be imported from the SKY-002 type export (e.g. src/skyscanner/client.ts), not redeclared inline. Depends on SKY-002.
+
+## Acceptance Criteria
+- src/server.ts exports a named `app` (Express instance) separately from the `listen()` call so supertest can import it without binding a port; the listen() call is guarded by `if (import.meta.url === pathToFileURL(process.argv[1]).href)` (ESM) or `if (require.main === module)` (CJS) matching the tsup output format so vitest never binds a port
+- GET /health returns HTTP 200 with Content-Type application/json and body { status: 'ok', uptime: <positive number> } regardless of whether RAPIDAPI_KEY env var is set or absent
+- GET / returns HTTP 200 with Content-Type text/html and response body equal to the contents of src/public/index.html read via fs.readFileSync at runtime — a hardcoded inline HTML string in server.ts that happens to match is NOT acceptable; this route is never gated by RAPIDAPI_KEY
+- GET /search with valid query params (from, to, date, adults) returns HTTP 200 with body { flights: FlightResult[], count: number, searchedAt: ISO-8601 string } where count === flights.length; when adults param is absent it defaults to 1
+- GET /search missing any required param (from, to, or date) returns HTTP 400 with Content-Type application/json and body { error: string }; non-numeric adults param (e.g. 'abc', '') returns HTTP 400 with body { error: string }
+- GET /cheapest with valid required params (from, to, date) returns HTTP 200 with a single FlightResult whose price ≤ all others in the client response; returns HTTP 404 { error: string } when client returns empty array; returns HTTP 400 { error: string } when missing required params; adults defaults to 1 if absent
+- When RAPIDAPI_KEY env var is absent at server initialisation, middleware short-circuits GET /search and GET /cheapest with HTTP 503 Content-Type application/json body { error: 'RAPIDAPI_KEY not configured' }; GET /health and GET / are unaffected and return normal responses
+- When SkyscannerClient throws an error during /search or /cheapest, the server returns HTTP 500 with Content-Type application/json and body { error: string } without crashing or emitting an unhandled promise rejection
+
+
+
+
+
+## Technical Notes
+- files: ["/home/bradleyjerome/projects/skyscanner-app/src/server.ts"]
+- dependsOn: ["SKY-002"]
+
+## Files to Create/Modify (EXACT ABSOLUTE PATHS — write to these paths exactly)
+/home/bradleyjerome/projects/skyscanner-app/src/server.ts
+
+## Dependencies
+SKY-002
+
+
+## Instructions
+**CRITICAL — WRITE FILES FIRST:**
+   - WRITE /home/bradleyjerome/projects/skyscanner-app/src/server.ts first, before any other action
+**You MUST write every file listed above to its EXACT absolute path. Do NOT write to a different path, do NOT write to the current directory unless it matches the path above. Use your WriteFile or Edit tools with the full absolute path shown.**
+
+1. Write each required file to its exact absolute path listed above — do this FIRST before anything else
+2. Implement all acceptance criteria for this story
+3. Follow the project's existing code patterns and conventions
+4. Do NOT create tests unless explicitly required in acceptance criteria
+
+After implementation, provide a brief summary of what was created/modified.
+
+## Relevant Knowledge Base Entries
+The following was learned from previous story implementations and is relevant to your agent role. Apply this knowledge before writing any code:
+
+- [2026-07-06T17:45:30Z] Always resolve mocked fetch calls to a Response-shaped object with ok, status, statusText, and a json method returning a Promise.
+- [2026-07-06T17:50:20Z] Use valid module and moduleResolution pairs in tsconfig.json: CommonJS with Node, Node16 with Node16, ESNext with Bundler. Use CommonJS and Node for the stack. Mismatched pairs cause build errors.
+- [2026-07-06T18:11:26Z] Use vi.fn().mockResolvedValue(value) to make a mock return a resolved Promise.
+- [2026-07-06T20:31:11Z] Use `test: { passWithNoTests: true }` in vitest.config.ts or create a stub test file when no *.test.ts files exist.
+- [2026-07-06T20:33:03Z] Enable globals:true in vitest.config.ts so describe, it, and expect work without imports, reducing boilerplate in test files.
+- [2026-07-06T23:47:34Z] Use CommonJS-compatible patterns in src/server.ts: avoid `import.meta.url` and top-level `await`; gate listen with `if (require.main === module)`.
+- [2026-07-07T02:35:30Z] Always include a non-test source file in src/ alongside any src/*.test.ts file, since tsconfig.json excludes test files from tsc --noEmit.
+- [2026-07-07T19:01:34Z] Only modify or create files explicitly listed in the story's acceptance criteria. Do not touch files belonging to other stories or outside the current task scope.
+- [2026-07-07T20:17:57Z] [unreviewed-fallback] Avoid using deprecated TypeScript compiler options like 'moduleResolution=node10'; use 'moduleResolution=node' instead.
+- [2026-07-17T20:20:58Z] Always: Before importing a module or referencing a type/property, always read the actual source file to verify the export exists, its exact path, its properties, and its constructor/factory signatures
+
+## Knowledge Base Contribution (do this LAST — after writing all implementation files)
+Your assigned KB entry ID for this run: **KB-008**
+
+IMPORTANT: Write ALL implementation files first. Only AFTER writing every required file should you optionally append a KB entry.
+Do NOT read orchestrations/agents/KB.md before writing implementation files. The relevant KB entries are already injected above.
+
+If (and only if) you discover a non-obvious pattern during implementation, append one entry to `orchestrations/agents/KB.md`:
+
+```markdown
+## KB-008 -- 2026-07-17
+
+**Category:** <backend|frontend|infrastructure|testing|orchestration>
+**AgentRole:** <your agentRole from the story>
+**Tags:** <comma-separated tech keywords, e.g. typescript, node, cli>
+**Trigger:** <retry|first-success>
+**StoryRef:** SKY-004-a
+
+<One concise paragraph: the specific pattern, gotcha, or anti-pattern.>
+```
+
+Only write an entry if the knowledge is genuinely non-obvious. Skip trivial observations.
+
+## Available Dynamic Tools
+This project has the following helper scripts, written by prior self-healing runs. Use them via the bash tool instead of repeating the equivalent steps by hand:
+
+- `bash /home/bradleyjerome/projects/skyscanner-app/.epam/dynamic-tools/install-missing-types.sh <args>` — Installs missing @types/* packages that tsc reports as TS2688 type definition errors.
+
+## Execution Plan
+Follow this plan step by step:
+[1;33m[WARNING][0m   PlanReview: mismatch detected for SKY-004-a against dependency contracts — one corrective re-plan
+1. Create `/home/bradleyjerome/projects/skyscanner-app/src/server.ts` with imports for `express`, `fs`, `path`, and `pathToFileURL` from `node:url`; import `SkyscannerClient` and `FlightResult` types from their source modules.
+2. Instantiate `export const app = express()` and add `express.json()` middleware plus a custom middleware that checks `process.env.RAPIDAPI_KEY` and short-circuits `/search` and `/cheapest` with `503 { error: 'RAPIDAPI_KEY not configured' }` when the env var is absent.
+3. Implement `GET /health` returning `200` with `{ status: 'ok', uptime: process.uptime() }` — ensure `uptime` is a positive number.
+4. Implement `GET /` reading `src/public/index.html` via `fs.readFileSync(path.join(__dirname, 'public', 'index.html'))` at request time and returning it with `Content-Type: text/html`; do not inline HTML.
+5. Implement `GET /search` with param validation: require `from`, `to`, `date` (400 on missing); parse `adults` defaulting to 1, reject non-numeric with 400; call `SkyscannerClient` inside try/catch, return `200 { flights, count: flights.length, searchedAt: new Date().toISOString() }` on success or `500 { error: string }` on thrown error.
+6. Implement `GET /cheapest` with the same param validation as `/search`; call `SkyscannerClient`, return `404 { error: string }` for empty array, otherwise return `200` with the single cheapest `FlightResult` (min by `price`); catch errors and return `500 { error: string }`.
+7. Add the `listen()` call at the bottom guarded by `if (import.meta.url === pathToFileURL(process.argv[1]).href)` (ESM) so vitest imports never bind a port.
+8. Verify with vitest + supertest: `app` is importable without binding; `/health` returns 200 regardless of `RAPIDAPI_KEY`; `/` returns file contents; `/search` and `/cheapest` return 503 without key, 400 on missing/invalid params, 200 on valid params, 500 on client error; `/cheapest` returns 404 on empty array and the min-price flight otherwise.
+=== End Prompt ===
+
+=== epam Output (attempt 1) ===
+The existing tests pass. Let me verify the implementation is complete by checking the file structure:
+  [tc-writer] No test stories need TCs in phase 'unknown' — skipping
+The existing tests pass. Let me verify the implementation is complete by checking the file structure:
+
+=== End epam Output ===

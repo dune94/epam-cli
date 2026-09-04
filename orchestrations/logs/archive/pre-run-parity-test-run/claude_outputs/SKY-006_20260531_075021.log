@@ -1,0 +1,110 @@
+=== Prompt for SKY-006 (attempt 1) ===
+Implement user story SKY-006: Code review: Skyscanner mini-app
+
+## Story Description
+Review the full Skyscanner mini-app implementation across all src/ files. Checks: TypeScript strict compliance, test coverage (client, CLI, and server each have at least one test file), security (API key never logged or returned in responses, all query params validated), error handling completeness (non-200 upstream responses propagated correctly, missing-param responses return 400), and Express static-file safety (no path traversal). Produce a review document at /tmp/skyscanner-app/review/SKY-006-review.md with findings organized by category. The review passes when all gating checks exit clean.
+
+## Acceptance Criteria
+- review/SKY-006-review.md is written to /tmp/skyscanner-app/review/ and contains sections for: TypeScript, Tests, Security, Error Handling, and Express Safety
+- `tsc --noEmit` exits 0 with the project's tsconfig.json (strict mode enabled)
+- `vitest run` exits 0 with no skipped or todo tests counted as passing
+- Test files exist for each of the three layers: Skyscanner API client, CLI entry point, and Express server
+- API key is not present in any log statement, console output, or HTTP response body in src/ files
+- Every Express route that accepts query parameters returns HTTP 400 with a descriptive message when required params are missing or malformed
+- Non-2xx responses from the upstream Skyscanner API are caught and forwarded to the caller as a structured error (not an unhandled exception)
+- Static file serving uses a safe path resolution strategy — no user-supplied path segments are concatenated directly to __dirname or equivalent
+- review/SKY-006-review.md includes a final PASS/FAIL verdict and, if FAIL, a prioritised list of blocking findings
+
+## Technical Notes
+- workingDir: /tmp/skyscanner-app
+- files: ["/tmp/skyscanner-app/review/SKY-006-review.md"]
+- dependsOn: ["SKY-001","SKY-002","SKY-003","SKY-004","SKY-005"]
+
+## Files to Create/Modify
+/tmp/skyscanner-app/review/SKY-006-review.md
+
+## Dependencies
+None
+
+## Instructions
+1. Implement all acceptance criteria for this story
+2. Follow the project's existing code patterns and conventions
+3. Create any necessary files in the locations specified
+4. Ensure code compiles/runs without errors
+5. Do NOT create tests unless explicitly required in acceptance criteria
+
+After implementation, provide a brief summary of what was created/modified.
+
+## Relevant Knowledge Base Entries
+The following was learned from previous story implementations and is relevant to your agent role. Apply this knowledge before writing any code:
+
+## KB-003 -- 2026-03-01
+
+**Category:** backend
+**AgentRole:** review-agent
+**Tags:** typescript, async, cancellation, abort-controller
+**Trigger:** first-success
+**StoryRef:** EPAM-014
+
+When implementing multi-agent parallel execution with cancellation support, registering an AbortController in a task registry is insufficient. The abort signal must be threaded through the entire call chain: TaskRegistry → caller → AgentRunOptions → AgentRunner → provider.stream(). Without adding `abortSignal?: AbortSignal` to AgentRunOptions and checking it in the agent loop, calling `abortController.abort()` will update task status but leave the underlying LLM stream and agent execution running. Always ensure cancellation signals propagate to the lowest-level async operation (the provider stream) to avoid resource leaks and unbounded execution.
+
+
+## KB-004 -- 2026-03-01
+
+**Category:** orchestration
+**AgentRole:** review-agent
+**Tags:** typescript, prompt-injection, session-history, agent-runner
+**Trigger:** first-success
+**StoryRef:** EPAM-018
+
+For one-turn consultation or override prompts, consuming a pending flag is not enough if you also persist the injected text into the turn history. If the transformed message is stored in the same message array that becomes future history, the consultation silently bleeds into later turns. Keep a separate transient message list for the model-facing request and preserve the original user message in the persisted session history.
+
+## Knowledge Base Contribution
+Your assigned KB entry ID for this run: **KB-006**
+
+If you discover a non-obvious pattern, gotcha, or anti-pattern during this implementation (or this is a retry), append exactly one entry to `orchestrations/agents/KB.md` using this format:
+
+```markdown
+## KB-006 -- 2026-05-31
+
+**Category:** <backend|frontend|infrastructure|testing|orchestration>
+**AgentRole:** <your agentRole from the story>
+**Tags:** <comma-separated tech keywords, e.g. typescript, node, cli>
+**Trigger:** <retry|first-success>
+**StoryRef:** SKY-006
+
+<One concise paragraph: the specific pattern, gotcha, or anti-pattern. Precise enough that a future Claude instance can apply it without re-discovering it.>
+```
+
+Only write an entry if the knowledge is genuinely non-obvious. Skip trivial observations.
+=== End Prompt ===
+
+=== claude Output (attempt 1) ===
+Perfect! All required sections are present. Let me create a summary of what was delivered:
+
+## Summary
+
+I have successfully implemented **SKY-006: Code review: Skyscanner mini-app** with a comprehensive review document and verification of all acceptance criteria.
+
+### Deliverables
+
+✅ **Review document created:** `/tmp/skyscanner-app/review/SKY-006-review.md` (292 lines)
+
+### Acceptance Criteria - ALL MET ✅
+
+1. **Review document sections:** ✅ Contains TypeScript, Tests, Security, Error Handling, Express Safety, plus gating checks and final verdict
+2. **TypeScript strict mode:** ✅ `tsc --noEmit` exits 0 with no errors
+3. **Test suite:** ✅ `vitest run` passes all 63 tests across 4 files (0 skipped/todo)
+4. **Test coverage:**
+   - ✅ Client layer: `src/skyscanner/client.test.ts` (16 tests) + `src/skyscanner-client.test.ts` (11 tests)
+   - ✅ CLI layer: `src/cli.test.ts` (19 tests)
+   - ✅ Server layer: `src/server.test.ts` (17 tests)
+5. **API key security:** ✅ Never logged or returned in responses; private field, used only in Authorization header; test validates secret key never in error messages
+6. **Parameter validation:** ✅ All Express routes return HTTP 400 with descriptive messages for missing/malformed required parameters (`from`, `to`, `date`, `adults`)
+7. **Upstream error handling:** ✅ Non-2xx API responses caught and propagated as structured 500 errors; error messages don't leak sensitive data
+8. **Express static file safety:** ✅ Static file path is hardcoded (`public/index.html`) with no user input in path resolution; uses safe `path.join()` with non-user-supplied segments
+9. **Final verdict:** ✅ **PASS** with no blocking findings
+
+The review confirms production-readiness across all gating checks and security requirements.
+
+=== End claude Output ===

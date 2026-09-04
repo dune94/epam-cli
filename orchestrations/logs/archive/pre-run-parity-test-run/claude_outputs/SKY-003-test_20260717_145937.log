@@ -1,0 +1,141 @@
+=== Prompt for SKY-003-test (attempt 1) ===
+## SPEC-REALITY MISMATCH (auto-detected — the description/ACs above contain a WRONG file path)
+The following path(s) in this story's own description/ACs do NOT match the real file a dependency actually built. TRUST THE CONTRACT SECTION BELOW, NOT THE WRONG PATH ABOVE:
+- Description/ACs say `src/cli.test.ts` — the REAL file is at `/home/bradleyjerome/projects/skyscanner-app/src/cli.ts`. Use the real path.CRITICAL — WRITE FILES FIRST. Your FIRST tool call MUST be WriteFile.
+Do NOT output any text before calling WriteFile. Do NOT plan or say "I will...".
+Call WriteFile NOW for the EXACT ABSOLUTE PATHS listed below:
+
+   - WRITE /home/bradleyjerome/projects/skyscanner-app/src/cli.test.ts first, before any other action
+---
+
+Implement user story SKY-003-test: Test flight search CLI entry point (src/cli.test.ts)
+
+## Story Description
+Create `src/cli.test.ts` covering argument validation, successful table render, empty-result render, missing env var, and error handling using vitest with `SkyscannerClient` mocked at the module boundary. At least 8 tests covering all CLI exit paths and output formatting.
+
+## Acceptance Criteria
+- `src/cli.test.ts` exists and `vitest run` exits 0 with all tests green
+- Tests mock `SkyscannerClient` at the module boundary using vitest vi.mock so no real network calls are made
+- Tests verify that missing --from, missing --to, or missing --date each prints a usage hint to stderr and exits with code 2
+- Tests verify that an invalid --date format (non-YYYY-MM-DD) exits with code 2 and a human-readable message to stderr before any network call
+- Tests verify that invalid --adults values (non-integer, ≤0, non-numeric) exit with code 2 and a message to stderr; valid --adults is forwarded to searchFlights
+- Tests verify that missing or empty RAPIDAPI_KEY env var prints 'Error: RAPIDAPI_KEY environment variable is required' to stderr and exits 1
+- Tests verify table rendering for valid multi-row results: header row present, separator row of hyphens present and matching column widths, all columns padded to widest value, Price right-aligned with currency symbol, other columns left-aligned
+- Tests verify empty-array result renders exactly 'No flights found.' to stdout and exits 0; tests verify client-thrown error writes message to stderr and exits 1 with empty stdout
+
+
+## Test Criteria (ground truth — written from actual source; overrides any conflicting AC)
+- CLI entry point is in src/cli.ts, imports SkyscannerClient from './skyscanner/client'
+- parseArgs() manually parses argv starting at index 2, supports --from, --to, --date, --adults flags
+- validateRequired() checks for missing --from, --to, --date and exits code 2 with stderr: 'Error: Missing required flag(s): <flags>\nUsage: --from <origin> --to <destination> --date <YYYY-MM-DD> [--adults <number>]\n'
+- validateDate() uses regex /^\d{4}-\d{2}-\d{2}$/ and exits code 2 with stderr: 'Error: --date must be in YYYY-MM-DD format (e.g., 2026-01-15)\n'
+- validateAdults() returns defaultAdults=1 when undefined, validates with Number(), isNaN(), Number.isInteger(), and adults <= 0 check
+- validateAdults() exits code 2 with stderr: 'Error: --adults must be a valid number\n' for isNaN
+- validateAdults() exits code 2 with stderr: 'Error: --adults must be an integer\n' for non-integer
+- validateAdults() exits code 2 with stderr: 'Error: --adults must be greater than 0\n' for adults <= 0
+- checkApiKey() checks process.env.RAPIDAPI_KEY with trim() === '', exits code 1 with stderr: 'Error: RAPIDAPI_KEY environment variable is required\n'
+- main() calls validateRequired(), validateDate(), validateAdults(), checkApiKey() in that order before any network call
+- SkyscannerClient constructor accepts opts: { apiKey?: string }, resolves key from opts.apiKey or process.env.RAPIDAPI_KEY
+- SkyscannerClient.searchFlights() accepts SearchParams: { origin: string, destination: string, date: string, adults?: number }
+- CLI calls client.searchFlights({ origin: args.from, destination: args.to, date: args.date, adults }) - note param names are origin/destination not from/to
+- Empty results array outputs 'No flights found.' to stdout via console.log() and exits code 0
+- formatTable() uses headers: ['Airline', 'Price', 'Departure', 'Arrival', 'Duration', 'Stops']
+- formatTable() builds separator with widths.map(w => '-'.repeat(w)).join(' -+- ')
+- formatTable() builds header row with headers.map((h, i) => h.padEnd(widths[i])).join(' | ') - ALL columns left-aligned including Price
+- formatTable() price format is `${flight.currency || '£'}${flight.price.toFixed(2)}` - note default currency is '£' not '$'
+- formatTable() data rows join with ' | ' separator
+- Client errors caught in try/catch, message written to stderr via process.stderr.write(`${message}\n`), exits code 1
+- Uncaught errors in main().catch() also write to stderr and exit code 1
+- MOCK_SKYSCANNER_API env var triggers mock mode in client when exactly equals 'true'
+- Client validates API response with ensureFlightResult() throwing errors for invalid shapes
+
+## Mock Strategy
+Use vi.mock('./skyscanner/client', () => ({ SkyscannerClient: vi.fn() })) with vi.hoisted to define mock constructor, then vi.mocked(SkyscannerClient).mockImplementation returns object with searchFlights: vi.fn(), use vi.clearAllMocks in beforeEach
+
+## Banned Patterns (must NOT appear in your file)
+'origin' and 'destination' as CLI flags, 'from' and 'to' as searchFlights parameter names, 'Error: Missing required arguments', 'Error: --date must be in YYYY-MM-DD format' without the example, 'Error: RAPIDAPI_KEY environment variable is required' without trailing newline, 'No flights found' without period, Right-aligned Price column, Default currency '$' in price formatting, '/search' endpoint path - actual is '/flights/search-roundtrip', @jest/globals imports, vi.mock('./client') - must be './skyscanner/client', process.exit(2) for API key missing - actual is exit code 1, process.exit(1) for missing flags - actual is exit code 2
+
+## Technical Notes
+- files: ["/home/bradleyjerome/projects/skyscanner-app/src/cli.test.ts"]
+- dependsOn: ["SKY-002"]
+
+## Files to Create/Modify (EXACT ABSOLUTE PATHS — write to these paths exactly)
+/home/bradleyjerome/projects/skyscanner-app/src/cli.test.ts
+
+## Dependencies
+SKY-002, SKY-003-impl
+
+
+## Instructions
+**CRITICAL — WRITE FILES FIRST:**
+   - WRITE /home/bradleyjerome/projects/skyscanner-app/src/cli.test.ts first, before any other action
+**You MUST write every file listed above to its EXACT absolute path. Do NOT write to a different path, do NOT write to the current directory unless it matches the path above. Use your WriteFile or Edit tools with the full absolute path shown.**
+
+1. Write each required file to its exact absolute path listed above — do this FIRST before anything else
+2. Implement all acceptance criteria for this story
+3. Test Criteria facts above are ground truth — your test assertions MUST match them exactly
+4. Do NOT create tests unless explicitly required in acceptance criteria
+
+After implementation, provide a brief summary of what was created/modified.
+
+## Relevant Knowledge Base Entries
+The following was learned from previous story implementations and is relevant to your agent role. Apply this knowledge before writing any code:
+
+- [2026-07-07T14:33:39Z] Check the source before writing CLI tests to verify whether output uses console.log or process.stdout.write, then spy on whichever it actually uses.
+- [2026-07-07T18:54:47Z] Always export classes using a named export. Never use a default export for a class, and never declare a class without exporting it.
+- [2026-07-14T10:23:13Z] Always: In strict TypeScript, always annotate callback parameters with explicit types (e.g., `.map((c: Column) =>` not `.map(c =>`). Never rely on implicit any inference for array method callbacks.
+- [2026-07-15T02:48:02Z] Never access ECMAScript private fields (#fieldName) from outside the class in test code — TypeScript cannot parse it and will emit TS1005/TS1109. Test private state indirectly through public methods o
+- [2026-07-15T03:53:06Z] NEVER modify files inside node_modules/ — if a dependency is missing or has wrong types, add it to package.json devDependencies/dependencies and run npm install. If a type mismatch exists, use declara
+- [2026-07-15T04:03:31Z] Never modify any file inside node_modules/ — only edit source files under src/ or config files like package.json/tsconfig.json. If a dependency is missing, add it to package.json devDependencies and r
+- [2026-07-16T16:27:50Z] Never use top-level await in test files — the project uses CommonJS modules which forbid it. Wrap any async setup in an async function called from the test body or inside beforeAll/beforeEach.
+
+## Knowledge Base Contribution (do this LAST — after writing all implementation files)
+Your assigned KB entry ID for this run: **KB-008**
+
+IMPORTANT: Write ALL implementation files first. Only AFTER writing every required file should you optionally append a KB entry.
+Do NOT read orchestrations/agents/KB.md before writing implementation files. The relevant KB entries are already injected above.
+
+If (and only if) you discover a non-obvious pattern during implementation, append one entry to `orchestrations/agents/KB.md`:
+
+```markdown
+## KB-008 -- 2026-07-17
+
+**Category:** <backend|frontend|infrastructure|testing|orchestration>
+**AgentRole:** <your agentRole from the story>
+**Tags:** <comma-separated tech keywords, e.g. typescript, node, cli>
+**Trigger:** <retry|first-success>
+**StoryRef:** SKY-003-test
+
+<One concise paragraph: the specific pattern, gotcha, or anti-pattern.>
+```
+
+Only write an entry if the knowledge is genuinely non-obvious. Skip trivial observations.
+
+## Available Dynamic Tools
+This project has the following helper scripts, written by prior self-healing runs. Use them via the bash tool instead of repeating the equivalent steps by hand:
+
+- `bash /home/bradleyjerome/projects/skyscanner-app/.epam/dynamic-tools/add-dep.sh <args>` — Install an npm package and its @types before importing it
+- `bash /home/bradleyjerome/projects/skyscanner-app/.epam/dynamic-tools/install-with-types.sh <args>` — Install a npm package and its @types counterpart idempotently before importing it
+
+## Execution Plan
+Follow this plan step by step:
+1. Read `/home/bradleyjerome/projects/skyscanner-app/src/cli.ts` to understand the module's exports, argument parsing logic, validation flow, exit codes, and how `SkyscannerClient` is imported.
+
+2. Read `/home/bradleyjerome/projects/skyscanner-app/src/client.ts` to understand the `SkyscannerClient` class constructor and `searchFlights` method signature (parameters and return type).
+
+3. Create `/home/bradleyjerome/projects/skyscanner-app/src/cli.test.ts` with `vi.mock` for the client module, mocking `SkyscannerClient` so `searchFlights` is a `vi.fn()` that never makes network calls; spy on `process.stderr.write`, `process.stdout.write`, and mock `process.exit` with `vi.fn()` that throws to prevent actual exit.
+
+4. In the test file, write a `describe('argument validation')` block with tests for: missing `--from` → stderr contains usage hint + exit 2; missing `--to` → same; missing `--date` → same; invalid `--date` format (e.g. `--date 01-01-2024`) → stderr contains human-readable message + exit 2, and `searchFlights` was never called.
+
+5. Add tests in the same describe block for invalid `--adults` values: non-integer (`--adults 1.5`), ≤0 (`--adults 0`), non-numeric (`--adults abc`) — each exits 2 with stderr message; and a test that valid `--adults 3` is forwarded as the correct parameter to `searchFlights`.
+
+6. Add a `describe('RAPIDAPI_KEY env check')` block: test that when `process.env.RAPIDAPI_KEY` is unset or empty string, stderr contains exactly `'Error: RAPIDAPI_KEY environment variable is required'` and exit code is 1; restore env after each test.
+
+7. Add a `describe('table rendering for valid results')` block: stub `searchFlights` to return a multi-row array with varied string lengths; assert stdout contains a header row, a separator row of hyphens matching column widths, all data columns padded to the widest value, Price column right-aligned with currency symbol, and other columns left-aligned.
+
+8. Add a `describe('empty and error results')` block: test that `searchFlights` returning `[]` prints exactly `'No flights found.\n'` to stdout and exits 0; test that `searchFlights` throwing an error writes the error message to stderr, exits 1, and stdout is empty.
+
+9. Run `npx vitest run src/cli.test.ts` and fix any failures related to import paths, mock setup, or assertion details until all tests pass green.
+=== End Prompt ===
+
+=== epam Output (attempt 1) ===

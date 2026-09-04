@@ -1,0 +1,227 @@
+=== Prompt for SKY-005 (attempt 1) ===
+Implement user story SKY-005: Build HTML dashboard at src/public/index.html
+
+## Story Description
+Create src/public/index.html — a clean, self-contained single-file HTML dashboard (no build step, no npm, just HTML+CSS+vanilla JS). The dashboard must: (1) have a search form with fields: From (IATA code), To (IATA code), Date (date picker), Adults (number input, default 1, min 1); (2) on form submit, call GET /search?from=&to=&date=&adults= on the same origin and render results; (3) display results in a styled table with columns: Airline, Price, Departure, Arrival, Duration, Stops; (4) include a 'Find Cheapest' button that calls GET /cheapest on the same origin and highlights or separately labels the cheapest row; (5) show a loading indicator while requests are in-flight and display error messages when requests fail; (6) support dark mode via CSS custom properties and prefers-color-scheme; (7) be mobile-responsive via responsive CSS (flexbox/grid or media queries). The file must be entirely self-contained — no external CDN links, no imported scripts or stylesheets.
+
+## Acceptance Criteria
+- src/public/index.html exists and is served by the Express app as a static file
+- Search form renders four fields: From (text, IATA placeholder), To (text, IATA placeholder), Date (type=date), Adults (type=number, default value 1, min 1)
+- Submitting the form issues GET /search?from=&to=&date=&adults= with the correct field values URL-encoded via encodeURIComponent or URLSearchParams
+- A loading indicator (spinner or 'Searching...' text) is visible while the /search request is in-flight and hidden once the request resolves, whether the response is a success or an error
+- On a successful /search response the results table renders one row per flight with columns: Airline, Price, Departure, Arrival, Duration, Stops
+- If /search returns an empty flights array (data.flights.length === 0) the table is replaced or accompanied by a 'No results found' message
+- If /search returns an HTTP error or the fetch rejects, an error message is displayed to the user (not just a console log)
+- 'Find Cheapest' button is present and clicking it issues GET /cheapest?from=&to=&date=&adults= on the same origin, passing the same parameter values currently in the search form fields
+- A loading indicator is visible while the /cheapest request is in-flight and hidden once the request resolves (success or error)
+- If /cheapest returns an HTTP error or the fetch rejects, an error message is displayed to the user
+- The row matching the /cheapest response is visually distinguished in the results table (e.g. highlighted background or 'Cheapest' badge); if no table results are displayed yet, the cheapest flight details (Airline, Price, Departure, Arrival, Duration, Stops) are shown in a separate summary section
+- The HTML file contains no <link rel=stylesheet href=...> pointing to external origins and no <script src=...> pointing to external origins — all CSS and JS are inline
+- The page applies distinct background and foreground colors when the OS prefers dark mode (via @media (prefers-color-scheme: dark) using CSS custom properties)
+- On a viewport width of 375px the form fields and results table are usable without horizontal scrolling (table scrolls horizontally within its container or stacks appropriately)
+- The page has a <title> element and each form field has a corresponding <label> element associated via for/id
+- All flight data from API responses is rendered using safe DOM methods (e.g. textContent, createElement, setAttribute) rather than by interpolating API-supplied strings directly into innerHTML — this prevents XSS if an upstream API field contains HTML or script content
+- The search submit button is disabled while a /search request is in-flight; the 'Find Cheapest' button is disabled while a /cheapest request is in-flight — preventing duplicate in-flight requests
+- Submitting a new search clears any previously rendered results table rows and cheapest highlight before rendering the new response
+- The results table uses <thead> containing <th scope='col'> elements for each column header (Airline, Price, Departure, Arrival, Duration, Stops) and a <tbody> for data rows, so screen readers can associate cells with headers
+- Loading indicators and error messages are placed in or associated with an aria-live='polite' region or role='alert' element so that screen reader users are notified of state changes without requiring focus movement
+
+## Technical Notes
+- workingDir: /tmp/skyscanner-app
+- files: ["/tmp/skyscanner-app/src/public/index.html"]
+- dependsOn: ["SKY-004"]
+
+## Files to Create/Modify
+/tmp/skyscanner-app/src/public/index.html
+
+## Dependencies
+None
+
+## Instructions
+1. Implement all acceptance criteria for this story
+2. Follow the project's existing code patterns and conventions
+3. Create any necessary files in the locations specified
+4. Ensure code compiles/runs without errors
+5. Do NOT create tests unless explicitly required in acceptance criteria
+
+After implementation, provide a brief summary of what was created/modified.
+
+## Relevant Knowledge Base Entries
+No prior KB entries match your agent role yet.
+
+## Knowledge Base Contribution
+Your assigned KB entry ID for this run: **KB-008**
+
+If you discover a non-obvious pattern, gotcha, or anti-pattern during this implementation (or this is a retry), append exactly one entry to `orchestrations/agents/KB.md` using this format:
+
+```markdown
+## KB-008 -- 2026-06-04
+
+**Category:** <backend|frontend|infrastructure|testing|orchestration>
+**AgentRole:** <your agentRole from the story>
+**Tags:** <comma-separated tech keywords, e.g. typescript, node, cli>
+**Trigger:** <retry|first-success>
+**StoryRef:** SKY-005
+
+<One concise paragraph: the specific pattern, gotcha, or anti-pattern. Precise enough that a future Claude instance can apply it without re-discovering it.>
+```
+
+Only write an entry if the knowledge is genuinely non-obvious. Skip trivial observations.
+=== End Prompt ===
+
+=== claude Output (attempt 1) ===
+Credit balance is too low
+
+=== claude exited with code 1 ===
+=== Prompt for SKY-005 (attempt 2) ===
+Implement user story SKY-005: Build HTML dashboard at src/public/index.html
+
+## Story Description
+Create src/public/index.html — a clean, self-contained single-file HTML dashboard (no build step, no npm, just HTML+CSS+vanilla JS). The dashboard must: (1) have a search form with fields: From (IATA code), To (IATA code), Date (date picker), Adults (number input, default 1, min 1); (2) on form submit, call GET /search?from=&to=&date=&adults= on the same origin and render results; (3) display results in a styled table with columns: Airline, Price, Departure, Arrival, Duration, Stops; (4) include a 'Find Cheapest' button that calls GET /cheapest on the same origin and highlights or separately labels the cheapest row; (5) show a loading indicator while requests are in-flight and display error messages when requests fail; (6) support dark mode via CSS custom properties and prefers-color-scheme; (7) be mobile-responsive via responsive CSS (flexbox/grid or media queries). The file must be entirely self-contained — no external CDN links, no imported scripts or stylesheets.
+
+## Acceptance Criteria
+- src/public/index.html exists and is served by the Express app as a static file
+- Search form renders four fields: From (text, IATA placeholder), To (text, IATA placeholder), Date (type=date), Adults (type=number, default value 1, min 1)
+- Submitting the form issues GET /search?from=&to=&date=&adults= with the correct field values URL-encoded via encodeURIComponent or URLSearchParams
+- A loading indicator (spinner or 'Searching...' text) is visible while the /search request is in-flight and hidden once the request resolves, whether the response is a success or an error
+- On a successful /search response the results table renders one row per flight with columns: Airline, Price, Departure, Arrival, Duration, Stops
+- If /search returns an empty flights array (data.flights.length === 0) the table is replaced or accompanied by a 'No results found' message
+- If /search returns an HTTP error or the fetch rejects, an error message is displayed to the user (not just a console log)
+- 'Find Cheapest' button is present and clicking it issues GET /cheapest?from=&to=&date=&adults= on the same origin, passing the same parameter values currently in the search form fields
+- A loading indicator is visible while the /cheapest request is in-flight and hidden once the request resolves (success or error)
+- If /cheapest returns an HTTP error or the fetch rejects, an error message is displayed to the user
+- The row matching the /cheapest response is visually distinguished in the results table (e.g. highlighted background or 'Cheapest' badge); if no table results are displayed yet, the cheapest flight details (Airline, Price, Departure, Arrival, Duration, Stops) are shown in a separate summary section
+- The HTML file contains no <link rel=stylesheet href=...> pointing to external origins and no <script src=...> pointing to external origins — all CSS and JS are inline
+- The page applies distinct background and foreground colors when the OS prefers dark mode (via @media (prefers-color-scheme: dark) using CSS custom properties)
+- On a viewport width of 375px the form fields and results table are usable without horizontal scrolling (table scrolls horizontally within its container or stacks appropriately)
+- The page has a <title> element and each form field has a corresponding <label> element associated via for/id
+- All flight data from API responses is rendered using safe DOM methods (e.g. textContent, createElement, setAttribute) rather than by interpolating API-supplied strings directly into innerHTML — this prevents XSS if an upstream API field contains HTML or script content
+- The search submit button is disabled while a /search request is in-flight; the 'Find Cheapest' button is disabled while a /cheapest request is in-flight — preventing duplicate in-flight requests
+- Submitting a new search clears any previously rendered results table rows and cheapest highlight before rendering the new response
+- The results table uses <thead> containing <th scope='col'> elements for each column header (Airline, Price, Departure, Arrival, Duration, Stops) and a <tbody> for data rows, so screen readers can associate cells with headers
+- Loading indicators and error messages are placed in or associated with an aria-live='polite' region or role='alert' element so that screen reader users are notified of state changes without requiring focus movement
+
+## Technical Notes
+- workingDir: /tmp/skyscanner-app
+- files: ["/tmp/skyscanner-app/src/public/index.html"]
+- dependsOn: ["SKY-004"]
+
+## Files to Create/Modify
+/tmp/skyscanner-app/src/public/index.html
+
+## Dependencies
+None
+
+## Instructions
+1. Implement all acceptance criteria for this story
+2. Follow the project's existing code patterns and conventions
+3. Create any necessary files in the locations specified
+4. Ensure code compiles/runs without errors
+5. Do NOT create tests unless explicitly required in acceptance criteria
+
+After implementation, provide a brief summary of what was created/modified.
+
+## Relevant Knowledge Base Entries
+No prior KB entries match your agent role yet.
+
+## Knowledge Base Contribution
+Your assigned KB entry ID for this run: **KB-008**
+**This is retry attempt 1** — a previous attempt failed. You MUST write a KB entry documenting what went wrong and what you changed.
+
+If you discover a non-obvious pattern, gotcha, or anti-pattern during this implementation (or this is a retry), append exactly one entry to `orchestrations/agents/KB.md` using this format:
+
+```markdown
+## KB-008 -- 2026-06-04
+
+**Category:** <backend|frontend|infrastructure|testing|orchestration>
+**AgentRole:** <your agentRole from the story>
+**Tags:** <comma-separated tech keywords, e.g. typescript, node, cli>
+**Trigger:** <retry|first-success>
+**StoryRef:** SKY-005
+
+<One concise paragraph: the specific pattern, gotcha, or anti-pattern. Precise enough that a future Claude instance can apply it without re-discovering it.>
+```
+
+Only write an entry if the knowledge is genuinely non-obvious. Skip trivial observations.
+=== End Prompt ===
+
+=== claude Output (attempt 2) ===
+Credit balance is too low
+
+=== claude exited with code 1 ===
+=== Prompt for SKY-005 (attempt 3) ===
+Implement user story SKY-005: Build HTML dashboard at src/public/index.html
+
+## Story Description
+Create src/public/index.html — a clean, self-contained single-file HTML dashboard (no build step, no npm, just HTML+CSS+vanilla JS). The dashboard must: (1) have a search form with fields: From (IATA code), To (IATA code), Date (date picker), Adults (number input, default 1, min 1); (2) on form submit, call GET /search?from=&to=&date=&adults= on the same origin and render results; (3) display results in a styled table with columns: Airline, Price, Departure, Arrival, Duration, Stops; (4) include a 'Find Cheapest' button that calls GET /cheapest on the same origin and highlights or separately labels the cheapest row; (5) show a loading indicator while requests are in-flight and display error messages when requests fail; (6) support dark mode via CSS custom properties and prefers-color-scheme; (7) be mobile-responsive via responsive CSS (flexbox/grid or media queries). The file must be entirely self-contained — no external CDN links, no imported scripts or stylesheets.
+
+## Acceptance Criteria
+- src/public/index.html exists and is served by the Express app as a static file
+- Search form renders four fields: From (text, IATA placeholder), To (text, IATA placeholder), Date (type=date), Adults (type=number, default value 1, min 1)
+- Submitting the form issues GET /search?from=&to=&date=&adults= with the correct field values URL-encoded via encodeURIComponent or URLSearchParams
+- A loading indicator (spinner or 'Searching...' text) is visible while the /search request is in-flight and hidden once the request resolves, whether the response is a success or an error
+- On a successful /search response the results table renders one row per flight with columns: Airline, Price, Departure, Arrival, Duration, Stops
+- If /search returns an empty flights array (data.flights.length === 0) the table is replaced or accompanied by a 'No results found' message
+- If /search returns an HTTP error or the fetch rejects, an error message is displayed to the user (not just a console log)
+- 'Find Cheapest' button is present and clicking it issues GET /cheapest?from=&to=&date=&adults= on the same origin, passing the same parameter values currently in the search form fields
+- A loading indicator is visible while the /cheapest request is in-flight and hidden once the request resolves (success or error)
+- If /cheapest returns an HTTP error or the fetch rejects, an error message is displayed to the user
+- The row matching the /cheapest response is visually distinguished in the results table (e.g. highlighted background or 'Cheapest' badge); if no table results are displayed yet, the cheapest flight details (Airline, Price, Departure, Arrival, Duration, Stops) are shown in a separate summary section
+- The HTML file contains no <link rel=stylesheet href=...> pointing to external origins and no <script src=...> pointing to external origins — all CSS and JS are inline
+- The page applies distinct background and foreground colors when the OS prefers dark mode (via @media (prefers-color-scheme: dark) using CSS custom properties)
+- On a viewport width of 375px the form fields and results table are usable without horizontal scrolling (table scrolls horizontally within its container or stacks appropriately)
+- The page has a <title> element and each form field has a corresponding <label> element associated via for/id
+- All flight data from API responses is rendered using safe DOM methods (e.g. textContent, createElement, setAttribute) rather than by interpolating API-supplied strings directly into innerHTML — this prevents XSS if an upstream API field contains HTML or script content
+- The search submit button is disabled while a /search request is in-flight; the 'Find Cheapest' button is disabled while a /cheapest request is in-flight — preventing duplicate in-flight requests
+- Submitting a new search clears any previously rendered results table rows and cheapest highlight before rendering the new response
+- The results table uses <thead> containing <th scope='col'> elements for each column header (Airline, Price, Departure, Arrival, Duration, Stops) and a <tbody> for data rows, so screen readers can associate cells with headers
+- Loading indicators and error messages are placed in or associated with an aria-live='polite' region or role='alert' element so that screen reader users are notified of state changes without requiring focus movement
+
+## Technical Notes
+- workingDir: /tmp/skyscanner-app
+- files: ["/tmp/skyscanner-app/src/public/index.html"]
+- dependsOn: ["SKY-004"]
+
+## Files to Create/Modify
+/tmp/skyscanner-app/src/public/index.html
+
+## Dependencies
+None
+
+## Instructions
+1. Implement all acceptance criteria for this story
+2. Follow the project's existing code patterns and conventions
+3. Create any necessary files in the locations specified
+4. Ensure code compiles/runs without errors
+5. Do NOT create tests unless explicitly required in acceptance criteria
+
+After implementation, provide a brief summary of what was created/modified.
+
+## Relevant Knowledge Base Entries
+No prior KB entries match your agent role yet.
+
+## Knowledge Base Contribution
+Your assigned KB entry ID for this run: **KB-008**
+**This is retry attempt 2** — a previous attempt failed. You MUST write a KB entry documenting what went wrong and what you changed.
+
+If you discover a non-obvious pattern, gotcha, or anti-pattern during this implementation (or this is a retry), append exactly one entry to `orchestrations/agents/KB.md` using this format:
+
+```markdown
+## KB-008 -- 2026-06-04
+
+**Category:** <backend|frontend|infrastructure|testing|orchestration>
+**AgentRole:** <your agentRole from the story>
+**Tags:** <comma-separated tech keywords, e.g. typescript, node, cli>
+**Trigger:** <retry|first-success>
+**StoryRef:** SKY-005
+
+<One concise paragraph: the specific pattern, gotcha, or anti-pattern. Precise enough that a future Claude instance can apply it without re-discovering it.>
+```
+
+Only write an entry if the knowledge is genuinely non-obvious. Skip trivial observations.
+=== End Prompt ===
+
+=== claude Output (attempt 3) ===
+Credit balance is too low
+
+=== claude exited with code 1 ===

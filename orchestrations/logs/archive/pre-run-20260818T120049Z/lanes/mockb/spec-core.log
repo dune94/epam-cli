@@ -1,0 +1,19 @@
+spec-mode: fast-path qwen/z-ai/glm-5.2 (skipping MiniMax)
+spec-mode: detective for mockb = schedule-investigator (minted for this codeline)
+spec-mode: fast-path qwen/z-ai/glm-5.2 (skipping MiniMax)
+spec-mode: fast-path qwen/z-ai/glm-5.1 (skipping MiniMax)
+spec-mode: fast-path qwen/z-ai/glm-5.2 (skipping MiniMax)
+spec-mode: VC guard flagged mechanism in MOCK3-2 VC: [Internal function name that produces the rendered string; naming it in a verification criterion prescribes the implementation mechanism rather than the observable surface (the rendered departure-board string).] "The string returned by formatStops contains the name of every stop in the input "
+spec-mode: MOCK3-2 — 3 verification criteria persisted (source: both, resolution: regenerated)
+spec-mode: fast-path qwen/z-ai/glm-5.1 (skipping MiniMax)
+Failed to parse JSON for tag SPEC_AGENT: Unexpected token 'I', "I don't ha"... is not valid JSON
+spec-mode: SPEC_AGENT: no parseable output — the tag was missing, empty, or contained prose instead of JSON
+spec-mode: speckit returned null for MOCK3-2 (attempt 2/3) — retrying transient failure
+spec-mode: fast-path qwen/z-ai/glm-5.1 (skipping MiniMax)
+spec-mode: SPEC_AGENT: missing required field "storyId" — required by its own tool definition
+spec-mode: brownfield — ignoring 5 AC(s) speckit produced for MOCK3-2; ACs are out of scope and VCs come from the description
+spec-mode: fast-path qwen/z-ai/glm-5.2 (skipping MiniMax)
+spec-mode: fast-path qwen/z-ai/glm-5.2 (skipping MiniMax)
+spec-mode: MODEL_REVIEW: the array is empty — a report about nothing is not a report
+spec-mode: LLM model review completed for 0 stories
+spec-mode: completed for phase core (run 20260818T101809Z)

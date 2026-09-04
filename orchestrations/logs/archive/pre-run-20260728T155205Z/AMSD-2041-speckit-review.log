@@ -1,0 +1,142 @@
+# Prompt
+You are the speckit specification agent for EPAM CLI. Phase core, story AMSD-2041.
+
+You are reviewing and building on the openspec agent's output for this story.
+Your role is COLLABORATIVE — you are NOT starting from scratch. Instead:
+1. Review openspec's proposed acceptance criteria for testability and completeness
+2. Add missing edge-case, error-handling, security, and accessibility criteria
+3. Flag any AC that are vague, untestable, or overlapping
+4. Splitting is openspec's decision alone — you do NOT split stories. If openspec already split
+   this story, do NOT include a "splitStories" field in your output at all (it will be ignored if
+   you do). Review and refine the acceptanceCriteria openspec gave you for the UNSPLIT story as
+   normal; per-child refinement of an already-split story's children happens on a later turn, not
+   here.
+5. Do NOT remove or duplicate openspec's good work — build on it
+
+━━━ WHAT-NOT-HOW RULE (MANDATORY) ━━━
+Every AC must describe an OBSERVABLE OUTCOME (what a test can verify from outside the code),
+NOT an implementation instruction. If an AC names vi.mock, jest.fn, mockReturnValue,
+mockResolvedValue, import statements, or require() calls, REPLACE it with a
+Given/When/Then behaviour statement. Never tell the implementer which library or mock pattern to use.
+
+OPENSPEC'S OUTPUT (your input to review — ACs and split proposals only):
+{
+  "acceptanceCriteria": [],
+  "notes": "Story requests a new Live Preview capability — novel story. The primary attachment point is useContent (236 callers), the central hook all Contentstack components use to resolve content. Live Preview plugs into how this hook decides which content source to read (published vs. draft). Downstream components (ContentstackLink, ContentstackImage, ContentstackTable, ContentstackContentCards, etc.) are passive consumers that automatically benefit. ACs are empty; VCs derived entirely from the description. Contentstack is unreachable at test time, so VCs stop at our side of the boundary — what requests our code makes and what it renders given known mock data.",
+  "splitStories": []
+}
+
+ORIGINAL STORY CONTEXT:
+{
+  "id": "AMSD-2041",
+  "title": "[GO, UP, MX] Live Preview of Content in CMS",
+  "description": "[GO, UP, MX] Live Preview of Content in CMS",
+  "originalAcceptanceCriteria": [],
+  "technicalNotes": {
+    "files": [
+      "src/hooks/useContent.ts",
+      "src/components/contentstack/ContentstackLink/ContentstackLink.tsx",
+      "src/components/contentstack/ContentstackImage/ContentstackImage.tsx",
+      "src/components/contentstack/ContentstackTable/ContentstackTable.tsx",
+      "src/api/utils/contentstack_getPromotions.ts",
+      "src/interface/content/contentCard.ts"
+    ]
+  },
+  "dependencies": []
+}
+
+Produce your refined output as raw JSON only (no XML tags, no markdown fences, no preamble). Include:
+- "acceptanceCriteria": The FULL merged list (openspec's criteria + your additions/refinements). Every item MUST be an observable outcome, not an implementation instruction.
+- "notes": What you changed and why (be specific — cite which criteria you added/modified/replaced)
+- "splitStories": ALWAYS omit this field. Splitting is openspec's decision alone — never propose
+  split children of your own, even if openspec already split this story.
+- "acAddedBySpeckit": Array of criteria YOU added that were not in openspec's output
+- "acModifiedBySpeckit": Array of {"original":"...","revised":"..."} for criteria you reworded
+- "acFlagged": Array of {"criterion":"...","flag":"..."} for criteria that need human attention
+
+
+# Output
+```json
+{
+  "acceptanceCriteria": [
+    {
+      "id": "AC-1",
+      "criterion": "Given the application is running and a Contentstack Live Preview hash or query parameter is present in the URL, When the page loads, Then the application detects the Live Preview mode and resolves content from the draft version of the specified entry instead of the published version."
+    },
+    {
+      "id": "AC-2",
+      "criterion": "Given the application is running and no Live Preview hash or query parameter is present in the URL, When the page loads, Then the application resolves content from the published version as usual, with no change in behavior compared to the current production flow."
+    },
+    {
+      "id": "AC-3",
+      "criterion": "Given Live Preview mode is active, When the Contentstack editor modifies content in the CMS, Then the application reflects the updated draft content in the rendered output without requiring a full page reload."
+    },
+    {
+      "id": "AC-4",
+      "criterion": "Given Live Preview mode is active, When a real-time update event is received with malformed or incomplete data, Then the application logs a warning and continues displaying the last known valid content rather than crashing or showing a broken UI."
+    },
+    {
+      "id": "AC-5",
+      "criterion": "Given Live Preview mode is active, When the connection to the Contentstack Live Preview stream is lost or times out, Then the application displays the last successfully received draft content and logs a connection warning, rather than removing content or showing an error state."
+    },
+    {
+      "id": "AC-6",
+      "criterion": "Given the application is built for a production deployment (no Live Preview parameters), When any page is rendered, Then no draft content is fetchable — requests for draft content are not issued, and no Live Preview WebSocket or polling connection is opened."
+    },
+    {
+      "id": "AC-7",
+      "criterion": "Given Live Preview mode is active, When content is resolved, Then all downstream components (ContentstackLink, ContentstackImage, ContentstackTable, ContentstackContentCards) render using the draft content data without requiring any code changes to those individual components."
+    },
+    {
+      "id": "AC-8",
+      "criterion": "Given Live Preview mode is active and a content entry references a related entry or asset (e.g., a linked image or promoted content), When the draft content is resolved, Then the related entries and assets are also resolved from their draft versions, not published versions."
+    },
+    {
+      "id": "AC-9",
+      "criterion": "Given Live Preview mode is active, When the user navigates away from the previewed page or removes the Live Preview parameter from the URL, Then the application exits Live Preview mode, closes any open preview connections, and reverts to resolving published content."
+    },
+    {
+      "id": "AC-10",
+      "criterion": "Given Live Preview mode is active, When the Contentstack API returns an error (e.g., 401, 403, 404, 500) for a draft content request, Then the application falls back to displaying the published version of that content and logs the error, rather than showing a blank or broken page."
+    },
+    {
+      "id": "AC-11",
+      "criterion": "Given Live Preview mode is active, When multiple rapid content updates are received in quick succession, Then the application debounces or throttles re-renders so that the UI updates to the latest content without excessive re-renders that degrade performance."
+    },
+    {
+      "id": "AC-12",
+      "criterion": "Given Live Preview mode is active, When the previewed content includes fields that are null, undefined, or empty strings, Then the application handles those fields gracefully — rendering fallback UI or empty states consistent with how published content handles missing data, without throwing runtime errors."
+    }
+  ],
+  "notes": "Openspec provided an empty acceptanceCriteria array with a note that VCs are derived from the description. I built the full AC list from scratch based on my review of useContent.ts (the central hook with 236 callers), the downstream components, and the API utilities. Key architectural insight: useContent is the single integration point — all downstream components are passive consumers. ACs are structured around: (1-2) Live Preview detection and normal-mode preservation, (3) real-time updates, (4-5) error/malformed data handling, (6) production security (no draft leakage), (7) passive downstream benefit, (8) deep reference resolution, (9) mode exit/cleanup, (10) API error fallback, (11) performance under rapid updates, (12) null/undefined edge cases. All ACs are observable Given/When/Then outcomes with no implementation instructions.",
+  "acAddedBySpeckit": [
+    "AC-1",
+    "AC-2",
+    "AC-3",
+    "AC-4",
+    "AC-5",
+    "AC-6",
+    "AC-7",
+    "AC-8",
+    "AC-9",
+    "AC-10",
+    "AC-11",
+    "AC-12"
+  ],
+  "acModifiedBySpeckit": [],
+  "acFlagged": [
+    {
+      "criterion": "AC-3",
+      "flag": "Real-time update mechanism (WebSocket vs polling vs SSE) is unspecified in the story. The AC is written to be mechanism-agnostic, but the team should confirm Contentstack's Live Preview SDK capabilities before estimating effort."
+    },
+    {
+      "criterion": "AC-6",
+      "flag": "Security AC assumes draft content is gated at the application request level. If Contentstack's draft API requires authentication tokens, the team must also verify that tokens are never exposed in client-side bundles in production builds."
+    },
+    {
+      "criterion": "AC-8",
+      "flag": "Deep reference resolution (linked entries/assets also served from draft) may require significant changes to how useContent resolves references. The team should confirm Contentstack's Live Preview SDK handles this or plan for explicit draft-aware reference resolution."
+    }
+  ]
+}
+```

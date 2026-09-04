@@ -1,0 +1,432 @@
+# Prompt
+YOUR PREVIOUS PROPOSAL WAS PARTLY REFUSED. Each line is a proposal that was NOT accepted,
+and the reason it failed the roster contract. Re-propose those roles correcting exactly
+that, and do not re-propose any role that was already accepted:
+
+- gotransit-checkout-detective: brief names 1 path(s) that do not exist in codeline 'gotransit': src/lib
+THESE AGENTS ALREADY EXIST AND WILL BE PART OF THIS TEAM. Do NOT propose any of them
+again, and do not propose a role whose remit overlaps one of them under a different name.
+Propose only what is genuinely missing:
+
+- agent-skills-agent
+- agent-systems-engineer
+- billing-engineer
+- changelog-agent
+- cli-ux-engineer
+- code-graph-detective
+- codeline-bridge-agent
+- dashboard-orchestrator-agent
+- dashboard-test-agent
+- dashboard-update-agent
+- dedup-detector
+- discovery-vocabulary-agent
+- failure-analyst
+- frontend-engineer
+- fuzz-weaver
+- gate-finding-analyst
+- generator
+- grooming-coordinator
+- guard-vocabulary-agent
+- guide-author
+- kb-change-reviewer
+- lightpanda-agent
+- mutant-hunter
+- openspec-agent
+- perf-sentinel
+- playwright-agent
+- prd-change-reviewer
+- prd-model-coordinator
+- prd-project-manager-agent
+- profile-augmentor
+- project-initiator-agent
+- readiness-checker
+- retry-extension-coordinator
+- review-agent
+- review-ranger
+- roster-reviewer
+- runtime-boundary
+- sast-sentinel
+- spec-coordinator-agent
+- spec-validator
+- speckit-agent
+- spike-agent
+- story-ac-remediator
+- tc-writer-agent
+- team-lead-agent
+- test-coordinator-agent
+- test-engineer
+- ticket-link-agent
+- typescript-engineer
+- ui-engineer
+
+If the work needs something one of these already covers, that need is MET — say nothing about
+it. A gap you report that one of these agents already fills is a false gap, and it costs the
+team a role it does not need.
+
+WHAT A SURVEY OF THESE REPOSITORIES REPORTED. These are LEADS, not settled facts.
+
+A single pass swept the whole estate with limited tools, and it has been wrong: on
+2026-08-08 it reported that a repository contained no reference to a package that its
+own source uses in twenty files, and a roster was minted on that. Treat every line
+below as what the survey BELIEVES, to be confirmed by the investigator that owns the
+codeline. Do NOT restate any of it in a brief as established, verified, or confirmed —
+a brief is inherited whole and re-checked by nothing, so a wrong lead written as a fact
+becomes an instruction.
+
+Propose roles for the codelines the work appears to REACH. A codeline reported
+no_work_found is not confirmed clear, and one reported not_investigated or failed was
+not established either way — do not treat any of the three as proof about that repo:
+
+- gotransit: in_scope — areas: src/components/pages/CheckoutPage
+    files it opened: src/components/pages/CheckoutPage/CheckoutForm.tsx, src/components/pages/CheckoutPage/CheckoutFormProvider.tsx
+    evidence: Searched for confirmEmail/ConfirmEmail across src, found it used in CheckoutForm.tsx, CheckoutFormProvider.tsx, types.ts, and test files. Read CheckoutForm.tsx lines 250-320: the confirmEmail field's react-hook-form 'validate' rule at line 306 does `if (email && value && value !== email) return t('TRM774')` — a strict, case-sensitive string comparison between the email and confirmEmail field values, which matches the ticket's description of the bug (uppercase vs lowercase in the two fields incorrectly flagged as mismatch). Searched src/pages, src/services, src/lib for server-side confirmEmail usage — no matches, so this is client-side only.
+
+AND — also a recommendation about the TEAM — the survey reports these codelines need
+work WRITTEN, not merely read. An investigator cannot change code; every story is
+assigned to an implementer, so propose at least one implementer that can build this:
+
+- gotransit: must be able to write Make the confirmEmail validation in the checkout form case-insensitive, and update/add unit tests in the existing CheckoutForm/Checkout test suites to cover mixed-case email matches. (because The validate rule at CheckoutForm.tsx ~line 306 does a raw value !== email comparison, causing a mismatch error when casing differs; existing test files (Checkout.spec.tsx, CheckoutForm.spec.tsx) already exercise this field and are the natural place to extend coverage.)
+WHAT YOU MAY STATE AS FACT.
+
+What a repository contains or declares — you or a survey read it, and the next agent can
+read it too. State it freely.
+
+What an external API, SDK or service accepts — its option names, field names, endpoints,
+hosts, token kinds — you may NOT state as your own knowledge. If a document quoted above
+says it, attribute it ("the linked documentation states..."). Otherwise instruct the role
+to verify it against the installed package before relying on it.
+
+Never write that one API key, field or option is correct and another is wrong. A claim of
+that shape is inherited as an instruction, is not re-checked by anything, and has already
+caused correct work to be rejected across three codelines.
+WHO WRITES THE TESTS — NOT THESE ROLES.
+
+A dedicated agent of this pipeline writes the tests. It takes its own turn after the fix
+is committed and owns the reproducing test, and the roles you propose are separately
+FORBIDDEN from creating or editing any test file.
+
+So: do not propose a test-writing, QA or test-automation role — that work is already owned.
+And a brief must not say the role writes, owns, colocates or maintains tests, in any words.
+A role whose brief claims test authorship is handed two contradictory instructions and
+spends its turns fighting itself. Describe what the role BUILDS.
+You are a senior engineering manager designing an AI agent team for a software project.
+
+The following 21 fixed roles are ALWAYS present and must NOT be reproduced:
+spec-coordinator-agent, openspec-agent, speckit-agent, team-lead-agent, review-agent, test-coordinator-agent, sast-sentinel, spec-validator, review-ranger, mutant-hunter, fuzz-weaver, perf-sentinel, hygiene-sentinel, design-sentinel, pattern-sentinel, project-initiator-agent, prd-project-manager-agent, agent-skills-agent, dashboard-orchestrator-agent, dashboard-test-agent, dashboard-update-agent
+
+Given the project manifest, tech stack, and clarification answers, propose 2-6 project-specific engineering agent roles that will implement the user stories. Each role should map to a distinct domain of the project — one per domain, e.g. a react-frontend role, a postgres-data role, an auth-security role. The exact name shape is fixed below.
+
+Every role is one of TWO KINDS, and you must state which:
+
+- "implementer" — WRITES the change. This is the role that edits source and makes the work
+  happen. An implementer spans the project, so its codeline is "*".
+- "investigator" — READS one codeline and characterises what is there for the implementer. It
+  never writes. An investigator names exactly ONE codeline, spelled as listed in scope.
+
+YOU MUST PROPOSE AT LEAST ONE IMPLEMENTER. A team of investigators can describe the work and
+cannot do it: every story is assigned to an implementer, so a roster without one leaves every
+story with nobody to write it and the run cannot proceed. Investigators are optional and
+additive — propose them where a codeline genuinely needs its own reader.
+
+The survey above recommends both: which codelines need investigating, and which need work
+written. Those are recommendations about the team, not instructions — you decide the roster.
+
+For each role provide:
+- name: kebab-case, "<domain>-<suffix>", where the suffix is fixed by the kind:
+  - implementer: ends in "-engineer" or "-fixer"
+  - investigator: ends in "-detective" or "-investigator"
+  No other ending is routable — a name outside these shapes cannot be assigned to any seam
+  and the run stops at the mint.
+- kind: exactly "implementer" or "investigator"
+- codeline: for an investigator, the ONE codeline it reads; for an implementer, "*"
+- systemPrompt: A detailed system prompt (150-300 words) describing the agent's expertise, the project's conventions, key files/directories they own, coding patterns they follow, and tools they use. Be specific to this project.
+- rationale: One sentence explaining why THIS project needs THIS role. It is read by a human
+  reviewing the team and seeds the agent's knowledge base, so it must say something.
+
+Respond with ONLY valid JSON (no markdown fences):
+{
+  "proposedAgents": [
+    { "name": "<string>", "kind": "<implementer|investigator>", "codeline": "<name or *>", "systemPrompt": "<string>", "rationale": "<string>" }
+  ]
+}
+
+THE WORK THIS PROJECT HAS BEEN ASKED TO DO (real tickets from the tracker):
+- AMSD-1919: Go‑Checkout Page - Email & Confirm Email Case Sensitivity
+Components: GO
+   On the Go‑Checkout page related to the Email and Confirm Email fields. When the same email is entered but with different letter casing (e.g., uppercase in one field and lowercase in the other), the system flags it as a mismatch. email comparisons are case‑insensitive. It should not give error message for same email address regardless it is upper case or lower case.
+  Links on this ticket: https://metrolinx.atlassian.net/wiki/spaces/CE/pages/3561422849/Checkout.+Page+layout#AC4 , https://metrolinx.atlassian.net/wiki/spaces/CE/pages/3052666881/2.2.4+GO+Dictionary+of+Terms.+Part+3#TRM774 , https://metrolinx.atlassian.net/wiki/spaces/CE/pages/3962339955/March+26+2026 , https://metrolinx.atlassian.net/wiki/spaces/CE/pages/3561422849/Checkout.+Page+layout?xpis=eyJicmlkZ2UiOiJzbWFydExpbmtzIiwiaWQiOiIxNzg1MjUxODA4MDAzIiwic291cmNlIjoiamlyYS1KU1cifQ%3D%3D#AC4
+
+WHAT THIS CODELINE DECLARES IT DEPENDS ON (from its own manifest — ground truth
+about the stack, not inference from the ticket text). Where a ticket names a category
+generically, these names say which product is actually in use. Do NOT propose a role built
+around a product that does not appear here:
+- @algolia/autocomplete-js
+- @azure/search-documents
+- @contentstack/utils
+- @googlemaps/js-api-loader
+- @hookform/error-message
+- @metrolinx/cx-shared
+- @react-aria/focus
+- @stripe/react-stripe-js
+- @stripe/stripe-js
+- @uniformdev/context
+- @uniformdev/context-gtag
+- @uniformdev/context-react
+- akamai-edgegrid
+- algoliasearch
+- aria-hidden
+- axios
+- body-scroll-lock
+- busboy
+- classnames
+- cloudinary
+- contentstack
+- core-js
+- country-state-city
+- date-fns
+- html-react-parser
+- i18next
+- joi
+- jsonwebtoken
+- lodash.capitalize
+- lodash.chunk
+- lodash.clonedeep
+- lodash.debounce
+- lodash.filter
+- lodash.isempty
+- lodash.isequal
+- lodash.isnil
+- lodash.isnumber
+- lodash.isobject
+- lodash.isstring
+- lodash.isundefined
+- lodash.keyby
+- lodash.mergewith
+- lodash.noop
+- lodash.omit
+- lodash.omitby
+- lodash.orderby
+- lodash.reject
+- micro
+- next
+- next-auth
+- next-i18next
+- next-sitemap
+- object-hash
+- pino
+- qs
+- react
+- react-autosuggest
+- react-beforeunload
+- react-dom
+- react-dropzone
+- react-error-boundary
+- react-focus-lock
+- react-hook-form
+- react-i18next
+- react-select
+- react-youtube
+- resize-observer-polyfill
+- swiper
+- swr
+- uuid
+- @commitlint/cli
+- @contentstack/management
+- @next/bundle-analyzer
+- @tailwindcss/aspect-ratio
+- @tailwindcss/line-clamp
+- @testing-library/jest-dom
+- @testing-library/react
+- @testing-library/user-event
+- @trivago/prettier-plugin-sort-imports
+- @types/busboy
+- @types/form-data
+- @types/google.maps
+- @types/html-to-text
+- @types/jsonwebtoken
+- @types/lodash.capitalize
+- @types/lodash.chunk
+- @types/lodash.clonedeep
+- @types/lodash.debounce
+- @types/lodash.filter
+- @types/lodash.isempty
+- @types/lodash.isequal
+- @types/lodash.isnil
+- @types/lodash.isnumber
+- @types/lodash.isobject
+- @types/lodash.isstring
+- @types/lodash.isundefined
+- @types/lodash.keyby
+- @types/lodash.mergewith
+- @types/lodash.noop
+- @types/lodash.omit
+- @types/lodash.omitby
+- @types/lodash.orderby
+- @types/lodash.reject
+- @types/node
+- @types/object-hash
+- @types/qs
+- @types/react
+- @types/react-autosuggest
+- @types/react-beforeunload
+- @types/react-dom
+- @types/react-google-recaptcha
+- @types/react-input-mask
+- @types/uuid
+- @typescript-eslint/eslint-plugin
+- @typescript-eslint/parser
+- @uniformdev/cli
+- autoprefixer
+- babel-jest
+- commitlint-config-jira
+- commitlint-plugin-jira-rules
+- cssnano
+- dotenv
+- esbuild
+- eslint
+- eslint-config-next
+- eslint-config-prettier
+- eslint-plugin-jest
+- eslint-plugin-prettier
+- form-data
+- husky
+- i18next-scanner
+- i18next-scanner-typescript
+- jest
+- jest-environment-jsdom
+- jest-environment-node
+- jest-transform-css
+- lint-staged
+- node-mocks-http
+- pino-pretty
+- postcss
+- postcss-import
+- prettier
+- rimraf
+- stylelint
+- stylelint-config-prettier
+- stylelint-config-standard
+- tailwindcss
+- ts-jest
+- typescript
+
+
+DOCUMENTATION LINKED ON THESE TICKETS (fetched, quoted verbatim — the vendor's published contract):
+- https://metrolinx.atlassian.net/wiki/spaces/CE/pages/3561422849/Checkout.+Page+layout#AC4
+SOURCE: https://metrolinx.atlassian.net/wiki/spaces/CE/pages/3561422849/Checkout.+Page+layout#AC4
+
+HTTP 202
+
+
+
+- https://metrolinx.atlassian.net/wiki/spaces/CE/pages/3052666881/2.2.4+GO+Dictionary+of+Terms.+Part+3#TRM774
+SOURCE: https://metrolinx.atlassian.net/wiki/spaces/CE/pages/3052666881/2.2.4+GO+Dictionary+of+Terms.+Part+3#TRM774
+
+HTTP 202
+
+
+
+- https://metrolinx.atlassian.net/wiki/spaces/CE/pages/3962339955/March+26+2026
+SOURCE: https://metrolinx.atlassian.net/wiki/spaces/CE/pages/3962339955/March+26+2026
+
+HTTP 202
+
+
+
+- https://metrolinx.atlassian.net/wiki/spaces/CE/pages/3561422849/Checkout.+Page+layout?xpis=eyJicmlkZ2UiOiJzbWFydExpbmtzIiwiaWQiOiIxNzg1MjUxODA4MDAzIiwic291cmNlIjoiamlyYS1KU1cifQ%3D%3D#AC4
+SOURCE: https://metrolinx.atlassian.net/wiki/spaces/CE/pages/3561422849/Checkout.+Page+layout?xpis=eyJicmlkZ2UiOiJzbWFydExpbmtzIiwiaWQiOiIxNzg1MjUxODA4MDAzIiwic291cmNlIjoiamlyYS1KU1cifQ%3D%3D#AC4
+
+HTTP 202
+
+
+
+THE CODELINES IN SCOPE (1) — one roster covers all of them:
+- gotransit  at /home/bradleyjerome/projects/metrolinx/next.gotransit.com
+    declares: @algolia/autocomplete-js, @azure/search-documents, @contentstack/utils, @googlemaps/js-api-loader, @hookform/error-message, @metrolinx/cx-shared, @react-aria/focus, @stripe/react-stripe-js, @stripe/stripe-js, @uniformdev/context, @uniformdev/context-gtag, @uniformdev/context-react, akamai-edgegrid, algoliasearch, aria-hidden, axios, body-scroll-lock, busboy, classnames, cloudinary, contentstack, core-js, country-state-city, date-fns, html-react-parser, i18next, joi, jsonwebtoken, lodash.capitalize, lodash.chunk, lodash.clonedeep, lodash.debounce, lodash.filter, lodash.isempty, lodash.isequal, lodash.isnil, lodash.isnumber, lodash.isobject, lodash.isstring, lodash.isundefined, lodash.keyby, lodash.mergewith, lodash.noop, lodash.omit, lodash.omitby, lodash.orderby, lodash.reject, micro, next, next-auth, next-i18next, next-sitemap, object-hash, pino, qs, react, react-autosuggest, react-beforeunload, react-dom, react-dropzone, react-error-boundary, react-focus-lock, react-hook-form, react-i18next, react-select, react-youtube, resize-observer-polyfill, swiper, swr, uuid, @commitlint/cli, @contentstack/management, @next/bundle-analyzer, @tailwindcss/aspect-ratio, @tailwindcss/line-clamp, @testing-library/jest-dom, @testing-library/react, @testing-library/user-event, @trivago/prettier-plugin-sort-imports, @types/busboy, @types/form-data, @types/google.maps, @types/html-to-text, @types/jsonwebtoken, @types/lodash.capitalize, @types/lodash.chunk, @types/lodash.clonedeep, @types/lodash.debounce, @types/lodash.filter, @types/lodash.isempty, @types/lodash.isequal, @types/lodash.isnil, @types/lodash.isnumber, @types/lodash.isobject, @types/lodash.isstring, @types/lodash.isundefined, @types/lodash.keyby, @types/lodash.mergewith, @types/lodash.noop, @types/lodash.omit, @types/lodash.omitby, @types/lodash.orderby, @types/lodash.reject, @types/node, @types/object-hash, @types/qs, @types/react, @types/react-autosuggest, @types/react-beforeunload, @types/react-dom, @types/react-google-recaptcha, @types/react-input-mask, @types/uuid, @typescript-eslint/eslint-plugin, @typescript-eslint/parser, @uniformdev/cli, autoprefixer, babel-jest, commitlint-config-jira, commitlint-plugin-jira-rules, cssnano, dotenv, esbuild, eslint, eslint-config-next, eslint-config-prettier, eslint-plugin-jest, eslint-plugin-prettier, form-data, husky, i18next-scanner, i18next-scanner-typescript, jest, jest-environment-jsdom, jest-environment-node, jest-transform-css, lint-staged, node-mocks-http, pino-pretty, postcss, postcss-import, prettier, rimraf, stylelint, stylelint-config-prettier, stylelint-config-standard, tailwindcss, ts-jest, typescript
+You have READ-ONLY tools (read_file,list_files,search,codegraph_query,resolve_test_file,codeline_facts,git_state,check_anti_patterns,resolve_package_symbol,dependency_contract,dependency_available,scan_secrets). Use them: open the manifests, find the modules
+this work touches, and VERIFY any API or package you are about to name in a brief actually
+exists in these repositories. A vendor's documentation describes its current product; these
+codelines pin the versions they pin, and where the two disagree the repository wins. A brief
+that names a symbol the installed package does not export sends an implementer to write code
+against something that is not there.
+
+Propose ONE roster for the project as a whole: roles for the
+domains this work and these codebases actually span, not the domains you would expect a
+project like this to have. Where the codelines share a stack, one role covers all of them —
+do not mint near-duplicate roles per codeline.
+
+Write each brief so it stays true wherever the project is checked out. Refer to a codeline by
+its NAME, exactly as listed above, and to locations inside it by paths relative to its root.
+
+Never identify a codeline by POSITION — not "the first", not "the second", not "the one listed
+above". The order codelines are listed in is not stable between runs, so a brief written that
+way points at a different repository the moment the order changes, and nothing detects it: the
+sentence still reads correctly. Never write an absolute filesystem path either; it is specific
+to one machine. A name is the only reference that stays true.
+
+A brief may only rely on what the codelines actually declare above. If the work plainly needs
+something that is not declared, say so in the rationale rather than assuming it is present.
+
+EVERY ROLE MUST BE ABLE TO AUTHOR CODE. Each brief must name the files or directories, relative
+to a codeline root, that the role edits. A role whose work happens only in a vendor's web
+console, or only in prose, cannot implement a story: this pipeline's agents change files in a
+repository, and a story assigned to such a role produces a configuration note and no working
+software. If part of the work genuinely is console-only, that belongs in one role's brief as
+context it must WRITE CODE around — never as a role of its own.
+
+TEST RESPONSIBILITY MUST BE OWNED, EXPLICITLY. Say in the brief, for whichever role owns it,
+how this codeline's tests are written: where test files live, how they are named, and which
+runner executes them — taken from what the codelines declare above, not from habit. Work with
+no named owner for its tests arrives at review untested and cannot be approved.
+
+PROPOSE TWO CLASSES OF AGENT.
+
+IMPLEMENTERS (kind: "implementer") author code, as described above. One roster of them spans
+every codeline.
+
+Every proposal states a "codeline". An implementer spans the project and uses "*". An
+investigator names the ONE codeline it reads, exactly as spelled in scope above. There is no
+third option and no omitting it.
+
+INVESTIGATORS (kind: "investigator") read code and report what is there — they never write and
+never own a story. Propose EXACTLY ONE per codeline listed in scope. Its brief should describe how to find things
+in THAT codebase: where the modules relevant to this work live, what the layout and naming
+conventions are, and which of its declared dependencies matter here. An investigator that
+merely restates the ticket adds nothing — its value is knowing one repository well.
+
+Keep each investigator to its own codeline. It reports on the repository it was briefed for and
+says nothing about the others; a claim about a repository it has not read is a guess wearing the
+authority of an investigation.
+
+Do not propose a role that duplicates one of the canonical roles already listed above.
+# Output — THIS IS A CONTRACT, NOT A PREFERENCE
+
+Emit EXACTLY one <PROJECT_AGENTS> block and nothing else that matters. Prose outside it is DISCARDED
+unread, however correct it is — the pipeline parses the block and never the commentary.
+
+<PROJECT_AGENTS>
+{
+  "proposedAgents": [ {
+      "name": <string>
+         // kebab-case "<domain>-<suffix>". The suffix is fixed by the kind — implementer: -engineer or -fixer; investigator: -detective or -investigator. A name ending any other way cannot be routed to a seam.,
+      "kind": <string> one of "implementer" | "investigator"
+         // implementer = authors code and can own a story. investigator = reads code and reports what is there; never writes, never owns a story.,
+      "codeline": <string>
+         // ALWAYS required. For an investigator: the ONE codeline it investigates, named exactly as listed in scope above — the lane looks its investigator up by codeline and cannot find one that names none. For an implementer, which spans the project, use "*". Never leave it out: a proposal without it is rejected.,
+      "systemPrompt": <string>
+         // The role's full briefing: its expertise, the conventions of THIS codeline, the files and directories it owns, the patterns it follows and the tools it uses.,
+      "rationale": <string>
+         // One sentence: why THIS project needs THIS role, referring to something stated in the ticket, the documents or the declared dependencies above. A placeholder ("...", "-", "n/a") is refused, as is anything under 24 letters and digits. This is what a human reads when reviewing the roster before it is given any work.,
+  } ]
+}
+</PROJECT_AGENTS>
+
+Propose the project-specific engineering agent roles this codeline needs, on top of the canonical core. One role per distinct domain of the project. Do not answer in prose.
+
+
+# Output
+{"proposedAgents":[{"name":"gotransit-checkout-detective","kind":"investigator","codeline":"gotransit","systemPrompt":"You are the read-only investigator for the gotransit codeline (next.gotransit.com), focused on the checkout flow implicated in AMSD-1919 (Email/Confirm Email case-sensitivity mismatch). Your job is to characterize what exists in src/components/pages/CheckoutPage/ so an implementer can act without re-discovering the layout. Key files to open and report on: src/components/pages/CheckoutPage/CheckoutForm.tsx (contains the react-hook-form 'validate' rule comparing the confirmEmail field against the email field's raw value), src/components/pages/CheckoutPage/CheckoutFormProvider.tsx (form context/schema wiring), and src/components/pages/CheckoutPage/CheckoutFormContainer.tsx. Existing tests for this area live under src/components/pages/CheckoutPage/__tests__/ (CheckoutForm.spec.tsx, CheckoutFormContainer.spec.tsx) and run via Jest (ts-jest, jest-environment-jsdom per package.json). Do not assume a src/lib directory exists — it does not; the project's shared utilities live under src/utils and src/services instead, so check those if you need to trace helper functions used by validation (e.g. any lodash.isstring/lodash.isequal usage, i18next TRM774 string lookups). Report exact line numbers, current validation logic, how the TRM774 error message key is wired through i18next, and any other call sites of confirmEmail/email comparison you find via search. Never write or edit files; your output is a factual map for the implementer.","rationale":"AMSD-1919's fix and test extension both center on CheckoutForm.tsx and its sibling files, so a dedicated reader of this exact directory (verified to exist, unlike a src/lib path) prevents the implementer from re-deriving file locations and the TRM774 wiring from scratch."}]}
+
+[coverage-gate] writer: no pre-flight has gated this run — standing down
+  [provider] 'openrouter' is not routable by the 'claude' set — using 'claude'.
+  [provider] The set is the launch's own choice; the env value was left by something else.

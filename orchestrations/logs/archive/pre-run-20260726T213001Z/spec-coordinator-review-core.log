@@ -1,0 +1,84 @@
+# Prompt
+You are the specification coordinator for the epam-cli orchestration system. Before every phase you read orchestrations/prd.json (implementationOrder and stories), evaluate risk, dependencies, and technical readiness, then assign the correct specification runners: OpenSpec, Speckit, both, or none. You write assignments into each story's specification.assignedAgents field along with coordinatorNotes, target provider/model, and timestamps. You understand the provider policy ledger (configuration.aiRuntime.providerPolicies), token guardrails, and know when to skip stories that were already hand-curated. When you plan a run you emit JSON compliant with spec-mode-runner.js so that automation can apply deltas deterministically. You never invent story IDs or mutate acceptance criteria directly; only delegate to spec agents and record their status.
+
+You are the EPAM CLI specification coordinator reviewing the completed spec outputs for phase core.
+
+Each story was processed by a sequential agent pipeline:
+  1. openspec elaborated requirements (AC refinement, story splits, technical depth)
+  2. speckit reviewed openspec's output (testability, security, edge cases, gap analysis)
+
+For each story, evaluate the quality of the collaborative spec work:
+1. Did both agents add meaningful, non-overlapping value?
+2. Are the acceptance criteria complete, testable, and non-overlapping?
+3. Are story splits logical and properly scoped?
+4. Flag any story needing human review.
+
+Respond with JSON between <SPEC_REVIEW> and </SPEC_REVIEW> using this schema:
+[
+  {"storyId":"REM-xxx","verdict":"approved|needs_review","reviewNotes":"coordinator observations","qualityScore":0.0-1.0,"flags":[]}
+]
+
+Stories to review:
+[
+  {
+    "id": "MOCK-HW-1",
+    "title": "Hello world greeting should say hello dolly",
+    "acceptanceCriteria": [
+      "Delegated to split children: MOCK-HW-1-impl, MOCK-HW-1-test"
+    ],
+    "specification": {
+      "runId": "20260726T212458Z",
+      "assignedAgents": [
+        "openspec"
+      ],
+      "coordinatorNotes": "Trivial mock story with no acceptance criteria to elaborate and no complexity warranting security/test hardening. Direct implementation sufficient.",
+      "status": "completed",
+      "updatedAt": "2026-07-26T21:27:00.566Z",
+      "appliedAgents": [
+        "openspec"
+      ],
+      "agentContributions": [
+        {
+          "agent": "openspec",
+          "applied": true,
+          "notes": "Story requests changing the greeting from 'hello world' to 'hello dolly'. This is a defect in existing behavior. Mandatory split triggered by SPLIT RULE 2: technicalNotes.files contains both an implementation file and a test file.",
+          "acceptanceChanged": false,
+          "splitCount": 2,
+          "timestamp": "2026-07-26T21:27:00.566Z",
+          "splitIds": [
+            "MOCK-HW-1-impl",
+            "MOCK-HW-1-test"
+          ]
+        }
+      ]
+    },
+    "splitChildren": [
+      {
+        "id": "MOCK-HW-1-impl",
+        "title": "Change getGreeting to return hello dolly",
+        "acceptanceCriteria": []
+      },
+      {
+        "id": "MOCK-HW-1-test",
+        "title": "Update test to expect hello dolly",
+        "acceptanceCriteria": []
+      }
+    ]
+  }
+]
+
+<SPEC_REVIEW>
+</SPEC_REVIEW>
+
+# Output
+<SPEC_REVIEW>
+[
+  {
+    "storyId": "MOCK-HW-1",
+    "verdict": "needs_review",
+    "reviewNotes": "OpenSpec correctly identified the mandatory split (impl + test files) and produced logically scoped children. Coordinator was right to skip speckit for this trivial greeting change. However, both child stories (MOCK-HW-1-impl, MOCK-HW-1-test) have empty acceptanceCriteria — even trivial stories need at least one verifiable AC (e.g., 'getGreeting() returns \"hello dolly\"' for impl; 'existing test passes with updated expectation' for test). Without AC there is no formal completion gate. Minor fix; human should populate child AC before implementation.",
+    "qualityScore": 0.7,
+    "flags": ["child_acceptance_criteria_empty"]
+  }
+]
+</SPEC_REVIEW>

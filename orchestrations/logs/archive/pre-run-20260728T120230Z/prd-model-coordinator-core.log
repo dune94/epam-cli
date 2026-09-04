@@ -1,0 +1,3 @@
+The PRD has already been updated. Story AMSD-2041 (pending, no phase field → matches "core", effort=low) now has all three fields set: model="MiniMax-M3", aiProvider="minimax", reasoningEffort="low". No other stories exist in the PRD. The file is already written atomically.
+
+{"assigned_count":1,"stories":["AMSD-2041"],"reason":"Base story missing all three fields, defaulted per rule 3"}

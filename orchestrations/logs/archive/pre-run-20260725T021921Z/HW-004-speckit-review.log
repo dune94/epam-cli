@@ -1,0 +1,133 @@
+# Prompt
+You are the speckit specification agent for EPAM CLI. Phase hello_world_test, story HW-004.
+
+You are reviewing and building on the openspec agent's output for this story.
+Your role is COLLABORATIVE — you are NOT starting from scratch. Instead:
+1. Review openspec's proposed acceptance criteria for testability and completeness
+2. Add missing edge-case, error-handling, security, and accessibility criteria
+3. Flag any AC that are vague, untestable, or overlapping
+4. If openspec proposed story splits, validate the decomposition and refine AC per split
+5. Do NOT remove or duplicate openspec's good work — build on it
+
+OPENSPEC'S OUTPUT (your input to review):
+{
+  "storyId": "HW-004",
+  "agent": "openspec",
+  "notes": "Story is well-scoped and atomic; no split needed. Refined acceptance criteria to make the previously vague items ('edge cases', 'invalid input') concretely verifiable: pinned the invalid-input contract to an Invalid Date check (the signature only admits Date, so 'invalid input' must mean new Date('garbage')), specified UTC-based formatting to avoid timezone-dependent failures since new Date('2026-06-04') parses as UTC midnight, enumerated the required edge-case tests (single-digit day zero-padding in short format, no padding in long format, month/year boundaries), and added an explicit no-existing-files-modified criterion from the description. Title and description unchanged except for clarifying the invalid-input behavior in the description.",
+  "title": "Implement formatDate() utility with vitest tests",
+  "description": "Create formatDate.ts in the project root. Export a single function `export function formatDate(date: Date, format: 'short' | 'long'): string` that returns: 'short' → 'YYYY-MM-DD' (e.g. '2026-06-04'); 'long' → 'Month DD, YYYY' (e.g. 'June 4, 2026'). Use UTC date components so results are deterministic regardless of host timezone (new Date('2026-06-04') is UTC midnight). For an invalid Date (e.g. new Date('not-a-date')), throw a descriptive Error rather than returning 'NaN'-laden output. Create formatDate.test.ts in the project root with at least 6 vitest tests covering both formats, edge cases (month boundaries, single-digit days), and invalid-Date input. Do not modify any existing files.",
+  "acceptanceCriteria": [
+    "formatDate.ts exists in the project root and exports `function formatDate(date: Date, format: 'short' | 'long'): string` (named export, exact signature)",
+    "formatDate(new Date('2026-06-04'), 'short') returns '2026-06-04'",
+    "formatDate(new Date('2026-06-04'), 'long') returns 'June 4, 2026'",
+    "Short format zero-pads month and day: formatDate(new Date('2026-01-05'), 'short') returns '2026-01-05'",
+    "Long format does not pad the day: formatDate(new Date('2026-01-05'), 'long') returns 'January 5, 2026'",
+    "Date components are derived via UTC accessors (getUTCFullYear/getUTCMonth/getUTCDate or equivalent) so tests pass in any host timezone",
+    "Passing an invalid Date (e.g. new Date('not-a-date')) throws an Error with a descriptive message, and a test asserts this with expect(...).toThrow()",
+    "formatDate.test.ts exists in the project root with at least 6 vitest tests, including at least one month-boundary case (e.g. Dec 31 / Jan 1) and one single-digit-day case in each format",
+    "npx tsc --noEmit exits 0",
+    "vitest run exits 0 with all tests passing (the new tests pass and no pre-existing tests break)",
+    "git status shows no modifications to existing files — only formatDate.ts and formatDate.test.ts are added"
+  ],
+  "splitStories": [],
+  "runId": "20260609T200411Z"
+}
+
+ORIGINAL STORY CONTEXT:
+{
+  "id": "HW-004",
+  "title": "Implement formatDate() utility with vitest tests",
+  "description": "Create formatDate.ts in the project root. Export a single function `export function formatDate(date: Date, format: 'short' | 'long'): string` that returns: 'short' → 'YYYY-MM-DD' (e.g. '2026-06-04'); 'long' → 'Month DD, YYYY' (e.g. 'June 4, 2026'). Use UTC date components so results are deterministic regardless of host timezone (new Date('2026-06-04') is UTC midnight). For an invalid Date (e.g. new Date('not-a-date')), throw a descriptive Error rather than returning 'NaN'-laden output. Create formatDate.test.ts in the project root with at least 6 vitest tests covering both formats, edge cases (month boundaries, single-digit days), and invalid-Date input. Do not modify any existing files.",
+  "originalAcceptanceCriteria": [
+    "formatDate.ts exists in the project root and exports `function formatDate(date: Date, format: 'short' | 'long'): string` (named export, exact signature)",
+    "formatDate(new Date('2026-06-04'), 'short') returns '2026-06-04'",
+    "formatDate(new Date('2026-06-04'), 'long') returns 'June 4, 2026'",
+    "Short format zero-pads month and day: formatDate(new Date('2026-01-05'), 'short') returns '2026-01-05'",
+    "Long format does not pad the day: formatDate(new Date('2026-01-05'), 'long') returns 'January 5, 2026'",
+    "Date components are derived via UTC accessors (getUTCFullYear/getUTCMonth/getUTCDate or equivalent) so tests pass in any host timezone",
+    "Passing an invalid Date (e.g. new Date('not-a-date')) throws an Error with a descriptive message, and a test asserts this with expect(...).toThrow()",
+    "formatDate.test.ts exists in the project root with at least 6 vitest tests, including at least one month-boundary case (e.g. Dec 31 / Jan 1) and one single-digit-day case in each format",
+    "npx tsc --noEmit exits 0",
+    "vitest run exits 0 with all tests passing (the new tests pass and no pre-existing tests break)",
+    "git status shows no modifications to existing files — only formatDate.ts and formatDate.test.ts are added"
+  ],
+  "technicalNotes": {
+    "dependsOn": [
+      "HW-001"
+    ],
+    "files": [
+      "formatDate.ts",
+      "formatDate.test.ts"
+    ]
+  },
+  "dependencies": []
+}
+
+Produce your refined output between <SPEC_AGENT> tags. Include:
+- "acceptanceCriteria": The FULL merged list (openspec's criteria + your additions/refinements)
+- "notes": What you changed and why (be specific — cite which criteria you added/modified)
+- "splitStories": Include if you refined openspec's splits, otherwise omit or pass through
+- "acAddedBySpeckit": Array of criteria YOU added that were not in openspec's output
+- "acModifiedBySpeckit": Array of {"original":"...","revised":"..."} for criteria you reworded
+- "acFlagged": Array of {"criterion":"...","flag":"..."} for criteria that need human attention
+
+<SPEC_AGENT>
+
+# Output
+<SPEC_AGENT>
+{
+  "storyId": "HW-004",
+  "agent": "speckit",
+  "title": "Implement formatDate() utility with vitest tests",
+  "description": "Create formatDate.ts in the project root. Export a single function `export function formatDate(date: Date, format: 'short' | 'long'): string` that returns: 'short' → 'YYYY-MM-DD' (e.g. '2026-06-04'); 'long' → 'Month DD, YYYY' (e.g. 'June 4, 2026'). Use UTC date components so results are deterministic regardless of host timezone (new Date('2026-06-04') is UTC midnight). For an invalid Date (e.g. new Date('not-a-date')), throw a descriptive Error rather than returning 'NaN'-laden output. Create formatDate.test.ts in the project root with at least 6 vitest tests covering both formats, edge cases (month boundaries, single-digit days), and invalid-Date input. Do not modify any existing files.",
+  "acceptanceCriteria": [
+    "formatDate.ts exists in the project root and exports `function formatDate(date: Date, format: 'short' | 'long'): string` (named export, exact signature)",
+    "formatDate(new Date('2026-06-04'), 'short') returns '2026-06-04'",
+    "formatDate(new Date('2026-06-04'), 'long') returns 'June 4, 2026'",
+    "Short format zero-pads month and day: formatDate(new Date('2026-01-05'), 'short') returns '2026-01-05'",
+    "Long format does not pad the day: formatDate(new Date('2026-01-05'), 'long') returns 'January 5, 2026'",
+    "Date components are derived via UTC accessors (getUTCFullYear/getUTCMonth/getUTCDate or equivalent) so tests pass in any host timezone",
+    "Passing an invalid Date throws an Error whose message identifies the problem, and a test asserts the message content with expect(...).toThrow(/invalid date/i) (or an equivalent matcher on the message), not just a bare expect(...).toThrow()",
+    "formatDate.test.ts exists in the project root with at least 6 vitest tests, including at least one month-boundary case (e.g. Dec 31 / Jan 1) and one single-digit-day case in each format",
+    "npx tsc --noEmit exits 0",
+    "vitest run exits 0 with all tests passing (the new tests pass and no pre-existing tests break)",
+    "git status shows no modifications to existing files — only formatDate.ts and formatDate.test.ts are added",
+    "Long-format month names come from a fixed English month-name array (or a formatter explicitly pinned to locale 'en-US' and timeZone 'UTC'), so output does not vary with the host's ICU/locale build; at least one test covers a month other than January or June (e.g. December)",
+    "Invalid-Date detection works for any Invalid Date regardless of construction: both new Date('not-a-date') and new Date(NaN) throw (i.e. detection is based on Number.isNaN(date.getTime()) or equivalent, not on parsing the input string)",
+    "A leap-day case is covered: formatDate(new Date('2024-02-29'), 'short') returns '2024-02-29' and formatDate(new Date('2024-02-29'), 'long') returns 'February 29, 2024'",
+    "vitest run reports at least 6 more passing tests than the pre-change baseline (i.e. formatDate.test.ts is actually discovered by the existing vitest include patterns, not silently skipped — a green run with an unchanged test count does NOT satisfy this criterion)"
+  ],
+  "acAddedBySpeckit": [
+    "Long-format month names come from a fixed English month-name array (or a formatter explicitly pinned to locale 'en-US' and timeZone 'UTC'), so output does not vary with the host's ICU/locale build; at least one test covers a month other than January or June (e.g. December)",
+    "Invalid-Date detection works for any Invalid Date regardless of construction: both new Date('not-a-date') and new Date(NaN) throw (i.e. detection is based on Number.isNaN(date.getTime()) or equivalent, not on parsing the input string)",
+    "A leap-day case is covered: formatDate(new Date('2024-02-29'), 'short') returns '2024-02-29' and formatDate(new Date('2024-02-29'), 'long') returns 'February 29, 2024'",
+    "vitest run reports at least 6 more passing tests than the pre-change baseline (i.e. formatDate.test.ts is actually discovered by the existing vitest include patterns, not silently skipped — a green run with an unchanged test count does NOT satisfy this criterion)"
+  ],
+  "acModifiedBySpeckit": [
+    {
+      "original": "Passing an invalid Date (e.g. new Date('not-a-date')) throws an Error with a descriptive message, and a test asserts this with expect(...).toThrow()",
+      "revised": "Passing an invalid Date throws an Error whose message identifies the problem, and a test asserts the message content with expect(...).toThrow(/invalid date/i) (or an equivalent matcher on the message), not just a bare expect(...).toThrow()"
+    }
+  ],
+  "acFlagged": [
+    {
+      "criterion": "vitest run exits 0 with all tests passing (the new tests pass and no pre-existing tests break)",
+      "flag": "Potential criteria conflict: if the repo's vitest config restricts test discovery (e.g. include: ['src/**/*.test.ts']), a test file in the project root will never run, and fixing that requires editing vitest.config / package.json — which violates the 'no existing files modified' criterion. The build agent should verify root-level *.test.ts files are discoverable BEFORE writing code; if they are not, this story needs a human decision (relocate files vs. authorize a config edit). The new baseline-test-count criterion I added makes this failure mode detectable instead of silently green."
+    },
+    {
+      "criterion": "npx tsc --noEmit exits 0",
+      "flag": "Same root-file concern, inverted: if tsconfig's include excludes the project root, tsc --noEmit passes trivially without type-checking formatDate.ts. Acceptable as written, but the oracle should not treat a trivially-green tsc as evidence the new file type-checks."
+    },
+    {
+      "criterion": "(not added) runtime guard for an unexpected format value, e.g. formatDate(d, 'medium' as any)",
+      "flag": "Deliberately NOT added to avoid scope creep: the TypeScript signature precludes invalid format values at compile time, and the original story only specifies throwing for invalid Dates. If the function will ever be called from plain JS, a runtime throw (or exhaustive switch with a default throw) is cheap insurance — flagging for human decision rather than expanding scope unilaterally."
+    },
+    {
+      "criterion": "Date components are derived via UTC accessors (getUTCFullYear/getUTCMonth/getUTCDate or equivalent) so tests pass in any host timezone",
+      "flag": "Minor: this is verified by code inspection rather than behavior. A stronger behavioral check is running the suite under two different TZ env values (e.g. TZ=America/New_York and TZ=Asia/Tokyo) and asserting identical results. Left as-is since 'or equivalent' keeps it implementation-flexible, but the oracle may prefer the behavioral form."
+    }
+  ],
+  "splitStories": [],
+  "notes": "Validated openspec's no-split decision — the story is atomic (one pure function + one test file) and splitting would create artificial dependencies; concur. Openspec's 11 criteria are solid and I removed none. My changes: (1) ADDED a locale-determinism criterion — 'June 4, 2026' via toLocaleDateString without a pinned 'en-US' locale and UTC timeZone can vary across Node ICU builds (small-icu vs full-icu) and host locale, which is the same class of nondeterminism openspec already fixed for timezones; (2) ADDED a construction-independent invalid-Date criterion (new Date(NaN) as well as new Date('not-a-date')) so detection must be Number.isNaN(date.getTime())-based rather than string-parsing-based; (3) ADDED a leap-day edge case (2024-02-29) in both formats — month-boundary cases were enumerated but leap handling was not; (4) ADDED a test-discovery criterion requiring the passing-test count to increase by ≥6 over baseline, closing a silent-failure hole where vitest exits green while never running the new root-level test file; (5) MODIFIED the invalid-Date criterion to require asserting the error message content (toThrow(/invalid date/i)) — 'descriptive message' plus a bare toThrow() was untestable as to descriptiveness, since toThrow() passes for any error including 'undefined is not a function'. Flagged two environment risks for the build agent/oracle (vitest include patterns and tsconfig include may both exclude the project root — the former conflicts with the no-modified-files criterion if true) and one deliberate scope decision (no runtime guard for invalid format strings; TS signature precludes it and adding it would exceed the original contract). Security and accessibility review: no criteria warranted — pure deterministic function, no I/O, no user-facing surface, no PII."
+}
+</SPEC_AGENT>

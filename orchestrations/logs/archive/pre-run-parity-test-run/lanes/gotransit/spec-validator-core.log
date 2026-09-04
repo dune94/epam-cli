@@ -1,0 +1,23 @@
+```json
+{
+  "agent": "spec-validator",
+  "phase": "core",
+  "stories": [{
+    "storyId": "AMSD-2041",
+    "title": "[GO, UP, MX] Live Preview of Content in CMS",
+    "criteria": [
+      { "text": "Given a draft (unpublished) entry exists in the CMS for the GO Transit brand, when a content author opens the GO Transit preview page, then the page displays the draft headline and body text that exist only in that unpublished entry, not the currently published version.", "status": "untestable", "evidence": "No git diff lines, no file excerpts, and no test results were provided. The only touched file is src/services/contentstack.ts but its contents were not injected.", "gaps": "Cannot determine if draft preview logic for GO Transit is implemented without seeing the code or tests." },
+      { "text": "Given a draft (unpublished) entry exists in the CMS for the UP Express brand, when a content author opens the UP Express preview page, then the page displays the draft headline and body text from that unpublished UP Express entry.", "status": "untestable", "evidence": "No implementation evidence available for UP Express brand preview.", "gaps": "Cannot determine if UP Express draft preview is implemented." },
+      { "text": "Given a draft (unpublished) entry exists in the CMS for the MX brand, when a content author opens the MX preview page, then the page displays the draft headline and body text from that unpublished MX entry.", "status": "untestable", "evidence": "No implementation evidence available for MX brand preview.", "gaps": "Cannot determine if MX draft preview is implemented." },
+      { "text": "Given a content author is viewing a preview page and saves an edit to the entry in the CMS, when the save completes, then the updated text appears on the preview page without a full page reload.", "status": "untestable", "evidence": "No evidence of live-update/hot-reload mechanism (e.g., WebSocket, polling, or re-fetch on save) was provided.", "gaps": "Cannot determine if updates appear without full page reload." },
+      { "text": "Given a content author is viewing draft content in preview mode, when the preview page renders, then a visible on-screen indicator (such as a preview or draft banner/badge) shows that the displayed content is unpublished draft content.", "status": "untestable", "evidence": "No evidence of a preview/draft banner or badge component was provided.", "gaps": "Cannot determine if a visible draft indicator exists." },
+      { "text": "Given an entry has both a published version and a newer unpublished draft in the CMS, when a visitor opens the live public page (not preview mode), then the page displays the published headline and body text, with no draft-only content visible.", "status": "untestable", "evidence": "No evidence of published-vs-draft content separation logic was provided.", "gaps": "Cannot determine if public pages correctly show only published content." }
+    ],
+    "overallCompliance": 0,
+    "verdict": "fail"
+  }],
+  "overallVerdict": "fail"
+}
+```
+
+**Reasoning:** All three evidence sources are empty — the git diff section contains no diff lines, the key implementation files section reports "(no expected files found in technicalNotes)", and the vitest oracle was skipped. The only known touched file is `src/services/contentstack.ts`, but no contents or excerpts were injected. With zero ground-truth evidence, every criterion is classified as `untestable`. Per the output format requirements, `untestable` criteria cannot count toward compliance, yielding 0% met. The verdict is `fail` not because the change is necessarily wrong, but because there is no evidence to demonstrate any criterion is met. If the evidence had been present, a different verdict would be possible.

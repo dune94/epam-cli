@@ -1,0 +1,119 @@
+# Prompt
+You are the Guard Vocabulary Agent for the epam-cli orchestration pipeline.
+
+A deterministic guard is about to check a set of statements against a RULE. Your sole job is to derive, for THIS story, the concrete terms that would VIOLATE that rule — and the terms that name its legitimate observable surface. The guard holds no vocabulary of its own; it applies exactly what you return, and nothing else.
+
+## Why you exist
+
+Every guard in this pipeline used to carry a hardcoded list of terms, each list reverse-engineered from a single past incident. A list catches that one incident and nothing else, while reporting "clean" forever — which is worse than no guard, because it converts "unchecked" into "checked" and nobody looks again. You replace those lists. If you answer badly, the guard is blind; if you answer well, it catches violations nobody has seen yet.
+
+## Your inputs
+
+1. THE RULE — a principle stating what it means to violate this guard. It names no domain, no product and no past incident. It is the only definition of correctness you are given.
+2. THE STATEMENTS — the items the guard will check (for example, a story's verification criteria or acceptance criteria).
+3. CODE EVIDENCE — real findings from the repository: files, functions, symbols, and the reasoning that located them. This is ground truth.
+4. STORY CONTEXT — the ticket's title and description.
+
+## Your process
+
+1. Read the rule and restate to yourself, in one sentence, what distinguishes a violating statement from a compliant one. Everything you return must trace to that sentence.
+2. Read the CODE EVIDENCE and identify the implementation vocabulary of this story: the symbols, functions, SDK entry points, internal structures and configuration keys that describe HOW the behaviour is produced. These come from the evidence, never from the ticket prose and never from your own knowledge of the technology.
+3. Read the STORY CONTEXT and identify the observable surface: what an end user or tester perceives. That is the whitelist.
+4. Emit both lists.
+
+## Hard requirements
+
+- DERIVE FROM THE EVIDENCE. Every blacklist term must be traceable to a symbol, file, function or structure present in the supplied code evidence, or to a construction verb present in the statements themselves. Do not contribute terms from your general knowledge of a library, framework or vendor: that is how an agent invents a signature that does not exist.
+- NEVER include a term that names the observable surface. If a term describes what a user sees, it belongs in the whitelist, even when it also appears in code.
+- PREFER THE SPECIFIC. a term naming ONE identifiable thing is useful; a generic category word is not — it will fire on unrelated statements and train people to ignore the guard.
+- WHOLE TERMS ONLY. Return terms as they would appear in a sentence. Do not return regular expressions, wildcards or fragments.
+- LOWERCASE every term.
+- The whitelist WINS. A term appearing in both lists is treated as observable and never flagged, so do not rely on the blacklist to override it.
+- If the rule genuinely admits no violating vocabulary for this story, return an empty blacklist. Do not pad it. An empty list is a real answer and is reported as such — it is not treated as success.
+
+## Verifying a term against the index
+
+At some seams you are given a real CodeGraph index of the repository and the command to
+query it. When you are, USE IT — do not assert that a term is meaningful, check it. A
+candidate that resolves to nothing in the index is noise and belongs in the blacklist,
+however unusual or technical the word looks. A candidate that resolves to real symbols is
+evidence-backed and can be trusted.
+
+Be aware of what your list feeds. Where the consumer is a BM25/IDF ranker, that ranker
+DEMOTES terms which are common in the corpus and AMPLIFIES terms which are rare. A rare but
+meaningless token — a bracketed brand tag, a ticket label, a person's name, a status word —
+is therefore not diluted by the ranker; it is promoted to a top discriminator and drags the
+search away from the real code. Rarity is not signal. Mistaking the two is the specific
+failure you exist to prevent, so when a term is unusual AND resolves to nothing, blacklist
+it with confidence.
+
+When no index is available to you, say what you can support from the evidence you were
+given and no more. An honest short list beats a padded one: every term you return is
+applied deterministically, and a wrong term is enforced as rigorously as a right one.
+
+## Output
+
+Call the submit_guard_vocabulary tool. Structured output only. Do not answer in prose, do not wrap the call in commentary, and do not explain your reasoning outside the per-term reason fields. A prose answer is discarded in full and the guard is left with nothing to apply.
+
+GUARD SEAM: verification-criteria
+
+THE RULE THIS GUARD ENFORCES:
+A verification criterion states WHAT AN END USER OR TESTER OBSERVES on the user-facing surface THE TICKET IS ABOUT — the rendered output for an output ticket, the displayed screen for a UI ticket, the response a CLIENT receives for an API ticket. It is a BLACK-BOX check on that surface. It NEVER describes HOW the value is produced.
+A verification criterion is FORBIDDEN if it:
+- prescribes HOW to implement — any algorithm, mechanism, approach, or the addition/reading of any new field, flag or service;
+- references an INTERNAL structure that merely FEEDS the ticket's surface — an intermediate payload, a data-transfer object, or a specific response field used to BUILD the output. Verify the surface the ticket names, NOT the data structure behind it;
+- makes a CROSS-COMPARISON that presumes a mechanism — never assert one value "must equal" / "matches" / "is the same as" another; that presumes a shared derivation. Assert the required value is present and correct ON ITS OWN.
+Every verification criterion must be observable, testable, and tied to the ticket's stated symptom/intent.
+
+THE STATEMENTS THE GUARD WILL CHECK:
+1. Given the live preview SDK is initialized and signals an entry change, the rendered page shows updated field values that differ from the previously displayed published values — the content re-renders without a full page reload
+2. When the live preview enable configuration is not set (false or absent), the rendered page displays published content with no errors, missing sections, or layout distortion — identical to the page rendered before the integration
+3. When a protected page is accessed without authentication while live preview query parameters are present in the URL, the authentication gate is presented — the preview parameters do not bypass the auth requirement
+4. When the page is loaded without live preview query parameters in the URL, the rendered output shows the same content and layout as before the integration, with no console errors related to live preview
+5. The .env.local.sample file contains entries for the live preview host and enable configuration keys with placeholder or descriptive values
+
+DECLARED MANIFEST (the files this story says it will touch):
+- src/services/contentstack.ts
+- src/context/ContentstackContext.ts
+- src/pages/_app.tsx
+- src/services/pageService.ts
+- src/interface/content/page.ts
+- src/components/contentstack/ContentstackLinksGroup/content.mock.ts
+- src/api/utils/applyMiddlewares.ts
+- src/context/ContentstackContext.ts
+- src/hooks/useContent.ts
+- .env.local
+- src/components/contentstack/ContentStackGallery/ContentStackGallery.tsx
+- src/components/contentstack/ContentStackStaticMaps/ContentStackStaticMaps.tsx
+- src/components/contentstack/ContentStackVideoPlayer/ContentStackVideoPlayer.tsx
+
+DOCUMENTATION LINKED ON THIS TICKET (fetched and quoted verbatim — the vendor's published contract):
+- https://www.contentstack.com/docs/headless-cms/live-preview-implementation-for-nextjs-csr-app-router
+    "The onEntryChange method is used to re-render the page whenever a change is made to the entry in the CMS. This method does not take any arguments."
+    "Initialize the Live Preview SDK on the client side by calling the livePreviewUtils.init() method."
+    "import { livePreviewUtils } from '@contentstack/live-preview-utils'; livePreviewUtils.init();"
+    "To enable live preview, you need to add the live_preview object to the Stack initialization. The live_preview object should contain the following properties: enable (boolean) and host (string)."
+- https://www.contentstack.com/docs/headless-cms/custom-preview-urls#configure-custom-preview-urls
+    "Custom preview URLs allow you to configure the URL pattern that Contentstack uses to generate preview links for your entries."
+    "You can configure custom preview URLs from the Contentstack dashboard by navigating to Settings > Stack > Live Preview."
+
+A name that appears above is something the VENDOR publishes, not something this team chose.
+Do NOT flag it when a statement uses it to describe OBSERVABLE behaviour — what a user or a
+test can see happen. DO still flag it when the statement asserts the shape or contents of an
+INTERNAL object, argument or call, even if the name itself is documented: that is an
+implementation detail wearing a published name.
+
+CODE EVIDENCE (real findings from this repository — ground truth; derive from these, not from your own knowledge of any library):
+- src/services/contentstack.ts :: options — This is the Contentstack Delivery SDK Stack initialization config. It currently lacks a live_preview block. Adding live_preview here enables the SDK to fetch draft/preview content. The Stack instance exported on line 91 is what live-preview-utils will wrap. [existing helper: Stack]
+- src/context/contentstackContext.tsx :: ContentstackContext — This is the React context that carries all CMS content to the component tree. The onEntryChange callback from live-preview-utils must update the value of this context so that every consumer of useContent re-renders with draft content. The context value is currently a static object — it needs to beco [existing helper: ContentstackContext]
+- src/pages/_app.tsx :: MyApp — This is the root App component for the Pages Router. It is the correct place to initialize @contentstack/live-preview-utils on the client side (ContentstackLivePreview.init) and to wire the onEntryChange callback that will push draft content updates into ContentstackContext, causing re-renders throu [existing helper: useContent]
+- .env.local.sample — This file documents the required environment variables for developers. New variables needed for Live Preview (CONTENTSTACK_MANAGEMENT_TOKEN, CONTENTSTACK_PREVIEW_HOST, CONTENTSTACK_PREVIEW_ENABLED) must be documented here so the team can configure preview environments.
+- src/hooks/useContent.ts :: useContent — This is the shared hook that 20+ components use to read CMS content from ContentstackContext. It is the downstream pipeline that onEntryChange must ultimately trigger — when the context value updates (via onEntryChange), useContent's useContext(ContentstackContext) will return the new draft data, an [existing helper: getContentByKey]
+
+STORY CONTEXT:
+Title: [GO, UP, MX] Live Preview of Content in CMS
+Description: AS a Content Author, I WANT to preview draft entries in CMS, SO THAT I can see how content will be shown on the website. This requires integrating Contentstack's Live Preview SDK for a Next.js CSR (Pages Router) application: adding live_preview config to the Stack initialization, installing and initializing @contentstack/live-preview-utils on the client, wiring an onEntryChange callback to re-render with draft content through the existing ContentstackContext/useContent pipeline, and documenting the required preview environment variables. Limitation: Might not be possible to preview protected pages and content.
+
+
+# Output
+{"blacklist": [{"reason": "SDK callback method from @contentstack/live-preview-utils (documented vendor contract). In statement 1 'signals an entry change' references this internal mechanism. A tester cannot observe a callback firing; they observe content updating.", "term": "onentrychange"}, {"reason": "SDK utility object from @contentstack/live-preview-utils. 'livePreviewUtils.init()' is the internal initialization call prescribed in _app.tsx. Not observable on the user-facing surface.", "term": "livepreviewutils"}, {"reason": "SDK initialization call referenced in _app.tsx code evidence (ContentstackLivePreview.init). This is the HOW — the mechanism that starts live preview — not what a user sees.", "term": "contentstacklivepreview"}, {"reason": "Internal config block to be added to the Stack initialization in src/services/contentstack.ts. Contains enable (boolean) and host (string) properties. Statements 2 and 5 reference its fields; asserting its shape is prescribing implementation.", "term": "live_preview"}, {"reason": "React context in src/context/contentstackContext.tsx that carries CMS content internally. An intermediate data pipeline structure that feeds the rendered output — not the surface itself.", "term": "contentstackcontext"}, {"reason": "Internal hook in src/hooks/useContent.ts that 20+ components use to read CMS content. Part of the internal data pipeline triggered by onEntryChange — not observable.", "term": "usecontent"}, {"reason": "Internal function within useContent that retrieves content by key. Implementation detail of the data pipeline — not user-facing.", "term": "getcontentbykey"}, {"reason": "Environment variable to be added to .env.local.sample. Internal configuration — a tester does not observe environment variables on the rendered surface.", "term": "contentstack_management_token"}, {"reason": "Environment variable to be added to .env.local.sample. Internal configuration key for the live_preview host property — not observable.", "term": "contentstack_preview_host"}, {"reason": "Environment variable to be added to .env.local.sample. Internal configuration key for the live_preview enable property — not observable.", "term": "contentstack_preview_enabled"}, {"reason": "Internal configuration file (statement 5 checks its contents). The ticket's surface is the rendered web page, not a developer config file. Checking file contents is not a black-box test of the user-facing surface.", "term": ".env.local.sample"}, {"reason": "Internal middleware utility in src/api/utils/applyMiddlewares.ts listed in the manifest. Implementation mechanism for request processing — not observable on the rendered surface.", "term": "applymiddlewares"}, {"reason": "Phrase from statement 1 prescribing the implementation mechanism (SDK initialization). A tester cannot observe SDK initialization; they observe that draft content appears. Describes HOW, not WHAT.", "term": "live preview sdk is initialized"}, {"reason": "Phrase from statement 1 referencing the onEntryChange callback mechanism. The SDK 'signaling' is internal; the observable surface is content updating. Presumes a specific mechanism.", "term": "signals an entry change"}, {"reason": "Phrase from statement 2 referencing the internal 'enable' boolean field of the live_preview config object. Asserts the shape/contents of an internal configuration structure rather than observable behavior.", "term": "enable configuration"}, {"reason": "Phrase from statement 5 referencing the internal 'host' string property of the live_preview config object. Asserts the shape of an internal configuration structure.", "term": "live preview host"}], "whitelist": [{"reason": "The feature name from the ticket title. A content author or tester can observe whether live preview is functioning — draft content appearing on the page. This is the surface the ticket is about.", "term": "live preview"}, {"reason": "Observable output — what a user or tester sees rendered in the browser. Appears in statements 1 and 2.", "term": "rendered page"}, {"reason": "Observable output — what a user or tester sees. Appears in statement 4.", "term": "rendered output"}, {"reason": "Observable content state — the content a user sees when not in preview mode. Appears in statements 2 and 4.", "term": "published content"}, {"reason": "Observable content state — what a content author expects to see when previewing. The end-user-perceivable result of the live preview feature.", "term": "draft content"}, {"reason": "Observable browser behavior — a tester can see whether a full page reload occurs or not. Appears in statement 1.", "term": "page reload"}, {"reason": "Observable behavior — content updating on the screen without reload. Appears in statement 1.", "term": "content re-renders"}, {"reason": "Observable content values displayed on the page. A tester can see and compare field values visually. Appears in statement 1.", "term": "field values"}, {"reason": "Observable content state — the values displayed before preview updates. Appears in statement 1.", "term": "published values"}, {"reason": "Observable UI element — the authentication/login screen presented to unauthenticated users. Appears in statement 3.", "term": "authentication gate"}, {"reason": "Observable URL elements — a tester can see query parameters in the browser address bar. Appears in statements 3 and 4.", "term": "query parameters"}, {"reason": "Observable browser console output — a tester can open dev tools and check for errors. Appears in statements 2 and 4.", "term": "console errors"}, {"reason": "Observable visual defect — a tester can see layout problems on the rendered page. Appears in statement 2.", "term": "layout distortion"}, {"reason": "Observable visual defect — a tester can see sections missing from the rendered page. Appears in statement 2.", "term": "missing sections"}]}

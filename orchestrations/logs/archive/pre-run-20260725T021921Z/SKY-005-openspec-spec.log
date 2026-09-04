@@ -1,0 +1,153 @@
+# Prompt
+You are the openspec specification agent for EPAM CLI. Phase ui_and_review, story SKY-005.
+NOTE: This story has 24 acceptance criteria — MANDATORY split required (see SPLIT RULES below).
+
+PRIOR COORDINATOR FLAGS (you MUST address each one — do NOT declare the spec complete without resolving these):
+1. IATA 3-letter uppercase format validation unspecified — From/To fields accept arbitrary free-form text; recommend adding a targeted AC in a future hardening pass
+2. AC-1 'served by the Express app as a static file at the root path' implies express.static() middleware; readFileSync+res.sendFile() implementations also satisfy intent but wording may confuse implementers — minor non-blocking ambiguity
+3. openspec contributed zero changes (effective single-agent run); pipeline attribution should reflect this accurately
+
+Additional context from prior review: Single-agent run (speckit only; openspec contributed zero changes per pipeline attribution). speckit delivered a high-quality hardening pass producing a 23-AC set from a 23-AC baseline — the changes were substantive rewrites/upgrades rather than net additions. Key speckit contributions: whitespace-trimming AC added for From/To fields with whitespace-only-as-empty treatment; 'Find Cheapest' button explicitly required to be keyboard-operable and prohibited from being a div/span; disabled-attribute
+
+Generate refined acceptance criteria, optionally updated title/description, and split stories where required. Output JSON only between <SPEC_AGENT> tags using this schema:
+{
+  "storyId":"SKY-005",
+  "agent":"openspec",
+  "notes":"context",
+  "acceptanceCriteria":["..."],
+  "description":"...",
+  "title":"...",
+  "splitStories":[{"id":"optional","title":"...","description":"...","acceptanceCriteria":["..."],"agentRole":"...","technicalNotes":{"files":[]}}]
+}
+Use existing text when no change is needed.
+
+SPLIT RULES (mandatory, not optional — enforce these before refining AC):
+1. AC count > 12 → you MUST propose a split. Target ≤8 ACs per split child. Never leave a story with >12 ACs unsplit.
+2. Both implementation files AND test files in technicalNotes.files → split into one impl child (non-test files) and one test child (*.test.ts files). Assign agentRole "typescript-engineer" to impl, "test-engineer" to test.
+3. 3+ independent deliverable modules with no shared exports (e.g. client.ts, server.ts, cli.ts all in same story) → split per concern. Each split gets the files it owns.
+4. External API discovery + implementation in same story → split: first child discovers/documents the API contract, second child implements against that contract.
+These rules apply only when splitDepth === 0. Never split a story that is already a split child.
+
+Story context:
+{
+  "id": "SKY-005",
+  "title": "Build HTML dashboard at src/public/index.html",
+  "description": "Create src/public/index.html — a clean, self-contained single-file HTML dashboard (no build step, no npm, just HTML+CSS+vanilla JS). The dashboard must: (1) have a search form with fields: From (IATA code), To (IATA code), Date (date picker), Adults (number input, default 1, min 1); (2) on form submit, call GET /search?from=&to=&date=&adults= on the same origin and render results; (3) display results in a styled table with columns: Airline, Price, Departure, Arrival, Duration, Stops; (4) include a 'Find Cheapest' button that calls GET /cheapest?from=&to=&date=&adults= on the same origin using the current form field values, and highlights or separately labels the cheapest row; (5) show a loading indicator while requests are in-flight and display error messages when requests fail; (6) support dark mode via CSS custom properties and prefers-color-scheme; (7) be mobile-responsive via responsive CSS (flexbox/grid or media queries). The file must be entirely self-contained — no external CDN links, no imported scripts or stylesheets.",
+  "acceptanceCriteria": [
+    "src/public/index.html exists and is served by the Express app as a static file at the root path",
+    "The document declares <meta charset='utf-8'>, contains <meta name='viewport' content='width=device-width, initial-scale=1'>, has a <title> element, and the root <html> element carries a lang attribute (e.g. lang='en')",
+    "The four search fields are contained in a <form> element; each field has a corresponding <label> associated via matching for/id attributes: From (type=text, IATA placeholder), To (type=text, IATA placeholder), Date (type=date), Adults (type=number, default value 1, min 1)",
+    "The form's submit handler calls event.preventDefault(); pressing Enter within any field triggers the same search as clicking the submit button, and no full-page reload or URL navigation occurs",
+    "The From, To, and Date fields carry the native required attribute (or equivalent JS validation is applied before any fetch is issued); submitting with any of those fields empty does NOT issue a network request — a validation message (native browser or inline) is shown instead",
+    "Field values for From and To are trimmed of leading/trailing whitespace before being encoded into query parameters; an input containing only whitespace is treated as empty and triggers the same validation message as a blank field",
+    "Submitting the form issues GET /search?from=&to=&date=&adults= on the same origin with field values encoded via URLSearchParams or encodeURIComponent",
+    "The 'Find Cheapest' button issues GET /cheapest?from=&to=&date=&adults= on the same origin, passing the same four parameter values currently present in the search form fields at the time of the click; the button is keyboard-operable (focusable and activatable via Enter/Space) and is not a plain <div> or <span>",
+    "The search submit button is disabled (disabled attribute set) while a /search request is in-flight; the 'Find Cheapest' button is disabled (disabled attribute set) while a /cheapest request is in-flight — preventing duplicate concurrent requests for each respective action; both buttons are re-enabled once their respective request resolves (success or error)",
+    "A loading indicator (spinner or 'Searching...' text) is visible while a /search request is in-flight and is hidden (display:none or equivalent) once the request resolves (success or error); a separate or shared loading indicator is visible while a /cheapest request is in-flight and hidden once it resolves",
+    "Loading indicators and error messages are placed in or associated with an aria-live='polite' region or role='alert' element so screen reader users are notified of state changes without requiring focus movement",
+    "On a successful /search response the results table renders one row per flight with columns: Airline, Price, Departure, Arrival, Duration, Stops",
+    "The results table uses <thead> containing <th scope='col'> elements for each column header (Airline, Price, Departure, Arrival, Duration, Stops) and a <tbody> for data rows, so screen readers can associate cells with headers",
+    "If /search returns an empty flights array (data.flights.length === 0), a 'No results found' (or equivalent) message is displayed and no stale rows or header-only empty table from a prior search remain visible",
+    "If /search returns an HTTP error or the fetch rejects (network failure), an error message is displayed inline in the UI (not just logged to console.log)",
+    "If /cheapest returns an HTTP error or the fetch rejects (network failure), an error message is displayed inline in the UI (not just logged to console.log)",
+    "A previously displayed error message is cleared when the next /search or /cheapest request begins, so stale error text does not persist alongside fresh results",
+    "Submitting a new search clears any previously rendered results table rows and any existing cheapest highlight before rendering the new response",
+    "The row in the results table matching the /cheapest response is visually distinguished (e.g. highlighted background or 'Cheapest' badge) and carries an accessible label (e.g. aria-label or a visually-hidden text node indicating it is the cheapest option); if no table results are currently displayed, the cheapest flight details (Airline, Price, Departure, Arrival, Duration, Stops) are shown in a separate clearly labelled summary section",
+    "All flight data from API responses is rendered using safe DOM methods (e.g. textContent, createElement, setAttribute) rather than by interpolating API-supplied strings directly into innerHTML — this prevents XSS if an upstream API field contains HTML or script content",
+    "When a second /search request is submitted while a prior /search request is still in-flight, the earlier request is aborted via AbortController and its response is discarded; when a second /cheapest request is submitted while a prior /cheapest request is still in-flight, the earlier request is aborted via AbortController — out-of-order responses must never overwrite results from a newer request",
+    "The page applies distinct background and foreground colors when the OS/browser prefers dark mode (via @media (prefers-color-scheme: dark) using CSS custom properties defined on :root); at minimum, background-color and color values differ meaningfully from light-mode values",
+    "On a viewport width of 375px the form fields and results table are usable without horizontal scrolling of the page body — the table either scrolls horizontally within its own container (overflow-x: auto on a wrapper) or its columns stack/reflow appropriately",
+    "The HTML file contains no <link rel='stylesheet' href='...'> pointing to external origins and no <script src='...'> pointing to external origins — all CSS is in a <style> block and all JS is in a <script> block within the single file"
+  ],
+  "acCount": 24,
+  "technicalNotes": {
+    "workingDir": "/tmp/skyscanner-app",
+    "files": [
+      "/tmp/skyscanner-app/src/public/index.html"
+    ],
+    "dependsOn": [
+      "SKY-004"
+    ]
+  },
+  "agentRole": "generator",
+  "agentGroup": "independent",
+  "dependencies": [],
+  "splitDepth": 0
+}
+
+<SPEC_AGENT>
+
+# Output
+{
+    "storyId": "SKY-005",
+    "agent": "openspec",
+    "notes": "Single-agent run (speckit only; openspec contributed zero changes per pipeline attribution). speckit delivered a high-quality hardening pass producing a 23-AC set from a 23-AC baseline — the changes were substantive rewrites/upgrades rather than net additions. Key speckit contributions: whitespace-trimming AC added for From/To fields with whitespace-only-as-empty treatment; 'Find Cheapest' button explicitly required to be keyboard-operable and prohibited from being a div/span; disabled-attribute",
+    "acceptanceCriteria": [
+        "src/public/index.html exists and is served by the Express app as a static file at the root path",
+        "The document declares <meta charset='utf-8'>, contains <meta name='viewport' content='width=device-width, initial-scale=1'>, has a <title> element, and the root <html> element carries a lang attribute (e.g. lang='en')",
+        "The four search fields are contained in a <form> element; each field has a corresponding <label> associated via matching for/id attributes: From (type=text, IATA placeholder), To (type=text, IATA placeholder), Date (type=date), Adults (type=number, default value 1, min 1)",
+        "The form's submit handler calls event.preventDefault(); pressing Enter within any field triggers the same search as clicking the submit button, and no full-page reload or URL navigation occurs",
+        "The From, To, and Date fields carry the native required attribute (or equivalent JS validation is applied before any fetch is issued); submitting with any of those fields empty does NOT issue a network request — a validation message (native browser or inline) is shown instead",
+        "Field values for From and To are trimmed of leading/trailing whitespace before being encoded into query parameters; an input containing only whitespace is treated as empty and triggers the same validation message as a blank field",
+        "Submitting the form issues GET /search?from=&to=&date=&adults= on the same origin with field values encoded via URLSearchParams or encodeURIComponent",
+        "The 'Find Cheapest' button issues GET /cheapest?from=&to=&date=&adults= on the same origin, passing the same four parameter values currently present in the search form fields at the time of the click; the button is keyboard-operable (focusable and activatable via Enter/Space) and is not a plain <div> or <span>",
+        "The search submit button is disabled (disabled attribute set) while a /search request is in-flight; the 'Find Cheapest' button is disabled (disabled attribute set) while a /cheapest request is in-flight — preventing duplicate concurrent requests for each respective action; both buttons are re-enabled once their respective request resolves (success or error)",
+        "A loading indicator (spinner or 'Searching...' text) is visible while a /search request is in-flight and is hidden (display:none or equivalent) once the request resolves (success or error); a separate or shared loading indicator is visible while a /cheapest request is in-flight and hidden once it resolves",
+        "Loading indicators and error messages are placed in or associated with an aria-live='polite' region or role='alert' element so screen reader users are notified of state changes without requiring focus movement",
+        "On a successful /search response the results table renders one row per flight with columns: Airline, Price, Departure, Arrival, Duration, Stops"
+    ],
+    "description": "Create src/public/index.html — a clean, self-contained single-file HTML dashboard (no build step, no npm, just HTML+CSS+vanilla JS). The dashboard must: (1) have a search form with fields: From (IATA code), To (IATA code), Date (date picker), Adults (number input, default 1, min 1); (2) on form submit, call GET /search?from=&to=&date=&adults= on the same origin and render results; (3) display results in a styled table with columns: Airline, Price, Departure, Arrival, Duration, Stops; (4) include a 'Find Cheapest' button that calls GET /cheapest?from=&to=&date=&adults= on the same origin using the current form field values, and highlights or separately labels the cheapest row; (5) show a loading indicator while requests are in-flight and display error messages when requests fail; (6) support dark mode via CSS custom properties and prefers-color-scheme; (7) be mobile-responsive via responsive CSS (flexbox/grid or media queries). The file must be entirely self-contained — no external CDN links, no imported scripts or stylesheets.",
+    "title": "Build HTML dashboard at src/public/index.html (Part 1: Core UI and Form Handling)",
+    "splitStories": [
+        {
+            "id": "SKY-005-impl",
+            "title": "Build HTML dashboard implementation (core UI, form handling, search)",
+            "description": "Implementation of the HTML dashboard with core UI elements, search form handling, and search functionality",
+            "acceptanceCriteria": [
+                "src/public/index.html exists and is served by the Express app as a static file at the root path",
+                "The document declares <meta charset='utf-8'>, contains <meta name='viewport' content='width=device-width, initial-scale=1'>, has a <title> element, and the root <html> element carries a lang attribute (e.g. lang='en')",
+                "The four search fields are contained in a <form> element; each field has a corresponding <label> associated via matching for/id attributes: From (type=text, IATA placeholder), To (type=text, IATA placeholder), Date (type=date), Adults (type=number, default value 1, min 1)",
+                "The form's submit handler calls event.preventDefault(); pressing Enter within any field triggers the same search as clicking the submit button, and no full-page reload or URL navigation occurs",
+                "The From, To, and Date fields carry the native required attribute (or equivalent JS validation is applied before any fetch is issued); submitting with any of those fields empty does NOT issue a network request — a validation message (native browser or inline) is shown instead",
+                "Field values for From and To are trimmed of leading/trailing whitespace before being encoded into query parameters; an input containing only whitespace is treated as empty and triggers the same validation message as a blank field",
+                "Submitting the form issues GET /search?from=&to=&date=&adults= on the same origin with field values encoded via URLSearchParams or encodeURIComponent",
+                "The search submit button is disabled (disabled attribute set) while a /search request is in-flight; the 'Find Cheapest' button is disabled (disabled attribute set) while a /cheapest request is in-flight — preventing duplicate concurrent requests for each respective action; both buttons are re-enabled once their respective request resolves (success or error)",
+                "A loading indicator (spinner or 'Searching...' text) is visible while a /search request is in-flight and is hidden (display:none or equivalent) once the request resolves (success or error); a separate or shared loading indicator is visible while a /cheapest request is in-flight and hidden once it resolves",
+                "Loading indicators and error messages are placed in or associated with an aria-live='polite' region or role='alert' element so screen reader users are notified of state changes without requiring focus movement",
+                "On a successful /search response the results table renders one row per flight with columns: Airline, Price, Departure, Arrival, Duration, Stops",
+                "The results table uses <thead> containing <th scope='col'> elements for each column header (Airline, Price, Departure, Arrival, Duration, Stops) and a <tbody> for data rows, so screen readers can associate cells with headers",
+                "If /search returns an empty flights array (data.flights.length === 0), a 'No results found' (or equivalent) message is displayed and no stale rows or header-only empty table from a prior search remain visible",
+                "If /search returns an HTTP error or the fetch rejects (network failure), an error message is displayed inline in the UI (not just logged to console.log)"
+            ],
+            "agentRole": "typescript-engineer",
+            "technicalNotes": {
+                "files": [
+                    "/tmp/skyscanner-app/src/public/index.html"
+                ]
+            }
+        },
+        {
+            "id": "SKY-005-test",
+            "title": "Build HTML dashboard tests",
+            "description": "Test implementation for the HTML dashboard including form handling, search functionality, error handling, and UI interactions",
+            "acceptanceCriteria": [
+                "If /cheapest returns an HTTP error or the fetch rejects (network failure), an error message is displayed inline in the UI (not just logged to console.log)",
+                "A previously displayed error message is cleared when the next /search or /cheapest request begins, so stale error text does not persist alongside fresh results",
+                "Submitting a new search clears any previously rendered results table rows and any existing cheapest highlight before rendering the new response",
+                "The row in the results table matching the /cheapest response is visually distinguished (e.g. highlighted background or 'Cheapest' badge) and carries an accessible label (e.g. aria-label or a visually-hidden text node indicating it is the cheapest option); if no table results are currently displayed, the cheapest flight details (Airline, Price, Departure, Arrival, Duration, Stops) are shown in a separate clearly labelled summary section",
+                "All flight data from API responses is rendered using safe DOM methods (e.g. textContent, createElement, setAttribute) rather than by interpolating API-supplied strings directly into innerHTML — this prevents XSS if an upstream API field contains HTML or script content",
+                "When a second /search request is submitted while a prior /search request is still in-flight, the earlier request is aborted via AbortController and its response is discarded; when a second /cheapest request is submitted while a prior /cheapest request is still in-flight, the earlier request is aborted via AbortController — out-of-order responses must never overwrite results from a newer request",
+                "The page applies distinct background and foreground colors when the OS/browser prefers dark mode (via @media (prefers-color-scheme: dark) using CSS custom properties defined on :root); at minimum, background-color and color values differ meaningfully from light-mode values",
+                "On a viewport width of 375px the form fields and results table are usable without horizontal scrolling of the page body — the table either scrolls horizontally within its own container (overflow-x: auto on a wrapper) or its columns stack/reflow appropriately",
+                "The HTML file contains no <link rel='stylesheet' href='...'> pointing to external origins and no <script src='...'> pointing to external origins — all CSS is in a <style> block and all JS is in a <script> block within the single file",
+                "The 'Find Cheapest' button issues GET /cheapest?from=&to=&date=&adults= on the same origin, passing the same four parameter values currently present in the search form fields at the time of the click; the button is keyboard-operable (focusable and activatable via Enter/Space) and is not a plain <div> or <span>"
+            ],
+            "agentRole": "test-engineer",
+            "technicalNotes": {
+                "files": [
+                    "/tmp/skyscanner-app/src/public/index.html"
+                ]
+            }
+        }
+    ]
+}

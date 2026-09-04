@@ -1,0 +1,548 @@
+=== Prompt for SKY-003-test (attempt 1) ===
+CRITICAL — WRITE FILES FIRST. Your FIRST tool call MUST be WriteFile.
+Do NOT output any text before calling WriteFile. Do NOT plan or say "I will...".
+Call WriteFile NOW for the EXACT ABSOLUTE PATHS listed below:
+
+   - WRITE /home/bradleyjerome/projects/skyscanner-app/src/cli.test.ts first, before any other action
+---
+
+Implement user story SKY-003-test: Test flight search CLI entry point — argument validation, rendering, and error paths
+
+## Story Description
+Create `src/cli.test.ts` with vitest covering all CLI behaviors: missing required flags, invalid `--adults` and `--date` values, missing `RAPIDAPI_KEY`, correct table rendering with separator and alignment for multi-row results, empty-array result rendering, and error path where `SkyscannerClient` throws. Mock `SkyscannerClient` at the module boundary.
+
+## Acceptance Criteria
+- 1. `src/cli.test.ts` contains at least 8 passing vitest tests covering: missing --from, missing --to, missing --date, invalid --adults value, missing RAPIDAPI_KEY env var, table rendered correctly for valid multi-row results (verify separator row present and column alignment), empty-array result renders 'No flights found.', and error path (client throws)
+- 2. `vitest run` exits 0 with all tests green
+
+
+## Test Criteria (ground truth — written from actual source; overrides any conflicting AC)
+- CLI entry point is main() function which calls process.exit() with codes: 2 for missing args/invalid args, 1 for API key missing or client errors, 0 for success or empty results
+- parseArgs() parses --from, --to, --date, --adults flags from process.argv slice(2)
+- Missing --from, --to, or --date triggers printUsage() which writes to stderr: 'Error: Missing required arguments.\n' followed by USAGE string, then process.exit(2)
+- Invalid --date format triggers stderr write: 'Error: Invalid --date value "<value>". Expected format YYYY-MM-DD.\n' then process.exit(2)
+- Invalid --adults value triggers stderr write: 'Error: Invalid --adults value. Must be a positive integer.\n' then process.exit(2)
+- Missing RAPIDAPI_KEY env var triggers stderr write: 'Error: RAPIDAPI_KEY environment variable is required\n' then process.exit(1)
+- isValidDate() validates format /^\d{4}-\d{2}-\d{2}$/ only - no actual date validation
+- isPositiveInteger() validates Number.isInteger(value) && value > 0 - adults=0 is invalid, adults=1.5 is invalid
+- SkyscannerClient is imported from './skyscanner/client.js' and instantiated with { apiKey } object
+- client.searchFlights() is called with object: { origin: args.from, destination: args.to, date: args.date, adults }
+- Empty flights array (length === 0) writes 'No flights found.\n' to stdout and process.exit(0)
+- renderTable() outputs 6 columns: Airline (left), Price (right), Departure (left), Arrival (left), Duration (left), Stops (left)
+- Price column uses getCurrencySymbol() which returns: USD='$', EUR='€', GBP='£', JPY='¥', CAD='C$', AUD='A$', default='£'
+- Price values formatted as '${symbol}${price.toFixed(2)}'
+- Duration formatted via formatDuration(minutes) returning '${hours}h ${mins}m'
+- Table has header row, separator row of dashes, then data rows - all joined by single space
+- padLeft used for right-aligned columns, padRight used for left-aligned columns
+- Client constructor errors and searchFlights errors write message to stderr and process.exit(1)
+- Default adults value is 1 when --adults flag not provided
+
+## Mock Strategy
+vi.mock('./skyscanner/client.js') with vi.hoisted(() => ({ SkyscannerClient: vi.fn() })) and mock instance with vi.fn().mockResolvedValue/MockRejectedValue for searchFlights; use vi.stubEnv for RAPIDAPI_KEY; beforeEach uses vi.clearAllMocks()
+
+## Banned Patterns (must NOT appear in your file)
+origin, destination, --origin, --destination, @jest/globals, ./skyscanner/client', ./client, process.exit(0) on error, process.exit(2) on API key error, table rendered with | separators, console.log, console.error, throw new Error, adults defaults to 0, adults accepts 0, adults accepts negative, adults accepts decimal
+
+## Technical Notes
+- files: ["/home/bradleyjerome/projects/skyscanner-app/src/cli.test.ts"]
+- dependsOn: ["SKY-002"]
+
+## Files to Create/Modify (EXACT ABSOLUTE PATHS — write to these paths exactly)
+/home/bradleyjerome/projects/skyscanner-app/src/cli.test.ts
+
+## Dependencies
+SKY-002
+
+
+## Instructions
+**CRITICAL — WRITE FILES FIRST:**
+   - WRITE /home/bradleyjerome/projects/skyscanner-app/src/cli.test.ts first, before any other action
+**You MUST write every file listed above to its EXACT absolute path. Do NOT write to a different path, do NOT write to the current directory unless it matches the path above. Use your WriteFile or Edit tools with the full absolute path shown.**
+
+1. Write each required file to its exact absolute path listed above — do this FIRST before anything else
+2. Implement all acceptance criteria for this story
+3. Test Criteria facts above are ground truth — your test assertions MUST match them exactly
+4. Do NOT create tests unless explicitly required in acceptance criteria
+
+After implementation, provide a brief summary of what was created/modified.
+
+## Relevant Knowledge Base Entries
+The following was learned from previous story implementations and is relevant to your agent role. Apply this knowledge before writing any code:
+
+- [2026-07-06T17:45:30Z] Always resolve mocked fetch calls to a Response-shaped object with ok, status, statusText, and a json method returning a Promise.
+- [2026-07-06T17:50:20Z] Use valid module and moduleResolution pairs in tsconfig.json: CommonJS with Node, Node16 with Node16, ESNext with Bundler. Use CommonJS and Node for the stack. Mismatched pairs cause build errors.
+- [2026-07-06T18:11:26Z] Use vi.fn().mockResolvedValue(value) to make a mock return a resolved Promise.
+- [2026-07-06T20:31:11Z] Use `test: { passWithNoTests: true }` in vitest.config.ts or create a stub test file when no *.test.ts files exist.
+- [2026-07-06T20:33:03Z] Enable globals:true in vitest.config.ts so describe, it, and expect work without imports, reducing boilerplate in test files.
+- [2026-07-06T23:47:34Z] Use CommonJS-compatible patterns in src/server.ts: avoid `import.meta.url` and top-level `await`; gate listen with `if (require.main === module)`.
+- [2026-07-07T02:35:30Z] Always include a non-test source file in src/ alongside any src/*.test.ts file, since tsconfig.json excludes test files from tsc --noEmit.
+- [2026-07-07T19:01:34Z] Only modify or create files explicitly listed in the story's acceptance criteria. Do not touch files belonging to other stories or outside the current task scope.
+- [2026-07-07T20:17:57Z] [unreviewed-fallback] Avoid using deprecated TypeScript compiler options like 'moduleResolution=node10'; use 'moduleResolution=node' instead.
+- [2026-07-17T20:20:58Z] Always: Before importing a module or referencing a type/property, always read the actual source file to verify the export exists, its exact path, its properties, and its constructor/factory signatures
+
+## Knowledge Base Contribution (do this LAST — after writing all implementation files)
+Your assigned KB entry ID for this run: **KB-008**
+
+IMPORTANT: Write ALL implementation files first. Only AFTER writing every required file should you optionally append a KB entry.
+Do NOT read orchestrations/agents/KB.md before writing implementation files. The relevant KB entries are already injected above.
+
+If (and only if) you discover a non-obvious pattern during implementation, append one entry to `orchestrations/agents/KB.md`:
+
+```markdown
+## KB-008 -- 2026-07-18
+
+**Category:** <backend|frontend|infrastructure|testing|orchestration>
+**AgentRole:** <your agentRole from the story>
+**Tags:** <comma-separated tech keywords, e.g. typescript, node, cli>
+**Trigger:** <retry|first-success>
+**StoryRef:** SKY-003-test
+
+<One concise paragraph: the specific pattern, gotcha, or anti-pattern.>
+```
+
+Only write an entry if the knowledge is genuinely non-obvious. Skip trivial observations.
+
+## Execution Plan
+Follow this plan step by step:
+1. Create test file /home/bradleyjerome/projects/skyscanner-app/src/cli.test.ts with vitest import and describe block
+2. Write test for missing --from argument validation that expects error message
+3. Write test for missing --to argument validation that expects error message
+4. Write test for missing --date argument validation that expects error message
+5. Write test for invalid --adults value validation that expects error message
+6. Write test for missing RAPIDAPI_KEY environment variable that expects error message
+7. Write test for valid multi-row flight results that verifies table rendering with separator row and column alignment
+8. Write test for empty flight results that verifies 'No flights found.' message rendering
+9. Write test for client error path that expects error to be thrown and handled
+10. Run vitest to ensure all 8 tests pass and exit code is 0
+=== End Prompt ===
+
+=== epam Output (attempt 1) ===
+
+
+=== External verification failed (exit 1) ===
+
+> skyscanner-app@1.0.0 test
+> vitest run
+
+[33mThe CJS build of Vite's Node API is deprecated. See https://vite.dev/guide/troubleshooting.html#vite-cjs-node-api-deprecated for more details.[39m
+
+ RUN  v1.6.1 /home/bradleyjerome/projects/skyscanner-app
+
+ ❯ src/cli.test.ts  (0 test)
+ ✓ src/skyscanner/client.test.ts  (19 tests) 8ms
+ ✓ src/server.test.ts  (18 tests) 192ms
+
+⎯⎯⎯⎯⎯⎯ Failed Suites 1 ⎯⎯⎯⎯⎯⎯⎯
+
+ FAIL  src/cli.test.ts [ src/cli.test.ts ]
+SyntaxError: Cannot call vi.hoisted() inside vi.mock(): both methods are hoisted to the top of the file and not actually called inside each other.
+      2| import { SkyscannerClient } from "./skyscanner/client.js";
+      3| vi.mock("./skyscanner/client.js", () => {
+      4|   const { SkyscannerClient: MockClient } = vi.hoisted(() => ({
+       |                                            ^
+      5|     SkyscannerClient: vi.fn()
+      6|   }));
+⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯[1/1]⎯
+
+ Test Files  1 failed | 2 passed (3)
+      Tests  37 passed (37)
+   Start at  21:19:32
+   Duration  603ms (transform 116ms, setup 0ms, collect 203ms, tests 200ms, environment 0ms, prepare 197ms)
+
+
+=== epam exited with code 1 ===
+=== Prompt for SKY-003-test (attempt 5) ===
+CRITICAL — WRITE FILES FIRST. Your FIRST tool call MUST be WriteFile.
+Do NOT output any text before calling WriteFile. Do NOT plan or say "I will...".
+Call WriteFile NOW for the EXACT ABSOLUTE PATHS listed below:
+
+   - WRITE /home/bradleyjerome/projects/skyscanner-app/src/cli.test.ts first, before any other action
+---
+
+Implement user story SKY-003-test: Test flight search CLI entry point — argument validation, rendering, and error paths
+
+## Story Description
+Create `src/cli.test.ts` with vitest covering all CLI behaviors: missing required flags, invalid `--adults` and `--date` values, missing `RAPIDAPI_KEY`, correct table rendering with separator and alignment for multi-row results, empty-array result rendering, and error path where `SkyscannerClient` throws. Mock `SkyscannerClient` at the module boundary.
+
+## Acceptance Criteria
+- 1. `src/cli.test.ts` contains at least 8 passing vitest tests covering: missing --from, missing --to, missing --date, invalid --adults value, missing RAPIDAPI_KEY env var, table rendered correctly for valid multi-row results (verify separator row present and column alignment), empty-array result renders 'No flights found.', and error path (client throws)
+- 2. `vitest run` exits 0 with all tests green
+
+
+## Test Criteria (ground truth — written from actual source; overrides any conflicting AC)
+- CLI entry point is main() function which calls process.exit() with codes: 2 for missing args/invalid args, 1 for API key missing or client errors, 0 for success or empty results
+- parseArgs() parses --from, --to, --date, --adults flags from process.argv slice(2)
+- Missing --from, --to, or --date triggers printUsage() which writes to stderr: 'Error: Missing required arguments.\n' followed by USAGE string, then process.exit(2)
+- Invalid --date format triggers stderr write: 'Error: Invalid --date value "<value>". Expected format YYYY-MM-DD.\n' then process.exit(2)
+- Invalid --adults value triggers stderr write: 'Error: Invalid --adults value. Must be a positive integer.\n' then process.exit(2)
+- Missing RAPIDAPI_KEY env var triggers stderr write: 'Error: RAPIDAPI_KEY environment variable is required\n' then process.exit(1)
+- isValidDate() validates format /^\d{4}-\d{2}-\d{2}$/ only - no actual date validation
+- isPositiveInteger() validates Number.isInteger(value) && value > 0 - adults=0 is invalid, adults=1.5 is invalid
+- SkyscannerClient is imported from './skyscanner/client.js' and instantiated with { apiKey } object
+- client.searchFlights() is called with object: { origin: args.from, destination: args.to, date: args.date, adults }
+- Empty flights array (length === 0) writes 'No flights found.\n' to stdout and process.exit(0)
+- renderTable() outputs 6 columns: Airline (left), Price (right), Departure (left), Arrival (left), Duration (left), Stops (left)
+- Price column uses getCurrencySymbol() which returns: USD='$', EUR='€', GBP='£', JPY='¥', CAD='C$', AUD='A$', default='£'
+- Price values formatted as '${symbol}${price.toFixed(2)}'
+- Duration formatted via formatDuration(minutes) returning '${hours}h ${mins}m'
+- Table has header row, separator row of dashes, then data rows - all joined by single space
+- padLeft used for right-aligned columns, padRight used for left-aligned columns
+- Client constructor errors and searchFlights errors write message to stderr and process.exit(1)
+- Default adults value is 1 when --adults flag not provided
+
+## Mock Strategy
+vi.mock('./skyscanner/client.js') with vi.hoisted(() => ({ SkyscannerClient: vi.fn() })) and mock instance with vi.fn().mockResolvedValue/MockRejectedValue for searchFlights; use vi.stubEnv for RAPIDAPI_KEY; beforeEach uses vi.clearAllMocks()
+
+## Banned Patterns (must NOT appear in your file)
+origin, destination, --origin, --destination, @jest/globals, ./skyscanner/client', ./client, process.exit(0) on error, process.exit(2) on API key error, table rendered with | separators, console.log, console.error, throw new Error, adults defaults to 0, adults accepts 0, adults accepts negative, adults accepts decimal
+
+## Technical Notes
+- files: ["/home/bradleyjerome/projects/skyscanner-app/src/cli.test.ts"]
+- dependsOn: ["SKY-002"]
+
+## Files to Create/Modify (EXACT ABSOLUTE PATHS — write to these paths exactly)
+/home/bradleyjerome/projects/skyscanner-app/src/cli.test.ts
+
+## Dependencies
+SKY-002
+
+
+## Instructions
+**CRITICAL — WRITE FILES FIRST:**
+   - WRITE /home/bradleyjerome/projects/skyscanner-app/src/cli.test.ts first, before any other action
+**You MUST write every file listed above to its EXACT absolute path. Do NOT write to a different path, do NOT write to the current directory unless it matches the path above. Use your WriteFile or Edit tools with the full absolute path shown.**
+
+1. Write each required file to its exact absolute path listed above — do this FIRST before anything else
+2. Implement all acceptance criteria for this story
+3. Test Criteria facts above are ground truth — your test assertions MUST match them exactly
+4. Do NOT create tests unless explicitly required in acceptance criteria
+
+After implementation, provide a brief summary of what was created/modified.
+
+## Verification Failure
+
+The orchestrator ran `npm test` after your files were written and it failed (exit code 1). Fix the code so the tests pass.
+
+```
+
+> skyscanner-app@1.0.0 test
+> vitest run
+
+[33mThe CJS build of Vite's Node API is deprecated. See https://vite.dev/guide/troubleshooting.html#vite-cjs-node-api-deprecated for more details.[39m
+
+ RUN  v1.6.1 /home/bradleyjerome/projects/skyscanner-app
+
+ ❯ src/cli.test.ts  (0 test)
+ ✓ src/skyscanner/client.test.ts  (19 tests) 8ms
+ ✓ src/server.test.ts  (18 tests) 192ms
+
+⎯⎯⎯⎯⎯⎯ Failed Suites 1 ⎯⎯⎯⎯⎯⎯⎯
+
+ FAIL  src/cli.test.ts [ src/cli.test.ts ]
+SyntaxError: Cannot call vi.hoisted() inside vi.mock(): both methods are hoisted to the top of the file and not actually called inside each other.
+      2| import { SkyscannerClient } from "./skyscanner/client.js";
+      3| vi.mock("./skyscanner/client.js", () => {
+      4|   const { SkyscannerClient: MockClient } = vi.hoisted(() => ({
+       |                                            ^
+      5|     SkyscannerClient: vi.fn()
+      6|   }));
+⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯[1/1]⎯
+
+ Test Files  1 failed | 2 passed (3)
+      Tests  37 passed (37)
+   Start at  21:19:32
+   Duration  603ms (transform 116ms, setup 0ms, collect 203ms, tests 200ms, environment 0ms, prepare 197ms)
+```
+
+## Relevant Knowledge Base Entries
+The following was learned from previous story implementations and is relevant to your agent role. Apply this knowledge before writing any code:
+
+- [2026-07-06T17:45:30Z] Always resolve mocked fetch calls to a Response-shaped object with ok, status, statusText, and a json method returning a Promise.
+- [2026-07-06T17:50:20Z] Use valid module and moduleResolution pairs in tsconfig.json: CommonJS with Node, Node16 with Node16, ESNext with Bundler. Use CommonJS and Node for the stack. Mismatched pairs cause build errors.
+- [2026-07-06T18:11:26Z] Use vi.fn().mockResolvedValue(value) to make a mock return a resolved Promise.
+- [2026-07-06T20:31:11Z] Use `test: { passWithNoTests: true }` in vitest.config.ts or create a stub test file when no *.test.ts files exist.
+- [2026-07-06T20:33:03Z] Enable globals:true in vitest.config.ts so describe, it, and expect work without imports, reducing boilerplate in test files.
+- [2026-07-06T23:47:34Z] Use CommonJS-compatible patterns in src/server.ts: avoid `import.meta.url` and top-level `await`; gate listen with `if (require.main === module)`.
+- [2026-07-07T02:35:30Z] Always include a non-test source file in src/ alongside any src/*.test.ts file, since tsconfig.json excludes test files from tsc --noEmit.
+- [2026-07-07T19:01:34Z] Only modify or create files explicitly listed in the story's acceptance criteria. Do not touch files belonging to other stories or outside the current task scope.
+- [2026-07-07T20:17:57Z] [unreviewed-fallback] Avoid using deprecated TypeScript compiler options like 'moduleResolution=node10'; use 'moduleResolution=node' instead.
+- [2026-07-17T20:20:58Z] Always: Before importing a module or referencing a type/property, always read the actual source file to verify the export exists, its exact path, its properties, and its constructor/factory signatures
+
+## Knowledge Base Contribution (do this LAST — after writing all implementation files)
+Your assigned KB entry ID for this run: **KB-008**
+**This is retry attempt 4** — a previous attempt failed. You MUST write a KB entry documenting what went wrong and what you changed.
+
+IMPORTANT: Write ALL implementation files first. Only AFTER writing every required file should you optionally append a KB entry.
+Do NOT read orchestrations/agents/KB.md before writing implementation files. The relevant KB entries are already injected above.
+
+If (and only if) you discover a non-obvious pattern during implementation, append one entry to `orchestrations/agents/KB.md`:
+
+```markdown
+## KB-008 -- 2026-07-18
+
+**Category:** <backend|frontend|infrastructure|testing|orchestration>
+**AgentRole:** <your agentRole from the story>
+**Tags:** <comma-separated tech keywords, e.g. typescript, node, cli>
+**Trigger:** <retry|first-success>
+**StoryRef:** SKY-003-test
+
+<One concise paragraph: the specific pattern, gotcha, or anti-pattern.>
+```
+
+Only write an entry if the knowledge is genuinely non-obvious. Skip trivial observations.
+
+## Execution Plan
+Follow this plan step by step:
+1. Create test file /home/bradleyjerome/projects/skyscanner-app/src/cli.test.ts with vitest import and describe block
+2. Write test for missing --from argument validation that expects error message
+3. Write test for missing --to argument validation that expects error message
+4. Write test for missing --date argument validation that expects error message
+5. Write test for invalid --adults value validation that expects error message
+6. Write test for missing RAPIDAPI_KEY environment variable that expects error message
+7. Write test for valid multi-row flight results that verifies table rendering with separator row and column alignment
+8. Write test for empty flight results that verifies 'No flights found.' message rendering
+9. Write test for client error path that expects error to be thrown and handled
+10. Run vitest to ensure all 8 tests pass and exit code is 0
+
+## Coordinator Guidance (retry 4)
+The following targeted instruction was identified from the previous failure:
+
+## Self-Heal: Failure Analyst Summary
+Root cause: vi.hoisted() used inside vi.mock() causes syntax error
+Fix: Never use vi.hoisted() inside vi.mock() factory; declare hoisted mocks at file level
+=== End Prompt ===
+
+=== epam Output (attempt 5) ===
+
+
+=== External verification failed (exit 1) ===
+
+> skyscanner-app@1.0.0 test
+> vitest run
+
+[33mThe CJS build of Vite's Node API is deprecated. See https://vite.dev/guide/troubleshooting.html#vite-cjs-node-api-deprecated for more details.[39m
+
+ RUN  v1.6.1 /home/bradleyjerome/projects/skyscanner-app
+
+ ❯ src/cli.test.ts  (0 test)
+ ✓ src/skyscanner/client.test.ts  (19 tests) 9ms
+ ✓ src/server.test.ts  (18 tests) 195ms
+
+⎯⎯⎯⎯⎯⎯ Failed Suites 1 ⎯⎯⎯⎯⎯⎯⎯
+
+ FAIL  src/cli.test.ts [ src/cli.test.ts ]
+SyntaxError: Cannot call vi.hoisted() inside vi.mock(): both methods are hoisted to the top of the file and not actually called inside each other.
+      2| import { SkyscannerClient } from "./skyscanner/client.js";
+      3| vi.mock("./skyscanner/client.js", () => {
+      4|   const { SkyscannerClient: MockClient } = vi.hoisted(() => ({
+       |                                            ^
+      5|     SkyscannerClient: vi.fn()
+      6|   }));
+⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯[1/1]⎯
+
+ Test Files  1 failed | 2 passed (3)
+      Tests  37 passed (37)
+   Start at  21:24:26
+   Duration  587ms (transform 92ms, setup 0ms, collect 191ms, tests 204ms, environment 0ms, prepare 201ms)
+
+
+=== epam exited with code 1 ===
+=== Prompt for SKY-003-test (attempt 7) ===
+CRITICAL — WRITE FILES FIRST. Your FIRST tool call MUST be WriteFile.
+Do NOT output any text before calling WriteFile. Do NOT plan or say "I will...".
+Call WriteFile NOW for the EXACT ABSOLUTE PATHS listed below:
+
+   - WRITE /home/bradleyjerome/projects/skyscanner-app/src/cli.test.ts first, before any other action
+---
+
+Implement user story SKY-003-test: Test flight search CLI entry point — argument validation, rendering, and error paths
+
+## Story Description
+Create `src/cli.test.ts` with vitest covering all CLI behaviors: missing required flags, invalid `--adults` and `--date` values, missing `RAPIDAPI_KEY`, correct table rendering with separator and alignment for multi-row results, empty-array result rendering, and error path where `SkyscannerClient` throws. Mock `SkyscannerClient` at the module boundary.
+
+## Acceptance Criteria
+- 1. `src/cli.test.ts` contains at least 8 passing vitest tests covering: missing --from, missing --to, missing --date, invalid --adults value, missing RAPIDAPI_KEY env var, table rendered correctly for valid multi-row results (verify separator row present and column alignment), empty-array result renders 'No flights found.', and error path (client throws)
+- 2. `vitest run` exits 0 with all tests green
+
+
+## Test Criteria (ground truth — written from actual source; overrides any conflicting AC)
+- CLI entry point is main() function which calls process.exit() with codes: 2 for missing args/invalid args, 1 for API key missing or client errors, 0 for success or empty results
+- parseArgs() parses --from, --to, --date, --adults flags from process.argv slice(2)
+- Missing --from, --to, or --date triggers printUsage() which writes to stderr: 'Error: Missing required arguments.\n' followed by USAGE string, then process.exit(2)
+- Invalid --date format triggers stderr write: 'Error: Invalid --date value "<value>". Expected format YYYY-MM-DD.\n' then process.exit(2)
+- Invalid --adults value triggers stderr write: 'Error: Invalid --adults value. Must be a positive integer.\n' then process.exit(2)
+- Missing RAPIDAPI_KEY env var triggers stderr write: 'Error: RAPIDAPI_KEY environment variable is required\n' then process.exit(1)
+- isValidDate() validates format /^\d{4}-\d{2}-\d{2}$/ only - no actual date validation
+- isPositiveInteger() validates Number.isInteger(value) && value > 0 - adults=0 is invalid, adults=1.5 is invalid
+- SkyscannerClient is imported from './skyscanner/client.js' and instantiated with { apiKey } object
+- client.searchFlights() is called with object: { origin: args.from, destination: args.to, date: args.date, adults }
+- Empty flights array (length === 0) writes 'No flights found.\n' to stdout and process.exit(0)
+- renderTable() outputs 6 columns: Airline (left), Price (right), Departure (left), Arrival (left), Duration (left), Stops (left)
+- Price column uses getCurrencySymbol() which returns: USD='$', EUR='€', GBP='£', JPY='¥', CAD='C$', AUD='A$', default='£'
+- Price values formatted as '${symbol}${price.toFixed(2)}'
+- Duration formatted via formatDuration(minutes) returning '${hours}h ${mins}m'
+- Table has header row, separator row of dashes, then data rows - all joined by single space
+- padLeft used for right-aligned columns, padRight used for left-aligned columns
+- Client constructor errors and searchFlights errors write message to stderr and process.exit(1)
+- Default adults value is 1 when --adults flag not provided
+
+## Mock Strategy
+vi.mock('./skyscanner/client.js') with vi.hoisted(() => ({ SkyscannerClient: vi.fn() })) and mock instance with vi.fn().mockResolvedValue/MockRejectedValue for searchFlights; use vi.stubEnv for RAPIDAPI_KEY; beforeEach uses vi.clearAllMocks()
+
+## Banned Patterns (must NOT appear in your file)
+origin, destination, --origin, --destination, @jest/globals, ./skyscanner/client', ./client, process.exit(0) on error, process.exit(2) on API key error, table rendered with | separators, console.log, console.error, throw new Error, adults defaults to 0, adults accepts 0, adults accepts negative, adults accepts decimal
+
+## Technical Notes
+- files: ["/home/bradleyjerome/projects/skyscanner-app/src/cli.test.ts"]
+- dependsOn: ["SKY-002"]
+
+## Files to Create/Modify (EXACT ABSOLUTE PATHS — write to these paths exactly)
+/home/bradleyjerome/projects/skyscanner-app/src/cli.test.ts
+
+## Dependencies
+SKY-002
+
+
+## Instructions
+**CRITICAL — WRITE FILES FIRST:**
+   - WRITE /home/bradleyjerome/projects/skyscanner-app/src/cli.test.ts first, before any other action
+**You MUST write every file listed above to its EXACT absolute path. Do NOT write to a different path, do NOT write to the current directory unless it matches the path above. Use your WriteFile or Edit tools with the full absolute path shown.**
+
+1. Write each required file to its exact absolute path listed above — do this FIRST before anything else
+2. Implement all acceptance criteria for this story
+3. Test Criteria facts above are ground truth — your test assertions MUST match them exactly
+4. Do NOT create tests unless explicitly required in acceptance criteria
+
+After implementation, provide a brief summary of what was created/modified.
+
+## Verification Failure
+
+The orchestrator ran `npm test` after your files were written and it failed (exit code 1). Fix the code so the tests pass.
+
+```
+
+> skyscanner-app@1.0.0 test
+> vitest run
+
+[33mThe CJS build of Vite's Node API is deprecated. See https://vite.dev/guide/troubleshooting.html#vite-cjs-node-api-deprecated for more details.[39m
+
+ RUN  v1.6.1 /home/bradleyjerome/projects/skyscanner-app
+
+ ❯ src/cli.test.ts  (0 test)
+ ✓ src/skyscanner/client.test.ts  (19 tests) 9ms
+ ✓ src/server.test.ts  (18 tests) 195ms
+
+⎯⎯⎯⎯⎯⎯ Failed Suites 1 ⎯⎯⎯⎯⎯⎯⎯
+
+ FAIL  src/cli.test.ts [ src/cli.test.ts ]
+SyntaxError: Cannot call vi.hoisted() inside vi.mock(): both methods are hoisted to the top of the file and not actually called inside each other.
+      2| import { SkyscannerClient } from "./skyscanner/client.js";
+      3| vi.mock("./skyscanner/client.js", () => {
+      4|   const { SkyscannerClient: MockClient } = vi.hoisted(() => ({
+       |                                            ^
+      5|     SkyscannerClient: vi.fn()
+      6|   }));
+⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯[1/1]⎯
+
+ Test Files  1 failed | 2 passed (3)
+      Tests  37 passed (37)
+   Start at  21:24:26
+   Duration  587ms (transform 92ms, setup 0ms, collect 191ms, tests 204ms, environment 0ms, prepare 201ms)
+```
+
+## Relevant Knowledge Base Entries
+The following was learned from previous story implementations and is relevant to your agent role. Apply this knowledge before writing any code:
+
+- [2026-07-06T17:45:30Z] Always resolve mocked fetch calls to a Response-shaped object with ok, status, statusText, and a json method returning a Promise.
+- [2026-07-06T17:50:20Z] Use valid module and moduleResolution pairs in tsconfig.json: CommonJS with Node, Node16 with Node16, ESNext with Bundler. Use CommonJS and Node for the stack. Mismatched pairs cause build errors.
+- [2026-07-06T18:11:26Z] Use vi.fn().mockResolvedValue(value) to make a mock return a resolved Promise.
+- [2026-07-06T20:31:11Z] Use `test: { passWithNoTests: true }` in vitest.config.ts or create a stub test file when no *.test.ts files exist.
+- [2026-07-06T20:33:03Z] Enable globals:true in vitest.config.ts so describe, it, and expect work without imports, reducing boilerplate in test files.
+- [2026-07-06T23:47:34Z] Use CommonJS-compatible patterns in src/server.ts: avoid `import.meta.url` and top-level `await`; gate listen with `if (require.main === module)`.
+- [2026-07-07T02:35:30Z] Always include a non-test source file in src/ alongside any src/*.test.ts file, since tsconfig.json excludes test files from tsc --noEmit.
+- [2026-07-07T19:01:34Z] Only modify or create files explicitly listed in the story's acceptance criteria. Do not touch files belonging to other stories or outside the current task scope.
+- [2026-07-07T20:17:57Z] [unreviewed-fallback] Avoid using deprecated TypeScript compiler options like 'moduleResolution=node10'; use 'moduleResolution=node' instead.
+- [2026-07-17T20:20:58Z] Always: Before importing a module or referencing a type/property, always read the actual source file to verify the export exists, its exact path, its properties, and its constructor/factory signatures
+
+## Knowledge Base Contribution (do this LAST — after writing all implementation files)
+Your assigned KB entry ID for this run: **KB-008**
+**This is retry attempt 6** — a previous attempt failed. You MUST write a KB entry documenting what went wrong and what you changed.
+
+IMPORTANT: Write ALL implementation files first. Only AFTER writing every required file should you optionally append a KB entry.
+Do NOT read orchestrations/agents/KB.md before writing implementation files. The relevant KB entries are already injected above.
+
+If (and only if) you discover a non-obvious pattern during implementation, append one entry to `orchestrations/agents/KB.md`:
+
+```markdown
+## KB-008 -- 2026-07-18
+
+**Category:** <backend|frontend|infrastructure|testing|orchestration>
+**AgentRole:** <your agentRole from the story>
+**Tags:** <comma-separated tech keywords, e.g. typescript, node, cli>
+**Trigger:** <retry|first-success>
+**StoryRef:** SKY-003-test
+
+<One concise paragraph: the specific pattern, gotcha, or anti-pattern.>
+```
+
+Only write an entry if the knowledge is genuinely non-obvious. Skip trivial observations.
+
+## Execution Plan
+Follow this plan step by step:
+1. Create test file /home/bradleyjerome/projects/skyscanner-app/src/cli.test.ts with vitest import and describe block
+2. Write test for missing --from argument validation that expects error message
+3. Write test for missing --to argument validation that expects error message
+4. Write test for missing --date argument validation that expects error message
+5. Write test for invalid --adults value validation that expects error message
+6. Write test for missing RAPIDAPI_KEY environment variable that expects error message
+7. Write test for valid multi-row flight results that verifies table rendering with separator row and column alignment
+8. Write test for empty flight results that verifies 'No flights found.' message rendering
+9. Write test for client error path that expects error to be thrown and handled
+10. Run vitest to ensure all 8 tests pass and exit code is 0
+
+## Coordinator Guidance (retry 6)
+The following targeted instruction was identified from the previous failure:
+
+## Self-Heal: Failure Analyst Summary
+Root cause: vi.hoisted() used inside vi.mock() causes syntax error
+Fix: Never use vi.hoisted() inside vi.mock() factory; declare hoisted mocks at file level
+## Self-Heal: Failure Analyst Summary
+Root cause: vi.hoisted() used inside vi.mock() factory causing syntax error
+Fix: Never use vi.hoisted() inside vi.mock() factory; declare hoisted mocks at file level
+=== End Prompt ===
+
+=== epam Output (attempt 7) ===
+
+
+=== External verification failed (exit 1) ===
+
+> skyscanner-app@1.0.0 test
+> vitest run
+
+[33mThe CJS build of Vite's Node API is deprecated. See https://vite.dev/guide/troubleshooting.html#vite-cjs-node-api-deprecated for more details.[39m
+
+ RUN  v1.6.1 /home/bradleyjerome/projects/skyscanner-app
+
+ ❯ src/cli.test.ts  (0 test)
+ ✓ src/skyscanner/client.test.ts  (19 tests) 9ms
+ ✓ src/server.test.ts  (18 tests) 193ms
+
+⎯⎯⎯⎯⎯⎯ Failed Suites 1 ⎯⎯⎯⎯⎯⎯⎯
+
+ FAIL  src/cli.test.ts [ src/cli.test.ts ]
+SyntaxError: Cannot call vi.hoisted() inside vi.mock(): both methods are hoisted to the top of the file and not actually called inside each other.
+      2| import { SkyscannerClient } from "./skyscanner/client.js";
+      3| vi.mock("./skyscanner/client.js", () => {
+      4|   const { SkyscannerClient: MockClient } = vi.hoisted(() => ({
+       |                                            ^
+      5|     SkyscannerClient: vi.fn()
+      6|   }));
+⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯[1/1]⎯
+
+ Test Files  1 failed | 2 passed (3)
+      Tests  37 passed (37)
+   Start at  21:31:54
+   Duration  583ms (transform 92ms, setup 0ms, collect 187ms, tests 202ms, environment 0ms, prepare 180ms)
+
+
+=== epam exited with code 1 ===

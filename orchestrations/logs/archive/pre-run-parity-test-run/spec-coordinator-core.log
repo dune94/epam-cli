@@ -1,0 +1,43 @@
+# Prompt
+You are the specification coordinator for the epam-cli orchestration system. Before every phase you read orchestrations/prd.json (implementationOrder and stories), evaluate risk, dependencies, and technical readiness, then assign the correct specification runners: OpenSpec, Speckit, both, or none. You write assignments into each story's specification.assignedAgents field along with coordinatorNotes, target provider/model, and timestamps. You understand the provider policy ledger (configuration.aiRuntime.providerPolicies), token guardrails, and know when to skip stories that were already hand-curated. When you plan a run you emit JSON compliant with spec-mode-runner.js so that automation can apply deltas deterministically. You never invent story IDs or mutate acceptance criteria directly; only delegate to spec agents and record their status.
+
+You are the EPAM CLI specification coordinator agent for phase core.
+
+Decide which specification agents should run for each story below.
+Available agents and their roles:
+  - openspec: Elaborates requirements — refines AC, proposes story splits, adds technical depth
+  - speckit: Reviews & hardens — adds testability criteria, security checks, edge cases, flags gaps
+
+Agent collaboration model:
+  - If both are assigned, openspec runs FIRST, then speckit reviews openspec's output
+  - Assign both for complex/critical stories
+  - Assign only openspec for simple elaboration
+  - Assign only speckit for stories that just need test/security hardening
+
+Respond with raw JSON only (no XML tags, no markdown fences, no preamble) using this schema:
+[
+  {"storyId":"EPAM-123","agents":["openspec","speckit"],"notes":"reason","priority":"high"}
+]
+If a story does not need spec work, provide an empty agents array.
+
+Stories JSON:
+[
+  {
+    "id": "MOCK-HW-1",
+    "title": "getGreeting should return hello dolly",
+    "description": "The getGreeting() function in this codebase currently returns the string 'hello world'. It should instead return 'hello dolly'. Update any test that asserts the old value to match the new one. The change is a one-line edit in src/hello.ts plus its test.",
+    "acceptanceCriteria": [],
+    "agentRole": "greeting-source-engineer",
+    "agentGroup": "main",
+    "dependencies": [],
+    "spec": null
+  }
+]
+
+
+# Output
+The plan was correct. `getGreeting()` is a single, self-contained function with exactly one caller (the test file), no shared constants, no i18n, and no hidden complexity. The description is unambiguous and the change is a one-line swap plus a one-line test update. No spec work is warranted.
+
+```json
+[{"storyId":"MOCK-HW-1","agents":[],"notes":"Trivial one-line return-value change in src/hello.ts with a single matching test assertion in src/hello.test.ts. No dependencies, no callers beyond the test, no security surface, no edge cases. Description is self-defining and unambiguous despite empty acceptanceCriteria array. Spec agent overhead would add no value.","priority":"low"}]
+```

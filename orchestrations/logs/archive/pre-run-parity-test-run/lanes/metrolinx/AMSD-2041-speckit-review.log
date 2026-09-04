@@ -1,0 +1,432 @@
+# Prompt
+You are the speckit specification agent for EPAM CLI. Phase core, story AMSD-2041.
+
+You are reviewing and building on the openspec agent's output for this story.
+Your role is COLLABORATIVE — you are NOT starting from scratch. Instead:
+1. Review openspec's proposed acceptance criteria for testability and completeness
+2. Add missing edge-case, error-handling, security, and accessibility criteria
+3. Flag any AC that are vague, untestable, or overlapping
+4. Splitting is openspec's decision alone — you do NOT split stories. If openspec already split
+   this story, do NOT include a "splitStories" field in your output at all (it will be ignored if
+   you do). Review and refine the acceptanceCriteria openspec gave you for the UNSPLIT story as
+   normal; per-child refinement of an already-split story's children happens on a later turn, not
+   here.
+5. Do NOT remove or duplicate openspec's good work — build on it
+
+━━━ WHAT-NOT-HOW RULE (MANDATORY) ━━━
+Every AC must describe an OBSERVABLE OUTCOME (what a test can verify from outside the code),
+NOT an implementation instruction. If an AC names vi.mock, jest.fn, mockReturnValue,
+mockResolvedValue, import statements, or require() calls, REPLACE it with a
+Given/When/Then behaviour statement. Never tell the implementer which library or mock pattern to use.
+
+OPENSPEC'S OUTPUT (your input to review — ACs and split proposals only):
+{
+  "acceptanceCriteria": [],
+  "notes": "Novel capability — no live_preview config, no preview API route, no context.preview handling, and no livePreviewQuery() usage exist anywhere in the codebase. The Contentstack SDK's live_preview feature requires: (1) live_preview config block on the Stack, (2) a preview API route to receive Contentstack's webhook/polling callbacks, (3) passing preview context through to queries so they return draft content. All queries currently use SSG via getStaticProps with fallback:false, so Next.js Preview Mode must be enabled to serve dynamic draft content. Direct Stack consumers in newsService, getEventsList, and _contentstack_getNewsArticles bypass ContentstackFactory and each need live preview query support."
+}
+
+ORIGINAL STORY CONTEXT:
+{
+  "id": "AMSD-2041",
+  "title": "[GO, UP, MX] Live Preview of Content in CMS",
+  "description": "AS a Content Author, I WANT to preview draft entries in CMS, SO THAT I can see how content will be shown on the website. This requires integrating the Contentstack Live Preview SDK: adding live_preview configuration (preview_token, management_token, host) to the Stack options, creating a Next.js API route for Contentstack's preview callbacks, enabling Next.js Preview Mode in getStaticProps so draft content is served on demand, and applying livePreviewQuery() to all Contentstack query paths including those that bypass ContentstackFactory. Limitation: Might not be possible to preview protected pages and content.",
+  "originalAcceptanceCriteria": [],
+  "technicalNotes": {
+    "files": [
+      "src/services/contentstack.ts",
+      "src/pages/[[...slug]].tsx",
+      "src/services/newsService.ts",
+      "src/api/getEventsList.ts",
+      "src/api/utils/_contentstack_getNewsArticles.ts",
+      "src/interface/content/page.ts",
+      "src/components/contentstack/ContentstackAttention/content.mock.ts",
+      "src/components/contentstack/ContentStackGallery/ContentStackGallery.mock.ts"
+    ],
+    "perCodeline": {
+      "gotransit": {
+        "files": [
+          "src/services/contentstack.ts",
+          "src/pages/[[...slug]].tsx",
+          "src/interface/content/page.ts",
+          "src/components/contentstack/ContentStackGallery/ContentStackGallery.mock.ts"
+        ],
+        "resolved": [
+          {
+            "declared": "src/services/contentstack.ts",
+            "actual": "src/services/contentstack.ts",
+            "match": "exact",
+            "verified_against": "/home/bradleyjerome/projects/metrolinx/next.gotransit.com"
+          },
+          {
+            "declared": "src/pages/[[...slug]].tsx",
+            "actual": "src/pages/[[...slug]].tsx",
+            "match": "exact",
+            "verified_against": "/home/bradleyjerome/projects/metrolinx/next.gotransit.com"
+          },
+          {
+            "declared": "src/interface/content/page.ts",
+            "actual": "src/interface/content/page.ts",
+            "match": "exact",
+            "verified_against": "/home/bradleyjerome/projects/metrolinx/next.gotransit.com"
+          },
+          {
+            "declared": "src/components/contentstack/ContentStackGallery/ContentStackGallery.mock.ts",
+            "actual": "src/components/contentstack/ContentStackGallery/ContentStackGallery.mock.ts",
+            "match": "exact",
+            "verified_against": "/home/bradleyjerome/projects/metrolinx/next.gotransit.com"
+          }
+        ],
+        "unresolved": [
+          {
+            "declared": "src/services/newsService.ts",
+            "candidates_checked": [
+              "src/services/newsService.ts",
+              "src/services/__tests__",
+              "src/services/abandonedCartPromptService.ts",
+              "src/services/akamai.ts",
+              "src/services/blogService.ts",
+              "src/services/contentstack.ts",
+              "src/services/directoryService.ts",
+              "src/services/getNsbConfigurationFiltersService.ts",
+              "src/services/go-transit",
+              "src/services/gtm",
+              "src/services/logger.ts",
+              "src/services/onBoardingService.ts",
+              "src/services/pageComponentResolver.ts",
+              "src/services/pageService.ts",
+              "src/services/partnersPromotionsService.ts",
+              "src/services/redirectsService.ts",
+              "src/services/serviceUpdatesService.ts",
+              "src/services/staticPathsResolver.ts",
+              "src/services/stationService.ts",
+              "src/services/urlRewritesService.ts",
+              "src/services/userAccountService.ts",
+              "src/services/userProfileService.ts",
+              "src/services/userSignUpService.ts",
+              "src/services/v1-api"
+            ],
+            "reason": "no exact, case-variant or extension-variant match exists in this codeline"
+          },
+          {
+            "declared": "src/api/getEventsList.ts",
+            "candidates_checked": [
+              "src/api/getEventsList.ts",
+              "src/api/__tests__",
+              "src/api/algolia.ts",
+              "src/api/emailSignUp.ts",
+              "src/api/enums",
+              "src/api/getNearbyStations.ts",
+              "src/api/getStationDetails.ts",
+              "src/api/getSubscriptionPreferencesHandler.ts",
+              "src/api/logger.ts",
+              "src/api/middlewares",
+              "src/api/retrieveUserProfile.ts",
+              "src/api/schedules.ts",
+              "src/api/services",
+              "src/api/updateSubscriptionPreferencesHandler.ts",
+              "src/api/updateUserProfile.ts",
+              "src/api/utils",
+              "src/api/verifyRecaptcha.ts"
+            ],
+            "reason": "no exact, case-variant or extension-variant match exists in this codeline"
+          },
+          {
+            "declared": "src/api/utils/_contentstack_getNewsArticles.ts",
+            "candidates_checked": [
+              "src/api/utils/_contentstack_getNewsArticles.ts",
+              "src/api/utils/applyMiddlewares.ts",
+              "src/api/utils/contentstack_getBlogArticles.ts",
+              "src/api/utils/contentstack_getPromotions.ts",
+              "src/api/utils/createSignature.ts",
+              "src/api/utils/decodeJwtToken.ts",
+              "src/api/utils/getBearerToken.ts",
+              "src/api/utils/getJwtToken.ts",
+              "src/api/utils/helper.ts",
+              "src/api/utils/interface.ts",
+              "src/api/utils/parseRequestBody.ts",
+              "src/api/utils/parseRequestBodyAsJson.ts",
+              "src/api/utils/parseRequestBodyAsMultipart.ts",
+              "src/api/utils/response.ts",
+              "src/api/utils/schema.ts",
+              "src/api/utils/schemas",
+              "src/api/utils/search.ts"
+            ],
+            "reason": "no exact, case-variant or extension-variant match exists in this codeline"
+          },
+          {
+            "declared": "src/components/contentstack/ContentstackAttention/content.mock.ts",
+            "candidates_checked": [
+              "src/components/contentstack/ContentstackAttention/content.mock.ts"
+            ],
+            "reason": "directory 'src/components/contentstack/ContentstackAttention' does not exist in this codeline"
+          }
+        ]
+      },
+      "upexpress": {
+        "files": [
+          "src/services/contentstack.ts",
+          "src/pages/[[...slug]].tsx",
+          "src/interface/content/page.ts",
+          "src/components/contentstack/ContentStackGallery/ContentStackGallery.mock.ts"
+        ],
+        "resolved": [
+          {
+            "declared": "src/services/contentstack.ts",
+            "actual": "src/services/contentstack.ts",
+            "match": "exact",
+            "verified_against": "/home/bradleyjerome/projects/metrolinx/next.upexpress.com"
+          },
+          {
+            "declared": "src/pages/[[...slug]].tsx",
+            "actual": "src/pages/[[...slug]].tsx",
+            "match": "exact",
+            "verified_against": "/home/bradleyjerome/projects/metrolinx/next.upexpress.com"
+          },
+          {
+            "declared": "src/interface/content/page.ts",
+            "actual": "src/interface/content/page.ts",
+            "match": "exact",
+            "verified_against": "/home/bradleyjerome/projects/metrolinx/next.upexpress.com"
+          },
+          {
+            "declared": "src/components/contentstack/ContentStackGallery/ContentStackGallery.mock.ts",
+            "actual": "src/components/contentstack/ContentStackGallery/ContentStackGallery.mock.ts",
+            "match": "exact",
+            "verified_against": "/home/bradleyjerome/projects/metrolinx/next.upexpress.com"
+          }
+        ],
+        "unresolved": [
+          {
+            "declared": "src/services/newsService.ts",
+            "candidates_checked": [
+              "src/services/newsService.ts",
+              "src/services/__tests__",
+              "src/services/blogService.ts",
+              "src/services/contentstack.ts",
+              "src/services/directoryService.ts",
+              "src/services/facilitiesService.ts",
+              "src/services/gtm.ts",
+              "src/services/logger.ts",
+              "src/services/pageComponentResolver.tsx",
+              "src/services/pageService.ts",
+              "src/services/redirectsService.ts",
+              "src/services/staticPathsResolver.ts",
+              "src/services/up-api",
+              "src/services/userProfileService.ts",
+              "src/services/userSignUpService.ts",
+              "src/services/v1-api"
+            ],
+            "reason": "no exact, case-variant or extension-variant match exists in this codeline"
+          },
+          {
+            "declared": "src/api/getEventsList.ts",
+            "candidates_checked": [
+              "src/api/getEventsList.ts",
+              "src/api/__tests__",
+              "src/api/enums",
+              "src/api/interfaces",
+              "src/api/logger.ts",
+              "src/api/middlewares",
+              "src/api/passes.ts",
+              "src/api/retrieveUserProfile.ts",
+              "src/api/services",
+              "src/api/tickets.ts",
+              "src/api/updateUserProfile.ts",
+              "src/api/utils"
+            ],
+            "reason": "no exact, case-variant or extension-variant match exists in this codeline"
+          },
+          {
+            "declared": "src/api/utils/_contentstack_getNewsArticles.ts",
+            "candidates_checked": [
+              "src/api/utils/_contentstack_getNewsArticles.ts",
+              "src/api/utils/__tests__",
+              "src/api/utils/applyMiddlewares.ts",
+              "src/api/utils/bytemark.ts",
+              "src/api/utils/bytemarkCookie.ts",
+              "src/api/utils/cookies.ts",
+              "src/api/utils/decodeJwtToken.ts",
+              "src/api/utils/domain.ts",
+              "src/api/utils/getBearerToken.ts",
+              "src/api/utils/getJwtToken.ts",
+              "src/api/utils/handleApimError.ts",
+              "src/api/utils/handleCrmError.ts",
+              "src/api/utils/helper.ts",
+              "src/api/utils/interface.ts",
+              "src/api/utils/passes.ts",
+              "src/api/utils/response.ts",
+              "src/api/utils/schema.ts",
+              "src/api/utils/search.ts",
+              "src/api/utils/tickets.ts"
+            ],
+            "reason": "no exact, case-variant or extension-variant match exists in this codeline"
+          },
+          {
+            "declared": "src/components/contentstack/ContentstackAttention/content.mock.ts",
+            "candidates_checked": [
+              "src/components/contentstack/ContentstackAttention/content.mock.ts"
+            ],
+            "reason": "directory 'src/components/contentstack/ContentstackAttention' does not exist in this codeline"
+          }
+        ]
+      },
+      "metrolinx": {
+        "files": [
+          "src/services/contentstack.ts",
+          "src/pages/[[...slug]].tsx",
+          "src/services/newsService.ts",
+          "src/api/getEventsList.ts",
+          "src/api/utils/_contentstack_getNewsArticles.ts",
+          "src/interface/content/page.ts",
+          "src/components/contentstack/ContentstackAttention/content.mock.ts",
+          "src/components/contentstack/ContentStackGallery/ContentStackGallery.mock.ts"
+        ],
+        "resolved": [
+          {
+            "declared": "src/services/contentstack.ts",
+            "actual": "src/services/contentstack.ts",
+            "match": "exact",
+            "verified_against": "/home/bradleyjerome/projects/metrolinx/next.metrolinx.com"
+          },
+          {
+            "declared": "src/pages/[[...slug]].tsx",
+            "actual": "src/pages/[[...slug]].tsx",
+            "match": "exact",
+            "verified_against": "/home/bradleyjerome/projects/metrolinx/next.metrolinx.com"
+          },
+          {
+            "declared": "src/services/newsService.ts",
+            "actual": "src/services/newsService.ts",
+            "match": "exact",
+            "verified_against": "/home/bradleyjerome/projects/metrolinx/next.metrolinx.com"
+          },
+          {
+            "declared": "src/api/getEventsList.ts",
+            "actual": "src/api/getEventsList.ts",
+            "match": "exact",
+            "verified_against": "/home/bradleyjerome/projects/metrolinx/next.metrolinx.com"
+          },
+          {
+            "declared": "src/api/utils/_contentstack_getNewsArticles.ts",
+            "actual": "src/api/utils/_contentstack_getNewsArticles.ts",
+            "match": "exact",
+            "verified_against": "/home/bradleyjerome/projects/metrolinx/next.metrolinx.com"
+          },
+          {
+            "declared": "src/interface/content/page.ts",
+            "actual": "src/interface/content/page.ts",
+            "match": "exact",
+            "verified_against": "/home/bradleyjerome/projects/metrolinx/next.metrolinx.com"
+          },
+          {
+            "declared": "src/components/contentstack/ContentstackAttention/content.mock.ts",
+            "actual": "src/components/contentstack/ContentstackAttention/content.mock.ts",
+            "match": "exact",
+            "verified_against": "/home/bradleyjerome/projects/metrolinx/next.metrolinx.com"
+          },
+          {
+            "declared": "src/components/contentstack/ContentStackGallery/ContentStackGallery.mock.ts",
+            "actual": "src/components/contentstack/ContentStackGallery/ContentStackGallery.mock.ts",
+            "match": "exact",
+            "verified_against": "/home/bradleyjerome/projects/metrolinx/next.metrolinx.com"
+          }
+        ],
+        "unresolved": []
+      }
+    }
+  },
+  "dependencies": []
+}
+
+Produce your refined output as raw JSON only (no XML tags, no markdown fences, no preamble). Include:
+- "acceptanceCriteria": The FULL merged list (openspec's criteria + your additions/refinements). Every item MUST be an observable outcome, not an implementation instruction.
+- "notes": What you changed and why (be specific — cite which criteria you added/modified/replaced)
+- "splitStories": ALWAYS omit this field. Splitting is openspec's decision alone — never propose
+  split children of your own, even if openspec already split this story.
+- "acAddedBySpeckit": Array of criteria YOU added that were not in openspec's output
+- "acModifiedBySpeckit": Array of {"original":"...","revised":"..."} for criteria you reworded
+- "acFlagged": Array of {"criterion":"...","flag":"..."} for criteria that need human attention
+
+For a brownfield story with a real codeline, you may have read-only tools (read_file,
+list_files, search) available this turn — if so, USE them for real to check a file's
+actual contents before relying on it; do not invent what a tool would return. For a
+greenfield story with no existing codeline, you have none — give your best answer from
+the description, title and paths you were given, and say so in "notes" if the file
+contents would have changed your answer. Either way, never narrate an imagined tool
+result: a real answer with an honest caveat is worth everything; fabricated tool-call
+syntax (<tool_call>, <tool_use>, <function_call>) is worth nothing — it is discarded in
+full and the work is lost (observed live, 2026-07-28: exactly this, on an empty-criteria
+story that got no answer at all).
+
+
+# Output
+```json
+{
+  "acceptanceCriteria": [
+    "Given the live preview environment variables (preview token, management token, preview host) are set, when the Contentstack Stack is initialized, then the Stack's live preview feature is enabled and configured to communicate with the specified preview host for draft content retrieval.",
+
+    "Given the application is running, when a valid preview callback request is sent to the preview API route containing content_type_uid, entry_uid, and a valid live_preview hash, then the response sets preview mode cookies and redirects the user to the page URL for the specified entry.",
+
+    "Given the application is running, when a request is sent to the preview API route without required parameters (e.g., missing content_type_uid or entry_uid), then the response returns a 400-level status code and preview mode is not activated.",
+
+    "Given a request to the preview API route does not include a valid live_preview hash or token from Contentstack, then the route does not activate preview mode and returns an appropriate error response.",
+
+    "Given a user has valid preview mode cookies, when they navigate to the page for the previewed entry, then the page renders the draft (unpublished) version of that entry's content instead of the published version.",
+
+    "Given a preview callback is received with content_type_uid and entry_uid, when the user is redirected to the corresponding page, then the preview data (content_type_uid, entry_uid) is available in the page's data-fetching context and is used to identify which entry to render in draft form.",
+
+    "Given preview mode is active with preview data containing content_type_uid and entry_uid, when ContentstackFactory-based queries (getEntry, getSingleEntry, findSingletonEntry) are executed, then the queries return draft content for the specified entry.",
+
+    "Given preview mode is active, when newsService methods (getNews, getNewsAndDetailsByProject, getNewsCategories) execute Contentstack queries, then draft content is returned for the previewed entry.",
+
+    "Given preview mode is active, when getEventsList executes Contentstack queries, then draft content is returned for the previewed entry.",
+
+    "Given preview mode is active, when getContentStackNewsArticles executes Contentstack queries, then draft content is returned for the previewed entry.",
+
+    "Given a user is in preview mode, when they access the exit-preview endpoint, then preview mode cookies are cleared and subsequent page requests return only published content.",
+
+    "Given a user does not have preview mode cookies, when they request any page or API endpoint, then only published content is returned — no draft or unpublished content is ever visible to unauthenticated visitors.",
+
+    "Given the live preview environment variables are not set or are empty, when the application starts, then it initializes successfully without errors and serves published content normally (live preview is gracefully disabled).",
+
+    "Given preview mode is not active, when pages are built via getStaticProps or served via SSG, then the output and behavior are identical to the pre-live-preview state — no regression in static page generation, page rendering, or content retrieval.",
+
+    "Given a content entry belongs to a protected page, when the preview API route is called for that entry, then the system indicates that the entry cannot be previewed rather than exposing protected content.",
+
+    "Given preview mode is active, when the previewed entry does not exist or has been deleted in Contentstack, then the page displays an appropriate error or fallback state rather than crashing or rendering a blank page.",
+
+    "Given the application is running in any codeline (metrolinx, gotransit, upexpress), when live preview is configured, then all Contentstack query paths that exist in that codeline support draft content retrieval, and no references are made to files that do not exist in that codeline (e.g., newsService.ts, getEventsList.ts, and _contentstack_getNewsArticles.ts are absent in gotransit and upexpress)."
+  ],
+  "notes": "Openspec provided an empty acceptanceCriteria array with detailed notes about the current codebase state. I created all 17 ACs from scratch, informed by reading the actual source files. Key observations from code review: (1) contentstack.ts exports a singleton `Stack` initialized without any `live_preview` config and a `ContentstackFactory` class that wraps it — both need live preview support; (2) [[...slug]].tsx uses getStaticProps with fallback:false and no preview handling; (3) newsService.ts, getEventsList.ts, and _contentstack_getNewsArticles.ts all import `Stack` directly and bypass ContentstackFactory, each constructing queries inline — all three need live preview query support; (4) No live_preview/preview/setPreviewData references exist anywhere. ACs are organized into: config (AC1), preview API route success/failure/validation (AC2-4), draft content rendering (AC5-6), query-path coverage for factory and direct consumers (AC7-10), exit preview (AC11), security/no-leak (AC12), graceful degradation (AC13), SSG regression (AC14), protected pages limitation (AC15), missing-entry edge case (AC16), and multi-codeline consistency (AC17). I flagged AC15 (protected pages) because the story acknowledges this limitation but does not define expected behavior. I also flagged the interactive maps stack (separate Stack instance in contentstack.ts) which may need its own live preview config but is not mentioned in the story.",
+  "acAddedBySpeckit": [
+    "Given the live preview environment variables (preview token, management token, preview host) are set, when the Contentstack Stack is initialized, then the Stack's live preview feature is enabled and configured to communicate with the specified preview host for draft content retrieval.",
+    "Given the application is running, when a valid preview callback request is sent to the preview API route containing content_type_uid, entry_uid, and a valid live_preview hash, then the response sets preview mode cookies and redirects the user to the page URL for the specified entry.",
+    "Given the application is running, when a request is sent to the preview API route without required parameters (e.g., missing content_type_uid or entry_uid), then the response returns a 400-level status code and preview mode is not activated.",
+    "Given a request to the preview API route does not include a valid live_preview hash or token from Contentstack, then the route does not activate preview mode and returns an appropriate error response.",
+    "Given a user has valid preview mode cookies, when they navigate to the page for the previewed entry, then the page renders the draft (unpublished) version of that entry's content instead of the published version.",
+    "Given a preview callback is received with content_type_uid and entry_uid, when the user is redirected to the corresponding page, then the preview data (content_type_uid, entry_uid) is available in the page's data-fetching context and is used to identify which entry to render in draft form.",
+    "Given preview mode is active with preview data containing content_type_uid and entry_uid, when ContentstackFactory-based queries (getEntry, getSingleEntry, findSingletonEntry) are executed, then the queries return draft content for the specified entry.",
+    "Given preview mode is active, when newsService methods (getNews, getNewsAndDetailsByProject, getNewsCategories) execute Contentstack queries, then draft content is returned for the previewed entry.",
+    "Given preview mode is active, when getEventsList executes Contentstack queries, then draft content is returned for the previewed entry.",
+    "Given preview mode is active, when getContentStackNewsArticles executes Contentstack queries, then draft content is returned for the previewed entry.",
+    "Given a user is in preview mode, when they access the exit-preview endpoint, then preview mode cookies are cleared and subsequent page requests return only published content.",
+    "Given a user does not have preview mode cookies, when they request any page or API endpoint, then only published content is returned — no draft or unpublished content is ever visible to unauthenticated visitors.",
+    "Given the live preview environment variables are not set or are empty, when the application starts, then it initializes successfully without errors and serves published content normally (live preview is gracefully disabled).",
+    "Given preview mode is not active, when pages are built via getStaticProps or served via SSG, then the output and behavior are identical to the pre-live-preview state — no regression in static page generation, page rendering, or content retrieval.",
+    "Given a content entry belongs to a protected page, when the preview API route is called for that entry, then the system indicates that the entry cannot be previewed rather than exposing protected content.",
+    "Given preview mode is active, when the previewed entry does not exist or has been deleted in Contentstack, then the page displays an appropriate error or fallback state rather than crashing or rendering a blank page.",
+    "Given the application is running in any codeline (metrolinx, gotransit, upexpress), when live preview is configured, then all Contentstack query paths that exist in that codeline support draft content retrieval, and no references are made to files that do not exist in that codeline (e.g., newsService.ts, getEventsList.ts, and _contentstack_getNewsArticles.ts are absent in gotransit and upexpress)."
+  ],
+  "acModifiedBySpeckit": [],
+  "acFlagged": [
+    {
+      "criterion": "Given a content entry belongs to a protected page, when the preview API route is called for that entry, then the system indicates that the entry cannot be previewed rather than exposing protected content.",
+      "flag": "The story states 'Might not be possible to preview protected pages' but does not define expected behavior — should the preview route return an error, redirect with a message, or silently fall back to published content? Product owner should clarify the desired user experience."
+    },
+    {
+      "criterion": "Given the application is running in any codeline (metrolinx, gotransit, upexpress), when live preview is configured, then all Contentstack query paths that exist in that codeline support draft content retrieval, and no references are made to files that do not exist in that codeline (e.g., newsService.ts, getEventsList.ts, and _contentstack_getNewsArticles.ts are absent in gotransit and upexpress).",
+      "flag": "The Interactive Maps Stack (separate Stack instance initialized with INTERACTIVE_MAPS_STACK_* env vars in contentstack.ts, used by getInteractiveMapsStackEntry) is not mentioned in the story but also queries Contentstack. Product owner should confirm whether live preview is needed for interactive maps content or if it is out of scope for this story."
+    }
+  ]
+}
+```

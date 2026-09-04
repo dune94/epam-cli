@@ -1,0 +1,268 @@
+=== Prompt for AMSD-2041 (attempt 1) ===
+[0;34m[2026-08-03 18:19:14][0m   Deliverable 'src/context/ContentstackContext.tsx' resolved to '[1;33m[WARNING][0m Deliverable '/home/bradleyjerome/projects/metrolinx/next.metrolinx.com/src/context/ContentstackContext.tsx' resolved case-insensitively to '/home/bradleyjerome/projects/metrolinx/next.metrolinx.com/src/context/contentstackContext.tsx' — the declared casing does not match the repository.
+/home/bradleyjerome/projects/metrolinx/next.metrolinx.com/src/context/contentstackContext.tsx' for prompt injection (declaration's case/extension did not match the repository)
+CRITICAL — these files already exist. Their real content is injected below (## Existing File Contents) — you do NOT need to ReadFile them to see what's already there.
+Do NOT import or reference anything that doesn't appear in the injected content below — a plausible-sounding module name is not a real one.
+Only call ReadFile yourself if you need to see MORE of a file than what's shown (e.g. it was truncated), or a file not listed below.
+
+   - /home/bradleyjerome/projects/metrolinx/next.metrolinx.com/src/hooks/useContent.ts (ReadFile this only if you need it — not a fix site; content omitted to keep the prompt small)
+   - /home/bradleyjerome/projects/metrolinx/next.metrolinx.com/src/components/contentstack/ContentstackLink/ContentstackLink.tsx (ReadFile this only if you need it — not a fix site; content omitted to keep the prompt small)
+   - [1;33m[WARNING][0m Deliverable '/home/bradleyjerome/projects/metrolinx/next.metrolinx.com/src/context/ContentstackContext.tsx' resolved case-insensitively to '/home/bradleyjerome/projects/metrolinx/next.metrolinx.com/src/context/contentstackContext.tsx' — the declared casing does not match the repository.
+/home/bradleyjerome/projects/metrolinx/next.metrolinx.com/src/context/contentstackContext.tsx (ReadFile this only if you need it — not a fix site; content omitted to keep the prompt small)
+   - /home/bradleyjerome/projects/metrolinx/next.metrolinx.com/src/interface/content/contentCard.ts (ReadFile this only if you need it — not a fix site; content omitted to keep the prompt small)
+---
+
+Implement user story AMSD-2041: [GO, UP, MX] Live Preview of Content in CMS
+
+## Story Description
+[GO, UP, MX] Live Preview of Content in CMS
+
+## Acceptance Criteria
+- 
+
+
+## Root Cause Analysis & Prescribed Fix (AUTHORITATIVE — start here, do not re-trace)
+A code investigation already traced this bug to its cause and prescribed the minimal fix below. This is the plan of record. Apply it; do NOT re-read the whole codebase to re-derive it.
+
+The Acceptance Criteria above describe the desired END BEHAVIOR to VERIFY — they are NOT an implementation blueprint. Do not re-architect, split values, or add new fields/abstractions to satisfy an AC literally when the prescribed minimal fix already makes that AC pass. Implement the fix below; the ACs are how you check you got it right.
+
+HARD RULES:
+- Make the SMALLEST change that fixes the root cause. Fewer lines of code is always better.
+- REUSE existing functions. Before writing any new helper, search the repo for an existing util/parser/formatter that already does what you need (use the CodeGraph tool documented below) and call it. Writing novel code when a helper already exists is a defect to be rejected in review.
+- **src/context/ContentstackContext.tsx** (`ContentstackProvider`): This is the React context provider that holds all Contentstack content and distributes it to every component via useContent. Currently it wraps defaultContent in a static useMemo — it has NO mechanism to receive or react to Contentstack Live Preview SDK updates (onEntryChange). Live Preview requires this provider to subscribe to real-time content changes and update the context reactively, which is the root cause of the feature gap.
+  - **Minimal fix:** Replace the static useMemo with useState(initialContent) + useEffect that subscribes to Contentstack Live Preview SDK's onEntryChange callback. The effect should call onEntryChange(() => setContent(livePreviewData)) so that when the CMS pushes a preview update, the context re-renders all consumers. Also add live_preview config to the Stack initialization in src/services/contentstack.ts (the Stack object used by ContentstackFactory) to enable the preview endpoint — add live_preview: { management_token, enable: true } to the Stack initialization options so the SDK knows to poll/websocket for preview changes.
+
+
+## Lessons From Prior Runs (persisted — a previous attempt at this or a similar story already hit these problems)
+Any public method returning Promise<void> that wraps a Node.js EventEmitter callback (e.g. server.listen, child_process.spawn, stream.pipe) MUST:
+1. Pass BOTH resolve AND reject to the Promise executor: `new Promise((resolve, reject) => {`
+2. Wire the error event to reject: `emitter.on('error', reject)` — EADDRINUSE, EACCES, and other async errors are emitted on the EventEmitter, NOT thrown synchronously. Without `server.on('error', reject)`, a port-collision hangs the Promise forever. 3. Validate inputs in the constructor BEFORE the Promise is created. TypeScript types are compile-time only; at runtime port=NaN/Infinity/undefined bypasses them. Use `Number.isInteger(port) && port >= 0 && port <= 65535` and throw RangeError if invalid. VERIFIABLE: `grep -n 'reject' src/index.ts` must return at least two hits — one in the executor signature `(resolve, reject)` and one in `.on('error', reject)`. MINIMAL CHANGE & REUSE. Make the smallest change that satisfies the requirement — fewer lines of code is always better. Before writing any new function or helper, search the existing codebase for one that already does the job (use the CodeGraph `helpers` tool when it is offered in your prompt) and reuse it by importing it; do NOT duplicate existing logic or introduce new abstractions/fields when a concise edit to existing code suffices. Acceptance criteria describe the behavior to satisfy — they are not a mandate to add new code paths. [Self-Heal] Always patch only the broken line range on a repeated syntax-error retry -- never regenerate the whole file, since a full rewrite tends to reproduce the same corruption elsewhere.
+Content interface definitions in src/interface/content/ must use `export interface` and must not include implementation logic — they are pure type definitions.
+When creating a new file under src/context/, import React as `import React from 'react'` (CommonJS) — do not use ESM `import * as React` syntax.
+
+## Verification Criteria (what a tester will CONFIRM — your change must satisfy every one)
+These are observable checks, derived from the acceptance criteria and description. They describe WHAT is observed, not how to build it. Make the minimal change that makes all of these true; your accompanying test should assert them:
+- When content is edited in the CMS while Live Preview is active, the page displays the edited content.
+- When content is changed in the CMS while Live Preview is active, the page reflects the updated content without requiring a manual page reload.
+- When Live Preview is not active, the page displays the published version of the content.
+- When content is edited in the CMS while Live Preview is active, all areas of the page that display the edited content show the updated values.
+- When content is edited in the CMS while Live Preview is active, no area of the page continues to display the previous version of the content after the edit.
+
+## Codeline-Specific Facts (real, curated gotchas for THIS codeline — read before assuming local tooling behaves like a fully-configured environment)
+- Local dev/pre-commit hooks require real Contentstack env vars (CONTENTSTACK_API_KEY, CONTENTSTACK_DELIVERY_TOKEN, CONTENTSTACK_ENVIRONMENT, CONTENTSTACK_BRANCH) to be set — next.config.js throws 'Missing required environment variables' at import time if they're absent, which breaks tsc/next-lint inside the husky pre-commit hook even when the source change itself is correct.
+- Date/locale tests assert UTC-rendered dates (this project's CI runs in UTC) — running with a non-UTC TZ produces off-by-one-day test failures unrelated to any real code change.
+
+## Project Tools (registered by THIS codeline — call them directly, NOT via Bash)
+Each reports REAL state discovered from this repository or its installed dependencies. Call the relevant one instead of assuming — an assumption that contradicts one of these is a defect:
+- codegraph_query: Query this codebase's real, static symbol index (CodeGraph) instead of grepping. Modes: "explore <domain nouns>" (START HERE for an unfamiliar bug/feature — ranked symbols + blast radius + callers/callees; use domain nouns like "discount refund", never symptom/UI words like "displayed wrong"); "helpers <term>" (ALWAYS run before writing a new function — finds existing exported util/parser/formatter/mapper functions to reuse, with exact symbol + import path); "query <symbol>" (exact definition site of a known symbol name); "callers <symbol>" (who calls this — trace a symptom back to its cause); "callees <symbol>" (what this calls — trace forward); "impact <symbol>" (blast radius if you change this symbol); "show <file> [startLine] [endLine]" (read REAL verbatim source lines — required before quoting any line as evidence, capped at 300 lines per call if no end line given). Call this iteratively (5-10 times is normal), refining your query based on each result, until you converge on the real fix site.
+- resolve_test_file: Given a source file path (relative to the project root), report which test file(s) ALREADY EXIST for it on disk, checked against this codeline's real conventions — co-located __tests__/, sibling .spec/.test files, and mirrored test/ directories. Use this BEFORE creating a new test file: extending an existing test file at its real, established path is almost always correct; inventing a new path/directory is almost always wrong.
+- codeline_facts: Return known, real, project-operator-curated facts and gotchas about the codeline currently being worked in — e.g. required local environment variables, known dependency quirks, test-environment requirements. These are facts that could not otherwise be discovered by reading the code alone; check this before assuming local tooling (lint, tsc, pre-commit hooks) will behave the same as in a fully-configured environment.
+- git_state: Report the REAL current git state of this codeline: branch, HEAD SHA, and whether the working tree is dirty (with the list of changed files). Use this instead of assuming a clean baseline.
+- check_anti_patterns: Check a piece of code you are about to write (or have just written) against this project's list of known, previously-diagnosed wrong patterns — rules operators have configured because a model has regressed to them before. Call this before finishing your implementation whenever you touch an area that might have a documented gotcha; it is advisory (nothing blocks you from writing), so treat any match as a real defect to fix, not a suggestion to weigh.
+- dependency_contract: Before writing configuration for an installed dependency, check which option keys that dependency ACTUALLY consumes. Reports per key: "consumed" (read by the package's runtime source), "declared_only" (present only in a .d.ts type declaration — the types are STALE and the runtime ignores this key, so satisfying the type is the wrong fix), "absent" (appears nowhere — a typo or invented option), or "undetermined" (package not installed/readable). Call this whenever you add or change an options object passed to a third-party library; a key that is not "consumed" will silently do nothing at runtime.
+
+## Tests are NOT your job this turn
+A dedicated test-writer agent runs immediately after your fix commits and owns the bug-reproducing test. Do NOT write, edit, or create any test file (*.test.*, *.spec.*, __tests__/). Write ONLY the fix. Adding a test here wastes your turn budget and has caused repeated failures.
+
+## CodeGraph Tool — find EXISTING functions to reuse (do this BEFORE writing any new helper)
+A codegraph_query tool is available — call it directly (NOT via Bash) to discover reusable functions instead of inventing new ones:
+  codegraph_query(mode="helpers", args="<domain nouns>")   # existing util/parser/formatter to REUSE (symbol + import path)
+  codegraph_query(mode="query", args="<SymbolName>")       # exact definition site of a symbol
+  codegraph_query(mode="callees", args="<SymbolName>")     # what a function already calls
+RULE: Before you add ANY new function, run `helpers` for what it would do. If a suitable function already exists, import and call it — do NOT duplicate it. Fewer lines of code is always better.
+
+
+
+
+
+
+## Technical Notes
+- files: ["src/hooks/useContent.ts","src/components/contentstack/ContentstackLink/ContentstackLink.tsx","src/context/ContentstackContext.tsx","src/interface/content/contentCard.ts"]
+- perCodeline: {"gotransit":{"files":["src/hooks/useContent.ts","src/components/contentstack/ContentstackLink/ContentstackLink.tsx","src/context/ContentstackContext.tsx","src/interface/content/contentCard.ts"],"resolved":[{"declared":"src/hooks/useContent.ts","actual":"src/hooks/useContent.ts","match":"exact","verified_against":"/home/bradleyjerome/projects/metrolinx/next.gotransit.com"},{"declared":"src/components/contentstack/ContentstackLink/ContentstackLink.tsx","actual":"src/components/contentstack/ContentstackLink/ContentstackLink.tsx","match":"exact","verified_against":"/home/bradleyjerome/projects/metrolinx/next.gotransit.com"},{"declared":"src/context/ContentstackContext.tsx","actual":"src/context/ContentstackContext.tsx","match":"exact","verified_against":"/home/bradleyjerome/projects/metrolinx/next.gotransit.com"},{"declared":"src/interface/content/contentCard.ts","actual":"src/interface/content/contentCard.ts","match":"exact","verified_against":"/home/bradleyjerome/projects/metrolinx/next.gotransit.com"}],"unresolved":[]},"upexpress":{"files":["src/hooks/useContent.ts","src/components/contentstack/ContentstackLink/ContentstackLink.tsx","src/context/ContentstackContext.ts","src/interface/content/contentCard.ts"],"resolved":[{"declared":"src/hooks/useContent.ts","actual":"src/hooks/useContent.ts","match":"exact","verified_against":"/home/bradleyjerome/projects/metrolinx/next.upexpress.com"},{"declared":"src/components/contentstack/ContentstackLink/ContentstackLink.tsx","actual":"src/components/contentstack/ContentstackLink/ContentstackLink.tsx","match":"exact","verified_against":"/home/bradleyjerome/projects/metrolinx/next.upexpress.com"},{"declared":"src/context/ContentstackContext.tsx","actual":"src/context/ContentstackContext.ts","match":"extension_variant","verified_against":"/home/bradleyjerome/projects/metrolinx/next.upexpress.com"},{"declared":"src/interface/content/contentCard.ts","actual":"src/interface/content/contentCard.ts","match":"exact","verified_against":"/home/bradleyjerome/projects/metrolinx/next.upexpress.com"}],"unresolved":[]},"metrolinx":{"files":["src/hooks/useContent.ts","src/components/contentstack/ContentstackLink/ContentstackLink.tsx","src/context/contentstackContext.tsx","src/interface/content/contentCard.ts"],"resolved":[{"declared":"src/hooks/useContent.ts","actual":"src/hooks/useContent.ts","match":"exact","verified_against":"/home/bradleyjerome/projects/metrolinx/next.metrolinx.com"},{"declared":"src/components/contentstack/ContentstackLink/ContentstackLink.tsx","actual":"src/components/contentstack/ContentstackLink/ContentstackLink.tsx","match":"exact","verified_against":"/home/bradleyjerome/projects/metrolinx/next.metrolinx.com"},{"declared":"src/context/ContentstackContext.tsx","actual":"src/context/contentstackContext.tsx","match":"case_variant","verified_against":"/home/bradleyjerome/projects/metrolinx/next.metrolinx.com"},{"declared":"src/interface/content/contentCard.ts","actual":"src/interface/content/contentCard.ts","match":"exact","verified_against":"/home/bradleyjerome/projects/metrolinx/next.metrolinx.com"}],"unresolved":[]}}
+
+
+## Files to Create/Modify (EXACT ABSOLUTE PATHS — write to these paths exactly)
+src/hooks/useContent.ts, src/components/contentstack/ContentstackLink/ContentstackLink.tsx, src/context/ContentstackContext.tsx, src/interface/content/contentCard.ts
+
+## Dependencies
+None
+
+## Module resolution in this codeline
+A bare import that names a file under any of these directories is INTERNAL source, not a dependency — never add it to the dependency manifest:
+  __tests__, docs, migration-scripts, public, src
+Source extensions here: .ts, .tsx, .js, .jsx, .mjs, .cjs
+Write imports the way the existing files in this codeline write them; read a neighbouring file before inventing a path.
+
+
+## Instructions
+CRITICAL — these files already exist. Their real content is injected below (## Existing File Contents) — you do NOT need to ReadFile them to see what's already there.
+Do NOT import or reference anything that doesn't appear in the injected content below — a plausible-sounding module name is not a real one.
+Only call ReadFile yourself if you need to see MORE of a file than what's shown (e.g. it was truncated), or a file not listed below.
+   - /home/bradleyjerome/projects/metrolinx/next.metrolinx.com/src/hooks/useContent.ts (ReadFile this only if you need it — not a fix site; content omitted to keep the prompt small)
+   - /home/bradleyjerome/projects/metrolinx/next.metrolinx.com/src/components/contentstack/ContentstackLink/ContentstackLink.tsx (ReadFile this only if you need it — not a fix site; content omitted to keep the prompt small)
+   - [1;33m[WARNING][0m Deliverable '/home/bradleyjerome/projects/metrolinx/next.metrolinx.com/src/context/ContentstackContext.tsx' resolved case-insensitively to '/home/bradleyjerome/projects/metrolinx/next.metrolinx.com/src/context/contentstackContext.tsx' — the declared casing does not match the repository.
+/home/bradleyjerome/projects/metrolinx/next.metrolinx.com/src/context/contentstackContext.tsx (ReadFile this only if you need it — not a fix site; content omitted to keep the prompt small)
+   - /home/bradleyjerome/projects/metrolinx/next.metrolinx.com/src/interface/content/contentCard.ts (ReadFile this only if you need it — not a fix site; content omitted to keep the prompt small)
+**The content of every file listed above is already shown in ## Existing File Contents — use that, do not spend a tool call re-reading them. Use Edit for targeted changes to existing files — do NOT overwrite an existing file wholesale with WriteFile.**
+
+1. Use the injected ## Existing File Contents above to verify what actually exists (exports, types, existing utilities) before writing any code — do not guess, and do not re-read a file already shown in full
+2. Implement all acceptance criteria for this story
+3. Follow the project's existing code patterns and conventions
+4. Do NOT create tests unless explicitly required in acceptance criteria
+
+After implementation, provide a brief summary of what was created/modified.
+
+## Relevant Knowledge Base Entries
+The following was learned from previous story implementations and is relevant to your agent role. Apply this knowledge before writing any code:
+
+- [2026-07-06T18:11:26Z] Use vi.fn().mockResolvedValue(value) to make a mock return a resolved Promise.
+- [2026-07-06T20:31:11Z] Use `test: { passWithNoTests: true }` in vitest.config.ts or create a stub test file when no *.test.ts files exist.
+- [2026-07-06T20:33:03Z] Enable globals:true in vitest.config.ts so describe, it, and expect work without imports, reducing boilerplate in test files.
+- [2026-07-06T23:47:34Z] Use CommonJS-compatible patterns in src/server.ts: avoid `import.meta.url` and top-level `await`; gate listen with `if (require.main === module)`.
+- [2026-07-07T02:35:30Z] Always include a non-test source file in src/ alongside any src/*.test.ts file, since tsconfig.json excludes test files from tsc --noEmit.
+- [2026-07-07T19:01:34Z] Only modify or create files explicitly listed in the story's acceptance criteria. Do not touch files belonging to other stories or outside the current task scope.
+- [2026-07-07T20:17:57Z] [unreviewed-fallback] Avoid using deprecated TypeScript compiler options like 'moduleResolution=node10'; use 'moduleResolution=node' instead.
+- [2026-07-17T20:20:58Z] Always: Before importing a module or referencing a type/property, always read the actual source file to verify the export exists, its exact path, its properties, and its constructor/factory signatures
+- [2026-07-23T01:15:16Z] Always: In tsconfig.json, always use moduleResolution 'node' (not 'node10' or 'Node10') — 'node10' was removed in TypeScript 5.x. The correct value for CommonJS + Node resolution is 'node'.
+- [2026-07-23T14:30:00Z] CORRECTION to a prior entry (2026-07-23T01:17:52Z, now removed): that entry wrongly claimed 'moduleResolution: node' itself is removed and must become 'node16'/'nodenext'. Root-caused via mock1 (epam-cli orchestration test): 'node' is valid and correct through TypeScript 5.x (confirmed on 5.9.3) — it was only removed in TypeScript 7.x. The real defect was an unpinned `typescript` devDependency letting a fallback `npm install` pull latest (7.x) instead of the project's intended version. Do NOT rewrite a working tsconfig.json's moduleResolution in response to a TS5108 error — first check `node_modules/typescript/package.json`'s version; if it's 7.x and the rest of the project expects 5.x, the fix is pinning/reinstalling the correct typescript version, not changing moduleResolution.
+
+## Knowledge Base Contribution (do this LAST — after writing all implementation files)
+Your assigned KB entry ID for this run: **KB-029**
+
+IMPORTANT: Write ALL implementation files first. Only AFTER writing every required file should you optionally append a KB entry.
+Do NOT read orchestrations/agents/KB.md before writing implementation files. The relevant KB entries are already injected above.
+
+If (and only if) you discover a non-obvious pattern during implementation, append one entry to `orchestrations/agents/KB.md`:
+
+```markdown
+## KB-029 -- 2026-08-03
+
+**Category:** <backend|frontend|infrastructure|testing|orchestration>
+**AgentRole:** <your agentRole from the story>
+**Tags:** <comma-separated tech keywords, e.g. typescript, node, cli>
+**Trigger:** <retry|first-success>
+**StoryRef:** AMSD-2041
+
+<One concise paragraph: the specific pattern, gotcha, or anti-pattern.>
+```
+
+Only write an entry if the knowledge is genuinely non-obvious. Skip trivial observations.
+
+## Execution Plan
+Follow this plan step by step:
+[1;33m[WARNING][0m   PlanReview: mismatch detected for AMSD-2041 against dependency contracts — one corrective re-plan
+1. Read `src/interface/content/contentCard.ts` to understand the existing content card interface, then add an `isPreview` boolean field and a `previewContent` optional field to support live preview data from Contentstack CMS.
+
+2. Read `src/hooks/useContent.ts` to understand the current content fetching logic, then modify it to detect Contentstack live preview mode (via query parameter `live_preview` or preview hash) and expose an `isPreview` boolean and `previewContent` object alongside the existing fetched content.
+
+3. Create a new file `src/context/ContentstackContext.tsx` (this file does not currently exist on the filesystem) that defines a context structure exposing `isPreview` and `previewContent` alongside any existing content state, so any consuming component can access live preview state.
+
+4. Read `src/components/contentstack/ContentstackLink/ContentstackLink.tsx` to understand the current link rendering logic, then update it to consume `isPreview` and `previewContent` from `ContentstackContext` and, when in preview mode, render preview-aware URLs or content overrides.
+
+5. Update `src/hooks/useContent.ts` to accept a `contentTypeId` and `entryUid` parameter pair, and when `isPreview` is true, call the Contentstack Live Preview API (or read from the preview SDK) to fetch draft entry data and merge it into the returned `content` object.
+
+6. Update the newly created `src/context/ContentstackContext.tsx` so the provider initializes the Contentstack Live Preview SDK on mount, listens for preview message events (postMessage from CMS iframe), and pushes updated `previewContent` into context state.
+
+7. Update `src/components/contentstack/ContentstackLink/ContentstackLink.tsx` to conditionally append `live_preview=<preview-hash>` to link URLs when `isPreview` is true, ensuring navigation within preview stays in preview mode.
+
+8. Run `npm run lint` and `npm run build` to verify all four files compile without errors and no TypeScript type mismatches exist across the modified interface, hook, context, and component.
+
+9. Run `npm test -- --testPathPattern="useContent|ContentstackLink|ContentstackContext"` to verify existing tests pass and add or update unit tests covering: (a) `useContent` returns `isPreview=true` when preview query param present, (b) `ContentstackContext` provides preview state, and (c) `ContentstackLink` renders preview-aware URLs when `isPreview` is true.
+=== End Prompt ===
+
+=== epam Output (attempt 1) ===
+No technicalNotes file available to me. The summary is my authoritative source for the prescribed fix and scope.
+
+Let me give a clear final report. The action I am taking is: **not implement the fix and report the blocker**, because:
+
+1. The prescribed fix targets `src/context/ContentstackContext.tsx` (capital C).
+2. The real, version-controlled, app-imported file is `src/context/contentstackContext.tsx` (lowercase c).
+3. The filesystem is case-sensitive, `tsconfig.json` has `forceConsistentCasingInFileNames: true`, and 30+ source/test files import the lowercase path.
+4. The declared scope permits writes to `ContentstackContext.tsx` (capital C) only.
+5. Writing to the lowercase file is blocked by the scope-guard with a loop-protection flag.
+6. The 30+ importers are also out of scope, so they cannot be updated either.
+7. Therefore no combination of in-scope writes can deliver the prescribed behavior to the running app.
+
+---
+
+## Status report
+
+**Implemented in this turn:** None — reverted to clean working tree.
+
+**Reason for no implementation:** Hard structural mismatch between prescribed fix and codebase reality.
+
+**The blocker:**
+
+The story's prescribed fix instructs me to modify `src/context/ContentstackContext.tsx` (capital C) to add a `ContentstackProvider`. I did create that file and added the provider as specified. However, on this case-sensitive filesystem, that is a **different file** from the one the running app actually imports:
+
+| Prescribed | Actual | On disk? | Tracked in git? | Imported by app? |
+|---|---|---|---|---|
+| `src/context/ContentstackContext.tsx` (capital C) | ❌ | Created by me, then deleted | No | No |
+| `src/context/contentstackContext.tsx` (lowercase c) | ✅ | Yes | Yes (`git ls-files src/context/`) | Yes — `[[...slug]].tsx`, `404.tsx`, `PageHead.tsx`, `Layout.tsx`, `Header/*`, `useContent`, `useDirectory`, `usePageBaseURLs`, plus 20+ test files |
+
+`tsconfig.json` has `"forceConsistentCasingInFileNames": true`, so the two filenames are not interchangeable to TypeScript, ESLint, or Next.js module resolution. My new capital-C file was an orphan — nothing in the app would ever see `ContentstackProvider`, `isPreview`, or `previewContent`.
+
+**Why I cannot pivot within scope:**
+
+The scope-guard permits writes only to:
+- `src/hooks/useContent.ts`
+- `src/components/contentstack/ContentstackLink/ContentstackLink.tsx`
+- `src/context/ContentstackContext.tsx` (capital C)
+- `src/interface/content/contentCard.ts`
+
+It explicitly blocks `src/context/contentstackContext.tsx` (the actually-used file), the page files (`src/pages/[[...slug]].tsx`, `src/pages/404.tsx`), and every consumer/test file. Without modifying any of those, no in-scope write can deliver live-preview behavior to the running app — the prescribed fix requires changes to out-of-scope files (the lowercase context module that exports the React context object) for the changes to actually take effect.
+
+The summary's lesson ("potentially KB-029") identified this exact conflict; on retry or pivot. I reverted and am reporting rather than attempting further in-scope writes that cannot deliver the prescribed outcome.
+
+**Recommended resolution (out of scope for this story to decide):**
+
+Add `src/context/contentstackContext.tsx` (lowercase) — the actually-imported file — to the story's declared file list, then implement the provider there. Alternatively, expand the declared scope to include the two page files plus the lowercase context file so a re-export shim can be added; this is a smaller blast radius but still requires modifying the lowercase file. Once the lowercase file is in scope, the rest of the prescribed 4-file change is implementable as written.
+  [tc-writer] No test stories need TCs in phase 'unknown' — skipping
+No technicalNotes file available to me. The summary is my authoritative source for the prescribed fix and scope.
+
+Let me give a clear final report. The action I am taking is: **not implement the fix and report the blocker**, because:
+
+1. The prescribed fix targets `src/context/ContentstackContext.tsx` (capital C).
+2. The real, version-controlled, app-imported file is `src/context/contentstackContext.tsx` (lowercase c).
+3. The filesystem is case-sensitive, `tsconfig.json` has `forceConsistentCasingInFileNames: true`, and 30+ source/test files import the lowercase path.
+4. The declared scope permits writes to `ContentstackContext.tsx` (capital C) only.
+5. Writing to the lowercase file is blocked by the scope-guard with a loop-protection flag.
+6. The 30+ importers are also out of scope, so they cannot be updated either.
+7. Therefore no combination of in-scope writes can deliver the prescribed behavior to the running app.
+
+---
+
+## Status report
+
+**Implemented in this turn:** None — reverted to clean working tree.
+
+**Reason for no implementation:** Hard structural mismatch between prescribed fix and codebase reality.
+
+**The blocker:**
+
+The story's prescribed fix instructs me to modify `src/context/ContentstackContext.tsx` (capital C) to add a `ContentstackProvider`. I did create that file and added the provider as specified. However, on this case-sensitive filesystem, that is a **different file** from the one the running app actually imports:
+
+| Prescribed | Actual | On disk? | Tracked in git? | Imported by app? |
+|---|---|---|---|---|
+| `src/context/ContentstackContext.tsx` (capital C) | ❌ | Created by me, then deleted | No | No |
+| `src/context/contentstackContext.tsx` (lowercase c) | ✅ | Yes | Yes (`git ls-files src/context/`) | Yes — `[[...slug]].tsx`, `404.tsx`, `PageHead.tsx`, `Layout.tsx`, `Header/*`, `useContent`, `useDirectory`, `usePageBaseURLs`, plus 20+ test files |
+
+`tsconfig.json` has `"forceConsistentCasingInFileNames": true`, so the two filenames are not interchangeable to TypeScript, ESLint, or Next.js module resolution. My new capital-C file was an orphan — nothing in the app would ever see `ContentstackProvider`, `isPreview`, or `previewContent`.
+
+**Why I cannot pivot within scope:**
+
+The scope-guard permits writes only to:
+- `src/hooks/useContent.ts`
+- `src/components/contentstack/ContentstackLink/ContentstackLink.tsx`
+- `src/context/ContentstackContext.tsx` (capital C)
+- `src/interface/content/contentCard.ts`
+
+It explicitly blocks `src/context/contentstackContext.tsx` (the actually-used file), the page files (`src/pages/[[...slug]].tsx`, `src/pages/404.tsx`), and every consumer/test file. Without modifying any of those, no in-scope write can deliver live-preview behavior to the running app — the prescribed fix requires changes to out-of-scope files (the lowercase context module that exports the React context object) for the changes to actually take effect.
+
+The summary's lesson ("potentially KB-029") identified this exact conflict; on retry or pivot. I reverted and am reporting rather than attempting further in-scope writes that cannot deliver the prescribed outcome.
+
+**Recommended resolution (out of scope for this story to decide):**
+
+Add `src/context/contentstackContext.tsx` (lowercase) — the actually-imported file — to the story's declared file list, then implement the provider there. Alternatively, expand the declared scope to include the two page files plus the lowercase context file so a re-export shim can be added; this is a smaller blast radius but still requires modifying the lowercase file. Once the lowercase file is in scope, the rest of the prescribed 4-file change is implementable as written.
+
+=== End epam Output ===

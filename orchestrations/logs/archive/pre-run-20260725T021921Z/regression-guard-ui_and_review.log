@@ -1,0 +1,14 @@
+[33mThe CJS build of Vite's Node API is deprecated. See https://vite.dev/guide/troubleshooting.html#vite-cjs-node-api-deprecated for more details.[39m
+
+ RUN  v0.34.6 /tmp/skyscanner-app
+
+ ✓ src/index.test.ts  (1 test) 3ms
+ ✓ src/skyscanner/client.test.ts  (6 tests) 6ms
+table output ✓ src/cli.test.ts  (27 tests) 11ms
+table outputtable output ✓ src/server.test.ts  (18 tests) 323ms
+
+ Test Files  4 passed (4)
+      Tests  52 passed (52)
+   Start at  20:34:20
+   Duration  959ms (transform 241ms, setup 0ms, collect 402ms, tests 343ms, environment 0ms, prepare 352ms)
+

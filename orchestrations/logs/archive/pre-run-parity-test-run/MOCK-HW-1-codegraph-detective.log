@@ -1,0 +1,92 @@
+# Prompt
+You are an investigator for the mockhelloworld codeline. Your job is to read and report on this repository — never write or own a story. The codeline root contains a small TypeScript project. Use list_files to survey the root for package.json, tsconfig.json, and any config files. Use read_file to examine src/hello.ts (which defines getGreeting at line 1, currently returning 'hello world') and src/hello.test.ts (which imports getGreeting from './hello' and asserts .toBe('hello world') under a test named 'returns hello world'). Use codegraph_query in 'query' mode for getGreeting to confirm its definition location and callers. Report the test runner declared in package.json (look for jest, vitest, or mocha in devDependencies and scripts.test), the module system (CommonJS or ESM from tsconfig or package.json type field), and whether any Contentstack-related dependency or configuration exists anywhere in the codebase. Do not state facts about Contentstack APIs from the linked documentation as verified knowledge — only report what the repository itself declares. Your findings guide the implementer and test-writing agents.
+
+You are investigating this ticket. The repository is at: /home/bradleyjerome/.epam/mock1-paused/20260812T155700Z/workspace/codelines/mock-hello-world
+
+JIRA DOES NOT CLASSIFY THIS AS A BUG (issue type: Bug). This is a HINT, not a certainty — if the ticket's own text below clearly describes existing behavior that is wrong, trust the ticket over this hint. Assuming novel: there is likely NO existing bug and no wrong value to trace. Inventing a "cause" for a capability that does not exist yet produces a confident wrong answer. Your job is the ATTACHMENT POINT — the existing file/function/provider/hook/route/component this new capability must plug into, and anything already present the implementation should REUSE — not a fix site.
+
+TICKET (read it, then decide for YOURSELF which few domain nouns matter — do not treat every word as a search term):
+Title: getGreeting should return hello dolly
+Description: The getGreeting() function in this codebase currently returns the string 'hello world'. It should instead return 'hello dolly'. Update any test that asserts the old value to match the new one. The change is a one-line edit in src/hello.ts plus its test.
+Acceptance criteria:
+
+
+Your CodeGraph tool is the shell script at: /home/bradleyjerome/projects/ai/epam-cli/orchestrations/scripts/codegraph-agent-query.sh
+Invoke it with the Bash tool, always passing PROJECT_ROOT:
+  PROJECT_ROOT="/home/bradleyjerome/.epam/mock1-paused/20260812T155700Z/workspace/codelines/mock-hello-world" bash "/home/bradleyjerome/projects/ai/epam-cli/orchestrations/scripts/codegraph-agent-query.sh" explore <domain nouns>
+  PROJECT_ROOT="/home/bradleyjerome/.epam/mock1-paused/20260812T155700Z/workspace/codelines/mock-hello-world" bash "/home/bradleyjerome/projects/ai/epam-cli/orchestrations/scripts/codegraph-agent-query.sh" callers <SymbolName>
+  PROJECT_ROOT="/home/bradleyjerome/.epam/mock1-paused/20260812T155700Z/workspace/codelines/mock-hello-world" bash "/home/bradleyjerome/projects/ai/epam-cli/orchestrations/scripts/codegraph-agent-query.sh" callees <SymbolName>
+  PROJECT_ROOT="/home/bradleyjerome/.epam/mock1-paused/20260812T155700Z/workspace/codelines/mock-hello-world" bash "/home/bradleyjerome/projects/ai/epam-cli/orchestrations/scripts/codegraph-agent-query.sh" show <file> [startLine] [endLine]
+
+
+YOUR FIRST `explore` HAS ALREADY BEEN RUN FOR YOU — these are its real results (domain nouns only, symptom/presentation words stripped). Treat this as call 1 of your budget; do NOT re-run it. Start from step 2: decide whether the top hit COMPUTES the wrong value or only READS it, and trace from there.
+
+=== PRE-COMPUTED `explore` RESULTS ===
+**Exploration: getgreeting should return hello dolly the function in this codebase currently returns string world it instead update any test that asserts old value to match new one change is a line edit src ts plus its**
+
+Found 1 symbol across 1 file.
+
+**Blast radius — what depends on these (update/verify before editing)**
+
+- `getGreeting` (src/hello.ts:1) — 1 caller; tests: `src/hello.test.ts`
+
+**Source Code**
+
+> The code below is the **verbatim, current on-disk source** of these files — re-read from disk on this call and line-numbered, byte-for-byte identical to what the Read tool returns. It is NOT a summary, outline, or stale cache. Treat each block as a Read you have already performed: do not Read a file shown here.
+
+**`src/hello.ts`** — getGreeting(function)
+
+```typescript
+1	export function getGreeting(): string {
+2	  return 'hello world';
+3	}
+```
+=== END PRE-COMPUTED RESULTS ===
+
+CONVERGE FAST — HARD LIMIT: 6 tool calls total. This is not a suggestion.
+By your 6th tool call you MUST stop querying and emit the JSON answer. A partial map of the attachment points is infinitely better than no answer.
+1. First call: `explore` with the DOMAIN NOUNS only (drop symptom/presentation words).
+2. NOTHING IS BROKEN HERE. This story asks for a capability that does not exist yet, so there is no wrong value to trace and no line to quote. Do not hunt for a cause — you will invent one.
+3. FIND EVERY PLACE THIS WORK MUST TOUCH. This is the most important output, and returning only ONE is the known failure of this step. A new capability almost never lands in a single file. Trace the SHAPE of it through this repository, in whatever terms this repository uses:
+   - WHERE IT IS SET UP — the place the thing being enabled is created, configured or registered. Start here.
+   - WHAT CARRIES IT — anything between that setup and the code that uses it: a shared module, a wrapper, an app-wide registration, a passed-down value. There may be none; there may be several.
+   - EVERYWHERE IT IS USED — every place that reads the affected data or must react when it changes. There is usually MORE THAN ONE. Name them all.
+   Do not force this repository into a shape it does not have, and do not skip a place because it has no obvious name. Describe each site in the vocabulary the codebase itself uses, which you have seen in the tool output — not in the vocabulary of some other project's architecture.
+4. COVER THE ACCEPTANCE CRITERIA. Read them again and check your site list against them: every criterion describing observable behaviour needs a site where that behaviour becomes possible. A criterion with no corresponding site means your map is incomplete — go back and find it.
+5. NAME WHAT TO REUSE at each site — whatever already exists there that the implementation should build on rather than duplicating. Use `explore`/`callers`/`callees` to find it; you cannot reuse what you have not found.
+6. `brokenLine` is NOT required for this story and must be left "" — there is no broken expression to quote.
+7. DO NOT INVENT A PATH OR A SYMBOL. Your grounding here is provenance, not a quoted line: every file and symbol you name must have been returned to you by a tool. If you believe something exists and the tools did not show it, PROVE it with ripgrep-search.sh before naming it, or report it absent.
+
+
+READ THE FILE BEFORE YOU QUOTE IT. Once you have a candidate file, run `show <file>` and look at the real lines. Your "brokenLine" must be COPIED EXACTLY from that output — it is checked character-for-character against the file, after whitespace normalisation. Do NOT reconstruct the line from symbol names: on 2026-07-26 that produced `lineItemKey === orderLineItem.id`, a plausible-looking expression using an identifier that exists nowhere in the repository, and the answer was rejected. `show` accepts a line range so you can read just the region you care about.
+
+CRITICAL REALITY ANCHOR: if the CodeGraph tool does not return a file or symbol, it does NOT exist in this codebase. Do not infer, assume, or extrapolate file paths, function signatures, or variable names from naming patterns — that is exactly how `lineItemKey` was invented. The index answers only for what it parsed, so a miss is a question, not an answer. If you believe something exists and CodeGraph did not return it, PROVE it before reasoning about it:
+
+    bash orchestrations/scripts/ripgrep-search.sh --string "<exact symbol>" [--glob "*.ts"]
+    bash orchestrations/scripts/ripgrep-search.sh --file "<part of a filename>"
+
+If your fix calls a method or function from a THIRD-PARTY package (not this repo's own code), a name existing somewhere in that package is not the same as it being the RIGHT way to call it — a symbol can be a real, internal implementation detail the package's own docs never call directly, or a static class method vs. an instance method, and picking the wrong one produces code that type-checks and fails at runtime. PROVE the real shape before naming it:
+
+    bash orchestrations/scripts/resolve-package-symbol.sh "<package name>" "<method or function name>"
+
+It reports whether the symbol is a direct/static call or needs an instance, and surfaces the package's own documented usage examples (README and JSDoc) so you can prefer the intended pattern over an internal detail that happens to exist.
+
+That searches the real working tree, so a hit is ground truth and "NOT FOUND" is definitive absence. If both tools come back empty, the thing does not exist — say so and revise your hypothesis. Never write a name into your answer that no tool has shown you.
+
+CRITICAL — HOW TO ANSWER: Emit the JSON array as TEXT directly in your reply. Do NOT call WriteFile and do NOT write your answer to any file — the pipeline reads your reply text, not a file. If you write your answer to a file, it is LOST and the whole investigation is wasted. Use the Bash tool ONLY to run the CodeGraph query script above (including its `show` subcommand, which you MUST use before quoting a line); use no other tool.
+
+NAME THE FORMAT, DO NOT DESCRIBE IT. If your fix depends on the SHAPE of a string — a prefix, suffix, separator, delimiter — you must QUOTE THE EXACT LITERAL (e.g. '#') or name the constant that defines it (e.g. DIVIDER). Saying "a prefix match that accounts for the suffix" without stating the suffix is not implementable: on 2026-07-26 exactly that wording made the implementer guess '-' where the repository uses '#', and the fix could never match. This is machine-checked.
+
+PREFER THE PARSER OVER THE WRITER. If a helper CONSTRUCTS the value (getX/buildX/toX) and another READS it (parseX/fromX), prescribe the reader. Naming the writer invites the implementer to reconstruct the format by hand — which is how the above happened. The best fix does no string surgery at all, because the helper owns the format.
+
+VERIFY THIRD-PARTY METHOD CALLS with resolve-package-symbol.sh before prescribing them (see above) — a name existing in a package is not proof it is called the way you assume.
+
+SAY WHETHER THE FILE MUST BE EDITED — "changeRequired" is REQUIRED. Set it true when your fix means editing THIS file. Set it FALSE when the file is genuinely part of the fix but needs no edit of its own: it already does the right thing, and will simply behave correctly once the other sites change. A consumer that reads state from a provider you are fixing is the usual case. This is not a lesser finding and must not be dropped — a downstream gate requires a real diff in every site you mark true, so marking a verify-only file true makes the story impossible to complete: the implementer changes nothing (correctly), the gate rejects it, and every retry repeats. Saying it in the "fix" prose is not enough; nothing reads prose.
+
+DECLARE ANY PACKAGE YOUR FIX NEEDS — "requiredPackages" is REQUIRED and is machine-verified. List the BARE package names, exactly as they appear in this project's manifest (e.g. "some-sdk", "@scope/pkg"), for every third-party package your fix imports or configures. Use [] when the fix needs none — that is the common case and is not a failure. Each name is checked against what this codeline actually declares and installs: a package that is not there means your fix CANNOT be implemented as written, and prescribing it produces a change that type-checks, passes tests, and fails for a real user. Prefer a fix built on what is already installed; if the work genuinely requires a package this project does not have, still declare it — that is the honest answer and the pipeline needs to see it, whereas an approach invented to avoid naming it is the failure this field exists to prevent.
+
+Output ONLY a JSON array (no prose, no markdown fences), then stop. The "fix" field is REQUIRED and must be a concrete, minimal instruction naming the exact change and any existing helper to reuse. The "helper" field must be the BARE SYMBOL NAME of the existing function you are telling the implementer to reuse (so it can be machine-verified to actually exist) — leave it "" if the fix genuinely needs no existing helper. Do NOT invent a helper name; only put a symbol you actually saw in the tool output:
+[{"file":"<repo-relative path>","function":"<symbol>","reason":"<why THIS computes the value, not just displays it>","brokenLine":"<the exact existing expression that is wrong, copied verbatim from that file>","fix":"<the exact minimal change: which line/expression to change, to what, and which EXISTING helper (symbol + import path) to reuse — never 'write a new function' if one already exists>","helper":"<bare existing symbol name to reuse, or empty>","changeRequired":<true if this file must be EDITED; false if it is implicated but needs NO edit — it already behaves correctly and only needs to be VERIFIED once the other sites change>,"requiredPackages":["<bare package name this fix needs>"]}]
+
+# Output
+[{"file":"src/hello.ts","function":"getGreeting","reason":"This function computes the greeting string that the ticket requires to change from 'hello world' to 'hello dolly'","brokenLine":"","fix":"Change line 2 from `return 'hello world';` to `return 'hello dolly';`","helper":"","changeRequired":true,"requiredPackages":[]},{"file":"src/hello.test.ts","function":"","reason":"This test asserts the return value of getGreeting; the assertion and test name must match the new return value","brokenLine":"","fix":"Change line 6 from `expect(getGreeting()).toBe('hello world');` to `expect(getGreeting()).toBe('hello dolly');` and change line 5 from `it('returns hello world', () => {` to `it('returns hello dolly', () => {`","helper":"","changeRequired":true,"requiredPackages":[]}]

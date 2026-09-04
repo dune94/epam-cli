@@ -1,0 +1,63 @@
+{
+  "agent": "mutant-hunter",
+  "phase": "core",
+  "summary": { "mutationsProposed": 6, "killed": 3, "survived": 0, "noCoverage": 3, "mutationScore": 50 },
+  "mutations": [
+    {
+      "file": "src/services/contentstack.ts",
+      "line": 78,
+      "originalCode": "    enable: true,",
+      "mutatedCode": "    enable: false,",
+      "status": "killed",
+      "relatedTest": "src/services/contentstack.spec.ts > contentstack > Stack live preview wiring > enables live preview on the Stack with the preview token from the environment, so draft entry changes can be delivered to the page",
+      "recommendation": "None — the objectContaining assertion pins enable: true."
+    },
+    {
+      "file": "src/services/contentstack.ts",
+      "line": 81,
+      "originalCode": "    host: CONTENTSTACK_API_HOST || \"api.contentstack.io\",",
+      "mutatedCode": "    host: CONTENTSTACK_API_HOST,",
+      "status": "killed",
+      "relatedTest": "src/services/contentstack.spec.ts > contentstack > Stack live preview wiring > enables live preview on the Stack with the preview token from the environment, so draft entry changes can be delivered to the page",
+      "recommendation": "None — the test asserts host === \"api.contentstack.io\" with CONTENTSTACK_API_HOST unset, so removing the default fails the assertion. Note: the fallback is only verified for the unset case; a mutation swapping the fallback to a different host string is also killed by the same assertion."
+    },
+    {
+      "file": "src/services/contentstack.ts",
+      "line": 86,
+      "originalCode": "    management_token: CONTENTSTACK_PREVIEW_TOKEN,",
+      "mutatedCode": "    preview_token: CONTENTSTACK_PREVIEW_TOKEN,",
+      "status": "killed",
+      "relatedTest": "src/services/contentstack.spec.ts > contentstack > Stack live preview wiring > enables live preview on the Stack with the preview token from the environment, so draft entry changes can be delivered to the page",
+      "recommendation": "None — the assertion requires management_token: \"TEST_PREVIEW_TOKEN\"; renaming or omitting the key fails the objectContaining match. This is the credential-handling path and it is pinned."
+    },
+    {
+      "file": "src/pages/[[...slug]].tsx",
+      "line": 42,
+      "originalCode": "  const mergedContent = (\n    livePreviewContent ? { ...content, ...livePreviewContent } : content\n  ) as IContentstackContext;",
+      "mutatedCode": "  const mergedContent = (\n    livePreviewContent ? { ...livePreviewContent, ...content } : content\n  ) as IContentstackContext;",
+      "status": "no-coverage",
+      "relatedTest": null,
+      "recommendation": "Add a page-level test that renders Page with livePreviewContent set in ContentstackContext and asserts draft fields override published content. Swapping spread order silently reverts preview to published content — a costly silent failure for the live-preview feature this change introduces."
+    },
+    {
+      "file": "src/pages/_app.tsx",
+      "line": 76,
+      "originalCode": "      if (!hash) {\n        return;\n      }",
+      "mutatedCode": "      if (hash) {\n        return;\n      }",
+      "status": "no-coverage",
+      "relatedTest": null,
+      "recommendation": "No _app.tsx test exists in the evidence. Inverting this guard disables all live-preview re-fetching (and inverts the outside-preview no-op). Add a test mounting MyApp, triggering the onEntryChange callback with and without a hash, and asserting getEntry/getSingleEntry is or is not called."
+    },
+    {
+      "file": "src/pages/_app.tsx",
+      "line": 90,
+      "originalCode": "      if (!contentTypeUid) {\n        return;\n      }",
+      "mutatedCode": "      return;",
+      "status": "no-coverage",
+      "relatedTest": null,
+      "recommendation": "No _app.tsx test exists in the evidence. An early unconditional return kills the entire preview re-fetch path silently. The CONTENT_TYPE_CONTEXT_KEY fallback (|| \"page\") and the header/footer/onboarding vs page fetch branching are likewise untested; cover them with a test that simulates onEntryChange for a global-header content type and for a page content type."
+    }
+  ],
+  "verdict": "warn",
+  "thresholds": "pass >= 80% mutation score with all credential/config mutations killed; warn 40–79% or when the changed runtime behavior is untested but config wiring is pinned; fail < 40% or when credential-handling mutations survive. Score: 3/6 = 50%. The credential/config wiring (enable, host fallback, management_token) is killed by the named spec test, but the runtime live-preview behavior this change introduces — the draft-over-published merge in [[...slug]].tsx and the onEntryChange guards/branching in _app.tsx — has no test coverage in the provided evidence. Assessment is limited to the first 60 of 156 lines of contentstack.spec.ts and the truncated source files; if the spec tail contains additional assertions, the true score may be higher."
+}

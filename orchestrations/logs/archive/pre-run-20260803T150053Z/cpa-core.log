@@ -1,0 +1,6 @@
+[0;35m[CPA][0m Retrieval: TF-IDF
+[0;36m[10:34:30][0m Loading stories from orch-mockhelloworld-prd-1274812.json...
+[0;36m[10:34:30][0m Found 1 stories to contextualize
+
+[0;35m[CPA][0m Processing MOCK-HW-1...
+[0;35m[CPA][0m   MOCK-HW-1: formula baseline from calibration[low:implementation:cli](n=29): 4.5178418971594745min $0.1404333618569382

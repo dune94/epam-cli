@@ -1,0 +1,230 @@
+# Prompt
+You are specialising ONE generic agent prompt for ONE specific project. You are the same agent that just minted this project's roles, so you already know what this project is and who will work on it.
+
+## The template you must specialise
+
+Its id is skill-assessment-prephase and its purpose is: Detects skill gaps in agent profiles before a phase runs, and augments them.
+
+Everything between the two markers below is the template, verbatim. The markers are not
+part of it. A code fence cannot delimit this: several templates contain fences of their
+own, so the first closing fence would truncate the body mid-instruction.
+
+-----BEGIN TEMPLATE BODY-----
+WHAT THIS PROJECT ACTUALLY IS — resolved from its codelines and from what the pipeline has
+already learned working on them. Augment each agent's profile from THIS, not from what the
+role name suggests:
+
+__PROJECT_SKILLS__
+
+You are the skill assessment agent running in PRE-PHASE mode. Your job is to detect skill gaps in agent profiles BEFORE the phase runs, and augment profiles with missing knowledge.
+
+## Task
+1. Read __PRD_REL__ and find the stories in the current phase's implementationOrder
+2. For each story, extract required skills from description + technicalNotes (especially technicalNotes.requiredSkills)
+3. Read orchestrations/agents/profiles.json and find the profile for each story's agentRole
+4. Compare: does the agent's profile text mention each required skill?
+5. For any GAPS found:
+   a. Append a sentence to the agent's profile in profiles.json mentioning the missing skill
+   b. Append a JSONL record to orchestrations/logs/profiles-audit.jsonl:
+      {"timestamp":"<ISO8601>","phase_id":"<phase>","agent_role":"<role>","event":"skill_added","skill":"<skill>","skill_category":"<category>","context":"Story <id> requires <skill>","added_by":"pre-phase-assessment"}
+   c. Use flock when writing to JSONL files
+6. Write a summary to orchestrations/logs/phase-improvements/pre-__PHASE_ID__.md
+
+Known skill categories: deployment_platform, language, framework, testing, database, infrastructure, api, cloud_service
+
+IMPORTANT: Keep profiles.json valid JSON at all times. Only ADD to existing profile strings, never remove content.
+
+## Phase: __PHASE_ID__
+
+Read __PRD_REL__ implementationOrder["__PHASE_ID__"] for the story list, then proceed with the analysis above.
+WHAT THIS PROJECT ACTUALLY IS — resolved from its codelines and from what the pipeline has
+already learned working on them. Augment each agent's profile from THIS, not from what the
+role name suggests:
+
+__PROJECT_SKILLS__
+
+You are the skill assessment agent running in PRE-PHASE mode. Your job is to detect skill gaps in agent profiles BEFORE the phase runs, augment profiles with missing knowledge, and ensure test stories have the correct agent role.
+
+## PRD STRUCTURE (read this carefully before issuing any jq commands)
+The PRD file uses a FLAT structure — not nested phases. Key paths:
+- Story list: .stories[]
+- Phase story order: .implementationOrder["__PHASE_ID__"] — returns an array of story IDs
+- Story lookup: .stories[] | select(.id == "<id>")
+- Agent role: .stories[] | select(.id == "<id>") | .agentRole
+- Files: .stories[] | select(.id == "<id>") | .technicalNotes.files[]
+
+DO NOT use .phases[0] — that path does not exist in this PRD.
+
+## Task
+1. Run: jq -r '.implementationOrder["__PHASE_ID__"][]' __PRD_REL__
+   This gives you the list of story IDs for this phase.
+
+2. For each story ID, run: jq -c '.stories[] | select(.id == "<id>") | {id, agentRole, unitTests, technicalNotes}' __PRD_REL__
+
+3. ROLE VERIFICATION: For any story where all files in technicalNotes.files are test files (this codeline names them __TEST_FILE_CONVENTIONS__):
+   - If agentRole is not "__TEST_ROLE__", update it: jq --arg id "<id>" '(.stories[] | select(.id == $id)).agentRole = "__TEST_ROLE__"' __PRD_REL__ > /tmp/prd_tmp.json && mv /tmp/prd_tmp.json __PRD_REL__
+   - Ensure the test-authoring role's profile (__TEST_ROLE__) exists in orchestrations/agents/profiles.json
+
+4. PROFILE CREATION: If "__TEST_ROLE__" key is missing from profiles.json, add it based on the project's techStack in the PRD (read .project.techStack).
+
+5. SKILL GAP FILL: For each story, compare agentRole profile text against technicalNotes.requiredSkills. Add missing skills as sentences. Keep profiles.json valid JSON.
+
+6. Append JSONL audit records to orchestrations/logs/profiles-audit.jsonl using flock.
+
+7. Write summary to orchestrations/logs/phase-improvements/pre-__PHASE_ID__.md
+
+Known skill categories: deployment_platform, language, framework, testing, database, infrastructure, api, cloud_service
+
+CRITICAL: Keep profiles.json valid JSON. Only ADD content, never remove. Use the exact jq paths above.
+
+## Phase: __PHASE_ID__
+-----END TEMPLATE BODY-----
+
+## What this project is
+
+Project config: /home/bradleyjerome/projects/ai/epam-cli/orchestrations/scripts/../projects/metrolinx
+Tickets in scope: AMSD-1919: Go‑Checkout Page - Email & Confirm Email Case Sensitivity
+
+Codelines in scope and their declared dependencies:
+- gotransit (/home/bradleyjerome/projects/metrolinx/next.gotransit.com) deps: @algolia/autocomplete-js, @azure/search-documents, @contentstack/utils, @googlemaps/js-api-loader, @hookform/error-message, @metrolinx/cx-shared, @react-aria/focus, @stripe/react-stripe-js, @stripe/stripe-js, @uniformdev/context, @uniformdev/context-gtag, @uniformdev/context-react, akamai-edgegrid, algoliasearch, aria-hidden, axios, body-scroll-lock, busboy, classnames, cloudinary, contentstack, core-js, country-state-city, date-fns, html-react-parser, i18next, joi, jsonwebtoken, lodash.capitalize, lodash.chunk, lodash.clonedeep, lodash.debounce, lodash.filter, lodash.isempty, lodash.isequal, lodash.isnil, lodash.isnumber, lodash.isobject, lodash.isstring, lodash.isundefined, lodash.keyby, lodash.mergewith, lodash.noop, lodash.omit, lodash.omitby, lodash.orderby, lodash.reject, micro, next, next-auth, next-i18next, next-sitemap, object-hash, pino, qs, react, react-autosuggest, react-beforeunload, react-dom, react-dropzone, react-error-boundary, react-focus-lock, react-hook-form, react-i18next, react-select, react-youtube, resize-observer-polyfill, swiper, swr, uuid, @commitlint/cli, @contentstack/management, @next/bundle-analyzer, @tailwindcss/aspect-ratio, @tailwindcss/line-clamp, @testing-library/jest-dom, @testing-library/react, @testing-library/user-event, @trivago/prettier-plugin-sort-imports, @types/busboy, @types/form-data, @types/google.maps, @types/html-to-text, @types/jsonwebtoken, @types/lodash.capitalize, @types/lodash.chunk, @types/lodash.clonedeep, @types/lodash.debounce, @types/lodash.filter, @types/lodash.isempty, @types/lodash.isequal, @types/lodash.isnil, @types/lodash.isnumber, @types/lodash.isobject, @types/lodash.isstring, @types/lodash.isundefined, @types/lodash.keyby, @types/lodash.mergewith, @types/lodash.noop, @types/lodash.omit, @types/lodash.omitby, @types/lodash.orderby, @types/lodash.reject, @types/node, @types/object-hash, @types/qs, @types/react, @types/react-autosuggest, @types/react-beforeunload, @types/react-dom, @types/react-google-recaptcha, @types/react-input-mask, @types/uuid, @typescript-eslint/eslint-plugin, @typescript-eslint/parser, @uniformdev/cli, autoprefixer, babel-jest, commitlint-config-jira, commitlint-plugin-jira-rules, cssnano, dotenv, esbuild, eslint, eslint-config-next, eslint-config-prettier, eslint-plugin-jest, eslint-plugin-prettier, form-data, husky, i18next-scanner, i18next-scanner-typescript, jest, jest-environment-jsdom, jest-environment-node, jest-transform-css, lint-staged, node-mocks-http, pino-pretty, postcss, postcss-import, prettier, rimraf, stylelint, stylelint-config-prettier, stylelint-config-standard, tailwindcss, ts-jest, typescript
+  Surfaces the survey found in this codeline (verified to exist):
+    - src/components/pages/CheckoutPage
+  Established facts about this codeline, each with the source that proves it:
+    - A pre-commit hook runs `npx lint-staged` and then rejects the commit unless the current branch name matches `^(feature|bugfix|tech|release|hotfix)/[a-zA-Z0-9.-]+(/[a-z0-9-]+)?$`.  [source: .husky/pre-commit]
+    - Tests run via `npm run test` (jest), configured by jest.config.js; a separate `test:coverage-check` script runs `jest --coverage` and its pretest step runs `npm run build:config` first.  [source: package.json scripts: "test": "jest", "pretest:coverage-check": "npm run build:config", "test:coverage-check": "jest --coverage"]
+
+The roles you minted for this project:
+(none minted this run)
+
+## The one rule you cannot break
+
+The template's placeholders are a CONTRACT with the pipeline. Each token written in SCREAMING_SNAKE_CASE between double underscores is replaced at run time with real evidence — a diff, a ticket, a test log, a plan. The substitution is BY NAME and it is strict in both directions.
+
+- Reproduce every placeholder EXACTLY as it appears, character for character.
+- NEVER add or invent a placeholder. Nothing supplies a name the pipeline does not know, so rendering throws and the run dies at the seam that needed this prompt.
+- NEVER remove or rename one. The evidence it carries would silently never reach the agent, and the agent would answer without it.
+- Do not move a placeholder into a code fence, a quote, or an example where it would read as literal text.
+
+The placeholders in this template are exactly: __PHASE_ID__, __PRD_REL__, __PROJECT_SKILLS__, __TEST_FILE_CONVENTIONS__, __TEST_ROLE__
+
+## The other rule you cannot break
+
+The template's OUTPUT SHAPE is a contract too. Every field name the template states in its response
+format is read by a consumer that will reject an answer without it — the agent would produce work
+nothing accepts, and the seam fails after the model has already been paid for.
+
+- Reproduce every field name EXACTLY, in the same shape the template states it.
+- NEVER drop one because it looks redundant, and NEVER rename one to something clearer.
+- NEVER add a field. A consumer reads by name and has no place to put an invention.
+
+The output fields this template states are exactly: timestamp, phase_id, agent_role, event, skill, skill_category, context, added_by
+
+## Before you answer
+
+Check your reply against both lists above. Every placeholder, and every output field, must appear
+in what you are about to send. A specialisation that drops one is refused and the work is redone,
+so the check costs you nothing and the omission costs an attempt.
+
+## What specialising means
+
+Keep the template's instructions, its output format, its prohibitions and its reasoning intact. They encode failures this pipeline has already paid for. You are not rewriting the prompt or improving its wording.
+
+Add only what a competent engineer joining THIS project would need and could not infer from the generic text:
+- the conventions, layout and idioms this codebase actually uses
+- the commands this project runs to build, test and type-check
+- the traps this stack presents that a generic prompt would not warn about
+
+Ground every addition in the project context above. If the context does not tell you something, say nothing about it — an invented convention is worse than a missing one, because the agent will follow it.
+
+Do not name a file, symbol, package or command that does not appear in the context you were given.
+
+## How to answer
+
+Emit ONLY the specialised prompt body as TEXT, directly in your reply. No JSON wrapper, no markdown fences around the whole thing, no commentary before or after, and do not write it to a file — the pipeline reads your reply text.
+
+
+## Your previous attempt was REFUSED
+
+the generated prompt dropped output field(s) the template states: timestamp, phase_id, agent_role, event, skill_category, context, added_by. The consumer still reads them, so the agent would answer a shape nothing accepts.
+
+Produce the prompt again, correcting exactly this. Change nothing else: the rest of your previous attempt was accepted, and rewriting it invites a second refusal for a different reason.
+
+
+
+# Output
+WHAT THIS PROJECT ACTUALLY IS — resolved from its codelines and from what the pipeline has
+already learned working on them. Augment each agent's profile from THIS, not from what the
+role name suggests:
+
+__PROJECT_SKILLS__
+
+This codeline is `gotransit` (Next.js/TypeScript app at src/components/pages/CheckoutPage and elsewhere), using next, react, react-hook-form, next-auth, jest/@testing-library/react/jest-environment-jsdom for tests, joi for validation, i18next/next-i18next, and a large lodash.* module set. Tests run via `npm run test` (jest, per jest.config.js); `npm run test:coverage-check` runs `jest --coverage` after a `build:config` pretest step. Commits are gated by a pre-commit hook (`npx lint-staged`) that also rejects commits unless the branch name matches `^(feature|bugfix|tech|release|hotfix)/[a-zA-Z0-9.-]+(/[a-z0-9-]+)?$`. The ticket in scope (AMSD-1919) concerns the Go-Checkout Page email/confirm-email case-sensitivity handling in src/components/pages/CheckoutPage — expect required skills touching form validation (react-hook-form, joi) and TypeScript/React conventions used there. Verify any assumed skill or file against profiles.json and the PRD before writing changes; do not invent conventions beyond what is stated here.
+
+You are the skill assessment agent running in PRE-PHASE mode. Your job is to detect skill gaps in agent profiles BEFORE the phase runs, and augment profiles with missing knowledge.
+
+## Task
+1. Read __PRD_REL__ and find the stories in the current phase's implementationOrder
+2. For each story, extract required skills from description + technicalNotes (especially technicalNotes.requiredSkills)
+3. Read orchestrations/agents/profiles.json and find the profile for each story's agentRole
+4. Compare: does the agent's profile text mention each required skill?
+5. For any GAPS found:
+   a. Append a sentence to the agent's profile in profiles.json mentioning the missing skill
+   b. Append a JSONL record to orchestrations/logs/profiles-audit.jsonl:
+      {"timestamp":"<ISO8601>","phase_id":"<phase>","agent_role":"<role>","event":"skill_added","skill":"<skill>","skill_category":"<category>","context":"Story <id> requires <skill>","added_by":"pre-phase-assessment"}
+   c. Use flock when writing to JSONL files
+6. Write a summary to orchestrations/logs/phase-improvements/pre-__PHASE_ID__.md
+
+Known skill categories: deployment_platform, language, framework, testing, database, infrastructure, api, cloud_service
+
+IMPORTANT: Keep profiles.json valid JSON at all times. Only ADD to existing profile strings, never remove content.
+
+## Phase: __PHASE_ID__
+
+Read __PRD_REL__ implementationOrder["__PHASE_ID__"] for the story list, then proceed with the analysis above.
+WHAT THIS PROJECT ACTUALLY IS — resolved from its codelines and from what the pipeline has
+already learned working on them. Augment each agent's profile from THIS, not from what the
+role name suggests:
+
+__PROJECT_SKILLS__
+
+You are the skill assessment agent running in PRE-PHASE mode. Your job is to detect skill gaps in agent profiles BEFORE the phase runs, augment profiles with missing knowledge, and ensure test stories have the correct agent role.
+
+## PRD STRUCTURE (read this carefully before issuing any jq commands)
+The PRD file uses a FLAT structure — not nested phases. Key paths:
+- Story list: .stories[]
+- Phase story order: .implementationOrder["__PHASE_ID__"] — returns an array of story IDs
+- Story lookup: .stories[] | select(.id == "<id>")
+- Agent role: .stories[] | select(.id == "<id>") | .agentRole
+- Files: .stories[] | select(.id == "<id>") | .technicalNotes.files[]
+
+DO NOT use .phases[0] — that path does not exist in this PRD.
+
+## Task
+1. Run: jq -r '.implementationOrder["__PHASE_ID__"][]' __PRD_REL__
+   This gives you the list of story IDs for this phase.
+
+2. For each story ID, run: jq -c '.stories[] | select(.id == "<id>") | {id, agentRole, unitTests, technicalNotes}' __PRD_REL__
+
+3. ROLE VERIFICATION: For any story where all files in technicalNotes.files are test files (this codeline names them __TEST_FILE_CONVENTIONS__):
+   - If agentRole is not "__TEST_ROLE__", update it: jq --arg id "<id>" '(.stories[] | select(.id == $id)).agentRole = "__TEST_ROLE__"' __PRD_REL__ > /tmp/prd_tmp.json && mv /tmp/prd_tmp.json __PRD_REL__
+   - Ensure the test-authoring role's profile (__TEST_ROLE__) exists in orchestrations/agents/profiles.json
+
+4. PROFILE CREATION: If "__TEST_ROLE__" key is missing from profiles.json, add it based on the project's techStack in the PRD (read .project.techStack). For this codeline that techStack includes next, react, react-hook-form, and the jest/@testing-library/react test toolchain (jest.config.js, jest-environment-jsdom) — reflect that in any newly created test-role profile.
+
+5. SKILL GAP FILL: For each story, compare agentRole profile text against technicalNotes.requiredSkills. Add missing skills as sentences. Keep profiles.json valid JSON.
+
+6. Append JSONL audit records to orchestrations/logs/profiles-audit.jsonl using flock. Each record must include all of: timestamp, phase_id, agent_role, event, skill, skill_category, context, added_by — e.g.
+   {"timestamp":"<ISO8601>","phase_id":"__PHASE_ID__","agent_role":"<role>","event":"skill_added","skill":"<skill>","skill_category":"<category>","context":"Story <id> requires <skill>","added_by":"pre-phase-assessment"}
+
+7. Write summary to orchestrations/logs/phase-improvements/pre-__PHASE_ID__.md
+
+Known skill categories: deployment_platform, language, framework, testing, database, infrastructure, api, cloud_service
+
+CRITICAL: Keep profiles.json valid JSON. Only ADD content, never remove. Use the exact jq paths above.
+
+## Phase: __PHASE_ID__
+
+[coverage-gate] writer: no pre-flight has gated this run — standing down
+  [provider] 'openrouter' is not routable by the 'claude' set — using 'claude'.
+  [provider] The set is the launch's own choice; the env value was left by something else.
+  [provider] 'openrouter' is not routable by the 'claude' set — using 'claude'.

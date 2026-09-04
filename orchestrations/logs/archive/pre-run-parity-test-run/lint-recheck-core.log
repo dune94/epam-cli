@@ -1,0 +1,22 @@
+src/context/contentstackContext.tsx:10:13  @typescript-eslint/no-explicit-any  Unexpected any. Specify a different type.
+src/context/contentstackContext.tsx:13:37  @typescript-eslint/no-explicit-any  Unexpected any. Specify a different type.
+src/pages/404.tsx:19:14  @typescript-eslint/no-explicit-any  Unexpected any. Specify a different type.
+src/pages/[[...slug]].tsx:26:14  @typescript-eslint/no-explicit-any  Unexpected any. Specify a different type.
+src/services/contentstack.ts:106:28  @typescript-eslint/no-explicit-any  Unexpected any. Specify a different type.
+src/services/contentstack.ts:106:48  @typescript-eslint/no-explicit-any  Unexpected any. Specify a different type.
+src/services/contentstack.ts:106:56  @typescript-eslint/no-explicit-any  Unexpected any. Specify a different type.
+src/services/contentstack.ts:214:17  @typescript-eslint/no-explicit-any  Unexpected any. Specify a different type.
+src/services/contentstack.ts:244:25  @typescript-eslint/no-explicit-any  Unexpected any. Specify a different type.
+src/services/contentstack.ts:258:15  @typescript-eslint/no-explicit-any  Unexpected any. Specify a different type.
+src/services/contentstack.ts:301:15  @typescript-eslint/no-explicit-any  Unexpected any. Specify a different type.
+src/services/contentstack.ts:404:15  @typescript-eslint/no-explicit-any  Unexpected any. Specify a different type.
+NEW_FINDINGS=12
+src/services/contentstack.ts:106:28  @typescript-eslint/no-explicit-any  Unexpected any. Specify a different type.
+src/services/contentstack.ts:106:48  @typescript-eslint/no-explicit-any  Unexpected any. Specify a different type.
+src/services/contentstack.ts:106:56  @typescript-eslint/no-explicit-any  Unexpected any. Specify a different type.
+src/services/contentstack.ts:214:17  @typescript-eslint/no-explicit-any  Unexpected any. Specify a different type.
+src/services/contentstack.ts:244:25  @typescript-eslint/no-explicit-any  Unexpected any. Specify a different type.
+src/services/contentstack.ts:258:15  @typescript-eslint/no-explicit-any  Unexpected any. Specify a different type.
+src/services/contentstack.ts:301:15  @typescript-eslint/no-explicit-any  Unexpected any. Specify a different type.
+src/services/contentstack.ts:404:15  @typescript-eslint/no-explicit-any  Unexpected any. Specify a different type.
+NEW_FINDINGS=8

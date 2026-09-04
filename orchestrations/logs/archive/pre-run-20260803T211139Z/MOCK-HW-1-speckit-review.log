@@ -1,0 +1,129 @@
+# Prompt
+You are the speckit specification agent for EPAM CLI. Phase core, story MOCK-HW-1.
+
+You are reviewing and building on the openspec agent's output for this story.
+Your role is COLLABORATIVE — you are NOT starting from scratch. Instead:
+1. Review openspec's proposed acceptance criteria for testability and completeness
+2. Add missing edge-case, error-handling, security, and accessibility criteria
+3. Flag any AC that are vague, untestable, or overlapping
+4. Splitting is openspec's decision alone — you do NOT split stories. If openspec already split
+   this story, do NOT include a "splitStories" field in your output at all (it will be ignored if
+   you do). Review and refine the acceptanceCriteria openspec gave you for the UNSPLIT story as
+   normal; per-child refinement of an already-split story's children happens on a later turn, not
+   here.
+5. Do NOT remove or duplicate openspec's good work — build on it
+
+━━━ WHAT-NOT-HOW RULE (MANDATORY) ━━━
+Every AC must describe an OBSERVABLE OUTCOME (what a test can verify from outside the code),
+NOT an implementation instruction. If an AC names vi.mock, jest.fn, mockReturnValue,
+mockResolvedValue, import statements, or require() calls, REPLACE it with a
+Given/When/Then behaviour statement. Never tell the implementer which library or mock pattern to use.
+
+OPENSPEC'S OUTPUT (your input to review — ACs and split proposals only):
+{
+  "acceptanceCriteria": [],
+  "notes": "No existing code block was injected into the prompt, so no fix site can be identified. Verification criteria derived from the description since acceptance criteria are empty."
+}
+
+ORIGINAL STORY CONTEXT:
+{
+  "id": "MOCK-HW-1",
+  "title": "getGreeting should return hello dolly",
+  "description": "getGreeting should return hello dolly",
+  "originalAcceptanceCriteria": [],
+  "technicalNotes": {
+    "files": [
+      "src/hello.ts"
+    ],
+    "perCodeline": {
+      "helloworld": {
+        "files": [
+          "src/hello.ts"
+        ],
+        "resolved": [
+          {
+            "declared": "src/hello.ts",
+            "actual": "src/hello.ts",
+            "match": "exact",
+            "verified_against": "/tmp/mock1-paused-RFMmAX/codelines/mock-hello-world"
+          }
+        ],
+        "unresolved": []
+      }
+    }
+  },
+  "dependencies": []
+}
+
+Produce your refined output as raw JSON only (no XML tags, no markdown fences, no preamble). Include:
+- "acceptanceCriteria": The FULL merged list (openspec's criteria + your additions/refinements). Every item MUST be an observable outcome, not an implementation instruction.
+- "notes": What you changed and why (be specific — cite which criteria you added/modified/replaced)
+- "splitStories": ALWAYS omit this field. Splitting is openspec's decision alone — never propose
+  split children of your own, even if openspec already split this story.
+- "acAddedBySpeckit": Array of criteria YOU added that were not in openspec's output
+- "acModifiedBySpeckit": Array of {"original":"...","revised":"..."} for criteria you reworded
+- "acFlagged": Array of {"criterion":"...","flag":"..."} for criteria that need human attention
+
+You have NO tools in this request and cannot call any — do not emit a tool call in any
+syntax (<tool_call>, <tool_use>, <function_call>). Nothing executes them, so a response
+containing one is discarded in full and the work is lost. Observed live (2026-07-28)
+died exactly this way: asked to review a story with an empty criteria list, the model
+requested the four files named above via <tool_call>read_file(...) and produced no answer
+at all. Everything you may use is already in this prompt. File PATHS are given without
+their contents by design — if the contents would have changed your answer, say so in
+"notes" and give your best answer from the description, title and paths you were given.
+An answer with a caveat is worth everything; a tool call is worth nothing.
+
+
+# Output
+```json
+{
+  "acceptanceCriteria": [
+    {
+      "id": "AC-1",
+      "given": "the getGreeting function is called",
+      "when": "it is invoked with no arguments",
+      "then": "it returns the exact string 'hello dolly'"
+    },
+    {
+      "id": "AC-2",
+      "given": "the getGreeting function is called",
+      "when": "the return value is inspected",
+      "then": "the return type is string (not undefined, null, number, or any other type)"
+    },
+    {
+      "id": "AC-3",
+      "given": "the getGreeting function is called multiple times",
+      "when": "each return value is compared",
+      "then": "every call returns the identical string 'hello dolly' (the function is deterministic)"
+    },
+    {
+      "id": "AC-4",
+      "given": "the getGreeting function return value",
+      "when": "compared to 'Hello Dolly' or 'HELLO DOLLY'",
+      "then": "it is NOT equal — the casing must be exactly lowercase 'hello dolly'"
+    },
+    {
+      "id": "AC-5",
+      "given": "the getGreeting function is called",
+      "when": "the return value is inspected",
+      "then": "it contains no leading or trailing whitespace beyond the 11 characters of 'hello dolly'"
+    }
+  ],
+  "notes": "Openspec provided empty acceptance criteria, so all criteria above are new. I derived them from the story title and description ('getGreeting should return hello dolly'). Without access to the contents of src/hello.ts, I assumed getGreeting takes no arguments and returns a plain string — if the function signature differs (e.g., accepts parameters), AC-1 may need adjustment. I added casing (AC-4), determinism (AC-3), type (AC-2), and whitespace (AC-5) as edge-case criteria that a simple 'it returns hello dolly' check would miss.",
+  "acAddedBySpeckit": [
+    "AC-1",
+    "AC-2",
+    "AC-3",
+    "AC-4",
+    "AC-5"
+  ],
+  "acModifiedBySpeckit": [],
+  "acFlagged": [
+    {
+      "criterion": "AC-1",
+      "flag": "Assumes getGreeting takes no arguments. If src/hello.ts defines parameters, this AC needs revision to specify input conditions. File contents were not available for review."
+    }
+  ]
+}
+```

@@ -1,0 +1,108 @@
+# Prompt
+You are specialising ONE generic agent prompt for ONE specific project. You are the same agent that just minted this project's roles, so you already know what this project is and who will work on it.
+
+## The template you must specialise
+
+Its id is ac-elaboration and its purpose is: Write a complete, testable set of acceptance criteria for a story that has none.
+
+Everything between the two markers below is the template, verbatim. The markers are not
+part of it. A code fence cannot delimit this: several templates contain fences of their
+own, so the first closing fence would truncate the body mid-instruction.
+
+-----BEGIN TEMPLATE BODY-----
+You are an acceptance-criteria writer for a brownfield software pipeline.
+
+A Jira story has NO formal acceptance criteria. Generate a complete, testable set of ACs
+so that an AI agent can implement the change without human clarification.
+
+STORY: __STORY_KEY__ — __STORY_TITLE__
+
+DESCRIPTION:
+__STORY_DESCRIPTION__
+
+Rules:
+1. Each AC must be specific and testable (observable in UI, API response, or logs).
+2. Infer "expected" behaviour from the description, domain knowledge, and the word "NOT".
+3. Include: primary success path, at least one edge case, and one error/boundary case.
+4. Do NOT invent requirements not implied by the description.
+5. Use plain English, present tense, third-person ("The system...", "The UI shows...").
+6. Describe WHAT to verify (observable behavior), never HOW to implement it. Do NOT prescribe a mechanism/algorithm — no "calculate independently", "split", "halve", "per segment", "for each line item", new fields, or internal approach. Keep a bug's ACs at the symptom/behavior level; prescribing an implementation misdirects the downstream code investigation.
+
+Respond with JSON only — no markdown, no preamble:
+{ "enrichedAcs": ["<AC 1>", "<AC 2>", ...] }
+-----END TEMPLATE BODY-----
+
+## What this project is
+
+Project config: /home/bradleyjerome/projects/ai/epam-cli/orchestrations/projects/mock3
+Tickets in scope: MOCK3-1: Riders aged exactly 65 are charged the adult fare | MOCK3-2: The departure board omits the final stop
+
+Codelines in scope and their declared dependencies:
+- mocka (/home/bradleyjerome/projects/mock3/mock-a) deps: vitest, typescript
+- mockb (/home/bradleyjerome/projects/mock3/mock-b) deps: vitest, typescript
+
+The roles you minted for this project:
+- mocka-fare-detective [investigator] — MOCK3-1 lives entirely in mocka's src/fares.ts, and a dedicated reader of this codeline's actual comparison logic and test coverage prevents the implementer from acting on the unverified survey lead alone.
+- mockb-schedule-detective [investigator] — MOCK3-2 lives entirely in mockb's src/schedule.ts, and a dedicated reader of this codeline's loop bounds and existing assertions prevents the implementer from acting on the unverified survey lead alone.
+- fare-boundary-fixer [implementer] — MOCK3-1 requires an actual code change to src/fares.ts's age comparison, which only an implementer with write access can make, since investigators in this roster are read-only by design.
+- stop-rendering-fixer [implementer] — MOCK3-2 requires an actual code change to src/schedule.ts's rendering loop, which only an implementer with write access can make, since investigators in this roster are read-only by design.
+
+## The one rule you cannot break
+
+The template's placeholders are a CONTRACT with the pipeline. Each token written in SCREAMING_SNAKE_CASE between double underscores is replaced at run time with real evidence — a diff, a ticket, a test log, a plan. The substitution is BY NAME and it is strict in both directions.
+
+- Reproduce every placeholder EXACTLY as it appears, character for character.
+- NEVER add or invent a placeholder. Nothing supplies a name the pipeline does not know, so rendering throws and the run dies at the seam that needed this prompt.
+- NEVER remove or rename one. The evidence it carries would silently never reach the agent, and the agent would answer without it.
+- Do not move a placeholder into a code fence, a quote, or an example where it would read as literal text.
+
+The placeholders in this template are exactly: __STORY_DESCRIPTION__, __STORY_KEY__, __STORY_TITLE__
+
+## What specialising means
+
+Keep the template's instructions, its output format, its prohibitions and its reasoning intact. They encode failures this pipeline has already paid for. You are not rewriting the prompt or improving its wording.
+
+Add only what a competent engineer joining THIS project would need and could not infer from the generic text:
+- the conventions, layout and idioms this codebase actually uses
+- the commands this project runs to build, test and type-check
+- the traps this stack presents that a generic prompt would not warn about
+
+Ground every addition in the project context above. If the context does not tell you something, say nothing about it — an invented convention is worse than a missing one, because the agent will follow it.
+
+Do not name a file, symbol, package or command that does not appear in the context you were given.
+
+## How to answer
+
+Emit ONLY the specialised prompt body as TEXT, directly in your reply. No JSON wrapper, no markdown fences around the whole thing, no commentary before or after, and do not write it to a file — the pipeline reads your reply text.
+
+
+
+# Output
+You are an acceptance-criteria writer for a brownfield software pipeline working on the mock3 project.
+
+A Jira story has NO formal acceptance criteria. Generate a complete, testable set of ACs
+so that an AI agent can implement the change without human clarification.
+
+STORY: __STORY_KEY__ — __STORY_TITLE__
+
+DESCRIPTION:
+__STORY_DESCRIPTION__
+
+Project context:
+- This project contains two independent codelines: mocka and mockb, each with vitest test suites.
+- MOCK3-1 is scoped to mocka/src/fares.ts (fare calculation logic).
+- MOCK3-2 is scoped to mockb/src/schedule.ts (schedule rendering logic).
+- Changes must pass their respective test suites: `npm test` in each codeline.
+- TypeScript is strictly enforced; type errors block test runs.
+
+Rules:
+1. Each AC must be specific and testable (observable in UI, API response, logs, or test assertions).
+2. Infer "expected" behaviour from the description, domain knowledge, and the word "NOT".
+3. Include: primary success path, at least one edge case, and one error/boundary case.
+4. Do NOT invent requirements not implied by the description.
+5. Use plain English, present tense, third-person ("The system...", "The API returns...", "The function calculates...").
+6. Describe WHAT to verify (observable behavior), never HOW to implement it. Do NOT prescribe a mechanism/algorithm — no "calculate independently", "split", "halve", "per segment", "for each line item", new fields, or internal approach. Keep a bug's ACs at the symptom/behavior level; prescribing an implementation misdirects the downstream code investigation.
+7. Each AC must be verifiable by the vitest test suite after a code change. Avoid ACs that require manual inspection or external tools.
+
+Respond with JSON only — no markdown, no preamble:
+{ "enrichedAcs": ["<AC 1>", "<AC 2>", ...] }

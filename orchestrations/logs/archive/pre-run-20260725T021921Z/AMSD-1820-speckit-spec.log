@@ -1,0 +1,509 @@
+# Prompt
+You are the speckit specification agent for EPAM CLI. Phase core, story AMSD-1820.
+EXISTING CODE — CodeGraph static analysis (exact symbols, callers, blast radius):
+**Dynamic-dispatch links among your symbols**
+(synthesized — the indirect hops grep/Read would reconstruct; the `@file:line` is the wiring site)
+
+- GetTopFive → GetTopFive   [dynamic: interface → impl @Web Services/Metrolinx Service/MetroLinxService.svc.cs:235]
+
+> Full source for these symbols is below — the call flow among them, followed by their bodies.
+**Exploration: applies handles processes resolves [Mozio] -  Promo code amount   displayed  expected  Return trip tickets   Mozio email confirmation**
+
+Found 14 symbols across 4 files.
+
+**Blast radius — what depends on these (update/verify before editing)**
+
+- `LogGoogleTripPlannerUsage` (Web Services/GOTransitService/GoogleTripPlanner/GoolgeTripPlannerMethods.cs:43) — 1 caller in `Web Services/GOTransitService/GoogleTripPlanner/GoogleTripPlannerContracts.cs`; ⚠️ no covering tests found
+- `UpdateTripPlannerStatisticsAsync` (Web Services/GOTransitService/GoogleTripPlanner/GootleTripPlannerAsyncMethods.cs:10) — 1 caller in `Web Services/GOTransitService/GoogleTripPlanner/GoolgeTripPlannerMethods.cs`; ⚠️ no covering tests found
+
+**Source Code**
+
+> The code below is the **verbatim, current on-disk source** of these files — re-read from disk on this call and line-numbered, byte-for-byte identical to what the Read tool returns. It is NOT a summary, outline, or stale cache. Treat each block as a Read you have already performed: do not Read a file shown here.
+
+**`Web Services/GOTransitService/GoogleTripPlanner/GoolgeTripPlannerMethods.cs`** — LogGoogleTripPlannerUsage(method), EndUpdateTripPlannerStatistics(method), BeginUpdateTripPlannerStatistics(method), GOTransitService(class), MetroLinx.Web(namespace)
+
+```csharp
+1	﻿using System;
+2	using System.Collections.Generic;
+3	using System.Linq;
+4	using System.Runtime.Serialization;
+5	using System.ServiceModel;
+6	using System.ServiceModel.Web;
+7	using System.Text;
+8	using System.Text.RegularExpressions;
+9	using System.Data.OleDb;
+10	using System.Data;
+11	using System.Net;
+12	using System.Configuration;
+13	using System.Data.OracleClient;
+14	using System.Xml;
+15	using System.Diagnostics;
+16	
+17	namespace MetroLinx.Web
+18	{
+19	    public partial class GOTransitService : IGOTransitService
+20	    {
+21	        public IAsyncResult BeginUpdateTripPlannerStatistics(bool isEnglish, string lastUser, string startPoint, string endPoint, string dateOfTrip, string departAt, string arriveBy, string tripTime, AsyncCallback callback, object state)
+22	        {
+23	            string writeLogFlag = ConfigurationManager.AppSettings["WriteTPStatsEnabled"];
+24	
+25	            if (String.IsNullOrEmpty(writeLogFlag))
+26	            {
+27	                return null;
+28	            }
+29	
+30	            if (!writeLogFlag.Equals("true") && !writeLogFlag.Equals("True"))
+31	            {
+32	                return null;
+33	            }
+34	
+35	            return new UpdateTripPlannerStatisticsAsync(lastUser, startPoint, endPoint, dateOfTrip, departAt, arriveBy, tripTime, callback, state);
+36	        }
+37	
+38	        public void EndUpdateTripPlannerStatistics(IAsyncResult result)
+39	        {
+40	            return;
+41	        }
+42	
+43	        public void LogGoogleTripPlannerUsage(string lastUser, string startPoint, string endPoint, string dateOfTrip, string departAt, string arriveBy, string tripTime)
+44	        {
+45	            OleDbConnection conn = null;
+46	            OleDbCommand cmd = null;
+47	            string connStr = string.Empty;
+48	
+49	            try
+50	            {
+51	                string writeLogFlag = ConfigurationManager.AppSettings["WriteTPStatsEnabled"];
+52	
+53	                if (String.IsNullOrEmpty(writeLogFlag))
+54	                {
+55	                    return;
+56	                }
+57	
+58	                if (!writeLogFlag.Equals("true") && !writeLogFlag.Equals("True"))
+59	                {
+60	                    return;
+61	                }
+62	
+63	                connStr = ConfigurationManager.ConnectionStrings["metrolinx_oracle"].ConnectionString;
+64	                conn = new OleDbConnection(connStr);
+65	                cmd = new OleDbCommand("websp_Update_TP_Statistics", conn);
+66	
+67	                string dateTimeOfTrip = dateOfTrip + " " + tripTime;
+68	                DateTime tripDateTimeStamp = DateTime.Parse(dateTimeOfTrip);
+69	                cmd.CommandType = CommandType.StoredProcedure;
+70	                cmd.Parameters.AddWithValue("lastUser", lastUser);
+71	                cmd.Parameters.AddWithValue("startPoint", startPoint);
+72	                cmd.Parameters.AddWithValue("endPoint", endPoint);
+73	                cmd.Parameters.AddWithValue("tripDate", tripDateTimeStamp);
+74	                cmd.Parameters.AddWithValue("departAt", departAt);
+75	                cmd.Parameters.AddWithValue("arriveBy", arriveBy);
+76	                cmd.Parameters.AddWithValue("tripTime", tripDateTimeStamp);
+77	                cmd.ExecuteNonQuery();
+78	            }
+79	            catch (OleDbException OleDbEx)
+80	            {
+81	                LogMessage(true, OleDbEx.ToString(), "Error in LogGoogleTripPlannerUsage() method.");
+82	            }
+83	            catch (Exception ex)
+84	            {
+85	                LogMessage(false, ex.ToString(), "Error in LogGoogleTripPlannerUsage() method.");
+86	            }
+87	            finally
+88	            {
+89	                if (cmd != null)
+90	                {
+91	                    cmd.Dispose();
+92	                }
+93	            }
+94	        }
+95	    }
+96	}
+```
+
+**`Web Services/GOTransitService/GoogleTripPlanner/GoogleTripPlannerContracts.cs`** — LogGoogleTripPlannerUsage(method), EndUpdateTripPlannerStatistics(method), BeginUpdateTripPlannerStatistics(method), IGOTransitService(interface), MetroLinx.Web(namespace)
+
+```csharp
+1	﻿using System;
+2	using System.Collections.Generic;
+3	using System.Linq;
+4	using System.Runtime.Serialization;
+5	using System.ServiceModel;
+6	using System.ServiceModel.Web;
+7	using System.Text;
+8	using System.Data;
+9	
+10	namespace MetroLinx.Web
+11	{
+12	    public partial interface IGOTransitService
+13	    {
+14	        [OperationContract(AsyncPattern = true, IsOneWay=true)]
+15	        IAsyncResult BeginUpdateTripPlannerStatistics(bool isEnglish, string lastUser, string startPoint, string endPoint, string dateOfTrip, string departAt, string arriveBy, string tripTime, AsyncCallback callback, object state);
+16	        void EndUpdateTripPlannerStatistics(IAsyncResult result);
+17	
+18	        [OperationContract(IsOneWay=true)]
+19	        void LogGoogleTripPlannerUsage(string lastUser, string startPoint, string endPoint, string dateOfTrip, string departAt, string arriveBy, string tripTime);
+20	    }
+21	}
+```
+
+**`Web Services/ReservedParkingService/ReservedParking/Reserved_Parking_Application_Form/js/jquery_colorbox.js`** — process(function)
+
+```javascript
+132	    }
+133	
+134	    // Assigns function results to their respective settings.  This allows functions to be used as values.
+135	    function process(settings) {
+136	        for (var i in settings) {
+137	            if ($.isFunction(settings[i]) && i.substring(0, 2) !== 'on') { // checks to make sure the function isn't one of the callbacks, they will be handled at the appropriate time.
+138	                settings[i] = settings[i].call(element);
+139	            }
+140	        }
+141	        settings.rel = settings.rel || element.rel || 'nofollow';
+142	        settings.href = $.trim(settings.href || $(element).attr('href'));
+143	        settings.title = settings.title || element.title;
+144	    }
+145	
+146	    function trigger(event, callback) {
+147	        if (callback) {
+```
+
+**`Web Services/GOTransitService/GoogleTripPlanner/GootleTripPlannerAsyncMethods.cs`** — UpdateTripPlannerStatisticsAsync(class), UpdateTripPlannerStatisticsAsync(method), MetroLinx.Web(namespace)
+
+```csharp
+1	﻿using System.Threading;
+2	using System;
+3	using System.Data.OleDb;
+4	using System.Data;
+5	using System.Configuration;
+6	using MetroLinx.UtilLibrary;
+7	
+8	namespace MetroLinx.Web
+9	{
+10	    public class UpdateTripPlannerStatisticsAsync : IAsyncResult
+11	    {
+12	        private object _asyncState = null;
+13	        private WaitHandle _asyncWaitHandle = null;
+14	        private bool _completedSynchronously;
+15	        private bool _isCompleted;
+16	        private AsyncCallback _callback;
+17	
+18	        public object AsyncState
+19	        {
+20	            get { return _asyncState; }
+21	        }
+22	
+23	        public WaitHandle AsyncWaitHandle
+24	        {
+25	            get { return _asyncWaitHandle; }
+26	        }
+27	
+28	        public bool CompletedSynchronously
+29	        {
+30	            get { return _completedSynchronously; }
+31	        }
+32	
+33	        public bool IsCompleted
+34	        {
+35	            get { return _isCompleted; }
+36	        }
+37	
+38	        public UpdateTripPlannerStatisticsAsync(string lastUser, string startPoint, string endPoint, string dateOfTrip, string departAt, string arriveBy, string tripTime, AsyncCallback callback, object state)
+39	        {
+40	            _asyncState = state;
+41	            _callback = callback;
+42	            string connStr = string.Empty;
+43	
+44	            OleDbConnection conn = DatabaseHandler.Instance.GOPUBCONNECTION;
+45	            OleDbCommand cmd = new OleDbCommand("websp_Update_TP_Statistics", conn);
+46	            cmd.CommandType = CommandType.StoredProcedure;
+47	            cmd.Parameters.AddWithValue("lastUser", lastUser);
+48	            cmd.Parameters.AddWithValue("startPoint", startPoint);
+49	            cmd.Parameters.AddWithValue("endPoint", endPoint);
+50	            cmd.Parameters.AddWithValue("tripDate", dateOfTrip);
+51	            cmd.Parameters.AddWithValue("departAt", departAt);
+52	            cmd.Parameters.AddWithValue("arriveBy", arriveBy);
+53	            cmd.Parameters.AddWithValue("tripTime", tripTime);
+54	            cmd.ExecuteNonQuery();
+55	
+56	        }
+57	    }
+58	}
+```
+
+
+EXISTING CODE (brownfield fallback via Semble — identify the code path that handles this behavior, then specify how to fix it; do not propose new abstractions):
+// Web Services/PINS/App_Code/PINS.vb (lines 1039–1064, relevance: 0.0179)
+colorCode = "#00FFFF"
+            Case Else
+                colorCode = ""
+                warning = "Illegal color code [" & color & "]"
+                Log( "Warning: " & warning, EventLogEntryType.Warning )
+         End Select
+          
+         Return colorCode 
+    End Function
+    
+End Class
+
+Class OrderComparer
+    Implements IComparer 'Implement the IComparer Interface
+    Overloads Function Compare(ByVal x As Object, ByVal y As Object) As Integer Implements IComparer.Compare
+        Return CType(x, TripStop).order - CType(y, TripStop).order
+        'If x.order is bigger than y.order then x.order-y.order will be positive.
+        'And if y.order is bigger, then x.order-y.order will be negative
+        'And finally if they are equal then x.order-y.order will equal zero.
+    End Function
+
+---
+
+// Web Services/ReservedParkingService/ReservedParking/Reserved_Parking_Application_Form/en/traveling/reserved_parking_application.aspx.cs (lines 229–231, relevance: 0.0157)
++
+
+                "If the payment method selected was credit card, and a Reserved Parking space becomes available in the location you selected you will be sent an email with a secure server link to enter your credit card information.<br /><br />If the payment method selected was pre-authorized debit (bank withdrawal), please submit a VOID cheque to Customer Service Centre, Union Station, as soon as possible.<br /><br />If you wish to change or cancel your submission or you have any questions or concerns regarding this application, please call Reserved Parking (416 ) 869-3600 ex 7275 (PARK) or send an email to "
+
+---
+
+// Web Services/ReservedParkingService/ReservedParking/Reserved_Parking_Application_Form/js/jquery-1.4.4.js (lines 208–241, relevance: 0.0110)
+,
+
+	// Start with an empty selector
+	selector: "",
+
+	// The current version of jQuery being used
+	jquery: "1.4.4",
+
+	// The default length of a jQuery object is 0
+	length: 0,
+
+	// The number of elements contained in the matched element set
+	size: function() {
+		return this.length;
+	},
+
+	toArray: function() {
+		return slice.call( this, 0 );
+	},
+
+
+---
+
+// Web Services/ReservedParkingService/ReservedParking/Reserved_Parking_Application_Form/js/jquery.ui.datepicker.js (lines 278–287, relevance: 0.0107)
+/* Pop-up the date picker in a "dialog" box.
+	   @param  input     element - ignored
+	   @param  date      string or Date - the initial date to display
+	   @param  onSelect  function - the function to call when a date is selected
+	   @param  settings  object - update the dialog date picker instance's settings (anonymous object)
+	   @param  pos       int[2] - coordinates for the dialog's position within the screen or
+	                     event - with x/y coordinates or
+	                     leave empty for default (screen centre)
+	   @return the manager object */
+	_dialogDatepicker: function(input, date, onSelect, settings, pos)
+
+---
+
+// Web Services/ReservedParkingService/ReservedParking/Reserved_Parking_Application_Form/en/traveling/reserved_parking_application.aspx.designer.cs (lines 295–318, relevance: 0.0105)
+/// _validateEmailPattern control.
+        /// </summary>
+        /// <remarks>
+        /// Auto-generated field.
+        /// To modify move field declaration from designer file to code-behind file.
+        /// </remarks>
+        protected global::System.Web.UI.WebControls.RegularExpressionValidator _validateEmailPattern;
+        
+        /// <summary>
+        /// emailConfirm control.
+        /// </summary>
+        /// <remarks>
+        /// Auto-generated field.
+        /// To modify move field declaration from designer file to code-behind file.
+        /// </remarks>
+        protected global::System.Web.UI.WebControls.TextBox emailConfirm;
+        
+        /// <summary>
+        /// emailConfirmVal control.
+        /// </summary>
+
+---
+
+// Web Services/ReservedParkingService/ReservedParking/Reserved_Parking_Application_Form/MonerisForm5.aspx.cs (lines 130–135, relevance: 0.0096)
+else if (responseNo >= 50 && responseNo != -1)
+            {
+                transactionDeclined.InnerHtml = "<p>The transaction has been declined. Please tray again or if the problem persist, contact the Reserved Parking Office at Metrolinx (416) 869 3600 ext. 7475(PARK).</p><p>Message: " + message + "</p>";
+            }
+
+            else
+
+---
+
+// Web Services/GOTransitService/GOTransitService.svc.cs (lines 1105–1109, relevance: 0.0095)
+else
+                {
+                    qrySchedule = qrySelect + "FROM (" + qrySelect2 + "FROM SCHEDULE WHERE TABLE_ID = '" + strTableDesc + "' AND DIRECTION_ID = '" + strDirection + "' AND SERVICE_NUM = '" + strServiceNumber + "' AND STATION_ID NOT IN " + stationIdFilter + " ORDER BY SEQ_NUM) tbSchedule " +
+                                                       "GROUP BY STATION_ID,STATION_SHORT_NAME,ZONE_ID,STATION_WHEELCHAIR,REMARK,ARR_DEPART,TRIP1_TIME,TRIP2_TIME,TRIP3_TIME,TRIP4_TIME,TRIP5_TIME,TRIP6_TIME,TRIP7_TIME,TRIP8_TIME,TRIP9_TIME,TRIP10_TIME,TRIP11_TIME,TRIP12_TIME,TRIP1_IND,TRIP2_IND,TRIP3_IND,TRIP4_IND,TRIP5_IND,TRIP6_IND,TRIP7_IND,TRIP8_IND,TRIP9_IND,TRIP10_IND,TRIP11_IND,TRIP12_IND ORDER BY MIN (tbSchedule.SEQ_NUM)";
+                }
+
+---
+
+// Web Services/ReservedParkingService/ReservedParking/Reserved_Parking_Application_Form/css/main.css (lines 315–340, relevance: 0.0092)
+#sidebarPromo p.SMLtext {
+	margin:0; /* zeroing the margins of the first element in the footer will avoid the possibility of margin collapse - a space between divs */
+	padding:22px 10px 5px 85px; /* padding on this element will create space, just as the the margin would have, without the margin collapse issue */
+	font-family:Arial, Verdana, Helvetica, Sans-Serif;
+	font-size:8pt;
+	font-weight:normal;
+	color:#6d6e71;
+	line-height:normal;
+}
+
+#sidebarPromo img {
+	margin:0px 0px 7px 0px;
+	padding-top:0px;
+}
+
+#sidebarRSS {
+	float:left;
+	background-image:url('../images/GOTransit_RSS_270x130.jpg');
+	background-repeat:no-repeat;
+	width:270px;
+
+---
+
+// Web Services/Pins4Mobile/App_Code/pins4mobile.vb (lines 187–211, relevance: 0.0096)
+i = 0 To rows.Count - 1
+            Dim tripStops As ArrayList
+            id = rows(i)("id")
+
+            trip = New Trip
+            trip.type = rows(i)("trip_mode")
+            trip.time = rows(i)("time")
+            trip.number = rows(i)("trip_name")
+            trip.service = rows(i)("line")
+            trip.platform = rows(i)("track")
+            trip.information = remarks(id)(0)("remarks")
+
+            tripStops = stops(id)
+            If Not IsNothing(tripStops) Then
+                Dim stopsInfo(tripStops.Count - 1) As TripStop
+                Dim j As Integer = 0
+                trip.stops = stopsInfo
+                For Each row In tripStops
+                    stopsInfo(j).name = row("stop_name")
+                    j = j + 1
+                Next
+            End If
+
+            tripList.Add(trip)
+        Next i
+
+---
+
+// Web Services/ReservedParkingService/ReservedParking/Reserved_Parking_Application_Form/js/jquery-1.4.4.js (lines 5344–5363, relevance: 0.0085)
+,
+
+	css: function( elem, name, extra ) {
+		// Make sure that we're working with the right name
+		var ret, origName = jQuery.camelCase( name ),
+			hooks = jQuery.cssHooks[ origName ];
+
+		name = jQuery.cssProps[ origName ] || origName;
+
+		// If a hook was provided get the computed value from there
+		if ( hooks && "get" in hooks && (ret = hooks.get( elem, true, extra )) !== undefined ) {
+			return ret;
+
+		// Otherwise, if a way to get the computed value exists, use that
+		} else if ( curCSS ) {
+			return curCSS( elem, name, origName );
+		}
+	},
+
+	// A method for quickly swapping in/out CSS properties to get correct calculations
+
+---
+
+// Web Services/MetroLinx_Write_Bridge/MetroLinxWriteService.svc.cs (lines 228–241, relevance: 0.0084)
+//parameters["LocalCode"].Value = webComment.Phonenumber.NPA;
+                    //parameters["Extension"].Value = webComment.Phonenumber.NXX;
+                    //if (string.IsNullOrEmpty(webComment.Email))
+                    //    parameters["Email"].Value = DBNull.Value;
+                    //else
+                    //    parameters["Email"].Value = webComment.Email;
+                    //parameters["CommType"].Value = webComment.CommType;
+                    //parameters["ServiceType"].Value = webComment.ServiceType;
+                    //if (webComment.ServiceType.Equals("Bus"))
+                    //{
+                    //    parameters["Route"].Value = webComment.BusRoute;
+                    //    parameters["TripTime"].Value = GetTimeFromTimestamp(webComment.BusTripTime, DBNull.Value);
+                    //    parameters["Departing"].Value = webComment.DepartureBusStop;
+                    //    parameters["Destination"].Value = webComment.DestinationBusStop;
+
+
+BROWNFIELD MODE — output JSON only, no tools, no search.
+Using ONLY the EXISTING CODE block already present in this prompt (injected above via CodeGraph or Semble), identify which file(s) and function(s) currently handle the behavior described in this story. Set the "locationHint" field in your JSON output to: [{"file":"<repo-relative path>","function":"<function name>","reason":"<why this is the fix site>"}]. If no relevant code appears in the existing code block above, set locationHint to []. ACs must describe changes to those existing locations — do not propose new files, services, or abstractions.
+
+Generate refined acceptance criteria, optionally updated title/description, and split stories where required. Output raw JSON only (no XML tags, no markdown fences, no preamble) using this schema:
+{
+  "storyId":"AMSD-1820",
+  "agent":"speckit",
+  "notes":"context",
+  "acceptanceCriteria":["..."],
+  "description":"...",
+  "title":"...",
+  "locationHint":[{"file":"path/relative/to/repo","function":"functionName","reason":"why this is the fix site"}],
+  "splitStories":[{"id":"optional","title":"...","description":"...","acceptanceCriteria":["..."],"agentRole":"...","technicalNotes":{"files":[]}}]
+}
+Use existing text when no change is needed.
+
+SPLIT RULES (mandatory, not optional — enforce these before refining AC):
+1. AC count > 12 → you MUST propose a split. Target ≤8 ACs per split child. Never leave a story with >12 ACs unsplit.
+2. Both implementation files AND test files in technicalNotes.files → split into one impl child (non-test files) and one test child (*.test.ts files). Assign agentRole "typescript-engineer" to impl, "test-engineer" to test.
+3. 3+ independent deliverable modules with no shared exports (e.g. client.ts, server.ts, cli.ts all in same story) → split per concern. Each split gets the files it owns.
+4. External API discovery + implementation in same story → split: first child discovers/documents the API contract, second child implements against that contract.
+5. technicalNotes.files contains BOTH frontend/template files (*.html, *.css, *.scss, *.jsx, *.tsx, *.vue, *.svelte) AND build/tooling files (vite.config.*, webpack.config.*, rollup.config.*, package.json, Makefile, Dockerfile, *.sh) → split: one child owns the frontend/template files, one child owns the build/tooling files. These have different runtime roles and different owners — bundling them causes token bloat and diffuse responsibility.
+6. Story covers multiple independent runtime roles in the same deliverable (e.g. HTTP server AND CLI binary AND HTML dashboard) → split by runtime role, one child per runtime target. Each child's agentRole should match what it produces (typescript-engineer for application code, test-engineer for test-only files).
+These rules apply only when splitDepth === 0. Never split a story that is already a split child.
+
+Story context:
+{
+  "id": "AMSD-1820",
+  "title": "[Mozio] - The Promo code amount is NOT displayed as expected for Return trip tickets in the Mozio email confirmation",
+  "description": "[Mozio] - The Promo code amount is NOT displayed as expected for Return trip tickets in the Mozio email confirmation",
+  "acceptanceCriteria": [
+    "The system displays the promo code discount amount for both the outbound and return trip tickets in the Mozio email confirmation when a return trip order with a promo code is submitted.",
+    "The Mozio email confirmation shows the promo code discount amount for the return trip line item equal to the discount applied in the order payload for that line item.",
+    "When a return trip order contains multiple line items (e.g., outbound and return senior tickets), the system renders the promo code discount amount for each line item independently based on the discount data in the order payload.",
+    "The system does not omit or zero out the promo code discount amount for the return trip line item when the outbound trip line item also has a promo discount applied.",
+    "When a promo code is applied to a single-trip (one-way) order, the system continues to display the promo code discount amount correctly in the Mozio email confirmation, ensuring no regression for non-return orders.",
+    "When the order payload contains no promo code discount for a return trip line item, the system does not display a promo code discount amount for that line item in the Mozio email confirmation.",
+    "The system displays the promo code discount amount for return trip tickets in the Mozio email confirmation in the same format and position as the outbound trip discount amount, ensuring visual and structural consistency between the two trip directions."
+  ],
+  "acCount": 7,
+  "agentRole": "typescript-engineer",
+  "agentGroup": "main",
+  "dependencies": [],
+  "splitDepth": 0
+}
+
+
+# Output
+```json
+{
+  "storyId": "AMSD-1820",
+  "agent": "speckit",
+  "notes": "The existing code block contains GoogleTripPlanner statistics logging, reserved parking UI assets, and jQuery libraries — none of which relate to Mozio email confirmation generation or promo code discount rendering. The Mozio email confirmation and promo code display logic is not present in the provided code. Location hints are empty because the relevant code path (Mozio order/email template processing) was not found in the CodeGraph or Semble results. The ACs are well-scoped at 7, so no split is required.",
+  "acceptanceCriteria": [
+    "The system displays the promo code discount amount for both the outbound and return trip tickets in the Mozio email confirmation when a return trip order with a promo code is submitted.",
+    "The Mozio email confirmation shows the promo code discount amount for the return trip line item equal to the discount applied in the order payload for that line item.",
+    "When a return trip order contains multiple line items (e.g., outbound and return senior tickets), the system renders the promo code discount amount for each line item independently based on the discount data in the order payload.",
+    "The system does not omit or zero out the promo code discount amount for the return trip line item when the outbound trip line item also has a promo discount applied.",
+    "When a promo code is applied to a single-trip (one-way) order, the system continues to display the promo code discount amount correctly in the Mozio email confirmation, ensuring no regression for non-return orders.",
+    "When the order payload contains no promo code discount for a return trip line item, the system does not display a promo code discount amount for that line item in the Mozio email confirmation.",
+    "The system displays the promo code discount amount for return trip tickets in the Mozio email confirmation in the same format and position as the outbound trip discount amount, ensuring visual and structural consistency between the two trip directions."
+  ],
+  "description": "[Mozio] - The Promo code amount is NOT displayed as expected for Return trip tickets in the Mozio email confirmation. When a return trip order includes a promo code discount, the email confirmation omits or zeroes out the discount amount on the return leg while correctly showing it on the outbound leg. The fix must ensure the promo code discount is rendered per-line-item from the order payload for both trip directions.",
+  "title": "[Mozio] - Promo code amount not displayed for return trip tickets in Mozio email confirmation",
+  "locationHint": [],
+  "splitStories": []
+}
+```

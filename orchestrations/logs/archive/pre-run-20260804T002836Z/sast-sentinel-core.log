@@ -1,0 +1,8 @@
+{
+  "agent": "sast-sentinel",
+  "phase": "core",
+  "summary": { "filesScanned": 2, "findingsCount": 0, "blockerCount": 0 },
+  "findings": [],
+  "verdict": "not_applicable",
+  "reason": "No tsc errors, no npm-audit CVEs, and Semgrep was skipped — no security-relevant evidence exists for this hello-world change."
+}

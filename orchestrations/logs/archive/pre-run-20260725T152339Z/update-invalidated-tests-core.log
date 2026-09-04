@@ -1,0 +1,33 @@
+[update-invalidated-tests] suite is RED after the fix — deciding whether the failures are invalidated expectations or a real regression
+[update-invalidated-tests] BLOCKED — suite still RED after the update attempt (the fix or the update is wrong)
+     ❯ src/hello.test.ts:6:27
+          4| describe('getGreeting', () => {
+          5|   it('returns hello dolly', () => {
+          6|     expect(getGreeting()).toBe('hello dolly');
+           |                           ^
+          7|   });
+          8| });
+    
+    ⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯[1/1]⎯
+    
+    
+     Test Files  1 failed (1)
+          Tests  1 failed (1)
+       Start at  10:23:51
+       Duration  113ms (transform 16ms, setup 0ms, import 23ms, tests 5ms, environment 0ms)[update-invalidated-tests] suite is RED after the fix — deciding whether the failures are invalidated expectations or a real regression
+[update-invalidated-tests] BLOCKED — suite still RED after the update attempt (the fix or the update is wrong)
+     ❯ src/hello.test.ts:6:27
+          4| describe('getGreeting', () => {
+          5|   it('returns hello dolly', () => {
+          6|     expect(getGreeting()).toBe('hello dolly');
+           |                           ^
+          7|   });
+          8| });
+    
+    ⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯[1/1]⎯
+    
+    
+     Test Files  1 failed (1)
+          Tests  1 failed (1)
+       Start at  10:23:53
+       Duration  114ms (transform 14ms, setup 0ms, import 23ms, tests 4ms, environment 0ms)

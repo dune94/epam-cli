@@ -1,0 +1,106 @@
+```json
+{
+  "agent": "mutant-hunter",
+  "phase": "core",
+  "summary": {
+    "mutationsProposed": 10,
+    "killed": 0,
+    "survived": 0,
+    "noCoverage": 10,
+    "mutationScore": 0
+  },
+  "mutations": [
+    {
+      "file": "src/services/submit-reservations/apply-report-discounts.service.ts",
+      "line": 22,
+      "originalCode": "if (discountsForDispatch.length === 0) { return; }",
+      "mutatedCode": "if (discountsForDispatch.length === 1) { return; }",
+      "status": "no-coverage",
+      "relatedTest": null,
+      "recommendation": "Add a unit test for applyReportDiscountsService that verifies dispatches with zero matching discounts are skipped and dispatches with one or more matching discounts are processed."
+    },
+    {
+      "file": "src/services/submit-reservations/apply-report-discounts.service.ts",
+      "line": 27,
+      "originalCode": "(d) => d.amount.value === 0",
+      "mutatedCode": "(d) => d.amount.value !== 0",
+      "status": "no-coverage",
+      "relatedTest": null,
+      "recommendation": "Add a test that passes a discount already fully applied (amount.value === 0) and asserts the dispatch selling price is unchanged."
+    },
+    {
+      "file": "src/services/submit-reservations/apply-report-discounts.service.ts",
+      "line": 35,
+      "originalCode": "if (!currency) { return; }",
+      "mutatedCode": "/* removed null check for currency */",
+      "status": "no-coverage",
+      "relatedTest": null,
+      "recommendation": "Add a test where discountsForDispatch[0].amount.currency is undefined and assert the function returns early without modifying the dispatch."
+    },
+    {
+      "file": "src/services/submit-reservations/apply-report-discounts.service.ts",
+      "line": 48,
+      "originalCode": "if (currentSellingPrice === 0 || discount.amount.value === 0) { return; }",
+      "mutatedCode": "if (currentSellingPrice !== 0 || discount.amount.value === 0) { return; }",
+      "status": "no-coverage",
+      "relatedTest": null,
+      "recommendation": "Add a test with a non-zero selling price and non-zero discount amount, asserting the discount is applied and selling price is reduced."
+    },
+    {
+      "file": "src/services/submit-reservations/apply-report-discounts.service.ts",
+      "line": 57,
+      "originalCode": "currentSellingPrice - discount.amount.value",
+      "mutatedCode": "currentSellingPrice + discount.amount.value",
+      "status": "no-coverage",
+      "relatedTest": null,
+      "recommendation": "Add a test asserting the discounted selling price equals sellingPrice - discountAmount, verifying the subtraction operator is correct."
+    },
+    {
+      "file": "src/services/submit-reservations/apply-report-discounts.service.ts",
+      "line": 59,
+      "originalCode": "Math.abs(Math.min(0, discountedAmount))",
+      "mutatedCode": "Math.abs(Math.max(0, discountedAmount))",
+      "status": "no-coverage",
+      "relatedTest": null,
+      "recommendation": "Add a test where the discount exceeds the selling price (over-discount scenario) and assert remainingDiscount is the positive overflow amount."
+    },
+    {
+      "file": "src/services/submit-reservations/apply-report-discounts.service.ts",
+      "line": 62,
+      "originalCode": "Math.max(0, discountedAmount)",
+      "mutatedCode": "Math.min(0, discountedAmount)",
+      "status": "no-coverage",
+      "relatedTest": null,
+      "recommendation": "Add a test where discount > sellingPrice and assert the final selling price is clamped to 0, not a negative value."
+    },
+    {
+      "file": "src/services/submit-reservations/apply-report-discounts.service.ts",
+      "line": 71,
+      "originalCode": "dispatch.report.price.discount.amount.value + appliedDiscount",
+      "mutatedCode": "dispatch.report.price.discount.amount.value - appliedDiscount",
+      "status": "no-coverage",
+      "relatedTest": null,
+      "recommendation": "Add a test with multiple discounts on the same dispatch and assert the accumulated discount amount equals the sum of all applied discounts."
+    },
+    {
+      "file": "src/services/submit-reservations/apply-report-discounts.service.ts",
+      "line": 73,
+      "originalCode": "discount.amount.value = remainingDiscount;",
+      "mutatedCode": "discount.amount.value = appliedDiscount;",
+      "status": "no-coverage",
+      "relatedTest": null,
+      "recommendation": "Add a test that verifies the discount object's amount.value is updated to the remaining (unapplied) portion after partial application."
+    },
+    {
+      "file": "src/services/submit-reservations/apply-report-discounts.service.ts",
+      "line": 82,
+      "originalCode": "case PriceDiscountType.AUTOMATIC: return `Auto:${discount.id}`",
+      "mutatedCode": "case PriceDiscountType.AUTOMATIC: return 'Manual'",
+      "status": "no-coverage",
+      "relatedTest": null,
+      "recommendation": "Add a test with an AUTOMATIC discount type and assert the discount name string starts with 'Auto:' and includes the discount id."
+    }
+  ],
+  "verdict": "fail"
+}
+```

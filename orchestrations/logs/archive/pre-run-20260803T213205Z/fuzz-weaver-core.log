@@ -1,0 +1,10 @@
+```json
+{
+  "agent": "fuzz-weaver",
+  "phase": "core",
+  "summary": { "functionsAnalysed": 1, "fuzzCasesProposed": 0, "covered": 0, "gaps": 0, "vulnerabilities": 0 },
+  "cases": [],
+  "verdict": "not_applicable",
+  "reason": "The only public function (getGreeting) takes no parameters and returns a hardcoded string — no input domain exists for fuzz testing; none of the focus areas (config parsing, auth, billing, path traversal, provider requests) apply."
+}
+```

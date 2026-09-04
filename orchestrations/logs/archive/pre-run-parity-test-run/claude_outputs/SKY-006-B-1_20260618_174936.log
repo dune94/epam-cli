@@ -1,0 +1,90 @@
+=== Prompt for SKY-006-B-1 (attempt 1) ===
+Implement user story SKY-006-B-1: Code review (Part B): Security, error handling, Express safety, and verdict
+
+## Story Description
+Second half of the Skyscanner mini-app code review. The agent reads the partially-populated review document produced by SKY-006-A and performs deep inspection of security (API key exposure and query-parameter validation), error handling (missing-param 400 responses and upstream error propagation), and Express static-file safety (path traversal prevention). It then writes the `## Verdict` section and finalises the document. This story depends on SKY-006-A being complete.
+
+## Acceptance Criteria
+- Security check — API key exposure: The agent MUST determine the exact string value assigned to the API key (from environment variable, config constant, or .env file under /tmp/skyscanner-app) and perform a case-insensitive literal grep for that value across: (a) all files under src/, (b) the captured stdout/stderr from the `vitest run` execution, and (c) any .log files under /tmp/skyscanner-app. Zero matches MUST be found across all three scopes; any match is a blocking Security finding. If the API key value cannot be determined (e.g. it is only read from process.env at runtime with no default), the agent MUST record this as an informational note and instead grep for the environment variable name to confirm it is never interpolated into a response body or log statement.
+- Security check — query parameter validation: Every Express route handler that accepts query parameters MUST validate each parameter before use. Validation MUST occur via an explicit check (e.g. `if (!req.query.x)` or equivalent), a validation library schema (e.g. Zod, Joi, express-validator), or dedicated middleware — implicit type coercion alone is insufficient. The agent MUST enumerate all route handlers found in src/ and confirm each one validates its inputs. Any route handler that uses a query parameter without prior explicit validation is a blocking Security finding.
+- Error Handling check — missing/invalid parameters: Every Express route handler that declares a required query parameter MUST return HTTP 400 with a JSON body of the shape `{ "error": "<non-empty string>" }` (additional fields are permitted) when that parameter is: (a) absent from the request, (b) present but an empty string, or (c) present but not parseable as its declared type (e.g. a non-numeric string where a number is required). The agent MUST verify this by static analysis of the handler code and, where the test suite exercises these paths, by inspecting the relevant test assertions. Failure of any sub-case (a), (b), or (c) for any route is a blocking Error Handling finding.
+- Error Handling check — upstream error propagation: All code paths that invoke or await the upstream Skyscanner API MUST be wrapped in try/catch or .catch() / Promise rejection handling. Non-2xx HTTP status codes returned by the upstream MUST be mapped to a JSON response of the shape `{ "error": string, "status": number }` forwarded to the Express caller with the same HTTP status code or a semantically equivalent one (e.g. 502 Bad Gateway is acceptable for a 500 upstream). No unhandled-rejection or uncaught-exception path reachable via upstream errors is permitted. The agent MUST trace every call site to the upstream API in src/ and confirm coverage; any unguarded call site or missing non-2xx mapping is a blocking Error Handling finding.
+- Express Safety check — path traversal prevention: Static file serving MUST use `express.static` with a base directory derived exclusively from a fixed, hard-coded constant (e.g. `path.join(__dirname, 'public')` or `path.resolve(__dirname, '../public')`). No user-controlled input — including but not limited to query parameters, request headers, URL path segments, or body fields — MAY be concatenated, interpolated, or passed as an argument into `__dirname`, `process.cwd()`, `path.resolve()`, `path.join()`, `fs.readFile()`, or any other file-system call used to derive the path of a served or read file. The agent MUST grep src/ for all occurrences of the following tokens: `path.join`, `path.resolve`, `readFile`, `createReadStream`, and `sendFile`, and inspect each call site. Any call site that incorporates user-controlled input is a blocking Express Safety finding.
+- Verdict integrity: The `## Verdict` section MUST contain exactly one line matching the POSIX ERE regex `^(PASS|FAIL)$` (case-sensitive, anchored at both start and end of line, no leading or trailing whitespace, no punctuation, no markdown formatting). If the Verdict is FAIL, a prioritised numbered list of ALL blocking findings across all categories MUST follow immediately under the heading — with no intervening blank line or sub-heading — with each item cross-referencing its category name and the AC number it violates. The Verdict MUST be PASS if and only if all category checks produced zero blocking findings. A PASS verdict with any recorded blocking finding, or a FAIL verdict with no recorded blocking findings, is itself a review failure and the document MUST be regenerated from the point of the Verdict section.
+- Tool exit code authority: Before writing the Verdict line, the agent MUST collate all tool invocations across both SKY-006-A and SKY-006-B and record any that exited with a non-zero code. If any such non-zero exit code exists, the Verdict MUST be FAIL regardless of the narrative content of the category sections. The collated list of non-zero exit codes and the commands that produced them MUST appear as an appended sub-list under the first FAIL finding (or as a standalone finding if no other blocking findings were recorded), labelled `Tool Exit Code Failures`.
+- Document finalisation and atomic write: Upon writing the Verdict line the agent MUST perform a self-check verifying: (i) the final document satisfies all structural constraints from SKY-006-A AC-2 (exactly six H2 headings in the required order, no extra headings), and (ii) every blocking finding recorded in any section is represented in the Verdict's consolidated numbered list (if Verdict is FAIL). A document that passes this self-check MUST be written atomically — first to a uniquely-named temp file under /tmp/skyscanner-app/review/ (e.g. `SKY-006-review.md.tmp.<pid>`), then renamed to `/tmp/skyscanner-app/review/SKY-006-review.md` — to prevent partial reads by downstream tooling. If the self-check fails, the agent MUST correct the document before performing the atomic write. If `/tmp/skyscanner-app/review/SKY-006-review.md` already exists from a prior run, it MUST be fully overwritten (not appended to) by the atomic rename; the agent MUST NOT open the existing file in append mode at any point.
+- Dependency-guard precondition: Before performing any category check, the agent MUST verify that `/tmp/skyscanner-app/review/SKY-006-review.md` exists and contains the five H2 section headings expected from SKY-006-A (i.e. `## Project Structure`, `## Dependencies`, `## Code Quality`, `## Test Coverage`, and `## Security` at minimum — exact heading names are defined by SKY-006-A AC-2). If the file is absent, empty, or missing any required heading, the agent MUST abort with a non-zero exit code and emit a human-readable error message identifying the missing prerequisite; it MUST NOT create a partial or blank review document in this failure mode.
+- JSON error response Content-Type enforcement: Every Express route handler that returns an error response (HTTP 4xx or 5xx) with a JSON body MUST set the `Content-Type` response header to `application/json` (or `application/json; charset=utf-8`). The agent MUST verify this by static analysis — confirming that either `res.json(...)` is used (which sets Content-Type automatically in Express), or `res.setHeader('Content-Type', 'application/json')` / `res.type('json')` is called before `res.send(...)`. Any error response path that sends a JSON-shaped body without an explicit or implicit `application/json` Content-Type is a blocking Error Handling finding.
+- Supply-chain secrets check: The agent MUST inspect the resolved contents of `node_modules/` (or, if node_modules is absent, the lockfile at `/tmp/skyscanner-app/package-lock.json` or `yarn.lock`) for any file whose name matches `*.env`, `.env*`, `config.json`, or `secrets.*` at depth ≤ 2 within any single package directory. Each such file MUST be scanned for the API key value (if known) and for common credential patterns (bare 32+-character hex strings, strings matching `sk-[A-Za-z0-9]{20,}`, or strings matching `Bearer [A-Za-z0-9+/=]{20,}`). Any match is a blocking Security finding labelled `Supply-Chain Credential Exposure`. If node_modules is absent and no lockfile exists, the agent MUST record this as an informational note and skip this check without issuing a finding.
+
+## Technical Notes
+- workingDir: /tmp/skyscanner-app
+- files: ["/tmp/skyscanner-app/review/SKY-006-review.md"]
+- dependsOn: ["SKY-001","SKY-002","SKY-003","SKY-004","SKY-005"]
+
+## Files to Create/Modify
+/tmp/skyscanner-app/review/SKY-006-review.md
+
+## Dependencies
+None
+
+## Instructions
+**IMPORTANT: You MUST use your file-writing and bash tools to create all required files. Do NOT just describe or plan what you will do — call tools immediately and write the files.**
+
+1. Implement all acceptance criteria for this story
+2. Follow the project's existing code patterns and conventions
+3. Create any necessary files in the locations specified
+4. Ensure code compiles/runs without errors
+5. Do NOT create tests unless explicitly required in acceptance criteria
+
+After implementation, provide a brief summary of what was created/modified.
+
+## Relevant Knowledge Base Entries
+The following was learned from previous story implementations and is relevant to your agent role. Apply this knowledge before writing any code:
+
+## KB-003 -- 2026-03-01
+
+**Category:** backend
+**AgentRole:** review-agent
+**Tags:** typescript, async, cancellation, abort-controller
+**Trigger:** first-success
+**StoryRef:** EPAM-014
+
+When implementing multi-agent parallel execution with cancellation support, registering an AbortController in a task registry is insufficient. The abort signal must be threaded through the entire call chain: TaskRegistry → caller → AgentRunOptions → AgentRunner → provider.stream(). Without adding `abortSignal?: AbortSignal` to AgentRunOptions and checking it in the agent loop, calling `abortController.abort()` will update task status but leave the underlying LLM stream and agent execution running. Always ensure cancellation signals propagate to the lowest-level async operation (the provider stream) to avoid resource leaks and unbounded execution.
+
+
+## KB-004 -- 2026-03-01
+
+**Category:** orchestration
+**AgentRole:** review-agent
+**Tags:** typescript, prompt-injection, session-history, agent-runner
+**Trigger:** first-success
+**StoryRef:** EPAM-018
+
+For one-turn consultation or override prompts, consuming a pending flag is not enough if you also persist the injected text into the turn history. If the transformed message is stored in the same message array that becomes future history, the consultation silently bleeds into later turns. Keep a separate transient message list for the model-facing request and preserve the original user message in the persisted session history.
+
+## Knowledge Base Contribution
+Your assigned KB entry ID for this run: **KB-008**
+
+If you discover a non-obvious pattern, gotcha, or anti-pattern during this implementation (or this is a retry), append exactly one entry to `orchestrations/agents/KB.md` using this format:
+
+```markdown
+## KB-008 -- 2026-06-18
+
+**Category:** <backend|frontend|infrastructure|testing|orchestration>
+**AgentRole:** <your agentRole from the story>
+**Tags:** <comma-separated tech keywords, e.g. typescript, node, cli>
+**Trigger:** <retry|first-success>
+**StoryRef:** SKY-006-B-1
+
+<One concise paragraph: the specific pattern, gotcha, or anti-pattern. Precise enough that a future Claude instance can apply it without re-discovering it.>
+```
+
+Only write an entry if the knowledge is genuinely non-obvious. Skip trivial observations.
+=== End Prompt ===
+
+=== epam Output (attempt 1) ===
+Let me check for any existing node_modules to look for secrets:
+Let me check for any existing node_modules to look for secrets:
+
+=== End epam Output ===

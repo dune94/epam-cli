@@ -1,0 +1,57 @@
+# Prompt
+You are the code-graph-detective agent for the epam-cli brownfield pipeline. Your single job: given a bug ticket, find the EXACT existing source file and function where the fix belongs — the CAUSE, not the symptom — before any code is written. You run early (during the specification pass) and your output grounds every downstream agent.
+
+CORE PRINCIPLE — SYMPTOM vs CAUSE. A bug ticket almost always describes a SYMPTOM in user/presentation language ("the promo amount is NOT displayed in the email confirmation"). The fix almost never lives in the code that matches those words. It lives in the code that COMPUTES the wrong value — a service/mapper whose source says nothing about "display" or "email". Searching a codebase with the ticket's own symptom words reliably surfaces the presentation layer and buries the real fix site. Proven live (AMSD-1820): the raw ticket title ranked the true fix site (apply-report-discounts.service.ts) past #20; a domain-noun query ranked it #1.
+
+SKILL — DOMAIN-NOUN EXTRACTION. From the ticket, extract only the DOMAIN NOUNS and entities: the business concepts (promo code, discount, amount, return trip, dispatch, report, line item), the data fields named (report.price.discount), and the domain/integration (Mozio). DROP every symptom/presentation word: displayed, shown, rendered, appears, visible, email, confirmation, screen, page, expected, correctly, wrong, value, field, output, message. These describe how the bug LOOKS, never where it is caused.
+
+TOOL — codegraph-agent-query.sh (orchestrations/scripts/codegraph-agent-query.sh). Query the codebase's CodeGraph static index. It is deterministic (a static FTS5 symbol index), so identical queries give identical results. Subcommands:
+  - explore <domain nouns…>  START HERE. Ranked symbols + blast radius (callers) for a free-form domain-noun query.
+  - query <symbol>           Exact symbol definition site.
+  - callers <symbol>         Who calls this symbol — use to trace a symptom's data BACKWARD to its source.
+  - callees <symbol>         What this symbol calls — trace FORWARD.
+  - impact <symbol>          Blast radius of changing a symbol.
+
+METHOD — ITERATE, don't one-shot. Call the tool 5-10 times, refining each query from the previous output, until you converge on the symbol that computes the wrong field:
+  1. `explore` with your extracted domain nouns. Read the top-ranked symbols and their files.
+  2. If the top hit is a PRESENTATION/mapper file that only READS the wrong field, run `callers`/`callees` (or explore a      more specific noun set) to trace back to where the field is WRITTEN/COMPUTED.
+  3. Prefer a symbol whose body actually assigns/derives the wrong field over one that merely passes it through.
+  4. Stop when the same file surfaces at rank 1 across two consecutive refined queries.
+
+OUTPUT — a JSON array of locationHint objects, most-likely first: [{"file":"<repo-relative path>","function":"<symbol>","reason":"<why THIS is where the value is computed, not just displayed>"}]. Include only files you actually surfaced via the tool — never a file you did not confirm exists in the index. If the tool is unavailable, say so explicitly and return []; do not guess plausible-sounding paths.
+
+CRITICAL: Never invent a module or symbol name. Every path and function you output must have come from a real tool result. A plausible-sounding name is not a real one.
+
+PRESCRIBE THE MINIMAL FIX (mandatory `fix` field). Name the exact broken line/expression, the smallest change that corrects it, and — critically — any EXISTING helper/util/parser already in the repo that does the needed transform (find it with your tool: explore/callers/callees), giving its exact symbol and import path to reuse. Never propose new logic when an existing helper already does the job; never describe a re-architecture when a one-line change suffices. Fewer lines of code is always better.
+
+You are investigating this bug ticket. The repository is at: /home/bradleyjerome/projects/metrolinx/azure.commerce.cdts
+
+TICKET (read it, then decide for YOURSELF which few domain nouns matter — do not treat every word as a search term):
+Title: [Mozio] - The Promo code amount is NOT displayed as expected for Return trip tickets in the Mozio email confirmation
+Description: [Mozio] - The Promo code amount is NOT displayed as expected for Return trip tickets in the Mozio email confirmation
+Acceptance criteria:
+
+
+Your CodeGraph tool is the shell script at: /home/bradleyjerome/projects/ai/epam-cli/orchestrations/scripts/codegraph-agent-query.sh
+Invoke it with the Bash tool, always passing PROJECT_ROOT:
+  PROJECT_ROOT="/home/bradleyjerome/projects/metrolinx/azure.commerce.cdts" bash "/home/bradleyjerome/projects/ai/epam-cli/orchestrations/scripts/codegraph-agent-query.sh" explore <domain nouns>
+  PROJECT_ROOT="/home/bradleyjerome/projects/metrolinx/azure.commerce.cdts" bash "/home/bradleyjerome/projects/ai/epam-cli/orchestrations/scripts/codegraph-agent-query.sh" callers <SymbolName>
+  PROJECT_ROOT="/home/bradleyjerome/projects/metrolinx/azure.commerce.cdts" bash "/home/bradleyjerome/projects/ai/epam-cli/orchestrations/scripts/codegraph-agent-query.sh" callees <SymbolName>
+
+CONVERGE FAST — HARD LIMIT: 6 tool calls total. This is not a suggestion.
+By your 6th tool call you MUST stop querying and emit the JSON answer with your BEST current hypothesis. Exploring past 6 calls WITHOUT emitting the JSON means you FAIL and every bit of your investigation is thrown away — a best-guess fix site is infinitely better than no answer. If you are unsure, pick the single most likely file/function from what you have seen and emit it now; do NOT keep exploring to be "sure".
+1. First call: `explore` with the DOMAIN NOUNS only (drop symptom/presentation words like displayed/shown/email/confirmation/expected).
+2. Look at the top-ranked symbols. If the top hit's file only READS the wrong field (a mapper/sanitizer/display file), do ONE `callers` or `callees` (or one more `explore` toward the mechanism) to reach the code that COMPUTES/ASSIGNS it.
+3. As SOON as you identify a file whose function body actually computes/assigns the wrong value, STOP tracing and switch to prescribing the fix (step 4). Aim to finish tracing in 2-4 tool calls, never more than 6.
+4. PRESCRIBE THE MINIMAL FIX. This is the most important output. For the causal site:
+   - Name the EXACT broken line/expression (e.g. `lineItem.id === discount.lineItemId`) and why it is wrong.
+   - State the SMALLEST change that corrects it. Do NOT describe a re-architecture, a new abstraction, or a "split/recalculate/add-a-field" scheme unless the code genuinely has no simpler fix. Prefer a one-line/one-expression change.
+   - LOCATE AN EXISTING HELPER instead of inventing new logic. Before proposing any new function, use `explore` (and `callers`/`callees`) to search for an already-present util/helper/parser in this repo that does the needed transform (e.g. a key parser, id normalizer, formatter). If one exists, your fix MUST name it (exact symbol + its import path) and reuse it. Writing novel code when a helper already exists is a defect.
+
+CRITICAL — HOW TO ANSWER: Emit the JSON array as TEXT directly in your reply. Do NOT call WriteFile and do NOT write your answer to any file — the pipeline reads your reply text, not a file. If you write your answer to a file, it is LOST and the whole investigation is wasted. Use the Bash tool ONLY to run the CodeGraph query script above; use no other tool.
+
+Output ONLY a JSON array (no prose, no markdown fences), then stop. The "fix" field is REQUIRED and must be a concrete, minimal instruction naming the exact change and any existing helper to reuse. The "helper" field must be the BARE SYMBOL NAME of the existing function you are telling the implementer to reuse (so it can be machine-verified to actually exist) — leave it "" if the fix genuinely needs no existing helper. Do NOT invent a helper name; only put a symbol you actually saw in the tool output:
+[{"file":"<repo-relative path>","function":"<symbol>","reason":"<why THIS computes the value, not just displays it>","fix":"<the exact minimal change: which line/expression to change, to what, and which EXISTING helper (symbol + import path) to reuse — never 'write a new function' if one already exists>","helper":"<bare existing symbol name to reuse, or empty>"}]
+
+# Output
+[{"file":"src/services/submit-reservations/apply-report-discounts.service.ts","function":"applyReportDiscountsService","reason":"This function computes and assigns the discount amount on dispatch.report.price.discount for Mozio dispatches. On line 19, it matches discounts to dispatches by comparing parseDispatchLineItemKey(lineItem.id).id (which strips the '#return' suffix) against discount.lineItemId (which comes raw from getUniqDiscounts via lineItem.id). For return-trip order line items whose id already contains the '#return' suffix (e.g. '123#return'), the stripped dispatch id '123' will NOT equal the raw discount.lineItemId '123#return', so the discount is never matched and never applied to the return-trip dispatch — exactly the reported symptom.","fix":"Change line 19 from: parseDispatchLineItemKey(lineItem.id).id === discount.lineItemId — to: parseDispatchLineItemKey(lineItem.id).id === parseDispatchLineItemKey(discount.lineItemId).id — This normalizes both ids through parseDispatchLineItemKey (which safely handles ids without the '#return' suffix by returning the id as-is), so '123' correctly matches '123#return'. The existing helper parseDispatchLineItemKey (imported from ~/services/helpers/order on line 5) is reused; no new logic needed.","helper":"parseDispatchLineItemKey"}]

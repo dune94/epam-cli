@@ -1,0 +1,9 @@
+```json
+{
+  "agent": "sast-sentinel",
+  "phase": "mock3_core",
+  "summary": { "filesScanned": 2, "findingsCount": 0, "blockerCount": 0 },
+  "findings": [],
+  "verdict": "pass"
+}
+```

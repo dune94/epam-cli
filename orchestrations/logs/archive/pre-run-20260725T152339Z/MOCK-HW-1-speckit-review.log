@@ -1,0 +1,111 @@
+# Prompt
+You are the speckit specification agent for EPAM CLI. Phase core, story MOCK-HW-1.
+
+You are reviewing and building on the openspec agent's output for this story.
+Your role is COLLABORATIVE — you are NOT starting from scratch. Instead:
+1. Review openspec's proposed acceptance criteria for testability and completeness
+2. Add missing edge-case, error-handling, security, and accessibility criteria
+3. Flag any AC that are vague, untestable, or overlapping
+4. Splitting is openspec's decision alone — you do NOT split stories. If openspec already split
+   this story, do NOT include a "splitStories" field in your output at all (it will be ignored if
+   you do). Review and refine the acceptanceCriteria openspec gave you for the UNSPLIT story as
+   normal; per-child refinement of an already-split story's children happens on a later turn, not
+   here.
+5. Do NOT remove or duplicate openspec's good work — build on it
+
+━━━ WHAT-NOT-HOW RULE (MANDATORY) ━━━
+Every AC must describe an OBSERVABLE OUTCOME (what a test can verify from outside the code),
+NOT an implementation instruction. If an AC names vi.mock, jest.fn, mockReturnValue,
+mockResolvedValue, import statements, or require() calls, REPLACE it with a
+Given/When/Then behaviour statement. Never tell the implementer which library or mock pattern to use.
+
+OPENSPEC'S OUTPUT (your input to review — ACs and split proposals only):
+{
+  "acceptanceCriteria": [
+    "Delegated to split children: MOCK-HW-1-impl, MOCK-HW-1-test"
+  ],
+  "notes": "Mid-execution split registered by agent during story execution",
+  "splitStories": [
+    {
+      "id": "MOCK-HW-1-impl",
+      "title": "Change getGreeting to return 'hello dolly'",
+      "description": "Update the getGreeting function in src/hello.ts to return 'hello dolly' instead of 'hello world'.",
+      "acceptanceCriteria": [
+        "The getGreeting function returns 'hello dolly'"
+      ],
+      "dependencies": [],
+      "agentRole": "typescript-engineer"
+    },
+    {
+      "id": "MOCK-HW-1-test",
+      "title": "Update test to expect 'hello dolly'",
+      "description": "Update the existing test in src/hello.test.ts to expect 'hello dolly' from getGreeting instead of 'hello world'.",
+      "acceptanceCriteria": [
+        "The test for getGreeting asserts the return value is 'hello dolly'"
+      ],
+      "dependencies": [
+        "MOCK-HW-1-impl"
+      ],
+      "agentRole": "test-engineer"
+    }
+  ]
+}
+
+ORIGINAL STORY CONTEXT:
+{
+  "id": "MOCK-HW-1",
+  "title": "Hello world greeting should say hello dolly",
+  "description": "Hello world greeting should say hello dolly",
+  "originalAcceptanceCriteria": [
+    "Delegated to split children: MOCK-HW-1-impl, MOCK-HW-1-test"
+  ],
+  "technicalNotes": {
+    "files": [
+      "src/hello.ts",
+      ".codegraph/.gitignore",
+      "src/hello.test.ts"
+    ]
+  },
+  "dependencies": []
+}
+
+Produce your refined output as raw JSON only (no XML tags, no markdown fences, no preamble). Include:
+- "acceptanceCriteria": The FULL merged list (openspec's criteria + your additions/refinements). Every item MUST be an observable outcome, not an implementation instruction.
+- "notes": What you changed and why (be specific — cite which criteria you added/modified/replaced)
+- "splitStories": ALWAYS omit this field. Splitting is openspec's decision alone — never propose
+  split children of your own, even if openspec already split this story.
+- "acAddedBySpeckit": Array of criteria YOU added that were not in openspec's output
+- "acModifiedBySpeckit": Array of {"original":"...","revised":"..."} for criteria you reworded
+- "acFlagged": Array of {"criterion":"...","flag":"..."} for criteria that need human attention
+
+
+# Output
+{
+  "acceptanceCriteria": [
+    "Given a call to getGreeting, it returns the string 'hello dolly'",
+    "The test suite for getGreeting passes when expecting the return value 'hello dolly'",
+    "No other exported functions or module interfaces in src/hello.ts are altered by this change",
+    "The full test suite (not only the getGreeting test) passes after the change"
+  ],
+  "notes": "Openspec delegated all ACs to split children, leaving the parent with only a delegation marker. I consolidated the child ACs back into the parent list, refined both for what-not-how compliance (the original 'asserts' phrasing was an implementation instruction), and added two regression/integration guards: one ensuring no unrelated exports are changed, and one ensuring the full suite (not just the single test) still passes.",
+  "acAddedBySpeckit": [
+    "No other exported functions or module interfaces in src/hello.ts are altered by this change",
+    "The full test suite (not only the getGreeting test) passes after the change"
+  ],
+  "acModifiedBySpeckit": [
+    {
+      "original": "The getGreeting function returns 'hello dolly'",
+      "revised": "Given a call to getGreeting, it returns the string 'hello dolly'"
+    },
+    {
+      "original": "The test for getGreeting asserts the return value is 'hello dolly'",
+      "revised": "The test suite for getGreeting passes when expecting the return value 'hello dolly'"
+    }
+  ],
+  "acFlagged": [
+    {
+      "criterion": "Delegated to split children: MOCK-HW-1-impl, MOCK-HW-1-test",
+      "flag": "Not a real acceptance criterion — it is a delegation marker. Replaced with the concrete criteria from the child stories, refined and extended."
+    }
+  ]
+}

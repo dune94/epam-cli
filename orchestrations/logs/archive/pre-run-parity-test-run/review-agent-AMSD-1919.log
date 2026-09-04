@@ -1,0 +1,33 @@
+[coverage-gate] writer: no pre-flight has gated this run — standing down
+  [provider] 'minimax' is not routable by the 'claude' set — using 'claude'.
+  [provider] The set is the launch's own choice; the env value was left by something else.
+  [provider] 'minimax' is not routable by the 'claude' set — using 'claude'.
+```json
+{
+  "verdict": "approved",
+  "issues": [],
+  "summary": "The fix to CheckoutForm.tsx correctly implements case-insensitive email comparison by changing line 306 from `value !== email` to `value.toLowerCase() !== email.toLowerCase()`. This precisely addresses the root cause identified in the plan: the confirmEmail field's validate rule was performing case-sensitive string comparison. The change is minimal, idiomatic (using built-in toLowerCase), preserves the guarantee that genuinely different emails still trigger the error, and follows the prescribed fix exactly. All four acceptance criteria are demonstrably satisfied by the logic.",
+  "vcAssessment": [
+    {
+      "criterion": "When the user types the same email address into the Email field in lowercase and into the Confirm Email field in uppercase and moves focus away, the Confirm Email field shows no validation error.",
+      "met": true,
+      "evidence": "src/components/pages/CheckoutPage/CheckoutForm.tsx:306 — the validation rule now compares lowercased versions: `value.toLowerCase() !== email.toLowerCase()`. Input 'user@example.com' vs 'USER@EXAMPLE.COM' both lowercase to 'user@example.com', match, and return undefined (no error)."
+    },
+    {
+      "criterion": "When the user types the same email address into the Email field in uppercase and into the Confirm Email field in lowercase and moves focus away, the Confirm Email field shows no validation error.",
+      "met": true,
+      "evidence": "src/components/pages/CheckoutPage/CheckoutForm.tsx:306 — same case-insensitive comparison handles 'USER@EXAMPLE.COM' vs 'user@example.com', both lowercase to 'user@example.com', match, return undefined."
+    },
+    {
+      "criterion": "When the user types genuinely different email addresses into the Email and Confirm Email fields (regardless of casing) and moves focus away, the Confirm Email field still shows the existing mismatch error message.",
+      "met": true,
+      "evidence": "src/components/pages/CheckoutPage/CheckoutForm.tsx:306 — the condition `if (email && value && value.toLowerCase() !== email.toLowerCase()) { return t('TRM774'); }` still returns the error when addresses differ after lowercasing, e.g., 'test@example.com' vs 'other@example.com' remain unequal."
+    },
+    {
+      "criterion": "With matching-but-differently-cased email and confirm-email values entered, the checkout form's submit action is not blocked by a confirm-email mismatch error.",
+      "met": true,
+      "evidence": "src/components/pages/CheckoutPage/CheckoutForm.tsx:306 — when emails match after lowercasing, the validate rule returns undefined (implicit, no error path taken), so the field's validation passes and form submission proceeds unblocked."
+    }
+  ]
+}
+```

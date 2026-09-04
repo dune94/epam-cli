@@ -1,0 +1,14 @@
+
+> mock-a@1.0.0 test
+> vitest run
+
+
+ RUN  v2.1.9 /home/bradleyjerome/projects/mock3/mock-a
+
+ ✓ test/fares.test.ts (6 tests) 3ms
+
+ Test Files  1 passed (1)
+      Tests  6 passed (6)
+   Start at  20:17:43
+   Duration  208ms (transform 36ms, setup 0ms, collect 29ms, tests 3ms, environment 0ms, prepare 53ms)
+

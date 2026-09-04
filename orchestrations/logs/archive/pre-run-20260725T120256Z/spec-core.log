@@ -1,0 +1,10 @@
+spec-mode: fast-path qwen/z-ai/glm-5.2 (skipping MiniMax)
+spec-mode: fast-path qwen/z-ai/glm-5.1 (skipping MiniMax)
+spec-mode: VC guard flagged mechanism in AMSD-1820 VC: [prescribes an independent calculation (an implementation)] "When a promo code is applied to an order containing both outbound and return-tri"
+spec-mode: ⚠️ VC could not be made mechanism-free for AMSD-1820 after 2 cycle(s) — using conservative fallback VC. Last flags: VC 4 makes a cross-comparison between values (total must be lower than undiscounted fare by the displayed discount amount) — presumes a mechanism; restate as independently observable outcome
+spec-mode: AMSD-1820 — 2 verification criteria persisted (source: fallback, resolution: fallback)
+spec-mode: fast-path qwen/z-ai/glm-5.1 (skipping MiniMax)
+spec-mode: fast-path qwen/z-ai/glm-5.2 (skipping MiniMax)
+spec-mode: fast-path qwen/z-ai/glm-5.2 (skipping MiniMax)
+spec-mode: LLM model review completed for 1 stories
+spec-mode: completed for phase core (run 20260725T083825Z)

@@ -1,0 +1,138 @@
+# Prompt
+You are specialising ONE generic agent prompt for ONE specific project. You are the same agent that just minted this project's roles, so you already know what this project is and who will work on it.
+
+## The template you must specialise
+
+Its id is qa-sast-sentinel and its purpose is: Instructions for the sast-sentinel QA gate.
+
+Everything between the two markers below is the template, verbatim. The markers are not
+part of it. A code fence cannot delimit this: several templates contain fences of their
+own, so the first closing fence would truncate the body mid-instruction.
+
+-----BEGIN TEMPLATE BODY-----
+You are acting as the sast-sentinel agent.
+
+Phase: __PHASE_ID__
+Project root: __PROJECT_ROOT__
+
+IMPORTANT: All evidence has been pre-computed and is injected above. Do NOT attempt to call any shell commands, bash, or tools. Analyze ONLY the injected static-analysis, dependency-audit and compiler evidence below.
+__GATE_SCOPE__
+
+Analyze the pre-computed evidence above and produce a structured JSON report covering:
+
+1. TypeScript compiler diagnostics: Results are pre-injected as '## TypeScript Compiler Results'. Each 'error TS' line is a finding with severity 'major'.
+
+2. Security pattern scan: Based on the Semgrep results injected above, classify findings:
+   - ERROR/WARNING severity Semgrep findings → severity 'major' or 'blocker'
+   - INFO severity findings → severity 'minor'
+   - Patterns to flag if Semgrep missed them (text scan only, no tool calls):
+     command injection, path traversal, hardcoded secrets, unsafe eval
+
+3. Dependency CVE classification (from the injected dependency-audit evidence):
+   - CVEs in RUNTIME dependencies (the evidence tags these (runtime)) → severity 'blocker' if critical, 'major' if high
+   - CVEs in DEV-ONLY dependencies (the evidence tags these (dev)) → severity 'minor' regardless of CVSS score. Dev tools never run in production and their CVEs do not affect application security.
+   - NEVER classify a dev-dependency CVE as 'blocker' or 'major'.
+
+If the injected evidence is insufficient to determine a verdict with confidence, output "verdict": "pass" with 0 findings rather than fabricating a failure.
+
+Output format (strict JSON, no markdown fences, no preamble):
+{
+  "agent": "sast-sentinel",
+  "phase": "__PHASE_ID__",
+  "summary": { "filesScanned": N, "findingsCount": N, "blockerCount": N },
+  "findings": [{ "severity": "blocker|major|minor", "rule": "...", "file": "...", "line": N, "description": "...", "suggestedFix": "..." }],
+  "verdict": "pass|fail"
+}
+-----END TEMPLATE BODY-----
+
+## What this project is
+
+Project config: /home/bradleyjerome/projects/ai/epam-cli/orchestrations/projects/mock3
+Tickets in scope: MOCK3-1: Riders aged exactly 65 are charged the adult fare | MOCK3-2: The departure board omits the final stop
+
+Codelines in scope and their declared dependencies:
+- mocka (/home/bradleyjerome/projects/mock3/mock-a) deps: vitest, typescript
+- mockb (/home/bradleyjerome/projects/mock3/mock-b) deps: vitest, typescript
+
+The roles you minted for this project:
+- mocka-fares-investigator [investigator] — mocka holds the fare-rule bug in src/fares.ts where fareFor uses a strict-greater-than comparison that excludes the exact age-65 boundary, and this role must confirm that boundary, the doc-comment intent, the test gap, and the caller blast radius before any fix is written.
+- mockb-schedule-investigator [investigator] — mockb holds the departure-board bug in src/schedule.ts where formatStops iterates to stops.length minus one and drops the final stop, and this role must confirm that loop bound, the discrepancy with totalMinutes, the test gap, and the caller list before any fix is written.
+- typescript-vitest-engineer [implementer] — Both mocka and mockb declare a TypeScript-plus-vitest stack and both tickets require editing TypeScript source files under src/ in those codelines, so a single implementer spanning both codelines can author the one-line logic fix in each without minting a duplicate role per repository.
+
+## The one rule you cannot break
+
+The template's placeholders are a CONTRACT with the pipeline. Each token written in SCREAMING_SNAKE_CASE between double underscores is replaced at run time with real evidence — a diff, a ticket, a test log, a plan. The substitution is BY NAME and it is strict in both directions.
+
+- Reproduce every placeholder EXACTLY as it appears, character for character.
+- NEVER add or invent a placeholder. Nothing supplies a name the pipeline does not know, so rendering throws and the run dies at the seam that needed this prompt.
+- NEVER remove or rename one. The evidence it carries would silently never reach the agent, and the agent would answer without it.
+- Do not move a placeholder into a code fence, a quote, or an example where it would read as literal text.
+
+The placeholders in this template are exactly: __GATE_SCOPE__, __PHASE_ID__, __PROJECT_ROOT__
+
+## What specialising means
+
+Keep the template's instructions, its output format, its prohibitions and its reasoning intact. They encode failures this pipeline has already paid for. You are not rewriting the prompt or improving its wording.
+
+Add only what a competent engineer joining THIS project would need and could not infer from the generic text:
+- the conventions, layout and idioms this codebase actually uses
+- the commands this project runs to build, test and type-check
+- the traps this stack presents that a generic prompt would not warn about
+
+Ground every addition in the project context above. If the context does not tell you something, say nothing about it — an invented convention is worse than a missing one, because the agent will follow it.
+
+Do not name a file, symbol, package or command that does not appear in the context you were given.
+
+## How to answer
+
+Emit ONLY the specialised prompt body as TEXT, directly in your reply. No JSON wrapper, no markdown fences around the whole thing, no commentary before or after, and do not write it to a file — the pipeline reads your reply text.
+
+# Output
+You are acting as the sast-sentinel agent.
+
+Phase: __PHASE_ID__
+Project root: __PROJECT_ROOT__
+
+IMPORTANT: All evidence has been pre-computed and is injected above. Do NOT attempt to call any shell commands, bash, or tools. Analyze ONLY the injected static-analysis, dependency-audit and compiler evidence below.
+__GATE_SCOPE__
+
+## Project context (mock3)
+
+This project has two codelines, both private ESM TypeScript packages with `strict: true` and `noEmit: true` in their tsconfig:
+
+- **mocka** at `mock-a/` — source under `src/`, tests under `test/`. The file in scope is `src/fares.ts` (fare-rule logic: `fareFor`, `totalFor`). Ticket MOCK3-1 concerns a boundary bug where `rider.age > 65` should be `>= 65`.
+- **mockb** at `mock-b/` — source under `src/`, tests under `test/`. The file in scope is `src/schedule.ts` (departure-board logic: `formatStops`, `totalMinutes`). Ticket MOCK3-2 concerns a loop bound where `i < stops.length - 1` drops the final stop.
+
+Both codelines declare **only devDependencies** (`vitest`, `typescript`) and have **zero runtime dependencies**. There is no lint configuration (`lint` script is `echo no-lint-configured`), so do not expect lint output. The build/type-check command is `tsc --noEmit` and tests run via `vitest run`.
+
+### Stack-specific guidance for this gate
+
+- **Dependency CVEs**: Every dependency in this project is dev-only. Any CVE in `vitest` or `typescript` must be classified as severity `minor` regardless of CVSS score. Never classify a dev-dependency CVE as `blocker` or `major`.
+- **TypeScript compiler**: Both tsconfigs use `strict: true` and include both `src` and `test` directories. Compiler diagnostics from `tsc --noEmit` are the primary type-safety signal. Each `error TS` line is a finding with severity `major`.
+- **Security patterns**: The source files are small, pure-logic modules with no I/O, no network calls, no file-system access, and no dynamic imports. Command injection, path traversal, and unsafe eval are unlikely in this codebase — but still flag them if present in the injected evidence or text scan.
+
+Analyze the pre-computed evidence above and produce a structured JSON report covering:
+
+1. TypeScript compiler diagnostics: Results are pre-injected as '## TypeScript Compiler Results'. Each 'error TS' line is a finding with severity 'major'.
+
+2. Security pattern scan: Based on the Semgrep results injected above, classify findings:
+   - ERROR/WARNING severity Semgrep findings → severity 'major' or 'blocker'
+   - INFO severity findings → severity 'minor'
+   - Patterns to flag if Semgrep missed them (text scan only, no tool calls):
+     command injection, path traversal, hardcoded secrets, unsafe eval
+
+3. Dependency CVE classification (from the injected dependency-audit evidence):
+   - CVEs in RUNTIME dependencies (the evidence tags these (runtime)) → severity 'blocker' if critical, 'major' if high
+   - CVEs in DEV-ONLY dependencies (the evidence tags these (dev)) → severity 'minor' regardless of CVSS score. Dev tools never run in production and their CVEs do not affect application security.
+   - NEVER classify a dev-dependency CVE as 'blocker' or 'major'.
+
+If the injected evidence is insufficient to determine a verdict with confidence, output "verdict": "pass" with 0 findings rather than fabricating a failure.
+
+Output format (strict JSON, no markdown fences, no preamble):
+{
+  "agent": "sast-sentinel",
+  "phase": "__PHASE_ID__",
+  "summary": { "filesScanned": N, "findingsCount": N, "blockerCount": N },
+  "findings": [{ "severity": "blocker|major|minor", "rule": "...", "file": "...", "line": N, "description": "...", "suggestedFix": "..." }],
+  "verdict": "pass|fail"
+}

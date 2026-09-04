@@ -1,0 +1,55 @@
+# Prompt
+You are the openspec specification agent for EPAM CLI. Phase hello_world_test, story HW-004.
+
+Generate refined acceptance criteria, optionally updated title/description, and optional split stories. Output JSON only between <SPEC_AGENT> tags using this schema:
+{
+  "storyId":"HW-004",
+  "agent":"openspec",
+  "notes":"context",
+  "acceptanceCriteria":["..."],
+  "description":"...",
+  "title":"...",
+  "splitStories":[{"id":"optional","title":"...","description":"...","acceptanceCriteria":["..."]}]
+}
+Use existing text when no change is needed.
+Story context:
+{
+  "id": "HW-004",
+  "title": "Implement formatDate() utility with vitest tests",
+  "description": "Create formatDate.ts in the project root. Export a single function `export function formatDate(date: Date, format: 'short' | 'long'): string` that returns: 'short' → 'YYYY-MM-DD' (e.g. '2026-06-04'); 'long' → 'Month DD, YYYY' (e.g. 'June 4, 2026'). Use UTC date components so results are deterministic regardless of host timezone (new Date('2026-06-04') is UTC midnight). For an invalid Date (e.g. new Date('not-a-date')), throw a descriptive Error rather than returning 'NaN'-laden output. Create formatDate.test.ts in the project root with at least 6 vitest tests covering both formats, edge cases (month boundaries, single-digit days), and invalid-Date input. Do not modify any existing files.",
+  "acceptanceCriteria": [
+    "formatDate.ts exists in the project root and exports `function formatDate(date: Date, format: 'short' | 'long'): string` (named export, exact signature)",
+    "formatDate(new Date('2026-06-04'), 'short') returns '2026-06-04'",
+    "formatDate(new Date('2026-06-04'), 'long') returns 'June 4, 2026'",
+    "Short format zero-pads month and day: formatDate(new Date('2026-01-05'), 'short') returns '2026-01-05'",
+    "Long format does not pad the day: formatDate(new Date('2026-01-05'), 'long') returns 'January 5, 2026'",
+    "Date components are derived via UTC accessors (getUTCFullYear/getUTCMonth/getUTCDate or equivalent) so tests pass in any host timezone",
+    "Passing an invalid Date throws an Error whose message identifies the problem, and a test asserts the message content with expect(...).toThrow(/invalid date/i) (or an equivalent matcher on the message), not just a bare expect(...).toThrow()",
+    "formatDate.test.ts exists in the project root with at least 6 vitest tests, including at least one month-boundary case (e.g. Dec 31 / Jan 1) and one single-digit-day case in each format",
+    "npx tsc --noEmit exits 0",
+    "vitest run exits 0 with all tests passing (the new tests pass and no pre-existing tests break)",
+    "git status shows no modifications to existing files — only formatDate.ts and formatDate.test.ts are added",
+    "Long-format month names come from a fixed English month-name array (or a formatter explicitly pinned to locale 'en-US' and timeZone 'UTC'), so output does not vary with the host's ICU/locale build; at least one test covers a month other than January or June (e.g. December)",
+    "Invalid-Date detection works for any Invalid Date regardless of construction: both new Date('not-a-date') and new Date(NaN) throw (i.e. detection is based on Number.isNaN(date.getTime()) or equivalent, not on parsing the input string)",
+    "A leap-day case is covered: formatDate(new Date('2024-02-29'), 'short') returns '2024-02-29' and formatDate(new Date('2024-02-29'), 'long') returns 'February 29, 2024'",
+    "vitest run reports at least 6 more passing tests than the pre-change baseline (i.e. formatDate.test.ts is actually discovered by the existing vitest include patterns, not silently skipped — a green run with an unchanged test count does NOT satisfy this criterion)"
+  ],
+  "technicalNotes": {
+    "dependsOn": [
+      "HW-001"
+    ],
+    "files": [
+      "formatDate.ts",
+      "formatDate.test.ts"
+    ],
+    "testCommand": "npx vitest run formatDate.test.ts"
+  },
+  "agentRole": "typescript-engineer",
+  "agentGroup": "independent",
+  "dependencies": []
+}
+
+<SPEC_AGENT>
+
+# Output
+ai-run failed with no error output

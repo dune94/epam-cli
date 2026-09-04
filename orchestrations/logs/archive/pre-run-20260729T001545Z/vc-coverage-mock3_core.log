@@ -1,0 +1,8 @@
+  [vc-coverage] COVERED   Calling getGreeting() produces the exact string 'hello dolly'
+  [vc-coverage]           ↳ returns hello world
+  [vc-coverage] COVERED   Running vitest on the existing test file results in all tests passing
+  [vc-coverage]           ↳ returns hello world
+  [vc-coverage] UNCOVERED Running tsc --noEmit exits with code 0
+  [vc-coverage]           The test only asserts runtime behavior of getGreeting(), not that tsc --noEmit exits with code 0.
+  [vc-coverage] VC_UNCOVERED=1 of 3
+  [vc-coverage] the change is still proven by the bug-reproduction gate — this is a COVERAGE gap, not a correctness one

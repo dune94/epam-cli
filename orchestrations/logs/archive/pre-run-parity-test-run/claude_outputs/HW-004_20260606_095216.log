@@ -1,0 +1,77 @@
+=== Prompt for HW-004 (attempt 1) ===
+Implement user story HW-004: Implement formatDate() utility with vitest tests
+
+## Story Description
+Create formatDate.ts in the project root. Export a single function `export function formatDate(date: Date, format: 'short' | 'long'): string` that returns: 'short' → 'YYYY-MM-DD' (e.g. '2026-06-04'); 'long' → 'Month DD, YYYY' (e.g. 'June 4, 2026'). Create formatDate.test.ts with at least 6 vitest tests covering both formats, edge cases (month boundaries, single-digit days), and invalid input. Do not modify any existing files.
+
+## Acceptance Criteria
+- formatDate.ts exists and exports formatDate function with correct signature
+- formatDate(new Date('2026-06-04'), 'short') returns '2026-06-04'
+- formatDate(new Date('2026-06-04'), 'long') returns 'June 4, 2026'
+- formatDate.test.ts exists with at least 6 passing vitest tests
+- tsc --noEmit exits 0
+- vitest run exits 0 with all tests passing
+
+## Technical Notes
+- dependsOn: ["HW-001"]
+- files: ["formatDate.ts","formatDate.test.ts"]
+
+## Files to Create/Modify
+formatDate.ts, formatDate.test.ts
+
+## Dependencies
+None
+
+## Instructions
+1. Implement all acceptance criteria for this story
+2. Follow the project's existing code patterns and conventions
+3. Create any necessary files in the locations specified
+4. Ensure code compiles/runs without errors
+5. Do NOT create tests unless explicitly required in acceptance criteria
+
+After implementation, provide a brief summary of what was created/modified.
+
+## Relevant Knowledge Base Entries
+No prior KB entries match your agent role yet.
+
+## Knowledge Base Contribution
+Your assigned KB entry ID for this run: **KB-008**
+
+If you discover a non-obvious pattern, gotcha, or anti-pattern during this implementation (or this is a retry), append exactly one entry to `orchestrations/agents/KB.md` using this format:
+
+```markdown
+## KB-008 -- 2026-06-06
+
+**Category:** <backend|frontend|infrastructure|testing|orchestration>
+**AgentRole:** <your agentRole from the story>
+**Tags:** <comma-separated tech keywords, e.g. typescript, node, cli>
+**Trigger:** <retry|first-success>
+**StoryRef:** HW-004
+
+<One concise paragraph: the specific pattern, gotcha, or anti-pattern. Precise enough that a future Claude instance can apply it without re-discovering it.>
+```
+
+Only write an entry if the knowledge is genuinely non-obvious. Skip trivial observations.
+=== End Prompt ===
+
+=== codex Output (attempt 1) ===
+**Summary**
+- `formatDate.ts:1` exports `formatDate` with Date-instance validation, UTC-safe short formatting, and long month-name output to avoid timezone drift.
+- `formatDate.test.ts:1` adds seven vitest cases covering acceptance scenarios, single-digit padding, month boundaries, leap day, and invalid inputs.
+
+**Tests**
+- `npx -y -p typescript tsc --noEmit`
+- `npm test`
+
+Let me know if you’d like me to document any follow-on notes or expand coverage.
+**Summary**
+- `formatDate.ts:1` exports `formatDate` with Date-instance validation, UTC-safe short formatting, and long month-name output to avoid timezone drift.
+- `formatDate.test.ts:1` adds seven vitest cases covering acceptance scenarios, single-digit padding, month boundaries, leap day, and invalid inputs.
+
+**Tests**
+- `npx -y -p typescript tsc --noEmit`
+- `npm test`
+
+Let me know if you’d like me to document any follow-on notes or expand coverage.
+
+=== End codex Output ===

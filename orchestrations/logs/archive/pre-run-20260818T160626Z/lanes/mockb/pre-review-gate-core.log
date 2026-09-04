@@ -1,0 +1,12 @@
+=== Pre-Review Gate: core @ 2026-08-18T11:03:23-04:00 ===
+
+ RUN  v2.1.9 /home/bradleyjerome/projects/mock3/mock-b
+
+ ✓ test/schedule.test.ts (6 tests) 2ms
+
+ Test Files  1 passed (1)
+      Tests  6 passed (6)
+   Start at  11:03:23
+   Duration  266ms (transform 38ms, setup 0ms, collect 34ms, tests 2ms, environment 0ms, prepare 75ms)
+
+=== Gate Result: PASS ===

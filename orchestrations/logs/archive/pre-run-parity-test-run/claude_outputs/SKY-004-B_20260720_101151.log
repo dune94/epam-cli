@@ -1,0 +1,165 @@
+=== Prompt for SKY-004-B (attempt 1) ===
+CRITICAL — WRITE FILES FIRST. Your FIRST tool call MUST be WriteFile.
+Do NOT output any text before calling WriteFile. Do NOT plan or say "I will...".
+Call WriteFile NOW for the EXACT ABSOLUTE PATHS listed below:
+
+   - WRITE /home/bradleyjerome/projects/skyscanner-app/src/server.test.ts first, before any other action
+   - WRITE /home/bradleyjerome/projects/skyscanner-app/package.json first, before any other action
+---
+
+Implement user story SKY-004-B: Add build/start scripts and integration tests for Express server
+
+## Story Description
+Add 'start' and 'build' scripts to package.json. Install supertest and @types/supertest. Create src/server.test.ts using vitest + supertest with 8+ tests covering all endpoints, validation, error scenarios, and RAPIDAPI_KEY gating — with no real outbound HTTP calls. Depends on SKY-004-A.
+
+## Acceptance Criteria
+- package.json: 'start' → 'node dist/server.js'; 'build' produces dist/server.js and copies src/public/ to dist/public/
+- supertest + @types/supertest in devDependencies; src/server.test.ts uses vitest + supertest; no real outbound HTTP calls during test execution; tsc --noEmit exits 0; vitest run exits 0
+- Tests cover at least 8 cases: /health 200, / 200 HTML content, / 500 when index.html missing, /search 200 with valid params, /search 400 with missing/empty/invalid params, /cheapest 200 and 404, RAPIDAPI_KEY absent → 503, SkyscannerClient error → 500
+
+
+
+
+
+## Technical Notes
+- files: ["/home/bradleyjerome/projects/skyscanner-app/src/server.test.ts","/home/bradleyjerome/projects/skyscanner-app/package.json"]
+- dependsOn: ["SKY-002"]
+
+## Files to Create/Modify (EXACT ABSOLUTE PATHS — write to these paths exactly)
+/home/bradleyjerome/projects/skyscanner-app/src/server.test.ts, /home/bradleyjerome/projects/skyscanner-app/package.json
+
+## Dependencies
+SKY-002
+
+
+
+## Instructions
+**CRITICAL — WRITE FILES FIRST:**
+   - WRITE /home/bradleyjerome/projects/skyscanner-app/src/server.test.ts first, before any other action
+   - WRITE /home/bradleyjerome/projects/skyscanner-app/package.json first, before any other action
+**You MUST write every file listed above to its EXACT absolute path. Do NOT write to a different path, do NOT write to the current directory unless it matches the path above. Use your WriteFile or Edit tools with the full absolute path shown.**
+
+1. Write each required file to its exact absolute path listed above — do this FIRST before anything else
+2. Implement all acceptance criteria for this story
+3. Follow the project's existing code patterns and conventions
+4. Do NOT create tests unless explicitly required in acceptance criteria
+
+After implementation, provide a brief summary of what was created/modified.
+
+## Relevant Knowledge Base Entries
+The following was learned from previous story implementations and is relevant to your agent role. Apply this knowledge before writing any code:
+
+- [2026-07-06T17:45:30Z] Always resolve mocked fetch calls to a Response-shaped object with ok, status, statusText, and a json method returning a Promise.
+- [2026-07-06T17:50:20Z] Use valid module and moduleResolution pairs in tsconfig.json: CommonJS with Node, Node16 with Node16, ESNext with Bundler. Use CommonJS and Node for the stack. Mismatched pairs cause build errors.
+- [2026-07-06T18:11:26Z] Use vi.fn().mockResolvedValue(value) to make a mock return a resolved Promise.
+- [2026-07-06T20:31:11Z] Use `test: { passWithNoTests: true }` in vitest.config.ts or create a stub test file when no *.test.ts files exist.
+- [2026-07-06T20:33:03Z] Enable globals:true in vitest.config.ts so describe, it, and expect work without imports, reducing boilerplate in test files.
+- [2026-07-06T23:47:34Z] Use CommonJS-compatible patterns in src/server.ts: avoid `import.meta.url` and top-level `await`; gate listen with `if (require.main === module)`.
+- [2026-07-07T02:35:30Z] Always include a non-test source file in src/ alongside any src/*.test.ts file, since tsconfig.json excludes test files from tsc --noEmit.
+- [2026-07-07T19:01:34Z] Only modify or create files explicitly listed in the story's acceptance criteria. Do not touch files belonging to other stories or outside the current task scope.
+- [2026-07-07T20:17:57Z] [unreviewed-fallback] Avoid using deprecated TypeScript compiler options like 'moduleResolution=node10'; use 'moduleResolution=node' instead.
+- [2026-07-17T20:20:58Z] Always: Before importing a module or referencing a type/property, always read the actual source file to verify the export exists, its exact path, its properties, and its constructor/factory signatures
+
+## Knowledge Base Contribution (do this LAST — after writing all implementation files)
+Your assigned KB entry ID for this run: **KB-001**
+
+IMPORTANT: Write ALL implementation files first. Only AFTER writing every required file should you optionally append a KB entry.
+Do NOT read orchestrations/agents/KB.md before writing implementation files. The relevant KB entries are already injected above.
+
+If (and only if) you discover a non-obvious pattern during implementation, append one entry to `orchestrations/agents/KB.md`:
+
+```markdown
+## KB-001 -- 2026-07-20
+
+**Category:** <backend|frontend|infrastructure|testing|orchestration>
+**AgentRole:** <your agentRole from the story>
+**Tags:** <comma-separated tech keywords, e.g. typescript, node, cli>
+**Trigger:** <retry|first-success>
+**StoryRef:** SKY-004-B
+
+<One concise paragraph: the specific pattern, gotcha, or anti-pattern.>
+```
+
+Only write an entry if the knowledge is genuinely non-obvious. Skip trivial observations.
+
+## Execution Plan
+Follow this plan step by step:
+1. Read `/home/bradleyjerome/projects/skyscanner-app/package.json` and `/home/bradleyjerome/projects/skyscanner-app/src/server.ts` to inspect existing scripts, dependencies, and server structure.
+2. Modify `/home/bradleyjerome/projects/skyscanner-app/package.json` to set the `start` script to `node dist/server.js` and the `build` script to compile TypeScript and copy `src/public/` to `dist/public/`, then add `supertest` and `@types/supertest` to `devDependencies`.
+3. Create `/home/bradleyjerome/projects/skyscanner-app/src/server.test.ts` importing `describe`, `it`, `expect`, `vi`, `beforeEach`, `afterEach` from `vitest` and `request` from `supertest`.
+4. In `/home/bradleyjerome/projects/skyscanner-app/src/server.test.ts`, use `vi.mock` to mock the Skyscanner client or fetch module to prevent real outbound HTTP calls during test execution.
+5. In `/home/bradleyjerome/projects/skyscanner-app/src/server.test.ts`, add tests for `GET /health` returning 200 and `GET /` returning 200 with HTML content.
+6. In `/home/bradleyjerome/projects/skyscanner-app/src/server.test.ts`, add a test for `GET /` returning 500 when `index.html` is missing by mocking file system reads.
+7. In `/home/bradleyjerome/projects/skyscanner-app/src/server.test.ts`, add tests for `GET /search` returning 200 with valid query parameters and 400 when params are missing, empty, or invalid.
+8. In `/home/bradleyjerome/projects/skyscanner-app/src/server.test.ts`, add tests for `GET /cheapest` returning 200 with valid data and 404 when no results are found.
+9. In `/home/bradleyjerome/projects/skyscanner-app/src/server.test.ts`, add tests for `RAPIDAPI_KEY` absent returning 503 and SkyscannerClient error returning 500 by manipulating `process.env` and configuring mock rejections.
+10. Execute `tsc --noEmit` and `vitest run` to verify type checking passes and all tests exit 0.
+=== End Prompt ===
+
+=== epam Output (attempt 1) ===
+All acceptance criteria are met:
+
+## Summary
+
+**Files Created/Modified:**
+
+1. **`/home/bradleyjerome/projects/skyscanner-app/package.json`**
+   - Added `start` script: `node dist/server.js`
+   - Added `build` script: `tsc && cp -r src/public dist/public`
+   - Added `supertest` and `@types/supertest` to devDependencies
+
+2. **`/home/bradleyjerome/projects/skyscanner-app/src/server.test.ts`**
+   - Created comprehensive integration tests using vitest + supertest
+   - Mocked SkyscannerClient and fs modules to prevent real outbound HTTP calls
+   - 12 tests covering:
+     - `GET /health` 200
+     - `GET /` 200 with HTML content
+     - `GET /` 500 when index.html missing
+     - `GET /search` 200 with valid params
+     - `GET /search` 400 with missing params
+     - `GET /search` 400 with empty from param
+     - `GET /search` 400 with empty to param
+     - `GET /search` 400 with invalid date format
+     - `GET /cheapest` 200 with valid data
+     - `GET /cheapest` 404 when no results found
+     - RAPIDAPI_KEY absent → 503
+     - SkyscannerClient error → 500
+
+**Verification:**
+- ✅ `tsc --noEmit` exits 0
+- ✅ `vitest run` exits 0 (33 tests passed)
+- ✅ `npm run build` produces `dist/server.js` and copies `src/public/` to `dist/public/`
+All acceptance criteria are met:
+
+## Summary
+
+**Files Created/Modified:**
+
+1. **`/home/bradleyjerome/projects/skyscanner-app/package.json`**
+   - Added `start` script: `node dist/server.js`
+   - Added `build` script: `tsc && cp -r src/public dist/public`
+   - Added `supertest` and `@types/supertest` to devDependencies
+
+2. **`/home/bradleyjerome/projects/skyscanner-app/src/server.test.ts`**
+   - Created comprehensive integration tests using vitest + supertest
+   - Mocked SkyscannerClient and fs modules to prevent real outbound HTTP calls
+   - 12 tests covering:
+     - `GET /health` 200
+     - `GET /` 200 with HTML content
+     - `GET /` 500 when index.html missing
+     - `GET /search` 200 with valid params
+     - `GET /search` 400 with missing params
+     - `GET /search` 400 with empty from param
+     - `GET /search` 400 with empty to param
+     - `GET /search` 400 with invalid date format
+     - `GET /cheapest` 200 with valid data
+     - `GET /cheapest` 404 when no results found
+     - RAPIDAPI_KEY absent → 503
+     - SkyscannerClient error → 500
+
+**Verification:**
+- ✅ `tsc --noEmit` exits 0
+- ✅ `vitest run` exits 0 (33 tests passed)
+- ✅ `npm run build` produces `dist/server.js` and copies `src/public/` to `dist/public/`
+
+=== End epam Output ===

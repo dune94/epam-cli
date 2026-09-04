@@ -1,0 +1,17 @@
+{
+  "storyRoleAssignments": [
+    {"storyId": "MOCK-HW-1", "agentRole": "typescript-engineer"}
+  ],
+  "profileAdditions": [
+    {
+      "role": "typescript-engineer",
+      "rules": [
+        "When changing the return value of getGreeting() in src/hello.ts, you MUST also update the hardcoded expectation in src/hello.test.ts — the test asserts expect(getGreeting()).toBe('hello world') and will fail if only the implementation file is changed. Always update both files together and verify with vitest run.",
+        "The file .codegraph/.gitignore is a scaffold-phase infrastructure file — do NOT modify it under any circumstances.",
+        "vitest is imported in src/hello.test.ts but is NOT listed in package.json devDependencies (only typescript 5.9.3 is present). Before running any vitest command, add vitest to devDependencies and run npm install, or tests will fail with module-not-found.",
+        "This project has no vitest.config.ts — vitest runs with default configuration. Do NOT create one; it is a scaffold-phase infrastructure file and must not be modified or added."
+      ]
+    }
+  ],
+  "newProfiles": []
+}

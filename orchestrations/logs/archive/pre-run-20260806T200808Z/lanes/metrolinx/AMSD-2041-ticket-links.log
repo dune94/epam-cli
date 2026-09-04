@@ -1,0 +1,178 @@
+# Prompt
+You are the Ticket Link Agent for the epam-cli orchestration pipeline.
+
+A ticket's comments and description carry URLs. Most are noise — meeting invites, dashboards, internal threads. A few are decisive: vendor documentation for the exact capability being built, an API reference, a specification. Your job is to tell those apart, and to extract what a decisive one actually says.
+
+## Why you exist
+
+On a real ticket, two vendor documentation links sat in the comment thread for six weeks. They stated that the SDK callback the implementation depends on takes NO argument, and that the feature is configured in the vendor's own UI rather than in application code. Nobody read them. Two full pipeline runs were spent building against the opposite assumption, and a writer was failed for not doing something the SDK cannot do. The links were in the ticket the whole time.
+
+You are the step that prevents that. A link you classify as irrelevant is never opened again, so be careful in both directions: a false negative loses the answer, a false positive floods the writer with a meeting agenda.
+
+## Your inputs
+
+You receive the story (title, description, components), and every URL found in its description and comments, each with the surrounding comment text, its author, and its date. You may also receive the story's declared file manifest and any code findings already gathered.
+
+## Your process
+
+1. Classify each link by what it points at: vendor or third-party documentation; an internal wiki or specification; a ticket, board or dashboard; a meeting, recording or email thread; source code; or unknown.
+2. Judge relevance to THIS story from the surrounding comment text and the story itself — not from the URL alone. A vendor docs link on an unrelated feature is not relevant.
+3. For a link you judge relevant AND can actually fetch, read it and extract only what bears on the implementation: the real signature or contract of an API the story depends on, required configuration keys, whether the work is code or configuration, and any constraint that contradicts what the story assumes.
+4. Report what you could not reach. Most internal links will be unreachable from this environment; that is expected and useful — a human then knows which to open. Never guess a document's contents from its URL.
+
+## Hard requirements
+
+- QUOTE, DO NOT PARAPHRASE, when you state what a document says. A summary of a contract is how a wrong contract propagates.
+- Note the document's own scope. Vendor documentation is often written for one framework variant, one router, one version — if the guide targets a different architecture than the codeline uses, say so plainly, because following it literally would be wrong.
+- If a document CONTRADICTS an assumption visible in the story, say so explicitly and quote both sides. That contradiction is the single most valuable thing you can return.
+- Never fetch anything that requires credentials, and never attempt to authenticate.
+- You never write to the ticket or to any external system. You read and report.
+
+
+## Opening a link
+
+You are given a fetch tool. USE IT on every link you judge relevant — do not infer a document's contents from its URL, its title, or the comment that posted it. A URL that looks like an implementation guide may be a changelog, a marketing page, or a redirect to something else entirely.
+
+Fetch, read, and quote. If a fetch fails or the page requires credentials, classify the link `unreachable` and say so — that is a useful answer, and a human then knows which link to open by hand. Never invent what a page says.
+
+## Output
+
+Call the submit_ticket_links tool. Structured output only; do not answer in prose.
+
+STORY
+Title: [GO, UP, MX] Live Preview of Content in CMS
+Description: Original Requirements (discovery)  AS a Content Author, I WANT to preview draft entries in CMS, SO THAT I can see how content will be shown on the website
+ability to preview draft entries in CMS
+Notes& Assumptions  Limitation: Might not be possible to preview protected pages and content.
+Original Total Estimate:  8  Original FE Estimate:  8  Original DAM Estimate:  0  Original BE Estimate:  0
+Components: GO, Intake & Planning, MX, UP
+Declared files: (none yet)
+
+LINKS FOUND IN THIS TICKET:
+1. https://www.contentstack.com/docs/headless-cms/live-preview-implementation-for-nextjs-csr-app-router
+   found by: Chenowa George on 2026-07-09
+   surrounding text: More info needed to understand the gap/learning needed to implement the feature vs a POC; TBD - option to create a story with 2 pages to implement? Confirm if instead a demo from contentstack is the appropriate solve EPAM/IT to discuss next steps at standing meeting more info: cc
+2. https://www.contentstack.com/docs/headless-cms/custom-preview-urls#configure-custom-preview-urls
+   found by: V-EPAM-Ivan Mikhailov on 2026-07-27
+   surrounding text: , Agreed to have a demo from the Contentstack team on the solution. Once demonstrated, this ticket could be reassessed. Updated Contentstack docs link - CC ,
+
+COMMENT THREAD (context for judging relevance — a link's surrounding discussion often says why it was posted):
+- Ibrahim Didi: / , the interactive Maps stack has to be included in this Live Preview Implementation as well. Please confirm this ticket covers the following stacks: GO Transit UP Express Metrolinx.com Interactive Maps Thanks, Ibrahim CC: / / /
+- V-EPAM-Ivan Mikhailov: Hi , As agreed , please: review the code available in github (Mykyta demonstraged) ideally we want to: restore it, fix dependencies/etc. connect with Contentstack check how it works to pre-estimate the task. Ideas for the estimation: Spike needed? Estimate separately - GO/MX/UP Placeholder for the future: Pre-estimated in the following state: Current status: Breakdown: Spike needed? Live edit Verify that user can edit the content type from the "Visual experience" tab ( somehow ) If so - Life edit could became much easier Estimate page by page ( start from the obvious ones to present several options to PO's ) Estimate only the first part for certain pages of a single website GO UP MX Interactive Maps EXD - Assumption: No live edit Links wont work The functionality is available only through the "Visual experience" tab in Contentstack It wont work from the Content type level (there is a "Live preview" CTA) Its a CS bug (TBD) Dependencies Risks T-shirt
+- V-EPAM-Ivan Mikhailov: Pre-estimated in the following state: Current status: POC needed, and it’s estimated Breakdown: POC: Verify whether there is a change to navigate through pages within the Live view (will the links work?) Related assumption - #a Verify that user can edit the content type from the "Visual experience" tab If so - Live Edit could become much easier Related assumption - #b Implement Live View and Live Edit for 2 GO Transit pages: Homepage Details Page - Standard PI11 planning update, : MX. Homepage MX. Discover Article page (aka News Article page) After POC , devs should be able to properly estimate the following: GO. Live View and Live Edit UP. Live View and Live Edit MX. Live View and Live Edit Interactive Maps. Live View and Live Edit EXD - Assumption: Most probably links inside the Live view wont work (Live edit limitation, but TBD by the dev team) The functionality is available only through the "Visual experience" tab in Contentstack It wont work from the Content type level (there is a "Live preview" CTA) Its a CS bug (TBD in #2.a.ii) Dependencies - Risks Potential Contentstack limitations, TBD after the POC implemenmtation (see more details in #2.a) T-shirt For POC - M Estimate for MX/GO/UP TBD after the POC
+- V-Oksana Seleznova: , please review and confirm if we should add POC (M-size) to PI-10.
+- Chenowa George: to review and confirm
+- Chenowa George: More info needed to understand the gap/learning needed to implement the feature vs a POC; TBD - option to create a story with 2 pages to implement? Confirm if instead a demo from contentstack is the appropriate solve EPAM/IT to discuss next steps at standing meeting more info: cc
+- V-Oksana Seleznova: , please follow up on this
+- V-NandaKumar KR: As recommended by we will await for demo from ContentStack. Its possible, no code changes are needed and its more of configure and use. After the demo if any code changes required we can plan this story for development team.
+- V-EPAM-Ivan Mikhailov: , Agreed to have a demo from the Contentstack team on the solution. Once demonstrated, this ticket could be reassessed. Updated Contentstack docs link - CC ,
+- V-EPAM-Ivan Mikhailov: , agreed to have a demo from the Contentstack team on the solution. Once demonstrated, this ticket could be reassessed. For the current pi-11 planning agreed to add this ticket with M estimate Next steps: going to share email to with the current problems will schedule a call with CS team CC Updated Contentstack docs link - CC ,
+- V-EPAM-Ivan Mikhailov: During the PI-11 planning we agreed to update the: Scope of this ticket from GO. Homepage GO. Details Page - Standard to the following: MX. Homepage MX. Discover Article page (aka News Article page) Move this ticket closer to the middle of the PI (waiting for the Demo from Contentstack to clarify the implementation, and most probably convert the Spike to the delivereable) CC
+- V-EPAM-Ivan Mikhailov: Hi , Please schedule a demo with CS once possible. More details/issues/agenda/etc. are in the email from : “Content Stack Live Preview demo request “ CC , ,
+
+
+# Output
+```json
+{
+  "submit_ticket_links": {
+    "story_key": "GO-UP-MX-Live-Preview-of-Content-in-CMS",
+    "links": [
+      {
+        "url": "https://www.contentstack.com/docs/headless-cms/live-preview-implementation-for-nextjs-csr-app-router",
+        "classification": "vendor_documentation",
+        "relevance": "relevant",
+        "fetch_status": "fetched",
+        "document_scope": "This guide targets Next.js CSR (Client-Side Rendering) App Router specifically. The document states: \"Client-side rendering (CSR) means your website loads data and builds pages directly inside the browser using JavaScript. This guide walks you through setting up Contentstack Live Preview for CSR websites using REST APIs.\" I could not verify whether this codeline uses CSR/App Router architecture — no codebase matches were found for Next.js config, app/, pages/, or Contentstack references. If the codeline uses SSR (Server-Side Rendering) or the Pages Router, this guide would be the WRONG variant and following it literally would be incorrect.",
+        "extracted_facts": [
+          {
+            "topic": "SDK configuration required (code change)",
+            "quote": "Add the Live Preview configuration inside the Contentstack.Stack() method when configuring Contentstack's Delivery SDK. For example, here's a sample configuration using the JavaScript Delivery SDK:\n\nContentstack.Stack({\n  ...\n  live_preview: {\n    preview_token: preview_token,\n    enable: true,\n    host: 'rest-preview.contentstack.com'\n  },\n  ...\n})"
+          },
+          {
+            "topic": "Separate SDK must be installed (code change)",
+            "quote": "Use the Live Preview Utils SDK to listen for content updates and fetch real-time preview data on the client side. ... npm install @contentstack/live-preview-utils@contentstack/utils"
+          },
+          {
+            "topic": "SDK initialization contract",
+            "quote": "ContentstackLivePreview.init({\n  stackSdk: Stack,\n  enable: true,\n  ssr: false,\n  editButton: { enable: true },\n  stackDetails: {\n    apiKey: \"your api key\",\n    environment: \"your environment value\",\n    branch: \"your branch\",\n  },\n  clientUrlParams: {\n    protocol: \"https\",\n    host: \"app.contentstack.com\",\n    port: 443,\n  },\n});\nexport const onEntryChange = ContentstackLivePreview.onEntryChange;"
+          },
+          {
+            "topic": "onEntryChange contract — takes a callback function, used in useEffect",
+            "quote": "When you update an entry, the onEntryChange() method detects the change and runs your defined logic to fetch updated data. ... React.useEffect(() => { onEntryChange(updateData); }, []);"
+          },
+          {
+            "topic": "Configuration also required in Contentstack UI (not only code)",
+            "quote": "Navigate to Settings and select Environments. Set the base URLs for different locales, and click Update. ... Select Visual Experience from the stack settings. In the General tab, select the Enable Live Preview checkbox. Set the Default Preview Environment and click Save to save the settings."
+          },
+          {
+            "topic": "Preview token required, not management token",
+            "quote": "It is recommended to use a preview token for Live Preview instead of a previously utilized, read-only management token."
+          }
+        ],
+        "contradictions_with_story": [
+          {
+            "story_assumption": "NandaKumar KR commented: 'Its possible, no code changes are needed and its more of configure and use.'",
+            "document_says": "The document requires installing a separate npm package (@contentstack/live-preview-utils), modifying the Contentstack.Stack() initialization to add live_preview config, calling ContentstackLivePreview.init() with multiple parameters, and wiring onEntryChange() into each page component's useEffect hook. This is code, not only configuration.",
+            "severity": "high"
+          },
+          {
+            "story_assumption": "The ticket discusses Live Preview being available through the 'Visual experience' tab and questions whether it works from the Content type level 'Live preview' CTA, calling it 'a CS bug (TBD)'.",
+            "document_says": "The document describes enabling Live Preview via 'Settings > Visual Experience' in stack settings, and notes 'You can now see the Live Preview icon within all the entries of your stack.' The document does not describe a separate 'Live preview' CTA at the content type level — it frames Live Preview as a stack-level setting surfaced on entries.",
+            "severity": "medium"
+          }
+        ],
+        "unreachable": false
+      },
+      {
+        "url": "https://www.contentstack.com/docs/headless-cms/custom-preview-urls#configure-custom-preview-urls",
+        "classification": "vendor_documentation",
+        "relevance": "relevant",
+        "fetch_status": "fetched",
+        "document_scope": "This document covers Custom Preview URLs, a feature for defining dynamic pattern-based paths for Live Preview. It is not framework-specific (no mention of Next.js, CSR, or SSR). It applies to any Contentstack stack using Live Preview or Visual Editor. Note: 'Custom Preview URLs is available on select plans. Contact Contentstack support for more information.'",
+        "extracted_facts": [
+          {
+            "topic": "What Custom Preview URLs are for",
+            "quote": "Custom Preview URLs allow you to define dynamic, pattern-based paths for Live Preview. These paths align preview behavior with your website's routing logic, including nested routes, taxonomies, multiple domains, and non-native URL fields."
+          },
+          {
+            "topic": "Previous (default) preview URL behavior",
+            "quote": "Previously, Live Preview used a fixed pattern: <environment base URL> + <entry's native URL field>. This approach works for simple scenarios but does not support advanced routing setups."
+          },
+          {
+            "topic": "Configuration is done in Contentstack UI, not in code",
+            "quote": "Go to your stack and click \"Settings\". Navigate to Visual Experience and select the Preview URL tab. Enable the Custom Preview URL toggle."
+          },
+          {
+            "topic": "Pattern placeholder syntax",
+            "quote": "Build preview URLs using dynamic placeholders in the pattern. Placeholders use the {{...}} syntax and can reference: Entry fields: {{entry.slug}}, {{entry.title}}, {{entry.uid}}; Custom fields: {{entry.custom_field_id}}; Context variables: {{environment}}, {{locale}}, {{branch}}, {{contentTypeUid}}; Reference fields: {{entry.author.name}}, {{entry.parent.url}}; Taxonomy values: {{taxonomy:brand}}"
+          },
+          {
+            "topic": "Works with Visual Editor (Visual Experience tab)",
+            "quote": "Custom Preview URLs resolve in Visual Editor the same way they do in Live Preview. After you configure a pattern under Settings → Visual Experience → Preview URL, Visual Editor uses that configuration to resolve entry URLs on the canvas. No additional setup is required."
+          },
+          {
+            "topic": "setPageContext needed for Visual Editor with custom URLs",
+            "quote": "When an entry relies on a custom URL pattern, its preview URL is generated from the pattern instead of a single URL field. As a result, Visual Editor cannot identify the entry from the target URL alone. To open the correct entry, the Start editing button passes the entry UID and content type UID as page context. Configure this context once in your front-end code. For setup steps, refer to setPageContext(context) in the Live Preview Utils SDK config reference."
+          }
+        ],
+        "contradictions_with_story": [
+          {
+            "story_assumption": "The ticket's scope includes multiple sites (GO Transit, UP Express, Metrolinx.com, Interactive Maps) which may use different routing patterns.",
+            "document_says": "Custom Preview URLs support 'multiple domains or regional sites' and 'URL structures vary by locale, environment, or branch' through alias configuration: 'Under Base URL, define one or more aliases. Aliases allow you to define multiple hostnames for the same content.' This suggests the multi-site concern is addressable through configuration, but each site's routing pattern must be individually configured.",
+            "severity": "low"
+          }
+        ],
+        "unreachable": false
+      }
+    ],
+    "summary": {
+      "relevant_links_fetched": 2,
+      "relevant_links_unreachable": 0,
+      "irrelevant_links": 0,
+      "key_contradiction": "NandaKumar's comment that 'no code changes are needed and its more of configure and use' is contradicted by the CSR App Router implementation guide, which requires: (1) installing @contentstack/live-preview-utils npm package, (2) modifying Contentstack.Stack() initialization with live_preview config, (3) calling ContentstackLivePreview.init() with stackSdk/ssr/editButton/stackDetails/clientUrlParams, and (4) wiring onEntryChange() into each page component. The Custom Preview URLs doc is primarily configuration-in-UI, but the base Live Preview SDK integration is code.",
+      "scope_warning": "The first document targets Next.js CSR (Client-Side Rendering) App Router specifically. I could not verify the codeline's architecture (no codebase matches found). If this project uses SSR or the Pages Router, a different Contentstack guide would apply and the SDK initialization contract (e.g., ssr: true vs ssr: false) would differ.",
+      "unverifiable": "Could not search the codebase for existing Contentstack SDK usage, Next.js router type (app/ vs pages/), or rendering mode (CSR vs SSR). No matches were returned for contentstack, live-preview, next.config, app/, pages/, or rendering-related patterns. This means either the codebase is not yet initialized for this feature, or the search patterns did not match the project structure."
+    }
+  }
+}
+```

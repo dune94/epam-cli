@@ -1,0 +1,164 @@
+=== Prompt for SKY-004-test (attempt 1) ===
+CRITICAL — WRITE FILES FIRST. Your FIRST tool call MUST be WriteFile.
+Do NOT output any text before calling WriteFile. Do NOT plan or say "I will...".
+Call WriteFile NOW for the EXACT ABSOLUTE PATHS listed below:
+
+   - WRITE /home/bradleyjerome/projects/skyscanner-app/src/server.test.ts first, before any other action
+---
+
+Implement user story SKY-004-test: Write vitest + supertest integration tests for Express REST API server
+
+## Story Description
+Create src/server.test.ts using vitest + supertest with at least 8 tests covering all server route scenarios: /health (with and without RAPIDAPI_KEY), / (static HTML from file), /search (valid params, missing params, adults default/validation), /cheapest (valid, empty/404, missing params), RAPIDAPI_KEY gating (503), and SkyscannerClient error handling (500). SkyscannerClient must be mocked so no real HTTP calls are made.
+
+## Acceptance Criteria
+- src/server.test.ts uses vitest + supertest with SkyscannerClient fully mocked via vi.mock so no real HTTP calls occur during `vitest run`
+- Test: GET /health returns 200 with JSON body { status: 'ok', uptime: <positive number> }
+- Test: GET /health returns 200 even when RAPIDAPI_KEY env var is absent (health never gated)
+- Test: GET / returns 200 text/html with body matching the contents of src/public/index.html (read from file, not hardcoded)
+- Test: GET /search with valid params returns 200 { flights, count, searchedAt } where count === flights.length and searchedAt is ISO-8601; missing from/to/date → 400; non-numeric adults → 400; absent adults defaults to 1
+- Test: GET /cheapest returns 200 with cheapest FlightResult; returns 404 when SkyscannerClient returns empty array; missing params → 400
+- Test: RAPIDAPI_KEY absent → /search and /cheapest return 503 { error: 'RAPIDAPI_KEY not configured' }; /health and / still return 200
+- Test: SkyscannerClient throws → /search and /cheapest return 500 { error: string } without crash; `vitest run` exits 0 with all tests passing
+
+
+## Test Criteria (ground truth — written from actual source; overrides any conflicting AC)
+- GET /health returns 200 with JSON body containing status: 'ok' and uptime: process.uptime() (positive number)
+- GET /health is never gated by RAPIDAPI_KEY - it executes before any env checks
+- GET / returns 200 text/html with body read from path.resolve(__dirname, 'public/index.html') using fs.readFileSync
+- GET / is never gated by RAPIDAPI_KEY
+- GET /search query params are: from, to, date, adults (all from req.query)
+- GET /search missing from, to, or date returns 400 with error: 'Missing required query parameters: from, to, date'
+- GET /search adults param defaults to 1 when absent (adultsRaw === undefined)
+- GET /search non-numeric adults returns 400 with error: 'Invalid adults parameter: must be numeric'
+- GET /search adults=0 is valid - no lower-bound check exists in validateSearchParams
+- GET /search when RAPIDAPI_KEY absent returns 503 with error: 'RAPIDAPI_KEY not configured'
+- GET /search success returns 200 with JSON body: { flights: FlightResult[], count: flights.length, searchedAt: new Date().toISOString() }
+- GET /search when SkyscannerClient throws returns 500 with JSON body: { error: message } where message is err.message or String(err)
+- GET /cheapest query params are: from, to, date, adults (same validation as /search)
+- GET /cheapest missing from, to, or date returns 400 with same error as /search
+- GET /cheapest non-numeric adults returns 400 with same error as /search
+- GET /cheapest when RAPIDAPI_KEY absent returns 503 with error: 'RAPIDAPI_KEY not configured'
+- GET /cheapest when SkyscannerClient returns empty array returns 404 with error: 'No flights found'
+- GET /cheapest success returns 200 with single FlightResult object (cheapest from reduce)
+- GET /cheapest when SkyscannerClient throws returns 500 with JSON body: { error: message }
+- SkyscannerClient constructor accepts { apiKey?: string } and falls back to process.env.RAPIDAPI_KEY
+- SkyscannerClient.searchFlights throws Error when missing API key: 'SkyscannerClient: missing API key. Provide apiKey to the constructor or set the RAPIDAPI_KEY environment variable.'
+- FlightResult interface has fields: price (number), currency (string), airline (string), departure (string), arrival (string), duration (number), stops (number)
+- validateSearchParams returns null on validation failure (already sent response)
+- validateSearchParams returns ValidatedSearchParams { from: string, to: string, date: string, adults: number } on success
+- toSearchParams maps from->origin, to->destination, date->date, adults->adults for SkyscannerClient
+- Global error handler at end of middleware chain returns 500 with { error: err.message }
+- listen() function is guarded - only runs when require.main === module or process.argv[1].endsWith('server.js')
+
+## Mock Strategy
+vi.mock('./skyscanner/client', () => ({ SkyscannerClient: vi.fn() })) with vi.hoisted to create mock constructor; use vi.stubEnv to control RAPIDAPI_KEY; beforeEach uses vi.clearAllMocks()
+
+## Banned Patterns (must NOT appear in your file)
+origin, destination, GET /cheapest returns 200 with cheapest FlightResult; returns 404 when SkyscannerClient returns empty array, GET /search with valid params returns 200 { flights, count, searchedAt } where count === flights.length and searchedAt is ISO-8601, RAPIDAPI_KEY absent → /search and /cheapest return 503 { error: 'RAPIDAPI_KEY not configured' }; /health and / still return 200, SkyscannerClient throws → /search and /cheapest return 500 { error: string } without crash, @jest/globals, jest.mock, ./client, ./skyscanner, hardcoded HTML content, fs.readFile, fs/promises
+
+## Technical Notes
+- files: ["/home/bradleyjerome/projects/skyscanner-app/src/server.test.ts"]
+- dependsOn: ["SKY-004-impl","SKY-002"]
+
+## Files to Create/Modify (EXACT ABSOLUTE PATHS — write to these paths exactly)
+/home/bradleyjerome/projects/skyscanner-app/src/server.test.ts
+
+## Dependencies
+SKY-002, SKY-004-impl
+
+
+## Instructions
+**CRITICAL — WRITE FILES FIRST:**
+   - WRITE /home/bradleyjerome/projects/skyscanner-app/src/server.test.ts first, before any other action
+**You MUST write every file listed above to its EXACT absolute path. Do NOT write to a different path, do NOT write to the current directory unless it matches the path above. Use your WriteFile or Edit tools with the full absolute path shown.**
+
+1. Write each required file to its exact absolute path listed above — do this FIRST before anything else
+2. Implement all acceptance criteria for this story
+3. Test Criteria facts above are ground truth — your test assertions MUST match them exactly
+4. Do NOT create tests unless explicitly required in acceptance criteria
+
+After implementation, provide a brief summary of what was created/modified.
+
+## Relevant Knowledge Base Entries
+The following was learned from previous story implementations and is relevant to your agent role. Apply this knowledge before writing any code:
+
+- [2026-07-07T14:33:39Z] Check the source before writing CLI tests to verify whether output uses console.log or process.stdout.write, then spy on whichever it actually uses.
+- [2026-07-07T18:54:47Z] Always export classes using a named export. Never use a default export for a class, and never declare a class without exporting it.
+- [2026-07-14T10:23:13Z] Always: In strict TypeScript, always annotate callback parameters with explicit types (e.g., `.map((c: Column) =>` not `.map(c =>`). Never rely on implicit any inference for array method callbacks.
+- [2026-07-15T02:48:02Z] Never access ECMAScript private fields (#fieldName) from outside the class in test code — TypeScript cannot parse it and will emit TS1005/TS1109. Test private state indirectly through public methods o
+- [2026-07-15T03:53:06Z] NEVER modify files inside node_modules/ — if a dependency is missing or has wrong types, add it to package.json devDependencies/dependencies and run npm install. If a type mismatch exists, use declara
+- [2026-07-15T04:03:31Z] Never modify any file inside node_modules/ — only edit source files under src/ or config files like package.json/tsconfig.json. If a dependency is missing, add it to package.json devDependencies and r
+- [2026-07-16T16:27:50Z] Never use top-level await in test files — the project uses CommonJS modules which forbid it. Wrap any async setup in an async function called from the test body or inside beforeAll/beforeEach.
+
+## Knowledge Base Contribution (do this LAST — after writing all implementation files)
+Your assigned KB entry ID for this run: **KB-008**
+
+IMPORTANT: Write ALL implementation files first. Only AFTER writing every required file should you optionally append a KB entry.
+Do NOT read orchestrations/agents/KB.md before writing implementation files. The relevant KB entries are already injected above.
+
+If (and only if) you discover a non-obvious pattern during implementation, append one entry to `orchestrations/agents/KB.md`:
+
+```markdown
+## KB-008 -- 2026-07-17
+
+**Category:** <backend|frontend|infrastructure|testing|orchestration>
+**AgentRole:** <your agentRole from the story>
+**Tags:** <comma-separated tech keywords, e.g. typescript, node, cli>
+**Trigger:** <retry|first-success>
+**StoryRef:** SKY-004-test
+
+<One concise paragraph: the specific pattern, gotcha, or anti-pattern.>
+```
+
+Only write an entry if the knowledge is genuinely non-obvious. Skip trivial observations.
+
+## Execution Plan
+Follow this plan step by step:
+1. Read `/home/bradleyjerome/projects/skyscanner-app/src/server.ts` to understand route handlers, middleware, SkyscannerClient import path, and how RAPIDAPI_KEY is checked.
+2. Read `/home/bradleyjerome/projects/skyscanner-app/src/public/index.html` to capture the exact HTML content the root route serves.
+3. Read `/home/bradleyjerome/projects/skyscanner-app/src/index.ts` (or equivalent entry point) to find the SkyscannerClient class import path and constructor signature for mocking.
+4. Create `/home/bradleyjerome/projects/skyscanner-app/src/server.test.ts` with imports: `vitest` (`describe`, `it`, `expect`, `vi`, `beforeEach`, `afterEach`), `supertest` (as `request`), and `fs`/`path` for reading `index.html`.
+5. Add `vi.mock('<SkyscannerClient import path>')` at module scope, returning a mock class with a `searchFlights` method that defaults to resolving a known array of `FlightResult` objects; store the mock implementation in a module-level variable for per-test control.
+6. Implement `describe('GET /health')` with three tests: (a) returns 200 `{ status: 'ok', uptime: <positive number> }`; (b) returns 200 when `RAPIDAPI_KEY` is absent; (c) verify `uptime` is a positive number.
+7. Implement `describe('GET /')` with one test: returns 200 `text/html` with body equal to `fs.readFileSync(path.resolve(__dirname, 'public/index.html'), 'utf8')`.
+8. Implement `describe('GET /search')` with tests: (a) valid params → 200 `{ flights, count, searchedAt }` where `count === flights.length` and `searchedAt` is ISO-8601; (b) missing `from`/`to`/`date` → 400; (c) non-numeric `adults` → 400; (d) absent `adults` defaults to 1 (verify mock called with `adults: 1`); (e) `RAPIDAPI_KEY` absent → 503 `{ error: 'RAPIDAPI_KEY not configured' }`; (f) `SkyscannerClient.searchFlights` throws → 500 `{ error: <string> }`.
+9. Implement `describe('GET /cheapest')` with tests: (a) valid params → 200 with cheapest `FlightResult`; (b) `SkyscannerClient.searchFlights` returns empty array → 404; (c) missing params → 400; (d) `RAPIDAPI_KEY` absent → 503 `{ error: 'RAPIDAPI_KEY not configured' }`; (e) `SkyscannerClient.searchFlights` throws → 500 `{ error: <string> }`.
+10. Add `beforeEach`/`afterEach` hooks to: reset `vi.mocked` implementations, restore `process.env.RAPIDAPI_KEY` (save original, set/delete per test, restore after), and ensure `vitest run` exits 0 with no unhandled rejections.
+=== End Prompt ===
+
+=== epam Output (attempt 1) ===
+## Summary
+
+Created `/home/bradleyjerome/projects/skyscanner-app/src/server.test.ts` with **16 tests** covering all Express REST API server routes:
+
+**Test Coverage:**
+- **GET /health (2 tests):** Returns 200 with `{ status: 'ok', uptime: <positive> }`, works even without RAPIDAPI_KEY
+- **GET / (2 tests):** Returns 200 text/html matching `src/public/index.html` content, works even without RAPIDAPI_KEY  
+- **GET /search (6 tests):** Valid params → 200 with `{ flights, count, searchedAt }`, missing params → 400, non-numeric adults → 400, absent adults defaults to 1, RAPIDAPI_KEY absent → 503, SkyscannerClient throws → 500
+- **GET /cheapest (6 tests):** Valid params → 200 with cheapest flight, empty results → 404, missing params → 400, non-numeric adults → 400, RAPIDAPI_KEY absent → 503, SkyscannerClient throws → 500
+
+**Mock Strategy:**
+- Used `vi.mock()` with async importOriginal to preserve other exports from `./skyscanner/client`
+- Mocked `SkyscannerClient` class with a mock `searchFlights` method controlled via `mockSearchFlights`
+- `beforeEach` clears mocks and sets `RAPIDAPI_KEY`, `afterEach` restores environment
+
+All 52 tests pass (`vitest run` exits 0).
+## Summary
+
+Created `/home/bradleyjerome/projects/skyscanner-app/src/server.test.ts` with **16 tests** covering all Express REST API server routes:
+
+**Test Coverage:**
+- **GET /health (2 tests):** Returns 200 with `{ status: 'ok', uptime: <positive> }`, works even without RAPIDAPI_KEY
+- **GET / (2 tests):** Returns 200 text/html matching `src/public/index.html` content, works even without RAPIDAPI_KEY  
+- **GET /search (6 tests):** Valid params → 200 with `{ flights, count, searchedAt }`, missing params → 400, non-numeric adults → 400, absent adults defaults to 1, RAPIDAPI_KEY absent → 503, SkyscannerClient throws → 500
+- **GET /cheapest (6 tests):** Valid params → 200 with cheapest flight, empty results → 404, missing params → 400, non-numeric adults → 400, RAPIDAPI_KEY absent → 503, SkyscannerClient throws → 500
+
+**Mock Strategy:**
+- Used `vi.mock()` with async importOriginal to preserve other exports from `./skyscanner/client`
+- Mocked `SkyscannerClient` class with a mock `searchFlights` method controlled via `mockSearchFlights`
+- `beforeEach` clears mocks and sets `RAPIDAPI_KEY`, `afterEach` restores environment
+
+All 52 tests pass (`vitest run` exits 0).
+
+=== End epam Output ===

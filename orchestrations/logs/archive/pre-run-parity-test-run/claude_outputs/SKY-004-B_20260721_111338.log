@@ -1,0 +1,220 @@
+=== Prompt for SKY-004-B (attempt 1) ===
+CRITICAL — WRITE FILES FIRST. Your FIRST tool call MUST be WriteFile.
+Do NOT output any text before calling WriteFile. Do NOT plan or say "I will...".
+Call WriteFile NOW for the EXACT ABSOLUTE PATHS listed below:
+
+   - WRITE /home/bradleyjerome/projects/skyscanner-app/src/public/index.html first, before any other action
+   - WRITE /home/bradleyjerome/projects/skyscanner-app/package.json first, before any other action
+---
+
+Implement user story SKY-004-B: Static dashboard HTML and build/start configuration
+
+## Story Description
+Create src/public/index.html as a styled single-page dashboard with search form and client-side JS. Wire GET / to serve it via fs.readFileSync at runtime. Configure package.json build script to copy static assets to dist/public/ and add start script. Add supertest devDependencies.
+
+## Acceptance Criteria
+- src/public/index.html exists as a styled dashboard with: (1) full-width solid-color header bar (e.g. #1a73e8) with bold white title 'Skyscanner Dashboard' and subtitle; (2) centered white card (max-width ~700px, rounded corners) with 2-column grid search form: From/To IATA inputs row 1, Date/Adults inputs row 2, each with label; (3) full-width colored 'Search Flights' button; (4) status area with red error banner, gray empty message, success count; (5) client-side JS submitting GET /search via fetch, disabling button during request, rendering results table in-page
+- GET / returns HTTP 200 with Content-Type text/html and body equal to contents of src/public/index.html read at runtime via fs.readFileSync — hardcoded inline HTML is NOT acceptable; this route is never gated by RAPIDAPI_KEY
+- package.json contains a 'start' script with value 'node dist/server.js'
+- package.json 'build' script produces dist/server.js such that `npm run build && npm run start` starts the server and GET /health returns HTTP 200
+- Build script copies src/public/ into dist/public/ — after `npm run build`, dist/public/index.html exists and GET / serves the real dashboard file (not 404 or hardcoded fallback)
+- supertest and @types/supertest are listed in package.json devDependencies
+- `npx tsc --noEmit` exits 0 with no type errors
+- The file path used by the GET / handler resolves correctly under both `tsx src/server.ts` (dev) and `node dist/server.js` (built)
+
+
+
+
+
+## Technical Notes
+- files: ["/home/bradleyjerome/projects/skyscanner-app/src/public/index.html","/home/bradleyjerome/projects/skyscanner-app/package.json"]
+- dependsOn: ["SKY-004-A","SKY-002"]
+
+## Files to Create/Modify (EXACT ABSOLUTE PATHS — write to these paths exactly)
+/home/bradleyjerome/projects/skyscanner-app/src/public/index.html, /home/bradleyjerome/projects/skyscanner-app/package.json
+
+## Dependencies
+SKY-002
+
+
+
+## Instructions
+**CRITICAL — WRITE FILES FIRST:**
+   - WRITE /home/bradleyjerome/projects/skyscanner-app/src/public/index.html first, before any other action
+   - WRITE /home/bradleyjerome/projects/skyscanner-app/package.json first, before any other action
+**You MUST write every file listed above to its EXACT absolute path. Do NOT write to a different path, do NOT write to the current directory unless it matches the path above. Use your WriteFile or Edit tools with the full absolute path shown.**
+
+1. Write each required file to its exact absolute path listed above — do this FIRST before anything else
+2. Implement all acceptance criteria for this story
+3. Follow the project's existing code patterns and conventions
+4. Do NOT create tests unless explicitly required in acceptance criteria
+
+After implementation, provide a brief summary of what was created/modified.
+
+## Relevant Knowledge Base Entries
+The following was learned from previous story implementations and is relevant to your agent role. Apply this knowledge before writing any code:
+
+- [2026-07-06T17:45:30Z] Always resolve mocked fetch calls to a Response-shaped object with ok, status, statusText, and a json method returning a Promise.
+- [2026-07-06T17:50:20Z] Use valid module and moduleResolution pairs in tsconfig.json: CommonJS with Node, Node16 with Node16, ESNext with Bundler. Use CommonJS and Node for the stack. Mismatched pairs cause build errors.
+- [2026-07-06T18:11:26Z] Use vi.fn().mockResolvedValue(value) to make a mock return a resolved Promise.
+- [2026-07-06T20:31:11Z] Use `test: { passWithNoTests: true }` in vitest.config.ts or create a stub test file when no *.test.ts files exist.
+- [2026-07-06T20:33:03Z] Enable globals:true in vitest.config.ts so describe, it, and expect work without imports, reducing boilerplate in test files.
+- [2026-07-06T23:47:34Z] Use CommonJS-compatible patterns in src/server.ts: avoid `import.meta.url` and top-level `await`; gate listen with `if (require.main === module)`.
+- [2026-07-07T02:35:30Z] Always include a non-test source file in src/ alongside any src/*.test.ts file, since tsconfig.json excludes test files from tsc --noEmit.
+- [2026-07-07T19:01:34Z] Only modify or create files explicitly listed in the story's acceptance criteria. Do not touch files belonging to other stories or outside the current task scope.
+- [2026-07-07T20:17:57Z] [unreviewed-fallback] Avoid using deprecated TypeScript compiler options like 'moduleResolution=node10'; use 'moduleResolution=node' instead.
+- [2026-07-17T20:20:58Z] Always: Before importing a module or referencing a type/property, always read the actual source file to verify the export exists, its exact path, its properties, and its constructor/factory signatures
+
+## Knowledge Base Contribution (do this LAST — after writing all implementation files)
+Your assigned KB entry ID for this run: **KB-011**
+
+IMPORTANT: Write ALL implementation files first. Only AFTER writing every required file should you optionally append a KB entry.
+Do NOT read orchestrations/agents/KB.md before writing implementation files. The relevant KB entries are already injected above.
+
+If (and only if) you discover a non-obvious pattern during implementation, append one entry to `orchestrations/agents/KB.md`:
+
+```markdown
+## KB-011 -- 2026-07-21
+
+**Category:** <backend|frontend|infrastructure|testing|orchestration>
+**AgentRole:** <your agentRole from the story>
+**Tags:** <comma-separated tech keywords, e.g. typescript, node, cli>
+**Trigger:** <retry|first-success>
+**StoryRef:** SKY-004-B
+
+<One concise paragraph: the specific pattern, gotcha, or anti-pattern.>
+```
+
+Only write an entry if the knowledge is genuinely non-obvious. Skip trivial observations.
+
+## Available Dynamic Tools
+This project has the following helper scripts, written by prior self-healing runs. Use them via the bash tool instead of repeating the equivalent steps by hand:
+
+- `bash /home/bradleyjerome/projects/skyscanner-app/.epam/dynamic-tools/ensure-typescript.sh <args>` — Ensure typescript is installed as a dev dependency before running tsc --noEmit
+
+## Execution Plan
+Follow this plan step by step:
+1. Create `/home/bradleyjerome/projects/skyscanner-app/src/public/index.html` with the styled dashboard UI, including the full-width header, centered card, 2-column grid search form, status area, and client-side JS to fetch `/search` and render results.
+2. Modify `/home/bradleyjerome/projects/skyscanner-app/package.json` to set the `start` script to `node dist/server.js`, configure the `build` script to compile TypeScript and copy `src/public/` to `dist/public/`, and add `supertest` and `@types/supertest` to `devDependencies`.
+3. Update the `GET /` route in the server source code to read the HTML file at runtime using `fs.readFileSync` with a path resolving relative to `__dirname` (e.g., `path.join(__dirname, '..', 'public', 'index.html')`) to support both dev and built modes, ensuring it is not gated by `RAPIDAPI_KEY`.
+4. Run `npx tsc --noEmit` to verify the project compiles with zero type errors.
+5. Run `npm run build` and verify that `dist/server.js` and `dist/public/index.html` are successfully generated.
+6. Run `npm run start` and verify `GET /` returns HTTP 200 with `text/html` and the dashboard content, and `GET /health` returns HTTP 200.
+=== End Prompt ===
+
+=== epam Output (attempt 1) ===
+Now let me check the public dir again - apparently it exists in the project root, but the task requires it at src/public. Let me see what's in the root public:
+Now let me check the public dir again - apparently it exists in the project root, but the task requires it at src/public. Let me see what's in the root public:
+
+=== epam exited with code 1 ===
+=== Prompt for SKY-004-B (attempt 2) ===
+CRITICAL — WRITE FILES FIRST. Your FIRST tool call MUST be WriteFile.
+Do NOT output any text before calling WriteFile. Do NOT plan or say "I will...".
+Call WriteFile NOW for the EXACT ABSOLUTE PATHS listed below:
+
+   - WRITE /home/bradleyjerome/projects/skyscanner-app/src/public/index.html first, before any other action
+   - WRITE /home/bradleyjerome/projects/skyscanner-app/package.json first, before any other action
+---
+
+Implement user story SKY-004-B: Static dashboard HTML and build/start configuration
+
+## Story Description
+Create src/public/index.html as a styled single-page dashboard with search form and client-side JS. Wire GET / to serve it via fs.readFileSync at runtime. Configure package.json build script to copy static assets to dist/public/ and add start script. Add supertest devDependencies.
+
+## Acceptance Criteria
+- src/public/index.html exists as a styled dashboard with: (1) full-width solid-color header bar (e.g. #1a73e8) with bold white title 'Skyscanner Dashboard' and subtitle; (2) centered white card (max-width ~700px, rounded corners) with 2-column grid search form: From/To IATA inputs row 1, Date/Adults inputs row 2, each with label; (3) full-width colored 'Search Flights' button; (4) status area with red error banner, gray empty message, success count; (5) client-side JS submitting GET /search via fetch, disabling button during request, rendering results table in-page
+- GET / returns HTTP 200 with Content-Type text/html and body equal to contents of src/public/index.html read at runtime via fs.readFileSync — hardcoded inline HTML is NOT acceptable; this route is never gated by RAPIDAPI_KEY
+- package.json contains a 'start' script with value 'node dist/server.js'
+- package.json 'build' script produces dist/server.js such that `npm run build && npm run start` starts the server and GET /health returns HTTP 200
+- Build script copies src/public/ into dist/public/ — after `npm run build`, dist/public/index.html exists and GET / serves the real dashboard file (not 404 or hardcoded fallback)
+- supertest and @types/supertest are listed in package.json devDependencies
+- `npx tsc --noEmit` exits 0 with no type errors
+- The file path used by the GET / handler resolves correctly under both `tsx src/server.ts` (dev) and `node dist/server.js` (built)
+
+
+
+
+
+## Technical Notes
+- files: ["/home/bradleyjerome/projects/skyscanner-app/src/public/index.html","/home/bradleyjerome/projects/skyscanner-app/package.json"]
+- dependsOn: ["SKY-004-A","SKY-002"]
+
+## Files to Create/Modify (EXACT ABSOLUTE PATHS — write to these paths exactly)
+/home/bradleyjerome/projects/skyscanner-app/src/public/index.html, /home/bradleyjerome/projects/skyscanner-app/package.json
+
+## Dependencies
+SKY-002
+
+
+
+## Instructions
+**CRITICAL — WRITE FILES FIRST:**
+   - WRITE /home/bradleyjerome/projects/skyscanner-app/src/public/index.html first, before any other action
+   - WRITE /home/bradleyjerome/projects/skyscanner-app/package.json first, before any other action
+**You MUST write every file listed above to its EXACT absolute path. Do NOT write to a different path, do NOT write to the current directory unless it matches the path above. Use your WriteFile or Edit tools with the full absolute path shown.**
+
+1. Write each required file to its exact absolute path listed above — do this FIRST before anything else
+2. Implement all acceptance criteria for this story
+3. Follow the project's existing code patterns and conventions
+4. Do NOT create tests unless explicitly required in acceptance criteria
+
+After implementation, provide a brief summary of what was created/modified.
+
+## Relevant Knowledge Base Entries
+The following was learned from previous story implementations and is relevant to your agent role. Apply this knowledge before writing any code:
+
+- [2026-07-06T17:45:30Z] Always resolve mocked fetch calls to a Response-shaped object with ok, status, statusText, and a json method returning a Promise.
+- [2026-07-06T17:50:20Z] Use valid module and moduleResolution pairs in tsconfig.json: CommonJS with Node, Node16 with Node16, ESNext with Bundler. Use CommonJS and Node for the stack. Mismatched pairs cause build errors.
+- [2026-07-06T18:11:26Z] Use vi.fn().mockResolvedValue(value) to make a mock return a resolved Promise.
+- [2026-07-06T20:31:11Z] Use `test: { passWithNoTests: true }` in vitest.config.ts or create a stub test file when no *.test.ts files exist.
+- [2026-07-06T20:33:03Z] Enable globals:true in vitest.config.ts so describe, it, and expect work without imports, reducing boilerplate in test files.
+- [2026-07-06T23:47:34Z] Use CommonJS-compatible patterns in src/server.ts: avoid `import.meta.url` and top-level `await`; gate listen with `if (require.main === module)`.
+- [2026-07-07T02:35:30Z] Always include a non-test source file in src/ alongside any src/*.test.ts file, since tsconfig.json excludes test files from tsc --noEmit.
+- [2026-07-07T19:01:34Z] Only modify or create files explicitly listed in the story's acceptance criteria. Do not touch files belonging to other stories or outside the current task scope.
+- [2026-07-07T20:17:57Z] [unreviewed-fallback] Avoid using deprecated TypeScript compiler options like 'moduleResolution=node10'; use 'moduleResolution=node' instead.
+- [2026-07-17T20:20:58Z] Always: Before importing a module or referencing a type/property, always read the actual source file to verify the export exists, its exact path, its properties, and its constructor/factory signatures
+
+## Knowledge Base Contribution (do this LAST — after writing all implementation files)
+Your assigned KB entry ID for this run: **KB-011**
+**This is retry attempt 1** — a previous attempt failed. You MUST write a KB entry documenting what went wrong and what you changed.
+
+IMPORTANT: Write ALL implementation files first. Only AFTER writing every required file should you optionally append a KB entry.
+Do NOT read orchestrations/agents/KB.md before writing implementation files. The relevant KB entries are already injected above.
+
+If (and only if) you discover a non-obvious pattern during implementation, append one entry to `orchestrations/agents/KB.md`:
+
+```markdown
+## KB-011 -- 2026-07-21
+
+**Category:** <backend|frontend|infrastructure|testing|orchestration>
+**AgentRole:** <your agentRole from the story>
+**Tags:** <comma-separated tech keywords, e.g. typescript, node, cli>
+**Trigger:** <retry|first-success>
+**StoryRef:** SKY-004-B
+
+<One concise paragraph: the specific pattern, gotcha, or anti-pattern.>
+```
+
+Only write an entry if the knowledge is genuinely non-obvious. Skip trivial observations.
+
+## Available Dynamic Tools
+This project has the following helper scripts, written by prior self-healing runs. Use them via the bash tool instead of repeating the equivalent steps by hand:
+
+- `bash /home/bradleyjerome/projects/skyscanner-app/.epam/dynamic-tools/ensure-typescript.sh <args>` — Ensure typescript is installed as a dev dependency before running tsc --noEmit
+
+## Execution Plan
+Follow this plan step by step:
+1. Create `/home/bradleyjerome/projects/skyscanner-app/src/public/index.html` with the styled dashboard UI, including the full-width header, centered card, 2-column grid search form, status area, and client-side JS to fetch `/search` and render results.
+2. Modify `/home/bradleyjerome/projects/skyscanner-app/package.json` to set the `start` script to `node dist/server.js`, configure the `build` script to compile TypeScript and copy `src/public/` to `dist/public/`, and add `supertest` and `@types/supertest` to `devDependencies`.
+3. Update the `GET /` route in the server source code to read the HTML file at runtime using `fs.readFileSync` with a path resolving relative to `__dirname` (e.g., `path.join(__dirname, '..', 'public', 'index.html')`) to support both dev and built modes, ensuring it is not gated by `RAPIDAPI_KEY`.
+4. Run `npx tsc --noEmit` to verify the project compiles with zero type errors.
+5. Run `npm run build` and verify that `dist/server.js` and `dist/public/index.html` are successfully generated.
+6. Run `npm run start` and verify `GET /` returns HTTP 200 with `text/html` and the dashboard content, and `GET /health` returns HTTP 200.
+=== End Prompt ===
+
+=== epam Output (attempt 2) ===
+Still getting token corruption (`table.className = ".createElement("thead");` and `form.addEvent      renderEmpty();`). The issue is in the `</header>` token area where multiple lines are being joined. Let me try a fundamentally different approach — write the file directly via the bash tool using just `>` redirection with `\n` literally in the content.
+  [tc-writer] No test stories need TCs in phase 'unknown' — skipping
+Still getting token corruption (`table.className = ".createElement("thead");` and `form.addEvent      renderEmpty();`). The issue is in the `</header>` token area where multiple lines are being joined. Let me try a fundamentally different approach — write the file directly via the bash tool using just `>` redirection with `\n` literally in the content.
+
+=== End epam Output ===

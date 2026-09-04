@@ -1,0 +1,42 @@
+# Prompt
+Regenerate the VERIFICATION CRITERIA for this brownfield story. Your previous verification criteria were FLAGGED and must be fixed:
+- VC 1 cross-compares 'as it would appear to a site visitor' — restate as the observable rendered output alone
+- VC 1 references internal structure 'entry fields' — verify the rendered page content, not the CMS data model behind it
+- VC 2 cross-compares 'updates to reflect the modified content' — restate as what the previewed page displays after a change, without asserting it matches the CMS state
+- VC 3 cross-compares 'identical to its current behavior' — restate as the observable published-only output on its own
+- VC 4 cross-compares 'continue to behave as they currently do' — restate as the observable outcome for protected pages without referencing existing behavior
+- VC 5 prescribes HOW — mocked client, request parameters, preview token/flag, SDK configuration are all internal mechanisms; restate as what the end user observes on the previewed page
+- VC 6 references internal structure as trigger — 'Contentstack service returns an error or empty response' is not end-user-observable; restate the condition and outcome on the user-facing surface
+
+THE FIX SITE (located by the code-graph detective — anchor every criterion to the behaviour THIS code produces):
+- src/services/contentstack.ts :: options — This is the Contentstack SDK configuration object where live_preview must be enabled and where the preview API host is set. It is the root attachment point for the entire preview capability — without live_preview config here, no downstream query can fetch draft entries.
+Do NOT write criteria about areas unrelated to this code.
+
+
+Acceptance criteria (IMMUTABLE — the intent to verify; do NOT restate as-is, VERIFY them):
+- (none)
+Description: Original Requirements (discovery)  AS a Content Author, I WANT to preview draft entries in CMS, SO THAT I can see how content will be shown on the website
+ability to preview draft entries in CMS
+Notes& Assumptions  Limitation: Might not be possible to preview protected pages and content.
+Original Total Estimate:  8  Original FE Estimate:  8  Original DAM Estimate:  0  Original BE Estimate:  0
+
+A verification criterion states WHAT AN END USER OR TESTER OBSERVES on the user-facing surface THE TICKET IS ABOUT — the rendered output for an output ticket, the displayed screen for a UI ticket, the response a CLIENT receives for an API ticket. It is a BLACK-BOX check on that surface. It NEVER describes HOW the value is produced.
+A verification criterion is FORBIDDEN if it:
+- prescribes HOW to implement — any algorithm, mechanism, approach, or the addition/reading of any new field, flag or service;
+- references an INTERNAL structure that merely FEEDS the ticket's surface — an intermediate payload, a data-transfer object, or a specific response field used to BUILD the output. Verify the surface the ticket names, NOT the data structure behind it;
+- makes a CROSS-COMPARISON that presumes a mechanism — never assert one value "must equal" / "matches" / "is the same as" another; that presumes a shared derivation. Assert the required value is present and correct ON ITS OWN.
+Every verification criterion must be observable, testable, and tied to the ticket's stated symptom/intent.
+
+Do NOT restate an acceptance criterion as-is — express what a tester OBSERVES that confirms it. Address every flag above.
+Output ONLY a JSON array of verification-criterion strings. No prose, no markdown.
+
+# Output
+```json
+[
+  "A page viewed through CMS preview displays content that has been saved but not yet published.",
+  "After content is edited and saved without publishing in the CMS, the previewed page displays the edited content.",
+  "A page viewed outside of CMS preview displays only published content.",
+  "A protected page viewed through CMS preview does not display content that has been saved but not published.",
+  "When a previewed page has no saved-but-unpublished version, the page displays the published content."
+]
+```

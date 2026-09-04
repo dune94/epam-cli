@@ -1,0 +1,65 @@
+# Prompt
+Assign an implementation agent role to every story below.
+
+AVAILABLE ROLES — these are this project's own engineering roles. Choose from these and
+nothing else; the name you return must match one of them verbatim:
+- stand-in-engineer
+    
+
+STORIES — a story listing more than one codeline needs ONE ASSIGNMENT PER CODELINE:
+- MOCK-HW-1: Hello world greeting should say hello dolly
+    codelines — 2 assignments required, one for EACH of: mocka, mockb
+    The getGreeting() function in this codebase currently returns the string 'hello world'. It should instead return 'hello dolly'. Update any test that asserts the old value to match the new one. This is a customer-facing greeting shown on first load; the exact casing, spacing, and punctuation of the returned string matter and must match 'hello dolly' precisely — no trailing punctuation, no capitalization changes, no extra whitespace. Every existing test in src/hello.test.ts that currently asserts the old 'hello world' value must be updated to assert the new value instead — do not leave any stale assertion in place, and do not delete test coverage for this function. No other exported function's behavior, signature, or return type in this file may change as a side effect of this fix — the change must be scoped precisely to the string literal returned by getGreeting().
+
+Pick the role whose stated expertise actually covers the work the story describes. If two
+roles could plausibly own a story, prefer the one whose brief names the surface the story
+touches.
+
+THE UNIT OF ASSIGNMENT IS A (STORY, CODELINE) PAIR, NOT A STORY. A story listing three
+codelines needs THREE assignments — the repositories differ, so the right owner can differ.
+Count the codelines listed against each story and return exactly that many assignments for it,
+naming the codeline on every one. A story is not assigned until every codeline it lists is.
+
+THE OWNER MUST AUTHOR THE CODE. Assign the role that will EDIT THE FILES this story changes —
+the one whose brief names those files or directories. A role whose brief is about settings in
+a vendor's console, or about documentation, cannot deliver a story here: the agent's output is
+a change in a repository. Live 2026-08-07: this story went to the one role of three that owned
+no source files, and all such a role can produce is a configuration note. Where the story needs
+both console configuration and code, the assignment goes to the role that authors the code, and the configuration work is part of that story rather than a reason to reassign it.
+# Output — THIS IS A CONTRACT, NOT A PREFERENCE
+
+Emit EXACTLY one <ROLE_ASSIGNMENTS> block and nothing else that matters. Prose outside it is DISCARDED
+unread, however correct it is — the pipeline parses the block and never the commentary.
+
+<ROLE_ASSIGNMENTS>
+{
+  "assignments": [ {
+      "storyId": <string>,
+      "codeline": <string>
+         // The codeline this assignment is for. A story that spans codelines gets ONE assignment PER codeline — the repositories differ, so the right owner can differ too. Omit only for a story that spans none.   (optional),
+      "agentRole": <string>
+         // MUST be one of the offered roles, verbatim.,
+      "reason": <string>
+         // One sentence: why this role owns this story.,
+  } ]
+}
+</ROLE_ASSIGNMENTS>
+
+Assign exactly one implementation agent role to every story, chosen from the roles offered. Do not answer in prose and do not invent a role.
+
+
+# Output
+<ROLE_ASSIGNMENTS>
+{
+  "assignments": [
+    {
+      "storyId": "MOCK-HW-1",
+      "agentRole": "stand-in-engineer",
+      "reason": "stand-in-engineer"
+    }
+  ]
+}
+</ROLE_ASSIGNMENTS>
+
+[coverage-gate] writer: no pre-flight has gated this run — standing down
+  [provider] 'openrouter' is not routable by the 'mockserver' set — using 'claude'.

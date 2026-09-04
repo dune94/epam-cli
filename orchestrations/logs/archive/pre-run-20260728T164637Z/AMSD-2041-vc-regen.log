@@ -1,0 +1,28 @@
+# Prompt
+Regenerate the VERIFICATION CRITERIA for this brownfield story. Your previous verification criteria were FLAGGED and must be fixed:
+- VC 5 references internal 'feature flag or configuration' — prescribes implementation mechanism; 'identically to current production behavior' is a cross-comparison
+- VC 7 bundle size is a build metric, not observable on the user-facing rendered surface
+- VC 8 SDK initialization calls / network requests / mock call counts are internal behavior, not observable on the rendered UI
+- VC 9 references internal 'content card components' structure — restate as what the user sees on the page
+
+THE FIX SITE (located by the code-graph detective — anchor every criterion to the behaviour THIS code produces):
+- src/services/contentstack.ts :: options — This is where the Contentstack SDK Stack is initialized. The `options` object passed to `contentstack.Stack()` lacks the `live_preview` configuration required by Contentstack's Live Preview feature. Without it, the Stack cannot receive or respond to live preview hash parameters, so no downstream query or component can ever show real-time edits. Every content fetch flows through this Stack instance (getEntry, getSingleEntry, findSingletonEntry all instantiate ContentstackFactory with it), making this the single causal site.
+Do NOT write criteria about areas unrelated to this code.
+
+
+Acceptance criteria (IMMUTABLE — the intent to verify; do NOT restate as-is, VERIFY them):
+- (none)
+Description: [GO, UP, MX] Live Preview of Content in CMS — Enable real-time content preview from Contentstack's Live Preview feature, so that content editors see their edits reflected on the page without a full reload, across GO Transit, UP Express, and MX brands.
+
+A verification criterion states WHAT AN END USER OR TESTER OBSERVES on the user-facing surface THE TICKET IS ABOUT — the rendered email for an email ticket, the displayed screen/UI for a UI ticket, the API response a CLIENT receives for an API ticket. It is a BLACK-BOX check on that surface. It NEVER describes HOW the value is produced.
+A verification criterion is FORBIDDEN if it:
+- prescribes HOW to implement — any algorithm, mechanism, or approach: "split", "halve", "×0.5", "calculate independently", "per segment", "for each line item", or adding/reading any new field, flag, or service;
+- references an INTERNAL structure that merely FEEDS the ticket's surface — an intermediate payload, a "confirmation data"/DTO object, or a specific response field used to BUILD the output. Verify the surface the ticket names, NOT the data structure behind it;
+- makes a CROSS-COMPARISON that presumes a mechanism — never assert one value "must equal" / "matches" / "is the same as" another (e.g. "the return amount equals the outbound amount"); that presumes a copy/split. Assert the required value is present and correct ON ITS OWN.
+Every verification criterion must be observable, testable, and tied to the ticket's stated symptom/intent.
+
+Do NOT restate an acceptance criterion as-is — express what a tester OBSERVES that confirms it. Address every flag above.
+Output ONLY a JSON array of verification-criterion strings. No prose, no markdown.
+
+# Output
+["When a content editor opens a page in Contentstack's Live Preview editing experience, the page renders the currently published content for that page.", "After a content editor changes a field value in the CMS, the updated text appears on the previewed page without the editor manually reloading the browser.", "Edits made to a single-instance content item (such as a homepage banner or site-wide message) are visible on the previewed page shortly after the edit is made in the CMS.", "Edits made to an entry that belongs to a content collection (such as a news item or alert in a list) are visible on the previewed page shortly after the edit is made in the CMS.", "The Live Preview editing experience renders and reflects CMS edits on the GO Transit branded site.", "The Live Preview editing experience renders and reflects CMS edits on the UP Express branded site.", "The Live Preview editing experience renders and reflects CMS edits on the MX branded site.", "Content that the editor has not changed continues to display correctly on the previewed page, with no missing, duplicated, or broken sections.", "When the editor reverts an edit in the CMS, the previewed page shows the reverted content without a manual browser reload."]

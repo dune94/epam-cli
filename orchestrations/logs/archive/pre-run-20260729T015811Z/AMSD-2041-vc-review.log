@@ -1,0 +1,30 @@
+# Prompt
+You are a STRICT verification-criteria reviewer for a brownfield fix. REVIEW ONLY — do NOT rewrite anything.
+
+Acceptance criteria (IMMUTABLE ticket intent):
+- (none)
+Description: [GO, UP, MX] Live Preview of Content in CMS
+
+Proposed verification criteria:
+1. Given the Contentstack Live Preview client SDK is initialised with valid configuration, the application establishes a live-preview connection on page load without throwing an uncaught error.
+2. Given the Contentstack Live Preview SDK is mocked to emit a content-update event for a given content key, a component that renders that content key (e.g. ContentstackText with a matching contentKey) displays the updated value without a full page reload.
+3. Given the Contentstack Live Preview SDK is mocked to emit a content-update event, the updated content is reflected in the rendered output for GO-branded pages.
+4. Given the Contentstack Live Preview SDK is mocked to emit a content-update event, the updated content is reflected in the rendered output for UP-branded pages.
+5. Given the Contentstack Live Preview SDK is mocked to emit a content-update event, the updated content is reflected in the rendered output for MX-branded pages.
+6. When the Contentstack Live Preview SDK is unavailable or the connection fails, the application falls back to the existing static content-fetching behaviour and renders the page without errors.
+7. When the application is running in production mode (i.e. not in a CMS preview context), the live-preview integration does not initialise and no live-preview-related network requests are made.
+8. Given the Contentstack Live Preview SDK is mocked to emit a content-update event for a content key used by the NavigationBar, the NavigationBar renders the updated content without a full page reload.
+
+Apply these rules EXACTLY (the producer is held to the same text — do not invent stricter or looser criteria):
+A verification criterion states WHAT AN END USER OR TESTER OBSERVES on the user-facing surface THE TICKET IS ABOUT — the rendered email for an email ticket, the displayed screen/UI for a UI ticket, the API response a CLIENT receives for an API ticket. It is a BLACK-BOX check on that surface. It NEVER describes HOW the value is produced.
+A verification criterion is FORBIDDEN if it:
+- prescribes HOW to implement — any algorithm, mechanism, or approach: "split", "halve", "×0.5", "calculate independently", "per segment", "for each line item", or adding/reading any new field, flag, or service;
+- references an INTERNAL structure that merely FEEDS the ticket's surface — an intermediate payload, a "confirmation data"/DTO object, or a specific response field used to BUILD the output. Verify the surface the ticket names, NOT the data structure behind it;
+- makes a CROSS-COMPARISON that presumes a mechanism — never assert one value "must equal" / "matches" / "is the same as" another (e.g. "the return amount equals the outbound amount"); that presumes a copy/split. Assert the required value is present and correct ON ITS OWN.
+Every verification criterion must be observable, testable, and tied to the ticket's stated symptom/intent.
+
+FLAG any verification criterion that violates ANY rule above, OR that fails to cover the intent of an acceptance criterion.
+Output ONLY a JSON array of short flag strings, e.g. ["VC 2 prescribes halving — restate as observable outcome"]. Output [] if every VC is clean. No prose, no markdown.
+
+# Output
+["VC 1 references internal mechanism — SDK initialisation and 'establishes a live-preview connection' are not user-observable; restate as the page loading and rendering without errors", "VC 2 references internal structure — names the ContentstackText component and contentKey prop; restate as the rendered text displaying the updated value without a full page reload", "VC 6 prescribes a mechanism — 'falls back to the existing static content-fetching behaviour' describes HOW; restate as the page rendering its content without errors when preview is unavailable", "VC 7 partially internal — 'live-preview integration does not initialise' is not observable; keep only the observable absence of live-preview network requests and unchanged page behaviour in production"]

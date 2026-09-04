@@ -1,0 +1,32 @@
+# Prompt
+You are a STRICT verification-criteria reviewer for a brownfield fix. REVIEW ONLY — do NOT rewrite anything.
+
+Acceptance criteria (IMMUTABLE ticket intent):
+- (none)
+Description: AS a Content Author, I WANT to preview draft entries in CMS, SO THAT I can see how content will be shown on the website before publishing. This requires integrating the @contentstack/live-preview-utils SDK into the Next.js application so that the ContentstackContext becomes reactive to entry changes signaled by the CMS, and the Stack initialization includes the live_preview configuration. Limitation: Protected/authenticated pages may not be previewable. Note: CMS-side configuration (enabling Live Preview on the stack, setting preview URLs in Settings > Preview URLs) is a prerequisite performed in the Contentstack UI and is outside the scope of this code change.
+
+Proposed verification criteria:
+1. package.json lists @contentstack/live-preview-utils as a dependency and the package resolves without error
+2. given the Contentstack client is mocked to signal an entry change for a visible page component, the rendered page updates to show the changed content without a full browser reload
+3. when no live preview session is active, the rendered page displays the same published content as before the change, with no visual or functional difference
+4. given the live preview SDK callback signals a change to a protected/authenticated page's content, the page does not render its content without authentication
+5. the application builds and starts without error when CONTENTSTACK_API_KEY, CONTENTSTACK_DELIVERY_TOKEN, CONTENTSTACK_ENVIRONMENT, and CONTENTSTACK_BRANCH are set to valid values
+6. existing unit and integration tests continue to pass after the change
+
+Apply these rules EXACTLY (the producer is held to the same text — do not invent stricter or looser criteria):
+A verification criterion states WHAT AN END USER OR TESTER OBSERVES on the user-facing surface THE TICKET IS ABOUT — the rendered output for an output ticket, the displayed screen for a UI ticket, the response a CLIENT receives for an API ticket. It is a BLACK-BOX check on that surface. It NEVER describes HOW the value is produced.
+A verification criterion is FORBIDDEN if it:
+- prescribes HOW to implement — any algorithm, mechanism, approach, or the addition/reading of any new field, flag or service;
+- references an INTERNAL structure that merely FEEDS the ticket's surface — an intermediate payload, a data-transfer object, or a specific response field used to BUILD the output. Verify the surface the ticket names, NOT the data structure behind it;
+- makes a CROSS-COMPARISON that presumes a mechanism — never assert one value "must equal" / "matches" / "is the same as" another; that presumes a shared derivation. Assert the required value is present and correct ON ITS OWN.
+Every verification criterion must be observable, testable, and tied to the ticket's stated symptom/intent.
+
+A criterion may declare a PRECONDITION the test establishes (for example a mocked client
+signalling a change). A declared precondition is NOT implementation prescription — do not flag
+it. Flag what the criterion ASSERTS, not what it sets up.
+
+FLAG any verification criterion that violates ANY rule above, OR that fails to cover the intent of an acceptance criterion.
+Output ONLY a JSON array of short flag strings, e.g. ["VC 2 prescribes <an approach> — restate as observable outcome"]. Output [] if every VC is clean. No prose, no markdown.
+
+# Output
+["VC 1 references internal structure (package.json) and prescribes implementation approach — restate as observable outcome on the rendered preview surface","VC 3 makes a cross-comparison ('same published content as before the change') — assert the required value is present and correct on its own","VC 5 asserts build/start success, not the rendered surface the ticket is about — restate as observable preview behavior","VC 6 asserts internal test pass/fail, not the user-facing surface — restate as observable outcome on the rendered preview"]

@@ -1,0 +1,10 @@
+spec-mode: fast-path qwen/z-ai/glm-5.2 (skipping MiniMax)
+Failed to parse JSON for tag SPEC_ASSIGNMENTS: Unexpected token 'B', "Based on t"... is not valid JSON
+spec-mode: fast-path qwen/z-ai/glm-5.2 (skipping MiniMax)
+Failed to parse JSON for tag TICKET_LINKS: Unexpected token 'B', "Based on m"... is not valid JSON
+spec-mode: TICKET_LINKS: no parseable output — the tag was missing, empty, or contained prose instead of JSON
+spec-mode: fast-path qwen/z-ai/glm-5.2 (skipping MiniMax)
+spec-mode: search-term vocabulary unavailable for AMSD-2041 (Cannot read properties of null (reading 'cmd')) — seeding with an unfiltered query
+spec-mode: ⚠️ code-graph-detective plan/execution MISMATCH for AMSD-2041 — plan named [preview, livepreview, callers, callees, show, plan, novel], final answer named [contentstack, options], no shared term and no stated reason for the change.
+spec-mode: fast-path qwen/z-ai/glm-5.1 (skipping MiniMax)
+spec-mode: fast-path qwen/z-ai/glm-5.2 (skipping MiniMax)

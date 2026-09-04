@@ -1,0 +1,94 @@
+=== Prompt for SKY-001-A (attempt 1) ===
+Implement user story SKY-001-A: Scaffold TypeScript/Express project file structure and configuration
+
+## Story Description
+Create all required files and install dependencies for the skyscanner-app project at /tmp/skyscanner-app. This story covers file creation and content correctness only; runtime verification is covered in SKY-001-B.
+
+## Acceptance Criteria
+- /tmp/skyscanner-app/package.json exists with name='skyscanner-app', scripts (build, test, start, dev), dependencies (express), and devDependencies (typescript, tsx, vitest, @types/express, @types/node)
+- package.json 'scripts.test' equals 'vitest run'
+- package.json 'scripts.start' equals 'node dist/server.js'
+- package.json 'scripts.build' invokes tsc (e.g. 'tsc' or 'tsc -p tsconfig.json')
+- package.json 'scripts.dev' invokes tsx against src/index.ts
+- package.json contains no dependency whose name includes 'skyscanner' or any Skyscanner/RapidAPI SDK
+- /tmp/skyscanner-app/tsconfig.json exists with compilerOptions: strict=true, target='ES2022', module='CommonJS', moduleResolution='Node', outDir='dist/'
+- tsconfig.json does not enable allowJs (omitted or set to false)
+- /tmp/skyscanner-app/vitest.config.ts exists, imports defineConfig from 'vitest/config', exports a default config, sets test.globals=true, test.environment='node', and test.include=['src/**/*.test.ts']
+- /tmp/skyscanner-app/.gitignore exists containing 'node_modules' and 'dist' entries, and contains no hardcoded secrets
+- /tmp/skyscanner-app/src/index.ts exists as a valid TypeScript placeholder file
+- /tmp/skyscanner-app/node_modules/ directory exists confirming npm install succeeded
+- No configuration file contains hardcoded API keys, tokens, or passwords
+
+## Technical Notes
+- workingDir: /tmp/skyscanner-app
+- files: ["/tmp/skyscanner-app/package.json","/tmp/skyscanner-app/tsconfig.json","/tmp/skyscanner-app/vitest.config.ts"]
+- notes: CRITICAL — vitest.config.ts MUST include the pattern: include: ['src/**/*.test.ts']. Without this vitest picks up compiled dist/**/*.test.js files and fails with "Vitest cannot be imported in a CommonJS module". The correct vitest.config.ts:
+  import { defineConfig } from 'vitest/config';
+  export default defineConfig({ test: { globals: true, environment: 'node', include: ['src/**/*.test.ts'] } });
+
+CRITICAL — package.json MUST have a 'test' script. External verification runs 'npm test' and fails with exit 1 if the script is missing. Required scripts section:
+  "scripts": { "start": "node dist/server.js", "build": "tsup", "test": "vitest run" }
+
+## Files to Create/Modify
+/tmp/skyscanner-app/package.json, /tmp/skyscanner-app/tsconfig.json, /tmp/skyscanner-app/vitest.config.ts
+
+## Dependencies
+None
+
+## Instructions
+**IMPORTANT: You MUST use your file-writing and bash tools to create all required files. Do NOT just describe or plan what you will do — call tools immediately and write the files.**
+
+1. Implement all acceptance criteria for this story
+2. Follow the project's existing code patterns and conventions
+3. Create any necessary files in the locations specified
+4. Ensure code compiles/runs without errors
+5. Do NOT create tests unless explicitly required in acceptance criteria
+
+After implementation, provide a brief summary of what was created/modified.
+
+## Relevant Knowledge Base Entries
+No prior KB entries match your agent role yet.
+
+## Knowledge Base Contribution
+Your assigned KB entry ID for this run: **KB-008**
+
+If you discover a non-obvious pattern, gotcha, or anti-pattern during this implementation (or this is a retry), append exactly one entry to `orchestrations/agents/KB.md` using this format:
+
+```markdown
+## KB-008 -- 2026-06-18
+
+**Category:** <backend|frontend|infrastructure|testing|orchestration>
+**AgentRole:** <your agentRole from the story>
+**Tags:** <comma-separated tech keywords, e.g. typescript, node, cli>
+**Trigger:** <retry|first-success>
+**StoryRef:** SKY-001-A
+
+<One concise paragraph: the specific pattern, gotcha, or anti-pattern. Precise enough that a future Claude instance can apply it without re-discovering it.>
+```
+
+Only write an entry if the knowledge is genuinely non-obvious. Skip trivial observations.
+=== End Prompt ===
+
+=== epam Output (attempt 1) ===
+Created the skyscanner-app project structure and configuration at /tmp/skyscanner-app:
+
+- package.json with specified name, scripts (build, test, start, dev), dependencies (express), devDependencies (typescript, tsx, vitest, @types/express, @types/node), and no skyscanner SDKs
+- tsconfig.json with strict type checking, ES2022 target, CommonJS module, Node module resolution, outDir dist/, and allowJs disabled
+- vitest.config.ts with defineConfig import, test globals, node environment, and include pattern for src/**/*.test.ts
+- .gitignore with node_modules and dist entries, no secrets
+- src/index.ts placeholder file
+- ran npm install to create node_modules directory
+
+All acceptance criteria related to file presence, content, and configuration have been met.
+Created the skyscanner-app project structure and configuration at /tmp/skyscanner-app:
+
+- package.json with specified name, scripts (build, test, start, dev), dependencies (express), devDependencies (typescript, tsx, vitest, @types/express, @types/node), and no skyscanner SDKs
+- tsconfig.json with strict type checking, ES2022 target, CommonJS module, Node module resolution, outDir dist/, and allowJs disabled
+- vitest.config.ts with defineConfig import, test globals, node environment, and include pattern for src/**/*.test.ts
+- .gitignore with node_modules and dist entries, no secrets
+- src/index.ts placeholder file
+- ran npm install to create node_modules directory
+
+All acceptance criteria related to file presence, content, and configuration have been met.
+
+=== End epam Output ===

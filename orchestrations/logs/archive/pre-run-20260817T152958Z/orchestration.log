@@ -1,0 +1,16 @@
+[mint-step] codeline mocka: /home/bradleyjerome/projects/mock3/mock-a (2 declared deps)
+[mint-step] codeline mockb: /home/bradleyjerome/projects/mock3/mock-b (2 declared deps)
+[mint-step] plugins provisioned: 1 · mint tools: read_file,list_files,search,codegraph_query
+spec-mode: fast-path qwen/z-ai/glm-5.2 (skipping MiniMax)
+[mint-step]   survey: mocka — in_scope (src/fares.ts, test/fares.test.ts)
+[mint-step]   survey: mockb — in_scope (src/schedule.ts, test/schedule.test.ts)
+[mint-step]   survey recommends an investigator for mocka: The fare boundary in src/fares.ts: `rider.age > 65` on line 10 should be `>= 65` per the JSDoc and ticket. Add a test for age exactly 65 to test/fares.test.ts to cover the boundary.
+[mint-step]   survey recommends an investigator for mockb: The loop bound in src/schedule.ts: `i < stops.length - 1` on line 6 drops the final stop. The fix should iterate through all stops. Add a test asserting the last stop name appears in formatStops output.
+spec-mode: fast-path qwen/z-ai/glm-5.2 (skipping MiniMax)
+[mint-step] proposed=3 minted=3 unchanged=0 rejected=0 superseded=0
+[mint-step]   + [implementer] typescript-logic-engineer (profiles.json, kb, project-roles, project-profiles) — Both codelines share the same TypeScript + vitest stack and contain small, focused logic bugs in pure functions, so a single implementer role spans the project without near-duplicate roles per codeline.
+[mint-step]   + [investigator:mocka] mocka-fares-investigator (profiles.json, kb, project-investigators, project-profiles) — An investigator dedicated to mocka can confirm the exact fare boundary operator, the JSDoc intent, and the test coverage gap so the implementer does not rely on unverified survey leads.
+[mint-step]   + [investigator:mockb] mockb-schedule-investigator (profiles.json, kb, project-investigators, project-profiles) — An investigator dedicated to mockb can confirm the exact loop bound that drops the final stop and whether existing tests assert on the last stop, so the implementer does not rely on unverified survey leads.
+spec-mode: fast-path qwen/z-ai/glm-5.2 (skipping MiniMax)
+[mint-step] roster review (cycle 1): sound — 0 finding(s), 0 blocking
+[mint-step] FAILED: [assign] MOCK3-1 was assigned "transit-fare-engineer", which is not in the roster — it has no profile entry, so the writer would run with an empty system prompt.

@@ -1,0 +1,3 @@
+[control-plane] listening on http://0.0.0.0:8094  LOG_DIR=/home/bradleyjerome/projects/ai/epam-cli/orchestrations/logs
+[control-plane] port 8094 already in use — another instance running? Exiting cleanly.
+[control-plane] port 8094 already in use — another instance running? Exiting cleanly.

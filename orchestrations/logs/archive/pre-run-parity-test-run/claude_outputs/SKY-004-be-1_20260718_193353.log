@@ -1,0 +1,110 @@
+=== Prompt for SKY-004-be-1 (attempt 1) ===
+CRITICAL — WRITE FILES FIRST. Your FIRST tool call MUST be WriteFile.
+Do NOT output any text before calling WriteFile. Do NOT plan or say "I will...".
+Call WriteFile NOW for the EXACT ABSOLUTE PATHS listed below:
+
+   - WRITE /home/bradleyjerome/projects/skyscanner-app/src/server.ts first, before any other action
+   - WRITE /home/bradleyjerome/projects/skyscanner-app/package.json first, before any other action
+   - WRITE /home/bradleyjerome/projects/skyscanner-app/src/public/index.html first, before any other action
+---
+
+Implement user story SKY-004-be-1: Implement Express REST API server with /health, /search, /cheapest, and static dashboard endpoints
+
+## Story Description
+Create src/server.ts — an Express HTTP server exposing GET /health, GET /search, GET /cheapest, and GET / (static dashboard). The app must be importable without triggering port binding. Server reads PORT (default 3000) and RAPIDAPI_KEY from env; absent RAPIDAPI_KEY gates /search and /cheapest with 503. GET / serves src/public/index.html read from disk at runtime (not an inline string). FlightResult type must come from SKY-002. Add 'start' script (node dist/server.js). Build must produce dist/public/index.html so the / route resolves under both tsx and node dist/server.js. Depends on SKY-002.
+
+## Acceptance Criteria
+- The Express app is importable as a named export without triggering port binding; importing the module does not start listening on any port
+- GET /health returns HTTP 200 JSON { status: 'ok', uptime: <positive number> } regardless of whether RAPIDAPI_KEY is set or absent
+- GET /search with all required params (from, to, date) returns HTTP 200 JSON { flights: FlightResult[], count: <equals flights.length>, searchedAt: <ISO-8601 string> }; adults defaults to 1 when absent; returns HTTP 400 JSON { error: string } when any required param is missing or adults is non-numeric
+- GET /cheapest with all required params (from, to, date) returns HTTP 200 JSON with a single FlightResult whose price is ≤ all others; adults defaults to 1 when absent; returns HTTP 400 JSON { error: string } when required params are missing; returns HTTP 404 JSON { error: string } when no flights are found
+- When RAPIDAPI_KEY is absent, GET /search and GET /cheapest return HTTP 503 JSON { error: 'RAPIDAPI_KEY not configured' }; GET /health and GET / return HTTP 200 unaffected
+- When SkyscannerClient throws an error during /search or /cheapest, the server returns HTTP 500 JSON { error: string } without crashing or emitting an unhandled promise rejection
+- GET / serves the dashboard HTML file read from disk at runtime; the served content matches src/public/index.html (not an inline hardcoded string); the file path resolves correctly under both tsx and node dist/server.js execution
+- src/server.ts uses the FlightResult type from the SKY-002 export without redeclaring it inline; package.json contains 'start': 'node dist/server.js'; npm run build produces dist/public/index.html; npx tsc --noEmit exits 0
+
+
+
+
+
+## Technical Notes
+- files: ["/home/bradleyjerome/projects/skyscanner-app/src/server.ts","/home/bradleyjerome/projects/skyscanner-app/package.json","/home/bradleyjerome/projects/skyscanner-app/src/public/index.html"]
+- dependsOn: ["SKY-002"]
+
+## Files to Create/Modify (EXACT ABSOLUTE PATHS — write to these paths exactly)
+/home/bradleyjerome/projects/skyscanner-app/src/server.ts, /home/bradleyjerome/projects/skyscanner-app/package.json, /home/bradleyjerome/projects/skyscanner-app/src/public/index.html
+
+## Dependencies
+SKY-002
+
+
+## Instructions
+**CRITICAL — WRITE FILES FIRST:**
+   - WRITE /home/bradleyjerome/projects/skyscanner-app/src/server.ts first, before any other action
+   - WRITE /home/bradleyjerome/projects/skyscanner-app/package.json first, before any other action
+   - WRITE /home/bradleyjerome/projects/skyscanner-app/src/public/index.html first, before any other action
+**You MUST write every file listed above to its EXACT absolute path. Do NOT write to a different path, do NOT write to the current directory unless it matches the path above. Use your WriteFile or Edit tools with the full absolute path shown.**
+
+1. Write each required file to its exact absolute path listed above — do this FIRST before anything else
+2. Implement all acceptance criteria for this story
+3. Follow the project's existing code patterns and conventions
+4. Do NOT create tests unless explicitly required in acceptance criteria
+
+After implementation, provide a brief summary of what was created/modified.
+
+## Relevant Knowledge Base Entries
+The following was learned from previous story implementations and is relevant to your agent role. Apply this knowledge before writing any code:
+
+- [2026-07-06T17:45:30Z] Always resolve mocked fetch calls to a Response-shaped object with ok, status, statusText, and a json method returning a Promise.
+- [2026-07-06T17:50:20Z] Use valid module and moduleResolution pairs in tsconfig.json: CommonJS with Node, Node16 with Node16, ESNext with Bundler. Use CommonJS and Node for the stack. Mismatched pairs cause build errors.
+- [2026-07-06T18:11:26Z] Use vi.fn().mockResolvedValue(value) to make a mock return a resolved Promise.
+- [2026-07-06T20:31:11Z] Use `test: { passWithNoTests: true }` in vitest.config.ts or create a stub test file when no *.test.ts files exist.
+- [2026-07-06T20:33:03Z] Enable globals:true in vitest.config.ts so describe, it, and expect work without imports, reducing boilerplate in test files.
+- [2026-07-06T23:47:34Z] Use CommonJS-compatible patterns in src/server.ts: avoid `import.meta.url` and top-level `await`; gate listen with `if (require.main === module)`.
+- [2026-07-07T02:35:30Z] Always include a non-test source file in src/ alongside any src/*.test.ts file, since tsconfig.json excludes test files from tsc --noEmit.
+- [2026-07-07T19:01:34Z] Only modify or create files explicitly listed in the story's acceptance criteria. Do not touch files belonging to other stories or outside the current task scope.
+- [2026-07-07T20:17:57Z] [unreviewed-fallback] Avoid using deprecated TypeScript compiler options like 'moduleResolution=node10'; use 'moduleResolution=node' instead.
+- [2026-07-17T20:20:58Z] Always: Before importing a module or referencing a type/property, always read the actual source file to verify the export exists, its exact path, its properties, and its constructor/factory signatures
+
+## Knowledge Base Contribution (do this LAST — after writing all implementation files)
+Your assigned KB entry ID for this run: **KB-008**
+
+IMPORTANT: Write ALL implementation files first. Only AFTER writing every required file should you optionally append a KB entry.
+Do NOT read orchestrations/agents/KB.md before writing implementation files. The relevant KB entries are already injected above.
+
+If (and only if) you discover a non-obvious pattern during implementation, append one entry to `orchestrations/agents/KB.md`:
+
+```markdown
+## KB-008 -- 2026-07-18
+
+**Category:** <backend|frontend|infrastructure|testing|orchestration>
+**AgentRole:** <your agentRole from the story>
+**Tags:** <comma-separated tech keywords, e.g. typescript, node, cli>
+**Trigger:** <retry|first-success>
+**StoryRef:** SKY-004-be-1
+
+<One concise paragraph: the specific pattern, gotcha, or anti-pattern.>
+```
+
+Only write an entry if the knowledge is genuinely non-obvious. Skip trivial observations.
+
+## Execution Plan
+Follow this plan step by step:
+1. Create `/home/bradleyjerome/projects/skyscanner-app/src/server.ts` with Express app that exports a named export `app` without binding to port
+2. Implement GET `/health` endpoint returning JSON with status, uptime, and handling RAPIDAPI_KEY absence
+3. Implement GET `/search` endpoint validating required params, defaulting adults to 1, handling missing/invalid params with 400 errors, and returning FlightResult array
+4. Implement GET `/cheapest` endpoint validating required params, defaulting adults to 1, handling missing params with 400 errors, returning single cheapest flight or 404 if none found
+5. Add error handling middleware for SkyscannerClient errors returning 500 JSON without crashing
+6. Implement GET `/` endpoint serving static dashboard HTML from `/home/bradleyjerome/projects/skyscanner-app/src/public/index.html`
+7. Update `/home/bradleyjerome/projects/skyscanner-app/package.json` with 'start': 'node dist/server.js' script and ensure build produces dist/public/index.html
+8. Verify FlightResult type import from SKY-002 module in server.ts without redeclaration
+9. Ensure npx tsc --noEmit exits 0 and all tests pass for the implemented endpoints
+10. Confirm file path resolution works correctly under both tsx and node dist/server.js execution contexts
+=== End Prompt ===
+
+=== epam Output (attempt 1) ===
+`RAPIDAPI_KEY` is NOT in env... but the client made a real API call and got 403. Looking again at the client: it throws on missing key in the constructor. So the fact that the request went out means... oh — the constructor `throw` was caught somewhere? No, looking at the error: it's a 403 from the API, not a "missing API key" error. That means `RAPIDAPI_KEY` IS set. But `env | grep` showed nothing. Maybe it's set in a parent shell that doesn't propagate. Let me try with `unset`:
+  [tc-writer] No test stories need TCs in phase 'unknown' — skipping
+`RAPIDAPI_KEY` is NOT in env... but the client made a real API call and got 403. Looking again at the client: it throws on missing key in the constructor. So the fact that the request went out means... oh — the constructor `throw` was caught somewhere? No, looking at the error: it's a 403 from the API, not a "missing API key" error. That means `RAPIDAPI_KEY` IS set. But `env | grep` showed nothing. Maybe it's set in a parent shell that doesn't propagate. Let me try with `unset`:
+
+=== End epam Output ===

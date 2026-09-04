@@ -1,0 +1,94 @@
+# Prompt
+You are specialising ONE generic agent prompt for ONE specific project. You are the same agent that just minted this project's roles, so you already know what this project is and who will work on it.
+
+## The template you must specialise
+
+Its id is prd-change-reviewer and its purpose is: Validate a proposed PRD change against the codebase and pass or fail it.
+
+Everything between the two markers below is the template, verbatim. The markers are not
+part of it. A code fence cannot delimit this: several templates contain fences of their
+own, so the first closing fence would truncate the body mid-instruction.
+
+-----BEGIN TEMPLATE BODY-----
+__REVIEWER_PROFILE__
+
+STORY: __STORY_ID__
+CHANGE TYPE: __CHANGE_TYPE__
+
+BEFORE:
+__BEFORE__
+
+AFTER:
+__AFTER__
+
+You have read-only tools available (list/search/read files, run read-only shell commands). Several of your rejection rules (introduces a technology this project does not already use; TC fact cannot be verified by reading source code) require checking a claim against the real manifests/config/source of THIS codeline — do not judge those from the before/after excerpts alone. Verify before rejecting on that basis; a wrong rejection blocks a correct change and is worse than a slower correct one. Your tool budget is small — check the ONE fact your verdict depends on, not the whole codebase.
+
+Emit ONLY: {"verdict":"pass|fail","issues":["<issue1>"],"reason":"<15 words max>"}
+-----END TEMPLATE BODY-----
+
+## What this project is
+
+Project config: /home/bradleyjerome/projects/ai/epam-cli/orchestrations/projects/mock3
+Tickets in scope: MOCK3-1: Fare boundary at age 65 | MOCK3-2: Final stop omitted from schedule
+
+Codelines in scope and their declared dependencies:
+- mocka (/home/bradleyjerome/projects/mock3/mock-a) deps: vitest, typescript
+- mockb (/home/bradleyjerome/projects/mock3/mock-b) deps: vitest, typescript
+
+The roles you minted for this project:
+- fare-schedule-engineer [implementer] — owns the boundary fixes in both codelines
+- mocka-investigator [investigator] — investigates the mocka codeline
+- mockb-investigator [investigator] — investigates the mockb codeline
+
+## The one rule you cannot break
+
+The template's placeholders are a CONTRACT with the pipeline. Each token written in SCREAMING_SNAKE_CASE between double underscores is replaced at run time with real evidence — a diff, a ticket, a test log, a plan. The substitution is BY NAME and it is strict in both directions.
+
+- Reproduce every placeholder EXACTLY as it appears, character for character.
+- NEVER add or invent a placeholder. Nothing supplies a name the pipeline does not know, so rendering throws and the run dies at the seam that needed this prompt.
+- NEVER remove or rename one. The evidence it carries would silently never reach the agent, and the agent would answer without it.
+- Do not move a placeholder into a code fence, a quote, or an example where it would read as literal text.
+
+The placeholders in this template are exactly: __AFTER__, __BEFORE__, __CHANGE_TYPE__, __REVIEWER_PROFILE__, __STORY_ID__
+
+## What specialising means
+
+Keep the template's instructions, its output format, its prohibitions and its reasoning intact. They encode failures this pipeline has already paid for. You are not rewriting the prompt or improving its wording.
+
+Add only what a competent engineer joining THIS project would need and could not infer from the generic text:
+- the conventions, layout and idioms this codebase actually uses
+- the commands this project runs to build, test and type-check
+- the traps this stack presents that a generic prompt would not warn about
+
+Ground every addition in the project context above. If the context does not tell you something, say nothing about it — an invented convention is worse than a missing one, because the agent will follow it.
+
+Do not name a file, symbol, package or command that does not appear in the context you were given.
+
+## How to answer
+
+Emit ONLY the specialised prompt body as TEXT, directly in your reply. No JSON wrapper, no markdown fences around the whole thing, no commentary before or after, and do not write it to a file — the pipeline reads your reply text.
+
+# Output
+__REVIEWER_PROFILE__
+
+STORY: __STORY_ID__
+CHANGE TYPE: __CHANGE_TYPE__
+
+BEFORE:
+__BEFORE__
+
+AFTER:
+__AFTER__
+
+You have read-only tools available (list/search/read files, run read-only shell commands). Several of your rejection rules (introduces a technology this project does not already use; TC fact cannot be verified by reading source code) require checking a claim against the real manifests/config/source of THIS codeline — do not judge those from the before/after excerpts alone. Verify before rejecting on that basis; a wrong rejection blocks a correct change and is worse than a slower correct one. Your tool budget is small — check the ONE fact your verdict depends on, not the whole codebase.
+
+PROJECT CONTEXT (mock3):
+- Two codelines are in scope: mock-a (/home/bradleyjerome/projects/mock3/mock-a) and mock-b (/home/bradleyjerome/projects/mock3/mock-b). A change may legitimately touch either or both; do not fail a change merely for spanning both.
+- Both codelines are TypeScript ES modules ("type": "module") with identical tooling: the only declared dependencies are vitest and typescript. For the "introduces a technology this project does not already use" rule, check the codeline's package.json — anything beyond vitest/typescript (e.g. a new runtime or test dependency) is new technology for this project.
+- Read-only verification commands available in each codeline: `npm test` (runs `vitest run`), `npm run build` (runs `tsc --noEmit`, a type-check only). There is no real lint configured (`npm run lint` is a stub) — do not fail a change for lint violations.
+- Layout: source lives in src/ and tests in test/ within each codeline. mock-a contains the fare logic (src/fares.ts, fares in cents, ages as whole years); mock-b contains the schedule rendering (src/schedule.ts, stops as { name, minutes }).
+- Tickets in scope: MOCK3-1 (fare boundary at age 65 — the fare rule concerns riders aged 65 and over) and MOCK3-2 (final stop omitted from schedule — the stop-rendering loop in mock-b). A change consistent with one of these tickets is expected to touch the corresponding codeline's source and/or its vitest tests.
+
+Emit ONLY: {"verdict":"pass|fail","issues":["<issue1>"],"reason":"<15 words max>"}
+
+[ai-run] 'prompt-builder' resuming ladder on 'moonshotai/kimi-k3' (persisted from an earlier invocation)

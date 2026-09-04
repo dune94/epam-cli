@@ -1,0 +1,15 @@
+[seam-invocation] seam 'spec-coordinator' starts on 'claude-haiku-4-5-20251001' but the project declares no iteration budget for it — the seam will run on the engine default, which is nobody's choice
+[seam-invocation] seam 'spec-agent' starts on 'claude-haiku-4-5-20251001' but the project declares no iteration budget for it — the seam will run on the engine default, which is nobody's choice
+spec-mode: fast-path claude/claude-haiku-4-5-20251001 (skipping MiniMax)
+spec-mode: detective for mockb = mockb-detective (minted for this codeline)
+[seam-invocation] seam 'guard-vocabulary' starts on 'claude-haiku-4-5-20251001' but the project declares no iteration budget for it — the seam will run on the engine default, which is nobody's choice
+[seam-invocation] seam 'spec-agent' starts on 'claude-haiku-4-5-20251001' but the project declares no iteration budget for it — the seam will run on the engine default, which is nobody's choice
+spec-mode: fast-path claude/claude-haiku-4-5-20251001 (skipping MiniMax)
+[seam-invocation] seam 'spec-coordinator' starts on 'claude-haiku-4-5-20251001' but the project declares no iteration budget for it — the seam will run on the engine default, which is nobody's choice
+[seam-invocation] seam 'code-graph-detective' starts on 'claude-haiku-4-5-20251001' but the project declares no iteration budget for it — the seam will run on the engine default, which is nobody's choice
+[seam-invocation] seam 'spec-agent' starts on 'claude-haiku-4-5-20251001' but the project declares no iteration budget for it — the seam will run on the engine default, which is nobody's choice
+[seam-invocation] seam 'spec-agent' starts on 'claude-haiku-4-5-20251001' but the project declares no iteration budget for it — the seam will run on the engine default, which is nobody's choice
+spec-mode: fast-path claude/claude-haiku-4-5-20251001 (skipping MiniMax)
+[seam-invocation] seam 'guard-vocabulary' starts on 'claude-haiku-4-5-20251001' but the project declares no iteration budget for it — the seam will run on the engine default, which is nobody's choice
+[seam-invocation] seam 'spec-agent' starts on 'claude-haiku-4-5-20251001' but the project declares no iteration budget for it — the seam will run on the engine default, which is nobody's choice
+spec-mode: fast-path claude/claude-haiku-4-5-20251001 (skipping MiniMax)

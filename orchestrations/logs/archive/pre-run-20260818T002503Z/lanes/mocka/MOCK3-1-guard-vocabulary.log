@@ -1,0 +1,88 @@
+# Prompt
+You are the Guard Vocabulary Agent for the epam-cli orchestration pipeline.
+
+A deterministic guard is about to check a set of statements against a RULE. Your sole job is to derive, for THIS story, the concrete terms that would VIOLATE that rule — and the terms that name its legitimate observable surface. The guard holds no vocabulary of its own; it applies exactly what you return, and nothing else.
+
+## Why you exist
+
+Every guard in this pipeline used to carry a hardcoded list of terms, each list reverse-engineered from a single past incident. A list catches that one incident and nothing else, while reporting "clean" forever — which is worse than no guard, because it converts "unchecked" into "checked" and nobody looks again. You replace those lists. If you answer badly, the guard is blind; if you answer well, it catches violations nobody has seen yet.
+
+## Your inputs
+
+1. THE RULE — a principle stating what it means to violate this guard. It names no domain, no product and no past incident. It is the only definition of correctness you are given.
+2. THE STATEMENTS — the items the guard will check (for example, a story's verification criteria or acceptance criteria).
+3. CODE EVIDENCE — real findings from the repository: files, functions, symbols, and the reasoning that located them. This is ground truth.
+4. STORY CONTEXT — the ticket's title and description.
+
+## Your process
+
+1. Read the rule and restate to yourself, in one sentence, what distinguishes a violating statement from a compliant one. Everything you return must trace to that sentence.
+2. Read the CODE EVIDENCE and identify the implementation vocabulary of this story: the symbols, functions, SDK entry points, internal structures and configuration keys that describe HOW the behaviour is produced. These come from the evidence, never from the ticket prose and never from your own knowledge of the technology.
+3. Read the STORY CONTEXT and identify the observable surface: what an end user or tester perceives. That is the whitelist.
+4. Emit both lists.
+
+## Hard requirements
+
+- DERIVE FROM THE EVIDENCE. Every blacklist term must be traceable to a symbol, file, function or structure present in the supplied code evidence, or to a construction verb present in the statements themselves. Do not contribute terms from your general knowledge of a library, framework or vendor: that is how an agent invents a signature that does not exist.
+- NEVER include a term that names the observable surface. If a term describes what a user sees, it belongs in the whitelist, even when it also appears in code.
+- PREFER THE SPECIFIC. a term naming ONE identifiable thing is useful; a generic category word is not — it will fire on unrelated statements and train people to ignore the guard.
+- WHOLE TERMS ONLY. Return terms as they would appear in a sentence. Do not return regular expressions, wildcards or fragments.
+- LOWERCASE every term.
+- The whitelist WINS. A term appearing in both lists is treated as observable and never flagged, so do not rely on the blacklist to override it.
+- If the rule genuinely admits no violating vocabulary for this story, return an empty blacklist. Do not pad it. An empty list is a real answer and is reported as such — it is not treated as success.
+
+## Verifying a term against the index
+
+At some seams you are given a real CodeGraph index of the repository and the command to
+query it. When you are, USE IT — do not assert that a term is meaningful, check it. A
+candidate that resolves to nothing in the index is noise and belongs in the blacklist,
+however unusual or technical the word looks. A candidate that resolves to real symbols is
+evidence-backed and can be trusted.
+
+Be aware of what your list feeds. Where the consumer is a BM25/IDF ranker, that ranker
+DEMOTES terms which are common in the corpus and AMPLIFIES terms which are rare. A rare but
+meaningless token — a bracketed brand tag, a ticket label, a person's name, a status word —
+is therefore not diluted by the ranker; it is promoted to a top discriminator and drags the
+search away from the real code. Rarity is not signal. Mistaking the two is the specific
+failure you exist to prevent, so when a term is unusual AND resolves to nothing, blacklist
+it with confidence.
+
+When no index is available to you, say what you can support from the evidence you were
+given and no more. An honest short list beats a padded one: every term you return is
+applied deterministically, and a wrong term is enforced as rigorously as a right one.
+
+## Output
+
+Call the submit_guard_vocabulary tool. Structured output only. Do not answer in prose, do not wrap the call in commentary, and do not explain your reasoning outside the per-term reason fields. A prose answer is discarded in full and the guard is left with nothing to apply.
+
+GUARD SEAM: verification-criteria
+
+THE RULE THIS GUARD ENFORCES:
+A verification criterion states WHAT AN END USER OR TESTER OBSERVES on the user-facing surface THE TICKET IS ABOUT — the rendered output for an output ticket, the displayed screen for a UI ticket, the response a CLIENT receives for an API ticket. It is a BLACK-BOX check on that surface. It NEVER describes HOW the value is produced.
+A verification criterion is FORBIDDEN if it:
+- prescribes HOW to implement — any algorithm, mechanism, approach, or the addition/reading of any new field, flag or service;
+- references an INTERNAL structure that merely FEEDS the ticket's surface — an intermediate payload, a data-transfer object, or a specific response field used to BUILD the output. Verify the surface the ticket names, NOT the data structure behind it;
+- makes a CROSS-COMPARISON that presumes a mechanism — never assert one value "must equal" / "matches" / "is the same as" another; that presumes a shared derivation. Assert the required value is present and correct ON ITS OWN.
+Every verification criterion must be observable, testable, and tied to the ticket's stated symptom/intent.
+
+THE STATEMENTS THE GUARD WILL CHECK:
+1. fareFor returns 175 (CONCESSION_FARE_CENTS) when called with a rider whose age is 65 and hasPass is false
+2. fareFor returns 350 (BASE_FARE_CENTS) when called with a rider whose age is 64 and hasPass is false
+3. fareFor returns 175 (CONCESSION_FARE_CENTS) when called with a rider whose age is 8 and hasPass is false
+4. fareFor returns 0 when called with a rider whose age is 30 and hasPass is true
+5. fareFor returns 350 (BASE_FARE_CENTS) when called with a rider whose age is 30 and hasPass is false
+
+DECLARED MANIFEST (the files this story says it will touch):
+- (none declared)
+
+CODE EVIDENCE (real findings from this repository — ground truth; derive from these, not from your own knowledge of any library):
+- src/fares.ts :: fareFor — fareFor is the sole function that computes a rider's fare. The senior-boundary comparison on line 10 uses a strict greater-than (>) instead of greater-than-or-equal (>=), so a rider aged exactly 65 falls through to the BASE_FARE_CENTS return on line 12. This is the single site that PRODUCES the wrong fare value for age 65. The docstring on line 7 already states the intended rule ('Riders aged 65 AND OVER pay the concession fare'). The branching structure otherwise has no gaps: hasPass→0, age>=65→concession, age<13→concession, else→base covers all integers without overlap once >= is used. [existing helper: CONCESSION_FARE_CENTS]
+- test/fares.test.ts :: fareFor — The test suite already asserts the correct boundary behaviour: age 65 → CONCESSION_FARE_CENTS (line 18), age 64 → BASE_FARE_CENTS (line 22). Age 66 is absent (only age 70 covers 'well past'). Age 13 (the child/adult boundary) is also absent — only age 8 covers children. The existing assertions are correct and need no edit; they will turn from failing to passing once the operator in src/fares.ts is fixed.
+
+STORY CONTEXT:
+Title: Riders aged exactly 65 are charged the adult fare
+Description: The fare rules say riders aged 65 and over pay the concession fare. A rider aged exactly 65 is charged the full adult fare of 350 cents instead of 175. Riders aged 66 and above are charged correctly, so the boundary itself is wrong rather than the rule.
+
+
+# Output
+{ "blacklist": [ { "reason": "Internal named constant (value 175) that defines the concession fare in code; the observable surface is the value 175 cents, not the constant symbol. Referencing it leans on implementation structure rather than the rendered fare." , "term": "concession_fare_cents" }, { "reason": "Internal named constant (value 350) that defines the base/adult fare in code; the observable surface is the value 350 cents. Naming the constant describes HOW the value is defined internally, not what the rider is charged." , "term": "base_fare_cents" }, { "reason": "Names the specific comparison operator that must be changed to fix the bug; prescribing this is prescribing the implementation mechanism (the fix), not an observable fare outcome." , "term": "greater-than-or-equal" }, { "reason": "Names the current (incorrect) comparison operator on line 10 of src/fares.ts; referencing it describes the implementation mechanism, not the observable fare charged to the rider." , "term": "greater-than" }, { "reason": "Describes the internal control-flow structure of fareFor (the if/else branches); a verification criterion must state the observed fare, not the branching logic that produces it." , "term": "branching" }, { "reason": "References the internal code comment on line 7 of src/fares.ts; a verification criterion must describe observable fare behaviour, not the source documentation." , "term": "docstring" } ], "whitelist": [ { "reason": "The sole API entry point a client/tester calls to obtain a fare; for this library ticket the function IS the user-facing surface, and 'returns X' is the observable response." , "term": "farefor" }, { "reason": "The observable quantity the ticket is about — the fare charged to a rider, expressed in cents." , "term": "fare" }, { "reason": "The input entity whose attributes determine the fare; specifying the rider and their attributes is a black-box test condition, not an implementation detail." , "term": "rider" }, { "reason": "An input attribute of the rider that determines the fare; specifying it is a test condition on the observable input surface." , "term": "age" }, { "reason": "An input attribute of the rider (whether they hold a pass) that determines the fare; specifying it is a test condition on the observable input surface." , "term": "haspass" }, { "reason": "The observable action describing the fare value a caller receives; 'fareFor returns 175' is a black-box assertion on the API response." , "term": "returns" }, { "reason": "An observable fare value (concession fare in cents) that a tester can verify directly on the API response." , "term": "175" }, { "reason": "An observable fare value (base/adult fare in cents) that a tester can verify directly on the API response." , "term": "350" }, { "reason": "An observable fare value (pass-holder fare in cents) that a tester can verify directly on the API response." , "term": "0" }, { "reason": "A user-facing fare concept (the reduced fare for eligible riders); distinct from the internal constant CONCESSION_FARE_CENTS." , "term": "concession" }, { "reason": "A user-facing fare concept (the full fare for adult riders) named in the ticket title; distinct from the internal constant BASE_FARE_CENTS." , "term": "adult" }, { "reason": "The unit in which the observable fare value is expressed; part of the observable surface description." , "term": "cents" } ] }

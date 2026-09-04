@@ -1,0 +1,32 @@
+# Prompt
+Assign an implementation agent role to every story below.
+
+AVAILABLE ROLES — these are this project's own engineering roles. Choose from these and
+nothing else; the name you return must match one of them verbatim:
+- contentstack-live-preview-sdk-engineer
+    You are a frontend engineer implementing Contentstack Live Preview SDK configuration across three Next.js codelines: gotransit, upexpress, and metrolinx. All three declare contentstack and @contentstack/utils as dependencies but none currently declare @contentstack/live-preview-utils — you must add it to each codeline's package.json and install it. Your responsibilities: 1. Locate each codeline's 
+- contentstack-live-preview-wiring-engineer
+    You are a frontend engineer wiring Contentstack Live Preview into page-level data fetching across three Next.js codelines: gotransit, upexpress, and metrolinx. All three use SWR for data fetching and the contentstack Delivery SDK for CMS data. Your responsibilities: 1. In each codeline, locate the page components and data-fetching hooks that retrieve Contentstack data. Search for SWR usage pattern
+
+STORIES — a story listing more than one codeline needs ONE ASSIGNMENT PER CODELINE:
+- AMSD-2041: [GO, UP, MX] Live Preview of Content in CMS
+    codelines (assign one role for EACH): gotransit, upexpress, metrolinx
+    Original Requirements (discovery) AS a Content Author, I WANT to preview draft entries in CMS, SO THAT I can see how content will be shown on the website ability to preview draft entries in CMS Notes& Assumptions Limitation: Might not be possible to preview protected pages and content. Original Total Estimate: 8 Original FE Estimate: 8 Original DAM Estimate: 0 Original BE Estimate: 0
+
+Pick the role whose stated expertise actually covers the work the story describes. If two
+roles could plausibly own a story, prefer the one whose brief names the surface the story
+touches. Every story must be assigned exactly one role.
+
+THE OWNER MUST AUTHOR THE CODE. Assign the role that will EDIT THE FILES this story changes —
+the one whose brief names those files or directories. A role whose brief is about settings in
+a vendor's console, or about documentation, cannot deliver a story here: the agent's output is
+a change in a repository. Live 2026-08-07: this story went to the one role of three that owned
+no source files, and all such a role can produce is a configuration note. Where the story needs
+both console configuration and code, the code owner is the assignee.
+
+# Output
+{"assignments": [
+{"agentRole": "contentstack-live-preview-wiring-engineer", "codeline": "gotransit", "reason": "The story delivers visible draft-entry preview on the website. That surface is page-level data fetching — SWR hooks and page components that retrieve Contentstack data — which is exactly the wiring engineer's brief. The SDK engineer's scope (package.json, install, SDK config) is a prerequisite step, not the feature surface; the story's user value ('see how content will be shown on the website') is realized only when live preview is wired into the data-fetching layer that renders pages. Per the tie-breaker, the role whose brief names the surface the story touches (page components, data-fetching hooks) wins over the role whose brief names setup/configuration files.", "storyId": "AMSD-2041"},
+{"agentRole": "contentstack-live-preview-wiring-engineer", "codeline": "upexpress", "reason": "Same rationale as gotransit: the story's deliverable is on-page draft preview, which is delivered through SWR data-fetching hooks and page components wired to Contentstack — the wiring engineer's named surface. SDK installation/config is supporting work, not the feature surface the story describes.", "storyId": "AMSD-2041"},
+{"agentRole": "contentstack-live-preview-wiring-engineer", "codeline": "metrolinx", "reason": "Same rationale as gotransit and upexpress: the story enables content authors to preview draft entries on the website, which requires wiring live preview into page-level data fetching (SWR hooks, page components). The wiring engineer's brief names exactly that surface; the SDK engineer's brief names package.json/install, which is prerequisite but not the story's user-facing deliverable.", "storyId": "AMSD-2041"}
+]}

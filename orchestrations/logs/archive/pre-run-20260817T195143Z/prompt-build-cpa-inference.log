@@ -1,0 +1,95 @@
+# Prompt
+You are specialising ONE generic agent prompt for ONE specific project. You are the same agent that just minted this project's roles, so you already know what this project is and who will work on it.
+
+## The template you must specialise
+
+Its id is cpa-inference and its purpose is: Ask the estimator for an iteration count, given the story and everything known about it.
+
+Everything between the two markers below is the template, verbatim. The markers are not
+part of it. A code fence cannot delimit this: several templates contain fences of their
+own, so the first closing fence would truncate the body mid-instruction.
+
+-----BEGIN TEMPLATE BODY-----
+__SYSTEM_PROMPT__
+
+---
+
+__SECTIONS__
+
+---
+
+Respond with ONLY the JSON object as specified in your instructions. No prose, no markdown fences.
+-----END TEMPLATE BODY-----
+
+## What this project is
+
+Project config: /home/bradleyjerome/projects/ai/epam-cli/orchestrations/projects/mock3
+Tickets in scope: MOCK3-1: Riders aged exactly 65 are charged the adult fare | MOCK3-2: The departure board omits the final stop
+
+Codelines in scope and their declared dependencies:
+- mocka (/home/bradleyjerome/projects/mock3/mock-a) deps: vitest, typescript
+- mockb (/home/bradleyjerome/projects/mock3/mock-b) deps: vitest, typescript
+
+The roles you minted for this project:
+- typescript-logic-engineer [implementer] — Both codelines declare only vitest and typescript, and both tickets are small operator-bound fixes in TypeScript source modules, so a single implementer spanning the shared stack avoids minting near-duplicate roles.
+- mocka-fares-investigator [investigator] — MOCK3-1 is a boundary bug in mocka's fare logic, and an investigator that knows where mocka's fare modules live and how its comparisons are structured can tell the implementer exactly what to change without the implementer hunting blind.
+- mockb-schedule-investigator [investigator] — MOCK3-2 is a loop-bound bug in mockb's stop-rendering logic, and an investigator that knows mockb's schedule module layout and what else consumes formatStops can prevent the implementer from breaking a dependent caller.
+
+## The one rule you cannot break
+
+The template's placeholders are a CONTRACT with the pipeline. Each token written in SCREAMING_SNAKE_CASE between double underscores is replaced at run time with real evidence — a diff, a ticket, a test log, a plan. The substitution is BY NAME and it is strict in both directions.
+
+- Reproduce every placeholder EXACTLY as it appears, character for character.
+- NEVER add or invent a placeholder. Nothing supplies a name the pipeline does not know, so rendering throws and the run dies at the seam that needed this prompt.
+- NEVER remove or rename one. The evidence it carries would silently never reach the agent, and the agent would answer without it.
+- Do not move a placeholder into a code fence, a quote, or an example where it would read as literal text.
+
+The placeholders in this template are exactly: __SECTIONS__, __SYSTEM_PROMPT__
+
+## What specialising means
+
+Keep the template's instructions, its output format, its prohibitions and its reasoning intact. They encode failures this pipeline has already paid for. You are not rewriting the prompt or improving its wording.
+
+Add only what a competent engineer joining THIS project would need and could not infer from the generic text:
+- the conventions, layout and idioms this codebase actually uses
+- the commands this project runs to build, test and type-check
+- the traps this stack presents that a generic prompt would not warn about
+
+Ground every addition in the project context above. If the context does not tell you something, say nothing about it — an invented convention is worse than a missing one, because the agent will follow it.
+
+Do not name a file, symbol, package or command that does not appear in the context you were given.
+
+## How to answer
+
+Emit ONLY the specialised prompt body as TEXT, directly in your reply. No JSON wrapper, no markdown fences around the whole thing, no commentary before or after, and do not write it to a file — the pipeline reads your reply text.
+
+# Output
+__SYSTEM_PROMPT__
+
+---
+
+## Project context for estimation
+
+This project has two codelines, both TypeScript with vitest, both using ES2022 modules and `strict: true` in tsconfig. Each codeline has a single source module under `src/` and a single test file under `test/`.
+
+**Build / test / type-check commands (identical in both codelines):**
+- `npm test` — runs `vitest run` (single pass, no watch)
+- `npm run build` — runs `tsc --noEmit` (type-check only, no output emitted)
+- No lint step is configured (`npm run lint` echoes a placeholder)
+
+**Tickets in scope:**
+
+- **MOCK3-1 (mocka codeline, `src/fares.ts`):** Riders aged exactly 65 are charged the adult fare instead of the concession fare. The bug is a boundary comparison: `fareFor` uses `rider.age > 65` where it should use `>=`. The fix is a single operator change. The existing test suite covers ages 8, 30, and 70 but does **not** assert the behaviour at exactly 65, so a new test case at the boundary will likely be needed to confirm the fix and prevent regression.
+
+- **MOCK3-2 (mockb codeline, `src/schedule.ts`):** The departure board omits the final stop. `formatStops` loops with `i < stops.length - 1`, which skips the last element. The fix is changing the loop bound to `i < stops.length`. The existing tests assert that the output contains an arrow and names the first stop, but do **not** assert that the last stop appears, so a test verifying the final stop is rendered will likely be needed. Note that `totalMinutes` already reads `stops[stops.length - 1]` and is unaffected.
+
+**Estimation guidance:**
+Both fixes are single-operator changes in one-line conditions within small, self-contained modules. Each likely requires one additional test case at the boundary. There are no cross-module dependencies, no shared state, and no async logic. When estimating iterations, consider: the investigator's findings may already identify the exact line and operator, the implementer must add a boundary test, and `npm test` plus `npm run build` must both pass before the iteration is complete.
+
+---
+
+__SECTIONS__
+
+---
+
+Respond with ONLY the JSON object as specified in your instructions. No prose, no markdown fences.

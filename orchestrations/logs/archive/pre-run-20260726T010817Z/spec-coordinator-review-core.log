@@ -1,0 +1,100 @@
+# Prompt
+You are the specification coordinator for the epam-cli orchestration system. Before every phase you read orchestrations/prd.json (implementationOrder and stories), evaluate risk, dependencies, and technical readiness, then assign the correct specification runners: OpenSpec, Speckit, both, or none. You write assignments into each story's specification.assignedAgents field along with coordinatorNotes, target provider/model, and timestamps. You understand the provider policy ledger (configuration.aiRuntime.providerPolicies), token guardrails, and know when to skip stories that were already hand-curated. When you plan a run you emit JSON compliant with spec-mode-runner.js so that automation can apply deltas deterministically. You never invent story IDs or mutate acceptance criteria directly; only delegate to spec agents and record their status.
+
+You are the EPAM CLI specification coordinator reviewing the completed spec outputs for phase core.
+
+Each story was processed by a sequential agent pipeline:
+  1. openspec elaborated requirements (AC refinement, story splits, technical depth)
+  2. speckit reviewed openspec's output (testability, security, edge cases, gap analysis)
+
+For each story, evaluate the quality of the collaborative spec work:
+1. Did both agents add meaningful, non-overlapping value?
+2. Are the acceptance criteria complete, testable, and non-overlapping?
+3. Are story splits logical and properly scoped?
+4. Flag any story needing human review.
+
+Respond with JSON between <SPEC_REVIEW> and </SPEC_REVIEW> using this schema:
+[
+  {"storyId":"REM-xxx","verdict":"approved|needs_review","reviewNotes":"coordinator observations","qualityScore":0.0-1.0,"flags":[]}
+]
+
+Stories to review:
+[
+  {
+    "id": "AMSD-1820",
+    "title": "[Mozio] - The Promo code amount is NOT displayed as expected for Return trip tickets in the Mozio email confirmation",
+    "acceptanceCriteria": [],
+    "specification": {
+      "runId": "20260726T003122Z",
+      "assignedAgents": [
+        "openspec",
+        "speckit"
+      ],
+      "coordinatorNotes": "",
+      "status": "completed",
+      "updatedAt": "2026-07-26T00:34:49.919Z",
+      "appliedAgents": [
+        "openspec",
+        "speckit"
+      ],
+      "agentContributions": [
+        {
+          "agent": "openspec",
+          "applied": true,
+          "notes": "Defect: promo code/discount amount is incorrect for return-trip Mozio tickets in the email confirmation. The return-trip mapping path in create-reservations.mappers.ts swaps from/to stations but likely does not correctly propagate or compute the discount amount for the return dispatch, and map-to-sanitized-mozio-dispatch passes the discount through as-is from the dispatch report — so the root cause is upstream in how the return-trip dispatch discount is populated.",
+          "acceptanceChanged": false,
+          "splitCount": 0,
+          "timestamp": "2026-07-26T00:34:26.119Z"
+        },
+        {
+          "agent": "speckit",
+          "applied": true,
+          "notes": "Openspec provided empty acceptance criteria with only a root-cause note. I created all criteria from scratch based on the defect description and the technical file references. AC-1 through AC-3 cover the core regression (one-way correct, outbound correct, return leg correct — the bug). AC-4 addresses cross-contamination between legs with different discounts. AC-5 targets the return-trip mapper's station-swap logic and its interaction with discount propagation (the likely root cause per openspec's note). AC-6 covers the zero/null discount edge case. AC-7 and AC-8 target the two other files in the chain (map-to-sanitized-mozio-dispatch and apply-report-discounts) to ensure the discount flows correctly through the entire pipeline for return trips.",
+          "acceptanceChanged": false,
+          "splitCount": 0,
+          "timestamp": "2026-07-26T00:34:49.919Z"
+        }
+      ]
+    },
+    "splitChildren": []
+  }
+]
+
+<SPEC_REVIEW>
+</SPEC_REVIEW>
+
+# Output
+Looking at the story provided, I need to evaluate the collaborative spec work between openspec and speckit.
+
+**AMSD-1820 Analysis:**
+
+1. **Both agents add meaningful, non-overlapping value?**
+   - OpenSpec provided a root-cause analysis identifying the return-trip mapping path in `create-reservations.mappers.ts` as the likely source of the discount propagation bug. However, it left acceptance criteria empty — a significant gap.
+   - Speckit compensated by creating all 8 acceptance criteria from scratch, leveraging OpenSpec's technical root-cause note to target the correct files and logic paths. Speckit covered the regression cases, cross-contamination, edge cases (zero/null), and the full pipeline chain.
+   - Value is non-overlapping: OpenSpec = root-cause investigation; Speckit = criteria authoring + gap-filling. But OpenSpec's contribution is thin — it should have at least proposed draft ACs.
+
+2. **Acceptance criteria complete, testable, non-overlapping?**
+   - Based on Speckit's notes, the 8 ACs appear well-structured: core regression (one-way, outbound, return), cross-contamination, root-cause mapper logic, edge cases, and downstream pipeline files. This is comprehensive and testable.
+
+3. **Story splits logical?**
+   - No splits were proposed (splitCount: 0). For a single defect fix, this is appropriate.
+
+4. **Flags:**
+   - OpenSpec produced empty ACs — this is a quality concern for the openspec agent, though Speckit recovered well.
+   - The final ACs are not visible in the story data (acceptanceCriteria: []), which means either they were written elsewhere or not persisted. This needs verification.
+
+<SPEC_REVIEW>
+[
+  {
+    "storyId": "AMSD-1820",
+    "verdict": "needs_review",
+    "reviewNotes": "Speckit did heavy lifting creating all 8 ACs from scratch after OpenSpec left acceptance criteria empty. OpenSpec's root-cause note (identifying return-trip mapper station-swap and discount propagation in create-reservations.mappers.ts) was valuable but insufficient — openspec should have produced draft ACs. Speckit's criteria appear comprehensive (regression coverage, cross-contamination, edge cases, full pipeline chain), but the acceptanceCriteria array in the story record is still empty — the generated criteria may not have been persisted back to the story object. Human should verify ACs are actually stored and review their content before implementation. No splits needed for a single defect fix.",
+    "qualityScore": 0.72,
+    "flags": [
+      "openspec_produced_empty_acceptance_criteria",
+      "acceptance_criteria_not_persisted_to_story_record",
+      "speckit_compensated_for_openspec_gap"
+    ]
+  }
+]
+</SPEC_REVIEW>

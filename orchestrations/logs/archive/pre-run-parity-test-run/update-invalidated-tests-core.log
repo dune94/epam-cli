@@ -1,0 +1,17 @@
+[update-invalidated-tests] suite is RED after the fix — deciding whether the failures are invalidated expectations or a real regression
+[update-invalidated-tests] BLOCKED — suite still RED after the update attempt (the fix or the update is wrong)
+          297 |   });
+    
+          at toHaveTextContent (src/components/TripFares/__tests__/TripFaresContainer.spec.tsx:294:23)
+              at Array.forEach (<anonymous>)
+          at forEach (src/components/TripFares/__tests__/TripFaresContainer.spec.tsx:287:16)
+          at runWithExpensiveErrorDiagnosticsDisabled (node_modules/@testing-library/dom/dist/config.js:47:12)
+          at checkCallback (node_modules/@testing-library/dom/dist/wait-for.js:127:77)
+          at node_modules/@testing-library/dom/dist/wait-for.js:70:9
+    
+    
+    Test Suites: 3 failed, 743 passed, 746 total
+    Tests:       5 failed, 4 skipped, 21 todo, 3359 passed, 3389 total
+    Snapshots:   19 passed, 19 total
+    Time:        74.114 s, estimated 217 s
+    Ran all test suites.

@@ -1,0 +1,6 @@
+spec-mode: MOCK-HW-1 — 1 verification criteria persisted (source: description, resolution: clean)
+spec-mode: MOCK-HW-1 — 2 verification criteria persisted (source: description, resolution: regenerated)
+spec-mode: parent MOCK-HW-1 ACs redistributed → delegated to MOCK-HW-1-impl, MOCK-HW-1-test
+spec-mode: wired MOCK-HW-1-test.dependencies -> [MOCK-HW-1-impl] (deterministic sibling match, createdFrom=MOCK-HW-1)
+spec-mode: LLM model review completed for 0 stories
+spec-mode: completed for phase core (run 20260726T212458Z)

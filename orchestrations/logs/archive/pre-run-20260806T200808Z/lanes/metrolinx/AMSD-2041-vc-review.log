@@ -1,0 +1,33 @@
+# Prompt
+You are a STRICT verification-criteria reviewer for a brownfield fix. REVIEW ONLY — do NOT rewrite anything.
+
+Acceptance criteria (IMMUTABLE ticket intent):
+- (none)
+Description: Original Requirements (discovery)  AS a Content Author, I WANT to preview draft entries in CMS, SO THAT I can see how content will be shown on the website
+ability to preview draft entries in CMS
+Notes& Assumptions  Limitation: Might not be possible to preview protected pages and content.
+Original Total Estimate:  8  Original FE Estimate:  8  Original DAM Estimate:  0  Original BE Estimate:  0
+
+Proposed verification criteria:
+1. Given the Contentstack client is mocked to return a draft entry containing unpublished changes (e.g., a modified page title and body), when a content author triggers live preview from CMS, the rendered page displays the unpublished title and body from that draft entry.
+2. When no preview signal is present in the page request, the rendered page displays the published version of the content exactly as it currently does — existing page rendering is unchanged.
+3. Given the Contentstack client is mocked, when a live preview is triggered for a page entry, the request our application sends to Contentstack includes the live_preview hash, content_type_uid, and entry_uid parameters.
+4. Given the Contentstack client is mocked to return a draft entry for a GO-branded page, the rendered page displays the draft content with GO branding and styling intact; the same holds for UP-branded and MX-branded pages.
+5. When live preview is attempted on a protected page, the page does not crash or display an unhandled error — the user is informed that preview is unavailable for that page, or the page renders gracefully within the stated limitation.
+6. Given the Contentstack client is mocked to return a draft entry, when the content author navigates between pages during a live preview session, the preview state persists across page navigations within that session until the preview signal is no longer present.
+
+Apply these rules EXACTLY (the producer is held to the same text — do not invent stricter or looser criteria):
+A verification criterion states WHAT AN END USER OR TESTER OBSERVES on the user-facing surface THE TICKET IS ABOUT — the rendered output for an output ticket, the displayed screen for a UI ticket, the response a CLIENT receives for an API ticket. It is a BLACK-BOX check on that surface. It NEVER describes HOW the value is produced.
+A verification criterion is FORBIDDEN if it:
+- prescribes HOW to implement — any algorithm, mechanism, approach, or the addition/reading of any new field, flag or service;
+- references an INTERNAL structure that merely FEEDS the ticket's surface — an intermediate payload, a data-transfer object, or a specific response field used to BUILD the output. Verify the surface the ticket names, NOT the data structure behind it;
+- makes a CROSS-COMPARISON that presumes a mechanism — never assert one value "must equal" / "matches" / "is the same as" another; that presumes a shared derivation. Assert the required value is present and correct ON ITS OWN.
+Every verification criterion must be observable, testable, and tied to the ticket's stated symptom/intent.
+
+FLAG any verification criterion that violates ANY rule above, OR that fails to cover the intent of an acceptance criterion.
+Output ONLY a JSON array of short flag strings, e.g. ["VC 2 prescribes halving — restate as observable outcome"]. Output [] if every VC is clean. No prose, no markdown.
+
+# Output
+```json
+["VC 1 prescribes mocking the Contentstack client and cross-compares with 'that draft entry' — restate as observable draft content on the rendered page without specifying the mechanism or cross-reference","VC 2 references internal 'preview signal' and cross-compares with current rendering — restate as observable published content when no preview is active, without naming the internal flag or cross-comparing","VC 3 verifies internal API request parameters (live_preview hash, content_type_uid, entry_uid) rather than the user-facing rendered output — remove or restate as observable surface behavior","VC 4 prescribes mocking the Contentstack client — restate as observable draft content rendered with correct branding, without specifying the mechanism","VC 6 prescribes mocking, references internal 'preview signal' and 'preview state' — restate as observable draft content persisting across navigations, without naming internal structures"]
+```

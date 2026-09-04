@@ -1,0 +1,17 @@
+[update-invalidated-tests] suite is RED after the fix — deciding whether the failures are invalidated expectations or a real regression
+[update-invalidated-tests] BLOCKED — suite still RED after the update attempt (the fix or the update is wrong)
+        > 91 |   it("should add station to favorites", async () => {
+             |   ^
+          92 |     updateUserDetailsMock.mockResolvedValue({
+          93 |       response: {
+          94 |         user: userMock,
+    
+          at it (src/components/FavoriteStationWrapper/__tests__/FavoriteStationWrapper.spec.tsx:91:3)
+          at Object.describe (src/components/FavoriteStationWrapper/__tests__/FavoriteStationWrapper.spec.tsx:80:1)
+    
+    
+    Test Suites: 4 failed, 742 passed, 746 total
+    Tests:       13 failed, 4 skipped, 21 todo, 3351 passed, 3389 total
+    Snapshots:   19 passed, 19 total
+    Time:        95.201 s
+    Ran all test suites.

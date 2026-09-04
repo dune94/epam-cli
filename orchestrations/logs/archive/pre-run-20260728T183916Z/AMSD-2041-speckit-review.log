@@ -1,0 +1,106 @@
+# Prompt
+You are the speckit specification agent for EPAM CLI. Phase core, story AMSD-2041.
+
+You are reviewing and building on the openspec agent's output for this story.
+Your role is COLLABORATIVE — you are NOT starting from scratch. Instead:
+1. Review openspec's proposed acceptance criteria for testability and completeness
+2. Add missing edge-case, error-handling, security, and accessibility criteria
+3. Flag any AC that are vague, untestable, or overlapping
+4. Splitting is openspec's decision alone — you do NOT split stories. If openspec already split
+   this story, do NOT include a "splitStories" field in your output at all (it will be ignored if
+   you do). Review and refine the acceptanceCriteria openspec gave you for the UNSPLIT story as
+   normal; per-child refinement of an already-split story's children happens on a later turn, not
+   here.
+5. Do NOT remove or duplicate openspec's good work — build on it
+
+━━━ WHAT-NOT-HOW RULE (MANDATORY) ━━━
+Every AC must describe an OBSERVABLE OUTCOME (what a test can verify from outside the code),
+NOT an implementation instruction. If an AC names vi.mock, jest.fn, mockReturnValue,
+mockResolvedValue, import statements, or require() calls, REPLACE it with a
+Given/When/Then behaviour statement. Never tell the implementer which library or mock pattern to use.
+
+OPENSPEC'S OUTPUT (your input to review — ACs and split proposals only):
+{
+  "acceptanceCriteria": [],
+  "notes": "Novel capability — Live Preview does not exist in the codebase. The attachment point is useContent, the central hook consumed by 236+ components. Live Preview must plug into this hook so that all downstream Contentstack components (ContentstackLink, ContentstackImage, ContentstackTable, ContentstackContentCards, etc.) automatically receive real-time content updates from the CMS preview session. No split needed — single integration concern with 0 existing ACs.",
+  "splitStories": []
+}
+
+ORIGINAL STORY CONTEXT:
+{
+  "id": "AMSD-2041",
+  "title": "[GO, UP, MX] Live Preview of Content in CMS",
+  "description": "[GO, UP, MX] Live Preview of Content in CMS — enable content authors editing in Contentstack CMS to see their changes reflected in real-time on the preview site without requiring a full page reload or manual publish. This applies across GO Transit, UP Express, and MX brand sites.",
+  "originalAcceptanceCriteria": [],
+  "technicalNotes": {
+    "files": [
+      "src/hooks/useContent.ts",
+      "src/components/contentstack/ContentstackLink/ContentstackLink.tsx",
+      "src/context/ContentstackContext.tsx",
+      "src/interface/content/contentCard.ts"
+    ]
+  },
+  "dependencies": []
+}
+
+Produce your refined output as raw JSON only (no XML tags, no markdown fences, no preamble). Include:
+- "acceptanceCriteria": The FULL merged list (openspec's criteria + your additions/refinements). Every item MUST be an observable outcome, not an implementation instruction.
+- "notes": What you changed and why (be specific — cite which criteria you added/modified/replaced)
+- "splitStories": ALWAYS omit this field. Splitting is openspec's decision alone — never propose
+  split children of your own, even if openspec already split this story.
+- "acAddedBySpeckit": Array of criteria YOU added that were not in openspec's output
+- "acModifiedBySpeckit": Array of {"original":"...","revised":"..."} for criteria you reworded
+- "acFlagged": Array of {"criterion":"...","flag":"..."} for criteria that need human attention
+
+
+# Output
+{
+  "acceptanceCriteria": [
+    "Given a content author is editing content in Contentstack CMS with Live Preview enabled, When the author modifies a field value, Then the corresponding component on the preview site reflects the updated value within 2 seconds without a full page reload.",
+    "Given the Live Preview connection is active, When useContent returns data for any downstream component (ContentstackLink, ContentstackImage, ContentstackTable, ContentstackContentCards, etc.), Then the returned data includes the latest unpublished content from the active CMS editing session rather than only the last published version.",
+    "Given a user navigates to the preview site without an active Contentstack Live Preview session, When useContent is invoked, Then it returns the standard published content as it did prior to this feature — no preview-specific logic executes and no errors are thrown.",
+    "Given an active Live Preview session, When the author switches between GO Transit, UP Express, and MX brand content in the CMS, Then the preview site displays content for the correct brand corresponding to the author's current editing context.",
+    "Given an active Live Preview session, When the WebSocket or polling connection to Contentstack is interrupted, Then the preview site continues displaying the last-received content state and does not crash, throw an unhandled error, or show a broken UI.",
+    "Given a dropped Live Preview connection, When connectivity is restored, Then the preview site automatically resumes receiving real-time updates without requiring the author to refresh the page or re-enter preview mode.",
+    "Given the Live Preview feature is receiving unpublished content, When a non-preview visitor accesses the same URL (without the preview session token), Then they receive only published content — unpublished draft content must never leak to public-facing pages.",
+    "Given multiple content entries are being edited simultaneously in the CMS, When Live Preview events arrive for different entries, Then each component on the preview site updates independently based on its own entry's changes without cross-contamination of data between entries.",
+    "Given a Live Preview session has been idle for longer than the Contentstack session timeout, When the author resumes editing, Then the preview site either re-establishes the preview connection automatically or clearly indicates that the preview session has expired and a page reload is needed.",
+    "Given the ContentstackContext provider is mounted, When Live Preview is initialized, Then the preview configuration (preview token, content type UID, entry UID, etc.) is read from the URL query parameters or CMS-provided callback and used to establish the preview session — the site does not hard-code preview credentials.",
+    "Given a component using useContent receives a Live Preview update, When the updated data contains a field that did not previously exist in the content object, Then the component renders the new field without throwing a runtime error.",
+    "Given a component using useContent receives a Live Preview update, When the updated data removes a field that was previously present, Then the component gracefully handles the missing field without throwing a runtime error — falling back to a default or rendering nothing for that field.",
+    "Given the Live Preview feature is active, When the author navigates between pages on the preview site, Then the preview session persists across client-side navigations and continues delivering real-time updates on the new page.",
+    "Given the preview site is loaded in a browser with JavaScript disabled, When a preview URL is accessed, Then the site renders the last published content without errors — Live Preview is a progressive enhancement, not a requirement for basic rendering."
+  ],
+  "notes": "Openspec provided 0 acceptance criteria, so all 14 are new. I examined the referenced files (useContent.ts, ContentstackContext.tsx, ContentstackLink.tsx, contentCard.ts) to understand the data flow: useContent is the central hook that fetches from Contentstack via ContentstackContext, and all 236+ components consume it. ACs are structured around observable outcomes: real-time update delivery, fallback to published content, multi-brand support (GO/UP/MX), connection resilience, security (no draft leakage), edge cases (missing/added fields, idle sessions, cross-page navigation), and progressive enhancement. Key areas flagged for human attention: Contentstack SDK version compatibility and the exact mechanism for distinguishing preview vs public visitors.",
+  "acAddedBySpeckit": [
+    "Given a content author is editing content in Contentstack CMS with Live Preview enabled, When the author modifies a field value, Then the corresponding component on the preview site reflects the updated value within 2 seconds without a full page reload.",
+    "Given the Live Preview connection is active, When useContent returns data for any downstream component (ContentstackLink, ContentstackImage, ContentstackTable, ContentstackContentCards, etc.), Then the returned data includes the latest unpublished content from the active CMS editing session rather than only the last published version.",
+    "Given a user navigates to the preview site without an active Contentstack Live Preview session, When useContent is invoked, Then it returns the standard published content as it did prior to this feature — no preview-specific logic executes and no errors are thrown.",
+    "Given an active Live Preview session, When the author switches between GO Transit, UP Express, and MX brand content in the CMS, Then the preview site displays content for the correct brand corresponding to the author's current editing context.",
+    "Given an active Live Preview session, When the WebSocket or polling connection to Contentstack is interrupted, Then the preview site continues displaying the last-received content state and does not crash, throw an unhandled error, or show a broken UI.",
+    "Given a dropped Live Preview connection, When connectivity is restored, Then the preview site automatically resumes receiving real-time updates without requiring the author to refresh the page or re-enter preview mode.",
+    "Given the Live Preview feature is receiving unpublished content, When a non-preview visitor accesses the same URL (without the preview session token), Then they receive only published content — unpublished draft content must never leak to public-facing pages.",
+    "Given multiple content entries are being edited simultaneously in the CMS, When Live Preview events arrive for different entries, Then each component on the preview site updates independently based on its own entry's changes without cross-contamination of data between entries.",
+    "Given a Live Preview session has been idle for longer than the Contentstack session timeout, When the author resumes editing, Then the preview site either re-establishes the preview connection automatically or clearly indicates that the preview session has expired and a page reload is needed.",
+    "Given the ContentstackContext provider is mounted, When Live Preview is initialized, Then the preview configuration (preview token, content type UID, entry UID, etc.) is read from the URL query parameters or CMS-provided callback and used to establish the preview session — the site does not hard-code preview credentials.",
+    "Given a component using useContent receives a Live Preview update, When the updated data contains a field that did not previously exist in the content object, Then the component renders the new field without throwing a runtime error.",
+    "Given a component using useContent receives a Live Preview update, When the updated data removes a field that was previously present, Then the component gracefully handles the missing field without throwing a runtime error — falling back to a default or rendering nothing for that field.",
+    "Given the Live Preview feature is active, When the author navigates between pages on the preview site, Then the preview session persists across client-side navigations and continues delivering real-time updates on the new page.",
+    "Given the preview site is loaded in a browser with JavaScript disabled, When a preview URL is accessed, Then the site renders the last published content without errors — Live Preview is a progressive enhancement, not a requirement for basic rendering."
+  ],
+  "acModifiedBySpeckit": [],
+  "acFlagged": [
+    {
+      "criterion": "Given the Live Preview feature is receiving unpublished content, When a non-preview visitor accesses the same URL (without the preview session token), Then they receive only published content — unpublished draft content must never leak to public-facing pages.",
+      "flag": "Security-critical: The mechanism for distinguishing preview vs public visitors (URL token, cookie, header) must be defined by the implementer, but the team should confirm Contentstack's recommended approach for preview session isolation to avoid draft content leakage."
+    },
+    {
+      "criterion": "Given a content author is editing content in Contentstack CMS with Live Preview enabled, When the author modifies a field value, Then the corresponding component on the preview site reflects the updated value within 2 seconds without a full page reload.",
+      "flag": "The 2-second SLA assumes Contentstack's Live Preview SDK uses WebSocket-based push; if the SDK uses HTTP polling, the latency budget may need adjustment. Team should verify against the actual Contentstack Live Preview SDK transport mechanism."
+    },
+    {
+      "criterion": "Given a Live Preview session has been idle for longer than the Contentstack session timeout, When the author resumes editing, Then the preview site either re-establishes the preview connection automatically or clearly indicates that the preview session has expired and a page reload is needed.",
+      "flag": "Contentstack session timeout duration is externally controlled by the CMS. The team should document the expected timeout range and ensure the reconnection/expiry behavior is tested against realistic values."
+    }
+  ]
+}

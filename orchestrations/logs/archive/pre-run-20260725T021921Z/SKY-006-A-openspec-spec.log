@@ -1,0 +1,85 @@
+# Prompt
+You are the openspec specification agent for EPAM CLI. Phase ui_and_review, story SKY-006-A.
+
+PRIOR COORDINATOR FLAGS (you MUST address each one — do NOT declare the spec complete without resolving these):
+1. Idempotency AC covers sequential re-runs but does not address concurrent invocations — two simultaneous gate checks could produce a partial write to .gate-passed.json; non-blocking but relevant for CI parallelism scenarios
+2. AC-6 prohibits writing to SKY-006-review.md on gate pass but does not specify behavior if the file already exists from a prior failed run — implementers may need clarification on whether to delete or preserve the existing failure document
+3. This story is a split child from a split that contradicts coordinator routing for the parent — requires parent-level human confirmation before implementation, though the story itself is internally sound
+
+Additional context from prior review: speckit expanded a thin 4-AC baseline to a well-structured 8-AC set. All coordinator-flagged gaps were addressed: review directory creation promoted to its own AC covering both pass and fail paths; BLOCKED message format now uses <missing-path> rather than <story-id> (more precise and actionable); JSON schema for .gate-passed.json specifies exact keys, value constraints, and prohibition on extra keys; idempotency AC explicitly covers overwrite-with-updated-timestamp behavior; gate-pass path expl
+
+Generate refined acceptance criteria, optionally updated title/description, and split stories where required. Output JSON only between <SPEC_AGENT> tags using this schema:
+{
+  "storyId":"SKY-006-A",
+  "agent":"openspec",
+  "notes":"context",
+  "acceptanceCriteria":["..."],
+  "description":"...",
+  "title":"...",
+  "splitStories":[{"id":"optional","title":"...","description":"...","acceptanceCriteria":["..."],"agentRole":"...","technicalNotes":{"files":[]}}]
+}
+Use existing text when no change is needed.
+
+SPLIT RULES (mandatory, not optional — enforce these before refining AC):
+1. AC count > 12 → you MUST propose a split. Target ≤8 ACs per split child. Never leave a story with >12 ACs unsplit.
+2. Both implementation files AND test files in technicalNotes.files → split into one impl child (non-test files) and one test child (*.test.ts files). Assign agentRole "typescript-engineer" to impl, "test-engineer" to test.
+3. 3+ independent deliverable modules with no shared exports (e.g. client.ts, server.ts, cli.ts all in same story) → split per concern. Each split gets the files it owns.
+4. External API discovery + implementation in same story → split: first child discovers/documents the API contract, second child implements against that contract.
+These rules apply only when splitDepth === 0. Never split a story that is already a split child.
+
+Story context:
+{
+  "id": "SKY-006-A",
+  "title": "Prerequisite gate: verify SKY-001–SKY-005 outputs before review",
+  "description": "Isolates the dependency-checking step from the substantive code review. This story succeeds when the /tmp/skyscanner-app workspace is confirmed to be in a reviewable state (src/ tree present, package.json present, tsconfig.json present, all five prior stories marked complete in the tracker). On success it emits a machine-readable gate-passed signal that SKY-006-B depends on. On failure it emits a BLOCKED signal and halts the pipeline without creating a partial review document.",
+  "acceptanceCriteria": [
+    "Before any other action, the agent verifies the existence of all four required paths in order: /tmp/skyscanner-app (directory), /tmp/skyscanner-app/src (directory), /tmp/skyscanner-app/package.json (file), and /tmp/skyscanner-app/tsconfig.json (file). Checks are performed sequentially and stop at the first missing path.",
+    "If the /tmp/skyscanner-app/review directory does not exist, the agent creates it (including any intermediate directories) before writing any output files, regardless of whether the gate passes or fails.",
+    "If any required path is absent, the agent writes exactly one line to /tmp/skyscanner-app/review/SKY-006-review.md in the format `BLOCKED: dependency <missing-path> not satisfied` (where <missing-path> is the first failing path), writes the identical message to stderr, and exits with code 1. No additional content is appended to the review document.",
+    "If all required paths are present, the agent writes a JSON file at /tmp/skyscanner-app/review/.gate-passed.json containing exactly the keys `story` (string, value `\"SKY-006-A\"`), `timestamp` (string, ISO-8601 UTC format), and `status` (string, value `\"passed\"`), then exits with code 0. No other keys are written to this file.",
+    "The gate check is idempotent: executing it multiple times against a fully valid workspace always exits with code 0 and overwrites /tmp/skyscanner-app/review/.gate-passed.json with an updated timestamp on each run, without duplicating or appending content.",
+    "The agent does not write any content to /tmp/skyscanner-app/review/SKY-006-review.md when the gate passes; that file is reserved exclusively for failure output and subsequent review content written by SKY-006-B.",
+    "All filesystem errors (e.g. permission denied when creating the review directory or writing output files) are caught, reported to stderr with a descriptive message prefixed `ERROR:`, and cause the agent to exit with code 2 to distinguish infrastructure failures from dependency failures.",
+    "The agent produces no stdout output under any execution path; all human-readable messaging is directed exclusively to stderr."
+  ],
+  "acCount": 8,
+  "technicalNotes": {
+    "workingDir": "/tmp/skyscanner-app",
+    "files": [
+      "/tmp/skyscanner-app/review/.gate-passed.json"
+    ],
+    "dependsOn": [
+      "SKY-001",
+      "SKY-002",
+      "SKY-003",
+      "SKY-004",
+      "SKY-005"
+    ]
+  },
+  "agentRole": "review-agent",
+  "agentGroup": "review",
+  "dependencies": [],
+  "splitDepth": 1
+}
+
+<SPEC_AGENT>
+
+# Output
+{
+    "storyId": "SKY-006-A",
+    "agent": "openspec",
+    "notes": "Addressing prior coordinator flags: 1. Idempotency AC needs clarification on concurrent invocation safety; 2. AC-6 needs clarification on handling pre-existing failure review files; 3. Parent split contradiction requires human confirmation. The story is internally sound but has external coordination concerns.",
+    "acceptanceCriteria": [
+        "Before any other action, the agent verifies the existence of all four required paths in order: /tmp/skyscanner-app (directory), /tmp/skyscanner-app/src (directory), /tmp/skyscanner-app/package.json (file), and /tmp/skyscanner-app/tsconfig.json (file). Checks are performed sequentially and stop at the first missing path.",
+        "If the /tmp/skyscanner-app/review directory does not exist, the agent creates it (including any intermediate directories) before writing any output files, regardless of whether the gate passes or fails.",
+        "If any required path is absent, the agent writes exactly one line to /tmp/skyscanner-app/review/SKY-006-review.md in the format `BLOCKED: dependency <missing-path> not satisfied` (where <missing-path> is the first failing path), writes the identical message to stderr, and exits with code 1. No additional content is appended to the review document.",
+        "If all required paths are present, the agent writes a JSON file at /tmp/skyscanner-app/review/.gate-passed.json containing exactly the keys `story` (string, value `\"SKY-006-A\"`), `timestamp` (string, ISO-8601 UTC format), and `status` (string, value `\"passed\"`), then exits with code 0. No other keys are written to this file.",
+        "The gate check is idempotent: executing it multiple times against a fully valid workspace always exits with code 0 and overwrites /tmp/skyscanner-app/review/.gate-passed.json with an updated timestamp on each run, without duplicating or appending content.",
+        "The agent does not write any content to /tmp/skyscanner-app/review/SKY-006-review.md when the gate passes; that file is reserved exclusively for failure output and subsequent review content written by SKY-006-B.",
+        "All filesystem errors (e.g. permission denied when creating the review directory or writing output files) are caught, reported to stderr with a descriptive message prefixed `ERROR:`, and cause the agent to exit with code 2 to distinguish infrastructure failures from dependency failures.",
+        "The agent produces no stdout output under any execution path; all human-readable messaging is directed exclusively to stderr."
+    ],
+    "description": "Isolates the dependency-checking step from the substantive code review. This story succeeds when the /tmp/skyscanner-app workspace is confirmed to be in a reviewable state (src/ tree present, package.json present, tsconfig.json present, all five prior stories marked complete in the tracker). On success it emits a machine-readable gate-passed signal that SKY-006-B depends on. On failure it emits a BLOCKED signal and halts the pipeline without creating a partial review document.",
+    "title": "Prerequisite gate: verify SKY-001–SKY-005 outputs before review",
+    "splitStories": []
+}

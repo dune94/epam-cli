@@ -1,0 +1,113 @@
+=== Prompt for MOCK-HW-1 (attempt 1) ===
+CRITICAL — WRITE FILES FIRST. Your FIRST tool call MUST be WriteFile.
+Do NOT output any text before calling WriteFile. Do NOT plan or say "I will...".
+Call WriteFile NOW for the EXACT ABSOLUTE PATHS listed below:
+
+
+---
+
+Implement user story MOCK-HW-1: Hello world greeting should say hello dolly
+
+## Story Description
+Hello world greeting should say hello dolly
+
+## Acceptance Criteria
+- The getGreeting() function returns the exact string 'hello dolly'.
+- All existing tests that asserted the value 'hello world' are updated to assert 'hello dolly'.
+- No other function behavior or return values are changed.
+- Running the full test suite passes with no failures.
+
+
+
+
+
+## Technical Notes
+None specified
+
+## Files to Create/Modify (EXACT ABSOLUTE PATHS — write to these paths exactly)
+
+
+## Dependencies
+None
+
+
+
+## Instructions
+**CRITICAL — WRITE FILES FIRST:**
+
+**You MUST write every file listed above to its EXACT absolute path. Do NOT write to a different path, do NOT write to the current directory unless it matches the path above. Use your WriteFile or Edit tools with the full absolute path shown.**
+
+1. Write each required file to its exact absolute path listed above — do this FIRST before anything else
+2. Implement all acceptance criteria for this story
+3. Follow the project's existing code patterns and conventions
+4. Do NOT create tests unless explicitly required in acceptance criteria
+
+After implementation, provide a brief summary of what was created/modified.
+
+## Relevant Knowledge Base Entries
+The following was learned from previous story implementations and is relevant to your agent role. Apply this knowledge before writing any code:
+
+- [2026-07-06T18:11:26Z] Use vi.fn().mockResolvedValue(value) to make a mock return a resolved Promise.
+- [2026-07-06T20:31:11Z] Use `test: { passWithNoTests: true }` in vitest.config.ts or create a stub test file when no *.test.ts files exist.
+- [2026-07-06T20:33:03Z] Enable globals:true in vitest.config.ts so describe, it, and expect work without imports, reducing boilerplate in test files.
+- [2026-07-06T23:47:34Z] Use CommonJS-compatible patterns in src/server.ts: avoid `import.meta.url` and top-level `await`; gate listen with `if (require.main === module)`.
+- [2026-07-07T02:35:30Z] Always include a non-test source file in src/ alongside any src/*.test.ts file, since tsconfig.json excludes test files from tsc --noEmit.
+- [2026-07-07T19:01:34Z] Only modify or create files explicitly listed in the story's acceptance criteria. Do not touch files belonging to other stories or outside the current task scope.
+- [2026-07-07T20:17:57Z] [unreviewed-fallback] Avoid using deprecated TypeScript compiler options like 'moduleResolution=node10'; use 'moduleResolution=node' instead.
+- [2026-07-17T20:20:58Z] Always: Before importing a module or referencing a type/property, always read the actual source file to verify the export exists, its exact path, its properties, and its constructor/factory signatures
+- [2026-07-23T01:15:16Z] Always: In tsconfig.json, always use moduleResolution 'node' (not 'node10' or 'Node10') — 'node10' was removed in TypeScript 5.x. The correct value for CommonJS + Node resolution is 'node'.
+- [2026-07-23T01:17:52Z] Never use moduleResolution 'node' or 'node10' in tsconfig.json — they are removed in TS 5+. Use 'node16' or 'nodenext' for CommonJS projects.
+
+## Knowledge Base Contribution (do this LAST — after writing all implementation files)
+Your assigned KB entry ID for this run: **KB-012**
+
+IMPORTANT: Write ALL implementation files first. Only AFTER writing every required file should you optionally append a KB entry.
+Do NOT read orchestrations/agents/KB.md before writing implementation files. The relevant KB entries are already injected above.
+
+If (and only if) you discover a non-obvious pattern during implementation, append one entry to `orchestrations/agents/KB.md`:
+
+```markdown
+## KB-012 -- 2026-07-23
+
+**Category:** <backend|frontend|infrastructure|testing|orchestration>
+**AgentRole:** <your agentRole from the story>
+**Tags:** <comma-separated tech keywords, e.g. typescript, node, cli>
+**Trigger:** <retry|first-success>
+**StoryRef:** MOCK-HW-1
+
+<One concise paragraph: the specific pattern, gotcha, or anti-pattern.>
+```
+
+Only write an entry if the knowledge is genuinely non-obvious. Skip trivial observations.
+=== End Prompt ===
+
+=== epam Output (attempt 1) ===
+The `orchestrations/agents/KB.md` file doesn't exist locally in this project. Per my instructions, I should only append a KB entry if I discover a non-obvious pattern. This task was a trivial string change with no genuinely non-obvious learning, so I'll skip the KB entry.
+
+## Summary
+
+Implemented user story **MOCK-HW-1** by modifying two files:
+
+**`src/hello.ts`** — Changed `getGreeting()` to return `'hello dolly'` instead of `'hello world'`.
+
+**`src/hello.test.ts`** — Updated the test description and assertion from `'hello world'` to `'hello dolly'`.
+
+**Verification:** Test suite passes — `Test Files 1 passed (1) / Tests 1 passed (1)`. No other files were touched, and no other behavior was changed.
+
+**Note on path specification:** The story description listed "EXACT ABSOLUTE PATHS" under "Files to Create/Modify" but no paths were actually provided. I used the existing source files (`src/hello.ts` and `src/hello.test.ts`) which were the only files in the project containing the `getGreeting` function and its test, matching the acceptance criteria's explicit references to those.
+  [tc-writer] No test stories need TCs in phase 'unknown' — skipping
+The `orchestrations/agents/KB.md` file doesn't exist locally in this project. Per my instructions, I should only append a KB entry if I discover a non-obvious pattern. This task was a trivial string change with no genuinely non-obvious learning, so I'll skip the KB entry.
+
+## Summary
+
+Implemented user story **MOCK-HW-1** by modifying two files:
+
+**`src/hello.ts`** — Changed `getGreeting()` to return `'hello dolly'` instead of `'hello world'`.
+
+**`src/hello.test.ts`** — Updated the test description and assertion from `'hello world'` to `'hello dolly'`.
+
+**Verification:** Test suite passes — `Test Files 1 passed (1) / Tests 1 passed (1)`. No other files were touched, and no other behavior was changed.
+
+**Note on path specification:** The story description listed "EXACT ABSOLUTE PATHS" under "Files to Create/Modify" but no paths were actually provided. I used the existing source files (`src/hello.ts` and `src/hello.test.ts`) which were the only files in the project containing the `getGreeting` function and its test, matching the acceptance criteria's explicit references to those.
+
+=== End epam Output ===

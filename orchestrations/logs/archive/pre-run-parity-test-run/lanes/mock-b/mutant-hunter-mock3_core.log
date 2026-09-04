@@ -1,0 +1,10 @@
+```json
+{
+  "agent": "mutant-hunter",
+  "phase": "mock3_core",
+  "summary": { "mutationsProposed": 0, "killed": 0, "survived": 0, "noCoverage": 0, "mutationScore": 100 },
+  "mutations": [],
+  "verdict": "not_applicable",
+  "reason": "The changed file contains only a static string return with no operators, comparisons, boolean logic, null checks, arguments, or critical paths (failover/auth/billing/state) — mutation testing is not meaningful for this change."
+}
+```

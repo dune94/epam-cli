@@ -1,0 +1,6 @@
+[0;35m[CPA][0m Retrieval: TF-IDF
+[0;36m[18:50:01][0m Loading stories from orch-gotransit-prd-55369.json...
+[0;36m[18:50:01][0m Found 1 stories to contextualize
+
+[0;35m[CPA][0m Processing AMSD-2041...
+[0;35m[CPA][0m   AMSD-2041: formula baseline from calibration[low:implementation:cli](n=29): 4.5178418971594745min $0.1404333618569382

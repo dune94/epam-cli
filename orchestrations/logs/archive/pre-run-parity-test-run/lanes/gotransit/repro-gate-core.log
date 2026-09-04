@@ -1,0 +1,19 @@
+[repro-gate] ⛔ BLOCK (AMSD-2041): no test file accompanies the change — every brownfield change must ship a test that reproduces the fixed behavior.
+[repro-gate] ⛔ BLOCK (AMSD-2041): no test file accompanies the change — every brownfield change must ship a test that reproduces the fixed behavior.
+[repro-gate] ✓ AMSD-2041: the test reproduces the bug (fails on baseline, passes with the fix) — gate passed.
+[repro-gate] ✓ AMSD-2041: the test reproduces the bug (fails on baseline, passes with the fix) — gate passed.
+[repro-gate] ✓ AMSD-2041: the test reproduces the bug (fails on baseline, passes with the fix) — gate passed.
+[repro-gate] ⛔ BLOCK (AMSD-2041): no test file accompanies the change — every brownfield change must ship a test that reproduces the fixed behavior.
+[repro-gate] ⛔ BLOCK (AMSD-2041): no test file accompanies the change — every brownfield change must ship a test that reproduces the fixed behavior.
+[repro-gate] ⛔ BLOCK (AMSD-2041): no test file accompanies the change — every brownfield change must ship a test that reproduces the fixed behavior.
+[repro-gate] ⛔ BLOCK (AMSD-2041): no test file accompanies the change — every brownfield change must ship a test that reproduces the fixed behavior.
+[repro-gate] ✓ AMSD-2041: the test reproduces the bug (fails on baseline, passes with the fix) — gate passed.
+[repro-gate] ✓ AMSD-2041: the test reproduces the bug (fails on baseline, passes with the fix) — gate passed.
+[repro-gate] ✓ AMSD-2041: the test reproduces the bug (fails on baseline, passes with the fix) — gate passed.
+[repro-gate] ⛔ BLOCK (AMSD-2041): no test file accompanies the change — every brownfield change must ship a test that reproduces the fixed behavior.
+[repro-gate] ✓ AMSD-2041: the test reproduces the bug (fails on baseline, passes with the fix) — gate passed.
+[repro-gate] ✓ AMSD-2041: the test reproduces the bug (fails on baseline, passes with the fix) — gate passed.
+[repro-gate] ✓ AMSD-2041: the test reproduces the bug (fails on baseline, passes with the fix) — gate passed.
+[repro-gate] ✓ AMSD-2041: the test reproduces the bug (fails on baseline, passes with the fix) — gate passed.
+[repro-gate] ✓ AMSD-2041: the test reproduces the bug (fails on baseline, passes with the fix) — gate passed.
+[repro-gate] ✓ AMSD-2041: the test reproduces the bug (fails on baseline, passes with the fix) — gate passed.

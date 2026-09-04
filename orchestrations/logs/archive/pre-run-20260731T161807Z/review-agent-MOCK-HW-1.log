@@ -1,0 +1,26 @@
+[1;33m[WARN][0m   review-agent has NO ladder escalation available — ladder is EMPTY/unset — NO escalation configured for this run
+[ai-run] attempt 2/3 for 'team-lead-review' — no further ladder rung, retrying on z-ai/glm-5.1
+[ai-run] attempt 3/3 for 'team-lead-review' — no further ladder rung, retrying on z-ai/glm-5.1
+shell-init: error retrieving current directory: getcwd: cannot access parent directories: No such file or directory
+node:internal/bootstrap/switches/does_own_process_state:142
+    cachedCwd = rawMethods.cwd();
+                           ^
+
+Error: ENOENT: process.cwd failed with error no such file or directory, the current working directory was likely removed without changing the working directory, uv_cwd
+    at process.wrappedCwd [as cwd] (node:internal/bootstrap/switches/does_own_process_state:142:28)
+    at Object.configDotenv (/home/bradleyjerome/projects/ai/epam-cli/node_modules/dotenv/lib/main.js:249:43)
+    at Object.config (/home/bradleyjerome/projects/ai/epam-cli/node_modules/dotenv/lib/main.js:331:25)
+    at /home/bradleyjerome/projects/ai/epam-cli/node_modules/dotenv/config.js:2:25
+    at Object.<anonymous> (/home/bradleyjerome/projects/ai/epam-cli/node_modules/dotenv/config.js:9:3)
+    at Module._compile (node:internal/modules/cjs/loader:1812:14)
+    at Object..js (node:internal/modules/cjs/loader:1943:10)
+    at Module.load (node:internal/modules/cjs/loader:1533:32)
+    at Module._load (node:internal/modules/cjs/loader:1335:12)
+    at wrapModuleLoad (node:internal/modules/cjs/loader:255:19) {
+  errno: -2,
+  code: 'ENOENT',
+  syscall: 'uv_cwd'
+}
+
+Node.js v24.14.1
+[ai-run] 'team-lead-review' failed after 3 attempt(s) across every provider and ladder rung.

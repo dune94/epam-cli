@@ -1,0 +1,5 @@
+The changed source file (`src/hello.ts`) contains a single function `getGreeting()` that takes **no parameters** and returns a constant string. There are no input domains to fuzz, no config parsing, no billing, no auth, no path traversal — nothing for fuzz-weaver to meaningfully analyze.
+
+```json
+{"agent":"fuzz-weaver","phase":"core","summary":{"functionsAnalysed":1,"fuzzCasesProposed":0,"covered":0,"gaps":0,"vulnerabilities":0},"cases":[],"verdict":"not_applicable"}
+```

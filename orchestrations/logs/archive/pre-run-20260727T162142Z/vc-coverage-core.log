@@ -1,0 +1,9 @@
+  [vc-coverage] COVERED   When a return trip ticket with a promo code is purchased, the Mozio email confirmation shows a promo
+  [vc-coverage]           ↳ applies promo code discount to a return trip dispatch (line item id has #return suffix)
+  [vc-coverage] COVERED   When a return trip ticket with a promo code is purchased, the Mozio email confirmation shows the pro
+  [vc-coverage]           ↳ applies promo code discount to a return trip dispatch (line item id has #return suffix)
+  [vc-coverage] COVERED   When a one-way trip ticket with a promo code is purchased, the Mozio email confirmation continues to
+  [vc-coverage]           ↳ applies promo code discount to a one-way trip dispatch (line item id has no suffix)
+  [vc-coverage] COVERED   When a return trip ticket with no promo code is purchased, the Mozio email confirmation does not dis
+  [vc-coverage]           ↳ does not apply discount to a return trip dispatch when there is no promo code
+  [vc-coverage] VC_UNCOVERED=0 of 4

@@ -1,0 +1,9 @@
+```json
+{
+  "agent": "review-ranger",
+  "phase": "mock3_core",
+  "summary": { "filesReviewed": 2, "findingsCount": 0, "blockerCount": 0, "majorCount": 0, "minorCount": 0 },
+  "findings": [],
+  "verdict": "not_applicable"
+}
+```

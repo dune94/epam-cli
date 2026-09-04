@@ -1,0 +1,24 @@
+Done. Wrote exactly one file: `/tmp/brownfield-mock-e2e-j3j2a1/codelines/mock-hello-world/src/hello.test.ts`
+
+```ts
+import { describe, it, expect } from 'vitest';
+import { getGreeting } from './hello';
+
+describe('getGreeting', () => {
+  it('returns exactly "hello dolly"', () => {
+    expect(getGreeting()).toBe('hello dolly');
+  });
+
+  it('no longer displays the previous text "hello world"', () => {
+    expect(getGreeting()).not.toContain('hello world');
+  });
+});
+```
+
+Verification:
+- **Typecheck:** `tsc --noEmit | grep src/hello.test.ts` printed nothing (grep exit 1) — the test typechecks cleanly. No mocks were needed, so no full-type mock risk.
+- **Runs green with the fix:** `vitest run` → 2/2 tests pass against the fixed `getGreeting()` which returns `'hello dolly'`.
+- **Reproduces the bug:** against the pre-fix code (`return 'hello world'`), the first assertion `toBe('hello dolly')` fails and the second (`not.toContain('hello world')`) also fails — so the test genuinely distinguishes pre- vs post-fix behavior and asserts the observable outcome, not the mechanism.
+
+The plan held; no CodeGraph lookup was needed since the repo example already supplied the exact signature and import path.
+{"numTotalTestSuites":2,"numPassedTestSuites":2,"numFailedTestSuites":0,"numPendingTestSuites":0,"numTotalTests":2,"numPassedTests":2,"numFailedTests":0,"numPendingTests":0,"numTodoTests":0,"snapshot":{"added":0,"failure":false,"filesAdded":0,"filesRemoved":0,"filesRemovedList":[],"filesUnmatched":0,"filesUpdated":0,"matched":0,"total":0,"unchecked":0,"uncheckedKeysByFile":[],"unmatched":0,"updated":0,"didUpdate":false},"startTime":1785102951427,"success":true,"testResults":[{"assertionResults":[{"ancestorTitles":["getGreeting"],"fullName":"getGreeting returns exactly \"hello dolly\"","status":"passed","title":"returns exactly \"hello dolly\"","duration":0.9896009999999933,"failureMessages":[],"meta":{},"tags":[]},{"ancestorTitles":["getGreeting"],"fullName":"getGreeting no longer displays the previous text \"hello world\"","status":"passed","title":"no longer displays the previous text \"hello world\"","duration":0.18619700000000705,"failureMessages":[],"meta":{},"tags":[]}],"startTime":1785102951526,"endTime":1785102951527.1863,"status":"passed","message":"","name":"/tmp/brownfield-mock-e2e-j3j2a1/codelines/mock-hello-world/src/hello.test.ts"}]}

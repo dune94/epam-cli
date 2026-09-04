@@ -1,0 +1,82 @@
+# Prompt
+You are the specification coordinator for the epam-cli orchestration system. Before every phase you read orchestrations/prd.json (implementationOrder and stories), evaluate risk, dependencies, and technical readiness, then assign the correct specification runners: OpenSpec, Speckit, both, or none. You write assignments into each story's specification.assignedAgents field along with coordinatorNotes, target provider/model, and timestamps. You understand the provider policy ledger (configuration.aiRuntime.providerPolicies), token guardrails, and know when to skip stories that were already hand-curated. When you plan a run you emit JSON compliant with spec-mode-runner.js so that automation can apply deltas deterministically. You never invent story IDs or mutate acceptance criteria directly; only delegate to spec agents and record their status.
+
+You are the EPAM CLI specification coordinator reviewing the completed spec outputs for phase core.
+
+Each story was processed by a sequential agent pipeline:
+  1. openspec elaborated requirements (AC refinement, story splits, technical depth)
+  2. speckit reviewed openspec's output (testability, security, edge cases, gap analysis)
+
+For each story, evaluate the quality of the collaborative spec work:
+1. Did both agents add meaningful, non-overlapping value?
+2. Are the acceptance criteria complete, testable, and non-overlapping?
+3. Are story splits logical and properly scoped?
+4. Flag any story needing human review.
+
+Respond with JSON between <SPEC_REVIEW> and </SPEC_REVIEW> using this schema:
+[
+  {"storyId":"REM-xxx","verdict":"approved|needs_review","reviewNotes":"coordinator observations","qualityScore":0.0-1.0,"flags":[]}
+]
+
+Stories to review:
+[
+  {
+    "id": "AMSD-2041",
+    "title": "[GO, UP, MX] Live Preview of Content in CMS",
+    "acceptanceCriteria": [],
+    "specification": {
+      "runId": "20260728T183916Z",
+      "assignedAgents": [
+        "openspec",
+        "speckit"
+      ],
+      "coordinatorNotes": "Story has empty acceptance criteria and no existing spec. Complex multi-market (GO, UP, MX) live preview feature requiring requirements elaboration first (openspec), then testability/security hardening (speckit) for preview token handling, draft vs published state, concurrent edits, and cross-locale edge cases. Priority is high — blocked until ACs are defined.",
+      "status": "completed",
+      "updatedAt": "2026-07-28T18:48:57.723Z",
+      "appliedAgents": [
+        "openspec",
+        "speckit"
+      ],
+      "agentContributions": [
+        {
+          "agent": "openspec",
+          "applied": true,
+          "notes": "Novel capability — Contentstack Live Preview SDK integration. The attachment point is useContent, the central hook (236 callers) that all Contentstack components call via getContentByKey. Enhancing this hook to subscribe to Live Preview events from Contentstack SDK will propagate real-time content updates to every consuming component without page reload. No existing live preview code was found in the indexed files. VCs are derived from the description since ACs are empty. Contentstack.io is unreachable at test time, so VCs stop at our side of the boundary: what our code subscribes to, how it handles events, and what it renders given a known update.",
+          "acceptanceChanged": false,
+          "splitCount": 0,
+          "timestamp": "2026-07-28T18:48:25.964Z"
+        },
+        {
+          "agent": "speckit",
+          "applied": true,
+          "notes": "Openspec provided empty acceptanceCriteria, so all criteria are new. I examined useContent.ts, [[...slug]].tsx, contentCard.ts, and ContentstackLink.tsx to ground the ACs in the actual architecture. Key findings: useContent is the central hook called via getContentByKey by 236+ callers; it fetches content by content type and locale and returns content data. [[...slug]].tsx uses useContent for page-level entries. ContentstackLink renders reference/link fields. ACs cover: subscription lifecycle (AC1-3, AC5), error/fallback when SDK unavailable (AC4, AC6, AC7), security/XSS (AC8), reference field updates (AC9), multi-subscriber deduplication (AC10), page-level updates (AC11), locale handling (AC12), accessibility (AC13), and rapid-update debouncing (AC14). All ACs are observable outcomes with Given/When/Then structure and contain no implementation instructions.",
+          "acceptanceChanged": false,
+          "splitCount": 0,
+          "timestamp": "2026-07-28T18:48:57.723Z"
+        }
+      ]
+    },
+    "splitChildren": []
+  }
+]
+
+<SPEC_REVIEW>
+</SPEC_REVIEW>
+
+# Output
+<SPEC_REVIEW>
+[
+  {
+    "storyId": "AMSD-2041",
+    "verdict": "needs_review",
+    "reviewNotes": "Speckit delivered strong, well-structured ACs (14 criteria with Given/When/Then covering subscription lifecycle, error/fallback, security/XSS, reference fields, deduplication, locale, accessibility, and debouncing) grounded in actual source files. However, the pipeline did not function as designed: openspec's role is to elaborate requirements including AC refinement, yet it produced only architectural analysis with acceptanceChanged=false and zero draft ACs, leaving all AC authoring to speckit. This means speckit was doing openspec's job rather than reviewing/hardening its output. Additionally, the coordinator notes explicitly flagged 'concurrent edits' and 'draft vs published state' as areas requiring coverage, but neither appears explicitly in the 14 ACs described. The multi-market complexity (GO, UP, MX) also warranted at least a split consideration, yet neither agent proposed one. Recommend human review to verify concurrent-edit and draft-vs-published scenarios are covered, and to assess whether openspec should re-run to produce draft ACs for speckit to harden.",
+    "qualityScore": 0.65,
+    "flags": [
+      "openspec_underdelivered_no_acs_produced",
+      "potential_gap_concurrent_edits_not_covered",
+      "potential_gap_draft_vs_published_state_not_covered",
+      "no_split_consideration_for_multi_market_complexity"
+    ]
+  }
+]
+</SPEC_REVIEW>

@@ -1,0 +1,104 @@
+# Prompt
+You are specialising ONE generic agent prompt for ONE specific project. You are the same agent that just minted this project's roles, so you already know what this project is and who will work on it.
+
+## The template you must specialise
+
+Its id is spec-story-block and its purpose is: The labelled story block handed to a spec agent, and its retrieved-documents notice.
+
+Everything between the two markers below is the template, verbatim. The markers are not
+part of it. A code fence cannot delimit this: several templates contain fences of their
+own, so the first closing fence would truncate the body mid-instruction.
+
+-----BEGIN TEMPLATE BODY-----
+,
+-----END TEMPLATE BODY-----
+
+## What this project is
+
+Project config: /home/bradleyjerome/projects/ai/epam-cli/orchestrations/projects/mock3
+Tickets in scope: MOCK3-1: Riders aged exactly 65 are charged the adult fare | MOCK3-2: The departure board omits the final stop
+
+Codelines in scope and their declared dependencies:
+- mocka (/home/bradleyjerome/projects/mock3/mock-a) deps: vitest, typescript
+
+The roles you minted for this project:
+- fare-rules-engineer [implementer] — MOCK3-1 requires an actual source edit to the age comparison in src/fares.ts, and only an implementer can commit that one-line boundary fix confirmed present in the code.
+- mocka-detective [investigator] — The declared vitest+typescript stack and the narrow four-file repository mean a single dedicated reader can definitively confirm the fareFor() boundary condition and the absence of any MOCK3-2 surface before an implementer commits to a fix.
+
+## The one rule you cannot break
+
+The template's placeholders are a CONTRACT with the pipeline. Each token written in SCREAMING_SNAKE_CASE between double underscores is replaced at run time with real evidence — a diff, a ticket, a test log, a plan. The substitution is BY NAME and it is strict in both directions.
+
+- Reproduce every placeholder EXACTLY as it appears, character for character.
+- NEVER add or invent a placeholder. Nothing supplies a name the pipeline does not know, so rendering throws and the run dies at the seam that needed this prompt.
+- NEVER remove or rename one. The evidence it carries would silently never reach the agent, and the agent would answer without it.
+- Do not move a placeholder into a code fence, a quote, or an example where it would read as literal text.
+
+The placeholders in this template are exactly: __PERSONA__, __TITLE__, __DESCRIPTION__, __COMPONENTS__, __DECLARED_FILES__, __LINK_BLOCK__, __COMMENT_BLOCK__, __RETRIEVED_DOCS__, __DOC_PATHS__
+
+## What specialising means
+
+Keep the template's instructions, its output format, its prohibitions and its reasoning intact. They encode failures this pipeline has already paid for. You are not rewriting the prompt or improving its wording.
+
+Add only what a competent engineer joining THIS project would need and could not infer from the generic text:
+- the conventions, layout and idioms this codebase actually uses
+- the commands this project runs to build, test and type-check
+- the traps this stack presents that a generic prompt would not warn about
+
+Ground every addition in the project context above. If the context does not tell you something, say nothing about it — an invented convention is worse than a missing one, because the agent will follow it.
+
+Do not name a file, symbol, package or command that does not appear in the context you were given.
+
+## How to answer
+
+Emit ONLY the specialised prompt body as TEXT, directly in your reply. No JSON wrapper, no markdown fences around the whole thing, no commentary before or after, and do not write it to a file — the pipeline reads your reply text.
+
+
+## Your previous attempt was REFUSED
+
+the generated prompt dropped placeholder(s) the template requires: __COMMENT_BLOCK__, __COMPONENTS__, __DECLARED_FILES__, __DESCRIPTION__, __DOC_PATHS__, __LINK_BLOCK__, __PERSONA__, __RETRIEVED_DOCS__, __TITLE__. The evidence they carry would silently never reach the agent.
+
+Produce the prompt again, correcting exactly this. Change nothing else: the rest of your previous attempt was accepted, and rewriting it invites a second refusal for a different reason.
+
+
+
+# Output
+,
+
+__PERSONA__
+
+## Story
+
+__TITLE__
+
+__DESCRIPTION__
+
+Components: __COMPONENTS__
+
+Declared files: __DECLARED_FILES__
+
+__LINK_BLOCK__
+
+__COMMENT_BLOCK__
+
+__RETRIEVED_DOCS__
+
+__DOC_PATHS__
+
+## Project context for this story
+
+The only codeline in scope is `mocka`, checked out at `/home/bradleyjerome/projects/mock3/mock-a`. Its declared dependencies are `vitest` and `typescript` — nothing else is available, so do not reach for a test runner, assertion library, build tool or helper package that is not one of those two. The repository is small: treat the declared files above as the starting point, not as a guarantee that a named file exists.
+
+Two tickets are in scope for this project:
+
+- MOCK3-1 — Riders aged exactly 65 are charged the adult fare. This is a boundary condition in the age comparison inside `src/fares.ts`, in `fareFor()`. It is a real source defect and the fix is a source edit, not a test-only change.
+- MOCK3-2 — The departure board omits the final stop. Investigation of this codeline has not established that a departure-board surface exists in it at all. If the story you have been handed is MOCK3-2, do not assume the feature is present and do not invent a module, file or function to host it; describe only what the evidence in front of you supports, and say plainly when the code that the ticket describes cannot be located.
+
+Roles working this project: `fare-rules-engineer` (implementer — owns the source edit for the age comparison in `src/fares.ts`) and `mocka-detective` (investigator — confirms the `fareFor()` boundary condition and the presence or absence of any MOCK3-2 surface). Write your spec so the implementer can act on it without re-deriving the investigation.
+
+## Stack traps for this codeline
+
+- **TypeScript strictness is a real constraint.** `typescript` is a declared dependency; any behaviour you specify must be expressible without loosening types or adding casts to make a change compile.
+- **Boundary conditions are the whole story for MOCK3-1.** `<` versus `<=` and `>` versus `>=` on the age comparison are not stylistic. State the exact intended behaviour at the boundary age — which side of the comparison the boundary rider falls on — rather than describing the fix in prose that leaves the operator ambiguous.
+- **Vitest is the only test surface.** Specify expected behaviour in terms a `vitest` test can assert directly: input age, expected fare outcome. Do not specify snapshot files, custom matchers or reporters.
+- **The repository is narrow.** With only a handful of files, an exhaustive read is cheap and a guess is inexcusable. If the spec needs a file path, a symbol name or a signature, it must be one you have actually seen in the code or one that appears in the declared files above.

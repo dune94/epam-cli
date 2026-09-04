@@ -1,0 +1,37 @@
+{
+  "agent": "spec-validator",
+  "phase": "mock3_core",
+  "stories": [{
+    "storyId": "SPAN-1",
+    "title": "Change the greeting from hello world to hello dolly in every affected codeline",
+    "criteria": [
+      {
+        "text": "Calling getGreeting() returns the exact string 'hello dolly'",
+        "status": "met",
+        "evidence": "src/hello.ts diff shows `return 'hello dolly';` replacing `return 'hello world';`",
+        "gaps": ""
+      },
+      {
+        "text": "The greeting 'hello dolly' is produced in each codeline named on this story",
+        "status": "met",
+        "evidence": "Both src/hello.ts and src/hello.test.ts were changed: the function returns 'hello dolly' and the test asserts 'hello dolly'",
+        "gaps": ""
+      },
+      {
+        "text": "The vitest test suite passes with no failures",
+        "status": "met",
+        "evidence": "Test oracle: numTotal=1, numPassed=1, numFailed=0, numSkipped=0",
+        "gaps": ""
+      },
+      {
+        "text": "tsc --noEmit exits with code 0",
+        "status": "untestable",
+        "evidence": "No tsc output was injected; the change is a string-literal swap that cannot introduce type errors, but no hard evidence of tsc exit code",
+        "gaps": "tsc result not provided in injected evidence"
+      }
+    ],
+    "overallCompliance": 100,
+    "verdict": "pass"
+  }],
+  "overallVerdict": "pass"
+}

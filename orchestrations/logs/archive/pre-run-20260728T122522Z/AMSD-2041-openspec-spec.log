@@ -1,0 +1,580 @@
+# Prompt
+You are the openspec specification agent for EPAM CLI. Phase core, story AMSD-2041.
+EXISTING CODE — CodeGraph static analysis (exact symbols, callers, blast radius):
+**Exploration: applies handles processes resolves [GO, UP, MX] Live Preview  Content  CMS**
+
+Found 13 symbols across 4 files.
+
+**Blast radius — what depends on these (update/verify before editing)**
+
+- `IContentCard` (src/interface/content/contentCard.ts:7) — 6 callers in `src/components/contentstack/ContentstackContentCards/content.mock.ts`, `src/components/contentstack/ContentstackContentCards/utils.ts`, `src/interface/content/contentCard.ts`; ⚠️ no covering tests found
+- `IContentstackLink` (src/components/contentstack/ContentstackLink/ContentstackLink.tsx:9) — 23 callers in `src/components/DamVideo/DamVideo.tsx`, `src/components/EmptyView/EmptyView.tsx`, `src/components/Header/DesktopNav/DesktopNav.tsx`, `src/components/Header/MobileNav/MobileNavItem.tsx` +10 more; tests: `src/components/EmptyView/__tests__/EmptyView.spec.tsx`
+- `IContentCardsList` (src/interface/content/contentCard.ts:16) — 12 callers in `src/components/contentstack/ContentstackContentCards/ContentstackContentCards.tsx`, `src/components/contentstack/ContentstackContentCards/content.mock.ts`, `src/components/contentstack/ContentstackContentCardsSlider/ContentstackContentCardsSlider.tsx`, `src/components/pages/HomePage/HomePage.tsx` +1 more; tests: `src/components/contentstack/ContentstackContentCards/ContentstackContentCards.spec.tsx`, `src/components/contentstack/ContentstackContentCardsSlider/ContentstackContentCardsSlider.spec.tsx`
+- `useContent` (src/hooks/useContent.ts:5) — 236 callers in `src/components/ContactUsForm/ContactUsForm.tsx`, `src/components/ContactUsForm/ContactUsFormContainer.tsx`, `src/components/DamVideo/DamVideo.tsx`, `src/components/EmptyView/EmptyView.tsx` +109 more; tests: `src/components/pages/ServiceGuaranteeLandingPage/search-claims/__tests__/SearchClaims.spec.tsx`, `src/components/pages/ServiceGuaranteeLandingPage/search-claims/__tests__/SearchClaimsForm.spec.tsx`, `src/components/pages/ServiceGuaranteeWebformPage/check-trip-eligibility/__tests__/CheckTripEligibilityForm.spec.tsx`, `src/components/pages/ServiceGuaranteeWebformPage/personal-information/contactless/__tests__/ContactlessInformationForm.spec.tsx` +5
+- `ListContent` (src/components/RoutesAndDepartures/Routes/ListContent.tsx:23) — 3 callers in `src/components/RoutesAndDepartures/Routes/Routes.tsx`; tests: `src/components/RoutesAndDepartures/__tests__/RoutesAndDepartures.spec.tsx`
+
+**Relationships**
+
+**references:**
+- IContentCard → IContentstackLink
+- IContentCard → IContentstackPage
+- IContentCard → ContentCardType
+- cards → IContentCard
+- mapContentCardData → IContentCard
+- mapContentCardsData → IContentCard
+- IContentCardsList → IContentCard
+- emptyCtaMock → IContentstackLink
+- ctaMock → IContentstackLink
+- IL2LinkItem → IContentstackLink
+- ... and 61 more
+
+**calls:**
+- DamVideo → useContent
+- DamVideo → useNextLocale
+- renderVideo → DamVideo
+- ContentstackLink → useContent
+- MobileNav → ContentstackLink
+- NavigationBar → ContentstackLink
+- BrandNavigation → ContentstackLink
+- createGroupPassesProps → ContentstackSVGIcon
+- DeparturesFlyOut → createGroupPassesProps
+- renderContentstackContentCards → render
+- ... and 102 more
+
+**Source Code**
+
+> The code below is the **verbatim, current on-disk source** of these files — re-read from disk on this call and line-numbered, byte-for-byte identical to what the Read tool returns. It is NOT a summary, outline, or stale cache. Treat each block as a Read you have already performed: do not Read a file shown here.
+
+**`src/components/contentstack/ContentstackLink/ContentstackLink.tsx`** — IContentstackLink(interface), IContentstackLinkProps(interface), ContentstackLink(function), ContentstackLink.tsx(file)
+
+```tsx
+1	import { FC } from "react";
+2	import { CustomLink } from "@metrolinx/cx-shared/build/src/components/CustomLink/CustomLink";
+3	import { useContent } from "hooks/useContent";
+4	
+5	/**
+6	 * @deprecated
+7	 * `IContentstackLink` from `cx-shared` should be used instead
+8	 */
+9	export interface IContentstackLink {
+10	  href: string;
+11	  title: string;
+12	}
+13	
+14	export interface IContentstackLinkProps extends React.AnchorHTMLAttributes<HTMLAnchorElement> {
+15	  contentKey: string;
+16	  linkClasses: string;
+17	}
+18	
+19	export const ContentstackLink: FC<IContentstackLinkProps> = ({
+20	  contentKey,
+21	  linkClasses,
+22	  children,
+23	  ...props
+24	}) => {
+25	  const { getContentByKey } = useContent();
+26	  const { href }: IContentstackLink = getContentByKey(contentKey, {} as IContentstackLink);
+27	
+28	  return (
+29	    <CustomLink {...props} href={href} className={linkClasses}>
+30	      {children}
+31	    </CustomLink>
+32	  );
+33	};
+```
+
+**`src/components/contentstack/ContentstackImage/ContentstackImage.tsx`** — IContentstackImageProps(interface), ContentstackImage(function), ContentstackImage.tsx(file)
+
+```tsx
+1	import { ElementType, FC } from "react";
+2	import { CustomImage } from "@metrolinx/cx-shared/build/src/components/CustomImage/CustomImage";
+3	import { SVGIconScaleBy } from "@metrolinx/cx-shared/build/src/components/SVGColoredIcon/SVGColoredIcon";
+4	import { IContentstackImage } from "@metrolinx/cx-shared/build/src/interface/content/global";
+5	import { getCloudinaryImageAlt } from "@metrolinx/cx-shared/build/src/utils/common/getCloudinaryImageAlt";
+6	import { useContent } from "hooks/useContent";
+7	import { useNextLocale } from "hooks/useNextLocale";
+8	
+9	export interface IContentstackImageProps {
+10	  contentKey: string;
+11	  scaleBy?: SVGIconScaleBy;
+12	  fallbackPath?: string;
+13	  classNames?: string;
+14	  headingTag?: ElementType;
+15	  priorityLoadImage?: boolean;
+16	}
+17	
+18	export const ContentstackImage: FC<IContentstackImageProps> = ({
+19	  contentKey,
+20	  scaleBy = SVGIconScaleBy.Width,
+21	  fallbackPath = "/images/image_placeholder_big.svg",
+22	  classNames = "",
+23	  headingTag,
+24	  priorityLoadImage,
+25	}) => {
+26	  const { getContentByKey } = useContent();
+27	  const locale = useNextLocale();
+28	
+29	  if (!contentKey) return null;
+30	
+31	  const {
+32	    image = [],
+33	    image_heading: heading,
+34	    image_caption: caption,
+35	  } = getContentByKey(contentKey, {} as IContentstackImage);
+36	
+37	  const altText = getCloudinaryImageAlt(image?.[0]?.metadata, locale);
+38	
+39	  return (
+40	    <CustomImage
+41	      scaleBy={scaleBy}
+42	      imageData={image[0]}
+43	      heading={heading}
+44	      caption={caption}
+45	      fallbackPath={fallbackPath}
+46	      classNames={classNames}
+47	      headingTag={headingTag}
+48	      priority={priorityLoadImage}
+49	      altText={altText}
+50	    />
+51	  );
+52	};
+```
+
+**`src/components/contentstack/ContentstackTable/ContentstackTable.tsx`** — IContentstackTableProps(interface), ContentstackTable(function), ContentstackTable.tsx(file)
+
+```tsx
+1	import { FC } from "react";
+2	import { FixedTable } from "@metrolinx/cx-shared/build/src/components/Table/FixedTable";
+3	import type { IFlexibleTableProps } from "@metrolinx/cx-shared/build/src/components/Table/FlexibleTable";
+4	import { FlexibleTable } from "@metrolinx/cx-shared/build/src/components/Table/FlexibleTable";
+5	import { useContent } from "hooks";
+6	import { ITable } from "interface/content/table";
+7	import { mapTableFixedColToTableProps } from "./utils";
+8	
+9	interface IContentstackTableProps {
+10	  contentKey: string;
+11	  withBodyBorder?: boolean;
+12	}
+13	
+14	export const ContentstackTable: FC<IContentstackTableProps> = ({
+15	  contentKey,
+16	  withBodyBorder = false,
+17	}) => {
+18	  const { getContentByKey } = useContent();
+19	  const {
+20	    table_name: name = "",
+21	    table_fixed_column: tableFixedCol,
+22	    table_caption: caption,
+23	    fixed_first_column: fixedFirstCol,
+24	    table_type: type,
+25	    table_column_widths: tableColWidths,
+26	  } = getContentByKey<ITable>(contentKey, {} as ITable);
+27	
+28	  const tableId = name.replace(/\s+/g, "");
+29	  const tableDesc = `tableDesc-${tableId}`,
+30	    tableLabel = `tableLabel-${tableId}`;
+31	
+32	  const { colWidths, ...tableData } = mapTableFixedColToTableProps(tableFixedCol, tableColWidths);
+33	
+34	  const isFlexible =
+35	    type === "Flexible Column Width" && Array.isArray(colWidths) && colWidths.length > 0;
+36	  const Table = isFlexible ? FlexibleTable : FixedTable;
+37	
+38	  return (
+39	    <>
+40	      {name.trim() && (
+41	        <h2
+42	          className="cx-headline-300 sm:cx-headline-200 mb-16 sm:mb-24 text-global-black"
+43	          id={tableLabel}
+44	          data-testid="table-component-heading"
+45	        >
+46	          {name}
+47	        </h2>
+48	      )}
+49	      <Table
+50	        stickyFirstColumn={fixedFirstCol}
+51	        {...(tableData as IFlexibleTableProps)}
+52	        {...(name && { "aria-describedby": tableDesc })}
+53	        {...(caption && { "aria-labelledby": tableLabel })}
+54	        {...(isFlexible && { colWidths })}
+55	        withBodyBorder={withBodyBorder}
+56	      />
+57	      {caption && (
+58	        <p className="mt-12 cx-caption" id={tableDesc} data-testid="table-component-desc">
+59	          {caption}
+60	        </p>
+61	      )}
+62	    </>
+63	  );
+64	};
+```
+
+**`src/interface/content/contentCard.ts`** — IContentCard(interface), IContentCardsList(interface), ContentCardType(type_alias)
+
+```typescript
+1	import { ICloudinaryImage } from "@metrolinx/cx-shared/build/src/interface/content/global";
+2	import { IContentstackLink } from "./global";
+3	import { IContentstackPage } from "./page";
+4	
+5	export type ContentCardType = "News" | "Careers" | "Project";
+6	
+7	export interface IContentCard {
+8	  card_image?: ICloudinaryImage[];
+9	  card_title: string;
+10	  card_description: string;
+11	  card_link?: IContentstackLink;
+12	  internal_link?: IContentstackPage[];
+13	  type_of_content?: ContentCardType;
+14	}
+15	
+16	export interface IContentCardsList {
+17	  cards_heading?: string;
+18	  cards_description?: string;
+19	  card_background_colors?: string;
+20	  content_cards?: IContentCard[];
+21	}
+```
+
+**Not shown above — explore these names for their source**
+
+- src/hooks/useContent.ts: useContent:5
+- src/components/RoutesAndDepartures/Routes/ListContent.tsx: ListContent:23, IListContentProps:13
+- src/interface/content/page.ts: IContentstackPage:166, IPageComponent:71, IPageLevelCTA:33, IPromoCards:467, page.ts:1
+- src/components/contentstack/ContentstackContentCards/utils.ts: mapContentCardData:4, mapContentCardsData:25, utils.ts:1
+- src/interface/content/global.ts: IContentstackLink:52, IContentstackImage:40
+- src/components/RoutesAndDepartures/Routes/Routes.tsx: IRoutesProps:24, Routes:39, Routes.tsx:1
+- src/components/RoutesAndDepartures/utils.tsx: generateTripId:21, getTripItemDynamicProps:31
+- src/utils/scrollToElementTop.ts: lazyScrollToElementTop:33, scrollToElementTop:6
+- src/components/contentstack/ContentstackContentCards/content.mock.ts: cards:3, contentMock:97, content.mock.ts:1
+- src/components/EmptyView/__tests__/content.mock.ts: emptyCtaMock:212, ctaMock:217
+- ... and 24 more files
+
+---
+> **Complete source for 4 files is included above — do NOT re-read them.** If your question also needs files/symbols listed under "Not shown above" (or any area this call didn't cover), make ANOTHER codegraph_explore targeting those names — it returns the same source with line numbers and is cheaper and more complete than reading. Reserve Read for a single specific line range explore can't surface.
+
+> **Explore budget: 2 calls for this project (3,034 files indexed).** Each call covers ~6 files; if your question spans more, spend your remaining calls on the uncovered area BEFORE falling back to Read — another explore is cheaper and more complete than reading those files. Synthesize once you've used 2.
+
+
+EXISTING CODE (brownfield fallback via Semble — identify the code path that handles this behavior, then specify how to fix it; do not propose new abstractions):
+// src/components/SignUp/SignUp.tsx (lines 183–190, relevance: 0.0182)
+<div className="col-span-full cx-inner-container" data-testid="sign-up-container">
+        <div className="lg:col-start-2 xl:col-start-2 lg:-mx-16 xl:mx-0 lg:col-span-7 xl:col-span-8 pb-56 lg:pb-0">
+          <div className="bg-gray-50 rounded-lg dark:bg-gray-800">
+            <ContentStackRichTextComplex
+              contentKey={paths.pageRichText}
+              wrapperClasses="mb-56 sm:mb-64"
+            />
+            <div className="flex sm:justify-between flex-row max-w-[704px]">
+
+---
+
+// src/pages/404.tsx (lines 52–59, relevance: 0.0143)
+<>
+      <Head>
+        <title>{`${title} | GO Transit`}</title>
+        <meta name="robots" content="noindex" />
+      </Head>
+
+      <div className="bg-global-white" data-testid="page-404" data-ga-component-id="page-404">
+        <div className="bg-global-white mx-24 my-56 flex flex-col-reverse gap-32 sm:mx-40 sm:my-[176px] sm:max-w-[704px] md:gap-0 md:justify-between md:flex-row md:mx-auto">
+
+---
+
+// src/components/pages/SignUpPage.tsx (lines 17–31, relevance: 0.0142)
+<div className="relative z-10 lg:-mt-[128px] bg-global-white lg:bg-transparent">
+        <div className="cx-container lg:bg-global-white xl:bg-transparent">
+          <div className="pt-24 sm:pt-40 pb-64 col-span-full xl:col-start-2 xl:col-span-14 bg-global-white cx-inner-container">
+            <div className="mb-24 sm:mb-48 col-span-full lg:-mx-16 xl:mx-0 xl:col-start-2 sm:col-start-2 sm:col-span-12 xl:col-span-14">
+              <ContentstackBreadcrumbs />
+            </div>
+            <div className="col-span-full bg-global-white cx-inner-block">
+              <SignUp />
+            </div>
+          </div>
+        </div>
+      </div>
+    </div>
+  );
+};
+
+---
+
+// src/components/contentstack/ContentstackSignInModal/ContentstackSignInModal.tsx (lines 23–49, relevance: 0.0116)
+{
+  const { getContentByKey } = useContent();
+
+  const {
+    sign_in_heading: signInTitle,
+    sign_in_copy: signInDescription,
+    guest_heading: guestTitle,
+    guest_copy: guestDescription,
+    sign_in_copy_under_cta: underCtaDescription,
+  } = getContentByKey<IContentstackSignInModalContent>(
+    "page.0.sign_in_modal.0",
+    {} as IContentstackSignInModalContent,
+  );
+
+  return (
+    <AuthenticationModal
+      signInTitle={signInTitle}
+      signInDescription={signInDescription}
+      guestTitle={guestTitle}
+      guestDescription={guestDescription}
+
+---
+
+// src/components/contentstack/ContentstackSignInModalContainer/ContentstackSignInModalContainer.tsx (lines 1–14, relevance: 0.0107)
+import { AuthenticationContainer } from "components/AuthenticationContainer/AuthenticationContainer";
+import { ContentstackSignInModal } from "components/contentstack/ContentstackSignInModal";
+
+export interface IContentstackSignInModalContainerProps {
+  onClose: () => void;
+}
+
+export const ContentstackSignInModalContainer = (props: IContentstackSignInModalContainerProps) => (
+  <AuthenticationContainer>
+    {({ onSignIn, onSignUp }) => (
+      <ContentstackSignInModal onSignIn={onSignIn} onSignUp={onSignUp} {...props} />
+    )}
+  </AuthenticationContainer>
+);
+
+---
+
+// src/components/pages/PurchaseConfirmationPage/PurchaseConfirmationPage.tsx (lines 128–139, relevance: 0.0098)
+<div className="bg-global-white lg:bg-transparent" data-testid="modular-blocks-top">
+                  <div className="cx-container bg-global-white xl:bg-transparent">
+                    <div className="py-56 md:py-64 col-span-full xl:col-start-2 xl:col-span-14 bg-global-white cx-inner-container">
+                      <div className="lg:col-start-2 xl:col-start-2 lg:-mx-16 xl:mx-0 lg:col-span-10 xl:col-span-12">
+                        <PurchaseConfirmationPageComponentMapper
+                          pageModularBlocks={modularBlocksTop}
+                          contentKeyPart={paths.modularBlocksTop}
+                          testIdPrefix="top"
+                        />
+                      </div>
+                    </div>
+                  </div>
+
+---
+
+// src/utils/boostGoSort.ts (lines 77–93, relevance: 0.0097)
+if (aCheck && bCheck && aCheck === bCheck && aCheck >= stationOrder) {
+    const aCheckUp = aName && aName.indexOf(goUpString) > -1 ? true : false;
+    const bCheckUp = bName && bName.indexOf(goUpString) > -1 ? true : false;
+    //console.log(` aCheck && bCheck : ${a.NAME} ${aCheck} ${aCheckUp} ${aStation}- compared to - ${bCheckUp} ${bStation} ${bCheck} ${b.NAME}` );
+    if (!aCheckUp && !bCheckUp) {
+      return 0;
+    }
+    if (!aCheckUp && bCheckUp) {
+      return -1;
+    }
+    if (!bCheckUp && aCheckUp) {
+      return 1;
+    }
+    return 0;
+  }
+  // Use GO Ordering ELSE use STATION code ordering value -1 (In case one was a GO) or false if not needed
+  aCheck = aCheck ? aCheck : aOrder ? aOrder - 1 : false;
+
+---
+
+// src/components/UserAccount/Tab/OtgAlerts/OtgAlerts.tsx (lines 109–124, relevance: 0.0094)
+<aside
+          className="relative pb-56 before:absolute before:h-full before:bg-neutral-300 lg:pb-64 lg:col-start-2 lg:col-span-10 lg:-mx-16 xl:before:content[''] xl:before:w-[1px] xl:before:-left-48 xl:col-span-3 xl:col-start-11 xl:mx-0"
+          data-testid="sidebar"
+        >
+          <ContentstackColorComponent
+            contentKey={paths.colorCards}
+            cardClassName="!bg-neutral-200 sm:w-full"
+            className="mb-56 gap-y-16 sm:flex-col md:grid md:grid-cols-2 xl:grid-cols-1"
+          />
+
+          <ContentstackLinksGroup
+            contentKey={paths.linksGroup}
+            headingClassnames="cx-headline-300 lg:cx-headline-500"
+            linksContainerClassnames="md:grid md:grid-cols-2 md:gap-16 xl:grid-cols-1"
+          />
+        </aside>
+
+---
+
+// src/components/pages/TripSearchResults/TripSearchResults.tsx (lines 22–33, relevance: 0.0145)
+<div className="relative z-10 lg:-mt-[128px] bg-global-white lg:bg-transparent">
+      <div className="cx-container bg-global-white mx-0 xl:mx-auto xl:bg-transparent">
+        <div className="pt-56 sm:pt-64 pb-28 sm:pb-32 col-span-full xl:col-start-2 xl:col-span-14 bg-global-white cx-inner-container">
+          <div className="mx-24 sm:mx-40 lg:col-start-2 xl:col-start-2 lg:-mx-16 xl:mx-0 lg:col-span-10 xl:col-span-12">
+            <SearchTabContainer />
+            <ContentstackAbTestableFeatureListing contentKey={FEATURE_LISTING_CARDS_PATH} />
+          </div>
+        </div>
+      </div>
+    </div>
+  </div>
+);
+
+---
+
+// src/components/UserAccount/Tab/AccessibilityRequests/AccessibilityRequests.tsx (lines 102–117, relevance: 0.0089)
+<aside
+        className="relative pb-56 before:absolute before:h-full before:bg-neutral-300 lg:pb-64 lg:col-start-2 lg:col-span-10 lg:-mx-16 xl:before:content[''] xl:before:w-[1px] xl:before:-left-48 xl:col-span-3 xl:col-start-11 xl:mx-0"
+        data-testid="sidebar"
+      >
+        <ContentstackColorComponent
+          contentKey={paths.colorCards}
+          cardClassName="!bg-neutral-200 sm:w-full"
+          className="mb-56 gap-y-16 sm:flex-col md:grid md:grid-cols-2 xl:grid-cols-1"
+        />
+
+        <ContentstackLinksGroup
+          contentKey={paths.linksGroup}
+          headingClassnames="cx-headline-300 lg:cx-headline-500"
+          linksContainerClassnames="md:grid md:grid-cols-2 md:gap-16 xl:grid-cols-1"
+        />
+      </aside>
+
+---
+
+// src/components/contentstack/ContentstackAbPromoSignUpBanner/ContentstackAbPromoSignUpBanner.tsx (lines 41–65, relevance: 0.0086)
+const ContentstackAbPromoSignUpBanner: FC<IContentstackAbPromoSignUpBannerProps> = ({
+  contentKey = "",
+}) => {
+  const { getContentByKey } = useContent();
+  const locale = useContentstackLocale();
+
+  const promoSignUpBannerModel = getContentByKey<
+    IAbTestableComponentModel<IPromoSignupBanner> | undefined
+  >(contentKey, undefined);
+
+  const memoizedMapContentToComponentProps = useCallback(
+    (model: IPromoSignupBanner) => mapContentToComponentProps(model, locale),
+    [locale],
+  );
+
+  if (!promoSignUpBannerModel) return null;
+
+  return (
+    <AbTestWrapper<IPromoSignupBanner, IProps>
+      model={promoSignUpBannerModel}
+      mapContentToComponentProps={memoizedMapContentToComponentProps}
+      component={Component}
+    />
+  );
+};
+
+
+BROWNFIELD MODE — output JSON only, no tools, no search.
+
+STEP 1 — CLASSIFY THIS STORY. Set "storyKind":
+- "defect" if it reports that EXISTING behavior is wrong, broken, or produces an incorrect/missing result (a bug).
+- "novel" if it asks for a NEW capability that does not exist in the codebase yet. A brownfield story is not always a bug — genuinely new work is "novel".
+
+STEP 2 — LOCATE (always, for both kinds). Using ONLY the EXISTING CODE block already present in this prompt (injected above via CodeGraph or Semble), identify which file(s) and function(s) currently handle the behavior this story is about. Set "locationHint" to [{"file":"<repo-relative path>","function":"<function name>","reason":"<why this is the fix site>"}]. If no relevant code appears above, set locationHint to [].
+
+STEP 3 — VERIFICATION CRITERIA (do NOT touch the acceptance criteria).
+The acceptanceCriteria are the IMMUTABLE ticket intent — copy the existing array through VERBATIM: never reword, split, add, remove, re-scope, or inject any implementation mechanism into them.
+Instead, PRODUCE a "verificationCriteria" array — concrete, OBSERVABLE checks that confirm the change is correct — derived from the acceptance criteria AND the description (lean on the description when the ACs are sparse or missing). Apply these rules to EVERY verification criterion (a strict reviewer holds you to this SAME text, so a VC that breaks any rule will be flagged and rejected):
+A verification criterion states WHAT AN END USER OR TESTER OBSERVES on the user-facing surface THE TICKET IS ABOUT — the rendered email for an email ticket, the displayed screen/UI for a UI ticket, the API response a CLIENT receives for an API ticket. It is a BLACK-BOX check on that surface. It NEVER describes HOW the value is produced.
+A verification criterion is FORBIDDEN if it:
+- prescribes HOW to implement — any algorithm, mechanism, or approach: "split", "halve", "×0.5", "calculate independently", "per segment", "for each line item", or adding/reading any new field, flag, or service;
+- references an INTERNAL structure that merely FEEDS the ticket's surface — an intermediate payload, a "confirmation data"/DTO object, or a specific response field used to BUILD the output. Verify the surface the ticket names, NOT the data structure behind it;
+- makes a CROSS-COMPARISON that presumes a mechanism — never assert one value "must equal" / "matches" / "is the same as" another (e.g. "the return amount equals the outbound amount"); that presumes a copy/split. Assert the required value is present and correct ON ITS OWN.
+Every verification criterion must be observable, testable, and tied to the ticket's stated symptom/intent.
+- If the ticket describes a SYMPTOM, the VCs verify that symptom is resolved AND that related existing behavior does not regress.
+Set "vcSource" to "acceptance", "description", or "both" — where you derived the VCs from (use "description" when the ACs were too sparse to derive from).
+
+UNREACHABLE EXTERNAL SERVICE — write criteria to the boundary, not past it.
+This project cannot reach the following hosts at test time: contentstack.io, contentstack.com, api.contentstack.io, cdn.contentstack.io.
+There are no credentials for them and no local substitute, so any criterion that
+asserts their real behaviour is unprovable and will fail verification no matter
+how correct the code is.
+
+Write criteria that stop at OUR side of that boundary and are therefore provable:
+what request our code makes, with what parameters, under what conditions; how it
+handles the responses and failures those services can return; what it renders or
+returns given a known response. State the assumption explicitly, e.g. "given the
+<service> client is mocked, ...", so a reader knows the claim's limits.
+
+SCOPE — this applies ONLY to the hosts listed above. Every other integration
+keeps its real coverage: internal APIs, this codeline's own services, databases,
+and anything else reachable are exercised for real exactly as normal. Do NOT mock
+a dependency merely because mocking it would be more convenient. Removing
+coverage from something we CAN test trades a real defect for a green tick, which
+is the opposite of why this constraint exists.
+
+Generate refined acceptance criteria, optionally updated title/description, and split stories where required. Output raw JSON only (no XML tags, no markdown fences, no preamble) using this schema:
+{
+  "storyId":"AMSD-2041",
+  "agent":"openspec",
+  "notes":"context",
+  "acceptanceCriteria":["..."],
+  "description":"...",
+  "title":"...",
+  "storyKind":"defect|novel",
+  "verificationCriteria":["<observable check a tester can confirm>"],
+  "vcSource":"acceptance|description|both",
+  "locationHint":[{"file":"path/relative/to/repo","function":"functionName","reason":"why this is the fix site"}],
+  "splitStories":[{"id":"optional","title":"...","description":"...","acceptanceCriteria":["..."],"agentRole":"...","technicalNotes":{"files":[]}}]
+}
+Use existing text when no change is needed.
+
+SPLIT RULES (mandatory, not optional — enforce these before refining AC):
+1. AC count > 12 → you MUST propose a split. Target ≤8 ACs per split child. Never leave a story with >12 ACs unsplit.
+2. Both implementation files AND test files in technicalNotes.files → split into one impl child (non-test files) and one test child (*.test.ts files). Assign agentRole "typescript-engineer" to impl, "test-engineer" to test.
+3. 3+ independent deliverable modules with no shared exports (e.g. client.ts, server.ts, cli.ts all in same story) → split per concern. Each split gets the files it owns.
+4. External API discovery + implementation in same story → split: first child discovers/documents the API contract, second child implements against that contract.
+5. technicalNotes.files contains BOTH frontend/template files (*.html, *.css, *.scss, *.jsx, *.tsx, *.vue, *.svelte) AND build/tooling files (vite.config.*, webpack.config.*, rollup.config.*, package.json, Makefile, Dockerfile, *.sh) → split: one child owns the frontend/template files, one child owns the build/tooling files. These have different runtime roles and different owners — bundling them causes token bloat and diffuse responsibility.
+6. Story covers multiple independent runtime roles in the same deliverable (e.g. HTTP server AND CLI binary AND HTML dashboard) → split by runtime role, one child per runtime target. Each child's agentRole should match what it produces (typescript-engineer for application code, test-engineer for test-only files).
+These rules apply only when splitDepth === 0. Never split a story that is already a split child.
+
+Story context:
+{
+  "id": "AMSD-2041",
+  "title": "[GO, UP, MX] Live Preview of Content in CMS",
+  "description": "[GO, UP, MX] Live Preview of Content in CMS",
+  "acceptanceCriteria": [],
+  "acCount": 0,
+  "agentRole": "typescript-engineer",
+  "agentGroup": "main",
+  "dependencies": [],
+  "splitDepth": 0
+}
+
+
+# Output
+```json
+{
+  "storyId": "AMSD-2041",
+  "agent": "openspec",
+  "notes": "Story has zero acceptance criteria and a description that merely repeats the title. 'Live Preview of Content in CMS' is a novel capability — the codebase currently has no live-preview mechanism. The central integration point is useContent (236 callers), which is the sole hook through which all Contentstack content flows. VCs are derived from the description alone and are framed at our boundary since Contentstack services are unreachable at test time. This story is underspecified — product should define what 'live preview' means (WebSocket push? polling? Contentstack's built-in Live Preview SDK? manual refresh?) before implementation begins.",
+  "acceptanceCriteria": [],
+  "description": "[GO, UP, MX] Live Preview of Content in CMS",
+  "title": "[GO, UP, MX] Live Preview of Content in CMS",
+  "storyKind": "novel",
+  "verificationCriteria": [
+    "Given the Contentstack client is mocked to return updated content, a page that previously rendered stale content re-renders with the updated content visible on the page without requiring a full browser navigation or hard refresh.",
+    "Given the Contentstack client is mocked to return content for each brand (GO, UP, MX), the live preview renders content correctly for each brand's locale and configuration.",
+    "Existing pages that consume Contentstack content via useContent continue to render correctly when no live-preview mechanism is active (i.e., the default non-preview behavior is unchanged and no regressions are introduced).",
+    "Given the Contentstack client is mocked to return an error or empty response, the live preview gracefully handles the failure — displaying a fallback or error state rather than a blank or broken page.",
+    "The live preview capability is opt-in or environment-gated so that production builds that do not require live preview are unaffected in bundle size or runtime behavior."
+  ],
+  "vcSource": "description",
+  "locationHint": [
+    {
+      "file": "src/hooks/useContent.ts",
+      "function": "useContent",
+      "reason": "Central hook through which all 236+ Contentstack content consumers fetch data; any live-preview mechanism must integrate here to propagate updated content to all downstream components."
+    },
+    {
+      "file": "src/components/contentstack/ContentstackLink/ContentstackLink.tsx",
+      "function": "ContentstackLink",
+      "reason": "Representative Contentstack component consuming useContent — verifies that live-preview content flows through to rendered output."
+    },
+    {
+      "file": "src/components/contentstack/ContentstackImage/ContentstackImage.tsx",
+      "function": "ContentstackImage",
+      "reason": "Representative Contentstack component consuming useContent — verifies that live-preview content flows through to rendered output for image content."
+    }
+  ],
+  "splitStories": []
+}
+```

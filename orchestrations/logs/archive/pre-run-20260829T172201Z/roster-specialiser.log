@@ -1,0 +1,78 @@
+# Prompt
+You are specialising a generic agent roster for ONE project. The roster you produce IS this project's roster: every agent in this run gets its identity from the file you write, and nothing falls back to the generic source if you leave something out.
+
+## What you are given
+
+The canonical roster, verbatim, at:
+
+  /home/bradleyjerome/projects/ai/epam-cli/orchestrations/logs/roster-canonical-copy.json
+
+Read it with your tools. Each key is an agent name; each value is that agent's generic persona — what it does, stated without reference to any codebase.
+
+The project:
+Project config: /home/bradleyjerome/projects/ai/epam-cli/orchestrations/scripts/../projects/metrolinx
+Tickets in scope: AMSD-1919: Go‑Checkout Page - Email & Confirm Email Case Sensitivity
+Agents this project minted: checkout-form-engineer [implementer], gotransit-checkout-detective [investigator]
+
+The codelines it works on:
+- gotransit (/home/bradleyjerome/projects/metrolinx/next.gotransit.com) deps: @algolia/autocomplete-js, @azure/search-documents, @contentstack/utils, @googlemaps/js-api-loader, @hookform/error-message, @metrolinx/cx-shared, @react-aria/focus, @stripe/react-stripe-js, @stripe/stripe-js, @uniformdev/context, @uniformdev/context-gtag, @uniformdev/context-react, akamai-edgegrid, algoliasearch, aria-hidden, axios, body-scroll-lock, busboy, classnames, cloudinary, contentstack, core-js, country-state-city, date-fns, html-react-parser, i18next, joi, jsonwebtoken, lodash.capitalize, lodash.chunk, lodash.clonedeep, lodash.debounce, lodash.filter, lodash.isempty, lodash.isequal, lodash.isnil, lodash.isnumber, lodash.isobject, lodash.isstring, lodash.isundefined, lodash.keyby, lodash.mergewith, lodash.noop, lodash.omit, lodash.omitby, lodash.orderby, lodash.reject, micro, next, next-auth, next-i18next, next-sitemap, object-hash, pino, qs, react, react-autosuggest, react-beforeunload, react-dom, react-dropzone, react-error-boundary, react-focus-lock, react-hook-form, react-i18next, react-select, react-youtube, resize-observer-polyfill, swiper, swr, uuid, @commitlint/cli, @contentstack/management, @next/bundle-analyzer, @tailwindcss/aspect-ratio, @tailwindcss/line-clamp, @testing-library/jest-dom, @testing-library/react, @testing-library/user-event, @trivago/prettier-plugin-sort-imports, @types/busboy, @types/form-data, @types/google.maps, @types/html-to-text, @types/jsonwebtoken, @types/lodash.capitalize, @types/lodash.chunk, @types/lodash.clonedeep, @types/lodash.debounce, @types/lodash.filter, @types/lodash.isempty, @types/lodash.isequal, @types/lodash.isnil, @types/lodash.isnumber, @types/lodash.isobject, @types/lodash.isstring, @types/lodash.isundefined, @types/lodash.keyby, @types/lodash.mergewith, @types/lodash.noop, @types/lodash.omit, @types/lodash.omitby, @types/lodash.orderby, @types/lodash.reject, @types/node, @types/object-hash, @types/qs, @types/react, @types/react-autosuggest, @types/react-beforeunload, @types/react-dom, @types/react-google-recaptcha, @types/react-input-mask, @types/uuid, @typescript-eslint/eslint-plugin, @typescript-eslint/parser, @uniformdev/cli, autoprefixer, babel-jest, commitlint-config-jira, commitlint-plugin-jira-rules, cssnano, dotenv, esbuild, eslint, eslint-config-next, eslint-config-prettier, eslint-plugin-jest, eslint-plugin-prettier, form-data, husky, i18next-scanner, i18next-scanner-typescript, jest, jest-environment-jsdom, jest-environment-node, jest-transform-css, lint-staged, node-mocks-http, pino-pretty, postcss, postcss-import, prettier, rimraf, stylelint, stylelint-config-prettier, stylelint-config-standard, tailwindcss, ts-jest, typescript
+
+The stack in use:
+node
+
+## What to write
+
+Write a JSON file to:
+
+  /home/bradleyjerome/projects/ai/epam-cli/orchestrations/projects/metrolinx/roster.json
+
+of exactly this shape:
+
+{"agents": {"<agent name>": {"persona": "...", "kind": "implementer|investigator|seam", "ancestor": "<canonical agent name>", "derivedFromSha256": "<sha256 of the ancestor's persona text>", "seam": "<the seam this agent enters by — required only for an agent you ADD>"}}}
+
+EVERY AGENT IN THE CANONICAL ROSTER MUST APPEAR. A missing agent is not a smaller roster — it is an agent with no identity at the moment the pipeline invokes it, and the run has nowhere else to look. Do not decide that an agent is irrelevant to this project; you cannot know which seams a run will reach.
+
+## How to specialise
+
+For each agent, keep WHAT IT DOES and replace WHAT IT KNOWS. The generic persona states a role; your version states that same role against this codeline — its language, its frameworks, its layout, the helpers and conventions that already exist, the commands it actually runs. Read the code to find these. An assertion about the codeline that you did not verify is worse than a generic sentence, because the next reader cannot tell which is which.
+
+Do not weaken a rule while specialising it. If the generic persona forbids something, says a finding must carry evidence, or names a check that must pass, that survives verbatim in meaning — you are changing what the agent knows, never what it is required to do.
+
+KEEP EACH PERSONA AT THE LENGTH THE WORK NEEDS. A persona that lists every file in the repository is not more specialised, it is less usable: the agent reads it before every invocation.
+
+## Ancestry
+
+Each entry names the canonical agent it derives from. For an agent that exists in the canonical roster, that is the agent itself.
+
+If this project needs an agent the canonical roster does not have, you may add one — but it MUST name the canonical agent it is closest to as its ancestor. That is not bookkeeping: an agent inherits its ladder, its tool grant and its output contract from its ancestor, so an agent invented from nothing has no budget, no tools and no way for the pipeline to receive what it returns.
+
+`derivedFromSha256` is the SHA-256 of the ancestor's persona text exactly as it appears in the canonical copy you were given. It records what you derived from, so that a later change to the canonical roster is detectable rather than silent.
+
+## Which seam an agent enters by
+
+An agent does not run on its own. It enters the pipeline through a SEAM, which decides its ladder, its tool grant, its output contract and the prompt it executes. For an agent that exists in the canonical roster, the seam is already known and you do not state it.
+
+For an agent you ADD, name the seam in the `seam` field. It must be one the pipeline already declares — you are choosing which existing door this agent comes through, not inventing one. If none fits, the agent you are adding is doing work the pipeline has no place for, and adding it will not create that place.
+
+Omitting it does not leave the question open: the name is matched against patterns instead, and a pattern is a guess about what an agent does based on how it is spelled. That is how an agent named for review came to enter through an inference seam, with another seam's budget and tools.
+
+## What you are not doing
+
+You are not editing the canonical roster. You are not judging whether an agent should exist. You are not writing prompts — an agent's persona says who it is; its instructions for a task live in that task's prompt.
+
+
+## Your previous attempt was REFUSED
+
+the specialiser call failed: prompt runner exited with code 1
+
+Produce the roster again, correcting exactly this. Change nothing else: the rest of your previous attempt was accepted, and rewriting it invites a second refusal for a different reason.
+
+
+
+# Output
+/home/bradleyjerome/projects/ai/epam-cli/orchestrations/scripts/llm-handler.sh: line 57: warning: command not found
+/home/bradleyjerome/projects/ai/epam-cli/orchestrations/scripts/llm-handler.sh: line 58: warning: command not found
+[ai-run] attempt 2/3 for 'roster-specialiser' — at the top of its declared chain (claude-opus-5), retrying the same rung
+[ai-run] attempt 3/3 for 'roster-specialiser' — at the top of its declared chain (claude-opus-5), retrying the same rung
+[ai-run] provider 'qwen' returned NO completion record — truncated or empty reply, treating as FAILURE
+[ai-run] 'roster-specialiser' failed after 3 attempt(s) across every provider and ladder rung.

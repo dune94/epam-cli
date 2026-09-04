@@ -1,0 +1,46 @@
+[repro-test-writer] writing test for AMSD-2041 (kind: novel) → src/context/ContentstackContext.spec.ts (convention: .spec.ts, example: __tests__/next-sitemap.config.spec.ts)
+[repro-test-writer] test produced and validated on attempt 1 (model z-ai/glm-5.1)
+[repro-test-writer] WARNING: commit failed — repro-gate will report. Output:
+[repro-test-writer] WARNING: [STARTED] Preparing lint-staged...
+[SUCCESS] Preparing lint-staged...
+[STARTED] Running tasks for staged files...
+[STARTED] .lintstagedrc.js — 1 file
+[STARTED] src/**/*.ts?(x) — 1 file
+[STARTED] src/**/*.(ts|js)?(x) — 1 file
+[STARTED] **/*.(md|json|html) — 0 files
+[STARTED] src/**/*.css — 0 files
+[SKIPPED] **/*.(md|json|html) — no files
+[SKIPPED] src/**/*.css — no files
+[STARTED] npm run check-types
+[STARTED] eslint /home/bradleyjerome/projects/metrolinx/next.gotransit.com/src/cont…
+[FAILED] eslint /home/bradleyjerome/projects/metrolinx/next.gotransit.com/src/context/ContentstackContext.spec.ts [FAILED]
+[FAILED] eslint /home/bradleyjerome/projects/metrolinx/next.gotransit.com/src/context/ContentstackContext.spec.ts [FAILED]
+[FAILED] eslint /home/bradleyjerome/projects/metrolinx/next.gotransit.com/src/context/ContentstackContext.spec.ts [FAILED]
+[STARTED] Applying modifications from tasks...
+[SKIPPED] Skipped because of errors from tasks.
+[STARTED] Reverting to original state because of errors...
+[FAILED] npm run check-types [KILLED]
+[FAILED] npm run check-types [KILLED]
+[SUCCESS] Reverting to original state because of errors...
+[STARTED] Cleaning up temporary files...
+[SUCCESS] Cleaning up temporary files...
+
+✖ eslint /home/bradleyjerome/projects/metrolinx/next.gotransit.com/src/context/ContentstackContext.spec.ts:
+
+/home/bradleyjerome/projects/metrolinx/next.gotransit.com/src/context/ContentstackContext.spec.ts
+   21:12  error  Do not pass children as props. Instead, pass them as additional arguments to React.createElement  react/no-children-prop
+   66:9   error  Do not pass children as props. Instead, pass them as additional arguments to React.createElement  react/no-children-prop
+  113:9   error  Do not pass children as props. Instead, pass them as additional arguments to React.createElement  react/no-children-prop
+  122:9   error  Do not pass children as props. Instead, pass them as additional arguments to React.createElement  react/no-children-prop
+  194:16  error  Do not pass children as props. Instead, pass them as additional arguments to React.createElement  react/no-children-prop
+  230:16  error  Do not pass children as props. Instead, pass them as additional arguments to React.createElement  react/no-children-prop
+
+✖ 6 problems (6 errors, 0 warnings)
+
+
+✖ npm run check-types:
+
+> @metrolinx/gotransit@1.0.0 check-types
+> tsc --noEmit --incremental
+
+husky - pre-commit hook exited with code 1 (error)

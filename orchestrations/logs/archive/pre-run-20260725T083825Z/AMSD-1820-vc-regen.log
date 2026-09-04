@@ -1,0 +1,27 @@
+# Prompt
+Regenerate the VERIFICATION CRITERIA for this brownfield story. Your previous verification criteria were FLAGGED and must be fixed:
+- VC 1 references 'for that return segment' — prescribes a per-segment mechanism; restate as the discount amount displayed is correct for a return-trip ticket
+- VC 4 says 'full discount amount' — 'full' implies contrast with a split, prescribing a mechanism; restate as 'the correct discount amount'
+
+Acceptance criteria (IMMUTABLE — the intent to verify; do NOT restate as-is, VERIFY them):
+- (none)
+Description: [Mozio] - The Promo code amount is NOT displayed as expected for Return trip tickets in the Mozio email confirmation
+
+A verification criterion states WHAT AN END USER OR TESTER OBSERVES on the user-facing surface THE TICKET IS ABOUT — the rendered email for an email ticket, the displayed screen/UI for a UI ticket, the API response a CLIENT receives for an API ticket. It is a BLACK-BOX check on that surface. It NEVER describes HOW the value is produced.
+A verification criterion is FORBIDDEN if it:
+- prescribes HOW to implement — any algorithm, mechanism, or approach: "split", "halve", "×0.5", "calculate independently", "per segment", "for each line item", or adding/reading any new field, flag, or service;
+- references an INTERNAL structure that merely FEEDS the ticket's surface — an intermediate payload, a "confirmation data"/DTO object, or a specific response field used to BUILD the output. Verify the surface the ticket names, NOT the data structure behind it;
+- makes a CROSS-COMPARISON that presumes a mechanism — never assert one value "must equal" / "matches" / "is the same as" another (e.g. "the return amount equals the outbound amount"); that presumes a copy/split. Assert the required value is present and correct ON ITS OWN.
+Every verification criterion must be observable, testable, and tied to the ticket's stated symptom/intent.
+
+Do NOT restate an acceptance criterion as-is — express what a tester OBSERVES that confirms it. Address every flag above.
+Output ONLY a JSON array of verification-criterion strings. No prose, no markdown.
+
+# Output
+[
+  "When a return-trip booking is made with a promo code, the Mozio email confirmation displays a discount amount that is correct for the return-trip ticket.",
+  "When a return-trip booking is made with a promo code, the promo code discount appears in the pricing/fare summary section of the Mozio email confirmation.",
+  "When a return-trip booking is made with a promo code, the total amount shown in the Mozio email confirmation reflects the promo code discount being applied.",
+  "When a return-trip booking is made with a promo code, the Mozio email confirmation displays the correct discount amount, with no portion of the discount missing from the email.",
+  "When a return-trip booking is made without a promo code, the Mozio email confirmation shows no promo code discount line or amount."
+]

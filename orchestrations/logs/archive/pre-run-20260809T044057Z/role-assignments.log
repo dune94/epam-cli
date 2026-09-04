@@ -1,0 +1,33 @@
+# Prompt
+Assign an implementation agent role to every story below.
+
+AVAILABLE ROLES — these are this project's own engineering roles. Choose from these and
+nothing else; the name you return must match one of them verbatim:
+- contentstack-live-preview-engineer
+    You are a senior frontend engineer specializing in Contentstack CMS integration and Live Preview for Next.js applications. You work across three codelines: gotransit, upexpress, and metrolinx — all Next.js + React + TypeScript projects that depend on the `contentstack` Delivery SDK and `@contentstack/utils`. Your missi
+- nextjs-content-architecture-engineer
+    You are a senior Next.js architect specializing in data-fetching patterns, React Context providers, and content security policy configuration. You work across three codelines: gotransit, upexpress, and metrolinx — all Next.js + React + TypeScript projects. Your mission for ticket AMSD-2041 is to restructure the content
+
+STORIES — a story listing more than one codeline needs ONE ASSIGNMENT PER CODELINE:
+- AMSD-2041: [GO, UP, MX] Live Preview of Content in CMS
+    codelines — 3 assignments required, one for EACH of: gotransit, upexpress, metrolinx
+    Original Requirements (discovery) AS a Content Author, I WANT to preview draft entries in CMS, SO THAT I can see how content will be shown on the website ability to preview draft entries in CMS Notes& Assumptions Limitation: Might not be possible to preview protected pages and content. Original Total Estimate: 8 Original FE Estimate: 8 Original DAM Estimate: 0 Original BE Estimate: 0
+
+Pick the role whose stated expertise actually covers the work the story describes. If two
+roles could plausibly own a story, prefer the one whose brief names the surface the story
+touches.
+
+THE UNIT OF ASSIGNMENT IS A (STORY, CODELINE) PAIR, NOT A STORY. A story listing three
+codelines needs THREE assignments — the repositories differ, so the right owner can differ.
+Count the codelines listed against each story and return exactly that many assignments for it,
+naming the codeline on every one. A story is not assigned until every codeline it lists is.
+
+THE OWNER MUST AUTHOR THE CODE. Assign the role that will EDIT THE FILES this story changes —
+the one whose brief names those files or directories. A role whose brief is about settings in
+a vendor's console, or about documentation, cannot deliver a story here: the agent's output is
+a change in a repository. Live 2026-08-07: this story went to the one role of three that owned
+no source files, and all such a role can produce is a configuration note. Where the story needs
+both console configuration and code, the code owner is the assignee.
+
+# Output
+{ "assignments": [ { "agentRole": "contentstack-live-preview-engineer", "codeline": "gotransit", "reason": "AMSD-2041 is about Live Preview of draft CMS entries in Next.js — the core expertise named in this role's brief (Contentstack CMS integration and Live Preview for Next.js). The story requires editing source files to wire up live-preview SDK integration, content delivery, and preview rendering, all of which this role owns across the gotransit codeline.", "storyId": "AMSD-2041" }, { "agentRole": "contentstack-live-preview-engineer", "codeline": "upexpress", "reason": "Same story, same Live Preview capability, different repository. This role explicitly covers the upexpress codeline and its brief names Contentstack Live Preview integration as its primary mission — it is the code owner that will edit the files needed to enable draft preview.", "storyId": "AMSD-2041" }, { "agentRole": "contentstack-live-preview-engineer", "codeline": "metrolinx", "reason": "Same story, same Live Preview capability, third repository. This role's brief lists metrolinx as one of its three codelines and its entire mission is Contentstack Live Preview for Next.js — it is the role that will author the code changes in this repo.", "storyId": "AMSD-2041" } ] }

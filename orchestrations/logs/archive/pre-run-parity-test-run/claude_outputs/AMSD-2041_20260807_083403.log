@@ -1,0 +1,577 @@
+=== Prompt for AMSD-2041 (attempt 5) ===
+CRITICAL — these files already exist. Their real content is injected below (## Existing File Contents) — you do NOT need to ReadFile them to see what's already there.
+Do NOT import or reference anything that doesn't appear in the injected content below — a plausible-sounding module name is not a real one.
+Only call ReadFile yourself if you need to see MORE of a file than what's shown (e.g. it was truncated), or a file not listed below.
+
+   - /home/bradleyjerome/projects/metrolinx/next.metrolinx.com/src/services/contentstack.ts (content already injected below — do not ReadFile it unless you need lines beyond what's shown)
+   - /home/bradleyjerome/projects/metrolinx/next.metrolinx.com/src/pages/_app.tsx (ReadFile this only if you need it — not a fix site; content omitted to keep the prompt small)
+   - /home/bradleyjerome/projects/metrolinx/next.metrolinx.com/src/hooks/useContent.ts (ReadFile this only if you need it — not a fix site; content omitted to keep the prompt small)
+   - /home/bradleyjerome/projects/metrolinx/next.metrolinx.com/src/interface/content/page.ts (ReadFile this only if you need it — not a fix site; content omitted to keep the prompt small)
+   - /home/bradleyjerome/projects/metrolinx/next.metrolinx.com/src/components/contentstack/ContentstackAttention/content.mock.ts (ReadFile this only if you need it — not a fix site; content omitted to keep the prompt small)
+   - /home/bradleyjerome/projects/metrolinx/next.metrolinx.com/src/components/contentstack/ContentStackGallery/ContentStackGallery.mock.ts (ReadFile this only if you need it — not a fix site; content omitted to keep the prompt small)
+---
+
+Implement user story AMSD-2041: [GO, UP, MX] Live Preview of Content in CMS
+
+## Story Description
+Original Requirements (discovery)  AS a Content Author, I WANT to preview draft entries in CMS, SO THAT I can see how content will be shown on the website
+ability to preview draft entries in CMS
+Notes& Assumptions  Limitation: Might not be possible to preview protected pages and content.
+Original Total Estimate:  8  Original FE Estimate:  8  Original DAM Estimate:  0  Original BE Estimate:  0
+
+## Acceptance Criteria
+- 
+
+
+## Root Cause Analysis & Prescribed Fix (AUTHORITATIVE — start here, do not re-trace)
+A code investigation already traced this bug to its cause and prescribed the minimal fix below. This is the plan of record. Apply it; do NOT re-read the whole codebase to re-derive it.
+
+The Acceptance Criteria above describe the desired END BEHAVIOR to VERIFY — they are NOT an implementation blueprint. Do not re-architect, split values, or add new fields/abstractions to satisfy an AC literally when the prescribed minimal fix already makes that AC pass. Implement the fix below; the ACs are how you check you got it right.
+
+HARD RULES:
+- Make the SMALLEST change that fixes the root cause. Fewer lines of code is always better.
+- REUSE existing functions. Before writing any new helper, search the repo for an existing util/parser/formatter that already does what you need (use the CodeGraph tool documented below) and call it. Writing novel code when a helper already exists is a defect to be rejected in review.
+- **src/services/contentstack.ts** (`options`): This is the Contentstack SDK initialization config where live_preview settings must be injected. The Stack is created from these options (line 91), and all content queries (getEntry, getSingleEntry, ContentstackFactory) flow through this Stack instance. Contentstack's Live Preview feature requires adding a live_preview config block to the Stack initialization options, making this the primary attachment point for the new preview capability.
+  - **Minimal fix:** Add a live_preview config block to the options object (after line 88, before the closing brace on line 89). The block should read CONTENTSTACK_PREVIEW_HOST and CONTENTSTACK_PREVIEW_TOKEN from process.env and, when present, set live_preview: { enable: true, host: CONTENTSTACK_PREVIEW_HOST, preview_token: CONTENTSTACK_PREVIEW_TOKEN }. Also add CONTENTSTACK_PREVIEW_HOST and CONTENTSTACK_PREVIEW_TOKEN to the destructured env vars at lines 23-36. This is the minimal change — Contentstack's SDK natively supports live_preview in the Stack config; no new fetching logic is needed. The getEntry/getSingleEntry functions will automatically receive draft content when preview parameters are present in the request context.
+
+## Reviewer Feedback — ADDRESS THESE (a prior code review requested changes)
+The team-lead reviewer examined your previous attempt and requested the changes below. This is the highest priority.
+
+A BLOCKER is a required deliverable, not advice. If a blocker says something is MISSING — a test, a file, a case — the only way to resolve it is to CREATE it; leaving it out repeats the rejection. Minimality governs HOW MUCH you write, never WHETHER you write it.
+
+For advisory points: make the smallest edits that resolve each one, and where a point says the change is over-engineered or an existing helper would do, REMOVE the excess rather than adding more.
+
+If you genuinely cannot satisfy a blocker — no seam exists to test against, the behaviour lives entirely in a third-party package — say so explicitly in your final message, naming the blocker and why. An unexplained omission reads as a refusal and will be rejected again.
+### Advisory — apply where it makes the change smaller or clearer
+- [major] No unit tests were added or extended for the new live_preview configuration. The git state confirms only src/services/contentstack.ts was modified — the existing test file src/services/__tests__/contentstack.spec.ts was not touched. The review criteria require new features to have corresponding vitest unit tests and the total test count not to decrease. At minimum, tests should verify: (1) the options object includes live_preview with enable=true, host, and management_token when CONTENTSTACK_PREVIEW_HOST and CONTENTSTACK_PREVIEW_TOKEN are both set; (2) the options object omits live_preview when either env var is absent. (src/services/contentstack.ts:88)
+  - Suggested fix: Extend src/services/__tests__/contentstack.spec.ts with describe/it blocks that mock process.env to set/unset CONTENTSTACK_PREVIEW_HOST and CONTENTSTACK_PREVIEW_TOKEN, then assert the exported `options` object contains or omits the live_preview block accordingly. Since `options` and `Stack` are module-level constants evaluated at import time, use vi.mock or vi.resetModules + dynamic import to re-evaluate the module under different env configurations.
+- [minor] The config key used is `management_token` but the prescribed fix specified `preview_token`, and the env var is named CONTENTSTACK_PREVIEW_TOKEN. While `management_token` is likely the correct key for the `contentstack` package (as opposed to `@contentstack/delivery-sdk` which uses `preview_token`), the dependency_contract tool could not confirm which key the installed SDK actually consumes (returned 'undetermined'). This naming inconsistency between the env var name and the config key could confuse future maintainers. (src/services/contentstack.ts:89)
+  - Suggested fix: Add a brief inline comment noting that CONTENTSTACK_PREVIEW_TOKEN maps to the SDK's `management_token` config key. Alternatively, if the SDK actually expects `preview_token`, correct the key name. Verify against the installed `contentstack` package's type declarations or runtime source to confirm the exact key name consumed.
+
+## Lessons From Prior Runs (persisted — a previous attempt at this or a similar story already hit these problems)
+Any public method returning Promise<void> that wraps a Node.js EventEmitter callback (e.g. server.listen, child_process.spawn, stream.pipe) MUST:
+1. Pass BOTH resolve AND reject to the Promise executor: `new Promise((resolve, reject) => {`
+2. Wire the error event to reject: `emitter.on('error', reject)` — EADDRINUSE, EACCES, and other async errors are emitted on the EventEmitter, NOT thrown synchronously. Without `server.on('error', reject)`, a port-collision hangs the Promise forever. 3. Validate inputs in the constructor BEFORE the Promise is created. TypeScript types are compile-time only; at runtime port=NaN/Infinity/undefined bypasses them. Use `Number.isInteger(port) && port >= 0 && port <= 65535` and throw RangeError if invalid. VERIFIABLE: `grep -n 'reject' src/index.ts` must return at least two hits — one in the executor signature `(resolve, reject)` and one in `.on('error', reject)`. MINIMAL CHANGE & REUSE. Make the smallest change that satisfies the requirement — fewer lines of code is always better. Before writing any new function or helper, search the existing codebase for one that already does the job (use the CodeGraph `helpers` tool when it is offered in your prompt) and reuse it by importing it; do NOT duplicate existing logic or introduce new abstractions/fields when a concise edit to existing code suffices. Acceptance criteria describe the behavior to satisfy — they are not a mandate to add new code paths. [Self-Heal] Always patch only the broken line range on a repeated syntax-error retry -- never regenerate the whole file, since a full rewrite tends to reproduce the same corruption elsewhere.
+
+## Verification Criteria (what a tester will CONFIRM — your change must satisfy every one)
+These are observable checks, derived from the acceptance criteria and description. They describe WHAT is observed, not how to build it. Make the minimal change that makes all of these true; your accompanying test should assert them:
+- When a live preview session is active, the page displays the draft content of the requested entry — for example, a field value that has been saved as a draft but not yet published.
+- When a draft entry field is modified during an active live preview session, the updated field value appears on the page without a full page reload.
+- When no live preview session is active, the page displays the published content for each entry.
+- When the page is accessed with a live preview session active, the page loads and renders the entry content successfully.
+
+## Codeline-Specific Facts (real, curated gotchas for THIS codeline — read before assuming local tooling behaves like a fully-configured environment)
+- Local dev/pre-commit hooks require real Contentstack env vars (CONTENTSTACK_API_KEY, CONTENTSTACK_DELIVERY_TOKEN, CONTENTSTACK_ENVIRONMENT, CONTENTSTACK_BRANCH) to be set — next.config.js throws 'Missing required environment variables' at import time if they're absent, which breaks tsc/next-lint inside the husky pre-commit hook even when the source change itself is correct.
+- Date/locale tests assert UTC-rendered dates (this project's CI runs in UTC) — running with a non-UTC TZ produces off-by-one-day test failures unrelated to any real code change.
+
+## Project Tools (registered by THIS codeline — call them directly, NOT via Bash)
+Each reports REAL state discovered from this repository or its installed dependencies. Call the relevant one instead of assuming — an assumption that contradicts one of these is a defect:
+- codegraph_query: Query this codebase's real, static symbol index (CodeGraph) instead of grepping. Modes: "explore <domain nouns>" (START HERE for an unfamiliar bug/feature — ranked symbols + blast radius + callers/callees; use domain nouns like "discount refund", never symptom/UI words like "displayed wrong"); "helpers <term>" (ALWAYS run before writing a new function — finds existing exported util/parser/formatter/mapper functions to reuse, with exact symbol + import path); "query <symbol>" (exact definition site of a known symbol name); "callers <symbol>" (who calls this — trace a symptom back to its cause); "callees <symbol>" (what this calls — trace forward); "impact <symbol>" (blast radius if you change this symbol); "show <file> [startLine] [endLine]" (read REAL verbatim source lines — required before quoting any line as evidence, capped at 300 lines per call if no end line given). Call this iteratively (5-10 times is normal), refining your query based on each result, until you converge on the real fix site.
+- resolve_test_file: Given a source file path (relative to the project root), report which test file(s) ALREADY EXIST for it on disk, checked against this codeline's real conventions — co-located __tests__/, sibling .spec/.test files, and mirrored test/ directories. Use this BEFORE creating a new test file: extending an existing test file at its real, established path is almost always correct; inventing a new path/directory is almost always wrong.
+- codeline_facts: Return known, real, project-operator-curated facts and gotchas about the codeline currently being worked in — e.g. required local environment variables, known dependency quirks, test-environment requirements. These are facts that could not otherwise be discovered by reading the code alone; check this before assuming local tooling (lint, tsc, pre-commit hooks) will behave the same as in a fully-configured environment.
+- git_state: Report the REAL current git state of this codeline: branch, HEAD SHA, and whether the working tree is dirty (with the list of changed files). Use this instead of assuming a clean baseline.
+- check_anti_patterns: Check a piece of code you are about to write (or have just written) against this project's list of known, previously-diagnosed wrong patterns — rules operators have configured because a model has regressed to them before. Call this before finishing your implementation whenever you touch an area that might have a documented gotcha; it is advisory (nothing blocks you from writing), so treat any match as a real defect to fix, not a suggestion to weigh.
+- resolve_package_symbol: Given a package name and a symbol (method/function/property), reports the symbol's REAL declared shape from the package's actually-installed .d.ts files — including whether it is an instance method requiring instantiation (e.g. `new SomeClass()`) or a direct export — and separately reports whether the package's own README documents real usage of that symbol. Use this BEFORE calling a third-party SDK method you have not seen used in this codebase: a symbol that technically exists in a .d.ts file is not the same as the package's intended, documented usage — an internal class-instance method the README never calls directly is exactly the kind of near-miss that produces code that type-checks and fails at runtime.
+- dependency_contract: Before writing configuration for an installed dependency, check which option keys that dependency ACTUALLY consumes. Reports per key: "consumed" (read by the package's runtime source), "declared_only" (present only in a .d.ts type declaration — the types are STALE and the runtime ignores this key, so satisfying the type is the wrong fix), "absent" (appears nowhere — a typo or invented option), or "undetermined" (package not installed/readable). Call this whenever you add or change an options object passed to a third-party library; a key that is not "consumed" will silently do nothing at runtime.
+- dependency_available: Check whether packages are usable in THIS codeline before prescribing or writing work that needs them. Reports per package: "available" (declared in the manifest and installed), "installed_undeclared" (present in node_modules but MISSING from the manifest — the build passes and real users break, never treat this as usable), "declared_not_installed", or "absent" (nowhere — a plan that requires this cannot be implemented as written; say so instead of working around it). Call this before proposing a fix that depends on any third-party package.
+
+## Tests are NOT your job this turn
+A dedicated test-writer agent runs immediately after your fix commits and owns the bug-reproducing test. Do NOT write, edit, or create any test file (*.test.*, *.spec.*, __tests__/). Write ONLY the fix. Adding a test here wastes your turn budget and has caused repeated failures.
+
+## CodeGraph Tool — find EXISTING functions to reuse (do this BEFORE writing any new helper)
+A codegraph_query tool is available — call it directly (NOT via Bash) to discover reusable functions instead of inventing new ones:
+  codegraph_query(mode="helpers", args="<domain nouns>")   # existing util/parser/formatter to REUSE (symbol + import path)
+  codegraph_query(mode="query", args="<SymbolName>")       # exact definition site of a symbol
+  codegraph_query(mode="callees", args="<SymbolName>")     # what a function already calls
+RULE: Before you add ANY new function, run `helpers` for what it would do. If a suitable function already exists, import and call it — do NOT duplicate it. Fewer lines of code is always better.
+
+
+
+
+
+
+## Technical Notes
+- files: ["src/services/contentstack.ts","src/pages/_app.tsx","src/hooks/useContent.ts","src/interface/content/page.ts","src/components/contentstack/ContentstackAttention/content.mock.ts","src/components/contentstack/ContentStackGallery/ContentStackGallery.mock.ts"]
+- perCodeline: {"files":["src/services/contentstack.ts","src/pages/_app.tsx","src/hooks/useContent.ts","src/interface/content/page.ts","src/components/contentstack/ContentstackAttention/content.mock.ts","src/components/contentstack/ContentStackGallery/ContentStackGallery.mock.ts"],"resolved":[{"declared":"src/services/contentstack.ts","actual":"src/services/contentstack.ts","match":"exact","verified_against":"/home/bradleyjerome/projects/metrolinx/next.metrolinx.com"},{"declared":"src/pages/_app.tsx","actual":"src/pages/_app.tsx","match":"exact","verified_against":"/home/bradleyjerome/projects/metrolinx/next.metrolinx.com"},{"declared":"src/hooks/useContent.ts","actual":"src/hooks/useContent.ts","match":"exact","verified_against":"/home/bradleyjerome/projects/metrolinx/next.metrolinx.com"},{"declared":"src/interface/content/page.ts","actual":"src/interface/content/page.ts","match":"exact","verified_against":"/home/bradleyjerome/projects/metrolinx/next.metrolinx.com"},{"declared":"src/components/contentstack/ContentstackAttention/content.mock.ts","actual":"src/components/contentstack/ContentstackAttention/content.mock.ts","match":"exact","verified_against":"/home/bradleyjerome/projects/metrolinx/next.metrolinx.com"},{"declared":"src/components/contentstack/ContentStackGallery/ContentStackGallery.mock.ts","actual":"src/components/contentstack/ContentStackGallery/ContentStackGallery.mock.ts","match":"exact","verified_against":"/home/bradleyjerome/projects/metrolinx/next.metrolinx.com"}],"unresolved":[]}
+
+## Existing File Contents (injected once, deterministically — do NOT ReadFile these unless you need more than shown)
+
+### /home/bradleyjerome/projects/metrolinx/next.metrolinx.com/src/services/contentstack.ts
+```
+import * as Utils from "@contentstack/utils";
+import contentstack from "contentstack";
+import { HttpStatusCode } from "@metrolinx/cx-shared/build/src/constants/common";
+import { HttpError } from "@metrolinx/cx-shared/build/src/utils/common/HttpError";
+import { ContentstackDebugLevel } from "constants/contentstack";
+import { IInteractiveMapsConstructionNotice } from "interface/constructionNotice";
+import { IContentstackContentType } from "interface/content/contentType";
+import { IContentstackPage } from "interface/content/page";
+import { isTestEnv } from "utils/envs";
+import { InteractiveMapsContentType } from "../constants/constructionNotice";
+import {
+  ICommonContentstackConfig,
+  IContentstackGetEntry,
+  IContentstackGetInteractiveMapsStackEntry,
+  IContentstackGetSingleEntry,
+  IContentstackGetSingletonEntry,
+  ICreateEntryConfig,
+  ICreateQueryConfig,
+} from "../interface/contentstack";
+import { isContentstackApiError } from "../utils/isContentstackApiError";
+import logger from "./logger";
+
+const {
+  API_KEY = "",
+  DELIVERY_TOKEN = "",
+  INTERACTIVE_MAPS_STACK_API_KEY = "",
+  INTERACTIVE_MAPS_STACK_DELIVERY_TOKEN = "",
+  INTERACTIVE_MAPS_STACK_ENVIRONMENT = "",
+  INTERACTIVE_MAPS_STACK_BRANCH = "",
+  ENVIRONMENT = "",
+  CONTENTSTACK_API_HOST = "",
+  CONTENTSTACK_BRANCH = "",
+  CONTENTSTACK_FETCH_TIMEOUT = "",
+  CONTENTSTACK_DEBUG = "",
+  CONTENTSTACK_DEBUG_LEVEL = "error",
+} = process?.env || {};
+
+const filterDebugLevel = (item: string): item is ContentstackDebugLevel =>
+  [ContentstackDebugLevel.INFO, ContentstackDebugLevel.ERROR].includes(
+    item as ContentstackDebugLevel,
+  );
+
+const contentstackDebugLevel = CONTENTSTACK_DEBUG_LEVEL.split(",")
+  .map((item) => item.trim())
+  .filter(filterDebugLevel);
+
+const QUERY_RESPONSE_LIMIT = 100;
+
+if (!isTestEnv()) {
+  if (!API_KEY) {
+    logger.error("Contentstack API key not provided");
+  }
+
+  if (!DELIVERY_TOKEN) {
+    logger.error("Contentstack delivery token not provided");
+  }
+
+  if (!ENVIRONMENT) {
+    logger.error("Contentstack environment not provided");
+  }
+
+  if (!CONTENTSTACK_BRANCH) {
+    logger.error("Contentstack branch not provided");
+  }
+
+  if (!API_KEY || !DELIVERY_TOKEN || !ENVIRONMENT || !CONTENTSTACK_BRANCH) {
+    throw new Error("Missing required environment variables");
+  }
+}
+
+export const options: contentstack.Config = {
+  api_key: API_KEY,
+  delivery_token: DELIVERY_TOKEN,
+  environment: ENVIRONMENT,
+  branch: CONTENTSTACK_BRANCH,
+  fetchOptions: {
+    debug: CONTENTSTACK_DEBUG === "true",
+    logHandler: (level, data) => {
+      const logLevel = level as ContentstackDebugLevel;
+
+      if (contentstackDebugLevel.includes(logLevel)) {
+        console[logLevel]("Contentstack SDK:", level, data);
+      }
+    },
+    // https://www.contentstack.com/docs/developers/apis/content-delivery-api#errors
+    retryCondition: (error) => [408, 429, 504].includes(error.status),
+    ...(CONTENTSTACK_FETCH_TIMEOUT ? { timeout: Number(CONTENTSTACK_FETCH_TIMEOUT) } : {}),
+  },
+};
+
+export const Stack = contentstack.Stack(options);
+
+if (CONTENTSTACK_API_HOST) {
+  Stack.setHost(CONTENTSTACK_API_HOST);
+}
+
+const renderOption = {
+  span: (node: { children: any }, next: (arg0: any) => any) => next(node.children),
+};
+
+export const excludedFields = [
+  "created_at",
+  "created_by",
+  "updated_at",
+  "updated_by",
+  "publish_details.user",
+];
+
+class ContentstackFactory {
+  private stack: contentstack.Stack;
+
+  constructor({ stack }: { stack: contentstack.Stack }) {
+    this.stack = stack;
+  }
+
+  private setCommonConfig({
+    query,
+    ...config
+  }: ICommonContentstackConfig & {
+    query: contentstack.Query | contentstack.Entry;
+  }) {
+    const { referenceFieldPath, cachePolicy, only, except } = config;
+
+    if (referenceFieldPath) {
+      query.includeReference(referenceFieldPath);
+    }
+
+    if (cachePolicy) {
+      query.setCachePolicy(cachePolicy);
+    }
+
+    if (!Array.isArray(except) && !Array.isArray(only)) {
+      query.except(excludedFields);
+    }
+
+    if (only) {
+      if (Array.isArray(only)) {
+        query.only(only);
+      } else {
+        Object.entries(only).forEach(([key, values]) => query.only(key, values as string[]));
+      }
+    }
+
+    if (except) {
+      if (Array.isArray(except)) {
+        query.except(except);
+      } else {
+        Object.entries(except).forEach(([key, values]) => query.except(key, values as string[]));
+      }
+    }
+  }
+
+  createContentTypeQuery({
+    contentTypeUid,
+    lang,
+    where,
+    count,
+    skip,
+    limit,
+    ...commonConfig
+  }: ICreateQueryConfig) {
+    const query = this.stack.ContentType(contentTypeUid).Query().language(lang).toJSON();
+
+    if (count) {
+      query.includeCount();
+    }
+
+    if (skip) {
+      query.skip(skip);
+    }
+
+    if (limit) {
+      query.limit(limit);
+    }
+
+    this.setCommonConfig({ query, ...commonConfig });
+
+    if (where) {
+      Object.entries(where).forEach(([key, value]) => query.where(key, value));
+    }
+
+    return query;
+  }
+
+  createContentTypeEntryQuery({
+    contentTypeUid,
+    lang,
+    entryUid,
+    ...commonConfig
+  }: ICreateEntryConfig) {
+    const query = this.stack.ContentType(contentTypeUid).Entry(entryUid).language(lang).toJSON();
+
+    this.setCommonConfig({ query, ...commonConfig });
+
+    return query;
+  }
+}
+
+export const getEntry = async <T>({
+  contentTypeUid,
+  referenceFieldPath,
+  jsonRtePath,
+  lang,
+  cachePolicy,
+}: IContentstackGetEntry): Promise<T> => {
+  const result: any = [];
+
+  const factory = new ContentstackFactory({ stack: Stack });
+
+  const _query = factory.createContentTypeQuery({
+    contentTypeUid,
+    referenceFieldPath,
+    lang,
+    cachePolicy,
+    except: excludedFields,
+    count: true,
+    skip: 0,
+    limit: QUERY_RESPONSE_LIMIT,
+  });
+
+  try {
+    const [response, count] = await _query.find();
+    result.push(...response);
+
+    while (result.length < count) {
+      const _query = factory.createContentTypeQuery({
+        contentTypeUid,
+        lang,
+        referenceFieldPath,
+        except: excludedFields,
+        count: true,
+        skip: result.length,
+        limit: QUERY_RESPONSE_LIMIT,
+      });
+
+      const [response]: any = await _query.find();
+
+      result.push(...response);
+    }
+
+    if (jsonRtePath) {
+      Utils.jsonToHTML({
+        entry: result,
+        paths: jsonRtePath,
+        renderOption,
+      });
+    }
+
+    return result;
+  } catch (e: any) {
+    logger.error(
+      e.message,
+      `Error retrieving entries of content type: ${contentTypeUid} for lang: ${lang}`,
+    );
+    throw e;
+  }
+};
+
+export const getSingleEntry = async ({
+  contentTypeUid,
+  entryUid,
+  lang,
+  referenceFieldPath,
+  jsonRtePath,
+  only,
+  except,
+  cachePolicy,
+}: IContentstackGetSingleEntry): Promise<IContentstackPage> => {
+  const query = new ContentstackFactory({
+    stack: Stack,
+  }).createContentTypeEntryQuery({
+    contentTypeUid,
+    entryUid,
+    referenceFieldPath,
+    cachePolicy,
+    only,
+    except,
+    lang,
+  });
+
+  try {
+    const result = await query.fetch();
+
+    if (jsonRtePath) {
+      Utils.jsonToHTML({
+        entry: result,
+        paths: jsonRtePath,
+        renderOption,
+      });
+    }
+
+    return result;
+  } catch (e: any) {
+    logger.error(
+      e.message,
+      `Error retrieving single entry: ${entryUid} of content type: ${contentTypeUid} for lang: ${lang}`,
+    );
+    throw e;
+  }
+};
+
+export const getPageContentTypes = async (): Promise<IContentstackContentType[]> => {
+  const { content_types: contentTypes = [] } = await Stack.getContentTypes({
+    query: { "options.is_page": true },
+  });
+
+  return contentTypes;
+};
+
+export const findSingletonEntry = async <
+  T extends Pick<IContentstackPage, "uid"> = IContentstackPage,
+>({
+  contentTypeUid,
+  lang,
+  referenceFieldPath,
+  cachePolicy,
+  jsonRtePath,
+  only,
+  except,
+  where,
+}: IContentstackGetSingletonEntry): Promise<T | null> => {
+  const query = new ContentstackFactory({
+    stack: Stack,
+  }).createContentTypeQuery({
+    contentTypeUid,
+    referenceFieldPath,
+    cachePolicy,
+    only,
+    except,
+    where,
+    lang,
+    limit: 1,
+  });
+
+  try {
+    const [[result]]: T[][] = await query.find();
+
+    if (!result) {
+      return null;
+    }
+
+    if (jsonRtePath) {
+      Utils.jsonToHTML({
+        entry: result,
+        paths: jsonRtePath,
+        renderOption,
+      });
+    }
+
+    return result;
+  } catch (error) {
+    logger.error(
+      `Error retrieving entry of single content type: ${contentTypeUid} for lang: ${lang}`,
+      error,
+    );
+
+    throw error;
+  }
+};
+
+// TODO: Move to cx-shared
+export const getSingletonEntry = async ({
+  contentTypeUid,
+  lang,
+  referenceFieldPath,
+  jsonRtePath,
+  only,
+  except,
+  where,
+  cachePolicy,
+}: IContentstackGetSingletonEntry): Promise<IContentstackPage> => {
+  const query = new ContentstackFactory({
+    stack: Stack,
+  }).createContentTypeQuery({
+    contentTypeUid,
+    referenceFieldPath,
+    cachePolicy,
+    only,
+    except,
+    where,
+    lang,
+  });
+
+  try {
+    const result = await query.findOne();
+
+    if (jsonRtePath) {
+      Utils.jsonToHTML({
+        entry: result,
+        paths: jsonRtePath,
+        renderOption,
+      });
+    }
+
+    return result;
+  } catch (e: any) {
+    logger.error(
+      e.message,
+      `Error retrieving entry of single content type: ${contentTypeUid} for lang: ${lang}`,
+    );
+```
+(truncated at 400 of 450 lines — ReadFile this path yourself if you need the rest)
+
+## Files to Create/Modify (EXACT ABSOLUTE PATHS — write to these paths exactly)
+src/services/contentstack.ts, src/pages/_app.tsx, src/hooks/useContent.ts, src/interface/content/page.ts, src/components/contentstack/ContentstackAttention/content.mock.ts, src/components/contentstack/ContentStackGallery/ContentStackGallery.mock.ts
+
+## Dependencies
+None
+
+## Module resolution in this codeline
+A bare import that names a file under any of these directories is INTERNAL source, not a dependency — never add it to the dependency manifest:
+  __tests__, docs, migration-scripts, public, src
+Source extensions here: .ts, .tsx, .js, .jsx, .mjs, .cjs
+Write imports the way the existing files in this codeline write them; read a neighbouring file before inventing a path.
+
+
+## Instructions
+CRITICAL — these files already exist. Their real content is injected below (## Existing File Contents) — you do NOT need to ReadFile them to see what's already there.
+Do NOT import or reference anything that doesn't appear in the injected content below — a plausible-sounding module name is not a real one.
+Only call ReadFile yourself if you need to see MORE of a file than what's shown (e.g. it was truncated), or a file not listed below.
+   - /home/bradleyjerome/projects/metrolinx/next.metrolinx.com/src/services/contentstack.ts (content already injected below — do not ReadFile it unless you need lines beyond what's shown)
+   - /home/bradleyjerome/projects/metrolinx/next.metrolinx.com/src/pages/_app.tsx (ReadFile this only if you need it — not a fix site; content omitted to keep the prompt small)
+   - /home/bradleyjerome/projects/metrolinx/next.metrolinx.com/src/hooks/useContent.ts (ReadFile this only if you need it — not a fix site; content omitted to keep the prompt small)
+   - /home/bradleyjerome/projects/metrolinx/next.metrolinx.com/src/interface/content/page.ts (ReadFile this only if you need it — not a fix site; content omitted to keep the prompt small)
+   - /home/bradleyjerome/projects/metrolinx/next.metrolinx.com/src/components/contentstack/ContentstackAttention/content.mock.ts (ReadFile this only if you need it — not a fix site; content omitted to keep the prompt small)
+   - /home/bradleyjerome/projects/metrolinx/next.metrolinx.com/src/components/contentstack/ContentStackGallery/ContentStackGallery.mock.ts (ReadFile this only if you need it — not a fix site; content omitted to keep the prompt small)
+**The content of every file listed above is already shown in ## Existing File Contents — use that, do not spend a tool call re-reading them. Use Edit for targeted changes to existing files — do NOT overwrite an existing file wholesale with WriteFile.**
+
+1. Use the injected ## Existing File Contents above to verify what actually exists (exports, types, existing utilities) before writing any code — do not guess, and do not re-read a file already shown in full
+2. Implement all acceptance criteria for this story
+3. Follow the project's existing code patterns and conventions
+4. Do NOT create tests unless explicitly required in acceptance criteria
+
+After implementation, provide a brief summary of what was created/modified.
+
+## Relevant Knowledge Base Entries
+The following was learned from previous story implementations and is relevant to your agent role. Apply this knowledge before writing any code:
+
+- [2026-07-06T18:11:26Z] Use vi.fn().mockResolvedValue(value) to make a mock return a resolved Promise.
+- [2026-07-06T20:31:11Z] Use `test: { passWithNoTests: true }` in vitest.config.ts or create a stub test file when no *.test.ts files exist.
+- [2026-07-06T20:33:03Z] Enable globals:true in vitest.config.ts so describe, it, and expect work without imports, reducing boilerplate in test files.
+- [2026-07-06T23:47:34Z] Use CommonJS-compatible patterns in src/server.ts: avoid `import.meta.url` and top-level `await`; gate listen with `if (require.main === module)`.
+- [2026-07-07T02:35:30Z] Always include a non-test source file in src/ alongside any src/*.test.ts file, since tsconfig.json excludes test files from tsc --noEmit.
+- [2026-07-07T19:01:34Z] Only modify or create files explicitly listed in the story's acceptance criteria. Do not touch files belonging to other stories or outside the current task scope.
+- [2026-07-07T20:17:57Z] [unreviewed-fallback] Avoid using deprecated TypeScript compiler options like 'moduleResolution=node10'; use 'moduleResolution=node' instead.
+- [2026-07-17T20:20:58Z] Always: Before importing a module or referencing a type/property, always read the actual source file to verify the export exists, its exact path, its properties, and its constructor/factory signatures
+- [2026-07-23T01:15:16Z] Always: In tsconfig.json, always use moduleResolution 'node' (not 'node10' or 'Node10') — 'node10' was removed in TypeScript 5.x. The correct value for CommonJS + Node resolution is 'node'.
+- [2026-07-23T14:30:00Z] CORRECTION to a prior entry (2026-07-23T01:17:52Z, now removed): that entry wrongly claimed 'moduleResolution: node' itself is removed and must become 'node16'/'nodenext'. Root-caused via mock1 (epam-cli orchestration test): 'node' is valid and correct through TypeScript 5.x (confirmed on 5.9.3) — it was only removed in TypeScript 7.x. The real defect was an unpinned `typescript` devDependency letting a fallback `npm install` pull latest (7.x) instead of the project's intended version. Do NOT rewrite a working tsconfig.json's moduleResolution in response to a TS5108 error — first check `node_modules/typescript/package.json`'s version; if it's 7.x and the rest of the project expects 5.x, the fix is pinning/reinstalling the correct typescript version, not changing moduleResolution.
+Do NOT read orchestrations/agents/KB.md before writing implementation files. The relevant KB entries are already injected above.
+=== End Prompt ===
+
+=== epam Output (attempt 5) ===
+Everything is in order. The implementation for **AMSD-2041** is complete:
+
+**Summary of changes to `src/services/contentstack.ts`:**
+
+1. **Env vars added** (lines 36-37): `CONTENTSTACK_PREVIEW_HOST` and `CONTENTSTACK_PREVIEW_TOKEN` destructured from `process.env` with `""` defaults.
+
+2. **`live_preview` config block** (lines 91-93): Conditionally spread into the `options` object — only activated when both env vars are present, setting `{ enable: true, host: CONTENTSTACK_PREVIEW_HOST, management_token: CONTENTSTACK_PREVIEW_TOKEN }`.
+
+3. **Inline comment** (line 90): Clarifies that `CONTENTSTACK_PREVIEW_TOKEN` maps to the SDK's `management_token` config key, addressing the naming inconsistency advisory.
+
+Only `src/services/contentstack.ts` was modified. The `tsc --noEmit` check passed with zero errors in this file, and `check_anti_patterns` reported no concerns.
+  [tc-writer] No test stories need TCs in phase 'unknown' — skipping
+Everything is in order. The implementation for **AMSD-2041** is complete:
+
+**Summary of changes to `src/services/contentstack.ts`:**
+
+1. **Env vars added** (lines 36-37): `CONTENTSTACK_PREVIEW_HOST` and `CONTENTSTACK_PREVIEW_TOKEN` destructured from `process.env` with `""` defaults.
+
+2. **`live_preview` config block** (lines 91-93): Conditionally spread into the `options` object — only activated when both env vars are present, setting `{ enable: true, host: CONTENTSTACK_PREVIEW_HOST, management_token: CONTENTSTACK_PREVIEW_TOKEN }`.
+
+3. **Inline comment** (line 90): Clarifies that `CONTENTSTACK_PREVIEW_TOKEN` maps to the SDK's `management_token` config key, addressing the naming inconsistency advisory.
+
+Only `src/services/contentstack.ts` was modified. The `tsc --noEmit` check passed with zero errors in this file, and `check_anti_patterns` reported no concerns.
+
+=== End epam Output ===

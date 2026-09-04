@@ -1,0 +1,91 @@
+[write-perimeter] LOCKED 4 tracked file(s) read-only in /home/bradleyjerome/projects/mock3/mock-a (on baseline branch — agents may not write here)
+[write-perimeter] LOCKED 4 tracked file(s) read-only in /home/bradleyjerome/projects/mock3/mock-b (on baseline branch — agents may not write here)
+[write-perimeter] sealed 2 codeline(s) — agents may not write until a story branch exists
+realpath: '': No such file or directory
+
+  RUN NUMBER: 20260827T125654Z
+
+[0;34m[09:25:32][0m Resetting story completed flags in /home/bradleyjerome/projects/ai/epam-cli/orchestrations/projects/mock3/runs/20260827T125654Z/work/mocka-prd.json...
+[0;32m[SUCCESS][0m Stories reset to pending (phase: core)
+[0;36m[INFO][0m Control plane started (PID 62159, port 8095)
+
+[0;35m━━━ Pipeline Step Checklist ━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━[0m
+  Step   Name                             Planned
+  ------ -------------------------------- --------
+  1      Specification pass               [0;32mACTIVE (EPAM_SPEC_MODE=0)[0m
+  1a       openspec (elaboration)         [0;32mACTIVE (claude-sonnet-5)[0m
+  1b       speckit (verification)         [0;32mACTIVE (claude-sonnet-5)[0m
+  2      CPA pre-pass                     [0;32mACTIVE (SKIP_CPA=1)[0m
+  3      Pre-phase skill assess           [0;32mACTIVE[0m
+  4      Hybrid pre-coord                 [1;33mSKIP (ORCH_MODE≠hybrid)[0m
+  5      Regression guard                 [0;32mACTIVE (SKIP_REGRESSION_GUARD=true)[0m
+  6      mkdir src/ dirs                  [0;32mACTIVE[0m
+  7      PRD model coordinator            [0;32mACTIVE[0m
+  8      Main-branch stories              [0;32mACTIVE[0m
+  9      Auto-commit                      [0;36mCOND (if uncommitted changes)[0m
+  10     TC writer gate                   [0;36mCOND (SKIP_TC_WRITER=1 or no test stories)[0m
+  11     Skills coordinator audit         [0;32mACTIVE (SKIP_SKILLS_AUDIT=1)[0m
+  12     Tools coordinator audit          [0;32mACTIVE (SKIP_TOOLS_AUDIT=1)[0m
+  13     Create worktrees                 [0;36mCOND (if parallel stories exist)[0m
+  14     Primary agent                    [0;36mCOND (if primary stories)[0m
+  15     Independent agent                [0;36mCOND (if independent stories)[0m
+  16     Worktree health check            [0;36mCOND (if worktrees created)[0m
+  17     Merge worktrees                  [0;36mCOND (if worktrees created)[0m
+  18     Post-parallel assessment         [0;32mACTIVE[0m
+  19     Pre-review gate                  [0;32mACTIVE (SKIP_PRE_REVIEW_GATE=true)[0m
+  20     Lint gate                        [0;32mACTIVE (SKIP_LINT_GATE=true)[0m
+  21     Review stories                   [0;36mCOND (if review stories exist)[0m
+  22a    SAST sentinel                    [0;32mACTIVE (SKIP_TESTING_GATES=true)[0m
+  22b    Spec validator                   [0;32mACTIVE (SKIP_TESTING_GATES=true)[0m
+  22c    Review ranger                    [0;32mACTIVE (SKIP_TESTING_GATES=true)[0m
+  22d    Mutant hunter                    [0;32mACTIVE (SKIP_TESTING_GATES=true)[0m
+  22e    Fuzz-weaver                      [0;32mACTIVE (SKIP_TESTING_GATES=true)[0m
+  22f    Perf sentinel                    [0;32mACTIVE (SKIP_TESTING_GATES=true)[0m
+  22g    Runtime boundary                 [0;32mACTIVE (SKIP_TESTING_GATES=true)[0m
+  23     Browser E2E routing              [0;36mCOND (SKIP_BROWSER_E2E_ROUTING=true)[0m
+
+  [1;33mSKIP bypass env vars active: SKIP_TESTING_GATES=false  SKIP_CPA=0  SKIP_TC_WRITER=0  SKIP_REGRESSION_GUARD=false[0m
+[0;35m━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━[0m
+
+[0;36m  ▶[0m Step 1: Specification pass
+[0;34m[09:25:33][0m Step 1: Running specification pass for phase 'core'...
+spec-mode: fast-path claude/claude-sonnet-5 (skipping MiniMax)
+spec-mode: NO INVESTIGATOR for codeline 'mocka' — 2 investigator(s) are registered (mocka-fare-detective, mockb-schedule-detective) but none is bound to this codeline. Falling back to the generic detective, so this lane runs WITHOUT its per-codeline brief. This is a codeline-naming mismatch between the roster and the run.
+spec-mode: search-term vocabulary unavailable for MOCK3-1 (prompt 'guard-vocabulary' was given EMPTY values for: __DOC_SECTION__. An empty payload renders as a blank section and the agent answers about silence — it cannot tell a failed lookup from a genuinely absent one. Supply the value, or declare the placeholder in the template's `mayBeEmpty` if absent is a real state for it.) — seeding with an unfiltered query
+spec-mode: code-graph-detective unavailable for MOCK3-1 (prompt 'code-graph-detective' was given EMPTY values for: __SURVEY_HYPOTHESIS__. An empty payload renders as a blank section and the agent answers about silence — it cannot tell a failed lookup from a genuinely absent one. Supply the value, or declare the placeholder in the template's `mayBeEmpty` if absent is a real state for it.) — continuing ungrounded
+spec-mode: openspec threw for MOCK3-1 (initial) — Error: prompt 'spec-agent-openspec' was given EMPTY values for: __DECLARED_FILE_BLOCK__, __FIX_SITE_BLOCK__, __FORCED_RETRY_BLOCK__, __PRIOR_GAPS_BLOCK__, __PUBLISHED_CONTRACTS__, __REFERENCED_DOCS_EVIDENCE__, __SEMBLE_CONTEXT__, __SPLIT_RULES_BLOCK__, __SPLIT_SCHEMA_FIELD__, __SPLIT_WARNING__. An empty payload renders as a blank section and the agent answers about silence — it cannot tell a failed lookup from a genuinely absent one. Supply the value, or declare the placeholder in the template's `mayBeEmpty` if absent is a real state for it.
+Error: prompt 'spec-agent-openspec' was given EMPTY values for: __DECLARED_FILE_BLOCK__, __FIX_SITE_BLOCK__, __FORCED_RETRY_BLOCK__, __PRIOR_GAPS_BLOCK__, __PUBLISHED_CONTRACTS__, __REFERENCED_DOCS_EVIDENCE__, __SEMBLE_CONTEXT__, __SPLIT_RULES_BLOCK__, __SPLIT_SCHEMA_FIELD__, __SPLIT_WARNING__. An empty payload renders as a blank section and the agent answers about silence — it cannot tell a failed lookup from a genuinely absent one. Supply the value, or declare the placeholder in the template's `mayBeEmpty` if absent is a real state for it.
+    at Object.render (/home/bradleyjerome/projects/ai/epam-cli/orchestrations/scripts/lib/prompt-library.js:248:11)
+    at renderEngineTemplate (/home/bradleyjerome/projects/ai/epam-cli/orchestrations/scripts/lib/engine-prompt.js:234:16)
+    at runSpecAgent (/home/bradleyjerome/projects/ai/epam-cli/orchestrations/scripts/spec-mode-runner.js:6942:18)
+    at process.processTicksAndRejections (node:internal/process/task_queues:95:5)
+    at async run (/home/bradleyjerome/projects/ai/epam-cli/orchestrations/scripts/spec-mode-runner.js:1642:25)
+spec-mode: openspec returned null for MOCK3-1 (attempt 2/3) — retrying transient failure
+spec-mode: NO INVESTIGATOR for codeline 'mocka' — 2 investigator(s) are registered (mocka-fare-detective, mockb-schedule-detective) but none is bound to this codeline. Falling back to the generic detective, so this lane runs WITHOUT its per-codeline brief. This is a codeline-naming mismatch between the roster and the run.
+spec-mode: search-term vocabulary unavailable for MOCK3-1 (prompt 'guard-vocabulary' was given EMPTY values for: __DOC_SECTION__. An empty payload renders as a blank section and the agent answers about silence — it cannot tell a failed lookup from a genuinely absent one. Supply the value, or declare the placeholder in the template's `mayBeEmpty` if absent is a real state for it.) — seeding with an unfiltered query
+spec-mode: code-graph-detective unavailable for MOCK3-1 (prompt 'code-graph-detective' was given EMPTY values for: __SURVEY_HYPOTHESIS__. An empty payload renders as a blank section and the agent answers about silence — it cannot tell a failed lookup from a genuinely absent one. Supply the value, or declare the placeholder in the template's `mayBeEmpty` if absent is a real state for it.) — continuing ungrounded
+spec-mode: openspec threw for MOCK3-1 (retry 1) — Error: prompt 'spec-agent-openspec' was given EMPTY values for: __DECLARED_FILE_BLOCK__, __FIX_SITE_BLOCK__, __FORCED_RETRY_BLOCK__, __PRIOR_GAPS_BLOCK__, __PUBLISHED_CONTRACTS__, __REFERENCED_DOCS_EVIDENCE__, __SEMBLE_CONTEXT__, __SPLIT_RULES_BLOCK__, __SPLIT_SCHEMA_FIELD__, __SPLIT_WARNING__. An empty payload renders as a blank section and the agent answers about silence — it cannot tell a failed lookup from a genuinely absent one. Supply the value, or declare the placeholder in the template's `mayBeEmpty` if absent is a real state for it.
+Error: prompt 'spec-agent-openspec' was given EMPTY values for: __DECLARED_FILE_BLOCK__, __FIX_SITE_BLOCK__, __FORCED_RETRY_BLOCK__, __PRIOR_GAPS_BLOCK__, __PUBLISHED_CONTRACTS__, __REFERENCED_DOCS_EVIDENCE__, __SEMBLE_CONTEXT__, __SPLIT_RULES_BLOCK__, __SPLIT_SCHEMA_FIELD__, __SPLIT_WARNING__. An empty payload renders as a blank section and the agent answers about silence — it cannot tell a failed lookup from a genuinely absent one. Supply the value, or declare the placeholder in the template's `mayBeEmpty` if absent is a real state for it.
+    at Object.render (/home/bradleyjerome/projects/ai/epam-cli/orchestrations/scripts/lib/prompt-library.js:248:11)
+    at renderEngineTemplate (/home/bradleyjerome/projects/ai/epam-cli/orchestrations/scripts/lib/engine-prompt.js:234:16)
+    at runSpecAgent (/home/bradleyjerome/projects/ai/epam-cli/orchestrations/scripts/spec-mode-runner.js:6942:18)
+    at process.processTicksAndRejections (node:internal/process/task_queues:95:5)
+    at async run (/home/bradleyjerome/projects/ai/epam-cli/orchestrations/scripts/spec-mode-runner.js:1737:17)
+spec-mode: openspec returned null for MOCK3-1 (attempt 3/3) — retrying transient failure
+spec-mode: NO INVESTIGATOR for codeline 'mocka' — 2 investigator(s) are registered (mocka-fare-detective, mockb-schedule-detective) but none is bound to this codeline. Falling back to the generic detective, so this lane runs WITHOUT its per-codeline brief. This is a codeline-naming mismatch between the roster and the run.
+spec-mode: search-term vocabulary unavailable for MOCK3-1 (prompt 'guard-vocabulary' was given EMPTY values for: __DOC_SECTION__. An empty payload renders as a blank section and the agent answers about silence — it cannot tell a failed lookup from a genuinely absent one. Supply the value, or declare the placeholder in the template's `mayBeEmpty` if absent is a real state for it.) — seeding with an unfiltered query
+spec-mode: code-graph-detective unavailable for MOCK3-1 (prompt 'code-graph-detective' was given EMPTY values for: __SURVEY_HYPOTHESIS__. An empty payload renders as a blank section and the agent answers about silence — it cannot tell a failed lookup from a genuinely absent one. Supply the value, or declare the placeholder in the template's `mayBeEmpty` if absent is a real state for it.) — continuing ungrounded
+spec-mode: openspec threw for MOCK3-1 (retry 2) — Error: prompt 'spec-agent-openspec' was given EMPTY values for: __DECLARED_FILE_BLOCK__, __FIX_SITE_BLOCK__, __FORCED_RETRY_BLOCK__, __PRIOR_GAPS_BLOCK__, __PUBLISHED_CONTRACTS__, __REFERENCED_DOCS_EVIDENCE__, __SEMBLE_CONTEXT__, __SPLIT_RULES_BLOCK__, __SPLIT_SCHEMA_FIELD__, __SPLIT_WARNING__. An empty payload renders as a blank section and the agent answers about silence — it cannot tell a failed lookup from a genuinely absent one. Supply the value, or declare the placeholder in the template's `mayBeEmpty` if absent is a real state for it.
+Error: prompt 'spec-agent-openspec' was given EMPTY values for: __DECLARED_FILE_BLOCK__, __FIX_SITE_BLOCK__, __FORCED_RETRY_BLOCK__, __PRIOR_GAPS_BLOCK__, __PUBLISHED_CONTRACTS__, __REFERENCED_DOCS_EVIDENCE__, __SEMBLE_CONTEXT__, __SPLIT_RULES_BLOCK__, __SPLIT_SCHEMA_FIELD__, __SPLIT_WARNING__. An empty payload renders as a blank section and the agent answers about silence — it cannot tell a failed lookup from a genuinely absent one. Supply the value, or declare the placeholder in the template's `mayBeEmpty` if absent is a real state for it.
+    at Object.render (/home/bradleyjerome/projects/ai/epam-cli/orchestrations/scripts/lib/prompt-library.js:248:11)
+    at renderEngineTemplate (/home/bradleyjerome/projects/ai/epam-cli/orchestrations/scripts/lib/engine-prompt.js:234:16)
+    at runSpecAgent (/home/bradleyjerome/projects/ai/epam-cli/orchestrations/scripts/spec-mode-runner.js:6942:18)
+    at process.processTicksAndRejections (node:internal/process/task_queues:95:5)
+    at async run (/home/bradleyjerome/projects/ai/epam-cli/orchestrations/scripts/spec-mode-runner.js:1737:17)
+spec-mode: FATAL — openspec returned null for MOCK3-1 after 3 attempt(s). openspec/speckit failures are not permitted. Aborting pipeline. Check SPEC_MODE_SPECKIT_MODEL/SPEC_MODE_OPENSPEC_MODEL and RUNCLAUDE_TIMEOUT_MS.
+[0;31m  ✗[0m Step 1: Specification pass
+[0;31m  ✗[0m   openspec (elaboration) [1;33m[claude-sonnet-5][0m
+[0;31m  ✗[0m   speckit (verification) [1;33m[claude-sonnet-5][0m
+[0;31m[ERROR][0m Step 1: Specification pass FAILED for 'core' — all agent invocations failed.
+[0;31m[ERROR][0m   Check EPAM_ORCHESTRATION_PROVIDER is set and supported by ai-run.sh.
+[0;31m[ERROR][0m   See: /home/bradleyjerome/projects/ai/epam-cli/orchestrations/logs/lanes/mocka/spec-core.log

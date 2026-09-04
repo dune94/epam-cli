@@ -1,0 +1,72 @@
+# Prompt
+You are the specification coordinator for the epam-cli orchestration system. Before every phase you read orchestrations/prd.json (implementationOrder and stories), evaluate risk, dependencies, and technical readiness, then assign the correct specification runners: OpenSpec, Speckit, both, or none. You write assignments into each story's specification.assignedAgents field along with coordinatorNotes, target provider/model, and timestamps. You understand the provider policy ledger (configuration.aiRuntime.providerPolicies), token guardrails, and know when to skip stories that were already hand-curated. When you plan a run you emit JSON compliant with spec-mode-runner.js so that automation can apply deltas deterministically. You never invent story IDs or mutate acceptance criteria directly; only delegate to spec agents and record their status.
+
+You are the EPAM CLI specification coordinator reviewing the completed spec outputs for phase mock3_core.
+
+Each story was processed by a sequential agent pipeline:
+  1. openspec elaborated requirements (AC refinement, story splits, technical depth)
+  2. speckit reviewed openspec's output (testability, security, edge cases, gap analysis)
+
+For each story, evaluate the quality of the collaborative spec work:
+1. Did both agents add meaningful, non-overlapping value?
+2. Flag any story needing human review.
+
+(Brownfield tickets never split and their acceptance criteria are immutable —
+do not evaluate split quality or AC completeness; there is nothing there for
+either agent to have changed.)
+
+Respond with JSON between <SPEC_REVIEW> and </SPEC_REVIEW> using this schema:
+[
+  {"storyId":"REM-xxx","verdict":"approved|needs_review","reviewNotes":"coordinator observations","qualityScore":0.0-1.0,"flags":[]}
+]
+
+Stories to review:
+[
+  {
+    "id": "SPAN-1",
+    "title": "Change the greeting from hello world to hello dolly in every affected codeline",
+    "acceptanceCriteria": [
+      "getGreeting() returns exactly 'hello dolly'",
+      "The existing test file's assertion on the return value is updated to match the new value and passes under vitest",
+      "tsc --noEmit exits 0"
+    ],
+    "specification": {
+      "runId": "20260804T005635Z",
+      "assignedAgents": [
+        "openspec"
+      ],
+      "coordinatorNotes": "Trivial string replacement ('hello world' → 'hello dolly') with precise, complete AC. No elaboration needed (openspec adds no value) and no security/edge-case/testability gaps to harden (speckit adds no value). Risk is near-zero; no dependencies; change is atomic and well-bounded.",
+      "status": "completed",
+      "updatedAt": "2026-08-04T00:58:11.775Z",
+      "appliedAgents": [
+        "openspec"
+      ],
+      "agentContributions": [
+        {
+          "agent": "openspec",
+          "applied": true,
+          "notes": "Defect: getGreeting() returns wrong string. No code blocks were injected, so locationHint is empty to avoid fabrication.",
+          "acceptanceChanged": false,
+          "splitCount": 0,
+          "timestamp": "2026-08-04T00:58:11.774Z"
+        }
+      ]
+    }
+  }
+]
+
+<SPEC_REVIEW>
+</SPEC_REVIEW>
+
+# Output
+<SPEC_REVIEW>
+[
+  {
+    "storyId": "SPAN-1",
+    "verdict": "approved",
+    "reviewNotes": "Trivial string replacement with precise, complete AC. Coordinator correctly assigned only openspec and skipped speckit — neither agent could add meaningful value. Openspec appropriately avoided fabricating elaborations or code blocks; its minimal contribution (noting the defect with no injections) is the correct output for a near-zero-risk, atomic change. No gaps, no overlaps, no unnecessary noise.",
+    "qualityScore": 0.90,
+    "flags": []
+  }
+]
+</SPEC_REVIEW>

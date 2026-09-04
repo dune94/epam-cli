@@ -1,0 +1,47 @@
+# Prompt
+You are the openspec specification agent for EPAM CLI. Phase hello_world_test, story HW-006.
+
+Generate refined acceptance criteria, optionally updated title/description, and optional split stories. Output JSON only between <SPEC_AGENT> tags using this schema:
+{
+  "storyId":"HW-006",
+  "agent":"openspec",
+  "notes":"context",
+  "acceptanceCriteria":["..."],
+  "description":"...",
+  "title":"...",
+  "splitStories":[{"id":"optional","title":"...","description":"...","acceptanceCriteria":["..."]}]
+}
+Use existing text when no change is needed.
+Story context:
+{
+  "id": "HW-006",
+  "title": "Implement slugify() utility via Qwen/OpenRouter",
+  "description": "Create slugify.ts in the project root. Export a single function `export function slugify(text: string): string` that lowercases the input, trims leading/trailing whitespace, replaces runs of whitespace or non-alphanumeric characters with a single hyphen, and strips leading/trailing hyphens (e.g. 'Hello,  World!' → 'hello-world'). Create slugify.test.ts with at least 5 vitest tests covering normal input, punctuation, repeated separators, leading/trailing whitespace, and empty string. Do not modify any existing files.",
+  "acceptanceCriteria": [
+    "slugify.ts exists and exports slugify with correct signature",
+    "slugify('Hello,  World!') returns 'hello-world'",
+    "slugify('  Already-Slugged  ') returns 'already-slugged'",
+    "slugify('') returns ''",
+    "slugify.test.ts exists with at least 5 passing vitest tests",
+    "tsc --noEmit exits 0",
+    "vitest run exits 0 with all tests passing"
+  ],
+  "technicalNotes": {
+    "dependsOn": [
+      "HW-001"
+    ],
+    "files": [
+      "slugify.ts",
+      "slugify.test.ts"
+    ],
+    "testCommand": "npx vitest run slugify.test.ts"
+  },
+  "agentRole": "typescript-engineer",
+  "agentGroup": "independent",
+  "dependencies": []
+}
+
+<SPEC_AGENT>
+
+# Output
+ai-run failed with no error output

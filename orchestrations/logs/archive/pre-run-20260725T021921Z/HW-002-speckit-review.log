@@ -1,0 +1,76 @@
+# Prompt
+You are the speckit specification agent for EPAM CLI. Phase hello_world_test, story HW-002.
+
+You are reviewing and building on the openspec agent's output for this story.
+Your role is COLLABORATIVE — you are NOT starting from scratch. Instead:
+1. Review openspec's proposed acceptance criteria for testability and completeness
+2. Add missing edge-case, error-handling, security, and accessibility criteria
+3. Flag any AC that are vague, untestable, or overlapping
+4. If openspec proposed story splits, validate the decomposition and refine AC per split
+5. Do NOT remove or duplicate openspec's good work — build on it
+
+OPENSPEC'S OUTPUT (your input to review):
+{
+  "storyId": "HW-002",
+  "agent": "openspec",
+  "notes": "No changes needed to title, description, or acceptance criteria. The story is already precise, read-only, and aligned with verification requirements. No split stories are required.",
+  "acceptanceCriteria": [
+    "Tests are executed with exactly: ~/.local/share/fnm/node-versions/v20.20.2/installation/bin/node ./node_modules/.bin/vitest run (tilde resolved to $HOME; no additional flags, no --max-turns-style wrappers, no watch mode)",
+    "The vitest process terminates with exit code 0, captured immediately after the run via $? (or equivalent) and stated explicitly in the story report",
+    "The captured output contains the literal line fragment 'Test Files  1 passed (1)'",
+    "The captured output contains the literal line fragment 'Tests  3 passed (3)'",
+    "The test result summary lines contain no 'failed', 'skipped', 'todo', or 'only' counts — i.e., zero tests in any state other than passed",
+    "Immediately before the vitest run, 'git status --porcelain -- src/ tests/ test/ *.test.* vitest.config.*' (restricted to tracked source, test, and test-config paths) produces empty output, and the identical command produces empty output immediately after the run, demonstrating no files were modified by this story",
+    "The full, unedited, untruncated combined stdout/stderr of the vitest run is included verbatim in the story report as a single fenced block",
+    "No file is created, modified, or deleted by this story; only read-only and process-execution operations are performed"
+  ],
+  "description": "Run the project test suite using the Node 20 vitest binary and confirm all 3 vitest tests in greet.test.ts pass. This is a read-only verification story: do not modify, create, or delete any files. Capture the complete combined stdout/stderr of the vitest run and report it verbatim (unedited, untruncated) in the story report, along with the observed exit code and the before/after git cleanliness checks.",
+  "title": "Verify all tests pass",
+  "splitStories": [],
+  "runId": "20260610T171613Z"
+}
+
+ORIGINAL STORY CONTEXT:
+{
+  "id": "HW-002",
+  "title": "Verify all tests pass",
+  "description": "Run the project test suite using the Node 20 vitest binary and confirm all 3 vitest tests in greet.test.ts pass. This is a read-only verification story: do not modify, create, or delete any files. Capture the complete combined stdout/stderr of the vitest run and report it verbatim (unedited, untruncated) in the story report, along with the observed exit code and the before/after git cleanliness checks.",
+  "originalAcceptanceCriteria": [
+    "Tests are executed with exactly: ~/.local/share/fnm/node-versions/v20.20.2/installation/bin/node ./node_modules/.bin/vitest run (tilde resolved to $HOME; no additional flags, no --max-turns-style wrappers, no watch mode)",
+    "The vitest process terminates with exit code 0, captured immediately after the run via $? (or equivalent) and stated explicitly in the story report",
+    "The captured output contains the literal line fragment 'Test Files  1 passed (1)'",
+    "The captured output contains the literal line fragment 'Tests  3 passed (3)'",
+    "The test result summary lines contain no 'failed', 'skipped', 'todo', or 'only' counts — i.e., zero tests in any state other than passed",
+    "Immediately before the vitest run, 'git status --porcelain -- src/ tests/ test/ *.test.* vitest.config.*' (restricted to tracked source, test, and test-config paths) produces empty output, and the identical command produces empty output immediately after the run, demonstrating no files were modified by this story",
+    "The full, unedited, untruncated combined stdout/stderr of the vitest run is included verbatim in the story report as a single fenced block",
+    "No file is created, modified, or deleted by this story; only read-only and process-execution operations are performed"
+  ],
+  "technicalNotes": {
+    "files": [],
+    "requiredSkills": [
+      "TypeScript",
+      "vitest"
+    ]
+  },
+  "dependencies": [
+    "HW-001"
+  ]
+}
+
+Produce your refined output between <SPEC_AGENT> tags. Include:
+- "acceptanceCriteria": The FULL merged list (openspec's criteria + your additions/refinements)
+- "notes": What you changed and why (be specific — cite which criteria you added/modified)
+- "splitStories": Include if you refined openspec's splits, otherwise omit or pass through
+- "acAddedBySpeckit": Array of criteria YOU added that were not in openspec's output
+- "acModifiedBySpeckit": Array of {"original":"...","revised":"..."} for criteria you reworded
+- "acFlagged": Array of {"criterion":"...","flag":"..."} for criteria that need human attention
+
+<SPEC_AGENT>
+
+# Output
+<function=bash>
+<parameter=command>
+ls -la
+</parameter>
+</function>
+</tool_call>

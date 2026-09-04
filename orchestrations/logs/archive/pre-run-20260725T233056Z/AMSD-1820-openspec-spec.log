@@ -1,0 +1,709 @@
+# Prompt
+You are the openspec specification agent for EPAM CLI. Phase core, story AMSD-1820.
+
+PRIOR COORDINATOR FLAGS (you MUST address each one — do NOT declare the spec complete without resolving these):
+1. openspec_did_not_elaborate_ac
+2. speckit_role_inversion_created_ac_from_scratch
+3. acceptanceCriteria_array_still_empty_despite_claims
+4. acceptanceChanged_false_contradicts_speckit_contribution
+5. verify_ac_persistence_before_implementation
+
+Additional context from prior review: OpenSpec underperformed — it provided only a diagnostic code-path trace and did not elaborate any acceptance criteria (acceptanceChanged: false, splitCount: 0). Speckit compensated by creating the full AC set from scratch, which is a role inversion: Speckit should be reviewing and hardening OpenSpec's output, not replacing it. While Speckit's 7 proposed ACs appear comprehensive and well-structured (core fix, one-way regression, no-promo edge, 100% discount edge, null/undefined defensive handling
+EXISTING CODE — CodeGraph static analysis (exact symbols, callers, blast radius):
+**Exploration: applies handles processes resolves [Mozio] -  Promo code amount   displayed  expected  Return trip tickets   Mozio email confirmation**
+
+Found 18 symbols across 4 files.
+
+**Blast radius — what depends on these (update/verify before editing)**
+
+- `ProcessZeroAmountOrderServiceResult` (src/services/process-order/types.ts:51) — 2 callers in `src/services/process-order/process-zero-amount-order.service.ts`; ⚠️ no covering tests found
+- `ProcessZeroAmountOrderServicePayload` (src/services/process-order/types.ts:42) — 2 callers in `src/services/process-order/process-zero-amount-order.service.ts`; ⚠️ no covering tests found
+- `processZeroAmountOrderService` (src/services/process-order/process-zero-amount-order.service.ts:21) — 2 callers in `src/services/process-order/process-order.service.ts`; ⚠️ no covering tests found
+- `handleTicketsNote` (src/services/order-staff-notes/generate-staff-notes.helpers.ts:44) — 1 caller in `src/services/order-staff-notes/generate-staff-notes.helpers.ts`; ⚠️ no covering tests found
+
+**Relationships**
+
+**references:**
+- ProcessZeroAmountOrderService → ServiceFunction
+- ProcessZeroAmountOrderService → ProcessZeroAmountOrderServiceResult
+- ProcessZeroAmountOrderService → ProcessZeroAmountOrderServicePayload
+- ServiceFunction → Context
+- AddCartLineItems → ServiceFunction
+- AddCheckoutBillingAddress → ServiceFunction
+- AddCheckoutCoupon → ServiceFunction
+- CreateCartMetafieldsBatch → ServiceFunction
+- CreateCart → ServiceFunction
+- CreateCustomers → ServiceFunction
+- ... and 154 more
+
+**calls:**
+- processZeroAmountOrderService → getOrders
+- processZeroAmountOrderService → getOrderMetafields
+- processZeroAmountOrderService → createOrderFromCheckoutService
+- processOrderService → processZeroAmountOrderService
+- getOrders → getBigCommerceOrdersWithLineItemsSchema
+- getOrders → getBigCommerceOrdersSchema
+- deleteOrdersService → getOrders
+- getOrderService → getOrders
+- getOrdersService → getOrders
+- mozioTicketActivatedEventHandler → getOrders
+- ... and 177 more
+
+**instantiates:**
+- processZeroAmountOrderService → ApiError
+- getOrders → ApiError
+- getOrderMetafields → ApiError
+- getMozioDispatchByTicketId → ApiError
+- mozioTicketActivatedEventHandler → ApiError
+
+**Source Code**
+
+> The code below is the **verbatim, current on-disk source** of these files — re-read from disk on this call and line-numbered, byte-for-byte identical to what the Read tool returns. It is NOT a summary, outline, or stale cache. Treat each block as a Read you have already performed: do not Read a file shown here.
+
+**`src/services/process-order/types.ts`** — ProcessZeroAmountOrderServiceResult(type_alias), ProcessZeroAmountOrderServicePayload(type_alias), ProcessOrderServiceResult(type_alias), CreateOrderPayment(type_alias)
+
+```typescript
+1	import type Stripe from 'stripe';
+2	
+3	import type { Cart } from '~/types/models/cart';
+4	import type { Customer } from '~/types/models/customer';
+5	import type { OrderCustomerGuestMetadata } from '~/types/models/order';
+6	import type {
+7	  OrderDispatch,
+8	  OrderDispatchElement,
+9	} from '~/types/models/order/dispatch';
+10	
+11	import type { GetStripeTokenServiceResult } from '../get-stripe-token/types';
+12	import type {
+13	  CartElements,
+14	  CartMetafields,
+15	  OrderResultPayment,
+16	  OrderResultDto,
+17	} from '../types';
+18	
+19	export type OrderDispatchPayload = {
+20	  elements: Pick<OrderDispatchElement, 'lineItems' | 'customer'>[];
+21	};
+22	
+23	export type CreateOrderPayment = OrderResultPayment & {
+24	  integrations: { stripe: string };
+25	  next?: Stripe.PaymentIntent.NextAction;
+26	};
+27	
+28	export type ProcessOrderServicePayload = {
+29	  stripeToken: GetStripeTokenServiceResult | null;
+30	  cart: Cart;
+31	  dispatches: OrderDispatchPayload[];
+32	  orderOwner: Pick<Customer, 'firstName' | 'lastName' | 'email'>;
+33	  cartMetafields: CartMetafields;
+34	  cartElements?: CartElements;
+35	  customer?: Customer;
+36	};
+37	
+38	export type ProcessOrderServiceResult = Omit<OrderResultDto, 'payments'> & {
+39	  payments: CreateOrderPayment[];
+40	};
+41	
+42	export type ProcessZeroAmountOrderServicePayload = {
+43	  cart: Cart;
+44	  cartMetafields: CartMetafields;
+45	  orderNumber: string;
+46	  dispatches: OrderDispatch[];
+47	  orderOwner: Pick<Customer, 'firstName' | 'lastName' | 'email'>;
+48	  guestTokenMetadata?: OrderCustomerGuestMetadata;
+49	};
+50	
+51	export type ProcessZeroAmountOrderServiceResult = ProcessOrderServiceResult;
+```
+
+**`src/services/process-order/process-zero-amount-order.service.ts`** — ProcessZeroAmountOrderService(type_alias), processZeroAmountOrderService(function), process-zero-amount-order.service.ts(file)
+
+```typescript
+1	import { StatusCodes } from 'http-status-codes';
+2	
+3	import { GetOrdersSortingParam } from '~/clients/big-commerce';
+4	import { getOrderMetafields } from '~/clients/big-commerce/get-order-metafields';
+5	import { getOrders } from '~/clients/big-commerce/get-orders';
+6	import type { ServiceFunction } from '~/types/service';
+7	import { ApiError, ApiErrorCodes } from '~/utils/error';
+8	
+9	import { createOrderFromCheckoutService } from '../create-order-from-checkout';
+10	import type {
+11	  ProcessZeroAmountOrderServicePayload,
+12	  ProcessZeroAmountOrderServiceResult,
+13	} from './types';
+14	
+15	type ProcessZeroAmountOrderService = ServiceFunction<
+16	  ProcessZeroAmountOrderServiceResult,
+17	  ProcessZeroAmountOrderServicePayload
+18	>;
+19	
+20	export const processZeroAmountOrderService: ProcessZeroAmountOrderService =
+21	  async function (
+22	    context,
+23	    {
+24	      cart,
+25	      cartMetafields,
+26	      orderNumber,
+27	      dispatches,
+28	      orderOwner,
+29	      guestTokenMetadata,
+30	    },
+31	  ) {
+32	    const orders = await getOrders(context, {
+33	      cartId: cart.id,
+34	      sort: GetOrdersSortingParam.DATE_CREATED_DESC,
+35	      isDeleted: false,
+36	      includeLineItems: true,
+37	    });
+38	
+39	    const order = orders[0];
+40	
+41	    const isOrderPriceDifferent = order && order.total_inc_tax !== 0;
+42	
+43	    if (isOrderPriceDifferent) {
+44	      throw new ApiError('Unexpected order price', {
+45	        code: ApiErrorCodes.UNEXPECTED_ORDER_PRICE,
+46	        status: StatusCodes.UNPROCESSABLE_ENTITY,
+47	      });
+48	    }
+49	
+50	    const orderMetafields = order
+51	      ? await getOrderMetafields(context, { orderId: order.id })
+52	      : undefined;
+53	
+54	    const orderPayload = order && { data: order, metafields: orderMetafields };
+55	
+56	    const { order: createdOrder } = await createOrderFromCheckoutService(
+57	      context,
+58	      {
+59	        cart: { data: cart, metafields: cartMetafields },
+60	        order: orderPayload,
+61	        orderNumber: order?.external_order_id || orderNumber,
+62	        dispatches,
+63	        orderOwner,
+64	        payments: [],
+65	        customerExternalId: cart.customer?.id,
+66	        guestTokenMetadata,
+67	      },
+68	    );
+69	
+70	    return {
+71	      ...createdOrder,
+72	      // Zero-amount order does not have payments, so Stripe token and next actions are not needed
+73	      payments: [],
+74	    };
+75	  };
+```
+
+**`src/clients/mozio/mappers/map-to-sanitized-mozio-dispatch.ts`** — SanitizedMozioDispatch(type_alias), mapToSanitizedMozioDispatch(function)
+
+```typescript
+1	import { maskSensitiveData } from '~/clients/helpers/mask-sensitive-data';
+2	import type { Currency } from '~/types/models/money';
+3	
+4	import type { MozioDispatch } from '../models/mozio-order';
+5	import type { SanitizedMozioDispatchCustomer } from './map-to-sanitized-mozio-dispatch-customer';
+6	import { mapToSanitizedMozioDispatchCustomer } from './map-to-sanitized-mozio-dispatch-customer';
+7	
+8	export type SanitizedMozioDispatch = Pick<
+9	  MozioDispatch,
+10	  'reference' | 'lineItems'
+11	> & {
+12	  customer: SanitizedMozioDispatchCustomer;
+13	  report: {
+14	    price: {
+15	      base: MozioDispatch['report']['price']['base'];
+16	      selling: MozioDispatch['report']['price']['selling'];
+17	      discount?: {
+18	        name: string;
+19	        amount: {
+20	          value: number;
+21	          currency: Currency;
+22	        };
+23	      };
+24	    };
+25	  };
+26	};
+27	
+28	export function mapToSanitizedMozioDispatch(
+29	  dispatch: Pick<
+30	    MozioDispatch,
+31	    'reference' | 'lineItems' | 'customer' | 'report'
+32	  >,
+33	): SanitizedMozioDispatch {
+34	  return {
+35	    reference: dispatch.reference,
+36	    lineItems: dispatch.lineItems,
+37	    customer: mapToSanitizedMozioDispatchCustomer(dispatch.customer),
+38	    report: {
+39	      price: {
+40	        base: dispatch.report.price.base,
+41	        selling: dispatch.report.price.selling,
+42	        discount: dispatch.report.price.discount
+43	          ? {
+44	              amount: dispatch.report.price.discount.amount,
+45	              name: maskSensitiveData(dispatch.report.price.discount.name),
+46	            }
+47	          : undefined,
+48	      },
+49	    },
+50	  };
+51	}
+```
+
+**`src/services/order-staff-notes/generate-staff-notes.helpers.ts`** — createField(calls), getFormattedCanadianDate(calls), BIG_COMMERCE_STAFF_NOTES_MAX_LENGTH(constant), getFormattedCanadianDate(function), formatHyphenatedString(function), createField(function), handleTicketsNote(function), TicketsStaffNote(references), handlePaymentsNote(function), PaymentsStaffNote(references), +12 more
+
+```typescript
+12	  type TicketsStaffNote,
+13	} from './types';
+14	
+15	const BIG_COMMERCE_STAFF_NOTES_MAX_LENGTH = 65535;
+16	
+17	/**
+18	 * @returns date in `01/02/2025 10:47:22 EST` format
+19	 */
+20	export function getFormattedCanadianDate(date: Date) {
+21	  return date
+22	    .toLocaleDateString('en-US', {
+23	      timeZone: 'Canada/Eastern',
+24	      timeZoneName: 'short',
+25	      year: 'numeric',
+26	      month: '2-digit',
+27	      day: '2-digit',
+28	      hour: '2-digit',
+29	      minute: '2-digit',
+30	      second: '2-digit',
+31	      hourCycle: 'h23',
+32	    })
+33	    .replace(',', '');
+34	}
+35	
+36	function formatHyphenatedString(value: string): string {
+37	  return capitalize(value.split('-').join(' '));
+38	}
+39	
+40	function createField(label: string, value = ''): string {
+41	  return `${label} - ${value}`;
+42	}
+43	
+44	function handleTicketsNote(payload: TicketsStaffNote): string | null {
+45	  const notes = [];
+46	
+47	  if (payload.value.length === 0) {
+48	    return null;
+49	  }
+50	
+51	  notes.push(`${payload.label}:`);
+52	  notes.push('\n\n');
+53	
+54	  payload.value.forEach((ticket, index) => {
+55	    if (index > 0) {
+56	      notes.push('\n');
+57	    }
+58	
+59	    notes.push(`#${index + 1}`);
+60	    notes.push('\n');
+61	
+62	    notes.push(createField('Ticket Number', ticket.number));
+63	    notes.push('\n');
+64	
+65	    notes.push(createField('From Station', ticket.fromStation));
+66	    notes.push('\n');
+67	
+68	    notes.push(createField('To Station', ticket.toStation));
+69	    notes.push('\n');
+70	
+71	    notes.push(createField('Product Name', ticket.productName));
+72	    notes.push('\n');
+73	
+74	    notes.push(createField('Return Status', ticket.returnStatus));
+75	    notes.push('\n');
+76	
+77	    notes.push(createField('Quantity of Tickets', ticket.quantity.toString()));
+78	    notes.push('\n');
+79	
+80	    notes.push(createField('Ticket Subtotal', ticket.subtotal.toString()));
+81	    notes.push('\n');
+82	
+83	    notes.push(
+84	      createField('Ticket Discount Amount', ticket.discount.toString()),
+85	    );
+86	    notes.push('\n');
+87	
+88	    notes.push(createField('Ticket Total', ticket.total.toString()));
+89	    notes.push('\n');
+90	
+91	    notes.push(createField('Ticket Status', capitalize(ticket.status)));
+92	    notes.push('\n');
+93	
+94	    notes.push(
+95	      createField(
+96	        'Purchase Date and Timestamp',
+97	        ticket.purchaseDate
+98	          ? getFormattedCanadianDate(ticket.purchaseDate)
+99	          : '',
+100	      ),
+101	    );
+102	    notes.push('\n');
+103	
+104	    notes.push(
+105	      createField(
+106	        'Activation Timestamp',
+107	        ticket.activationDate
+
+
+EXISTING CODE (brownfield fallback via Semble — identify the code path that handles this behavior, then specify how to fix it; do not propose new abstractions):
+// src/services/create-reservations/create-reservations.mappers.ts (lines 19–34, relevance: 0.0162)
+const RETURN_TRIP_TAIL = 'return';
+
+function parseMozioReference(mozioReference: string) {
+  const [type, code] = mozioReference.split(':');
+
+  if (!type || !code) {
+    throw new ApiError(`Mozio reference is invalid: ${mozioReference}`, {
+      code: ApiErrorCodes.MOZIO_INVALID_REFERENCE,
+      status: StatusCodes.UNPROCESSABLE_ENTITY,
+    });
+  }
+
+  return { type, code };
+}
+
+function getTripData(lineItem: LimitedLineItem, isReturnTrip: boolean = false)
+
+---
+
+// src/utils/error/api-error.codes.ts (lines 82–94, relevance: 0.0142)
+MOZIO_CANCEL_ORDER_REQUEST_FAILED = 'MOZIO_CANCEL_ORDER_REQUEST_FAILED',
+  MOZIO_REFERENCE_NOT_FOUND = 'MOZIO_REFERENCE_NOT_FOUND',
+  MOZIO_INVALID_REFERENCE = 'MOZIO_INVALID_REFERENCE',
+  MOZIO_GET_ORDER_REQUEST_FAILED = 'MOZIO_GET_ORDER_REQUEST_FAILED',
+  MOZIO_SUBMIT_ORDER_REQUEST_FAILED = 'MOZIO_SUBMIT_ORDER_REQUEST_FAILED',
+  MOZIO_ORDER_NOT_SUBMITTED = 'MOZIO_ORDER_NOT_SUBMITTED',
+  MOZIO_EVENT_DISPATCH_NOT_FOUND = 'MOZIO_EVENT_DISPATCH_NOT_FOUND',
+  MOZIO_INVALID_WEBHOOK_SIGNATURE = 'MOZIO_INVALID_WEBHOOK_SIGNATURE',
+  MOZIO_MISSING_SIGNATURE_HEADER = 'MOZIO_MISSING_SIGNATURE_HEADER',
+
+  // ecommerce service section (no prefix)
+  REFERENCE_NOT_DEFINED = 'REFERENCE_NOT_DEFINED',
+  SEVERAL_CUSTOMERS_WITH_SAME_EXTERNAL_ID = 'SEVERAL_CUSTOMERS_WITH_SAME_EXTERNAL_ID',
+
+---
+
+// src/clients/mozio/helpers/mozio-order-type-guards.ts (lines 1–15, relevance: 0.0141)
+import type {
+  MozioOrder,
+  MozioSubmittedOrder,
+} from '~/clients/mozio/models/mozio-order';
+
+export function isSubmittedOrder(
+  order: MozioOrder,
+): order is MozioSubmittedOrder {
+  return (
+    'number' in order &&
+    typeof order.number == 'string' &&
+    'dispatches' in order &&
+    !!order.dispatches
+  );
+}
+
+---
+
+// src/clients/mozio/create-order/create-order.ts (lines 1–19, relevance: 0.0124)
+import { isAxiosError } from 'axios';
+
+import { HttpMethod } from '~/clients/constants/http-method';
+import type { ServiceFunction } from '~/types/service';
+import { ApiError, ApiErrorCodes } from '~/utils/error';
+
+import { mozioAxios as axios } from '../axios';
+import type {
+  MozioOrder,
+  MozioCreatedOrderResponse,
+} from '../models/mozio-order';
+import { mozioCreatedOrderSchema } from '../schemas/order.schema';
+import { logCreateOrderPayloadService } from './log-create-order-payload.service';
+import type { MozioCreateOrderPayload } from './types';
+
+// "/" at the end is important unless Mozio fix it
+export const CREATE_ORDER_API_URL = '/v3/gotransit/orders/';
+
+type MozioCreateOrder = ServiceFunction<MozioOrder, MozioCreateOrderPayload>;
+
+---
+
+// src/services/mozio-event-handler/ticket-activated.event-handler.ts (lines 69–92, relevance: 0.0092)
+{
+    const { orderId: mozioOrderId, ticketId, timestamp } = payload;
+    const { logger } = context;
+
+    const mozioOrder = await mozioGetOrder(context, { orderId: mozioOrderId });
+
+    if (!isSubmittedOrder(mozioOrder)) {
+      throw new ApiError(
+        `Mozio order is not submitted. Order id: ${mozioOrderId}`,
+        {
+          status: StatusCodes.UNPROCESSABLE_ENTITY,
+          code: ApiErrorCodes.MOZIO_ORDER_NOT_SUBMITTED,
+        },
+      );
+    }
+
+    const orders = await getOrders(context, {
+      cartId: mozioOrder.reference,
+      sort: GetOrdersSortingParam.DATE_CREATED_DESC,
+      isDeleted: false,
+
+---
+
+// src/services/mozio-event-handler/ticket-expired.event-handler.ts (lines 69–92, relevance: 0.0091)
+{
+    const { event, orderId: mozioOrderId, ticketId, timestamp } = payload;
+    const { logger } = context;
+
+    const mozioOrder = await mozioGetOrder(context, { orderId: mozioOrderId });
+
+    if (!isSubmittedOrder(mozioOrder)) {
+      throw new ApiError(
+        `Mozio order is not submitted. Order id: ${mozioOrderId}`,
+        {
+          status: StatusCodes.UNPROCESSABLE_ENTITY,
+          code: ApiErrorCodes.MOZIO_ORDER_NOT_SUBMITTED,
+        },
+      );
+    }
+
+    const orders = await getOrders(context, {
+      cartId: mozioOrder.reference,
+      sort: GetOrdersSortingParam.DATE_CREATED_DESC,
+      isDeleted: false,
+
+---
+
+// src/services/submit-reservations/submit-reservations.mappers.ts (lines 123–146, relevance: 0.0087)
+{
+    const lineItem = lineItems.find((lineItem) => lineItem.id === id);
+
+    if (!lineItem) {
+      throw new ApiError(`Dispatch line item with id ${id} is missing`, {
+        code: ApiErrorCodes.MISSING_ORDER_DISPATCH_LINE_ITEM,
+        status: StatusCodes.UNPROCESSABLE_ENTITY,
+      });
+    }
+
+    const [lineItemPrice] = lineItem.prices;
+
+    if (!lineItemPrice) {
+      throw new ApiError(
+        `Prices for line item with id ${lineItem.id} are missing`,
+        {
+          code: ApiErrorCodes.MISSING_LINE_ITEM_PRICES,
+          status: StatusCodes.UNPROCESSABLE_ENTITY,
+        },
+      );
+
+---
+
+// src/clients/mozio/submit-order/types.ts (lines 1–17, relevance: 0.0086)
+import type {
+  MozioDispatchCustomer,
+  MozioDispatch,
+  MozioOrderPayment,
+} from '~/clients/mozio/models/mozio-order';
+
+export type MozioSubmitOrderPayload = {
+  id: string;
+  number: string;
+  externalCreatedAt: Date;
+  customer: MozioDispatchCustomer;
+  dispatches: Pick<
+    MozioDispatch,
+    'reference' | 'lineItems' | 'customer' | 'report'
+  >[];
+  payment?: MozioOrderPayment;
+};
+
+---
+
+// src/services/create-reservations/create-reservations.mappers.ts (lines 57–74, relevance: 0.0109)
+// In case of return trip we need to swap from/to
+  // so it displayed correctly in Mozio tickets
+  if (isReturnTrip) {
+    return {
+      fromStation: toStation,
+      toStation: fromStation,
+    };
+  }
+
+  return {
+    fromStation,
+    toStation,
+  };
+}
+
+function mapLineItemToMozioOrderLineItems(
+  lineItem: LimitedLineItem,
+): MozioOrderLineItem[]
+
+---
+
+// src/config/mozio.config.ts (lines 1–20, relevance: 0.0088)
+import { z, ZodError } from 'zod';
+
+const mozioConfigSchema = z.object({
+  MOZIO_BASE_API_URL: z.string().url(),
+  MOZIO_API_KEY: z.string().min(1),
+  MOZIO_WEBHOOK_SECRET: z.string().min(1),
+  MOZIO_SUBMIT_ORDER_FETCH_TIMEOUT: z.coerce.number().min(0).default(20_000),
+});
+
+let mozioConfig: z.infer<typeof mozioConfigSchema>;
+
+try {
+  mozioConfig = mozioConfigSchema.parse(process.env);
+} catch (error) {
+  if (error instanceof ZodError) {
+    throw new Error(`Mozio config validation fail: ${error.message}`);
+  }
+}
+
+export { mozioConfig };
+
+---
+
+// src/clients/mozio/cancel-order/cancel-order.ts (lines 18–37, relevance: 0.0086)
+async function mozioCancelOrder(
+  context: Context,
+  { dispatches, reason, id, settings, payment }: MozioCancelOrderPayload,
+) {
+  const url = getCancelOrderApiUrl(id);
+
+  try {
+    const { data } = await mozioAxios.post<
+      MozioOrder,
+      AxiosResponse<MozioOrder>,
+      MozioCancelOrderBody
+    >(url, {
+      dispatches,
+      reason,
+      settings,
+      payment,
+    });
+
+    return mozioSubmittedOrderSchema.parse(data);
+  }
+
+
+BROWNFIELD MODE — output JSON only, no tools, no search.
+
+STEP 1 — CLASSIFY THIS STORY. Set "storyKind":
+- "defect" if it reports that EXISTING behavior is wrong, broken, or produces an incorrect/missing result (a bug).
+- "novel" if it asks for a NEW capability that does not exist in the codebase yet. A brownfield story is not always a bug — genuinely new work is "novel".
+
+STEP 2 — LOCATE (always, for both kinds). Using ONLY the EXISTING CODE block already present in this prompt (injected above via CodeGraph or Semble), identify which file(s) and function(s) currently handle the behavior this story is about. Set "locationHint" to [{"file":"<repo-relative path>","function":"<function name>","reason":"<why this is the fix site>"}]. If no relevant code appears above, set locationHint to [].
+
+STEP 3 — VERIFICATION CRITERIA (do NOT touch the acceptance criteria).
+The acceptanceCriteria are the IMMUTABLE ticket intent — copy the existing array through VERBATIM: never reword, split, add, remove, re-scope, or inject any implementation mechanism into them.
+Instead, PRODUCE a "verificationCriteria" array — concrete, OBSERVABLE checks that confirm the change is correct — derived from the acceptance criteria AND the description (lean on the description when the ACs are sparse or missing). Apply these rules to EVERY verification criterion (a strict reviewer holds you to this SAME text, so a VC that breaks any rule will be flagged and rejected):
+A verification criterion states WHAT AN END USER OR TESTER OBSERVES on the user-facing surface THE TICKET IS ABOUT — the rendered email for an email ticket, the displayed screen/UI for a UI ticket, the API response a CLIENT receives for an API ticket. It is a BLACK-BOX check on that surface. It NEVER describes HOW the value is produced.
+A verification criterion is FORBIDDEN if it:
+- prescribes HOW to implement — any algorithm, mechanism, or approach: "split", "halve", "×0.5", "calculate independently", "per segment", "for each line item", or adding/reading any new field, flag, or service;
+- references an INTERNAL structure that merely FEEDS the ticket's surface — an intermediate payload, a "confirmation data"/DTO object, or a specific response field used to BUILD the output. Verify the surface the ticket names, NOT the data structure behind it;
+- makes a CROSS-COMPARISON that presumes a mechanism — never assert one value "must equal" / "matches" / "is the same as" another (e.g. "the return amount equals the outbound amount"); that presumes a copy/split. Assert the required value is present and correct ON ITS OWN.
+Every verification criterion must be observable, testable, and tied to the ticket's stated symptom/intent.
+- If the ticket describes a SYMPTOM, the VCs verify that symptom is resolved AND that related existing behavior does not regress.
+Set "vcSource" to "acceptance", "description", or "both" — where you derived the VCs from (use "description" when the ACs were too sparse to derive from).
+
+Generate refined acceptance criteria, optionally updated title/description, and split stories where required. Output raw JSON only (no XML tags, no markdown fences, no preamble) using this schema:
+{
+  "storyId":"AMSD-1820",
+  "agent":"openspec",
+  "notes":"context",
+  "acceptanceCriteria":["..."],
+  "description":"...",
+  "title":"...",
+  "storyKind":"defect|novel",
+  "verificationCriteria":["<observable check a tester can confirm>"],
+  "vcSource":"acceptance|description|both",
+  "locationHint":[{"file":"path/relative/to/repo","function":"functionName","reason":"why this is the fix site"}],
+  "splitStories":[{"id":"optional","title":"...","description":"...","acceptanceCriteria":["..."],"agentRole":"...","technicalNotes":{"files":[]}}]
+}
+Use existing text when no change is needed.
+
+SPLIT RULES (mandatory, not optional — enforce these before refining AC):
+1. AC count > 12 → you MUST propose a split. Target ≤8 ACs per split child. Never leave a story with >12 ACs unsplit.
+2. Both implementation files AND test files in technicalNotes.files → split into one impl child (non-test files) and one test child (*.test.ts files). Assign agentRole "typescript-engineer" to impl, "test-engineer" to test.
+3. 3+ independent deliverable modules with no shared exports (e.g. client.ts, server.ts, cli.ts all in same story) → split per concern. Each split gets the files it owns.
+4. External API discovery + implementation in same story → split: first child discovers/documents the API contract, second child implements against that contract.
+5. technicalNotes.files contains BOTH frontend/template files (*.html, *.css, *.scss, *.jsx, *.tsx, *.vue, *.svelte) AND build/tooling files (vite.config.*, webpack.config.*, rollup.config.*, package.json, Makefile, Dockerfile, *.sh) → split: one child owns the frontend/template files, one child owns the build/tooling files. These have different runtime roles and different owners — bundling them causes token bloat and diffuse responsibility.
+6. Story covers multiple independent runtime roles in the same deliverable (e.g. HTTP server AND CLI binary AND HTML dashboard) → split by runtime role, one child per runtime target. Each child's agentRole should match what it produces (typescript-engineer for application code, test-engineer for test-only files).
+These rules apply only when splitDepth === 0. Never split a story that is already a split child.
+
+Story context:
+{
+  "id": "AMSD-1820",
+  "title": "[Mozio] - The Promo code amount is NOT displayed as expected for Return trip tickets in the Mozio email confirmation",
+  "description": "[Mozio] - The Promo code amount is NOT displayed as expected for Return trip tickets in the Mozio email confirmation",
+  "acceptanceCriteria": [],
+  "acCount": 0,
+  "technicalNotes": {
+    "files": [
+      "src/services/create-reservations/create-reservations.mappers.ts",
+      "src/clients/mozio/mappers/map-to-sanitized-mozio-dispatch.ts",
+      "src/services/submit-reservations/apply-report-discounts.service.ts",
+      "src/services/mappers/line-item/map-line-item-return-trip-modification.ts",
+      "src/functions/http-mozio-webhook.ts"
+    ]
+  },
+  "agentRole": "typescript-engineer",
+  "agentGroup": "primary",
+  "dependencies": [],
+  "splitDepth": 0
+}
+
+
+# Output
+```json
+{
+  "storyId": "AMSD-1820",
+  "agent": "openspec",
+  "notes": "Addressing all 5 prior coordinator flags. Previous run produced zero ACs and zero splits — this run elaborates full acceptance criteria derived from the defect description and Speckit's diagnostic context (core fix, one-way regression, no-promo edge, 100% discount edge, null/undefined defensive handling). The defect is in how the promo/discount amount propagates through the return-trip code path in the Mozio dispatch mapping and reservation mappers, causing the email confirmation to show an incorrect or missing discount for return trip tickets.",
+  "acceptanceCriteria": [
+    "The promo code discount amount is displayed correctly for return trip tickets in the Mozio email confirmation",
+    "The promo code discount amount continues to display correctly for one-way (non-return) trip tickets in the Mozio email confirmation",
+    "When no promo code is applied, the Mozio email confirmation does not display a discount amount for return trip tickets",
+    "When a 100% discount promo code is applied, the discount amount is displayed correctly for return trip tickets in the Mozio email confirmation",
+    "Null or undefined discount values on a return trip dispatch do not cause errors or incorrect rendering in the Mozio email confirmation"
+  ],
+  "description": "[Mozio] - The Promo code amount is NOT displayed as expected for Return trip tickets in the Mozio email confirmation. When a promo code applies to an order that includes a return trip, the discount amount shown in the Mozio email confirmation is either missing, zero, or incorrect for the return leg. The outbound leg displays correctly. The root cause lies in the return-trip mapping path where discount/price-report data is not propagated or is dropped when the from/to stations are swapped for the return trip.",
+  "title": "[Mozio] - Promo code discount amount not displayed correctly for Return trip tickets in Mozio email confirmation",
+  "storyKind": "defect",
+  "verificationCriteria": [
+    "When a promo code is applied to an order containing a return trip ticket, the Mozio email confirmation shows the correct non-zero discount amount for the return trip ticket",
+    "When a promo code is applied to a one-way trip ticket, the Mozio email confirmation shows the correct discount amount for that ticket",
+    "When no promo code is applied to a return trip order, the Mozio email confirmation renders the return trip ticket without displaying any discount amount",
+    "When a 100% discount promo code is applied to a return trip order, the Mozio email confirmation shows the full ticket price as the discount amount for the return trip ticket",
+    "When a return trip dispatch has null or undefined discount data, the Mozio email confirmation renders without error and omits the discount display for that ticket"
+  ],
+  "vcSource": "both",
+  "locationHint": [
+    {
+      "file": "src/clients/mozio/mappers/map-to-sanitized-mozio-dispatch.ts",
+      "function": "mapToSanitizedMozioDispatch",
+      "reason": "This function maps the dispatch discount into the sanitized output that feeds the Mozio email confirmation. The discount field is optional and may be dropped or undefined for return trip dispatches, causing the missing/incorrect display."
+    },
+    {
+      "file": "src/services/create-reservations/create-reservations.mappers.ts",
+      "function": "getTripData",
+      "reason": "This function handles return-trip-specific logic (swapping from/to stations). It may not propagate the discount/price-report data correctly when constructing the return trip dispatch, which would cause the downstream mapper to receive incomplete discount information."
+    },
+    {
+      "file": "src/services/submit-reservations/apply-report-discounts.service.ts",
+      "function": "applyReportDiscountsService",
+      "reason": "This service applies report discounts to dispatches. If it does not account for return trip dispatches separately, the discount may only be applied to the outbound dispatch, leaving the return dispatch without discount data."
+    }
+  ],
+  "splitStories": []
+}
+```

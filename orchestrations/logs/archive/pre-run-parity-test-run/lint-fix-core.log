@@ -1,0 +1,10 @@
+**4. `src/services/contentstack.ts`** — lines 106 (3x `any`), 214, 244, 258, 301, 404
+
+Line 106 is `renderOption`:
+```ts
+span: (node: { children: any }, next: (arg0: any) => any) => next(node.children),
+```
+
+Lines 214, 244, 258, 301, 404 are `catch (e: any)` and `const [response]: any`.
+
+Let me check how `e.message` is used in the catch blocks — `e: any` needs to become `e: unknown` with proper access, or we can use a typed error. Let me check the pattern used elsewhere:

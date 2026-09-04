@@ -1,0 +1,25 @@
+{
+  "agent": "spec-validator",
+  "phase": "core",
+  "stories": [{
+    "storyId": "MOCK-HW-1",
+    "title": "Hello world greeting should say hello dolly",
+    "criteria": [
+      {
+        "text": "When the greeting is displayed to the user, it reads \"hello dolly\".",
+        "status": "met",
+        "evidence": "src/hello.ts changed return value from 'hello world' to 'hello dolly'; test asserts expect(getGreeting()).toBe('hello dolly') and passes (2/2 tests passed).",
+        "gaps": "none"
+      },
+      {
+        "text": "The displayed greeting no longer shows \"hello world\" anywhere on the greeting surface.",
+        "status": "met",
+        "evidence": "The function now returns only 'hello dolly'; explicit negative test expect(getGreeting()).not.toBe('hello world') passes (2/2 tests passed).",
+        "gaps": "none"
+      }
+    ],
+    "overallCompliance": 100,
+    "verdict": "pass"
+  }],
+  "overallVerdict": "pass"
+}

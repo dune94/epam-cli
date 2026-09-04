@@ -1,0 +1,42 @@
+[repro-test-writer] target from the plan's fix site: src/services/contentstack.ts
+[repro-test-writer] writing test for AMSD-2041 (kind: novel) → src/services/contentstack.spec.ts (convention: .spec.ts, example: src/services/__tests__/contactUsService.spec.ts)
+[repro-test-writer] test produced and validated on attempt 1 (model z-ai/glm-5.2)
+[repro-test-writer] WARNING: commit failed — repro-gate will report. Output:
+[repro-test-writer] WARNING: [STARTED] Preparing lint-staged...
+[SUCCESS] Preparing lint-staged...
+[STARTED] Running tasks for staged files...
+[STARTED] .lintstagedrc.js — 1 file
+[STARTED] src/**/*.ts?(x) — 1 file
+[STARTED] src/**/*.(ts|js)?(x) — 1 file
+[STARTED] **/*.(md|json|html) — 0 files
+[STARTED] src/**/*.css — 0 files
+[SKIPPED] **/*.(md|json|html) — no files
+[SKIPPED] src/**/*.css — no files
+[STARTED] npm run check-types
+[STARTED] eslint /home/bradleyjerome/projects/metrolinx/next.metrolinx.com/src/serv…
+[FAILED] eslint /home/bradleyjerome/projects/metrolinx/next.metrolinx.com/src/services/contentstack.spec.ts [FAILED]
+[FAILED] eslint /home/bradleyjerome/projects/metrolinx/next.metrolinx.com/src/services/contentstack.spec.ts [FAILED]
+[FAILED] eslint /home/bradleyjerome/projects/metrolinx/next.metrolinx.com/src/services/contentstack.spec.ts [FAILED]
+[STARTED] Applying modifications from tasks...
+[SKIPPED] Skipped because of errors from tasks.
+[STARTED] Reverting to original state because of errors...
+[FAILED] npm run check-types [KILLED]
+[FAILED] npm run check-types [KILLED]
+[SUCCESS] Reverting to original state because of errors...
+[STARTED] Cleaning up temporary files...
+[SUCCESS] Cleaning up temporary files...
+
+✖ eslint /home/bradleyjerome/projects/metrolinx/next.metrolinx.com/src/services/contentstack.spec.ts:
+
+/home/bradleyjerome/projects/metrolinx/next.metrolinx.com/src/services/contentstack.spec.ts
+  32:48  error  React Hook "useState" is called in function "wrapper" that is neither a React function component nor a custom React Hook function. React component names must start with an uppercase letter. React Hook names must start with the word "use"  react-hooks/rules-of-hooks
+
+✖ 1 problem (1 error, 0 warnings)
+
+
+✖ npm run check-types:
+
+> metrolinx-starter@0.1.0 check-types
+> tsc
+
+husky - pre-commit hook exited with code 1 (error)

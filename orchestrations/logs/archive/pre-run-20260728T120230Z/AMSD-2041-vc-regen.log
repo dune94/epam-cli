@@ -1,0 +1,27 @@
+# Prompt
+Regenerate the VERIFICATION CRITERIA for this brownfield story. Your previous verification criteria were FLAGGED and must be fixed:
+- VC 1 prescribes implementation — 'mocked at the boundary' is a testing mechanism, not an observable condition
+- VC 1 references internal mechanism — 'a preview event delivers' describes HOW content arrives internally; restate as an observable trigger (e.g., editor changes content in CMS)
+- VC 5 references internal mechanism — 'preview stream disconnects or returns an error' is not end-user-observable; restate as observable symptom (e.g., content stops updating)
+
+THE FIX SITE (located by the code-graph detective — anchor every criterion to the behaviour THIS code produces):
+- src/context/ContentstackContext.tsx :: ContentstackProvider — This is the single source that COMPUTES/PROVIDES all CMS content to the entire app (165+ renderers, 236+ useContent consumers). It currently freezes content into an immutable useMemo value, so no consumer can ever see updated content without a full page reload. Live Preview requires this provider to accept runtime content updates — it is the CAUSE (static content) not a SYMPTOM (any individual component not updating).
+Do NOT write criteria about areas unrelated to this code.
+
+
+Acceptance criteria (IMMUTABLE — the intent to verify; do NOT restate as-is, VERIFY them):
+- (none)
+Description: [GO, UP, MX] Live Preview of Content in CMS — Enable real-time content preview so that editors editing content in Contentstack CMS see their changes reflected immediately in the running application without a full page reload.
+
+A verification criterion states WHAT AN END USER OR TESTER OBSERVES on the user-facing surface THE TICKET IS ABOUT — the rendered email for an email ticket, the displayed screen/UI for a UI ticket, the API response a CLIENT receives for an API ticket. It is a BLACK-BOX check on that surface. It NEVER describes HOW the value is produced.
+A verification criterion is FORBIDDEN if it:
+- prescribes HOW to implement — any algorithm, mechanism, or approach: "split", "halve", "×0.5", "calculate independently", "per segment", "for each line item", or adding/reading any new field, flag, or service;
+- references an INTERNAL structure that merely FEEDS the ticket's surface — an intermediate payload, a "confirmation data"/DTO object, or a specific response field used to BUILD the output. Verify the surface the ticket names, NOT the data structure behind it;
+- makes a CROSS-COMPARISON that presumes a mechanism — never assert one value "must equal" / "matches" / "is the same as" another (e.g. "the return amount equals the outbound amount"); that presumes a copy/split. Assert the required value is present and correct ON ITS OWN.
+Every verification criterion must be observable, testable, and tied to the ticket's stated symptom/intent.
+
+Do NOT restate an acceptance criterion as-is — express what a tester OBSERVES that confirms it. Address every flag above.
+Output ONLY a JSON array of verification-criterion strings. No prose, no markdown.
+
+# Output
+["When an editor changes and saves/publishes content in Contentstack CMS, the running application displays the updated content on the currently open page without the tester reloading the browser tab.", "After an editor updates content in Contentstack CMS, the change is visible across all areas of the application that render that content, not just a single page or component.", "When an editor edits content in Contentstack CMS, the updated content appears in the running application while the page URL remains unchanged and the user's in-app state (e.g., scroll position, open dialogs, form inputs) is preserved.", "Before the editor makes any CMS change, the application continues to render the last-known content correctly, confirming that live preview does not break normal content display.", "When live preview is no longer receiving updates (e.g., the editor session ends), the tester observes that the page stops reflecting further CMS edits while the application continues to render the last-known content without a blank screen, error message, or crash.", "When the editor makes multiple successive content changes in Contentstack CMS, the tester observes each successive change reflected on the open page in sequence, without any reload between edits.", "An editor working in Contentstack CMS on a preview-enabled environment sees their changes reflected in the application, while a page not in a live-preview session continues to show the previously published content until reloaded."]

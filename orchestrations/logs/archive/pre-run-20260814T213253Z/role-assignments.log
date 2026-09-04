@@ -1,0 +1,42 @@
+# Prompt
+Assign an implementation agent role to every story below.
+
+AVAILABLE ROLES — these are this project's own engineering roles. Choose from these and
+nothing else; the name you return must match one of them verbatim:
+- contentstack-sdk-engineer
+    You are a Contentstack SDK integration engineer. You own the Contentstack delivery SDK initialization and the live preview utils SDK setup for the metrolinx codeline. The metrolinx codeline initializes its Contentstack Stack in src/services/contentstack.ts via `contentstack.Stack(options)`. The current options object c
+- contentstack-react-context-engineer
+    You are a React context and hooks engineer for the metrolinx codeline. You own the content delivery context layer and the integration of real-time preview updates into the existing component chain. The metrolinx codeline delivers Contentstack content through a React context (ContentstackContext) and the useContent hook
+
+STORIES — a story listing more than one codeline needs ONE ASSIGNMENT PER CODELINE:
+- AMSD-2041: [MX] Live Preview of Content in CMS (part 1)
+    codeline: metrolinx
+    Bullet points: Original Requirements (discovery) AS a Content Author, I WANT to preview draft entries in CMS, SO THAT I can see how content will be shown on the website ability to preview draft entries in CMS Notes& Assumptions Limitation: Might not be possible to preview protected pages and content. Original Total Estimate: 8 Original FE Estimate: 8 Original DAM Estimate: 0 Original BE Estimate: 0
+
+Pick the role whose stated expertise actually covers the work the story describes. If two
+roles could plausibly own a story, prefer the one whose brief names the surface the story
+touches.
+
+THE UNIT OF ASSIGNMENT IS A (STORY, CODELINE) PAIR, NOT A STORY. A story listing three
+codelines needs THREE assignments — the repositories differ, so the right owner can differ.
+Count the codelines listed against each story and return exactly that many assignments for it,
+naming the codeline on every one. A story is not assigned until every codeline it lists is.
+
+THE OWNER MUST AUTHOR THE CODE. Assign the role that will EDIT THE FILES this story changes —
+the one whose brief names those files or directories. A role whose brief is about settings in
+a vendor's console, or about documentation, cannot deliver a story here: the agent's output is
+a change in a repository. Live 2026-08-07: this story went to the one role of three that owned
+no source files, and all such a role can produce is a configuration note. Where the story needs
+both console configuration and code, the code owner is the assignee.
+
+# Output
+{
+"assignments": [
+{
+"agentRole": "contentstack-sdk-engineer",
+"codeline": "metrolinx",
+"reason": "AMSD-2041 (part 1) is about enabling Live Preview of draft CMS entries. The contentstack-sdk-engineer's brief explicitly owns 'the live preview utils SDK setup' and the Contentstack delivery SDK initialization in src/services/contentstack.ts via contentstack.Stack(options) — the exact surface this story's first part requires. Live preview begins at the SDK level: enabling live_preview in the Stack options, configuring the host, and wiring the Live Preview Utils SDK. These are code edits to the files named in this role's brief. The react-context role's brief is downstream (integrating real-time preview updates into the component chain via ContentstackContext/useContent), which is part 2 work after the SDK is configured. Since the owner must author the code and the story touches the SDK initialization files named in the contentstack-sdk-engineer's brief, this role is the correct assignee.",
+"storyId": "AMSD-2041"
+}
+]
+}

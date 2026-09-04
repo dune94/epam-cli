@@ -1,0 +1,29 @@
+# Prompt
+You are a STRICT verification-criteria reviewer for a brownfield fix. REVIEW ONLY — do NOT rewrite anything.
+
+Acceptance criteria (IMMUTABLE ticket intent):
+- (none)
+Description: [GO, UP, MX] Live Preview of Content in CMS
+
+Proposed verification criteria:
+1. When a content editor changes an entry in the CMS and views the page in preview mode, the rendered page displays the updated draft content without requiring the entry to be published or the site to be rebuilt.
+2. Draft or unpublished CMS changes are visible on the page when viewed in preview mode, while the same page viewed normally continues to display the previously published content.
+3. When a page is viewed outside of preview mode, it renders fully and correctly with its published content, with no blank sections or errors.
+4. If live preview is unavailable or fails while viewing a page, the page still displays content to the visitor rather than showing an error or empty page.
+5. A tester can confirm live preview end-to-end by editing any visible content in the CMS and observing that change appear on the rendered preview page.
+6. Pages that were rendering correctly before this change continue to display the same published content and layout after it.
+7. A production build of the site serves only published content and makes no live-preview-related network requests when pages are viewed normally.
+
+Apply these rules EXACTLY (the producer is held to the same text — do not invent stricter or looser criteria):
+A verification criterion states WHAT AN END USER OR TESTER OBSERVES on the user-facing surface THE TICKET IS ABOUT — the rendered email for an email ticket, the displayed screen/UI for a UI ticket, the API response a CLIENT receives for an API ticket. It is a BLACK-BOX check on that surface. It NEVER describes HOW the value is produced.
+A verification criterion is FORBIDDEN if it:
+- prescribes HOW to implement — any algorithm, mechanism, or approach: "split", "halve", "×0.5", "calculate independently", "per segment", "for each line item", or adding/reading any new field, flag, or service;
+- references an INTERNAL structure that merely FEEDS the ticket's surface — an intermediate payload, a "confirmation data"/DTO object, or a specific response field used to BUILD the output. Verify the surface the ticket names, NOT the data structure behind it;
+- makes a CROSS-COMPARISON that presumes a mechanism — never assert one value "must equal" / "matches" / "is the same as" another (e.g. "the return amount equals the outbound amount"); that presumes a copy/split. Assert the required value is present and correct ON ITS OWN.
+Every verification criterion must be observable, testable, and tied to the ticket's stated symptom/intent.
+
+FLAG any verification criterion that violates ANY rule above, OR that fails to cover the intent of an acceptance criterion.
+Output ONLY a JSON array of short flag strings, e.g. ["VC 2 prescribes halving — restate as observable outcome"]. Output [] if every VC is clean. No prose, no markdown.
+
+# Output
+["VC 7 inspects network requests — implementation behavior, not the rendered page surface; restate as observable outcome (e.g. normally viewed pages show only published content)"]

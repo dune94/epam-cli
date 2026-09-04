@@ -1,0 +1,216 @@
+=== Prompt for SKY-002-test (attempt 1) ===
+CRITICAL — WRITE FILES FIRST. Your FIRST tool call MUST be WriteFile.
+Do NOT output any text before calling WriteFile. Do NOT plan or say "I will...".
+Call WriteFile NOW for the EXACT ABSOLUTE PATHS listed below:
+
+   - WRITE /home/bradleyjerome/projects/skyscanner-app/src/skyscanner/client.test.ts first, before any other action
+---
+
+Implement user story SKY-002-test: Write vitest test suite for SkyscannerClient
+
+## Story Description
+Create src/skyscanner/client.test.ts with vitest tests covering all SkyscannerClient behaviors: URL/header construction, successful parsing, HTTP errors, missing API key, malformed responses, and mock mode verification. All tests mock global fetch — no real network calls.
+
+## Acceptance Criteria
+- client.test.ts contains at least 5 vitest tests using mocked fetch (vi.stubGlobal or equivalent) with afterEach fetch restoration
+- Tests cover: correct RapidAPI URL and header construction; successful response parsed into FlightResult[]; HTTP 4xx rejection with status code in error message; missing API key constructor error; malformed/missing-fields response body rejects with parse/validation error
+- Test verifies MOCK_SKYSCANNER_API='true' mode: fetch spy is never invoked and deterministic fixture FlightResult[] is returned
+- Test verifies MOCK_SKYSCANNER_API with non-'true' values (unset, empty string, 'false', '1', 'TRUE') still performs real fetch call — strict opt-in, not fuzzy truthy
+- Test verifies real failures (4xx, 5xx, network error, malformed body) are never silently replaced with mock/fixture data
+- vitest run exits 0 with all tests passing
+
+
+## Test Criteria (ground truth — written from actual source; overrides any conflicting AC)
+- Class SkyscannerClient is exported from /home/bradleyjerome/projects/skyscanner-app/src/skyscanner/client.ts
+- Constructor signature: constructor({ apiKey }: { apiKey?: string } = {})
+- Constructor throws Error with exact message: 'SkyscannerClient: missing API key. Provide apiKey to the constructor or set the RAPIDAPI_KEY environment variable.' when no API key provided
+- Constructor resolves API key from constructor param first, then RAPIDAPI_KEY env var
+- Method signature: async searchFlights(params: SearchParams): Promise<FlightResult[]>
+- SearchParams interface: { origin: string; destination: string; date: string; adults?: number }
+- FlightResult interface: { price: number; currency: string; airline: string; departure: string; arrival: string; duration: number; stops: number }
+- Mock mode activates only when process.env.MOCK_SKYSCANNER_API === 'true' (strict string equality, case-sensitive)
+- When MOCK_SKYSCANNER_API === 'true', searchFlights returns mockFixture(params) without calling fetch
+- mockFixture returns array of 3 FlightResult objects with deterministic values based on params seed
+- Real API endpoint: POST https://${SKYSCANNER_API_HOST}/v1/flights/search (default host: skyscanner-api.p.rapidapi.com)
+- Request headers include: 'Content-Type': 'application/json', 'X-RapidAPI-Key': this.#apiKey, 'X-RapidAPI-Host': SKYSCANNER_HOST
+- Request body JSON: { origin, destination, date, adults: params.adults ?? 1 }
+- Network errors throw Error with message: 'SkyscannerClient: network error while calling Skyscanner API: ${original}'
+- HTTP 4xx/5xx errors throw Error with message: 'SkyscannerClient: Skyscanner API request failed with status ${status} ${statusText}'
+- JSON parse errors throw Error with message: 'SkyscannerClient: failed to parse Skyscanner API response as JSON: ${original}'
+- Response body parsed from: body.flights, body.results, body.data, or top-level array
+- Malformed response (non-array) throws Error: 'SkyscannerClient: malformed response from Skyscanner API: expected an array of flights at body.flights or top-level array'
+- Each flight entry validated for: price (number), currency (non-empty string), airline (non-empty string), departure (non-empty string), arrival (non-empty string), duration (number), stops (number)
+- Validation error format: 'SkyscannerClient: malformed response entry at index ${index}: missing or invalid fields: ${fieldList}'
+- No validation on adults lower bound - adults=0 is accepted
+- No validation on date format - any string accepted
+- No validation on origin/destination format - any non-empty string accepted
+
+## Mock Strategy
+```typescript
+vi.mock('<import-path-to-SkyscannerClient>', () => ({
+  SkyscannerClient: vi.fn().mockImplementation(() => ({
+    searchFlights: vi.fn().mockResolvedValue(undefined),
+  })),
+}));
+```
+
+## Banned Patterns (must NOT appear in your file)
+@jest/globals, jest.mock, axios, node-fetch, GET /v1/flights/search, from, to, originPlace, destinationPlace, outboundDate, inboundDate, MOCK_SKYSCANNER_API === true, MOCK_SKYSCANNER_API == 'true', MOCK_SKYSCANNER_API, process.env.MOCK_SKYSCANNER_API = 'true', stubGlobal('process', vi.mock('./client', vi.mock('../client', vi.mock('./skyscanner/client', mockResolvedValue, mockRejectedValue
+
+## Technical Notes
+- files: ["/home/bradleyjerome/projects/skyscanner-app/src/skyscanner/client.test.ts"]
+- dependsOn: ["SKY-001"]
+
+## Files to Create/Modify (EXACT ABSOLUTE PATHS — write to these paths exactly)
+/home/bradleyjerome/projects/skyscanner-app/src/skyscanner/client.test.ts
+
+## Dependencies
+SKY-002-impl
+
+## Dependency Contracts (EXACT import paths and signatures — use these verbatim, do NOT guess a different path)
+
+### Contract: SKY-002-impl
+# Contract: SKY-002-impl
+
+Auto-generated from actual source (deterministic — not model-transcribed).
+
+```typescript
+export interface SearchParams {origin: string;
+  destination: string;
+  date: string;
+  adults?: number;}
+```
+
+```typescript
+export interface FlightResult {price: number;
+  currency: string;
+  airline: string;
+  departure: string;
+  arrival: string;
+  duration: number;
+  stops: number;}
+```
+
+```typescript
+export class SkyscannerClient {
+  constructor({ apiKey }: { apiKey?: string } = {});
+  async searchFlights(params: SearchParams): Promise<FlightResult[]>;
+}
+```
+
+Mock factory skeleton — every exported method MUST appear here (every method name is real; fill in real return values):
+```typescript
+vi.mock('<import-path-to-SkyscannerClient>', () => ({
+  SkyscannerClient: vi.fn().mockImplementation(() => ({
+    searchFlights: vi.fn().mockResolvedValue(undefined),
+  })),
+}));
+```
+
+## Instructions
+**CRITICAL — WRITE FILES FIRST:**
+   - WRITE /home/bradleyjerome/projects/skyscanner-app/src/skyscanner/client.test.ts first, before any other action
+**You MUST write every file listed above to its EXACT absolute path. Do NOT write to a different path, do NOT write to the current directory unless it matches the path above. Use your WriteFile or Edit tools with the full absolute path shown.**
+
+1. Write each required file to its exact absolute path listed above — do this FIRST before anything else
+2. Implement all acceptance criteria for this story
+3. Test Criteria facts above are ground truth — your test assertions MUST match them exactly
+4. Do NOT create tests unless explicitly required in acceptance criteria
+
+After implementation, provide a brief summary of what was created/modified.
+
+## Relevant Knowledge Base Entries
+The following was learned from previous story implementations and is relevant to your agent role. Apply this knowledge before writing any code:
+
+- [2026-07-07T14:33:39Z] Check the source before writing CLI tests to verify whether output uses console.log or process.stdout.write, then spy on whichever it actually uses.
+- [2026-07-07T18:54:47Z] Always export classes using a named export. Never use a default export for a class, and never declare a class without exporting it.
+- [2026-07-14T10:23:13Z] Always: In strict TypeScript, always annotate callback parameters with explicit types (e.g., `.map((c: Column) =>` not `.map(c =>`). Never rely on implicit any inference for array method callbacks.
+- [2026-07-15T02:48:02Z] Never access ECMAScript private fields (#fieldName) from outside the class in test code — TypeScript cannot parse it and will emit TS1005/TS1109. Test private state indirectly through public methods o
+- [2026-07-15T03:53:06Z] NEVER modify files inside node_modules/ — if a dependency is missing or has wrong types, add it to package.json devDependencies/dependencies and run npm install. If a type mismatch exists, use declara
+- [2026-07-15T04:03:31Z] Never modify any file inside node_modules/ — only edit source files under src/ or config files like package.json/tsconfig.json. If a dependency is missing, add it to package.json devDependencies and r
+- [2026-07-16T16:27:50Z] Never use top-level await in test files — the project uses CommonJS modules which forbid it. Wrap any async setup in an async function called from the test body or inside beforeAll/beforeEach.
+
+## Knowledge Base Contribution (do this LAST — after writing all implementation files)
+Your assigned KB entry ID for this run: **KB-008**
+
+IMPORTANT: Write ALL implementation files first. Only AFTER writing every required file should you optionally append a KB entry.
+Do NOT read orchestrations/agents/KB.md before writing implementation files. The relevant KB entries are already injected above.
+
+If (and only if) you discover a non-obvious pattern during implementation, append one entry to `orchestrations/agents/KB.md`:
+
+```markdown
+## KB-008 -- 2026-07-17
+
+**Category:** <backend|frontend|infrastructure|testing|orchestration>
+**AgentRole:** <your agentRole from the story>
+**Tags:** <comma-separated tech keywords, e.g. typescript, node, cli>
+**Trigger:** <retry|first-success>
+**StoryRef:** SKY-002-test
+
+<One concise paragraph: the specific pattern, gotcha, or anti-pattern.>
+```
+
+Only write an entry if the knowledge is genuinely non-obvious. Skip trivial observations.
+=== End Prompt ===
+
+=== epam Output (attempt 1) ===
+All 23 tests pass. Let me provide a summary of what was created:
+
+## Summary
+
+Created `/home/bradleyjerome/projects/skyscanner-app/src/skyscanner/client.test.ts` with a comprehensive vitest test suite for `SkyscannerClient` covering:
+
+**Constructor tests (4 tests):**
+- Throws error when no API key provided
+- Accepts API key from constructor parameter
+- Resolves API key from `RAPIDAPI_KEY` env var
+- Prefers constructor param over env var
+
+**searchFlights tests (11 tests):**
+- Correct RapidAPI URL and header construction
+- Successful response parsing into `FlightResult[]`
+- HTTP 4xx/5xx error rejection with status code in message
+- Network error handling
+- JSON parse error handling
+- Malformed response (non-array) validation error
+- Malformed response entry validation error
+- Response parsing from `body.flights`, `body.results`, `body.data`, and top-level array
+- Default adults value of 1 when not provided
+
+**Mock mode tests (7 tests):**
+- Returns deterministic fixture when `MOCK_SKYSCANNER_API === 'true'`
+- Performs real fetch when `MOCK_SKYSCANNER_API` is unset, empty string, `'false'`, `'1'`, or `'TRUE'` (strict opt-in, not fuzzy truthy)
+- Does not silently replace real failures with mock data
+
+All 23 tests pass with `vitest run`.
+All 23 tests pass. Let me provide a summary of what was created:
+
+## Summary
+
+Created `/home/bradleyjerome/projects/skyscanner-app/src/skyscanner/client.test.ts` with a comprehensive vitest test suite for `SkyscannerClient` covering:
+
+**Constructor tests (4 tests):**
+- Throws error when no API key provided
+- Accepts API key from constructor parameter
+- Resolves API key from `RAPIDAPI_KEY` env var
+- Prefers constructor param over env var
+
+**searchFlights tests (11 tests):**
+- Correct RapidAPI URL and header construction
+- Successful response parsing into `FlightResult[]`
+- HTTP 4xx/5xx error rejection with status code in message
+- Network error handling
+- JSON parse error handling
+- Malformed response (non-array) validation error
+- Malformed response entry validation error
+- Response parsing from `body.flights`, `body.results`, `body.data`, and top-level array
+- Default adults value of 1 when not provided
+
+**Mock mode tests (7 tests):**
+- Returns deterministic fixture when `MOCK_SKYSCANNER_API === 'true'`
+- Performs real fetch when `MOCK_SKYSCANNER_API` is unset, empty string, `'false'`, `'1'`, or `'TRUE'` (strict opt-in, not fuzzy truthy)
+- Does not silently replace real failures with mock data
+
+All 23 tests pass with `vitest run`.
+
+=== End epam Output ===

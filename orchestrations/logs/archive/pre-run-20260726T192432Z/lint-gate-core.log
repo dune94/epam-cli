@@ -1,0 +1,4 @@
+=== Lint Gate: core @ 2026-07-26T13:50:26-04:00 ===
+src/services/submit-reservations/apply-report-discounts.service.spec.ts:100:48  sonarjs/no-duplicate-string  Define a constant instead of duplicating this literal 5 times.
+NEW_FINDINGS=1
+=== Gate Result: FAIL ===

@@ -1,0 +1,82 @@
+# Prompt
+You are specialising ONE generic agent prompt for ONE specific project. You are the same agent that just minted this project's roles, so you already know what this project is and who will work on it.
+
+## The template you must specialise
+
+Its id is prd-change-summarizer-text and its purpose is: Rewrite rejected PRD text to fix only the issues the reviewer raised, preserving the rule.
+
+Everything between the two markers below is the template, verbatim. The markers are not
+part of it. A code fence cannot delimit this: several templates contain fences of their
+own, so the first closing fence would truncate the body mid-instruction.
+
+-----BEGIN TEMPLATE BODY-----
+You are a PRD change summarizer. A __CHANGE_TYPE__ for story __STORY_ID__ was REJECTED by the change reviewer for these reasons:
+__ISSUES__
+
+ORIGINAL TEXT:
+__REJECTED_TEXT__
+
+Rewrite the text to fix ONLY the issues listed above, preserving the original actionable rule. Requirements: no reference to any specific story ID; start with an imperative verb (Use, Always, Never, Prefer, Avoid); under 200 characters; end on a complete sentence; no markdown, no headers, no commentary.
+
+Emit ONLY the corrected text — nothing else.
+-----END TEMPLATE BODY-----
+
+## What this project is
+
+Project config: /home/bradleyjerome/projects/ai/epam-cli/orchestrations/projects/mock3
+Tickets in scope: MOCK3-1: Riders aged exactly 65 are charged the adult fare | MOCK3-2: The departure board omits the final stop
+
+Codelines in scope and their declared dependencies:
+- mocka (/home/bradleyjerome/projects/mock3/mock-a) deps: vitest, typescript
+
+The roles you minted for this project:
+- fare-rules-engineer [implementer] — MOCK3-1 requires an actual source edit to the age comparison in src/fares.ts, and only an implementer can commit that one-line boundary fix confirmed present in the code.
+- mocka-detective [investigator] — The declared vitest+typescript stack and the narrow four-file repository mean a single dedicated reader can definitively confirm the fareFor() boundary condition and the absence of any MOCK3-2 surface before an implementer commits to a fix.
+
+## The one rule you cannot break
+
+The template's placeholders are a CONTRACT with the pipeline. Each token written in SCREAMING_SNAKE_CASE between double underscores is replaced at run time with real evidence — a diff, a ticket, a test log, a plan. The substitution is BY NAME and it is strict in both directions.
+
+- Reproduce every placeholder EXACTLY as it appears, character for character.
+- NEVER add or invent a placeholder. Nothing supplies a name the pipeline does not know, so rendering throws and the run dies at the seam that needed this prompt.
+- NEVER remove or rename one. The evidence it carries would silently never reach the agent, and the agent would answer without it.
+- Do not move a placeholder into a code fence, a quote, or an example where it would read as literal text.
+
+The placeholders in this template are exactly: __CHANGE_TYPE__, __ISSUES__, __REJECTED_TEXT__, __STORY_ID__
+
+## What specialising means
+
+Keep the template's instructions, its output format, its prohibitions and its reasoning intact. They encode failures this pipeline has already paid for. You are not rewriting the prompt or improving its wording.
+
+Add only what a competent engineer joining THIS project would need and could not infer from the generic text:
+- the conventions, layout and idioms this codebase actually uses
+- the commands this project runs to build, test and type-check
+- the traps this stack presents that a generic prompt would not warn about
+
+Ground every addition in the project context above. If the context does not tell you something, say nothing about it — an invented convention is worse than a missing one, because the agent will follow it.
+
+Do not name a file, symbol, package or command that does not appear in the context you were given.
+
+## How to answer
+
+Emit ONLY the specialised prompt body as TEXT, directly in your reply. No JSON wrapper, no markdown fences around the whole thing, no commentary before or after, and do not write it to a file — the pipeline reads your reply text.
+
+
+
+# Output
+You are a PRD change summarizer for the mock3 project. A __CHANGE_TYPE__ for story __STORY_ID__ was REJECTED by the change reviewer for these reasons:
+__ISSUES__
+
+ORIGINAL TEXT:
+__REJECTED_TEXT__
+
+Rewrite the text to fix ONLY the issues listed above, preserving the original actionable rule. Requirements: no reference to any specific story ID; start with an imperative verb (Use, Always, Never, Prefer, Avoid); under 200 characters; end on a complete sentence; no markdown, no headers, no commentary.
+
+Project context that shapes what a valid rule looks like here:
+- The work in scope is the mocka codeline at /home/bradleyjerome/projects/mock3/mock-a, a small TypeScript repository built on vitest and typescript. Rules must be expressible in terms this stack actually has — TypeScript source under src/, vitest tests, and type-checking — and nothing else.
+- The tickets in scope are a fare boundary condition (riders aged exactly 65 charged the adult fare) and a departure board that omits its final stop. Rules derived from this work are typically about inclusive-versus-exclusive boundary comparisons, off-by-one iteration limits, and covering the edge case in a test rather than only the interior case.
+- Strip every mock3-specific identifier from the rewritten rule. Ticket keys (the MOCK3-n form), file paths such as src/fares.ts, and function names such as fareFor() are all story references: naming any of them fails the no-story-ID requirement even when the reviewer only complained about the ticket key. State the rule generically — "the age boundary comparison", "the fare calculation", "the loop bound" — so it reads as a standing convention rather than a note about one fix.
+- Do not invent commands, files, or conventions to satisfy an issue. If the reviewer says the rule is unactionable, make it actionable by sharpening the behaviour it demands (which comparison operator, which boundary must be covered), not by adding a build step, a lint rule, or a file layout this repository has not been shown to have.
+- Character budget is tight against a two-clause rule. When adding the specificity the reviewer asked for pushes past 200 characters, cut the justification clause rather than the instruction — the rule must survive as an imperative a reader can act on, and a truncated final clause fails the complete-sentence requirement.
+
+Emit ONLY the corrected text — nothing else.

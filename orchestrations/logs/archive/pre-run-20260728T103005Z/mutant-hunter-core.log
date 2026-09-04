@@ -1,0 +1,35 @@
+{
+  "agent": "mutant-hunter",
+  "phase": "core",
+  "summary": { "mutationsProposed": 3, "killed": 3, "survived": 0, "noCoverage": 0, "mutationScore": 100 },
+  "mutations": [
+    {
+      "file": "src/hello.ts",
+      "line": 2,
+      "originalCode": "return 'hello dolly';",
+      "mutatedCode": "return 'hello world';",
+      "status": "killed",
+      "relatedTest": "src/hello.test.ts → 'returns hello dolly' (toBe) and 'does not contain hello world' (not.toContain)",
+      "recommendation": "No action needed — both test assertions catch this mutation."
+    },
+    {
+      "file": "src/hello.ts",
+      "line": 2,
+      "originalCode": "return 'hello dolly';",
+      "mutatedCode": "return '';",
+      "status": "killed",
+      "relatedTest": "src/hello.test.ts → 'returns hello dolly' (toBe('hello dolly'))",
+      "recommendation": "No action needed — strict equality assertion catches empty-string mutation."
+    },
+    {
+      "file": "src/hello.ts",
+      "line": 2,
+      "originalCode": "return 'hello dolly';",
+      "mutatedCode": "return 'HELLO DOLLY';",
+      "status": "killed",
+      "relatedTest": "src/hello.test.ts → 'returns hello dolly' (toBe('hello dolly'))",
+      "recommendation": "No action needed — toBe enforces case-sensitive strict equality."
+    }
+  ],
+  "verdict": "pass"
+}

@@ -1,0 +1,60 @@
+```json
+{
+  "agent": "fuzz-weaver",
+  "phase": "core",
+  "summary": { "functionsAnalysed": 1, "fuzzCasesProposed": 5, "covered": 0, "gaps": 5, "vulnerabilities": 0 },
+  "cases": [
+    {
+      "function": "options (live_preview conditional spread)",
+      "file": "src/services/contentstack.ts",
+      "line": 62,
+      "property": "When both CONTENTSTACK_PREVIEW_TOKEN and CONTENTSTACK_PREVIEW_HOST are set, options.live_preview should be included with management_token, host, and enable:true",
+      "generator": "fc.record({ token: fc.string({ minLength: 1 }), host: fc.string({ minLength: 1 }) }) mapped to process.env",
+      "invariant": "options.live_preview !== undefined && options.live_preview.management_token === token && options.live_preview.host === host && options.live_preview.enable === true",
+      "status": "gap",
+      "recommendation": "Add a test that sets both env vars and asserts options.live_preview is present with correct values."
+    },
+    {
+      "function": "options (live_preview conditional spread)",
+      "file": "src/services/contentstack.ts",
+      "line": 62,
+      "property": "When only CONTENTSTACK_PREVIEW_TOKEN is set and CONTENTSTACK_PREVIEW_HOST is empty, options should NOT include live_preview",
+      "generator": "fc.string({ minLength: 1 }) for token, fc.constant('') for host",
+      "invariant": "options.live_preview === undefined",
+      "status": "gap",
+      "recommendation": "Add a test that sets only the preview token and asserts live_preview is absent from options."
+    },
+    {
+      "function": "options (live_preview conditional spread)",
+      "file": "src/services/contentstack.ts",
+      "line": 62,
+      "property": "When only CONTENTSTACK_PREVIEW_HOST is set and CONTENTSTACK_PREVIEW_TOKEN is empty, options should NOT include live_preview",
+      "generator": "fc.string({ minLength: 1 }) for host, fc.constant('') for token",
+      "invariant": "options.live_preview === undefined",
+      "status": "gap",
+      "recommendation": "Add a test that sets only the preview host and asserts live_preview is absent from options."
+    },
+    {
+      "function": "options (live_preview conditional spread)",
+      "file": "src/services/contentstack.ts",
+      "line": 62,
+      "property": "When both CONTENTSTACK_PREVIEW_TOKEN and CONTENTSTACK_PREVIEW_HOST are empty strings, options should NOT include live_preview",
+      "generator": "fc.constant('') for both token and host",
+      "invariant": "options.live_preview === undefined",
+      "status": "gap",
+      "recommendation": "Add a test that leaves both preview env vars unset and asserts live_preview is absent."
+    },
+    {
+      "function": "options (live_preview conditional spread)",
+      "file": "src/services/contentstack.ts",
+      "line": 62,
+      "property": "Whitespace-only values for CONTENTSTACK_PREVIEW_TOKEN and CONTENTSTACK_PREVIEW_HOST are truthy in JS, so live_preview would be included with invalid values",
+      "generator": "fc.constant(' ') for both token and host",
+      "invariant": "options.live_preview would be present with whitespace-only management_token and host — SDK may construct invalid requests",
+      "status": "gap",
+      "recommendation": "Consider trimming env var values before truthiness check, or document that whitespace-only values will enable live_preview with invalid config. Add a test to clarify intended behavior."
+    }
+  ],
+  "verdict": "warn"
+}
+```

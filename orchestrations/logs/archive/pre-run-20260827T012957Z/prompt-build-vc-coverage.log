@@ -1,0 +1,127 @@
+# Prompt
+You are specialising ONE generic agent prompt for ONE specific project. You are the same agent that just minted this project's roles, so you already know what this project is and who will work on it.
+
+## The template you must specialise
+
+Its id is vc-coverage and its purpose is: Decide whether a test suite covers ONE specific verification criterion.
+
+Everything between the two markers below is the template, verbatim. The markers are not
+part of it. A code fence cannot delimit this: several templates contain fences of their
+own, so the first closing fence would truncate the body mid-instruction.
+
+-----BEGIN TEMPLATE BODY-----
+You are checking whether a test suite covers ONE specific requirement.
+
+## The requirement
+__VERIFICATION_CRITERION__
+
+## The test file (complete)
+```
+__TEST_SOURCE__
+```
+
+Answer ONE question: does this test file contain a case that would FAIL if this
+requirement were violated?
+
+Judge the ASSERTIONS, not the titles. A test whose name mentions the same words
+is irrelevant if it does not actually exercise the requirement — in particular a
+requirement stating something must NOT happen is not covered by a test asserting
+that it DOES happen, however similar the wording.
+
+Output ONLY this JSON, nothing else:
+{"covered": true|false, "case": "<the test case name that covers it, or empty>", "why": "<one sentence>"}
+-----END TEMPLATE BODY-----
+
+## What this project is
+
+Project config: /home/bradleyjerome/projects/ai/epam-cli/orchestrations/projects/mock3
+Tickets in scope: MOCK3-1: Riders aged exactly 65 are charged the adult fare | MOCK3-2: The departure board omits the final stop
+
+Codelines in scope and their declared dependencies:
+- mocka (/home/bradleyjerome/projects/mock3/mock-a) deps: vitest, typescript
+- mockb (/home/bradleyjerome/projects/mock3/mock-b) deps: vitest, typescript
+
+The roles you minted for this project:
+- fare-schedule-engineer [implementer] — Both MOCK3-1 and MOCK3-2 are single-line pure-function logic fixes in the same declared typescript/vitest stack, so one implementer spanning src/fares.ts (mocka) and src/schedule.ts (mockb) is sufficient and avoids minting redundant near-duplicate engineers per codeline.
+- mocka-detective [investigator] — MOCK3-1 is scoped entirely to mocka's fare logic, so a dedicated investigator confirming the exact comparison operator and current test boundary coverage in src/fares.ts and test/fares.test.ts prevents the implementer from acting on the unverified survey lead alone.
+- mockb-detective [investigator] — MOCK3-2 is scoped entirely to mockb's schedule rendering, so a dedicated investigator confirming the actual loop bound in formatStops and the current test coverage in test/schedule.test.ts prevents the implementer from acting on the unverified survey lead alone.
+
+## The one rule you cannot break
+
+The template's placeholders are a CONTRACT with the pipeline. Each token written in SCREAMING_SNAKE_CASE between double underscores is replaced at run time with real evidence — a diff, a ticket, a test log, a plan. The substitution is BY NAME and it is strict in both directions.
+
+- Reproduce every placeholder EXACTLY as it appears, character for character.
+- NEVER add or invent a placeholder. Nothing supplies a name the pipeline does not know, so rendering throws and the run dies at the seam that needed this prompt.
+- NEVER remove or rename one. The evidence it carries would silently never reach the agent, and the agent would answer without it.
+- Do not move a placeholder into a code fence, a quote, or an example where it would read as literal text.
+
+The placeholders in this template are exactly: __TEST_SOURCE__, __VERIFICATION_CRITERION__
+
+## What specialising means
+
+Keep the template's instructions, its output format, its prohibitions and its reasoning intact. They encode failures this pipeline has already paid for. You are not rewriting the prompt or improving its wording.
+
+Add only what a competent engineer joining THIS project would need and could not infer from the generic text:
+- the conventions, layout and idioms this codebase actually uses
+- the commands this project runs to build, test and type-check
+- the traps this stack presents that a generic prompt would not warn about
+
+Ground every addition in the project context above. If the context does not tell you something, say nothing about it — an invented convention is worse than a missing one, because the agent will follow it.
+
+Do not name a file, symbol, package or command that does not appear in the context you were given.
+
+## How to answer
+
+Emit ONLY the specialised prompt body as TEXT, directly in your reply. No JSON wrapper, no markdown fences around the whole thing, no commentary before or after, and do not write it to a file — the pipeline reads your reply text.
+
+
+
+# Output
+You are checking whether a test suite covers ONE specific requirement.
+
+## Project context
+
+This is a two-codeline TypeScript project tested with vitest:
+
+- **mocka** (`mock-a`) — fare logic in `src/fares.ts`, tests in `test/fares.test.ts`.
+- **mockb** (`mock-b`) — schedule rendering in `src/schedule.ts`, tests in `test/schedule.test.ts`.
+
+The test source you are given is a vitest file: `describe` / `it` blocks with `expect(...)`
+assertions, sometimes table-driven over an array of cases. Read the assertions inside the
+blocks, including any loop or `it.each`-style table that generates cases — a case generated
+from a data table counts as a real case, and the concrete input values in that table are
+what determine coverage, not the table's label.
+
+The requirements in this project are boundary and omission rules — the two traps below are
+the ones that actually bite here:
+
+- **Boundary values.** A requirement about an exact value (e.g. behaviour at exactly one age)
+  is NOT covered by a case one step either side of it. A test at 64 and a test at 66 leave
+  65 untested; only a case whose input is exactly the boundary can fail when the comparison
+  operator is wrong. Check the literal numbers passed in, not the prose around them.
+- **Off-by-one over a sequence.** A requirement about which elements of a list appear in
+  output (e.g. whether the last stop is included or omitted) is only covered by an assertion
+  pinned to the sequence's end — an exact full-output equality, a length check, or an
+  explicit assertion about the final element. A test that merely checks some middle element
+  is present would still pass if the loop bound were wrong.
+
+## The requirement
+__VERIFICATION_CRITERION__
+
+## The test file (complete)
+```
+__TEST_SOURCE__
+```
+
+Answer ONE question: does this test file contain a case that would FAIL if this
+requirement were violated?
+
+Judge the ASSERTIONS, not the titles. A test whose name mentions the same words
+is irrelevant if it does not actually exercise the requirement — in particular a
+requirement stating something must NOT happen is not covered by a test asserting
+that it DOES happen, however similar the wording. An assertion that the final stop
+appears in the board is the inverse of a requirement that it be omitted, not
+evidence for it.
+
+Output ONLY this JSON, nothing else:
+{"covered": true|false, "case": "<the test case name that covers it, or empty>", "why": "<one sentence>"}

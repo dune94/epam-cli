@@ -1,0 +1,105 @@
+=== Prompt for SKY-006-A-1 (attempt 1) ===
+Implement user story SKY-006-A-1: Code review (Part A): Prerequisites, document structure, TypeScript, and test checks
+
+## Story Description
+First half of the Skyscanner mini-app code review. The agent verifies that all prerequisite stories are satisfied, creates the review document with the correct six-section structure, runs the TypeScript compiler, and verifies test execution and per-layer test coverage. Output is written to /tmp/skyscanner-app/review/SKY-006-review.md. This story must be completed before SKY-006-B begins.
+
+## Acceptance Criteria
+- PREREQUISITE GATE — Before any review step executes the agent MUST verify: (a) the directory /tmp/skyscanner-app exists, (b) a src/ subtree is present beneath it containing at least one TypeScript source file (*.ts or *.tsx), and (c) a package.json is present at /tmp/skyscanner-app/package.json. If any of these three conditions is not met the agent MUST immediately write a single-line file at /tmp/skyscanner-app/review/SKY-006-review.md containing exactly `BLOCKED: dependency SKY-00N not satisfied` (where N identifies the first unsatisfied story by its numeric suffix), emit the same message to stderr, exit with a non-zero code, and produce NO further review content. Any partial review document written after a failed prerequisite check is itself treated as a review failure.
+- The file /tmp/skyscanner-app/review/SKY-006-review.md MUST be created (parent directory /tmp/skyscanner-app/review/ created if absent) and MUST contain all six required sections with exact H2 headings in this order and no other H2 headings: `## TypeScript`, `## Tests`, `## Security`, `## Error Handling`, `## Express Safety`, `## Verdict`. Any missing heading, any heading with different casing or punctuation (e.g. `## Typescript` or `## TypeScript:` are both non-conforming), or any additional H2 heading anywhere in the document is a blocking structural finding that forces Verdict: FAIL.
+- A 'blocking finding' is defined as any discrete defect, failed check, or policy violation discovered during live inspection that, if left unresolved, would prevent the mini-app from meeting its stated requirements. Each blocking finding MUST be recorded as a numbered list item under the relevant category section and MUST include all four of the following fields: (1) the relative file path (relative to /tmp/skyscanner-app), (2) the line number or line range where the issue was observed, (3) a one-sentence description of the defect, and (4) the specific acceptance criterion or policy it violates. A finding that omits any of these four fields is itself considered incomplete, and the category containing it is treated as having an unresolved blocking finding.
+- Each of the five category sections (TypeScript, Tests, Security, Error Handling, Express Safety) MUST reference at least one concrete relative file path or specific line-number finding discovered during live inspection of the actual codebase at /tmp/skyscanner-app. Content that could have been produced without reading the actual source files (boilerplate, placeholder sentences, generic advice) constitutes a blocking structural finding for that section. For every finding the agent MUST record the exact tool invocation used to produce it (command run, exit code, and output truncated to 500 characters if longer) as a fenced code block immediately following the finding list item.
+- TypeScript check: The agent MUST run `tsc --noEmit --project /tmp/skyscanner-app/tsconfig.json` and capture stdout, stderr, and exit code. Before running, the agent MUST read /tmp/skyscanner-app/tsconfig.json and confirm that `"strict": true` appears in the top-level `compilerOptions` object of that file (not solely inherited via an `extends` chain without being re-stated); if it is absent, that absence is itself a blocking TypeScript finding recorded before the compiler is invoked. The tsc command MUST exit with code 0 and produce zero bytes on both stdout and stderr; any non-zero exit code or any diagnostic line on either stream is a blocking TypeScript finding. The raw command output (or a truncation to 2000 characters with a truncation notice) MUST be reproduced verbatim in the `## TypeScript` section.
+- Tests check — execution: The agent MUST read /tmp/skyscanner-app/package.json, extract the value of `scripts.test`, and run that exact command from the /tmp/skyscanner-app working directory (falling back to `npx vitest run` only if the `test` key is absent or empty). The agent MUST capture stdout, stderr, and exit code. The command MUST exit with code 0. The Vitest (or equivalent runner) summary line MUST report 0 failed, 0 skipped, and 0 todo tests. Any non-zero exit code or any non-zero value in failed/skipped/todo counts is a blocking Tests finding. The raw summary output (last 2000 characters of combined stdout+stderr, with a truncation notice if trimmed) MUST be reproduced verbatim in the `## Tests` section.
+- Tests check — coverage by layer: At least one non-empty test file (containing at least one `it(`, `test(`, or `describe(` call) MUST be present for each of the following three layers: (a) Skyscanner API client — a file matching the glob `src/**/*.client.test.*` OR any file under src/ whose base name (without extension) contains both a word identifying the Skyscanner client module (e.g. 'client', 'skyscanner', 'api') and either 'test' or 'spec'; (b) CLI entry-point — any file under src/ whose base name contains a word identifying the CLI or bin module (e.g. 'cli', 'bin', 'index') and either 'test' or 'spec'; (c) Express server/router — any file under src/ whose base name contains a word identifying the server or router module (e.g. 'server', 'router', 'app') and either 'test' or 'spec'. Absence of a qualifying non-empty file for any single layer is a blocking Tests finding. The agent MUST list the resolved absolute path of each qualifying test file found in the `## Tests` section.
+- Upon completing all checks assigned to this story the agent MUST leave the review document in a consistent intermediate state: the `## TypeScript` and `## Tests` sections MUST be fully populated with findings and verbatim tool output as specified above; the remaining four sections (`## Security`, `## Error Handling`, `## Express Safety`, `## Verdict`) MUST be present as H2 headings with no content beneath them (not even a blank placeholder line containing text). The document MUST NOT contain any line beginning with `Verdict:` or any text beneath the `## Verdict` heading until SKY-006-B writes it. Writing a Verdict line or populating the Security, Error Handling, or Express Safety sections in SKY-006-A is itself a blocking structural finding.
+
+## Technical Notes
+- workingDir: /tmp/skyscanner-app
+- files: ["/tmp/skyscanner-app/review/SKY-006-review.md"]
+- dependsOn: ["SKY-001","SKY-002","SKY-003","SKY-004","SKY-005"]
+
+## Files to Create/Modify
+/tmp/skyscanner-app/review/SKY-006-review.md
+
+## Dependencies
+None
+
+## Instructions
+**IMPORTANT: You MUST use your file-writing and bash tools to create all required files. Do NOT just describe or plan what you will do — call tools immediately and write the files.**
+
+1. Implement all acceptance criteria for this story
+2. Follow the project's existing code patterns and conventions
+3. Create any necessary files in the locations specified
+4. Ensure code compiles/runs without errors
+5. Do NOT create tests unless explicitly required in acceptance criteria
+
+After implementation, provide a brief summary of what was created/modified.
+
+## Relevant Knowledge Base Entries
+The following was learned from previous story implementations and is relevant to your agent role. Apply this knowledge before writing any code:
+
+## KB-003 -- 2026-03-01
+
+**Category:** backend
+**AgentRole:** review-agent
+**Tags:** typescript, async, cancellation, abort-controller
+**Trigger:** first-success
+**StoryRef:** EPAM-014
+
+When implementing multi-agent parallel execution with cancellation support, registering an AbortController in a task registry is insufficient. The abort signal must be threaded through the entire call chain: TaskRegistry → caller → AgentRunOptions → AgentRunner → provider.stream(). Without adding `abortSignal?: AbortSignal` to AgentRunOptions and checking it in the agent loop, calling `abortController.abort()` will update task status but leave the underlying LLM stream and agent execution running. Always ensure cancellation signals propagate to the lowest-level async operation (the provider stream) to avoid resource leaks and unbounded execution.
+
+
+## KB-004 -- 2026-03-01
+
+**Category:** orchestration
+**AgentRole:** review-agent
+**Tags:** typescript, prompt-injection, session-history, agent-runner
+**Trigger:** first-success
+**StoryRef:** EPAM-018
+
+For one-turn consultation or override prompts, consuming a pending flag is not enough if you also persist the injected text into the turn history. If the transformed message is stored in the same message array that becomes future history, the consultation silently bleeds into later turns. Keep a separate transient message list for the model-facing request and preserve the original user message in the persisted session history.
+
+## Knowledge Base Contribution
+Your assigned KB entry ID for this run: **KB-008**
+
+If you discover a non-obvious pattern, gotcha, or anti-pattern during this implementation (or this is a retry), append exactly one entry to `orchestrations/agents/KB.md` using this format:
+
+```markdown
+## KB-008 -- 2026-06-18
+
+**Category:** <backend|frontend|infrastructure|testing|orchestration>
+**AgentRole:** <your agentRole from the story>
+**Tags:** <comma-separated tech keywords, e.g. typescript, node, cli>
+**Trigger:** <retry|first-success>
+**StoryRef:** SKY-006-A-1
+
+<One concise paragraph: the specific pattern, gotcha, or anti-pattern. Precise enough that a future Claude instance can apply it without re-discovering it.>
+```
+
+Only write an entry if the knowledge is genuinely non-obvious. Skip trivial observations.
+=== End Prompt ===
+
+=== epam Output (attempt 1) ===
+Implemented user story SKY-006-A-1: Code Review Part A.
+
+- Verified prerequisites: /tmp/skyscanner-app directory, src/ subtree with TypeScript files, and package.json presence.
+- Confirmed "strict": true in tsconfig.json.
+- Ran TypeScript compiler with no errors or diagnostics.
+- Ran tests with the package.json test script; all tests passed with zero failures/skips/todo.
+- Verified test coverage layers with non-empty test files for Skyscanner API client, CLI entry-point, and Express server/router.
+- Created /tmp/skyscanner-app/review/SKY-006-review.md with all required six sections and partial content as specified (TypeScript and Tests sections fully populated, others empty).
+
+No blocking findings were detected. The review document is in a consistent intermediate state awaiting SKY-006-B.
+Implemented user story SKY-006-A-1: Code Review Part A.
+
+- Verified prerequisites: /tmp/skyscanner-app directory, src/ subtree with TypeScript files, and package.json presence.
+- Confirmed "strict": true in tsconfig.json.
+- Ran TypeScript compiler with no errors or diagnostics.
+- Ran tests with the package.json test script; all tests passed with zero failures/skips/todo.
+- Verified test coverage layers with non-empty test files for Skyscanner API client, CLI entry-point, and Express server/router.
+- Created /tmp/skyscanner-app/review/SKY-006-review.md with all required six sections and partial content as specified (TypeScript and Tests sections fully populated, others empty).
+
+No blocking findings were detected. The review document is in a consistent intermediate state awaiting SKY-006-B.
+
+=== End epam Output ===

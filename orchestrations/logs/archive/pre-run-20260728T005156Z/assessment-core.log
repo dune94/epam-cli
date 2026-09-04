@@ -1,0 +1,27 @@
+Both outputs verified. Here's the assessment summary:
+
+## Assessment Complete — Phase: core
+
+### Key Findings
+
+| Metric | Actual | Forecast | Variance |
+|--------|--------|----------|----------|
+| Time | 0.21 min | 2.256 min | **−2.046 min** (91% under) |
+| Cost | $0.0028 | $0.0700 | **−$0.0672** (96% under) |
+
+### Deduplication
+- MOCK-HW-1 had 2 records in the cost log. Used only the latest (`started_at: 18:38:17`, attempt=1) per instructions.
+
+### PRD Cross-Reference
+- MOCK-HW-1: PRD shows `completed: true` → treated as succeeded ✓
+
+### Agent Role Mismatches
+- **None.** The sole story (MOCK-HW-1) assigned `typescript-engineer` for a TypeScript string-literal fix — appropriate match.
+- No pending future-phase stories exist in the PRD, so no corrective role reassignments were needed.
+
+### Outputs Written
+1. **Assessment JSONL** → `phase-skill-assessments.jsonl` (single-line JSON appended with flock)
+2. **Improvement report** → `phase-improvements/core.md`
+3. **PRD updates** → None required (no mismatches, no pending future stories)
+
+**Verdict: `over_threshold: false` — No improvements needed.**

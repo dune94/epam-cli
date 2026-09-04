@@ -1,0 +1,2350 @@
+=== Prompt for AMSD-2041 (attempt 1) ===
+Contract auto-generated: 10 interface(s), 7 class(es)
+CRITICAL — these files already exist. Their real content is injected below (## Existing File Contents) — you do NOT need to ReadFile them to see what's already there.
+Do NOT import or reference anything that doesn't appear in the injected content below — a plausible-sounding module name is not a real one.
+Only call ReadFile yourself if you need to see MORE of a file than what's shown (e.g. it was truncated), or a file not listed below.
+
+   - /home/bradleyjerome/projects/metrolinx/next.upexpress.com/src/hooks/useContent.ts (ReadFile this only if you need it — not a fix site; content omitted to keep the prompt small)
+   - /home/bradleyjerome/projects/metrolinx/next.upexpress.com/src/services/contentstack.ts (content already injected below — do not ReadFile it unless you need lines beyond what's shown)
+   - /home/bradleyjerome/projects/metrolinx/next.upexpress.com/src/interface/content/contentCard.ts (ReadFile this only if you need it — not a fix site; content omitted to keep the prompt small)
+   - /home/bradleyjerome/projects/metrolinx/next.upexpress.com/src/components/contentstack/ContentstackLink/ContentstackLink.tsx (ReadFile this only if you need it — not a fix site; content omitted to keep the prompt small)
+---
+
+Implement user story AMSD-2041: [GO, UP, MX] Live Preview of Content in CMS
+
+## Story Description
+[GO, UP, MX] Live Preview of Content in CMS
+
+## Acceptance Criteria
+- 
+
+
+## Root Cause Analysis & Prescribed Fix (AUTHORITATIVE — start here, do not re-trace)
+A code investigation already traced this bug to its cause and prescribed the minimal fix below. This is the plan of record. Apply it; do NOT re-read the whole codebase to re-derive it.
+
+The Acceptance Criteria above describe the desired END BEHAVIOR to VERIFY — they are NOT an implementation blueprint. Do not re-architect, split values, or add new fields/abstractions to satisfy an AC literally when the prescribed minimal fix already makes that AC pass. Implement the fix below; the ACs are how you check you got it right.
+
+HARD RULES:
+- Make the SMALLEST change that fixes the root cause. Fewer lines of code is always better.
+- REUSE existing functions. Before writing any new helper, search the repo for an existing util/parser/formatter that already does what you need (use the CodeGraph tool documented below) and call it. Writing novel code when a helper already exists is a defect to be rejected in review.
+- **src/services/contentstack.ts** (`options`): This is where the Contentstack SDK Stack is configured. Live Preview requires a `live_preview` config block (preview_token, management_token, enable) passed into `contentstack.Stack(options)`. The current `options` object (lines 55-67) lacks any `live_preview` configuration, so the Stack is initialized in delivery-only mode and can never serve draft/preview content — the root cause of why CMS live preview does not work.
+  - **Minimal fix:** Add `live_preview` configuration to the `options` object before it is passed to `contentstack.Stack()`. Read `CONTENTSTACK_PREVIEW_TOKEN` and `CONTENTSTACK_MANAGEMENT_TOKEN` from `process.env` (add them alongside the existing env destructuring at lines 17-24). Then extend `options` with: `live_preview: { preview_token: CONTENTSTACK_PREVIEW_TOKEN || '', management_token: CONTENTSTACK_MANAGEMENT_TOKEN || '', enable: !!CONTENTSTACK_PREVIEW_TOKEN }`. This is the minimal change — the Contentstack SDK's `Stack` constructor accepts `live_preview` natively; no new functions or architecture are needed. The `isTestEnv` guard pattern already used in this file (line 28) can be reused for any env-validation of the new tokens if desired.
+
+
+## Verification Criteria (what a tester will CONFIRM — your change must satisfy every one)
+These are observable checks, derived from the acceptance criteria and description. They describe WHAT is observed, not how to build it. Make the minimal change that makes all of these true; your accompanying test should assert them:
+- When a tester opens a page in CMS live-preview mode after saving a draft (unpublished) change to a content entry, the rendered page displays the draft content rather than the last published version.
+- While a live-preview session is open, a tester who edits and saves a field in the CMS sees the updated value appear on the rendered page without redeploying or restarting the application.
+- When the same page is visited outside of any preview session, it renders only the published CMS content, with no draft or unpublished values visible.
+- When a page is opened in preview mode with an invalid preview token or for content that has no draft version, the page still renders successfully showing the published content, with no error screen, blank page, or crash.
+- Draft content shown in preview mode appears in the same location, formatting, and styling on the page as the published content it replaces, so the preview accurately represents how the change will look once published.
+- All pages and sections on the site that display CMS-managed content render draft values when viewed in live-preview mode, with no visible layout breakage or missing content anywhere draft changes exist.
+
+## Tests are NOT your job this turn
+A dedicated test-writer agent runs immediately after your fix commits and owns the bug-reproducing test. Do NOT write, edit, or create any test file (*.test.*, *.spec.*, __tests__/). Write ONLY the fix. Adding a test here wastes your turn budget and has caused repeated failures.
+
+## CodeGraph Tool — find EXISTING functions to reuse (do this BEFORE writing any new helper)
+An existing-code search tool is available. Run it with the Bash tool to discover reusable functions instead of inventing new ones:
+  PROJECT_ROOT="/home/bradleyjerome/projects/metrolinx/next.upexpress.com" bash "/home/bradleyjerome/projects/ai/epam-cli/orchestrations/scripts/codegraph-agent-query.sh" helpers <domain nouns>   # existing util/parser/formatter to REUSE (symbol + import path)
+  PROJECT_ROOT="/home/bradleyjerome/projects/metrolinx/next.upexpress.com" bash "/home/bradleyjerome/projects/ai/epam-cli/orchestrations/scripts/codegraph-agent-query.sh" query <SymbolName>        # exact definition site of a symbol
+  PROJECT_ROOT="/home/bradleyjerome/projects/metrolinx/next.upexpress.com" bash "/home/bradleyjerome/projects/ai/epam-cli/orchestrations/scripts/codegraph-agent-query.sh" callees <SymbolName>      # what a function already calls
+RULE: Before you add ANY new function, run `helpers` for what it would do. If a suitable function already exists, import and call it — do NOT duplicate it. Fewer lines of code is always better.
+
+
+## Adding a New Dependency
+If the fix genuinely requires a package this project does not yet declare, import it directly and continue — do not stop to ask whether this is possible or search for an alternative that avoids it. Missing imports are detected and installed automatically after your change; this does not need your permission or a separate step. Proceed with the real fix.
+
+
+
+
+## Technical Notes
+- files: ["src/hooks/useContent.ts","src/services/contentstack.ts","src/interface/content/contentCard.ts","src/components/contentstack/ContentstackLink/ContentstackLink.tsx"]
+
+## Existing File Contents (injected once, deterministically — do NOT ReadFile these unless you need more than shown)
+
+### /home/bradleyjerome/projects/metrolinx/next.upexpress.com/src/services/contentstack.ts
+```
+/* eslint-disable @typescript-eslint/no-explicit-any */
+import * as Utils from "@contentstack/utils";
+import contentstack from "contentstack";
+import { isTestEnv } from "utils/envs";
+import { IContentstackContentType } from "interface/content/contentType";
+import { IContentstackPage } from "interface/content/page";
+import {
+  ICommonContentstackConfig,
+  IContentstackGetEntry,
+  IContentstackGetSingleEntry,
+  IContentstackGetSingletonEntry,
+  ICreateEntryConfig,
+  ICreateQueryConfig,
+} from "../interface/contentstack";
+import logger from "./logger";
+
+const {
+  CONTENTSTACK_API_KEY = "",
+  CONTENTSTACK_DELIVERY_TOKEN = "",
+  CONTENTSTACK_ENVIRONMENT = "",
+  CONTENTSTACK_API_HOST = "",
+  CONTENTSTACK_BRANCH = "",
+  CONTENTSTACK_FETCH_TIMEOUT = "",
+} = process?.env || {};
+
+const QUERY_RESPONSE_LIMIT = 100;
+
+if (!isTestEnv()) {
+  if (!CONTENTSTACK_API_KEY) {
+    logger.error("Contentstack API key not provided");
+  }
+
+  if (!CONTENTSTACK_DELIVERY_TOKEN) {
+    logger.error("Contentstack delivery token not provided");
+  }
+
+  if (!CONTENTSTACK_ENVIRONMENT) {
+    logger.error("Contentstack environment not provided");
+  }
+
+  if (!CONTENTSTACK_BRANCH) {
+    logger.error("Contentstack branch not provided");
+  }
+
+  if (
+    !CONTENTSTACK_API_KEY ||
+    !CONTENTSTACK_DELIVERY_TOKEN ||
+    !CONTENTSTACK_ENVIRONMENT ||
+    !CONTENTSTACK_BRANCH
+  ) {
+    throw new Error("Missing required environment variables");
+  }
+}
+
+export const options = {
+  api_key: CONTENTSTACK_API_KEY,
+  delivery_token: CONTENTSTACK_DELIVERY_TOKEN,
+  environment: CONTENTSTACK_ENVIRONMENT,
+  branch: CONTENTSTACK_BRANCH,
+  ...(CONTENTSTACK_FETCH_TIMEOUT
+    ? {
+        fetchOptions: {
+          timeout: Number(CONTENTSTACK_FETCH_TIMEOUT),
+        },
+      }
+    : {}),
+};
+
+export const Stack = contentstack.Stack(options);
+
+if (CONTENTSTACK_API_HOST) {
+  Stack.setHost(CONTENTSTACK_API_HOST);
+}
+
+const renderOption = {
+  span: (node: { children: any }, next: (arg0: any) => any) => next(node.children),
+};
+
+export const excludedFields = [
+  "created_at",
+  "created_by",
+  "updated_at",
+  "updated_by",
+  "publish_details",
+];
+
+class ContentstackFactory {
+  private stack: contentstack.Stack;
+
+  constructor({ stack }: { stack: contentstack.Stack }) {
+    this.stack = stack;
+  }
+
+  private setCommonConfig({
+    query,
+    ...config
+  }: ICommonContentstackConfig & {
+    query: contentstack.Query | contentstack.Entry;
+  }) {
+    const { referenceFieldPath, only, except } = config;
+
+    if (referenceFieldPath) query.includeReference(referenceFieldPath);
+
+    if (!Array.isArray(except) && !Array.isArray(only)) {
+      query.except(excludedFields);
+    }
+
+    if (only) {
+      Array.isArray(only)
+        ? query.only(only)
+        : Object.entries(only).forEach(([key, values]) => query.only(key, values as any));
+    }
+
+    if (except) {
+      Array.isArray(except)
+        ? query.except(except)
+        : Object.entries(except).forEach(([key, values]) => query.except(key, values as any));
+    }
+  }
+
+  createContentTypeQuery({
+    contentTypeUid,
+    lang,
+    where,
+    count,
+    skip,
+    limit,
+    ...commonConfig
+  }: ICreateQueryConfig) {
+    const query = this.stack.ContentType(contentTypeUid).Query().language(lang).toJSON();
+
+    if (count) {
+      query.includeCount();
+    }
+
+    if (skip) {
+      query.skip(skip);
+    }
+
+    if (limit) {
+      query.limit(limit);
+    }
+
+    this.setCommonConfig({ query, ...commonConfig });
+
+    if (where) {
+      Object.entries(where).forEach(([key, value]) => query.where(key, value));
+    }
+
+    return query;
+  }
+
+  createContentTypeEntryQuery({
+    contentTypeUid,
+    lang,
+    entryUid,
+    ...commonConfig
+  }: ICreateEntryConfig) {
+    const query = this.stack.ContentType(contentTypeUid).Entry(entryUid).language(lang).toJSON();
+
+    this.setCommonConfig({ query, ...commonConfig });
+
+    return query;
+  }
+}
+
+export const getEntry = async <T>({
+  contentTypeUid,
+  referenceFieldPath,
+  jsonRtePath,
+  only,
+  lang,
+  includeFields,
+}: IContentstackGetEntry): Promise<T> => {
+  const result: any = [];
+
+  const excludedFieldsFinal = excludedFields.filter(
+    (excluded) => !includeFields?.some((included) => excluded === included),
+  );
+
+  const factory = new ContentstackFactory({ stack: Stack });
+  const _query = factory.createContentTypeQuery({
+    contentTypeUid,
+    lang,
+    referenceFieldPath,
+    only,
+    except: excludedFieldsFinal,
+    count: true,
+    skip: 0,
+    limit: QUERY_RESPONSE_LIMIT,
+  });
+
+  try {
+    const [response, count] = await _query.find();
+    result.push(...response);
+
+    while (result.length < count) {
+      const _query = factory.createContentTypeQuery({
+        contentTypeUid,
+        lang,
+        referenceFieldPath,
+        only,
+        except: excludedFieldsFinal,
+        count: true,
+        skip: result.length,
+        limit: QUERY_RESPONSE_LIMIT,
+      });
+
+      const [response]: any = await _query.find();
+
+      result.push(...response);
+    }
+
+    jsonRtePath &&
+      Utils.jsonToHTML({
+        entry: result,
+        paths: jsonRtePath,
+        renderOption,
+      });
+
+    return result;
+  } catch (e: any) {
+    logger.error(
+      e.message,
+      `Error retrieving entries of content type: ${contentTypeUid} for lang: ${lang}`,
+    );
+    throw e;
+  }
+};
+
+export const getSingleEntry = async ({
+  contentTypeUid,
+  entryUid,
+  lang,
+  referenceFieldPath,
+  jsonRtePath,
+  only,
+  except,
+}: IContentstackGetSingleEntry): Promise<IContentstackPage> => {
+  const query = new ContentstackFactory({
+    stack: Stack,
+  }).createContentTypeEntryQuery({
+    contentTypeUid,
+    entryUid,
+    referenceFieldPath,
+    only,
+    except,
+    lang,
+  });
+
+  try {
+    const result = await query.fetch();
+
+    if (jsonRtePath) {
+      Utils.jsonToHTML({
+        entry: result,
+        paths: jsonRtePath,
+        renderOption,
+      });
+    }
+
+    return result;
+  } catch (e: any) {
+    logger.error(
+      e.message,
+      `Error retrieving single entry: ${entryUid} of content type: ${contentTypeUid} for lang: ${lang}`,
+    );
+    throw e;
+  }
+};
+
+export const getAllContentTypeEntries = async ({
+  contentTypeUid,
+  lang,
+  referenceFieldPath,
+  jsonRtePath,
+  only,
+  except,
+  where,
+}: IContentstackGetSingletonEntry): Promise<IContentstackPage> => {
+  const query = new ContentstackFactory({
+    stack: Stack,
+  }).createContentTypeQuery({
+    contentTypeUid,
+    referenceFieldPath,
+    only,
+    except,
+    lang,
+    where,
+  });
+
+  query.except(excludedFields);
+
+  try {
+    const result = await query.find();
+
+    if (jsonRtePath) {
+      Utils.jsonToHTML({
+        entry: result,
+        paths: jsonRtePath,
+        renderOption,
+      });
+    }
+
+    return result;
+  } catch (e: any) {
+    logger.error(
+      e.message,
+      `Error retrieving entries of content type: ${contentTypeUid} for lang: ${lang}`,
+    );
+    throw e;
+  }
+};
+
+export const findSingletonEntry = async <
+  T extends Pick<IContentstackPage, "uid"> = IContentstackPage,
+>({
+  contentTypeUid,
+  lang,
+  referenceFieldPath,
+  jsonRtePath,
+  only,
+  except,
+  where,
+}: IContentstackGetSingletonEntry): Promise<T | null> => {
+  const query = new ContentstackFactory({
+    stack: Stack,
+  }).createContentTypeQuery({
+    contentTypeUid,
+    referenceFieldPath,
+    only,
+    except,
+    where,
+    lang,
+    limit: 1,
+  });
+
+  try {
+    const [[result]]: T[][] = await query.find();
+
+    if (!result) {
+      return null;
+    }
+
+    if (jsonRtePath) {
+      Utils.jsonToHTML({
+        entry: result,
+        paths: jsonRtePath,
+        renderOption,
+      });
+    }
+
+    return result;
+  } catch (error) {
+    logger.error(
+      `Error retrieving entry of single content type: ${contentTypeUid} for lang: ${lang}`,
+      error,
+    );
+
+    throw error;
+  }
+};
+
+export const getSingletonEntry = async ({
+  contentTypeUid,
+  lang,
+  referenceFieldPath,
+  jsonRtePath,
+  only,
+  except,
+  where,
+}: IContentstackGetSingletonEntry): Promise<IContentstackPage> => {
+  const query = new ContentstackFactory({
+    stack: Stack,
+  }).createContentTypeQuery({ contentTypeUid, referenceFieldPath, only, except, where, lang });
+
+  try {
+    const result = await query.findOne();
+
+    if (jsonRtePath) {
+      Utils.jsonToHTML({
+        entry: result,
+        paths: jsonRtePath,
+        renderOption,
+      });
+    }
+
+    return result;
+  } catch (e: any) {
+    logger.error(
+      e.message,
+      `Error retrieving entry of single content type: ${contentTypeUid} for lang: ${lang}`,
+    );
+    throw e;
+  }
+};
+
+export const getPageContentTypes = async (): Promise<IContentstackContentType[]> => {
+  try {
+    const { content_types: contentTypes = [] } = await Stack.getContentTypes({
+```
+(truncated at 400 of 409 lines — ReadFile this path yourself if you need the rest)
+
+## Files to Create/Modify (EXACT ABSOLUTE PATHS — write to these paths exactly)
+src/hooks/useContent.ts, src/services/contentstack.ts, src/interface/content/contentCard.ts, src/components/contentstack/ContentstackLink/ContentstackLink.tsx
+
+## Dependencies
+None
+
+## Dependency Contracts (EXACT import paths and signatures — use these verbatim, do NOT guess a different path)
+
+### Vendor package: contentstack
+# Contract: vendor:contentstack
+
+Auto-generated from actual source (deterministic — not model-transcribed).
+
+```typescript
+export interface SyncResult {items: Array<any>;
+    pagination_token?: string;
+    sync_token?: string;
+    skip: number;
+    limit: number;
+    total_count: number;}
+```
+
+```typescript
+export interface Config {api_key: string;
+    delivery_token: string;
+    environment: string;
+    region?: Region;
+    branch?: string;
+    live_preview?: LivePreview;
+    plugins?: ContentstackPlugin[];
+    fetchOptions?: FetchOptions;
+    early_access?: string[]}
+```
+
+```typescript
+export interface StackConfig {protocol: string;
+    host: string;
+    port: number;
+    version: string;}
+```
+
+```typescript
+export interface ContentTypeCollection {content_types: Array<any>
+    count?: number}
+```
+
+```typescript
+export interface LivePreview {host: string
+    management_token: string
+    enable: boolean}
+```
+
+```typescript
+export interface LivePreviewQuery {live_preview: string
+    content_type_uid: string}
+```
+
+```typescript
+export interface RetryDelayOption {base?: number
+    customBackoff?: (retryCount: number, error: Error) => number}
+```
+
+```typescript
+export interface FetchOptions {[propName: string]: any
+    debug?: boolean
+    timeout?: number
+    retryLimit?: number
+    retryDelay?: number
+    retryCondition?: (error: any) => boolean
+    logHandler?: (level: string, data: any) => void
+    retryDelayOptions?: RetryDelayOption}
+```
+
+```typescript
+export interface ContentstackPlugin {onRequest?(stack: Stack, request: ContentstackRequest): ContentstackRequest;
+    onResponse?(stack: Stack, request: ContentstackRequest, response: any, data: any): any;}
+```
+
+```typescript
+export interface ContentstackRequest {url: string;
+    option: object;}
+```
+
+```typescript
+export class Utils {
+  constructor();
+
+}
+```
+
+```typescript
+export class Stack {
+  constructor(config: Config);
+
+}
+```
+
+```typescript
+export class ContentType {
+  constructor();
+
+}
+```
+
+```typescript
+export class Assets {
+  constructor();
+
+}
+```
+
+```typescript
+export class Asset {
+  constructor();
+
+}
+```
+
+```typescript
+export class Entry {
+  constructor();
+
+}
+```
+
+```typescript
+export class Query {
+  constructor();
+
+}
+```
+
+Mock factory skeleton — every exported method MUST appear here (every method name is real; fill in real return values):
+```typescript
+vi.mock('<import-path-to-Utils>', () => ({
+  Utils: vi.fn().mockImplementation(() => ({
+
+  })),
+}));
+vi.mock('<import-path-to-Stack>', () => ({
+  Stack: vi.fn().mockImplementation(() => ({
+
+  })),
+}));
+vi.mock('<import-path-to-ContentType>', () => ({
+  ContentType: vi.fn().mockImplementation(() => ({
+
+  })),
+}));
+vi.mock('<import-path-to-Assets>', () => ({
+  Assets: vi.fn().mockImplementation(() => ({
+
+  })),
+}));
+vi.mock('<import-path-to-Asset>', () => ({
+  Asset: vi.fn().mockImplementation(() => ({
+
+  })),
+}));
+vi.mock('<import-path-to-Entry>', () => ({
+  Entry: vi.fn().mockImplementation(() => ({
+
+  })),
+}));
+vi.mock('<import-path-to-Query>', () => ({
+  Query: vi.fn().mockImplementation(() => ({
+
+  })),
+}));
+```
+## Module resolution in this codeline
+A bare import that names a file under any of these directories is INTERNAL source, not a dependency — never add it to the dependency manifest:
+  __tests__, migration-scripts, public, review, src, zap_hooks
+Source extensions here: .ts, .tsx, .js, .jsx, .mjs, .cjs
+Write imports the way the existing files in this codeline write them; read a neighbouring file before inventing a path.
+
+
+## Instructions
+CRITICAL — these files already exist. Their real content is injected below (## Existing File Contents) — you do NOT need to ReadFile them to see what's already there.
+Do NOT import or reference anything that doesn't appear in the injected content below — a plausible-sounding module name is not a real one.
+Only call ReadFile yourself if you need to see MORE of a file than what's shown (e.g. it was truncated), or a file not listed below.
+   - /home/bradleyjerome/projects/metrolinx/next.upexpress.com/src/hooks/useContent.ts (ReadFile this only if you need it — not a fix site; content omitted to keep the prompt small)
+   - /home/bradleyjerome/projects/metrolinx/next.upexpress.com/src/services/contentstack.ts (content already injected below — do not ReadFile it unless you need lines beyond what's shown)
+   - /home/bradleyjerome/projects/metrolinx/next.upexpress.com/src/interface/content/contentCard.ts (ReadFile this only if you need it — not a fix site; content omitted to keep the prompt small)
+   - /home/bradleyjerome/projects/metrolinx/next.upexpress.com/src/components/contentstack/ContentstackLink/ContentstackLink.tsx (ReadFile this only if you need it — not a fix site; content omitted to keep the prompt small)
+**The content of every file listed above is already shown in ## Existing File Contents — use that, do not spend a tool call re-reading them. Use Edit for targeted changes to existing files — do NOT overwrite an existing file wholesale with WriteFile.**
+
+1. Use the injected ## Existing File Contents above to verify what actually exists (exports, types, existing utilities) before writing any code — do not guess, and do not re-read a file already shown in full
+2. Implement all acceptance criteria for this story
+3. Follow the project's existing code patterns and conventions
+4. Do NOT create tests unless explicitly required in acceptance criteria
+
+After implementation, provide a brief summary of what was created/modified.
+
+## Relevant Knowledge Base Entries
+The following was learned from previous story implementations and is relevant to your agent role. Apply this knowledge before writing any code:
+
+- [2026-07-06T18:11:26Z] Use vi.fn().mockResolvedValue(value) to make a mock return a resolved Promise.
+- [2026-07-06T20:31:11Z] Use `test: { passWithNoTests: true }` in vitest.config.ts or create a stub test file when no *.test.ts files exist.
+- [2026-07-06T20:33:03Z] Enable globals:true in vitest.config.ts so describe, it, and expect work without imports, reducing boilerplate in test files.
+- [2026-07-06T23:47:34Z] Use CommonJS-compatible patterns in src/server.ts: avoid `import.meta.url` and top-level `await`; gate listen with `if (require.main === module)`.
+- [2026-07-07T02:35:30Z] Always include a non-test source file in src/ alongside any src/*.test.ts file, since tsconfig.json excludes test files from tsc --noEmit.
+- [2026-07-07T19:01:34Z] Only modify or create files explicitly listed in the story's acceptance criteria. Do not touch files belonging to other stories or outside the current task scope.
+- [2026-07-07T20:17:57Z] [unreviewed-fallback] Avoid using deprecated TypeScript compiler options like 'moduleResolution=node10'; use 'moduleResolution=node' instead.
+- [2026-07-17T20:20:58Z] Always: Before importing a module or referencing a type/property, always read the actual source file to verify the export exists, its exact path, its properties, and its constructor/factory signatures
+- [2026-07-23T01:15:16Z] Always: In tsconfig.json, always use moduleResolution 'node' (not 'node10' or 'Node10') — 'node10' was removed in TypeScript 5.x. The correct value for CommonJS + Node resolution is 'node'.
+- [2026-07-23T14:30:00Z] CORRECTION to a prior entry (2026-07-23T01:17:52Z, now removed): that entry wrongly claimed 'moduleResolution: node' itself is removed and must become 'node16'/'nodenext'. Root-caused via mock1 (epam-cli orchestration test): 'node' is valid and correct through TypeScript 5.x (confirmed on 5.9.3) — it was only removed in TypeScript 7.x. The real defect was an unpinned `typescript` devDependency letting a fallback `npm install` pull latest (7.x) instead of the project's intended version. Do NOT rewrite a working tsconfig.json's moduleResolution in response to a TS5108 error — first check `node_modules/typescript/package.json`'s version; if it's 7.x and the rest of the project expects 5.x, the fix is pinning/reinstalling the correct typescript version, not changing moduleResolution.
+
+## Knowledge Base Contribution (do this LAST — after writing all implementation files)
+Your assigned KB entry ID for this run: **KB-021**
+
+IMPORTANT: Write ALL implementation files first. Only AFTER writing every required file should you optionally append a KB entry.
+Do NOT read orchestrations/agents/KB.md before writing implementation files. The relevant KB entries are already injected above.
+
+If (and only if) you discover a non-obvious pattern during implementation, append one entry to `orchestrations/agents/KB.md`:
+
+```markdown
+## KB-021 -- 2026-07-31
+
+**Category:** <backend|frontend|infrastructure|testing|orchestration>
+**AgentRole:** <your agentRole from the story>
+**Tags:** <comma-separated tech keywords, e.g. typescript, node, cli>
+**Trigger:** <retry|first-success>
+**StoryRef:** AMSD-2041
+
+<One concise paragraph: the specific pattern, gotcha, or anti-pattern.>
+```
+
+Only write an entry if the knowledge is genuinely non-obvious. Skip trivial observations.
+=== End Prompt ===
+
+=== epam Output (attempt 1) ===
+The implementation is complete. Here's a summary of the changes made:
+
+## Summary
+
+**File modified:** `src/services/contentstack.ts`
+
+**Two minimal changes:**
+
+1. **Added env var destructuring** (lines 24-25): Added `CONTENTSTACK_PREVIEW_TOKEN` and `CONTENTSTACK_MANAGEMENT_TOKEN` to the existing `process.env` destructuring block, with empty-string defaults matching the existing pattern.
+
+2. **Added `live_preview` config to `options`** (lines 62-66): Added the `live_preview` block to the `options` object passed to `contentstack.Stack()`, containing:
+   - `preview_token`: from `CONTENTSTACK_PREVIEW_TOKEN` (falls back to empty string)
+   - `management_token`: from `CONTENTSTACK_MANAGEMENT_TOKEN` (falls back to empty string)
+   - `enable`: `!!CONTENTSTACK_PREVIEW_TOKEN` — live preview is only active when a preview token is configured; without it, the Stack operates in normal delivery-only mode
+
+This is the minimal fix prescribed by the root cause analysis. The Contentstack SDK natively supports the `live_preview` config in `Stack()` — no new functions, classes, or architecture changes are needed. When `CONTENTSTACK_PREVIEW_TOKEN` is not set, `enable` is `false` and the app behaves exactly as before (delivery-only mode). When it is set, the SDK will serve draft/preview content for live-preview sessions.
+  [tc-writer] No test stories need TCs in phase 'unknown' — skipping
+
+=== tsc --noEmit failed (exit 2) — new errors introduced by this story ===
+migration-scripts/client.ts(2,24): error TS2307: Cannot find module '@metrolinx/cx-shared/migration-tool-build' or its corresponding type declarations.
+migration-scripts/index.ts(2,52): error TS2307: Cannot find module '@metrolinx/cx-shared/migration-tool-build' or its corresponding type declarations.
+src/__tests__/pages/api/v1/autocomplete.spec.ts(4,44): error TS2307: Cannot find module '@metrolinx/cx-shared/build/src/constants/common' or its corresponding type declarations.
+src/__tests__/pages/api/v1/autocomplete.spec.ts(5,27): error TS2307: Cannot find module '@metrolinx/cx-shared/build/src/utils/common/HttpError' or its corresponding type declarations.
+src/__tests__/pages/api/v1/blog-articles.spec.ts(3,44): error TS2307: Cannot find module '@metrolinx/cx-shared/build/src/constants/common' or its corresponding type declarations.
+src/__tests__/pages/api/v1/blog-articles.spec.ts(4,27): error TS2307: Cannot find module '@metrolinx/cx-shared/build/src/utils/common/HttpError' or its corresponding type declarations.
+src/__tests__/pages/api/v1/email-sign-up.spec.ts(3,44): error TS2307: Cannot find module '@metrolinx/cx-shared/build/src/constants/common' or its corresponding type declarations.
+src/__tests__/pages/api/v1/email-sign-up.spec.ts(4,27): error TS2307: Cannot find module '@metrolinx/cx-shared/build/src/utils/common/HttpError' or its corresponding type declarations.
+src/__tests__/pages/api/v1/logs-collector.spec.ts(2,44): error TS2307: Cannot find module '@metrolinx/cx-shared/build/src/constants/common' or its corresponding type declarations.
+src/__tests__/pages/api/v1/search-1.spec.ts(4,44): error TS2307: Cannot find module '@metrolinx/cx-shared/build/src/constants/common' or its corresponding type declarations.
+src/__tests__/pages/api/v1/search-2.spec.ts(3,44): error TS2307: Cannot find module '@metrolinx/cx-shared/build/src/constants/common' or its corresponding type declarations.
+src/__tests__/pages/api/v1/search-2.spec.ts(4,27): error TS2307: Cannot find module '@metrolinx/cx-shared/build/src/utils/common/HttpError' or its corresponding type declarations.
+src/__tests__/pages/api/v1/user-profile.spec.ts(3,28): error TS2307: Cannot find module '@metrolinx/cx-shared/build/src/constants/common' or its corresponding type declarations.
+src/__tests__/pages/api/v1/webchat/token.spec.ts(4,44): error TS2307: Cannot find module '@metrolinx/cx-shared/build/src/constants/common' or its corresponding type declarations.
+src/__tests__/pages/api/v1/webchat/token.spec.ts(5,29): error TS2307: Cannot find module '@metrolinx/cx-shared/build/src/constants/locales' or its corresponding type declarations.
+src/api/__tests__/retrieveUserProfile.spec.ts(1,44): error TS2307: Cannot find module '@metrolinx/cx-shared/build/src/constants/common' or its corresponding type declarations.
+src/api/__tests__/retrieveUserProfile.spec.ts(2,27): error TS2307: Cannot find module '@metrolinx/cx-shared/build/src/utils/common/HttpError' or its corresponding type declarations.
+src/api/__tests__/tickets.spec.ts(1,32): error TS2307: Cannot find module '@metrolinx/cx-shared/build/src/constants/common' or its corresponding type declarations.
+src/api/__tests__/tickets.spec.ts(2,27): error TS2307: Cannot find module '@metrolinx/cx-shared/build/src/utils/common/HttpError' or its corresponding type declarations.
+src/api/__tests__/updateUserProfile.spec.ts(1,44): error TS2307: Cannot find module '@metrolinx/cx-shared/build/src/constants/common' or its corresponding type declarations.
+src/api/__tests__/updateUserProfile.spec.ts(2,27): error TS2307: Cannot find module '@metrolinx/cx-shared/build/src/utils/common/HttpError' or its corresponding type declarations.
+src/api/logger.ts(2,44): error TS2307: Cannot find module '@metrolinx/cx-shared/build/src/constants/common' or its corresponding type declarations.
+src/api/logger.ts(3,27): error TS2307: Cannot find module '@metrolinx/cx-shared/build/src/utils/common/HttpError' or its corresponding type declarations.
+src/api/middlewares/__tests__/withAzureB2CId.spec.ts(3,32): error TS2307: Cannot find module '@metrolinx/cx-shared/build/src/constants/common' or its corresponding type declarations.
+src/api/middlewares/__tests__/withAzureB2CId.spec.ts(4,27): error TS2307: Cannot find module '@metrolinx/cx-shared/build/src/utils/common/HttpError' or its corresponding type declarations.
+src/api/middlewares/__tests__/withRequestMethods.spec.ts(1,28): error TS2307: Cannot find module '@metrolinx/cx-shared/build/src/constants/common' or its corresponding type declarations.
+src/api/middlewares/withAzureB2CId.ts(1,32): error TS2307: Cannot find module '@metrolinx/cx-shared/build/src/constants/common' or its corresponding type declarations.
+src/api/middlewares/withAzureB2CId.ts(2,27): error TS2307: Cannot find module '@metrolinx/cx-shared/build/src/utils/common/HttpError' or its corresponding type declarations.
+src/api/middlewares/withErrorBoundary.ts(1,32): error TS2307: Cannot find module '@metrolinx/cx-shared/build/src/constants/common' or its corresponding type declarations.
+src/api/middlewares/withErrorBoundary.ts(2,29): error TS2307: Cannot find module '@metrolinx/cx-shared/build/src/utils/common/isHttpError' or its corresponding type declarations.
+src/api/middlewares/withErrorBoundary.ts(17,25): error TS18046: 'error' is of type 'unknown'.
+src/api/middlewares/withErrorBoundary.ts(19,20): error TS18046: 'error' is of type 'unknown'.
+src/api/middlewares/withErrorBoundary.ts(20,17): error TS18046: 'error' is of type 'unknown'.
+src/api/middlewares/withErrorBoundary.ts(21,20): error TS18046: 'error' is of type 'unknown'.
+src/api/middlewares/withRequestMethods.ts(1,44): error TS2307: Cannot find module '@metrolinx/cx-shared/build/src/constants/common' or its corresponding type declarations.
+src/api/middlewares/withRequestMethods.ts(2,27): error TS2307: Cannot find module '@metrolinx/cx-shared/build/src/utils/common/HttpError' or its corresponding type declarations.
+src/api/middlewares/withUserProfileEnvVariables.ts(1,32): error TS2307: Cannot find module '@metrolinx/cx-shared/build/src/constants/common' or its corresponding type declarations.
+src/api/middlewares/withUserProfileEnvVariables.ts(2,27): error TS2307: Cannot find module '@metrolinx/cx-shared/build/src/utils/common/HttpError' or its corresponding type declarations.
+src/api/passes.ts(3,32): error TS2307: Cannot find module '@metrolinx/cx-shared/build/src/constants/common' or its corresponding type declarations.
+src/api/passes.ts(4,27): error TS2307: Cannot find module '@metrolinx/cx-shared/build/src/utils/common/HttpError' or its corresponding type declarations.
+src/api/retrieveUserProfile.ts(2,44): error TS2307: Cannot find module '@metrolinx/cx-shared/build/src/constants/common' or its corresponding type declarations.
+src/api/retrieveUserProfile.ts(3,27): error TS2307: Cannot find module '@metrolinx/cx-shared/build/src/utils/common/HttpError' or its corresponding type declarations.
+src/api/retrieveUserProfile.ts(4,37): error TS2307: Cannot find module '@metrolinx/cx-shared/build/src/utils/common/parseResponseAsJson' or its corresponding type declarations.
+src/api/services/recaptcha/verifyRecaptcha.ts(1,44): error TS2307: Cannot find module '@metrolinx/cx-shared/build/src/constants/common' or its corresponding type declarations.
+src/api/services/recaptcha/verifyRecaptcha.ts(2,27): error TS2307: Cannot find module '@metrolinx/cx-shared/build/src/utils/common/HttpError' or its corresponding type declarations.
+src/api/services/recaptcha/verifyRecaptcha.ts(3,37): error TS2307: Cannot find module '@metrolinx/cx-shared/build/src/utils/common/parseResponseAsJson' or its corresponding type declarations.
+src/api/services/webchat/generate-webchat-token/generateWebchatToken.ts(1,44): error TS2307: Cannot find module '@metrolinx/cx-shared/build/src/constants/common' or its corresponding type declarations.
+src/api/services/webchat/generate-webchat-token/generateWebchatToken.ts(2,29): error TS2307: Cannot find module '@metrolinx/cx-shared/build/src/constants/common' or its corresponding type declarations.
+src/api/services/webchat/generate-webchat-token/generateWebchatToken.ts(3,29): error TS2307: Cannot find module '@metrolinx/cx-shared/build/src/constants/locales' or its corresponding type declarations.
+src/api/services/webchat/generate-webchat-token/generateWebchatToken.ts(4,27): error TS2307: Cannot find module '@metrolinx/cx-shared/build/src/utils/common/HttpError' or its corresponding type declarations.
+src/api/services/webchat/generate-webchat-token/generateWebchatToken.ts(5,35): error TS2307: Cannot find module '@metrolinx/cx-shared/build/src/utils/common/getRequestHeaders' or its corresponding type declarations.
+src/api/services/webchat/generate-webchat-token/generateWechatToken.spec.ts(6,8): error TS2307: Cannot find module '@metrolinx/cx-shared/build/src/constants/common' or its corresponding type declarations.
+src/api/services/webchat/generate-webchat-token/generateWechatToken.spec.ts(7,29): error TS2307: Cannot find module '@metrolinx/cx-shared/build/src/constants/locales' or its corresponding type declarations.
+src/api/services/webchat/generate-webchat-token/generateWechatToken.spec.ts(8,27): error TS2307: Cannot find module '@metrolinx/cx-shared/build/src/utils/common/HttpError' or its corresponding type declarations.
+src/api/tickets.ts(3,32): error TS2307: Cannot find module '@metrolinx/cx-shared/build/src/constants/common' or its corresponding type declarations.
+src/api/tickets.ts(4,27): error TS2307: Cannot find module '@metrolinx/cx-shared/build/src/utils/common/HttpError' or its corresponding type declarations.
+src/api/updateUserProfile.ts(2,32): error TS2307: Cannot find module '@metrolinx/cx-shared/build/src/constants/common' or its corresponding type declarations.
+src/api/updateUserProfile.ts(3,27): error TS2307: Cannot find module '@metrolinx/cx-shared/build/src/utils/common/HttpError' or its corresponding type declarations.
+src/api/updateUserProfile.ts(4,37): error TS2307: Cannot find module '@metrolinx/cx-shared/build/src/utils/common/parseResponseAsJson' or its corresponding type declarations.
+src/api/utils/bytemark.ts(2,32): error TS2307: Cannot find module '@metrolinx/cx-shared/build/src/constants/common' or its corresponding type declarations.
+The implementation is complete. Here's a summary of the changes made:
+
+## Summary
+
+**File modified:** `src/services/contentstack.ts`
+
+**Two minimal changes:**
+
+1. **Added env var destructuring** (lines 24-25): Added `CONTENTSTACK_PREVIEW_TOKEN` and `CONTENTSTACK_MANAGEMENT_TOKEN` to the existing `process.env` destructuring block, with empty-string defaults matching the existing pattern.
+
+2. **Added `live_preview` config to `options`** (lines 62-66): Added the `live_preview` block to the `options` object passed to `contentstack.Stack()`, containing:
+   - `preview_token`: from `CONTENTSTACK_PREVIEW_TOKEN` (falls back to empty string)
+   - `management_token`: from `CONTENTSTACK_MANAGEMENT_TOKEN` (falls back to empty string)
+   - `enable`: `!!CONTENTSTACK_PREVIEW_TOKEN` — live preview is only active when a preview token is configured; without it, the Stack operates in normal delivery-only mode
+
+This is the minimal fix prescribed by the root cause analysis. The Contentstack SDK natively supports the `live_preview` config in `Stack()` — no new functions, classes, or architecture changes are needed. When `CONTENTSTACK_PREVIEW_TOKEN` is not set, `enable` is `false` and the app behaves exactly as before (delivery-only mode). When it is set, the SDK will serve draft/preview content for live-preview sessions.
+
+=== epam exited with code 1 ===
+=== Prompt for AMSD-2041 (attempt 2) ===
+CRITICAL — these files already exist. Their real content is injected below (## Existing File Contents) — you do NOT need to ReadFile them to see what's already there.
+Do NOT import or reference anything that doesn't appear in the injected content below — a plausible-sounding module name is not a real one.
+Only call ReadFile yourself if you need to see MORE of a file than what's shown (e.g. it was truncated), or a file not listed below.
+
+   - /home/bradleyjerome/projects/metrolinx/next.upexpress.com/src/hooks/useContent.ts (ReadFile this only if you need it — not a fix site; content omitted to keep the prompt small)
+   - /home/bradleyjerome/projects/metrolinx/next.upexpress.com/src/services/contentstack.ts (content already injected below — do not ReadFile it unless you need lines beyond what's shown)
+   - /home/bradleyjerome/projects/metrolinx/next.upexpress.com/src/interface/content/contentCard.ts (ReadFile this only if you need it — not a fix site; content omitted to keep the prompt small)
+   - /home/bradleyjerome/projects/metrolinx/next.upexpress.com/src/components/contentstack/ContentstackLink/ContentstackLink.tsx (ReadFile this only if you need it — not a fix site; content omitted to keep the prompt small)
+---
+
+Implement user story AMSD-2041: [GO, UP, MX] Live Preview of Content in CMS
+
+## Story Description
+[GO, UP, MX] Live Preview of Content in CMS
+
+## Acceptance Criteria
+- 
+
+
+## Root Cause Analysis & Prescribed Fix (AUTHORITATIVE — start here, do not re-trace)
+A code investigation already traced this bug to its cause and prescribed the minimal fix below. This is the plan of record. Apply it; do NOT re-read the whole codebase to re-derive it.
+
+The Acceptance Criteria above describe the desired END BEHAVIOR to VERIFY — they are NOT an implementation blueprint. Do not re-architect, split values, or add new fields/abstractions to satisfy an AC literally when the prescribed minimal fix already makes that AC pass. Implement the fix below; the ACs are how you check you got it right.
+
+HARD RULES:
+- Make the SMALLEST change that fixes the root cause. Fewer lines of code is always better.
+- REUSE existing functions. Before writing any new helper, search the repo for an existing util/parser/formatter that already does what you need (use the CodeGraph tool documented below) and call it. Writing novel code when a helper already exists is a defect to be rejected in review.
+- **src/services/contentstack.ts** (`options`): This is where the Contentstack SDK Stack is configured. Live Preview requires a `live_preview` config block (preview_token, management_token, enable) passed into `contentstack.Stack(options)`. The current `options` object (lines 55-67) lacks any `live_preview` configuration, so the Stack is initialized in delivery-only mode and can never serve draft/preview content — the root cause of why CMS live preview does not work.
+  - **Minimal fix:** Add `live_preview` configuration to the `options` object before it is passed to `contentstack.Stack()`. Read `CONTENTSTACK_PREVIEW_TOKEN` and `CONTENTSTACK_MANAGEMENT_TOKEN` from `process.env` (add them alongside the existing env destructuring at lines 17-24). Then extend `options` with: `live_preview: { preview_token: CONTENTSTACK_PREVIEW_TOKEN || '', management_token: CONTENTSTACK_MANAGEMENT_TOKEN || '', enable: !!CONTENTSTACK_PREVIEW_TOKEN }`. This is the minimal change — the Contentstack SDK's `Stack` constructor accepts `live_preview` natively; no new functions or architecture are needed. The `isTestEnv` guard pattern already used in this file (line 28) can be reused for any env-validation of the new tokens if desired.
+
+
+## Verification Criteria (what a tester will CONFIRM — your change must satisfy every one)
+These are observable checks, derived from the acceptance criteria and description. They describe WHAT is observed, not how to build it. Make the minimal change that makes all of these true; your accompanying test should assert them:
+- When a tester opens a page in CMS live-preview mode after saving a draft (unpublished) change to a content entry, the rendered page displays the draft content rather than the last published version.
+- While a live-preview session is open, a tester who edits and saves a field in the CMS sees the updated value appear on the rendered page without redeploying or restarting the application.
+- When the same page is visited outside of any preview session, it renders only the published CMS content, with no draft or unpublished values visible.
+- When a page is opened in preview mode with an invalid preview token or for content that has no draft version, the page still renders successfully showing the published content, with no error screen, blank page, or crash.
+- Draft content shown in preview mode appears in the same location, formatting, and styling on the page as the published content it replaces, so the preview accurately represents how the change will look once published.
+- All pages and sections on the site that display CMS-managed content render draft values when viewed in live-preview mode, with no visible layout breakage or missing content anywhere draft changes exist.
+
+## Tests are NOT your job this turn
+A dedicated test-writer agent runs immediately after your fix commits and owns the bug-reproducing test. Do NOT write, edit, or create any test file (*.test.*, *.spec.*, __tests__/). Write ONLY the fix. Adding a test here wastes your turn budget and has caused repeated failures.
+
+## CodeGraph Tool — find EXISTING functions to reuse (do this BEFORE writing any new helper)
+An existing-code search tool is available. Run it with the Bash tool to discover reusable functions instead of inventing new ones:
+  PROJECT_ROOT="/home/bradleyjerome/projects/metrolinx/next.upexpress.com" bash "/home/bradleyjerome/projects/ai/epam-cli/orchestrations/scripts/codegraph-agent-query.sh" helpers <domain nouns>   # existing util/parser/formatter to REUSE (symbol + import path)
+  PROJECT_ROOT="/home/bradleyjerome/projects/metrolinx/next.upexpress.com" bash "/home/bradleyjerome/projects/ai/epam-cli/orchestrations/scripts/codegraph-agent-query.sh" query <SymbolName>        # exact definition site of a symbol
+  PROJECT_ROOT="/home/bradleyjerome/projects/metrolinx/next.upexpress.com" bash "/home/bradleyjerome/projects/ai/epam-cli/orchestrations/scripts/codegraph-agent-query.sh" callees <SymbolName>      # what a function already calls
+RULE: Before you add ANY new function, run `helpers` for what it would do. If a suitable function already exists, import and call it — do NOT duplicate it. Fewer lines of code is always better.
+
+
+## Adding a New Dependency
+If the fix genuinely requires a package this project does not yet declare, import it directly and continue — do not stop to ask whether this is possible or search for an alternative that avoids it. Missing imports are detected and installed automatically after your change; this does not need your permission or a separate step. Proceed with the real fix.
+
+
+
+
+## Technical Notes
+- files: ["src/hooks/useContent.ts","src/services/contentstack.ts","src/interface/content/contentCard.ts","src/components/contentstack/ContentstackLink/ContentstackLink.tsx"]
+
+## Existing File Contents (injected once, deterministically — do NOT ReadFile these unless you need more than shown)
+
+### /home/bradleyjerome/projects/metrolinx/next.upexpress.com/src/services/contentstack.ts
+```
+/* eslint-disable @typescript-eslint/no-explicit-any */
+import * as Utils from "@contentstack/utils";
+import contentstack from "contentstack";
+import { isTestEnv } from "utils/envs";
+import { IContentstackContentType } from "interface/content/contentType";
+import { IContentstackPage } from "interface/content/page";
+import {
+  ICommonContentstackConfig,
+  IContentstackGetEntry,
+  IContentstackGetSingleEntry,
+  IContentstackGetSingletonEntry,
+  ICreateEntryConfig,
+  ICreateQueryConfig,
+} from "../interface/contentstack";
+import logger from "./logger";
+
+const {
+  CONTENTSTACK_API_KEY = "",
+  CONTENTSTACK_DELIVERY_TOKEN = "",
+  CONTENTSTACK_ENVIRONMENT = "",
+  CONTENTSTACK_API_HOST = "",
+  CONTENTSTACK_BRANCH = "",
+  CONTENTSTACK_FETCH_TIMEOUT = "",
+  CONTENTSTACK_PREVIEW_TOKEN = "",
+  CONTENTSTACK_MANAGEMENT_TOKEN = "",
+} = process?.env || {};
+
+const QUERY_RESPONSE_LIMIT = 100;
+
+if (!isTestEnv()) {
+  if (!CONTENTSTACK_API_KEY) {
+    logger.error("Contentstack API key not provided");
+  }
+
+  if (!CONTENTSTACK_DELIVERY_TOKEN) {
+    logger.error("Contentstack delivery token not provided");
+  }
+
+  if (!CONTENTSTACK_ENVIRONMENT) {
+    logger.error("Contentstack environment not provided");
+  }
+
+  if (!CONTENTSTACK_BRANCH) {
+    logger.error("Contentstack branch not provided");
+  }
+
+  if (
+    !CONTENTSTACK_API_KEY ||
+    !CONTENTSTACK_DELIVERY_TOKEN ||
+    !CONTENTSTACK_ENVIRONMENT ||
+    !CONTENTSTACK_BRANCH
+  ) {
+    throw new Error("Missing required environment variables");
+  }
+}
+
+export const options = {
+  api_key: CONTENTSTACK_API_KEY,
+  delivery_token: CONTENTSTACK_DELIVERY_TOKEN,
+  environment: CONTENTSTACK_ENVIRONMENT,
+  branch: CONTENTSTACK_BRANCH,
+  live_preview: {
+    preview_token: CONTENTSTACK_PREVIEW_TOKEN || "",
+    management_token: CONTENTSTACK_MANAGEMENT_TOKEN || "",
+    enable: !!CONTENTSTACK_PREVIEW_TOKEN,
+  },
+  ...(CONTENTSTACK_FETCH_TIMEOUT
+    ? {
+        fetchOptions: {
+          timeout: Number(CONTENTSTACK_FETCH_TIMEOUT),
+        },
+      }
+    : {}),
+};
+
+export const Stack = contentstack.Stack(options);
+
+if (CONTENTSTACK_API_HOST) {
+  Stack.setHost(CONTENTSTACK_API_HOST);
+}
+
+const renderOption = {
+  span: (node: { children: any }, next: (arg0: any) => any) => next(node.children),
+};
+
+export const excludedFields = [
+  "created_at",
+  "created_by",
+  "updated_at",
+  "updated_by",
+  "publish_details",
+];
+
+class ContentstackFactory {
+  private stack: contentstack.Stack;
+
+  constructor({ stack }: { stack: contentstack.Stack }) {
+    this.stack = stack;
+  }
+
+  private setCommonConfig({
+    query,
+    ...config
+  }: ICommonContentstackConfig & {
+    query: contentstack.Query | contentstack.Entry;
+  }) {
+    const { referenceFieldPath, only, except } = config;
+
+    if (referenceFieldPath) query.includeReference(referenceFieldPath);
+
+    if (!Array.isArray(except) && !Array.isArray(only)) {
+      query.except(excludedFields);
+    }
+
+    if (only) {
+      Array.isArray(only)
+        ? query.only(only)
+        : Object.entries(only).forEach(([key, values]) => query.only(key, values as any));
+    }
+
+    if (except) {
+      Array.isArray(except)
+        ? query.except(except)
+        : Object.entries(except).forEach(([key, values]) => query.except(key, values as any));
+    }
+  }
+
+  createContentTypeQuery({
+    contentTypeUid,
+    lang,
+    where,
+    count,
+    skip,
+    limit,
+    ...commonConfig
+  }: ICreateQueryConfig) {
+    const query = this.stack.ContentType(contentTypeUid).Query().language(lang).toJSON();
+
+    if (count) {
+      query.includeCount();
+    }
+
+    if (skip) {
+      query.skip(skip);
+    }
+
+    if (limit) {
+      query.limit(limit);
+    }
+
+    this.setCommonConfig({ query, ...commonConfig });
+
+    if (where) {
+      Object.entries(where).forEach(([key, value]) => query.where(key, value));
+    }
+
+    return query;
+  }
+
+  createContentTypeEntryQuery({
+    contentTypeUid,
+    lang,
+    entryUid,
+    ...commonConfig
+  }: ICreateEntryConfig) {
+    const query = this.stack.ContentType(contentTypeUid).Entry(entryUid).language(lang).toJSON();
+
+    this.setCommonConfig({ query, ...commonConfig });
+
+    return query;
+  }
+}
+
+export const getEntry = async <T>({
+  contentTypeUid,
+  referenceFieldPath,
+  jsonRtePath,
+  only,
+  lang,
+  includeFields,
+}: IContentstackGetEntry): Promise<T> => {
+  const result: any = [];
+
+  const excludedFieldsFinal = excludedFields.filter(
+    (excluded) => !includeFields?.some((included) => excluded === included),
+  );
+
+  const factory = new ContentstackFactory({ stack: Stack });
+  const _query = factory.createContentTypeQuery({
+    contentTypeUid,
+    lang,
+    referenceFieldPath,
+    only,
+    except: excludedFieldsFinal,
+    count: true,
+    skip: 0,
+    limit: QUERY_RESPONSE_LIMIT,
+  });
+
+  try {
+    const [response, count] = await _query.find();
+    result.push(...response);
+
+    while (result.length < count) {
+      const _query = factory.createContentTypeQuery({
+        contentTypeUid,
+        lang,
+        referenceFieldPath,
+        only,
+        except: excludedFieldsFinal,
+        count: true,
+        skip: result.length,
+        limit: QUERY_RESPONSE_LIMIT,
+      });
+
+      const [response]: any = await _query.find();
+
+      result.push(...response);
+    }
+
+    jsonRtePath &&
+      Utils.jsonToHTML({
+        entry: result,
+        paths: jsonRtePath,
+        renderOption,
+      });
+
+    return result;
+  } catch (e: any) {
+    logger.error(
+      e.message,
+      `Error retrieving entries of content type: ${contentTypeUid} for lang: ${lang}`,
+    );
+    throw e;
+  }
+};
+
+export const getSingleEntry = async ({
+  contentTypeUid,
+  entryUid,
+  lang,
+  referenceFieldPath,
+  jsonRtePath,
+  only,
+  except,
+}: IContentstackGetSingleEntry): Promise<IContentstackPage> => {
+  const query = new ContentstackFactory({
+    stack: Stack,
+  }).createContentTypeEntryQuery({
+    contentTypeUid,
+    entryUid,
+    referenceFieldPath,
+    only,
+    except,
+    lang,
+  });
+
+  try {
+    const result = await query.fetch();
+
+    if (jsonRtePath) {
+      Utils.jsonToHTML({
+        entry: result,
+        paths: jsonRtePath,
+        renderOption,
+      });
+    }
+
+    return result;
+  } catch (e: any) {
+    logger.error(
+      e.message,
+      `Error retrieving single entry: ${entryUid} of content type: ${contentTypeUid} for lang: ${lang}`,
+    );
+    throw e;
+  }
+};
+
+export const getAllContentTypeEntries = async ({
+  contentTypeUid,
+  lang,
+  referenceFieldPath,
+  jsonRtePath,
+  only,
+  except,
+  where,
+}: IContentstackGetSingletonEntry): Promise<IContentstackPage> => {
+  const query = new ContentstackFactory({
+    stack: Stack,
+  }).createContentTypeQuery({
+    contentTypeUid,
+    referenceFieldPath,
+    only,
+    except,
+    lang,
+    where,
+  });
+
+  query.except(excludedFields);
+
+  try {
+    const result = await query.find();
+
+    if (jsonRtePath) {
+      Utils.jsonToHTML({
+        entry: result,
+        paths: jsonRtePath,
+        renderOption,
+      });
+    }
+
+    return result;
+  } catch (e: any) {
+    logger.error(
+      e.message,
+      `Error retrieving entries of content type: ${contentTypeUid} for lang: ${lang}`,
+    );
+    throw e;
+  }
+};
+
+export const findSingletonEntry = async <
+  T extends Pick<IContentstackPage, "uid"> = IContentstackPage,
+>({
+  contentTypeUid,
+  lang,
+  referenceFieldPath,
+  jsonRtePath,
+  only,
+  except,
+  where,
+}: IContentstackGetSingletonEntry): Promise<T | null> => {
+  const query = new ContentstackFactory({
+    stack: Stack,
+  }).createContentTypeQuery({
+    contentTypeUid,
+    referenceFieldPath,
+    only,
+    except,
+    where,
+    lang,
+    limit: 1,
+  });
+
+  try {
+    const [[result]]: T[][] = await query.find();
+
+    if (!result) {
+      return null;
+    }
+
+    if (jsonRtePath) {
+      Utils.jsonToHTML({
+        entry: result,
+        paths: jsonRtePath,
+        renderOption,
+      });
+    }
+
+    return result;
+  } catch (error) {
+    logger.error(
+      `Error retrieving entry of single content type: ${contentTypeUid} for lang: ${lang}`,
+      error,
+    );
+
+    throw error;
+  }
+};
+
+export const getSingletonEntry = async ({
+  contentTypeUid,
+  lang,
+  referenceFieldPath,
+  jsonRtePath,
+  only,
+  except,
+  where,
+}: IContentstackGetSingletonEntry): Promise<IContentstackPage> => {
+  const query = new ContentstackFactory({
+    stack: Stack,
+  }).createContentTypeQuery({ contentTypeUid, referenceFieldPath, only, except, where, lang });
+
+  try {
+    const result = await query.findOne();
+
+    if (jsonRtePath) {
+      Utils.jsonToHTML({
+        entry: result,
+        paths: jsonRtePath,
+        renderOption,
+      });
+    }
+
+    return result;
+  } catch (e: any) {
+    logger.error(
+      e.message,
+      `Error retrieving entry of single content type: ${contentTypeUid} for lang: ${lang}`,
+    );
+```
+(truncated at 400 of 416 lines — ReadFile this path yourself if you need the rest)
+
+## Files to Create/Modify (EXACT ABSOLUTE PATHS — write to these paths exactly)
+src/hooks/useContent.ts, src/services/contentstack.ts, src/interface/content/contentCard.ts, src/components/contentstack/ContentstackLink/ContentstackLink.tsx
+
+## Dependencies
+None
+
+## Dependency Contracts (EXACT import paths and signatures — use these verbatim, do NOT guess a different path)
+
+### Vendor package: contentstack
+# Contract: vendor:contentstack
+
+Auto-generated from actual source (deterministic — not model-transcribed).
+
+```typescript
+export interface SyncResult {items: Array<any>;
+    pagination_token?: string;
+    sync_token?: string;
+    skip: number;
+    limit: number;
+    total_count: number;}
+```
+
+```typescript
+export interface Config {api_key: string;
+    delivery_token: string;
+    environment: string;
+    region?: Region;
+    branch?: string;
+    live_preview?: LivePreview;
+    plugins?: ContentstackPlugin[];
+    fetchOptions?: FetchOptions;
+    early_access?: string[]}
+```
+
+```typescript
+export interface StackConfig {protocol: string;
+    host: string;
+    port: number;
+    version: string;}
+```
+
+```typescript
+export interface ContentTypeCollection {content_types: Array<any>
+    count?: number}
+```
+
+```typescript
+export interface LivePreview {host: string
+    management_token: string
+    enable: boolean}
+```
+
+```typescript
+export interface LivePreviewQuery {live_preview: string
+    content_type_uid: string}
+```
+
+```typescript
+export interface RetryDelayOption {base?: number
+    customBackoff?: (retryCount: number, error: Error) => number}
+```
+
+```typescript
+export interface FetchOptions {[propName: string]: any
+    debug?: boolean
+    timeout?: number
+    retryLimit?: number
+    retryDelay?: number
+    retryCondition?: (error: any) => boolean
+    logHandler?: (level: string, data: any) => void
+    retryDelayOptions?: RetryDelayOption}
+```
+
+```typescript
+export interface ContentstackPlugin {onRequest?(stack: Stack, request: ContentstackRequest): ContentstackRequest;
+    onResponse?(stack: Stack, request: ContentstackRequest, response: any, data: any): any;}
+```
+
+```typescript
+export interface ContentstackRequest {url: string;
+    option: object;}
+```
+
+```typescript
+export class Utils {
+  constructor();
+
+}
+```
+
+```typescript
+export class Stack {
+  constructor(config: Config);
+
+}
+```
+
+```typescript
+export class ContentType {
+  constructor();
+
+}
+```
+
+```typescript
+export class Assets {
+  constructor();
+
+}
+```
+
+```typescript
+export class Asset {
+  constructor();
+
+}
+```
+
+```typescript
+export class Entry {
+  constructor();
+
+}
+```
+
+```typescript
+export class Query {
+  constructor();
+
+}
+```
+
+Mock factory skeleton — every exported method MUST appear here (every method name is real; fill in real return values):
+```typescript
+vi.mock('<import-path-to-Utils>', () => ({
+  Utils: vi.fn().mockImplementation(() => ({
+
+  })),
+}));
+vi.mock('<import-path-to-Stack>', () => ({
+  Stack: vi.fn().mockImplementation(() => ({
+
+  })),
+}));
+vi.mock('<import-path-to-ContentType>', () => ({
+  ContentType: vi.fn().mockImplementation(() => ({
+
+  })),
+}));
+vi.mock('<import-path-to-Assets>', () => ({
+  Assets: vi.fn().mockImplementation(() => ({
+
+  })),
+}));
+vi.mock('<import-path-to-Asset>', () => ({
+  Asset: vi.fn().mockImplementation(() => ({
+
+  })),
+}));
+vi.mock('<import-path-to-Entry>', () => ({
+  Entry: vi.fn().mockImplementation(() => ({
+
+  })),
+}));
+vi.mock('<import-path-to-Query>', () => ({
+  Query: vi.fn().mockImplementation(() => ({
+
+  })),
+}));
+```
+## Module resolution in this codeline
+A bare import that names a file under any of these directories is INTERNAL source, not a dependency — never add it to the dependency manifest:
+  __tests__, migration-scripts, public, review, src, zap_hooks
+Source extensions here: .ts, .tsx, .js, .jsx, .mjs, .cjs
+Write imports the way the existing files in this codeline write them; read a neighbouring file before inventing a path.
+
+
+## Instructions
+CRITICAL — these files already exist. Their real content is injected below (## Existing File Contents) — you do NOT need to ReadFile them to see what's already there.
+Do NOT import or reference anything that doesn't appear in the injected content below — a plausible-sounding module name is not a real one.
+Only call ReadFile yourself if you need to see MORE of a file than what's shown (e.g. it was truncated), or a file not listed below.
+   - /home/bradleyjerome/projects/metrolinx/next.upexpress.com/src/hooks/useContent.ts (ReadFile this only if you need it — not a fix site; content omitted to keep the prompt small)
+   - /home/bradleyjerome/projects/metrolinx/next.upexpress.com/src/services/contentstack.ts (content already injected below — do not ReadFile it unless you need lines beyond what's shown)
+   - /home/bradleyjerome/projects/metrolinx/next.upexpress.com/src/interface/content/contentCard.ts (ReadFile this only if you need it — not a fix site; content omitted to keep the prompt small)
+   - /home/bradleyjerome/projects/metrolinx/next.upexpress.com/src/components/contentstack/ContentstackLink/ContentstackLink.tsx (ReadFile this only if you need it — not a fix site; content omitted to keep the prompt small)
+**The content of every file listed above is already shown in ## Existing File Contents — use that, do not spend a tool call re-reading them. Use Edit for targeted changes to existing files — do NOT overwrite an existing file wholesale with WriteFile.**
+
+1. Use the injected ## Existing File Contents above to verify what actually exists (exports, types, existing utilities) before writing any code — do not guess, and do not re-read a file already shown in full
+2. Implement all acceptance criteria for this story
+3. Follow the project's existing code patterns and conventions
+4. Do NOT create tests unless explicitly required in acceptance criteria
+
+After implementation, provide a brief summary of what was created/modified.
+
+## Verification Failure
+
+The orchestrator ran `tsc --noEmit` after your files were written and it failed (exit code 2). Fix the type errors so tsc exits 0.
+
+```
+migration-scripts/client.ts(2,24): error TS2307: Cannot find module '@metrolinx/cx-shared/migration-tool-build' or its corresponding type declarations.
+migration-scripts/index.ts(2,52): error TS2307: Cannot find module '@metrolinx/cx-shared/migration-tool-build' or its corresponding type declarations.
+src/__tests__/pages/api/v1/autocomplete.spec.ts(4,44): error TS2307: Cannot find module '@metrolinx/cx-shared/build/src/constants/common' or its corresponding type declarations.
+src/__tests__/pages/api/v1/autocomplete.spec.ts(5,27): error TS2307: Cannot find module '@metrolinx/cx-shared/build/src/utils/common/HttpError' or its corresponding type declarations.
+src/__tests__/pages/api/v1/blog-articles.spec.ts(3,44): error TS2307: Cannot find module '@metrolinx/cx-shared/build/src/constants/common' or its corresponding type declarations.
+src/__tests__/pages/api/v1/blog-articles.spec.ts(4,27): error TS2307: Cannot find module '@metrolinx/cx-shared/build/src/utils/common/HttpError' or its corresponding type declarations.
+src/__tests__/pages/api/v1/email-sign-up.spec.ts(3,44): error TS2307: Cannot find module '@metrolinx/cx-shared/build/src/constants/common' or its corresponding type declarations.
+src/__tests__/pages/api/v1/email-sign-up.spec.ts(4,27): error TS2307: Cannot find module '@metrolinx/cx-shared/build/src/utils/common/HttpError' or its corresponding type declarations.
+src/__tests__/pages/api/v1/logs-collector.spec.ts(2,44): error TS2307: Cannot find module '@metrolinx/cx-shared/build/src/constants/common' or its corresponding type declarations.
+src/__tests__/pages/api/v1/search-1.spec.ts(4,44): error TS2307: Cannot find module '@metrolinx/cx-shared/build/src/constants/common' or its corresponding type declarations.
+src/__tests__/pages/api/v1/search-2.spec.ts(3,44): error TS2307: Cannot find module '@metrolinx/cx-shared/build/src/constants/common' or its corresponding type declarations.
+src/__tests__/pages/api/v1/search-2.spec.ts(4,27): error TS2307: Cannot find module '@metrolinx/cx-shared/build/src/utils/common/HttpError' or its corresponding type declarations.
+src/__tests__/pages/api/v1/user-profile.spec.ts(3,28): error TS2307: Cannot find module '@metrolinx/cx-shared/build/src/constants/common' or its corresponding type declarations.
+src/__tests__/pages/api/v1/webchat/token.spec.ts(4,44): error TS2307: Cannot find module '@metrolinx/cx-shared/build/src/constants/common' or its corresponding type declarations.
+src/__tests__/pages/api/v1/webchat/token.spec.ts(5,29): error TS2307: Cannot find module '@metrolinx/cx-shared/build/src/constants/locales' or its corresponding type declarations.
+src/api/__tests__/retrieveUserProfile.spec.ts(1,44): error TS2307: Cannot find module '@metrolinx/cx-shared/build/src/constants/common' or its corresponding type declarations.
+src/api/__tests__/retrieveUserProfile.spec.ts(2,27): error TS2307: Cannot find module '@metrolinx/cx-shared/build/src/utils/common/HttpError' or its corresponding type declarations.
+src/api/__tests__/tickets.spec.ts(1,32): error TS2307: Cannot find module '@metrolinx/cx-shared/build/src/constants/common' or its corresponding type declarations.
+src/api/__tests__/tickets.spec.ts(2,27): error TS2307: Cannot find module '@metrolinx/cx-shared/build/src/utils/common/HttpError' or its corresponding type declarations.
+src/api/__tests__/updateUserProfile.spec.ts(1,44): error TS2307: Cannot find module '@metrolinx/cx-shared/build/src/constants/common' or its corresponding type declarations.
+src/api/__tests__/updateUserProfile.spec.ts(2,27): error TS2307: Cannot find module '@metrolinx/cx-shared/build/src/utils/common/HttpError' or its corresponding type declarations.
+src/api/logger.ts(2,44): error TS2307: Cannot find module '@metrolinx/cx-shared/build/src/constants/common' or its corresponding type declarations.
+src/api/logger.ts(3,27): error TS2307: Cannot find module '@metrolinx/cx-shared/build/src/utils/common/HttpError' or its corresponding type declarations.
+src/api/middle
+```
+
+## Relevant Knowledge Base Entries
+The following was learned from previous story implementations and is relevant to your agent role. Apply this knowledge before writing any code:
+
+- [2026-07-06T18:11:26Z] Use vi.fn().mockResolvedValue(value) to make a mock return a resolved Promise.
+- [2026-07-06T20:31:11Z] Use `test: { passWithNoTests: true }` in vitest.config.ts or create a stub test file when no *.test.ts files exist.
+- [2026-07-06T20:33:03Z] Enable globals:true in vitest.config.ts so describe, it, and expect work without imports, reducing boilerplate in test files.
+- [2026-07-06T23:47:34Z] Use CommonJS-compatible patterns in src/server.ts: avoid `import.meta.url` and top-level `await`; gate listen with `if (require.main === module)`.
+- [2026-07-07T02:35:30Z] Always include a non-test source file in src/ alongside any src/*.test.ts file, since tsconfig.json excludes test files from tsc --noEmit.
+- [2026-07-07T19:01:34Z] Only modify or create files explicitly listed in the story's acceptance criteria. Do not touch files belonging to other stories or outside the current task scope.
+- [2026-07-07T20:17:57Z] [unreviewed-fallback] Avoid using deprecated TypeScript compiler options like 'moduleResolution=node10'; use 'moduleResolution=node' instead.
+- [2026-07-17T20:20:58Z] Always: Before importing a module or referencing a type/property, always read the actual source file to verify the export exists, its exact path, its properties, and its constructor/factory signatures
+- [2026-07-23T01:15:16Z] Always: In tsconfig.json, always use moduleResolution 'node' (not 'node10' or 'Node10') — 'node10' was removed in TypeScript 5.x. The correct value for CommonJS + Node resolution is 'node'.
+- [2026-07-23T14:30:00Z] CORRECTION to a prior entry (2026-07-23T01:17:52Z, now removed): that entry wrongly claimed 'moduleResolution: node' itself is removed and must become 'node16'/'nodenext'. Root-caused via mock1 (epam-cli orchestration test): 'node' is valid and correct through TypeScript 5.x (confirmed on 5.9.3) — it was only removed in TypeScript 7.x. The real defect was an unpinned `typescript` devDependency letting a fallback `npm install` pull latest (7.x) instead of the project's intended version. Do NOT rewrite a working tsconfig.json's moduleResolution in response to a TS5108 error — first check `node_modules/typescript/package.json`'s version; if it's 7.x and the rest of the project expects 5.x, the fix is pinning/reinstalling the correct typescript version, not changing moduleResolution.
+
+## Knowledge Base Contribution (do this LAST — after writing all implementation files)
+Your assigned KB entry ID for this run: **KB-021**
+**This is retry attempt 1** — a previous attempt failed. You MUST write a KB entry documenting what went wrong and what you changed.
+
+IMPORTANT: Write ALL implementation files first. Only AFTER writing every required file should you optionally append a KB entry.
+Do NOT read orchestrations/agents/KB.md before writing implementation files. The relevant KB entries are already injected above.
+
+If (and only if) you discover a non-obvious pattern during implementation, append one entry to `orchestrations/agents/KB.md`:
+
+```markdown
+## KB-021 -- 2026-07-31
+
+**Category:** <backend|frontend|infrastructure|testing|orchestration>
+**AgentRole:** <your agentRole from the story>
+**Tags:** <comma-separated tech keywords, e.g. typescript, node, cli>
+**Trigger:** <retry|first-success>
+**StoryRef:** AMSD-2041
+
+<One concise paragraph: the specific pattern, gotcha, or anti-pattern.>
+```
+
+Only write an entry if the knowledge is genuinely non-obvious. Skip trivial observations.
+
+## Available Dynamic Tools
+This project has the following helper scripts, written by prior self-healing runs. Use them via the bash tool instead of repeating the equivalent steps by hand:
+
+- `bash /home/bradleyjerome/projects/metrolinx/next.upexpress.com/.epam/dynamic-tools/ensure-cx-shared-installed.sh <args>` — Verifies @metrolinx/cx-shared is fully installed with its build/ directory before tsc runs
+
+## Coordinator Guidance (retry 1, showing most recent up to 3 — full retry history: /home/bradleyjerome/projects/ai/epam-cli/orchestrations/logs/kb-scratchpad/AMSD-2041-attempt-2.md)
+## Self-Heal: Failure Analyst Summary
+Root cause: @metrolinx/cx-shared is declared but not installed — node_modules has no build/ dir or package.json, only a nested uuid folder.
+=== End Prompt ===
+
+=== epam Output (attempt 2) ===
+The `GH_TOKEN` environment variable is not set, which is why npm can't authenticate. Let me check if there's a GitHub token available elsewhere.
+  [tc-writer] No test stories need TCs in phase 'unknown' — skipping
+
+=== tsc --noEmit failed (exit 1) — new errors introduced by this story ===
+migration-scripts/client.ts(2,24): error TS2307: Cannot find module '@metrolinx/cx-shared/migration-tool-build' or its corresponding type declarations.
+migration-scripts/index.ts(2,52): error TS2307: Cannot find module '@metrolinx/cx-shared/migration-tool-build' or its corresponding type declarations.
+src/__tests__/pages/api/v1/autocomplete.spec.ts(4,44): error TS2307: Cannot find module '@metrolinx/cx-shared/build/src/constants/common' or its corresponding type declarations.
+src/__tests__/pages/api/v1/autocomplete.spec.ts(5,27): error TS2307: Cannot find module '@metrolinx/cx-shared/build/src/utils/common/HttpError' or its corresponding type declarations.
+src/__tests__/pages/api/v1/blog-articles.spec.ts(3,44): error TS2307: Cannot find module '@metrolinx/cx-shared/build/src/constants/common' or its corresponding type declarations.
+src/__tests__/pages/api/v1/blog-articles.spec.ts(4,27): error TS2307: Cannot find module '@metrolinx/cx-shared/build/src/utils/common/HttpError' or its corresponding type declarations.
+src/__tests__/pages/api/v1/email-sign-up.spec.ts(3,44): error TS2307: Cannot find module '@metrolinx/cx-shared/build/src/constants/common' or its corresponding type declarations.
+src/__tests__/pages/api/v1/email-sign-up.spec.ts(4,27): error TS2307: Cannot find module '@metrolinx/cx-shared/build/src/utils/common/HttpError' or its corresponding type declarations.
+src/__tests__/pages/api/v1/logs-collector.spec.ts(2,44): error TS2307: Cannot find module '@metrolinx/cx-shared/build/src/constants/common' or its corresponding type declarations.
+src/__tests__/pages/api/v1/search-1.spec.ts(4,44): error TS2307: Cannot find module '@metrolinx/cx-shared/build/src/constants/common' or its corresponding type declarations.
+src/__tests__/pages/api/v1/search-2.spec.ts(3,44): error TS2307: Cannot find module '@metrolinx/cx-shared/build/src/constants/common' or its corresponding type declarations.
+src/__tests__/pages/api/v1/search-2.spec.ts(4,27): error TS2307: Cannot find module '@metrolinx/cx-shared/build/src/utils/common/HttpError' or its corresponding type declarations.
+src/__tests__/pages/api/v1/user-profile.spec.ts(3,28): error TS2307: Cannot find module '@metrolinx/cx-shared/build/src/constants/common' or its corresponding type declarations.
+src/__tests__/pages/api/v1/webchat/token.spec.ts(4,44): error TS2307: Cannot find module '@metrolinx/cx-shared/build/src/constants/common' or its corresponding type declarations.
+src/__tests__/pages/api/v1/webchat/token.spec.ts(5,29): error TS2307: Cannot find module '@metrolinx/cx-shared/build/src/constants/locales' or its corresponding type declarations.
+src/api/__tests__/retrieveUserProfile.spec.ts(1,44): error TS2307: Cannot find module '@metrolinx/cx-shared/build/src/constants/common' or its corresponding type declarations.
+src/api/__tests__/retrieveUserProfile.spec.ts(2,27): error TS2307: Cannot find module '@metrolinx/cx-shared/build/src/utils/common/HttpError' or its corresponding type declarations.
+src/api/__tests__/tickets.spec.ts(1,32): error TS2307: Cannot find module '@metrolinx/cx-shared/build/src/constants/common' or its corresponding type declarations.
+src/api/__tests__/tickets.spec.ts(2,27): error TS2307: Cannot find module '@metrolinx/cx-shared/build/src/utils/common/HttpError' or its corresponding type declarations.
+src/api/__tests__/updateUserProfile.spec.ts(1,44): error TS2307: Cannot find module '@metrolinx/cx-shared/build/src/constants/common' or its corresponding type declarations.
+src/api/__tests__/updateUserProfile.spec.ts(2,27): error TS2307: Cannot find module '@metrolinx/cx-shared/build/src/utils/common/HttpError' or its corresponding type declarations.
+src/api/logger.ts(2,44): error TS2307: Cannot find module '@metrolinx/cx-shared/build/src/constants/common' or its corresponding type declarations.
+src/api/logger.ts(3,27): error TS2307: Cannot find module '@metrolinx/cx-shared/build/src/utils/common/HttpError' or its corresponding type declarations.
+src/api/middlewares/__tests__/withAzureB2CId.spec.ts(3,32): error TS2307: Cannot find module '@metrolinx/cx-shared/build/src/constants/common' or its corresponding type declarations.
+src/api/middlewares/__tests__/withAzureB2CId.spec.ts(4,27): error TS2307: Cannot find module '@metrolinx/cx-shared/build/src/utils/common/HttpError' or its corresponding type declarations.
+src/api/middlewares/__tests__/withRequestMethods.spec.ts(1,28): error TS2307: Cannot find module '@metrolinx/cx-shared/build/src/constants/common' or its corresponding type declarations.
+src/api/middlewares/withAzureB2CId.ts(1,32): error TS2307: Cannot find module '@metrolinx/cx-shared/build/src/constants/common' or its corresponding type declarations.
+src/api/middlewares/withAzureB2CId.ts(2,27): error TS2307: Cannot find module '@metrolinx/cx-shared/build/src/utils/common/HttpError' or its corresponding type declarations.
+src/api/middlewares/withErrorBoundary.ts(1,32): error TS2307: Cannot find module '@metrolinx/cx-shared/build/src/constants/common' or its corresponding type declarations.
+src/api/middlewares/withErrorBoundary.ts(2,29): error TS2307: Cannot find module '@metrolinx/cx-shared/build/src/utils/common/isHttpError' or its corresponding type declarations.
+src/api/middlewares/withErrorBoundary.ts(17,25): error TS18046: 'error' is of type 'unknown'.
+src/api/middlewares/withErrorBoundary.ts(19,20): error TS18046: 'error' is of type 'unknown'.
+src/api/middlewares/withErrorBoundary.ts(20,17): error TS18046: 'error' is of type 'unknown'.
+src/api/middlewares/withErrorBoundary.ts(21,20): error TS18046: 'error' is of type 'unknown'.
+src/api/middlewares/withRequestMethods.ts(1,44): error TS2307: Cannot find module '@metrolinx/cx-shared/build/src/constants/common' or its corresponding type declarations.
+src/api/middlewares/withRequestMethods.ts(2,27): error TS2307: Cannot find module '@metrolinx/cx-shared/build/src/utils/common/HttpError' or its corresponding type declarations.
+src/api/middlewares/withUserProfileEnvVariables.ts(1,32): error TS2307: Cannot find module '@metrolinx/cx-shared/build/src/constants/common' or its corresponding type declarations.
+src/api/middlewares/withUserProfileEnvVariables.ts(2,27): error TS2307: Cannot find module '@metrolinx/cx-shared/build/src/utils/common/HttpError' or its corresponding type declarations.
+src/api/passes.ts(3,32): error TS2307: Cannot find module '@metrolinx/cx-shared/build/src/constants/common' or its corresponding type declarations.
+src/api/passes.ts(4,27): error TS2307: Cannot find module '@metrolinx/cx-shared/build/src/utils/common/HttpError' or its corresponding type declarations.
+src/api/retrieveUserProfile.ts(2,44): error TS2307: Cannot find module '@metrolinx/cx-shared/build/src/constants/common' or its corresponding type declarations.
+src/api/retrieveUserProfile.ts(3,27): error TS2307: Cannot find module '@metrolinx/cx-shared/build/src/utils/common/HttpError' or its corresponding type declarations.
+src/api/retrieveUserProfile.ts(4,37): error TS2307: Cannot find module '@metrolinx/cx-shared/build/src/utils/common/parseResponseAsJson' or its corresponding type declarations.
+src/api/services/recaptcha/verifyRecaptcha.ts(1,44): error TS2307: Cannot find module '@metrolinx/cx-shared/build/src/constants/common' or its corresponding type declarations.
+src/api/services/recaptcha/verifyRecaptcha.ts(2,27): error TS2307: Cannot find module '@metrolinx/cx-shared/build/src/utils/common/HttpError' or its corresponding type declarations.
+src/api/services/recaptcha/verifyRecaptcha.ts(3,37): error TS2307: Cannot find module '@metrolinx/cx-shared/build/src/utils/common/parseResponseAsJson' or its corresponding type declarations.
+src/api/services/webchat/generate-webchat-token/generateWebchatToken.ts(1,44): error TS2307: Cannot find module '@metrolinx/cx-shared/build/src/constants/common' or its corresponding type declarations.
+src/api/services/webchat/generate-webchat-token/generateWebchatToken.ts(2,29): error TS2307: Cannot find module '@metrolinx/cx-shared/build/src/constants/common' or its corresponding type declarations.
+src/api/services/webchat/generate-webchat-token/generateWebchatToken.ts(3,29): error TS2307: Cannot find module '@metrolinx/cx-shared/build/src/constants/locales' or its corresponding type declarations.
+src/api/services/webchat/generate-webchat-token/generateWebchatToken.ts(4,27): error TS2307: Cannot find module '@metrolinx/cx-shared/build/src/utils/common/HttpError' or its corresponding type declarations.
+src/api/services/webchat/generate-webchat-token/generateWebchatToken.ts(5,35): error TS2307: Cannot find module '@metrolinx/cx-shared/build/src/utils/common/getRequestHeaders' or its corresponding type declarations.
+src/api/services/webchat/generate-webchat-token/generateWechatToken.spec.ts(6,8): error TS2307: Cannot find module '@metrolinx/cx-shared/build/src/constants/common' or its corresponding type declarations.
+src/api/services/webchat/generate-webchat-token/generateWechatToken.spec.ts(7,29): error TS2307: Cannot find module '@metrolinx/cx-shared/build/src/constants/locales' or its corresponding type declarations.
+src/api/services/webchat/generate-webchat-token/generateWechatToken.spec.ts(8,27): error TS2307: Cannot find module '@metrolinx/cx-shared/build/src/utils/common/HttpError' or its corresponding type declarations.
+src/api/tickets.ts(3,32): error TS2307: Cannot find module '@metrolinx/cx-shared/build/src/constants/common' or its corresponding type declarations.
+src/api/tickets.ts(4,27): error TS2307: Cannot find module '@metrolinx/cx-shared/build/src/utils/common/HttpError' or its corresponding type declarations.
+src/api/updateUserProfile.ts(2,32): error TS2307: Cannot find module '@metrolinx/cx-shared/build/src/constants/common' or its corresponding type declarations.
+src/api/updateUserProfile.ts(3,27): error TS2307: Cannot find module '@metrolinx/cx-shared/build/src/utils/common/HttpError' or its corresponding type declarations.
+src/api/updateUserProfile.ts(4,37): error TS2307: Cannot find module '@metrolinx/cx-shared/build/src/utils/common/parseResponseAsJson' or its corresponding type declarations.
+src/api/utils/bytemark.ts(2,32): error TS2307: Cannot find module '@metrolinx/cx-shared/build/src/constants/common' or its corresponding type declarations.
+The `GH_TOKEN` environment variable is not set, which is why npm can't authenticate. Let me check if there's a GitHub token available elsewhere.
+
+=== epam exited with code 1 ===
+=== Prompt for AMSD-2041 (attempt 5) ===
+CRITICAL — these files already exist. Their real content is injected below (## Existing File Contents) — you do NOT need to ReadFile them to see what's already there.
+Do NOT import or reference anything that doesn't appear in the injected content below — a plausible-sounding module name is not a real one.
+Only call ReadFile yourself if you need to see MORE of a file than what's shown (e.g. it was truncated), or a file not listed below.
+
+   - /home/bradleyjerome/projects/metrolinx/next.upexpress.com/src/hooks/useContent.ts (ReadFile this only if you need it — not a fix site; content omitted to keep the prompt small)
+   - /home/bradleyjerome/projects/metrolinx/next.upexpress.com/src/services/contentstack.ts (content already injected below — do not ReadFile it unless you need lines beyond what's shown)
+   - /home/bradleyjerome/projects/metrolinx/next.upexpress.com/src/interface/content/contentCard.ts (ReadFile this only if you need it — not a fix site; content omitted to keep the prompt small)
+   - /home/bradleyjerome/projects/metrolinx/next.upexpress.com/src/components/contentstack/ContentstackLink/ContentstackLink.tsx (ReadFile this only if you need it — not a fix site; content omitted to keep the prompt small)
+---
+
+Implement user story AMSD-2041: [GO, UP, MX] Live Preview of Content in CMS
+
+## Story Description
+[GO, UP, MX] Live Preview of Content in CMS
+
+## Acceptance Criteria
+- 
+
+
+## Root Cause Analysis & Prescribed Fix (AUTHORITATIVE — start here, do not re-trace)
+A code investigation already traced this bug to its cause and prescribed the minimal fix below. This is the plan of record. Apply it; do NOT re-read the whole codebase to re-derive it.
+
+The Acceptance Criteria above describe the desired END BEHAVIOR to VERIFY — they are NOT an implementation blueprint. Do not re-architect, split values, or add new fields/abstractions to satisfy an AC literally when the prescribed minimal fix already makes that AC pass. Implement the fix below; the ACs are how you check you got it right.
+
+HARD RULES:
+- Make the SMALLEST change that fixes the root cause. Fewer lines of code is always better.
+- REUSE existing functions. Before writing any new helper, search the repo for an existing util/parser/formatter that already does what you need (use the CodeGraph tool documented below) and call it. Writing novel code when a helper already exists is a defect to be rejected in review.
+- **src/services/contentstack.ts** (`options`): This is where the Contentstack SDK Stack is configured. Live Preview requires a `live_preview` config block (preview_token, management_token, enable) passed into `contentstack.Stack(options)`. The current `options` object (lines 55-67) lacks any `live_preview` configuration, so the Stack is initialized in delivery-only mode and can never serve draft/preview content — the root cause of why CMS live preview does not work.
+  - **Minimal fix:** Add `live_preview` configuration to the `options` object before it is passed to `contentstack.Stack()`. Read `CONTENTSTACK_PREVIEW_TOKEN` and `CONTENTSTACK_MANAGEMENT_TOKEN` from `process.env` (add them alongside the existing env destructuring at lines 17-24). Then extend `options` with: `live_preview: { preview_token: CONTENTSTACK_PREVIEW_TOKEN || '', management_token: CONTENTSTACK_MANAGEMENT_TOKEN || '', enable: !!CONTENTSTACK_PREVIEW_TOKEN }`. This is the minimal change — the Contentstack SDK's `Stack` constructor accepts `live_preview` natively; no new functions or architecture are needed. The `isTestEnv` guard pattern already used in this file (line 28) can be reused for any env-validation of the new tokens if desired.
+
+
+## Verification Criteria (what a tester will CONFIRM — your change must satisfy every one)
+These are observable checks, derived from the acceptance criteria and description. They describe WHAT is observed, not how to build it. Make the minimal change that makes all of these true; your accompanying test should assert them:
+- When a tester opens a page in CMS live-preview mode after saving a draft (unpublished) change to a content entry, the rendered page displays the draft content rather than the last published version.
+- While a live-preview session is open, a tester who edits and saves a field in the CMS sees the updated value appear on the rendered page without redeploying or restarting the application.
+- When the same page is visited outside of any preview session, it renders only the published CMS content, with no draft or unpublished values visible.
+- When a page is opened in preview mode with an invalid preview token or for content that has no draft version, the page still renders successfully showing the published content, with no error screen, blank page, or crash.
+- Draft content shown in preview mode appears in the same location, formatting, and styling on the page as the published content it replaces, so the preview accurately represents how the change will look once published.
+- All pages and sections on the site that display CMS-managed content render draft values when viewed in live-preview mode, with no visible layout breakage or missing content anywhere draft changes exist.
+
+## Tests are NOT your job this turn
+A dedicated test-writer agent runs immediately after your fix commits and owns the bug-reproducing test. Do NOT write, edit, or create any test file (*.test.*, *.spec.*, __tests__/). Write ONLY the fix. Adding a test here wastes your turn budget and has caused repeated failures.
+
+## CodeGraph Tool — find EXISTING functions to reuse (do this BEFORE writing any new helper)
+An existing-code search tool is available. Run it with the Bash tool to discover reusable functions instead of inventing new ones:
+  PROJECT_ROOT="/home/bradleyjerome/projects/metrolinx/next.upexpress.com" bash "/home/bradleyjerome/projects/ai/epam-cli/orchestrations/scripts/codegraph-agent-query.sh" helpers <domain nouns>   # existing util/parser/formatter to REUSE (symbol + import path)
+  PROJECT_ROOT="/home/bradleyjerome/projects/metrolinx/next.upexpress.com" bash "/home/bradleyjerome/projects/ai/epam-cli/orchestrations/scripts/codegraph-agent-query.sh" query <SymbolName>        # exact definition site of a symbol
+  PROJECT_ROOT="/home/bradleyjerome/projects/metrolinx/next.upexpress.com" bash "/home/bradleyjerome/projects/ai/epam-cli/orchestrations/scripts/codegraph-agent-query.sh" callees <SymbolName>      # what a function already calls
+RULE: Before you add ANY new function, run `helpers` for what it would do. If a suitable function already exists, import and call it — do NOT duplicate it. Fewer lines of code is always better.
+
+
+## Adding a New Dependency
+If the fix genuinely requires a package this project does not yet declare, import it directly and continue — do not stop to ask whether this is possible or search for an alternative that avoids it. Missing imports are detected and installed automatically after your change; this does not need your permission or a separate step. Proceed with the real fix.
+
+
+
+
+## Technical Notes
+- files: ["src/hooks/useContent.ts","src/services/contentstack.ts","src/interface/content/contentCard.ts","src/components/contentstack/ContentstackLink/ContentstackLink.tsx"]
+
+## Existing File Contents (injected once, deterministically — do NOT ReadFile these unless you need more than shown)
+
+### /home/bradleyjerome/projects/metrolinx/next.upexpress.com/src/services/contentstack.ts
+```
+/* eslint-disable @typescript-eslint/no-explicit-any */
+import * as Utils from "@contentstack/utils";
+import contentstack from "contentstack";
+import { isTestEnv } from "utils/envs";
+import { IContentstackContentType } from "interface/content/contentType";
+import { IContentstackPage } from "interface/content/page";
+import {
+  ICommonContentstackConfig,
+  IContentstackGetEntry,
+  IContentstackGetSingleEntry,
+  IContentstackGetSingletonEntry,
+  ICreateEntryConfig,
+  ICreateQueryConfig,
+} from "../interface/contentstack";
+import logger from "./logger";
+
+const {
+  CONTENTSTACK_API_KEY = "",
+  CONTENTSTACK_DELIVERY_TOKEN = "",
+  CONTENTSTACK_ENVIRONMENT = "",
+  CONTENTSTACK_API_HOST = "",
+  CONTENTSTACK_BRANCH = "",
+  CONTENTSTACK_FETCH_TIMEOUT = "",
+  CONTENTSTACK_PREVIEW_TOKEN = "",
+  CONTENTSTACK_MANAGEMENT_TOKEN = "",
+} = process?.env || {};
+
+const QUERY_RESPONSE_LIMIT = 100;
+
+if (!isTestEnv()) {
+  if (!CONTENTSTACK_API_KEY) {
+    logger.error("Contentstack API key not provided");
+  }
+
+  if (!CONTENTSTACK_DELIVERY_TOKEN) {
+    logger.error("Contentstack delivery token not provided");
+  }
+
+  if (!CONTENTSTACK_ENVIRONMENT) {
+    logger.error("Contentstack environment not provided");
+  }
+
+  if (!CONTENTSTACK_BRANCH) {
+    logger.error("Contentstack branch not provided");
+  }
+
+  if (
+    !CONTENTSTACK_API_KEY ||
+    !CONTENTSTACK_DELIVERY_TOKEN ||
+    !CONTENTSTACK_ENVIRONMENT ||
+    !CONTENTSTACK_BRANCH
+  ) {
+    throw new Error("Missing required environment variables");
+  }
+}
+
+export const options = {
+  api_key: CONTENTSTACK_API_KEY,
+  delivery_token: CONTENTSTACK_DELIVERY_TOKEN,
+  environment: CONTENTSTACK_ENVIRONMENT,
+  branch: CONTENTSTACK_BRANCH,
+  live_preview: {
+    preview_token: CONTENTSTACK_PREVIEW_TOKEN || "",
+    management_token: CONTENTSTACK_MANAGEMENT_TOKEN || "",
+    enable: !!CONTENTSTACK_PREVIEW_TOKEN,
+  },
+  ...(CONTENTSTACK_FETCH_TIMEOUT
+    ? {
+        fetchOptions: {
+          timeout: Number(CONTENTSTACK_FETCH_TIMEOUT),
+        },
+      }
+    : {}),
+};
+
+export const Stack = contentstack.Stack(options);
+
+if (CONTENTSTACK_API_HOST) {
+  Stack.setHost(CONTENTSTACK_API_HOST);
+}
+
+const renderOption = {
+  span: (node: { children: any }, next: (arg0: any) => any) => next(node.children),
+};
+
+export const excludedFields = [
+  "created_at",
+  "created_by",
+  "updated_at",
+  "updated_by",
+  "publish_details",
+];
+
+class ContentstackFactory {
+  private stack: contentstack.Stack;
+
+  constructor({ stack }: { stack: contentstack.Stack }) {
+    this.stack = stack;
+  }
+
+  private setCommonConfig({
+    query,
+    ...config
+  }: ICommonContentstackConfig & {
+    query: contentstack.Query | contentstack.Entry;
+  }) {
+    const { referenceFieldPath, only, except } = config;
+
+    if (referenceFieldPath) query.includeReference(referenceFieldPath);
+
+    if (!Array.isArray(except) && !Array.isArray(only)) {
+      query.except(excludedFields);
+    }
+
+    if (only) {
+      Array.isArray(only)
+        ? query.only(only)
+        : Object.entries(only).forEach(([key, values]) => query.only(key, values as any));
+    }
+
+    if (except) {
+      Array.isArray(except)
+        ? query.except(except)
+        : Object.entries(except).forEach(([key, values]) => query.except(key, values as any));
+    }
+  }
+
+  createContentTypeQuery({
+    contentTypeUid,
+    lang,
+    where,
+    count,
+    skip,
+    limit,
+    ...commonConfig
+  }: ICreateQueryConfig) {
+    const query = this.stack.ContentType(contentTypeUid).Query().language(lang).toJSON();
+
+    if (count) {
+      query.includeCount();
+    }
+
+    if (skip) {
+      query.skip(skip);
+    }
+
+    if (limit) {
+      query.limit(limit);
+    }
+
+    this.setCommonConfig({ query, ...commonConfig });
+
+    if (where) {
+      Object.entries(where).forEach(([key, value]) => query.where(key, value));
+    }
+
+    return query;
+  }
+
+  createContentTypeEntryQuery({
+    contentTypeUid,
+    lang,
+    entryUid,
+    ...commonConfig
+  }: ICreateEntryConfig) {
+    const query = this.stack.ContentType(contentTypeUid).Entry(entryUid).language(lang).toJSON();
+
+    this.setCommonConfig({ query, ...commonConfig });
+
+    return query;
+  }
+}
+
+export const getEntry = async <T>({
+  contentTypeUid,
+  referenceFieldPath,
+  jsonRtePath,
+  only,
+  lang,
+  includeFields,
+}: IContentstackGetEntry): Promise<T> => {
+  const result: any = [];
+
+  const excludedFieldsFinal = excludedFields.filter(
+    (excluded) => !includeFields?.some((included) => excluded === included),
+  );
+
+  const factory = new ContentstackFactory({ stack: Stack });
+  const _query = factory.createContentTypeQuery({
+    contentTypeUid,
+    lang,
+    referenceFieldPath,
+    only,
+    except: excludedFieldsFinal,
+    count: true,
+    skip: 0,
+    limit: QUERY_RESPONSE_LIMIT,
+  });
+
+  try {
+    const [response, count] = await _query.find();
+    result.push(...response);
+
+    while (result.length < count) {
+      const _query = factory.createContentTypeQuery({
+        contentTypeUid,
+        lang,
+        referenceFieldPath,
+        only,
+        except: excludedFieldsFinal,
+        count: true,
+        skip: result.length,
+        limit: QUERY_RESPONSE_LIMIT,
+      });
+
+      const [response]: any = await _query.find();
+
+      result.push(...response);
+    }
+
+    jsonRtePath &&
+      Utils.jsonToHTML({
+        entry: result,
+        paths: jsonRtePath,
+        renderOption,
+      });
+
+    return result;
+  } catch (e: any) {
+    logger.error(
+      e.message,
+      `Error retrieving entries of content type: ${contentTypeUid} for lang: ${lang}`,
+    );
+    throw e;
+  }
+};
+
+export const getSingleEntry = async ({
+  contentTypeUid,
+  entryUid,
+  lang,
+  referenceFieldPath,
+  jsonRtePath,
+  only,
+  except,
+}: IContentstackGetSingleEntry): Promise<IContentstackPage> => {
+  const query = new ContentstackFactory({
+    stack: Stack,
+  }).createContentTypeEntryQuery({
+    contentTypeUid,
+    entryUid,
+    referenceFieldPath,
+    only,
+    except,
+    lang,
+  });
+
+  try {
+    const result = await query.fetch();
+
+    if (jsonRtePath) {
+      Utils.jsonToHTML({
+        entry: result,
+        paths: jsonRtePath,
+        renderOption,
+      });
+    }
+
+    return result;
+  } catch (e: any) {
+    logger.error(
+      e.message,
+      `Error retrieving single entry: ${entryUid} of content type: ${contentTypeUid} for lang: ${lang}`,
+    );
+    throw e;
+  }
+};
+
+export const getAllContentTypeEntries = async ({
+  contentTypeUid,
+  lang,
+  referenceFieldPath,
+  jsonRtePath,
+  only,
+  except,
+  where,
+}: IContentstackGetSingletonEntry): Promise<IContentstackPage> => {
+  const query = new ContentstackFactory({
+    stack: Stack,
+  }).createContentTypeQuery({
+    contentTypeUid,
+    referenceFieldPath,
+    only,
+    except,
+    lang,
+    where,
+  });
+
+  query.except(excludedFields);
+
+  try {
+    const result = await query.find();
+
+    if (jsonRtePath) {
+      Utils.jsonToHTML({
+        entry: result,
+        paths: jsonRtePath,
+        renderOption,
+      });
+    }
+
+    return result;
+  } catch (e: any) {
+    logger.error(
+      e.message,
+      `Error retrieving entries of content type: ${contentTypeUid} for lang: ${lang}`,
+    );
+    throw e;
+  }
+};
+
+export const findSingletonEntry = async <
+  T extends Pick<IContentstackPage, "uid"> = IContentstackPage,
+>({
+  contentTypeUid,
+  lang,
+  referenceFieldPath,
+  jsonRtePath,
+  only,
+  except,
+  where,
+}: IContentstackGetSingletonEntry): Promise<T | null> => {
+  const query = new ContentstackFactory({
+    stack: Stack,
+  }).createContentTypeQuery({
+    contentTypeUid,
+    referenceFieldPath,
+    only,
+    except,
+    where,
+    lang,
+    limit: 1,
+  });
+
+  try {
+    const [[result]]: T[][] = await query.find();
+
+    if (!result) {
+      return null;
+    }
+
+    if (jsonRtePath) {
+      Utils.jsonToHTML({
+        entry: result,
+        paths: jsonRtePath,
+        renderOption,
+      });
+    }
+
+    return result;
+  } catch (error) {
+    logger.error(
+      `Error retrieving entry of single content type: ${contentTypeUid} for lang: ${lang}`,
+      error,
+    );
+
+    throw error;
+  }
+};
+
+export const getSingletonEntry = async ({
+  contentTypeUid,
+  lang,
+  referenceFieldPath,
+  jsonRtePath,
+  only,
+  except,
+  where,
+}: IContentstackGetSingletonEntry): Promise<IContentstackPage> => {
+  const query = new ContentstackFactory({
+    stack: Stack,
+  }).createContentTypeQuery({ contentTypeUid, referenceFieldPath, only, except, where, lang });
+
+  try {
+    const result = await query.findOne();
+
+    if (jsonRtePath) {
+      Utils.jsonToHTML({
+        entry: result,
+        paths: jsonRtePath,
+        renderOption,
+      });
+    }
+
+    return result;
+  } catch (e: any) {
+    logger.error(
+      e.message,
+      `Error retrieving entry of single content type: ${contentTypeUid} for lang: ${lang}`,
+    );
+```
+(truncated at 400 of 416 lines — ReadFile this path yourself if you need the rest)
+
+## Files to Create/Modify (EXACT ABSOLUTE PATHS — write to these paths exactly)
+src/hooks/useContent.ts, src/services/contentstack.ts, src/interface/content/contentCard.ts, src/components/contentstack/ContentstackLink/ContentstackLink.tsx
+
+## Dependencies
+None
+
+## Dependency Contracts (EXACT import paths and signatures — use these verbatim, do NOT guess a different path)
+
+### Vendor package: contentstack
+# Contract: vendor:contentstack
+
+Auto-generated from actual source (deterministic — not model-transcribed).
+
+```typescript
+export interface SyncResult {items: Array<any>;
+    pagination_token?: string;
+    sync_token?: string;
+    skip: number;
+    limit: number;
+    total_count: number;}
+```
+
+```typescript
+export interface Config {api_key: string;
+    delivery_token: string;
+    environment: string;
+    region?: Region;
+    branch?: string;
+    live_preview?: LivePreview;
+    plugins?: ContentstackPlugin[];
+    fetchOptions?: FetchOptions;
+    early_access?: string[]}
+```
+
+```typescript
+export interface StackConfig {protocol: string;
+    host: string;
+    port: number;
+    version: string;}
+```
+
+```typescript
+export interface ContentTypeCollection {content_types: Array<any>
+    count?: number}
+```
+
+```typescript
+export interface LivePreview {host: string
+    management_token: string
+    enable: boolean}
+```
+
+```typescript
+export interface LivePreviewQuery {live_preview: string
+    content_type_uid: string}
+```
+
+```typescript
+export interface RetryDelayOption {base?: number
+    customBackoff?: (retryCount: number, error: Error) => number}
+```
+
+```typescript
+export interface FetchOptions {[propName: string]: any
+    debug?: boolean
+    timeout?: number
+    retryLimit?: number
+    retryDelay?: number
+    retryCondition?: (error: any) => boolean
+    logHandler?: (level: string, data: any) => void
+    retryDelayOptions?: RetryDelayOption}
+```
+
+```typescript
+export interface ContentstackPlugin {onRequest?(stack: Stack, request: ContentstackRequest): ContentstackRequest;
+    onResponse?(stack: Stack, request: ContentstackRequest, response: any, data: any): any;}
+```
+
+```typescript
+export interface ContentstackRequest {url: string;
+    option: object;}
+```
+
+```typescript
+export class Utils {
+  constructor();
+
+}
+```
+
+```typescript
+export class Stack {
+  constructor(config: Config);
+
+}
+```
+
+```typescript
+export class ContentType {
+  constructor();
+
+}
+```
+
+```typescript
+export class Assets {
+  constructor();
+
+}
+```
+
+```typescript
+export class Asset {
+  constructor();
+
+}
+```
+
+```typescript
+export class Entry {
+  constructor();
+
+}
+```
+
+```typescript
+export class Query {
+  constructor();
+
+}
+```
+
+Mock factory skeleton — every exported method MUST appear here (every method name is real; fill in real return values):
+```typescript
+vi.mock('<import-path-to-Utils>', () => ({
+  Utils: vi.fn().mockImplementation(() => ({
+
+  })),
+}));
+vi.mock('<import-path-to-Stack>', () => ({
+  Stack: vi.fn().mockImplementation(() => ({
+
+  })),
+}));
+vi.mock('<import-path-to-ContentType>', () => ({
+  ContentType: vi.fn().mockImplementation(() => ({
+
+  })),
+}));
+vi.mock('<import-path-to-Assets>', () => ({
+  Assets: vi.fn().mockImplementation(() => ({
+
+  })),
+}));
+vi.mock('<import-path-to-Asset>', () => ({
+  Asset: vi.fn().mockImplementation(() => ({
+
+  })),
+}));
+vi.mock('<import-path-to-Entry>', () => ({
+  Entry: vi.fn().mockImplementation(() => ({
+
+  })),
+}));
+vi.mock('<import-path-to-Query>', () => ({
+  Query: vi.fn().mockImplementation(() => ({
+
+  })),
+}));
+```
+## Module resolution in this codeline
+A bare import that names a file under any of these directories is INTERNAL source, not a dependency — never add it to the dependency manifest:
+  __tests__, migration-scripts, public, review, src, zap_hooks
+Source extensions here: .ts, .tsx, .js, .jsx, .mjs, .cjs
+Write imports the way the existing files in this codeline write them; read a neighbouring file before inventing a path.
+
+
+## Instructions
+CRITICAL — these files already exist. Their real content is injected below (## Existing File Contents) — you do NOT need to ReadFile them to see what's already there.
+Do NOT import or reference anything that doesn't appear in the injected content below — a plausible-sounding module name is not a real one.
+Only call ReadFile yourself if you need to see MORE of a file than what's shown (e.g. it was truncated), or a file not listed below.
+   - /home/bradleyjerome/projects/metrolinx/next.upexpress.com/src/hooks/useContent.ts (ReadFile this only if you need it — not a fix site; content omitted to keep the prompt small)
+   - /home/bradleyjerome/projects/metrolinx/next.upexpress.com/src/services/contentstack.ts (content already injected below — do not ReadFile it unless you need lines beyond what's shown)
+   - /home/bradleyjerome/projects/metrolinx/next.upexpress.com/src/interface/content/contentCard.ts (ReadFile this only if you need it — not a fix site; content omitted to keep the prompt small)
+   - /home/bradleyjerome/projects/metrolinx/next.upexpress.com/src/components/contentstack/ContentstackLink/ContentstackLink.tsx (ReadFile this only if you need it — not a fix site; content omitted to keep the prompt small)
+**The content of every file listed above is already shown in ## Existing File Contents — use that, do not spend a tool call re-reading them. Use Edit for targeted changes to existing files — do NOT overwrite an existing file wholesale with WriteFile.**
+
+1. Use the injected ## Existing File Contents above to verify what actually exists (exports, types, existing utilities) before writing any code — do not guess, and do not re-read a file already shown in full
+2. Implement all acceptance criteria for this story
+3. Follow the project's existing code patterns and conventions
+4. Do NOT create tests unless explicitly required in acceptance criteria
+
+After implementation, provide a brief summary of what was created/modified.
+
+## Verification Failure
+
+The orchestrator ran `tsc --noEmit` after your files were written and it failed (exit code 1). Fix the type errors so tsc exits 0.
+
+```
+migration-scripts/client.ts(2,24): error TS2307: Cannot find module '@metrolinx/cx-shared/migration-tool-build' or its corresponding type declarations.
+migration-scripts/index.ts(2,52): error TS2307: Cannot find module '@metrolinx/cx-shared/migration-tool-build' or its corresponding type declarations.
+src/__tests__/pages/api/v1/autocomplete.spec.ts(4,44): error TS2307: Cannot find module '@metrolinx/cx-shared/build/src/constants/common' or its corresponding type declarations.
+src/__tests__/pages/api/v1/autocomplete.spec.ts(5,27): error TS2307: Cannot find module '@metrolinx/cx-shared/build/src/utils/common/HttpError' or its corresponding type declarations.
+src/__tests__/pages/api/v1/blog-articles.spec.ts(3,44): error TS2307: Cannot find module '@metrolinx/cx-shared/build/src/constants/common' or its corresponding type declarations.
+src/__tests__/pages/api/v1/blog-articles.spec.ts(4,27): error TS2307: Cannot find module '@metrolinx/cx-shared/build/src/utils/common/HttpError' or its corresponding type declarations.
+src/__tests__/pages/api/v1/email-sign-up.spec.ts(3,44): error TS2307: Cannot find module '@metrolinx/cx-shared/build/src/constants/common' or its corresponding type declarations.
+src/__tests__/pages/api/v1/email-sign-up.spec.ts(4,27): error TS2307: Cannot find module '@metrolinx/cx-shared/build/src/utils/common/HttpError' or its corresponding type declarations.
+src/__tests__/pages/api/v1/logs-collector.spec.ts(2,44): error TS2307: Cannot find module '@metrolinx/cx-shared/build/src/constants/common' or its corresponding type declarations.
+src/__tests__/pages/api/v1/search-1.spec.ts(4,44): error TS2307: Cannot find module '@metrolinx/cx-shared/build/src/constants/common' or its corresponding type declarations.
+src/__tests__/pages/api/v1/search-2.spec.ts(3,44): error TS2307: Cannot find module '@metrolinx/cx-shared/build/src/constants/common' or its corresponding type declarations.
+src/__tests__/pages/api/v1/search-2.spec.ts(4,27): error TS2307: Cannot find module '@metrolinx/cx-shared/build/src/utils/common/HttpError' or its corresponding type declarations.
+src/__tests__/pages/api/v1/user-profile.spec.ts(3,28): error TS2307: Cannot find module '@metrolinx/cx-shared/build/src/constants/common' or its corresponding type declarations.
+src/__tests__/pages/api/v1/webchat/token.spec.ts(4,44): error TS2307: Cannot find module '@metrolinx/cx-shared/build/src/constants/common' or its corresponding type declarations.
+src/__tests__/pages/api/v1/webchat/token.spec.ts(5,29): error TS2307: Cannot find module '@metrolinx/cx-shared/build/src/constants/locales' or its corresponding type declarations.
+src/api/__tests__/retrieveUserProfile.spec.ts(1,44): error TS2307: Cannot find module '@metrolinx/cx-shared/build/src/constants/common' or its corresponding type declarations.
+src/api/__tests__/retrieveUserProfile.spec.ts(2,27): error TS2307: Cannot find module '@metrolinx/cx-shared/build/src/utils/common/HttpError' or its corresponding type declarations.
+src/api/__tests__/tickets.spec.ts(1,32): error TS2307: Cannot find module '@metrolinx/cx-shared/build/src/constants/common' or its corresponding type declarations.
+src/api/__tests__/tickets.spec.ts(2,27): error TS2307: Cannot find module '@metrolinx/cx-shared/build/src/utils/common/HttpError' or its corresponding type declarations.
+src/api/__tests__/updateUserProfile.spec.ts(1,44): error TS2307: Cannot find module '@metrolinx/cx-shared/build/src/constants/common' or its corresponding type declarations.
+src/api/__tests__/updateUserProfile.spec.ts(2,27): error TS2307: Cannot find module '@metrolinx/cx-shared/build/src/utils/common/HttpError' or its corresponding type declarations.
+src/api/logger.ts(2,44): error TS2307: Cannot find module '@metrolinx/cx-shared/build/src/constants/common' or its corresponding type declarations.
+src/api/logger.ts(3,27): error TS2307: Cannot find module '@metrolinx/cx-shared/build/src/utils/common/HttpError' or its corresponding type declarations.
+src/api/middle
+```
+
+## Relevant Knowledge Base Entries
+The following was learned from previous story implementations and is relevant to your agent role. Apply this knowledge before writing any code:
+
+- [2026-07-06T18:11:26Z] Use vi.fn().mockResolvedValue(value) to make a mock return a resolved Promise.
+- [2026-07-06T20:31:11Z] Use `test: { passWithNoTests: true }` in vitest.config.ts or create a stub test file when no *.test.ts files exist.
+- [2026-07-06T20:33:03Z] Enable globals:true in vitest.config.ts so describe, it, and expect work without imports, reducing boilerplate in test files.
+- [2026-07-06T23:47:34Z] Use CommonJS-compatible patterns in src/server.ts: avoid `import.meta.url` and top-level `await`; gate listen with `if (require.main === module)`.
+- [2026-07-07T02:35:30Z] Always include a non-test source file in src/ alongside any src/*.test.ts file, since tsconfig.json excludes test files from tsc --noEmit.
+- [2026-07-07T19:01:34Z] Only modify or create files explicitly listed in the story's acceptance criteria. Do not touch files belonging to other stories or outside the current task scope.
+- [2026-07-07T20:17:57Z] [unreviewed-fallback] Avoid using deprecated TypeScript compiler options like 'moduleResolution=node10'; use 'moduleResolution=node' instead.
+- [2026-07-17T20:20:58Z] Always: Before importing a module or referencing a type/property, always read the actual source file to verify the export exists, its exact path, its properties, and its constructor/factory signatures
+- [2026-07-23T01:15:16Z] Always: In tsconfig.json, always use moduleResolution 'node' (not 'node10' or 'Node10') — 'node10' was removed in TypeScript 5.x. The correct value for CommonJS + Node resolution is 'node'.
+- [2026-07-23T14:30:00Z] CORRECTION to a prior entry (2026-07-23T01:17:52Z, now removed): that entry wrongly claimed 'moduleResolution: node' itself is removed and must become 'node16'/'nodenext'. Root-caused via mock1 (epam-cli orchestration test): 'node' is valid and correct through TypeScript 5.x (confirmed on 5.9.3) — it was only removed in TypeScript 7.x. The real defect was an unpinned `typescript` devDependency letting a fallback `npm install` pull latest (7.x) instead of the project's intended version. Do NOT rewrite a working tsconfig.json's moduleResolution in response to a TS5108 error — first check `node_modules/typescript/package.json`'s version; if it's 7.x and the rest of the project expects 5.x, the fix is pinning/reinstalling the correct typescript version, not changing moduleResolution.
+
+## Knowledge Base Contribution (do this LAST — after writing all implementation files)
+Your assigned KB entry ID for this run: **KB-021**
+**This is retry attempt 4** — a previous attempt failed. You MUST write a KB entry documenting what went wrong and what you changed.
+
+IMPORTANT: Write ALL implementation files first. Only AFTER writing every required file should you optionally append a KB entry.
+Do NOT read orchestrations/agents/KB.md before writing implementation files. The relevant KB entries are already injected above.
+
+If (and only if) you discover a non-obvious pattern during implementation, append one entry to `orchestrations/agents/KB.md`:
+
+```markdown
+## KB-021 -- 2026-07-31
+
+**Category:** <backend|frontend|infrastructure|testing|orchestration>
+**AgentRole:** <your agentRole from the story>
+**Tags:** <comma-separated tech keywords, e.g. typescript, node, cli>
+**Trigger:** <retry|first-success>
+**StoryRef:** AMSD-2041
+
+<One concise paragraph: the specific pattern, gotcha, or anti-pattern.>
+```
+
+Only write an entry if the knowledge is genuinely non-obvious. Skip trivial observations.
+
+## Available Dynamic Tools
+This project has the following helper scripts, written by prior self-healing runs. Use them via the bash tool instead of repeating the equivalent steps by hand:
+
+- `bash /home/bradleyjerome/projects/metrolinx/next.upexpress.com/.epam/dynamic-tools/ensure-cx-shared-installed.sh <args>` — Verifies @metrolinx/cx-shared is fully installed with its build/ directory before tsc runs
+- `bash /home/bradleyjerome/projects/metrolinx/next.upexpress.com/.epam/dynamic-tools/ensure-deps-and-clean-ts-cache.sh <args>` — Reinstall dependencies and clear stale TypeScript incremental cache so tsc can resolve @metrolinx/cx-shared
+
+## Coordinator Guidance (retry 4, showing most recent up to 3 — full retry history: /home/bradleyjerome/projects/ai/epam-cli/orchestrations/logs/kb-scratchpad/AMSD-2041-attempt-5.md)
+## Self-Heal: Failure Analyst Summary
+Root cause: @metrolinx/cx-shared is declared but not installed — node_modules has no build/ dir or package.json, only a nested uuid folder.
+## Self-Heal: Failure Analyst Summary
+Root cause: tsc cannot resolve @metrolinx/cx-shared deep imports despite files existing in node_modules; stale tsbuildinfo or broken npm link from file: dependency
+=== End Prompt ===
+
+=== epam Output (attempt 5) ===

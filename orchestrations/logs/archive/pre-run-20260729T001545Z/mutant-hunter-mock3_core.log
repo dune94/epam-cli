@@ -1,0 +1,10 @@
+```json
+{
+  "agent": "mutant-hunter",
+  "phase": "mock3_core",
+  "summary": { "mutationsProposed": 0, "killed": 0, "survived": 0, "noCoverage": 0, "mutationScore": 100 },
+  "mutations": [],
+  "verdict": "not_applicable",
+  "reason": "Changed file is a trivial constant-return function with no critical-path logic (no provider failover, tool safety, auth, billing, or agent state); mutation testing is not meaningful here."
+}
+```

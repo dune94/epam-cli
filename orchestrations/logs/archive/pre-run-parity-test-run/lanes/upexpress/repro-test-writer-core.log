@@ -1,0 +1,63 @@
+[repro-test-writer] no fix files in the diff — nothing to test
+[repro-test-writer] no fix files in the diff — nothing to test
+[repro-test-writer] no fix files in the diff — nothing to test
+[repro-test-writer] no fix files in the diff — nothing to test
+[repro-test-writer] no fix files in the diff — nothing to test
+[repro-test-writer] no fix files in the diff — nothing to test
+[repro-test-writer] no fix files in the diff — nothing to test
+[repro-test-writer] no fix files in the diff — nothing to test
+[repro-test-writer] no fix files in the diff — nothing to test
+[repro-test-writer] no fix files in the diff — nothing to test
+[repro-test-writer] no fix files in the diff — nothing to test
+[repro-test-writer] a test already accompanies the change (src/services/__tests__/contentstack.spec.ts) — nothing to write
+[repro-test-writer] a test already accompanies the change (src/services/__tests__/contentstack.spec.ts) — nothing to write
+[repro-test-writer] a test already accompanies the change (src/services/__tests__/contentstack.spec.ts) — nothing to write
+[repro-test-writer] a test already accompanies the change (src/services/__tests__/contentstack.spec.ts) — nothing to write
+[repro-test-writer] a test already accompanies the change (src/services/__tests__/contentstack.spec.ts) — nothing to write
+[repro-test-writer] a test already accompanies the change (src/services/__tests__/contentstack.spec.ts) — nothing to write
+[repro-test-writer] a test already accompanies the change (src/services/__tests__/contentstack.spec.ts) — nothing to write
+[repro-test-writer] a test already accompanies the change (src/services/__tests__/contentstack.spec.ts) — nothing to write
+[repro-test-writer] writing reproducing test for AMSD-2041 → src/interface/contentstack.spec.ts (convention: .spec.ts, example: __tests__/next-sitemap.config.spec.ts)
+[repro-test-writer] test produced and validated on attempt 1 (model z-ai/glm-5.1)
+[repro-test-writer] commit failed (non-fatal) — repro-gate will report
+[repro-test-writer] a test already accompanies the change (src/services/__tests__/contentstack.spec.ts) — nothing to write
+[repro-test-writer] a test already accompanies the change (src/services/__tests__/contentstack.spec.ts) — nothing to write
+[repro-test-writer] a test already accompanies the change (src/services/__tests__/contentstack.spec.ts) — nothing to write
+[repro-test-writer] a test already accompanies the change (src/services/__tests__/contentstack.spec.ts) — nothing to write
+[repro-test-writer] a test already accompanies the change (src/services/__tests__/contentstack.spec.ts) — nothing to write
+[repro-test-writer] a test already accompanies the change (src/services/__tests__/contentstack.spec.ts) — nothing to write
+[repro-test-writer] writing reproducing test for AMSD-2041 → src/services/contentstack.spec.ts (convention: .spec.ts, example: src/services/__tests__/blogService.spec.ts)
+[repro-test-writer] test produced and validated on attempt 1 (model z-ai/glm-5.1)
+[repro-test-writer] WARNING: commit failed — repro-gate will report. Output:
+[repro-test-writer] WARNING: ⋯ Backing up original state…
+✔ Done backing up original state (a2c6dee)!
+⋯ Running tasks for staged files…
+    src/**/*.ts?(x) — 1 file
+      ⋯ npm run check-types
+    src/**/*.(ts|js)?(x) — 1 file
+      ⋯ cross-env NODE_ENV=precommit next lint --file /home/bradleyjerome/projects/metrolinx/next.upexpress.com/src/services/contentstack.spec.ts
+      ⋯ prettier --write --ignore-unknown /home/bradleyjerome/projects/metrolinx/next.upexpress.com/src/services/contentstack.spec.ts
+
+✔ npm run check-types
+✖ cross-env NODE_ENV=precommit next lint --file /home/bradleyjerome/projects/metrolinx/next.upexpress.com/src/services/contentstack.spec.ts
+↓ prettier --write --ignore-unknown /home/bradleyjerome/projects/metrolinx/next.upexpress.com/src/services/contentstack.spec.ts
+
+✖ Failed to run tasks for staged files!
+↓ Skipped staging changes from tasks…
+⋯ Reverting to original state because of errors…
+✔ Done reverting to original state!
+⋯ Cleaning up temporary files…
+✔ Done cleaning up temporary files!
+
+✖ cross-env NODE_ENV=precommit next lint --file /home/bradleyjerome/projects/metrolinx/next.upexpress.com/src/services/contentstack.spec.ts:
+ ⚠ You are using a non-standard "NODE_ENV" value in your environment. This creates inconsistencies in the project and is strongly advised against. Read more: https://nextjs.org/docs/messages/non-standard-node-env
+
+./src/services/contentstack.spec.ts
+1:1  Error: Do not export from a test file.  jest/no-export
+
+info  - Need to disable some ESLint rules? Learn more here: https://nextjs.org/docs/basic-features/eslint#disabling-rules
+husky - pre-commit hook exited with code 1 (error)
+[repro-test-writer] writing test for AMSD-2041 (kind: novel) → src/context/ContentstackContext.spec.ts (convention: .spec.ts, example: __tests__/next-sitemap.config.spec.ts)
+[repro-test-writer] test produced and validated on attempt 1 (model z-ai/glm-5.1)
+[repro-test-writer] committed reproducing test: src/context/ContentstackContext.spec.ts
+[repro-test-writer] no fix files in the diff — nothing to test

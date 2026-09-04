@@ -1,0 +1,133 @@
+# Prompt
+You are the speckit specification agent for EPAM CLI. Phase core, story AMSD-1820.
+
+You are reviewing and building on the openspec agent's output for this story.
+Your role is COLLABORATIVE — you are NOT starting from scratch. Instead:
+1. Review openspec's proposed acceptance criteria for testability and completeness
+2. Add missing edge-case, error-handling, security, and accessibility criteria
+3. Flag any AC that are vague, untestable, or overlapping
+4. Splitting is openspec's decision alone — you do NOT split stories. If openspec already split
+   this story, do NOT include a "splitStories" field in your output at all (it will be ignored if
+   you do). Review and refine the acceptanceCriteria openspec gave you for the UNSPLIT story as
+   normal; per-child refinement of an already-split story's children happens on a later turn, not
+   here.
+5. Do NOT remove or duplicate openspec's good work — build on it
+
+━━━ WHAT-NOT-HOW RULE (MANDATORY) ━━━
+Every AC must describe an OBSERVABLE OUTCOME (what a test can verify from outside the code),
+NOT an implementation instruction. If an AC names vi.mock, jest.fn, mockReturnValue,
+mockResolvedValue, import statements, or require() calls, REPLACE it with a
+Given/When/Then behaviour statement. Never tell the implementer which library or mock pattern to use.
+
+OPENSPEC'S OUTPUT (your input to review — ACs and split proposals only):
+{
+  "acceptanceCriteria": [
+    {
+      "text": "AMSD-1820 MUST NOT ship without a unit test that exercises the zero-discount early-return branch in src/services/submit-reservations/apply-report-discounts.service.ts (line 22, `discountsForDispatch.length === 0`). Compliance: `grep -rl 'discountsForDispatch.*length.*0\\|empty.*discount\\|zero.*discount' src/services/submit-reservations/__tests__/ | wc -l` must return >= 1. [rule: no-coverage]",
+      "status": "pending"
+    },
+    {
+      "text": "AMSD-1820 MUST NOT ship without a unit test that verifies dispatches with one or more matching discounts are processed (non-empty path) in src/services/submit-reservations/apply-report-discounts.service.ts. Compliance: `grep -rl 'discountsForDispatch.*length.*[1-9]\\|one or more.*discount\\|matching.*discount.*process' src/services/submit-reservations/__tests__/ | wc -l` must return >= 1. [rule: no-coverage]",
+      "status": "pending"
+    }
+  ],
+  "notes": "Defect: promo code discount amount is missing/incorrect for return-trip tickets in the Mozio email confirmation. Root cause likely in apply-report-discounts.service.ts where return-trip dispatches may be skipped when discounts are applied, or in the station-swap path in create-reservations.mappers.ts that may affect discount matching. The existing ACs are test-coverage gates only; functional verification criteria are derived from the description since the ACs don't describe expected user-facing behavior. Prior coordinator flags about empty ACs appear to be a persistence issue — the story context now contains 2 ACs with text, which are preserved verbatim.",
+  "splitStories": []
+}
+
+ORIGINAL STORY CONTEXT:
+{
+  "id": "AMSD-1820",
+  "title": "[Mozio] - Promo code amount not displayed as expected for Return trip tickets in Mozio email confirmation",
+  "description": "[Mozio] - The Promo code amount is NOT displayed as expected for Return trip tickets in the Mozio email confirmation",
+  "originalAcceptanceCriteria": [
+    {
+      "text": "AMSD-1820 MUST NOT ship without a unit test that exercises the zero-discount early-return branch in src/services/submit-reservations/apply-report-discounts.service.ts (line 22, `discountsForDispatch.length === 0`). Compliance: `grep -rl 'discountsForDispatch.*length.*0\\|empty.*discount\\|zero.*discount' src/services/submit-reservations/__tests__/ | wc -l` must return >= 1. [rule: no-coverage]",
+      "status": "pending"
+    },
+    {
+      "text": "AMSD-1820 MUST NOT ship without a unit test that verifies dispatches with one or more matching discounts are processed (non-empty path) in src/services/submit-reservations/apply-report-discounts.service.ts. Compliance: `grep -rl 'discountsForDispatch.*length.*[1-9]\\|one or more.*discount\\|matching.*discount.*process' src/services/submit-reservations/__tests__/ | wc -l` must return >= 1. [rule: no-coverage]",
+      "status": "pending"
+    }
+  ],
+  "technicalNotes": {
+    "files": [
+      "src/clients/mozio/mappers/map-to-sanitized-mozio-dispatch.ts",
+      "src/services/create-reservations/create-reservations.mappers.ts",
+      "src/services/order-staff-notes/generate-staff-notes.helpers.ts",
+      "src/services/submit-reservations/apply-report-discounts.service.ts",
+      "src/services/mappers/line-item/map-line-item-return-trip-modification.ts",
+      "src/functions/http-mozio-webhook.ts"
+    ]
+  },
+  "dependencies": []
+}
+
+Produce your refined output as raw JSON only (no XML tags, no markdown fences, no preamble). Include:
+- "acceptanceCriteria": The FULL merged list (openspec's criteria + your additions/refinements). Every item MUST be an observable outcome, not an implementation instruction.
+- "notes": What you changed and why (be specific — cite which criteria you added/modified/replaced)
+- "splitStories": ALWAYS omit this field. Splitting is openspec's decision alone — never propose
+  split children of your own, even if openspec already split this story.
+- "acAddedBySpeckit": Array of criteria YOU added that were not in openspec's output
+- "acModifiedBySpeckit": Array of {"original":"...","revised":"..."} for criteria you reworded
+- "acFlagged": Array of {"criterion":"...","flag":"..."} for criteria that need human attention
+
+
+# Output
+```json
+{
+  "acceptanceCriteria": [
+    {
+      "text": "Given a dispatch with zero matching discounts, when apply-report-discounts processes it, then the dispatch is returned without any discount amount modifications (early-return branch).",
+      "status": "pending"
+    },
+    {
+      "text": "Given a dispatch with one or more matching discounts, when apply-report-discounts processes it, then the correct discount amounts are applied to the dispatch.",
+      "status": "pending"
+    },
+    {
+      "text": "Given a return-trip ticket with an applicable promo code, when the Mozio email confirmation is generated, then the promo code discount amount is displayed correctly for the return trip.",
+      "status": "pending"
+    },
+    {
+      "text": "Given both outbound and return dispatches with applicable promo codes, when discounts are applied, then each dispatch receives its correct and independent discount amount (no cross-contamination or skipping of the return leg).",
+      "status": "pending"
+    },
+    {
+      "text": "Given a return-trip dispatch where station-swap mapping alters station identifiers, when discount matching is performed, then the promo code discount is still correctly matched and applied to the return dispatch.",
+      "status": "pending"
+    },
+    {
+      "text": "Given a return-trip dispatch with a zero-amount promo code, when apply-report-discounts processes it, then the dispatch discount fields reflect a zero discount without error or omission.",
+      "status": "pending"
+    }
+  ],
+  "notes": "Refined openspec's two coverage-gate ACs into behavioral Given/When/Then statements (AC1 and AC2) that describe observable outcomes rather than prescribing that tests must exist. The original ACs violated the what-not-how rule by mandating unit tests and using grep compliance checks as verification. Added AC3: the core functional fix — promo code amount must display correctly for return trips in the Mozio email confirmation (the actual user-facing bug). Added AC4: edge case where both legs have discounts, ensuring the return leg isn't skipped or cross-contaminated. Added AC5: station-swap path edge case, since the technical notes flag create-reservations.mappers.ts station-swap as a potential root cause for discount matching failure on return dispatches. Added AC6: zero-amount promo code edge case to ensure the early-return branch doesn't swallow legitimate zero-value discounts that should still be reported.",
+  "acAddedBySpeckit": [
+    "Given a return-trip ticket with an applicable promo code, when the Mozio email confirmation is generated, then the promo code discount amount is displayed correctly for the return trip.",
+    "Given both outbound and return dispatches with applicable promo codes, when discounts are applied, then each dispatch receives its correct and independent discount amount (no cross-contamination or skipping of the return leg).",
+    "Given a return-trip dispatch where station-swap mapping alters station identifiers, when discount matching is performed, then the promo code discount is still correctly matched and applied to the return dispatch.",
+    "Given a return-trip dispatch with a zero-amount promo code, when apply-report-discounts processes it, then the dispatch discount fields reflect a zero discount without error or omission."
+  ],
+  "acModifiedBySpeckit": [
+    {
+      "original": "AMSD-1820 MUST NOT ship without a unit test that exercises the zero-discount early-return branch in src/services/submit-reservations/apply-report-discounts.service.ts (line 22, `discountsForDispatch.length === 0`). Compliance: `grep -rl 'discountsForDispatch.*length.*0\\|empty.*discount\\|zero.*discount' src/services/submit-reservations/__tests__/ | wc -l` must return >= 1. [rule: no-coverage]",
+      "revised": "Given a dispatch with zero matching discounts, when apply-report-discounts processes it, then the dispatch is returned without any discount amount modifications (early-return branch)."
+    },
+    {
+      "original": "AMSD-1820 MUST NOT ship without a unit test that verifies dispatches with one or more matching discounts are processed (non-empty path) in src/services/submit-reservations/apply-report-discounts.service.ts. Compliance: `grep -rl 'discountsForDispatch.*length.*[1-9]\\|one or more.*discount\\|matching.*discount.*process' src/services/submit-reservations/__tests__/ | wc -l` must return >= 1. [rule: no-coverage]",
+      "revised": "Given a dispatch with one or more matching discounts, when apply-report-discounts processes it, then the correct discount amounts are applied to the dispatch."
+    }
+  ],
+  "acFlagged": [
+    {
+      "criterion": "AMSD-1820 MUST NOT ship without a unit test that exercises the zero-discount early-return branch in src/services/submit-reservations/apply-report-discounts.service.ts (line 22, `discountsForDispatch.length === 0`). Compliance: `grep -rl 'discountsForDispatch.*length.*0\\|empty.*discount\\|zero.*discount' src/services/submit-reservations/__tests__/ | wc -l` must return >= 1. [rule: no-coverage]",
+      "flag": "Violates what-not-how rule: prescribes unit tests and grep-based compliance rather than describing an observable behavioral outcome. Replaced with Given/When/Then behavioral AC. If the no-coverage rule requires a separate coverage gate, it should be tracked as a non-functional requirement, not an acceptance criterion."
+    },
+    {
+      "criterion": "AMSD-1820 MUST NOT ship without a unit test that verifies dispatches with one or more matching discounts are processed (non-empty path) in src/services/submit-reservations/apply-report-discounts.service.ts. Compliance: `grep -rl 'discountsForDispatch.*length.*[1-9]\\|one or more.*discount\\|matching.*discount.*process' src/services/submit-reservations/__tests__/ | wc -l` must return >= 1. [rule: no-coverage]",
+      "flag": "Same what-not-how violation as above. Grep-based compliance checks are fragile (pattern matching on source text) and don't verify correct behavior, only that certain strings exist in test files. Replaced with behavioral AC."
+    }
+  ]
+}
+```

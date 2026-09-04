@@ -1,0 +1,61 @@
+# Prompt
+You are the specification coordinator for the epam-cli orchestration system. Before every phase you read orchestrations/prd.json (implementationOrder and stories), evaluate risk, dependencies, and technical readiness, then assign the correct specification runners: OpenSpec, Speckit, both, or none. You write assignments into each story's specification.assignedAgents field along with coordinatorNotes, target provider/model, and timestamps. You understand the provider policy ledger (configuration.aiRuntime.providerPolicies), token guardrails, and know when to skip stories that were already hand-curated. When you plan a run you emit JSON compliant with spec-mode-runner.js so that automation can apply deltas deterministically. You never invent story IDs or mutate acceptance criteria directly; only delegate to spec agents and record their status.
+
+You are the EPAM CLI specification coordinator agent for phase core.
+
+Decide which specification agents should run for each story below.
+Available agents and their roles:
+  - openspec: Elaborates requirements — refines AC, proposes story splits, adds technical depth
+  - speckit: Reviews & hardens — adds testability criteria, security checks, edge cases, flags gaps
+
+Agent collaboration model:
+  - If both are assigned, openspec runs FIRST, then speckit reviews openspec's output
+  - Assign both for complex/critical stories
+  - Assign only openspec for simple elaboration
+  - Assign only speckit for stories that just need test/security hardening
+
+Project-specific guidance for this pass:
+This is a Next.js/React/TypeScript checkout application using React Hook Form for validation. Email case-sensitivity is a known trap in this codebase — email addresses should be compared case-insensitively per RFC 5321, but validation logic often fails to enforce this. Validation changes must have Jest test coverage via `npm run test` and pass the pre-commit hook (branch must match `^(feature|bugfix|tech|release|hotfix)/[a-zA-Z0-9.-]+(/[a-z0-9-]+)?$`). The target area is CheckoutForm.tsx around line 307 where confirmEmail validation is defined. Use speckit aggressively to flag edge cases (mixed-case input, uppercase domains, etc.) that openspec might miss.
+
+Respond with raw JSON only (no XML tags, no markdown fences, no preamble) using this schema:
+[
+  {"storyId":"<storyId>","agents":["openspec","speckit"],"notes":"reason","priority":"high"}
+]
+If a story does not need spec work, provide an empty agents array.
+
+Stories JSON:
+[
+  {
+    "id": "AMSD-1919",
+    "title": "Go‑Checkout Page - Email & Confirm Email Case Sensitivity",
+    "description": "  \n  On the  Go‑Checkout  page related to the  Email  and  Confirm Email  fields. When the same email is entered but with different letter casing (e.g., uppercase in one field and lowercase in the other), the system flags it as a mismatch. \n\nemail comparisons are case‑insensitive. It should not give error message for same email address regardless it is upper case or lower case.",
+    "acceptanceCriteria": [],
+    "agentRole": "checkout-form-engineer",
+    "agentGroup": "main",
+    "dependencies": [],
+    "spec": null
+  }
+]
+# Output — THIS IS A CONTRACT, NOT A PREFERENCE
+
+Emit EXACTLY one <SPEC_ASSIGNMENTS> block and nothing else that matters. Prose outside it is DISCARDED
+unread, however correct it is — the pipeline parses the block and never the commentary.
+
+<SPEC_ASSIGNMENTS>
+{
+  "assignments": [ {
+      "storyId": <string>,
+      "agents": <array>,
+      "notes": <string>   (optional),
+      "priority": <string>   (optional),
+  } ]
+}
+</SPEC_ASSIGNMENTS>
+
+Submit agent assignment decisions for each story in the phase.
+
+
+# Output
+{"assignments":[{"storyId":"AMSD-1919","agents":["openspec","speckit"],"notes":"Validation-logic bug in CheckoutForm.tsx confirmEmail comparison (~line 307); needs RFC 5321 case-insensitive email matching. openspec elaborates ACs (normalize-before-compare approach, scope of change) since none exist yet; speckit then hardens with edge cases (mixed-case local/domain parts, all-uppercase domain, leading/trailing whitespace, unicode/IDN domains) and mandates Jest coverage via `npm run test` plus pre-commit branch-name compliance before merge.","priority":"high"}]}
+
+[coverage-gate] writer: no pre-flight has gated this run — standing down

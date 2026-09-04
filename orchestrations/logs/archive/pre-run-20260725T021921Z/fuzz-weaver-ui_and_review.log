@@ -1,0 +1,13 @@
+{
+  "agent": "fuzz-weaver",
+  "phase": "ui_and_review",
+  "summary": {
+    "functionsAnalysed": 0,
+    "fuzzCasesProposed": 0,
+    "covered": 0,
+    "gaps": 0,
+    "vulnerabilities": 0
+  },
+  "cases": [],
+  "verdict": "pass"
+}

@@ -1,0 +1,34 @@
+# Prompt
+Assign an implementation agent role to every story below.
+
+AVAILABLE ROLES — these are this project's own engineering roles. Choose from these and
+nothing else; the name you return must match one of them verbatim:
+- typescript-vitest-engineer
+    You are a TypeScript implementer who edits source across the mocka and mockb codelines. Both codelines declare TypeScript and vitest as their stack. You own writing the production-code fixes for tickets MOCK3-1 and MOCK3-2. Conventions: - Source files live under src/ relative to each codeline root; mocka has src/fares.ts and mockb has src/schedule.ts. - Tests live under test/ relative to each codeline root (e.g. test/fares.test.ts in mocka, test/schedule.test.ts in mockb) and are named *.test.ts. - Tests are run with vitest. Before finishing, run the vitest test suite in the codeline you edited to confirm your change does not break existing tests. - You MUST NOT create or edit any test file. A dedicated test agent of this pipeline owns all test authorship, including reproducing tests for these tickets. Your responsibility is production source only. Ticket MOCK3-1 (mocka, src/fares.ts): - The function fareFor charges a rider aged exactly 65 the adult fare instead of the concession fare. The doc comment states riders aged 65 and over pay the concession fare. The fix is to change the boundary comparison so that age 65 is included — verify the exact operator in the source and correct it so the condition matches '65 and over.' - Confirm the constant names (BASE_FARE_CENTS, CONCESSION_FARE_CENTS) and the Rider type from the source before editing. - fareFor is called by totalFor in the same file; ensure the change is consistent with how totalFor uses the result. Ticket MOCK3-2 (mockb, src/schedule.ts): - The function formatStops omits the final stop because its loop iterates to stops.length minus one. The fix is to correct the loop bound so every stop including the last is rendered. - totalMinutes in the same file reads the last stop's minutes and is correct; do not change it. - Confirm the Stop type and the output format (e.g. how stops are joined with '->') from the source before editing. After each fix, run vitest in that codeline to verify existing tests still pass. Report exactly which files you changed and which lines you modified.
+
+STORIES — a story listing more than one codeline needs ONE ASSIGNMENT PER CODELINE:
+- MOCK3-1: Riders aged exactly 65 are charged the adult fare
+    codeline: mocka
+    The fare rules say riders aged 65 and over pay the concession fare. A rider aged exactly 65 is charged the full adult fare of 350 cents instead of 175. Riders aged 66 and above are charged correctly, so the boundary itself is wrong rather than the rule.
+- MOCK3-2: The departure board omits the final stop
+    codeline: mockb
+    formatStops renders every stop except the last one, so a three-stop line shows two. The journey length reported by totalMinutes is correct, which is why the omission has gone unnoticed.
+
+Pick the role whose stated expertise actually covers the work the story describes. If two
+roles could plausibly own a story, prefer the one whose brief names the surface the story
+touches.
+
+THE UNIT OF ASSIGNMENT IS A (STORY, CODELINE) PAIR, NOT A STORY. A story listing three
+codelines needs THREE assignments — the repositories differ, so the right owner can differ.
+Count the codelines listed against each story and return exactly that many assignments for it,
+naming the codeline on every one. A story is not assigned until every codeline it lists is.
+
+THE OWNER MUST AUTHOR THE CODE. Assign the role that will EDIT THE FILES this story changes —
+the one whose brief names those files or directories. A role whose brief is about settings in
+a vendor's console, or about documentation, cannot deliver a story here: the agent's output is
+a change in a repository. Live 2026-08-07: this story went to the one role of three that owned
+no source files, and all such a role can produce is a configuration note. Where the story needs
+both console configuration and code, 
+
+# Output
+{"assignments":[{"agentRole":"typescript-vitest-engineer","codeline":"mocka","reason":"Story MOCK3-1 is a TypeScript production-code fix in mocka/src/fares.ts. The typescript-vitest-engineer role explicitly owns production-code fixes for ticket MOCK3-1 in mocka and is the only available role whose brief names src/fares.ts and the mocka codeline.","storyId":"MOCK3-1"},{"agentRole":"typescript-vitest-engineer","codeline":"mockb","reason":"Story MOCK3-2 is a TypeScript production-code fix in mockb/src/schedule.ts. The typescript-vitest-engineer role explicitly owns production-code fixes for ticket MOCK3-2 in mockb and is the only available role whose brief names src/schedule.ts and the mockb codeline.","storyId":"MOCK3-2"}]}

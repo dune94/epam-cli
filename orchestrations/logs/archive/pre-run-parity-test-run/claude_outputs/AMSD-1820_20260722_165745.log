@@ -1,0 +1,97 @@
+=== Prompt for AMSD-1820 (attempt 1) ===
+CRITICAL — WRITE FILES FIRST. Your FIRST tool call MUST be WriteFile.
+Do NOT output any text before calling WriteFile. Do NOT plan or say "I will...".
+Call WriteFile NOW for the EXACT ABSOLUTE PATHS listed below:
+
+
+---
+
+Implement user story AMSD-1820: [Mozio] - The Promo code amount is NOT displayed as expected for Return trip tickets in the Mozio email confirmation
+
+## Story Description
+[Mozio] - The Promo code amount is NOT displayed as expected for Return trip tickets in the Mozio email confirmation
+
+## Acceptance Criteria
+- Given an order with a promo code discount and a return-trip line item, the return-trip dispatch report includes the same discount amount that corresponds to the return-trip order line item's discount, and the Mozio email confirmation displays a promo discount line for the return trip matching that amount.
+- When a promo code discount applies to a return trip line item, the dispatch report for that return trip leg includes report.price.discount with the correct name and amount, independently calculated from the outbound trip.
+- When a promo code does not apply to the return trip product, the return trip dispatch report omits the discount field (remains undefined), and no false discount entry appears in the Mozio email confirmation.
+- When no promo code is applied to the order, no discount field is included in any dispatch report (outbound or return), and no promo discount lines appear in the email confirmation.
+- For a percentage-based promo code, the return trip dispatch report's discount amount equals the promo percentage multiplied by the return trip fare, calculated independently of the outbound trip. For a fixed-amount promo code, the return trip dispatch report's discount amount equals the fixed promo value applied to the return trip fare independently of the outbound trip.
+- When outbound and return trips have different fare types or product codes (e.g., senior fare on one leg, adult fare on the other), the return trip dispatch report includes the discount amount calculated on the return trip fare, and the email confirmation displays the promo discount line with the amount corresponding to the return trip's fare.
+- When the return trip date differs from the outbound trip date, the return trip dispatch report includes the discount amount applicable to the return trip, and the email confirmation displays the promo discount line for the return trip leg.
+- When a fixed-amount promo code discount exceeds the return trip fare, the discount amount in the dispatch report is capped at the return trip fare, and the email confirmation reflects the capped amount for that leg.
+- The rounding behavior for percentage-based promo code discounts on return trip line items matches the rounding behavior applied to outbound trip line items (e.g., same decimal precision and rounding direction).
+- For orders with more than two trip legs (e.g., multi-city itineraries), each applicable leg's dispatch report includes the promo code discount amount, and the email confirmation displays a promo discount line for each leg where the promo code applies.
+- When the promo code calculation for a specific trip leg fails or returns an invalid result (e.g., NaN, negative value), the dispatch report for that leg omits the discount field, the email confirmation excludes the promo discount line for that leg only, and the remaining legs' discounts and the email confirmation are unaffected.
+- When a promo code is valid for the outbound trip date but has expired by the return trip date, the return trip dispatch report and email confirmation reflect the correct discount status for the return leg based on the promo code's validity on the return trip date.
+
+
+
+
+
+## Technical Notes
+None specified
+
+## Files to Create/Modify (EXACT ABSOLUTE PATHS — write to these paths exactly)
+
+
+## Dependencies
+None
+
+
+
+## Instructions
+**CRITICAL — WRITE FILES FIRST:**
+
+**You MUST write every file listed above to its EXACT absolute path. Do NOT write to a different path, do NOT write to the current directory unless it matches the path above. Use your WriteFile or Edit tools with the full absolute path shown.**
+
+1. Write each required file to its exact absolute path listed above — do this FIRST before anything else
+2. Implement all acceptance criteria for this story
+3. Follow the project's existing code patterns and conventions
+4. Do NOT create tests unless explicitly required in acceptance criteria
+
+After implementation, provide a brief summary of what was created/modified.
+
+## Relevant Knowledge Base Entries
+The following was learned from previous story implementations and is relevant to your agent role. Apply this knowledge before writing any code:
+
+- [2026-07-06T17:45:30Z] Always resolve mocked fetch calls to a Response-shaped object with ok, status, statusText, and a json method returning a Promise.
+- [2026-07-06T17:50:20Z] Use valid module and moduleResolution pairs in tsconfig.json: CommonJS with Node, Node16 with Node16, ESNext with Bundler. Use CommonJS and Node for the stack. Mismatched pairs cause build errors.
+- [2026-07-06T18:11:26Z] Use vi.fn().mockResolvedValue(value) to make a mock return a resolved Promise.
+- [2026-07-06T20:31:11Z] Use `test: { passWithNoTests: true }` in vitest.config.ts or create a stub test file when no *.test.ts files exist.
+- [2026-07-06T20:33:03Z] Enable globals:true in vitest.config.ts so describe, it, and expect work without imports, reducing boilerplate in test files.
+- [2026-07-06T23:47:34Z] Use CommonJS-compatible patterns in src/server.ts: avoid `import.meta.url` and top-level `await`; gate listen with `if (require.main === module)`.
+- [2026-07-07T02:35:30Z] Always include a non-test source file in src/ alongside any src/*.test.ts file, since tsconfig.json excludes test files from tsc --noEmit.
+- [2026-07-07T19:01:34Z] Only modify or create files explicitly listed in the story's acceptance criteria. Do not touch files belonging to other stories or outside the current task scope.
+- [2026-07-07T20:17:57Z] [unreviewed-fallback] Avoid using deprecated TypeScript compiler options like 'moduleResolution=node10'; use 'moduleResolution=node' instead.
+- [2026-07-17T20:20:58Z] Always: Before importing a module or referencing a type/property, always read the actual source file to verify the export exists, its exact path, its properties, and its constructor/factory signatures
+
+## Knowledge Base Contribution (do this LAST — after writing all implementation files)
+Your assigned KB entry ID for this run: **KB-012**
+
+IMPORTANT: Write ALL implementation files first. Only AFTER writing every required file should you optionally append a KB entry.
+Do NOT read orchestrations/agents/KB.md before writing implementation files. The relevant KB entries are already injected above.
+
+If (and only if) you discover a non-obvious pattern during implementation, append one entry to `orchestrations/agents/KB.md`:
+
+```markdown
+## KB-012 -- 2026-07-22
+
+**Category:** <backend|frontend|infrastructure|testing|orchestration>
+**AgentRole:** <your agentRole from the story>
+**Tags:** <comma-separated tech keywords, e.g. typescript, node, cli>
+**Trigger:** <retry|first-success>
+**StoryRef:** AMSD-1820
+
+<One concise paragraph: the specific pattern, gotcha, or anti-pattern.>
+```
+
+Only write an entry if the knowledge is genuinely non-obvious. Skip trivial observations.
+=== End Prompt ===
+
+=== epam Output (attempt 1) ===
+Let me search for the specific dispatch report / promo discount logic:
+  [tc-writer] No test stories need TCs in phase 'unknown' — skipping
+Let me search for the specific dispatch report / promo discount logic:
+
+=== End epam Output ===

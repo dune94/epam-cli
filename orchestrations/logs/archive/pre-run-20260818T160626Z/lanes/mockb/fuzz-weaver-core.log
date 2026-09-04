@@ -1,0 +1,70 @@
+```json
+{
+  "agent": "fuzz-weaver",
+  "phase": "core",
+  "summary": { "functionsAnalysed": 2, "fuzzCasesProposed": 6, "covered": 3, "gaps": 3, "vulnerabilities": 0 },
+  "cases": [
+    {
+      "function": "formatStops",
+      "file": "src/schedule.ts",
+      "line": 6,
+      "property": "Every stop in the input array appears in the output string",
+      "generator": "fc.array(fc.record({ name: fc.string(), minutes: fc.integer() }), { minLength: 0, maxLength: 5 })",
+      "invariant": "for all i: formatStops(stops).includes(stops[i].name) === true",
+      "status": "covered",
+      "recommendation": "Covered by 'names the first stop' and 'names the final stop' tests which together assert both boundary stops appear; the loop change (length-1 -> length) is directly validated."
+    },
+    {
+      "function": "formatStops",
+      "file": "src/schedule.ts",
+      "line": 6,
+      "property": "An empty stops array yields an empty string",
+      "generator": "fc.constant([])",
+      "invariant": "formatStops([]) === ''",
+      "status": "covered",
+      "recommendation": "Covered by the 'handles an empty line' test in test/schedule.test.ts."
+    },
+    {
+      "function": "formatStops",
+      "file": "src/schedule.ts",
+      "line": 6,
+      "property": "A single-element stops array renders that one stop (boundary case for the loop change)",
+      "generator": "fc.record({ name: fc.string({ minLength: 1 }), minutes: fc.integer({ min: 0 }) }).map(s => [s])",
+      "invariant": "formatStops([stop]) === `${stop.name} (${stop.minutes}m)` and is non-empty",
+      "status": "gap",
+      "recommendation": "The loop boundary changed from `i < length-1` to `i < length`; a single-element array is the minimal case where the old code produced '' and the new code produces a stop string. No test exercises length===1. Add a unit test with a one-element array."
+    },
+    {
+      "function": "formatStops",
+      "file": "src/schedule.ts",
+      "line": 7,
+      "property": "Negative or non-finite minute values do not throw and are rendered verbatim",
+      "generator": "fc.record({ name: fc.string({ minLength: 1 }), minutes: fc.oneof(fc.integer({ max: -1 }), fc.constant(NaN), fc.constant(Infinity), fc.constant(-Infinity)) }).map(s => [s])",
+      "invariant": "formatStops([s]) does not throw and contains the string form of s.minutes",
+      "status": "gap",
+      "recommendation": "No test uses negative, NaN, or Infinity minutes. The template literal coerces them without throwing, so this is a graceful gap, not a vulnerability. Consider asserting the rendered output for negative minutes at minimum."
+    },
+    {
+      "function": "totalMinutes",
+      "file": "src/schedule.ts",
+      "line": 12,
+      "property": "An empty stops array yields 0",
+      "generator": "fc.constant([])",
+      "invariant": "totalMinutes([]) === 0",
+      "status": "covered",
+      "recommendation": "Covered by the 'handles an empty line' test under describe('totalMinutes')."
+    },
+    {
+      "function": "totalMinutes",
+      "file": "src/schedule.ts",
+      "line": 12,
+      "property": "totalMinutes returns exactly the minutes field of the last stop, including for negative/NaN values",
+      "generator": "fc.array(fc.record({ name: fc.string(), minutes: fc.oneof(fc.integer(), fc.constant(NaN), fc.constant(Infinity)) }), { minLength: 1, maxLength: 3 })",
+      "invariant": "totalMinutes(stops) === stops[stops.length-1].minutes (using SameValueZero via Object.is)",
+      "status": "gap",
+      "recommendation": "Only a normal positive-integer case (LINE, 25) is tested. Negative, NaN, and Infinity last-stop minutes are untested; the function returns the value as-is without throwing, so this is a gap, not a vulnerability."
+    }
+  ],
+  "verdict": "warn"
+}
+```

@@ -1,0 +1,158 @@
+```json
+{
+  "agent": "fuzz-weaver",
+  "phase": "core",
+  "summary": {
+    "functionsAnalysed": 2,
+    "fuzzCasesProposed": 13,
+    "covered": 4,
+    "gaps": 7,
+    "vulnerabilities": 2
+  },
+  "cases": [
+    {
+      "function": "formatStops",
+      "file": "src/schedule.ts",
+      "line": 4,
+      "property": "Empty array returns empty string",
+      "generator": "fc.constant([])",
+      "invariant": "formatStops([]) === ''",
+      "status": "covered",
+      "recommendation": "Covered by src/schedule.test.ts line 42-43"
+    },
+    {
+      "function": "formatStops",
+      "file": "src/schedule.ts",
+      "line": 4,
+      "property": "All stops included in output",
+      "generator": "fc.array(fc.record({name: fc.string({minLength: 1}), minutes: fc.integer({min: 0, max: 1000})}), {minLength: 1})",
+      "invariant": "For all stop in stops, result includes stop.name",
+      "status": "covered",
+      "recommendation": "Covered by src/schedule.test.ts line 17-26"
+    },
+    {
+      "function": "formatStops",
+      "file": "src/schedule.ts",
+      "line": 4,
+      "property": "Stops separated by ' -> '",
+      "generator": "fc.array(fc.record({name: fc.string(), minutes: fc.number()}), {minLength: 2})",
+      "invariant": "result.includes(' -> ')",
+      "status": "covered",
+      "recommendation": "Covered by src/schedule.test.ts line 29-35"
+    },
+    {
+      "function": "formatStops",
+      "file": "src/schedule.ts",
+      "line": 4,
+      "property": "No throw on empty input",
+      "generator": "fc.constant([])",
+      "invariant": "formatStops([]) does not throw",
+      "status": "covered",
+      "recommendation": "Covered by src/schedule.test.ts line 38-39"
+    },
+    {
+      "function": "formatStops",
+      "file": "src/schedule.ts",
+      "line": 4,
+      "property": "Handles empty string names",
+      "generator": "fc.array(fc.record({name: fc.constant(''), minutes: fc.integer()}), {minLength: 1})",
+      "invariant": "formatStops([{name: '', minutes: 5}]) outputs ' (5m)'",
+      "status": "gap",
+      "recommendation": "Add test for empty string name"
+    },
+    {
+      "function": "formatStops",
+      "file": "src/schedule.ts",
+      "line": 4,
+      "property": "Handles unicode and special characters",
+      "generator": "fc.array(fc.record({name: fc.unicode(), minutes: fc.integer()}), {minLength: 1})",
+      "invariant": "formatStops preserves unicode in names",
+      "status": "gap",
+      "recommendation": "Add property test with fc.unicode() for names"
+    },
+    {
+      "function": "formatStops",
+      "file": "src/schedule.ts",
+      "line": 4,
+      "property": "Handles negative minutes",
+      "generator": "fc.array(fc.record({name: fc.string({minLength: 1}), minutes: fc.integer({min: -1000})}), {minLength: 1})",
+      "invariant": "formatStops([{name: 'X', minutes: -5}]) outputs 'X (-5m)'",
+      "status": "gap",
+      "recommendation": "Add test for negative minutes values"
+    },
+    {
+      "function": "formatStops",
+      "file": "src/schedule.ts",
+      "line": 4,
+      "property": "Handles fractional minutes",
+      "generator": "fc.array(fc.record({name: fc.string({minLength: 1}), minutes: fc.double({noNaN: true, noInfinity: true})}), {minLength: 1})",
+      "invariant": "formatStops([{name: 'X', minutes: 1.5}]) outputs 'X (1.5m)'",
+      "status": "gap",
+      "recommendation": "Add test for non-integer minutes"
+    },
+    {
+      "function": "formatStops",
+      "file": "src/schedule.ts",
+      "line": 7,
+      "property": "Array element is undefined",
+      "generator": "fc.array(fc.oneof(fc.record({name: fc.string(), minutes: fc.number()}), fc.constant(undefined)), {minLength: 1})",
+      "invariant": "formatStops should reject or handle undefined array elements",
+      "status": "vulnerability",
+      "recommendation": "Accessing stops[i].name when stops[i] is undefined throws TypeError at line 7. Add input validation.",
+      "executableTest": "import { formatStops } from '../src/schedule';\nexpect(() => formatStops([undefined as any])).toThrow(TypeError);"
+    },
+    {
+      "function": "formatStops",
+      "file": "src/schedule.ts",
+      "line": 7,
+      "property": "Stop object missing name field",
+      "generator": "fc.array(fc.record({minutes: fc.number()}), {minLength: 1})",
+      "invariant": "formatStops([{minutes: 5}]) outputs 'undefined (5m)'",
+      "status": "gap",
+      "recommendation": "Add test for Stop object missing name field"
+    },
+    {
+      "function": "totalMinutes",
+      "file": "src/schedule.ts",
+      "line": 12,
+      "property": "Empty array returns 0",
+      "generator": "fc.constant([])",
+      "invariant": "totalMinutes([]) === 0",
+      "status": "covered",
+      "recommendation": "Covered by test/schedule.test.ts line 21"
+    },
+    {
+      "function": "totalMinutes",
+      "file": "src/schedule.ts",
+      "line": 12,
+      "property": "Returns last element minutes",
+      "generator": "fc.array(fc.record({name: fc.string(), minutes: fc.integer({min: 0, max: 1000})}), {minLength: 1})",
+      "invariant": "totalMinutes(stops) === stops[stops.length - 1].minutes",
+      "status": "covered",
+      "recommendation": "Covered by test/schedule.test.ts line 20"
+    },
+    {
+      "function": "totalMinutes",
+      "file": "src/schedule.ts",
+      "line": 13,
+      "property": "Last element missing minutes field",
+      "generator": "fc.array(fc.record({name: fc.string()}), {minLength: 1})",
+      "invariant": "totalMinutes returns undefined instead of number",
+      "status": "vulnerability",
+      "recommendation": "Function declares return type 'number' but returns undefined when last Stop lacks minutes field (line 13). Type contract violation.",
+      "executableTest": "import { totalMinutes } from '../src/schedule';\nconst stops: any[] = [{name: 'X'}];\nconst result = totalMinutes(stops);\nexpect(typeof result).toBe('number');"
+    },
+    {
+      "function": "totalMinutes",
+      "file": "src/schedule.ts",
+      "line": 12,
+      "property": "Large array (1000+ elements)",
+      "generator": "fc.array(fc.record({name: fc.string(), minutes: fc.integer()}), {minLength: 1000})",
+      "invariant": "totalMinutes with many elements still returns last element's minutes",
+      "status": "gap",
+      "recommendation": "Add test with large array to verify correctness and performance"
+    }
+  ],
+  "verdict": "warn"
+}
+```

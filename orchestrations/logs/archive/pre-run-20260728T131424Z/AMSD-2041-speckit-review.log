@@ -1,0 +1,161 @@
+# Prompt
+You are the speckit specification agent for EPAM CLI. Phase core, story AMSD-2041.
+
+You are reviewing and building on the openspec agent's output for this story.
+Your role is COLLABORATIVE — you are NOT starting from scratch. Instead:
+1. Review openspec's proposed acceptance criteria for testability and completeness
+2. Add missing edge-case, error-handling, security, and accessibility criteria
+3. Flag any AC that are vague, untestable, or overlapping
+4. Splitting is openspec's decision alone — you do NOT split stories. If openspec already split
+   this story, do NOT include a "splitStories" field in your output at all (it will be ignored if
+   you do). Review and refine the acceptanceCriteria openspec gave you for the UNSPLIT story as
+   normal; per-child refinement of an already-split story's children happens on a later turn, not
+   here.
+5. Do NOT remove or duplicate openspec's good work — build on it
+
+━━━ WHAT-NOT-HOW RULE (MANDATORY) ━━━
+Every AC must describe an OBSERVABLE OUTCOME (what a test can verify from outside the code),
+NOT an implementation instruction. If an AC names vi.mock, jest.fn, mockReturnValue,
+mockResolvedValue, import statements, or require() calls, REPLACE it with a
+Given/When/Then behaviour statement. Never tell the implementer which library or mock pattern to use.
+
+OPENSPEC'S OUTPUT (your input to review — ACs and split proposals only):
+{
+  "acceptanceCriteria": [],
+  "notes": "Novel capability — Live Preview does not exist in the codebase. The central content hook (useContent, 236 callers) and the Contentstack service layer are the integration points. ACs were empty; VCs derived entirely from the description. Contentstack hosts are unreachable at test time, so VCs stop at our request boundary and mock assumptions.",
+  "splitStories": []
+}
+
+ORIGINAL STORY CONTEXT:
+{
+  "id": "AMSD-2041",
+  "title": "[GO, UP, MX] Live Preview of Content in CMS",
+  "description": "[GO, UP, MX] Live Preview of Content in CMS",
+  "originalAcceptanceCriteria": [],
+  "technicalNotes": null,
+  "dependencies": []
+}
+
+Produce your refined output as raw JSON only (no XML tags, no markdown fences, no preamble). Include:
+- "acceptanceCriteria": The FULL merged list (openspec's criteria + your additions/refinements). Every item MUST be an observable outcome, not an implementation instruction.
+- "notes": What you changed and why (be specific — cite which criteria you added/modified/replaced)
+- "splitStories": ALWAYS omit this field. Splitting is openspec's decision alone — never propose
+  split children of your own, even if openspec already split this story.
+- "acAddedBySpeckit": Array of criteria YOU added that were not in openspec's output
+- "acModifiedBySpeckit": Array of {"original":"...","revised":"..."} for criteria you reworded
+- "acFlagged": Array of {"criterion":"...","flag":"..."} for criteria that need human attention
+
+
+# Output
+{
+  "acceptanceCriteria": [
+    {
+      "id": "AC-1",
+      "criterion": "Given the application is configured with Contentstack Live Preview enabled, When a content author edits a draft entry in Contentstack's visual editor, Then the consuming application reflects the draft field values in real time without a full page reload."
+    },
+    {
+      "id": "AC-2",
+      "criterion": "Given the application is configured with Contentstack Live Preview enabled, When a content author modifies a reference or nested content field in the visual editor, Then the consuming application resolves and displays the updated referenced entry values in real time."
+    },
+    {
+      "id": "AC-3",
+      "criterion": "Given the application is running with Live Preview enabled, When the Contentstack Live Preview SDK sends a callback event with updated field data, Then the useContent hook returns the merged live-preview data instead of the published data, while preserving the original response shape and type contract."
+    },
+    {
+      "id": "AC-4",
+      "criterion": "Given the application is running without Live Preview enabled (flag off or configuration absent), When content is fetched, Then the application behaves identically to the current production behaviour — no preview SDK is initialised, no preview-related network requests are made, and published content is returned."
+    },
+    {
+      "id": "AC-5",
+      "criterion": "Given the application is in Live Preview mode, When the Contentstack preview SDK callback provides partial field updates (only changed fields), Then the application merges the partial updates with the existing full entry so that unchanged fields retain their previous values and no data is lost."
+    },
+    {
+      "id": "AC-6",
+      "criterion": "Given the application is in Live Preview mode, When the preview SDK callback fires multiple rapid successive updates for the same entry, Then the final rendered state reflects the last-received update without intermediate rendering errors or unhandled promise rejections."
+    },
+    {
+      "id": "AC-7",
+      "criterion": "Given the application is in Live Preview mode, When the preview SDK fails to initialise or the callback throws an error, Then the application falls back to displaying the last successfully fetched published content and logs a descriptive error, without crashing or showing a blank screen."
+    },
+    {
+      "id": "AC-8",
+      "criterion": "Given the application is in Live Preview mode, When the preview connection is lost or times out, Then the application continues to display the last-known content state and does not enter a loading or error state that blocks the user."
+    },
+    {
+      "id": "AC-9",
+      "criterion": "Given the application is in Live Preview mode, When a content entry is of a content type that does not support Live Preview, Then the application renders the published version of that entry without errors or empty fields."
+    },
+    {
+      "id": "AC-10",
+      "criterion": "Given the application is in Live Preview mode, When the preview SDK provides a live preview hash or token in the URL or callback, Then the application includes that token only in requests to Contentstack's preview endpoint and never exposes it in client-side logs, analytics events, or non-Contentstack network requests."
+    },
+    {
+      "id": "AC-11",
+      "criterion": "Given the application is in Live Preview mode, When the user navigates away from a previewed page and then returns, Then the Live Preview session resumes correctly without requiring a full application reload."
+    },
+    {
+      "id": "AC-12",
+      "criterion": "Given the application is in Live Preview mode, When the preview callback delivers data for an entry that does not match the currently rendered entry, Then the application ignores the mismatched data and does not update the displayed content."
+    },
+    {
+      "id": "AC-13",
+      "criterion": "Given the application is in Live Preview mode, When the preview callback delivers data containing fields not present in the original content type schema, Then the application ignores the unknown fields and does not throw or render unexpected content."
+    },
+    {
+      "id": "AC-14",
+      "criterion": "Given the application is in Live Preview mode, When the content author publishes the draft entry being previewed, Then the application transitions from showing preview data to showing the published data without visual glitches or duplicate requests."
+    },
+    {
+      "id": "AC-15",
+      "criterion": "Given the application is in Live Preview mode, When multiple independent useContent calls exist on the same page, Then each hook independently receives and applies preview updates only for its own queried content, without cross-contamination between hooks."
+    },
+    {
+      "id": "AC-16",
+      "criterion": "Given the application is in Live Preview mode, When the preview SDK callback delivers data, Then the application re-renders only the components whose data has changed, avoiding unnecessary re-renders of unaffected components."
+    },
+    {
+      "id": "AC-17",
+      "criterion": "Given the application is in Live Preview mode, When the preview data includes rich text, modular blocks, or other complex field types, Then those fields render identically to how they render with published data, preserving formatting, embedded entries, and component mappings."
+    },
+    {
+      "id": "AC-18",
+      "criterion": "Given the application is in Live Preview mode, When the preview callback delivers an empty or null entry payload, Then the application falls back to the last known valid content and does not render a broken or empty page."
+    }
+  ],
+  "notes": "Openspec produced empty acceptanceCriteria with a note that this is a novel capability. I derived all 18 ACs from scratch based on the story description and the codebase context (useContent hook with 236 callers, Contentstack service layer). ACs cover: core live-preview behaviour (AC-1, AC-2, AC-3), opt-out/fallback (AC-4), partial field merging (AC-5), rapid-update resilience (AC-6), SDK failure fallback (AC-7), connection loss (AC-8), unsupported content types (AC-9), preview token security (AC-10), session persistence (AC-11), entry mismatch guard (AC-12), unknown field guard (AC-13), publish transition (AC-14), multi-hook isolation (AC-15), render efficiency (AC-16), complex field types (AC-17), and null/empty payload guard (AC-18). All ACs are written as observable outcomes (Given/When/Then) with no implementation instructions. Per openspec's note, Contentstack hosts are unreachable at test time, so ACs are scoped to observable behaviour at the application boundary.",
+  "acAddedBySpeckit": [
+    "AC-1",
+    "AC-2",
+    "AC-3",
+    "AC-4",
+    "AC-5",
+    "AC-6",
+    "AC-7",
+    "AC-8",
+    "AC-9",
+    "AC-10",
+    "AC-11",
+    "AC-12",
+    "AC-13",
+    "AC-14",
+    "AC-15",
+    "AC-16",
+    "AC-17",
+    "AC-18"
+  ],
+  "acModifiedBySpeckit": [],
+  "acFlagged": [
+    {
+      "criterion": "AC-1",
+      "flag": "Depends on Contentstack Live Preview SDK behaviour which cannot be tested against a real Contentstack instance in CI. Test must simulate SDK callback events at the application boundary."
+    },
+    {
+      "criterion": "AC-10",
+      "flag": "Security criterion — requires careful review to ensure the preview token is not leaked via SSR headers, error boundaries, or third-party scripts. May need additional security audit beyond automated testing."
+    },
+    {
+      "criterion": "AC-16",
+      "flag": "Render efficiency is inherently subjective — 'unnecessary re-renders' should be defined as: no component re-renders when its input data object reference has not changed, measurable via render count instrumentation."
+    }
+  ]
+}

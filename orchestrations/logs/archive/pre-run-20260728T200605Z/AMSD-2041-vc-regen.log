@@ -1,0 +1,31 @@
+# Prompt
+Regenerate the VERIFICATION CRITERIA for this brownfield story. Your previous verification criteria were FLAGGED and must be fixed:
+- VC 1 prescribes HOW — 'subscribes to live-preview content-change events' is a mechanism, not an observable outcome; also references internal structure 'content keys'
+- VC 2 references internal structure — 'useContent().getContentByKey' is a hook/API contract, not user-facing surface; 'component re-renders' describes mechanism not observation
+- VC 3 prescribes HOW — 'falls back to the existing static content-fetching behaviour' is an implementation strategy; restate as what the user sees (pages render correctly)
+- VC 4 references internal structure — 'the Live Preview SDK emits an error or the connection drops' is an internal event; restate as observable: content remains visible on the page
+- VC 5 prescribes HOW — 'mocked to emit a content update for a specific content key' is a test mechanism; references internal structure 'content key' and named internal components
+- VC 6 references internal structure — 'shape or contract of the useContent hook's return value' is an API contract, not a user-facing observation
+- VC 7 prescribes HOW — 'detected via SDK configuration or environment' is a detection mechanism; restate as observable: production build makes no additional live-preview network calls
+
+THE FIX SITE (located by the code-graph detective — anchor every criterion to the behaviour THIS code produces):
+- src/pages/[[...slug]].tsx :: getStaticProps — This is the main Next.js SSG entry point (line 66) that receives the build context including context.preview and context.previewData. It orchestrates all Contentstack content fetching via pageService but currently does not read or forward any preview/draft parameters. For CMS Live Preview to work, this function must detect preview mode from the Next.js context and pass the Contentstack live_preview token/hash through to the API calls (getEntry/getSingletonEntry). Without this, the Contentstack SDK always fetches published content, making live preview impossible.
+Do NOT write criteria about areas unrelated to this code.
+
+
+Acceptance criteria (IMMUTABLE — the intent to verify; do NOT restate as-is, VERIFY them):
+- (none)
+Description: [GO, UP, MX] Live Preview of Content in CMS
+
+A verification criterion states WHAT AN END USER OR TESTER OBSERVES on the user-facing surface THE TICKET IS ABOUT — the rendered email for an email ticket, the displayed screen/UI for a UI ticket, the API response a CLIENT receives for an API ticket. It is a BLACK-BOX check on that surface. It NEVER describes HOW the value is produced.
+A verification criterion is FORBIDDEN if it:
+- prescribes HOW to implement — any algorithm, mechanism, or approach: "split", "halve", "×0.5", "calculate independently", "per segment", "for each line item", or adding/reading any new field, flag, or service;
+- references an INTERNAL structure that merely FEEDS the ticket's surface — an intermediate payload, a "confirmation data"/DTO object, or a specific response field used to BUILD the output. Verify the surface the ticket names, NOT the data structure behind it;
+- makes a CROSS-COMPARISON that presumes a mechanism — never assert one value "must equal" / "matches" / "is the same as" another (e.g. "the return amount equals the outbound amount"); that presumes a copy/split. Assert the required value is present and correct ON ITS OWN.
+Every verification criterion must be observable, testable, and tied to the ticket's stated symptom/intent.
+
+Do NOT restate an acceptance criterion as-is — express what a tester OBSERVES that confirms it. Address every flag above.
+Output ONLY a JSON array of verification-criterion strings. No prose, no markdown.
+
+# Output
+["When a content editor changes an entry in the CMS and views the page in preview mode, the rendered page displays the updated draft content without requiring the entry to be published or the site to be rebuilt.", "Draft or unpublished CMS changes are visible on the page when viewed in preview mode, while the same page viewed normally continues to display the previously published content.", "When a page is viewed outside of preview mode, it renders fully and correctly with its published content, with no blank sections or errors.", "If live preview is unavailable or fails while viewing a page, the page still displays content to the visitor rather than showing an error or empty page.", "A tester can confirm live preview end-to-end by editing any visible content in the CMS and observing that change appear on the rendered preview page.", "Pages that were rendering correctly before this change continue to display the same published content and layout after it.", "A production build of the site serves only published content and makes no live-preview-related network requests when pages are viewed normally."]

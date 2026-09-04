@@ -1,0 +1,4 @@
+[update-invalidated-tests] suite is RED after the fix — deciding whether the failures are invalidated expectations or a real regression
+[update-invalidated-tests] BLOCKED — reported as a REGRESSION, not an invalidated expectation:
+    REGRESSION: The fix for return-trip discount matching is not correctly applying discounts when both outbound and return dispatches share the same order line item
+[update-invalidated-tests] the fix is suspect; NOT rewriting any test to hide it

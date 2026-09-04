@@ -1,0 +1,189 @@
+# Prompt
+You are the speckit specification agent for EPAM CLI. Phase core, story AMSD-2041.
+
+You are reviewing and building on the openspec agent's output for this story.
+Your role is COLLABORATIVE — you are NOT starting from scratch. Instead:
+1. Review openspec's proposed acceptance criteria for testability and completeness
+2. Add missing edge-case, error-handling, security, and accessibility criteria
+3. Flag any AC that are vague, untestable, or overlapping
+4. Splitting is openspec's decision alone — you do NOT split stories. If openspec already split
+   this story, do NOT include a "splitStories" field in your output at all (it will be ignored if
+   you do). Review and refine the acceptanceCriteria openspec gave you for the UNSPLIT story as
+   normal; per-child refinement of an already-split story's children happens on a later turn, not
+   here.
+5. Do NOT remove or duplicate openspec's good work — build on it
+
+━━━ WHAT-NOT-HOW RULE (MANDATORY) ━━━
+Every AC must describe an OBSERVABLE OUTCOME (what a test can verify from outside the code),
+NOT an implementation instruction. If an AC names vi.mock, jest.fn, mockReturnValue,
+mockResolvedValue, import statements, or require() calls, REPLACE it with a
+Given/When/Then behaviour statement. Never tell the implementer which library or mock pattern to use.
+
+OPENSPEC'S OUTPUT (your input to review — ACs and split proposals only):
+{
+  "acceptanceCriteria": [
+    "See in:"
+  ],
+  "notes": "Novel capability — live preview does not exist in the codebase. The options object in contentstack.ts has no live_preview block, _app.tsx has no live-preview-utils initialization, and ContentstackContext is static (set once from SSR, never updated client-side). Attachment points are the SDK config, the app-wide provider, the React context, and the existing server-side fetch pattern to reuse for client-side re-fetching. VCs are derived from the description since the AC ('See in:') carries no testable content."
+}
+
+ORIGINAL STORY CONTEXT:
+{
+  "id": "AMSD-2041",
+  "title": "[MX] Live Preview of Content in CMS (part 1)",
+  "description": "AS a  Content Author,  I WANT  to preview draft entries in CMS for the MX Homepage and Discover Article pages  SO THAT  I can see how content will be shown on the website\nAcceptance Criteria:\nSee in:\n\n\n\n\nOriginal Requirements:\nBullet points:\n \n\n AS a Content Author, I WANT to preview draft entries in CMS, SO THAT I can see how content will be shown on the website\nability to preview draft entries in CMS\nNotes& Assumptions  Limitation: Might not be possible to preview protected pages and content.\nOriginal Total Estimate:  8  Original FE Estimate:  8  Original DAM Estimate:  0  Original BE Estimate:  0",
+  "originalAcceptanceCriteria": [
+    "See in:"
+  ],
+  "technicalNotes": {
+    "files": [
+      "src/services/contentstack.ts",
+      "src/pages/_app.tsx",
+      "src/context/contentstackContext.tsx",
+      "src/services/pageService.ts",
+      "src/components/pages/Homepage.tsx",
+      "src/hooks/useContent.ts",
+      "src/api/utils/_contentstack_getNewsArticles.ts",
+      "src/interface/content/page.ts"
+    ],
+    "perCodeline": {
+      "metrolinx": {
+        "files": [
+          "src/services/contentstack.ts",
+          "src/pages/_app.tsx",
+          "src/context/contentstackContext.tsx",
+          "src/services/pageService.ts",
+          "src/components/pages/Homepage.tsx",
+          "src/hooks/useContent.ts",
+          "src/api/utils/_contentstack_getNewsArticles.ts",
+          "src/interface/content/page.ts"
+        ],
+        "resolved": [
+          {
+            "declared": "src/services/contentstack.ts",
+            "actual": "src/services/contentstack.ts",
+            "match": "exact",
+            "verified_against": "/home/bradleyjerome/projects/metrolinx/next.metrolinx.com"
+          },
+          {
+            "declared": "src/pages/_app.tsx",
+            "actual": "src/pages/_app.tsx",
+            "match": "exact",
+            "verified_against": "/home/bradleyjerome/projects/metrolinx/next.metrolinx.com"
+          },
+          {
+            "declared": "src/context/contentstackContext.tsx",
+            "actual": "src/context/contentstackContext.tsx",
+            "match": "exact",
+            "verified_against": "/home/bradleyjerome/projects/metrolinx/next.metrolinx.com"
+          },
+          {
+            "declared": "src/services/pageService.ts",
+            "actual": "src/services/pageService.ts",
+            "match": "exact",
+            "verified_against": "/home/bradleyjerome/projects/metrolinx/next.metrolinx.com"
+          },
+          {
+            "declared": "src/components/pages/Homepage.tsx",
+            "actual": "src/components/pages/Homepage.tsx",
+            "match": "exact",
+            "verified_against": "/home/bradleyjerome/projects/metrolinx/next.metrolinx.com"
+          },
+          {
+            "declared": "src/hooks/useContent.ts",
+            "actual": "src/hooks/useContent.ts",
+            "match": "exact",
+            "verified_against": "/home/bradleyjerome/projects/metrolinx/next.metrolinx.com"
+          },
+          {
+            "declared": "src/api/utils/_contentstack_getNewsArticles.ts",
+            "actual": "src/api/utils/_contentstack_getNewsArticles.ts",
+            "match": "exact",
+            "verified_against": "/home/bradleyjerome/projects/metrolinx/next.metrolinx.com"
+          },
+          {
+            "declared": "src/interface/content/page.ts",
+            "actual": "src/interface/content/page.ts",
+            "match": "exact",
+            "verified_against": "/home/bradleyjerome/projects/metrolinx/next.metrolinx.com"
+          }
+        ],
+        "unresolved": []
+      }
+    }
+  },
+  "dependencies": []
+}
+
+Produce your refined output as raw JSON only (no XML tags, no markdown fences, no preamble). Include:
+- "acceptanceCriteria": The FULL merged list (openspec's criteria + your additions/refinements). Every item MUST be an observable outcome, not an implementation instruction.
+- "notes": What you changed and why (be specific — cite which criteria you added/modified/replaced)
+- "splitStories": ALWAYS omit this field. Splitting is openspec's decision alone — never propose
+  split children of your own, even if openspec already split this story.
+- "acAddedBySpeckit": Array of criteria YOU added that were not in openspec's output
+- "acModifiedBySpeckit": Array of {"original":"...","revised":"..."} for criteria you reworded
+- "acFlagged": Array of {"criterion":"...","flag":"..."} for criteria that need human attention
+
+For a brownfield story with a real codeline, you may have read-only tools (read_file,
+list_files, search) available this turn — if so, USE them for real to check a file's
+actual contents before relying on it; do not invent what a tool would return. For a
+greenfield story with no existing codeline, you have none — give your best answer from
+the description, title and paths you were given, and say so in "notes" if the file
+contents would have changed your answer. Either way, never narrate an imagined tool
+result: a real answer with an honest caveat is worth everything; fabricated tool-call
+syntax (<tool_call>, <tool_use>, <function_call>) is worth nothing — it is discarded in
+full and the work is lost (observed live, 2026-07-28: exactly this, on an empty-criteria
+story that got no answer at all).
+
+
+# Output
+```json
+{
+  "acceptanceCriteria": [
+    "Given the Contentstack SDK configuration object, When the application starts in a live-preview-enabled environment, Then the configuration includes a live_preview block with enable set to true and a valid management_token, so that the SDK can establish a connection to the Contentstack preview service.",
+    "Given the application is running in a live-preview-enabled environment, When the Contentstack Stack is initialized, Then live-preview utility initialization completes without errors, so that the application can receive real-time content change events from the CMS.",
+    "Given the application is NOT in a live-preview-enabled environment (e.g., production build, missing management token), When the application starts, Then the application initializes normally without errors and no live-preview connection is attempted, so that production behavior is unaffected.",
+    "Given a Content Author is editing a Homepage entry in the CMS, When the author makes a content change and the live preview iframe loads the Homepage URL, Then the Homepage renders with the draft content reflecting the author's change, including hero banner, modular blocks, and recent news sections.",
+    "Given a Content Author is editing a Discover Article entry in the CMS, When the author makes a content change and the live preview iframe loads the Article URL, Then the Discover Article page renders with the draft content reflecting the author's change, including article components and sidebar content.",
+    "Given the application is receiving live-preview events, When the Contentstack context receives updated entry data from a preview event, Then any component consuming content via the ContentstackContext or useContent hook re-renders with the updated data, so that the preview reflects the latest edit.",
+    "Given a Content Author is editing content in the CMS, When the author modifies a field and the preview event is received, Then the previewed page updates within 5 seconds of the author's edit, so that the preview experience is responsive.",
+    "Given the application is running with live preview enabled, When a live-preview event contains an entry for a content type that is not the current page's content type, Then the current page does not re-render or error, so that only relevant preview events affect the visible page.",
+    "Given a protected or authentication-required page, When a Content Author attempts to preview it via the CMS live preview, Then the preview either displays the page without protected content or displays a meaningful message indicating the limitation, so that the author is not shown a broken or misleading preview.",
+    "Given the application is running with live preview enabled, When a preview event arrives with malformed or incomplete entry data, Then the application does not crash and continues displaying the last valid content, so that preview errors are gracefully handled.",
+    "Given the application is running with live preview enabled, When the Contentstack preview service is unreachable or times out, Then the application falls back to displaying the published content and logs an error, so that the user experience degrades gracefully.",
+    "Given the application is server-side rendered, When a page is built or rendered via SSR (next build or getServerSideProps), Then the live-preview client-side initialization does not execute on the server and does not interfere with the existing SSR data-fetching pipeline, so that production builds and SSR remain unchanged.",
+    "Given the ContentstackContext is updated with live-preview data, When a component calls useContent().getContentByKey for a path that exists in the preview data, Then the hook returns the preview value rather than the initially SSR-rendered value, so that components reflect live edits."
+  ],
+  "notes": "Openspec's output contained only the placeholder 'See in:' with no testable criteria, so I built all ACs from scratch after reading the 8 listed files. Key observations from the codebase that shaped the ACs: (1) contentstack.ts options object has no live_preview block — AC 1 addresses this; (2) _app.tsx has no live-preview-utils initialization — AC 2 addresses this; (3) ContentstackContext is a static createContext with no update mechanism — ACs 6 and 13 address the need for dynamic updates; (4) useContent hook only reads, never writes — AC 13 addresses this; (5) Homepage receives page as props from SSR — AC 4 covers preview re-rendering; (6) No INewsArticlePage rendering path was visible but the interface exists — AC 5 covers Discover Articles; (7) The story's original notes mention protected pages limitation — AC 8 captures this explicitly; (8) No live-preview code exists anywhere in the codebase (searched for live_preview, livePreview, live-preview, ContentstackLivePreview, livePreviewUtils — zero matches). All ACs are phrased as observable outcomes (what a test can verify) with no implementation instructions per the WHAT-NOT-HOW rule.",
+  "acAddedBySpeckit": [
+    "Given the Contentstack SDK configuration object, When the application starts in a live-preview-enabled environment, Then the configuration includes a live_preview block with enable set to true and a valid management_token, so that the SDK can establish a connection to the Contentstack preview service.",
+    "Given the application is running in a live-preview-enabled environment, When the Contentstack Stack is initialized, Then live-preview utility initialization completes without errors, so that the application can receive real-time content change events from the CMS.",
+    "Given the application is NOT in a live-preview-enabled environment (e.g., production build, missing management token), When the application starts, Then the application initializes normally without errors and no live-preview connection is attempted, so that production behavior is unaffected.",
+    "Given a Content Author is editing a Homepage entry in the CMS, When the author makes a content change and the live preview iframe loads the Homepage URL, Then the Homepage renders with the draft content reflecting the author's change, including hero banner, modular blocks, and recent news sections.",
+    "Given a Content Author is editing a Discover Article entry in the CMS, When the author makes a content change and the live preview iframe loads the Article URL, Then the Discover Article page renders with the draft content reflecting the author's change, including article components and sidebar content.",
+    "Given the application is receiving live-preview events, When the Contentstack context receives updated entry data from a preview event, Then any component consuming content via the ContentstackContext or useContent hook re-renders with the updated data, so that the preview reflects the latest edit.",
+    "Given a Content Author is editing content in the CMS, When the author modifies a field and the preview event is received, Then the previewed page updates within 5 seconds of the author's edit, so that the preview experience is responsive.",
+    "Given the application is running with live preview enabled, When a live-preview event contains an entry for a content type that is not the current page's content type, Then the current page does not re-render or error, so that only relevant preview events affect the visible page.",
+    "Given a protected or authentication-required page, When a Content Author attempts to preview it via the CMS live preview, Then the preview either displays the page without protected content or displays a meaningful message indicating the limitation, so that the author is not shown a broken or misleading preview.",
+    "Given the application is running with live preview enabled, When a preview event arrives with malformed or incomplete entry data, Then the application does not crash and continues displaying the last valid content, so that preview errors are gracefully handled.",
+    "Given the application is running with live preview enabled, When the Contentstack preview service is unreachable or times out, Then the application falls back to displaying the published content and logs an error, so that the user experience degrades gracefully.",
+    "Given the application is server-side rendered, When a page is built or rendered via SSR (next build or getServerSideProps), Then the live-preview client-side initialization does not execute on the server and does not interfere with the existing SSR data-fetching pipeline, so that production builds and SSR remain unchanged.",
+    "Given the ContentstackContext is updated with live-preview data, When a component calls useContent().getContentByKey for a path that exists in the preview data, Then the hook returns the preview value rather than the initially SSR-rendered value, so that components reflect live edits."
+  ],
+  "acModifiedBySpeckit": [],
+  "acFlagged": [
+    {
+      "criterion": "Given a Content Author is editing a Homepage entry in the CMS, When the author makes a content change and the live preview iframe loads the Homepage URL, Then the Homepage renders with the draft content reflecting the author's change, including hero banner, modular blocks, and recent news sections.",
+      "flag": "Homepage currently receives page data as SSR props (page: [IContentstackPage]), not from ContentstackContext. The implementer must decide whether to inject preview data into props or context — this AC assumes the rendered output is correct regardless of mechanism, but the architectural choice between props-injection vs context-injection for Homepage specifically needs human confirmation."
+    },
+    {
+      "criterion": "Given a Content Author is editing a Discover Article entry in the CMS, When the author makes a content change and the live preview iframe loads the Article URL, Then the Discover Article page renders with the draft content reflecting the author's change, including article components and sidebar content.",
+      "flag": "No Discover Article page component was found in the listed files. The INewsArticlePage interface exists in page.ts but the rendering component path was not verified. Confirm which component renders Discover Articles before implementation."
+    },
+    {
+      "criterion": "Given a protected or authentication-required page, When a Content Author attempts to preview it via the CMS live preview, Then the preview either displays the page without protected content or displays a meaningful message indicating the limitation, so that the author is not shown a broken or misleading preview.",
+      "flag": "The original story notes say 'Might not be possible to preview protected pages' — this is stated as a limitation, not a requirement. This AC may need to be downgraded to a known limitation rather than a testable acceptance criterion, depending on product owner intent."
+    }
+  ]
+}
+```

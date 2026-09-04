@@ -1,0 +1,18 @@
+=== Pre-Review Gate: ui_and_review @ 2026-06-18T20:36:54-04:00 ===
+[33mThe CJS build of Vite's Node API is deprecated. See https://vite.dev/guide/troubleshooting.html#vite-cjs-node-api-deprecated for more details.[39m
+
+ RUN  v0.34.6 /tmp/skyscanner-app
+
+ ✓ src/index.test.ts  (1 test) 4ms
+ ✓ src/skyscanner/client.test.ts  (6 tests) 6ms
+table outputtable outputtable output ✓ src/cli.test.ts  (27 tests) 15ms
+ ✓ src/server.test.ts  (18 tests) 318ms
+
+ Test Files  4 passed (4)
+      Tests  52 passed (52)
+   Start at  20:36:54
+   Duration  857ms (transform 268ms, setup 0ms, collect 435ms, tests 343ms, environment 1ms, prepare 341ms)
+
+node_modules/vite/dist/node/index.d.ts(5,41): error TS2307: Cannot find module 'rollup/parseAst' or its corresponding type declarations.
+  There are types at '/tmp/skyscanner-app/node_modules/vite/node_modules/rollup/dist/parseAst.d.ts', but this result could not be resolved under your current 'moduleResolution' setting. Consider updating to 'node16', 'nodenext', or 'bundler'.
+=== Gate Result: PASS ===

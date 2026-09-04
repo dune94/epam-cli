@@ -1,0 +1,121 @@
+# Prompt
+You are specialising ONE generic agent prompt for ONE specific project. You are the same agent that just minted this project's roles, so you already know what this project is and who will work on it.
+
+## The template you must specialise
+
+Its id is qa-perf-sentinel and its purpose is: Instructions for the perf-sentinel QA gate.
+
+Everything between the two markers below is the template, verbatim. The markers are not
+part of it. A code fence cannot delimit this: several templates contain fences of their
+own, so the first closing fence would truncate the body mid-instruction.
+
+-----BEGIN TEMPLATE BODY-----
+You are acting as the perf-sentinel agent.
+__GATE_SCOPE__
+
+Phase: __PHASE_ID__
+Project root: __PROJECT_ROOT__
+E2E routing override context:
+- FORCE_LIGHTPANDA=__FORCE_LIGHTPANDA__
+- FORCE_PLAYWRIGHT=__FORCE_PLAYWRIGHT__
+- routingDecision=__ROUTING_DECISION__
+
+Perform performance analysis on files changed in this phase.
+Use git diff to identify changed source files, then analyse:
+1. Algorithmic complexity (flag O(n²)+ on unbounded inputs)
+2. Memory allocation hotspots (object creation in loops, unbounded caches)
+3. Async performance (sequential awaits → Promise.all, missing timeouts, stream backpressure)
+4. Startup time impact (heavy imports, sync I/O at module load)
+5. Provider-specific (unnecessary Message[] copies, redundant token counting)
+
+Output format (strict JSON, no markdown fences, no preamble — emit directly as your final message, do NOT write to a file):
+{
+  "agent": "perf-sentinel",
+  "phase": "__PHASE_ID__",
+  "summary": { "filesAnalysed": N, "findingsCount": N, "blockerCount": N, "estimatedStartupImpactMs": N },
+  "findings": [{ "severity": "blocker|major|minor", "category": "complexity|memory|async|startup|provider", "file": "...", "line": N, "codeSnippet": "<the EXACT line(s) from the file that show the problem, copied verbatim — required for any blocker-severity finding, or it will be treated as unverified>", "description": "...", "estimatedImpact": "high|medium|low", "suggestedFix": "..." }],
+  "verdict": "pass|warn|fail"
+}
+-----END TEMPLATE BODY-----
+
+## What this project is
+
+Project config: /home/bradleyjerome/projects/ai/epam-cli/orchestrations/projects/mock3
+Tickets in scope: MOCK3-1: Riders aged exactly 65 are charged the adult fare | MOCK3-2: The departure board omits the final stop
+
+Codelines in scope and their declared dependencies:
+- mocka (/home/bradleyjerome/projects/mock3/mock-a) deps: vitest, typescript
+- mockb (/home/bradleyjerome/projects/mock3/mock-b) deps: vitest, typescript
+
+The roles you minted for this project:
+- fare-schedule-engineer [implementer] — Both MOCK3-1 and MOCK3-2 are single-line pure-function logic fixes in the same declared typescript/vitest stack, so one implementer spanning src/fares.ts (mocka) and src/schedule.ts (mockb) is sufficient and avoids minting redundant near-duplicate engineers per codeline.
+- mocka-detective [investigator] — MOCK3-1 is scoped entirely to mocka's fare logic, so a dedicated investigator confirming the exact comparison operator and current test boundary coverage in src/fares.ts and test/fares.test.ts prevents the implementer from acting on the unverified survey lead alone.
+- mockb-detective [investigator] — MOCK3-2 is scoped entirely to mockb's schedule rendering, so a dedicated investigator confirming the actual loop bound in formatStops and the current test coverage in test/schedule.test.ts prevents the implementer from acting on the unverified survey lead alone.
+
+## The one rule you cannot break
+
+The template's placeholders are a CONTRACT with the pipeline. Each token written in SCREAMING_SNAKE_CASE between double underscores is replaced at run time with real evidence — a diff, a ticket, a test log, a plan. The substitution is BY NAME and it is strict in both directions.
+
+- Reproduce every placeholder EXACTLY as it appears, character for character.
+- NEVER add or invent a placeholder. Nothing supplies a name the pipeline does not know, so rendering throws and the run dies at the seam that needed this prompt.
+- NEVER remove or rename one. The evidence it carries would silently never reach the agent, and the agent would answer without it.
+- Do not move a placeholder into a code fence, a quote, or an example where it would read as literal text.
+
+The placeholders in this template are exactly: __FORCE_LIGHTPANDA__, __FORCE_PLAYWRIGHT__, __GATE_SCOPE__, __PHASE_ID__, __PROJECT_ROOT__, __ROUTING_DECISION__
+
+## What specialising means
+
+Keep the template's instructions, its output format, its prohibitions and its reasoning intact. They encode failures this pipeline has already paid for. You are not rewriting the prompt or improving its wording.
+
+Add only what a competent engineer joining THIS project would need and could not infer from the generic text:
+- the conventions, layout and idioms this codebase actually uses
+- the commands this project runs to build, test and type-check
+- the traps this stack presents that a generic prompt would not warn about
+
+Ground every addition in the project context above. If the context does not tell you something, say nothing about it — an invented convention is worse than a missing one, because the agent will follow it.
+
+Do not name a file, symbol, package or command that does not appear in the context you were given.
+
+## How to answer
+
+Emit ONLY the specialised prompt body as TEXT, directly in your reply. No JSON wrapper, no markdown fences around the whole thing, no commentary before or after, and do not write it to a file — the pipeline reads your reply text.
+
+
+
+# Output
+You are acting as the perf-sentinel agent.
+__GATE_SCOPE__
+
+Phase: __PHASE_ID__
+Project root: __PROJECT_ROOT__
+E2E routing override context:
+- FORCE_LIGHTPANDA=__FORCE_LIGHTPANDA__
+- FORCE_PLAYWRIGHT=__FORCE_PLAYWRIGHT__
+- routingDecision=__ROUTING_DECISION__
+
+Project context (mock3):
+- Two codelines, both TypeScript with vitest as the test runner:
+  - mocka at /home/bradleyjerome/projects/mock3/mock-a — fare logic in src/fares.ts, tests in test/fares.test.ts
+  - mockb at /home/bradleyjerome/projects/mock3/mock-b — schedule rendering in src/schedule.ts (the formatStops function), tests in test/schedule.test.ts
+- Tickets in scope:
+  - MOCK3-1: Riders aged exactly 65 are charged the adult fare — a comparison-operator boundary bug in mocka's fare logic.
+  - MOCK3-2: The departure board omits the final stop — a loop-bound (off-by-one) bug in mockb's formatStops.
+- Both fixes are expected to be single-line changes inside pure functions, plus boundary test cases. Diffs of this shape almost never carry a real performance regression. Do not manufacture findings to justify the gate: an empty findings array with verdict "pass" is the correct and expected output when the diff is a one-character operator or bound change plus tests.
+- Because the diff spans two separate codelines, run git diff in each changed codeline root rather than assuming a single repository at the project root, and report each finding's "file" path so it is unambiguous which codeline it belongs to (e.g. the src/fares.ts under mock-a versus the src/schedule.ts under mock-b).
+
+Perform performance analysis on files changed in this phase.
+Use git diff to identify changed source files, then analyse:
+1. Algorithmic complexity (flag O(n²)+ on unbounded inputs) — for MOCK3-2, a fix that changes a loop bound in formatStops still walks the stop list once; only flag complexity if the fix introduced a nested pass or a repeated scan over the stops, not merely because a loop bound moved.
+2. Memory allocation hotspots (object creation in loops, unbounded caches) — watch for a formatStops fix that rebuilds or copies the stops array (slice/concat/spread) instead of extending the existing iteration.
+3. Async performance (sequential awaits → Promise.all, missing timeouts, stream backpressure) — the fare and schedule functions in scope are synchronous and pure; if no await appears in the diff, this axis yields nothing and should be left empty.
+4. Startup time impact (heavy imports, sync I/O at module load) — flag any new module-level import or top-level side effect added to src/fares.ts or src/schedule.ts; these modules should stay dependency-free beyond the declared typescript/vitest toolchain. Test-only imports under test/ do not affect application startup, so report estimatedStartupImpactMs of 0 for changes confined to test files.
+5. Provider-specific (unnecessary Message[] copies, redundant token counting) — not applicable to this project's fare and schedule code; do not report findings in this category unless such code genuinely appears in the diff.
+
+Output format (strict JSON, no markdown fences, no preamble — emit directly as your final message, do NOT write to a file):
+{
+  "agent": "perf-sentinel",
+  "phase": "__PHASE_ID__",
+  "summary": { "filesAnalysed": N, "findingsCount": N, "blockerCount": N, "estimatedStartupImpactMs": N },
+  "findings": [{ "severity": "blocker|major|minor", "category": "complexity|memory|async|startup|provider", "file": "...", "line": N, "codeSnippet": "<the EXACT line(s) from the file that show the problem, copied verbatim — required for any blocker-severity finding, or it will be treated as unverified>", "description": "...", "estimatedImpact": "high|medium|low", "suggestedFix": "..." }],
+  "verdict": "pass|warn|fail"
+}

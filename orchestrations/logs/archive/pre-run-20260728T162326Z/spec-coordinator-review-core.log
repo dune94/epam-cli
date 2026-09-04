@@ -1,0 +1,82 @@
+# Prompt
+You are the specification coordinator for the epam-cli orchestration system. Before every phase you read orchestrations/prd.json (implementationOrder and stories), evaluate risk, dependencies, and technical readiness, then assign the correct specification runners: OpenSpec, Speckit, both, or none. You write assignments into each story's specification.assignedAgents field along with coordinatorNotes, target provider/model, and timestamps. You understand the provider policy ledger (configuration.aiRuntime.providerPolicies), token guardrails, and know when to skip stories that were already hand-curated. When you plan a run you emit JSON compliant with spec-mode-runner.js so that automation can apply deltas deterministically. You never invent story IDs or mutate acceptance criteria directly; only delegate to spec agents and record their status.
+
+You are the EPAM CLI specification coordinator reviewing the completed spec outputs for phase core.
+
+Each story was processed by a sequential agent pipeline:
+  1. openspec elaborated requirements (AC refinement, story splits, technical depth)
+  2. speckit reviewed openspec's output (testability, security, edge cases, gap analysis)
+
+For each story, evaluate the quality of the collaborative spec work:
+1. Did both agents add meaningful, non-overlapping value?
+2. Are the acceptance criteria complete, testable, and non-overlapping?
+3. Are story splits logical and properly scoped?
+4. Flag any story needing human review.
+
+Respond with JSON between <SPEC_REVIEW> and </SPEC_REVIEW> using this schema:
+[
+  {"storyId":"REM-xxx","verdict":"approved|needs_review","reviewNotes":"coordinator observations","qualityScore":0.0-1.0,"flags":[]}
+]
+
+Stories to review:
+[
+  {
+    "id": "AMSD-2041",
+    "title": "[GO, UP, MX] Live Preview of Content in CMS",
+    "acceptanceCriteria": [],
+    "specification": {
+      "runId": "20260728T155205Z",
+      "assignedAgents": [
+        "openspec",
+        "speckit"
+      ],
+      "coordinatorNotes": "Story has empty acceptance criteria and null spec. Live Preview of Content in CMS is a complex cross-platform feature (GO, UP, MX) requiring requirement elaboration (AC definition, possible story splits, live preview architecture depth) followed by testability/security hardening (preview latency, concurrent edits, XSS in rendered preview, content binding edge cases). Both agents assigned in order: openspec first, speckit second.",
+      "status": "completed",
+      "updatedAt": "2026-07-28T15:58:53.475Z",
+      "appliedAgents": [
+        "openspec",
+        "speckit"
+      ],
+      "agentContributions": [
+        {
+          "agent": "openspec",
+          "applied": true,
+          "notes": "Story requests Live Preview integration with Contentstack CMS — a novel capability. No acceptance criteria provided; VCs derived from description alone. The primary attachment point is useContent (236 callers), the central content-resolution hook. Live Preview SDK initialization and event wiring are secondary attachment points not yet visible in the indexed code. VCs are written to the boundary: they assert what the app renders/does given known Contentstack responses, not what Contentstack's real API returns.",
+          "acceptanceChanged": false,
+          "splitCount": 0,
+          "timestamp": "2026-07-28T15:58:15.066Z"
+        },
+        {
+          "agent": "speckit",
+          "applied": true,
+          "notes": "Openspec provided zero acceptance criteria, so all ACs are new. I created 12 criteria covering: happy-path single-field update (AC-1), multi-field simultaneous update (AC-2), disabled/fallback behavior (AC-3), connection loss resilience (AC-4), malformed event handling (AC-5), entry navigation (AC-6), rapid-update debouncing (AC-7), production security gate (AC-8), unknown-field resilience (AC-9), initial-load progressive enhancement (AC-10), reference/rich-text field support (AC-11), and reconnection recovery (AC-12). All criteria are written as observable Given/When/Then outcomes with no implementation details. The production security gate (AC-8) ensures Live Preview is not accidentally exposed to end users. AC-10 addresses the startup race condition where content must render before the Live Preview connection is ready.",
+          "acceptanceChanged": false,
+          "splitCount": 0,
+          "timestamp": "2026-07-28T15:58:53.475Z"
+        }
+      ]
+    },
+    "splitChildren": []
+  }
+]
+
+<SPEC_REVIEW>
+</SPEC_REVIEW>
+
+# Output
+<SPEC_REVIEW>
+[
+  {
+    "storyId": "AMSD-2041",
+    "verdict": "needs_review",
+    "reviewNotes": "Openspec identified the primary attachment point (useContent, 236 callers) and wrote boundary-level verification criteria but failed its core responsibility of AC elaboration — it explicitly produced zero acceptance criteria. Speckit compensated by authoring 12 well-structured ACs covering happy path, multi-field updates, connection loss, malformed events, debouncing, production security gate, startup race condition, and reconnection recovery. The agents added non-overlapping value (architectural analysis vs AC authoring), but the pipeline did not function as designed: speckit's ACs were not informed by openspec's requirements elaboration since openspec produced none. Additionally, no story split was proposed despite this being a complex cross-platform feature (GO, UP, MX) that the coordinator notes themselves flagged as a candidate for splitting. The 12 AC summaries appear comprehensive and testable, but without seeing full AC text, non-overlap cannot be fully verified. Human review should confirm: (1) whether openspec's VC output is sufficient or ACs need re-elaboration, (2) whether this story should be split by platform or concern, and (3) whether the 12 ACs are truly non-overlapping and individually testable.",
+    "qualityScore": 0.65,
+    "flags": [
+      "openspec_underperformed_zero_acs",
+      "no_story_split_for_complex_cross_platform_feature",
+      "speckit_acs_not_informed_by_openspec_elaboration",
+      "ac_text_not_available_for_overlap_verification"
+    ]
+  }
+]
+</SPEC_REVIEW>

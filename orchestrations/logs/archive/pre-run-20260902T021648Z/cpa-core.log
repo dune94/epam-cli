@@ -1,0 +1,40 @@
+[0;35m[CPA][0m Retrieval: TF-IDF
+[0;36m[01:42:24][0m Loading stories from gotransit-prd.json...
+[0;36m[01:42:24][0m Found 1 stories to contextualize
+
+[0;35m[CPA][0m Processing AMSD-1919...
+[0;35m[CPA][0m   AMSD-1919: formula baseline from calibration[medium:implementation:cli:sonnet](n=9): 2.808398113839453min $0.54208529935815
+[1mAMSD-1919[0m  Go-Checkout Page - Email & Confirm Email Case Sensitivity  [1;33m[REVIEW][0m
+  Machine time:              2.81 min  →      3.37 min  (conf: 0.45, adj: 0.80x)
+  Cost (story):          $0.5421     →  $0.6505   
+  Escalation:            +$0.0000      (r2@35%=+$0.0000 r3@15%=+$0.0000 k3@3.0%=+$0.0000)
+  Self-heal:             +$0.0000      (p=30%)
+  Retries (exp):          0.81  
+  Total (est):           $144.1038       (story+esc+heal=$0.6505 × pipeline 221.53x)
+  KB coverage:           4     chunks retrieved   3     cited   cov: 75%
+  [1;33m⚠[0m  Critical file CheckoutForm.tsx (containing line 306 bug) not provided in previews — search/read required
+  [1;33m⚠[0m  Email normalization scope undefined — unclear whether .toLowerCase() applies only to validation or also to downstream submission, risking silent email alteration
+  [1;33m⚠[0m  No test patterns shown for form validation — methodology for testing react-hook-form fields not established
+  [1;33m⚠[0m  react-hook-form integration opaque — validator wiring method (custom rule vs built-in vs onChange handler) unknown without reading CheckoutForm
+  [1;33m⚠[0m  Potential scope creep — other email field operations may require same fix; no grep results provided to rule this out
+
+[0;36m=== CPA Gate Summary ===[0m
+
+Phase                    Pass   Review    Block    Total
+------------------------------------------------------
+core                        0        1        0        1
+------------------------------------------------------
+[1mTOTAL                       0        1        0        1[0m
+
+[1;33m[CPA WARN][0m 1 story/stories in REVIEW gate — check risk flags
+
+[0;36m[01:42:59][0m Appended 1 CPA records to /home/bradleyjerome/projects/ai/epam-cli/orchestrations/logs/cpa-review.jsonl
+[0;36m[01:42:59][0m Applying blended estimates to prd.json...
+[0;32m[CPA OK][0m Backed up prd.json → gotransit-prd.json.before-cpa
+[0;32m[CPA OK][0m Applied CPA blended estimates to 1 stories
+
+  Review:   git diff /home/bradleyjerome/projects/ai/epam-cli/orchestrations/projects/metrolinx/runs/20260901T224029Z/work/gotransit-prd.json
+  Restore:  cp /home/bradleyjerome/projects/ai/epam-cli/orchestrations/projects/metrolinx/runs/20260901T224029Z/work/gotransit-prd.json.before-cpa /home/bradleyjerome/projects/ai/epam-cli/orchestrations/projects/metrolinx/runs/20260901T224029Z/work/gotransit-prd.json
+
+No calibrated categories (need >= min-n completed stories per category).
+[0;36m[01:43:07][0m Calibration updated from actuals

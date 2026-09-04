@@ -1,0 +1,16 @@
+spec-mode: fast-path claude/claude-haiku-4-5-20251001 (skipping MiniMax)
+spec-mode: detective for mockb = mockb-detective (minted for this codeline)
+spec-mode: fast-path claude/claude-haiku-4-5-20251001 (skipping MiniMax)
+spec-mode: fast-path claude/claude-haiku-4-5-20251001 (skipping MiniMax)
+spec-mode: fast-path claude/claude-haiku-4-5-20251001 (skipping MiniMax)
+spec-mode: VC guard flagged mechanism in MOCK3-2 VC: [Internal function name that produces the rendered string; naming it in a verification criterion prescribes the implementation mechanism rather than the observable surface (the rendered departure-board string).] "The string returned by formatStops contains the name of every stop in the input "
+spec-mode: VC guard flagged mechanism in MOCK3-2 VC: [Internal function name that produces the rendered string; naming it in a verification criterion prescribes the implementation mechanism rather than the observable surface (the rendered departure-board string).] "The string returned by formatStops contains the name of every stop in the input "
+spec-mode: ⚠️ VC still flagged for MOCK3-2 after 2 cycle(s) — dropping 1 flagged criterion/criteria, retaining 3 clean. Dropped: "The string returned by formatStops contains the name of ever"
+spec-mode: MOCK3-2 — 3 verification criteria persisted (source: both, resolution: partial)
+spec-mode: fast-path claude/claude-haiku-4-5-20251001 (skipping MiniMax)
+spec-mode: brownfield — ignoring 3 AC(s) speckit produced for MOCK3-2; ACs are out of scope and VCs come from the description
+spec-mode: fast-path claude/claude-haiku-4-5-20251001 (skipping MiniMax)
+spec-mode: SPEC_REVIEW: missing required field "storyId" — required by its own tool definition
+spec-mode: fast-path claude/claude-haiku-4-5-20251001 (skipping MiniMax)
+spec-mode: MODEL_REVIEW: missing required field "storyId" — required by its own tool definition
+spec-mode: completed for phase core (run 20260828T133134Z)

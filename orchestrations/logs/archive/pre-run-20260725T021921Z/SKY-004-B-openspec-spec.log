@@ -1,0 +1,90 @@
+# Prompt
+You are the openspec specification agent for EPAM CLI. Phase core, story SKY-004-B.
+
+Generate refined acceptance criteria, optionally updated title/description, and optional split stories. Output JSON only between <SPEC_AGENT> tags using this schema:
+{
+  "storyId":"SKY-004-B",
+  "agent":"openspec",
+  "notes":"context",
+  "acceptanceCriteria":["..."],
+  "description":"...",
+  "title":"...",
+  "splitStories":[{"id":"optional","title":"...","description":"...","acceptanceCriteria":["..."]}]
+}
+Use existing text when no change is needed.
+Story context:
+{
+  "id": "SKY-004-B",
+  "title": "Search and cheapest API routes with full input validation and complete test suite",
+  "description": "Implement GET /search and GET /cheapest in src/server.ts, importing FlightResult from the SKY-002 export. Add all input validation (required params, adults range, date format regex). Expand src/server.test.ts to at least 12 total tests with SkyscannerClient fully mocked via vi.mock. **Depends on SKY-002 and SKY-004-A.**",
+  "acceptanceCriteria": [
+    "GET /search with all valid params (from, to, date as YYYY-MM-DD, adults as positive integer) returns HTTP 200 with Content-Type application/json and body { flights: FlightResult[], count: number, searchedAt: string } where count strictly equals flights.length",
+    "GET /search missing any required param (from, to, or date) — query key absent entirely — returns HTTP 400 with Content-Type application/json and body { error: string }",
+    "GET /search with any required param (from, to, or date) present but set to an empty string returns HTTP 400 with Content-Type application/json and body { error: string }",
+    "GET /search with adults absent defaults to 1 passed to SkyscannerClient.search and returns HTTP 200",
+    "GET /search with adults present but non-numeric (e.g. 'abc', '1.5', '') returns HTTP 400 with Content-Type application/json and body { error: string }",
+    "GET /search with adults equal to zero or any negative integer returns HTTP 400 with Content-Type application/json and body { error: string }",
+    "GET /search or GET /cheapest with date not matching /^\\d{4}-\\d{2}-\\d{2}$/ returns HTTP 400 with Content-Type application/json and body { error: string }; both routes apply the identical regex",
+    "Validation order is deterministic and identical across both routes: required-param presence (absent or empty) is checked first, then date format, then adults type/range — so when multiple params are invalid the resulting 400 is reproducible and tests can assert it without ordering ambiguity",
+    "The searchedAt field in the GET /search response is an ISO-8601 datetime string; tests assert isNaN(new Date(body.searchedAt).getTime()) === false",
+    "GET /cheapest with all valid params returns HTTP 200 with Content-Type application/json and body { flight: FlightResult, searchedAt: string } where flight.price is ≤ the price of every FlightResult in the mocked SkyscannerClient response; on a price tie the first such flight in the mocked array order is returned, and the test fixture includes at least one strictly-cheaper flight to make the selection unambiguous",
+    "GET /cheapest with adults absent defaults to 1 passed to SkyscannerClient.search; when adults is present and valid it is forwarded as-is",
+    "GET /cheapest with adults non-numeric or ≤ 0 returns HTTP 400 with Content-Type application/json and body { error: string }, with validation identical to /search",
+    "GET /cheapest missing any required param (from, to, or date) — key absent or empty string — returns HTTP 400 with Content-Type application/json and body { error: string }",
+    "GET /cheapest returns HTTP 404 with Content-Type application/json and body { error: string } when SkyscannerClient.search resolves to an empty array",
+    "FlightResult is imported from the SKY-002 module export path and is not re-declared or duplicated inline in server.ts",
+    "src/server.test.ts uses vi.mock at the module level to mock SkyscannerClient so zero real HTTP calls are made during the test run; mocked responses are deterministic per test",
+    "src/server.test.ts contains at least 12 vitest test cases, each covering a distinct scenario: happy path /search, happy path /cheapest, each distinct 400 variant (missing/empty required param, non-numeric adults, adults ≤ 0, bad date format), the /cheapest 404 empty-result case, the searchedAt ISO-8601 format assertion, and the adults-default behaviour for both routes",
+    "`npx tsc --noEmit` exits 0 with no type errors across src/server.ts and src/server.test.ts",
+    "`vitest run` exits 0 with all tests green"
+  ],
+  "technicalNotes": {
+    "workingDir": "/tmp/skyscanner-app",
+    "files": [
+      "/tmp/skyscanner-app/src/server.ts",
+      "/tmp/skyscanner-app/src/server.test.ts"
+    ],
+    "dependsOn": [
+      "SKY-002"
+    ],
+    "testCommand": "npx vitest run src/server.test.ts"
+  },
+  "agentRole": "typescript-engineer",
+  "agentGroup": "primary",
+  "dependencies": []
+}
+
+<SPEC_AGENT>
+
+# Output
+```json
+{
+  "storyId": "SKY-004-B",
+  "agent": "openspec",
+  "notes": "context",
+  "acceptanceCriteria": [
+    "GET /search with all valid params (from, to, date as YYYY-MM-DD, adults as positive integer) returns HTTP 200 with Content-Type application/json and body { flights: FlightResult[], count: number, searchedAt: string } where count strictly equals flights.length",
+    "GET /search missing any required param (from, to, or date) — query key absent entirely — returns HTTP 400 with Content-Type application/json and body { error: string }",
+    "GET /search with any required param (from, to, or date) present but set to an empty string returns HTTP 400 with Content-Type application/json and body { error: string }",
+    "GET /search with adults absent defaults to 1 passed to SkyscannerClient.search and returns HTTP 200",
+    "GET /search with adults present but non-numeric (e.g. 'abc', '1.5', '') returns HTTP 400 with Content-Type application/json and body { error: string }",
+    "GET /search with adults equal to zero or any negative integer returns HTTP 400 with Content-Type application/json and body { error: string }",
+    "GET /search or GET /cheapest with date not matching /^\\d{4}-\\d{2}-\\d{2}$/ returns HTTP 400 with Content-Type application/json and body { error: string }; both routes apply the identical regex",
+    "Validation order is deterministic and identical across both routes: required-param presence (absent or empty) is checked first, then date format, then adults type/range — so when multiple params are invalid the resulting 400 is reproducible and tests can assert it without ordering ambiguity",
+    "The searchedAt field in the GET /search response is an ISO-8601 datetime string; tests assert isNaN(new Date(body.searchedAt).getTime()) === false",
+    "GET /cheapest with all valid params returns HTTP 200 with Content-Type application/json and body { flight: FlightResult, searchedAt: string } where flight.price is ≤ the price of every FlightResult in the mocked SkyscannerClient response; on a price tie the first such flight in the mocked array order is returned, and the test fixture includes at least one strictly-cheaper flight to make the selection unambiguous",
+    "GET /cheapest with adults absent defaults to 1 passed to SkyscannerClient.search; when adults is present and valid it is forwarded as-is",
+    "GET /cheapest with adults non-numeric or ≤ 0 returns HTTP 400 with Content-Type application/json and body { error: string }, with validation identical to /search",
+    "GET /cheapest missing any required param (from, to, or date) — key absent or empty string — returns HTTP 400 with Content-Type application/json and body { error: string }",
+    "GET /cheapest returns HTTP 404 with Content-Type application/json and body { error: string } when SkyscannerClient.search resolves to an empty array",
+    "FlightResult is imported from the SKY-002 module export path and is not re-declared or duplicated inline in server.ts",
+    "src/server.test.ts uses vi.mock at the module level to mock SkyscannerClient so zero real HTTP calls are made during the test run; mocked responses are deterministic per test",
+    "src/server.test.ts contains at least 12 vitest test cases, each covering a distinct scenario: happy path /search, happy path /cheapest, each distinct 400 variant (missing/empty required param, non-numeric adults, adults ≤ 0, bad date format), the /cheapest 404 empty-result case, the searchedAt ISO-8601 format assertion, and the adults-default behaviour for both routes",
+    "`npx tsc --noEmit` exits 0 with no type errors across src/server.ts and src/server.test.ts",
+    "`vitest run` exits 0 with all tests green"
+  ],
+  "description": "Implement GET /search and GET /cheapest in src/server.ts, importing FlightResult from the SKY-002 export. Add all input validation (required params, adults range, date format regex). Expand src/server.test.ts to at least 12 total tests with SkyscannerClient fully mocked via vi.mock. **Depends on SKY-002 and SKY-004-A.**",
+  "title": "Search and cheapest API routes with full input validation and complete test suite",
+  "splitStories": []
+}
+```

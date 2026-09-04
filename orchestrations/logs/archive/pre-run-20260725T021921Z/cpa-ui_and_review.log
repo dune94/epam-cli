@@ -1,0 +1,6 @@
+[0;35m[CPA][0m Retrieval: semantic-search (text-embedding-3-small)
+[0;36m[20:32:43][0m Loading stories from travel-app-prd.json...
+[0;36m[20:32:43][0m Found 8 stories to contextualize
+
+[0;35m[CPA][0m Processing SKY-005...
+[0;35m[CPA][0m   SKY-005: formula baseline from calibration[medium:implementation:cli:sonnet](n=9): 2.808398113839453min $0.54208529935815

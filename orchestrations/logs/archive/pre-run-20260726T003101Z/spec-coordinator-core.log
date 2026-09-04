@@ -1,0 +1,91 @@
+# Prompt
+You are the specification coordinator for the epam-cli orchestration system. Before every phase you read orchestrations/prd.json (implementationOrder and stories), evaluate risk, dependencies, and technical readiness, then assign the correct specification runners: OpenSpec, Speckit, both, or none. You write assignments into each story's specification.assignedAgents field along with coordinatorNotes, target provider/model, and timestamps. You understand the provider policy ledger (configuration.aiRuntime.providerPolicies), token guardrails, and know when to skip stories that were already hand-curated. When you plan a run you emit JSON compliant with spec-mode-runner.js so that automation can apply deltas deterministically. You never invent story IDs or mutate acceptance criteria directly; only delegate to spec agents and record their status.
+
+You are the EPAM CLI specification coordinator agent for phase core.
+
+Decide which specification agents should run for each story below.
+Available agents and their roles:
+  - openspec: Elaborates requirements — refines AC, proposes story splits, adds technical depth
+  - speckit: Reviews & hardens — adds testability criteria, security checks, edge cases, flags gaps
+
+Agent collaboration model:
+  - If both are assigned, openspec runs FIRST, then speckit reviews openspec's output
+  - Assign both for complex/critical stories
+  - Assign only openspec for simple elaboration
+  - Assign only speckit for stories that just need test/security hardening
+
+Respond with raw JSON only (no XML tags, no markdown fences, no preamble) using this schema:
+[
+  {"storyId":"EPAM-123","agents":["openspec","speckit"],"notes":"reason","priority":"high"}
+]
+If a story does not need spec work, provide an empty agents array.
+
+Stories JSON:
+[
+  {
+    "id": "AMSD-1820",
+    "title": "[Mozio] - Promo code amount not displayed for Return trip tickets in Mozio email confirmation",
+    "description": "[Mozio] - The Promo code amount is NOT displayed as expected for Return trip tickets in the Mozio email confirmation",
+    "acceptanceCriteria": [],
+    "technicalNotes": {
+      "files": [
+        "src/clients/mozio/mappers/map-to-sanitized-mozio-dispatch.ts",
+        "src/services/create-reservations/create-reservations.mappers.ts",
+        "src/services/submit-reservations/apply-report-discounts.service.ts",
+        "src/services/mappers/line-item/map-line-item-return-trip-modification.ts",
+        "src/functions/http-mozio-webhook.ts"
+      ]
+    },
+    "agentRole": "typescript-engineer",
+    "agentGroup": "primary",
+    "dependencies": [],
+    "spec": {
+      "runId": "20260725T235558Z",
+      "assignedAgents": [
+        "openspec",
+        "speckit"
+      ],
+      "coordinatorNotes": "Bug fix with empty acceptance criteria — openspec needed to elaborate the expected promo code display behavior for return trips vs one-way, define clear AC, and identify root cause areas in the email confirmation pipeline. speckit needed afterward to add testability criteria covering edge cases (zero promo, partial promo, multi-leg return trips) and verify financial display accuracy. Both assigned due to absence of any AC and the financial-calculation sensitivity of promo code amounts.",
+      "status": "completed",
+      "updatedAt": "2026-07-26T00:00:25.836Z",
+      "appliedAgents": [
+        "openspec",
+        "speckit"
+      ],
+      "agentContributions": [
+        {
+          "agent": "openspec",
+          "applied": true,
+          "notes": "Defect: promo code discount amount is missing or incorrect for return-trip tickets in Mozio email confirmations. The map-to-sanitized-mozio-dispatch mapper carries discount data per dispatch, and create-reservations.mappers has return-trip-specific logic (station swap). The discount amount likely needs analogous return-trip handling so it appears in the Mozio confirmation for return tickets.",
+          "acceptanceChanged": false,
+          "splitCount": 0,
+          "timestamp": "2026-07-26T00:00:04.478Z"
+        },
+        {
+          "agent": "speckit",
+          "applied": true,
+          "notes": "Openspec provided no acceptance criteria (empty array), only a descriptive note about the defect. I created all ACs from scratch based on the defect description and the listed technical files. AC-1 is the core fix verification. AC-2 ensures no regression on outbound trips. AC-3 covers the no-discount edge case. AC-4 covers the case where outbound and return discounts differ (prevents a naive copy of outbound discount to return). AC-5 and AC-6 trace the discount data through the mapper and webhook paths identified in the technical notes to ensure the fix is end-to-end. AC-7 covers the zero-discount edge case.",
+          "acceptanceChanged": false,
+          "splitCount": 0,
+          "timestamp": "2026-07-26T00:00:25.836Z"
+        }
+      ],
+      "coordinatorReview": {
+        "verdict": "needs_review",
+        "reviewNotes": "Openspec failed to produce acceptance criteria — it only emitted a descriptive note about the defect and left the AC array empty. Speckit compensated by authoring all 7 ACs from scratch, which is valuable but means the two agents did not collaborate as designed; openspec's contribution was effectively a root-cause hypothesis rather than elaborated requirements. The ACs speckit created appear comprehensive (core fix, outbound regression, no-discount edge, differing discounts, end-to-end mapper/webhook tracing, zero-discount edge), but because they were written without openspec's structured elaboration, there is risk of missing scenarios (e.g., multi-leg return trips, currency formatting, promo code display label vs amount). The coordinator notes correctly identified the need for both agents, but the pipeline did not enforce that openspec deliver ACs before speckit reviewed. Human review recommended to validate AC completeness and confirm openspec's root-cause hypothesis about the return-trip discount handling in the mapper.",
+        "qualityScore": 0.55,
+        "flags": [
+          "openspec_produced_no_acceptance_criteria",
+          "speckit_authored_all_acs_without_openspec_elaboration",
+          "pipeline_did_not_enforce_openspec_output_before_speckit",
+          "possible_missing_scenarios_multi_leg_return_currency_formatting"
+        ],
+        "reviewedAt": "2026-07-26T00:00:37.751Z"
+      }
+    }
+  }
+]
+
+
+# Output
+[{"storyId":"AMSD-1820","agents":[],"notes":"Spec run already completed (status: completed) with both openspec and speckit applied. Coordinator review flagged needs_review due to openspec producing no ACs and speckit compensating. No additional spec agent runs needed — story requires human review of existing AC completeness before implementation.","priority":"medium"}]

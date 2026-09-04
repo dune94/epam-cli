@@ -1,0 +1,107 @@
+# Prompt
+You are specialising ONE generic agent prompt for ONE specific project. You are the same agent that just minted this project's roles, so you already know what this project is and who will work on it.
+
+## The template you must specialise
+
+Its id is codeline-bridge and its purpose is: Extracts a completed codeline's exported surface as a contract for later lanes.
+
+Everything between the two markers below is the template, verbatim. The markers are not
+part of it. A code fence cannot delimit this: several templates contain fences of their
+own, so the first closing fence would truncate the body mid-instruction.
+
+-----BEGIN TEMPLATE BODY-----
+__BRIDGE_PROFILE__
+
+## Variables for this run
+
+- BRIDGE_SRC_CODELINE: __BCL__
+- BRIDGE_SRC_DIR: __BWT__
+- BRIDGE_OUT_FILE: __BRIDGE_OUT__
+- BRIDGE_PRD_FILE: __BPRD__
+
+Extract the exported API surface from the '__BCL__' codeline files and write the cross-codeline contract to __BRIDGE_OUT__.
+-----END TEMPLATE BODY-----
+
+## What this project is
+
+Project config: /home/bradleyjerome/projects/ai/epam-cli/orchestrations/projects/mock3
+Tickets in scope: MOCK3-1: Riders aged exactly 65 are charged the adult fare | MOCK3-2: The departure board omits the final stop
+
+Codelines in scope and their declared dependencies:
+- mocka (/home/bradleyjerome/projects/mock3/mock-a) deps: vitest, typescript
+- mockb (/home/bradleyjerome/projects/mock3/mock-b) deps: vitest, typescript
+
+The roles you minted for this project:
+- fare-logic-engineer [implementer] — MOCK3-1 requires fixing an off-by-one boundary comparison in TypeScript fare logic shared across both codelines, so a single implementer who knows the fare module and its conventions can fix it consistently.
+- departure-board-engineer [implementer] — MOCK3-2 requires fixing a stop-formatting function that omits the last stop in a departure board, which is a distinct domain from fare calculation and needs its own implementer who knows the rendering module.
+- mocka-codebase-investigator [investigator] — Each codeline needs an investigator who knows its repository layout, dependencies, and conventions so that implementers receive accurate guidance rather than survey guesses.
+
+## The one rule you cannot break
+
+The template's placeholders are a CONTRACT with the pipeline. Each token written in SCREAMING_SNAKE_CASE between double underscores is replaced at run time with real evidence — a diff, a ticket, a test log, a plan. The substitution is BY NAME and it is strict in both directions.
+
+- Reproduce every placeholder EXACTLY as it appears, character for character.
+- NEVER add or invent a placeholder. Nothing supplies a name the pipeline does not know, so rendering throws and the run dies at the seam that needed this prompt.
+- NEVER remove or rename one. The evidence it carries would silently never reach the agent, and the agent would answer without it.
+- Do not move a placeholder into a code fence, a quote, or an example where it would read as literal text.
+
+The placeholders in this template are exactly: __BRIDGE_PROFILE__, __BRIDGE_OUT__, __BPRD__, __BCL__, __BWT__
+
+## What specialising means
+
+Keep the template's instructions, its output format, its prohibitions and its reasoning intact. They encode failures this pipeline has already paid for. You are not rewriting the prompt or improving its wording.
+
+Add only what a competent engineer joining THIS project would need and could not infer from the generic text:
+- the conventions, layout and idioms this codebase actually uses
+- the commands this project runs to build, test and type-check
+- the traps this stack presents that a generic prompt would not warn about
+
+Ground every addition in the project context above. If the context does not tell you something, say nothing about it — an invented convention is worse than a missing one, because the agent will follow it.
+
+Do not name a file, symbol, package or command that does not appear in the context you were given.
+
+## How to answer
+
+Emit ONLY the specialised prompt body as TEXT, directly in your reply. No JSON wrapper, no markdown fences around the whole thing, no commentary before or after, and do not write it to a file — the pipeline reads your reply text.
+
+# Output
+__BRIDGE_PROFILE__
+
+## Variables for this run
+
+- BRIDGE_SRC_CODELINE: __BCL__
+- BRIDGE_SRC_DIR: __BWT__
+- BRIDGE_OUT_FILE: __BRIDGE_OUT__
+- BRIDGE_PRD_FILE: __BPRD__
+
+Extract the exported API surface from the '__BCL__' codeline files and write the cross-codeline contract to __BRIDGE_OUT__.
+
+## Project-specific context
+
+This project has two codelines, each a standalone TypeScript package with no workspace root and no cross-package imports:
+
+- **mock-a** (`/home/bradleyjerome/projects/mock3/mock-a`) — fare logic. Source lives in `src/fares.ts`; tests in `test/fares.test.ts`.
+- **mock-b** (`/home/bradleyjerome/projects/mock3/mock-b`) — departure board. Source lives in `src/schedule.ts`; tests in `test/schedule.test.ts`.
+
+### Export conventions
+
+- Every source file uses **named exports only**. There are no default exports and no barrel/index files.
+- Types are exported alongside values from the same module (e.g. `Rider` in `fares.ts`, `Stop` in `schedule.ts`).
+- When extracting the contract, list each exported symbol with its kind (type, const, function) and its full TypeScript signature.
+
+### TypeScript configuration
+
+- Both packages use `"module": "ES2022"`, `"moduleResolution": "bundler"`, `"strict": true`, `"noEmit": true`.
+- There are **no `paths` aliases** and **no `composite`/`references`** settings. Imports between files use relative paths (e.g. `../src/fares`).
+- Packages are ESM (`"type": "module"` in `package.json`).
+
+### Commands
+
+- **Type-check / build:** `npm run build` (runs `tsc --noEmit` — no emitted JS).
+- **Test:** `npm test` (runs `vitest run`).
+
+### Traps
+
+- Because `noEmit` is `true`, there is no compiled output to inspect; the contract must be derived from source `.ts` files directly.
+- `moduleResolution: "bundler"` allows extensionless imports, so a test importing `../src/fares` resolves to `src/fares.ts`. When listing the exported surface, read the actual source file, not a guessed path.
+- Both codelines are `private: true` packages with no published artifacts — the contract file is the only inter-codeline interface.

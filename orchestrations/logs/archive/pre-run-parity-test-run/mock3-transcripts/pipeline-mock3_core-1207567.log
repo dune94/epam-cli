@@ -1,0 +1,7 @@
+# mock3 mock3_core — PRD /tmp/mock3-prd-qOYPaa/prd.json
+/home/bradleyjerome/projects/ai/epam-cli/orchestrations/scripts/lib/dist-freshness.sh: line 40: error: command not found
+/home/bradleyjerome/projects/ai/epam-cli/orchestrations/scripts/lib/dist-freshness.sh: line 42: error: command not found
+/home/bradleyjerome/projects/ai/epam-cli/orchestrations/scripts/lib/dist-freshness.sh: line 44: error: command not found
+/home/bradleyjerome/projects/ai/epam-cli/orchestrations/scripts/lib/dist-freshness.sh: line 45: error: command not found
+
+# exit=1

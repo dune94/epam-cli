@@ -1,0 +1,15 @@
+ ⚠ Warning: Next.js inferred your workspace root, but it may not be correct.
+ We detected multiple lockfiles and selected the directory of /home/bradleyjerome/package-lock.json as the root directory.
+ To silence this warning, set `outputFileTracingRoot` in your Next.js config, or consider removing one of the lockfiles if it's not needed.
+   See https://nextjs.org/docs/app/api-reference/config/next-config-js/output#caveats for more information.
+ Detected additional lockfiles: 
+   * /home/bradleyjerome/projects/metrolinx/next.gotransit.com/package-lock.json
+
+No tests found, exiting with code 1
+Run with `--passWithNoTests` to exit with code 0
+In /home/bradleyjerome/projects/metrolinx/next.gotransit.com
+  3103 files checked.
+  testMatch: **/__tests__/**/*.[jt]s?(x), **/?(*.)+(spec|test).[tj]s?(x) - 874 matches
+  testPathIgnorePatterns: /node_modules/, /.next/, /__tests__/.*.mock.ts - 2966 matches
+  testRegex:  - 0 matches
+Pattern: run - 0 matches

@@ -1,0 +1,86 @@
+[1;33m[tier3-metrolinx][0m Tier 3 Metrolinx brownfield run — GLM + Kimi multi-model pipeline (USES CREDITS)
+[1;33m[tier3-metrolinx][0m   Jira:    https://metrolinx.atlassian.net / project AMSD
+[1;33m[tier3-metrolinx][0m   Codeline root: /home/bradleyjerome/projects/metrolinx
+[1;33m[tier3-metrolinx][0m   Baseline: develop
+[1;33m[tier3-metrolinx][0m   Mode:    BROWNFIELD (existing codeline, no teardown)
+[1;33m[tier3-metrolinx][0m   Log:     /tmp/tier3-metrolinx-jira-20260722T161348-4061929.log
+
+[1;33m[tier3-metrolinx][0m Auto-confirmed (--yes flag)
+[1;33m[tier3-metrolinx][0m OpenRouter usage before: $265.850449303
+
+[1;33m[tier3-metrolinx][0m profiles.json restored from canonical original
+
+[1;33m[tier3-metrolinx][0m Predictable teardown: resetting codelines to last verified baseline...
+[brownfield-preflight-reset] no verified-baseline marker yet for /home/bradleyjerome/projects/metrolinx/Api.Departures.UPExpress.com — nothing known-good to reset to, leaving as-is
+[brownfield-preflight-reset] no verified-baseline marker yet for /home/bradleyjerome/projects/metrolinx/Api.ServiceUpdates.UPExpress.com — nothing known-good to reset to, leaving as-is
+[brownfield-preflight-reset] no verified-baseline marker yet for /home/bradleyjerome/projects/metrolinx/Api.Stations.UPExpress.com — nothing known-good to reset to, leaving as-is
+[brownfield-preflight-reset] no verified-baseline marker yet for /home/bradleyjerome/projects/metrolinx/UPExpress.com — nothing known-good to reset to, leaving as-is
+[brownfield-preflight-reset] no verified-baseline marker yet for /home/bradleyjerome/projects/metrolinx/api.commonlib.gotransit.com — nothing known-good to reset to, leaving as-is
+[brownfield-preflight-reset] no verified-baseline marker yet for /home/bradleyjerome/projects/metrolinx/api.composer.gotransit.com — nothing known-good to reset to, leaving as-is
+[brownfield-preflight-reset] no verified-baseline marker yet for /home/bradleyjerome/projects/metrolinx/api.departures.gotransit.com — nothing known-good to reset to, leaving as-is
+[brownfield-preflight-reset] no verified-baseline marker yet for /home/bradleyjerome/projects/metrolinx/api.farecalculator.gotransit.com — nothing known-good to reset to, leaving as-is
+[brownfield-preflight-reset] no verified-baseline marker yet for /home/bradleyjerome/projects/metrolinx/api.schedules.gotransit.com — nothing known-good to reset to, leaving as-is
+[brownfield-preflight-reset] no verified-baseline marker yet for /home/bradleyjerome/projects/metrolinx/api.serviceguarantee.gotransit.com — nothing known-good to reset to, leaving as-is
+[brownfield-preflight-reset] no verified-baseline marker yet for /home/bradleyjerome/projects/metrolinx/api.serviceupdates.gotransit.com — nothing known-good to reset to, leaving as-is
+[brownfield-preflight-reset] no verified-baseline marker yet for /home/bradleyjerome/projects/metrolinx/api.stations.gotransit.com — nothing known-good to reset to, leaving as-is
+[brownfield-preflight-reset] no verified-baseline marker yet for /home/bradleyjerome/projects/metrolinx/api.tripplanner.gotransit.com — nothing known-good to reset to, leaving as-is
+[brownfield-preflight-reset] resetting /home/bradleyjerome/projects/metrolinx/azure.commerce.cdts to last verified baseline d944621 (current: 241e5f2dcb7481ebde81b6ea7b8889f1aac7a0f3, dirty: yes)
+[brownfield-preflight-reset] reset complete — /home/bradleyjerome/projects/metrolinx/azure.commerce.cdts is now at d944621
+[brownfield-preflight-reset] no verified-baseline marker yet for /home/bradleyjerome/projects/metrolinx/azure.gotransit.com — nothing known-good to reset to, leaving as-is
+[brownfield-preflight-reset] no verified-baseline marker yet for /home/bradleyjerome/projects/metrolinx/azure.metrolinx.com — nothing known-good to reset to, leaving as-is
+[brownfield-preflight-reset] no verified-baseline marker yet for /home/bradleyjerome/projects/metrolinx/azure.metrolinx.psme.com — nothing known-good to reset to, leaving as-is
+[brownfield-preflight-reset] no verified-baseline marker yet for /home/bradleyjerome/projects/metrolinx/azure.upexpress.com — nothing known-good to reset to, leaving as-is
+[brownfield-preflight-reset] no verified-baseline marker yet for /home/bradleyjerome/projects/metrolinx/c365 — nothing known-good to reset to, leaving as-is
+[brownfield-preflight-reset] no verified-baseline marker yet for /home/bradleyjerome/projects/metrolinx/construction-notice-pdf-service — nothing known-good to reset to, leaving as-is
+[brownfield-preflight-reset] no verified-baseline marker yet for /home/bradleyjerome/projects/metrolinx/cx-shared — nothing known-good to reset to, leaving as-is
+[brownfield-preflight-reset] no verified-baseline marker yet for /home/bradleyjerome/projects/metrolinx/docs.ads.com — nothing known-good to reset to, leaving as-is
+[brownfield-preflight-reset] no verified-baseline marker yet for /home/bradleyjerome/projects/metrolinx/docs.tools.com — nothing known-good to reset to, leaving as-is
+[brownfield-preflight-reset] no verified-baseline marker yet for /home/bradleyjerome/projects/metrolinx/gotransit.webservices — nothing known-good to reset to, leaving as-is
+[brownfield-preflight-reset] no verified-baseline marker yet for /home/bradleyjerome/projects/metrolinx/login.metrolinx.com — nothing known-good to reset to, leaving as-is
+[brownfield-preflight-reset] no verified-baseline marker yet for /home/bradleyjerome/projects/metrolinx/metrolinx.estimations.com — nothing known-good to reset to, leaving as-is
+[brownfield-preflight-reset] no verified-baseline marker yet for /home/bradleyjerome/projects/metrolinx/metrolinx.powerbi.com — nothing known-good to reset to, leaving as-is
+[brownfield-preflight-reset] no verified-baseline marker yet for /home/bradleyjerome/projects/metrolinx/next.gotransit.com — nothing known-good to reset to, leaving as-is
+[brownfield-preflight-reset] no verified-baseline marker yet for /home/bradleyjerome/projects/metrolinx/next.metrolinx.com — nothing known-good to reset to, leaving as-is
+[brownfield-preflight-reset] no verified-baseline marker yet for /home/bradleyjerome/projects/metrolinx/next.upexpress.com — nothing known-good to reset to, leaving as-is
+[brownfield-preflight-reset] no verified-baseline marker yet for /home/bradleyjerome/projects/metrolinx/react.gotransit.com — nothing known-good to reset to, leaving as-is
+[brownfield-preflight-reset] no verified-baseline marker yet for /home/bradleyjerome/projects/metrolinx/secure.gotransit.com — nothing known-good to reset to, leaving as-is
+[brownfield-preflight-reset] no verified-baseline marker yet for /home/bradleyjerome/projects/metrolinx/tools.gotransit.com — nothing known-good to reset to, leaving as-is
+
+[1;33m[tier3-metrolinx][0m Wiring dashboard to serve this run's live PRD + logs...
+[0;32m[pre-run-reset] ✓[0m PRD: /home/bradleyjerome/projects/ai/epam-cli/orchestrations/travel-app-prd.json
+[0;32m[pre-run-reset] ✓[0m Log dir: /home/bradleyjerome/projects/ai/epam-cli/orchestrations/logs
+[1;33m[pre-run-reset][0m Configuring agent-monitor to serve: travel-app-prd.json...
+[0;32m[pre-run-reset] ✓[0m agent-monitor restarted → /prd-dir = /home/bradleyjerome/projects/ai/epam-cli/orchestrations (serving travel-app-prd.json), /logs-dir = /home/bradleyjerome/projects/ai/epam-cli/orchestrations/logs
+[1;33m[pre-run-reset][0m Archiving and clearing run logs...
+[0;32m[pre-run-reset] ✓[0m Archived 4 log files → /home/bradleyjerome/projects/ai/epam-cli/orchestrations/logs/archive/pre-run-20260722T161351
+[1;33m[pre-run-reset][0m   KB scratchpad already empty
+[1;33m[pre-run-reset][0m Resetting agent-status.json...
+[0;32m[pre-run-reset] ✓[0m agent-status.json reset
+
+[0;32m[pre-run-reset] ✓[0m Pre-run reset complete.
+  PRD:         /home/bradleyjerome/projects/ai/epam-cli/orchestrations/travel-app-prd.json
+  Log dir:     /home/bradleyjerome/projects/ai/epam-cli/orchestrations/logs
+  Dashboard:   http://localhost:8092/monitor.html
+  PRD Viewer:  http://localhost:8092/prd-viewer.html
+  Langfuse:    http://localhost:3100
+
+
+[1;33m[tier3-metrolinx][0m CodeGraph preflight: verifying every codeline is indexed...
+[codegraph-preflight] Checked 31 repo(s): 31 already indexed, 0 indexed just now, 0 failure(s).
+
+[1;33m[tier3-metrolinx][0m ━━━ Phase: core ━━━
+[0;34m[16:13:51][0m [jira] https://metrolinx.atlassian.net (project: AMSD) → /tmp/orch-20260722T161351.log
+[0;32m[ingest][0m Pulling tickets from https://metrolinx.atlassian.net — project: AMSD, status: 'To Do'
+[0;32m[ingest][0m Found 1 issues.
+[0;32m[ingest][0m Brownfield: running codeline discovery against /home/bradleyjerome/projects/metrolinx...
+[codeline-discovery] Scanning /home/bradleyjerome/projects/metrolinx for git repositories...
+[codeline-discovery] Skipping docs repo (not in maintenance scope): docs.ads.com
+[codeline-discovery] Skipping docs repo (not in maintenance scope): docs.tools.com
+[codeline-discovery] Found 31 git repo(s) in codeline root.
+[codeline-discovery] Repo scoring: top 8 candidate(s) from 31 repos (scores: azure.commerce.cdts=147, c365=144, secure.gotransit.com=121, next.gotransit.com=120, UPExpress.com=92, next.metrolinx.com=79, gotransit.webservices=63, cx-shared=55)
+[codeline-discovery] Calling LLM (z-ai/glm-5.2) to match 1 ticket(s) to 8 candidate repo(s)...
+[codeline-discovery] ERROR: Discovery returned no valid codeline paths.
+[0;31m[ingest][0m Codeline discovery failed (exit 1). Cannot synthesize PRD.
+[0;31m[ERROR][0m [jira] Ingestion failed (exit 1).
+
+[0;31m[tier3-metrolinx] ✗[0m Phase 'core' failed (exit 1) — aborting pipeline

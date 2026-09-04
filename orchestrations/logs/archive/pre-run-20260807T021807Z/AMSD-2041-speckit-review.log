@@ -1,0 +1,213 @@
+# Prompt
+You are the speckit specification agent for EPAM CLI. Phase core, story AMSD-2041.
+
+You are reviewing and building on the openspec agent's output for this story.
+Your role is COLLABORATIVE — you are NOT starting from scratch. Instead:
+1. Review openspec's proposed acceptance criteria for testability and completeness
+2. Add missing edge-case, error-handling, security, and accessibility criteria
+3. Flag any AC that are vague, untestable, or overlapping
+4. Splitting is openspec's decision alone — you do NOT split stories. If openspec already split
+   this story, do NOT include a "splitStories" field in your output at all (it will be ignored if
+   you do). Review and refine the acceptanceCriteria openspec gave you for the UNSPLIT story as
+   normal; per-child refinement of an already-split story's children happens on a later turn, not
+   here.
+5. Do NOT remove or duplicate openspec's good work — build on it
+
+━━━ WHAT-NOT-HOW RULE (MANDATORY) ━━━
+Every AC must describe an OBSERVABLE OUTCOME (what a test can verify from outside the code),
+NOT an implementation instruction. If an AC names vi.mock, jest.fn, mockReturnValue,
+mockResolvedValue, import statements, or require() calls, REPLACE it with a
+Given/When/Then behaviour statement. Never tell the implementer which library or mock pattern to use.
+
+OPENSPEC'S OUTPUT (your input to review — ACs and split proposals only):
+{
+  "acceptanceCriteria": [],
+  "notes": "This is a novel feature — the codebase has zero live_preview/livePreview references. The Contentstack SDK initialization in src/services/contentstack.ts (the `options` object fed to `contentstack.Stack()`) is the primary attachment point: the vendor docs require a live_preview config block on Stack initialization. The app entry point src/pages/_app.tsx is where the Live Preview SDK init call would be wired. The ContentstackContext/useContent hook is the data flow that must be updated when draft content changes arrive. Note: the project uses Next.js Pages Router (src/pages/_app.tsx), not App Router, so the vendor's App Router guide must be adapted. Part of the setup (custom preview URL configuration in the Contentstack dashboard) is a vendor-console task, not code — it is a prerequisite but not verifiable in this suite."
+}
+
+ORIGINAL STORY CONTEXT:
+{
+  "id": "AMSD-2041",
+  "title": "[GO, UP, MX] Live Preview of Content in CMS",
+  "description": "Original Requirements (discovery)  AS a Content Author, I WANT to preview draft entries in CMS, SO THAT I can see how content will be shown on the website\nability to preview draft entries in CMS\nNotes& Assumptions  Limitation: Might not be possible to preview protected pages and content.\nOriginal Total Estimate:  8  Original FE Estimate:  8  Original DAM Estimate:  0  Original BE Estimate:  0",
+  "originalAcceptanceCriteria": [],
+  "technicalNotes": {
+    "files": [
+      "src/services/contentstack.ts",
+      "src/pages/_app.tsx",
+      "src/hooks/useContent.ts",
+      "src/interface/content/page.ts",
+      "src/components/contentstack/ContentstackAttention/content.mock.ts",
+      "src/components/contentstack/ContentStackGallery/ContentStackGallery.mock.ts"
+    ],
+    "perCodeline": {
+      "metrolinx": {
+        "files": [
+          "src/services/contentstack.ts",
+          "src/pages/_app.tsx",
+          "src/hooks/useContent.ts",
+          "src/interface/content/page.ts",
+          "src/components/contentstack/ContentstackAttention/content.mock.ts",
+          "src/components/contentstack/ContentStackGallery/ContentStackGallery.mock.ts"
+        ],
+        "resolved": [
+          {
+            "declared": "src/services/contentstack.ts",
+            "actual": "src/services/contentstack.ts",
+            "match": "exact",
+            "verified_against": "/home/bradleyjerome/projects/metrolinx/next.metrolinx.com"
+          },
+          {
+            "declared": "src/pages/_app.tsx",
+            "actual": "src/pages/_app.tsx",
+            "match": "exact",
+            "verified_against": "/home/bradleyjerome/projects/metrolinx/next.metrolinx.com"
+          },
+          {
+            "declared": "src/hooks/useContent.ts",
+            "actual": "src/hooks/useContent.ts",
+            "match": "exact",
+            "verified_against": "/home/bradleyjerome/projects/metrolinx/next.metrolinx.com"
+          },
+          {
+            "declared": "src/interface/content/page.ts",
+            "actual": "src/interface/content/page.ts",
+            "match": "exact",
+            "verified_against": "/home/bradleyjerome/projects/metrolinx/next.metrolinx.com"
+          },
+          {
+            "declared": "src/components/contentstack/ContentstackAttention/content.mock.ts",
+            "actual": "src/components/contentstack/ContentstackAttention/content.mock.ts",
+            "match": "exact",
+            "verified_against": "/home/bradleyjerome/projects/metrolinx/next.metrolinx.com"
+          },
+          {
+            "declared": "src/components/contentstack/ContentStackGallery/ContentStackGallery.mock.ts",
+            "actual": "src/components/contentstack/ContentStackGallery/ContentStackGallery.mock.ts",
+            "match": "exact",
+            "verified_against": "/home/bradleyjerome/projects/metrolinx/next.metrolinx.com"
+          }
+        ],
+        "unresolved": []
+      }
+    }
+  },
+  "dependencies": []
+}
+
+Produce your refined output as raw JSON only (no XML tags, no markdown fences, no preamble). Include:
+- "acceptanceCriteria": The FULL merged list (openspec's criteria + your additions/refinements). Every item MUST be an observable outcome, not an implementation instruction.
+- "notes": What you changed and why (be specific — cite which criteria you added/modified/replaced)
+- "splitStories": ALWAYS omit this field. Splitting is openspec's decision alone — never propose
+  split children of your own, even if openspec already split this story.
+- "acAddedBySpeckit": Array of criteria YOU added that were not in openspec's output
+- "acModifiedBySpeckit": Array of {"original":"...","revised":"..."} for criteria you reworded
+- "acFlagged": Array of {"criterion":"...","flag":"..."} for criteria that need human attention
+
+For a brownfield story with a real codeline, you may have read-only tools (read_file,
+list_files, search) available this turn — if so, USE them for real to check a file's
+actual contents before relying on it; do not invent what a tool would return. For a
+greenfield story with no existing codeline, you have none — give your best answer from
+the description, title and paths you were given, and say so in "notes" if the file
+contents would have changed your answer. Either way, never narrate an imagined tool
+result: a real answer with an honest caveat is worth everything; fabricated tool-call
+syntax (<tool_call>, <tool_use>, <function_call>) is worth nothing — it is discarded in
+full and the work is lost (observed live, 2026-07-28: exactly this, on an empty-criteria
+story that got no answer at all).
+
+
+# Output
+```json
+{
+  "acceptanceCriteria": [
+    {
+      "id": "AC-1",
+      "criterion": "Given the Contentstack SDK Stack initialization, When the application starts, Then the Stack configuration must include a live_preview config block enabling the live preview feature, so that the SDK can establish a connection to the Contentstack live preview service."
+    },
+    {
+      "id": "AC-2",
+      "criterion": "Given the application is loaded in a browser, When the page renders, Then the Contentstack Live Preview SDK must be initialized (wired into the Pages Router app entry point), so that the application can receive draft content change events from the Contentstack dashboard."
+    },
+    {
+      "id": "AC-3",
+      "criterion": "Given a Content Author is editing a draft entry in Contentstack and has the live preview URL open, When the author makes changes to the draft, Then the previewed page must render the draft (unpublished) content instead of the published content."
+    },
+    {
+      "id": "AC-4",
+      "criterion": "Given a Content Author is viewing a live preview of a draft entry, When the author modifies the draft content in Contentstack, Then the previewed page must update to reflect the changes without requiring a manual page refresh."
+    },
+    {
+      "id": "AC-5",
+      "criterion": "Given the application receives a request without Contentstack live preview parameters, When content is fetched, Then the application must deliver published content with identical behavior and structure to the current (pre-feature) implementation — no change in data shape, performance, or error handling for published content delivery."
+    },
+    {
+      "id": "AC-6",
+      "criterion": "Given the live preview connection fails or times out, When the application attempts to retrieve draft content, Then the application must log the error and fall back to displaying the published content for that entry, rather than showing a blank page, a crash, or an unhandled error to the user."
+    },
+    {
+      "id": "AC-7",
+      "criterion": "Given a page that requires authentication (protected page), When a Content Author attempts to live-preview that protected page, Then the application must display the standard authentication gate or a meaningful message instead of an unhandled error, acknowledging the known limitation that protected pages may not be fully previewable."
+    },
+    {
+      "id": "AC-8",
+      "criterion": "Given draft content is received via the live preview connection, When the ContentstackContext value is updated, Then consumers of useContent().getContentByKey must receive the draft content values rather than the published content values, so that all components rendering content from the context reflect the draft state."
+    },
+    {
+      "id": "AC-9",
+      "criterion": "Given the application receives a request containing Contentstack live preview hash or query parameters, When the application processes the request, Then it must recognize those parameters and enter live preview mode (fetching draft content), and When those parameters are absent, it must remain in standard published-content mode."
+    },
+    {
+      "id": "AC-10",
+      "criterion": "Given live preview is active, When draft content is delivered, Then it must be deliverable for all content types currently supported by the application's content-fetching functions (getEntry, getSingleEntry, findSingletonEntry, getInteractiveMapsStackEntry), not limited to a single content type."
+    },
+    {
+      "id": "AC-11",
+      "criterion": "Given the application is deployed to an environment where live preview should not be active (e.g., production without preview), When the application starts, Then live preview must be configurable via environment variables so that it can be disabled, and When disabled, no live preview SDK initialization or draft content fetching must occur."
+    },
+    {
+      "id": "AC-12",
+      "criterion": "Given the live preview SDK is initialized, When the Contentstack dashboard pushes a callback event indicating the preview session has ended or the entry was published, Then the application must revert to displaying the published version of the content."
+    },
+    {
+      "id": "AC-13",
+      "criterion": "Given the application is in live preview mode, When the content type or entry UID from the preview parameters does not match any valid content type or entry, Then the application must display a meaningful error or fallback state rather than crashing or rendering empty content."
+    },
+    {
+      "id": "AC-14",
+      "criterion": "Given the live preview feature is added, When the application bundle is built, Then the Live Preview SDK must only be included in the client-side bundle (since live preview is a browser-side feature requiring WebSocket/POST communication with Contentstack), and must not inflate the server-side bundle."
+    }
+  ],
+  "notes": "Openspec provided an empty acceptanceCriteria array with useful architectural notes. I built the full AC list from scratch based on codebase inspection. Key findings from reading the actual files: (1) src/services/contentstack.ts exports `options: contentstack.Config` and `Stack = contentstack.Stack(options)` — the `options` object currently has no `live_preview` block, confirming it is the primary attachment point. (2) src/pages/_app.tsx uses Pages Router with no Contentstack Live Preview SDK init — the vendor's App Router guide must be adapted. (3) src/hooks/useContent.ts reads from `ContentstackContext` via useContext and exposes `getContentByKey` — this is the data-flow path that must surface draft content to components. (4) Zero `live_preview`/`livePreview` references exist anywhere in the codebase. (5) The ContentstackFactory class wraps Stack and is used by getEntry, getSingleEntry, findSingletonEntry, getInteractiveMapsStackEntry — all must support draft content delivery (AC-10). (6) The story's noted limitation about protected pages is captured in AC-7. (7) AC-14 addresses bundle-size concern since live preview is client-only. The ContentstackContext file was not found by search — it may be auto-generated, in a different path, or not yet created; this does not affect the ACs since they describe observable outcomes regardless of file location.",
+  "acAddedBySpeckit": [
+    "AC-1",
+    "AC-2",
+    "AC-3",
+    "AC-4",
+    "AC-5",
+    "AC-6",
+    "AC-7",
+    "AC-8",
+    "AC-9",
+    "AC-10",
+    "AC-11",
+    "AC-12",
+    "AC-13",
+    "AC-14"
+  ],
+  "acModifiedBySpeckit": [],
+  "acFlagged": [
+    {
+      "criterion": "AC-7",
+      "flag": "The story states protected pages 'might not be possible' to preview — this is vague. Needs product clarification on whether (a) protected pages show an auth gate with a message, (b) protected pages are simply excluded from preview with a Contentstack dashboard config, or (c) some partial preview is expected. The current AC assumes option (a) but this should be confirmed."
+    },
+    {
+      "criterion": "AC-2",
+      "flag": "The Contentstack Live Preview SDK initialization pattern for Pages Router is not documented in the vendor's primary guide (which targets App Router). The implementation will need to adapt the vendor's App Router approach. This AC describes the observable outcome but the technical path needs spike/proof-of-concept validation before implementation."
+    },
+    {
+      "criterion": "AC-14",
+      "flag": "Bundle-size impact of the Live Preview SDK should be measured during implementation. If the SDK is large, lazy-loading or dynamic import may be needed. This AC may need refinement once the SDK size is known."
+    }
+  ]
+}
+```

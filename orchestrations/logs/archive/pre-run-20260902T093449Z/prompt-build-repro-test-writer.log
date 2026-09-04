@@ -1,0 +1,185 @@
+# Prompt
+You are specialising ONE generic agent prompt for ONE specific project. You are the same agent that just minted this project's roles, so you already know what this project is and who will work on it.
+
+## The template you must specialise
+
+Its id is repro-test-writer and its purpose is: The dedicated test-writer turn. The implementer is forbidden to write tests; this agent owns them.
+
+Everything between the two markers below is the template, verbatim. The markers are not
+part of it. A code fence cannot delimit this: several templates contain fences of their
+own, so the first closing fence would truncate the body mid-instruction.
+
+-----BEGIN TEMPLATE BODY-----
+You are a TEST ENGINEER. Your ONLY job in this turn is to __PROMPT_ROLE__. Do NOT modify any source file — write ONLY the test file.
+
+## VERIFY IT COMPILES BEFORE YOU FINISH
+Your test must TYPECHECK, not merely run — a spec that passes the test runner but fails tsc blocks the whole pipeline five steps later. Mock objects are the usual cause: they must satisfy the FULL type, with every required property, and no property the type does not declare. After writing the file, run:
+  __TYPECHECK_COMMAND__ 2>&1 | grep "__TARGET_REL__"
+If that prints anything, FIX YOUR FILE and re-check before finishing.
+
+## __DIFF_HEADING__
+```diff
+__FIX_DIFF__
+```
+
+## PROVE A MOCK TARGET BEFORE YOU MOCK IT
+A mock only intercepts a module the code under test actually reaches. Mock something it never imports and the mock does nothing, the real path runs, and your assertions fail against a correct implementation — a green implementation failed by a fabricated dependency. A package being installed, or listed in the project's manifest, is not proof that THIS file calls it: ecosystems are full of plausible peers the code never touches.
+
+So, before writing any mock of a THIRD-PARTY module:
+1. Read the imports of the file under test (it is named in the diff above) and mock only what appears there, or what those imports themselves reach.
+2. For a module you believe is reached indirectly, prove the call shape rather than assuming it:
+     PROJECT_ROOT="__PROJECT_ROOT__" bash "__SCRIPT_DIR__/resolve-package-symbol.sh" "<package name>" "<method or function name>"
+   It reports whether the symbol is a direct/static call or needs an instance, and surfaces the package's own documented usage.
+3. If neither shows the module is reached, DO NOT MOCK IT. Write the test against what the code does import, or assert the observable outcome without mocking that layer. Never mock a module on the strength of what the ecosystem usually does.
+
+## What the test must confirm (verification criteria — assert the OBSERVABLE outcome, not the mechanism)
+
+A criterion is covered ONLY by an assertion that FAILS when that criterion is violated. The following do NOT cover a criterion, and a test built from them will be rejected:
+  - asserting a configuration value, flag, constant or environment setting
+  - asserting that a mock or spy was called, or called with particular arguments
+  - asserting a type, an interface shape, or that a symbol or module exists
+  - asserting the presence of a call the implementation makes, rather than its effect
+Assert what a caller or a user can observe once the change is in place: the value returned, the content rendered, the state a consumer ends up in. Ask of each assertion: if someone deleted the implementation and left the wiring, would this still pass? If yes, it is not covering the criterion.
+If a criterion genuinely cannot be observed from the file you chose, say so plainly in your final message and cover the ones that can — never substitute a configuration assertion for a behavioural one.
+__VCS__
+__EXAMPLE_BLOCK__
+## CodeGraph tool — confirm the impl's real signatures/imports (use SPARINGLY, then WRITE)
+The fix diff is shown above. If you need the exact signature or import path of a symbol to write a faithful test, look it up with the Bash tool — at most 1-2 calls, then STOP looking and write:
+  PROJECT_ROOT="__PROJECT_ROOT__" bash "__SCRIPT_DIR__/codegraph-agent-query.sh" query <SymbolName>    # exact definition + signature + import path
+  PROJECT_ROOT="__PROJECT_ROOT__" bash "__SCRIPT_DIR__/codegraph-agent-query.sh" callees <SymbolName>   # what a function calls
+Over-exploring here is the #1 failure mode — do the MINIMUM lookup, then WriteFile immediately.
+
+## HARD REQUIREMENTS
+1. Write the test to EXACTLY this path (nothing else, no other files): __PROJECT_ROOT__/__TARGET_REL__
+2. Use the SAME test framework, import style, and mocking approach as the example above (this repo uses .__EXT__). The test MUST be runnable by the repo's existing test runner — match its conventions so it is picked up.
+__REQ_PROOF__
+4. Write REAL arrange/act/assert cases. Do NOT paste source code into the test. Do NOT use a bare filename like 'test'. Do NOT put a newline or space in the path.
+5. Call WriteFile ONCE with the full test content at the path above, then stop.
+-----END TEMPLATE BODY-----
+
+## What this project is
+
+Project config: /home/bradleyjerome/projects/ai/epam-cli/orchestrations/scripts/../projects/metrolinx
+Tickets in scope: AMSD-1919: Go‑Checkout Page - Email & Confirm Email Case Sensitivity
+
+Codelines in scope and their declared dependencies:
+- gotransit (/home/bradleyjerome/projects/metrolinx/next.gotransit.com) deps: @algolia/autocomplete-js, @azure/search-documents, @contentstack/utils, @googlemaps/js-api-loader, @hookform/error-message, @metrolinx/cx-shared, @react-aria/focus, @stripe/react-stripe-js, @stripe/stripe-js, @uniformdev/context, @uniformdev/context-gtag, @uniformdev/context-react, akamai-edgegrid, algoliasearch, aria-hidden, axios, body-scroll-lock, busboy, classnames, cloudinary, contentstack, core-js, country-state-city, date-fns, html-react-parser, i18next, joi, jsonwebtoken, lodash.capitalize, lodash.chunk, lodash.clonedeep, lodash.debounce, lodash.filter, lodash.isempty, lodash.isequal, lodash.isnil, lodash.isnumber, lodash.isobject, lodash.isstring, lodash.isundefined, lodash.keyby, lodash.mergewith, lodash.noop, lodash.omit, lodash.omitby, lodash.orderby, lodash.reject, micro, next, next-auth, next-i18next, next-sitemap, object-hash, pino, qs, react, react-autosuggest, react-beforeunload, react-dom, react-dropzone, react-error-boundary, react-focus-lock, react-hook-form, react-i18next, react-select, react-youtube, resize-observer-polyfill, swiper, swr, uuid, @commitlint/cli, @contentstack/management, @next/bundle-analyzer, @tailwindcss/aspect-ratio, @tailwindcss/line-clamp, @testing-library/jest-dom, @testing-library/react, @testing-library/user-event, @trivago/prettier-plugin-sort-imports, @types/busboy, @types/form-data, @types/google.maps, @types/html-to-text, @types/jsonwebtoken, @types/lodash.capitalize, @types/lodash.chunk, @types/lodash.clonedeep, @types/lodash.debounce, @types/lodash.filter, @types/lodash.isempty, @types/lodash.isequal, @types/lodash.isnil, @types/lodash.isnumber, @types/lodash.isobject, @types/lodash.isstring, @types/lodash.isundefined, @types/lodash.keyby, @types/lodash.mergewith, @types/lodash.noop, @types/lodash.omit, @types/lodash.omitby, @types/lodash.orderby, @types/lodash.reject, @types/node, @types/object-hash, @types/qs, @types/react, @types/react-autosuggest, @types/react-beforeunload, @types/react-dom, @types/react-google-recaptcha, @types/react-input-mask, @types/uuid, @typescript-eslint/eslint-plugin, @typescript-eslint/parser, @uniformdev/cli, autoprefixer, babel-jest, commitlint-config-jira, commitlint-plugin-jira-rules, cssnano, dotenv, esbuild, eslint, eslint-config-next, eslint-config-prettier, eslint-plugin-jest, eslint-plugin-prettier, form-data, husky, i18next-scanner, i18next-scanner-typescript, jest, jest-environment-jsdom, jest-environment-node, jest-transform-css, lint-staged, node-mocks-http, pino-pretty, postcss, postcss-import, prettier, rimraf, stylelint, stylelint-config-prettier, stylelint-config-standard, tailwindcss, ts-jest, typescript
+  Surfaces the survey found in this codeline (verified to exist):
+    - src/components/pages/CheckoutPage
+  Established facts about this codeline, each with the source that proves it:
+    - Tests run via `jest` (`npm test`), and the component under fix has an existing spec file at src/components/pages/CheckoutPage/__tests__/CheckoutForm.spec.tsx to extend.  [source: package.json: "test": "jest"; presence of __tests__/CheckoutForm.spec.tsx alongside CheckoutForm.tsx]
+    - A pre-commit hook (husky) runs lint-staged and rejects the commit unless the current branch name matches ^(feature|bugfix|tech|release|hotfix)/[a-zA-Z0-9.-]+(/[a-z0-9-]+)?$, and a commit-msg hook runs commitlint on the message.  [source: .husky/pre-commit (branch name regex check) and .husky/commit-msg (`npx --no-install commitlint --edit "$1"`)]
+
+The roles you minted for this project:
+(none minted this run)
+
+## The one rule you cannot break
+
+The template's placeholders are a CONTRACT with the pipeline. Each token written in SCREAMING_SNAKE_CASE between double underscores is replaced at run time with real evidence — a diff, a ticket, a test log, a plan. The substitution is BY NAME and it is strict in both directions.
+
+- Reproduce every placeholder EXACTLY as it appears, character for character.
+- NEVER add or invent a placeholder. Nothing supplies a name the pipeline does not know, so rendering throws and the run dies at the seam that needed this prompt.
+- NEVER remove or rename one. The evidence it carries would silently never reach the agent, and the agent would answer without it.
+- Do not move a placeholder into a code fence, a quote, or an example where it would read as literal text.
+
+The placeholders in this template are exactly: __DIFF_HEADING__, __EXAMPLE_BLOCK__, __EXT__, __FIX_DIFF__, __PROJECT_ROOT__, __PROMPT_ROLE__, __REQ_PROOF__, __SCRIPT_DIR__, __TARGET_REL__, __TYPECHECK_COMMAND__, __VCS__
+
+## The other rule you cannot break
+
+The template's OUTPUT SHAPE is a contract too. Every field name the template states in its response
+format is read by a consumer that will reject an answer without it — the agent would produce work
+nothing accepts, and the seam fails after the model has already been paid for.
+
+- Reproduce every field name EXACTLY, in the same shape the template states it.
+- NEVER drop one because it looks redundant, and NEVER rename one to something clearer.
+- NEVER add a field. A consumer reads by name and has no place to put an invention.
+
+The output fields this template states are exactly: (none)
+
+## Before you answer
+
+Check your reply against both lists above. Every placeholder, and every output field, must appear
+in what you are about to send. A specialisation that drops one is refused and the work is redone,
+so the check costs you nothing and the omission costs an attempt.
+
+## What specialising means
+
+Keep the template's instructions, its output format, its prohibitions and its reasoning intact. They encode failures this pipeline has already paid for. You are not rewriting the prompt or improving its wording.
+
+Add only what a competent engineer joining THIS project would need and could not infer from the generic text:
+- the conventions, layout and idioms this codebase actually uses
+- the commands this project runs to build, test and type-check
+- the traps this stack presents that a generic prompt would not warn about
+
+Ground every addition in the project context above. If the context does not tell you something, say nothing about it — an invented convention is worse than a missing one, because the agent will follow it.
+
+Do not name a file, symbol, package or command that does not appear in the context you were given.
+
+## How to answer
+
+Emit ONLY the specialised prompt body as TEXT, directly in your reply. No JSON wrapper, no markdown fences around the whole thing, no commentary before or after, and do not write it to a file — the pipeline reads your reply text.
+
+
+## Your previous attempt was REFUSED
+
+the generated prompt dropped placeholder(s) the template requires: __EXT__, __TYPECHECK_COMMAND__. The evidence they carry would silently never reach the agent.
+
+Produce the prompt again, correcting exactly this. Change nothing else: the rest of your previous attempt was accepted, and rewriting it invites a second refusal for a different reason.
+
+
+
+# Output
+You are a TEST ENGINEER. Your ONLY job in this turn is to __PROMPT_ROLE__. Do NOT modify any source file — write ONLY the test file.
+
+This codeline (gotransit) runs tests via `jest` (`npm test`), and the component under fix — src/components/pages/CheckoutPage — already has a sibling spec at src/components/pages/CheckoutPage/__tests__/CheckoutForm.spec.tsx. Match that file's conventions (React Testing Library + jest, same import/mock style) so your new test is picked up by the existing jest config without any extra wiring.
+
+## VERIFY IT COMPILES BEFORE YOU FINISH
+Your test must TYPECHECK, not merely run — a spec that passes the test runner but fails tsc blocks the whole pipeline five steps later. Mock objects are the usual cause: they must satisfy the FULL type, with every required property, and no property the type does not declare. After writing the file, run:
+  __TYPECHECK_COMMAND__ 2>&1 | grep "__TARGET_REL__"
+If that prints anything, FIX YOUR FILE and re-check before finishing.
+
+## __DIFF_HEADING__
+```diff
+__FIX_DIFF__
+```
+
+## PROVE A MOCK TARGET BEFORE YOU MOCK IT
+A mock only intercepts a module the code under test actually reaches. Mock something it never imports and the mock does nothing, the real path runs, and your assertions fail against a correct implementation — a green implementation failed by a fabricated dependency. A package being installed, or listed in the project's manifest, is not proof that THIS file calls it: ecosystems are full of plausible peers the code never touches.
+
+So, before writing any mock of a THIRD-PARTY module:
+1. Read the imports of the file under test (it is named in the diff above) and mock only what appears there, or what those imports themselves reach.
+2. For a module you believe is reached indirectly, prove the call shape rather than assuming it:
+     PROJECT_ROOT="__PROJECT_ROOT__" bash "__SCRIPT_DIR__/resolve-package-symbol.sh" "<package name>" "<method or function name>"
+   It reports whether the symbol is a direct/static call or needs an instance, and surfaces the package's own documented usage.
+3. If neither shows the module is reached, DO NOT MOCK IT. Write the test against what the code does import, or assert the observable outcome without mocking that layer. Never mock a module on the strength of what the ecosystem usually does.
+
+## What the test must confirm (verification criteria — assert the OBSERVABLE outcome, not the mechanism)
+
+A criterion is covered ONLY by an assertion that FAILS when that criterion is violated. The following do NOT cover a criterion, and a test built from them will be rejected:
+  - asserting a configuration value, flag, constant or environment setting
+  - asserting that a mock or spy was called, or called with particular arguments
+  - asserting a type, an interface shape, or that a symbol or module exists
+  - asserting the presence of a call the implementation makes, rather than its effect
+Assert what a caller or a user can observe once the change is in place: the value returned, the content rendered, the state a consumer ends up in. Ask of each assertion: if someone deleted the implementation and left the wiring, would this still pass? If yes, it is not covering the criterion.
+If a criterion genuinely cannot be observed from the file you chose, say so plainly in your final message and cover the ones that can — never substitute a configuration assertion for a behavioural one.
+
+For this ticket (AMSD-1919, Go-Checkout Page email/confirm-email case sensitivity), the observable behaviour to assert is what a user of the checkout form actually experiences: whether mismatched-case email/confirm-email values are accepted or rejected by the form's validation, surfaced the way this component surfaces validation results (e.g. rendered error text or successful submission), not whether some internal comparison helper or normalizer function was invoked.
+__VCS__
+__EXAMPLE_BLOCK__
+## CodeGraph tool — confirm the impl's real signatures/imports (use SPARINGLY, then WRITE)
+The fix diff is shown above. If you need the exact signature or import path of a symbol to write a faithful test, look it up with the Bash tool — at most 1-2 calls, then STOP looking and write:
+  PROJECT_ROOT="__PROJECT_ROOT__" bash "__SCRIPT_DIR__/codegraph-agent-query.sh" query <SymbolName>    # exact definition + signature + import path
+  PROJECT_ROOT="__PROJECT_ROOT__" bash "__SCRIPT_DIR__/codegraph-agent-query.sh" callees <SymbolName>   # what a function calls
+Over-exploring here is the #1 failure mode — do the MINIMUM lookup, then WriteFile immediately.
+
+## HARD REQUIREMENTS
+1. Write the test to EXACTLY this path (nothing else, no other files): __PROJECT_ROOT__/__TARGET_REL__
+2. Use the SAME test framework, import style, and mocking approach as the example above (this repo uses .__EXT__). The test MUST be runnable by the repo's existing test runner — match its conventions so it is picked up.
+__REQ_PROOF__
+4. Write REAL arrange/act/assert cases. Do NOT paste source code into the test. Do NOT use a bare filename like 'test'. Do NOT put a newline or space in the path.
+5. Call WriteFile ONCE with the full test content at the path above, then stop.
+
+[coverage-gate] writer: no pre-flight has gated this run — standing down
+  [provider] 'openrouter' is not routable by the 'claude' set — using 'claude'.
+  [provider] The set is the launch's own choice; the env value was left by something else.
+  [provider] 'openrouter' is not routable by the 'claude' set — using 'claude'.

@@ -1,0 +1,29 @@
+{"agent":" "spec-validator"   "phase": "core",
+  "stories": [{
+    "storyId": "MOCK3-2",
+    "title": "The departure board omits the final stop",
+    "criteria": [
+      {
+        "text": "The rendered departure-board string for a line with multiple stops includes the name of the last stop on that line, confirming the previously-omitted final stop now appears.",
+        "status": "met",
+        "evidence": "src/schedule.ts line 7: loop bound changed from `i < stops.length - 1` to `i < stops.length`, so the final stop is now iterated and pushed into parts. Test 'names the final stop' (test/schedule.test.ts) asserts formatStops(LINE) contains 'Eglinton' (the last stop in the LINE fixture). All 6 tests passed.",
+        "gaps": ""
+      },
+      {
+        "text": "The rendered departure-board string displays each pair of consecutive stops separated by the arrow separator ' -> '.",
+        "status": "met",
+        "evidence": "src/schedule.ts line 9: `return parts.join(' -> ')` joins consecutive stop entries with the exact ' -> ' separator. Test 'separates stops with an arrow' (test/schedule.test.ts) asserts the output contains '->'. All 6 tests passed.",
+        "gaps": ""
+      },
+      {
+        "text": "Rendering a line with no stops yields a string without raising an error.",
+        "status": "met",
+        "evidence": "src/schedule.ts: with an empty array the for-loop body never executes, parts remains empty, and `parts.join(' -> ')` returns ''. Test 'handles an empty line' (test/schedule.test.ts) asserts `formatStops([])).toBe('')`. All 6 tests passed.",
+        "gaps": ""
+      }
+    ],
+    "overallCompliance": 100,
+    "verdict": "pass"
+  }],
+  "overallVerdict": "pass"
+}

@@ -1,0 +1,106 @@
+=== Prompt for HW-001 (attempt 1) ===
+Implement user story HW-001: Implement greet() function
+
+## Story Description
+Create greet.ts in the project root. It must export a single named function with the signature `export function greet(name: string): string` that returns the string `Hello, <name>!` where `<name>` is the argument passed in. The files greet.test.ts, package.json, tsconfig.json, and main.ts must not be modified.
+
+## Acceptance Criteria
+- greet.ts exists in the project root
+- greet.ts exports a named function with the exact signature: export function greet(name: string): string
+- The return type annotation is explicitly `string` (not inferred-only)
+- greet.ts does not contain a default export — only the named `greet` export is present
+- greet('World') returns exactly 'Hello, World!'
+- greet('Alice') returns exactly 'Hello, Alice!'
+- greet('Bob') returns exactly 'Hello, Bob!'
+- greet('X').length is greater than 0
+- greet('') returns 'Hello, !' (empty name is valid input, no throw)
+- greet() does not throw for any string argument
+- Calling greet() produces no console output or other observable side effects
+- tsc --noEmit exits with code 0 (no TypeScript compilation errors) after greet.ts is added
+- npm test passes with all 3 vitest tests in greet.test.ts green
+- greet.test.ts is not modified
+- package.json is not modified
+- tsconfig.json is not modified
+- main.ts is not modified
+
+## Technical Notes
+- files: ["greet.ts"]
+- requiredSkills: ["TypeScript","vitest"]
+
+## Files to Create/Modify
+greet.ts
+
+## Dependencies
+None
+
+## Instructions
+1. Implement all acceptance criteria for this story
+2. Follow the project's existing code patterns and conventions
+3. Create any necessary files in the locations specified
+4. Ensure code compiles/runs without errors
+5. Do NOT create tests unless explicitly required in acceptance criteria
+
+After implementation, provide a brief summary of what was created/modified.
+
+## Relevant Knowledge Base Entries
+No prior KB entries match your agent role yet.
+
+## Knowledge Base Contribution
+Your assigned KB entry ID for this run: **KB-008**
+
+If you discover a non-obvious pattern, gotcha, or anti-pattern during this implementation (or this is a retry), append exactly one entry to `orchestrations/agents/KB.md` using this format:
+
+```markdown
+## KB-008 -- 2026-06-10
+
+**Category:** <backend|frontend|infrastructure|testing|orchestration>
+**AgentRole:** <your agentRole from the story>
+**Tags:** <comma-separated tech keywords, e.g. typescript, node, cli>
+**Trigger:** <retry|first-success>
+**StoryRef:** HW-001
+
+<One concise paragraph: the specific pattern, gotcha, or anti-pattern. Precise enough that a future Claude instance can apply it without re-discovering it.>
+```
+
+Only write an entry if the knowledge is genuinely non-obvious. Skip trivial observations.
+=== End Prompt ===
+
+=== epam Output (attempt 1) ===
+I've implemented the `greet()` function as required for user story HW-001.
+
+The `greet.ts` file has been created in the project root with the following implementation:
+- Exported named function `greet(name: string): string` with explicit string return type
+- Returns exactly "Hello, <name>!" for any string input
+- No default export - only the named export as required
+- Handles edge cases like empty string (returns "Hello, !")
+- No console output or side effects
+- The implementation is simple and follows TypeScript best practices
+
+The file meets all acceptance criteria:
+- Correct function signature with explicit return type
+- Returns expected strings for all test cases (including empty string)
+- No modifications to other files (greet.test.ts, package.json, tsconfig.json, main.ts)
+- Will compile without errors (tsc --noEmit will succeed)
+- Will pass all vitest tests in greet.test.ts
+
+No KB entry is needed as this is a straightforward implementation following standard patterns.
+I've implemented the `greet()` function as required for user story HW-001.
+
+The `greet.ts` file has been created in the project root with the following implementation:
+- Exported named function `greet(name: string): string` with explicit string return type
+- Returns exactly "Hello, <name>!" for any string input
+- No default export - only the named export as required
+- Handles edge cases like empty string (returns "Hello, !")
+- No console output or side effects
+- The implementation is simple and follows TypeScript best practices
+
+The file meets all acceptance criteria:
+- Correct function signature with explicit return type
+- Returns expected strings for all test cases (including empty string)
+- No modifications to other files (greet.test.ts, package.json, tsconfig.json, main.ts)
+- Will compile without errors (tsc --noEmit will succeed)
+- Will pass all vitest tests in greet.test.ts
+
+No KB entry is needed as this is a straightforward implementation following standard patterns.
+
+=== End epam Output ===

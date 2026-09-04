@@ -1,0 +1,1 @@
+{"event_id":"evt-1788443265611918508-27206","timestamp":"2026-09-03T09:47:45-04:00","agent":"failure-analyst","story_id":null,"phase":null,"type":"info","model":null,"provider":null,"detail":{"lane":"main","message":"failure-analyst prescribed corrective directive (malformed)","source":"update-monitor.sh","rawType":"self_heal_complete","prevModel":null}}

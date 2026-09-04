@@ -1,0 +1,130 @@
+```json
+{
+  "agent": "sast-sentinel",
+  "phase": "core",
+  "summary": { "filesScanned": 8, "findingsCount": 15, "blockerCount": 1 },
+  "findings": [
+    {
+      "severity": "blocker",
+      "rule": "dependency-cve-critical-runtime",
+      "file": "package.json",
+      "line": 1,
+      "description": "next-auth (runtime, critical): Auth.js — Email normalizer validates the address before Unicode normalization, allowing a homoglyph @. Critical CVE in a runtime dependency.",
+      "suggestedFix": "Upgrade next-auth to a patched version that normalizes email addresses before validation."
+    },
+    {
+      "severity": "major",
+      "rule": "dependency-cve-high-runtime",
+      "file": "package.json",
+      "line": 1,
+      "description": "next (runtime, high): Next.js Denial of Service in App Router using Server Actions; Next.js Server-Side Request Forgery. High-severity CVEs in a runtime dependency.",
+      "suggestedFix": "Upgrade next to a patched version addressing Server Actions DoS and SSRF."
+    },
+    {
+      "severity": "minor",
+      "rule": "dependency-cve-high-dev-only",
+      "file": "package.json",
+      "line": 1,
+      "description": "postcss (dev, high): PostCSS incomplete fix of GHSA-6g55-p6wh-862q — attacker-controlled sourceMappingURL reads arbitrary files. Dev-only dependency; does not run in production.",
+      "suggestedFix": "Upgrade postcss to a patched version when convenient."
+    },
+    {
+      "severity": "minor",
+      "rule": "dependency-cve-moderate-runtime",
+      "file": "package.json",
+      "line": 1,
+      "description": "@azure/search-documents (runtime, moderate): pulls in vulnerable @azure/core-http. Moderate CVE in a runtime dependency.",
+      "suggestedFix": "Upgrade @azure/search-documents to a version with patched @azure/core-http."
+    },
+    {
+      "severity": "minor",
+      "rule": "dependency-cve-moderate-runtime",
+      "file": "package.json",
+      "line": 1,
+      "description": "@metrolinx/cx-shared (runtime, moderate): pulls in vulnerable react-tooltip. Moderate CVE in a runtime dependency.",
+      "suggestedFix": "Upgrade @metrolinx/cx-shared to a version with patched react-tooltip."
+    },
+    {
+      "severity": "minor",
+      "rule": "dependency-cve-moderate-runtime",
+      "file": "package.json",
+      "line": 1,
+      "description": "react-tooltip (runtime, moderate): pulls in vulnerable uuid. Moderate CVE in a runtime dependency.",
+      "suggestedFix": "Upgrade react-tooltip to a version with patched uuid."
+    },
+    {
+      "severity": "minor",
+      "rule": "dependency-cve-high-transitive",
+      "file": "package.json",
+      "line": 1,
+      "description": "axios (transitive, high): Excessive recursion in formDataToJSON can cause denial of service; Deep formToJSON Key. Transitive dependency — cannot confirm runtime loading; classified minor.",
+      "suggestedFix": "Upgrade the root dependency that pulls in axios to a version with patched axios."
+    },
+    {
+      "severity": "minor",
+      "rule": "dependency-cve-high-transitive",
+      "file": "package.json",
+      "line": 1,
+      "description": "brace-expansion (transitive, high): DoS via exponential-time expansion of consecutive non-expanding {} groups. Transitive dependency — cannot confirm runtime loading; classified minor.",
+      "suggestedFix": "Upgrade the root dependency that pulls in brace-expansion to a patched version."
+    },
+    {
+      "severity": "minor",
+      "rule": "dependency-cve-moderate-transitive",
+      "file": "package.json",
+      "line": 1,
+      "description": "@azure/core-http (transitive, moderate): pulls in vulnerable uuid. Transitive dependency — classified minor.",
+      "suggestedFix": "Upgrade the root dependency that pulls in @azure/core-http to a patched version."
+    },
+    {
+      "severity": "minor",
+      "rule": "dependency-cve-moderate-transitive",
+      "file": "package.json",
+      "line": 1,
+      "description": "cloudinary-video-analytics (transitive, moderate): pulls in vulnerable uuid. Transitive dependency — classified minor.",
+      "suggestedFix": "Upgrade cloudinary-video-player to a version with patched cloudinary-video-analytics."
+    },
+    {
+      "severity": "minor",
+      "rule": "dependency-cve-moderate-transitive",
+      "file": "package.json",
+      "line": 1,
+      "description": "cloudinary-video-player (transitive, moderate): pulls in vulnerable cloudinary-video-analytics and uuid. Transitive dependency — classified minor.",
+      "suggestedFix": "Upgrade cloudinary-video-player to a patched version."
+    },
+    {
+      "severity": "minor",
+      "rule": "dependency-cve-moderate-transitive",
+      "file": "package.json",
+      "line": 1,
+      "description": "dompurify (transitive, moderate): CUSTOM_ELEMENT_HANDLING bypasses afterSanitizeElements for allowed custom elements. Transitive dependency — classified minor.",
+      "suggestedFix": "Upgrade the root dependency that pulls in dompurify to a patched version."
+    },
+    {
+      "severity": "minor",
+      "rule": "dependency-cve-high-transitive",
+      "file": "package.json",
+      "line": 1,
+      "description": "fast-uri (transitive, high): vulnerable to host confusion via literal backslash authority delimiter. Transitive dependency — cannot confirm runtime loading; classified minor.",
+      "suggestedFix": "Upgrade the root dependency that pulls in fast-uri to a patched version."
+    },
+    {
+      "severity": "minor",
+      "rule": "dependency-cve-high-transitive",
+      "file": "package.json",
+      "line": 1,
+      "description": "js-yaml (transitive, high): YAML merge-key chains can force quadratic CPU consumption. Transitive dependency — cannot confirm runtime loading; classified minor.",
+      "suggestedFix": "Upgrade the root dependency that pulls in js-yaml to a patched version."
+    },
+    {
+      "severity": "minor",
+      "rule": "dependency-cve-high-transitive",
+      "file": "package.json",
+      "line": 1,
+      "description": "nanoid (transitive, high): non-secure generators can loop indefinitely with negative size; custom generators can be unsafe. Transitive dependency — cannot confirm runtime loading; classified minor.",
+      "suggestedFix": "Upgrade the root dependency that pulls in nanoid to a patched version."
+    }
+  ],
+  "verdict": "fail"
+}
+```

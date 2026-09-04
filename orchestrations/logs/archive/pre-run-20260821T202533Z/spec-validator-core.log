@@ -1,0 +1,51 @@
+```json
+{
+  "agent": "spec-validator",
+  "phase": "core",
+  "stories": [{
+    "storyId": "AMSD-2041",
+    "title": "[MX] Live Preview of Content in CMS (part 1)",
+    "criteria": [
+      {
+        "text": "Given the Contentstack client is mocked to signal a draft entry change for the MX Homepage, the rendered Homepage shows the draft entry content instead of the previously published content, without requiring a full page reload.",
+        "status": "met",
+        "evidence": "src/services/contentstack.spec.ts lines 56-74: test 'shows the draft Homepage content through useContent when a preview entry change is signalled, without a page reload' — sets publishedHomepage, calls setPreviewPage([draftHomepage]), asserts getContentByKey('page.0.title','') === 'Draft MX Homepage'. Implementation in src/pages/_app.tsx: useLivePreviewPage() registers onEntryChange callback that calls getSingleEntry() then setPreviewPage([result]); LivePreviewContentProvider overrides context.page with previewPage when set. Test oracle: numPassed=1, numFailed=0.",
+        "gaps": ""
+      },
+      {
+        "text": "Given the Contentstack client is mocked to signal a draft entry change for a Discover Article page, the rendered Discover Article page shows the draft entry content instead of the previously published content, without requiring a full page reload.",
+        "status": "met",
+        "evidence": "src/services/contentstack.spec.ts lines 76-94: test 'shows the draft Discover Article content through useContent when a preview entry change is signalled, without a page reload' — sets publishedDiscoverArticle, calls setPreviewPage([draftArticle]), asserts 'Draft Discover Article'. Same LivePreviewContentProvider mechanism in src/pages/_app.tsx applies to any content type since it reads data-cslp-content-type-uid dynamically. Test oracle: numPassed=1, numFailed=0.",
+        "gaps": ""
+      },
+      {
+        "text": "When no preview signal is active, the MX Homepage renders published content identically to its current behavior with no visual or functional regression.",
+        "status": "met",
+        "evidence": "src/services/contentstack.spec.ts lines 96-102: test 'renders published Homepage content unchanged when no preview signal is active' — asserts title='Published MX Homepage' and url='/'. Implementation in src/pages/_app.tsx: LivePreviewContentProvider returns `content` unchanged when previewPage is undefined (useLivePreviewPage initial state is undefined). The ternary `previewPage ? {...content, page: previewPage} : content` passes through original context.",
+        "gaps": ""
+      },
+      {
+        "text": "When no preview signal is active, Discover Article pages render published content identically to their current behavior with no visual or functional regression.",
+        "status": "met",
+        "evidence": "src/services/contentstack.spec.ts lines 104-110: test 'renders published Discover Article content unchanged when no preview signal is active' — asserts title='Published Discover Article' and url='/discover/published-article'. Same pass-through logic in LivePreviewContentProvider when previewPage is undefined.",
+        "gaps": ""
+      },
+      {
+        "text": "Given the Contentstack client is mocked to signal multiple successive draft entry changes for the same Homepage, the rendered Homepage updates to reflect each change in sequence without a full page reload.",
+        "status": "met",
+        "evidence": "src/services/contentstack.spec.ts lines 112-128: test 'reflects each of multiple successive draft entry changes in sequence without a page reload' — calls setPreviewPage three times with titles 'Draft revision 1/2/3' and asserts each in sequence. Implementation uses useState setter setPreviewPage which triggers re-render on each call. Test oracle: numPassed=1, numFailed=0.",
+        "gaps": ""
+      },
+      {
+        "text": "Given the Contentstack client is mocked to signal a draft entry change while the page is in a protected or gated state, the page does not render the draft content and continues to show the published content unchanged.",
+        "status": "unmet",
+        "evidence": "src/pages/_app.tsx LivePreviewContentProvider: `value={previewPage ? { ...content, page: previewPage } : content}` — unconditionally overrides context.page when previewPage is set, with no check for auth/session/gated state. useLivePreviewPage() onEntryChange callback fetches and sets previewPage regardless of any protection state. No test in src/services/contentstack.spec.ts covers a protected/gated scenario — the 6th test ('keeps non-page published content available') tests non-page content preservation, not gating. LivePreviewContentProvider is placed inside SessionProvider but does not consume session state to gate preview overrides.",
+        "gaps": "No implementation guard prevents draft content from rendering on protected/gated pages. The LivePreviewContentProvider unconditionally overrides page content when a preview signal is active. No test case covers the protected/gated state scenario described in criterion 6. This is a content-security gap: draft (unpublished) content could be rendered on pages that should only show published content when in a gated state."
+      }
+    ],
+    "overallCompliance": 83,
+    "verdict": "warn"
+  }],
+  "overallVerdict": "warn"
+}
+```

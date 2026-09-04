@@ -1,0 +1,2 @@
+[repro-test-writer] writing reproducing test for AMSD-1820 → src/services/submit-reservations/apply-report-discounts.service.spec.ts (convention: .spec.ts, example: apps/background/src/core/health/health.controller.spec.ts)
+  [SelfHeal/KB] constraints applied for repro-test-writer (story:AMSD-1820): repro-test-writer-class-invalid-test,repro-test-writer-ts2532

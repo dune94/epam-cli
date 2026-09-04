@@ -1,0 +1,14 @@
+spec-mode: coordinator failed, falling back to default agent pair: prompt runner exited with code 1
+spec-mode: openspec run failed for HW-001: prompt runner exited with code 1
+spec-mode: speckit run failed for HW-001: prompt runner exited with code 1
+spec-mode: openspec run failed for HW-002: prompt runner exited with code 1
+spec-mode: speckit run failed for HW-002: prompt runner exited with code 1
+spec-mode: openspec run failed for HW-003: prompt runner exited with code 1
+spec-mode: speckit run failed for HW-003: prompt runner exited with code 1
+spec-mode: openspec run failed for HW-004: prompt runner exited with code 1
+spec-mode: speckit run failed for HW-004: prompt runner exited with code 1
+spec-mode: openspec run failed for HW-005: prompt runner exited with code 1
+spec-mode: speckit run failed for HW-005: prompt runner exited with code 1
+spec-mode: openspec run failed for HW-006: prompt runner exited with code 1
+spec-mode: speckit run failed for HW-006: prompt runner exited with code 1
+spec-mode: completed for phase hello_world_test (run 20260612T124505Z)

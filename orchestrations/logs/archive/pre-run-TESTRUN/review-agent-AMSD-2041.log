@@ -1,0 +1,24 @@
+[1;33m[WARN][0m   review-agent has NO ladder escalation available — ladder is EMPTY/unset — NO escalation configured for this run
+[ai-run] attempt 2/3 for 'team-lead-review' — no further ladder rung, retrying on z-ai/glm-5.2
+```json
+{
+  "verdict": "changes_requested",
+  "issues": [
+    {
+      "severity": "major",
+      "file": "src/services/__tests__/contentstack.spec.ts",
+      "line": 1,
+      "description": "No test coverage was added for the live_preview configuration feature. The test file was modified only to add `debug: jest.fn()` to the logger mock (line 47), but no `it()` or `test()` blocks were added to verify: (1) that `options.live_preview` is correctly configured with `enable: true`, `host`, and `management_token` when `CONTENTSTACK_PREVIEW_HOST` and `CONTENTSTACK_PREVIEW_TOKEN` are set; (2) that `options.live_preview` is absent when those env vars are not set; (3) that the debug log is emitted when preview is not configured. The acceptance criteria require that live preview sessions display draft content and that non-preview sessions display published content — none of these scenarios are tested. I searched for `live_preview|preview_token|management_token|CONTENTSTACK_PREVIEW` in the test file and found zero matches.",
+      "suggestedFix": "Add describe/it blocks to contentstack.spec.ts that: (a) set CONTENTSTACK_PREVIEW_HOST and CONTENTSTACK_PREVIEW_TOKEN in process.env, require the module, and assert `options.live_preview` equals `{ enable: true, host: '...', management_token: '...' }`; (b) omit those env vars and assert `options.live_preview` is undefined; (c) verify `logger.debug` is called with the 'not configured' message when env vars are missing."
+    },
+    {
+      "severity": "minor",
+      "file": "src/services/contentstack.ts",
+      "line": 108,
+      "description": "The debug log message hardcodes the string 'Contentstack live preview is not configured: CONTENTSTACK_PREVIEW_HOST or CONTENTSTACK_PREVIEW_TOKEN is missing'. While this is a log message (not a model name, endpoint URL, or file path), the message could be more precise by indicating which specific variable is missing, which would aid debugging.",
+      "suggestedFix": "Optionally split into two checks: `if (!CONTENTSTACK_PREVIEW_HOST) logger.debug('Contentstack live preview: CONTENTSTACK_PREVIEW_HOST is missing');` and similarly for the token. This is optional — the current message is functional."
+    }
+  ],
+  "summary": "The implementation correctly applies the prescribed minimal fix: it adds CONTENTSTACK_PREVIEW_HOST and CONTENTSTACK_PREVIEW_TOKEN to the destructured env vars (lines 35-36), injects a conditional `live_preview` config block into the `options` object (lines 91-99), and adds a debug log when preview is not configured (lines 108-112). No unnecessary changes were made to _app.tsx, useContent.ts, or other files — the SDK natively handles preview content routing. Regarding the learned review rules flagging `management_token` vs `preview_token`: the `dependency_contract` tool confirms that in the installed contentstack SDK v3.17.2, `preview_token` is ABSENT (appears nowhere in the package) while `management_token` is CONSUMED (present in runtime source). The implementation's use of `management_token` is therefore CORRECT for this SDK version, and the prior learned rules were based on incorrect information. TypeScript strict compliance is maintained — no new `any` types, no unhandled promises, no generic Error throws in the new code. No security issues (no path traversal, no user-controlled paths). The change is concise and does not over-engineer. The sole major issue is the complete absence of test coverage for the new live_preview configuration — the test file was touched but no test cases were added to verify the feature works as intended."
+}
+```

@@ -1,0 +1,14 @@
+The plan is complete and the log entry has been written atomically. Here's a summary of what was produced:
+
+## Plan Summary for SKY-004-c
+
+**Story**: Server integration tests with vitest and supertest  
+**Target file**: `/home/bradleyjerome/projects/skyscanner-app/src/server.test.ts` (does not yet exist)
+
+### Key findings:
+- **All 3 dependencies are satisfied** — SKY-002 (client), SKY-004-a (server), SKY-004-b (HTML + package.json) are all completed with code present
+- **13 test cases planned** (exceeds the minimum 8), covering all mandated scenarios plus edge cases
+- **Top 3 risks**: (1) vi.mock path must use `.js` extension to match server.ts imports, (2) RAPIDAPI_KEY env var leakage between tests, (3) `/` route reads index.html from `process.cwd()` which may differ under test runner
+- **Effort estimate adjustment recommended**: from 0.0455h → ~0.75h given 13 tests with complex mocking requirements and 20 test facts / 11 banned patterns to respect
+- **Banned patterns to avoid**: Using `origin`/`destination` as query param names, returning `{ flights, count, searchedAt }` from `/cheapest`, 401/403 instead of 503 for missing API key, `@jest/globals` imports, wrong mock paths, `expect(app).toBeDefined()` style assertions
+

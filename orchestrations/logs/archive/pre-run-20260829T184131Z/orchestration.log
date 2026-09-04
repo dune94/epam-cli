@@ -1,0 +1,17 @@
+[mint-step] codeline mocka: /home/bradleyjerome/projects/mock3/mock-a (2 declared deps)
+[mint-step] codeline mockb: /home/bradleyjerome/projects/mock3/mock-b (2 declared deps)
+[mint-step] plugins provisioned: 1 · mint tools: read_file,list_files,search,codegraph_query
+spec-mode: fast-path claude/claude-haiku-4-5-20251001 (skipping MiniMax)
+[mint-step]   survey: mocka — not_investigated
+[mint-step]   survey: mockb — not_investigated
+spec-mode: fast-path claude/claude-haiku-4-5-20251001 (skipping MiniMax)
+[mint-step] proposed=1 minted=1 unchanged=0 rejected=0 superseded=0
+[mint-step]   + [implementer] stand-in-analyst (profiles.json, kb, project-roles, project-profiles) — stand-in reply for the agent-mint seam, long enough to satisfy the contract's declared minimum so the consumer judges the WIRING rather than the prose
+[mint-step]   ! no investigator minted for codeline "mocka" — it will use the canonical detective
+[mint-step]   ! no investigator minted for codeline "mockb" — it will use the canonical detective
+spec-mode: fast-path claude/claude-haiku-4-5-20251001 (skipping MiniMax)
+[mint-step] roster review (cycle 1): sound — 0 finding(s), 0 blocking
+[mint-step] [roster] rosterMode=canonical — 56 persona(s) adopted verbatim (1 minted for this project), no specialiser call
+[mint-step] project roster: 56 agent(s)
+spec-mode: fast-path claude/claude-haiku-4-5-20251001 (skipping MiniMax)
+[mint-step] FAILED: [assign] stand-in-role-assigner was assigned "stand-in-role-assigner", which is not in the roster — it has no profile entry, so the writer would run with an empty system prompt.

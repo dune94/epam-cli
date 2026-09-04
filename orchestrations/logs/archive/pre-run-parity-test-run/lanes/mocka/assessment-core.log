@@ -1,0 +1,2 @@
+[ai-run] 'agent' resuming ladder on 'claude-sonnet-5' (persisted from an earlier invocation)
+{"notes":"MOCK3-1 succeeded well under budget: actual time (1.46 min) and cost ($0.0624) came in roughly 68% below forecast, with no threshold breach. The fix correctly addressed the off-by-one boundary condition (age exactly 65 was hitting the adult fare branch instead of concession) and was verified with a regression test.","agent_recommendations":[],"role_reassignments":[]}

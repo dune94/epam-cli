@@ -1,0 +1,41 @@
+# Prompt
+Regenerate the VERIFICATION CRITERIA for this brownfield story. Your previous verification criteria were FLAGGED and must be fixed:
+- Criterion 1 asserts the shape of an internal config object — the `live_preview` key with `enable_by_default` and `host` properties — which is an implementation mechanism (how the SDK is configured), not an observable user-facing surface. The ticket's surface is the rendered draft content, not the config object passed to the SDK constructor.: "Given the contentstack Stack is initialized, the options config object passed to"
+- VC 1 references internal config object and SDK initialization method — restate as observable outcome on rendered page
+- VC 2 prescribes SDK callback mechanism and references internal hook/event dispatch — restate as observable outcome on rendered page
+- VC 3 prescribes mocked client and references internal hook and Live Preview event — restate as observable outcome on rendered page
+- VC 4 cross-compares to current behavior and references internal config/API responses — restate as observable outcome on rendered page
+- VC 5 prescribes SDK method calls and references internal subscription/unsubscribe mechanism — restate as observable outcome on rendered page
+
+THE FIX SITE (located by the code-graph detective — anchor every criterion to the behaviour THIS code produces):
+- src/services/contentstack.ts :: options — This is the Contentstack SDK initialization config where `live_preview` settings must be added to enable draft/preview content delivery. The `contentstack.Stack(options)` call at line 91 is the single point where the SDK client is created — Live Preview requires a `live_preview` key in this config object, and all downstream data fetching (getEntry, ContentstackFactory) flows through this Stack instance.
+- src/context/contentstackContext.tsx :: ContentstackContext — The React context that provides Contentstack content to all components via `useContent`. When Live Preview pushes updates, the context value must be refreshed reactively so every component reading from `useContent()` re-renders with the new draft data. This is the consumer-side attachment point — the context provider wrapper must subscribe to Contentstack Live Preview events and update its value.
+Do NOT write criteria about areas unrelated to this code.
+
+
+Acceptance criteria (IMMUTABLE — the intent to verify; do NOT restate as-is, VERIFY them):
+- (none)
+Description: Original Requirements (discovery)  AS a Content Author, I WANT to preview draft entries in CMS, SO THAT I can see how content will be shown on the website
+ability to preview draft entries in CMS
+Notes& Assumptions  Limitation: Might not be possible to preview protected pages and content.
+Original Total Estimate:  8  Original FE Estimate:  8  Original DAM Estimate:  0  Original BE Estimate:  0
+
+A verification criterion states WHAT AN END USER OR TESTER OBSERVES on the user-facing surface THE TICKET IS ABOUT — the rendered output for an output ticket, the displayed screen for a UI ticket, the response a CLIENT receives for an API ticket. It is a BLACK-BOX check on that surface. It NEVER describes HOW the value is produced.
+A verification criterion is FORBIDDEN if it:
+- prescribes HOW to implement — any algorithm, mechanism, approach, or the addition/reading of any new field, flag or service;
+- references an INTERNAL structure that merely FEEDS the ticket's surface — an intermediate payload, a data-transfer object, or a specific response field used to BUILD the output. Verify the surface the ticket names, NOT the data structure behind it;
+- makes a CROSS-COMPARISON that presumes a mechanism — never assert one value "must equal" / "matches" / "is the same as" another; that presumes a shared derivation. Assert the required value is present and correct ON ITS OWN.
+Every verification criterion must be observable, testable, and tied to the ticket's stated symptom/intent.
+
+Do NOT restate an acceptance criterion as-is — express what a tester OBSERVES that confirms it. Address every flag above.
+Output ONLY a JSON array of verification-criterion strings. No prose, no markdown.
+
+# Output
+```json
+[
+  "When a content author views a page in preview mode, the page renders draft (unpublished) content from the CMS, displaying content that has been saved but not yet published.",
+  "When a content author edits and saves a draft entry in the CMS, the preview page updates to display the newly saved content without requiring a manual page refresh.",
+  "The preview page displays the full content of draft entries — including all text, media, and referenced content — as they exist in the draft version, even when those values differ from the currently published version.",
+  "Protected pages and protected content are not rendered in preview mode."
+]
+```

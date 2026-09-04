@@ -1,0 +1,119 @@
+# Prompt
+You are the speckit specification agent for EPAM CLI. Phase core, story AMSD-2041.
+
+You are reviewing and building on the openspec agent's output for this story.
+Your role is COLLABORATIVE — you are NOT starting from scratch. Instead:
+1. Review openspec's proposed acceptance criteria for testability and completeness
+2. Add missing edge-case, error-handling, security, and accessibility criteria
+3. Flag any AC that are vague, untestable, or overlapping
+4. Splitting is openspec's decision alone — you do NOT split stories. If openspec already split
+   this story, do NOT include a "splitStories" field in your output at all (it will be ignored if
+   you do). Review and refine the acceptanceCriteria openspec gave you for the UNSPLIT story as
+   normal; per-child refinement of an already-split story's children happens on a later turn, not
+   here.
+5. Do NOT remove or duplicate openspec's good work — build on it
+
+━━━ WHAT-NOT-HOW RULE (MANDATORY) ━━━
+Every AC must describe an OBSERVABLE OUTCOME (what a test can verify from outside the code),
+NOT an implementation instruction. If an AC names vi.mock, jest.fn, mockReturnValue,
+mockResolvedValue, import statements, or require() calls, REPLACE it with a
+Given/When/Then behaviour statement. Never tell the implementer which library or mock pattern to use.
+
+OPENSPEC'S OUTPUT (your input to review — ACs and split proposals only):
+{
+  "acceptanceCriteria": [],
+  "notes": "Novel story — Contentstack Live Preview does not exist in the codebase. The attachment point is useContent (236 callers), the central hook through which all Contentstack content flows. ACs were empty; populated from description with measurable criteria. Contentstack is unreachable at test time so VCs stop at our boundary with explicit mock assumptions.",
+  "splitStories": []
+}
+
+ORIGINAL STORY CONTEXT:
+{
+  "id": "AMSD-2041",
+  "title": "[GO, UP, MX] Live Preview of Content in CMS",
+  "description": "[GO, UP, MX] Live Preview of Content in CMS — Enable real-time content preview from Contentstack's Live Preview feature, so that content editors see their edits reflected on the page without a full reload, across GO Transit, UP Express, and MX brands.",
+  "originalAcceptanceCriteria": [],
+  "technicalNotes": {
+    "files": [
+      "src/hooks/useContent.ts",
+      "src/services/contentstack.ts",
+      "src/interface/content/contentCard.ts",
+      "src/components/contentstack/ContentstackLink/ContentstackLink.tsx"
+    ]
+  },
+  "dependencies": []
+}
+
+Produce your refined output as raw JSON only (no XML tags, no markdown fences, no preamble). Include:
+- "acceptanceCriteria": The FULL merged list (openspec's criteria + your additions/refinements). Every item MUST be an observable outcome, not an implementation instruction.
+- "notes": What you changed and why (be specific — cite which criteria you added/modified/replaced)
+- "splitStories": ALWAYS omit this field. Splitting is openspec's decision alone — never propose
+  split children of your own, even if openspec already split this story.
+- "acAddedBySpeckit": Array of criteria YOU added that were not in openspec's output
+- "acModifiedBySpeckit": Array of {"original":"...","revised":"..."} for criteria you reworded
+- "acFlagged": Array of {"criterion":"...","flag":"..."} for criteria that need human attention
+
+
+# Output
+It seems the tools aren't available in this environment. I'll proceed based on the information provided in the story context and openspec's output, which gives me enough to work with — the key files are listed, useContent is the central hook with 236 callers, and Contentstack Live Preview doesn't exist yet in the codebase.
+
+{
+  "acceptanceCriteria": [
+    "Given the application is running with Contentstack Live Preview configuration enabled, When a content editor initiates a live preview session from Contentstack, Then the application receives and processes live preview events without requiring a full page reload.",
+
+    "Given a component renders content via useContent, When Contentstack sends a live preview update for that content entry, Then the component re-renders with the updated content data within 2 seconds of the edit being saved.",
+
+    "Given the application is configured for GO Transit brand, When a live preview event arrives, Then the previewed content renders within the GO Transit brand context. The same behavior applies for UP Express and MX brand contexts respectively.",
+
+    "Given useContent has been called with a contentType and entryUid, When a live preview update is received for that specific entry, Then only the component consuming that entry updates, and other components rendering different entries remain unchanged.",
+
+    "Given the application is running without Contentstack Live Preview configuration (e.g., missing environment variables or preview disabled), When the application loads, Then it functions identically to the current non-preview behavior with no console errors or degraded user experience.",
+
+    "Given a live preview session is active, When the connection to Contentstack's live preview service is interrupted, Then the application displays the last successfully received content and logs a warning to the console, rather than showing an error state or blank content.",
+
+    "Given a live preview connection was previously interrupted, When the connection is re-established, Then the application automatically resumes receiving live preview updates without requiring a page reload or manual user action.",
+
+    "Given a live preview update is received, When the updated content fails schema validation or contains unexpected data shapes, Then the application retains the last valid content and logs an error, rather than crashing or rendering broken content.",
+
+    "Given a live preview update is received for an entry that has not yet been fetched, When the application processes this event, Then the update is ignored and no stale or orphaned data is rendered.",
+
+    "Given the application is in live preview mode, When content is rendered, Then no unpublished draft content is persisted to any cache, localStorage, or server-side data store — preview data exists only in volatile client-side state for the duration of the preview session.",
+
+    "Given the application is in live preview mode, When a user who is not an authenticated Contentstack editor accesses the application, Then no live preview data is displayed and the application serves published content only.",
+
+    "Given useContent returns content in live preview mode, When the content is rendered, Then all interactive elements (links, buttons) remain keyboard-navigable and screen-reader accessible, and ARIA live regions announce content updates to assistive technology users.",
+
+    "Given multiple live preview updates arrive in rapid succession (e.g., a content editor is typing), When the application processes these events, Then the UI updates are debounced or throttled so that no more than one re-render occurs per 300ms, preventing excessive DOM updates.",
+
+    "Given the application is running in production mode (non-preview), When the live preview code path is evaluated, Then the live preview initialization has zero measurable impact on page load time or bundle size for end users who are not in preview mode.",
+
+    "Given useContent is invoked with a locale parameter, When a live preview update is received, Then the preview content respects the specified locale and does not mix content across locales.",
+
+    "Given a live preview session is active, When the user navigates to a different page or route within the application, Then the live preview session is cleanly terminated for the previous route and re-initialized for the new route without memory leaks or stale event listeners."
+  ],
+  "notes": "Openspec provided empty ACs with a note that the story is novel (no existing Live Preview code). I created all ACs from scratch based on: (1) the story description requiring real-time preview without full reload across GO/UP/MX brands; (2) useContent.ts being the central hook with 236 callers — the natural integration point; (3) contentstack.ts being the client factory that will need live_preview config; (4) the Contentstack SDK which supports live_preview via Stack initialization config. Key design decisions: ACs stop at our boundary with Contentstack (we verify our code processes events correctly, not that Contentstack sends them); security ACs ensure preview data is never persisted and only shown to authenticated editors; accessibility ACs ensure ARIA live regions announce updates; performance ACs prevent preview code from impacting production users; edge-case ACs cover connection loss, reconnection, malformed data, and untargeted updates.",
+  "acAddedBySpeckit": [
+    "Given the application is running without Contentstack Live Preview configuration (e.g., missing environment variables or preview disabled), When the application loads, Then it functions identically to the current non-preview behavior with no console errors or degraded user experience.",
+    "Given a live preview session is active, When the connection to Contentstack's live preview service is interrupted, Then the application displays the last successfully received content and logs a warning to the console, rather than showing an error state or blank content.",
+    "Given a live preview connection was previously interrupted, When the connection is re-established, Then the application automatically resumes receiving live preview updates without requiring a page reload or manual user action.",
+    "Given a live preview update is received, When the updated content fails schema validation or contains unexpected data shapes, Then the application retains the last valid content and logs an error, rather than crashing or rendering broken content.",
+    "Given a live preview update is received for an entry that has not yet been fetched, When the application processes this event, Then the update is ignored and no stale or orphaned data is rendered.",
+    "Given the application is in live preview mode, When content is rendered, Then no unpublished draft content is persisted to any cache, localStorage, or server-side data store — preview data exists only in volatile client-side state for the duration of the preview session.",
+    "Given the application is in live preview mode, When a user who is not an authenticated Contentstack editor accesses the application, Then no live preview data is displayed and the application serves published content only.",
+    "Given useContent returns content in live preview mode, When the content is rendered, Then all interactive elements (links, buttons) remain keyboard-navigable and screen-reader accessible, and ARIA live regions announce content updates to assistive technology users.",
+    "Given multiple live preview updates arrive in rapid succession (e.g., a content editor is typing), When the application processes these events, Then the UI updates are debounced or throttled so that no more than one re-render occurs per 300ms, preventing excessive DOM updates.",
+    "Given the application is running in production mode (non-preview), When the live preview code path is evaluated, Then the live preview initialization has zero measurable impact on page load time or bundle size for end users who are not in preview mode.",
+    "Given useContent is invoked with a locale parameter, When a live preview update is received, Then the preview content respects the specified locale and does not mix content across locales.",
+    "Given a live preview session is active, When the user navigates to a different page or route within the application, Then the live preview session is cleanly terminated for the previous route and re-initialized for the new route without memory leaks or stale event listeners."
+  ],
+  "acModifiedBySpeckit": [],
+  "acFlagged": [
+    {
+      "criterion": "Given the application is in live preview mode, When a user who is not an authenticated Contentstack editor accesses the application, Then no live preview data is displayed and the application serves published content only.",
+      "flag": "Authentication model for Contentstack editors needs clarification — does the app receive auth context from Contentstack's preview iframe, or must we implement our own editor verification? This AC may need refinement once the Contentstack Live Preview auth mechanism is confirmed."
+    },
+    {
+      "criterion": "Given the application is running in production mode (non-preview), When the live preview code path is evaluated, Then the live preview initialization has zero measurable impact on page load time or bundle size for end users who are not in preview mode.",
+      "flag": "'Zero measurable impact' may be aspirational — code-splitting the live preview module will add some marginal overhead. Consider whether 'no more than 5KB gzipped added to the initial bundle' or similar measurable threshold is more realistic."
+    }
+  ]
+}

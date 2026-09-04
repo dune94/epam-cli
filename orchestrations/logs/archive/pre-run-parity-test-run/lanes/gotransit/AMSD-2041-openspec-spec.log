@@ -1,0 +1,1147 @@
+# Prompt
+You are the openspec specification agent for EPAM CLI. Phase core, story AMSD-2041.
+EXISTING CODE — CodeGraph static analysis (exact symbols, callers, blast radius):
+**Exploration: applies handles processes resolves [GO, UP, MX] Live Preview  Content  CMS**
+
+Found 13 symbols across 4 files.
+
+**Blast radius — what depends on these (update/verify before editing)**
+
+- `IContentCard` (src/interface/content/contentCard.ts:7) — 6 callers in `src/components/contentstack/ContentstackContentCards/content.mock.ts`, `src/components/contentstack/ContentstackContentCards/utils.ts`, `src/interface/content/contentCard.ts`; ⚠️ no covering tests found
+- `IContentstackLink` (src/components/contentstack/ContentstackLink/ContentstackLink.tsx:9) — 23 callers in `src/components/DamVideo/DamVideo.tsx`, `src/components/EmptyView/EmptyView.tsx`, `src/components/Header/DesktopNav/DesktopNav.tsx`, `src/components/Header/MobileNav/MobileNavItem.tsx` +10 more; tests: `src/components/EmptyView/__tests__/EmptyView.spec.tsx`
+- `IContentCardsList` (src/interface/content/contentCard.ts:16) — 12 callers in `src/components/contentstack/ContentstackContentCards/ContentstackContentCards.tsx`, `src/components/contentstack/ContentstackContentCards/content.mock.ts`, `src/components/contentstack/ContentstackContentCardsSlider/ContentstackContentCardsSlider.tsx`, `src/components/pages/HomePage/HomePage.tsx` +1 more; tests: `src/components/contentstack/ContentstackContentCards/ContentstackContentCards.spec.tsx`, `src/components/contentstack/ContentstackContentCardsSlider/ContentstackContentCardsSlider.spec.tsx`
+- `useContent` (src/hooks/useContent.ts:5) — 236 callers in `src/components/ContactUsForm/ContactUsForm.tsx`, `src/components/ContactUsForm/ContactUsFormContainer.tsx`, `src/components/DamVideo/DamVideo.tsx`, `src/components/EmptyView/EmptyView.tsx` +109 more; tests: `src/components/pages/ServiceGuaranteeLandingPage/search-claims/__tests__/SearchClaims.spec.tsx`, `src/components/pages/ServiceGuaranteeLandingPage/search-claims/__tests__/SearchClaimsForm.spec.tsx`, `src/components/pages/ServiceGuaranteeWebformPage/check-trip-eligibility/__tests__/CheckTripEligibilityForm.spec.tsx`, `src/components/pages/ServiceGuaranteeWebformPage/personal-information/contactless/__tests__/ContactlessInformationForm.spec.tsx` +5
+- `ListContent` (src/components/RoutesAndDepartures/Routes/ListContent.tsx:23) — 3 callers in `src/components/RoutesAndDepartures/Routes/Routes.tsx`; tests: `src/components/RoutesAndDepartures/__tests__/RoutesAndDepartures.spec.tsx`
+
+**Relationships**
+
+**references:**
+- IContentCard → IContentstackLink
+- IContentCard → IContentstackPage
+- IContentCard → ContentCardType
+- cards → IContentCard
+- mapContentCardData → IContentCard
+- mapContentCardsData → IContentCard
+- IContentCardsList → IContentCard
+- emptyCtaMock → IContentstackLink
+- ctaMock → IContentstackLink
+- IL2LinkItem → IContentstackLink
+- ... and 61 more
+
+**calls:**
+- DamVideo → useContent
+- DamVideo → useNextLocale
+- renderVideo → DamVideo
+- ContentstackLink → useContent
+- MobileNav → ContentstackLink
+- NavigationBar → ContentstackLink
+- BrandNavigation → ContentstackLink
+- createGroupPassesProps → ContentstackSVGIcon
+- DeparturesFlyOut → createGroupPassesProps
+- renderContentstackContentCards → render
+- ... and 102 more
+
+**Source Code**
+
+> The code below is the **verbatim, current on-disk source** of these files — re-read from disk on this call and line-numbered, byte-for-byte identical to what the Read tool returns. It is NOT a summary, outline, or stale cache. Treat each block as a Read you have already performed: do not Read a file shown here.
+
+**`src/components/contentstack/ContentstackLink/ContentstackLink.tsx`** — IContentstackLink(interface), IContentstackLinkProps(interface), ContentstackLink(function), ContentstackLink.tsx(file)
+
+```tsx
+1	import { FC } from "react";
+2	import { CustomLink } from "@metrolinx/cx-shared/build/src/components/CustomLink/CustomLink";
+3	import { useContent } from "hooks/useContent";
+4	
+5	/**
+6	 * @deprecated
+7	 * `IContentstackLink` from `cx-shared` should be used instead
+8	 */
+9	export interface IContentstackLink {
+10	  href: string;
+11	  title: string;
+12	}
+13	
+14	export interface IContentstackLinkProps extends React.AnchorHTMLAttributes<HTMLAnchorElement> {
+15	  contentKey: string;
+16	  linkClasses: string;
+17	}
+18	
+19	export const ContentstackLink: FC<IContentstackLinkProps> = ({
+20	  contentKey,
+21	  linkClasses,
+22	  children,
+23	  ...props
+24	}) => {
+25	  const { getContentByKey } = useContent();
+26	  const { href }: IContentstackLink = getContentByKey(contentKey, {} as IContentstackLink);
+27	
+28	  return (
+29	    <CustomLink {...props} href={href} className={linkClasses}>
+30	      {children}
+31	    </CustomLink>
+32	  );
+33	};
+```
+
+**`src/components/contentstack/ContentstackImage/ContentstackImage.tsx`** — IContentstackImageProps(interface), ContentstackImage(function), ContentstackImage.tsx(file)
+
+```tsx
+1	import { ElementType, FC } from "react";
+2	import { CustomImage } from "@metrolinx/cx-shared/build/src/components/CustomImage/CustomImage";
+3	import { SVGIconScaleBy } from "@metrolinx/cx-shared/build/src/components/SVGColoredIcon/SVGColoredIcon";
+4	import { IContentstackImage } from "@metrolinx/cx-shared/build/src/interface/content/global";
+5	import { getCloudinaryImageAlt } from "@metrolinx/cx-shared/build/src/utils/common/getCloudinaryImageAlt";
+6	import { useContent } from "hooks/useContent";
+7	import { useNextLocale } from "hooks/useNextLocale";
+8	
+9	export interface IContentstackImageProps {
+10	  contentKey: string;
+11	  scaleBy?: SVGIconScaleBy;
+12	  fallbackPath?: string;
+13	  classNames?: string;
+14	  headingTag?: ElementType;
+15	  priorityLoadImage?: boolean;
+16	}
+17	
+18	export const ContentstackImage: FC<IContentstackImageProps> = ({
+19	  contentKey,
+20	  scaleBy = SVGIconScaleBy.Width,
+21	  fallbackPath = "/images/image_placeholder_big.svg",
+22	  classNames = "",
+23	  headingTag,
+24	  priorityLoadImage,
+25	}) => {
+26	  const { getContentByKey } = useContent();
+27	  const locale = useNextLocale();
+28	
+29	  if (!contentKey) return null;
+30	
+31	  const {
+32	    image = [],
+33	    image_heading: heading,
+34	    image_caption: caption,
+35	  } = getContentByKey(contentKey, {} as IContentstackImage);
+36	
+37	  const altText = getCloudinaryImageAlt(image?.[0]?.metadata, locale);
+38	
+39	  return (
+40	    <CustomImage
+41	      scaleBy={scaleBy}
+42	      imageData={image[0]}
+43	      heading={heading}
+44	      caption={caption}
+45	      fallbackPath={fallbackPath}
+46	      classNames={classNames}
+47	      headingTag={headingTag}
+48	      priority={priorityLoadImage}
+49	      altText={altText}
+50	    />
+51	  );
+52	};
+```
+
+**`src/components/contentstack/ContentstackTable/ContentstackTable.tsx`** — IContentstackTableProps(interface), ContentstackTable(function), ContentstackTable.tsx(file)
+
+```tsx
+1	import { FC } from "react";
+2	import { FixedTable } from "@metrolinx/cx-shared/build/src/components/Table/FixedTable";
+3	import type { IFlexibleTableProps } from "@metrolinx/cx-shared/build/src/components/Table/FlexibleTable";
+4	import { FlexibleTable } from "@metrolinx/cx-shared/build/src/components/Table/FlexibleTable";
+5	import { useContent } from "hooks";
+6	import { ITable } from "interface/content/table";
+7	import { mapTableFixedColToTableProps } from "./utils";
+8	
+9	interface IContentstackTableProps {
+10	  contentKey: string;
+11	  withBodyBorder?: boolean;
+12	}
+13	
+14	export const ContentstackTable: FC<IContentstackTableProps> = ({
+15	  contentKey,
+16	  withBodyBorder = false,
+17	}) => {
+18	  const { getContentByKey } = useContent();
+19	  const {
+20	    table_name: name = "",
+21	    table_fixed_column: tableFixedCol,
+22	    table_caption: caption,
+23	    fixed_first_column: fixedFirstCol,
+24	    table_type: type,
+25	    table_column_widths: tableColWidths,
+26	  } = getContentByKey<ITable>(contentKey, {} as ITable);
+27	
+28	  const tableId = name.replace(/\s+/g, "");
+29	  const tableDesc = `tableDesc-${tableId}`,
+30	    tableLabel = `tableLabel-${tableId}`;
+31	
+32	  const { colWidths, ...tableData } = mapTableFixedColToTableProps(tableFixedCol, tableColWidths);
+33	
+34	  const isFlexible =
+35	    type === "Flexible Column Width" && Array.isArray(colWidths) && colWidths.length > 0;
+36	  const Table = isFlexible ? FlexibleTable : FixedTable;
+37	
+38	  return (
+39	    <>
+40	      {name.trim() && (
+41	        <h2
+42	          className="cx-headline-300 sm:cx-headline-200 mb-16 sm:mb-24 text-global-black"
+43	          id={tableLabel}
+44	          data-testid="table-component-heading"
+45	        >
+46	          {name}
+47	        </h2>
+48	      )}
+49	      <Table
+50	        stickyFirstColumn={fixedFirstCol}
+51	        {...(tableData as IFlexibleTableProps)}
+52	        {...(name && { "aria-describedby": tableDesc })}
+53	        {...(caption && { "aria-labelledby": tableLabel })}
+54	        {...(isFlexible && { colWidths })}
+55	        withBodyBorder={withBodyBorder}
+56	      />
+57	      {caption && (
+58	        <p className="mt-12 cx-caption" id={tableDesc} data-testid="table-component-desc">
+59	          {caption}
+60	        </p>
+61	      )}
+62	    </>
+63	  );
+64	};
+```
+
+**`src/interface/content/contentCard.ts`** — IContentCard(interface), IContentCardsList(interface), ContentCardType(type_alias)
+
+```typescript
+1	import { ICloudinaryImage } from "@metrolinx/cx-shared/build/src/interface/content/global";
+2	import { IContentstackLink } from "./global";
+3	import { IContentstackPage } from "./page";
+4	
+5	export type ContentCardType = "News" | "Careers" | "Project";
+6	
+7	export interface IContentCard {
+8	  card_image?: ICloudinaryImage[];
+9	  card_title: string;
+10	  card_description: string;
+11	  card_link?: IContentstackLink;
+12	  internal_link?: IContentstackPage[];
+13	  type_of_content?: ContentCardType;
+14	}
+15	
+16	export interface IContentCardsList {
+17	  cards_heading?: string;
+18	  cards_description?: string;
+19	  card_background_colors?: string;
+20	  content_cards?: IContentCard[];
+21	}
+```
+
+**Not shown above — explore these names for their source**
+
+- src/hooks/useContent.ts: useContent:5
+- src/components/RoutesAndDepartures/Routes/ListContent.tsx: ListContent:23, IListContentProps:13
+- src/interface/content/page.ts: IContentstackPage:166, IPageComponent:71, IPageLevelCTA:33, IPromoCards:467, page.ts:1
+- src/components/contentstack/ContentstackContentCards/utils.ts: mapContentCardData:4, mapContentCardsData:25, utils.ts:1
+- src/interface/content/global.ts: IContentstackLink:52, IContentstackImage:40
+- src/components/RoutesAndDepartures/Routes/Routes.tsx: IRoutesProps:24, Routes:39, Routes.tsx:1
+- src/components/RoutesAndDepartures/utils.tsx: generateTripId:21, getTripItemDynamicProps:31
+- src/utils/scrollToElementTop.ts: lazyScrollToElementTop:33, scrollToElementTop:6
+- src/components/contentstack/ContentstackContentCards/content.mock.ts: cards:3, contentMock:97, content.mock.ts:1
+- src/components/EmptyView/__tests__/content.mock.ts: emptyCtaMock:212, ctaMock:217
+- ... and 24 more files
+
+---
+> **Complete source for 4 files is included above — do NOT re-read them.** If your question also needs files/symbols listed under "Not shown above" (or any area this call didn't cover), make ANOTHER codegraph_explore targeting those names — it returns the same source with line numbers and is cheaper and more complete than reading. Reserve Read for a single specific line range explore can't surface.
+
+> **Explore budget: 2 calls for this project (3,034 files indexed).** Each call covers ~6 files; if your question spans more, spend your remaining calls on the uncovered area BEFORE falling back to Read — another explore is cheaper and more complete than reading those files. Synthesize once you've used 2.
+
+
+EXISTING CODE (brownfield fallback via Semble — identify the code path that handles this behavior, then specify how to fix it; do not propose new abstractions):
+// src/components/SignUp/SignUp.tsx (lines 183–190, relevance: 0.0182)
+<div className="col-span-full cx-inner-container" data-testid="sign-up-container">
+        <div className="lg:col-start-2 xl:col-start-2 lg:-mx-16 xl:mx-0 lg:col-span-7 xl:col-span-8 pb-56 lg:pb-0">
+          <div className="bg-gray-50 rounded-lg dark:bg-gray-800">
+            <ContentStackRichTextComplex
+              contentKey={paths.pageRichText}
+              wrapperClasses="mb-56 sm:mb-64"
+            />
+            <div className="flex sm:justify-between flex-row max-w-[704px]">
+
+---
+
+// src/pages/404.tsx (lines 53–60, relevance: 0.0143)
+<>
+      <Head>
+        <title>{`${title} | GO Transit`}</title>
+        <meta name="robots" content="noindex" />
+      </Head>
+
+      <div className="bg-global-white" data-testid="page-404" data-ga-component-id="page-404">
+        <div className="bg-global-white mx-24 my-56 flex flex-col-reverse gap-32 sm:mx-40 sm:my-[176px] sm:max-w-[704px] md:gap-0 md:justify-between md:flex-row md:mx-auto">
+
+---
+
+// src/components/pages/SignUpPage.tsx (lines 17–31, relevance: 0.0142)
+<div className="relative z-10 lg:-mt-[128px] bg-global-white lg:bg-transparent">
+        <div className="cx-container lg:bg-global-white xl:bg-transparent">
+          <div className="pt-24 sm:pt-40 pb-64 col-span-full xl:col-start-2 xl:col-span-14 bg-global-white cx-inner-container">
+            <div className="mb-24 sm:mb-48 col-span-full lg:-mx-16 xl:mx-0 xl:col-start-2 sm:col-start-2 sm:col-span-12 xl:col-span-14">
+              <ContentstackBreadcrumbs />
+            </div>
+            <div className="col-span-full bg-global-white cx-inner-block">
+              <SignUp />
+            </div>
+          </div>
+        </div>
+      </div>
+    </div>
+  );
+};
+
+---
+
+// src/components/contentstack/ContentstackSignInModal/ContentstackSignInModal.tsx (lines 23–49, relevance: 0.0116)
+{
+  const { getContentByKey } = useContent();
+
+  const {
+    sign_in_heading: signInTitle,
+    sign_in_copy: signInDescription,
+    guest_heading: guestTitle,
+    guest_copy: guestDescription,
+    sign_in_copy_under_cta: underCtaDescription,
+  } = getContentByKey<IContentstackSignInModalContent>(
+    "page.0.sign_in_modal.0",
+    {} as IContentstackSignInModalContent,
+  );
+
+  return (
+    <AuthenticationModal
+      signInTitle={signInTitle}
+      signInDescription={signInDescription}
+      guestTitle={guestTitle}
+      guestDescription={guestDescription}
+
+---
+
+// src/components/contentstack/ContentstackSignInModalContainer/ContentstackSignInModalContainer.tsx (lines 1–14, relevance: 0.0107)
+import { AuthenticationContainer } from "components/AuthenticationContainer/AuthenticationContainer";
+import { ContentstackSignInModal } from "components/contentstack/ContentstackSignInModal";
+
+export interface IContentstackSignInModalContainerProps {
+  onClose: () => void;
+}
+
+export const ContentstackSignInModalContainer = (props: IContentstackSignInModalContainerProps) => (
+  <AuthenticationContainer>
+    {({ onSignIn, onSignUp }) => (
+      <ContentstackSignInModal onSignIn={onSignIn} onSignUp={onSignUp} {...props} />
+    )}
+  </AuthenticationContainer>
+);
+
+---
+
+// src/components/pages/PurchaseConfirmationPage/PurchaseConfirmationPage.tsx (lines 128–139, relevance: 0.0098)
+<div className="bg-global-white lg:bg-transparent" data-testid="modular-blocks-top">
+                  <div className="cx-container bg-global-white xl:bg-transparent">
+                    <div className="py-56 md:py-64 col-span-full xl:col-start-2 xl:col-span-14 bg-global-white cx-inner-container">
+                      <div className="lg:col-start-2 xl:col-start-2 lg:-mx-16 xl:mx-0 lg:col-span-10 xl:col-span-12">
+                        <PurchaseConfirmationPageComponentMapper
+                          pageModularBlocks={modularBlocksTop}
+                          contentKeyPart={paths.modularBlocksTop}
+                          testIdPrefix="top"
+                        />
+                      </div>
+                    </div>
+                  </div>
+
+---
+
+// src/utils/boostGoSort.ts (lines 77–93, relevance: 0.0097)
+if (aCheck && bCheck && aCheck === bCheck && aCheck >= stationOrder) {
+    const aCheckUp = aName && aName.indexOf(goUpString) > -1 ? true : false;
+    const bCheckUp = bName && bName.indexOf(goUpString) > -1 ? true : false;
+    //console.log(` aCheck && bCheck : ${a.NAME} ${aCheck} ${aCheckUp} ${aStation}- compared to - ${bCheckUp} ${bStation} ${bCheck} ${b.NAME}` );
+    if (!aCheckUp && !bCheckUp) {
+      return 0;
+    }
+    if (!aCheckUp && bCheckUp) {
+      return -1;
+    }
+    if (!bCheckUp && aCheckUp) {
+      return 1;
+    }
+    return 0;
+  }
+  // Use GO Ordering ELSE use STATION code ordering value -1 (In case one was a GO) or false if not needed
+  aCheck = aCheck ? aCheck : aOrder ? aOrder - 1 : false;
+
+---
+
+// src/components/UserAccount/Tab/OtgAlerts/OtgAlerts.tsx (lines 109–124, relevance: 0.0094)
+<aside
+          className="relative pb-56 before:absolute before:h-full before:bg-neutral-300 lg:pb-64 lg:col-start-2 lg:col-span-10 lg:-mx-16 xl:before:content[''] xl:before:w-[1px] xl:before:-left-48 xl:col-span-3 xl:col-start-11 xl:mx-0"
+          data-testid="sidebar"
+        >
+          <ContentstackColorComponent
+            contentKey={paths.colorCards}
+            cardClassName="!bg-neutral-200 sm:w-full"
+            className="mb-56 gap-y-16 sm:flex-col md:grid md:grid-cols-2 xl:grid-cols-1"
+          />
+
+          <ContentstackLinksGroup
+            contentKey={paths.linksGroup}
+            headingClassnames="cx-headline-300 lg:cx-headline-500"
+            linksContainerClassnames="md:grid md:grid-cols-2 md:gap-16 xl:grid-cols-1"
+          />
+        </aside>
+
+---
+
+// src/components/UserAccount/Tab/AccessibilityRequests/AccessibilityRequests.tsx (lines 102–117, relevance: 0.0089)
+<aside
+        className="relative pb-56 before:absolute before:h-full before:bg-neutral-300 lg:pb-64 lg:col-start-2 lg:col-span-10 lg:-mx-16 xl:before:content[''] xl:before:w-[1px] xl:before:-left-48 xl:col-span-3 xl:col-start-11 xl:mx-0"
+        data-testid="sidebar"
+      >
+        <ContentstackColorComponent
+          contentKey={paths.colorCards}
+          cardClassName="!bg-neutral-200 sm:w-full"
+          className="mb-56 gap-y-16 sm:flex-col md:grid md:grid-cols-2 xl:grid-cols-1"
+        />
+
+        <ContentstackLinksGroup
+          contentKey={paths.linksGroup}
+          headingClassnames="cx-headline-300 lg:cx-headline-500"
+          linksContainerClassnames="md:grid md:grid-cols-2 md:gap-16 xl:grid-cols-1"
+        />
+      </aside>
+
+---
+
+// src/pages/find-a-station/[stationCode]/routes-departures.tsx (lines 129–132, relevance: 0.0085)
+<div
+              className="lg:col-start-2 xl:col-start-2 xl:mx-0 lg:col-span-10 xl:col-span-12"
+              data-testid="menu-content-container"
+            >
+
+
+LOCATED FIX SITE(S) — traced in this repository before you were asked. Anchor every criterion to the behaviour THIS code produces:
+- src/services/contentstack.ts :: options — Central Contentstack Stack initialization. The `options` object passed to `contentstack.Stack(options)` is where `live_preview` config (preview_token, host) must be added. Currently has no live_preview config at all — this is the primary attachment point for enabling Live Preview SDK support.
+- src/services/pageService.ts :: getPageContent — The main page-level data fetcher that calls getEntry/getSingletonEntry/findSingletonEntry for all page content types. Preview mode must be detected at the page level and threaded through these calls so draft entries are returned during Live Preview sessions.
+- src/pages/[[...slug]].tsx — The catch-all Pages Router page that renders all Contentstack-driven pages. This is where preview-mode detection must occur (checking for Contentstack live-preview query parameters like live_preview and content_type_uid) and where the preview context gets passed into the data-fetching layer.
+- src/services/partnersPromotionsService.ts — Bypasses the centralized ContentstackFactory by calling `Stack.ContentType(type)` directly. These direct Stack calls also need `.includeDraft()` in preview mode. Same pattern applies to stationService.ts, blogService.ts, and userAccountService.ts which also call Stack.ContentType directly.
+- src/interface/contentstack.ts :: ICreateQueryConfig — The TypeScript interfaces that define the shape of query configurations. `ICreateQueryConfig`, `ICreateEntryConfig`, `IContentstackGetEntry`, `IContentstackGetSingleEntry`, `IContentstackGetSingletonEntry` must all be extended with an optional `includeDraft` boolean so the draft flag can flow through the type system from page detection to Stack query.
+
+
+DECLARED FILES — the actual contents of the files this story names or the detective located. Base every observable criterion on what THIS code does, not on what the title suggests:
+--- src/services/contentstack.ts (truncated)
+/* eslint-disable @typescript-eslint/no-explicit-any */
+import * as Utils from "@contentstack/utils";
+import contentstack from "contentstack";
+import { IContentstackContentType } from "interface/content/contentType";
+import { IContentstackPage } from "interface/content/page";
+import { isTestEnv } from "utils/envs";
+import {
+  ICommonContentstackConfig,
+  IContentstackGetEntry,
+  IContentstackGetSingleEntry,
+  IContentstackGetSingletonEntry,
+  ICreateEntryConfig,
+  ICreateQueryConfig,
+} from "../interface/contentstack";
+import logger from "./logger";
+
+const {
+  CONTENTSTACK_API_KEY = "",
+  CONTENTSTACK_DELIVERY_TOKEN = "",
+  CONTENTSTACK_ENVIRONMENT = "",
+  CONTENTSTACK_API_HOST = "",
+  CONTENTSTACK_BRANCH = "",
+  CONTENTSTACK_FETCH_TIMEOUT = "",
+} = process?.env || {};
+
+const QUERY_RESPONSE_LIMIT = 100;
+
+if (!isTestEnv()) {
+  if (!CONTENTSTACK_API_KEY) {
+    logger.error("Contentstack API key not provided");
+  }
+
+  if (!CONTENTSTACK_DELIVERY_TOKEN) {
+    logger.error("Contentstack delivery token not provided");
+  }
+
+  if (!CONTENTSTACK_ENVIRONMENT) {
+    logger.error("Contentstack environment not provided");
+  }
+
+  if (!CONTENTSTACK_BRANCH) {
+    logger.error("Contentstack branch not provided");
+  }
+
+  if (
+    !CONTENTSTACK_API_KEY ||
+    !CONTENTSTACK_DELIVERY_TOKEN ||
+    !CONTENTSTACK_ENVIRONMENT ||
+    !CONTENTSTACK_BRANCH
+  ) {
+    throw new Error("Missing required environment variables");
+  }
+}
+
+export const options = {
+  api_key: CONTENTSTACK_API_KEY,
+  delivery_token: CONTENTSTACK_DELIVERY_TOKEN,
+  environment: CONTENTSTACK_ENVIRONMENT,
+  branch: CONTENTSTACK_BRANCH,
+  ...(CONTENTSTACK_FETCH_TIMEOUT
+    ? {
+        fetchOptions: {
+          timeout: Number(CONTENTSTACK_FETCH_TIMEOUT),
+        },
+      }
+    : {}),
+};
+
+export const Stack = contentstack.Stack(options);
+
+if (CONTENTSTACK_API_HOST) {
+  Stack.setHost(CONTENTSTACK_API_HOST);
+}
+
+const renderOption = {
+  span: (node: { children: any }, next: (arg0: any) => any) => next(node.children),
+};
+
+export const excludedFields = [
+  "created_at",
+  "created_by",
+  "updated_at",
+  "updated_by",
+  "publish_details",
+];
+
+class ContentstackFactory {
+  private stack: contentstack.Stack;
+
+  constructor({ stack }: { stack: contentstack.Stack }) {
+    this.stack = stack;
+  }
+
+  private setCommonConfig({
+    query,
+    ...config
+  }: ICommonContentstackConfig & {
+    query: contentstack.Query | contentstack.Entry;
+  }) {
+    const { referenceFieldPath, only, except } = config;
+
+    if (referenceFieldPath) query.includeReference(referenceFieldPath);
+
+    if (!Array.isArray(except) && !Array.isArray(only)) {
+      query.except(excludedFields);
+    }
+
+    if (only) {
+      if (Array.isArray(only)) {
+        query.only(only);
+      } else {
+        Object.entries(only).forEach(([key, values]) => query.only(key, values as any));
+      }
+    }
+
+    if (except) {
+      if (Array.isArray(except)) {
+        query.except(except);
+      } else {
+        Object.entries(except).forEach(([key, values]) => query.except(key, values as any));
+      }
+    }
+  }
+
+  createContentTypeQuery({
+    contentTypeUid,
+    lang,
+    where,
+    count,
+    skip,
+    limit,
+    ...commonConfig
+  }: ICreateQueryConfig) {
+    const query = this.stack.ContentType(contentTypeUid).Query().language(lang).toJSON();
+
+    if (count) {
+      query.includeCount();
+    }
+
+    if (skip) {
+      query.skip(skip);
+    }
+
+    if (limit) {
+      query.limit(limit);
+    }
+
+    this.setCommonConfig({ query, ...commonConfig });
+
+    if (where) {
+      Object.entries(where).forEach(([key, value]) => query.where(key, value));
+    }
+
+    return query;
+  }
+
+  createContentTypeEntryQuery({
+    contentTypeUid,
+    lang,
+    entryUid,
+    ...commonConfig
+  }: ICreateEntryConfig) {
+    const query = this.stack.ContentType(contentTypeUid).Entry(entryUid).language(lang).toJSON();
+
+    this.setCommonConfig({ query, ...commonConfig });
+
+    return query;
+  }
+}
+
+export const getEntry = async <T>({
+  contentTypeUid,
+  referenceFieldPath,
+  jso
+--- src/services/pageService.ts (truncated)
+import { contentstackConfig, ContentstackLocales, ContentTypes } from "constants/contentstack";
+import { publicEnv } from "constants/publicEnv";
+import { IGlobalDictionary } from "interface/content/globalDictionary";
+import {
+  IAccessibilityAssistancePage,
+  IContentstackPage,
+  IStationDetailsPage,
+  IUserAccountPageSpecificData,
+} from "interface/content/page";
+import { IEnrichedPublishedPage } from "interface/contentstack";
+import { IDirectoryData, IMappedByLocaleDirectories } from "interface/directory";
+import { IMappedByLocalePageSlugs } from "interface/page";
+import logger from "services/logger";
+import { getValue } from "utils";
+import { getLineColors } from "utils/common/getLineColors";
+import { getFullSlug, transformSlugIntoUrl } from "utils/slug";
+import { blogService } from "./blogService";
+import {
+  getEntry,
+  getPageContentTypes,
+  getSingletonEntry,
+  findSingletonEntry,
+} from "./contentstack";
+import { getAllLinesInfo } from "./go-transit/getAllLinesInfo";
+import { partnersPromotionsService } from "./partnersPromotionsService";
+import { serviceUpdatesService } from "./serviceUpdatesService";
+import { stationService } from "./stationService";
+import { userAccountService } from "./userAccountService";
+
+export const excludedContentTypes = [ContentTypes.StationDetailPage];
+
+class PageService {
+  async getAllPublishedPages(): Promise<IEnrichedPublishedPage[]> {
+    const contentTypes = await getPageContentTypes();
+    const contentTypesUids = contentTypes
+      .map((contentType) => contentType.uid)
+      .filter((uid) => !excludedContentTypes.includes(uid as ContentTypes));
+
+    const handlePageEntriesError = (contentTypeUid: string, locale: string) => (error: unknown) => {
+      logger.error(
+        error,
+        `Error retrieving page entries of content type: ${contentTypeUid} of locale: ${locale}`,
+      );
+      throw error;
+    };
+
+    const pageEntriesPromises = contentTypesUids.reduce((acc, contentTypeUid) => {
+      const { referenceFieldPath, jsonRtePath, only } = contentstackConfig[contentTypeUid] || {};
+      const enSpecificPageTypeEntriesPromise = getEntry<IContentstackPage[]>({
+        contentTypeUid,
+        referenceFieldPath,
+        jsonRtePath,
+        only,
+        lang: ContentstackLocales.EN,
+      }).then(
+        this.getEnrichedPageDetails(contentTypeUid, ContentstackLocales.EN),
+        handlePageEntriesError(contentTypeUid, ContentstackLocales.EN),
+      );
+      const frSpecificPageTypeEntriesPromise = getEntry<IContentstackPage[]>({
+        contentTypeUid,
+        referenceFieldPath,
+        jsonRtePath,
+        only,
+        lang: ContentstackLocales.FR,
+      }).then(
+        this.getEnrichedPageDetails(contentTypeUid, ContentstackLocales.FR),
+        handlePageEntriesError(contentTypeUid, ContentstackLocales.FR),
+      );
+
+      acc.push(enSpecificPageTypeEntriesPromise, frSpecificPageTypeEntriesPromise);
+
+      return acc;
+    }, [] as Promise<IEnrichedPublishedPage>[]);
+
+    const results = await Promise.all(pageEntriesPromises);
+
+    return results.filter(({ entries }) => Array.isArray(entries) && entries.length);
+  }
+
+  getMappedByLocalePageSlugs(
+    pages: IEnrichedPublishedPage[],
+    mappedDirectories: IMappedByLocaleDirectories,
+  ): IMappedByLocalePageSlugs {
+    return pages.reduce((acc, { locale, entries }) => {
+      entries.forEach((entry: IContentstackPage) => {
+        const { uid, url, directory } = entry;
+        const directoryUid = directory?.[0]?.uid;
+        const directoryDetails = directoryUid
+          ? mappedDirectories[locale]?.[directoryUid]
+          : undefined;
+        const slug = getFullSlug(directoryDetails?.parts, url);
+
+        acc[locale] = acc[locale] || {};
+        acc[locale][uid] = slug;
+      });
+
+      return acc;
+    }, {} as IMappedByLocalePageSlugs);
+  }
+
+  async getHeaderAndFooter({ lang }: { lang: ContentstackLocales }) {
+    try {
+      const [footer, header] = await Promise.all([
+        getEntry({ contentTypeUid: ContentTypes.G
+--- src/pages/[[...slug]].tsx (truncated)
+import { GetStaticPaths, GetStaticProps } from "next";
+import { serverSideTranslations } from "next-i18next/serverSideTranslations";
+import { NextLocales } from "@metrolinx/cx-shared/build/src/constants/locales";
+import { Layout } from "components/Layout";
+import { PageHead } from "components/pages/PageHead";
+import { TLineColors } from "context/LineColorsContext";
+import { TEnrichedNextPage } from "interface/common";
+import { IAbandonedCartPrompt } from "interface/content/abandonedCartPrompt";
+import { IGlobalDictionary } from "interface/content/globalDictionary";
+import { IContentstackPage } from "interface/content/page";
+import { IDirectoryData, IMappedByLocaleDirectories } from "interface/directory";
+import { onBoardingService } from "services/onBoardingService";
+import { resolvePageComponent } from "services/pageComponentResolver";
+import { pageService } from "services/pageService";
+import { staticPathsResolver } from "services/staticPathsResolver";
+import { getBreadcrumbs } from "utils/breadcrumbs";
+import { readFromFs } from "utils/fsCache";
+import { getLocaleByNextLocale } from "utils/locale";
+import { readCachedPageDataFromFs } from "utils/pageDataCache";
+import { refineClientData } from "utils/refineClientData";
+
+interface IDynamicSlugParams {
+  slug: string[];
+}
+
+export interface IPageProps {
+  session: any;
+  content: {
+    // TODO: Define types for header and footer
+    header: [any];
+    footer: [any];
+    page: [IContentstackPage];
+    directories: IDirectoryData;
+    languageAlternativePageSlug?: string[];
+  };
+  contentTypeUid: string;
+}
+
+const Page: TEnrichedNextPage<IPageProps> = ({ content, contentTypeUid }) => {
+  const PageComponent = resolvePageComponent(contentTypeUid);
+
+  return (
+    <>
+      <PageHead page={content?.page} contentTypeUid={contentTypeUid} />
+      {PageComponent ? <PageComponent {...content} /> : <h1>Page not implemented</h1>}
+    </>
+  );
+};
+
+Page.Layout = Layout;
+
+export const getStaticPaths: GetStaticPaths = async () => {
+  const { MAINTENANCE_MODE } = process.env;
+
+  if (MAINTENANCE_MODE === "true") {
+    return { paths: [], fallback: false };
+  }
+
+  const paths = await staticPathsResolver.resolveStaticPaths();
+
+  return {
+    paths,
+    fallback: false,
+  };
+};
+
+export const getStaticProps: GetStaticProps = async (context) => {
+  const { locale: nextLocale = "" } = context;
+  const { slug = [] } = (context?.params as unknown as IDynamicSlugParams) || {};
+
+  const {
+    uid: pageUid,
+    contentTypeUid,
+    languageAlternativePageSlug,
+    entry: pageContent,
+  } = readCachedPageDataFromFs([nextLocale, ...slug]);
+
+  const contentstackLocale = getLocaleByNextLocale(nextLocale);
+  const directories = readFromFs<IMappedByLocaleDirectories>({ fileName: "directories" });
+  const currentLocaleDirectories = directories?.[contentstackLocale] || {};
+
+  const breadcrumbs = getBreadcrumbs({
+    pageUrl: pageContent.url,
+    pageBreadcrumbLabel: pageContent.breadcrumb_label?.breadcrumb_label || pageContent.title,
+    directories: currentLocaleDirectories,
+    directoryUid: pageContent.directory?.[0]?.uid || "",
+  });
+
+  const onBoardingData = await onBoardingService.getPageSpecificData(contentstackLocale);
+
+  let pageSpecificData: any;
+
+  try {
+    pageSpecificData = await pageService.getPageSpecificData({
+      contentTypeUid,
+      entryUid: pageUid,
+      lang: contentstackLocale,
+    });
+  } catch {
+    pageSpecificData = null;
+  }
+
+  const cachedFooterData = readFromFs<{ [locale: string]: any }>({
+    fileName: "footer",
+  });
+  const cachedHeaderData = readFromFs<{ [locale: string]: any }>({
+    fileName: "header",
+  });
+  const cachedServiceAlerts = readFromFs<{ [locale: string]: any }>({
+    fileName: "serviceAlerts",
+  });
+  const cachedStaticUpdates = readFromFs<{ [locale: string]: any }>({
+    fileName: "staticUpdates",
+  });
+  const cachedCookiesBanner = readFromFs<{ [locale: string]: any }>({
+    fileName: "cookiesBanner",
+  });
+  const cachedGlobalDictionary = readFromFs<{ [local
+--- src/services/partnersPromotionsService.ts
+import { ContentstackLocales, ContentTypes, ContentUid } from "constants/contentstack";
+import { Stack } from "services/contentstack";
+
+import logger from "./logger";
+
+class PartnersPromotionsService {
+  async getContentTypeByUid(type: string, uid: string) {
+    const query = Stack.ContentType(type);
+    return query
+      .fetch()
+      .then((response) => {
+        const categorySchema = response?.content_type?.schema?.find(
+          (item: any) => item.uid === uid,
+        );
+        return categorySchema?.enum?.choices || [];
+      })
+      .catch((error: any) => error);
+  }
+
+  async getPromoCategories({ lang }: { lang: ContentstackLocales }) {
+    const query = Stack.ContentType(ContentTypes.PartnersPromotionsDetailPage)
+      .Query()
+      .language(lang)
+      .toJSON();
+    try {
+      const detailPages: [{ promo_category: string[] }[]] = await query.find();
+      const categories: { key: string; value: string }[] = await this.getContentTypeByUid(
+        ContentTypes.PartnersPromotionsDetailPage,
+        ContentUid.PromoCategory,
+      );
+
+      const categoriesCounts = (detailPages?.[0] || []).reduce((acc, curr) => {
+        curr.promo_category.forEach((category) => {
+          const count = acc[category];
+          acc[category] = count === undefined ? 1 : count + 1;
+        });
+        return acc;
+      }, {} as { [category: string]: number });
+
+      const categoriesWithCounts = (categories || []).map((category) => {
+        const count = categoriesCounts[category.value] ?? 0;
+        return { ...category, count };
+      });
+
+      return categoriesWithCounts;
+    } catch (error) {
+      logger.error(error, "Error retrieving promo categories");
+      return [];
+    }
+  }
+}
+
+export const partnersPromotionsService = new PartnersPromotionsService();
+
+--- src/interface/contentstack.ts
+import { IRichTextDocument } from "@metrolinx/cx-shared/build/src/interface/content/richText";
+import { ContentstackLocales } from "constants/contentstack";
+import { IContentstackPage } from "./content/page";
+
+export interface ICommonContentstackConfig {
+  referenceFieldPath?: string[];
+  only?: Record<string, string | string[]> | string[];
+  except?: Record<string, string | string[]> | string[];
+}
+
+export interface IContentstackPageConfig extends ICommonContentstackConfig {
+  jsonRtePath?: string[];
+  includeFields?: string[];
+}
+
+export interface IContentstackGetEntry extends IContentstackPageConfig {
+  contentTypeUid: string;
+  lang: ContentstackLocales;
+}
+
+export interface IContentstackGetSingletonEntry extends IContentstackGetEntry {
+  where?: Record<string, string>;
+}
+
+export interface IContentstackGetSingleEntry extends IContentstackGetEntry {
+  entryUid: string;
+}
+
+export interface ICreateQueryConfig extends ICommonContentstackConfig {
+  contentTypeUid: string;
+  lang: ContentstackLocales;
+  where?: Record<string, string>;
+  count?: boolean;
+  skip?: number;
+  limit?: number;
+}
+
+export interface ICreateEntryConfig extends ICommonContentstackConfig {
+  contentTypeUid: string;
+  lang: ContentstackLocales;
+  entryUid: string;
+}
+
+export interface IEnrichedPublishedPage {
+  contentTypeUid: string;
+  locale: ContentstackLocales;
+  entries: IContentstackPage[];
+}
+
+export interface IContentstackSelectOption {
+  value: string;
+  key: string;
+}
+
+export interface IContentstackSchemaItem {
+  uid: string;
+  enum: {
+    choices: IContentstackSelectOption[];
+  };
+  schema: IContentstackSchemaItem[];
+}
+
+export interface IContentstackContentType {
+  uid: string;
+  schema: IContentstackSchemaItem[];
+}
+
+export interface IRichTextContent {
+  [key: string]: IRichTextDocument | IRichTextDocument[];
+}
+
+
+
+BROWNFIELD MODE — answer as JSON.
+You MAY use read_file on any path named in this prompt (declared files, located fix sites, and any
+document persisted under the run's docs/ directory) when you need more than the excerpt shown.
+Looking is allowed; inventing is not — a file you have neither been shown nor read is a fabrication.
+
+STEP 1 — CLASSIFY THIS STORY. Set "storyKind":
+- "defect" if it reports that EXISTING behavior is wrong, broken, or produces an incorrect/missing result (a bug).
+- "novel" if it asks for a NEW capability that does not exist in the codebase yet. A brownfield story is not always a bug — genuinely new work is "novel".
+
+STEP 2 — LOCATE (always, for both kinds — but the question differs).
+Use ONLY the EXISTING CODE block already present in this prompt (injected above via CodeGraph or Semble).
+
+- If storyKind is "defect": find the FIX SITE — the file/function that COMPUTES the wrong value, not the one that displays it.
+- If storyKind is "novel": there is no fix site, and inventing one produces a confident wrong answer. Find the ATTACHMENT POINT instead — the existing file/function this new capability plugs INTO (the provider, hook, route, config or component it must integrate with), plus anything already present that the implementation should REUSE rather than rewrite. This is what keeps the change as small as possible: you cannot reuse what you have not found.
+
+Set "locationHint" to [{"file":"<repo-relative path>","function":"<function name>","reason":"<why this location — the fix site for a defect, the attachment point for a novel story>"}].
+If no relevant code appears above, set locationHint to []. Do NOT invent a plausible file: a named file whose contents you cannot see in this prompt is a fabrication, and an empty locationHint is a usable answer while a fabricated one is not.
+
+For EACH criterion also declare WHO observes it (end user, tester, api client, operator) and
+WHAT SURFACE they look at — the rendered page, the API response, the CLI output, a generated
+file. If no person or client can see it, it is not a verification criterion. A precondition
+the test establishes (for example a mocked client signalling a change) goes in "setup": that
+is allowed and is not implementation prescription.
+
+STEP 3 — VERIFICATION CRITERIA.
+PRODUCE a "verificationCriteriaDetail" array — concrete, OBSERVABLE checks that confirm the change is correct — derived from the description. Apply these rules to EVERY verification criterion (a strict reviewer holds you to this SAME text, so a VC that breaks any rule will be flagged and rejected):
+A verification criterion states WHAT AN END USER OR TESTER OBSERVES on the user-facing surface THE TICKET IS ABOUT — the rendered output for an output ticket, the displayed screen for a UI ticket, the response a CLIENT receives for an API ticket. It is a BLACK-BOX check on that surface. It NEVER describes HOW the value is produced.
+A verification criterion is FORBIDDEN if it:
+- prescribes HOW to implement — any algorithm, mechanism, approach, or the addition/reading of any new field, flag or service;
+- references an INTERNAL structure that merely FEEDS the ticket's surface — an intermediate payload, a data-transfer object, or a specific response field used to BUILD the output. Verify the surface the ticket names, NOT the data structure behind it;
+- makes a CROSS-COMPARISON that presumes a mechanism — never assert one value "must equal" / "matches" / "is the same as" another; that presumes a shared derivation. Assert the required value is present and correct ON ITS OWN.
+Every verification criterion must be observable, testable, and tied to the ticket's stated symptom/intent.
+
+EXAMPLES OF FORM (the angle-bracket words are placeholders — fill them from THIS story; never copy them literally):
+
+REJECTED: "the <config object> passed to <the client> includes a <key> entry"
+  — asserts INTERNAL STRUCTURE. A tester cannot see a config object.
+ACCEPTED: "when <the request> carries <the marker>, <the surface> shows <the draft state> instead of <the published state>"
+
+REJECTED: "when <internal function> is called with <argument>, the resulting <query> includes <field>"
+  — asserts an INTERNAL CALL PATH. Verify the surface the ticket is about, not the path behind it.
+ACCEPTED: "<the surface> shows <the value> that <the source of truth> currently holds"
+
+REJECTED: "an author edits <entity> in <the external tool> and <the surface> updates"
+  — begins OUTSIDE THE BOUNDARY this suite can drive. Nothing here can operate that tool.
+ACCEPTED: "given <the client> is mocked to signal <the change>, <the surface> re-renders without a reload"
+
+REJECTED: "<the value> matches what <the other place> shows"
+  — a CROSS-COMPARISON presumes a shared derivation. Assert the required value on its own.
+ACCEPTED: "<the surface> shows <the expected value> for <the stated condition>"
+
+REJECTED: "<the feature> works correctly with no regression"
+  — verifies nothing and cannot fail.
+ACCEPTED: "when <the feature> is inactive, <the surface> shows <the prior behaviour> unchanged"
+
+- If the ticket describes a SYMPTOM, the VCs verify that symptom is resolved AND that related existing behavior does not regress.
+Set "vcSource" to one of "description", "both" — where you actually derived the VCs from.
+
+UNREACHABLE EXTERNAL SERVICE — write criteria to the boundary, not past it.
+This project cannot reach the following hosts at test time: contentstack.io, contentstack.com, api.contentstack.io, cdn.contentstack.io.
+There are no credentials for them and no local substitute, so any criterion that
+asserts their real behaviour is unprovable and will fail verification no matter
+how correct the code is.
+
+Write criteria that stop at OUR side of that boundary and are therefore provable:
+what request our code makes, with what parameters, under what conditions; how it
+handles the responses and failures those services can return; what it renders or
+returns given a known response. State the assumption explicitly, e.g. "given the
+<service> client is mocked, ...", so a reader knows the claim's limits.
+
+SCOPE — this applies ONLY to the hosts listed above. Every other integration
+keeps its real coverage: internal APIs, this codeline's own services, databases,
+and anything else reachable are exercised for real exactly as normal. Do NOT mock
+a dependency merely because mocking it would be more convenient. Removing
+coverage from something we CAN test trades a real defect for a green tick, which
+is the opposite of why this constraint exists.
+
+Generate refined acceptance criteria and optionally updated title/description. Output raw JSON only (no XML tags, no markdown fences, no preamble) using this schema:
+{
+  "storyId":"AMSD-2041",
+  "agent":"openspec",
+  "notes":"context",
+  "acceptanceCriteria":["..."],
+  "description":"...",
+  "title":"...",
+  "storyKind":"defect|novel",
+  "verificationCriteriaDetail":[{"criterion":"<observable check>","observer":"end user|tester|api client|operator","surface":"<what they look at>","setup":"<optional precondition, e.g. a mocked client signalling a change>"}],
+  "vcSource":"description|both",
+  "locationHint":[{"file":"path/relative/to/repo","function":"functionName","reason":"why this location — the fix site for a defect, the attachment point it integrates with for a novel story"}]
+}
+Use existing text when no change is needed.
+
+Story context:
+{
+  "id": "AMSD-2041",
+  "title": "[GO, UP, MX] Live Preview of Content in CMS",
+  "description": "Original Requirements (discovery)  AS a Content Author, I WANT to preview draft entries in CMS, SO THAT I can see how content will be shown on the website\nability to preview draft entries in CMS\nNotes& Assumptions  Limitation: Might not be possible to preview protected pages and content.\nOriginal Total Estimate:  8  Original FE Estimate:  8  Original DAM Estimate:  0  Original BE Estimate:  0",
+  "acceptanceCriteria": [],
+  "acCount": 0,
+  "agentRole": "contentstack-live-preview-sdk-engineer",
+  "agentGroup": "main",
+  "dependencies": [],
+  "splitDepth": 0
+}
+
+
+# Output
+```json
+{
+  "storyId": "AMSD-2041",
+  "agent": "openspec",
+  "notes": "Novel capability — the codebase has zero Live Preview support today. The Stack options lack live_preview config, interfaces carry no draft flag, and the catch-all page has no preview-mode detection. All attachment points are in the data-fetching and page-rendering pipeline. Verification criteria stop at our boundary: they assume the Contentstack SDK client is mocked to signal preview state, never asserting real contentstack.io behaviour.",
+  "acceptanceCriteria": [
+    "When a Contentstack Live Preview session is active, the rendered page shows draft/unpublished content instead of the published version",
+    "When no Live Preview session is active, the rendered page shows published content unchanged from current behaviour",
+    "When the Live Preview client signals a content field update, the page re-renders with the updated value without a full page reload",
+    "Pages that bypass the centralised data-fetching layer (e.g. partners/promotions, stations, blogs) also display draft content when a Live Preview session is active"
+  ],
+  "description": "As a Content Author, I want to preview draft entries in the CMS so that I can see how content will be shown on the website before publishing. This requires integrating the Contentstack Live Preview SDK so that draft content is fetched and rendered when a preview session is active, and real-time updates are reflected on the page when content changes in the CMS. Limitation: preview of protected pages and content may not be possible.",
+  "title": "[GO, UP, MX] Live Preview of Content in CMS",
+  "storyKind": "novel",
+  "verificationCriteriaDetail": [
+    {
+      "criterion": "Given the Contentstack client is mocked to return a draft entry when a preview session marker is present in the request context, the rendered page surface displays the draft content values (e.g. a draft heading, draft body text) rather than the published values for the same entry",
+      "observer": "tester",
+      "surface": "rendered page content (headings, body text, images, links)",
+      "setup": "Contentstack SDK client is mocked so that queries made during a preview session return draft entry data"
+    },
+    {
+      "criterion": "Given no preview session marker is present in the request context, the rendered page surface displays the published content values identical to the current production behaviour",
+      "observer": "tester",
+      "surface": "rendered page content (headings, body text, images, links)",
+      "setup": "No preview session marker is present; Contentstack SDK client returns published entry data as it does today"
+    },
+    {
+      "criterion": "Given the Live Preview client-side SDK is initialised and signals an update to a content field, the rendered page surface reflects the updated field value without requiring a full page navigation",
+      "observer": "tester",
+      "surface": "rendered page content after an in-session content change",
+      "setup": "Live Preview SDK client-side module is loaded and emits a content-update event for a specific field"
+    },
+    {
+      "criterion": "Given a preview session marker is present, a page whose content is fetched through a service that calls Stack.ContentType directly (e.g. partners/promotions listing) displays the draft version of that content on the rendered page surface",
+      "observer": "tester",
+      "surface": "rendered page content for pages using direct Stack queries (partners/promotions, stations, blogs, user account)",
+      "setup": "Contentstack SDK client is mocked so that direct Stack queries made during a preview session return draft entry data"
+    },
+    {
+      "criterion": "Given a preview session targets a protected or authenticated page, the rendered page surface shows an appropriate state (e.g. the published version, a fallback, or a clear indication that preview is unavailable) rather than an error or blank screen",
+      "observer": "tester",
+      "surface": "rendered page content for protected/authenticated pages",
+      "setup": "A preview session marker is present but the page requires authentication or is marked as protected"
+    }
+  ],
+  "vcSource": "both",
+  "locationHint": [
+    {
+      "file": "src/services/contentstack.ts",
+      "function": "options",
+      "reason": "Attachment point — Stack initialization where live_preview config (preview_token, host) must be added to enable the Contentstack Live Preview SDK"
+    },
+    {
+      "file": "src/interface/contentstack.ts",
+      "function": "ICreateQueryConfig",
+      "reason": "Attachment point — type interfaces that must carry an includeDraft flag so the draft indicator can flow through the type system from page-level detection to Stack queries"
+    },
+    {
+      "file": "src/pages/[[...slug]].tsx",
+      "function": "getStaticProps",
+      "reason": "Attachment point — catch-all page entry where Contentstack live-preview query parameters (live_preview, content_type_uid) are detected and preview context is passed into the data-fetching layer"
+    },
+    {
+      "file": "src/services/pageService.ts",
+      "function": "getPageContent",
+      "reason": "Attachment point — centralised page-level data fetcher that must thread the preview/draft flag through to getEntry/getSingletonEntry/findSingletonEntry calls"
+    },
+    {
+      "file": "src/services/partnersPromotionsService.ts",
+      "function": "PartnersPromotionsService",
+      "reason": "Attachment point — bypasses ContentstackFactory by calling Stack.ContentType directly; needs its own draft handling in preview mode (same pattern applies to stationService, blogService, userAccountService)"
+    }
+  ]
+}
+```

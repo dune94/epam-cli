@@ -1,0 +1,502 @@
+# Prompt
+You are the specification coordinator for the epam-cli orchestration system. Before every phase you read orchestrations/prd.json (implementationOrder and stories), evaluate risk, dependencies, and technical readiness, then assign the correct specification runners: OpenSpec, Speckit, both, or none. You write assignments into each story's specification.assignedAgents field along with coordinatorNotes, target provider/model, and timestamps. You understand the provider policy ledger (configuration.aiRuntime.providerPolicies), token guardrails, and know when to skip stories that were already hand-curated. When you plan a run you emit JSON compliant with spec-mode-runner.js so that automation can apply deltas deterministically. You never invent story IDs or mutate acceptance criteria directly; only delegate to spec agents and record their status.
+
+You are the EPAM CLI specification coordinator reviewing the completed spec outputs for phase core.
+
+Each story was processed by a sequential agent pipeline:
+  1. openspec elaborated requirements (AC refinement, story splits, technical depth)
+  2. speckit reviewed openspec's output (testability, security, edge cases, gap analysis)
+
+For each story, evaluate the quality of the collaborative spec work:
+1. Did both agents add meaningful, non-overlapping value?
+2. Flag any story needing human review.
+3. PLAN ALIGNMENT — where planAlignmentEvidence is present, it tells you what the
+   code-graph-detective SAID it would investigate (detectivePlan) and a deterministic,
+   cheap signal (aligned: true/false) for whether the final fixSiteAnalysis shares any
+   named symbol/file with that plan. This signal is NOT your verdict — it is evidence, the
+   same as MANIFEST EVIDENCE below. A plan can legitimately turn out wrong once real
+   exploration starts. Read detectivePlan and fixSiteAnalysis yourself and judge: did the
+   detective explain WHY it moved from its plan to its final answer (a stated pivot,
+   reasoning that connects the two), or did the answer just change with no explanation?
+   The latter is a real defect (a fix has shipped that shared no term with the detective's
+   own stated plan, with no explanation, more than once on the same ticket) — set
+   planAlignment to justified_deviation when the detective justifies its pivot, or
+   unexplained_mismatch when it does not, and say why in reviewNotes. aligned:true needs
+   no action.
+
+(Brownfield tickets never split and their acceptance criteria are immutable —
+do not evaluate split quality or AC completeness; there is nothing there for
+either agent to have changed.
+
+EXPECTED, NOT A DEFECT: an agent's notes may describe acceptance criteria it
+authored while the story's acceptanceCriteria array is empty, and report
+acceptanceChanged=false. That is this pipeline REDACTING them on purpose: on a
+brownfield ticket the ACs are the ticket's own, and a thin ticket legitimately
+has none. The observable checks live in verificationCriteria — judge THOSE.
+Do not report the mismatch as a hallucination, a persistence failure or a
+metadata inconsistency, and do not lower qualityScore for it. An empty
+acceptanceCriteria array on a brownfield story is correct by policy.)
+
+MANIFEST EVIDENCE (checked against the repository, not asserted):
+  AMSD-2041: EXISTS  src/services/contentstack.ts
+  AMSD-2041: EXISTS  src/pages/_app.tsx
+  AMSD-2041: EXISTS  src/context/contentstackContext.tsx
+  AMSD-2041: EXISTS  src/services/pageService.ts
+  AMSD-2041: EXISTS  src/components/pages/Homepage.tsx
+  AMSD-2041: EXISTS  src/hooks/useContent.ts
+  AMSD-2041: EXISTS  src/api/utils/_contentstack_getNewsArticles.ts
+  AMSD-2041: EXISTS  src/interface/content/page.ts
+
+
+ANSWER IN THIS RESPONSE. Your <SPEC_REVIEW> verdict must appear in THIS reply — an
+empty <SPEC_REVIEW></SPEC_REVIEW>, or a promise to verify and answer later, is
+discarded and the review does not happen. There is no follow-up turn to come back in.
+
+You DO have read-only tools this turn (read_file, list_files, search). Use them for
+real if something is genuinely unclear — but never narrate an imagined tool result,
+and never spend the whole turn exploring and run out before writing the verdict.
+Budget is small and the verdict is mandatory: gather at most what you need, then answer.
+
+MANIFEST EVIDENCE has already been gathered from the repository for you and appears
+above. Every declared path was checked with a real filesystem stat, so re-checking
+paths is wasted budget — that part is done and is more reliable than a tool call.
+  - A story with any MISSING path CANNOT be implemented: the writer is sent to edit a
+    file that is not there, and every retry reproduces that. Mark it needs_review, name
+    the exact path in reviewNotes, and add the flag "missing_manifest_path".
+  - Where the evidence names a real neighbour ("the directory holds X instead"), say so
+    — that is what makes the report actionable.
+  - Never silently correct a path. The manifest is the artefact under review; a
+    correction living only in your prose reaches nobody.
+
+Judge what the evidence cannot: are the acceptance criteria testable, is the declared
+file set plausible for this change, is anything obviously missing. If you are unsure,
+lower qualityScore and add a flag — do not withhold the verdict. A missing review is
+EVERY FLAG CARRIES A SEVERITY. It ranks your objections for whoever reads them; it does not
+decide whether the run stops — a computed check or a project-declared flag does that. Mark
+blocking when an implementer following this spec would produce work that CANNOT FUNCTION,
+and advisory for uncertainty about what you could not see. Report both honestly: nothing is
+gained by inflating uncertainty into a defect, and nothing is lost by naming a real one.
+worse than an uncertain one: it means nothing was checked at all.
+
+QUALITY SCORE — what the number has to mean. It is enforced: below 0.7 halts the run
+before implementation, so an unanchored guess stops real work.
+  0.9-1.0  the spec is ready to implement; criteria are observable and the file set fits.
+  0.7-0.89 ready to implement, with ordinary open questions a competent writer resolves.
+  0.5-0.69 NOT ready: something concrete is wrong or missing — criteria that cannot be
+           observed, a file set that cannot deliver what is described, contradictions.
+  below 0.5 the spec would send a writer somewhere useless.
+Score what IS in front of you. Do NOT lower the score because an agent could not read the
+source files, or because a human "might want to check" — that is true of every ticket and
+is not a defect in this spec. If your notes cannot name something concretely wrong, the
+score belongs at 0.7 or above.
+
+Respond with JSON between <SPEC_REVIEW> and </SPEC_REVIEW> using this schema:
+[
+  {"storyId":"REM-xxx","verdict":"approved|needs_review","reviewNotes":"coordinator observations","qualityScore":0.0-1.0,"flags":[{"flag":"short-slug","severity":"blocking|advisory","why":"what you checked and what you found"}],"planAlignment":"aligned|justified_deviation|unexplained_mismatch|not_applicable"}
+]
+
+Stories to review:
+[
+  {
+    "id": "AMSD-2041",
+    "title": "[MX] Live Preview of Content in CMS (part 1)",
+    "acceptanceCriteria": [
+      "See in:"
+    ],
+    "verificationCriteria": [
+      "Given the Contentstack client is mocked to signal a draft entry change for the MX Homepage, the rendered Homepage shows the draft entry content instead of the previously published content, without requiring a full page reload.",
+      "Given the Contentstack client is mocked to signal a draft entry change for a Discover Article page, the rendered Discover Article page shows the draft entry content instead of the previously published content, without requiring a full page reload.",
+      "When no preview signal is active, the MX Homepage renders published content identically to its current behavior with no visual or functional regression.",
+      "When no preview signal is active, Discover Article pages render published content identically to their current behavior with no visual or functional regression.",
+      "Given the Contentstack client is mocked to signal multiple successive draft entry changes for the same Homepage, the rendered Homepage updates to reflect each change in sequence without a full page reload.",
+      "Given the Contentstack client is mocked to signal a draft entry change while the page is in a protected or gated state, the page does not render the draft content and continues to show the published content unchanged."
+    ],
+    "technicalNotes": {
+      "files": [
+        "src/services/contentstack.ts",
+        "src/pages/_app.tsx",
+        "src/context/contentstackContext.tsx",
+        "src/services/pageService.ts",
+        "src/components/pages/Homepage.tsx",
+        "src/hooks/useContent.ts",
+        "src/api/utils/_contentstack_getNewsArticles.ts",
+        "src/interface/content/page.ts"
+      ],
+      "perCodeline": {
+        "metrolinx": {
+          "files": [
+            "src/services/contentstack.ts",
+            "src/pages/_app.tsx",
+            "src/context/contentstackContext.tsx",
+            "src/services/pageService.ts",
+            "src/components/pages/Homepage.tsx",
+            "src/hooks/useContent.ts",
+            "src/api/utils/_contentstack_getNewsArticles.ts",
+            "src/interface/content/page.ts"
+          ],
+          "resolved": [
+            {
+              "declared": "src/services/contentstack.ts",
+              "actual": "src/services/contentstack.ts",
+              "match": "exact",
+              "verified_against": "/home/bradleyjerome/projects/metrolinx/next.metrolinx.com"
+            },
+            {
+              "declared": "src/pages/_app.tsx",
+              "actual": "src/pages/_app.tsx",
+              "match": "exact",
+              "verified_against": "/home/bradleyjerome/projects/metrolinx/next.metrolinx.com"
+            },
+            {
+              "declared": "src/context/contentstackContext.tsx",
+              "actual": "src/context/contentstackContext.tsx",
+              "match": "exact",
+              "verified_against": "/home/bradleyjerome/projects/metrolinx/next.metrolinx.com"
+            },
+            {
+              "declared": "src/services/pageService.ts",
+              "actual": "src/services/pageService.ts",
+              "match": "exact",
+              "verified_against": "/home/bradleyjerome/projects/metrolinx/next.metrolinx.com"
+            },
+            {
+              "declared": "src/components/pages/Homepage.tsx",
+              "actual": "src/components/pages/Homepage.tsx",
+              "match": "exact",
+              "verified_against": "/home/bradleyjerome/projects/metrolinx/next.metrolinx.com"
+            },
+            {
+              "declared": "src/hooks/useContent.ts",
+              "actual": "src/hooks/useContent.ts",
+              "match": "exact",
+              "verified_against": "/home/bradleyjerome/projects/metrolinx/next.metrolinx.com"
+            },
+            {
+              "declared": "src/api/utils/_contentstack_getNewsArticles.ts",
+              "actual": "src/api/utils/_contentstack_getNewsArticles.ts",
+              "match": "exact",
+              "verified_against": "/home/bradleyjerome/projects/metrolinx/next.metrolinx.com"
+            },
+            {
+              "declared": "src/interface/content/page.ts",
+              "actual": "src/interface/content/page.ts",
+              "match": "exact",
+              "verified_against": "/home/bradleyjerome/projects/metrolinx/next.metrolinx.com"
+            }
+          ],
+          "unresolved": []
+        }
+      }
+    },
+    "specification": {
+      "guardVocabulary": {
+        "blacklist": [
+          {
+            "term": "contentstack client is mocked",
+            "reason": "Describes the test harness mechanism (mocking the SDK client), not what an end user observes on the rendered surface."
+          },
+          {
+            "term": "mocked to signal a draft entry change",
+            "reason": "Prescribes the internal testing mechanism — mocking the SDK to emit a preview signal — rather than asserting the observable rendered output."
+          },
+          {
+            "term": "onentrychange",
+            "reason": "Names the internal SDK callback/producer that feeds the context; it is an intermediate mechanism behind the surface, not the rendered result itself."
+          },
+          {
+            "term": "contentstackcontext",
+            "reason": "Names the internal React context that distributes data to components; it is an intermediate structure feeding the surface, not the observable output."
+          },
+          {
+            "term": "usecontent",
+            "reason": "Names the internal hook consumers use to read context; it is an implementation mechanism behind the surface."
+          },
+          {
+            "term": "contentstackcontext.provider",
+            "reason": "Names the internal provider site that wraps the app; it is an implementation structure feeding the surface, not the observable output."
+          },
+          {
+            "term": "live_preview",
+            "reason": "References the internal SDK configuration block added to the options object; it is a mechanism flag, not the rendered surface."
+          },
+          {
+            "term": "options",
+            "reason": "Names the internal Stack configuration object (site of the contentstack.Stack(options) call); it is an implementation structure, not the observable output."
+          },
+          {
+            "term": "contentstackfactory",
+            "reason": "Names the internal factory through which all data fetches flow; it is an intermediate mechanism behind the surface."
+          },
+          {
+            "term": "getsinglepageentry",
+            "reason": "Names the internal server-side data fetcher that populates the page prop; it is an intermediate pipeline feeding the surface, not the rendered result."
+          },
+          {
+            "term": "getsingleentry",
+            "reason": "Names the internal SDK delegation function used by the fetcher; it is an implementation mechanism behind the surface."
+          },
+          {
+            "term": "getsingletonentry",
+            "reason": "Names the internal SDK delegation function used by the fetcher; it is an implementation mechanism behind the surface."
+          },
+          {
+            "term": "pageservice.getpageentry",
+            "reason": "Names the internal server-side service that populates props; it is an intermediate structure feeding the surface, not the observable output."
+          },
+          {
+            "term": "live-preview-utils",
+            "reason": "Names the internal SDK utility initialized in _app.tsx to produce preview data; it is a mechanism, not the rendered surface."
+          },
+          {
+            "term": "full page reload",
+            "reason": "Describes an implementation mechanism (absence of a reload) rather than the observable rendered output; the surface observation is that content updates without navigation."
+          },
+          {
+            "term": "preview signal",
+            "reason": "Names the internal SDK signal/event that triggers the preview pipeline; it is an intermediate mechanism behind the surface."
+          },
+          {
+            "term": "protected or gated state",
+            "reason": "Presumes an internal state/flag mechanism rather than asserting the observable rendered output (published content shown unchanged)."
+          }
+        ],
+        "whitelist": [
+          {
+            "term": "draft entry content",
+            "reason": "The observable content a content author sees rendered on the page during preview — the ticket's stated surface."
+          },
+          {
+            "term": "published content",
+            "reason": "The observable content rendered when no preview is active — the baseline surface the ticket names."
+          },
+          {
+            "term": "mx homepage",
+            "reason": "The user-facing page surface the ticket is about."
+          },
+          {
+            "term": "discover article page",
+            "reason": "The user-facing page surface the ticket is about."
+          },
+          {
+            "term": "rendered homepage",
+            "reason": "The observable rendered output surface for the Homepage."
+          },
+          {
+            "term": "rendered discover article page",
+            "reason": "The observable rendered output surface for the Discover Article page."
+          },
+          {
+            "term": "visual or functional regression",
+            "reason": "An observable property of the rendered surface — whether it matches current behavior — as perceived by a tester."
+          },
+          {
+            "term": "published content unchanged",
+            "reason": "The observable rendered state when preview is not permitted — the surface a tester checks."
+          }
+        ]
+      },
+      "runId": "20260818T203628Z",
+      "assignedAgents": [
+        "openspec",
+        "speckit"
+      ],
+      "coordinatorNotes": "AC is a placeholder ('See in:') for a non-trivial ContentStack live-preview integration spanning MX Homepage and Discover Article pages with a noted limitation around protected pages. openspec must elaborate real acceptance criteria, define preview scope, and clarify the protected-content limitation; speckit should then harden with testability criteria, security checks for protected-content leakage, and edge-case coverage (draft vs published, preview token expiry, cross-page rendering). No prior spec or coordinator notes detected, so no skip.",
+      "status": "completed",
+      "updatedAt": "2026-08-18T21:17:07.023Z",
+      "appliedAgents": [
+        "openspec",
+        "speckit"
+      ],
+      "agentContributions": [
+        {
+          "agent": "openspec",
+          "applied": true,
+          "notes": "Novel capability — live preview does not exist in the codebase. The options object in contentstack.ts has no live_preview block, _app.tsx has no live-preview-utils initialization, and ContentstackContext is static (set once from SSR, never updated client-side). Attachment points are the SDK config, the app-wide provider, the React context, and the existing server-side fetch pattern to reuse for client-side re-fetching. VCs are derived from the description since the AC ('See in:') carries no testable content.",
+          "acceptanceChanged": false,
+          "splitCount": 0,
+          "timestamp": "2026-08-18T21:16:04.885Z"
+        },
+        {
+          "agent": "speckit",
+          "applied": true,
+          "notes": "Openspec's output contained only the placeholder 'See in:' with no testable criteria, so I built all ACs from scratch after reading the 8 listed files. Key observations from the codebase that shaped the ACs: (1) contentstack.ts options object has no live_preview block — AC 1 addresses this; (2) _app.tsx has no live-preview-utils initialization — AC 2 addresses this; (3) ContentstackContext is a static createContext with no update mechanism — ACs 6 and 13 address the need for dynamic updates; (4) useContent hook only reads, never writes — AC 13 addresses this; (5) Homepage receives page as props from SSR — AC 4 covers preview re-rendering; (6) No INewsArticlePage rendering path was visible but the interface exists — AC 5 covers Discover Articles; (7) The story's original notes mention protected pages limitation — AC 8 captures this explicitly; (8) No live-preview code exists anywhere in the codebase (searched for live_preview, livePreview, live-preview, ContentstackLivePreview, livePreviewUtils — zero matches). All ACs are phrased as observable outcomes (what a test can verify) with no implementation instructions per the WHAT-NOT-HOW rule.",
+          "acceptanceChanged": false,
+          "splitCount": 0,
+          "timestamp": "2026-08-18T21:17:07.023Z"
+        }
+      ]
+    },
+    "fixSiteAnalysis": [
+      {
+        "file": "src/services/contentstack.ts",
+        "function": "options",
+        "reason": "This is the Stack configuration site — the single contentstack.Stack(options) call at line 91 that every data fetch flows through (via ContentstackFactory). The options object (lines 71-89) currently contains api_key, delivery_token, environment, branch, fetchOptions but NO live_preview block. Adding live_preview here is what enables the SDK to detect preview mode and return draft entries — without it, no downstream consumer can ever receive preview data.",
+        "fix": "Add a live_preview block to the options object (lines 71-89): live_preview: { enable: true, preview_token: process.env.CONTENTSTACK_PREVIEW_TOKEN || '' }. Also add CONTENTSTACK_PREVIEW_TOKEN to the env destructuring block (lines 23-36). The existing Stack = contentstack.Stack(options) at line 91 and ContentstackFactory class (line 109) are reused as-is.",
+        "helper": "options",
+        "brokenLine": "",
+        "fixVerified": true,
+        "evidenceVerified": null,
+        "fileVerified": true,
+        "changeRequired": true,
+        "requiredPackages": [
+          "@contentstack/live-preview-utils"
+        ],
+        "deliveryRole": "produces",
+        "runsIn": "both",
+        "prescriptionNote": "",
+        "prescriptionUnderspecified": false,
+        "codeline": "metrolinx"
+      },
+      {
+        "file": "src/pages/_app.tsx",
+        "function": "ContentstackContext.Provider",
+        "reason": "This is the app-wide provider site where ContentstackContext.Provider wraps the application and sets the context value from server-side page props (header, footer, onboarding, page). For live preview, @contentstack/live-preview-utils must be initialized here with an onEntryChange callback that receives updated entry data from the CMS and pushes it into React state, causing the provider value and all 147+ useContent consumers to re-render. This callback is the PRODUCER of live preview entry data on the client.",
+        "fix": "Import and initialize ContentstackLivePreview from @contentstack/live-preview-utils with { stackSdk: Stack (from src/services/contentstack.ts line 91), onEntryChange: callback }. In the onEntryChange callback, re-fetch the changed entry using the same Stack ContentType/Entry pattern used by ContentstackFactory.createContentTypeEntryQuery (line 185) and update React state (useState) that feeds the ContentstackContext.Provider value. The existing getSingleEntry / getSinglePageEntry pattern from pageService.ts (line 75-88) should be reused for the client-side re-fetch shape.",
+        "helper": "ContentstackFactory",
+        "brokenLine": "",
+        "fixVerified": true,
+        "evidenceVerified": null,
+        "fileVerified": true,
+        "changeRequired": true,
+        "requiredPackages": [
+          "@contentstack/live-preview-utils"
+        ],
+        "deliveryRole": "produces",
+        "runsIn": "browser",
+        "prescriptionNote": "",
+        "prescriptionUnderspecified": false,
+        "codeline": "metrolinx"
+      },
+      {
+        "file": "src/context/contentstackContext.tsx",
+        "function": "ContentstackContext",
+        "reason": "The React context that distributes Contentstack data to all components via the useContent hook. Currently createContext<IContentstackContext>({}) with a static interface — the Provider value is set once from server-side props and never updated. For live preview, this context must CARRY reactive state so that when onEntryChange in _app.tsx fires with updated entry data, all useContent consumers re-render with new values.",
+        "fix": "Add a setContent or updatePage callback field to IContentstackContext (line 8-18) so the onEntryChange subscriber in _app.tsx can push updated entry data into the context. The existing context shape (header, footer, onboarding, page, pagesBaseURLs, directories, languageAlternativePageSlug) is reused — only an updater mechanism is added.",
+        "helper": "ContentstackContext",
+        "brokenLine": "",
+        "fixVerified": true,
+        "evidenceVerified": null,
+        "fileVerified": true,
+        "changeRequired": true,
+        "requiredPackages": [],
+        "deliveryRole": "carries",
+        "runsIn": "browser",
+        "prescriptionNote": "",
+        "prescriptionUnderspecified": false,
+        "codeline": "metrolinx"
+      },
+      {
+        "file": "src/components/pages/Homepage.tsx",
+        "function": "Homepage",
+        "reason": "Target page per acceptance criteria (MX Homepage). Receives page prop (IContentstackPage[]) and renders ContentStackHomePageHeroBanner, HomepageComponentMapper, ContentstackRecentNews, ContentStackLandAcknowledgement. Child components use useContent hook which reads from ContentstackContext. Once the context becomes reactive via onEntryChange, Homepage and all its children will automatically re-render with preview data — no direct edit needed.",
+        "fix": "No code change required. Homepage reads page data from props at line 21 and its children consume useContent from ContentstackContext. When the context value updates (from onEntryChange subscription in _app.tsx), Homepage re-renders automatically. Verify that the page prop and context page data stay synchronized when live preview updates arrive — the context page field (IContentstackContext.page at line 12) must reflect the updated entry.",
+        "helper": "useContent",
+        "brokenLine": "",
+        "fixVerified": true,
+        "evidenceVerified": null,
+        "fileVerified": true,
+        "changeRequired": false,
+        "requiredPackages": [],
+        "deliveryRole": "verifies",
+        "runsIn": "browser",
+        "prescriptionNote": "",
+        "prescriptionUnderspecified": false,
+        "codeline": "metrolinx"
+      },
+      {
+        "file": "src/services/pageService.ts",
+        "function": "PageService.getPageEntry",
+        "reason": "Server-side data fetcher (lines 166-229) that populates the page prop passed to ContentstackContext.Provider. Calls getSinglePageEntry (line 211) or getSingletonPageEntry (line 212) which delegate to getSingleEntry/getSingletonEntry from contentstack.ts. This is the existing server-side pipeline that live preview augments client-side. The getSinglePageEntry function (line 75-88) uses getSingleEntry with contentstackConfig lookup — this same pattern should be reused in the onEntryChange callback for client-side re-fetching of preview entries.",
+        "fix": "No code change needed for server-side fetching. The onEntryChange callback in _app.tsx should reuse the same getSingleEntry pattern (via ContentstackFactory.createContentTypeEntryQuery from src/services/contentstack.ts line 185) for client-side re-fetches. Verify that contentstackConfig (referenced at line 80) and ContentTypes constants are accessible client-side for the callback to resolve contentTypeUid config.",
+        "helper": "getSinglePageEntry",
+        "brokenLine": "",
+        "fixVerified": true,
+        "evidenceVerified": null,
+        "fileVerified": true,
+        "changeRequired": false,
+        "requiredPackages": [],
+        "deliveryRole": "verifies",
+        "runsIn": "server",
+        "prescriptionNote": "",
+        "prescriptionUnderspecified": false,
+        "codeline": "metrolinx"
+      },
+      {
+        "file": "src/hooks/useContent.ts",
+        "function": "useContent",
+        "reason": "The hook used by 147+ components to read Contentstack data via ContentstackContext. Returns getContentByKey which path-navigates the context value using getValue. Once the context value becomes reactive (updated by onEntryChange in _app.tsx), all useContent consumers will automatically re-render — no change needed here. This is the verification point to confirm the full pipeline works end-to-end.",
+        "fix": "No code change needed. useContent reads from ContentstackContext via useContext (line 6). When the provider value updates from onEntryChange, the useCallback dependency on content (line 9) causes getContentByKey to return updated data, triggering re-renders in all consuming components.",
+        "helper": "",
+        "brokenLine": "",
+        "fixVerified": null,
+        "evidenceVerified": null,
+        "fileVerified": true,
+        "changeRequired": false,
+        "requiredPackages": [],
+        "deliveryRole": "verifies",
+        "runsIn": "browser",
+        "prescriptionNote": "",
+        "prescriptionUnderspecified": false,
+        "codeline": "metrolinx"
+      }
+    ],
+    "planAlignmentEvidence": {
+      "detectivePlan": "**Plan:**\n\nI need to find the attachment points for Contentstack Live Preview in this codeline. Key targets:\n\n1. **Stack initialization site** — search for `Contentstack.Stack(` to find where the Delivery SDK is configured; this is where `live_preview` config and `ContentstackLivePreview.init()` must be added.\n2. **Shared query/fetch layer** — whatever wraps `Stack.ContentType().Query()` calls; this carries live_preview params to every fetch.\n3. **Page-level data fetching** — `getStaticProps`/`getServerSideProps` in `pages/` that call Contentstack; these need `onEntryChange` wiring.\n4. **Package check** — whether `@contentstack/live-preview-utils` is already installed.\n5. **Env config** — how API keys are managed, where `CONTENTSTACK_LIVE_PREVIEW_TOKEN` etc. would go.\n\nThe pre-computed explore showed `PageComponents` with 36 callers across component mappers, and migration scripts (irrelevant). I need to trace from Stack init → shared fetch utils → page-level getStaticProps to map every site. If I find no `live_preview` block in Stack config and no `live-preview-utils` package, those are the primary setup sites. I'll verify each with tool calls before naming them.",
+      "aligned": true,
+      "planTerms": [
+        "livepreview",
+        "getstaticprops",
+        "getserversideprops",
+        "onentrychange",
+        "contentstacklivepreviewtoken",
+        "pagecomponents",
+        "contentstacklivepreview",
+        "contenttype"
+      ],
+      "findingTerms": [
+        "contentstack",
+        "options",
+        "contentstackcontext",
+        "contentstackcontextprovider",
+        "homepage",
+        "pageservice",
+        "getpageentry",
+        "pageservicegetpageentry",
+        "usecontent"
+      ]
+    }
+  }
+]
+
+<SPEC_REVIEW>
+</SPEC_REVIEW>
+
+# Output
+<SPEC_REVIEW>
+[
+  {
+    "storyId": "AMSD-2041",
+    "verdict": "approved",
+    "reviewNotes": "Both agents added meaningful, non-overlapping value. Openspec provided strategic analysis: confirmed this is a novel capability (no live_preview code anywhere), identified the four architectural attachment points (SDK config, app-wide provider, React context, server-side fetch pattern), and derived VCs from the description since the AC was a placeholder. Speckit provided tactical depth: read all 8 files, built 6 observable verification criteria from scratch, and grounded each VC in specific codebase observations (e.g., options object lines 71-89 has no live_preview block, ContentstackContext is static createContext, useContent only reads). Their contributions are complementary — openspec was architectural, speckit was implementation-grounded — with no redundancy.\n\nManifest evidence: all 8 declared paths verified EXISTS with exact matches. No missing paths.\n\nPackage check: @contentstack/live-preview-utils is physically installed in node_modules but NOT declared in package.json (verdict: installed_undeclared). The fixSiteAnalysis correctly lists it under requiredPackages for contentstack.ts and _app.tsx, so the spec is telling the writer to add it — but the writer must also add the package.json declaration, not just import from it. This is an ordinary open question, not a blocker, since the spec already flags the package as required.\n\nfixSiteAnalysis covers 6 of 8 declared files. The 2 absent are src/api/utils/_contentstack_getNewsArticles.ts (the Contentstack news articles fetcher, relevant to VC #2 Discover Article preview) and src/interface/content/page.ts (defines INewsArticlePage). The same context-update pipeline logic described for Homepage would apply to Discover Article pages, so the gap is navigable but the writer has no specific guidance for those files. Notably, speckit's notes claim 'No INewsArticlePage rendering path was visible but the interface exists' — this is slightly inaccurate: INewsArticlePage is imported and used in pageService.ts (line 316) and the news articles API route at pages/api/v1/news-articles.ts imports from _contentstack_getNewsArticles.ts. The rendering path does exist; speckit missed it. This does not undermine the VCs themselves, which assert observable behavior rather than implementation paths.\n\nVerification criteria are testable: each VC has a Given clause (test setup) and an observable Then-equivalent outcome (draft content shown, published content unchanged, sequential updates, protected-state non-leakage). The Given clauses use terms the spec's own guardVocabulary blacklists ('contentstack client is mocked', 'mocked to signal', 'preview signal', 'protected or gated state') — these describe test-harness mechanisms rather than user-observable surfaces. However, the observable assertions in each VC are sound (draft entry content shown, published content unchanged). This is a tension between the guardVocabulary and the VC phrasing but does not make the VCs untestable.\n\nPlan alignment: aligned=true. The detectivePlan named Stack initialization, shared query/fetch layer, page-level data fetching, package check, and env config. The fixSiteAnalysis covers contentstack.ts (Stack init/options), _app.tsx (provider/onEntryChange), pageService.ts (fetcher), contentstackContext.tsx (context), Homepage.tsx and useContent.ts (consumers). These share the plan's core targets. No action needed per policy.\n\nOverall: the spec is ready to implement. The file set is plausible and fully verified, the VCs are observable, and both agents contributed genuine non-overlapping value. The undeclared package and the 2 absent fixSiteAnalysis files are ordinary open questions a competent writer resolves.",
+    "qualityScore": 0.82,
+    "flags": [
+      {
+        "flag": "undeclared-required-package",
+        "severity": "advisory",
+        "why": "Checked @contentstack/live-preview-utils against package.json and node_modules. The package is installed in node_modules but NOT declared in package.json (verdict: installed_undeclared). The fixSiteAnalysis correctly lists it as a requiredPackage, so the writer knows it is needed — but must add the package.json declaration, not just the import. A fresh CI install would fail without this. Not blocking because the spec already identifies the dependency; the writer just needs to formalize the declaration."
+      },
+      {
+        "flag": "fixsiteanalysis-incomplete-for-discover-article",
+        "severity": "advisory",
+        "why": "fixSiteAnalysis covers 6 of 8 declared files. The 2 absent — src/api/utils/_contentstack_getNewsArticles.ts and src/interface/content/page.ts — are relevant to VC #2 (Discover Article preview). The same context-update pipeline logic described for Homepage would apply, but the writer has no file-specific guidance for these. Speckit's note that 'No INewsArticlePage rendering path was visible' is inaccurate: INewsArticlePage is used in pageService.ts line 316 and _contentstack_getNewsArticles.ts is imported by pages/api/v1/news-articles.ts. The path exists; the analysis simply did not cover it."
+      },
+      {
+        "flag": "vc-given-clauses-use-blacklisted-terms",
+        "severity": "advisory",
+        "why": "The verification criteria's Given clauses use terms the spec's own guardVocabulary blacklists: 'contentstack client is mocked' (VCs 1, 2, 5, 6), 'mocked to signal a draft entry change' (VCs 1, 2, 5), 'preview signal' (VCs 3, 4), 'protected or gated state' (VC 6). These describe test-harness mechanisms rather than user-observable surfaces. The observable assertions (Then-equivalent outcomes) in each VC are sound and testable, so this is a phrasing tension, not a testability defect."
+      }
+    ],
+    "planAlignment": "aligned"
+  }
+]
+</SPEC_REVIEW>

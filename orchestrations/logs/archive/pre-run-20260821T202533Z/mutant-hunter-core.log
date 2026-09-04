@@ -1,0 +1,41 @@
+{
+  "agent": "mutant-hunter",
+  "phase": "core",
+  "summary": {
+    "mutationsProposed": 3,
+    "killed": 0,
+    "survived": 0,
+    "noCoverage": 3,
+    "mutationScore": 0
+  },
+  "mutations": [
+    {
+      "file": "src/pages/_app.tsx",
+      "line": 94,
+      "originalCode": "<ContentstackContext.Provider value={previewPage ? { ...content, page: previewPage } : content}>",
+      "mutatedCode": "<ContentstackContext.Provider value={previewPage ? content : { ...content, page: previewPage }}>",
+      "status": "no-coverage",
+      "relatedTest": null,
+      "recommendation": "The spec (contentstack.spec.ts) builds its own PreviewWrapper that replicates this ternary logic instead of importing and rendering LivePreviewContentProvider. Swapping the branches would publish draft data and suppress published data — a silent failure — and no test would catch it because the actual provider is never rendered. Render the real LivePreviewContentProvider in the spec, or add a dedicated component test that mounts it and asserts context propagation."
+    },
+    {
+      "file": "src/pages/_app.tsx",
+      "line": 60,
+      "originalCode": "if (!contentTypeUid || !entryUid) {\n        return;\n      }",
+      "mutatedCode": "// guard removed — proceed to call getSingleEntry with undefined uids",
+      "status": "no-coverage",
+      "relatedTest": null,
+      "recommendation": "useLivePreviewPage is never invoked by the spec. Removing this null-guard would call getSingleEntry with undefined contentTypeUid/entryUid on every entry-change signal lacking data-cslp attributes, but no test exercises this path. Add a test that mocks ContentstackLivePreview.onEntryChange, simulates a callback with no data-cslp element, and asserts getSingleEntry is not called."
+    },
+    {
+      "file": "src/pages/_app.tsx",
+      "line": 70,
+      "originalCode": "setPreviewPage([result]);",
+      "mutatedCode": "setPreviewPage(result);",
+      "status": "no-coverage",
+      "relatedTest": null,
+      "recommendation": "The spec never calls useLivePreviewPage, so unwrapping the array (setting a single IContentstackPage instead of [IContentstackPage]) would break the page shape contract downstream in useContent but no test would detect it. The IContentstackPage[] vs IContentstackPage distinction is unverified."
+    }
+  ],
+  "verdict": "warn"
+}

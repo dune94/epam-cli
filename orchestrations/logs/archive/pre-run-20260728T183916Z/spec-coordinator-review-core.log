@@ -1,0 +1,84 @@
+# Prompt
+You are the specification coordinator for the epam-cli orchestration system. Before every phase you read orchestrations/prd.json (implementationOrder and stories), evaluate risk, dependencies, and technical readiness, then assign the correct specification runners: OpenSpec, Speckit, both, or none. You write assignments into each story's specification.assignedAgents field along with coordinatorNotes, target provider/model, and timestamps. You understand the provider policy ledger (configuration.aiRuntime.providerPolicies), token guardrails, and know when to skip stories that were already hand-curated. When you plan a run you emit JSON compliant with spec-mode-runner.js so that automation can apply deltas deterministically. You never invent story IDs or mutate acceptance criteria directly; only delegate to spec agents and record their status.
+
+You are the EPAM CLI specification coordinator reviewing the completed spec outputs for phase core.
+
+Each story was processed by a sequential agent pipeline:
+  1. openspec elaborated requirements (AC refinement, story splits, technical depth)
+  2. speckit reviewed openspec's output (testability, security, edge cases, gap analysis)
+
+For each story, evaluate the quality of the collaborative spec work:
+1. Did both agents add meaningful, non-overlapping value?
+2. Are the acceptance criteria complete, testable, and non-overlapping?
+3. Are story splits logical and properly scoped?
+4. Flag any story needing human review.
+
+Respond with JSON between <SPEC_REVIEW> and </SPEC_REVIEW> using this schema:
+[
+  {"storyId":"REM-xxx","verdict":"approved|needs_review","reviewNotes":"coordinator observations","qualityScore":0.0-1.0,"flags":[]}
+]
+
+Stories to review:
+[
+  {
+    "id": "AMSD-2041",
+    "title": "[GO, UP, MX] Live Preview of Content in CMS",
+    "acceptanceCriteria": [],
+    "specification": {
+      "runId": "20260728T164637Z",
+      "assignedAgents": [
+        "openspec",
+        "speckit"
+      ],
+      "coordinatorNotes": "Story has zero acceptance criteria and spans three domains (GO, UP, MX) for a complex CMS live-preview feature. Requires full elaboration by openspec to define AC and technical depth, then hardening by speckit for testability, security, and edge cases. Spec is null and AC is empty — not hand-curated, so both agents are warranted.",
+      "status": "completed",
+      "updatedAt": "2026-07-28T16:53:05.981Z",
+      "appliedAgents": [
+        "openspec",
+        "speckit"
+      ],
+      "agentContributions": [
+        {
+          "agent": "openspec",
+          "applied": true,
+          "notes": "Novel capability — Live Preview does not exist in the codebase. The attachment point is useContent, the central hook consumed by 236+ components. Live Preview must plug into this hook so that all downstream Contentstack components (ContentstackLink, ContentstackImage, ContentstackTable, ContentstackContentCards, etc.) automatically receive real-time content updates from the CMS preview session. No split needed — single integration concern with 0 existing ACs.",
+          "acceptanceChanged": false,
+          "splitCount": 0,
+          "timestamp": "2026-07-28T16:52:27.126Z"
+        },
+        {
+          "agent": "speckit",
+          "applied": true,
+          "notes": "Openspec provided 0 acceptance criteria, so all 14 are new. I examined the referenced files (useContent.ts, ContentstackContext.tsx, ContentstackLink.tsx, contentCard.ts) to understand the data flow: useContent is the central hook that fetches from Contentstack via ContentstackContext, and all 236+ components consume it. ACs are structured around observable outcomes: real-time update delivery, fallback to published content, multi-brand support (GO/UP/MX), connection resilience, security (no draft leakage), edge cases (missing/added fields, idle sessions, cross-page navigation), and progressive enhancement. Key areas flagged for human attention: Contentstack SDK version compatibility and the exact mechanism for distinguishing preview vs public visitors.",
+          "acceptanceChanged": false,
+          "splitCount": 0,
+          "timestamp": "2026-07-28T16:53:05.980Z"
+        }
+      ]
+    },
+    "splitChildren": []
+  }
+]
+
+<SPEC_REVIEW>
+</SPEC_REVIEW>
+
+# Output
+<SPEC_REVIEW>
+[
+  {
+    "storyId": "AMSD-2041",
+    "verdict": "needs_review",
+    "reviewNotes": "Openspec failed its core responsibility: it provided architectural context (identifying useContent as the attachment point) but produced zero acceptance criteria. Speckit compensated by authoring all 14 ACs from scratch, covering real-time delivery, fallback, multi-brand support, resilience, security (no draft leakage), and edge cases. While the resulting AC scope appears comprehensive, the pipeline did not function as designed — speckit should be hardening openspec's ACs, not creating them wholesale. This process asymmetry means the ACs lack the collaborative elaboration-and-review dynamic that catches gaps. Additionally, the story spans three brands (GO, UP, MX) with zero original ACs, making it inherently high-risk. Speckit correctly flagged two items for human attention: Contentstack SDK version compatibility and the mechanism for distinguishing preview vs public visitors. The actual AC text is not available in this review payload, so non-overlap and testability cannot be fully verified. Recommend human review of the 14 ACs for completeness, testability, and overlap before implementation.",
+    "qualityScore": 0.6,
+    "flags": [
+      "openspec_produced_zero_acs",
+      "speckit_authored_acs_wholesale",
+      "multi_brand_high_complexity",
+      "sdk_compatibility_unverified",
+      "preview_vs_public_visitor_mechanism_undefined",
+      "actual_ac_text_not_available_for_verification"
+    ]
+  }
+]
+</SPEC_REVIEW>

@@ -1,0 +1,57 @@
+```json
+{
+  "verdict": "changes_requested",
+  "issues": [
+    {
+      "severity": "blocker",
+      "file": "src/context/contentstackContext.ts (or .tsx)",
+      "line": 0,
+      "description": "The prescribed root cause fix was NOT implemented. There is no ContentstackProvider component with useState for reactive content, no useEffect subscribing to ContentstackLivePreview.onEntryChange(), and no deep-merge of incoming live preview data. The context is a bare createContext with a static value supplied by ContentstackContext.Provider in [[...slug]].tsx. Without a reactive state mechanism, no downstream consumer (236+ components using useContent) can ever receive live preview updates. Every acceptance criterion — real-time update without reload, all display locations updating, partial updates of only changed content — is unmet because the reactivity mechanism is entirely absent.",
+      "suggestedFix": "Create or update src/context/contentstackContext.tsx to export a ContentstackProvider component that: (1) holds content via useState(defaultContent); (2) has a useEffect that calls ContentstackLivePreview.init() from '@contentstack/live-preview-utils' and subscribes to onEntryChange, deep-merging incoming data into state via setContent(prev => deepMerge(prev, liveData)); (3) provides { content } as the context value. Replace the bare ContentstackContext.Provider usage in [[...slug]].tsx with <ContentstackProvider defaultContent={content}>."
+    },
+    {
+      "severity": "blocker",
+      "file": "package.json",
+      "line": 0,
+      "description": "The @contentstack/live-preview-utils dependency is not installed anywhere in the project. No import of this package exists in the codebase. Without the SDK, no Live Preview subscription can be established.",
+      "suggestedFix": "Add '@contentstack/live-preview-utils' as a dependency in package.json and import ContentstackLivePreview from it in the ContentstackProvider."
+    },
+    {
+      "severity": "blocker",
+      "file": "src/hooks/useContent.ts",
+      "line": 1,
+      "description": "useContent calls useContext(ContentstackContext) but there is no reactive Provider component in the codebase. The hook will always return the static value passed at render time from [[...slug]].tsx. Even if ContentstackLivePreview events fired, there is no state setter to trigger re-renders of the 236+ consumers. The hook cannot propagate live preview updates as-is.",
+      "suggestedFix": "Once ContentstackProvider with useState is implemented, useContent will automatically receive reactive updates via useContext. No change needed to useContent itself — but it is blocked on the provider fix above."
+    },
+    {
+      "severity": "blocker",
+      "file": "src/pages/[[...slug]].tsx",
+      "line": 48,
+      "description": "The page wraps content in <ContentstackContext.Provider value={content}> with a static prop value. This is the direct integration point that should use the prescribed ContentstackProvider component instead. As long as this uses the raw context Provider with a static value, no live preview updates can propagate.",
+      "suggestedFix": "Replace <ContentstackContext.Provider value={content}> with <ContentstackProvider defaultContent={content}> so that the provider can manage reactive state internally."
+    },
+    {
+      "severity": "blocker",
+      "file": "src/pages/[[...slug]].tsx",
+      "line": 23,
+      "description": "TypeScript strict compliance violation: the IPageProps interface uses untyped 'any' — footer?: [any] — without an explanatory comment. This violates the strict typing requirement.",
+      "suggestedFix": "Replace [any] with a properly typed interface, e.g. footer?: [IContentstackFooter], or add an explanatory comment if a type is genuinely unavailable: // eslint-disable-next-line @typescript-eslint/no-explicit-any -- footer schema not yet typed."
+    },
+    {
+      "severity": "blocker",
+      "file": "test/unit/",
+      "line": 0,
+      "description": "No vitest unit tests were found for the Live Preview feature. There are no tests mirroring src/context/ for the ContentstackProvider, no tests for onEntryChange callback behavior, and no tests verifying deep-merge of live preview data. The test count has not increased to cover this new feature.",
+      "suggestedFix": "Add test/unit/context/contentstackContext.test.tsx (or .test.ts) with tests that: (1) verify ContentstackProvider initializes content from defaultContent; (2) verify onEntryChange callback updates content state; (3) verify deep-merge behavior when partial data is received; (4) verify cleanup/unsubscribe on unmount."
+    },
+    {
+      "severity": "major",
+      "file": "src/context/contentstackContext.ts",
+      "line": 0,
+      "description": "No deepMerge utility exists anywhere in the codebase. The prescribed fix calls for deep-merging incoming live preview data into existing content state. Without a deep-merge, a simple spread-based merge would only shallow-merge top-level keys, potentially losing nested content that wasn't included in the live preview payload.",
+      "suggestedFix": "Either install/use an existing deep-merge library (e.g. lodash.merge) or implement a small deepMerge utility in src/utils/ and add unit tests for it. Verify with the codegraph tool that no existing helper provides this functionality before implementing."
+    }
+  ],
+  "summary": "The Live Preview feature for Story AMSD-2041 is NOT implemented. The prescribed root cause fix — a reactive ContentstackProvider with useState, useEffect subscribing to ContentstackLivePreview.onEntryChange, and deep-merge of incoming data — is entirely absent. The @contentstack/live-preview-utils SDK is not installed, no ContentstackProvider component exists, and the context still uses a static value passed via the raw React Context Provider. As a result, none of the five acceptance criteria can be met: content cannot update in real-time, no partial updates can propagate, and the 236+ consumers via useContent will always render stale static data. Additionally, there is an untyped 'any' in IPageProps (footer?: [any]) violating TypeScript strict compliance, and no unit tests exist for this feature. Verdict: changes_requested with 7 blockers and 1 major issue."
+}
+```

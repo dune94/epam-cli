@@ -1,0 +1,12 @@
+{
+  "agent": "spec-validator",
+  "phase": "core",
+  "stories": [{
+    "storyId": "MOCK-HW-1",
+    "title": "Hello world greeting should say hello dolly",
+    "criteria": [{ "text": "Calling getGreeting() returns the string 'hello dolly'", "status": "met", "evidence": "src/hello.ts exports getGreeting() returning 'hello dolly'; src/hello.test.ts asserts expect(getGreeting()).toBe('hello dolly'); test oracle confirms 1/1 passed", "gaps": "none" }],
+    "overallCompliance": 100,
+    "verdict": "pass"
+  }],
+  "overallVerdict": "pass"
+}

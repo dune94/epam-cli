@@ -1,0 +1,25 @@
+{
+  "agent": "spec-validator",
+  "phase": "core",
+  "stories": [{
+    "storyId": "MOCK-HW-1",
+    "title": "Hello world greeting should say hello dolly",
+    "criteria": [
+      {
+        "text": "Calling getGreeting() returns the exact string 'hello dolly'",
+        "status": "met",
+        "evidence": "src/hello.ts returns 'hello dolly' directly; test asserts expect(getGreeting()).toBe('hello dolly') and passes (2/2 tests passed)",
+        "gaps": ""
+      },
+      {
+        "text": "Calling getGreeting() returns a string value (no regression in return type)",
+        "status": "met",
+        "evidence": "src/hello.ts has return type annotation `: string`; test asserts expect(typeof getGreeting()).toBe('string') and passes (2/2 tests passed)",
+        "gaps": ""
+      }
+    ],
+    "overallCompliance": 100,
+    "verdict": "pass"
+  }],
+  "overallVerdict": "pass"
+}

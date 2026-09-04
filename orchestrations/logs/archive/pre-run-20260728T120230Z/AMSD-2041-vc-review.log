@@ -1,0 +1,29 @@
+# Prompt
+You are a STRICT verification-criteria reviewer for a brownfield fix. REVIEW ONLY — do NOT rewrite anything.
+
+Acceptance criteria (IMMUTABLE ticket intent):
+- (none)
+Description: [GO, UP, MX] Live Preview of Content in CMS — Enable real-time content preview so that editors editing content in Contentstack CMS see their changes reflected immediately in the running application without a full page reload.
+
+Proposed verification criteria:
+1. When an editor changes and saves/publishes content in Contentstack CMS, the running application displays the updated content on the currently open page without the tester reloading the browser tab.
+2. After an editor updates content in Contentstack CMS, the change is visible across all areas of the application that render that content, not just a single page or component.
+3. When an editor edits content in Contentstack CMS, the updated content appears in the running application while the page URL remains unchanged and the user's in-app state (e.g., scroll position, open dialogs, form inputs) is preserved.
+4. Before the editor makes any CMS change, the application continues to render the last-known content correctly, confirming that live preview does not break normal content display.
+5. When live preview is no longer receiving updates (e.g., the editor session ends), the tester observes that the page stops reflecting further CMS edits while the application continues to render the last-known content without a blank screen, error message, or crash.
+6. When the editor makes multiple successive content changes in Contentstack CMS, the tester observes each successive change reflected on the open page in sequence, without any reload between edits.
+7. An editor working in Contentstack CMS on a preview-enabled environment sees their changes reflected in the application, while a page not in a live-preview session continues to show the previously published content until reloaded.
+
+Apply these rules EXACTLY (the producer is held to the same text — do not invent stricter or looser criteria):
+A verification criterion states WHAT AN END USER OR TESTER OBSERVES on the user-facing surface THE TICKET IS ABOUT — the rendered email for an email ticket, the displayed screen/UI for a UI ticket, the API response a CLIENT receives for an API ticket. It is a BLACK-BOX check on that surface. It NEVER describes HOW the value is produced.
+A verification criterion is FORBIDDEN if it:
+- prescribes HOW to implement — any algorithm, mechanism, or approach: "split", "halve", "×0.5", "calculate independently", "per segment", "for each line item", or adding/reading any new field, flag, or service;
+- references an INTERNAL structure that merely FEEDS the ticket's surface — an intermediate payload, a "confirmation data"/DTO object, or a specific response field used to BUILD the output. Verify the surface the ticket names, NOT the data structure behind it;
+- makes a CROSS-COMPARISON that presumes a mechanism — never assert one value "must equal" / "matches" / "is the same as" another (e.g. "the return amount equals the outbound amount"); that presumes a copy/split. Assert the required value is present and correct ON ITS OWN.
+Every verification criterion must be observable, testable, and tied to the ticket's stated symptom/intent.
+
+FLAG any verification criterion that violates ANY rule above, OR that fails to cover the intent of an acceptance criterion.
+Output ONLY a JSON array of short flag strings, e.g. ["VC 2 prescribes halving — restate as observable outcome"]. Output [] if every VC is clean. No prose, no markdown.
+
+# Output
+[]

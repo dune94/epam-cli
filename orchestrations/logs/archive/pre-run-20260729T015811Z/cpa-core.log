@@ -1,0 +1,33 @@
+[0;35m[CPA][0m Retrieval: TF-IDF
+[0;36m[01:57:31][0m Loading stories from orch-nextupexpresscom-prd-1589921.json...
+[0;36m[01:57:31][0m Found 1 stories to contextualize
+
+[0;35m[CPA][0m Processing AMSD-2041...
+[0;35m[CPA][0m   AMSD-2041: formula baseline from calibration[low:implementation:cli](n=29): 4.5178418971594745min $0.1404333618569382
+[0;35m[CPA][0m   CPA: 'AMSD-2041' is a NOVEL story with an attachment point — block downgraded to review (a missing target is expected for new work)
+[1mAMSD-2041[0m  [GO, UP, MX] Live Preview of Content in CMS  [1;33m[REVIEW][0m
+  Machine time:              4.52 min  →      5.42 min  (conf: 0.25, adj: 1.60x)
+  Cost (story):          $0.1404     →  $0.1685   
+  Escalation:            +$0.2804      (r2@15%=+$0.1650 r3@5%=+$0.0565 k3@1.0%=+$0.0589)
+  Self-heal:             +$0.0309      (p=20%)
+  Retries (exp):          0.32  
+  Total (est):           $1.6592         (story+esc+heal=$0.4798 × pipeline 3.46x)
+  KB coverage:           5     chunks retrieved   1     cited   cov: 20%
+  [1;33m⚠[0m  No acceptance criteria — scope and done-ness are undefined
+  [1;33m⚠[0m  Live preview requires real-time sync (WebSocket/SSE/polling) absent from codebase
+  [1;33m⚠[0m  No KB coverage for Contentstack live preview or real-time content patterns
+  [1;33m⚠[0m  Contentstack SDK may not support live preview without undocumented custom integration
+
+[0;36m=== CPA Gate Summary ===[0m
+
+Phase                    Pass   Review    Block    Total
+------------------------------------------------------
+core                        0        1        0        1
+------------------------------------------------------
+[1mTOTAL                       0        1        0        1[0m
+
+[1;33m[CPA WARN][0m 1 story/stories in REVIEW gate — check risk flags
+
+[0;36m[01:57:37][0m Appended 1 CPA records to /home/bradleyjerome/projects/ai/epam-cli/orchestrations/logs/cpa-review.jsonl
+[0;36m[01:57:37][0m Applying blended estimates to prd.json...
+[0;32m[CPA OK][0m Backed up prd.json → orch-nextgotransitcom-prd-1589921.json.before-cpa

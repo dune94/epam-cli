@@ -1,0 +1,40 @@
+# Prompt
+You are a STRICT verification-criteria reviewer for a brownfield fix. REVIEW ONLY — do NOT rewrite anything.
+
+Acceptance criteria (IMMUTABLE ticket intent):
+- (none)
+Description: Original Requirements (discovery)  AS a Content Author, I WANT to preview draft entries in CMS, SO THAT I can see how content will be shown on the website
+ability to preview draft entries in CMS
+Notes& Assumptions  Limitation: Might not be possible to preview protected pages and content.
+Original Total Estimate:  8  Original FE Estimate:  8  Original DAM Estimate:  0  Original BE Estimate:  0
+
+Proposed verification criteria:
+1. Given the Contentstack Live Preview SDK client is mocked to invoke the registered onEntryChange callback, when onEntryChange fires, the ContentstackContext.Provider value updates to reflect the new draft entry data, and any component consuming useContent() re-renders with that updated data.
+2. Given the application is loaded in a non-preview environment (no live-preview SDK initialization), all existing content renders identically to the current production behavior — no visual or functional regression.
+3. The Contentstack Live Preview SDK initialization call includes the required configuration parameters (stack API key, delivery token, environment, and any other parameters mandated by the SDK) sourced from the application's existing environment configuration.
+4. The onEntryChange callback is registered exactly once during the ContentstackContext provider's lifecycle (not on every render), and it triggers a data refresh that updates the context value.
+5. Given the Contentstack Live Preview SDK client is mocked and onEntryChange fires for a page that requires authentication, the application does not throw an unhandled error or crash; it renders gracefully (e.g., shows the public portion or a fallback).
+6. The application does not contain hardcoded preview URL patterns; preview URL routing is handled entirely by the Contentstack web app configuration (Stack Settings > Live Preview).
+
+Apply these rules EXACTLY (the producer is held to the same text — do not invent stricter or looser criteria):
+A verification criterion states WHAT AN END USER OR TESTER OBSERVES on the user-facing surface THE TICKET IS ABOUT — the rendered output for an output ticket, the displayed screen for a UI ticket, the response a CLIENT receives for an API ticket. It is a BLACK-BOX check on that surface. It NEVER describes HOW the value is produced.
+A verification criterion is FORBIDDEN if it:
+- prescribes HOW to implement — any algorithm, mechanism, approach, or the addition/reading of any new field, flag or service;
+- references an INTERNAL structure that merely FEEDS the ticket's surface — an intermediate payload, a data-transfer object, or a specific response field used to BUILD the output. Verify the surface the ticket names, NOT the data structure behind it;
+- makes a CROSS-COMPARISON that presumes a mechanism — never assert one value "must equal" / "matches" / "is the same as" another; that presumes a shared derivation. Assert the required value is present and correct ON ITS OWN.
+Every verification criterion must be observable, testable, and tied to the ticket's stated symptom/intent.
+
+FLAG any verification criterion that violates ANY rule above, OR that fails to cover the intent of an acceptance criterion.
+Output ONLY a JSON array of short flag strings, e.g. ["VC 2 prescribes halving — restate as observable outcome"]. Output [] if every VC is clean. No prose, no markdown.
+
+# Output
+```json
+[
+  "VC 1 references internal structures (ContentstackContext.Provider, useContent(), onEntryChange callback) and prescribes HOW — restate as what the Content Author sees rendered when a draft entry is previewed",
+  "VC 2 cross-compares to 'current production behavior' — restate as the specific observable rendering that must appear in non-preview mode",
+  "VC 3 prescribes HOW (SDK initialization call, configuration parameters, environment sourcing) — not user-facing; restate as what the Content Author observes when preview is activated",
+  "VC 4 prescribes HOW (callback registration count, lifecycle, context value update) — entirely internal mechanism; restate as observable preview behavior",
+  "VC 5 references internal mechanism in setup (mocked SDK client, onEntryChange) — restate as: when previewing a protected page, the application renders without error and shows a fallback or public content",
+  "VC 6 prescribes HOW (no hardcoded preview URL patterns, routing handled by Contentstack web app config) — not user-facing; restate as observable preview navigation behavior"
+]
+```

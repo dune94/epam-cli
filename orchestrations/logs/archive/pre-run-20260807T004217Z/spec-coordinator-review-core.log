@@ -1,0 +1,275 @@
+# Prompt
+You are the specification coordinator for the epam-cli orchestration system. Before every phase you read orchestrations/prd.json (implementationOrder and stories), evaluate risk, dependencies, and technical readiness, then assign the correct specification runners: OpenSpec, Speckit, both, or none. You write assignments into each story's specification.assignedAgents field along with coordinatorNotes, target provider/model, and timestamps. You understand the provider policy ledger (configuration.aiRuntime.providerPolicies), token guardrails, and know when to skip stories that were already hand-curated. When you plan a run you emit JSON compliant with spec-mode-runner.js so that automation can apply deltas deterministically. You never invent story IDs or mutate acceptance criteria directly; only delegate to spec agents and record their status.
+
+You are the EPAM CLI specification coordinator reviewing the completed spec outputs for phase core.
+
+Each story was processed by a sequential agent pipeline:
+  1. openspec elaborated requirements (AC refinement, story splits, technical depth)
+  2. speckit reviewed openspec's output (testability, security, edge cases, gap analysis)
+
+For each story, evaluate the quality of the collaborative spec work:
+1. Did both agents add meaningful, non-overlapping value?
+2. Flag any story needing human review.
+3. PLAN ALIGNMENT — where planAlignmentEvidence is present, it tells you what the
+   code-graph-detective SAID it would investigate (detectivePlan) and a deterministic,
+   cheap signal (aligned: true/false) for whether the final fixSiteAnalysis shares any
+   named symbol/file with that plan. This signal is NOT your verdict — it is evidence, the
+   same as MANIFEST EVIDENCE below. A plan can legitimately turn out wrong once real
+   exploration starts. Read detectivePlan and fixSiteAnalysis yourself and judge: did the
+   detective explain WHY it moved from its plan to its final answer (a stated pivot,
+   reasoning that connects the two), or did the answer just change with no explanation?
+   The latter is a real defect (a fix has shipped that shared no term with the detective's
+   own stated plan, with no explanation, more than once on the same ticket) — set
+   planAlignment to justified_deviation when the detective justifies its pivot, or
+   unexplained_mismatch when it does not, and say why in reviewNotes. aligned:true needs
+   no action.
+
+(Brownfield tickets never split and their acceptance criteria are immutable —
+do not evaluate split quality or AC completeness; there is nothing there for
+either agent to have changed.
+
+EXPECTED, NOT A DEFECT: an agent's notes may describe acceptance criteria it
+authored while the story's acceptanceCriteria array is empty, and report
+acceptanceChanged=false. That is this pipeline REDACTING them on purpose: on a
+brownfield ticket the ACs are the ticket's own, and a thin ticket legitimately
+has none. The observable checks live in verificationCriteria — judge THOSE.
+Do not report the mismatch as a hallucination, a persistence failure or a
+metadata inconsistency, and do not lower qualityScore for it. An empty
+acceptanceCriteria array on a brownfield story is correct by policy.)
+
+MANIFEST EVIDENCE (checked against the repository, not asserted):
+  AMSD-2041: EXISTS  src/context/contentstackContext.tsx
+  AMSD-2041: EXISTS  src/hooks/useContent.ts
+  AMSD-2041: EXISTS  src/interface/content/page.ts
+  AMSD-2041: EXISTS  src/components/contentstack/ContentstackAttention/content.mock.ts
+  AMSD-2041: EXISTS  src/components/contentstack/ContentStackGallery/ContentStackGallery.mock.ts
+
+ANSWER IN THIS RESPONSE. Your <SPEC_REVIEW> verdict must appear in THIS reply — an
+empty <SPEC_REVIEW></SPEC_REVIEW>, or a promise to verify and answer later, is
+discarded and the review does not happen. There is no follow-up turn to come back in.
+
+You DO have read-only tools this turn (read_file, list_files, search). Use them for
+real if something is genuinely unclear — but never narrate an imagined tool result,
+and never spend the whole turn exploring and run out before writing the verdict.
+Budget is small and the verdict is mandatory: gather at most what you need, then answer.
+
+MANIFEST EVIDENCE has already been gathered from the repository for you and appears
+above. Every declared path was checked with a real filesystem stat, so re-checking
+paths is wasted budget — that part is done and is more reliable than a tool call.
+  - A story with any MISSING path CANNOT be implemented: the writer is sent to edit a
+    file that is not there, and every retry reproduces that. Mark it needs_review, name
+    the exact path in reviewNotes, and add the flag "missing_manifest_path".
+  - Where the evidence names a real neighbour ("the directory holds X instead"), say so
+    — that is what makes the report actionable.
+  - Never silently correct a path. The manifest is the artefact under review; a
+    correction living only in your prose reaches nobody.
+
+Judge what the evidence cannot: are the acceptance criteria testable, is the declared
+file set plausible for this change, is anything obviously missing. If you are unsure,
+lower qualityScore and add a flag — do not withhold the verdict. A missing review is
+worse than an uncertain one: it means nothing was checked at all.
+
+QUALITY SCORE — what the number has to mean. It is enforced: below 0.7 halts the run
+before implementation, so an unanchored guess stops real work.
+  0.9-1.0  the spec is ready to implement; criteria are observable and the file set fits.
+  0.7-0.89 ready to implement, with ordinary open questions a competent writer resolves.
+  0.5-0.69 NOT ready: something concrete is wrong or missing — criteria that cannot be
+           observed, a file set that cannot deliver what is described, contradictions.
+  below 0.5 the spec would send a writer somewhere useless.
+Score what IS in front of you. Do NOT lower the score because an agent could not read the
+source files, or because a human "might want to check" — that is true of every ticket and
+is not a defect in this spec. If your notes cannot name something concretely wrong, the
+score belongs at 0.7 or above.
+
+Respond with JSON between <SPEC_REVIEW> and </SPEC_REVIEW> using this schema:
+[
+  {"storyId":"REM-xxx","verdict":"approved|needs_review","reviewNotes":"coordinator observations","qualityScore":0.0-1.0,"flags":[],"planAlignment":"aligned|justified_deviation|unexplained_mismatch|not_applicable"}
+]
+
+Stories to review:
+[
+  {
+    "id": "AMSD-2041",
+    "title": "[GO, UP, MX] Live Preview of Content in CMS",
+    "acceptanceCriteria": [],
+    "verificationCriteria": [
+      "Given the application is loaded in a non-preview environment (no live-preview SDK initialization), all existing content renders identically to the current production behavior — no visual or functional regression.",
+      "The Contentstack Live Preview SDK initialization call includes the required configuration parameters (stack API key, delivery token, environment, and any other parameters mandated by the SDK) sourced from the application's existing environment configuration.",
+      "The application does not contain hardcoded preview URL patterns; preview URL routing is handled entirely by the Contentstack web app configuration (Stack Settings > Live Preview)."
+    ],
+    "technicalNotes": {
+      "files": [
+        "src/context/contentstackContext.tsx",
+        "src/hooks/useContent.ts",
+        "src/interface/content/page.ts",
+        "src/components/contentstack/ContentstackAttention/content.mock.ts",
+        "src/components/contentstack/ContentStackGallery/ContentStackGallery.mock.ts"
+      ],
+      "perCodeline": {
+        "metrolinx": {
+          "files": [
+            "src/context/contentstackContext.tsx",
+            "src/hooks/useContent.ts",
+            "src/interface/content/page.ts",
+            "src/components/contentstack/ContentstackAttention/content.mock.ts",
+            "src/components/contentstack/ContentStackGallery/ContentStackGallery.mock.ts"
+          ],
+          "resolved": [
+            {
+              "declared": "src/context/contentstackContext.tsx",
+              "actual": "src/context/contentstackContext.tsx",
+              "match": "exact",
+              "verified_against": "/home/bradleyjerome/projects/metrolinx/next.metrolinx.com"
+            },
+            {
+              "declared": "src/hooks/useContent.ts",
+              "actual": "src/hooks/useContent.ts",
+              "match": "exact",
+              "verified_against": "/home/bradleyjerome/projects/metrolinx/next.metrolinx.com"
+            },
+            {
+              "declared": "src/interface/content/page.ts",
+              "actual": "src/interface/content/page.ts",
+              "match": "exact",
+              "verified_against": "/home/bradleyjerome/projects/metrolinx/next.metrolinx.com"
+            },
+            {
+              "declared": "src/components/contentstack/ContentstackAttention/content.mock.ts",
+              "actual": "src/components/contentstack/ContentstackAttention/content.mock.ts",
+              "match": "exact",
+              "verified_against": "/home/bradleyjerome/projects/metrolinx/next.metrolinx.com"
+            },
+            {
+              "declared": "src/components/contentstack/ContentStackGallery/ContentStackGallery.mock.ts",
+              "actual": "src/components/contentstack/ContentStackGallery/ContentStackGallery.mock.ts",
+              "match": "exact",
+              "verified_against": "/home/bradleyjerome/projects/metrolinx/next.metrolinx.com"
+            }
+          ],
+          "unresolved": []
+        }
+      }
+    },
+    "specification": {
+      "referencedDocs": [
+        {
+          "url": "https://www.contentstack.com/docs/headless-cms/live-preview-implementation-for-nextjs-csr-app-router",
+          "classification": "vendor_documentation",
+          "relevant": true,
+          "reason": "",
+          "quotes": [
+            "The Live Preview SDK is a client-side JavaScript library that enables real-time preview of your content.",
+            "The onEntryChange function takes no arguments.",
+            "Live Preview is configured in the Contentstack web app under Stack Settings > Live Preview.",
+            "This guide is for Next.js CSR (Client-Side Rendering) applications using the App Router."
+          ],
+          "scopeCaveat": "This guide targets Next.js CSR (Client-Side Rendering) with App Router. If the codeline uses SSR, SSG, or a hybrid rendering model, parts of this guide — particularly the client-side SDK initialization and the onEntryChange callback pattern — may not apply directly. The guide is framework-version-specific to Next.js App Router, which does match the codeline's router variant.",
+          "fetchStatus": "fetched",
+          "contradictsStory": "The story assumes live preview can be implemented in application code. The documentation states that onEntryChange takes NO argument and that Live Preview is configured in the Contentstack web app (Stack Settings > Live Preview), not in application code. This contradicts any assumption that the preview callback receives entry data as a parameter or that preview is purely a code-side implementation."
+        },
+        {
+          "url": "https://www.contentstack.com/docs/headless-cms/custom-preview-urls#configure-custom-preview-urls",
+          "classification": "vendor_documentation",
+          "relevant": true,
+          "reason": "",
+          "quotes": [
+            "Custom Preview URLs allow you to define the URL pattern that Contentstack uses when opening a preview of your content.",
+            "You can configure custom preview URLs from the Stack Settings > Live Preview section in your Contentstack stack.",
+            "The preview URL can include placeholders for the content type UID and entry UID."
+          ],
+          "scopeCaveat": "This guide covers configuration of preview URLs within the Contentstack web app UI. It is framework-agnostic and applies regardless of the frontend framework used.",
+          "fetchStatus": "fetched",
+          "contradictsStory": "This confirms that preview URL configuration is done in the Contentstack web app UI (Stack Settings > Live Preview), not in application code. This supports the same finding from the first link: the story's work may be configuration in the vendor UI rather than code implementation."
+        }
+      ],
+      "guardVocabulary": {
+        "blacklist": [
+          {
+            "term": "onentrychange",
+            "reason": "SDK callback mechanism referenced in statements 1 and 4; names an internal event handler wiring detail, not the rendered output a user observes."
+          },
+          {
+            "term": "contentstackcontext.provider value",
+            "reason": ""
+          }
+        ],
+        "whitelist": []
+      },
+      "runId": "20260807T000054Z",
+      "assignedAgents": [
+        "openspec",
+        "speckit"
+      ],
+      "coordinatorNotes": "Story has empty acceptance criteria and describes a complex, security-sensitive feature (live preview of draft CMS content with noted limitations around protected pages). Openspec needed first to elaborate AC, define preview mechanism, draft-state handling, and CMS integration scope. Speckit then hardens testability, security boundaries for protected content, and edge cases. Both agents warranted given complexity and risk.",
+      "status": "completed",
+      "updatedAt": "2026-08-07T00:10:50.261Z",
+      "appliedAgents": [
+        "openspec",
+        "speckit"
+      ],
+      "agentContributions": [
+        {
+          "agent": "openspec",
+          "applied": true,
+          "notes": "This is a novel capability — the codebase currently has a static ContentstackContext with no live-preview subscription. The Contentstack Live Preview SDK must be initialized client-side and wired into the context provider so that onEntryChange triggers a re-render with draft data. Documentation confirms: (1) onEntryChange takes NO argument — it signals that a change occurred and the app must re-fetch; (2) preview URL configuration lives in the Contentstack web app UI, not in application code; (3) the SDK targets Next.js CSR with App Router. The attachment point is ContentstackContext.Provider, consumed by 40+ components via useContent. The hook file src/hooks/useContent.ts is the consumer-side integration point. Unreachable external services: contentstack.io, contentstack.com, api.contentstack.io, cdn.contentstack.io — criteria stop at our side of that boundary.",
+          "acceptanceChanged": false,
+          "splitCount": 0,
+          "timestamp": "2026-08-07T00:09:45.283Z"
+        },
+        {
+          "agent": "speckit",
+          "applied": true,
+          "notes": "Openspec provided empty acceptanceCriteria with rich contextual notes about the current architecture. All 14 criteria above are new. Key design decisions: (1) AC-1/AC-3 cover the core re-render behavior — observable via component output, not implementation; (2) AC-2/AC-6/AC-7 ensure zero-impact when preview is not active — critical for production safety; (3) AC-4 addresses SSR safety since this is a Next.js App Router project and the current context has no browser dependency; (4) AC-5 covers error resilience for the re-fetch triggered by onEntryChange; (5) AC-8 addresses the real-world edge case of rapid successive signals causing render thrashing; (6) AC-9 enforces the stated limitation about protected content not being previewable and prevents auth bypass; (7) AC-10 adds an accessibility/UX requirement — content authors must be able to distinguish preview from live; (8) AC-11 ensures type safety is maintained for the 40+ consuming components; (9) AC-12/AC-13 cover the full preview lifecycle including entry switching and session teardown; (10) AC-14 ensures no SSR bundle bloat. I could not verify the package.json contents for existing Contentstack SDK dependencies due to tool call limits, but the search for 'contentstack' in package.json returned no matches, suggesting no live-preview SDK is installed yet. I also could not locate the Provider component wrapping site — it likely exists in a layout or app file not found by search. If the provider has additional complexity, AC-3 and AC-11 may need further refinement.",
+          "acceptanceChanged": false,
+          "splitCount": 0,
+          "timestamp": "2026-08-07T00:10:50.261Z"
+        }
+      ]
+    },
+    "fixSiteAnalysis": [
+      {
+        "file": "src/context/contentstackContext.tsx",
+        "function": "ContentstackContext",
+        "reason": "This is the React context that feeds all Contentstack content into the component tree (consumed by 40+ components via useContent). It is the sole attachment point for live preview: the Provider here must subscribe to Contentstack live preview events and update the context value when draft content changes, causing the entire component tree to re-render with updated draft data.",
+        "fix": "In the ContentstackContext Provider component, add a Contentstack live preview subscription (e.g., using @contentstack/live-preview-utils) that listens for draft content changes and updates the context value. The existing useContent hook (src/hooks/useContent.ts) and getValue utility (src/utils/getValue.ts) already handle path-based content access and need no changes — they will automatically serve updated draft content once the context value refreshes. Wrap the app's ContentstackContext.Provider with the live preview provider from @contentstack/live-preview-utils, passing the Contentstack Stack instance and enabling live_preview config.",
+        "helper": "useContent",
+        "brokenLine": "= createContext<IContentstackContext>({})",
+        "fixVerified": true,
+        "evidenceVerified": true,
+        "prescriptionNote": "",
+        "prescriptionUnderspecified": false
+      }
+    ],
+    "planAlignmentEvidence": {
+      "detectivePlan": "**PLAN**\n\nThis is a NOVEL feature — \"Live Preview of Content in CMS\" for Contentstack. I need to find the ATTACHMENT POINT where Contentstack live preview would plug into: the Contentstack SDK initialization/configuration and the data-fetching layer that retrieves entries.\n\nThe pre-computed explore surfaced page interfaces and component mappers, but those are the presentation layer — not where live preview hooks in. Live preview for Contentstack typically requires:\n1. Initializing the Contentstack SDK with live preview config\n2. Wrapping the app with a live preview provider\n3. Using `@contentstack/live-preview-utils` or similar\n\nMy next steps:\n1. `explore contentstack live preview draft` — find any existing preview infrastructure or Contentstack SDK initialization\n2. `explore contentstack initialization config` — find where the Contentstack client/SDK is set up (the real attachment point)\n3. Check if any live-preview package is already installed via `dependency_available`\n4. Trace callers/callees of the Contentstack init to understand the data-fetching pipeline\n\nI'll know I'm wrong if the top hits are only component mappers/presentational files rather than SDK initialization or data-fetching code. I'm looking for the Contentstack client setup — that's where live preview configuration gets added.",
+      "aligned": false,
+      "planTerms": [
+        "dependencyavailable",
+        "plan",
+        "novel",
+        "attachment",
+        "point"
+      ],
+      "findingTerms": [
+        "contentstackcontext"
+      ]
+    }
+  }
+]
+
+<SPEC_REVIEW>
+</SPEC_REVIEW>
+
+# Output
+<SPEC_REVIEW>
+[
+  {
+    "storyId": "AMSD-2041",
+    "verdict": "approved",
+    "reviewNotes": "All 5 declared manifest paths verified EXISTS — no missing_manifest_path. Both agents added non-overlapping value: openspec identified the architecture (ContentstackContext.Provider as sole attachment point consumed by 40+ components, onEntryChange takes no argument, preview URL config lives in vendor UI not application code), while speckit hardened the spec with 14 verification criteria covering regression safety, SSR safety, error resilience, protected-content auth boundaries, accessibility/UX for preview-vs-live distinction, type safety for consuming components, full preview lifecycle, and SSR bundle bloat. The 3 verification criteria present in the story record are observable and testable: (1) no visual/functional regression in non-preview mode, (2) SDK init params sourced from env config, (3) no hardcoded preview URL patterns. File set is plausible — contentstackContext.tsx is the correct attachment point for wiring live preview, and useContent.ts/interface/page.ts/mock files provide the consumer-side and type-safety context. Plan alignment: detectivePlan sought 'Contentstack SDK initialization' and 'wrapping the app with a live preview provider'; fixSiteAnalysis landed on contentstackContext.tsx with fix description explicitly stating 'Wrap the app's ContentstackContext.Provider with the live preview provider' and 'passing the Contentstack Stack instance' — directly connecting to the plan's stated intent. The automated term match returned aligned:false because the plan's vocabulary ('dependency_available', 'attachment', 'point') is generic while the finding is specific ('contentstackcontext'), but the detective's reasoning visibly narrows from the general search to the concrete file. This is a justified_deviation: the detective explained its pivot from searching for SDK init/provider to finding it in ContentstackContext. Minor open questions (Speckit could not verify package.json for existing SDK deps, could not locate the app-level Provider wrapper) are ordinary items a competent writer resolves during implementation — not defects in the spec.",
+    "qualityScore": 0.88,
+    "flags": [],
+    "planAlignment": "justified_deviation"
+  }
+]
+</SPEC_REVIEW>

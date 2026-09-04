@@ -1,0 +1,10 @@
+```json
+{
+  "agent": "mutant-hunter",
+  "phase": "core",
+  "summary": { "mutationsProposed": 0, "killed": 0, "survived": 0, "noCoverage": 0, "mutationScore": 100 },
+  "mutations": [],
+  "verdict": "not_applicable",
+  "reason": "The changed file contains only a trivial hardcoded-string return with no operators, conditionals, comparisons, or logic amenable to meaningful mutation analysis; no critical-path code (failover, auth, billing, state) exists."
+}
+```

@@ -1,0 +1,49 @@
+# Prompt
+Assign an implementation agent role to every story below.
+
+AVAILABLE ROLES — these are this project's own engineering roles. Choose from these and
+nothing else; the name you return must match one of them verbatim:
+- typescript-logic-fixer
+    You are a TypeScript implementer fixing two boundary bugs across two small codelines that share the same stack: vitest and typescript. You span every codeline. ## Codelines and layout Two codelines are in scope, each a self-contained TypeScript project at its own root: - **mocka** — fare logic. Source and tests are colocated under `src/`. The fare module you will edit is `src/fares.ts`. A reproducing test file sits beside it in `src/`; read it to understand existing coverage and the expected fare boundary, but you must NOT create, edit, or modify any test file — a dedicated test agent owns those. - **mockb** — schedule formatting. Source and tests are colocated under `src/`. The formatting module you will edit is `src/schedule.ts`. A reproducing test file sits beside it in `src/`; the same restriction applies: read it, do not edit it. Neither codeline has a `test/` directory. Every file — source and test — lives under `src/`. Do not invent a `test/` path. Before referencing any test file path, list the `src/` directory of the codeline to discover the exact filename; do not assume a specific test filename. ## Manifest facts Each codeline has a `package.json` that declares `vitest` and `typescript` as devDependencies. Neither manifest defines a `test` npm script, and neither wires a `vitest` binary into `scripts`. You may NOT assume `npm test` or `npm run test` works. If you need to execute the suite, invoke the vitest binary directly from the codeline root, e.g. `npx vitest run` or `./node_modules/.bin/vitest run`, and verify the binary is present before relying on it. Do not claim a workflow the manifests do not declare. ## The work ### MOCK3-1 — fare boundary (mocka) The fare rules intend riders aged 65 and over to pay the concession fare (175 cents). A rider aged exactly 65 is charged the full adult fare (350 cents) instead. Riders 66+ are correct, so the boundary comparison itself is wrong — likely a strict `>` where it should be `>=`, or an off-by-one in the age check. Read `src/fares.ts`, find the age comparison that gates the concession fare, and fix the boundary so age 65 qualifies. Do not change any fare amount; only the comparison. ### MOCK3-2 — final stop omitted (mockb) `formatStops` renders every stop except the last one, so a three-stop line shows two stops. `totalMinutes` already reports the correct journey length, confirming the data has all stops and only the rendering loop drops the last. Read `src/schedule.ts`, find the loop or slice in `formatStops` that truncates the stop list, and fix it so every stop including the last is rendered. Do not alter `totalMinutes`. ## Conventions - Source files are plain `.ts` modules under `src/` in each codeline. - Tests are `*.test.ts` files colocated in the same `src/` directory; they are owned by a separate test agent — never create or edit them. - After each change, run vitest directly (`npx vitest run` from the codeline root) to confirm you have not broken existing tests. If the binary is missing, say so rather than assuming a script that does not exist. - Make the smallest change that fixes the boundary or the loop. Do not refactor surrounding code.
+
+STORIES — a story listing more than one codeline needs ONE ASSIGNMENT PER CODELINE:
+- MOCK3-1: Riders aged exactly 65 are charged the adult fare
+    codeline: mocka
+    The fare rules say riders aged 65 and over pay the concession fare. A rider aged exactly 65 is charged the full adult fare of 350 cents instead of 175. Riders aged 66 and above are charged correctly, so the boundary itself is wrong rather than the rule.
+- MOCK3-2: The departure board omits the final stop
+    codeline: mockb
+    formatStops renders every stop except the last one, so a three-stop line shows two. The journey length reported by totalMinutes is correct, which is why the omission has gone unnoticed.
+
+Pick the role whose stated expertise actually covers the work the story describes. If two
+roles could plausibly own a story, prefer the one whose brief names the surface the story
+touches.
+
+THE UNIT OF ASSIGNMENT IS A (STORY, CODELINE) PAIR, NOT A STORY. A story listing three
+codelines needs THREE assignments — the repositories differ, so the right owner can differ.
+Count the codelines listed against each story and return exactly that many assignments for it,
+naming the codeline on every one. A story is not assigned until every codeline it lists is.
+
+THE OWNER MUST AUTHOR THE CODE. Assign the role that will EDIT THE FILES this story changes —
+the one whose brief names those files or directories. A role whose brief is about settings in
+a vendor's console, or about documentation, cannot deliver a story here: the agent's output is
+a change in a repository. Live 2026-08-07: this story went to the one role of three that owned
+no source files, and all such a role can produce is a configuration note. Where the story needs
+both console configuration and code, 
+
+# Output
+{
+  "assignments": [
+   {
+   "storyId": "MOCK3-1",
+  "codeline": "mocka",
+  "agentRole": "typescript-logic-fixer",
+  "reason": "The story is a boundary bug in fare logic — a wrong age comparison in src/fares.ts under the mocka codeline. typescript-logic-fixer is the only role whose brief covers editing TypeScript source files in mocka, and MOCK3-1 is explicitly the fare-boundary task in its work list."
+   },
+   {
+   "storyId": "MOCK3-2",
+  "codeline": "mockb",
+  "agentRole": "typescript-logic-fixer",
+  "reason": "The story is a loop/slice truncation bug in formatStops in src/schedule.ts under the mockb codeline. typescript-logic-fixer is the only role whose brief covers editing TypeScript source files in mockb, and MOCK3-2 is explicitly the final-stop-omitted task in its work list."
+   }
+  ]
+}

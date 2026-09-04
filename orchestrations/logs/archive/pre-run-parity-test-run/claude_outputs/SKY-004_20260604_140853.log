@@ -1,0 +1,138 @@
+=== Prompt for SKY-004 (attempt 1) ===
+Implement user story SKY-004: Build Express REST API with /health, /search, /cheapest, and static dashboard endpoints
+
+## Story Description
+Create src/server.ts — an Express HTTP server that exposes: (1) GET /health → { status: 'ok', uptime: number }, (2) GET /search?from=LHR&to=JFK&date=2026-08-01&adults=1 → { flights: FlightResult[], count: number, searchedAt: string }, (3) GET /cheapest?from=LHR&to=JFK&date=2026-08-01 → the single cheapest FlightResult or 404 JSON { error: string } if none found, (4) GET / → serves src/public/index.html. Server reads PORT from env (default 3000); reads RAPIDAPI_KEY from env and passes to SkyscannerClient. If RAPIDAPI_KEY is absent at startup all API routes (/search, /cheapest) return 503 { error: 'RAPIDAPI_KEY not configured' }; /health and / are never gated. The listen() call must be guarded so importing `app` in tests does not bind a port. Add 'start' script in package.json pointing to 'node dist/server.js'. Install supertest and @types/supertest. Create src/server.test.ts using vitest + supertest with at least 8 tests covering the scenarios in acceptance criteria. **Depends on SKY-002** (SkyscannerClient and FlightResult type must exist and be merged before this story is started).
+
+## Acceptance Criteria
+- src/server.ts exports a named `app` (Express instance) separately from the `listen()` call so supertest can import it without binding a port
+- The `listen()` call in src/server.ts is guarded so that `vitest run` never binds a port — inspect the actual tsup output format (check tsup.config.ts or the `tsup` field in package.json) first: use `if (require.main === module)` for CJS output, or the `import.meta.url === pathToFileURL(process.argv[1]).href` pattern for ESM output; the guard must match the emitted module format or the test isolation guarantee is void
+- GET /health returns HTTP 200 with Content-Type application/json and body matching { status: 'ok', uptime: <positive number> }
+- GET /health returns HTTP 200 regardless of whether RAPIDAPI_KEY env var is set or absent — the health endpoint is never gated by API key presence
+- GET / returns HTTP 200 with Content-Type matching text/html and response body equal to the contents of src/public/index.html — this route is never gated by RAPIDAPI_KEY
+- src/public/index.html exists and contains valid HTML (at minimum a non-empty file with an <html> root element)
+- GET /search with valid query params (from, to, date, adults) returns HTTP 200 with body { flights: FlightResult[], count: number, searchedAt: ISO-8601 string } where count strictly equals flights.length
+- GET /search missing any required param (from, to, or date) returns HTTP 400 with Content-Type application/json and body { error: string } — an empty string value for a required param (e.g. from='') is treated as missing and also returns HTTP 400
+- When the `adults` query param is absent on GET /search, the request succeeds (HTTP 200) with a default value of 1 passed to SkyscannerClient — `adults` is optional, not required
+- When the `adults` query param is present but non-numeric (e.g. 'abc', ''), GET /search returns HTTP 400 with Content-Type application/json and body { error: string }
+- When the `adults` query param is present but is zero or negative (e.g. '0', '-1'), GET /search returns HTTP 400 with Content-Type application/json and body { error: string } — only positive integers are valid
+- When the `date` query param is present but does not match the YYYY-MM-DD format — validated against the regex /^\d{4}-\d{2}-\d{2}$/ (e.g. '01-08-2026', 'tomorrow', '', '2026-8-1') — GET /search and GET /cheapest each return HTTP 400 with Content-Type application/json and body { error: string }
+- GET /cheapest with valid required query params (from, to, date) returns HTTP 200 with a single FlightResult whose `price` field is less than or equal to the `price` field of every FlightResult returned by SkyscannerClient for the same route/date (validated against a mocked client response); if `adults` is supplied it is forwarded, if absent it defaults to 1
+- When the `adults` query param is supplied on GET /cheapest but is non-numeric or zero or negative, GET /cheapest returns HTTP 400 with Content-Type application/json and body { error: string } — adults validation rules are identical on /search and /cheapest
+- GET /cheapest returns HTTP 404 with Content-Type application/json and body { error: string } when SkyscannerClient returns an empty array for the given route/date
+- GET /cheapest missing any required param (from, to, or date) returns HTTP 400 with Content-Type application/json and body { error: string } — an empty string value for a required param is treated as missing and also returns HTTP 400
+- When RAPIDAPI_KEY env var is absent at server initialisation, a single middleware (or equivalent) short-circuits GET /search and GET /cheapest with HTTP 503 Content-Type application/json body { error: 'RAPIDAPI_KEY not configured' }; GET /health and GET / are unaffected and return their normal responses
+- When SkyscannerClient throws an error during a /search or /cheapest request (e.g. network failure, upstream 5xx), the server returns HTTP 500 with Content-Type application/json and body { error: string } and does not crash or emit an unhandled promise rejection
+- The `searchedAt` field in the GET /search response is an ISO-8601 datetime string reflecting the time of the request and is not a hardcoded value — validated in tests by parsing with `new Date()` and asserting `isNaN(date.getTime()) === false`
+- The FlightResult type used in src/server.ts is imported from the SKY-002 type export (e.g. src/skyscanner-client.ts) and not redeclared inline — type definitions must not diverge between the client and server layers
+- package.json contains a 'start' script with value 'node dist/server.js'
+- package.json contains a 'build' script (tsup or equivalent) that produces dist/server.js such that `npm run build && npm run start` successfully starts the server and GET /health returns HTTP 200
+- supertest and @types/supertest are listed in package.json devDependencies
+- src/server.test.ts contains at least 8 vitest tests, each covering a distinct scenario from the criteria above, with SkyscannerClient mocked (vi.mock or equivalent) so no real HTTP calls are made during `vitest run`
+- `npx tsc --noEmit` exits 0 with no type errors
+- `vitest run` exits 0 with all tests passing
+
+## Technical Notes
+- workingDir: /tmp/skyscanner-app
+- files: ["/tmp/skyscanner-app/src/server.ts","/tmp/skyscanner-app/src/server.test.ts"]
+- dependsOn: ["SKY-002"]
+
+## Files to Create/Modify
+/tmp/skyscanner-app/src/server.ts, /tmp/skyscanner-app/src/server.test.ts
+
+## Dependencies
+None
+
+## Instructions
+1. Implement all acceptance criteria for this story
+2. Follow the project's existing code patterns and conventions
+3. Create any necessary files in the locations specified
+4. Ensure code compiles/runs without errors
+5. Do NOT create tests unless explicitly required in acceptance criteria
+
+After implementation, provide a brief summary of what was created/modified.
+
+## Relevant Knowledge Base Entries
+No prior KB entries match your agent role yet.
+
+## Knowledge Base Contribution
+Your assigned KB entry ID for this run: **KB-008**
+
+If you discover a non-obvious pattern, gotcha, or anti-pattern during this implementation (or this is a retry), append exactly one entry to `orchestrations/agents/KB.md` using this format:
+
+```markdown
+## KB-008 -- 2026-06-04
+
+**Category:** <backend|frontend|infrastructure|testing|orchestration>
+**AgentRole:** <your agentRole from the story>
+**Tags:** <comma-separated tech keywords, e.g. typescript, node, cli>
+**Trigger:** <retry|first-success>
+**StoryRef:** SKY-004
+
+<One concise paragraph: the specific pattern, gotcha, or anti-pattern. Precise enough that a future Claude instance can apply it without re-discovering it.>
+```
+
+Only write an entry if the knowledge is genuinely non-obvious. Skip trivial observations.
+=== End Prompt ===
+
+=== claude Output (attempt 1) ===
+## Summary
+
+I have successfully implemented **SKY-004: Build Express REST API** with all acceptance criteria met.
+
+### Files Created/Modified
+
+**Created:**
+- **`src/server.ts`** (4.9 KB) - Express server with all required endpoints:
+  - `GET /health` - Returns server status and uptime
+  - `GET /search` - Flight search with parameter validation
+  - `GET /cheapest` - Returns cheapest flight with proper error handling
+  - `GET /` - Serves the static HTML dashboard
+  - Middleware to enforce RAPIDAPI_KEY for protected routes
+  - Proper error handling and validation for all query parameters
+
+- **`src/server.test.ts`** (11 KB) - Comprehensive test suite with **25 vitest tests** covering:
+  - Health endpoint functionality
+  - Static file serving
+  - Parameter validation (required params, empty strings, date format, adults constraints)
+  - API key configuration handling (503 when absent)
+  - Cheapest flight selection logic
+  - 404 handling for no results
+  - Error propagation (500 on client errors)
+
+- **`src/public/index.html`** (4.3 KB) - Interactive HTML dashboard with:
+  - Flight search form with all required fields
+  - Client-side form submission
+  - Results display with flight details
+  - Responsive styling
+
+**Modified:**
+- **`package.json`**:
+  - Updated `start` script to `node dist/server.js`
+  - Added `supertest` and `@types/supertest` to devDependencies
+
+### Key Implementation Details
+
+1. **Module Guard**: Uses `if (require.main === module)` for CommonJS output to prevent port binding when imported in tests
+
+2. **Environment Variable Handling**: Reads `RAPIDAPI_KEY` at request time (not module load) for proper test isolation and runtime flexibility
+
+3. **Parameter Validation**:
+   - Required parameters: `from`, `to`, `date`
+   - Optional `adults` defaults to 1
+   - Date format strict validation: `YYYY-MM-DD` regex
+   - Adults must be positive integer
+
+4. **Error Handling**:
+   - 400: Invalid/missing parameters
+   - 404: No flights found (cheapest only)
+   - 503: RAPIDAPI_KEY not configured
+   - 500: SkyscannerClient errors
+
+### Test Results
+✅ All **40 tests passing** (15 client tests + 25 server tests)
+✅ **0 TypeScript errors** (`npx tsc --noEmit`)
+✅ **Build successful** (`npm run build`)
+✅ **Server starts correctly** with or without API key environment variable
+
+=== End claude Output ===

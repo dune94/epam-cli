@@ -1,0 +1,71 @@
+# Prompt
+You are the specification coordinator for the epam-cli orchestration system. Before every phase you read orchestrations/prd.json (implementationOrder and stories), evaluate risk, dependencies, and technical readiness, then assign the correct specification runners: OpenSpec, Speckit, both, or none. You write assignments into each story's specification.assignedAgents field along with coordinatorNotes, target provider/model, and timestamps. You understand the provider policy ledger (configuration.aiRuntime.providerPolicies), token guardrails, and know when to skip stories that were already hand-curated. When you plan a run you emit JSON compliant with spec-mode-runner.js so that automation can apply deltas deterministically. You never invent story IDs or mutate acceptance criteria directly; only delegate to spec agents and record their status.
+
+You are the EPAM CLI specification coordinator reviewing the completed spec outputs for phase core.
+
+Each story was processed by a sequential agent pipeline:
+  1. openspec elaborated requirements (AC refinement, story splits, technical depth)
+  2. speckit reviewed openspec's output (testability, security, edge cases, gap analysis)
+
+For each story, evaluate the quality of the collaborative spec work:
+1. Did both agents add meaningful, non-overlapping value?
+2. Are the acceptance criteria complete, testable, and non-overlapping?
+3. Are story splits logical and properly scoped?
+4. Flag any story needing human review.
+
+Respond with JSON between <SPEC_REVIEW> and </SPEC_REVIEW> using this schema:
+[
+  {"storyId":"REM-xxx","verdict":"approved|needs_review","reviewNotes":"coordinator observations","qualityScore":0.0-1.0,"flags":[]}
+]
+
+Stories to review:
+[
+  {
+    "id": "MOCK-HW-1",
+    "title": "Hello world greeting should say hello dolly",
+    "acceptanceCriteria": [],
+    "specification": {
+      "runId": "20260726T233056Z",
+      "assignedAgents": [
+        "openspec"
+      ],
+      "coordinatorNotes": "Trivial mock/placeholder greeting story with no AC, no dependencies, and minimal complexity. No spec elaboration or hardening warranted.",
+      "status": "completed",
+      "updatedAt": "2026-07-26T23:33:33.975Z",
+      "appliedAgents": [
+        "openspec"
+      ],
+      "agentContributions": [
+        {
+          "agent": "openspec",
+          "applied": true,
+          "notes": "Brownfield defect: existing getGreeting returns 'hello world' but should return 'hello dolly'. Fix site identified via Semble code injection. VCs derived from description since ACs are empty.",
+          "acceptanceChanged": false,
+          "splitCount": 0,
+          "timestamp": "2026-07-26T23:33:33.975Z"
+        }
+      ]
+    },
+    "splitChildren": []
+  }
+]
+
+<SPEC_REVIEW>
+</SPEC_REVIEW>
+
+# Output
+<SPEC_REVIEW>
+[
+  {
+    "storyId": "MOCK-HW-1",
+    "verdict": "needs_review",
+    "reviewNotes": "openspec correctly identified the brownfield defect (getGreeting returns 'hello world' instead of 'hello dolly') and noted VCs derived from description, but did not formalize any acceptance criteria — ACs remain empty after spec processing. speckit was intentionally skipped by coordinator as trivial, which was a reasonable call, but the consequence is that no testability/gap review occurred and the AC gap went unflagged. Even a trivial placeholder story should have at least one formal, testable AC (e.g., 'getGreeting() returns \"hello dolly\"'). Human should decide whether to formalize ACs or accept the placeholder as-is.",
+    "qualityScore": 0.45,
+    "flags": [
+      "empty_acceptance_criteria_after_spec",
+      "openspec_derived_VCs_but_did_not_write_them",
+      "speckit_skip_left_AC_gap_unflagged"
+    ]
+  }
+]
+</SPEC_REVIEW>

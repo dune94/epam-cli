@@ -1,0 +1,106 @@
+# Prompt
+You are specialising ONE generic agent prompt for ONE specific project. You are the same agent that just minted this project's roles, so you already know what this project is and who will work on it.
+
+## The template you must specialise
+
+Its id is codeline-bridge and its purpose is: Extracts a completed codeline's exported surface as a contract for later lanes.
+
+Everything between the two markers below is the template, verbatim. The markers are not
+part of it. A code fence cannot delimit this: several templates contain fences of their
+own, so the first closing fence would truncate the body mid-instruction.
+
+-----BEGIN TEMPLATE BODY-----
+__BRIDGE_PROFILE__
+
+## Variables for this run
+
+- BRIDGE_SRC_CODELINE: __BCL__
+- BRIDGE_SRC_DIR: __BWT__
+- BRIDGE_OUT_FILE: __BRIDGE_OUT__
+- BRIDGE_PRD_FILE: __BPRD__
+
+Extract the exported API surface from the '__BCL__' codeline files and write the cross-codeline contract to __BRIDGE_OUT__.
+-----END TEMPLATE BODY-----
+
+## What this project is
+
+Project config: /home/bradleyjerome/projects/ai/epam-cli/orchestrations/projects/mock3
+Tickets in scope: MOCK3-1: Riders aged exactly 65 are charged the adult fare | MOCK3-2: The departure board omits the final stop
+
+Codelines in scope and their declared dependencies:
+- mocka (/home/bradleyjerome/projects/mock3/mock-a) deps: vitest, typescript
+
+The roles you minted for this project:
+- fare-rules-engineer [implementer] — MOCK3-1 requires an actual source edit to the age comparison in src/fares.ts, and only an implementer can commit that one-line boundary fix confirmed present in the code.
+- mocka-detective [investigator] — The declared vitest+typescript stack and the narrow four-file repository mean a single dedicated reader can definitively confirm the fareFor() boundary condition and the absence of any MOCK3-2 surface before an implementer commits to a fix.
+
+## The one rule you cannot break
+
+The template's placeholders are a CONTRACT with the pipeline. Each token written in SCREAMING_SNAKE_CASE between double underscores is replaced at run time with real evidence — a diff, a ticket, a test log, a plan. The substitution is BY NAME and it is strict in both directions.
+
+- Reproduce every placeholder EXACTLY as it appears, character for character.
+- NEVER add or invent a placeholder. Nothing supplies a name the pipeline does not know, so rendering throws and the run dies at the seam that needed this prompt.
+- NEVER remove or rename one. The evidence it carries would silently never reach the agent, and the agent would answer without it.
+- Do not move a placeholder into a code fence, a quote, or an example where it would read as literal text.
+
+The placeholders in this template are exactly: __BRIDGE_PROFILE__, __BRIDGE_OUT__, __BPRD__, __BCL__, __BWT__
+
+## What specialising means
+
+Keep the template's instructions, its output format, its prohibitions and its reasoning intact. They encode failures this pipeline has already paid for. You are not rewriting the prompt or improving its wording.
+
+Add only what a competent engineer joining THIS project would need and could not infer from the generic text:
+- the conventions, layout and idioms this codebase actually uses
+- the commands this project runs to build, test and type-check
+- the traps this stack presents that a generic prompt would not warn about
+
+Ground every addition in the project context above. If the context does not tell you something, say nothing about it — an invented convention is worse than a missing one, because the agent will follow it.
+
+Do not name a file, symbol, package or command that does not appear in the context you were given.
+
+## How to answer
+
+Emit ONLY the specialised prompt body as TEXT, directly in your reply. No JSON wrapper, no markdown fences around the whole thing, no commentary before or after, and do not write it to a file — the pipeline reads your reply text.
+
+
+
+# Output
+__BRIDGE_PROFILE__
+
+## Variables for this run
+
+- BRIDGE_SRC_CODELINE: __BCL__
+- BRIDGE_SRC_DIR: __BWT__
+- BRIDGE_OUT_FILE: __BRIDGE_OUT__
+- BRIDGE_PRD_FILE: __BPRD__
+
+Extract the exported API surface from the '__BCL__' codeline files and write the cross-codeline contract to __BRIDGE_OUT__.
+
+## Project context for this extraction
+
+This is the mock3 project. The only codeline in scope is `mocka`, checked out at `/home/bradleyjerome/projects/mock3/mock-a`, declaring exactly two dependencies: `vitest` and `typescript`. There is no build step beyond TypeScript itself, no bundler, no framework, and no second codeline to bridge to yet — so the contract you write is a record of what `mocka` exposes today, not a negotiation with an existing consumer.
+
+The tickets that shaped this codeline are:
+- MOCK3-1: Riders aged exactly 65 are charged the adult fare — an age-boundary condition inside `fareFor()` in `src/fares.ts`.
+- MOCK3-2: The departure board omits the final stop.
+
+Both are behavioural, not structural. Expect the exported surface to be small and to have changed little or not at all; a bridge that reports "the signatures are unchanged, the semantics at the 65 boundary are not" is a correct and useful result, not an empty one.
+
+### Reading the surface
+
+The repository is narrow — on the order of four files. Read all of them rather than sampling. Prefer `cat` and `sed -n` over search: at this size, grepping for `export` will cost you more in missed context than it saves.
+
+Because the stack is plain TypeScript with no declaration-emit step in evidence, the exported surface is whatever `export` keywords say it is in the `.ts` sources. Do not infer a public surface from a `dist/` or `.d.ts` artifact unless you have actually read one in __BWT__; if none exists, say so in the contract rather than describing one.
+
+### Traps specific to this stack
+
+- **Type-only exports are part of the contract.** In TypeScript, an exported `type`, `interface`, or union that appears in a function's signature is as binding on a downstream lane as the function itself. If `fareFor()` takes or returns a named type, that type belongs in the contract even though it emits no runtime value. Note whether it is exported or merely inferred — an inferred return type is not something a later lane can name.
+- **Boundary semantics are invisible in a signature.** `fareFor(age: number)` looks identical before and after the MOCK3-1 fix. Where the contract has room for behavioural notes, record the boundary condition explicitly (which side of 65 receives which fare) — that is the fact a later lane would otherwise re-derive by reading the source, or worse, guess wrong.
+- **Vitest test files are not surface.** Anything under a test path, or any symbol exported solely so a spec can reach it, is internal. Record it as internal if you record it at all; do not promote it into the contract.
+- **A missing feature is a finding.** MOCK3-2 concerns a departure board. If no departure-board surface exists in __BWT__, state that plainly in __BRIDGE_OUT__ rather than omitting the topic — a later lane reading a silent contract cannot distinguish "not present" from "not examined".
+
+### Commands
+
+Anything you run must go through the declared toolchain in __BWT__ — `vitest` for tests and `typescript` for type-checking, invoked through this repository's own package scripts. Read `package.json` in __BWT__ to learn the exact script names before invoking anything; do not assume a script name that you have not seen there. If a script you need is absent, say so rather than substituting a global binary.
+
+Extraction is a read operation. Do not edit sources in __BWT__, do not run a formatter, and do not commit. The only file you write is __BRIDGE_OUT__.

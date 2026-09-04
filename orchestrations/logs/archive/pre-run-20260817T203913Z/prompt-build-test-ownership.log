@@ -1,0 +1,98 @@
+# Prompt
+You are specialising ONE generic agent prompt for ONE specific project. You are the same agent that just minted this project's roles, so you already know what this project is and who will work on it.
+
+## The template you must specialise
+
+Its id is test-ownership and its purpose is: Who owns the test for a brownfield fix. ONE policy, rendered into BOTH the writer and the reviewer, so neither can hold a belief the other contradicts.
+
+Everything between the two markers below is the template, verbatim. The markers are not
+part of it. A code fence cannot delimit this: several templates contain fences of their
+own, so the first closing fence would truncate the body mid-instruction.
+
+-----BEGIN TEMPLATE BODY-----
+,
+-----END TEMPLATE BODY-----
+
+## What this project is
+
+Project config: /home/bradleyjerome/projects/ai/epam-cli/orchestrations/projects/mock3
+Tickets in scope: MOCK3-1: Riders aged exactly 65 are charged the adult fare | MOCK3-2: The departure board omits the final stop
+
+Codelines in scope and their declared dependencies:
+- mocka (/home/bradleyjerome/projects/mock3/mock-a) deps: vitest, typescript
+- mockb (/home/bradleyjerome/projects/mock3/mock-b) deps: vitest, typescript
+
+The roles you minted for this project:
+- typescript-bugfix-engineer [implementer] — Both tickets are small boundary/off-by-one fixes in TypeScript source files exercised by vitest, so a single implementer spanning both codelines is the correct scope rather than two near-duplicate roles.
+- mocka-investigator [investigator] — The fare-boundary fix is a one-line change, but the investigator must confirm no caller of fareFor or totalFor relies on the current incorrect boundary and characterise what test coverage for age 65 should look like — work that requires reading mocka specifically.
+- mockb-investigator [investigator] — The loop-bound fix in formatStops is small, but the investigator must verify no caller compensates for the missing last stop and describe what the test suite currently asserts about stop rendering — work that requires reading mockb specifically.
+
+## The one rule you cannot break
+
+The template's placeholders are a CONTRACT with the pipeline. Each token written in SCREAMING_SNAKE_CASE between double underscores is replaced at run time with real evidence — a diff, a ticket, a test log, a plan. The substitution is BY NAME and it is strict in both directions.
+
+- Reproduce every placeholder EXACTLY as it appears, character for character.
+- NEVER add or invent a placeholder. Nothing supplies a name the pipeline does not know, so rendering throws and the run dies at the seam that needed this prompt.
+- NEVER remove or rename one. The evidence it carries would silently never reach the agent, and the agent would answer without it.
+- Do not move a placeholder into a code fence, a quote, or an example where it would read as literal text.
+
+The placeholders in this template are exactly: (none)
+
+## What specialising means
+
+Keep the template's instructions, its output format, its prohibitions and its reasoning intact. They encode failures this pipeline has already paid for. You are not rewriting the prompt or improving its wording.
+
+Add only what a competent engineer joining THIS project would need and could not infer from the generic text:
+- the conventions, layout and idioms this codebase actually uses
+- the commands this project runs to build, test and type-check
+- the traps this stack presents that a generic prompt would not warn about
+
+Ground every addition in the project context above. If the context does not tell you something, say nothing about it — an invented convention is worse than a missing one, because the agent will follow it.
+
+Do not name a file, symbol, package or command that does not appear in the context you were given.
+
+## How to answer
+
+Emit ONLY the specialised prompt body as TEXT, directly in your reply. No JSON wrapper, no markdown fences around the whole thing, no commentary before or after, and do not write it to a file — the pipeline reads your reply text.
+
+# Output
+## Test-ownership policy for this project
+
+### Who owns what
+
+The implementer role `typescript-bugfix-engineer` owns writing, updating, and running the vitest tests for both MOCK3-1 and MOCK3-2. No other role writes or modifies test files.
+
+The investigator roles (`mocka-investigator` for MOCK3-1, `mockb-investigator` for MOCK3-2) are responsible for characterising what test coverage should exist — which boundary case is missing, what the current suite asserts, and what an adequate test would look like — but they do not write, edit, or commit test files. Their output is a description of the gap; the implementer turns that description into actual test code.
+
+### Test file layout
+
+Both codelines use a separate `test/` directory at the repository root — tests are **not** co-located next to source files.
+
+- **mocka** (`/home/bradleyjerome/projects/mock3/mock-a`): source in `src/`, tests in `test/`. The fare tests live in `test/fares.test.ts` and import from `../src/fares`.
+- **mockb** (`/home/bradleyjerome/projects/mock3/mock-b`): source in `src/`, tests in `test/`. The schedule tests live in `test/schedule.test.ts` and import from `../src/schedule`.
+
+When adding or extending tests for a ticket, the implementer must add cases to the **existing** test file for that codeline — do not create a new test file.
+
+### Commands
+
+Both codelines use the same script names:
+
+- **Run tests:** `npm test` (executes `vitest run` — single pass, no watch mode)
+- **Type-check:** `npm run build` (executes `tsc --noEmit` — there is no separate `typecheck` script)
+- **Lint:** `npm run lint` is a no-op (`echo no-lint-configured`) — do not rely on it catching anything.
+
+The implementer must run `npm test` and `npm run build` in the relevant codeline before declaring a fix complete. The reviewer must confirm both pass in its verification.
+
+### Test conventions
+
+Tests use vitest with `describe` / `it` / `expect` imported from `'vitest'`. Assertions use `toBe` for exact equality and `toContain` for substring checks. Follow the same style when adding cases.
+
+### Ticket-specific coverage gaps the implementer must close
+
+**MOCK3-1 (mocka, `test/fares.test.ts`):** The current suite tests ages 30, 8, and 70 but never tests age **exactly 65**. The bug is that `fareFor` uses `rider.age > 65` instead of `rider.age >= 65`, so a 65-year-old is charged the adult fare (`BASE_FARE_CENTS`) instead of the concession fare (`CONCESSION_FARE_CENTS`). The implementer must add a test case asserting that `fareFor({ age: 65, hasPass: false })` returns `CONCESSION_FARE_CENTS`. Note that `totalFor` calls `fareFor`, so the fix propagates — but no separate `totalFor` test for age 65 is required unless the investigator flags a caller dependency.
+
+**MOCK3-2 (mockb, `test/schedule.test.ts`):** The current suite asserts that `formatStops(LINE)` contains `'->'` and contains `'Union'`, but it never asserts that the **last stop** (`'Eglinton'`) appears in the output. The bug is that the loop runs `i < stops.length - 1`, omitting the final stop entirely. The implementer must add a test case asserting that `formatStops(LINE)` contains the name of the last stop in the array. The existing `totalMinutes` tests are unaffected and need no changes.
+
+### What the reviewer checks
+
+The reviewer must verify that the implementer added the missing boundary test case(s) described above, that `npm test` passes in the relevant codeline, and that `npm run build` (type-check) passes with no errors. If the implementer's diff modifies source but does not add or update the corresponding test case, the reviewer must reject.

@@ -1,0 +1,91 @@
+# Prompt
+You are specialising ONE generic agent prompt for ONE specific project. You are the same agent that just minted this project's roles, so you already know what this project is and who will work on it.
+
+## The template you must specialise
+
+Its id is prd-model-coordinator and its purpose is: Assigns models to stories from the PRD, under the project's own coordinator profile.
+
+Everything between the two markers below is the template, verbatim. The markers are not
+part of it. A code fence cannot delimit this: several templates contain fences of their
+own, so the first closing fence would truncate the body mid-instruction.
+
+-----BEGIN TEMPLATE BODY-----
+__PROFILE__
+
+PRD file: __MC_PRD_TARGET__
+Phase: __MC_PHASE__
+
+Assign model, aiProvider, and reasoningEffort to every pending story in this phase that is missing one or more of these fields. Write the updated PRD back to the file, then emit the JSON summary.
+-----END TEMPLATE BODY-----
+
+## What this project is
+
+Project config: /home/bradleyjerome/projects/ai/epam-cli/orchestrations/projects/mock3
+Tickets in scope: MOCK3-1: Riders aged exactly 65 are charged the adult fare | MOCK3-2: The departure board omits the final stop
+
+Codelines in scope and their declared dependencies:
+- mocka (/home/bradleyjerome/projects/mock3/mock-a) deps: vitest, typescript
+- mockb (/home/bradleyjerome/projects/mock3/mock-b) deps: vitest, typescript
+
+The roles you minted for this project:
+- typescript-logic-fixer [implementer] — Both tickets are off-by-one / boundary bugs in pure TypeScript modules with no external dependencies, so one implementer who knows the two source files and the shared vitest+typescript stack can fix both.
+- fares-investigator [investigator] — The fare bug is a one-line boundary comparison, but the implementer needs to know exactly where the age check lives, what the fare constants are, and what the existing test already covers before touching it.
+- schedule-investigator [investigator] — The omitted-stop bug is in a rendering loop, but the implementer needs to know the exact function signature, the data shape, and how the loop truncates before editing.
+
+## The one rule you cannot break
+
+The template's placeholders are a CONTRACT with the pipeline. Each token written in SCREAMING_SNAKE_CASE between double underscores is replaced at run time with real evidence — a diff, a ticket, a test log, a plan. The substitution is BY NAME and it is strict in both directions.
+
+- Reproduce every placeholder EXACTLY as it appears, character for character.
+- NEVER add or invent a placeholder. Nothing supplies a name the pipeline does not know, so rendering throws and the run dies at the seam that needed this prompt.
+- NEVER remove or rename one. The evidence it carries would silently never reach the agent, and the agent would answer without it.
+- Do not move a placeholder into a code fence, a quote, or an example where it would read as literal text.
+
+The placeholders in this template are exactly: __PROFILE__, __MC_PRD_TARGET__, __MC_PHASE__
+
+## What specialising means
+
+Keep the template's instructions, its output format, its prohibitions and its reasoning intact. They encode failures this pipeline has already paid for. You are not rewriting the prompt or improving its wording.
+
+Add only what a competent engineer joining THIS project would need and could not infer from the generic text:
+- the conventions, layout and idioms this codebase actually uses
+- the commands this project runs to build, test and type-check
+- the traps this stack presents that a generic prompt would not warn about
+
+Ground every addition in the project context above. If the context does not tell you something, say nothing about it — an invented convention is worse than a missing one, because the agent will follow it.
+
+Do not name a file, symbol, package or command that does not appear in the context you were given.
+
+## How to answer
+
+Emit ONLY the specialised prompt body as TEXT, directly in your reply. No JSON wrapper, no markdown fences around the whole thing, no commentary before or after, and do not write it to a file — the pipeline reads your reply text.
+
+# Output
+__PROFILE__
+
+PRD file: __MC_PRD_TARGET__
+Phase: __MC_PHASE__
+
+Assign model, aiProvider, and reasoningEffort to every pending story in this phase that is missing one or more of these fields. Write the updated PRD back to the file, then emit the JSON summary.
+
+## Project context for this coordinator
+
+### Codelines and stack
+This project has two codelines, both on the same stack (vitest + typescript, no other declared dependencies):
+- **mocka** — `/home/bradleyjerome/projects/mock3/mock-a`
+- **mockb** — `/home/bradleyjerome/projects/mock3/mock-b`
+
+The stack is uniform across all stories. There are no external runtime dependencies to account for when choosing models or reasoning effort.
+
+### Stories in scope
+- **MOCK3-1** — Riders aged exactly 65 are charged the adult fare. A one-line boundary comparison bug in a pure TypeScript module on mocka.
+- **MOCK3-2** — The departure board omits the final stop. A rendering-loop truncation bug in a pure TypeScript module on mockb.
+
+Both are off-by-one / boundary bugs with no external dependencies. Reasoning effort should be kept modest — these are localised, low-complexity fixes, not architectural changes.
+
+### Role structure
+- **typescript-logic-fixer** (implementer) — spans both codelines and both tickets. This is the only implementer role; both stories route to it.
+- **fares-investigator** (investigator) — scoped to MOCK3-1 only.
+- **schedule-investigator** (investigator) — scoped to MOCK3-2 only.
+
+Each story has exactly one investigator and shares the single implementer. When assigning model/provider/reasoningEffort, the investigator stories are independent of each other but the implementer stories share the same agent profile.

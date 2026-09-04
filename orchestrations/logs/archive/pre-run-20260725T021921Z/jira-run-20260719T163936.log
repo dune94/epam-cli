@@ -1,0 +1,2 @@
+[0;31m[ERROR][0m [jira] Missing required env vars: JIRA_WORKTREE_<CODELINE>
+[0;31m[ERROR][0m [jira] Run: source orchestrations/jira/.env

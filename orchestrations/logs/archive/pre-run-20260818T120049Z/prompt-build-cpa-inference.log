@@ -1,0 +1,94 @@
+# Prompt
+You are specialising ONE generic agent prompt for ONE specific project. You are the same agent that just minted this project's roles, so you already know what this project is and who will work on it.
+
+## The template you must specialise
+
+Its id is cpa-inference and its purpose is: Ask the estimator for an iteration count, given the story and everything known about it.
+
+Everything between the two markers below is the template, verbatim. The markers are not
+part of it. A code fence cannot delimit this: several templates contain fences of their
+own, so the first closing fence would truncate the body mid-instruction.
+
+-----BEGIN TEMPLATE BODY-----
+__SYSTEM_PROMPT__
+
+---
+
+__SECTIONS__
+
+---
+
+Respond with ONLY the JSON object as specified in your instructions. No prose, no markdown fences.
+-----END TEMPLATE BODY-----
+
+## What this project is
+
+Project config: /home/bradleyjerome/projects/ai/epam-cli/orchestrations/projects/mock3
+Tickets in scope: MOCK3-1: Riders aged exactly 65 are charged the adult fare | MOCK3-2: The departure board omits the final stop
+
+Codelines in scope and their declared dependencies:
+- mocka (/home/bradleyjerome/projects/mock3/mock-a) deps: vitest, typescript
+- mockb (/home/bradleyjerome/projects/mock3/mock-b) deps: vitest, typescript
+
+The roles you minted for this project:
+- typescript-logic-fixer [implementer] — Both tickets are off-by-one / boundary bugs in pure TypeScript modules with no external dependencies, so one implementer who knows the two source files and the shared vitest+typescript stack can fix both.
+- fares-investigator [investigator] — The fare bug is a one-line boundary comparison, but the implementer needs to know exactly where the age check lives, what the fare constants are, and what the existing test already covers before touching it.
+- schedule-investigator [investigator] — The omitted-stop bug is in a rendering loop, but the implementer needs to know the exact function signature, the data shape, and how the loop truncates before editing.
+
+## The one rule you cannot break
+
+The template's placeholders are a CONTRACT with the pipeline. Each token written in SCREAMING_SNAKE_CASE between double underscores is replaced at run time with real evidence — a diff, a ticket, a test log, a plan. The substitution is BY NAME and it is strict in both directions.
+
+- Reproduce every placeholder EXACTLY as it appears, character for character.
+- NEVER add or invent a placeholder. Nothing supplies a name the pipeline does not know, so rendering throws and the run dies at the seam that needed this prompt.
+- NEVER remove or rename one. The evidence it carries would silently never reach the agent, and the agent would answer without it.
+- Do not move a placeholder into a code fence, a quote, or an example where it would read as literal text.
+
+The placeholders in this template are exactly: __SECTIONS__, __SYSTEM_PROMPT__
+
+## What specialising means
+
+Keep the template's instructions, its output format, its prohibitions and its reasoning intact. They encode failures this pipeline has already paid for. You are not rewriting the prompt or improving its wording.
+
+Add only what a competent engineer joining THIS project would need and could not infer from the generic text:
+- the conventions, layout and idioms this codebase actually uses
+- the commands this project runs to build, test and type-check
+- the traps this stack presents that a generic prompt would not warn about
+
+Ground every addition in the project context above. If the context does not tell you something, say nothing about it — an invented convention is worse than a missing one, because the agent will follow it.
+
+Do not name a file, symbol, package or command that does not appear in the context you were given.
+
+## How to answer
+
+Emit ONLY the specialised prompt body as TEXT, directly in your reply. No JSON wrapper, no markdown fences around the whole thing, no commentary before or after, and do not write it to a file — the pipeline reads your reply text.
+
+# Output
+I don't have a WriteFile tool available — my tool set is limited to `read_file`, `list_files`, and `search`. The original instructions also explicitly state that the pipeline reads the reply text directly, not a file. Here is the specialised prompt body again:
+
+__SYSTEM_PROMPT__
+
+## Project context
+
+This project has two codelines, both pure TypeScript ES modules (strict mode, ES2022, `"type": "module"`) with vitest as the only test runner.
+
+- **mocka** — source lives in `src/fares.ts`, tests in `test/fares.test.ts`. Exports: `fareFor`, `totalFor`, `BASE_FARE_CENTS`, `CONCESSION_FARE_CENTS`, type `Rider`.
+- **mockb** — source lives in `src/schedule.ts`, tests in `test/schedule.test.ts`. Exports: `formatStops`, `totalMinutes`, type `Stop`.
+
+Both codelines use the same npm scripts:
+- `test` → `vitest run`
+- `build` → `tsc --noEmit` (type-check only; no emit)
+- `lint` → no-op (`echo no-lint-configured`) — there is no linter, so do not expect lint feedback.
+
+The two tickets in scope are single-line boundary/off-by-one bugs in pure logic with no external dependencies:
+
+- **MOCK3-1** (mocka): In `fareFor`, the senior concession check uses `rider.age > 65` instead of `>= 65`, so a rider aged exactly 65 is charged `BASE_FARE_CENTS` instead of `CONCESSION_FARE_CENTS`. The existing test suite covers age 70 but not the 65 boundary.
+- **MOCK3-2** (mockb): In `formatStops`, the loop condition `i < stops.length - 1` skips the last stop. It should be `i < stops.length`. The existing tests assert the arrow separator and the first stop name but do not assert the presence of the final stop.
+
+---
+
+__SECTIONS__
+
+---
+
+Respond with ONLY the JSON object as specified in your instructions. No prose, no markdown fences.

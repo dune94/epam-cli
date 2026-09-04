@@ -1,0 +1,48 @@
+[0;35m[CPA][0m Retrieval: TF-IDF
+[0;36m[10:10:55][0m Loading stories from orch-mockhelloworld-prd-1960075.json...
+[0;36m[10:10:55][0m Found 2 stories to contextualize
+
+[0;35m[CPA][0m Processing MOCK-HW-1-impl...
+[0;35m[CPA][0m   MOCK-HW-1-impl: formula baseline from calibration[low:implementation:cli](n=29): 4.5178418971594745min $0.1404333618569382
+[1mMOCK-HW-1-impl[0m  Change getGreeting to return 'hello dolly'  [0;32m[PASS][0m
+  Machine time:              4.52 min  →      2.26 min  (conf: 0.92, adj: 0.50x)
+  Cost (story):          $0.1404     →  $0.0351   
+  Escalation:            +$0.4449      (r2@15%=+$0.1650 r3@5%=+$0.2210 k3@1.0%=+$0.0589)
+  Self-heal:             +$0.0320      (p=20%)
+  Retries (exp):          0.32  
+  Total (est):           $2.8068         (story+esc+heal=$0.5121 × pipeline 5.48x)
+  KB coverage:           5     chunks retrieved   2     cited   cov: 40%
+  [1;33m⚠[0m  Adjacent test story MOCK-HW-1-test must update assertion to expect 'hello dolly'
+
+[0;35m[CPA][0m Processing MOCK-HW-1-test...
+[0;35m[CPA][0m   MOCK-HW-1-test: formula baseline from calibration[low:implementation:cli](n=29): 4.5178418971594745min $0.1404333618569382
+[1mMOCK-HW-1-test[0m  Update test to expect 'hello dolly'  [0;32m[PASS][0m
+  Machine time:              4.52 min  →      2.26 min  (conf: 0.90, adj: 0.50x)
+  Cost (story):          $0.1404     →  $0.0351   
+  Escalation:            +$0.4449      (r2@15%=+$0.1650 r3@5%=+$0.2210 k3@1.0%=+$0.0589)
+  Self-heal:             +$0.0320      (p=20%)
+  Retries (exp):          0.32  
+  Total (est):           $2.8068         (story+esc+heal=$0.5121 × pipeline 5.48x)
+  KB coverage:           5     chunks retrieved   3     cited   cov: 60%
+  [1;33m⚠[0m  Dependency MOCK-HW-1-impl shows pending in adjacent stories but completed in AGENTS.md
+
+[0;36m=== CPA Gate Summary ===[0m
+
+Phase                    Pass   Review    Block    Total
+------------------------------------------------------
+core                        2        0        0        2
+------------------------------------------------------
+[1mTOTAL                       2        0        0        2[0m
+
+[0;32m[CPA OK][0m All 2 stories passed the CPA gate
+
+[0;36m[10:12:00][0m Appended 2 CPA records to /home/bradleyjerome/projects/ai/epam-cli/orchestrations/logs/cpa-review.jsonl
+[0;36m[10:12:00][0m Applying blended estimates to prd.json...
+[0;32m[CPA OK][0m Backed up prd.json → orch-mockhelloworld-prd-1960075.json.before-cpa
+[0;32m[CPA OK][0m Applied CPA blended estimates to 2 stories
+
+  Review:   git diff /tmp/orch-mockhelloworld-prd-1960075.json
+  Restore:  cp /tmp/orch-mockhelloworld-prd-1960075.json.before-cpa /tmp/orch-mockhelloworld-prd-1960075.json
+
+No calibrated categories (need >= min-n completed stories per category).
+[0;36m[10:12:11][0m Calibration updated from actuals

@@ -1,0 +1,82 @@
+# Prompt
+You are the specification coordinator for the epam-cli orchestration system. Before every phase you read orchestrations/prd.json (implementationOrder and stories), evaluate risk, dependencies, and technical readiness, then assign the correct specification runners: OpenSpec, Speckit, both, or none. You write assignments into each story's specification.assignedAgents field along with coordinatorNotes, target provider/model, and timestamps. You understand the provider policy ledger (configuration.aiRuntime.providerPolicies), token guardrails, and know when to skip stories that were already hand-curated. When you plan a run you emit JSON compliant with spec-mode-runner.js so that automation can apply deltas deterministically. You never invent story IDs or mutate acceptance criteria directly; only delegate to spec agents and record their status.
+
+You are the EPAM CLI specification coordinator reviewing the completed spec outputs for phase core.
+
+Each story was processed by a sequential agent pipeline:
+  1. openspec elaborated requirements (AC refinement, story splits, technical depth)
+  2. speckit reviewed openspec's output (testability, security, edge cases, gap analysis)
+
+For each story, evaluate the quality of the collaborative spec work:
+1. Did both agents add meaningful, non-overlapping value?
+2. Are the acceptance criteria complete, testable, and non-overlapping?
+3. Are story splits logical and properly scoped?
+4. Flag any story needing human review.
+
+Respond with JSON between <SPEC_REVIEW> and </SPEC_REVIEW> using this schema:
+[
+  {"storyId":"REM-xxx","verdict":"approved|needs_review","reviewNotes":"coordinator observations","qualityScore":0.0-1.0,"flags":[]}
+]
+
+Stories to review:
+[
+  {
+    "id": "AMSD-2041",
+    "title": "[GO, UP, MX] Live Preview of Content in CMS",
+    "acceptanceCriteria": [],
+    "specification": {
+      "runId": "20260729T015811Z",
+      "assignedAgents": [
+        "openspec",
+        "speckit"
+      ],
+      "coordinatorNotes": "Multi-platform story (GO, UP, MX) with no acceptance criteria and no existing spec. Complex scope requires full elaboration: openspec to draft AC and refine requirements across all three platforms, then speckit to harden with testability, security, and edge-case criteria.",
+      "status": "completed",
+      "updatedAt": "2026-07-29T02:12:24.426Z",
+      "appliedAgents": [
+        "openspec",
+        "speckit"
+      ],
+      "agentContributions": [
+        {
+          "agent": "openspec",
+          "applied": true,
+          "notes": "ACs were empty; derived measurable acceptance criteria from the description about real-time draft content rendering in CMS preview. Contentstack is unreachable at test time, so VCs stop at our request boundary and assume mocked responses.",
+          "acceptanceChanged": false,
+          "splitCount": 0,
+          "timestamp": "2026-07-29T02:11:53.738Z"
+        },
+        {
+          "agent": "speckit",
+          "applied": true,
+          "notes": "Openspec provided empty ACs, so all criteria are new. Derived from the story title '[GO, UP, MX] Live Preview of Content in CMS' which implies real-time draft content rendering in a CMS preview context. Criteria cover: basic rendering (AC1), real-time update latency (AC2), rapid-edit debouncing/coalescing (AC3), empty/null field handling (AC4), large payload resilience (AC5), service error handling (AC6), timeout handling (AC7), authorization/security (AC8), navigation state persistence (AC9), multi-locale support per the GO/UP/MX market scope (AC10), save/publish continuity (AC11), and broken asset resilience (AC12). Without access to technical notes, codebase, or existing preview implementation, these are best-effort criteria; some may need adjustment once the actual CMS integration (e.g., Contentstack) and preview architecture are known.",
+          "acceptanceChanged": false,
+          "splitCount": 0,
+          "timestamp": "2026-07-29T02:12:24.426Z"
+        }
+      ]
+    },
+    "splitChildren": []
+  }
+]
+
+<SPEC_REVIEW>
+</SPEC_REVIEW>
+
+# Output
+<SPEC_REVIEW>
+[
+  {
+    "storyId": "AMSD-2041",
+    "verdict": "needs_review",
+    "reviewNotes": "Both agents claim to have derived acceptance criteria from scratch, but the acceptanceCriteria array remains empty [] — no ACs were persisted. The sequential pipeline did not function as intended: speckit states 'Openspec provided empty ACs, so all criteria are new,' indicating it re-derived from the title rather than reviewing and hardening openspec's output. Both contributions are essentially the same task (inferring ACs from the story title), so the agents overlapped rather than added complementary value. Additionally, both agentContributions report acceptanceChanged: false despite claiming to have created new ACs — this metadata is contradictory. Speckit's notes describe 12 ACs (AC1–AC12) covering rendering, latency, debouncing, error handling, security, multi-locale, and asset resilience, which appear reasonable in scope, but they exist only in prose notes and were never materialized into the story record. The multi-platform scope (GO, UP, MX) was not split (splitCount: 0); this may be acceptable if the preview implementation is shared across markets, but a human should confirm. Human review is required to: (1) persist the derived ACs into acceptanceCriteria, (2) re-run speckit against openspec's actual output to get true sequential hardening, and (3) confirm whether platform-specific splits are needed.",
+    "qualityScore": 0.4,
+    "flags": [
+      "acceptance_criteria_not_persisted",
+      "sequential_pipeline_broken_speckit_re_derived_instead_of_reviewing",
+      "contradictory_metadata_acceptanceChanged_false_with_new_ACs",
+      "multi_platform_scope_not_split_needs_confirmation"
+    ]
+  }
+]
+</SPEC_REVIEW>

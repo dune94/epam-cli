@@ -1,0 +1,41 @@
+```json
+{
+  "agent": "spec-validator",
+  "phase": "core",
+  "stories": [
+    {
+      "storyId": "MOCK3-2",
+      "title": "The departure board omits the final stop",
+      "criteria": [
+        {
+          "text": "The final stop in the input line appears in the rendered board output.",
+          "status": "met",
+          "evidence": "src/schedule.ts:7 changed loop condition from `i < stops.length - 1` to `i < stops.length`, now including the final element. Test src/schedule.test.ts:8-14 ('includes the final stop in the output') explicitly verifies 'Eglinton (25m)' is in the output. Test result: 9/9 passed.",
+          "gaps": ""
+        },
+        {
+          "text": "Every stop in the input line appears in the rendered board output.",
+          "status": "met",
+          "evidence": "src/schedule.ts:6-9 loop iterates through all indices 0 to stops.length-1 inclusive, pushing each stop to the parts array. Test src/schedule.test.ts:16-28 ('includes all stops in the output') verifies Union, Bloor, and Eglinton all appear in the output. Test result: 9/9 passed.",
+          "gaps": ""
+        },
+        {
+          "text": "Consecutive stops are separated by arrow separators in the output.",
+          "status": "met",
+          "evidence": "src/schedule.ts:10 joins parts with `' -> '` separator. Test src/schedule.test.ts:30-36 ('separates consecutive stops with arrow separators') verifies the arrow is present in the output. Test result: 9/9 passed.",
+          "gaps": ""
+        },
+        {
+          "text": "An empty input produces an empty output without throwing an error.",
+          "status": "met",
+          "evidence": "src/schedule.ts:6-10 handles empty array: loop condition `i < 0` is false, parts remains [], and `[].join(' -> ')` returns empty string. Tests src/schedule.test.ts:38-44 verify both no error is thrown and empty string is returned. Test result: 9/9 passed.",
+          "gaps": ""
+        }
+      ],
+      "overallCompliance": 100,
+      "verdict": "pass"
+    }
+  ],
+  "overallVerdict": "pass"
+}
+```

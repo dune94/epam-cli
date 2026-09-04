@@ -1,0 +1,29 @@
+=== Lint Gate: core @ 2026-08-21T21:50:42+00:00 ===
+
+> metrolinx-starter@0.1.0 check-types
+> tsc
+
+
+src/context/contentstackContext.tsx:10:13  @typescript-eslint/no-explicit-any  Unexpected any. Specify a different type.
+src/hooks/useContent.ts:9:9  react-hooks/exhaustive-deps  The 'effectiveContent' conditional could make the dependencies of useCallback Hook (at line 13) change on every render. Move it inside the useCallback callback. Alternatively, wrap the initialization of 'effectiveContent' in its own useMemo() Hook.
+src/services/contentstack.ts:109:28  @typescript-eslint/no-explicit-any  Unexpected any. Specify a different type.
+src/services/contentstack.ts:109:48  @typescript-eslint/no-explicit-any  Unexpected any. Specify a different type.
+src/services/contentstack.ts:109:56  @typescript-eslint/no-explicit-any  Unexpected any. Specify a different type.
+src/services/contentstack.ts:217:17  @typescript-eslint/no-explicit-any  Unexpected any. Specify a different type.
+src/services/contentstack.ts:247:25  @typescript-eslint/no-explicit-any  Unexpected any. Specify a different type.
+src/services/contentstack.ts:261:15  @typescript-eslint/no-explicit-any  Unexpected any. Specify a different type.
+src/services/contentstack.ts:304:15  @typescript-eslint/no-explicit-any  Unexpected any. Specify a different type.
+src/services/contentstack.ts:407:15  @typescript-eslint/no-explicit-any  Unexpected any. Specify a different type.
+NEW_FINDINGS=10
+UNATTRIBUTABLE (baseline unavailable): src/context/contentstackContext.tsx:10:13  @typescript-eslint/no-explicit-any  Unexpected any. Specify a different type.
+src/hooks/useContent.ts:9:9  react-hooks/exhaustive-deps  The 'effectiveContent' conditional could make the dependencies of useCallback Hook (at line 13) change on every render. Move it inside the useCallback callback. Alternatively, wrap the initialization of 'effectiveContent' in its own useMemo() Hook.
+src/services/contentstack.ts:109:28  @typescript-eslint/no-explicit-any  Unexpected any. Specify a different type.
+src/services/contentstack.ts:109:48  @typescript-eslint/no-explicit-any  Unexpected any. Specify a different type.
+src/services/contentstack.ts:109:56  @typescript-eslint/no-explicit-any  Unexpected any. Specify a different type.
+src/services/contentstack.ts:217:17  @typescript-eslint/no-explicit-any  Unexpected any. Specify a different type.
+src/services/contentstack.ts:247:25  @typescript-eslint/no-explicit-any  Unexpected any. Specify a different type.
+src/services/contentstack.ts:261:15  @typescript-eslint/no-explicit-any  Unexpected any. Specify a different type.
+src/services/contentstack.ts:304:15  @typescript-eslint/no-explicit-any  Unexpected any. Specify a different type.
+src/services/contentstack.ts:407:15  @typescript-eslint/no-explicit-any  Unexpected any. Specify a different type.
+NEW_FINDINGS=10
+=== Gate Result: PASS ===

@@ -1,0 +1,146 @@
+# Prompt
+You are specialising ONE generic agent prompt for ONE specific project. You are the same agent that just minted this project's roles, so you already know what this project is and who will work on it.
+
+## The template you must specialise
+
+Its id is guard-vocabulary and its purpose is: Derive the vocabulary a guard uses, verified against the repository index.
+
+Everything between the two markers below is the template, verbatim. The markers are not
+part of it. A code fence cannot delimit this: several templates contain fences of their
+own, so the first closing fence would truncate the body mid-instruction.
+
+-----BEGIN TEMPLATE BODY-----
+__PERSONA_PREFIX__GUARD SEAM: __SEAM__
+
+THE RULE THIS GUARD ENFORCES:
+__RULE__
+
+THE STATEMENTS THE GUARD WILL CHECK:
+__STATEMENT_LIST__
+
+DECLARED MANIFEST (the files this story says it will touch):
+__MANIFEST__
+
+__DOC_SECTION__CODE EVIDENCE (real findings from this repository — ground truth; derive from these, not from your own knowledge of any library):
+__EVIDENCE__
+
+STORY CONTEXT:
+Title: __STORY_TITLE__
+Description: __STORY_DESCRIPTION__
+__CODEGRAPH_SECTION__
+-----END TEMPLATE BODY-----
+
+## What this project is
+
+Project config: /home/bradleyjerome/projects/ai/epam-cli/orchestrations/projects/mock3
+Tickets in scope: MOCK3-1: Riders aged exactly 65 are charged the adult fare | MOCK3-2: The departure board omits the final stop
+
+Codelines in scope and their declared dependencies:
+- mocka (/home/bradleyjerome/projects/mock3/mock-a) deps: vitest, typescript
+
+The roles you minted for this project:
+- fare-rules-engineer [implementer] — MOCK3-1 requires an actual source edit to the age comparison in src/fares.ts, and only an implementer can commit that one-line boundary fix confirmed present in the code.
+- mocka-detective [investigator] — The declared vitest+typescript stack and the narrow four-file repository mean a single dedicated reader can definitively confirm the fareFor() boundary condition and the absence of any MOCK3-2 surface before an implementer commits to a fix.
+
+## The one rule you cannot break
+
+The template's placeholders are a CONTRACT with the pipeline. Each token written in SCREAMING_SNAKE_CASE between double underscores is replaced at run time with real evidence — a diff, a ticket, a test log, a plan. The substitution is BY NAME and it is strict in both directions.
+
+- Reproduce every placeholder EXACTLY as it appears, character for character.
+- NEVER add or invent a placeholder. Nothing supplies a name the pipeline does not know, so rendering throws and the run dies at the seam that needed this prompt.
+- NEVER remove or rename one. The evidence it carries would silently never reach the agent, and the agent would answer without it.
+- Do not move a placeholder into a code fence, a quote, or an example where it would read as literal text.
+
+The placeholders in this template are exactly: __CODEGRAPH_SECTION__, __DOC_SECTION__, __EVIDENCE__, __MANIFEST__, __PERSONA_PREFIX__, __RULE__, __SEAM__, __STATEMENT_LIST__, __STORY_DESCRIPTION__, __STORY_TITLE__
+
+## What specialising means
+
+Keep the template's instructions, its output format, its prohibitions and its reasoning intact. They encode failures this pipeline has already paid for. You are not rewriting the prompt or improving its wording.
+
+Add only what a competent engineer joining THIS project would need and could not infer from the generic text:
+- the conventions, layout and idioms this codebase actually uses
+- the commands this project runs to build, test and type-check
+- the traps this stack presents that a generic prompt would not warn about
+
+Ground every addition in the project context above. If the context does not tell you something, say nothing about it — an invented convention is worse than a missing one, because the agent will follow it.
+
+Do not name a file, symbol, package or command that does not appear in the context you were given.
+
+## How to answer
+
+Emit ONLY the specialised prompt body as TEXT, directly in your reply. No JSON wrapper, no markdown fences around the whole thing, no commentary before or after, and do not write it to a file — the pipeline reads your reply text.
+
+
+
+# Output
+__PERSONA_PREFIX__GUARD SEAM: __SEAM__
+
+THE RULE THIS GUARD ENFORCES:
+__RULE__
+
+THE STATEMENTS THE GUARD WILL CHECK:
+__STATEMENT_LIST__
+
+DECLARED MANIFEST (the files this story says it will touch):
+__MANIFEST__
+
+__DOC_SECTION__CODE EVIDENCE (real findings from this repository — ground truth; derive from these, not from your own knowledge of any library):
+__EVIDENCE__
+
+STORY CONTEXT:
+Title: __STORY_TITLE__
+Description: __STORY_DESCRIPTION__
+__CODEGRAPH_SECTION__
+PROJECT GROUNDING — mock3
+
+This vocabulary is for guards running against the `mocka` codeline, rooted at
+/home/bradleyjerome/projects/mock3/mock-a. Its declared dependencies are exactly two:
+vitest and typescript. There is no other framework, no build tool, no runtime service,
+no database and no HTTP layer in scope. The repository is small — a handful of files —
+so the repository index you are verifying against is close to exhaustive: if a term is
+not in the evidence, it is very likely not in the repository at all, rather than merely
+unindexed. Treat an absent term as absent, not as "probably elsewhere".
+
+The two tickets in scope are:
+- MOCK3-1: Riders aged exactly 65 are charged the adult fare. This is a boundary-condition
+  defect in the age comparison inside the fare calculation in src/fares.ts, reached through
+  fareFor(). Vocabulary for guards on this ticket lives around fare selection and the
+  age boundary — draw the exact identifier spellings (function name, parameter names,
+  comparison operators, fare-category names, numeric literals) from the evidence block,
+  never from memory of what a fare engine "usually" calls things.
+- MOCK3-2: The departure board omits the final stop. No departure-board surface has been
+  confirmed to exist in this repository. If the evidence block contains no departure-board
+  symbols, the correct vocabulary is the vocabulary of absence: name only what the evidence
+  actually shows, and do not mint terms for a module, component or function that the
+  repository index does not contain. Inventing a plausible departure-board vocabulary here
+  is the specific failure this project is exposed to, because it would let a downstream
+  guard "verify" statements about code that was never written.
+
+Two roles consume what you produce, and they consume it differently:
+- mocka-detective (investigator) uses the vocabulary to confirm or refute the fareFor()
+  boundary condition and to establish whether any MOCK3-2 surface exists. Terms must be
+  precise enough to grep for verbatim.
+- fare-rules-engineer (implementer) uses it to commit the age-comparison edit in
+  src/fares.ts. Terms must match the identifiers as they are actually spelled in that file,
+  including case, so that a statement about the edit can be checked against the real source.
+
+Stack-specific traps for this repository:
+- TypeScript identifiers are case-sensitive and the evidence is the only authority on
+  casing. fareFor is not FareFor, farefor, or fare_for. Reproduce spellings character for
+  character from the evidence.
+- A .ts source symbol and a vitest test's description string are different vocabulary.
+  A phrase that appears only inside a test title describes intent, not an implementation
+  symbol; a phrase that appears as an exported symbol in src/ is checkable in the source.
+  Keep them distinct — do not promote a test description into a code term.
+- Boundary defects like MOCK3-1 turn on the operator and the literal, so the comparison
+  itself is vocabulary: the exact relational operator and the exact age literal shown in
+  the evidence are terms a guard must be able to match, not incidental syntax to paraphrase.
+- Do not introduce command, script or task-name vocabulary unless a command appears
+  verbatim in the evidence. The declared dependency list names vitest and typescript; it
+  does not tell you how this project is invoked, and a guessed invocation would be checked
+  against nothing.
+- Do not import vocabulary across tickets. Fare terms do not license departure-board terms,
+  and vice versa; each guard's vocabulary is bounded by the evidence supplied for it.
+
+Every term you emit must be traceable to a specific line of the evidence above. If you
+cannot point at the evidence that supplies a term, leave the term out.

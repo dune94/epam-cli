@@ -1,0 +1,212 @@
+# Prompt
+You are specialising ONE generic agent prompt for ONE specific project. You are the same agent that just minted this project's roles, so you already know what this project is and who will work on it.
+
+## The template you must specialise
+
+Its id is roster-specialisation and its purpose is: 
+
+Everything between the two markers below is the template, verbatim. The markers are not
+part of it. A code fence cannot delimit this: several templates contain fences of their
+own, so the first closing fence would truncate the body mid-instruction.
+
+-----BEGIN TEMPLATE BODY-----
+You are specialising a generic agent roster for ONE project. The roster you produce IS this project's roster: every agent in this run gets its identity from the file you write, and nothing falls back to the generic source if you leave something out.
+
+## What you are given
+
+The canonical roster, verbatim, at:
+
+  __CANONICAL_COPY_PATH__
+
+Read it with your tools. Each key is an agent name; each value is that agent's generic persona — what it does, stated without reference to any codebase.
+
+The project:
+__PROJECT_CONTEXT__
+
+The codelines it works on:
+__CODELINE_CONTEXT__
+
+The stack in use:
+__STACK__
+
+## What to write
+
+Write a JSON file to:
+
+  __OUT_PATH__
+
+of exactly this shape:
+
+{"agents": {"<agent name>": {"persona": "...", "kind": "implementer|investigator|seam", "ancestor": "<canonical agent name>", "derivedFromSha256": "<sha256 of the ancestor's persona text>", "seam": "<the seam this agent enters by — required only for an agent you ADD>"}}}
+
+EVERY AGENT IN THE CANONICAL ROSTER MUST APPEAR. A missing agent is not a smaller roster — it is an agent with no identity at the moment the pipeline invokes it, and the run has nowhere else to look. Do not decide that an agent is irrelevant to this project; you cannot know which seams a run will reach.
+
+## How to specialise
+
+For each agent, keep WHAT IT DOES and replace WHAT IT KNOWS. The generic persona states a role; your version states that same role against this codeline — its language, its frameworks, its layout, the helpers and conventions that already exist, the commands it actually runs. Read the code to find these. An assertion about the codeline that you did not verify is worse than a generic sentence, because the next reader cannot tell which is which.
+
+Do not weaken a rule while specialising it. If the generic persona forbids something, says a finding must carry evidence, or names a check that must pass, that survives verbatim in meaning — you are changing what the agent knows, never what it is required to do.
+
+KEEP EACH PERSONA AT THE LENGTH THE WORK NEEDS. A persona that lists every file in the repository is not more specialised, it is less usable: the agent reads it before every invocation.
+
+## Ancestry
+
+Each entry names the canonical agent it derives from. For an agent that exists in the canonical roster, that is the agent itself.
+
+If this project needs an agent the canonical roster does not have, you may add one — but it MUST name the canonical agent it is closest to as its ancestor. That is not bookkeeping: an agent inherits its ladder, its tool grant and its output contract from its ancestor, so an agent invented from nothing has no budget, no tools and no way for the pipeline to receive what it returns.
+
+`derivedFromSha256` is the SHA-256 of the ancestor's persona text exactly as it appears in the canonical copy you were given. It records what you derived from, so that a later change to the canonical roster is detectable rather than silent.
+
+## Which seam an agent enters by
+
+An agent does not run on its own. It enters the pipeline through a SEAM, which decides its ladder, its tool grant, its output contract and the prompt it executes. For an agent that exists in the canonical roster, the seam is already known and you do not state it.
+
+For an agent you ADD, name the seam in the `seam` field. It must be one the pipeline already declares — you are choosing which existing door this agent comes through, not inventing one. If none fits, the agent you are adding is doing work the pipeline has no place for, and adding it will not create that place.
+
+Omitting it does not leave the question open: the name is matched against patterns instead, and a pattern is a guess about what an agent does based on how it is spelled. That is how an agent named for review came to enter through an inference seam, with another seam's budget and tools.
+
+## What you are not doing
+
+You are not editing the canonical roster. You are not judging whether an agent should exist. You are not writing prompts — an agent's persona says who it is; its instructions for a task live in that task's prompt.
+__PREVIOUS_REFUSAL__
+
+-----END TEMPLATE BODY-----
+
+## What this project is
+
+Project config: /home/bradleyjerome/projects/ai/epam-cli/orchestrations/projects/mock3
+Tickets in scope: MOCK3-1: Riders aged exactly 65 are charged the adult fare | MOCK3-2: The departure board omits the final stop
+
+Codelines in scope and their declared dependencies:
+- mocka (/home/bradleyjerome/projects/mock3/mock-a) deps: vitest, typescript
+- mockb (/home/bradleyjerome/projects/mock3/mock-b) deps: vitest, typescript
+
+The roles you minted for this project:
+- mocka-fares-investigator [investigator] — MOCK3-1 is scoped to mocka's fare logic, and a dedicated reader who verifies the exact comparison operator and the test file's actual age coverage (rather than inheriting the survey's belief) prevents the implementer from fixing the wrong line.
+- mockb-schedule-investigator [investigator] — MOCK3-2 is scoped to mockb's rendering logic, and a dedicated reader who confirms the loop bound and totalMinutes()'s independent indexing firsthand prevents the implementer from misjudging the blast radius of the fix.
+- fare-boundary-engineer [implementer] — MOCK3-1 requires an actual code change to the fare-rule boundary in src/fares.ts within the mocka codeline, and only an implementer can author that fix.
+- departure-board-engineer [implementer] — MOCK3-2 requires an actual code change to the stop-rendering loop bound in src/schedule.ts within the mockb codeline, and only an implementer can author that fix.
+
+## The one rule you cannot break
+
+The template's placeholders are a CONTRACT with the pipeline. Each token written in SCREAMING_SNAKE_CASE between double underscores is replaced at run time with real evidence — a diff, a ticket, a test log, a plan. The substitution is BY NAME and it is strict in both directions.
+
+- Reproduce every placeholder EXACTLY as it appears, character for character.
+- NEVER add or invent a placeholder. Nothing supplies a name the pipeline does not know, so rendering throws and the run dies at the seam that needed this prompt.
+- NEVER remove or rename one. The evidence it carries would silently never reach the agent, and the agent would answer without it.
+- Do not move a placeholder into a code fence, a quote, or an example where it would read as literal text.
+
+The placeholders in this template are exactly: __CANONICAL_COPY_PATH__, __OUT_PATH__, __PROJECT_CONTEXT__, __CODELINE_CONTEXT__, __STACK__, __PREVIOUS_REFUSAL__
+
+## The other rule you cannot break
+
+The template's OUTPUT SHAPE is a contract too. Every field name the template states in its response
+format is read by a consumer that will reject an answer without it — the agent would produce work
+nothing accepts, and the seam fails after the model has already been paid for.
+
+- Reproduce every field name EXACTLY, in the same shape the template states it.
+- NEVER drop one because it looks redundant, and NEVER rename one to something clearer.
+- NEVER add a field. A consumer reads by name and has no place to put an invention.
+
+The output fields this template states are exactly: agents, persona, kind, ancestor, derivedFromSha256, seam
+
+## Before you answer
+
+Check your reply against both lists above. Every placeholder, and every output field, must appear
+in what you are about to send. A specialisation that drops one is refused and the work is redone,
+so the check costs you nothing and the omission costs an attempt.
+
+## What specialising means
+
+Keep the template's instructions, its output format, its prohibitions and its reasoning intact. They encode failures this pipeline has already paid for. You are not rewriting the prompt or improving its wording.
+
+Add only what a competent engineer joining THIS project would need and could not infer from the generic text:
+- the conventions, layout and idioms this codebase actually uses
+- the commands this project runs to build, test and type-check
+- the traps this stack presents that a generic prompt would not warn about
+
+Ground every addition in the project context above. If the context does not tell you something, say nothing about it — an invented convention is worse than a missing one, because the agent will follow it.
+
+Do not name a file, symbol, package or command that does not appear in the context you were given.
+
+## How to answer
+
+Emit ONLY the specialised prompt body as TEXT, directly in your reply. No JSON wrapper, no markdown fences around the whole thing, no commentary before or after, and do not write it to a file — the pipeline reads your reply text.
+
+
+## Your previous attempt was REFUSED
+
+the generated prompt dropped placeholder(s) the template requires: __CANONICAL_COPY_PATH__, __CODELINE_CONTEXT__, __OUT_PATH__, __PREVIOUS_REFUSAL__, __PROJECT_CONTEXT__, __STACK__. The evidence they carry would silently never reach the agent.
+
+Produce the prompt again, correcting exactly this. Change nothing else: the rest of your previous attempt was accepted, and rewriting it invites a second refusal for a different reason.
+
+
+
+# Output
+You are specialising a generic agent roster for ONE project. The roster you produce IS this project's roster: every agent in this run gets its identity from the file you write, and nothing falls back to the generic source if you leave something out.
+
+## What you are given
+
+The canonical roster, verbatim, at:
+
+  __CANONICAL_COPY_PATH__
+
+Read it with your tools. Each key is an agent name; each value is that agent's generic persona — what it does, stated without reference to any codebase.
+
+The project:
+__PROJECT_CONTEXT__
+
+This project is mock3, tracking two tickets: MOCK3-1 (riders aged exactly 65 are charged the adult fare) and MOCK3-2 (the departure board omits the final stop). The roster you produce covers two codelines, mocka and mockb, and four already-minted roles: mocka-fares-investigator and mockb-schedule-investigator (investigators), and fare-boundary-engineer and departure-board-engineer (implementers). Ground each canonical agent's specialised persona in whichever of these two codelines and tickets it actually touches — do not blend mocka's fare-boundary work into mockb's schedule work or vice versa.
+
+The codelines it works on:
+__CODELINE_CONTEXT__
+
+mocka (/home/bradleyjerome/projects/mock3/mock-a) holds the fare logic implicated in MOCK3-1, including src/fares.ts and its test file. mockb (/home/bradleyjerome/projects/mock3/mock-b) holds the schedule/departure-board rendering logic implicated in MOCK3-2, including src/schedule.ts and totalMinutes(). Treat these as separate codebases: an investigator or implementer working one codeline should not assume facts about the other.
+
+The stack in use:
+__STACK__
+
+Both codelines share the same toolchain: TypeScript with vitest as the test runner. Any command an agent is told to run to verify its own work — type-check, run the relevant test file — should be stated in those terms, not in terms of a different stack.
+
+## What to write
+
+Write a JSON file to:
+
+  __OUT_PATH__
+
+of exactly this shape:
+
+{"agents": {"<agent name>": {"persona": "...", "kind": "implementer|investigator|seam", "ancestor": "<canonical agent name>", "derivedFromSha256": "<sha256 of the ancestor's persona text>", "seam": "<the seam this agent enters by — required only for an agent you ADD>"}}}
+
+EVERY AGENT IN THE CANONICAL ROSTER MUST APPEAR. A missing agent is not a smaller roster — it is an agent with no identity at the moment the pipeline invokes it, and the run has nowhere else to look. Do not decide that an agent is irrelevant to this project; you cannot know which seams a run will reach. This includes any canonical agent that has no direct counterpart among the four roles minted for mock3 — give it a persona grounded in mocka and/or mockb as best fits its generic role, rather than omitting it.
+
+## How to specialise
+
+For each agent, keep WHAT IT DOES and replace WHAT IT KNOWS. The generic persona states a role; your version states that same role against this codeline — its language, its frameworks, its layout, the helpers and conventions that already exist, the commands it actually runs. Read the code to find these. An assertion about the codeline that you did not verify is worse than a generic sentence, because the next reader cannot tell which is which.
+
+For mock3, that means: an investigator or implementer persona should name the actual codeline (mocka or mockb), the actual file (src/fares.ts or src/schedule.ts), and the actual test runner (vitest) it will use to check its own conclusions — but only when the canonical agent's role and the evidence you've read both support that specificity. Do not invent a file, function, or command beyond what is given.
+
+Do not weaken a rule while specialising it. If the generic persona forbids something, says a finding must carry evidence, or names a check that must pass, that survives verbatim in meaning — you are changing what the agent knows, never what it is required to do.
+
+KEEP EACH PERSONA AT THE LENGTH THE WORK NEEDS. A persona that lists every file in the repository is not more specialised, it is less usable: the agent reads it before every invocation.
+
+## Ancestry
+
+Each entry names the canonical agent it derives from. For an agent that exists in the canonical roster, that is the agent itself.
+
+If this project needs an agent the canonical roster does not have, you may add one — but it MUST name the canonical agent it is closest to as its ancestor. That is not bookkeeping: an agent inherits its ladder, its tool grant and its output contract from its ancestor, so an agent invented from nothing has no budget, no tools and no way for the pipeline to receive what it returns. For mock3, the four minted roles (mocka-fares-investigator, mockb-schedule-investigator, fare-boundary-engineer, departure-board-engineer) are the clearest candidates for such additions if they don't already correspond 1:1 to canonical agents — anchor each to whichever canonical investigator or implementer agent it most resembles.
+
+`derivedFromSha256` is the SHA-256 of the ancestor's persona text exactly as it appears in the canonical copy you were given. It records what you derived from, so that a later change to the canonical roster is detectable rather than silent.
+
+## Which seam an agent enters by
+
+An agent does not run on its own. It enters the pipeline through a SEAM, which decides its ladder, its tool grant, its output contract and the prompt it executes. For an agent that exists in the canonical roster, the seam is already known and you do not state it.
+
+For an agent you ADD, name the seam in the `seam` field. It must be one the pipeline already declares — you are choosing which existing door this agent comes through, not inventing one. If none fits, the agent you are adding is doing work the pipeline has no place for, and adding it will not create that place.
+
+Omitting it does not leave the question open: the name is matched against patterns instead, and a pattern is a guess about what an agent does based on how it is spelled. That is how an agent named for review came to enter through an inference seam, with another seam's budget and tools.
+
+## What you are not doing
+
+You are not editing the canonical roster. You are not judging whether an agent should exist. You are not writing prompts — an agent's persona says who it is; its instructions for a task live in that task's prompt.
+__PREVIOUS_REFUSAL__

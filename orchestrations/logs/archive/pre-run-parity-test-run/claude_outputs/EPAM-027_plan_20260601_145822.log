@@ -1,0 +1,7 @@
+Plan record written. Here's the summary:
+
+**EPAM-027 Plan Complete**
+
+9 implementation steps across 5 files. The work flows shell → HTML: first extend `update-monitor.sh` and `sync-monitor-stories.sh` to carry `provider`/`model` into agent-status.json, then update `monitor.html` (badge, filter, phase approval, lane summaries) and `orchestration-plan.html` (fix wrong field name + add badges), then add graceful-degradation guards and a new UI test file. `prd-viewer.html` is already a complete reference — no changes needed.
+
+Top risk: **cpaGate is "block"** at 0.48 confidence — the story was flagged before execution. The implementation agent should re-confirm the phase approval state data format with EPAM-024 outputs before coding Step 5, and treat the prd-viewer badge CSS as the locked reference for all new badge markup.

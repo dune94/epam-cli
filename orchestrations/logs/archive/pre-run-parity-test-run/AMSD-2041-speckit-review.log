@@ -1,0 +1,195 @@
+# Prompt
+You are the speckit specification agent for EPAM CLI. Phase core, story AMSD-2041.
+
+You are reviewing and building on the openspec agent's output for this story.
+Your role is COLLABORATIVE — you are NOT starting from scratch. Instead:
+1. Review openspec's proposed acceptance criteria for testability and completeness
+2. Add missing edge-case, error-handling, security, and accessibility criteria
+3. Flag any AC that are vague, untestable, or overlapping
+4. Splitting is openspec's decision alone — you do NOT split stories. If openspec already split
+   this story, do NOT include a "splitStories" field in your output at all (it will be ignored if
+   you do). Review and refine the acceptanceCriteria openspec gave you for the UNSPLIT story as
+   normal; per-child refinement of an already-split story's children happens on a later turn, not
+   here.
+5. Do NOT remove or duplicate openspec's good work — build on it
+
+━━━ WHAT-NOT-HOW RULE (MANDATORY) ━━━
+Every AC must describe an OBSERVABLE OUTCOME (what a test can verify from outside the code),
+NOT an implementation instruction. If an AC names vi.mock, jest.fn, mockReturnValue,
+mockResolvedValue, import statements, or require() calls, REPLACE it with a
+Given/When/Then behaviour statement. Never tell the implementer which library or mock pattern to use.
+
+OPENSPEC'S OUTPUT (your input to review — ACs and split proposals only):
+{
+  "acceptanceCriteria": [],
+  "notes": "Novel capability — Live Preview integration with Contentstack CMS. No existing fix site; the work attaches into the central content context and its consumer hook. VCs derived entirely from description since ACs are empty. Criteria stop at our side of the Contentstack API boundary."
+}
+
+ORIGINAL STORY CONTEXT:
+{
+  "id": "AMSD-2041",
+  "title": "[GO, UP, MX] Live Preview of Content in CMS",
+  "description": "[GO, UP, MX] Live Preview of Content in CMS",
+  "originalAcceptanceCriteria": [],
+  "technicalNotes": {
+    "files": [
+      "src/context/contentstackContext.tsx",
+      "src/hooks/useContent.ts",
+      "src/components/contentstack/ContentstackAttention/content.mock.ts",
+      "src/components/contentstack/ContentStackGallery/ContentStackGallery.mock.ts",
+      "src/interface/content/contentCard.ts"
+    ],
+    "perCodeline": {
+      "metrolinx": {
+        "files": [
+          "src/context/contentstackContext.tsx",
+          "src/hooks/useContent.ts",
+          "src/components/contentstack/ContentstackAttention/content.mock.ts",
+          "src/components/contentstack/ContentStackGallery/ContentStackGallery.mock.ts",
+          "src/interface/content/contentCard.ts"
+        ],
+        "resolved": [
+          {
+            "declared": "src/context/contentstackContext.tsx",
+            "actual": "src/context/contentstackContext.tsx",
+            "match": "exact",
+            "verified_against": "/home/bradleyjerome/projects/metrolinx/next.metrolinx.com"
+          },
+          {
+            "declared": "src/hooks/useContent.ts",
+            "actual": "src/hooks/useContent.ts",
+            "match": "exact",
+            "verified_against": "/home/bradleyjerome/projects/metrolinx/next.metrolinx.com"
+          },
+          {
+            "declared": "src/components/contentstack/ContentstackAttention/content.mock.ts",
+            "actual": "src/components/contentstack/ContentstackAttention/content.mock.ts",
+            "match": "exact",
+            "verified_against": "/home/bradleyjerome/projects/metrolinx/next.metrolinx.com"
+          },
+          {
+            "declared": "src/components/contentstack/ContentStackGallery/ContentStackGallery.mock.ts",
+            "actual": "src/components/contentstack/ContentStackGallery/ContentStackGallery.mock.ts",
+            "match": "exact",
+            "verified_against": "/home/bradleyjerome/projects/metrolinx/next.metrolinx.com"
+          },
+          {
+            "declared": "src/interface/content/contentCard.ts",
+            "actual": "src/interface/content/contentCard.ts",
+            "match": "exact",
+            "verified_against": "/home/bradleyjerome/projects/metrolinx/next.metrolinx.com"
+          }
+        ],
+        "unresolved": []
+      }
+    }
+  },
+  "dependencies": []
+}
+
+Produce your refined output as raw JSON only (no XML tags, no markdown fences, no preamble). Include:
+- "acceptanceCriteria": The FULL merged list (openspec's criteria + your additions/refinements). Every item MUST be an observable outcome, not an implementation instruction.
+- "notes": What you changed and why (be specific — cite which criteria you added/modified/replaced)
+- "splitStories": ALWAYS omit this field. Splitting is openspec's decision alone — never propose
+  split children of your own, even if openspec already split this story.
+- "acAddedBySpeckit": Array of criteria YOU added that were not in openspec's output
+- "acModifiedBySpeckit": Array of {"original":"...","revised":"..."} for criteria you reworded
+- "acFlagged": Array of {"criterion":"...","flag":"..."} for criteria that need human attention
+
+For a brownfield story with a real codeline, you may have read-only tools (read_file,
+list_files, search) available this turn — if so, USE them for real to check a file's
+actual contents before relying on it; do not invent what a tool would return. For a
+greenfield story with no existing codeline, you have none — give your best answer from
+the description, title and paths you were given, and say so in "notes" if the file
+contents would have changed your answer. Either way, never narrate an imagined tool
+result: a real answer with an honest caveat is worth everything; fabricated tool-call
+syntax (<tool_call>, <tool_use>, <function_call>) is worth nothing — it is discarded in
+full and the work is lost (observed live, 2026-07-28: exactly this, on an empty-criteria
+story that got no answer at all).
+
+
+# Output
+```json
+{
+  "acceptanceCriteria": [
+    {
+      "id": "AC-1",
+      "criterion": "Given the application is running with Contentstack Live Preview enabled, When a CMS author edits a published entry in Contentstack, Then the consuming page reflects the updated content without a full page reload."
+    },
+    {
+      "id": "AC-2",
+      "criterion": "Given the application is running without Live Preview enabled (e.g. production build, no preview hash in URL), When any page loads, Then all content is fetched and rendered identically to the current behavior with zero regression."
+    },
+    {
+      "id": "AC-3",
+      "criterion": "Given the ContentstackContext is mounted, When Live Preview sends an entry-change event for a content type present in the context (page, header, footer, onboarding, directories), Then the context value updates to include the edited field values and any component consuming via useContent().getContentByKey receives the updated value."
+    },
+    {
+      "id": "AC-4",
+      "criterion": "Given a Live Preview entry-change event is received, When the event payload is merged into the context, Then the resulting data still conforms to the IContentstackContext interface shape — no properties are removed, no extraneous top-level keys are introduced, and nested structures (page_components, seo, site_architecture, etc.) remain traversable."
+    },
+    {
+      "id": "AC-5",
+      "criterion": "Given the Live Preview SDK initialization is called with missing or invalid configuration (e.g. empty stack API key, missing host), When the application loads, Then it logs a descriptive error and falls back to standard non-preview content fetching without crashing."
+    },
+    {
+      "id": "AC-6",
+      "criterion": "Given the application is in Live Preview mode, When a network error or SDK runtime error occurs during an entry-change event, Then the previously rendered content remains visible and the application does not enter a broken or blank state."
+    },
+    {
+      "id": "AC-7",
+      "criterion": "Given the application is in Live Preview mode, When a CMS author navigates between different entries or content types, Then each entry-change event updates only the relevant content slice in the context (e.g. a page edit does not overwrite header data)."
+    },
+    {
+      "id": "AC-8",
+      "criterion": "Given the application is in Live Preview mode, When the preview session ends or the preview query parameters are removed from the URL, Then the application returns to displaying published content on the next navigation or page load."
+    },
+    {
+      "id": "AC-9",
+      "criterion": "Given the application is in Live Preview mode, When rich-text fields (e.g. attention_block_copy with type 'doc', children, uid structure) are edited, Then the merged content preserves the rich-text document structure so that any rich-text renderer consuming the data renders correctly."
+    },
+    {
+      "id": "AC-10",
+      "criterion": "Given the application is in Live Preview mode, When Cloudinary image fields within modular blocks (e.g. image_gallery_image arrays) are edited, Then the updated image data (public_id, secure_url, width, height, context.custom.alt) is reflected in the rendered gallery component."
+    },
+    {
+      "id": "AC-11",
+      "criterion": "Given the Live Preview feature is active, When the page is loaded, Then no console errors or warnings related to Live Preview SDK initialization, event subscription, or data merging are emitted for valid configurations."
+    },
+    {
+      "id": "AC-12",
+      "criterion": "Given the application is in Live Preview mode, When multiple rapid entry-change events are fired (e.g. author typing quickly), Then the context applies the latest event's data and does not render stale intermediate states."
+    }
+  ],
+  "notes": "Openspec provided empty acceptanceCriteria, so all criteria are new. I examined the actual codebase to ground them: (1) contentstackContext.tsx exports only a context object and interface — no provider component, so Live Preview integration must supply a provider that wraps the app and manages state. (2) useContent.ts exposes getContentByKey via getValue — Live Preview must ensure merged data is accessible through this existing API. (3) The mock data reveals Contentstack entry shapes including rich-text docs (type:'doc', children, uid), modular blocks with Cloudinary images, and metadata fields (_version, publish_details) — AC-9 and AC-10 ensure these nested structures survive the merge. (4) No @contentstack/live-preview-sdk package is currently installed, so AC-5 guards against bad initialization config. (5) AC-2 is the critical regression guard: production behavior must be unchanged. AC-6 and AC-12 address error resilience and race conditions respectively. AC-7 ensures cross-content-type isolation. AC-8 covers session teardown. I could not locate the provider component or page-level integration point — the context file only defines the shape — so these ACs are written against the observable behavior of the context + hook contract, not a specific provider file.",
+  "acAddedBySpeckit": [
+    "AC-1",
+    "AC-2",
+    "AC-3",
+    "AC-4",
+    "AC-5",
+    "AC-6",
+    "AC-7",
+    "AC-8",
+    "AC-9",
+    "AC-10",
+    "AC-11",
+    "AC-12"
+  ],
+  "acModifiedBySpeckit": [],
+  "acFlagged": [
+    {
+      "criterion": "AC-1",
+      "flag": "Requires a test environment with Contentstack Live Preview SDK configured and a CMS authoring session — may need an integration/E2E test strategy rather than unit-only. Verify team has access to a Contentstack preview environment."
+    },
+    {
+      "criterion": "AC-3",
+      "flag": "The current contentstackContext.tsx has no provider component — only a createContext call. The implementation must introduce a provider. This AC assumes one will exist; if the provider lives in a different story, this AC may need to move."
+    },
+    {
+      "criterion": "AC-9",
+      "flag": "Depends on how Contentstack Live Preview SDK delivers rich-text diffs (full doc replacement vs. partial patch). If the SDK delivers full entry payloads, this is trivially satisfied; if it delivers field-level patches, the merge logic must handle doc-structure merging correctly."
+    }
+  ]
+}
+```

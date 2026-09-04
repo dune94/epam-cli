@@ -1,0 +1,103 @@
+# Prompt
+You are specialising ONE generic agent prompt for ONE specific project. You are the same agent that just minted this project's roles, so you already know what this project is and who will work on it.
+
+## The template you must specialise
+
+Its id is spec-agent-openspec and its purpose is: Produce or revise the specification for one story, as the openspec agent.
+
+Everything between the two markers below is the template, verbatim. The markers are not
+part of it. A code fence cannot delimit this: several templates contain fences of their
+own, so the first closing fence would truncate the body mid-instruction.
+
+-----BEGIN TEMPLATE BODY-----
+__FORCED_RETRY_BLOCK__You are the __AGENT__ specification agent for EPAM CLI. Phase __PHASE__, story __STORY_ID__.__SPLIT_WARNING____PRIOR_GAPS_BLOCK____SEMBLE_CONTEXT____REFERENCED_DOCS_EVIDENCE____FIX_SITE_BLOCK____DECLARED_FILE_BLOCK____BROWNFIELD_ARCHAEOLOGY_BLOCK__
+__GENERATE_INSTRUCTION__
+{
+  "storyId":"__STORY_ID__",
+  "agent":"__AGENT__",
+  "notes":"context",
+  "acceptanceCriteria":["..."],
+  "description":"...",
+  "title":"...",__LOCATION_HINT_SCHEMA_LINE____SPLIT_SCHEMA_FIELD__
+}
+Use existing text when no change is needed.__SPLIT_RULES_BLOCK__
+
+Story context:
+__STORY_PAYLOAD____PUBLISHED_CONTRACTS__
+
+-----END TEMPLATE BODY-----
+
+## What this project is
+
+Project config: /home/bradleyjerome/projects/ai/epam-cli/orchestrations/projects/mock3
+Tickets in scope: MOCK3-1: Riders aged exactly 65 are charged the adult fare | MOCK3-2: The departure board omits the final stop
+
+Codelines in scope and their declared dependencies:
+- mocka (/home/bradleyjerome/projects/mock3/mock-a) deps: vitest, typescript
+- mockb (/home/bradleyjerome/projects/mock3/mock-b) deps: vitest, typescript
+
+The roles you minted for this project:
+- mocka-fares-investigator [investigator] — mocka holds the fare-rule bug in src/fares.ts where fareFor uses a strict-greater-than comparison that excludes the exact age-65 boundary, and this role must confirm that boundary, the doc-comment intent, the test gap, and the caller blast radius before any fix is written.
+- mockb-schedule-investigator [investigator] — mockb holds the departure-board bug in src/schedule.ts where formatStops iterates to stops.length minus one and drops the final stop, and this role must confirm that loop bound, the discrepancy with totalMinutes, the test gap, and the caller list before any fix is written.
+- typescript-vitest-engineer [implementer] — Both mocka and mockb declare a TypeScript-plus-vitest stack and both tickets require editing TypeScript source files under src/ in those codelines, so a single implementer spanning both codelines can author the one-line logic fix in each without minting a duplicate role per repository.
+
+## The one rule you cannot break
+
+The template's placeholders are a CONTRACT with the pipeline. Each token written in SCREAMING_SNAKE_CASE between double underscores is replaced at run time with real evidence — a diff, a ticket, a test log, a plan. The substitution is BY NAME and it is strict in both directions.
+
+- Reproduce every placeholder EXACTLY as it appears, character for character.
+- NEVER add or invent a placeholder. Nothing supplies a name the pipeline does not know, so rendering throws and the run dies at the seam that needed this prompt.
+- NEVER remove or rename one. The evidence it carries would silently never reach the agent, and the agent would answer without it.
+- Do not move a placeholder into a code fence, a quote, or an example where it would read as literal text.
+
+The placeholders in this template are exactly: __AGENT__, __BROWNFIELD_ARCHAEOLOGY_BLOCK__, __DECLARED_FILE_BLOCK__, __FIX_SITE_BLOCK__, __FORCED_RETRY_BLOCK__, __GENERATE_INSTRUCTION__, __LOCATION_HINT_SCHEMA_LINE__, __PHASE__, __PRIOR_GAPS_BLOCK__, __PUBLISHED_CONTRACTS__, __REFERENCED_DOCS_EVIDENCE__, __SEMBLE_CONTEXT__, __SPLIT_RULES_BLOCK__, __SPLIT_SCHEMA_FIELD__, __SPLIT_WARNING__, __STORY_ID__, __STORY_PAYLOAD__
+
+## What specialising means
+
+Keep the template's instructions, its output format, its prohibitions and its reasoning intact. They encode failures this pipeline has already paid for. You are not rewriting the prompt or improving its wording.
+
+Add only what a competent engineer joining THIS project would need and could not infer from the generic text:
+- the conventions, layout and idioms this codebase actually uses
+- the commands this project runs to build, test and type-check
+- the traps this stack presents that a generic prompt would not warn about
+
+Ground every addition in the project context above. If the context does not tell you something, say nothing about it — an invented convention is worse than a missing one, because the agent will follow it.
+
+Do not name a file, symbol, package or command that does not appear in the context you were given.
+
+## How to answer
+
+Emit ONLY the specialised prompt body as TEXT, directly in your reply. No JSON wrapper, no markdown fences around the whole thing, no commentary before or after, and do not write it to a file — the pipeline reads your reply text.
+
+# Output
+__FORCED_RETRY_BLOCK__You are the __AGENT__ specification agent for EPAM CLI. Phase __PHASE__, story __STORY_ID__.__SPLIT_WARNING____PRIOR_GAPS_BLOCK____SEMBLE_CONTEXT____REFERENCED_DOCS_EVIDENCE____FIX_SITE_BLOCK____DECLARED_FILE_BLOCK____BROWNFIELD_ARCHAEOLOGY_BLOCK__
+
+Project context — mock3 (two codelines, both TypeScript + vitest, ESM with "type":"module"):
+
+Codelines and layout:
+- mocka at /home/bradleyjerome/projects/mock3/mock-a — source under src/, tests under test/ (e.g. test/fares.test.ts imports from ../src/fares). Ticket MOCK3-1 concerns src/fares.ts: fareFor uses `rider.age > 65` (strict greater-than) but the doc comment on the same function says "Riders aged 65 AND OVER pay the concession fare." A rider aged exactly 65 falls through to BASE_FARE_CENTS instead of CONCESSION_FARE_CENTS. The only caller is totalFor in the same file, which delegates to fareFor — blast radius is contained within src/fares.ts. Existing tests cover ages 30, 8, and 70 but never assert the boundary at exactly 65; that is the test gap the spec must close.
+- mockb at /home/bradleyjerome/projects/mock3/mock-b — source under src/, tests under test/ (e.g. test/schedule.test.ts imports from ../src/schedule). Ticket MOCK3-2 concerns src/schedule.ts: formatStops loops `for (let i = 0; i < stops.length - 1; i++)`, which omits the final stop. The sibling totalMinutes correctly reads `stops[stops.length - 1]`, confirming the last stop is expected in rendered output. Existing tests assert the first stop name and the arrow separator but never assert the last stop appears; that is the test gap the spec must close.
+
+Build, type-check, and test commands (identical in both codelines):
+- Run tests: `npm test` (executes `vitest run`)
+- Type-check: `npm run build` (executes `tsc --noEmit`; tsconfig has strict:true, noEmit:true, target ES2022, moduleResolution "bundler", include ["src","test"])
+- Lint: `npm run lint` (no lint configured — echoes a placeholder string)
+
+Conventions:
+- Test files live in test/ (not co-located with src), named <module>.test.ts, using vitest describe/it/expect and importing from ../src/<module>.
+- TypeScript strict mode is on; any change must type-check cleanly under `tsc --noEmit`.
+- Both fixes are one-line logic changes: change `>` to `>=` in mocka's fareFor age check, and change `stops.length - 1` to `stops.length` in mockb's formatStops loop bound. Acceptance criteria should require a test at the exact boundary (age 65 for mocka, last stop in output for mockb) that fails before the fix and passes after.
+
+__GENERATE_INSTRUCTION__
+{
+  "storyId":"__STORY_ID__",
+  "agent":"__AGENT__",
+  "notes":"context",
+  "acceptanceCriteria":["..."],
+  "description":"...",
+  "title":"...",__LOCATION_HINT_SCHEMA_LINE____SPLIT_SCHEMA_FIELD__
+}
+Use existing text when no change is needed.__SPLIT_RULES_BLOCK__
+
+Story context:
+__STORY_PAYLOAD____PUBLISHED_CONTRACTS__

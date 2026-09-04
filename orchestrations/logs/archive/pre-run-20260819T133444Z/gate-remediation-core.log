@@ -1,0 +1,39 @@
+The blocker finding is against `package.json`, which is not in any story's `technicalNotes.files` array. The only story in the `core` phase is `AMSD-2041` (listed in `implementationOrder.core`). Per the fallback rule, I assign it to that story.
+
+Verbatim log line proving the finding:
+
+```
+{"severity":"blocker","rule":"dependency-cve-critical-runtime","file":"package.json","line":1,"description":"Dependency audit (hard evidence): '[critical] (runtime) next-auth: Auth.js: Email normalizer validates the address before Unicode normalization, allowing a homoglyph attack'. next-auth is tagged (runtime) — the shipped artefact loads it, and a critical advisory in a runtime dependency is a blocker per the severity policy.","suggestedFix":"Upgrade next-auth to the version patched for the Auth.js email-normalizer homoglyph advisory, then re-run the dependency audit and confirm the critical count is 0."}
+```
+
+```json
+{
+  "gate": "sast-sentinel",
+  "story_id": "AMSD-2041",
+  "file": "package.json",
+  "line": 1,
+  "rule": "dependency-cve-critical-runtime",
+  "message": "Critical CVE in runtime dependency next-auth: Auth.js email normalizer homoglyph attack (validates before Unicode normalization).",
+  "suggested_fix": "Upgrade next-auth to the version patched for the Auth.js email-normalizer homoglyph advisory, then re-run the dependency audit and confirm the critical count is 0."
+}
+```
+```json
+{
+  "story_id": "AMSD-2041",
+  "acs_added": 2,
+  "acs": [
+    "package.json MUST NOT declare next-auth at a version with a critical CVE for the Auth.js email-normalizer homoglyph advisory (rule: dependency-cve-critical-runtime). Verify with: `npm audit --json 2>/dev/null | node -e \"const a=JSON.parse(require('fs').readFileSync(0,'utf8'));const m=Object.values(a.vulnerabilities||{}).filter(v=>v.name==='next-auth'&&v.severity==='critical');process.exit(m.length>0?1:0)\"` — exit 0 required.",
+    "package.json MUST NOT contain any runtime dependency flagged as critical by npm audit (rule: dependency-cve-critical-runtime). Verify with: `npm audit --omit=dev --audit-level=critical 2>&1 | grep -c 'critical' | xargs -I{} test {} -eq 0` — exit 0 required."
+  ]
+}
+```
+The file has been written successfully. Here is the required JSON summary:
+
+```json
+{
+  "profile": "contentstack-live-preview-engineer",
+  "profile_updated": true,
+  "rule_id": "dependency-cve-critical-runtime",
+  "rule_text": "## Self-Healing Addendum\n\n- **Rule dependency-cve-critical-runtime** — Critical CVE in a runtime dependency (e.g. next-auth homoglyph/email-normalizer advisory). You MUST NOT ship a runtime dependency that carries a critical CVE. Before completing any story that touches package.json or adds/upgrades a runtime dependency, run the dependency audit (npm audit or the project equivalent), identify any package flagged at critical severity, and upgrade it to the patched version before considering the story done. After upgrading, re-run the audit and confirm the critical count is 0. Grep to verify no vulnerable pinned version remains: `grep -n \"next-auth\" package.json` — if the version line still matches the advisory-affected range, the fix is incomplete."
+}
+```

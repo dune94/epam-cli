@@ -1,0 +1,109 @@
+[ai-run] attempt 2/3 for 'qa-gate:mutant-hunter' — escalating z-ai/glm-5.2 -> moonshotai/kimi-k3
+{
+  "agent": "mutant-hunter",
+  "phase": "core",
+  "summary": { "mutationsProposed": 11, "killed": 6, "survived": 3, "noCoverage": 2, "mutationScore": 55 },
+  "mutations": [
+    {
+      "file": "src/fares.ts",
+      "line": 8,
+      "originalCode": "if (rider.hasPass) return 0;",
+      "mutatedCode": "if (rider.hasPass) return BASE_FARE_CENTS;",
+      "status": "killed",
+      "relatedTest": "charges nothing when the rider holds a pass (test/fares.test.ts:10)",
+      "recommendation": "None — existing assertion on pass-holder fare catches this."
+    },
+    {
+      "file": "src/fares.ts",
+      "line": 8,
+      "originalCode": "if (rider.hasPass) return 0;",
+      "mutatedCode": "guard removed entirely",
+      "status": "killed",
+      "relatedTest": "charges nothing when the rider holds a pass (test/fares.test.ts:10)",
+      "recommendation": "None — pass test fails with guard removed."
+    },
+    {
+      "file": "src/fares.ts",
+      "line": 9,
+      "originalCode": "if (rider.age >= 65) return CONCESSION_FARE_CENTS;",
+      "mutatedCode": "if (rider.age > 65) return CONCESSION_FARE_CENTS;",
+      "status": "killed",
+      "relatedTest": "charges the concession fare at the senior boundary (age 65) (test/fares.test.ts:19)",
+      "recommendation": "None — the exact boundary test kills the off-by-one."
+    },
+    {
+      "file": "src/fares.ts",
+      "line": 9,
+      "originalCode": "if (rider.age >= 65) return CONCESSION_FARE_CENTS;",
+      "mutatedCode": "if (rider.age >= 64) return CONCESSION_FARE_CENTS;",
+      "status": "survived",
+      "relatedTest": null,
+      "recommendation": "Add a test for age 64 expecting BASE_FARE_CENTS to pin the senior threshold from below."
+    },
+    {
+      "file": "src/fares.ts",
+      "line": 9,
+      "originalCode": "if (rider.age >= 65) return CONCESSION_FARE_CENTS;",
+      "mutatedCode": "if (rider.age >= 65) return BASE_FARE_CENTS;",
+      "status": "killed",
+      "relatedTest": "charges the concession fare well past the senior boundary (age 70) and at the boundary (age 65) (test/fares.test.ts:16,19)",
+      "recommendation": "None — senior tests fail."
+    },
+    {
+      "file": "src/fares.ts",
+      "line": 10,
+      "originalCode": "if (rider.age < 13) return CONCESSION_FARE_CENTS;",
+      "mutatedCode": "if (rider.age <= 13) return CONCESSION_FARE_CENTS;",
+      "status": "survived",
+      "relatedTest": null,
+      "recommendation": "Add a test for age 13 expecting BASE_FARE_CENTS — the upper child boundary is untested."
+    },
+    {
+      "file": "src/fares.ts",
+      "line": 10,
+      "originalCode": "if (rider.age < 13) return CONCESSION_FARE_CENTS;",
+      "mutatedCode": "if (rider.age < 12) return CONCESSION_FARE_CENTS;",
+      "status": "survived",
+      "relatedTest": null,
+      "recommendation": "Add a test for age 12 expecting CONCESSION_FARE_CENTS to pin the lower side of the child boundary."
+    },
+    {
+      "file": "src/fares.ts",
+      "line": 10,
+      "originalCode": "if (rider.age < 13) return CONCESSION_FARE_CENTS;",
+      "mutatedCode": "if (rider.age < 13) return BASE_FARE_CENTS;",
+      "status": "killed",
+      "relatedTest": "charges the concession fare for a child (test/fares.test.ts:13)",
+      "recommendation": "None — child test fails."
+    },
+    {
+      "file": "src/fares.ts",
+      "line": 11,
+      "originalCode": "return BASE_FARE_CENTS;",
+      "mutatedCode": "return CONCESSION_FARE_CENTS;",
+      "status": "killed",
+      "relatedTest": "charges the base fare for an adult (test/fares.test.ts:6)",
+      "recommendation": "None — adult test fails."
+    },
+    {
+      "file": "src/fares.ts",
+      "line": 15,
+      "originalCode": "return riders.reduce((sum, r) => sum + fareFor(r), 0);",
+      "mutatedCode": "return riders.reduce((sum, r) => sum + fareFor(r), BASE_FARE_CENTS);",
+      "status": "no-coverage",
+      "relatedTest": null,
+      "recommendation": "totalFor has zero tests. Add tests for empty array (expect 0) and multi-rider sums to catch a seeded accumulator."
+    },
+    {
+      "file": "src/fares.ts",
+      "line": 15,
+      "originalCode": "return riders.reduce((sum, r) => sum + fareFor(r), 0);",
+      "mutatedCode": "return riders.reduce((sum, r) => sum - fareFor(r), 0);",
+      "status": "no-coverage",
+      "relatedTest": null,
+      "recommendation": "totalFor is untested; an arithmetic-operator mutation would go undetected. Add a summation test with heterogeneous riders."
+    }
+  ],
+  "verdict": "warn",
+  "reason": "fareFor branch logic is well-tested for the pass, adult, child, and senior-boundary paths (6/6 boundary-relevant mutations killed), but the child upper boundary at age 13 and the entire totalFor function are uncovered: 3 mutations survived and 2 had no coverage, for a mutation score of 55%. Thresholds applied: pass ≥ 90%, warn 50–89%, fail < 50%. This is monetary accounting, so the untested totalFor aggregation and the open age-12/13 boundary should be closed before relying on this suite."
+}

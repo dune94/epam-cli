@@ -1,0 +1,15 @@
+Assessment complete. Both outputs are now written (retry succeeded):
+
+**Assessment record** appended to `phase-skill-assessments.jsonl` (under `flock`):
+```json
+{"phase_id":"core","phase_name":"core","actual_minutes":0.35,"forecast_minutes":2.256,"actual_cost_usd":0.0025,"forecast_cost_usd":0.0351,"variance_minutes":-1.906,"variance_cost_usd":-0.0326,"over_threshold":false,"agent_recommendations":[],"notes":"Single story task MOCK-HW-1 (typescript-engineer)... No agentRole mismatches; no pending stories in later phases, so PRD unmodified."}
+```
+
+**Improvement report** written to `phase-improvements/core.md`.
+
+Key findings:
+- **MOCK-HW-1** is the only forecast-bearing task in phase `core`. Two log records existed; the latest by `started_at` (04:35:33, status "attempt", 0.35 min) was used. PRD `completed: true` confirms success.
+- **Under forecast on both axes:** time −84.5% (0.35 vs 2.256 min), cost −92.9% ($0.0025 vs $0.0351). `over_threshold: false`.
+- **No improvements needed** — `agent_recommendations` is empty.
+- **No corrective role changes:** MOCK-HW-1 is a TypeScript fix correctly assigned to `typescript-engineer`, and the PRD has no pending stories in later phases to modify. PRD left untouched.
+- Notable observation documented in the report: orchestration overhead (spec-pass, 3 team-lead runs, 6 qa-gates) totaled ~$0.2649 — roughly 100× the story execution cost, worth considering for trivial phases.

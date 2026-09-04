@@ -1,0 +1,1 @@
+{"agent":"perf-sentinel","phase":"core","summary":{"filesAnalysed":2,"findingsCount":0,"blockerCount":0,"estimatedStartupImpactMs":0},"findings":[],"verdict":"not_applicable","notes":["Change is a trivial string literal update in a hello-world module — no algorithmic, memory, async, startup, or provider patterns to evaluate."]}

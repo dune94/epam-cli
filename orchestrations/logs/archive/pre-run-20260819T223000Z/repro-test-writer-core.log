@@ -1,0 +1,55 @@
+[repro-test-writer] target from the plan's fix site: src/services/contentstack.ts
+/home/bradleyjerome/projects/ai/epam-cli/orchestrations/scripts/brownfield-repro-test-writer.sh: line 287: render_engine_prompt: command not found
+/home/bradleyjerome/projects/ai/epam-cli/orchestrations/scripts/brownfield-repro-test-writer.sh: line 288: render_engine_prompt: command not found
+/home/bradleyjerome/projects/ai/epam-cli/orchestrations/scripts/brownfield-repro-test-writer.sh: line 289: render_engine_prompt: command not found
+[repro-test-writer] writing test for AMSD-2041 (kind: novel) → src/services/contentstack.spec.ts (convention: .spec.ts, example: src/services/__tests__/contactUsService.spec.ts)
+[repro-test-writer] attempt 1 failed (class=no_file) — invoking self-heal analyst
+[repro-test-writer]   self-heal analyst ran for attempt 2 — enforcement applied from the KB
+[repro-test-writer] ladder escalation (attempt 2/3) — z-ai/glm-5.2 → moonshotai/kimi-k3
+  [SelfHeal/KB] constraints applied for repro-test-writer (story:AMSD-2041): repro-test-writer-class-no-file
+[repro-test-writer] attempt 2: test was written but does NOT parse/run — discarding it (class=invalid_test)
+[repro-test-writer] attempt 2 failed (class=invalid_test) — invoking self-heal analyst
+[repro-test-writer]   self-heal analyst ran for attempt 3 — enforcement applied from the KB
+[repro-test-writer] WARNING: NO ladder escalation on attempt 3/3 — at the top of the declared chain (moonshotai/kimi-k3)
+  [SelfHeal/KB] constraints applied for repro-test-writer (story:AMSD-2041): repro-test-writer-class-no-file,repro-test-writer-class-invalid-test
+[repro-test-writer] test produced and validated on attempt 3 (model moonshotai/kimi-k3)
+[repro-test-writer] WARNING: commit failed — repro-gate will report. Output:
+[repro-test-writer] WARNING: [STARTED] Preparing lint-staged...
+[SUCCESS] Preparing lint-staged...
+[STARTED] Running tasks for staged files...
+[STARTED] .lintstagedrc.js — 1 file
+[STARTED] src/**/*.ts?(x) — 1 file
+[STARTED] src/**/*.(ts|js)?(x) — 1 file
+[STARTED] **/*.(md|json|html) — 0 files
+[STARTED] src/**/*.css — 0 files
+[SKIPPED] **/*.(md|json|html) — no files
+[SKIPPED] src/**/*.css — no files
+[STARTED] npm run check-types
+[STARTED] eslint /home/bradleyjerome/projects/metrolinx/next.metrolinx.com/src/serv…
+[FAILED] eslint /home/bradleyjerome/projects/metrolinx/next.metrolinx.com/src/services/contentstack.spec.ts [FAILED]
+[FAILED] eslint /home/bradleyjerome/projects/metrolinx/next.metrolinx.com/src/services/contentstack.spec.ts [FAILED]
+[FAILED] eslint /home/bradleyjerome/projects/metrolinx/next.metrolinx.com/src/services/contentstack.spec.ts [FAILED]
+[STARTED] Applying modifications from tasks...
+[SKIPPED] Skipped because of errors from tasks.
+[STARTED] Reverting to original state because of errors...
+[FAILED] npm run check-types [KILLED]
+[FAILED] npm run check-types [KILLED]
+[SUCCESS] Reverting to original state because of errors...
+[STARTED] Cleaning up temporary files...
+[SUCCESS] Cleaning up temporary files...
+
+✖ eslint /home/bradleyjerome/projects/metrolinx/next.metrolinx.com/src/services/contentstack.spec.ts:
+
+/home/bradleyjerome/projects/metrolinx/next.metrolinx.com/src/services/contentstack.spec.ts
+  165:9  error  'gatedContent' is never reassigned. Use 'const' instead  prefer-const
+
+✖ 1 problem (1 error, 0 warnings)
+  1 error and 0 warnings potentially fixable with the `--fix` option.
+
+
+✖ npm run check-types:
+
+> metrolinx-starter@0.1.0 check-types
+> tsc
+
+husky - pre-commit hook exited with code 1 (error)

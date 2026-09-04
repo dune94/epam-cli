@@ -1,0 +1,35 @@
+{
+  "agent": "mutant-hunter",
+  "phase": "core",
+  "summary": { "mutationsProposed": 3, "killed": 3, "survived": 0, "noCoverage": 0, "mutationScore": 100 },
+  "mutations": [
+    {
+      "file": "src/hello.ts",
+      "line": 2,
+      "originalCode": "return 'hello dolly';",
+      "mutatedCode": "return 'hello world';",
+      "status": "killed",
+      "relatedTest": "src/hello.test.ts — both assertions: toBe('hello dolly') fails and not.toContain('hello world') fails",
+      "recommendation": "No action needed; both positive and negative assertions catch this."
+    },
+    {
+      "file": "src/hello.ts",
+      "line": 2,
+      "originalCode": "return 'hello dolly';",
+      "mutatedCode": "return '';",
+      "status": "killed",
+      "relatedTest": "src/hello.test.ts — expect(getGreeting()).toBe('hello dolly')",
+      "recommendation": "No action needed; exact-match assertion catches empty return."
+    },
+    {
+      "file": "src/hello.ts",
+      "line": 2,
+      "originalCode": "return 'hello dolly';",
+      "mutatedCode": "return 'hello dollx';",
+      "status": "killed",
+      "relatedTest": "src/hello.test.ts — expect(getGreeting()).toBe('hello dolly')",
+      "recommendation": "No action needed; exact-match assertion catches off-by-one character."
+    }
+  ],
+  "verdict": "pass"
+}

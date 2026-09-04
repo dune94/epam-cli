@@ -1,0 +1,136 @@
+# Prompt
+You are the speckit specification agent for EPAM CLI. Phase core, story AMSD-2041.
+
+You are reviewing and building on the openspec agent's output for this story.
+Your role is COLLABORATIVE — you are NOT starting from scratch. Instead:
+1. Review openspec's proposed acceptance criteria for testability and completeness
+2. Add missing edge-case, error-handling, security, and accessibility criteria
+3. Flag any AC that are vague, untestable, or overlapping
+4. Splitting is openspec's decision alone — you do NOT split stories. If openspec already split
+   this story, do NOT include a "splitStories" field in your output at all (it will be ignored if
+   you do). Review and refine the acceptanceCriteria openspec gave you for the UNSPLIT story as
+   normal; per-child refinement of an already-split story's children happens on a later turn, not
+   here.
+5. Do NOT remove or duplicate openspec's good work — build on it
+
+━━━ WHAT-NOT-HOW RULE (MANDATORY) ━━━
+Every AC must describe an OBSERVABLE OUTCOME (what a test can verify from outside the code),
+NOT an implementation instruction. If an AC names vi.mock, jest.fn, mockReturnValue,
+mockResolvedValue, import statements, or require() calls, REPLACE it with a
+Given/When/Then behaviour statement. Never tell the implementer which library or mock pattern to use.
+
+OPENSPEC'S OUTPUT (your input to review — ACs and split proposals only):
+{
+  "acceptanceCriteria": [],
+  "notes": "Novel capability — no live preview mechanism exists. Attachment points are useContent (called by 236+ components) and ContentstackContext (the provider). ACs were empty, so derived from the description's claim of 'real-time updates to content rendered in a preview context'. VCs stop at the Contentstack boundary (mocked client).",
+  "splitStories": []
+}
+
+ORIGINAL STORY CONTEXT:
+{
+  "id": "AMSD-2041",
+  "title": "[GO, UP, MX] Live Preview of Content in CMS",
+  "description": "[GO, UP, MX] Live Preview of Content in CMS",
+  "originalAcceptanceCriteria": [],
+  "technicalNotes": null,
+  "dependencies": []
+}
+
+Produce your refined output as raw JSON only (no XML tags, no markdown fences, no preamble). Include:
+- "acceptanceCriteria": The FULL merged list (openspec's criteria + your additions/refinements). Every item MUST be an observable outcome, not an implementation instruction.
+- "notes": What you changed and why (be specific — cite which criteria you added/modified/replaced)
+- "splitStories": ALWAYS omit this field. Splitting is openspec's decision alone — never propose
+  split children of your own, even if openspec already split this story.
+- "acAddedBySpeckit": Array of criteria YOU added that were not in openspec's output
+- "acModifiedBySpeckit": Array of {"original":"...","revised":"..."} for criteria you reworded
+- "acFlagged": Array of {"criterion":"...","flag":"..."} for criteria that need human attention
+
+
+# Output
+{
+  "acceptanceCriteria": [
+    {
+      "id": "AC-1",
+      "criterion": "Given a component rendered via useContent in live-preview mode, When content is edited in the CMS, Then the component re-renders with the updated content without requiring a manual page refresh."
+    },
+    {
+      "id": "AC-2",
+      "criterion": "Given a component rendered via useContent in non-preview (published) mode, When the live preview mechanism is active, Then the component's behavior and rendered output are identical to the current production behavior with no regressions."
+    },
+    {
+      "id": "AC-3",
+      "criterion": "Given the live preview connection is established, When the connection is lost due to network failure, Then a visible indicator is displayed informing the user that live preview is disconnected and content may be stale."
+    },
+    {
+      "id": "AC-4",
+      "criterion": "Given the live preview connection was previously lost, When the connection is restored, Then the preview automatically resumes receiving updates and the indicator reflects the connected state."
+    },
+    {
+      "id": "AC-5",
+      "criterion": "Given live preview is active, When a malformed or invalid content payload is received from the CMS, Then the previously rendered content remains displayed and an error indicator is shown without crashing the preview."
+    },
+    {
+      "id": "AC-6",
+      "criterion": "Given live preview is active, When rapid successive content updates are received (e.g., multiple field edits within one second), Then the component reflects the most recent content state without intermediate rendering artifacts or errors."
+    },
+    {
+      "id": "AC-7",
+      "criterion": "Given live preview is active, When content is received from the CMS, Then the content is sanitized before rendering to prevent injection of executable scripts or markup."
+    },
+    {
+      "id": "AC-8",
+      "criterion": "Given a user without preview access permissions, When they attempt to initiate a live preview session, Then the preview is not established and an appropriate access-denied message is displayed."
+    },
+    {
+      "id": "AC-9",
+      "criterion": "Given live preview is active and content updates are being applied, When a screen reader is in use, Then an accessible live-region announcement is made indicating that content has been updated."
+    },
+    {
+      "id": "AC-10",
+      "criterion": "Given the live preview connection was lost and then restored, When updates resume, Then the component renders the latest content from the CMS rather than stale content from before the disconnection."
+    },
+    {
+      "id": "AC-11",
+      "criterion": "Given multiple components on the same page consume useContent, When a content entry shared by those components is edited in the CMS, Then all affected components update to reflect the new content."
+    },
+    {
+      "id": "AC-12",
+      "criterion": "Given live preview is active, When the user navigates away from the preview context (e.g., closes the preview panel or navigates to a different route), Then the live preview connection is cleanly terminated without leaking resources or causing errors."
+    },
+    {
+      "id": "AC-13",
+      "criterion": "Given the ContentstackContext provider is not present in the component tree, When a component calls useContent, Then the component renders with published content as it does today, without errors."
+    }
+  ],
+  "notes": "Openspec produced empty ACs with a note identifying useContent (236+ consumers) and ContentstackContext as attachment points. I derived all 13 ACs from the story title's claim of 'Live Preview of Content in CMS' and openspec's note about 'real-time updates to content rendered in a preview context'. Key additions: AC-2 (backward compatibility — critical given 236+ consumers), AC-3/4 (connection lifecycle), AC-5 (malformed payload handling), AC-6 (rapid update debouncing), AC-7 (XSS/injection prevention), AC-8 (authorization), AC-9 (accessibility live-region), AC-10 (stale data on reconnect), AC-11 (multi-component shared content), AC-12 (resource cleanup), AC-13 (graceful degradation without provider). The original story description is extremely thin — these ACs are derived assumptions that need product owner validation.",
+  "acAddedBySpeckit": [
+    "AC-1",
+    "AC-2",
+    "AC-3",
+    "AC-4",
+    "AC-5",
+    "AC-6",
+    "AC-7",
+    "AC-8",
+    "AC-9",
+    "AC-10",
+    "AC-11",
+    "AC-12",
+    "AC-13"
+  ],
+  "acModifiedBySpeckit": [],
+  "acFlagged": [
+    {
+      "criterion": "AC-1",
+      "flag": "The original story description is just the title repeated. AC-1 assumes 'real-time' means sub-second push updates — product owner must confirm the expected latency threshold and whether polling is acceptable."
+    },
+    {
+      "criterion": "AC-8",
+      "flag": "Authorization model is unspecified. It is unclear whether preview access is controlled by Contentstack roles, a custom token, or something else. Product owner must clarify the auth mechanism."
+    },
+    {
+      "criterion": "AC-6",
+      "flag": "No specific performance threshold is defined for 'rapid successive updates.' Consider defining a maximum update frequency or debounce window with the product owner."
+    }
+  ]
+}

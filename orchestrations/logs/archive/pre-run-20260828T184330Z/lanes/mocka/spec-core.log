@@ -1,0 +1,12 @@
+spec-mode: fast-path claude/claude-haiku-4-5-20251001 (skipping MiniMax)
+spec-mode: detective for mocka = mocka-detective (minted for this codeline)
+spec-mode: fast-path claude/claude-haiku-4-5-20251001 (skipping MiniMax)
+spec-mode: fast-path claude/claude-haiku-4-5-20251001 (skipping MiniMax)
+spec-mode: fast-path claude/claude-haiku-4-5-20251001 (skipping MiniMax)
+spec-mode: MOCK3-1 — 6 verification criteria persisted (source: acceptance, resolution: clean)
+spec-mode: fast-path claude/claude-haiku-4-5-20251001 (skipping MiniMax)
+spec-mode: brownfield — ignoring 6 AC(s) speckit produced for MOCK3-1; ACs are out of scope and VCs come from the description
+spec-mode: fast-path claude/claude-haiku-4-5-20251001 (skipping MiniMax)
+spec-mode: fast-path claude/claude-haiku-4-5-20251001 (skipping MiniMax)
+spec-mode: MODEL_REVIEW: "items" is empty — a report about nothing is not a report
+spec-mode: completed for phase core (run 20260828T172102Z)

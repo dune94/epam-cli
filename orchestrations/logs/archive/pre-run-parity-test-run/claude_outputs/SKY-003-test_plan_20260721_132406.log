@@ -1,0 +1,22 @@
+The plan is complete and the log record has been written atomically. Here's a summary of what was produced:
+
+## Plan Summary for SKY-003-test
+
+**Plan file:** `/home/bradleyjerome/projects/ai/epam-cli/orchestrations/plans/SKY-003-test-plan.md`
+
+### Key Findings
+
+**6 Critical Defects in `cli.ts`** (must be escalated to the impl story before tests can pass):
+1. **No `--date` format validation** — AC-4 requires `^\d{4}-\d{2}-\d{2}$` regex check; current impl skips this entirely
+2. **No `src/table.ts` module** — `renderTable` is an inline void function in cli.ts; ACs require a separate module exporting `renderTable(flights: Flight[], currency?: string): string`
+3. **Wrong delimiter** — uses `'  '` (two spaces) instead of `' | '` (space-pipe-space) for all rows
+4. **`renderTable` returns void** instead of string
+5. **Currency handling** — uses code→symbol mapping instead of using API currency symbol with `£` fallback
+6. **RAPIDAPI_KEY error message** — missing `Error: ` prefix (AC requires exact `Error: RAPIDAPI_KEY environment variable is required`)
+
+### Plan Highlights
+- **20 tests** across two files: `cli.test.ts` (12 tests) and `table.test.ts` (8 tests)
+- **Mock strategy**: `vi.mock()` at module boundary for SkyscannerClient; `vi.spyOn` for process.exit/stdout/stderr
+- **Tests written against AC-specified behavior** (not broken implementation) — will fail until impl defects are fixed
+- **Estimated effort**: 9 hours (reduced from 15h combined estimate, accounting for defect escalation overhead)
+

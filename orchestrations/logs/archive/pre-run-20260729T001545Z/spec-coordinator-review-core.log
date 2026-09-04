@@ -1,0 +1,83 @@
+# Prompt
+You are the specification coordinator for the epam-cli orchestration system. Before every phase you read orchestrations/prd.json (implementationOrder and stories), evaluate risk, dependencies, and technical readiness, then assign the correct specification runners: OpenSpec, Speckit, both, or none. You write assignments into each story's specification.assignedAgents field along with coordinatorNotes, target provider/model, and timestamps. You understand the provider policy ledger (configuration.aiRuntime.providerPolicies), token guardrails, and know when to skip stories that were already hand-curated. When you plan a run you emit JSON compliant with spec-mode-runner.js so that automation can apply deltas deterministically. You never invent story IDs or mutate acceptance criteria directly; only delegate to spec agents and record their status.
+
+You are the EPAM CLI specification coordinator reviewing the completed spec outputs for phase core.
+
+Each story was processed by a sequential agent pipeline:
+  1. openspec elaborated requirements (AC refinement, story splits, technical depth)
+  2. speckit reviewed openspec's output (testability, security, edge cases, gap analysis)
+
+For each story, evaluate the quality of the collaborative spec work:
+1. Did both agents add meaningful, non-overlapping value?
+2. Are the acceptance criteria complete, testable, and non-overlapping?
+3. Are story splits logical and properly scoped?
+4. Flag any story needing human review.
+
+Respond with JSON between <SPEC_REVIEW> and </SPEC_REVIEW> using this schema:
+[
+  {"storyId":"REM-xxx","verdict":"approved|needs_review","reviewNotes":"coordinator observations","qualityScore":0.0-1.0,"flags":[]}
+]
+
+Stories to review:
+[
+  {
+    "id": "AMSD-2041",
+    "title": "[GO, UP, MX] Live Preview of Content in CMS",
+    "acceptanceCriteria": [],
+    "specification": {
+      "runId": "20260728T204704Z",
+      "assignedAgents": [
+        "openspec",
+        "speckit"
+      ],
+      "coordinatorNotes": "Story has empty acceptance criteria and null spec. Live Preview across GO, UP, MX locales is a complex feature requiring requirement elaboration (openspec first) followed by testability, security, and edge-case hardening (speckit). Security concerns include iframe sandboxing for preview rendering; edge cases include locale switching, content state synchronization, and preview latency.",
+      "status": "completed",
+      "updatedAt": "2026-07-28T21:02:18.106Z",
+      "appliedAgents": [
+        "openspec",
+        "speckit"
+      ],
+      "agentContributions": [
+        {
+          "agent": "openspec",
+          "applied": true,
+          "notes": "Story had empty acceptanceCriteria despite a detailed description covering three distinct behaviors (SDK init, draft fetch, real-time events). Added measurable ACs for each. VCs derived from description since ACs were originally empty. All VCs stop at our side of the Contentstack boundary (mocked client). No split needed — 5 ACs is well within limit.",
+          "acceptanceChanged": false,
+          "splitCount": 0,
+          "timestamp": "2026-07-28T21:01:51.426Z"
+        },
+        {
+          "agent": "speckit",
+          "applied": true,
+          "notes": "Openspec's acceptanceCriteria array was empty despite their notes claiming they added 5 measurable ACs for three behaviors (SDK init, draft fetch, real-time events). I created all ACs from scratch based on the story title, description, and openspec's noted three behaviors. AC-1 through AC-4 cover the three core behaviors (init, draft, real-time) plus entry switching. AC-5 through AC-8 add edge cases: network interruption/reconnection, auth failure, reference resolution, and rapid-update coalescing. AC-9 covers the multi-market (GO, UP, MX) localization requirement from the title. AC-10 covers malformed data error handling. AC-11 covers accessibility. All ACs are observable outcomes (Given/When/Then) with no implementation instructions. I could not review source files (no tool access), so these ACs are based solely on the story context and openspec's notes — if implementation files reveal additional behaviors, those should be incorporated in a later pass.",
+          "acceptanceChanged": false,
+          "splitCount": 0,
+          "timestamp": "2026-07-28T21:02:18.106Z"
+        }
+      ]
+    },
+    "splitChildren": []
+  }
+]
+
+<SPEC_REVIEW>
+</SPEC_REVIEW>
+
+# Output
+<SPEC_REVIEW>
+[
+  {
+    "storyId": "AMSD-2041",
+    "verdict": "needs_review",
+    "reviewNotes": "Critical pipeline failure: both agents report applied=true and acceptanceChanged=false, yet the story's acceptanceCriteria array remains empty []. Openspec claims it added 5 measurable ACs but they were not persisted. Speckit then created 11 ACs from scratch (core behaviors: SDK init, draft fetch, real-time events, entry switching; edge cases: network interruption, auth failure, reference resolution, rapid-update coalescing; plus multi-market GO/UP/MX localization, malformed data handling, and accessibility) — but these also did not persist. The collaborative value is effectively null: openspec's contribution was lost, and speckit compensated by doing full elaboration alone, defeating the sequential pipeline design. Additionally, speckit had no source file access, so ACs are derived solely from title/description without implementation context. Human must manually reconstruct the 11 ACs speckit described (or re-run the pipeline with persistence fixes) and verify they are complete, non-overlapping, and properly scoped. The described AC structure sounds reasonable but cannot be verified against the empty array.",
+    "qualityScore": 0.25,
+    "flags": [
+      "DATA_PERSISTENCE_FAILURE: Both agents marked applied=true but acceptanceCriteria is still []",
+      "PIPELINE_BREAKDOWN: Speckit had to perform openspec's elaboration role due to lost openspec output",
+      "NO_SOURCE_ACCESS: Speckit could not review implementation files; ACs may miss existing behaviors",
+      "ACCEPTANCE_CRITERIA_EMPTY: Final story state has zero acceptance criteria despite two completed agent passes",
+      "ACCEPTANCE_CHANGED_MISMATCH: Both agents report acceptanceChanged=false while claiming to have created ACs"
+    ]
+  }
+]
+</SPEC_REVIEW>

@@ -39,11 +39,55 @@ function config(env) {
   // counted as a url/port — correctly: moving the backend would have meant editing engine code.
   // The environment still outranks the file, as everywhere else in this pipeline.
   const d = declared();
-  const base = env.LANGFUSE_BASE_URL || '';
+  // RESOLVED THE WAY EVERY OTHER ENDPOINT IN THIS PIPELINE RESOLVES, because this install already
+  // knows where its own Langfuse is. This read LANGFUSE_BASE_URL and, finding it empty, gave up —
+  // right about not GUESSING a host, wrong about having nothing to consult.
+  //
+  // Live 2026-09-04, pipeline-tests-17: no sessions and no traces while Langfuse was healthy on
+  // :3110 and both keys had reached the run. The literal had been removed from .env earlier that
+  // day — correctly, because it was pinned to :3100, the compose default, which is wrong for every
+  // isolated install — on the assumption that the state-file fallback used everywhere else applied
+  // here too. This was the one consumer with no such fallback, so removing the literal turned
+  // emission off entirely, silently, on every install. "It worked in dev" was the tell: dev's
+  // Langfuse really is on :3100.
+  //
+  // Order matches service_url(): an explicit env var outranks everything, then THIS install's
+  // allocated port, then the declared default. Never a guess — every source is something the
+  // operator or the installer actually stated.
+  const base = env.LANGFUSE_BASE_URL || allocatedBase() || declaredBase() || '';
   // Absent stays absent: with no endpoint declared anywhere there is nothing to emit TO, and a
   // silent no-op is honest where a guessed host would post this run's data somewhere unintended.
   if (!base) return null;
   return { pk, sk, base: String(base).replace(/\/+$/, ''), timeoutMs: Number(env.LANGFUSE_TIMEOUT_MS || d.timeoutMs || 0) };
+}
+
+/** The install root: this file is <root>/orchestrations/scripts/lib/langfuse-emit.js. */
+function installRoot() {
+  return require('path').join(__dirname, '..', '..', '..');
+}
+
+/**
+ * The port THIS install actually allocated for Langfuse, from the identity install.sh persists on
+ * every successful bring-up — the same file service_url(), pre-run-reset.sh and
+ * pipeline-services.sh all read. An isolated install's Langfuse is never on the compose default.
+ */
+function allocatedBase() {
+  try {
+    const fs = require('fs');
+    const p = require('path').join(installRoot(), '.pipeline-services-state.env');
+    const m = fs.readFileSync(p, 'utf8').match(/^OBS_LANGFUSE_PORT=(\d+)\s*$/m);
+    return m ? `http://localhost:${m[1]}` : '';
+  } catch { return ''; }
+}
+
+/** The declared default, from the service registry every other consumer reads. */
+function declaredBase() {
+  try {
+    const fs = require('fs');
+    const p = require('path').join(installRoot(), 'orchestrations', 'config', 'services.json');
+    const j = JSON.parse(fs.readFileSync(p, 'utf8'));
+    return (j.services && j.services.langfuse && j.services.langfuse.url) || '';
+  } catch { return ''; }
 }
 
 /** The project's declared observability settings. Absent is not an error — it is "not declared". */

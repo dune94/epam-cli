@@ -157,8 +157,8 @@
       "$whyFlags": "Checked against the installed CLI's own --help, not assumed: --effort takes (low, medium, high, xhigh, max) and --autocompact takes auto or a token count. These were declared as CLAUDE_CODE_* env vars that the CLI does not document and that nothing exported.",
       "$whyNoTurnCap": "maxIterations is deliberately absent. It binds the ReAct loop in src/agent/AgentRunner.ts, which only the `epam run` arm enters; a --print call has no turn cap and the loop is Claude Code's own. Declaring one here would name a knob nothing can turn.",
       "$whyNoOutputCap": "maxOutputTokens is deliberately unmapped: the installed CLI documents no flag or env for it. It stays declared in modelOverrides so the intent is visible, and is not routed anywhere pretending to work.",
-      "emitsTraces": false,
-      "$emitsTraces": "Whether model calls made through this runner reach Langfuse. Traces are written by wrapWithTracing (src/observability/TracedProvider.ts), which only runs inside the epam CLI. A runner that shells out to a vendor CLI (claude, codemie-claude) never reaches it, so the observability preflight must not demand Langfuse for it \u2014 gating a run on a service nothing writes to aborts healthy launches (live 2026-09-04)."
+      "emitsTraces": true,
+      "$emitsTraces": "Whether model calls made through this runner reach Langfuse. TRUE for every runner: traces are emitted by lib/cost-emitter.js at the cost seam \u2014 the point every arm passes through with its model, tokens, cost and timing resolved \u2014 not by the TypeScript provider decorator, which only the epam arm reaches. Verified end-to-end 2026-09-04 by driving the real emitter and reading the session back out of Langfuse."
     }
   }
 }

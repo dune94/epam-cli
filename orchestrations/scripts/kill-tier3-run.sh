@@ -203,6 +203,8 @@ if [ -f "$_perim_lib" ] && [ -n "${JIRA_CODELINE_ROOT:-}" ] && [ -d "${JIRA_CODE
   . "$_perim_lib" 2>/dev/null || true
   if command -v perimeter_unlock >/dev/null 2>&1; then
     _unlocked=0
+    . "$_KILL_SCRIPT_DIR/lib/codeline-scope.sh"
+    require_codeline_root "the kill sweep" || exit 1
     for _cl in "$JIRA_CODELINE_ROOT"/*/; do
       [ -e "${_cl}.git" ] || continue
       perimeter_unlock "${_cl%/}" >/dev/null 2>&1 && _unlocked=$((_unlocked + 1))

@@ -409,6 +409,7 @@ info "Predictable teardown: resetting codelines to last verified baseline..."
 # shellcheck source=lib/codeline-scope.sh
 . "$SCRIPT_DIR/lib/codeline-scope.sh"
 _scoped=0
+require_codeline_root "the brownfield codeline reset" || exit 1
 for _cl_dir in "$JIRA_CODELINE_ROOT"/*/; do
   [ -d "${_cl_dir}.git" ] || continue
   codeline_in_scope "${_cl_dir%/}" "$PRD_FILE" || continue

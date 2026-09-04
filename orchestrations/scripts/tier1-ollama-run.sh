@@ -44,6 +44,15 @@ if ! curl -sf "http://127.0.0.1:11434/api/tags" >/dev/null 2>&1; then
   fail "Ollama not running. Start with: ollama serve"
 fi
 
+# THE MODEL IS THE OPERATOR'S CHOICE, AND THIS LAUNCHER NEVER PICKS ONE. Referenced but never
+# assigned, so under `set -u` the first expansion below aborted the run with a bare
+# "OLLAMA_MODEL: unbound variable" — a message that names the symptom and nothing else. Same class
+# as the CONFIG_DIR abort that killed a live launch on 2026-09-04; caught by
+# a-launcher-never-references-an-unassigned-variable.test.ts, which turns on the shellcheck rule
+# (SC2154) that sees it. Refused loudly rather than defaulted: guessing a model on the operator's
+# behalf is how the wrong vendor reaches a run.
+: "${OLLAMA_MODEL:?OLLAMA_MODEL is not set — name the ollama model this run should use (e.g. OLLAMA_MODEL=qwen2.5-coder:7b). This launcher never chooses one for you.}"
+
 # Check model is available
 if ! curl -sf "http://127.0.0.1:11434/api/tags" | python3 "$SCRIPT_DIR/lib/handlers/ollama-model-present.py" "$OLLAMA_MODEL" 2>&1; then
   info "Pulling $OLLAMA_MODEL (this may take a minute)..."

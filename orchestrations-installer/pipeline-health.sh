@@ -338,8 +338,20 @@ else
       } catch { process.stdout.write("0"); }
     ' "$CONFIG/provider-sets.json" "${STACK:-}" 2>/dev/null || echo 0)"
 
+    # RETRIED, because "still starting" and "down" are different answers and this check runs
+    # immediately after an install. Live 2026-09-04, pipeline-tests-15: grafana reported NOT
+    # SERVING in the post-install check and answered 200 a few seconds later — its container had
+    # come up healthy in the meantime. A health check that fails a race teaches an operator to
+    # ignore it, which is worse than not having one.
     _probe_code() {
-        curl -s -o /dev/null -w '%{http_code}' --max-time 10 "$1" 2>/dev/null || echo 000
+        local _url="$1" _tries="${2:-6}" _code=000 _i=0
+        while [ "$_i" -lt "$_tries" ]; do
+            _code=$(curl -s -o /dev/null -w '%{http_code}' --max-time 10 "$_url" 2>/dev/null || echo 000)
+            case "$_code" in 2??|3??) printf '%s' "$_code"; return 0 ;; esac
+            _i=$((_i + 1))
+            [ "$_i" -lt "$_tries" ] && sleep 2
+        done
+        printf '%s' "$_code"
     }
 
     # name<TAB>required<TAB>tracesink — every declared service, in declaration order.
@@ -381,6 +393,23 @@ EOF
     # says nothing about whether this run's PRD and log directories are mounted INTO it, which is
     # what every panel actually reads. Both were broken while / returned 200 — "data offline" on a
     # healthy install. Derived from the same registry entry, never a second URL literal.
+    # ASK DOCKER WHAT IS MOUNTED. The override file is git-TRACKED, so it ships with every install
+    # and says nothing about whether agent-monitor was ever started with it — keying severity on the
+    # file made a fresh install report a hard failure for a mount that legitimately does not exist
+    # until the first run applies it.
+    _dashboard_has_mount() {
+        local _want="$1" _name
+        _name="$(docker ps --format '{{.Names}}' 2>/dev/null | grep -m1 "${OBS_PROJECT:-__none__}-agent-monitor" || true)"
+        [ -n "$_name" ] || return 1
+        docker inspect "$_name" --format '{{range .Mounts}}{{.Destination}} {{end}}' 2>/dev/null \
+            | tr ' ' '\n' | grep -qx "$_want"
+    }
+    # OBS_PROJECT comes from the install's own persisted identity, never re-derived here.
+    if [ -f "$ROOT/.pipeline-services-state.env" ]; then
+        # shellcheck source=/dev/null
+        . "$ROOT/.pipeline-services-state.env"
+    fi
+
     _DASH_URL="$(service_url dashboard 2>/dev/null || true)"
     if [ -n "$_DASH_URL" ]; then
         # BEFORE THE FIRST RUN THERE IS NO MOUNT TO FIND, and saying "NOT serving" about that makes
@@ -391,8 +420,8 @@ EOF
         _lc="$(_probe_code "$_DASH_URL/logs/agent-status.json")"
         case "$_lc" in
             2??|3??) _ok "dashboard /logs mount: serving (HTTP $_lc)" ;;
-            *) if [ -f "$ROOT/docker-compose.observability.override.yml" ]; then
-                   _bad "dashboard /logs mount: NOT serving (HTTP $_lc) — agent-activity.html and health.html have nothing to read"
+            *) if _dashboard_has_mount /logs-dir; then
+                   _bad "dashboard /logs mount: /logs-dir IS mounted but nginx will not serve it (HTTP $_lc) — agent-activity.html and health.html have nothing to read"
                    _fix "bash orchestrations-installer/install.sh --dest \"$ROOT\""
                else
                    _warn "dashboard /logs mount: not mounted yet (HTTP $_lc) — normal before the first run; pre-run-reset.sh mounts this run's log dir at launch"
@@ -402,8 +431,12 @@ EOF
         case "$_pc" in
             2??|3??) _ok "dashboard /prd.json: serving (HTTP $_pc)" ;;
             404)     _warn "dashboard /prd.json: 404 — no PRD ingested yet (normal before the first run); dashboards read 'data offline' until one exists" ;;
-            *)       _bad "dashboard /prd.json: NOT serving (HTTP $_pc) — the /prd-dir mount is wrong, every dashboard shows 'data offline'"
-                     _fix "bash orchestrations-installer/install.sh --dest \"$ROOT\"" ;;
+            *) if _dashboard_has_mount /prd-dir; then
+                   _bad "dashboard /prd.json: NOT serving (HTTP $_pc) — /prd-dir is mounted but nginx will not serve it, every dashboard shows 'data offline'"
+                   _fix "bash orchestrations-installer/install.sh --dest \"$ROOT\""
+               else
+                   _warn "dashboard /prd.json: not mounted yet (HTTP $_pc) — normal before the first run"
+               fi ;;
         esac
     fi
 

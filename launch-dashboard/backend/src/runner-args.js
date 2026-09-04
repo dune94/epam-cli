@@ -31,11 +31,18 @@ function buildLaunchEnv(request, { providerSet, retryExtension = true } = {}) {
     EPAM_RETRY_EXTENSION_ENABLED: retryExtension ? '1' : '0',
   };
 
-  // The pauses are the human-in-the-loop points. Absent means absent — never "0", because the
-  // pipeline tests these with is_truthy and an explicit 0 reads no differently, but an absent
-  // variable is honest about not being asked for.
-  if (request.pauseAfterMint) env.EPAM_PAUSE_AFTER_AGENT_MINT = '1';
-  if (request.pauseBeforeWriter) env.EPAM_PAUSE_BEFORE_WRITER = '1';
+  // The pauses are the human-in-the-loop points, and THE OPERATOR'S ANSWER IS A DECISION — "no"
+  // included. This used to emit the variable only when the box was ticked, reasoning that "absent
+  // means absent". Absent is not absent to the pipeline: the launcher then sources the project's
+  // config.env, which sets EPAM_PAUSE_AFTER_AGENT_MINT=1, and the unticked box is overwritten.
+  //
+  // Live 2026-09-04, pipeline-tests-19: the operator ticked NEITHER box and the run paused after
+  // the roster mint anyway. The dashboard could express "on" and could not express "off".
+  //
+  // So both answers travel explicitly. The project's config.env is a DEFAULT and now yields to a
+  // value already set (`VAR="${VAR:-1}"`); the two changes are one fix and neither works alone.
+  env.EPAM_PAUSE_AFTER_AGENT_MINT = request.pauseAfterMint ? '1' : '0';
+  env.EPAM_PAUSE_BEFORE_WRITER = request.pauseBeforeWriter ? '1' : '0';
 
   // A RESUME AND A REPLAY ARE NOT THE SAME THING. Only a resume continues a checkpoint; a replay
   // reproduces from the start and must never carry this, or it would silently continue the original.

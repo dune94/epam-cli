@@ -190,7 +190,7 @@ function resumeRun(db, id, { requestedBy, providerSet = null }) {
       'cannot resume into mockserver — the no-pay rehearsal set is never a live-run swap target',
     );
   }
-  return createRun(db, {
+  const resumed = createRun(db, {
     ticket: paused.ticket,
     requestedBy,
     pauseAfterMint: !!paused.pauseAfterMint,
@@ -199,6 +199,26 @@ function resumeRun(db, id, { requestedBy, providerSet = null }) {
     resumeRunId: paused.runId,
     providerSet: nextProviderSet,
   });
+
+  // THE QUESTION HAS BEEN ANSWERED, SO CLOSE IT.
+  //
+  // This row used to stay `paused` forever. The frontend derives canResume from exactly that
+  // value, so the operator kept being offered a resume button for a decision already made — live
+  // 2026-09-04: "the first row still has a resume button on it even though it is now in flight".
+  //
+  // It was not only cosmetic. The guard above reads THIS row's status, so a second click was
+  // permitted; it is caught today only by createRun's busy check, and only while the resumed run
+  // is still active. Once that run finished, the stale button would spawn a duplicate run against
+  // the same checkpoint.
+  //
+  // The row itself stays, with its runId, ticket and detail intact — history must still show that
+  // a human was asked. `resumed` is terminal, so it does not hold the ticket busy either.
+  updateProgress(db, paused.id, {
+    status: 'resumed',
+    detail: `resumed as ${resumed.id} by ${requestedBy}`,
+  });
+
+  return resumed;
 }
 
 /**

@@ -152,6 +152,9 @@ _run_project_verification() {
 
 SCRIPT_DIR="$(cd "$(dirname "${BASH_SOURCE[0]}")" && pwd)"
 # shellcheck source=lib/seam-ladder.sh
+# Nothing the pipeline spawns is entitled to the whole machine. See the file header:
+# an unbounded client suite is what defeated RG-DELTA and aborted the 2026-09-04 run.
+source "$SCRIPT_DIR/lib/bounded-exec.sh"
 source "$SCRIPT_DIR/lib/seam-ladder.sh"
 # The pipeline does not run code nobody has tested. Every stage below asks this first.
 source "$SCRIPT_DIR/lib/stage-coverage-gate.sh"
@@ -803,8 +806,22 @@ print_step_checklist() {
             COND)   color="$CYAN" ;;
             *)      color="$NC" ;;
         esac
+        # A SWITCH ONLY MEANS SOMETHING ON A ROW THAT IS ACTUALLY OFF.
+        #
+        # The reason was printed unconditionally, and for the skip-toggle rows it is the variable
+        # that DISABLES the step — so a running gate rendered as
+        #     5      Regression guard          ACTIVE (SKIP_REGRESSION_GUARD=true)
+        # which reads as "skipped, here is the proof". Eleven rows did this on every run: the
+        # status was computed and correct, and the text beside it contradicted the status.
+        #
+        # By SHAPE, not by a list of rows: several rows pass the resolved MODEL here, which is the
+        # most useful thing on the line and must survive. `NAME=value` is a switch; a model name
+        # never looks like one. So a switch is shown only when the row is not ACTIVE.
         local reason_str=""
-        [ -n "$reason" ] && reason_str=" (${reason})"
+        if [ -n "$reason" ] \
+           && { [ "$planned" != "ACTIVE" ] || ! printf '%s' "$reason" | grep -qE '^[A-Za-z_][A-Za-z0-9_]*='; }; then
+            reason_str=" (${reason})"
+        fi
         printf "  %-6s %-32s " "$step" "$name"
         echo -e "${color}${planned}${reason_str}${NC}"
     }
@@ -1430,7 +1447,7 @@ _lint_fix_findings_directly() {
         # repo and left _lf_ok=1, accepting a repair without re-running its proof.
         local _lf_test_cmd; _lf_test_cmd="$(_codeline_test_command "$PROJECT_ROOT")"
         if [ "$_lf_ok" = "1" ] && [ -n "$_lf_test_cmd" ]; then
-            ( cd "$PROJECT_ROOT" && timeout 600 sh -c "$_lf_test_cmd" ) >/dev/null 2>&1 || _lf_ok=0
+            ( cd "$PROJECT_ROOT" && run_test_bounded "$(resolve_test_workers)" timeout 600 sh -c "$_lf_test_cmd" ) >/dev/null 2>&1 || _lf_ok=0
         elif [ "$_lf_ok" = "1" ]; then
             warning "  loop-fix: ${PROJECT_ROOT} declares no test command — repair NOT re-verified"
             _lf_ok=0
@@ -5442,6 +5459,12 @@ if ! is_truthy "${SKIP_REGRESSION_GUARD:-}"; then
         # subtracting them assumes a stable baseline; against a flaky suite it
         # would permanently excuse whichever tests happened to fail at capture
         # time, including a real regression in the same file.
+        # HOW MANY WORKERS THIS MACHINE CAN AFFORD, read from the machine at this moment.
+        # Unbounded, this suite took 16 workers and 9.7GB, and the resulting timeouts differed
+        # between attempts — which is what made RG-DELTA's intersection unstable and hard-failed
+        # a run over three failures unrelated to the story.
+        _rg_workers="$(resolve_test_workers)"
+        log "Step 5: bounding the suite to ${_rg_workers} worker(s) — an unbounded suite starves the host and destabilises its own result"
         _rg_retries="${EPAM_REGRESSION_GUARD_RETRIES:-2}"
         _rg_max=$(( _rg_retries + 1 ))
         _rg_rc=1
@@ -5454,7 +5477,7 @@ if ! is_truthy "${SKIP_REGRESSION_GUARD:-}"; then
             # The project's OWN command. Its node is put on PATH first so the script
             # resolves the version the codeline declares, without us naming a runner
             # or guessing its arguments.
-            (cd "$_rg_root" && PATH="${_rg_node:+$(dirname "$_rg_node"):}$PATH" sh -c "$_rg_test_cmd") > "$_rg_try_log" 2>&1
+            (cd "$_rg_root" && PATH="${_rg_node:+$(dirname "$_rg_node"):}$PATH" run_test_bounded "$_rg_workers" sh -c "$_rg_test_cmd") > "$_rg_try_log" 2>&1
             _rg_rc=$?
             set -e
             [ "$_rg_rc" -eq 0 ] && break
@@ -5508,8 +5531,28 @@ if ! is_truthy "${SKIP_REGRESSION_GUARD:-}"; then
         if [ $_rg_rc -ne 0 ]; then
             step_emit "5" "fail" "Step 5: Regression guard"
             error "Step 5: Regression guard FAILED — tests red in all ${_rg_max} attempt(s) before phase '$PHASE' starts"
-            error "  The failure survived every attempt, so it is reproducible, not a flake."
+            # SAY WHAT WAS ACTUALLY OBSERVED, NOT WHAT WOULD BE CONVENIENT TO CONCLUDE.
+            #
+            # This line used to read, unconditionally: "The failure survived every attempt, so it
+            # is reproducible, not a flake." On 2026-09-04 that was FALSE. Every attempt failed,
+            # but not on the same tests — attempt 1 failed one suite, attempts 2 and 3 failed two —
+            # and it is precisely that disagreement that stopped RG-DELTA tolerating the baseline.
+            # The guard had the evidence of instability in its hand and reported the opposite.
+            #
+            # `_rg_tolerated=0` after a pattern was configured means the intersection was judged
+            # UNSTABLE, so the distinction is already computed; it was simply never said.
+            if [ -n "${_rg_pattern:-}" ]; then
+                error "  Every attempt failed, but they did NOT agree on WHICH tests failed."
+                error "  An unstable failing set cannot be told from a real regression, so it is not tolerated."
+                error "  Attempts that disagree usually mean interference, not broken code — most often the"
+                error "  suite competing with itself for the machine. Compare the attempt logs below."
+            else
+                error "  The failure survived every attempt."
+            fi
             error "  See: $_rg_log"
+            for _rg_i in $(seq 2 "$_rg_max"); do
+                [ -f "${_rg_log%.log}-attempt-${_rg_i}.log" ] && error "       ${_rg_log%.log}-attempt-${_rg_i}.log"
+            done
             # NAME THE MECHANISM THAT WOULD HAVE TOLERATED THIS.
             #
             # Operator policy is that brownfield INHERITS pre-existing failures and is not expected
@@ -7616,7 +7659,7 @@ if ! is_truthy "${SKIP_REGRESSION_GUARD:-}"; then
             [ "$_rgd_try" -gt 1 ] && _rgd_try_log="${_rgd_log%.log}-attempt-${_rgd_try}.log"
             # The project's OWN command, same as the guard above. Assembling "<pm> test" assumed an
             # ecosystem whose package manager takes a test subcommand.
-            (cd "$_rg_root" && PATH="${_rg_node:+$(dirname "$_rg_node"):}$PATH" sh -c "$_rg_test_cmd") > "$_rgd_try_log" 2>&1 || true
+            (cd "$_rg_root" && PATH="${_rg_node:+$(dirname "$_rg_node"):}$PATH" run_test_bounded "$(resolve_test_workers)" sh -c "$_rg_test_cmd") > "$_rgd_try_log" 2>&1 || true
         done
         _rgd_result=$(python3 "$SCRIPT_DIR/lib/handlers/rgd-diff.py" "$_rgd_pattern" "$_rgd_max" "$_rgd_log" "$_rgd_baseline_file"
 )
@@ -8017,7 +8060,7 @@ if ! is_truthy "${SKIP_PRE_REVIEW_GATE:-}" && [ -f "$PROJECT_ROOT/package.json" 
             # "tests failed" blamed the story for the engine being unable to ask.
             warning "  Step 19: ${PROJECT_ROOT} declares no test command — pre-review tests NOT run"
             _pre_review_failed=1
-        elif timeout "${EPAM_TEST_TIMEOUT_SECS:-300}" sh -c "$_pr_test_cmd" \
+        elif run_test_bounded "$(resolve_test_workers)" timeout "${EPAM_TEST_TIMEOUT_SECS:-300}" sh -c "$_pr_test_cmd" \
                 2>&1 | tee -a "$_pre_review_log"; then
             success "  vitest: PASS"
             "$SCRIPT_DIR/update-monitor.sh" event "pre_review_test_pass" \
@@ -10459,7 +10502,7 @@ run_unit_tests_gate() {
     # package.json" — a message about the engine's expectation, not about the project.
     log "  Running: ${_ut_test_cmd}"
     local vitest_output vitest_exit=0
-    vitest_output=$(cd "$PROJECT_ROOT" && timeout "${EPAM_TEST_TIMEOUT_SECS:-300}" sh -c "$_ut_test_cmd" 2>&1) || vitest_exit=$?
+    vitest_output=$(cd "$PROJECT_ROOT" && run_test_bounded "$(resolve_test_workers)" timeout "${EPAM_TEST_TIMEOUT_SECS:-300}" sh -c "$_ut_test_cmd" 2>&1) || vitest_exit=$?
     echo "$vitest_output" >> "$gate_log"
 
     if [ "$vitest_exit" -eq 0 ]; then
@@ -10544,7 +10587,7 @@ run_unit_tests_gate() {
         # directly, so on a project using any other runner the verification of the fix ran a
         # different thing from the check that found the failure — or nothing at all.
         vitest_exit=0
-        vitest_output=$(cd "$PROJECT_ROOT" && timeout "${EPAM_TEST_TIMEOUT_SECS:-300}" sh -c "$_ut_test_cmd" 2>&1) || vitest_exit=$?
+        vitest_output=$(cd "$PROJECT_ROOT" && run_test_bounded "$(resolve_test_workers)" timeout "${EPAM_TEST_TIMEOUT_SECS:-300}" sh -c "$_ut_test_cmd" 2>&1) || vitest_exit=$?
         echo "=== Post-bug-fix test run (round $bug_round): ${_ut_test_cmd} ===" >> "$gate_log"
         echo "$vitest_output" >> "$gate_log"
 

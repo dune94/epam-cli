@@ -49,14 +49,29 @@ const launcher = createLauncher({
 
 // NO providerSet HERE ANYMORE. It used to be a single value fixed for every launch this runner
 // would ever make; each spooled REQUEST now declares its own (runner.js reads req.providerSet).
+// WHERE THE PIPELINE PUBLISHES ITS OWN PROGRESS. Declared the same way the launcher is, and
+// resolved from the same EPAM_HOME: guessing is not this component's job, and an absent file
+// simply means the dashboard reports nothing extra rather than inventing something.
+//
+// Without this the dashboard showed "running — starting" for an entire two-and-a-half hour run,
+// then "no update in 10m" — on a run that was perfectly healthy. Operator, 2026-09-04:
+// "dashboard not useful at all."
+const progressFile = process.env.EPAM_STEP_STATUS_FILE
+  ?? path.join(cwd, 'orchestrations/logs/step-status.json');
+
 const runner = createRunner({
   spoolDir: cfg.spoolDir,
   launcher,
   dry,
+  progressFile,
+  // How often to look. Seconds-scale is right for a run measured in hours; overridable because a
+  // test cannot wait five seconds to observe a poll, and a slow filesystem may want less traffic.
+  progressMs: Number(process.env.EPAM_PROGRESS_MS || 5000),
 });
 
 console.log(`[launch-runner] watching ${cfg.spoolDir}${dry ? ' (DRY — nothing will be launched)' : ''}`);
 console.log(`[launch-runner] launcher=${script}`);
+console.log(`[launch-runner] progress=${progressFile}`);
 runner.start();
 
 for (const sig of ['SIGINT', 'SIGTERM']) {

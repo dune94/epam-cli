@@ -1,6 +1,58 @@
+# NAMING THE SUBNET SKIPS THE POOL SEARCH ENTIRELY — the same rule, and the same wording, as
+# docker-compose.observability.yml.
+#
+# This file declared no network, so compose asked docker to allocate one from its default pools.
+# Measured on this host 2026-09-04: SEVEN networks held subnets, several /16s in the default range
+# were visibly free, and `docker network create` still failed with "all predefined address pools
+# have been fully subnetted" — the daemon does not always release a removed network's pool. A
+# `--subnet` request is served from the request itself and never consults the pool, so it succeeds
+# on exactly the host where an allocated one fails. Proven both ways before this was written.
+#
+# That is why the observability stack installs on a corporate laptop with the VPN up while this
+# would not have. Overridable for a machine where the range is genuinely in use; install.sh
+# already derives a free one per destination (lib/isolated-compose-identity.sh).
+networks:
+  default:
+    ipam:
+      config:
+        - subnet: ${EPAM_MOCK_SUBNET:-172.29.0.0/16}
+
 services:
+  # MOCKSERVER — what the `mockserver` provider set actually talks to.
+  #
+  # llm-defaults.mockserver.json declares mockBaseUrl http://localhost:1080 and every seam
+  # resolves against it, but NOTHING in this repository ever brought :1080 up. The only instance
+  # was one hand-made `docker run` on a single developer's box, so a fresh install shipped the
+  # settings for a free rehearsal and no way to hold one.
+  #
+  # Declared here so the bound is part of the definition rather than part of what someone
+  # remembered to type. MockServer is a JVM that RETAINS every recorded request: unbounded it
+  # reached 7.1GB of 14GB across a day of rehearsals (2026-08-28). Three things hold it —
+  # mem_limit with memswap_limit so the ceiling cannot be escaped into swap, MaxRAMPercentage so
+  # the JVM sizes its heap against the container rather than the host, and caps on what it retains
+  # so a long rehearsal cannot grow without end.
+  mockserver:
+    image: mockserver/mockserver:latest
+    mem_limit: 1g
+    memswap_limit: 1g
+    environment:
+      SERVER_PORT: "1080"
+      # Without this the JVM plans against the HOST's memory and is killed by its own ceiling.
+      JAVA_TOOL_OPTIONS: "-XX:MaxRAMPercentage=60.0"
+      # A recorder accumulates. These are what stop a day of rehearsals becoming a leak.
+      MOCKSERVER_MAX_EXPECTATIONS: "2000"
+      MOCKSERVER_MAX_LOG_ENTRIES: "250"
+    ports:
+      - "1080:1080"
+    restart: "no"
+
   mock-llm:
     build: .
+    # Bounded: an unbounded container is entitled to the whole host, and on WSL the OOM
+    # victim is the environment, not the container. memswap_limit matches mem_limit so a
+    # throttled process cannot escape the ceiling into swap.
+    mem_limit: 1g
+    memswap_limit: 1g
     ports:
       - "4000:4000"
     environment:

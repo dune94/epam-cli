@@ -37,13 +37,22 @@ class Run {
 
   bool get isActive => status == 'pending' || status == 'running' || status == 'stopping';
   bool get isPaused => status == 'paused';
+
+  /// A pause that has been ANSWERED. The row stays so history shows both the question and the
+  /// answer, but it is not a run outcome and it is not a live run — it draws no controls at all.
+  bool get isResumed => status == 'resumed';
+
   bool get isFinished => !isActive && !isPaused;
 
   /// A paused run is resumable ONLY if it recorded the pipeline runId. Resuming without it would
   /// launch a FRESH run — which on a brownfield defect resets the codeline and discards committed
   /// work. That happened live on 2026-09-02, so the button is hidden rather than allowed to fail.
   bool get canResume => isPaused && (runId?.isNotEmpty ?? false);
-  bool get canReplay => isFinished;
+  /// A REPLAY IS A FRESH RUN, and a fresh run on a brownfield defect hard-resets the codeline to
+  /// baseline — the 2026-09-02 incident that destroyed committed work. So it is never offered on
+  /// an answered pause, which `isFinished` alone would have allowed: the resumed run is the live
+  /// one and carries the controls.
+  bool get canReplay => isFinished && !isResumed;
   bool get canStop => isActive;
 }
 

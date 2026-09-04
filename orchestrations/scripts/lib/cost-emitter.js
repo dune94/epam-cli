@@ -368,6 +368,46 @@ function emitCostSnapshot({
       });
     } catch { /* observability must never break the call it observes */ }
 
+    // THE SCREEN RIDES THE COST SEAM TOO, for the same reason tracing does: this is the one point
+    // every model call passes, on every arm, with its agent, phase, story, model and timing
+    // already resolved.
+    //
+    // Monitor events were emitted from HAND-PLACED CALL SITES — a handful of
+    // `update-monitor.sh event ...` lines in claude.sh and run-agent-orchestration.sh. A stage
+    // nobody remembered to add a line to is silent, and silence is indistinguishable from a hang.
+    // Live 2026-09-04, pipeline-tests-19: agent-status.json held TEN events for an entire run, all
+    // preflight or self_heal, while the mint, the roster specialiser and prompt-builder — about
+    // 45 minutes and most of the spend — reported nothing. The dashboard said
+    // "running — no update in 10m" about a run whose log had advanced 14 seconds earlier, and the
+    // operator asked the one question the dashboard exists to answer: is it stuck?
+    //
+    // NOTHING IS NAMED HERE. No stage list, no agent list, no per-stage call site — the event is
+    // built from what the seam already carries, so a stage added tomorrow is visible tomorrow.
+    //
+    // Fire-and-forget, exactly like the trace beside it: a monitor that cannot be reached must
+    // never fail the call it reports on.
+    try {
+      // eslint-disable-next-line global-require
+      const _cp = require('child_process');
+      // eslint-disable-next-line global-require
+      const _pathm = require('path');
+      const _script = process.env.EPAM_MONITOR_SCRIPT
+        || _pathm.join(__dirname, '..', 'update-monitor.sh');
+      if (fs.existsSync(_script)) {
+        const _secs = startedAt ? Math.max(0, Math.round((Date.now() - new Date(startedAt).getTime()) / 1000)) : 0;
+        // The MESSAGE is what an operator reads on the row: which stage, on which model, how long.
+        // The rung matters most of all — roster-specialiser silently escalating to opus-4-8 cost
+        // $3.63 in a single call, and that should be visible while it happens rather than
+        // discoverable afterwards in the ledger.
+        const _msg = `${agent || 'agent'}${phase ? ` · ${phase}` : ''}`
+          + `${model ? ` · ${model}` : ''}${_secs ? ` · ${_secs}s` : ''}`;
+        _cp.execFileSync(_script, [
+          'event', 'agent_call', _msg, String(storyId || ''), 'main',
+          String(agent || ''), String(model || ''), String(provider || ''),
+        ], { stdio: 'ignore', timeout: 5000 });
+      }
+    } catch { /* the screen must never break the run it is describing */ }
+
     const evt = buildCostSnapshot({ agent, storyId, phase, model, provider, cost, turns });
     fs.appendFileSync(activityFile, JSON.stringify(evt) + '\n');
 

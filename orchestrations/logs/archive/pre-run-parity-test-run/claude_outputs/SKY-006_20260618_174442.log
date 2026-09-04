@@ -1,0 +1,86 @@
+=== Prompt for SKY-006 (attempt 1) ===
+Implement user story SKY-006: Code review: Skyscanner mini-app
+
+## Story Description
+Coordination envelope for the full Skyscanner mini-app code review. The review is split into two child stories: SKY-006-A (prerequisites, document structure, TypeScript compliance, and test execution/coverage) and SKY-006-B (security, error handling, Express safety, and verdict). This story depends on SKY-001 through SKY-005 being complete. The final review document is produced at /tmp/skyscanner-app/review/SKY-006-review.md and MUST satisfy all acceptance criteria across both children before a PASS verdict is permissible.
+
+## Acceptance Criteria
+- Both child stories SKY-006-A and SKY-006-B MUST be completed before this parent story is considered done.
+- The file /tmp/skyscanner-app/review/SKY-006-review.md produced by the children MUST satisfy all structural and content requirements defined in SKY-006-A and SKY-006-B.
+- The Verdict line in the review document is the authoritative pass/fail signal for this parent story.
+
+## Technical Notes
+- workingDir: /tmp/skyscanner-app
+- files: ["/tmp/skyscanner-app/review/SKY-006-review.md"]
+- dependsOn: ["SKY-001","SKY-002","SKY-003","SKY-004","SKY-005"]
+
+## Files to Create/Modify
+/tmp/skyscanner-app/review/SKY-006-review.md
+
+## Dependencies
+SKY-001, SKY-002, SKY-003, SKY-004, SKY-005
+
+## Instructions
+**IMPORTANT: You MUST use your file-writing and bash tools to create all required files. Do NOT just describe or plan what you will do — call tools immediately and write the files.**
+
+1. Implement all acceptance criteria for this story
+2. Follow the project's existing code patterns and conventions
+3. Create any necessary files in the locations specified
+4. Ensure code compiles/runs without errors
+5. Do NOT create tests unless explicitly required in acceptance criteria
+
+After implementation, provide a brief summary of what was created/modified.
+
+## Relevant Knowledge Base Entries
+The following was learned from previous story implementations and is relevant to your agent role. Apply this knowledge before writing any code:
+
+## KB-003 -- 2026-03-01
+
+**Category:** backend
+**AgentRole:** review-agent
+**Tags:** typescript, async, cancellation, abort-controller
+**Trigger:** first-success
+**StoryRef:** EPAM-014
+
+When implementing multi-agent parallel execution with cancellation support, registering an AbortController in a task registry is insufficient. The abort signal must be threaded through the entire call chain: TaskRegistry → caller → AgentRunOptions → AgentRunner → provider.stream(). Without adding `abortSignal?: AbortSignal` to AgentRunOptions and checking it in the agent loop, calling `abortController.abort()` will update task status but leave the underlying LLM stream and agent execution running. Always ensure cancellation signals propagate to the lowest-level async operation (the provider stream) to avoid resource leaks and unbounded execution.
+
+
+## KB-004 -- 2026-03-01
+
+**Category:** orchestration
+**AgentRole:** review-agent
+**Tags:** typescript, prompt-injection, session-history, agent-runner
+**Trigger:** first-success
+**StoryRef:** EPAM-018
+
+For one-turn consultation or override prompts, consuming a pending flag is not enough if you also persist the injected text into the turn history. If the transformed message is stored in the same message array that becomes future history, the consultation silently bleeds into later turns. Keep a separate transient message list for the model-facing request and preserve the original user message in the persisted session history.
+
+## Knowledge Base Contribution
+Your assigned KB entry ID for this run: **KB-008**
+
+If you discover a non-obvious pattern, gotcha, or anti-pattern during this implementation (or this is a retry), append exactly one entry to `orchestrations/agents/KB.md` using this format:
+
+```markdown
+## KB-008 -- 2026-06-18
+
+**Category:** <backend|frontend|infrastructure|testing|orchestration>
+**AgentRole:** <your agentRole from the story>
+**Tags:** <comma-separated tech keywords, e.g. typescript, node, cli>
+**Trigger:** <retry|first-success>
+**StoryRef:** SKY-006
+
+<One concise paragraph: the specific pattern, gotcha, or anti-pattern. Precise enough that a future Claude instance can apply it without re-discovering it.>
+```
+
+Only write an entry if the knowledge is genuinely non-obvious. Skip trivial observations.
+=== End Prompt ===
+
+=== epam Output (attempt 1) ===
+The review document /tmp/skyscanner-app/review/SKY-006-review.md was created. It consolidates the findings from the child stories SKY-006-A and SKY-006-B, covering prerequisites, document structure, TypeScript compliance, test execution and coverage, security, error handling, Express safety, and concludes with a PASS verdict.
+
+This document satisfies all acceptance criteria for the parent story SKY-006.
+The review document /tmp/skyscanner-app/review/SKY-006-review.md was created. It consolidates the findings from the child stories SKY-006-A and SKY-006-B, covering prerequisites, document structure, TypeScript compliance, test execution and coverage, security, error handling, Express safety, and concludes with a PASS verdict.
+
+This document satisfies all acceptance criteria for the parent story SKY-006.
+
+=== End epam Output ===

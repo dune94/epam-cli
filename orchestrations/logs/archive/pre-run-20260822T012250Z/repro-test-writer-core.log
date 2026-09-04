@@ -1,0 +1,12 @@
+[repro-test-writer] target from the plan's fix site: src/services/contentstack.ts
+[repro-test-writer] writing test for AMSD-2041 (kind: novel) → src/services/contentstack.spec.ts (convention: .spec.ts, example: src/services/__tests__/contactUsService.spec.ts)
+[repro-test-writer] attempt 1 failed (class=no_file) — invoking self-heal analyst
+[repro-test-writer]   self-heal analyst ran for attempt 2 — enforcement applied from the KB
+[repro-test-writer] ladder escalation (attempt 2/3) — z-ai/glm-5.2 → moonshotai/kimi-k3
+  [SelfHeal/KB] constraints applied for repro-test-writer (story:AMSD-2041): repro-test-writer-class-no-file
+[repro-test-writer] attempt 2 failed (class=no_file) — invoking self-heal analyst
+[repro-test-writer]   self-heal analyst ran for attempt 3 — enforcement applied from the KB
+[repro-test-writer] WARNING: NO ladder escalation on attempt 3/3 — at the top of the declared chain (moonshotai/kimi-k3)
+  [SelfHeal/KB] constraints applied for repro-test-writer (story:AMSD-2041): repro-test-writer-class-no-file
+[repro-test-writer] no valid test after 3 attempts — repro-gate will BLOCK
+[repro-test-writer] no test file produced at src/services/contentstack.spec.ts — the repro-gate will BLOCK (as designed)

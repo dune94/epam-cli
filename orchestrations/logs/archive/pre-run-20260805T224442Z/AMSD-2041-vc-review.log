@@ -1,0 +1,28 @@
+# Prompt
+You are a STRICT verification-criteria reviewer for a brownfield fix. REVIEW ONLY — do NOT rewrite anything.
+
+Acceptance criteria (IMMUTABLE ticket intent):
+- (none)
+Description: [GO, UP, MX] Live Preview of Content in CMS
+
+Proposed verification criteria:
+1. Given content is edited in the CMS, the rendered page reflects the edited content in real time
+2. Given the page is initially loaded, the rendered page displays the CMS content
+3. Given multiple content edits are made in the CMS, each edit is reflected in the rendered page output
+4. Given a new content field is populated in the CMS, the rendered page displays the newly populated content
+5. Given the live-preview connection is lost, the rendered page retains the last displayed content
+6. Given a populated content field is cleared in the CMS, the rendered page reflects the cleared state
+
+Apply these rules EXACTLY (the producer is held to the same text — do not invent stricter or looser criteria):
+A verification criterion states WHAT AN END USER OR TESTER OBSERVES on the user-facing surface THE TICKET IS ABOUT — the rendered email for an email ticket, the displayed screen/UI for a UI ticket, the API response a CLIENT receives for an API ticket. It is a BLACK-BOX check on that surface. It NEVER describes HOW the value is produced.
+A verification criterion is FORBIDDEN if it:
+- prescribes HOW to implement — any algorithm, mechanism, or approach: "split", "halve", "×0.5", "calculate independently", "per segment", "for each line item", or adding/reading any new field, flag, or service;
+- references an INTERNAL structure that merely FEEDS the ticket's surface — an intermediate payload, a "confirmation data"/DTO object, or a specific response field used to BUILD the output. Verify the surface the ticket names, NOT the data structure behind it;
+- makes a CROSS-COMPARISON that presumes a mechanism — never assert one value "must equal" / "matches" / "is the same as" another (e.g. "the return amount equals the outbound amount"); that presumes a copy/split. Assert the required value is present and correct ON ITS OWN.
+Every verification criterion must be observable, testable, and tied to the ticket's stated symptom/intent.
+
+FLAG any verification criterion that violates ANY rule above, OR that fails to cover the intent of an acceptance criterion.
+Output ONLY a JSON array of short flag strings, e.g. ["VC 2 prescribes halving — restate as observable outcome"]. Output [] if every VC is clean. No prose, no markdown.
+
+# Output
+["VC 1 cross-compares rendered page to CMS content and prescribes 'real time' mechanism — restate as observable outcome", "VC 2 cross-compares rendered page to CMS content — restate as observable outcome", "VC 3 cross-compares rendered page to CMS edits — restate as observable outcome", "VC 4 cross-compares rendered page to newly populated CMS content — restate as observable outcome", "VC 5 references internal 'live-preview connection' mechanism — restate without referencing transport layer", "VC 6 cross-compares rendered page to cleared CMS state — restate as observable outcome"]

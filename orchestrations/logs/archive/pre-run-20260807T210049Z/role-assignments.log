@@ -1,0 +1,32 @@
+# Prompt
+Assign an implementation agent role to every story below.
+
+AVAILABLE ROLES — these are this project's own engineering roles. Choose from these and
+nothing else; the name you return must match one of them verbatim:
+- contentstack-integration-engineer
+    You are a senior backend/content-platform integration engineer specializing in Contentstack headless CMS and its Delivery SDK for Next.js applications. Your domain is the Contentstack SDK initialization layer and the data-fetching services that sit between the CMS and the React rendering layer. This project spans three Next.js codelines that share the same Contentstack-based stack: nextgotransitco
+- nextjs-preview-frontend-engineer
+    You are a senior frontend engineer specializing in Next.js (App Router and Pages Router), React, and Contentstack Live Preview integration at the component layer. Your domain is the React rendering layer — page components, layout components, and the hooks that connect CMS data to the UI. This project spans three codelines: nextgotransitcom, nextupexpresscom, and nextmetrolinxcom. All use Next.js, 
+
+STORIES — a story listing more than one codeline needs ONE ASSIGNMENT PER CODELINE:
+- AMSD-2041: [GO, UP, MX] Live Preview of Content in CMS
+    codelines (assign one role for EACH): nextgotransitcom, nextupexpresscom, nextmetrolinxcom
+    Original Requirements (discovery) AS a Content Author, I WANT to preview draft entries in CMS, SO THAT I can see how content will be shown on the website ability to preview draft entries in CMS Notes& Assumptions Limitation: Might not be possible to preview protected pages and content. Original Total Estimate: 8 Original FE Estimate: 8 Original DAM Estimate: 0 Original BE Estimate: 0
+
+Pick the role whose stated expertise actually covers the work the story describes. If two
+roles could plausibly own a story, prefer the one whose brief names the surface the story
+touches. Every story must be assigned exactly one role.
+
+THE OWNER MUST AUTHOR THE CODE. Assign the role that will EDIT THE FILES this story changes —
+the one whose brief names those files or directories. A role whose brief is about settings in
+a vendor's console, or about documentation, cannot deliver a story here: the agent's output is
+a change in a repository. Live 2026-08-07: this story went to the one role of three that owned
+no source files, and all such a role can produce is a configuration note. Where the story needs
+both console configuration and code, the code owner is the assignee.
+
+# Output
+{"assignments": [
+{"agentRole": "nextjs-preview-frontend-engineer", "codeline": "nextgotransitcom", "reason": "Story is Live Preview of CMS content. This role's brief explicitly names 'Contentstack Live Preview integration at the component layer' and its domain covers page components, layout components, and hooks that connect CMS data to the UI — exactly the files this story changes. FE estimate is 8, BE/DAM are 0, confirming this is frontend-owned work." ,"storyId": "AMSD-2041"},
+{"agentRole": "nextjs-preview-frontend-engineer", "codeline": "nextupexpresscom", "reason": "Same story, same codeline. The nextjs-preview-frontend-engineer brief explicitly lists nextupexpresscom as one of its three codelines and its specialty is Contentstack Live Preview integration at the component layer." ,"storyId": "AMSD-2041"},
+{"agentRole": "nextjs-preview-frontend-engineer", "codeline": "nextmetrolinxcom", "reason": "Same story, same codeline. The nextjs-preview-frontend-engineer brief explicitly lists nextmetrolinxcom as one of its three codelines and its specialty is Contentstack Live Preview integration at the component layer." ,"storyId": "AMSD-2041"}
+]}

@@ -1,0 +1,125 @@
+# Prompt
+You are specialising a generic agent roster for ONE project. The roster you produce IS this project's roster: every agent in this run gets its identity from the file you write, and nothing falls back to the generic source if you leave something out.
+
+## What you are given
+
+The canonical roster, verbatim, at:
+
+  /home/bradleyjerome/projects/ai/epam-cli/orchestrations/logs/roster-canonical-copy.json
+
+Read it with your tools. Each key is an agent name; each value is that agent's generic persona — what it does, stated without reference to any codebase.
+
+The project:
+Project config: /home/bradleyjerome/projects/ai/epam-cli/orchestrations/projects/hello-dolly
+Tickets in scope: MOCK-HW-1: Hello world greeting should say hello dolly — MOCKA | MOCK-HW-1: Hello world greeting should say hello dolly — MOCKB
+Agents this project minted: stand-in-engineer [implementer]
+
+The codelines it works on:
+- mocka (/home/bradleyjerome/projects/mock3/mock-a) deps: vitest, typescript
+- mockb (/home/bradleyjerome/projects/mock3/mock-b) deps: vitest, typescript
+
+The stack in use:
+node
+
+## What to write
+
+Write a JSON file to:
+
+  /home/bradleyjerome/projects/ai/epam-cli/orchestrations/projects/hello-dolly/roster.json
+
+of exactly this shape:
+
+{"agents": {"<agent name>": {"persona": "...", "kind": "implementer|investigator|seam", "ancestor": "<canonical agent name>", "derivedFromSha256": "<sha256 of the ancestor's persona text>", "seam": "<one of the DECLARED SEAMS listed below — required only for an agent you ADD; omit it and the resolver derives it from the name>"}}}
+
+## The declared seams
+
+THESE ARE THE ONLY VALID VALUES for "seam". It is a closed list, and a value outside it is
+refused. Note that "kind" above and "seam" here are DIFFERENT questions: kind says what sort of
+agent this is, seam says which invocation contract it enters by. An agent of kind "implementer"
+does not have seam "implementer".
+
+- ac-classification
+- ac-elaboration
+- agent-failure-analyst
+- agent-mint
+- code-graph-detective
+- code-review-cycle
+- codeline-bridge-agent
+- codeline-discovery
+- cpa-inference
+- estate-survey
+- guard-vocabulary
+- impl-failure-analyst
+- phase-assessment
+- prd-change-reviewer
+- prd-change-summarizer
+- prd-model-coordinator
+- project-roster-review
+- prompt-builder
+- prompt-review
+- qa-gate:e2e
+- qa-gate:fuzz-weaver
+- qa-gate:mutant-hunter
+- qa-gate:perf-sentinel
+- qa-gate:review-ranger
+- qa-gate:runtime-boundary
+- qa-gate:sast
+- qa-gate:spec-validator
+- repro-test-writer
+- role-assigner
+- roster-review
+- roster-specialiser
+- spec-agent
+- spec-coordinator
+- story-writer
+- survey-review
+- tc-writer
+- team-lead-review
+- ticket-links
+- topology-router
+- vc-coverage
+
+If none of them fits, OMIT the seam field. The resolver derives one from the agent's name, and
+omitting is always safer than inventing.
+
+EVERY AGENT IN THE CANONICAL ROSTER MUST APPEAR. A missing agent is not a smaller roster — it is an agent with no identity at the moment the pipeline invokes it, and the run has nowhere else to look. Do not decide that an agent is irrelevant to this project; you cannot know which seams a run will reach.
+
+## How to specialise
+
+For each agent, keep WHAT IT DOES and replace WHAT IT KNOWS. The generic persona states a role; your version states that same role against this codeline — its language, its frameworks, its layout, the helpers and conventions that already exist, the commands it actually runs. Read the code to find these. An assertion about the codeline that you did not verify is worse than a generic sentence, because the next reader cannot tell which is which.
+
+Do not weaken a rule while specialising it. If the generic persona forbids something, says a finding must carry evidence, or names a check that must pass, that survives verbatim in meaning — you are changing what the agent knows, never what it is required to do.
+
+KEEP EACH PERSONA AT THE LENGTH THE WORK NEEDS. A persona that lists every file in the repository is not more specialised, it is less usable: the agent reads it before every invocation.
+
+## Ancestry
+
+Each entry names the canonical agent it derives from. For an agent that exists in the canonical roster, that is the agent itself.
+
+If this project needs an agent the canonical roster does not have, you may add one — but it MUST name the canonical agent it is closest to as its ancestor. That is not bookkeeping: an agent inherits its ladder, its tool grant and its output contract from its ancestor, so an agent invented from nothing has no budget, no tools and no way for the pipeline to receive what it returns.
+
+`derivedFromSha256` is the SHA-256 of the ancestor's persona text exactly as it appears in the canonical copy you were given. It records what you derived from, so that a later change to the canonical roster is detectable rather than silent.
+
+## Which seam an agent enters by
+
+An agent does not run on its own. It enters the pipeline through a SEAM, which decides its ladder, its tool grant, its output contract and the prompt it executes. For an agent that exists in the canonical roster, the seam is already known and you do not state it.
+
+For an agent you ADD, name the seam in the `seam` field. It must be one the pipeline already declares — you are choosing which existing door this agent comes through, not inventing one. If none fits, the agent you are adding is doing work the pipeline has no place for, and adding it will not create that place.
+
+Omitting it does not leave the question open: the name is matched against patterns instead, and a pattern is a guess about what an agent does based on how it is spelled. That is how an agent named for review came to enter through an inference seam, with another seam's budget and tools.
+
+## What you are not doing
+
+You are not editing the canonical roster. You are not judging whether an agent should exist. You are not writing prompts — an agent's persona says who it is; its instructions for a task live in that task's prompt.
+
+
+## Your previous attempt was REFUSED
+
+the agent wrote no roster at /home/bradleyjerome/projects/ai/epam-cli/orchestrations/projects/hello-dolly/roster.json
+
+Produce the roster again, correcting exactly this. Change nothing else: the rest of your previous attempt was accepted, and rewriting it invites a second refusal for a different reason.
+
+
+
+# Output
+{"note":"stand-in artefact for roster-specialiser"}

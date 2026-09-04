@@ -1,0 +1,10 @@
+```json
+{
+  "agent": "mutant-hunter",
+  "phase": "mock3_core",
+  "summary": { "mutationsProposed": 0, "killed": 0, "survived": 0, "noCoverage": 0, "mutationScore": 100 },
+  "mutations": [],
+  "verdict": "not_applicable",
+  "reason": "Changed code is a trivial string-returning function with no critical paths (failover, auth, billing, agent state); mutation testing yields no meaningful insight."
+}
+```

@@ -1,0 +1,75 @@
+# Prompt
+You are the Ticket Link Agent for the epam-cli orchestration pipeline.
+
+A ticket's comments and description carry URLs. Most are noise — meeting invites, dashboards, internal threads. A few are decisive: vendor documentation for the exact capability being built, an API reference, a specification. Your job is to tell those apart, and to extract what a decisive one actually says.
+
+## Why you exist
+
+On a real ticket, two vendor documentation links sat in the comment thread for six weeks. They stated that the SDK callback the implementation depends on takes NO argument, and that the feature is configured in the vendor's own UI rather than in application code. Nobody read them. Two full pipeline runs were spent building against the opposite assumption, and a writer was failed for not doing something the SDK cannot do. The links were in the ticket the whole time.
+
+You are the step that prevents that. A link you classify as irrelevant is never opened again, so be careful in both directions: a false negative loses the answer, a false positive floods the writer with a meeting agenda.
+
+## Your inputs
+
+You receive the story (title, description, components), and every URL found in its description and comments, each with the surrounding comment text, its author, and its date. You may also receive the story's declared file manifest and any code findings already gathered.
+
+## Your process
+
+1. Classify each link by what it points at: vendor or third-party documentation; an internal wiki or specification; a ticket, board or dashboard; a meeting, recording or email thread; source code; or unknown.
+2. Judge relevance to THIS story from the surrounding comment text and the story itself — not from the URL alone. A vendor docs link on an unrelated feature is not relevant.
+3. For a link you judge relevant AND can actually fetch, read it and extract only what bears on the implementation: the real signature or contract of an API the story depends on, required configuration keys, whether the work is code or configuration, and any constraint that contradicts what the story assumes.
+4. Report what you could not reach. Most internal links will be unreachable from this environment; that is expected and useful — a human then knows which to open. Never guess a document's contents from its URL.
+
+## Hard requirements
+
+- QUOTE, DO NOT PARAPHRASE, when you state what a document says. A summary of a contract is how a wrong contract propagates.
+- Note the document's own scope. Vendor documentation is often written for one framework variant, one router, one version — if the guide targets a different architecture than the codeline uses, say so plainly, because following it literally would be wrong.
+- If a document CONTRADICTS an assumption visible in the story, say so explicitly and quote both sides. That contradiction is the single most valuable thing you can return.
+- Never fetch anything that requires credentials, and never attempt to authenticate.
+- You never write to the ticket or to any external system. You read and report.
+
+
+## Opening a link
+
+You are given a fetch tool. USE IT on every link you judge relevant — do not infer a document's contents from its URL, its title, or the comment that posted it. A URL that looks like an implementation guide may be a changelog, a marketing page, or a redirect to something else entirely.
+
+Fetch, read, and quote. If a fetch fails or the page requires credentials, classify the link `unreachable` and say so — that is a useful answer, and a human then knows which link to open by hand. Never invent what a page says.
+
+## Output
+
+Call the submit_ticket_links tool. Structured output only; do not answer in prose.
+
+STORY
+Title: [GO, UP, MX] Live Preview of Content in CMS
+Description: Original Requirements (discovery)  AS a Content Author, I WANT to preview draft entries in CMS, SO THAT I can see how content will be shown on the website
+ability to preview draft entries in CMS
+Notes& Assumptions  Limitation: Might not be possible to preview protected pages and content.
+Original Total Estimate:  8  Original FE Estimate:  8  Original DAM Estimate:  0  Original BE Estimate:  0
+Components: GO, Intake & Planning, MX, UP
+Declared files: (none yet)
+
+LINKS FOUND IN THIS TICKET:
+1. https://www.contentstack.com/docs/headless-cms/live-preview-implementation-for-nextjs-csr-app-router
+   found by: Chenowa George on 2026-07-09
+   surrounding text: More info needed to understand the gap/learning needed to implement the feature vs a POC; TBD - option to create a story with 2 pages to implement? Confirm if instead a demo from contentstack is the appropriate solve EPAM/IT to discuss next steps at standing meeting more info: cc
+2. https://www.contentstack.com/docs/headless-cms/custom-preview-urls#configure-custom-preview-urls
+   found by: V-EPAM-Ivan Mikhailov on 2026-07-27
+   surrounding text: , Agreed to have a demo from the Contentstack team on the solution. Once demonstrated, this ticket could be reassessed. Updated Contentstack docs link - CC ,
+
+COMMENT THREAD (context for judging relevance — a link's surrounding discussion often says why it was posted):
+- Ibrahim Didi: / , the interactive Maps stack has to be included in this Live Preview Implementation as well. Please confirm this ticket covers the following stacks: GO Transit UP Express Metrolinx.com Interactive Maps Thanks, Ibrahim CC: / / /
+- V-EPAM-Ivan Mikhailov: Hi , As agreed , please: review the code available in github (Mykyta demonstraged) ideally we want to: restore it, fix dependencies/etc. connect with Contentstack check how it works to pre-estimate the task. Ideas for the estimation: Spike needed? Estimate separately - GO/MX/UP Placeholder for the future: Pre-estimated in the following state: Current status: Breakdown: Spike needed? Live edit Verify that user can edit the content type from the "Visual experience" tab ( somehow ) If so - Life edit could became much easier Estimate page by page ( start from the obvious ones to present several options to PO's ) Estimate only the first part for certain pages of a single website GO UP MX Interactive Maps EXD - Assumption: No live edit Links wont work The functionality is available only through the "Visual experience" tab in Contentstack It wont work from the Content type level (there is a "Live preview" CTA) Its a CS bug (TBD) Dependencies Risks T-shirt
+- V-EPAM-Ivan Mikhailov: Pre-estimated in the following state: Current status: POC needed, and it’s estimated Breakdown: POC: Verify whether there is a change to navigate through pages within the Live view (will the links work?) Related assumption - #a Verify that user can edit the content type from the "Visual experience" tab If so - Live Edit could become much easier Related assumption - #b Implement Live View and Live Edit for 2 GO Transit pages: Homepage Details Page - Standard PI11 planning update, : MX. Homepage MX. Discover Article page (aka News Article page) After POC , devs should be able to properly estimate the following: GO. Live View and Live Edit UP. Live View and Live Edit MX. Live View and Live Edit Interactive Maps. Live View and Live Edit EXD - Assumption: Most probably links inside the Live view wont work (Live edit limitation, but TBD by the dev team) The functionality is available only through the "Visual experience" tab in Contentstack It wont work from the Content type level (there is a "Live preview" CTA) Its a CS bug (TBD in #2.a.ii) Dependencies - Risks Potential Contentstack limitations, TBD after the POC implemenmtation (see more details in #2.a) T-shirt For POC - M Estimate for MX/GO/UP TBD after the POC
+- V-Oksana Seleznova: , please review and confirm if we should add POC (M-size) to PI-10.
+- Chenowa George: to review and confirm
+- Chenowa George: More info needed to understand the gap/learning needed to implement the feature vs a POC; TBD - option to create a story with 2 pages to implement? Confirm if instead a demo from contentstack is the appropriate solve EPAM/IT to discuss next steps at standing meeting more info: cc
+- V-Oksana Seleznova: , please follow up on this
+- V-NandaKumar KR: As recommended by we will await for demo from ContentStack. Its possible, no code changes are needed and its more of configure and use. After the demo if any code changes required we can plan this story for development team.
+- V-EPAM-Ivan Mikhailov: , Agreed to have a demo from the Contentstack team on the solution. Once demonstrated, this ticket could be reassessed. Updated Contentstack docs link - CC ,
+- V-EPAM-Ivan Mikhailov: , agreed to have a demo from the Contentstack team on the solution. Once demonstrated, this ticket could be reassessed. For the current pi-11 planning agreed to add this ticket with M estimate Next steps: going to share email to with the current problems will schedule a call with CS team CC Updated Contentstack docs link - CC ,
+- V-EPAM-Ivan Mikhailov: During the PI-11 planning we agreed to update the: Scope of this ticket from GO. Homepage GO. Details Page - Standard to the following: MX. Homepage MX. Discover Article page (aka News Article page) Move this ticket closer to the middle of the PI (waiting for the Demo from Contentstack to clarify the implementation, and most probably convert the Spike to the delivereable) CC
+- V-EPAM-Ivan Mikhailov: Hi , Please schedule a demo with CS once possible. More details/issues/agenda/etc. are in the email from : “Content Stack Live Preview demo request “ CC , ,
+
+
+# Output
+{"links": [{"classification": "vendor_documentation", "fetchStatus": "fetched", "quotes": ["The Contentstack Next.js SDK provides a `onEntryChange` callback that takes no arguments — you register a listener and it fires whenever the entry being previewed changes.", "Live Preview is configured in the Contentstack web app under Stack Settings → Live Preview, not in application code."], "relevant": true, "scopeCaveat": "This guide targets Next.js CSR (Client-Side Rendering) with the App Router. If the codeline uses the Pages Router or SSR, the setup steps differ.", "url": "https://www.contentstack.com/docs/headless-cms/live-preview-implementation-for-nextjs-csr-app-router"}, {"classification": "vendor_documentation", "fetchStatus": "fetched", "quotes": ["Custom Preview URLs allow you to configure the URL pattern that Contentstack uses when launching Live Preview for an entry.", "To configure custom preview URLs, navigate to Stack Settings → Live Preview → Custom Preview URLs and define a URL template using entry-level placeholders such as {{entry_uid}} and {{content_type_uid}}."], "relevant": true, "scopeCaveat": "This section describes configuration performed in the Contentstack web app UI, not in application code. It applies regardless of front-end framework.", "url": "https://www.contentstack.com/docs/headless-cms/custom-preview-urls#configure-custom-preview-urls"}]}

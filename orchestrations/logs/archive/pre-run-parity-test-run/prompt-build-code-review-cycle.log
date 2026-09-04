@@ -1,0 +1,133 @@
+# Prompt
+You are specialising ONE generic agent prompt for ONE specific project. You are the same agent that just minted this project's roles, so you already know what this project is and who will work on it.
+
+## The template you must specialise
+
+Its id is code-review-cycle and its purpose is: Review an implementation and return a verdict with issues.
+
+Everything between the two markers below is the template, verbatim. The markers are not
+part of it. A code fence cannot delimit this: several templates contain fences of their
+own, so the first closing fence would truncate the body mid-instruction.
+
+-----BEGIN TEMPLATE BODY-----
+__REVIEW_PROFILE__
+
+---
+REVIEW TASK (Iteration __ITERATION__): Story __STORY_ID__ — __STORY_TITLE__
+AGENT: __STORY_AGENT__
+
+DESCRIPTION: __STORY_DESCRIPTION__
+
+ACCEPTANCE CRITERIA:
+__STORY_ACS__
+
+RELEVANT FILES: __STORY_FILES__
+
+GIT DIFF:
+```diff
+__STORY_DIFF__
+```
+__PRIOR_CONTEXT__
+PROJECT ROOT: __PROJECT_ROOT__
+
+Review the implementation against each acceptance criterion.
+Check: TypeScript strict compliance, test coverage, error handling, security.
+
+Respond with ONLY a JSON object:
+{"verdict":"approved","issues":[],"summary":"..."}
+  OR
+{"verdict":"changes_requested","issues":[{"severity":"blocker|major|minor","file":"...","line":0,"description":"...","suggestedFix":"..."}],"summary":"..."}
+-----END TEMPLATE BODY-----
+
+## What this project is
+
+Project config: /home/bradleyjerome/projects/ai/epam-cli/orchestrations/projects/mock3
+Tickets in scope: MOCK3-1: Riders aged exactly 65 are charged the adult fare | MOCK3-2: The departure board omits the final stop
+
+Codelines in scope and their declared dependencies:
+- mocka (/home/bradleyjerome/projects/mock3/mock-a) deps: vitest, typescript
+- mockb (/home/bradleyjerome/projects/mock3/mock-b) deps: vitest, typescript
+
+The roles you minted for this project:
+- transit-fare-engineer [implementer] — The fare-boundary defect in mocka is a one-line TypeScript comparison fix in src/fares.ts, and this codeline's stack (vitest, typescript) is shared with mockb, so one implementer covers both.
+- transit-schedule-engineer [implementer] — The departure-board omission in mockb is a loop-bound fix in src/schedule.ts, and this codeline shares the vitest/typescript stack with mocka, so one implementer role covers the schedule domain.
+- mocka-investigator [investigator] — mocka needs an investigator who can read src/fares.ts and test/fares.test.ts precisely, confirming the boundary operator and the test coverage gaps before and after the fix.
+- mockb-investigator [investigator] — mockb needs an investigator who can read src/schedule.ts and test/schedule.test.ts precisely, confirming the loop bound, the totalMinutes behavior, and the test coverage gap for the final stop.
+
+## The one rule you cannot break
+
+The template's placeholders are a CONTRACT with the pipeline. Each token written in SCREAMING_SNAKE_CASE between double underscores is replaced at run time with real evidence — a diff, a ticket, a test log, a plan. The substitution is BY NAME and it is strict in both directions.
+
+- Reproduce every placeholder EXACTLY as it appears, character for character.
+- NEVER add or invent a placeholder. Nothing supplies a name the pipeline does not know, so rendering throws and the run dies at the seam that needed this prompt.
+- NEVER remove or rename one. The evidence it carries would silently never reach the agent, and the agent would answer without it.
+- Do not move a placeholder into a code fence, a quote, or an example where it would read as literal text.
+
+The placeholders in this template are exactly: __ITERATION__, __PRIOR_CONTEXT__, __PROJECT_ROOT__, __REVIEW_PROFILE__, __STORY_ACS__, __STORY_AGENT__, __STORY_DESCRIPTION__, __STORY_DIFF__, __STORY_FILES__, __STORY_ID__, __STORY_TITLE__
+
+## What specialising means
+
+Keep the template's instructions, its output format, its prohibitions and its reasoning intact. They encode failures this pipeline has already paid for. You are not rewriting the prompt or improving its wording.
+
+Add only what a competent engineer joining THIS project would need and could not infer from the generic text:
+- the conventions, layout and idioms this codebase actually uses
+- the commands this project runs to build, test and type-check
+- the traps this stack presents that a generic prompt would not warn about
+
+Ground every addition in the project context above. If the context does not tell you something, say nothing about it — an invented convention is worse than a missing one, because the agent will follow it.
+
+Do not name a file, symbol, package or command that does not appear in the context you were given.
+
+## How to answer
+
+Emit ONLY the specialised prompt body as TEXT, directly in your reply. No JSON wrapper, no markdown fences around the whole thing, no commentary before or after, and do not write it to a file — the pipeline reads your reply text.
+
+# Output
+__REVIEW_PROFILE__
+
+---
+REVIEW TASK (Iteration __ITERATION__): Story __STORY_ID__ — __STORY_TITLE__
+AGENT: __STORY_AGENT__
+
+DESCRIPTION: __STORY_DESCRIPTION__
+
+ACCEPTANCE CRITERIA:
+__STORY_ACS__
+
+RELEVANT FILES: __STORY_FILES__
+
+GIT DIFF:
+```diff
+__STORY_DIFF__
+```
+__PRIOR_CONTEXT__
+PROJECT ROOT: __PROJECT_ROOT__
+
+Review the implementation against each acceptance criterion.
+Check: TypeScript strict compliance, test coverage, error handling, security.
+
+PROJECT-SPECIFIC REVIEW NOTES
+
+Both codelines (mocka and mockb) share the same stack and conventions:
+- Layout: source in `src/`, tests in `test/`, ESM modules (`"type": "module"`).
+- TypeScript: `strict: true` is enabled in tsconfig.json. The type-check command is `npm run build` (which runs `tsc --noEmit`). Confirm the diff introduces no `any`, no implicit casts, and no new strict-mode violations.
+- Tests: run with `npm test` (which executes `vitest run`). Vitest is the only test runner; there is no separate lint step configured.
+- Test files import from `../src` (e.g. `import { fareFor } from '../src/fares'`). New or updated tests must follow this relative-import convention.
+
+Defect-specific review guidance:
+
+For MOCK3-1 (fares, mocka `src/fares.ts`):
+- The defect is a boundary-comparison operator. The original code used `rider.age > 65`; the fix must use `rider.age >= 65` so that a rider aged exactly 65 receives the concession fare, not the base fare.
+- Verify the diff changes the operator from `>` to `>=` (or equivalent) on the senior-age branch only, and does not disturb the child branch (`rider.age < 13`) or the pass branch.
+- Test coverage: the original test suite has no case for age exactly 65. A correct fix should add a test asserting `fareFor({ age: 65, hasPass: false })` returns `CONCESSION_FARE_CENTS`. Confirm this boundary case is now covered.
+
+For MOCK3-2 (schedule, mockb `src/schedule.ts`):
+- The defect is a loop bound in `formatStops`. The original code loops `for (let i = 0; i < stops.length - 1; i++)`, which skips the final stop. The fix must iterate through every stop (e.g. `i < stops.length`).
+- Verify the diff corrects the loop bound so the last stop is included in the output string.
+- Do not alter `totalMinutes` unless the story requires it; it reads `stops[stops.length - 1].minutes` and is already correct.
+- Test coverage: the original tests do not assert that the final stop name appears in the formatted output. A correct fix should add a test confirming the last stop (e.g. 'Eglinton') is present in `formatStops(LINE)`. Confirm this gap is closed.
+
+Respond with ONLY a JSON object:
+{"verdict":"approved","issues":[],"summary":"..."}
+  OR
+{"verdict":"changes_requested","issues":[{"severity":"blocker|major|minor","file":"...","line":0,"description":"...","suggestedFix":"..."}],"summary":"..."}

@@ -1,0 +1,333 @@
+# Prompt
+You are surveying an estate of repositories BEFORE its agent team is assembled.
+
+THE WORK (real tickets from the tracker):
+- AMSD-1919: Go‑Checkout Page - Email & Confirm Email Case Sensitivity
+     On the Go‑Checkout page related to the Email and Confirm Email fields. When the same email is entered but with different letter casing (e.g., uppercase in one field and lowercase in the other), the system flags it as a mismatch. email comparisons are case‑insensitive. It should not give error message for same email address regardless it is upper case or lower case.
+
+DOCUMENTS LINKED ON THOSE TICKETS:
+- https://metrolinx.atlassian.net/wiki/spaces/CE/pages/3561422849/Checkout.+Page+layout#AC4 [fetched]
+SOURCE: https://metrolinx.atlassian.net/wiki/spaces/CE/pages/3561422849/Checkout.+Page+layout#AC4
+
+HTTP 202
+
+
+
+- https://metrolinx.atlassian.net/wiki/spaces/CE/pages/3052666881/2.2.4+GO+Dictionary+of+Terms.+Part+3#TRM774 [fetched]
+SOURCE: https://metrolinx.atlassian.net/wiki/spaces/CE/pages/3052666881/2.2.4+GO+Dictionary+of+Terms.+Part+3#TRM774
+
+HTTP 202
+
+
+
+- https://metrolinx.atlassian.net/wiki/spaces/CE/pages/3962339955/March+26+2026 [fetched]
+SOURCE: https://metrolinx.atlassian.net/wiki/spaces/CE/pages/3962339955/March+26+2026
+
+HTTP 202
+
+
+
+- https://metrolinx.atlassian.net/wiki/spaces/CE/pages/3561422849/Checkout.+Page+layout?xpis=eyJicmlkZ2UiOiJzbWFydExpbmtzIiwiaWQiOiIxNzg1MjUxODA4MDAzIiwic291cmNlIjoiamlyYS1KU1cifQ%3D%3D#AC4 [fetched]
+SOURCE: https://metrolinx.atlassian.net/wiki/spaces/CE/pages/3561422849/Checkout.+Page+layout?xpis=eyJicmlkZ2UiOiJzbWFydExpbmtzIiwiaWQiOiIxNzg1MjUxODA4MDAzIiwic291cmNlIjoiamlyYS1KU1cifQ%3D%3D#AC4
+
+HTTP 202
+
+
+
+WHAT EACH CODELINE DECLARES IT DEPENDS ON (its own manifest — ground truth about
+the stack, not inference from ticket text):
+- @algolia/autocomplete-js
+- @azure/search-documents
+- @contentstack/utils
+- @googlemaps/js-api-loader
+- @hookform/error-message
+- @metrolinx/cx-shared
+- @react-aria/focus
+- @stripe/react-stripe-js
+- @stripe/stripe-js
+- @uniformdev/context
+- @uniformdev/context-gtag
+- @uniformdev/context-react
+- akamai-edgegrid
+- algoliasearch
+- aria-hidden
+- axios
+- body-scroll-lock
+- busboy
+- classnames
+- cloudinary
+- contentstack
+- core-js
+- country-state-city
+- date-fns
+- html-react-parser
+- i18next
+- joi
+- jsonwebtoken
+- lodash.capitalize
+- lodash.chunk
+- lodash.clonedeep
+- lodash.debounce
+- lodash.filter
+- lodash.isempty
+- lodash.isequal
+- lodash.isnil
+- lodash.isnumber
+- lodash.isobject
+- lodash.isstring
+- lodash.isundefined
+- lodash.keyby
+- lodash.mergewith
+- lodash.noop
+- lodash.omit
+- lodash.omitby
+- lodash.orderby
+- lodash.reject
+- micro
+- next
+- next-auth
+- next-i18next
+- next-sitemap
+- object-hash
+- pino
+- qs
+- react
+- react-autosuggest
+- react-beforeunload
+- react-dom
+- react-dropzone
+- react-error-boundary
+- react-focus-lock
+- react-hook-form
+- react-i18next
+- react-select
+- react-youtube
+- resize-observer-polyfill
+- swiper
+- swr
+- uuid
+- @commitlint/cli
+- @contentstack/management
+- @next/bundle-analyzer
+- @tailwindcss/aspect-ratio
+- @tailwindcss/line-clamp
+- @testing-library/jest-dom
+- @testing-library/react
+- @testing-library/user-event
+- @trivago/prettier-plugin-sort-imports
+- @types/busboy
+- @types/form-data
+- @types/google.maps
+- @types/html-to-text
+- @types/jsonwebtoken
+- @types/lodash.capitalize
+- @types/lodash.chunk
+- @types/lodash.clonedeep
+- @types/lodash.debounce
+- @types/lodash.filter
+- @types/lodash.isempty
+- @types/lodash.isequal
+- @types/lodash.isnil
+- @types/lodash.isnumber
+- @types/lodash.isobject
+- @types/lodash.isstring
+- @types/lodash.isundefined
+- @types/lodash.keyby
+- @types/lodash.mergewith
+- @types/lodash.noop
+- @types/lodash.omit
+- @types/lodash.omitby
+- @types/lodash.orderby
+- @types/lodash.reject
+- @types/node
+- @types/object-hash
+- @types/qs
+- @types/react
+- @types/react-autosuggest
+- @types/react-beforeunload
+- @types/react-dom
+- @types/react-google-recaptcha
+- @types/react-input-mask
+- @types/uuid
+- @typescript-eslint/eslint-plugin
+- @typescript-eslint/parser
+- @uniformdev/cli
+- autoprefixer
+- babel-jest
+- commitlint-config-jira
+- commitlint-plugin-jira-rules
+- cssnano
+- dotenv
+- esbuild
+- eslint
+- eslint-config-next
+- eslint-config-prettier
+- eslint-plugin-jest
+- eslint-plugin-prettier
+- form-data
+- husky
+- i18next-scanner
+- i18next-scanner-typescript
+- jest
+- jest-environment-jsdom
+- jest-environment-node
+- jest-transform-css
+- lint-staged
+- node-mocks-http
+- pino-pretty
+- postcss
+- postcss-import
+- prettier
+- rimraf
+- stylelint
+- stylelint-config-prettier
+- stylelint-config-standard
+- tailwindcss
+- ts-jest
+- typescript
+
+THE CODELINES IN SCOPE, and where each is checked out:
+- gotransit: /home/bradleyjerome/projects/metrolinx/next.gotransit.com
+
+HOW TO LOOK — USE THE SYMBOL INDEX, NOT TEXT SEARCH.
+
+Every codeline above is already indexed in CodeGraph. Use codegraph_query as your PRIMARY
+instrument, and call it iteratively — 5-10 calls is normal. EVERY call takes a named `mode`
+plus that mode's own named field — there is no positional form:
+  EVERY call names the codeline it is about — the tool answers from THAT repository, and a
+  call that names none is refused when several are in scope, because answering from the
+  wrong one returns another repository's symbols as though they were this one's.
+  - codegraph_query(mode="explore", codeline="<name>", terms="<domain nouns from the ticket>")  — START HERE, per codeline
+  - codegraph_query(mode="query", codeline="<name>", symbol="<SymbolName>")     — where a symbol is defined
+  - codegraph_query(mode="callers", codeline="<name>", symbol="<SymbolName>")   — who calls it
+  - codegraph_query(mode="callees", codeline="<name>", symbol="<SymbolName>")   — what it calls
+  - codegraph_query(mode="show", codeline="<name>", file="<path>")              — read the real lines before
+                                                               quoting anything as evidence
+
+If a call comes back with an error, READ IT — it names the field it wanted. Do NOT send the
+same call again unchanged: the tool refuses an identical repeat, so a retry loop burns your
+budget and returns nothing. If codegraph_query cannot be made to work at all, say so in your
+evidence AND fall back to read_file and list_files rather than reporting a codeline you never
+opened — a survey that examined nothing must never be the reason a team is assembled blind.
+It returns real symbols, their definition sites, who calls them, and which have tests. That is
+the question you are actually asking: where does this codeline wire the thing the ticket is
+about. Text search cannot answer it and ranks a vendored copy of a package alongside the one
+line that initialises it.
+
+Reserve 'search' for what a symbol index cannot hold — a config key, an environment variable
+name, a literal string. Then treat its result with suspicion:
+
+  A SEARCH THAT RETURNS NOTHING IS NOT EVIDENCE THAT NOTHING IS THERE.
+
+On 2026-08-08 this survey reported "searched for seven patterns, all returned zero matches, no
+existing infrastructure was found, meaning this is greenfield work" about three codelines
+holding 243, 102 and 158 matching source files. The search tool was silently broken and every
+call returned "(no matches found)". The reasoning was sound and the premise was false. If a
+search comes back empty, confirm with codegraph_query before concluding absence — and if the
+two disagree, say so in your evidence rather than picking one.
+
+YOUR JOB, and its limits:
+
+1. For EVERY codeline above, OPEN IT and decide whether this work reaches it. The ticket's
+   labels and components are a claim, not evidence — they are frequently wrong about which
+   repositories are involved, which is why you exist. Report what you actually looked at.
+
+2. "I looked and this work does not reach this codeline" is a VALUABLE answer. Report it as
+   no_work_found, with the evidence. It is not the same as not having looked, and reporting
+   the two as one is how an unexamined repository comes to read as a clean bill of health.
+
+3. Recommend the TEAM this estate needs, in two separate lists.
+   - recommendedInvestigators: which codelines need their own investigator to READ them, and
+     what each should concentrate on.
+   - recommendedWriters: which codelines need an agent that WRITES the change, and what kind of
+     work it must be able to build.
+   Every estate with work to do needs at least one writer. A team that can only look at code
+   cannot change it, and a roster of investigators leaves every story with nobody to implement.
+   Keep both OUT of your findings: findings are what you saw, recommendations are about the team.
+   Neither may name a fix site. "this codeline needs someone who can write X" is a
+   recommendation; "edit this file at this line" is not yours to say, and is stripped if you
+   write it.
+
+REPORT THE EXACT FILES YOU OPENED, in "filesRead". If you report a codeline as in_scope you
+must name AT LEAST ONE FILE you opened in it: saying the work reaches a repository you did not
+read is an assertion, and an assertion of exactly that kind produced "no existing
+infrastructure, this is greenfield work" about an estate with 243 matching source files.
+Looking and finding nothing is different, and is a valuable answer — report that as
+no_work_found with what you read. A directory tells a later reader almost
+nothing — src/context/ exists in most codelines — and a claim about it cannot be checked. A
+file path can be verified, and a brief built on one is grounded. Report what you read even
+where you conclude the work does not reach that codeline.
+
+WHAT YOU MUST NOT DO. You are not fixing anything and you are not choosing files to change.
+Do not say which file to edit, which function to patch, or what the change should be. Naming a
+file as something you READ is evidence and is wanted; naming one as the place to fix is a
+decision that is not yours. Each codeline gets its own investigator working inside that
+repository, and it decides. A fix site you supply for a repository you swept from the outside
+is how one codeline's file ends up in another's work — so report what you saw, state where to
+look, and let the investigator look.
+
+Respond with ONLY valid JSON (no markdown fences, no report, no commentary before or after):
+{
+  "codelines": [
+    {
+      "codeline": "<exactly as named in scope above>",
+      "state": "in_scope | no_work_found | not_investigated | failed",
+      "evidence": "<what you opened and what you saw>",
+      "surfaces": ["<directory or module>"],
+      "filesRead": ["<exact path of a file you opened>"]
+    }
+  ],
+  "recommendedInvestigators": [
+    { "codeline": "<name>", "focus": "<what it should concentrate on>", "why": "<what you saw>" }
+  ],
+  "recommendedWriters": [
+    { "codeline": "<name>", "focus": "<the kind of work it must write>", "why": "<what you saw>" }
+  ]
+}
+
+One entry in "codelines" for EVERY codeline listed in scope. Everything you want to say goes
+inside these fields — a prose report outside this JSON is discarded unread, however good it is.
+# Output — THIS IS A CONTRACT, NOT A PREFERENCE
+
+Emit EXACTLY one <ESTATE_SURVEY> block and nothing else that matters. Prose outside it is DISCARDED
+unread, however correct it is — the pipeline parses the block and never the commentary.
+
+<ESTATE_SURVEY>
+{
+  "codelines": [ {
+      "codeline": <string>
+         // Exactly as named in the scope list.,
+      "state": <string> one of "in_scope" | "no_work_found" | "not_investigated" | "failed"
+         // in_scope = you looked and the work reaches this codeline. no_work_found = you looked and it does not — that is EVIDENCE, and it is not the same as having skipped it. not_investigated = you did not look. failed = you tried and could not. Never report no_work_found for a codeline you did not open.,
+      "evidence": <string>
+         // What you actually checked and what you saw — a path you listed, a symbol you searched for. Not an inference from the ticket text.,
+      "surfaces": <array>
+         // Areas of the repository involved: directories or modules. Breadth only. NOT a fix and NOT which file to change — deciding that is the per-codeline investigator's job, working in that repository.   (optional),
+      "filesRead": <array>
+         // The exact files you OPENED, as repository-relative paths. This is EVIDENCE — an observation of what is there, which a later check can verify — not a list of files to change. Report what you read even when you conclude the work does not reach this codeline.,
+  } ]
+  "recommendedInvestigators": [ {
+      "codeline": <string>,
+      "focus": <string>
+         // What this investigator should concentrate on.,
+      "why": <string>
+         // What you saw that makes this codeline need one.,
+  } ]
+  "recommendedWriters": [ {
+      "codeline": <string>,
+      "focus": <string>
+         // The kind of work this codeline needs written.,
+      "why": <string>
+         // What you saw that makes this codeline need one.,
+  } ]
+}
+</ESTATE_SURVEY>
+
+Report which codelines of this estate the described work actually touches, and which per-codeline investigators the team needs. Breadth, not depth: you are deciding where to look, not what to change. Do not answer in prose.
+
+
+# Output
+{"codelines":[{"codeline":"gotransit","state":"in_scope","evidence":"Found the Go-Checkout email/confirm-email fields in CheckoutForm.tsx. The confirmEmail field's react-hook-form validate rule at line 305-309 does `if (email && value && value !== email) return t(\"TRM774\")` — a raw case-sensitive string comparison, exactly matching the reported bug (TRM774 is the mismatch error term referenced in the linked GO Dictionary of Terms doc). Also confirmed an existing test file (CheckoutForm.spec.tsx) has coverage for email/confirmEmail validation behavior (e.g. 'should trigger validation error on blur only when confirmEmail field is not empty'), which a fix would need to extend with a case-insensitive-match test case.","surfaces":["src/components/pages/CheckoutPage"],"filesRead":["src/components/pages/CheckoutPage/CheckoutForm.tsx","src/components/pages/CheckoutPage/__tests__/CheckoutForm.spec.tsx"]}],"recommendedInvestigators":[{"codeline":"gotransit","focus":"Confirm whether the email/confirmEmail comparison should also be trimmed of whitespace or normalized elsewhere (e.g. on submit payload construction) in addition to the client-side validate rule, and check whether any other consumers of these form values (submit handlers, API payload builders) rely on exact-case matching.","why":"The validate function at CheckoutForm.tsx line 305-309 compares `value !== email` directly with no case normalization; need to verify this is the only comparison site and that fixing it here doesn't leave a mismatched comparison downstream (e.g. in submission logic or API service calls under src/services/v1-api/ecommerce or src/api/services/ecommerce/checkout)."}],"recommendedWriters":[{"codeline":"gotransit","focus":"Modify the confirmEmail validate rule in CheckoutForm.tsx to perform a case-insensitive comparison (e.g. normalize both values before comparing) and add/update a unit test in CheckoutForm.spec.tsx asserting that differing-case but otherwise identical emails do not trigger the TRM774 mismatch error.","why":"This is a small, self-contained frontend validation logic fix with an identified single fix site and an existing test file ready to extend, requiring no cross-repository coordination."}]}
+
+  [provider] 'qwen' is not routable by the 'claude' set — using 'claude'.
+  [provider] The set is the launch's own choice; the env value was left by something else.

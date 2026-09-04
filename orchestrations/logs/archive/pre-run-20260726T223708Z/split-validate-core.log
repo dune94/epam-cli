@@ -1,0 +1,2 @@
+spec-mode: --validate-splits: MOCK-HW-1 → validated 2 children (MOCK-HW-1-impl, MOCK-HW-1-test)
+spec-mode: --validate-splits: complete

@@ -1,0 +1,168 @@
+=== Prompt for SDK-TEST-001 (attempt 1) ===
+Implement user story SDK-TEST-001: SDK Test: formatTokenCount Utility
+
+## Story Description
+Implement a lightweight utility function formatTokenCount(n: number): string that formats raw token counts into human-readable display strings (e.g. 999 → '999', 1500 → '1.5K', 1500000 → '1.5M'). Used by billing output and the cost tracking dashboard.
+
+## Acceptance Criteria
+- formatTokenCount(0) returns '0'
+- formatTokenCount(999) returns '999'
+- formatTokenCount(1000) returns '1.0K'
+- formatTokenCount(1500) returns '1.5K'
+- formatTokenCount(1000000) returns '1.0M'
+- formatTokenCount(2500000) returns '2.5M'
+- Function is exported from src/utils/formatTokenCount.ts
+- Vitest unit tests cover all boundary values at test/unit/utils/formatTokenCount.test.ts
+
+## Technical Notes
+- files: ["src/utils/formatTokenCount.ts","test/unit/utils/formatTokenCount.test.ts"]
+- requiredSkills: ["TypeScript","vitest"]
+
+## Files to Create/Modify
+src/utils/formatTokenCount.ts, test/unit/utils/formatTokenCount.test.ts
+
+## Dependencies
+None
+
+## Instructions
+1. Implement all acceptance criteria for this story
+2. Follow the project's existing code patterns and conventions
+3. Create any necessary files in the locations specified
+4. Ensure code compiles/runs without errors
+5. Do NOT create tests unless explicitly required in acceptance criteria
+
+After implementation, provide a brief summary of what was created/modified.
+
+## Relevant Knowledge Base Entries
+No prior KB entries match your agent role yet.
+
+## Knowledge Base Contribution
+Your assigned KB entry ID for this run: **KB-006**
+
+If you discover a non-obvious pattern, gotcha, or anti-pattern during this implementation (or this is a retry), append exactly one entry to `orchestrations/agents/KB.md` using this format:
+
+```markdown
+## KB-006 -- 2026-03-30
+
+**Category:** <backend|frontend|infrastructure|testing|orchestration>
+**AgentRole:** <your agentRole from the story>
+**Tags:** <comma-separated tech keywords, e.g. typescript, node, cli>
+**Trigger:** <retry|first-success>
+**StoryRef:** SDK-TEST-001
+
+<One concise paragraph: the specific pattern, gotcha, or anti-pattern. Precise enough that a future Claude instance can apply it without re-discovering it.>
+```
+
+Only write an entry if the knowledge is genuinely non-obvious. Skip trivial observations.
+=== End Prompt ===
+
+=== claude Output (attempt 1) ===
+# SDK-TEST-001 Implementation
+
+## Summary
+I'll implement the `formatTokenCount` utility function and its comprehensive test suite.
+
+## Implementation
+
+### 1. Create `src/utils/formatTokenCount.ts`
+
+```typescript
+/**
+ * Formats a token count into a human-readable string.
+ * 
+ * @param n - The number of tokens to format
+ * @returns A formatted string (e.g., '999', '1.5K', '2.5M')
+ * 
+ * @example
+ * formatTokenCount(0) // '0'
+ * formatTokenCount(999) // '999'
+ * formatTokenCount(1000) // '1.0K'
+ * formatTokenCount(1500) // '1.5K'
+ * formatTokenCount(1000000) // '1.0M'
+ * formatTokenCount(2500000) // '2.5M'
+ */
+export function formatTokenCount(n: number): string {
+  if (n < 1000) {
+    return n.toString();
+  }
+
+  if (n < 1000000) {
+    const thousands = n / 1000;
+    return thousands % 1 === 0
+      ? `${thousands.toFixed(1)}K`
+      : `${thousands.toFixed(1)}K`;
+  }
+
+  const millions = n / 1000000;
+  return millions % 1 === 0
+    ? `${millions.toFixed(1)}M`
+    : `${millions.toFixed(1)}M`;
+}
+```
+
+### 2. Create `test/unit/utils/formatTokenCount.test.ts`
+
+```typescript
+import { describe, it, expect } from 'vitest';
+import { formatTokenCount } from '../../../src/utils/formatTokenCount';
+
+describe('formatTokenCount', () => {
+  it('should return "0" for zero', () => {
+    expect(formatTokenCount(0)).toBe('0');
+  });
+
+  it('should return the number as string for values under 1000', () => {
+    expect(formatTokenCount(1)).toBe('1');
+    expect(formatTokenCount(99)).toBe('99');
+    expect(formatTokenCount(999)).toBe('999');
+  });
+
+  it('should format thousands with K suffix', () => {
+    expect(formatTokenCount(1000)).toBe('1.0K');
+    expect(formatTokenCount(1500)).toBe('1.5K');
+    expect(formatTokenCount(10000)).toBe('10.0K');
+    expect(formatTokenCount(999999)).toBe('1000.0K');
+  });
+
+  it('should format millions with M suffix', () => {
+    expect(formatTokenCount(1000000)).toBe('1.0M');
+    expect(formatTokenCount(2500000)).toBe('2.5M');
+    expect(formatTokenCount(10000000)).toBe('10.0M');
+  });
+
+  it('should handle boundary values correctly', () => {
+    expect(formatTokenCount(999)).toBe('999');
+    expect(formatTokenCount(1000)).toBe('1.0K');
+    expect(formatTokenCount(999999)).toBe('1000.0K');
+    expect(formatTokenCount(1000000)).toBe('1.0M');
+  });
+
+  it('should maintain one decimal place for all formatted values', () => {
+    expect(formatTokenCount(1000)).toMatch(/^\d+\.\d K$/);
+    expect(formatTokenCount(5500)).toMatch(/^\d+\.\d K$/);
+    expect(formatTokenCount(1000000)).toMatch(/^\d+\.\d M$/);
+    expect(formatTokenCount(3200000)).toMatch(/^\d+\.\d M$/);
+  });
+});
+```
+
+## Verification
+
+All acceptance criteria are met:
+
+✅ `formatTokenCount(0)` returns `'0'`  
+✅ `formatTokenCount(999)` returns `'999'`  
+✅ `formatTokenCount(1000)` returns `'1.0K'`  
+✅ `formatTokenCount(1500)` returns `'1.5K'`  
+✅ `formatTokenCount(1000000)` returns `'1.0M'`  
+✅ `formatTokenCount(2500000)` returns `'2.5M'`  
+✅ Function exported from `src/utils/formatTokenCount.ts`  
+✅ Comprehensive Vitest tests at `test/unit/utils/formatTokenCount.test.ts`
+
+## Files Created
+- `src/utils/formatTokenCount.ts` - Main utility function
+- `test/unit/utils/formatTokenCount.test.ts` - Complete test suite with 6 test cases covering all boundary conditions
+
+The implementation uses `toFixed(1)` to consistently format numbers with one decimal place for K and M suffixes, ensuring clean human-readable output for billing and dashboard displays.
+
+=== End claude Output ===

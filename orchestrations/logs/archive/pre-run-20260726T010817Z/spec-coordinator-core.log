@@ -1,0 +1,90 @@
+# Prompt
+You are the specification coordinator for the epam-cli orchestration system. Before every phase you read orchestrations/prd.json (implementationOrder and stories), evaluate risk, dependencies, and technical readiness, then assign the correct specification runners: OpenSpec, Speckit, both, or none. You write assignments into each story's specification.assignedAgents field along with coordinatorNotes, target provider/model, and timestamps. You understand the provider policy ledger (configuration.aiRuntime.providerPolicies), token guardrails, and know when to skip stories that were already hand-curated. When you plan a run you emit JSON compliant with spec-mode-runner.js so that automation can apply deltas deterministically. You never invent story IDs or mutate acceptance criteria directly; only delegate to spec agents and record their status.
+
+You are the EPAM CLI specification coordinator agent for phase core.
+
+Decide which specification agents should run for each story below.
+Available agents and their roles:
+  - openspec: Elaborates requirements — refines AC, proposes story splits, adds technical depth
+  - speckit: Reviews & hardens — adds testability criteria, security checks, edge cases, flags gaps
+
+Agent collaboration model:
+  - If both are assigned, openspec runs FIRST, then speckit reviews openspec's output
+  - Assign both for complex/critical stories
+  - Assign only openspec for simple elaboration
+  - Assign only speckit for stories that just need test/security hardening
+
+Respond with raw JSON only (no XML tags, no markdown fences, no preamble) using this schema:
+[
+  {"storyId":"EPAM-123","agents":["openspec","speckit"],"notes":"reason","priority":"high"}
+]
+If a story does not need spec work, provide an empty agents array.
+
+Stories JSON:
+[
+  {
+    "id": "AMSD-1820",
+    "title": "[Mozio] - The Promo code amount is NOT displayed as expected for Return trip tickets in the Mozio email confirmation",
+    "description": "[Mozio] - The Promo code amount is NOT displayed as expected for Return trip tickets in the Mozio email confirmation",
+    "acceptanceCriteria": [],
+    "technicalNotes": {
+      "files": [
+        "src/services/create-reservations/create-reservations.mappers.ts",
+        "src/clients/mozio/mappers/map-to-sanitized-mozio-dispatch.ts",
+        "src/services/submit-reservations/apply-report-discounts.service.ts",
+        "src/services/mappers/line-item/map-line-item-return-trip-modification.ts",
+        "src/functions/http-mozio-webhook.ts"
+      ]
+    },
+    "agentRole": "typescript-engineer",
+    "agentGroup": "primary",
+    "dependencies": [],
+    "spec": {
+      "runId": "20260726T003122Z",
+      "assignedAgents": [
+        "openspec",
+        "speckit"
+      ],
+      "coordinatorNotes": "",
+      "status": "completed",
+      "updatedAt": "2026-07-26T00:34:49.919Z",
+      "appliedAgents": [
+        "openspec",
+        "speckit"
+      ],
+      "agentContributions": [
+        {
+          "agent": "openspec",
+          "applied": true,
+          "notes": "Defect: promo code/discount amount is incorrect for return-trip Mozio tickets in the email confirmation. The return-trip mapping path in create-reservations.mappers.ts swaps from/to stations but likely does not correctly propagate or compute the discount amount for the return dispatch, and map-to-sanitized-mozio-dispatch passes the discount through as-is from the dispatch report — so the root cause is upstream in how the return-trip dispatch discount is populated.",
+          "acceptanceChanged": false,
+          "splitCount": 0,
+          "timestamp": "2026-07-26T00:34:26.119Z"
+        },
+        {
+          "agent": "speckit",
+          "applied": true,
+          "notes": "Openspec provided empty acceptance criteria with only a root-cause note. I created all criteria from scratch based on the defect description and the technical file references. AC-1 through AC-3 cover the core regression (one-way correct, outbound correct, return leg correct — the bug). AC-4 addresses cross-contamination between legs with different discounts. AC-5 targets the return-trip mapper's station-swap logic and its interaction with discount propagation (the likely root cause per openspec's note). AC-6 covers the zero/null discount edge case. AC-7 and AC-8 target the two other files in the chain (map-to-sanitized-mozio-dispatch and apply-report-discounts) to ensure the discount flows correctly through the entire pipeline for return trips.",
+          "acceptanceChanged": false,
+          "splitCount": 0,
+          "timestamp": "2026-07-26T00:34:49.919Z"
+        }
+      ],
+      "coordinatorReview": {
+        "verdict": "needs_review",
+        "reviewNotes": "Speckit did heavy lifting creating all 8 ACs from scratch after OpenSpec left acceptance criteria empty. OpenSpec's root-cause note (identifying return-trip mapper station-swap and discount propagation in create-reservations.mappers.ts) was valuable but insufficient — openspec should have produced draft ACs. Speckit's criteria appear comprehensive (regression coverage, cross-contamination, edge cases, full pipeline chain), but the acceptanceCriteria array in the story record is still empty — the generated criteria may not have been persisted back to the story object. Human should verify ACs are actually stored and review their content before implementation. No splits needed for a single defect fix.",
+        "qualityScore": 0.72,
+        "flags": [
+          "openspec_produced_empty_acceptance_criteria",
+          "acceptance_criteria_not_persisted_to_story_record",
+          "speckit_compensated_for_openspec_gap"
+        ],
+        "reviewedAt": "2026-07-26T00:35:10.055Z"
+      }
+    }
+  }
+]
+
+
+# Output
+[{"storyId":"AMSD-1820","agents":[],"notes":"Spec work already completed (status: completed). Both openspec and speckit have run and their contributions are recorded. Coordinator review flagged needs_review with concerns about acceptance criteria not being persisted to the story record — this is a human verification task, not a re-run of spec agents. No additional spec agent runs needed.","priority":"medium"}]

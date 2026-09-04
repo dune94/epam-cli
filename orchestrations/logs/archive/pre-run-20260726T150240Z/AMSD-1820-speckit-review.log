@@ -1,0 +1,124 @@
+# Prompt
+You are the speckit specification agent for EPAM CLI. Phase core, story AMSD-1820.
+
+You are reviewing and building on the openspec agent's output for this story.
+Your role is COLLABORATIVE — you are NOT starting from scratch. Instead:
+1. Review openspec's proposed acceptance criteria for testability and completeness
+2. Add missing edge-case, error-handling, security, and accessibility criteria
+3. Flag any AC that are vague, untestable, or overlapping
+4. Splitting is openspec's decision alone — you do NOT split stories. If openspec already split
+   this story, do NOT include a "splitStories" field in your output at all (it will be ignored if
+   you do). Review and refine the acceptanceCriteria openspec gave you for the UNSPLIT story as
+   normal; per-child refinement of an already-split story's children happens on a later turn, not
+   here.
+5. Do NOT remove or duplicate openspec's good work — build on it
+
+━━━ WHAT-NOT-HOW RULE (MANDATORY) ━━━
+Every AC must describe an OBSERVABLE OUTCOME (what a test can verify from outside the code),
+NOT an implementation instruction. If an AC names vi.mock, jest.fn, mockReturnValue,
+mockResolvedValue, import statements, or require() calls, REPLACE it with a
+Given/When/Then behaviour statement. Never tell the implementer which library or mock pattern to use.
+
+OPENSPEC'S OUTPUT (your input to review — ACs and split proposals only):
+{
+  "acceptanceCriteria": [],
+  "notes": "Defect: promo code discount amount is missing or incorrect in the Mozio email confirmation specifically for return trip tickets. The map-to-sanitized-mozio-dispatch mapper passes discount.amount through from the dispatch report, so the root cause likely lies upstream in how the discount is computed or applied for return-trip dispatches (apply-report-discounts.service.ts or map-line-item-return-trip-modification.ts). The sanitized mapper itself appears to pass the value correctly when present, suggesting the discount data is either not populated or incorrectly calculated for return trips before reaching the mapper.",
+  "splitStories": []
+}
+
+ORIGINAL STORY CONTEXT:
+{
+  "id": "AMSD-1820",
+  "title": "[Mozio] - The Promo code amount is NOT displayed as expected for Return trip tickets in the Mozio email confirmation",
+  "description": "[Mozio] - The Promo code amount is NOT displayed as expected for Return trip tickets in the Mozio email confirmation",
+  "originalAcceptanceCriteria": [],
+  "technicalNotes": {
+    "files": [
+      "src/services/submit-reservations/apply-report-discounts.service.ts",
+      "src/services/mappers/line-item/map-line-item-return-trip-modification.ts",
+      "src/clients/mozio/mappers/map-to-sanitized-mozio-dispatch.ts",
+      "src/services/create-reservations/create-reservations.mappers.ts",
+      "src/functions/http-mozio-webhook.ts"
+    ]
+  },
+  "dependencies": []
+}
+
+Produce your refined output as raw JSON only (no XML tags, no markdown fences, no preamble). Include:
+- "acceptanceCriteria": The FULL merged list (openspec's criteria + your additions/refinements). Every item MUST be an observable outcome, not an implementation instruction.
+- "notes": What you changed and why (be specific — cite which criteria you added/modified/replaced)
+- "splitStories": ALWAYS omit this field. Splitting is openspec's decision alone — never propose
+  split children of your own, even if openspec already split this story.
+- "acAddedBySpeckit": Array of criteria YOU added that were not in openspec's output
+- "acModifiedBySpeckit": Array of {"original":"...","revised":"..."} for criteria you reworded
+- "acFlagged": Array of {"criterion":"...","flag":"..."} for criteria that need human attention
+
+
+# Output
+```json
+{
+  "acceptanceCriteria": [
+    {
+      "id": "AC-1",
+      "given": "A return trip reservation with a promo code discount applied",
+      "when": "The Mozio email confirmation is generated",
+      "then": "The promo code discount amount displayed in the email matches the discount value from the original dispatch report"
+    },
+    {
+      "id": "AC-2",
+      "given": "A one-way trip reservation with a promo code discount applied",
+      "when": "The Mozio email confirmation is generated",
+      "then": "The promo code discount amount displayed in the email matches the discount value from the original dispatch report (no regression)"
+    },
+    {
+      "id": "AC-3",
+      "given": "A return trip reservation with no promo code applied",
+      "when": "The Mozio email confirmation is generated",
+      "then": "No discount amount is displayed in the email confirmation"
+    },
+    {
+      "id": "AC-4",
+      "given": "A return trip reservation with a promo code that results in a zero-value discount",
+      "when": "The Mozio email confirmation is generated",
+      "then": "The discount amount is displayed as zero or is omitted, consistent with how one-way zero-discount trips are handled"
+    },
+    {
+      "id": "AC-5",
+      "given": "A return trip reservation with a promo code discount applied",
+      "when": "The discount data is processed through the report-discounts and line-item-return-trip-modification pipeline",
+      "then": "The discount amount is present and correct in the sanitized Mozio dispatch output"
+    },
+    {
+      "id": "AC-6",
+      "given": "A return trip reservation with a promo code discount applied",
+      "when": "The Mozio webhook processes the dispatch report",
+      "then": "The discount amount in the resulting email payload matches the discount from the original reservation"
+    },
+    {
+      "id": "AC-7",
+      "given": "A return trip reservation with a promo code discount applied",
+      "when": "The reservation is created via create-reservations",
+      "then": "The discount amount is correctly propagated to the line item for the return trip modification"
+    },
+    {
+      "id": "AC-8",
+      "given": "A return trip reservation with a fractional promo code discount (e.g., $12.345)",
+      "when": "The Mozio email confirmation is generated",
+      "then": "The discount amount is rounded or truncated consistently with how one-way trip discounts are displayed"
+    }
+  ],
+  "notes": "Openspec provided empty acceptance criteria, so all criteria are new. I built criteria around the core defect (return-trip discount missing/incorrect) and added: AC-2 as a one-way regression guard; AC-3 and AC-4 for edge cases (no discount, zero discount); AC-5 and AC-7 to ensure the discount value survives the upstream pipeline stages mentioned in the technical notes (apply-report-discounts, map-line-item-return-trip-modification, create-reservations); AC-6 to cover the webhook path; AC-8 for fractional-amount rounding consistency. All criteria are expressed as observable outcomes without referencing implementation details.",
+  "acAddedBySpeckit": [
+    "AC-1: Return trip promo discount matches dispatch report in email",
+    "AC-2: One-way trip promo discount still correct (regression guard)",
+    "AC-3: No discount displayed when no promo code on return trip",
+    "AC-4: Zero-value discount handled consistently for return trips",
+    "AC-5: Discount amount present and correct in sanitized Mozio dispatch output for return trips",
+    "AC-6: Webhook-processed return trip discount matches original reservation",
+    "AC-7: Discount propagated correctly through create-reservations to return trip line item",
+    "AC-8: Fractional discount amounts rounded consistently between one-way and return trips"
+  ],
+  "acModifiedBySpeckit": [],
+  "acFlagged": []
+}
+```

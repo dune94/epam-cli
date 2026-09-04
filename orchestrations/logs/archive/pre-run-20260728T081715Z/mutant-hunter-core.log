@@ -1,0 +1,8 @@
+{
+  "agent": "mutant-hunter",
+  "phase": "core",
+  "summary": { "mutationsProposed": 0, "killed": 0, "survived": 0, "noCoverage": 0, "mutationScore": 100 },
+  "mutations": [],
+  "verdict": "not_applicable",
+  "reason": "Changed file src/hello.ts contains a single static string-return function with no operators, conditionals, comparisons, arguments, or critical paths (failover, auth, billing, state) to mutate meaningfully."
+}

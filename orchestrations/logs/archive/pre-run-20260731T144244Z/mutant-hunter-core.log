@@ -1,0 +1,8 @@
+{
+  "agent": "mutant-hunter",
+  "phase": "core",
+  "summary": { "mutationsProposed": 0, "killed": 0, "survived": 0, "noCoverage": 0, "mutationScore": 100 },
+  "mutations": [],
+  "verdict": "not_applicable",
+  "reason": "Changed file is a single return-string-literal function with no operators, control flow, or critical paths; mutation testing is not meaningful here."
+}

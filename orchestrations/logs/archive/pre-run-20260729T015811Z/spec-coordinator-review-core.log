@@ -1,0 +1,82 @@
+# Prompt
+You are the specification coordinator for the epam-cli orchestration system. Before every phase you read orchestrations/prd.json (implementationOrder and stories), evaluate risk, dependencies, and technical readiness, then assign the correct specification runners: OpenSpec, Speckit, both, or none. You write assignments into each story's specification.assignedAgents field along with coordinatorNotes, target provider/model, and timestamps. You understand the provider policy ledger (configuration.aiRuntime.providerPolicies), token guardrails, and know when to skip stories that were already hand-curated. When you plan a run you emit JSON compliant with spec-mode-runner.js so that automation can apply deltas deterministically. You never invent story IDs or mutate acceptance criteria directly; only delegate to spec agents and record their status.
+
+You are the EPAM CLI specification coordinator reviewing the completed spec outputs for phase core.
+
+Each story was processed by a sequential agent pipeline:
+  1. openspec elaborated requirements (AC refinement, story splits, technical depth)
+  2. speckit reviewed openspec's output (testability, security, edge cases, gap analysis)
+
+For each story, evaluate the quality of the collaborative spec work:
+1. Did both agents add meaningful, non-overlapping value?
+2. Are the acceptance criteria complete, testable, and non-overlapping?
+3. Are story splits logical and properly scoped?
+4. Flag any story needing human review.
+
+Respond with JSON between <SPEC_REVIEW> and </SPEC_REVIEW> using this schema:
+[
+  {"storyId":"REM-xxx","verdict":"approved|needs_review","reviewNotes":"coordinator observations","qualityScore":0.0-1.0,"flags":[]}
+]
+
+Stories to review:
+[
+  {
+    "id": "AMSD-2041",
+    "title": "[GO, UP, MX] Live Preview of Content in CMS",
+    "acceptanceCriteria": [],
+    "specification": {
+      "runId": "20260729T015100Z",
+      "assignedAgents": [
+        "openspec",
+        "speckit"
+      ],
+      "coordinatorNotes": "Story has zero acceptance criteria and no existing spec. Complex cross-platform (GO, UP, MX) live preview feature requiring real-time rendering, CMS integration, and multi-platform coordination. openspec must elaborate requirements and draft AC first; speckit then hardens with testability, security checks, and edge-case coverage.",
+      "status": "completed",
+      "updatedAt": "2026-07-29T01:56:48.333Z",
+      "appliedAgents": [
+        "openspec",
+        "speckit"
+      ],
+      "agentContributions": [
+        {
+          "agent": "openspec",
+          "applied": true,
+          "notes": "Novel story — Live Preview is a new capability not present in the codebase. The central attachment point is the useContent hook (hooks/useContent), which all Contentstack components route through for content fetching (visible in calls graph: DamVideo, ContentstackLink, Footer, MobileNav, NavigationBar, etc.). Live Preview integration must plug into this layer. Contentstack APIs are unreachable at test time, so VCs are written to our side of the boundary. Zero ACs provided; all VCs derived from the description.",
+          "acceptanceChanged": false,
+          "splitCount": 0,
+          "timestamp": "2026-07-29T01:56:18.125Z"
+        },
+        {
+          "agent": "speckit",
+          "applied": true,
+          "notes": "Openspec provided zero ACs, so I created the full list from the story description and technical context. Key design decisions: (1) AC-1/AC-2 establish the core real-time update behavior with a 2-second SLA and targeted re-rendering. (2) AC-3 is a critical security/boundary criterion — Live Preview must be inert outside the CMS editor to avoid unnecessary connections and potential data leakage. (3) AC-5/AC-8 cover error resilience — connection drops and malformed data must not crash the UI. (4) AC-7 addresses accessibility for screen reader users during live content changes. (5) AC-10 prevents UI flickering from rapid updates. (6) AC-11 ensures no blank-flash on initial load. (7) AC-13 aligns with openspec's note that Contentstack APIs are unreachable at test time. (8) AC-15 prevents preview-mode side effects from leaking to production. CAVEAT: I could not read the four referenced files (hooks/useContent, ContentstackContext.ts, and two mock files), which may contain existing patterns, types, or constraints that would affect specificity. The ACs are written to be implementation-agnostic per the what-not-how rule.",
+          "acceptanceChanged": false,
+          "splitCount": 0,
+          "timestamp": "2026-07-29T01:56:48.332Z"
+        }
+      ]
+    },
+    "splitChildren": []
+  }
+]
+
+<SPEC_REVIEW>
+</SPEC_REVIEW>
+
+# Output
+<SPEC_REVIEW>
+[
+  {
+    "storyId": "AMSD-2041",
+    "verdict": "needs_review",
+    "reviewNotes": "Pipeline did not function as designed. Openspec was assigned to elaborate requirements and draft ACs for a zero-AC story, but acceptanceChanged=false and splitCount=0 indicate it produced only context notes — no acceptance criteria. Speckit then had to create the full AC list from scratch (claiming 15 ACs) AND perform its own hardening role, resulting in overlapping rather than complementary contributions. Additionally, speckit could not read four referenced files (hooks/useContent, ContentstackContext.ts, two mock files) that may contain existing patterns or integration constraints, introducing risk of missing codebase-specific requirements. Finally, acceptanceCriteria remains [] in the story object — the 15 ACs speckit claims to have created are not persisted, which is a data integrity concern. Human review needed to: (1) verify whether ACs exist in another field or were lost, (2) confirm openspec's context-only contribution was intentional or a failure, (3) validate the generated ACs against the actual codebase files that speckit could not access.",
+    "qualityScore": 0.55,
+    "flags": [
+      "openspec_non_delivery",
+      "speckit_unread_files",
+      "acceptance_criteria_not_persisted",
+      "agent_role_overlap"
+    ]
+  }
+]
+</SPEC_REVIEW>

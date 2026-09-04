@@ -1,0 +1,2 @@
+  [vc-coverage] COVERED   When the greeting is displayed or emitted to the user, the tester observes the exact text "hello dol
+  [vc-coverage]           ↳ returns hello dolly

@@ -1,0 +1,34 @@
+# Prompt
+Assign an implementation agent role to every story below.
+
+AVAILABLE ROLES — these are this project's own engineering roles. Choose from these and
+nothing else; the name you return must match one of them verbatim:
+- typescript-logic-fixer
+    You are a TypeScript implementer working across two codelines in this project: mocka and mockb. Both codelines declare vitest and typescript as dependencies. Your job is to edit TypeScript source files to fix logic bugs identified by investigators and by the ticket tracker. You do NOT write, edit, or own test files — a separate pipeline agent owns all test authorship. Your changes are limited to source files. ## Codeline mocka Root-relative paths you edit: src/fares.ts. The fareFor function in src/fares.ts computes fares based on rider properties. The ticket MOCK3-1 reports that a rider aged exactly 65 is charged the adult fare (350 cents) instead of the concession fare (175 cents), because the comparison operator governing the concession branch excludes the boundary value. Read src/fares.ts, identify the comparison in fareFor, and correct the operator so that riders aged 65 and over receive the concession fare, matching the documented rule. Do not change constant names or unrelated logic. ## Codeline mockb Root-relative paths you edit: src/schedule.ts. The formatStops function in src/schedule.ts renders a list of stops for a departure board. The ticket MOCK3-2 reports that the final stop is omitted from the output because the loop iterates to stops.length - 1. Read src/schedule.ts, identify the loop bound in formatStops, and correct it so that every stop including the last one is rendered. Do not change totalMinutes or any other function in the file. ## Conventions - Both codelines use TypeScript. Follow the existing coding style in each file: naming, indentation, type annotations, and export patterns already present. - Make the smallest change that fixes the bug. Do not refactor surrounding code. - After editing, run the existing test suite with the vitest runner declared in each codeline's manifest to confirm you have not broken passing tests. The command is `npx vitest run` or the equivalent configured in the codeline's package.json scripts — check the scripts section to confirm the exact command before running. - Do not create, modify, or delete any file under a test/ directory or matching *.test.ts. The test pipeline agent owns regression tests. - If a package or API symbol you are told to use does not appear in the codeline's installed dependencies or declared exports, stop and report the discrepancy rather than guessing.
+
+STORIES — a story listing more than one codeline needs ONE ASSIGNMENT PER CODELINE:
+- MOCK3-1: Riders aged exactly 65 are charged the adult fare
+    codeline: mocka
+    The fare rules say riders aged 65 and over pay the concession fare. A rider aged exactly 65 is charged the full adult fare of 350 cents instead of 175. Riders aged 66 and above are charged correctly, so the boundary itself is wrong rather than the rule.
+- MOCK3-2: The departure board omits the final stop
+    codeline: mockb
+    formatStops renders every stop except the last one, so a three-stop line shows two. The journey length reported by totalMinutes is correct, which is why the omission has gone unnoticed.
+
+Pick the role whose stated expertise actually covers the work the story describes. If two
+roles could plausibly own a story, prefer the one whose brief names the surface the story
+touches.
+
+THE UNIT OF ASSIGNMENT IS A (STORY, CODELINE) PAIR, NOT A STORY. A story listing three
+codelines needs THREE assignments — the repositories differ, so the right owner can differ.
+Count the codelines listed against each story and return exactly that many assignments for it,
+naming the codeline on every one. A story is not assigned until every codeline it lists is.
+
+THE OWNER MUST AUTHOR THE CODE. Assign the role that will EDIT THE FILES this story changes —
+the one whose brief names those files or directories. A role whose brief is about settings in
+a vendor's console, or about documentation, cannot deliver a story here: the agent's output is
+a change in a repository. Live 2026-08-07: this story went to the one role of three that owned
+no source files, and all such a role can produce is a configuration note. Where the story needs
+both console configuration and code, 
+
+# Output
+{"assignments":[{"storyId":"MOCK3-1","codeline":"mocka","agentRole":"typescript-logic-fixer","reason":"The role's brief explicitly names codeline mocka, ticket MOCK3-1, and the file src/fares.ts. The story requires editing src/fares.ts to correct the comparison operator in fareFor, which is exactly the work this role is chartered to perform."},{"storyId":"MOCK3-2","codeline":"mockb","agentRole":"typescript-logic-fixer","reason":"The role's brief explicitly names codeline mockb, ticket MOCK3-2, and the file src/schedule.ts. The story requires editing src/schedule.ts to correct the loop bound in formatStops, which is exactly the work this role is chartered to perform."}]}

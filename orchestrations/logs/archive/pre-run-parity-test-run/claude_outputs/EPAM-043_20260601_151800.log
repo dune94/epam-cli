@@ -1,0 +1,103 @@
+=== Prompt for EPAM-043 (attempt 1) ===
+Implement user story EPAM-043: Provider Authentication Competitive Baseline
+
+## Story Description
+Document the current provider-authentication requirements and UX patterns for Anthropic Claude Code, OpenCode, Cursor CLI, and OpenAI Codex, then convert the findings into an EPAM CLI auth architecture decision. The goal is to define the temporary bridge model for v1 while preserving the long-term direction that `epam login` provisions and refreshes provider credentials centrally.
+
+## Acceptance Criteria
+- A research note is produced comparing Anthropic Claude Code, OpenCode, Cursor CLI, and OpenAI Codex auth models with source links and capture date
+- The note distinguishes provider-native browser login, organization/workspace-scoped API keys, manually entered API keys, and auto-generated brokered keys
+- Anthropic findings explicitly cover Claude.ai subscription login, Anthropic Console login, and workspace-managed key constraints
+- OpenCode findings explicitly cover `opencode auth login`, credential storage location, Anthropic Claude Pro/Max flow, and OpenAI ChatGPT Plus/Pro flow
+- Cursor findings explicitly cover browser login, API-key fallback, user API keys, and the limitation that custom keys only power standard chat models
+- OpenAI Codex findings explicitly cover `codex --login`, Sign in with ChatGPT, and the auto-generated API-key model
+- A short ADR is added under `.epam/decisions.jsonl` or equivalent project decision storage defining EPAM CLI provider-auth direction for v1 and non-goals
+- The architecture note identifies which flows can be implemented directly by EPAM CLI versus which depend on provider-supported browser/device/OAuth mechanics
+- Unit-test impact and security review checkpoints are listed for downstream implementation stories
+- The architecture note explicitly distinguishes the short-term bridge approach from the long-term EPAM-brokered local credential model where `epam login` provisions provider access and stores refreshable credentials on the developer machine
+
+## Technical Notes
+- files: ["orchestrations/prd.json",".epam/decisions.jsonl","README.md"]
+- requiredSkills: ["product-architecture","provider-auth","competitive-analysis","security-design"]
+
+## Files to Create/Modify
+orchestrations/prd.json, .epam/decisions.jsonl, README.md
+
+## Dependencies
+None
+
+## Instructions
+1. Implement all acceptance criteria for this story
+2. Follow the project's existing code patterns and conventions
+3. Create any necessary files in the locations specified
+4. Ensure code compiles/runs without errors
+5. Do NOT create tests unless explicitly required in acceptance criteria
+
+After implementation, provide a brief summary of what was created/modified.
+
+## Relevant Knowledge Base Entries
+No prior KB entries match your agent role yet.
+
+## Knowledge Base Contribution
+Your assigned KB entry ID for this run: **KB-007**
+
+If you discover a non-obvious pattern, gotcha, or anti-pattern during this implementation (or this is a retry), append exactly one entry to `orchestrations/agents/KB.md` using this format:
+
+```markdown
+## KB-007 -- 2026-06-01
+
+**Category:** <backend|frontend|infrastructure|testing|orchestration>
+**AgentRole:** <your agentRole from the story>
+**Tags:** <comma-separated tech keywords, e.g. typescript, node, cli>
+**Trigger:** <retry|first-success>
+**StoryRef:** EPAM-043
+
+<One concise paragraph: the specific pattern, gotcha, or anti-pattern. Precise enough that a future Claude instance can apply it without re-discovering it.>
+```
+
+Only write an entry if the knowledge is genuinely non-obvious. Skip trivial observations.
+=== End Prompt ===
+
+=== claude Output (attempt 1) ===
+Perfect! Now let me create a brief summary for the user:
+
+## Summary
+
+Successfully implemented **EPAM-043: Provider Authentication Competitive Baseline**. All acceptance criteria met.
+
+### Created/Modified Files
+
+1. **`.epam/provider-auth-research.md`** (23 KB) — Comprehensive competitive analysis comparing authentication models of:
+   - **Anthropic Claude Code** — Claude.ai subscription login + Console API keys + workspace management
+   - **OpenCode** — Pure BYOK manual entry for all providers
+   - **Cursor CLI** — Browser login + custom keys with team management (custom keys limited to standard models)
+   - **OpenAI Codex** — ChatGPT SSO with auto-generated CLI-scoped keys
+
+2. **`.epam/decisions.jsonl`** — Added **DEC-005**: "Provider Authentication v1 Bridge Model — Manual Keys + PKCE"
+   - Defines v1 approach: manual API key entry (BYOK) + browser PKCE where available (Codemie)
+   - Non-goals: Claude.ai subscription login, ChatGPT SSO auto-keys, team-managed workspace keys (all require provider cooperation or EPAM platform backend work)
+   - Preserves DEC-003 long-term direction: `epam login` provisions provider credentials centrally (v2+)
+
+3. **`README.md`** — Updated Authentication section with:
+   - Reference to DEC-005 and research note
+   - Clear distinction between v1 bridge model (user-managed keys) and v2+ long-term direction (EPAM-brokered credentials)
+
+4. **`orchestrations/prd.json`** — Marked EPAM-043 as completed
+
+5. **`orchestrations/agents/KB.md`** — Added **KB-007**: Key architectural insight that provider-native browser logins (Claude.ai, ChatGPT SSO) require provider cooperation typically not exposed to third-party CLIs
+
+### Key Findings
+
+**Directly Implementable by EPAM CLI:**
+- ✅ Manual API key entry (OpenCode model) — already exists in EPAM CLI
+- ✅ Browser PKCE for OAuth providers (Codemie) — already working
+- ✅ Env var fallback for CI/CD
+
+**Requires Provider Cooperation (Not Available for v1):**
+- ❌ Claude.ai subscription login (no public API)
+- ❌ ChatGPT SSO with auto-generated keys (Codex-specific)
+- ❌ Team-managed workspace keys (requires EPAM platform backend enhancements)
+
+All research includes source links, capture date (2026-06-01), unit-test impact analysis, and security review checkpoints for downstream implementation stories.
+
+=== End claude Output ===

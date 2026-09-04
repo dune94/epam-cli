@@ -1,0 +1,156 @@
+=== Prompt for SKY-004-b (attempt 1) ===
+CRITICAL — WRITE FILES FIRST. Your FIRST tool call MUST be WriteFile.
+Do NOT output any text before calling WriteFile. Do NOT plan or say "I will...".
+Call WriteFile NOW for the EXACT ABSOLUTE PATHS listed below:
+
+   - WRITE /home/bradleyjerome/projects/skyscanner-app/package.json first, before any other action
+   - WRITE /home/bradleyjerome/projects/skyscanner-app/tsconfig.json first, before any other action
+---
+
+Implement user story SKY-004-b: Build configuration and package setup for server
+
+## Story Description
+Configure package.json build script to compile server.ts to dist/server.js and copy src/public/ to dist/public/. Add start script. Add supertest devDependencies. Ensure tsc --noEmit passes.
+
+## Acceptance Criteria
+- package.json contains 'start' script with value 'node dist/server.js'
+- package.json 'build' script produces dist/server.js such that `npm run build && npm run start` starts the server and GET /health returns 200
+- Build script copies src/public/ into dist/public/ — after `npm run build`, dist/public/index.html exists and GET / serves the real dashboard file (not 404 or stale fallback)
+- supertest and @types/supertest are listed in package.json devDependencies
+- `npx tsc --noEmit` exits 0 with no type errors
+
+
+
+
+
+## Technical Notes
+- files: ["/home/bradleyjerome/projects/skyscanner-app/package.json","/home/bradleyjerome/projects/skyscanner-app/tsconfig.json"]
+- dependsOn: ["SKY-004-a","SKY-002"]
+
+## Files to Create/Modify (EXACT ABSOLUTE PATHS — write to these paths exactly)
+/home/bradleyjerome/projects/skyscanner-app/package.json, /home/bradleyjerome/projects/skyscanner-app/tsconfig.json
+
+## Dependencies
+SKY-002
+
+
+
+## Instructions
+**CRITICAL — WRITE FILES FIRST:**
+   - WRITE /home/bradleyjerome/projects/skyscanner-app/package.json first, before any other action
+   - WRITE /home/bradleyjerome/projects/skyscanner-app/tsconfig.json first, before any other action
+**You MUST write every file listed above to its EXACT absolute path. Do NOT write to a different path, do NOT write to the current directory unless it matches the path above. Use your WriteFile or Edit tools with the full absolute path shown.**
+
+1. Write each required file to its exact absolute path listed above — do this FIRST before anything else
+2. Implement all acceptance criteria for this story
+3. Follow the project's existing code patterns and conventions
+4. Do NOT create tests unless explicitly required in acceptance criteria
+
+After implementation, provide a brief summary of what was created/modified.
+
+## Relevant Knowledge Base Entries
+The following was learned from previous story implementations and is relevant to your agent role. Apply this knowledge before writing any code:
+
+- [2026-07-06T17:45:30Z] Always resolve mocked fetch calls to a Response-shaped object with ok, status, statusText, and a json method returning a Promise.
+- [2026-07-06T17:50:20Z] Use valid module and moduleResolution pairs in tsconfig.json: CommonJS with Node, Node16 with Node16, ESNext with Bundler. Use CommonJS and Node for the stack. Mismatched pairs cause build errors.
+- [2026-07-06T18:11:26Z] Use vi.fn().mockResolvedValue(value) to make a mock return a resolved Promise.
+- [2026-07-06T20:31:11Z] Use `test: { passWithNoTests: true }` in vitest.config.ts or create a stub test file when no *.test.ts files exist.
+- [2026-07-06T20:33:03Z] Enable globals:true in vitest.config.ts so describe, it, and expect work without imports, reducing boilerplate in test files.
+- [2026-07-06T23:47:34Z] Use CommonJS-compatible patterns in src/server.ts: avoid `import.meta.url` and top-level `await`; gate listen with `if (require.main === module)`.
+- [2026-07-07T02:35:30Z] Always include a non-test source file in src/ alongside any src/*.test.ts file, since tsconfig.json excludes test files from tsc --noEmit.
+- [2026-07-07T19:01:34Z] Only modify or create files explicitly listed in the story's acceptance criteria. Do not touch files belonging to other stories or outside the current task scope.
+- [2026-07-07T20:17:57Z] [unreviewed-fallback] Avoid using deprecated TypeScript compiler options like 'moduleResolution=node10'; use 'moduleResolution=node' instead.
+- [2026-07-17T20:20:58Z] Always: Before importing a module or referencing a type/property, always read the actual source file to verify the export exists, its exact path, its properties, and its constructor/factory signatures
+
+## Knowledge Base Contribution (do this LAST — after writing all implementation files)
+Your assigned KB entry ID for this run: **KB-009**
+
+IMPORTANT: Write ALL implementation files first. Only AFTER writing every required file should you optionally append a KB entry.
+Do NOT read orchestrations/agents/KB.md before writing implementation files. The relevant KB entries are already injected above.
+
+If (and only if) you discover a non-obvious pattern during implementation, append one entry to `orchestrations/agents/KB.md`:
+
+```markdown
+## KB-009 -- 2026-07-20
+
+**Category:** <backend|frontend|infrastructure|testing|orchestration>
+**AgentRole:** <your agentRole from the story>
+**Tags:** <comma-separated tech keywords, e.g. typescript, node, cli>
+**Trigger:** <retry|first-success>
+**StoryRef:** SKY-004-b
+
+<One concise paragraph: the specific pattern, gotcha, or anti-pattern.>
+```
+
+Only write an entry if the knowledge is genuinely non-obvious. Skip trivial observations.
+
+## Execution Plan
+Follow this plan step by step:
+[1;33m[WARNING][0m   PlanReview: mismatch detected for SKY-004-b against dependency contracts — one corrective re-plan
+1. Read `/home/bradleyjerome/projects/skyscanner-app/package.json` and `/home/bradleyjerome/projects/skyscanner-app/tsconfig.json` to inspect current contents, and list the project directory to understand existing structure (src/, dist/, etc.).
+
+2. Write `/home/bradleyjerome/projects/skyscanner-app/tsconfig.json` with compiler options targeting ES2020/Node, `module: commonjs`, `outDir: "./dist"`, `rootDir: "./src"`, `strict: true`, `esModuleInterop: true`, `resolveJsonModule: true`, `skipLibCheck: true`, and `include: ["src/**/*"]`.
+
+3. Write `/home/bradleyjerome/projects/skyscanner-app/package.json` with `name`, `version`, `scripts` containing `"start": "node dist/server.js"`, `"build": "tsc && npx shx mkdir -p dist/public && npx shx cp -r src/public/* dist/public/"` (or equivalent copy mechanism), and appropriate `dependencies` (express, etc.) and `devDependencies` including `typescript`, `supertest`, `@types/supertest`, `@types/express`, `@types/node`, and `shx` (or similar copy tool).
+
+4. Verify that `src/server.ts` exists and exports/starts an Express app listening on a port (default 3000), with a `GET /health` route returning 200 and a `GET /` route serving `dist/public/index.html` via `express.static('dist/public')` or `sendFile`. If `src/server.ts` does not exist, create it with those routes.
+
+5. Verify that `src/public/index.html` exists as the dashboard file. If it does not exist, create a minimal HTML dashboard file at `src/public/index.html`.
+
+6. Run `npx tsc --noEmit` from the project root and confirm it exits 0 with no type errors. Fix any type errors in source files.
+
+7. Run `npm run build` and confirm `dist/server.js` and `dist/public/index.html` both exist.
+
+8. Run `npm run start` in the background, then `curl http://localhost:3000/health` to confirm 200 response, and `curl http://localhost:3000/` to confirm the dashboard HTML is served (not 404). Kill the server process.
+
+9. If any step fails, iterate on the source/config files (using only the two specified paths for config changes) until all acceptance criteria pass.
+=== End Prompt ===
+
+=== epam Output (attempt 1) ===
+All acceptance criteria have been verified:
+
+**Summary of Implementation:**
+
+1. **`/home/bradleyjerome/projects/skyscanner-app/package.json`**:
+   - Added `"start": "node dist/server.js"` script
+   - Added `"build": "tsc && npx shx mkdir -p dist/public && npx shx cp -r src/public/* dist/public/"` script that compiles TypeScript and copies public assets
+   - Added `supertest` and `@types/supertest` to devDependencies
+   - Added `shx` for cross-platform file copying
+
+2. **`/home/bradleyjerome/projects/skyscanner-app/tsconfig.json`**:
+   - Configured for CommonJS output with `module: "commonjs"` and `moduleResolution: "node"`
+   - Set `outDir: "./dist"` and `rootDir: "./src"`
+   - Enabled strict mode, esModuleInterop, and other standard options
+   - Excluded test files from compilation
+
+**Verification Results:**
+- ✅ `npx tsc --noEmit` exits with code 0 (no type errors)
+- ✅ `npm run build` produces `dist/server.js` and `dist/public/index.html`
+- ✅ `npm run start` starts the server successfully
+- ✅ GET `/health` returns 200 with `{"status":"ok","uptime":...}`
+- ✅ GET `/` serves the real dashboard HTML file (not 404)
+  [tc-writer] No test stories need TCs in phase 'unknown' — skipping
+All acceptance criteria have been verified:
+
+**Summary of Implementation:**
+
+1. **`/home/bradleyjerome/projects/skyscanner-app/package.json`**:
+   - Added `"start": "node dist/server.js"` script
+   - Added `"build": "tsc && npx shx mkdir -p dist/public && npx shx cp -r src/public/* dist/public/"` script that compiles TypeScript and copies public assets
+   - Added `supertest` and `@types/supertest` to devDependencies
+   - Added `shx` for cross-platform file copying
+
+2. **`/home/bradleyjerome/projects/skyscanner-app/tsconfig.json`**:
+   - Configured for CommonJS output with `module: "commonjs"` and `moduleResolution: "node"`
+   - Set `outDir: "./dist"` and `rootDir: "./src"`
+   - Enabled strict mode, esModuleInterop, and other standard options
+   - Excluded test files from compilation
+
+**Verification Results:**
+- ✅ `npx tsc --noEmit` exits with code 0 (no type errors)
+- ✅ `npm run build` produces `dist/server.js` and `dist/public/index.html`
+- ✅ `npm run start` starts the server successfully
+- ✅ GET `/health` returns 200 with `{"status":"ok","uptime":...}`
+- ✅ GET `/` serves the real dashboard HTML file (not 404)
+
+=== End epam Output ===

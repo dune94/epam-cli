@@ -1,0 +1,34 @@
+# Prompt
+Assign an implementation agent role to every story below.
+
+AVAILABLE ROLES — these are this project's own engineering roles. Choose from these and
+nothing else; the name you return must match one of them verbatim:
+- typescript-bugfix-engineer
+    You are an implementer who fixes bugs in TypeScript source across two codelines: mocka and mockb. Both declare vitest and typescript in their manifests; no other runtime or framework is declared, and you must not assume any dependency that does not appear in a codeline's own manifest. Your job is to edit source files — never test files. A separate agent owns all test authorship; you are forbidden from creating or editing any file under a test/ directory. If you believe a test is missing, say so in your report and stop. Codeline mocka: the work is in src/fares.ts. The function fareFor (src/fares.ts) gates the concession fare with a boundary comparison. Ticket MOCK3-1 reports that a rider aged exactly 65 is charged the adult fare because the comparison excludes 65. The fix is a single-operator change in fareFor so the boundary includes age 65. After editing, run vitest from the mocka root to confirm existing tests still pass — do not add or modify tests yourself. Report which line you changed and what the operator was before and after. Codeline mockb: the work is in src/schedule.ts. The function formatStops (src/schedule.ts) iterates the stops array with a bound that skips the final element. Ticket MOCK3-2 reports that the last stop is omitted from the rendered output. The fix is a loop-bound change in formatStops so every stop including the last is rendered. totalMinutes in the same file reads the last element directly and should not need changes — verify this rather than assuming. After editing, run vitest from the mockb root to confirm existing tests still pass. Conventions: source lives under src/, tests under test/, both codelines use vitest as the test runner invoked from the repository root. TypeScript is the language for all source. Keep changes minimal — one operator or one bound per ticket — and do not refactor surrounding code. If a caller of the function you change appears to depend on the current (incorrect) behavior, stop and report it rather than working around it.
+
+STORIES — a story listing more than one codeline needs ONE ASSIGNMENT PER CODELINE:
+- MOCK3-1: Riders aged exactly 65 are charged the adult fare
+    codeline: mocka
+    The fare rules say riders aged 65 and over pay the concession fare. A rider aged exactly 65 is charged the full adult fare of 350 cents instead of 175. Riders aged 66 and above are charged correctly, so the boundary itself is wrong rather than the rule.
+- MOCK3-2: The departure board omits the final stop
+    codeline: mockb
+    formatStops renders every stop except the last one, so a three-stop line shows two. The journey length reported by totalMinutes is correct, which is why the omission has gone unnoticed.
+
+Pick the role whose stated expertise actually covers the work the story describes. If two
+roles could plausibly own a story, prefer the one whose brief names the surface the story
+touches.
+
+THE UNIT OF ASSIGNMENT IS A (STORY, CODELINE) PAIR, NOT A STORY. A story listing three
+codelines needs THREE assignments — the repositories differ, so the right owner can differ.
+Count the codelines listed against each story and return exactly that many assignments for it,
+naming the codeline on every one. A story is not assigned until every codeline it lists is.
+
+THE OWNER MUST AUTHOR THE CODE. Assign the role that will EDIT THE FILES this story changes —
+the one whose brief names those files or directories. A role whose brief is about settings in
+a vendor's console, or about documentation, cannot deliver a story here: the agent's output is
+a change in a repository. Live 2026-08-07: this story went to the one role of three that owned
+no source files, and all such a role can produce is a configuration note. Where the story needs
+both console configuration and code, 
+
+# Output
+{"assignments":[{"storyId":"MOCK3-1","codeline":"mocka","agentRole":"typescript-bugfix-engineer","reason":"Ticket concerns fareFor in src/fares.ts on the mocka codeline — a single-operator boundary fix. The role's brief explicitly names mocka, src/fares.ts, fareFor, and ticket MOCK3-1."},{"storyId":"MOCK3-2","codeline":"mockb","agentRole":"typescript-bugfix-engineer","reason":"Ticket concerns formatStops in src/schedule.ts on the mockb codeline — a loop-bound fix. The role's brief explicitly names mockb, src/schedule.ts, formatStops, and ticket MOCK3-2."}]}

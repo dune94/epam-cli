@@ -1,0 +1,23 @@
+Now let me reason about the proactive skill gaps for MOCK-HW-1:
+
+**Story MOCK-HW-1 analysis:**
+- This is a bug fix: change `'hello world'` to `'hello dolly'` in `src/hello.ts`
+- Must also update the test assertion in `src/hello.test.ts`
+- The project's package.json does NOT list vitest as a devDependency (it's available via the parent project's node_modules hoisting)
+- TypeScript strict mode is enabled
+- Module system is CommonJS
+- No vitest.config.ts exists (vitest uses defaults)
+
+**Inferred gaps for typescript-engineer:**
+
+1. **Vitest not in local package.json**: The brownfield project's package.json only has `typescript` as a devDependency. Vitest works via hoisted node_modules from the parent project. The agent might try to add vitest to devDependencies or run `npm install vitest`, which would be unnecessary and could cause conflicts. Rule: Do NOT add vitest to the project's package.json — it is available via the parent workspace's hoisted node_modules.
+
+2. **No vitest.config.ts**: The project has no vitest.config.ts. The agent might try to create one, but this is a scaffold-phase file and is immutable. Rule: Do NOT create vitest.config.ts — the project uses vitest defaults.
+
+3. **Test-first for bug fixes**: Since this is a bug fix where both the implementation and test need updating, the agent should update the test FIRST (to assert 'hello dolly'), watch it fail, then fix the implementation. This confirms the test actually catches the bug. Rule: For bug-fix stories, update the test assertion BEFORE changing the implementation, then verify the test fails with the old code, then fix the implementation.
+
+4. **Both files are in scope**: The story has both `src/hello.ts` and `src/hello.test.ts`. The agent might change only the implementation and forget to update the test, or vice versa. Rule: When a story lists both implementation and test files, BOTH must be updated in the same story — the test assertion must match the new implementation output.
+
+5. **.codegraph/.gitignore is a deliverable**: The story also lists `.codegraph/.gitignore` as a file. The agent might not realize this file already exists and should not be modified unless necessary. Rule: Check if `.codegraph/.gitignore` already exists before attempting to create or modify it.
+
+Now let me implement all the updates:

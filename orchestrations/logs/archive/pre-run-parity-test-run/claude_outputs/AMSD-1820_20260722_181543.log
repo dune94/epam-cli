@@ -1,0 +1,98 @@
+=== Prompt for AMSD-1820 (attempt 1) ===
+CRITICAL — WRITE FILES FIRST. Your FIRST tool call MUST be WriteFile.
+Do NOT output any text before calling WriteFile. Do NOT plan or say "I will...".
+Call WriteFile NOW for the EXACT ABSOLUTE PATHS listed below:
+
+   - WRITE /home/bradleyjerome/projects/metrolinx/azure.commerce.cdts/src/services/submit-reservations/submit-reservations.mappers.ts first, before any other action
+   - WRITE /home/bradleyjerome/projects/metrolinx/azure.commerce.cdts/src/services/submit-reservations/apply-report-discounts.service.ts first, before any other action
+   - WRITE /home/bradleyjerome/projects/metrolinx/azure.commerce.cdts/src/clients/mozio/mappers/map-to-sanitized-mozio-dispatch.ts first, before any other action
+---
+
+Implement user story AMSD-1820: [Mozio] - Promo code discount amount missing for return trip tickets in Mozio email confirmation
+
+## Story Description
+Promo code discount amount is not displayed for return trip tickets in the Mozio email confirmation. The root cause is that the code path constructing the Mozio dispatch report price does not correctly extract and apply the discount for return-trip segments, so the return segment's discount is missing or zeroed. The fix must ensure the dispatch report price discount is correctly populated for return-trip dispatches before the dispatch is serialized for the email confirmation.
+
+## Acceptance Criteria
+- Given a return trip ticket order with an applied promo code, when the Mozio dispatch report price is constructed for the return segment, then the discount.amount and discount.name fields are populated with the correct promo code values.
+- Given a return trip ticket order with an applied promo code, when the dispatch is sanitized for the Mozio email confirmation, then the return segment's report.price.discount includes the correct amount and masked name — matching the outbound segment's format, currency, and placement.
+- Given a one-way trip ticket order with an applied promo code, when the Mozio dispatch is constructed and sanitized, then the promo code discount amount is displayed correctly (regression — existing behavior must not break).
+- Given a return trip ticket order with NO promo code applied, when the Mozio dispatch is constructed, then report.price.discount is undefined/absent for both outbound and return segments, and the sanitized dispatch omits the discount field.
+- Given a return trip ticket order where the promo code discount fully covers the trip cost (zero-amount order), when the Mozio dispatch is constructed, then the discount.amount reflects the full promo value for both outbound and return segments.
+- Given a return trip ticket order with an applied promo code, when the Mozio dispatch report price is constructed, then the discount.amount on each segment equals the promo discount allocated to that segment (not the total order discount, and not the segment trip price).
+- Given a return trip ticket order with an applied promo code, when the Mozio dispatch report price is constructed, then the discount currency matches the report.price currency for both outbound and return segments.
+- Given a return trip ticket order where the promo code discount amount exceeds the trip price, when the Mozio dispatch is constructed, then the discount.amount is capped at the trip price and no negative total price is produced.
+- Given a return trip ticket order with an applied promo code, when the dispatch is sanitized for the Mozio email confirmation, then the discount.name does not expose the raw promo code string — only a display-safe/masked representation is included.
+
+
+
+
+
+## Technical Notes
+- files: ["src/services/submit-reservations/submit-reservations.mappers.ts","src/services/submit-reservations/apply-report-discounts.service.ts","src/clients/mozio/mappers/map-to-sanitized-mozio-dispatch.ts"]
+
+## Files to Create/Modify (EXACT ABSOLUTE PATHS — write to these paths exactly)
+src/services/submit-reservations/submit-reservations.mappers.ts, src/services/submit-reservations/apply-report-discounts.service.ts, src/clients/mozio/mappers/map-to-sanitized-mozio-dispatch.ts
+
+## Dependencies
+None
+
+
+
+## Instructions
+**CRITICAL — WRITE FILES FIRST:**
+   - WRITE /home/bradleyjerome/projects/metrolinx/azure.commerce.cdts/src/services/submit-reservations/submit-reservations.mappers.ts first, before any other action
+   - WRITE /home/bradleyjerome/projects/metrolinx/azure.commerce.cdts/src/services/submit-reservations/apply-report-discounts.service.ts first, before any other action
+   - WRITE /home/bradleyjerome/projects/metrolinx/azure.commerce.cdts/src/clients/mozio/mappers/map-to-sanitized-mozio-dispatch.ts first, before any other action
+**You MUST write every file listed above to its EXACT absolute path. Do NOT write to a different path, do NOT write to the current directory unless it matches the path above. Use your WriteFile or Edit tools with the full absolute path shown.**
+
+1. Write each required file to its exact absolute path listed above — do this FIRST before anything else
+2. Implement all acceptance criteria for this story
+3. Follow the project's existing code patterns and conventions
+4. Do NOT create tests unless explicitly required in acceptance criteria
+
+After implementation, provide a brief summary of what was created/modified.
+
+## Relevant Knowledge Base Entries
+The following was learned from previous story implementations and is relevant to your agent role. Apply this knowledge before writing any code:
+
+- [2026-07-06T17:45:30Z] Always resolve mocked fetch calls to a Response-shaped object with ok, status, statusText, and a json method returning a Promise.
+- [2026-07-06T17:50:20Z] Use valid module and moduleResolution pairs in tsconfig.json: CommonJS with Node, Node16 with Node16, ESNext with Bundler. Use CommonJS and Node for the stack. Mismatched pairs cause build errors.
+- [2026-07-06T18:11:26Z] Use vi.fn().mockResolvedValue(value) to make a mock return a resolved Promise.
+- [2026-07-06T20:31:11Z] Use `test: { passWithNoTests: true }` in vitest.config.ts or create a stub test file when no *.test.ts files exist.
+- [2026-07-06T20:33:03Z] Enable globals:true in vitest.config.ts so describe, it, and expect work without imports, reducing boilerplate in test files.
+- [2026-07-06T23:47:34Z] Use CommonJS-compatible patterns in src/server.ts: avoid `import.meta.url` and top-level `await`; gate listen with `if (require.main === module)`.
+- [2026-07-07T02:35:30Z] Always include a non-test source file in src/ alongside any src/*.test.ts file, since tsconfig.json excludes test files from tsc --noEmit.
+- [2026-07-07T19:01:34Z] Only modify or create files explicitly listed in the story's acceptance criteria. Do not touch files belonging to other stories or outside the current task scope.
+- [2026-07-07T20:17:57Z] [unreviewed-fallback] Avoid using deprecated TypeScript compiler options like 'moduleResolution=node10'; use 'moduleResolution=node' instead.
+- [2026-07-17T20:20:58Z] Always: Before importing a module or referencing a type/property, always read the actual source file to verify the export exists, its exact path, its properties, and its constructor/factory signatures
+
+## Knowledge Base Contribution (do this LAST — after writing all implementation files)
+Your assigned KB entry ID for this run: **KB-012**
+
+IMPORTANT: Write ALL implementation files first. Only AFTER writing every required file should you optionally append a KB entry.
+Do NOT read orchestrations/agents/KB.md before writing implementation files. The relevant KB entries are already injected above.
+
+If (and only if) you discover a non-obvious pattern during implementation, append one entry to `orchestrations/agents/KB.md`:
+
+```markdown
+## KB-012 -- 2026-07-22
+
+**Category:** <backend|frontend|infrastructure|testing|orchestration>
+**AgentRole:** <your agentRole from the story>
+**Tags:** <comma-separated tech keywords, e.g. typescript, node, cli>
+**Trigger:** <retry|first-success>
+**StoryRef:** AMSD-1820
+
+<One concise paragraph: the specific pattern, gotcha, or anti-pattern.>
+```
+
+Only write an entry if the knowledge is genuinely non-obvious. Skip trivial observations.
+=== End Prompt ===
+
+=== epam Output (attempt 1) ===
+Now let me explore supporting types to understand the structure:
+  [tc-writer] No test stories need TCs in phase 'unknown' — skipping
+Now let me explore supporting types to understand the structure:
+
+=== End epam Output ===

@@ -1,0 +1,56 @@
+# Prompt
+Regenerate the VERIFICATION CRITERIA for this brownfield story. Your previous verification criteria were FLAGGED and must be fixed:
+- VC 1 references internal structure (Contentstack SDK client mocked) and prescribes HOW — restate as observable outcome on the rendered page only
+- VC 1 uses cross-comparison ('instead of the published entry's title and body text') — assert the draft content is present on its own, not that it differs from published
+- VC 2 is entirely about internal SDK query parameters and method names (getEntry/getSingleEntry/findSingletonEntry) — not observable on the user-facing surface; restate as what the Content Author sees when preview parameters are in the URL
+- VC 3 uses cross-comparison ('the same published content it displayed before this change') — assert the published content is present and correct on its own terms
+- VC 4 is entirely about an internal structure (Contentstack Stack initialization options object with live_preview property) — prescribes HOW and is not observable on the rendered surface; restate as the end-user outcome that live preview capability enables
+- VC 5 references internal structure (SDK client mocked) and prescribes HOW (application receives preview parameters) — restate as observable outcome on the rendered page
+- VC 6 uses cross-comparison ('renders its current published content unchanged') — assert the published content is displayed on its own terms without referencing a comparison state
+
+THE FIX SITE (located by the code-graph detective — anchor every criterion to the behaviour THIS code produces):
+- src/services/contentstack.ts :: getEntry — Central data-fetching function for all Contentstack entries (22 callers across all services). Live Preview requires that draft entries be fetchable through this same pipeline — the Contentstack SDK's live_preview config must be added to the Stack initialization (line 91) and preview query parameters (preview token, content type UIDs) must flow through getEntry/getSingleEntry/findSingletonEntry into ContentstackFactory's createContentTypeQuery and createContentTypeEntryQuery methods. This is the attachment point where preview mode toggles must be injected so all downstream page services receive draft content.
+Do NOT write criteria about areas unrelated to this code.
+
+
+Acceptance criteria (IMMUTABLE — the intent to verify; do NOT restate as-is, VERIFY them):
+- (none)
+Description: Original Requirements (discovery)  AS a Content Author, I WANT to preview draft entries in CMS, SO THAT I can see how content will be shown on the website
+ability to preview draft entries in CMS
+Notes& Assumptions  Limitation: Might not be possible to preview protected pages and content.
+Original Total Estimate:  8  Original FE Estimate:  8  Original DAM Estimate:  0  Original BE Estimate:  0
+
+A verification criterion states WHAT AN END USER OR TESTER OBSERVES on the user-facing surface THE TICKET IS ABOUT — the rendered output for an output ticket, the displayed screen for a UI ticket, the response a CLIENT receives for an API ticket. It is a BLACK-BOX check on that surface. It NEVER describes HOW the value is produced.
+A verification criterion is FORBIDDEN if it:
+- prescribes HOW to implement — any algorithm, mechanism, approach, or the addition/reading of any new field, flag or service;
+- references an INTERNAL structure that merely FEEDS the ticket's surface — an intermediate payload, a data-transfer object, or a specific response field used to BUILD the output. Verify the surface the ticket names, NOT the data structure behind it;
+- makes a CROSS-COMPARISON that presumes a mechanism — never assert one value "must equal" / "matches" / "is the same as" another; that presumes a shared derivation. Assert the required value is present and correct ON ITS OWN.
+Every verification criterion must be observable, testable, and tied to the ticket's stated symptom/intent.
+
+EXAMPLES OF FORM (the angle-bracket words are placeholders — fill them from THIS story; never copy them literally):
+
+REJECTED: "the <config object> passed to <the client> includes a <key> entry"
+  — asserts INTERNAL STRUCTURE. A tester cannot see a config object.
+ACCEPTED: "when <the request> carries <the marker>, <the surface> shows <the draft state> instead of <the published state>"
+
+REJECTED: "when <internal function> is called with <argument>, the resulting <query> includes <field>"
+  — asserts an INTERNAL CALL PATH. Verify the surface the ticket is about, not the path behind it.
+ACCEPTED: "<the surface> shows <the value> that <the source of truth> currently holds"
+
+REJECTED: "an author edits <entity> in <the external tool> and <the surface> updates"
+  — begins OUTSIDE THE BOUNDARY this suite can drive. Nothing here can operate that tool.
+ACCEPTED: "given <the client> is mocked to signal <the change>, <the surface> re-renders without a reload"
+
+REJECTED: "<the value> matches what <the other place> shows"
+  — a CROSS-COMPARISON presumes a shared derivation. Assert the required value on its own.
+ACCEPTED: "<the surface> shows <the expected value> for <the stated condition>"
+
+REJECTED: "<the feature> works correctly with no regression"
+  — verifies nothing and cannot fail.
+ACCEPTED: "when <the feature> is inactive, <the surface> shows <the prior behaviour> unchanged"
+
+Do NOT restate an acceptance criterion as-is — express what a tester OBSERVES that confirms it. Address every flag above.
+Output ONLY a JSON array of verification-criterion strings. No prose, no markdown.
+
+# Output
+Agent reached maximum iterations (2) without completing.

@@ -1,0 +1,10 @@
+```json
+{
+  "agent": "lightpanda-agent",
+  "storyId": "SPAN-1",
+  "phase": "mock3_core",
+  "verdict": "pass",
+  "findings": [],
+  "summary": "Greeting fully migrated from 'hello world' to 'hello dolly'. No residual 'hello world' found in any file. Source (src/hello.ts) returns 'hello dolly', test (src/hello.test.ts) asserts 'hello dolly', and vitest suite passes (1/1). No functional breakage detected."
+}
+```

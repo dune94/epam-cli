@@ -1,0 +1,16 @@
+spec-mode: fast-path qwen/z-ai/glm-5.2 (skipping MiniMax)
+spec-mode: fast-path qwen/z-ai/glm-5.1 (skipping MiniMax)
+spec-mode: AMSD-1820 — 3 verification criteria persisted (source: description, resolution: clean)
+spec-mode: code-graph-detective phase-2 extraction recovered 1 fix-site(s) for AMSD-1820 from a narrative phase-1 answer.
+spec-mode: fast-path qwen/z-ai/glm-5.1 (skipping MiniMax)
+spec-mode: openspec run failed for AMSD-1820: prompt runner exited with code null
+spec-mode: prd-change-reviewer REJECTED openspec's changes to AMSD-1820 after 2 attempt(s): no details — reverting
+spec-mode: fast-path qwen/z-ai/glm-5.1 (skipping MiniMax)
+spec-mode: speckit review failed for AMSD-1820: prompt runner exited with code null
+spec-mode: speckit returned null for AMSD-1820 (attempt 2/3) — retrying transient failure
+spec-mode: fast-path qwen/z-ai/glm-5.1 (skipping MiniMax)
+spec-mode: fast-path qwen/z-ai/glm-5.2 (skipping MiniMax)
+spec-mode: coordinator review failed: prompt runner exited with code null
+spec-mode: fast-path qwen/z-ai/glm-5.2 (skipping MiniMax)
+Failed to parse JSON for tag MODEL_REVIEW: Unexpected token 'I', "I need to "... is not valid JSON
+spec-mode: completed for phase core (run 20260725T120900Z)

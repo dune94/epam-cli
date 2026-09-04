@@ -1,0 +1,435 @@
+# Prompt
+You are the speckit specification agent for EPAM CLI. Phase core, story AMSD-2041.
+
+You are reviewing and building on the openspec agent's output for this story.
+Your role is COLLABORATIVE — you are NOT starting from scratch. Instead:
+1. Review openspec's proposed acceptance criteria for testability and completeness
+2. Add missing edge-case, error-handling, security, and accessibility criteria
+3. Flag any AC that are vague, untestable, or overlapping
+4. Splitting is openspec's decision alone — you do NOT split stories. If openspec already split
+   this story, do NOT include a "splitStories" field in your output at all (it will be ignored if
+   you do). Review and refine the acceptanceCriteria openspec gave you for the UNSPLIT story as
+   normal; per-child refinement of an already-split story's children happens on a later turn, not
+   here.
+5. Do NOT remove or duplicate openspec's good work — build on it
+
+━━━ WHAT-NOT-HOW RULE (MANDATORY) ━━━
+Every AC must describe an OBSERVABLE OUTCOME (what a test can verify from outside the code),
+NOT an implementation instruction. If an AC names vi.mock, jest.fn, mockReturnValue,
+mockResolvedValue, import statements, or require() calls, REPLACE it with a
+Given/When/Then behaviour statement. Never tell the implementer which library or mock pattern to use.
+
+OPENSPEC'S OUTPUT (your input to review — ACs and split proposals only):
+{
+  "acceptanceCriteria": [],
+  "notes": "Novel capability — the codebase has zero Live Preview support today. The Stack options lack live_preview config, interfaces carry no draft flag, and the catch-all page has no preview-mode detection. All attachment points are in the data-fetching and page-rendering pipeline. Verification criteria stop at our boundary: they assume the Contentstack SDK client is mocked to signal preview state, never asserting real contentstack.io behaviour."
+}
+
+ORIGINAL STORY CONTEXT:
+{
+  "id": "AMSD-2041",
+  "title": "[GO, UP, MX] Live Preview of Content in CMS",
+  "description": "As a Content Author, I want to preview draft entries in the CMS so that I can see how content will be shown on the website before publishing. This requires integrating the Contentstack Live Preview SDK so that draft content is fetched and rendered when a preview session is active, and real-time updates are reflected on the page when content changes in the CMS. Limitation: preview of protected pages and content may not be possible.",
+  "originalAcceptanceCriteria": [],
+  "technicalNotes": {
+    "files": [
+      "src/services/contentstack.ts",
+      "src/interface/contentstack.ts",
+      "src/pages/[[...slug]].tsx",
+      "src/services/pageService.ts",
+      "src/services/partnersPromotionsService.ts",
+      "src/interface/content/page.ts",
+      "src/components/contentstack/ContentstackLinksGroup/content.mock.ts",
+      "src/api/utils/applyMiddlewares.ts"
+    ],
+    "perCodeline": {
+      "gotransit": {
+        "files": [
+          "src/services/contentstack.ts",
+          "src/interface/contentstack.ts",
+          "src/pages/[[...slug]].tsx",
+          "src/services/pageService.ts",
+          "src/services/partnersPromotionsService.ts",
+          "src/interface/content/page.ts",
+          "src/components/contentstack/ContentstackLinksGroup/content.mock.ts",
+          "src/api/utils/applyMiddlewares.ts"
+        ],
+        "resolved": [
+          {
+            "declared": "src/services/contentstack.ts",
+            "actual": "src/services/contentstack.ts",
+            "match": "exact",
+            "verified_against": "/home/bradleyjerome/projects/metrolinx/next.gotransit.com"
+          },
+          {
+            "declared": "src/interface/contentstack.ts",
+            "actual": "src/interface/contentstack.ts",
+            "match": "exact",
+            "verified_against": "/home/bradleyjerome/projects/metrolinx/next.gotransit.com"
+          },
+          {
+            "declared": "src/pages/[[...slug]].tsx",
+            "actual": "src/pages/[[...slug]].tsx",
+            "match": "exact",
+            "verified_against": "/home/bradleyjerome/projects/metrolinx/next.gotransit.com"
+          },
+          {
+            "declared": "src/services/pageService.ts",
+            "actual": "src/services/pageService.ts",
+            "match": "exact",
+            "verified_against": "/home/bradleyjerome/projects/metrolinx/next.gotransit.com"
+          },
+          {
+            "declared": "src/services/partnersPromotionsService.ts",
+            "actual": "src/services/partnersPromotionsService.ts",
+            "match": "exact",
+            "verified_against": "/home/bradleyjerome/projects/metrolinx/next.gotransit.com"
+          },
+          {
+            "declared": "src/interface/content/page.ts",
+            "actual": "src/interface/content/page.ts",
+            "match": "exact",
+            "verified_against": "/home/bradleyjerome/projects/metrolinx/next.gotransit.com"
+          },
+          {
+            "declared": "src/components/contentstack/ContentstackLinksGroup/content.mock.ts",
+            "actual": "src/components/contentstack/ContentstackLinksGroup/content.mock.ts",
+            "match": "exact",
+            "verified_against": "/home/bradleyjerome/projects/metrolinx/next.gotransit.com"
+          },
+          {
+            "declared": "src/api/utils/applyMiddlewares.ts",
+            "actual": "src/api/utils/applyMiddlewares.ts",
+            "match": "exact",
+            "verified_against": "/home/bradleyjerome/projects/metrolinx/next.gotransit.com"
+          }
+        ],
+        "unresolved": []
+      },
+      "upexpress": {
+        "files": [
+          "src/services/contentstack.ts",
+          "src/interface/contentstack.ts",
+          "src/pages/[[...slug]].tsx",
+          "src/services/pageService.ts",
+          "src/interface/content/page.ts",
+          "src/components/contentstack/ContentstackLinksGroup/content.mock.ts",
+          "src/api/utils/applyMiddlewares.ts"
+        ],
+        "resolved": [
+          {
+            "declared": "src/services/contentstack.ts",
+            "actual": "src/services/contentstack.ts",
+            "match": "exact",
+            "verified_against": "/home/bradleyjerome/projects/metrolinx/next.upexpress.com"
+          },
+          {
+            "declared": "src/interface/contentstack.ts",
+            "actual": "src/interface/contentstack.ts",
+            "match": "exact",
+            "verified_against": "/home/bradleyjerome/projects/metrolinx/next.upexpress.com"
+          },
+          {
+            "declared": "src/pages/[[...slug]].tsx",
+            "actual": "src/pages/[[...slug]].tsx",
+            "match": "exact",
+            "verified_against": "/home/bradleyjerome/projects/metrolinx/next.upexpress.com"
+          },
+          {
+            "declared": "src/services/pageService.ts",
+            "actual": "src/services/pageService.ts",
+            "match": "exact",
+            "verified_against": "/home/bradleyjerome/projects/metrolinx/next.upexpress.com"
+          },
+          {
+            "declared": "src/interface/content/page.ts",
+            "actual": "src/interface/content/page.ts",
+            "match": "exact",
+            "verified_against": "/home/bradleyjerome/projects/metrolinx/next.upexpress.com"
+          },
+          {
+            "declared": "src/components/contentstack/ContentstackLinksGroup/content.mock.ts",
+            "actual": "src/components/contentstack/ContentstackLinksGroup/content.mock.ts",
+            "match": "exact",
+            "verified_against": "/home/bradleyjerome/projects/metrolinx/next.upexpress.com"
+          },
+          {
+            "declared": "src/api/utils/applyMiddlewares.ts",
+            "actual": "src/api/utils/applyMiddlewares.ts",
+            "match": "exact",
+            "verified_against": "/home/bradleyjerome/projects/metrolinx/next.upexpress.com"
+          }
+        ],
+        "unresolved": [
+          {
+            "declared": "src/services/partnersPromotionsService.ts",
+            "candidates_checked": [
+              "src/services/partnersPromotionsService.ts",
+              "src/services/__tests__",
+              "src/services/blogService.ts",
+              "src/services/contentstack.ts",
+              "src/services/directoryService.ts",
+              "src/services/facilitiesService.ts",
+              "src/services/gtm.ts",
+              "src/services/logger.ts",
+              "src/services/pageComponentResolver.tsx",
+              "src/services/pageService.ts",
+              "src/services/redirectsService.ts",
+              "src/services/staticPathsResolver.ts",
+              "src/services/up-api",
+              "src/services/userProfileService.ts",
+              "src/services/userSignUpService.ts",
+              "src/services/v1-api"
+            ],
+            "reason": "no exact, case-variant or extension-variant match exists in this codeline"
+          }
+        ]
+      },
+      "metrolinx": {
+        "files": [
+          "src/services/contentstack.ts",
+          "src/interface/contentstack.ts",
+          "src/pages/[[...slug]].tsx",
+          "src/services/pageService.ts",
+          "src/interface/content/page.ts"
+        ],
+        "resolved": [
+          {
+            "declared": "src/services/contentstack.ts",
+            "actual": "src/services/contentstack.ts",
+            "match": "exact",
+            "verified_against": "/home/bradleyjerome/projects/metrolinx/next.metrolinx.com"
+          },
+          {
+            "declared": "src/interface/contentstack.ts",
+            "actual": "src/interface/contentstack.ts",
+            "match": "exact",
+            "verified_against": "/home/bradleyjerome/projects/metrolinx/next.metrolinx.com"
+          },
+          {
+            "declared": "src/pages/[[...slug]].tsx",
+            "actual": "src/pages/[[...slug]].tsx",
+            "match": "exact",
+            "verified_against": "/home/bradleyjerome/projects/metrolinx/next.metrolinx.com"
+          },
+          {
+            "declared": "src/services/pageService.ts",
+            "actual": "src/services/pageService.ts",
+            "match": "exact",
+            "verified_against": "/home/bradleyjerome/projects/metrolinx/next.metrolinx.com"
+          },
+          {
+            "declared": "src/interface/content/page.ts",
+            "actual": "src/interface/content/page.ts",
+            "match": "exact",
+            "verified_against": "/home/bradleyjerome/projects/metrolinx/next.metrolinx.com"
+          }
+        ],
+        "unresolved": [
+          {
+            "declared": "src/services/partnersPromotionsService.ts",
+            "candidates_checked": [
+              "src/services/partnersPromotionsService.ts",
+              "src/services/__tests__",
+              "src/services/contactUsService.ts",
+              "src/services/contentstack.ts",
+              "src/services/directoryService.ts",
+              "src/services/eventsService.ts",
+              "src/services/getIframeSrcHealthCheck.ts",
+              "src/services/gtm.ts",
+              "src/services/logger.ts",
+              "src/services/mappers.ts",
+              "src/services/newsService.ts",
+              "src/services/pageComponentResolver.tsx",
+              "src/services/pageService.ts",
+              "src/services/podcastService.ts",
+              "src/services/projectsSearchService.tsx",
+              "src/services/projectsService.ts",
+              "src/services/redirectsService.ts",
+              "src/services/regionService.ts",
+              "src/services/renderOption.tsx",
+              "src/services/staticPathsResolver.ts",
+              "src/services/topicService.ts",
+              "src/services/userProfileService.ts",
+              "src/services/v1-api"
+            ],
+            "reason": "no exact, case-variant or extension-variant match exists in this codeline"
+          },
+          {
+            "declared": "src/components/contentstack/ContentstackLinksGroup/content.mock.ts",
+            "candidates_checked": [
+              "src/components/contentstack/ContentstackLinksGroup/content.mock.ts"
+            ],
+            "reason": "directory 'src/components/contentstack/ContentstackLinksGroup' does not exist in this codeline"
+          },
+          {
+            "declared": "src/api/utils/applyMiddlewares.ts",
+            "candidates_checked": [
+              "src/api/utils/applyMiddlewares.ts",
+              "src/api/utils/__tests__",
+              "src/api/utils/_cloudinary.ts",
+              "src/api/utils/_contentstack_getNewsArticles.ts",
+              "src/api/utils/_fetchAndTransformCSV.ts",
+              "src/api/utils/_helper.ts",
+              "src/api/utils/_interface.ts",
+              "src/api/utils/_logger.ts",
+              "src/api/utils/_response.ts",
+              "src/api/utils/_schema.ts",
+              "src/api/utils/_search.ts",
+              "src/api/utils/_travelExpenseHelper.ts"
+            ],
+            "reason": "no exact, case-variant or extension-variant match exists in this codeline"
+          }
+        ]
+      }
+    }
+  },
+  "dependencies": []
+}
+
+Produce your refined output as raw JSON only (no XML tags, no markdown fences, no preamble). Include:
+- "acceptanceCriteria": The FULL merged list (openspec's criteria + your additions/refinements). Every item MUST be an observable outcome, not an implementation instruction.
+- "notes": What you changed and why (be specific — cite which criteria you added/modified/replaced)
+- "splitStories": ALWAYS omit this field. Splitting is openspec's decision alone — never propose
+  split children of your own, even if openspec already split this story.
+- "acAddedBySpeckit": Array of criteria YOU added that were not in openspec's output
+- "acModifiedBySpeckit": Array of {"original":"...","revised":"..."} for criteria you reworded
+- "acFlagged": Array of {"criterion":"...","flag":"..."} for criteria that need human attention
+
+For a brownfield story with a real codeline, you may have read-only tools (read_file,
+list_files, search) available this turn — if so, USE them for real to check a file's
+actual contents before relying on it; do not invent what a tool would return. For a
+greenfield story with no existing codeline, you have none — give your best answer from
+the description, title and paths you were given, and say so in "notes" if the file
+contents would have changed your answer. Either way, never narrate an imagined tool
+result: a real answer with an honest caveat is worth everything; fabricated tool-call
+syntax (<tool_call>, <tool_use>, <function_call>) is worth nothing — it is discarded in
+full and the work is lost (observed live, 2026-07-28: exactly this, on an empty-criteria
+story that got no answer at all).
+
+
+# Output
+```json
+{
+  "acceptanceCriteria": [
+    {
+      "id": "AC-1",
+      "criterion": "Given the Contentstack Live Preview SDK is configured with valid preview credentials, When a page request arrives with a valid preview token in the query string, Then the response renders draft (unpublished) content for that entry instead of the published version."
+    },
+    {
+      "id": "AC-2",
+      "criterion": "Given a page request arrives without any preview token, When the response is rendered, Then only published content is returned — identical to the current production behaviour."
+    },
+    {
+      "id": "AC-3",
+      "criterion": "Given a preview session is active on a page, When a content author modifies a field value in Contentstack and saves the draft, Then the previewed page updates to reflect the changed field value without a full manual page reload."
+    },
+    {
+      "id": "AC-4",
+      "criterion": "Given a preview session is active, When the Contentstack live-preview callback signals an update for an entry that does not match the currently displayed entry, Then the page content remains unchanged — only updates for the correct entry are applied."
+    },
+    {
+      "id": "AC-5",
+      "criterion": "Given a page request includes a preview token that is expired or invalid, When the response is rendered, Then the page falls back to published content and logs a warning — no error page or crash is shown to the user."
+    },
+    {
+      "id": "AC-6",
+      "criterion": "Given a preview session is active, When the requested entry does not exist as a draft (e.g., the entry was deleted in the CMS), Then the page renders a not-found response rather than an unhandled exception."
+    },
+    {
+      "id": "AC-7",
+      "criterion": "Given a preview session is active, When the page being previewed is a protected or authenticated page, Then the preview does not render the protected content and instead shows a message indicating the page cannot be previewed — consistent with the stated limitation."
+    },
+    {
+      "id": "AC-8",
+      "criterion": "Given the Contentstack Live Preview SDK is configured, When the Stack initialization options are inspected, Then the configuration includes the live_preview hash with host, app_key, and any required token fields — verified by the SDK accepting the config without throwing a validation error."
+    },
+    {
+      "id": "AC-9",
+      "criterion": "Given a preview session is active, When draft content is fetched, Then all reference fields and JSON RTE fields are resolved with the same depth and rendering as published content — the page structure and layout are visually identical to the published version."
+    },
+    {
+      "id": "AC-10",
+      "criterion": "Given a preview session is active, When the Contentstack SDK returns a network error or timeout while fetching draft content, Then the page falls back to published content and an error is logged — the end user sees a functional page rather than a blank screen."
+    },
+    {
+      "id": "AC-11",
+      "criterion": "Given the live preview feature is enabled, When the Contentstack preview host or app key environment variables are missing or empty, Then the application starts successfully in non-preview mode and logs a warning — it does not crash or throw at startup."
+    },
+    {
+      "id": "AC-12",
+      "criterion": "Given a preview session is active, When a page is rendered, Then the HTML response includes the Contentstack Live Preview client-side script tag or initialization marker so that real-time update callbacks can be received."
+    },
+    {
+      "id": "AC-13",
+      "criterion": "Given a preview session is active, When the page renders draft content, Then the rendered output includes data attributes or metadata on editable elements that allow the Contentstack sidebar to map fields to their on-page locations for in-context editing."
+    },
+    {
+      "id": "AC-14",
+      "criterion": "Given a preview session is active, When the page content includes locale-specific entries, Then draft content is fetched in the same locale as the requested page — preview does not default to or mix locales."
+    },
+    {
+      "id": "AC-15",
+      "criterion": "Given the live preview integration is active, When a non-preview user visits any page on the site, Then page load performance (as measured by Time to First Byte and Largest Contentful Paint) does not degrade by more than 5% compared to the baseline without live preview enabled."
+    },
+    {
+      "id": "AC-16",
+      "criterion": "Given a preview session is active, When the page is rendered, Then no sensitive tokens, API keys, or delivery tokens are exposed in the client-side JavaScript bundle or HTML source beyond what the Contentstack Live Preview SDK explicitly requires for its client-side callback."
+    },
+    {
+      "id": "AC-17",
+      "criterion": "Given the live preview integration is added to the gotransit codeline, When the same integration is applied to the upexpress and metrolinx codelines, Then all three codelines pass their respective build and test suites — the feature is consistent across codelines despite file-structure differences (e.g., absence of partnersPromotionsService.ts or applyMiddlewares.ts in some codelines)."
+    },
+    {
+      "id": "AC-18",
+      "criterion": "Given a preview session is active, When the page content includes modular blocks with nested references, Then all nested reference content is resolved as draft — not just the top-level entry."
+    },
+    {
+      "id": "AC-19",
+      "criterion": "Given the Contentstack Live Preview SDK is integrated, When the application runs its existing unit and integration test suites without a preview session, Then all previously passing tests continue to pass — the integration does not break existing functionality."
+    },
+    {
+      "id": "AC-20",
+      "criterion": "Given a preview session is active, When the rendered page is inspected for accessibility, Then the page maintains the same ARIA attributes, heading hierarchy, and semantic structure as the published version — live preview does not inject elements that break screen-reader navigation."
+    }
+  ],
+  "notes": "Openspec provided empty acceptance criteria, so all 20 criteria are new. Key findings from codebase analysis: (1) The app uses SSG (getStaticProps/getStaticPaths) with filesystem caching — Live Preview requires a shift to SSR or ISR with preview-mode detection in getStaticProps, which AC-1 and AC-12 implicitly require. (2) The Stack in contentstack.ts is initialized without live_preview config — AC-8 addresses this. (3) Zero existing preview-related code was found (search confirmed no matches for live_preview, livePreview, preview_token, etc.). (4) The catch-all page reads from FS cache and never checks context.preview — AC-1 and AC-2 cover the branching. (5) Three codelines have different file sets (partnersPromotionsService.ts and applyMiddlewares.ts absent in metrolinx; ContentstackLinksGroup absent in metrolinx) — AC-17 addresses cross-codeline consistency. (6) The story explicitly states protected pages cannot be previewed — AC-7 captures this. (7) Security consideration: the current Stack options expose api_key and delivery_token server-side only; Live Preview SDK requires a client-side app_key which must not leak the delivery_token — AC-16 addresses this. (8) Performance guard added as AC-15 because adding SSR branching to an SSG pipeline could introduce latency. (9) Accessibility AC-20 ensures preview instrumentation (data attributes, script tags) does not break a11y. File contents were read in full for contentstack.ts, the catch-all page, pageService.ts, and interfaces — criteria are grounded in actual code patterns.",
+  "acAddedBySpeckit": [
+    "AC-1",
+    "AC-2",
+    "AC-3",
+    "AC-4",
+    "AC-5",
+    "AC-6",
+    "AC-7",
+    "AC-8",
+    "AC-9",
+    "AC-10",
+    "AC-11",
+    "AC-12",
+    "AC-13",
+    "AC-14",
+    "AC-15",
+    "AC-16",
+    "AC-17",
+    "AC-18",
+    "AC-19",
+    "AC-20"
+  ],
+  "acModifiedBySpeckit": [],
+  "acFlagged": [
+    {
+      "criterion": "AC-7",
+      "flag": "The story says 'preview of protected pages and content may not be possible' — 'may not' is ambiguous. Needs product clarification on exactly which pages are 'protected' (auth-gated? paywalled? SSO-required?) and whether the expected behaviour is a graceful message, a redirect, or a silent fallback to published content."
+    },
+    {
+      "criterion": "AC-15",
+      "flag": "5% performance budget is a reasonable starting threshold but should be validated against actual baseline measurements. If no baseline exists, this AC needs a concrete measurement plan before it can be verified."
+    },
+    {
+      "criterion": "AC-3",
+      "flag": "Real-time update without full reload depends on the Contentstack Live Preview SDK's client-side callback mechanism (WebSocket or polling). The AC says 'without a full manual page reload' but does not specify acceptable latency. Product should define an acceptable delay (e.g., < 2 seconds) if this is a hard requirement."
+    }
+  ]
+}
+```

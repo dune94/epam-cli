@@ -1,0 +1,3 @@
+Both pending stories (`MOCK-HW-1-impl` and `MOCK-HW-1-test`) already have all three fields (`model`, `aiProvider`, `reasoningEffort`) explicitly set. Per rule 1, they are left untouched. No changes needed to the PRD.
+
+{"assigned_count":0,"stories":[],"reason":"All 2 pending core stories already have model/aiProvider/reasoningEffort"}

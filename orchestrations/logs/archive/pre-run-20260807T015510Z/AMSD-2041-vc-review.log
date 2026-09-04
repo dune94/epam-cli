@@ -1,0 +1,31 @@
+# Prompt
+You are a STRICT verification-criteria reviewer for a brownfield fix. REVIEW ONLY — do NOT rewrite anything.
+
+Acceptance criteria (IMMUTABLE ticket intent):
+- (none)
+Description: Original Requirements (discovery)  AS a Content Author, I WANT to preview draft entries in CMS, SO THAT I can see how content will be shown on the website
+ability to preview draft entries in CMS
+Notes& Assumptions  Limitation: Might not be possible to preview protected pages and content.
+Original Total Estimate:  8  Original FE Estimate:  8  Original DAM Estimate:  0  Original BE Estimate:  0
+
+Proposed verification criteria:
+1. Given the Contentstack SDK client is mocked to return a draft entry when a live_preview_token is supplied, the rendered page displays the draft entry's title and body text instead of the published entry's title and body text
+2. Given a request URL that includes live_preview=1 and live_preview_token=<token> and content_type_uid=<uid> query parameters, the Contentstack SDK query issued by getEntry or getSingleEntry or findSingletonEntry includes those preview parameters in its request to the Contentstack API
+3. Given a request URL that does NOT include live_preview query parameters, the rendered page displays the same published content it displayed before this change, with no difference in layout, data, or behavior
+4. Given the Contentstack Stack initialization options object, it contains a live_preview configuration property that enables the SDK's live preview capability
+5. Given the Contentstack SDK client is mocked to return a draft entry, and the application receives preview parameters via the request URL, the page re-renders with the draft content without requiring a full page reload
+6. Given a protected or authenticated page route, when preview parameters are present in the request URL, the page renders its current published content unchanged (acknowledged limitation — preview is not supported on protected pages)
+
+Apply these rules EXACTLY (the producer is held to the same text — do not invent stricter or looser criteria):
+A verification criterion states WHAT AN END USER OR TESTER OBSERVES on the user-facing surface THE TICKET IS ABOUT — the rendered output for an output ticket, the displayed screen for a UI ticket, the response a CLIENT receives for an API ticket. It is a BLACK-BOX check on that surface. It NEVER describes HOW the value is produced.
+A verification criterion is FORBIDDEN if it:
+- prescribes HOW to implement — any algorithm, mechanism, approach, or the addition/reading of any new field, flag or service;
+- references an INTERNAL structure that merely FEEDS the ticket's surface — an intermediate payload, a data-transfer object, or a specific response field used to BUILD the output. Verify the surface the ticket names, NOT the data structure behind it;
+- makes a CROSS-COMPARISON that presumes a mechanism — never assert one value "must equal" / "matches" / "is the same as" another; that presumes a shared derivation. Assert the required value is present and correct ON ITS OWN.
+Every verification criterion must be observable, testable, and tied to the ticket's stated symptom/intent.
+
+FLAG any verification criterion that violates ANY rule above, OR that fails to cover the intent of an acceptance criterion.
+Output ONLY a JSON array of short flag strings, e.g. ["VC 2 prescribes <an approach> — restate as observable outcome"]. Output [] if every VC is clean. No prose, no markdown.
+
+# Output
+["VC 1 prescribes mocking setup — restate as observable outcome on the rendered page","VC 1 cross-compares draft vs published content — assert the draft content is present on its own","VC 2 references internal SDK query and API request structure — verify the rendered page output, not the SDK call","VC 3 cross-compares with 'before this change' — assert published content is present and correct on its own","VC 4 references internal SDK initialization options object — verify the rendered page output, not the SDK config","VC 5 prescribes mocking setup — restate as observable outcome on the rendered page","VC 6 cross-compares with 'unchanged' — assert the published content is present on its own"]

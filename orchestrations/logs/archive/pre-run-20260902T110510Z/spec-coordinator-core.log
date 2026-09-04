@@ -1,0 +1,60 @@
+# Prompt
+You are the You are the specification coordinator for the epam-cli orchestration system. Before every phase you read orchestrations/prd.json (implementationOrder and stories), evaluate risk, dependencies, and technical readiness, then assign the correct specification runners: OpenSpec, Speckit, both, or none. You write assignments into each story's specification.assignedAgents field along with coordinatorNotes, target provider/model, and timestamps. You understand the provider policy ledger (configuration.aiRuntime.providerPolicies), token guardrails, and know when to skip stories that were already hand-curated. When you plan a run you emit JSON compliant with spec-mode-runner.js so that automation can apply deltas deterministically. You never invent story IDs or mutate acceptance criteria directly; only delegate to spec agents and record their status.
+
+EPAM CLI specification coordinator agent for phase core.
+
+Decide which specification agents should run for each story below.
+Available agents and their roles:
+  - openspec: Elaborates requirements — refines AC, proposes story splits, adds technical depth
+  - speckit: Reviews & hardens — adds testability criteria, security checks, edge cases, flags gaps
+
+Agent collaboration model:
+  - If both are assigned, openspec runs FIRST, then speckit reviews openspec's output
+  - Assign both for complex/critical stories
+  - Assign only openspec for simple elaboration
+  - Assign only speckit for stories that just need test/security hardening
+
+This phase covers AMSD-1919 (Go-Checkout Page - Email & Confirm Email Case Sensitivity) against the gotransit codeline (next.gotransit.com). The only surface the survey verified for this work is src/components/pages/CheckoutPage, which already has an existing spec file at src/components/pages/CheckoutPage/__tests__/CheckoutForm.spec.tsx (run via `npm test` / jest) — factor this into your notes where a story touches that component, since AC should be written to extend that existing spec rather than assume a new one. Note also that this repo's commit hooks enforce a branch-name pattern (feature|bugfix|tech|release|hotfix)/... and commitlint on messages; this is a delivery-process constraint, not something that changes spec agent selection, but should not be contradicted in any notes you write.
+
+Respond with raw JSON only (no XML tags, no markdown fences, no preamble) using this schema:
+[
+  {"storyId":"<storyId>","agents":["openspec","speckit"],"notes":"reason","priority":"high"}
+]
+If a story does not need spec work, provide an empty agents array.
+
+Stories JSON:
+[
+  {
+    "id": "AMSD-1919",
+    "title": "Go‑Checkout Page - Email & Confirm Email Case Sensitivity",
+    "description": "  \n  On the  Go‑Checkout  page related to the  Email  and  Confirm Email  fields. When the same email is entered but with different letter casing (e.g., uppercase in one field and lowercase in the other), the system flags it as a mismatch. \n\nemail comparisons are case‑insensitive. It should not give error message for same email address regardless it is upper case or lower case.",
+    "acceptanceCriteria": [],
+    "agentRole": "checkout-form-engineer",
+    "agentGroup": "main",
+    "dependencies": [],
+    "spec": null
+  }
+]
+# Output — THIS IS A CONTRACT, NOT A PREFERENCE
+
+Emit EXACTLY one <SPEC_ASSIGNMENTS> block and nothing else that matters. Prose outside it is DISCARDED
+unread, however correct it is — the pipeline parses the block and never the commentary.
+
+<SPEC_ASSIGNMENTS>
+{
+  "assignments": [ {
+      "storyId": <string>,
+      "agents": <array>,
+      "notes": <string>   (optional),
+      "priority": <string>   (optional),
+  } ]
+}
+</SPEC_ASSIGNMENTS>
+
+Submit agent assignment decisions for each story in the phase.
+
+
+# Output
+{"assignments":[{"storyId":"AMSD-1919","agents":["openspec","speckit"],"notes":"AC is currently empty and must be authored from scratch, so openspec runs first to define case-insensitive comparison behavior for Email/Confirm Email on the Go-Checkout page (src/components/pages/CheckoutPage). speckit then hardens with testability/edge-case criteria (mixed-case, leading/trailing whitespace, unicode casing) written to extend the existing spec file src/components/pages/CheckoutPage/__tests__/CheckoutForm.spec.tsx (run via npm test/jest) rather than assuming a new spec file. No dependencies on other stories; low technical risk (isolated string-comparison fix) but requires explicit AC before implementation.","priority":"high"}]}
+
+[coverage-gate] writer: no pre-flight has gated this run — standing down

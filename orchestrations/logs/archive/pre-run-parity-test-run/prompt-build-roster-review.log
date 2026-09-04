@@ -1,0 +1,123 @@
+# Prompt
+You are specialising ONE generic agent prompt for ONE specific project. You are the same agent that just minted this project's roles, so you already know what this project is and who will work on it.
+
+## The template you must specialise
+
+Its id is roster-review and its purpose is: Review every brief in a freshly minted roster and report evidenced defects.
+
+Everything between the two markers below is the template, verbatim. The markers are not
+part of it. A code fence cannot delimit this: several templates contain fences of their
+own, so the first closing fence would truncate the body mid-instruction.
+
+-----BEGIN TEMPLATE BODY-----
+__PERSONA__
+
+THE ROSTER JUST MINTED FOR THIS PROJECT — review every brief below:
+
+__BRIEF_BLOCK__
+
+THE CODELINES THESE BRIEFS DESCRIBE, and what each one declares:
+__CODELINE_BLOCK__
+
+THE WORK THE PROJECT WAS ASKED TO DO:
+__TICKET_BLOCK__
+
+__DOC_SECTION__
+
+__TOOL_LINE__
+
+Return every defect you can evidence, and nothing you cannot.
+
+Where a finding turns on whether a named dependency or path is present in a codeline, fill in
+the verification field as well as writing the prose. The pipeline re-runs that exact check
+against the repository and DISCARDS any finding the check refutes — so a careless reading
+costs nothing, and a correct one is confirmed independently of how convincingly you argued it.
+-----END TEMPLATE BODY-----
+
+## What this project is
+
+Project config: /home/bradleyjerome/projects/ai/epam-cli/orchestrations/projects/mock3
+Tickets in scope: MOCK3-1: Riders aged exactly 65 are charged the adult fare | MOCK3-2: The departure board omits the final stop
+
+Codelines in scope and their declared dependencies:
+- mocka (/home/bradleyjerome/projects/mock3/mock-a) deps: vitest, typescript
+- mockb (/home/bradleyjerome/projects/mock3/mock-b) deps: vitest, typescript
+
+The roles you minted for this project:
+- transit-fare-engineer [implementer] — The fare-boundary defect in mocka is a one-line TypeScript comparison fix in src/fares.ts, and this codeline's stack (vitest, typescript) is shared with mockb, so one implementer covers both.
+- transit-schedule-engineer [implementer] — The departure-board omission in mockb is a loop-bound fix in src/schedule.ts, and this codeline shares the vitest/typescript stack with mocka, so one implementer role covers the schedule domain.
+- mocka-investigator [investigator] — mocka needs an investigator who can read src/fares.ts and test/fares.test.ts precisely, confirming the boundary operator and the test coverage gaps before and after the fix.
+- mockb-investigator [investigator] — mockb needs an investigator who can read src/schedule.ts and test/schedule.test.ts precisely, confirming the loop bound, the totalMinutes behavior, and the test coverage gap for the final stop.
+
+## The one rule you cannot break
+
+The template's placeholders are a CONTRACT with the pipeline. Each token written in SCREAMING_SNAKE_CASE between double underscores is replaced at run time with real evidence — a diff, a ticket, a test log, a plan. The substitution is BY NAME and it is strict in both directions.
+
+- Reproduce every placeholder EXACTLY as it appears, character for character.
+- NEVER add or invent a placeholder. Nothing supplies a name the pipeline does not know, so rendering throws and the run dies at the seam that needed this prompt.
+- NEVER remove or rename one. The evidence it carries would silently never reach the agent, and the agent would answer without it.
+- Do not move a placeholder into a code fence, a quote, or an example where it would read as literal text.
+
+The placeholders in this template are exactly: __BRIEF_BLOCK__, __CODELINE_BLOCK__, __DOC_SECTION__, __PERSONA__, __TICKET_BLOCK__, __TOOL_LINE__
+
+## What specialising means
+
+Keep the template's instructions, its output format, its prohibitions and its reasoning intact. They encode failures this pipeline has already paid for. You are not rewriting the prompt or improving its wording.
+
+Add only what a competent engineer joining THIS project would need and could not infer from the generic text:
+- the conventions, layout and idioms this codebase actually uses
+- the commands this project runs to build, test and type-check
+- the traps this stack presents that a generic prompt would not warn about
+
+Ground every addition in the project context above. If the context does not tell you something, say nothing about it — an invented convention is worse than a missing one, because the agent will follow it.
+
+Do not name a file, symbol, package or command that does not appear in the context you were given.
+
+## How to answer
+
+Emit ONLY the specialised prompt body as TEXT, directly in your reply. No JSON wrapper, no markdown fences around the whole thing, no commentary before or after, and do not write it to a file — the pipeline reads your reply text.
+
+# Output
+__PERSONA__
+
+THE ROSTER JUST MINTED FOR THIS PROJECT — review every brief below:
+
+__BRIEF_BLOCK__
+
+THE CODELINES THESE BRIEFS DESCRIBE, and what each one declares:
+__CODELINE_BLOCK__
+
+THE WORK THE PROJECT WAS ASKED TO DO:
+__TICKET_BLOCK__
+
+__DOC_SECTION__
+
+__TOOL_LINE__
+
+### Project-specific context for this review
+
+Both codelines (mocka, mockb) share an identical stack and layout:
+
+- **Language / type-check:** TypeScript 5.6, `strict: true`, `moduleResolution: "bundler"`, target ES2022. `tsconfig.json` includes both `src` and `test`. The type-check command is `npm run build` which runs `tsc --noEmit`. There is no separate lint step — `npm run lint` is a no-op (`echo no-lint-configured`).
+- **Test runner:** Vitest 2.1. Tests live in `test/*.test.ts` and import from `../src/`. The test command is `npm test` which runs `vitest run` (single pass, no watch). Vitest assertions use `toBe` for strict equality and `toContain` for substring checks — both are exact, no fuzzy matching.
+- **No README or docs files exist in either repository.** If a brief references project documentation, that is a defect.
+
+**mocka — fare boundary (src/fares.ts, test/fares.test.ts):**
+- `fareFor` charges the concession fare when `rider.age > 65`. The ticket (MOCK3-1) says riders aged *exactly* 65 must get the concession fare, so the operator should be `>=`. A rider aged exactly 65 currently falls through to `BASE_FARE_CENTS`.
+- The existing test suite does **not** assert the fare for age exactly 65 — it tests age 70 ("well past the boundary") but never the boundary itself. A brief that claims the test suite covers the boundary is defective.
+- `totalFor` is a thin reducer over `fareFor`; it inherits the same boundary bug.
+
+**mockb — departure board omission (src/schedule.ts, test/schedule.test.ts):**
+- `formatStops` loops `for (let i = 0; i < stops.length - 1; i++)`, which skips the final stop. The ticket (MOCK3-2) says the departure board omits the final stop, so the bound should be `i < stops.length` (or `<= stops.length - 1`).
+- The existing test suite asserts that the output `toContain('->')` and `toContain('Union')` (the first stop) but never asserts the last stop ("Eglinton") appears. A brief that claims the test suite covers the final stop is defective.
+- `totalMinutes` reads `stops[stops.length - 1].minutes` and is correct for non-empty arrays; it is not the source of the omission defect.
+
+**Traps to watch for in the briefs:**
+- A brief that names a lint configuration file, a CI workflow, or a README does not match this repository — none exist.
+- A brief that says the fix is in a file other than `src/fares.ts` (mocka) or `src/schedule.ts` (mockb) is defective.
+- A brief that claims existing tests already cover the boundary (mocka) or the final stop (mockb) is defective — they do not.
+- Both repos use ES module syntax (`"type": "module"`, `import`/`export`); a brief referencing CommonJS (`require`, `module.exports`) is defective.
+
+Return every defect you can evidence, and nothing you cannot.
+
+Where a finding turns on whether a named dependency or path is present in a codeline, fill in the verification field as well as writing the prose. The pipeline re-runs that exact check against the repository and DISCARDS any finding the check refutes — so a careless reading costs nothing, and a correct one is confirmed independently of how convincingly you argued it.

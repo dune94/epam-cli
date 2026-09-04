@@ -1,0 +1,227 @@
+# Prompt
+You are the Guard Vocabulary Agent for the epam-cli orchestration pipeline.
+
+A deterministic guard is about to check a set of statements against a RULE. Your sole job is to derive, for THIS story, the concrete terms that would VIOLATE that rule — and the terms that name its legitimate observable surface. The guard holds no vocabulary of its own; it applies exactly what you return, and nothing else.
+
+## Why you exist
+
+Every guard in this pipeline used to carry a hardcoded list of terms, each list reverse-engineered from a single past incident. A list catches that one incident and nothing else, while reporting "clean" forever — which is worse than no guard, because it converts "unchecked" into "checked" and nobody looks again. You replace those lists. If you answer badly, the guard is blind; if you answer well, it catches violations nobody has seen yet.
+
+## Your inputs
+
+1. THE RULE — a principle stating what it means to violate this guard. It names no domain, no product and no past incident. It is the only definition of correctness you are given.
+2. THE STATEMENTS — the items the guard will check (for example, a story's verification criteria or acceptance criteria).
+3. CODE EVIDENCE — real findings from the repository: files, functions, symbols, and the reasoning that located them. This is ground truth.
+4. STORY CONTEXT — the ticket's title and description.
+
+## Your process
+
+1. Read the rule and restate to yourself, in one sentence, what distinguishes a violating statement from a compliant one. Everything you return must trace to that sentence.
+2. Read the CODE EVIDENCE and identify the implementation vocabulary of this story: the symbols, functions, SDK entry points, internal structures and configuration keys that describe HOW the behaviour is produced. These come from the evidence, never from the ticket prose and never from your own knowledge of the technology.
+3. Read the STORY CONTEXT and identify the observable surface: what an end user or tester perceives. That is the whitelist.
+4. Emit both lists.
+
+## Hard requirements
+
+- DERIVE FROM THE EVIDENCE. Every blacklist term must be traceable to a symbol, file, function or structure present in the supplied code evidence, or to a construction verb present in the statements themselves. Do not contribute terms from your general knowledge of a library, framework or vendor: that is how an agent invents a signature that does not exist.
+- NEVER include a term that names the observable surface. If a term describes what a user sees, it belongs in the whitelist, even when it also appears in code.
+- PREFER THE SPECIFIC. "onEntryChange" is a useful blacklist term; "callback" is not — it will fire on unrelated statements and train people to ignore the guard.
+- WHOLE TERMS ONLY. Return terms as they would appear in a sentence. Do not return regular expressions, wildcards or fragments.
+- LOWERCASE every term.
+- The whitelist WINS. A term appearing in both lists is treated as observable and never flagged, so do not rely on the blacklist to override it.
+- If the rule genuinely admits no violating vocabulary for this story, return an empty blacklist. Do not pad it. An empty list is a real answer and is reported as such — it is not treated as success.
+
+## Verifying a term against the index
+
+At some seams you are given a real CodeGraph index of the repository and the command to
+query it. When you are, USE IT — do not assert that a term is meaningful, check it. A
+candidate that resolves to nothing in the index is noise and belongs in the blacklist,
+however unusual or technical the word looks. A candidate that resolves to real symbols is
+evidence-backed and can be trusted.
+
+Be aware of what your list feeds. Where the consumer is a BM25/IDF ranker, that ranker
+DEMOTES terms which are common in the corpus and AMPLIFIES terms which are rare. A rare but
+meaningless token — a bracketed brand tag, a ticket label, a person's name, a status word —
+is therefore not diluted by the ranker; it is promoted to a top discriminator and drags the
+search away from the real code. Rarity is not signal. Mistaking the two is the specific
+failure you exist to prevent, so when a term is unusual AND resolves to nothing, blacklist
+it with confidence.
+
+When no index is available to you, say what you can support from the evidence you were
+given and no more. An honest short list beats a padded one: every term you return is
+applied deterministically, and a wrong term is enforced as rigorously as a right one.
+
+## Output
+
+Call the submit_guard_vocabulary tool. Structured output only. Do not answer in prose, do not wrap the call in commentary, and do not explain your reasoning outside the per-term reason fields. A prose answer is discarded in full and the guard is left with nothing to apply.
+
+GUARD SEAM: verification-criteria
+
+THE RULE THIS GUARD ENFORCES:
+A verification criterion states WHAT AN END USER OR TESTER OBSERVES on the user-facing surface THE TICKET IS ABOUT — the rendered output for an output ticket, the displayed screen for a UI ticket, the response a CLIENT receives for an API ticket. It is a BLACK-BOX check on that surface. It NEVER describes HOW the value is produced.
+A verification criterion is FORBIDDEN if it:
+- prescribes HOW to implement — any algorithm, mechanism, approach, or the addition/reading of any new field, flag or service;
+- references an INTERNAL structure that merely FEEDS the ticket's surface — an intermediate payload, a data-transfer object, or a specific response field used to BUILD the output. Verify the surface the ticket names, NOT the data structure behind it;
+- makes a CROSS-COMPARISON that presumes a mechanism — never assert one value "must equal" / "matches" / "is the same as" another; that presumes a shared derivation. Assert the required value is present and correct ON ITS OWN.
+Every verification criterion must be observable, testable, and tied to the ticket's stated symptom/intent.
+
+THE STATEMENTS THE GUARD WILL CHECK:
+1. Given the Contentstack client is mocked to return a draft entry containing unpublished changes (e.g., a modified page title and body), when a content author triggers live preview from CMS, the rendered page displays the unpublished title and body from that draft entry.
+2. When no preview signal is present in the page request, the rendered page displays the published version of the content exactly as it currently does — existing page rendering is unchanged.
+3. Given the Contentstack client is mocked, when a live preview is triggered for a page entry, the request our application sends to Contentstack includes the live_preview hash, content_type_uid, and entry_uid parameters.
+4. Given the Contentstack client is mocked to return a draft entry for a GO-branded page, the rendered page displays the draft content with GO branding and styling intact; the same holds for UP-branded and MX-branded pages.
+5. When live preview is attempted on a protected page, the page does not crash or display an unhandled error — the user is informed that preview is unavailable for that page, or the page renders gracefully within the stated limitation.
+6. Given the Contentstack client is mocked to return a draft entry, when the content author navigates between pages during a live preview session, the preview state persists across page navigations within that session until the preview signal is no longer present.
+
+DECLARED MANIFEST (the files this story says it will touch):
+- (none declared)
+
+CODE EVIDENCE (real findings from this repository — ground truth; derive from these, not from your own knowledge of any library):
+- src/services/pageService.ts :: PageService — Primary attachment point for live preview: this service orchestrates all Contentstack data fetching (getPageEntry, getAllPublishedPages, getEntry). Live preview requires passing draft/preview parameters (live_preview hash, content_type_uid, entry_uid) through to the Contentstack SDK at fetch time —  [existing helper: EntryEmbedable]
+- src/context/contentstackContext.tsx :: ContentstackContext — Secondary attachment point: the React context that injects Contentstack content into the entire component tree (consumed by useContent hook used by 40+ components). When a preview request is detected (e.g. via query param or cookie), the context provider must receive and supply the draft entry data  [existing helper: useContent]
+
+STORY CONTEXT:
+Title: [GO, UP, MX] Live Preview of Content in CMS
+Description: Original Requirements (discovery)  AS a Content Author, I WANT to preview draft entries in CMS, SO THAT I can see how content will be shown on the website
+ability to preview draft entries in CMS
+Notes& Assumptions  Limitation: Might not be possible to preview protected pages and content.
+Original Total Estimate:  8  Original FE Estimate:  8  Original DAM Estimate:  0  Original BE Estimate:  0
+
+
+# Output
+```json
+{
+  "blacklist": [
+    {
+      "term": "pageservice",
+      "reason": "Internal service class in src/services/pageService.ts that orchestrates Contentstack data fetching. Naming it in a verification criterion prescribes the implementation layer, not the rendered surface."
+    },
+    {
+      "term": "getpageentry",
+      "reason": "Internal method on PageService that fetches a page entry from Contentstack. Describes HOW data is retrieved, not WHAT the user observes."
+    },
+    {
+      "term": "getallpublishedpages",
+      "reason": "Internal method on PageService that retrieves all published pages. An implementation detail of data fetching, not an observable surface."
+    },
+    {
+      "term": "getentry",
+      "reason": "Internal function imported from ./contentstack used by PageService to fetch entries. Implementation mechanism, not user-facing."
+    },
+    {
+      "term": "contentstackcontext",
+      "reason": "React context in src/context/contentstackContext.tsx that injects Contentstack data into the component tree. An internal wiring structure that feeds the surface, not the surface itself."
+    },
+    {
+      "term": "mocked",
+      "reason": "Test construction verb appearing in statements 1, 3, 4. Describes the test setup mechanism (mocking the Contentstack client), not what the end user or tester observes on the rendered page."
+    },
+    {
+      "term": "contentstack client",
+      "reason": "Names the internal dependency being mocked. A verification criterion should not reference the data source client; it should reference the rendered output."
+    },
+    {
+      "term": "draft entry",
+      "reason": "Names the internal Contentstack data structure (an entry) that feeds the rendered surface. The observable surface is 'draft content' or 'unpublished title and body' — the entry itself is an intermediate payload."
+    },
+    {
+      "term": "preview signal",
+      "reason": "Names an internal detection mechanism (query param or cookie) for identifying a preview request. Not observable on the rendered page; prescribes HOW preview is detected."
+    },
+    {
+      "term": "preview state",
+      "reason": "Names an internal state concept that persists across navigations. The user observes draft content persisting, not an internal 'preview state' variable."
+    },
+    {
+      "term": "live_preview",
+      "reason": "SDK parameter passed to Contentstack at fetch time. Appears in statement 3 prescribing that the application's request include this parameter — pure internal mechanism with zero observable surface."
+    },
+    {
+      "term": "content_type_uid",
+      "reason": "SDK parameter prescribed in statement 3. An internal identifier sent to Contentstack; not something the end user or tester observes on the rendered page."
+    },
+    {
+      "term": "entry_uid",
+      "reason": "SDK parameter prescribed in statement 3. An internal identifier sent to Contentstack; not observable on the user-facing surface."
+    },
+    {
+      "term": "request our application sends to contentstack",
+      "reason": "Phrase from statement 3 that describes the application's outbound request to the CMS. A verification criterion must check what the client receives or what the page renders, not what the application sends internally."
+    }
+  ],
+  "whitelist": [
+    {
+      "term": "rendered page",
+      "reason": "The observable surface the ticket is about — what the user sees rendered in the browser."
+    },
+    {
+      "term": "displays",
+      "reason": "Observable action: the page displays content to the user. Tied directly to the rendered output."
+    },
+    {
+      "term": "published version",
+      "reason": "Observable content state the user sees when no preview is active. The ticket explicitly requires this to be unchanged."
+    },
+    {
+      "term": "draft content",
+      "reason": "Observable content the content author sees during live preview. This is what appears on the rendered page, distinct from the internal 'draft entry' data structure."
+    },
+    {
+      "term": "unpublished title",
+      "reason": "Observable content element the user sees on the rendered page during preview."
+    },
+    {
+      "term": "body",
+      "reason": "Observable content element displayed on the rendered page."
+    },
+    {
+      "term": "go branding",
+      "reason": "Observable visual styling the user perceives on the rendered page. The ticket title names GO, UP, MX branding."
+    },
+    {
+      "term": "up-branded",
+      "reason": "Observable visual styling on the rendered page, named in the ticket."
+    },
+    {
+      "term": "mx-branded",
+      "reason": "Observable visual styling on the rendered page, named in the ticket."
+    },
+    {
+      "term": "page does not crash",
+      "reason": "Observable behavior on the rendered surface when preview is attempted on a protected page."
+    },
+    {
+      "term": "unhandled error",
+      "reason": "Observable failure mode the user would see on the rendered page. The criterion asserts its absence."
+    },
+    {
+      "term": "user is informed",
+      "reason": "Observable user-facing communication: the user sees a message about preview availability."
+    },
+    {
+      "term": "preview is unavailable",
+      "reason": "Observable message the user receives when attempting preview on a protected page."
+    },
+    {
+      "term": "page renders gracefully",
+      "reason": "Observable rendering behavior on the user-facing surface."
+    },
+    {
+      "term": "live preview",
+      "reason": "The feature name from the ticket title. Describes the user-facing capability, not the internal SDK parameter 'live_preview'."
+    },
+    {
+      "term": "content author",
+      "reason": "The end-user role named in the story context. The person who triggers and observes the preview."
+    },
+    {
+      "term": "protected page",
+      "reason": "Observable page category named in the story. The user perceives whether a page is protected by its behavior."
+    },
+    {
+      "term": "page navigations",
+      "reason": "Observable user action: navigating between pages. The user perceives whether draft content persists across navigations."
+    }
+  ]
+}
+```

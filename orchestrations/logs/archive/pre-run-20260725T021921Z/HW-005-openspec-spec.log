@@ -1,0 +1,50 @@
+# Prompt
+You are the openspec specification agent for EPAM CLI. Phase hello_world_test, story HW-005.
+
+Generate refined acceptance criteria, optionally updated title/description, and optional split stories. Output JSON only between <SPEC_AGENT> tags using this schema:
+{
+  "storyId":"HW-005",
+  "agent":"openspec",
+  "notes":"context",
+  "acceptanceCriteria":["..."],
+  "description":"...",
+  "title":"...",
+  "splitStories":[{"id":"optional","title":"...","description":"...","acceptanceCriteria":["..."]}]
+}
+Use existing text when no change is needed.
+Story context:
+{
+  "id": "HW-005",
+  "title": "Implement truncate() utility with structured output",
+  "description": "Create truncate.ts in the project root. Export a single function `export function truncate(text: string, maxLength: number, suffix?: string): string` that truncates text to maxLength characters appending suffix (default '...'). If text.length < maxLength (strictly less than) return text unchanged; otherwise truncate to fit suffix. Create truncate.test.ts with at least 5 vitest tests. Do not modify any existing files.",
+  "acceptanceCriteria": [
+    "truncate.ts exists and exports truncate with correct signature: export function truncate(text: string, maxLength: number, suffix?: string): string",
+    "truncate('hello world', 5) returns 'he...' (text longer than maxLength: truncate to fit suffix within maxLength)",
+    "truncate('hi', 10) returns 'hi' unchanged (text.length < maxLength: return as-is)",
+    "truncate('hello', 5) returns 'he...' (text.length === maxLength is NOT strictly less than, so truncate applies)",
+    "truncate('hello', 5, '!') returns 'hell!' (custom suffix: 5-1=4 chars, result is 4 chars + '!')",
+    "truncate('hello', 0) returns '...' (maxLength=0: suffix only, no text chars fit)",
+    "truncate('こんにちは', 4) returns 'こ...' (Unicode: 4-3=1 char fits before suffix)",
+    "truncate.test.ts exists with at least 5 passing vitest tests",
+    "tsc --noEmit exits 0",
+    "vitest run exits 0 with all tests passing"
+  ],
+  "technicalNotes": {
+    "dependsOn": [
+      "HW-001"
+    ],
+    "files": [
+      "truncate.ts",
+      "truncate.test.ts"
+    ],
+    "testCommand": "npx vitest run truncate.test.ts"
+  },
+  "agentRole": "typescript-engineer",
+  "agentGroup": "independent",
+  "dependencies": []
+}
+
+<SPEC_AGENT>
+
+# Output
+ai-run failed with no error output

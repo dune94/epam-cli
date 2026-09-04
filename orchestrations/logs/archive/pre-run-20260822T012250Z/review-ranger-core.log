@@ -1,0 +1,28 @@
+```json
+{
+  "agent": "review-ranger",
+  "phase": "core",
+  "summary": { "filesReviewed": 5, "findingsCount": 2, "blockerCount": 0, "majorCount": 0, "minorCount": 2 },
+  "findings": [
+    {
+      "severity": "minor",
+      "category": "Error handling",
+      "file": "src/pages/_app.tsx",
+      "line": 102,
+      "codeSnippet": "        // Live preview is best-effort: keep showing the last known content on failure.\n        .catch(() => {});",
+      "description": "The onEntryChange promise chain swallows fetch errors with an empty catch handler. While the inline comment documents this as intentional best-effort behavior, a completely silent catch makes preview failures invisible to developers debugging the CMS authoring experience — e.g. a misconfigured CONTENTSTACK_PREVIEW_TOKEN or wrong host would produce no signal at all. Even a console.warn would aid diagnosis without changing user-facing behavior.",
+      "suggestedFix": "Replace `.catch(() => {})` with `.catch((err) => { if (process.env.NODE_ENV !== 'production') console.warn('Live preview refetch failed:', err); })` or similar conditional dev-only logging."
+    },
+    {
+      "severity": "minor",
+      "category": "Test coverage gaps",
+      "file": "src/services/contentstack.ts",
+      "line": 120,
+      "codeSnippet": "export class ContentstackFactory {",
+      "description": "ContentstackFactory was changed from module-private to exported, creating new public API surface now consumed by _app.tsx for live-preview entry refetching. No test file appears in the diff alongside this change. Per first-pass grounding rules (no tool access), the symbol appears in the diff with no corresponding test change; this should be verified against the real test tree on retry.",
+      "suggestedFix": "Add a unit test for ContentstackFactory.createContentTypeEntryQuery covering the contentTypeUid/entryUid/lang configuration path used by the live-preview refetch, or verify existing tests already cover this path and close the gap."
+    }
+  ],
+  "verdict": "pass"
+}
+```

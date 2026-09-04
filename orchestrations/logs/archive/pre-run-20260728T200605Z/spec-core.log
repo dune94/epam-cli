@@ -1,0 +1,9 @@
+spec-mode: fast-path qwen/z-ai/glm-5.2 (skipping MiniMax)
+spec-mode: fast-path qwen/z-ai/glm-5.1 (skipping MiniMax)
+spec-mode: ⚠️ VC could not be made mechanism-free for AMSD-2041 after 2 cycle(s) — using conservative fallback VC. Last flags: VC 7 inspects network requests — implementation behavior, not the rendered page surface; restate as observable outcome (e.g. normally viewed pages show only published content)
+spec-mode: AMSD-2041 — 2 verification criteria persisted (source: fallback, resolution: fallback)
+spec-mode: fast-path qwen/z-ai/glm-5.1 (skipping MiniMax)
+spec-mode: fast-path qwen/z-ai/glm-5.2 (skipping MiniMax)
+spec-mode: fast-path qwen/z-ai/glm-5.2 (skipping MiniMax)
+spec-mode: LLM model review completed for 0 stories
+spec-mode: completed for phase core (run 20260728T183916Z)

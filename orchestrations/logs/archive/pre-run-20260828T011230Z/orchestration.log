@@ -1,0 +1,14 @@
+[mint-step] codeline mocka: /home/bradleyjerome/projects/mock3/mock-a (2 declared deps)
+[mint-step] codeline mockb: /home/bradleyjerome/projects/mock3/mock-b (2 declared deps)
+[mint-step] plugins provisioned: 1 · mint tools: read_file,list_files,search,codegraph_query
+spec-mode: fast-path claude/claude-haiku-4-5-20251001 (skipping MiniMax)
+[mint-step]   survey: mocka — in_scope (src/fares.ts, test/fares.test.ts)
+[mint-step]   survey: mockb — in_scope (src/schedule.ts, test/schedule.test.ts)
+[mint-step]   survey recommends an investigator for mocka: Confirm the age-65 boundary condition in fareFor and review whether any other code paths or callers depend on the current `> 65` behaviour.
+[mint-step]   survey recommends an investigator for mockb: Confirm the loop bound in formatStops and check whether any caller or display path compensates for the missing last stop.
+[mint-step] mint skipped (EPAM_SKIP_AGENT_MINT=1) — resuming from a checkpoint
+[mint-step] resumed roster — reviewed in the run being resumed, not re-reviewed here
+[mint-step] [roster] rosterMode=canonical — 58 persona(s) adopted verbatim (4 minted for this project), no specialiser call
+[mint-step] project roster: 58 agent(s)
+spec-mode: fast-path claude/claude-haiku-4-5-20251001 (skipping MiniMax)
+[mint-step] FAILED: [assign] MOCK3-1 was assigned "typescript-logic-fixer", which is not in the roster — it has no profile entry, so the writer would run with an empty system prompt.

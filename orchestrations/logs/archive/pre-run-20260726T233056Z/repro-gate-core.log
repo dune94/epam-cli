@@ -1,0 +1,2 @@
+[repro-gate] ✓ MOCK-HW-1-impl: the test reproduces the bug (fails on baseline, passes with the fix) — gate passed.
+[repro-gate] ✓ MOCK-HW-1-test: the test reproduces the bug (fails on baseline, passes with the fix) — gate passed.

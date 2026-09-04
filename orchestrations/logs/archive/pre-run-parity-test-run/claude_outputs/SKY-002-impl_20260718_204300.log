@@ -1,0 +1,134 @@
+=== Prompt for SKY-002-impl (attempt 1) ===
+CRITICAL — WRITE FILES FIRST. Your FIRST tool call MUST be WriteFile.
+Do NOT output any text before calling WriteFile. Do NOT plan or say "I will...".
+Call WriteFile NOW for the EXACT ABSOLUTE PATHS listed below:
+
+   - WRITE /home/bradleyjerome/projects/skyscanner-app/src/skyscanner/client.ts first, before any other action
+---
+
+Implement user story SKY-002-impl: Implement SkyscannerClient class with mock mode and error handling
+
+## Story Description
+Create src/skyscanner/client.ts exporting SkyscannerClient, SearchParams, and FlightResult. Client resolves apiKey from constructor or RAPIDAPI_KEY env var, calls Skyscanner RapidAPI via global fetch, throws on HTTP errors and parse errors without leaking the key, and supports opt-in mock mode via MOCK_SKYSCANNER_API='true'.
+
+## Acceptance Criteria
+- new SkyscannerClient({ apiKey: 'k' }) succeeds; new SkyscannerClient({}) with RAPIDAPI_KEY unset throws Error whose message contains 'apiKey' (case-insensitive)
+- Constructor param apiKey takes precedence over RAPIDAPI_KEY env var when both are present
+- searchFlights returns Promise<FlightResult[]>; each element has price(number), currency(string), airline(string), departure(string), arrival(string), duration(number), stops(number)
+- searchFlights rejects with Error whose message includes the numeric HTTP status code when API returns 4xx or 5xx
+- searchFlights rejects with Error when response body cannot be parsed into FlightResult[]
+- No Error thrown by SkyscannerClient contains the resolved apiKey value in its message
+- When MOCK_SKYSCANNER_API='true', searchFlights returns a deterministic FlightResult[] with ≥1 element and zero fetch calls
+- When MOCK_SKYSCANNER_API is unset or any value ≠ 'true', searchFlights invokes fetch; a fetch failure never falls back to mock data
+
+
+
+
+
+## Technical Notes
+- files: ["/home/bradleyjerome/projects/skyscanner-app/src/skyscanner/client.ts"]
+- dependsOn: ["SKY-001"]
+
+## Files to Create/Modify (EXACT ABSOLUTE PATHS — write to these paths exactly)
+/home/bradleyjerome/projects/skyscanner-app/src/skyscanner/client.ts
+
+## Dependencies
+None
+
+
+## Instructions
+**CRITICAL — WRITE FILES FIRST:**
+   - WRITE /home/bradleyjerome/projects/skyscanner-app/src/skyscanner/client.ts first, before any other action
+**You MUST write every file listed above to its EXACT absolute path. Do NOT write to a different path, do NOT write to the current directory unless it matches the path above. Use your WriteFile or Edit tools with the full absolute path shown.**
+
+1. Write each required file to its exact absolute path listed above — do this FIRST before anything else
+2. Implement all acceptance criteria for this story
+3. Follow the project's existing code patterns and conventions
+4. Do NOT create tests unless explicitly required in acceptance criteria
+
+After implementation, provide a brief summary of what was created/modified.
+
+## Relevant Knowledge Base Entries
+The following was learned from previous story implementations and is relevant to your agent role. Apply this knowledge before writing any code:
+
+- [2026-07-06T17:45:30Z] Always resolve mocked fetch calls to a Response-shaped object with ok, status, statusText, and a json method returning a Promise.
+- [2026-07-06T17:50:20Z] Use valid module and moduleResolution pairs in tsconfig.json: CommonJS with Node, Node16 with Node16, ESNext with Bundler. Use CommonJS and Node for the stack. Mismatched pairs cause build errors.
+- [2026-07-06T18:11:26Z] Use vi.fn().mockResolvedValue(value) to make a mock return a resolved Promise.
+- [2026-07-06T20:31:11Z] Use `test: { passWithNoTests: true }` in vitest.config.ts or create a stub test file when no *.test.ts files exist.
+- [2026-07-06T20:33:03Z] Enable globals:true in vitest.config.ts so describe, it, and expect work without imports, reducing boilerplate in test files.
+- [2026-07-06T23:47:34Z] Use CommonJS-compatible patterns in src/server.ts: avoid `import.meta.url` and top-level `await`; gate listen with `if (require.main === module)`.
+- [2026-07-07T02:35:30Z] Always include a non-test source file in src/ alongside any src/*.test.ts file, since tsconfig.json excludes test files from tsc --noEmit.
+- [2026-07-07T19:01:34Z] Only modify or create files explicitly listed in the story's acceptance criteria. Do not touch files belonging to other stories or outside the current task scope.
+- [2026-07-07T20:17:57Z] [unreviewed-fallback] Avoid using deprecated TypeScript compiler options like 'moduleResolution=node10'; use 'moduleResolution=node' instead.
+- [2026-07-17T20:20:58Z] Always: Before importing a module or referencing a type/property, always read the actual source file to verify the export exists, its exact path, its properties, and its constructor/factory signatures
+
+## Knowledge Base Contribution (do this LAST — after writing all implementation files)
+Your assigned KB entry ID for this run: **KB-008**
+
+IMPORTANT: Write ALL implementation files first. Only AFTER writing every required file should you optionally append a KB entry.
+Do NOT read orchestrations/agents/KB.md before writing implementation files. The relevant KB entries are already injected above.
+
+If (and only if) you discover a non-obvious pattern during implementation, append one entry to `orchestrations/agents/KB.md`:
+
+```markdown
+## KB-008 -- 2026-07-18
+
+**Category:** <backend|frontend|infrastructure|testing|orchestration>
+**AgentRole:** <your agentRole from the story>
+**Tags:** <comma-separated tech keywords, e.g. typescript, node, cli>
+**Trigger:** <retry|first-success>
+**StoryRef:** SKY-002-impl
+
+<One concise paragraph: the specific pattern, gotcha, or anti-pattern.>
+```
+
+Only write an entry if the knowledge is genuinely non-obvious. Skip trivial observations.
+
+## Execution Plan
+Follow this plan step by step:
+1. Create /home/bradleyjerome/projects/skyscanner-app/src/skyscanner/client.ts with SkyscannerClient class implementing constructor that validates apiKey parameter and handles RAPIDAPI_KEY environment variable
+2. Add logic in constructor to throw Error with 'apiKey' in message when neither apiKey parameter nor RAPIDAPI_KEY environment variable is provided
+3. Implement searchFlights method in SkyscannerClient that returns Promise<FlightResult[]>
+4. Add mock mode functionality to searchFlights that returns deterministic FlightResult[] when MOCK_SKYSCANNER_API='true'
+5. Implement fetch call in searchFlights for non-mock mode that handles 4xx/5xx responses by rejecting with Error containing HTTP status code
+6. Add error handling for fetch failures in searchFlights that rejects with Error when response body cannot be parsed into FlightResult[]
+7. Ensure no Error messages in SkyscannerClient contain the resolved apiKey value
+8. Add type definitions for FlightResult interface with required properties: price, currency, airline, departure, arrival, duration, stops
+9. Implement proper precedence logic where constructor apiKey parameter takes precedence over RAPIDAPI_KEY environment variable
+10. Write tests to verify all acceptance criteria including error conditions, mock behavior, and environment variable handling
+=== End Prompt ===
+
+=== epam Output (attempt 1) ===
+## Summary
+
+Created `/home/bradleyjerome/projects/skyscanner-app/src/skyscanner/client.ts` exporting:
+
+- **`SearchParams`** — input type with `origin`, `destination`, `date`, optional `adults`.
+- **`FlightResult`** — output type with `price` (number), `currency`, `airline`, `departure`, `arrival`, `duration`, `stops` (number).
+- **`SkyscannerClient`** class with:
+  - **Constructor** that resolves the apiKey from the `apiKey` constructor option first (after trim); falls back to `process.env.RAPIDAPI_KEY` (trimmed); throws an `Error` whose message contains `apiKey` when both are missing/empty.
+  - **`searchFlights(params)`** returning `Promise<FlightResult[]>`. When `MOCK_SKYSCANNER_API === 'true'`, returns a deterministic single-element `FlightResult[]` withno fetch call** (early return before any network access). Otherwise issues a `fetch` GET to RapidAPI with `X-RapidAPI-Key`/`X-RapidAPI-Host` headers.
+  - **HTTP error handling**: rejects with an `Error` whose message includes the numeric `response.status` for any 4xx/5xx (`!response.ok`).
+  - **Parse error handling**: rejects with an `Error` when `response.json()` throws **or** when the parsed body cannot be coerced into a `FlightResult[]` (no array, missing `flights`/`data`/`results`/`itineraries` key, or any element missing the required typed fields).
+  - **No apiKey leakage**: every error message constructed by the client omits the resolved The key only ever lives in the request header, never in the thrown message.
+  - **No mock fallback on fetch failure**: when mock mode is off and `fetch` rejects, the rejection propagates unchanged.
+
+Verified `tsc --noEmit` passes and `vitest run` exits cleanly (no test files yet — none required by the story). No files outside the declared scope were touched.
+  [tc-writer] No test stories need TCs in phase 'unknown' — skipping
+## Summary
+
+Created `/home/bradleyjerome/projects/skyscanner-app/src/skyscanner/client.ts` exporting:
+
+- **`SearchParams`** — input type with `origin`, `destination`, `date`, optional `adults`.
+- **`FlightResult`** — output type with `price` (number), `currency`, `airline`, `departure`, `arrival`, `duration`, `stops` (number).
+- **`SkyscannerClient`** class with:
+  - **Constructor** that resolves the apiKey from the `apiKey` constructor option first (after trim); falls back to `process.env.RAPIDAPI_KEY` (trimmed); throws an `Error` whose message contains `apiKey` when both are missing/empty.
+  - **`searchFlights(params)`** returning `Promise<FlightResult[]>`. When `MOCK_SKYSCANNER_API === 'true'`, returns a deterministic single-element `FlightResult[]` withno fetch call** (early return before any network access). Otherwise issues a `fetch` GET to RapidAPI with `X-RapidAPI-Key`/`X-RapidAPI-Host` headers.
+  - **HTTP error handling**: rejects with an `Error` whose message includes the numeric `response.status` for any 4xx/5xx (`!response.ok`).
+  - **Parse error handling**: rejects with an `Error` when `response.json()` throws **or** when the parsed body cannot be coerced into a `FlightResult[]` (no array, missing `flights`/`data`/`results`/`itineraries` key, or any element missing the required typed fields).
+  - **No apiKey leakage**: every error message constructed by the client omits the resolved The key only ever lives in the request header, never in the thrown message.
+  - **No mock fallback on fetch failure**: when mock mode is off and `fetch` rejects, the rejection propagates unchanged.
+
+Verified `tsc --noEmit` passes and `vitest run` exits cleanly (no test files yet — none required by the story). No files outside the declared scope were touched.
+
+=== End epam Output ===

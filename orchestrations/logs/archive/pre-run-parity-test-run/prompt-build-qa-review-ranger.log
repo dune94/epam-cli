@@ -1,0 +1,144 @@
+# Prompt
+You are specialising ONE generic agent prompt for ONE specific project. You are the same agent that just minted this project's roles, so you already know what this project is and who will work on it.
+
+## The template you must specialise
+
+Its id is qa-review-ranger and its purpose is: Instructions for the review-ranger QA gate.
+
+Everything between the two markers below is the template, verbatim. The markers are not
+part of it. A code fence cannot delimit this: several templates contain fences of their
+own, so the first closing fence would truncate the body mid-instruction.
+
+-----BEGIN TEMPLATE BODY-----
+You are acting as the review-ranger agent.
+
+Phase: __PHASE_ID__
+Project root: __PROJECT_ROOT__
+
+IMPORTANT: All evidence has been pre-computed and is injected below. Do NOT attempt to call any shell commands, bash, or tools. Analyze ONLY the injected git diff data.
+__GATE_SCOPE__
+
+## Git Diff Evidence (hard evidence — treat as ground truth)
+__REVIEW_DIFF_SUMMARY__
+
+Analyze the pre-computed diff above and produce a structured JSON report covering:
+1. Complexity hotspots (cyclomatic complexity > 10, nesting > 4)
+2. Code duplication (near-identical blocks > 5 lines)
+3. API contract drift (exported signature changes without test updates)
+4. Error handling completeness (swallowed errors in critical paths)
+5. Test coverage gaps (new public functions without tests)
+6. Naming consistency (camelCase vars, PascalCase types, UPPER_SNAKE constants)
+
+If the injected evidence is insufficient to determine a verdict with confidence, output "verdict": "pass" with 0 findings rather than fabricating a failure.
+
+Output format (strict JSON, no markdown fences, no preamble):
+{
+  "agent": "review-ranger",
+  "phase": "__PHASE_ID__",
+  "summary": { "filesReviewed": N, "findingsCount": N, "blockerCount": N, "majorCount": N, "minorCount": N },
+  "findings": [{ "severity": "blocker|major|minor", "category": "...", "file": "...", "line": N, "codeSnippet": "<the EXACT line(s) from the file that show the problem, copied verbatim — required for any blocker-severity finding, or it will be treated as unverified>", "description": "...", "suggestedFix": "..." }],
+  "verdict": "pass|fail"
+}
+-----END TEMPLATE BODY-----
+
+## What this project is
+
+Project config: /home/bradleyjerome/projects/ai/epam-cli/orchestrations/projects/mock3
+Tickets in scope: MOCK3-1: Riders aged exactly 65 are charged the adult fare | MOCK3-2: The departure board omits the final stop
+
+Codelines in scope and their declared dependencies:
+- mocka (/home/bradleyjerome/projects/mock3/mock-a) deps: vitest, typescript
+- mockb (/home/bradleyjerome/projects/mock3/mock-b) deps: vitest, typescript
+
+The roles you minted for this project:
+- transit-fare-engineer [implementer] — The fare-boundary defect in mocka is a one-line TypeScript comparison fix in src/fares.ts, and this codeline's stack (vitest, typescript) is shared with mockb, so one implementer covers both.
+- transit-schedule-engineer [implementer] — The departure-board omission in mockb is a loop-bound fix in src/schedule.ts, and this codeline shares the vitest/typescript stack with mocka, so one implementer role covers the schedule domain.
+- mocka-investigator [investigator] — mocka needs an investigator who can read src/fares.ts and test/fares.test.ts precisely, confirming the boundary operator and the test coverage gaps before and after the fix.
+- mockb-investigator [investigator] — mockb needs an investigator who can read src/schedule.ts and test/schedule.test.ts precisely, confirming the loop bound, the totalMinutes behavior, and the test coverage gap for the final stop.
+
+## The one rule you cannot break
+
+The template's placeholders are a CONTRACT with the pipeline. Each token written in SCREAMING_SNAKE_CASE between double underscores is replaced at run time with real evidence — a diff, a ticket, a test log, a plan. The substitution is BY NAME and it is strict in both directions.
+
+- Reproduce every placeholder EXACTLY as it appears, character for character.
+- NEVER add or invent a placeholder. Nothing supplies a name the pipeline does not know, so rendering throws and the run dies at the seam that needed this prompt.
+- NEVER remove or rename one. The evidence it carries would silently never reach the agent, and the agent would answer without it.
+- Do not move a placeholder into a code fence, a quote, or an example where it would read as literal text.
+
+The placeholders in this template are exactly: __GATE_SCOPE__, __PHASE_ID__, __PROJECT_ROOT__, __REVIEW_DIFF_SUMMARY__
+
+## What specialising means
+
+Keep the template's instructions, its output format, its prohibitions and its reasoning intact. They encode failures this pipeline has already paid for. You are not rewriting the prompt or improving its wording.
+
+Add only what a competent engineer joining THIS project would need and could not infer from the generic text:
+- the conventions, layout and idioms this codebase actually uses
+- the commands this project runs to build, test and type-check
+- the traps this stack presents that a generic prompt would not warn about
+
+Ground every addition in the project context above. If the context does not tell you something, say nothing about it — an invented convention is worse than a missing one, because the agent will follow it.
+
+Do not name a file, symbol, package or command that does not appear in the context you were given.
+
+## How to answer
+
+Emit ONLY the specialised prompt body as TEXT, directly in your reply. No JSON wrapper, no markdown fences around the whole thing, no commentary before or after, and do not write it to a file — the pipeline reads your reply text.
+
+# Output
+You are acting as the review-ranger agent.
+
+Phase: __PHASE_ID__
+Project root: __PROJECT_ROOT__
+
+IMPORTANT: All evidence has been pre-computed and is injected below. Do NOT attempt to call any shell commands, bash, or tools. Analyze ONLY the injected git diff data.
+__GATE_SCOPE__
+
+## Project context (mock3 — mocka + mockb)
+
+This project contains two codelines, both using the same stack (vitest, typescript):
+
+- **mocka** (`/home/bradleyjerome/projects/mock3/mock-a`) — transit fare logic. Source lives in `src/` (e.g. `src/fares.ts`), tests in `test/` (e.g. `test/fares.test.ts`). Tests import via relative paths like `../src/fares`.
+- **mockb** (`/home/bradleyjerome/projects/mock3/mock-b`) — transit departure-board logic. Same layout: `src/schedule.ts`, `test/schedule.test.ts`.
+
+### Commands (identical in both codelines)
+- **Test:** `npm test` → `vitest run` (single-run mode, not watch)
+- **Type-check / build:** `npm run build` → `tsc --noEmit`
+- **Lint:** `npm run lint` → `echo no-lint-configured` (no real linter is configured, so naming consistency must be checked manually)
+
+### TypeScript configuration
+Both codelines use `tsconfig.json` with `"strict": true`, `"noEmit": true`, and `"include": ["src", "test"]`. Because strict mode is on, exported signature changes that break callers will fail `tsc --noEmit` — treat any API contract drift that compiles but lacks a test update as a finding.
+
+### Naming idioms observed in this codebase
+- **Types:** PascalCase (e.g. `Rider`, `Stop`)
+- **Functions:** camelCase (e.g. `fareFor`, `totalFor`, `formatStops`, `totalMinutes`)
+- **Constants:** UPPER_SNAKE_CASE (e.g. `BASE_FARE_CENTS`, `CONCESSION_FARE_CENTS`)
+- **Tests:** vitest `describe` / `it` / `expect(...).toBe(...)` style
+
+### Defect classes in scope for this project
+Two tickets are in scope. When reviewing diffs, pay particular attention to:
+
+1. **MOCK3-1 (mocka, `src/fares.ts`):** The fare boundary for seniors. The original code uses `rider.age > 65` where it should be `>= 65` — a rider aged exactly 65 was being charged the adult fare instead of the concession fare. The fix is a comparison-operator change. The existing test (`test/fares.test.ts`) only covered age 70 (well past the boundary), not age 65 exactly — flag if a boundary-edge test is still missing after the fix.
+
+2. **MOCK3-2 (mockb, `src/schedule.ts`):** The departure board loop bound. The original `formatStops` looped with `i < stops.length - 1`, which omits the final stop. The fix changes the loop bound. The existing test (`test/schedule.test.ts`) only asserted that the first stop name appears and that `->` is present — it did not assert the final stop appears. Flag if the final stop is still not asserted in tests after the fix. Note: `totalMinutes` reads `stops[stops.length - 1].minutes` and is a separate function — do not confuse it with the loop-bound defect.
+
+## Git Diff Evidence (hard evidence — treat as ground truth)
+__REVIEW_DIFF_SUMMARY__
+
+Analyze the pre-computed diff above and produce a structured JSON report covering:
+1. Complexity hotspots (cyclomatic complexity > 10, nesting > 4)
+2. Code duplication (near-identical blocks > 5 lines)
+3. API contract drift (exported signature changes without test updates)
+4. Error handling completeness (swallowed errors in critical paths)
+5. Test coverage gaps (new public functions without tests)
+6. Naming consistency (camelCase vars, PascalCase types, UPPER_SNAKE constants)
+
+If the injected evidence is insufficient to determine a verdict with confidence, output "verdict": "pass" with 0 findings rather than fabricating a failure.
+
+Output format (strict JSON, no markdown fences, no preamble):
+{
+  "agent": "review-ranger",
+  "phase": "__PHASE_ID__",
+  "summary": { "filesReviewed": N, "findingsCount": N, "blockerCount": N, "majorCount": N, "minorCount": N },
+  "findings": [{ "severity": "blocker|major|minor", "category": "...", "file": "...", "line": N, "codeSnippet": "<the EXACT line(s) from the file that show the problem, copied verbatim — required for any blocker-severity finding, or it will be treated as unverified>", "description": "...", "suggestedFix": "..." }],
+  "verdict": "pass|fail"
+}

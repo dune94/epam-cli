@@ -1,0 +1,3 @@
+Based on my analysis, the project is in scaffold phase with a single source file `src/index.ts` containing only `export {};` — an empty module with no public functions, no exports, no classes, and no interfaces. There are no functions to fuzz-test.
+
+{"agent":"fuzz-weaver","phase":"scaffold","summary":{"functionsAnalysed":0,"fuzzCasesProposed":0,"covered":0,"gaps":0,"vulnerabilities":0},"cases":[],"verdict":"pass"}

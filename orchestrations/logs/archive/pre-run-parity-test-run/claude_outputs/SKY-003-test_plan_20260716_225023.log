@@ -1,0 +1,30 @@
+The plan is complete. Here's a summary of the key findings:
+
+---
+
+## Plan Summary for SKY-003-test
+
+### Key Findings
+
+**Current State:** `src/cli.test.ts` exists with 11 tests, but **7 of 11 are failing** due to a fundamental test strategy mismatch — the current tests spawn child processes (`npx tsx cli.ts`) instead of using module-boundary mocking as required by AC-13.
+
+### 6 Required Outputs
+
+1. **Implementation Steps (12 steps):** Complete rewrite of `src/cli.test.ts` from spawn-based integration tests to proper vitest `vi.mock()` module-boundary mocking with `process.exit` interception via custom `ProcessExitError` class. 9 test cases mapped to ACs.
+
+2. **Dependency Validation:** SKY-001 ✅, SKY-002 ✅, SKY-003-impl ⚠️ (exists but has separator delimiter bug), vitest ✅, tsc ✅.
+
+3. **Risk Register (top 3):**
+   - 🔴 **Separator delimiter bug** — `cli.ts` uses `-+-` instead of ` | ` for separator row join (violates AC-8). Must escalate to impl story.
+   - 🟡 **Entity ID flags** — current tests test for `--from-entity`/`--to-entity` flags that don't exist in `parseArgs()`. Tests must match actual CLI behavior.
+   - 🟡 **process.exit interception** — must use `ProcessExitError` throw pattern to prevent vitest termination.
+
+4. **Test Plan:** 9 new tests (minimum per AC-13), regression scope includes 8 existing client tests + tsc compilation.
+
+5. **AC Mapping:** All 15 ACs mapped to implementation steps. AC-8 (separator delimiter) flagged as at-risk due to impl defect.
+
+6. **Cost/Effort:** Adjusted from 15h → **8h** (test-only story, impl already exists, well-defined test cases).
+
+### Escalation Required
+**Defect in `cli.ts`:** `buildTable()` separator join uses `'-+-'` instead of `' | '` — must be fixed by the impl story for AC-8 compliance.
+

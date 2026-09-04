@@ -1,0 +1,325 @@
+=== Prompt for SKY-003-impl (attempt 1) ===
+CRITICAL — WRITE FILES FIRST. Your FIRST tool call MUST be WriteFile.
+Do NOT output any text before calling WriteFile. Do NOT plan or say "I will...".
+Call WriteFile NOW for the EXACT ABSOLUTE PATHS listed below:
+
+   - WRITE /home/bradleyjerome/projects/skyscanner-app/src/cli.ts first, before any other action
+---
+
+Implement user story SKY-003-impl: Implement flight search CLI entry point (src/cli.ts)
+
+## Story Description
+Create `src/cli.ts` — a standalone Node entry point that accepts flight search arguments via `process.argv` and prints results as an aligned table. Parse flags manually (no commander, no yargs, zero new runtime deps). Require `RAPIDAPI_KEY` env var; exit 1 with a human-readable message if absent. Instantiate `SkyscannerClient` from `src/skyscanner/client.ts` (SKY-002), call `searchFlights` forwarding all parsed arguments including adults count, and render results in a dynamically-padded table. CRITICAL: use Number() not parseInt() for --adults parsing. CRITICAL: separator row has one hyphen-segment per column separated by whitespace, not a single unbroken run. CRITICAL: export main() and guard execution with `if (require.main === module)` or VITEST env var pattern.
+
+## Acceptance Criteria
+- `src/cli.ts` exists and `tsc --noEmit` reports zero errors
+- `tsconfig.json` sets `outDir` to `dist` and emits CommonJS-compatible output invocable as `node dist/cli.js`
+- Required flags `--from`, `--to`, `--date` — missing any prints usage hint to stderr and exits 2; `--date` must match `YYYY-MM-DD` or exit 2; optional `--adults` defaults to 1, rejects non-integer/≤0/non-numeric with exit 2
+- The parsed `adults` value is forwarded to `SkyscannerClient.searchFlights`
+- If `RAPIDAPI_KEY` env var is unset or empty, prints 'Error: RAPIDAPI_KEY environment variable is required' to stderr and exits 1
+- Successful results render a table with header (Airline, Price, Departure, Arrival, Duration, Stops), separator row of hyphens matching each column width, and data rows; all columns padded to widest value; Price right-aligned with currency symbol (fallback £); other columns left-aligned
+- Empty results print exactly `No flights found.` and exit 0
+- `searchFlights` rejection prints error message to stderr and exits 1; stdout is empty
+- No new runtime dependencies added
+- `main()` is exported for testability and guarded: `export async function main()` with `if (require.main === module)` or VITEST env var guard
+
+
+
+
+
+## Technical Notes
+- files: ["/home/bradleyjerome/projects/skyscanner-app/src/cli.ts"]
+- dependsOn: ["SKY-002"]
+- implementationNotes: CRITICAL — argument parsing pitfall: use Number() not parseInt() to parse --adults. parseInt('1.5', 10) silently truncates to 1 (a valid integer), making the non-integer validation impossible — Number.isInteger(1) is true so exit code 2 is never triggered. Number('1.5') returns 1.5, which correctly fails Number.isInteger() and triggers exit 2. The adults validation must reject: non-integer values (e.g. 1.5), zero, negative numbers, and non-numeric strings. All must exit with code 2.
+
+CRITICAL — separator row format: the table renders one hyphen-segment per column, padded to that column's width, separated by the same whitespace used between column values. The separator is NOT a single run of unbroken hyphens. A regex checking the separator must allow spaces: /^[-\s]+$/ not /^-[-]+$/.
+
+CRITICAL — main() must be exported and guarded. Export the function: `export async function main()`. Guard execution: `if (require.main === module) { main(); }` or use the VITEST env var pattern. Unexported main cannot be tested via require('./cli').main.
+
+## Files to Create/Modify (EXACT ABSOLUTE PATHS — write to these paths exactly)
+/home/bradleyjerome/projects/skyscanner-app/src/cli.ts
+
+## Dependencies
+SKY-002
+
+
+
+## Instructions
+**CRITICAL — WRITE FILES FIRST:**
+   - WRITE /home/bradleyjerome/projects/skyscanner-app/src/cli.ts first, before any other action
+**You MUST write every file listed above to its EXACT absolute path. Do NOT write to a different path, do NOT write to the current directory unless it matches the path above. Use your WriteFile or Edit tools with the full absolute path shown.**
+
+1. Write each required file to its exact absolute path listed above — do this FIRST before anything else
+2. Implement all acceptance criteria for this story
+3. Follow the project's existing code patterns and conventions
+4. Do NOT create tests unless explicitly required in acceptance criteria
+
+After implementation, provide a brief summary of what was created/modified.
+
+## Relevant Knowledge Base Entries
+The following was learned from previous story implementations and is relevant to your agent role. Apply this knowledge before writing any code:
+
+- [2026-07-06T17:45:30Z] Always resolve mocked fetch calls to a Response-shaped object with ok, status, statusText, and a json method returning a Promise.
+- [2026-07-06T17:50:20Z] Use valid module and moduleResolution pairs in tsconfig.json: CommonJS with Node, Node16 with Node16, ESNext with Bundler. Use CommonJS and Node for the stack. Mismatched pairs cause build errors.
+- [2026-07-06T18:11:26Z] Use vi.fn().mockResolvedValue(value) to make a mock return a resolved Promise.
+- [2026-07-06T20:31:11Z] Use `test: { passWithNoTests: true }` in vitest.config.ts or create a stub test file when no *.test.ts files exist.
+- [2026-07-06T20:33:03Z] Enable globals:true in vitest.config.ts so describe, it, and expect work without imports, reducing boilerplate in test files.
+- [2026-07-06T23:47:34Z] Use CommonJS-compatible patterns in src/server.ts: avoid `import.meta.url` and top-level `await`; gate listen with `if (require.main === module)`.
+- [2026-07-07T02:35:30Z] Always include a non-test source file in src/ alongside any src/*.test.ts file, since tsconfig.json excludes test files from tsc --noEmit.
+- [2026-07-07T19:01:34Z] Only modify or create files explicitly listed in the story's acceptance criteria. Do not touch files belonging to other stories or outside the current task scope.
+- [2026-07-07T20:17:57Z] [unreviewed-fallback] Avoid using deprecated TypeScript compiler options like 'moduleResolution=node10'; use 'moduleResolution=node' instead.
+- [2026-07-17T20:20:58Z] Always: Before importing a module or referencing a type/property, always read the actual source file to verify the export exists, its exact path, its properties, and its constructor/factory signatures
+
+## Knowledge Base Contribution (do this LAST — after writing all implementation files)
+Your assigned KB entry ID for this run: **KB-010**
+
+IMPORTANT: Write ALL implementation files first. Only AFTER writing every required file should you optionally append a KB entry.
+Do NOT read orchestrations/agents/KB.md before writing implementation files. The relevant KB entries are already injected above.
+
+If (and only if) you discover a non-obvious pattern during implementation, append one entry to `orchestrations/agents/KB.md`:
+
+```markdown
+## KB-010 -- 2026-07-21
+
+**Category:** <backend|frontend|infrastructure|testing|orchestration>
+**AgentRole:** <your agentRole from the story>
+**Tags:** <comma-separated tech keywords, e.g. typescript, node, cli>
+**Trigger:** <retry|first-success>
+**StoryRef:** SKY-003-impl
+
+<One concise paragraph: the specific pattern, gotcha, or anti-pattern.>
+```
+
+Only write an entry if the knowledge is genuinely non-obvious. Skip trivial observations.
+
+## Execution Plan
+Follow this plan step by step:
+[1;33m[WARNING][0m   PlanReview: mismatch detected for SKY-003-impl against dependency contracts — one corrective re-plan
+1. Inspect existing project files (tsconfig.json, SkyscannerClient.searchFlights signature) to align CLI types and module style.
+2. Create `/home/bradleyjerome/projects/skyscanner-app/src/cli.ts` exporting `async function main()` and guarded with `if (require.main === module)` or `VITEST` env var check.
+3. Implement argument parsing for `--from`, `--to`, `--date`, optional `--adults` (default 1) with validation: missing flags or invalid `--date` (not `YYYY-MM-DD`) or invalid `--adults` (non-integer/≤0/non-numeric) prints usage hint to stderr and exits 2.
+4. Implement `RAPIDAPI_KEY` env var check: if unset/empty, print `Error: RAPIDAPI_KEY environment variable is required` to stderr and exit 1.
+5. Call `SkyscannerClient.searchFlights` with parsed `from`, `to`, `date`, and `adults`; forward `adults` as integer.
+6. Implement table rendering: header row `Airline, Price, Departure, Arrival, Duration, Stops`, separator row of hyphens matching column widths, data rows padded to widest value; Price right-aligned with currency symbol fallback `£`, other columns left-aligned.
+7. Implement empty results handling: print exactly `No flights found.` and exit 0.
+8. Implement `searchFlights` rejection handling: print error message to stderr, keep stdout empty, exit 1.
+9. Run `tsc --noEmit` and `node dist/cli.js` smoke tests to verify zero type errors and acceptance criteria.
+=== End Prompt ===
+
+=== epam Output (attempt 1) ===
+The corruption is real — line 80 lost its `//` prefix, becoming an invalid statement. This will fail TypeScript compilation. Let me delete and rewrite using a here-doc via bash to avoid any tool-induced corruption:
+  [tc-writer] No test stories need TCs in phase 'unknown' — skipping
+
+=== tsc --noEmit failed (exit 2) ===
+src/cli.ts(99,14): error TS1005: ',' expected.
+src/cli.ts(99,26): error TS1005: '(' expected.
+src/cli.ts(106,3): error TS1109: Expression expected.
+src/cli.ts(106,4): error TS1005: ':' expected.
+src/cli.ts(107,9): error TS1005: ':' expected.
+src/cli.ts(107,89): error TS1005: ',' expected.
+src/cli.ts(109,9): error TS1005: ':' expected.
+src/cli.ts(109,15): error TS1005: ',' expected.
+src/cli.ts(109,23): error TS1005: ',' expected.
+src/cli.ts(109,24): error TS1109: Expression expected.
+src/cli.ts(109,26): error TS1005: ':' expected.
+src/cli.ts(116,5): error TS1005: ',' expected.
+src/cli.ts(118,9): error TS1005: ':' expected.
+src/cli.ts(119,46): error TS1005: ',' expected.
+src/cli.ts(120,9): error TS1005: ':' expected.
+src/cli.ts(121,46): error TS1005: ',' expected.
+src/cli.ts(123,9): error TS1005: ':' expected.
+src/cli.ts(123,19): error TS1005: ',' expected.
+src/cli.ts(125,9): error TS1005: ':' expected.
+src/cli.ts(131,17): error TS1005: ',' expected.
+src/cli.ts(133,9): error TS1005: ':' expected.
+src/cli.ts(133,63): error TS1005: ',' expected.
+src/cli.ts(135,9): error TS1005: ':' expected.
+src/cli.ts(135,14): error TS1005: ',' expected.
+src/cli.ts(135,22): error TS1005: ',' expected.
+src/cli.ts(135,23): error TS1109: Expression expected.
+src/cli.ts(135,25): error TS1005: ':' expected.
+src/cli.ts(135,29): error TS1005: ',' expected.
+src/cli.ts(136,8): error TS1005: ',' expected.
+src/cli.ts(136,38): error TS1005: ',' expected.
+src/cli.ts(137,8): error TS1005: ',' expected.
+src/cli.ts(137,24): error TS1005: ',' expected.
+src/cli.ts(138,8): error TS1359: Identifier expected. 'const' is a reserved word that cannot be used here.
+src/cli.ts(138,14): error TS1005: ',' expected.
+src/cli.ts(138,18): error TS1005: ',' expected.
+src/cli.ts(138,21): error TS1005: ',' expected.
+src/cli.ts(142,3): error TS1005: ',' expected.
+src/cli.ts(142,10): error TS1005: ':' expected.
+src/cli.ts(142,26): error TS1005: ',' expected.
+src/cli.ts(187,1): error TS1005: '}' expected.
+The corruption is real — line 80 lost its `//` prefix, becoming an invalid statement. This will fail TypeScript compilation. Let me delete and rewrite using a here-doc via bash to avoid any tool-induced corruption:
+
+=== epam exited with code 1 ===
+=== Prompt for SKY-003-impl (attempt 2) ===
+CRITICAL — WRITE FILES FIRST. Your FIRST tool call MUST be WriteFile.
+Do NOT output any text before calling WriteFile. Do NOT plan or say "I will...".
+Call WriteFile NOW for the EXACT ABSOLUTE PATHS listed below:
+
+   - WRITE /home/bradleyjerome/projects/skyscanner-app/src/cli.ts first, before any other action
+---
+
+Implement user story SKY-003-impl: Implement flight search CLI entry point (src/cli.ts)
+
+## Story Description
+Create `src/cli.ts` — a standalone Node entry point that accepts flight search arguments via `process.argv` and prints results as an aligned table. Parse flags manually (no commander, no yargs, zero new runtime deps). Require `RAPIDAPI_KEY` env var; exit 1 with a human-readable message if absent. Instantiate `SkyscannerClient` from `src/skyscanner/client.ts` (SKY-002), call `searchFlights` forwarding all parsed arguments including adults count, and render results in a dynamically-padded table. CRITICAL: use Number() not parseInt() for --adults parsing. CRITICAL: separator row has one hyphen-segment per column separated by whitespace, not a single unbroken run. CRITICAL: export main() and guard execution with `if (require.main === module)` or VITEST env var pattern.
+
+## Acceptance Criteria
+- `src/cli.ts` exists and `tsc --noEmit` reports zero errors
+- `tsconfig.json` sets `outDir` to `dist` and emits CommonJS-compatible output invocable as `node dist/cli.js`
+- Required flags `--from`, `--to`, `--date` — missing any prints usage hint to stderr and exits 2; `--date` must match `YYYY-MM-DD` or exit 2; optional `--adults` defaults to 1, rejects non-integer/≤0/non-numeric with exit 2
+- The parsed `adults` value is forwarded to `SkyscannerClient.searchFlights`
+- If `RAPIDAPI_KEY` env var is unset or empty, prints 'Error: RAPIDAPI_KEY environment variable is required' to stderr and exits 1
+- Successful results render a table with header (Airline, Price, Departure, Arrival, Duration, Stops), separator row of hyphens matching each column width, and data rows; all columns padded to widest value; Price right-aligned with currency symbol (fallback £); other columns left-aligned
+- Empty results print exactly `No flights found.` and exit 0
+- `searchFlights` rejection prints error message to stderr and exits 1; stdout is empty
+- No new runtime dependencies added
+- `main()` is exported for testability and guarded: `export async function main()` with `if (require.main === module)` or VITEST env var guard
+
+
+
+
+
+## Technical Notes
+- files: ["/home/bradleyjerome/projects/skyscanner-app/src/cli.ts"]
+- dependsOn: ["SKY-002"]
+- implementationNotes: CRITICAL — argument parsing pitfall: use Number() not parseInt() to parse --adults. parseInt('1.5', 10) silently truncates to 1 (a valid integer), making the non-integer validation impossible — Number.isInteger(1) is true so exit code 2 is never triggered. Number('1.5') returns 1.5, which correctly fails Number.isInteger() and triggers exit 2. The adults validation must reject: non-integer values (e.g. 1.5), zero, negative numbers, and non-numeric strings. All must exit with code 2.
+
+CRITICAL — separator row format: the table renders one hyphen-segment per column, padded to that column's width, separated by the same whitespace used between column values. The separator is NOT a single run of unbroken hyphens. A regex checking the separator must allow spaces: /^[-\s]+$/ not /^-[-]+$/.
+
+CRITICAL — main() must be exported and guarded. Export the function: `export async function main()`. Guard execution: `if (require.main === module) { main(); }` or use the VITEST env var pattern. Unexported main cannot be tested via require('./cli').main.
+
+## Files to Create/Modify (EXACT ABSOLUTE PATHS — write to these paths exactly)
+/home/bradleyjerome/projects/skyscanner-app/src/cli.ts
+
+## Dependencies
+SKY-002
+
+
+
+## Instructions
+**CRITICAL — WRITE FILES FIRST:**
+   - WRITE /home/bradleyjerome/projects/skyscanner-app/src/cli.ts first, before any other action
+**You MUST write every file listed above to its EXACT absolute path. Do NOT write to a different path, do NOT write to the current directory unless it matches the path above. Use your WriteFile or Edit tools with the full absolute path shown.**
+
+1. Write each required file to its exact absolute path listed above — do this FIRST before anything else
+2. Implement all acceptance criteria for this story
+3. Follow the project's existing code patterns and conventions
+4. Do NOT create tests unless explicitly required in acceptance criteria
+
+After implementation, provide a brief summary of what was created/modified.
+
+## Verification Failure
+
+The orchestrator ran `tsc --noEmit` after your files were written and it failed (exit code 2). Fix the type errors so tsc exits 0.
+
+```
+src/cli.ts(99,14): error TS1005: ',' expected.
+src/cli.ts(99,26): error TS1005: '(' expected.
+src/cli.ts(106,3): error TS1109: Expression expected.
+src/cli.ts(106,4): error TS1005: ':' expected.
+src/cli.ts(107,9): error TS1005: ':' expected.
+src/cli.ts(107,89): error TS1005: ',' expected.
+src/cli.ts(109,9): error TS1005: ':' expected.
+src/cli.ts(109,15): error TS1005: ',' expected.
+src/cli.ts(109,23): error TS1005: ',' expected.
+src/cli.ts(109,24): error TS1109: Expression expected.
+src/cli.ts(109,26): error TS1005: ':' expected.
+src/cli.ts(116,5): error TS1005: ',' expected.
+src/cli.ts(118,9): error TS1005: ':' expected.
+src/cli.ts(119,46): error TS1005: ',' expected.
+src/cli.ts(120,9): error TS1005: ':' expected.
+src/cli.ts(121,46): error TS1005: ',' expected.
+src/cli.ts(123,9): error TS1005: ':' expected.
+src/cli.ts(123,19): error TS1005: ',' expected.
+src/cli.ts(125,9): error TS1005: ':' expected.
+src/cli.ts(131,17): error TS1005: ',' expected.
+src/cli.ts(133,9): error TS1005: ':' expected.
+src/cli.ts(133,63): error TS1005: ',' expected.
+src/cli.ts(135,9): error TS1005: ':' expected.
+src/cli.ts(135,14): error TS1005: ',' expected.
+src/cli.ts(135,22): error TS1005: ',' expected.
+src/cli.ts(135,23): error TS1109: Expression expected.
+src/cli.ts(135,25): error TS1005: ':' expected.
+src/cli.ts(135,29): error TS1005: ',' expected.
+src/cli.ts(136,8): error TS1005: ',' expected.
+src/cli.ts(136,38): error TS1005: ',' expected.
+src/cli.ts(137,8): error TS1005: ',' expected.
+src/cli.ts(137,24): error TS1005: ',' expected.
+src/cli.ts(138,8): error TS1359: Identifier expected. 'const' is a reserved word that cannot be used here.
+src/cli.ts(138,14): error TS1005: ',' expected.
+src/cli.ts(138,18): error TS1005: ',' expected.
+src/cli.ts(138,21): error TS1005: ',' expected.
+src/cli.ts(142,3): error TS1005: ',' expected.
+src/cli.ts(142,10): error TS1005: ':' expected.
+src/cli.ts(142,26): error TS1005: ',' expected.
+src/cli.ts(187,1): error TS1005: '}' expected.
+```
+
+## Relevant Knowledge Base Entries
+The following was learned from previous story implementations and is relevant to your agent role. Apply this knowledge before writing any code:
+
+- [2026-07-06T17:45:30Z] Always resolve mocked fetch calls to a Response-shaped object with ok, status, statusText, and a json method returning a Promise.
+- [2026-07-06T17:50:20Z] Use valid module and moduleResolution pairs in tsconfig.json: CommonJS with Node, Node16 with Node16, ESNext with Bundler. Use CommonJS and Node for the stack. Mismatched pairs cause build errors.
+- [2026-07-06T18:11:26Z] Use vi.fn().mockResolvedValue(value) to make a mock return a resolved Promise.
+- [2026-07-06T20:31:11Z] Use `test: { passWithNoTests: true }` in vitest.config.ts or create a stub test file when no *.test.ts files exist.
+- [2026-07-06T20:33:03Z] Enable globals:true in vitest.config.ts so describe, it, and expect work without imports, reducing boilerplate in test files.
+- [2026-07-06T23:47:34Z] Use CommonJS-compatible patterns in src/server.ts: avoid `import.meta.url` and top-level `await`; gate listen with `if (require.main === module)`.
+- [2026-07-07T02:35:30Z] Always include a non-test source file in src/ alongside any src/*.test.ts file, since tsconfig.json excludes test files from tsc --noEmit.
+- [2026-07-07T19:01:34Z] Only modify or create files explicitly listed in the story's acceptance criteria. Do not touch files belonging to other stories or outside the current task scope.
+- [2026-07-07T20:17:57Z] [unreviewed-fallback] Avoid using deprecated TypeScript compiler options like 'moduleResolution=node10'; use 'moduleResolution=node' instead.
+- [2026-07-17T20:20:58Z] Always: Before importing a module or referencing a type/property, always read the actual source file to verify the export exists, its exact path, its properties, and its constructor/factory signatures
+
+## Knowledge Base Contribution (do this LAST — after writing all implementation files)
+Your assigned KB entry ID for this run: **KB-010**
+**This is retry attempt 1** — a previous attempt failed. You MUST write a KB entry documenting what went wrong and what you changed.
+
+IMPORTANT: Write ALL implementation files first. Only AFTER writing every required file should you optionally append a KB entry.
+Do NOT read orchestrations/agents/KB.md before writing implementation files. The relevant KB entries are already injected above.
+
+If (and only if) you discover a non-obvious pattern during implementation, append one entry to `orchestrations/agents/KB.md`:
+
+```markdown
+## KB-010 -- 2026-07-21
+
+**Category:** <backend|frontend|infrastructure|testing|orchestration>
+**AgentRole:** <your agentRole from the story>
+**Tags:** <comma-separated tech keywords, e.g. typescript, node, cli>
+**Trigger:** <retry|first-success>
+**StoryRef:** SKY-003-impl
+
+<One concise paragraph: the specific pattern, gotcha, or anti-pattern.>
+```
+
+Only write an entry if the knowledge is genuinely non-obvious. Skip trivial observations.
+
+## Execution Plan
+Follow this plan step by step:
+[1;33m[WARNING][0m   PlanReview: mismatch detected for SKY-003-impl against dependency contracts — one corrective re-plan
+1. Inspect existing project files (tsconfig.json, SkyscannerClient.searchFlights signature) to align CLI types and module style.
+2. Create `/home/bradleyjerome/projects/skyscanner-app/src/cli.ts` exporting `async function main()` and guarded with `if (require.main === module)` or `VITEST` env var check.
+3. Implement argument parsing for `--from`, `--to`, `--date`, optional `--adults` (default 1) with validation: missing flags or invalid `--date` (not `YYYY-MM-DD`) or invalid `--adults` (non-integer/≤0/non-numeric) prints usage hint to stderr and exits 2.
+4. Implement `RAPIDAPI_KEY` env var check: if unset/empty, print `Error: RAPIDAPI_KEY environment variable is required` to stderr and exit 1.
+5. Call `SkyscannerClient.searchFlights` with parsed `from`, `to`, `date`, and `adults`; forward `adults` as integer.
+6. Implement table rendering: header row `Airline, Price, Departure, Arrival, Duration, Stops`, separator row of hyphens matching column widths, data rows padded to widest value; Price right-aligned with currency symbol fallback `£`, other columns left-aligned.
+7. Implement empty results handling: print exactly `No flights found.` and exit 0.
+8. Implement `searchFlights` rejection handling: print error message to stderr, keep stdout empty, exit 1.
+9. Run `tsc --noEmit` and `node dist/cli.js` smoke tests to verify zero type errors and acceptance criteria.
+
+## Coordinator Guidance (retry 1)
+The following targeted instruction was identified from the previous failure:
+
+## Self-Heal: Failure Analyst Summary
+Root cause: Agent wrote syntactically invalid TypeScript in cli.ts causing cascading parse errors from line 99 onward.
+The spec is correct — the model made a code-level mistake. Write correct code this time.
+=== End Prompt ===
+
+=== epam Output (attempt 2) ===
+Type check passes. Let me also verify the build emits and the binary runs in mock mode:
+  [tc-writer] No test stories need TCs in phase 'unknown' — skipping
+Type check passes. Let me also verify the build emits and the binary runs in mock mode:
+
+=== End epam Output ===

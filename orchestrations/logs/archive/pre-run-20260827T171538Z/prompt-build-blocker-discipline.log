@@ -1,0 +1,108 @@
+# Prompt
+You are specialising ONE generic agent prompt for ONE specific project. You are the same agent that just minted this project's roles, so you already know what this project is and who will work on it.
+
+## The template you must specialise
+
+Its id is blocker-discipline and its purpose is: What a reviewer may and may not raise as a BLOCKER. Bounds a rejection to the plan of record and to what the implementer can actually do.
+
+Everything between the two markers below is the template, verbatim. The markers are not
+part of it. A code fence cannot delimit this: several templates contain fences of their
+own, so the first closing fence would truncate the body mid-instruction.
+
+-----BEGIN TEMPLATE BODY-----
+## What may be a BLOCKER
+
+A blocker REJECTS the implementer's work and forces another attempt. It must therefore be something that implementer can actually do. Before raising one, check all three:
+
+1. IS IT IN THE PLAN? The root-cause analysis above is the plan of record — the same one the implementer was given. A blocker must concern a file that plan names. If you believe work is needed somewhere the plan does not mention, that is a finding about the PLAN, not a failure by the implementer: raise it as an ADVISORY note beginning 'SPEC:' and explain what the plan appears to be missing. Do NOT describe it as 'prescribed' or 'required' — the implementer will follow you out of scope, and the change will be rejected later for exceeding the plan.
+
+2. DOES THE PLAN EXEMPT IT? A site marked NO EDIT REQUIRED is part of the fix and correctly left untouched. Never raise a finding of any severity because such a file is unchanged. The implementer was told not to change it.
+
+3. CAN IT BE SATISFIED? If you claim something is missing — a package, a file, an export, an API — CONFIRM IT with the tools you have before raising it. A blocker naming a dependency that does not exist, or an API the installed version does not provide, can never be resolved: the implementer will fail on it repeatedly and the story will exhaust its attempts on your mistake.
+
+4. IS IT INSIDE THE PLAN? A file the plan NAMES, and does not mark NO EDIT REQUIRED, was PRESCRIBED. Changing it is compliance, not over-engineering. Never raise a finding of any severity because a prescribed file was changed, and never assert a smaller set of files than the plan names — you were handed the plan; it is the authority on scope, not your own estimate of what a minimal fix would touch. If you believe the plan names more files than the work needs, that is a finding about the PLAN: raise it as an ADVISORY note beginning 'SPEC:'. Live failure, 2026-08-14: a reviewer rejected a change for "modifying 6 files when the prescribed minimal fix requires only 2" against a plan that named FIVE — every one of which the implementer changed, and no others. Obeying the plan was the thing being rejected, so no attempt could ever pass, and the story burned its whole ladder.
+
+Anything failing these is ADVISORY. Advisory findings are still valuable — they make the change smaller, clearer or safer — but they do not reject the work.
+
+Judge the FIX ITSELF as a blocker freely: it does not address the prescribed root cause, it is materially larger than the PLAN OF RECORD — measured against the files and changes that plan names, never against a smaller fix you would have written instead, it removes a property the existing code guaranteed, it is unsafe. Those are yours to enforce.
+-----END TEMPLATE BODY-----
+
+## What this project is
+
+Project config: /home/bradleyjerome/projects/ai/epam-cli/orchestrations/projects/mock3
+Tickets in scope: MOCK3-1: Riders aged exactly 65 are charged the adult fare | MOCK3-2: The departure board omits the final stop
+
+Codelines in scope and their declared dependencies:
+- mocka (/home/bradleyjerome/projects/mock3/mock-a) deps: vitest, typescript
+- mockb (/home/bradleyjerome/projects/mock3/mock-b) deps: vitest, typescript
+
+The roles you minted for this project:
+- mocka-fares-investigator [investigator] — MOCK3-1 is scoped to mocka's fare logic, and a dedicated reader who verifies the exact comparison operator and the test file's actual age coverage (rather than inheriting the survey's belief) prevents the implementer from fixing the wrong line.
+- mockb-schedule-investigator [investigator] — MOCK3-2 is scoped to mockb's rendering logic, and a dedicated reader who confirms the loop bound and totalMinutes()'s independent indexing firsthand prevents the implementer from misjudging the blast radius of the fix.
+- fare-boundary-engineer [implementer] — MOCK3-1 requires an actual code change to the fare-rule boundary in src/fares.ts within the mocka codeline, and only an implementer can author that fix.
+- departure-board-engineer [implementer] — MOCK3-2 requires an actual code change to the stop-rendering loop bound in src/schedule.ts within the mockb codeline, and only an implementer can author that fix.
+
+## The one rule you cannot break
+
+The template's placeholders are a CONTRACT with the pipeline. Each token written in SCREAMING_SNAKE_CASE between double underscores is replaced at run time with real evidence — a diff, a ticket, a test log, a plan. The substitution is BY NAME and it is strict in both directions.
+
+- Reproduce every placeholder EXACTLY as it appears, character for character.
+- NEVER add or invent a placeholder. Nothing supplies a name the pipeline does not know, so rendering throws and the run dies at the seam that needed this prompt.
+- NEVER remove or rename one. The evidence it carries would silently never reach the agent, and the agent would answer without it.
+- Do not move a placeholder into a code fence, a quote, or an example where it would read as literal text.
+
+The placeholders in this template are exactly: (none)
+
+## The other rule you cannot break
+
+The template's OUTPUT SHAPE is a contract too. Every field name the template states in its response
+format is read by a consumer that will reject an answer without it — the agent would produce work
+nothing accepts, and the seam fails after the model has already been paid for.
+
+- Reproduce every field name EXACTLY, in the same shape the template states it.
+- NEVER drop one because it looks redundant, and NEVER rename one to something clearer.
+- NEVER add a field. A consumer reads by name and has no place to put an invention.
+
+The output fields this template states are exactly: (none)
+
+## Before you answer
+
+Check your reply against both lists above. Every placeholder, and every output field, must appear
+in what you are about to send. A specialisation that drops one is refused and the work is redone,
+so the check costs you nothing and the omission costs an attempt.
+
+## What specialising means
+
+Keep the template's instructions, its output format, its prohibitions and its reasoning intact. They encode failures this pipeline has already paid for. You are not rewriting the prompt or improving its wording.
+
+Add only what a competent engineer joining THIS project would need and could not infer from the generic text:
+- the conventions, layout and idioms this codebase actually uses
+- the commands this project runs to build, test and type-check
+- the traps this stack presents that a generic prompt would not warn about
+
+Ground every addition in the project context above. If the context does not tell you something, say nothing about it — an invented convention is worse than a missing one, because the agent will follow it.
+
+Do not name a file, symbol, package or command that does not appear in the context you were given.
+
+## How to answer
+
+Emit ONLY the specialised prompt body as TEXT, directly in your reply. No JSON wrapper, no markdown fences around the whole thing, no commentary before or after, and do not write it to a file — the pipeline reads your reply text.
+
+
+
+# Output
+## What may be a BLOCKER
+
+A blocker REJECTS the implementer's work and forces another attempt. It must therefore be something that implementer can actually do. Before raising one, check all three:
+
+1. IS IT IN THE PLAN? The root-cause analysis above is the plan of record — the same one the implementer was given. A blocker must concern a file that plan names. If you believe work is needed somewhere the plan does not mention, that is a finding about the PLAN, not a failure by the implementer: raise it as an ADVISORY note beginning 'SPEC:' and explain what the plan appears to be missing. Do NOT describe it as 'prescribed' or 'required' — the implementer will follow you out of scope, and the change will be rejected later for exceeding the plan. For this project, plans are domain-isolated: MOCK3-1 (fares) lives entirely within mocka, and MOCK3-2 (schedule) lives entirely within mockb. Do not require changes across codelines.
+
+2. DOES THE PLAN EXEMPT IT? A site marked NO EDIT REQUIRED is part of the fix and correctly left untouched. Never raise a finding of any severity because such a file is unchanged. The implementer was told not to change it.
+
+3. CAN IT BE SATISFIED? If you claim something is missing — a package, a file, an export, an API — CONFIRM IT with the tools you have before raising it. A blocker naming a dependency that does not exist, or an API the installed version does not provide, can never be resolved: the implementer will fail on it repeatedly and the story will exhaust its attempts on your mistake. For this project, verify that fixes can run under vitest and that TypeScript type-checks cleanly in the affected codeline.
+
+4. IS IT INSIDE THE PLAN? A file the plan NAMES, and does not mark NO EDIT REQUIRED, was PRESCRIBED. Changing it is compliance, not over-engineering. Never raise a finding of any severity because a prescribed file was changed, and never assert a smaller set of files than the plan names — you were handed the plan; it is the authority on scope, not your own estimate of what a minimal fix would touch. If you believe the plan names more files than the work needs, that is a finding about the PLAN: raise it as an ADVISORY note beginning 'SPEC:'. Live failure, 2026-08-14: a reviewer rejected a change for "modifying 6 files when the prescribed minimal fix requires only 2" against a plan that named FIVE — every one of which the implementer changed, and no others. Obeying the plan was the thing being rejected, so no attempt could ever pass, and the story burned its whole ladder.
+
+Anything failing these is ADVISORY. Advisory findings are still valuable — they make the change smaller, clearer or safer — but they do not reject the work.
+
+Judge the FIX ITSELF as a blocker freely: it does not address the prescribed root cause, it is materially larger than the PLAN OF RECORD — measured against the files and changes that plan names, never against a smaller fix you would have written instead, it removes a property the existing code guaranteed, it is unsafe, or it introduces a type error that breaks the build. For MOCK3-1 (fare boundary), a blocker must address the exact comparison operator in src/fares.ts and ensure test coverage spans the boundary age. For MOCK3-2 (schedule rendering), a blocker must address the loop bound in src/schedule.ts and ensure the final stop is included in the departure board output. Those are yours to enforce.

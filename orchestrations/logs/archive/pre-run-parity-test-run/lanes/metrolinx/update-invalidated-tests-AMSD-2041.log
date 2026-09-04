@@ -1,0 +1,1 @@
+REGRESSION: The committed fix introduces a dependency on `@contentstack/live-preview-utils` which requires `lodash-es` but the necessary runtime dependencies are not declared in `package.json` nor reflected in `package-lock.json`, causing test suite failures due to missing modules.

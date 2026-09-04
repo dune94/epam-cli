@@ -1,0 +1,16 @@
+[repro-test-writer] writing reproducing test for AMSD-1820 → src/services/submit-reservations/apply-report-discounts.service.spec.ts (convention: .spec.ts, example: apps/background/src/core/health/health.controller.spec.ts)
+[repro-test-writer] attempt 1 failed (class=max_iterations) — invoking self-heal analyst
+[repro-test-writer]   self-heal analyst ran for attempt 2 — enforcement applied from the KB
+[repro-test-writer] ladder escalation (attempt 2/3) — z-ai/glm-5.1 → moonshotai/kimi-k3
+[repro-test-writer] attempt 2 failed (class=max_iterations) — invoking self-heal analyst
+[repro-test-writer]   self-heal analyst ran for attempt 3 — enforcement applied from the KB
+[repro-test-writer] ladder escalation (attempt 3/3) — z-ai/glm-5.1 → moonshotai/kimi-k3
+[repro-test-writer] written test FAILS TYPECHECK — rejecting so the writer can retry:
+    src/services/submit-reservations/apply-report-discounts.service.spec.ts(101,12): error TS18048: 'outboundResult' is possibly 'undefined'.
+    src/services/submit-reservations/apply-report-discounts.service.spec.ts(105,12): error TS18048: 'outboundResult' is possibly 'undefined'.
+    src/services/submit-reservations/apply-report-discounts.service.spec.ts(110,12): error TS18048: 'returnResult' is possibly 'undefined'.
+    src/services/submit-reservations/apply-report-discounts.service.spec.ts(114,12): error TS18048: 'returnResult' is possibly 'undefined'.
+    src/services/submit-reservations/apply-report-discounts.service.spec.ts(123,12): error TS18048: 'result' is possibly 'undefined'.
+[repro-test-writer] attempt 3: test was written but does NOT parse/run — discarding it (class=invalid_test)
+[repro-test-writer] no valid test after 3 attempts — repro-gate will BLOCK
+[repro-test-writer] no test file produced at src/services/submit-reservations/apply-report-discounts.service.spec.ts — the repro-gate will BLOCK (as designed)

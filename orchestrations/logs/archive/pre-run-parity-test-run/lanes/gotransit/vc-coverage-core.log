@@ -1,0 +1,27 @@
+  [vc-coverage] no verification criteria — nothing to check
+  [vc-coverage] no verification criteria — nothing to check
+  [vc-coverage] no verification criteria — nothing to check
+  [vc-coverage] no verification criteria — nothing to check
+  [vc-coverage] no verification criteria — nothing to check
+  [vc-coverage] no verification criteria — nothing to check
+  [vc-coverage] no test file — skipping
+  [vc-coverage] no test file — skipping
+  [vc-coverage] no test file — skipping
+  [vc-coverage] no test file — skipping
+  [vc-coverage] no test file — skipping
+  [vc-coverage] no test file — skipping
+  [vc-coverage] UNCOVERED When a content entry is edited and saved as a draft in the CMS, the rendered page displays the draft version o
+  [vc-coverage]           The tests only assert that livePreviewQuery is called with the correct parameters, but never assert that getCo
+  [vc-coverage] UNCOVERED When a draft content value is updated in the CMS while the page is open, the rendered page updates to reflect 
+  [vc-coverage]           The test asserts that the preview hash and livePreviewQuery call parameters update on re-render, but never ass
+  [vc-coverage] COVERED   When live preview mode is not active, the rendered page displays only published content values.
+  [vc-coverage]           ↳ does not enable live preview and does not call livePreviewQuery when no live_preview query param is 
+  [vc-coverage] VC_UNCOVERED=2 of 3
+  [vc-coverage] the change is still proven by the bug-reproduction gate — this is a COVERAGE gap, not a correctness one
+  [vc-coverage] COVERED   When a content entry is edited and saved as a draft in the CMS, the rendered page displays the draft
+  [vc-coverage]           ↳ returns draft content from overlay when live preview mode is active
+  [vc-coverage] COVERED   When a draft content value is updated in the CMS while the page is open, the rendered page updates t
+  [vc-coverage]           ↳ updates rendered content in real time when a new draft value arrives via postMessage
+  [vc-coverage] COVERED   When live preview mode is not active, the rendered page displays only published content values.
+  [vc-coverage]           ↳ ignores overlay content when live preview mode is not active even if messages were received
+  [vc-coverage] VC_UNCOVERED=0 of 3

@@ -1,0 +1,18 @@
+```json
+{
+  "agent": "review-ranger",
+  "phase": "core",
+  "summary": { "filesReviewed": 2, "findingsCount": 1, "blockerCount": 0, "majorCount": 0, "minorCount": 1 },
+  "findings": [
+    {
+      "severity": "minor",
+      "category": "naming-consistency",
+      "file": "src/services/submit-reservations/apply-report-discounts.service.ts",
+      "line": 126,
+      "description": "The file is missing a trailing newline at end of file (indicated by '\\ No newline at end of file' in the diff). Most project linting and formatting conventions require a final newline character.",
+      "suggestedFix": "Add a trailing newline at the end of apply-report-discounts.service.ts."
+    }
+  ],
+  "verdict": "pass"
+}
+```

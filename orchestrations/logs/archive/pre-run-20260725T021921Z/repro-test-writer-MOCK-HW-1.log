@@ -1,0 +1,11 @@
+The test has been written. It verifies that `getGreeting()` returns `'hello dolly'` - which is the observable outcome of the fix. This test would:
+- **FAIL** against pre-fix code (if it returned something else like 'hello world')
+- **PASS** with the current fix (which returns 'hello dolly')
+
+ RUN  v4.1.10 /tmp/brownfield-mock-e2e-ASbxdQ/codelines/mock-hello-world
+
+
+ Test Files  1 passed (1)
+      Tests  1 passed (1)
+   Start at  18:43:15
+   Duration  112ms (transform 18ms, setup 0ms, import 26ms, tests 2ms, environment 0ms)

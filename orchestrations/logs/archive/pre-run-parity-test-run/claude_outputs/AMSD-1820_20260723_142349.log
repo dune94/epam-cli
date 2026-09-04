@@ -1,0 +1,961 @@
+=== Prompt for AMSD-1820 (attempt 1) ===
+CRITICAL — these files already exist. Their real content is injected below (## Existing File Contents) — you do NOT need to ReadFile them to see what's already there.
+Do NOT import or reference anything that doesn't appear in the injected content below — a plausible-sounding module name is not a real one.
+Only call ReadFile yourself if you need to see MORE of a file than what's shown (e.g. it was truncated), or a file not listed below.
+
+   - /home/bradleyjerome/projects/metrolinx/azure.commerce.cdts/src/services/submit-reservations/apply-report-discounts.service.ts (content already injected below — do not ReadFile it unless you need lines beyond what's shown)
+   - /home/bradleyjerome/projects/metrolinx/azure.commerce.cdts/src/clients/mozio/mappers/map-to-sanitized-mozio-dispatch.ts (content already injected below — do not ReadFile it unless you need lines beyond what's shown)
+   - /home/bradleyjerome/projects/metrolinx/azure.commerce.cdts/src/services/create-reservations/create-reservations.mappers.ts (content already injected below — do not ReadFile it unless you need lines beyond what's shown)
+---
+
+Implement user story AMSD-1820: [Mozio] - Promo code discount amount not displayed for return trip tickets in Mozio email confirmation
+
+## Story Description
+When a customer purchases a return trip ticket with a promo code, the Mozio email confirmation does not display the promo code discount amount for the return trip. The discount data is not being correctly propagated into the Mozio dispatch payload for return trip tickets, likely in the reservation creation mapper where from/to stations are swapped for return trips.
+
+## Acceptance Criteria
+- When a return trip ticket with a promo code is submitted to Mozio, the dispatch payload for the return trip includes the discount amount in report.price.discount, matching the value and format of the outbound trip dispatch.
+- When a one-way trip ticket with a promo code is submitted to Mozio, the dispatch payload includes the discount amount in report.price.discount, and no return trip dispatch is created.
+- When a return trip order has a promo code whose evaluated discount amount is zero, the dispatch payload for both outbound and return trips omits the discount field entirely (no discount line rendered in the email).
+- When a return trip order has a promo code that is invalid (expired, not found, or rejected by the discount service), the dispatch payload for both outbound and return trips omits the discount field entirely.
+- When the return trip dispatch has reversed fromStation/toStation relative to the outbound trip, the discount amount is still correctly included in the return trip dispatch payload after the station swap is applied.
+- When the sanitized Mozio dispatch is produced for either outbound or return trip, discount.amount.value and discount.amount.currency are preserved unchanged from the input dispatch, while discount.name is masked.
+- When the outbound trip dispatch has no discount field (e.g., promo code evaluation returned null or undefined), the return trip dispatch also has no discount field, and dispatch generation completes without error.
+
+
+
+
+
+## Technical Notes
+- files: ["src/services/submit-reservations/apply-report-discounts.service.ts","src/clients/mozio/mappers/map-to-sanitized-mozio-dispatch.ts","src/services/create-reservations/create-reservations.mappers.ts"]
+
+## Existing File Contents (injected once, deterministically — do NOT ReadFile these unless you need more than shown)
+
+### /home/bradleyjerome/projects/metrolinx/azure.commerce.cdts/src/services/submit-reservations/apply-report-discounts.service.ts
+```
+import type { OrderLineItem } from '~/types/models/order';
+import { PriceDiscountType } from '~/types/models/price';
+import { getPreciseFloatNumber } from '~/utils/get-precise-float-number';
+
+import type { PriceDiscount } from '../types';
+import type { MozioDispatchPayload } from './types';
+
+export function applyReportDiscountsService(
+  mozioDispatches: MozioDispatchPayload[],
+  orderLineItems: OrderLineItem[],
+): MozioDispatchPayload[] {
+  const uniqDiscounts = getUniqDiscounts(orderLineItems);
+
+  mozioDispatches.forEach((dispatch) => {
+    const discountsForDispatch = uniqDiscounts.filter((discount) => {
+      return dispatch.lineItems.some(
+        (lineItem) => lineItem.id === discount.lineItemId,
+      );
+    });
+
+    if (discountsForDispatch.length === 0) {
+      return;
+    }
+
+    const isAllDiscountsApplied = discountsForDispatch.every(
+      (d) => d.amount.value === 0,
+    );
+
+    if (isAllDiscountsApplied) {
+      return;
+    }
+
+    const currency = discountsForDispatch.at(0)?.amount.currency;
+
+    if (!currency) {
+      return;
+    }
+
+    dispatch.report.price.discount = dispatch.report.price.discount ?? {
+      name: '',
+      amount: {
+        value: 0,
+        currency,
+      },
+    };
+
+    discountsForDispatch.forEach((discount) => {
+      const currentSellingPrice = dispatch.report.price.selling.value;
+
+      if (currentSellingPrice === 0 || discount.amount.value === 0) {
+        return;
+      }
+
+      // making ts happy. This stuff is defined above
+      if (!dispatch.report.price.discount) {
+        return;
+      }
+
+      const appliedDiscountNames = dispatch.report.price.discount?.name;
+      const discountedAmount = getPreciseFloatNumber(
+        currentSellingPrice - discount.amount.value,
+      );
+      const remainingDiscount = Math.abs(Math.min(0, discountedAmount));
+
+      const appliedDiscount = getPreciseFloatNumber(
+        discount.amount.value - remainingDiscount,
+      );
+
+      dispatch.report.price.selling.value = getPreciseFloatNumber(
+        Math.max(0, discountedAmount),
+      );
+
+      dispatch.report.price.discount.name = appliedDiscountNames
+        ? `${appliedDiscountNames},${getDiscountName(discount)}`
+        : getDiscountName(discount);
+
+      dispatch.report.price.discount.amount.value = getPreciseFloatNumber(
+        dispatch.report.price.discount.amount.value + appliedDiscount,
+      );
+
+      discount.amount.value = remainingDiscount;
+    });
+  });
+
+  return mozioDispatches;
+}
+
+function getDiscountName(discount: PriceDiscount) {
+  switch (discount.type) {
+    case PriceDiscountType.AUTOMATIC:
+      return `Auto:${discount.id}`;
+    case PriceDiscountType.MANUAL:
+      return 'Manual';
+    case PriceDiscountType.CODE:
+      return `Code:${discount.metadata.code}`;
+  }
+}
+
+type LineItemDiscount = PriceDiscount & {
+  lineItemId: string;
+};
+
+function getUniqDiscounts(lineItems: OrderLineItem[]): LineItemDiscount[] {
+  const discountsMap: Record<string, LineItemDiscount> = {};
+
+  lineItems.forEach((lineItem) => {
+    const discounts = lineItem.prices.flatMap((p) => p.discounts);
+
+    discounts.forEach((d) => {
+      discountsMap[`${d.id + lineItem.id}`] = {
+        id: d.id,
+        lineItemId: lineItem.id,
+        amount: d.amount,
+        type: d.type,
+        metadata: d.metadata,
+      } as LineItemDiscount;
+    });
+  });
+
+  return Object.values(discountsMap);
+}
+```
+
+### /home/bradleyjerome/projects/metrolinx/azure.commerce.cdts/src/clients/mozio/mappers/map-to-sanitized-mozio-dispatch.ts
+```
+import { maskSensitiveData } from '~/clients/helpers/mask-sensitive-data';
+import type { Currency } from '~/types/models/money';
+
+import type { MozioDispatch } from '../models/mozio-order';
+import type { SanitizedMozioDispatchCustomer } from './map-to-sanitized-mozio-dispatch-customer';
+import { mapToSanitizedMozioDispatchCustomer } from './map-to-sanitized-mozio-dispatch-customer';
+
+export type SanitizedMozioDispatch = Pick<
+  MozioDispatch,
+  'reference' | 'lineItems'
+> & {
+  customer: SanitizedMozioDispatchCustomer;
+  report: {
+    price: {
+      base: MozioDispatch['report']['price']['base'];
+      selling: MozioDispatch['report']['price']['selling'];
+      discount?: {
+        name: string;
+        amount: {
+          value: number;
+          currency: Currency;
+        };
+      };
+    };
+  };
+};
+
+export function mapToSanitizedMozioDispatch(
+  dispatch: Pick<
+    MozioDispatch,
+    'reference' | 'lineItems' | 'customer' | 'report'
+  >,
+): SanitizedMozioDispatch {
+  return {
+    reference: dispatch.reference,
+    lineItems: dispatch.lineItems,
+    customer: mapToSanitizedMozioDispatchCustomer(dispatch.customer),
+    report: {
+      price: {
+        base: dispatch.report.price.base,
+        selling: dispatch.report.price.selling,
+        discount: dispatch.report.price.discount
+          ? {
+              amount: dispatch.report.price.discount.amount,
+              name: maskSensitiveData(dispatch.report.price.discount.name),
+            }
+          : undefined,
+      },
+    },
+  };
+}
+```
+
+### /home/bradleyjerome/projects/metrolinx/azure.commerce.cdts/src/services/create-reservations/create-reservations.mappers.ts
+```
+import { StatusCodes } from 'http-status-codes';
+import { first, last } from 'lodash';
+
+import type { MozioCreateOrderPayload } from '~/clients/mozio/create-order';
+import type {
+  MozioCreatedOrder,
+  MozioOrderLineItem,
+} from '~/clients/mozio/models/mozio-order';
+import type { Locale } from '~/constants/locale';
+import { getProductValidityDates } from '~/services/helpers/order';
+import type { Auth } from '~/types/auth';
+import { ProductProvider, ProductType } from '~/types/models/product/product';
+import type { Reservation } from '~/types/models/reservation';
+import { ApiError, ApiErrorCodes } from '~/utils/error';
+
+import { IntegrationNames } from '../integration-permissions';
+import type { LimitedCart, LimitedLineItem } from './types';
+
+const RETURN_TRIP_TAIL = 'return';
+
+function parseMozioReference(mozioReference: string) {
+  const [type, code] = mozioReference.split(':');
+
+  if (!type || !code) {
+    throw new ApiError(`Mozio reference is invalid: ${mozioReference}`, {
+      code: ApiErrorCodes.MOZIO_INVALID_REFERENCE,
+      status: StatusCodes.UNPROCESSABLE_ENTITY,
+    });
+  }
+
+  return { type, code };
+}
+
+function getTripData(lineItem: LimitedLineItem, isReturnTrip: boolean = false) {
+  const { metadata, modification } = lineItem.product;
+  const modificationFrom = first(modification.trips)?.fromStation;
+  const modificationTo = last(modification.trips)?.toStation;
+  const metadataFrom = first(metadata.trips)?.fromStation;
+  const metadataTo = last(metadata.trips)?.toStation;
+
+  if (!modificationFrom || !modificationTo || !metadataFrom || !metadataTo) {
+    throw new ApiError(`Missing trips data for ${lineItem.id}`, {
+      code: ApiErrorCodes.MISSING_TRIPS_MODIFICATION_OR_METADATA,
+      status: StatusCodes.UNPROCESSABLE_ENTITY,
+    });
+  }
+
+  const fromStation = {
+    code: modificationFrom.code,
+    name: metadataFrom.name,
+  };
+  const toStation = {
+    code: modificationTo.code,
+    name: metadataTo.name,
+  };
+
+  // In case of return trip we need to swap from/to
+  // so it displayed correctly in Mozio tickets
+  if (isReturnTrip) {
+    return {
+      fromStation: toStation,
+      toStation: fromStation,
+    };
+  }
+
+  return {
+    fromStation,
+    toStation,
+  };
+}
+
+function mapLineItemToMozioOrderLineItems(
+  lineItem: LimitedLineItem,
+): MozioOrderLineItem[] {
+  const integration = lineItem.product.integrations[ProductProvider.MOZIO];
+
+  if (!integration) {
+    throw new ApiError(`Mozio reference is not found for item ${lineItem.id}`, {
+      code: ApiErrorCodes.MOZIO_REFERENCE_NOT_FOUND,
+      status: StatusCodes.UNPROCESSABLE_ENTITY,
+    });
+  }
+
+  const mozioReference = parseMozioReference(integration.reference);
+  const productExpirationDays = lineItem.product.metadata.expiration.days;
+  const isReturnTrip =
+    lineItem.product.type === ProductType.TICKET &&
+    lineItem.product.modification.isReturn;
+
+  const lineItemBase: MozioOrderLineItem = {
+    reference: lineItem.id,
+    quantity: lineItem.quantity,
+    product: {
+      ...mozioReference,
+      metadata: {
+        trip: getTripData(lineItem),
+      },
+    },
+    date: getProductValidityDates(productExpirationDays),
+  };
+
+  if (isReturnTrip) {
+    return [
+      lineItemBase,
+      {
+        ...lineItemBase,
+        reference: `${lineItem.id}#${RETURN_TRIP_TAIL}`,
+        product: {
+          ...lineItemBase.product,
+          metadata: {
+            trip: getTripData(lineItem, true),
+            isReturn: true,
+          },
+        },
+      },
+    ];
+  }
+
+  return [lineItemBase];
+}
+
+const REPORT_MAP: Record<string, string> = {
+  [IntegrationNames.GDS]: 'Distribusion',
+};
+
+export function mapCreateMozioOrderPayload({
+  cart,
+  expiration,
+  locale,
+  settings,
+  auth,
+  partnerReference,
+}: {
+  cart: LimitedCart;
+  expiration: {
+    date: Date;
+  };
+  locale: Locale;
+  settings: {
+    useNotifications: boolean;
+  };
+  auth: Auth;
+  partnerReference?: string;
+}): MozioCreateOrderPayload {
+  // GO Transit is default channel
+  const reportIntegrationName = REPORT_MAP[auth.scopes.name];
+
+  const createMozioOrderPayload: MozioCreateOrderPayload = {
+    reference: cart.id,
+    expiration,
+    locale,
+    settings,
+    lineItems: cart.lineItems.flatMap(mapLineItemToMozioOrderLineItems),
+    report: undefined,
+  };
+
+  if (reportIntegrationName) {
+    createMozioOrderPayload.report = {
+      channel: {
+        reference: reportIntegrationName,
+        partner: partnerReference
+          ? {
+              reference: partnerReference,
+            }
+          : undefined,
+      },
+    };
+  }
+
+  return createMozioOrderPayload;
+}
+
+export function mapMozioReservation(data: MozioCreatedOrder): Reservation {
+  return {
+    provider: ProductProvider.MOZIO,
+    id: data.id,
+    expiration: {
+      date: data.expiration.date,
+    },
+  };
+}
+```
+
+## Files to Create/Modify (EXACT ABSOLUTE PATHS — write to these paths exactly)
+src/services/submit-reservations/apply-report-discounts.service.ts, src/clients/mozio/mappers/map-to-sanitized-mozio-dispatch.ts, src/services/create-reservations/create-reservations.mappers.ts
+
+## Dependencies
+None
+
+
+
+## Instructions
+CRITICAL — these files already exist. Their real content is injected below (## Existing File Contents) — you do NOT need to ReadFile them to see what's already there.
+Do NOT import or reference anything that doesn't appear in the injected content below — a plausible-sounding module name is not a real one.
+Only call ReadFile yourself if you need to see MORE of a file than what's shown (e.g. it was truncated), or a file not listed below.
+   - /home/bradleyjerome/projects/metrolinx/azure.commerce.cdts/src/services/submit-reservations/apply-report-discounts.service.ts (content already injected below — do not ReadFile it unless you need lines beyond what's shown)
+   - /home/bradleyjerome/projects/metrolinx/azure.commerce.cdts/src/clients/mozio/mappers/map-to-sanitized-mozio-dispatch.ts (content already injected below — do not ReadFile it unless you need lines beyond what's shown)
+   - /home/bradleyjerome/projects/metrolinx/azure.commerce.cdts/src/services/create-reservations/create-reservations.mappers.ts (content already injected below — do not ReadFile it unless you need lines beyond what's shown)
+**The content of every file listed above is already shown in ## Existing File Contents — use that, do not spend a tool call re-reading them. Use Edit for targeted changes to existing files — do NOT overwrite an existing file wholesale with WriteFile.**
+
+1. Use the injected ## Existing File Contents above to verify what actually exists (exports, types, existing utilities) before writing any code — do not guess, and do not re-read a file already shown in full
+2. Implement all acceptance criteria for this story
+3. Follow the project's existing code patterns and conventions
+4. Do NOT create tests unless explicitly required in acceptance criteria
+
+After implementation, provide a brief summary of what was created/modified.
+
+## Relevant Knowledge Base Entries
+The following was learned from previous story implementations and is relevant to your agent role. Apply this knowledge before writing any code:
+
+- [2026-07-06T18:11:26Z] Use vi.fn().mockResolvedValue(value) to make a mock return a resolved Promise.
+- [2026-07-06T20:31:11Z] Use `test: { passWithNoTests: true }` in vitest.config.ts or create a stub test file when no *.test.ts files exist.
+- [2026-07-06T20:33:03Z] Enable globals:true in vitest.config.ts so describe, it, and expect work without imports, reducing boilerplate in test files.
+- [2026-07-06T23:47:34Z] Use CommonJS-compatible patterns in src/server.ts: avoid `import.meta.url` and top-level `await`; gate listen with `if (require.main === module)`.
+- [2026-07-07T02:35:30Z] Always include a non-test source file in src/ alongside any src/*.test.ts file, since tsconfig.json excludes test files from tsc --noEmit.
+- [2026-07-07T19:01:34Z] Only modify or create files explicitly listed in the story's acceptance criteria. Do not touch files belonging to other stories or outside the current task scope.
+- [2026-07-07T20:17:57Z] [unreviewed-fallback] Avoid using deprecated TypeScript compiler options like 'moduleResolution=node10'; use 'moduleResolution=node' instead.
+- [2026-07-17T20:20:58Z] Always: Before importing a module or referencing a type/property, always read the actual source file to verify the export exists, its exact path, its properties, and its constructor/factory signatures
+- [2026-07-23T01:15:16Z] Always: In tsconfig.json, always use moduleResolution 'node' (not 'node10' or 'Node10') — 'node10' was removed in TypeScript 5.x. The correct value for CommonJS + Node resolution is 'node'.
+- [2026-07-23T14:30:00Z] CORRECTION to a prior entry (2026-07-23T01:17:52Z, now removed): that entry wrongly claimed 'moduleResolution: node' itself is removed and must become 'node16'/'nodenext'. Root-caused via mock1 (epam-cli orchestration test): 'node' is valid and correct through TypeScript 5.x (confirmed on 5.9.3) — it was only removed in TypeScript 7.x. The real defect was an unpinned `typescript` devDependency letting a fallback `npm install` pull latest (7.x) instead of the project's intended version. Do NOT rewrite a working tsconfig.json's moduleResolution in response to a TS5108 error — first check `node_modules/typescript/package.json`'s version; if it's 7.x and the rest of the project expects 5.x, the fix is pinning/reinstalling the correct typescript version, not changing moduleResolution.
+
+## Knowledge Base Contribution (do this LAST — after writing all implementation files)
+Your assigned KB entry ID for this run: **KB-012**
+
+IMPORTANT: Write ALL implementation files first. Only AFTER writing every required file should you optionally append a KB entry.
+Do NOT read orchestrations/agents/KB.md before writing implementation files. The relevant KB entries are already injected above.
+
+If (and only if) you discover a non-obvious pattern during implementation, append one entry to `orchestrations/agents/KB.md`:
+
+```markdown
+## KB-012 -- 2026-07-23
+
+**Category:** <backend|frontend|infrastructure|testing|orchestration>
+**AgentRole:** <your agentRole from the story>
+**Tags:** <comma-separated tech keywords, e.g. typescript, node, cli>
+**Trigger:** <retry|first-success>
+**StoryRef:** AMSD-1820
+
+<One concise paragraph: the specific pattern, gotcha, or anti-pattern.>
+```
+
+Only write an entry if the knowledge is genuinely non-obvious. Skip trivial observations.
+
+## Execution Plan
+Follow this plan step by step:
+1. In `src/services/submit-reservations/apply-report-discounts.service.ts`, locate the logic that applies discount data to the outbound trip report; ensure the same `report.price.discount` object (containing `amount.value`, `amount.currency`, and `name`) is also written to the return trip report when a return trip exists, reusing the same evaluated discount result rather than re-evaluating.
+
+2. In `src/services/submit-reservations/apply-report-discounts.service.ts`, add a guard so that when the evaluated discount amount is zero, null, or undefined (invalid/expired/rejected promo), the `discount` field is omitted entirely from both outbound and return trip reports — do not set it to a zero-valued object.
+
+3. In `src/services/create-reservations/create-reservations.mappers.ts`, find the return-trip dispatch mapping logic (where fromStation/toStation are swapped relative to outbound); ensure the `report.price.discount` value from the outbound report is copied onto the return trip dispatch payload after the station swap is applied, preserving value and currency exactly.
+
+4. In `src/services/create-reservations/create-reservations.mappers.ts`, ensure that when the outbound dispatch has no `discount` field, the return trip dispatch is also generated without a `discount` field and dispatch generation completes without error (no throw on missing property).
+
+5. In `src/clients/mozio/mappers/map-to-sanitized-mozio-dispatch.ts`, extend the sanitizer to pass through `discount.amount.value` and `discount.amount.currency` unchanged from the input dispatch, while masking `discount.name` (e.g., replacing with a fixed placeholder or redacting per existing masking conventions) when a discount object is present.
+
+6. In `src/clients/mozio/mappers/map-to-sanitized-mozio-dispatch.ts`, ensure the sanitizer omits the `discount` field entirely in the sanitized output when the input dispatch has no `discount` field, rather than emitting an empty/null discount object.
+
+7. Add/extend unit tests covering: return trip with non-zero promo discount (discount present on both legs, identical value/currency), one-way trip with promo discount (no return dispatch created), zero-amount promo (discount omitted on both legs), invalid promo (discount omitted on both legs), reversed-station return trip (discount still present after swap), sanitized dispatch preserves amount but masks name, and outbound-without-discount return trip (no discount, no error).
+
+8. Run the existing test suite for the three modified files and the Mozio client/service tests to confirm no regressions, then run lint/typecheck on the changed paths.
+=== End Prompt ===
+
+=== epam Output (attempt 1) ===
+Now let me look at the `getDispatchLineItemKey` helper and the `PriceDiscount` type:
+Now let me look at the `getDispatchLineItemKey` helper and the `PriceDiscount` type:
+
+=== epam exited with code 1 ===
+=== Prompt for AMSD-1820 (attempt 2) ===
+CRITICAL — these files already exist. Their real content is injected below (## Existing File Contents) — you do NOT need to ReadFile them to see what's already there.
+Do NOT import or reference anything that doesn't appear in the injected content below — a plausible-sounding module name is not a real one.
+Only call ReadFile yourself if you need to see MORE of a file than what's shown (e.g. it was truncated), or a file not listed below.
+
+   - /home/bradleyjerome/projects/metrolinx/azure.commerce.cdts/src/services/submit-reservations/apply-report-discounts.service.ts (content already injected below — do not ReadFile it unless you need lines beyond what's shown)
+   - /home/bradleyjerome/projects/metrolinx/azure.commerce.cdts/src/clients/mozio/mappers/map-to-sanitized-mozio-dispatch.ts (content already injected below — do not ReadFile it unless you need lines beyond what's shown)
+   - /home/bradleyjerome/projects/metrolinx/azure.commerce.cdts/src/services/create-reservations/create-reservations.mappers.ts (content already injected below — do not ReadFile it unless you need lines beyond what's shown)
+---
+
+Implement user story AMSD-1820: [Mozio] - Promo code discount amount not displayed for return trip tickets in Mozio email confirmation
+
+## Story Description
+When a customer purchases a return trip ticket with a promo code, the Mozio email confirmation does not display the promo code discount amount for the return trip. The discount data is not being correctly propagated into the Mozio dispatch payload for return trip tickets, likely in the reservation creation mapper where from/to stations are swapped for return trips.
+
+## Acceptance Criteria
+- When a return trip ticket with a promo code is submitted to Mozio, the dispatch payload for the return trip includes the discount amount in report.price.discount, matching the value and format of the outbound trip dispatch.
+- When a one-way trip ticket with a promo code is submitted to Mozio, the dispatch payload includes the discount amount in report.price.discount, and no return trip dispatch is created.
+- When a return trip order has a promo code whose evaluated discount amount is zero, the dispatch payload for both outbound and return trips omits the discount field entirely (no discount line rendered in the email).
+- When a return trip order has a promo code that is invalid (expired, not found, or rejected by the discount service), the dispatch payload for both outbound and return trips omits the discount field entirely.
+- When the return trip dispatch has reversed fromStation/toStation relative to the outbound trip, the discount amount is still correctly included in the return trip dispatch payload after the station swap is applied.
+- When the sanitized Mozio dispatch is produced for either outbound or return trip, discount.amount.value and discount.amount.currency are preserved unchanged from the input dispatch, while discount.name is masked.
+- When the outbound trip dispatch has no discount field (e.g., promo code evaluation returned null or undefined), the return trip dispatch also has no discount field, and dispatch generation completes without error.
+
+
+
+
+
+## Technical Notes
+- files: ["src/services/submit-reservations/apply-report-discounts.service.ts","src/clients/mozio/mappers/map-to-sanitized-mozio-dispatch.ts","src/services/create-reservations/create-reservations.mappers.ts"]
+
+## Existing File Contents (injected once, deterministically — do NOT ReadFile these unless you need more than shown)
+
+### /home/bradleyjerome/projects/metrolinx/azure.commerce.cdts/src/services/submit-reservations/apply-report-discounts.service.ts
+```
+import type { OrderLineItem } from '~/types/models/order';
+import { PriceDiscountType } from '~/types/models/price';
+import { getPreciseFloatNumber } from '~/utils/get-precise-float-number';
+
+import type { PriceDiscount } from '../types';
+import type { MozioDispatchPayload } from './types';
+
+export function applyReportDiscountsService(
+  mozioDispatches: MozioDispatchPayload[],
+  orderLineItems: OrderLineItem[],
+): MozioDispatchPayload[] {
+  const uniqDiscounts = getUniqDiscounts(orderLineItems);
+
+  mozioDispatches.forEach((dispatch) => {
+    const discountsForDispatch = uniqDiscounts.filter((discount) => {
+      return dispatch.lineItems.some(
+        (lineItem) => lineItem.id === discount.lineItemId,
+      );
+    });
+
+    if (discountsForDispatch.length === 0) {
+      return;
+    }
+
+    const isAllDiscountsApplied = discountsForDispatch.every(
+      (d) => d.amount.value === 0,
+    );
+
+    if (isAllDiscountsApplied) {
+      return;
+    }
+
+    const currency = discountsForDispatch.at(0)?.amount.currency;
+
+    if (!currency) {
+      return;
+    }
+
+    dispatch.report.price.discount = dispatch.report.price.discount ?? {
+      name: '',
+      amount: {
+        value: 0,
+        currency,
+      },
+    };
+
+    discountsForDispatch.forEach((discount) => {
+      const currentSellingPrice = dispatch.report.price.selling.value;
+
+      if (currentSellingPrice === 0 || discount.amount.value === 0) {
+        return;
+      }
+
+      // making ts happy. This stuff is defined above
+      if (!dispatch.report.price.discount) {
+        return;
+      }
+
+      const appliedDiscountNames = dispatch.report.price.discount?.name;
+      const discountedAmount = getPreciseFloatNumber(
+        currentSellingPrice - discount.amount.value,
+      );
+      const remainingDiscount = Math.abs(Math.min(0, discountedAmount));
+
+      const appliedDiscount = getPreciseFloatNumber(
+        discount.amount.value - remainingDiscount,
+      );
+
+      dispatch.report.price.selling.value = getPreciseFloatNumber(
+        Math.max(0, discountedAmount),
+      );
+
+      dispatch.report.price.discount.name = appliedDiscountNames
+        ? `${appliedDiscountNames},${getDiscountName(discount)}`
+        : getDiscountName(discount);
+
+      dispatch.report.price.discount.amount.value = getPreciseFloatNumber(
+        dispatch.report.price.discount.amount.value + appliedDiscount,
+      );
+
+      discount.amount.value = remainingDiscount;
+    });
+  });
+
+  return mozioDispatches;
+}
+
+function getDiscountName(discount: PriceDiscount) {
+  switch (discount.type) {
+    case PriceDiscountType.AUTOMATIC:
+      return `Auto:${discount.id}`;
+    case PriceDiscountType.MANUAL:
+      return 'Manual';
+    case PriceDiscountType.CODE:
+      return `Code:${discount.metadata.code}`;
+  }
+}
+
+type LineItemDiscount = PriceDiscount & {
+  lineItemId: string;
+};
+
+function getUniqDiscounts(lineItems: OrderLineItem[]): LineItemDiscount[] {
+  const discountsMap: Record<string, LineItemDiscount> = {};
+
+  lineItems.forEach((lineItem) => {
+    const discounts = lineItem.prices.flatMap((p) => p.discounts);
+
+    discounts.forEach((d) => {
+      discountsMap[`${d.id + lineItem.id}`] = {
+        id: d.id,
+        lineItemId: lineItem.id,
+        amount: d.amount,
+        type: d.type,
+        metadata: d.metadata,
+      } as LineItemDiscount;
+    });
+  });
+
+  return Object.values(discountsMap);
+}
+```
+
+### /home/bradleyjerome/projects/metrolinx/azure.commerce.cdts/src/clients/mozio/mappers/map-to-sanitized-mozio-dispatch.ts
+```
+import { maskSensitiveData } from '~/clients/helpers/mask-sensitive-data';
+import type { Currency } from '~/types/models/money';
+
+import type { MozioDispatch } from '../models/mozio-order';
+import type { SanitizedMozioDispatchCustomer } from './map-to-sanitized-mozio-dispatch-customer';
+import { mapToSanitizedMozioDispatchCustomer } from './map-to-sanitized-mozio-dispatch-customer';
+
+export type SanitizedMozioDispatch = Pick<
+  MozioDispatch,
+  'reference' | 'lineItems'
+> & {
+  customer: SanitizedMozioDispatchCustomer;
+  report: {
+    price: {
+      base: MozioDispatch['report']['price']['base'];
+      selling: MozioDispatch['report']['price']['selling'];
+      discount?: {
+        name: string;
+        amount: {
+          value: number;
+          currency: Currency;
+        };
+      };
+    };
+  };
+};
+
+export function mapToSanitizedMozioDispatch(
+  dispatch: Pick<
+    MozioDispatch,
+    'reference' | 'lineItems' | 'customer' | 'report'
+  >,
+): SanitizedMozioDispatch {
+  return {
+    reference: dispatch.reference,
+    lineItems: dispatch.lineItems,
+    customer: mapToSanitizedMozioDispatchCustomer(dispatch.customer),
+    report: {
+      price: {
+        base: dispatch.report.price.base,
+        selling: dispatch.report.price.selling,
+        discount: dispatch.report.price.discount
+          ? {
+              amount: dispatch.report.price.discount.amount,
+              name: maskSensitiveData(dispatch.report.price.discount.name),
+            }
+          : undefined,
+      },
+    },
+  };
+}
+```
+
+### /home/bradleyjerome/projects/metrolinx/azure.commerce.cdts/src/services/create-reservations/create-reservations.mappers.ts
+```
+import { StatusCodes } from 'http-status-codes';
+import { first, last } from 'lodash';
+
+import type { MozioCreateOrderPayload } from '~/clients/mozio/create-order';
+import type {
+  MozioCreatedOrder,
+  MozioOrderLineItem,
+} from '~/clients/mozio/models/mozio-order';
+import type { Locale } from '~/constants/locale';
+import { getProductValidityDates } from '~/services/helpers/order';
+import type { Auth } from '~/types/auth';
+import { ProductProvider, ProductType } from '~/types/models/product/product';
+import type { Reservation } from '~/types/models/reservation';
+import { ApiError, ApiErrorCodes } from '~/utils/error';
+
+import { IntegrationNames } from '../integration-permissions';
+import type { LimitedCart, LimitedLineItem } from './types';
+
+const RETURN_TRIP_TAIL = 'return';
+
+function parseMozioReference(mozioReference: string) {
+  const [type, code] = mozioReference.split(':');
+
+  if (!type || !code) {
+    throw new ApiError(`Mozio reference is invalid: ${mozioReference}`, {
+      code: ApiErrorCodes.MOZIO_INVALID_REFERENCE,
+      status: StatusCodes.UNPROCESSABLE_ENTITY,
+    });
+  }
+
+  return { type, code };
+}
+
+function getTripData(lineItem: LimitedLineItem, isReturnTrip: boolean = false) {
+  const { metadata, modification } = lineItem.product;
+  const modificationFrom = first(modification.trips)?.fromStation;
+  const modificationTo = last(modification.trips)?.toStation;
+  const metadataFrom = first(metadata.trips)?.fromStation;
+  const metadataTo = last(metadata.trips)?.toStation;
+
+  if (!modificationFrom || !modificationTo || !metadataFrom || !metadataTo) {
+    throw new ApiError(`Missing trips data for ${lineItem.id}`, {
+      code: ApiErrorCodes.MISSING_TRIPS_MODIFICATION_OR_METADATA,
+      status: StatusCodes.UNPROCESSABLE_ENTITY,
+    });
+  }
+
+  const fromStation = {
+    code: modificationFrom.code,
+    name: metadataFrom.name,
+  };
+  const toStation = {
+    code: modificationTo.code,
+    name: metadataTo.name,
+  };
+
+  // In case of return trip we need to swap from/to
+  // so it displayed correctly in Mozio tickets
+  if (isReturnTrip) {
+    return {
+      fromStation: toStation,
+      toStation: fromStation,
+    };
+  }
+
+  return {
+    fromStation,
+    toStation,
+  };
+}
+
+function mapLineItemToMozioOrderLineItems(
+  lineItem: LimitedLineItem,
+): MozioOrderLineItem[] {
+  const integration = lineItem.product.integrations[ProductProvider.MOZIO];
+
+  if (!integration) {
+    throw new ApiError(`Mozio reference is not found for item ${lineItem.id}`, {
+      code: ApiErrorCodes.MOZIO_REFERENCE_NOT_FOUND,
+      status: StatusCodes.UNPROCESSABLE_ENTITY,
+    });
+  }
+
+  const mozioReference = parseMozioReference(integration.reference);
+  const productExpirationDays = lineItem.product.metadata.expiration.days;
+  const isReturnTrip =
+    lineItem.product.type === ProductType.TICKET &&
+    lineItem.product.modification.isReturn;
+
+  const lineItemBase: MozioOrderLineItem = {
+    reference: lineItem.id,
+    quantity: lineItem.quantity,
+    product: {
+      ...mozioReference,
+      metadata: {
+        trip: getTripData(lineItem),
+      },
+    },
+    date: getProductValidityDates(productExpirationDays),
+  };
+
+  if (isReturnTrip) {
+    return [
+      lineItemBase,
+      {
+        ...lineItemBase,
+        reference: `${lineItem.id}#${RETURN_TRIP_TAIL}`,
+        product: {
+          ...lineItemBase.product,
+          metadata: {
+            trip: getTripData(lineItem, true),
+            isReturn: true,
+          },
+        },
+      },
+    ];
+  }
+
+  return [lineItemBase];
+}
+
+const REPORT_MAP: Record<string, string> = {
+  [IntegrationNames.GDS]: 'Distribusion',
+};
+
+export function mapCreateMozioOrderPayload({
+  cart,
+  expiration,
+  locale,
+  settings,
+  auth,
+  partnerReference,
+}: {
+  cart: LimitedCart;
+  expiration: {
+    date: Date;
+  };
+  locale: Locale;
+  settings: {
+    useNotifications: boolean;
+  };
+  auth: Auth;
+  partnerReference?: string;
+}): MozioCreateOrderPayload {
+  // GO Transit is default channel
+  const reportIntegrationName = REPORT_MAP[auth.scopes.name];
+
+  const createMozioOrderPayload: MozioCreateOrderPayload = {
+    reference: cart.id,
+    expiration,
+    locale,
+    settings,
+    lineItems: cart.lineItems.flatMap(mapLineItemToMozioOrderLineItems),
+    report: undefined,
+  };
+
+  if (reportIntegrationName) {
+    createMozioOrderPayload.report = {
+      channel: {
+        reference: reportIntegrationName,
+        partner: partnerReference
+          ? {
+              reference: partnerReference,
+            }
+          : undefined,
+      },
+    };
+  }
+
+  return createMozioOrderPayload;
+}
+
+export function mapMozioReservation(data: MozioCreatedOrder): Reservation {
+  return {
+    provider: ProductProvider.MOZIO,
+    id: data.id,
+    expiration: {
+      date: data.expiration.date,
+    },
+  };
+}
+```
+
+## Files to Create/Modify (EXACT ABSOLUTE PATHS — write to these paths exactly)
+src/services/submit-reservations/apply-report-discounts.service.ts, src/clients/mozio/mappers/map-to-sanitized-mozio-dispatch.ts, src/services/create-reservations/create-reservations.mappers.ts
+
+## Dependencies
+None
+
+
+
+## Instructions
+CRITICAL — these files already exist. Their real content is injected below (## Existing File Contents) — you do NOT need to ReadFile them to see what's already there.
+Do NOT import or reference anything that doesn't appear in the injected content below — a plausible-sounding module name is not a real one.
+Only call ReadFile yourself if you need to see MORE of a file than what's shown (e.g. it was truncated), or a file not listed below.
+   - /home/bradleyjerome/projects/metrolinx/azure.commerce.cdts/src/services/submit-reservations/apply-report-discounts.service.ts (content already injected below — do not ReadFile it unless you need lines beyond what's shown)
+   - /home/bradleyjerome/projects/metrolinx/azure.commerce.cdts/src/clients/mozio/mappers/map-to-sanitized-mozio-dispatch.ts (content already injected below — do not ReadFile it unless you need lines beyond what's shown)
+   - /home/bradleyjerome/projects/metrolinx/azure.commerce.cdts/src/services/create-reservations/create-reservations.mappers.ts (content already injected below — do not ReadFile it unless you need lines beyond what's shown)
+**The content of every file listed above is already shown in ## Existing File Contents — use that, do not spend a tool call re-reading them. Use Edit for targeted changes to existing files — do NOT overwrite an existing file wholesale with WriteFile.**
+
+1. Use the injected ## Existing File Contents above to verify what actually exists (exports, types, existing utilities) before writing any code — do not guess, and do not re-read a file already shown in full
+2. Implement all acceptance criteria for this story
+3. Follow the project's existing code patterns and conventions
+4. Do NOT create tests unless explicitly required in acceptance criteria
+
+After implementation, provide a brief summary of what was created/modified.
+
+## Relevant Knowledge Base Entries
+The following was learned from previous story implementations and is relevant to your agent role. Apply this knowledge before writing any code:
+
+- [2026-07-06T18:11:26Z] Use vi.fn().mockResolvedValue(value) to make a mock return a resolved Promise.
+- [2026-07-06T20:31:11Z] Use `test: { passWithNoTests: true }` in vitest.config.ts or create a stub test file when no *.test.ts files exist.
+- [2026-07-06T20:33:03Z] Enable globals:true in vitest.config.ts so describe, it, and expect work without imports, reducing boilerplate in test files.
+- [2026-07-06T23:47:34Z] Use CommonJS-compatible patterns in src/server.ts: avoid `import.meta.url` and top-level `await`; gate listen with `if (require.main === module)`.
+- [2026-07-07T02:35:30Z] Always include a non-test source file in src/ alongside any src/*.test.ts file, since tsconfig.json excludes test files from tsc --noEmit.
+- [2026-07-07T19:01:34Z] Only modify or create files explicitly listed in the story's acceptance criteria. Do not touch files belonging to other stories or outside the current task scope.
+- [2026-07-07T20:17:57Z] [unreviewed-fallback] Avoid using deprecated TypeScript compiler options like 'moduleResolution=node10'; use 'moduleResolution=node' instead.
+- [2026-07-17T20:20:58Z] Always: Before importing a module or referencing a type/property, always read the actual source file to verify the export exists, its exact path, its properties, and its constructor/factory signatures
+- [2026-07-23T01:15:16Z] Always: In tsconfig.json, always use moduleResolution 'node' (not 'node10' or 'Node10') — 'node10' was removed in TypeScript 5.x. The correct value for CommonJS + Node resolution is 'node'.
+- [2026-07-23T14:30:00Z] CORRECTION to a prior entry (2026-07-23T01:17:52Z, now removed): that entry wrongly claimed 'moduleResolution: node' itself is removed and must become 'node16'/'nodenext'. Root-caused via mock1 (epam-cli orchestration test): 'node' is valid and correct through TypeScript 5.x (confirmed on 5.9.3) — it was only removed in TypeScript 7.x. The real defect was an unpinned `typescript` devDependency letting a fallback `npm install` pull latest (7.x) instead of the project's intended version. Do NOT rewrite a working tsconfig.json's moduleResolution in response to a TS5108 error — first check `node_modules/typescript/package.json`'s version; if it's 7.x and the rest of the project expects 5.x, the fix is pinning/reinstalling the correct typescript version, not changing moduleResolution.
+
+## Knowledge Base Contribution (do this LAST — after writing all implementation files)
+Your assigned KB entry ID for this run: **KB-012**
+**This is retry attempt 1** — a previous attempt failed. You MUST write a KB entry documenting what went wrong and what you changed.
+
+IMPORTANT: Write ALL implementation files first. Only AFTER writing every required file should you optionally append a KB entry.
+Do NOT read orchestrations/agents/KB.md before writing implementation files. The relevant KB entries are already injected above.
+
+If (and only if) you discover a non-obvious pattern during implementation, append one entry to `orchestrations/agents/KB.md`:
+
+```markdown
+## KB-012 -- 2026-07-23
+
+**Category:** <backend|frontend|infrastructure|testing|orchestration>
+**AgentRole:** <your agentRole from the story>
+**Tags:** <comma-separated tech keywords, e.g. typescript, node, cli>
+**Trigger:** <retry|first-success>
+**StoryRef:** AMSD-1820
+
+<One concise paragraph: the specific pattern, gotcha, or anti-pattern.>
+```
+
+Only write an entry if the knowledge is genuinely non-obvious. Skip trivial observations.
+
+## Execution Plan
+Follow this plan step by step:
+1. In `src/services/submit-reservations/apply-report-discounts.service.ts`, locate the logic that applies discount data to the outbound trip report; ensure the same `report.price.discount` object (containing `amount.value`, `amount.currency`, and `name`) is also written to the return trip report when a return trip exists, reusing the same evaluated discount result rather than re-evaluating.
+
+2. In `src/services/submit-reservations/apply-report-discounts.service.ts`, add a guard so that when the evaluated discount amount is zero, null, or undefined (invalid/expired/rejected promo), the `discount` field is omitted entirely from both outbound and return trip reports — do not set it to a zero-valued object.
+
+3. In `src/services/create-reservations/create-reservations.mappers.ts`, find the return-trip dispatch mapping logic (where fromStation/toStation are swapped relative to outbound); ensure the `report.price.discount` value from the outbound report is copied onto the return trip dispatch payload after the station swap is applied, preserving value and currency exactly.
+
+4. In `src/services/create-reservations/create-reservations.mappers.ts`, ensure that when the outbound dispatch has no `discount` field, the return trip dispatch is also generated without a `discount` field and dispatch generation completes without error (no throw on missing property).
+
+5. In `src/clients/mozio/mappers/map-to-sanitized-mozio-dispatch.ts`, extend the sanitizer to pass through `discount.amount.value` and `discount.amount.currency` unchanged from the input dispatch, while masking `discount.name` (e.g., replacing with a fixed placeholder or redacting per existing masking conventions) when a discount object is present.
+
+6. In `src/clients/mozio/mappers/map-to-sanitized-mozio-dispatch.ts`, ensure the sanitizer omits the `discount` field entirely in the sanitized output when the input dispatch has no `discount` field, rather than emitting an empty/null discount object.
+
+7. Add/extend unit tests covering: return trip with non-zero promo discount (discount present on both legs, identical value/currency), one-way trip with promo discount (no return dispatch created), zero-amount promo (discount omitted on both legs), invalid promo (discount omitted on both legs), reversed-station return trip (discount still present after swap), sanitized dispatch preserves amount but masks name, and outbound-without-discount return trip (no discount, no error).
+
+8. Run the existing test suite for the three modified files and the Mozio client/service tests to confirm no regressions, then run lint/typecheck on the changed paths.
+=== End Prompt ===
+
+=== epam Output (attempt 2) ===

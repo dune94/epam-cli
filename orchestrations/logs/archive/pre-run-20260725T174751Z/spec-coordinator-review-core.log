@@ -1,0 +1,70 @@
+# Prompt
+You are the specification coordinator for the epam-cli orchestration system. Before every phase you read orchestrations/prd.json (implementationOrder and stories), evaluate risk, dependencies, and technical readiness, then assign the correct specification runners: OpenSpec, Speckit, both, or none. You write assignments into each story's specification.assignedAgents field along with coordinatorNotes, target provider/model, and timestamps. You understand the provider policy ledger (configuration.aiRuntime.providerPolicies), token guardrails, and know when to skip stories that were already hand-curated. When you plan a run you emit JSON compliant with spec-mode-runner.js so that automation can apply deltas deterministically. You never invent story IDs or mutate acceptance criteria directly; only delegate to spec agents and record their status.
+
+You are the EPAM CLI specification coordinator reviewing the completed spec outputs for phase core.
+
+Each story was processed by a sequential agent pipeline:
+  1. openspec elaborated requirements (AC refinement, story splits, technical depth)
+  2. speckit reviewed openspec's output (testability, security, edge cases, gap analysis)
+
+For each story, evaluate the quality of the collaborative spec work:
+1. Did both agents add meaningful, non-overlapping value?
+2. Are the acceptance criteria complete, testable, and non-overlapping?
+3. Are story splits logical and properly scoped?
+4. Flag any story needing human review.
+
+Respond with JSON between <SPEC_REVIEW> and </SPEC_REVIEW> using this schema:
+[
+  {"storyId":"REM-xxx","verdict":"approved|needs_review","reviewNotes":"coordinator observations","qualityScore":0.0-1.0,"flags":[]}
+]
+
+Stories to review:
+[
+  {
+    "id": "MOCK-HW-1",
+    "title": "Hello world greeting should say hello dolly",
+    "acceptanceCriteria": [],
+    "specification": {
+      "runId": "20260725T152339Z",
+      "assignedAgents": [
+        "openspec"
+      ],
+      "coordinatorNotes": "Simple hello-world story with empty AC — openspec needed to elaborate acceptance criteria. speckit skipped: no security/edge-case complexity for a greeting string change.",
+      "status": "completed",
+      "updatedAt": "2026-07-25T15:25:10.547Z",
+      "appliedAgents": [
+        "openspec"
+      ],
+      "agentContributions": [
+        {
+          "agent": "openspec",
+          "applied": true,
+          "notes": "Existing getGreeting returns 'hello world'; story requires it to return 'hello dolly'. Classified as defect because the current output is incorrect per the story intent.",
+          "acceptanceChanged": false,
+          "splitCount": 0,
+          "timestamp": "2026-07-25T15:25:10.547Z"
+        }
+      ]
+    },
+    "splitChildren": []
+  }
+]
+
+<SPEC_REVIEW>
+</SPEC_REVIEW>
+
+# Output
+<SPEC_REVIEW>
+[
+  {
+    "storyId": "MOCK-HW-1",
+    "verdict": "needs_review",
+    "reviewNotes": "openspec correctly classified this as a defect and identified the current vs. expected behavior, but the primary reason for assigning openspec was to elaborate empty AC — and acceptanceChanged is false with acceptanceCriteria still []. A greeting-string story should have at least one explicit, testable AC (e.g., 'getGreeting() returns \"hello dolly\"'). speckit skip was appropriate. The story is trivial enough that implementation risk is low, but the process gap (empty AC after spec run) should be resolved before handoff to implementation.",
+    "qualityScore": 0.55,
+    "flags": [
+      "AC_STILL_EMPTY_AFTER_OPENSPEC",
+      "OPENSPEC_DID_NOT_WRITE_ACCEPTANCE_CRITERIA"
+    ]
+  }
+]
+</SPEC_REVIEW>

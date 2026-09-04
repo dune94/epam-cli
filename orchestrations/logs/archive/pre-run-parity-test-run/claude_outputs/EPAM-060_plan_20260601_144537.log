@@ -1,0 +1,3 @@
+Plan is complete and logged. Here's the summary:
+
+**EPAM-060 is a focused refactor** — the `/mcp` stub already exists and is registered. The implementation is 4 steps: wire `McpClientLegacy` into `MCPCommand.ts` for the default status view, add `list-tools` and `reload` subcommands, and write 5 unit tests. No changes to `SlashCommands.ts`, `Repl.ts`, or `SlashCommandContext` — a module-level cache pattern keeps the blast radius minimal. Top risk is module cache leakage in tests, mitigated by exporting `clearMcpClientCache()`. Effort confirmed at ~0.30 h AI time.

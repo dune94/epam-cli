@@ -1,0 +1,14 @@
+
+> mock-b@1.0.0 test
+> vitest run
+
+
+ RUN  v2.1.9 /home/bradleyjerome/projects/mock3/mock-b
+
+ ✓ test/schedule.test.ts (4 tests) 4ms
+
+ Test Files  1 passed (1)
+      Tests  4 passed (4)
+   Start at  10:13:43
+   Duration  533ms (transform 69ms, setup 0ms, collect 47ms, tests 4ms, environment 0ms, prepare 137ms)
+

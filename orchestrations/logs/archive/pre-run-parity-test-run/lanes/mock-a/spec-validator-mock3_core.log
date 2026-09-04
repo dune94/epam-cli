@@ -1,0 +1,31 @@
+{
+  "agent": "spec-validator",
+  "phase": "mock3_core",
+  "stories": [{
+    "storyId": "SPAN-1",
+    "title": "Change the greeting from hello world to hello dolly in every affected codeline",
+    "criteria": [
+      {
+        "text": "Calling getGreeting() produces the exact string 'hello dolly'",
+        "status": "met",
+        "evidence": "src/hello.ts now returns 'hello dolly' (diff shows 'hello world' → 'hello dolly'); test file asserts getGreeting() === 'hello dolly'",
+        "gaps": ""
+      },
+      {
+        "text": "Running vitest on the existing test file results in all tests passing with no failures",
+        "status": "met",
+        "evidence": "Test oracle: numTotal=1, numPassed=1, numFailed=0, numSkipped=0",
+        "gaps": ""
+      },
+      {
+        "text": "Running tsc --noEmit exits with return code 0",
+        "status": "untestable",
+        "evidence": "No tsc output or exit code provided in pre-injected evidence; the change is a pure string-literal swap with no type impact, but compliance cannot be confirmed without execution evidence",
+        "gaps": "tsc --noEmit was not run or its output was not captured"
+      }
+    ],
+    "overallCompliance": 67,
+    "verdict": "warn"
+  }],
+  "overallVerdict": "warn"
+}

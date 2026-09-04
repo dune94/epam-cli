@@ -1,0 +1,39 @@
+# Prompt
+Regenerate the VERIFICATION CRITERIA for this brownfield story. Your previous verification criteria were FLAGGED and must be fixed:
+- VC 1 cross-compares 'instead of the published entry' — restate as observable content on the page
+- VC 2 cross-compares 'identically to the current production behavior' — restate as observable rendering
+- VC 3 prescribes HOW with 'mocked at the SDK boundary' and references internal structure 'component re-renders' — restate as user-visible update without page reload
+- VC 4 prescribes HOW with 'mocked' and references internal structure 'components', 're-render' — restate as observable: unchanged UI sections stay unchanged
+- VC 5 cross-compares 'reverts to displaying published content' — restate as observable: page displays published content after session ends
+- VC 6 references internal structure 'useContent getContentByKey', 'content-fetching contract' and cross-compares 'same shape and values as before' — restate as observable content rendering
+- VC 7 prescribes HOW with 'mocked' and cross-compares 'exactly as returned by the mock' — restate as observable field values on the rendered page
+
+THE FIX SITE (located by the code-graph detective — anchor every criterion to the behaviour THIS code produces):
+- src/services/contentstack.ts :: ContentstackFactory — This is where all Contentstack content queries are constructed and executed. The Stack initialization and query builders (createContentTypeQuery, createContentTypeEntryQuery) have no live preview support — no preview token, no draft parameter, no includePreview fallback. Every page's getStaticProps flows through getSingletonEntry/getSingleEntry/getEntry which instantiate ContentstackFactory with a Stack that lacks live_preview config. Adding preview support here propagates to all consumers automatically.
+Do NOT write criteria about areas unrelated to this code.
+
+
+Acceptance criteria (IMMUTABLE — the intent to verify; do NOT restate as-is, VERIFY them):
+- (none)
+Description: [GO, UP, MX] Live Preview of Content in CMS
+
+A verification criterion states WHAT AN END USER OR TESTER OBSERVES on the user-facing surface THE TICKET IS ABOUT — the rendered email for an email ticket, the displayed screen/UI for a UI ticket, the API response a CLIENT receives for an API ticket. It is a BLACK-BOX check on that surface. It NEVER describes HOW the value is produced.
+A verification criterion is FORBIDDEN if it:
+- prescribes HOW to implement — any algorithm, mechanism, or approach: "split", "halve", "×0.5", "calculate independently", "per segment", "for each line item", or adding/reading any new field, flag, or service;
+- references an INTERNAL structure that merely FEEDS the ticket's surface — an intermediate payload, a "confirmation data"/DTO object, or a specific response field used to BUILD the output. Verify the surface the ticket names, NOT the data structure behind it;
+- makes a CROSS-COMPARISON that presumes a mechanism — never assert one value "must equal" / "matches" / "is the same as" another (e.g. "the return amount equals the outbound amount"); that presumes a copy/split. Assert the required value is present and correct ON ITS OWN.
+Every verification criterion must be observable, testable, and tied to the ticket's stated symptom/intent.
+
+Do NOT restate an acceptance criterion as-is — express what a tester OBSERVES that confirms it. Address every flag above.
+Output ONLY a JSON array of verification-criterion strings. No prose, no markdown.
+
+# Output
+[
+  "When an editor opens page in Contentstack Live Preview with unsaved draft edits, the rendered page displays the draft content in the page body, headings, and other content.",
+  "In Live Preview mode, the page renders fully with its normal layout, navigation, images, and all content sections visible and readable.",
+  "When an editor saves a change to an entry in the CMS while viewing the page in Live Preview, the updated text or image becomes visible on the displayed page without the editor manually reloading the browser.",
+  "When an editor changes one field in the CMS during a Live Preview session, the other sections of the displayed page that were not edited continue to show their previous content.",
+  "After the Live Preview session is ended, visiting the page shows the published version of the content.",
+  "Pages on the GO, UP, and MX sites render their content fields — such as titles, body text, and images — visibly and completely when loaded in Live Preview.",
+  "Draft values entered into CMS fields, including text, rich content, and image selections, appear on the Live Preview page exactly as the editor entered them."
+]

@@ -1,0 +1,119 @@
+# Prompt
+You are specialising ONE generic agent prompt for ONE specific project. You are the same agent that just minted this project's roles, so you already know what this project is and who will work on it.
+
+## The template you must specialise
+
+Its id is skill-assessment-prephase and its purpose is: Detects skill gaps in agent profiles before a phase runs, and augments them.
+
+Everything between the two markers below is the template, verbatim. The markers are not
+part of it. A code fence cannot delimit this: several templates contain fences of their
+own, so the first closing fence would truncate the body mid-instruction.
+
+-----BEGIN TEMPLATE BODY-----
+,
+-----END TEMPLATE BODY-----
+
+## What this project is
+
+Project config: /home/bradleyjerome/projects/ai/epam-cli/orchestrations/projects/mock3
+Tickets in scope: MOCK3-1: Riders aged exactly 65 are charged the adult fare | MOCK3-2: The departure board omits the final stop
+
+Codelines in scope and their declared dependencies:
+- mocka (/home/bradleyjerome/projects/mock3/mock-a) deps: vitest, typescript
+- mockb (/home/bradleyjerome/projects/mock3/mock-b) deps: vitest, typescript
+
+The roles you minted for this project:
+- typescript-bugfix-engineer [implementer] — Both tickets are small boundary/off-by-one fixes in TypeScript source files exercised by vitest, so a single implementer spanning both codelines is the correct scope rather than two near-duplicate roles.
+- mocka-investigator [investigator] — The fare-boundary fix is a one-line change, but the investigator must confirm no caller of fareFor or totalFor relies on the current incorrect boundary and characterise what test coverage for age 65 should look like — work that requires reading mocka specifically.
+- mockb-investigator [investigator] — The loop-bound fix in formatStops is small, but the investigator must verify no caller compensates for the missing last stop and describe what the test suite currently asserts about stop rendering — work that requires reading mockb specifically.
+
+## The one rule you cannot break
+
+The template's placeholders are a CONTRACT with the pipeline. Each token written in SCREAMING_SNAKE_CASE between double underscores is replaced at run time with real evidence — a diff, a ticket, a test log, a plan. The substitution is BY NAME and it is strict in both directions.
+
+- Reproduce every placeholder EXACTLY as it appears, character for character.
+- NEVER add or invent a placeholder. Nothing supplies a name the pipeline does not know, so rendering throws and the run dies at the seam that needed this prompt.
+- NEVER remove or rename one. The evidence it carries would silently never reach the agent, and the agent would answer without it.
+- Do not move a placeholder into a code fence, a quote, or an example where it would read as literal text.
+
+The placeholders in this template are exactly: __PHASE_ID__, __PRD_REL__, __PROJECT_SKILLS__, __TEST_FILE_CONVENTIONS__, __TEST_ROLE__
+
+## What specialising means
+
+Keep the template's instructions, its output format, its prohibitions and its reasoning intact. They encode failures this pipeline has already paid for. You are not rewriting the prompt or improving its wording.
+
+Add only what a competent engineer joining THIS project would need and could not infer from the generic text:
+- the conventions, layout and idioms this codebase actually uses
+- the commands this project runs to build, test and type-check
+- the traps this stack presents that a generic prompt would not warn about
+
+Ground every addition in the project context above. If the context does not tell you something, say nothing about it — an invented convention is worse than a missing one, because the agent will follow it.
+
+Do not name a file, symbol, package or command that does not appear in the context you were given.
+
+## How to answer
+
+Emit ONLY the specialised prompt body as TEXT, directly in your reply. No JSON wrapper, no markdown fences around the whole thing, no commentary before or after, and do not write it to a file — the pipeline reads your reply text.
+
+# Output
+You are a skill-assessment agent for phase __PHASE_ID__ of the project described in __PRD_REL__.
+
+Your job is to detect skill gaps in the agent profiles assigned to this phase and augment them with targeted guidance so they can execute their tasks without stumbling. Do not rewrite the profiles; add only what is missing.
+
+## Project skills baseline
+
+__PROJECT_SKILLS__
+
+## Test conventions
+
+__TEST_FILE_CONVENTIONS__
+
+## Role under test
+
+__TEST_ROLE__
+
+## Project-specific context
+
+This project has two codelines, both TypeScript + vitest, both using ES modules (`"type": "module"` in package.json, `export`/`import` syntax in source and tests):
+
+- **mocka** at `/home/bradleyjerome/projects/mock3/mock-a` — source in `src/fares.ts`, tests in `test/fares.test.ts`. Scripts: `npm test` → `vitest run`, `npm run build` → `tsc --noEmit`. tsconfig: `"strict": true`, `"moduleResolution": "bundler"`, `"target": "ES2022"`, `"noEmit": true`.
+- **mockb** at `/home/bradleyjerome/projects/mock3/mock-b` — source in `src/schedule.ts`, tests in `test/schedule.test.ts`. Same scripts, same tsconfig, same toolchain versions (vitest ^2.1.9, typescript ^5.6.0).
+
+### Roles in scope
+
+- **typescript-bugfix-engineer** (implementer) — spans both codelines; both tickets are small boundary/off-by-one fixes in TypeScript source exercised by vitest.
+- **mocka-investigator** (investigator) — must confirm no caller of `fareFor` or `totalFor` relies on the current incorrect age-65 boundary and characterise what test coverage for age 65 should look like.
+- **mockb-investigator** (investigator) — must verify no caller compensates for the missing last stop in `formatStops` and describe what the test suite currently asserts about stop rendering.
+
+## TypeScript boundary-fix traps to flag
+
+When assessing whether a role's profile covers the skills needed for these specific fixes, watch for:
+
+1. **Off-by-one in comparison operators** — The mocka bug is `rider.age > 65` where it should be `>= 65` (riders aged *exactly* 65 must get the concession fare). The mockb bug is `i < stops.length - 1` where it should be `i < stops.length` (the final stop is omitted). An agent unfamiliar with strict comparison semantics might "fix" by changing the value rather than the operator.
+
+2. **Strict mode implications** — tsconfig has `"strict": true`. Any augmentation that introduces `any`, untyped parameters, or non-null assertions without justification will fail `tsc --noEmit`. Ensure the implementer profile explicitly mentions working under `strict: true`.
+
+3. **Test coverage gaps at boundaries** — The existing test suite in mocka (`test/fares.test.ts`) tests age 70 but not age 65. The existing suite in mockb (`test/schedule.test.ts`) checks that the output contains `'->'` and `'Union'` but does not assert the presence of the last stop (`Eglinton`). An investigator who does not flag these specific missing assertions has a skill gap in test-characterisation.
+
+4. **ES module imports** — Tests use `import { describe, it, expect } from 'vitest'` and `import { … } from '../src/…'`. Any augmentation suggesting CommonJS `require()` is wrong for this project.
+
+5. **No lint step** — `npm run lint` is `echo no-lint-configured`. Do not require lint compliance in any augmented profile; only `vitest run` and `tsc --noEmit` are meaningful gates.
+
+## Output format
+
+For each role in scope, produce:
+
+1. **Role name** and codeline(s) it covers.
+2. **Skills present** — list the skills from __PROJECT_SKILLS__ that the role already has.
+3. **Skills missing** — list skills required for this phase's tasks that the role lacks, grounded in the specific traps above.
+4. **Augmentation** — a concise paragraph to prepend to the role's prompt that fills each gap. Reference real file paths, real symbols (`fareFor`, `totalFor`, `formatStops`, `totalMinutes`), and real commands (`vitest run`, `tsc --noEmit`) only. Do not invent files, packages, or conventions.
+
+If a role has no gaps, state "No skill gaps detected" and move on.
+
+## Prohibitions
+
+- Do not invent file names, package names, or commands not present in the project context above.
+- Do not suggest CommonJS patterns; this project uses ES modules.
+- Do not require lint compliance; no linter is configured.
+- Do not remove or alter the existing test assertions; augmentation describes what is missing, not what to change in tests.
+- Do not move placeholders into code fences, quotes, or examples where they would read as literal text.

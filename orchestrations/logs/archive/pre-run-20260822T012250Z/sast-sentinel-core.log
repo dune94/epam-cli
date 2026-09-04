@@ -1,0 +1,105 @@
+[ai-run] attempt 2/3 for 'qa-gate:sast' — escalating z-ai/glm-5.2 -> moonshotai/kimi-k3
+{
+  "agent": "sast-sentinel",
+  "phase": "core",
+  "summary": { "filesScanned": 6, "findingsCount": 12, "blockerCount": 1 },
+  "findings": [
+    {
+      "severity": "blocker",
+      "rule": "dependency-cve-critical-runtime",
+      "file": "package.json",
+      "line": 0,
+      "description": "Critical CVE in runtime dependency next-auth: Auth.js email normalizer validates the address before Unicode normalization, allowing a homoglyph attack. Tagged (runtime) in the audit — this package is loaded by the shipped artefact.",
+      "suggestedFix": "Upgrade next-auth to the latest patched release in the same major line per the major/minor rule, then run npm audit to confirm the advisory clears."
+    },
+    {
+      "severity": "major",
+      "rule": "dependency-cve-high-runtime",
+      "file": "package.json",
+      "line": 0,
+      "description": "High CVEs in runtime dependency next: Denial of Service in App Router using Server Actions, and Server-Side Request Forgery. Tagged (runtime) in the audit.",
+      "suggestedFix": "Upgrade next to the latest patched version within the declared major version, then re-run the audit."
+    },
+    {
+      "severity": "minor",
+      "rule": "dependency-cve-high-dev-only",
+      "file": "package.json",
+      "line": 0,
+      "description": "High CVE in dev dependency postcss: incomplete fix of GHSA-6g55-p6wh-862q — attacker-controlled sourceMappingURL reads arbitrary files. Tagged (dev); build-time tooling does not run in production, so severity is minor regardless of published score.",
+      "suggestedFix": "Upgrade postcss to the latest patched version within the declared major range."
+    },
+    {
+      "severity": "minor",
+      "rule": "dependency-cve-moderate-runtime",
+      "file": "package.json",
+      "line": 0,
+      "description": "Moderate CVE in runtime dependency @azure/search-documents via @azure/core-http (uuid advisory). Moderate severity, floored to minor for this gate.",
+      "suggestedFix": "Upgrade @azure/search-documents within its declared major to pull a patched @azure/core-http/uuid chain."
+    },
+    {
+      "severity": "minor",
+      "rule": "dependency-cve-moderate-runtime",
+      "file": "package.json",
+      "line": 0,
+      "description": "Moderate CVE in runtime dependency react-tooltip (uuid advisory), also surfaced via @metrolinx/cx-shared. Moderate severity, floored to minor for this gate.",
+      "suggestedFix": "Upgrade react-tooltip / @metrolinx/cx-shared within their declared majors to pull a patched uuid."
+    },
+    {
+      "severity": "minor",
+      "rule": "dependency-cve-moderate-transitive",
+      "file": "package.json",
+      "line": 0,
+      "description": "Moderate CVE in transitive dependency @azure/core-http (uuid). Transitive scope is ambiguous from the audit; conservatively floored to minor.",
+      "suggestedFix": "Refresh the lockfile (npm update within declared ranges) to pull a patched uuid."
+    },
+    {
+      "severity": "minor",
+      "rule": "dependency-cve-moderate-transitive",
+      "file": "package.json",
+      "line": 0,
+      "description": "Moderate CVEs in transitive dependencies cloudinary-video-player and cloudinary-video-analytics (uuid). Conservatively floored to minor.",
+      "suggestedFix": "Upgrade the cloudinary packages within declared ranges or refresh the lockfile to pull patched uuid."
+    },
+    {
+      "severity": "minor",
+      "rule": "dependency-cve-high-transitive",
+      "file": "package.json",
+      "line": 0,
+      "description": "High CVEs in transitive dependency axios: excessive recursion in formDataToJSON (DoS) and deep formToJSON key handling. Conservatively floored to minor pending confirmation of which runtime package pulls it.",
+      "suggestedFix": "Identify the parent dependency via npm ls axios and upgrade it within its declared major to pull a patched axios."
+    },
+    {
+      "severity": "minor",
+      "rule": "dependency-cve-high-transitive",
+      "file": "package.json",
+      "line": 0,
+      "description": "High CVE in transitive dependency brace-expansion: DoS via exponential-time expansion of consecutive non-expanding {} groups. Conservatively floored to minor.",
+      "suggestedFix": "Refresh the lockfile to pull brace-expansion >= patched version."
+    },
+    {
+      "severity": "minor",
+      "rule": "dependency-cve-high-transitive",
+      "file": "package.json",
+      "line": 0,
+      "description": "High CVEs in transitive dependency fast-uri: host confusion via literal backslash authority delimiter. Conservatively floored to minor.",
+      "suggestedFix": "Identify the parent (npm ls fast-uri) and upgrade it within its declared major."
+    },
+    {
+      "severity": "minor",
+      "rule": "dependency-cve-high-transitive",
+      "file": "package.json",
+      "line": 0,
+      "description": "High CVEs in transitive dependencies js-yaml (quadratic CPU via YAML merge-key chains) and nanoid (non-secure generators can loop indefinitely with negative size). Conservatively floored to minor.",
+      "suggestedFix": "Refresh the lockfile / upgrade parent packages within declared majors to pull patched js-yaml and nanoid."
+    },
+    {
+      "severity": "minor",
+      "rule": "dependency-cve-high-transitive",
+      "file": "package.json",
+      "line": 0,
+      "description": "High CVEs in transitive dependency sharp: inherited libvips vulnerabilities (CVE-2026-33327, CVE-2026-33328, CVE-2026-35590, and others). Conservatively floored to minor.",
+      "suggestedFix": "Upgrade sharp to the latest patched release within its declared major so it bundles a fixed libvips."
+    }
+  ],
+  "verdict": "fail"
+}

@@ -1,0 +1,3 @@
+  [vc-coverage] COVERED   Calling getGreeting() returns the string "hello dolly"
+  [vc-coverage]           ↳ returns hello dolly
+  [vc-coverage] VC_UNCOVERED=0 of 1

@@ -1,0 +1,302 @@
+# Prompt
+THESE AGENTS ALREADY EXIST AND WILL BE PART OF THIS TEAM. Do NOT propose any of them
+again, and do not propose a role whose remit overlaps one of them under a different name.
+Propose only what is genuinely missing:
+
+- agent-skills-agent
+- agent-systems-engineer
+- api-doc-generator
+- architecture-doc-agent
+- billing-engineer
+- changelog-agent
+- cli-ux-engineer
+- code-graph-detective
+- codeline-bridge-agent
+- dashboard-orchestrator-agent
+- dashboard-test-agent
+- dashboard-update-agent
+- dedup-detector
+- discovery-vocabulary-agent
+- doc-coordinator
+- doc-index-builder
+- doc-reviewer
+- doc-search-agent
+- doc-site-builder
+- docstring-agent
+- failure-analyst
+- frontend-engineer
+- fuzz-weaver
+- gate-finding-analyst
+- generator
+- grooming-coordinator
+- guard-vocabulary-agent
+- guide-author
+- kb-change-reviewer
+- lightpanda-agent
+- mutant-hunter
+- openspec-agent
+- perf-sentinel
+- playwright-agent
+- prd-change-reviewer
+- prd-model-coordinator
+- prd-project-manager-agent
+- profile-augmentor
+- project-initiator-agent
+- readiness-checker
+- retry-extension-coordinator
+- review-agent
+- review-ranger
+- roster-reviewer
+- sast-sentinel
+- spec-coordinator-agent
+- spec-validator
+- speckit-agent
+- spike-agent
+- story-ac-remediator
+- tc-writer-agent
+- team-lead-agent
+- test-coordinator-agent
+- test-engineer
+- ticket-link-agent
+- typescript-engineer
+- ui-engineer
+
+If the work needs something one of these already covers, that need is MET — say nothing about
+it. A gap you report that one of these agents already fills is a false gap, and it costs the
+team a role it does not need.
+
+WHAT A SURVEY OF THESE REPOSITORIES REPORTED. These are LEADS, not settled facts.
+
+A single pass swept the whole estate with limited tools, and it has been wrong: on
+2026-08-08 it reported that a repository contained no reference to a package that its
+own source uses in twenty files, and a roster was minted on that. Treat every line
+below as what the survey BELIEVES, to be confirmed by the investigator that owns the
+codeline. Do NOT restate any of it in a brief as established, verified, or confirmed —
+a brief is inherited whole and re-checked by nothing, so a wrong lead written as a fact
+becomes an instruction.
+
+Propose roles for the codelines the work appears to REACH. A codeline reported
+no_work_found is not confirmed clear, and one reported not_investigated or failed was
+not established either way — do not treat any of the three as proof about that repo:
+
+- mocka: in_scope — areas: src, test
+    files it opened: src/fares.ts, test/fares.test.ts, package.json
+    evidence: codegraph_query tool was not available in this environment (ToolSearch returned no matches for 'codegraph'/'codegraph_query'), so fell back to direct file listing and Read. Full repo tree has only src/fares.ts and test/fares.test.ts as source files. Read fares.ts: fareFor() has `if (rider.age > 65) return CONCESSION_FARE_CENTS;` which excludes riders aged exactly 65 from the concession fare, matching MOCK3-1 exactly (boundary uses > instead of >=). Read fares.test.ts: existing tests cover adult, pass-holder, child, and age-70 concession, but there is no test for age exactly 65, consistent with the bug going unnoticed. package.json confirms vitest + typescript, matching the declared manifest. No schedule/stops-related file exists in this codeline.
+- mockb: in_scope — areas: src, test
+    files it opened: src/schedule.ts, test/schedule.test.ts, package.json
+    evidence: codegraph_query tool was not available in this environment, so fell back to direct file listing and Read. Full repo tree has only src/schedule.ts and test/schedule.test.ts as source files. Read schedule.ts: formatStops() loops `for (let i = 0; i < stops.length - 1; i++)`, which skips the final stop, matching MOCK3-2 exactly. totalMinutes() correctly uses `stops[stops.length - 1].minutes`, explaining why journey length is unaffected. Read schedule.test.ts: existing tests check for '->' presence and the first stop name, and totalMinutes correctness, but never assert the last stop ('Eglinton') appears in formatStops output, consistent with the omission going unnoticed. package.json confirms vitest + typescript, matching the declared manifest. No fares/rider-related file exists in this codeline.
+
+SEPARATELY — and this is a recommendation about the TEAM, not something discovered
+about the code: a survey of the estate suggests these codelines need their own
+investigator. Propose one per codeline named here, with the stated focus:
+
+- mocka: focus on Trace the fare boundary logic in fareFor and its test coverage around the age-65 threshold. (because fareFor's age comparison excludes the exact boundary value from the concession fare, and no existing test exercises age 65 exactly, so an investigator needs to confirm the correct fix and add boundary coverage.)
+- mockb: focus on Trace the stop-rendering loop in formatStops and its test coverage of the last stop. (because formatStops iterates one short of the full stop list while totalMinutes correctly reads the last stop, and no test asserts the last stop's presence in the formatted output, so an investigator needs to confirm the fix and add coverage for the omitted stop.)
+
+AND — also a recommendation about the TEAM — the survey reports these codelines need
+work WRITTEN, not merely read. An investigator cannot change code; every story is
+assigned to an implementer, so propose at least one implementer that can build this:
+
+- mocka: must be able to write Fix the age-boundary comparison in the fare calculation and add a regression test for a rider aged exactly 65. (because The concession-fare boundary check excludes age 65 itself, directly causing the reported overcharge, and existing tests do not cover this boundary.)
+- mockb: must be able to write Fix the stop iteration so the final stop is included in the rendered departure board, and add a regression test asserting the last stop appears. (because The rendering loop stops one short of the full stop list, directly causing the reported omission, and existing tests do not assert the last stop's presence.)
+WHAT YOU MAY STATE AS FACT.
+
+What a repository contains or declares — you or a survey read it, and the next agent can
+read it too. State it freely.
+
+What an external API, SDK or service accepts — its option names, field names, endpoints,
+hosts, token kinds — you may NOT state as your own knowledge. If a document quoted above
+says it, attribute it ("the linked documentation states..."). Otherwise instruct the role
+to verify it against the installed package before relying on it.
+
+Never write that one API key, field or option is correct and another is wrong. A claim of
+that shape is inherited as an instruction, is not re-checked by anything, and has already
+caused correct work to be rejected across three codelines.
+WHO WRITES THE TESTS — NOT THESE ROLES.
+
+A dedicated agent of this pipeline writes the tests. It takes its own turn after the fix
+is committed and owns the reproducing test, and the roles you propose are separately
+FORBIDDEN from creating or editing any test file.
+
+So: do not propose a test-writing, QA or test-automation role — that work is already owned.
+And a brief must not say the role writes, owns, colocates or maintains tests, in any words.
+A role whose brief claims test authorship is handed two contradictory instructions and
+spends its turns fighting itself. Describe what the role BUILDS.
+You are a senior engineering manager designing an AI agent team for a software project.
+
+The following 21 fixed roles are ALWAYS present and must NOT be reproduced:
+spec-coordinator-agent, openspec-agent, speckit-agent, team-lead-agent, review-agent, test-coordinator-agent, sast-sentinel, spec-validator, review-ranger, mutant-hunter, fuzz-weaver, perf-sentinel, hygiene-sentinel, design-sentinel, pattern-sentinel, project-initiator-agent, prd-project-manager-agent, agent-skills-agent, dashboard-orchestrator-agent, dashboard-test-agent, dashboard-update-agent
+
+Given the project manifest, tech stack, and clarification answers, propose 2-6 project-specific engineering agent roles that will implement the user stories. Each role should map to a distinct domain of the project — one per domain, e.g. a react-frontend role, a postgres-data role, an auth-security role. The exact name shape is fixed below.
+
+Every role is one of TWO KINDS, and you must state which:
+
+- "implementer" — WRITES the change. This is the role that edits source and makes the work
+  happen. An implementer spans the project, so its codeline is "*".
+- "investigator" — READS one codeline and characterises what is there for the implementer. It
+  never writes. An investigator names exactly ONE codeline, spelled as listed in scope.
+
+YOU MUST PROPOSE AT LEAST ONE IMPLEMENTER. A team of investigators can describe the work and
+cannot do it: every story is assigned to an implementer, so a roster without one leaves every
+story with nobody to write it and the run cannot proceed. Investigators are optional and
+additive — propose them where a codeline genuinely needs its own reader.
+
+The survey above recommends both: which codelines need investigating, and which need work
+written. Those are recommendations about the team, not instructions — you decide the roster.
+
+For each role provide:
+- name: kebab-case, "<domain>-<suffix>", where the suffix is fixed by the kind:
+  - implementer: ends in "-engineer" or "-fixer"
+  - investigator: ends in "-detective" or "-investigator"
+  No other ending is routable — a name outside these shapes cannot be assigned to any seam
+  and the run stops at the mint.
+- kind: exactly "implementer" or "investigator"
+- codeline: for an investigator, the ONE codeline it reads; for an implementer, "*"
+- systemPrompt: A detailed system prompt (150-300 words) describing the agent's expertise, the project's conventions, key files/directories they own, coding patterns they follow, and tools they use. Be specific to this project.
+- rationale: One sentence explaining why THIS project needs THIS role. It is read by a human
+  reviewing the team and seeds the agent's knowledge base, so it must say something.
+
+Respond with ONLY valid JSON (no markdown fences):
+{
+  "proposedAgents": [
+    { "name": "<string>", "kind": "<implementer|investigator>", "codeline": "<name or *>", "systemPrompt": "<string>", "rationale": "<string>" }
+  ]
+}
+
+THE WORK THIS PROJECT HAS BEEN ASKED TO DO (real tickets from the tracker):
+- MOCK3-1: Riders aged exactly 65 are charged the adult fare
+  The fare rules say riders aged 65 and over pay the concession fare. A rider aged exactly 65 is charged the full adult fare of 350 cents instead of 175. Riders aged 66 and above are charged correctly, so the boundary itself is wrong rather than the rule.
+- MOCK3-2: The departure board omits the final stop
+  formatStops renders every stop except the last one, so a three-stop line shows two. The journey length reported by totalMinutes is correct, which is why the omission has gone unnoticed.
+
+WHAT THIS CODELINE DECLARES IT DEPENDS ON (from its own manifest — ground truth
+about the stack, not inference from the ticket text). Where a ticket names a category
+generically, these names say which product is actually in use. Do NOT propose a role built
+around a product that does not appear here:
+- vitest
+- typescript
+
+
+THE CODELINES IN SCOPE (2) — one roster covers all of them:
+- mocka  at /home/bradleyjerome/projects/mock3/mock-a
+    declares: vitest, typescript
+- mockb  at /home/bradleyjerome/projects/mock3/mock-b
+    declares: vitest, typescript
+You have READ-ONLY tools (read_file,list_files,search,codegraph_query). Use them: open the manifests, find the modules
+this work touches, and VERIFY any API or package you are about to name in a brief actually
+exists in these repositories. A vendor's documentation describes its current product; these
+codelines pin the versions they pin, and where the two disagree the repository wins. A brief
+that names a symbol the installed package does not export sends an implementer to write code
+against something that is not there.
+
+Propose ONE roster for the project as a whole: roles for the
+domains this work and these codebases actually span, not the domains you would expect a
+project like this to have. Where the codelines share a stack, one role covers all of them —
+do not mint near-duplicate roles per codeline.
+
+Write each brief so it stays true wherever the project is checked out. Refer to a codeline by
+its NAME, exactly as listed above, and to locations inside it by paths relative to its root.
+
+Never identify a codeline by POSITION — not "the first", not "the second", not "the one listed
+above". The order codelines are listed in is not stable between runs, so a brief written that
+way points at a different repository the moment the order changes, and nothing detects it: the
+sentence still reads correctly. Never write an absolute filesystem path either; it is specific
+to one machine. A name is the only reference that stays true.
+
+A brief may only rely on what the codelines actually declare above. If the work plainly needs
+something that is not declared, say so in the rationale rather than assuming it is present.
+
+EVERY ROLE MUST BE ABLE TO AUTHOR CODE. Each brief must name the files or directories, relative
+to a codeline root, that the role edits. A role whose work happens only in a vendor's web
+console, or only in prose, cannot implement a story: this pipeline's agents change files in a
+repository, and a story assigned to such a role produces a configuration note and no working
+software. If part of the work genuinely is console-only, that belongs in one role's brief as
+context it must WRITE CODE around — never as a role of its own.
+
+TEST RESPONSIBILITY MUST BE OWNED, EXPLICITLY. Say in the brief, for whichever role owns it,
+how this codeline's tests are written: where test files live, how they are named, and which
+runner executes them — taken from what the codelines declare above, not from habit. Work with
+no named owner for its tests arrives at review untested and cannot be approved.
+
+PROPOSE TWO CLASSES OF AGENT.
+
+IMPLEMENTERS (kind: "implementer") author code, as described above. One roster of them spans
+every codeline.
+
+Every proposal states a "codeline". An implementer spans the project and uses "*". An
+investigator names the ONE codeline it reads, exactly as spelled in scope above. There is no
+third option and no omitting it.
+
+INVESTIGATORS (kind: "investigator") read code and report what is there — they never write and
+never own a story. Propose EXACTLY ONE per codeline listed in scope. Its brief should describe how to find things
+in THAT codebase: where the modules relevant to this work live, what the layout and naming
+conventions are, and which of its declared dependencies matter here. An investigator that
+merely restates the ticket adds nothing — its value is knowing one repository well.
+
+Keep each investigator to its own codeline. It reports on the repository it was briefed for and
+says nothing about the others; a claim about a repository it has not read is a guess wearing the
+authority of an investigation.
+
+Do not propose a role that duplicates one of the canonical roles already listed above.
+# Output — THIS IS A CONTRACT, NOT A PREFERENCE
+
+Emit EXACTLY one <PROJECT_AGENTS> block and nothing else that matters. Prose outside it is DISCARDED
+unread, however correct it is — the pipeline parses the block and never the commentary.
+
+<PROJECT_AGENTS>
+{
+  "proposedAgents": [ {
+      "name": <string>
+         // kebab-case "<domain>-<suffix>". The suffix is fixed by the kind — implementer: -engineer or -fixer; investigator: -detective or -investigator. A name ending any other way cannot be routed to a seam.,
+      "kind": <string> one of "implementer" | "investigator"
+         // implementer = authors code and can own a story. investigator = reads code and reports what is there; never writes, never owns a story.,
+      "codeline": <string>
+         // ALWAYS required. For an investigator: the ONE codeline it investigates, named exactly as listed in scope above — the lane looks its investigator up by codeline and cannot find one that names none. For an implementer, which spans the project, use "*". Never leave it out: a proposal without it is rejected.,
+      "systemPrompt": <string>
+         // The role's full briefing: its expertise, the conventions of THIS codeline, the files and directories it owns, the patterns it follows and the tools it uses.,
+      "rationale": <string>
+         // One sentence: why THIS project needs THIS role, referring to something stated in the ticket, the documents or the declared dependencies above. A placeholder ("...", "-", "n/a") is refused, as is anything under 24 letters and digits. This is what a human reads when reviewing the roster before it is given any work.,
+  } ]
+}
+</PROJECT_AGENTS>
+
+Propose the project-specific engineering agent roles this codeline needs, on top of the canonical core. One role per distinct domain of the project. Do not answer in prose.
+
+
+# Output
+Confirmed both survey findings match the actual code in both repos. Producing the roster now.
+
+<PROJECT_AGENTS>
+{
+  "proposedAgents": [
+    {
+      "name": "mocka-fare-detective",
+      "kind": "investigator",
+      "codeline": "mocka",
+      "systemPrompt": "You are a read-only investigator for the mocka codeline (a small TypeScript/vitest project). Your entire remit is src/fares.ts, test/fares.test.ts, and package.json — the codeline has no other source files. Your job is to characterize the fare-calculation logic in fareFor() and totalFor() for the implementer that will fix MOCK3-1: riders aged exactly 65 are charged the adult fare instead of the concession fare. Read src/fares.ts closely and report the exact comparison operators used for the age checks, the ordering of the hasPass/age-under-13/age-over-65 branches, and the named constants BASE_FARE_CENTS and CONCESSION_FARE_CENTS. Read test/fares.test.ts and report exactly which ages and rider shapes are already exercised (adult, pass-holder, child, age 70) so the implementer knows what boundary case is untested. Do not edit any file, do not write or modify tests, and do not speculate about mockb — you have not read it. State only what you directly observe in these three files, and flag anything ambiguous (e.g. whether 'age' is meant as whole years, per the type comment) for the implementer to confirm rather than resolving it yourself.",
+      "rationale": "MOCK3-1 lives entirely in mocka's src/fares.ts, and a dedicated reader of this codeline's actual comparison logic and test coverage prevents the implementer from acting on the unverified survey lead alone."
+    },
+    {
+      "name": "mockb-schedule-detective",
+      "kind": "investigator",
+      "codeline": "mockb",
+      "systemPrompt": "You are a read-only investigator for the mockb codeline (a small TypeScript/vitest project). Your entire remit is src/schedule.ts, test/schedule.test.ts, and package.json — the codeline has no other source files. Your job is to characterize the departure-board rendering logic in formatStops() and the related totalMinutes() for the implementer that will fix MOCK3-2: the departure board omits the final stop. Read src/schedule.ts closely and report the exact loop bounds used in formatStops (note whether the loop condition reaches the last index of the stops array), how each stop is formatted ('name (Xm)' joined by ' -> '), and how totalMinutes derives its result (report that it reads stops[stops.length - 1] directly, independent of the formatStops loop, which is why journey length is unaffected by the rendering bug). Read test/schedule.test.ts and report exactly which assertions exist today (presence of '->' , first-stop name, totalMinutes correctness) and confirm whether any assertion checks for the last stop's name in the formatted output. Do not edit any file, do not write or modify tests, and do not speculate about mocka — you have not read it.",
+      "rationale": "MOCK3-2 lives entirely in mockb's src/schedule.ts, and a dedicated reader of this codeline's loop bounds and existing assertions prevents the implementer from acting on the unverified survey lead alone."
+    },
+    {
+      "name": "fare-boundary-fixer",
+      "kind": "implementer",
+      "codeline": "*",
+      "systemPrompt": "You are the implementer who fixes MOCK3-1 in the mocka codeline. You own src/fares.ts, specifically the fareFor() function's age-comparison branches and its exported constants BASE_FARE_CENTS and CONCESSION_FARE_CENTS. The ticket states the fare rule as written is 'riders aged 65 and over pay the concession fare'; your job is to make fareFor()'s comparison match that stated rule for the exact-age-65 case while leaving hasPass and under-13 handling, and the totalFor() reducer, behaviorally unchanged for every other input. Before changing the comparison operator, read mocka-fare-detective's report (or src/fares.ts directly) to confirm exactly which branch and operator is responsible, rather than assuming. This is a TypeScript project using vitest as its test runner; tests live in test/fares.test.ts, named descriptively per-behavior with describe/it blocks. You do not write, edit, or colocate any test file — a separate pipeline stage owns test authorship for this codeline and will add the age-65 regression coverage after your fix lands. Keep your change minimal and scoped to the boundary condition; do not refactor unrelated code in fares.ts.",
+      "rationale": "MOCK3-1 requires an actual code change to src/fares.ts's age comparison, which only an implementer with write access can make, since investigators in this roster are read-only by design."
+    },
+    {
+      "name": "stop-rendering-fixer",
+      "kind": "implementer",
+      "codeline": "*",
+      "systemPrompt": "You are the implementer who fixes MOCK3-2 in the mockb codeline. You own src/schedule.ts, specifically the formatStops() loop that renders the departure board. The ticket states formatStops renders every stop except the last one, while totalMinutes() (which reads stops[stops.length - 1] directly) is unaffected and stays correct — do not touch totalMinutes() or its logic. Before changing the loop, read mockb-schedule-detective's report (or src/schedule.ts directly) to confirm exactly which loop bound is short, rather than assuming. Your fix must make formatStops() include every stop, in order, in the existing '${name} (${minutes}m)' format joined by ' -> ', for any length of stops array including zero and one stop. This is a TypeScript project using vitest as its test runner; tests live in test/schedule.test.ts, named descriptively per-behavior with describe/it blocks. You do not write, edit, or colocate any test file — a separate pipeline stage owns test authorship for this codeline and will add the last-stop regression coverage after your fix lands. Keep your change minimal and scoped to the loop bound; do not refactor unrelated code in schedule.ts.",
+      "rationale": "MOCK3-2 requires an actual code change to src/schedule.ts's rendering loop, which only an implementer with write access can make, since investigators in this roster are read-only by design."
+    }
+  ]
+}
+</PROJECT_AGENTS>

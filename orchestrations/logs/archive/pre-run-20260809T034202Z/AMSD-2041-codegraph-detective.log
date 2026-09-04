@@ -1,0 +1,309 @@
+# Prompt
+You are an investigator for the gotransit codeline. Your job is to read the codebase and report what is there — you never write code and never own a story.
+
+The gotransit codeline is a Next.js application at the gotransit codeline root. It declares contentstack and @contentstack/utils as dependencies but does NOT declare @contentstack/live-preview-utils in its manifest (verify this by reading package.json).
+
+Your focus is the Contentstack integration surface:
+- Read src/services/contentstack.ts — report the exact Contentstack.Stack() call, what options are passed, whether live_preview is present, and what environment variables or config values feed the Stack options. Report line numbers.
+- Read src/context/ContentstackContext.tsx — report the exact structure: what createContext holds, how ContentstackProvider is implemented, whether it uses useMemo with static data or useState/useEffect, and whether any live preview subscription exists.
+- Read src/hooks/useContent.ts — report what useContent returns, how it consumes the context, and how many files import useContent (search for imports of useContent across the codebase).
+- Search the entire source tree for any existing references to 'live-preview-utils', 'onEntryChange', 'live_preview', or 'LivePreview' — report whether any exist outside node_modules.
+- Read package.json — confirm whether @contentstack/live-preview-utils is listed in dependencies or devDependencies.
+- Report the test conventions: where test files live, naming patterns, and which runner is configured (jest/ts-jest per the manifest).
+
+Report exact file paths, line numbers, and code snippets. Do not speculate about what should be done — report what IS there.
+
+You are investigating this ticket. The repository is at: /home/bradleyjerome/projects/metrolinx/next.gotransit.com
+
+JIRA DOES NOT CLASSIFY THIS AS A BUG (issue type: Story). This is a HINT, not a certainty — if the ticket's own text below clearly describes existing behavior that is wrong, trust the ticket over this hint. Assuming novel: there is likely NO existing bug and no wrong value to trace. Inventing a "cause" for a capability that does not exist yet produces a confident wrong answer. Your job is the ATTACHMENT POINT — the existing file/function/provider/hook/route/component this new capability must plug into, and anything already present the implementation should REUSE — not a fix site.
+
+TICKET (read it, then decide for YOURSELF which few domain nouns matter — do not treat every word as a search term):
+Title: [GO, UP, MX] Live Preview of Content in CMS
+Description: Original Requirements (discovery)  AS a Content Author, I WANT to preview draft entries in CMS, SO THAT I can see how content will be shown on the website
+ability to preview draft entries in CMS
+Notes& Assumptions  Limitation: Might not be possible to preview protected pages and content.
+Original Total Estimate:  8  Original FE Estimate:  8  Original DAM Estimate:  0  Original BE Estimate:  0
+Acceptance criteria:
+
+
+Your CodeGraph tool is the shell script at: /home/bradleyjerome/projects/ai/epam-cli/orchestrations/scripts/codegraph-agent-query.sh
+Invoke it with the Bash tool, always passing PROJECT_ROOT:
+  PROJECT_ROOT="/home/bradleyjerome/projects/metrolinx/next.gotransit.com" bash "/home/bradleyjerome/projects/ai/epam-cli/orchestrations/scripts/codegraph-agent-query.sh" explore <domain nouns>
+  PROJECT_ROOT="/home/bradleyjerome/projects/metrolinx/next.gotransit.com" bash "/home/bradleyjerome/projects/ai/epam-cli/orchestrations/scripts/codegraph-agent-query.sh" callers <SymbolName>
+  PROJECT_ROOT="/home/bradleyjerome/projects/metrolinx/next.gotransit.com" bash "/home/bradleyjerome/projects/ai/epam-cli/orchestrations/scripts/codegraph-agent-query.sh" callees <SymbolName>
+  PROJECT_ROOT="/home/bradleyjerome/projects/metrolinx/next.gotransit.com" bash "/home/bradleyjerome/projects/ai/epam-cli/orchestrations/scripts/codegraph-agent-query.sh" show <file> [startLine] [endLine]
+
+
+YOUR FIRST `explore` HAS ALREADY BEEN RUN FOR YOU — these are its real results (domain nouns only, symptom/presentation words stripped). Treat this as call 1 of your budget; do NOT re-run it. Start from step 2: decide whether the top hit COMPUTES the wrong value or only READS it, and trace from there.
+
+=== PRE-COMPUTED `explore` RESULTS ===
+**Dynamic-dispatch links among your symbols**
+(synthesized — the indirect hops grep/Read would reconstruct; the `@file:line` is the wiring site)
+
+- renderSchedulesPage → SeeSchedulesPage   [dynamic: renders <SeeSchedulesPage>]
+- SeeSchedulesPage → ContentstackHeroBanner   [dynamic: renders <ContentstackHeroBanner>]
+- SeeSchedulesPage → Schedules   [dynamic: renders <Schedules>]
+- SeeSchedulesPage → ContentstackAbFeatureListingCardsComponent   [dynamic: renders <ContentstackAbFeatureListingCardsComponent>]
+- SeeSchedulesPage → ContentStackFeatureListing   [dynamic: renders <ContentStackFeatureListing>]
+- SeeSchedulesPage → ContentstackLinksGroup   [dynamic: renders <ContentstackLinksGroup>]
+
+> Full source for these symbols is below — the call flow among them, followed by their bodies.
+**Exploration: go up mx live preview of content in cms original requirements discovery as a author i want to draft entries so that can see how will be shown on the website ability notes assumptions limitation might not possible protected pages and total estimate 8 fe dam 0**
+
+Found 11 symbols across 8 files.
+
+**Blast radius — what depends on these (update/verify before editing)**
+
+- `PageComponents` (src/interface/content/page.ts:117) — 36 callers in `src/components/componentMappers/AboutUsComponentMapper.tsx`, `src/components/componentMappers/BlogPostPageComponentMapper.tsx`, `src/components/componentMappers/DetailPageComponentMapper.tsx`, `src/components/componentMappers/FindAStationComponentMapper.tsx` +17 more; tests: `src/components/componentMappers/__tests__/AboutUsComponentMapper.spec.tsx`, `src/components/componentMappers/__tests__/DetailPageComponentMapper.spec.tsx`, `src/components/componentMappers/__tests__/HolidayScheduleComponentMapper.spec.tsx`, `src/components/componentMappers/__tests__/PartnersPromotionsDetailPageComponentMapper.spec.tsx` +2
+- `actualiseEntries` (migration-scripts/utils/content-migration/actualiseEntries.ts:14) — 2 callers in `migration-scripts/utils/content-migration/getEntries.ts`; ⚠️ no covering tests found
+- `getEntries` (migration-scripts/utils/content-migration/getEntries.ts:7) — 2 callers in `migration-scripts/utils/content-migration/getManagementEntriesMatchingQuery.ts`; ⚠️ no covering tests found
+- `content` (src/components/contentstack/ContentstackLinksGroup/content.mock.ts:1) — 1 caller; tests: `src/components/contentstack/ContentstackLinksGroup/ContentstackLinksGroup.spec.tsx`
+
+**Relationships**
+
+**references:**
+- PageComponents → IPageComponent
+- IProps → PageComponents
+- IBlogPostPageComponentMapperProps → PageComponents
+- IDetailPageComponentMapperProps → PageComponents
+- IFindAStationComponentMapperProps → PageComponents
+- IFullScheduleComponentMapperProps → PageComponents
+- IHolidayScheduleComponentMapperProps → PageComponents
+- IPartnersPromotionsDetailPageComponentMapperProps → PageComponents
+- IPoliciesAndLegalPageMapperProps → PageComponents
+- IWaysToPayComponentMapperProps → PageComponents
+- ... and 31 more
+
+**calls:**
+- actualiseEntries → getCurrentEnvironment
+- actualiseEntries → getEntryEnvironmentPublishDetails
+- actualiseEntries → logger
+- getEntries → actualiseEntries
+- bulkPublishEntries → logger
+- migrateEntries → logger
+- migrateContent → logger
+- getManagementEntriesMatchingQuery → getEntries
+- migrateContent → bulkPublishEntries
+- migrateContent → migrateEntries
+- ... and 35 more
+
+**Source Code**
+
+> The code below is the **verbatim, current on-disk source** of these files — re-read from disk on this call and line-numbered, byte-for-byte identical to what the Read tool returns. It is NOT a summary, outline, or stale cache. Treat each block as a Read you have already performed: do not Read a file shown here.
+
+**`migration-scripts/utils/content-migration/actualiseEntries.ts`** — actualiseEntries(function), getEntryEnvironmentPublishDetails(function)
+
+```typescript
+1	import { Entry } from "@contentstack/management/types/stack/contentType/entry";
+2	import { client } from "../../client";
+3	import { ContentStatus } from "./constants";
+4	import { getCurrentEnvironment } from "./getCurrentEnvironment";
+5	import { logger } from "./logger";
+6	import { IPublishDetails } from "./types";
+7	
+8	export const getEntryEnvironmentPublishDetails = (entry: Entry, environmentUid: string) =>
+9	  entry.publish_details.find(
+10	    ({ locale, environment }: IPublishDetails) =>
+11	      locale === entry.locale && environment === environmentUid,
+12	  );
+13	
+14	export const actualiseEntries = async (contentType: string, entries: Entry[]) => {
+15	  const actualisedEntries: Entry[] = [];
+16	  const environment = await getCurrentEnvironment();
+17	
+18	  for (const entry of entries) {
+19	    const entryEnvironmentPublishDetails = getEntryEnvironmentPublishDetails(
+20	      entry,
+21	      environment.uid,
+22	    );
+23	    const isPublished = !!entryEnvironmentPublishDetails;
+24	
+25	    if (!isPublished) {
+26	      actualisedEntries.push(entry);
+27	      continue;
+28	    }
+29	
+30	    const publishedVersion = entryEnvironmentPublishDetails?.version;
+31	    const isLatestVersionPublished = publishedVersion === entry._version;
+32	
+33	    if (!isLatestVersionPublished) {
+34	      try {
+35	        const publishedVersionEntry = await client.client
+36	          .contentType(contentType)
+37	          .entry(entry.uid)
+38	          .fetch({ version: publishedVersion, locale: entry.locale });
+39	
+40	        actualisedEntries.push(publishedVersionEntry);
+41	        logger.collect([publishedVersionEntry], ContentStatus.DRAFT_CONTENT);
+42	      } catch (e: any) {
+43	        console.error(e.message, "Error actualising entry:", entry.uid);
+44	        logger.collect([entry], ContentStatus.ACTUALISATION_FAILED);
+45	      }
+46	    } else {
+47	      actualisedEntries.push(entry);
+48	    }
+49	  }
+50	
+51	  return actualisedEntries;
+52	};
+```
+
+**`migration-scripts/utils/content-migration/getEntries.ts`** — getEntries(function), QUERY_RESPONSE_LIMIT(constant), getEntries.ts(file)
+
+```typescript
+1	import { Entry } from "@contentstack/management/types/stack/contentType/entry";
+2	import { client } from "../../client";
+3	import { actualiseEntries } from "./actualiseEntries";
+4	
+5	const QUERY_RESPONSE_LIMIT = 100;
+6	
+7	export const getEntries = async ({
+8	  contentType,
+9	  query,
+10	  locale,
+11	}: {
+12	  contentType: string;
+13	  query: object;
+14	  locale: string;
+15	}) => {
+16	  const result: Entry[] = [];
+17	
+18	  const _query = await client.client.contentType(contentType).entry().query({
+19	    query,
+20	    locale,
+21	    include_count: true,
+22	    include_publish_details: true, // required for entries actualisation
+23	    limit: QUERY_RESPONSE_LIMIT,
+24	  });
+25	
+26	  try {
+27	    const { items, count } = await _query.find();
+28	    result.push(...items);
+29	
+30	    while (result.length < count) {
+31	      const { items } = await client.client
+32	        .contentType(contentType)
+33	        .entry()
+34	        .query({
+35	          query,
+36	          locale,
+37	          include_publish_details: true, // required for entries actualisation
+38	          skip: result.length,
+39	          limit: QUERY_RESPONSE_LIMIT,
+40	        })
+41	        .find();
+42	
+43	      result.push(...items);
+44	    }
+45	
+46	    return await actualiseEntries(contentType, result);
+47	  } catch (e: any) {
+48	    console.error(
+49	      e.message,
+50	      `Error retrieving content management entries of content type: ${contentType} for lang: ${locale}`,
+51	    );
+52	  }
+53	};
+```
+
+**`migration-scripts/content_types/see_timetable/see_timetable.v5.ts`** — deleteSeeTimetable(function)
+
+```typescript
+1	import { client } from "../../client";
+2	
+3	export function deleteSeeTimetable() {
+4	  return client.deleteContentType("see_timetable");
+5	}
+```
+
+**`migration-scripts/content_types/see_schedule/see_schedule.v1.ts`** — updateSeeScheduleV1(function)
+
+```typescript
+1	import { Schema } from "@contentstack/management/types/stack/contentT
+… (truncated — re-run explore yourself if you need the rest)
+=== END PRE-COMPUTED RESULTS ===
+
+CONVERGE FAST — HARD LIMIT: 6 tool calls total. This is not a suggestion.
+By your 6th tool call you MUST stop querying and emit the JSON answer. A partial map of the attachment points is infinitely better than no answer.
+1. First call: `explore` with the DOMAIN NOUNS only (drop symptom/presentation words).
+2. NOTHING IS BROKEN HERE. This story asks for a capability that does not exist yet, so there is no wrong value to trace and no line to quote. Do not hunt for a cause — you will invent one.
+3. FIND EVERY PLACE THIS WORK MUST TOUCH. This is the most important output, and returning only ONE is the known failure of this step. A new capability almost never lands in a single file. Trace the SHAPE of it through this repository, in whatever terms this repository uses:
+   - WHERE IT IS SET UP — the place the thing being enabled is created, configured or registered. Start here.
+   - WHAT CARRIES IT — anything between that setup and the code that uses it: a shared module, a wrapper, an app-wide registration, a passed-down value. There may be none; there may be several.
+   - EVERYWHERE IT IS USED — every place that reads the affected data or must react when it changes. There is usually MORE THAN ONE. Name them all.
+   Do not force this repository into a shape it does not have, and do not skip a place because it has no obvious name. Describe each site in the vocabulary the codebase itself uses, which you have seen in the tool output — not in the vocabulary of some other project's architecture.
+4. COVER THE ACCEPTANCE CRITERIA. Read them again and check your site list against them: every criterion describing observable behaviour needs a site where that behaviour becomes possible. A criterion with no corresponding site means your map is incomplete — go back and find it.
+5. NAME WHAT TO REUSE at each site — whatever already exists there that the implementation should build on rather than duplicating. Use `explore`/`callers`/`callees` to find it; you cannot reuse what you have not found.
+6. `brokenLine` is NOT required for this story and must be left "" — there is no broken expression to quote.
+7. DO NOT INVENT A PATH OR A SYMBOL. Your grounding here is provenance, not a quoted line: every file and symbol you name must have been returned to you by a tool. If you believe something exists and the tools did not show it, PROVE it with ripgrep-search.sh before naming it, or report it absent.
+
+
+READ THE FILE BEFORE YOU QUOTE IT. Once you have a candidate file, run `show <file>` and look at the real lines. Your "brokenLine" must be COPIED EXACTLY from that output — it is checked character-for-character against the file, after whitespace normalisation. Do NOT reconstruct the line from symbol names: on 2026-07-26 that produced `lineItemKey === orderLineItem.id`, a plausible-looking expression using an identifier that exists nowhere in the repository, and the answer was rejected. `show` accepts a line range so you can read just the region you care about.
+
+CRITICAL REALITY ANCHOR: if the CodeGraph tool does not return a file or symbol, it does NOT exist in this codebase. Do not infer, assume, or extrapolate file paths, function signatures, or variable names from naming patterns — that is exactly how `lineItemKey` was invented. The index answers only for what it parsed, so a miss is a question, not an answer. If you believe something exists and CodeGraph did not return it, PROVE it before reasoning about it:
+
+    bash orchestrations/scripts/ripgrep-search.sh --string "<exact symbol>" [--glob "*.ts"]
+    bash orchestrations/scripts/ripgrep-search.sh --file "<part of a filename>"
+
+If your fix calls a method or function from a THIRD-PARTY package (not this repo's own code), a name existing somewhere in that package is not the same as it being the RIGHT way to call it — a symbol can be a real, internal implementation detail the package's own docs never call directly, or a static class method vs. an instance method, and picking the wrong one produces code that type-checks and fails at runtime. PROVE the real shape before naming it:
+
+    bash orchestrations/scripts/resolve-package-symbol.sh "<package name>" "<method or function name>"
+
+It reports whether the symbol is a direct/static call or needs an instance, and surfaces the package's own documented usage examples (README and JSDoc) so you can prefer the intended pattern over an internal detail that happens to exist.
+
+That searches the real working tree, so a hit is ground truth and "NOT FOUND" is definitive absence. If both tools come back empty, the thing does not exist — say so and revise your hypothesis. Never write a name into your answer that no tool has shown you.
+
+CRITICAL — HOW TO ANSWER: Emit the JSON array as TEXT directly in your reply. Do NOT call WriteFile and do NOT write your answer to any file — the pipeline reads your reply text, not a file. If you write your answer to a file, it is LOST and the whole investigation is wasted. Use the Bash tool ONLY to run the CodeGraph query script above (including its `show` subcommand, which you MUST use before quoting a line); use no other tool.
+
+NAME THE FORMAT, DO NOT DESCRIBE IT. If your fix depends on the SHAPE of a string — a prefix, suffix, separator, delimiter — you must QUOTE THE EXACT LITERAL (e.g. '#') or name the constant that defines it (e.g. DIVIDER). Saying "a prefix match that accounts for the suffix" without stating the suffix is not implementable: on 2026-07-26 exactly that wording made the implementer guess '-' where the repository uses '#', and the fix could never match. This is machine-checked.
+
+PREFER THE PARSER OVER THE WRITER. If a helper CONSTRUCTS the value (getX/buildX/toX) and another READS it (parseX/fromX), prescribe the reader. Naming the writer invites the implementer to reconstruct the format by hand — which is how the above happened. The best fix does no string surgery at all, because the helper owns the format.
+
+VERIFY THIRD-PARTY METHOD CALLS with resolve-package-symbol.sh before prescribing them (see above) — a name existing in a package is not proof it is called the way you assume.
+
+DECLARE ANY PACKAGE YOUR FIX NEEDS — "requiredPackages" is REQUIRED and is machine-verified. List the BARE package names, exactly as they appear in this project's manifest (e.g. "some-sdk", "@scope/pkg"), for every third-party package your fix imports or configures. Use [] when the fix needs none — that is the common case and is not a failure. Each name is checked against what this codeline actually declares and installs: a package that is not there means your fix CANNOT be implemented as written, and prescribing it produces a change that type-checks, passes tests, and fails for a real user. Prefer a fix built on what is already installed; if the work genuinely requires a package this project does not have, still declare it — that is the honest answer and the pipeline needs to see it, whereas an approach invented to avoid naming it is the failure this field exists to prevent.
+
+Output ONLY a JSON array (no prose, no markdown fences), then stop. The "fix" field is REQUIRED and must be a concrete, minimal instruction naming the exact change and any existing helper to reuse. The "helper" field must be the BARE SYMBOL NAME of the existing function you are telling the implementer to reuse (so it can be machine-verified to actually exist) — leave it "" if the fix genuinely needs no existing helper. Do NOT invent a helper name; only put a symbol you actually saw in the tool output:
+[{"file":"<repo-relative path>","function":"<symbol>","reason":"<why THIS computes the value, not just displays it>","brokenLine":"<the exact existing expression that is wrong, copied verbatim from that file>","fix":"<the exact minimal change: which line/expression to change, to what, and which EXISTING helper (symbol + import path) to reuse — never 'write a new function' if one already exists>","helper":"<bare existing symbol name to reuse, or empty>","requiredPackages":["<bare package name this fix needs>"]}]
+
+# Output
+```json
+[
+  {
+    "file": "src/services/contentstack.ts",
+    "function": "options",
+    "reason": "This is WHERE the Contentstack SDK Stack is configured and initialized. The `options` object (lines 55-67) passed to `contentstack.Stack(options)` on line 69 currently lacks a `live_preview` key. Contentstack Live Preview requires `live_preview: { host, enable: true }` in the Stack initialization options. This is the setup site where the capability must be registered.",
+    "brokenLine": "",
+    "fix": "Add a `live_preview` key to the `options` object (lines 55-67). The key should be conditionally included, driven by new env vars (e.g. CONTENTSTACK_LIVE_PREVIEW_HOST and CONTENTSTACK_LIVE_PREVIEW_ENABLE). Example shape: `live_preview: { host: CONTENTSTACK_LIVE_PREVIEW_HOST, enable: CONTENTSTACK_LIVE_PREVIEW_ENABLE === 'true' }`. The existing `options` object and `Stack` export at line 69 are the only sites that need changes in this file — no new helpers needed, just extend the existing `options` const.",
+    "helper": "options",
+    "requiredPackages": ["@contentstack/live-preview-utils"]
+  },
+  {
+    "file": "src/context/ContentstackContext.tsx",
+    "function": "ContentstackProvider",
+    "reason": "This is WHAT CARRIES live preview data through the app. Currently `ContentstackProvider` (lines 55-67) uses `useMemo` with static `defaultContent`, producing an immutable context value. To support live preview, the provider must subscribe to `onEntryChange` from `@contentstack/live-preview-utils` and reactively update content when entries change, so all consumers receive updated data without page reload.",
+    "brokenLine": "",
+    "fix": "Replace the `useMemo` on lines 59-64 with `useState` to hold `content`, and add a `useEffect` that calls `onEntryChange` from `@contentstack/live-preview-utils` with a callback that merges the updated entry into the existing `content` state. The `onEntryChange` callback receives the updated entry data; the provider should call the state setter to trigger re-render of all consumers. The existing `IContentstackContent` interface and `ContentstackContext` shape remain unchanged — only the provider's internal state mechanism changes from static `useMemo` to reactive `useState`/`useEffect`.",
+    "helper": "ContentstackProvider",
+    "requiredPackages": ["@contentstack/live-preview-utils"]
+  },
+  {
+    "file": "src/hooks/useContent.ts",
+    "function": "useContent",
+    "reason": "This is EVERYWHERE the capability is consumed — all 234+ import sites across the codebase go through `useContent` → `useContentstackContext`. It already returns `{ getContentByKey }` which reads from context. If `ContentstackProvider` is made reactive (previous attachment point), `useContent` consumers automatically receive live preview updates with no changes needed here. Listed to confirm blast radius: any live preview implementation must verify that `useContent` and its `getContentByKey` path correctly propagate re-renders when the context value object reference changes.",
+    "brokenLine": "",
+    "fix": "No code change required in this file itself — it already reads from `useContentstackContext()` and will reactively update when the provider's context value changes. Verify that `getContentByKey`'s `useCallback` dependency on `content` (line 10) causes re-computation when content updates from live preview, which it does since `content` is in the dependency array.",
+    "helper": "useContent",
+    "requiredPackages": []
+  },
+  {
+    "file": "package.json",
+    "function": "",
+    "reason": "The package `@contentstack/live-preview-utils` is NOT declared in dependencies or devDependencies (confirmed: only `contentstack`, `@contentstack/utils`, and `@contentstack/management` exist). This package must be added to dependencies because it provides the `onEntryChange` subscription function and the `live_preview` Stack config integration that the Contentstack SDK requires for live preview to function.",
+    "brokenLine": "",
+    "fix": "Add `@contentstack/live-preview-utils` to the `dependencies` section of package.json. The package provides `onEntryChange` which must be called in `ContentstackProvider` to subscribe to entry changes from the CMS preview iframe.",
+    "helper": "",
+    "requiredPackages": ["@contentstack/live-preview-utils"]
+  }
+]
+```

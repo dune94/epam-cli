@@ -1,0 +1,35 @@
+spec-mode: fast-path qwen/z-ai/glm-5.2 (skipping MiniMax)
+spec-mode: fast-path qwen/z-ai/glm-5.2 (skipping MiniMax)
+Failed to parse JSON for tag TICKET_LINKS: Unexpected token 'B', "Both docum"... is not valid JSON
+spec-mode: TICKET_LINKS: no parseable output — the tag was missing, empty, or contained prose instead of JSON
+spec-mode: fast-path qwen/z-ai/glm-5.2 (skipping MiniMax)
+spec-mode: search-term vocabulary unavailable for AMSD-2041 (Cannot read properties of null (reading 'cmd')) — seeding with an unfiltered query
+spec-mode: ⚠️ code-graph-detective plan/execution MISMATCH for AMSD-2041 — plan named [usecontent, getvalue, livepreview, previewtoken, plan, novel, javascript], final answer named [contentstackcontext], no shared term and no stated reason for the change.
+spec-mode: fast-path qwen/z-ai/glm-5.1 (skipping MiniMax)
+spec-mode: SPEC_AGENT (story AMSD-2041): missing required field "acceptanceCriteria" — required by its own tool definition
+spec-mode: fast-path qwen/z-ai/glm-5.2 (skipping MiniMax)
+spec-mode: ⚠️ VC review DISPUTED for AMSD-2041 — the reviewer's flags would leave 0/5 criteria, below the floor of 3. Keeping the 5 the deterministic guard certified; a review that condemns most of a set is treated as an outlier. Flags: VC 1 prescribes mechanism ("preview/draft content indication") and cross-compares ("rather than the published version") — restate as observable outcome of draft content on the page surface | VC 2 prescribes mechanism ("without any preview/draft indication") and cross-compares ("identical to current production behavior") — restate as observable outcome of published content rendering | VC 3 prescribes mechanism ("API is mocked"), references internal structure ("draft data"), and cross-compares ("same layout and component structure used for published content") — restate as observable content on the rendered page
+spec-mode: AMSD-2041 — 5 verification criteria persisted (source: description, resolution: disputed)
+spec-mode: AMSD-2041 — 2 declared file(s) do NOT exist in codeline 'gotransit': src/components/contentstack/ContentstackAccordion/content.mock.ts, src/components/contentstack/ContentstackColorComponent/content.mock.ts
+spec-mode: AMSD-2041 — 2 declared file(s) do NOT exist in codeline 'metrolinx': src/components/contentstack/ContentstackAccordion/content.mock.ts, src/components/contentstack/ContentstackColorComponent/content.mock.ts
+spec-mode: fast-path qwen/z-ai/glm-5.1 (skipping MiniMax)
+spec-mode: SPEC_AGENT: missing required field "storyId" — required by its own tool definition
+spec-mode: fast-path qwen/z-ai/glm-5.2 (skipping MiniMax)
+Failed to parse JSON for tag GUARD_VOCABULARY: Unexpected token '<', "<tool_call"... is not valid JSON
+spec-mode: GUARD_VOCABULARY: no parseable output — the tag was missing, empty, or contained prose instead of JSON
+spec-mode: speckit review failed for AMSD-2041: AC guard could not be armed for AMSD-2041: the guard-vocabulary agent returned no usable terms after its full retry/ladder budget. Refusing to proceed with an unarmed guard.
+spec-mode: speckit returned null for AMSD-2041 (attempt 2/3) — retrying transient failure
+spec-mode: fast-path qwen/z-ai/glm-5.1 (skipping MiniMax)
+spec-mode: SPEC_AGENT: missing required field "storyId" — required by its own tool definition
+spec-mode: fast-path qwen/z-ai/glm-5.2 (skipping MiniMax)
+Failed to parse JSON for tag GUARD_VOCABULARY: Unexpected token 'B', "Based on m"... is not valid JSON
+spec-mode: GUARD_VOCABULARY: no parseable output — the tag was missing, empty, or contained prose instead of JSON
+spec-mode: speckit review failed for AMSD-2041: AC guard could not be armed for AMSD-2041: the guard-vocabulary agent returned no usable terms after its full retry/ladder budget. Refusing to proceed with an unarmed guard.
+spec-mode: speckit returned null for AMSD-2041 (attempt 3/3) — retrying transient failure
+spec-mode: fast-path qwen/z-ai/glm-5.1 (skipping MiniMax)
+spec-mode: SPEC_AGENT: missing required field "storyId" — required by its own tool definition
+spec-mode: fast-path qwen/z-ai/glm-5.2 (skipping MiniMax)
+Failed to parse JSON for tag GUARD_VOCABULARY: Unexpected token 'B', "Based on m"... is not valid JSON
+spec-mode: GUARD_VOCABULARY: no parseable output — the tag was missing, empty, or contained prose instead of JSON
+spec-mode: speckit review failed for AMSD-2041: AC guard could not be armed for AMSD-2041: the guard-vocabulary agent returned no usable terms after its full retry/ladder budget. Refusing to proceed with an unarmed guard.
+spec-mode: FATAL — speckit returned null for AMSD-2041 after 3 attempt(s). openspec/speckit failures are not permitted. Aborting pipeline. Check SPEC_MODE_SPECKIT_MODEL/SPEC_MODE_OPENSPEC_MODEL and RUNCLAUDE_TIMEOUT_MS.

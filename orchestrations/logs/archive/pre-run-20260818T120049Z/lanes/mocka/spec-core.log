@@ -1,0 +1,12 @@
+spec-mode: fast-path qwen/z-ai/glm-5.2 (skipping MiniMax)
+spec-mode: SPEC_ASSIGNMENTS[0] (story MOCK3-1): missing required field "agents" — required by its own tool definition
+spec-mode: detective for mocka = fares-investigator (minted for this codeline)
+spec-mode: fast-path qwen/z-ai/glm-5.2 (skipping MiniMax)
+spec-mode: fast-path qwen/z-ai/glm-5.1 (skipping MiniMax)
+spec-mode: fast-path qwen/z-ai/glm-5.2 (skipping MiniMax)
+spec-mode: MOCK3-1 — 6 verification criteria persisted (source: acceptance, resolution: clean)
+spec-mode: fast-path qwen/z-ai/glm-5.2 (skipping MiniMax)
+spec-mode: fast-path qwen/z-ai/glm-5.2 (skipping MiniMax)
+spec-mode: MODEL_REVIEW: the array is empty — a report about nothing is not a report
+spec-mode: LLM model review completed for 0 stories
+spec-mode: completed for phase core (run 20260818T101809Z)

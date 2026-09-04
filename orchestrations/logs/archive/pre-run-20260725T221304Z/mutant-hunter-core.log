@@ -1,0 +1,79 @@
+```json
+{
+  "agent": "mutant-hunter",
+  "phase": "core",
+  "summary": {
+    "mutationsProposed": 7,
+    "killed": 6,
+    "survived": 1,
+    "noCoverage": 0,
+    "mutationScore": 86
+  },
+  "mutations": [
+    {
+      "file": "src/hello.ts",
+      "line": 2,
+      "originalCode": "return 'hello dolly';",
+      "mutatedCode": "return 'hello world';",
+      "status": "killed",
+      "relatedTest": "src/hello.test.ts → 'returns hello dolly' (toBe match) and 'no longer returns the old hello world greeting' (not.toBe / not.toContain)",
+      "recommendation": "No action needed — both positive and negative assertions catch this mutation."
+    },
+    {
+      "file": "src/hello.ts",
+      "line": 2,
+      "originalCode": "return 'hello dolly';",
+      "mutatedCode": "return 'hello dolly!';",
+      "status": "killed",
+      "relatedTest": "src/hello.test.ts → 'returns hello dolly' (toBe strict equality fails on trailing '!')",
+      "recommendation": "No action needed — strict equality assertion catches the extra character."
+    },
+    {
+      "file": "src/hello.ts",
+      "line": 2,
+      "originalCode": "return 'hello dolly';",
+      "mutatedCode": "return '';",
+      "status": "killed",
+      "relatedTest": "src/hello.test.ts → 'returns hello dolly' (toBe fails on empty string)",
+      "recommendation": "No action needed — empty return is caught by the exact-match assertion."
+    },
+    {
+      "file": "src/hello.ts",
+      "line": 2,
+      "originalCode": "return 'hello dolly';",
+      "mutatedCode": "return 'goodbye dolly';",
+      "status": "killed",
+      "relatedTest": "src/hello.test.ts → 'returns hello dolly' (toBe fails on different greeting)",
+      "recommendation": "No action needed — wrong greeting caught by exact-match assertion."
+    },
+    {
+      "file": "src/hello.ts",
+      "line": 2,
+      "originalCode": "return 'hello dolly';",
+      "mutatedCode": "return 'HELLO DOLLY';",
+      "status": "killed",
+      "relatedTest": "src/hello.test.ts → 'returns hello dolly' (toBe is case-sensitive, fails)",
+      "recommendation": "No action needed — case mutation caught by strict equality."
+    },
+    {
+      "file": "src/hello.ts",
+      "line": 1,
+      "originalCode": "export function getGreeting(): string {",
+      "mutatedCode": "export function getGreeting(): number {",
+      "status": "survived",
+      "relatedTest": null,
+      "recommendation": "Type-annotation mutation does not alter runtime behavior; vitest executes transpiled JS where the return value is still 'hello dolly'. No test asserts the TypeScript type contract. Consider adding a type-level test (e.g., tsd or expect-type) or rely on tsc --noEmit in CI to catch type regressions."
+    },
+    {
+      "file": "src/hello.ts",
+      "line": 2,
+      "originalCode": "return 'hello dolly';",
+      "mutatedCode": "/* return removed — function implicitly returns undefined */",
+      "status": "killed",
+      "relatedTest": "src/hello.test.ts → 'returns hello dolly' (toBe fails on undefined)",
+      "recommendation": "No action needed — missing return is caught by the exact-match assertion."
+    }
+  ],
+  "verdict": "pass"
+}
+```

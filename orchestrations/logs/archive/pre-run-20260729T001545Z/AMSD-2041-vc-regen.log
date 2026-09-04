@@ -1,0 +1,30 @@
+# Prompt
+Regenerate the VERIFICATION CRITERIA for this brownfield story. Your previous verification criteria were FLAGGED and must be fixed:
+- VC 1 cross-compares draft vs published values — restate as observable draft content displayed
+- VC 2 cross-compares to 'behavior before the Live Preview integration' — restate as observable published content values displayed
+- VC 3 references internal mechanism 'emit a real-time content update event' — restate as observable UI update without page reload
+- VC 4 references internal structure 'Live Preview SDK initialization' and checks console instead of the ticket's UI surface — restate as observable UI behavior on error
+- VC 5 references internal structure 'useContent hook' and cross-compares to output without preview token — restate as observable rendered output on its own
+
+THE FIX SITE (located by the code-graph detective — anchor every criterion to the behaviour THIS code produces):
+- src/services/contentstack.ts :: options — This is where the Contentstack Stack is initialized. The options object (lines 55-67) lacks the live_preview configuration, and the Stack (line 69) is created without it. Without live_preview in the Stack config, no downstream component can receive draft/unpublished content or subscribe to real-time updates. This is the root cause — the Stack must be initialized with live_preview: { enable: true } for the entire Live Preview feature to function.
+- src/context/ContentstackContext.tsx :: ContentstackProvider — This is the React context provider that all 236+ useContent consumers depend on. Currently it only passes through defaultContent as a static value (line 58). For Live Preview, this provider must subscribe to livePreviewUpdate events from Contentstack's Live Preview SDK, updating the context's content state in real-time when Contentstack emits changes. Without this, even with the Stack configured for live preview, the UI will never re-render with draft content.
+Do NOT write criteria about areas unrelated to this code.
+
+
+Acceptance criteria (IMMUTABLE — the intent to verify; do NOT restate as-is, VERIFY them):
+- (none)
+Description: [GO, UP, MX] Live Preview of Content in CMS — enable content authors using the Contentstack CMS to see draft/unpublished content rendered in the live application UI in real time, so they can preview changes before publishing. This requires integrating Contentstack's Live Preview SDK so that, when a preview token is present, the application fetches and renders draft content and subscribes to real-time content update events.
+
+A verification criterion states WHAT AN END USER OR TESTER OBSERVES on the user-facing surface THE TICKET IS ABOUT — the rendered email for an email ticket, the displayed screen/UI for a UI ticket, the API response a CLIENT receives for an API ticket. It is a BLACK-BOX check on that surface. It NEVER describes HOW the value is produced.
+A verification criterion is FORBIDDEN if it:
+- prescribes HOW to implement — any algorithm, mechanism, or approach: "split", "halve", "×0.5", "calculate independently", "per segment", "for each line item", or adding/reading any new field, flag, or service;
+- references an INTERNAL structure that merely FEEDS the ticket's surface — an intermediate payload, a "confirmation data"/DTO object, or a specific response field used to BUILD the output. Verify the surface the ticket names, NOT the data structure behind it;
+- makes a CROSS-COMPARISON that presumes a mechanism — never assert one value "must equal" / "matches" / "is the same as" another (e.g. "the return amount equals the outbound amount"); that presumes a copy/split. Assert the required value is present and correct ON ITS OWN.
+Every verification criterion must be observable, testable, and tied to the ticket's stated symptom/intent.
+
+Do NOT restate an acceptance criterion as-is — express what a tester OBSERVES that confirms it. Address every flag above.
+Output ONLY a JSON array of verification-criterion strings. No prose, no markdown.
+
+# Output
+["When a content author opens the application in preview mode from the CMS, the page displays the draft/unpublished content values (e.g., the edited headline or body text) in the rendered UI.", "When the application is viewed in its normal published state, the page displays the published content values from the CMS in the rendered UI.", "While preview mode is open, after a content author saves a change in the CMS, the content displayed on the page updates to show the new value without the tester reloading or refreshing the page.", "When the CMS connection or preview setup fails, the UI displays an observable error or fallback state rather than a blank, broken, or unresponsive page.", "With preview mode active, the rendered page displays the CMS content fields as a complete, working page with all expected content visible in place."]

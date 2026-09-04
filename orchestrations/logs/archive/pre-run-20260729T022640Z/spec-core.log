@@ -1,0 +1,14 @@
+spec-mode: fast-path qwen/z-ai/glm-5.2 (skipping MiniMax)
+spec-mode: fast-path qwen/z-ai/glm-5.1 (skipping MiniMax)
+spec-mode: ⚠️ VC could not be made mechanism-free for AMSD-2041 after 2 cycle(s) — using conservative fallback VC. Last flags: VC 5 asserts the draft appears in the 'same position and rendered form' as the published entry — a mechanism-presuming cross-comparison; restate as the draft spec-mode: AMSD-2041 — 6 verification criteria persisted (source: both, resolution: regenerated)
+spec-mode: fast-path qwen/z-ai/glm-5.1 (skipping MiniMax)
+spec-mode: AMSD-2041 — ACs are immutable (VC model); openspec AC edits redacted, verification captured in verificationCriteria
+spec-mode: AMSD-2041 — 5 verification criteria persisted (source: description, resolution: regenerated)
+spec-mode: prd-change-reviewer REJECTED openspec's changes to AMSD-2041 after 3 attempt(s): Description describes concrete live-preview functionality but acceptanceCriteria is empty — ACs must be added to test the described real-timespec-mode: AMSD-2041 — 6 verification criteria persisted (source: description, resolution: regenerated)
+spec-mode: fast-path qwen/z-ai/glm-5.1 (skipping MiniMax)
+�� reverting
+spec-mode: fast-path qwen/z-ai/glm-5.1 (skipping MiniMax)
+spec-mode: fast-path qwen/z-ai/glm-5.2 (skipping MiniMax)
+spec-mode: fast-path qwen/z-ai/glm-5.2 (skipping MiniMax)
+spec-mode: LLM model review completed for 0 stories
+spec-mode: completed for phase core (run 20260729T015811Z)

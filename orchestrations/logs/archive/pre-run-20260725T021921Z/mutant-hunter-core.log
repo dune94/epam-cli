@@ -1,0 +1,52 @@
+```json
+{
+  "agent": "mutant-hunter",
+  "phase": "core",
+  "summary": {
+    "mutationsProposed": 4,
+    "killed": 4,
+    "survived": 0,
+    "noCoverage": 0,
+    "mutationScore": 100
+  },
+  "mutations": [
+    {
+      "file": "src/hello.ts",
+      "line": 2,
+      "originalCode": "return 'hello dolly';",
+      "mutatedCode": "return 'hello world';",
+      "status": "killed",
+      "relatedTest": "src/hello.test.ts: getGreeting returns the greeting 'hello dolly'",
+      "recommendation": "No action needed — test asserts exact return value and catches this mutation."
+    },
+    {
+      "file": "src/hello.ts",
+      "line": 2,
+      "originalCode": "return 'hello dolly';",
+      "mutatedCode": "return '';",
+      "status": "killed",
+      "relatedTest": "src/hello.test.ts: getGreeting returns the greeting 'hello dolly'",
+      "recommendation": "No action needed — empty-string mutation caught by strict toBe assertion."
+    },
+    {
+      "file": "src/hello.ts",
+      "line": 2,
+      "originalCode": "return 'hello dolly';",
+      "mutatedCode": "return 'HELLO DOLLY';",
+      "status": "killed",
+      "relatedTest": "src/hello.test.ts: getGreeting returns the greeting 'hello dolly'",
+      "recommendation": "No action needed — case-sensitivity mutation caught by toBe (strict equality)."
+    },
+    {
+      "file": "src/hello.ts",
+      "line": 2,
+      "originalCode": "return 'hello dolly';",
+      "mutatedCode": "if (true) return ''; return 'hello dolly';",
+      "status": "killed",
+      "relatedTest": "src/hello.test.ts: getGreeting returns the greeting 'hello dolly'",
+      "recommendation": "No action needed — early-return insertion caught by exact-value assertion."
+    }
+  ],
+  "verdict": "pass"
+}
+```

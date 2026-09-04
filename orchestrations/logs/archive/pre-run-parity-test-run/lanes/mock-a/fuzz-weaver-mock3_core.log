@@ -1,0 +1,10 @@
+```json
+{
+  "agent": "fuzz-weaver",
+  "phase": "mock3_core",
+  "summary": { "functionsAnalysed": 1, "fuzzCasesProposed": 0, "covered": 0, "gaps": 0, "vulnerabilities": 0 },
+  "cases": [],
+  "verdict": "not_applicable",
+  "reason": "The only changed function is getGreeting(), a zero-parameter constant-return function; no input domain exists to fuzz, and the change is a test assertion string update from 'hello world' to 'hello dolly'."
+}
+```

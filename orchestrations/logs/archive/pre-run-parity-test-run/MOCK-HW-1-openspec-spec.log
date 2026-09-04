@@ -1,0 +1,139 @@
+# Prompt
+You are the openspec specification agent for EPAM CLI. Phase core, story MOCK-HW-1.
+
+LOCATED FIX SITE(S) — traced in this repository before you were asked. Anchor every criterion to the behaviour THIS code produces:
+- src/hello.ts :: getGreeting — This function computes the greeting string that the ticket requires to change from 'hello world' to 'hello dolly'
+- src/hello.test.ts — This test asserts the return value of getGreeting; the assertion and test name must match the new return value
+
+
+DECLARED FILES — the actual contents of the files this story names or the detective located. Base every observable criterion on what THIS code does, not on what the title suggests:
+--- src/hello.ts
+export function getGreeting(): string {
+  return 'hello world';
+}
+
+--- src/hello.test.ts
+import { describe, it, expect } from 'vitest';
+import { getGreeting } from './hello';
+
+describe('getGreeting', () => {
+  it('returns hello world', () => {
+    expect(getGreeting()).toBe('hello world');
+  });
+});
+
+
+
+BROWNFIELD MODE — answer as JSON.
+You MAY use read_file on any path named in this prompt (declared files, located fix sites, and any
+document persisted under the run's docs/ directory) when you need more than the excerpt shown.
+Looking is allowed; inventing is not — a file you have neither been shown nor read is a fabrication.
+
+STEP 1 — CLASSIFY THIS STORY. Set "storyKind":
+- "defect" if it reports that EXISTING behavior is wrong, broken, or produces an incorrect/missing result (a bug).
+- "novel" if it asks for a NEW capability that does not exist in the codebase yet. A brownfield story is not always a bug — genuinely new work is "novel".
+
+STEP 2 — LOCATE (always, for both kinds — but the question differs).
+Use ONLY the EXISTING CODE block already present in this prompt (injected above via CodeGraph or Semble).
+
+- If storyKind is "defect": find the FIX SITE — the file/function that COMPUTES the wrong value, not the one that displays it.
+- If storyKind is "novel": there is no fix site, and inventing one produces a confident wrong answer. Find the ATTACHMENT POINT instead — the existing file/function this new capability plugs INTO (the provider, hook, route, config or component it must integrate with), plus anything already present that the implementation should REUSE rather than rewrite. This is what keeps the change as small as possible: you cannot reuse what you have not found.
+
+Set "locationHint" to [{"file":"<repo-relative path>","function":"<function name>","reason":"<why this location — the fix site for a defect, the attachment point for a novel story>"}].
+If no relevant code appears above, set locationHint to []. Do NOT invent a plausible file: a named file whose contents you cannot see in this prompt is a fabrication, and an empty locationHint is a usable answer while a fabricated one is not.
+
+For EACH criterion also declare WHO observes it (end user, tester, api client, operator) and
+WHAT SURFACE they look at — the rendered page, the API response, the CLI output, a generated
+file. If no person or client can see it, it is not a verification criterion. A precondition
+the test establishes (for example a mocked client signalling a change) goes in "setup": that
+is allowed and is not implementation prescription.
+
+STEP 3 — VERIFICATION CRITERIA.
+PRODUCE a "verificationCriteriaDetail" array — concrete, OBSERVABLE checks that confirm the change is correct — derived from the description. Apply these rules to EVERY verification criterion (a strict reviewer holds you to this SAME text, so a VC that breaks any rule will be flagged and rejected):
+A verification criterion states WHAT AN END USER OR TESTER OBSERVES on the user-facing surface THE TICKET IS ABOUT — the rendered output for an output ticket, the displayed screen for a UI ticket, the response a CLIENT receives for an API ticket. It is a BLACK-BOX check on that surface. It NEVER describes HOW the value is produced.
+A verification criterion is FORBIDDEN if it:
+- prescribes HOW to implement — any algorithm, mechanism, approach, or the addition/reading of any new field, flag or service;
+- references an INTERNAL structure that merely FEEDS the ticket's surface — an intermediate payload, a data-transfer object, or a specific response field used to BUILD the output. Verify the surface the ticket names, NOT the data structure behind it;
+- makes a CROSS-COMPARISON that presumes a mechanism — never assert one value "must equal" / "matches" / "is the same as" another; that presumes a shared derivation. Assert the required value is present and correct ON ITS OWN.
+Every verification criterion must be observable, testable, and tied to the ticket's stated symptom/intent.
+- If the ticket describes a SYMPTOM, the VCs verify that symptom is resolved AND that related existing behavior does not regress.
+Set "vcSource" to one of "description", "both" — where you actually derived the VCs from.
+
+Generate refined acceptance criteria and optionally updated title/description. Output raw JSON only (no XML tags, no markdown fences, no preamble) using this schema:
+{
+  "storyId":"MOCK-HW-1",
+  "agent":"openspec",
+  "notes":"context",
+  "acceptanceCriteria":["..."],
+  "description":"...",
+  "title":"...",
+  "storyKind":"defect|novel",
+  "verificationCriteriaDetail":[{"criterion":"<observable check>","observer":"end user|tester|api client|operator","surface":"<what they look at>","setup":"<optional precondition, e.g. a mocked client signalling a change>"}],
+  "vcSource":"description|both",
+  "locationHint":[{"file":"path/relative/to/repo","function":"functionName","reason":"why this location — the fix site for a defect, the attachment point it integrates with for a novel story"}]
+}
+Use existing text when no change is needed.
+
+Story context:
+{
+  "id": "MOCK-HW-1",
+  "title": "getGreeting should return hello dolly",
+  "description": "The getGreeting() function in this codebase currently returns the string 'hello world'. It should instead return 'hello dolly'. Update any test that asserts the old value to match the new one. The change is a one-line edit in src/hello.ts plus its test.",
+  "acceptanceCriteria": [],
+  "acCount": 0,
+  "agentRole": "greeting-source-engineer",
+  "agentGroup": "main",
+  "dependencies": [],
+  "splitDepth": 0
+}
+
+
+# Output
+{
+  "storyId": "MOCK-HW-1",
+  "agent": "openspec",
+  "notes": "Defect story: getGreeting() currently returns 'hello world' but must return 'hello dolly'. The fix site is src/hello.ts :: getGreeting (computes the value) and src/hello.test.ts (asserts the old value and must be updated to match).",
+  "acceptanceCriteria": [
+    "getGreeting() returns the string 'hello dolly'",
+    "The test suite passes with assertions matching the new return value 'hello dolly'",
+    "No test asserts the old value 'hello world'"
+  ],
+  "description": "The getGreeting() function in this codebase currently returns the string 'hello world'. It should instead return 'hello dolly'. Update any test that asserts the old value to match the new one. The change is a one-line edit in src/hello.ts plus its test.",
+  "title": "getGreeting should return hello dolly",
+  "storyKind": "defect",
+  "verificationCriteriaDetail": [
+    {
+      "criterion": "A caller invoking getGreeting() receives the string 'hello dolly'.",
+      "observer": "api client",
+      "surface": "the return value of getGreeting()"
+    },
+    {
+      "criterion": "Running the test suite, the tester sees all tests pass with no failures.",
+      "observer": "tester",
+      "surface": "test runner output"
+    },
+    {
+      "criterion": "The test named for getGreeting asserts that the return value is 'hello dolly'.",
+      "observer": "tester",
+      "surface": "test source and test runner output"
+    },
+    {
+      "criterion": "No assertion in the test suite expects the string 'hello world'.",
+      "observer": "tester",
+      "surface": "test source"
+    }
+  ],
+  "vcSource": "description",
+  "locationHint": [
+    {
+      "file": "src/hello.ts",
+      "function": "getGreeting",
+      "reason": "Fix site: this function computes the greeting string that must change from 'hello world' to 'hello dolly'."
+    },
+    {
+      "file": "src/hello.test.ts",
+      "function": "getGreeting test block",
+      "reason": "The test asserts the old return value 'hello world' and must be updated to assert 'hello dolly'."
+    }
+  ]
+}

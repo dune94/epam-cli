@@ -1,0 +1,179 @@
+=== Prompt for EPAM-049 (attempt 1) ===
+Implement user story EPAM-049: Backlog Bug — Disable Dead Default MCP Example Server
+
+## Story Description
+Remove or disable the default `example-server` MCP configuration that ships with the project when it is not backed by a reachable endpoint. The current REPL startup path emits a warning for an unreachable sample server, which creates noise during normal onboarding and POC demos even though the core CLI is functioning correctly.
+
+## Acceptance Criteria
+- The default project experience does not emit an MCP unreachable warning unless the user has explicitly configured a real remote MCP server
+- Sample or example MCP server entries are either removed from shipped defaults or marked disabled by default
+- If example MCP configuration is retained for documentation purposes, the CLI clearly distinguishes example entries from active runtime entries
+- REPL startup remains non-blocking when an explicitly user-configured MCP server is unreachable
+- Unit tests cover the default no-warning path and the warning path for an explicitly configured unreachable server
+
+## Technical Notes
+- files: [".mcp.json","src/mcp/McpClient.ts","src/cli/repl/Repl.ts","README.md"]
+- requiredSkills: ["typescript","mcp-protocol","cli-ux"]
+
+## Files to Create/Modify
+.mcp.json, src/mcp/McpClient.ts, src/cli/repl/Repl.ts, README.md
+
+## Dependencies
+EPAM-007
+
+## Instructions
+1. Implement all acceptance criteria for this story
+2. Follow the project's existing code patterns and conventions
+3. Create any necessary files in the locations specified
+4. Ensure code compiles/runs without errors
+5. Do NOT create tests unless explicitly required in acceptance criteria
+
+After implementation, provide a brief summary of what was created/modified.
+
+## Relevant Knowledge Base Entries
+No prior KB entries match your agent role yet.
+
+## Knowledge Base Contribution
+Your assigned KB entry ID for this run: **KB-008**
+
+If you discover a non-obvious pattern, gotcha, or anti-pattern during this implementation (or this is a retry), append exactly one entry to `orchestrations/agents/KB.md` using this format:
+
+```markdown
+## KB-008 -- 2026-06-01
+
+**Category:** <backend|frontend|infrastructure|testing|orchestration>
+**AgentRole:** <your agentRole from the story>
+**Tags:** <comma-separated tech keywords, e.g. typescript, node, cli>
+**Trigger:** <retry|first-success>
+**StoryRef:** EPAM-049
+
+<One concise paragraph: the specific pattern, gotcha, or anti-pattern. Precise enough that a future Claude instance can apply it without re-discovering it.>
+```
+
+Only write an entry if the knowledge is genuinely non-obvious. Skip trivial observations.
+=== End Prompt ===
+
+=== claude Output (attempt 1) ===
+API Error: 400 ExceededBudget: End User=bradley_jerome@epam.com_codemie_cli over budget. Spend=150.2407718350002, Budget=150.0
+
+=== claude exited with code 1 ===
+=== Prompt for EPAM-049 (attempt 2) ===
+Implement user story EPAM-049: Backlog Bug — Disable Dead Default MCP Example Server
+
+## Story Description
+Remove or disable the default `example-server` MCP configuration that ships with the project when it is not backed by a reachable endpoint. The current REPL startup path emits a warning for an unreachable sample server, which creates noise during normal onboarding and POC demos even though the core CLI is functioning correctly.
+
+## Acceptance Criteria
+- The default project experience does not emit an MCP unreachable warning unless the user has explicitly configured a real remote MCP server
+- Sample or example MCP server entries are either removed from shipped defaults or marked disabled by default
+- If example MCP configuration is retained for documentation purposes, the CLI clearly distinguishes example entries from active runtime entries
+- REPL startup remains non-blocking when an explicitly user-configured MCP server is unreachable
+- Unit tests cover the default no-warning path and the warning path for an explicitly configured unreachable server
+
+## Technical Notes
+- files: [".mcp.json","src/mcp/McpClient.ts","src/cli/repl/Repl.ts","README.md"]
+- requiredSkills: ["typescript","mcp-protocol","cli-ux"]
+
+## Files to Create/Modify
+.mcp.json, src/mcp/McpClient.ts, src/cli/repl/Repl.ts, README.md
+
+## Dependencies
+EPAM-007
+
+## Instructions
+1. Implement all acceptance criteria for this story
+2. Follow the project's existing code patterns and conventions
+3. Create any necessary files in the locations specified
+4. Ensure code compiles/runs without errors
+5. Do NOT create tests unless explicitly required in acceptance criteria
+
+After implementation, provide a brief summary of what was created/modified.
+
+## Relevant Knowledge Base Entries
+No prior KB entries match your agent role yet.
+
+## Knowledge Base Contribution
+Your assigned KB entry ID for this run: **KB-008**
+**This is retry attempt 1** — a previous attempt failed. You MUST write a KB entry documenting what went wrong and what you changed.
+
+If you discover a non-obvious pattern, gotcha, or anti-pattern during this implementation (or this is a retry), append exactly one entry to `orchestrations/agents/KB.md` using this format:
+
+```markdown
+## KB-008 -- 2026-06-01
+
+**Category:** <backend|frontend|infrastructure|testing|orchestration>
+**AgentRole:** <your agentRole from the story>
+**Tags:** <comma-separated tech keywords, e.g. typescript, node, cli>
+**Trigger:** <retry|first-success>
+**StoryRef:** EPAM-049
+
+<One concise paragraph: the specific pattern, gotcha, or anti-pattern. Precise enough that a future Claude instance can apply it without re-discovering it.>
+```
+
+Only write an entry if the knowledge is genuinely non-obvious. Skip trivial observations.
+=== End Prompt ===
+
+=== claude Output (attempt 2) ===
+API Error: 400 ExceededBudget: End User=bradley_jerome@epam.com_codemie_cli over budget. Spend=150.2407718350002, Budget=150.0
+
+=== claude exited with code 1 ===
+=== Prompt for EPAM-049 (attempt 3) ===
+Implement user story EPAM-049: Backlog Bug — Disable Dead Default MCP Example Server
+
+## Story Description
+Remove or disable the default `example-server` MCP configuration that ships with the project when it is not backed by a reachable endpoint. The current REPL startup path emits a warning for an unreachable sample server, which creates noise during normal onboarding and POC demos even though the core CLI is functioning correctly.
+
+## Acceptance Criteria
+- The default project experience does not emit an MCP unreachable warning unless the user has explicitly configured a real remote MCP server
+- Sample or example MCP server entries are either removed from shipped defaults or marked disabled by default
+- If example MCP configuration is retained for documentation purposes, the CLI clearly distinguishes example entries from active runtime entries
+- REPL startup remains non-blocking when an explicitly user-configured MCP server is unreachable
+- Unit tests cover the default no-warning path and the warning path for an explicitly configured unreachable server
+
+## Technical Notes
+- files: [".mcp.json","src/mcp/McpClient.ts","src/cli/repl/Repl.ts","README.md"]
+- requiredSkills: ["typescript","mcp-protocol","cli-ux"]
+
+## Files to Create/Modify
+.mcp.json, src/mcp/McpClient.ts, src/cli/repl/Repl.ts, README.md
+
+## Dependencies
+EPAM-007
+
+## Instructions
+1. Implement all acceptance criteria for this story
+2. Follow the project's existing code patterns and conventions
+3. Create any necessary files in the locations specified
+4. Ensure code compiles/runs without errors
+5. Do NOT create tests unless explicitly required in acceptance criteria
+
+After implementation, provide a brief summary of what was created/modified.
+
+## Relevant Knowledge Base Entries
+No prior KB entries match your agent role yet.
+
+## Knowledge Base Contribution
+Your assigned KB entry ID for this run: **KB-008**
+**This is retry attempt 2** — a previous attempt failed. You MUST write a KB entry documenting what went wrong and what you changed.
+
+If you discover a non-obvious pattern, gotcha, or anti-pattern during this implementation (or this is a retry), append exactly one entry to `orchestrations/agents/KB.md` using this format:
+
+```markdown
+## KB-008 -- 2026-06-01
+
+**Category:** <backend|frontend|infrastructure|testing|orchestration>
+**AgentRole:** <your agentRole from the story>
+**Tags:** <comma-separated tech keywords, e.g. typescript, node, cli>
+**Trigger:** <retry|first-success>
+**StoryRef:** EPAM-049
+
+<One concise paragraph: the specific pattern, gotcha, or anti-pattern. Precise enough that a future Claude instance can apply it without re-discovering it.>
+```
+
+Only write an entry if the knowledge is genuinely non-obvious. Skip trivial observations.
+=== End Prompt ===
+
+=== claude Output (attempt 3) ===
+API Error: 400 ExceededBudget: End User=bradley_jerome@epam.com_codemie_cli over budget. Spend=150.2407718350002, Budget=150.0
+
+=== claude exited with code 1 ===

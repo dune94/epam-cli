@@ -1,0 +1,10 @@
+[0;35m[CPA][0m Retrieval: TF-IDF
+[0;36m[18:40:16][0m Loading stories from orch-mockhelloworld-prd-706231.json...
+[0;36m[18:40:16][0m Found 1 stories to contextualize
+
+[0;35m[CPA][0m Processing MOCK-HW-1...
+[0;35m[CPA][0m   MOCK-HW-1: formula baseline from calibration[low:implementation:cli](n=29): 4.5178418971594745min $0.1404333618569382
+[1mMOCK-HW-1[0m  Hello world greeting should say hello dolly  [0;32m[PASS][0m
+  Machine time:              4.52 min  →      2.26 min  (conf: 0.90, adj: 0.50x)
+  Cost (story):          $0.1404     →  $0.0351   
+  Escalation:            +$0.4449      (r2@15%=+$0.1650 r3@5%=+$0.2210 k3@1.0%=+$0.0589)

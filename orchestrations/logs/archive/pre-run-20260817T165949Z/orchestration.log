@@ -1,0 +1,53 @@
+[mint-step] codeline mocka: /home/bradleyjerome/projects/mock3/mock-a (2 declared deps)
+[mint-step] codeline mockb: /home/bradleyjerome/projects/mock3/mock-b (2 declared deps)
+[mint-step] plugins provisioned: 1 · mint tools: read_file,list_files,search,codegraph_query
+spec-mode: fast-path qwen/z-ai/glm-5.2 (skipping MiniMax)
+[mint-step]   survey: mocka — in_scope (src/fares.ts)
+[mint-step]   survey: mockb — in_scope (src/fares.ts)
+[mint-step]   survey recommends an investigator for mocka: MOCK3-1 fare boundary bug in `fareFor` (src/fares.ts line 10: `> 65` should be `>= 65`). Add a test for age exactly 65.
+[mint-step]   survey recommends an investigator for mockb: MOCK3-1 fare boundary bug in `fareFor` (src/fares.ts line 10: `> 65` should be `>= 65`). Same logic as mocka.
+spec-mode: fast-path qwen/z-ai/glm-5.2 (skipping MiniMax)
+spec-mode: fast-path qwen/z-ai/glm-5.2 (skipping MiniMax)
+[mint-step] proposed=5 minted=3 unchanged=0 rejected=1 superseded=0 UNACCOUNTED=1
+[mint-step]   + [implementer] fare-logic-engineer (profiles.json, kb, project-roles, project-profiles) — MOCK3-1 requires fixing an off-by-one boundary comparison in TypeScript fare logic shared across both codelines, so a single implementer who knows the fare module and its conventions can fix it consistently.
+[mint-step]   + [implementer] departure-board-engineer (profiles.json, kb, project-roles, project-profiles) — MOCK3-2 requires fixing a stop-formatting function that omits the last stop in a departure board, which is a distinct domain from fare calculation and needs its own implementer who knows the rendering module.
+[mint-step]   + [investigator:mocka] mocka-codebase-investigator (profiles.json, kb, project-investigators, project-profiles) — Each codeline needs an investigator who knows its repository layout, dependencies, and conventions so that implementers receive accurate guidance rather than survey guesses.
+[mint-step]   ! no investigator minted for codeline "mockb" — it will use the canonical detective
+[mint-step]   ! refused mockb-codebase-investigator: brief names 1 path(s) that do not exist in codeline 'mockb': src/fares.ts
+spec-mode: fast-path qwen/z-ai/glm-5.2 (skipping MiniMax)
+[mint-step] roster review (cycle 1): sound — 0 finding(s), 0 blocking
+spec-mode: fast-path qwen/z-ai/glm-5.2 (skipping MiniMax)
+[mint-step]   MOCK3-1 -> fare-logic-engineer (MOCK3-1 is a fare-calculation boundary bug in src/fares.ts — fareFor uses `rider.age > 65` on line 10, excluding riders aged exactly 65 from the concession fare. The fare-logic-engineer role explicitly names MOCK3-1, src/fares.ts, and the `> 65` → `>= 65` fix. It is the only role that edits fare logic.)
+[mint-step]   MOCK3-2 -> departure-board-engineer (MOCK3-2 is a departure-board rendering bug where formatStops omits the last stop while totalMinutes is correct. The departure-board-engineer role explicitly names MOCK3-2, formatStops, and totalMinutes. It is the only role that edits departure-board rendering. (formatStops was not found in mock-a/src, confirming the story is scoped to mockb.))
+[mint-step] roster diff: 3 generated, 0 brief-changed, 0 missing vs canonical
+[mint-step] agent→seam cross-reference written for 56 agent(s)
+[mint-step] ✓ workflow is buildable: every required input has a producer
+[prompt-builder] 51 template(s) need a project copy (seam-declared, plus bootstrap auxiliaries)
+[prompt-builder] 17 template(s) are engine-layer and are not provisioned — nothing would ever read a project copy: change-reviewer, cpa-system, detective-retry-note, guard-vocabulary-codegraph, guard-vocabulary-documentation, manifest-analysis, prd-change-reviewer-spec, prd-change-summarizer-tool, prd-generation, spec-agent-speckit, spec-agent-speckit-refine, spec-coordinator-review, spec-model-review, story-kind-hint-defect, story-kind-hint-other, vc-regenerate, vc-review
+[prompt-builder] copied agent-proposal
+[prompt-builder] copied project-prompt-generation
+[prompt-builder] generated team-lead-review (attempt 1/3)
+[prompt-builder] generated code-review-cycle (attempt 1/3)
+[prompt-builder] generated failure-analyst (attempt 1/3)
+[prompt-builder] generated repro-test-writer (attempt 1/3)
+[prompt-builder] generated tc-writer (attempt 1/3)
+[prompt-builder] generated cpa-inference (attempt 1/3)
+[prompt-builder] generated prd-change-reviewer (attempt 1/3)
+[prompt-builder] generated prd-change-summarizer-text (attempt 1/3)
+[prompt-builder] generated ac-classification (attempt 1/3)
+[prompt-builder] generated ac-elaboration (attempt 1/3)
+[prompt-builder] generated codeline-discovery (attempt 1/3)
+[prompt-builder] generated roster-review (attempt 1/3)
+[prompt-builder] generated code-graph-detective (attempt 1/3)
+[prompt-builder] generated guard-vocabulary (attempt 1/3)
+[prompt-builder] generated estate-survey (attempt 1/3)
+[prompt-builder] generated story-writer (attempt 1/3)
+[prompt-builder] generated vc-coverage (attempt 1/3)
+[prompt-builder] generated qa-sast-sentinel (attempt 1/3)
+[prompt-builder] generated qa-spec-validator (attempt 1/3)
+[prompt-builder] generated qa-review-ranger (attempt 1/3)
+[prompt-builder] generated qa-mutant-hunter (attempt 1/3)
+[prompt-builder] generated qa-fuzz-weaver (attempt 1/3)
+[prompt-builder] generated qa-perf-sentinel (attempt 1/3)
+[prompt-builder] generated codeline-bridge (attempt 1/3)
+[prompt-builder] generated e2e-route-check (attempt 1/3)

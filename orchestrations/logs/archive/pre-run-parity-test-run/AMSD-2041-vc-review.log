@@ -1,0 +1,30 @@
+# Prompt
+You are a STRICT verification-criteria reviewer for a brownfield fix. REVIEW ONLY — do NOT rewrite anything.
+
+Acceptance criteria (IMMUTABLE ticket intent):
+- (none)
+Description: Original Requirements (discovery)  AS a Content Author, I WANT to preview draft entries in CMS, SO THAT I can see how content will be shown on the website
+ability to preview draft entries in CMS
+Notes& Assumptions  Limitation: Might not be possible to preview protected pages and content.
+Original Total Estimate:  8  Original FE Estimate:  8  Original DAM Estimate:  0  Original BE Estimate:  0
+
+Proposed verification criteria:
+1. When a Content Author opens a draft entry in the CMS live preview panel, the website page renders and displays the draft version of that entry's content fields.
+2. When a Content Author modifies a field value on a draft entry in the CMS, the preview surface updates to show the modified value without requiring the entry to be published.
+3. When a Content Author views the live preview for a draft entry, the page displays content that includes unpublished changes, distinct from what the published version of the same entry shows.
+4. When a Content Author navigates to a different draft entry in the CMS, the preview surface renders the content of the newly selected draft entry.
+5. When a Content Author has the live preview open, the preview session remains connected and continues to render draft content for the selected entry throughout the editing session.
+
+Apply these rules EXACTLY (the producer is held to the same text — do not invent stricter or looser criteria):
+A verification criterion states WHAT AN END USER OR TESTER OBSERVES on the user-facing surface THE TICKET IS ABOUT — the rendered output for an output ticket, the displayed screen for a UI ticket, the response a CLIENT receives for an API ticket. It is a BLACK-BOX check on that surface. It NEVER describes HOW the value is produced.
+A verification criterion is FORBIDDEN if it:
+- prescribes HOW to implement — any algorithm, mechanism, approach, or the addition/reading of any new field, flag or service;
+- references an INTERNAL structure that merely FEEDS the ticket's surface — an intermediate payload, a data-transfer object, or a specific response field used to BUILD the output. Verify the surface the ticket names, NOT the data structure behind it;
+- makes a CROSS-COMPARISON that presumes a mechanism — never assert one value "must equal" / "matches" / "is the same as" another; that presumes a shared derivation. Assert the required value is present and correct ON ITS OWN.
+Every verification criterion must be observable, testable, and tied to the ticket's stated symptom/intent.
+
+FLAG any verification criterion that violates ANY rule above, OR that fails to cover the intent of an acceptance criterion.
+Output ONLY a JSON array of short flag strings, e.g. ["VC 2 prescribes halving — restate as observable outcome"]. Output [] if every VC is clean. No prose, no markdown.
+
+# Output
+["VC 3 cross-compares draft preview with published version — presumes shared derivation mechanism; restate as observable content on its own", "VC 5 references internal 'session remains connected' — describes mechanism, not user-facing observation; restate as what the user sees on the preview surface"]

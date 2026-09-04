@@ -1,0 +1,21 @@
+[0;36m[GATE][0m Checking phase gate for: core
+
+[0;36m[GATE][0m Check 0: Review status...
+[0;32m[PASS][0m All stories have approved review status (or no review required)
+
+[0;36m[GATE][0m Check 1: Story completion...
+[0;32m[PASS][0m All 1 stories completed
+
+[0;36m[GATE][0m Check 2: Deliverable presence...
+[0;32m[PASS][0m Deliverables assumed present (all stories complete)
+
+[0;36m[GATE][0m Check 3: Test execution...
+[1;33m[WARN][0m Test execution skipped (SKIP_TESTS=true)
+
+[0;36m[GATE][0m Check 4: Cost variance (warn>=30%, escalate>=150%)...
+[0;32m[PASS][0m Cost variance: -93.00% (within warn threshold 30%)
+
+[0;36m[GATE][0m Phase Gate Decision...
+
+[0;32m[PASS][0m Decision: GO - All criteria met, proceed to next phase
+[0;36m[GATE][0m Decision logged to /home/bradleyjerome/projects/ai/epam-cli/orchestrations/logs/phase-gates.jsonl

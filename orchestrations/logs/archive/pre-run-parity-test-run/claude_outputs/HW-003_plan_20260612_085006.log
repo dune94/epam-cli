@@ -1,0 +1,6 @@
+I'll help you create an execution-ready plan for story HW-003. First, I need to read the PRD file to understand the full details of this story.
+
+```bash
+cat /home/bradleyjerome/projects/ai/epam-cli/orchestrations/prd.json
+```
+

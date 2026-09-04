@@ -1,0 +1,119 @@
+=== Prompt for SKY-003-a (attempt 1) ===
+CRITICAL — WRITE FILES FIRST. Your FIRST tool call MUST be WriteFile.
+Do NOT output any text before calling WriteFile. Do NOT plan or say "I will...".
+Call WriteFile NOW for the EXACT ABSOLUTE PATHS listed below:
+
+   - WRITE /home/bradleyjerome/projects/skyscanner-app/src/cli.ts first, before any other action
+---
+
+Implement user story SKY-003-a: Implement flight search CLI entry point with formatted table output
+
+## Story Description
+Create `src/cli.ts` — a standalone Node entry point that accepts flight search arguments via `process.argv` and prints results as an aligned table. Parse flags manually (no commander, no yargs, zero new runtime deps). Require `RAPIDAPI_KEY` env var; exit 1 with a human-readable message if absent. Instantiate `SkyscannerClient` from `src/skyscanner/client.ts` (SKY-002), call `searchFlights` forwarding all parsed arguments including adults count, and render results in a dynamically-padded table with columns: Airline | Price | Departure | Arrival | Duration | Stops. Column widths are determined by the widest value in each column (including the header). A separator row of hyphen characters must appear between the header and data rows. Price is right-aligned and prefixed with the currency symbol returned by the API (default £ if absent); all other columns are left-aligned. If no flights are returned print `No flights found.` and exit 0. On any thrown error print the message to stderr and exit 1. The compiled output must be invokable as `node dist/cli.js ...` after `tsc`; `tsconfig.json` must have `outDir` set to `dist` and emit CommonJS-compatible output.
+
+## Acceptance Criteria
+- `src/cli.ts` exists and `tsc --noEmit` reports zero errors; `tsconfig.json` sets `outDir` to `dist` and emits CommonJS-compatible output invocable as `node dist/cli.js`
+- Flags `--from`, `--to`, `--date` are all required; if any is absent the CLI prints a usage hint to stderr (showing correct flag names) and exits with code 2
+- The `--date` flag value must match `YYYY-MM-DD`; an invalid format causes exit code 2 with a human-readable message to stderr before any network call
+- Optional `--adults` flag defaults to 1 when omitted; a non-integer, ≤ 0, or non-numeric value causes exit code 2 with a human-readable message to stderr; the parsed value is forwarded to `SkyscannerClient.searchFlights`
+- If `RAPIDAPI_KEY` env var is unset or empty, CLI prints 'Error: RAPIDAPI_KEY environment variable is required' to stderr and exits 1 before any network call
+- When `searchFlights` resolves with results, stdout contains a header row (Airline, Price, Departure, Arrival, Duration, Stops), a separator row of hyphens matching each column width, and one data row per result; columns padded to the widest value in that column (including header); all columns left-aligned except Price which is right-aligned; Price prefixed with currency symbol from API (fallback £ if absent)
+- When `searchFlights` resolves with an empty array, stdout contains exactly `No flights found.` and process exits 0; when `searchFlights` rejects, the error message is written to stderr, stdout is empty, and process exits 1
+- No runtime dependency other than Node built-ins and packages already in `package.json` (from SKY-001/SKY-002) is added
+
+
+
+
+
+## Technical Notes
+- files: ["/home/bradleyjerome/projects/skyscanner-app/src/cli.ts"]
+- dependsOn: ["SKY-002"]
+
+## Files to Create/Modify (EXACT ABSOLUTE PATHS — write to these paths exactly)
+/home/bradleyjerome/projects/skyscanner-app/src/cli.ts
+
+## Dependencies
+SKY-002
+
+
+## Instructions
+**CRITICAL — WRITE FILES FIRST:**
+   - WRITE /home/bradleyjerome/projects/skyscanner-app/src/cli.ts first, before any other action
+**You MUST write every file listed above to its EXACT absolute path. Do NOT write to a different path, do NOT write to the current directory unless it matches the path above. Use your WriteFile or Edit tools with the full absolute path shown.**
+
+1. Write each required file to its exact absolute path listed above — do this FIRST before anything else
+2. Implement all acceptance criteria for this story
+3. Follow the project's existing code patterns and conventions
+4. Do NOT create tests unless explicitly required in acceptance criteria
+
+After implementation, provide a brief summary of what was created/modified.
+
+## Relevant Knowledge Base Entries
+The following was learned from previous story implementations and is relevant to your agent role. Apply this knowledge before writing any code:
+
+- [2026-07-06T17:45:30Z] Always resolve mocked fetch calls to a Response-shaped object with ok, status, statusText, and a json method returning a Promise.
+- [2026-07-06T17:50:20Z] Use valid module and moduleResolution pairs in tsconfig.json: CommonJS with Node, Node16 with Node16, ESNext with Bundler. Use CommonJS and Node for the stack. Mismatched pairs cause build errors.
+- [2026-07-06T18:11:26Z] Use vi.fn().mockResolvedValue(value) to make a mock return a resolved Promise.
+- [2026-07-06T20:31:11Z] Use `test: { passWithNoTests: true }` in vitest.config.ts or create a stub test file when no *.test.ts files exist.
+- [2026-07-06T20:33:03Z] Enable globals:true in vitest.config.ts so describe, it, and expect work without imports, reducing boilerplate in test files.
+- [2026-07-06T23:47:34Z] Use CommonJS-compatible patterns in src/server.ts: avoid `import.meta.url` and top-level `await`; gate listen with `if (require.main === module)`.
+- [2026-07-07T02:35:30Z] Always include a non-test source file in src/ alongside any src/*.test.ts file, since tsconfig.json excludes test files from tsc --noEmit.
+- [2026-07-07T19:01:34Z] Only modify or create files explicitly listed in the story's acceptance criteria. Do not touch files belonging to other stories or outside the current task scope.
+- [2026-07-07T20:17:57Z] [unreviewed-fallback] Avoid using deprecated TypeScript compiler options like 'moduleResolution=node10'; use 'moduleResolution=node' instead.
+- [2026-07-17T20:20:58Z] Always: Before importing a module or referencing a type/property, always read the actual source file to verify the export exists, its exact path, its properties, and its constructor/factory signatures
+
+## Knowledge Base Contribution (do this LAST — after writing all implementation files)
+Your assigned KB entry ID for this run: **KB-008**
+
+IMPORTANT: Write ALL implementation files first. Only AFTER writing every required file should you optionally append a KB entry.
+Do NOT read orchestrations/agents/KB.md before writing implementation files. The relevant KB entries are already injected above.
+
+If (and only if) you discover a non-obvious pattern during implementation, append one entry to `orchestrations/agents/KB.md`:
+
+```markdown
+## KB-008 -- 2026-07-17
+
+**Category:** <backend|frontend|infrastructure|testing|orchestration>
+**AgentRole:** <your agentRole from the story>
+**Tags:** <comma-separated tech keywords, e.g. typescript, node, cli>
+**Trigger:** <retry|first-success>
+**StoryRef:** SKY-003-a
+
+<One concise paragraph: the specific pattern, gotcha, or anti-pattern.>
+```
+
+Only write an entry if the knowledge is genuinely non-obvious. Skip trivial observations.
+
+## Available Dynamic Tools
+This project has the following helper scripts, written by prior self-healing runs. Use them via the bash tool instead of repeating the equivalent steps by hand:
+
+- `bash /home/bradleyjerome/projects/skyscanner-app/.epam/dynamic-tools/ensure-tsc.sh <args>` — Ensure typescript is installed as a devDependency before running tsc --noEmit.
+
+## Execution Plan
+Follow this plan step by step:
+[1;33m[WARNING][0m   PlanReview: mismatch detected for SKY-003-a against dependency contracts — one corrective re-plan
+1. Read `/home/bradleyjerome/projects/skyscanner-app/src/cli.ts` (if exists), `package.json`, `tsconfig.json`, and the `SkyscannerClient` source (e.g. `src/skyscanner-client.ts` or similar) to confirm the `searchFlights` method signature, result shape (fields for airline, price, currency, departure, arrival, duration, stops), and existing TypeScript conventions.
+
+2. Create `/home/bradleyjerome/projects/skyscanner-app/src/cli.ts` with a `main(args: string[], env: NodeJS.ProcessEnv): Promise<number>` function that parses flags manually from `args` (no new deps): `--from`, `--to`, `--date`, `--adults` (optional, default `1`).
+
+3. In `main`, validate required flags first: if any of `--from`, `--to`, `--date` is missing, print a usage hint listing all flag names to `stderr` and return `2`. Validate `--date` against `/^\d{4}-\d{2}-\d{2}$/`; on mismatch print a human-readable message to `stderr` and return `2`. Validate `--adults`: parse with `Number`/`parseInt`, reject non-integer, `≤ 0`, or `NaN`; on failure print a human-readable message to `stderr` and return `2`.
+
+4. Before any network call, check `env.RAPIDAPI_KEY`; if unset or empty, write `Error: RAPIDAPI_KEY environment variable is required` to `stderr` and return `1`.
+
+5. Instantiate `SkyscannerClient` (using `RAPIDAPI_KEY` from env) and call `searchFlights({ from, to, date, adults })` inside a `try/catch`. On rejection, write the error message to `stderr` (ensure nothing is written to `stdout`) and return `1`.
+
+6. On resolve with an empty array, write exactly `No flights found.` to `stdout` and return `0`.
+
+7. On resolve with results, build a table: header row `["Airline", "Price", "Departure", "Arrival", "Duration", "Stops"]`; compute max column width per column (including header and all data rows); format each row with space-padded columns — left-aligned for all except Price (right-aligned); prefix Price with the currency symbol from the API result (fallback `£` if absent); insert a separator row of hyphens matching each column width after the header. Write the full table to `stdout` and return `0`.
+
+8. Add a bottom-level entry block: `if (require.main === module) { main(process.argv.slice(2), process.env).then(code => process.exit(code)); }` so `node dist/cli.js` works after `tsc` emits to `dist`.
+
+9. Run `npx tsc --noEmit` and fix any type errors; then run `npx tsc` and execute `node dist/cli.js --from LHR --to JFK --date 2025-01-01` (with and without `RAPIDAPI_KEY`) plus missing-flag and invalid-date/adults cases to verify exit codes, stderr/stdout content, and table formatting against every acceptance criterion.
+=== End Prompt ===
+
+=== epam Output (attempt 1) ===
+I see the `SkyscannerClient` uses different parameter names (`origin`, `destination`) than what I used (`from`, `to`). Let me update the CLI to match the actual API:
+  [tc-writer] No test stories need TCs in phase 'unknown' — skipping
+I see the `SkyscannerClient` uses different parameter names (`origin`, `destination`) than what I used (`from`, `to`). Let me update the CLI to match the actual API:
+
+=== End epam Output ===

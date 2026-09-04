@@ -1,0 +1,10 @@
+```json
+{
+  "agent": "fuzz-weaver",
+  "phase": "mock3_core",
+  "summary": { "functionsAnalysed": 1, "fuzzCasesProposed": 0, "covered": 0, "gaps": 0, "vulnerabilities": 0 },
+  "cases": [],
+  "verdict": "not_applicable",
+  "reason": "The only changed function getGreeting() takes no parameters and returns a hardcoded string — there is no input surface to fuzz, no config parsing, no billing logic, no path handling, and no auth parsing."
+}
+```

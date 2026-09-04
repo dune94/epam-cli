@@ -1,0 +1,20 @@
+The plan is complete and the log entry has been written atomically. Here's a summary:
+
+---
+
+## Plan Summary for SKY-003-test
+
+**Deliverable:** Create `/home/bradleyjerome/projects/skyscanner-app/src/cli.test.ts` with ≥9 vitest tests (target: 13) covering all CLI behaviors specified in SKY-003's 15 acceptance criteria.
+
+**Key findings:**
+
+1. **Implementation is in place** — `src/cli.ts` exists, compiles cleanly, and handles arg parsing, env-var guard, table rendering, and error handling. The `SkyscannerClient` dependency (SKY-002) is complete with 21 passing tests.
+
+2. **Critical defect (R-1):** The separator row in `cli.ts` uses `'-+-'` as the join delimiter, but all ACs require ` | ` (space-pipe-space). This must be fixed in the impl story before AC-8/AC-13(7) tests can pass. Escalation was attempted but the tool requires pipeline context — the defect is documented in the plan for the test engineer to flag.
+
+3. **Test execution challenges (R-2, R-3):** `cli.ts` calls `process.exit()` directly and invokes `main()` at module load. Tests must mock `process.exit` (via `vi.spyOn`) and control `process.argv`/`process.env` in `beforeEach` to prevent premature termination.
+
+4. **Effort:** Adjusted from 15h → **12h** since only test creation is needed (impl is done).
+
+5. **Regression risk:** None — existing 33 tests (client + server) are independent of CLI code.
+

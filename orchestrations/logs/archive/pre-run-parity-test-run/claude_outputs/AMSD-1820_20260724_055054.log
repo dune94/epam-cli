@@ -1,0 +1,923 @@
+=== Prompt for AMSD-1820 (attempt 1) ===
+CRITICAL — these files already exist. Their real content is injected below (## Existing File Contents) — you do NOT need to ReadFile them to see what's already there.
+Do NOT import or reference anything that doesn't appear in the injected content below — a plausible-sounding module name is not a real one.
+Only call ReadFile yourself if you need to see MORE of a file than what's shown (e.g. it was truncated), or a file not listed below.
+
+   - /home/bradleyjerome/projects/metrolinx/azure.commerce.cdts/src/services/submit-reservations/apply-report-discounts.service.ts (content already injected below — do not ReadFile it unless you need lines beyond what's shown)
+   - /home/bradleyjerome/projects/metrolinx/azure.commerce.cdts/src/clients/mozio/mappers/map-to-sanitized-mozio-dispatch.ts (content already injected below — do not ReadFile it unless you need lines beyond what's shown)
+   - /home/bradleyjerome/projects/metrolinx/azure.commerce.cdts/src/clients/mozio/mappers/map-to-sanitized-mozio-dispatch-customer.ts (content already injected below — do not ReadFile it unless you need lines beyond what's shown)
+   - /home/bradleyjerome/projects/metrolinx/azure.commerce.cdts/src/services/process-order/process-zero-amount-order.service.ts (content already injected below — do not ReadFile it unless you need lines beyond what's shown)
+   - /home/bradleyjerome/projects/metrolinx/azure.commerce.cdts/src/services/order-staff-notes/generate-staff-notes-on-error.service.ts (content already injected below — do not ReadFile it unless you need lines beyond what's shown)
+---
+
+Implement user story AMSD-1820: [Mozio] - The Promo code amount is NOT displayed as expected for Return trip tickets in the Mozio email confirmation
+
+## Story Description
+[Mozio] - The Promo code amount is NOT displayed as expected for Return trip tickets in the Mozio email confirmation
+
+## Acceptance Criteria
+- Given a customer purchases a return trip ticket with a promo code applied, when the Mozio email confirmation is generated, then the promo code discount amount is displayed for BOTH the outbound trip and the return trip, with each leg showing its proportional share of the total promo discount.
+- Given a customer purchases a one-way trip with a promo code, when the Mozio email confirmation is generated, then the promo code discount amount continues to display correctly for the single trip (regression check).
+- Given a return trip with a promo code where the discount amount is zero, when the Mozio email confirmation is generated, then the email does not show a negative value, NaN, or undefined value for the promo amount on either leg.
+- Given a return trip with a promo code, when the email confirmation is rendered, then the sum of the discount amounts shown across both legs equals the total promo code discount value applied at checkout.
+- Given a return trip with a promo code discount that results in a fractional-cent amount when split across legs (e.g., $5.01 total discount), when the Mozio email confirmation is generated, then the discount amounts for each leg are displayed with proper currency precision and the sum of both legs still equals the original total discount.
+- Given a return trip ticket where the promo discount data is missing or undefined in the report, when the Mozio email confirmation is generated, then the email displays a zero discount for each leg rather than crashing or rendering an error placeholder.
+- Given a return trip ticket with a promo code applied, when the discount is split across outbound and return legs, then neither leg displays a discount amount greater than the total promo discount applied at checkout.
+
+
+## Root Cause Analysis & Prescribed Fix (AUTHORITATIVE — start here, do not re-trace)
+A code investigation already traced this bug to its cause and prescribed the minimal fix below. This is the plan of record. Apply it; do NOT re-read the whole codebase to re-derive it.
+
+The Acceptance Criteria above describe the desired END BEHAVIOR to VERIFY — they are NOT an implementation blueprint. Do not re-architect, split values, or add new fields/abstractions to satisfy an AC literally when the prescribed minimal fix already makes that AC pass. Implement the fix below; the ACs are how you check you got it right.
+
+HARD RULES:
+- Make the SMALLEST change that fixes the root cause. Fewer lines of code is always better.
+- REUSE existing functions. Before writing any new helper, search the repo for an existing util/parser/formatter that already does what you need (use the CodeGraph tool documented below) and call it. Writing novel code when a helper already exists is a defect to be rejected in review.
+- **src/services/submit-reservations/apply-report-discounts.service.ts** (`getUniqDiscounts`): This function constructs the lineItemId key for each discount from OrderLineItems. The matching logic in applyReportDiscountsService (lines 17-27) parses both discount.lineItemId and dispatch lineItem.id via parseDispatchLineItemKey and compares BOTH id AND isReturn. The dispatch lineItem.id values are built by getDispatchLineItemKey (which appends '#return' for return trips), but getUniqDiscounts likely does NOT use getDispatchLineItemKey when constructing discount.lineItemId — so return-trip discounts get isReturn=false after parsing, causing the match on line 25 (parsedLineItem.isReturn === parsedDiscount.isReturn) to fail for return trips. This is why promo amounts appear for outbound but not return legs.
+  - **Minimal fix:** In getUniqDiscounts, when constructing the lineItemId for each LineItemDiscount, use getDispatchLineItemKey(lineItem.id, lineItem.isReturn) instead of just lineItem.id, so that return-trip discounts carry the '#return' suffix and parseDispatchLineItemKey correctly yields isReturn=true. Import getDispatchLineItemKey from '~/services/helpers/order/dispatch-line-item-key' (same import path already used by parseDispatchLineItemKey on line 1).
+
+
+## CodeGraph Tool — find EXISTING functions to reuse (do this BEFORE writing any new helper)
+An existing-code search tool is available. Run it with the Bash tool to discover reusable functions instead of inventing new ones:
+  PROJECT_ROOT="/home/bradleyjerome/projects/metrolinx/azure.commerce.cdts" bash "/home/bradleyjerome/projects/ai/epam-cli/orchestrations/scripts/codegraph-agent-query.sh" helpers <domain nouns>   # existing util/parser/formatter to REUSE (symbol + import path)
+  PROJECT_ROOT="/home/bradleyjerome/projects/metrolinx/azure.commerce.cdts" bash "/home/bradleyjerome/projects/ai/epam-cli/orchestrations/scripts/codegraph-agent-query.sh" query <SymbolName>        # exact definition site of a symbol
+  PROJECT_ROOT="/home/bradleyjerome/projects/metrolinx/azure.commerce.cdts" bash "/home/bradleyjerome/projects/ai/epam-cli/orchestrations/scripts/codegraph-agent-query.sh" callees <SymbolName>      # what a function already calls
+RULE: Before you add ANY new function, run `helpers` for what it would do. If a suitable function already exists, import and call it — do NOT duplicate it. Fewer lines of code is always better.
+
+## Brownfield Testing Policy (READ — do not write unnecessary tests)
+This is a change to EXISTING code. The existing test suite already runs after your change (regression gate) — you do NOT need to re-prove already-tested behavior. Add a test ONLY for the file(s) below, which currently have NO covering tests, and add just ONE focused test covering the specific behavior you changed. Do NOT add tests for any other file, and do NOT expand scope:
+  - src/services/submit-reservations/apply-report-discounts.service.ts
+  - src/services/process-order/process-zero-amount-order.service.ts
+  - src/services/order-staff-notes/generate-staff-notes-on-error.service.ts
+
+
+
+
+## Technical Notes
+- files: ["src/services/submit-reservations/apply-report-discounts.service.ts","src/clients/mozio/mappers/map-to-sanitized-mozio-dispatch.ts","src/clients/mozio/mappers/map-to-sanitized-mozio-dispatch-customer.ts","src/services/process-order/process-zero-amount-order.service.ts","src/services/order-staff-notes/generate-staff-notes-on-error.service.ts"]
+
+## Existing File Contents (injected once, deterministically — do NOT ReadFile these unless you need more than shown)
+
+### /home/bradleyjerome/projects/metrolinx/azure.commerce.cdts/src/services/submit-reservations/apply-report-discounts.service.ts
+```
+import type { OrderLineItem } from '~/types/models/order';
+import { PriceDiscountType } from '~/types/models/price';
+import { getPreciseFloatNumber } from '~/utils/get-precise-float-number';
+
+import type { PriceDiscount } from '../types';
+import type { MozioDispatchPayload } from './types';
+
+export function applyReportDiscountsService(
+  mozioDispatches: MozioDispatchPayload[],
+  orderLineItems: OrderLineItem[],
+): MozioDispatchPayload[] {
+  const uniqDiscounts = getUniqDiscounts(orderLineItems);
+
+  mozioDispatches.forEach((dispatch) => {
+    const discountsForDispatch = uniqDiscounts.filter((discount) => {
+      return dispatch.lineItems.some(
+        (lineItem) => lineItem.id === discount.lineItemId,
+      );
+    });
+
+    if (discountsForDispatch.length === 0) {
+      return;
+    }
+
+    const isAllDiscountsApplied = discountsForDispatch.every(
+      (d) => d.amount.value === 0,
+    );
+
+    if (isAllDiscountsApplied) {
+      return;
+    }
+
+    const currency = discountsForDispatch.at(0)?.amount.currency;
+
+    if (!currency) {
+      return;
+    }
+
+    dispatch.report.price.discount = dispatch.report.price.discount ?? {
+      name: '',
+      amount: {
+        value: 0,
+        currency,
+      },
+    };
+
+    discountsForDispatch.forEach((discount) => {
+      const currentSellingPrice = dispatch.report.price.selling.value;
+
+      if (currentSellingPrice === 0 || discount.amount.value === 0) {
+        return;
+      }
+
+      // making ts happy. This stuff is defined above
+      if (!dispatch.report.price.discount) {
+        return;
+      }
+
+      const appliedDiscountNames = dispatch.report.price.discount?.name;
+      const discountedAmount = getPreciseFloatNumber(
+        currentSellingPrice - discount.amount.value,
+      );
+      const remainingDiscount = Math.abs(Math.min(0, discountedAmount));
+
+      const appliedDiscount = getPreciseFloatNumber(
+        discount.amount.value - remainingDiscount,
+      );
+
+      dispatch.report.price.selling.value = getPreciseFloatNumber(
+        Math.max(0, discountedAmount),
+      );
+
+      dispatch.report.price.discount.name = appliedDiscountNames
+        ? `${appliedDiscountNames},${getDiscountName(discount)}`
+        : getDiscountName(discount);
+
+      dispatch.report.price.discount.amount.value = getPreciseFloatNumber(
+        dispatch.report.price.discount.amount.value + appliedDiscount,
+      );
+
+      discount.amount.value = remainingDiscount;
+    });
+  });
+
+  return mozioDispatches;
+}
+
+function getDiscountName(discount: PriceDiscount) {
+  switch (discount.type) {
+    case PriceDiscountType.AUTOMATIC:
+      return `Auto:${discount.id}`;
+    case PriceDiscountType.MANUAL:
+      return 'Manual';
+    case PriceDiscountType.CODE:
+      return `Code:${discount.metadata.code}`;
+  }
+}
+
+type LineItemDiscount = PriceDiscount & {
+  lineItemId: string;
+};
+
+function getUniqDiscounts(lineItems: OrderLineItem[]): LineItemDiscount[] {
+  const discountsMap: Record<string, LineItemDiscount> = {};
+
+  lineItems.forEach((lineItem) => {
+    const discounts = lineItem.prices.flatMap((p) => p.discounts);
+
+    discounts.forEach((d) => {
+      discountsMap[`${d.id + lineItem.id}`] = {
+        id: d.id,
+        lineItemId: lineItem.id,
+        amount: d.amount,
+        type: d.type,
+        metadata: d.metadata,
+      } as LineItemDiscount;
+    });
+  });
+
+  return Object.values(discountsMap);
+}
+```
+
+### /home/bradleyjerome/projects/metrolinx/azure.commerce.cdts/src/clients/mozio/mappers/map-to-sanitized-mozio-dispatch.ts
+```
+import { maskSensitiveData } from '~/clients/helpers/mask-sensitive-data';
+import type { Currency } from '~/types/models/money';
+
+import type { MozioDispatch } from '../models/mozio-order';
+import type { SanitizedMozioDispatchCustomer } from './map-to-sanitized-mozio-dispatch-customer';
+import { mapToSanitizedMozioDispatchCustomer } from './map-to-sanitized-mozio-dispatch-customer';
+
+export type SanitizedMozioDispatch = Pick<
+  MozioDispatch,
+  'reference' | 'lineItems'
+> & {
+  customer: SanitizedMozioDispatchCustomer;
+  report: {
+    price: {
+      base: MozioDispatch['report']['price']['base'];
+      selling: MozioDispatch['report']['price']['selling'];
+      discount?: {
+        name: string;
+        amount: {
+          value: number;
+          currency: Currency;
+        };
+      };
+    };
+  };
+};
+
+export function mapToSanitizedMozioDispatch(
+  dispatch: Pick<
+    MozioDispatch,
+    'reference' | 'lineItems' | 'customer' | 'report'
+  >,
+): SanitizedMozioDispatch {
+  return {
+    reference: dispatch.reference,
+    lineItems: dispatch.lineItems,
+    customer: mapToSanitizedMozioDispatchCustomer(dispatch.customer),
+    report: {
+      price: {
+        base: dispatch.report.price.base,
+        selling: dispatch.report.price.selling,
+        discount: dispatch.report.price.discount
+          ? {
+              amount: dispatch.report.price.discount.amount,
+              name: maskSensitiveData(dispatch.report.price.discount.name),
+            }
+          : undefined,
+      },
+    },
+  };
+}
+```
+
+### /home/bradleyjerome/projects/metrolinx/azure.commerce.cdts/src/clients/mozio/mappers/map-to-sanitized-mozio-dispatch-customer.ts
+```
+import { maskSensitiveData } from '~/clients/helpers/mask-sensitive-data';
+
+import type { MozioDispatchCustomer } from '../models/mozio-order';
+
+export type SanitizedMozioDispatchCustomer = {
+  firstName: string;
+  lastName: string;
+  email: string;
+};
+
+export function mapToSanitizedMozioDispatchCustomer(
+  customer: MozioDispatchCustomer,
+): SanitizedMozioDispatchCustomer {
+  return {
+    firstName: maskSensitiveData(customer.firstName),
+    lastName: maskSensitiveData(customer.lastName),
+    email: maskSensitiveData(customer.email),
+  };
+}
+```
+
+### /home/bradleyjerome/projects/metrolinx/azure.commerce.cdts/src/services/process-order/process-zero-amount-order.service.ts
+```
+import { StatusCodes } from 'http-status-codes';
+
+import { GetOrdersSortingParam } from '~/clients/big-commerce';
+import { getOrderMetafields } from '~/clients/big-commerce/get-order-metafields';
+import { getOrders } from '~/clients/big-commerce/get-orders';
+import type { ServiceFunction } from '~/types/service';
+import { ApiError, ApiErrorCodes } from '~/utils/error';
+
+import { createOrderFromCheckoutService } from '../create-order-from-checkout';
+import type {
+  ProcessZeroAmountOrderServicePayload,
+  ProcessZeroAmountOrderServiceResult,
+} from './types';
+
+type ProcessZeroAmountOrderService = ServiceFunction<
+  ProcessZeroAmountOrderServiceResult,
+  ProcessZeroAmountOrderServicePayload
+>;
+
+export const processZeroAmountOrderService: ProcessZeroAmountOrderService =
+  async function (
+    context,
+    {
+      cart,
+      cartMetafields,
+      orderNumber,
+      dispatches,
+      orderOwner,
+      guestTokenMetadata,
+    },
+  ) {
+    const orders = await getOrders(context, {
+      cartId: cart.id,
+      sort: GetOrdersSortingParam.DATE_CREATED_DESC,
+      isDeleted: false,
+      includeLineItems: true,
+    });
+
+    const order = orders[0];
+
+    const isOrderPriceDifferent = order && order.total_inc_tax !== 0;
+
+    if (isOrderPriceDifferent) {
+      throw new ApiError('Unexpected order price', {
+        code: ApiErrorCodes.UNEXPECTED_ORDER_PRICE,
+        status: StatusCodes.UNPROCESSABLE_ENTITY,
+      });
+    }
+
+    const orderMetafields = order
+      ? await getOrderMetafields(context, { orderId: order.id })
+      : undefined;
+
+    const orderPayload = order && { data: order, metafields: orderMetafields };
+
+    const { order: createdOrder } = await createOrderFromCheckoutService(
+      context,
+      {
+        cart: { data: cart, metafields: cartMetafields },
+        order: orderPayload,
+        orderNumber: order?.external_order_id || orderNumber,
+        dispatches,
+        orderOwner,
+        payments: [],
+        customerExternalId: cart.customer?.id,
+        guestTokenMetadata,
+      },
+    );
+
+    return {
+      ...createdOrder,
+      // Zero-amount order does not have payments, so Stripe token and next actions are not needed
+      payments: [],
+    };
+  };
+```
+
+### /home/bradleyjerome/projects/metrolinx/azure.commerce.cdts/src/services/order-staff-notes/generate-staff-notes-on-error.service.ts
+```
+import { getOrder } from '~/clients/big-commerce/get-order';
+import { getAsyncContext } from '~/middlewares';
+import type { Context } from '~/types/context';
+
+import { getOrderMetadataFromContextService } from '../async-context-order-metadata';
+import { getErrorMessage } from '../helpers/error/get-error-message';
+import { extendStaffNotesWithError } from './generate-staff-notes.helpers';
+import { generateStaffNotesService } from './generate-staff-notes.service';
+
+type GenerateStaffNotesOnErrorServicePayload = {
+  error: unknown;
+  orderId: number;
+};
+
+export async function generateStaffNotesOnErrorService(
+  context: Context,
+  { error, orderId }: GenerateStaffNotesOnErrorServicePayload,
+): Promise<string | null> {
+  const correlationId = getAsyncContext().correlationId;
+  const message = getErrorMessage(error);
+  const { payments, dispatches, lineItems, cartDetails } =
+    getOrderMetadataFromContextService(context) || {};
+
+  const isAllRequiredDataAvailable = !!payments && !!dispatches && !!lineItems;
+
+  const staffNotes = isAllRequiredDataAvailable
+    ? generateStaffNotesService(context, {
+        payments,
+        dispatches,
+        lineItems,
+        error: message ?? undefined,
+        cartDetails,
+      })
+    : null;
+
+  if (staffNotes || !message) return staffNotes;
+
+  const order = await getOrder(context, {
+    orderId,
+  });
+
+  // extend the existing order staff notes with an error message
+  // we don't want to lose the previous staff notes in case the new ones are not generated
+  return extendStaffNotesWithError({
+    correlationId,
+    error: message,
+    staffNotes: order.staff_notes,
+  });
+}
+```
+
+## Files to Create/Modify (EXACT ABSOLUTE PATHS — write to these paths exactly)
+src/services/submit-reservations/apply-report-discounts.service.ts, src/clients/mozio/mappers/map-to-sanitized-mozio-dispatch.ts, src/clients/mozio/mappers/map-to-sanitized-mozio-dispatch-customer.ts, src/services/process-order/process-zero-amount-order.service.ts, src/services/order-staff-notes/generate-staff-notes-on-error.service.ts
+
+## Dependencies
+None
+
+
+
+## Instructions
+CRITICAL — these files already exist. Their real content is injected below (## Existing File Contents) — you do NOT need to ReadFile them to see what's already there.
+Do NOT import or reference anything that doesn't appear in the injected content below — a plausible-sounding module name is not a real one.
+Only call ReadFile yourself if you need to see MORE of a file than what's shown (e.g. it was truncated), or a file not listed below.
+   - /home/bradleyjerome/projects/metrolinx/azure.commerce.cdts/src/services/submit-reservations/apply-report-discounts.service.ts (content already injected below — do not ReadFile it unless you need lines beyond what's shown)
+   - /home/bradleyjerome/projects/metrolinx/azure.commerce.cdts/src/clients/mozio/mappers/map-to-sanitized-mozio-dispatch.ts (content already injected below — do not ReadFile it unless you need lines beyond what's shown)
+   - /home/bradleyjerome/projects/metrolinx/azure.commerce.cdts/src/clients/mozio/mappers/map-to-sanitized-mozio-dispatch-customer.ts (content already injected below — do not ReadFile it unless you need lines beyond what's shown)
+   - /home/bradleyjerome/projects/metrolinx/azure.commerce.cdts/src/services/process-order/process-zero-amount-order.service.ts (content already injected below — do not ReadFile it unless you need lines beyond what's shown)
+   - /home/bradleyjerome/projects/metrolinx/azure.commerce.cdts/src/services/order-staff-notes/generate-staff-notes-on-error.service.ts (content already injected below — do not ReadFile it unless you need lines beyond what's shown)
+**The content of every file listed above is already shown in ## Existing File Contents — use that, do not spend a tool call re-reading them. Use Edit for targeted changes to existing files — do NOT overwrite an existing file wholesale with WriteFile.**
+
+1. Use the injected ## Existing File Contents above to verify what actually exists (exports, types, existing utilities) before writing any code — do not guess, and do not re-read a file already shown in full
+2. Implement all acceptance criteria for this story
+3. Follow the project's existing code patterns and conventions
+4. Do NOT create tests unless explicitly required in acceptance criteria
+
+After implementation, provide a brief summary of what was created/modified.
+
+## Relevant Knowledge Base Entries
+The following was learned from previous story implementations and is relevant to your agent role. Apply this knowledge before writing any code:
+
+- [2026-07-06T18:11:26Z] Use vi.fn().mockResolvedValue(value) to make a mock return a resolved Promise.
+- [2026-07-06T20:31:11Z] Use `test: { passWithNoTests: true }` in vitest.config.ts or create a stub test file when no *.test.ts files exist.
+- [2026-07-06T20:33:03Z] Enable globals:true in vitest.config.ts so describe, it, and expect work without imports, reducing boilerplate in test files.
+- [2026-07-06T23:47:34Z] Use CommonJS-compatible patterns in src/server.ts: avoid `import.meta.url` and top-level `await`; gate listen with `if (require.main === module)`.
+- [2026-07-07T02:35:30Z] Always include a non-test source file in src/ alongside any src/*.test.ts file, since tsconfig.json excludes test files from tsc --noEmit.
+- [2026-07-07T19:01:34Z] Only modify or create files explicitly listed in the story's acceptance criteria. Do not touch files belonging to other stories or outside the current task scope.
+- [2026-07-07T20:17:57Z] [unreviewed-fallback] Avoid using deprecated TypeScript compiler options like 'moduleResolution=node10'; use 'moduleResolution=node' instead.
+- [2026-07-17T20:20:58Z] Always: Before importing a module or referencing a type/property, always read the actual source file to verify the export exists, its exact path, its properties, and its constructor/factory signatures
+- [2026-07-23T01:15:16Z] Always: In tsconfig.json, always use moduleResolution 'node' (not 'node10' or 'Node10') — 'node10' was removed in TypeScript 5.x. The correct value for CommonJS + Node resolution is 'node'.
+- [2026-07-23T14:30:00Z] CORRECTION to a prior entry (2026-07-23T01:17:52Z, now removed): that entry wrongly claimed 'moduleResolution: node' itself is removed and must become 'node16'/'nodenext'. Root-caused via mock1 (epam-cli orchestration test): 'node' is valid and correct through TypeScript 5.x (confirmed on 5.9.3) — it was only removed in TypeScript 7.x. The real defect was an unpinned `typescript` devDependency letting a fallback `npm install` pull latest (7.x) instead of the project's intended version. Do NOT rewrite a working tsconfig.json's moduleResolution in response to a TS5108 error — first check `node_modules/typescript/package.json`'s version; if it's 7.x and the rest of the project expects 5.x, the fix is pinning/reinstalling the correct typescript version, not changing moduleResolution.
+
+## Knowledge Base Contribution (do this LAST — after writing all implementation files)
+Your assigned KB entry ID for this run: **KB-013**
+
+IMPORTANT: Write ALL implementation files first. Only AFTER writing every required file should you optionally append a KB entry.
+Do NOT read orchestrations/agents/KB.md before writing implementation files. The relevant KB entries are already injected above.
+
+If (and only if) you discover a non-obvious pattern during implementation, append one entry to `orchestrations/agents/KB.md`:
+
+```markdown
+## KB-013 -- 2026-07-24
+
+**Category:** <backend|frontend|infrastructure|testing|orchestration>
+**AgentRole:** <your agentRole from the story>
+**Tags:** <comma-separated tech keywords, e.g. typescript, node, cli>
+**Trigger:** <retry|first-success>
+**StoryRef:** AMSD-1820
+
+<One concise paragraph: the specific pattern, gotcha, or anti-pattern.>
+```
+
+Only write an entry if the knowledge is genuinely non-obvious. Skip trivial observations.
+=== End Prompt ===
+
+=== epam Output (attempt 1) ===
+OK — I now see `OrderDispatchElementLineItem` has the `metadata.modification.isReturn` field, NOT `OrderLineItem` itself. So an `OrderLineItem` doesn't directly carry `isReturn`. Let me look at how the dispatch `lineItem.id` is constructed for return trips — specifically via `getDispatchLineItemKey`:
+OK — I now see `OrderDispatchElementLineItem` has the `metadata.modification.isReturn` field, NOT `OrderLineItem` itself. So an `OrderLineItem` doesn't directly carry `isReturn`. Let me look at how the dispatch `lineItem.id` is constructed for return trips — specifically via `getDispatchLineItemKey`:
+
+=== epam exited with code 1 ===
+=== Prompt for AMSD-1820 (attempt 2) ===
+CRITICAL — these files already exist. Their real content is injected below (## Existing File Contents) — you do NOT need to ReadFile them to see what's already there.
+Do NOT import or reference anything that doesn't appear in the injected content below — a plausible-sounding module name is not a real one.
+Only call ReadFile yourself if you need to see MORE of a file than what's shown (e.g. it was truncated), or a file not listed below.
+
+   - /home/bradleyjerome/projects/metrolinx/azure.commerce.cdts/src/services/submit-reservations/apply-report-discounts.service.ts (content already injected below — do not ReadFile it unless you need lines beyond what's shown)
+   - /home/bradleyjerome/projects/metrolinx/azure.commerce.cdts/src/clients/mozio/mappers/map-to-sanitized-mozio-dispatch.ts (content already injected below — do not ReadFile it unless you need lines beyond what's shown)
+   - /home/bradleyjerome/projects/metrolinx/azure.commerce.cdts/src/clients/mozio/mappers/map-to-sanitized-mozio-dispatch-customer.ts (content already injected below — do not ReadFile it unless you need lines beyond what's shown)
+   - /home/bradleyjerome/projects/metrolinx/azure.commerce.cdts/src/services/process-order/process-zero-amount-order.service.ts (content already injected below — do not ReadFile it unless you need lines beyond what's shown)
+   - /home/bradleyjerome/projects/metrolinx/azure.commerce.cdts/src/services/order-staff-notes/generate-staff-notes-on-error.service.ts (content already injected below — do not ReadFile it unless you need lines beyond what's shown)
+---
+
+Implement user story AMSD-1820: [Mozio] - The Promo code amount is NOT displayed as expected for Return trip tickets in the Mozio email confirmation
+
+## Story Description
+[Mozio] - The Promo code amount is NOT displayed as expected for Return trip tickets in the Mozio email confirmation
+
+## Acceptance Criteria
+- Given a customer purchases a return trip ticket with a promo code applied, when the Mozio email confirmation is generated, then the promo code discount amount is displayed for BOTH the outbound trip and the return trip, with each leg showing its proportional share of the total promo discount.
+- Given a customer purchases a one-way trip with a promo code, when the Mozio email confirmation is generated, then the promo code discount amount continues to display correctly for the single trip (regression check).
+- Given a return trip with a promo code where the discount amount is zero, when the Mozio email confirmation is generated, then the email does not show a negative value, NaN, or undefined value for the promo amount on either leg.
+- Given a return trip with a promo code, when the email confirmation is rendered, then the sum of the discount amounts shown across both legs equals the total promo code discount value applied at checkout.
+- Given a return trip with a promo code discount that results in a fractional-cent amount when split across legs (e.g., $5.01 total discount), when the Mozio email confirmation is generated, then the discount amounts for each leg are displayed with proper currency precision and the sum of both legs still equals the original total discount.
+- Given a return trip ticket where the promo discount data is missing or undefined in the report, when the Mozio email confirmation is generated, then the email displays a zero discount for each leg rather than crashing or rendering an error placeholder.
+- Given a return trip ticket with a promo code applied, when the discount is split across outbound and return legs, then neither leg displays a discount amount greater than the total promo discount applied at checkout.
+
+
+## Root Cause Analysis & Prescribed Fix (AUTHORITATIVE — start here, do not re-trace)
+A code investigation already traced this bug to its cause and prescribed the minimal fix below. This is the plan of record. Apply it; do NOT re-read the whole codebase to re-derive it.
+
+The Acceptance Criteria above describe the desired END BEHAVIOR to VERIFY — they are NOT an implementation blueprint. Do not re-architect, split values, or add new fields/abstractions to satisfy an AC literally when the prescribed minimal fix already makes that AC pass. Implement the fix below; the ACs are how you check you got it right.
+
+HARD RULES:
+- Make the SMALLEST change that fixes the root cause. Fewer lines of code is always better.
+- REUSE existing functions. Before writing any new helper, search the repo for an existing util/parser/formatter that already does what you need (use the CodeGraph tool documented below) and call it. Writing novel code when a helper already exists is a defect to be rejected in review.
+- **src/services/submit-reservations/apply-report-discounts.service.ts** (`getUniqDiscounts`): This function constructs the lineItemId key for each discount from OrderLineItems. The matching logic in applyReportDiscountsService (lines 17-27) parses both discount.lineItemId and dispatch lineItem.id via parseDispatchLineItemKey and compares BOTH id AND isReturn. The dispatch lineItem.id values are built by getDispatchLineItemKey (which appends '#return' for return trips), but getUniqDiscounts likely does NOT use getDispatchLineItemKey when constructing discount.lineItemId — so return-trip discounts get isReturn=false after parsing, causing the match on line 25 (parsedLineItem.isReturn === parsedDiscount.isReturn) to fail for return trips. This is why promo amounts appear for outbound but not return legs.
+  - **Minimal fix:** In getUniqDiscounts, when constructing the lineItemId for each LineItemDiscount, use getDispatchLineItemKey(lineItem.id, lineItem.isReturn) instead of just lineItem.id, so that return-trip discounts carry the '#return' suffix and parseDispatchLineItemKey correctly yields isReturn=true. Import getDispatchLineItemKey from '~/services/helpers/order/dispatch-line-item-key' (same import path already used by parseDispatchLineItemKey on line 1).
+
+
+## CodeGraph Tool — find EXISTING functions to reuse (do this BEFORE writing any new helper)
+An existing-code search tool is available. Run it with the Bash tool to discover reusable functions instead of inventing new ones:
+  PROJECT_ROOT="/home/bradleyjerome/projects/metrolinx/azure.commerce.cdts" bash "/home/bradleyjerome/projects/ai/epam-cli/orchestrations/scripts/codegraph-agent-query.sh" helpers <domain nouns>   # existing util/parser/formatter to REUSE (symbol + import path)
+  PROJECT_ROOT="/home/bradleyjerome/projects/metrolinx/azure.commerce.cdts" bash "/home/bradleyjerome/projects/ai/epam-cli/orchestrations/scripts/codegraph-agent-query.sh" query <SymbolName>        # exact definition site of a symbol
+  PROJECT_ROOT="/home/bradleyjerome/projects/metrolinx/azure.commerce.cdts" bash "/home/bradleyjerome/projects/ai/epam-cli/orchestrations/scripts/codegraph-agent-query.sh" callees <SymbolName>      # what a function already calls
+RULE: Before you add ANY new function, run `helpers` for what it would do. If a suitable function already exists, import and call it — do NOT duplicate it. Fewer lines of code is always better.
+
+## Brownfield Testing Policy (READ — do not write unnecessary tests)
+This is a change to EXISTING code. The existing test suite already runs after your change (regression gate) — you do NOT need to re-prove already-tested behavior. Add a test ONLY for the file(s) below, which currently have NO covering tests, and add just ONE focused test covering the specific behavior you changed. Do NOT add tests for any other file, and do NOT expand scope:
+  - src/services/submit-reservations/apply-report-discounts.service.ts
+  - src/services/process-order/process-zero-amount-order.service.ts
+  - src/services/order-staff-notes/generate-staff-notes-on-error.service.ts
+
+
+
+
+## Technical Notes
+- files: ["src/services/submit-reservations/apply-report-discounts.service.ts","src/clients/mozio/mappers/map-to-sanitized-mozio-dispatch.ts","src/clients/mozio/mappers/map-to-sanitized-mozio-dispatch-customer.ts","src/services/process-order/process-zero-amount-order.service.ts","src/services/order-staff-notes/generate-staff-notes-on-error.service.ts"]
+
+## Existing File Contents (injected once, deterministically — do NOT ReadFile these unless you need more than shown)
+
+### /home/bradleyjerome/projects/metrolinx/azure.commerce.cdts/src/services/submit-reservations/apply-report-discounts.service.ts
+```
+import type { OrderLineItem } from '~/types/models/order';
+import { PriceDiscountType } from '~/types/models/price';
+import { getPreciseFloatNumber } from '~/utils/get-precise-float-number';
+
+import type { PriceDiscount } from '../types';
+import type { MozioDispatchPayload } from './types';
+
+export function applyReportDiscountsService(
+  mozioDispatches: MozioDispatchPayload[],
+  orderLineItems: OrderLineItem[],
+): MozioDispatchPayload[] {
+  const uniqDiscounts = getUniqDiscounts(orderLineItems);
+
+  mozioDispatches.forEach((dispatch) => {
+    const discountsForDispatch = uniqDiscounts.filter((discount) => {
+      return dispatch.lineItems.some(
+        (lineItem) => lineItem.id === discount.lineItemId,
+      );
+    });
+
+    if (discountsForDispatch.length === 0) {
+      return;
+    }
+
+    const isAllDiscountsApplied = discountsForDispatch.every(
+      (d) => d.amount.value === 0,
+    );
+
+    if (isAllDiscountsApplied) {
+      return;
+    }
+
+    const currency = discountsForDispatch.at(0)?.amount.currency;
+
+    if (!currency) {
+      return;
+    }
+
+    dispatch.report.price.discount = dispatch.report.price.discount ?? {
+      name: '',
+      amount: {
+        value: 0,
+        currency,
+      },
+    };
+
+    discountsForDispatch.forEach((discount) => {
+      const currentSellingPrice = dispatch.report.price.selling.value;
+
+      if (currentSellingPrice === 0 || discount.amount.value === 0) {
+        return;
+      }
+
+      // making ts happy. This stuff is defined above
+      if (!dispatch.report.price.discount) {
+        return;
+      }
+
+      const appliedDiscountNames = dispatch.report.price.discount?.name;
+      const discountedAmount = getPreciseFloatNumber(
+        currentSellingPrice - discount.amount.value,
+      );
+      const remainingDiscount = Math.abs(Math.min(0, discountedAmount));
+
+      const appliedDiscount = getPreciseFloatNumber(
+        discount.amount.value - remainingDiscount,
+      );
+
+      dispatch.report.price.selling.value = getPreciseFloatNumber(
+        Math.max(0, discountedAmount),
+      );
+
+      dispatch.report.price.discount.name = appliedDiscountNames
+        ? `${appliedDiscountNames},${getDiscountName(discount)}`
+        : getDiscountName(discount);
+
+      dispatch.report.price.discount.amount.value = getPreciseFloatNumber(
+        dispatch.report.price.discount.amount.value + appliedDiscount,
+      );
+
+      discount.amount.value = remainingDiscount;
+    });
+  });
+
+  return mozioDispatches;
+}
+
+function getDiscountName(discount: PriceDiscount) {
+  switch (discount.type) {
+    case PriceDiscountType.AUTOMATIC:
+      return `Auto:${discount.id}`;
+    case PriceDiscountType.MANUAL:
+      return 'Manual';
+    case PriceDiscountType.CODE:
+      return `Code:${discount.metadata.code}`;
+  }
+}
+
+type LineItemDiscount = PriceDiscount & {
+  lineItemId: string;
+};
+
+function getUniqDiscounts(lineItems: OrderLineItem[]): LineItemDiscount[] {
+  const discountsMap: Record<string, LineItemDiscount> = {};
+
+  lineItems.forEach((lineItem) => {
+    const discounts = lineItem.prices.flatMap((p) => p.discounts);
+
+    discounts.forEach((d) => {
+      discountsMap[`${d.id + lineItem.id}`] = {
+        id: d.id,
+        lineItemId: lineItem.id,
+        amount: d.amount,
+        type: d.type,
+        metadata: d.metadata,
+      } as LineItemDiscount;
+    });
+  });
+
+  return Object.values(discountsMap);
+}
+```
+
+### /home/bradleyjerome/projects/metrolinx/azure.commerce.cdts/src/clients/mozio/mappers/map-to-sanitized-mozio-dispatch.ts
+```
+import { maskSensitiveData } from '~/clients/helpers/mask-sensitive-data';
+import type { Currency } from '~/types/models/money';
+
+import type { MozioDispatch } from '../models/mozio-order';
+import type { SanitizedMozioDispatchCustomer } from './map-to-sanitized-mozio-dispatch-customer';
+import { mapToSanitizedMozioDispatchCustomer } from './map-to-sanitized-mozio-dispatch-customer';
+
+export type SanitizedMozioDispatch = Pick<
+  MozioDispatch,
+  'reference' | 'lineItems'
+> & {
+  customer: SanitizedMozioDispatchCustomer;
+  report: {
+    price: {
+      base: MozioDispatch['report']['price']['base'];
+      selling: MozioDispatch['report']['price']['selling'];
+      discount?: {
+        name: string;
+        amount: {
+          value: number;
+          currency: Currency;
+        };
+      };
+    };
+  };
+};
+
+export function mapToSanitizedMozioDispatch(
+  dispatch: Pick<
+    MozioDispatch,
+    'reference' | 'lineItems' | 'customer' | 'report'
+  >,
+): SanitizedMozioDispatch {
+  return {
+    reference: dispatch.reference,
+    lineItems: dispatch.lineItems,
+    customer: mapToSanitizedMozioDispatchCustomer(dispatch.customer),
+    report: {
+      price: {
+        base: dispatch.report.price.base,
+        selling: dispatch.report.price.selling,
+        discount: dispatch.report.price.discount
+          ? {
+              amount: dispatch.report.price.discount.amount,
+              name: maskSensitiveData(dispatch.report.price.discount.name),
+            }
+          : undefined,
+      },
+    },
+  };
+}
+```
+
+### /home/bradleyjerome/projects/metrolinx/azure.commerce.cdts/src/clients/mozio/mappers/map-to-sanitized-mozio-dispatch-customer.ts
+```
+import { maskSensitiveData } from '~/clients/helpers/mask-sensitive-data';
+
+import type { MozioDispatchCustomer } from '../models/mozio-order';
+
+export type SanitizedMozioDispatchCustomer = {
+  firstName: string;
+  lastName: string;
+  email: string;
+};
+
+export function mapToSanitizedMozioDispatchCustomer(
+  customer: MozioDispatchCustomer,
+): SanitizedMozioDispatchCustomer {
+  return {
+    firstName: maskSensitiveData(customer.firstName),
+    lastName: maskSensitiveData(customer.lastName),
+    email: maskSensitiveData(customer.email),
+  };
+}
+```
+
+### /home/bradleyjerome/projects/metrolinx/azure.commerce.cdts/src/services/process-order/process-zero-amount-order.service.ts
+```
+import { StatusCodes } from 'http-status-codes';
+
+import { GetOrdersSortingParam } from '~/clients/big-commerce';
+import { getOrderMetafields } from '~/clients/big-commerce/get-order-metafields';
+import { getOrders } from '~/clients/big-commerce/get-orders';
+import type { ServiceFunction } from '~/types/service';
+import { ApiError, ApiErrorCodes } from '~/utils/error';
+
+import { createOrderFromCheckoutService } from '../create-order-from-checkout';
+import type {
+  ProcessZeroAmountOrderServicePayload,
+  ProcessZeroAmountOrderServiceResult,
+} from './types';
+
+type ProcessZeroAmountOrderService = ServiceFunction<
+  ProcessZeroAmountOrderServiceResult,
+  ProcessZeroAmountOrderServicePayload
+>;
+
+export const processZeroAmountOrderService: ProcessZeroAmountOrderService =
+  async function (
+    context,
+    {
+      cart,
+      cartMetafields,
+      orderNumber,
+      dispatches,
+      orderOwner,
+      guestTokenMetadata,
+    },
+  ) {
+    const orders = await getOrders(context, {
+      cartId: cart.id,
+      sort: GetOrdersSortingParam.DATE_CREATED_DESC,
+      isDeleted: false,
+      includeLineItems: true,
+    });
+
+    const order = orders[0];
+
+    const isOrderPriceDifferent = order && order.total_inc_tax !== 0;
+
+    if (isOrderPriceDifferent) {
+      throw new ApiError('Unexpected order price', {
+        code: ApiErrorCodes.UNEXPECTED_ORDER_PRICE,
+        status: StatusCodes.UNPROCESSABLE_ENTITY,
+      });
+    }
+
+    const orderMetafields = order
+      ? await getOrderMetafields(context, { orderId: order.id })
+      : undefined;
+
+    const orderPayload = order && { data: order, metafields: orderMetafields };
+
+    const { order: createdOrder } = await createOrderFromCheckoutService(
+      context,
+      {
+        cart: { data: cart, metafields: cartMetafields },
+        order: orderPayload,
+        orderNumber: order?.external_order_id || orderNumber,
+        dispatches,
+        orderOwner,
+        payments: [],
+        customerExternalId: cart.customer?.id,
+        guestTokenMetadata,
+      },
+    );
+
+    return {
+      ...createdOrder,
+      // Zero-amount order does not have payments, so Stripe token and next actions are not needed
+      payments: [],
+    };
+  };
+```
+
+### /home/bradleyjerome/projects/metrolinx/azure.commerce.cdts/src/services/order-staff-notes/generate-staff-notes-on-error.service.ts
+```
+import { getOrder } from '~/clients/big-commerce/get-order';
+import { getAsyncContext } from '~/middlewares';
+import type { Context } from '~/types/context';
+
+import { getOrderMetadataFromContextService } from '../async-context-order-metadata';
+import { getErrorMessage } from '../helpers/error/get-error-message';
+import { extendStaffNotesWithError } from './generate-staff-notes.helpers';
+import { generateStaffNotesService } from './generate-staff-notes.service';
+
+type GenerateStaffNotesOnErrorServicePayload = {
+  error: unknown;
+  orderId: number;
+};
+
+export async function generateStaffNotesOnErrorService(
+  context: Context,
+  { error, orderId }: GenerateStaffNotesOnErrorServicePayload,
+): Promise<string | null> {
+  const correlationId = getAsyncContext().correlationId;
+  const message = getErrorMessage(error);
+  const { payments, dispatches, lineItems, cartDetails } =
+    getOrderMetadataFromContextService(context) || {};
+
+  const isAllRequiredDataAvailable = !!payments && !!dispatches && !!lineItems;
+
+  const staffNotes = isAllRequiredDataAvailable
+    ? generateStaffNotesService(context, {
+        payments,
+        dispatches,
+        lineItems,
+        error: message ?? undefined,
+        cartDetails,
+      })
+    : null;
+
+  if (staffNotes || !message) return staffNotes;
+
+  const order = await getOrder(context, {
+    orderId,
+  });
+
+  // extend the existing order staff notes with an error message
+  // we don't want to lose the previous staff notes in case the new ones are not generated
+  return extendStaffNotesWithError({
+    correlationId,
+    error: message,
+    staffNotes: order.staff_notes,
+  });
+}
+```
+
+## Files to Create/Modify (EXACT ABSOLUTE PATHS — write to these paths exactly)
+src/services/submit-reservations/apply-report-discounts.service.ts, src/clients/mozio/mappers/map-to-sanitized-mozio-dispatch.ts, src/clients/mozio/mappers/map-to-sanitized-mozio-dispatch-customer.ts, src/services/process-order/process-zero-amount-order.service.ts, src/services/order-staff-notes/generate-staff-notes-on-error.service.ts
+
+## Dependencies
+None
+
+
+
+## Instructions
+CRITICAL — these files already exist. Their real content is injected below (## Existing File Contents) — you do NOT need to ReadFile them to see what's already there.
+Do NOT import or reference anything that doesn't appear in the injected content below — a plausible-sounding module name is not a real one.
+Only call ReadFile yourself if you need to see MORE of a file than what's shown (e.g. it was truncated), or a file not listed below.
+   - /home/bradleyjerome/projects/metrolinx/azure.commerce.cdts/src/services/submit-reservations/apply-report-discounts.service.ts (content already injected below — do not ReadFile it unless you need lines beyond what's shown)
+   - /home/bradleyjerome/projects/metrolinx/azure.commerce.cdts/src/clients/mozio/mappers/map-to-sanitized-mozio-dispatch.ts (content already injected below — do not ReadFile it unless you need lines beyond what's shown)
+   - /home/bradleyjerome/projects/metrolinx/azure.commerce.cdts/src/clients/mozio/mappers/map-to-sanitized-mozio-dispatch-customer.ts (content already injected below — do not ReadFile it unless you need lines beyond what's shown)
+   - /home/bradleyjerome/projects/metrolinx/azure.commerce.cdts/src/services/process-order/process-zero-amount-order.service.ts (content already injected below — do not ReadFile it unless you need lines beyond what's shown)
+   - /home/bradleyjerome/projects/metrolinx/azure.commerce.cdts/src/services/order-staff-notes/generate-staff-notes-on-error.service.ts (content already injected below — do not ReadFile it unless you need lines beyond what's shown)
+**The content of every file listed above is already shown in ## Existing File Contents — use that, do not spend a tool call re-reading them. Use Edit for targeted changes to existing files — do NOT overwrite an existing file wholesale with WriteFile.**
+
+1. Use the injected ## Existing File Contents above to verify what actually exists (exports, types, existing utilities) before writing any code — do not guess, and do not re-read a file already shown in full
+2. Implement all acceptance criteria for this story
+3. Follow the project's existing code patterns and conventions
+4. Do NOT create tests unless explicitly required in acceptance criteria
+
+After implementation, provide a brief summary of what was created/modified.
+
+## Relevant Knowledge Base Entries
+The following was learned from previous story implementations and is relevant to your agent role. Apply this knowledge before writing any code:
+
+- [2026-07-06T18:11:26Z] Use vi.fn().mockResolvedValue(value) to make a mock return a resolved Promise.
+- [2026-07-06T20:31:11Z] Use `test: { passWithNoTests: true }` in vitest.config.ts or create a stub test file when no *.test.ts files exist.
+- [2026-07-06T20:33:03Z] Enable globals:true in vitest.config.ts so describe, it, and expect work without imports, reducing boilerplate in test files.
+- [2026-07-06T23:47:34Z] Use CommonJS-compatible patterns in src/server.ts: avoid `import.meta.url` and top-level `await`; gate listen with `if (require.main === module)`.
+- [2026-07-07T02:35:30Z] Always include a non-test source file in src/ alongside any src/*.test.ts file, since tsconfig.json excludes test files from tsc --noEmit.
+- [2026-07-07T19:01:34Z] Only modify or create files explicitly listed in the story's acceptance criteria. Do not touch files belonging to other stories or outside the current task scope.
+- [2026-07-07T20:17:57Z] [unreviewed-fallback] Avoid using deprecated TypeScript compiler options like 'moduleResolution=node10'; use 'moduleResolution=node' instead.
+- [2026-07-17T20:20:58Z] Always: Before importing a module or referencing a type/property, always read the actual source file to verify the export exists, its exact path, its properties, and its constructor/factory signatures
+- [2026-07-23T01:15:16Z] Always: In tsconfig.json, always use moduleResolution 'node' (not 'node10' or 'Node10') — 'node10' was removed in TypeScript 5.x. The correct value for CommonJS + Node resolution is 'node'.
+- [2026-07-23T14:30:00Z] CORRECTION to a prior entry (2026-07-23T01:17:52Z, now removed): that entry wrongly claimed 'moduleResolution: node' itself is removed and must become 'node16'/'nodenext'. Root-caused via mock1 (epam-cli orchestration test): 'node' is valid and correct through TypeScript 5.x (confirmed on 5.9.3) — it was only removed in TypeScript 7.x. The real defect was an unpinned `typescript` devDependency letting a fallback `npm install` pull latest (7.x) instead of the project's intended version. Do NOT rewrite a working tsconfig.json's moduleResolution in response to a TS5108 error — first check `node_modules/typescript/package.json`'s version; if it's 7.x and the rest of the project expects 5.x, the fix is pinning/reinstalling the correct typescript version, not changing moduleResolution.
+
+## Knowledge Base Contribution (do this LAST — after writing all implementation files)
+Your assigned KB entry ID for this run: **KB-013**
+**This is retry attempt 1** — a previous attempt failed. You MUST write a KB entry documenting what went wrong and what you changed.
+
+IMPORTANT: Write ALL implementation files first. Only AFTER writing every required file should you optionally append a KB entry.
+Do NOT read orchestrations/agents/KB.md before writing implementation files. The relevant KB entries are already injected above.
+
+If (and only if) you discover a non-obvious pattern during implementation, append one entry to `orchestrations/agents/KB.md`:
+
+```markdown
+## KB-013 -- 2026-07-24
+
+**Category:** <backend|frontend|infrastructure|testing|orchestration>
+**AgentRole:** <your agentRole from the story>
+**Tags:** <comma-separated tech keywords, e.g. typescript, node, cli>
+**Trigger:** <retry|first-success>
+**StoryRef:** AMSD-1820
+
+<One concise paragraph: the specific pattern, gotcha, or anti-pattern.>
+```
+
+Only write an entry if the knowledge is genuinely non-obvious. Skip trivial observations.
+=== End Prompt ===
+
+=== epam Output (attempt 2) ===

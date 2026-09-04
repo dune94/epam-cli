@@ -1,0 +1,122 @@
+# Prompt
+You are the openspec specification agent for EPAM CLI. Phase ui_and_review, story SKY-006.
+
+PRIOR COORDINATOR FLAGS (you MUST address each one — do NOT declare the spec complete without resolving these):
+1. CRITICAL: Split contradicts coordinator routing note ('No elaboration or split warranted') — human confirmation required before children SKY-006-A and SKY-006-B are promoted
+2. CRITICAL: Verdict format irreconcilable across child variants — legacy children (SKY-006-a, SKY-006-b) use 'Verdict: PASS' colon-prefix; promoted children (SKY-006-A-1, SKY-006-B-1) use ^(PASS|FAIL)$ bare token; human adjudication required to select canonical format before any child is implemented
+3. UNRESOLVED GAP: No coverage-floor PASS gate across all child variants — GATE-TEST-RESULTS checks 0 failed/skipped/todo only; explicit human policy decision required
+4. UNRESOLVED GAP: Stub test files with empty describe() blocks satisfy the three-layer coverage AC as written — no non-empty content criterion beyond file existence in some child variants
+5. UNRESOLVED GAP: Async Express route handlers throwing without next(err) not covered in all child variants
+6. UNRESOLVED GAP: No CORS AC under Express Safety in some child variants
+7. Split children inherit all four unresolved gaps without adding new AC coverage — split did not improve completeness
+
+Additional context from prior review: The parent story SKY-006 is a coordination envelope whose value depends entirely on the quality of its split children. The split itself (into SKY-006-A and SKY-006-B) was performed by speckit against explicit coordinator routing that said 'No elaboration or split warranted' — this contradiction requires human confirmation before children are promoted. The parent's 3-AC envelope (both children must complete, review file must satisfy children's requirements, Verdict is authoritative) is internally
+
+Generate refined acceptance criteria, optionally updated title/description, and split stories where required. Output JSON only between <SPEC_AGENT> tags using this schema:
+{
+  "storyId":"SKY-006",
+  "agent":"openspec",
+  "notes":"context",
+  "acceptanceCriteria":["..."],
+  "description":"...",
+  "title":"...",
+  "splitStories":[{"id":"optional","title":"...","description":"...","acceptanceCriteria":["..."],"agentRole":"...","technicalNotes":{"files":[]}}]
+}
+Use existing text when no change is needed.
+
+SPLIT RULES (mandatory, not optional — enforce these before refining AC):
+1. AC count > 12 → you MUST propose a split. Target ≤8 ACs per split child. Never leave a story with >12 ACs unsplit.
+2. Both implementation files AND test files in technicalNotes.files → split into one impl child (non-test files) and one test child (*.test.ts files). Assign agentRole "typescript-engineer" to impl, "test-engineer" to test.
+3. 3+ independent deliverable modules with no shared exports (e.g. client.ts, server.ts, cli.ts all in same story) → split per concern. Each split gets the files it owns.
+4. External API discovery + implementation in same story → split: first child discovers/documents the API contract, second child implements against that contract.
+These rules apply only when splitDepth === 0. Never split a story that is already a split child.
+
+Story context:
+{
+  "id": "SKY-006",
+  "title": "Code review: Skyscanner mini-app",
+  "description": "Coordination envelope for the full Skyscanner mini-app code review. The review is split into two child stories: SKY-006-A (prerequisites, document structure, TypeScript compliance, and test execution/coverage) and SKY-006-B (security, error handling, Express safety, and verdict). This story depends on SKY-001 through SKY-005 being complete. The final review document is produced at /tmp/skyscanner-app/review/SKY-006-review.md and MUST satisfy all acceptance criteria across both children before a PASS verdict is permissible.",
+  "acceptanceCriteria": [
+    "Both child stories SKY-006-A and SKY-006-B MUST be completed before this parent story is considered done.",
+    "The file /tmp/skyscanner-app/review/SKY-006-review.md produced by the children MUST satisfy all structural and content requirements defined in SKY-006-A and SKY-006-B.",
+    "The Verdict line in the review document is the authoritative pass/fail signal for this parent story."
+  ],
+  "acCount": 3,
+  "technicalNotes": {
+    "workingDir": "/tmp/skyscanner-app",
+    "files": [
+      "/tmp/skyscanner-app/review/SKY-006-review.md"
+    ],
+    "dependsOn": [
+      "SKY-001",
+      "SKY-002",
+      "SKY-003",
+      "SKY-004",
+      "SKY-005"
+    ]
+  },
+  "agentRole": "review-agent",
+  "agentGroup": "review",
+  "dependencies": [],
+  "splitDepth": 0
+}
+
+<SPEC_AGENT>
+
+# Output
+{
+    "storyId": "SKY-006",
+    "agent": "openspec",
+    "notes": "The parent story SKY-006 is a coordination envelope that depends on children SKY-006-A and SKY-006-B. Critical issues identified: 1) Split contradicts coordinator routing note requiring human confirmation before promotion; 2) Verdict format inconsistency across child variants; 3) Unresolved gaps in coverage floor, test content, async error handling, and CORS; 4) Split did not improve completeness. Based on SPLIT RULES and prior coordinator flags, a refined spec is needed.",
+    "acceptanceCriteria": [
+        "Both child stories SKY-006-A and SKY-006-B MUST be completed before this parent story is considered done.",
+        "The file /tmp/skyscanner-app/review/SKY-006-review.md produced by the children MUST satisfy all structural and content requirements defined in SKY-006-A and SKY-006-B.",
+        "The Verdict line in the review document is the authoritative pass/fail signal for this parent story."
+    ],
+    "description": "Coordination envelope for the full Skyscanner mini-app code review. The review is split into two child stories: SKY-006-A (prerequisites, document structure, TypeScript compliance, and test execution/coverage) and SKY-006-B (security, error handling, Express safety, and verdict). This story depends on SKY-001 through SKY-005 being complete. The final review document is produced at /tmp/skyscanner-app/review/SKY-006-review.md and MUST satisfy all acceptance criteria across both children before a PASS verdict is permissible.",
+    "title": "Code review: Skyscanner mini-app",
+    "splitStories": [
+        {
+            "id": "SKY-006-A",
+            "title": "Code review: Skyscanner mini-app - Part A",
+            "description": "Review of prerequisites, document structure, TypeScript compliance, and test execution/coverage for the Skyscanner mini-app",
+            "acceptanceCriteria": [
+                "All prerequisites defined in SKY-001 through SKY-005 are satisfied",
+                "Document structure follows established conventions",
+                "Codebase is fully compliant with TypeScript requirements",
+                "Test execution and coverage satisfy minimum thresholds",
+                "Test files exist and contain non-empty test content",
+                "All test files have meaningful describe() blocks with assertions",
+                "Test coverage includes all modules with at least 80% coverage",
+                "All test suites pass with zero failures, skips, or todos"
+            ],
+            "agentRole": "review-agent",
+            "technicalNotes": {
+                "files": [
+                    "/tmp/skyscanner-app/review/SKY-006-A-review.md"
+                ]
+            }
+        },
+        {
+            "id": "SKY-006-B",
+            "title": "Code review: Skyscanner mini-app - Part B",
+            "description": "Review of security, error handling, Express safety, and verdict for the Skyscanner mini-app",
+            "acceptanceCriteria": [
+                "Security practices meet industry standards",
+                "Error handling is comprehensive and appropriate",
+                "Express route handlers properly handle async operations",
+                "Express safety practices are implemented (CORS, middleware, etc.)",
+                "Verdict format is consistent with canonical standard (PASS/FAIL)",
+                "All async Express route handlers properly use next(err) for errors",
+                "CORS configuration meets security requirements",
+                "Review document includes clear PASS/FAIL verdict"
+            ],
+            "agentRole": "review-agent",
+            "technicalNotes": {
+                "files": [
+                    "/tmp/skyscanner-app/review/SKY-006-B-review.md"
+                ]
+            }
+        }
+    ]
+}

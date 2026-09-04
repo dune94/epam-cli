@@ -12,6 +12,6 @@
     "  shellDefects       — handlers/scan-shell-defects.js  (shellcheck warning+ across every .sh)"
   ],
   "duplicatedLiterals": 10,
-  "uncalibratedGuards": 31,
+  "uncalibratedGuards": 30,
   "shellDefects": 0
 }

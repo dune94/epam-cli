@@ -1,0 +1,7 @@
+```json
+{
+  "verdict": "approved",
+  "issues": [],
+  "summary": "Implementation correctly addresses the prescribed root cause (AMSD-1820): dispatch lineItem.id format change for return trips ('originalId#return') is now properly parsed using the existing parseDispatchLineItemKey helper before matching against discount.lineItemId. The fix is minimal, reuses existing infrastructure, and all three acceptance criteria are tested: (1) return trip with promo code applies discount, (2) one-way with promo code applies discount, (3) return trip without promo code shows no discount. Tests are well-structured with helper functions and cover the critical scenarios that were previously failing."
+}
+```

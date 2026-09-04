@@ -1,0 +1,309 @@
+=== Prompt for MOCK-HW-1-test (attempt 1) ===
+CRITICAL — these files already exist. Their real content is injected below (## Existing File Contents) — you do NOT need to ReadFile them to see what's already there.
+Do NOT import or reference anything that doesn't appear in the injected content below — a plausible-sounding module name is not a real one.
+Only call ReadFile yourself if you need to see MORE of a file than what's shown (e.g. it was truncated), or a file not listed below.
+
+   - /tmp/brownfield-mock-e2e-G7eg9p/codelines/mock-hello-world/src/hello.test.ts (ReadFile this only if you need it — not a fix site; content omitted to keep the prompt small)
+---
+
+Implement user story MOCK-HW-1-test: Update hello.test.ts to assert hello dolly
+
+## Story Description
+Update the existing test in src/hello.test.ts to assert that getGreeting() returns 'hello dolly' instead of 'hello world'.
+
+## Acceptance Criteria
+- The test suite verifies that getGreeting() returns 'hello dolly'
+
+
+## Root Cause Analysis & Prescribed Fix (AUTHORITATIVE — start here, do not re-trace)
+A code investigation already traced this bug to its cause and prescribed the minimal fix below. This is the plan of record. Apply it; do NOT re-read the whole codebase to re-derive it.
+
+The Acceptance Criteria above describe the desired END BEHAVIOR to VERIFY — they are NOT an implementation blueprint. Do not re-architect, split values, or add new fields/abstractions to satisfy an AC literally when the prescribed minimal fix already makes that AC pass. Implement the fix below; the ACs are how you check you got it right.
+
+HARD RULES:
+- Make the SMALLEST change that fixes the root cause. Fewer lines of code is always better.
+- REUSE existing functions. Before writing any new helper, search the repo for an existing util/parser/formatter that already does what you need (use the CodeGraph tool documented below) and call it. Writing novel code when a helper already exists is a defect to be rejected in review.
+- **src/hello.ts** (`getGreeting`): This function's body directly computes and returns the greeting string literal 'hello world' — it is the sole source of the wrong value, not a pass-through or display layer; it is the only symbol in the index for the greeting.
+  - **Minimal fix:** Change line 2 in src/hello.ts from `return 'hello world';` to `return 'hello dolly';` — a one-line string-literal replacement. No existing helper is needed or available (the index contains only this one symbol); verify src/hello.test.ts against the new literal.
+
+
+## Verification Criteria (what a tester will CONFIRM — your change must satisfy every one)
+These are observable checks, derived from the acceptance criteria and description. They describe WHAT is observed, not how to build it. Make the minimal change that makes all of these true; your accompanying test should assert them:
+- Calling getGreeting() returns the string 'hello dolly'
+
+## Tests are NOT your job this turn
+A dedicated test-writer agent runs immediately after your fix commits and owns the bug-reproducing test. Do NOT write, edit, or create any test file (*.test.*, *.spec.*, __tests__/). Write ONLY the fix. Adding a test here wastes your turn budget and has caused repeated failures.
+
+## CodeGraph Tool — find EXISTING functions to reuse (do this BEFORE writing any new helper)
+An existing-code search tool is available. Run it with the Bash tool to discover reusable functions instead of inventing new ones:
+  PROJECT_ROOT="/tmp/brownfield-mock-e2e-G7eg9p/codelines/mock-hello-world" bash "/home/bradleyjerome/projects/ai/epam-cli/orchestrations/scripts/codegraph-agent-query.sh" helpers <domain nouns>   # existing util/parser/formatter to REUSE (symbol + import path)
+  PROJECT_ROOT="/tmp/brownfield-mock-e2e-G7eg9p/codelines/mock-hello-world" bash "/home/bradleyjerome/projects/ai/epam-cli/orchestrations/scripts/codegraph-agent-query.sh" query <SymbolName>        # exact definition site of a symbol
+  PROJECT_ROOT="/tmp/brownfield-mock-e2e-G7eg9p/codelines/mock-hello-world" bash "/home/bradleyjerome/projects/ai/epam-cli/orchestrations/scripts/codegraph-agent-query.sh" callees <SymbolName>      # what a function already calls
+RULE: Before you add ANY new function, run `helpers` for what it would do. If a suitable function already exists, import and call it — do NOT duplicate it. Fewer lines of code is always better.
+
+
+## Test Criteria (ground truth — written from actual source; overrides any conflicting AC)
+- getGreeting is exported from src/hello.ts as a named export
+- getGreeting takes no parameters and returns the string 'hello dolly'
+- The return value is exactly the string literal 'hello dolly' (all lowercase, single space)
+
+## Mock Strategy
+No mocks needed — getGreeting has no external dependencies; import directly from '../src/hello'
+
+## Banned Patterns (must NOT appear in your file)
+@jest/globals, getGreeting(', hello world, Hello Dolly, vi.mock
+
+## Technical Notes
+- files: ["src/hello.test.ts"]
+
+
+## Files to Create/Modify (EXACT ABSOLUTE PATHS — write to these paths exactly)
+src/hello.test.ts
+
+## Dependencies
+MOCK-HW-1-impl
+
+
+
+## Instructions
+CRITICAL — these files already exist. Their real content is injected below (## Existing File Contents) — you do NOT need to ReadFile them to see what's already there.
+Do NOT import or reference anything that doesn't appear in the injected content below — a plausible-sounding module name is not a real one.
+Only call ReadFile yourself if you need to see MORE of a file than what's shown (e.g. it was truncated), or a file not listed below.
+   - /tmp/brownfield-mock-e2e-G7eg9p/codelines/mock-hello-world/src/hello.test.ts (ReadFile this only if you need it — not a fix site; content omitted to keep the prompt small)
+**The content of every file listed above is already shown in ## Existing File Contents — use that, do not spend a tool call re-reading them. Use Edit for targeted changes to existing files — do NOT overwrite an existing file wholesale with WriteFile.**
+
+1. Use the injected ## Existing File Contents above to verify what actually exists (exports, types, existing utilities) before writing any code — do not guess, and do not re-read a file already shown in full
+2. Implement all acceptance criteria for this story
+3. Test Criteria facts above are ground truth — your test assertions MUST match them exactly
+4. Do NOT create tests unless explicitly required in acceptance criteria
+
+After implementation, provide a brief summary of what was created/modified.
+
+## Relevant Knowledge Base Entries
+The following was learned from previous story implementations and is relevant to your agent role. Apply this knowledge before writing any code:
+
+- [2026-07-07T14:33:39Z] Check the source before writing CLI tests to verify whether output uses console.log or process.stdout.write, then spy on whichever it actually uses.
+- [2026-07-07T18:54:47Z] Always export classes using a named export. Never use a default export for a class, and never declare a class without exporting it.
+- [2026-07-14T10:23:13Z] Always: In strict TypeScript, always annotate callback parameters with explicit types (e.g., `.map((c: Column) =>` not `.map(c =>`). Never rely on implicit any inference for array method callbacks.
+- [2026-07-15T02:48:02Z] Never access ECMAScript private fields (#fieldName) from outside the class in test code — TypeScript cannot parse it and will emit TS1005/TS1109. Test private state indirectly through public methods o
+- [2026-07-15T03:53:06Z] NEVER modify files inside node_modules/ — if a dependency is missing or has wrong types, add it to package.json devDependencies/dependencies and run npm install. If a type mismatch exists, use declara
+- [2026-07-15T04:03:31Z] Never modify any file inside node_modules/ — only edit source files under src/ or config files like package.json/tsconfig.json. If a dependency is missing, add it to package.json devDependencies and r
+- [2026-07-16T16:27:50Z] Never use top-level await in test files — the project uses CommonJS modules which forbid it. Wrap any async setup in an async function called from the test body or inside beforeAll/beforeEach.
+
+## Knowledge Base Contribution (do this LAST — after writing all implementation files)
+Your assigned KB entry ID for this run: **KB-015**
+
+IMPORTANT: Write ALL implementation files first. Only AFTER writing every required file should you optionally append a KB entry.
+Do NOT read orchestrations/agents/KB.md before writing implementation files. The relevant KB entries are already injected above.
+
+If (and only if) you discover a non-obvious pattern during implementation, append one entry to `orchestrations/agents/KB.md`:
+
+```markdown
+## KB-015 -- 2026-07-27
+
+**Category:** <backend|frontend|infrastructure|testing|orchestration>
+**AgentRole:** <your agentRole from the story>
+**Tags:** <comma-separated tech keywords, e.g. typescript, node, cli>
+**Trigger:** <retry|first-success>
+**StoryRef:** MOCK-HW-1-test
+
+<One concise paragraph: the specific pattern, gotcha, or anti-pattern.>
+```
+
+Only write an entry if the knowledge is genuinely non-obvious. Skip trivial observations.
+=== End Prompt ===
+
+=== epam Output (attempt 1) ===
+[Langfuse SDK] Network error:  LangfuseFetchNetworkError: Network error while fetching Langfuse
+    at retriable (/home/bradleyjerome/projects/ai/epam-cli/node_modules/langfuse-core/lib/index.cjs.js:1742:15)
+    at process.processTicksAndRejections (node:internal/process/task_queues:104:5)
+    at async retriable (/home/bradleyjerome/projects/ai/epam-cli/node_modules/langfuse-core/lib/index.cjs.js:359:19)
+    at async Langfuse.fetchWithRetry (/home/bradleyjerome/projects/ai/epam-cli/node_modules/langfuse-core/lib/index.cjs.js:1733:12) {
+  error: [TypeError: fetch failed] {
+    [cause]: Error: connect ECONNREFUSED 127.0.0.1:3100
+        at TCPConnectWrap.afterConnect [as oncomplete] (node:net:1645:16) {
+      errno: -111,
+      code: 'ECONNREFUSED',
+      syscall: 'connect',
+      address: '127.0.0.1',
+      port: 3100
+    }
+  },
+  [cause]: [TypeError: fetch failed] {
+    [cause]: Error: connect ECONNREFUSED 127.0.0.1:3100
+        at TCPConnectWrap.afterConnect [as oncomplete] (node:net:1645:16) {
+      errno: -111,
+      code: 'ECONNREFUSED',
+      syscall: 'connect',
+      address: '127.0.0.1',
+      port: 3100
+    }
+  }
+}
+## Summary
+
+Applied the prescribed minimal one-line fix to `src/hello.ts`: changed the returned string literal from `'hello world'` to `'hello dolly'`. 
+
+I did NOT modify `src/hello.test.ts` per the explicit rule "Tests are NOT your job this turn — Do NOT write, edit, or create any test file". The prescribed fix (authoritative) targets `src/hello.ts`, and the dedicated test-writer agent will handle the test assertions against the new literal.
+
+Note: The "Files to Create/Modify" list in the prompt was inconsistent with the authoritative prescribed fix and the no-test rule — I followed the authoritative prescription, which results in the smallest, correct change that makes the verification criteria (`getGreeting()` returns `'hello dolly'`) true.
+
+Skipping the KB entry — the change was a trivial literal swap with no non-obvious pattern to record.
+## Summary
+
+Applied the prescribed minimal one-line fix to `src/hello.ts`: changed the returned string literal from `'hello world'` to `'hello dolly'`. 
+
+I did NOT modify `src/hello.test.ts` per the explicit rule "Tests are NOT your job this turn — Do NOT write, edit, or create any test file". The prescribed fix (authoritative) targets `src/hello.ts`, and the dedicated test-writer agent will handle the test assertions against the new literal.
+
+Note: The "Files to Create/Modify" list in the prompt was inconsistent with the authoritative prescribed fix and the no-test rule — I followed the authoritative prescription, which results in the smallest, correct change that makes the verification criteria (`getGreeting()` returns `'hello dolly'`) true.
+
+Skipping the KB entry — the change was a trivial literal swap with no non-obvious pattern to record.
+
+=== epam exited with code 1 ===
+=== Prompt for MOCK-HW-1-test (attempt 2) ===
+CRITICAL — these files already exist. Their real content is injected below (## Existing File Contents) — you do NOT need to ReadFile them to see what's already there.
+Do NOT import or reference anything that doesn't appear in the injected content below — a plausible-sounding module name is not a real one.
+Only call ReadFile yourself if you need to see MORE of a file than what's shown (e.g. it was truncated), or a file not listed below.
+
+   - /tmp/brownfield-mock-e2e-G7eg9p/codelines/mock-hello-world/src/hello.test.ts (ReadFile this only if you need it — not a fix site; content omitted to keep the prompt small)
+---
+
+Implement user story MOCK-HW-1-test: Update hello.test.ts to assert hello dolly
+
+## Story Description
+Update the existing test in src/hello.test.ts to assert that getGreeting() returns 'hello dolly' instead of 'hello world'.
+
+## Acceptance Criteria
+- The test suite verifies that getGreeting() returns 'hello dolly'
+
+
+## Root Cause Analysis & Prescribed Fix (AUTHORITATIVE — start here, do not re-trace)
+A code investigation already traced this bug to its cause and prescribed the minimal fix below. This is the plan of record. Apply it; do NOT re-read the whole codebase to re-derive it.
+
+The Acceptance Criteria above describe the desired END BEHAVIOR to VERIFY — they are NOT an implementation blueprint. Do not re-architect, split values, or add new fields/abstractions to satisfy an AC literally when the prescribed minimal fix already makes that AC pass. Implement the fix below; the ACs are how you check you got it right.
+
+HARD RULES:
+- Make the SMALLEST change that fixes the root cause. Fewer lines of code is always better.
+- REUSE existing functions. Before writing any new helper, search the repo for an existing util/parser/formatter that already does what you need (use the CodeGraph tool documented below) and call it. Writing novel code when a helper already exists is a defect to be rejected in review.
+- **src/hello.ts** (`getGreeting`): This function's body directly computes and returns the greeting string literal 'hello world' — it is the sole source of the wrong value, not a pass-through or display layer; it is the only symbol in the index for the greeting.
+  - **Minimal fix:** Change line 2 in src/hello.ts from `return 'hello world';` to `return 'hello dolly';` — a one-line string-literal replacement. No existing helper is needed or available (the index contains only this one symbol); verify src/hello.test.ts against the new literal.
+
+
+## Verification Criteria (what a tester will CONFIRM — your change must satisfy every one)
+These are observable checks, derived from the acceptance criteria and description. They describe WHAT is observed, not how to build it. Make the minimal change that makes all of these true; your accompanying test should assert them:
+- Calling getGreeting() returns the string 'hello dolly'
+
+## Tests are NOT your job this turn
+A dedicated test-writer agent runs immediately after your fix commits and owns the bug-reproducing test. Do NOT write, edit, or create any test file (*.test.*, *.spec.*, __tests__/). Write ONLY the fix. Adding a test here wastes your turn budget and has caused repeated failures.
+
+## CodeGraph Tool — find EXISTING functions to reuse (do this BEFORE writing any new helper)
+An existing-code search tool is available. Run it with the Bash tool to discover reusable functions instead of inventing new ones:
+  PROJECT_ROOT="/tmp/brownfield-mock-e2e-G7eg9p/codelines/mock-hello-world" bash "/home/bradleyjerome/projects/ai/epam-cli/orchestrations/scripts/codegraph-agent-query.sh" helpers <domain nouns>   # existing util/parser/formatter to REUSE (symbol + import path)
+  PROJECT_ROOT="/tmp/brownfield-mock-e2e-G7eg9p/codelines/mock-hello-world" bash "/home/bradleyjerome/projects/ai/epam-cli/orchestrations/scripts/codegraph-agent-query.sh" query <SymbolName>        # exact definition site of a symbol
+  PROJECT_ROOT="/tmp/brownfield-mock-e2e-G7eg9p/codelines/mock-hello-world" bash "/home/bradleyjerome/projects/ai/epam-cli/orchestrations/scripts/codegraph-agent-query.sh" callees <SymbolName>      # what a function already calls
+RULE: Before you add ANY new function, run `helpers` for what it would do. If a suitable function already exists, import and call it — do NOT duplicate it. Fewer lines of code is always better.
+
+
+## Test Criteria (ground truth — written from actual source; overrides any conflicting AC)
+- getGreeting is exported from src/hello.ts as a named export
+- getGreeting takes no parameters and returns the string 'hello dolly'
+- The return value is exactly the string literal 'hello dolly' (all lowercase, single space)
+
+## Mock Strategy
+No mocks needed — getGreeting has no external dependencies; import directly from '../src/hello'
+
+## Banned Patterns (must NOT appear in your file)
+@jest/globals, getGreeting(', hello world, Hello Dolly, vi.mock
+
+## Technical Notes
+- files: ["src/hello.test.ts"]
+
+
+## Files to Create/Modify (EXACT ABSOLUTE PATHS — write to these paths exactly)
+src/hello.test.ts
+
+## Dependencies
+MOCK-HW-1-impl
+
+
+
+## Instructions
+CRITICAL — these files already exist. Their real content is injected below (## Existing File Contents) — you do NOT need to ReadFile them to see what's already there.
+Do NOT import or reference anything that doesn't appear in the injected content below — a plausible-sounding module name is not a real one.
+Only call ReadFile yourself if you need to see MORE of a file than what's shown (e.g. it was truncated), or a file not listed below.
+   - /tmp/brownfield-mock-e2e-G7eg9p/codelines/mock-hello-world/src/hello.test.ts (ReadFile this only if you need it — not a fix site; content omitted to keep the prompt small)
+**The content of every file listed above is already shown in ## Existing File Contents — use that, do not spend a tool call re-reading them. Use Edit for targeted changes to existing files — do NOT overwrite an existing file wholesale with WriteFile.**
+
+1. Use the injected ## Existing File Contents above to verify what actually exists (exports, types, existing utilities) before writing any code — do not guess, and do not re-read a file already shown in full
+2. Implement all acceptance criteria for this story
+3. Test Criteria facts above are ground truth — your test assertions MUST match them exactly
+4. Do NOT create tests unless explicitly required in acceptance criteria
+
+After implementation, provide a brief summary of what was created/modified.
+
+## Relevant Knowledge Base Entries
+The following was learned from previous story implementations and is relevant to your agent role. Apply this knowledge before writing any code:
+
+- [2026-07-07T14:33:39Z] Check the source before writing CLI tests to verify whether output uses console.log or process.stdout.write, then spy on whichever it actually uses.
+- [2026-07-07T18:54:47Z] Always export classes using a named export. Never use a default export for a class, and never declare a class without exporting it.
+- [2026-07-14T10:23:13Z] Always: In strict TypeScript, always annotate callback parameters with explicit types (e.g., `.map((c: Column) =>` not `.map(c =>`). Never rely on implicit any inference for array method callbacks.
+- [2026-07-15T02:48:02Z] Never access ECMAScript private fields (#fieldName) from outside the class in test code — TypeScript cannot parse it and will emit TS1005/TS1109. Test private state indirectly through public methods o
+- [2026-07-15T03:53:06Z] NEVER modify files inside node_modules/ — if a dependency is missing or has wrong types, add it to package.json devDependencies/dependencies and run npm install. If a type mismatch exists, use declara
+- [2026-07-15T04:03:31Z] Never modify any file inside node_modules/ — only edit source files under src/ or config files like package.json/tsconfig.json. If a dependency is missing, add it to package.json devDependencies and r
+- [2026-07-16T16:27:50Z] Never use top-level await in test files — the project uses CommonJS modules which forbid it. Wrap any async setup in an async function called from the test body or inside beforeAll/beforeEach.
+
+## Knowledge Base Contribution (do this LAST — after writing all implementation files)
+Your assigned KB entry ID for this run: **KB-015**
+**This is retry attempt 1** — a previous attempt failed. You MUST write a KB entry documenting what went wrong and what you changed.
+
+IMPORTANT: Write ALL implementation files first. Only AFTER writing every required file should you optionally append a KB entry.
+Do NOT read orchestrations/agents/KB.md before writing implementation files. The relevant KB entries are already injected above.
+
+If (and only if) you discover a non-obvious pattern during implementation, append one entry to `orchestrations/agents/KB.md`:
+
+```markdown
+## KB-015 -- 2026-07-27
+
+**Category:** <backend|frontend|infrastructure|testing|orchestration>
+**AgentRole:** <your agentRole from the story>
+**Tags:** <comma-separated tech keywords, e.g. typescript, node, cli>
+**Trigger:** <retry|first-success>
+**StoryRef:** MOCK-HW-1-test
+
+<One concise paragraph: the specific pattern, gotcha, or anti-pattern.>
+```
+
+Only write an entry if the knowledge is genuinely non-obvious. Skip trivial observations.
+=== End Prompt ===
+
+=== epam Output (attempt 2) ===
+[Langfuse SDK] Network error:  LangfuseFetchNetworkError: Network error while fetching Langfuse
+    at retriable (/home/bradleyjerome/projects/ai/epam-cli/node_modules/langfuse-core/lib/index.cjs.js:1742:15)
+    at process.processTicksAndRejections (node:internal/process/task_queues:104:5)
+    at async retriable (/home/bradleyjerome/projects/ai/epam-cli/node_modules/langfuse-core/lib/index.cjs.js:359:19)
+    at async Langfuse.fetchWithRetry (/home/bradleyjerome/projects/ai/epam-cli/node_modules/langfuse-core/lib/index.cjs.js:1733:12) {
+  error: [TypeError: fetch failed] {
+    [cause]: Error: connect ECONNREFUSED 127.0.0.1:3100
+        at TCPConnectWrap.afterConnect [as oncomplete] (node:net:1645:16) {
+      errno: -111,
+      code: 'ECONNREFUSED',
+      syscall: 'connect',
+      address: '127.0.0.1',
+      port: 3100
+    }
+  },
+  [cause]: [TypeError: fetch failed] {
+    [cause]: Error: connect ECONNREFUSED 127.0.0.1:3100
+        at TCPConnectWrap.afterConnect [as oncomplete] (node:net:1645:16) {
+      errno: -111,
+      code: 'ECONNREFUSED',
+      syscall: 'connect',
+      address: '127.0.0.1',
+      port: 3100
+    }
+  }
+}
+Done. Updated `src/hello.test.ts` to assert `getGreeting()` returns `'hello dolly'`.
+Done. Updated `src/hello.test.ts` to assert `getGreeting()` returns `'hello dolly'`.
+
+=== End epam Output ===

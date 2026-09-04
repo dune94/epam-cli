@@ -1,0 +1,25 @@
+=== Lint Gate: core @ 2026-08-21T17:00:44+00:00 ===
+
+> metrolinx-starter@0.1.0 check-types
+> tsc
+
+
+src/services/contentstack.ts:107:28  @typescript-eslint/no-explicit-any  Unexpected any. Specify a different type.
+src/services/contentstack.ts:107:48  @typescript-eslint/no-explicit-any  Unexpected any. Specify a different type.
+src/services/contentstack.ts:107:56  @typescript-eslint/no-explicit-any  Unexpected any. Specify a different type.
+src/services/contentstack.ts:215:17  @typescript-eslint/no-explicit-any  Unexpected any. Specify a different type.
+src/services/contentstack.ts:245:25  @typescript-eslint/no-explicit-any  Unexpected any. Specify a different type.
+src/services/contentstack.ts:259:15  @typescript-eslint/no-explicit-any  Unexpected any. Specify a different type.
+src/services/contentstack.ts:302:15  @typescript-eslint/no-explicit-any  Unexpected any. Specify a different type.
+src/services/contentstack.ts:405:15  @typescript-eslint/no-explicit-any  Unexpected any. Specify a different type.
+NEW_FINDINGS=8
+UNATTRIBUTABLE (baseline unavailable): src/services/contentstack.ts:107:28  @typescript-eslint/no-explicit-any  Unexpected any. Specify a different type.
+src/services/contentstack.ts:107:48  @typescript-eslint/no-explicit-any  Unexpected any. Specify a different type.
+src/services/contentstack.ts:107:56  @typescript-eslint/no-explicit-any  Unexpected any. Specify a different type.
+src/services/contentstack.ts:215:17  @typescript-eslint/no-explicit-any  Unexpected any. Specify a different type.
+src/services/contentstack.ts:245:25  @typescript-eslint/no-explicit-any  Unexpected any. Specify a different type.
+src/services/contentstack.ts:259:15  @typescript-eslint/no-explicit-any  Unexpected any. Specify a different type.
+src/services/contentstack.ts:302:15  @typescript-eslint/no-explicit-any  Unexpected any. Specify a different type.
+src/services/contentstack.ts:405:15  @typescript-eslint/no-explicit-any  Unexpected any. Specify a different type.
+NEW_FINDINGS=8
+=== Gate Result: PASS ===

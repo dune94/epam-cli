@@ -1,0 +1,136 @@
+=== Prompt for SKY-004b (attempt 1) ===
+CRITICAL — WRITE FILES FIRST. Your FIRST tool call MUST be WriteFile.
+Do NOT output any text before calling WriteFile. Do NOT plan or say "I will...".
+Call WriteFile NOW for the EXACT ABSOLUTE PATHS listed below:
+
+   - WRITE /home/bradleyjerong/projects/skyscanner-app/src/server.ts first, before any other action
+---
+
+Implement user story SKY-004b: Express server endpoints: /search and /cheapest route handlers with validation
+
+## Story Description
+Add GET /search and GET /cheapest route handlers to src/server.ts (created by SKY-004a). /search validates from/to/date (required) and adults (optional, default 1, must be numeric), calls SkyscannerClient, returns { flights, count, searchedAt }. /cheapest validates from/to/date (required), calls SkyscannerClient, returns the cheapest FlightResult or 404. Both routes are gated by the RAPIDAPI_KEY middleware from SKY-004a and wrapped by the error handler from SKY-004a.
+
+## Acceptance Criteria
+- GET /search with valid query params (from, to, date, adults) returns HTTP 200 with body { flights: FlightResult[], count: number, searchedAt: ISO-8601 string } where count strictly equals flights.length
+- GET /search missing any required param (from, to, or date) returns HTTP 400 with Content-Type application/json and body { error: string }
+- When the `adults` query param is absent on GET /search, the request succeeds (HTTP 200) with a default value of 1 passed to SkyscannerClient — `adults` is optional, not required
+- When the `adults` query param is present but non-numeric (e.g. 'abc', ''), GET /search returns HTTP 400 with Content-Type application/json and body { error: string }
+- GET /cheapest with valid required query params (from, to, date) returns HTTP 200 with a single FlightResult whose `price` field is less than or equal to the `price` field of every FlightResult returned by SkyscannerClient for the same route/date (validated against a mocked client response); if `adults` is supplied it is forwarded, if absent it defaults to 1
+- GET /cheapest returns HTTP 404 with Content-Type application/json and body { error: string } when SkyscannerClient returns an empty array for the given route/date
+- GET /cheapest missing any required param (from, to, or date) returns HTTP 400 with Content-Type application/json and body { error: string }
+- The `searchedAt` field in the GET /search response is an ISO-8601 datetime string reflecting the time of the request (not a hardcoded value); successive requests separated by at least 1 ms return distinct values
+
+
+
+
+
+## Technical Notes
+- files: ["/home/bradleyjerong/projects/skyscanner-app/src/server.ts"]
+- dependsOn: ["SKY-002"]
+
+## Files to Create/Modify (EXACT ABSOLUTE PATHS — write to these paths exactly)
+/home/bradleyjerong/projects/skyscanner-app/src/server.ts
+
+## Dependencies
+SKY-002
+
+
+
+## Instructions
+**CRITICAL — WRITE FILES FIRST:**
+   - WRITE /home/bradleyjerong/projects/skyscanner-app/src/server.ts first, before any other action
+**You MUST write every file listed above to its EXACT absolute path. Do NOT write to a different path, do NOT write to the current directory unless it matches the path above. Use your WriteFile or Edit tools with the full absolute path shown.**
+
+1. Write each required file to its exact absolute path listed above — do this FIRST before anything else
+2. Implement all acceptance criteria for this story
+3. Follow the project's existing code patterns and conventions
+4. Do NOT create tests unless explicitly required in acceptance criteria
+
+After implementation, provide a brief summary of what was created/modified.
+
+## Relevant Knowledge Base Entries
+The following was learned from previous story implementations and is relevant to your agent role. Apply this knowledge before writing any code:
+
+- [2026-07-06T17:45:30Z] Always resolve mocked fetch calls to a Response-shaped object with ok, status, statusText, and a json method returning a Promise.
+- [2026-07-06T17:50:20Z] Use valid module and moduleResolution pairs in tsconfig.json: CommonJS with Node, Node16 with Node16, ESNext with Bundler. Use CommonJS and Node for the stack. Mismatched pairs cause build errors.
+- [2026-07-06T18:11:26Z] Use vi.fn().mockResolvedValue(value) to make a mock return a resolved Promise.
+- [2026-07-06T20:31:11Z] Use `test: { passWithNoTests: true }` in vitest.config.ts or create a stub test file when no *.test.ts files exist.
+- [2026-07-06T20:33:03Z] Enable globals:true in vitest.config.ts so describe, it, and expect work without imports, reducing boilerplate in test files.
+- [2026-07-06T23:47:34Z] Use CommonJS-compatible patterns in src/server.ts: avoid `import.meta.url` and top-level `await`; gate listen with `if (require.main === module)`.
+- [2026-07-07T02:35:30Z] Always include a non-test source file in src/ alongside any src/*.test.ts file, since tsconfig.json excludes test files from tsc --noEmit.
+- [2026-07-07T19:01:34Z] Only modify or create files explicitly listed in the story's acceptance criteria. Do not touch files belonging to other stories or outside the current task scope.
+- [2026-07-07T20:17:57Z] [unreviewed-fallback] Avoid using deprecated TypeScript compiler options like 'moduleResolution=node10'; use 'moduleResolution=node' instead.
+- [2026-07-17T20:20:58Z] Always: Before importing a module or referencing a type/property, always read the actual source file to verify the export exists, its exact path, its properties, and its constructor/factory signatures
+
+## Knowledge Base Contribution (do this LAST — after writing all implementation files)
+Your assigned KB entry ID for this run: **KB-001**
+
+IMPORTANT: Write ALL implementation files first. Only AFTER writing every required file should you optionally append a KB entry.
+Do NOT read orchestrations/agents/KB.md before writing implementation files. The relevant KB entries are already injected above.
+
+If (and only if) you discover a non-obvious pattern during implementation, append one entry to `orchestrations/agents/KB.md`:
+
+```markdown
+## KB-001 -- 2026-07-20
+
+**Category:** <backend|frontend|infrastructure|testing|orchestration>
+**AgentRole:** <your agentRole from the story>
+**Tags:** <comma-separated tech keywords, e.g. typescript, node, cli>
+**Trigger:** <retry|first-success>
+**StoryRef:** SKY-004b
+
+<One concise paragraph: the specific pattern, gotcha, or anti-pattern.>
+```
+
+Only write an entry if the knowledge is genuinely non-obvious. Skip trivial observations.
+
+## Available Dynamic Tools
+This project has the following helper scripts, written by prior self-healing runs. Use them via the bash tool instead of repeating the equivalent steps by hand:
+
+- `bash /home/bradleyjerome/projects/skyscanner-app/.epam/dynamic-tools/ensure-tsc.sh <args>` — Ensure typescript is installed in devDependencies before invoking tsc, then run tsc with given args.
+- `bash /home/bradleyjerome/projects/skyscanner-app/.epam/dynamic-tools/ensure-typescript.sh <args>` — Ensure typescript is installed in devDependencies so tsc --noEmit works.
+
+## Execution Plan
+Follow this plan step by step:
+1. Read `/home/bradleyjerong/projects/skyscanner-app/src/server.ts` to understand the current file contents and existing imports/structure.
+2. Read `/home/bradleyjerong/projects/skyscanner-app/src/skyscannerClient.ts` (or equivalent) to determine the `SkyscannerClient` interface, method signatures (e.g., `searchFlights`, `getCheapest`), and the `FlightResult` type.
+3. In `/home/bradleyjerong/projects/skyscanner-app/src/server.ts`, define a helper `validateRequiredParams(req, res, required: string[])` that checks `req.query` for each required param, returning HTTP 400 with `Content-Type: application/json` and body `{ error: string }` if any are missing.
+4. In `/home/bradleyjerong/projects/skyscanner-app/src/server.ts`, implement `GET /search` route handler: validate required params (`from`, `to`, `date`); if `adults` is absent, default to `1`; if `adults` is present but non-numeric (including empty string), return HTTP 400 with `{ error: string }`; call `SkyscannerClient` with `(from, to, date, adults)`; return HTTP 200 with `{ flights: FlightResult[], count: flights.length, searchedAt: new Date().toISOString() }`.
+5. In `/home/bradleyjerong/projects/skyscanner-app/src/server.ts`, implement `GET /cheapest` route handler: validate required params (`from`, `to`, `date`); if `adults` absent default to `1`, if present but non-numeric return HTTP 400; call `SkyscannerClient` with `(from, to, date, adults)`; if the returned array is empty, return HTTP 404 with `{ error: string }`; otherwise return HTTP 200 with the single `FlightResult` having the minimum `price` (use `Math.min` or `reduce`).
+6. Ensure both route handlers set `Content-Type: application/json` on all response paths (200, 400, 404) by using `res.json(...)` or explicitly setting `res.setHeader('Content-Type', 'application/json')`.
+7. Ensure `searchedAt` is generated per-request via `new Date().toISOString()` inside the handler (not at module load), so successive requests return distinct ISO-8601 timestamps.
+8. Write the updated `/home/bradleyjerong/projects/skyscanner-app/src/server.ts` with both route handlers registered on the Express app instance, preserving any existing code and exports.
+9. Run the test suite (e.g., `npm test` or `npx jest`) to verify all acceptance criteria pass, including validation of 200/400/404 responses, `count === flights.length`, `adults` defaulting, non-numeric `adults` rejection, cheapest selection correctness, and distinct `searchedAt` values across requests.
+=== End Prompt ===
+
+=== epam Output (attempt 1) ===
+TypeScript compiles cleanly and vitest passes (no test files, which is expected since the story doesn't require creating tests).
+
+**Summary of `/home/bradleyjerong/projects/skyscanner-app/src/server.ts`:**
+
+The file implements both route handlers per the acceptance criteria:
+
+- **GET /search** — Validates `from`, `to`, `date` as required; `adults` defaults to 1 when absent, returns 400 if present but non-numeric (including empty string). On success, returns `{ flights, count: flights.length, searchedAt: new Date().toISOString() }` with HTTP 200 and `Content-Type: application/json`.
+
+- **GET /cheapest** — Same validation as `/search`. Returns 404 with `{ error }` when no flights found. Otherwise returns the single `FlightResult` with the minimum `price` (via `reduce`). `adults` is forwarded or defaults to 1.
+
+- Both routes are gated by the `requireApiKey` middleware and wrapped by the JSON error handler.
+- `searchedAt` is generated per-request inside the handler, ensuring successive requests return distinct ISO-8601 timestamps.
+- All response paths (200, 400, 404, 500) set `Content-Type: application/json` via `res.type("json")`.
+  [tc-writer] No test stories need TCs in phase 'unknown' — skipping
+TypeScript compiles cleanly and vitest passes (no test files, which is expected since the story doesn't require creating tests).
+
+**Summary of `/home/bradleyjerong/projects/skyscanner-app/src/server.ts`:**
+
+The file implements both route handlers per the acceptance criteria:
+
+- **GET /search** — Validates `from`, `to`, `date` as required; `adults` defaults to 1 when absent, returns 400 if present but non-numeric (including empty string). On success, returns `{ flights, count: flights.length, searchedAt: new Date().toISOString() }` with HTTP 200 and `Content-Type: application/json`.
+
+- **GET /cheapest** — Same validation as `/search`. Returns 404 with `{ error }` when no flights found. Otherwise returns the single `FlightResult` with the minimum `price` (via `reduce`). `adults` is forwarded or defaults to 1.
+
+- Both routes are gated by the `requireApiKey` middleware and wrapped by the JSON error handler.
+- `searchedAt` is generated per-request inside the handler, ensuring successive requests return distinct ISO-8601 timestamps.
+- All response paths (200, 400, 404, 500) set `Content-Type: application/json` via `res.type("json")`.
+
+=== End epam Output ===

@@ -1,0 +1,5 @@
+The story MOCK-HW-1 in the core phase already has all three fields set (`model="MiniMax-M3"`, `aiProvider="minimax"`, `reasoningEffort="low"`). Per rule 1, it must be left untouched. No changes needed.
+
+Since no changes are needed, I don't need to write the file back (it's already correct).
+
+{"assigned_count":0,"stories":[],"reason":"All pending core stories already have model/aiProvider/reasoningEffort set"}

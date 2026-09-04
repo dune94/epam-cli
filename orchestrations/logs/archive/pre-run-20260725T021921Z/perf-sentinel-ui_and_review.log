@@ -1,0 +1,12 @@
+{
+  "agent": "perf-sentinel",
+  "phase": "ui_and_review",
+  "summary": {
+    "filesAnalysed": 0,
+    "findingsCount": 0,
+    "blockerCount": 0,
+    "estimatedStartupImpactMs": 0
+  },
+  "findings": [],
+  "verdict": "pass"
+}

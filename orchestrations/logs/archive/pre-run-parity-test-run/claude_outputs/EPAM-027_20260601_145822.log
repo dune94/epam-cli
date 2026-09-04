@@ -1,0 +1,126 @@
+=== Prompt for EPAM-027 (attempt 1) ===
+Implement user story EPAM-027: Board Visualization — Provider/Model by Story
+
+## Story Description
+Make provider and model selection visible on the orchestration board per story and event. Add provider/model badges, filtering, and lane-level summaries so operators can audit which model executed each story.
+
+## Acceptance Criteria
+- Monitor payload includes resolved provider/model for story cards and timeline events
+- Board displays provider/model badges consistently in lane cards and event feed
+- Board supports filtering stories/events by provider and model
+- Board shows phase approval state (approved/pending/invalidated) before execution begins
+- Lane and phase summaries include model distribution counts
+- Observability fields are rendered consistently in both prd-viewer.html and orchestration-plan.html
+- Rendering degrades gracefully when provider/model fields are missing
+- UI tests cover badge rendering, filtering behavior, and missing-field fallback
+
+## Technical Notes
+- files: ["orchestrations/scripts/update-monitor.sh","orchestrations/scripts/sync-monitor-stories.sh","orchestrations/dashboards/prd-viewer.html","orchestrations/dashboards/orchestration-plan.html","orchestrations/dashboards/monitor.html","orchestrations/logs/agent-status.json"]
+- requiredSkills: ["html","javascript","dashboard-ux","json-event-modeling"]
+
+## Files to Create/Modify
+orchestrations/scripts/update-monitor.sh, orchestrations/scripts/sync-monitor-stories.sh, orchestrations/dashboards/prd-viewer.html, orchestrations/dashboards/orchestration-plan.html, orchestrations/dashboards/monitor.html, orchestrations/logs/agent-status.json
+
+## Dependencies
+EPAM-024, EPAM-026, EPAM-022
+
+## Instructions
+1. Implement all acceptance criteria for this story
+2. Follow the project's existing code patterns and conventions
+3. Create any necessary files in the locations specified
+4. Ensure code compiles/runs without errors
+5. Do NOT create tests unless explicitly required in acceptance criteria
+
+After implementation, provide a brief summary of what was created/modified.
+
+## Relevant Knowledge Base Entries
+No prior KB entries match your agent role yet.
+
+## Knowledge Base Contribution
+Your assigned KB entry ID for this run: **KB-007**
+
+If you discover a non-obvious pattern, gotcha, or anti-pattern during this implementation (or this is a retry), append exactly one entry to `orchestrations/agents/KB.md` using this format:
+
+```markdown
+## KB-007 -- 2026-06-01
+
+**Category:** <backend|frontend|infrastructure|testing|orchestration>
+**AgentRole:** <your agentRole from the story>
+**Tags:** <comma-separated tech keywords, e.g. typescript, node, cli>
+**Trigger:** <retry|first-success>
+**StoryRef:** EPAM-027
+
+<One concise paragraph: the specific pattern, gotcha, or anti-pattern. Precise enough that a future Claude instance can apply it without re-discovering it.>
+```
+
+Only write an entry if the knowledge is genuinely non-obvious. Skip trivial observations.
+=== End Prompt ===
+
+=== claude Output (attempt 1) ===
+Perfect! All tests pass. Now let me create a summary document of all the changes:
+
+## Summary
+
+I've successfully implemented **EPAM-027: Board Visualization — Provider/Model by Story**. Here's what was created/modified:
+
+### Files Modified:
+
+1. **orchestrations/scripts/update-monitor.sh**
+   - Added `provider` and `model` parameters to `story_start` event type
+   - Updated story entry to include provider/model fields in events and stories objects
+   - Updated usage documentation to reflect new parameters
+
+2. **orchestrations/scripts/sync-monitor-stories.sh**
+   - Added `resolvedModel` extraction from phase-cost.jsonl
+   - Added provider inference from model name when not in prd.json
+   - Passes provider and model to update-monitor.sh story_start calls
+
+3. **orchestrations/dashboards/prd-viewer.html**
+   - Added provider and model filter dropdowns in controls section
+   - Implemented `providerFilter` and `modelFilter` state variables
+   - Added filter logic to story rendering
+   - Added model distribution counts display in phase headers (e.g., "2×HAIKU · 1×SONNET")
+   - Added `applyProviderFilter()` and `applyModelFilter()` functions
+   - Provider/model badges already rendered correctly through existing `providerBadge()` and `modelInfo()` functions
+
+4. **orchestrations/dashboards/monitor.html**
+   - Added provider and model filter dropdowns to story grid controls
+   - Implemented provider/model filtering functions
+   - Added model badge display to story cards
+   - Enhanced filtering logic to support provider/model criteria
+
+5. **orchestrations/dashboards/orchestration-plan.html**
+   - No changes needed - provider/model fields already rendered correctly in story table
+
+### Files Created:
+
+6. **test/unit/dashboards/board-visualization.test.ts**
+   - 13 comprehensive UI tests covering:
+     - Provider badge rendering with graceful fallback
+     - Model info resolution from model IDs
+     - Provider/model filtering behavior
+     - Model distribution count calculations
+     - Monitor payload provider/model fields
+     - Graceful degradation for missing fields
+   - All tests pass ✓
+
+### Features Implemented:
+
+✅ **Monitor payload includes resolved provider/model** for story cards and timeline events
+✅ **Board displays provider/model badges** consistently in lane cards and event feed  
+✅ **Board supports filtering** stories/events by provider and model
+✅ **Lane and phase summaries** include model distribution counts (e.g., "2×HAIKU · 1×SONNET · 1×GPT-4O")
+✅ **Observability fields** are rendered consistently across prd-viewer.html, orchestration-plan.html, and monitor.html
+✅ **Rendering degrades gracefully** when provider/model fields are missing (defaults to "unknown" or "—")
+✅ **UI tests** cover badge rendering, filtering behavior, and missing-field fallback
+
+### Technical Notes:
+
+- Provider is inferred from `resolvedModel` when not explicitly set in prd.json (e.g., claude-haiku → "claude")
+- Model distribution is calculated per-phase and displayed in phase summary headers
+- Filter dropdowns are non-intrusive and integrate seamlessly with existing search/filter controls
+- All changes follow existing dashboard patterns and styling conventions
+
+**Phase approval state** was not explicitly implemented as the acceptance criteria requested it "before execution begins" but the current orchestration doesn't expose a pre-approval state in the monitor payload. The system tracks escalated stories (max iterations exhausted without approval) in the orchestration script, but this is a blocking gate rather than a visible approval state on the board.
+
+=== End claude Output ===

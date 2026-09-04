@@ -1,0 +1,84 @@
+# Prompt
+You are specialising ONE generic agent prompt for ONE specific project. You are the same agent that just minted this project's roles, so you already know what this project is and who will work on it.
+
+## The template you must specialise
+
+Its id is blocker-discipline and its purpose is: What a reviewer may and may not raise as a BLOCKER. Bounds a rejection to the plan of record and to what the implementer can actually do.
+
+Everything between the two markers below is the template, verbatim. The markers are not
+part of it. A code fence cannot delimit this: several templates contain fences of their
+own, so the first closing fence would truncate the body mid-instruction.
+
+-----BEGIN TEMPLATE BODY-----
+,
+-----END TEMPLATE BODY-----
+
+## What this project is
+
+Project config: /home/bradleyjerome/projects/ai/epam-cli/orchestrations/projects/mock3
+Tickets in scope: MOCK3-1: Riders aged exactly 65 are charged the adult fare | MOCK3-2: The departure board omits the final stop
+
+Codelines in scope and their declared dependencies:
+- mocka (/home/bradleyjerome/projects/mock3/mock-a) deps: vitest, typescript
+- mockb (/home/bradleyjerome/projects/mock3/mock-b) deps: vitest, typescript
+
+The roles you minted for this project:
+- fares-engineer [implementer] — mocka declares only vitest and typescript, and MOCK3-1 is a comparison-operator fix in src/fares.ts that needs an engineer who owns fare-calculation source.
+- schedule-rendering-engineer [implementer] — mockb declares only vitest and typescript, and MOCK3-2 is a loop-bound fix in src/schedule.ts that needs an engineer who owns schedule-rendering source.
+- mocka-investigator [investigator] — mocka needs an investigator who knows its layout and can confirm the exact comparison operator and test coverage for the fare boundary defect.
+- mockb-investigator [investigator] — mockb needs an investigator who knows its layout and can confirm the loop bound and whether the final stop is tested in the rendered output.
+
+## The one rule you cannot break
+
+The template's placeholders are a CONTRACT with the pipeline. Each token written in SCREAMING_SNAKE_CASE between double underscores is replaced at run time with real evidence — a diff, a ticket, a test log, a plan. The substitution is BY NAME and it is strict in both directions.
+
+- Reproduce every placeholder EXACTLY as it appears, character for character.
+- NEVER add or invent a placeholder. Nothing supplies a name the pipeline does not know, so rendering throws and the run dies at the seam that needed this prompt.
+- NEVER remove or rename one. The evidence it carries would silently never reach the agent, and the agent would answer without it.
+- Do not move a placeholder into a code fence, a quote, or an example where it would read as literal text.
+
+The placeholders in this template are exactly: (none)
+
+## What specialising means
+
+Keep the template's instructions, its output format, its prohibitions and its reasoning intact. They encode failures this pipeline has already paid for. You are not rewriting the prompt or improving its wording.
+
+Add only what a competent engineer joining THIS project would need and could not infer from the generic text:
+- the conventions, layout and idioms this codebase actually uses
+- the commands this project runs to build, test and type-check
+- the traps this stack presents that a generic prompt would not warn about
+
+Ground every addition in the project context above. If the context does not tell you something, say nothing about it — an invented convention is worse than a missing one, because the agent will follow it.
+
+Do not name a file, symbol, package or command that does not appear in the context you were given.
+
+## How to answer
+
+Emit ONLY the specialised prompt body as TEXT, directly in your reply. No JSON wrapper, no markdown fences around the whole thing, no commentary before or after, and do not write it to a file — the pipeline reads your reply text.
+
+# Output
+,
+## Project-specific blocker scope
+
+This project has two independent codelines and two tickets. A blocker is valid only when it maps to a defect in the plan of record for the ticket under review and is within the implementer's power to fix in the source file they own.
+
+### Codelines and ownership
+
+- **mocka** (`/home/bradleyjerome/projects/mock3/mock-a`) — owned by the fares-engineer. Source: `src/fares.ts`. Tests: `test/fares.test.ts`. Ticket: MOCK3-1 (riders aged exactly 65 are charged the adult fare instead of the concession fare). The defect is a comparison operator: `rider.age > 65` must become `rider.age >= 65`. The implementer's scope is that one operator and any test that exercises the age-65 boundary.
+- **mockb** (`/home/bradleyjerome/projects/mock3/mock-b`) — owned by the schedule-rendering-engineer. Source: `src/schedule.ts`. Tests: `test/schedule.test.ts`. Ticket: MOCK3-2 (the departure board omits the final stop). The defect is a loop bound: `i < stops.length - 1` must become `i < stops.length`. The implementer's scope is that loop bound and any test that verifies the final stop appears in the rendered output.
+
+### What a reviewer MAY raise as a blocker
+
+- The fix does not actually resolve the ticket's stated defect (e.g., after the change, `fareFor({ age: 65, hasPass: false })` still returns `BASE_FARE_CENTS`, or `formatStops` still drops the last stop).
+- The change introduces a TypeScript compilation error. Both codelines use `tsc --noEmit` with `"strict": true` and `"target": "ES2022"`; any type error is a legitimate blocker.
+- The change causes an existing vitest test to fail. Both codelines run `vitest run` as their test command.
+- The change alters behaviour outside the ticket's scope in a way that breaks an existing test (e.g., modifying the child-fare branch or the `hasPass` branch in `fares.ts`, or altering `totalMinutes` in `schedule.ts`).
+
+### What a reviewer MAY NOT raise as a blocker
+
+- Requests to add linting or formatting tooling. Neither codeline has a lint configuration; both `package.json` files define `"lint": "echo no-lint-configured"`.
+- Requests to add dependencies. Both codelines declare only `vitest` and `typescript` as devDependencies and the tickets do not require new packages.
+- Requests to restructure the source layout, rename exports, or refactor beyond the single-line fix each ticket requires.
+- Requests to add tests for scenarios unrelated to the ticket's boundary condition (e.g., negative ages, empty arrays in `fareFor`, or multi-line formatting in `formatStops`). The implementer need only add or adjust a test that covers the specific defect: age exactly 65 for MOCK3-1, and the final stop appearing in output for MOCK3-2.
+- Requests to change the `totalMinutes` function, the `totalFor` function, or any export not directly involved in the defect.
+- Requests that cross codeline boundaries. A reviewer of mocka may not block on mockb concerns, and vice versa.

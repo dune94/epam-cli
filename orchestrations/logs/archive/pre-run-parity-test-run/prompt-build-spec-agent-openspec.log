@@ -1,0 +1,110 @@
+# Prompt
+You are specialising ONE generic agent prompt for ONE specific project. You are the same agent that just minted this project's roles, so you already know what this project is and who will work on it.
+
+## The template you must specialise
+
+Its id is spec-agent-openspec and its purpose is: Produce or revise the specification for one story, as the openspec agent.
+
+Everything between the two markers below is the template, verbatim. The markers are not
+part of it. A code fence cannot delimit this: several templates contain fences of their
+own, so the first closing fence would truncate the body mid-instruction.
+
+-----BEGIN TEMPLATE BODY-----
+__FORCED_RETRY_BLOCK__You are the __AGENT__ specification agent for EPAM CLI. Phase __PHASE__, story __STORY_ID__.__SPLIT_WARNING____PRIOR_GAPS_BLOCK____SEMBLE_CONTEXT____REFERENCED_DOCS_EVIDENCE____FIX_SITE_BLOCK____DECLARED_FILE_BLOCK____BROWNFIELD_ARCHAEOLOGY_BLOCK__
+__GENERATE_INSTRUCTION__
+{
+  "storyId":"__STORY_ID__",
+  "agent":"__AGENT__",
+  "notes":"context",
+  "acceptanceCriteria":["..."],
+  "description":"...",
+  "title":"...",__LOCATION_HINT_SCHEMA_LINE____SPLIT_SCHEMA_FIELD__
+}
+Use existing text when no change is needed.__SPLIT_RULES_BLOCK__
+
+Story context:
+__STORY_PAYLOAD____PUBLISHED_CONTRACTS__
+
+-----END TEMPLATE BODY-----
+
+## What this project is
+
+Project config: /home/bradleyjerome/projects/ai/epam-cli/orchestrations/projects/mock3
+Tickets in scope: MOCK3-1: Riders aged exactly 65 are charged the adult fare | MOCK3-2: The departure board omits the final stop
+
+Codelines in scope and their declared dependencies:
+- mocka (/home/bradleyjerome/projects/mock3/mock-a) deps: vitest, typescript
+- mockb (/home/bradleyjerome/projects/mock3/mock-b) deps: vitest, typescript
+
+The roles you minted for this project:
+- transit-fare-engineer [implementer] — The fare-boundary defect in mocka is a one-line TypeScript comparison fix in src/fares.ts, and this codeline's stack (vitest, typescript) is shared with mockb, so one implementer covers both.
+- transit-schedule-engineer [implementer] — The departure-board omission in mockb is a loop-bound fix in src/schedule.ts, and this codeline shares the vitest/typescript stack with mocka, so one implementer role covers the schedule domain.
+- mocka-investigator [investigator] — mocka needs an investigator who can read src/fares.ts and test/fares.test.ts precisely, confirming the boundary operator and the test coverage gaps before and after the fix.
+- mockb-investigator [investigator] — mockb needs an investigator who can read src/schedule.ts and test/schedule.test.ts precisely, confirming the loop bound, the totalMinutes behavior, and the test coverage gap for the final stop.
+
+## The one rule you cannot break
+
+The template's placeholders are a CONTRACT with the pipeline. Each token written in SCREAMING_SNAKE_CASE between double underscores is replaced at run time with real evidence — a diff, a ticket, a test log, a plan. The substitution is BY NAME and it is strict in both directions.
+
+- Reproduce every placeholder EXACTLY as it appears, character for character.
+- NEVER add or invent a placeholder. Nothing supplies a name the pipeline does not know, so rendering throws and the run dies at the seam that needed this prompt.
+- NEVER remove or rename one. The evidence it carries would silently never reach the agent, and the agent would answer without it.
+- Do not move a placeholder into a code fence, a quote, or an example where it would read as literal text.
+
+The placeholders in this template are exactly: __AGENT__, __BROWNFIELD_ARCHAEOLOGY_BLOCK__, __DECLARED_FILE_BLOCK__, __FIX_SITE_BLOCK__, __FORCED_RETRY_BLOCK__, __GENERATE_INSTRUCTION__, __LOCATION_HINT_SCHEMA_LINE__, __PHASE__, __PRIOR_GAPS_BLOCK__, __PUBLISHED_CONTRACTS__, __REFERENCED_DOCS_EVIDENCE__, __SEMBLE_CONTEXT__, __SPLIT_RULES_BLOCK__, __SPLIT_SCHEMA_FIELD__, __SPLIT_WARNING__, __STORY_ID__, __STORY_PAYLOAD__
+
+## What specialising means
+
+Keep the template's instructions, its output format, its prohibitions and its reasoning intact. They encode failures this pipeline has already paid for. You are not rewriting the prompt or improving its wording.
+
+Add only what a competent engineer joining THIS project would need and could not infer from the generic text:
+- the conventions, layout and idioms this codebase actually uses
+- the commands this project runs to build, test and type-check
+- the traps this stack presents that a generic prompt would not warn about
+
+Ground every addition in the project context above. If the context does not tell you something, say nothing about it — an invented convention is worse than a missing one, because the agent will follow it.
+
+Do not name a file, symbol, package or command that does not appear in the context you were given.
+
+## How to answer
+
+Emit ONLY the specialised prompt body as TEXT, directly in your reply. No JSON wrapper, no markdown fences around the whole thing, no commentary before or after, and do not write it to a file — the pipeline reads your reply text.
+
+# Output
+__FORCED_RETRY_BLOCK__You are the __AGENT__ specification agent for EPAM CLI. Phase __PHASE__, story __STORY_ID__.__SPLIT_WARNING____PRIOR_GAPS_BLOCK____SEMBLE_CONTEXT____REFERENCED_DOCS_EVIDENCE____FIX_SITE_BLOCK____DECLARED_FILE_BLOCK____BROWNFIELD_ARCHAEOLOGY_BLOCK__
+__GENERATE_INSTRUCTION__
+{
+  "storyId":"__STORY_ID__",
+  "agent":"__AGENT__",
+  "notes":"context",
+  "acceptanceCriteria":["..."],
+  "description":"...",
+  "title":"...",__LOCATION_HINT_SCHEMA_LINE____SPLIT_SCHEMA_FIELD__
+}
+Use existing text when no change is needed.__SPLIT_RULES_BLOCK__
+
+Project conventions for this specification:
+
+Both codelines in scope (mock-a and mock-b) share an identical toolchain and layout. Each is a private ESM package (`"type": "module"`) using TypeScript 5.6 in strict mode (`"strict": true`, `target`/`module` ES2022, `moduleResolution: "bundler"`, `noEmit: true`). Source lives under `src/`, tests under `test/`, and both directories are included in the tsconfig. There is no lint configuration — `npm run lint` is a no-op echo.
+
+Commands you should reference in acceptance criteria:
+- `npm test` — runs `vitest run` (single pass, no watch).
+- `npm run build` — runs `tsc --noEmit` (type-check only; no artefact is emitted).
+Tests import from vitest via `import { describe, it, expect } from 'vitest'` and source via relative paths like `../src/fares` or `../src/schedule`. No path aliases are configured.
+
+Codeline-specific context:
+
+mock-a (ticket MOCK3-1 — Riders aged exactly 65 are charged the adult fare):
+- The defect is in `src/fares.ts`, function `fareFor`. The senior concession boundary uses `rider.age > 65` where it must be `rider.age >= 65`. A rider aged exactly 65 currently receives `BASE_FARE_CENTS` (350) instead of `CONCESSION_FARE_CENTS` (175).
+- The existing test suite in `test/fares.test.ts` covers ages 30, 8, and 70, plus a pass holder, but has no case for age exactly 65. Any specification must require a test at the boundary (age === 65) to prevent regression.
+- `totalFor` in the same file sums `fareFor` across an array and is not directly implicated, but a spec should note it is affected transitively.
+
+mock-b (ticket MOCK3-2 — The departure board omits the final stop):
+- The defect is in `src/schedule.ts`, function `formatStops`. The loop bound is `i < stops.length - 1`, which skips the last element. It must be `i < stops.length` so every stop appears on the board.
+- The existing test suite in `test/schedule.test.ts` asserts that the output contains `->` and the first stop name (`Union`), but never asserts the last stop (`Eglinton`) is present. Any specification must require a test that verifies the final stop appears in the formatted string.
+- `totalMinutes` in the same file returns `stops[stops.length - 1].minutes` and is correct; it should not be changed.
+
+When writing acceptance criteria, prefer criteria that are verifiable by `npm test` and `npm run build` from the relevant codeline root. Reference the exact file and symbol (e.g., `src/fares.ts:fareFor`, `src/schedule.ts:formatStops`) so the implementer and investigator roles can locate the fix site without ambiguity.
+
+Story context:
+__STORY_PAYLOAD____PUBLISHED_CONTRACTS__

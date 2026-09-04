@@ -1,0 +1,37 @@
+[0;32m[SUCCESS][0m Prerequisites check passed
+[0;34m[2026-07-26 13:10:01][0m ======================================
+[0;34m[2026-07-26 13:10:01][0m EPAM CLI Orchestration Loop Starting
+[0;34m[2026-07-26 13:10:01][0m Stories to implement: AMSD-1820
+[0;34m[2026-07-26 13:10:01][0m ======================================
+
+Project: metrolinx
+Description: Brownfield defect fixes against the Metrolinx codelines, sourced from Jira.
+Tech Stack: language: TypeScript, runtime: Node.js 20, framework: Express, testing: vitest, devEnvironment: Ubuntu WSL2
+
+Global Acceptance Criteria:
+- 
+
+[0;34m[2026-07-26 13:10:01][0m --------------------------------------
+[0;32m+ No dependencies for AMSD-1820[0m
+[0;34m[2026-07-26 13:10:01][0m Implementing story: AMSD-1820 - [Mozio] - The Promo code amount is NOT displayed as expected for Return trip tickets in the Mozio email confirmation
+[0;34m[2026-07-26 13:10:01][0m   Effort[medium] -> turns=unlimited maxIter=10 maxOutTok=6144
+[0;34m[2026-07-26 13:10:01][0m   BrownfieldEffortFloor: reasoning-model headroom -> maxIter=10 maxOutTok=24576 (think + write must fit one response)
+[0;34m[2026-07-26 13:10:01][0m   Effort[final] -> maxIter=10 maxOutTok=24576
+[0;34m[2026-07-26 13:10:01][0m   Provider[minimax] -> CLI=epam
+[0;34m[2026-07-26 13:10:01][0m   Model[prd.json] -> MiniMax-M3 (overrides effort default)
+[0;34m[2026-07-26 13:10:01][0m   ReasoningEffort[prd.json] -> medium
+[0;34m[2026-07-26 13:10:01][0m   PlannerModel[auto/high-tier: z-ai/glm-5.2] -> planning turn, then execution on MiniMax-M3
+[0;34m[2026-07-26 13:10:01][0m   Running planning phase with z-ai/glm-5.2...
+[0;34m[2026-07-26 13:10:29][0m   Planning phase complete (301 words, reviewed)
+[0;34m[2026-07-26 13:10:29][0m Invoking epam (attempt 1/8)...
+[0;34m[2026-07-26 13:11:17][0m   Cost[AMSD-1820] model=MiniMax-M3 in=48962 out=5058 cost=$0.0208 elapsed=.80min status=attempt
+[1;33m[WARNING][0m Story AMSD-1820: 4/5 declared candidate file(s) were unchanged (real work landed in the others) — informational, not a failure:
+[1;33m[WARNING][0m   src/clients/mozio/mappers/map-to-sanitized-mozio-dispatch.ts
+[1;33m[WARNING][0m   src/services/create-reservations/create-reservations.mappers.ts
+[1;33m[WARNING][0m   src/services/mappers/line-item/map-line-item-return-trip-modification.ts
+[1;33m[WARNING][0m   src/functions/http-mozio-webhook.ts
+[0;32m[SUCCESS][0m Verified 5 declared deliverable(s) for AMSD-1820
+[0;34m[2026-07-26 13:11:18][0m   [tc-writer] Generating TCs for phase 'unknown' (post-impl, pre-test)...
+  [tc-writer] No test stories need TCs in phase 'unknown' — skipping
+[0;34m[2026-07-26 13:11:18][0m   [tc-writer] TC generation complete — test stories have testCriteria
+[0;32m[SUCCESS][0m   [tsc-verify] AMSD-1820: tsc --noEmit passed

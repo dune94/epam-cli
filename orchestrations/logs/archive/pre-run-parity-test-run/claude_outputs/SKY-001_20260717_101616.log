@@ -1,0 +1,122 @@
+=== Prompt for SKY-001 (attempt 1) ===
+CRITICAL — WRITE FILES FIRST. Your FIRST tool call MUST be WriteFile.
+Do NOT output any text before calling WriteFile. Do NOT plan or say "I will...".
+Call WriteFile NOW for the EXACT ABSOLUTE PATHS listed below:
+
+   - WRITE /home/bradleyjerome/projects/skyscanner-app/package.json first, before any other action
+   - WRITE /home/bradleyjerome/projects/skyscanner-app/tsconfig.json first, before any other action
+   - WRITE /home/bradleyjerome/projects/skyscanner-app/vitest.config.ts first, before any other action
+---
+
+Implement user story SKY-001: Scaffold TypeScript project with Vitest and Express
+
+## Story Description
+Create the project skeleton at /home/bradleyjerome/projects/skyscanner-app. Initialize a TypeScript Node.js project with: package.json (name: skyscanner-app, main: 'dist/server.js', scripts: build='tsc', test='vitest run', start='node dist/server.js', dev='tsx src/server.ts' — src/server.ts is the app's real entry point, built later by the REST API story; do NOT create a src/index.ts or reference dist/index.js anywhere), tsconfig.json (strict mode, target ES2022, module CommonJS, outDir dist/), vitest.config.ts, .gitignore, and a src/ directory. Install runtime dependency express and devDependencies typescript, tsx, vitest, @types/express, @types/node. Do NOT install Skyscanner SDKs — RapidAPI is called directly via fetch. The project must compile cleanly and vitest must exit 0 with no test files present.
+
+## Acceptance Criteria
+- /home/bradleyjerome/projects/skyscanner-app/package.json exists and the 'name' field equals exactly 'skyscanner-app'
+- package.json 'scripts' object contains exactly: build='tsc', test='vitest run', start='node dist/server.js', dev='tsx src/server.ts' — and 'main' equals 'dist/server.js'
+- package.json 'dependencies' includes 'express'
+- package.json 'devDependencies' includes all of: typescript, tsx, vitest, @types/express, @types/node
+- package.json contains no dependency whose name includes 'skyscanner', 'rapidapi', or any Skyscanner SDK
+- /home/bradleyjerome/projects/skyscanner-app/tsconfig.json exists with compilerOptions: strict=true, target='ES2022', module='CommonJS', outDir='dist/'
+- /home/bradleyjerome/projects/skyscanner-app/vitest.config.ts exists, imports defineConfig from 'vitest/config', exports a default config object, and sets test.globals to true (so test files can use describe/it/expect/vi/beforeEach/afterEach without importing them explicitly)
+- /home/bradleyjerome/projects/skyscanner-app/.gitignore exists and contains entries for both 'node_modules' and 'dist'
+- /home/bradleyjerome/projects/skyscanner-app/src/ directory exists
+- /home/bradleyjerome/projects/skyscanner-app/node_modules/ directory exists (npm install completed successfully)
+- Running ~/.nvm/versions/node/v20.20.0/bin/node ./node_modules/.bin/tsc --noEmit inside /home/bradleyjerome/projects/skyscanner-app exits with code 0 and produces no output
+- Running ~/.nvm/versions/node/v20.20.0/bin/node ./node_modules/.bin/vitest run inside /home/bradleyjerome/projects/skyscanner-app exits with code 0 (no test files is an acceptable passing state)
+- package.json contains no reference anywhere to 'index.ts' or 'index.js' (the real entry point is src/server.ts, built by a later story)
+
+
+
+
+
+## Technical Notes
+- workingDir: /home/bradleyjerome/projects/skyscanner-app
+- files: ["/home/bradleyjerome/projects/skyscanner-app/package.json","/home/bradleyjerome/projects/skyscanner-app/tsconfig.json","/home/bradleyjerome/projects/skyscanner-app/vitest.config.ts"]
+
+## Files to Create/Modify (EXACT ABSOLUTE PATHS — write to these paths exactly)
+/home/bradleyjerome/projects/skyscanner-app/package.json, /home/bradleyjerome/projects/skyscanner-app/tsconfig.json, /home/bradleyjerome/projects/skyscanner-app/vitest.config.ts
+
+## Dependencies
+None
+
+
+## Instructions
+**CRITICAL — WRITE FILES FIRST:**
+   - WRITE /home/bradleyjerome/projects/skyscanner-app/package.json first, before any other action
+   - WRITE /home/bradleyjerome/projects/skyscanner-app/tsconfig.json first, before any other action
+   - WRITE /home/bradleyjerome/projects/skyscanner-app/vitest.config.ts first, before any other action
+**You MUST write every file listed above to its EXACT absolute path. Do NOT write to a different path, do NOT write to the current directory unless it matches the path above. Use your WriteFile or Edit tools with the full absolute path shown.**
+
+1. Write each required file to its exact absolute path listed above — do this FIRST before anything else
+2. Implement all acceptance criteria for this story
+3. Follow the project's existing code patterns and conventions
+4. Do NOT create tests unless explicitly required in acceptance criteria
+
+After implementation, provide a brief summary of what was created/modified.
+
+## Relevant Knowledge Base Entries
+The following was learned from previous story implementations and is relevant to your agent role. Apply this knowledge before writing any code:
+
+- [2026-07-06T11:14:41Z] Use vi.mock() factories that export every binding the SUT uses in its exact call shape (standalone function vs class instance method), and assert each mock's type and shape after mocking.
+- [2026-07-06T17:45:30Z] Always resolve mocked fetch calls to a Response-shaped object with ok, status, statusText, and a json method returning a Promise.
+- [2026-07-06T17:50:20Z] Use valid module and moduleResolution pairs in tsconfig.json: CommonJS with Node, Node16 with Node16, ESNext with Bundler. Use CommonJS and Node for the stack. Mismatched pairs cause build errors.
+- [2026-07-06T18:11:26Z] Use vi.fn().mockResolvedValue(value) to make a mock return a resolved Promise.
+- [2026-07-06T20:31:11Z] Use `test: { passWithNoTests: true }` in vitest.config.ts or create a stub test file when no *.test.ts files exist.
+- [2026-07-06T20:33:03Z] Enable globals:true in vitest.config.ts so describe, it, and expect work without imports, reducing boilerplate in test files.
+- [2026-07-06T23:47:34Z] Use CommonJS-compatible patterns in src/server.ts: avoid `import.meta.url` and top-level `await`; gate listen with `if (require.main === module)`.
+- [2026-07-07T02:35:30Z] Always include a non-test source file in src/ alongside any src/*.test.ts file, since tsconfig.json excludes test files from tsc --noEmit.
+- [2026-07-07T19:01:34Z] Only modify or create files explicitly listed in the story's acceptance criteria. Do not touch files belonging to other stories or outside the current task scope.
+- [2026-07-07T20:17:57Z] [unreviewed-fallback] Avoid using deprecated TypeScript compiler options like 'moduleResolution=node10'; use 'moduleResolution=node' instead.
+
+## Knowledge Base Contribution (do this LAST — after writing all implementation files)
+Your assigned KB entry ID for this run: **KB-008**
+
+IMPORTANT: Write ALL implementation files first. Only AFTER writing every required file should you optionally append a KB entry.
+Do NOT read orchestrations/agents/KB.md before writing implementation files. The relevant KB entries are already injected above.
+
+If (and only if) you discover a non-obvious pattern during implementation, append one entry to `orchestrations/agents/KB.md`:
+
+```markdown
+## KB-008 -- 2026-07-17
+
+**Category:** <backend|frontend|infrastructure|testing|orchestration>
+**AgentRole:** <your agentRole from the story>
+**Tags:** <comma-separated tech keywords, e.g. typescript, node, cli>
+**Trigger:** <retry|first-success>
+**StoryRef:** SKY-001
+
+<One concise paragraph: the specific pattern, gotcha, or anti-pattern.>
+```
+
+Only write an entry if the knowledge is genuinely non-obvious. Skip trivial observations.
+
+## Execution Plan
+Follow this plan step by step:
+1. Create `/home/bradleyjerome/projects/skyscanner-app/package.json` with name "skyscanner-app", main "dist/server.js", scripts { build: "tsc", test: "vitest run", start: "node dist/server.js", dev: "tsx src/server.ts" }, dependencies { express }, devDependencies { typescript, tsx, vitest, @types/express, @types/node } — no dependency containing "skyscanner" or "rapidapi", no reference to "index.ts" or "index.js" anywhere in the file.
+
+2. Create `/home/bradleyjerome/projects/skyscanner-app/tsconfig.json` with compilerOptions: { strict: true, target: "ES2022", module: "CommonJS", outDir: "dist/", rootDir: "src", include: ["src"] } — rootDir/include ensure `tsc --noEmit` succeeds without any .ts files yet.
+
+3. Create `/home/bradleyjerome/projects/skyscanner-app/vitest.config.ts` that imports `defineConfig` from "vitest/config" and exports default `defineConfig({ test: { globals: true } })`.
+
+4. Create `/home/bradleyjerome/projects/skyscanner-app/.gitignore` with entries `node_modules` and `dist` on separate lines.
+
+5. Create an empty directory `/home/bradleyjerome/projects/skyscanner-app/src/` (e.g., by writing a placeholder file like `src/.gitkeep` then removing it, or via `mkdir -p`).
+
+6. Run `npm install` inside `/home/bradleyjerome/projects/skyscanner-app` to populate node_modules.
+
+7. Run `~/.nvm/versions/node/v20.20.0/bin/node ./node_modules/.bin/tsc --noEmit` inside the project and verify exit code 0 with no output; if it fails due to empty src/, add a minimal `src/.ts` file (e.g., `export {};`) and re-run.
+
+8. Run `~/.nvm/versions/node/v20.20.0/bin/node ./node_modules/.bin/vitest run` inside the project and verify exit code 0.
+
+9. Verify `/home/bradleyjerome/projects/skyscanner-app/package.json` contains no string "index.ts", "index.js", "skyscanner" (outside the name field), or "rapidapi" anywhere in the file.
+=== End Prompt ===
+
+=== epam Output (attempt 1) ===
+It's an empty pre-existing directory. Not my scope to touch (per KB: "Only modify or create files explicitly listed"). I'll leave it alone. Now run the typecheck and tests.
+  [tc-writer] No test stories need TCs in phase 'unknown' — skipping
+It's an empty pre-existing directory. Not my scope to touch (per KB: "Only modify or create files explicitly listed"). I'll leave it alone. Now run the typecheck and tests.
+
+=== End epam Output ===

@@ -1,0 +1,25 @@
+{
+  "agent": "spec-validator",
+  "phase": "core",
+  "stories": [{
+    "storyId": "MOCK-HW-1",
+    "title": "Hello world greeting should say hello dolly",
+    "criteria": [
+      {
+        "text": "The behavior described in the ticket is observed to be correct after the change: Hello world greeting should say hello dolly",
+        "status": "met",
+        "evidence": "src/hello.ts exports getGreeting() returning 'hello dolly'; src/hello.test.ts asserts expect(getGreeting()).toBe('hello dolly'); test run shows numTotal=1 numPassed=1 numFailed=0.",
+        "gaps": "None"
+      },
+      {
+        "text": "Existing behavior related to this area is unchanged (no regression)",
+        "status": "met",
+        "evidence": "Diff shows only the greeting string change in getGreeting() and matching test update; no other behavioral code altered; test suite passes with zero failures.",
+        "gaps": "None"
+      }
+    ],
+    "overallCompliance": 100,
+    "verdict": "pass"
+  }],
+  "overallVerdict": "pass"
+}

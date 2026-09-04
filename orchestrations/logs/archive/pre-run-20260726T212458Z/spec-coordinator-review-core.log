@@ -1,0 +1,82 @@
+# Prompt
+You are the specification coordinator for the epam-cli orchestration system. Before every phase you read orchestrations/prd.json (implementationOrder and stories), evaluate risk, dependencies, and technical readiness, then assign the correct specification runners: OpenSpec, Speckit, both, or none. You write assignments into each story's specification.assignedAgents field along with coordinatorNotes, target provider/model, and timestamps. You understand the provider policy ledger (configuration.aiRuntime.providerPolicies), token guardrails, and know when to skip stories that were already hand-curated. When you plan a run you emit JSON compliant with spec-mode-runner.js so that automation can apply deltas deterministically. You never invent story IDs or mutate acceptance criteria directly; only delegate to spec agents and record their status.
+
+You are the EPAM CLI specification coordinator reviewing the completed spec outputs for phase core.
+
+Each story was processed by a sequential agent pipeline:
+  1. openspec elaborated requirements (AC refinement, story splits, technical depth)
+  2. speckit reviewed openspec's output (testability, security, edge cases, gap analysis)
+
+For each story, evaluate the quality of the collaborative spec work:
+1. Did both agents add meaningful, non-overlapping value?
+2. Are the acceptance criteria complete, testable, and non-overlapping?
+3. Are story splits logical and properly scoped?
+4. Flag any story needing human review.
+
+Respond with JSON between <SPEC_REVIEW> and </SPEC_REVIEW> using this schema:
+[
+  {"storyId":"REM-xxx","verdict":"approved|needs_review","reviewNotes":"coordinator observations","qualityScore":0.0-1.0,"flags":[]}
+]
+
+Stories to review:
+[
+  {
+    "id": "AMSD-1820",
+    "title": "[Mozio] - The Promo code amount is NOT displayed as expected for Return trip tickets in the Mozio email confirmation",
+    "acceptanceCriteria": [],
+    "specification": {
+      "runId": "20260726T205149Z",
+      "assignedAgents": [
+        "openspec",
+        "speckit"
+      ],
+      "coordinatorNotes": "Bug fix with empty AC — needs openspec to elaborate expected vs actual promo code display behavior for return trips, define clear acceptance criteria, and identify root cause areas. Speckit should follow to harden testability criteria covering edge cases: currency rounding, multi-segment return trips, zero-value promo codes, and email rendering across clients. Monetary display logic warrants both agents.",
+      "status": "completed",
+      "updatedAt": "2026-07-26T20:55:45.661Z",
+      "appliedAgents": [
+        "openspec",
+        "speckit"
+      ],
+      "agentContributions": [
+        {
+          "agent": "openspec",
+          "applied": true,
+          "notes": "Defect: promo code discount amount is incorrect/missing for return-trip tickets in the Mozio email confirmation. The codebase already swaps from/to stations for return trips in create-reservations.mappers.ts getTripData, but the discount/promo-code amount is not similarly adjusted. mapToSanitizedMozioDispatch passes discount through as-is from dispatch.report.price.discount, which likely contains the full-order discount rather than the per-leg amount for the return dispatch. Zero-amount order handling in process-zero-amount-order.service.ts is a related but separate concern (100% promo → entire order free); this story is about partial promo amounts on return legs.",
+          "acceptanceChanged": false,
+          "splitCount": 0,
+          "timestamp": "2026-07-26T20:55:35.815Z"
+        },
+        {
+          "agent": "speckit",
+          "applied": true,
+          "notes": "Openspec provided an empty acceptanceCriteria array with helpful technical notes. I built the full AC set from scratch based on those notes and the story context. Key design decisions: (1) AC 1-2 ensure both legs of a round trip get the per-leg discount, not just the return leg — the bug likely manifests on the return but the fix should handle both legs symmetrically. (2) AC 3 is a regression guard for one-way trips. (3) AC 5 is a critical invariant: per-leg discounts must sum to the total. (4) AC 6 addresses the edge case of indivisible discount amounts. (5) AC 7 covers the zero-discount edge case. (6) AC 8 ensures the fix doesn't break the separate 100%-promo/zero-amount-order flow. (7) AC 9 ensures consistency with the existing station-swap pattern. (8) AC 10 covers the webhook entry point since http-mozio-webhook.ts is listed as a relevant file.",
+          "acceptanceChanged": false,
+          "splitCount": 0,
+          "timestamp": "2026-07-26T20:55:45.661Z"
+        }
+      ]
+    },
+    "splitChildren": []
+  }
+]
+
+<SPEC_REVIEW>
+</SPEC_REVIEW>
+
+# Output
+<SPEC_REVIEW>
+[
+  {
+    "storyId": "AMSD-1820",
+    "verdict": "needs_review",
+    "reviewNotes": "Both agents provided valuable technical analysis — openspec correctly identified the root cause (discount passed through as-is from dispatch.report.price.discount without per-leg adjustment for return trips) and distinguished it from the separate zero-amount-order flow, while speckit designed a comprehensive 10-point AC framework covering symmetric per-leg discounts, sum invariants, indivisible-amount edge cases, and regression guards. However, there is a critical gap: both agents report 'acceptanceChanged: false' and the story's acceptanceCriteria array remains empty. Speckit's notes describe 10 acceptance criteria in prose but they were never materialized into the story's AC field. The collaborative value is evident in the notes, but the deliverable is incomplete — a story with empty ACs cannot proceed to implementation. Additionally, openspec's primary assignment was to elaborate ACs, yet it produced only technical notes without any criteria, shifting the full AC-authoring burden to speckit. Human review is needed to (1) extract speckit's described ACs into the actual acceptanceCriteria array, and (2) verify the 10 proposed ACs are individually testable and non-overlapping.",
+    "qualityScore": 0.55,
+    "flags": [
+      "acceptance_criteria_not_materialized",
+      "openspec_did_not_produce_acs",
+      "speckit_acs_exist_only_in_notes_not_in_story",
+      "empty_ac_array_blocks_implementation"
+    ]
+  }
+]
+</SPEC_REVIEW>

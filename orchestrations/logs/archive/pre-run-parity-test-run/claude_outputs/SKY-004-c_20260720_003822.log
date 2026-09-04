@@ -1,0 +1,302 @@
+=== Prompt for SKY-004-c (attempt 1) ===
+CRITICAL — WRITE FILES FIRST. Your FIRST tool call MUST be WriteFile.
+Do NOT output any text before calling WriteFile. Do NOT plan or say "I will...".
+Call WriteFile NOW for the EXACT ABSOLUTE PATHS listed below:
+
+   - WRITE /home/bradleyjerome/projects/skyscanner-app/src/server.test.ts first, before any other action
+---
+
+Implement user story SKY-004-c: Write vitest + supertest integration tests for all server endpoints
+
+## Story Description
+Create src/server.test.ts with at least 8 vitest tests using supertest, covering all endpoint scenarios: /health, /search (valid, missing params, non-numeric adults, default adults), /cheapest (valid, empty→404, missing params), RAPIDAPI_KEY absent→503, client error→500, and / serves HTML from file. SkyscannerClient must be fully mocked so no real HTTP calls occur during test runs.
+
+## Acceptance Criteria
+- src/server.test.ts contains ≥8 vitest tests covering distinct scenarios: /health (with/without RAPIDAPI_KEY), /search (valid params, missing required param, non-numeric adults, default adults=1), /cheapest (valid, empty→404, missing param), RAPIDAPI_KEY absent→503, SkyscannerClient error→500, GET / serves HTML from file
+- SkyscannerClient mocked via vi.mock or equivalent — no real HTTP calls made during `vitest run`
+- `npx tsc --noEmit` exits 0 with no type errors
+- `vitest run` exits 0 with all tests passing
+
+
+## Test Criteria (ground truth — written from actual source; overrides any conflicting AC)
+- Express app exported as 'app' from src/server.ts
+- GET /health returns { status: 'ok', uptime: number } with 200 status
+- GET / returns { status: 'ok', message: 'Skyscanner app server' } with 200 status
+- GET /search and GET /cheapest both use query params: from, to, date, adults
+- adults defaults to 1 when not provided - no upper or lower bound validation exists
+- validateParams returns { ok: false, error: 'Missing required parameter: from' } for missing from
+- validateParams returns { ok: false, error: 'Missing required parameter: to' } for missing to
+- validateParams returns { ok: false, error: 'Missing required parameter: date' } for missing date
+- validateParams returns { ok: false, error: 'Invalid parameter: adults must be numeric' } for non-numeric adults
+- RAPIDAPI_KEY is read from process.env.RAPIDAPI_KEY at module load time, not per-request
+- When RAPIDAPI_KEY is falsy, both /search and /cheapest return { error: 'RAPIDAPI_KEY not configured' } with 503 status
+- GET /search returns { flights: FlightResult[], count: number, searchedAt: string } with 200 status on success
+- GET /cheapest returns a single FlightResult object (not wrapped) with 200 status on success
+- GET /cheapest returns { error: 'No flights found' } with 404 status when flights array is empty
+- Both routes catch errors and return { error: message } with 500 status - message comes from err.message or 'Unknown error'
+- SkyscannerClient constructor takes { apiKey?: string } options bag
+- SkyscannerClient.searchFlights takes { origin, destination, date, adults? } and returns Promise<FlightResult[]>
+- FlightResult interface has fields: price (number), currency (string), airline (string), departure (string), arrival (string), duration (number), stops (number)
+- Server listens on PORT env var or defaults to 3000 only when require.main === module
+
+## Mock Strategy
+Use vi.mock('./skyscanner/client') with vi.hoisted(() => ({ SkyscannerClient: vi.fn() })) to mock the constructor, then mockReturnValueOnce with a mock instance containing mock searchFlights method; use vi.stubEnv to set/clear RAPIDAPI_KEY; use beforeEach with vi.clearAllMocks()
+
+## Banned Patterns (must NOT appear in your file)
+origin, destination, GET /cheapest returns wrapped object, adults=0 validation, adults upper bound check, RAPIDAPI_KEY checked per-request, @jest/globals, import { jest } from, mock('./client'), mock('../skyscanner/client')
+
+## Technical Notes
+- files: ["/home/bradleyjerome/projects/skyscanner-app/src/server.test.ts"]
+- dependsOn: ["SKY-002"]
+
+## Files to Create/Modify (EXACT ABSOLUTE PATHS — write to these paths exactly)
+/home/bradleyjerome/projects/skyscanner-app/src/server.test.ts
+
+## Dependencies
+SKY-002, SKY-004-a
+
+
+
+## Instructions
+**CRITICAL — WRITE FILES FIRST:**
+   - WRITE /home/bradleyjerome/projects/skyscanner-app/src/server.test.ts first, before any other action
+**You MUST write every file listed above to its EXACT absolute path. Do NOT write to a different path, do NOT write to the current directory unless it matches the path above. Use your WriteFile or Edit tools with the full absolute path shown.**
+
+1. Write each required file to its exact absolute path listed above — do this FIRST before anything else
+2. Implement all acceptance criteria for this story
+3. Test Criteria facts above are ground truth — your test assertions MUST match them exactly
+4. Do NOT create tests unless explicitly required in acceptance criteria
+
+After implementation, provide a brief summary of what was created/modified.
+
+## Relevant Knowledge Base Entries
+The following was learned from previous story implementations and is relevant to your agent role. Apply this knowledge before writing any code:
+
+- [2026-07-07T14:33:39Z] Check the source before writing CLI tests to verify whether output uses console.log or process.stdout.write, then spy on whichever it actually uses.
+- [2026-07-07T18:54:47Z] Always export classes using a named export. Never use a default export for a class, and never declare a class without exporting it.
+- [2026-07-14T10:23:13Z] Always: In strict TypeScript, always annotate callback parameters with explicit types (e.g., `.map((c: Column) =>` not `.map(c =>`). Never rely on implicit any inference for array method callbacks.
+- [2026-07-15T02:48:02Z] Never access ECMAScript private fields (#fieldName) from outside the class in test code — TypeScript cannot parse it and will emit TS1005/TS1109. Test private state indirectly through public methods o
+- [2026-07-15T03:53:06Z] NEVER modify files inside node_modules/ — if a dependency is missing or has wrong types, add it to package.json devDependencies/dependencies and run npm install. If a type mismatch exists, use declara
+- [2026-07-15T04:03:31Z] Never modify any file inside node_modules/ — only edit source files under src/ or config files like package.json/tsconfig.json. If a dependency is missing, add it to package.json devDependencies and r
+- [2026-07-16T16:27:50Z] Never use top-level await in test files — the project uses CommonJS modules which forbid it. Wrap any async setup in an async function called from the test body or inside beforeAll/beforeEach.
+
+## Knowledge Base Contribution (do this LAST — after writing all implementation files)
+Your assigned KB entry ID for this run: **KB-001**
+
+IMPORTANT: Write ALL implementation files first. Only AFTER writing every required file should you optionally append a KB entry.
+Do NOT read orchestrations/agents/KB.md before writing implementation files. The relevant KB entries are already injected above.
+
+If (and only if) you discover a non-obvious pattern during implementation, append one entry to `orchestrations/agents/KB.md`:
+
+```markdown
+## KB-001 -- 2026-07-20
+
+**Category:** <backend|frontend|infrastructure|testing|orchestration>
+**AgentRole:** <your agentRole from the story>
+**Tags:** <comma-separated tech keywords, e.g. typescript, node, cli>
+**Trigger:** <retry|first-success>
+**StoryRef:** SKY-004-c
+
+<One concise paragraph: the specific pattern, gotcha, or anti-pattern.>
+```
+
+Only write an entry if the knowledge is genuinely non-obvious. Skip trivial observations.
+
+## Execution Plan
+Follow this plan step by step:
+1. Read `/home/bradleyjerome/projects/skyscanner-app/src/server.ts` and `/home/bradleyjermon/projects/skyscanner-app/src/SkyscannerClient.ts` (or equivalent) to understand the server's endpoints, request shapes, and how `SkyscannerClient` is imported/used.
+2. Inspect `/home/bradleyjerome/projects/skyscanner-app/package.json` and `tsconfig.json` to confirm `vitest`, `supertest`, and `@types/supertest` are installed; if missing, run `npm i -D vitest supertest @types/supertest`.
+3. Create `/home/bradleyjerome/projects/skyscanner-app/src/server.test.ts` with imports: `describe`, `it`, `expect`, `vi`, `beforeEach`, `afterEach` from `vitest`; `request` from `supertest`; and `vi.mock('../src/SkyscannerClient')` (adjust relative path to match actual import in `server.ts`) so no real HTTP calls occur.
+4. In the mock factory, expose a controllable mock object (e.g., `vi.fn()` for `searchFlights`/`getCheapest`) and export a `__setMockResult`/`__setMockError` helper or use `vi.mocked(SkyscannerClient.prototype.method).mockResolvedValue(...)` patterns; reset mocks in `beforeEach`.
+5. Import the Express app from `server.ts` (
+=== End Prompt ===
+
+=== epam Output (attempt 1) ===
+TypeScript passes. But wait — `tsconfig.json` excludes `src/**/*.test.ts`. Let me confirm vitest can resolve the test file and run it.
+
+=== External verification failed (exit 1) ===
+
+> skyscanner-app@1.0.0 test
+> vitest run /home/bradleyjerome/projects/skyscanner-app/src/server.test.ts
+
+[33mThe CJS build of Vite's Node API is deprecated. See https://vite.dev/guide/troubleshooting.html#vite-cjs-node-api-deprecated for more details.[39m
+
+ RUN  v1.6.1 /home/bradleyjerome/projects/skyscanner-app
+
+ ❯ src/server.test.ts  (0 test)
+
+⎯⎯⎯⎯⎯⎯ Failed Suites 1 ⎯⎯⎯⎯⎯⎯⎯
+
+ FAIL  src/server.test.ts [ src/server.test.ts ]
+Error: Failed to load url supertest (resolved id: supertest) in /home/bradleyjerome/projects/skyscanner-app/src/server.test.ts. Does the file exist?
+ ❯ loadAndTransform node_modules/vite/dist/node/chunks/dep-BK3b2jBa.js:51969:17
+
+⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯[1/1]⎯
+
+ Test Files  1 failed (1)
+      Tests  no tests
+   Start at  00:41:45
+   Duration  312ms (transform 34ms, setup 0ms, collect 0ms, tests 0ms, environment 0ms, prepare 56ms)
+TypeScript passes. But wait — `tsconfig.json` excludes `src/**/*.test.ts`. Let me confirm vitest can resolve the test file and run it.
+
+=== epam exited with code 1 ===
+=== Prompt for SKY-004-c (attempt 2) ===
+CRITICAL — WRITE FILES FIRST. Your FIRST tool call MUST be WriteFile.
+Do NOT output any text before calling WriteFile. Do NOT plan or say "I will...".
+Call WriteFile NOW for the EXACT ABSOLUTE PATHS listed below:
+
+   - WRITE /home/bradleyjerome/projects/skyscanner-app/src/server.test.ts first, before any other action
+---
+
+Implement user story SKY-004-c: Write vitest + supertest integration tests for all server endpoints
+
+## Story Description
+Create src/server.test.ts with at least 8 vitest tests using supertest, covering all endpoint scenarios: /health, /search (valid, missing params, non-numeric adults, default adults), /cheapest (valid, empty→404, missing params), RAPIDAPI_KEY absent→503, client error→500, and / serves HTML from file. SkyscannerClient must be fully mocked so no real HTTP calls occur during test runs.
+
+## Acceptance Criteria
+- src/server.test.ts contains ≥8 vitest tests covering distinct scenarios: /health (with/without RAPIDAPI_KEY), /search (valid params, missing required param, non-numeric adults, default adults=1), /cheapest (valid, empty→404, missing param), RAPIDAPI_KEY absent→503, SkyscannerClient error→500, GET / serves HTML from file
+- SkyscannerClient mocked via vi.mock or equivalent — no real HTTP calls made during `vitest run`
+- `npx tsc --noEmit` exits 0 with no type errors
+- `vitest run` exits 0 with all tests passing
+
+
+## Test Criteria (ground truth — written from actual source; overrides any conflicting AC)
+- Express app exported as 'app' from src/server.ts
+- GET /health returns { status: 'ok', uptime: number } with 200 status
+- GET / returns { status: 'ok', message: 'Skyscanner app server' } with 200 status
+- GET /search and GET /cheapest both use query params: from, to, date, adults
+- adults defaults to 1 when not provided - no upper or lower bound validation exists
+- validateParams returns { ok: false, error: 'Missing required parameter: from' } for missing from
+- validateParams returns { ok: false, error: 'Missing required parameter: to' } for missing to
+- validateParams returns { ok: false, error: 'Missing required parameter: date' } for missing date
+- validateParams returns { ok: false, error: 'Invalid parameter: adults must be numeric' } for non-numeric adults
+- RAPIDAPI_KEY is read from process.env.RAPIDAPI_KEY at module load time, not per-request
+- When RAPIDAPI_KEY is falsy, both /search and /cheapest return { error: 'RAPIDAPI_KEY not configured' } with 503 status
+- GET /search returns { flights: FlightResult[], count: number, searchedAt: string } with 200 status on success
+- GET /cheapest returns a single FlightResult object (not wrapped) with 200 status on success
+- GET /cheapest returns { error: 'No flights found' } with 404 status when flights array is empty
+- Both routes catch errors and return { error: message } with 500 status - message comes from err.message or 'Unknown error'
+- SkyscannerClient constructor takes { apiKey?: string } options bag
+- SkyscannerClient.searchFlights takes { origin, destination, date, adults? } and returns Promise<FlightResult[]>
+- FlightResult interface has fields: price (number), currency (string), airline (string), departure (string), arrival (string), duration (number), stops (number)
+- Server listens on PORT env var or defaults to 3000 only when require.main === module
+
+## Mock Strategy
+Use vi.mock('./skyscanner/client') with vi.hoisted(() => ({ SkyscannerClient: vi.fn() })) to mock the constructor, then mockReturnValueOnce with a mock instance containing mock searchFlights method; use vi.stubEnv to set/clear RAPIDAPI_KEY; use beforeEach with vi.clearAllMocks()
+
+## Banned Patterns (must NOT appear in your file)
+origin, destination, GET /cheapest returns wrapped object, adults=0 validation, adults upper bound check, RAPIDAPI_KEY checked per-request, @jest/globals, import { jest } from, mock('./client'), mock('../skyscanner/client')
+
+## Technical Notes
+- files: ["/home/bradleyjerome/projects/skyscanner-app/src/server.test.ts"]
+- dependsOn: ["SKY-002"]
+
+## Files to Create/Modify (EXACT ABSOLUTE PATHS — write to these paths exactly)
+/home/bradleyjerome/projects/skyscanner-app/src/server.test.ts
+
+## Dependencies
+SKY-002, SKY-004-a
+
+
+
+## Instructions
+**CRITICAL — WRITE FILES FIRST:**
+   - WRITE /home/bradleyjerome/projects/skyscanner-app/src/server.test.ts first, before any other action
+**You MUST write every file listed above to its EXACT absolute path. Do NOT write to a different path, do NOT write to the current directory unless it matches the path above. Use your WriteFile or Edit tools with the full absolute path shown.**
+
+1. Write each required file to its exact absolute path listed above — do this FIRST before anything else
+2. Implement all acceptance criteria for this story
+3. Test Criteria facts above are ground truth — your test assertions MUST match them exactly
+4. Do NOT create tests unless explicitly required in acceptance criteria
+
+After implementation, provide a brief summary of what was created/modified.
+
+## Verification Failure
+
+The orchestrator ran `npm test -- /home/bradleyjerome/projects/skyscanner-app/src/server.test.ts` after your files were written and it failed (exit code 1). Fix the code so the tests pass.
+
+```
+
+> skyscanner-app@1.0.0 test
+> vitest run /home/bradleyjerome/projects/skyscanner-app/src/server.test.ts
+
+[33mThe CJS build of Vite's Node API is deprecated. See https://vite.dev/guide/troubleshooting.html#vite-cjs-node-api-deprecated for more details.[39m
+
+ RUN  v1.6.1 /home/bradleyjerome/projects/skyscanner-app
+
+ ❯ src/server.test.ts  (0 test)
+
+⎯⎯⎯⎯⎯⎯ Failed Suites 1 ⎯⎯⎯⎯⎯⎯⎯
+
+ FAIL  src/server.test.ts [ src/server.test.ts ]
+Error: Failed to load url supertest (resolved id: supertest) in /home/bradleyjerome/projects/skyscanner-app/src/server.test.ts. Does the file exist?
+ ❯ loadAndTransform node_modules/vite/dist/node/chunks/dep-BK3b2jBa.js:51969:17
+
+⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯[1/1]⎯
+
+ Test Files  1 failed (1)
+      Tests  no tests
+   Start at  00:41:45
+   Duration  312ms (transform 34ms, setup 0ms, collect 0ms, tests 0ms, environment 0ms, prepare 56ms)
+```
+
+## Relevant Knowledge Base Entries
+The following was learned from previous story implementations and is relevant to your agent role. Apply this knowledge before writing any code:
+
+- [2026-07-07T14:33:39Z] Check the source before writing CLI tests to verify whether output uses console.log or process.stdout.write, then spy on whichever it actually uses.
+- [2026-07-07T18:54:47Z] Always export classes using a named export. Never use a default export for a class, and never declare a class without exporting it.
+- [2026-07-14T10:23:13Z] Always: In strict TypeScript, always annotate callback parameters with explicit types (e.g., `.map((c: Column) =>` not `.map(c =>`). Never rely on implicit any inference for array method callbacks.
+- [2026-07-15T02:48:02Z] Never access ECMAScript private fields (#fieldName) from outside the class in test code — TypeScript cannot parse it and will emit TS1005/TS1109. Test private state indirectly through public methods o
+- [2026-07-15T03:53:06Z] NEVER modify files inside node_modules/ — if a dependency is missing or has wrong types, add it to package.json devDependencies/dependencies and run npm install. If a type mismatch exists, use declara
+- [2026-07-15T04:03:31Z] Never modify any file inside node_modules/ — only edit source files under src/ or config files like package.json/tsconfig.json. If a dependency is missing, add it to package.json devDependencies and r
+- [2026-07-16T16:27:50Z] Never use top-level await in test files — the project uses CommonJS modules which forbid it. Wrap any async setup in an async function called from the test body or inside beforeAll/beforeEach.
+
+## Knowledge Base Contribution (do this LAST — after writing all implementation files)
+Your assigned KB entry ID for this run: **KB-001**
+**This is retry attempt 1** — a previous attempt failed. You MUST write a KB entry documenting what went wrong and what you changed.
+
+IMPORTANT: Write ALL implementation files first. Only AFTER writing every required file should you optionally append a KB entry.
+Do NOT read orchestrations/agents/KB.md before writing implementation files. The relevant KB entries are already injected above.
+
+If (and only if) you discover a non-obvious pattern during implementation, append one entry to `orchestrations/agents/KB.md`:
+
+```markdown
+## KB-001 -- 2026-07-20
+
+**Category:** <backend|frontend|infrastructure|testing|orchestration>
+**AgentRole:** <your agentRole from the story>
+**Tags:** <comma-separated tech keywords, e.g. typescript, node, cli>
+**Trigger:** <retry|first-success>
+**StoryRef:** SKY-004-c
+
+<One concise paragraph: the specific pattern, gotcha, or anti-pattern.>
+```
+
+Only write an entry if the knowledge is genuinely non-obvious. Skip trivial observations.
+
+## Available Dynamic Tools
+This project has the following helper scripts, written by prior self-healing runs. Use them via the bash tool instead of repeating the equivalent steps by hand:
+
+- `bash /home/bradleyjerome/projects/skyscanner-app/.epam/dynamic-tools/ensure-test-deps.sh <args>` — Ensures supertest and @types/supertest are installed before tests import them
+
+## Execution Plan
+Follow this plan step by step:
+1. Read `/home/bradleyjerome/projects/skyscanner-app/src/server.ts` and `/home/bradleyjermon/projects/skyscanner-app/src/SkyscannerClient.ts` (or equivalent) to understand the server's endpoints, request shapes, and how `SkyscannerClient` is imported/used.
+2. Inspect `/home/bradleyjerome/projects/skyscanner-app/package.json` and `tsconfig.json` to confirm `vitest`, `supertest`, and `@types/supertest` are installed; if missing, run `npm i -D vitest supertest @types/supertest`.
+3. Create `/home/bradleyjerome/projects/skyscanner-app/src/server.test.ts` with imports: `describe`, `it`, `expect`, `vi`, `beforeEach`, `afterEach` from `vitest`; `request` from `supertest`; and `vi.mock('../src/SkyscannerClient')` (adjust relative path to match actual import in `server.ts`) so no real HTTP calls occur.
+4. In the mock factory, expose a controllable mock object (e.g., `vi.fn()` for `searchFlights`/`getCheapest`) and export a `__setMockResult`/`__setMockError` helper or use `vi.mocked(SkyscannerClient.prototype.method).mockResolvedValue(...)` patterns; reset mocks in `beforeEach`.
+5. Import the Express app from `server.ts` (
+
+## Coordinator Guidance (retry 1)
+The following targeted instruction was identified from the previous failure:
+
+## Self-Heal: Failure Analyst Summary
+Root cause: supertest package not installed before importing it in server.test.ts
+Fix: Always install supertest and @types/supertest before importing supertest in test files.
+=== End Prompt ===
+
+=== epam Output (attempt 2) ===
+All 15 tests pass. Let me also confirm `npx tsc --noEmit` works:
+All 15 tests pass. Let me also confirm `npx tsc --noEmit` works:
+
+=== End epam Output ===

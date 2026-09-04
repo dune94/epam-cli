@@ -1,0 +1,31 @@
+# Prompt
+Regenerate the VERIFICATION CRITERIA for this brownfield story. Your previous verification criteria were FLAGGED and must be fixed:
+- VC 2 references 'preview signal' — an internal mechanism/field in the page request; restate as what the user observes when preview is not active, and remove cross-comparison 'exactly as it currently does'
+- VC 3 checks the request our application sends to Contentstack (live_preview hash, content_type_uid, entry_uid) — that is an internal payload feeding the surface, not the user-facing output the ticket is about
+- VC 6 references 'preview state persists' and 'preview signal' — both describe internal mechanism; restate as the observable: draft content continues to display across page navigations during a preview session
+
+THE FIX SITE (located by the code-graph detective — anchor every criterion to the behaviour THIS code produces):
+- src/services/pageService.ts :: PageService — Primary attachment point for live preview: this service orchestrates all Contentstack data fetching (getPageEntry, getAllPublishedPages, getEntry). Live preview requires passing draft/preview parameters (live_preview hash, content_type_uid, entry_uid) through to the Contentstack SDK at fetch time — this is where those parameters must be accepted and forwarded to the underlying SDK calls.
+- src/context/contentstackContext.tsx :: ContentstackContext — Secondary attachment point: the React context that injects Contentstack content into the entire component tree (consumed by useContent hook used by 40+ components). When a preview request is detected (e.g. via query param or cookie), the context provider must receive and supply the draft entry data instead of the published entry, so all downstream components render preview content without modification.
+Do NOT write criteria about areas unrelated to this code.
+
+
+Acceptance criteria (IMMUTABLE — the intent to verify; do NOT restate as-is, VERIFY them):
+- (none)
+Description: Original Requirements (discovery)  AS a Content Author, I WANT to preview draft entries in CMS, SO THAT I can see how content will be shown on the website
+ability to preview draft entries in CMS
+Notes& Assumptions  Limitation: Might not be possible to preview protected pages and content.
+Original Total Estimate:  8  Original FE Estimate:  8  Original DAM Estimate:  0  Original BE Estimate:  0
+
+A verification criterion states WHAT AN END USER OR TESTER OBSERVES on the user-facing surface THE TICKET IS ABOUT — the rendered output for an output ticket, the displayed screen for a UI ticket, the response a CLIENT receives for an API ticket. It is a BLACK-BOX check on that surface. It NEVER describes HOW the value is produced.
+A verification criterion is FORBIDDEN if it:
+- prescribes HOW to implement — any algorithm, mechanism, approach, or the addition/reading of any new field, flag or service;
+- references an INTERNAL structure that merely FEEDS the ticket's surface — an intermediate payload, a data-transfer object, or a specific response field used to BUILD the output. Verify the surface the ticket names, NOT the data structure behind it;
+- makes a CROSS-COMPARISON that presumes a mechanism — never assert one value "must equal" / "matches" / "is the same as" another; that presumes a shared derivation. Assert the required value is present and correct ON ITS OWN.
+Every verification criterion must be observable, testable, and tied to the ticket's stated symptom/intent.
+
+Do NOT restate an acceptance criterion as-is — express what a tester OBSERVES that confirms it. Address every flag above.
+Output ONLY a JSON array of verification-criterion strings. No prose, no markdown.
+
+# Output
+Agent reached maximum iterations (2) without completing.

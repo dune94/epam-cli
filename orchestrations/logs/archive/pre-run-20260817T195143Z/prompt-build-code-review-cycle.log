@@ -1,0 +1,135 @@
+# Prompt
+You are specialising ONE generic agent prompt for ONE specific project. You are the same agent that just minted this project's roles, so you already know what this project is and who will work on it.
+
+## The template you must specialise
+
+Its id is code-review-cycle and its purpose is: Review an implementation and return a verdict with issues.
+
+Everything between the two markers below is the template, verbatim. The markers are not
+part of it. A code fence cannot delimit this: several templates contain fences of their
+own, so the first closing fence would truncate the body mid-instruction.
+
+-----BEGIN TEMPLATE BODY-----
+__REVIEW_PROFILE__
+
+---
+REVIEW TASK (Iteration __ITERATION__): Story __STORY_ID__ — __STORY_TITLE__
+AGENT: __STORY_AGENT__
+
+DESCRIPTION: __STORY_DESCRIPTION__
+
+ACCEPTANCE CRITERIA:
+__STORY_ACS__
+
+RELEVANT FILES: __STORY_FILES__
+
+GIT DIFF:
+```diff
+__STORY_DIFF__
+```
+__PRIOR_CONTEXT__
+PROJECT ROOT: __PROJECT_ROOT__
+
+Review the implementation against each acceptance criterion.
+Check: TypeScript strict compliance, test coverage, error handling, security.
+
+Respond with ONLY a JSON object:
+{"verdict":"approved","issues":[],"summary":"..."}
+  OR
+{"verdict":"changes_requested","issues":[{"severity":"blocker|major|minor","file":"...","line":0,"description":"...","suggestedFix":"..."}],"summary":"..."}
+-----END TEMPLATE BODY-----
+
+## What this project is
+
+Project config: /home/bradleyjerome/projects/ai/epam-cli/orchestrations/projects/mock3
+Tickets in scope: MOCK3-1: Riders aged exactly 65 are charged the adult fare | MOCK3-2: The departure board omits the final stop
+
+Codelines in scope and their declared dependencies:
+- mocka (/home/bradleyjerome/projects/mock3/mock-a) deps: vitest, typescript
+- mockb (/home/bradleyjerome/projects/mock3/mock-b) deps: vitest, typescript
+
+The roles you minted for this project:
+- typescript-logic-engineer [implementer] — Both codelines declare only vitest and typescript, and both tickets are small operator-bound fixes in TypeScript source modules, so a single implementer spanning the shared stack avoids minting near-duplicate roles.
+- mocka-fares-investigator [investigator] — MOCK3-1 is a boundary bug in mocka's fare logic, and an investigator that knows where mocka's fare modules live and how its comparisons are structured can tell the implementer exactly what to change without the implementer hunting blind.
+- mockb-schedule-investigator [investigator] — MOCK3-2 is a loop-bound bug in mockb's stop-rendering logic, and an investigator that knows mockb's schedule module layout and what else consumes formatStops can prevent the implementer from breaking a dependent caller.
+
+## The one rule you cannot break
+
+The template's placeholders are a CONTRACT with the pipeline. Each token written in SCREAMING_SNAKE_CASE between double underscores is replaced at run time with real evidence — a diff, a ticket, a test log, a plan. The substitution is BY NAME and it is strict in both directions.
+
+- Reproduce every placeholder EXACTLY as it appears, character for character.
+- NEVER add or invent a placeholder. Nothing supplies a name the pipeline does not know, so rendering throws and the run dies at the seam that needed this prompt.
+- NEVER remove or rename one. The evidence it carries would silently never reach the agent, and the agent would answer without it.
+- Do not move a placeholder into a code fence, a quote, or an example where it would read as literal text.
+
+The placeholders in this template are exactly: __ITERATION__, __PRIOR_CONTEXT__, __PROJECT_ROOT__, __REVIEW_PROFILE__, __STORY_ACS__, __STORY_AGENT__, __STORY_DESCRIPTION__, __STORY_DIFF__, __STORY_FILES__, __STORY_ID__, __STORY_TITLE__
+
+## What specialising means
+
+Keep the template's instructions, its output format, its prohibitions and its reasoning intact. They encode failures this pipeline has already paid for. You are not rewriting the prompt or improving its wording.
+
+Add only what a competent engineer joining THIS project would need and could not infer from the generic text:
+- the conventions, layout and idioms this codebase actually uses
+- the commands this project runs to build, test and type-check
+- the traps this stack presents that a generic prompt would not warn about
+
+Ground every addition in the project context above. If the context does not tell you something, say nothing about it — an invented convention is worse than a missing one, because the agent will follow it.
+
+Do not name a file, symbol, package or command that does not appear in the context you were given.
+
+## How to answer
+
+Emit ONLY the specialised prompt body as TEXT, directly in your reply. No JSON wrapper, no markdown fences around the whole thing, no commentary before or after, and do not write it to a file — the pipeline reads your reply text.
+
+# Output
+__REVIEW_PROFILE__
+
+## Project Context (mock3)
+
+This project spans two independent TypeScript codelines that share an identical toolchain:
+
+- **mocka** (`mock-a/`) — transit fare logic. Source in `src/fares.ts`, tests in `test/fares.test.ts`.
+- **mockb** (`mock-b/`) — departure-board schedule rendering. Source in `src/schedule.ts`, tests in `test/schedule.test.ts`.
+
+Both codelines are ESM (`"type": "module"`, `moduleResolution: "bundler"`, `target: ES2022`).
+
+### Commands (run inside the relevant codeline directory)
+- **Type-check / build:** `npm run build` (executes `tsc --noEmit`)
+- **Tests:** `npm test` (executes `vitest run`)
+- **Lint:** not configured (`npm run lint` is a no-op echo).
+
+### TypeScript strictness
+Both `tsconfig.json` files set `"strict": true`. The reviewer must reject any implementation that introduces `any`, non-null assertions (`!`), or implicit casts. `noEmit` is on, so the build script is purely a type-check.
+
+### Test conventions
+Tests use vitest with `describe` / `it` / `expect` and `toBe` equality assertions. New or updated tests should follow the same pattern and live alongside source under `test/`.
+
+### Domain-specific review traps
+- **MOCK3-1 (mocka fares):** The bug is a boundary comparison — `fareFor` currently uses `rider.age > 65` where it should use `>= 65`. Verify the fix covers the exact-65 case and that no other boundary (child fare at age 13, pass override) regressed.
+- **MOCK3-2 (mockb schedule):** The bug is an off-by-one in `formatStops` — the loop bound `i < stops.length - 1` drops the final stop. Verify the fix renders every stop including the last. Check whether `totalMinutes` or any other consumer of the `Stop[]` array is affected by the change.
+
+---
+REVIEW TASK (Iteration __ITERATION__): Story __STORY_ID__ — __STORY_TITLE__
+AGENT: __STORY_AGENT__
+
+DESCRIPTION: __STORY_DESCRIPTION__
+
+ACCEPTANCE CRITERIA:
+__STORY_ACS__
+
+RELEVANT FILES: __STORY_FILES__
+
+GIT DIFF:
+```diff
+__STORY_DIFF__
+```
+__PRIOR_CONTEXT__
+PROJECT ROOT: __PROJECT_ROOT__
+
+Review the implementation against each acceptance criterion.
+Check: TypeScript strict compliance, test coverage, error handling, security.
+
+Respond with ONLY a JSON object:
+{"verdict":"approved","issues":[],"summary":"..."}
+  OR
+{"verdict":"changes_requested","issues":[{"severity":"blocker|major|minor","file":"...","line":0,"description":"...","suggestedFix":"..."}],"summary":"..."}

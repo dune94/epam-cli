@@ -1,0 +1,28 @@
+# Prompt
+Regenerate the VERIFICATION CRITERIA for this brownfield story. Your previous verification criteria were FLAGGED and must be fixed:
+- Internal function name that produces the rendered string; naming it in a verification criterion prescribes the implementation mechanism rather than the observable surface (the rendered departure-board string).: "The string returned by formatStops contains the name of every stop in the input "
+
+THE FIX SITE (located by the code-graph detective — anchor every criterion to the behaviour THIS code produces):
+- src/schedule.ts :: formatStops — The for-loop bound `i < stops.length - 1` excludes the last index, so the final stop is never pushed into parts. Changing the bound to `i < stops.length` makes every stop, including the last, appear in the rendered string. The separator `' -> '` already exists on line 9 and is reused unchanged.
+- test/schedule.test.ts :: schedule.test.ts — Existing tests only assert that the output contains '->' and 'Union'; none check the last stop ('Eglinton'). Once formatStops is fixed, a test must verify the final stop name appears in the rendered string, and that an empty line still renders without error (matching the acceptance criteria).
+Do NOT write criteria about areas unrelated to this code.
+
+
+Acceptance criteria (IMMUTABLE — the intent to verify; do NOT restate as-is, VERIFY them):
+- Every stop on the line appears on the rendered board, including the final one.
+- Stops remain separated by the existing arrow separator.
+- An empty line still renders without error.
+Description: formatStops renders every stop except the last one, so a three-stop line shows two. The journey length reported by totalMinutes is correct, which is why the omission has gone unnoticed.
+
+A verification criterion states WHAT AN END USER OR TESTER OBSERVES on the user-facing surface THE TICKET IS ABOUT — the rendered output for an output ticket, the displayed screen for a UI ticket, the response a CLIENT receives for an API ticket. It is a BLACK-BOX check on that surface. It NEVER describes HOW the value is produced.
+A verification criterion is FORBIDDEN if it:
+- prescribes HOW to implement — any algorithm, mechanism, approach, or the addition/reading of any new field, flag or service;
+- references an INTERNAL structure that merely FEEDS the ticket's surface — an intermediate payload, a data-transfer object, or a specific response field used to BUILD the output. Verify the surface the ticket names, NOT the data structure behind it;
+- makes a CROSS-COMPARISON that presumes a mechanism — never assert one value "must equal" / "matches" / "is the same as" another; that presumes a shared derivation. Assert the required value is present and correct ON ITS OWN.
+Every verification criterion must be observable, testable, and tied to the ticket's stated symptom/intent.
+
+Do NOT restate an acceptance criterion as-is — express what a tester OBSERVES that confirms it. Address every flag above.
+Output ONLY a JSON array of verification-criterion strings. No prose, no markdown.
+
+# Output
+{}

@@ -1,0 +1,85 @@
+# Prompt
+You are specialising ONE generic agent prompt for ONE specific project. You are the same agent that just minted this project's roles, so you already know what this project is and who will work on it.
+
+## The template you must specialise
+
+Its id is blocker-discipline and its purpose is: What a reviewer may and may not raise as a BLOCKER. Bounds a rejection to the plan of record and to what the implementer can actually do.
+
+Everything between the two markers below is the template, verbatim. The markers are not
+part of it. A code fence cannot delimit this: several templates contain fences of their
+own, so the first closing fence would truncate the body mid-instruction.
+
+-----BEGIN TEMPLATE BODY-----
+,
+-----END TEMPLATE BODY-----
+
+## What this project is
+
+Project config: /home/bradleyjerome/projects/ai/epam-cli/orchestrations/projects/mock3
+Tickets in scope: MOCK3-1: Riders aged exactly 65 are charged the adult fare | MOCK3-2: The departure board omits the final stop
+
+Codelines in scope and their declared dependencies:
+- mocka (/home/bradleyjerome/projects/mock3/mock-a) deps: vitest, typescript
+- mockb (/home/bradleyjerome/projects/mock3/mock-b) deps: vitest, typescript
+
+The roles you minted for this project:
+- mocka-fares-investigator [investigator] — mocka holds the fare-rule bug in src/fares.ts where fareFor uses a strict-greater-than comparison that excludes the exact age-65 boundary, and this role must confirm that boundary, the doc-comment intent, the test gap, and the caller blast radius before any fix is written.
+- mockb-schedule-investigator [investigator] — mockb holds the departure-board bug in src/schedule.ts where formatStops iterates to stops.length minus one and drops the final stop, and this role must confirm that loop bound, the discrepancy with totalMinutes, the test gap, and the caller list before any fix is written.
+- typescript-vitest-engineer [implementer] — Both mocka and mockb declare a TypeScript-plus-vitest stack and both tickets require editing TypeScript source files under src/ in those codelines, so a single implementer spanning both codelines can author the one-line logic fix in each without minting a duplicate role per repository.
+
+## The one rule you cannot break
+
+The template's placeholders are a CONTRACT with the pipeline. Each token written in SCREAMING_SNAKE_CASE between double underscores is replaced at run time with real evidence — a diff, a ticket, a test log, a plan. The substitution is BY NAME and it is strict in both directions.
+
+- Reproduce every placeholder EXACTLY as it appears, character for character.
+- NEVER add or invent a placeholder. Nothing supplies a name the pipeline does not know, so rendering throws and the run dies at the seam that needed this prompt.
+- NEVER remove or rename one. The evidence it carries would silently never reach the agent, and the agent would answer without it.
+- Do not move a placeholder into a code fence, a quote, or an example where it would read as literal text.
+
+The placeholders in this template are exactly: (none)
+
+## What specialising means
+
+Keep the template's instructions, its output format, its prohibitions and its reasoning intact. They encode failures this pipeline has already paid for. You are not rewriting the prompt or improving its wording.
+
+Add only what a competent engineer joining THIS project would need and could not infer from the generic text:
+- the conventions, layout and idioms this codebase actually uses
+- the commands this project runs to build, test and type-check
+- the traps this stack presents that a generic prompt would not warn about
+
+Ground every addition in the project context above. If the context does not tell you something, say nothing about it — an invented convention is worse than a missing one, because the agent will follow it.
+
+Do not name a file, symbol, package or command that does not appear in the context you were given.
+
+## How to answer
+
+Emit ONLY the specialised prompt body as TEXT, directly in your reply. No JSON wrapper, no markdown fences around the whole thing, no commentary before or after, and do not write it to a file — the pipeline reads your reply text.
+
+# Output
+,
+
+BLOCKER DISCIPLINE — project mock3 (tickets MOCK3-1 and MOCK3-2)
+
+You are reviewing work in one of two TypeScript + vitest codelines: mocka (fares) and mockb (departure board). Before marking anything BLOCKER, apply these project-specific bounds. A BLOCKER must (1) trace to the plan of record for the ticket being reviewed and (2) be something the typescript-vitest-engineer can actually fix inside that codeline. Anything else is a comment, a follow-up, or silence — never a rejection.
+
+What the plan of record is, per ticket:
+- MOCK3-1 (mocka): in src/fares.ts, fareFor uses `rider.age > 65`, which excludes riders aged exactly 65 even though the doc comment on that function states "Riders aged 65 AND OVER pay the concession fare." The planned fix is the one-line boundary correction (strict `>` to `>=`) in src/fares.ts, plus test coverage of the exact age-65 boundary in test/fares.test.ts.
+- MOCK3-2 (mockb): in src/schedule.ts, formatStops loops with `i < stops.length - 1`, dropping the final stop that totalMinutes still counts. The planned fix is the one-line loop-bound correction in src/schedule.ts, plus test coverage that the final stop appears in the formatted output, in test/schedule.test.ts.
+
+Legitimate BLOCKERS — examples of what you MAY raise:
+- The diff does not contain the planned boundary/loop-bound fix, or changes the wrong comparison.
+- The fix breaks existing behaviour asserted by the current tests (e.g., pass-holders must still pay 0, children under 13 must still pay the concession fare, the arrow separator format `name (Xm) -> ...` must be preserved).
+- The change introduces a TypeScript error or a test failure: verify by running `npm test` (vitest run) and `npm run build` (tsc --noEmit) from the codeline root. These are the only two meaningful gates; `npm run lint` is a stub that echoes "no-lint-configured" and proves nothing.
+- The claimed test for the ticket's boundary case (age exactly 65; final stop present in the board output) is missing or does not actually exercise it.
+- Scope creep that changes behaviour outside the plan: altering BASE_FARE_CENTS / CONCESSION_FARE_CENTS values, changing the pass or child fare branches, or changing totalMinutes' contract in mockb.
+
+What you may NOT raise as a BLOCKER:
+- Lint, formatting, or style findings — no linter is configured in either repo; style preferences are unenforceable here.
+- Refactors, renames, doc rewrites, or "while you're in there" improvements to code the ticket does not touch (e.g., restructuring fareFor, reformatting test files, touching totalFor in mocka).
+- Cross-repo demands: each ticket is scoped to its own codeline. Do not block mocka work on something in mockb, or vice versa, and do not demand shared packages or tooling that does not exist in these repos.
+- Demands the implementer cannot meet with this stack: no new dependencies beyond the declared vitest + typescript, no build artefacts (both repos compile with noEmit; there is no dist output to inspect).
+- Re-litigating the plan itself. The investigators (mocka-fares-investigator, mockb-schedule-investigator) already confirmed the boundary condition, the doc-comment intent, the test gap, and the caller blast radius. If you believe the plan is wrong, say so as a comment routed back to planning — it is not a BLOCKER against the implementer who executed the plan of record.
+
+Every BLOCKER you raise must cite the specific ticket (MOCK3-1 or MOCK3-2), the specific file and line-level change you object to, and the concrete, in-scope action that would clear it. If you cannot name all three, it is not a BLOCKER.
+
+[ai-run] 'prompt-builder' resuming ladder on 'moonshotai/kimi-k3' (persisted from an earlier invocation)

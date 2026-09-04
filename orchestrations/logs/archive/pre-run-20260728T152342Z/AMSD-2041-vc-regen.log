@@ -1,0 +1,32 @@
+# Prompt
+Regenerate the VERIFICATION CRITERIA for this brownfield story. Your previous verification criteria were FLAGGED and must be fixed:
+- VC 1 references internal structure — 'sourced from the Live Preview data provided to the context' describes the mechanism feeding the surface, not the observable rendered output
+- VC 2 is a cross-comparison — 'renders identically to the current production behavior' presumes a matching mechanism; restate as the specific correct rendering expected
+- VC 3 prescribes HOW — 'mocked to emit a content update event' dictates the test mechanism; restate as the observable outcome when content changes during preview
+- VC 4 references internal structure — 'components consuming useContent re-render with the updated data' describes the hook and component lifecycle, not what the user observes on the page
+- VC 5 'enters Live Preview mode' references internal state rather than a user-observable surface outcome; restate as what the editor sees on the page
+- VC 6 'enters Live Preview mode' references internal state rather than a user-observable surface outcome; restate as what the editor sees on the page
+- VC 7 'enters Live Preview mode' references internal state rather than a user-observable surface outcome; restate as what the editor sees on the page
+- VC 8 prescribes HOW — 'mocked Live Preview client disconnects or errors' dictates the test mechanism; also 'last successfully received content' references internal data flow rather than the observable rendered page content
+
+THE FIX SITE (located by the code-graph detective — anchor every criterion to the behaviour THIS code produces):
+- src/hooks/useContent.ts :: useContent — This is the single funnel through which ALL components access Contentstack content via getContentByKey. It currently reads only the static context value with no awareness of Live Preview query parameters. The ticket explicitly requires plugging Live Preview into the existing useContent hook — the hook must detect Live Preview params and merge live preview data into the content it returns, preserving current behavior when those params are absent.
+Do NOT write criteria about areas unrelated to this code.
+
+
+Acceptance criteria (IMMUTABLE — the intent to verify; do NOT restate as-is, VERIFY them):
+- (none)
+Description: Enable Contentstack Live Preview for the GO, UP, and MX sites so that content editors see real-time content changes in the CMS preview without manual page refresh. The integration must plug into the existing useContent hook and ContentstackContext provider, activate only when Live Preview query parameters are present, and preserve all current rendering behavior when preview mode is inactive.
+
+A verification criterion states WHAT AN END USER OR TESTER OBSERVES on the user-facing surface THE TICKET IS ABOUT — the rendered email for an email ticket, the displayed screen/UI for a UI ticket, the API response a CLIENT receives for an API ticket. It is a BLACK-BOX check on that surface. It NEVER describes HOW the value is produced.
+A verification criterion is FORBIDDEN if it:
+- prescribes HOW to implement — any algorithm, mechanism, or approach: "split", "halve", "×0.5", "calculate independently", "per segment", "for each line item", or adding/reading any new field, flag, or service;
+- references an INTERNAL structure that merely FEEDS the ticket's surface — an intermediate payload, a "confirmation data"/DTO object, or a specific response field used to BUILD the output. Verify the surface the ticket names, NOT the data structure behind it;
+- makes a CROSS-COMPARISON that presumes a mechanism — never assert one value "must equal" / "matches" / "is the same as" another (e.g. "the return amount equals the outbound amount"); that presumes a copy/split. Assert the required value is present and correct ON ITS OWN.
+Every verification criterion must be observable, testable, and tied to the ticket's stated symptom/intent.
+
+Do NOT restate an acceptance criterion as-is — express what a tester OBSERVES that confirms it. Address every flag above.
+Output ONLY a JSON array of verification-criterion strings. No prose, no markdown.
+
+# Output
+["When a page on the GO, UP, or MX site is opened without Live Preview query parameters, the page displays the published Contentstack content with its normal layout and styling.", "When a page on the GO, UP, or MX site is opened without Live Preview query parameters, every section of the page shows the same published content a visitor would have seen before this change, with no missing, duplicated, or reordered content.", "When an editor opens a page through the CMS preview (with Live Preview query parameters present), the page renders the current draft content for that entry instead of the last published version.", "When an editor saves a content change in the CMS while the preview page is open, the updated text or media appears on the preview page without the editor manually refreshing the browser.", "When an editor opens a page on the GO site through the CMS preview, the page displays the site's content inside the CMS preview experience with the editor's latest changes visible.", "When an editor opens a page on the UP site through the CMS preview, the page displays the site's content inside the CMS preview experience with the editor's latest changes visible.", "When an editor opens a page on the MX site through the CMS preview, the page displays the site's content inside the CMS preview experience with the editor's latest changes visible.", "If the connection to the CMS preview is lost or fails while a preview page is open, the page continues to display the content it was already showing rather than going blank, showing an error, or breaking the layout."]

@@ -1,0 +1,136 @@
+# Prompt
+You are the speckit specification agent for EPAM CLI. Phase hello_world_test, story HW-001.
+
+You are reviewing and building on the openspec agent's output for this story.
+Your role is COLLABORATIVE — you are NOT starting from scratch. Instead:
+1. Review openspec's proposed acceptance criteria for testability and completeness
+2. Add missing edge-case, error-handling, security, and accessibility criteria
+3. Flag any AC that are vague, untestable, or overlapping
+4. If openspec proposed story splits, validate the decomposition and refine AC per split
+5. Do NOT remove or duplicate openspec's good work — build on it
+
+OPENSPEC'S OUTPUT (your input to review):
+{
+  "storyId": "HW-001",
+  "agent": "openspec",
+  "notes": "Criteria are largely complete. Added explicit return-type annotation requirement, empty-string edge case, and no-throw contract. Tightened description to call out the exact export shape and forbidden files list.",
+  "title": "Implement greet() function",
+  "description": "Create greet.ts in the project root. It must export a single named function with the signature `export function greet(name: string): string` that returns the string `Hello, <name>!` where `<name>` is the argument passed in. The files greet.test.ts, package.json, tsconfig.json, and main.ts must not be modified.",
+  "acceptanceCriteria": [
+    "greet.ts exists in the project root",
+    "greet.ts exports a named function with the exact signature: export function greet(name: string): string",
+    "The return type annotation is explicitly `string` (not inferred-only)",
+    "greet('World') returns exactly 'Hello, World!'",
+    "greet('Alice') returns exactly 'Hello, Alice!'",
+    "greet('Bob') returns exactly 'Hello, Bob!'",
+    "greet('X').length is greater than 0",
+    "greet('') returns 'Hello, !' (empty name is valid input, no throw)",
+    "greet() does not throw for any string argument",
+    "npm test passes with all 3 vitest tests in greet.test.ts green",
+    "greet.test.ts is not modified",
+    "package.json is not modified",
+    "tsconfig.json is not modified",
+    "main.ts is not modified"
+  ],
+  "splitStories": [],
+  "runId": "20260530T214802Z"
+}
+
+ORIGINAL STORY CONTEXT:
+{
+  "id": "HW-001",
+  "title": "Implement greet() function",
+  "description": "Create greet.ts in the project root. It must export a single named function with the signature `export function greet(name: string): string` that returns the string `Hello, <name>!` where `<name>` is the argument passed in. The files greet.test.ts, package.json, tsconfig.json, and main.ts must not be modified.",
+  "originalAcceptanceCriteria": [
+    "greet.ts exists in the project root",
+    "greet.ts exports a named function with the exact signature: export function greet(name: string): string",
+    "The return type annotation is explicitly `string` (not inferred-only)",
+    "greet('World') returns exactly 'Hello, World!'",
+    "greet('Alice') returns exactly 'Hello, Alice!'",
+    "greet('Bob') returns exactly 'Hello, Bob!'",
+    "greet('X').length is greater than 0",
+    "greet('') returns 'Hello, !' (empty name is valid input, no throw)",
+    "greet() does not throw for any string argument",
+    "npm test passes with all 3 vitest tests in greet.test.ts green",
+    "greet.test.ts is not modified",
+    "package.json is not modified",
+    "tsconfig.json is not modified",
+    "main.ts is not modified"
+  ],
+  "technicalNotes": {
+    "files": [
+      "greet.ts"
+    ],
+    "requiredSkills": [
+      "TypeScript",
+      "vitest"
+    ]
+  },
+  "dependencies": []
+}
+
+Produce your refined output between <SPEC_AGENT> tags. Include:
+- "acceptanceCriteria": The FULL merged list (openspec's criteria + your additions/refinements)
+- "notes": What you changed and why (be specific — cite which criteria you added/modified)
+- "splitStories": Include if you refined openspec's splits, otherwise omit or pass through
+- "acAddedBySpeckit": Array of criteria YOU added that were not in openspec's output
+- "acModifiedBySpeckit": Array of {"original":"...","revised":"..."} for criteria you reworded
+- "acFlagged": Array of {"criterion":"...","flag":"..."} for criteria that need human attention
+
+<SPEC_AGENT>
+
+# Output
+<SPEC_AGENT>
+```json
+{
+  "storyId": "HW-001",
+  "agent": "speckit",
+  "notes": "openspec's criteria are solid and complete for the happy path. I added three criteria that were genuinely missing: (1) TypeScript compilation must pass — the CLAUDE.md mandate for `tsc --noEmit` is project-wide and applies here; (2) no default export alongside the named export, since 'single named function' is ambiguous about whether a simultaneous default export is permitted; (3) no side effects, which is unspecified but testable and relevant for a pure utility function. I flagged one criterion as redundant. No rewrites were needed — openspec's wording is precise.",
+  "title": "Implement greet() function",
+  "description": "Create greet.ts in the project root. It must export a single named function with the signature `export function greet(name: string): string` that returns the string `Hello, <name>!` where `<name>` is the argument passed in. The files greet.test.ts, package.json, tsconfig.json, and main.ts must not be modified.",
+  "acceptanceCriteria": [
+    "greet.ts exists in the project root",
+    "greet.ts exports a named function with the exact signature: export function greet(name: string): string",
+    "The return type annotation is explicitly `string` (not inferred-only)",
+    "greet.ts does not contain a default export — only the named `greet` export is present",
+    "greet('World') returns exactly 'Hello, World!'",
+    "greet('Alice') returns exactly 'Hello, Alice!'",
+    "greet('Bob') returns exactly 'Hello, Bob!'",
+    "greet('X').length is greater than 0",
+    "greet('') returns 'Hello, !' (empty name is valid input, no throw)",
+    "greet() does not throw for any string argument",
+    "Calling greet() produces no console output or other observable side effects",
+    "tsc --noEmit exits with code 0 (no TypeScript compilation errors) after greet.ts is added",
+    "npm test passes with all 3 vitest tests in greet.test.ts green",
+    "greet.test.ts is not modified",
+    "package.json is not modified",
+    "tsconfig.json is not modified",
+    "main.ts is not modified"
+  ],
+  "acAddedBySpeckit": [
+    "greet.ts does not contain a default export — only the named `greet` export is present",
+    "Calling greet() produces no console output or other observable side effects",
+    "tsc --noEmit exits with code 0 (no TypeScript compilation errors) after greet.ts is added"
+  ],
+  "acModifiedBySpeckit": [],
+  "acFlagged": [
+    {
+      "criterion": "greet('X').length is greater than 0",
+      "flag": "Redundant — fully implied by the return-format contract ('Hello, X!' has length 9). This criterion cannot fail independently of the others. Safe to keep for belt-and-suspenders coverage, but adds no unique test surface."
+    }
+  ],
+  "splitStories": [],
+  "runId": "20260530T214802Z"
+}
+```
+</SPEC_AGENT>
+
+**Summary of my additions:**
+
+1. **No default export** — "a single named function" doesn't explicitly forbid `export default greet` appearing alongside the named export. TypeScript allows both; this AC closes that gap.
+
+2. **No side effects** — A `console.log` inside the implementation would silently pollute test output and pass all existing criteria. Explicitly testable with a spy.
+
+3. **`tsc --noEmit` passes** — CLAUDE.md mandates a clean TypeScript build project-wide. Without this AC, an implementation that produces type errors but still satisfies the runtime tests would be considered passing. The `npm test` criterion only covers vitest, not the compiler.
+
+The flagged criterion (`greet('X').length > 0`) is harmless but cannot fail independently of any other criterion — it's noise coverage. Human reviewer should decide whether to keep it.

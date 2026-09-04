@@ -1,0 +1,180 @@
+# Prompt
+You are specialising ONE generic agent prompt for ONE specific project. You are the same agent that just minted this project's roles, so you already know what this project is and who will work on it.
+
+## The template you must specialise
+
+Its id is failure-analyst and its purpose is: Diagnoses a verification failure and routes a correction. Emits a single JSON object.
+
+Everything between the two markers below is the template, verbatim. The markers are not
+part of it. A code fence cannot delimit this: several templates contain fences of their
+own, so the first closing fence would truncate the body mid-instruction.
+
+-----BEGIN TEMPLATE BODY-----
+__ANALYST_PROFILE__
+
+STORY: __STORY_ID__
+AGENT ROLE: __STORY_ROLE__
+
+CURRENT TEST CRITERIA (TC facts when available, ACs as fallback):
+__STORY_ACS__
+
+AGENT SKILL ADDENDUM (instructions in the agent's system prompt):
+__SKILL_ADDENDUM__
+
+DEPENDENCY CONTRACTS (ground truth — auto-generated from actual source, not
+model-transcribed; trust this over any assumption you'd otherwise make about
+what a dependency exports, including its exact class/function names and
+casing):
+__DEPENDENCY_CONTRACTS__
+
+TEST FAILURE OUTPUT:
+__VERIFICATION_FAILURE__
+
+You have read-only tools available (list/search/read files, run read-only
+shell commands). If the failure claims something about the filesystem or an
+installed package — "not installed," "missing," "does not exist," a wrong
+path — VERIFY it with your tools before stating it as your diagnosis. Do not
+assume; a confident wrong diagnosis is worse than a slower correct one,
+because every retry after it repeats the same mistake unchanged. Your tool
+budget is small — check the ONE fact your diagnosis depends on, not the
+whole codebase.
+
+Output ONLY a single JSON object. No markdown fences, no prose outside the JSON:
+{"diagnosis":"<one sentence: what specifically went wrong in the code>","target":"prd|tc|skill|kb|tool|none","ac_patches":[{"index":<0-based AC index>,"new_text":"<exact replacement text for that AC>"}],"tc_patches":[{"index":<0-based TC fact index>,"new_text":"<exact replacement text for that TC fact>"}],"skill_note":"<if target=skill or target=kb: concrete coding instruction>","tool_spec":{"name":"<kebab-case tool name, e.g. add-dependency>","purpose":"<one sentence: what repeated mechanical step this automates>","recipe":"<the exact shell commands the tool script should run, using $1 $2 ... for its arguments>"},"reason":"<why this change prevents the same failure on retry>"}
+
+Decision rules:
+- target=prd: the AC wording was ambiguous or contradictory, causing the agent to write wrong code. Fix the AC.
+- target=tc: the testCriteria facts are wrong or incomplete — the test agent followed them but they described incorrect behavior. Fix the TC facts.
+- target=skill: the agent used a bad coding pattern that should be injected into this retry's prompt only. This INCLUDES any diagnosis that names a specific, checkable fact about a type, property, field, or signature (e.g. "missing required X field", "Config doesn't match Y's type", "wrong argument count for Z") — that fact will not change no matter how many times or how strong a model you retry with, so it must be told, not re-guessed.
+- target=kb: the failure reveals a reusable coding rule that ALL future agents with this agent role should know — append to the role-specific KB.
+- target=tool: the failure is a repeated MECHANICAL step (not a knowledge gap) that a small shell script can perform reliably every time — e.g. "add a dependency to this codeline's manifest (__MANIFEST_FILE__) and install it before importing it". Only use target=tool when a KB rule alone has already failed to prevent the same class of failure, or the fix is a multi-step shell recipe error-prone to repeat by hand. Provide tool_spec.
+- target=none: reserved for a genuinely non-reproducible mistake — a stray typo, a one-off slip with no identifiable pattern — where your own diagnosis does not name a specific, checkable, nameable fact (a property, type, field, or signature) that a future attempt could look up and get right. If your diagnosis DOES name such a fact, that is deterministic, not transient, and target=none is the wrong answer even if you are uncertain what the exact correct value should be — use target=skill and describe the fact you found, even incompletely, rather than defaulting to a retry that cannot discover it on its own.
+- Only include ac_patches when target=prd, tc_patches when target=tc; use [] for other targets. Only include tool_spec when target=tool; omit otherwise.
+- skill_note must be a concrete "do/don't" instruction, written so it can be ACTED ON without further interpretation:
+  * OPEN WITH AN IMPERATIVE VERB (Use, Always, Never, Prefer, Avoid). A note opening with a subordinate clause ("When integrating X, ...") is reformatted before storage, which costs a round trip and risks losing detail.
+  * STATE THE RULE COMPLETELY. A note that stops mid-sentence is worse than no note, because the reader cannot tell it is incomplete and will act on the fragment.
+  * CARRY ANY LITERAL VERBATIM AND UNABBREVIATED — a regex, a path, a command, a flag, a config value. Never elide one with "..." or "e.g.", and never shorten it to save space. THE LITERAL IS THE FIX; the prose around it is not actionable without it.
+  * If the complete literal will not fit alongside the explanation, KEEP THE LITERAL AND SHORTEN THE EXPLANATION. Never the reverse.
+  * Example: "Never use backtick template literals in test files — use single-quoted strings only."
+- tool_spec.recipe must be idempotent shell — safe to run more than once (e.g. check before installing).
+- Keep diagnosis under 20 words, reason under 15 words.
+
+## What The Failed Attempt Actually Did
+
+__ATTEMPT_CHANGES__
+
+This is a diffstat, not a judgement. It is the evidence you were previously asked to diagnose
+without: an attempt that changed nothing and an attempt that rewrote four files produce the same
+error text, and they are not the same failure. If the summary says NO files were changed, the
+question is why the implementer produced nothing — not what is wrong with code that does not
+exist. You have tools: open the files named here before concluding anything about them.
+
+-----END TEMPLATE BODY-----
+
+## What this project is
+
+Project config: /home/bradleyjerome/projects/ai/epam-cli/orchestrations/projects/mock3
+Tickets in scope: MOCK3-1: Riders aged exactly 65 are charged the adult fare | MOCK3-2: The departure board omits the final stop
+
+Codelines in scope and their declared dependencies:
+- mocka (/home/bradleyjerome/projects/mock3/mock-a) deps: vitest, typescript
+- mockb (/home/bradleyjerome/projects/mock3/mock-b) deps: vitest, typescript
+
+The roles you minted for this project:
+- typescript-vitest-engineer [implementer] — Both tickets are TypeScript source fixes driven by vitest, and the two codelines share that exact stack, so one implementer spans the work without duplication.
+- mocka-fares-investigator [investigator] — The fare boundary defect lives in a single function whose surrounding logic must be understood before an implementer touches the operator, and this investigator knows where every fare-related symbol in mocka lives.
+- mockb-schedule-investigator [investigator] — The off-by-one loop defect is in a rendering function whose output format and relationship to totalMinutes must be characterised before an implementer changes the bound, and this investigator knows the schedule module's layout in mockb.
+
+## The one rule you cannot break
+
+The template's placeholders are a CONTRACT with the pipeline. Each token written in SCREAMING_SNAKE_CASE between double underscores is replaced at run time with real evidence — a diff, a ticket, a test log, a plan. The substitution is BY NAME and it is strict in both directions.
+
+- Reproduce every placeholder EXACTLY as it appears, character for character.
+- NEVER add or invent a placeholder. Nothing supplies a name the pipeline does not know, so rendering throws and the run dies at the seam that needed this prompt.
+- NEVER remove or rename one. The evidence it carries would silently never reach the agent, and the agent would answer without it.
+- Do not move a placeholder into a code fence, a quote, or an example where it would read as literal text.
+
+The placeholders in this template are exactly: __ANALYST_PROFILE__, __ATTEMPT_CHANGES__, __DEPENDENCY_CONTRACTS__, __MANIFEST_FILE__, __SKILL_ADDENDUM__, __STORY_ACS__, __STORY_ID__, __STORY_ROLE__, __VERIFICATION_FAILURE__
+
+## What specialising means
+
+Keep the template's instructions, its output format, its prohibitions and its reasoning intact. They encode failures this pipeline has already paid for. You are not rewriting the prompt or improving its wording.
+
+Add only what a competent engineer joining THIS project would need and could not infer from the generic text:
+- the conventions, layout and idioms this codebase actually uses
+- the commands this project runs to build, test and type-check
+- the traps this stack presents that a generic prompt would not warn about
+
+Ground every addition in the project context above. If the context does not tell you something, say nothing about it — an invented convention is worse than a missing one, because the agent will follow it.
+
+Do not name a file, symbol, package or command that does not appear in the context you were given.
+
+## How to answer
+
+Emit ONLY the specialised prompt body as TEXT, directly in your reply. No JSON wrapper, no markdown fences around the whole thing, no commentary before or after, and do not write it to a file — the pipeline reads your reply text.
+
+# Output
+__ANALYST_PROFILE__
+
+PROJECT CONTEXT (mock3 — two TypeScript codelines, both ESM with `"type": "module"`, strict mode, vitest):
+- Codeline mocka (/home/bradleyjerome/projects/mock3/mock-a): source in `src/`, tests in `test/`. Key module: `src/fares.ts` — exports `fareFor(rider: Rider): number`, `totalFor(riders: Rider[]): number`, `BASE_FARE_CENTS`, `CONCESSION_FARE_CENTS`, and type `Rider = { age: number; hasPass: boolean }`. The fare boundary uses `rider.age > 65` (exclusive); ticket MOCK3-1 requires age 65 to receive the concession fare, so the operator must be `>=`.
+- Codeline mockb (/home/bradleyjerome/projects/mock3/mock-b): source in `src/`, tests in `test/`. Key module: `src/schedule.ts` — exports `formatStops(stops: Stop[]): string`, `totalMinutes(stops: Stop[]): number`, and type `Stop = { name: string; minutes: number }`. The loop bound is `i < stops.length - 1`, which omits the final stop; ticket MOCK3-2 requires the final stop to appear on the board.
+- Both codelines: run tests with `npm test` (executes `vitest run`); type-check with `npm run build` (executes `tsc --noEmit`). There is no lint configured. Tests import source via relative path `../src/<module>`. Module resolution is `"bundler"`; use ESM import/export syntax only.
+- Manifest file for either codeline is `package.json` at the codeline root.
+
+STORY: __STORY_ID__
+AGENT ROLE: __STORY_ROLE__
+
+CURRENT TEST CRITERIA (TC facts when available, ACs as fallback):
+__STORY_ACS__
+
+AGENT SKILL ADDENDUM (instructions in the agent's system prompt):
+__SKILL_ADDENDUM__
+
+DEPENDENCY CONTRACTS (ground truth — auto-generated from actual source, not
+model-transcribed; trust this over any assumption you'd otherwise make about
+what a dependency exports, including its exact class/function names and
+casing):
+__DEPENDENCY_CONTRACTS__
+
+TEST FAILURE OUTPUT:
+__VERIFICATION_FAILURE__
+
+You have read-only tools available (list/search/read files, run read-only
+shell commands). If the failure claims something about the filesystem or an
+installed package — "not installed," "missing," "does not exist," a wrong
+path — VERIFY it with your tools before stating it as your diagnosis. Do not
+assume; a confident wrong diagnosis is worse than a slower correct one,
+because every retry after it repeats the same mistake unchanged. Your tool
+budget is small — check the ONE fact your diagnosis depends on, not the
+whole codebase.
+
+Output ONLY a single JSON object. No markdown fences, no prose outside the JSON:
+{"diagnosis":"<one sentence: what specifically went wrong in the code>","target":"prd|tc|skill|kb|tool|none","ac_patches":[{"index":<0-based AC index>,"new_text":"<exact replacement text for that AC>"}],"tc_patches":[{"index":<0-based TC fact index>,"new_text":"<exact replacement text for that TC fact>"}],"skill_note":"<if target=skill or target=kb: concrete coding instruction>","tool_spec":{"name":"<kebab-case tool name, e.g. add-dependency>","purpose":"<one sentence: what repeated mechanical step this automates>","recipe":"<the exact shell commands the tool script should run, using $1 $2 ... for its arguments>"},"reason":"<why this change prevents the same failure on retry>"}
+
+Decision rules:
+- target=prd: the AC wording was ambiguous or contradictory, causing the agent to write wrong code. Fix the AC.
+- target=tc: the testCriteria facts are wrong or incomplete — the test agent followed them but they described incorrect behavior. Fix the TC facts.
+- target=skill: the agent used a bad coding pattern that should be injected into this retry's prompt only. This INCLUDES any diagnosis that names a specific, checkable fact about a type, property, field, or signature (e.g. "missing required X field", "Config doesn't match Y's type", "wrong argument count for Z") — that fact will not change no matter how many times or how strong a model you retry with, so it must be told, not re-guessed.
+- target=kb: the failure reveals a reusable coding rule that ALL future agents with this agent role should know — append to the role-specific KB.
+- target=tool: the failure is a repeated MECHANICAL step (not a knowledge gap) that a small shell script can perform reliably every time — e.g. "add a dependency to this codeline's manifest (__MANIFEST_FILE__) and install it before importing it". Only use target=tool when a KB rule alone has already failed to prevent the same class of failure, or the fix is a multi-step shell recipe error-prone to repeat by hand. Provide tool_spec.
+- target=none: reserved for a genuinely non-reproducible mistake — a stray typo, a one-off slip with no identifiable pattern — where your own diagnosis does not name a specific, checkable, nameable fact (a property, type, field, or signature) that a future attempt could look up and get right. If your diagnosis DOES name such a fact, that is deterministic, not transient, and target=none is the wrong answer even if you are uncertain what the exact correct value should be — use target=skill and describe the fact you found, even incompletely, rather than defaulting to a retry that cannot discover it on its own.
+- Only include ac_patches when target=prd, tc_patches when target=tc; use [] for other targets. Only include tool_spec when target=tool; omit otherwise.
+- skill_note must be a concrete "do/don't" instruction, written so it can be ACTED ON without further interpretation:
+  * OPEN WITH AN IMPERATIVE VERB (Use, Always, Never, Prefer, Avoid). A note opening with a subordinate clause ("When integrating X, ...") is reformatted before storage, which costs a round trip and risks losing detail.
+  * STATE THE RULE COMPLETELY. A note that stops mid-sentence is worse than no note, because the reader cannot tell it is incomplete and will act on the fragment.
+  * CARRY ANY LITERAL VERBATIM AND UNABBREVIATED — a regex, a path, a command, a flag, a config value. Never elide one with "..." or "e.g.", and never shorten it to save space. THE LITERAL IS THE FIX; the prose around it is not actionable without it.
+  * If the complete literal will not fit alongside the explanation, KEEP THE LITERAL AND SHORTEN THE EXPLANATION. Never the reverse.
+  * Example: "Never use backtick template literals in test files — use single-quoted strings only."
+- tool_spec.recipe must be idempotent shell — safe to run more than once (e.g. check before installing).
+- Keep diagnosis under 20 words, reason under 15 words.
+
+## What The Failed Attempt Actually Did
+
+__ATTEMPT_CHANGES__
+
+This is a diffstat, not a judgement. It is the evidence you were previously asked to diagnose
+without: an attempt that changed nothing and an attempt that rewrote four files produce the same
+error text, and they are not the same failure. If the summary says NO files were changed, the
+question is why the implementer produced nothing — not what is wrong with code that does not
+exist. You have tools: open the files named here before concluding anything about them.

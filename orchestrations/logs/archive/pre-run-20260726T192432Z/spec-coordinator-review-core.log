@@ -1,0 +1,83 @@
+# Prompt
+You are the specification coordinator for the epam-cli orchestration system. Before every phase you read orchestrations/prd.json (implementationOrder and stories), evaluate risk, dependencies, and technical readiness, then assign the correct specification runners: OpenSpec, Speckit, both, or none. You write assignments into each story's specification.assignedAgents field along with coordinatorNotes, target provider/model, and timestamps. You understand the provider policy ledger (configuration.aiRuntime.providerPolicies), token guardrails, and know when to skip stories that were already hand-curated. When you plan a run you emit JSON compliant with spec-mode-runner.js so that automation can apply deltas deterministically. You never invent story IDs or mutate acceptance criteria directly; only delegate to spec agents and record their status.
+
+You are the EPAM CLI specification coordinator reviewing the completed spec outputs for phase core.
+
+Each story was processed by a sequential agent pipeline:
+  1. openspec elaborated requirements (AC refinement, story splits, technical depth)
+  2. speckit reviewed openspec's output (testability, security, edge cases, gap analysis)
+
+For each story, evaluate the quality of the collaborative spec work:
+1. Did both agents add meaningful, non-overlapping value?
+2. Are the acceptance criteria complete, testable, and non-overlapping?
+3. Are story splits logical and properly scoped?
+4. Flag any story needing human review.
+
+Respond with JSON between <SPEC_REVIEW> and </SPEC_REVIEW> using this schema:
+[
+  {"storyId":"REM-xxx","verdict":"approved|needs_review","reviewNotes":"coordinator observations","qualityScore":0.0-1.0,"flags":[]}
+]
+
+Stories to review:
+[
+  {
+    "id": "AMSD-1820",
+    "title": "[Mozio] - Promo code amount not displayed as expected for Return trip tickets in Mozio email confirmation",
+    "acceptanceCriteria": [],
+    "specification": {
+      "runId": "20260726T173022Z",
+      "assignedAgents": [
+        "openspec",
+        "speckit"
+      ],
+      "coordinatorNotes": "Bug fix with empty acceptance criteria — openspec needed to elaborate expected promo code display behavior for return trips and define clear AC; speckit needed to add testability criteria covering edge cases (multi-leg returns, zero-amount promos, currency formatting) and verify email template security considerations.",
+      "status": "completed",
+      "updatedAt": "2026-07-26T17:33:08.369Z",
+      "appliedAgents": [
+        "openspec",
+        "speckit"
+      ],
+      "agentContributions": [
+        {
+          "agent": "openspec",
+          "applied": true,
+          "notes": "Defect: promo code discount amount is incorrect for return-trip tickets in the Mozio email confirmation. The code path that builds the Mozio dispatch payload for return trips (create-reservations.mappers.ts getTripData) and the mapper that surfaces the discount into the sanitized dispatch (map-to-sanitized-mozio-dispatch.ts) are the likely fix sites. The return-trip branch swaps from/to stations but may not correctly propagate or compute the per-segment discount amount, causing the Mozio confirmation email to show an unexpected promo code value for the return leg.",
+          "acceptanceChanged": false,
+          "splitCount": 0,
+          "timestamp": "2026-07-26T17:32:44.973Z"
+        },
+        {
+          "agent": "speckit",
+          "applied": true,
+          "notes": "Openspec provided empty acceptanceCriteria with only diagnostic notes about likely fix sites. I created 8 ACs from scratch covering: (1) the core return-trip discount correctness bug, (2) one-way trip regression safety, (3) no-promo-code edge case, (4) percentage-based discount computation per segment, (5) fixed-amount discount propagation, (6) asymmetric base prices between outbound and return legs, (7) currency rounding edge case, (8) zero-value discount edge case. All ACs follow the What-Not-How rule — they describe observable outcomes in the Mozio confirmation email/dispatch payload, not implementation details. AC-4 and AC-6 specifically address the likely root cause described in openspec's notes (return-trip branch swapping stations may compute discount from the wrong segment's base price).",
+          "acceptanceChanged": false,
+          "splitCount": 0,
+          "timestamp": "2026-07-26T17:33:08.369Z"
+        }
+      ]
+    },
+    "splitChildren": []
+  }
+]
+
+<SPEC_REVIEW>
+</SPEC_REVIEW>
+
+# Output
+<SPEC_REVIEW>
+[
+  {
+    "storyId": "AMSD-1820",
+    "verdict": "needs_review",
+    "reviewNotes": "Both agents contributed non-overlapping value: openspec performed root-cause analysis identifying likely fix sites (create-reservations.mappers.ts getTripData, map-to-sanitized-mozio-dispatch.ts) and described the defect mechanism (return-trip station swap not propagating per-segment discount). Speckit then built 8 acceptance criteria from scratch since openspec left AC empty — covering core bug, regression safety, edge cases (no promo, percentage vs fixed-amount, asymmetric base prices, currency rounding, zero-value). However, several concerns: (1) openspec did not produce any acceptance criteria despite the coordinator note explicitly requesting AC elaboration — this is a gap in the openspec contribution; (2) speckit's 8 ACs were authored unilaterally without openspec's technical root-cause framing integrated into the ACs themselves, creating a risk that ACs may not precisely target the identified defect path; (3) acceptanceChanged is false for both agents despite speckit explicitly creating 8 new ACs from scratch — this metadata inconsistency suggests the delta pipeline may not have persisted the ACs correctly; (4) no story split was produced despite the bug potentially spanning both payload construction and email template rendering. Human review should verify: that the 8 ACs were actually written into the story's acceptanceCriteria array, that AC-4 and AC-6 align with the root-cause hypothesis, and whether a split into 'dispatch payload fix' vs 'email template verification' is warranted.",
+    "qualityScore": 0.65,
+    "flags": [
+      "openspec_produced_no_ac",
+      "acceptanceChanged_false_but_ac_created",
+      "metadata_inconsistency",
+      "possible_missing_split",
+      "human_verify_ac_persistence"
+    ]
+  }
+]
+</SPEC_REVIEW>

@@ -1,0 +1,5 @@
+
+> mock-a@1.0.0 build
+> tsc --noEmit
+
+

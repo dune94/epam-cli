@@ -1,0 +1,25 @@
+
+> @metrolinx/next.upexpress.com@1.0.0 pretest
+> npm run build:config
+
+
+> @metrolinx/next.upexpress.com@1.0.0 build:config
+> esbuild next.config.ts --bundle --outfile=next.config.js --platform=node --external:./node_modules/* --target=es2020 --minify
+
+✘ [ERROR] Could not resolve "@metrolinx/cx-shared/build/src/utils/common"
+
+    src/services/redirectsService.ts:2:31:
+      2 │ ...sExternalLink } from "@metrolinx/cx-shared/build/src/utils/common";
+        ╵                         ~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~
+
+  You can mark the path "@metrolinx/cx-shared/build/src/utils/common" as external to exclude it from the bundle, which will remove this error and leave the unresolved path in the bundle.
+
+✘ [ERROR] Could not resolve "@metrolinx/cx-shared/build/src/utils/url/removeTrailingSlash"
+
+    src/utils/generateCspHeader.ts:1:36:
+      1 │ ...ash } from "@metrolinx/cx-shared/build/src/utils/url/removeTrail...
+        ╵               ~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~
+
+  You can mark the path "@metrolinx/cx-shared/build/src/utils/url/removeTrailingSlash" as external to exclude it from the bundle, which will remove this error and leave the unresolved path in the bundle.
+
+2 errors

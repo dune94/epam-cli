@@ -1,0 +1,1 @@
+{"event_id":"evt-1788459066613829057-27206","timestamp":"2026-09-03T14:11:06-04:00","agent":"repro-test-writer","story_id":"AMSD-1820","phase":null,"type":"spec_update","model":null,"provider":null,"detail":{"lane":"main","message":"repro-test-writer committed reproducing test: src/svc/discount.spec.ts","source":"update-monitor.sh","rawType":"spec_update","prevModel":null}}

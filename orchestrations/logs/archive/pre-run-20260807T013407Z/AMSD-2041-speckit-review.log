@@ -1,0 +1,184 @@
+# Prompt
+You are the speckit specification agent for EPAM CLI. Phase core, story AMSD-2041.
+
+You are reviewing and building on the openspec agent's output for this story.
+Your role is COLLABORATIVE — you are NOT starting from scratch. Instead:
+1. Review openspec's proposed acceptance criteria for testability and completeness
+2. Add missing edge-case, error-handling, security, and accessibility criteria
+3. Flag any AC that are vague, untestable, or overlapping
+4. Splitting is openspec's decision alone — you do NOT split stories. If openspec already split
+   this story, do NOT include a "splitStories" field in your output at all (it will be ignored if
+   you do). Review and refine the acceptanceCriteria openspec gave you for the UNSPLIT story as
+   normal; per-child refinement of an already-split story's children happens on a later turn, not
+   here.
+5. Do NOT remove or duplicate openspec's good work — build on it
+
+━━━ WHAT-NOT-HOW RULE (MANDATORY) ━━━
+Every AC must describe an OBSERVABLE OUTCOME (what a test can verify from outside the code),
+NOT an implementation instruction. If an AC names vi.mock, jest.fn, mockReturnValue,
+mockResolvedValue, import statements, or require() calls, REPLACE it with a
+Given/When/Then behaviour statement. Never tell the implementer which library or mock pattern to use.
+
+OPENSPEC'S OUTPUT (your input to review — ACs and split proposals only):
+{
+  "acceptanceCriteria": [],
+  "notes": "Novel capability — Live Preview does not exist in the codebase. The app uses Next.js Pages Router (src/pages/_app.tsx), NOT App Router, so the Contentstack App Router CSR guide cannot be followed literally. The contentstack SDK v3.15.2 accepts a live_preview config key. The @contentstack/live-preview-utils package is NOT installed and must be added. The ContentstackContext is a simple createContext with no provider in _app.tsx — the provider is mounted at the page level. Two attachment points: (1) the options config + Stack creation in contentstack.ts where live_preview config must be added, and (2) the context provider where Live Preview event listeners must trigger reactive re-renders for useContent() consumers. Custom Preview URLs are CMS dashboard configuration, not application code — that portion of the story is configuration work, not FE development, which partially explains the FE-only estimate contradiction."
+}
+
+ORIGINAL STORY CONTEXT:
+{
+  "id": "AMSD-2041",
+  "title": "[GO, UP, MX] Live Preview of Content in CMS",
+  "description": "AS a Content Author, I WANT to preview draft entries in CMS, SO THAT I can see how content will be shown on the website. This requires: (1) adding live_preview configuration to the Contentstack SDK Stack initialization in src/services/contentstack.ts, (2) installing and initializing the @contentstack/live-preview-utils SDK to subscribe to draft content change events, (3) wiring Live Preview event callbacks into the ContentstackContext provider so that useContent() consumers re-render with updated draft data, and (4) configuring Custom Preview URLs in the Contentstack CMS dashboard. Limitation: protected/authenticated pages may not be previewable. The app uses Next.js Pages Router, not App Router, so the Contentstack App Router CSR guide must be adapted accordingly.",
+  "originalAcceptanceCriteria": [],
+  "technicalNotes": {
+    "files": [
+      "src/services/contentstack.ts",
+      "src/context/contentstackContext.tsx",
+      "src/interface/content/page.ts",
+      "src/components/contentstack/ContentstackAttention/content.mock.ts",
+      "src/components/contentstack/ContentStackGallery/ContentStackGallery.mock.ts"
+    ],
+    "perCodeline": {
+      "metrolinx": {
+        "files": [
+          "src/services/contentstack.ts",
+          "src/context/contentstackContext.tsx",
+          "src/interface/content/page.ts",
+          "src/components/contentstack/ContentstackAttention/content.mock.ts",
+          "src/components/contentstack/ContentStackGallery/ContentStackGallery.mock.ts"
+        ],
+        "resolved": [
+          {
+            "declared": "src/services/contentstack.ts",
+            "actual": "src/services/contentstack.ts",
+            "match": "exact",
+            "verified_against": "/home/bradleyjerome/projects/metrolinx/next.metrolinx.com"
+          },
+          {
+            "declared": "src/context/contentstackContext.tsx",
+            "actual": "src/context/contentstackContext.tsx",
+            "match": "exact",
+            "verified_against": "/home/bradleyjerome/projects/metrolinx/next.metrolinx.com"
+          },
+          {
+            "declared": "src/interface/content/page.ts",
+            "actual": "src/interface/content/page.ts",
+            "match": "exact",
+            "verified_against": "/home/bradleyjerome/projects/metrolinx/next.metrolinx.com"
+          },
+          {
+            "declared": "src/components/contentstack/ContentstackAttention/content.mock.ts",
+            "actual": "src/components/contentstack/ContentstackAttention/content.mock.ts",
+            "match": "exact",
+            "verified_against": "/home/bradleyjerome/projects/metrolinx/next.metrolinx.com"
+          },
+          {
+            "declared": "src/components/contentstack/ContentStackGallery/ContentStackGallery.mock.ts",
+            "actual": "src/components/contentstack/ContentStackGallery/ContentStackGallery.mock.ts",
+            "match": "exact",
+            "verified_against": "/home/bradleyjerome/projects/metrolinx/next.metrolinx.com"
+          }
+        ],
+        "unresolved": []
+      }
+    }
+  },
+  "dependencies": []
+}
+
+Produce your refined output as raw JSON only (no XML tags, no markdown fences, no preamble). Include:
+- "acceptanceCriteria": The FULL merged list (openspec's criteria + your additions/refinements). Every item MUST be an observable outcome, not an implementation instruction.
+- "notes": What you changed and why (be specific — cite which criteria you added/modified/replaced)
+- "splitStories": ALWAYS omit this field. Splitting is openspec's decision alone — never propose
+  split children of your own, even if openspec already split this story.
+- "acAddedBySpeckit": Array of criteria YOU added that were not in openspec's output
+- "acModifiedBySpeckit": Array of {"original":"...","revised":"..."} for criteria you reworded
+- "acFlagged": Array of {"criterion":"...","flag":"..."} for criteria that need human attention
+
+For a brownfield story with a real codeline, you may have read-only tools (read_file,
+list_files, search) available this turn — if so, USE them for real to check a file's
+actual contents before relying on it; do not invent what a tool would return. For a
+greenfield story with no existing codeline, you have none — give your best answer from
+the description, title and paths you were given, and say so in "notes" if the file
+contents would have changed your answer. Either way, never narrate an imagined tool
+result: a real answer with an honest caveat is worth everything; fabricated tool-call
+syntax (<tool_call>, <tool_use>, <function_call>) is worth nothing — it is discarded in
+full and the work is lost (observed live, 2026-07-28: exactly this, on an empty-criteria
+story that got no answer at all).
+
+
+# Output
+```json
+{
+  "acceptanceCriteria": [
+    {
+      "id": "AC-1",
+      "criterion": "Given the Contentstack SDK Stack initialization options, When the application starts with Live Preview environment variables configured, Then the Stack config includes a live_preview key containing enable: true, host, and management_token (or app SDK config) so that the SDK can resolve draft content from the Contentstack preview API."
+    },
+    {
+      "id": "AC-2",
+      "criterion": "Given the application running without Live Preview environment variables (e.g. production build), When the Stack initialization options are constructed, Then no live_preview key is present in the config and the Stack behaves identically to the current production behavior — all published content is fetched via the delivery API with no errors or warnings."
+    },
+    {
+      "id": "AC-3",
+      "criterion": "Given the application is running in the browser with Live Preview enabled, When a Contentstack draft entry is edited in the CMS, Then the @contentstack/live-preview-utils SDK emits a callback containing the updated draft entry data."
+    },
+    {
+      "id": "AC-4",
+      "criterion": "Given a page component that consumes content from ContentstackContext, When the Live Preview SDK emits an updated draft entry for that page's content type, Then the consuming component re-renders with the updated draft data without a full page reload."
+    },
+    {
+      "id": "AC-5",
+      "criterion": "Given the application is server-side rendered (SSR or SSG), When pages are built or rendered on the server, Then no Live Preview initialization, event subscription, or client-only API calls execute — the server-rendered HTML contains only published content."
+    },
+    {
+      "id": "AC-6",
+      "criterion": "Given a page loaded without a Live Preview hash in the URL (i.e. normal visitor traffic), When the page renders, Then the page displays published content and no Live Preview event listeners are active — behavior is indistinguishable from the current production behavior."
+    },
+    {
+      "id": "AC-7",
+      "criterion": "Given a Live Preview session is active and draft data is received, When the updated draft data is applied to the context, Then the data conforms to the existing IContentstackPage interface (and related content interfaces) — no type errors occur and component rendering does not break due to unexpected data shapes."
+    },
+    {
+      "id": "AC-8",
+      "criterion": "Given a Live Preview session is active, When the user navigates away from the previewed page or closes the CMS preview panel, Then Live Preview event listeners are cleaned up and no memory leaks or stale callbacks persist."
+    },
+    {
+      "id": "AC-9",
+      "criterion": "Given an authenticated/protected page (e.g. behind next-auth), When a Content Author attempts to Live Preview that page, Then the page either renders the preview content correctly or displays a clear indication that the page cannot be previewed — it must not crash, expose protected content to unauthenticated sessions, or enter an error state."
+    },
+    {
+      "id": "AC-10",
+      "criterion": "Given the Contentstack CMS dashboard is configured with Custom Preview URLs pointing to the application's base URL, When an author clicks 'Live Preview' on a draft entry in the CMS, Then the application loads in an iframe with the Live Preview hash appended to the URL and the draft content is displayed."
+    },
+    {
+      "id": "AC-11",
+      "criterion": "Given the Live Preview SDK receives an event with partial or malformed draft data, When the event callback processes the data, Then the application does not crash — it either gracefully ignores the malformed update or retains the last valid content state."
+    },
+    {
+      "id": "AC-12",
+      "criterion": "Given the @contentstack/live-preview-utils package is added as a dependency, When the production bundle is built without Live Preview enabled, Then the Live Preview utilities are tree-shaken or code-split so they do not increase the production bundle size for end users who never use Live Preview."
+    }
+  ],
+  "notes": "Openspec provided zero ACs but excellent technical notes. I built the full AC list from scratch, grounded in the actual code I read. Key observations from code review: (1) contentstack.ts creates Stack with a plain options object — AC-1/AC-2 cover the live_preview config addition with graceful fallback. (2) ContentstackContext is a bare createContext with no Provider or hook — the story's mention of 'useContent() consumers' likely refers to any component using useContext(ContentstackContext), so AC-4 is phrased generically around context consumers re-rendering. (3) The context has no provider component in the file; search for ContentstackContext.Provider returned zero matches, confirming the provider is mounted elsewhere (page-level). AC-4/AC-8 assume the provider will be enhanced to subscribe to LP events. (4) @contentstack/live-preview-utils is confirmed NOT in package.json. (5) AC-5 ensures SSR safety since the app uses Next.js Pages Router with SSR/SSG. (6) AC-9 addresses the stated limitation about protected pages. (7) AC-10 covers the Custom Preview URL configuration — this is partly CMS dashboard config but the app must correctly handle the preview URL with hash params. (8) AC-11 covers error handling for malformed LP data. (9) AC-12 addresses bundle impact — important because the LP utils should not bloat production for regular visitors.",
+  "acAddedBySpeckit": [
+    "AC-1", "AC-2", "AC-3", "AC-4", "AC-5", "AC-6", "AC-7", "AC-8", "AC-9", "AC-10", "AC-11", "AC-12"
+  ],
+  "acModifiedBySpeckit": [],
+  "acFlagged": [
+    {
+      "criterion": "AC-10",
+      "flag": "Custom Preview URLs are primarily a CMS dashboard configuration task, not application code. This AC may belong in a separate configuration story or acceptance checklist. Verify with the team whether CMS dashboard configuration is in scope for this FE story."
+    },
+    {
+      "criterion": "AC-9",
+      "flag": "The story states protected pages 'may not be previewable' but does not specify the expected behavior. AC-9 allows either graceful failure or a clear indication — the team should decide which outcome is required and update this AC accordingly."
+    },
+    {
+      "criterion": "AC-12",
+      "flag": "Tree-shaking/code-splitting behavior depends on how @contentstack/live-preview-utils is architected and imported. If the package cannot be tree-shaken, this AC may need to be relaxed to 'Live Preview code is dynamically imported only when the LP hash is present in the URL'."
+    }
+  ]
+}
+```

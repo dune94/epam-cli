@@ -1,0 +1,67 @@
+# Prompt
+You are the specification coordinator for the epam-cli orchestration system. Before every phase you read orchestrations/prd.json (implementationOrder and stories), evaluate risk, dependencies, and technical readiness, then assign the correct specification runners: OpenSpec, Speckit, both, or none. You write assignments into each story's specification.assignedAgents field along with coordinatorNotes, target provider/model, and timestamps. You understand the provider policy ledger (configuration.aiRuntime.providerPolicies), token guardrails, and know when to skip stories that were already hand-curated. When you plan a run you emit JSON compliant with spec-mode-runner.js so that automation can apply deltas deterministically. You never invent story IDs or mutate acceptance criteria directly; only delegate to spec agents and record their status.
+
+You are the EPAM CLI specification coordinator reviewing the completed spec outputs for phase core.
+
+Each story was processed by a sequential agent pipeline:
+  1. openspec elaborated requirements (AC refinement, story splits, technical depth)
+  2. speckit reviewed openspec's output (testability, security, edge cases, gap analysis)
+
+For each story, evaluate the quality of the collaborative spec work:
+1. Did both agents add meaningful, non-overlapping value?
+2. Are the acceptance criteria complete, testable, and non-overlapping?
+3. Are story splits logical and properly scoped?
+4. Flag any story needing human review.
+
+Respond with JSON between <SPEC_REVIEW> and </SPEC_REVIEW> using this schema:
+[
+  {"storyId":"REM-xxx","verdict":"approved|needs_review","reviewNotes":"coordinator observations","qualityScore":0.0-1.0,"flags":[]}
+]
+
+Stories to review:
+[
+  {
+    "id": "MOCK-HW-1",
+    "title": "Hello world greeting should say hello dolly",
+    "acceptanceCriteria": [],
+    "specification": {
+      "runId": "20260731T144244Z",
+      "assignedAgents": [
+        "openspec"
+      ],
+      "coordinatorNotes": "Trivial greeting story with empty acceptance criteria and no existing spec. Needs basic elaboration to define expected output, invocation, and behavior. No security concerns or complex edge cases warrant speckit hardening.",
+      "status": "completed",
+      "updatedAt": "2026-07-31T14:48:53.785Z",
+      "appliedAgents": [
+        "openspec"
+      ],
+      "agentContributions": [
+        {
+          "agent": "openspec",
+          "applied": true,
+          "notes": "Existing getGreeting() returns 'hello world'; story requires 'hello dolly'. This is a defect — the computed value is wrong. Fix site is src/hello.ts:getGreeting(). No ACs provided, so VCs derived from description. No split needed — single function, zero ACs, one runtime role.",
+          "acceptanceChanged": false,
+          "splitCount": 0,
+          "timestamp": "2026-07-31T14:48:53.785Z"
+        }
+      ]
+    },
+    "splitChildren": []
+  }
+]
+
+<SPEC_REVIEW>
+</SPEC_REVIEW>
+
+# Output
+<SPEC_REVIEW>
+[
+  {
+    "storyId": "MOCK-HW-1",
+    "verdict": "approved",
+    "reviewNotes": "Trivial single-function defect fix (getGreeting returns 'hello world', should return 'hello dolly'). Coordinator's decision to assign only openspec was correct — no security, edge-case, or testability concerns warranting speckit. OpenSpec correctly identified the fix site (src/hello.ts:getGreeting()), determined no split was needed, and derived verification conditions from the description. However, acceptanceCriteria remains empty [] despite elaboration — openspec noted 'VCs derived from description' but did not write back concrete ACs. For a story this trivial the agent's notes sufficiently describe the expected behavior, but the empty AC array is a process gap that should be addressed in future runs.",
+    "qualityScore": 0.75,
+    "flags": ["acceptance_criteria_not_populated", "single_agent_no_speckit_justified"]
+  }
+]
+</SPEC_REVIEW>

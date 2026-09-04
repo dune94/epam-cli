@@ -1,0 +1,1 @@
+{"agent":"fuzz-weaver","phase":"core","summary":{"functionsAnalysed":1,"fuzzCasesProposed":0,"covered":0,"gaps":0,"vulnerabilities":0},"cases":[],"verdict":"not_applicable"}

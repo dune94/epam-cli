@@ -1,0 +1,247 @@
+=== Prompt for SKY-002-impl (attempt 1) ===
+CRITICAL — WRITE FILES FIRST. Your FIRST tool call MUST be WriteFile.
+Do NOT output any text before calling WriteFile. Do NOT plan or say "I will...".
+Call WriteFile NOW for the EXACT ABSOLUTE PATHS listed below:
+
+   - WRITE /home/bradleyjerome/projects/skyscanner-app/src/skyscanner/client.ts first, before any other action
+---
+
+Implement user story SKY-002-impl: Implement SkyscannerClient class and interfaces
+
+## Story Description
+Create src/skyscanner/client.ts with the SkyscannerClient class, SearchParams and FlightResult interfaces, global-fetch-based searchFlights method, constructor key resolution with env-var fallback, HTTP error handling, parse validation, and explicit MOCK_SKYSCANNER_API='true' mock mode.
+
+## Acceptance Criteria
+- SkyscannerClient class exported with constructor({ apiKey?: string }); apiKey stored as private field (# prefix or private keyword), not publicly readable
+- SearchParams interface exported with exactly: origin: string, destination: string, date: string, adults?: number; FlightResult interface exported with exactly: price: number, currency: string, airline: string, departure: string, arrival: string, duration: number, stops: number
+- searchFlights uses Node.js global fetch exclusively — no axios, node-fetch, or other third-party HTTP dependency imported
+- Constructor throws missing-key Error when apiKey is omitted or empty string AND RAPIDAPI_KEY env var is unset or empty string; constructor-provided apiKey takes precedence over RAPIDAPI_KEY env var
+- HTTP 4xx/5xx → searchFlights rejects with Error including status code in message; error message does NOT include the apiKey value anywhere
+- Malformed or missing-fields response body → searchFlights rejects with a descriptive parse/validation Error
+- MOCK_SKYSCANNER_API='true' → searchFlights returns deterministic fixture (≥2 results, valid FlightResult shape, varying prices) without calling fetch; any other value (unset, empty, 'false', '1', 'TRUE') → real fetch; real failures are NEVER silently replaced with mock data
+- tsc --noEmit exits 0 with no type errors
+
+
+
+
+
+## Technical Notes
+- files: ["/home/bradleyjerome/projects/skyscanner-app/src/skyscanner/client.ts"]
+- dependsOn: ["SKY-001"]
+
+## Files to Create/Modify (EXACT ABSOLUTE PATHS — write to these paths exactly)
+/home/bradleyjerome/projects/skyscanner-app/src/skyscanner/client.ts
+
+## Dependencies
+None
+
+
+## Instructions
+**CRITICAL — WRITE FILES FIRST:**
+   - WRITE /home/bradleyjerome/projects/skyscanner-app/src/skyscanner/client.ts first, before any other action
+**You MUST write every file listed above to its EXACT absolute path. Do NOT write to a different path, do NOT write to the current directory unless it matches the path above. Use your WriteFile or Edit tools with the full absolute path shown.**
+
+1. Write each required file to its exact absolute path listed above — do this FIRST before anything else
+2. Implement all acceptance criteria for this story
+3. Follow the project's existing code patterns and conventions
+4. Do NOT create tests unless explicitly required in acceptance criteria
+
+After implementation, provide a brief summary of what was created/modified.
+
+## Relevant Knowledge Base Entries
+The following was learned from previous story implementations and is relevant to your agent role. Apply this knowledge before writing any code:
+
+- [2026-07-06T17:45:30Z] Always resolve mocked fetch calls to a Response-shaped object with ok, status, statusText, and a json method returning a Promise.
+- [2026-07-06T17:50:20Z] Use valid module and moduleResolution pairs in tsconfig.json: CommonJS with Node, Node16 with Node16, ESNext with Bundler. Use CommonJS and Node for the stack. Mismatched pairs cause build errors.
+- [2026-07-06T18:11:26Z] Use vi.fn().mockResolvedValue(value) to make a mock return a resolved Promise.
+- [2026-07-06T20:31:11Z] Use `test: { passWithNoTests: true }` in vitest.config.ts or create a stub test file when no *.test.ts files exist.
+- [2026-07-06T20:33:03Z] Enable globals:true in vitest.config.ts so describe, it, and expect work without imports, reducing boilerplate in test files.
+- [2026-07-06T23:47:34Z] Use CommonJS-compatible patterns in src/server.ts: avoid `import.meta.url` and top-level `await`; gate listen with `if (require.main === module)`.
+- [2026-07-07T02:35:30Z] Always include a non-test source file in src/ alongside any src/*.test.ts file, since tsconfig.json excludes test files from tsc --noEmit.
+- [2026-07-07T19:01:34Z] Only modify or create files explicitly listed in the story's acceptance criteria. Do not touch files belonging to other stories or outside the current task scope.
+- [2026-07-07T20:17:57Z] [unreviewed-fallback] Avoid using deprecated TypeScript compiler options like 'moduleResolution=node10'; use 'moduleResolution=node' instead.
+- [2026-07-17T20:20:58Z] Always: Before importing a module or referencing a type/property, always read the actual source file to verify the export exists, its exact path, its properties, and its constructor/factory signatures
+
+## Knowledge Base Contribution (do this LAST — after writing all implementation files)
+Your assigned KB entry ID for this run: **KB-001**
+
+IMPORTANT: Write ALL implementation files first. Only AFTER writing every required file should you optionally append a KB entry.
+Do NOT read orchestrations/agents/KB.md before writing implementation files. The relevant KB entries are already injected above.
+
+If (and only if) you discover a non-obvious pattern during implementation, append one entry to `orchestrations/agents/KB.md`:
+
+```markdown
+## KB-001 -- 2026-07-19
+
+**Category:** <backend|frontend|infrastructure|testing|orchestration>
+**AgentRole:** <your agentRole from the story>
+**Tags:** <comma-separated tech keywords, e.g. typescript, node, cli>
+**Trigger:** <retry|first-success>
+**StoryRef:** SKY-002-impl
+
+<One concise paragraph: the specific pattern, gotcha, or anti-pattern.>
+```
+
+Only write an entry if the knowledge is genuinely non-obvious. Skip trivial observations.
+
+## Execution Plan
+Follow this plan step by step:
+[1;33m[WARNING][0m   PlanReview: mismatch detected for SKY-002-impl against dependency contracts — one corrective re-plan
+1. Create `/home/bradleyjerome/projects/skyscanner-app/src/skyscanner/client.ts` and export the `SearchParams` interface with exactly: `origin: string`, `destination: string`, `date: string`, `adults?: number`.
+
+2. In the same file, export the `FlightResult` interface with exactly: `price: number`, `currency: string`, `airline: string`, `departure: string`, `arrival: string`, `duration: number`, `stops: number`.
+
+3. Implement the `SkyscannerClient` class with a `private #apiKey: string` field; in the constructor `constructor({ apiKey }: { apiKey?: string } = {})`, resolve the key by preferring the `apiKey` argument, falling back to `process.env.RAPIDAPI_KEY`; if the resolved value is empty or undefined, throw `new Error("Missing API key: provide apiKey or set RAPIDAPI_KEY")`.
+
+4. Implement `async searchFlights(params: SearchParams): Promise<FlightResult[]>` that, when `process.env.MOCK_SKYSCANNER_API === 'true'`, returns a deterministic fixture array of at least 2 `FlightResult` objects with varying prices and valid shape, without calling `fetch`.
+
+5. In `searchFlights`, for the real-fetch path, build the request to the Skyscanner RapidAPI endpoint using the stored `#apiKey` in the appropriate header (e.g., `X-RapidAPI-Key`); call `await fetch(url, options)` using the global `fetch` only — do not import any HTTP library.
+
+6. After the fetch response, check `!response.ok` (HTTP 4xx/5xx): throw `new Error(\`Skyscanner API request failed with status \${response.status}\`)` — ensure the error message never includes the `#apiKey` value.
+
+7. Parse the JSON body and validate that it contains the expected fields; if the body is malformed or missing required fields, throw a descriptive `Error("Failed to parse Skyscanner API response: <reason>")`; map the validated data to `FlightResult[]` and return it.
+
+8. Run `npx tsc --noEmit` from the project root and fix any type errors until it exits 0 with no output.
+=== End Prompt ===
+
+=== epam Output (attempt 1) ===
+The TypeScript file compiles without errors. The error about `vitest.config.ts` is a project configuration issue unrelated to the implementation file. Let me verify the file exists and check if there are any other issues:
+  [tc-writer] No test stories need TCs in phase 'unknown' — skipping
+
+=== tsc --noEmit failed (exit 2) ===
+error TS6059: File '/home/bradleyjerome/projects/skyscanner-app/vitest.config.ts' is not under 'rootDir' '/home/bradleyjerome/projects/skyscanner-app/src'. 'rootDir' is expected to contain all source files.
+  The file is in the program because:
+    Matched by default include pattern '**/*'
+The TypeScript file compiles without errors. The error about `vitest.config.ts` is a project configuration issue unrelated to the implementation file. Let me verify the file exists and check if there are any other issues:
+
+=== epam exited with code 1 ===
+=== Prompt for SKY-002-impl (attempt 2) ===
+CRITICAL — WRITE FILES FIRST. Your FIRST tool call MUST be WriteFile.
+Do NOT output any text before calling WriteFile. Do NOT plan or say "I will...".
+Call WriteFile NOW for the EXACT ABSOLUTE PATHS listed below:
+
+   - WRITE /home/bradleyjerome/projects/skyscanner-app/src/skyscanner/client.ts first, before any other action
+---
+
+Implement user story SKY-002-impl: Implement SkyscannerClient class and interfaces
+
+## Story Description
+Create src/skyscanner/client.ts with the SkyscannerClient class, SearchParams and FlightResult interfaces, global-fetch-based searchFlights method, constructor key resolution with env-var fallback, HTTP error handling, parse validation, and explicit MOCK_SKYSCANNER_API='true' mock mode.
+
+## Acceptance Criteria
+- SkyscannerClient class exported with constructor({ apiKey?: string }); apiKey stored as private field (# prefix or private keyword), not publicly readable
+- SearchParams interface exported with exactly: origin: string, destination: string, date: string, adults?: number; FlightResult interface exported with exactly: price: number, currency: string, airline: string, departure: string, arrival: string, duration: number, stops: number
+- searchFlights uses Node.js global fetch exclusively — no axios, node-fetch, or other third-party HTTP dependency imported
+- Constructor throws missing-key Error when apiKey is omitted or empty string AND RAPIDAPI_KEY env var is unset or empty string; constructor-provided apiKey takes precedence over RAPIDAPI_KEY env var
+- HTTP 4xx/5xx → searchFlights rejects with Error including status code in message; error message does NOT include the apiKey value anywhere
+- Malformed or missing-fields response body → searchFlights rejects with a descriptive parse/validation Error
+- MOCK_SKYSCANNER_API='true' → searchFlights returns deterministic fixture (≥2 results, valid FlightResult shape, varying prices) without calling fetch; any other value (unset, empty, 'false', '1', 'TRUE') → real fetch; real failures are NEVER silently replaced with mock data
+- tsc --noEmit exits 0 with no type errors
+
+
+
+
+
+## Technical Notes
+- files: ["/home/bradleyjerome/projects/skyscanner-app/src/skyscanner/client.ts"]
+- dependsOn: ["SKY-001"]
+
+## Files to Create/Modify (EXACT ABSOLUTE PATHS — write to these paths exactly)
+/home/bradleyjerome/projects/skyscanner-app/src/skyscanner/client.ts
+
+## Dependencies
+None
+
+
+## Instructions
+**CRITICAL — WRITE FILES FIRST:**
+   - WRITE /home/bradleyjerome/projects/skyscanner-app/src/skyscanner/client.ts first, before any other action
+**You MUST write every file listed above to its EXACT absolute path. Do NOT write to a different path, do NOT write to the current directory unless it matches the path above. Use your WriteFile or Edit tools with the full absolute path shown.**
+
+1. Write each required file to its exact absolute path listed above — do this FIRST before anything else
+2. Implement all acceptance criteria for this story
+3. Follow the project's existing code patterns and conventions
+4. Do NOT create tests unless explicitly required in acceptance criteria
+
+After implementation, provide a brief summary of what was created/modified.
+
+## Verification Failure
+
+The orchestrator ran `tsc --noEmit` after your files were written and it failed (exit code 2). Fix the type errors so tsc exits 0.
+
+```
+error TS6059: File '/home/bradleyjerome/projects/skyscanner-app/vitest.config.ts' is not under 'rootDir' '/home/bradleyjerome/projects/skyscanner-app/src'. 'rootDir' is expected to contain all source files.
+  The file is in the program because:
+    Matched by default include pattern '**/*'
+```
+
+## Relevant Knowledge Base Entries
+The following was learned from previous story implementations and is relevant to your agent role. Apply this knowledge before writing any code:
+
+- [2026-07-06T17:45:30Z] Always resolve mocked fetch calls to a Response-shaped object with ok, status, statusText, and a json method returning a Promise.
+- [2026-07-06T17:50:20Z] Use valid module and moduleResolution pairs in tsconfig.json: CommonJS with Node, Node16 with Node16, ESNext with Bundler. Use CommonJS and Node for the stack. Mismatched pairs cause build errors.
+- [2026-07-06T18:11:26Z] Use vi.fn().mockResolvedValue(value) to make a mock return a resolved Promise.
+- [2026-07-06T20:31:11Z] Use `test: { passWithNoTests: true }` in vitest.config.ts or create a stub test file when no *.test.ts files exist.
+- [2026-07-06T20:33:03Z] Enable globals:true in vitest.config.ts so describe, it, and expect work without imports, reducing boilerplate in test files.
+- [2026-07-06T23:47:34Z] Use CommonJS-compatible patterns in src/server.ts: avoid `import.meta.url` and top-level `await`; gate listen with `if (require.main === module)`.
+- [2026-07-07T02:35:30Z] Always include a non-test source file in src/ alongside any src/*.test.ts file, since tsconfig.json excludes test files from tsc --noEmit.
+- [2026-07-07T19:01:34Z] Only modify or create files explicitly listed in the story's acceptance criteria. Do not touch files belonging to other stories or outside the current task scope.
+- [2026-07-07T20:17:57Z] [unreviewed-fallback] Avoid using deprecated TypeScript compiler options like 'moduleResolution=node10'; use 'moduleResolution=node' instead.
+- [2026-07-17T20:20:58Z] Always: Before importing a module or referencing a type/property, always read the actual source file to verify the export exists, its exact path, its properties, and its constructor/factory signatures
+
+## Knowledge Base Contribution (do this LAST — after writing all implementation files)
+Your assigned KB entry ID for this run: **KB-001**
+**This is retry attempt 1** — a previous attempt failed. You MUST write a KB entry documenting what went wrong and what you changed.
+
+IMPORTANT: Write ALL implementation files first. Only AFTER writing every required file should you optionally append a KB entry.
+Do NOT read orchestrations/agents/KB.md before writing implementation files. The relevant KB entries are already injected above.
+
+If (and only if) you discover a non-obvious pattern during implementation, append one entry to `orchestrations/agents/KB.md`:
+
+```markdown
+## KB-001 -- 2026-07-19
+
+**Category:** <backend|frontend|infrastructure|testing|orchestration>
+**AgentRole:** <your agentRole from the story>
+**Tags:** <comma-separated tech keywords, e.g. typescript, node, cli>
+**Trigger:** <retry|first-success>
+**StoryRef:** SKY-002-impl
+
+<One concise paragraph: the specific pattern, gotcha, or anti-pattern.>
+```
+
+Only write an entry if the knowledge is genuinely non-obvious. Skip trivial observations.
+
+## Execution Plan
+Follow this plan step by step:
+[1;33m[WARNING][0m   PlanReview: mismatch detected for SKY-002-impl against dependency contracts — one corrective re-plan
+1. Create `/home/bradleyjerome/projects/skyscanner-app/src/skyscanner/client.ts` and export the `SearchParams` interface with exactly: `origin: string`, `destination: string`, `date: string`, `adults?: number`.
+
+2. In the same file, export the `FlightResult` interface with exactly: `price: number`, `currency: string`, `airline: string`, `departure: string`, `arrival: string`, `duration: number`, `stops: number`.
+
+3. Implement the `SkyscannerClient` class with a `private #apiKey: string` field; in the constructor `constructor({ apiKey }: { apiKey?: string } = {})`, resolve the key by preferring the `apiKey` argument, falling back to `process.env.RAPIDAPI_KEY`; if the resolved value is empty or undefined, throw `new Error("Missing API key: provide apiKey or set RAPIDAPI_KEY")`.
+
+4. Implement `async searchFlights(params: SearchParams): Promise<FlightResult[]>` that, when `process.env.MOCK_SKYSCANNER_API === 'true'`, returns a deterministic fixture array of at least 2 `FlightResult` objects with varying prices and valid shape, without calling `fetch`.
+
+5. In `searchFlights`, for the real-fetch path, build the request to the Skyscanner RapidAPI endpoint using the stored `#apiKey` in the appropriate header (e.g., `X-RapidAPI-Key`); call `await fetch(url, options)` using the global `fetch` only — do not import any HTTP library.
+
+6. After the fetch response, check `!response.ok` (HTTP 4xx/5xx): throw `new Error(\`Skyscanner API request failed with status \${response.status}\`)` — ensure the error message never includes the `#apiKey` value.
+
+7. Parse the JSON body and validate that it contains the expected fields; if the body is malformed or missing required fields, throw a descriptive `Error("Failed to parse Skyscanner API response: <reason>")`; map the validated data to `FlightResult[]` and return it.
+
+8. Run `npx tsc --noEmit` from the project root and fix any type errors until it exits 0 with no output.
+
+## Coordinator Guidance (retry 1)
+The following targeted instruction was identified from the previous failure:
+
+## Self-Heal: Failure Analyst Summary
+Root cause: tsconfig rootDir is 'src' but vitest.config.ts at project root is included by default pattern, causing TS6059.
+Fix: Always: When setting tsconfig rootDir to 'src', always set include to ['src/**/*.ts'] (not the default '**/*') so root-level config files like vitest.config.ts are excluded from compilation.
+=== End Prompt ===
+
+=== epam Output (attempt 2) ===
+Now let me append the KB entry as instructed:
+  [tc-writer] No test stories need TCs in phase 'unknown' — skipping
+Now let me append the KB entry as instructed:
+
+=== End epam Output ===

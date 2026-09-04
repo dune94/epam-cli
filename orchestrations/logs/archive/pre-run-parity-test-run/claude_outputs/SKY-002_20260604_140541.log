@@ -1,0 +1,104 @@
+=== Prompt for SKY-002 (attempt 1) ===
+Implement user story SKY-002: Implement typed Skyscanner API client
+
+## Story Description
+Create src/skyscanner/client.ts that wraps the Skyscanner RapidAPI. The client must: (1) export a SkyscannerClient class whose constructor accepts { apiKey: string }; if apiKey is omitted, fall back to the RAPIDAPI_KEY environment variable — throw a descriptive Error if neither is present; (2) implement searchFlights(params: SearchParams): Promise<FlightResult[]> using the Node.js 18+ global fetch (no third-party HTTP library); (3) export TypeScript interfaces SearchParams { origin: string; destination: string; date: string; adults?: number } and FlightResult { price: number; currency: string; airline: string; departure: string; arrival: string; duration: number; stops: number }; (4) throw on HTTP 4xx/5xx responses, including the status code in the message; (5) throw a descriptive parse error when the response body does not match the expected shape. Also create src/skyscanner/client.test.ts with vitest tests that mock the global fetch — no real network calls.
+
+## Acceptance Criteria
+- src/skyscanner/client.ts exports a SkyscannerClient class whose constructor signature is constructor({ apiKey }: { apiKey?: string })
+- SearchParams interface is exported with exactly: origin: string, destination: string, date: string, adults?: number
+- FlightResult interface is exported with exactly: price: number, currency: string, airline: string, departure: string, arrival: string, duration: number, stops: number
+- searchFlights uses the Node.js global fetch exclusively — no axios, node-fetch, or other HTTP dependency imported
+- When no apiKey is passed to the constructor and RAPIDAPI_KEY env var is unset, constructing SkyscannerClient throws an Error whose message references the missing key
+- When the API returns a 4xx or 5xx status, searchFlights rejects with an Error that includes the HTTP status code
+- When the API response body is malformed or missing expected fields, searchFlights rejects with a descriptive parse/validation Error
+- client.test.ts contains at least 5 vitest tests, each using a mocked fetch (vi.stubGlobal or equivalent) with afterEach fetch restoration, covering: (a) correct RapidAPI URL and header construction, (b) successful response parsed into FlightResult[], (c) HTTP 4xx rejection with status code in error message, (d) missing API key constructor error, (e) malformed/missing-fields response body rejects with a parse/validation error
+- tsc --noEmit exits 0 with no type errors
+- vitest run exits 0 with all tests passing
+- The apiKey is stored as a private field (private or # prefix) on the SkyscannerClient instance and is not publicly readable
+- When apiKey is passed as an empty string ('') to the constructor, SkyscannerClient throws the same missing-key Error as when apiKey is omitted entirely
+- When RAPIDAPI_KEY is set to an empty string in the environment and no apiKey is provided to the constructor, SkyscannerClient throws the missing-key Error
+- When an apiKey is provided to the constructor and RAPIDAPI_KEY is also set in the environment, the constructor-provided apiKey takes precedence
+- The Error thrown by searchFlights on HTTP 4xx/5xx does not include the apiKey value anywhere in its message string
+
+## Technical Notes
+- workingDir: /tmp/skyscanner-app
+- files: ["/tmp/skyscanner-app/src/skyscanner/client.ts","/tmp/skyscanner-app/src/skyscanner/client.test.ts"]
+- dependsOn: ["SKY-001","SKY-001b"]
+
+## Files to Create/Modify
+/tmp/skyscanner-app/src/skyscanner/client.ts, /tmp/skyscanner-app/src/skyscanner/client.test.ts
+
+## Dependencies
+None
+
+## Instructions
+1. Implement all acceptance criteria for this story
+2. Follow the project's existing code patterns and conventions
+3. Create any necessary files in the locations specified
+4. Ensure code compiles/runs without errors
+5. Do NOT create tests unless explicitly required in acceptance criteria
+
+After implementation, provide a brief summary of what was created/modified.
+
+## Relevant Knowledge Base Entries
+No prior KB entries match your agent role yet.
+
+## Knowledge Base Contribution
+Your assigned KB entry ID for this run: **KB-008**
+
+If you discover a non-obvious pattern, gotcha, or anti-pattern during this implementation (or this is a retry), append exactly one entry to `orchestrations/agents/KB.md` using this format:
+
+```markdown
+## KB-008 -- 2026-06-04
+
+**Category:** <backend|frontend|infrastructure|testing|orchestration>
+**AgentRole:** <your agentRole from the story>
+**Tags:** <comma-separated tech keywords, e.g. typescript, node, cli>
+**Trigger:** <retry|first-success>
+**StoryRef:** SKY-002
+
+<One concise paragraph: the specific pattern, gotcha, or anti-pattern. Precise enough that a future Claude instance can apply it without re-discovering it.>
+```
+
+Only write an entry if the knowledge is genuinely non-obvious. Skip trivial observations.
+=== End Prompt ===
+
+=== claude Output (attempt 1) ===
+Excellent! All tests pass and the implementation is complete. Let me create a summary of what was implemented:
+
+## Summary
+
+I've successfully implemented **SKY-002: Implement typed Skyscanner API client** with all acceptance criteria met.
+
+### Files Created:
+
+**1. `/tmp/skyscanner-app/src/skyscanner/client.ts`** (89 lines)
+   - `SkyscannerClient` class with constructor accepting `{ apiKey?: string }`
+   - Fallback to `RAPIDAPI_KEY` environment variable with proper validation
+   - `searchFlights()` method using Node.js 18+ global fetch (no external HTTP library)
+   - Exported `SearchParams` interface: `origin`, `destination`, `date`, `adults?`
+   - Exported `FlightResult` interface: `price`, `currency`, `airline`, `departure`, `arrival`, `duration`, `stops`
+   - Comprehensive error handling:
+     - Throws on missing/empty apiKey
+     - Includes HTTP status code in error messages for 4xx/5xx responses
+     - Validates and throws on malformed responses or missing fields
+     - **Never exposes apiKey in error messages**
+   - Private `apiKey` field to prevent unauthorized access
+
+**2. `/tmp/skyscanner-app/src/skyscanner/client.test.ts`** (334 lines)
+   - 15 comprehensive vitest tests with mocked `fetch`
+   - Covers all 5 required acceptance criteria:
+     - (a) Correct RapidAPI URL and header construction
+     - (b) Successful response parsing into `FlightResult[]`
+     - (c) HTTP 4xx/5xx rejection with status code in error
+     - (d) Missing API key constructor error
+     - (e) Malformed/missing-fields response rejection
+   - Additional tests for edge cases (empty string handling, env precedence, etc.)
+
+### Verification Results:
+✅ TypeScript compilation: `tsc --noEmit` exits 0 with no type errors
+✅ Test suite: `vitest run` — **15 tests passing**, all acceptance criteria verified
+✅ All interfaces and class properly exported and typed
+
+=== End claude Output ===

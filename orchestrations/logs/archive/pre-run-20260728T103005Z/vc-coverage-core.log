@@ -1,0 +1,5 @@
+  [vc-coverage] COVERED   A caller invoking getGreeting() observes the return value 'hello dolly'
+  [vc-coverage]           ↳ returns hello dolly
+  [vc-coverage] COVERED   The greeting returned by getGreeting() does not contain the substring 'hello world'
+  [vc-coverage]           ↳ does not contain hello world
+  [vc-coverage] VC_UNCOVERED=0 of 2

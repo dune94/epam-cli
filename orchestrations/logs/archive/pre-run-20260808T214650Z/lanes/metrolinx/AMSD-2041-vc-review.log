@@ -1,0 +1,37 @@
+# Prompt
+You are a STRICT verification-criteria reviewer for a brownfield fix. REVIEW ONLY — do NOT rewrite anything.
+
+Acceptance criteria (IMMUTABLE ticket intent):
+- (none)
+Description: Original Requirements (discovery)  AS a Content Author, I WANT to preview draft entries in CMS, SO THAT I can see how content will be shown on the website
+ability to preview draft entries in CMS
+Notes& Assumptions  Limitation: Might not be possible to preview protected pages and content.
+Original Total Estimate:  8  Original FE Estimate:  8  Original DAM Estimate:  0  Original BE Estimate:  0
+
+Proposed verification criteria:
+1. When a Contentstack Live Preview session is active for an entry, the rendered page displays the draft version of that entry's content.
+2. The page renders the entry content indicated by the Contentstack Live Preview session, showing the content the preview session specifies.
+3. When a draft entry's field value is modified while live preview is active, the page displays the updated draft content without a full browser page reload.
+4. When live preview is active for an entry, the page renders all content fields from the draft version of that entry — including text fields, reference fields, and rich-text fields — with each field value present and correctly displayed.
+5. The page loads without Contentstack authentication or connection errors when the live preview capability is enabled.
+6. The Contentstack Live Preview client functionality is present on the page, enabling draft content to be displayed during a preview session.
+7. When live preview is active for a draft entry that contains field values not yet published, the page displays those unpublished field values.
+8. When live preview is not active, the page renders published entry content with all fields present and correctly displayed.
+
+Apply these rules EXACTLY (the producer is held to the same text — do not invent stricter or looser criteria):
+A verification criterion states WHAT AN END USER OR TESTER OBSERVES on the user-facing surface THE TICKET IS ABOUT — the rendered output for an output ticket, the displayed screen for a UI ticket, the response a CLIENT receives for an API ticket. It is a BLACK-BOX check on that surface. It NEVER describes HOW the value is produced.
+A verification criterion is FORBIDDEN if it:
+- prescribes HOW to implement — any algorithm, mechanism, approach, or the addition/reading of any new field, flag or service;
+- references an INTERNAL structure that merely FEEDS the ticket's surface — an intermediate payload, a data-transfer object, or a specific response field used to BUILD the output. Verify the surface the ticket names, NOT the data structure behind it;
+- makes a CROSS-COMPARISON that presumes a mechanism — never assert one value "must equal" / "matches" / "is the same as" another; that presumes a shared derivation. Assert the required value is present and correct ON ITS OWN.
+Every verification criterion must be observable, testable, and tied to the ticket's stated symptom/intent.
+
+A criterion may declare a PRECONDITION the test establishes (for example a mocked client
+signalling a change). A declared precondition is NOT implementation prescription — do not flag
+it. Flag what the criterion ASSERTS, not what it sets up.
+
+FLAG any verification criterion that violates ANY rule above, OR that fails to cover the intent of an acceptance criterion.
+Output ONLY a JSON array of short flag strings, e.g. ["VC 2 prescribes <an approach> — restate as observable outcome"]. Output [] if every VC is clean. No prose, no markdown.
+
+# Output
+["VC 2 references the internal preview-session payload as the authority for what content appears — restate as observable outcome on the rendered page", "VC 4 enumerates internal Contentstack field types (reference fields, rich-text fields) — verify the rendered surface, not the internal structure feeding it", "VC 6 prescribes the Live Preview client functionality being present on the page — restate as the observable outcome of draft content being displayed"]

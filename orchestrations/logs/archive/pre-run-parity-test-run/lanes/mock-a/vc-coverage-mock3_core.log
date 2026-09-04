@@ -1,0 +1,42 @@
+  [vc-coverage] COVERED   Invoking getGreeting() returns the string 'hello dolly'
+  [vc-coverage]           ↳ returns hello dolly
+  [vc-coverage] UNCOVERED The vitest test suite passes with no failures
+  [vc-coverage]           The test asserts that getGreeting() returns 'hello dolly', which is a functional assertion; it does not assert
+  [vc-coverage] UNCOVERED Running tsc --noEmit exits with code 0
+  [vc-coverage]           The test only asserts runtime behavior of getGreeting(); it never invokes tsc --noEmit or checks its exit code
+  [vc-coverage] VC_UNCOVERED=2 of 3
+  [vc-coverage] the change is still proven by the bug-reproduction gate — this is a COVERAGE gap, not a correctness one
+  [vc-coverage] COVERED   Calling getGreeting() returns exactly the string 'hello dolly'
+  [vc-coverage]           ↳ returns hello world
+  [vc-coverage] UNCOVERED The existing test suite passes under vitest with no failures
+  [vc-coverage]           No assertion in this file checks that the entire test suite passes; the test only asserts a specific functiona
+  [vc-coverage] UNCOVERED tsc --noEmit exits with code 0
+  [vc-coverage]           The test only asserts a runtime return value of getGreeting(); nothing invokes tsc --noEmit or checks its exit
+  [vc-coverage] VC_UNCOVERED=2 of 3
+  [vc-coverage] the change is still proven by the bug-reproduction gate — this is a COVERAGE gap, not a correctness one
+  [vc-coverage] COVERED   Calling getGreeting() returns exactly the string 'hello dolly'
+  [vc-coverage]           ↳ returns hello dolly
+  [vc-coverage] COVERED   Running the test suite under vitest results in all tests passing
+  [vc-coverage]           ↳ returns hello dolly
+  [vc-coverage] UNCOVERED Running tsc --noEmit exits with code 0
+  [vc-coverage]           No test case runs tsc --noEmit or checks its exit code; the only test asserts runtime behavior of getGreeting(
+  [vc-coverage] COVERED   In each codeline named on this story, calling getGreeting() returns exactly 'hello dolly'
+  [vc-coverage]           ↳ returns hello dolly
+  [vc-coverage] VC_UNCOVERED=1 of 4
+  [vc-coverage] the change is still proven by the bug-reproduction gate — this is a COVERAGE gap, not a correctness one
+  [vc-coverage] COVERED   Calling getGreeting() returns exactly the string 'hello dolly'
+  [vc-coverage]           ↳ returns hello dolly
+  [vc-coverage] COVERED   The vitest test suite passes with all tests green
+  [vc-coverage]           ↳ returns hello dolly
+  [vc-coverage] UNCOVERED Running tsc --noEmit exits with code 0
+  [vc-coverage]           No test runs tsc --noEmit or checks its exit code; the existing test only asserts the return value of getGreet
+  [vc-coverage] VC_UNCOVERED=1 of 3
+  [vc-coverage] the change is still proven by the bug-reproduction gate — this is a COVERAGE gap, not a correctness one
+  [vc-coverage] COVERED   Calling getGreeting() produces the exact string 'hello dolly'
+  [vc-coverage]           ↳ returns hello dolly
+  [vc-coverage] COVERED   Running vitest on the existing test file results in all tests passing with no failures
+  [vc-coverage]           ↳ returns hello dolly
+  [vc-coverage] UNCOVERED Running tsc --noEmit exits with return code 0
+  [vc-coverage]           The test only asserts runtime behavior (that getGreeting returns 'hello dolly') and does not invoke tsc or che
+  [vc-coverage] VC_UNCOVERED=1 of 3
+  [vc-coverage] the change is still proven by the bug-reproduction gate — this is a COVERAGE gap, not a correctness one

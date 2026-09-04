@@ -1,0 +1,5 @@
+  [vc-coverage] COVERED   Calling getGreeting() returns the exact string 'hello dolly'
+  [vc-coverage]           ↳ returns hello dolly
+  [vc-coverage] COVERED   Calling getGreeting() returns a string value (no regression in return type)
+  [vc-coverage]           ↳ returns a string value
+  [vc-coverage] VC_UNCOVERED=0 of 2

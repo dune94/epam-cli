@@ -1,0 +1,195 @@
+# Prompt
+You are the speckit specification agent for EPAM CLI. Phase core, story AMSD-2041.
+
+You are reviewing and building on the openspec agent's output for this story.
+Your role is COLLABORATIVE — you are NOT starting from scratch. Instead:
+1. Review openspec's proposed acceptance criteria for testability and completeness
+2. Add missing edge-case, error-handling, security, and accessibility criteria
+3. Flag any AC that are vague, untestable, or overlapping
+4. Splitting is openspec's decision alone — you do NOT split stories. If openspec already split
+   this story, do NOT include a "splitStories" field in your output at all (it will be ignored if
+   you do). Review and refine the acceptanceCriteria openspec gave you for the UNSPLIT story as
+   normal; per-child refinement of an already-split story's children happens on a later turn, not
+   here.
+5. Do NOT remove or duplicate openspec's good work — build on it
+
+━━━ WHAT-NOT-HOW RULE (MANDATORY) ━━━
+Every AC must describe an OBSERVABLE OUTCOME (what a test can verify from outside the code),
+NOT an implementation instruction. If an AC names vi.mock, jest.fn, mockReturnValue,
+mockResolvedValue, import statements, or require() calls, REPLACE it with a
+Given/When/Then behaviour statement. Never tell the implementer which library or mock pattern to use.
+
+OPENSPEC'S OUTPUT (your input to review — ACs and split proposals only):
+{
+  "acceptanceCriteria": [],
+  "notes": "This is a novel capability — the codebase currently has zero live-preview support (grep for live_preview/livePreview/live-preview returns no matches). The Contentstack SDK Stack in src/services/contentstack.ts must be extended with live_preview config, and the query-building path through ContentstackFactory must forward preview/draft parameters. All 147+ components consume content via useContent → ContentstackContext, which is populated by data fetched through getEntry/getSingleEntry/findSingletonEntry, so the change propagates from the service layer upward without touching individual components."
+}
+
+ORIGINAL STORY CONTEXT:
+{
+  "id": "AMSD-2041",
+  "title": "[GO, UP, MX] Live Preview of Content in CMS",
+  "description": "AS a Content Author, I WANT to preview draft entries in CMS, SO THAT I can see how content will be shown on the website. This requires integrating the Contentstack Live Preview SDK with the existing Stack configuration and query pipeline so that draft/unpublished entries are fetched and rendered when preview mode is active. Limitation: protected pages and content may not be previewable.",
+  "originalAcceptanceCriteria": [],
+  "technicalNotes": {
+    "files": [
+      "src/services/contentstack.ts",
+      "src/interface/contentstack.ts",
+      "src/interface/content/page.ts",
+      "src/components/contentstack/ContentstackAttention/content.mock.ts",
+      "src/components/contentstack/ContentStackGallery/ContentStackGallery.mock.ts"
+    ],
+    "perCodeline": {
+      "metrolinx": {
+        "files": [
+          "src/services/contentstack.ts",
+          "src/interface/contentstack.ts",
+          "src/interface/content/page.ts",
+          "src/components/contentstack/ContentstackAttention/content.mock.ts",
+          "src/components/contentstack/ContentStackGallery/ContentStackGallery.mock.ts"
+        ],
+        "resolved": [
+          {
+            "declared": "src/services/contentstack.ts",
+            "actual": "src/services/contentstack.ts",
+            "match": "exact",
+            "verified_against": "/home/bradleyjerome/projects/metrolinx/next.metrolinx.com"
+          },
+          {
+            "declared": "src/interface/contentstack.ts",
+            "actual": "src/interface/contentstack.ts",
+            "match": "exact",
+            "verified_against": "/home/bradleyjerome/projects/metrolinx/next.metrolinx.com"
+          },
+          {
+            "declared": "src/interface/content/page.ts",
+            "actual": "src/interface/content/page.ts",
+            "match": "exact",
+            "verified_against": "/home/bradleyjerome/projects/metrolinx/next.metrolinx.com"
+          },
+          {
+            "declared": "src/components/contentstack/ContentstackAttention/content.mock.ts",
+            "actual": "src/components/contentstack/ContentstackAttention/content.mock.ts",
+            "match": "exact",
+            "verified_against": "/home/bradleyjerome/projects/metrolinx/next.metrolinx.com"
+          },
+          {
+            "declared": "src/components/contentstack/ContentStackGallery/ContentStackGallery.mock.ts",
+            "actual": "src/components/contentstack/ContentStackGallery/ContentStackGallery.mock.ts",
+            "match": "exact",
+            "verified_against": "/home/bradleyjerome/projects/metrolinx/next.metrolinx.com"
+          }
+        ],
+        "unresolved": []
+      }
+    }
+  },
+  "dependencies": []
+}
+
+Produce your refined output as raw JSON only (no XML tags, no markdown fences, no preamble). Include:
+- "acceptanceCriteria": The FULL merged list (openspec's criteria + your additions/refinements). Every item MUST be an observable outcome, not an implementation instruction.
+- "notes": What you changed and why (be specific — cite which criteria you added/modified/replaced)
+- "splitStories": ALWAYS omit this field. Splitting is openspec's decision alone — never propose
+  split children of your own, even if openspec already split this story.
+- "acAddedBySpeckit": Array of criteria YOU added that were not in openspec's output
+- "acModifiedBySpeckit": Array of {"original":"...","revised":"..."} for criteria you reworded
+- "acFlagged": Array of {"criterion":"...","flag":"..."} for criteria that need human attention
+
+For a brownfield story with a real codeline, you may have read-only tools (read_file,
+list_files, search) available this turn — if so, USE them for real to check a file's
+actual contents before relying on it; do not invent what a tool would return. For a
+greenfield story with no existing codeline, you have none — give your best answer from
+the description, title and paths you were given, and say so in "notes" if the file
+contents would have changed your answer. Either way, never narrate an imagined tool
+result: a real answer with an honest caveat is worth everything; fabricated tool-call
+syntax (<tool_call>, <tool_use>, <function_call>) is worth nothing — it is discarded in
+full and the work is lost (observed live, 2026-07-28: exactly this, on an empty-criteria
+story that got no answer at all).
+
+
+# Output
+```json
+{
+  "acceptanceCriteria": [
+    {
+      "id": "AC-1",
+      "criterion": "Given the Contentstack Stack is initialized with valid live_preview configuration, When the application starts, Then the Stack is created with live_preview enabled and a valid management token host, verifiable by confirming that draft entries are returned when preview parameters are present."
+    },
+    {
+      "id": "AC-2",
+      "criterion": "Given a content author opens a Contentstack live preview session, When the application receives a request containing live preview query parameters (e.g., live_preview, content_type_uid), Then the query pipeline includes those parameters and the response contains the draft (unpublished) version of the entry instead of the published version."
+    },
+    {
+      "id": "AC-3",
+      "criterion": "Given a request that does NOT contain live preview query parameters, When the application fetches content, Then only published entries are returned, identical to the behavior before live preview integration."
+    },
+    {
+      "id": "AC-4",
+      "criterion": "Given the live_preview configuration is missing or disabled in environment variables, When the application starts, Then the Stack initializes without live_preview support and all content queries return published entries only, with no errors or degraded functionality."
+    },
+    {
+      "id": "AC-5",
+      "criterion": "Given a live preview request for a protected page or protected content type, When the query is executed, Then the request is handled gracefully — either returning published content, returning an appropriate error, or indicating that the content is not available for preview — without exposing protected content to unauthorized users."
+    },
+    {
+      "id": "AC-6",
+      "criterion": "Given live preview is active and the Contentstack preview service is unreachable or returns an error, When the application attempts to fetch a draft entry, Then the error is caught and logged with sufficient context (content type, entry UID, language) and the application does not crash or serve a broken page."
+    },
+    {
+      "id": "AC-7",
+      "criterion": "Given live preview is active, When getEntry, getSingleEntry, or findSingletonEntry is called with preview parameters, Then each method returns the draft entry content, confirming that live preview support propagates through all three data-fetching paths."
+    },
+    {
+      "id": "AC-8",
+      "criterion": "Given the Interactive Maps Stack (separate API key and delivery token), When the application initializes, Then the Interactive Maps Stack configuration remains independent and unaffected by the main Stack's live_preview configuration."
+    },
+    {
+      "id": "AC-9",
+      "criterion": "Given a live preview session is active, When the content author modifies a field in Contentstack, Then the rendered preview updates to reflect the change without requiring a full page reload."
+    },
+    {
+      "id": "AC-10",
+      "criterion": "Given the application is running in a non-preview context (production delivery without preview parameters), When any content query is executed, Then no live-preview-related network calls are made to Contentstack's preview/management endpoints."
+    },
+    {
+      "id": "AC-11",
+      "criterion": "Given the ICommonContentstackConfig and ICreateQueryConfig interfaces, When live preview parameters are added to the query pipeline, Then the TypeScript interfaces reflect any new required or optional fields for preview configuration, and the project compiles without type errors."
+    },
+    {
+      "id": "AC-12",
+      "criterion": "Given a live preview request, When the response includes reference fields (via referenceFieldPath), Then referenced entries also reflect their draft versions when applicable, not just the top-level entry."
+    }
+  ],
+  "notes": "Openspec provided empty acceptanceCriteria with a helpful architectural note. I built all criteria from scratch after examining the actual codebase. Key findings that shaped the ACs: (1) The Stack is initialized in src/services/contentstack.ts with a flat options object — live_preview config must be added there. (2) ContentstackFactory has two query-creation methods (createContentTypeQuery for collections, createContentTypeEntryQuery for single entries) — both must forward preview parameters. (3) Three public fetch functions (getEntry, getSingleEntry, findSingletonEntry) all route through ContentstackFactory, so AC-7 ensures all paths are covered. (4) There is a separate Interactive Maps Stack — AC-8 ensures it is not inadvertently affected. (5) The story explicitly mentions protected pages may not be previewable — AC-5 addresses this. (6) The codebase uses contentstack ^3.15.2 which supports live_preview config natively. (7) Openspec's note about 'useContent → ContentstackContext' appears inaccurate for this codebase — no such pattern was found; data flows directly through the service-layer functions. This would not change the ACs but is worth noting for implementers.",
+  "acAddedBySpeckit": [
+    "AC-1: Stack initialization with live_preview config",
+    "AC-2: Draft entries returned when preview parameters present",
+    "AC-3: Published-only behavior preserved without preview parameters",
+    "AC-4: Graceful degradation when live_preview is missing/disabled",
+    "AC-5: Protected pages/content not exposed via live preview",
+    "AC-6: Error handling when preview service is unreachable",
+    "AC-7: All three fetch methods (getEntry, getSingleEntry, findSingletonEntry) support preview",
+    "AC-8: Interactive Maps Stack remains independent",
+    "AC-9: Live preview updates reflect field changes without full reload",
+    "AC-10: No preview network calls in non-preview/production context",
+    "AC-11: TypeScript interfaces updated for preview config fields",
+    "AC-12: Referenced entries also reflect draft versions in preview"
+  ],
+  "acModifiedBySpeckit": [],
+  "acFlagged": [
+    {
+      "criterion": "AC-5",
+      "flag": "The story states 'protected pages and content may not be previewable' but does not define which pages/content are protected or what the expected fallback behavior should be. Product should clarify: should protected content return published-only, return a specific error, or be excluded from preview entirely? The current AC covers graceful handling broadly but may need tightening once scope is defined."
+    },
+    {
+      "criterion": "AC-9",
+      "flag": "This AC assumes Contentstack's live preview SDK provides real-time update events. If the integration uses only the query-parameter-based draft fetching (not the JS SDK's live update callback), this AC may be out of scope for this story. Verify with the team whether real-time re-render on field change is expected or if manual refresh is acceptable."
+    },
+    {
+      "criterion": "AC-12",
+      "flag": "Contentstack's live preview behavior for referenced entries depends on SDK version and configuration. This may require includeReference to also pass preview context. Verify with Contentstack documentation for v3.15.2 whether referenced entry drafts are automatically included in preview responses."
+    }
+  ]
+}
+```

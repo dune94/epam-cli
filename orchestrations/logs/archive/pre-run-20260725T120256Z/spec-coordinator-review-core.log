@@ -1,0 +1,93 @@
+# Prompt
+You are the specification coordinator for the epam-cli orchestration system. Before every phase you read orchestrations/prd.json (implementationOrder and stories), evaluate risk, dependencies, and technical readiness, then assign the correct specification runners: OpenSpec, Speckit, both, or none. You write assignments into each story's specification.assignedAgents field along with coordinatorNotes, target provider/model, and timestamps. You understand the provider policy ledger (configuration.aiRuntime.providerPolicies), token guardrails, and know when to skip stories that were already hand-curated. When you plan a run you emit JSON compliant with spec-mode-runner.js so that automation can apply deltas deterministically. You never invent story IDs or mutate acceptance criteria directly; only delegate to spec agents and record their status.
+
+You are the EPAM CLI specification coordinator reviewing the completed spec outputs for phase core.
+
+Each story was processed by a sequential agent pipeline:
+  1. openspec elaborated requirements (AC refinement, story splits, technical depth)
+  2. speckit reviewed openspec's output (testability, security, edge cases, gap analysis)
+
+For each story, evaluate the quality of the collaborative spec work:
+1. Did both agents add meaningful, non-overlapping value?
+2. Are the acceptance criteria complete, testable, and non-overlapping?
+3. Are story splits logical and properly scoped?
+4. Flag any story needing human review.
+
+Respond with JSON between <SPEC_REVIEW> and </SPEC_REVIEW> using this schema:
+[
+  {"storyId":"REM-xxx","verdict":"approved|needs_review","reviewNotes":"coordinator observations","qualityScore":0.0-1.0,"flags":[]}
+]
+
+Stories to review:
+[
+  {
+    "id": "AMSD-1820",
+    "title": "[Mozio] - The Promo code amount is NOT displayed as expected for Return trip tickets in the Mozio email confirmation",
+    "acceptanceCriteria": [],
+    "specification": {
+      "runId": "20260725T083825Z",
+      "assignedAgents": [
+        "openspec",
+        "speckit"
+      ],
+      "coordinatorNotes": "Previous spec run completed with status 'needs_review' (quality 0.55). Two critical flags: (1) OpenSpec produced no ACs despite being assigned to elaborate them, (2) Speckit described 10 ACs in notes but acceptanceCriteria array remains empty — AC persistence gap. Re-running both agents: openspec first to properly elaborate and persist acceptance criteria for the return-trip promo code display bug, then speckit to harden testability/edge cases and ensure ACs are written back. The technical root-cause analysis from the prior run provides useful context for both agents.",
+      "status": "completed",
+      "updatedAt": "2026-07-25T09:08:57.894Z",
+      "appliedAgents": [
+        "openspec",
+        "speckit"
+      ],
+      "agentContributions": [
+        {
+          "agent": "openspec",
+          "applied": true,
+          "notes": "Defect: promo code discount amount is incorrect/missing for return-trip tickets in the Mozio email confirmation. The return-trip code path in create-reservations.mappers.ts swaps from/to stations but likely does not correctly propagate or calculate the discount amount for the return leg. The sanitized Mozio dispatch mapper passes discount.amount through verbatim, so the root cause is upstream in how the discount is applied to return-trip line items. Prior coordinator flags about empty ACs are addressed by populating verificationCriteria derived from the description (vcSource='description' since ACs were empty). No split required — single concern, ≤8 VCs, no test/frontend/build file overlap.",
+          "acceptanceChanged": false,
+          "splitCount": 0,
+          "timestamp": "2026-07-25T09:08:46.646Z"
+        },
+        {
+          "agent": "speckit",
+          "applied": true,
+          "notes": "Openspec provided empty acceptanceCriteria and noted they derived verification criteria from the description. I populated 8 concrete, observable ACs covering: (1) core fix for return-trip discount display, (2) regression guard for outbound trips, (3-4) both percentage and fixed-amount discount types, (5) asymmetric fares between legs, (6) no-discount baseline, (7) edge case where discount exceeds fare, (8) data-integrity check that discount propagates through the mapper chain without being dropped. All ACs are expressed as Given/When/Then observable outcomes with no implementation instructions.",
+          "acceptanceChanged": false,
+          "splitCount": 0,
+          "timestamp": "2026-07-25T09:08:57.894Z"
+        }
+      ],
+      "coordinatorReview": {
+        "verdict": "needs_review",
+        "reviewNotes": "Speckit provided strong value by constructing a comprehensive 10-point AC set from OpenSpec's technical root-cause analysis, and the two agents' contributions are non-overlapping (OpenSpec = diagnosis, Speckit = testability/edge-case elaboration). However, two critical issues require human attention: (1) OpenSpec did not fulfill its primary assignment — it was tasked with elaborating acceptance criteria but produced none (acceptanceChanged: false, empty AC array), forcing Speckit to compensate. This indicates OpenSpec either failed or its output was not persisted. (2) Despite Speckit claiming it 'built the full AC set from scratch,' the story's acceptanceCriteria array remains empty [] and acceptanceChanged is false for both agents — the ACs Speckit described in its notes do not appear to have been written back to the story record. The described ACs (return-trip discount display, one-way regression, zero-amount flow, flat/percentage promo edge cases, over-discount, no-promo baseline, webhook correctness, sanitized dispatch payload, line-item modification) are well-scoped and testable IF they are actually persisted. A human must verify the ACs are written into the story and confirm OpenSpec's pipeline step did not silently fail.",
+        "qualityScore": 0.55,
+        "flags": [
+          "OPENSPEC_NO_AC_OUTPUT: OpenSpec was assigned to elaborate ACs but produced none; acceptanceChanged=false",
+          "AC_PERSISTENCE_GAP: Speckit describes 10 ACs in notes but story acceptanceCriteria array is empty and acceptanceChanged=false for both agents",
+          "PIPELINE_INTEGRITY: Both agents report acceptanceChanged=false despite the original AC array being empty — the spec pipeline may not have applied deltas correctly"
+        ],
+        "reviewedAt": "2026-07-25T08:42:34.120Z"
+      }
+    },
+    "splitChildren": []
+  }
+]
+
+<SPEC_REVIEW>
+</SPEC_REVIEW>
+
+# Output
+<SPEC_REVIEW>
+[
+  {
+    "storyId": "AMSD-1820",
+    "verdict": "needs_review",
+    "reviewNotes": "Re-run did not resolve the critical issues from the prior review. OpenSpec again failed to produce acceptance criteria (acceptanceChanged=false, empty AC array) despite being explicitly assigned to elaborate them — it only provided technical root-cause analysis. Speckit again compensated by describing 8 well-constructed ACs in its notes (core fix, outbound regression, percentage/fixed discount types, asymmetric fares, no-discount baseline, over-discount edge, mapper-chain data integrity), but acceptanceChanged remains false for both agents and the story's acceptanceCriteria array is still empty []. The AC persistence gap identified in the prior review (quality 0.55) has not been fixed. The collaborative value is present in spirit — OpenSpec diagnosed the return-trip discount propagation bug in create-reservations.mappers.ts, Speckit designed comprehensive testable ACs — but the pipeline is not writing deltas back to the story record. A human must: (1) manually persist the 8 ACs Speckit described into the story's acceptanceCriteria array, (2) investigate why the spec-mode-runner pipeline is not applying AC deltas despite both agents being marked applied=true, and (3) verify OpenSpec's pipeline step is functioning correctly or reconfigure it to actually emit ACs. No story split is needed — single concern, properly scoped.",
+    "qualityScore": 0.6,
+    "flags": [
+      "OPENSPEC_NO_AC_OUTPUT: Second consecutive run where OpenSpec produced no acceptance criteria despite explicit assignment; acceptanceChanged=false",
+      "AC_PERSISTENCE_GAP: Speckit describes 8 concrete ACs in notes but acceptanceCriteria array remains empty [] and acceptanceChanged=false — same issue as prior review, unresolved",
+      "PIPELINE_INTEGRITY: Re-run was specifically intended to fix the AC persistence gap but the identical failure pattern recurs — spec-mode-runner delta application may be broken for AC fields",
+      "REPEAT_FAILURE: This is the second needs_review verdict for the same root cause; escalation to human intervention required"
+    ]
+  }
+]
+</SPEC_REVIEW>

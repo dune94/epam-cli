@@ -1,0 +1,1 @@
+Now let me verify the test actually covers the prescribed fix scenario (condition 3 — where `discount.lineItemId` has the `#return` suffix and dispatch uses base ID):

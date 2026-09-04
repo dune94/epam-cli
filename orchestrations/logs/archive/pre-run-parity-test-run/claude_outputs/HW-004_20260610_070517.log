@@ -1,0 +1,86 @@
+=== Prompt for HW-004 (attempt 1) ===
+Implement user story HW-004: Implement formatDate() utility with vitest tests
+
+## Story Description
+Create formatDate.ts in the project root. Export a single function `export function formatDate(date: Date, format: 'short' | 'long'): string` that returns: 'short' → 'YYYY-MM-DD' (e.g. '2026-06-04'); 'long' → 'Month DD, YYYY' (e.g. 'June 4, 2026'). Use UTC date components so results are deterministic regardless of host timezone (new Date('2026-06-04') is UTC midnight). For an invalid Date (e.g. new Date('not-a-date')), throw a descriptive Error rather than returning 'NaN'-laden output. Create formatDate.test.ts in the project root with at least 6 vitest tests covering both formats, edge cases (month boundaries, single-digit days), and invalid-Date input. Do not modify any existing files.
+
+## Acceptance Criteria
+- formatDate.ts exists in the project root and exports `function formatDate(date: Date, format: 'short' | 'long'): string` (named export, exact signature)
+- formatDate(new Date('2026-06-04'), 'short') returns '2026-06-04'
+- formatDate(new Date('2026-06-04'), 'long') returns 'June 4, 2026'
+- Short format zero-pads month and day: formatDate(new Date('2026-01-05'), 'short') returns '2026-01-05'
+- Long format does not pad the day: formatDate(new Date('2026-01-05'), 'long') returns 'January 5, 2026'
+- Date components are derived via UTC accessors (getUTCFullYear/getUTCMonth/getUTCDate or equivalent) so tests pass in any host timezone
+- Passing an invalid Date throws an Error whose message identifies the problem, and a test asserts the message content with expect(...).toThrow(/invalid date/i) (or an equivalent matcher on the message), not just a bare expect(...).toThrow()
+- formatDate.test.ts exists in the project root with at least 6 vitest tests, including at least one month-boundary case (e.g. Dec 31 / Jan 1) and one single-digit-day case in each format
+- npx tsc --noEmit exits 0
+- vitest run exits 0 with all tests passing (the new tests pass and no pre-existing tests break)
+- git status shows no modifications to existing files — only formatDate.ts and formatDate.test.ts are added
+- Long-format month names come from a fixed English month-name array (or a formatter explicitly pinned to locale 'en-US' and timeZone 'UTC'), so output does not vary with the host's ICU/locale build; at least one test covers a month other than January or June (e.g. December)
+- Invalid-Date detection works for any Invalid Date regardless of construction: both new Date('not-a-date') and new Date(NaN) throw (i.e. detection is based on Number.isNaN(date.getTime()) or equivalent, not on parsing the input string)
+- A leap-day case is covered: formatDate(new Date('2024-02-29'), 'short') returns '2024-02-29' and formatDate(new Date('2024-02-29'), 'long') returns 'February 29, 2024'
+- vitest run reports at least 6 more passing tests than the pre-change baseline (i.e. formatDate.test.ts is actually discovered by the existing vitest include patterns, not silently skipped — a green run with an unchanged test count does NOT satisfy this criterion)
+
+## Technical Notes
+- dependsOn: ["HW-001"]
+- files: ["formatDate.ts","formatDate.test.ts"]
+
+## Files to Create/Modify
+formatDate.ts, formatDate.test.ts
+
+## Dependencies
+HW-001
+
+## Instructions
+1. Implement all acceptance criteria for this story
+2. Follow the project's existing code patterns and conventions
+3. Create any necessary files in the locations specified
+4. Ensure code compiles/runs without errors
+5. Do NOT create tests unless explicitly required in acceptance criteria
+
+After implementation, provide a brief summary of what was created/modified.
+
+## Relevant Knowledge Base Entries
+No prior KB entries match your agent role yet.
+
+## Knowledge Base Contribution
+Your assigned KB entry ID for this run: **KB-008**
+
+If you discover a non-obvious pattern, gotcha, or anti-pattern during this implementation (or this is a retry), append exactly one entry to `orchestrations/agents/KB.md` using this format:
+
+```markdown
+## KB-008 -- 2026-06-10
+
+**Category:** <backend|frontend|infrastructure|testing|orchestration>
+**AgentRole:** <your agentRole from the story>
+**Tags:** <comma-separated tech keywords, e.g. typescript, node, cli>
+**Trigger:** <retry|first-success>
+**StoryRef:** HW-004
+
+<One concise paragraph: the specific pattern, gotcha, or anti-pattern. Precise enough that a future Claude instance can apply it without re-discovering it.>
+```
+
+Only write an entry if the knowledge is genuinely non-obvious. Skip trivial observations.
+=== End Prompt ===
+
+=== codex Output (attempt 1) ===
+**Summary**
+- Strengthened validation in `formatDate.ts:14` to emit descriptive errors for non-Date inputs and NaN timestamps while retaining UTC-based formatting for both layouts.
+- Rebuilt `formatDate.test.ts:1` with nine vitest cases covering required short/long examples, zero-padding, month/year boundaries, leap day, UTC behavior, and invalid-date message assertions.
+
+**Testing**
+- `npx tsc --noEmit`
+- `npx vitest run`
+
+I installed TypeScript locally with `npm install --no-save typescript` so the type check can run without altering tracked files. Let me know if you’d like those dependencies added permanently.
+**Summary**
+- Strengthened validation in `formatDate.ts:14` to emit descriptive errors for non-Date inputs and NaN timestamps while retaining UTC-based formatting for both layouts.
+- Rebuilt `formatDate.test.ts:1` with nine vitest cases covering required short/long examples, zero-padding, month/year boundaries, leap day, UTC behavior, and invalid-date message assertions.
+
+**Testing**
+- `npx tsc --noEmit`
+- `npx vitest run`
+
+I installed TypeScript locally with `npm install --no-save typescript` so the type check can run without altering tracked files. Let me know if you’d like those dependencies added permanently.
+
+=== End codex Output ===

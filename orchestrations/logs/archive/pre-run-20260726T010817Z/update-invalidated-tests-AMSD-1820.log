@@ -1,0 +1,27 @@
+Looking at the failing test and the committed fix, I need to analyze what's happening.
+
+The test failure is:
+- Test: "should correctly apply discounts when both outbound and return dispatches share the same order line item"
+- Error: `expected undefined to be defined` on the return trip discount
+
+From the test code, I can see that:
+1. Both outbound and return dispatches use the same order line item with ID 'li-1'
+2. The outbound dispatch should get the discount (this works)
+3. The return dispatch should also get the discount (this fails)
+
+Looking at the fix description, the issue was that return-trip line item IDs have the format "lineItemId#return" but the discount matching logic was comparing against raw lineItem.id directly. The fix uses `parseDispatchLineItemKey` to extract the real ID before comparing.
+
+The problem is that in the test, when we have:
+- Outbound dispatch: `makeMozioDispatch('li-1', 100)` 
+- Return dispatch: `makeMozioDispatch('li-1#return', 100)`
+- Order line item: `makeOrderLineItem('li-1', 20, 'PROMO20')`
+
+The fix should make the return dispatch match the order line item properly, but it seems like the discount isn't being applied to the return trip.
+
+Looking more carefully at the test, the issue is that the test expects both the outbound and return dispatches to have discounts applied, but the return dispatch is not getting the discount. This suggests that the fix may not be working correctly for the case where the same order line item is used for both outbound and return trips.
+
+However, since this is a test that was written to verify the bug fix, and the fix is supposed to make the return trip get the discount, this test failure indicates that the fix is not working as intended for this specific case.
+
+Looking at the test failure more carefully, this is actually a case (b) - the fix broke something. The test was written to verify that both outbound and return trips get discounts when they share the same order line item, but the fix is not working correctly for this scenario.
+
+REGRESSION: The fix for return-trip discount matching is not correctly applying discounts when both outbound and return dispatches share the same order line item

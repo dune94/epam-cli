@@ -1,0 +1,65 @@
+# Prompt
+Regenerate the VERIFICATION CRITERIA for this brownfield story. Your previous verification criteria were FLAGGED and must be fixed:
+- VC 1 prescribes internal API useContent().getContentByKey() and re-render mechanism — restate as observable draft values appearing without full page reload
+- VC 2 cross-compares to 'same published content as before the Live Preview integration' — assert the published content is present and correct on its own
+- VC 3 prescribes ContentstackProvider context propagation and references internal useContent() API — restate as observable updated values displayed on the page
+- VC 5 references internal 'authentication gate' mechanism — restate as observable outcome that unauthenticated visitors cannot access the protected page
+- VC 7 cross-compares to 'previously loaded published content' — assert the published content is present and correct on its own
+
+THE FIX SITE (located by the code-graph detective — anchor every criterion to the behaviour THIS code produces):
+- src/services/contentstack.ts :: options — This is the Contentstack Delivery SDK initialization config. The `live_preview` block must be added here (management_token, enable, host) and CONTENTSTACK_LIVE_PREVIEW_TOKEN / CONTENTSTACK_PREVIEW_HOST env vars must be read alongside the existing ones. After Stack creation on line 69, ContentstackLivePreview.init(Stack) must be called. This is the SETUP site — every downstream fetch depends on this config being present.
+- src/context/ContentstackContext.tsx :: ContentstackProvider — This is the CARRIER — the React context provider that holds all CMS content and distributes it to every component via `useContentstackContext`/`useContent`. For live preview, this provider must accept an `onEntryChange` callback (from the page's getStaticProps/getServerSideProps) and call `setContent` to trigger re-renders when Contentstack pushes draft updates. Without wiring here, no component will ever see updated draft content.
+- src/services/pageService.ts :: pageService — This service orchestrates page-level Contentstack fetches (calling getEntry/getSingleEntry) and is invoked from every page's getStaticProps/getServerSideProps. It must forward the `preview` flag and `live_preview` params to the contentstack service functions, and return the `onEntryChange` callback from `@contentstack/live-preview-utils` so pages can pass it to ContentstackProvider.
+- src/hooks/useContent.ts :: useContent — This is the primary CONSUMER hook — 60+ components call `useContent().getContentByKey()` to read CMS data from ContentstackContext. Once ContentstackProvider is wired with `onEntryChange` and updates its context state, all components using `useContent` will automatically re-render with draft content. No structural change needed here, but it must be verified that the context update path from ContentstackProvider → ContentstackContext → useContent propagates correctly.
+Do NOT write criteria about areas unrelated to this code.
+
+
+Acceptance criteria (IMMUTABLE — the intent to verify; do NOT restate as-is, VERIFY them):
+- (none)
+Description: Original Requirements (discovery)  AS a Content Author, I WANT to preview draft entries in CMS, SO THAT I can see how content will be shown on the website
+ability to preview draft entries in CMS
+Notes& Assumptions  Limitation: Might not be possible to preview protected pages and content.
+Original Total Estimate:  8  Original FE Estimate:  8  Original DAM Estimate:  0  Original BE Estimate:  0
+
+A verification criterion states WHAT AN END USER OR TESTER OBSERVES on the user-facing surface THE TICKET IS ABOUT — the rendered output for an output ticket, the displayed screen for a UI ticket, the response a CLIENT receives for an API ticket. It is a BLACK-BOX check on that surface. It NEVER describes HOW the value is produced.
+A verification criterion is FORBIDDEN if it:
+- prescribes HOW to implement — any algorithm, mechanism, approach, or the addition/reading of any new field, flag or service;
+- references an INTERNAL structure that merely FEEDS the ticket's surface — an intermediate payload, a data-transfer object, or a specific response field used to BUILD the output. Verify the surface the ticket names, NOT the data structure behind it;
+- makes a CROSS-COMPARISON that presumes a mechanism — never assert one value "must equal" / "matches" / "is the same as" another; that presumes a shared derivation. Assert the required value is present and correct ON ITS OWN.
+Every verification criterion must be observable, testable, and tied to the ticket's stated symptom/intent.
+
+EXAMPLES OF FORM (the angle-bracket words are placeholders — fill them from THIS story; never copy them literally):
+
+REJECTED: "the <config object> passed to <the client> includes a <key> entry"
+  — asserts INTERNAL STRUCTURE. A tester cannot see a config object.
+ACCEPTED: "when <the request> carries <the marker>, <the surface> shows <the draft state> instead of <the published state>"
+
+REJECTED: "when <internal function> is called with <argument>, the resulting <query> includes <field>"
+  — asserts an INTERNAL CALL PATH. Verify the surface the ticket is about, not the path behind it.
+ACCEPTED: "<the surface> shows <the value> that <the source of truth> currently holds"
+
+REJECTED: "an author edits <entity> in <the external tool> and <the surface> updates"
+  — begins OUTSIDE THE BOUNDARY this suite can drive. Nothing here can operate that tool.
+ACCEPTED: "given <the client> is mocked to signal <the change>, <the surface> re-renders without a reload"
+
+REJECTED: "<the value> matches what <the other place> shows"
+  — a CROSS-COMPARISON presumes a shared derivation. Assert the required value on its own.
+ACCEPTED: "<the surface> shows <the expected value> for <the stated condition>"
+
+REJECTED: "<the feature> works correctly with no regression"
+  — verifies nothing and cannot fail.
+ACCEPTED: "when <the feature> is inactive, <the surface> shows <the prior behaviour> unchanged"
+
+Do NOT restate an acceptance criterion as-is — express what a tester OBSERVES that confirms it. Address every flag above.
+Output ONLY a JSON array of verification-criterion strings. No prose, no markdown.
+
+# Output
+```json
+[
+  "When the page request includes live preview parameters, the rendered page displays the draft content values for the entry being previewed.",
+  "When a draft entry's field value changes during an active live preview session, the updated value appears on the rendered page without a full page reload.",
+  "When live preview is not active, the rendered page displays the correct published content for every entry — all field values are present and accurate.",
+  "For a page that requires authentication, an unauthenticated visitor cannot view the page's content.",
+  "For a page that requires authentication, draft content does not appear on the rendered page when live preview parameters are present and the visitor is unauthenticated."
+]
+```

@@ -1,0 +1,12 @@
+  [vc-coverage] COVERED   When the greeting is invoked, the output displayed to the user is exactly "hello dolly".
+  [vc-coverage]           ↳ returns hello dolly
+  [vc-coverage] COVERED   When the greeting is invoked, the output displayed to the user does not contain "hello world".
+  [vc-coverage]           ↳ does not return hello world
+  [vc-coverage] COVERED   The greeting output consists solely of the text "hello dolly" with no additional or missing words.
+  [vc-coverage]           ↳ output consists solely of hello dolly with no additional or missing words
+  [vc-coverage] VC_UNCOVERED=0 of 3
+  [vc-coverage] COVERED   The behavior described in the ticket is observed to be correct after the change: "Hello world greeti
+  [vc-coverage]           ↳ says hello dolly
+  [vc-coverage] COVERED   Existing behavior related to this area is unchanged (no regression).
+  [vc-coverage]           ↳ says hello dolly
+  [vc-coverage] VC_UNCOVERED=0 of 2

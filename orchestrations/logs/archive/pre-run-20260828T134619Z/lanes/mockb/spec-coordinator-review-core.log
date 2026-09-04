@@ -1,0 +1,314 @@
+# Prompt
+You are the specification coordinator for the epam-cli orchestration system. Before every phase you read orchestrations/prd.json (implementationOrder and stories), evaluate risk, dependencies, and technical readiness, then assign the correct specification runners: OpenSpec, Speckit, both, or none. You write assignments into each story's specification.assignedAgents field along with coordinatorNotes, target provider/model, and timestamps. You understand the provider policy ledger (configuration.aiRuntime.providerPolicies), token guardrails, and know when to skip stories that were already hand-curated. When you plan a run you emit JSON compliant with spec-mode-runner.js so that automation can apply deltas deterministically. You never invent story IDs or mutate acceptance criteria directly; only delegate to spec agents and record their status.
+
+You are the EPAM CLI specification coordinator reviewing the completed spec outputs for phase core.
+
+Each story was processed by a sequential agent pipeline:
+  1. openspec elaborated requirements (AC refinement, story splits, technical depth)
+  2. speckit reviewed openspec's output (testability, security, edge cases, gap analysis)
+
+For each story, evaluate the quality of the collaborative spec work:
+1. Did both agents add meaningful, non-overlapping value?
+2. Flag any story needing human review.
+3. PLAN ALIGNMENT — where planAlignmentEvidence is present, it tells you what the
+   code-graph-detective SAID it would investigate (detectivePlan) and a deterministic,
+   cheap signal (aligned: true/false) for whether the final fixSiteAnalysis shares any
+   named symbol/file with that plan. This signal is NOT your verdict — it is evidence, the
+   same as MANIFEST EVIDENCE below. A plan can legitimately turn out wrong once real
+   exploration starts. Read detectivePlan and fixSiteAnalysis yourself and judge: did the
+   detective explain WHY it moved from its plan to its final answer (a stated pivot,
+   reasoning that connects the two), or did the answer just change with no explanation?
+   The latter is a real defect (a fix has shipped that shared no term with the detective's
+   own stated plan, with no explanation, more than once on the same ticket) — set
+   planAlignment to justified_deviation when the detective justifies its pivot, or
+   unexplained_mismatch when it does not, and say why in reviewNotes. aligned:true needs
+   no action.
+
+(Brownfield tickets never split and their acceptance criteria are immutable —
+do not evaluate split quality or AC completeness; there is nothing there for
+either agent to have changed.
+
+EXPECTED, NOT A DEFECT: an agent's notes may describe acceptance criteria it
+authored while the story's acceptanceCriteria array is empty, and report
+acceptanceChanged=false. That is this pipeline REDACTING them on purpose: on a
+brownfield ticket the ACs are the ticket's own, and a thin ticket legitimately
+has none. The observable checks live in verificationCriteria — judge THOSE.
+Do not report the mismatch as a hallucination, a persistence failure or a
+metadata inconsistency, and do not lower qualityScore for it. An empty
+acceptanceCriteria array on a brownfield story is correct by policy.)
+
+MANIFEST EVIDENCE (checked against the repository, not asserted):
+  MOCK3-2: EXISTS  src/schedule.ts
+  MOCK3-2: EXISTS  test/schedule.test.ts
+
+
+ANSWER IN THIS RESPONSE. Your <SPEC_REVIEW> verdict must appear in THIS reply — an
+empty <SPEC_REVIEW></SPEC_REVIEW>, or a promise to verify and answer later, is
+discarded and the review does not happen. There is no follow-up turn to come back in.
+
+You DO have read-only tools this turn (read_file, list_files, search). Use them for
+real if something is genuinely unclear — but never narrate an imagined tool result,
+and never spend the whole turn exploring and run out before writing the verdict.
+Budget is small and the verdict is mandatory: gather at most what you need, then answer.
+
+MANIFEST EVIDENCE has already been gathered from the repository for you and appears
+above. Every declared path was checked with a real filesystem stat, so re-checking
+paths is wasted budget — that part is done and is more reliable than a tool call.
+  - A story with any MISSING path CANNOT be implemented: the writer is sent to edit a
+    file that is not there, and every retry reproduces that. Mark it needs_review, name
+    the exact path in reviewNotes, and add the flag "missing_manifest_path".
+  - Where the evidence names a real neighbour ("the directory holds X instead"), say so
+    — that is what makes the report actionable.
+  - Never silently correct a path. The manifest is the artefact under review; a
+    correction living only in your prose reaches nobody.
+
+Judge what the evidence cannot: are the acceptance criteria testable, is the declared
+file set plausible for this change, is anything obviously missing. If you are unsure,
+lower qualityScore and add a flag — do not withhold the verdict. A missing review is
+EVERY FLAG CARRIES A SEVERITY. It ranks your objections for whoever reads them; it does not
+decide whether the run stops — a computed check or a project-declared flag does that. Mark
+blocking when an implementer following this spec would produce work that CANNOT FUNCTION,
+and advisory for uncertainty about what you could not see. Report both honestly: nothing is
+gained by inflating uncertainty into a defect, and nothing is lost by naming a real one.
+worse than an uncertain one: it means nothing was checked at all.
+
+QUALITY SCORE — what the number has to mean. It is enforced: below 0.7 halts the run
+before implementation, so an unanchored guess stops real work.
+  0.9-1.0  the spec is ready to implement; criteria are observable and the file set fits.
+  0.7-0.89 ready to implement, with ordinary open questions a competent writer resolves.
+  0.5-0.69 NOT ready: something concrete is wrong or missing — criteria that cannot be
+           observed, a file set that cannot deliver what is described, contradictions.
+  below 0.5 the spec would send a writer somewhere useless.
+Score what IS in front of you. Do NOT lower the score because an agent could not read the
+source files, or because a human "might want to check" — that is true of every ticket and
+is not a defect in this spec. If your notes cannot name something concretely wrong, the
+score belongs at 0.7 or above.
+
+Respond with JSON between <SPEC_REVIEW> and </SPEC_REVIEW> using this schema:
+[
+  {"storyId":"REM-xxx","verdict":"approved|needs_review","reviewNotes":"coordinator observations","qualityScore":<0.0-1.0>,"flags":[{"flag":"short-slug","severity":"blocking|advisory","why":"what you checked and what you found"}],"planAlignment":"aligned|justified_deviation|unexplained_mismatch|not_applicable"}
+]
+
+Stories to review:
+[
+  {
+    "id": "MOCK3-2",
+    "title": "The departure board omits the final stop",
+    "acceptanceCriteria": [
+      "Every stop on the line appears on the rendered board, including the final one.",
+      "Stops remain separated by the existing arrow separator.",
+      "An empty line still renders without error."
+    ],
+    "verificationCriteria": [
+      "The string returned by formatStops contains the name of the final stop in the input array.",
+      "The string returned by formatStops contains the ' -> ' separator between stop entries.",
+      "Calling formatStops with an empty array returns a string without throwing an error."
+    ],
+    "technicalNotes": {
+      "files": [
+        "src/schedule.ts",
+        "test/schedule.test.ts"
+      ],
+      "perCodeline": {
+        "mockb": {
+          "files": [
+            "src/schedule.ts",
+            "test/schedule.test.ts"
+          ],
+          "resolved": [
+            {
+              "declared": "src/schedule.ts",
+              "actual": "src/schedule.ts",
+              "match": "exact",
+              "verified_against": "/home/bradleyjerome/projects/mock3/mock-b"
+            },
+            {
+              "declared": "test/schedule.test.ts",
+              "actual": "test/schedule.test.ts",
+              "match": "exact",
+              "verified_against": "/home/bradleyjerome/projects/mock3/mock-b"
+            }
+          ],
+          "unresolved": []
+        }
+      }
+    },
+    "specification": {
+      "guardVocabulary": {
+        "blacklist": [
+          {
+            "term": "formatstops",
+            "reason": "Internal function name that produces the rendered string; naming it in a verification criterion prescribes the implementation mechanism rather than the observable surface (the rendered departure-board string)."
+          },
+          {
+            "term": "input array",
+            "reason": "Internal array/loop structure used to build the output string; referencing it prescribes HOW the value is produced, not what the user observes."
+          },
+          {
+            "term": "parts",
+            "reason": "Internal accumulator structure that feeds the rendered output; naming it describes the mechanism behind the surface, not the surface itself."
+          },
+          {
+            "term": "stops.length",
+            "reason": "Internal loop-bound expression that controls which stops are included; referencing it prescribes the implementation fix, not the observable result."
+          },
+          {
+            "term": "stop[]",
+            "reason": "Internal type/parameter of the producing function; naming it describes the data structure feeding the surface, not what the user sees."
+          },
+          {
+            "term": "totalminutes",
+            "reason": "Sibling internal function unrelated to the ticket's surface (the rendered stop list); referencing it presumes a mechanism and is not part of the observable output."
+          }
+        ],
+        "whitelist": [
+          {
+            "term": "departure board",
+            "reason": "The observable surface the ticket is about: the rendered string of stop names shown on the departure board."
+          },
+          {
+            "term": "rendered string",
+            "reason": "The user-facing rendered output that a tester observes; the black-box surface, not the function that builds it."
+          },
+          {
+            "term": "final stop",
+            "reason": "Observable content a user/tester sees in the output; the ticket's stated symptom is that the final stop name is missing from the display."
+          },
+          {
+            "term": "stop name",
+            "reason": "Observable content a user/tester sees; the ticket intends every stop name to appear in the rendered output."
+          },
+          {
+            "term": "separator",
+            "reason": "Observable visual element between stop entries in the rendered string; a tester can see it in the output."
+          },
+          {
+            "term": "empty array",
+            "reason": "Observable behaviour: calling the surface with no stops must produce a string without error, which a tester can verify."
+          },
+          {
+            "term": "returns a string",
+            "reason": "Observable contract: the surface returns a string rather than throwing; a black-box check on the output."
+          },
+          {
+            "term": "without throwing an error",
+            "reason": "Observable negative behaviour: the surface must not throw for empty input; a tester can observe this."
+          }
+        ]
+      },
+      "runId": "20260828T133739Z",
+      "assignedAgents": [
+        "openspec",
+        "speckit"
+      ],
+      "coordinatorNotes": "",
+      "status": "completed",
+      "updatedAt": "2026-08-28T13:38:28.490Z",
+      "appliedAgents": [
+        "openspec",
+        "speckit"
+      ],
+      "agentContributions": [
+        {
+          "agent": "openspec",
+          "applied": true,
+          "notes": "Defect: the for-loop bound `i < stops.length - 1` in formatStops skips the last stop. The fix site is formatStops itself; totalMinutes is already correct. VCs are black-box checks on the returned string ? no implementation prescription, no internal structure references, no cross-comparisons.",
+          "acceptanceChanged": false,
+          "splitCount": 0,
+          "timestamp": "2026-08-28T13:38:24.731Z"
+        },
+        {
+          "agent": "speckit",
+          "applied": true,
+          "notes": "Defect: the for-loop bound `i < stops.length - 1` in formatStops skips the last stop. The fix site is formatStops itself; totalMinutes is already correct. VCs are black-box checks on the returned string ? no implementation prescription, no internal structure references, no cross-comparisons.",
+          "acceptanceChanged": false,
+          "splitCount": 0,
+          "timestamp": "2026-08-28T13:38:28.490Z"
+        }
+      ]
+    },
+    "fixSiteAnalysis": [
+      {
+        "file": "src/schedule.ts",
+        "function": "formatStops",
+        "reason": "The for-loop bound `i < stops.length - 1` excludes the last index, so the final stop is never pushed into parts. Changing the bound to `i < stops.length` makes every stop, including the last, appear in the rendered string. The separator `' -> '` already exists on line 9 and is reused unchanged.",
+        "fix": "Change the loop bound on line 6 from `i < stops.length - 1` to `i < stops.length`. No other changes needed ? the template literal on line 7 and the `' -> '` join on line 9 already handle the last stop correctly once the loop visits it.",
+        "helper": "",
+        "brokenLine": "for (let i = 0; i < stops.length - 1; i++)",
+        "fixVerified": null,
+        "evidenceVerified": true,
+        "fileVerified": true,
+        "changeRequired": true,
+        "requiredPackages": [],
+        "deliveryRole": "produces",
+        "runsIn": "n/a",
+        "prescriptionNote": "",
+        "prescriptionUnderspecified": false,
+        "codeline": "mockb"
+      },
+      {
+        "file": "test/schedule.test.ts",
+        "function": "schedule.test.ts",
+        "reason": "Existing tests only assert that the output contains '->' and 'Union'; none check the last stop ('Eglinton'). Once formatStops is fixed, a test must verify the final stop name appears in the rendered string, and that an empty line still renders without error (matching the acceptance criteria).",
+        "fix": "Add an assertion that formatStops(LINE) contains 'Eglinton' (the last stop in the 3-stop test data), and an assertion for the empty-line case (formatStops([]) returns ''). The existing LINE constant and the formatStops import are reused.",
+        "helper": "formatStops",
+        "brokenLine": "",
+        "fixVerified": true,
+        "evidenceVerified": null,
+        "fileVerified": true,
+        "changeRequired": true,
+        "requiredPackages": [],
+        "deliveryRole": "verifies",
+        "runsIn": "n/a",
+        "prescriptionNote": "",
+        "prescriptionUnderspecified": false,
+        "codeline": "mockb"
+      }
+    ],
+    "planAlignmentEvidence": {
+      "detectivePlan": "[{\"file\":\"src/schedule.ts\",\"function\":\"formatStops\",\"reason\":\"The for-loop bound `i < stops.length - 1` excludes the last index, so the final stop is never pushed into parts. Changing the bound to `i < stops.length` makes every stop, including the last, appear in the rendered string. The separator `' -> '` already exists on line 9 and is reused unchanged.\",\"brokenLine\":\"for (let i = 0; i < stops.length - 1; i++)\",\"fix\":\"Change the loop bound on line 6 from `i < stops.length - 1` to `i < stops.length`. No other changes needed ? the template literal on line 7 and the `' -> '` join on line 9 already handle the last stop correctly once the loop visits it.\",\"helper\":\"\",\"changeRequired\":true,\"requiredPackages\":[],\"deliveryRole\":\"produces\",\"runsIn\":\"n/a\"},{\"file\":\"test/schedule.test.ts\",\"function\":\"schedule.test.ts\",\"reason\":\"Existing tests only assert that the output contains '->' and 'Union'; none check the last stop ('Eglinton'). Once formatStops is fixed, a test must verify the final stop name appears in the rendered string, and that an empty line still renders without error (matching the acceptance criteria).\",\"brokenLine\":\"\",\"fix\":\"Add an assertion that formatStops(LINE) contains 'Eglinton' (the last stop in the 3-stop test data), and an assertion for the empty-line case (formatStops([]) returns ''). The existing LINE constant and the formatStops import are reused.\",\"helper\":\"formatStops\",\"changeRequired\":true,\"requiredPackages\":[],\"deliveryRole\":\"verifies\",\"runsIn\":\"n/a\"}]",
+      "aligned": true,
+      "planTerms": [
+        "schedule",
+        "formatstops",
+        "brokenline",
+        "changerequired",
+        "requiredpackages",
+        "deliveryrole",
+        "runsin",
+        "line"
+      ],
+      "findingTerms": [
+        "schedule",
+        "formatstops",
+        "scheduletest"
+      ]
+    }
+  }
+]
+
+<SPEC_REVIEW>
+</SPEC_REVIEW>
+# Output — THIS IS A CONTRACT, NOT A PREFERENCE
+
+Emit EXACTLY one <SPEC_REVIEW> block and nothing else that matters. Prose outside it is DISCARDED
+unread, however correct it is — the pipeline parses the block and never the commentary.
+
+<SPEC_REVIEW>
+{
+  "items": [ {
+      "storyId": <string>,
+      "verdict": <string>,
+      "reviewNotes": <string>   (optional),
+      "qualityScore": <number>   (optional),
+      "flags": <array>
+         // Each flag is either a bare string (advisory) or an object carrying severity. Severity RANKS your objections for the human reading them; it does not decide whether the run stops. Mark blocking when an implementer following this spec would produce work that cannot function, and advisory for uncertainty about what you could not see. What halts a run is a computed check or a flag this project has declared blocking — not your assessment of your own output.   (optional),
+  } ]
+}
+</SPEC_REVIEW>
+
+Submit coordinator quality review results for all stories.
+
+
+# Output
+{}

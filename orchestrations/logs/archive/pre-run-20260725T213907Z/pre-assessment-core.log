@@ -1,0 +1,39 @@
+All steps complete. Here's the summary of what was done:
+
+## Pre-Phase Assessment Complete — Core Phase
+
+### Step 1-2: Story Discovery
+- **MOCK-HW-1-impl** (typescript-engineer): Change `getGreeting()` to return `'hello dolly'`
+- **MOCK-HW-1-test** (test-engineer): Update test to expect `'hello dolly'`
+
+### Step 3: Role Assignment
+Both stories already had correct agentRoles — no changes needed. No story splitting required.
+
+### Step 4: Profile Creation
+Both `typescript-engineer` and `test-engineer` already exist in profiles.json — no new profiles created.
+
+### Step 5: Proactive Skill Inference — 9 targeted rules added
+**Key pitfalls identified and mitigated:**
+
+| Agent | Pitfall | Rule Added |
+|---|---|---|
+| typescript-engineer | Over-engineering a trivial string literal change | minimal-change-enforcement |
+| typescript-engineer | Modifying the test file that belongs to paired story | do-not-touch-test-files |
+| typescript-engineer | Modifying package.json or creating vitest.config.ts | immutable-scaffold-files |
+| typescript-engineer | Skipping contract file for paired test story | contract-file-mandatory |
+| test-engineer | Over-engineering a trivial assertion change | minimal-change-enforcement |
+| test-engineer | Modifying the impl file that belongs to paired story | do-not-modify-implementation |
+| test-engineer | Modifying package.json or creating vitest.config.ts | immutable-scaffold-files |
+| test-engineer | Not reading contract file before writing tests | contract-read-first |
+| test-engineer | Confused by epam-cli test/ directory structure that doesn't exist here | vitest-default-discovery |
+
+### Step 5b: QA Agent Skill Injection — 4 agents augmented
+All four QA agents (`sast-sentinel`, `review-ranger`, `spec-validator`, `mutant-hunter`) received project-specific context to prevent hallucinating findings about non-existent files/functions.
+
+### Step 6: Explicit Skill Gap Fill
+Both stories have empty `requiredSkills` — no gaps to fill.
+
+### Artifacts
+- **profiles.json**: Updated with 6 profile augmentations (only additions, no removals)
+- **profiles-audit.jsonl**: 13 JSONL records written
+- **pre-core.md**: Full summary in `orchestrations/logs/phase-improvements/`

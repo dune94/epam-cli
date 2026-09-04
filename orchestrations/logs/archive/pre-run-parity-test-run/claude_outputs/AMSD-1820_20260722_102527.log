@@ -1,0 +1,111 @@
+=== Prompt for AMSD-1820 (attempt 1) ===
+CRITICAL — WRITE FILES FIRST. Your FIRST tool call MUST be WriteFile.
+Do NOT output any text before calling WriteFile. Do NOT plan or say "I will...".
+Call WriteFile NOW for the EXACT ABSOLUTE PATHS listed below:
+
+
+---
+
+Implement user story AMSD-1820: [Mozio] - The Promo code amount is NOT displayed as expected for Return trip tickets in the Mozio email confirmation
+
+## Story Description
+[Mozio] - The Promo code amount is NOT displayed as expected for Return trip tickets in the Mozio email confirmation
+
+## Acceptance Criteria
+- The function promoAppliesToLineItem in src/services/mozio/email-promo-discount.ts MUST return true when a valid promo object is passed and the line item represents a return trip (i.e., has a dateFrom and dateTo indicating a round trip), ensuring the promo is evaluated for both outbound and return legs.
+- The Mozio email confirmation template MUST render the promo code discount amount for the return trip portion of a round-trip ticket when a promo code is applied, matching the format used for the outbound trip.
+- The test suite for src/services/mozio/email-promo-discount.ts MUST include a test case that passes a valid promo object and a return-trip line item to promoAppliesToLineItem and asserts a true return value.
+- The test suite for src/services/mozio/email-promo-discount.ts MUST NOT omit a test case that passes null or undefined as the promo argument to promoAppliesToLineItem and asserts a false return value (rule: no-coverage). Verify with: grep -rn 'promoAppliesToLineItem' test/ --include='*.ts' | grep -E 'null|undefined' | wc -l — result must be ≥ 1.
+- The function promoAppliesToLineItem in src/services/mozio/email-promo-discount.ts MUST NOT return a truthy value when the promo argument is null or undefined (rule: no-coverage). Verify with: node -e "const m=require('./src/services/mozio/email-promo-discount'); process.exit(m.promoAppliesToLineItem(null)===false && m.promoAppliesToLineItem(undefined)===false ? 0 : 1)" — exit code must be 0.
+- The email confirmation generation MUST include the promo discount amount line item for the return trip when a promo code is applied to a round-trip order, and the rendered output must be verifiable via a snapshot or assertion-based test.
+
+## CRITICAL COMPLIANCE: STRING INVARIANTS
+The Acceptance Criteria above contain exact string matches required by the test suite.
+You are FORBIDDEN from paraphrasing, summarizing, or optimizing these strings — reproduce them character-for-character, including case and spacing, wherever the AC requires them.
+
+LITERAL STRINGS TO USE VERBATIM:
+- "const m=require('./src/services/mozio/email-promo-discount'); process.exit(m.promoAppliesToLineItem(null)===false && m.promoAppliesToLineItem(undefined)===false ? 0 : 1)"
+
+
+
+
+## Technical Notes
+None specified
+
+## Files to Create/Modify (EXACT ABSOLUTE PATHS — write to these paths exactly)
+
+
+## Dependencies
+None
+
+
+
+## Instructions
+**CRITICAL — WRITE FILES FIRST:**
+
+**You MUST write every file listed above to its EXACT absolute path. Do NOT write to a different path, do NOT write to the current directory unless it matches the path above. Use your WriteFile or Edit tools with the full absolute path shown.**
+
+1. Write each required file to its exact absolute path listed above — do this FIRST before anything else
+2. Implement all acceptance criteria for this story
+3. Follow the project's existing code patterns and conventions
+4. Do NOT create tests unless explicitly required in acceptance criteria
+
+After implementation, provide a brief summary of what was created/modified.
+
+## Relevant Knowledge Base Entries
+The following was learned from previous story implementations and is relevant to your agent role. Apply this knowledge before writing any code:
+
+- [2026-07-06T17:45:30Z] Always resolve mocked fetch calls to a Response-shaped object with ok, status, statusText, and a json method returning a Promise.
+- [2026-07-06T17:50:20Z] Use valid module and moduleResolution pairs in tsconfig.json: CommonJS with Node, Node16 with Node16, ESNext with Bundler. Use CommonJS and Node for the stack. Mismatched pairs cause build errors.
+- [2026-07-06T18:11:26Z] Use vi.fn().mockResolvedValue(value) to make a mock return a resolved Promise.
+- [2026-07-06T20:31:11Z] Use `test: { passWithNoTests: true }` in vitest.config.ts or create a stub test file when no *.test.ts files exist.
+- [2026-07-06T20:33:03Z] Enable globals:true in vitest.config.ts so describe, it, and expect work without imports, reducing boilerplate in test files.
+- [2026-07-06T23:47:34Z] Use CommonJS-compatible patterns in src/server.ts: avoid `import.meta.url` and top-level `await`; gate listen with `if (require.main === module)`.
+- [2026-07-07T02:35:30Z] Always include a non-test source file in src/ alongside any src/*.test.ts file, since tsconfig.json excludes test files from tsc --noEmit.
+- [2026-07-07T19:01:34Z] Only modify or create files explicitly listed in the story's acceptance criteria. Do not touch files belonging to other stories or outside the current task scope.
+- [2026-07-07T20:17:57Z] [unreviewed-fallback] Avoid using deprecated TypeScript compiler options like 'moduleResolution=node10'; use 'moduleResolution=node' instead.
+- [2026-07-17T20:20:58Z] Always: Before importing a module or referencing a type/property, always read the actual source file to verify the export exists, its exact path, its properties, and its constructor/factory signatures
+
+## Knowledge Base Contribution (do this LAST — after writing all implementation files)
+Your assigned KB entry ID for this run: **KB-012**
+
+IMPORTANT: Write ALL implementation files first. Only AFTER writing every required file should you optionally append a KB entry.
+Do NOT read orchestrations/agents/KB.md before writing implementation files. The relevant KB entries are already injected above.
+
+If (and only if) you discover a non-obvious pattern during implementation, append one entry to `orchestrations/agents/KB.md`:
+
+```markdown
+## KB-012 -- 2026-07-22
+
+**Category:** <backend|frontend|infrastructure|testing|orchestration>
+**AgentRole:** <your agentRole from the story>
+**Tags:** <comma-separated tech keywords, e.g. typescript, node, cli>
+**Trigger:** <retry|first-success>
+**StoryRef:** AMSD-1820
+
+<One concise paragraph: the specific pattern, gotcha, or anti-pattern.>
+```
+
+Only write an entry if the knowledge is genuinely non-obvious. Skip trivial observations.
+
+## Execution Plan
+Follow this plan step by step:
+1. Read `src/services/mozio/email-promo-discount.ts` to understand the current implementation of `promoAppliesToLineItem`, including its signature, how it evaluates promo objects and line items, and how round-trip detection (dateFrom/dateTo) is currently handled.
+
+2. Read the existing test file for `email-promo-discount.ts` (search under `test/` for `promoAppliesToLineItem`) to understand current test coverage, patterns, and the test framework used.
+
+3. Modify `src/services/mozio/email-promo-discount.ts` so that `promoAppliesToLineItem(promo, lineItem)` returns `false` immediately when `promo` is `null` or `undefined`, and returns `true` when a valid promo object is passed and the line item has both `dateFrom` and `dateTo` (indicating a return/round trip), ensuring the promo is evaluated for both outbound and return legs.
+
+4. Locate and read the Mozio email confirmation template file (search for the template that renders outbound promo discount lines, likely in `src/services/mozio/` or a templates/views directory) to understand how the outbound promo discount amount is currently rendered.
+
+5. Modify the email confirmation template to render the promo code discount amount for the return trip portion of a round-trip ticket when a promo code is applied, matching the format and structure used for the outbound trip discount line item.
+
+6. Add a test case to the test suite for `src/services/mozio/email-promo-discount.ts` that passes a valid promo object and a return-trip line item (with `dateFrom` and `dateTo`) to `promoAppliesToLineItem` and asserts the return value is `true`.
+
+7. Add a test case to the same test suite that passes `null` and `undefined` as the promo argument to `promoAppliesToLineItem` and asserts a `false` return value, satisfying the no-coverage rule.
+
+8. Add a snapshot or assertion-based test for the email confirmation generation that applies a promo code to a round-trip order and verifies the rendered output includes the promo discount amount line item for the return trip.
+
+9. Run the verification commands: `grep -rn 'promoAppliesToLineItem' test/ --include='*.ts' | grep -E 'null|undefined' | wc -l` (must be ≥ 1) and `node -e "const m=require('./src/services/mozio/email-promo-discount'); process.exit(m.promoAppliesToLineItem(null)===false && m.promoAppliesToLineItem(undefined)===false ? 0 : 1)"` (exit code must be 0), then run the full test suite to confirm all tests pass.
+=== End Prompt ===
+

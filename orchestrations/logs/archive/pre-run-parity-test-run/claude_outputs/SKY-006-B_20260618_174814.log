@@ -1,0 +1,94 @@
+=== Prompt for SKY-006-B (attempt 1) ===
+Implement user story SKY-006-B: Execute and document Skyscanner mini-app code review
+
+## Story Description
+Performs the substantive five-category code review (TypeScript, Tests, Security, Error Handling, Express Safety) against the Skyscanner mini-app source and produces the final review document at /tmp/skyscanner-app/review/SKY-006-review.md. Execution is gated on SKY-006-A having written /tmp/skyscanner-app/review/.gate-passed.json with status 'passed'. This story owns all tool invocations, finding recording, Verdict determination, and exit-code signalling for CI.
+
+## Acceptance Criteria
+- Before executing any review step the agent reads /tmp/skyscanner-app/review/.gate-passed.json; if the file is absent, unreadable, or does not contain the key-value pair '"status": "passed"' the agent halts immediately, emits a dependency error message that identifies the missing or invalid gate file by path, and exits with code 2 (distinct from exit code 1 used for a FAIL verdict); additionally, if the file is present and readable but is not valid JSON the agent treats this as an invalid gate file and exits with code 2, emitting a parse-error message that includes the file path and the JSON parse error description.
+- The agent performs a TypeScript category review: it inspects all .ts source files for strict-mode compliance, absence of untyped 'any' escape-hatches, correct interface/type usage, and absence of compiler errors reported by tsc --noEmit; every finding is recorded as a structured entry containing: file path (relative to /tmp/skyscanner-app), line number (a positive integer ≥ 1), severity (ERROR | WARN | INFO), gate name (e.g. TS_STRICT, TS_NO_ANY, TS_COMPILER_ERROR), and a one-sentence rationale; if a source file cannot be read due to permissions or I/O error the agent records a single ERROR-severity finding with gate name TS_FILE_UNREADABLE for that file and continues reviewing remaining files.
+- The agent performs a Tests category review: it verifies that a test suite exists and is executable, and that line-coverage meets or exceeds the target floor — the floor is the value declared in the project README or package.json (e.g. jest coverageThreshold.global.lines); if the project declares a branch or statement threshold instead of a line threshold, that declared metric and value is used as the floor; if no target is declared the default floor is 80% line coverage; it also verifies that test files follow the project's naming and co-location conventions; every finding is recorded with the same schema as AC-2, using gate names such as TEST_SUITE_EXISTS, TEST_COVERAGE_FLOOR, TEST_NAMING_CONVENTION.
+- The agent performs a Security category review: it checks for hard-coded secrets or credentials (gate SECURITY_NO_HARDCODED_SECRETS), unsafe use of eval or the Function constructor (gate SECURITY_NO_EVAL), dependency versions with known CVEs using available lock-file data (gate SECURITY_DEPENDENCY_CVE), and missing input sanitisation on user-supplied data (gate SECURITY_INPUT_SANITISATION); every finding is recorded with the same schema as AC-2.
+- The agent performs an Error Handling category review: it verifies that all async operations have explicit catch paths or are wrapped in try/catch (gate EH_ASYNC_CATCH), that error responses never leak stack traces or internal paths to HTTP clients (gate EH_NO_STACK_LEAK), that unhandled-rejection and uncaughtException process-level handlers are present (gate EH_PROCESS_HANDLERS), and that async Express route handlers do not throw without forwarding the error via next(err) (gate EH_EXPRESS_NEXT_ERR — a handler is non-compliant if it contains an await expression or returns a Promise and does not wrap its body in try/catch with a next(err) call in the catch block); every finding is recorded with the same schema as AC-2.
+- The agent performs an Express Safety category review: it checks for helmet or equivalent security-header middleware (gate EXPRESS_HELMET), rate-limiting middleware on public endpoints (gate EXPRESS_RATE_LIMIT), absence of directory-traversal vectors in static-file serving or path construction (gate EXPRESS_NO_PATH_TRAVERSAL), and CORS configuration (gate EXPRESS_CORS — PASS when cors() is called with an explicit origin allowlist or when CORS is intentionally disabled and a comment documents the rationale; FAIL when cors() is called with origin: '*' on a non-public API, when no CORS middleware is present on routes that accept cross-origin requests, or when the origin value is derived from an unsanitised request header); every finding is recorded with the same schema as AC-2.
+- The review document written to /tmp/skyscanner-app/review/SKY-006-review.md contains exactly eight top-level sections in this order: (1) Executive Summary, (2) Scope & Methodology, (3) TypeScript Review, (4) Tests Review, (5) Security Review, (6) Error Handling Review, (7) Express Safety Review, (8) Verdict — each section heading formatted as a level-2 Markdown heading (## ).
+- The Verdict section must have ^(PASS|FAIL)$ as its first non-blank line (the token alone, no other text on that line); subsequent lines provide a concise rationale; Verdict is PASS only when zero ERROR-severity findings exist across all five categories, otherwise Verdict is FAIL.
+- The Executive Summary section includes: total finding counts broken down by category and by severity (ERROR / WARN / INFO), the overall Verdict token (PASS or FAIL), and the UTC timestamp at which the review completed in ISO-8601 format (e.g. 2024-06-01T12:34:56Z) with second-level precision and explicit 'Z' suffix.
+- The agent exits with code 0 when Verdict is PASS and with code 1 when Verdict is FAIL, allowing CI pipelines to gate on the exit code without parsing the document; exit code 2 is reserved exclusively for the gate-prerequisite failure described in AC-1; if the review document cannot be written to disk (e.g. directory does not exist, insufficient permissions, disk full) the agent emits an I/O error message identifying the target path and the OS error, and exits with code 3 (distinct from codes 0, 1, and 2).
+- The review document is valid UTF-8 Markdown, contains no placeholder text (i.e. the literal strings 'TODO', 'TBD', 'FIXME', or 'N/A' used as a substitute for genuine analysis, or any section body that consists solely of whitespace), and every finding count stated in the Executive Summary is traceable to a corresponding named finding entry (identified by gate name, file path, and line number) in its respective category section; each finding entry must have a composite identifier (gate name + file path + line number) that is unique within the document — duplicate entries for the same location and gate are not permitted.
+- The document write operation is atomic from the reader's perspective: the agent writes the complete review content to a temporary file in the same directory (e.g. SKY-006-review.md.tmp) and renames it to the final path only after the write is fully flushed; if a previous run's output file already exists at the final path it is overwritten by the rename without leaving a partially written file.
+- When the agent encounters a source file that matches the *.ts glob but is not valid UTF-8 text (e.g. a binary file with a .ts extension), it records a single WARN-severity finding with gate name TS_FILE_ENCODING_INVALID for that file, skips static analysis of that file, and continues processing remaining files; this behaviour is verified by confirming the finding appears in the TypeScript Review section and the file is not listed as analysed.
+- All five category review sections (TypeScript, Tests, Security, Error Handling, Express Safety) must each contain at least one finding entry — either a genuine finding or an explicit INFO-severity 'no issues found' entry using the gate name <CATEGORY>_NO_ISSUES (e.g. TS_NO_ISSUES) — so that no section body is empty; a section that contains only a heading with no finding entries is treated as a placeholder and fails the AC-11 placeholder check.
+- The agent must not write any data to stdout or stderr that reveals the contents of environment variables, internal file paths outside /tmp/skyscanner-app, or process credentials; all diagnostic messages emitted to stderr are limited to: the gate-file error (AC-1), the I/O error (AC-10), and per-category progress indicators that contain only the category name and file count.
+
+## Technical Notes
+- workingDir: /tmp/skyscanner-app
+- files: ["/tmp/skyscanner-app/review/SKY-006-review.md"]
+- dependsOn: ["SKY-001","SKY-002","SKY-003","SKY-004","SKY-005"]
+
+## Files to Create/Modify
+/tmp/skyscanner-app/review/SKY-006-review.md
+
+## Dependencies
+None
+
+## Instructions
+**IMPORTANT: You MUST use your file-writing and bash tools to create all required files. Do NOT just describe or plan what you will do — call tools immediately and write the files.**
+
+1. Implement all acceptance criteria for this story
+2. Follow the project's existing code patterns and conventions
+3. Create any necessary files in the locations specified
+4. Ensure code compiles/runs without errors
+5. Do NOT create tests unless explicitly required in acceptance criteria
+
+After implementation, provide a brief summary of what was created/modified.
+
+## Relevant Knowledge Base Entries
+The following was learned from previous story implementations and is relevant to your agent role. Apply this knowledge before writing any code:
+
+## KB-003 -- 2026-03-01
+
+**Category:** backend
+**AgentRole:** review-agent
+**Tags:** typescript, async, cancellation, abort-controller
+**Trigger:** first-success
+**StoryRef:** EPAM-014
+
+When implementing multi-agent parallel execution with cancellation support, registering an AbortController in a task registry is insufficient. The abort signal must be threaded through the entire call chain: TaskRegistry → caller → AgentRunOptions → AgentRunner → provider.stream(). Without adding `abortSignal?: AbortSignal` to AgentRunOptions and checking it in the agent loop, calling `abortController.abort()` will update task status but leave the underlying LLM stream and agent execution running. Always ensure cancellation signals propagate to the lowest-level async operation (the provider stream) to avoid resource leaks and unbounded execution.
+
+
+## KB-004 -- 2026-03-01
+
+**Category:** orchestration
+**AgentRole:** review-agent
+**Tags:** typescript, prompt-injection, session-history, agent-runner
+**Trigger:** first-success
+**StoryRef:** EPAM-018
+
+For one-turn consultation or override prompts, consuming a pending flag is not enough if you also persist the injected text into the turn history. If the transformed message is stored in the same message array that becomes future history, the consultation silently bleeds into later turns. Keep a separate transient message list for the model-facing request and preserve the original user message in the persisted session history.
+
+## Knowledge Base Contribution
+Your assigned KB entry ID for this run: **KB-008**
+
+If you discover a non-obvious pattern, gotcha, or anti-pattern during this implementation (or this is a retry), append exactly one entry to `orchestrations/agents/KB.md` using this format:
+
+```markdown
+## KB-008 -- 2026-06-18
+
+**Category:** <backend|frontend|infrastructure|testing|orchestration>
+**AgentRole:** <your agentRole from the story>
+**Tags:** <comma-separated tech keywords, e.g. typescript, node, cli>
+**Trigger:** <retry|first-success>
+**StoryRef:** SKY-006-B
+
+<One concise paragraph: the specific pattern, gotcha, or anti-pattern. Precise enough that a future Claude instance can apply it without re-discovering it.>
+```
+
+Only write an entry if the knowledge is genuinely non-obvious. Skip trivial observations.
+=== End Prompt ===
+
+=== epam Output (attempt 1) ===
+Now I will create the full implementation for the code review. Let me start by writing the code review script:
+Now I will create the full implementation for the code review. Let me start by writing the code review script:
+
+=== End epam Output ===

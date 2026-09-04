@@ -1,0 +1,71 @@
+# Prompt
+Regenerate the VERIFICATION CRITERIA for this brownfield story. Your previous verification criteria were FLAGGED and must be fixed:
+- VC 1 cross-compares — 'instead of the previously published content' compares two states; assert what the rendered Homepage shows on its own
+- VC 2 cross-compares — 'instead of the previously published content' compares two states; assert what the rendered Discover Article page shows on its own
+- VC 3 cross-compares — 'identically to its current behavior' compares to a baseline; assert what the rendered Homepage shows on its own
+- VC 4 cross-compares — 'identically to their current behavior' compares to a baseline; assert what the rendered Discover Article page shows on its own
+- VC 5 cross-compares — 'updates to reflect each change in sequence' asserts page output matches each draft input; assert what the rendered Homepage shows for each successive draft on its own
+- VC 6 cross-compares — 'continues to show the published content unchanged' compares to prior state; assert what the page shows on its own
+
+THE FIX SITE (located by the code-graph detective — anchor every criterion to the behaviour THIS code produces):
+- src/services/contentstack.ts :: options — This is the Stack configuration site — the single contentstack.Stack(options) call at line 91 that every data fetch flows through (via ContentstackFactory). The options object (lines 71-89) currently contains api_key, delivery_token, environment, branch, fetchOptions but NO live_preview block. Adding live_preview here is what enables the SDK to detect preview mode and return draft entries — without it, no downstream consumer can ever receive preview data.
+- src/pages/_app.tsx :: ContentstackContext.Provider — This is the app-wide provider site where ContentstackContext.Provider wraps the application and sets the context value from server-side page props (header, footer, onboarding, page). For live preview, @contentstack/live-preview-utils must be initialized here with an onEntryChange callback that receives updated entry data from the CMS and pushes it into React state, causing the provider value and all 147+ useContent consumers to re-render. This callback is the PRODUCER of live preview entry data on the client.
+- src/context/contentstackContext.tsx :: ContentstackContext — The React context that distributes Contentstack data to all components via the useContent hook. Currently createContext<IContentstackContext>({}) with a static interface — the Provider value is set once from server-side props and never updated. For live preview, this context must CARRY reactive state so that when onEntryChange in _app.tsx fires with updated entry data, all useContent consumers re-render with new values.
+- src/components/pages/Homepage.tsx :: Homepage — Target page per acceptance criteria (MX Homepage). Receives page prop (IContentstackPage[]) and renders ContentStackHomePageHeroBanner, HomepageComponentMapper, ContentstackRecentNews, ContentStackLandAcknowledgement. Child components use useContent hook which reads from ContentstackContext. Once the context becomes reactive via onEntryChange, Homepage and all its children will automatically re-render with preview data — no direct edit needed.
+- src/services/pageService.ts :: PageService.getPageEntry — Server-side data fetcher (lines 166-229) that populates the page prop passed to ContentstackContext.Provider. Calls getSinglePageEntry (line 211) or getSingletonPageEntry (line 212) which delegate to getSingleEntry/getSingletonEntry from contentstack.ts. This is the existing server-side pipeline that live preview augments client-side. The getSinglePageEntry function (line 75-88) uses getSingleEntry with contentstackConfig lookup — this same pattern should be reused in the onEntryChange callback for client-side re-fetching of preview entries.
+- src/hooks/useContent.ts :: useContent — The hook used by 147+ components to read Contentstack data via ContentstackContext. Returns getContentByKey which path-navigates the context value using getValue. Once the context value becomes reactive (updated by onEntryChange in _app.tsx), all useContent consumers will automatically re-render — no change needed here. This is the verification point to confirm the full pipeline works end-to-end.
+Do NOT write criteria about areas unrelated to this code.
+
+
+Acceptance criteria (IMMUTABLE — the intent to verify; do NOT restate as-is, VERIFY them):
+- See in:
+Description: AS a  Content Author,  I WANT  to preview draft entries in CMS for the MX Homepage and Discover Article pages  SO THAT  I can see how content will be shown on the website
+Acceptance Criteria:
+See in:
+
+
+
+
+Original Requirements:
+Bullet points:
+ 
+
+ AS a Content Author, I WANT to preview draft entries in CMS, SO THAT I can see how content will be shown on the website
+ability to preview draft entries in CMS
+Notes& Assumptions  Limitation: Might not be possible to preview protected pages and content.
+Original Total Estimate:  8  Original FE Estimate:  8  Original DAM Estimate:  0  Original BE Estimate:  0
+
+A verification criterion states WHAT AN END USER OR TESTER OBSERVES on the user-facing surface THE TICKET IS ABOUT — the rendered output for an output ticket, the displayed screen for a UI ticket, the response a CLIENT receives for an API ticket. It is a BLACK-BOX check on that surface. It NEVER describes HOW the value is produced.
+A verification criterion is FORBIDDEN if it:
+- prescribes HOW to implement — any algorithm, mechanism, approach, or the addition/reading of any new field, flag or service;
+- references an INTERNAL structure that merely FEEDS the ticket's surface — an intermediate payload, a data-transfer object, or a specific response field used to BUILD the output. Verify the surface the ticket names, NOT the data structure behind it;
+- makes a CROSS-COMPARISON that presumes a mechanism — never assert one value "must equal" / "matches" / "is the same as" another; that presumes a shared derivation. Assert the required value is present and correct ON ITS OWN.
+Every verification criterion must be observable, testable, and tied to the ticket's stated symptom/intent.
+
+EXAMPLES OF FORM (the angle-bracket words are placeholders — fill them from THIS story; never copy them literally):
+
+REJECTED: "the <config object> passed to <the client> includes a <key> entry"
+  — asserts INTERNAL STRUCTURE. A tester cannot see a config object.
+ACCEPTED: "when <the request> carries <the marker>, <the surface> shows <the draft state> instead of <the published state>"
+
+REJECTED: "when <internal function> is called with <argument>, the resulting <query> includes <field>"
+  — asserts an INTERNAL CALL PATH. Verify the surface the ticket is about, not the path behind it.
+ACCEPTED: "<the surface> shows <the value> that <the source of truth> currently holds"
+
+REJECTED: "an author edits <entity> in <the external tool> and <the surface> updates"
+  — begins OUTSIDE THE BOUNDARY this suite can drive. Nothing here can operate that tool.
+ACCEPTED: "given <the client> is mocked to signal <the change>, <the surface> re-renders without a reload"
+
+REJECTED: "<the value> matches what <the other place> shows"
+  — a CROSS-COMPARISON presumes a shared derivation. Assert the required value on its own.
+ACCEPTED: "<the surface> shows <the expected value> for <the stated condition>"
+
+REJECTED: "<the feature> works correctly with no regression"
+  — verifies nothing and cannot fail.
+ACCEPTED: "when <the feature> is inactive, <the surface> shows <the prior behaviour> unchanged"
+
+Do NOT restate an acceptance criterion as-is — express what a tester OBSERVES that confirms it. Address every flag above.
+Output ONLY a JSON array of verification-criterion strings. No prose, no markdown.
+
+# Output
+Agent reached maximum iterations (2) without completing.

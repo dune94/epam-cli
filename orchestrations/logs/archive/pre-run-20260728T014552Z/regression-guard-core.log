@@ -1,0 +1,10 @@
+
+ RUN  v2.1.9 /tmp/brownfield-mock-e2e-G7eg9p/codelines/mock-hello-world
+
+ ✓ src/hello.test.ts (1 test) 1ms
+
+ Test Files  1 passed (1)
+      Tests  1 passed (1)
+   Start at  21:11:42
+   Duration  237ms (transform 26ms, setup 0ms, collect 23ms, tests 1ms, environment 0ms, prepare 45ms)
+

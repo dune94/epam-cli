@@ -1,0 +1,105 @@
+# Prompt
+You are specialising ONE generic agent prompt for ONE specific project. You are the same agent that just minted this project's roles, so you already know what this project is and who will work on it.
+
+## The template you must specialise
+
+Its id is cpa-inference and its purpose is: Ask the estimator for an iteration count, given the story and everything known about it.
+
+Everything between the two markers below is the template, verbatim. The markers are not
+part of it. A code fence cannot delimit this: several templates contain fences of their
+own, so the first closing fence would truncate the body mid-instruction.
+
+-----BEGIN TEMPLATE BODY-----
+__SYSTEM_PROMPT__
+
+---
+
+__SECTIONS__
+
+---
+
+Respond with ONLY the JSON object as specified in your instructions. No prose, no markdown fences.
+-----END TEMPLATE BODY-----
+
+## What this project is
+
+Project config: /home/bradleyjerome/projects/ai/epam-cli/orchestrations/projects/mock3
+Tickets in scope: MOCK3-1: Riders aged exactly 65 are charged the adult fare | MOCK3-2: The departure board omits the final stop
+
+Codelines in scope and their declared dependencies:
+- mocka (/home/bradleyjerome/projects/mock3/mock-a) deps: vitest, typescript
+
+The roles you minted for this project:
+- fare-rules-engineer [implementer] — MOCK3-1 requires an actual source edit to the age comparison in src/fares.ts, and only an implementer can commit that one-line boundary fix confirmed present in the code.
+- mocka-detective [investigator] — The declared vitest+typescript stack and the narrow four-file repository mean a single dedicated reader can definitively confirm the fareFor() boundary condition and the absence of any MOCK3-2 surface before an implementer commits to a fix.
+
+## The one rule you cannot break
+
+The template's placeholders are a CONTRACT with the pipeline. Each token written in SCREAMING_SNAKE_CASE between double underscores is replaced at run time with real evidence — a diff, a ticket, a test log, a plan. The substitution is BY NAME and it is strict in both directions.
+
+- Reproduce every placeholder EXACTLY as it appears, character for character.
+- NEVER add or invent a placeholder. Nothing supplies a name the pipeline does not know, so rendering throws and the run dies at the seam that needed this prompt.
+- NEVER remove or rename one. The evidence it carries would silently never reach the agent, and the agent would answer without it.
+- Do not move a placeholder into a code fence, a quote, or an example where it would read as literal text.
+
+The placeholders in this template are exactly: __SECTIONS__, __SYSTEM_PROMPT__
+
+## What specialising means
+
+Keep the template's instructions, its output format, its prohibitions and its reasoning intact. They encode failures this pipeline has already paid for. You are not rewriting the prompt or improving its wording.
+
+Add only what a competent engineer joining THIS project would need and could not infer from the generic text:
+- the conventions, layout and idioms this codebase actually uses
+- the commands this project runs to build, test and type-check
+- the traps this stack presents that a generic prompt would not warn about
+
+Ground every addition in the project context above. If the context does not tell you something, say nothing about it — an invented convention is worse than a missing one, because the agent will follow it.
+
+Do not name a file, symbol, package or command that does not appear in the context you were given.
+
+## How to answer
+
+Emit ONLY the specialised prompt body as TEXT, directly in your reply. No JSON wrapper, no markdown fences around the whole thing, no commentary before or after, and do not write it to a file — the pipeline reads your reply text.
+
+
+
+# Output
+__SYSTEM_PROMPT__
+
+---
+
+__SECTIONS__
+
+---
+
+## Project calibration for this estimate — mock3
+
+The story you are sizing belongs to the `mock3` project. Everything below is fixed, known context; use it to anchor the iteration count rather than reasoning from a generic repository.
+
+**Scope of the whole project.** Two tickets only:
+- MOCK3-1: Riders aged exactly 65 are charged the adult fare.
+- MOCK3-2: The departure board omits the final stop.
+
+**The only codeline.** `mocka`, at `/home/bradleyjerome/projects/mock3/mock-a`. Declared dependencies: `vitest`, `typescript`. There is no second codeline, no service boundary to cross, no cross-repo coordination to pay for in iterations.
+
+**Repository size.** `mock-a` is a four-file repository. A full read of it is cheap and is not, by itself, a reason to add iterations. An agent cannot get lost in this codebase; budget for thinking about a boundary condition, not for search.
+
+**What is already established about each ticket.** Weigh these facts before adding iterations for "investigation":
+- MOCK3-1 concerns the age comparison in `src/fares.ts`, inside `fareFor()`. The boundary condition has been confirmed present in the code. The expected shape of the fix is a one-line comparison change (`>` vs `>=` class of edit) plus a test that pins age exactly 65. Do not budget iterations for locating the defect; it is located.
+- MOCK3-2 has no confirmed surface in `mocka`. The departure board is not known to exist in this codeline. A story that asks for MOCK3-2 work may be an investigation that terminates in "no such surface here" rather than an implementation. Estimate the cost of establishing absence — which in a four-file repository is small and bounded — not the cost of building a departure board.
+
+**Roles that will execute.** Only two:
+- `fare-rules-engineer` (implementer) — the only role that can commit a source edit to `src/fares.ts`.
+- `mocka-detective` (investigator) — reads and confirms; does not commit.
+An implementer story here is edit-plus-test-plus-verify. An investigator story here is read-plus-report and produces no diff; investigator stories in a repository this small should not be estimated like open-ended discovery.
+
+**Stack traps that legitimately cost iterations.** Do not inflate for these, but do not price them at zero either:
+- `vitest` plus `typescript`: a type error surfaces separately from a test failure, so a change can need one extra pass to get both green. Budget for a second pass only when the story's change touches types or signatures, not for a comparison-operator edit.
+- Boundary fixes flip a defect from one side to the other. A story that changes an age comparison can plausibly need one extra iteration to confirm that ages 64 and 66 still behave correctly after the fix. This is the single most likely source of a real second iteration on MOCK3-1.
+- There is no build, lint, or format tooling declared beyond `vitest` and `typescript`. Do not add iterations for pipeline steps this project has not declared.
+
+**Anchoring guidance.** Both tickets are small and the codeline is tiny. Reserve high iteration counts for genuine ambiguity in the story's acceptance criteria or for work whose surface is not yet confirmed to exist — not for repository size, not for stack setup, and not for work that the evidence above has already narrowed to a single known line.
+
+---
+
+Respond with ONLY the JSON object as specified in your instructions. No prose, no markdown fences.

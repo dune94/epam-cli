@@ -1,0 +1,46 @@
+# Prompt
+You are a STRICT verification-criteria reviewer for a brownfield fix. REVIEW ONLY — do NOT rewrite anything.
+
+Acceptance criteria (IMMUTABLE ticket intent):
+- (none)
+Description: Original Requirements (discovery)  AS a Content Author, I WANT to preview draft entries in CMS, SO THAT I can see how content will be shown on the website
+ability to preview draft entries in CMS
+Notes& Assumptions  Limitation: Might not be possible to preview protected pages and content.
+Original Total Estimate:  8  Original FE Estimate:  8  Original DAM Estimate:  0  Original BE Estimate:  0
+
+Proposed verification criteria:
+1. When a content page entry with unpublished draft changes is being previewed, the rendered slug page displays the draft entry's content including any unpublished field values.
+2. When a news article entry with unpublished draft changes is being previewed, the rendered page displays the draft article's title, body, and metadata as they exist in the draft entry.
+3. When a published content page entry is viewed, the rendered slug page displays the published entry's content correctly with all expected fields and values.
+4. When an event entry with unpublished draft changes is being previewed, the rendered events listing displays the draft event's details as they exist in the draft entry.
+5. When a news article entry with unpublished draft changes is being previewed, the rendered news listing displays the draft article along with its associated category information as it exists in the draft entry.
+6. When a page is viewed without a draft preview, the page displays only published content and does not show any unpublished draft changes.
+7. After a draft preview session ends and the page is viewed again, the page displays the published version of the content.
+8. All content pages (slug pages, news listings, and event listings) render their published content without errors when the live preview feature is available but not in use.
+
+Apply these rules EXACTLY (the producer is held to the same text — do not invent stricter or looser criteria):
+A verification criterion states WHAT AN END USER OR TESTER OBSERVES on the user-facing surface THE TICKET IS ABOUT — the rendered output for an output ticket, the displayed screen for a UI ticket, the response a CLIENT receives for an API ticket. It is a BLACK-BOX check on that surface. It NEVER describes HOW the value is produced.
+A verification criterion is FORBIDDEN if it:
+- prescribes HOW to implement — any algorithm, mechanism, approach, or the addition/reading of any new field, flag or service;
+- references an INTERNAL structure that merely FEEDS the ticket's surface — an intermediate payload, a data-transfer object, or a specific response field used to BUILD the output. Verify the surface the ticket names, NOT the data structure behind it;
+- makes a CROSS-COMPARISON that presumes a mechanism — never assert one value "must equal" / "matches" / "is the same as" another; that presumes a shared derivation. Assert the required value is present and correct ON ITS OWN.
+Every verification criterion must be observable, testable, and tied to the ticket's stated symptom/intent.
+
+A criterion may declare a PRECONDITION the test establishes (for example a mocked client
+signalling a change). A declared precondition is NOT implementation prescription — do not flag
+it. Flag what the criterion ASSERTS, not what it sets up.
+
+FLAG any verification criterion that violates ANY rule above, OR that fails to cover the intent of an acceptance criterion.
+Output ONLY a JSON array of short flag strings, e.g. ["VC 2 prescribes <an approach> — restate as observable outcome"]. Output [] if every VC is clean. No prose, no markdown.
+
+# Output
+```json
+[
+  "VC 1 cross-compares — 'displays the draft entry's content including any unpublished field values' asserts rendered output equals internal draft entry values; restate as observable surface content",
+  "VC 2 cross-compares — 'as they exist in the draft entry' ties displayed title, body, and metadata to internal draft values; restate as what the user sees on the page",
+  "VC 3 cross-compares — 'displays the published entry's content correctly with all expected fields and values' asserts rendered output equals internal published entry; restate as observable surface content",
+  "VC 4 cross-compares — 'as they exist in the draft entry' ties displayed event details to internal draft values; restate as observable surface content",
+  "VC 5 cross-compares — 'as it exists in the draft entry' ties displayed article and category to internal draft values; restate as observable surface content",
+  "VC 7 cross-compares — 'displays the published version of the content' asserts rendered output equals internal published version; restate as observable surface content"
+]
+```

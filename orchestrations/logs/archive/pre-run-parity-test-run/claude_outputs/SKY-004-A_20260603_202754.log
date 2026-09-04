@@ -1,0 +1,96 @@
+=== Prompt for SKY-004-A (attempt 1) ===
+Implement user story SKY-004-A: Server skeleton: /health, GET /, API-key middleware, error handling, and package.json scripts
+
+## Story Description
+Create the Express server skeleton in src/server.ts with the module-guard pattern, the /health and GET / routes, the RAPIDAPI_KEY absence middleware (503 short-circuit), the global error handler (500), and the package.json 'start'/'build' scripts. This slice has no runtime dependency on SKY-002 and can be implemented and merged in parallel with it. supertest and @types/supertest must be installed. A minimal test file (at least 4 tests) covering /health, GET /, 503 gating, and the module-guard must pass.
+
+## Acceptance Criteria
+- src/server.ts exports a named `app` (Express instance) separately from the `listen()` call so supertest can import it without binding a port
+- The `listen()` call in src/server.ts is guarded using the pattern matching the tsup output format (CJS: `require.main === module`; ESM: `import.meta.url === pathToFileURL(process.argv[1]).href`) so `vitest run` never binds a port
+- GET /health returns HTTP 200 with Content-Type application/json and body matching { status: 'ok', uptime: <positive number> }
+- GET /health returns HTTP 200 regardless of whether RAPIDAPI_KEY env var is set or absent
+- GET / returns HTTP 200 with Content-Type matching text/html and body equal to the contents of src/public/index.html
+- src/public/index.html exists and contains valid HTML with at minimum a non-empty file with an <html> root element
+- When RAPIDAPI_KEY env var is absent at server initialisation, a single middleware short-circuits GET /search and GET /cheapest with HTTP 503 Content-Type application/json body { error: 'RAPIDAPI_KEY not configured' }; GET /health and GET / are unaffected
+- When SkyscannerClient throws during a request, the server returns HTTP 500 with Content-Type application/json and body { error: string } and does not crash or emit an unhandled promise rejection
+- package.json contains a 'start' script with value 'node dist/server.js'
+- package.json contains a 'build' script that produces dist/server.js such that `npm run build && npm run start` starts the server and GET /health returns HTTP 200
+- supertest and @types/supertest are listed in package.json devDependencies
+- `npx tsc --noEmit` exits 0 with no type errors
+- `vitest run` exits 0 with all tests passing (minimum 4 tests covering /health, GET /, 503 gating, and module-guard isolation)
+
+## Technical Notes
+- workingDir: /tmp/skyscanner-app
+- files: ["/tmp/skyscanner-app/src/server.ts","/tmp/skyscanner-app/src/server.test.ts"]
+- dependsOn: ["SKY-002"]
+
+## Files to Create/Modify
+/tmp/skyscanner-app/src/server.ts, /tmp/skyscanner-app/src/server.test.ts
+
+## Dependencies
+None
+
+## Instructions
+1. Implement all acceptance criteria for this story
+2. Follow the project's existing code patterns and conventions
+3. Create any necessary files in the locations specified
+4. Ensure code compiles/runs without errors
+5. Do NOT create tests unless explicitly required in acceptance criteria
+
+After implementation, provide a brief summary of what was created/modified.
+
+## Relevant Knowledge Base Entries
+No prior KB entries match your agent role yet.
+
+## Knowledge Base Contribution
+Your assigned KB entry ID for this run: **KB-008**
+
+If you discover a non-obvious pattern, gotcha, or anti-pattern during this implementation (or this is a retry), append exactly one entry to `orchestrations/agents/KB.md` using this format:
+
+```markdown
+## KB-008 -- 2026-06-03
+
+**Category:** <backend|frontend|infrastructure|testing|orchestration>
+**AgentRole:** <your agentRole from the story>
+**Tags:** <comma-separated tech keywords, e.g. typescript, node, cli>
+**Trigger:** <retry|first-success>
+**StoryRef:** SKY-004-A
+
+<One concise paragraph: the specific pattern, gotcha, or anti-pattern. Precise enough that a future Claude instance can apply it without re-discovering it.>
+```
+
+Only write an entry if the knowledge is genuinely non-obvious. Skip trivial observations.
+=== End Prompt ===
+
+=== claude Output (attempt 1) ===
+Excellent! All acceptance criteria have been successfully implemented and verified. Here's a summary:
+
+## Implementation Complete ✓
+
+### What was already in place:
+- **src/server.ts**: Express server with /health, GET /, /search, /cheapest endpoints
+- **src/server.test.ts**: Comprehensive test suite with 22 tests
+- **src/public/index.html**: Valid HTML dashboard
+- **package.json**: Scripts and dependencies already configured
+  - `build`: `tsc` (compiles TypeScript to CommonJS)
+  - `start`: `node dist/server.js` (runs compiled server)
+  - `supertest` and `@types/supertest` in devDependencies
+
+### Key Implementation Features Verified:
+
+1. **Module Guard Pattern**: Uses `require.main === module` (CommonJS) to prevent port binding during tests
+2. **Named Export**: `app` is exported separately from the `listen()` call for supertest compatibility
+3. **Health Endpoint**: Returns `{ status: 'ok', uptime: <ms> }` with Content-Type application/json, unaffected by RAPIDAPI_KEY
+4. **Root Endpoint**: Returns HTML dashboard with Content-Type text/html
+5. **API Key Middleware**: Returns 503 `{ error: 'RAPIDAPI_KEY not configured' }` when env var is absent
+6. **Error Handling**: Catch blocks return 500 with error message when SkyscannerClient throws
+
+### Test Results:
+- ✅ **38 total tests pass** (22 server tests + 16 client tests)
+- ✅ **TypeScript compilation**: No errors (`npx tsc --noEmit`)
+- ✅ **Build & Start**: `npm run build && npm run start` works correctly
+- ✅ **Coverage**: Tests cover /health, GET /, 503 gating, and module-guard isolation
+
+**Story SKY-004-A is complete and ready for merge.**
+
+=== End claude Output ===

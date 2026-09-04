@@ -1,0 +1,111 @@
+# Prompt
+You are the Guard Vocabulary Agent for the epam-cli orchestration pipeline.
+
+A deterministic guard is about to check a set of statements against a RULE. Your sole job is to derive, for THIS story, the concrete terms that would VIOLATE that rule — and the terms that name its legitimate observable surface. The guard holds no vocabulary of its own; it applies exactly what you return, and nothing else.
+
+## Why you exist
+
+Every guard in this pipeline used to carry a hardcoded list of terms, each list reverse-engineered from a single past incident. A list catches that one incident and nothing else, while reporting "clean" forever — which is worse than no guard, because it converts "unchecked" into "checked" and nobody looks again. You replace those lists. If you answer badly, the guard is blind; if you answer well, it catches violations nobody has seen yet.
+
+## Your inputs
+
+1. THE RULE — a principle stating what it means to violate this guard. It names no domain, no product and no past incident. It is the only definition of correctness you are given.
+2. THE STATEMENTS — the items the guard will check (for example, a story's verification criteria or acceptance criteria).
+3. CODE EVIDENCE — real findings from the repository: files, functions, symbols, and the reasoning that located them. This is ground truth.
+4. STORY CONTEXT — the ticket's title and description.
+
+## Your process
+
+1. Read the rule and restate to yourself, in one sentence, what distinguishes a violating statement from a compliant one. Everything you return must trace to that sentence.
+2. Read the CODE EVIDENCE and identify the implementation vocabulary of this story: the symbols, functions, SDK entry points, internal structures and configuration keys that describe HOW the behaviour is produced. These come from the evidence, never from the ticket prose and never from your own knowledge of the technology.
+3. Read the STORY CONTEXT and identify the observable surface: what an end user or tester perceives. That is the whitelist.
+4. Emit both lists.
+
+## Hard requirements
+
+- DERIVE FROM THE EVIDENCE. Every blacklist term must be traceable to a symbol, file, function or structure present in the supplied code evidence, or to a construction verb present in the statements themselves. Do not contribute terms from your general knowledge of a library, framework or vendor: that is how an agent invents a signature that does not exist.
+- NEVER include a term that names the observable surface. If a term describes what a user sees, it belongs in the whitelist, even when it also appears in code.
+- PREFER THE SPECIFIC. a term naming ONE identifiable thing is useful; a generic category word is not — it will fire on unrelated statements and train people to ignore the guard.
+- WHOLE TERMS ONLY. Return terms as they would appear in a sentence. Do not return regular expressions, wildcards or fragments.
+- LOWERCASE every term.
+- The whitelist WINS. A term appearing in both lists is treated as observable and never flagged, so do not rely on the blacklist to override it.
+- If the rule genuinely admits no violating vocabulary for this story, return an empty blacklist. Do not pad it. An empty list is a real answer and is reported as such — it is not treated as success.
+
+## Verifying a term against the index
+
+At some seams you are given a real CodeGraph index of the repository and the command to
+query it. When you are, USE IT — do not assert that a term is meaningful, check it. A
+candidate that resolves to nothing in the index is noise and belongs in the blacklist,
+however unusual or technical the word looks. A candidate that resolves to real symbols is
+evidence-backed and can be trusted.
+
+Be aware of what your list feeds. Where the consumer is a BM25/IDF ranker, that ranker
+DEMOTES terms which are common in the corpus and AMPLIFIES terms which are rare. A rare but
+meaningless token — a bracketed brand tag, a ticket label, a person's name, a status word —
+is therefore not diluted by the ranker; it is promoted to a top discriminator and drags the
+search away from the real code. Rarity is not signal. Mistaking the two is the specific
+failure you exist to prevent, so when a term is unusual AND resolves to nothing, blacklist
+it with confidence.
+
+When no index is available to you, say what you can support from the evidence you were
+given and no more. An honest short list beats a padded one: every term you return is
+applied deterministically, and a wrong term is enforced as rigorously as a right one.
+
+## Output
+
+Call the submit_guard_vocabulary tool. Structured output only. Do not answer in prose, do not wrap the call in commentary, and do not explain your reasoning outside the per-term reason fields. A prose answer is discarded in full and the guard is left with nothing to apply.
+
+GUARD SEAM: verification-criteria
+
+THE RULE THIS GUARD ENFORCES:
+A verification criterion states WHAT AN END USER OR TESTER OBSERVES on the user-facing surface THE TICKET IS ABOUT — the rendered output for an output ticket, the displayed screen for a UI ticket, the response a CLIENT receives for an API ticket. It is a BLACK-BOX check on that surface. It NEVER describes HOW the value is produced.
+A verification criterion is FORBIDDEN if it:
+- prescribes HOW to implement — any algorithm, mechanism, approach, or the addition/reading of any new field, flag or service;
+- references an INTERNAL structure that merely FEEDS the ticket's surface — an intermediate payload, a data-transfer object, or a specific response field used to BUILD the output. Verify the surface the ticket names, NOT the data structure behind it;
+- makes a CROSS-COMPARISON that presumes a mechanism — never assert one value "must equal" / "matches" / "is the same as" another; that presumes a shared derivation. Assert the required value is present and correct ON ITS OWN.
+Every verification criterion must be observable, testable, and tied to the ticket's stated symptom/intent.
+
+THE STATEMENTS THE GUARD WILL CHECK:
+1. The fare returned for a rider aged 65 with no pass is 175 cents
+2. The fare returned for a rider aged 64 with no pass is 350 cents
+3. The fare returned for any rider with a transit pass is 0 cents, regardless of age
+4. The fare returned for a child aged 12 with no pass is 175 cents
+5. The fare returned for an adult aged 45 with no pass is 350 cents
+6. The fare returned for a rider aged 66 with no pass is 175 cents
+
+DECLARED MANIFEST (the files this story says it will touch):
+- (none declared)
+
+CODE EVIDENCE (real findings from this repository — ground truth; derive from these, not from your own knowledge of any library):
+- src/fares.ts :: fareFor — Line 10 uses strict greater-than (>) which excludes age 65, contradicting the spec comment on line 7 that states 'Riders aged 65 AND OVER'. Changing to >= produces the correct boundary where riders aged exactly 65 receive the concession fare.
+
+STORY CONTEXT:
+Title: Riders aged exactly 65 are charged the adult fare
+Description: The fare rules say riders aged 65 and over pay the concession fare. A rider aged exactly 65 is charged the full adult fare of 350 cents instead of 175. Riders aged 66 and above are charged correctly, so the boundary itself is wrong rather than the rule.
+
+# Output — THIS IS A CONTRACT, NOT A PREFERENCE
+
+Emit EXACTLY one <GUARD_VOCABULARY> block and nothing else that matters. Prose outside it is DISCARDED
+unread, however correct it is — the pipeline parses the block and never the commentary.
+
+<GUARD_VOCABULARY>
+{
+  "blacklist": [ {
+      "term": <string>
+         // The literal term or phrase to match, lowercase.,
+      "reason": <string>
+         // Short clause naming which part of the rule it breaks.,
+      "kind": <string> one of "implementation_noun" | "construction_verb" | "internal_structure" | "cross_comparison" | "other"   (optional),
+  } ]
+  "whitelist": [ {
+      "term": <string>,
+      "reason": <string>   (optional),
+  } ]
+}
+</GUARD_VOCABULARY>
+
+Submit the concrete terms that would VIOLATE the stated guard rule for this story, and the terms that represent its legitimate observable surface. Derive them from the supplied code evidence. Do not answer in prose.
+
+
+# Output
+{"blacklist":[{"term":"farefor","reason":"references internal implementation function","kind":"implementation_noun"},{"term":">","reason":"references the specific operator chosen in implementation","kind":"internal_structure"},{"term":">=","reason":"references the specific operator used in implementation","kind":"internal_structure"},{"term":"strict greater-than","reason":"describes the implementation operator choice","kind":"implementation_noun"},{"term":"boundary","reason":"names the implementation mechanism for age threshold, not the observable fare","kind":"internal_structure"},{"term":"comparison operator","reason":"describes the implementation mechanism for the boundary logic","kind":"implementation_noun"},{"term":"src/fares.ts","reason":"references internal code location, not observable surface","kind":"internal_structure"}],"whitelist":[{"term":"fare","reason":"observable amount returned to user"},{"term":"returned","reason":"observable action on surface"},{"term":"rider","reason":"observable actor"},{"term":"aged","reason":"observable age attribute input"},{"term":"pass","reason":"observable pass attribute input"},{"term":"cents","reason":"observable unit of fare"},{"term":"child","reason":"observable age category"},{"term":"adult","reason":"observable age category"},{"term":"transit pass","reason":"observable pass type"},{"term":"no pass","reason":"observable pass state"},{"term":"with pass","reason":"observable pass state"},{"term":"regardless of age","reason":"observable invariant behavior"}]}

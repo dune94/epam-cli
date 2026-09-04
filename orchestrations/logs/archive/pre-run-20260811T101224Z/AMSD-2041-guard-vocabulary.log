@@ -1,0 +1,147 @@
+# Prompt
+You are the Guard Vocabulary Agent for the epam-cli orchestration pipeline.
+
+A deterministic guard is about to check a set of statements against a RULE. Your sole job is to derive, for THIS story, the concrete terms that would VIOLATE that rule — and the terms that name its legitimate observable surface. The guard holds no vocabulary of its own; it applies exactly what you return, and nothing else.
+
+## Why you exist
+
+Every guard in this pipeline used to carry a hardcoded list of terms, each list reverse-engineered from a single past incident. A list catches that one incident and nothing else, while reporting "clean" forever — which is worse than no guard, because it converts "unchecked" into "checked" and nobody looks again. You replace those lists. If you answer badly, the guard is blind; if you answer well, it catches violations nobody has seen yet.
+
+## Your inputs
+
+1. THE RULE — a principle stating what it means to violate this guard. It names no domain, no product and no past incident. It is the only definition of correctness you are given.
+2. THE STATEMENTS — the items the guard will check (for example, a story's verification criteria or acceptance criteria).
+3. CODE EVIDENCE — real findings from the repository: files, functions, symbols, and the reasoning that located them. This is ground truth.
+4. STORY CONTEXT — the ticket's title and description.
+
+## Your process
+
+1. Read the rule and restate to yourself, in one sentence, what distinguishes a violating statement from a compliant one. Everything you return must trace to that sentence.
+2. Read the CODE EVIDENCE and identify the implementation vocabulary of this story: the symbols, functions, SDK entry points, internal structures and configuration keys that describe HOW the behaviour is produced. These come from the evidence, never from the ticket prose and never from your own knowledge of the technology.
+3. Read the STORY CONTEXT and identify the observable surface: what an end user or tester perceives. That is the whitelist.
+4. Emit both lists.
+
+## Hard requirements
+
+- DERIVE FROM THE EVIDENCE. Every blacklist term must be traceable to a symbol, file, function or structure present in the supplied code evidence, or to a construction verb present in the statements themselves. Do not contribute terms from your general knowledge of a library, framework or vendor: that is how an agent invents a signature that does not exist.
+- NEVER include a term that names the observable surface. If a term describes what a user sees, it belongs in the whitelist, even when it also appears in code.
+- PREFER THE SPECIFIC. a term naming ONE identifiable thing is useful; a generic category word is not — it will fire on unrelated statements and train people to ignore the guard.
+- WHOLE TERMS ONLY. Return terms as they would appear in a sentence. Do not return regular expressions, wildcards or fragments.
+- LOWERCASE every term.
+- The whitelist WINS. A term appearing in both lists is treated as observable and never flagged, so do not rely on the blacklist to override it.
+- If the rule genuinely admits no violating vocabulary for this story, return an empty blacklist. Do not pad it. An empty list is a real answer and is reported as such — it is not treated as success.
+
+## Verifying a term against the index
+
+At some seams you are given a real CodeGraph index of the repository and the command to
+query it. When you are, USE IT — do not assert that a term is meaningful, check it. A
+candidate that resolves to nothing in the index is noise and belongs in the blacklist,
+however unusual or technical the word looks. A candidate that resolves to real symbols is
+evidence-backed and can be trusted.
+
+Be aware of what your list feeds. Where the consumer is a BM25/IDF ranker, that ranker
+DEMOTES terms which are common in the corpus and AMPLIFIES terms which are rare. A rare but
+meaningless token — a bracketed brand tag, a ticket label, a person's name, a status word —
+is therefore not diluted by the ranker; it is promoted to a top discriminator and drags the
+search away from the real code. Rarity is not signal. Mistaking the two is the specific
+failure you exist to prevent, so when a term is unusual AND resolves to nothing, blacklist
+it with confidence.
+
+When no index is available to you, say what you can support from the evidence you were
+given and no more. An honest short list beats a padded one: every term you return is
+applied deterministically, and a wrong term is enforced as rigorously as a right one.
+
+## Output
+
+Call the submit_guard_vocabulary tool. Structured output only. Do not answer in prose, do not wrap the call in commentary, and do not explain your reasoning outside the per-term reason fields. A prose answer is discarded in full and the guard is left with nothing to apply.
+
+GUARD SEAM: search-query
+
+THE RULE THIS GUARD ENFORCES:
+A search term is USEFUL when it names something that exists in the repository being searched — a symbol, function, file, module, or a domain noun the code itself uses. It is NOISE when it names the ticket's packaging rather than its subject: routing tags, brand or product labels, ticket prefixes, status words, people, or generic prose.
+Return as BLACKLIST every candidate that names packaging rather than subject, or that resolves to nothing in the index. Return as WHITELIST the terms that name the capability or code under discussion.
+
+THE STATEMENTS THE GUARD WILL CHECK:
+1. [GO, UP, MX] Live Preview of Content in CMS
+2. AS a Content Author, I WANT to preview draft entries in CMS, SO THAT I can see how content will be shown on the website. This requires integrating Contentstack's Live Preview SDK for a Next.js CSR (Pages Router) application: adding a live_preview config block (enable, host) to the Stack initialization in src/services/contentstack.ts, installing and initializing @contentstack/live-preview-utils on the client side in src/pages/_app.tsx, wiring the onEntryChange callback to trigger a re-render through the existing ContentstackContext/useContent pipeline (note: per Contentstack documentation, onEntryChange takes no arguments — the re-render relies on the SDK's internal state update, not a callback parameter), and documenting the live_preview.enable and live_preview.host environment variables in .env.local.sample. Custom preview URL patterns are configured in the Contentstack dashboard (Settings > Stack > Live Preview), not via application environment variables. Limitation: Protected pages may not be previewable because the authentication gate cannot be bypassed by preview parameters.
+
+DECLARED MANIFEST (the files this story says it will touch):
+- (none declared)
+
+CODE EVIDENCE (real findings from this repository — ground truth; derive from these, not from your own knowledge of any library):
+- (none available)
+
+STORY CONTEXT:
+Title: [GO, UP, MX] Live Preview of Content in CMS
+Description: AS a Content Author, I WANT to preview draft entries in CMS, SO THAT I can see how content will be shown on the website. This requires integrating Contentstack's Live Preview SDK for a Next.js CSR (Pages Router) application: adding a live_preview config block (enable, host) to the Stack initialization in src/services/contentstack.ts, installing and initializing @contentstack/live-preview-utils on the client side in src/pages/_app.tsx, wiring the onEntryChange callback to trigger a re-render through the existing ContentstackContext/useContent pipeline (note: per Contentstack documentation, onEntryChange takes no arguments — the re-render relies on the SDK's internal state update, not a callback parameter), and documenting the live_preview.enable and live_preview.host environment variables in .env.local.sample. Custom preview URL patterns are configured in the Contentstack dashboard (Settings > Stack > Live Preview), not via application environment variables. Limitation: Protected pages may not be previewable because the authentication gate cannot be bypassed by preview parameters.
+
+VERIFY BEFORE YOU ANSWER — you have a real index of this repository.
+
+  PROJECT_ROOT="/home/bradleyjerome/projects/metrolinx/next.gotransit.com" bash "/home/bradleyjerome/projects/ai/epam-cli/orchestrations/scripts/codegraph-agent-query.sh" query <SymbolName>
+  PROJECT_ROOT="/home/bradleyjerome/projects/metrolinx/next.gotransit.com" bash "/home/bradleyjerome/projects/ai/epam-cli/orchestrations/scripts/codegraph-agent-query.sh" explore <terms>
+
+Run it via Bash. A candidate term that resolves to NOTHING in this index is noise and
+belongs in the blacklist, however unusual the word looks. Do not assert that a term is
+meaningful — check it.
+
+WHY THIS MATTERS HERE: the list you return feeds a BM25/IDF ranker. That ranker DEMOTES
+terms which are common in the corpus and AMPLIFIES terms which are rare. So a rare,
+meaningless token — a bracketed brand tag, a ticket label, a person's name — is not
+diluted, it is promoted to a top discriminator and drags the search away from the real
+code. Rare-and-meaningless is the failure mode you exist to prevent; do not mistake
+rarity for signal.
+
+
+# Output
+[
+  {
+    "file": "src/services/contentstack.ts",
+    "function": "Stack",
+    "reason": "Setup site — the Contentstack Stack is created here with live_preview config, and ContentstackLivePreview.init is already called. The SDK is initialized and the live_preview block is already conditionally added to options. This is the foundation the rest of the wiring depends on.",
+    "brokenLine": "",
+    "fix": "No edit required. The file already: imports ContentstackLivePreview (line 3), reads CONTENTSTACK_LIVE_PREVIEW/CONTENTSTACK_LIVE_PREVIEW_TOKEN/CONTENTSTACK_PREVIEW_HOST env vars (lines 24-26), conditionally adds options.live_preview (lines 54-60), calls ContentstackLivePreview.init({ stack: Stack, ssr: false }) on lines 68-72, and passes live_preview param through query functions. The implementer must REUSE the already-initialized Stack export and the already-imported ContentstackLivePreview.",
+    "helper": "Stack",
+    "changeRequired": false,
+    "requiredPackages": []
+  },
+  {
+    "file": "src/context/ContentstackContext.tsx",
+    "function": "ContentstackProvider",
+    "reason": "Carrier — the provider already declares an onEntryChange prop and a useEffect to register it, but the current signature onEntryChange?: (callback: (entry: IContentstackContent) => void) => void (line 38) does not match the SDK's ContentstackLivePreview.onEntryChange which takes a no-argument callback. The useEffect on lines 62-71 also assumes the callback receives updated entry data, which the SDK does not provide. This must be corrected so the provider accepts and wires the SDK's () => void callback pattern, triggering a re-render that relies on the SDK's internal state update rather than a callback parameter.",
+    "brokenLine": "onEntryChange?: (callback: (entry: IContentstackContent) => void) => void;",
+    "fix": "Change IContentStackProviderProps.onEntryChange type from (callback: (entry: IContentstackContent) => void) => void to () => void to match the SDK's ContentstackLivePreview.onEntryChange signature. Update the useEffect on lines 62-71: instead of calling onEntryChange(cb) with a callback that receives updated data, call onEntryChange() directly (the SDK registers its own internal callback). Inside the useEffect, after onEntryChange() is called, use a state counter or toggle to force re-render so components re-reading from context get fresh data. Remove the content dependency from the useEffect deps array to avoid re-registration loops.",
+    "helper": "ContentstackProvider",
+    "changeRequired": true,
+    "requiredPackages": []
+  },
+  {
+    "file": "src/pages/_app.tsx",
+    "function": "MyApp",
+    "reason": "Wiring site — this is where ContentstackProvider is rendered (line 74) but onEntryChange is NOT passed as a prop. The SDK's ContentstackLivePreview.onEntryChange callback must be wired here and passed to ContentstackProvider so that entry changes in the CMS trigger a re-render through the context pipeline.",
+    "brokenLine": "<ContentstackProvider defaultContent={content}>",
+    "fix": "Import ContentstackLivePreview from '@contentstack/live-preview-utils' at the top of _app.tsx. Pass onEntryChange={ContentstackLivePreview.onEntryChange} as a prop to ContentstackProvider on line 74, changing it to <ContentstackProvider defaultContent={content} onEntryChange={ContentstackLivePreview.onEntryChange}>. This wires the SDK's callback to the context's re-render mechanism.",
+    "helper": "ContentstackLivePreview",
+    "changeRequired": true,
+    "requiredPackages": ["@contentstack/live-preview-utils"]
+  },
+  {
+    "file": ".env.local.sample",
+    "function": "",
+    "reason": "Documentation site — the live preview environment variables (CONTENTSTACK_LIVE_PREVIEW, CONTENTSTACK_LIVE_PREVIEW_TOKEN, CONTENTSTACK_PREVIEW_HOST) are already read in src/services/contentstack.ts lines 24-26 but are NOT documented in .env.local.sample. Content authors and developers need these documented to enable and configure live preview.",
+    "brokenLine": "",
+    "fix": "Add the following three entries under the existing Contentstack section in .env.local.sample (after the CONTENTSTACK_FETCH_TIMEOUT line): CONTENTSTACK_LIVE_PREVIEW=\"\" (enable flag, set to \"true\" to activate), CONTENTSTACK_LIVE_PREVIEW_TOKEN=\"\" (management/preview token from Contentstack stack settings), CONTENTSTACK_PREVIEW_HOST=\"\" (preview host, e.g. https://api.contentstack.io for NA or https://eu-api.contentstack.com for EU). Follow the existing CONTENTSTACK_ prefix naming convention.",
+    "helper": "",
+    "changeRequired": true,
+    "requiredPackages": []
+  },
+  {
+    "file": "src/hooks/useContent.ts",
+    "function": "useContent",
+    "reason": "Consumer — this hook purely reads content from ContentstackContext via useContentstackContext (line 6) and provides getContentByKey. It has no own data-fetching logic. Once ContentstackProvider correctly triggers re-renders on entry change, this hook and all 18+ callers of useContentstackContext will automatically receive updated content without any changes to this file.",
+    "brokenLine": "",
+    "fix": "No edit required. The hook purely consumes context. It will automatically benefit from the ContentstackProvider re-render wiring once onEntryChange is correctly connected in _app.tsx and the context signature is fixed.",
+    "helper": "useContentstackContext",
+    "changeRequired": false,
+    "requiredPackages": []
+  }
+]

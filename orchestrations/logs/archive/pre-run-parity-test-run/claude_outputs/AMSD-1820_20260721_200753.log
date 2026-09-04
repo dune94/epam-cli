@@ -1,0 +1,259 @@
+=== Prompt for AMSD-1820 (attempt 1) ===
+CRITICAL — WRITE FILES FIRST. Your FIRST tool call MUST be WriteFile.
+Do NOT output any text before calling WriteFile. Do NOT plan or say "I will...".
+Call WriteFile NOW for the EXACT ABSOLUTE PATHS listed below:
+
+
+---
+
+Implement user story AMSD-1820: [Mozio] - The Promo code amount is NOT displayed as expected for Return trip tickets in the Mozio email confirmation
+
+## Story Description
+[Mozio] - The Promo code amount is NOT displayed as expected for Return trip tickets in the Mozio email confirmation. The promo code discount should be independently calculated and correctly displayed for both the outbound and return legs of a return-trip order in the Mozio email confirmation, including edge cases for missing promo codes, differing base fares, multiple line items, calculation failures, and non-English locales.
+
+## Acceptance Criteria
+- When a return-trip order with a promo code is confirmed, the Mozio email confirmation renders a promo code discount line item for BOTH the outbound leg and the return leg, each showing the correct discount amount for its respective trip.
+- Given a return-trip order where the correct promo code discount for the return leg differs from the outbound leg's discount, the email confirmation displays distinct discount amounts for each leg — the return leg discount is not a duplicate of the outbound leg discount.
+- The return-trip promo code discount line item appears in the same format, position, and styling as the outbound discount line item within the email confirmation template, ensuring visual consistency across both legs.
+- When no promo code is applied to the order, the email confirmation either shows a zero-value discount line for the return trip or omits the line entirely, and the template renders without errors in either case.
+- When the outbound and return trips have different base fares, the promo code discount for each leg is allocated per business rules (e.g., proportional or per-leg rule), and the email displays the correctly allocated discount amount for each leg.
+- When the return trip contains multiple line items (e.g., multiple passengers or ticket types), the email confirmation displays a single aggregated promo code discount amount for the return portion that equals the sum of per-line-item discounts.
+- If promo code discount calculation for the return trip fails due to missing or malformed trip metadata in the order payload, the system logs a warning, still sends the email with the outbound discount displayed, and the return trip discount line is either omitted entirely or displays a safe default value (e.g., zero or 'N/A'), with no partial, corrupted, or placeholder content rendered.
+- When the order locale is set to a non-English language, the return-trip promo code discount amount is displayed with appropriate localized currency symbols and number formatting, matching the locale formatting used for the outbound discount line.
+- When a one-way trip order with a promo code is confirmed, the email confirmation still renders the promo code discount line item correctly for the single leg, confirming the return-trip fix does not regress one-way trip behavior.
+- When a promo code is applied to a return-trip order but results in a zero-value discount for the return leg (e.g., minimum fare threshold not met), the email confirmation renders without errors and the return trip discount line either shows zero or is omitted, consistent with the no-promo-code behavior.
+- When a promo code discount equals or exceeds the return trip base fare, the email confirmation displays the discount amount capped at the base fare (or per applicable business rules) and does not render a negative remaining fare for the return leg.
+
+
+
+
+
+## Technical Notes
+None specified
+
+## Files to Create/Modify (EXACT ABSOLUTE PATHS — write to these paths exactly)
+
+
+## Dependencies
+None
+
+
+
+## Instructions
+**CRITICAL — WRITE FILES FIRST:**
+
+**You MUST write every file listed above to its EXACT absolute path. Do NOT write to a different path, do NOT write to the current directory unless it matches the path above. Use your WriteFile or Edit tools with the full absolute path shown.**
+
+1. Write each required file to its exact absolute path listed above — do this FIRST before anything else
+2. Implement all acceptance criteria for this story
+3. Follow the project's existing code patterns and conventions
+4. Do NOT create tests unless explicitly required in acceptance criteria
+
+After implementation, provide a brief summary of what was created/modified.
+
+## Relevant Knowledge Base Entries
+The following was learned from previous story implementations and is relevant to your agent role. Apply this knowledge before writing any code:
+
+- [2026-07-06T17:45:30Z] Always resolve mocked fetch calls to a Response-shaped object with ok, status, statusText, and a json method returning a Promise.
+- [2026-07-06T17:50:20Z] Use valid module and moduleResolution pairs in tsconfig.json: CommonJS with Node, Node16 with Node16, ESNext with Bundler. Use CommonJS and Node for the stack. Mismatched pairs cause build errors.
+- [2026-07-06T18:11:26Z] Use vi.fn().mockResolvedValue(value) to make a mock return a resolved Promise.
+- [2026-07-06T20:31:11Z] Use `test: { passWithNoTests: true }` in vitest.config.ts or create a stub test file when no *.test.ts files exist.
+- [2026-07-06T20:33:03Z] Enable globals:true in vitest.config.ts so describe, it, and expect work without imports, reducing boilerplate in test files.
+- [2026-07-06T23:47:34Z] Use CommonJS-compatible patterns in src/server.ts: avoid `import.meta.url` and top-level `await`; gate listen with `if (require.main === module)`.
+- [2026-07-07T02:35:30Z] Always include a non-test source file in src/ alongside any src/*.test.ts file, since tsconfig.json excludes test files from tsc --noEmit.
+- [2026-07-07T19:01:34Z] Only modify or create files explicitly listed in the story's acceptance criteria. Do not touch files belonging to other stories or outside the current task scope.
+- [2026-07-07T20:17:57Z] [unreviewed-fallback] Avoid using deprecated TypeScript compiler options like 'moduleResolution=node10'; use 'moduleResolution=node' instead.
+- [2026-07-17T20:20:58Z] Always: Before importing a module or referencing a type/property, always read the actual source file to verify the export exists, its exact path, its properties, and its constructor/factory signatures
+
+## Knowledge Base Contribution (do this LAST — after writing all implementation files)
+Your assigned KB entry ID for this run: **KB-012**
+
+IMPORTANT: Write ALL implementation files first. Only AFTER writing every required file should you optionally append a KB entry.
+Do NOT read orchestrations/agents/KB.md before writing implementation files. The relevant KB entries are already injected above.
+
+If (and only if) you discover a non-obvious pattern during implementation, append one entry to `orchestrations/agents/KB.md`:
+
+```markdown
+## KB-012 -- 2026-07-21
+
+**Category:** <backend|frontend|infrastructure|testing|orchestration>
+**AgentRole:** <your agentRole from the story>
+**Tags:** <comma-separated tech keywords, e.g. typescript, node, cli>
+**Trigger:** <retry|first-success>
+**StoryRef:** AMSD-1820
+
+<One concise paragraph: the specific pattern, gotcha, or anti-pattern.>
+```
+
+Only write an entry if the knowledge is genuinely non-obvious. Skip trivial observations.
+
+## Execution Plan
+Follow this plan step by step:
+1. Search the codebase for the Mozio email confirmation template and its associated data-building logic (e.g., grep for "Mozio", "promo", "discount", "return trip", "confirmation email") to identify the exact template file and the service/builder class that populates it.
+2. Locate the unit and/or integration tests covering the Mozio email confirmation rendering, especially any existing tests for promo code discount display on one-way trips.
+3. Inspect the order payload model and the promo code discount calculation logic to determine how discounts are currently computed and whether return-leg discounts are sourced from the payload or derived from the outbound leg.
+4. Fix the data builder/service so that, for return-trip orders, the promo code discount is calculated and surfaced independently for the outbound leg and the return leg, including aggregation across multiple return line items and capping at the return base fare per business rules.
+5. Update the email template to render a promo code discount line item for the return leg in the same format, position, and styling as the outbound leg, ensuring it handles zero-value, omitted, and "N/A" fallback cases without rendering errors.
+6. Add error handling in the builder/service so that missing or malformed return-trip metadata logs a warning, omits or safely defaults the return discount line, and still sends the email with the outbound discount intact.
+7. Ensure locale-aware currency and number formatting is applied to the return-leg discount amount using the same localization path as the outbound leg.
+8. Add or extend tests to cover: return trip with distinct per-leg discounts, return trip with multiple line items aggregated, no promo code, zero-value return discount, discount exceeding base fare, missing/malformed metadata, non-English locale, and one-way trip regression.
+9. Run the full test suite for the affected module and verify all new and existing tests pass.
+=== End Prompt ===
+
+=== epam Output (attempt 1) ===
+This is a backend system. The story mentions "Mozio email confirmation" but this is more about the email data sent to the customer. Let me look at the Mozio event handlers and order structures.
+  [tc-writer] No test stories need TCs in phase 'unknown' — skipping
+
+=== tsc --noEmit failed (exit 1) ===
+node:internal/modules/cjs/loader:1210
+  throw err;
+  ^
+
+Error: Cannot find module '/home/bradleyjerome/projects/metrolinx/azure.commerce.cdts/node_modules/.bin/tsc'
+    at Module._resolveFilename (node:internal/modules/cjs/loader:1207:15)
+    at Module._load (node:internal/modules/cjs/loader:1038:27)
+    at Function.executeUserEntryPoint [as runMain] (node:internal/modules/run_main:164:12)
+    at node:internal/main/run_main_module:28:49 {
+  code: 'MODULE_NOT_FOUND',
+  requireStack: []
+}
+
+Node.js v20.20.2
+This is a backend system. The story mentions "Mozio email confirmation" but this is more about the email data sent to the customer. Let me look at the Mozio event handlers and order structures.
+
+=== epam exited with code 1 ===
+=== Prompt for AMSD-1820 (attempt 2) ===
+CRITICAL — WRITE FILES FIRST. Your FIRST tool call MUST be WriteFile.
+Do NOT output any text before calling WriteFile. Do NOT plan or say "I will...".
+Call WriteFile NOW for the EXACT ABSOLUTE PATHS listed below:
+
+
+---
+
+Implement user story AMSD-1820: [Mozio] - The Promo code amount is NOT displayed as expected for Return trip tickets in the Mozio email confirmation
+
+## Story Description
+[Mozio] - The Promo code amount is NOT displayed as expected for Return trip tickets in the Mozio email confirmation. The promo code discount should be independently calculated and correctly displayed for both the outbound and return legs of a return-trip order in the Mozio email confirmation, including edge cases for missing promo codes, differing base fares, multiple line items, calculation failures, and non-English locales.
+
+## Acceptance Criteria
+- When a return-trip order with a promo code is confirmed, the Mozio email confirmation renders a promo code discount line item for BOTH the outbound leg and the return leg, each showing the correct discount amount for its respective trip.
+- Given a return-trip order where the correct promo code discount for the return leg differs from the outbound leg's discount, the email confirmation displays distinct discount amounts for each leg — the return leg discount is not a duplicate of the outbound leg discount.
+- The return-trip promo code discount line item appears in the same format, position, and styling as the outbound discount line item within the email confirmation template, ensuring visual consistency across both legs.
+- When no promo code is applied to the order, the email confirmation either shows a zero-value discount line for the return trip or omits the line entirely, and the template renders without errors in either case.
+- When the outbound and return trips have different base fares, the promo code discount for each leg is allocated per business rules (e.g., proportional or per-leg rule), and the email displays the correctly allocated discount amount for each leg.
+- When the return trip contains multiple line items (e.g., multiple passengers or ticket types), the email confirmation displays a single aggregated promo code discount amount for the return portion that equals the sum of per-line-item discounts.
+- If promo code discount calculation for the return trip fails due to missing or malformed trip metadata in the order payload, the system logs a warning, still sends the email with the outbound discount displayed, and the return trip discount line is either omitted entirely or displays a safe default value (e.g., zero or 'N/A'), with no partial, corrupted, or placeholder content rendered.
+- When the order locale is set to a non-English language, the return-trip promo code discount amount is displayed with appropriate localized currency symbols and number formatting, matching the locale formatting used for the outbound discount line.
+- When a one-way trip order with a promo code is confirmed, the email confirmation still renders the promo code discount line item correctly for the single leg, confirming the return-trip fix does not regress one-way trip behavior.
+- When a promo code is applied to a return-trip order but results in a zero-value discount for the return leg (e.g., minimum fare threshold not met), the email confirmation renders without errors and the return trip discount line either shows zero or is omitted, consistent with the no-promo-code behavior.
+- When a promo code discount equals or exceeds the return trip base fare, the email confirmation displays the discount amount capped at the base fare (or per applicable business rules) and does not render a negative remaining fare for the return leg.
+
+
+
+
+
+## Technical Notes
+None specified
+
+## Files to Create/Modify (EXACT ABSOLUTE PATHS — write to these paths exactly)
+
+
+## Dependencies
+None
+
+
+
+## Instructions
+**CRITICAL — WRITE FILES FIRST:**
+
+**You MUST write every file listed above to its EXACT absolute path. Do NOT write to a different path, do NOT write to the current directory unless it matches the path above. Use your WriteFile or Edit tools with the full absolute path shown.**
+
+1. Write each required file to its exact absolute path listed above — do this FIRST before anything else
+2. Implement all acceptance criteria for this story
+3. Follow the project's existing code patterns and conventions
+4. Do NOT create tests unless explicitly required in acceptance criteria
+
+After implementation, provide a brief summary of what was created/modified.
+
+## Verification Failure
+
+The orchestrator ran `tsc --noEmit` after your files were written and it failed (exit code 1). Fix the type errors so tsc exits 0.
+
+```
+node:internal/modules/cjs/loader:1210
+  throw err;
+  ^
+
+Error: Cannot find module '/home/bradleyjerome/projects/metrolinx/azure.commerce.cdts/node_modules/.bin/tsc'
+    at Module._resolveFilename (node:internal/modules/cjs/loader:1207:15)
+    at Module._load (node:internal/modules/cjs/loader:1038:27)
+    at Function.executeUserEntryPoint [as runMain] (node:internal/modules/run_main:164:12)
+    at node:internal/main/run_main_module:28:49 {
+  code: 'MODULE_NOT_FOUND',
+  requireStack: []
+}
+
+Node.js v20.20.2
+```
+
+## Relevant Knowledge Base Entries
+The following was learned from previous story implementations and is relevant to your agent role. Apply this knowledge before writing any code:
+
+- [2026-07-06T17:45:30Z] Always resolve mocked fetch calls to a Response-shaped object with ok, status, statusText, and a json method returning a Promise.
+- [2026-07-06T17:50:20Z] Use valid module and moduleResolution pairs in tsconfig.json: CommonJS with Node, Node16 with Node16, ESNext with Bundler. Use CommonJS and Node for the stack. Mismatched pairs cause build errors.
+- [2026-07-06T18:11:26Z] Use vi.fn().mockResolvedValue(value) to make a mock return a resolved Promise.
+- [2026-07-06T20:31:11Z] Use `test: { passWithNoTests: true }` in vitest.config.ts or create a stub test file when no *.test.ts files exist.
+- [2026-07-06T20:33:03Z] Enable globals:true in vitest.config.ts so describe, it, and expect work without imports, reducing boilerplate in test files.
+- [2026-07-06T23:47:34Z] Use CommonJS-compatible patterns in src/server.ts: avoid `import.meta.url` and top-level `await`; gate listen with `if (require.main === module)`.
+- [2026-07-07T02:35:30Z] Always include a non-test source file in src/ alongside any src/*.test.ts file, since tsconfig.json excludes test files from tsc --noEmit.
+- [2026-07-07T19:01:34Z] Only modify or create files explicitly listed in the story's acceptance criteria. Do not touch files belonging to other stories or outside the current task scope.
+- [2026-07-07T20:17:57Z] [unreviewed-fallback] Avoid using deprecated TypeScript compiler options like 'moduleResolution=node10'; use 'moduleResolution=node' instead.
+- [2026-07-17T20:20:58Z] Always: Before importing a module or referencing a type/property, always read the actual source file to verify the export exists, its exact path, its properties, and its constructor/factory signatures
+
+## Knowledge Base Contribution (do this LAST — after writing all implementation files)
+Your assigned KB entry ID for this run: **KB-012**
+**This is retry attempt 1** — a previous attempt failed. You MUST write a KB entry documenting what went wrong and what you changed.
+
+IMPORTANT: Write ALL implementation files first. Only AFTER writing every required file should you optionally append a KB entry.
+Do NOT read orchestrations/agents/KB.md before writing implementation files. The relevant KB entries are already injected above.
+
+If (and only if) you discover a non-obvious pattern during implementation, append one entry to `orchestrations/agents/KB.md`:
+
+```markdown
+## KB-012 -- 2026-07-21
+
+**Category:** <backend|frontend|infrastructure|testing|orchestration>
+**AgentRole:** <your agentRole from the story>
+**Tags:** <comma-separated tech keywords, e.g. typescript, node, cli>
+**Trigger:** <retry|first-success>
+**StoryRef:** AMSD-1820
+
+<One concise paragraph: the specific pattern, gotcha, or anti-pattern.>
+```
+
+Only write an entry if the knowledge is genuinely non-obvious. Skip trivial observations.
+
+## Available Dynamic Tools
+This project has the following helper scripts, written by prior self-healing runs. Use them via the bash tool instead of repeating the equivalent steps by hand:
+
+- `bash /home/bradleyjerome/projects/metrolinx/azure.commerce.cdts/.epam/dynamic-tools/ensure-typescript.sh <args>` — Ensures the typescript compiler is installed as a devDependency before running tsc.
+
+## Execution Plan
+Follow this plan step by step:
+1. Search the codebase for the Mozio email confirmation template and its associated data-building logic (e.g., grep for "Mozio", "promo", "discount", "return trip", "confirmation email") to identify the exact template file and the service/builder class that populates it.
+2. Locate the unit and/or integration tests covering the Mozio email confirmation rendering, especially any existing tests for promo code discount display on one-way trips.
+3. Inspect the order payload model and the promo code discount calculation logic to determine how discounts are currently computed and whether return-leg discounts are sourced from the payload or derived from the outbound leg.
+4. Fix the data builder/service so that, for return-trip orders, the promo code discount is calculated and surfaced independently for the outbound leg and the return leg, including aggregation across multiple return line items and capping at the return base fare per business rules.
+5. Update the email template to render a promo code discount line item for the return leg in the same format, position, and styling as the outbound leg, ensuring it handles zero-value, omitted, and "N/A" fallback cases without rendering errors.
+6. Add error handling in the builder/service so that missing or malformed return-trip metadata logs a warning, omits or safely defaults the return discount line, and still sends the email with the outbound discount intact.
+7. Ensure locale-aware currency and number formatting is applied to the return-leg discount amount using the same localization path as the outbound leg.
+8. Add or extend tests to cover: return trip with distinct per-leg discounts, return trip with multiple line items aggregated, no promo code, zero-value return discount, discount exceeding base fare, missing/malformed metadata, non-English locale, and one-way trip regression.
+9. Run the full test suite for the affected module and verify all new and existing tests pass.
+
+## Coordinator Guidance (retry 1)
+The following targeted instruction was identified from the previous failure:
+
+## Self-Heal: Failure Analyst Summary
+Root cause: TypeScript compiler (tsc) not installed in node_modules — tsc --noEmit cannot run.
+=== End Prompt ===
+

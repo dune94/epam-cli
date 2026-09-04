@@ -1,0 +1,136 @@
+=== Prompt for SKY-003 (attempt 1) ===
+Implement user story SKY-003: Implement flight search CLI entry point with formatted table output
+
+## Story Description
+Create `src/cli.ts` — a standalone Node entry point that accepts flight search arguments via `process.argv` and prints results as an aligned table. Parse flags manually (no commander, no yargs, zero new runtime deps). Require `RAPIDAPI_KEY` env var; exit 1 with a human-readable message if absent. Instantiate `SkyscannerClient` from `src/skyscanner-client.ts` (SKY-002), call `searchFlights` forwarding all parsed arguments including adults count, and render results in a dynamically-padded table with columns: Airline | Price | Departure | Arrival | Duration | Stops. Column widths are determined by the widest value in each column (including the header). A separator row of hyphen characters must appear between the header and data rows. Price is right-aligned and prefixed with the currency symbol returned by the API (default £ if absent); all other columns are left-aligned. If no flights are returned print `No flights found.` and exit 0. On any thrown error print the message to stderr and exit 1. Create `src/cli.test.ts` covering argument validation, successful render, empty-result render, missing env var, and error handling using vitest with `SkyscannerClient` mocked at the module boundary. The compiled output must be invokable as `node dist/cli.js ...` after `tsc`; `tsconfig.json` must have `outDir` set to `dist` and emit CommonJS-compatible output.
+
+## Acceptance Criteria
+- `src/cli.ts` exists and `tsc --noEmit` reports zero errors
+- `tsconfig.json` sets `outDir` to `dist` and emits a module format compatible with `node dist/cli.js` invocation (CommonJS or ESM with .mjs extension consistently applied)
+- Flags `--from`, `--to`, and `--date` are all required; if any is absent the CLI prints a usage hint to stderr (showing correct flag names) and exits with code 2
+- The `--date` flag value must match the pattern `YYYY-MM-DD`; a value that does not match this format causes exit code 2 with a human-readable message written to stderr before any network call is made
+- Optional `--adults` flag defaults to 1 when omitted; a non-integer value, a value ≤ 0, or a non-numeric string causes exit code 2 with a human-readable message to stderr
+- The parsed `adults` value is forwarded as an argument to `SkyscannerClient.searchFlights` — the flag is not silently dropped
+- If `RAPIDAPI_KEY` env var is unset or empty, CLI prints 'Error: RAPIDAPI_KEY environment variable is required' to stderr and exits 1 before making any network call
+- When `searchFlights` resolves with one or more results, stdout contains: (a) a header row with columns Airline, Price, Departure, Arrival, Duration, Stops; (b) a separator row of hyphen characters whose width matches each column exactly; (c) one data row per result; all columns padded to the width of the widest value in that column (including the header label)
+- All columns except Price are left-aligned within their padded width; the Price column is right-aligned within its padded width
+- Price column values are prefixed with the currency symbol from the API response; if the API response omits a currency symbol, £ is used as the fallback
+- When `searchFlights` resolves with an empty array, stdout contains exactly the line `No flights found.` and process exits 0
+- When `searchFlights` rejects, the error message is written to stderr and process exits 1; stdout is empty
+- `src/cli.test.ts` contains at least 8 passing vitest tests covering: missing --from, missing --to, missing --date, invalid --adults value, missing RAPIDAPI_KEY env var, table rendered correctly for valid multi-row results (verify separator row present and column alignment), empty-array result renders 'No flights found.', and error path (client throws)
+- `vitest run` exits 0 with all tests green
+- No runtime dependency other than Node built-ins and packages already in `package.json` (from SKY-001/SKY-002) is added
+
+## Technical Notes
+- workingDir: /tmp/skyscanner-app
+- files: ["/tmp/skyscanner-app/src/cli.ts","/tmp/skyscanner-app/src/cli.test.ts"]
+- dependsOn: ["SKY-002"]
+
+## Files to Create/Modify
+/tmp/skyscanner-app/src/cli.ts, /tmp/skyscanner-app/src/cli.test.ts
+
+## Dependencies
+None
+
+## Instructions
+1. Implement all acceptance criteria for this story
+2. Follow the project's existing code patterns and conventions
+3. Create any necessary files in the locations specified
+4. Ensure code compiles/runs without errors
+5. Do NOT create tests unless explicitly required in acceptance criteria
+
+After implementation, provide a brief summary of what was created/modified.
+
+## Relevant Knowledge Base Entries
+No prior KB entries match your agent role yet.
+
+## Knowledge Base Contribution
+Your assigned KB entry ID for this run: **KB-006**
+
+If you discover a non-obvious pattern, gotcha, or anti-pattern during this implementation (or this is a retry), append exactly one entry to `orchestrations/agents/KB.md` using this format:
+
+```markdown
+## KB-006 -- 2026-05-31
+
+**Category:** <backend|frontend|infrastructure|testing|orchestration>
+**AgentRole:** <your agentRole from the story>
+**Tags:** <comma-separated tech keywords, e.g. typescript, node, cli>
+**Trigger:** <retry|first-success>
+**StoryRef:** SKY-003
+
+<One concise paragraph: the specific pattern, gotcha, or anti-pattern. Precise enough that a future Claude instance can apply it without re-discovering it.>
+```
+
+Only write an entry if the knowledge is genuinely non-obvious. Skip trivial observations.
+=== End Prompt ===
+
+=== claude Output (attempt 1) ===
+Perfect! All 30 tests pass (19 CLI tests + 11 skyscanner-client tests). Let me create a summary of what was implemented:
+
+## Summary
+
+I've successfully implemented SKY-002 and SKY-003:
+
+### SKY-002: Typed Skyscanner API Client
+**File:** `src/skyscanner-client.ts` + `src/skyscanner-client.test.ts`
+
+- Created `SkyscannerClient` class that:
+  - Accepts `RAPIDAPI_KEY` via constructor or environment variable
+  - Implements `searchFlights()` method accepting origin, destination, date, and optional adults count
+  - Parses Skyscanner API responses into typed `FlightResult` objects
+  - Formats departure/arrival times and flight durations
+  - Forwards all parameters including `adults` to the API
+  - Uses fallback '£' currency when API omits currency symbol
+  - Throws descriptive errors on API failures
+
+- Created comprehensive test suite with 11 tests covering:
+  - Constructor validation and env var handling
+  - Flight result parsing from API responses
+  - Parameter forwarding (including adults)
+  - Empty result handling
+  - Fallback currency symbol
+  - API error handling
+  - Multiple flight results
+
+### SKY-003: Flight Search CLI Entry Point
+**File:** `src/cli.ts` + `src/cli.test.ts`
+
+- Implemented manual argument parsing (no external CLI libs) supporting:
+  - Required flags: `--from`, `--to`, `--date` (exits 2 if missing)
+  - Optional flag: `--adults` (defaults to 1)
+  - `--date` format validation (YYYY-MM-DD, exits 2 on invalid format)
+  - `--adults` validation (must be positive integer, exits 2 on invalid)
+
+- Implemented dynamic table rendering:
+  - Column width calculated from widest value in each column (including header)
+  - Separator row with hyphens matching column widths
+  - Left-aligned columns (Airline, Departure, Arrival, Duration, Stops)
+  - Right-aligned Price column with currency symbol prefix and 2 decimal places
+  - Fallback to '£' if API omits currency symbol
+  - Prints "No flights found." for empty results (exits 0)
+
+- Error handling:
+  - Exits 1 if `RAPIDAPI_KEY` env var missing/empty with descriptive message
+  - Exits 1 on any API errors, printing message to stderr
+  - Usage hints to stderr for missing required flags (exits 2)
+
+- Created comprehensive test suite with 19 tests covering:
+  - All argument parsing scenarios (missing flags, invalid formats, invalid values)
+  - Table rendering with correct alignment and formatting
+  - Separator row generation
+  - Column padding calculations
+  - Price formatting with currency symbols
+  - Empty result handling
+  - Fallback currency symbol behavior
+
+### Technical Details
+- **TypeScript Configuration:** `tsconfig.json` properly configured with:
+  - `outDir: "dist"` 
+  - `module: "CommonJS"` for Node.js invocation
+  - Strict type checking enabled
+- **Build Output:** `node dist/cli.js` works correctly with CommonJS format
+- **All Tests Pass:** 30 tests passing (19 CLI + 11 skyscanner-client)
+- **Zero Compilation Errors:** `tsc --noEmit` reports no errors
+- **No New Dependencies:** Uses only Node.js built-ins and existing packages
+
+=== End claude Output ===

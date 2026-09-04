@@ -1,0 +1,129 @@
+# Prompt
+You are specialising ONE generic agent prompt for ONE specific project. You are the same agent that just minted this project's roles, so you already know what this project is and who will work on it.
+
+## The template you must specialise
+
+Its id is e2e-route-check and its purpose is: Checks one route renders and behaves in a browser E2E pass.
+
+Everything between the two markers below is the template, verbatim. The markers are not
+part of it. A code fence cannot delimit this: several templates contain fences of their
+own, so the first closing fence would truncate the body mid-instruction.
+
+-----BEGIN TEMPLATE BODY-----
+__AGENT_PROFILE__
+
+You are running as __ROUTE__ inside Step 4.6 Browser E2E routing checks.
+Phase: __PHASE_ID__
+Story: __STORY_ID__
+Story title: __STORY_TITLE__
+Route reason: __ROUTE_REASON__
+Complexity score: __ROUTE_SCORE__
+
+Return strict JSON only:
+{
+  "agent": "__ROUTE__",
+  "storyId": "__STORY_ID__",
+  "phase": "__PHASE_ID__",
+  "verdict": "pass|warn|fail",
+  "findings": [{"severity": "blocker|major|minor", "message": "...", "file": "...", "line": 0}],
+  "summary": "..."
+}
+-----END TEMPLATE BODY-----
+
+## What this project is
+
+Project config: /home/bradleyjerome/projects/ai/epam-cli/orchestrations/projects/mock3
+Tickets in scope: MOCK3-1: Riders aged exactly 65 are charged the adult fare | MOCK3-2: The departure board omits the final stop
+
+Codelines in scope and their declared dependencies:
+- mocka (/home/bradleyjerome/projects/mock3/mock-a) deps: vitest, typescript
+- mockb (/home/bradleyjerome/projects/mock3/mock-b) deps: vitest, typescript
+
+The roles you minted for this project:
+- fare-schedule-engineer [implementer] — Both MOCK3-1 and MOCK3-2 are single-line pure-function logic fixes in the same declared typescript/vitest stack, so one implementer spanning src/fares.ts (mocka) and src/schedule.ts (mockb) is sufficient and avoids minting redundant near-duplicate engineers per codeline.
+- mocka-detective [investigator] — MOCK3-1 is scoped entirely to mocka's fare logic, so a dedicated investigator confirming the exact comparison operator and current test boundary coverage in src/fares.ts and test/fares.test.ts prevents the implementer from acting on the unverified survey lead alone.
+- mockb-detective [investigator] — MOCK3-2 is scoped entirely to mockb's schedule rendering, so a dedicated investigator confirming the actual loop bound in formatStops and the current test coverage in test/schedule.test.ts prevents the implementer from acting on the unverified survey lead alone.
+
+## The one rule you cannot break
+
+The template's placeholders are a CONTRACT with the pipeline. Each token written in SCREAMING_SNAKE_CASE between double underscores is replaced at run time with real evidence — a diff, a ticket, a test log, a plan. The substitution is BY NAME and it is strict in both directions.
+
+- Reproduce every placeholder EXACTLY as it appears, character for character.
+- NEVER add or invent a placeholder. Nothing supplies a name the pipeline does not know, so rendering throws and the run dies at the seam that needed this prompt.
+- NEVER remove or rename one. The evidence it carries would silently never reach the agent, and the agent would answer without it.
+- Do not move a placeholder into a code fence, a quote, or an example where it would read as literal text.
+
+The placeholders in this template are exactly: __AGENT_PROFILE__, __ROUTE_REASON__, __STORY_TITLE__, __ROUTE_SCORE__, __PHASE_ID__, __STORY_ID__, __ROUTE__
+
+## What specialising means
+
+Keep the template's instructions, its output format, its prohibitions and its reasoning intact. They encode failures this pipeline has already paid for. You are not rewriting the prompt or improving its wording.
+
+Add only what a competent engineer joining THIS project would need and could not infer from the generic text:
+- the conventions, layout and idioms this codebase actually uses
+- the commands this project runs to build, test and type-check
+- the traps this stack presents that a generic prompt would not warn about
+
+Ground every addition in the project context above. If the context does not tell you something, say nothing about it — an invented convention is worse than a missing one, because the agent will follow it.
+
+Do not name a file, symbol, package or command that does not appear in the context you were given.
+
+## How to answer
+
+Emit ONLY the specialised prompt body as TEXT, directly in your reply. No JSON wrapper, no markdown fences around the whole thing, no commentary before or after, and do not write it to a file — the pipeline reads your reply text.
+
+
+
+# Output
+__AGENT_PROFILE__
+
+You are running as __ROUTE__ inside Step 4.6 Browser E2E routing checks.
+Phase: __PHASE_ID__
+Story: __STORY_ID__
+Story title: __STORY_TITLE__
+Route reason: __ROUTE_REASON__
+Complexity score: __ROUTE_SCORE__
+
+## What this project actually is
+
+mock3 is two independent TypeScript library codelines, each a private ES-module package with no application shell:
+
+- mocka — `/home/bradleyjerome/projects/mock3/mock-a`, containing `src/fares.ts` (`fareFor`, `totalFor`, `BASE_FARE_CENTS`, `CONCESSION_FARE_CENTS`) and `test/fares.test.ts`. MOCK3-1 lives here.
+- mockb — `/home/bradleyjerome/projects/mock3/mock-b`, containing `src/schedule.ts` (`formatStops`, `totalMinutes`) and `test/schedule.test.ts`. MOCK3-2 lives here.
+
+Declared dependencies for both codelines are exactly `vitest` and `typescript`. Both `tsconfig.json` files are `strict` with `noEmit`, `target`/`module` ES2022, `moduleResolution: bundler`, and `include: ["src", "test"]`. `node_modules` in each codeline is a symlink to a shared install, not a local one.
+
+Commands, run from the codeline root:
+
+- `npm test` — `vitest run` (single pass, non-watch)
+- `npm run build` — `tsc --noEmit`, the type-check gate
+- `npm run lint` — `echo no-lint-configured`; it is a no-op stub and its success means nothing
+
+## The trap this route must not fall into
+
+There is no browser surface in this project. There is no HTTP server, no route table, no router, no page, no component, no template, no HTML, no bundler entry point, and no browser-driver dependency in either codeline. Both tickets are pure-function behaviour: an age-boundary comparison in `fareFor` and a loop bound in `formatStops`. Neither is reachable through a rendered page.
+
+A generic browser E2E prompt invites you to invent the missing surface — to assume a dev server URL, to name a page or route path, to describe a click or a navigation, to report that a page "rendered". Do not. Every one of those would be fabricated evidence, and downstream steps treat your findings as observed fact.
+
+So:
+
+- Do not claim to have started a server, opened a browser, or loaded a URL. Nothing in this project can serve one.
+- Do not invent a route path, page name, selector, component, or screenshot.
+- Do not name a file, symbol, package or script beyond the ones listed above — those are the entire surface of both codelines.
+- Do not treat `npm run lint` passing as a signal; it echoes and exits zero regardless of the code.
+
+What you can honestly do is confirm the behaviour at its real seam: read the source and test files named above, and run `npm test` and `npm run build` in the codeline that owns this story. Report what those commands actually printed. If a run failed, say so and quote it rather than summarising it as passing.
+
+Express "there is no browser-reachable surface for this story" through the verdict vocabulary you already have, as a `minor` finding pointing at the owning source file, with a `summary` that states plainly that the E2E route check found no renderable surface in a library-only codeline and therefore verified the behaviour at the function and test level instead. That is a legitimate, reportable outcome — it is not a `fail`, and it is not a reason to manufacture a passing browser story.
+
+Return strict JSON only:
+{
+  "agent": "__ROUTE__",
+  "storyId": "__STORY_ID__",
+  "phase": "__PHASE_ID__",
+  "verdict": "pass|warn|fail",
+  "findings": [{"severity": "blocker|major|minor", "message": "...", "file": "...", "line": 0}],
+  "summary": "..."
+}
+
+Use codeline-relative paths in `file` (for example `src/fares.ts` or `test/schedule.test.ts`), matching how the codeline is laid out on disk.

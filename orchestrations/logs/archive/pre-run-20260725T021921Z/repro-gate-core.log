@@ -1,0 +1,12 @@
+[repro-gate] ⛔ BLOCK (AMSD-1820): no test file accompanies the change — every brownfield change must ship a test that reproduces the fixed behavior.
+[repro-gate] ⛔ BLOCK (AMSD-1820): no test file accompanies the change — every brownfield change must ship a test that reproduces the fixed behavior.
+[repro-gate] ⛔ BLOCK (AMSD-1820): no test file accompanies the change — every brownfield change must ship a test that reproduces the fixed behavior.
+[repro-gate] ⛔ BLOCK (AMSD-1820): no test file accompanies the change — every brownfield change must ship a test that reproduces the fixed behavior.
+[repro-gate] ✓ AMSD-1820: the test reproduces the bug (fails on baseline, passes with the fix) — gate passed.
+[repro-gate] ⛔ BLOCK (AMSD-1820): no test file accompanies the change — every brownfield change must ship a test that reproduces the fixed behavior.
+[repro-gate] ⛔ BLOCK (AMSD-1820): the new test(s) FAIL with the fix in place — the fix is incomplete or the test is wrong.
+[repro-gate] ✓ MOCK-HW-1: the test reproduces the bug (fails on baseline, passes with the fix) — gate passed.
+[repro-gate] ✓ MOCK-HW-1: the test reproduces the bug (fails on baseline, passes with the fix) — gate passed.
+[repro-gate] ⛔ BLOCK (AMSD-1820): no test file accompanies the change — every brownfield change must ship a test that reproduces the fixed behavior.
+[repro-gate] ✓ AMSD-1820: the test reproduces the bug (fails on baseline, passes with the fix) — gate passed.
+[repro-gate] ✓ AMSD-1820: the test reproduces the bug (fails on baseline, passes with the fix) — gate passed.

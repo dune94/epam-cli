@@ -1,0 +1,68 @@
+# Prompt
+You are the specification coordinator for the epam-cli orchestration system. Before every phase you read orchestrations/prd.json (implementationOrder and stories), evaluate risk, dependencies, and technical readiness, then assign the correct specification runners: OpenSpec, Speckit, both, or none. You write assignments into each story's specification.assignedAgents field along with coordinatorNotes, target provider/model, and timestamps. You understand the provider policy ledger (configuration.aiRuntime.providerPolicies), token guardrails, and know when to skip stories that were already hand-curated. When you plan a run you emit JSON compliant with spec-mode-runner.js so that automation can apply deltas deterministically. You never invent story IDs or mutate acceptance criteria directly; only delegate to spec agents and record their status.
+
+You are the EPAM CLI specification coordinator reviewing the completed spec outputs for phase core.
+
+Each story was processed by a sequential agent pipeline:
+  1. openspec elaborated requirements (AC refinement, story splits, technical depth)
+  2. speckit reviewed openspec's output (testability, security, edge cases, gap analysis)
+
+For each story, evaluate the quality of the collaborative spec work:
+1. Did both agents add meaningful, non-overlapping value?
+2. Flag any story needing human review.
+
+(Brownfield tickets never split and their acceptance criteria are immutable —
+do not evaluate split quality or AC completeness; there is nothing there for
+either agent to have changed.)
+
+Respond with JSON between <SPEC_REVIEW> and </SPEC_REVIEW> using this schema:
+[
+  {"storyId":"REM-xxx","verdict":"approved|needs_review","reviewNotes":"coordinator observations","qualityScore":0.0-1.0,"flags":[]}
+]
+
+Stories to review:
+[
+  {
+    "id": "MOCK-HW-1",
+    "title": "getGreeting should return hello dolly",
+    "acceptanceCriteria": [],
+    "specification": {
+      "runId": "20260803T234619Z",
+      "assignedAgents": [
+        "openspec"
+      ],
+      "coordinatorNotes": "Trivial hello-world story with self-explanatory description and no acceptance criteria to elaborate or harden. Engineer can implement directly without spec agent involvement.",
+      "status": "completed",
+      "updatedAt": "2026-08-03T23:50:18.631Z",
+      "appliedAgents": [
+        "openspec"
+      ],
+      "agentContributions": [
+        {
+          "agent": "openspec",
+          "applied": true,
+          "notes": "No code block was injected into this prompt, so locationHint is empty per the no-fabrication rule. Classification is defect because the story references an existing function (getGreeting) and asserts it should return a specific value it currently does not.",
+          "acceptanceChanged": false,
+          "splitCount": 0,
+          "timestamp": "2026-08-03T23:50:18.631Z"
+        }
+      ]
+    }
+  }
+]
+
+<SPEC_REVIEW>
+</SPEC_REVIEW>
+
+# Output
+<SPEC_REVIEW>
+[
+  {
+    "storyId": "MOCK-HW-1",
+    "verdict": "approved",
+    "reviewNotes": "Trivial hello-world story with no acceptance criteria to elaborate. Only openspec was assigned, which is appropriate given the coordinator's explicit justification. OpenSpec correctly performed a no-op: no AC changes, no splits, no fabricated code blocks, and accurately classified the story as a defect referencing an existing function. Speckit was not run, which is acceptable for a story of this triviality — there was nothing meaningful for a review agent to harden. Both-agents value-add question is moot; the single agent added no unnecessary content and caused no harm.",
+    "qualityScore": 0.85,
+    "flags": ["speckit_skipped_justified"]
+  }
+]
+</SPEC_REVIEW>

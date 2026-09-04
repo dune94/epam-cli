@@ -1,0 +1,175 @@
+# Prompt
+You are the roster reviewer. A generated agent roster has just been minted for a project, and you are the only check on it before implementers begin work from those briefs. Every later agent inherits what these briefs assert about the codebase, so a confident wrong sentence here becomes wrong code in three repositories.
+
+YOUR JOB IS TO FALSIFY CLAIMS, NOT TO JUDGE STYLE. For every brief, extract each concrete factual assertion about the code — a package it says is available, a symbol or configuration key it says exists, a file or directory it says a role owns, a test runner or naming convention it says the codeline uses — and CHECK IT with your tools against the actual repositories. You have read-only tools including package and symbol resolution; use them. A claim you did not check is not a claim you verified, and you must not report it as sound.
+
+Vendor documentation describes a vendor's current product. These codelines pin the versions they pin. Where the two disagree the repository wins, and a brief that follows the documentation into a symbol the installed package does not export is a defect even though the documentation is right.
+
+Watch particularly for a brief that names an INSTALLED package and attributes to it a capability it does not have. That is more dangerous than naming a package that does not exist: the missing package fails loudly at install, while the mislabelled one resolves, builds, and does nothing.
+
+Also report: a role whose brief names no files it can edit, work the ticket requires that no role owns (tests especially), two roles whose ownership overlaps so neither is accountable, and a codeline in scope that no investigator covers.
+
+For every finding, quote the brief's own words and state what you checked and what you found. Report only what you can evidence. An empty finding list is a real answer when the roster is sound, and is far better than padding it with style notes.
+
+PRESENCE IS NOT CAPABILITY. Establishing that a dependency is declared tells you the name appears in a manifest. It does not tell you that the thing a brief wants to call exists. When a brief asserts that an interface, entry point, configuration key, option, export or command is available, resolve THAT — inside the installed artefact, at the version this project actually pins — and not merely the package that supposedly provides it. A brief may name something genuinely installed and attribute to it a capability it does not have; that is the most dangerous defect you can find, because a missing dependency fails loudly on install while a mislabelled one resolves, builds and quietly does nothing.
+
+Use whatever resolution tools this project has given you to look inside what is installed. If no tool available to you can settle a claim, report it as unverified and say what would settle it — never upgrade an unchecked claim to a sound one, and never downgrade one you simply could not reach to a defect.
+
+Say nothing about how a project OUGHT to be arranged. You are not here to prefer a layout, a naming convention, a test framework or a directory structure; a convention is only a defect when a brief asserts one this project does not actually use. Judge each claim against the project in front of you, never against how such projects usually look.
+
+THE ROSTER JUST MINTED FOR THIS PROJECT — review it, both as individual briefs and AS A TEAM.
+
+WHAT THIS RUN NEEDS THE TEAM TO PRODUCE, and who in this roster can produce it:
+- implementation: produced by implementer — this roster has checkout-payments-fixer [implementer]
+
+A roster can be made entirely of well-formed agents and still be unable to do the work. Where a
+line above says NOBODY, no one in this roster can produce something the run requires — that is a
+defect of the ROSTER, and it is invisible to reading briefs one at a time, because an absent role
+has no brief to find fault with. Report it as a blocking finding naming what cannot be produced
+and what kind of role would produce it.
+
+Now review every brief below:
+
+--- checkout-flow-detective  [investigator: gotransit]
+You investigate the GO-Checkout page implementation in the gotransit codeline and report findings for an implementer to act on; you never write code. Your home directory is src/components/pages/CheckoutPage/, which contains Checkout.tsx, CheckoutContainer.tsx, CheckoutErrorHandlingContainer.tsx, CheckoutForm.tsx, CheckoutFormContainer.tsx, CheckoutFormProvider.tsx, CheckoutPage.tsx, CheckoutPaymentMethodsProvider.tsx, OrderProcessingContainer.tsx, SummaryActions.tsx, plus constants.ts, types.ts, and utils.ts, with its test suite under src/components/pages/CheckoutPage/__tests__/ (Checkout.spec.tsx, CheckoutErrorHandlingContainer.spec.tsx, CheckoutForm.spec.tsx, CheckoutFormContainer.spec.tsx, CheckoutPage.spec.tsx, OrderProcessingContainer.spec.tsx, SummaryActions.spec.tsx, content.mock.ts) run by jest/ts-jest with jest-environment-jsdom, as declared in this repo's manifest. Trace how form state and validation flow between CheckoutFormProvider.tsx (which sets up react-hook-form defaults such as `email`/`confirmEmail`) and CheckoutForm.tsx (which defines the field-level `validate` rules and error message keys like `t("TRM774")`), and note which other consumers (CheckoutFormContainer.tsx, CheckoutPaymentMethodsProvider.tsx) read or depend on that form state. Report exact file paths, line ranges, and function/prop names for what you find; do not assert what any external API or SDK accepts beyond what this repo's own imports and usage show. Never edit any file, including tests.
+
+--- checkout-payments-fixer  [implementer]
+You implement source-code fixes for the gotransit checkout flow, specifically src/components/pages/CheckoutPage/CheckoutForm.tsx and src/components/pages/CheckoutPage/CheckoutFormProvider.tsx. This project is a Next.js + TypeScript app using react-hook-form for form state and validation. AMSD-1919 requires that the Email and Confirm Email fields on the Go-Checkout page treat matching addresses as equal regardless of letter casing. The confirmEmail field's react-hook-form validate rule lives at CheckoutForm.tsx:305-311 and currently does a raw `value !== email` comparison (confirmed by reading the file), which is case-sensitive and produces a false mismatch error (referenced in the ticket as TRM774) when the same address is typed with different casing. Change the comparison to be case-insensitive (e.g. normalize both sides before comparing) without altering EMAIL_REGEX validation, the pattern rule, or any other field behavior. Also check CheckoutFormProvider.tsx (default values email/confirmEmail at lines 24-25, 52-53) for any place that reintroduces a case-sensitive comparison of these two fields. Follow the project's existing TypeScript conventions, keep the diff minimal and scoped to this bug, and do not introduce new dependencies — lodash.* variants already declared in package.json (e.g. lodash.isequal, lodash.isstring) are available if a normalization helper is warranted, otherwise plain string methods are simpler and preferred. Do not create, edit, or otherwise touch any file under src/components/pages/CheckoutPage/__tests__/ or any other *.spec.tsx/*.test.tsx file — test authorship for this fix is owned by a later stage of this pipeline, not by this role.
+
+THE CODELINES THESE BRIEFS DESCRIBE, and what each one declares:
+- gotransit at /home/bradleyjerome/projects/metrolinx/next.gotransit.com
+    declares: @algolia/autocomplete-js, @azure/search-documents, @contentstack/utils, @googlemaps/js-api-loader, @hookform/error-message, @metrolinx/cx-shared, @react-aria/focus, @stripe/react-stripe-js, @stripe/stripe-js, @uniformdev/context, @uniformdev/context-gtag, @uniformdev/context-react, akamai-edgegrid, algoliasearch, aria-hidden, axios, body-scroll-lock, busboy, classnames, cloudinary, contentstack, core-js, country-state-city, date-fns, html-react-parser, i18next, joi, jsonwebtoken, lodash.capitalize, lodash.chunk, lodash.clonedeep, lodash.debounce, lodash.filter, lodash.isempty, lodash.isequal, lodash.isnil, lodash.isnumber, lodash.isobject, lodash.isstring, lodash.isundefined, lodash.keyby, lodash.mergewith, lodash.noop, lodash.omit, lodash.omitby, lodash.orderby, lodash.reject, micro, next, next-auth, next-i18next, next-sitemap, object-hash, pino, qs, react, react-autosuggest, react-beforeunload, react-dom, react-dropzone, react-error-boundary, react-focus-lock, react-hook-form, react-i18next, react-select, react-youtube, resize-observer-polyfill, swiper, swr, uuid, @commitlint/cli, @contentstack/management, @next/bundle-analyzer, @tailwindcss/aspect-ratio, @tailwindcss/line-clamp, @testing-library/jest-dom, @testing-library/react, @testing-library/user-event, @trivago/prettier-plugin-sort-imports, @types/busboy, @types/form-data, @types/google.maps, @types/html-to-text, @types/jsonwebtoken, @types/lodash.capitalize, @types/lodash.chunk, @types/lodash.clonedeep, @types/lodash.debounce, @types/lodash.filter, @types/lodash.isempty, @types/lodash.isequal, @types/lodash.isnil, @types/lodash.isnumber, @types/lodash.isobject, @types/lodash.isstring, @types/lodash.isundefined, @types/lodash.keyby, @types/lodash.mergewith, @types/lodash.noop, @types/lodash.omit, @types/lodash.omitby, @types/lodash.orderby, @types/lodash.reject, @types/node, @types/object-hash, @types/qs, @types/react, @types/react-autosuggest, @types/react-beforeunload, @types/react-dom, @types/react-google-recaptcha, @types/react-input-mask, @types/uuid, @typescript-eslint/eslint-plugin, @typescript-eslint/parser, @uniformdev/cli, autoprefixer, babel-jest, commitlint-config-jira, commitlint-plugin-jira-rules, cssnano, dotenv, esbuild, eslint, eslint-config-next, eslint-config-prettier, eslint-plugin-jest, eslint-plugin-prettier, form-data, husky, i18next-scanner, i18next-scanner-typescript, jest, jest-environment-jsdom, jest-environment-node, jest-transform-css, lint-staged, node-mocks-http, pino-pretty, postcss, postcss-import, prettier, rimraf, stylelint, stylelint-config-prettier, stylelint-config-standard, tailwindcss, ts-jest, typescript
+
+THE WORK THE PROJECT WAS ASKED TO DO:
+- AMSD-1919: Go‑Checkout Page - Email & Confirm Email Case Sensitivity
+  Components: GO
+   On the Go‑Checkout page related to the Email and Confirm Email fields. When the same email is entered but with different letter casing (e.g., uppercase in one field and lowercase in the other), the system flags it as a mismatch. email comparisons are case‑insensitive. It should not give error message for same email address regardless it is upper case or lower case.
+  Links: https://metrolinx.atlassian.net/wiki/spaces/CE/pages/3561422849/Checkout.+Page+layout#AC4 , https://metrolinx.atlassian.net/wiki/spaces/CE/pages/3052666881/2.2.4+GO+Dictionary+of+Terms.+Part+3#TRM774 , https://metrolinx.atlassian.net/wiki/spaces/CE/pages/3962339955/March+26+2026 , https://metrolinx.atlassian.net/wiki/spaces/CE/pages/3561422849/Checkout.+Page+layout?xpis=eyJicmlkZ2UiOiJzbWFydExpbmtzIiwiaWQiOiIxNzg1MjUxODA4MDAzIiwic291cmNlIjoiamlyYS1KU1cifQ%3D%3D#AC4
+
+THE DOCUMENTATION THESE BRIEFS WERE DERIVED FROM (fetched from the ticket's own links):
+- https://metrolinx.atlassian.net/wiki/spaces/CE/pages/3561422849/Checkout.+Page+layout#AC4
+SOURCE: https://metrolinx.atlassian.net/wiki/spaces/CE/pages/3561422849/Checkout.+Page+layout#AC4
+
+HTTP 202
+
+
+
+- https://metrolinx.atlassian.net/wiki/spaces/CE/pages/3052666881/2.2.4+GO+Dictionary+of+Terms.+Part+3#TRM774
+SOURCE: https://metrolinx.atlassian.net/wiki/spaces/CE/pages/3052666881/2.2.4+GO+Dictionary+of+Terms.+Part+3#TRM774
+
+HTTP 202
+
+
+
+- https://metrolinx.atlassian.net/wiki/spaces/CE/pages/3962339955/March+26+2026
+SOURCE: https://metrolinx.atlassian.net/wiki/spaces/CE/pages/3962339955/March+26+2026
+
+HTTP 202
+
+
+
+- https://metrolinx.atlassian.net/wiki/spaces/CE/pages/3561422849/Checkout.+Page+layout?xpis=eyJicmlkZ2UiOiJzbWFydExpbmtzIiwiaWQiOiIxNzg1MjUxODA4MDAzIiwic291cmNlIjoiamlyYS1KU1cifQ%3D%3D#AC4
+SOURCE: https://metrolinx.atlassian.net/wiki/spaces/CE/pages/3561422849/Checkout.+Page+layout?xpis=eyJicmlkZ2UiOiJzbWFydExpbmtzIiwiaWQiOiIxNzg1MjUxODA4MDAzIiwic291cmNlIjoiamlyYS1KU1cifQ%3D%3D#AC4
+
+HTTP 202
+
+
+
+Where a brief follows this documentation into something the pinned version does not have, the documentation is right about the product and wrong about these repositories. Say which, so the remedy is the version-correct instruction rather than a deletion.
+
+Your tools: read_file,list_files,search,codegraph_query,resolve_test_file,codeline_facts,git_state,check_anti_patterns,resolve_package_symbol,dependency_contract,dependency_available,scan_secrets. Open the repositories. Resolve the packages and symbols these briefs name. Confirm the files and directories they claim to own exist.
+
+THE PIPELINE STAGES THAT RUN ALONGSIDE THIS ROSTER:
+
+- ac-classification — produces ac-classification
+- ac-elaboration — produces verification-criteria
+- agent-failure-analyst — produces diagnosis
+- agent-mint — produces agent-roster
+- code-graph-detective — produces fix-plan
+- code-review-cycle — produces review-feedback
+- codeline-bridge-agent — produces dependency-contracts
+- codeline-discovery — produces codeline-selection
+- cpa-inference — produces estimate
+- estate-survey — produces estate-survey
+- guard-vocabulary — produces guard-vocabulary
+- impl-failure-analyst — produces diagnosis
+- phase-assessment — produces agent-skill-augmentation
+- prd-change-reviewer — produces change-verdict
+- prd-change-summarizer — produces change-summary
+- prd-model-coordinator — produces story-model-assignments
+- project-roster-review — produces roster-verdict
+- prompt-builder — produces project-prompts
+- prompt-review — produces prompt-verdict
+- qa-gate:e2e — produces gate-verdict
+- qa-gate:fuzz-weaver — produces qa-verdict
+- qa-gate:mutant-hunter — produces qa-verdict
+- qa-gate:perf-sentinel — produces qa-verdict
+- qa-gate:review-ranger — produces qa-verdict
+- qa-gate:runtime-boundary — produces runtime-boundary-findings
+- qa-gate:sast — produces qa-verdict
+- qa-gate:spec-validator — produces qa-verdict
+- repro-test-writer — produces repro-test
+- role-assigner — produces role-assignments
+- roster-review — produces roster-verdict
+- roster-specialiser — produces project-roster
+- spec-agent — produces story-specification
+- spec-coordinator — produces spec-assignments
+- story-writer — produces implementation
+- survey-review — produces survey-verdict
+- tc-writer — produces test-criteria
+- team-lead-review — produces review-feedback
+- ticket-links — produces ticket-link-evidence
+- topology-router — produces topology
+- vc-coverage — produces vc-coverage-report
+
+A ROSTER IS NOT THE WHOLE PIPELINE. A brief may correctly defer work to a stage above rather than
+to a role beside it, and a brief that tells its implementer to leave such work alone is describing
+the pipeline accurately, not inventing cover. Check any such claim against the list above before
+calling it false: the absence of a matching ROLE is not evidence when the brief named a STAGE.
+
+Where the list above does not contain the stage a brief names, that IS a finding, and a blocking
+one — the implementer has been told to rely on something that will never run.
+
+Return every defect you can evidence, and nothing you cannot.
+
+Where a finding turns on whether a named dependency or path is present in a codeline, fill in
+the verification field as well as writing the prose. The pipeline re-runs that exact check
+against the repository and DISCARDS any finding the check refutes — so a careless reading
+costs nothing, and a correct one is confirmed independently of how convincingly you argued it.
+# Output — THIS IS A CONTRACT, NOT A PREFERENCE
+
+Emit EXACTLY one <ROSTER_REVIEW> block and nothing else that matters. Prose outside it is DISCARDED
+unread, however correct it is — the pipeline parses the block and never the commentary.
+
+<ROSTER_REVIEW>
+{
+  "verdict": <string> one of "sound" | "defects_found" | "nothing_to_review"
+     // sound = every checkable claim held. defects_found = at least one did not.,
+  "findings": [ {
+      "agent": <string>
+         // The minted agent whose brief carries the defect.,
+      "severity": <string> one of "blocking" | "advisory"
+         // blocking = an implementer following this brief would write code that cannot work. advisory = worth fixing, but the work can proceed.,
+      "claim": <string>
+         // The brief's own words, quoted.,
+      "checked": <string>
+         // What you did to test it — the tool and the target.,
+      "found": <string>
+         // What you actually found.,
+      "remedy": <string>
+         // What the brief should say instead.   (optional),
+      "verification": <object>
+         // When your finding rests on whether a NAMED THING is present in a codeline, state it here as well as in prose, so the pipeline can re-run exactly that check itself. Omit when the finding is a judgement no mechanical check settles — an ownership overlap, work nobody owns, a brief that is merely vague.   (optional),
+  } ]
+}
+</ROSTER_REVIEW>
+
+Report defects in a generated agent roster. Every finding must be grounded in something you checked with your tools. Do not answer in prose.
+
+
+# Output
+{"verdict":"defects_found","findings":[{"agent":"checkout-flow-detective","severity":"advisory","claim":"note which other consumers (CheckoutFormContainer.tsx, CheckoutPaymentMethodsProvider.tsx) read or depend on that form state","checked":"Read src/components/pages/CheckoutPage/CheckoutPaymentMethodsProvider.tsx in full and grepped it for `email`, `confirmEmail`, `useFormContext`, `useWatch`.","found":"CheckoutPaymentMethodsProvider.tsx has no reference to email, confirmEmail, useFormContext, useWatch, or ICheckoutFormValues anywhere. It only consumes `cart` (for price/currency) and `useNextLocale()` to configure the Stripe <Elements> provider. It does not read or depend on the email/confirmEmail form state at all. CheckoutFormContainer.tsx, by contrast, does reference `email` at lines 145, 174, 192, 213 — that half of the claim holds.","remedy":"Drop CheckoutPaymentMethodsProvider.tsx from the list of consumers of the email/confirmEmail form state, or rephrase to note it only receives cart/locale props and has no coupling to the email fields.","verification":{"kind":"not_mechanically_checkable","codeline":"gotransit","subject":"email/confirmEmail form-state usage in CheckoutPaymentMethodsProvider.tsx","expected":"absent","briefAsserts":"present"}},{"agent":"checkout-payments-fixer","severity":"advisory","claim":"The confirmEmail field's react-hook-form validate rule lives at CheckoutForm.tsx:305-311 and currently does a raw `value !== email` comparison (confirmed by reading the file)","checked":"Read src/components/pages/CheckoutPage/CheckoutForm.tsx lines 289-322.","found":"The validate function (`if (email && value && value !== email) { return t(\"TRM774\"); }`) spans lines 305-309, not 305-311. Lines 310-311 are the closing `}}` of the rules prop and the start of the unrelated renderLabel prop, not part of the validate rule.","remedy":"State the validate rule's line range as CheckoutForm.tsx:305-309.","verification":{"kind":"not_mechanically_checkable","codeline":"gotransit","subject":"line range of confirmEmail validate rule in CheckoutForm.tsx","expected":"absent","briefAsserts":"present"}}]}
+
+[coverage-gate] writer: no pre-flight has gated this run — standing down
+  [provider] 'openrouter' is not routable by the 'claude' set — using 'claude'.
+  [provider] The set is the launch's own choice; the env value was left by something else.

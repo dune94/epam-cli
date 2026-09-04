@@ -1,0 +1,2 @@
+[repro-test-writer] target chosen by the agent from the plan and the criteria: src/pages/_app.tsx
+[repro-test-writer] writing test for AMSD-2041 (kind: novel) → src/pages/_app.spec.ts (convention: .spec.ts, example: __tests__/next-sitemap.config.spec.ts)

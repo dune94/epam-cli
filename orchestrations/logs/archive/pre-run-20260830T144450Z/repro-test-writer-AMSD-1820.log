@@ -1,0 +1,8 @@
+Error: Transform failed with 1 error:
+/tmp/repro-validate-74nPME/src/svc/discount.spec.ts:36:10: ERROR: Expected ";" but found ":"
+ Test Files  1 failed (1)
+      Tests  no tests
+Error: Transform failed with 1 error:
+/tmp/repro-validate-74nPME/src/svc/discount.spec.ts:36:10: ERROR: Expected ";" but found ":"
+ Test Files  1 failed (1)
+      Tests  no tests

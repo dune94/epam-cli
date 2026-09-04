@@ -1,0 +1,246 @@
+# Prompt
+You are the specification coordinator for the epam-cli orchestration system. Before every phase you read orchestrations/prd.json (implementationOrder and stories), evaluate risk, dependencies, and technical readiness, then assign the correct specification runners: OpenSpec, Speckit, both, or none. You write assignments into each story's specification.assignedAgents field along with coordinatorNotes, target provider/model, and timestamps. You understand the provider policy ledger (configuration.aiRuntime.providerPolicies), token guardrails, and know when to skip stories that were already hand-curated. When you plan a run you emit JSON compliant with spec-mode-runner.js so that automation can apply deltas deterministically. You never invent story IDs or mutate acceptance criteria directly; only delegate to spec agents and record their status.
+
+You are the EPAM CLI specification coordinator reviewing the completed spec outputs for phase core.
+
+Each story was processed by a sequential agent pipeline:
+  1. openspec elaborated requirements (AC refinement, story splits, technical depth)
+  2. speckit reviewed openspec's output (testability, security, edge cases, gap analysis)
+
+For each story, evaluate the quality of the collaborative spec work:
+1. Did both agents add meaningful, non-overlapping value?
+2. Flag any story needing human review.
+3. PLAN ALIGNMENT — where planAlignmentEvidence is present, it tells you what the
+   code-graph-detective SAID it would investigate (detectivePlan) and a deterministic,
+   cheap signal (aligned: true/false) for whether the final fixSiteAnalysis shares any
+   named symbol/file with that plan. This signal is NOT your verdict — it is evidence, the
+   same as MANIFEST EVIDENCE below. A plan can legitimately turn out wrong once real
+   exploration starts. Read detectivePlan and fixSiteAnalysis yourself and judge: did the
+   detective explain WHY it moved from its plan to its final answer (a stated pivot,
+   reasoning that connects the two), or did the answer just change with no explanation?
+   The latter is a real defect (a fix has shipped that shared no term with the detective's
+   own stated plan, with no explanation, more than once on the same ticket) — set
+   planAlignment to justified_deviation when the detective justifies its pivot, or
+   unexplained_mismatch when it does not, and say why in reviewNotes. aligned:true needs
+   no action.
+
+(Brownfield tickets never split and their acceptance criteria are immutable —
+do not evaluate split quality or AC completeness; there is nothing there for
+either agent to have changed.
+
+EXPECTED, NOT A DEFECT: an agent's notes may describe acceptance criteria it
+authored while the story's acceptanceCriteria array is empty, and report
+acceptanceChanged=false. That is this pipeline REDACTING them on purpose: on a
+brownfield ticket the ACs are the ticket's own, and a thin ticket legitimately
+has none. The observable checks live in verificationCriteria — judge THOSE.
+Do not report the mismatch as a hallucination, a persistence failure or a
+metadata inconsistency, and do not lower qualityScore for it. An empty
+acceptanceCriteria array on a brownfield story is correct by policy.)
+
+MANIFEST EVIDENCE (checked against the repository, not asserted):
+  MOCK-HW-1: EXISTS  .codegraph/.gitignore
+  MOCK-HW-1: EXISTS  src/schedule.ts
+  MOCK-HW-1: EXISTS  test/schedule.test.ts
+
+CODELINE SCOPE — you are reviewing ONE lane.
+
+This spec pass ran against 'mockb' only, using that codeline's own checkout. The story
+also spans: mocka. Each of those is specified by its own pass, against its own
+checkout, and the results are recorded per codeline and merged afterwards. You are not seeing
+their work and it is not missing.
+
+So: judge whether this specification is correct, observable and implementable IN 'mockb'.
+Do not penalise it because a file, function or criterion it names does not exist in
+mocka — those codelines wire the same behaviour at their own sites, which
+their own lane locates.
+
+A cross-codeline concern IS in scope, and you should raise it, when 'mockb's own change
+depends on one: a shared contract it consumes, a payload shape another codeline produces, or
+work that cannot function unless another lane changes too. The distinction is dependency, not
+absence.
+
+
+ANSWER IN THIS RESPONSE. Your <SPEC_REVIEW> verdict must appear in THIS reply — an
+empty <SPEC_REVIEW></SPEC_REVIEW>, or a promise to verify and answer later, is
+discarded and the review does not happen. There is no follow-up turn to come back in.
+
+You DO have read-only tools this turn (read_file, list_files, search). Use them for
+real if something is genuinely unclear — but never narrate an imagined tool result,
+and never spend the whole turn exploring and run out before writing the verdict.
+Budget is small and the verdict is mandatory: gather at most what you need, then answer.
+
+MANIFEST EVIDENCE has already been gathered from the repository for you and appears
+above. Every declared path was checked with a real filesystem stat, so re-checking
+paths is wasted budget — that part is done and is more reliable than a tool call.
+  - A story with any MISSING path CANNOT be implemented: the writer is sent to edit a
+    file that is not there, and every retry reproduces that. Mark it needs_review, name
+    the exact path in reviewNotes, and add the flag "missing_manifest_path".
+  - Where the evidence names a real neighbour ("the directory holds X instead"), say so
+    — that is what makes the report actionable.
+  - Never silently correct a path. The manifest is the artefact under review; a
+    correction living only in your prose reaches nobody.
+
+Judge what the evidence cannot: are the acceptance criteria testable, is the declared
+file set plausible for this change, is anything obviously missing. If you are unsure,
+lower qualityScore and add a flag — do not withhold the verdict. A missing review is
+EVERY FLAG CARRIES A SEVERITY. It ranks your objections for whoever reads them; it does not
+decide whether the run stops — a computed check or a project-declared flag does that. Mark
+blocking when an implementer following this spec would produce work that CANNOT FUNCTION,
+and advisory for uncertainty about what you could not see. Report both honestly: nothing is
+gained by inflating uncertainty into a defect, and nothing is lost by naming a real one.
+worse than an uncertain one: it means nothing was checked at all.
+
+QUALITY SCORE — what the number has to mean. It is enforced: below 0.7 halts the run
+before implementation, so an unanchored guess stops real work.
+  0.9-1.0  the spec is ready to implement; criteria are observable and the file set fits.
+  0.7-0.89 ready to implement, with ordinary open questions a competent writer resolves.
+  0.5-0.69 NOT ready: something concrete is wrong or missing — criteria that cannot be
+           observed, a file set that cannot deliver what is described, contradictions.
+  below 0.5 the spec would send a writer somewhere useless.
+Score what IS in front of you. Do NOT lower the score because an agent could not read the
+source files, or because a human "might want to check" — that is true of every ticket and
+is not a defect in this spec. If your notes cannot name something concretely wrong, the
+score belongs at 0.7 or above.
+
+Respond with JSON between <SPEC_REVIEW> and </SPEC_REVIEW> using this schema:
+[
+  {"storyId":"REM-xxx","verdict":"approved|needs_review","reviewNotes":"coordinator observations","qualityScore":<0.0-1.0>,"flags":[{"flag":"short-slug","severity":"blocking|advisory","why":"what you checked and what you found"}],"planAlignment":"aligned|justified_deviation|unexplained_mismatch|not_applicable"}
+]
+
+Stories to review:
+[
+  {
+    "id": "MOCK-HW-1",
+    "title": "Hello world greeting should say hello dolly",
+    "acceptanceCriteria": [],
+    "verificationCriteria": [],
+    "technicalNotes": {
+      "files": [
+        ".codegraph/.gitignore",
+        "src/schedule.ts",
+        "test/schedule.test.ts"
+      ],
+      "perCodeline": {
+        "mocka": {
+          "files": [
+            ".codegraph/.gitignore"
+          ],
+          "resolved": [
+            {
+              "declared": ".codegraph/.gitignore",
+              "actual": ".codegraph/.gitignore",
+              "match": "exact",
+              "verified_against": "/home/bradleyjerome/projects/mock3/mock-a"
+            }
+          ],
+          "unresolved": [
+            {
+              "declared": "src/schedule.ts",
+              "candidates_checked": [
+                "src/schedule.ts",
+                "src/fares.ts"
+              ],
+              "reason": "no exact, case-variant or extension-variant match exists in this codeline"
+            },
+            {
+              "declared": "test/schedule.test.ts",
+              "candidates_checked": [
+                "test/schedule.test.ts",
+                "test/fares.test.ts"
+              ],
+              "reason": "no exact, case-variant or extension-variant match exists in this codeline"
+            }
+          ]
+        },
+        "mockb": {
+          "files": [
+            ".codegraph/.gitignore",
+            "src/schedule.ts",
+            "test/schedule.test.ts"
+          ],
+          "resolved": [
+            {
+              "declared": ".codegraph/.gitignore",
+              "actual": ".codegraph/.gitignore",
+              "match": "exact",
+              "verified_against": "/home/bradleyjerome/projects/mock3/mock-b"
+            },
+            {
+              "declared": "src/schedule.ts",
+              "actual": "src/schedule.ts",
+              "match": "exact",
+              "verified_against": "/home/bradleyjerome/projects/mock3/mock-b"
+            },
+            {
+              "declared": "test/schedule.test.ts",
+              "actual": "test/schedule.test.ts",
+              "match": "exact",
+              "verified_against": "/home/bradleyjerome/projects/mock3/mock-b"
+            }
+          ],
+          "unresolved": []
+        }
+      }
+    },
+    "specification": {
+      "runId": "20260901T100123Z",
+      "assignedAgents": [
+        "openspec",
+        "speckit"
+      ],
+      "coordinatorNotes": "",
+      "status": "completed",
+      "updatedAt": "2026-09-01T10:04:21.407Z",
+      "appliedAgents": [
+        "openspec",
+        "speckit"
+      ],
+      "agentContributions": [
+        {
+          "agent": "openspec",
+          "applied": true,
+          "notes": "",
+          "acceptanceChanged": false,
+          "splitCount": 0,
+          "timestamp": "2026-09-01T10:04:09.467Z"
+        },
+        {
+          "agent": "speckit",
+          "applied": true,
+          "notes": "",
+          "acceptanceChanged": false,
+          "splitCount": 0,
+          "timestamp": "2026-09-01T10:04:21.407Z"
+        }
+      ]
+    },
+    "fixSiteAnalysis": [],
+    "planAlignmentEvidence": null
+  }
+]
+
+<SPEC_REVIEW>
+</SPEC_REVIEW>
+# Output — THIS IS A CONTRACT, NOT A PREFERENCE
+
+Emit EXACTLY one <SPEC_REVIEW> block and nothing else that matters. Prose outside it is DISCARDED
+unread, however correct it is — the pipeline parses the block and never the commentary.
+
+<SPEC_REVIEW>
+{
+  "items": [ {
+      "storyId": <string>,
+      "verdict": <string>,
+      "reviewNotes": <string>   (optional),
+      "qualityScore": <number>   (optional),
+      "flags": <array>
+         // Each flag is either a bare string (advisory) or an object carrying severity. Severity RANKS your objections for the human reading them; it does not decide whether the run stops. Mark blocking when an implementer following this spec would produce work that cannot function, and advisory for uncertainty about what you could not see. What halts a run is a computed check or a flag this project has declared blocking — not your assessment of your own output.   (optional),
+  } ]
+}
+</SPEC_REVIEW>
+
+Submit coordinator quality review results for all stories.
+
+
+# Output
+{}

@@ -1,0 +1,72 @@
+# Prompt
+Regenerate the VERIFICATION CRITERIA for this brownfield story. Your previous verification criteria were FLAGGED and must be fixed:
+- VC 1 references internal mechanism (Next.js Preview Mode activation, preview cookie) — restate as observable outcome on the page surface
+- VC 2 cross-compares draft vs published version — assert the draft content is present and correct on its own
+- VC 3 cross-compares to 'same published content as before the feature was added' — assert the published content is present and correct on its own
+- VC 4 cross-compares draft vs published version — assert the draft content is present and correct on its own
+- VC 5 cross-compares draft vs published version — assert the draft content is present and correct on its own
+- VC 6 references internal mechanism (Next.js Preview Mode, preview cookie) — restate as observable outcome (e.g., draft content is not shown)
+- VC 7 references internal mechanism (deactivates Preview Mode, clears preview cookie) — restate as observable outcome (e.g., published content is shown after clearing)
+- VC 8 references internal structure (Stack created without live_preview config) — restate as observable outcome (e.g., pages render published content without errors)
+
+THE FIX SITE (located by the code-graph detective — anchor every criterion to the behaviour THIS code produces):
+- src/services/contentstack.ts :: options — Central Contentstack Stack configuration object — THE attachment point for adding live_preview config (management_token, preview_token, host). All queries flow through the Stack created from this config.
+- src/pages/[[...slug]].tsx :: getStaticProps — The catch-all page that renders all Contentstack content pages. It uses getStaticProps (SSG), so Live Preview requires Next.js Preview Mode to bypass static generation and serve draft content on demand. The preview context (req.preview) must be passed through to the service layer so queries include draft data.
+- src/services/newsService.ts :: Stack — newsService imports Stack directly and calls Stack.ContentType().Query() at lines 68, 109-110, 140-141, 157-158. These bypass ContentstackFactory and need livePreviewQuery() applied to include draft content during preview.
+- src/api/getEventsList.ts :: Stack — Directly calls Stack.ContentType(ContentTypes.EventPage).Query() at line 26, bypassing ContentstackFactory. Needs livePreviewQuery() for preview support.
+- src/api/utils/_contentstack_getNewsArticles.ts :: Stack — Directly calls Stack.ContentType(ContentTypes.NewsArticle).Query() at lines 24, 50-51, bypassing ContentstackFactory. Needs livePreviewQuery() for preview support.
+Do NOT write criteria about areas unrelated to this code.
+
+
+Acceptance criteria (IMMUTABLE — the intent to verify; do NOT restate as-is, VERIFY them):
+- (none)
+Description: Original Requirements (discovery)  AS a Content Author, I WANT to preview draft entries in CMS, SO THAT I can see how content will be shown on the website
+ability to preview draft entries in CMS
+Notes& Assumptions  Limitation: Might not be possible to preview protected pages and content.
+Original Total Estimate:  8  Original FE Estimate:  8  Original DAM Estimate:  0  Original BE Estimate:  0
+
+A verification criterion states WHAT AN END USER OR TESTER OBSERVES on the user-facing surface THE TICKET IS ABOUT — the rendered output for an output ticket, the displayed screen for a UI ticket, the response a CLIENT receives for an API ticket. It is a BLACK-BOX check on that surface. It NEVER describes HOW the value is produced.
+A verification criterion is FORBIDDEN if it:
+- prescribes HOW to implement — any algorithm, mechanism, approach, or the addition/reading of any new field, flag or service;
+- references an INTERNAL structure that merely FEEDS the ticket's surface — an intermediate payload, a data-transfer object, or a specific response field used to BUILD the output. Verify the surface the ticket names, NOT the data structure behind it;
+- makes a CROSS-COMPARISON that presumes a mechanism — never assert one value "must equal" / "matches" / "is the same as" another; that presumes a shared derivation. Assert the required value is present and correct ON ITS OWN.
+Every verification criterion must be observable, testable, and tied to the ticket's stated symptom/intent.
+
+EXAMPLES OF FORM (the angle-bracket words are placeholders — fill them from THIS story; never copy them literally):
+
+REJECTED: "the <config object> passed to <the client> includes a <key> entry"
+  — asserts INTERNAL STRUCTURE. A tester cannot see a config object.
+ACCEPTED: "when <the request> carries <the marker>, <the surface> shows <the draft state> instead of <the published state>"
+
+REJECTED: "when <internal function> is called with <argument>, the resulting <query> includes <field>"
+  — asserts an INTERNAL CALL PATH. Verify the surface the ticket is about, not the path behind it.
+ACCEPTED: "<the surface> shows <the value> that <the source of truth> currently holds"
+
+REJECTED: "an author edits <entity> in <the external tool> and <the surface> updates"
+  — begins OUTSIDE THE BOUNDARY this suite can drive. Nothing here can operate that tool.
+ACCEPTED: "given <the client> is mocked to signal <the change>, <the surface> re-renders without a reload"
+
+REJECTED: "<the value> matches what <the other place> shows"
+  — a CROSS-COMPARISON presumes a shared derivation. Assert the required value on its own.
+ACCEPTED: "<the surface> shows <the expected value> for <the stated condition>"
+
+REJECTED: "<the feature> works correctly with no regression"
+  — verifies nothing and cannot fail.
+ACCEPTED: "when <the feature> is inactive, <the surface> shows <the prior behaviour> unchanged"
+
+Do NOT restate an acceptance criterion as-is — express what a tester OBSERVES that confirms it. Address every flag above.
+Output ONLY a JSON array of verification-criterion strings. No prose, no markdown.
+
+# Output
+```json
+[
+  "When a content page entry with unpublished draft changes is being previewed, the rendered slug page displays the draft entry's content including any unpublished field values.",
+  "When a news article entry with unpublished draft changes is being previewed, the rendered page displays the draft article's title, body, and metadata as they exist in the draft entry.",
+  "When a published content page entry is viewed, the rendered slug page displays the published entry's content correctly with all expected fields and values.",
+  "When an event entry with unpublished draft changes is being previewed, the rendered events listing displays the draft event's details as they exist in the draft entry.",
+  "When a news article entry with unpublished draft changes is being previewed, the rendered news listing displays the draft article along with its associated category information as it exists in the draft entry.",
+  "When a page is viewed without a draft preview, the page displays only published content and does not show any unpublished draft changes.",
+  "After a draft preview session ends and the page is viewed again, the page displays the published version of the content.",
+  "All content pages (slug pages, news listings, and event listings) render their published content without errors when the live preview feature is available but not in use."
+]
+```

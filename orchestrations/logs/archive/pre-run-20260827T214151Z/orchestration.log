@@ -1,0 +1,13 @@
+[mint-step] codeline mocka: /home/bradleyjerome/projects/mock3/mock-a (2 declared deps)
+[mint-step] codeline mockb: /home/bradleyjerome/projects/mock3/mock-b (2 declared deps)
+[mint-step] plugins provisioned: 1 · mint tools: read_file,list_files,search,codegraph_query
+spec-mode: fast-path claude/MiniMax-M3 (skipping MiniMax)
+Failed to parse JSON for tag ESTATE_SURVEY: Unexpected token 'T', "There's an"... is not valid JSON
+spec-mode: ESTATE_SURVEY: no parseable output — the tag was missing, empty, or contained prose instead of JSON
+[mint-step]   survey: mocka — not_investigated
+[mint-step]   survey: mockb — not_investigated
+[mint-step] roster-only: deriving this project's roster, minting nothing
+[mint-step] [roster] attempt 1/3 REFUSED: the agent wrote no roster at /home/bradleyjerome/projects/ai/epam-cli/orchestrations/projects/mock3/roster.json
+[mint-step] [roster] attempt 2/3 REFUSED: the agent wrote no roster at /home/bradleyjerome/projects/ai/epam-cli/orchestrations/projects/mock3/roster.json
+[mint-step] [roster] attempt 3/3 REFUSED: the agent wrote no roster at /home/bradleyjerome/projects/ai/epam-cli/orchestrations/projects/mock3/roster.json
+[mint-step] FAILED: [roster] could not produce an accepted roster in 3 attempt(s). Last: the agent wrote no roster at /home/bradleyjerome/projects/ai/epam-cli/orchestrations/projects/mock3/roster.json

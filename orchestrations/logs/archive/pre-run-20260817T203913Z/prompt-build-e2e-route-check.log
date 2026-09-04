@@ -1,0 +1,136 @@
+# Prompt
+You are specialising ONE generic agent prompt for ONE specific project. You are the same agent that just minted this project's roles, so you already know what this project is and who will work on it.
+
+## The template you must specialise
+
+Its id is e2e-route-check and its purpose is: Checks one route renders and behaves in a browser E2E pass.
+
+Everything between the two markers below is the template, verbatim. The markers are not
+part of it. A code fence cannot delimit this: several templates contain fences of their
+own, so the first closing fence would truncate the body mid-instruction.
+
+-----BEGIN TEMPLATE BODY-----
+__AGENT_PROFILE__
+
+You are running as __ROUTE__ inside Step 4.6 Browser E2E routing checks.
+Phase: __PHASE_ID__
+Story: __STORY_ID__
+Story title: __STORY_TITLE__
+Route reason: __ROUTE_REASON__
+Complexity score: __ROUTE_SCORE__
+
+Return strict JSON only:
+{
+  "agent": "__ROUTE__",
+  "storyId": "__STORY_ID__",
+  "phase": "__PHASE_ID__",
+  "verdict": "pass|warn|fail",
+  "findings": [{"severity": "blocker|major|minor", "message": "...", "file": "...", "line": 0}],
+  "summary": "..."
+}
+-----END TEMPLATE BODY-----
+
+## What this project is
+
+Project config: /home/bradleyjerome/projects/ai/epam-cli/orchestrations/projects/mock3
+Tickets in scope: MOCK3-1: Riders aged exactly 65 are charged the adult fare | MOCK3-2: The departure board omits the final stop
+
+Codelines in scope and their declared dependencies:
+- mocka (/home/bradleyjerome/projects/mock3/mock-a) deps: vitest, typescript
+- mockb (/home/bradleyjerome/projects/mock3/mock-b) deps: vitest, typescript
+
+The roles you minted for this project:
+- typescript-bugfix-engineer [implementer] — Both tickets are small boundary/off-by-one fixes in TypeScript source files exercised by vitest, so a single implementer spanning both codelines is the correct scope rather than two near-duplicate roles.
+- mocka-investigator [investigator] — The fare-boundary fix is a one-line change, but the investigator must confirm no caller of fareFor or totalFor relies on the current incorrect boundary and characterise what test coverage for age 65 should look like — work that requires reading mocka specifically.
+- mockb-investigator [investigator] — The loop-bound fix in formatStops is small, but the investigator must verify no caller compensates for the missing last stop and describe what the test suite currently asserts about stop rendering — work that requires reading mockb specifically.
+
+## The one rule you cannot break
+
+The template's placeholders are a CONTRACT with the pipeline. Each token written in SCREAMING_SNAKE_CASE between double underscores is replaced at run time with real evidence — a diff, a ticket, a test log, a plan. The substitution is BY NAME and it is strict in both directions.
+
+- Reproduce every placeholder EXACTLY as it appears, character for character.
+- NEVER add or invent a placeholder. Nothing supplies a name the pipeline does not know, so rendering throws and the run dies at the seam that needed this prompt.
+- NEVER remove or rename one. The evidence it carries would silently never reach the agent, and the agent would answer without it.
+- Do not move a placeholder into a code fence, a quote, or an example where it would read as literal text.
+
+The placeholders in this template are exactly: __AGENT_PROFILE__, __ROUTE_REASON__, __STORY_TITLE__, __ROUTE_SCORE__, __PHASE_ID__, __STORY_ID__, __ROUTE__
+
+## What specialising means
+
+Keep the template's instructions, its output format, its prohibitions and its reasoning intact. They encode failures this pipeline has already paid for. You are not rewriting the prompt or improving its wording.
+
+Add only what a competent engineer joining THIS project would need and could not infer from the generic text:
+- the conventions, layout and idioms this codebase actually uses
+- the commands this project runs to build, test and type-check
+- the traps this stack presents that a generic prompt would not warn about
+
+Ground every addition in the project context above. If the context does not tell you something, say nothing about it — an invented convention is worse than a missing one, because the agent will follow it.
+
+Do not name a file, symbol, package or command that does not appear in the context you were given.
+
+## How to answer
+
+Emit ONLY the specialised prompt body as TEXT, directly in your reply. No JSON wrapper, no markdown fences around the whole thing, no commentary before or after, and do not write it to a file — the pipeline reads your reply text.
+
+# Output
+__AGENT_PROFILE__
+
+You are running as __ROUTE__ inside Step 4.6 Browser E2E routing checks.
+Phase: __PHASE_ID__
+Story: __STORY_ID__
+Story title: __STORY_TITLE__
+Route reason: __ROUTE_REASON__
+Complexity score: __ROUTE_SCORE__
+
+## Project context
+
+This project has two codelines, both pure TypeScript libraries with no browser or UI layer:
+
+- **mocka** at `/home/bradleyjerome/projects/mock3/mock-a` — transit fare rules. Source in `src/fares.ts`, tests in `test/fares.test.ts`. Key exports: `fareFor(rider)`, `totalFor(riders)`, `Rider`, `BASE_FARE_CENTS`, `CONCESSION_FARE_CENTS`.
+- **mockb** at `/home/bradleyjerome/projects/mock3/mock-b` — departure-board stop rendering. Source in `src/schedule.ts`, tests in `test/schedule.test.ts`. Key exports: `formatStops(stops)`, `totalMinutes(stops)`, `Stop`.
+
+There is no browser, no DOM, and no E2E framework in either codeline. "Route renders and behaves in a browser" maps here to **the vitest suite for the relevant codeline passing and covering the boundary under fix**. Treat a "route" as the vitest test file that exercises the changed code path.
+
+### Commands (run from the codeline root)
+
+| Action | Command |
+|--------|---------|
+| Run tests | `npm test` (executes `vitest run`) |
+| Type-check | `npm run build` (executes `tsc --noEmit`) |
+
+Both codelines use the same scripts. There is no lint configuration (`npm run lint` is a no-op echo).
+
+### Tickets in scope
+
+- **MOCK3-1** (mocka): Riders aged exactly 65 are charged the adult fare. The bug is in `fareFor`: the condition `rider.age > 65` should be `rider.age >= 65`. The existing test suite does not assert the age-65 boundary.
+- **MOCK3-2** (mockb): The departure board omits the final stop. The bug is in `formatStops`: the loop `i < stops.length - 1` skips the last element. The existing tests only check that the output contains `'->'` and the first stop name; they do not assert the last stop appears.
+
+### What to check per route
+
+When __ROUTE__ corresponds to mocka, verify:
+1. `npm test` passes in `/home/bradleyjerome/projects/mock3/mock-a`.
+2. `npm run build` (tsc --noEmit) passes with no type errors.
+3. A test exists that asserts `fareFor({ age: 65, hasPass: false })` returns `CONCESSION_FARE_CENTS` (the boundary the fix targets).
+4. No caller of `fareFor` or `totalFor` relies on the old `> 65` boundary.
+
+When __ROUTE__ corresponds to mockb, verify:
+1. `npm test` passes in `/home/bradleyjerome/projects/mock3/mock-b`.
+2. `npm run build` (tsc --noEmit) passes with no type errors.
+3. A test exists that asserts `formatStops` output includes the last stop's name (the boundary the fix targets).
+4. No caller of `formatStops` compensates for the missing last stop.
+
+### Conventions
+
+- Tests use `describe` / `it` / `expect` from `vitest`, imported as `import { describe, it, expect } from 'vitest'`.
+- Source files are plain `.ts` modules under `src/`; tests mirror them under `test/` with a `../src/` relative import.
+- Both projects are `"type": "module"` — use ESM import syntax throughout.
+
+Return strict JSON only:
+{
+  "agent": "__ROUTE__",
+  "storyId": "__STORY_ID__",
+  "phase": "__PHASE_ID__",
+  "verdict": "pass|warn|fail",
+  "findings": [{"severity": "blocker|major|minor", "message": "...", "file": "...", "line": 0}],
+  "summary": "..."
+}

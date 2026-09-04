@@ -1,0 +1,35 @@
+[0;35m[CPA][0m Retrieval: TF-IDF
+[0;36m[12:03:16][0m Loading stories from mockhelloworld-prd.json...
+[0;36m[12:03:16][0m Found 1 stories to contextualize
+
+[0;35m[CPA][0m Processing MOCK-HW-1...
+[0;35m[CPA][0m   MOCK-HW-1: formula baseline from calibration[medium:implementation:cli:sonnet](n=9): 2.808398113839453min $0.54208529935815
+[1mMOCK-HW-1[0m  getGreeting should return hello dolly  [0;32m[PASS][0m
+  Machine time:              2.81 min  →      1.40 min  (conf: 0.95, adj: 0.50x)
+  Cost (story):          $0.5421     →  $0.1355   
+  Escalation:            +$1.0017      (r2@35%=+$0.6445 r3@15%=+$0.2836 k3@3.0%=+$0.0737)
+  Self-heal:             +$0.0480      (p=30%)
+  Retries (exp):          0.81  
+  Total (est):           $1.7261         (story+esc+heal=$1.1852 × pipeline 1.46x)
+  KB coverage:           5     chunks retrieved   2     cited   cov: 40%
+
+[0;36m=== CPA Gate Summary ===[0m
+
+Phase                    Pass   Review    Block    Total
+------------------------------------------------------
+core                        1        0        0        1
+------------------------------------------------------
+[1mTOTAL                       1        0        0        1[0m
+
+[0;32m[CPA OK][0m All 1 stories passed the CPA gate
+
+[0;36m[12:03:43][0m Appended 1 CPA records to /home/bradleyjerome/projects/ai/epam-cli/orchestrations/logs/cpa-review.jsonl
+[0;36m[12:03:43][0m Applying blended estimates to prd.json...
+[0;32m[CPA OK][0m Backed up prd.json → mockhelloworld-prd.json.before-cpa
+[0;32m[CPA OK][0m Applied CPA blended estimates to 1 stories
+
+  Review:   git diff /home/bradleyjerome/projects/ai/epam-cli/orchestrations/projects/hello-dolly/runs/20260812T155700Z/work/mockhelloworld-prd.json
+  Restore:  cp /home/bradleyjerome/projects/ai/epam-cli/orchestrations/projects/hello-dolly/runs/20260812T155700Z/work/mockhelloworld-prd.json.before-cpa /home/bradleyjerome/projects/ai/epam-cli/orchestrations/projects/hello-dolly/runs/20260812T155700Z/work/mockhelloworld-prd.json
+
+No calibrated categories (need >= min-n completed stories per category).
+[0;36m[12:04:02][0m Calibration updated from actuals

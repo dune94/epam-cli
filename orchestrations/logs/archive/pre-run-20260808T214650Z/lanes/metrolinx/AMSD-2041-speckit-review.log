@@ -1,0 +1,296 @@
+# Prompt
+You are the speckit specification agent for EPAM CLI. Phase core, story AMSD-2041.
+
+You are reviewing and building on the openspec agent's output for this story.
+Your role is COLLABORATIVE — you are NOT starting from scratch. Instead:
+1. Review openspec's proposed acceptance criteria for testability and completeness
+2. Add missing edge-case, error-handling, security, and accessibility criteria
+3. Flag any AC that are vague, untestable, or overlapping
+4. Splitting is openspec's decision alone — you do NOT split stories. If openspec already split
+   this story, do NOT include a "splitStories" field in your output at all (it will be ignored if
+   you do). Review and refine the acceptanceCriteria openspec gave you for the UNSPLIT story as
+   normal; per-child refinement of an already-split story's children happens on a later turn, not
+   here.
+5. Do NOT remove or duplicate openspec's good work — build on it
+
+━━━ WHAT-NOT-HOW RULE (MANDATORY) ━━━
+Every AC must describe an OBSERVABLE OUTCOME (what a test can verify from outside the code),
+NOT an implementation instruction. If an AC names vi.mock, jest.fn, mockReturnValue,
+mockResolvedValue, import statements, or require() calls, REPLACE it with a
+Given/When/Then behaviour statement. Never tell the implementer which library or mock pattern to use.
+
+OPENSPEC'S OUTPUT (your input to review — ACs and split proposals only):
+{
+  "acceptanceCriteria": [],
+  "notes": "Novel story — Contentstack Live Preview SDK is not installed and no live-preview wiring exists. The project uses Next.js Pages Router (src/pages/_app.tsx), not App Router, so the referenced documentation's CSR App Router guide does not apply directly. The sole Contentstack initialization site is src/services/contentstack.ts where the `options` config lacks `live_preview` and `ContentstackLivePreview.init()` is never called. The `Stack` export from that file is the single data-fetching conduit for the entire site. Contentstack hosts are unreachable at test time, so VCs stop at our boundary: config shape, SDK call presence, and UI re-render given a mocked client signal."
+}
+
+ORIGINAL STORY CONTEXT:
+{
+  "id": "AMSD-2041",
+  "title": "[GO, UP, MX] Live Preview of Content in CMS",
+  "description": "Original Requirements (discovery)  AS a Content Author, I WANT to preview draft entries in CMS, SO THAT I can see how content will be shown on the website\nability to preview draft entries in CMS\nNotes& Assumptions  Limitation: Might not be possible to preview protected pages and content.\nOriginal Total Estimate:  8  Original FE Estimate:  8  Original DAM Estimate:  0  Original BE Estimate:  0",
+  "originalAcceptanceCriteria": [],
+  "technicalNotes": {
+    "files": [
+      "src/services/contentstack.ts",
+      "src/pages/_app.tsx",
+      "src/interface/content/page.ts",
+      "src/components/contentstack/ContentstackAttention/content.mock.ts",
+      "src/components/contentstack/ContentStackGallery/ContentStackGallery.mock.ts"
+    ],
+    "perCodeline": {
+      "gotransit": {
+        "files": [
+          "src/services/contentstack.ts",
+          "src/pages/_app.tsx",
+          "src/interface/content/page.ts",
+          "src/components/contentstack/ContentStackGallery/ContentStackGallery.mock.ts"
+        ],
+        "resolved": [
+          {
+            "declared": "src/services/contentstack.ts",
+            "actual": "src/services/contentstack.ts",
+            "match": "exact",
+            "verified_against": "/home/bradleyjerome/projects/metrolinx/next.gotransit.com"
+          },
+          {
+            "declared": "src/pages/_app.tsx",
+            "actual": "src/pages/_app.tsx",
+            "match": "exact",
+            "verified_against": "/home/bradleyjerome/projects/metrolinx/next.gotransit.com"
+          },
+          {
+            "declared": "src/interface/content/page.ts",
+            "actual": "src/interface/content/page.ts",
+            "match": "exact",
+            "verified_against": "/home/bradleyjerome/projects/metrolinx/next.gotransit.com"
+          },
+          {
+            "declared": "src/components/contentstack/ContentStackGallery/ContentStackGallery.mock.ts",
+            "actual": "src/components/contentstack/ContentStackGallery/ContentStackGallery.mock.ts",
+            "match": "exact",
+            "verified_against": "/home/bradleyjerome/projects/metrolinx/next.gotransit.com"
+          }
+        ],
+        "unresolved": [
+          {
+            "declared": "src/components/contentstack/ContentstackAttention/content.mock.ts",
+            "candidates_checked": [
+              "src/components/contentstack/ContentstackAttention/content.mock.ts"
+            ],
+            "reason": "directory 'src/components/contentstack/ContentstackAttention' does not exist in this codeline"
+          }
+        ]
+      },
+      "upexpress": {
+        "files": [
+          "src/services/contentstack.ts",
+          "src/pages/_app.tsx",
+          "src/interface/content/page.ts",
+          "src/components/contentstack/ContentStackGallery/ContentStackGallery.mock.ts"
+        ],
+        "resolved": [
+          {
+            "declared": "src/services/contentstack.ts",
+            "actual": "src/services/contentstack.ts",
+            "match": "exact",
+            "verified_against": "/home/bradleyjerome/projects/metrolinx/next.upexpress.com"
+          },
+          {
+            "declared": "src/pages/_app.tsx",
+            "actual": "src/pages/_app.tsx",
+            "match": "exact",
+            "verified_against": "/home/bradleyjerome/projects/metrolinx/next.upexpress.com"
+          },
+          {
+            "declared": "src/interface/content/page.ts",
+            "actual": "src/interface/content/page.ts",
+            "match": "exact",
+            "verified_against": "/home/bradleyjerome/projects/metrolinx/next.upexpress.com"
+          },
+          {
+            "declared": "src/components/contentstack/ContentStackGallery/ContentStackGallery.mock.ts",
+            "actual": "src/components/contentstack/ContentStackGallery/ContentStackGallery.mock.ts",
+            "match": "exact",
+            "verified_against": "/home/bradleyjerome/projects/metrolinx/next.upexpress.com"
+          }
+        ],
+        "unresolved": [
+          {
+            "declared": "src/components/contentstack/ContentstackAttention/content.mock.ts",
+            "candidates_checked": [
+              "src/components/contentstack/ContentstackAttention/content.mock.ts"
+            ],
+            "reason": "directory 'src/components/contentstack/ContentstackAttention' does not exist in this codeline"
+          }
+        ]
+      },
+      "metrolinx": {
+        "files": [
+          "src/services/contentstack.ts",
+          "src/pages/_app.tsx",
+          "src/interface/content/page.ts",
+          "src/components/contentstack/ContentstackAttention/content.mock.ts",
+          "src/components/contentstack/ContentStackGallery/ContentStackGallery.mock.ts"
+        ],
+        "resolved": [
+          {
+            "declared": "src/services/contentstack.ts",
+            "actual": "src/services/contentstack.ts",
+            "match": "exact",
+            "verified_against": "/home/bradleyjerome/projects/metrolinx/next.metrolinx.com"
+          },
+          {
+            "declared": "src/pages/_app.tsx",
+            "actual": "src/pages/_app.tsx",
+            "match": "exact",
+            "verified_against": "/home/bradleyjerome/projects/metrolinx/next.metrolinx.com"
+          },
+          {
+            "declared": "src/interface/content/page.ts",
+            "actual": "src/interface/content/page.ts",
+            "match": "exact",
+            "verified_against": "/home/bradleyjerome/projects/metrolinx/next.metrolinx.com"
+          },
+          {
+            "declared": "src/components/contentstack/ContentstackAttention/content.mock.ts",
+            "actual": "src/components/contentstack/ContentstackAttention/content.mock.ts",
+            "match": "exact",
+            "verified_against": "/home/bradleyjerome/projects/metrolinx/next.metrolinx.com"
+          },
+          {
+            "declared": "src/components/contentstack/ContentStackGallery/ContentStackGallery.mock.ts",
+            "actual": "src/components/contentstack/ContentStackGallery/ContentStackGallery.mock.ts",
+            "match": "exact",
+            "verified_against": "/home/bradleyjerome/projects/metrolinx/next.metrolinx.com"
+          }
+        ],
+        "unresolved": []
+      }
+    }
+  },
+  "dependencies": []
+}
+
+Produce your refined output as raw JSON only (no XML tags, no markdown fences, no preamble). Include:
+- "acceptanceCriteria": The FULL merged list (openspec's criteria + your additions/refinements). Every item MUST be an observable outcome, not an implementation instruction.
+- "notes": What you changed and why (be specific — cite which criteria you added/modified/replaced)
+- "splitStories": ALWAYS omit this field. Splitting is openspec's decision alone — never propose
+  split children of your own, even if openspec already split this story.
+- "acAddedBySpeckit": Array of criteria YOU added that were not in openspec's output
+- "acModifiedBySpeckit": Array of {"original":"...","revised":"..."} for criteria you reworded
+- "acFlagged": Array of {"criterion":"...","flag":"..."} for criteria that need human attention
+
+For a brownfield story with a real codeline, you may have read-only tools (read_file,
+list_files, search) available this turn — if so, USE them for real to check a file's
+actual contents before relying on it; do not invent what a tool would return. For a
+greenfield story with no existing codeline, you have none — give your best answer from
+the description, title and paths you were given, and say so in "notes" if the file
+contents would have changed your answer. Either way, never narrate an imagined tool
+result: a real answer with an honest caveat is worth everything; fabricated tool-call
+syntax (<tool_call>, <tool_use>, <function_call>) is worth nothing — it is discarded in
+full and the work is lost (observed live, 2026-07-28: exactly this, on an empty-criteria
+story that got no answer at all).
+
+
+# Output
+```json
+{
+  "acceptanceCriteria": [
+    {
+      "id": "AC-1",
+      "criterion": "Given the Contentstack SDK configuration object, When the application initializes, Then it includes a live_preview configuration key with enable flag, management_token, and host values sourced from environment variables."
+    },
+    {
+      "id": "AC-2",
+      "criterion": "Given the application starts in a browser environment, When the Contentstack Stack is created, Then the live preview SDK is initialized and the application registers to receive live preview events from Contentstack."
+    },
+    {
+      "id": "AC-3",
+      "criterion": "Given a content author edits a draft entry in Contentstack CMS, When the live preview SDK emits an update event for that entry, Then the corresponding page component re-renders with the updated draft content without a full page reload."
+    },
+    {
+      "id": "AC-4",
+      "criterion": "Given the application's root layout component, When the application renders, Then a live preview provider wraps the page component tree so that live preview events propagate to all content-displaying children."
+    },
+    {
+      "id": "AC-5",
+      "criterion": "Given the required live preview environment variables are missing or empty, When the application starts, Then the application renders normally using published content and does not throw an error or crash."
+    },
+    {
+      "id": "AC-6",
+      "criterion": "Given the application is running in a production build, When the application initializes, Then live preview is disabled and no live preview client-side scripts or WebSocket connections are active."
+    },
+    {
+      "id": "AC-7",
+      "criterion": "Given the application is running in a development environment, When the Contentstack CMS live preview iframe loads the application URL, Then the application responds to live preview events and displays draft content in real time."
+    },
+    {
+      "id": "AC-8",
+      "criterion": "Given the Contentstack management token used for live preview, When the application renders in the browser, Then the management token is not exposed in client-side JavaScript bundles, HTML source, or network responses accessible to end users."
+    },
+    {
+      "id": "AC-9",
+      "criterion": "Given a page that requires authentication or is otherwise protected, When a content author attempts live preview, Then the limitation is documented and the protected page either displays a fallback or gracefully indicates that live preview is unavailable for that page."
+    },
+    {
+      "id": "AC-10",
+      "criterion": "Given the live preview feature is active, When the page re-renders due to a live preview update, Then the page's accessibility attributes (ARIA roles, labels, landmark regions, focus management) remain intact and no accessibility regressions are introduced compared to the non-preview render."
+    },
+    {
+      "id": "AC-11",
+      "criterion": "Given the existing Contentstack data-fetching functions (getEntry, getSingleEntry, getPageContentTypes, findSingletonEntry), When live preview is enabled, Then these functions return draft content when a live preview signal is active and published content otherwise, without changes to their call signatures."
+    },
+    {
+      "id": "AC-12",
+      "criterion": "Given the application uses Next.js Pages Router, When live preview is integrated, Then the integration works within the Pages Router architecture (getServerSideProps / getStaticProps data flow) without requiring migration to App Router."
+    },
+    {
+      "id": "AC-13",
+      "criterion": "Given the live preview SDK initialization, When the Contentstack host URL is configured via environment variable, Then the SDK connects to the specified host for live preview communication."
+    },
+    {
+      "id": "AC-14",
+      "criterion": "Given a live preview update event is received, When the updated content contains references or modular blocks, Then referenced content and modular block data are also refreshed in the re-rendered output."
+    },
+    {
+      "id": "AC-15",
+      "criterion": "Given the live preview feature is active, When a live preview event arrives but contains malformed or incomplete data, Then the application logs a descriptive error and continues displaying the last known good content rather than crashing or showing a blank page."
+    }
+  ],
+  "notes": "Openspec provided an empty AC list with excellent contextual notes about the current state (no live-preview SDK, no wiring, Pages Router). I read the actual codebase to ground the ACs: (1) src/services/contentstack.ts confirms the `options` config lacks `live_preview` and `ContentstackLivePreview.init()` is never called; (2) src/pages/_app.tsx is a standard Pages Router wrapper with no live preview provider; (3) package.json has `contentstack: ^3.15.2` but no `@contentstack/live-preview` dependency; (4) no `live_preview`, `ContentstackLivePreview`, or management token references exist anywhere in src/. ACs 1-4 cover the core integration (config, init, provider, re-render). ACs 5-6 cover graceful degradation when env vars are missing or in production. ACs 7-8 cover the dev-only activation and security (management token not leaked to client). AC-9 addresses the story's stated limitation about protected pages. AC-10 covers accessibility non-regression. ACs 11-12 ensure backward compatibility with existing data-fetching functions and Pages Router. ACs 13-15 cover edge cases: host configuration, reference/modular-block refresh, and malformed event handling. All ACs are expressed as observable outcomes (Given/When/Then) without prescribing implementation libraries or mock patterns.",
+  "acAddedBySpeckit": [
+    "AC-1",
+    "AC-2",
+    "AC-3",
+    "AC-4",
+    "AC-5",
+    "AC-6",
+    "AC-7",
+    "AC-8",
+    "AC-9",
+    "AC-10",
+    "AC-11",
+    "AC-12",
+    "AC-13",
+    "AC-14",
+    "AC-15"
+  ],
+  "acModifiedBySpeckit": [],
+  "acFlagged": [
+    {
+      "criterion": "AC-9",
+      "flag": "The original story states protected pages may not be previewable, but the boundary of 'protected pages' is undefined. The team should clarify which pages are in scope and what 'gracefully indicates' means — a toast, a banner, or simply no preview? This AC may need refinement after product clarification."
+    },
+    {
+      "criterion": "AC-8",
+      "flag": "Contentstack Live Preview SDK for Pages Router may require the management token on the client side for its internal operation (the SDK manages this). The team should verify whether the SDK handles token security internally or if a server-side proxy pattern is needed. If the SDK requires the token client-side by design, this AC may need to be relaxed to 'the management token is not exposed in user-visible network responses or HTML source beyond what the SDK internally manages.'"
+    },
+    {
+      "criterion": "AC-6",
+      "flag": "Needs team confirmation on whether live preview should be completely disabled in production builds or merely inactive by default. Some teams enable it in staging environments that run production builds."
+    }
+  ]
+}
+```

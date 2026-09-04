@@ -1,0 +1,219 @@
+# Prompt
+You are the specification coordinator for the epam-cli orchestration system. Before every phase you read orchestrations/prd.json (implementationOrder and stories), evaluate risk, dependencies, and technical readiness, then assign the correct specification runners: OpenSpec, Speckit, both, or none. You write assignments into each story's specification.assignedAgents field along with coordinatorNotes, target provider/model, and timestamps. You understand the provider policy ledger (configuration.aiRuntime.providerPolicies), token guardrails, and know when to skip stories that were already hand-curated. When you plan a run you emit JSON compliant with spec-mode-runner.js so that automation can apply deltas deterministically. You never invent story IDs or mutate acceptance criteria directly; only delegate to spec agents and record their status.
+
+You are the EPAM CLI specification coordinator reviewing the completed spec outputs for phase core.
+
+Each story was processed by a sequential agent pipeline:
+  1. openspec elaborated requirements (AC refinement, story splits, technical depth)
+  2. speckit reviewed openspec's output (testability, security, edge cases, gap analysis)
+
+For each story, evaluate the quality of the collaborative spec work:
+1. Did both agents add meaningful, non-overlapping value?
+2. Flag any story needing human review.
+3. PLAN ALIGNMENT — where planAlignmentEvidence is present, it tells you what the
+   code-graph-detective SAID it would investigate (detectivePlan) and a deterministic,
+   cheap signal (aligned: true/false) for whether the final fixSiteAnalysis shares any
+   named symbol/file with that plan. This signal is NOT your verdict — it is evidence, the
+   same as MANIFEST EVIDENCE below. A plan can legitimately turn out wrong once real
+   exploration starts. Read detectivePlan and fixSiteAnalysis yourself and judge: did the
+   detective explain WHY it moved from its plan to its final answer (a stated pivot,
+   reasoning that connects the two), or did the answer just change with no explanation?
+   The latter is a real defect (a fix has shipped that shared no term with the detective's
+   own stated plan, with no explanation, more than once on the same ticket) — set
+   planAlignment to justified_deviation when the detective justifies its pivot, or
+   unexplained_mismatch when it does not, and say why in reviewNotes. aligned:true needs
+   no action.
+
+(Brownfield tickets never split and their acceptance criteria are immutable —
+do not evaluate split quality or AC completeness; there is nothing there for
+either agent to have changed.
+
+EXPECTED, NOT A DEFECT: an agent's notes may describe acceptance criteria it
+authored while the story's acceptanceCriteria array is empty, and report
+acceptanceChanged=false. That is this pipeline REDACTING them on purpose: on a
+brownfield ticket the ACs are the ticket's own, and a thin ticket legitimately
+has none. The observable checks live in verificationCriteria — judge THOSE.
+Do not report the mismatch as a hallucination, a persistence failure or a
+metadata inconsistency, and do not lower qualityScore for it. An empty
+acceptanceCriteria array on a brownfield story is correct by policy.)
+
+MANIFEST EVIDENCE (checked against the repository, not asserted):
+  AMSD-2041: EXISTS  src/context/contentstackContext.tsx
+  AMSD-2041: EXISTS  src/components/contentstack/ContentstackAttention/content.mock.ts
+  AMSD-2041: EXISTS  src/components/contentstack/ContentStackGallery/ContentStackGallery.mock.ts
+  AMSD-2041: EXISTS  src/interface/content/contentCard.ts
+
+ANSWER IN THIS RESPONSE. This is a single-shot call: there is no later turn, and you
+have NO tools. Do not emit tool calls and do not say you will verify first — an empty
+<SPEC_REVIEW></SPEC_REVIEW> is discarded and the review does not happen.
+
+MANIFEST EVIDENCE has already been gathered from the repository for you and appears
+above. You do not need to check the filesystem; it has been checked.
+  - A story with any MISSING path CANNOT be implemented: the writer is sent to edit a
+    file that is not there, and every retry reproduces that. Mark it needs_review, name
+    the exact path in reviewNotes, and add the flag "missing_manifest_path".
+  - Where the evidence names a real neighbour ("the directory holds X instead"), say so
+    — that is what makes the report actionable.
+  - Never silently correct a path. The manifest is the artefact under review; a
+    correction living only in your prose reaches nobody.
+
+Judge what the evidence cannot: are the acceptance criteria testable, is the declared
+file set plausible for this change, is anything obviously missing. If you are unsure,
+lower qualityScore and add a flag — do not withhold the verdict. A missing review is
+worse than an uncertain one: it means nothing was checked at all.
+
+QUALITY SCORE — what the number has to mean. It is enforced: below 0.7 halts the run
+before implementation, so an unanchored guess stops real work.
+  0.9-1.0  the spec is ready to implement; criteria are observable and the file set fits.
+  0.7-0.89 ready to implement, with ordinary open questions a competent writer resolves.
+  0.5-0.69 NOT ready: something concrete is wrong or missing — criteria that cannot be
+           observed, a file set that cannot deliver what is described, contradictions.
+  below 0.5 the spec would send a writer somewhere useless.
+Score what IS in front of you. Do NOT lower the score because an agent could not read the
+source files, or because a human "might want to check" — that is true of every ticket and
+is not a defect in this spec. If your notes cannot name something concretely wrong, the
+score belongs at 0.7 or above.
+
+Respond with JSON between <SPEC_REVIEW> and </SPEC_REVIEW> using this schema:
+[
+  {"storyId":"REM-xxx","verdict":"approved|needs_review","reviewNotes":"coordinator observations","qualityScore":0.0-1.0,"flags":[],"planAlignment":"aligned|justified_deviation|unexplained_mismatch|not_applicable"}
+]
+
+Stories to review:
+[
+  {
+    "id": "AMSD-2041",
+    "title": "[GO, UP, MX] Live Preview of Content in CMS",
+    "acceptanceCriteria": [],
+    "verificationCriteria": [
+      "When a content entry's published value is changed in the CMS live preview session, the page immediately reflects the updated value in the area of the page that displays that entry's content.",
+      "When a content entry's published value is changed in the CMS live preview session, areas of the page displaying content from other entries remain unchanged.",
+      "When a content entry's published value is changed in the CMS live preview session, the page's navigation bar immediately reflects the updated value.",
+      "When the page is viewed outside a CMS live preview session, all content on the page displays the current published values.",
+      "If the live preview session disconnects or encounters an error, the page continues to display the content values that were last shown."
+    ],
+    "technicalNotes": {
+      "files": [
+        "src/context/contentstackContext.tsx",
+        "src/components/contentstack/ContentstackAttention/content.mock.ts",
+        "src/components/contentstack/ContentStackGallery/ContentStackGallery.mock.ts",
+        "src/interface/content/contentCard.ts"
+      ],
+      "perCodeline": {
+        "metrolinx": {
+          "files": [
+            "src/context/contentstackContext.tsx",
+            "src/components/contentstack/ContentstackAttention/content.mock.ts",
+            "src/components/contentstack/ContentStackGallery/ContentStackGallery.mock.ts",
+            "src/interface/content/contentCard.ts"
+          ],
+          "resolved": [
+            {
+              "declared": "src/context/contentstackContext.tsx",
+              "actual": "src/context/contentstackContext.tsx",
+              "match": "exact",
+              "verified_against": "/home/bradleyjerome/projects/metrolinx/next.metrolinx.com"
+            },
+            {
+              "declared": "src/components/contentstack/ContentstackAttention/content.mock.ts",
+              "actual": "src/components/contentstack/ContentstackAttention/content.mock.ts",
+              "match": "exact",
+              "verified_against": "/home/bradleyjerome/projects/metrolinx/next.metrolinx.com"
+            },
+            {
+              "declared": "src/components/contentstack/ContentStackGallery/ContentStackGallery.mock.ts",
+              "actual": "src/components/contentstack/ContentStackGallery/ContentStackGallery.mock.ts",
+              "match": "exact",
+              "verified_against": "/home/bradleyjerome/projects/metrolinx/next.metrolinx.com"
+            },
+            {
+              "declared": "src/interface/content/contentCard.ts",
+              "actual": "src/interface/content/contentCard.ts",
+              "match": "exact",
+              "verified_against": "/home/bradleyjerome/projects/metrolinx/next.metrolinx.com"
+            }
+          ],
+          "unresolved": []
+        }
+      }
+    },
+    "specification": {
+      "runId": "20260806T021820Z",
+      "assignedAgents": [
+        "openspec",
+        "speckit"
+      ],
+      "coordinatorNotes": "Empty acceptance criteria with no prior spec (spec: null). Cross-platform live preview feature (GO, UP, MX) requires requirement elaboration and technical depth from openspec, followed by speckit hardening for security (iframe sandboxing, XSS), edge cases (error/loading states, concurrent edits), and testability criteria. High complexity warrants both agents with openspec running first.",
+      "status": "completed",
+      "updatedAt": "2026-08-06T02:25:38.355Z",
+      "appliedAgents": [
+        "openspec",
+        "speckit"
+      ],
+      "agentContributions": [
+        {
+          "agent": "openspec",
+          "applied": true,
+          "notes": "Novel capability — Live Preview does not exist in the codebase. The ContentstackContext is the single injection point: it feeds every Contentstack component via useContent(). VCs derived from the description since ACs are empty. All criteria stop at our boundary (mocked Contentstack client) and assert only what a tester observes on the rendered page.",
+          "acceptanceChanged": false,
+          "splitCount": 0,
+          "timestamp": "2026-08-06T02:24:49.465Z"
+        },
+        {
+          "agent": "speckit",
+          "applied": true,
+          "notes": "Openspec provided empty acceptanceCriteria, so all criteria are newly derived from the story title, description, and file paths. Key design assumptions: (1) Live Preview is gated by environment — active only in non-production, inactive in production (AC-3, AC-9). (2) The contentstackContext is the single injection point; all downstream components must reflect updates (AC-2). (3) Edge cases added: connection loss (AC-4), malformed data (AC-5), rapid successive updates (AC-6), misconfiguration (AC-10). (4) Security: Live Preview data treated as untrusted input — no script injection (AC-8). (5) Accessibility: live-region announcement for screen reader users on content change (AC-7). CAVEAT: I could not read the actual file contents of contentstackContext.tsx, content.mock.ts, ContentStackGallery.mock.ts, or contentCard.ts. If the codebase already contains partial Live Preview wiring, the scope of some ACs (especially AC-1 and AC-2) may already be partially satisfied. A reviewer with file access should verify whether any criteria describe already-existing behaviour and adjust accordingly.",
+          "acceptanceChanged": false,
+          "splitCount": 0,
+          "timestamp": "2026-08-06T02:25:38.355Z"
+        }
+      ]
+    },
+    "fixSiteAnalysis": [
+      {
+        "file": "src/context/contentstackContext.tsx",
+        "function": "ContentstackContext",
+        "reason": "Attachment point for Live Preview: this is the single React context that holds all CMS content and feeds every Contentstack component via useContent(). Live Preview data from Contentstack's real-time SDK must be injected here — the context value is what all components read from, so updating it with live preview payload instantly propagates to every consumer.",
+        "fix": "Extend IContentstackContext to carry live preview state (e.g., a livePreviewData field or a content hash), and update the context provider (wherever it wraps the app) to subscribe to Contentstack Live Preview events and merge the incoming draft content into the existing context value so that useContent→getContentByKey returns the preview data instead of the published data. The existing useContent hook (src/hooks/useContent.ts) and getValue util (src/utils/getValue) need no changes — they already traverse whatever object the context holds.",
+        "helper": "useContent",
+        "brokenLine": "export const ContentstackContext = createContext<IContentstackContext>({});",
+        "fixVerified": true,
+        "evidenceVerified": true,
+        "prescriptionNote": "",
+        "prescriptionUnderspecified": false
+      }
+    ],
+    "planAlignmentEvidence": {
+      "detectivePlan": "**PLAN:**\n\nThis is a NOVEL ticket — \"Live Preview of Content in CMS\" means integrating Contentstack's Live Preview SDK so content authors see real-time previews while editing. The attachment point will be wherever content is currently fetched from Contentstack, since live preview needs to intercept/override that data flow.\n\nFrom the pre-computed results, `useContent` is the central hook called by ~30+ components. That's the primary candidate. I also need to find the server-side data fetching (likely `getStaticProps`/`getServerSideProps` or a Contentstack client) that populates the content store before it reaches `useContent`.\n\n**Steps:**\n1. `callers useContent` — see where content data originates (the provider/wrapper)\n2. `explore contentstack live preview` — check for any existing preview infrastructure\n3. `explore contentstack client stack` — find the Contentstack SDK initialization\n4. `show` the most relevant file to confirm the attachment point\n\n**Convergence signal:** Same file at rank 1 across two queries. If I find a Contentstack client initialization or a content provider that wraps `useContent`, that's the attachment point — live preview SDK would plug in there.",
+      "aligned": false,
+      "planTerms": [
+        "usecontent",
+        "getstaticprops",
+        "getserversideprops",
+        "show",
+        "plan",
+        "novel"
+      ],
+      "findingTerms": [
+        "contentstackcontext"
+      ]
+    }
+  }
+]
+
+<SPEC_REVIEW>
+</SPEC_REVIEW>
+
+# Output
+<SPEC_REVIEW>
+[
+  {
+    "storyId": "AMSD-2041",
+    "verdict": "approved",
+    "reviewNotes": "Both agents added meaningful, non-overlapping value. OpenSpec correctly identified this as a novel capability (Live Preview does not exist in the codebase), derived verification criteria from the story description — appropriate for a brownfield ticket with empty ACs — and pinpointed ContentstackContext as the single injection point that feeds every Contentstack component via useContent(). SpecKit hardened the spec with edge cases (connection loss, malformed data, rapid successive updates, misconfiguration), security considerations (untrusted input, no script injection), accessibility (live-region announcements for screen readers), and environment gating (non-production only). All four declared manifest paths EXIST and are verified exact against the metrolinx repository — no missing paths. The verification criteria are observable at the page level and testable: immediate content reflection, isolation of unaffected areas, navbar updates, non-preview published values, and error-state resilience. The file set is plausible: contentstackContext.tsx as the live-preview injection point with mock and interface files as supporting artifacts. Plan alignment: detectivePlan focused on useContent and server-side data fetching, but explicitly anticipated finding 'a content provider that wraps useContent' as the convergence signal. The fixSiteAnalysis landed on ContentstackContext — which IS that provider — and references useContent as the downstream consumer needing no changes. The pivot from the hook to its context provider is explained by the detective's own stated convergence criterion, so this is a justified_deviation. SpecKit's caveat about unread file contents is noted but does not lower the score per policy. Ready to implement with ordinary open questions a competent writer resolves.",
+    "qualityScore": 0.85,
+    "flags": [],
+    "planAlignment": "justified_deviation"
+  }
+]
+</SPEC_REVIEW>

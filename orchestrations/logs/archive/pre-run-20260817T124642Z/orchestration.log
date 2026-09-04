@@ -1,0 +1,18 @@
+[mint-step] codeline mocka: /home/bradleyjerome/projects/mock3/mock-a (2 declared deps)
+[mint-step] codeline mockb: /home/bradleyjerome/projects/mock3/mock-b (2 declared deps)
+[mint-step] plugins provisioned: 1 · mint tools: read_file,list_files,search,codegraph_query
+spec-mode: fast-path qwen/z-ai/glm-5.2 (skipping MiniMax)
+[mint-step]   survey: mocka — in_scope (src/fares.ts, test/fares.test.ts)
+[mint-step]   survey: mockb — in_scope (src/schedule.ts, test/schedule.test.ts)
+[mint-step]   survey recommends an investigator for mocka: The boundary condition in fareFor at src/fares.ts line 10: `rider.age > 65` should be `>= 65` per the documented rule. Add a test at age 65 to the existing test/fares.test.ts.
+[mint-step]   survey recommends an investigator for mockb: The loop bound in formatStops at src/schedule.ts line 6: `i < stops.length - 1` drops the final stop. It should iterate through all stops. Add a test asserting the last stop name appears in the output.
+spec-mode: fast-path qwen/z-ai/glm-5.2 (skipping MiniMax)
+spec-mode: fast-path qwen/z-ai/glm-5.2 (skipping MiniMax)
+[mint-step] proposed=6 minted=3 unchanged=0 rejected=0 superseded=3
+[mint-step]   + [implementer] typescript-logic-engineer (profiles.json, kb, project-roles, project-profiles) — Both mocka and mockb share the same vitest-plus-typescript stack and require small precise logic fixes to production TypeScript files, so one implementer spanning both avoids minting near-duplicate roles per codeline.
+[mint-step]   + [investigator:mocka] mocka-investigator (profiles.json, kb, project-investigators, project-profiles) — The mocka codeline isolates fare logic in a single TypeScript module whose code and JSDoc disagree on a boundary, so an investigator who knows where fareFor and its test live can confirm the exact defect and the gap in test coverage before any fix is attempted.
+[mint-step]   + [investigator:mockb] mockb-investigator (profiles.json, kb, project-investigators, project-profiles) — The mockb codeline isolates schedule-rendering logic in a single TypeScript module with an off-by-one loop that drops the last stop, so an investigator who knows where formatStops and its test live can confirm the defect and the missing last-stop assertion before any fix is attempted.
+spec-mode: fast-path qwen/z-ai/glm-5.2 (skipping MiniMax)
+[mint-step] roster review (cycle 1): review_failed — 0 finding(s), 0 blocking
+[mint-step] ! the roster was NOT reviewed (review_failed): the roster reviewer returned no usable findings — the tag was missing, empty, or not the reviewed shape. The roster is UNREVIEWED, which is not the same as sound.
+[mint-step] FAILED: roster review did not run, so these briefs are unchecked, and no roster pause is configured for anyone to look at them. An unreviewed roster is not a sound one. See roster-review.json.

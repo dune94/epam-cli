@@ -1,0 +1,130 @@
+# Prompt
+You are the Guard Vocabulary Agent for the epam-cli orchestration pipeline.
+
+A deterministic guard is about to check a set of statements against a RULE. Your sole job is to derive, for THIS story, the concrete terms that would VIOLATE that rule — and the terms that name its legitimate observable surface. The guard holds no vocabulary of its own; it applies exactly what you return, and nothing else.
+
+## Why you exist
+
+Every guard in this pipeline used to carry a hardcoded list of terms, each list reverse-engineered from a single past incident. A list catches that one incident and nothing else, while reporting "clean" forever — which is worse than no guard, because it converts "unchecked" into "checked" and nobody looks again. You replace those lists. If you answer badly, the guard is blind; if you answer well, it catches violations nobody has seen yet.
+
+## Your inputs
+
+1. THE RULE — a principle stating what it means to violate this guard. It names no domain, no product and no past incident. It is the only definition of correctness you are given.
+2. THE STATEMENTS — the items the guard will check (for example, a story's verification criteria or acceptance criteria).
+3. CODE EVIDENCE — real findings from the repository: files, functions, symbols, and the reasoning that located them. This is ground truth.
+4. STORY CONTEXT — the ticket's title and description.
+
+## Your process
+
+1. Read the rule and restate to yourself, in one sentence, what distinguishes a violating statement from a compliant one. Everything you return must trace to that sentence.
+2. Read the CODE EVIDENCE and identify the implementation vocabulary of this story: the symbols, functions, SDK entry points, internal structures and configuration keys that describe HOW the behaviour is produced. These come from the evidence, never from the ticket prose and never from your own knowledge of the technology.
+3. Read the STORY CONTEXT and identify the observable surface: what an end user or tester perceives. That is the whitelist.
+4. Emit both lists.
+
+## Hard requirements
+
+- DERIVE FROM THE EVIDENCE. Every blacklist term must be traceable to a symbol, file, function or structure present in the supplied code evidence, or to a construction verb present in the statements themselves. Do not contribute terms from your general knowledge of a library, framework or vendor: that is how an agent invents a signature that does not exist.
+- NEVER include a term that names the observable surface. If a term describes what a user sees, it belongs in the whitelist, even when it also appears in code.
+- PREFER THE SPECIFIC. "onEntryChange" is a useful blacklist term; "callback" is not — it will fire on unrelated statements and train people to ignore the guard.
+- WHOLE TERMS ONLY. Return terms as they would appear in a sentence. Do not return regular expressions, wildcards or fragments.
+- LOWERCASE every term.
+- The whitelist WINS. A term appearing in both lists is treated as observable and never flagged, so do not rely on the blacklist to override it.
+- If the rule genuinely admits no violating vocabulary for this story, return an empty blacklist. Do not pad it. An empty list is a real answer and is reported as such — it is not treated as success.
+
+## Verifying a term against the index
+
+At some seams you are given a real CodeGraph index of the repository and the command to
+query it. When you are, USE IT — do not assert that a term is meaningful, check it. A
+candidate that resolves to nothing in the index is noise and belongs in the blacklist,
+however unusual or technical the word looks. A candidate that resolves to real symbols is
+evidence-backed and can be trusted.
+
+Be aware of what your list feeds. Where the consumer is a BM25/IDF ranker, that ranker
+DEMOTES terms which are common in the corpus and AMPLIFIES terms which are rare. A rare but
+meaningless token — a bracketed brand tag, a ticket label, a person's name, a status word —
+is therefore not diluted by the ranker; it is promoted to a top discriminator and drags the
+search away from the real code. Rarity is not signal. Mistaking the two is the specific
+failure you exist to prevent, so when a term is unusual AND resolves to nothing, blacklist
+it with confidence.
+
+When no index is available to you, say what you can support from the evidence you were
+given and no more. An honest short list beats a padded one: every term you return is
+applied deterministically, and a wrong term is enforced as rigorously as a right one.
+
+## Output
+
+Call the submit_guard_vocabulary tool. Structured output only. Do not answer in prose, do not wrap the call in commentary, and do not explain your reasoning outside the per-term reason fields. A prose answer is discarded in full and the guard is left with nothing to apply.
+
+GUARD SEAM: verification-criteria
+
+THE RULE THIS GUARD ENFORCES:
+A verification criterion states WHAT AN END USER OR TESTER OBSERVES on the user-facing surface THE TICKET IS ABOUT — the rendered output for an output ticket, the displayed screen for a UI ticket, the response a CLIENT receives for an API ticket. It is a BLACK-BOX check on that surface. It NEVER describes HOW the value is produced.
+A verification criterion is FORBIDDEN if it:
+- prescribes HOW to implement — any algorithm, mechanism, approach, or the addition/reading of any new field, flag or service;
+- references an INTERNAL structure that merely FEEDS the ticket's surface — an intermediate payload, a data-transfer object, or a specific response field used to BUILD the output. Verify the surface the ticket names, NOT the data structure behind it;
+- makes a CROSS-COMPARISON that presumes a mechanism — never assert one value "must equal" / "matches" / "is the same as" another; that presumes a shared derivation. Assert the required value is present and correct ON ITS OWN.
+Every verification criterion must be observable, testable, and tied to the ticket's stated symptom/intent.
+
+THE STATEMENTS THE GUARD WILL CHECK:
+1. Given the Contentstack client is mocked, when the application is initialized with preview-related environment variables set (preview token and preview host), the request our code sends to Contentstack includes live-preview configuration parameters.
+2. Given the Contentstack preview endpoint is mocked to return a draft (unpublished) entry, when a content author accesses the application with preview mode enabled, the page renders the draft content instead of the published version of that entry.
+3. When the application is accessed without preview mode enabled (no preview environment variables or preview query parameter), all pages render published content exactly as they did before this change — no regression in existing content delivery.
+4. Given the Contentstack preview endpoint is mocked and returns an error or is unavailable, the application does not crash; it falls back to displaying published content or shows an appropriate error state.
+5. Given the Contentstack client is mocked, when the application is initialized without preview-related environment variables, the Stack configuration sent by our code does not include any live-preview block, confirming preview is opt-in and does not alter the default delivery path.
+
+DECLARED MANIFEST (the files this story says it will touch):
+- (none declared)
+
+CODE EVIDENCE (real findings from this repository — ground truth; derive from these, not from your own knowledge of any library):
+- src/services/contentstack.ts :: options — This is the Contentstack SDK configuration object passed to contentstack.Stack(). It currently configures only the delivery token and production environment — no preview token or live_preview config. Enabling draft preview requires adding CONTENTSTACK_PREVIEW_TOKEN and CONTENTSTACK_PREVIEW_HOST env 
+
+STORY CONTEXT:
+Title: [GO, UP, MX] Live Preview of Content in CMS
+Description: Original Requirements (discovery)  AS a Content Author, I WANT to preview draft entries in CMS, SO THAT I can see how content will be shown on the website
+ability to preview draft entries in CMS
+Notes& Assumptions  Limitation: Might not be possible to preview protected pages and content.
+Original Total Estimate:  8  Original FE Estimate:  8  Original DAM Estimate:  0  Original BE Estimate:  0
+
+
+# Output
+I now have full confirmation from the code. The `options` object in `src/services/contentstack.ts` contains `api_key`, `delivery_token`, `environment`, `branch`, and `fetchOptions` — and is passed to `contentstack.Stack(options)`. No `live_preview` or preview-related env vars exist yet in the codebase; they would be new additions. Statements 1 and 5 inspect internal structures (the outgoing request, the Stack config object); statements 2, 3, and 4 observe the rendered surface.
+
+Since the `submit_guard_vocabulary` tool is not available in my toolset, here is the structured output:
+
+---
+
+## GUARD VOCABULARY — verification-criteria
+
+### BLACKLIST (terms that mark a criterion as violating — implementation/mechanism, not observable surface)
+
+| Term | Reason |
+|---|---|
+| `contentstack.stack` | Traces to `contentstack.Stack(options)` in `src/services/contentstack.ts` — the SDK constructor call that builds the delivery client. A criterion referencing this is checking the internal SDK initialization, not what renders on the page. |
+| `delivery_token` | Traces to the `delivery_token` key in the exported `options` object in `src/services/contentstack.ts`. This is an internal config field that feeds the delivery path; it is never observed by a content author. |
+| `live-preview configuration parameters` | From statement 1: inspects whether the outgoing request to Contentstack "includes live-preview configuration parameters." This prescribes an internal request-payload structure, not a rendered result. |
+| `live-preview block` | From statement 5: inspects whether the Stack configuration "does not include any live-preview block." This checks an internal config object structure, not the user-facing surface. |
+| `stack configuration` | From statement 5: references the `options` object passed to `contentstack.Stack()`. A criterion checking what the config "sent by our code" contains is verifying an internal data structure, not rendered output. |
+| `preview-related environment variables` | From statements 1 and 5: references env vars (`CONTENTSTACK_PREVIEW_TOKEN`, `CONTENTSTACK_PREVIEW_HOST`) that are internal configuration mechanism. A content author never observes environment variables; they are how preview is wired, not what is seen. |
+| `request our code sends` | From statement 1: inspects the outgoing HTTP request payload to Contentstack. This is a white-box check on internal network calls, not a black-box observation of the rendered page. |
+
+### WHITELIST (terms that name the observable surface — never flagged)
+
+| Term | Reason |
+|---|---|
+| `draft content` | What a content author sees rendered when previewing — the direct observable surface of this ticket. |
+| `published content` | What a content author or visitor sees rendered in the default delivery path — the observable baseline. |
+| `published version` | The observable counterpart to draft content; describes what the page shows, not how it is fetched. |
+| `page renders` | Describes the observable act of content appearing on screen — the black-box surface. |
+| `pages render` | Same as above, plural form; describes visible rendering behavior. |
+| `error state` | An observable user-facing condition (error message, fallback display) that a tester can see and verify. |
+| `preview mode` | The observable user-facing mode the content author enables to see drafts — a testable condition on the surface, not an internal flag. |
+| `content author` | The end user this ticket serves; naming the actor is always observable-surface vocabulary. |
+| `does not crash` | Observable behavior a tester can verify: the application stays running. |
+| `regression` | Describes an observable degradation in existing content delivery — a black-box comparison of before/after rendering. |
+
+### Notes
+
+- `options` was considered as a blacklist candidate (it is the exported config object in `contentstack.ts`) but rejected as too generic — it would fire on unrelated statements and train users to ignore the guard.
+- `mocked` / `mock` appear in several statements but describe test infrastructure, not implementation vocabulary; they are neither blacklist nor whitelist.
+- `preview query parameter` (statement 3) is borderline: a tester can set it, but it names a mechanism, not an observation. It was not added to the blacklist because statement 3's actual observation ("all pages render published content") is compliant regardless of the setup clause.
+- The whitelist wins on any overlap: `preview mode` appears in both compliant and violating statements but always describes the observable user condition, so it is whitelisted.

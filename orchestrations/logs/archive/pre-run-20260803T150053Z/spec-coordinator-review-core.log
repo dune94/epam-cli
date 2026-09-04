@@ -1,0 +1,68 @@
+# Prompt
+You are the specification coordinator for the epam-cli orchestration system. Before every phase you read orchestrations/prd.json (implementationOrder and stories), evaluate risk, dependencies, and technical readiness, then assign the correct specification runners: OpenSpec, Speckit, both, or none. You write assignments into each story's specification.assignedAgents field along with coordinatorNotes, target provider/model, and timestamps. You understand the provider policy ledger (configuration.aiRuntime.providerPolicies), token guardrails, and know when to skip stories that were already hand-curated. When you plan a run you emit JSON compliant with spec-mode-runner.js so that automation can apply deltas deterministically. You never invent story IDs or mutate acceptance criteria directly; only delegate to spec agents and record their status.
+
+You are the EPAM CLI specification coordinator reviewing the completed spec outputs for phase core.
+
+Each story was processed by a sequential agent pipeline:
+  1. openspec elaborated requirements (AC refinement, story splits, technical depth)
+  2. speckit reviewed openspec's output (testability, security, edge cases, gap analysis)
+
+For each story, evaluate the quality of the collaborative spec work:
+1. Did both agents add meaningful, non-overlapping value?
+2. Flag any story needing human review.
+
+(Brownfield tickets never split and their acceptance criteria are immutable —
+do not evaluate split quality or AC completeness; there is nothing there for
+either agent to have changed.)
+
+Respond with JSON between <SPEC_REVIEW> and </SPEC_REVIEW> using this schema:
+[
+  {"storyId":"REM-xxx","verdict":"approved|needs_review","reviewNotes":"coordinator observations","qualityScore":0.0-1.0,"flags":[]}
+]
+
+Stories to review:
+[
+  {
+    "id": "MOCK-HW-1",
+    "title": "Hello world greeting should say hello dolly",
+    "acceptanceCriteria": [],
+    "specification": {
+      "runId": "20260803T142750Z",
+      "assignedAgents": [
+        "openspec"
+      ],
+      "coordinatorNotes": "Trivial greeting change with no AC or dependencies. Assigning openspec only to elaborate acceptance criteria and add minimal technical depth. Speckit not warranted — no security, edge-case, or complex testability concerns for a simple string change.",
+      "status": "completed",
+      "updatedAt": "2026-08-03T14:33:29.725Z",
+      "appliedAgents": [
+        "openspec"
+      ],
+      "agentContributions": [
+        {
+          "agent": "openspec",
+          "applied": true,
+          "notes": "The greeting is hardcoded in getGreeting() returning 'hello world'; the story requires it to return 'hello dolly'. This is a defect in existing computed output, fix site is src/hello.ts:getGreeting.",
+          "acceptanceChanged": false,
+          "splitCount": 0,
+          "timestamp": "2026-08-03T14:33:29.725Z"
+        }
+      ]
+    }
+  }
+]
+
+<SPEC_REVIEW>
+</SPEC_REVIEW>
+
+# Output
+<SPEC_REVIEW>
+[
+  {
+    "storyId": "MOCK-HW-1",
+    "verdict": "approved",
+    "reviewNotes": "Brownfield trivial greeting change with no AC. Coordinator correctly assigned openspec only and skipped speckit — no security, edge-case, or complex testability concerns for a one-word string swap. Openspec added meaningful, non-overlapping value: identified the exact defect location (src/hello.ts:getGreeting), confirmed the hardcoded string mismatch ('hello world' → 'hello dolly'), and correctly did not modify AC or propose splits per brownfield policy. No second agent was needed, so the single-agent contribution is sufficient. Quality is high given the simplicity of the story.",
+    "qualityScore": 0.9,
+    "flags": []
+  }
+]
+</SPEC_REVIEW>

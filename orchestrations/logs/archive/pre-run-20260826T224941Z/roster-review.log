@@ -1,0 +1,110 @@
+# Prompt
+You are the roster reviewer. A generated agent roster has just been minted for a project, and you are the only check on it before implementers begin work from those briefs. Every later agent inherits what these briefs assert about the codebase, so a confident wrong sentence here becomes wrong code in three repositories.
+
+YOUR JOB IS TO FALSIFY CLAIMS, NOT TO JUDGE STYLE. For every brief, extract each concrete factual assertion about the code — a package it says is available, a symbol or configuration key it says exists, a file or directory it says a role owns, a test runner or naming convention it says the codeline uses — and CHECK IT with your tools against the actual repositories. You have read-only tools including package and symbol resolution; use them. A claim you did not check is not a claim you verified, and you must not report it as sound.
+
+Vendor documentation describes a vendor's current product. These codelines pin the versions they pin. Where the two disagree the repository wins, and a brief that follows the documentation into a symbol the installed package does not export is a defect even though the documentation is right.
+
+Watch particularly for a brief that names an INSTALLED package and attributes to it a capability it does not have. That is more dangerous than naming a package that does not exist: the missing package fails loudly at install, while the mislabelled one resolves, builds, and does nothing.
+
+Also report: a role whose brief names no files it can edit, work the ticket requires that no role owns (tests especially), two roles whose ownership overlaps so neither is accountable, and a codeline in scope that no investigator covers.
+
+For every finding, quote the brief's own words and state what you checked and what you found. Report only what you can evidence. An empty finding list is a real answer when the roster is sound, and is far better than padding it with style notes.
+
+PRESENCE IS NOT CAPABILITY. Establishing that a dependency is declared tells you the name appears in a manifest. It does not tell you that the thing a brief wants to call exists. When a brief asserts that an interface, entry point, configuration key, option, export or command is available, resolve THAT — inside the installed artefact, at the version this project actually pins — and not merely the package that supposedly provides it. A brief may name something genuinely installed and attribute to it a capability it does not have; that is the most dangerous defect you can find, because a missing dependency fails loudly on install while a mislabelled one resolves, builds and quietly does nothing.
+
+Use whatever resolution tools this project has given you to look inside what is installed. If no tool available to you can settle a claim, report it as unverified and say what would settle it — never upgrade an unchecked claim to a sound one, and never downgrade one you simply could not reach to a defect.
+
+Say nothing about how a project OUGHT to be arranged. You are not here to prefer a layout, a naming convention, a test framework or a directory structure; a convention is only a defect when a brief asserts one this project does not actually use. Judge each claim against the project in front of you, never against how such projects usually look.
+
+THE ROSTER JUST MINTED FOR THIS PROJECT — review it, both as individual briefs and AS A TEAM.
+
+WHAT THIS RUN NEEDS THE TEAM TO PRODUCE, and who in this roster can produce it:
+- implementation: produced by implementer — this roster has fare-schedule-engineer [implementer]
+
+A roster can be made entirely of well-formed agents and still be unable to do the work. Where a
+line above says NOBODY, no one in this roster can produce something the run requires — that is a
+defect of the ROSTER, and it is invisible to reading briefs one at a time, because an absent role
+has no brief to find fault with. Report it as a blocking finding naming what cannot be produced
+and what kind of role would produce it.
+
+Now review every brief below:
+
+--- fare-schedule-engineer  [implementer]
+You are a TypeScript engineer implementing bug fixes across the mocka and mockb codelines, both of which declare vitest and typescript as their toolchain. In mocka, you own src/fares.ts, which contains fareFor() and its age-based fare-rule logic; your job for MOCK3-1 is to correct the boundary comparison so it matches the documented intent that riders aged 65 and over receive the concession fare (CONCESSION_FARE_CENTS) rather than the base/adult fare — read the existing doc comment and surrounding constants in src/fares.ts closely before changing the comparison operator, since the survey's claim about the exact operator used is a lead to verify yourself, not a settled fact. In mockb, you own src/schedule.ts, which contains formatStops() and totalMinutes(); your job for MOCK3-2 is to correct the loop or indexing in formatStops() so the final stop in a line is included in the rendered output, using totalMinutes()'s correct indexing over the same stops array as a cross-check for how the full list should be traversed. In both repos, do not create, edit, or otherwise touch any file under test/ (e.g. test/fares.test.ts, test/schedule.test.ts) — vitest-run tests in those files are authored and owned by a separate stage of the pipeline; your responsibility ends at making src/*.ts correct and leaving it in a state that a subsequent test-writing stage can verify. Make minimal, targeted edits — do not refactor unrelated code or add abstractions beyond what each ticket requires. Verify your changes compile under the project's declared typescript version before considering the fix complete.
+
+--- mocka-fare-detective  [investigator: mocka]
+You are a read-only investigator for the mocka codeline (declares vitest, typescript). Your job is to characterize, not fix, the fare-rule logic relevant to MOCK3-1. Open src/fares.ts and read fareFor(), the fare constants (including whatever concession/base fare constants are defined), and any doc comments describing the intended age boundary for concession eligibility. Open test/fares.test.ts and enumerate exactly which ages are exercised by the existing test cases, noting any gap at or near the boundary age itself. Check package.json to confirm the actual declared vitest and typescript versions in use. Report back: the exact comparison operator and boundary value used in the age check as it exists in the file today (do not assume the survey's description is accurate — confirm it yourself by reading the line), whether any other age-based comparisons exist elsewhere in the file that could hide a similar off-by-one, and which ages the current test suite does and does not cover. You never modify any file, including test files — you only read and report findings for the implementer to act on.
+
+--- mockb-schedule-detective  [investigator: mockb]
+You are a read-only investigator for the mockb codeline (declares vitest, typescript). Your job is to characterize, not fix, the departure-board rendering logic relevant to MOCK3-2. Open src/schedule.ts and read formatStops() and totalMinutes() in full, noting exactly how each function bounds its loop or indexes into the stops array, and whether the two functions treat the same stops list consistently. Open test/schedule.test.ts and enumerate which stops (by name and position) the existing fixtures assert appear in formatStops output, noting whether the final stop of any multi-stop fixture is ever asserted present. Check package.json to confirm the actual declared vitest and typescript versions in use. Report back: the precise loop bound and indexing as it exists in the file today (confirm this yourself rather than assuming the survey's characterization is exact), whether any other function in schedule.ts consumes formatStops' output and could depend on its current (possibly truncated) shape, and the exact test coverage gap around the last stop. You never modify any file, including test files — you only read and report findings for the implementer to act on.
+
+THE CODELINES THESE BRIEFS DESCRIBE, and what each one declares:
+- mocka at /home/bradleyjerome/projects/mock3/mock-a
+    declares: vitest, typescript
+- mockb at /home/bradleyjerome/projects/mock3/mock-b
+    declares: vitest, typescript
+
+THE WORK THE PROJECT WAS ASKED TO DO:
+- MOCK3-1: Riders aged exactly 65 are charged the adult fare
+  The fare rules say riders aged 65 and over pay the concession fare. A rider aged exactly 65 is charged the full adult fare of 350 cents instead of 175. Riders aged 66 and above are charged correctly, so the boundary itself is wrong rather than the rule.
+- MOCK3-2: The departure board omits the final stop
+  formatStops renders every stop except the last one, so a three-stop line shows two. The journey length reported by totalMinutes is correct, which is why the omission has gone unnoticed.
+
+No documentation was fetched for this ticket — briefs resting on vendor knowledge have nothing here to be checked against, and any such claim must be verified against the repositories or reported as unverifiable.
+
+Your tools: read_file,list_files,search,codegraph_query. Open the repositories. Resolve the packages and symbols these briefs name. Confirm the files and directories they claim to own exist.
+
+Return every defect you can evidence, and nothing you cannot.
+
+Where a finding turns on whether a named dependency or path is present in a codeline, fill in
+the verification field as well as writing the prose. The pipeline re-runs that exact check
+against the repository and DISCARDS any finding the check refutes — so a careless reading
+costs nothing, and a correct one is confirmed independently of how convincingly you argued it.
+# Output — THIS IS A CONTRACT, NOT A PREFERENCE
+
+Emit EXACTLY one <ROSTER_REVIEW> block and nothing else that matters. Prose outside it is DISCARDED
+unread, however correct it is — the pipeline parses the block and never the commentary.
+
+<ROSTER_REVIEW>
+{
+  "verdict": <string> one of "sound" | "defects_found" | "nothing_to_review"
+     // sound = every checkable claim held. defects_found = at least one did not.,
+  "findings": [ {
+      "agent": <string>
+         // The minted agent whose brief carries the defect.,
+      "severity": <string> one of "blocking" | "advisory"
+         // blocking = an implementer following this brief would write code that cannot work. advisory = worth fixing, but the work can proceed.,
+      "claim": <string>
+         // The brief's own words, quoted.,
+      "checked": <string>
+         // What you did to test it — the tool and the target.,
+      "found": <string>
+         // What you actually found.,
+      "remedy": <string>
+         // What the brief should say instead.   (optional),
+      "verification": <object>
+         // When your finding rests on whether a NAMED THING is present in a codeline, state it here as well as in prose, so the pipeline can re-run exactly that check itself. Omit when the finding is a judgement no mechanical check settles — an ownership overlap, work nobody owns, a brief that is merely vague.   (optional),
+  } ]
+}
+</ROSTER_REVIEW>
+
+Report defects in a generated agent roster. Every finding must be grounded in something you checked with your tools. Do not answer in prose.
+
+
+# Output
+<ROSTER_REVIEW>
+{
+  "verdict": "defects_found",
+  "findings": [
+    {
+      "agent": "fare-schedule-engineer",
+      "severity": "advisory",
+      "claim": "In both repos, do not create, edit, or otherwise touch any file under test/ (e.g. test/fares.test.ts, test/schedule.test.ts) — vitest-run tests in those files are authored and owned by a separate stage of the pipeline; your responsibility ends at making src/*.ts correct and leaving it in a state that a subsequent test-writing stage can verify.",
+      "checked": "Read /home/bradleyjerome/projects/mock3/mock-a/test/fares.test.ts and /home/bradleyjerome/projects/mock3/mock-b/test/schedule.test.ts directly, and enumerated every minted role in this roster (fare-schedule-engineer [implementer], mocka-fare-detective [investigator, read-only], mockb-schedule-detective [investigator, read-only]) to see which, if any, is authorized to add or edit test files.",
+      "found": "test/fares.test.ts asserts only ages 30, 8, and 70 — there is no case at age 65 (the exact boundary MOCK3-1 is about) or 66, so this suite cannot detect the bug before the fix or confirm the fix after it. test/schedule.test.ts asserts only that 'Union' (the first stop) appears and that '->' appears — it never asserts 'Eglinton' (the last stop) appears, so it cannot detect the MOCK3-2 truncation either. Both investigator briefs state 'You never modify any file, including test files,' and the implementer brief explicitly forbids touching test/. No role in this roster is authorized to write or edit tests, so the 'subsequent test-writing stage' this brief defers to does not exist anywhere in the minted roster, and the fix's correctness at the exact boundaries the tickets describe will go unverified by any test any role here can produce.",
+      "remedy": "Either add a test-authoring role scoped to test/fares.test.ts and test/schedule.test.ts (adding cases for age 65 and for the last-stop assertion), or have this brief state plainly that no test-writing stage exists in this run and that boundary correctness must be verified by other means, not by the test suite."
+    }
+  ]
+}
+</ROSTER_REVIEW>

@@ -1,0 +1,115 @@
+# Prompt
+You are specialising ONE generic agent prompt for ONE specific project. You are the same agent that just minted this project's roles, so you already know what this project is and who will work on it.
+
+## The template you must specialise
+
+Its id is roster-review and its purpose is: Review every brief in a freshly minted roster and report evidenced defects.
+
+Everything between the two markers below is the template, verbatim. The markers are not
+part of it. A code fence cannot delimit this: several templates contain fences of their
+own, so the first closing fence would truncate the body mid-instruction.
+
+-----BEGIN TEMPLATE BODY-----
+__PERSONA__
+
+THE ROSTER JUST MINTED FOR THIS PROJECT — review every brief below:
+
+__BRIEF_BLOCK__
+
+THE CODELINES THESE BRIEFS DESCRIBE, and what each one declares:
+__CODELINE_BLOCK__
+
+THE WORK THE PROJECT WAS ASKED TO DO:
+__TICKET_BLOCK__
+
+__DOC_SECTION__
+
+__TOOL_LINE__
+
+Return every defect you can evidence, and nothing you cannot.
+
+Where a finding turns on whether a named dependency or path is present in a codeline, fill in
+the verification field as well as writing the prose. The pipeline re-runs that exact check
+against the repository and DISCARDS any finding the check refutes — so a careless reading
+costs nothing, and a correct one is confirmed independently of how convincingly you argued it.
+-----END TEMPLATE BODY-----
+
+## What this project is
+
+Project config: /home/bradleyjerome/projects/ai/epam-cli/orchestrations/projects/mock3
+Tickets in scope: MOCK3-1: Riders aged exactly 65 are charged the adult fare | MOCK3-2: The departure board omits the final stop
+
+Codelines in scope and their declared dependencies:
+- mocka (/home/bradleyjerome/projects/mock3/mock-a) deps: vitest, typescript
+- mockb (/home/bradleyjerome/projects/mock3/mock-b) deps: vitest, typescript
+
+The roles you minted for this project:
+- fare-logic-engineer [implementer] — MOCK3-1 requires fixing an off-by-one boundary comparison in TypeScript fare logic shared across both codelines, so a single implementer who knows the fare module and its conventions can fix it consistently.
+- departure-board-engineer [implementer] — MOCK3-2 requires fixing a stop-formatting function that omits the last stop in a departure board, which is a distinct domain from fare calculation and needs its own implementer who knows the rendering module.
+- mocka-codebase-investigator [investigator] — Each codeline needs an investigator who knows its repository layout, dependencies, and conventions so that implementers receive accurate guidance rather than survey guesses.
+
+## The one rule you cannot break
+
+The template's placeholders are a CONTRACT with the pipeline. Each token written in SCREAMING_SNAKE_CASE between double underscores is replaced at run time with real evidence — a diff, a ticket, a test log, a plan. The substitution is BY NAME and it is strict in both directions.
+
+- Reproduce every placeholder EXACTLY as it appears, character for character.
+- NEVER add or invent a placeholder. Nothing supplies a name the pipeline does not know, so rendering throws and the run dies at the seam that needed this prompt.
+- NEVER remove or rename one. The evidence it carries would silently never reach the agent, and the agent would answer without it.
+- Do not move a placeholder into a code fence, a quote, or an example where it would read as literal text.
+
+The placeholders in this template are exactly: __BRIEF_BLOCK__, __CODELINE_BLOCK__, __DOC_SECTION__, __PERSONA__, __TICKET_BLOCK__, __TOOL_LINE__
+
+## What specialising means
+
+Keep the template's instructions, its output format, its prohibitions and its reasoning intact. They encode failures this pipeline has already paid for. You are not rewriting the prompt or improving its wording.
+
+Add only what a competent engineer joining THIS project would need and could not infer from the generic text:
+- the conventions, layout and idioms this codebase actually uses
+- the commands this project runs to build, test and type-check
+- the traps this stack presents that a generic prompt would not warn about
+
+Ground every addition in the project context above. If the context does not tell you something, say nothing about it — an invented convention is worse than a missing one, because the agent will follow it.
+
+Do not name a file, symbol, package or command that does not appear in the context you were given.
+
+## How to answer
+
+Emit ONLY the specialised prompt body as TEXT, directly in your reply. No JSON wrapper, no markdown fences around the whole thing, no commentary before or after, and do not write it to a file — the pipeline reads your reply text.
+
+# Output
+__PERSONA__
+
+This project (mock3) is a two-codeline transit-fares and departure-board workspace. The codelines are:
+
+- mocka at /home/bradleyjerome/projects/mock3/mock-a — contains fare logic in src/fares.ts (exports: fareFor, totalFor, Rider, BASE_FARE_CENTS, CONCESSION_FARE_CENTS) and tests in test/fares.test.ts. This codeline does NOT contain any schedule or departure-board module.
+- mockb at /home/bradleyjerome/projects/mock3/mock-b — contains departure-board rendering in src/schedule.ts (exports: formatStops, totalMinutes, Stop) and tests in test/schedule.test.ts. This codeline does NOT contain any fare module.
+
+Both codelines share identical structure and tooling configuration:
+- Source lives in src/, tests in test/ (named *.test.ts).
+- package.json declares "type": "module". Scripts: "test": "vitest run", "build": "tsc --noEmit", "lint": "echo no-lint-configured" (lint is a no-op — no lint gate exists).
+- tsconfig.json: strict: true, module: ES2022, moduleResolution: bundler, target: ES2022, include: ["src", "test"].
+- Declared devDependencies: vitest ^2.1.9, typescript ^5.6.0. Package manager: npm. No lockfile present.
+
+The PRD assigns each ticket to exactly one codeline: MOCK3-1 (fare boundary) to mocka only; MOCK3-2 (departure board) to mockb only. A brief that claims an implementer edits both codelines for a single ticket is over-scoped relative to the PRD's codeline assignment.
+
+Trap: the two codelines look superficially identical (same dependencies, same tsconfig, same package.json shape) but contain completely different domain modules. A brief that asserts both codelines "share an identical fare module structure" or instructs an implementer to search for formatStops in mocka is making a false claim about the repository — verify it against the actual source tree.
+
+Only mocka has a dedicated investigator (mocka-codebase-investigator). There is no mockb-codebase-investigator in the roster.
+
+THE ROSTER JUST MINTED FOR THIS PROJECT — review every brief below:
+
+__BRIEF_BLOCK__
+
+THE CODELINES THESE BRIEFS DESCRIBE, and what each one declares:
+__CODELINE_BLOCK__
+
+THE WORK THE PROJECT WAS ASKED TO DO:
+__TICKET_BLOCK__
+
+__DOC_SECTION__
+
+__TOOL_LINE__
+
+Return every defect you can evidence, and nothing you cannot.
+
+Where a finding turns on whether a named dependency or path is present in a codeline, fill in the verification field as well as writing the prose. The pipeline re-runs that exact check against the repository and DISCARDS any finding the check refutes — so a careless reading costs nothing, and a correct one is confirmed independently of how convincingly you argued it.

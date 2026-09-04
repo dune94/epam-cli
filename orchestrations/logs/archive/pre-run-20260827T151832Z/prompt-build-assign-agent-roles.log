@@ -1,0 +1,117 @@
+# Prompt
+You are specialising ONE generic agent prompt for ONE specific project. You are the same agent that just minted this project's roles, so you already know what this project is and who will work on it.
+
+## The template you must specialise
+
+Its id is assign-agent-roles and its purpose is: Assigns an implementation role to every (story, codeline) pair.
+
+Everything between the two markers below is the template, verbatim. The markers are not
+part of it. A code fence cannot delimit this: several templates contain fences of their
+own, so the first closing fence would truncate the body mid-instruction.
+
+-----BEGIN TEMPLATE BODY-----
+Assign an implementation agent role to every story below.
+
+AVAILABLE ROLES — these are this project's own engineering roles. Choose from these and
+nothing else; the name you return must match one of them verbatim:
+__ROLE_BLOCK__
+
+STORIES — a story listing more than one codeline needs ONE ASSIGNMENT PER CODELINE:
+__STORY_BLOCK__
+
+Pick the role whose stated expertise actually covers the work the story describes. If two
+roles could plausibly own a story, prefer the one whose brief names the surface the story
+touches.
+
+THE UNIT OF ASSIGNMENT IS A (STORY, CODELINE) PAIR, NOT A STORY. A story listing three
+codelines needs THREE assignments — the repositories differ, so the right owner can differ.
+Count the codelines listed against each story and return exactly that many assignments for it,
+naming the codeline on every one. A story is not assigned until every codeline it lists is.
+
+THE OWNER MUST AUTHOR THE CODE. Assign the role that will EDIT THE FILES this story changes —
+the one whose brief names those files or directories. A role whose brief is about settings in
+a vendor's console, or about documentation, cannot deliver a story here: the agent's output is
+a change in a repository. Live 2026-08-07: this story went to the one role of three that owned
+no source files, and all such a role can produce is a configuration note. Where the story needs
+both console configuration and code, the assignment goes to the role that authors the code, and the configuration work is part of that story rather than a reason to reassign it.
+-----END TEMPLATE BODY-----
+
+## What this project is
+
+Project config: /home/bradleyjerome/projects/ai/epam-cli/orchestrations/projects/mock3
+Tickets in scope: MOCK3-1: Riders aged exactly 65 are charged the adult fare | MOCK3-2: The departure board omits the final stop
+
+Codelines in scope and their declared dependencies:
+- mocka (/home/bradleyjerome/projects/mock3/mock-a) deps: vitest, typescript
+- mockb (/home/bradleyjerome/projects/mock3/mock-b) deps: vitest, typescript
+
+The roles you minted for this project:
+- mocka-fare-detective [investigator] — MOCK3-1 lives entirely in mocka's src/fares.ts, and a dedicated reader of this codeline's actual comparison logic and test coverage prevents the implementer from acting on the unverified survey lead alone.
+- mockb-schedule-detective [investigator] — MOCK3-2 lives entirely in mockb's src/schedule.ts, and a dedicated reader of this codeline's loop bounds and existing assertions prevents the implementer from acting on the unverified survey lead alone.
+- fare-boundary-fixer [implementer] — MOCK3-1 requires an actual code change to src/fares.ts's age comparison, which only an implementer with write access can make, since investigators in this roster are read-only by design.
+- stop-rendering-fixer [implementer] — MOCK3-2 requires an actual code change to src/schedule.ts's rendering loop, which only an implementer with write access can make, since investigators in this roster are read-only by design.
+
+## The one rule you cannot break
+
+The template's placeholders are a CONTRACT with the pipeline. Each token written in SCREAMING_SNAKE_CASE between double underscores is replaced at run time with real evidence — a diff, a ticket, a test log, a plan. The substitution is BY NAME and it is strict in both directions.
+
+- Reproduce every placeholder EXACTLY as it appears, character for character.
+- NEVER add or invent a placeholder. Nothing supplies a name the pipeline does not know, so rendering throws and the run dies at the seam that needed this prompt.
+- NEVER remove or rename one. The evidence it carries would silently never reach the agent, and the agent would answer without it.
+- Do not move a placeholder into a code fence, a quote, or an example where it would read as literal text.
+
+The placeholders in this template are exactly: __ROLE_BLOCK__, __STORY_BLOCK__
+
+## What specialising means
+
+Keep the template's instructions, its output format, its prohibitions and its reasoning intact. They encode failures this pipeline has already paid for. You are not rewriting the prompt or improving its wording.
+
+Add only what a competent engineer joining THIS project would need and could not infer from the generic text:
+- the conventions, layout and idioms this codebase actually uses
+- the commands this project runs to build, test and type-check
+- the traps this stack presents that a generic prompt would not warn about
+
+Ground every addition in the project context above. If the context does not tell you something, say nothing about it — an invented convention is worse than a missing one, because the agent will follow it.
+
+Do not name a file, symbol, package or command that does not appear in the context you were given.
+
+## How to answer
+
+Emit ONLY the specialised prompt body as TEXT, directly in your reply. No JSON wrapper, no markdown fences around the whole thing, no commentary before or after, and do not write it to a file — the pipeline reads your reply text.
+
+
+## Your previous attempt was REFUSED
+
+the generated prompt dropped placeholder(s) the template requires: __ROLE_BLOCK__, __STORY_BLOCK__. The evidence they carry would silently never reach the agent.
+
+Produce the prompt again, correcting exactly this. Change nothing else: the rest of your previous attempt was accepted, and rewriting it invites a second refusal for a different reason.
+
+
+
+# Output
+Assign an implementation agent role to every story below.
+
+AVAILABLE ROLES — these are this project's own engineering roles. Choose from these and
+nothing else; the name you return must match one of them verbatim:
+__ROLE_BLOCK__
+
+STORIES — a story listing more than one codeline needs ONE ASSIGNMENT PER CODELINE:
+__STORY_BLOCK__
+
+Pick the role whose stated expertise actually covers the work the story describes. If two
+roles could plausibly own a story, prefer the one whose brief names the surface the story
+touches.
+
+THE UNIT OF ASSIGNMENT IS A (STORY, CODELINE) PAIR, NOT A STORY. A story listing three
+codelines needs THREE assignments — the repositories differ, so the right owner can differ.
+Count the codelines listed against each story and return exactly that many assignments for it,
+naming the codeline on every one. A story is not assigned until every codeline it lists is.
+
+THE OWNER MUST AUTHOR THE CODE. Assign the role that will EDIT THE FILES this story changes —
+the one whose brief names those files or directories. A role whose brief is about settings in
+a vendor's console, or about documentation, cannot deliver a story here: the agent's output is
+a change in a repository. Live 2026-08-07: this story went to the one role of three that owned
+no source files, and all such a role can produce is a configuration note. Where the story needs
+both console configuration and code, the assignment goes to the role that authors the code, and the configuration work is part of that story rather than a reason to reassign it.
+
+This project has two tickets, each confined to a single codeline — MOCK3-1 (riders aged exactly 65 charged the adult fare) lives entirely in mocka's src/fares.ts, and MOCK3-2 (the departure board omits the final stop) lives entirely in mockb's src/schedule.ts. Investigator roles (mocka-fare-detective, mockb-schedule-detective) are read-only by design and exist to verify the survey lead against the actual comparison logic, loop bounds, and test coverage before implementation — they cannot be assigned as the story owner since they produce no code change. Only fare-boundary-fixer (mocka, src/fares.ts) and stop-rendering-fixer (mockb, src/schedule.ts) hold write access and can author the fix, so each story's single codeline resolves to exactly one of these two implementer roles.

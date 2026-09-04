@@ -1,0 +1,13 @@
+spec-mode: fast-path qwen/z-ai/glm-5.2 (skipping MiniMax)
+spec-mode: fast-path qwen/z-ai/glm-5.1 (skipping MiniMax)
+spec-mode: AMSD-1820 — 4 verification criteria persisted (source: description, resolution: clean)
+spec-mode: fast-path qwen/z-ai/glm-5.1 (skipping MiniMax)
+spec-mode: ⚠️ code-graph-detective produced NO parseable JSON for AMSD-1820 (attempt 1/3) even after the extraction phase. Phase-1 head: "Agent reached maximum iterations (25) without completing."
+spec-mode: code-graph-detective ladder escalation for AMSD-1820 (attempt 2/3) — model z-ai/glm-5.1 → moonshotai/kimi-k3
+spec-mode: AMSD-1820 — 3 verification criteria persisted (source: description, resolution: clean)
+spec-mode: prd-change-reviewer call failed for AMSD-1820 (prompt runner timed out after 360000ms) — defaulting to pass
+spec-mode: fast-path qwen/z-ai/glm-5.1 (skipping MiniMax)
+spec-mode: fast-path qwen/z-ai/glm-5.2 (skipping MiniMax)
+spec-mode: fast-path qwen/z-ai/glm-5.2 (skipping MiniMax)
+spec-mode: LLM model review completed for 0 stories
+spec-mode: completed for phase core (run 20260726T111047Z)

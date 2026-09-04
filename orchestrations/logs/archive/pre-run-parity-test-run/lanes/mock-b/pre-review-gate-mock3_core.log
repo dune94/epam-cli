@@ -1,0 +1,12 @@
+=== Pre-Review Gate: mock3_core @ 2026-08-04T01:07:11+00:00 ===
+
+ RUN  v2.1.9 /tmp/brownfield-mock3-b-PPI8Tg/clone
+
+ ✓ src/hello.test.ts (1 test) 1ms
+
+ Test Files  1 passed (1)
+      Tests  1 passed (1)
+   Start at  01:07:11
+   Duration  194ms (transform 27ms, setup 0ms, collect 23ms, tests 1ms, environment 0ms, prepare 53ms)
+
+=== Gate Result: PASS ===

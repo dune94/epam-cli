@@ -1,0 +1,21 @@
+{
+  "newProfiles": []
+, "profileAdditions": [
+    {
+      "role": "typescript-engineer",
+      "rules": [
+        "This project uses jest@^29.7.0 as its test runner (package.json scripts.test is \"jest\"), NOT vitest. Run tests with `npx jest` or `npm test` — never `vitest run`. Do not reference vitest.config.ts; this project has no such file.",
+        "This project is CommonJS (package.json has no \"type\": \"module\" field). Do not use ESM-only syntax such as top-level await or import.meta. All imports must be CommonJS-compatible as transpiled by TypeScript.",
+        "src/services/contentstack.ts instantiates `contentstack.Stack(options)` at module scope on the line `export const Stack = contentstack.Stack(options);`. Any modification to this file must account for this module-level side effect — importing the file triggers SDK initialization. The `isTestEnv()` guard prevents the missing-env-var throw but does NOT prevent Stack creation, so test imports still instantiate the Contentstack client.",
+        "Mock files in this project (e.g., src/components/contentstack/ContentstackAttention/content.mock.ts, src/components/contentstack/ContentStackGallery/ContentStackGallery.mock.ts) follow the pattern `export const content: IImageGallery = { ... }` — a plain object literal typed against an interface imported from interface/content/page.ts. Any new or modified mock data must follow this export-const-of-typed-object pattern, not a factory function or class.",
+        "src/services/contentstack.ts reads Contentstack credentials from process.env at module scope (API_KEY, DELIVERY_TOKEN, ENVIRONMENT, CONTENTSTACK_BRANCH, INTERACTIVE_MAPS_STACK_API_KEY, etc.). NEVER hardcode these values or any API keys, tokens, or secrets in source files — always read from process.env. If example values are needed in documentation or comments, use the literal string YOUR_API_KEY_HERE."
+      ]
+    }
+  ]
+, "storyRoleAssignments": [
+    {
+      "agentRole": "typescript-engineer",
+      "storyId": "AMSD-2041"
+    }
+  ]
+}

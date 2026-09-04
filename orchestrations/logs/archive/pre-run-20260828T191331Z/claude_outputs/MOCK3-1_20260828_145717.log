@@ -1,0 +1,1886 @@
+=== Prompt for MOCK3-1 (attempt 1) ===
+CRITICAL — these files already exist. Their real content is injected below (## Existing File Contents) — you do NOT need to ReadFile them to see what's already there.
+Do NOT import or reference anything that doesn't appear in the injected content below — a plausible-sounding module name is not a real one.
+Only call ReadFile yourself if you need to see MORE of a file than what's shown (e.g. it was truncated), or a file not listed below.
+
+   - /home/bradleyjerome/projects/mock3/mock-a/src/fares.ts (content already injected below — do not ReadFile it unless you need lines beyond what's shown)
+---
+
+Implement user story MOCK3-1: Riders aged exactly 65 are charged the adult fare
+
+## Story Description
+The fare rules say riders aged 65 and over pay the concession fare. A rider aged exactly 65 is charged the full adult fare of 350 cents instead of 175. Riders aged 66 and above are charged correctly, so the boundary itself is wrong rather than the rule.
+
+## Acceptance Criteria
+- A rider aged exactly 65 with no pass is charged the concession fare.
+- A rider aged 64 with no pass is still charged the base fare.
+- The existing fare behaviour for children, pass holders and adults is unchanged.
+
+## Root Cause Analysis & Prescribed Fix (AUTHORITATIVE — start here, do not re-trace)
+A code investigation already traced this bug to its cause and prescribed the minimal fix below. This is the plan of record. Apply it; do NOT re-read the whole codebase to re-derive it.
+
+The Acceptance Criteria above describe the desired END BEHAVIOR to VERIFY — they are NOT an implementation blueprint. Do not re-architect, split values, or add new fields/abstractions to satisfy an AC literally when the prescribed minimal fix already makes that AC pass. Implement the fix below; the ACs are how you check you got it right.
+
+HARD RULES:
+- Make the SMALLEST change that fixes the root cause. Fewer lines of code is always better.
+- REUSE existing functions. Before writing any new helper, search the repo for an existing util/parser/formatter that already does what you need (use the CodeGraph tool documented below) and call it. Writing novel code when a helper already exists is a defect to be rejected in review.
+
+_(fix-plan, from: code-graph-detective)_
+
+- **src/fares.ts** (`fareFor`): Line 10 uses strict greater-than (>) which excludes age 65, contradicting the spec comment on line 7 that states 'Riders aged 65 AND OVER'. Changing to >= produces the correct boundary where riders aged exactly 65 receive the concession fare.  <== **THIS CHANGE PRODUCES THE VALUE** — it is what makes the new or corrected data exist. Without it, every other change here only moves a value that never changed. [runs: both]
+  - **Minimal fix:** Change line 10 comparison operator from > to >= so that riders aged 65 enter the concession fare branch
+
+
+
+## Verification Criteria (what a tester will CONFIRM — your change must satisfy every one)
+These are observable checks, derived from the acceptance criteria and description. They describe WHAT is observed, not how to build it. Make the minimal change that makes all of these true; your accompanying test should assert them:
+- The fare returned for a rider aged 65 with no pass is 175 cents
+- The fare returned for a rider aged 64 with no pass is 350 cents
+- The fare returned for any rider with a transit pass is 0 cents, regardless of age
+- The fare returned for a child aged 12 with no pass is 175 cents
+- The fare returned for an adult aged 45 with no pass is 350 cents
+- The fare returned for a rider aged 66 with no pass is 175 cents
+
+## Codeline-Specific Facts (real, curated gotchas for THIS codeline — read before assuming local tooling behaves like a fully-configured environment)
+- Tests run with: vitest run
+
+## Project Tools (registered by THIS codeline — call them directly, NOT via Bash)
+Each reports REAL state discovered from this repository or its installed dependencies. Call the relevant one instead of assuming — an assumption that contradicts one of these is a defect:
+- codegraph_query: Query this codebase's real, static symbol index (CodeGraph) instead of grepping. Modes: "explore <domain nouns>" (START HERE for an unfamiliar bug/feature — ranked symbols + blast radius + callers/callees; use domain nouns like "discount refund", never symptom/UI words like "displayed wrong"); "helpers <term>" (ALWAYS run before writing a new function — finds existing exported util/parser/formatter/mapper functions to reuse, with exact symbol + import path); "query <symbol>" (exact definition site of a known symbol name); "callers <symbol>" (who calls this — trace a symptom back to its cause); "callees <symbol>" (what this calls — trace forward); "impact <symbol>" (blast radius if you change this symbol); "show <file> [startLine] [endLine]" (read REAL verbatim source lines — required before quoting any line as evidence, capped at 300 lines per call if no end line given). Call this iteratively (5-10 times is normal), refining your query based on each result, until you converge on the real fix site.
+
+## Tests are NOT your job this turn
+A dedicated test-writer agent runs immediately after your fix commits and owns the bug-reproducing test. Do NOT write, edit, or create any test file (*.test.*, *.spec.*, __tests__/). Write ONLY the fix.
+
+This is not a suggestion you can trade against a review comment: the reviewer has been given the same rule and will not reject you for absent tests. If a prior review comment appears to demand a test, it is stale — resolve it by making the fix correct, and say in your final message that test authorship belongs to the test-writer.
+
+Adding a test here wastes your turn budget and has caused repeated failures.
+
+## CodeGraph Tool — find EXISTING functions to reuse (do this BEFORE writing any new helper)
+A codegraph_query tool is available — call it directly (NOT via Bash) to discover reusable functions instead of inventing new ones:
+  codegraph_query(mode="helpers", args="<domain nouns>")   # existing util/parser/formatter to REUSE (symbol + import path)
+  codegraph_query(mode="query", args="<SymbolName>")       # exact definition site of a symbol
+  codegraph_query(mode="callees", args="<SymbolName>")     # what a function already calls
+RULE: Before you add ANY new function, run `helpers` for what it would do. If a suitable function already exists, import and call it — do NOT duplicate it. Fewer lines of code is always better.
+
+
+
+## Adding a New Dependency
+If the change genuinely requires a package this project does not yet declare, add it and continue — do not stop to ask whether this is allowed, and do not look for a worse solution that avoids it.
+
+Add it by running:
+
+    npm install --save-dev <package>
+
+
+
+
+## Technical Notes
+- files: ["src/fares.ts"]
+- resolved: [{"declared":"src/fares.ts","actual":"src/fares.ts","match":"exact","verified_against":"/home/bradleyjerome/projects/mock3/mock-a"}]
+- unresolved: []
+
+## Existing File Contents (injected once, deterministically — do NOT ReadFile these unless you need more than shown)
+
+### /home/bradleyjerome/projects/mock3/mock-a/src/fares.ts
+```
+/** Fare rules for a transit line. Ages are whole years. */
+export type Rider = { age: number; hasPass: boolean };
+
+export const BASE_FARE_CENTS = 350;
+export const CONCESSION_FARE_CENTS = 175;
+
+/** Riders aged 65 AND OVER pay the concession fare. */
+export function fareFor(rider: Rider): number {
+  if (rider.hasPass) return 0;
+  if (rider.age > 65) return CONCESSION_FARE_CENTS;
+  if (rider.age < 13) return CONCESSION_FARE_CENTS;
+  return BASE_FARE_CENTS;
+}
+
+export function totalFor(riders: Rider[]): number {
+  return riders.reduce((sum, r) => sum + fareFor(r), 0);
+}
+```
+
+## Files to Create/Modify (EXACT ABSOLUTE PATHS — start here; this list is not exhaustive)
+These are the files the analysis identified. Use these exact paths for them. The list is a
+STARTING POINT, not a fence: it is derived from the ticket and may be incomplete or may name
+a path this repository spells differently. If your change genuinely requires another file in
+this repository, write it — the only files closed to you are ones another story OWNS, and
+attempting one of those returns a specific refusal saying so. Do NOT work around a refusal by
+repeatedly rewriting a file you can already write; that is never the fix. When you write a
+file that is not listed here, say which file and why in your final message, so the reviewer
+sees the whole change.
+src/fares.ts
+
+## Dependencies
+None
+
+## Module resolution in this codeline
+A bare import that names a file under any of these directories is INTERNAL source, not a dependency — never add it to the dependency manifest:
+  src, test
+Source extensions here: .ts, .tsx, .js, .mjs, .cjs
+Write imports the way the existing files in this codeline write them; read a neighbouring file before inventing a path.
+
+
+## Instructions
+CRITICAL — these files already exist. Their real content is injected below (## Existing File Contents) — you do NOT need to ReadFile them to see what's already there.
+Do NOT import or reference anything that doesn't appear in the injected content below — a plausible-sounding module name is not a real one.
+Only call ReadFile yourself if you need to see MORE of a file than what's shown (e.g. it was truncated), or a file not listed below.
+   - /home/bradleyjerome/projects/mock3/mock-a/src/fares.ts (content already injected below — do not ReadFile it unless you need lines beyond what's shown)
+**The content of every file listed above is already shown in ## Existing File Contents — use that, do not spend a tool call re-reading them. Use Edit for targeted changes to existing files — do NOT overwrite an existing file wholesale with WriteFile.**
+
+1. Use the injected ## Existing File Contents above to verify what actually exists (exports, types, existing utilities) before writing any code — do not guess, and do not re-read a file already shown in full
+2. Implement all acceptance criteria for this story
+3. Follow the project's existing code patterns and conventions
+4. Do NOT create tests unless explicitly required in acceptance criteria
+
+After implementation, provide a brief summary of what was created/modified.
+
+## Relevant Knowledge Base Entries
+No prior KB entries match your agent role yet.
+Do NOT read orchestrations/agents/KB.md before writing implementation files. The relevant KB entries are already injected above.
+=== End Prompt ===
+
+=== claude Output (attempt 1) ===
+error: option '--autocompact <auto|tokens>' argument '80000' is invalid. It must be 'auto', or between 100k and 1M (e.g. 500k, 200000, or 200 as shorthand)
+
+=== claude exited with code 1 ===
+=== Prompt for MOCK3-1 (attempt 2) ===
+CRITICAL — these files already exist. Their real content is injected below (## Existing File Contents) — you do NOT need to ReadFile them to see what's already there.
+Do NOT import or reference anything that doesn't appear in the injected content below — a plausible-sounding module name is not a real one.
+Only call ReadFile yourself if you need to see MORE of a file than what's shown (e.g. it was truncated), or a file not listed below.
+
+   - /home/bradleyjerome/projects/mock3/mock-a/src/fares.ts (content already injected below — do not ReadFile it unless you need lines beyond what's shown)
+---
+
+Implement user story MOCK3-1: Riders aged exactly 65 are charged the adult fare
+
+## Story Description
+The fare rules say riders aged 65 and over pay the concession fare. A rider aged exactly 65 is charged the full adult fare of 350 cents instead of 175. Riders aged 66 and above are charged correctly, so the boundary itself is wrong rather than the rule.
+
+## Acceptance Criteria
+- A rider aged exactly 65 with no pass is charged the concession fare.
+- A rider aged 64 with no pass is still charged the base fare.
+- The existing fare behaviour for children, pass holders and adults is unchanged.
+
+## Root Cause Analysis & Prescribed Fix (AUTHORITATIVE — start here, do not re-trace)
+A code investigation already traced this bug to its cause and prescribed the minimal fix below. This is the plan of record. Apply it; do NOT re-read the whole codebase to re-derive it.
+
+The Acceptance Criteria above describe the desired END BEHAVIOR to VERIFY — they are NOT an implementation blueprint. Do not re-architect, split values, or add new fields/abstractions to satisfy an AC literally when the prescribed minimal fix already makes that AC pass. Implement the fix below; the ACs are how you check you got it right.
+
+HARD RULES:
+- Make the SMALLEST change that fixes the root cause. Fewer lines of code is always better.
+- REUSE existing functions. Before writing any new helper, search the repo for an existing util/parser/formatter that already does what you need (use the CodeGraph tool documented below) and call it. Writing novel code when a helper already exists is a defect to be rejected in review.
+
+_(fix-plan, from: code-graph-detective)_
+
+- **src/fares.ts** (`fareFor`): Line 10 uses strict greater-than (>) which excludes age 65, contradicting the spec comment on line 7 that states 'Riders aged 65 AND OVER'. Changing to >= produces the correct boundary where riders aged exactly 65 receive the concession fare.  <== **THIS CHANGE PRODUCES THE VALUE** — it is what makes the new or corrected data exist. Without it, every other change here only moves a value that never changed. [runs: both]
+  - **Minimal fix:** Change line 10 comparison operator from > to >= so that riders aged 65 enter the concession fare branch
+
+
+
+## Verification Criteria (what a tester will CONFIRM — your change must satisfy every one)
+These are observable checks, derived from the acceptance criteria and description. They describe WHAT is observed, not how to build it. Make the minimal change that makes all of these true; your accompanying test should assert them:
+- The fare returned for a rider aged 65 with no pass is 175 cents
+- The fare returned for a rider aged 64 with no pass is 350 cents
+- The fare returned for any rider with a transit pass is 0 cents, regardless of age
+- The fare returned for a child aged 12 with no pass is 175 cents
+- The fare returned for an adult aged 45 with no pass is 350 cents
+- The fare returned for a rider aged 66 with no pass is 175 cents
+
+## Codeline-Specific Facts (real, curated gotchas for THIS codeline — read before assuming local tooling behaves like a fully-configured environment)
+- Tests run with: vitest run
+
+## Project Tools (registered by THIS codeline — call them directly, NOT via Bash)
+Each reports REAL state discovered from this repository or its installed dependencies. Call the relevant one instead of assuming — an assumption that contradicts one of these is a defect:
+- codegraph_query: Query this codebase's real, static symbol index (CodeGraph) instead of grepping. Modes: "explore <domain nouns>" (START HERE for an unfamiliar bug/feature — ranked symbols + blast radius + callers/callees; use domain nouns like "discount refund", never symptom/UI words like "displayed wrong"); "helpers <term>" (ALWAYS run before writing a new function — finds existing exported util/parser/formatter/mapper functions to reuse, with exact symbol + import path); "query <symbol>" (exact definition site of a known symbol name); "callers <symbol>" (who calls this — trace a symptom back to its cause); "callees <symbol>" (what this calls — trace forward); "impact <symbol>" (blast radius if you change this symbol); "show <file> [startLine] [endLine]" (read REAL verbatim source lines — required before quoting any line as evidence, capped at 300 lines per call if no end line given). Call this iteratively (5-10 times is normal), refining your query based on each result, until you converge on the real fix site.
+
+## Tests are NOT your job this turn
+A dedicated test-writer agent runs immediately after your fix commits and owns the bug-reproducing test. Do NOT write, edit, or create any test file (*.test.*, *.spec.*, __tests__/). Write ONLY the fix.
+
+This is not a suggestion you can trade against a review comment: the reviewer has been given the same rule and will not reject you for absent tests. If a prior review comment appears to demand a test, it is stale — resolve it by making the fix correct, and say in your final message that test authorship belongs to the test-writer.
+
+Adding a test here wastes your turn budget and has caused repeated failures.
+
+## CodeGraph Tool — find EXISTING functions to reuse (do this BEFORE writing any new helper)
+A codegraph_query tool is available — call it directly (NOT via Bash) to discover reusable functions instead of inventing new ones:
+  codegraph_query(mode="helpers", args="<domain nouns>")   # existing util/parser/formatter to REUSE (symbol + import path)
+  codegraph_query(mode="query", args="<SymbolName>")       # exact definition site of a symbol
+  codegraph_query(mode="callees", args="<SymbolName>")     # what a function already calls
+RULE: Before you add ANY new function, run `helpers` for what it would do. If a suitable function already exists, import and call it — do NOT duplicate it. Fewer lines of code is always better.
+
+
+
+## Adding a New Dependency
+If the change genuinely requires a package this project does not yet declare, add it and continue — do not stop to ask whether this is allowed, and do not look for a worse solution that avoids it.
+
+Add it by running:
+
+    npm install --save-dev <package>
+
+
+
+
+## Technical Notes
+- files: ["src/fares.ts"]
+- resolved: [{"declared":"src/fares.ts","actual":"src/fares.ts","match":"exact","verified_against":"/home/bradleyjerome/projects/mock3/mock-a"}]
+- unresolved: []
+
+## Existing File Contents (injected once, deterministically — do NOT ReadFile these unless you need more than shown)
+
+### /home/bradleyjerome/projects/mock3/mock-a/src/fares.ts
+```
+/** Fare rules for a transit line. Ages are whole years. */
+export type Rider = { age: number; hasPass: boolean };
+
+export const BASE_FARE_CENTS = 350;
+export const CONCESSION_FARE_CENTS = 175;
+
+/** Riders aged 65 AND OVER pay the concession fare. */
+export function fareFor(rider: Rider): number {
+  if (rider.hasPass) return 0;
+  if (rider.age > 65) return CONCESSION_FARE_CENTS;
+  if (rider.age < 13) return CONCESSION_FARE_CENTS;
+  return BASE_FARE_CENTS;
+}
+
+export function totalFor(riders: Rider[]): number {
+  return riders.reduce((sum, r) => sum + fareFor(r), 0);
+}
+```
+
+## Files to Create/Modify (EXACT ABSOLUTE PATHS — start here; this list is not exhaustive)
+These are the files the analysis identified. Use these exact paths for them. The list is a
+STARTING POINT, not a fence: it is derived from the ticket and may be incomplete or may name
+a path this repository spells differently. If your change genuinely requires another file in
+this repository, write it — the only files closed to you are ones another story OWNS, and
+attempting one of those returns a specific refusal saying so. Do NOT work around a refusal by
+repeatedly rewriting a file you can already write; that is never the fix. When you write a
+file that is not listed here, say which file and why in your final message, so the reviewer
+sees the whole change.
+src/fares.ts
+
+## Dependencies
+None
+
+## Module resolution in this codeline
+A bare import that names a file under any of these directories is INTERNAL source, not a dependency — never add it to the dependency manifest:
+  src, test
+Source extensions here: .ts, .tsx, .js, .mjs, .cjs
+Write imports the way the existing files in this codeline write them; read a neighbouring file before inventing a path.
+
+
+## Instructions
+CRITICAL — these files already exist. Their real content is injected below (## Existing File Contents) — you do NOT need to ReadFile them to see what's already there.
+Do NOT import or reference anything that doesn't appear in the injected content below — a plausible-sounding module name is not a real one.
+Only call ReadFile yourself if you need to see MORE of a file than what's shown (e.g. it was truncated), or a file not listed below.
+   - /home/bradleyjerome/projects/mock3/mock-a/src/fares.ts (content already injected below — do not ReadFile it unless you need lines beyond what's shown)
+**The content of every file listed above is already shown in ## Existing File Contents — use that, do not spend a tool call re-reading them. Use Edit for targeted changes to existing files — do NOT overwrite an existing file wholesale with WriteFile.**
+
+1. Use the injected ## Existing File Contents above to verify what actually exists (exports, types, existing utilities) before writing any code — do not guess, and do not re-read a file already shown in full
+2. Implement all acceptance criteria for this story
+3. Follow the project's existing code patterns and conventions
+4. Do NOT create tests unless explicitly required in acceptance criteria
+
+After implementation, provide a brief summary of what was created/modified.
+
+## Relevant Knowledge Base Entries
+No prior KB entries match your agent role yet.
+Do NOT read orchestrations/agents/KB.md before writing implementation files. The relevant KB entries are already injected above.
+=== End Prompt ===
+
+=== claude Output (attempt 2) ===
+error: option '--autocompact <auto|tokens>' argument '80000' is invalid. It must be 'auto', or between 100k and 1M (e.g. 500k, 200000, or 200 as shorthand)
+
+=== claude exited with code 1 ===
+=== Prompt for MOCK3-1 (attempt 3) ===
+CRITICAL — these files already exist. Their real content is injected below (## Existing File Contents) — you do NOT need to ReadFile them to see what's already there.
+Do NOT import or reference anything that doesn't appear in the injected content below — a plausible-sounding module name is not a real one.
+Only call ReadFile yourself if you need to see MORE of a file than what's shown (e.g. it was truncated), or a file not listed below.
+
+   - /home/bradleyjerome/projects/mock3/mock-a/src/fares.ts (content already injected below — do not ReadFile it unless you need lines beyond what's shown)
+---
+
+Implement user story MOCK3-1: Riders aged exactly 65 are charged the adult fare
+
+## Story Description
+The fare rules say riders aged 65 and over pay the concession fare. A rider aged exactly 65 is charged the full adult fare of 350 cents instead of 175. Riders aged 66 and above are charged correctly, so the boundary itself is wrong rather than the rule.
+
+## Acceptance Criteria
+- A rider aged exactly 65 with no pass is charged the concession fare.
+- A rider aged 64 with no pass is still charged the base fare.
+- The existing fare behaviour for children, pass holders and adults is unchanged.
+
+## Root Cause Analysis & Prescribed Fix (AUTHORITATIVE — start here, do not re-trace)
+A code investigation already traced this bug to its cause and prescribed the minimal fix below. This is the plan of record. Apply it; do NOT re-read the whole codebase to re-derive it.
+
+The Acceptance Criteria above describe the desired END BEHAVIOR to VERIFY — they are NOT an implementation blueprint. Do not re-architect, split values, or add new fields/abstractions to satisfy an AC literally when the prescribed minimal fix already makes that AC pass. Implement the fix below; the ACs are how you check you got it right.
+
+HARD RULES:
+- Make the SMALLEST change that fixes the root cause. Fewer lines of code is always better.
+- REUSE existing functions. Before writing any new helper, search the repo for an existing util/parser/formatter that already does what you need (use the CodeGraph tool documented below) and call it. Writing novel code when a helper already exists is a defect to be rejected in review.
+
+_(fix-plan, from: code-graph-detective)_
+
+- **src/fares.ts** (`fareFor`): Line 10 uses strict greater-than (>) which excludes age 65, contradicting the spec comment on line 7 that states 'Riders aged 65 AND OVER'. Changing to >= produces the correct boundary where riders aged exactly 65 receive the concession fare.  <== **THIS CHANGE PRODUCES THE VALUE** — it is what makes the new or corrected data exist. Without it, every other change here only moves a value that never changed. [runs: both]
+  - **Minimal fix:** Change line 10 comparison operator from > to >= so that riders aged 65 enter the concession fare branch
+
+## What Your Last Attempt Did
+This is a diffstat, not a judgement — it is what is on disk, unedited. It is EVIDENCE, not an instruction: it does not tell you the work was right, and it does not tell you to undo it. Read it to see what you already changed, so you extend that work rather than rediscovering it or repeating it.
+
+_(attempt-evidence, from: engine)_
+
+The previous attempt changed these files (diffstat against develop):
+
+ .epam/codeline-facts.json | new file
+ .epam/settings.json | new file
+ .epam/verification.json | new file
+
+
+
+## Verification Criteria (what a tester will CONFIRM — your change must satisfy every one)
+These are observable checks, derived from the acceptance criteria and description. They describe WHAT is observed, not how to build it. Make the minimal change that makes all of these true; your accompanying test should assert them:
+- The fare returned for a rider aged 65 with no pass is 175 cents
+- The fare returned for a rider aged 64 with no pass is 350 cents
+- The fare returned for any rider with a transit pass is 0 cents, regardless of age
+- The fare returned for a child aged 12 with no pass is 175 cents
+- The fare returned for an adult aged 45 with no pass is 350 cents
+- The fare returned for a rider aged 66 with no pass is 175 cents
+
+## Codeline-Specific Facts (real, curated gotchas for THIS codeline — read before assuming local tooling behaves like a fully-configured environment)
+- Tests run with: vitest run
+
+## Project Tools (registered by THIS codeline — call them directly, NOT via Bash)
+Each reports REAL state discovered from this repository or its installed dependencies. Call the relevant one instead of assuming — an assumption that contradicts one of these is a defect:
+- codegraph_query: Query this codebase's real, static symbol index (CodeGraph) instead of grepping. Modes: "explore <domain nouns>" (START HERE for an unfamiliar bug/feature — ranked symbols + blast radius + callers/callees; use domain nouns like "discount refund", never symptom/UI words like "displayed wrong"); "helpers <term>" (ALWAYS run before writing a new function — finds existing exported util/parser/formatter/mapper functions to reuse, with exact symbol + import path); "query <symbol>" (exact definition site of a known symbol name); "callers <symbol>" (who calls this — trace a symptom back to its cause); "callees <symbol>" (what this calls — trace forward); "impact <symbol>" (blast radius if you change this symbol); "show <file> [startLine] [endLine]" (read REAL verbatim source lines — required before quoting any line as evidence, capped at 300 lines per call if no end line given). Call this iteratively (5-10 times is normal), refining your query based on each result, until you converge on the real fix site.
+
+## Tests are NOT your job this turn
+A dedicated test-writer agent runs immediately after your fix commits and owns the bug-reproducing test. Do NOT write, edit, or create any test file (*.test.*, *.spec.*, __tests__/). Write ONLY the fix.
+
+This is not a suggestion you can trade against a review comment: the reviewer has been given the same rule and will not reject you for absent tests. If a prior review comment appears to demand a test, it is stale — resolve it by making the fix correct, and say in your final message that test authorship belongs to the test-writer.
+
+Adding a test here wastes your turn budget and has caused repeated failures.
+
+## CodeGraph Tool — find EXISTING functions to reuse (do this BEFORE writing any new helper)
+A codegraph_query tool is available — call it directly (NOT via Bash) to discover reusable functions instead of inventing new ones:
+  codegraph_query(mode="helpers", args="<domain nouns>")   # existing util/parser/formatter to REUSE (symbol + import path)
+  codegraph_query(mode="query", args="<SymbolName>")       # exact definition site of a symbol
+  codegraph_query(mode="callees", args="<SymbolName>")     # what a function already calls
+RULE: Before you add ANY new function, run `helpers` for what it would do. If a suitable function already exists, import and call it — do NOT duplicate it. Fewer lines of code is always better.
+
+
+
+## Adding a New Dependency
+If the change genuinely requires a package this project does not yet declare, add it and continue — do not stop to ask whether this is allowed, and do not look for a worse solution that avoids it.
+
+Add it by running:
+
+    npm install --save-dev <package>
+
+
+
+
+## Technical Notes
+- files: ["src/fares.ts"]
+- resolved: [{"declared":"src/fares.ts","actual":"src/fares.ts","match":"exact","verified_against":"/home/bradleyjerome/projects/mock3/mock-a"}]
+- unresolved: []
+
+## Existing File Contents (injected once, deterministically — do NOT ReadFile these unless you need more than shown)
+
+### /home/bradleyjerome/projects/mock3/mock-a/src/fares.ts
+```
+/** Fare rules for a transit line. Ages are whole years. */
+export type Rider = { age: number; hasPass: boolean };
+
+export const BASE_FARE_CENTS = 350;
+export const CONCESSION_FARE_CENTS = 175;
+
+/** Riders aged 65 AND OVER pay the concession fare. */
+export function fareFor(rider: Rider): number {
+  if (rider.hasPass) return 0;
+  if (rider.age > 65) return CONCESSION_FARE_CENTS;
+  if (rider.age < 13) return CONCESSION_FARE_CENTS;
+  return BASE_FARE_CENTS;
+}
+
+export function totalFor(riders: Rider[]): number {
+  return riders.reduce((sum, r) => sum + fareFor(r), 0);
+}
+```
+
+## Files to Create/Modify (EXACT ABSOLUTE PATHS — start here; this list is not exhaustive)
+These are the files the analysis identified. Use these exact paths for them. The list is a
+STARTING POINT, not a fence: it is derived from the ticket and may be incomplete or may name
+a path this repository spells differently. If your change genuinely requires another file in
+this repository, write it — the only files closed to you are ones another story OWNS, and
+attempting one of those returns a specific refusal saying so. Do NOT work around a refusal by
+repeatedly rewriting a file you can already write; that is never the fix. When you write a
+file that is not listed here, say which file and why in your final message, so the reviewer
+sees the whole change.
+src/fares.ts
+
+## Dependencies
+None
+
+## Module resolution in this codeline
+A bare import that names a file under any of these directories is INTERNAL source, not a dependency — never add it to the dependency manifest:
+  src, test
+Source extensions here: .ts, .tsx, .js, .mjs, .cjs
+Write imports the way the existing files in this codeline write them; read a neighbouring file before inventing a path.
+
+
+## Instructions
+CRITICAL — these files already exist. Their real content is injected below (## Existing File Contents) — you do NOT need to ReadFile them to see what's already there.
+Do NOT import or reference anything that doesn't appear in the injected content below — a plausible-sounding module name is not a real one.
+Only call ReadFile yourself if you need to see MORE of a file than what's shown (e.g. it was truncated), or a file not listed below.
+   - /home/bradleyjerome/projects/mock3/mock-a/src/fares.ts (content already injected below — do not ReadFile it unless you need lines beyond what's shown)
+**The content of every file listed above is already shown in ## Existing File Contents — use that, do not spend a tool call re-reading them. Use Edit for targeted changes to existing files — do NOT overwrite an existing file wholesale with WriteFile.**
+
+1. Use the injected ## Existing File Contents above to verify what actually exists (exports, types, existing utilities) before writing any code — do not guess, and do not re-read a file already shown in full
+2. Implement all acceptance criteria for this story
+3. Follow the project's existing code patterns and conventions
+4. Do NOT create tests unless explicitly required in acceptance criteria
+
+After implementation, provide a brief summary of what was created/modified.
+
+## Relevant Knowledge Base Entries
+No prior KB entries match your agent role yet.
+Do NOT read orchestrations/agents/KB.md before writing implementation files. The relevant KB entries are already injected above.
+=== End Prompt ===
+
+=== claude Output (attempt 3) ===
+error: option '--autocompact <auto|tokens>' argument '80000' is invalid. It must be 'auto', or between 100k and 1M (e.g. 500k, 200000, or 200 as shorthand)
+
+=== claude exited with code 1 ===
+=== Prompt for MOCK3-1 (attempt 4) ===
+CRITICAL — these files already exist. Their real content is injected below (## Existing File Contents) — you do NOT need to ReadFile them to see what's already there.
+Do NOT import or reference anything that doesn't appear in the injected content below — a plausible-sounding module name is not a real one.
+Only call ReadFile yourself if you need to see MORE of a file than what's shown (e.g. it was truncated), or a file not listed below.
+
+   - /home/bradleyjerome/projects/mock3/mock-a/src/fares.ts (content already injected below — do not ReadFile it unless you need lines beyond what's shown)
+---
+
+Implement user story MOCK3-1: Riders aged exactly 65 are charged the adult fare
+
+## Story Description
+The fare rules say riders aged 65 and over pay the concession fare. A rider aged exactly 65 is charged the full adult fare of 350 cents instead of 175. Riders aged 66 and above are charged correctly, so the boundary itself is wrong rather than the rule.
+
+## Acceptance Criteria
+- A rider aged exactly 65 with no pass is charged the concession fare.
+- A rider aged 64 with no pass is still charged the base fare.
+- The existing fare behaviour for children, pass holders and adults is unchanged.
+
+## Root Cause Analysis & Prescribed Fix (AUTHORITATIVE — start here, do not re-trace)
+A code investigation already traced this bug to its cause and prescribed the minimal fix below. This is the plan of record. Apply it; do NOT re-read the whole codebase to re-derive it.
+
+The Acceptance Criteria above describe the desired END BEHAVIOR to VERIFY — they are NOT an implementation blueprint. Do not re-architect, split values, or add new fields/abstractions to satisfy an AC literally when the prescribed minimal fix already makes that AC pass. Implement the fix below; the ACs are how you check you got it right.
+
+HARD RULES:
+- Make the SMALLEST change that fixes the root cause. Fewer lines of code is always better.
+- REUSE existing functions. Before writing any new helper, search the repo for an existing util/parser/formatter that already does what you need (use the CodeGraph tool documented below) and call it. Writing novel code when a helper already exists is a defect to be rejected in review.
+
+_(fix-plan, from: code-graph-detective)_
+
+- **src/fares.ts** (`fareFor`): Line 10 uses strict greater-than (>) which excludes age 65, contradicting the spec comment on line 7 that states 'Riders aged 65 AND OVER'. Changing to >= produces the correct boundary where riders aged exactly 65 receive the concession fare.  <== **THIS CHANGE PRODUCES THE VALUE** — it is what makes the new or corrected data exist. Without it, every other change here only moves a value that never changed. [runs: both]
+  - **Minimal fix:** Change line 10 comparison operator from > to >= so that riders aged 65 enter the concession fare branch
+
+## What Your Last Attempt Did
+This is a diffstat, not a judgement — it is what is on disk, unedited. It is EVIDENCE, not an instruction: it does not tell you the work was right, and it does not tell you to undo it. Read it to see what you already changed, so you extend that work rather than rediscovering it or repeating it.
+
+_(attempt-evidence, from: engine)_
+
+The previous attempt changed these files (diffstat against develop):
+
+ .epam/codeline-facts.json | new file
+ .epam/settings.json | new file
+ .epam/verification.json | new file
+
+
+
+## Verification Criteria (what a tester will CONFIRM — your change must satisfy every one)
+These are observable checks, derived from the acceptance criteria and description. They describe WHAT is observed, not how to build it. Make the minimal change that makes all of these true; your accompanying test should assert them:
+- The fare returned for a rider aged 65 with no pass is 175 cents
+- The fare returned for a rider aged 64 with no pass is 350 cents
+- The fare returned for any rider with a transit pass is 0 cents, regardless of age
+- The fare returned for a child aged 12 with no pass is 175 cents
+- The fare returned for an adult aged 45 with no pass is 350 cents
+- The fare returned for a rider aged 66 with no pass is 175 cents
+
+## Codeline-Specific Facts (real, curated gotchas for THIS codeline — read before assuming local tooling behaves like a fully-configured environment)
+- Tests run with: vitest run
+
+## Project Tools (registered by THIS codeline — call them directly, NOT via Bash)
+Each reports REAL state discovered from this repository or its installed dependencies. Call the relevant one instead of assuming — an assumption that contradicts one of these is a defect:
+- codegraph_query: Query this codebase's real, static symbol index (CodeGraph) instead of grepping. Modes: "explore <domain nouns>" (START HERE for an unfamiliar bug/feature — ranked symbols + blast radius + callers/callees; use domain nouns like "discount refund", never symptom/UI words like "displayed wrong"); "helpers <term>" (ALWAYS run before writing a new function — finds existing exported util/parser/formatter/mapper functions to reuse, with exact symbol + import path); "query <symbol>" (exact definition site of a known symbol name); "callers <symbol>" (who calls this — trace a symptom back to its cause); "callees <symbol>" (what this calls — trace forward); "impact <symbol>" (blast radius if you change this symbol); "show <file> [startLine] [endLine]" (read REAL verbatim source lines — required before quoting any line as evidence, capped at 300 lines per call if no end line given). Call this iteratively (5-10 times is normal), refining your query based on each result, until you converge on the real fix site.
+
+## Tests are NOT your job this turn
+A dedicated test-writer agent runs immediately after your fix commits and owns the bug-reproducing test. Do NOT write, edit, or create any test file (*.test.*, *.spec.*, __tests__/). Write ONLY the fix.
+
+This is not a suggestion you can trade against a review comment: the reviewer has been given the same rule and will not reject you for absent tests. If a prior review comment appears to demand a test, it is stale — resolve it by making the fix correct, and say in your final message that test authorship belongs to the test-writer.
+
+Adding a test here wastes your turn budget and has caused repeated failures.
+
+## CodeGraph Tool — find EXISTING functions to reuse (do this BEFORE writing any new helper)
+A codegraph_query tool is available — call it directly (NOT via Bash) to discover reusable functions instead of inventing new ones:
+  codegraph_query(mode="helpers", args="<domain nouns>")   # existing util/parser/formatter to REUSE (symbol + import path)
+  codegraph_query(mode="query", args="<SymbolName>")       # exact definition site of a symbol
+  codegraph_query(mode="callees", args="<SymbolName>")     # what a function already calls
+RULE: Before you add ANY new function, run `helpers` for what it would do. If a suitable function already exists, import and call it — do NOT duplicate it. Fewer lines of code is always better.
+
+
+
+## Adding a New Dependency
+If the change genuinely requires a package this project does not yet declare, add it and continue — do not stop to ask whether this is allowed, and do not look for a worse solution that avoids it.
+
+Add it by running:
+
+    npm install --save-dev <package>
+
+
+
+
+## Technical Notes
+- files: ["src/fares.ts"]
+- resolved: [{"declared":"src/fares.ts","actual":"src/fares.ts","match":"exact","verified_against":"/home/bradleyjerome/projects/mock3/mock-a"}]
+- unresolved: []
+
+## Existing File Contents (injected once, deterministically — do NOT ReadFile these unless you need more than shown)
+
+### /home/bradleyjerome/projects/mock3/mock-a/src/fares.ts
+```
+/** Fare rules for a transit line. Ages are whole years. */
+export type Rider = { age: number; hasPass: boolean };
+
+export const BASE_FARE_CENTS = 350;
+export const CONCESSION_FARE_CENTS = 175;
+
+/** Riders aged 65 AND OVER pay the concession fare. */
+export function fareFor(rider: Rider): number {
+  if (rider.hasPass) return 0;
+  if (rider.age > 65) return CONCESSION_FARE_CENTS;
+  if (rider.age < 13) return CONCESSION_FARE_CENTS;
+  return BASE_FARE_CENTS;
+}
+
+export function totalFor(riders: Rider[]): number {
+  return riders.reduce((sum, r) => sum + fareFor(r), 0);
+}
+```
+
+## Files to Create/Modify (EXACT ABSOLUTE PATHS — start here; this list is not exhaustive)
+These are the files the analysis identified. Use these exact paths for them. The list is a
+STARTING POINT, not a fence: it is derived from the ticket and may be incomplete or may name
+a path this repository spells differently. If your change genuinely requires another file in
+this repository, write it — the only files closed to you are ones another story OWNS, and
+attempting one of those returns a specific refusal saying so. Do NOT work around a refusal by
+repeatedly rewriting a file you can already write; that is never the fix. When you write a
+file that is not listed here, say which file and why in your final message, so the reviewer
+sees the whole change.
+src/fares.ts
+
+## Dependencies
+None
+
+## Module resolution in this codeline
+A bare import that names a file under any of these directories is INTERNAL source, not a dependency — never add it to the dependency manifest:
+  src, test
+Source extensions here: .ts, .tsx, .js, .mjs, .cjs
+Write imports the way the existing files in this codeline write them; read a neighbouring file before inventing a path.
+
+
+## Instructions
+CRITICAL — these files already exist. Their real content is injected below (## Existing File Contents) — you do NOT need to ReadFile them to see what's already there.
+Do NOT import or reference anything that doesn't appear in the injected content below — a plausible-sounding module name is not a real one.
+Only call ReadFile yourself if you need to see MORE of a file than what's shown (e.g. it was truncated), or a file not listed below.
+   - /home/bradleyjerome/projects/mock3/mock-a/src/fares.ts (content already injected below — do not ReadFile it unless you need lines beyond what's shown)
+**The content of every file listed above is already shown in ## Existing File Contents — use that, do not spend a tool call re-reading them. Use Edit for targeted changes to existing files — do NOT overwrite an existing file wholesale with WriteFile.**
+
+1. Use the injected ## Existing File Contents above to verify what actually exists (exports, types, existing utilities) before writing any code — do not guess, and do not re-read a file already shown in full
+2. Implement all acceptance criteria for this story
+3. Follow the project's existing code patterns and conventions
+4. Do NOT create tests unless explicitly required in acceptance criteria
+
+After implementation, provide a brief summary of what was created/modified.
+
+## Relevant Knowledge Base Entries
+No prior KB entries match your agent role yet.
+Do NOT read orchestrations/agents/KB.md before writing implementation files. The relevant KB entries are already injected above.
+=== End Prompt ===
+
+=== claude Output (attempt 4) ===
+error: option '--autocompact <auto|tokens>' argument '80000' is invalid. It must be 'auto', or between 100k and 1M (e.g. 500k, 200000, or 200 as shorthand)
+
+=== claude exited with code 1 ===
+=== Prompt for MOCK3-1 (attempt 5) ===
+CRITICAL — these files already exist. Their real content is injected below (## Existing File Contents) — you do NOT need to ReadFile them to see what's already there.
+Do NOT import or reference anything that doesn't appear in the injected content below — a plausible-sounding module name is not a real one.
+Only call ReadFile yourself if you need to see MORE of a file than what's shown (e.g. it was truncated), or a file not listed below.
+
+   - /home/bradleyjerome/projects/mock3/mock-a/src/fares.ts (content already injected below — do not ReadFile it unless you need lines beyond what's shown)
+---
+
+Implement user story MOCK3-1: Riders aged exactly 65 are charged the adult fare
+
+## Story Description
+The fare rules say riders aged 65 and over pay the concession fare. A rider aged exactly 65 is charged the full adult fare of 350 cents instead of 175. Riders aged 66 and above are charged correctly, so the boundary itself is wrong rather than the rule.
+
+## Acceptance Criteria
+- A rider aged exactly 65 with no pass is charged the concession fare.
+- A rider aged 64 with no pass is still charged the base fare.
+- The existing fare behaviour for children, pass holders and adults is unchanged.
+
+## Root Cause Analysis & Prescribed Fix (AUTHORITATIVE — start here, do not re-trace)
+A code investigation already traced this bug to its cause and prescribed the minimal fix below. This is the plan of record. Apply it; do NOT re-read the whole codebase to re-derive it.
+
+The Acceptance Criteria above describe the desired END BEHAVIOR to VERIFY — they are NOT an implementation blueprint. Do not re-architect, split values, or add new fields/abstractions to satisfy an AC literally when the prescribed minimal fix already makes that AC pass. Implement the fix below; the ACs are how you check you got it right.
+
+HARD RULES:
+- Make the SMALLEST change that fixes the root cause. Fewer lines of code is always better.
+- REUSE existing functions. Before writing any new helper, search the repo for an existing util/parser/formatter that already does what you need (use the CodeGraph tool documented below) and call it. Writing novel code when a helper already exists is a defect to be rejected in review.
+
+_(fix-plan, from: code-graph-detective)_
+
+- **src/fares.ts** (`fareFor`): Line 10 uses strict greater-than (>) which excludes age 65, contradicting the spec comment on line 7 that states 'Riders aged 65 AND OVER'. Changing to >= produces the correct boundary where riders aged exactly 65 receive the concession fare.  <== **THIS CHANGE PRODUCES THE VALUE** — it is what makes the new or corrected data exist. Without it, every other change here only moves a value that never changed. [runs: both]
+  - **Minimal fix:** Change line 10 comparison operator from > to >= so that riders aged 65 enter the concession fare branch
+
+## What Your Last Attempt Did
+This is a diffstat, not a judgement — it is what is on disk, unedited. It is EVIDENCE, not an instruction: it does not tell you the work was right, and it does not tell you to undo it. Read it to see what you already changed, so you extend that work rather than rediscovering it or repeating it.
+
+_(attempt-evidence, from: engine)_
+
+The previous attempt changed these files (diffstat against develop):
+
+ .epam/codeline-facts.json | new file
+ .epam/settings.json | new file
+ .epam/verification.json | new file
+
+
+
+## Verification Criteria (what a tester will CONFIRM — your change must satisfy every one)
+These are observable checks, derived from the acceptance criteria and description. They describe WHAT is observed, not how to build it. Make the minimal change that makes all of these true; your accompanying test should assert them:
+- The fare returned for a rider aged 65 with no pass is 175 cents
+- The fare returned for a rider aged 64 with no pass is 350 cents
+- The fare returned for any rider with a transit pass is 0 cents, regardless of age
+- The fare returned for a child aged 12 with no pass is 175 cents
+- The fare returned for an adult aged 45 with no pass is 350 cents
+- The fare returned for a rider aged 66 with no pass is 175 cents
+
+## Codeline-Specific Facts (real, curated gotchas for THIS codeline — read before assuming local tooling behaves like a fully-configured environment)
+- Tests run with: vitest run
+
+## Project Tools (registered by THIS codeline — call them directly, NOT via Bash)
+Each reports REAL state discovered from this repository or its installed dependencies. Call the relevant one instead of assuming — an assumption that contradicts one of these is a defect:
+- codegraph_query: Query this codebase's real, static symbol index (CodeGraph) instead of grepping. Modes: "explore <domain nouns>" (START HERE for an unfamiliar bug/feature — ranked symbols + blast radius + callers/callees; use domain nouns like "discount refund", never symptom/UI words like "displayed wrong"); "helpers <term>" (ALWAYS run before writing a new function — finds existing exported util/parser/formatter/mapper functions to reuse, with exact symbol + import path); "query <symbol>" (exact definition site of a known symbol name); "callers <symbol>" (who calls this — trace a symptom back to its cause); "callees <symbol>" (what this calls — trace forward); "impact <symbol>" (blast radius if you change this symbol); "show <file> [startLine] [endLine]" (read REAL verbatim source lines — required before quoting any line as evidence, capped at 300 lines per call if no end line given). Call this iteratively (5-10 times is normal), refining your query based on each result, until you converge on the real fix site.
+
+## Tests are NOT your job this turn
+A dedicated test-writer agent runs immediately after your fix commits and owns the bug-reproducing test. Do NOT write, edit, or create any test file (*.test.*, *.spec.*, __tests__/). Write ONLY the fix.
+
+This is not a suggestion you can trade against a review comment: the reviewer has been given the same rule and will not reject you for absent tests. If a prior review comment appears to demand a test, it is stale — resolve it by making the fix correct, and say in your final message that test authorship belongs to the test-writer.
+
+Adding a test here wastes your turn budget and has caused repeated failures.
+
+## CodeGraph Tool — find EXISTING functions to reuse (do this BEFORE writing any new helper)
+A codegraph_query tool is available — call it directly (NOT via Bash) to discover reusable functions instead of inventing new ones:
+  codegraph_query(mode="helpers", args="<domain nouns>")   # existing util/parser/formatter to REUSE (symbol + import path)
+  codegraph_query(mode="query", args="<SymbolName>")       # exact definition site of a symbol
+  codegraph_query(mode="callees", args="<SymbolName>")     # what a function already calls
+RULE: Before you add ANY new function, run `helpers` for what it would do. If a suitable function already exists, import and call it — do NOT duplicate it. Fewer lines of code is always better.
+
+
+
+## Adding a New Dependency
+If the change genuinely requires a package this project does not yet declare, add it and continue — do not stop to ask whether this is allowed, and do not look for a worse solution that avoids it.
+
+Add it by running:
+
+    npm install --save-dev <package>
+
+
+
+
+## Technical Notes
+- files: ["src/fares.ts"]
+- resolved: [{"declared":"src/fares.ts","actual":"src/fares.ts","match":"exact","verified_against":"/home/bradleyjerome/projects/mock3/mock-a"}]
+- unresolved: []
+
+## Existing File Contents (injected once, deterministically — do NOT ReadFile these unless you need more than shown)
+
+### /home/bradleyjerome/projects/mock3/mock-a/src/fares.ts
+```
+/** Fare rules for a transit line. Ages are whole years. */
+export type Rider = { age: number; hasPass: boolean };
+
+export const BASE_FARE_CENTS = 350;
+export const CONCESSION_FARE_CENTS = 175;
+
+/** Riders aged 65 AND OVER pay the concession fare. */
+export function fareFor(rider: Rider): number {
+  if (rider.hasPass) return 0;
+  if (rider.age > 65) return CONCESSION_FARE_CENTS;
+  if (rider.age < 13) return CONCESSION_FARE_CENTS;
+  return BASE_FARE_CENTS;
+}
+
+export function totalFor(riders: Rider[]): number {
+  return riders.reduce((sum, r) => sum + fareFor(r), 0);
+}
+```
+
+## Files to Create/Modify (EXACT ABSOLUTE PATHS — start here; this list is not exhaustive)
+These are the files the analysis identified. Use these exact paths for them. The list is a
+STARTING POINT, not a fence: it is derived from the ticket and may be incomplete or may name
+a path this repository spells differently. If your change genuinely requires another file in
+this repository, write it — the only files closed to you are ones another story OWNS, and
+attempting one of those returns a specific refusal saying so. Do NOT work around a refusal by
+repeatedly rewriting a file you can already write; that is never the fix. When you write a
+file that is not listed here, say which file and why in your final message, so the reviewer
+sees the whole change.
+src/fares.ts
+
+## Dependencies
+None
+
+## Module resolution in this codeline
+A bare import that names a file under any of these directories is INTERNAL source, not a dependency — never add it to the dependency manifest:
+  src, test
+Source extensions here: .ts, .tsx, .js, .mjs, .cjs
+Write imports the way the existing files in this codeline write them; read a neighbouring file before inventing a path.
+
+
+## Instructions
+CRITICAL — these files already exist. Their real content is injected below (## Existing File Contents) — you do NOT need to ReadFile them to see what's already there.
+Do NOT import or reference anything that doesn't appear in the injected content below — a plausible-sounding module name is not a real one.
+Only call ReadFile yourself if you need to see MORE of a file than what's shown (e.g. it was truncated), or a file not listed below.
+   - /home/bradleyjerome/projects/mock3/mock-a/src/fares.ts (content already injected below — do not ReadFile it unless you need lines beyond what's shown)
+**The content of every file listed above is already shown in ## Existing File Contents — use that, do not spend a tool call re-reading them. Use Edit for targeted changes to existing files — do NOT overwrite an existing file wholesale with WriteFile.**
+
+1. Use the injected ## Existing File Contents above to verify what actually exists (exports, types, existing utilities) before writing any code — do not guess, and do not re-read a file already shown in full
+2. Implement all acceptance criteria for this story
+3. Follow the project's existing code patterns and conventions
+4. Do NOT create tests unless explicitly required in acceptance criteria
+
+After implementation, provide a brief summary of what was created/modified.
+
+## Relevant Knowledge Base Entries
+No prior KB entries match your agent role yet.
+Do NOT read orchestrations/agents/KB.md before writing implementation files. The relevant KB entries are already injected above.
+=== End Prompt ===
+
+=== claude Output (attempt 5) ===
+error: option '--autocompact <auto|tokens>' argument '80000' is invalid. It must be 'auto', or between 100k and 1M (e.g. 500k, 200000, or 200 as shorthand)
+
+=== claude exited with code 1 ===
+=== Prompt for MOCK3-1 (attempt 6) ===
+CRITICAL — these files already exist. Their real content is injected below (## Existing File Contents) — you do NOT need to ReadFile them to see what's already there.
+Do NOT import or reference anything that doesn't appear in the injected content below — a plausible-sounding module name is not a real one.
+Only call ReadFile yourself if you need to see MORE of a file than what's shown (e.g. it was truncated), or a file not listed below.
+
+   - /home/bradleyjerome/projects/mock3/mock-a/src/fares.ts (content already injected below — do not ReadFile it unless you need lines beyond what's shown)
+---
+
+Implement user story MOCK3-1: Riders aged exactly 65 are charged the adult fare
+
+## Story Description
+The fare rules say riders aged 65 and over pay the concession fare. A rider aged exactly 65 is charged the full adult fare of 350 cents instead of 175. Riders aged 66 and above are charged correctly, so the boundary itself is wrong rather than the rule.
+
+## Acceptance Criteria
+- A rider aged exactly 65 with no pass is charged the concession fare.
+- A rider aged 64 with no pass is still charged the base fare.
+- The existing fare behaviour for children, pass holders and adults is unchanged.
+
+## Root Cause Analysis & Prescribed Fix (AUTHORITATIVE — start here, do not re-trace)
+A code investigation already traced this bug to its cause and prescribed the minimal fix below. This is the plan of record. Apply it; do NOT re-read the whole codebase to re-derive it.
+
+The Acceptance Criteria above describe the desired END BEHAVIOR to VERIFY — they are NOT an implementation blueprint. Do not re-architect, split values, or add new fields/abstractions to satisfy an AC literally when the prescribed minimal fix already makes that AC pass. Implement the fix below; the ACs are how you check you got it right.
+
+HARD RULES:
+- Make the SMALLEST change that fixes the root cause. Fewer lines of code is always better.
+- REUSE existing functions. Before writing any new helper, search the repo for an existing util/parser/formatter that already does what you need (use the CodeGraph tool documented below) and call it. Writing novel code when a helper already exists is a defect to be rejected in review.
+
+_(fix-plan, from: code-graph-detective)_
+
+- **src/fares.ts** (`fareFor`): Line 10 uses strict greater-than (>) which excludes age 65, contradicting the spec comment on line 7 that states 'Riders aged 65 AND OVER'. Changing to >= produces the correct boundary where riders aged exactly 65 receive the concession fare.  <== **THIS CHANGE PRODUCES THE VALUE** — it is what makes the new or corrected data exist. Without it, every other change here only moves a value that never changed. [runs: both]
+  - **Minimal fix:** Change line 10 comparison operator from > to >= so that riders aged 65 enter the concession fare branch
+
+## What Your Last Attempt Did
+This is a diffstat, not a judgement — it is what is on disk, unedited. It is EVIDENCE, not an instruction: it does not tell you the work was right, and it does not tell you to undo it. Read it to see what you already changed, so you extend that work rather than rediscovering it or repeating it.
+
+_(attempt-evidence, from: engine)_
+
+The previous attempt changed these files (diffstat against develop):
+
+ .epam/codeline-facts.json | new file
+ .epam/settings.json | new file
+ .epam/verification.json | new file
+
+
+
+## Verification Criteria (what a tester will CONFIRM — your change must satisfy every one)
+These are observable checks, derived from the acceptance criteria and description. They describe WHAT is observed, not how to build it. Make the minimal change that makes all of these true; your accompanying test should assert them:
+- The fare returned for a rider aged 65 with no pass is 175 cents
+- The fare returned for a rider aged 64 with no pass is 350 cents
+- The fare returned for any rider with a transit pass is 0 cents, regardless of age
+- The fare returned for a child aged 12 with no pass is 175 cents
+- The fare returned for an adult aged 45 with no pass is 350 cents
+- The fare returned for a rider aged 66 with no pass is 175 cents
+
+## Codeline-Specific Facts (real, curated gotchas for THIS codeline — read before assuming local tooling behaves like a fully-configured environment)
+- Tests run with: vitest run
+
+## Project Tools (registered by THIS codeline — call them directly, NOT via Bash)
+Each reports REAL state discovered from this repository or its installed dependencies. Call the relevant one instead of assuming — an assumption that contradicts one of these is a defect:
+- codegraph_query: Query this codebase's real, static symbol index (CodeGraph) instead of grepping. Modes: "explore <domain nouns>" (START HERE for an unfamiliar bug/feature — ranked symbols + blast radius + callers/callees; use domain nouns like "discount refund", never symptom/UI words like "displayed wrong"); "helpers <term>" (ALWAYS run before writing a new function — finds existing exported util/parser/formatter/mapper functions to reuse, with exact symbol + import path); "query <symbol>" (exact definition site of a known symbol name); "callers <symbol>" (who calls this — trace a symptom back to its cause); "callees <symbol>" (what this calls — trace forward); "impact <symbol>" (blast radius if you change this symbol); "show <file> [startLine] [endLine]" (read REAL verbatim source lines — required before quoting any line as evidence, capped at 300 lines per call if no end line given). Call this iteratively (5-10 times is normal), refining your query based on each result, until you converge on the real fix site.
+
+## Tests are NOT your job this turn
+A dedicated test-writer agent runs immediately after your fix commits and owns the bug-reproducing test. Do NOT write, edit, or create any test file (*.test.*, *.spec.*, __tests__/). Write ONLY the fix.
+
+This is not a suggestion you can trade against a review comment: the reviewer has been given the same rule and will not reject you for absent tests. If a prior review comment appears to demand a test, it is stale — resolve it by making the fix correct, and say in your final message that test authorship belongs to the test-writer.
+
+Adding a test here wastes your turn budget and has caused repeated failures.
+
+## CodeGraph Tool — find EXISTING functions to reuse (do this BEFORE writing any new helper)
+A codegraph_query tool is available — call it directly (NOT via Bash) to discover reusable functions instead of inventing new ones:
+  codegraph_query(mode="helpers", args="<domain nouns>")   # existing util/parser/formatter to REUSE (symbol + import path)
+  codegraph_query(mode="query", args="<SymbolName>")       # exact definition site of a symbol
+  codegraph_query(mode="callees", args="<SymbolName>")     # what a function already calls
+RULE: Before you add ANY new function, run `helpers` for what it would do. If a suitable function already exists, import and call it — do NOT duplicate it. Fewer lines of code is always better.
+
+
+
+## Adding a New Dependency
+If the change genuinely requires a package this project does not yet declare, add it and continue — do not stop to ask whether this is allowed, and do not look for a worse solution that avoids it.
+
+Add it by running:
+
+    npm install --save-dev <package>
+
+
+
+
+## Technical Notes
+- files: ["src/fares.ts"]
+- resolved: [{"declared":"src/fares.ts","actual":"src/fares.ts","match":"exact","verified_against":"/home/bradleyjerome/projects/mock3/mock-a"}]
+- unresolved: []
+
+## Existing File Contents (injected once, deterministically — do NOT ReadFile these unless you need more than shown)
+
+### /home/bradleyjerome/projects/mock3/mock-a/src/fares.ts
+```
+/** Fare rules for a transit line. Ages are whole years. */
+export type Rider = { age: number; hasPass: boolean };
+
+export const BASE_FARE_CENTS = 350;
+export const CONCESSION_FARE_CENTS = 175;
+
+/** Riders aged 65 AND OVER pay the concession fare. */
+export function fareFor(rider: Rider): number {
+  if (rider.hasPass) return 0;
+  if (rider.age > 65) return CONCESSION_FARE_CENTS;
+  if (rider.age < 13) return CONCESSION_FARE_CENTS;
+  return BASE_FARE_CENTS;
+}
+
+export function totalFor(riders: Rider[]): number {
+  return riders.reduce((sum, r) => sum + fareFor(r), 0);
+}
+```
+
+## Files to Create/Modify (EXACT ABSOLUTE PATHS — start here; this list is not exhaustive)
+These are the files the analysis identified. Use these exact paths for them. The list is a
+STARTING POINT, not a fence: it is derived from the ticket and may be incomplete or may name
+a path this repository spells differently. If your change genuinely requires another file in
+this repository, write it — the only files closed to you are ones another story OWNS, and
+attempting one of those returns a specific refusal saying so. Do NOT work around a refusal by
+repeatedly rewriting a file you can already write; that is never the fix. When you write a
+file that is not listed here, say which file and why in your final message, so the reviewer
+sees the whole change.
+src/fares.ts
+
+## Dependencies
+None
+
+## Module resolution in this codeline
+A bare import that names a file under any of these directories is INTERNAL source, not a dependency — never add it to the dependency manifest:
+  src, test
+Source extensions here: .ts, .tsx, .js, .mjs, .cjs
+Write imports the way the existing files in this codeline write them; read a neighbouring file before inventing a path.
+
+
+## Instructions
+CRITICAL — these files already exist. Their real content is injected below (## Existing File Contents) — you do NOT need to ReadFile them to see what's already there.
+Do NOT import or reference anything that doesn't appear in the injected content below — a plausible-sounding module name is not a real one.
+Only call ReadFile yourself if you need to see MORE of a file than what's shown (e.g. it was truncated), or a file not listed below.
+   - /home/bradleyjerome/projects/mock3/mock-a/src/fares.ts (content already injected below — do not ReadFile it unless you need lines beyond what's shown)
+**The content of every file listed above is already shown in ## Existing File Contents — use that, do not spend a tool call re-reading them. Use Edit for targeted changes to existing files — do NOT overwrite an existing file wholesale with WriteFile.**
+
+1. Use the injected ## Existing File Contents above to verify what actually exists (exports, types, existing utilities) before writing any code — do not guess, and do not re-read a file already shown in full
+2. Implement all acceptance criteria for this story
+3. Follow the project's existing code patterns and conventions
+4. Do NOT create tests unless explicitly required in acceptance criteria
+
+After implementation, provide a brief summary of what was created/modified.
+
+## Relevant Knowledge Base Entries
+No prior KB entries match your agent role yet.
+Do NOT read orchestrations/agents/KB.md before writing implementation files. The relevant KB entries are already injected above.
+=== End Prompt ===
+
+=== claude Output (attempt 6) ===
+error: option '--autocompact <auto|tokens>' argument '80000' is invalid. It must be 'auto', or between 100k and 1M (e.g. 500k, 200000, or 200 as shorthand)
+
+=== claude exited with code 1 ===
+=== Prompt for MOCK3-1 (attempt 7) ===
+CRITICAL — these files already exist. Their real content is injected below (## Existing File Contents) — you do NOT need to ReadFile them to see what's already there.
+Do NOT import or reference anything that doesn't appear in the injected content below — a plausible-sounding module name is not a real one.
+Only call ReadFile yourself if you need to see MORE of a file than what's shown (e.g. it was truncated), or a file not listed below.
+
+   - /home/bradleyjerome/projects/mock3/mock-a/src/fares.ts (content already injected below — do not ReadFile it unless you need lines beyond what's shown)
+---
+
+Implement user story MOCK3-1: Riders aged exactly 65 are charged the adult fare
+
+## Story Description
+The fare rules say riders aged 65 and over pay the concession fare. A rider aged exactly 65 is charged the full adult fare of 350 cents instead of 175. Riders aged 66 and above are charged correctly, so the boundary itself is wrong rather than the rule.
+
+## Acceptance Criteria
+- A rider aged exactly 65 with no pass is charged the concession fare.
+- A rider aged 64 with no pass is still charged the base fare.
+- The existing fare behaviour for children, pass holders and adults is unchanged.
+
+## Root Cause Analysis & Prescribed Fix (AUTHORITATIVE — start here, do not re-trace)
+A code investigation already traced this bug to its cause and prescribed the minimal fix below. This is the plan of record. Apply it; do NOT re-read the whole codebase to re-derive it.
+
+The Acceptance Criteria above describe the desired END BEHAVIOR to VERIFY — they are NOT an implementation blueprint. Do not re-architect, split values, or add new fields/abstractions to satisfy an AC literally when the prescribed minimal fix already makes that AC pass. Implement the fix below; the ACs are how you check you got it right.
+
+HARD RULES:
+- Make the SMALLEST change that fixes the root cause. Fewer lines of code is always better.
+- REUSE existing functions. Before writing any new helper, search the repo for an existing util/parser/formatter that already does what you need (use the CodeGraph tool documented below) and call it. Writing novel code when a helper already exists is a defect to be rejected in review.
+
+_(fix-plan, from: code-graph-detective)_
+
+- **src/fares.ts** (`fareFor`): Line 10 uses strict greater-than (>) which excludes age 65, contradicting the spec comment on line 7 that states 'Riders aged 65 AND OVER'. Changing to >= produces the correct boundary where riders aged exactly 65 receive the concession fare.  <== **THIS CHANGE PRODUCES THE VALUE** — it is what makes the new or corrected data exist. Without it, every other change here only moves a value that never changed. [runs: both]
+  - **Minimal fix:** Change line 10 comparison operator from > to >= so that riders aged 65 enter the concession fare branch
+
+## What Your Last Attempt Did
+This is a diffstat, not a judgement — it is what is on disk, unedited. It is EVIDENCE, not an instruction: it does not tell you the work was right, and it does not tell you to undo it. Read it to see what you already changed, so you extend that work rather than rediscovering it or repeating it.
+
+_(attempt-evidence, from: engine)_
+
+The previous attempt changed these files (diffstat against develop):
+
+ .epam/codeline-facts.json | new file
+ .epam/settings.json | new file
+ .epam/verification.json | new file
+
+
+
+## Verification Criteria (what a tester will CONFIRM — your change must satisfy every one)
+These are observable checks, derived from the acceptance criteria and description. They describe WHAT is observed, not how to build it. Make the minimal change that makes all of these true; your accompanying test should assert them:
+- The fare returned for a rider aged 65 with no pass is 175 cents
+- The fare returned for a rider aged 64 with no pass is 350 cents
+- The fare returned for any rider with a transit pass is 0 cents, regardless of age
+- The fare returned for a child aged 12 with no pass is 175 cents
+- The fare returned for an adult aged 45 with no pass is 350 cents
+- The fare returned for a rider aged 66 with no pass is 175 cents
+
+## Codeline-Specific Facts (real, curated gotchas for THIS codeline — read before assuming local tooling behaves like a fully-configured environment)
+- Tests run with: vitest run
+
+## Project Tools (registered by THIS codeline — call them directly, NOT via Bash)
+Each reports REAL state discovered from this repository or its installed dependencies. Call the relevant one instead of assuming — an assumption that contradicts one of these is a defect:
+- codegraph_query: Query this codebase's real, static symbol index (CodeGraph) instead of grepping. Modes: "explore <domain nouns>" (START HERE for an unfamiliar bug/feature — ranked symbols + blast radius + callers/callees; use domain nouns like "discount refund", never symptom/UI words like "displayed wrong"); "helpers <term>" (ALWAYS run before writing a new function — finds existing exported util/parser/formatter/mapper functions to reuse, with exact symbol + import path); "query <symbol>" (exact definition site of a known symbol name); "callers <symbol>" (who calls this — trace a symptom back to its cause); "callees <symbol>" (what this calls — trace forward); "impact <symbol>" (blast radius if you change this symbol); "show <file> [startLine] [endLine]" (read REAL verbatim source lines — required before quoting any line as evidence, capped at 300 lines per call if no end line given). Call this iteratively (5-10 times is normal), refining your query based on each result, until you converge on the real fix site.
+
+## Tests are NOT your job this turn
+A dedicated test-writer agent runs immediately after your fix commits and owns the bug-reproducing test. Do NOT write, edit, or create any test file (*.test.*, *.spec.*, __tests__/). Write ONLY the fix.
+
+This is not a suggestion you can trade against a review comment: the reviewer has been given the same rule and will not reject you for absent tests. If a prior review comment appears to demand a test, it is stale — resolve it by making the fix correct, and say in your final message that test authorship belongs to the test-writer.
+
+Adding a test here wastes your turn budget and has caused repeated failures.
+
+## CodeGraph Tool — find EXISTING functions to reuse (do this BEFORE writing any new helper)
+A codegraph_query tool is available — call it directly (NOT via Bash) to discover reusable functions instead of inventing new ones:
+  codegraph_query(mode="helpers", args="<domain nouns>")   # existing util/parser/formatter to REUSE (symbol + import path)
+  codegraph_query(mode="query", args="<SymbolName>")       # exact definition site of a symbol
+  codegraph_query(mode="callees", args="<SymbolName>")     # what a function already calls
+RULE: Before you add ANY new function, run `helpers` for what it would do. If a suitable function already exists, import and call it — do NOT duplicate it. Fewer lines of code is always better.
+
+
+
+## Adding a New Dependency
+If the change genuinely requires a package this project does not yet declare, add it and continue — do not stop to ask whether this is allowed, and do not look for a worse solution that avoids it.
+
+Add it by running:
+
+    npm install --save-dev <package>
+
+
+
+
+## Technical Notes
+- files: ["src/fares.ts"]
+- resolved: [{"declared":"src/fares.ts","actual":"src/fares.ts","match":"exact","verified_against":"/home/bradleyjerome/projects/mock3/mock-a"}]
+- unresolved: []
+
+## Existing File Contents (injected once, deterministically — do NOT ReadFile these unless you need more than shown)
+
+### /home/bradleyjerome/projects/mock3/mock-a/src/fares.ts
+```
+/** Fare rules for a transit line. Ages are whole years. */
+export type Rider = { age: number; hasPass: boolean };
+
+export const BASE_FARE_CENTS = 350;
+export const CONCESSION_FARE_CENTS = 175;
+
+/** Riders aged 65 AND OVER pay the concession fare. */
+export function fareFor(rider: Rider): number {
+  if (rider.hasPass) return 0;
+  if (rider.age > 65) return CONCESSION_FARE_CENTS;
+  if (rider.age < 13) return CONCESSION_FARE_CENTS;
+  return BASE_FARE_CENTS;
+}
+
+export function totalFor(riders: Rider[]): number {
+  return riders.reduce((sum, r) => sum + fareFor(r), 0);
+}
+```
+
+## Files to Create/Modify (EXACT ABSOLUTE PATHS — start here; this list is not exhaustive)
+These are the files the analysis identified. Use these exact paths for them. The list is a
+STARTING POINT, not a fence: it is derived from the ticket and may be incomplete or may name
+a path this repository spells differently. If your change genuinely requires another file in
+this repository, write it — the only files closed to you are ones another story OWNS, and
+attempting one of those returns a specific refusal saying so. Do NOT work around a refusal by
+repeatedly rewriting a file you can already write; that is never the fix. When you write a
+file that is not listed here, say which file and why in your final message, so the reviewer
+sees the whole change.
+src/fares.ts
+
+## Dependencies
+None
+
+## Module resolution in this codeline
+A bare import that names a file under any of these directories is INTERNAL source, not a dependency — never add it to the dependency manifest:
+  src, test
+Source extensions here: .ts, .tsx, .js, .mjs, .cjs
+Write imports the way the existing files in this codeline write them; read a neighbouring file before inventing a path.
+
+
+## Instructions
+CRITICAL — these files already exist. Their real content is injected below (## Existing File Contents) — you do NOT need to ReadFile them to see what's already there.
+Do NOT import or reference anything that doesn't appear in the injected content below — a plausible-sounding module name is not a real one.
+Only call ReadFile yourself if you need to see MORE of a file than what's shown (e.g. it was truncated), or a file not listed below.
+   - /home/bradleyjerome/projects/mock3/mock-a/src/fares.ts (content already injected below — do not ReadFile it unless you need lines beyond what's shown)
+**The content of every file listed above is already shown in ## Existing File Contents — use that, do not spend a tool call re-reading them. Use Edit for targeted changes to existing files — do NOT overwrite an existing file wholesale with WriteFile.**
+
+1. Use the injected ## Existing File Contents above to verify what actually exists (exports, types, existing utilities) before writing any code — do not guess, and do not re-read a file already shown in full
+2. Implement all acceptance criteria for this story
+3. Follow the project's existing code patterns and conventions
+4. Do NOT create tests unless explicitly required in acceptance criteria
+
+After implementation, provide a brief summary of what was created/modified.
+
+## Relevant Knowledge Base Entries
+No prior KB entries match your agent role yet.
+Do NOT read orchestrations/agents/KB.md before writing implementation files. The relevant KB entries are already injected above.
+=== End Prompt ===
+
+=== claude Output (attempt 7) ===
+error: option '--autocompact <auto|tokens>' argument '80000' is invalid. It must be 'auto', or between 100k and 1M (e.g. 500k, 200000, or 200 as shorthand)
+
+=== claude exited with code 1 ===
+=== Prompt for MOCK3-1 (attempt 8) ===
+CRITICAL — these files already exist. Their real content is injected below (## Existing File Contents) — you do NOT need to ReadFile them to see what's already there.
+Do NOT import or reference anything that doesn't appear in the injected content below — a plausible-sounding module name is not a real one.
+Only call ReadFile yourself if you need to see MORE of a file than what's shown (e.g. it was truncated), or a file not listed below.
+
+   - /home/bradleyjerome/projects/mock3/mock-a/src/fares.ts (content already injected below — do not ReadFile it unless you need lines beyond what's shown)
+---
+
+Implement user story MOCK3-1: Riders aged exactly 65 are charged the adult fare
+
+## Story Description
+The fare rules say riders aged 65 and over pay the concession fare. A rider aged exactly 65 is charged the full adult fare of 350 cents instead of 175. Riders aged 66 and above are charged correctly, so the boundary itself is wrong rather than the rule.
+
+## Acceptance Criteria
+- A rider aged exactly 65 with no pass is charged the concession fare.
+- A rider aged 64 with no pass is still charged the base fare.
+- The existing fare behaviour for children, pass holders and adults is unchanged.
+
+## Root Cause Analysis & Prescribed Fix (AUTHORITATIVE — start here, do not re-trace)
+A code investigation already traced this bug to its cause and prescribed the minimal fix below. This is the plan of record. Apply it; do NOT re-read the whole codebase to re-derive it.
+
+The Acceptance Criteria above describe the desired END BEHAVIOR to VERIFY — they are NOT an implementation blueprint. Do not re-architect, split values, or add new fields/abstractions to satisfy an AC literally when the prescribed minimal fix already makes that AC pass. Implement the fix below; the ACs are how you check you got it right.
+
+HARD RULES:
+- Make the SMALLEST change that fixes the root cause. Fewer lines of code is always better.
+- REUSE existing functions. Before writing any new helper, search the repo for an existing util/parser/formatter that already does what you need (use the CodeGraph tool documented below) and call it. Writing novel code when a helper already exists is a defect to be rejected in review.
+
+_(fix-plan, from: code-graph-detective)_
+
+- **src/fares.ts** (`fareFor`): Line 10 uses strict greater-than (>) which excludes age 65, contradicting the spec comment on line 7 that states 'Riders aged 65 AND OVER'. Changing to >= produces the correct boundary where riders aged exactly 65 receive the concession fare.  <== **THIS CHANGE PRODUCES THE VALUE** — it is what makes the new or corrected data exist. Without it, every other change here only moves a value that never changed. [runs: both]
+  - **Minimal fix:** Change line 10 comparison operator from > to >= so that riders aged 65 enter the concession fare branch
+
+## What Your Last Attempt Did
+This is a diffstat, not a judgement — it is what is on disk, unedited. It is EVIDENCE, not an instruction: it does not tell you the work was right, and it does not tell you to undo it. Read it to see what you already changed, so you extend that work rather than rediscovering it or repeating it.
+
+_(attempt-evidence, from: engine)_
+
+The previous attempt changed these files (diffstat against develop):
+
+ .epam/codeline-facts.json | new file
+ .epam/settings.json | new file
+ .epam/verification.json | new file
+
+
+
+## Verification Criteria (what a tester will CONFIRM — your change must satisfy every one)
+These are observable checks, derived from the acceptance criteria and description. They describe WHAT is observed, not how to build it. Make the minimal change that makes all of these true; your accompanying test should assert them:
+- The fare returned for a rider aged 65 with no pass is 175 cents
+- The fare returned for a rider aged 64 with no pass is 350 cents
+- The fare returned for any rider with a transit pass is 0 cents, regardless of age
+- The fare returned for a child aged 12 with no pass is 175 cents
+- The fare returned for an adult aged 45 with no pass is 350 cents
+- The fare returned for a rider aged 66 with no pass is 175 cents
+
+## Codeline-Specific Facts (real, curated gotchas for THIS codeline — read before assuming local tooling behaves like a fully-configured environment)
+- Tests run with: vitest run
+
+## Project Tools (registered by THIS codeline — call them directly, NOT via Bash)
+Each reports REAL state discovered from this repository or its installed dependencies. Call the relevant one instead of assuming — an assumption that contradicts one of these is a defect:
+- codegraph_query: Query this codebase's real, static symbol index (CodeGraph) instead of grepping. Modes: "explore <domain nouns>" (START HERE for an unfamiliar bug/feature — ranked symbols + blast radius + callers/callees; use domain nouns like "discount refund", never symptom/UI words like "displayed wrong"); "helpers <term>" (ALWAYS run before writing a new function — finds existing exported util/parser/formatter/mapper functions to reuse, with exact symbol + import path); "query <symbol>" (exact definition site of a known symbol name); "callers <symbol>" (who calls this — trace a symptom back to its cause); "callees <symbol>" (what this calls — trace forward); "impact <symbol>" (blast radius if you change this symbol); "show <file> [startLine] [endLine]" (read REAL verbatim source lines — required before quoting any line as evidence, capped at 300 lines per call if no end line given). Call this iteratively (5-10 times is normal), refining your query based on each result, until you converge on the real fix site.
+
+## Tests are NOT your job this turn
+A dedicated test-writer agent runs immediately after your fix commits and owns the bug-reproducing test. Do NOT write, edit, or create any test file (*.test.*, *.spec.*, __tests__/). Write ONLY the fix.
+
+This is not a suggestion you can trade against a review comment: the reviewer has been given the same rule and will not reject you for absent tests. If a prior review comment appears to demand a test, it is stale — resolve it by making the fix correct, and say in your final message that test authorship belongs to the test-writer.
+
+Adding a test here wastes your turn budget and has caused repeated failures.
+
+## CodeGraph Tool — find EXISTING functions to reuse (do this BEFORE writing any new helper)
+A codegraph_query tool is available — call it directly (NOT via Bash) to discover reusable functions instead of inventing new ones:
+  codegraph_query(mode="helpers", args="<domain nouns>")   # existing util/parser/formatter to REUSE (symbol + import path)
+  codegraph_query(mode="query", args="<SymbolName>")       # exact definition site of a symbol
+  codegraph_query(mode="callees", args="<SymbolName>")     # what a function already calls
+RULE: Before you add ANY new function, run `helpers` for what it would do. If a suitable function already exists, import and call it — do NOT duplicate it. Fewer lines of code is always better.
+
+
+
+## Adding a New Dependency
+If the change genuinely requires a package this project does not yet declare, add it and continue — do not stop to ask whether this is allowed, and do not look for a worse solution that avoids it.
+
+Add it by running:
+
+    npm install --save-dev <package>
+
+
+
+
+## Technical Notes
+- files: ["src/fares.ts"]
+- resolved: [{"declared":"src/fares.ts","actual":"src/fares.ts","match":"exact","verified_against":"/home/bradleyjerome/projects/mock3/mock-a"}]
+- unresolved: []
+
+## Existing File Contents (injected once, deterministically — do NOT ReadFile these unless you need more than shown)
+
+### /home/bradleyjerome/projects/mock3/mock-a/src/fares.ts
+```
+/** Fare rules for a transit line. Ages are whole years. */
+export type Rider = { age: number; hasPass: boolean };
+
+export const BASE_FARE_CENTS = 350;
+export const CONCESSION_FARE_CENTS = 175;
+
+/** Riders aged 65 AND OVER pay the concession fare. */
+export function fareFor(rider: Rider): number {
+  if (rider.hasPass) return 0;
+  if (rider.age > 65) return CONCESSION_FARE_CENTS;
+  if (rider.age < 13) return CONCESSION_FARE_CENTS;
+  return BASE_FARE_CENTS;
+}
+
+export function totalFor(riders: Rider[]): number {
+  return riders.reduce((sum, r) => sum + fareFor(r), 0);
+}
+```
+
+## Files to Create/Modify (EXACT ABSOLUTE PATHS — start here; this list is not exhaustive)
+These are the files the analysis identified. Use these exact paths for them. The list is a
+STARTING POINT, not a fence: it is derived from the ticket and may be incomplete or may name
+a path this repository spells differently. If your change genuinely requires another file in
+this repository, write it — the only files closed to you are ones another story OWNS, and
+attempting one of those returns a specific refusal saying so. Do NOT work around a refusal by
+repeatedly rewriting a file you can already write; that is never the fix. When you write a
+file that is not listed here, say which file and why in your final message, so the reviewer
+sees the whole change.
+src/fares.ts
+
+## Dependencies
+None
+
+## Module resolution in this codeline
+A bare import that names a file under any of these directories is INTERNAL source, not a dependency — never add it to the dependency manifest:
+  src, test
+Source extensions here: .ts, .tsx, .js, .mjs, .cjs
+Write imports the way the existing files in this codeline write them; read a neighbouring file before inventing a path.
+
+
+## Instructions
+CRITICAL — these files already exist. Their real content is injected below (## Existing File Contents) — you do NOT need to ReadFile them to see what's already there.
+Do NOT import or reference anything that doesn't appear in the injected content below — a plausible-sounding module name is not a real one.
+Only call ReadFile yourself if you need to see MORE of a file than what's shown (e.g. it was truncated), or a file not listed below.
+   - /home/bradleyjerome/projects/mock3/mock-a/src/fares.ts (content already injected below — do not ReadFile it unless you need lines beyond what's shown)
+**The content of every file listed above is already shown in ## Existing File Contents — use that, do not spend a tool call re-reading them. Use Edit for targeted changes to existing files — do NOT overwrite an existing file wholesale with WriteFile.**
+
+1. Use the injected ## Existing File Contents above to verify what actually exists (exports, types, existing utilities) before writing any code — do not guess, and do not re-read a file already shown in full
+2. Implement all acceptance criteria for this story
+3. Follow the project's existing code patterns and conventions
+4. Do NOT create tests unless explicitly required in acceptance criteria
+
+After implementation, provide a brief summary of what was created/modified.
+
+## Relevant Knowledge Base Entries
+No prior KB entries match your agent role yet.
+Do NOT read orchestrations/agents/KB.md before writing implementation files. The relevant KB entries are already injected above.
+=== End Prompt ===
+
+=== claude Output (attempt 8) ===
+error: option '--autocompact <auto|tokens>' argument '80000' is invalid. It must be 'auto', or between 100k and 1M (e.g. 500k, 200000, or 200 as shorthand)
+
+=== claude exited with code 1 ===
+=== Prompt for MOCK3-1 (attempt 9) ===
+CRITICAL — these files already exist. Their real content is injected below (## Existing File Contents) — you do NOT need to ReadFile them to see what's already there.
+Do NOT import or reference anything that doesn't appear in the injected content below — a plausible-sounding module name is not a real one.
+Only call ReadFile yourself if you need to see MORE of a file than what's shown (e.g. it was truncated), or a file not listed below.
+
+   - /home/bradleyjerome/projects/mock3/mock-a/src/fares.ts (content already injected below — do not ReadFile it unless you need lines beyond what's shown)
+---
+
+Implement user story MOCK3-1: Riders aged exactly 65 are charged the adult fare
+
+## Story Description
+The fare rules say riders aged 65 and over pay the concession fare. A rider aged exactly 65 is charged the full adult fare of 350 cents instead of 175. Riders aged 66 and above are charged correctly, so the boundary itself is wrong rather than the rule.
+
+## Acceptance Criteria
+- A rider aged exactly 65 with no pass is charged the concession fare.
+- A rider aged 64 with no pass is still charged the base fare.
+- The existing fare behaviour for children, pass holders and adults is unchanged.
+
+## Root Cause Analysis & Prescribed Fix (AUTHORITATIVE — start here, do not re-trace)
+A code investigation already traced this bug to its cause and prescribed the minimal fix below. This is the plan of record. Apply it; do NOT re-read the whole codebase to re-derive it.
+
+The Acceptance Criteria above describe the desired END BEHAVIOR to VERIFY — they are NOT an implementation blueprint. Do not re-architect, split values, or add new fields/abstractions to satisfy an AC literally when the prescribed minimal fix already makes that AC pass. Implement the fix below; the ACs are how you check you got it right.
+
+HARD RULES:
+- Make the SMALLEST change that fixes the root cause. Fewer lines of code is always better.
+- REUSE existing functions. Before writing any new helper, search the repo for an existing util/parser/formatter that already does what you need (use the CodeGraph tool documented below) and call it. Writing novel code when a helper already exists is a defect to be rejected in review.
+
+_(fix-plan, from: code-graph-detective)_
+
+- **src/fares.ts** (`fareFor`): Line 10 uses strict greater-than (>) which excludes age 65, contradicting the spec comment on line 7 that states 'Riders aged 65 AND OVER'. Changing to >= produces the correct boundary where riders aged exactly 65 receive the concession fare.  <== **THIS CHANGE PRODUCES THE VALUE** — it is what makes the new or corrected data exist. Without it, every other change here only moves a value that never changed. [runs: both]
+  - **Minimal fix:** Change line 10 comparison operator from > to >= so that riders aged 65 enter the concession fare branch
+
+## What Your Last Attempt Did
+This is a diffstat, not a judgement — it is what is on disk, unedited. It is EVIDENCE, not an instruction: it does not tell you the work was right, and it does not tell you to undo it. Read it to see what you already changed, so you extend that work rather than rediscovering it or repeating it.
+
+_(attempt-evidence, from: engine)_
+
+The previous attempt changed these files (diffstat against develop):
+
+ .epam/codeline-facts.json | new file
+ .epam/settings.json | new file
+ .epam/verification.json | new file
+
+
+
+## Verification Criteria (what a tester will CONFIRM — your change must satisfy every one)
+These are observable checks, derived from the acceptance criteria and description. They describe WHAT is observed, not how to build it. Make the minimal change that makes all of these true; your accompanying test should assert them:
+- The fare returned for a rider aged 65 with no pass is 175 cents
+- The fare returned for a rider aged 64 with no pass is 350 cents
+- The fare returned for any rider with a transit pass is 0 cents, regardless of age
+- The fare returned for a child aged 12 with no pass is 175 cents
+- The fare returned for an adult aged 45 with no pass is 350 cents
+- The fare returned for a rider aged 66 with no pass is 175 cents
+
+## Codeline-Specific Facts (real, curated gotchas for THIS codeline — read before assuming local tooling behaves like a fully-configured environment)
+- Tests run with: vitest run
+
+## Project Tools (registered by THIS codeline — call them directly, NOT via Bash)
+Each reports REAL state discovered from this repository or its installed dependencies. Call the relevant one instead of assuming — an assumption that contradicts one of these is a defect:
+- codegraph_query: Query this codebase's real, static symbol index (CodeGraph) instead of grepping. Modes: "explore <domain nouns>" (START HERE for an unfamiliar bug/feature — ranked symbols + blast radius + callers/callees; use domain nouns like "discount refund", never symptom/UI words like "displayed wrong"); "helpers <term>" (ALWAYS run before writing a new function — finds existing exported util/parser/formatter/mapper functions to reuse, with exact symbol + import path); "query <symbol>" (exact definition site of a known symbol name); "callers <symbol>" (who calls this — trace a symptom back to its cause); "callees <symbol>" (what this calls — trace forward); "impact <symbol>" (blast radius if you change this symbol); "show <file> [startLine] [endLine]" (read REAL verbatim source lines — required before quoting any line as evidence, capped at 300 lines per call if no end line given). Call this iteratively (5-10 times is normal), refining your query based on each result, until you converge on the real fix site.
+
+## Tests are NOT your job this turn
+A dedicated test-writer agent runs immediately after your fix commits and owns the bug-reproducing test. Do NOT write, edit, or create any test file (*.test.*, *.spec.*, __tests__/). Write ONLY the fix.
+
+This is not a suggestion you can trade against a review comment: the reviewer has been given the same rule and will not reject you for absent tests. If a prior review comment appears to demand a test, it is stale — resolve it by making the fix correct, and say in your final message that test authorship belongs to the test-writer.
+
+Adding a test here wastes your turn budget and has caused repeated failures.
+
+## CodeGraph Tool — find EXISTING functions to reuse (do this BEFORE writing any new helper)
+A codegraph_query tool is available — call it directly (NOT via Bash) to discover reusable functions instead of inventing new ones:
+  codegraph_query(mode="helpers", args="<domain nouns>")   # existing util/parser/formatter to REUSE (symbol + import path)
+  codegraph_query(mode="query", args="<SymbolName>")       # exact definition site of a symbol
+  codegraph_query(mode="callees", args="<SymbolName>")     # what a function already calls
+RULE: Before you add ANY new function, run `helpers` for what it would do. If a suitable function already exists, import and call it — do NOT duplicate it. Fewer lines of code is always better.
+
+
+
+## Adding a New Dependency
+If the change genuinely requires a package this project does not yet declare, add it and continue — do not stop to ask whether this is allowed, and do not look for a worse solution that avoids it.
+
+Add it by running:
+
+    npm install --save-dev <package>
+
+
+
+
+## Technical Notes
+- files: ["src/fares.ts"]
+- resolved: [{"declared":"src/fares.ts","actual":"src/fares.ts","match":"exact","verified_against":"/home/bradleyjerome/projects/mock3/mock-a"}]
+- unresolved: []
+
+## Existing File Contents (injected once, deterministically — do NOT ReadFile these unless you need more than shown)
+
+### /home/bradleyjerome/projects/mock3/mock-a/src/fares.ts
+```
+/** Fare rules for a transit line. Ages are whole years. */
+export type Rider = { age: number; hasPass: boolean };
+
+export const BASE_FARE_CENTS = 350;
+export const CONCESSION_FARE_CENTS = 175;
+
+/** Riders aged 65 AND OVER pay the concession fare. */
+export function fareFor(rider: Rider): number {
+  if (rider.hasPass) return 0;
+  if (rider.age > 65) return CONCESSION_FARE_CENTS;
+  if (rider.age < 13) return CONCESSION_FARE_CENTS;
+  return BASE_FARE_CENTS;
+}
+
+export function totalFor(riders: Rider[]): number {
+  return riders.reduce((sum, r) => sum + fareFor(r), 0);
+}
+```
+
+## Files to Create/Modify (EXACT ABSOLUTE PATHS — start here; this list is not exhaustive)
+These are the files the analysis identified. Use these exact paths for them. The list is a
+STARTING POINT, not a fence: it is derived from the ticket and may be incomplete or may name
+a path this repository spells differently. If your change genuinely requires another file in
+this repository, write it — the only files closed to you are ones another story OWNS, and
+attempting one of those returns a specific refusal saying so. Do NOT work around a refusal by
+repeatedly rewriting a file you can already write; that is never the fix. When you write a
+file that is not listed here, say which file and why in your final message, so the reviewer
+sees the whole change.
+src/fares.ts
+
+## Dependencies
+None
+
+## Module resolution in this codeline
+A bare import that names a file under any of these directories is INTERNAL source, not a dependency — never add it to the dependency manifest:
+  src, test
+Source extensions here: .ts, .tsx, .js, .mjs, .cjs
+Write imports the way the existing files in this codeline write them; read a neighbouring file before inventing a path.
+
+
+## Instructions
+CRITICAL — these files already exist. Their real content is injected below (## Existing File Contents) — you do NOT need to ReadFile them to see what's already there.
+Do NOT import or reference anything that doesn't appear in the injected content below — a plausible-sounding module name is not a real one.
+Only call ReadFile yourself if you need to see MORE of a file than what's shown (e.g. it was truncated), or a file not listed below.
+   - /home/bradleyjerome/projects/mock3/mock-a/src/fares.ts (content already injected below — do not ReadFile it unless you need lines beyond what's shown)
+**The content of every file listed above is already shown in ## Existing File Contents — use that, do not spend a tool call re-reading them. Use Edit for targeted changes to existing files — do NOT overwrite an existing file wholesale with WriteFile.**
+
+1. Use the injected ## Existing File Contents above to verify what actually exists (exports, types, existing utilities) before writing any code — do not guess, and do not re-read a file already shown in full
+2. Implement all acceptance criteria for this story
+3. Follow the project's existing code patterns and conventions
+4. Do NOT create tests unless explicitly required in acceptance criteria
+
+After implementation, provide a brief summary of what was created/modified.
+
+## Relevant Knowledge Base Entries
+No prior KB entries match your agent role yet.
+Do NOT read orchestrations/agents/KB.md before writing implementation files. The relevant KB entries are already injected above.
+=== End Prompt ===
+
+=== claude Output (attempt 9) ===
+error: option '--autocompact <auto|tokens>' argument '80000' is invalid. It must be 'auto', or between 100k and 1M (e.g. 500k, 200000, or 200 as shorthand)
+
+=== claude exited with code 1 ===
+=== Prompt for MOCK3-1 (attempt 10) ===
+CRITICAL — these files already exist. Their real content is injected below (## Existing File Contents) — you do NOT need to ReadFile them to see what's already there.
+Do NOT import or reference anything that doesn't appear in the injected content below — a plausible-sounding module name is not a real one.
+Only call ReadFile yourself if you need to see MORE of a file than what's shown (e.g. it was truncated), or a file not listed below.
+
+   - /home/bradleyjerome/projects/mock3/mock-a/src/fares.ts (content already injected below — do not ReadFile it unless you need lines beyond what's shown)
+---
+
+Implement user story MOCK3-1: Riders aged exactly 65 are charged the adult fare
+
+## Story Description
+The fare rules say riders aged 65 and over pay the concession fare. A rider aged exactly 65 is charged the full adult fare of 350 cents instead of 175. Riders aged 66 and above are charged correctly, so the boundary itself is wrong rather than the rule.
+
+## Acceptance Criteria
+- A rider aged exactly 65 with no pass is charged the concession fare.
+- A rider aged 64 with no pass is still charged the base fare.
+- The existing fare behaviour for children, pass holders and adults is unchanged.
+
+## Root Cause Analysis & Prescribed Fix (AUTHORITATIVE — start here, do not re-trace)
+A code investigation already traced this bug to its cause and prescribed the minimal fix below. This is the plan of record. Apply it; do NOT re-read the whole codebase to re-derive it.
+
+The Acceptance Criteria above describe the desired END BEHAVIOR to VERIFY — they are NOT an implementation blueprint. Do not re-architect, split values, or add new fields/abstractions to satisfy an AC literally when the prescribed minimal fix already makes that AC pass. Implement the fix below; the ACs are how you check you got it right.
+
+HARD RULES:
+- Make the SMALLEST change that fixes the root cause. Fewer lines of code is always better.
+- REUSE existing functions. Before writing any new helper, search the repo for an existing util/parser/formatter that already does what you need (use the CodeGraph tool documented below) and call it. Writing novel code when a helper already exists is a defect to be rejected in review.
+
+_(fix-plan, from: code-graph-detective)_
+
+- **src/fares.ts** (`fareFor`): Line 10 uses strict greater-than (>) which excludes age 65, contradicting the spec comment on line 7 that states 'Riders aged 65 AND OVER'. Changing to >= produces the correct boundary where riders aged exactly 65 receive the concession fare.  <== **THIS CHANGE PRODUCES THE VALUE** — it is what makes the new or corrected data exist. Without it, every other change here only moves a value that never changed. [runs: both]
+  - **Minimal fix:** Change line 10 comparison operator from > to >= so that riders aged 65 enter the concession fare branch
+
+## What Your Last Attempt Did
+This is a diffstat, not a judgement — it is what is on disk, unedited. It is EVIDENCE, not an instruction: it does not tell you the work was right, and it does not tell you to undo it. Read it to see what you already changed, so you extend that work rather than rediscovering it or repeating it.
+
+_(attempt-evidence, from: engine)_
+
+The previous attempt changed these files (diffstat against develop):
+
+ .epam/codeline-facts.json | new file
+ .epam/settings.json | new file
+ .epam/verification.json | new file
+
+
+
+## Verification Criteria (what a tester will CONFIRM — your change must satisfy every one)
+These are observable checks, derived from the acceptance criteria and description. They describe WHAT is observed, not how to build it. Make the minimal change that makes all of these true; your accompanying test should assert them:
+- The fare returned for a rider aged 65 with no pass is 175 cents
+- The fare returned for a rider aged 64 with no pass is 350 cents
+- The fare returned for any rider with a transit pass is 0 cents, regardless of age
+- The fare returned for a child aged 12 with no pass is 175 cents
+- The fare returned for an adult aged 45 with no pass is 350 cents
+- The fare returned for a rider aged 66 with no pass is 175 cents
+
+## Codeline-Specific Facts (real, curated gotchas for THIS codeline — read before assuming local tooling behaves like a fully-configured environment)
+- Tests run with: vitest run
+
+## Project Tools (registered by THIS codeline — call them directly, NOT via Bash)
+Each reports REAL state discovered from this repository or its installed dependencies. Call the relevant one instead of assuming — an assumption that contradicts one of these is a defect:
+- codegraph_query: Query this codebase's real, static symbol index (CodeGraph) instead of grepping. Modes: "explore <domain nouns>" (START HERE for an unfamiliar bug/feature — ranked symbols + blast radius + callers/callees; use domain nouns like "discount refund", never symptom/UI words like "displayed wrong"); "helpers <term>" (ALWAYS run before writing a new function — finds existing exported util/parser/formatter/mapper functions to reuse, with exact symbol + import path); "query <symbol>" (exact definition site of a known symbol name); "callers <symbol>" (who calls this — trace a symptom back to its cause); "callees <symbol>" (what this calls — trace forward); "impact <symbol>" (blast radius if you change this symbol); "show <file> [startLine] [endLine]" (read REAL verbatim source lines — required before quoting any line as evidence, capped at 300 lines per call if no end line given). Call this iteratively (5-10 times is normal), refining your query based on each result, until you converge on the real fix site.
+
+## Tests are NOT your job this turn
+A dedicated test-writer agent runs immediately after your fix commits and owns the bug-reproducing test. Do NOT write, edit, or create any test file (*.test.*, *.spec.*, __tests__/). Write ONLY the fix.
+
+This is not a suggestion you can trade against a review comment: the reviewer has been given the same rule and will not reject you for absent tests. If a prior review comment appears to demand a test, it is stale — resolve it by making the fix correct, and say in your final message that test authorship belongs to the test-writer.
+
+Adding a test here wastes your turn budget and has caused repeated failures.
+
+## CodeGraph Tool — find EXISTING functions to reuse (do this BEFORE writing any new helper)
+A codegraph_query tool is available — call it directly (NOT via Bash) to discover reusable functions instead of inventing new ones:
+  codegraph_query(mode="helpers", args="<domain nouns>")   # existing util/parser/formatter to REUSE (symbol + import path)
+  codegraph_query(mode="query", args="<SymbolName>")       # exact definition site of a symbol
+  codegraph_query(mode="callees", args="<SymbolName>")     # what a function already calls
+RULE: Before you add ANY new function, run `helpers` for what it would do. If a suitable function already exists, import and call it — do NOT duplicate it. Fewer lines of code is always better.
+
+
+
+## Adding a New Dependency
+If the change genuinely requires a package this project does not yet declare, add it and continue — do not stop to ask whether this is allowed, and do not look for a worse solution that avoids it.
+
+Add it by running:
+
+    npm install --save-dev <package>
+
+
+
+
+## Technical Notes
+- files: ["src/fares.ts"]
+- resolved: [{"declared":"src/fares.ts","actual":"src/fares.ts","match":"exact","verified_against":"/home/bradleyjerome/projects/mock3/mock-a"}]
+- unresolved: []
+
+## Existing File Contents (injected once, deterministically — do NOT ReadFile these unless you need more than shown)
+
+### /home/bradleyjerome/projects/mock3/mock-a/src/fares.ts
+```
+/** Fare rules for a transit line. Ages are whole years. */
+export type Rider = { age: number; hasPass: boolean };
+
+export const BASE_FARE_CENTS = 350;
+export const CONCESSION_FARE_CENTS = 175;
+
+/** Riders aged 65 AND OVER pay the concession fare. */
+export function fareFor(rider: Rider): number {
+  if (rider.hasPass) return 0;
+  if (rider.age > 65) return CONCESSION_FARE_CENTS;
+  if (rider.age < 13) return CONCESSION_FARE_CENTS;
+  return BASE_FARE_CENTS;
+}
+
+export function totalFor(riders: Rider[]): number {
+  return riders.reduce((sum, r) => sum + fareFor(r), 0);
+}
+```
+
+## Files to Create/Modify (EXACT ABSOLUTE PATHS — start here; this list is not exhaustive)
+These are the files the analysis identified. Use these exact paths for them. The list is a
+STARTING POINT, not a fence: it is derived from the ticket and may be incomplete or may name
+a path this repository spells differently. If your change genuinely requires another file in
+this repository, write it — the only files closed to you are ones another story OWNS, and
+attempting one of those returns a specific refusal saying so. Do NOT work around a refusal by
+repeatedly rewriting a file you can already write; that is never the fix. When you write a
+file that is not listed here, say which file and why in your final message, so the reviewer
+sees the whole change.
+src/fares.ts
+
+## Dependencies
+None
+
+## Module resolution in this codeline
+A bare import that names a file under any of these directories is INTERNAL source, not a dependency — never add it to the dependency manifest:
+  src, test
+Source extensions here: .ts, .tsx, .js, .mjs, .cjs
+Write imports the way the existing files in this codeline write them; read a neighbouring file before inventing a path.
+
+
+## Instructions
+CRITICAL — these files already exist. Their real content is injected below (## Existing File Contents) — you do NOT need to ReadFile them to see what's already there.
+Do NOT import or reference anything that doesn't appear in the injected content below — a plausible-sounding module name is not a real one.
+Only call ReadFile yourself if you need to see MORE of a file than what's shown (e.g. it was truncated), or a file not listed below.
+   - /home/bradleyjerome/projects/mock3/mock-a/src/fares.ts (content already injected below — do not ReadFile it unless you need lines beyond what's shown)
+**The content of every file listed above is already shown in ## Existing File Contents — use that, do not spend a tool call re-reading them. Use Edit for targeted changes to existing files — do NOT overwrite an existing file wholesale with WriteFile.**
+
+1. Use the injected ## Existing File Contents above to verify what actually exists (exports, types, existing utilities) before writing any code — do not guess, and do not re-read a file already shown in full
+2. Implement all acceptance criteria for this story
+3. Follow the project's existing code patterns and conventions
+4. Do NOT create tests unless explicitly required in acceptance criteria
+
+After implementation, provide a brief summary of what was created/modified.
+
+## Relevant Knowledge Base Entries
+No prior KB entries match your agent role yet.
+Do NOT read orchestrations/agents/KB.md before writing implementation files. The relevant KB entries are already injected above.
+=== End Prompt ===
+
+=== claude Output (attempt 10) ===
+error: option '--autocompact <auto|tokens>' argument '80000' is invalid. It must be 'auto', or between 100k and 1M (e.g. 500k, 200000, or 200 as shorthand)
+
+=== claude exited with code 1 ===
+=== Prompt for MOCK3-1 (attempt 11) ===
+CRITICAL — these files already exist. Their real content is injected below (## Existing File Contents) — you do NOT need to ReadFile them to see what's already there.
+Do NOT import or reference anything that doesn't appear in the injected content below — a plausible-sounding module name is not a real one.
+Only call ReadFile yourself if you need to see MORE of a file than what's shown (e.g. it was truncated), or a file not listed below.
+
+   - /home/bradleyjerome/projects/mock3/mock-a/src/fares.ts (content already injected below — do not ReadFile it unless you need lines beyond what's shown)
+---
+
+Implement user story MOCK3-1: Riders aged exactly 65 are charged the adult fare
+
+## Story Description
+The fare rules say riders aged 65 and over pay the concession fare. A rider aged exactly 65 is charged the full adult fare of 350 cents instead of 175. Riders aged 66 and above are charged correctly, so the boundary itself is wrong rather than the rule.
+
+## Acceptance Criteria
+- A rider aged exactly 65 with no pass is charged the concession fare.
+- A rider aged 64 with no pass is still charged the base fare.
+- The existing fare behaviour for children, pass holders and adults is unchanged.
+
+## Root Cause Analysis & Prescribed Fix (AUTHORITATIVE — start here, do not re-trace)
+A code investigation already traced this bug to its cause and prescribed the minimal fix below. This is the plan of record. Apply it; do NOT re-read the whole codebase to re-derive it.
+
+The Acceptance Criteria above describe the desired END BEHAVIOR to VERIFY — they are NOT an implementation blueprint. Do not re-architect, split values, or add new fields/abstractions to satisfy an AC literally when the prescribed minimal fix already makes that AC pass. Implement the fix below; the ACs are how you check you got it right.
+
+HARD RULES:
+- Make the SMALLEST change that fixes the root cause. Fewer lines of code is always better.
+- REUSE existing functions. Before writing any new helper, search the repo for an existing util/parser/formatter that already does what you need (use the CodeGraph tool documented below) and call it. Writing novel code when a helper already exists is a defect to be rejected in review.
+
+_(fix-plan, from: code-graph-detective)_
+
+- **src/fares.ts** (`fareFor`): Line 10 uses strict greater-than (>) which excludes age 65, contradicting the spec comment on line 7 that states 'Riders aged 65 AND OVER'. Changing to >= produces the correct boundary where riders aged exactly 65 receive the concession fare.  <== **THIS CHANGE PRODUCES THE VALUE** — it is what makes the new or corrected data exist. Without it, every other change here only moves a value that never changed. [runs: both]
+  - **Minimal fix:** Change line 10 comparison operator from > to >= so that riders aged 65 enter the concession fare branch
+
+## What Your Last Attempt Did
+This is a diffstat, not a judgement — it is what is on disk, unedited. It is EVIDENCE, not an instruction: it does not tell you the work was right, and it does not tell you to undo it. Read it to see what you already changed, so you extend that work rather than rediscovering it or repeating it.
+
+_(attempt-evidence, from: engine)_
+
+The previous attempt changed these files (diffstat against develop):
+
+ .epam/codeline-facts.json | new file
+ .epam/settings.json | new file
+ .epam/verification.json | new file
+
+
+
+## Verification Criteria (what a tester will CONFIRM — your change must satisfy every one)
+These are observable checks, derived from the acceptance criteria and description. They describe WHAT is observed, not how to build it. Make the minimal change that makes all of these true; your accompanying test should assert them:
+- The fare returned for a rider aged 65 with no pass is 175 cents
+- The fare returned for a rider aged 64 with no pass is 350 cents
+- The fare returned for any rider with a transit pass is 0 cents, regardless of age
+- The fare returned for a child aged 12 with no pass is 175 cents
+- The fare returned for an adult aged 45 with no pass is 350 cents
+- The fare returned for a rider aged 66 with no pass is 175 cents
+
+## Codeline-Specific Facts (real, curated gotchas for THIS codeline — read before assuming local tooling behaves like a fully-configured environment)
+- Tests run with: vitest run
+
+## Project Tools (registered by THIS codeline — call them directly, NOT via Bash)
+Each reports REAL state discovered from this repository or its installed dependencies. Call the relevant one instead of assuming — an assumption that contradicts one of these is a defect:
+- codegraph_query: Query this codebase's real, static symbol index (CodeGraph) instead of grepping. Modes: "explore <domain nouns>" (START HERE for an unfamiliar bug/feature — ranked symbols + blast radius + callers/callees; use domain nouns like "discount refund", never symptom/UI words like "displayed wrong"); "helpers <term>" (ALWAYS run before writing a new function — finds existing exported util/parser/formatter/mapper functions to reuse, with exact symbol + import path); "query <symbol>" (exact definition site of a known symbol name); "callers <symbol>" (who calls this — trace a symptom back to its cause); "callees <symbol>" (what this calls — trace forward); "impact <symbol>" (blast radius if you change this symbol); "show <file> [startLine] [endLine]" (read REAL verbatim source lines — required before quoting any line as evidence, capped at 300 lines per call if no end line given). Call this iteratively (5-10 times is normal), refining your query based on each result, until you converge on the real fix site.
+
+## Tests are NOT your job this turn
+A dedicated test-writer agent runs immediately after your fix commits and owns the bug-reproducing test. Do NOT write, edit, or create any test file (*.test.*, *.spec.*, __tests__/). Write ONLY the fix.
+
+This is not a suggestion you can trade against a review comment: the reviewer has been given the same rule and will not reject you for absent tests. If a prior review comment appears to demand a test, it is stale — resolve it by making the fix correct, and say in your final message that test authorship belongs to the test-writer.
+
+Adding a test here wastes your turn budget and has caused repeated failures.
+
+## CodeGraph Tool — find EXISTING functions to reuse (do this BEFORE writing any new helper)
+A codegraph_query tool is available — call it directly (NOT via Bash) to discover reusable functions instead of inventing new ones:
+  codegraph_query(mode="helpers", args="<domain nouns>")   # existing util/parser/formatter to REUSE (symbol + import path)
+  codegraph_query(mode="query", args="<SymbolName>")       # exact definition site of a symbol
+  codegraph_query(mode="callees", args="<SymbolName>")     # what a function already calls
+RULE: Before you add ANY new function, run `helpers` for what it would do. If a suitable function already exists, import and call it — do NOT duplicate it. Fewer lines of code is always better.
+
+
+
+## Adding a New Dependency
+If the change genuinely requires a package this project does not yet declare, add it and continue — do not stop to ask whether this is allowed, and do not look for a worse solution that avoids it.
+
+Add it by running:
+
+    npm install --save-dev <package>
+
+
+
+
+## Technical Notes
+- files: ["src/fares.ts"]
+- resolved: [{"declared":"src/fares.ts","actual":"src/fares.ts","match":"exact","verified_against":"/home/bradleyjerome/projects/mock3/mock-a"}]
+- unresolved: []
+
+## Existing File Contents (injected once, deterministically — do NOT ReadFile these unless you need more than shown)
+
+### /home/bradleyjerome/projects/mock3/mock-a/src/fares.ts
+```
+/** Fare rules for a transit line. Ages are whole years. */
+export type Rider = { age: number; hasPass: boolean };
+
+export const BASE_FARE_CENTS = 350;
+export const CONCESSION_FARE_CENTS = 175;
+
+/** Riders aged 65 AND OVER pay the concession fare. */
+export function fareFor(rider: Rider): number {
+  if (rider.hasPass) return 0;
+  if (rider.age > 65) return CONCESSION_FARE_CENTS;
+  if (rider.age < 13) return CONCESSION_FARE_CENTS;
+  return BASE_FARE_CENTS;
+}
+
+export function totalFor(riders: Rider[]): number {
+  return riders.reduce((sum, r) => sum + fareFor(r), 0);
+}
+```
+
+## Files to Create/Modify (EXACT ABSOLUTE PATHS — start here; this list is not exhaustive)
+These are the files the analysis identified. Use these exact paths for them. The list is a
+STARTING POINT, not a fence: it is derived from the ticket and may be incomplete or may name
+a path this repository spells differently. If your change genuinely requires another file in
+this repository, write it — the only files closed to you are ones another story OWNS, and
+attempting one of those returns a specific refusal saying so. Do NOT work around a refusal by
+repeatedly rewriting a file you can already write; that is never the fix. When you write a
+file that is not listed here, say which file and why in your final message, so the reviewer
+sees the whole change.
+src/fares.ts
+
+## Dependencies
+None
+
+## Module resolution in this codeline
+A bare import that names a file under any of these directories is INTERNAL source, not a dependency — never add it to the dependency manifest:
+  src, test
+Source extensions here: .ts, .tsx, .js, .mjs, .cjs
+Write imports the way the existing files in this codeline write them; read a neighbouring file before inventing a path.
+
+
+## Instructions
+CRITICAL — these files already exist. Their real content is injected below (## Existing File Contents) — you do NOT need to ReadFile them to see what's already there.
+Do NOT import or reference anything that doesn't appear in the injected content below — a plausible-sounding module name is not a real one.
+Only call ReadFile yourself if you need to see MORE of a file than what's shown (e.g. it was truncated), or a file not listed below.
+   - /home/bradleyjerome/projects/mock3/mock-a/src/fares.ts (content already injected below — do not ReadFile it unless you need lines beyond what's shown)
+**The content of every file listed above is already shown in ## Existing File Contents — use that, do not spend a tool call re-reading them. Use Edit for targeted changes to existing files — do NOT overwrite an existing file wholesale with WriteFile.**
+
+1. Use the injected ## Existing File Contents above to verify what actually exists (exports, types, existing utilities) before writing any code — do not guess, and do not re-read a file already shown in full
+2. Implement all acceptance criteria for this story
+3. Follow the project's existing code patterns and conventions
+4. Do NOT create tests unless explicitly required in acceptance criteria
+
+After implementation, provide a brief summary of what was created/modified.
+
+## Relevant Knowledge Base Entries
+No prior KB entries match your agent role yet.
+Do NOT read orchestrations/agents/KB.md before writing implementation files. The relevant KB entries are already injected above.
+=== End Prompt ===
+
+=== claude Output (attempt 11) ===
+error: option '--autocompact <auto|tokens>' argument '80000' is invalid. It must be 'auto', or between 100k and 1M (e.g. 500k, 200000, or 200 as shorthand)
+
+=== claude exited with code 1 ===
+=== Prompt for MOCK3-1 (attempt 12) ===
+CRITICAL — these files already exist. Their real content is injected below (## Existing File Contents) — you do NOT need to ReadFile them to see what's already there.
+Do NOT import or reference anything that doesn't appear in the injected content below — a plausible-sounding module name is not a real one.
+Only call ReadFile yourself if you need to see MORE of a file than what's shown (e.g. it was truncated), or a file not listed below.
+
+   - /home/bradleyjerome/projects/mock3/mock-a/src/fares.ts (content already injected below — do not ReadFile it unless you need lines beyond what's shown)
+---
+
+Implement user story MOCK3-1: Riders aged exactly 65 are charged the adult fare
+
+## Story Description
+The fare rules say riders aged 65 and over pay the concession fare. A rider aged exactly 65 is charged the full adult fare of 350 cents instead of 175. Riders aged 66 and above are charged correctly, so the boundary itself is wrong rather than the rule.
+
+## Acceptance Criteria
+- A rider aged exactly 65 with no pass is charged the concession fare.
+- A rider aged 64 with no pass is still charged the base fare.
+- The existing fare behaviour for children, pass holders and adults is unchanged.
+
+## Root Cause Analysis & Prescribed Fix (AUTHORITATIVE — start here, do not re-trace)
+A code investigation already traced this bug to its cause and prescribed the minimal fix below. This is the plan of record. Apply it; do NOT re-read the whole codebase to re-derive it.
+
+The Acceptance Criteria above describe the desired END BEHAVIOR to VERIFY — they are NOT an implementation blueprint. Do not re-architect, split values, or add new fields/abstractions to satisfy an AC literally when the prescribed minimal fix already makes that AC pass. Implement the fix below; the ACs are how you check you got it right.
+
+HARD RULES:
+- Make the SMALLEST change that fixes the root cause. Fewer lines of code is always better.
+- REUSE existing functions. Before writing any new helper, search the repo for an existing util/parser/formatter that already does what you need (use the CodeGraph tool documented below) and call it. Writing novel code when a helper already exists is a defect to be rejected in review.
+
+_(fix-plan, from: code-graph-detective)_
+
+- **src/fares.ts** (`fareFor`): Line 10 uses strict greater-than (>) which excludes age 65, contradicting the spec comment on line 7 that states 'Riders aged 65 AND OVER'. Changing to >= produces the correct boundary where riders aged exactly 65 receive the concession fare.  <== **THIS CHANGE PRODUCES THE VALUE** — it is what makes the new or corrected data exist. Without it, every other change here only moves a value that never changed. [runs: both]
+  - **Minimal fix:** Change line 10 comparison operator from > to >= so that riders aged 65 enter the concession fare branch
+
+## What Your Last Attempt Did
+This is a diffstat, not a judgement — it is what is on disk, unedited. It is EVIDENCE, not an instruction: it does not tell you the work was right, and it does not tell you to undo it. Read it to see what you already changed, so you extend that work rather than rediscovering it or repeating it.
+
+_(attempt-evidence, from: engine)_
+
+The previous attempt changed these files (diffstat against develop):
+
+ .epam/codeline-facts.json | new file
+ .epam/settings.json | new file
+ .epam/verification.json | new file
+
+
+
+## Verification Criteria (what a tester will CONFIRM — your change must satisfy every one)
+These are observable checks, derived from the acceptance criteria and description. They describe WHAT is observed, not how to build it. Make the minimal change that makes all of these true; your accompanying test should assert them:
+- The fare returned for a rider aged 65 with no pass is 175 cents
+- The fare returned for a rider aged 64 with no pass is 350 cents
+- The fare returned for any rider with a transit pass is 0 cents, regardless of age
+- The fare returned for a child aged 12 with no pass is 175 cents
+- The fare returned for an adult aged 45 with no pass is 350 cents
+- The fare returned for a rider aged 66 with no pass is 175 cents
+
+## Codeline-Specific Facts (real, curated gotchas for THIS codeline — read before assuming local tooling behaves like a fully-configured environment)
+- Tests run with: vitest run
+
+## Project Tools (registered by THIS codeline — call them directly, NOT via Bash)
+Each reports REAL state discovered from this repository or its installed dependencies. Call the relevant one instead of assuming — an assumption that contradicts one of these is a defect:
+- codegraph_query: Query this codebase's real, static symbol index (CodeGraph) instead of grepping. Modes: "explore <domain nouns>" (START HERE for an unfamiliar bug/feature — ranked symbols + blast radius + callers/callees; use domain nouns like "discount refund", never symptom/UI words like "displayed wrong"); "helpers <term>" (ALWAYS run before writing a new function — finds existing exported util/parser/formatter/mapper functions to reuse, with exact symbol + import path); "query <symbol>" (exact definition site of a known symbol name); "callers <symbol>" (who calls this — trace a symptom back to its cause); "callees <symbol>" (what this calls — trace forward); "impact <symbol>" (blast radius if you change this symbol); "show <file> [startLine] [endLine]" (read REAL verbatim source lines — required before quoting any line as evidence, capped at 300 lines per call if no end line given). Call this iteratively (5-10 times is normal), refining your query based on each result, until you converge on the real fix site.
+
+## Tests are NOT your job this turn
+A dedicated test-writer agent runs immediately after your fix commits and owns the bug-reproducing test. Do NOT write, edit, or create any test file (*.test.*, *.spec.*, __tests__/). Write ONLY the fix.
+
+This is not a suggestion you can trade against a review comment: the reviewer has been given the same rule and will not reject you for absent tests. If a prior review comment appears to demand a test, it is stale — resolve it by making the fix correct, and say in your final message that test authorship belongs to the test-writer.
+
+Adding a test here wastes your turn budget and has caused repeated failures.
+
+## CodeGraph Tool — find EXISTING functions to reuse (do this BEFORE writing any new helper)
+A codegraph_query tool is available — call it directly (NOT via Bash) to discover reusable functions instead of inventing new ones:
+  codegraph_query(mode="helpers", args="<domain nouns>")   # existing util/parser/formatter to REUSE (symbol + import path)
+  codegraph_query(mode="query", args="<SymbolName>")       # exact definition site of a symbol
+  codegraph_query(mode="callees", args="<SymbolName>")     # what a function already calls
+RULE: Before you add ANY new function, run `helpers` for what it would do. If a suitable function already exists, import and call it — do NOT duplicate it. Fewer lines of code is always better.
+
+
+
+## Adding a New Dependency
+If the change genuinely requires a package this project does not yet declare, add it and continue — do not stop to ask whether this is allowed, and do not look for a worse solution that avoids it.
+
+Add it by running:
+
+    npm install --save-dev <package>
+
+
+
+
+## Technical Notes
+- files: ["src/fares.ts"]
+- resolved: [{"declared":"src/fares.ts","actual":"src/fares.ts","match":"exact","verified_against":"/home/bradleyjerome/projects/mock3/mock-a"}]
+- unresolved: []
+
+## Existing File Contents (injected once, deterministically — do NOT ReadFile these unless you need more than shown)
+
+### /home/bradleyjerome/projects/mock3/mock-a/src/fares.ts
+```
+/** Fare rules for a transit line. Ages are whole years. */
+export type Rider = { age: number; hasPass: boolean };
+
+export const BASE_FARE_CENTS = 350;
+export const CONCESSION_FARE_CENTS = 175;
+
+/** Riders aged 65 AND OVER pay the concession fare. */
+export function fareFor(rider: Rider): number {
+  if (rider.hasPass) return 0;
+  if (rider.age > 65) return CONCESSION_FARE_CENTS;
+  if (rider.age < 13) return CONCESSION_FARE_CENTS;
+  return BASE_FARE_CENTS;
+}
+
+export function totalFor(riders: Rider[]): number {
+  return riders.reduce((sum, r) => sum + fareFor(r), 0);
+}
+```
+
+## Files to Create/Modify (EXACT ABSOLUTE PATHS — start here; this list is not exhaustive)
+These are the files the analysis identified. Use these exact paths for them. The list is a
+STARTING POINT, not a fence: it is derived from the ticket and may be incomplete or may name
+a path this repository spells differently. If your change genuinely requires another file in
+this repository, write it — the only files closed to you are ones another story OWNS, and
+attempting one of those returns a specific refusal saying so. Do NOT work around a refusal by
+repeatedly rewriting a file you can already write; that is never the fix. When you write a
+file that is not listed here, say which file and why in your final message, so the reviewer
+sees the whole change.
+src/fares.ts
+
+## Dependencies
+None
+
+## Module resolution in this codeline
+A bare import that names a file under any of these directories is INTERNAL source, not a dependency — never add it to the dependency manifest:
+  src, test
+Source extensions here: .ts, .tsx, .js, .mjs, .cjs
+Write imports the way the existing files in this codeline write them; read a neighbouring file before inventing a path.
+
+
+## Instructions
+CRITICAL — these files already exist. Their real content is injected below (## Existing File Contents) — you do NOT need to ReadFile them to see what's already there.
+Do NOT import or reference anything that doesn't appear in the injected content below — a plausible-sounding module name is not a real one.
+Only call ReadFile yourself if you need to see MORE of a file than what's shown (e.g. it was truncated), or a file not listed below.
+   - /home/bradleyjerome/projects/mock3/mock-a/src/fares.ts (content already injected below — do not ReadFile it unless you need lines beyond what's shown)
+**The content of every file listed above is already shown in ## Existing File Contents — use that, do not spend a tool call re-reading them. Use Edit for targeted changes to existing files — do NOT overwrite an existing file wholesale with WriteFile.**
+
+1. Use the injected ## Existing File Contents above to verify what actually exists (exports, types, existing utilities) before writing any code — do not guess, and do not re-read a file already shown in full
+2. Implement all acceptance criteria for this story
+3. Follow the project's existing code patterns and conventions
+4. Do NOT create tests unless explicitly required in acceptance criteria
+
+After implementation, provide a brief summary of what was created/modified.
+
+## Relevant Knowledge Base Entries
+No prior KB entries match your agent role yet.
+Do NOT read orchestrations/agents/KB.md before writing implementation files. The relevant KB entries are already injected above.
+=== End Prompt ===
+
+=== claude Output (attempt 12) ===
+error: option '--autocompact <auto|tokens>' argument '80000' is invalid. It must be 'auto', or between 100k and 1M (e.g. 500k, 200000, or 200 as shorthand)
+
+=== claude exited with code 1 ===

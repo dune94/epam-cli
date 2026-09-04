@@ -1,0 +1,106 @@
+=== Prompt for SKY-003-impl (attempt 1) ===
+CRITICAL — WRITE FILES FIRST. Your FIRST tool call MUST be WriteFile.
+Do NOT output any text before calling WriteFile. Do NOT plan or say "I will...".
+Call WriteFile NOW for the EXACT ABSOLUTE PATHS listed below:
+
+   - WRITE /home/bradleyjerome/projects/skyscanner-app/src/cli.ts first, before any other action
+---
+
+Implement user story SKY-003-impl: Implement flight search CLI entry point with argument parsing and table rendering
+
+## Story Description
+Create `src/cli.ts` — a standalone Node entry point that accepts flight search arguments via `process.argv`, validates them, checks `RAPIDAPI_KEY`, calls `SkyscannerClient.searchFlights`, and renders results as a dynamically-padded aligned table. No new runtime dependencies.
+
+## Acceptance Criteria
+- `src/cli.ts` exists and `tsc --noEmit` reports zero errors
+- `tsconfig.json` sets `outDir` to `dist` and emits CommonJS-compatible output invocable as `node dist/cli.js`
+- Flags `--from`, `--to`, and `--date` are all required; if any is absent the CLI prints a usage hint to stderr (showing correct flag names) and exits with code 2
+- `--date` value must match `YYYY-MM-DD`; invalid format causes exit 2 with a human-readable message to stderr before any network call
+- Optional `--adults` flag defaults to 1 when omitted; non-integer, ≤ 0, or non-numeric string causes exit 2 with message to stderr; parsed value is forwarded to `SkyscannerClient.searchFlights`
+- If `RAPIDAPI_KEY` env var is unset or empty, CLI prints 'Error: RAPIDAPI_KEY environment variable is required' to stderr and exits 1 before any network call
+- When results exist, stdout contains: header row (Airline, Price, Departure, Arrival, Duration, Stops), separator row of hyphens matching each column width, one data row per result; all columns padded to widest value; Price right-aligned with currency symbol prefix (fallback £); other columns left-aligned
+- Empty result array → stdout is exactly `No flights found.` and exit 0; `searchFlights` rejection → error message to stderr, exit 1, stdout empty
+
+
+
+
+
+## Technical Notes
+- files: ["/home/bradleyjerome/projects/skyscanner-app/src/cli.ts"]
+- dependsOn: ["SKY-002"]
+
+## Files to Create/Modify (EXACT ABSOLUTE PATHS — write to these paths exactly)
+/home/bradleyjerome/projects/skyscanner-app/src/cli.ts
+
+## Dependencies
+SKY-002
+
+
+## Instructions
+**CRITICAL — WRITE FILES FIRST:**
+   - WRITE /home/bradleyjerome/projects/skyscanner-app/src/cli.ts first, before any other action
+**You MUST write every file listed above to its EXACT absolute path. Do NOT write to a different path, do NOT write to the current directory unless it matches the path above. Use your WriteFile or Edit tools with the full absolute path shown.**
+
+1. Write each required file to its exact absolute path listed above — do this FIRST before anything else
+2. Implement all acceptance criteria for this story
+3. Follow the project's existing code patterns and conventions
+4. Do NOT create tests unless explicitly required in acceptance criteria
+
+After implementation, provide a brief summary of what was created/modified.
+
+## Relevant Knowledge Base Entries
+The following was learned from previous story implementations and is relevant to your agent role. Apply this knowledge before writing any code:
+
+- [2026-07-06T17:45:30Z] Always resolve mocked fetch calls to a Response-shaped object with ok, status, statusText, and a json method returning a Promise.
+- [2026-07-06T17:50:20Z] Use valid module and moduleResolution pairs in tsconfig.json: CommonJS with Node, Node16 with Node16, ESNext with Bundler. Use CommonJS and Node for the stack. Mismatched pairs cause build errors.
+- [2026-07-06T18:11:26Z] Use vi.fn().mockResolvedValue(value) to make a mock return a resolved Promise.
+- [2026-07-06T20:31:11Z] Use `test: { passWithNoTests: true }` in vitest.config.ts or create a stub test file when no *.test.ts files exist.
+- [2026-07-06T20:33:03Z] Enable globals:true in vitest.config.ts so describe, it, and expect work without imports, reducing boilerplate in test files.
+- [2026-07-06T23:47:34Z] Use CommonJS-compatible patterns in src/server.ts: avoid `import.meta.url` and top-level `await`; gate listen with `if (require.main === module)`.
+- [2026-07-07T02:35:30Z] Always include a non-test source file in src/ alongside any src/*.test.ts file, since tsconfig.json excludes test files from tsc --noEmit.
+- [2026-07-07T19:01:34Z] Only modify or create files explicitly listed in the story's acceptance criteria. Do not touch files belonging to other stories or outside the current task scope.
+- [2026-07-07T20:17:57Z] [unreviewed-fallback] Avoid using deprecated TypeScript compiler options like 'moduleResolution=node10'; use 'moduleResolution=node' instead.
+- [2026-07-17T20:20:58Z] Always: Before importing a module or referencing a type/property, always read the actual source file to verify the export exists, its exact path, its properties, and its constructor/factory signatures
+
+## Knowledge Base Contribution (do this LAST — after writing all implementation files)
+Your assigned KB entry ID for this run: **KB-008**
+
+IMPORTANT: Write ALL implementation files first. Only AFTER writing every required file should you optionally append a KB entry.
+Do NOT read orchestrations/agents/KB.md before writing implementation files. The relevant KB entries are already injected above.
+
+If (and only if) you discover a non-obvious pattern during implementation, append one entry to `orchestrations/agents/KB.md`:
+
+```markdown
+## KB-008 -- 2026-07-18
+
+**Category:** <backend|frontend|infrastructure|testing|orchestration>
+**AgentRole:** <your agentRole from the story>
+**Tags:** <comma-separated tech keywords, e.g. typescript, node, cli>
+**Trigger:** <retry|first-success>
+**StoryRef:** SKY-003-impl
+
+<One concise paragraph: the specific pattern, gotcha, or anti-pattern.>
+```
+
+Only write an entry if the knowledge is genuinely non-obvious. Skip trivial observations.
+
+## Execution Plan
+Follow this plan step by step:
+1. Inspect existing project structure: read `/home/bradleyjerome/projects/skyscanner-app/tsconfig.json` and `/home/bradleyjermon/projects/skyscanner-app/package.json`, and locate the `SkyscannerClient` class (its file path and `searchFlights` signature) to understand available types and imports.
+2. Verify or adjust `tsconfig.json` so that `outDir` is `dist` and `module` is `commonjs` (or `CommonJS`-compatible), ensuring `node dist/cli.js` will work.
+3. Create `/home/bradleyjerome/projects/skyscanner-app/src/cli.ts` with a `main(args: string[]): Promise<void>` function and a `if (require.main === module) { main(process.argv.slice(2)) }` guard.
+4. In `cli.ts`, implement argument parsing for `--from`, `--to`, `--date`, and `--adults` using a simple `for` loop over `args` or `process.argv`; collect values into a parsed-options object.
+5. Implement validation logic: if any of `--from`, `--to`, `--date` is missing, print a usage hint (showing `--from`, `--to`, `--date`, `--adults`) to `stderr` and `process.exit(2)`; validate `--date` against `/^\d{4}-\d{2}-\d{2}$/` (exit 2 with message on mismatch); parse `--adults` (default 1), reject non-integer/≤0/non-numeric with exit 2 and stderr message.
+6. Add `RAPIDAPI_KEY` check: if `process.env.RAPIDAPI_KEY` is unset or empty, print `'Error: RAPIDAPI_KEY environment variable is required'` to `stderr` and `process.exit(1)` before any network call.
+7. Call `SkyscannerClient.searchFlights` with `{ from, to, date, adults }`; on rejection, print the error message to `stderr` and `process.exit(1)` with no stdout output.
+8. Implement table rendering: compute column widths from header + data rows; print header `Airline, Price, Departure, Arrival, Duration, Stops`, a separator row of hyphens per column, then each data row — Price right-aligned with `£` prefix (or fallback currency symbol), all other columns left-aligned and padded to the widest value in each column.
+9. Handle empty results: if the returned array is empty, print exactly `No flights found.` to stdout and `process.exit(0)`.
+10. Run `npx tsc --noEmit` to confirm zero type errors, then run `node dist/cli.js --from LON --to NYC --date 2025-01-01` (with and without `RAPIDAPI_KEY`) to verify exit codes, stderr messages, and table output manually.
+=== End Prompt ===
+
+=== epam Output (attempt 1) ===
+Now let me verify the code compiles without errors:
+  [tc-writer] No test stories need TCs in phase 'unknown' — skipping
+Now let me verify the code compiles without errors:
+
+=== End epam Output ===

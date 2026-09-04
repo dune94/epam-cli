@@ -1,0 +1,122 @@
+=== Prompt for SKY-004-be (attempt 1) ===
+CRITICAL — WRITE FILES FIRST. Your FIRST tool call MUST be WriteFile.
+Do NOT output any text before calling WriteFile. Do NOT plan or say "I will...".
+Call WriteFile NOW for the EXACT ABSOLUTE PATHS listed below:
+
+   - WRITE /home/bradleyjerome/projects/skyscanner-app/src/server.ts first, before any other action
+   - WRITE /home/bradleyjerome/projects/skyscanner-app/src/server.test.ts first, before any other action
+---
+
+Implement user story SKY-004-be: Build Express REST API with /health, /search, /cheapest, and static dashboard endpoints — Backend [SPLIT]
+
+## Story Description
+Split into three children: SKY-004-be-1 (server core, health, API-key gate, build config), SKY-004-be-2 (search and cheapest route handlers), SKY-004-be-3 (integration tests). Depends on SKY-002.
+
+## Acceptance Criteria
+- src/server.ts exports a named `app` (Express instance) separately from the `listen()` call so supertest can import it without binding a port
+- The `listen()` call in src/server.ts is guarded by `import { pathToFileURL } from 'url'` and the condition `if (import.meta.url === pathToFileURL(process.argv[1]).href)` (ESM output) or `if (require.main === module)` (CJS output) — the guard form must match the tsup output format so that `vitest run` never binds a port
+- GET /health returns HTTP 200 with Content-Type application/json and body matching { status: 'ok', uptime: <positive number> }
+- GET /health returns HTTP 200 regardless of whether RAPIDAPI_KEY env var is set or absent — the health endpoint is never gated by API key presence
+- GET /search with valid query params (from, to, date, adults) returns HTTP 200 with body { flights: FlightResult[], count: number, searchedAt: ISO-8601 string } where count strictly equals flights.length
+- GET /search missing any required param (from, to, or date) returns HTTP 400 with Content-Type application/json and body { error: string }
+- When the `adults` query param is absent on GET /search, the request succeeds (HTTP 200) with a default value of 1 passed to SkyscannerClient — `adults` is optional, not required
+- When the `adults` query param is present but non-numeric (e.g. 'abc', ''), GET /search returns HTTP 400 with Content-Type application/json and body { error: string }
+- GET /cheapest with valid required query params (from, to, date) returns HTTP 200 with a single FlightResult whose `price` field is less than or equal to the `price` field of every FlightResult returned by SkyscannerClient for the same route/date (validated against a mocked client response); if `adults` is supplied it is forwarded, if absent it defaults to 1
+- GET /cheapest returns HTTP 404 with Content-Type application/json and body { error: string } when SkyscannerClient returns an empty array for the given route/date
+- GET /cheapest missing any required param (from, to, or date) returns HTTP 400 with Content-Type application/json and body { error: string }
+- When RAPIDAPI_KEY env var is absent at server initialisation, a single middleware (or equivalent) short-circuits GET /search and GET /cheapest with HTTP 503 Content-Type application/json body { error: 'RAPIDAPI_KEY not configured' }; GET /health and GET / are unaffected and return their normal responses
+- When SkyscannerClient throws an error during a /search or /cheapest request (e.g. network failure, upstream 5xx), the server returns HTTP 500 with Content-Type application/json and body { error: string } and does not crash or emit an unhandled promise rejection
+- The `searchedAt` field in the GET /search response is an ISO-8601 datetime string reflecting the time of the request (not a hardcoded value); successive requests separated by at least 1 ms return distinct values
+- The FlightResult type used in src/server.ts is imported from the SKY-002 type export (e.g. src/skyscanner/client.ts) and not redeclared inline — type definitions must not diverge between the client and server layers
+- package.json contains a 'start' script with value 'node dist/server.js'
+- package.json contains a 'build' script (tsup or equivalent) that produces dist/server.js such that `npm run build && npm run start` successfully starts the server and GET /health returns HTTP 200
+- package.json 'build' script copies src/public/ (or equivalent) into dist/public/ as part of the build — after `npm run build`, dist/public/index.html exists and `npm run build && npm run start` serves the real dashboard file (not a 404 or a stale/hardcoded fallback) from GET /
+- supertest and @types/supertest are listed in package.json devDependencies
+- src/server.test.ts contains at least 8 vitest tests, each covering a distinct scenario from the criteria above, with SkyscannerClient mocked (vi.mock or equivalent) so no real HTTP calls are made during `vitest run`
+- npx tsc --noEmit exits 0 with no type errors
+- vitest run exits 0 with all tests passing
+
+
+
+
+
+## Technical Notes
+- workingDir: /home/bradleyjerome/projects/skyscanner-app
+- files: ["/home/bradleyjerome/projects/skyscanner-app/src/server.ts","/home/bradleyjerome/projects/skyscanner-app/src/server.test.ts"]
+- dependsOn: ["SKY-002"]
+
+## Files to Create/Modify (EXACT ABSOLUTE PATHS — write to these paths exactly)
+/home/bradleyjerome/projects/skyscanner-app/src/server.ts, /home/bradleyjerome/projects/skyscanner-app/src/server.test.ts
+
+## Dependencies
+SKY-002
+
+
+## Instructions
+**CRITICAL — WRITE FILES FIRST:**
+   - WRITE /home/bradleyjerome/projects/skyscanner-app/src/server.ts first, before any other action
+   - WRITE /home/bradleyjerome/projects/skyscanner-app/src/server.test.ts first, before any other action
+**You MUST write every file listed above to its EXACT absolute path. Do NOT write to a different path, do NOT write to the current directory unless it matches the path above. Use your WriteFile or Edit tools with the full absolute path shown.**
+
+1. Write each required file to its exact absolute path listed above — do this FIRST before anything else
+2. Implement all acceptance criteria for this story
+3. Follow the project's existing code patterns and conventions
+4. Do NOT create tests unless explicitly required in acceptance criteria
+
+After implementation, provide a brief summary of what was created/modified.
+
+## Relevant Knowledge Base Entries
+The following was learned from previous story implementations and is relevant to your agent role. Apply this knowledge before writing any code:
+
+- [2026-07-06T17:45:30Z] Always resolve mocked fetch calls to a Response-shaped object with ok, status, statusText, and a json method returning a Promise.
+- [2026-07-06T17:50:20Z] Use valid module and moduleResolution pairs in tsconfig.json: CommonJS with Node, Node16 with Node16, ESNext with Bundler. Use CommonJS and Node for the stack. Mismatched pairs cause build errors.
+- [2026-07-06T18:11:26Z] Use vi.fn().mockResolvedValue(value) to make a mock return a resolved Promise.
+- [2026-07-06T20:31:11Z] Use `test: { passWithNoTests: true }` in vitest.config.ts or create a stub test file when no *.test.ts files exist.
+- [2026-07-06T20:33:03Z] Enable globals:true in vitest.config.ts so describe, it, and expect work without imports, reducing boilerplate in test files.
+- [2026-07-06T23:47:34Z] Use CommonJS-compatible patterns in src/server.ts: avoid `import.meta.url` and top-level `await`; gate listen with `if (require.main === module)`.
+- [2026-07-07T02:35:30Z] Always include a non-test source file in src/ alongside any src/*.test.ts file, since tsconfig.json excludes test files from tsc --noEmit.
+- [2026-07-07T19:01:34Z] Only modify or create files explicitly listed in the story's acceptance criteria. Do not touch files belonging to other stories or outside the current task scope.
+- [2026-07-07T20:17:57Z] [unreviewed-fallback] Avoid using deprecated TypeScript compiler options like 'moduleResolution=node10'; use 'moduleResolution=node' instead.
+- [2026-07-17T20:20:58Z] Always: Before importing a module or referencing a type/property, always read the actual source file to verify the export exists, its exact path, its properties, and its constructor/factory signatures
+
+## Knowledge Base Contribution (do this LAST — after writing all implementation files)
+Your assigned KB entry ID for this run: **KB-008**
+
+IMPORTANT: Write ALL implementation files first. Only AFTER writing every required file should you optionally append a KB entry.
+Do NOT read orchestrations/agents/KB.md before writing implementation files. The relevant KB entries are already injected above.
+
+If (and only if) you discover a non-obvious pattern during implementation, append one entry to `orchestrations/agents/KB.md`:
+
+```markdown
+## KB-008 -- 2026-07-18
+
+**Category:** <backend|frontend|infrastructure|testing|orchestration>
+**AgentRole:** <your agentRole from the story>
+**Tags:** <comma-separated tech keywords, e.g. typescript, node, cli>
+**Trigger:** <retry|first-success>
+**StoryRef:** SKY-004-be
+
+<One concise paragraph: the specific pattern, gotcha, or anti-pattern.>
+```
+
+Only write an entry if the knowledge is genuinely non-obvious. Skip trivial observations.
+
+## Execution Plan
+Follow this plan step by step:
+1. Create /home/bradleyjerome/projects/skyscanner-app/src/server.ts with Express app setup, health endpoint, and middleware guard for ESM format
+2. Implement GET /health endpoint in src/server.ts returning { status: 'ok', uptime: <positive number> } with HTTP 200
+3. Implement GET /search endpoint in src/server.ts with query parameter validation and FlightResult type import from SKY-002
+4. Implement GET /cheapest endpoint in src/server.ts with validation and default adults=1 handling
+5. Add RAPIDAPI_KEY middleware check in src/server.ts to return 503 when key is missing
+6. Add error handling middleware in src/server.ts to catch SkyscannerClient errors and return HTTP 500
+7. Create /home/bradleyjerome/projects/skyscanner-app/src/server.test.ts with 8+ vitest tests mocking SkyscannerClient
+8. Configure package.json with 'start' and 'build' scripts, ensuring dist/public/ is copied during build
+9. Add supertest and @types/supertest to devDependencies in package.json
+10. Run npx tsc --noEmit and vitest run to verify no type errors and all tests pass
+=== End Prompt ===
+
+=== epam Output (attempt 1) ===
+All tests pass. Let me also verify the build works:
+All tests pass. Let me also verify the build works:
+
+=== End epam Output ===

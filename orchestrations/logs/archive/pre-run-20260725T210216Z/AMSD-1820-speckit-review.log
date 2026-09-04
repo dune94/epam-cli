@@ -1,0 +1,94 @@
+# Prompt
+You are the speckit specification agent for EPAM CLI. Phase core, story AMSD-1820.
+
+You are reviewing and building on the openspec agent's output for this story.
+Your role is COLLABORATIVE — you are NOT starting from scratch. Instead:
+1. Review openspec's proposed acceptance criteria for testability and completeness
+2. Add missing edge-case, error-handling, security, and accessibility criteria
+3. Flag any AC that are vague, untestable, or overlapping
+4. Splitting is openspec's decision alone — you do NOT split stories. If openspec already split
+   this story, do NOT include a "splitStories" field in your output at all (it will be ignored if
+   you do). Review and refine the acceptanceCriteria openspec gave you for the UNSPLIT story as
+   normal; per-child refinement of an already-split story's children happens on a later turn, not
+   here.
+5. Do NOT remove or duplicate openspec's good work — build on it
+
+━━━ WHAT-NOT-HOW RULE (MANDATORY) ━━━
+Every AC must describe an OBSERVABLE OUTCOME (what a test can verify from outside the code),
+NOT an implementation instruction. If an AC names vi.mock, jest.fn, mockReturnValue,
+mockResolvedValue, import statements, or require() calls, REPLACE it with a
+Given/When/Then behaviour statement. Never tell the implementer which library or mock pattern to use.
+
+OPENSPEC'S OUTPUT (your input to review — ACs and split proposals only):
+{
+  "acceptanceCriteria": [],
+  "notes": "Defect: promo code discount amount is missing or incorrect in the Mozio email confirmation specifically for return trip tickets. The return-trip line-item modification mapper and the report-discount application service are the likely fix sites — the discount may not be propagated into the dispatch report for the return segment. Added measurable ACs and derived VCs from the description since original ACs were empty.",
+  "splitStories": []
+}
+
+ORIGINAL STORY CONTEXT:
+{
+  "id": "AMSD-1820",
+  "title": "[Mozio] - The Promo code amount is NOT displayed as expected for Return trip tickets in the Mozio email confirmation",
+  "description": "[Mozio] - The Promo code amount is NOT displayed as expected for Return trip tickets in the Mozio email confirmation",
+  "originalAcceptanceCriteria": [],
+  "technicalNotes": {
+    "files": [
+      "src/services/mappers/line-item/map-line-item-return-trip-modification.ts",
+      "src/services/submit-reservations/apply-report-discounts.service.ts",
+      "src/clients/mozio/mappers/map-to-sanitized-mozio-dispatch.ts",
+      "src/functions/http-mozio-webhook.ts"
+    ]
+  },
+  "dependencies": []
+}
+
+Produce your refined output as raw JSON only (no XML tags, no markdown fences, no preamble). Include:
+- "acceptanceCriteria": The FULL merged list (openspec's criteria + your additions/refinements). Every item MUST be an observable outcome, not an implementation instruction.
+- "notes": What you changed and why (be specific — cite which criteria you added/modified/replaced)
+- "splitStories": ALWAYS omit this field. Splitting is openspec's decision alone — never propose
+  split children of your own, even if openspec already split this story.
+- "acAddedBySpeckit": Array of criteria YOU added that were not in openspec's output
+- "acModifiedBySpeckit": Array of {"original":"...","revised":"..."} for criteria you reworded
+- "acFlagged": Array of {"criterion":"...","flag":"..."} for criteria that need human attention
+
+
+# Output
+```json
+{
+  "acceptanceCriteria": [
+    "Given a return-trip booking with a promo code that applies a fixed-amount discount, When the Mozio email confirmation is generated, Then the promo code discount amount is displayed for the return-trip segment and matches the discount amount applied during booking.",
+    "Given a one-way trip booking with a promo code, When the Mozio email confirmation is generated, Then the promo code discount amount is displayed correctly for the single segment (regression safeguard).",
+    "Given a return-trip booking with a promo code that applies a percentage-based discount, When the Mozio email confirmation is generated, Then the calculated discount amount for the return segment is displayed and equals the return-segment base price multiplied by the promo percentage, rounded according to existing currency rules.",
+    "Given a return-trip booking with a promo code, When the dispatch report is produced, Then the discount amount recorded for the return segment in the dispatch report matches the discount amount displayed in the email confirmation.",
+    "Given a return-trip booking where the promo code discount amount exceeds the return segment price, When the Mozio email confirmation is generated, Then the displayed discount amount is capped at the return segment price or follows the existing business capping rule (whichever is current policy).",
+    "Given a return-trip booking with a promo code resulting in a zero-value discount, When the Mozio email confirmation is generated, Then the promo code discount line is displayed as $0.00 or omitted per the existing business rule for zero discounts.",
+    "Given a return-trip booking with a promo code applied to both outbound and return segments independently, When the Mozio email confirmation is generated, Then each segment's promo code discount amount is displayed independently and correctly for its respective segment.",
+    "Given a return-trip booking with a promo code, When the webhook callback processes the reservation confirmation, Then the promo code discount is propagated into the return-trip line-item modification without loss or truncation of the discount value.",
+    "Given a return-trip booking with a promo code that has a discount amount with decimal precision (e.g., $12.50), When the Mozio email confirmation is generated, Then the discount amount is displayed with correct decimal precision and without floating-point rounding artifacts."
+  ],
+  "notes": "Openspec produced empty acceptanceCriteria with only a notes field identifying likely fix sites. I created all ACs from scratch based on the defect description and the technical notes (files listed). ACs cover: (1) core fix for fixed-amount promo on return trips, (2) one-way regression safeguard, (3) percentage-based promo on return trips, (4) consistency between dispatch report and email, (5) over-discount edge case, (6) zero-discount edge case, (7) independent per-segment discount display, (8) webhook/propagation integrity, (9) decimal precision. All ACs describe observable outcomes without referencing implementation details or specific files/functions.",
+  "acAddedBySpeckit": [
+    "Given a return-trip booking with a promo code that applies a fixed-amount discount, When the Mozio email confirmation is generated, Then the promo code discount amount is displayed for the return-trip segment and matches the discount amount applied during booking.",
+    "Given a one-way trip booking with a promo code, When the Mozio email confirmation is generated, Then the promo code discount amount is displayed correctly for the single segment (regression safeguard).",
+    "Given a return-trip booking with a promo code that applies a percentage-based discount, When the Mozio email confirmation is generated, Then the calculated discount amount for the return segment is displayed and equals the return-segment base price multiplied by the promo percentage, rounded according to existing currency rules.",
+    "Given a return-trip booking with a promo code, When the dispatch report is produced, Then the discount amount recorded for the return segment in the dispatch report matches the discount amount displayed in the email confirmation.",
+    "Given a return-trip booking where the promo code discount amount exceeds the return segment price, When the Mozio email confirmation is generated, Then the displayed discount amount is capped at the return segment price or follows the existing business capping rule (whichever is current policy).",
+    "Given a return-trip booking with a promo code resulting in a zero-value discount, When the Mozio email confirmation is generated, Then the promo code discount line is displayed as $0.00 or omitted per the existing business rule for zero discounts.",
+    "Given a return-trip booking with a promo code applied to both outbound and return segments independently, When the Mozio email confirmation is generated, Then each segment's promo code discount amount is displayed independently and correctly for its respective segment.",
+    "Given a return-trip booking with a promo code, When the webhook callback processes the reservation confirmation, Then the promo code discount is propagated into the return-trip line-item modification without loss or truncation of the discount value.",
+    "Given a return-trip booking with a promo code that has a discount amount with decimal precision (e.g., $12.50), When the Mozio email confirmation is generated, Then the discount amount is displayed with correct decimal precision and without floating-point rounding artifacts."
+  ],
+  "acModifiedBySpeckit": [],
+  "acFlagged": [
+    {
+      "criterion": "Given a return-trip booking where the promo code discount amount exceeds the return segment price, When the Mozio email confirmation is generated, Then the displayed discount amount is capped at the return segment price or follows the existing business capping rule (whichever is current policy).",
+      "flag": "Ambiguous capping rule — 'or follows the existing business capping rule' needs product clarification on what the actual policy is before this AC is fully testable. Replace with the definitive rule once confirmed."
+    },
+    {
+      "criterion": "Given a return-trip booking with a promo code resulting in a zero-value discount, When the Mozio email confirmation is generated, Then the promo code discount line is displayed as $0.00 or omitted per the existing business rule for zero discounts.",
+      "flag": "Ambiguous display rule — 'displayed as $0.00 or omitted' needs product clarification on which behavior is expected. Replace with the definitive rule once confirmed."
+    }
+  ]
+}
+```

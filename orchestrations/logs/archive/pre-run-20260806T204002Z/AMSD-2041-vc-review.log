@@ -1,0 +1,38 @@
+# Prompt
+You are a STRICT verification-criteria reviewer for a brownfield fix. REVIEW ONLY — do NOT rewrite anything.
+
+Acceptance criteria (IMMUTABLE ticket intent):
+- (none)
+Description: Original Requirements (discovery)  AS a Content Author, I WANT to preview draft entries in CMS, SO THAT I can see how content will be shown on the website
+ability to preview draft entries in CMS
+Notes& Assumptions  Limitation: Might not be possible to preview protected pages and content.
+Original Total Estimate:  8  Original FE Estimate:  8  Original DAM Estimate:  0  Original BE Estimate:  0
+
+Proposed verification criteria:
+1. Given the Contentstack client is mocked to return a draft (unpublished) entry, the rendered preview page displays the draft entry's content rather than the published version.
+2. Given the Contentstack client is mocked to return an updated draft entry, the preview reflects the updated content without requiring a full page reload.
+3. When Live Preview is not active, published content pages render identically to their current behavior — no visual or functional regression occurs on any existing page.
+4. When a protected page is requested in Live Preview mode, the page handles the limitation gracefully by displaying appropriate feedback to the Content Author rather than rendering a blank page or an unhandled error.
+5. Live Preview is available across GO, UP, and MX brand contexts — given the Contentstack client is mocked with draft data for each brand, the preview renders brand-appropriate content for each.
+
+Apply these rules EXACTLY (the producer is held to the same text — do not invent stricter or looser criteria):
+A verification criterion states WHAT AN END USER OR TESTER OBSERVES on the user-facing surface THE TICKET IS ABOUT — the rendered output for an output ticket, the displayed screen for a UI ticket, the response a CLIENT receives for an API ticket. It is a BLACK-BOX check on that surface. It NEVER describes HOW the value is produced.
+A verification criterion is FORBIDDEN if it:
+- prescribes HOW to implement — any algorithm, mechanism, approach, or the addition/reading of any new field, flag or service;
+- references an INTERNAL structure that merely FEEDS the ticket's surface — an intermediate payload, a data-transfer object, or a specific response field used to BUILD the output. Verify the surface the ticket names, NOT the data structure behind it;
+- makes a CROSS-COMPARISON that presumes a mechanism — never assert one value "must equal" / "matches" / "is the same as" another; that presumes a shared derivation. Assert the required value is present and correct ON ITS OWN.
+Every verification criterion must be observable, testable, and tied to the ticket's stated symptom/intent.
+
+FLAG any verification criterion that violates ANY rule above, OR that fails to cover the intent of an acceptance criterion.
+Output ONLY a JSON array of short flag strings, e.g. ["VC 2 prescribes halving — restate as observable outcome"]. Output [] if every VC is clean. No prose, no markdown.
+
+# Output
+```json
+[
+  "VC 1 prescribes HOW — 'Contentstack client is mocked' is an implementation mechanism; restate as what the user observes on the preview surface",
+  "VC 1 cross-compares — 'rather than the published version' presumes a shared derivation; assert the draft content is present and correct on its own",
+  "VC 2 prescribes HOW — 'Contentstack client is mocked' is an implementation mechanism; restate as what the user observes when previewing updated content",
+  "VC 3 cross-compares — 'render identically to their current behavior' presumes a shared derivation; restate as the observable published-page output on its own",
+  "VC 5 prescribes HOW — 'Contentstack client is mocked' is an implementation mechanism; restate as what the user observes per brand in Live Preview"
+]
+```

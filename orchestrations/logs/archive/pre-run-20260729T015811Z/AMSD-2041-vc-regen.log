@@ -1,0 +1,43 @@
+# Prompt
+Regenerate the VERIFICATION CRITERIA for this brownfield story. Your previous verification criteria were FLAGGED and must be fixed:
+- VC 1 prescribes HOW — 'SDK is initialised', 'establishes a live-preview connection' are internal mechanisms; restate as observable outcome on the rendered page
+- VC 2 prescribes HOW — 'SDK is mocked to emit a content-update event' and 'ContentstackText with a matching contentKey' reference internal mechanism and component; restate as observable outcome: updated content appears without full page reload
+- VC 3 prescribes HOW — 'SDK is mocked to emit a content-update event' is internal mechanism; restate as observable outcome on the GO-branded rendered page
+- VC 4 prescribes HOW — 'SDK is mocked to emit a content-update event' is internal mechanism; restate as observable outcome on the UP-branded rendered page
+- VC 5 prescribes HOW — 'SDK is mocked to emit a content-update event' is internal mechanism; restate as observable outcome on the MX-branded rendered page
+- VC 6 prescribes HOW — 'falls back to the existing static content-fetching behaviour' is internal mechanism; restate as observable outcome: page renders content without errors
+- VC 7 prescribes HOW — 'live-preview integration does not initialise' and 'no live-preview-related network requests are made' are internal mechanisms; restate as observable outcome on the rendered page
+- VC 8 prescribes HOW — 'SDK is mocked to emit a content-update event' is internal mechanism; restate as observable outcome: NavigationBar displays updated content without full page reload
+
+THE FIX SITE (located by the code-graph detective — anchor every criterion to the behaviour THIS code produces):
+- src/pages/[[...slug]].tsx :: getStaticProps — This is where Contentstack content is fetched via pageService.getPageEntry and provided to the component tree via ContentstackContext.Provider. Live preview requires (1) the page to support dynamic rendering instead of purely static, and (2) passing live_preview/draft parameters through to the Contentstack API calls. The current getStaticProps with fallback:false makes dynamic preview impossible — no new paths are resolved at request time, and no preview query parameters are forwarded to pageService.
+Do NOT write criteria about areas unrelated to this code.
+
+
+Acceptance criteria (IMMUTABLE — the intent to verify; do NOT restate as-is, VERIFY them):
+- (none)
+Description: [GO, UP, MX] Live Preview of Content in CMS
+
+A verification criterion states WHAT AN END USER OR TESTER OBSERVES on the user-facing surface THE TICKET IS ABOUT — the rendered email for an email ticket, the displayed screen/UI for a UI ticket, the API response a CLIENT receives for an API ticket. It is a BLACK-BOX check on that surface. It NEVER describes HOW the value is produced.
+A verification criterion is FORBIDDEN if it:
+- prescribes HOW to implement — any algorithm, mechanism, or approach: "split", "halve", "×0.5", "calculate independently", "per segment", "for each line item", or adding/reading any new field, flag, or service;
+- references an INTERNAL structure that merely FEEDS the ticket's surface — an intermediate payload, a "confirmation data"/DTO object, or a specific response field used to BUILD the output. Verify the surface the ticket names, NOT the data structure behind it;
+- makes a CROSS-COMPARISON that presumes a mechanism — never assert one value "must equal" / "matches" / "is the same as" another (e.g. "the return amount equals the outbound amount"); that presumes a copy/split. Assert the required value is present and correct ON ITS OWN.
+Every verification criterion must be observable, testable, and tied to the ticket's stated symptom/intent.
+
+Do NOT restate an acceptance criterion as-is — express what a tester OBSERVES that confirms it. Address every flag above.
+Output ONLY a JSON array of verification-criterion strings. No prose, no markdown.
+
+# Output
+```json
+[
+  "Opening a page in the CMS live-preview view displays the page fully rendered with the current CMS content visible to the tester",
+ While previewing a page, editing a content field in the CMS causes the updated text to appear on the rendered page without a full page reload",
+  "While previewing a GO-branded page, editing content in the CMS causes the updated content to appear on that GO-branded rendered page without a full page reload",
+  "While previewing an UP-branded page, editing content in the CMS causes the updated content to appear on that UP-branded rendered page without a full page reload",
+  "While previewing an MX-branded page, editing content in the CMS causes the updated content to appear on that MX-branded rendered page without a full page reload",
+  "Opening the page in a normal browsing context (outside of preview) displays the published content fully rendered with no errors visible on the page",
+  "On a normally browsed page, the displayed content remains the published version and does not change when unpublished CMS edits are made",
+  "While previewing a page, editing a navigation item in the CMS causes the NavigationBar on the rendered page to display the updated item without a full page reload"
+]
+```

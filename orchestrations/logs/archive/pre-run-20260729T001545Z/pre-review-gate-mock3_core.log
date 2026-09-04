@@ -1,0 +1,11 @@
+=== Pre-Review Gate: mock3_core @ 2026-07-28T23:09:19+00:00 ===
+
+ RUN  v4.1.10 /tmp/brownfield-mock3-a-IaLL1j/clone
+
+
+ Test Files  1 passed (1)
+      Tests  1 passed (1)
+   Start at  23:09:19
+   Duration  112ms (transform 21ms, setup 0ms, import 29ms, tests 2ms, environment 0ms)
+
+=== Gate Result: PASS ===

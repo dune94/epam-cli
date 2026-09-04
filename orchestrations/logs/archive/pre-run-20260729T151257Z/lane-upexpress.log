@@ -1,0 +1,2228 @@
+[0;34m[12:53:44][0m Resetting story completed flags in /tmp/orch-upexpress-prd-3249734.json...
+[0;32m[SUCCESS][0m Stories reset to pending (phase: core)
+[1;33m[WARNING][0m Control plane exited immediately; see /home/bradleyjerome/projects/ai/epam-cli/orchestrations/logs/lanes/upexpress/control-plane.log
+
+[0;35m━━━ Pipeline Step Checklist ━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━[0m
+  Step   Name                             Planned
+  ------ -------------------------------- --------
+  1      Specification pass               [0;32mACTIVE (EPAM_SPEC_MODE=0)[0m
+  1a       openspec (elaboration)         [0;32mACTIVE (z-ai/glm-5.2)[0m
+  1b       speckit (verification)         [0;32mACTIVE (z-ai/glm-5.1)[0m
+  2      CPA pre-pass                     [0;32mACTIVE (SKIP_CPA=1)[0m
+  3      Pre-phase skill assess           [0;32mACTIVE[0m
+  4      Hybrid pre-coord                 [1;33mSKIP (ORCH_MODE≠hybrid)[0m
+  5      Regression guard                 [0;32mACTIVE (SKIP_REGRESSION_GUARD=true)[0m
+  6      mkdir src/ dirs                  [0;32mACTIVE[0m
+  7      PRD model coordinator            [0;32mACTIVE[0m
+  8      Main-branch stories              [0;32mACTIVE[0m
+  9      Auto-commit                      [0;36mCOND (if uncommitted changes)[0m
+  10     TC writer gate                   [0;36mCOND (SKIP_TC_WRITER=1 or no test stories)[0m
+  11     Skills coordinator audit         [0;32mACTIVE (SKIP_SKILLS_AUDIT=1)[0m
+  12     Tools coordinator audit          [0;32mACTIVE (SKIP_TOOLS_AUDIT=1)[0m
+  13     Create worktrees                 [0;36mCOND (if parallel stories exist)[0m
+  14     Primary agent                    [0;36mCOND (if primary stories)[0m
+  15     Independent agent                [0;36mCOND (if independent stories)[0m
+  16     Worktree health check            [0;36mCOND (if worktrees created)[0m
+  17     Merge worktrees                  [0;36mCOND (if worktrees created)[0m
+  18     Post-parallel assessment         [0;32mACTIVE[0m
+  19     Pre-review gate                  [0;32mACTIVE (SKIP_PRE_REVIEW_GATE=true)[0m
+  20     Lint gate                        [0;32mACTIVE (SKIP_LINT_GATE=true)[0m
+  21     Review stories                   [0;36mCOND (if review stories exist)[0m
+  22a    SAST sentinel                    [0;32mACTIVE (SKIP_TESTING_GATES=true)[0m
+  22b    Spec validator                   [0;32mACTIVE (SKIP_TESTING_GATES=true)[0m
+  22c    Review ranger                    [0;32mACTIVE (SKIP_TESTING_GATES=true)[0m
+  22d    Mutant hunter                    [0;32mACTIVE (SKIP_TESTING_GATES=true)[0m
+  22e    Fuzz-weaver                      [0;32mACTIVE (SKIP_TESTING_GATES=true)[0m
+  22f    Perf sentinel                    [0;32mACTIVE (SKIP_TESTING_GATES=true)[0m
+  23     Browser E2E routing              [1;33mSKIP (SKIP_BROWSER_E2E_ROUTING=true)[0m
+
+  [1;33mSKIP bypass env vars active: SKIP_TESTING_GATES=false  SKIP_CPA=0  SKIP_TC_WRITER=0  SKIP_REGRESSION_GUARD=false[0m
+[0;35m━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━[0m
+
+[0;36m  ▶[0m Step 1: Specification pass
+[0;34m[12:53:44][0m Step 1: Running specification pass for phase 'core'...
+spec-mode: fast-path qwen/z-ai/glm-5.2 (skipping MiniMax)
+spec-mode: fast-path qwen/z-ai/glm-5.1 (skipping MiniMax)
+spec-mode: AMSD-2041 — 6 verification criteria persisted (source: description, resolution: regenerated)
+spec-mode: fast-path qwen/z-ai/glm-5.1 (skipping MiniMax)
+spec-mode: fast-path qwen/z-ai/glm-5.2 (skipping MiniMax)
+spec-mode: fast-path qwen/z-ai/glm-5.2 (skipping MiniMax)
+spec-mode: LLM model review completed for 0 stories
+spec-mode: completed for phase core (run 20260729T125146Z)
+[0;32m  ✓[0m Step 1: Specification pass
+[0;32m  ✓[0m   openspec (elaboration) [1;33m[z-ai/glm-5.2, 1 stor(y/ies)][0m
+[0;32m  ✓[0m   speckit (verification) [1;33m[z-ai/glm-5.1, 1 stor(y/ies)][0m
+[0;32m[SUCCESS][0m Step 1: Specification pass completed for 'core'
+[0;36m  ▶[0m Step 2: CPA pre-pass
+[0;34m[12:59:11][0m Step 2: Running CPA pre-pass for phase 'core'...
+[0;35m[CPA][0m Retrieval: TF-IDF
+[0;36m[12:59:11][0m Loading stories from orch-upexpress-prd-3249734.json...
+[0;36m[12:59:11][0m Found 1 stories to contextualize
+
+[0;35m[CPA][0m Processing AMSD-2041...
+[0;35m[CPA][0m   AMSD-2041: formula baseline from calibration[low:implementation:cli](n=29): 4.5178418971594745min $0.1404333618569382
+[1mAMSD-2041[0m  [GO, UP, MX] Live Preview of Content in CMS  [1;33m[REVIEW][0m
+  Machine time:              4.52 min  →      5.42 min  (conf: 0.48, adj: 1.40x)
+  Cost (story):          $0.1404     →  $0.1685   
+  Escalation:            +$0.2804      (r2@15%=+$0.1650 r3@5%=+$0.0565 k3@1.0%=+$0.0589)
+  Self-heal:             +$0.0309      (p=20%)
+  Retries (exp):          0.32  
+  Total (est):           $0.8011         (story+esc+heal=$0.4798 × pipeline 1.67x)
+  KB coverage:           4     chunks retrieved   0     cited   cov: 0%
+  [1;33m⚠[0m  No acceptance criteria defined; story scope is ambiguous and may expand
+  [1;33m⚠[0m  src/hooks/useContent does not exist; must be created from scratch
+  [1;33m⚠[0m  No KB coverage for Contentstack or live preview integration patterns
+  [1;33m⚠[0m  Story description merely repeats title; requirements are underdefined
+
+[0;36m=== CPA Gate Summary ===[0m
+
+Phase                    Pass   Review    Block    Total
+------------------------------------------------------
+core                        0        1        0        1
+------------------------------------------------------
+[1mTOTAL                       0        1        0        1[0m
+
+[1;33m[CPA WARN][0m 1 story/stories in REVIEW gate — check risk flags
+
+[0;36m[12:59:30][0m Appended 1 CPA records to /home/bradleyjerome/projects/ai/epam-cli/orchestrations/logs/cpa-review.jsonl
+[0;36m[12:59:30][0m Applying blended estimates to prd.json...
+[0;32m[CPA OK][0m Backed up prd.json → orch-upexpress-prd-3249734.json.before-cpa
+[0;32m[CPA OK][0m Applied CPA blended estimates to 1 stories
+
+  Review:   git diff /tmp/orch-upexpress-prd-3249734.json
+  Restore:  cp /tmp/orch-upexpress-prd-3249734.json.before-cpa /tmp/orch-upexpress-prd-3249734.json
+
+No calibrated categories (need >= min-n completed stories per category).
+[0;36m[12:59:41][0m Calibration updated from actuals
+[0;32m  ✓[0m Step 2: CPA pre-pass
+[0;32m[SUCCESS][0m Step 2: CPA gate PASSED for phase 'core'
+
+[0;35m============================================[0m
+[0;35m  EPAM CLI Agent Orchestration[0m
+[0;35m  Phase: [1;37mcore[0m
+[0;35m  Mode:  [1;37mLIVE[0m
+[0;35m  Orch:  [1;37mbash (bash-only)[0m
+[0;35m============================================[0m
+
+[0;36m[INFO][0m Topology: single [heuristic] — Count heuristic: ≤1 worktree story.
+[0;36mExecution Plan:[0m
+
+  [0;35mMain branch (sequential):[0m
+    AMSD-2041: [GO, UP, MX] Live Preview of Content in CMS [0;36m[typescript-engineer][0m
+
+[0;34m[12:59:41][0m Initializing monitor status file...
+[0;36m[INFO][0m Monitor file: /home/bradleyjerome/projects/ai/epam-cli/orchestrations/logs/lanes/upexpress/agent-status.json
+[0;36m[INFO][0m Open orchestrations/monitor.html in a browser to watch progress
+[0;36m  ▶[0m Step 3: Skill assessment
+[0;34m[12:59:41][0m Step 3: Running pre-phase skill assessment...
+[0;34m[12:59:41][0m Running pre-phase skill assessment for 'core'...
+{"newProfiles":[],"profileAdditions":[],"storyRoleAssignments":[]}
+[assessment-apply] no decision to apply (0 changes)
+[0;32m  ✓[0m Step 3: Skill assessment
+[0;32m[SUCCESS][0m Pre-phase assessment completed for 'core'
+[0;34m[12:59:49][0m   [split-gate] No unvalidated mid-execution splits for phase 'core'
+[0;34m[12:59:49][0m   [ac-invariant] All stories within 24-AC limit for phase 'core'
+[1;33m  ⊘[0m Step 4: Hybrid pre-coord [1;33m[ORCH_MODE=bash][0m
+[0;36m[INFO][0m Step 4: Skipped (ORCH_MODE=bash)
+[1;33m[WARNING][0m   [node-modules-health] /home/bradleyjerome/projects/metrolinx/next.upexpress.com/node_modules/.bin/escodegen exists but crashed on --version — dependencies present but corrupted, attempting repair...
+[1;33m[WARNING][0m   [deps-install] install FAILED in /home/bradleyjerome/projects/metrolinx/next.upexpress.com — tail below (often a private-registry auth wall):
+npm error code E401
+npm error 401 Unauthorized - GET https://npm.pkg.github.com/download/@metrolinx/cx-shared/7.2.2/c1de41509ef91ac44f1361151b82f54a946b09da - unauthenticated: User cannot be authenticated with the token provided.
+npm error A complete log of this run can be found in: /home/bradleyjerome/.npm/_logs/2026-07-29T12_59_50_300Z-debug-0.log
+[0;36m  ▶[0m Step 5: Regression guard
+[0;34m[12:59:52][0m Step 5: Cross-phase regression guard (npm test) in /home/bradleyjerome/projects/metrolinx/next.upexpress.com...
+[0;32m  ✓[0m Step 5: Regression guard
+[0;32m[SUCCESS][0m Step 5: Regression guard PASSED — baseline tests green
+[0;36m  ▶[0m Step 6: mkdir src/ dirs
+[0;32m  ✓[0m Step 6: mkdir src/ dirs
+[0;36m  ▶[0m Step 7: PRD model coordinator
+[0;36m[INFO][0m   [prd-model-coordinator] 1 pending stor(y/ies) missing model assignment — coordinating...
+
+[0;35m━━━ Step Status @ 13:00:41 ━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━[0m
+  [0;32m✓[0m 1      Step 1: Specification pass
+  [0;32m✓[0m 1a       openspec (elaboration)
+  [0;32m✓[0m 1b       speckit (verification)
+  [0;32m✓[0m 2      Step 2: CPA pre-pass
+  [1;37m○[0m 3      Skill assessment
+  [1;37m○[0m 4      Hybrid pre-coord
+  [1;37m○[0m 5      Regression guard
+  [1;37m○[0m 6      mkdir src/ dirs
+  [1;37m○[0m 7      PRD model coordinator
+  [1;37m○[0m 8      Main-branch stories
+  [1;37m○[0m 9      Auto-commit
+  [1;37m○[0m 10     TC writer gate
+  [1;37m○[0m 11     Skills coordinator audit
+  [1;37m○[0m 12     Tools coordinator audit
+  [1;37m○[0m 13     Create worktrees
+  [1;37m○[0m 14     Primary agent
+  [1;37m○[0m 15     Independent agent
+  [1;37m○[0m 16     Worktree health
+  [1;37m○[0m 17     Merge worktrees
+  [1;37m○[0m 18     Post-parallel assessment
+  [1;37m○[0m 19     Pre-review gate
+  [1;37m○[0m 20     Lint gate
+  [1;37m○[0m 21     Review stories
+  [1;37m○[0m 22a    SAST sentinel
+  [1;37m○[0m 22b    Spec validator
+  [1;37m○[0m 22c    Review ranger
+  [1;37m○[0m 22d    Mutant hunter
+  [1;37m○[0m 22e    Fuzz-weaver
+  [1;37m○[0m 22f    Perf sentinel
+  [1;37m○[0m 23     Browser E2E
+[0;35m━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━[0m
+
+
+[0;35m━━━ Step Status @ 13:01:41 ━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━[0m
+  [0;32m✓[0m 1      Step 1: Specification pass
+  [0;32m✓[0m 1a       openspec (elaboration)
+  [0;32m✓[0m 1b       speckit (verification)
+  [0;32m✓[0m 2      Step 2: CPA pre-pass
+  [1;37m○[0m 3      Skill assessment
+  [1;37m○[0m 4      Hybrid pre-coord
+  [1;37m○[0m 5      Regression guard
+  [1;37m○[0m 6      mkdir src/ dirs
+  [1;37m○[0m 7      PRD model coordinator
+  [1;37m○[0m 8      Main-branch stories
+  [1;37m○[0m 9      Auto-commit
+  [1;37m○[0m 10     TC writer gate
+  [1;37m○[0m 11     Skills coordinator audit
+  [1;37m○[0m 12     Tools coordinator audit
+  [1;37m○[0m 13     Create worktrees
+  [1;37m○[0m 14     Primary agent
+  [1;37m○[0m 15     Independent agent
+  [1;37m○[0m 16     Worktree health
+  [1;37m○[0m 17     Merge worktrees
+  [1;37m○[0m 18     Post-parallel assessment
+  [1;37m○[0m 19     Pre-review gate
+  [1;37m○[0m 20     Lint gate
+  [1;37m○[0m 21     Review stories
+  [1;37m○[0m 22a    SAST sentinel
+  [1;37m○[0m 22b    Spec validator
+  [1;37m○[0m 22c    Review ranger
+  [1;37m○[0m 22d    Mutant hunter
+  [1;37m○[0m 22e    Fuzz-weaver
+  [1;37m○[0m 22f    Perf sentinel
+  [1;37m○[0m 23     Browser E2E
+[0;35m━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━[0m
+
+[0;32m[SUCCESS][0m   [prd-model-coordinator] 1 stor(y/ies) assigned model/aiProvider/reasoningEffort (reviewer approved)
+[0;32m  ✓[0m Step 7: PRD model coordinator
+[0;36m  ▶[0m Step 8: Main-branch stories
+[0;34m[13:02:05][0m Step 8: Running main-branch stories...
+[0;32m[SUCCESS][0m   [story-branch] AMSD-2041: on branch 'AI-AMSD-2041', freshly based on origin/develop
+[0;34m[13:02:06][0m   Running: AMSD-2041
+[0;32m[SUCCESS][0m Prerequisites check passed
+[0;34m[2026-07-29 13:02:06][0m ======================================
+[0;34m[2026-07-29 13:02:06][0m EPAM CLI Orchestration Loop Starting
+[0;34m[2026-07-29 13:02:06][0m Stories to implement: AMSD-2041
+[0;34m[2026-07-29 13:02:06][0m ======================================
+
+Project: metrolinx
+Description: Brownfield defect fixes against the Metrolinx codelines, sourced from Jira.
+Tech Stack: language: TypeScript, runtime: Node.js 20, framework: Express, testing: vitest, devEnvironment: Ubuntu WSL2
+
+Global Acceptance Criteria:
+- 
+
+[0;34m[2026-07-29 13:02:06][0m --------------------------------------
+[0;32m+ No dependencies for AMSD-2041[0m
+[0;34m[2026-07-29 13:02:07][0m Implementing story: AMSD-2041 - [GO, UP, MX] Live Preview of Content in CMS
+[0;34m[2026-07-29 13:02:07][0m   Effort[low] -> turns=unlimited maxIter=6 maxOutTok=3072
+[0;34m[2026-07-29 13:02:07][0m   BrownfieldEffortFloor: reasoning-model headroom -> maxIter=12 maxOutTok=24576 (think + write must fit one response)
+[0;34m[2026-07-29 13:02:07][0m   Effort[final] -> maxIter=12 maxOutTok=24576
+[0;34m[2026-07-29 13:02:07][0m   Provider[minimax] -> CLI=epam
+[0;34m[2026-07-29 13:02:07][0m   Model[prd.json] -> MiniMax-M3 (overrides effort default)
+[0;34m[2026-07-29 13:02:07][0m   BrownfieldEffortFloor(reasoning): low -> medium (story-point-derived LOW is not enough for a brownfield fix)
+[0;34m[2026-07-29 13:02:07][0m   ReasoningEffort[prd.json] -> medium
+[0;34m[2026-07-29 13:02:07][0m   PlannerModel[auto/high-tier: z-ai/glm-5.2] -> planning turn, then execution on MiniMax-M3
+[0;34m[2026-07-29 13:02:07][0m   Running planning phase with z-ai/glm-5.2...
+
+[0;35m━━━ Step Status @ 13:02:41 ━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━[0m
+  [0;32m✓[0m 1      Step 1: Specification pass
+  [0;32m✓[0m 1a       openspec (elaboration)
+  [0;32m✓[0m 1b       speckit (verification)
+  [0;32m✓[0m 2      Step 2: CPA pre-pass
+  [1;37m○[0m 3      Skill assessment
+  [1;37m○[0m 4      Hybrid pre-coord
+  [1;37m○[0m 5      Regression guard
+  [1;37m○[0m 6      mkdir src/ dirs
+  [1;37m○[0m 7      PRD model coordinator
+  [1;37m○[0m 8      Main-branch stories
+  [1;37m○[0m 9      Auto-commit
+  [1;37m○[0m 10     TC writer gate
+  [1;37m○[0m 11     Skills coordinator audit
+  [1;37m○[0m 12     Tools coordinator audit
+  [1;37m○[0m 13     Create worktrees
+  [1;37m○[0m 14     Primary agent
+  [1;37m○[0m 15     Independent agent
+  [1;37m○[0m 16     Worktree health
+  [1;37m○[0m 17     Merge worktrees
+  [1;37m○[0m 18     Post-parallel assessment
+  [1;37m○[0m 19     Pre-review gate
+  [1;37m○[0m 20     Lint gate
+  [1;37m○[0m 21     Review stories
+  [1;37m○[0m 22a    SAST sentinel
+  [1;37m○[0m 22b    Spec validator
+  [1;37m○[0m 22c    Review ranger
+  [1;37m○[0m 22d    Mutant hunter
+  [1;37m○[0m 22e    Fuzz-weaver
+  [1;37m○[0m 22f    Perf sentinel
+  [1;37m○[0m 23     Browser E2E
+[0;35m━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━[0m
+
+[0;34m[2026-07-29 13:02:57][0m   Planning phase complete (209 words, reviewed)
+[0;34m[2026-07-29 13:02:58][0m Invoking epam (attempt 1/8)...
+npm warn EBADENGINE Unsupported engine {
+npm warn EBADENGINE   package: '@metrolinx/next.upexpress.com@1.0.0',
+npm warn EBADENGINE   required: { node: '22.x' },
+npm warn EBADENGINE   current: { node: 'v24.14.1', npm: '11.11.0' }
+npm warn EBADENGINE }
+npm warn EBADENGINE Unsupported engine {
+npm warn EBADENGINE   package: '@metrolinx/cx-shared@7.2.2',
+npm warn EBADENGINE   required: { node: '22.x' },
+npm warn EBADENGINE   current: { node: 'v24.14.1', npm: '11.11.0' }
+npm warn EBADENGINE }
+npm warn EBADENGINE Unsupported engine {
+npm warn EBADENGINE   package: 'ssri@14.0.0',
+npm warn EBADENGINE   required: { node: '^22.22.2 || ^24.15.0 || >=26.0.0' },
+npm warn EBADENGINE   current: { node: 'v24.14.1', npm: '11.11.0' }
+npm warn EBADENGINE }
+npm warn EBADENGINE Unsupported engine {
+npm warn EBADENGINE   package: 'validate-npm-package-name@8.0.0',
+npm warn EBADENGINE   required: { node: '^22.22.2 || ^24.15.0 || >=26.0.0' },
+npm warn EBADENGINE   current: { node: 'v24.14.1', npm: '11.11.0' }
+npm warn EBADENGINE }
+npm error code E401
+npm error 401 Unauthorized - GET https://npm.pkg.github.com/download/@metrolinx/cx-shared/7.2.2/c1de41509ef91ac44f1361151b82f54a946b09da - unauthenticated: User cannot be authenticated with the token provided.
+npm error A complete log of this run can be found in: /home/bradleyjerome/.npm/_logs/2026-07-29T13_03_13_564Z-debug-0.log
+npm warn EBADENGINE Unsupported engine {
+npm warn EBADENGINE   package: '@metrolinx/next.upexpress.com@1.0.0',
+npm warn EBADENGINE   required: { node: '22.x' },
+npm warn EBADENGINE   current: { node: 'v24.14.1', npm: '11.11.0' }
+npm warn EBADENGINE }
+npm warn EBADENGINE Unsupported engine {
+npm warn EBADENGINE   package: '@metrolinx/cx-shared@7.2.2',
+npm warn EBADENGINE   required: { node: '22.x' },
+npm warn EBADENGINE   current: { node: 'v24.14.1', npm: '11.11.0' }
+npm warn EBADENGINE }
+npm warn EBADENGINE Unsupported engine {
+npm warn EBADENGINE   package: 'ssri@14.0.0',
+npm warn EBADENGINE   required: { node: '^22.22.2 || ^24.15.0 || >=26.0.0' },
+npm warn EBADENGINE   current: { node: 'v24.14.1', npm: '11.11.0' }
+npm warn EBADENGINE }
+npm warn EBADENGINE Unsupported engine {
+npm warn EBADENGINE   package: 'validate-npm-package-name@8.0.0',
+npm warn EBADENGINE   required: { node: '^22.22.2 || ^24.15.0 || >=26.0.0' },
+npm warn EBADENGINE   current: { node: 'v24.14.1', npm: '11.11.0' }
+npm warn EBADENGINE }
+npm error code E401
+npm error 401 Unauthorized - GET https://npm.pkg.github.com/download/@metrolinx/cx-shared/7.2.2/c1de41509ef91ac44f1361151b82f54a946b09da - unauthenticated: User cannot be authenticated with the token provided.
+npm error A complete log of this run can be found in: /home/bradleyjerome/.npm/_logs/2026-07-29T13_03_24_803Z-debug-0.log
+npm warn EBADENGINE Unsupported engine {
+npm warn EBADENGINE   package: '@metrolinx/next.upexpress.com@1.0.0',
+npm warn EBADENGINE   required: { node: '22.x' },
+npm warn EBADENGINE   current: { node: 'v24.14.1', npm: '11.11.0' }
+npm warn EBADENGINE }
+npm warn EBADENGINE Unsupported engine {
+npm warn EBADENGINE   package: '@metrolinx/cx-shared@7.2.2',
+npm warn EBADENGINE   required: { node: '22.x' },
+npm warn EBADENGINE   current: { node: 'v24.14.1', npm: '11.11.0' }
+npm warn EBADENGINE }
+npm warn EBADENGINE Unsupported engine {
+npm warn EBADENGINE   package: 'ssri@14.0.0',
+npm warn EBADENGINE   required: { node: '^22.22.2 || ^24.15.0 || >=26.0.0' },
+npm warn EBADENGINE   current: { node: 'v24.14.1', npm: '11.11.0' }
+npm warn EBADENGINE }
+npm warn EBADENGINE Unsupported engine {
+npm warn EBADENGINE   package: 'validate-npm-package-name@8.0.0',
+npm warn EBADENGINE   required: { node: '^22.22.2 || ^24.15.0 || >=26.0.0' },
+npm warn EBADENGINE   current: { node: 'v24.14.1', npm: '11.11.0' }
+npm warn EBADENGINE }
+npm error code E401
+npm error 401 Unauthorized - GET https://npm.pkg.github.com/download/@metrolinx/cx-shared/7.2.2/c1de41509ef91ac44f1361151b82f54a946b09da - unauthenticated: User cannot be authenticated with the token provided.
+npm error A complete log of this run can be found in: /home/bradleyjerome/.npm/_logs/2026-07-29T13_03_30_246Z-debug-0.log
+npm warn EBADENGINE Unsupported engine {
+npm warn EBADENGINE   package: '@metrolinx/next.upexpress.com@1.0.0',
+npm warn EBADENGINE   required: { node: '22.x' },
+npm warn EBADENGINE   current: { node: 'v24.14.1', npm: '11.11.0' }
+npm warn EBADENGINE }
+npm warn EBADENGINE Unsupported engine {
+npm warn EBADENGINE   package: '@metrolinx/cx-shared@7.2.2',
+npm warn EBADENGINE   required: { node: '22.x' },
+npm warn EBADENGINE   current: { node: 'v24.14.1', npm: '11.11.0' }
+npm warn EBADENGINE }
+npm warn EBADENGINE Unsupported engine {
+npm warn EBADENGINE   package: 'ssri@14.0.0',
+npm warn EBADENGINE   required: { node: '^22.22.2 || ^24.15.0 || >=26.0.0' },
+npm warn EBADENGINE   current: { node: 'v24.14.1', npm: '11.11.0' }
+npm warn EBADENGINE }
+npm warn EBADENGINE Unsupported engine {
+npm warn EBADENGINE   package: 'validate-npm-package-name@8.0.0',
+npm warn EBADENGINE   required: { node: '^22.22.2 || ^24.15.0 || >=26.0.0' },
+npm warn EBADENGINE   current: { node: 'v24.14.1', npm: '11.11.0' }
+npm warn EBADENGINE }
+
+[0;35m━━━ Step Status @ 13:03:41 ━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━[0m
+  [0;32m✓[0m 1      Step 1: Specification pass
+  [0;32m✓[0m 1a       openspec (elaboration)
+  [0;32m✓[0m 1b       speckit (verification)
+  [0;32m✓[0m 2      Step 2: CPA pre-pass
+  [1;37m○[0m 3      Skill assessment
+  [1;37m○[0m 4      Hybrid pre-coord
+  [1;37m○[0m 5      Regression guard
+  [1;37m○[0m 6      mkdir src/ dirs
+  [1;37m○[0m 7      PRD model coordinator
+  [1;37m○[0m 8      Main-branch stories
+  [1;37m○[0m 9      Auto-commit
+  [1;37m○[0m 10     TC writer gate
+  [1;37m○[0m 11     Skills coordinator audit
+  [1;37m○[0m 12     Tools coordinator audit
+  [1;37m○[0m 13     Create worktrees
+  [1;37m○[0m 14     Primary agent
+  [1;37m○[0m 15     Independent agent
+  [1;37m○[0m 16     Worktree health
+  [1;37m○[0m 17     Merge worktrees
+  [1;37m○[0m 18     Post-parallel assessment
+  [1;37m○[0m 19     Pre-review gate
+  [1;37m○[0m 20     Lint gate
+  [1;37m○[0m 21     Review stories
+  [1;37m○[0m 22a    SAST sentinel
+  [1;37m○[0m 22b    Spec validator
+  [1;37m○[0m 22c    Review ranger
+  [1;37m○[0m 22d    Mutant hunter
+  [1;37m○[0m 22e    Fuzz-weaver
+  [1;37m○[0m 22f    Perf sentinel
+  [1;37m○[0m 23     Browser E2E
+[0;35m━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━[0m
+
+npm error code E401
+npm error 401 Unauthorized - GET https://npm.pkg.github.com/download/@metrolinx/cx-shared/7.2.2/c1de41509ef91ac44f1361151b82f54a946b09da - unauthenticated: User cannot be authenticated with the token provided.
+npm error A complete log of this run can be found in: /home/bradleyjerome/.npm/_logs/2026-07-29T13_03_36_627Z-debug-0.log
+npm warn EBADENGINE Unsupported engine {
+npm warn EBADENGINE   package: '@metrolinx/next.upexpress.com@1.0.0',
+npm warn EBADENGINE   required: { node: '22.x' },
+npm warn EBADENGINE   current: { node: 'v24.14.1', npm: '11.11.0' }
+npm warn EBADENGINE }
+npm warn EBADENGINE Unsupported engine {
+npm warn EBADENGINE   package: '@metrolinx/cx-shared@7.2.2',
+npm warn EBADENGINE   required: { node: '22.x' },
+npm warn EBADENGINE   current: { node: 'v24.14.1', npm: '11.11.0' }
+npm warn EBADENGINE }
+npm warn EBADENGINE Unsupported engine {
+npm warn EBADENGINE   package: 'ssri@14.0.0',
+npm warn EBADENGINE   required: { node: '^22.22.2 || ^24.15.0 || >=26.0.0' },
+npm warn EBADENGINE   current: { node: 'v24.14.1', npm: '11.11.0' }
+npm warn EBADENGINE }
+npm warn EBADENGINE Unsupported engine {
+npm warn EBADENGINE   package: 'validate-npm-package-name@8.0.0',
+npm warn EBADENGINE   required: { node: '^22.22.2 || ^24.15.0 || >=26.0.0' },
+npm warn EBADENGINE   current: { node: 'v24.14.1', npm: '11.11.0' }
+npm warn EBADENGINE }
+npm error code E401
+npm error 401 Unauthorized - GET https://npm.pkg.github.com/download/@metrolinx/cx-shared/7.2.2/c1de41509ef91ac44f1361151b82f54a946b09da - unauthenticated: User cannot be authenticated with the token provided.
+npm error A complete log of this run can be found in: /home/bradleyjerome/.npm/_logs/2026-07-29T13_03_42_110Z-debug-0.log
+npm warn EBADENGINE Unsupported engine {
+npm warn EBADENGINE   package: '@metrolinx/next.upexpress.com@1.0.0',
+npm warn EBADENGINE   required: { node: '22.x' },
+npm warn EBADENGINE   current: { node: 'v24.14.1', npm: '11.11.0' }
+npm warn EBADENGINE }
+npm warn EBADENGINE Unsupported engine {
+npm warn EBADENGINE   package: '@metrolinx/cx-shared@7.2.2',
+npm warn EBADENGINE   required: { node: '22.x' },
+npm warn EBADENGINE   current: { node: 'v24.14.1', npm: '11.11.0' }
+npm warn EBADENGINE }
+npm warn EBADENGINE Unsupported engine {
+npm warn EBADENGINE   package: 'ssri@14.0.0',
+npm warn EBADENGINE   required: { node: '^22.22.2 || ^24.15.0 || >=26.0.0' },
+npm warn EBADENGINE   current: { node: 'v24.14.1', npm: '11.11.0' }
+npm warn EBADENGINE }
+npm warn EBADENGINE Unsupported engine {
+npm warn EBADENGINE   package: 'validate-npm-package-name@8.0.0',
+npm warn EBADENGINE   required: { node: '^22.22.2 || ^24.15.0 || >=26.0.0' },
+npm warn EBADENGINE   current: { node: 'v24.14.1', npm: '11.11.0' }
+npm warn EBADENGINE }
+npm error code E401
+npm error 401 Unauthorized - GET https://npm.pkg.github.com/download/@metrolinx/cx-shared/7.2.2/c1de41509ef91ac44f1361151b82f54a946b09da - unauthenticated: User cannot be authenticated with the token provided.
+npm error A complete log of this run can be found in: /home/bradleyjerome/.npm/_logs/2026-07-29T13_03_47_034Z-debug-0.log
+npm warn EBADENGINE Unsupported engine {
+npm warn EBADENGINE   package: '@metrolinx/next.upexpress.com@1.0.0',
+npm warn EBADENGINE   required: { node: '22.x' },
+npm warn EBADENGINE   current: { node: 'v24.14.1', npm: '11.11.0' }
+npm warn EBADENGINE }
+npm warn EBADENGINE Unsupported engine {
+npm warn EBADENGINE   package: '@metrolinx/cx-shared@7.2.2',
+npm warn EBADENGINE   required: { node: '22.x' },
+npm warn EBADENGINE   current: { node: 'v24.14.1', npm: '11.11.0' }
+npm warn EBADENGINE }
+npm warn EBADENGINE Unsupported engine {
+npm warn EBADENGINE   package: 'ssri@14.0.0',
+npm warn EBADENGINE   required: { node: '^22.22.2 || ^24.15.0 || >=26.0.0' },
+npm warn EBADENGINE   current: { node: 'v24.14.1', npm: '11.11.0' }
+npm warn EBADENGINE }
+npm warn EBADENGINE Unsupported engine {
+npm warn EBADENGINE   package: 'validate-npm-package-name@8.0.0',
+npm warn EBADENGINE   required: { node: '^22.22.2 || ^24.15.0 || >=26.0.0' },
+npm warn EBADENGINE   current: { node: 'v24.14.1', npm: '11.11.0' }
+npm warn EBADENGINE }
+npm error code E401
+npm error 401 Unauthorized - GET https://npm.pkg.github.com/download/@metrolinx/cx-shared/7.2.2/c1de41509ef91ac44f1361151b82f54a946b09da - unauthenticated: User cannot be authenticated with the token provided.
+npm error A complete log of this run can be found in: /home/bradleyjerome/.npm/_logs/2026-07-29T13_03_51_865Z-debug-0.log
+npm warn EBADENGINE Unsupported engine {
+npm warn EBADENGINE   package: '@metrolinx/next.upexpress.com@1.0.0',
+npm warn EBADENGINE   required: { node: '22.x' },
+npm warn EBADENGINE   current: { node: 'v24.14.1', npm: '11.11.0' }
+npm warn EBADENGINE }
+npm warn EBADENGINE Unsupported engine {
+npm warn EBADENGINE   package: '@metrolinx/cx-shared@7.2.2',
+npm warn EBADENGINE   required: { node: '22.x' },
+npm warn EBADENGINE   current: { node: 'v24.14.1', npm: '11.11.0' }
+npm warn EBADENGINE }
+npm warn EBADENGINE Unsupported engine {
+npm warn EBADENGINE   package: 'ssri@14.0.0',
+npm warn EBADENGINE   required: { node: '^22.22.2 || ^24.15.0 || >=26.0.0' },
+npm warn EBADENGINE   current: { node: 'v24.14.1', npm: '11.11.0' }
+npm warn EBADENGINE }
+npm warn EBADENGINE Unsupported engine {
+npm warn EBADENGINE   package: 'validate-npm-package-name@8.0.0',
+npm warn EBADENGINE   required: { node: '^22.22.2 || ^24.15.0 || >=26.0.0' },
+npm warn EBADENGINE   current: { node: 'v24.14.1', npm: '11.11.0' }
+npm warn EBADENGINE }
+npm error code E401
+npm error 401 Unauthorized - GET https://npm.pkg.github.com/download/@metrolinx/cx-shared/7.2.2/c1de41509ef91ac44f1361151b82f54a946b09da - unauthenticated: User cannot be authenticated with the token provided.
+npm error A complete log of this run can be found in: /home/bradleyjerome/.npm/_logs/2026-07-29T13_03_56_939Z-debug-0.log
+npm warn EBADENGINE Unsupported engine {
+npm warn EBADENGINE   package: '@metrolinx/next.upexpress.com@1.0.0',
+npm warn EBADENGINE   required: { node: '22.x' },
+npm warn EBADENGINE   current: { node: 'v24.14.1', npm: '11.11.0' }
+npm warn EBADENGINE }
+npm warn EBADENGINE Unsupported engine {
+npm warn EBADENGINE   package: '@metrolinx/cx-shared@7.2.2',
+npm warn EBADENGINE   required: { node: '22.x' },
+npm warn EBADENGINE   current: { node: 'v24.14.1', npm: '11.11.0' }
+npm warn EBADENGINE }
+npm warn EBADENGINE Unsupported engine {
+npm warn EBADENGINE   package: 'ssri@14.0.0',
+npm warn EBADENGINE   required: { node: '^22.22.2 || ^24.15.0 || >=26.0.0' },
+npm warn EBADENGINE   current: { node: 'v24.14.1', npm: '11.11.0' }
+npm warn EBADENGINE }
+npm warn EBADENGINE Unsupported engine {
+npm warn EBADENGINE   package: 'validate-npm-package-name@8.0.0',
+npm warn EBADENGINE   required: { node: '^22.22.2 || ^24.15.0 || >=26.0.0' },
+npm warn EBADENGINE   current: { node: 'v24.14.1', npm: '11.11.0' }
+npm warn EBADENGINE }
+npm error code E401
+npm error 401 Unauthorized - GET https://npm.pkg.github.com/download/@metrolinx/cx-shared/7.2.2/c1de41509ef91ac44f1361151b82f54a946b09da - unauthenticated: User cannot be authenticated with the token provided.
+npm error A complete log of this run can be found in: /home/bradleyjerome/.npm/_logs/2026-07-29T13_04_01_777Z-debug-0.log
+npm warn EBADENGINE Unsupported engine {
+npm warn EBADENGINE   package: '@metrolinx/next.upexpress.com@1.0.0',
+npm warn EBADENGINE   required: { node: '22.x' },
+npm warn EBADENGINE   current: { node: 'v24.14.1', npm: '11.11.0' }
+npm warn EBADENGINE }
+npm warn EBADENGINE Unsupported engine {
+npm warn EBADENGINE   package: '@metrolinx/cx-shared@7.2.2',
+npm warn EBADENGINE   required: { node: '22.x' },
+npm warn EBADENGINE   current: { node: 'v24.14.1', npm: '11.11.0' }
+npm warn EBADENGINE }
+npm warn EBADENGINE Unsupported engine {
+npm warn EBADENGINE   package: 'ssri@14.0.0',
+npm warn EBADENGINE   required: { node: '^22.22.2 || ^24.15.0 || >=26.0.0' },
+npm warn EBADENGINE   current: { node: 'v24.14.1', npm: '11.11.0' }
+npm warn EBADENGINE }
+npm warn EBADENGINE Unsupported engine {
+npm warn EBADENGINE   package: 'validate-npm-package-name@8.0.0',
+npm warn EBADENGINE   required: { node: '^22.22.2 || ^24.15.0 || >=26.0.0' },
+npm warn EBADENGINE   current: { node: 'v24.14.1', npm: '11.11.0' }
+npm warn EBADENGINE }
+npm error code E401
+npm error 401 Unauthorized - GET https://npm.pkg.github.com/download/@metrolinx/cx-shared/7.2.2/c1de41509ef91ac44f1361151b82f54a946b09da - unauthenticated: User cannot be authenticated with the token provided.
+npm error A complete log of this run can be found in: /home/bradleyjerome/.npm/_logs/2026-07-29T13_04_07_160Z-debug-0.log
+npm warn EBADENGINE Unsupported engine {
+npm warn EBADENGINE   package: '@metrolinx/next.upexpress.com@1.0.0',
+npm warn EBADENGINE   required: { node: '22.x' },
+npm warn EBADENGINE   current: { node: 'v24.14.1', npm: '11.11.0' }
+npm warn EBADENGINE }
+npm warn EBADENGINE Unsupported engine {
+npm warn EBADENGINE   package: '@metrolinx/cx-shared@7.2.2',
+npm warn EBADENGINE   required: { node: '22.x' },
+npm warn EBADENGINE   current: { node: 'v24.14.1', npm: '11.11.0' }
+npm warn EBADENGINE }
+npm warn EBADENGINE Unsupported engine {
+npm warn EBADENGINE   package: 'ssri@14.0.0',
+npm warn EBADENGINE   required: { node: '^22.22.2 || ^24.15.0 || >=26.0.0' },
+npm warn EBADENGINE   current: { node: 'v24.14.1', npm: '11.11.0' }
+npm warn EBADENGINE }
+npm warn EBADENGINE Unsupported engine {
+npm warn EBADENGINE   package: 'validate-npm-package-name@8.0.0',
+npm warn EBADENGINE   required: { node: '^22.22.2 || ^24.15.0 || >=26.0.0' },
+npm warn EBADENGINE   current: { node: 'v24.14.1', npm: '11.11.0' }
+npm warn EBADENGINE }
+npm error code E401
+npm error 401 Unauthorized - GET https://npm.pkg.github.com/download/@metrolinx/cx-shared/7.2.2/c1de41509ef91ac44f1361151b82f54a946b09da - unauthenticated: User cannot be authenticated with the token provided.
+npm error A complete log of this run can be found in: /home/bradleyjerome/.npm/_logs/2026-07-29T13_04_12_500Z-debug-0.log
+npm warn EBADENGINE Unsupported engine {
+npm warn EBADENGINE   package: '@metrolinx/next.upexpress.com@1.0.0',
+npm warn EBADENGINE   required: { node: '22.x' },
+npm warn EBADENGINE   current: { node: 'v24.14.1', npm: '11.11.0' }
+npm warn EBADENGINE }
+npm warn EBADENGINE Unsupported engine {
+npm warn EBADENGINE   package: '@metrolinx/cx-shared@7.2.2',
+npm warn EBADENGINE   required: { node: '22.x' },
+npm warn EBADENGINE   current: { node: 'v24.14.1', npm: '11.11.0' }
+npm warn EBADENGINE }
+npm warn EBADENGINE Unsupported engine {
+npm warn EBADENGINE   package: 'ssri@14.0.0',
+npm warn EBADENGINE   required: { node: '^22.22.2 || ^24.15.0 || >=26.0.0' },
+npm warn EBADENGINE   current: { node: 'v24.14.1', npm: '11.11.0' }
+npm warn EBADENGINE }
+npm warn EBADENGINE Unsupported engine {
+npm warn EBADENGINE   package: 'validate-npm-package-name@8.0.0',
+npm warn EBADENGINE   required: { node: '^22.22.2 || ^24.15.0 || >=26.0.0' },
+npm warn EBADENGINE   current: { node: 'v24.14.1', npm: '11.11.0' }
+npm warn EBADENGINE }
+npm error code E401
+npm error 401 Unauthorized - GET https://npm.pkg.github.com/download/@metrolinx/cx-shared/7.2.2/c1de41509ef91ac44f1361151b82f54a946b09da - unauthenticated: User cannot be authenticated with the token provided.
+npm error A complete log of this run can be found in: /home/bradleyjerome/.npm/_logs/2026-07-29T13_04_17_028Z-debug-0.log
+npm warn EBADENGINE Unsupported engine {
+npm warn EBADENGINE   package: '@metrolinx/next.upexpress.com@1.0.0',
+npm warn EBADENGINE   required: { node: '22.x' },
+npm warn EBADENGINE   current: { node: 'v24.14.1', npm: '11.11.0' }
+npm warn EBADENGINE }
+npm warn EBADENGINE Unsupported engine {
+npm warn EBADENGINE   package: '@metrolinx/cx-shared@7.2.2',
+npm warn EBADENGINE   required: { node: '22.x' },
+npm warn EBADENGINE   current: { node: 'v24.14.1', npm: '11.11.0' }
+npm warn EBADENGINE }
+npm warn EBADENGINE Unsupported engine {
+npm warn EBADENGINE   package: 'ssri@14.0.0',
+npm warn EBADENGINE   required: { node: '^22.22.2 || ^24.15.0 || >=26.0.0' },
+npm warn EBADENGINE   current: { node: 'v24.14.1', npm: '11.11.0' }
+npm warn EBADENGINE }
+npm warn EBADENGINE Unsupported engine {
+npm warn EBADENGINE   package: 'validate-npm-package-name@8.0.0',
+npm warn EBADENGINE   required: { node: '^22.22.2 || ^24.15.0 || >=26.0.0' },
+npm warn EBADENGINE   current: { node: 'v24.14.1', npm: '11.11.0' }
+npm warn EBADENGINE }
+npm error code E401
+npm error 401 Unauthorized - GET https://npm.pkg.github.com/download/@metrolinx/cx-shared/7.2.2/c1de41509ef91ac44f1361151b82f54a946b09da - unauthenticated: User cannot be authenticated with the token provided.
+npm error A complete log of this run can be found in: /home/bradleyjerome/.npm/_logs/2026-07-29T13_04_22_296Z-debug-0.log
+npm warn EBADENGINE Unsupported engine {
+npm warn EBADENGINE   package: '@metrolinx/next.upexpress.com@1.0.0',
+npm warn EBADENGINE   required: { node: '22.x' },
+npm warn EBADENGINE   current: { node: 'v24.14.1', npm: '11.11.0' }
+npm warn EBADENGINE }
+npm warn EBADENGINE Unsupported engine {
+npm warn EBADENGINE   package: '@metrolinx/cx-shared@7.2.2',
+npm warn EBADENGINE   required: { node: '22.x' },
+npm warn EBADENGINE   current: { node: 'v24.14.1', npm: '11.11.0' }
+npm warn EBADENGINE }
+npm warn EBADENGINE Unsupported engine {
+npm warn EBADENGINE   package: 'ssri@14.0.0',
+npm warn EBADENGINE   required: { node: '^22.22.2 || ^24.15.0 || >=26.0.0' },
+npm warn EBADENGINE   current: { node: 'v24.14.1', npm: '11.11.0' }
+npm warn EBADENGINE }
+npm warn EBADENGINE Unsupported engine {
+npm warn EBADENGINE   package: 'validate-npm-package-name@8.0.0',
+npm warn EBADENGINE   required: { node: '^22.22.2 || ^24.15.0 || >=26.0.0' },
+npm warn EBADENGINE   current: { node: 'v24.14.1', npm: '11.11.0' }
+npm warn EBADENGINE }
+npm error code E401
+npm error 401 Unauthorized - GET https://npm.pkg.github.com/download/@metrolinx/cx-shared/7.2.2/c1de41509ef91ac44f1361151b82f54a946b09da - unauthenticated: User cannot be authenticated with the token provided.
+npm error A complete log of this run can be found in: /home/bradleyjerome/.npm/_logs/2026-07-29T13_04_27_935Z-debug-0.log
+npm warn EBADENGINE Unsupported engine {
+npm warn EBADENGINE   package: '@metrolinx/next.upexpress.com@1.0.0',
+npm warn EBADENGINE   required: { node: '22.x' },
+npm warn EBADENGINE   current: { node: 'v24.14.1', npm: '11.11.0' }
+npm warn EBADENGINE }
+npm warn EBADENGINE Unsupported engine {
+npm warn EBADENGINE   package: '@metrolinx/cx-shared@7.2.2',
+npm warn EBADENGINE   required: { node: '22.x' },
+npm warn EBADENGINE   current: { node: 'v24.14.1', npm: '11.11.0' }
+npm warn EBADENGINE }
+npm warn EBADENGINE Unsupported engine {
+npm warn EBADENGINE   package: 'ssri@14.0.0',
+npm warn EBADENGINE   required: { node: '^22.22.2 || ^24.15.0 || >=26.0.0' },
+npm warn EBADENGINE   current: { node: 'v24.14.1', npm: '11.11.0' }
+npm warn EBADENGINE }
+npm warn EBADENGINE Unsupported engine {
+npm warn EBADENGINE   package: 'validate-npm-package-name@8.0.0',
+npm warn EBADENGINE   required: { node: '^22.22.2 || ^24.15.0 || >=26.0.0' },
+npm warn EBADENGINE   current: { node: 'v24.14.1', npm: '11.11.0' }
+npm warn EBADENGINE }
+npm error code E401
+npm error 401 Unauthorized - GET https://npm.pkg.github.com/download/@metrolinx/cx-shared/7.2.2/c1de41509ef91ac44f1361151b82f54a946b09da - unauthenticated: User cannot be authenticated with the token provided.
+npm error A complete log of this run can be found in: /home/bradleyjerome/.npm/_logs/2026-07-29T13_04_33_767Z-debug-0.log
+npm warn EBADENGINE Unsupported engine {
+npm warn EBADENGINE   package: '@metrolinx/next.upexpress.com@1.0.0',
+npm warn EBADENGINE   required: { node: '22.x' },
+npm warn EBADENGINE   current: { node: 'v24.14.1', npm: '11.11.0' }
+npm warn EBADENGINE }
+npm warn EBADENGINE Unsupported engine {
+npm warn EBADENGINE   package: '@metrolinx/cx-shared@7.2.2',
+npm warn EBADENGINE   required: { node: '22.x' },
+npm warn EBADENGINE   current: { node: 'v24.14.1', npm: '11.11.0' }
+npm warn EBADENGINE }
+npm warn EBADENGINE Unsupported engine {
+npm warn EBADENGINE   package: 'ssri@14.0.0',
+npm warn EBADENGINE   required: { node: '^22.22.2 || ^24.15.0 || >=26.0.0' },
+npm warn EBADENGINE   current: { node: 'v24.14.1', npm: '11.11.0' }
+npm warn EBADENGINE }
+npm warn EBADENGINE Unsupported engine {
+npm warn EBADENGINE   package: 'validate-npm-package-name@8.0.0',
+npm warn EBADENGINE   required: { node: '^22.22.2 || ^24.15.0 || >=26.0.0' },
+npm warn EBADENGINE   current: { node: 'v24.14.1', npm: '11.11.0' }
+npm warn EBADENGINE }
+
+[0;35m━━━ Step Status @ 13:04:41 ━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━[0m
+  [0;32m✓[0m 1      Step 1: Specification pass
+  [0;32m✓[0m 1a       openspec (elaboration)
+  [0;32m✓[0m 1b       speckit (verification)
+  [0;32m✓[0m 2      Step 2: CPA pre-pass
+  [1;37m○[0m 3      Skill assessment
+  [1;37m○[0m 4      Hybrid pre-coord
+  [1;37m○[0m 5      Regression guard
+  [1;37m○[0m 6      mkdir src/ dirs
+  [1;37m○[0m 7      PRD model coordinator
+  [1;37m○[0m 8      Main-branch stories
+  [1;37m○[0m 9      Auto-commit
+  [1;37m○[0m 10     TC writer gate
+  [1;37m○[0m 11     Skills coordinator audit
+  [1;37m○[0m 12     Tools coordinator audit
+  [1;37m○[0m 13     Create worktrees
+  [1;37m○[0m 14     Primary agent
+  [1;37m○[0m 15     Independent agent
+  [1;37m○[0m 16     Worktree health
+  [1;37m○[0m 17     Merge worktrees
+  [1;37m○[0m 18     Post-parallel assessment
+  [1;37m○[0m 19     Pre-review gate
+  [1;37m○[0m 20     Lint gate
+  [1;37m○[0m 21     Review stories
+  [1;37m○[0m 22a    SAST sentinel
+  [1;37m○[0m 22b    Spec validator
+  [1;37m○[0m 22c    Review ranger
+  [1;37m○[0m 22d    Mutant hunter
+  [1;37m○[0m 22e    Fuzz-weaver
+  [1;37m○[0m 22f    Perf sentinel
+  [1;37m○[0m 23     Browser E2E
+[0;35m━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━[0m
+
+npm error code E401
+npm error 401 Unauthorized - GET https://npm.pkg.github.com/download/@metrolinx/cx-shared/7.2.2/c1de41509ef91ac44f1361151b82f54a946b09da - unauthenticated: User cannot be authenticated with the token provided.
+npm error A complete log of this run can be found in: /home/bradleyjerome/.npm/_logs/2026-07-29T13_04_38_947Z-debug-0.log
+npm warn EBADENGINE Unsupported engine {
+npm warn EBADENGINE   package: '@metrolinx/next.upexpress.com@1.0.0',
+npm warn EBADENGINE   required: { node: '22.x' },
+npm warn EBADENGINE   current: { node: 'v24.14.1', npm: '11.11.0' }
+npm warn EBADENGINE }
+npm warn EBADENGINE Unsupported engine {
+npm warn EBADENGINE   package: '@metrolinx/cx-shared@7.2.2',
+npm warn EBADENGINE   required: { node: '22.x' },
+npm warn EBADENGINE   current: { node: 'v24.14.1', npm: '11.11.0' }
+npm warn EBADENGINE }
+npm warn EBADENGINE Unsupported engine {
+npm warn EBADENGINE   package: 'ssri@14.0.0',
+npm warn EBADENGINE   required: { node: '^22.22.2 || ^24.15.0 || >=26.0.0' },
+npm warn EBADENGINE   current: { node: 'v24.14.1', npm: '11.11.0' }
+npm warn EBADENGINE }
+npm warn EBADENGINE Unsupported engine {
+npm warn EBADENGINE   package: 'validate-npm-package-name@8.0.0',
+npm warn EBADENGINE   required: { node: '^22.22.2 || ^24.15.0 || >=26.0.0' },
+npm warn EBADENGINE   current: { node: 'v24.14.1', npm: '11.11.0' }
+npm warn EBADENGINE }
+npm error code E401
+npm error 401 Unauthorized - GET https://npm.pkg.github.com/download/@metrolinx/cx-shared/7.2.2/c1de41509ef91ac44f1361151b82f54a946b09da - unauthenticated: User cannot be authenticated with the token provided.
+npm error A complete log of this run can be found in: /home/bradleyjerome/.npm/_logs/2026-07-29T13_04_44_024Z-debug-0.log
+npm warn EBADENGINE Unsupported engine {
+npm warn EBADENGINE   package: '@metrolinx/next.upexpress.com@1.0.0',
+npm warn EBADENGINE   required: { node: '22.x' },
+npm warn EBADENGINE   current: { node: 'v24.14.1', npm: '11.11.0' }
+npm warn EBADENGINE }
+npm warn EBADENGINE Unsupported engine {
+npm warn EBADENGINE   package: '@metrolinx/cx-shared@7.2.2',
+npm warn EBADENGINE   required: { node: '22.x' },
+npm warn EBADENGINE   current: { node: 'v24.14.1', npm: '11.11.0' }
+npm warn EBADENGINE }
+npm warn EBADENGINE Unsupported engine {
+npm warn EBADENGINE   package: 'ssri@14.0.0',
+npm warn EBADENGINE   required: { node: '^22.22.2 || ^24.15.0 || >=26.0.0' },
+npm warn EBADENGINE   current: { node: 'v24.14.1', npm: '11.11.0' }
+npm warn EBADENGINE }
+npm warn EBADENGINE Unsupported engine {
+npm warn EBADENGINE   package: 'validate-npm-package-name@8.0.0',
+npm warn EBADENGINE   required: { node: '^22.22.2 || ^24.15.0 || >=26.0.0' },
+npm warn EBADENGINE   current: { node: 'v24.14.1', npm: '11.11.0' }
+npm warn EBADENGINE }
+npm error code E401
+npm error 401 Unauthorized - GET https://npm.pkg.github.com/download/@metrolinx/cx-shared/7.2.2/c1de41509ef91ac44f1361151b82f54a946b09da - unauthenticated: User cannot be authenticated with the token provided.
+npm error A complete log of this run can be found in: /home/bradleyjerome/.npm/_logs/2026-07-29T13_04_49_612Z-debug-0.log
+npm warn EBADENGINE Unsupported engine {
+npm warn EBADENGINE   package: '@metrolinx/next.upexpress.com@1.0.0',
+npm warn EBADENGINE   required: { node: '22.x' },
+npm warn EBADENGINE   current: { node: 'v24.14.1', npm: '11.11.0' }
+npm warn EBADENGINE }
+npm warn EBADENGINE Unsupported engine {
+npm warn EBADENGINE   package: '@metrolinx/cx-shared@7.2.2',
+npm warn EBADENGINE   required: { node: '22.x' },
+npm warn EBADENGINE   current: { node: 'v24.14.1', npm: '11.11.0' }
+npm warn EBADENGINE }
+npm warn EBADENGINE Unsupported engine {
+npm warn EBADENGINE   package: 'ssri@14.0.0',
+npm warn EBADENGINE   required: { node: '^22.22.2 || ^24.15.0 || >=26.0.0' },
+npm warn EBADENGINE   current: { node: 'v24.14.1', npm: '11.11.0' }
+npm warn EBADENGINE }
+npm warn EBADENGINE Unsupported engine {
+npm warn EBADENGINE   package: 'validate-npm-package-name@8.0.0',
+npm warn EBADENGINE   required: { node: '^22.22.2 || ^24.15.0 || >=26.0.0' },
+npm warn EBADENGINE   current: { node: 'v24.14.1', npm: '11.11.0' }
+npm warn EBADENGINE }
+npm error code E401
+npm error 401 Unauthorized - GET https://npm.pkg.github.com/download/@metrolinx/cx-shared/7.2.2/c1de41509ef91ac44f1361151b82f54a946b09da - unauthenticated: User cannot be authenticated with the token provided.
+npm error A complete log of this run can be found in: /home/bradleyjerome/.npm/_logs/2026-07-29T13_04_55_710Z-debug-0.log
+npm warn EBADENGINE Unsupported engine {
+npm warn EBADENGINE   package: '@metrolinx/next.upexpress.com@1.0.0',
+npm warn EBADENGINE   required: { node: '22.x' },
+npm warn EBADENGINE   current: { node: 'v24.14.1', npm: '11.11.0' }
+npm warn EBADENGINE }
+npm warn EBADENGINE Unsupported engine {
+npm warn EBADENGINE   package: '@metrolinx/cx-shared@7.2.2',
+npm warn EBADENGINE   required: { node: '22.x' },
+npm warn EBADENGINE   current: { node: 'v24.14.1', npm: '11.11.0' }
+npm warn EBADENGINE }
+npm warn EBADENGINE Unsupported engine {
+npm warn EBADENGINE   package: 'ssri@14.0.0',
+npm warn EBADENGINE   required: { node: '^22.22.2 || ^24.15.0 || >=26.0.0' },
+npm warn EBADENGINE   current: { node: 'v24.14.1', npm: '11.11.0' }
+npm warn EBADENGINE }
+npm warn EBADENGINE Unsupported engine {
+npm warn EBADENGINE   package: 'validate-npm-package-name@8.0.0',
+npm warn EBADENGINE   required: { node: '^22.22.2 || ^24.15.0 || >=26.0.0' },
+npm warn EBADENGINE   current: { node: 'v24.14.1', npm: '11.11.0' }
+npm warn EBADENGINE }
+npm error code E401
+npm error 401 Unauthorized - GET https://npm.pkg.github.com/download/@metrolinx/cx-shared/7.2.2/c1de41509ef91ac44f1361151b82f54a946b09da - unauthenticated: User cannot be authenticated with the token provided.
+npm error A complete log of this run can be found in: /home/bradleyjerome/.npm/_logs/2026-07-29T13_05_15_982Z-debug-0.log
+npm warn EBADENGINE Unsupported engine {
+npm warn EBADENGINE   package: '@metrolinx/next.upexpress.com@1.0.0',
+npm warn EBADENGINE   required: { node: '22.x' },
+npm warn EBADENGINE   current: { node: 'v24.14.1', npm: '11.11.0' }
+npm warn EBADENGINE }
+npm warn EBADENGINE Unsupported engine {
+npm warn EBADENGINE   package: '@metrolinx/cx-shared@7.2.2',
+npm warn EBADENGINE   required: { node: '22.x' },
+npm warn EBADENGINE   current: { node: 'v24.14.1', npm: '11.11.0' }
+npm warn EBADENGINE }
+npm warn EBADENGINE Unsupported engine {
+npm warn EBADENGINE   package: 'ssri@14.0.0',
+npm warn EBADENGINE   required: { node: '^22.22.2 || ^24.15.0 || >=26.0.0' },
+npm warn EBADENGINE   current: { node: 'v24.14.1', npm: '11.11.0' }
+npm warn EBADENGINE }
+npm warn EBADENGINE Unsupported engine {
+npm warn EBADENGINE   package: 'validate-npm-package-name@8.0.0',
+npm warn EBADENGINE   required: { node: '^22.22.2 || ^24.15.0 || >=26.0.0' },
+npm warn EBADENGINE   current: { node: 'v24.14.1', npm: '11.11.0' }
+npm warn EBADENGINE }
+npm error code E401
+npm error 401 Unauthorized - GET https://npm.pkg.github.com/download/@metrolinx/cx-shared/7.2.2/c1de41509ef91ac44f1361151b82f54a946b09da - unauthenticated: User cannot be authenticated with the token provided.
+npm error A complete log of this run can be found in: /home/bradleyjerome/.npm/_logs/2026-07-29T13_05_26_267Z-debug-0.log
+npm warn EBADENGINE Unsupported engine {
+npm warn EBADENGINE   package: '@metrolinx/next.upexpress.com@1.0.0',
+npm warn EBADENGINE   required: { node: '22.x' },
+npm warn EBADENGINE   current: { node: 'v24.14.1', npm: '11.11.0' }
+npm warn EBADENGINE }
+npm warn EBADENGINE Unsupported engine {
+npm warn EBADENGINE   package: '@metrolinx/cx-shared@7.2.2',
+npm warn EBADENGINE   required: { node: '22.x' },
+npm warn EBADENGINE   current: { node: 'v24.14.1', npm: '11.11.0' }
+npm warn EBADENGINE }
+npm warn EBADENGINE Unsupported engine {
+npm warn EBADENGINE   package: 'ssri@14.0.0',
+npm warn EBADENGINE   required: { node: '^22.22.2 || ^24.15.0 || >=26.0.0' },
+npm warn EBADENGINE   current: { node: 'v24.14.1', npm: '11.11.0' }
+npm warn EBADENGINE }
+npm warn EBADENGINE Unsupported engine {
+npm warn EBADENGINE   package: 'validate-npm-package-name@8.0.0',
+npm warn EBADENGINE   required: { node: '^22.22.2 || ^24.15.0 || >=26.0.0' },
+npm warn EBADENGINE   current: { node: 'v24.14.1', npm: '11.11.0' }
+npm warn EBADENGINE }
+npm error code E401
+npm error 401 Unauthorized - GET https://npm.pkg.github.com/download/@metrolinx/cx-shared/7.2.2/c1de41509ef91ac44f1361151b82f54a946b09da - unauthenticated: User cannot be authenticated with the token provided.
+npm error A complete log of this run can be found in: /home/bradleyjerome/.npm/_logs/2026-07-29T13_05_31_758Z-debug-0.log
+npm warn EBADENGINE Unsupported engine {
+npm warn EBADENGINE   package: '@metrolinx/next.upexpress.com@1.0.0',
+npm warn EBADENGINE   required: { node: '22.x' },
+npm warn EBADENGINE   current: { node: 'v24.14.1', npm: '11.11.0' }
+npm warn EBADENGINE }
+npm warn EBADENGINE Unsupported engine {
+npm warn EBADENGINE   package: '@metrolinx/cx-shared@7.2.2',
+npm warn EBADENGINE   required: { node: '22.x' },
+npm warn EBADENGINE   current: { node: 'v24.14.1', npm: '11.11.0' }
+npm warn EBADENGINE }
+npm warn EBADENGINE Unsupported engine {
+npm warn EBADENGINE   package: 'ssri@14.0.0',
+npm warn EBADENGINE   required: { node: '^22.22.2 || ^24.15.0 || >=26.0.0' },
+npm warn EBADENGINE   current: { node: 'v24.14.1', npm: '11.11.0' }
+npm warn EBADENGINE }
+npm warn EBADENGINE Unsupported engine {
+npm warn EBADENGINE   package: 'validate-npm-package-name@8.0.0',
+npm warn EBADENGINE   required: { node: '^22.22.2 || ^24.15.0 || >=26.0.0' },
+npm warn EBADENGINE   current: { node: 'v24.14.1', npm: '11.11.0' }
+npm warn EBADENGINE }
+
+[0;35m━━━ Step Status @ 13:05:41 ━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━[0m
+  [0;32m✓[0m 1      Step 1: Specification pass
+  [0;32m✓[0m 1a       openspec (elaboration)
+  [0;32m✓[0m 1b       speckit (verification)
+  [0;32m✓[0m 2      Step 2: CPA pre-pass
+  [1;37m○[0m 3      Skill assessment
+  [1;37m○[0m 4      Hybrid pre-coord
+  [1;37m○[0m 5      Regression guard
+  [1;37m○[0m 6      mkdir src/ dirs
+  [1;37m○[0m 7      PRD model coordinator
+  [1;37m○[0m 8      Main-branch stories
+  [1;37m○[0m 9      Auto-commit
+  [1;37m○[0m 10     TC writer gate
+  [1;37m○[0m 11     Skills coordinator audit
+  [1;37m○[0m 12     Tools coordinator audit
+  [1;37m○[0m 13     Create worktrees
+  [1;37m○[0m 14     Primary agent
+  [1;37m○[0m 15     Independent agent
+  [1;37m○[0m 16     Worktree health
+  [1;37m○[0m 17     Merge worktrees
+  [1;37m○[0m 18     Post-parallel assessment
+  [1;37m○[0m 19     Pre-review gate
+  [1;37m○[0m 20     Lint gate
+  [1;37m○[0m 21     Review stories
+  [1;37m○[0m 22a    SAST sentinel
+  [1;37m○[0m 22b    Spec validator
+  [1;37m○[0m 22c    Review ranger
+  [1;37m○[0m 22d    Mutant hunter
+  [1;37m○[0m 22e    Fuzz-weaver
+  [1;37m○[0m 22f    Perf sentinel
+  [1;37m○[0m 23     Browser E2E
+[0;35m━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━[0m
+
+npm error code E401
+npm error 401 Unauthorized - GET https://npm.pkg.github.com/download/@metrolinx/cx-shared/7.2.2/c1de41509ef91ac44f1361151b82f54a946b09da - unauthenticated: User cannot be authenticated with the token provided.
+npm error A complete log of this run can be found in: /home/bradleyjerome/.npm/_logs/2026-07-29T13_05_37_914Z-debug-0.log
+npm warn EBADENGINE Unsupported engine {
+npm warn EBADENGINE   package: '@metrolinx/next.upexpress.com@1.0.0',
+npm warn EBADENGINE   required: { node: '22.x' },
+npm warn EBADENGINE   current: { node: 'v24.14.1', npm: '11.11.0' }
+npm warn EBADENGINE }
+npm warn EBADENGINE Unsupported engine {
+npm warn EBADENGINE   package: '@metrolinx/cx-shared@7.2.2',
+npm warn EBADENGINE   required: { node: '22.x' },
+npm warn EBADENGINE   current: { node: 'v24.14.1', npm: '11.11.0' }
+npm warn EBADENGINE }
+npm warn EBADENGINE Unsupported engine {
+npm warn EBADENGINE   package: 'ssri@14.0.0',
+npm warn EBADENGINE   required: { node: '^22.22.2 || ^24.15.0 || >=26.0.0' },
+npm warn EBADENGINE   current: { node: 'v24.14.1', npm: '11.11.0' }
+npm warn EBADENGINE }
+npm warn EBADENGINE Unsupported engine {
+npm warn EBADENGINE   package: 'validate-npm-package-name@8.0.0',
+npm warn EBADENGINE   required: { node: '^22.22.2 || ^24.15.0 || >=26.0.0' },
+npm warn EBADENGINE   current: { node: 'v24.14.1', npm: '11.11.0' }
+npm warn EBADENGINE }
+npm error code E401
+npm error 401 Unauthorized - GET https://npm.pkg.github.com/download/@metrolinx/cx-shared/7.2.2/c1de41509ef91ac44f1361151b82f54a946b09da - unauthenticated: User cannot be authenticated with the token provided.
+npm error A complete log of this run can be found in: /home/bradleyjerome/.npm/_logs/2026-07-29T13_05_45_030Z-debug-0.log
+npm warn EBADENGINE Unsupported engine {
+npm warn EBADENGINE   package: '@metrolinx/next.upexpress.com@1.0.0',
+npm warn EBADENGINE   required: { node: '22.x' },
+npm warn EBADENGINE   current: { node: 'v24.14.1', npm: '11.11.0' }
+npm warn EBADENGINE }
+npm warn EBADENGINE Unsupported engine {
+npm warn EBADENGINE   package: '@metrolinx/cx-shared@7.2.2',
+npm warn EBADENGINE   required: { node: '22.x' },
+npm warn EBADENGINE   current: { node: 'v24.14.1', npm: '11.11.0' }
+npm warn EBADENGINE }
+npm warn EBADENGINE Unsupported engine {
+npm warn EBADENGINE   package: 'ssri@14.0.0',
+npm warn EBADENGINE   required: { node: '^22.22.2 || ^24.15.0 || >=26.0.0' },
+npm warn EBADENGINE   current: { node: 'v24.14.1', npm: '11.11.0' }
+npm warn EBADENGINE }
+npm warn EBADENGINE Unsupported engine {
+npm warn EBADENGINE   package: 'validate-npm-package-name@8.0.0',
+npm warn EBADENGINE   required: { node: '^22.22.2 || ^24.15.0 || >=26.0.0' },
+npm warn EBADENGINE   current: { node: 'v24.14.1', npm: '11.11.0' }
+npm warn EBADENGINE }
+npm error code E401
+npm error 401 Unauthorized - GET https://npm.pkg.github.com/download/@metrolinx/cx-shared/7.2.2/c1de41509ef91ac44f1361151b82f54a946b09da - unauthenticated: User cannot be authenticated with the token provided.
+npm error A complete log of this run can be found in: /home/bradleyjerome/.npm/_logs/2026-07-29T13_05_49_400Z-debug-0.log
+npm warn EBADENGINE Unsupported engine {
+npm warn EBADENGINE   package: '@metrolinx/next.upexpress.com@1.0.0',
+npm warn EBADENGINE   required: { node: '22.x' },
+npm warn EBADENGINE   current: { node: 'v24.14.1', npm: '11.11.0' }
+npm warn EBADENGINE }
+npm warn EBADENGINE Unsupported engine {
+npm warn EBADENGINE   package: '@metrolinx/cx-shared@7.2.2',
+npm warn EBADENGINE   required: { node: '22.x' },
+npm warn EBADENGINE   current: { node: 'v24.14.1', npm: '11.11.0' }
+npm warn EBADENGINE }
+npm warn EBADENGINE Unsupported engine {
+npm warn EBADENGINE   package: 'ssri@14.0.0',
+npm warn EBADENGINE   required: { node: '^22.22.2 || ^24.15.0 || >=26.0.0' },
+npm warn EBADENGINE   current: { node: 'v24.14.1', npm: '11.11.0' }
+npm warn EBADENGINE }
+npm warn EBADENGINE Unsupported engine {
+npm warn EBADENGINE   package: 'validate-npm-package-name@8.0.0',
+npm warn EBADENGINE   required: { node: '^22.22.2 || ^24.15.0 || >=26.0.0' },
+npm warn EBADENGINE   current: { node: 'v24.14.1', npm: '11.11.0' }
+npm warn EBADENGINE }
+npm error code E401
+npm error 401 Unauthorized - GET https://npm.pkg.github.com/download/@metrolinx/cx-shared/7.2.2/c1de41509ef91ac44f1361151b82f54a946b09da - unauthenticated: User cannot be authenticated with the token provided.
+npm error A complete log of this run can be found in: /home/bradleyjerome/.npm/_logs/2026-07-29T13_05_53_779Z-debug-0.log
+npm warn EBADENGINE Unsupported engine {
+npm warn EBADENGINE   package: '@metrolinx/next.upexpress.com@1.0.0',
+npm warn EBADENGINE   required: { node: '22.x' },
+npm warn EBADENGINE   current: { node: 'v24.14.1', npm: '11.11.0' }
+npm warn EBADENGINE }
+npm warn EBADENGINE Unsupported engine {
+npm warn EBADENGINE   package: '@metrolinx/cx-shared@7.2.2',
+npm warn EBADENGINE   required: { node: '22.x' },
+npm warn EBADENGINE   current: { node: 'v24.14.1', npm: '11.11.0' }
+npm warn EBADENGINE }
+npm warn EBADENGINE Unsupported engine {
+npm warn EBADENGINE   package: 'ssri@14.0.0',
+npm warn EBADENGINE   required: { node: '^22.22.2 || ^24.15.0 || >=26.0.0' },
+npm warn EBADENGINE   current: { node: 'v24.14.1', npm: '11.11.0' }
+npm warn EBADENGINE }
+npm warn EBADENGINE Unsupported engine {
+npm warn EBADENGINE   package: 'validate-npm-package-name@8.0.0',
+npm warn EBADENGINE   required: { node: '^22.22.2 || ^24.15.0 || >=26.0.0' },
+npm warn EBADENGINE   current: { node: 'v24.14.1', npm: '11.11.0' }
+npm warn EBADENGINE }
+npm error code E401
+npm error 401 Unauthorized - GET https://npm.pkg.github.com/download/@metrolinx/cx-shared/7.2.2/c1de41509ef91ac44f1361151b82f54a946b09da - unauthenticated: User cannot be authenticated with the token provided.
+npm error A complete log of this run can be found in: /home/bradleyjerome/.npm/_logs/2026-07-29T13_05_58_362Z-debug-0.log
+npm warn EBADENGINE Unsupported engine {
+npm warn EBADENGINE   package: '@metrolinx/next.upexpress.com@1.0.0',
+npm warn EBADENGINE   required: { node: '22.x' },
+npm warn EBADENGINE   current: { node: 'v24.14.1', npm: '11.11.0' }
+npm warn EBADENGINE }
+npm warn EBADENGINE Unsupported engine {
+npm warn EBADENGINE   package: '@metrolinx/cx-shared@7.2.2',
+npm warn EBADENGINE   required: { node: '22.x' },
+npm warn EBADENGINE   current: { node: 'v24.14.1', npm: '11.11.0' }
+npm warn EBADENGINE }
+npm warn EBADENGINE Unsupported engine {
+npm warn EBADENGINE   package: 'ssri@14.0.0',
+npm warn EBADENGINE   required: { node: '^22.22.2 || ^24.15.0 || >=26.0.0' },
+npm warn EBADENGINE   current: { node: 'v24.14.1', npm: '11.11.0' }
+npm warn EBADENGINE }
+npm warn EBADENGINE Unsupported engine {
+npm warn EBADENGINE   package: 'validate-npm-package-name@8.0.0',
+npm warn EBADENGINE   required: { node: '^22.22.2 || ^24.15.0 || >=26.0.0' },
+npm warn EBADENGINE   current: { node: 'v24.14.1', npm: '11.11.0' }
+npm warn EBADENGINE }
+npm error code E401
+npm error 401 Unauthorized - GET https://npm.pkg.github.com/download/@metrolinx/cx-shared/7.2.2/c1de41509ef91ac44f1361151b82f54a946b09da - unauthenticated: User cannot be authenticated with the token provided.
+npm error A complete log of this run can be found in: /home/bradleyjerome/.npm/_logs/2026-07-29T13_06_03_030Z-debug-0.log
+npm warn EBADENGINE Unsupported engine {
+npm warn EBADENGINE   package: '@metrolinx/next.upexpress.com@1.0.0',
+npm warn EBADENGINE   required: { node: '22.x' },
+npm warn EBADENGINE   current: { node: 'v24.14.1', npm: '11.11.0' }
+npm warn EBADENGINE }
+npm warn EBADENGINE Unsupported engine {
+npm warn EBADENGINE   package: '@metrolinx/cx-shared@7.2.2',
+npm warn EBADENGINE   required: { node: '22.x' },
+npm warn EBADENGINE   current: { node: 'v24.14.1', npm: '11.11.0' }
+npm warn EBADENGINE }
+npm warn EBADENGINE Unsupported engine {
+npm warn EBADENGINE   package: 'ssri@14.0.0',
+npm warn EBADENGINE   required: { node: '^22.22.2 || ^24.15.0 || >=26.0.0' },
+npm warn EBADENGINE   current: { node: 'v24.14.1', npm: '11.11.0' }
+npm warn EBADENGINE }
+npm warn EBADENGINE Unsupported engine {
+npm warn EBADENGINE   package: 'validate-npm-package-name@8.0.0',
+npm warn EBADENGINE   required: { node: '^22.22.2 || ^24.15.0 || >=26.0.0' },
+npm warn EBADENGINE   current: { node: 'v24.14.1', npm: '11.11.0' }
+npm warn EBADENGINE }
+npm error code E401
+npm error 401 Unauthorized - GET https://npm.pkg.github.com/download/@metrolinx/cx-shared/7.2.2/c1de41509ef91ac44f1361151b82f54a946b09da - unauthenticated: User cannot be authenticated with the token provided.
+npm error A complete log of this run can be found in: /home/bradleyjerome/.npm/_logs/2026-07-29T13_06_07_510Z-debug-0.log
+npm warn EBADENGINE Unsupported engine {
+npm warn EBADENGINE   package: '@metrolinx/next.upexpress.com@1.0.0',
+npm warn EBADENGINE   required: { node: '22.x' },
+npm warn EBADENGINE   current: { node: 'v24.14.1', npm: '11.11.0' }
+npm warn EBADENGINE }
+npm warn EBADENGINE Unsupported engine {
+npm warn EBADENGINE   package: '@metrolinx/cx-shared@7.2.2',
+npm warn EBADENGINE   required: { node: '22.x' },
+npm warn EBADENGINE   current: { node: 'v24.14.1', npm: '11.11.0' }
+npm warn EBADENGINE }
+npm error code E401
+npm error 401 Unauthorized - GET https://npm.pkg.github.com/download/@metrolinx/cx-shared/7.2.2/c1de41509ef91ac44f1361151b82f54a946b09da - unauthenticated: User cannot be authenticated with the token provided.
+npm error A complete log of this run can be found in: /home/bradleyjerome/.npm/_logs/2026-07-29T13_06_11_845Z-debug-0.log
+npm warn EBADENGINE Unsupported engine {
+npm warn EBADENGINE   package: '@metrolinx/next.upexpress.com@1.0.0',
+npm warn EBADENGINE   required: { node: '22.x' },
+npm warn EBADENGINE   current: { node: 'v24.14.1', npm: '11.11.0' }
+npm warn EBADENGINE }
+npm warn EBADENGINE Unsupported engine {
+npm warn EBADENGINE   package: '@metrolinx/cx-shared@7.2.2',
+npm warn EBADENGINE   required: { node: '22.x' },
+npm warn EBADENGINE   current: { node: 'v24.14.1', npm: '11.11.0' }
+npm warn EBADENGINE }
+npm error code E401
+npm error 401 Unauthorized - GET https://npm.pkg.github.com/download/@metrolinx/cx-shared/7.2.2/c1de41509ef91ac44f1361151b82f54a946b09da - unauthenticated: User cannot be authenticated with the token provided.
+npm error A complete log of this run can be found in: /home/bradleyjerome/.npm/_logs/2026-07-29T13_06_14_007Z-debug-0.log
+npm warn EBADENGINE Unsupported engine {
+npm warn EBADENGINE   package: '@metrolinx/next.upexpress.com@1.0.0',
+npm warn EBADENGINE   required: { node: '22.x' },
+npm warn EBADENGINE   current: { node: 'v24.14.1', npm: '11.11.0' }
+npm warn EBADENGINE }
+npm warn EBADENGINE Unsupported engine {
+npm warn EBADENGINE   package: '@metrolinx/cx-shared@7.2.2',
+npm warn EBADENGINE   required: { node: '22.x' },
+npm warn EBADENGINE   current: { node: 'v24.14.1', npm: '11.11.0' }
+npm warn EBADENGINE }
+npm error code E401
+npm error 401 Unauthorized - GET https://npm.pkg.github.com/download/@metrolinx/cx-shared/7.2.2/c1de41509ef91ac44f1361151b82f54a946b09da - unauthenticated: User cannot be authenticated with the token provided.
+npm error A complete log of this run can be found in: /home/bradleyjerome/.npm/_logs/2026-07-29T13_06_16_434Z-debug-0.log
+npm warn EBADENGINE Unsupported engine {
+npm warn EBADENGINE   package: '@metrolinx/next.upexpress.com@1.0.0',
+npm warn EBADENGINE   required: { node: '22.x' },
+npm warn EBADENGINE   current: { node: 'v24.14.1', npm: '11.11.0' }
+npm warn EBADENGINE }
+npm warn EBADENGINE Unsupported engine {
+npm warn EBADENGINE   package: '@metrolinx/cx-shared@7.2.2',
+npm warn EBADENGINE   required: { node: '22.x' },
+npm warn EBADENGINE   current: { node: 'v24.14.1', npm: '11.11.0' }
+npm warn EBADENGINE }
+npm error code E401
+npm error 401 Unauthorized - GET https://npm.pkg.github.com/download/@metrolinx/cx-shared/7.2.2/c1de41509ef91ac44f1361151b82f54a946b09da - unauthenticated: User cannot be authenticated with the token provided.
+npm error A complete log of this run can be found in: /home/bradleyjerome/.npm/_logs/2026-07-29T13_06_17_794Z-debug-0.log
+npm warn EBADENGINE Unsupported engine {
+npm warn EBADENGINE   package: '@metrolinx/next.upexpress.com@1.0.0',
+npm warn EBADENGINE   required: { node: '22.x' },
+npm warn EBADENGINE   current: { node: 'v24.14.1', npm: '11.11.0' }
+npm warn EBADENGINE }
+npm warn EBADENGINE Unsupported engine {
+npm warn EBADENGINE   package: '@metrolinx/cx-shared@7.2.2',
+npm warn EBADENGINE   required: { node: '22.x' },
+npm warn EBADENGINE   current: { node: 'v24.14.1', npm: '11.11.0' }
+npm warn EBADENGINE }
+npm error code E401
+npm error 401 Unauthorized - GET https://npm.pkg.github.com/download/@metrolinx/cx-shared/7.2.2/c1de41509ef91ac44f1361151b82f54a946b09da - unauthenticated: User cannot be authenticated with the token provided.
+npm error A complete log of this run can be found in: /home/bradleyjerome/.npm/_logs/2026-07-29T13_06_19_113Z-debug-0.log
+npm warn EBADENGINE Unsupported engine {
+npm warn EBADENGINE   package: '@metrolinx/next.upexpress.com@1.0.0',
+npm warn EBADENGINE   required: { node: '22.x' },
+npm warn EBADENGINE   current: { node: 'v24.14.1', npm: '11.11.0' }
+npm warn EBADENGINE }
+npm warn EBADENGINE Unsupported engine {
+npm warn EBADENGINE   package: '@metrolinx/cx-shared@7.2.2',
+npm warn EBADENGINE   required: { node: '22.x' },
+npm warn EBADENGINE   current: { node: 'v24.14.1', npm: '11.11.0' }
+npm warn EBADENGINE }
+npm error code E401
+npm error 401 Unauthorized - GET https://npm.pkg.github.com/download/@metrolinx/cx-shared/7.2.2/c1de41509ef91ac44f1361151b82f54a946b09da - unauthenticated: User cannot be authenticated with the token provided.
+npm error A complete log of this run can be found in: /home/bradleyjerome/.npm/_logs/2026-07-29T13_06_20_492Z-debug-0.log
+npm warn EBADENGINE Unsupported engine {
+npm warn EBADENGINE   package: '@metrolinx/next.upexpress.com@1.0.0',
+npm warn EBADENGINE   required: { node: '22.x' },
+npm warn EBADENGINE   current: { node: 'v24.14.1', npm: '11.11.0' }
+npm warn EBADENGINE }
+npm warn EBADENGINE Unsupported engine {
+npm warn EBADENGINE   package: '@metrolinx/cx-shared@7.2.2',
+npm warn EBADENGINE   required: { node: '22.x' },
+npm warn EBADENGINE   current: { node: 'v24.14.1', npm: '11.11.0' }
+npm warn EBADENGINE }
+npm error code E401
+npm error 401 Unauthorized - GET https://npm.pkg.github.com/download/@metrolinx/cx-shared/7.2.2/c1de41509ef91ac44f1361151b82f54a946b09da - unauthenticated: User cannot be authenticated with the token provided.
+npm error A complete log of this run can be found in: /home/bradleyjerome/.npm/_logs/2026-07-29T13_06_21_855Z-debug-0.log
+npm warn EBADENGINE Unsupported engine {
+npm warn EBADENGINE   package: '@metrolinx/next.upexpress.com@1.0.0',
+npm warn EBADENGINE   required: { node: '22.x' },
+npm warn EBADENGINE   current: { node: 'v24.14.1', npm: '11.11.0' }
+npm warn EBADENGINE }
+npm warn EBADENGINE Unsupported engine {
+npm warn EBADENGINE   package: '@metrolinx/cx-shared@7.2.2',
+npm warn EBADENGINE   required: { node: '22.x' },
+npm warn EBADENGINE   current: { node: 'v24.14.1', npm: '11.11.0' }
+npm warn EBADENGINE }
+npm error code E401
+npm error 401 Unauthorized - GET https://npm.pkg.github.com/download/@metrolinx/cx-shared/7.2.2/c1de41509ef91ac44f1361151b82f54a946b09da - unauthenticated: User cannot be authenticated with the token provided.
+npm error A complete log of this run can be found in: /home/bradleyjerome/.npm/_logs/2026-07-29T13_06_23_224Z-debug-0.log
+npm warn EBADENGINE Unsupported engine {
+npm warn EBADENGINE   package: '@metrolinx/next.upexpress.com@1.0.0',
+npm warn EBADENGINE   required: { node: '22.x' },
+npm warn EBADENGINE   current: { node: 'v24.14.1', npm: '11.11.0' }
+npm warn EBADENGINE }
+npm warn EBADENGINE Unsupported engine {
+npm warn EBADENGINE   package: '@metrolinx/cx-shared@7.2.2',
+npm warn EBADENGINE   required: { node: '22.x' },
+npm warn EBADENGINE   current: { node: 'v24.14.1', npm: '11.11.0' }
+npm warn EBADENGINE }
+npm error code E401
+npm error 401 Unauthorized - GET https://npm.pkg.github.com/download/@metrolinx/cx-shared/7.2.2/c1de41509ef91ac44f1361151b82f54a946b09da - unauthenticated: User cannot be authenticated with the token provided.
+npm error A complete log of this run can be found in: /home/bradleyjerome/.npm/_logs/2026-07-29T13_06_25_445Z-debug-0.log
+npm warn EBADENGINE Unsupported engine {
+npm warn EBADENGINE   package: '@metrolinx/next.upexpress.com@1.0.0',
+npm warn EBADENGINE   required: { node: '22.x' },
+npm warn EBADENGINE   current: { node: 'v24.14.1', npm: '11.11.0' }
+npm warn EBADENGINE }
+npm warn EBADENGINE Unsupported engine {
+npm warn EBADENGINE   package: '@metrolinx/cx-shared@7.2.2',
+npm warn EBADENGINE   required: { node: '22.x' },
+npm warn EBADENGINE   current: { node: 'v24.14.1', npm: '11.11.0' }
+npm warn EBADENGINE }
+npm error code E401
+npm error 401 Unauthorized - GET https://npm.pkg.github.com/download/@metrolinx/cx-shared/7.2.2/c1de41509ef91ac44f1361151b82f54a946b09da - unauthenticated: User cannot be authenticated with the token provided.
+npm error A complete log of this run can be found in: /home/bradleyjerome/.npm/_logs/2026-07-29T13_06_26_913Z-debug-0.log
+npm warn EBADENGINE Unsupported engine {
+npm warn EBADENGINE   package: '@metrolinx/next.upexpress.com@1.0.0',
+npm warn EBADENGINE   required: { node: '22.x' },
+npm warn EBADENGINE   current: { node: 'v24.14.1', npm: '11.11.0' }
+npm warn EBADENGINE }
+npm warn EBADENGINE Unsupported engine {
+npm warn EBADENGINE   package: '@metrolinx/cx-shared@7.2.2',
+npm warn EBADENGINE   required: { node: '22.x' },
+npm warn EBADENGINE   current: { node: 'v24.14.1', npm: '11.11.0' }
+npm warn EBADENGINE }
+npm error code E401
+npm error 401 Unauthorized - GET https://npm.pkg.github.com/download/@metrolinx/cx-shared/7.2.2/c1de41509ef91ac44f1361151b82f54a946b09da - unauthenticated: User cannot be authenticated with the token provided.
+npm error A complete log of this run can be found in: /home/bradleyjerome/.npm/_logs/2026-07-29T13_06_28_328Z-debug-0.log
+npm warn EBADENGINE Unsupported engine {
+npm warn EBADENGINE   package: '@metrolinx/next.upexpress.com@1.0.0',
+npm warn EBADENGINE   required: { node: '22.x' },
+npm warn EBADENGINE   current: { node: 'v24.14.1', npm: '11.11.0' }
+npm warn EBADENGINE }
+npm warn EBADENGINE Unsupported engine {
+npm warn EBADENGINE   package: '@metrolinx/cx-shared@7.2.2',
+npm warn EBADENGINE   required: { node: '22.x' },
+npm warn EBADENGINE   current: { node: 'v24.14.1', npm: '11.11.0' }
+npm warn EBADENGINE }
+npm error code E401
+npm error 401 Unauthorized - GET https://npm.pkg.github.com/download/@metrolinx/cx-shared/7.2.2/c1de41509ef91ac44f1361151b82f54a946b09da - unauthenticated: User cannot be authenticated with the token provided.
+npm error A complete log of this run can be found in: /home/bradleyjerome/.npm/_logs/2026-07-29T13_06_29_593Z-debug-0.log
+npm warn EBADENGINE Unsupported engine {
+npm warn EBADENGINE   package: '@metrolinx/next.upexpress.com@1.0.0',
+npm warn EBADENGINE   required: { node: '22.x' },
+npm warn EBADENGINE   current: { node: 'v24.14.1', npm: '11.11.0' }
+npm warn EBADENGINE }
+npm warn EBADENGINE Unsupported engine {
+npm warn EBADENGINE   package: '@metrolinx/cx-shared@7.2.2',
+npm warn EBADENGINE   required: { node: '22.x' },
+npm warn EBADENGINE   current: { node: 'v24.14.1', npm: '11.11.0' }
+npm warn EBADENGINE }
+npm error code E401
+npm error 401 Unauthorized - GET https://npm.pkg.github.com/download/@metrolinx/cx-shared/7.2.2/c1de41509ef91ac44f1361151b82f54a946b09da - unauthenticated: User cannot be authenticated with the token provided.
+npm error A complete log of this run can be found in: /home/bradleyjerome/.npm/_logs/2026-07-29T13_06_31_715Z-debug-0.log
+npm warn EBADENGINE Unsupported engine {
+npm warn EBADENGINE   package: '@metrolinx/next.upexpress.com@1.0.0',
+npm warn EBADENGINE   required: { node: '22.x' },
+npm warn EBADENGINE   current: { node: 'v24.14.1', npm: '11.11.0' }
+npm warn EBADENGINE }
+npm warn EBADENGINE Unsupported engine {
+npm warn EBADENGINE   package: '@metrolinx/cx-shared@7.2.2',
+npm warn EBADENGINE   required: { node: '22.x' },
+npm warn EBADENGINE   current: { node: 'v24.14.1', npm: '11.11.0' }
+npm warn EBADENGINE }
+npm error code E401
+npm error 401 Unauthorized - GET https://npm.pkg.github.com/download/@metrolinx/cx-shared/7.2.2/c1de41509ef91ac44f1361151b82f54a946b09da - unauthenticated: User cannot be authenticated with the token provided.
+npm error A complete log of this run can be found in: /home/bradleyjerome/.npm/_logs/2026-07-29T13_06_33_940Z-debug-0.log
+npm warn EBADENGINE Unsupported engine {
+npm warn EBADENGINE   package: '@metrolinx/next.upexpress.com@1.0.0',
+npm warn EBADENGINE   required: { node: '22.x' },
+npm warn EBADENGINE   current: { node: 'v24.14.1', npm: '11.11.0' }
+npm warn EBADENGINE }
+npm warn EBADENGINE Unsupported engine {
+npm warn EBADENGINE   package: '@metrolinx/cx-shared@7.2.2',
+npm warn EBADENGINE   required: { node: '22.x' },
+npm warn EBADENGINE   current: { node: 'v24.14.1', npm: '11.11.0' }
+npm warn EBADENGINE }
+npm error code E401
+npm error 401 Unauthorized - GET https://npm.pkg.github.com/download/@metrolinx/cx-shared/7.2.2/c1de41509ef91ac44f1361151b82f54a946b09da - unauthenticated: User cannot be authenticated with the token provided.
+npm error A complete log of this run can be found in: /home/bradleyjerome/.npm/_logs/2026-07-29T13_06_35_261Z-debug-0.log
+npm warn EBADENGINE Unsupported engine {
+npm warn EBADENGINE   package: '@metrolinx/next.upexpress.com@1.0.0',
+npm warn EBADENGINE   required: { node: '22.x' },
+npm warn EBADENGINE   current: { node: 'v24.14.1', npm: '11.11.0' }
+npm warn EBADENGINE }
+npm warn EBADENGINE Unsupported engine {
+npm warn EBADENGINE   package: '@metrolinx/cx-shared@7.2.2',
+npm warn EBADENGINE   required: { node: '22.x' },
+npm warn EBADENGINE   current: { node: 'v24.14.1', npm: '11.11.0' }
+npm warn EBADENGINE }
+npm error code E401
+npm error 401 Unauthorized - GET https://npm.pkg.github.com/download/@metrolinx/cx-shared/7.2.2/c1de41509ef91ac44f1361151b82f54a946b09da - unauthenticated: User cannot be authenticated with the token provided.
+npm error A complete log of this run can be found in: /home/bradleyjerome/.npm/_logs/2026-07-29T13_06_37_436Z-debug-0.log
+npm warn EBADENGINE Unsupported engine {
+npm warn EBADENGINE   package: '@metrolinx/next.upexpress.com@1.0.0',
+npm warn EBADENGINE   required: { node: '22.x' },
+npm warn EBADENGINE   current: { node: 'v24.14.1', npm: '11.11.0' }
+npm warn EBADENGINE }
+npm warn EBADENGINE Unsupported engine {
+npm warn EBADENGINE   package: '@metrolinx/cx-shared@7.2.2',
+npm warn EBADENGINE   required: { node: '22.x' },
+npm warn EBADENGINE   current: { node: 'v24.14.1', npm: '11.11.0' }
+npm warn EBADENGINE }
+
+[0;35m━━━ Step Status @ 13:06:41 ━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━[0m
+  [0;32m✓[0m 1      Step 1: Specification pass
+  [0;32m✓[0m 1a       openspec (elaboration)
+  [0;32m✓[0m 1b       speckit (verification)
+  [0;32m✓[0m 2      Step 2: CPA pre-pass
+  [1;37m○[0m 3      Skill assessment
+  [1;37m○[0m 4      Hybrid pre-coord
+  [1;37m○[0m 5      Regression guard
+  [1;37m○[0m 6      mkdir src/ dirs
+  [1;37m○[0m 7      PRD model coordinator
+  [1;37m○[0m 8      Main-branch stories
+  [1;37m○[0m 9      Auto-commit
+  [1;37m○[0m 10     TC writer gate
+  [1;37m○[0m 11     Skills coordinator audit
+  [1;37m○[0m 12     Tools coordinator audit
+  [1;37m○[0m 13     Create worktrees
+  [1;37m○[0m 14     Primary agent
+  [1;37m○[0m 15     Independent agent
+  [1;37m○[0m 16     Worktree health
+  [1;37m○[0m 17     Merge worktrees
+  [1;37m○[0m 18     Post-parallel assessment
+  [1;37m○[0m 19     Pre-review gate
+  [1;37m○[0m 20     Lint gate
+  [1;37m○[0m 21     Review stories
+  [1;37m○[0m 22a    SAST sentinel
+  [1;37m○[0m 22b    Spec validator
+  [1;37m○[0m 22c    Review ranger
+  [1;37m○[0m 22d    Mutant hunter
+  [1;37m○[0m 22e    Fuzz-weaver
+  [1;37m○[0m 22f    Perf sentinel
+  [1;37m○[0m 23     Browser E2E
+[0;35m━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━[0m
+
+npm error code E401
+npm error 401 Unauthorized - GET https://npm.pkg.github.com/download/@metrolinx/cx-shared/7.2.2/c1de41509ef91ac44f1361151b82f54a946b09da - unauthenticated: User cannot be authenticated with the token provided.
+npm error A complete log of this run can be found in: /home/bradleyjerome/.npm/_logs/2026-07-29T13_06_39_817Z-debug-0.log
+npm warn EBADENGINE Unsupported engine {
+npm warn EBADENGINE   package: '@metrolinx/next.upexpress.com@1.0.0',
+npm warn EBADENGINE   required: { node: '22.x' },
+npm warn EBADENGINE   current: { node: 'v24.14.1', npm: '11.11.0' }
+npm warn EBADENGINE }
+npm warn EBADENGINE Unsupported engine {
+npm warn EBADENGINE   package: '@metrolinx/cx-shared@7.2.2',
+npm warn EBADENGINE   required: { node: '22.x' },
+npm warn EBADENGINE   current: { node: 'v24.14.1', npm: '11.11.0' }
+npm warn EBADENGINE }
+npm error code E401
+npm error 401 Unauthorized - GET https://npm.pkg.github.com/download/@metrolinx/cx-shared/7.2.2/c1de41509ef91ac44f1361151b82f54a946b09da - unauthenticated: User cannot be authenticated with the token provided.
+npm error A complete log of this run can be found in: /home/bradleyjerome/.npm/_logs/2026-07-29T13_06_42_174Z-debug-0.log
+npm warn EBADENGINE Unsupported engine {
+npm warn EBADENGINE   package: '@metrolinx/next.upexpress.com@1.0.0',
+npm warn EBADENGINE   required: { node: '22.x' },
+npm warn EBADENGINE   current: { node: 'v24.14.1', npm: '11.11.0' }
+npm warn EBADENGINE }
+npm warn EBADENGINE Unsupported engine {
+npm warn EBADENGINE   package: '@metrolinx/cx-shared@7.2.2',
+npm warn EBADENGINE   required: { node: '22.x' },
+npm warn EBADENGINE   current: { node: 'v24.14.1', npm: '11.11.0' }
+npm warn EBADENGINE }
+npm error code E401
+npm error 401 Unauthorized - GET https://npm.pkg.github.com/download/@metrolinx/cx-shared/7.2.2/c1de41509ef91ac44f1361151b82f54a946b09da - unauthenticated: User cannot be authenticated with the token provided.
+npm error A complete log of this run can be found in: /home/bradleyjerome/.npm/_logs/2026-07-29T13_06_44_295Z-debug-0.log
+npm warn EBADENGINE Unsupported engine {
+npm warn EBADENGINE   package: '@metrolinx/next.upexpress.com@1.0.0',
+npm warn EBADENGINE   required: { node: '22.x' },
+npm warn EBADENGINE   current: { node: 'v24.14.1', npm: '11.11.0' }
+npm warn EBADENGINE }
+npm warn EBADENGINE Unsupported engine {
+npm warn EBADENGINE   package: '@metrolinx/cx-shared@7.2.2',
+npm warn EBADENGINE   required: { node: '22.x' },
+npm warn EBADENGINE   current: { node: 'v24.14.1', npm: '11.11.0' }
+npm warn EBADENGINE }
+npm error code E401
+npm error 401 Unauthorized - GET https://npm.pkg.github.com/download/@metrolinx/cx-shared/7.2.2/c1de41509ef91ac44f1361151b82f54a946b09da - unauthenticated: User cannot be authenticated with the token provided.
+npm error A complete log of this run can be found in: /home/bradleyjerome/.npm/_logs/2026-07-29T13_06_46_580Z-debug-0.log
+npm warn EBADENGINE Unsupported engine {
+npm warn EBADENGINE   package: '@metrolinx/next.upexpress.com@1.0.0',
+npm warn EBADENGINE   required: { node: '22.x' },
+npm warn EBADENGINE   current: { node: 'v24.14.1', npm: '11.11.0' }
+npm warn EBADENGINE }
+npm warn EBADENGINE Unsupported engine {
+npm warn EBADENGINE   package: '@metrolinx/cx-shared@7.2.2',
+npm warn EBADENGINE   required: { node: '22.x' },
+npm warn EBADENGINE   current: { node: 'v24.14.1', npm: '11.11.0' }
+npm warn EBADENGINE }
+npm error code E401
+npm error 401 Unauthorized - GET https://npm.pkg.github.com/download/@metrolinx/cx-shared/7.2.2/c1de41509ef91ac44f1361151b82f54a946b09da - unauthenticated: User cannot be authenticated with the token provided.
+npm error A complete log of this run can be found in: /home/bradleyjerome/.npm/_logs/2026-07-29T13_06_48_787Z-debug-0.log
+npm warn EBADENGINE Unsupported engine {
+npm warn EBADENGINE   package: '@metrolinx/next.upexpress.com@1.0.0',
+npm warn EBADENGINE   required: { node: '22.x' },
+npm warn EBADENGINE   current: { node: 'v24.14.1', npm: '11.11.0' }
+npm warn EBADENGINE }
+npm warn EBADENGINE Unsupported engine {
+npm warn EBADENGINE   package: '@metrolinx/cx-shared@7.2.2',
+npm warn EBADENGINE   required: { node: '22.x' },
+npm warn EBADENGINE   current: { node: 'v24.14.1', npm: '11.11.0' }
+npm warn EBADENGINE }
+npm error code E401
+npm error 401 Unauthorized - GET https://npm.pkg.github.com/download/@metrolinx/cx-shared/7.2.2/c1de41509ef91ac44f1361151b82f54a946b09da - unauthenticated: User cannot be authenticated with the token provided.
+npm error A complete log of this run can be found in: /home/bradleyjerome/.npm/_logs/2026-07-29T13_06_50_907Z-debug-0.log
+npm warn EBADENGINE Unsupported engine {
+npm warn EBADENGINE   package: '@metrolinx/next.upexpress.com@1.0.0',
+npm warn EBADENGINE   required: { node: '22.x' },
+npm warn EBADENGINE   current: { node: 'v24.14.1', npm: '11.11.0' }
+npm warn EBADENGINE }
+npm warn EBADENGINE Unsupported engine {
+npm warn EBADENGINE   package: '@metrolinx/cx-shared@7.2.2',
+npm warn EBADENGINE   required: { node: '22.x' },
+npm warn EBADENGINE   current: { node: 'v24.14.1', npm: '11.11.0' }
+npm warn EBADENGINE }
+npm error code E401
+npm error 401 Unauthorized - GET https://npm.pkg.github.com/download/@metrolinx/cx-shared/7.2.2/c1de41509ef91ac44f1361151b82f54a946b09da - unauthenticated: User cannot be authenticated with the token provided.
+npm error A complete log of this run can be found in: /home/bradleyjerome/.npm/_logs/2026-07-29T13_06_53_158Z-debug-0.log
+npm warn EBADENGINE Unsupported engine {
+npm warn EBADENGINE   package: '@metrolinx/next.upexpress.com@1.0.0',
+npm warn EBADENGINE   required: { node: '22.x' },
+npm warn EBADENGINE   current: { node: 'v24.14.1', npm: '11.11.0' }
+npm warn EBADENGINE }
+npm warn EBADENGINE Unsupported engine {
+npm warn EBADENGINE   package: '@metrolinx/cx-shared@7.2.2',
+npm warn EBADENGINE   required: { node: '22.x' },
+npm warn EBADENGINE   current: { node: 'v24.14.1', npm: '11.11.0' }
+npm warn EBADENGINE }
+npm error code E401
+npm error 401 Unauthorized - GET https://npm.pkg.github.com/download/@metrolinx/cx-shared/7.2.2/c1de41509ef91ac44f1361151b82f54a946b09da - unauthenticated: User cannot be authenticated with the token provided.
+npm error A complete log of this run can be found in: /home/bradleyjerome/.npm/_logs/2026-07-29T13_06_55_557Z-debug-0.log
+npm warn EBADENGINE Unsupported engine {
+npm warn EBADENGINE   package: '@metrolinx/next.upexpress.com@1.0.0',
+npm warn EBADENGINE   required: { node: '22.x' },
+npm warn EBADENGINE   current: { node: 'v24.14.1', npm: '11.11.0' }
+npm warn EBADENGINE }
+npm warn EBADENGINE Unsupported engine {
+npm warn EBADENGINE   package: '@metrolinx/cx-shared@7.2.2',
+npm warn EBADENGINE   required: { node: '22.x' },
+npm warn EBADENGINE   current: { node: 'v24.14.1', npm: '11.11.0' }
+npm warn EBADENGINE }
+npm error code E401
+npm error 401 Unauthorized - GET https://npm.pkg.github.com/download/@metrolinx/cx-shared/7.2.2/c1de41509ef91ac44f1361151b82f54a946b09da - unauthenticated: User cannot be authenticated with the token provided.
+npm error A complete log of this run can be found in: /home/bradleyjerome/.npm/_logs/2026-07-29T13_06_58_078Z-debug-0.log
+npm warn EBADENGINE Unsupported engine {
+npm warn EBADENGINE   package: '@metrolinx/next.upexpress.com@1.0.0',
+npm warn EBADENGINE   required: { node: '22.x' },
+npm warn EBADENGINE   current: { node: 'v24.14.1', npm: '11.11.0' }
+npm warn EBADENGINE }
+npm warn EBADENGINE Unsupported engine {
+npm warn EBADENGINE   package: '@metrolinx/cx-shared@7.2.2',
+npm warn EBADENGINE   required: { node: '22.x' },
+npm warn EBADENGINE   current: { node: 'v24.14.1', npm: '11.11.0' }
+npm warn EBADENGINE }
+npm error code E401
+npm error 401 Unauthorized - GET https://npm.pkg.github.com/download/@metrolinx/cx-shared/7.2.2/c1de41509ef91ac44f1361151b82f54a946b09da - unauthenticated: User cannot be authenticated with the token provided.
+npm error A complete log of this run can be found in: /home/bradleyjerome/.npm/_logs/2026-07-29T13_07_00_746Z-debug-0.log
+npm warn EBADENGINE Unsupported engine {
+npm warn EBADENGINE   package: '@metrolinx/next.upexpress.com@1.0.0',
+npm warn EBADENGINE   required: { node: '22.x' },
+npm warn EBADENGINE   current: { node: 'v24.14.1', npm: '11.11.0' }
+npm warn EBADENGINE }
+npm warn EBADENGINE Unsupported engine {
+npm warn EBADENGINE   package: '@metrolinx/cx-shared@7.2.2',
+npm warn EBADENGINE   required: { node: '22.x' },
+npm warn EBADENGINE   current: { node: 'v24.14.1', npm: '11.11.0' }
+npm warn EBADENGINE }
+npm error code E401
+npm error 401 Unauthorized - GET https://npm.pkg.github.com/download/@metrolinx/cx-shared/7.2.2/c1de41509ef91ac44f1361151b82f54a946b09da - unauthenticated: User cannot be authenticated with the token provided.
+npm error A complete log of this run can be found in: /home/bradleyjerome/.npm/_logs/2026-07-29T13_07_03_068Z-debug-0.log
+npm warn EBADENGINE Unsupported engine {
+npm warn EBADENGINE   package: '@metrolinx/next.upexpress.com@1.0.0',
+npm warn EBADENGINE   required: { node: '22.x' },
+npm warn EBADENGINE   current: { node: 'v24.14.1', npm: '11.11.0' }
+npm warn EBADENGINE }
+npm warn EBADENGINE Unsupported engine {
+npm warn EBADENGINE   package: '@metrolinx/cx-shared@7.2.2',
+npm warn EBADENGINE   required: { node: '22.x' },
+npm warn EBADENGINE   current: { node: 'v24.14.1', npm: '11.11.0' }
+npm warn EBADENGINE }
+npm error code E401
+npm error 401 Unauthorized - GET https://npm.pkg.github.com/download/@metrolinx/cx-shared/7.2.2/c1de41509ef91ac44f1361151b82f54a946b09da - unauthenticated: User cannot be authenticated with the token provided.
+npm error A complete log of this run can be found in: /home/bradleyjerome/.npm/_logs/2026-07-29T13_07_04_697Z-debug-0.log
+npm warn EBADENGINE Unsupported engine {
+npm warn EBADENGINE   package: '@metrolinx/next.upexpress.com@1.0.0',
+npm warn EBADENGINE   required: { node: '22.x' },
+npm warn EBADENGINE   current: { node: 'v24.14.1', npm: '11.11.0' }
+npm warn EBADENGINE }
+npm warn EBADENGINE Unsupported engine {
+npm warn EBADENGINE   package: '@metrolinx/cx-shared@7.2.2',
+npm warn EBADENGINE   required: { node: '22.x' },
+npm warn EBADENGINE   current: { node: 'v24.14.1', npm: '11.11.0' }
+npm warn EBADENGINE }
+npm error code E401
+npm error 401 Unauthorized - GET https://npm.pkg.github.com/download/@metrolinx/cx-shared/7.2.2/c1de41509ef91ac44f1361151b82f54a946b09da - unauthenticated: User cannot be authenticated with the token provided.
+npm error A complete log of this run can be found in: /home/bradleyjerome/.npm/_logs/2026-07-29T13_07_07_366Z-debug-0.log
+npm warn EBADENGINE Unsupported engine {
+npm warn EBADENGINE   package: '@metrolinx/next.upexpress.com@1.0.0',
+npm warn EBADENGINE   required: { node: '22.x' },
+npm warn EBADENGINE   current: { node: 'v24.14.1', npm: '11.11.0' }
+npm warn EBADENGINE }
+npm warn EBADENGINE Unsupported engine {
+npm warn EBADENGINE   package: '@metrolinx/cx-shared@7.2.2',
+npm warn EBADENGINE   required: { node: '22.x' },
+npm warn EBADENGINE   current: { node: 'v24.14.1', npm: '11.11.0' }
+npm warn EBADENGINE }
+npm error code E401
+npm error 401 Unauthorized - GET https://npm.pkg.github.com/download/@metrolinx/cx-shared/7.2.2/c1de41509ef91ac44f1361151b82f54a946b09da - unauthenticated: User cannot be authenticated with the token provided.
+npm error A complete log of this run can be found in: /home/bradleyjerome/.npm/_logs/2026-07-29T13_07_10_604Z-debug-0.log
+npm warn EBADENGINE Unsupported engine {
+npm warn EBADENGINE   package: '@metrolinx/next.upexpress.com@1.0.0',
+npm warn EBADENGINE   required: { node: '22.x' },
+npm warn EBADENGINE   current: { node: 'v24.14.1', npm: '11.11.0' }
+npm warn EBADENGINE }
+npm warn EBADENGINE Unsupported engine {
+npm warn EBADENGINE   package: '@metrolinx/cx-shared@7.2.2',
+npm warn EBADENGINE   required: { node: '22.x' },
+npm warn EBADENGINE   current: { node: 'v24.14.1', npm: '11.11.0' }
+npm warn EBADENGINE }
+npm error code E401
+npm error 401 Unauthorized - GET https://npm.pkg.github.com/download/@metrolinx/cx-shared/7.2.2/c1de41509ef91ac44f1361151b82f54a946b09da - unauthenticated: User cannot be authenticated with the token provided.
+npm error A complete log of this run can be found in: /home/bradleyjerome/.npm/_logs/2026-07-29T13_07_13_371Z-debug-0.log
+npm warn EBADENGINE Unsupported engine {
+npm warn EBADENGINE   package: '@metrolinx/next.upexpress.com@1.0.0',
+npm warn EBADENGINE   required: { node: '22.x' },
+npm warn EBADENGINE   current: { node: 'v24.14.1', npm: '11.11.0' }
+npm warn EBADENGINE }
+npm warn EBADENGINE Unsupported engine {
+npm warn EBADENGINE   package: '@metrolinx/cx-shared@7.2.2',
+npm warn EBADENGINE   required: { node: '22.x' },
+npm warn EBADENGINE   current: { node: 'v24.14.1', npm: '11.11.0' }
+npm warn EBADENGINE }
+npm error code E401
+npm error 401 Unauthorized - GET https://npm.pkg.github.com/download/@metrolinx/cx-shared/7.2.2/c1de41509ef91ac44f1361151b82f54a946b09da - unauthenticated: User cannot be authenticated with the token provided.
+npm error A complete log of this run can be found in: /home/bradleyjerome/.npm/_logs/2026-07-29T13_07_14_988Z-debug-0.log
+npm warn EBADENGINE Unsupported engine {
+npm warn EBADENGINE   package: '@metrolinx/next.upexpress.com@1.0.0',
+npm warn EBADENGINE   required: { node: '22.x' },
+npm warn EBADENGINE   current: { node: 'v24.14.1', npm: '11.11.0' }
+npm warn EBADENGINE }
+npm warn EBADENGINE Unsupported engine {
+npm warn EBADENGINE   package: '@metrolinx/cx-shared@7.2.2',
+npm warn EBADENGINE   required: { node: '22.x' },
+npm warn EBADENGINE   current: { node: 'v24.14.1', npm: '11.11.0' }
+npm warn EBADENGINE }
+npm error code E401
+npm error 401 Unauthorized - GET https://npm.pkg.github.com/download/@metrolinx/cx-shared/7.2.2/c1de41509ef91ac44f1361151b82f54a946b09da - unauthenticated: User cannot be authenticated with the token provided.
+npm error A complete log of this run can be found in: /home/bradleyjerome/.npm/_logs/2026-07-29T13_07_17_557Z-debug-0.log
+npm warn EBADENGINE Unsupported engine {
+npm warn EBADENGINE   package: '@metrolinx/next.upexpress.com@1.0.0',
+npm warn EBADENGINE   required: { node: '22.x' },
+npm warn EBADENGINE   current: { node: 'v24.14.1', npm: '11.11.0' }
+npm warn EBADENGINE }
+npm warn EBADENGINE Unsupported engine {
+npm warn EBADENGINE   package: '@metrolinx/cx-shared@7.2.2',
+npm warn EBADENGINE   required: { node: '22.x' },
+npm warn EBADENGINE   current: { node: 'v24.14.1', npm: '11.11.0' }
+npm warn EBADENGINE }
+npm error code E401
+npm error 401 Unauthorized - GET https://npm.pkg.github.com/download/@metrolinx/cx-shared/7.2.2/c1de41509ef91ac44f1361151b82f54a946b09da - unauthenticated: User cannot be authenticated with the token provided.
+npm error A complete log of this run can be found in: /home/bradleyjerome/.npm/_logs/2026-07-29T13_07_19_123Z-debug-0.log
+npm warn EBADENGINE Unsupported engine {
+npm warn EBADENGINE   package: '@metrolinx/next.upexpress.com@1.0.0',
+npm warn EBADENGINE   required: { node: '22.x' },
+npm warn EBADENGINE   current: { node: 'v24.14.1', npm: '11.11.0' }
+npm warn EBADENGINE }
+npm warn EBADENGINE Unsupported engine {
+npm warn EBADENGINE   package: '@metrolinx/cx-shared@7.2.2',
+npm warn EBADENGINE   required: { node: '22.x' },
+npm warn EBADENGINE   current: { node: 'v24.14.1', npm: '11.11.0' }
+npm warn EBADENGINE }
+npm error code E401
+npm error 401 Unauthorized - GET https://npm.pkg.github.com/download/@metrolinx/cx-shared/7.2.2/c1de41509ef91ac44f1361151b82f54a946b09da - unauthenticated: User cannot be authenticated with the token provided.
+npm error A complete log of this run can be found in: /home/bradleyjerome/.npm/_logs/2026-07-29T13_07_20_841Z-debug-0.log
+npm warn EBADENGINE Unsupported engine {
+npm warn EBADENGINE   package: '@metrolinx/next.upexpress.com@1.0.0',
+npm warn EBADENGINE   required: { node: '22.x' },
+npm warn EBADENGINE   current: { node: 'v24.14.1', npm: '11.11.0' }
+npm warn EBADENGINE }
+npm warn EBADENGINE Unsupported engine {
+npm warn EBADENGINE   package: '@metrolinx/cx-shared@7.2.2',
+npm warn EBADENGINE   required: { node: '22.x' },
+npm warn EBADENGINE   current: { node: 'v24.14.1', npm: '11.11.0' }
+npm warn EBADENGINE }
+npm error code E401
+npm error 401 Unauthorized - GET https://npm.pkg.github.com/download/@metrolinx/cx-shared/7.2.2/c1de41509ef91ac44f1361151b82f54a946b09da - unauthenticated: User cannot be authenticated with the token provided.
+npm error A complete log of this run can be found in: /home/bradleyjerome/.npm/_logs/2026-07-29T13_07_23_365Z-debug-0.log
+npm warn EBADENGINE Unsupported engine {
+npm warn EBADENGINE   package: '@metrolinx/next.upexpress.com@1.0.0',
+npm warn EBADENGINE   required: { node: '22.x' },
+npm warn EBADENGINE   current: { node: 'v24.14.1', npm: '11.11.0' }
+npm warn EBADENGINE }
+npm warn EBADENGINE Unsupported engine {
+npm warn EBADENGINE   package: '@metrolinx/cx-shared@7.2.2',
+npm warn EBADENGINE   required: { node: '22.x' },
+npm warn EBADENGINE   current: { node: 'v24.14.1', npm: '11.11.0' }
+npm warn EBADENGINE }
+npm error code E401
+npm error 401 Unauthorized - GET https://npm.pkg.github.com/download/@metrolinx/cx-shared/7.2.2/c1de41509ef91ac44f1361151b82f54a946b09da - unauthenticated: User cannot be authenticated with the token provided.
+npm error A complete log of this run can be found in: /home/bradleyjerome/.npm/_logs/2026-07-29T13_07_25_936Z-debug-0.log
+npm warn EBADENGINE Unsupported engine {
+npm warn EBADENGINE   package: '@metrolinx/next.upexpress.com@1.0.0',
+npm warn EBADENGINE   required: { node: '22.x' },
+npm warn EBADENGINE   current: { node: 'v24.14.1', npm: '11.11.0' }
+npm warn EBADENGINE }
+npm warn EBADENGINE Unsupported engine {
+npm warn EBADENGINE   package: '@metrolinx/cx-shared@7.2.2',
+npm warn EBADENGINE   required: { node: '22.x' },
+npm warn EBADENGINE   current: { node: 'v24.14.1', npm: '11.11.0' }
+npm warn EBADENGINE }
+npm error code E401
+npm error 401 Unauthorized - GET https://npm.pkg.github.com/download/@metrolinx/cx-shared/7.2.2/c1de41509ef91ac44f1361151b82f54a946b09da - unauthenticated: User cannot be authenticated with the token provided.
+npm error A complete log of this run can be found in: /home/bradleyjerome/.npm/_logs/2026-07-29T13_07_27_507Z-debug-0.log
+npm warn EBADENGINE Unsupported engine {
+npm warn EBADENGINE   package: '@metrolinx/next.upexpress.com@1.0.0',
+npm warn EBADENGINE   required: { node: '22.x' },
+npm warn EBADENGINE   current: { node: 'v24.14.1', npm: '11.11.0' }
+npm warn EBADENGINE }
+npm warn EBADENGINE Unsupported engine {
+npm warn EBADENGINE   package: '@metrolinx/cx-shared@7.2.2',
+npm warn EBADENGINE   required: { node: '22.x' },
+npm warn EBADENGINE   current: { node: 'v24.14.1', npm: '11.11.0' }
+npm warn EBADENGINE }
+npm error code E401
+npm error 401 Unauthorized - GET https://npm.pkg.github.com/download/@metrolinx/cx-shared/7.2.2/c1de41509ef91ac44f1361151b82f54a946b09da - unauthenticated: User cannot be authenticated with the token provided.
+npm error A complete log of this run can be found in: /home/bradleyjerome/.npm/_logs/2026-07-29T13_07_29_170Z-debug-0.log
+npm warn EBADENGINE Unsupported engine {
+npm warn EBADENGINE   package: '@metrolinx/next.upexpress.com@1.0.0',
+npm warn EBADENGINE   required: { node: '22.x' },
+npm warn EBADENGINE   current: { node: 'v24.14.1', npm: '11.11.0' }
+npm warn EBADENGINE }
+npm warn EBADENGINE Unsupported engine {
+npm warn EBADENGINE   package: '@metrolinx/cx-shared@7.2.2',
+npm warn EBADENGINE   required: { node: '22.x' },
+npm warn EBADENGINE   current: { node: 'v24.14.1', npm: '11.11.0' }
+npm warn EBADENGINE }
+npm error code E401
+npm error 401 Unauthorized - GET https://npm.pkg.github.com/download/@metrolinx/cx-shared/7.2.2/c1de41509ef91ac44f1361151b82f54a946b09da - unauthenticated: User cannot be authenticated with the token provided.
+npm error A complete log of this run can be found in: /home/bradleyjerome/.npm/_logs/2026-07-29T13_07_30_838Z-debug-0.log
+npm warn EBADENGINE Unsupported engine {
+npm warn EBADENGINE   package: '@metrolinx/next.upexpress.com@1.0.0',
+npm warn EBADENGINE   required: { node: '22.x' },
+npm warn EBADENGINE   current: { node: 'v24.14.1', npm: '11.11.0' }
+npm warn EBADENGINE }
+npm warn EBADENGINE Unsupported engine {
+npm warn EBADENGINE   package: '@metrolinx/cx-shared@7.2.2',
+npm warn EBADENGINE   required: { node: '22.x' },
+npm warn EBADENGINE   current: { node: 'v24.14.1', npm: '11.11.0' }
+npm warn EBADENGINE }
+npm error code E401
+npm error 401 Unauthorized - GET https://npm.pkg.github.com/download/@metrolinx/cx-shared/7.2.2/c1de41509ef91ac44f1361151b82f54a946b09da - unauthenticated: User cannot be authenticated with the token provided.
+npm error A complete log of this run can be found in: /home/bradleyjerome/.npm/_logs/2026-07-29T13_07_32_466Z-debug-0.log
+npm warn EBADENGINE Unsupported engine {
+npm warn EBADENGINE   package: '@metrolinx/next.upexpress.com@1.0.0',
+npm warn EBADENGINE   required: { node: '22.x' },
+npm warn EBADENGINE   current: { node: 'v24.14.1', npm: '11.11.0' }
+npm warn EBADENGINE }
+npm warn EBADENGINE Unsupported engine {
+npm warn EBADENGINE   package: '@metrolinx/cx-shared@7.2.2',
+npm warn EBADENGINE   required: { node: '22.x' },
+npm warn EBADENGINE   current: { node: 'v24.14.1', npm: '11.11.0' }
+npm warn EBADENGINE }
+npm error code E401
+npm error 401 Unauthorized - GET https://npm.pkg.github.com/download/@metrolinx/cx-shared/7.2.2/c1de41509ef91ac44f1361151b82f54a946b09da - unauthenticated: User cannot be authenticated with the token provided.
+npm error A complete log of this run can be found in: /home/bradleyjerome/.npm/_logs/2026-07-29T13_07_34_074Z-debug-0.log
+npm warn EBADENGINE Unsupported engine {
+npm warn EBADENGINE   package: '@metrolinx/next.upexpress.com@1.0.0',
+npm warn EBADENGINE   required: { node: '22.x' },
+npm warn EBADENGINE   current: { node: 'v24.14.1', npm: '11.11.0' }
+npm warn EBADENGINE }
+npm warn EBADENGINE Unsupported engine {
+npm warn EBADENGINE   package: '@metrolinx/cx-shared@7.2.2',
+npm warn EBADENGINE   required: { node: '22.x' },
+npm warn EBADENGINE   current: { node: 'v24.14.1', npm: '11.11.0' }
+npm warn EBADENGINE }
+npm error code E401
+npm error 401 Unauthorized - GET https://npm.pkg.github.com/download/@metrolinx/cx-shared/7.2.2/c1de41509ef91ac44f1361151b82f54a946b09da - unauthenticated: User cannot be authenticated with the token provided.
+npm error A complete log of this run can be found in: /home/bradleyjerome/.npm/_logs/2026-07-29T13_07_35_803Z-debug-0.log
+npm warn EBADENGINE Unsupported engine {
+npm warn EBADENGINE   package: '@metrolinx/next.upexpress.com@1.0.0',
+npm warn EBADENGINE   required: { node: '22.x' },
+npm warn EBADENGINE   current: { node: 'v24.14.1', npm: '11.11.0' }
+npm warn EBADENGINE }
+npm warn EBADENGINE Unsupported engine {
+npm warn EBADENGINE   package: '@metrolinx/cx-shared@7.2.2',
+npm warn EBADENGINE   required: { node: '22.x' },
+npm warn EBADENGINE   current: { node: 'v24.14.1', npm: '11.11.0' }
+npm warn EBADENGINE }
+npm error code E401
+npm error 401 Unauthorized - GET https://npm.pkg.github.com/download/@metrolinx/cx-shared/7.2.2/c1de41509ef91ac44f1361151b82f54a946b09da - unauthenticated: User cannot be authenticated with the token provided.
+npm error A complete log of this run can be found in: /home/bradleyjerome/.npm/_logs/2026-07-29T13_07_37_567Z-debug-0.log
+npm warn EBADENGINE Unsupported engine {
+npm warn EBADENGINE   package: '@metrolinx/next.upexpress.com@1.0.0',
+npm warn EBADENGINE   required: { node: '22.x' },
+npm warn EBADENGINE   current: { node: 'v24.14.1', npm: '11.11.0' }
+npm warn EBADENGINE }
+npm warn EBADENGINE Unsupported engine {
+npm warn EBADENGINE   package: '@metrolinx/cx-shared@7.2.2',
+npm warn EBADENGINE   required: { node: '22.x' },
+npm warn EBADENGINE   current: { node: 'v24.14.1', npm: '11.11.0' }
+npm warn EBADENGINE }
+npm error code E401
+npm error 401 Unauthorized - GET https://npm.pkg.github.com/download/@metrolinx/cx-shared/7.2.2/c1de41509ef91ac44f1361151b82f54a946b09da - unauthenticated: User cannot be authenticated with the token provided.
+npm error A complete log of this run can be found in: /home/bradleyjerome/.npm/_logs/2026-07-29T13_07_39_092Z-debug-0.log
+npm warn EBADENGINE Unsupported engine {
+npm warn EBADENGINE   package: '@metrolinx/next.upexpress.com@1.0.0',
+npm warn EBADENGINE   required: { node: '22.x' },
+npm warn EBADENGINE   current: { node: 'v24.14.1', npm: '11.11.0' }
+npm warn EBADENGINE }
+npm warn EBADENGINE Unsupported engine {
+npm warn EBADENGINE   package: '@metrolinx/cx-shared@7.2.2',
+npm warn EBADENGINE   required: { node: '22.x' },
+npm warn EBADENGINE   current: { node: 'v24.14.1', npm: '11.11.0' }
+npm warn EBADENGINE }
+
+[0;35m━━━ Step Status @ 13:07:41 ━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━[0m
+  [0;32m✓[0m 1      Step 1: Specification pass
+  [0;32m✓[0m 1a       openspec (elaboration)
+  [0;32m✓[0m 1b       speckit (verification)
+  [0;32m✓[0m 2      Step 2: CPA pre-pass
+  [1;37m○[0m 3      Skill assessment
+  [1;37m○[0m 4      Hybrid pre-coord
+  [1;37m○[0m 5      Regression guard
+  [1;37m○[0m 6      mkdir src/ dirs
+  [1;37m○[0m 7      PRD model coordinator
+  [1;37m○[0m 8      Main-branch stories
+  [1;37m○[0m 9      Auto-commit
+  [1;37m○[0m 10     TC writer gate
+  [1;37m○[0m 11     Skills coordinator audit
+  [1;37m○[0m 12     Tools coordinator audit
+  [1;37m○[0m 13     Create worktrees
+  [1;37m○[0m 14     Primary agent
+  [1;37m○[0m 15     Independent agent
+  [1;37m○[0m 16     Worktree health
+  [1;37m○[0m 17     Merge worktrees
+  [1;37m○[0m 18     Post-parallel assessment
+  [1;37m○[0m 19     Pre-review gate
+  [1;37m○[0m 20     Lint gate
+  [1;37m○[0m 21     Review stories
+  [1;37m○[0m 22a    SAST sentinel
+  [1;37m○[0m 22b    Spec validator
+  [1;37m○[0m 22c    Review ranger
+  [1;37m○[0m 22d    Mutant hunter
+  [1;37m○[0m 22e    Fuzz-weaver
+  [1;37m○[0m 22f    Perf sentinel
+  [1;37m○[0m 23     Browser E2E
+[0;35m━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━[0m
+
+npm error code E401
+npm error 401 Unauthorized - GET https://npm.pkg.github.com/download/@metrolinx/cx-shared/7.2.2/c1de41509ef91ac44f1361151b82f54a946b09da - unauthenticated: User cannot be authenticated with the token provided.
+npm error A complete log of this run can be found in: /home/bradleyjerome/.npm/_logs/2026-07-29T13_07_40_754Z-debug-0.log
+npm warn EBADENGINE Unsupported engine {
+npm warn EBADENGINE   package: '@metrolinx/next.upexpress.com@1.0.0',
+npm warn EBADENGINE   required: { node: '22.x' },
+npm warn EBADENGINE   current: { node: 'v24.14.1', npm: '11.11.0' }
+npm warn EBADENGINE }
+npm warn EBADENGINE Unsupported engine {
+npm warn EBADENGINE   package: '@metrolinx/cx-shared@7.2.2',
+npm warn EBADENGINE   required: { node: '22.x' },
+npm warn EBADENGINE   current: { node: 'v24.14.1', npm: '11.11.0' }
+npm warn EBADENGINE }
+npm error code E401
+npm error 401 Unauthorized - GET https://npm.pkg.github.com/download/@metrolinx/cx-shared/7.2.2/c1de41509ef91ac44f1361151b82f54a946b09da - unauthenticated: User cannot be authenticated with the token provided.
+npm error A complete log of this run can be found in: /home/bradleyjerome/.npm/_logs/2026-07-29T13_07_43_483Z-debug-0.log
+npm warn EBADENGINE Unsupported engine {
+npm warn EBADENGINE   package: '@metrolinx/next.upexpress.com@1.0.0',
+npm warn EBADENGINE   required: { node: '22.x' },
+npm warn EBADENGINE   current: { node: 'v24.14.1', npm: '11.11.0' }
+npm warn EBADENGINE }
+npm warn EBADENGINE Unsupported engine {
+npm warn EBADENGINE   package: '@metrolinx/cx-shared@7.2.2',
+npm warn EBADENGINE   required: { node: '22.x' },
+npm warn EBADENGINE   current: { node: 'v24.14.1', npm: '11.11.0' }
+npm warn EBADENGINE }
+npm error code E401
+npm error 401 Unauthorized - GET https://npm.pkg.github.com/download/@metrolinx/cx-shared/7.2.2/c1de41509ef91ac44f1361151b82f54a946b09da - unauthenticated: User cannot be authenticated with the token provided.
+npm error A complete log of this run can be found in: /home/bradleyjerome/.npm/_logs/2026-07-29T13_07_45_207Z-debug-0.log
+npm warn EBADENGINE Unsupported engine {
+npm warn EBADENGINE   package: '@metrolinx/next.upexpress.com@1.0.0',
+npm warn EBADENGINE   required: { node: '22.x' },
+npm warn EBADENGINE   current: { node: 'v24.14.1', npm: '11.11.0' }
+npm warn EBADENGINE }
+npm warn EBADENGINE Unsupported engine {
+npm warn EBADENGINE   package: '@metrolinx/cx-shared@7.2.2',
+npm warn EBADENGINE   required: { node: '22.x' },
+npm warn EBADENGINE   current: { node: 'v24.14.1', npm: '11.11.0' }
+npm warn EBADENGINE }
+npm error code E401
+npm error 401 Unauthorized - GET https://npm.pkg.github.com/download/@metrolinx/cx-shared/7.2.2/c1de41509ef91ac44f1361151b82f54a946b09da - unauthenticated: User cannot be authenticated with the token provided.
+npm error A complete log of this run can be found in: /home/bradleyjerome/.npm/_logs/2026-07-29T13_07_46_712Z-debug-0.log
+npm warn EBADENGINE Unsupported engine {
+npm warn EBADENGINE   package: '@metrolinx/next.upexpress.com@1.0.0',
+npm warn EBADENGINE   required: { node: '22.x' },
+npm warn EBADENGINE   current: { node: 'v24.14.1', npm: '11.11.0' }
+npm warn EBADENGINE }
+npm warn EBADENGINE Unsupported engine {
+npm warn EBADENGINE   package: '@metrolinx/cx-shared@7.2.2',
+npm warn EBADENGINE   required: { node: '22.x' },
+npm warn EBADENGINE   current: { node: 'v24.14.1', npm: '11.11.0' }
+npm warn EBADENGINE }
+npm error code E401
+npm error 401 Unauthorized - GET https://npm.pkg.github.com/download/@metrolinx/cx-shared/7.2.2/c1de41509ef91ac44f1361151b82f54a946b09da - unauthenticated: User cannot be authenticated with the token provided.
+npm error A complete log of this run can be found in: /home/bradleyjerome/.npm/_logs/2026-07-29T13_07_49_190Z-debug-0.log
+npm warn EBADENGINE Unsupported engine {
+npm warn EBADENGINE   package: '@metrolinx/next.upexpress.com@1.0.0',
+npm warn EBADENGINE   required: { node: '22.x' },
+npm warn EBADENGINE   current: { node: 'v24.14.1', npm: '11.11.0' }
+npm warn EBADENGINE }
+npm warn EBADENGINE Unsupported engine {
+npm warn EBADENGINE   package: '@metrolinx/cx-shared@7.2.2',
+npm warn EBADENGINE   required: { node: '22.x' },
+npm warn EBADENGINE   current: { node: 'v24.14.1', npm: '11.11.0' }
+npm warn EBADENGINE }
+npm error code E401
+npm error 401 Unauthorized - GET https://npm.pkg.github.com/download/@metrolinx/cx-shared/7.2.2/c1de41509ef91ac44f1361151b82f54a946b09da - unauthenticated: User cannot be authenticated with the token provided.
+npm error A complete log of this run can be found in: /home/bradleyjerome/.npm/_logs/2026-07-29T13_07_50_754Z-debug-0.log
+npm warn EBADENGINE Unsupported engine {
+npm warn EBADENGINE   package: '@metrolinx/next.upexpress.com@1.0.0',
+npm warn EBADENGINE   required: { node: '22.x' },
+npm warn EBADENGINE   current: { node: 'v24.14.1', npm: '11.11.0' }
+npm warn EBADENGINE }
+npm warn EBADENGINE Unsupported engine {
+npm warn EBADENGINE   package: '@metrolinx/cx-shared@7.2.2',
+npm warn EBADENGINE   required: { node: '22.x' },
+npm warn EBADENGINE   current: { node: 'v24.14.1', npm: '11.11.0' }
+npm warn EBADENGINE }
+npm error code E401
+npm error 401 Unauthorized - GET https://npm.pkg.github.com/download/@metrolinx/cx-shared/7.2.2/c1de41509ef91ac44f1361151b82f54a946b09da - unauthenticated: User cannot be authenticated with the token provided.
+npm error A complete log of this run can be found in: /home/bradleyjerome/.npm/_logs/2026-07-29T13_07_53_279Z-debug-0.log
+npm warn EBADENGINE Unsupported engine {
+npm warn EBADENGINE   package: '@metrolinx/next.upexpress.com@1.0.0',
+npm warn EBADENGINE   required: { node: '22.x' },
+npm warn EBADENGINE   current: { node: 'v24.14.1', npm: '11.11.0' }
+npm warn EBADENGINE }
+npm warn EBADENGINE Unsupported engine {
+npm warn EBADENGINE   package: '@metrolinx/cx-shared@7.2.2',
+npm warn EBADENGINE   required: { node: '22.x' },
+npm warn EBADENGINE   current: { node: 'v24.14.1', npm: '11.11.0' }
+npm warn EBADENGINE }
+npm error code E401
+npm error 401 Unauthorized - GET https://npm.pkg.github.com/download/@metrolinx/cx-shared/7.2.2/c1de41509ef91ac44f1361151b82f54a946b09da - unauthenticated: User cannot be authenticated with the token provided.
+npm error A complete log of this run can be found in: /home/bradleyjerome/.npm/_logs/2026-07-29T13_07_55_806Z-debug-0.log
+npm warn EBADENGINE Unsupported engine {
+npm warn EBADENGINE   package: '@metrolinx/next.upexpress.com@1.0.0',
+npm warn EBADENGINE   required: { node: '22.x' },
+npm warn EBADENGINE   current: { node: 'v24.14.1', npm: '11.11.0' }
+npm warn EBADENGINE }
+npm warn EBADENGINE Unsupported engine {
+npm warn EBADENGINE   package: '@metrolinx/cx-shared@7.2.2',
+npm warn EBADENGINE   required: { node: '22.x' },
+npm warn EBADENGINE   current: { node: 'v24.14.1', npm: '11.11.0' }
+npm warn EBADENGINE }
+npm error code E401
+npm error 401 Unauthorized - GET https://npm.pkg.github.com/download/@metrolinx/cx-shared/7.2.2/c1de41509ef91ac44f1361151b82f54a946b09da - unauthenticated: User cannot be authenticated with the token provided.
+npm error A complete log of this run can be found in: /home/bradleyjerome/.npm/_logs/2026-07-29T13_07_57_571Z-debug-0.log
+npm warn EBADENGINE Unsupported engine {
+npm warn EBADENGINE   package: '@metrolinx/next.upexpress.com@1.0.0',
+npm warn EBADENGINE   required: { node: '22.x' },
+npm warn EBADENGINE   current: { node: 'v24.14.1', npm: '11.11.0' }
+npm warn EBADENGINE }
+npm warn EBADENGINE Unsupported engine {
+npm warn EBADENGINE   package: '@metrolinx/cx-shared@7.2.2',
+npm warn EBADENGINE   required: { node: '22.x' },
+npm warn EBADENGINE   current: { node: 'v24.14.1', npm: '11.11.0' }
+npm warn EBADENGINE }
+npm error code E401
+npm error 401 Unauthorized - GET https://npm.pkg.github.com/download/@metrolinx/cx-shared/7.2.2/c1de41509ef91ac44f1361151b82f54a946b09da - unauthenticated: User cannot be authenticated with the token provided.
+npm error A complete log of this run can be found in: /home/bradleyjerome/.npm/_logs/2026-07-29T13_07_59_096Z-debug-0.log
+npm warn EBADENGINE Unsupported engine {
+npm warn EBADENGINE   package: '@metrolinx/next.upexpress.com@1.0.0',
+npm warn EBADENGINE   required: { node: '22.x' },
+npm warn EBADENGINE   current: { node: 'v24.14.1', npm: '11.11.0' }
+npm warn EBADENGINE }
+npm warn EBADENGINE Unsupported engine {
+npm warn EBADENGINE   package: '@metrolinx/cx-shared@7.2.2',
+npm warn EBADENGINE   required: { node: '22.x' },
+npm warn EBADENGINE   current: { node: 'v24.14.1', npm: '11.11.0' }
+npm warn EBADENGINE }
+npm error code E401
+npm error 401 Unauthorized - GET https://npm.pkg.github.com/download/@metrolinx/cx-shared/7.2.2/c1de41509ef91ac44f1361151b82f54a946b09da - unauthenticated: User cannot be authenticated with the token provided.
+npm error A complete log of this run can be found in: /home/bradleyjerome/.npm/_logs/2026-07-29T13_08_01_562Z-debug-0.log
+  [dependency-check] Installing missing import: api (from 'api/__tests__/tickets.mock')
+  [dependency-check] Installing missing import: api (from 'api/enums/bytemark')
+  [dependency-check] Installing missing import: api (from 'api/enums/cookies')
+  [dependency-check] Installing missing import: api (from 'api/enums/headers')
+  [dependency-check] Installing missing import: api (from 'api/interfaces/cookies')
+  [dependency-check] Installing missing import: api (from 'api/interfaces/logger')
+  [dependency-check] Installing missing import: api (from 'api/interfaces/response')
+  [dependency-check] Installing missing import: api (from 'api/interfaces/tickets')
+  [dependency-check] Installing missing import: api (from 'api/logger')
+  [dependency-check] Installing missing import: api (from 'api/middlewares/withAzureB2CId')
+  [dependency-check] Installing missing import: api (from 'api/middlewares/withCacheControl')
+  [dependency-check] Installing missing import: api (from 'api/middlewares/withErrorBoundary')
+  [dependency-check] Installing missing import: api (from 'api/middlewares/withRecaptchaVerification')
+  [dependency-check] Installing missing import: api (from 'api/middlewares/withRequestMethods')
+  [dependency-check] Installing missing import: api (from 'api/passes')
+  [dependency-check] Installing missing import: api (from 'api/retrieveUserProfile')
+  [dependency-check] Installing missing import: api (from 'api/services/recaptcha/verifyRecaptcha')
+  [dependency-check] Installing missing import: api (from 'api/services/webchat/generate-webchat-token')
+  [dependency-check] Installing missing import: api (from 'api/tickets')
+  [dependency-check] Installing missing import: api (from 'api/updateUserProfile')
+  [dependency-check] Installing missing import: api (from 'api/utils/applyMiddlewares')
+  [dependency-check] Installing missing import: api (from 'api/utils/bytemarkCookie')
+  [dependency-check] Installing missing import: api (from 'api/utils/domain')
+  [dependency-check] Installing missing import: api (from 'api/utils/getJwtToken')
+  [dependency-check] Installing missing import: api (from 'api/utils/helper')
+  [dependency-check] Installing missing import: api (from 'api/utils/interface')
+  [dependency-check] Installing missing import: api (from 'api/utils/response')
+  [dependency-check] Installing missing import: api (from 'api/utils/schema')
+  [dependency-check] Installing missing import: api (from 'api/utils/search')
+  [dependency-check] Installing missing import: components (from 'components/AppImage')
+  [dependency-check] Installing missing import: components (from 'components/AppLink')
+  [dependency-check] Installing missing import: components (from 'components/AuthenticationContainer')
+  [dependency-check] Installing missing import: components (from 'components/BuyTicketsBanner/BuyTicketsBanner')
+  [dependency-check] Installing missing import: components (from 'components/ClientSideErrorFallback')
+  [dependency-check] Installing missing import: components (from 'components/ClientSideErrorFallback/ClientSideErrorFallback')
+  [dependency-check] Installing missing import: components (from 'components/Combobox')
+  [dependency-check] Installing missing import: components (from 'components/CommonAnalytics/CommonAnalytics')
+  [dependency-check] Installing missing import: components (from 'components/CountriesSelectContainer')
+  [dependency-check] Installing missing import: components (from 'components/Departures')
+  [dependency-check] Installing missing import: components (from 'components/Departures/ViaRailDepartures')
+  [dependency-check] Installing missing import: components (from 'components/Departures/utils')
+  [dependency-check] Installing missing import: components (from 'components/DownloadPDFCta')
+  [dependency-check] Installing missing import: components (from 'components/FacilitiesAndServices')
+  [dependency-check] Installing missing import: components (from 'components/Footer')
+  [dependency-check] Installing missing import: components (from 'components/FormCombobox')
+  [dependency-check] Installing missing import: components (from 'components/FormField/CardInput/CardInput')
+  [dependency-check] Installing missing import: components (from 'components/FormField/CheckBox/CheckBox')
+  [dependency-check] Installing missing import: components (from 'components/FormField/Input/Input')
+  [dependency-check] Installing missing import: components (from 'components/FormField/RadioButton/RadioButton')
+  [dependency-check] Installing missing import: components (from 'components/GlobalSearchAutoSuggestion')
+  [dependency-check] Installing missing import: components (from 'components/Header')
+  [dependency-check] Installing missing import: components (from 'components/Header/Cart/useCart')
+  [dependency-check] Installing missing import: components (from 'components/Header/DesktopNav')
+  [dependency-check] Installing missing import: components (from 'components/Header/MobileNav')
+  [dependency-check] Installing missing import: components (from 'components/Header/NavigationBar')
+  [dependency-check] Installing missing import: components (from 'components/Header/NavigationButton')
+  [dependency-check] Installing missing import: components (from 'components/Header/QuickMenu')
+  [dependency-check] Installing missing import: components (from 'components/Header/ServiceUpdates')
+  [dependency-check] Installing missing import: components (from 'components/HeroBanner')
+  [dependency-check] Installing missing import: components (from 'components/HeroBanner/getImageSource')
+  [dependency-check] Installing missing import: components (from 'components/IframeCommonComponents')
+  [dependency-check] Installing missing import: components (from 'components/Label')
+  [dependency-check] Installing missing import: components (from 'components/Layout/Layout')
+  [dependency-check] Installing missing import: components (from 'components/LinksAndColorsOrderedSidebar')
+  [dependency-check] Installing missing import: components (from 'components/LinksAndColorsOrderedSidebar/LinksAndColorsOrderedSidebar')
+  [dependency-check] Installing missing import: components (from 'components/Loading')
+  [dependency-check] Installing missing import: components (from 'components/OnPageNavigationComponents/DesktopOnPageNavigation')
+  [dependency-check] Installing missing import: components (from 'components/OnPageNavigationComponents/MobileOnPageNavigation')
+  [dependency-check] Installing missing import: components (from 'components/OnlineChat')
+  [dependency-check] Installing missing import: components (from 'components/RecentNews/RecentNews')
+  [dependency-check] Installing missing import: components (from 'components/RouterChangeLock')
+  [dependency-check] Installing missing import: components (from 'components/SearchPageAutoSuggest/SearchPageAutoSuggest')
+  [dependency-check] Installing missing import: components (from 'components/SearchResults')
+  [dependency-check] Installing missing import: components (from 'components/SearchResultsItem')
+  [dependency-check] Installing missing import: components (from 'components/ServiceAlertBanner/ServiceAlertBanner')
+  [dependency-check] Installing missing import: components (from 'components/SignUp/SignUp')
+  [dependency-check] Installing missing import: components (from 'components/SignUp/constants')
+  [dependency-check] Installing missing import: components (from 'components/StatesSelectContainer')
+  [dependency-check] Installing missing import: components (from 'components/SuccessfulSignInToast')
+  [dependency-check] Installing missing import: components (from 'components/SystemError')
+  [dependency-check] Installing missing import: components (from 'components/SystemError/SystemError')
+  [dependency-check] Installing missing import: components (from 'components/UpdateListing')
+  [dependency-check] Installing missing import: components (from 'components/UserAccount/Notification/Dialog')
+  [dependency-check] Installing missing import: components (from 'components/UserAccount/Shared/AccountUnavailableError')
+  [dependency-check] Installing missing import: components (from 'components/UserAccount/Shared/userProfile.mock')
+  [dependency-check] Installing missing import: components (from 'components/UserAccount/Shared/utils')npm warn EBADENGINE Unsupported engine {
+npm warn EBADENGINE   package: '@metrolinx/next.upexpress.com@1.0.0',
+npm warn EBADENGINE   required: { node: '22.x' },
+npm warn EBADENGINE   current: { node: 'v24.14.1', npm: '11.11.0' }
+npm warn EBADENGINE }
+npm warn EBADENGINE Unsupported engine {
+npm warn EBADENGINE   package: '@metrolinx/cx-shared@7.2.2',
+npm warn EBADENGINE   required: { node: '22.x' },
+npm warn EBADENGINE   current: { node: 'v24.14.1', npm: '11.11.0' }
+npm warn EBADENGINE }
+npm error code E401
+npm error 401 Unauthorized - GET https://npm.pkg.github.com/download/@metrolinx/cx-shared/7.2.2/c1de41509ef91ac44f1361151b82f54a946b09da - unauthenticated: User cannot be authenticated with the token provided.
+npm error A complete log of this run can be found in: /home/bradleyjerome/.npm/_logs/2026-07-29T13_08_04_084Z-debug-0.log
+npm warn EBADENGINE Unsupported engine {
+npm warn EBADENGINE   package: '@metrolinx/next.upexpress.com@1.0.0',
+npm warn EBADENGINE   required: { node: '22.x' },
+npm warn EBADENGINE   current: { node: 'v24.14.1', npm: '11.11.0' }
+npm warn EBADENGINE }
+npm warn EBADENGINE Unsupported engine {
+npm warn EBADENGINE   package: '@metrolinx/cx-shared@7.2.2',
+npm warn EBADENGINE   required: { node: '22.x' },
+npm warn EBADENGINE   current: { node: 'v24.14.1', npm: '11.11.0' }
+npm warn EBADENGINE }
+npm error code E401
+npm error 401 Unauthorized - GET https://npm.pkg.github.com/download/@metrolinx/cx-shared/7.2.2/c1de41509ef91ac44f1361151b82f54a946b09da - unauthenticated: User cannot be authenticated with the token provided.
+npm error A complete log of this run can be found in: /home/bradleyjerome/.npm/_logs/2026-07-29T13_08_05_663Z-debug-0.log
+npm warn EBADENGINE Unsupported engine {
+npm warn EBADENGINE   package: '@metrolinx/next.upexpress.com@1.0.0',
+npm warn EBADENGINE   required: { node: '22.x' },
+npm warn EBADENGINE   current: { node: 'v24.14.1', npm: '11.11.0' }
+npm warn EBADENGINE }
+npm warn EBADENGINE Unsupported engine {
+npm warn EBADENGINE   package: '@metrolinx/cx-shared@7.2.2',
+npm warn EBADENGINE   required: { node: '22.x' },
+npm warn EBADENGINE   current: { node: 'v24.14.1', npm: '11.11.0' }
+npm warn EBADENGINE }
+npm error code E401
+npm error 401 Unauthorized - GET https://npm.pkg.github.com/download/@metrolinx/cx-shared/7.2.2/c1de41509ef91ac44f1361151b82f54a946b09da - unauthenticated: User cannot be authenticated with the token provided.
+npm error A complete log of this run can be found in: /home/bradleyjerome/.npm/_logs/2026-07-29T13_08_07_320Z-debug-0.log
+npm warn EBADENGINE Unsupported engine {
+npm warn EBADENGINE   package: '@metrolinx/next.upexpress.com@1.0.0',
+npm warn EBADENGINE   required: { node: '22.x' },
+npm warn EBADENGINE   current: { node: 'v24.14.1', npm: '11.11.0' }
+npm warn EBADENGINE }
+npm warn EBADENGINE Unsupported engine {
+npm warn EBADENGINE   package: '@metrolinx/cx-shared@7.2.2',
+npm warn EBADENGINE   required: { node: '22.x' },
+npm warn EBADENGINE   current: { node: 'v24.14.1', npm: '11.11.0' }
+npm warn EBADENGINE }
+npm error code E401
+npm error 401 Unauthorized - GET https://npm.pkg.github.com/download/@metrolinx/cx-shared/7.2.2/c1de41509ef91ac44f1361151b82f54a946b09da - unauthenticated: User cannot be authenticated with the token provided.
+npm error A complete log of this run can be found in: /home/bradleyjerome/.npm/_logs/2026-07-29T13_08_08_830Z-debug-0.log
+npm warn EBADENGINE Unsupported engine {
+npm warn EBADENGINE   package: '@metrolinx/next.upexpress.com@1.0.0',
+npm warn EBADENGINE   required: { node: '22.x' },
+npm warn EBADENGINE   current: { node: 'v24.14.1', npm: '11.11.0' }
+npm warn EBADENGINE }
+npm warn EBADENGINE Unsupported engine {
+npm warn EBADENGINE   package: '@metrolinx/cx-shared@7.2.2',
+npm warn EBADENGINE   required: { node: '22.x' },
+npm warn EBADENGINE   current: { node: 'v24.14.1', npm: '11.11.0' }
+npm warn EBADENGINE }
+npm error code E401
+npm error 401 Unauthorized - GET https://npm.pkg.github.com/download/@metrolinx/cx-shared/7.2.2/c1de41509ef91ac44f1361151b82f54a946b09da - unauthenticated: User cannot be authenticated with the token provided.
+npm error A complete log of this run can be found in: /home/bradleyjerome/.npm/_logs/2026-07-29T13_08_10_408Z-debug-0.log
+npm warn EBADENGINE Unsupported engine {
+npm warn EBADENGINE   package: '@metrolinx/next.upexpress.com@1.0.0',
+npm warn EBADENGINE   required: { node: '22.x' },
+npm warn EBADENGINE   current: { node: 'v24.14.1', npm: '11.11.0' }
+npm warn EBADENGINE }
+npm warn EBADENGINE Unsupported engine {
+npm warn EBADENGINE   package: '@metrolinx/cx-shared@7.2.2',
+npm warn EBADENGINE   required: { node: '22.x' },
+npm warn EBADENGINE   current: { node: 'v24.14.1', npm: '11.11.0' }
+npm warn EBADENGINE }
+npm error code E401
+npm error 401 Unauthorized - GET https://npm.pkg.github.com/download/@metrolinx/cx-shared/7.2.2/c1de41509ef91ac44f1361151b82f54a946b09da - unauthenticated: User cannot be authenticated with the token provided.
+npm error A complete log of this run can be found in: /home/bradleyjerome/.npm/_logs/2026-07-29T13_08_12_979Z-debug-0.log
+npm warn EBADENGINE Unsupported engine {
+npm warn EBADENGINE   package: '@metrolinx/next.upexpress.com@1.0.0',
+npm warn EBADENGINE   required: { node: '22.x' },
+npm warn EBADENGINE   current: { node: 'v24.14.1', npm: '11.11.0' }
+npm warn EBADENGINE }
+npm warn EBADENGINE Unsupported engine {
+npm warn EBADENGINE   package: '@metrolinx/cx-shared@7.2.2',
+npm warn EBADENGINE   required: { node: '22.x' },
+npm warn EBADENGINE   current: { node: 'v24.14.1', npm: '11.11.0' }
+npm warn EBADENGINE }
+npm error code E401
+npm error 401 Unauthorized - GET https://npm.pkg.github.com/download/@metrolinx/cx-shared/7.2.2/c1de41509ef91ac44f1361151b82f54a946b09da - unauthenticated: User cannot be authenticated with the token provided.
+npm error A complete log of this run can be found in: /home/bradleyjerome/.npm/_logs/2026-07-29T13_08_14_646Z-debug-0.log
+npm warn EBADENGINE Unsupported engine {
+npm warn EBADENGINE   package: '@metrolinx/next.upexpress.com@1.0.0',
+npm warn EBADENGINE   required: { node: '22.x' },
+npm warn EBADENGINE   current: { node: 'v24.14.1', npm: '11.11.0' }
+npm warn EBADENGINE }
+npm warn EBADENGINE Unsupported engine {
+npm warn EBADENGINE   package: '@metrolinx/cx-shared@7.2.2',
+npm warn EBADENGINE   required: { node: '22.x' },
+npm warn EBADENGINE   current: { node: 'v24.14.1', npm: '11.11.0' }
+npm warn EBADENGINE }
+npm error code E401
+npm error 401 Unauthorized - GET https://npm.pkg.github.com/download/@metrolinx/cx-shared/7.2.2/c1de41509ef91ac44f1361151b82f54a946b09da - unauthenticated: User cannot be authenticated with the token provided.
+npm error A complete log of this run can be found in: /home/bradleyjerome/.npm/_logs/2026-07-29T13_08_17_168Z-debug-0.log
+npm warn EBADENGINE Unsupported engine {
+npm warn EBADENGINE   package: '@metrolinx/next.upexpress.com@1.0.0',
+npm warn EBADENGINE   required: { node: '22.x' },
+npm warn EBADENGINE   current: { node: 'v24.14.1', npm: '11.11.0' }
+npm warn EBADENGINE }
+npm warn EBADENGINE Unsupported engine {
+npm warn EBADENGINE   package: '@metrolinx/cx-shared@7.2.2',
+npm warn EBADENGINE   required: { node: '22.x' },
+npm warn EBADENGINE   current: { node: 'v24.14.1', npm: '11.11.0' }
+npm warn EBADENGINE }
+npm error code E401
+npm error 401 Unauthorized - GET https://npm.pkg.github.com/download/@metrolinx/cx-shared/7.2.2/c1de41509ef91ac44f1361151b82f54a946b09da - unauthenticated: User cannot be authenticated with the token provided.
+npm error A complete log of this run can be found in: /home/bradleyjerome/.npm/_logs/2026-07-29T13_08_19_767Z-debug-0.log
+npm warn EBADENGINE Unsupported engine {
+npm warn EBADENGINE   package: '@metrolinx/next.upexpress.com@1.0.0',
+npm warn EBADENGINE   required: { node: '22.x' },
+npm warn EBADENGINE   current: { node: 'v24.14.1', npm: '11.11.0' }
+npm warn EBADENGINE }
+npm warn EBADENGINE Unsupported engine {
+npm warn EBADENGINE   package: '@metrolinx/cx-shared@7.2.2',
+npm warn EBADENGINE   required: { node: '22.x' },
+npm warn EBADENGINE   current: { node: 'v24.14.1', npm: '11.11.0' }
+npm warn EBADENGINE }
+npm error code E401
+npm error 401 Unauthorized - GET https://npm.pkg.github.com/download/@metrolinx/cx-shared/7.2.2/c1de41509ef91ac44f1361151b82f54a946b09da - unauthenticated: User cannot be authenticated with the token provided.
+npm error A complete log of this run can be found in: /home/bradleyjerome/.npm/_logs/2026-07-29T13_08_22_717Z-debug-0.log
+npm warn EBADENGINE Unsupported engine {
+npm warn EBADENGINE   package: '@metrolinx/next.upexpress.com@1.0.0',
+npm warn EBADENGINE   required: { node: '22.x' },
+npm warn EBADENGINE   current: { node: 'v24.14.1', npm: '11.11.0' }
+npm warn EBADENGINE }
+npm warn EBADENGINE Unsupported engine {
+npm warn EBADENGINE   package: '@metrolinx/cx-shared@7.2.2',
+npm warn EBADENGINE   required: { node: '22.x' },
+npm warn EBADENGINE   current: { node: 'v24.14.1', npm: '11.11.0' }
+npm warn EBADENGINE }
+npm error code E401
+npm error 401 Unauthorized - GET https://npm.pkg.github.com/download/@metrolinx/cx-shared/7.2.2/c1de41509ef91ac44f1361151b82f54a946b09da - unauthenticated: User cannot be authenticated with the token provided.
+npm error A complete log of this run can be found in: /home/bradleyjerome/.npm/_logs/2026-07-29T13_08_24_381Z-debug-0.log
+npm warn EBADENGINE Unsupported engine {
+npm warn EBADENGINE   package: '@metrolinx/next.upexpress.com@1.0.0',
+npm warn EBADENGINE   required: { node: '22.x' },
+npm warn EBADENGINE   current: { node: 'v24.14.1', npm: '11.11.0' }
+npm warn EBADENGINE }
+npm warn EBADENGINE Unsupported engine {
+npm warn EBADENGINE   package: '@metrolinx/cx-shared@7.2.2',
+npm warn EBADENGINE   required: { node: '22.x' },
+npm warn EBADENGINE   current: { node: 'v24.14.1', npm: '11.11.0' }
+npm warn EBADENGINE }
+npm error code E401
+npm error 401 Unauthorized - GET https://npm.pkg.github.com/download/@metrolinx/cx-shared/7.2.2/c1de41509ef91ac44f1361151b82f54a946b09da - unauthenticated: User cannot be authenticated with the token provided.
+npm error A complete log of this run can be found in: /home/bradleyjerome/.npm/_logs/2026-07-29T13_08_25_951Z-debug-0.log
+npm warn EBADENGINE Unsupported engine {
+npm warn EBADENGINE   package: '@metrolinx/next.upexpress.com@1.0.0',
+npm warn EBADENGINE   required: { node: '22.x' },
+npm warn EBADENGINE   current: { node: 'v24.14.1', npm: '11.11.0' }
+npm warn EBADENGINE }
+npm warn EBADENGINE Unsupported engine {
+npm warn EBADENGINE   package: '@metrolinx/cx-shared@7.2.2',
+npm warn EBADENGINE   required: { node: '22.x' },
+npm warn EBADENGINE   current: { node: 'v24.14.1', npm: '11.11.0' }
+npm warn EBADENGINE }
+npm error code E401
+npm error 401 Unauthorized - GET https://npm.pkg.github.com/download/@metrolinx/cx-shared/7.2.2/c1de41509ef91ac44f1361151b82f54a946b09da - unauthenticated: User cannot be authenticated with the token provided.
+npm error A complete log of this run can be found in: /home/bradleyjerome/.npm/_logs/2026-07-29T13_08_29_036Z-debug-0.log
+npm warn EBADENGINE Unsupported engine {
+npm warn EBADENGINE   package: '@metrolinx/next.upexpress.com@1.0.0',
+npm warn EBADENGINE   required: { node: '22.x' },
+npm warn EBADENGINE   current: { node: 'v24.14.1', npm: '11.11.0' }
+npm warn EBADENGINE }
+npm warn EBADENGINE Unsupported engine {
+npm warn EBADENGINE   package: '@metrolinx/cx-shared@7.2.2',
+npm warn EBADENGINE   required: { node: '22.x' },
+npm warn EBADENGINE   current: { node: 'v24.14.1', npm: '11.11.0' }
+npm warn EBADENGINE }
+npm error code E401
+npm error 401 Unauthorized - GET https://npm.pkg.github.com/download/@metrolinx/cx-shared/7.2.2/c1de41509ef91ac44f1361151b82f54a946b09da - unauthenticated: User cannot be authenticated with the token provided.
+npm error A complete log of this run can be found in: /home/bradleyjerome/.npm/_logs/2026-07-29T13_08_31_818Z-debug-0.log
+npm warn EBADENGINE Unsupported engine {
+npm warn EBADENGINE   package: '@metrolinx/next.upexpress.com@1.0.0',
+npm warn EBADENGINE   required: { node: '22.x' },
+npm warn EBADENGINE   current: { node: 'v24.14.1', npm: '11.11.0' }
+npm warn EBADENGINE }
+npm warn EBADENGINE Unsupported engine {
+npm warn EBADENGINE   package: '@metrolinx/cx-shared@7.2.2',
+npm warn EBADENGINE   required: { node: '22.x' },
+npm warn EBADENGINE   current: { node: 'v24.14.1', npm: '11.11.0' }
+npm warn EBADENGINE }
+npm error code E401
+npm error 401 Unauthorized - GET https://npm.pkg.github.com/download/@metrolinx/cx-shared/7.2.2/c1de41509ef91ac44f1361151b82f54a946b09da - unauthenticated: User cannot be authenticated with the token provided.
+npm error A complete log of this run can be found in: /home/bradleyjerome/.npm/_logs/2026-07-29T13_08_33_528Z-debug-0.log
+npm warn EBADENGINE Unsupported engine {
+npm warn EBADENGINE   package: '@metrolinx/next.upexpress.com@1.0.0',
+npm warn EBADENGINE   required: { node: '22.x' },
+npm warn EBADENGINE   current: { node: 'v24.14.1', npm: '11.11.0' }
+npm warn EBADENGINE }
+npm warn EBADENGINE Unsupported engine {
+npm warn EBADENGINE   package: '@metrolinx/cx-shared@7.2.2',
+npm warn EBADENGINE   required: { node: '22.x' },
+npm warn EBADENGINE   current: { node: 'v24.14.1', npm: '11.11.0' }
+npm warn EBADENGINE }
+npm error code E401
+npm error 401 Unauthorized - GET https://npm.pkg.github.com/download/@metrolinx/cx-shared/7.2.2/c1de41509ef91ac44f1361151b82f54a946b09da - unauthenticated: User cannot be authenticated with the token provided.
+npm error A complete log of this run can be found in: /home/bradleyjerome/.npm/_logs/2026-07-29T13_08_36_215Z-debug-0.log
+npm warn EBADENGINE Unsupported engine {
+npm warn EBADENGINE   package: '@metrolinx/next.upexpress.com@1.0.0',
+npm warn EBADENGINE   required: { node: '22.x' },
+npm warn EBADENGINE   current: { node: 'v24.14.1', npm: '11.11.0' }
+npm warn EBADENGINE }
+npm warn EBADENGINE Unsupported engine {
+npm warn EBADENGINE   package: '@metrolinx/cx-shared@7.2.2',
+npm warn EBADENGINE   required: { node: '22.x' },
+npm warn EBADENGINE   current: { node: 'v24.14.1', npm: '11.11.0' }
+npm warn EBADENGINE }
+npm error code E401
+npm error 401 Unauthorized - GET https://npm.pkg.github.com/download/@metrolinx/cx-shared/7.2.2/c1de41509ef91ac44f1361151b82f54a946b09da - unauthenticated: User cannot be authenticated with the token provided.
+npm error A complete log of this run can be found in: /home/bradleyjerome/.npm/_logs/2026-07-29T13_08_37_971Z-debug-0.log
+npm warn EBADENGINE Unsupported engine {
+npm warn EBADENGINE   package: '@metrolinx/next.upexpress.com@1.0.0',
+npm warn EBADENGINE   required: { node: '22.x' },
+npm warn EBADENGINE   current: { node: 'v24.14.1', npm: '11.11.0' }
+npm warn EBADENGINE }
+npm warn EBADENGINE Unsupported engine {
+npm warn EBADENGINE   package: '@metrolinx/cx-shared@7.2.2',
+npm warn EBADENGINE   required: { node: '22.x' },
+npm warn EBADENGINE   current: { node: 'v24.14.1', npm: '11.11.0' }
+npm warn EBADENGINE }
+npm error code E401
+npm error 401 Unauthorized - GET https://npm.pkg.github.com/download/@metrolinx/cx-shared/7.2.2/c1de41509ef91ac44f1361151b82f54a946b09da - unauthenticated: User cannot be authenticated with the token provided.
+npm error A complete log of this run can be found in: /home/bradleyjerome/.npm/_logs/2026-07-29T13_08_39_792Z-debug-0.log
+
+[0;35m━━━ Step Status @ 13:08:41 ━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━[0m
+  [0;32m✓[0m 1      Step 1: Specification pass
+  [0;32m✓[0m 1a       openspec (elaboration)
+  [0;32m✓[0m 1b       speckit (verification)
+  [0;32m✓[0m 2      Step 2: CPA pre-pass
+  [1;37m○[0m 3      Skill assessment
+  [1;37m○[0m 4      Hybrid pre-coord
+  [1;37m○[0m 5      Regression guard
+  [1;37m○[0m 6      mkdir src/ dirs
+  [1;37m○[0m 7      PRD model coordinator
+  [1;37m○[0m 8      Main-branch stories
+  [1;37m○[0m 9      Auto-commit
+  [1;37m○[0m 10     TC writer gate
+  [1;37m○[0m 11     Skills coordinator audit
+  [1;37m○[0m 12     Tools coordinator audit
+  [1;37m○[0m 13     Create worktrees
+  [1;37m○[0m 14     Primary agent
+  [1;37m○[0m 15     Independent agent
+  [1;37m○[0m 16     Worktree health
+  [1;37m○[0m 17     Merge worktrees
+  [1;37m○[0m 18     Post-parallel assessment
+  [1;37m○[0m 19     Pre-review gate
+  [1;37m○[0m 20     Lint gate
+  [1;37m○[0m 21     Review stories
+  [1;37m○[0m 22a    SAST sentinel
+  [1;37m○[0m 22b    Spec validator
+  [1;37m○[0m 22c    Review ranger
+  [1;37m○[0m 22d    Mutant hunter
+  [1;37m○[0m 22e    Fuzz-weaver
+  [1;37m○[0m 22f    Perf sentinel
+  [1;37m○[0m 23     Browser E2E
+[0;35m━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━[0m
+
+npm warn EBADENGINE Unsupported engine {
+npm warn EBADENGINE   package: '@metrolinx/next.upexpress.com@1.0.0',
+npm warn EBADENGINE   required: { node: '22.x' },
+npm warn EBADENGINE   current: { node: 'v24.14.1', npm: '11.11.0' }
+npm warn EBADENGINE }
+npm warn EBADENGINE Unsupported engine {
+npm warn EBADENGINE   package: '@metrolinx/cx-shared@7.2.2',
+npm warn EBADENGINE   required: { node: '22.x' },
+npm warn EBADENGINE   current: { node: 'v24.14.1', npm: '11.11.0' }
+npm warn EBADENGINE }
+npm error code E401
+npm error 401 Unauthorized - GET https://npm.pkg.github.com/download/@metrolinx/cx-shared/7.2.2/c1de41509ef91ac44f1361151b82f54a946b09da - unauthenticated: User cannot be authenticated with the token provided.
+npm error A complete log of this run can be found in: /home/bradleyjerome/.npm/_logs/2026-07-29T13_08_41_514Z-debug-0.log
+npm warn EBADENGINE Unsupported engine {
+npm warn EBADENGINE   package: '@metrolinx/next.upexpress.com@1.0.0',
+npm warn EBADENGINE   required: { node: '22.x' },
+npm warn EBADENGINE   current: { node: 'v24.14.1', npm: '11.11.0' }
+npm warn EBADENGINE }
+npm warn EBADENGINE Unsupported engine {
+npm warn EBADENGINE   package: '@metrolinx/cx-shared@7.2.2',
+npm warn EBADENGINE   required: { node: '22.x' },
+npm warn EBADENGINE   current: { node: 'v24.14.1', npm: '11.11.0' }
+npm warn EBADENGINE }
+npm error code E401
+npm error 401 Unauthorized - GET https://npm.pkg.github.com/download/@metrolinx/cx-shared/7.2.2/c1de41509ef91ac44f1361151b82f54a946b09da - unauthenticated: User cannot be authenticated with the token provided.
+npm error A complete log of this run can be found in: /home/bradleyjerome/.npm/_logs/2026-07-29T13_08_43_280Z-debug-0.log
+npm warn EBADENGINE Unsupported engine {
+npm warn EBADENGINE   package: '@metrolinx/next.upexpress.com@1.0.0',
+npm warn EBADENGINE   required: { node: '22.x' },
+npm warn EBADENGINE   current: { node: 'v24.14.1', npm: '11.11.0' }
+npm warn EBADENGINE }
+npm warn EBADENGINE Unsupported engine {
+npm warn EBADENGINE   package: '@metrolinx/cx-shared@7.2.2',
+npm warn EBADENGINE   required: { node: '22.x' },
+npm warn EBADENGINE   current: { node: 'v24.14.1', npm: '11.11.0' }
+npm warn EBADENGINE }

@@ -1,0 +1,37 @@
+{
+  "agent": "spec-validator",
+  "phase": "core",
+  "stories": [{
+    "storyId": "AMSD-1820",
+    "title": "Fix promo code amount display for return trip tickets in Mozio email confirmation",
+    "criteria": [
+      {
+        "text": "When a return trip ticket with a promo code is purchased, the Mozio email confirmation shows a promo code discount amount that is a positive number greater than zero",
+        "status": "met",
+        "evidence": "The core fix changes line-item matching from `lineItem.id === discount.lineItemId` to `parseDispatchLineItemKey(lineItem.id).id === discount.lineItemId`, stripping the `#return` suffix so return-trip dispatches match their discounts. Test 'applies promo code discount to a return trip dispatch' creates a dispatch with id 'lineItem-1#return' and a discount of 10, then asserts `reportDiscount.amount.value` is greater than 0. All 165 tests pass.",
+        "gaps": ""
+      },
+      {
+        "text": "When a return trip ticket with a promo code is purchased, the Mozio email confirmation shows the promo code discount name as a non-empty string",
+        "status": "met",
+        "evidence": "The same return-trip test asserts `reportDiscount.name.length` is greater than 0. An additional test ('shows promo code discount name containing the code for a return trip') asserts the name contains 'SUMMER2024'. The service builds the name via `getDiscountName(discount)` and concatenates multiple names with commas.",
+        "gaps": ""
+      },
+      {
+        "text": "When a one-way trip ticket with a promo code is purchased, the Mozio email confirmation continues to show the promo code discount amount as a positive number greater than zero",
+        "status": "met",
+        "evidence": "Test 'applies promo code discount to a one-way trip dispatch' uses an unsuffixed line item id 'lineItem-1' and asserts `amount.value > 0`. The `parseDispatchLineItemKey` change is backward-compatible: with no `#` suffix, the parsed `.id` equals the original id, so one-way matching is unaffected.",
+        "gaps": ""
+      },
+      {
+        "text": "When a return trip ticket with no promo code is purchased, the Mozio email confirmation does not display a promo code discount amount or name",
+        "status": "met",
+        "evidence": "Test 'does not apply discount to a return trip dispatch when there is no promo code' creates a dispatch with id 'lineItem-1#return' and an order line item with an empty discounts array, then asserts `result[0].report.price.discount` is `undefined`. The service only sets `discount` when `discountsForDispatch.length > 0`, so no discount is applied.",
+        "gaps": ""
+      }
+    ],
+    "overallCompliance": 100,
+    "verdict": "pass"
+  }],
+  "overallVerdict": "pass"
+}

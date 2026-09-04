@@ -1,0 +1,3 @@
+[update-invalidated-tests] suite is RED after the fix — deciding whether the failures are invalidated expectations or a real regression
+[update-invalidated-tests] ERROR: the invalidated-test agent failed (exit 1) for AMSD-2041 — treating as unreconciled rather than as 'nothing to change'
+[update-invalidated-tests] suite already green — no invalidated tests, nothing to do

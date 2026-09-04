@@ -1,0 +1,97 @@
+# Prompt
+A code investigation of a bug produced the analysis below. Extract the single most-likely causal fix site and output ONLY a JSON array — no prose, no markdown fences, then stop. If the analysis is incomplete, output your BEST hypothesis from what it contains (a best guess beats nothing).
+[{"file":"<repo-relative path>","function":"<symbol>","reason":"<why THIS computes the wrong value, not just displays it>","fix":"<the exact minimal change: which line/expression to change and which EXISTING helper (symbol) to reuse>","helper":"<bare existing symbol name to reuse, or empty>"}]
+
+=== INVESTIGATION ===
+## Investigation Report — Checkout Email / Confirm Email Case Sensitivity
+
+### 1. `CheckoutForm.tsx` — the `confirmEmail` validation rule and TRM774
+
+File: `src/components/pages/CheckoutPage/CheckoutForm.tsx`
+
+The `confirmEmail` field is rendered at lines 289–322. The `validate` rule is defined at **lines 305–309**:
+
+```tsx
+validate: (value: string) => {
+  if (email && value && value !== email) {
+    return t("TRM774");
+  }
+},
+```
+
+- `email` (line 126–128) and `confirmEmail` (line 129–131) are both obtained via `useWatch<ICheckoutFormValues, ...>` on the shared form context.
+- The comparison `value !== email` is a strict, case-sensitive JS string inequality — no `.toLowerCase()`/`.toLocaleLowerCase()` or any other normalization is applied to either operand before the comparison, here or anywhere upstream in this file.
+- `TRM774` (translated via `t("TRM774")`, `next-i18next`) is returned as the react-hook-form validation error message when the strict comparison fails.
+- Additional confirm-email-only behaviors on the same field: `onPaste` (lines 316–320) calls `e.preventDefault()` and returns `false`, blocking paste entirely. The sibling `email` field's `onBlur` (line 263–265) calls `trigger("confirmEmail")` when `confirmEmail` is already populated, and its `onChange` (line 283–285) calls `clearErrors("confirmEmail")`.
+
+This matches the survey's claim, with the added precision that it's react-hook-form's field-level `validate` function, confirmed at exact lines 305–309 (survey said "around 305–309" — that's exactly right).
+
+### 2. `CheckoutFormProvider.tsx` — default value seeding and prefill
+
+File: `src/components/pages/CheckoutPage/CheckoutFormProvider.tsx`
+
+- `DEFAULT_FORM_VALUES` (lines 21–28) sets both `email: ""` (line 24) and `confirmEmail: ""` (line 25) as static empty-string defaults.
+- The `formValues` memo (lines 41–60) computes runtime form values. When an authenticated `user` object is present (from `useUserProfileContext()`), it spreads an override object (lines 48–55) that sets:
+  - `email: user.email` (line 52)
+  - `confirmEmail: user.email` (line 53)
+
+  Both are prefilled from the exact same `user.email` string, so on initial prefill they are always identical (no independent normalization applied to either target field — same source value assigned twice, verbatim).
+- This `formValues` object is passed as the `values` option to `useForm` (line 64), with `mode: "onBlur"` / `reValidateMode: "onBlur"` (lines 65–66), which is why the TRM774 mismatch rule only fires on blur, consistent with the spec test name below.
+
+Slight correction to the survey: prefill is at lines **52–53** (not 24–26/52–53 as two separate default+prefill claims) — lines 24–26 are the static empty defaults, lines 52–53 are the authenticated-user prefill. Both parts of the survey's claim are accurate, just worth pinning to the precise lines.
+
+### 3. `types.ts` — `ICheckoutFormValues` and normalization
+
+File: `src/components/pages/CheckoutPage/types.ts` (11 lines total)
+
+```ts
+export interface ICheckoutFormValues {
+  firstName: string;
+  lastName: string;
+  email: string;
+  confirmEmail: string;
+  emailConsent: boolean;
+  ticketDelivery: TicketDeliveryOption;
+}
+```
+
+Both `email` and `confirmEmail` are typed as plain `string` — no branded/normalized type, no case-folding utility type, nothing enforcing lowercase. Confirmed no normalization exists anywhere in this interface or in the provider layer (`CheckoutFormProvider.tsx`, reviewed above) — values are carried through as raw, unmodified strings from user input or `user.email`.
+
+### 4. `CheckoutForm.spec.tsx` — existing test coverage
+
+File: `src/components/pages/CheckoutPage/__tests__/CheckoutForm.spec.tsx`
+
+Enumerated scenarios (`describe("CheckoutForm")`, lines 151–326):
+
+1. `should render all required elements` (156–189)
+2. `should show validation error on submit when fields are empty` (191–199)
+3. `should update $name with $value` — parameterized for firstName/lastName/email/confirmEmail (201–231)
+4. `should prevent pasting on confirm email field` (233–246) — asserts paste is blocked, confirmEmail retains original value
+5. `should trigger validation error on blur only when 'confirmEmail' field is not empty` (248–260) — types `scooby@dooby.com` into email, then `shaggy@dooby.com` into confirmEmail (different local-parts, not just different casing), blurs, and asserts `validation-error` testid has text content `"TRM774"`
+6. `should prefill passenger details` (262–277) — authenticated user scenario, asserts both `getEmail()` and `getConfirmEmail()` equal `user.email`
+7. `should not display sign in button when user is authenticated` (279–285)
+8. `should call onSignIn callback when the sign in button is clicked` (287–295)
+9. `should show ticket delivery option...` (297–308)
+10. `should display a payment modal` (310–316)
+11. `should call onDirtyFieldsMock with 'true' if form is touched` (318–325)
+
+**No case-difference scenario exists today.** Test #5 (blur-triggered TRM774) uses two entirely different email strings, not the same email with different casing (e.g., `Foo@Bar.com` vs `foo@bar.com`). There is no test asserting that same-email-different-case should NOT produce TRM774, and no test asserting it currently DOES (incorrectly) produce TRM774. Helper `getConfirmEmail` (line 108) exists and would be reusable for such a test.
+
+### 5. Server-side interaction — is a client-only fix sufficient?
+
+Searched `src/pages/api/v1/ecommerce/checkouts/` (`index.ts`, `[checkoutId].ts`):
+- No occurrences of `email` (case-insensitive grep) in either file — no Joi schema or any other validation touches an `email`/`confirmEmail` field there.
+- Repo-wide, `confirmEmail` appears **only** in: `CheckoutFormProvider.tsx`, `types.ts`, `CheckoutForm.tsx`, and three spec files (`CheckoutForm.spec.tsx`, `Checkout.spec.tsx`, `CheckoutFormContainer.spec.tsx`). It never leaves the `CheckoutPage` component tree.
+- Confirmed in `CheckoutFormContainer.tsx` (lines 137–206): `onSubmit` destructures `{ firstName, lastName, email, ticketDelivery, emailConsent }` from form values (line 145) — **`confirmEmail` is not included**. Only `email` is forwarded into `customer` (lines 189–193) and ultimately into `createOrder`/`mapCreateOrderPayload`. `confirmEmail` is discarded after client-side validation passes; it never reaches any API call or the checkouts endpoint.
+
+**Conclusion: a client-only fix is sufficient.** `confirmEmail` is a UI-only confirmation field that is validated and then dropped — the server never sees it, so there is no server-side Joi rule (or any other backend logic) that duplicates or depends on this comparison.
+
+### Summary / discrepancies vs. the prior survey
+- All core claims in the survey check out against the current on-disk code: the `validate` rule is exactly at lines 305–309 in `CheckoutForm.tsx`, doing a raw `value !== email` comparison with no case normalization; `TRM774` is the correct error key; prefill from `user.email` happens at lines 52–53 of `CheckoutFormProvider.tsx`; the spec file has `getConfirmEmail` and a blur-triggered TRM774 test but no case-difference test.
+- One clarification: the existing blur-test (spec line 248) uses two different emails, not a same-email-different-case pair — so it doesn't currently assert anything about case sensitivity either way.
+- New finding: confirmed via `CheckoutFormContainer.tsx` that `confirmEmail` never leaves the client (not sent to `createOrder` or any API route), and the two `src/pages/api/v1/ecommerce/checkouts/*` files contain no email-related logic at all — so no server-side awareness is needed for this fix.
+
+# Output
+[{"file":"src/components/pages/CheckoutPage/CheckoutForm.tsx","function":"confirmEmail validate rule","reason":"The rule compares raw values with 'value !== email' without case normalization, so identical emails differing only in case are wrongly flagged as mismatched, incorrectly computing an invalid TRM774 error state","fix":"Change 'value !== email' to compare normalized case, e.g. 'value.toLowerCase() !== email.toLowerCase()' at lines 305-309","helper":"toLowerCase"}]
+
+[coverage-gate] writer: no pre-flight has gated this run — standing down

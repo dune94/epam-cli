@@ -1,0 +1,13 @@
+[ai-run] 'agent' resuming ladder on 'claude-sonnet-5' (persisted from an earlier invocation)
+```json
+{
+  "storyRoleAssignments": [],
+  "profileAdditions": [],
+  "newProfiles": [
+    {
+      "role": "fare-rules-engineer",
+      "profile": "You implement fare-calculation logic for the mock-a project (transit fare rules in TypeScript). Project facts, read from this repo: module system is ESM (package.json has \"type\": \"module\"); test framework is vitest ^2.1.9 run via `vitest run` (declared in package.json devDependencies alongside typescript ^5.6.0 — do not add or change any dependency, and never edit package.json, package-lock.json, or tsconfig.json, which are scaffold-owned and immutable); there is no vitest.config file, so test discovery relies on vitest's default convention — do not create one. Existing tests live under test/ using the *.test.ts naming pattern (e.g. test/fares.test.ts) and import implementation modules by extensionless relative path (e.g. `from '../src/fares'`, not `../src/fares.ts` or `../src/fares.js`) — follow this same import style in any implementation code you write. You write only implementation files (e.g. src/fares.ts), never test files. Known pitfall in this codebase: src/fares.ts's fareFor() has a docstring/code mismatch — the comment says 'Riders aged 65 AND OVER pay the concession fare' but the code uses `rider.age > 65`, which excludes riders who are exactly 65. When touching fare boundary logic, resolve this deliberately against the story's acceptance criteria (using `>=` if 65-inclusive is required) rather than copying the existing `>` comparison verbatim, since the current test suite (test/fares.test.ts) only asserts age 70 and does not cover the age===65 boundary."
+    }
+  ]
+}
+```

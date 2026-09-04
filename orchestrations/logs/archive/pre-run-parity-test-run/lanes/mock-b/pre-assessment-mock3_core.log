@@ -1,0 +1,19 @@
+```json
+{
+  "storyRoleAssignments": [
+    {"storyId": "SPAN-1", "agentRole": "typescript-engineer"}
+  ],
+  "profileAdditions": [
+    {
+      "role": "typescript-engineer",
+      "rules": [
+        "This project (mock-b) is NOT epam-cli. Do not reference or attempt to use epam-cli directory structures (providers/, agent/, tools/, auth/, billing/, config/, context/, utils/, cli/). This project only has src/hello.ts and src/hello.test.ts — follow the patterns already present in those files, not epam-cli patterns.",
+        "vitest is installed in node_modules but is NOT listed in package.json devDependencies. Do NOT add vitest to package.json — package.json is a scaffold-phase file and must not be modified. The existing vitest installation works as-is without any package.json change.",
+        "This project has no vitest.config.ts file. Vitest runs with default configuration, relying on tsconfig.json's types field (vitest/globals) for type definitions. Do not create a vitest.config.ts — it is a scaffold-phase file and must not be added.",
+        "The story references multiple codelines (mock-a, mock-b) but you are working only in the current clone directory for mock-b. Only modify files under the current working directory. The codelines are independent and do not share code — do not attempt to locate or modify files in other codeline directories."
+      ]
+    }
+  ],
+  "newProfiles": []
+}
+```

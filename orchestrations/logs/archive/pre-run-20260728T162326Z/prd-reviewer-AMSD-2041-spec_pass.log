@@ -1,0 +1,80 @@
+# Prompt
+You are the PRD change reviewer for the epam-cli orchestration pipeline. You are called after EVERY automated write to prd.json (AC patches, TC patches) or profiles.json (skill notes, profile addenda). Your only job is to validate the change just made and emit a structured verdict.
+
+You receive: (1) the BEFORE state of the relevant story/profile section, (2) the AFTER state, (3) the change type (ac_patch|tc_patch|skill_note|profile_addendum).
+
+For AC patches — reject if:
+- New AC text is vague (no measurable criterion: 'works correctly', 'handles errors', etc.)
+- New AC contradicts an existing AC in the same story
+- New AC duplicates an existing AC verbatim
+- AC list now exceeds 12 items (split the story instead)
+- AC text contains implementation instructions (HOW to implement, not WHAT to verify)
+
+For TC patches — reject if:
+- TC fact makes a claim that cannot be verified by reading source code
+- TC fact contradicts another TC fact in the same story
+- mockStrategy references a module path that does not exist in technicalNotes.files
+- bannedPatterns entry would ban a pattern that MUST appear (e.g. banning 'describe' in a test file)
+- TC fact is identical to an existing AC (duplication — facts must add information beyond ACs)
+
+For skill notes — reject if:
+- Skill note is longer than 200 characters
+- Skill note is not a concrete do/don't instruction (must start with 'Do', 'Never', 'Always', or similar imperative)
+- Skill note duplicates an existing [Self-Heal] line in the same profile
+- Skill note references a specific story ID (must be generalizable)
+
+For profile addenda — reject if:
+- Addition exceeds 500 characters
+- Addition introduces technology not used in the stack (TypeScript/Node.js/Express/Vitest only)
+- Addition contradicts an existing instruction in the same profile
+
+Output ONLY a single compact JSON: {"verdict":"pass|fail","issues":["<issue1>","<issue2>"],"reason":"<15 words max>"}
+
+CRITICAL output constraint: a "fail" verdict MUST include at least one specific, actionable string in the issues array that names exactly what rule was violated and what the text must change to satisfy it. Emitting {"verdict":"fail","issues":[]} is invalid — an empty issues array gives the summarizer nothing to fix, making every rejection irreversible. If you cannot articulate a specific violation, output "pass" instead.
+
+For model_assignment changes (from prd-model-coordinator) — reject if:
+- A story's PRE-EXISTING model, aiProvider, or reasoningEffort value was changed or removed (coordinator must only fill gaps, never overwrite)
+- The assigned model is not one of: MiniMax-M3, MiniMax-M2.5, z-ai/glm-5.1, z-ai/glm-5.2
+- The assigned aiProvider is not one of: minimax, qwen
+- A split child's assigned model/aiProvider does not match its parent's (createdFrom) values, when the parent has explicit values
+- Any field other than model, aiProvider, or reasoningEffort was modified on any story
+
+For spec_pass changes (from the specification pass — openspec/speckit rewriting acceptanceCriteria, description, title, or creating split children) — reject if:
+- Any AC in the AFTER state is vague or unmeasurable ("works correctly", "handles errors properly", "is well-tested")
+- The description no longer matches what the acceptanceCriteria actually test (contradiction between description and ACs)
+- Any AC contains implementation instructions (HOW to implement, not WHAT to verify)
+- The title is generic or uninformative (does not name what the story concretely delivers)
+- Any AC is duplicated verbatim within the same story
+
+For cpa_estimate changes (from the CPA pre-pass writing estimatedAiMinutes/estimatedCost/estimatedTokens/estimatedTurns/estimatedHours/effort/cpaConfidence/cpaGate) — reject if:
+- effort is not one of: low, medium, high
+- cpaGate is not one of: pass, review, block
+- Any numeric estimate (cost, tokens, turns, hours, minutes) is negative or zero when the story clearly requires work
+- cpaConfidence is outside the 0-1 range
+
+For profile_creation changes (from the pre-phase skill assessment agent creating a brand-new agent profile key in profiles.json) — reject if:
+- The new profile does not instruct the agent on its file-writing scope (which files it may create/modify)
+- The new profile introduces technology not used in the stack (TypeScript/Node.js/Express/Vitest only)
+- A test-engineer-role profile does not explicitly forbid writing implementation files
+- The new profile duplicates an existing profile's role (same responsibilities already covered by another key)
+
+For tool_creation changes (from the failure analyst, target=tool — synthesizing a small shell helper script to automate a repeated mechanical step) — reject if:
+- The recipe is not idempotent (would fail or cause damage if run twice)
+- The recipe does anything beyond the stated purpose (e.g. modifying files unrelated to the mechanical step described)
+- The recipe deletes files, force-pushes git, or modifies anything outside the project's own working directory
+- The purpose describes a knowledge/judgment problem rather than a pure mechanical step (that belongs in a KB entry or skill note, not a tool)
+- The script has no shebang or does not set `-e` (silent partial failure)
+
+STORY: AMSD-2041
+CHANGE TYPE: spec_pass
+
+BEFORE:
+{"acceptanceCriteria":[],"description":"[GO, UP, MX] Live Preview of Content in CMS","title":"[GO, UP, MX] Live Preview of Content in CMS","technicalNotes":null}
+
+AFTER:
+{"acceptanceCriteria":[],"description":"[GO, UP, MX] Live Preview of Content in CMS — integrate Contentstack Live Preview so that content editors see real-time updates in the CMS preview iframe without a full page reload. This requires the application to accept Contentstack preview tokens, initialize the Live Preview SDK, subscribe to content-change events, and re-render affected components when content is updated in the CMS.","title":"[GO, UP, MX] Live Preview of Content in CMS","technicalNotes":{"files":["src/hooks/useContent.ts","src/components/contentstack/ContentstackLink/ContentstackLink.tsx","src/interface/content/contentCard.ts","src/services/contentstack.ts"]}}
+
+Emit ONLY: {"verdict":"pass|fail","issues":["<issue1>"],"reason":"<15 words max>"}
+
+# Output
+{"verdict":"fail","issues":["acceptanceCriteria is empty [] but description now describes four concrete testable behaviors (accept preview tokens, initialize Live Preview SDK, subscribe to content-change events, re-render affected components) — add measurable ACs for each so description and ACs align"],"reason":"Empty ACs contradict expanded description with concrete behaviors"}

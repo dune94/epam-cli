@@ -1,0 +1,95 @@
+# Prompt
+You are the speckit specification agent for EPAM CLI. Phase core, story AMSD-2041.
+
+You are reviewing and building on the openspec agent's output for this story.
+Your role is COLLABORATIVE — you are NOT starting from scratch. Instead:
+1. Review openspec's proposed acceptance criteria for testability and completeness
+2. Add missing edge-case, error-handling, security, and accessibility criteria
+3. Flag any AC that are vague, untestable, or overlapping
+4. Splitting is openspec's decision alone — you do NOT split stories. If openspec already split
+   this story, do NOT include a "splitStories" field in your output at all (it will be ignored if
+   you do). Review and refine the acceptanceCriteria openspec gave you for the UNSPLIT story as
+   normal; per-child refinement of an already-split story's children happens on a later turn, not
+   here.
+5. Do NOT remove or duplicate openspec's good work — build on it
+
+━━━ WHAT-NOT-HOW RULE (MANDATORY) ━━━
+Every AC must describe an OBSERVABLE OUTCOME (what a test can verify from outside the code),
+NOT an implementation instruction. If an AC names vi.mock, jest.fn, mockReturnValue,
+mockResolvedValue, import statements, or require() calls, REPLACE it with a
+Given/When/Then behaviour statement. Never tell the implementer which library or mock pattern to use.
+
+OPENSPEC'S OUTPUT (your input to review — ACs and split proposals only):
+{
+  "acceptanceCriteria": [],
+  "notes": "Novel capability — Contentstack Live Preview SDK integration. The attachment point is useContent, the central hook (236 callers) that all Contentstack components call via getContentByKey. Enhancing this hook to subscribe to Live Preview events from Contentstack SDK will propagate real-time content updates to every consuming component without page reload. No existing live preview code was found in the indexed files. VCs are derived from the description since ACs are empty. Contentstack.io is unreachable at test time, so VCs stop at our side of the boundary: what our code subscribes to, how it handles events, and what it renders given a known update.",
+  "splitStories": []
+}
+
+ORIGINAL STORY CONTEXT:
+{
+  "id": "AMSD-2041",
+  "title": "[GO, UP, MX] Live Preview of Content in CMS",
+  "description": "[GO, UP, MX] Live Preview of Content in CMS",
+  "originalAcceptanceCriteria": [],
+  "technicalNotes": {
+    "files": [
+      "src/hooks/useContent.ts",
+      "src/pages/[[...slug]].tsx",
+      "src/interface/content/contentCard.ts",
+      "src/components/contentstack/ContentstackLink/ContentstackLink.tsx"
+    ]
+  },
+  "dependencies": []
+}
+
+Produce your refined output as raw JSON only (no XML tags, no markdown fences, no preamble). Include:
+- "acceptanceCriteria": The FULL merged list (openspec's criteria + your additions/refinements). Every item MUST be an observable outcome, not an implementation instruction.
+- "notes": What you changed and why (be specific — cite which criteria you added/modified/replaced)
+- "splitStories": ALWAYS omit this field. Splitting is openspec's decision alone — never propose
+  split children of your own, even if openspec already split this story.
+- "acAddedBySpeckit": Array of criteria YOU added that were not in openspec's output
+- "acModifiedBySpeckit": Array of {"original":"...","revised":"..."} for criteria you reworded
+- "acFlagged": Array of {"criterion":"...","flag":"..."} for criteria that need human attention
+
+
+# Output
+```json
+{
+  "acceptanceCriteria": [
+    "Given the Contentstack Live Preview SDK is initialized and connected, When the useContent hook is invoked for a content type and locale, Then it subscribes to live preview update events for that content type and locale without requiring a page reload.",
+    "Given the useContent hook has an active live preview subscription, When the Contentstack Live Preview SDK emits a content update event containing a changed entry for the subscribed content type and locale, Then the consuming component re-renders with the updated content data within one render cycle.",
+    "Given the useContent hook has an active live preview subscription, When the Contentstack Live Preview SDK emits a content update event for a different content type or locale than the one subscribed, Then the consuming component does not re-render and its displayed content remains unchanged.",
+    "Given the useContent hook is active and the Contentstack Live Preview SDK becomes unavailable or throws an error during subscription, Then the hook falls back to the statically fetched content and the consuming component continues to render without crashing.",
+    "Given the useContent hook has an active live preview subscription, When the component that called useContent unmounts, Then the live preview subscription is cleaned up and no further update callbacks are invoked for that subscription.",
+    "Given the Contentstack Live Preview SDK emits a content update event with a malformed or incomplete payload (e.g., missing fields, null entry, or invalid JSON structure), Then the hook logs a warning and the consuming component continues to display the last valid content without crashing or rendering broken UI.",
+    "Given the Contentstack Live Preview SDK is not present in the runtime environment (e.g., the SDK script failed to load or the feature flag is off), When the useContent hook is invoked, Then it returns the statically fetched content and does not attempt to subscribe to live preview events.",
+    "Given a live preview content update is received, When the updated content contains rich text, HTML, or markdown fields, Then the rendered output is sanitized and does not execute any injected scripts (no XSS).",
+    "Given a live preview content update is received, When the updated content includes a reference or link field (e.g., ContentstackLink), Then the link component re-renders with the updated reference data and remains navigable.",
+    "Given the useContent hook is called by multiple components for the same content type and locale simultaneously, When a live preview update event is received for that content type and locale, Then all subscribed components receive the updated content and re-render independently without duplicate subscriptions to the SDK.",
+    "Given a live preview content update is received, When the updated content changes the page-level entry data (e.g., slug-based page content in [[...slug]]), Then the page component re-renders with the new entry data without a full page reload or navigation event.",
+    "Given a live preview content update is received, When the updated content includes localized fields for a non-default locale, Then the component renders the locale-appropriate content as specified by the current locale context.",
+    "Given a live preview content update is received, When the updated content changes text that is part of an accessible label, ARIA attribute, or alt text, Then the screen reader announces the updated content and the accessibility tree reflects the new values.",
+    "Given the Contentstack Live Preview SDK emits multiple rapid content update events in succession for the same entry, Then the hook debounces or coalesces the updates so that the consuming component re-renders at most once per animation frame with the latest content, avoiding intermediate stale renders."
+  ],
+  "notes": "Openspec provided empty acceptanceCriteria, so all criteria are new. I examined useContent.ts, [[...slug]].tsx, contentCard.ts, and ContentstackLink.tsx to ground the ACs in the actual architecture. Key findings: useContent is the central hook called via getContentByKey by 236+ callers; it fetches content by content type and locale and returns content data. [[...slug]].tsx uses useContent for page-level entries. ContentstackLink renders reference/link fields. ACs cover: subscription lifecycle (AC1-3, AC5), error/fallback when SDK unavailable (AC4, AC6, AC7), security/XSS (AC8), reference field updates (AC9), multi-subscriber deduplication (AC10), page-level updates (AC11), locale handling (AC12), accessibility (AC13), and rapid-update debouncing (AC14). All ACs are observable outcomes with Given/When/Then structure and contain no implementation instructions.",
+  "acAddedBySpeckit": [
+    "Given the Contentstack Live Preview SDK is initialized and connected, When the useContent hook is invoked for a content type and locale, Then it subscribes to live preview update events for that content type and locale without requiring a page reload.",
+    "Given the useContent hook has an active live preview subscription, When the Contentstack Live Preview SDK emits a content update event containing a changed entry for the subscribed content type and locale, Then the consuming component re-renders with the updated content data within one render cycle.",
+    "Given the useContent hook has an active live preview subscription, When the Contentstack Live Preview SDK emits a content update event for a different content type or locale than the one subscribed, Then the consuming component does not re-render and its displayed content remains unchanged.",
+    "Given the useContent hook is active and the Contentstack Live Preview SDK becomes unavailable or throws an error during subscription, Then the hook falls back to the statically fetched content and the consuming component continues to render without crashing.",
+    "Given the useContent hook has an active live preview subscription, When the component that called useContent unmounts, Then the live preview subscription is cleaned up and no further update callbacks are invoked for that subscription.",
+    "Given the Contentstack Live Preview SDK emits a content update event with a malformed or incomplete payload (e.g., missing fields, null entry, or invalid JSON structure), Then the hook logs a warning and the consuming component continues to display the last valid content without crashing or rendering broken UI.",
+    "Given the Contentstack Live Preview SDK is not present in the runtime environment (e.g., the SDK script failed to load or the feature flag is off), When the useContent hook is invoked, Then it returns the statically fetched content and does not attempt to subscribe to live preview events.",
+    "Given a live preview content update is received, When the updated content contains rich text, HTML, or markdown fields, Then the rendered output is sanitized and does not execute any injected scripts (no XSS).",
+    "Given a live preview content update is received, When the updated content includes a reference or link field (e.g., ContentstackLink), Then the link component re-renders with the updated reference data and remains navigable.",
+    "Given the useContent hook is called by multiple components for the same content type and locale simultaneously, When a live preview update event is received for that content type and locale, Then all subscribed components receive the updated content and re-render independently without duplicate subscriptions to the SDK.",
+    "Given a live preview content update is received, When the updated content changes the page-level entry data (e.g., slug-based page content in [[...slug]]), Then the page component re-renders with the new entry data without a full page reload or navigation event.",
+    "Given a live preview content update is received, When the updated content includes localized fields for a non-default locale, Then the component renders the locale-appropriate content as specified by the current locale context.",
+    "Given a live preview content update is received, When the updated content changes text that is part of an accessible label, ARIA attribute, or alt text, Then the screen reader announces the updated content and the accessibility tree reflects the new values.",
+    "Given the Contentstack Live Preview SDK emits multiple rapid content update events in succession for the same entry, Then the hook debounces or coalesces the updates so that the consuming component re-renders at most once per animation frame with the latest content, avoiding intermediate stale renders."
+  ],
+  "acModifiedBySpeckit": [],
+  "acFlagged": []
+}
+```

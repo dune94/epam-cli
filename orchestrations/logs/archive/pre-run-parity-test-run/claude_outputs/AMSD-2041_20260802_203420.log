@@ -1,0 +1,1001 @@
+=== Prompt for AMSD-2041 (attempt 1) ===
+CRITICAL — these files already exist. Their real content is injected below (## Existing File Contents) — you do NOT need to ReadFile them to see what's already there.
+Do NOT import or reference anything that doesn't appear in the injected content below — a plausible-sounding module name is not a real one.
+Only call ReadFile yourself if you need to see MORE of a file than what's shown (e.g. it was truncated), or a file not listed below.
+
+   - /home/bradleyjerome/projects/metrolinx/next.upexpress.com/src/services/contentstack.ts (content already injected below — do not ReadFile it unless you need lines beyond what's shown)
+   - /home/bradleyjerome/projects/metrolinx/next.upexpress.com/src/interface/contentstack.ts (content already injected below — do not ReadFile it unless you need lines beyond what's shown)
+   - /home/bradleyjerome/projects/metrolinx/next.upexpress.com/src/services/__tests__/contentstack.spec.ts (content already injected below — do not ReadFile it unless you need lines beyond what's shown)
+---
+
+Implement user story AMSD-2041: [GO, UP, MX] Live Preview of Content in CMS
+
+## Story Description
+Add Contentstack Live Preview support so editors see draft content update in real time and linked/tabular references show draft values. RETEST: a prior attempt at this exact fix was rejected by team-lead review with specific, concrete defects — see 'Prior review feedback' below. Do not repeat them.
+
+## Acceptance Criteria
+- Contentstack Stack options include a live_preview block with enable:true and preview_token set from CONTENTSTACK_PREVIEW_TOKEN (NOT management_token — the delivery SDK's live_preview config reads preview_token; management_token is the wrong key and silently breaks preview).
+- Do NOT add a `host` field inside the live_preview block. Host is handled separately via Stack.setHost(CONTENTSTACK_PREVIEW_HOST), which already exists and is correct — adding host inside live_preview with a possibly-empty value can break requests.
+- ICommonContentstackConfig (src/interface/contentstack.ts) gains an optional live_preview field so preview context (live_preview/preview_hash) can flow through to Contentstack queries in setCommonConfig — this file IS in scope for this story; do not escalate it to a separate ticket.
+- New/extended vitest unit tests exist at src/services/__tests__/contentstack.spec.ts (the file ALREADY EXISTS on every codeline — extend it, do not create a new file at a different path) covering: (1) live_preview block present with preview_token when CONTENTSTACK_PREVIEW_TOKEN is set, (2) live_preview absent when the token is unset, (3) setHost called with CONTENTSTACK_PREVIEW_HOST when set, taking priority over CONTENTSTACK_API_HOST.
+- PRIOR REVIEW FEEDBACK (verbatim from the real rejection on this exact fix, orchestrations/logs/review-agent-AMSD-2041.log): 'the live_preview block uses management_token instead of the prescribed preview_token, which will cause the SDK to not recognize the preview token and live preview will silently fail'; 'no vitest unit tests exist for this feature'; 'host was added inside the live_preview block with a default empty string value, which was not prescribed and may cause runtime issues'; 'query config interfaces lack live_preview fields to forward preview context through to Contentstack queries'.
+- On a sibling codeline, the previous writer attempt REFUSED to edit src/interface/contentstack.ts, calling it 'outside my scope' and returning prose instead of a code change. That file IS in scope for this story on every codeline — make the actual edit, do not escalate or describe it in prose.
+
+
+
+
+
+## Codeline-Specific Facts (real, curated gotchas for THIS codeline — read before assuming local tooling behaves like a fully-configured environment)
+- Local dev/pre-commit hooks require real Contentstack env vars (CONTENTSTACK_API_KEY, CONTENTSTACK_DELIVERY_TOKEN, CONTENTSTACK_ENVIRONMENT, CONTENTSTACK_BRANCH) to be set — next.config.js throws 'Missing required environment variables' at import time if they're absent, which breaks tsc/next-lint inside the husky pre-commit hook even when the source change itself is correct.
+- Date/locale tests assert UTC-rendered dates (this project's CI runs in UTC) — running with a non-UTC TZ produces off-by-one-day test failures unrelated to any real code change.
+- @metrolinx/cx-shared is resolved from a local override (npm pack + file: install) when the GitHub Packages registry is unreachable — a direct directory reference instead of a packed tarball pulls in cx-shared's own node_modules and causes a dual-React 'Invalid hook call' failure.
+- Contentstack Live Preview config uses live_preview: { enable, preview_token } — preview_token, NOT management_token. Host is set separately via Stack.setHost(), not as a field inside the live_preview block.
+
+
+## CodeGraph Tool — find EXISTING functions to reuse (do this BEFORE writing any new helper)
+A codegraph_query tool is available — call it directly (NOT via Bash) to discover reusable functions instead of inventing new ones:
+  codegraph_query(mode="helpers", args="<domain nouns>")   # existing util/parser/formatter to REUSE (symbol + import path)
+  codegraph_query(mode="query", args="<SymbolName>")       # exact definition site of a symbol
+  codegraph_query(mode="callees", args="<SymbolName>")     # what a function already calls
+RULE: Before you add ANY new function, run `helpers` for what it would do. If a suitable function already exists, import and call it — do NOT duplicate it. Fewer lines of code is always better.
+
+## Brownfield Testing Policy (READ — do not write unnecessary tests)
+This is a change to EXISTING code, and every file you are modifying ALREADY has covering tests. Do NOT write any new test file. Make your code change; the existing test suite runs automatically and will verify it. Writing new tests here is out of scope.
+
+
+## Test Criteria (ground truth — written from actual source; overrides any conflicting AC)
+- Editors see draft/unpublished Contentstack content update in real time when Live Preview is active (live_preview.enable=true, preview_token wired correctly).
+- Linked references and tabular/list content (e.g. content cards) render their DRAFT values under Live Preview, not just top-level fields — preview context must flow through query calls, not just the initial Stack options.
+
+
+
+## Technical Notes
+- files: ["src/services/contentstack.ts","src/interface/contentstack.ts","src/services/__tests__/contentstack.spec.ts"]
+- failureReason: watchdog_timeout: story exceeded timeout twice and was skipped
+
+## Existing File Contents (injected once, deterministically — do NOT ReadFile these unless you need more than shown)
+
+### /home/bradleyjerome/projects/metrolinx/next.upexpress.com/src/services/contentstack.ts
+```
+/* eslint-disable @typescript-eslint/no-explicit-any */
+import * as Utils from "@contentstack/utils";
+import contentstack from "contentstack";
+import { isTestEnv } from "utils/envs";
+import { IContentstackContentType } from "interface/content/contentType";
+import { IContentstackPage } from "interface/content/page";
+import {
+  ICommonContentstackConfig,
+  IContentstackGetEntry,
+  IContentstackGetSingleEntry,
+  IContentstackGetSingletonEntry,
+  ICreateEntryConfig,
+  ICreateQueryConfig,
+} from "../interface/contentstack";
+import logger from "./logger";
+
+const {
+  CONTENTSTACK_API_KEY = "",
+  CONTENTSTACK_DELIVERY_TOKEN = "",
+  CONTENTSTACK_ENVIRONMENT = "",
+  CONTENTSTACK_API_HOST = "",
+  CONTENTSTACK_BRANCH = "",
+  CONTENTSTACK_FETCH_TIMEOUT = "",
+} = process?.env || {};
+
+const QUERY_RESPONSE_LIMIT = 100;
+
+if (!isTestEnv()) {
+  if (!CONTENTSTACK_API_KEY) {
+    logger.error("Contentstack API key not provided");
+  }
+
+  if (!CONTENTSTACK_DELIVERY_TOKEN) {
+    logger.error("Contentstack delivery token not provided");
+  }
+
+  if (!CONTENTSTACK_ENVIRONMENT) {
+    logger.error("Contentstack environment not provided");
+  }
+
+  if (!CONTENTSTACK_BRANCH) {
+    logger.error("Contentstack branch not provided");
+  }
+
+  if (
+    !CONTENTSTACK_API_KEY ||
+    !CONTENTSTACK_DELIVERY_TOKEN ||
+    !CONTENTSTACK_ENVIRONMENT ||
+    !CONTENTSTACK_BRANCH
+  ) {
+    throw new Error("Missing required environment variables");
+  }
+}
+
+export const options = {
+  api_key: CONTENTSTACK_API_KEY,
+  delivery_token: CONTENTSTACK_DELIVERY_TOKEN,
+  environment: CONTENTSTACK_ENVIRONMENT,
+  branch: CONTENTSTACK_BRANCH,
+  ...(CONTENTSTACK_FETCH_TIMEOUT
+    ? {
+        fetchOptions: {
+          timeout: Number(CONTENTSTACK_FETCH_TIMEOUT),
+        },
+      }
+    : {}),
+};
+
+export const Stack = contentstack.Stack(options);
+
+if (CONTENTSTACK_API_HOST) {
+  Stack.setHost(CONTENTSTACK_API_HOST);
+}
+
+const renderOption = {
+  span: (node: { children: any }, next: (arg0: any) => any) => next(node.children),
+};
+
+export const excludedFields = [
+  "created_at",
+  "created_by",
+  "updated_at",
+  "updated_by",
+  "publish_details",
+];
+
+class ContentstackFactory {
+  private stack: contentstack.Stack;
+
+  constructor({ stack }: { stack: contentstack.Stack }) {
+    this.stack = stack;
+  }
+
+  private setCommonConfig({
+    query,
+    ...config
+  }: ICommonContentstackConfig & {
+    query: contentstack.Query | contentstack.Entry;
+  }) {
+    const { referenceFieldPath, only, except } = config;
+
+    if (referenceFieldPath) query.includeReference(referenceFieldPath);
+
+    if (!Array.isArray(except) && !Array.isArray(only)) {
+      query.except(excludedFields);
+    }
+
+    if (only) {
+      Array.isArray(only)
+        ? query.only(only)
+        : Object.entries(only).forEach(([key, values]) => query.only(key, values as any));
+    }
+
+    if (except) {
+      Array.isArray(except)
+        ? query.except(except)
+        : Object.entries(except).forEach(([key, values]) => query.except(key, values as any));
+    }
+  }
+
+  createContentTypeQuery({
+    contentTypeUid,
+    lang,
+    where,
+    count,
+    skip,
+    limit,
+    ...commonConfig
+  }: ICreateQueryConfig) {
+    const query = this.stack.ContentType(contentTypeUid).Query().language(lang).toJSON();
+
+    if (count) {
+      query.includeCount();
+    }
+
+    if (skip) {
+      query.skip(skip);
+    }
+
+    if (limit) {
+      query.limit(limit);
+    }
+
+    this.setCommonConfig({ query, ...commonConfig });
+
+    if (where) {
+      Object.entries(where).forEach(([key, value]) => query.where(key, value));
+    }
+
+    return query;
+  }
+
+  createContentTypeEntryQuery({
+    contentTypeUid,
+    lang,
+    entryUid,
+    ...commonConfig
+  }: ICreateEntryConfig) {
+    const query = this.stack.ContentType(contentTypeUid).Entry(entryUid).language(lang).toJSON();
+
+    this.setCommonConfig({ query, ...commonConfig });
+
+    return query;
+  }
+}
+
+export const getEntry = async <T>({
+  contentTypeUid,
+  referenceFieldPath,
+  jsonRtePath,
+  only,
+  lang,
+  includeFields,
+}: IContentstackGetEntry): Promise<T> => {
+  const result: any = [];
+
+  const excludedFieldsFinal = excludedFields.filter(
+    (excluded) => !includeFields?.some((included) => excluded === included),
+  );
+
+  const factory = new ContentstackFactory({ stack: Stack });
+  const _query = factory.createContentTypeQuery({
+    contentTypeUid,
+    lang,
+    referenceFieldPath,
+    only,
+    except: excludedFieldsFinal,
+    count: true,
+    skip: 0,
+    limit: QUERY_RESPONSE_LIMIT,
+  });
+
+  try {
+    const [response, count] = await _query.find();
+    result.push(...response);
+
+    while (result.length < count) {
+      const _query = factory.createContentTypeQuery({
+        contentTypeUid,
+        lang,
+        referenceFieldPath,
+        only,
+        except: excludedFieldsFinal,
+        count: true,
+        skip: result.length,
+        limit: QUERY_RESPONSE_LIMIT,
+      });
+
+      const [response]: any = await _query.find();
+
+      result.push(...response);
+    }
+
+    jsonRtePath &&
+      Utils.jsonToHTML({
+        entry: result,
+        paths: jsonRtePath,
+        renderOption,
+      });
+
+    return result;
+  } catch (e: any) {
+    logger.error(
+      e.message,
+      `Error retrieving entries of content type: ${contentTypeUid} for lang: ${lang}`,
+    );
+    throw e;
+  }
+};
+
+export const getSingleEntry = async ({
+  contentTypeUid,
+  entryUid,
+  lang,
+  referenceFieldPath,
+  jsonRtePath,
+  only,
+  except,
+}: IContentstackGetSingleEntry): Promise<IContentstackPage> => {
+  const query = new ContentstackFactory({
+    stack: Stack,
+  }).createContentTypeEntryQuery({
+    contentTypeUid,
+    entryUid,
+    referenceFieldPath,
+    only,
+    except,
+    lang,
+  });
+
+  try {
+    const result = await query.fetch();
+
+    if (jsonRtePath) {
+      Utils.jsonToHTML({
+        entry: result,
+        paths: jsonRtePath,
+        renderOption,
+      });
+    }
+
+    return result;
+  } catch (e: any) {
+    logger.error(
+      e.message,
+      `Error retrieving single entry: ${entryUid} of content type: ${contentTypeUid} for lang: ${lang}`,
+    );
+    throw e;
+  }
+};
+
+export const getAllContentTypeEntries = async ({
+  contentTypeUid,
+  lang,
+  referenceFieldPath,
+  jsonRtePath,
+  only,
+  except,
+  where,
+}: IContentstackGetSingletonEntry): Promise<IContentstackPage> => {
+  const query = new ContentstackFactory({
+    stack: Stack,
+  }).createContentTypeQuery({
+    contentTypeUid,
+    referenceFieldPath,
+    only,
+    except,
+    lang,
+    where,
+  });
+
+  query.except(excludedFields);
+
+  try {
+    const result = await query.find();
+
+    if (jsonRtePath) {
+      Utils.jsonToHTML({
+        entry: result,
+        paths: jsonRtePath,
+        renderOption,
+      });
+    }
+
+    return result;
+  } catch (e: any) {
+    logger.error(
+      e.message,
+      `Error retrieving entries of content type: ${contentTypeUid} for lang: ${lang}`,
+    );
+    throw e;
+  }
+};
+
+export const findSingletonEntry = async <
+  T extends Pick<IContentstackPage, "uid"> = IContentstackPage,
+>({
+  contentTypeUid,
+  lang,
+  referenceFieldPath,
+  jsonRtePath,
+  only,
+  except,
+  where,
+}: IContentstackGetSingletonEntry): Promise<T | null> => {
+  const query = new ContentstackFactory({
+    stack: Stack,
+  }).createContentTypeQuery({
+    contentTypeUid,
+    referenceFieldPath,
+    only,
+    except,
+    where,
+    lang,
+    limit: 1,
+  });
+
+  try {
+    const [[result]]: T[][] = await query.find();
+
+    if (!result) {
+      return null;
+    }
+
+    if (jsonRtePath) {
+      Utils.jsonToHTML({
+        entry: result,
+        paths: jsonRtePath,
+        renderOption,
+      });
+    }
+
+    return result;
+  } catch (error) {
+    logger.error(
+      `Error retrieving entry of single content type: ${contentTypeUid} for lang: ${lang}`,
+      error,
+    );
+
+    throw error;
+  }
+};
+
+export const getSingletonEntry = async ({
+  contentTypeUid,
+  lang,
+  referenceFieldPath,
+  jsonRtePath,
+  only,
+  except,
+  where,
+}: IContentstackGetSingletonEntry): Promise<IContentstackPage> => {
+  const query = new ContentstackFactory({
+    stack: Stack,
+  }).createContentTypeQuery({ contentTypeUid, referenceFieldPath, only, except, where, lang });
+
+  try {
+    const result = await query.findOne();
+
+    if (jsonRtePath) {
+      Utils.jsonToHTML({
+        entry: result,
+        paths: jsonRtePath,
+        renderOption,
+      });
+    }
+
+    return result;
+  } catch (e: any) {
+    logger.error(
+      e.message,
+      `Error retrieving entry of single content type: ${contentTypeUid} for lang: ${lang}`,
+    );
+    throw e;
+  }
+};
+
+export const getPageContentTypes = async (): Promise<IContentstackContentType[]> => {
+  try {
+    const { content_types: contentTypes = [] } = await Stack.getContentTypes({
+```
+(truncated at 400 of 409 lines — ReadFile this path yourself if you need the rest)
+
+### /home/bradleyjerome/projects/metrolinx/next.upexpress.com/src/interface/contentstack.ts
+```
+import { ContentstackLocales } from "constants/contentstack";
+import { IContentstackPage } from "./content/page";
+
+export interface ICommonContentstackConfig {
+  referenceFieldPath?: string[];
+  only?: Record<string, string | string[]> | string[];
+  except?: Record<string, string | string[]> | string[];
+}
+
+export interface IContentstackPageConfig extends ICommonContentstackConfig {
+  jsonRtePath?: string[];
+  includeFields?: string[];
+}
+
+export interface IContentstackGetEntry extends IContentstackPageConfig {
+  contentTypeUid: string;
+  lang: ContentstackLocales;
+}
+
+export interface IContentstackGetSingletonEntry extends IContentstackGetEntry {
+  where?: Record<string, string>;
+}
+
+export interface IContentstackGetSingleEntry extends IContentstackGetEntry {
+  entryUid: string;
+}
+
+export interface ICreateQueryConfig extends ICommonContentstackConfig {
+  contentTypeUid: string;
+  lang: ContentstackLocales;
+  where?: Record<string, string>;
+  count?: boolean;
+  skip?: number;
+  limit?: number;
+}
+
+export interface ICreateEntryConfig extends ICommonContentstackConfig {
+  contentTypeUid: string;
+  lang: ContentstackLocales;
+  entryUid: string;
+}
+
+export interface IEnrichedPublishedPage {
+  contentTypeUid: string;
+  locale: ContentstackLocales;
+  entries: IContentstackPage[];
+}
+```
+
+### /home/bradleyjerome/projects/metrolinx/next.upexpress.com/src/services/__tests__/contentstack.spec.ts
+```
+import logger from "services/logger";
+import { ContentstackLocales } from "constants/contentstack";
+import {
+  Stack,
+  getEntry,
+  getSingleEntry,
+  excludedFields,
+  getPageContentTypes,
+  getSingletonEntry,
+  getAllContentTypeEntries,
+} from "../contentstack";
+
+// Mocking contenstack Stack methods by imitating chained calls
+jest.mock("contentstack", () => ({
+  Stack: () => ({
+    ContentType: jest.fn().mockReturnThis(),
+    Entry: jest.fn().mockReturnThis(),
+    Query: jest.fn().mockReturnThis(),
+    except: jest.fn().mockReturnThis(),
+    language: jest.fn().mockReturnThis(),
+    limit: jest.fn().mockReturnThis(),
+    descending: jest.fn().mockReturnThis(),
+    includeCount: jest.fn().mockReturnThis(),
+    includeReference: jest.fn().mockReturnThis(),
+    toJSON: jest.fn().mockReturnThis(),
+    find: jest.fn().mockResolvedValue([[{ uid: "newsArticleUid" }, { uid: "newsArticleUid2" }], 2]),
+    fetch: jest.fn().mockResolvedValue({ uid: "newsArticleUid" }),
+    skip: jest.fn().mockReturnThis(),
+    getContentTypes: jest.fn().mockResolvedValue({ content_types: ["1", "2", "3"] }),
+    only: jest.fn().mockReturnThis(),
+    setHost: jest.fn().mockReturnThis(),
+    findOne: jest.fn().mockResolvedValue({ uid: "newsArticleUid" }),
+    where: jest.fn().mockReturnThis(),
+  }),
+}));
+
+jest.mock("services/logger", () => ({
+  error: jest.fn(),
+}));
+
+describe("contentstack", () => {
+  const OLD_ENV = process.env;
+
+  beforeEach(() => {
+    jest.resetModules();
+    process.env = { ...OLD_ENV };
+  });
+
+  afterEach(() => {
+    jest.clearAllMocks();
+  });
+
+  afterAll(() => {
+    process.env = OLD_ENV;
+  });
+
+  describe("missing environmental variable cases", () => {
+    const loggerSpy = jest.fn();
+
+    beforeAll(() => {
+      jest.mock("services/logger", () => ({
+        error: loggerSpy,
+      }));
+    });
+
+    beforeEach(() => {
+      process.env = {
+        API_KEY: "TEST_KEY",
+        DELIVERY_TOKEN: "TEST_DELIVERY_TOKEN",
+        ENVIRONMENT: "TEST_ENVIRONMENT",
+        CONTENTSTACK_BRANCH: "TEST_BRANCH",
+        NODE_ENV: "production",
+      };
+    });
+
+    beforeAll(() => {
+      jest.mock("utils/envs", () => ({
+        isTestEnv: () => false,
+        isStorybookEnv: () => false,
+      }));
+    });
+
+    afterAll(() => {
+      jest.mock("utils/envs", () => ({
+        isTestEnv: () => true,
+        isStorybookEnv: () => false,
+      }));
+    });
+
+    it("should throw and log and error if API_KEY is missing", () => {
+      process.env.API_KEY = undefined;
+      expect.assertions(2);
+
+      try {
+        // eslint-disable-next-line @typescript-eslint/no-var-requires
+        require("../contentstack.ts");
+      } catch (e) {
+        // eslint-disable-next-line jest/no-conditional-expect
+        expect(e).toEqual(new Error("Missing required environment variables"));
+        // eslint-disable-next-line jest/no-conditional-expect
+        expect(loggerSpy).toHaveBeenCalledWith("Contentstack API key not provided");
+      }
+    });
+
+    it("should throw and log and error if DELIVERY_TOKEN is missing", () => {
+      process.env.DELIVERY_TOKEN = undefined;
+      expect.assertions(2);
+
+      try {
+        // eslint-disable-next-line @typescript-eslint/no-var-requires
+        require("../contentstack.ts");
+      } catch (e) {
+        // eslint-disable-next-line jest/no-conditional-expect
+        expect(e).toEqual(new Error("Missing required environment variables"));
+        // eslint-disable-next-line jest/no-conditional-expect
+        expect(loggerSpy).toHaveBeenCalledWith("Contentstack delivery token not provided");
+      }
+    });
+
+    it("should throw and log and error if ENVIRONMENT is missing", () => {
+      process.env.ENVIRONMENT = undefined;
+      expect.assertions(2);
+
+      try {
+        // eslint-disable-next-line @typescript-eslint/no-var-requires
+        require("../contentstack.ts");
+      } catch (e) {
+        // eslint-disable-next-line jest/no-conditional-expect
+        expect(e).toEqual(new Error("Missing required environment variables"));
+        // eslint-disable-next-line jest/no-conditional-expect
+        expect(loggerSpy).toHaveBeenCalledWith("Contentstack environment not provided");
+      }
+    });
+
+    it("should throw and log and error if CONTENTSTACK_BRANCH is missing", () => {
+      process.env.CONTENTSTACK_BRANCH = undefined;
+      expect.assertions(2);
+
+      try {
+        // eslint-disable-next-line @typescript-eslint/no-var-requires
+        require("../contentstack.ts");
+      } catch (e) {
+        // eslint-disable-next-line jest/no-conditional-expect
+        expect(e).toEqual(new Error("Missing required environment variables"));
+        // eslint-disable-next-line jest/no-conditional-expect
+        expect(loggerSpy).toHaveBeenCalledWith("Contentstack branch not provided");
+      }
+    });
+  });
+
+  describe("contentstack fetch timeout", () => {
+    it("should set fetch timeout from CONTENTSTACK_FETCH_TIMEOUT", () => {
+      process.env.CONTENTSTACK_FETCH_TIMEOUT = "100000";
+
+      // eslint-disable-next-line @typescript-eslint/no-var-requires
+      const testedModule = require("../contentstack.ts");
+
+      expect(testedModule.options).toEqual(
+        expect.objectContaining({
+          fetchOptions: {
+            timeout: 100000,
+          },
+        }),
+      );
+    });
+
+    it("should leave default fetch timeout if CONTENTSTACK_FETCH_TIMEOUT is missing", () => {
+      process.env.CONTENTSTACK_FETCH_TIMEOUT = undefined;
+
+      // eslint-disable-next-line @typescript-eslint/no-var-requires
+      const testedModule = require("../contentstack.ts");
+
+      expect(testedModule.options).not.toEqual(
+        expect.objectContaining({
+          fetchOptions: expect.any(Object),
+        }),
+      );
+    });
+  });
+
+  describe("getEntry", () => {
+    it("should call contentstack methods to retrieve data", async () => {
+      const contentTypeSpy = jest.spyOn(Stack, "ContentType");
+      const querySpy = jest.spyOn(Stack, "Query" as any);
+      const exceptSpy = jest.spyOn(Stack, "except" as any);
+      const languageSpy = jest.spyOn(Stack, "language" as any);
+      const includeCountSpy = jest.spyOn(Stack, "includeCount" as any);
+      const includeReferenceSpy = jest.spyOn(Stack, "includeReference" as any);
+      const toJSONSpy = jest.spyOn(Stack, "toJSON" as any);
+      const findSpy = jest.spyOn(Stack, "find" as any);
+      const result = await getEntry({
+        contentTypeUid: "contentType",
+        lang: ContentstackLocales.EN,
+        referenceFieldPath: ["a.b.c"],
+      });
+
+      expect(contentTypeSpy).toHaveBeenCalledWith("contentType");
+      expect(querySpy).toHaveBeenCalled();
+      expect(exceptSpy).toHaveBeenCalledWith(excludedFields);
+      expect(languageSpy).toHaveBeenCalledWith(ContentstackLocales.EN);
+      expect(includeCountSpy).toHaveBeenCalled();
+      expect(includeReferenceSpy).toHaveBeenCalledWith(["a.b.c"]);
+      expect(toJSONSpy).toHaveBeenCalled();
+      expect(findSpy).toHaveBeenCalled();
+      expect(result).toEqual([{ uid: "newsArticleUid" }, { uid: "newsArticleUid2" }]);
+    });
+
+    it("should additionally request other batches if not all results returned by a single call", async () => {
+      const skipSpy = jest.spyOn(Stack, "skip" as any);
+      const limitSpy = jest.spyOn(Stack, "limit" as any);
+
+      jest
+        .spyOn(Stack, "find" as any)
+        .mockResolvedValueOnce([[{ uid: "newsArticleUid" }, { uid: "newsArticleUid2" }], 4]);
+      const result = await getEntry({
+        contentTypeUid: "contentType",
+        lang: ContentstackLocales.EN,
+        referenceFieldPath: ["a.b.c"],
+      });
+
+      expect(skipSpy).toHaveBeenCalledWith(2);
+      expect(limitSpy).toHaveBeenCalledWith(100);
+      expect(result).toEqual([
+        { uid: "newsArticleUid" },
+        { uid: "newsArticleUid2" },
+        { uid: "newsArticleUid" },
+        { uid: "newsArticleUid2" },
+      ]);
+    });
+
+    it("should log error if request to contentstack fails", async () => {
+      jest.spyOn(Stack, "find" as any).mockRejectedValueOnce(new Error("Contentstack error"));
+
+      await expect(
+        getEntry({
+          contentTypeUid: "contentType",
+          lang: ContentstackLocales.EN,
+          referenceFieldPath: ["a.b.c"],
+        }),
+      ).rejects.toThrow(new Error("Contentstack error"));
+      expect(logger.error).toHaveBeenCalledWith(
+        "Contentstack error",
+        "Error retrieving entries of content type: contentType for lang: en-ca",
+      );
+    });
+  });
+
+  describe("getSingleEntry", () => {
+    it("should call contentstack methods to retrieve data", async () => {
+      const contentTypeSpy = jest.spyOn(Stack, "ContentType");
+      const entrySpy = jest.spyOn(Stack, "Entry" as any);
+      const exceptSpy = jest.spyOn(Stack, "except" as any);
+      const languageSpy = jest.spyOn(Stack, "language" as any);
+      const includeReferenceSpy = jest.spyOn(Stack, "includeReference" as any);
+      const toJSONSpy = jest.spyOn(Stack, "toJSON" as any);
+      const fetchSpy = jest.spyOn(Stack, "fetch" as any);
+      const onlySpy = jest.spyOn(Stack, "only" as any);
+      const result = await getSingleEntry({
+        contentTypeUid: "contentType",
+        entryUid: "entryUid",
+        lang: ContentstackLocales.EN,
+        referenceFieldPath: ["a.b.c"],
+        only: { "a.b": "onlyRef", "a.b.c": ["onlyArrElt"] },
+        except: { "a.b": "exceptRef", "a.b.c": ["exceptArrElt"] },
+      });
+
+      expect(contentTypeSpy).toHaveBeenCalledWith("contentType");
+      expect(entrySpy).toHaveBeenCalledWith("entryUid");
+      expect(exceptSpy.mock.calls[0][0]).toEqual(excludedFields);
+      expect(exceptSpy.mock.calls[1][0]).toEqual("a.b");
+      expect(exceptSpy.mock.calls[1][1]).toEqual("exceptRef");
+      expect(exceptSpy.mock.calls[2][0]).toEqual("a.b.c");
+      expect(exceptSpy.mock.calls[2][1]).toEqual(["exceptArrElt"]);
+      expect(languageSpy).toHaveBeenCalledWith(ContentstackLocales.EN);
+      expect(includeReferenceSpy).toHaveBeenCalledWith(["a.b.c"]);
+      expect(toJSONSpy).toHaveBeenCalled();
+      expect(fetchSpy).toHaveBeenCalled();
+      expect(onlySpy.mock.calls[0][0]).toEqual("a.b");
+      expect(onlySpy.mock.calls[0][1]).toEqual("onlyRef");
+      expect(onlySpy.mock.calls[1][0]).toEqual("a.b.c");
+      expect(onlySpy.mock.calls[1][1]).toEqual(["onlyArrElt"]);
+      expect(result).toEqual({ uid: "newsArticleUid" });
+    });
+
+    it("should log error if request to contentstack fails", async () => {
+      jest.spyOn(Stack, "fetch" as any).mockRejectedValueOnce(new Error("Contentstack error"));
+
+      await expect(
+        getSingleEntry({
+          contentTypeUid: "contentType",
+          entryUid: "entryUid",
+          lang: ContentstackLocales.EN,
+        }),
+      ).rejects.toThrow(new Error("Contentstack error"));
+      expect(logger.error).toHaveBeenCalledWith(
+        "Contentstack error",
+        "Error retrieving single entry: entryUid of content type: contentType for lang: en-ca",
+      );
+    });
+  });
+
+  describe("getAllContentTypeEntries", () => {
+    it("should call contentstack methods to retrieve data", async () => {
+      const contentTypeSpy = jest.spyOn(Stack, "ContentType");
+      const querySpy = jest.spyOn(Stack, "Query" as any);
+      const exceptSpy = jest.spyOn(Stack, "except" as any);
+      const languageSpy = jest.spyOn(Stack, "language" as any);
+      const includeReferenceSpy = jest.spyOn(Stack, "includeReference" as any);
+      const toJSONSpy = jest.spyOn(Stack, "toJSON" as any);
+      const findSpy = jest.spyOn(Stack, "find" as any);
+      const onlySpy = jest.spyOn(Stack, "only" as any);
+      const whereSpy = jest.spyOn(Stack, "where" as any);
+      const result = await getAllContentTypeEntries({
+        contentTypeUid: "contentType",
+        lang: ContentstackLocales.EN,
+        referenceFieldPath: ["a.b.c"],
+        only: { "a.b": "onlyRef", "a.b.c": ["onlyArrElt"] },
+        except: { "a.b": "exceptRef", "a.b.c": ["exceptArrElt"] },
+        where: { field: "value" },
+      });
+
+      expect(contentTypeSpy).toHaveBeenCalledWith("contentType");
+      expect(querySpy).toHaveBeenCalled();
+      expect(exceptSpy).toHaveBeenCalledWith(excludedFields);
+      expect(languageSpy).toHaveBeenCalledWith(ContentstackLocales.EN);
+      expect(includeReferenceSpy).toHaveBeenCalledWith(["a.b.c"]);
+      expect(toJSONSpy).toHaveBeenCalled();
+      expect(findSpy).toHaveBeenCalled();
+      expect(exceptSpy.mock.calls[0][0]).toEqual(excludedFields);
+      expect(exceptSpy.mock.calls[1][0]).toEqual("a.b");
+      expect(exceptSpy.mock.calls[1][1]).toEqual("exceptRef");
+      expect(exceptSpy.mock.calls[2][0]).toEqual("a.b.c");
+      expect(exceptSpy.mock.calls[2][1]).toEqual(["exceptArrElt"]);
+      expect(onlySpy.mock.calls[0][0]).toEqual("a.b");
+      expect(onlySpy.mock.calls[0][1]).toEqual("onlyRef");
+      expect(onlySpy.mock.calls[1][0]).toEqual("a.b.c");
+      expect(onlySpy.mock.calls[1][1]).toEqual(["onlyArrElt"]);
+      expect(whereSpy.mock.calls[0][0]).toEqual("field");
+      expect(whereSpy.mock.calls[0][1]).toEqual("value");
+      expect(result).toEqual([[{ uid: "newsArticleUid" }, { uid: "newsArticleUid2" }], 2]);
+    });
+
+    it("should log error if request to contentstack fails", async () => {
+      jest.spyOn(Stack, "find" as any).mockRejectedValueOnce(new Error("Contentstack error"));
+
+      await expect(
+        getAllContentTypeEntries({
+          contentTypeUid: "contentType",
+          lang: ContentstackLocales.EN,
+        }),
+      ).rejects.toThrow(new Error("Contentstack error"));
+      expect(logger.error).toHaveBeenCalledWith(
+        "Contentstack error",
+        "Error retrieving entries of content type: contentType for lang: en-ca",
+      );
+    });
+  });
+
+  describe("getSingletonEntry", () => {
+    it("should call contentstack methods to retrieve data", async () => {
+      const contentTypeSpy = jest.spyOn(Stack, "ContentType");
+      const querySpy = jest.spyOn(Stack, "Query" as any);
+      const exceptSpy = jest.spyOn(Stack, "except" as any);
+      const languageSpy = jest.spyOn(Stack, "language" as any);
+      const includeReferenceSpy = jest.spyOn(Stack, "includeReference" as any);
+      const toJSONSpy = jest.spyOn(Stack, "toJSON" as any);
+      const findOneSpy = jest.spyOn(Stack, "findOne" as any);
+      const onlySpy = jest.spyOn(Stack, "only" as any);
+      const whereSpy = jest.spyOn(Stack, "where" as any);
+      const result = await getSingletonEntry({
+        contentTypeUid: "contentType",
+        lang: ContentstackLocales.EN,
+        referenceFieldPath: ["a.b.c"],
+        only: { "a.b": "onlyRef", "a.b.c": ["onlyArrElt"] },
+        except: { "a.b": "exceptRef", "a.b.c": ["exceptArrElt"] },
+        where: { field: "value" },
+      });
+
+      expect(contentTypeSpy).toHaveBeenCalledWith("contentType");
+      expect(querySpy).toHaveBeenCalled();
+      expect(exceptSpy).toHaveBeenCalledWith(excludedFields);
+      expect(languageSpy).toHaveBeenCalledWith(ContentstackLocales.EN);
+      expect(includeReferenceSpy).toHaveBeenCalledWith(["a.b.c"]);
+      expect(toJSONSpy).toHaveBeenCalled();
+      expect(findOneSpy).toHaveBeenCalled();
+      expect(exceptSpy.mock.calls[0][0]).toEqual(excludedFields);
+      expect(exceptSpy.mock.calls[1][0]).toEqual("a.b");
+      expect(exceptSpy.mock.calls[1][1]).toEqual("exceptRef");
+      expect(exceptSpy.mock.calls[2][0]).toEqual("a.b.c");
+      expect(exceptSpy.mock.calls[2][1]).toEqual(["exceptArrElt"]);
+      expect(onlySpy.mock.calls[0][0]).toEqual("a.b");
+      expect(onlySpy.mock.calls[0][1]).toEqual("onlyRef");
+      expect(onlySpy.mock.calls[1][0]).toEqual("a.b.c");
+      expect(onlySpy.mock.calls[1][1]).toEqual(["onlyArrElt"]);
+      expect(whereSpy.mock.calls[0][0]).toEqual("field");
+      expect(whereSpy.mock.calls[0][1]).toEqual("value");
+      expect(result).toEqual({ uid: "newsArticleUid" });
+    });
+
+    it("should log error if request to contentstack fails", async () => {
+```
+(truncated at 400 of 438 lines — ReadFile this path yourself if you need the rest)
+
+## Files to Create/Modify (EXACT ABSOLUTE PATHS — write to these paths exactly)
+src/services/contentstack.ts, src/interface/contentstack.ts, src/services/__tests__/contentstack.spec.ts
+
+## Dependencies
+None
+
+## Module resolution in this codeline
+A bare import that names a file under any of these directories is INTERNAL source, not a dependency — never add it to the dependency manifest:
+  __tests__, migration-scripts, public, src, zap_hooks
+Source extensions here: .ts, .tsx, .js, .jsx, .mjs, .cjs
+Write imports the way the existing files in this codeline write them; read a neighbouring file before inventing a path.
+
+
+## Instructions
+CRITICAL — these files already exist. Their real content is injected below (## Existing File Contents) — you do NOT need to ReadFile them to see what's already there.
+Do NOT import or reference anything that doesn't appear in the injected content below — a plausible-sounding module name is not a real one.
+Only call ReadFile yourself if you need to see MORE of a file than what's shown (e.g. it was truncated), or a file not listed below.
+   - /home/bradleyjerome/projects/metrolinx/next.upexpress.com/src/services/contentstack.ts (content already injected below — do not ReadFile it unless you need lines beyond what's shown)
+   - /home/bradleyjerome/projects/metrolinx/next.upexpress.com/src/interface/contentstack.ts (content already injected below — do not ReadFile it unless you need lines beyond what's shown)
+   - /home/bradleyjerome/projects/metrolinx/next.upexpress.com/src/services/__tests__/contentstack.spec.ts (content already injected below — do not ReadFile it unless you need lines beyond what's shown)
+**The content of every file listed above is already shown in ## Existing File Contents — use that, do not spend a tool call re-reading them. Use Edit for targeted changes to existing files — do NOT overwrite an existing file wholesale with WriteFile.**
+
+1. Use the injected ## Existing File Contents above to verify what actually exists (exports, types, existing utilities) before writing any code — do not guess, and do not re-read a file already shown in full
+2. Implement all acceptance criteria for this story
+3. Test Criteria facts above are ground truth — your test assertions MUST match them exactly
+4. Do NOT create tests unless explicitly required in acceptance criteria
+
+After implementation, provide a brief summary of what was created/modified.
+
+## Relevant Knowledge Base Entries
+The following was learned from previous story implementations and is relevant to your agent role. Apply this knowledge before writing any code:
+
+- [2026-07-06T18:11:26Z] Use vi.fn().mockResolvedValue(value) to make a mock return a resolved Promise.
+- [2026-07-06T20:31:11Z] Use `test: { passWithNoTests: true }` in vitest.config.ts or create a stub test file when no *.test.ts files exist.
+- [2026-07-06T20:33:03Z] Enable globals:true in vitest.config.ts so describe, it, and expect work without imports, reducing boilerplate in test files.
+- [2026-07-06T23:47:34Z] Use CommonJS-compatible patterns in src/server.ts: avoid `import.meta.url` and top-level `await`; gate listen with `if (require.main === module)`.
+- [2026-07-07T02:35:30Z] Always include a non-test source file in src/ alongside any src/*.test.ts file, since tsconfig.json excludes test files from tsc --noEmit.
+- [2026-07-07T19:01:34Z] Only modify or create files explicitly listed in the story's acceptance criteria. Do not touch files belonging to other stories or outside the current task scope.
+- [2026-07-07T20:17:57Z] [unreviewed-fallback] Avoid using deprecated TypeScript compiler options like 'moduleResolution=node10'; use 'moduleResolution=node' instead.
+- [2026-07-17T20:20:58Z] Always: Before importing a module or referencing a type/property, always read the actual source file to verify the export exists, its exact path, its properties, and its constructor/factory signatures
+- [2026-07-23T01:15:16Z] Always: In tsconfig.json, always use moduleResolution 'node' (not 'node10' or 'Node10') — 'node10' was removed in TypeScript 5.x. The correct value for CommonJS + Node resolution is 'node'.
+- [2026-07-23T14:30:00Z] CORRECTION to a prior entry (2026-07-23T01:17:52Z, now removed): that entry wrongly claimed 'moduleResolution: node' itself is removed and must become 'node16'/'nodenext'. Root-caused via mock1 (epam-cli orchestration test): 'node' is valid and correct through TypeScript 5.x (confirmed on 5.9.3) — it was only removed in TypeScript 7.x. The real defect was an unpinned `typescript` devDependency letting a fallback `npm install` pull latest (7.x) instead of the project's intended version. Do NOT rewrite a working tsconfig.json's moduleResolution in response to a TS5108 error — first check `node_modules/typescript/package.json`'s version; if it's 7.x and the rest of the project expects 5.x, the fix is pinning/reinstalling the correct typescript version, not changing moduleResolution.
+
+## Knowledge Base Contribution (do this LAST — after writing all implementation files)
+Your assigned KB entry ID for this run: **KB-026**
+
+IMPORTANT: Write ALL implementation files first. Only AFTER writing every required file should you optionally append a KB entry.
+Do NOT read orchestrations/agents/KB.md before writing implementation files. The relevant KB entries are already injected above.
+
+If (and only if) you discover a non-obvious pattern during implementation, append one entry to `orchestrations/agents/KB.md`:
+
+```markdown
+## KB-026 -- 2026-08-02
+
+**Category:** <backend|frontend|infrastructure|testing|orchestration>
+**AgentRole:** <your agentRole from the story>
+**Tags:** <comma-separated tech keywords, e.g. typescript, node, cli>
+**Trigger:** <retry|first-success>
+**StoryRef:** AMSD-2041
+
+<One concise paragraph: the specific pattern, gotcha, or anti-pattern.>
+```
+
+Only write an entry if the knowledge is genuinely non-obvious. Skip trivial observations.
+
+## Execution Plan
+Follow this plan step by step:
+1. In `/home/bradleyjerome/projects/ai/epam-cli/src/interface/contentstack.ts`, add an optional `live_preview` field to `ICommonContentstackConfig` typed as `{ enable?: boolean; preview_hash?: string; live_preview?: string }` (or a suitable interface) so preview context can flow through `setCommonConfig` to Contentstack queries.
+
+2. In `/home/bradleyjerome/projects/ai/epam-cli/src/services/contentstack.ts`, locate the Stack initialization / options object and add a `live_preview` block containing only `{ enable: true, preview_token: process.env.CONTENTSTACK_PREVIEW_TOKEN }` — do NOT set `management_token` inside this block and do NOT add a `host` field inside it.
+
+3. In the same file, verify that `Stack.setHost` is called with `process.env.CONTENTSTACK_PREVIEW_HOST` when that env var is set, and that it takes priority over `CONTENTSTACK_API_HOST`. If the current logic does not already prioritize `CONTENTSTACK_PREVIEW_HOST`, adjust the conditional to check `CONTENTSTACK_PREVIEW_HOST` first.
+
+4. In `/home/bradleyjerome/projects/ai/epam-cli/src/services/__tests__/contentstack.spec.ts`, add a test that sets `CONTENTSTACK_PREVIEW_TOKEN` in `process.env`, instantiates/initializes the Stack, and asserts the `live_preview` block exists with `enable: true` and `preview_token` equal to the env var value.
+
+5. In the same spec file, add a test that leaves `CONTENTSTACK_PREVIEW_TOKEN` unset and asserts the `live_preview` block is absent (or not enabled) in the Stack options.
+
+6. In the same spec file, add a test that sets both `CONTENTSTACK_PREVIEW_HOST` and `CONTENTSTACK_API_HOST`, then asserts `setHost` is called with the value of `CONTENTSTACK_PREVIEW_HOST`, confirming it takes priority.
+
+7. Run `npm test` to confirm all new and existing tests pass; run `npm run build` to confirm no type errors were introduced by the interface change.
+=== End Prompt ===
+
+=== epam Output (attempt 1) ===

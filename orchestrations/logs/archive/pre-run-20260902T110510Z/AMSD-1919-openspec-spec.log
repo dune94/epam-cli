@@ -1,0 +1,939 @@
+# Prompt
+You are the openspec specification agent for gotransit. Phase core, story AMSD-1919.
+EXISTING CODE — CodeGraph static analysis (exact symbols, callers, blast radius):
+**Dynamic-dispatch links among your symbols**
+(synthesized — the indirect hops grep/Read would reconstruct; the `@file:line` is the wiring site)
+
+- renderConfirmationDialog → ConfirmationDialog   [dynamic: renders <ConfirmationDialog>]
+- CancelRequestDialogContainer → ConfirmationDialog   [dynamic: renders <ConfirmationDialog>]
+- DeleteAlertDialogContainer → ConfirmationDialog   [dynamic: renders <ConfirmationDialog>]
+- HoldOtgAlertsForm → ConfirmationDialog   [dynamic: renders <ConfirmationDialog>]
+- renderHoldOtgAlertsDialogContainer → ConfirmationDialog   [dynamic: renders <ConfirmationDialog>]
+
+> Full source for these symbols is below — the call flow among them, followed by their bodies.
+**Exploration: applies handles processes calculates resolves Go‑Checkout Page - Email & Confirm Email Case Sensitivity**
+
+Found 2 symbols across 2 files.
+
+**Blast radius — what depends on these (update/verify before editing)**
+
+- `updateSubscribeToEmailPageV3` (migration-scripts/content_types/subscribe_to_email_page/subscribe_to_email_page.v3.ts:4) — 4 callers in `migration-scripts/migrations/0030_create_rich_text_complex_without_cta_add_to_pages.ts`, `migration-scripts/migrations/0040_update_pages_directories.ts`; ⚠️ no covering tests found
+- `updateSubscribeToEmailPageV4` (migration-scripts/content_types/subscribe_to_email_page/subscribe_to_email_page.v4.ts:4) — 2 callers in `migration-scripts/migrations/0066_update_pages_with_sst.ts`; ⚠️ no covering tests found
+- `ICheckoutPageProps` (src/components/pages/CheckoutPage/CheckoutPage.tsx:40) — 1 caller in `src/services/pageComponentResolver.ts`; ⚠️ no covering tests found
+- `createCheckoutPageV1` (migration-scripts/content_types/checkout_page/checkout_page.v1.ts:4) — 2 callers in `migration-scripts/migrations/0125_create_checkout_page.ts`; ⚠️ no covering tests found
+- `updateCheckoutPageV2` (migration-scripts/content_types/checkout_page/checkout_page.v2.ts:4) — 2 callers in `migration-scripts/migrations/0126_update_checkout_page_modular_block.ts`; ⚠️ no covering tests found
+
+**Relationships**
+
+**calls:**
+- updateSubscribeToEmailPageV3 → client
+- migrate → updateSubscribeToEmailPageV3
+- migrate → updateSubscribeToEmailPageV3
+- updateAboutUsLandingPageV1 → client
+- updateAboutUsLandingPageV2 → client
+- updateAboutUsLandingPageV3 → client
+- createAccessibilityAssistanceWebformFromJsonV1 → client
+- updateAccessibilityAssistanceWebformV10 → client
+- updateAccessibilityAssistanceWebformV11 → client
+- updateAccessibilityAssistanceWebformV2 → client
+- ... and 34 more
+
+**references:**
+- ICheckoutPageProps → ICheckoutPage
+- ICheckoutPage → TShoppingCartModularBlocks
+- ICheckoutPage → IContentstackEmptyState
+- TShoppingCartModularBlocks → IPageComponent
+- IShoppingCartPageComponentMapperProps → TShoppingCartModularBlocks
+- IShoppingCartPage → TShoppingCartModularBlocks
+- IContentstackEmptyState → IContentstackLink
+- IShoppingCartPage → IContentstackEmptyState
+- updateCheckoutPageV4 → submitOrderCta
+- updateCheckoutPageV4 → termsAndConditions
+- ... and 3 more
+
+**Source Code**
+
+> The code below is the **verbatim, current on-disk source** of these files — re-read from disk on this call and line-numbered, byte-for-byte identical to what the Read tool returns. It is NOT a summary, outline, or stale cache. Treat each block as a Read you have already performed: do not Read a file shown here.
+
+**`src/pages/find-a-station/[stationCode]/station-details.tsx`** — calls(calls), Page(function)
+
+```tsx
+44	  facilities: IStationFacilities;
+45	}
+46	
+47	const Page: TEnrichedNextPage<IStationDetailsProps> = (props) => {
+48	  const { isFallback, locale = NextLocales.EN } = useRouter();
+49	  const { t } = useTranslation();
+50	
+51	  if (isFallback) {
+52	    return <PageLoader svgPath={BLACK_TRAIN_PATH} />;
+53	  }
+54	
+55	  const { stationDetails, linkManagement, facilities, stationCode } = props;
+56	
+57	  const transitConnectionsMapped = mapTransitConnectionsLinks(
+58	    linkManagement.transit_connections_links,
+59	  );
+60	
+61	  const renderTransitConnections = () => {
+62	    const connections = stationDetails.ConnectingTransit || [];
+63	
+64	    return (
+65	      <div className="mb-24 last:mb-0" data-testid="transit-connections-container">
+66	        <div className="flex pb-8">
+67	          <Connections24 />
+68	          <span className="pl-8 cx-headline-500 text-global-black">{t("transitConnections")}</span>
+69	        </div>
+70	        <div className="cx-body-text text-neutral-700">
+71	          {connections.length > 0
+72	            ? t("transitConnectionsCopy")
+73	            : t("transitConnectionsCopyNegative")}
+74	        </div>
+75	        <ul className="list-disc list-inside ml-8 text-neutral-700 cx-link-text underline empty:hidden">
+76	          {connections.map((connection) => {
+77	            const connectionKey = toLowerCaseWithGivenLocale(connection, locale as NextLocales);
+78	
+79	            return (
+80	              transitConnectionsMapped[connectionKey] && (
+81	                <li key={connection}>
+82	                  <CustomLink
+83	                    className="cx-focus-outline"
+84	                    href={transitConnectionsMapped[connectionKey] || "#"}
+85	                  >
+86	                    <span className="relative -left-8">{connection}</span>
+87	                  </CustomLink>
+88	                </li>
+89	              )
+90	            );
+91	          })}
+92	        </ul>
+93	      </div>
+94	    );
+95	  };
+96	
+97	  return (
+98	    <>
+99	      <Head>
+100	        <title>{`${t("stationDetailsNavigation.stationDetails")} | GO Transit`}</title>
+101	      </Head>
+102	
+103	      <StationDetails
+104	        {...props}
+105	        sidebar={
+106	          <DetailsFacilitiesRelatedLinks
+107	            stationCode={stationCode}
+108	            stationDetails={stationDetails}
+109	          />
+110	        }
+111	      >
+112	        <h2
+113	          className="pb-32 text-neutral-900 cx-headline-200"
+114	          data-testid="station-details-tab-heading"
+115	        >
+116	          {t("stationDetailsNavigation.stationDetails")}
+117	        </h2>
+118	
+119	        <div className="pb-32 empty:hidden">
+120	          <StationDetailsGoogleMap stationDetails={stationDetails} />
+121	        </div>
+122	
+123	        <div
+124	          className="grid sm:grid-cols-2 grid-cols-1 gap-x-16 pb-56 sm:pb-64 last:pb-0"
+125	          data-testid="station-details-info-container"
+126	        >
+127	          <div>
+128	            <div className="mb-24 last:mb-0" data-testid="staffed-hours-container">
+129	              <div className="flex pb-8">
+130	                <QueryBuilder24 />
+131	
+132	                <span className="pl-8 cx-headline-500 text-global-black">
+133	                  {t("staffedStationHours")}
+134	                </span>
+135	              </div>
+136	
+137	              <div
+138	                className="whitespace-pre-wrap cx-body-text text-neutral-700"
+139	                data-testid="staffed-hours"
+140	              >
+141	                {stationDetails.TicketSale?.length
+142	                  ? stationDetails.TicketSale?.join("")
+143	                  : t("stationNotStaffed")}
+144	              </div>
+145	            </div>
+146	
+147	            {renderTransitConnections()}
+148	
+149	            <div className="mb-24 last:mb-0" data-testid="bike-facilities-container">
+150	              <div className="flex pb-8">
+151	                <BikeRide24 />
+152	                <span className="pl-8 cx-headline-500 text-global-black">{t("bike")}</span>
+153	              </div>
+154	
+155	              <div className="cx-body-text text-neutral-700" data-testid="bike-section">
+156	                {!facilities.HasBikeRack.Value ? (
+157	                  <p data-testid="bike-negative-message">
+158	                    <TextFirstTranslation
+159	                      translation={t("bikeSectionCopyNegative")}
+160	                      href={linkManagement.cycling_link.href}
+161	                    />
+162	                  </p>
+163	                ) : (
+164	                  <>
+165	                    <p data-testid="bike-positive-message">
+166	                      <TextFirstTranslation
+167	                        translation={t("bikeSectionCopyPositive")}
+168	                        href={linkManagement.cycling_link.href}
+169	                      />
+170	                    </p>
+171	
+172	                    {stationDetails.BikeInfo && (
+173	                      <p className="mt-8">
+174	                        <span className="cx-link-text">
+175	                          {stationDetails.BikeInfo[0].BikeRoomSpots}{" "}
+176	                          {stationDetails.BikeInfo[0].Type}{" "}
+177	                        </span>
+178	                        {t("bikeSectionCopy")}
+179	                      </p>
+180	                    )}
+181	                  </>
+182	                )}
+183	              </div>
+184	            </div>
+185	          </div>
+186	
+187	          <div>
+188	            <div className="mt-24 sm:mt-0 mb-24 last:mb-0" data-testid="parking-info-container">
+189	              <div className="flex pb-8">
+190	                <Parking24 />
+191	                <span className="pl-8 cx-headline-500 text-global-black">{t("parking")}</span>
+192	              </div>
+193	
+194	              <div className="cx-body-text text-neutral-700">
+195	                {!stationDetails.ParkingInfo ? (
+196	                  <p>
+197	                    <LinkFirstTranslation
+198	                      translation={t("parkingSectionNoAvailable")}
+199	                      href={linkManagement.parking_link.href}
+200	                    />
+201	                  </p>
+202	                ) : (
+203	                  <>
+204	                    <p>
+205	                      <LinkFirstTranslation
+206	                        translation={t("freeCustomerParking")}
+207	                        href={linkManagement.parking_link.href}
+208	                      />
+209	                    </p>
+210	
+211	                    <p className="mt-8 cx-link-text">{t("stationParkingNumbers")}</p>
+212	                    <ul>
+213	                      {stationDetails.ParkingInfo.map(({ Type, ParkSpots }) => (
+214	                        <li key={Type}>
+215	                          {Type}: {ParkSpots}
+216	                        </li>
+217	                      ))}
+218	                    </ul>
+219	                  </>
+220	                )}
+221	
+222	                {facilities.HasReservedParking.Value && (
+223	                  <p className="mt-8">
+224	                    <LinkFirstTranslation
+225	                      translation={t("reservedParkings")}
+226	                      href={linkManagement.reserved_parking_link.href}
+227	                    />
+228	                  </p>
+229	                )}
+230	
+231	                {facilities.HasCarpool.Value && (
+232	                  <p className="mt-8">
+233	                    <LinkFirstTranslation
+234	                      translation={t("carpoolParking")}
+235	                      href={linkManagement.carpool_link.href}
+236	                    />
+237	                  </p>
+238	                )}
+239	              </div>
+240	            </div>
+241	
+242	            {/* TODO: Show Walking Directions when needed */}
+243	            {/* <div className="mb-24 last:mb-0">
+244	              <div className="flex pb-8">
+245	                <Walk24 />
+246	                <span className="pl-8 cx-headline-500 text-global-black">
+247	                  {t("walkingDirections")}
+248	                </span>
+249	              </div>
+250	              <CustomLink
+251	                href={`${MAP_BASE_URL}/@${stationDetails.StationInfo.Latitude},${stationDetails.StationInfo.Longitude},17z`}
+252	                className="cx-link-text underline text-neutral-700 cx-focus-outline"
+253	              >
+254	                {t("walkingDirectionSectionCopy")}
+255	              </CustomLink>
+256	            </div> */}
+257	          </div>
+258	        </div>
+259	
+
+
+EXISTING CODE (brownfield fallback via Semble — identify the code path that handles this behavior, then specify how to fix it; do not propose new abstractions):
+// src/components/pages/CheckoutPage/CheckoutForm.tsx (lines 289–310, relevance: 0.0236)
+<FormInput
+                  name="confirmEmail"
+                  type="text"
+                  id="checkout-confirm-email"
+                  autoComplete={AutoComplete.EMAIL}
+                  placeholder={t("TRM773")}
+                  maxLength={EMAIL_INPUT_MAX_LENGTH}
+                  classes={{
+                    focusRing: "focus:!outline-none focus:border-b-2 focus:border-global-black",
+                  }}
+                  rules={{
+                    ...requiredRule,
+                    pattern: {
+                      value: EMAIL_REGEX,
+                      message: t("TRM095"),
+                    },
+                    validate: (value: string) => {
+                      if (email && value && value !== email) {
+                        return t("TRM774");
+                      }
+
+---
+
+// src/components/pages/CheckoutPage/types.ts (lines 1–10, relevance: 0.0214)
+import { TicketDeliveryOption } from "constants/ecommerce/order";
+
+export interface ICheckoutFormValues {
+  firstName: string;
+  lastName: string;
+  email: string;
+  confirmEmail: string;
+  emailConsent: boolean;
+  ticketDelivery: TicketDeliveryOption;
+}
+
+---
+
+// migration-scripts/content_types/checkout_page/checkout_page.v7.ts (lines 1–29, relevance: 0.0206)
+import { client } from "../../client";
+import { insertField } from "../../utils/insertField";
+
+const emailConsent = {
+  data_type: "global_field",
+  display_name: "Email Consent",
+  reference_to: "rich_text_component_basic",
+  field_metadata: {
+    description: "",
+    instruction: "Optional checkbox on a page, consent for e-mail subscription.",
+  },
+  uid: "email_consent",
+  mandatory: false,
+  multiple: false,
+  non_localizable: false,
+  unique: false,
+};
+
+export async function updateCheckoutPageV7() {
+  const checkoutPage = await client.fetchContentType("checkout_page");
+
+---
+
+// src/pages/api/v1/create-contact-us-case.ts (lines 71–93, relevance: 0.0160)
+if (emailConsent && value.emailAddress && preferences && language) {
+    try {
+      const response = await emailSignUp({
+        firstName: value.firstName,
+        lastName: value.lastName,
+        email: value.emailAddress,
+        source: SubscriptionSource.CONTACT_US_PAGE,
+        preferences,
+        language,
+      });
+
+      if (!response.ok) {
+        logger.error(
+          `Email subscription request failed, message: ${response.statusText}, status: ${response.status}`,
+        );
+      }
+    } catch (error: any) {
+      logger.error(`Email Subscription request thrown an error: ${error?.message}`);
+    }
+  }
+
+---
+
+// src/components/pages/CheckoutPage/CheckoutFormContainer.tsx (lines 167–187, relevance: 0.0142)
+if (isPaymentRequired && stripe && elements) {
+        const { error: confirmationTokenError, confirmationToken } =
+          await stripe.createConfirmationToken({
+            elements,
+            params: {
+              payment_method_data: {
+                billing_details: {
+                  email,
+                  name: `${firstName} ${lastName}`,
+                },
+              },
+              return_url: getPaymentRedirectPageFullUrl(window.location.origin, locale),
+            },
+          });
+
+        if (confirmationTokenError) {
+          return onOrderSubmitFailure(CheckoutErrorType.GENERAL, confirmationTokenError);
+        }
+
+        paymentToken = confirmationToken.id;
+
+---
+
+// src/pages/api/v1/ecommerce/orders/index.ts (lines 124–145, relevance: 0.0139)
+if (value.emailConsent && value.preferences) {
+    try {
+      const response = await emailSignUp({
+        firstName: value.customer.firstName,
+        lastName: value.customer.lastName,
+        email: value.customer.email,
+        preferences: value.preferences,
+        source: SubscriptionSource.CHECKOUT_PAGE,
+        language: value.locale.toUpperCase(),
+      });
+
+      if (!response.ok) {
+        logger.error(
+          `Email subscription request failed, message: ${response.statusText}, status: ${response.status}`,
+        );
+      }
+    } catch (error: any) {
+      logger.error(`Email Subscription request thrown an error: ${error?.message}`);
+    }
+  }
+
+---
+
+// src/constants/sfmc.ts (lines 1–13, relevance: 0.0137)
+export const SFMC_LANGUAGE = {
+  EN: "EN",
+  FR: "FR",
+} as const;
+
+export enum SubscriptionSource {
+  EMAIL_SUBSCRIPTION_PAGE = "email_subscription_page",
+  ONBOARDING_MODAL = "onboarding_modal",
+  PREFERENCE_CENTER_TAB = "preference_center_tab",
+  CONTACT_US_PAGE = "contact_us_page",
+  CHECKOUT_PAGE = "checkout_page",
+  ACCESSIBILITY_REQUEST = "accessibility_request",
+}
+
+---
+
+// migration-scripts/content_types/checkout_page/checkout_page.v5.ts (lines 50–64, relevance: 0.0135)
+non_localizable: false,
+  unique: false,
+};
+
+export async function updateCheckoutPageV5() {
+  const checkoutPage = await client.fetchContentType("checkout_page");
+
+  insertField({
+    targetFieldUid: "submit_order_cta",
+    schema: checkoutPage.schema,
+    field: emptyState,
+  });
+
+  await checkoutPage.update();
+}
+
+---
+
+// src/components/pages/CheckoutPage/CheckoutForm.tsx (lines 311–326, relevance: 0.0199)
+renderLabel={(props) => (
+                    <Label {...props} data-testid="checkout-confirm-email-input-label">
+                      {t("TRM772")}
+                    </Label>
+                  )}
+                  onPaste={(e) => {
+                    e.preventDefault();
+
+                    return false;
+                  }}
+                  dataTestId="checkout-confirm-email-input"
+                />
+              </div>
+
+              {showTicketDeliveryOptions && (
+                <div className="space-y-24" data-testid="ticket-delivery">
+
+---
+
+// migration-scripts/content_types/checkout_page/checkout_page.v6.ts (lines 1–11, relevance: 0.0114)
+import { Schema } from "@contentstack/management/types/stack/contentType";
+import { client } from "../../client";
+
+export async function updateCheckoutPageV6() {
+  const checkoutPage = await client.fetchContentType("checkout_page");
+  const submitOrder = checkoutPage.schema.find((field: Schema) => field.uid === "submit_order_cta");
+
+  submitOrder.max = 25;
+
+  await checkoutPage.update();
+}
+
+---
+
+// migration-scripts/content_types/checkout_page/checkout_page.v8.ts (lines 41–54, relevance: 0.0112)
+unique: false,
+};
+
+export async function updateCheckoutPageV8() {
+  const checkoutPage = await client.fetchContentType("checkout_page");
+
+  insertField({
+    targetFieldUid: "empty_state",
+    schema: checkoutPage.schema,
+    field: orderProcessingErrorGroup,
+  });
+
+  await checkoutPage.update();
+}
+
+
+LOCATED FIX SITE(S) — traced in this repository before you were asked. Anchor every criterion to the behaviour THIS code produces:
+- src/components/pages/CheckoutPage/CheckoutForm.tsx :: CheckoutForm — This is the site that COMPUTES the mismatch verdict: the confirmEmail FormInput's react-hook-form `validate` rule (lines 305-309) performs the case-sensitive string comparison between the typed confirmEmail value and the watched `email` value, and returns t("TRM774") when they differ. No other module compares the two fields — CheckoutFormProvider.tsx only seeds defaults (email/confirmEmail both set verbatim from user.email, lines 46-59, no normalization) and types.ts (ICheckoutFormValues, lines 3-10) is plain `string` fields with no transform. So the wrong boolean originates here, not downstream.
+- src/components/pages/CheckoutPage/__tests__/CheckoutForm.spec.tsx :: CheckoutForm.spec — Existing spec for this component (helpers getEmail()/getConfirmEmail() at lines 107-108 already target the two fields, and the suite exercises blur-triggered validation via the provider's mode:"onBlur"). It currently has no case-difference scenario, so the regression is uncovered; it needs a new test asserting no TRM774 error when the same address is entered with differing casing.
+
+
+DECLARED FILES — the actual contents of the files this story names or the detective located. Base every observable criterion on what THIS code does, not on what the title suggests:
+--- src/components/pages/CheckoutPage/CheckoutForm.tsx (truncated)
+import { useEffect, useState } from "react";
+import { PaymentElement } from "@stripe/react-stripe-js";
+import { StripePaymentElementOptions } from "@stripe/stripe-js";
+import { useSession } from "next-auth/react";
+import { useTranslation, Trans } from "next-i18next";
+import Tooltip from "rc-tooltip";
+import { useFormContext, useWatch } from "react-hook-form";
+import { Modal } from "@metrolinx/cx-shared/build/src/components/Modal/Modal";
+import { RichText } from "@metrolinx/cx-shared/build/src/components/RichText/RichText";
+import { Info as Info24 } from "@metrolinx/cx-shared/build/src/components/svg/24/Info";
+import {
+  EMAIL_INPUT_MAX_LENGTH,
+  EMAIL_REGEX,
+  NAME_INPUT_MAX_LENGTH,
+} from "@metrolinx/cx-shared/build/src/constants/common";
+import { twTheme } from "@metrolinx/cx-shared/build/src/constants/tailwind";
+import { cn } from "@metrolinx/cx-shared/build/src/utils/cn";
+import { noop } from "@metrolinx/cx-shared/build/src/utils/common";
+import { AuthenticationButton } from "components/AuthenticationTooltip/AuthenticationButton";
+import { FormCheckBox } from "components/FormCheckBox";
+import { FormInput } from "components/FormInput";
+import { FormRadioGroup } from "components/FormRadioGroup/FormRadioGroup";
+import { Label } from "components/Label";
+import { Loading } from "components/Loading";
+import {
+  ALPHABETIC_PATTERN,
+  AutoComplete,
+  CANADA_CODE,
+  USER_ALPHABETIC_PATTERN,
+} from "constants/common";
+import { TicketDeliveryOption } from "constants/ecommerce/order";
+import { publicEnv } from "constants/publicEnv";
+import { useContent } from "hooks/useContent";
+import { useSignIn } from "hooks/useSignIn";
+import { IRichTextContent } from "interface/contentstack";
+import { ICart } from "interface/ecommerce/cart";
+import { isMobile, isTablet } from "utils/common/getDeviceType";
+import { removeNameInvalidChars } from "utils/common/removeNameInvalidChars";
+import { isTicketDeliverySelectable } from "utils/ecommerce/checkout/isTicketDeliverySelectable";
+import { isGuest } from "utils/user/isGuest";
+import { CHECKOUT_FORM_ID } from "./constants";
+import { ICheckoutFormValues } from "./types";
+
+const { STRIPE_PAYMENT_METHODS_ORDER, STRIPE_BUSINESS_NAME } = publicEnv;
+
+const OPTIONS: StripePaymentElementOptions = {
+  business: {
+    name: STRIPE_BUSINESS_NAME,
+  },
+  layout: "tabs",
+  wallets: {
+    applePay: "auto",
+    googlePay: "auto",
+  },
+  defaultValues: {
+    billingDetails: {
+      address: {
+        country: CANADA_CODE,
+      },
+    },
+  },
+  fields: {
+    billingDetails: {
+      address: {
+        country: "auto",
+        postalCode: "auto",
+      },
+    },
+  },
+  ...(STRIPE_PAYMENT_METHODS_ORDER && {
+    paymentMethodOrder: STRIPE_PAYMENT_METHODS_ORDER.split(","),
+  }),
+};
+
+const TOOLTIP_STYLES = {
+  background: twTheme.colors.global.white,
+  color: twTheme.colors.neutral[700],
+  padding: "16px",
+  opacity: 1,
+};
+
+const paths = {
+  passengerHeadline: "page.0.passenger_headline",
+  paymentHeadline: "page.0.payment_headline",
+  emailConsent: "page.0.email_consent",
+};
+
+const fieldsRowStyleClasses = "grid grid-cols-1 sm:grid-cols-2 gap-x-16 gap-y-[44px] empty:hidden";
+
+export interface ICheckoutFormProps {
+  cart: ICart;
+  onSubmit: (values: ICheckoutFormValues) => void;
+  onPaymentMethodsFailure: () => void;
+  redirectUrl: string | null;
+  onDirtyFields: (isDirty: boolean) => void;
+  isPaymentRequired: boolean;
+}
+
+export const CheckoutForm = ({
+  onSubmit,
+  cart,
+  onPaymentMethodsFailure,
+  redirectUrl,
+  onDirtyFields,
+  isPaymentRequired,
+}: ICheckoutFormProps) => {
+  const { t } = useTranslation();
+  const { getContentByKey } = useContent();
+  const { onSignIn } = useSignIn();
+  const { status } = useSession();
+  const {
+    handleSubmit,
+    clearErrors,
+    trigger,
+    formState: { dirtyFields },
+  } = useFormContext<ICheckoutFormValues>();
+
+  const isDirty = Object.keys(dirtyFields).length > 0;
+
+  useEffect(() => {
+    onDirtyFields(isDirty);
+  }, [isDirty, onDirtyFields]);
+
+  const [isPaymentsWidgetReady
+--- src/components/pages/CheckoutPage/__tests__/CheckoutForm.spec.tsx (truncated)
+import { cloneElement } from "react";
+import { render, screen, waitFor } from "@testing-library/react";
+import userEvent from "@testing-library/user-event";
+import { useSession } from "next-auth/react";
+import { Button } from "@metrolinx/cx-shared/build/src/components/Button/Button";
+import { ContentstackProvider } from "context/ContentstackContext";
+import { LeaveGuardProvider } from "context/LeaveGuardContext";
+import { UserProfileContext } from "context/UserProfileContext";
+import { IUserContext } from "interface/content/user";
+import { CheckoutForm, ICheckoutFormProps } from "../CheckoutForm";
+import { CheckoutFormProvider, DEFAULT_FORM_VALUES } from "../CheckoutFormProvider";
+import { CheckoutPaymentMethodsProvider } from "../CheckoutPaymentMethodsProvider";
+import { CHECKOUT_FORM_ID } from "../constants";
+import { ICheckoutFormValues } from "../types";
+import { cartMock, pageMock, singleLineItemMock, user, userContextMock } from "./content.mock";
+
+jest.mock("next/router", () => ({
+  useRouter: () => ({
+    locale: "en",
+    asPath: "/checkout-page",
+    events: {
+      on: jest.fn(),
+      off: jest.fn(),
+    },
+  }),
+}));
+
+jest.mock("next-auth/react", () => ({
+  useSession: jest.fn().mockReturnValue({
+    status: "unauthenticated",
+  }),
+}));
+
+jest.mock("services/v1-api/ecommerce/getCart", () => ({
+  ...jest.requireActual("services/v1-api/ecommerce/getCart"),
+  getCart: jest.fn(),
+}));
+
+jest.mock("next-i18next", () => ({
+  Trans: jest.fn().mockImplementation(({ defaults, components }: ITransProps) => {
+    if (components.signIn) {
+      const signIn = cloneElement(components.signIn, {}, "Sign In");
+
+      return (
+        <>
+          {defaults} {signIn}
+        </>
+      );
+    }
+
+    if (components.bold) {
+      const bold = cloneElement(components.bold, {}, "Combined Ticket");
+
+      return (
+        <>
+          {defaults} {bold}
+        </>
+      );
+    }
+
+    return null;
+  }),
+  useTranslation: () => ({
+    t: jest
+      .fn()
+      .mockImplementation((key, options) =>
+        options ? [`${key} ${JSON.stringify(options)}`] : key,
+      ),
+  }),
+}));
+
+const onSignInMock = jest.fn();
+
+jest.mock("hooks/useSignIn", () => ({
+  useSignIn: jest.fn(() => ({
+    onSignIn: onSignInMock,
+  })),
+}));
+
+interface ITransProps {
+  defaults: string;
+  components: {
+    signIn: JSX.Element;
+    bold: JSX.Element;
+  };
+}
+
+interface IRenderCheckoutFormProps extends Partial<ICheckoutFormProps> {
+  defaultFormValues?: ICheckoutFormValues;
+  userContext?: IUserContext;
+}
+
+const onDirtyFieldsMock = jest.fn();
+
+const defaultProps = {
+  cart: cartMock,
+  onSubmit: jest.fn(),
+  onPaymentMethodsFailure: jest.fn(),
+  onDirtyFields: onDirtyFieldsMock,
+  redirectUrl: null,
+  isPaymentRequired: true,
+};
+
+const getAllValidationErrors = () => screen.getAllByTestId("validation-error");
+const getFirstName = () => screen.getByLabelText("userAccount.firstName");
+const getLastName = () => screen.getByLabelText("userAccount.lastName");
+const getEmail = () => screen.getByLabelText("TRM085");
+const getConfirmEmail = () => screen.getByLabelText("TRM772");
+const getEmailConsent = () => screen.getByTestId("consent-checkbox-container");
+const getSubmitButton = () => screen.getByTestId<HTMLButtonElement>("submit-order-btn");
+
+const getUserContext = (values: Partial<IUserContext> = {}): IUserContext => ({
+  isLoading: false,
+  hasError: false,
+  data: null,
+  ...values,
+});
+
+const getSignInButton = () => screen.getByRole("button", { name: "Sign In" });
+
+const renderCheckoutForm = ({
+  defaultFormValues = DEFAULT_FORM_VALUES,
+  ...props
+}: IRenderCheckoutFormProps = {}) => ({
+  user: userEvent.setup(),
+  ...render(
+    <UserProfileContext.Provider
+      value={{ userContext: getUserContext(), setUserContext: () => undefined, ...props }}
+    >
+      <ContentstackProvider defaultContent={{ page: pageMock }}>
+        <LeaveGuardProvider>
+          <CheckoutPaymentMethodsProvider cart={cartMock}>
+            <CheckoutFormProvider cart={cartMock} defaultFormValues
+
+
+BROWNFIELD MODE — answer as JSON.
+You MAY use read_file on any path named in this prompt (declared files, located fix sites, and any
+document persisted under the run's docs/ directory) when you need more than the excerpt shown.
+Looking is allowed; inventing is not — a file you have neither been shown nor read is a fabrication.
+
+STEP 1 — CLASSIFY THIS STORY. Set "storyKind":
+- "defect" if it reports that EXISTING behavior is wrong, broken, or produces an incorrect/missing result (a bug).
+- "novel" if it asks for a NEW capability that does not exist in the codebase yet. A brownfield story is not always a bug — genuinely new work is "novel".
+
+STEP 2 — LOCATE (always, for both kinds — but the question differs).
+Use ONLY the EXISTING CODE block already present in this prompt (injected above via CodeGraph or Semble).
+
+- If storyKind is "defect": find the FIX SITE — the file/function that COMPUTES the wrong value, not the one that displays it.
+- If storyKind is "novel": there is no fix site, and inventing one produces a confident wrong answer. Find the ATTACHMENT POINT instead — the existing file/function this new capability plugs INTO (the provider, hook, route, config or component it must integrate with), plus anything already present that the implementation should REUSE rather than rewrite. This is what keeps the change as small as possible: you cannot reuse what you have not found.
+
+Set "locationHint" to [{"file":"<repo-relative path>","function":"<function name>","reason":"<why this location — the fix site for a defect, the attachment point for a novel story>"}].
+If no relevant code appears above, set locationHint to []. Do NOT invent a plausible file: a named file whose contents you cannot see in this prompt is a fabrication, and an empty locationHint is a usable answer while a fabricated one is not.
+
+For EACH criterion also declare WHO observes it (end user, tester, api client, operator) and
+WHAT SURFACE they look at — the rendered page, the API response, the CLI output, a generated
+file. If no person or client can see it, it is not a verification criterion. A precondition
+the test establishes (for example a mocked client signalling a change) goes in "setup": that
+is allowed and is not implementation prescription.
+
+STEP 3 — VERIFICATION CRITERIA.
+PRODUCE a "verificationCriteriaDetail" array — concrete, OBSERVABLE checks that confirm the change is correct — derived from the description. Apply these rules to EVERY verification criterion (a strict reviewer holds you to this SAME text, so a VC that breaks any rule will be flagged and rejected):
+A verification criterion states WHAT AN END USER OR TESTER OBSERVES on the user-facing surface THE TICKET IS ABOUT — the rendered output for an output ticket, the displayed screen for a UI ticket, the response a CLIENT receives for an API ticket. It is a BLACK-BOX check on that surface. It NEVER describes HOW the value is produced.
+A verification criterion is FORBIDDEN if it:
+- prescribes HOW to implement — any algorithm, mechanism, approach, or the addition/reading of any new field, flag or service;
+- references an INTERNAL structure that merely FEEDS the ticket's surface — an intermediate payload, a data-transfer object, or a specific response field used to BUILD the output. Verify the surface the ticket names, NOT the data structure behind it;
+- makes a CROSS-COMPARISON that presumes a mechanism — never assert one value "must equal" / "matches" / "is the same as" another; that presumes a shared derivation. Assert the required value is present and correct ON ITS OWN.
+Every verification criterion must be observable, testable, and tied to the ticket's stated symptom/intent.
+
+EXAMPLES OF FORM (the angle-bracket words are placeholders — fill them from THIS story; never copy them literally):
+
+REJECTED: "the <config object> passed to <the client> includes a <key> entry"
+  — asserts INTERNAL STRUCTURE. A tester cannot see a config object.
+ACCEPTED: "when <the request> carries <the marker>, <the surface> shows <the draft state> instead of <the published state>"
+
+REJECTED: "when <internal function> is called with <argument>, the resulting <query> includes <field>"
+  — asserts an INTERNAL CALL PATH. Verify the surface the ticket is about, not the path behind it.
+ACCEPTED: "<the surface> shows <the value> that <the source of truth> currently holds"
+
+REJECTED: "an author edits <entity> in <the external tool> and <the surface> updates"
+  — begins OUTSIDE THE BOUNDARY this suite can drive. Nothing here can operate that tool.
+ACCEPTED: "given <the client> is mocked to signal <the change>, <the surface> re-renders without a reload"
+
+REJECTED: "<the value> matches what <the other place> shows"
+  — a CROSS-COMPARISON presumes a shared derivation. Assert the required value on its own.
+ACCEPTED: "<the surface> shows <the expected value> for <the stated condition>"
+
+REJECTED: "<the feature> works correctly with no regression"
+  — verifies nothing and cannot fail.
+ACCEPTED: "when <the feature> is inactive, <the surface> shows <the prior behaviour> unchanged"
+
+- If the ticket describes a SYMPTOM, the VCs verify that symptom is resolved AND that related existing behavior does not regress.
+Set "vcSource" to one of "description", "both" — where you actually derived the VCs from.
+
+UNREACHABLE EXTERNAL SERVICE — write criteria to the boundary, not past it.
+This project cannot reach the following hosts at test time: contentstack.io, contentstack.com, api.contentstack.io, cdn.contentstack.io.
+There are no credentials for them and no local substitute, so any criterion that
+asserts their real behaviour is unprovable and will fail verification no matter
+how correct the code is.
+
+Write criteria that stop at OUR side of that boundary and are therefore provable:
+what request our code makes, with what parameters, under what conditions; how it
+handles the responses and failures those services can return; what it renders or
+returns given a known response. State the assumption explicitly, e.g. "given the
+<service> client is mocked, ...", so a reader knows the claim's limits.
+
+SCOPE — this applies ONLY to the hosts listed above. Every other integration
+keeps its real coverage: internal APIs, this codeline's own services, databases,
+and anything else reachable are exercised for real exactly as normal. Do NOT mock
+a dependency merely because mocking it would be more convenient. Removing
+coverage from something we CAN test trades a real defect for a green tick, which
+is the opposite of why this constraint exists.
+
+
+**gotransit Project Conventions**
+
+This specification addresses the gotransit checkout flow (/home/bradleyjerome/projects/metrolinx/next.gotransit.com), a Next.js/TypeScript/React application. Key details for AMSD-1919 (email case sensitivity):
+
+**Component Location & Tests:**
+- Source: `src/components/pages/CheckoutPage/CheckoutForm.tsx`
+- Tests: Extend `src/components/pages/CheckoutPage/__tests__/CheckoutForm.spec.tsx` (jest; run `npm test`)
+- Follow existing test patterns for consistency
+
+**Pre-Commit Requirements:**
+- Branch name must match: `^(feature|bugfix|tech|release|hotfix)/[a-zA-Z0-9.-]+(/[a-z0-9-]+)?$`
+- Current branch `bugfix/AI-AMSD-2041` is valid
+- Commits pass commitlint validation; lint-staged runs on staged files
+- All code must be TypeScript type-safe
+
+**Form & Validation Stack:**
+- Form library: react-hook-form (state, change listeners)
+- Validation: joi (server-side), react-hook-form validators (client-side)
+- UI: Tailwind CSS; errors rendered via @hookform/error-message
+- Email fields: Ensure case-insensitive comparison and storage normalization; both client and server should handle email@EXAMPLE.com and email@example.com as identical
+
+Generate refined acceptance criteria and optionally updated title/description. Output raw JSON only (no XML tags, no markdown fences, no preamble) using this schema:
+{
+  "storyId":"AMSD-1919",
+  "agent":"openspec",
+  "notes":"context",
+  "acceptanceCriteria":["..."],
+  "description":"...",
+  "title":"...",
+  "storyKind":"defect|novel",
+  "verificationCriteriaDetail":[{"criterion":"<observable check>","observer":"end user|tester|api client|operator","surface":"<what they look at>","setup":"<optional precondition, e.g. a mocked client signalling a change>"}],
+  "vcSource":"description|both",
+  "locationHint":[{"file":"path/relative/to/repo","function":"functionName","reason":"why this location — the fix site for a defect, the attachment point it integrates with for a novel story"}]
+}
+Use existing text when no change is needed.
+
+Story context:
+{
+  "id": "AMSD-1919",
+  "title": "Go‑Checkout Page - Email & Confirm Email Case Sensitivity",
+  "description": "  \n  On the  Go‑Checkout  page related to the  Email  and  Confirm Email  fields. When the same email is entered but with different letter casing (e.g., uppercase in one field and lowercase in the other), the system flags it as a mismatch. \n\nemail comparisons are case‑insensitive. It should not give error message for same email address regardless it is upper case or lower case.",
+  "acceptanceCriteria": [],
+  "acCount": 0,
+  "agentRole": "checkout-form-engineer",
+  "agentGroup": "main",
+  "dependencies": [],
+  "splitDepth": 0
+}
+# Output — THIS IS A CONTRACT, NOT A PREFERENCE
+
+Emit EXACTLY one <SPEC_AGENT> block and nothing else that matters. Prose outside it is DISCARDED
+unread, however correct it is — the pipeline parses the block and never the commentary.
+
+<SPEC_AGENT>
+{
+  "storyId": <string>,
+  "agent": <string>,
+  "notes": <string>   (optional),
+  "storyKind": <string> one of "defect" | "novel"   (optional),
+  "verificationCriteriaDetail": [ {
+      "criterion": <string>
+         // The observable check, as a sentence.,
+      "observer": <string> one of "end user" | "tester" | "api client" | "operator"
+         // WHO sees it. If no human or client can see it, the criterion is not observable.,
+      "surface": <string>
+         // WHAT they look at — the rendered page, the API response, the CLI output, the generated file. Never an internal object, argument, query or call.,
+      "setup": <string>
+         // Optional precondition the test establishes before observing — for example a mocked client signalling a change. Preconditions are allowed and are NOT implementation prescription; state them here rather than inside the criterion.   (optional),
+  } ]
+  "acceptanceCriteria": <array>,
+  "description": <string>   (optional),
+  "title": <string>   (optional),
+  "acAddedBySpeckit": <array>   (optional),
+  "acModifiedBySpeckit": <array>   (optional),
+  "acFlagged": <array>   (optional),
+  "splitStories": [ {
+      "id": <string>   (optional),
+      "title": <string>   (optional),
+      "description": <string>   (optional),
+      "acceptanceCriteria": <array>   (optional),
+      "agentRole": <string>   (optional),
+      "technicalNotes": <object>   (optional),
+  } ]
+}
+</SPEC_AGENT>
+
+Submit the specification analysis result for one story.
+
+
+# Output
+{"storyId":"AMSD-1919","agent":"openspec","notes":"Fix site confirmed at src/components/pages/CheckoutPage/CheckoutForm.tsx CheckoutForm's confirmEmail FormInput validate rule (~lines 305-309), which does a case-sensitive string comparison against the watched email value. CheckoutFormProvider.tsx and types.ts do not normalize case, so this is the sole point producing the false mismatch. Existing spec CheckoutForm.spec.tsx already exposes getEmail()/getConfirmEmail() helpers and exercises onBlur validation, so the new case-insensitivity scenario extends that suite rather than introducing new test scaffolding. Contentstack is not involved in this flow (translation strings only), so no external-service mocking boundary applies here.","storyKind":"defect","verificationCriteriaDetail":[{"criterion":"When the user types the same email address into the Email field in lowercase and into the Confirm Email field in uppercase (or any differing casing) and moves focus away, the Confirm Email field shows no validation error.","observer":"end user","surface":"rendered Go-Checkout page, Confirm Email field validation message area"},{"criterion":"When the user types the same email address into the Email field in uppercase and into the Confirm Email field in lowercase and moves focus away, the Confirm Email field shows no validation error.","observer":"end user","surface":"rendered Go-Checkout page, Confirm Email field validation message area"},{"criterion":"When the user types genuinely different email addresses into the Email and Confirm Email fields (regardless of casing) and moves focus away, the Confirm Email field still shows the existing mismatch error message.","observer":"end user","surface":"rendered Go-Checkout page, Confirm Email field validation message area"},{"criterion":"With matching-but-differently-cased email and confirm-email values entered, the checkout form's submit action is not blocked by a confirm-email mismatch error.","observer":"tester","surface":"rendered Go-Checkout page, form submit button state and absence of validation-error testid for the confirm email field"}],"acceptanceCriteria":["Given the Email field contains an address in one letter casing and the Confirm Email field contains the identical address in a different letter casing, when the Confirm Email field loses focus, then no mismatch error is displayed for Confirm Email.","Given the Email and Confirm Email fields contain the exact same address with identical casing, when the Confirm Email field loses focus, then no mismatch error is displayed (unchanged existing behavior).","Given the Email and Confirm Email fields contain genuinely different addresses (not just different casing), when the Confirm Email field loses focus, then the existing mismatch error message (TRM774) is still displayed.","Given matching emails with differing casing, the checkout form can be submitted without being blocked by a confirm-email validation error."],"description":"On the Go-Checkout page, the Email and Confirm Email fields are compared case-sensitively, so entering the same address with different letter casing (e.g. Name@Example.com vs name@example.com) incorrectly triggers a mismatch error. The comparison in CheckoutForm.tsx's confirmEmail validate rule must treat email addresses as equal regardless of casing, while still correctly flagging genuinely different addresses.","title":"Go-Checkout Page - Email & Confirm Email Case Sensitivity"}
+
+[coverage-gate] writer: no pre-flight has gated this run — standing down

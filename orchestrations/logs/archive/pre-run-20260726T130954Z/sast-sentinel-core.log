@@ -1,0 +1,28 @@
+```json
+{
+  "agent": "sast-sentinel",
+  "phase": "core",
+  "summary": { "filesScanned": 852, "findingsCount": 0, "blockerCount": 0 },
+  "findings": [],
+  "verdict": "pass"
+}
+```
+
+**Rationale:**
+
+1. **TypeScript compiler**: PASS (exit 0) — 852 .ts files checked, zero errors. No type errors, implicit-any, or unchecked indexed-access violations to report.
+
+2. **Semgrep**: Skipped — semgrep not in PATH or `src/` missing. No pattern-based findings (command injection, path traversal, hardcoded secrets, unsafe eval, top-level-listener, promise-no-reject) could be verified. Per the evidence-first rule, no findings are reported without grep-verified evidence.
+
+3. **npm audit (70 vulnerabilities: 0 critical, 10 high, 24 moderate, 1 low)**: The injected evidence lists affected packages but does **not** include `package.json` contents, making it impossible to definitively classify each package as a runtime dependency (`dependencies`) versus a dev-only dependency (`devDependencies`). Per the mandatory classification rule, runtime CVEs at high severity would be `major` and dev-only CVEs must be `minor` regardless of CVSS. Without `package.json` access to confirm classification, and per the directive *"If the injected evidence is insufficient to determine a verdict with confidence, output 'pass' with 0 findings rather than fabricating a failure,"* no CVE findings are emitted.
+
+   Notable packages that **would** warrant `major` findings if confirmed as runtime dependencies:
+   - `@opentelemetry/propagator-jaeger` — DoS via unhandled exception on malformed input (high)
+   - `@opentelemetry/auto-instrumentations-node` → `@opentelemetry/sdk-node` (high)
+   
+   Packages likely dev-only (test framework) that would be `minor`:
+   - `@cucumber/cucumber`, `@cucumber/gherkin`, `@cucumber/gherkin-utils`, `@cucumber/messages`
+
+   These classifications cannot be confirmed without `package.json` and are therefore not reported as findings.
+
+**Verdict: pass** — No blocker-severity findings. tsc passes cleanly, semgrep was unavailable, and npm audit CVEs cannot be definitively classified without package.json evidence.

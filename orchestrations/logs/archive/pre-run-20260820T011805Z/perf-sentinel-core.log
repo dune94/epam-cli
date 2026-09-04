@@ -1,0 +1,29 @@
+[ai-run] attempt 2/3 for 'qa-gate:perf-sentinel' — escalating z-ai/glm-5.2 -> moonshotai/kimi-k3
+{
+  "agent": "perf-sentinel",
+  "phase": "core",
+  "summary": { "filesAnalysed": 6, "findingsCount": 2, "blockerCount": 0, "estimatedStartupImpactMs": 0 },
+  "findings": [
+    {
+      "severity": "minor",
+      "category": "complexity",
+      "file": "src/pages/_app.tsx",
+      "line": 104,
+      "codeSnippet": ": (await getEntry<IContentstackPage[]>({ contentTypeUid, lang, ...config }))[0];",
+      "description": "When the live-preview session carries no entry_uid, the fallback calls getEntry, which paginates through the ENTIRE content type in 100-entry pages (while result.length < count loop in src/services/contentstack.ts) and then keeps only element [0]. For a content type with many entries this is an unbounded fetch of all pages on every live-preview edit event, when a single entry is wanted.",
+      "estimatedImpact": "medium, because it runs per live-preview edit event over an unbounded collection (all entries of the content type), though only in the no-entryUid fallback path and only inside live preview sessions",
+      "suggestedFix": "Fetch only what is needed: add a limit option to getEntry (or build the query directly with .limit(1)) so the fallback retrieves a single entry instead of paginating the whole content type."
+    },
+    {
+      "severity": "minor",
+      "category": "async",
+      "file": "src/pages/_app.tsx",
+      "line": 75,
+      "codeSnippet": "ContentstackLivePreview.onEntryChange(async () => {",
+      "description": "The onEntryChange handler fires a network re-fetch (getSingleEntry/getEntry) with no debounce, no in-flight guard, and no staleness check. Rapid edits in the CMS can trigger overlapping fetches, and a slower earlier response can resolve after a newer one and overwrite livePreviewContent with stale draft data (wasted requests plus a correctness risk).",
+      "estimatedImpact": "low-to-medium, because it is confined to live-preview editing sessions, but each spurious event costs a full Contentstack round trip and out-of-order resolution can show stale content",
+      "suggestedFix": "Track the latest hash (or a request sequence number) and discard responses whose hash no longer matches ContentstackLivePreview.hash before calling setLivePreviewContent; optionally debounce the handler."
+    }
+  ],
+  "verdict": "pass"
+}

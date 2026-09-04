@@ -1,0 +1,29 @@
+# Prompt
+You are a STRICT verification-criteria reviewer for a brownfield fix. REVIEW ONLY — do NOT rewrite anything.
+
+Acceptance criteria (IMMUTABLE ticket intent):
+- (none)
+Description: [GO, UP, MX] Live Preview of Content in CMS
+
+Proposed verification criteria:
+1. Given the Contentstack Live Preview client is mocked to emit content updates, a component using useContent with a valid contentKey renders the updated content value without a full page reload
+2. Given the Contentstack Live Preview client is mocked and emits a change to a content entry, any component that previously displayed the old value for that entry's contentKey now displays the new value
+3. Given the Contentstack Live Preview client is NOT active (normal production mode), all existing content renders identically to the current behavior — no visual or data differences
+4. Given the Contentstack Live Preview client is mocked and the preview session is disconnected, the application continues to render the last-known content without errors
+5. Given the Contentstack Live Preview client is mocked and provides initial content for a contentKey, the rendered output matches what useContent would return for the same contentKey without Live Preview
+6. The Live Preview integration does not alter the return signature or behavior of useContent when Live Preview is inactive — existing callers (236+ components) require no changes
+7. Given the Contentstack Live Preview client is mocked and emits multiple rapid successive updates for the same contentKey, the rendered output reflects the final value without intermediate errors or crashes
+
+Apply these rules EXACTLY (the producer is held to the same text — do not invent stricter or looser criteria):
+A verification criterion states WHAT AN END USER OR TESTER OBSERVES on the user-facing surface THE TICKET IS ABOUT — the rendered email for an email ticket, the displayed screen/UI for a UI ticket, the API response a CLIENT receives for an API ticket. It is a BLACK-BOX check on that surface. It NEVER describes HOW the value is produced.
+A verification criterion is FORBIDDEN if it:
+- prescribes HOW to implement — any algorithm, mechanism, or approach: "split", "halve", "×0.5", "calculate independently", "per segment", "for each line item", or adding/reading any new field, flag, or service;
+- references an INTERNAL structure that merely FEEDS the ticket's surface — an intermediate payload, a "confirmation data"/DTO object, or a specific response field used to BUILD the output. Verify the surface the ticket names, NOT the data structure behind it;
+- makes a CROSS-COMPARISON that presumes a mechanism — never assert one value "must equal" / "matches" / "is the same as" another (e.g. "the return amount equals the outbound amount"); that presumes a copy/split. Assert the required value is present and correct ON ITS OWN.
+Every verification criterion must be observable, testable, and tied to the ticket's stated symptom/intent.
+
+FLAG any verification criterion that violates ANY rule above, OR that fails to cover the intent of an acceptance criterion.
+Output ONLY a JSON array of short flag strings, e.g. ["VC 2 prescribes halving — restate as observable outcome"]. Output [] if every VC is clean. No prose, no markdown.
+
+# Output
+["VC 1 references internal structures (useContent hook, contentKey) — restate as observable: edited CMS content appears in the displayed page without reload", "VC 2 references internal structure (contentKey) — restate as observable: displayed content updates to the new CMS value", "VC 5 makes a cross-comparison presuming a mechanism (rendered output 'matches what useContent would return') and references an internal hook — assert the initial CMS content displays correctly on its own", "VC 6 is purely internal (hook return signature, existing callers) — not an observable user-facing outcome; remove or restate as 'existing pages render unchanged'", "VC 7 references internal structure (contentKey) — restate as observable: rapid successive CMS edits result in the final value displayed with no errors"]

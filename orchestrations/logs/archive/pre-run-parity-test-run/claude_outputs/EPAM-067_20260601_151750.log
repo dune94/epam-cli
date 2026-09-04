@@ -1,0 +1,194 @@
+=== Prompt for EPAM-067 (attempt 1) ===
+Implement user story EPAM-067: Interactive Provider Switch Confirmation
+
+## Story Description
+Add interactive confirmation dialog when budget threshold is reached. Instead of automatic downgrade, prompt user with: (1) Visual warning that threshold reached, (2) Suggested model switch within same provider (e.g., claude-opus-4-6 → claude-sonnet-4-5), (3) Show cost comparison and remaining budget, (4) User confirms or declines, (5) On confirm, switch model while preserving conversation context. Uses cached SSO credentials - no re-auth needed. Critical for demo to show controlled provider switching with context retention.
+
+## Acceptance Criteria
+- When budget threshold reached, display visual warning with current session cost and configured limit
+- Prompt shows suggested model switch within same provider (e.g., claude-opus-4-6 → claude-sonnet-4-5)
+- Display cost comparison: current model cost per 1K tokens vs suggested model cost
+- User can confirm (Y) or decline (N) the switch via prompts library
+- On confirm, switch model while preserving full conversation context (messages, tokens, session state)
+- On decline, pause and offer alternatives: end session, continue with current model, or manual model select
+- Context retention verified: message history, token counts, and session state preserved after switch
+- Visual confirmation shown after switch: ✓ Switched to {provider}/{model}, context retained ({N} messages)
+- Uses cached SSO credentials for target model - no re-authentication required
+- Unit tests cover: prompt rendering, user input handling, context preservation, model switch execution
+
+## Technical Notes
+- files: ["src/cli/repl/Repl.ts","src/cli/repl/SlashCommands.ts","src/billing/BudgetGuard.ts"]
+- requiredSkills: ["TypeScript","cli-ux","prompts"]
+- implementationNotes: ["Use prompts library for interactive confirmation","BudgetGuard.onHardLimit config option: \"confirm\" | \"downgrade\" | \"pause\"","Store conversation context before switch, restore after","Display: \"Session: $X.XX of $Y.YY limit | Claude: $0.003/1K tokens → Codex: $0.0001/1K tokens\"","Model switch within same provider (Codemie SSO)","Example: claude-opus-4-6 ($0.015/1K) → claude-sonnet-4-5 ($0.003/1K)","Same SSO token works for all models in account","No credential refresh needed - just update model parameter in ProviderChain"]
+
+## Files to Create/Modify
+src/cli/repl/Repl.ts, src/cli/repl/SlashCommands.ts, src/billing/BudgetGuard.ts
+
+## Dependencies
+EPAM-001
+
+## Instructions
+1. Implement all acceptance criteria for this story
+2. Follow the project's existing code patterns and conventions
+3. Create any necessary files in the locations specified
+4. Ensure code compiles/runs without errors
+5. Do NOT create tests unless explicitly required in acceptance criteria
+
+After implementation, provide a brief summary of what was created/modified.
+
+## Relevant Knowledge Base Entries
+No prior KB entries match your agent role yet.
+
+## Knowledge Base Contribution
+Your assigned KB entry ID for this run: **KB-007**
+
+If you discover a non-obvious pattern, gotcha, or anti-pattern during this implementation (or this is a retry), append exactly one entry to `orchestrations/agents/KB.md` using this format:
+
+```markdown
+## KB-007 -- 2026-06-01
+
+**Category:** <backend|frontend|infrastructure|testing|orchestration>
+**AgentRole:** <your agentRole from the story>
+**Tags:** <comma-separated tech keywords, e.g. typescript, node, cli>
+**Trigger:** <retry|first-success>
+**StoryRef:** EPAM-067
+
+<One concise paragraph: the specific pattern, gotcha, or anti-pattern. Precise enough that a future Claude instance can apply it without re-discovering it.>
+```
+
+Only write an entry if the knowledge is genuinely non-obvious. Skip trivial observations.
+=== End Prompt ===
+
+=== codex Output (attempt 1) ===
+
+=== codex exited with code 1 ===
+=== Prompt for EPAM-067 (attempt 2) ===
+Implement user story EPAM-067: Interactive Provider Switch Confirmation
+
+## Story Description
+Add interactive confirmation dialog when budget threshold is reached. Instead of automatic downgrade, prompt user with: (1) Visual warning that threshold reached, (2) Suggested model switch within same provider (e.g., claude-opus-4-6 → claude-sonnet-4-5), (3) Show cost comparison and remaining budget, (4) User confirms or declines, (5) On confirm, switch model while preserving conversation context. Uses cached SSO credentials - no re-auth needed. Critical for demo to show controlled provider switching with context retention.
+
+## Acceptance Criteria
+- When budget threshold reached, display visual warning with current session cost and configured limit
+- Prompt shows suggested model switch within same provider (e.g., claude-opus-4-6 → claude-sonnet-4-5)
+- Display cost comparison: current model cost per 1K tokens vs suggested model cost
+- User can confirm (Y) or decline (N) the switch via prompts library
+- On confirm, switch model while preserving full conversation context (messages, tokens, session state)
+- On decline, pause and offer alternatives: end session, continue with current model, or manual model select
+- Context retention verified: message history, token counts, and session state preserved after switch
+- Visual confirmation shown after switch: ✓ Switched to {provider}/{model}, context retained ({N} messages)
+- Uses cached SSO credentials for target model - no re-authentication required
+- Unit tests cover: prompt rendering, user input handling, context preservation, model switch execution
+
+## Technical Notes
+- files: ["src/cli/repl/Repl.ts","src/cli/repl/SlashCommands.ts","src/billing/BudgetGuard.ts"]
+- requiredSkills: ["TypeScript","cli-ux","prompts"]
+- implementationNotes: ["Use prompts library for interactive confirmation","BudgetGuard.onHardLimit config option: \"confirm\" | \"downgrade\" | \"pause\"","Store conversation context before switch, restore after","Display: \"Session: $X.XX of $Y.YY limit | Claude: $0.003/1K tokens → Codex: $0.0001/1K tokens\"","Model switch within same provider (Codemie SSO)","Example: claude-opus-4-6 ($0.015/1K) → claude-sonnet-4-5 ($0.003/1K)","Same SSO token works for all models in account","No credential refresh needed - just update model parameter in ProviderChain"]
+
+## Files to Create/Modify
+src/cli/repl/Repl.ts, src/cli/repl/SlashCommands.ts, src/billing/BudgetGuard.ts
+
+## Dependencies
+EPAM-001
+
+## Instructions
+1. Implement all acceptance criteria for this story
+2. Follow the project's existing code patterns and conventions
+3. Create any necessary files in the locations specified
+4. Ensure code compiles/runs without errors
+5. Do NOT create tests unless explicitly required in acceptance criteria
+
+After implementation, provide a brief summary of what was created/modified.
+
+## Relevant Knowledge Base Entries
+No prior KB entries match your agent role yet.
+
+## Knowledge Base Contribution
+Your assigned KB entry ID for this run: **KB-007**
+**This is retry attempt 1** — a previous attempt failed. You MUST write a KB entry documenting what went wrong and what you changed.
+
+If you discover a non-obvious pattern, gotcha, or anti-pattern during this implementation (or this is a retry), append exactly one entry to `orchestrations/agents/KB.md` using this format:
+
+```markdown
+## KB-007 -- 2026-06-01
+
+**Category:** <backend|frontend|infrastructure|testing|orchestration>
+**AgentRole:** <your agentRole from the story>
+**Tags:** <comma-separated tech keywords, e.g. typescript, node, cli>
+**Trigger:** <retry|first-success>
+**StoryRef:** EPAM-067
+
+<One concise paragraph: the specific pattern, gotcha, or anti-pattern. Precise enough that a future Claude instance can apply it without re-discovering it.>
+```
+
+Only write an entry if the knowledge is genuinely non-obvious. Skip trivial observations.
+=== End Prompt ===
+
+=== codex Output (attempt 2) ===
+
+=== codex exited with code 1 ===
+=== Prompt for EPAM-067 (attempt 3) ===
+Implement user story EPAM-067: Interactive Provider Switch Confirmation
+
+## Story Description
+Add interactive confirmation dialog when budget threshold is reached. Instead of automatic downgrade, prompt user with: (1) Visual warning that threshold reached, (2) Suggested model switch within same provider (e.g., claude-opus-4-6 → claude-sonnet-4-5), (3) Show cost comparison and remaining budget, (4) User confirms or declines, (5) On confirm, switch model while preserving conversation context. Uses cached SSO credentials - no re-auth needed. Critical for demo to show controlled provider switching with context retention.
+
+## Acceptance Criteria
+- When budget threshold reached, display visual warning with current session cost and configured limit
+- Prompt shows suggested model switch within same provider (e.g., claude-opus-4-6 → claude-sonnet-4-5)
+- Display cost comparison: current model cost per 1K tokens vs suggested model cost
+- User can confirm (Y) or decline (N) the switch via prompts library
+- On confirm, switch model while preserving full conversation context (messages, tokens, session state)
+- On decline, pause and offer alternatives: end session, continue with current model, or manual model select
+- Context retention verified: message history, token counts, and session state preserved after switch
+- Visual confirmation shown after switch: ✓ Switched to {provider}/{model}, context retained ({N} messages)
+- Uses cached SSO credentials for target model - no re-authentication required
+- Unit tests cover: prompt rendering, user input handling, context preservation, model switch execution
+
+## Technical Notes
+- files: ["src/cli/repl/Repl.ts","src/cli/repl/SlashCommands.ts","src/billing/BudgetGuard.ts"]
+- requiredSkills: ["TypeScript","cli-ux","prompts"]
+- implementationNotes: ["Use prompts library for interactive confirmation","BudgetGuard.onHardLimit config option: \"confirm\" | \"downgrade\" | \"pause\"","Store conversation context before switch, restore after","Display: \"Session: $X.XX of $Y.YY limit | Claude: $0.003/1K tokens → Codex: $0.0001/1K tokens\"","Model switch within same provider (Codemie SSO)","Example: claude-opus-4-6 ($0.015/1K) → claude-sonnet-4-5 ($0.003/1K)","Same SSO token works for all models in account","No credential refresh needed - just update model parameter in ProviderChain"]
+
+## Files to Create/Modify
+src/cli/repl/Repl.ts, src/cli/repl/SlashCommands.ts, src/billing/BudgetGuard.ts
+
+## Dependencies
+EPAM-001
+
+## Instructions
+1. Implement all acceptance criteria for this story
+2. Follow the project's existing code patterns and conventions
+3. Create any necessary files in the locations specified
+4. Ensure code compiles/runs without errors
+5. Do NOT create tests unless explicitly required in acceptance criteria
+
+After implementation, provide a brief summary of what was created/modified.
+
+## Relevant Knowledge Base Entries
+No prior KB entries match your agent role yet.
+
+## Knowledge Base Contribution
+Your assigned KB entry ID for this run: **KB-007**
+**This is retry attempt 2** — a previous attempt failed. You MUST write a KB entry documenting what went wrong and what you changed.
+
+If you discover a non-obvious pattern, gotcha, or anti-pattern during this implementation (or this is a retry), append exactly one entry to `orchestrations/agents/KB.md` using this format:
+
+```markdown
+## KB-007 -- 2026-06-01
+
+**Category:** <backend|frontend|infrastructure|testing|orchestration>
+**AgentRole:** <your agentRole from the story>
+**Tags:** <comma-separated tech keywords, e.g. typescript, node, cli>
+**Trigger:** <retry|first-success>
+**StoryRef:** EPAM-067
+
+<One concise paragraph: the specific pattern, gotcha, or anti-pattern. Precise enough that a future Claude instance can apply it without re-discovering it.>
+```
+
+Only write an entry if the knowledge is genuinely non-obvious. Skip trivial observations.
+=== End Prompt ===
+
+=== codex Output (attempt 3) ===
+
+=== codex exited with code 1 ===

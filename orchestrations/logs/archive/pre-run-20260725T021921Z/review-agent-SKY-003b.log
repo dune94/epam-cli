@@ -1,0 +1,50 @@
+```json
+{
+  "verdict": "changes_requested",
+  "issues": [
+    {
+      "severity": "blocker",
+      "file": "/tmp/skyscanner-app/src/table.ts",
+      "line": 0,
+      "description": "File does not exist — Acceptance Criterion 1 requires src/table.ts to exist and export renderTable(flights: Flight[], currency?: string): string. The entire table renderer implementation is missing.",
+      "suggestedFix": "Create /tmp/skyscanner-app/src/table.ts with the renderTable function implementing pipe-delimited columns (Airline | Price | Departure | Arrival | Duration | Stops), computed column widths, separator row with N hyphens per column, right-aligned Price with currency prefix (fallback £), left-aligned other columns, and empty array returning 'No flights found.'"
+    },
+    {
+      "severity": "blocker",
+      "file": "/tmp/skyscanner-app/src/cli.ts",
+      "line": 0,
+      "description": "Acceptance Criterion 9 requires src/cli.ts to call renderTable with searchFlights results and print to stdout. Without table.ts existing, this wiring cannot be present.",
+      "suggestedFix": "Import renderTable from ./table in cli.ts and call it with the flights array returned by searchFlights, printing the result to stdout"
+    },
+    {
+      "severity": "blocker",
+      "file": "/tmp/skyscanner-app/src/cli.ts",
+      "line": 0,
+      "description": "Acceptance Criterion 10 requires that when searchFlights rejects, the error message is written to stderr and process exits with code 1, with no stdout output. Need to verify this error-rejection path exists.",
+      "suggestedFix": "Ensure the catch/rejection handler in cli.ts writes to process.stderr (not stdout) and calls process.exit(1)"
+    },
+    {
+      "severity": "blocker",
+      "file": "/tmp/skyscanner-app/src/cli.test.ts",
+      "line": 0,
+      "description": "Acceptance Criterion 11 requires vitest tests covering: multi-row table output (separator row present, each separator segment length matches column width, Price column right-aligned), single-row table, empty array returning 'No flights found.', currency fallback to £, and searchFlights rejection path. No test file for table.ts exists.",
+      "suggestedFix": "Create test file mirroring src/table.ts path (e.g., test/unit/table.test.ts or src/table.test.ts) with vitest tests for all required scenarios"
+    },
+    {
+      "severity": "blocker",
+      "file": "/tmp/skyscanner-app/src/table.ts",
+      "line": 0,
+      "description": "Acceptance Criterion 1 requires tsc --noEmit reports zero errors. Since table.ts does not exist, this cannot be verified. When created, must have explicit types on all function parameters and return types, no implicit any, strictNullChecks compliance.",
+      "suggestedFix": "Ensure renderTable has explicit parameter types (flights: Flight[], currency?: string) and return type :string. Flight type must be imported or defined. All helper functions must have explicit types."
+    },
+    {
+      "severity": "major",
+      "file": "/tmp/skyscanner-app/src/table.ts",
+      "line": 0,
+      "description": "Acceptance Criteria 2-7 define precise formatting rules: fixed column order, max(header.length, longestDataValue.length) for column widths, separator row with exactly N hyphens per column, left-alignment for all columns except Price, right-alignment for Price after currency symbol prepend, currency fallback to £. Implementation must match all of these exactly.",
+      "suggestedFix": "Implement column width computation as max of header label and widest data value per column. Separator segments must be exactly N hyphens (not N+2 for padding — padding spaces are outside the hyphen count). Price right-alignment means leading spaces after currency symbol is prepended. All other columns get trailing spaces."
+    }
+  ],
+  "summary": "The SKY-003b implementation is entirely missing. The core file src/table.ts does not exist, src/cli.ts has not been wired to call renderTable, and no vitest tests cover the table renderer. All 11 acceptance criteria fail because the implementation artifact is absent. The git diff provided contains only unrelated orchestrations/dashboard changes. This is a blocker-level gap — the entire story needs to be implemented from scratch."
+}
+```

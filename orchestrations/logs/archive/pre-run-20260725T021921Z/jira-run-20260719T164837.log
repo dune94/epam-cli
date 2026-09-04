@@ -1,0 +1,34 @@
+[0;34m[16:48:37][0m [jira] https://bradjerome.atlassian.net (project: KAN) → /tmp/orch-20260719T164837.log
+[0;32m[ingest][0m Pulling tickets from https://bradjerome.atlassian.net — project: KAN, status: 'To Do'
+[0;32m[ingest][0m Found 4 issues.
+[0;32m[ingest][0m Running AC sufficiency gate...
+[ac-gate] Classifying 4 issues (model: z-ai/glm-5.2)
+[ac-gate] Codelines: [be, fe]
+[ac-gate]   KAN-4 — Scaffold TypeScript project with Vitest and Express
+[ac-gate]     verdict: sufficient — ACs are specific, testable, cover the primary success path and multiple edge cases (no index references, no Skyscanner SDKs, vitest passing with no tests), leaving no ambiguity for an AI agent.
+[ac-gate]     comment posted to KAN-4
+[ac-gate]   KAN-5 — Implement typed Skyscanner API client
+[ac-gate]     verdict: sufficient — ACs are highly specific, testable, cover the primary success path and numerous edge cases including error handling, mock mode, key precedence, and security concerns, leaving no ambiguity for implementation.
+[ac-gate]     comment posted to KAN-5
+[ac-gate]   KAN-6 — Implement flight search CLI entry point with formatted table
+[ac-gate]     verdict: sufficient — ACs are detailed, specific, testable, and cover success paths, error/edge cases, testing requirements, and dependency constraints with no ambiguity.
+[ac-gate]     comment posted to KAN-6
+[ac-gate]   KAN-7 — Build Express REST API with /health, /search, /cheapest, and
+[ac-gate]     verdict: sufficient — The acceptance criteria are exceptionally detailed, specific, testable, and cover all primary success paths plus numerous error/edge cases, build configuration, and test requirements, leaving no ambiguity for an AI agent to implement without clarification.
+[ac-gate]     comment posted to KAN-7
+[ac-gate] Results written to /tmp/ingest-FicKF2/ac-gate.json
+
+[ac-gate] ✅ All stories classified. Pipeline may proceed.
+  ✅ KAN-4 — sufficient: ACs are specific, testable, cover the primary success path and multiple edge cases (no index references, no Skyscanner SDKs, vitest passing with no tests), leaving no ambiguity for an AI agent.
+  ✅ KAN-5 — sufficient: ACs are highly specific, testable, cover the primary success path and numerous edge cases including error handling, mock mode, key precedence, and security concerns, leaving no ambiguity for implementation.
+  ✅ KAN-6 — sufficient: ACs are detailed, specific, testable, and cover success paths, error/edge cases, testing requirements, and dependency constraints with no ambiguity.
+  ✅ KAN-7 — sufficient: The acceptance criteria are exceptionally detailed, specific, testable, and cover all primary success paths plus numerous error/edge cases, build configuration, and test requirements, leaving no ambiguity for an AI agent to implement without clarification.
+[0;32m[ingest][0m Synthesizing PRD from classified tickets...
+[ingest]   Split SKY-004 across [be]: be=23 ACs
+[ingest] ✓ PRD written to /home/bradleyjerome/projects/ai/epam-cli/orchestrations/travel-app-prd.json
+[ingest]   Stories: 4
+[ingest]   Verdicts: {"sufficient":4}
+[0;32m[ingest][0m PRD ready: /home/bradleyjerome/projects/ai/epam-cli/orchestrations/travel-app-prd.json
+/home/bradleyjerome/projects/ai/epam-cli/orchestrations/travel-app-prd.json
+[0;31m[ERROR][0m [orch] No codeline/worktree entries found in PRD: /home/bradleyjerome/projects/ai/epam-cli/orchestrations/travel-app-prd.json
+[0;31m[ERROR][0m [orch] Add project.outputDirs to the PRD or set JIRA_DEFAULT_CODELINE + project.outputDir

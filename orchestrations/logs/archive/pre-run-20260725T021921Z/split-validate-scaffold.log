@@ -1,0 +1,3 @@
+spec-mode: fast-path qwen/z-ai/glm-5.1 (skipping MiniMax)
+spec-mode: --validate-splits: SKY-001 → validated 2 children (SKY-001-A, SKY-001-B)
+spec-mode: --validate-splits: complete

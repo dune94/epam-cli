@@ -1,0 +1,18 @@
+Assessment complete. Both artifacts were written successfully (the plan held — no deviations needed):
+
+## Results for phase `core`
+
+**Task-level (latest cost-log record per story, PRD-confirmed completion):**
+| Story | Agent | Elapsed | Forecast | Variance |
+|---|---|---|---|---|
+| MOCK-HW-1-impl | typescript-engineer | 0.30 min | 2.26 min | -87% |
+| MOCK-HW-1-test | test-engineer | 0.53 min | 2.26 min | -77% |
+
+**Phase totals:** 0.83 actual vs 4.51 forecast minutes (-3.68 min, -82%); $0.0086 vs $0.1053 (-92%). `over_threshold: false` — all variance is favorable.
+
+## Artifacts written
+1. **`logs/phase-skill-assessments.jsonl`** — single-line JSON appended under `flock -x` (lockfile `phase-skill-assessments.lock`), validated as parseable JSON with all 11 required fields.
+2. **`logs/phase-improvements/core.md`** — human-readable report with task table, totals, and three observations: forecasts over-conservative for trivial tasks; orchestration overhead (~23.6 min / $0.3986 across team-lead pipeline + spec-pass + 6 QA gates) is 98% of phase spend and should be forecast as a line item; duplicate attempt/completed log rows require dedupe.
+
+## Corrective action
+**No PRD changes made.** No role/domain mismatches exist (typescript-engineer → TS source change; test-engineer → test update — both correct), and there are **zero pending/incomplete stories** in later phases (`scaffold`, `ui_and_review`) eligible for modification. Documented in the report.

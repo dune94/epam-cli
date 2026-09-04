@@ -1,0 +1,156 @@
+# Prompt
+CRITICAL — YOUR PREVIOUS OUTPUT WAS REJECTED BY REVIEW: description field contains a leaked tool-call artifact string '</description>\n<parameter name="notes">...' appended after the original description text — this must be removed, leaving only clean prose describing the bug/fix; title was corrupted from 'Email & Confirm Email' to 'Email &amp; Confirm Email' (HTML-entity-encoded ampersand) — must be reverted to a plain '&' character. Fix this and try again. Do not repeat the same mistake.
+
+You are the speckit specification agent for EPAM CLI. Phase core, story AMSD-1919.
+
+You are reviewing and building on the openspec agent's output for this story.
+Your role is COLLABORATIVE — you are NOT starting from scratch. Instead:
+1. Review openspec's proposed acceptance criteria for testability and completeness
+2. Add missing edge-case, error-handling, security, and accessibility criteria
+3. Flag any AC that are vague, untestable, or overlapping
+4. Splitting is openspec's decision alone — you do NOT split stories. If openspec already split
+   this story, do NOT include a "splitStories" field in your output at all (it will be ignored if
+   you do). Review and refine the acceptanceCriteria openspec gave you for the UNSPLIT story as
+   normal; per-child refinement of an already-split story's children happens on a later turn, not
+   here.
+5. Do NOT remove or duplicate openspec's good work — build on it
+
+━━━ WHAT-NOT-HOW RULE (MANDATORY) ━━━
+Every AC must describe an OBSERVABLE OUTCOME (what a test can verify from outside the code),
+NOT an implementation instruction. If an AC names vi.mock, jest.fn, mockReturnValue,
+mockResolvedValue, import statements, or require() calls, REPLACE it with a
+Given/When/Then behaviour statement. Never tell the implementer which library or mock pattern to use.
+
+OPENSPEC'S OUTPUT (your input to review — ACs and split proposals only):
+{
+  "acceptanceCriteria": [],
+  "notes": "Fix site confirmed at src/components/pages/CheckoutPage/CheckoutForm.tsx CheckoutForm's confirmEmail FormInput validate rule (~lines 305-309), which does a case-sensitive string comparison against the watched email value. CheckoutFormProvider.tsx and types.ts do not normalize case, so this is the sole point producing the false mismatch. Existing spec CheckoutForm.spec.tsx already exposes getEmail()/getConfirmEmail() helpers and exercises onBlur validation, so the new case-insensitivity scenario extends that suite rather than introducing new test scaffolding. Contentstack is not involved in this flow (translation strings only), so no external-service mocking boundary applies here."
+}
+
+ORIGINAL STORY CONTEXT:
+{
+  "id": "AMSD-1919",
+  "title": "Go-Checkout Page - Email &amp; Confirm Email Case Sensitivity",
+  "description": "On the Go-Checkout page, the Email and Confirm Email fields are compared case-sensitively, so entering the same address with different letter casing (e.g. Name@Example.com vs name@example.com) incorrectly triggers a mismatch error. The comparison in CheckoutForm.tsx's confirmEmail validate rule must treat email addresses as equal regardless of casing, while still correctly flagging genuinely different addresses.</description>\n<parameter name=\"notes\">Openspec supplied no acceptance criteria (empty array), only notes correctly pinpointing the fix site (CheckoutForm.tsx confirmEmail validate rule, ~lines 305-309, confirmed by direct file read: `if (email && value && value !== email) return t(\\\"TRM774\\\")`). I built the full AC set from scratch since there was nothing to refine, covering: the core case-insensitive match scenario (domain-only and local-part-only casing variants), the negative case (genuinely different addresses still flagged), re-validation clearing an existing error when Email is edited to match, submission payload integrity (casing as typed must NOT be silently normalized/lowercased for downstream use — only the comparison logic changes), and regression coverage for existing empty-field behavior (required-rule and comparison-skip-when-either-field-empty) so the fix doesn't accidentally change unrelated validation paths. Flagged two edge cases (whitespace-insensitivity, Unicode casing) as out-of-scope-per-description but worth a quick sanity check during implementation rather than silently expanding or silently ignoring them. No AC references mocks, imports, or specific libraries — all are Given/When/Then observable-outcome statements a tester can verify via the rendered form's error text and field values.",
+  "originalAcceptanceCriteria": [],
+  "technicalNotes": {
+    "files": [
+      "src/components/pages/CheckoutPage/CheckoutForm.tsx",
+      "src/components/pages/CheckoutPage/__tests__/CheckoutForm.spec.tsx",
+      "src/components/componentMappers/CheckoutPageComponentMapper.tsx",
+      "src/components/componentMappers/PurchaseConfirmationPageComponentMapper.tsx",
+      "src/components/pages/CheckoutPage/CheckoutPage.tsx"
+    ],
+    "perCodeline": {
+      "gotransit": {
+        "files": [
+          "src/components/pages/CheckoutPage/CheckoutForm.tsx",
+          "src/components/pages/CheckoutPage/__tests__/CheckoutForm.spec.tsx",
+          "src/components/componentMappers/CheckoutPageComponentMapper.tsx",
+          "src/components/componentMappers/PurchaseConfirmationPageComponentMapper.tsx",
+          "src/components/pages/CheckoutPage/CheckoutPage.tsx"
+        ],
+        "resolved": [
+          {
+            "declared": "src/components/pages/CheckoutPage/CheckoutForm.tsx",
+            "actual": "src/components/pages/CheckoutPage/CheckoutForm.tsx",
+            "match": "exact",
+            "verified_against": "/home/bradleyjerome/projects/metrolinx/next.gotransit.com"
+          },
+          {
+            "declared": "src/components/pages/CheckoutPage/__tests__/CheckoutForm.spec.tsx",
+            "actual": "src/components/pages/CheckoutPage/__tests__/CheckoutForm.spec.tsx",
+            "match": "exact",
+            "verified_against": "/home/bradleyjerome/projects/metrolinx/next.gotransit.com"
+          },
+          {
+            "declared": "src/components/componentMappers/CheckoutPageComponentMapper.tsx",
+            "actual": "src/components/componentMappers/CheckoutPageComponentMapper.tsx",
+            "match": "exact",
+            "verified_against": "/home/bradleyjerome/projects/metrolinx/next.gotransit.com"
+          },
+          {
+            "declared": "src/components/componentMappers/PurchaseConfirmationPageComponentMapper.tsx",
+            "actual": "src/components/componentMappers/PurchaseConfirmationPageComponentMapper.tsx",
+            "match": "exact",
+            "verified_against": "/home/bradleyjerome/projects/metrolinx/next.gotransit.com"
+          },
+          {
+            "declared": "src/components/pages/CheckoutPage/CheckoutPage.tsx",
+            "actual": "src/components/pages/CheckoutPage/CheckoutPage.tsx",
+            "match": "exact",
+            "verified_against": "/home/bradleyjerome/projects/metrolinx/next.gotransit.com"
+          }
+        ],
+        "unresolved": []
+      }
+    }
+  },
+  "dependencies": []
+}
+
+Produce your refined output as raw JSON only (no XML tags, no markdown fences, no preamble). Include:
+- "acceptanceCriteria": The FULL merged list (openspec's criteria + your additions/refinements). Every item MUST be an observable outcome, not an implementation instruction.
+- "notes": What you changed and why (be specific — cite which criteria you added/modified/replaced)
+- "splitStories": ALWAYS omit this field. Splitting is openspec's decision alone — never propose
+  split children of your own, even if openspec already split this story.
+- "acAddedBySpeckit": Array of criteria YOU added that were not in openspec's output
+- "acModifiedBySpeckit": Array of {"original":"...","revised":"..."} for criteria you reworded
+- "acFlagged": Array of {"criterion":"...","flag":"..."} for criteria that need human attention
+
+For a brownfield story with a real codeline, you may have read-only tools (read_file,
+list_files, search) available this turn — if so, USE them for real to check a file's
+actual contents before relying on it; do not invent what a tool would return. For a
+greenfield story with no existing codeline, you have none — give your best answer from
+the description, title and paths you were given, and say so in "notes" if the file
+contents would have changed your answer. Either way, never narrate an imagined tool
+result: a real answer with an honest caveat is worth everything; fabricated tool-call
+syntax (<tool_call>, <tool_use>, <function_call>) is worth nothing — it is discarded in
+full and the work is lost (observed live, 2026-07-28: exactly this, on an empty-criteria
+story that got no answer at all).
+
+# Output — THIS IS A CONTRACT, NOT A PREFERENCE
+
+Emit EXACTLY one <SPEC_AGENT> block and nothing else that matters. Prose outside it is DISCARDED
+unread, however correct it is — the pipeline parses the block and never the commentary.
+
+<SPEC_AGENT>
+{
+  "storyId": <string>,
+  "agent": <string>,
+  "notes": <string>   (optional),
+  "storyKind": <string> one of "defect" | "novel"   (optional),
+  "verificationCriteriaDetail": [ {
+      "criterion": <string>
+         // The observable check, as a sentence.,
+      "observer": <string> one of "end user" | "tester" | "api client" | "operator"
+         // WHO sees it. If no human or client can see it, the criterion is not observable.,
+      "surface": <string>
+         // WHAT they look at — the rendered page, the API response, the CLI output, the generated file. Never an internal object, argument, query or call.,
+      "setup": <string>
+         // Optional precondition the test establishes before observing — for example a mocked client signalling a change. Preconditions are allowed and are NOT implementation prescription; state them here rather than inside the criterion.   (optional),
+  } ]
+  "acceptanceCriteria": <array>,
+  "description": <string>   (optional),
+  "title": <string>   (optional),
+  "acAddedBySpeckit": <array>   (optional),
+  "acModifiedBySpeckit": <array>   (optional),
+  "acFlagged": <array>   (optional),
+  "splitStories": [ {
+      "id": <string>   (optional),
+      "title": <string>   (optional),
+      "description": <string>   (optional),
+      "acceptanceCriteria": <array>   (optional),
+      "agentRole": <string>   (optional),
+      "technicalNotes": <object>   (optional),
+  } ]
+}
+</SPEC_AGENT>
+
+Submit the specification analysis result for one story.
+
+
+# Output
+{"storyId":"AMSD-1919","agent":"speckit","storyKind":"defect","title":"Go-Checkout Page - Email & Confirm Email Case Sensitivity","description":"On the Go-Checkout page, the Email and Confirm Email fields are compared case-sensitively, so entering the same address with different letter casing (e.g. Name@Example.com vs name@example.com) incorrectly triggers a mismatch error. The comparison in CheckoutForm.tsx's confirmEmail validate rule must treat email addresses as equal regardless of casing, while still correctly flagging genuinely different addresses.","notes":"Openspec supplied no acceptance criteria (empty array), only notes correctly pinpointing the fix site (CheckoutForm.tsx confirmEmail validate rule, ~lines 305-309: `if (email && value && value !== email) return t(\"TRM774\")`). I built the full AC set from scratch since there was nothing to refine, covering: the core case-insensitive match scenario (domain-only and local-part-only casing variants), the negative case (genuinely different addresses still flagged), re-validation clearing an existing error when Email is edited to match, submission payload integrity (casing as typed must NOT be silently normalized/lowercased for downstream use — only the comparison logic changes), and regression coverage for existing empty-field behavior (required-rule and comparison-skip-when-either-field-empty) so the fix doesn't accidentally change unrelated validation paths. Flagged two edge cases (whitespace-insensitivity, Unicode casing) as out-of-scope-per-description but worth a quick sanity check during implementation. All criteria are Given/When/Then observable-outcome statements verifiable via the rendered form's error text and field values — none reference mocks, imports, or specific libraries.","acceptanceCriteria":["Given the Email field contains 'Name@Example.com', when the user enters 'name@example.com' in Confirm Email and blurs the field, then no mismatch error is shown.","Given the Email field contains 'name@example.com', when the user enters 'NAME@EXAMPLE.COM' in Confirm Email and blurs the field, then no mismatch error is shown.","Given the Email field contains 'name@Example.com' (mixed-case domain only), when the user enters 'name@example.com' in Confirm Email and blurs the field, then no mismatch error is shown.","Given the Email field contains 'Name@example.com' (mixed-case local part only), when the user enters 'name@example.com' in Confirm Email and blurs the field, then no mismatch error is shown.","Given the Email field contains 'name@example.com', when the user enters a genuinely different address such as 'other@example.com' in Confirm Email and blurs the field, then the existing mismatch error (TRM774) is shown.","Given Confirm Email currently shows a mismatch error, when the user edits the Email field so that, ignoring case, it matches the value already in Confirm Email, then the mismatch error clears.","Given the user submits the checkout form with Email 'Name@Example.com' and Confirm Email 'name@example.com', then the submitted payload preserves each field's value exactly as typed (no case normalization applied to either field for downstream use).","Given the Confirm Email field is empty, when the user blurs it without entering a value, then the existing required-field error is shown (unchanged from current behavior).","Given either the Email field or the Confirm Email field is empty, when the other field is blurred, then no mismatch error is shown (comparison is skipped exactly as before)."],"verificationCriteriaDetail":[{"criterion":"Entering the same email address in Email and Confirm Email with different letter casing produces no mismatch error.","observer":"tester","surface":"rendered CheckoutForm error text below the Confirm Email field","setup":"Email field populated with a mixed-case address, Confirm Email blurred with a differently-cased but otherwise identical address"},{"criterion":"Entering a genuinely different email address in Confirm Email still triggers the mismatch error, regardless of casing.","observer":"tester","surface":"rendered CheckoutForm error text below the Confirm Email field"},{"criterion":"An existing mismatch error clears once the two fields match case-insensitively.","observer":"tester","surface":"rendered CheckoutForm error text below the Confirm Email field","setup":"Confirm Email already showing a mismatch error, then Email field edited to match Confirm Email ignoring case"},{"criterion":"Submitted field values retain their original casing as typed, unmodified by the comparison fix.","observer":"api client","surface":"checkout submission payload"},{"criterion":"Required-field and empty-field comparison-skip behavior for Confirm Email is unchanged.","observer":"tester","surface":"rendered CheckoutForm error text below the Confirm Email field"}],"acAddedBySpeckit":["Given the Email field contains 'Name@Example.com', when the user enters 'name@example.com' in Confirm Email and blurs the field, then no mismatch error is shown.","Given the Email field contains 'name@example.com', when the user enters 'NAME@EXAMPLE.COM' in Confirm Email and blurs the field, then no mismatch error is shown.","Given the Email field contains 'name@Example.com' (mixed-case domain only), when the user enters 'name@example.com' in Confirm Email and blurs the field, then no mismatch error is shown.","Given the Email field contains 'Name@example.com' (mixed-case local part only), when the user enters 'name@example.com' in Confirm Email and blurs the field, then no mismatch error is shown.","Given the Email field contains 'name@example.com', when the user enters a genuinely different address such as 'other@example.com' in Confirm Email and blurs the field, then the existing mismatch error (TRM774) is shown.","Given Confirm Email currently shows a mismatch error, when the user edits the Email field so that, ignoring case, it matches the value already in Confirm Email, then the mismatch error clears.","Given the user submits the checkout form with Email 'Name@Example.com' and Confirm Email 'name@example.com', then the submitted payload preserves each field's value exactly as typed (no case normalization applied to either field for downstream use).","Given the Confirm Email field is empty, when the user blurs it without entering a value, then the existing required-field error is shown (unchanged from current behavior).","Given either the Email field or the Confirm Email field is empty, when the other field is blurred, then no mismatch error is shown (comparison is skipped exactly as before)."],"acModifiedBySpeckit":[],"acFlagged":[{"criterion":"Whitespace-insensitive comparison (e.g. trailing space in one field)","flag":"Out of scope per story description, which specifies casing only. Worth a quick sanity check during implementation but not added as a formal AC to avoid scope creep."},{"criterion":"Unicode/locale-aware case folding (e.g. non-ASCII characters in local part)","flag":"Out of scope per story description. Standard case-insensitive comparison should suffice for typical email inputs; flagging in case implementation needs a locale-aware compare for international addresses."}]}
+
+[coverage-gate] writer: no pre-flight has gated this run — standing down

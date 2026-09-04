@@ -1,0 +1,47 @@
+[0;35m[CPA][0m Retrieval: TF-IDF
+[0;36m[23:23:22][0m Loading stories from orch-mock-b-prd-927175.json...
+[0;36m[23:23:22][0m Found 2 stories to contextualize
+
+[0;35m[CPA][0m Processing SPAN-1-1...
+[0;35m[CPA][0m   SPAN-1-1: formula baseline from calibration[low:implementation:cli](n=29): 4.5178418971594745min $0.1404333618569382
+[1mSPAN-1-1[0m  Change getGreeting() return value to 'hello dolly'  [0;32m[PASS][0m
+  Machine time:              4.52 min  →      2.26 min  (conf: 0.95, adj: 0.50x)
+  Cost (story):          $0.1404     →  $0.0351   
+  Escalation:            +$0.2804      (r2@15%=+$0.1650 r3@5%=+$0.0565 k3@1.0%=+$0.0589)
+  Self-heal:             +$0.0320      (p=20%)
+  Retries (exp):          0.32  
+  Total (est):           $0.3527         (story+esc+heal=$0.3475 × pipeline 1.01x)
+  KB coverage:           5     chunks retrieved   2     cited   cov: 40%
+
+[0;35m[CPA][0m Processing SPAN-1-2...
+[0;35m[CPA][0m   SPAN-1-2: formula baseline from calibration[low:implementation:cli](n=29): 4.5178418971594745min $0.1404333618569382
+[1mSPAN-1-2[0m  Update test assertion for getGreeting() to expect 'hello dolly'  [0;32m[PASS][0m
+  Machine time:              4.52 min  →      2.48 min  (conf: 0.82, adj: 0.55x)
+  Cost (story):          $0.1404     →  $0.0351   
+  Escalation:            +$0.2804      (r2@15%=+$0.1650 r3@5%=+$0.0565 k3@1.0%=+$0.0589)
+  Self-heal:             +$0.0320      (p=20%)
+  Retries (exp):          0.32  
+  Total (est):           $0.3527         (story+esc+heal=$0.3475 × pipeline 1.01x)
+  KB coverage:           5     chunks retrieved   3     cited   cov: 60%
+  [1;33m⚠[0m  SPAN-1-1 dependency is pending; test will fail if getGreeting() still returns 'hello world'
+
+[0;36m=== CPA Gate Summary ===[0m
+
+Phase                    Pass   Review    Block    Total
+------------------------------------------------------
+mock3_core                  2        0        0        2
+------------------------------------------------------
+[1mTOTAL                       2        0        0        2[0m
+
+[0;32m[CPA OK][0m All 2 stories passed the CPA gate
+
+[0;36m[23:25:06][0m Appended 2 CPA records to /home/bradleyjerome/projects/ai/epam-cli/orchestrations/logs/cpa-review.jsonl
+[0;36m[23:25:06][0m Applying blended estimates to prd.json...
+[0;32m[CPA OK][0m Backed up prd.json → orch-mock-b-prd-927175.json.before-cpa
+[0;32m[CPA OK][0m Applied CPA blended estimates to 2 stories
+
+  Review:   git diff /tmp/orch-mock-b-prd-927175.json
+  Restore:  cp /tmp/orch-mock-b-prd-927175.json.before-cpa /tmp/orch-mock-b-prd-927175.json
+
+No calibrated categories (need >= min-n completed stories per category).
+[0;36m[23:25:40][0m Calibration updated from actuals

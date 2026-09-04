@@ -1,0 +1,93 @@
+# Prompt
+You are the speckit specification agent for EPAM CLI. Phase mock3_core, story SPAN-1.
+
+You are reviewing and building on the openspec agent's output for this story.
+Your role is COLLABORATIVE — you are NOT starting from scratch. Instead:
+1. Review openspec's proposed acceptance criteria for testability and completeness
+2. Add missing edge-case, error-handling, security, and accessibility criteria
+3. Flag any AC that are vague, untestable, or overlapping
+4. Splitting is openspec's decision alone — you do NOT split stories. If openspec already split
+   this story, do NOT include a "splitStories" field in your output at all (it will be ignored if
+   you do). Review and refine the acceptanceCriteria openspec gave you for the UNSPLIT story as
+   normal; per-child refinement of an already-split story's children happens on a later turn, not
+   here.
+5. Do NOT remove or duplicate openspec's good work — build on it
+
+━━━ WHAT-NOT-HOW RULE (MANDATORY) ━━━
+Every AC must describe an OBSERVABLE OUTCOME (what a test can verify from outside the code),
+NOT an implementation instruction. If an AC names vi.mock, jest.fn, mockReturnValue,
+mockResolvedValue, import statements, or require() calls, REPLACE it with a
+Given/When/Then behaviour statement. Never tell the implementer which library or mock pattern to use.
+
+OPENSPEC'S OUTPUT (your input to review — ACs and split proposals only):
+{
+  "acceptanceCriteria": [
+    "getGreeting() returns exactly 'hello dolly'",
+    "The existing test file's assertion on the return value is updated to match the new value and passes under vitest",
+    "tsc --noEmit exits 0"
+  ],
+  "notes": "Defect: existing getGreeting() returns wrong value. No code block injected so locationHint is empty. VCs derived from both ACs and description — the description adds the multi-codeline scope not captured in the ACs."
+}
+
+ORIGINAL STORY CONTEXT:
+{
+  "id": "SPAN-1",
+  "title": "Change the greeting from hello world to hello dolly in every affected codeline",
+  "description": "The getGreeting() function currently returns the string 'hello world'. It should instead return 'hello dolly'. Update any test that asserts the old value to match the new one. This change is required independently in each codeline named on this story — the codelines do not share code.",
+  "originalAcceptanceCriteria": [
+    "getGreeting() returns exactly 'hello dolly'",
+    "The existing test file's assertion on the return value is updated to match the new value and passes under vitest",
+    "tsc --noEmit exits 0"
+  ],
+  "technicalNotes": {
+    "files": [
+      "src/hello.ts"
+    ]
+  },
+  "dependencies": []
+}
+
+Produce your refined output as raw JSON only (no XML tags, no markdown fences, no preamble). Include:
+- "acceptanceCriteria": The FULL merged list (openspec's criteria + your additions/refinements). Every item MUST be an observable outcome, not an implementation instruction.
+- "notes": What you changed and why (be specific — cite which criteria you added/modified/replaced)
+- "splitStories": ALWAYS omit this field. Splitting is openspec's decision alone — never propose
+  split children of your own, even if openspec already split this story.
+- "acAddedBySpeckit": Array of criteria YOU added that were not in openspec's output
+- "acModifiedBySpeckit": Array of {"original":"...","revised":"..."} for criteria you reworded
+- "acFlagged": Array of {"criterion":"...","flag":"..."} for criteria that need human attention
+
+You have NO tools in this request and cannot call any — do not emit a tool call in any
+syntax (<tool_call>, <tool_use>, <function_call>). Nothing executes them, so a response
+containing one is discarded in full and the work is lost. Live AMSD-2041 (2026-07-28)
+died exactly this way: asked to review a story with an empty criteria list, the model
+requested the four files named above via <tool_call>read_file(...) and produced no answer
+at all. Everything you may use is already in this prompt. File PATHS are given without
+their contents by design — if the contents would have changed your answer, say so in
+"notes" and give your best answer from the description, title and paths you were given.
+An answer with a caveat is worth everything; a tool call is worth nothing.
+
+
+# Output
+```json
+{
+  "acceptanceCriteria": [
+    "getGreeting() returns exactly 'hello dolly'",
+    "The existing test file's assertion on the return value is updated to match the new value and passes under vitest",
+    "tsc --noEmit exits 0",
+    "No occurrence of the string 'hello world' remains in any source or test file within the project",
+    "getGreeting() returns 'hello dolly' on every invocation (no stateful or one-shot behavior)"
+  ],
+  "notes": "Added AC4 to catch stale 'hello world' references that could be missed if only the function body and test assertion are updated — the description explicitly scopes this to 'every affected codeline' and a grep-level check ensures completeness. Added AC5 to guard against edge-case regressions where a function might return the correct value once then diverge (e.g., accidental closure over mutable state). Flagged the multi-codeline scope gap: the description says 'each codeline named on this story' and 'codelines do not share code,' but no AC enumerates which codelines must be verified, making it impossible to confirm completeness without external knowledge of the codeline list.",
+  "acAddedBySpeckit": [
+    "No occurrence of the string 'hello world' remains in any source or test file within the project",
+    "getGreeting() returns 'hello dolly' on every invocation (no stateful or one-shot behavior)"
+  ],
+  "acModifiedBySpeckit": [],
+  "acFlagged": [
+    {
+      "criterion": "getGreeting() returns exactly 'hello dolly'",
+      "flag": "The story description says 'every affected codeline' and 'codelines do not share code,' but this AC does not specify which codelines must satisfy it. Without an enumeration of codelines, completeness cannot be verified. A human should confirm whether the codeline list is tracked elsewhere or whether an AC should name them explicitly."
+    }
+  ]
+}
+```

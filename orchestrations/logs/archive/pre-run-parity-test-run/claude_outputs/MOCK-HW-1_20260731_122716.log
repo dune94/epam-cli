@@ -1,0 +1,150 @@
+=== Prompt for MOCK-HW-1 (attempt 1) ===
+CRITICAL — these files already exist. Their real content is injected below (## Existing File Contents) — you do NOT need to ReadFile them to see what's already there.
+Do NOT import or reference anything that doesn't appear in the injected content below — a plausible-sounding module name is not a real one.
+Only call ReadFile yourself if you need to see MORE of a file than what's shown (e.g. it was truncated), or a file not listed below.
+
+   - /tmp/brownfield-mock-e2e-wbuCZU/codelines/mock-hello-world/src/hello.ts (content already injected below — do not ReadFile it unless you need lines beyond what's shown)
+   - /tmp/brownfield-mock-e2e-wbuCZU/codelines/mock-hello-world/.codegraph/.gitignore (ReadFile this only if you need it — not a fix site; content omitted to keep the prompt small)
+   - /tmp/brownfield-mock-e2e-wbuCZU/codelines/mock-hello-world/src/hello.test.ts (ReadFile this only if you need it — not a fix site; content omitted to keep the prompt small)
+---
+
+Implement user story MOCK-HW-1: Hello world greeting should say hello dolly
+
+## Story Description
+Hello world greeting should say hello dolly
+
+## Acceptance Criteria
+- 
+
+
+## Root Cause Analysis & Prescribed Fix (AUTHORITATIVE — start here, do not re-trace)
+A code investigation already traced this bug to its cause and prescribed the minimal fix below. This is the plan of record. Apply it; do NOT re-read the whole codebase to re-derive it.
+
+The Acceptance Criteria above describe the desired END BEHAVIOR to VERIFY — they are NOT an implementation blueprint. Do not re-architect, split values, or add new fields/abstractions to satisfy an AC literally when the prescribed minimal fix already makes that AC pass. Implement the fix below; the ACs are how you check you got it right.
+
+HARD RULES:
+- Make the SMALLEST change that fixes the root cause. Fewer lines of code is always better.
+- REUSE existing functions. Before writing any new helper, search the repo for an existing util/parser/formatter that already does what you need (use the CodeGraph tool documented below) and call it. Writing novel code when a helper already exists is a defect to be rejected in review.
+- **src/hello.ts** (`getGreeting`): getGreeting COMPUTES the greeting value — it returns the hard-coded literal 'hello world', which is the exact wrong value the ticket reports (should be 'hello dolly'). It is not a display or mapper layer; the incorrect string originates in this function body, and its only caller plus the test in src/hello.test.ts merely consume whatever it returns.
+  - **Minimal fix:** In src/hello.ts, change line 2 from `return 'hello world';` to `return 'hello dolly';`. This is a one-line literal replacement; no new logic, abstraction, or helper is required. Also update the expectation in src/hello.test.ts to match.
+
+## Reviewer Feedback — ADDRESS THESE (a prior code review requested changes)
+The team-lead reviewer examined your previous attempt and requested the changes below. This is the highest priority: make the SMALLEST edits that resolve each point. If a point says the change is over-engineered or a more concise change/existing helper would do, REMOVE the excess and use the minimal approach — do not add more code.
+- [blocker] Over-engineered test change. The diff renames an existing test, removes 2 redundant tests (good per learned rules), but then adds an unnecessary 'returns a string greeting' typeof test. A more concise change exists that meets all acceptance criteria: from the baseline test expecting 'hello world', simply change the assertion string to 'hello dolly' — 1 line changed, 0 lines added. The typeof test is redundant because toBe('hello dolly') already implies a string return, and the return type is enforced by TypeScript (getGreeting(): string). Fewer lines is always better. (src/hello.test.ts:1)
+  - Suggested fix: Replace the entire test file change with a single-line edit: change expect(getGreeting()).toBe('hello world') to expect(getGreeting()).toBe('hello dolly') in the existing test. Remove the added typeof test and the test rename. The resulting test file should be: import { describe, it, expect } from 'vitest'; import { getGreeting } from './hello'; describe('getGreeting', () => { it('returns hello dolly', () => { expect(getGreeting()).toBe('hello dolly'); }); });
+
+## Verification Criteria (what a tester will CONFIRM — your change must satisfy every one)
+These are observable checks, derived from the acceptance criteria and description. They describe WHAT is observed, not how to build it. Make the minimal change that makes all of these true; your accompanying test should assert them:
+- The behavior described in the ticket is observed to be correct after the change: "Hello world greeting should say hello dolly".
+- Existing behavior related to this area is unchanged (no regression).
+
+## Tests are NOT your job this turn
+A dedicated test-writer agent runs immediately after your fix commits and owns the bug-reproducing test. Do NOT write, edit, or create any test file (*.test.*, *.spec.*, __tests__/). Write ONLY the fix. Adding a test here wastes your turn budget and has caused repeated failures.
+
+## CodeGraph Tool — find EXISTING functions to reuse (do this BEFORE writing any new helper)
+An existing-code search tool is available. Run it with the Bash tool to discover reusable functions instead of inventing new ones:
+  PROJECT_ROOT="/tmp/brownfield-mock-e2e-wbuCZU/codelines/mock-hello-world" bash "/home/bradleyjerome/projects/ai/epam-cli/orchestrations/scripts/codegraph-agent-query.sh" helpers <domain nouns>   # existing util/parser/formatter to REUSE (symbol + import path)
+  PROJECT_ROOT="/tmp/brownfield-mock-e2e-wbuCZU/codelines/mock-hello-world" bash "/home/bradleyjerome/projects/ai/epam-cli/orchestrations/scripts/codegraph-agent-query.sh" query <SymbolName>        # exact definition site of a symbol
+  PROJECT_ROOT="/tmp/brownfield-mock-e2e-wbuCZU/codelines/mock-hello-world" bash "/home/bradleyjerome/projects/ai/epam-cli/orchestrations/scripts/codegraph-agent-query.sh" callees <SymbolName>      # what a function already calls
+RULE: Before you add ANY new function, run `helpers` for what it would do. If a suitable function already exists, import and call it — do NOT duplicate it. Fewer lines of code is always better.
+
+
+## Adding a New Dependency
+If the fix genuinely requires a package this project does not yet declare, import it directly and continue — do not stop to ask whether this is possible or search for an alternative that avoids it. Missing imports are detected and installed automatically after your change; this does not need your permission or a separate step. Proceed with the real fix.
+
+
+
+
+## Technical Notes
+- files: ["src/hello.ts",".codegraph/.gitignore","src/hello.test.ts"]
+
+## Existing File Contents (injected once, deterministically — do NOT ReadFile these unless you need more than shown)
+
+### /tmp/brownfield-mock-e2e-wbuCZU/codelines/mock-hello-world/src/hello.ts
+```
+export function getGreeting(): string {
+  return 'hello world';
+}
+```
+
+## Files to Create/Modify (EXACT ABSOLUTE PATHS — write to these paths exactly)
+src/hello.ts, .codegraph/.gitignore, src/hello.test.ts
+
+## Dependencies
+None
+
+## Module resolution in this codeline
+A bare import that names a file under any of these directories is INTERNAL source, not a dependency — never add it to the dependency manifest:
+  public, review, src
+Source extensions here: .ts, .tsx, .js, .jsx, .mjs, .cjs
+Write imports the way the existing files in this codeline write them; read a neighbouring file before inventing a path.
+
+
+## Instructions
+CRITICAL — these files already exist. Their real content is injected below (## Existing File Contents) — you do NOT need to ReadFile them to see what's already there.
+Do NOT import or reference anything that doesn't appear in the injected content below — a plausible-sounding module name is not a real one.
+Only call ReadFile yourself if you need to see MORE of a file than what's shown (e.g. it was truncated), or a file not listed below.
+   - /tmp/brownfield-mock-e2e-wbuCZU/codelines/mock-hello-world/src/hello.ts (content already injected below — do not ReadFile it unless you need lines beyond what's shown)
+   - /tmp/brownfield-mock-e2e-wbuCZU/codelines/mock-hello-world/.codegraph/.gitignore (ReadFile this only if you need it — not a fix site; content omitted to keep the prompt small)
+   - /tmp/brownfield-mock-e2e-wbuCZU/codelines/mock-hello-world/src/hello.test.ts (ReadFile this only if you need it — not a fix site; content omitted to keep the prompt small)
+**The content of every file listed above is already shown in ## Existing File Contents — use that, do not spend a tool call re-reading them. Use Edit for targeted changes to existing files — do NOT overwrite an existing file wholesale with WriteFile.**
+
+1. Use the injected ## Existing File Contents above to verify what actually exists (exports, types, existing utilities) before writing any code — do not guess, and do not re-read a file already shown in full
+2. Implement all acceptance criteria for this story
+3. Follow the project's existing code patterns and conventions
+4. Do NOT create tests unless explicitly required in acceptance criteria
+
+After implementation, provide a brief summary of what was created/modified.
+
+## Relevant Knowledge Base Entries
+The following was learned from previous story implementations and is relevant to your agent role. Apply this knowledge before writing any code:
+
+- [2026-07-06T18:11:26Z] Use vi.fn().mockResolvedValue(value) to make a mock return a resolved Promise.
+- [2026-07-06T20:31:11Z] Use `test: { passWithNoTests: true }` in vitest.config.ts or create a stub test file when no *.test.ts files exist.
+- [2026-07-06T20:33:03Z] Enable globals:true in vitest.config.ts so describe, it, and expect work without imports, reducing boilerplate in test files.
+- [2026-07-06T23:47:34Z] Use CommonJS-compatible patterns in src/server.ts: avoid `import.meta.url` and top-level `await`; gate listen with `if (require.main === module)`.
+- [2026-07-07T02:35:30Z] Always include a non-test source file in src/ alongside any src/*.test.ts file, since tsconfig.json excludes test files from tsc --noEmit.
+- [2026-07-07T19:01:34Z] Only modify or create files explicitly listed in the story's acceptance criteria. Do not touch files belonging to other stories or outside the current task scope.
+- [2026-07-07T20:17:57Z] [unreviewed-fallback] Avoid using deprecated TypeScript compiler options like 'moduleResolution=node10'; use 'moduleResolution=node' instead.
+- [2026-07-17T20:20:58Z] Always: Before importing a module or referencing a type/property, always read the actual source file to verify the export exists, its exact path, its properties, and its constructor/factory signatures
+- [2026-07-23T01:15:16Z] Always: In tsconfig.json, always use moduleResolution 'node' (not 'node10' or 'Node10') — 'node10' was removed in TypeScript 5.x. The correct value for CommonJS + Node resolution is 'node'.
+- [2026-07-23T14:30:00Z] CORRECTION to a prior entry (2026-07-23T01:17:52Z, now removed): that entry wrongly claimed 'moduleResolution: node' itself is removed and must become 'node16'/'nodenext'. Root-caused via mock1 (epam-cli orchestration test): 'node' is valid and correct through TypeScript 5.x (confirmed on 5.9.3) — it was only removed in TypeScript 7.x. The real defect was an unpinned `typescript` devDependency letting a fallback `npm install` pull latest (7.x) instead of the project's intended version. Do NOT rewrite a working tsconfig.json's moduleResolution in response to a TS5108 error — first check `node_modules/typescript/package.json`'s version; if it's 7.x and the rest of the project expects 5.x, the fix is pinning/reinstalling the correct typescript version, not changing moduleResolution.
+
+## Knowledge Base Contribution (do this LAST — after writing all implementation files)
+Your assigned KB entry ID for this run: **KB-021**
+
+IMPORTANT: Write ALL implementation files first. Only AFTER writing every required file should you optionally append a KB entry.
+Do NOT read orchestrations/agents/KB.md before writing implementation files. The relevant KB entries are already injected above.
+
+If (and only if) you discover a non-obvious pattern during implementation, append one entry to `orchestrations/agents/KB.md`:
+
+```markdown
+## KB-021 -- 2026-07-31
+
+**Category:** <backend|frontend|infrastructure|testing|orchestration>
+**AgentRole:** <your agentRole from the story>
+**Tags:** <comma-separated tech keywords, e.g. typescript, node, cli>
+**Trigger:** <retry|first-success>
+**StoryRef:** MOCK-HW-1
+
+<One concise paragraph: the specific pattern, gotcha, or anti-pattern.>
+```
+
+Only write an entry if the knowledge is genuinely non-obvious. Skip trivial observations.
+=== End Prompt ===
+
+=== epam Output (attempt 1) ===
+Summary of changes:
+
+- **`src/hello.ts`**: Changed the returned literal from `'hello world'` to `'hello dolly'` (one-line fix to the root cause).
+- **`src/hello.test.ts`**: Replaced the test file with the minimal 1-test, 1-line-edit version requested by the reviewer — renamed test to `'returns hello dolly'` and updated the assertion to `'hello dolly'`. No typeof test, no redundant cases.
+
+No new helpers, abstractions, or dependencies were introduced.
+Summary of changes:
+
+- **`src/hello.ts`**: Changed the returned literal from `'hello world'` to `'hello dolly'` (one-line fix to the root cause).
+- **`src/hello.test.ts`**: Replaced the test file with the minimal 1-test, 1-line-edit version requested by the reviewer — renamed test to `'returns hello dolly'` and updated the assertion to `'hello dolly'`. No typeof test, no redundant cases.
+
+No new helpers, abstractions, or dependencies were introduced.
+
+=== End epam Output ===

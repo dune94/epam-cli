@@ -1,0 +1,19 @@
+{
+  "agent": "spec-validator",
+  "phase": "core",
+  "stories": [{
+    "storyId": "AMSD-1820",
+    "title": "[Mozio] - The Promo code amount is NOT displayed as expected for Return trip tickets in the Mozio email confirmation",
+    "criteria": [
+      {
+        "text": "Promo code discount amount must be correctly displayed for Return trip tickets in Mozio email confirmation (implicit from story title — no explicit ACs defined in prd.json)",
+        "status": "met",
+        "evidence": "The core bug was in apply-report-discounts.service.ts where lineItem.id was compared directly to discount.lineItemId. For return trips, lineItem.id is suffixed (e.g. 'abc#return') while discount.lineItemId is the base ID ('abc'), causing the discount to never match. The fix changes the comparison to use parseDispatchLineItemKey(lineItem.id).id === discount.lineItemId, which strips the return suffix before comparison. A comprehensive spec file (apply-report-discounts.service.spec.ts, 190 lines) was added with 4 test cases covering: (1) return-trip dispatch with '#return' suffix gets the promo discount applied, (2) outbound dispatch without suffix still works, (3) no discount applied when no promo code exists, (4) correct discount amount for shared line items. All 165 tests pass (numPassed=165, numFailed=0).",
+        "gaps": "No explicit acceptance criteria were defined in prd.json (criteria count = 0). Assessment is based on the story title as an implicit requirement. The fix is narrowly scoped to apply-report-discounts.service.ts; the other expected files (map-line-item-return-trip-modification.ts, map-to-sanitized-mozio-dispatch.ts, create-reservations.mappers.ts, http-mozio-webhook.ts) show no changes in the git diff, but they appear to be context files rather than requiring modification for this specific fix."
+      }
+    ],
+    "overallCompliance": 100,
+    "verdict": "pass"
+  }],
+  "overallVerdict": "pass"
+}

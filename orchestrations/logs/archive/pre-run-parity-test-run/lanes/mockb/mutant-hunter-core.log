@@ -1,0 +1,89 @@
+```json
+{
+  "agent": "mutant-hunter",
+  "phase": "core",
+  "summary": {
+    "mutationsProposed": 8,
+    "killed": 5,
+    "survived": 0,
+    "noCoverage": 3,
+    "mutationScore": 62.5
+  },
+  "mutations": [
+    {
+      "file": "src/schedule.ts",
+      "line": 6,
+      "originalCode": "for (let i = 0; i < stops.length; i++) {",
+      "mutatedCode": "for (let i = 0; i < stops.length - 1; i++) {",
+      "status": "killed",
+      "relatedTest": "includes the final stop in the output",
+      "recommendation": "The test explicitly asserts that 'Eglinton (25m)' appears in output, and 'includes all stops in the output' checks all three stops. Both catch this boundary regression."
+    },
+    {
+      "file": "src/schedule.ts",
+      "line": 6,
+      "originalCode": "for (let i = 0; i < stops.length; i++) {",
+      "mutatedCode": "for (let i = 0; i <= stops.length; i++) {",
+      "status": "killed",
+      "relatedTest": "includes all stops in the output",
+      "recommendation": "Accessing stops[stops.length] produces undefined; the string template yields 'undefined (undefined)m', which fails exact-match assertions for 'Union (0m)', 'Bloor (12m)', 'Eglinton (25m)'."
+    },
+    {
+      "file": "src/schedule.ts",
+      "line": 7,
+      "originalCode": "parts.push(`${stops[i].name} (${stops[i].minutes}m)`);",
+      "mutatedCode": "parts.push(`${stops[i].name}`);",
+      "status": "killed",
+      "relatedTest": "includes all stops in the output",
+      "recommendation": "Removing the minutes field breaks the expected format. Tests use .toContain() on strings like 'Union (0m)', which would not match 'Union'."
+    },
+    {
+      "file": "src/schedule.ts",
+      "line": 8,
+      "originalCode": "return parts.join(' -> ');",
+      "mutatedCode": "return parts.join(',');",
+      "status": "killed",
+      "relatedTest": "separates consecutive stops with arrow separators",
+      "recommendation": "Test explicitly checks for '->' in the output with .toContain('->'); changing the separator to ',' or any other value fails this assertion."
+    },
+    {
+      "file": "src/schedule.ts",
+      "line": 6,
+      "originalCode": "for (let i = 0; i < stops.length; i++) {",
+      "mutatedCode": "for (let i = 0; i < stops.length; i += 2) {",
+      "status": "killed",
+      "relatedTest": "includes all stops in the output",
+      "recommendation": "Skipping every other element (e.g., i+=2) with a 3-stop input would skip 'Bloor (12m)' and 'Eglinton (25m)'. The test checks all three stops are present; mutation fails."
+    },
+    {
+      "file": "src/schedule.ts",
+      "line": 12,
+      "originalCode": "return stops.length ? stops[stops.length - 1].minutes : 0;",
+      "mutatedCode": "return !stops.length ? stops[stops.length - 1].minutes : 0;",
+      "status": "no-coverage",
+      "relatedTest": null,
+      "recommendation": "totalMinutes() is not tested in the test suite. Inverting the condition would return 0 for non-empty arrays and attempt undefined access for empty ones. No test catches this logic inversion."
+    },
+    {
+      "file": "src/schedule.ts",
+      "line": 12,
+      "originalCode": "return stops.length ? stops[stops.length - 1].minutes : 0;",
+      "mutatedCode": "return stops.length ? stops[stops.length].minutes : 0;",
+      "status": "no-coverage",
+      "relatedTest": null,
+      "recommendation": "Off-by-one access: stops[stops.length] is undefined. For a non-empty array, this returns NaN or crashes. Untested function—no test catches the boundary shift."
+    },
+    {
+      "file": "src/schedule.ts",
+      "line": 12,
+      "originalCode": "return stops.length ? stops[stops.length - 1].minutes : 0;",
+      "mutatedCode": "return stops.length ? stops[stops.length - 1].minutes : 1;",
+      "status": "no-coverage",
+      "relatedTest": null,
+      "recommendation": "Changing the empty-array fallback from 0 to 1 silently inverts the semantics (empty = 1 minute instead of 0). If totalMinutes is used for billing or time accounting, this is a silent data corruption. No test detects it."
+    }
+  ],
+  "verdict": "warn",
+  "details": "formatStops is well-defended: all 5 mutations targeting its loop bounds, string format, and separator are caught by existing assertions. However, totalMinutes() is completely untested (0/3 mutations caught). This function accesses array boundaries and may be used for time accounting or billing—silent failures here are costly. Add tests for totalMinutes with empty and non-empty inputs, and verify the boundary conditions (stops[stops.length - 1] on single-element and multi-element arrays). Mutation score 62.5% reflects strong coverage of tested code but a significant gap in untested paths."
+}
+```

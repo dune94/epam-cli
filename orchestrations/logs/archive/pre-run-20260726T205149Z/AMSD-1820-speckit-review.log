@@ -1,0 +1,117 @@
+# Prompt
+You are the speckit specification agent for EPAM CLI. Phase core, story AMSD-1820.
+
+You are reviewing and building on the openspec agent's output for this story.
+Your role is COLLABORATIVE — you are NOT starting from scratch. Instead:
+1. Review openspec's proposed acceptance criteria for testability and completeness
+2. Add missing edge-case, error-handling, security, and accessibility criteria
+3. Flag any AC that are vague, untestable, or overlapping
+4. Splitting is openspec's decision alone — you do NOT split stories. If openspec already split
+   this story, do NOT include a "splitStories" field in your output at all (it will be ignored if
+   you do). Review and refine the acceptanceCriteria openspec gave you for the UNSPLIT story as
+   normal; per-child refinement of an already-split story's children happens on a later turn, not
+   here.
+5. Do NOT remove or duplicate openspec's good work — build on it
+
+━━━ WHAT-NOT-HOW RULE (MANDATORY) ━━━
+Every AC must describe an OBSERVABLE OUTCOME (what a test can verify from outside the code),
+NOT an implementation instruction. If an AC names vi.mock, jest.fn, mockReturnValue,
+mockResolvedValue, import statements, or require() calls, REPLACE it with a
+Given/When/Then behaviour statement. Never tell the implementer which library or mock pattern to use.
+
+OPENSPEC'S OUTPUT (your input to review — ACs and split proposals only):
+{
+  "acceptanceCriteria": [],
+  "notes": "Defect: promo code/discount amount is not displayed correctly for return trip tickets in Mozio email confirmations. The codebase already has return-trip-specific logic (station swapping in create-reservations.mappers.ts), but mapToSanitizedMozioDispatch passes the discount through without any return-trip adjustment. The fix site is the sanitization mapper that feeds the Mozio confirmation payload.",
+  "splitStories": []
+}
+
+ORIGINAL STORY CONTEXT:
+{
+  "id": "AMSD-1820",
+  "title": "[Mozio] - The Promo code amount is NOT displayed as expected for Return trip tickets in the Mozio email confirmation",
+  "description": "[Mozio] - The Promo code amount is NOT displayed as expected for Return trip tickets in the Mozio email confirmation",
+  "originalAcceptanceCriteria": [],
+  "technicalNotes": {
+    "files": [
+      "src/clients/mozio/mappers/map-to-sanitized-mozio-dispatch.ts",
+      "src/services/create-reservations/create-reservations.mappers.ts",
+      "src/services/submit-reservations/apply-report-discounts.service.ts",
+      "src/services/mappers/line-item/map-line-item-return-trip-modification.ts",
+      "src/functions/http-mozio-webhook.ts"
+    ]
+  },
+  "dependencies": []
+}
+
+Produce your refined output as raw JSON only (no XML tags, no markdown fences, no preamble). Include:
+- "acceptanceCriteria": The FULL merged list (openspec's criteria + your additions/refinements). Every item MUST be an observable outcome, not an implementation instruction.
+- "notes": What you changed and why (be specific — cite which criteria you added/modified/replaced)
+- "splitStories": ALWAYS omit this field. Splitting is openspec's decision alone — never propose
+  split children of your own, even if openspec already split this story.
+- "acAddedBySpeckit": Array of criteria YOU added that were not in openspec's output
+- "acModifiedBySpeckit": Array of {"original":"...","revised":"..."} for criteria you reworded
+- "acFlagged": Array of {"criterion":"...","flag":"..."} for criteria that need human attention
+
+
+# Output
+```json
+{
+  "acceptanceCriteria": [
+    {
+      "id": "AC-1",
+      "given": "a return trip reservation with a promo code discount applied",
+      "when": "the Mozio email confirmation payload is generated via the sanitized dispatch mapper",
+      "then": "the discount amount displayed in the confirmation matches the correct promo code amount for the return trip"
+    },
+    {
+      "id": "AC-2",
+      "given": "a one-way trip reservation with a promo code discount applied",
+      "when": "the Mozio email confirmation payload is generated via the sanitized dispatch mapper",
+      "then": "the discount amount displayed in the confirmation remains unchanged and correct (no regression)"
+    },
+    {
+      "id": "AC-3",
+      "given": "a return trip reservation with no promo code or discount",
+      "when": "the Mozio email confirmation payload is generated via the sanitized dispatch mapper",
+      "then": "no discount amount is displayed in the confirmation and no spurious zero or negative values appear"
+    },
+    {
+      "id": "AC-4",
+      "given": "a return trip reservation with a promo code discount",
+      "when": "the discount amount in the Mozio confirmation payload is compared to the discount amount in the line-item return-trip modification output",
+      "then": "the two discount amounts are consistent"
+    },
+    {
+      "id": "AC-5",
+      "given": "a return trip reservation where the discount data is missing or malformed in the input to the sanitized dispatch mapper",
+      "when": "the Mozio email confirmation payload is generated",
+      "then": "the mapper does not throw an unhandled exception and the confirmation is generated without a discount value (graceful degradation)"
+    },
+    {
+      "id": "AC-6",
+      "given": "a return trip reservation with a zero-value promo code applied",
+      "when": "the Mozio email confirmation payload is generated",
+      "then": "the discount amount displayed is zero and no incorrect non-zero value appears"
+    },
+    {
+      "id": "AC-7",
+      "given": "a return trip reservation with a promo code discount",
+      "when": "the Mozio webhook processes the confirmation",
+      "then": "the discount amount in the webhook payload is consistent with the amount in the email confirmation"
+    }
+  ],
+  "notes": "Openspec provided empty acceptanceCriteria, so all criteria were authored from scratch based on the defect description and technical notes. AC-1 is the core fix: return-trip promo amounts must display correctly. AC-2 guards against regression on one-way trips. AC-3 covers the no-discount edge case. AC-4 ensures consistency between the sanitized dispatch mapper and the existing return-trip line-item modification logic (the files listed suggest these should align). AC-5 addresses graceful handling of malformed/missing discount data. AC-6 covers the zero-value discount edge case. AC-7 ensures end-to-end consistency through the webhook path, since http-mozio-webhook.ts is listed as a relevant file.",
+  "acAddedBySpeckit": [
+    "AC-1",
+    "AC-2",
+    "AC-3",
+    "AC-4",
+    "AC-5",
+    "AC-6",
+    "AC-7"
+  ],
+  "acModifiedBySpeckit": [],
+  "acFlagged": []
+}
+```

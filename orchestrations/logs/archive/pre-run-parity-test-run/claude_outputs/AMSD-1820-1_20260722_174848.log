@@ -1,0 +1,112 @@
+=== Prompt for AMSD-1820-1 (attempt 1) ===
+CRITICAL — WRITE FILES FIRST. Your FIRST tool call MUST be WriteFile.
+Do NOT output any text before calling WriteFile. Do NOT plan or say "I will...".
+Call WriteFile NOW for the EXACT ABSOLUTE PATHS listed below:
+
+   - WRITE /home/bradleyjerome/projects/metrolinx/azure.commerce.cdts-wt-primary/src/services/create-reservations/create-reservations.mappers.ts first, before any other action
+   - WRITE /home/bradleyjerome/projects/metrolinx/azure.commerce.cdts-wt-primary/src/services/submit-reservations/apply-report-discounts.service.ts first, before any other action
+   - WRITE /home/bradleyjerome/projects/metrolinx/azure.commerce.cdts-wt-primary/src/services/submit-reservations/submit-reservations.mappers.ts first, before any other action
+   - WRITE /home/bradleyjerome/projects/metrolinx/azure.commerce.cdts-wt-primary/src/clients/mozio/mappers/map-to-sanitized-mozio-dispatch.ts first, before any other action
+---
+
+Implement user story AMSD-1820-1: [Mozio] - Fix return-trip discount propagation in dispatch pipeline
+
+## Story Description
+Fix the mapping pipeline so each Mozio dispatch carries its own per-segment promo discount amount. The return-trip dispatch currently loses or duplicates the outbound discount because create-reservations mappers, apply-report-discounts, and submit-reservations mappers do not correctly associate per-segment discounts with their corresponding dispatch.
+
+## Acceptance Criteria
+- In src/services/create-reservations/create-reservations.mappers.ts, the return-trip mapping logic (the block where isReturnTrip swaps from/to stations) propagates the per-segment promo/discount amount from the original line item to the return-trip dispatch payload, rather than dropping or duplicating the outbound segment's discount.
+- In src/services/submit-reservations/apply-report-discounts.service.ts, applyReportDiscountsService assigns each dispatch its own discount derived from that dispatch's corresponding line item, so a return-trip dispatch receives its own discount value and not a copy of the outbound dispatch's discount.
+- In src/services/submit-reservations/submit-reservations.mappers.ts, the line-item price extraction function that builds the MozioSubmitOrderPayload dispatches reads the discount amount from each dispatch's own line item prices, ensuring a return-trip dispatch carries its own discount value.
+- In src/clients/mozio/mappers/map-to-sanitized-mozio-dispatch.ts, mapToSanitizedMozioDispatch preserves discount.amount (value and currency) from each dispatch's report.price.discount without modification — verified that the return-trip dispatch's discount reaches the Mozio email payload intact.
+- When a promo code discount amount is zero or null/undefined for the return-trip segment in the dispatch's report.price, the discount field is omitted in the sanitized dispatch — no phantom or duplicated discount line appears in the Mozio email for that segment.
+- When a round-trip order has different promo discount amounts per segment (e.g., outbound discount ≠ return discount), each dispatch in the submitted order payload carries its own distinct discount value, and the Mozio email confirmation displays the correct per-leg amounts rather than duplicating the outbound amount on both legs.
+- No errors are thrown or logged during dispatch sanitization, reservation creation, or order submission when a promo code is applied to a round-trip order with a return-trip discount amount.
+
+
+
+
+
+## Technical Notes
+- files: ["src/services/create-reservations/create-reservations.mappers.ts","src/services/submit-reservations/apply-report-discounts.service.ts","src/services/submit-reservations/submit-reservations.mappers.ts","src/clients/mozio/mappers/map-to-sanitized-mozio-dispatch.ts"]
+
+## Files to Create/Modify (EXACT ABSOLUTE PATHS — write to these paths exactly)
+src/services/create-reservations/create-reservations.mappers.ts, src/services/submit-reservations/apply-report-discounts.service.ts, src/services/submit-reservations/submit-reservations.mappers.ts, src/clients/mozio/mappers/map-to-sanitized-mozio-dispatch.ts
+
+## Dependencies
+None
+
+
+
+## Instructions
+**CRITICAL — WRITE FILES FIRST:**
+   - WRITE /home/bradleyjerome/projects/metrolinx/azure.commerce.cdts-wt-primary/src/services/create-reservations/create-reservations.mappers.ts first, before any other action
+   - WRITE /home/bradleyjerome/projects/metrolinx/azure.commerce.cdts-wt-primary/src/services/submit-reservations/apply-report-discounts.service.ts first, before any other action
+   - WRITE /home/bradleyjerome/projects/metrolinx/azure.commerce.cdts-wt-primary/src/services/submit-reservations/submit-reservations.mappers.ts first, before any other action
+   - WRITE /home/bradleyjerome/projects/metrolinx/azure.commerce.cdts-wt-primary/src/clients/mozio/mappers/map-to-sanitized-mozio-dispatch.ts first, before any other action
+**You MUST write every file listed above to its EXACT absolute path. Do NOT write to a different path, do NOT write to the current directory unless it matches the path above. Use your WriteFile or Edit tools with the full absolute path shown.**
+
+1. Write each required file to its exact absolute path listed above — do this FIRST before anything else
+2. Implement all acceptance criteria for this story
+3. Follow the project's existing code patterns and conventions
+4. Do NOT create tests unless explicitly required in acceptance criteria
+
+After implementation, provide a brief summary of what was created/modified.
+
+## Relevant Knowledge Base Entries
+The following was learned from previous story implementations and is relevant to your agent role. Apply this knowledge before writing any code:
+
+- [2026-07-06T17:45:30Z] Always resolve mocked fetch calls to a Response-shaped object with ok, status, statusText, and a json method returning a Promise.
+- [2026-07-06T17:50:20Z] Use valid module and moduleResolution pairs in tsconfig.json: CommonJS with Node, Node16 with Node16, ESNext with Bundler. Use CommonJS and Node for the stack. Mismatched pairs cause build errors.
+- [2026-07-06T18:11:26Z] Use vi.fn().mockResolvedValue(value) to make a mock return a resolved Promise.
+- [2026-07-06T20:31:11Z] Use `test: { passWithNoTests: true }` in vitest.config.ts or create a stub test file when no *.test.ts files exist.
+- [2026-07-06T20:33:03Z] Enable globals:true in vitest.config.ts so describe, it, and expect work without imports, reducing boilerplate in test files.
+- [2026-07-06T23:47:34Z] Use CommonJS-compatible patterns in src/server.ts: avoid `import.meta.url` and top-level `await`; gate listen with `if (require.main === module)`.
+- [2026-07-07T02:35:30Z] Always include a non-test source file in src/ alongside any src/*.test.ts file, since tsconfig.json excludes test files from tsc --noEmit.
+- [2026-07-07T19:01:34Z] Only modify or create files explicitly listed in the story's acceptance criteria. Do not touch files belonging to other stories or outside the current task scope.
+- [2026-07-07T20:17:57Z] [unreviewed-fallback] Avoid using deprecated TypeScript compiler options like 'moduleResolution=node10'; use 'moduleResolution=node' instead.
+- [2026-07-17T20:20:58Z] Always: Before importing a module or referencing a type/property, always read the actual source file to verify the export exists, its exact path, its properties, and its constructor/factory signatures
+
+## Knowledge Base Contribution (do this LAST — after writing all implementation files)
+Your assigned KB entry ID for this run: **KB-012**
+
+IMPORTANT: Write ALL implementation files first. Only AFTER writing every required file should you optionally append a KB entry.
+Do NOT read orchestrations/agents/KB.md before writing implementation files. The relevant KB entries are already injected above.
+
+If (and only if) you discover a non-obvious pattern during implementation, append one entry to `orchestrations/agents/KB.md`:
+
+```markdown
+## KB-012 -- 2026-07-22
+
+**Category:** <backend|frontend|infrastructure|testing|orchestration>
+**AgentRole:** <your agentRole from the story>
+**Tags:** <comma-separated tech keywords, e.g. typescript, node, cli>
+**Trigger:** <retry|first-success>
+**StoryRef:** AMSD-1820-1
+
+<One concise paragraph: the specific pattern, gotcha, or anti-pattern.>
+```
+
+Only write an entry if the knowledge is genuinely non-obvious. Skip trivial observations.
+
+## Execution Plan
+Follow this plan step by step:
+1. In `src/services/create-reservations/create-reservations.mappers.ts`, locate the return-trip mapping block where `isReturnTrip` swaps from/to stations. Modify that block to copy the `discount` (or `promo`/`discountAmount`) field from the return-trip's own original line item (not the outbound line item) into the return-trip dispatch payload. Ensure the discount value and currency are sourced from the return segment's line item prices, not duplicated from the outbound segment.
+
+2. In `src/services/submit-reservations/apply-report-discounts.service.ts`, update `applyReportDiscountsService` so that when iterating over dispatches, each dispatch's discount is derived from its own corresponding line item's price/discount data. Replace any logic that copies a single discount value across all dispatches (or applies the outbound discount to the return dispatch) with a per-dispatch lookup keyed to the matching line item.
+
+3. In `src/services/submit-reservations/submit-reservations.mappers.ts`, find the line-item price extraction function that builds `MozioSubmitOrderPayload` dispatches. Update it to read `discount.amount` (and currency) from each dispatch's own line item `prices` array/object, so the return-trip dispatch carries its own discount value rather than inheriting the outbound's.
+
+4. In `src/clients/mozio/mappers/map-to-sanitized-mozio-dispatch.ts`, update `mapToSanitizedMozioDispatch` to preserve `discount.amount` and `discount.currency` from `dispatch.report.price.discount` without modification. Add a guard: when `report.price.discount.amount` is `0`, `null`, or `undefined`, omit the `discount` field entirely from the sanitized dispatch output so no phantom discount line appears.
+
+5. Add or update unit tests for `create-reservations.mappers.ts` covering a round-trip scenario where the outbound and return line items have different discount amounts — assert the return-trip dispatch payload carries the return segment's discount, not the outbound's.
+
+6. Add or update unit tests for `apply-report-discounts.service.ts` verifying that with two dispatches (outbound + return) having distinct line-item discounts, each dispatch receives its own discount value and the return dispatch does not inherit the outbound's.
+
+7. Add or update unit tests for `submit-reservations.mappers.ts` asserting that the `MozioSubmitOrderPayload` dispatches array contains per-dispatch discount values matching their respective line items, including a case where the return discount is zero/null and the field is omitted.
+
+8. Add or update unit tests for `map-to-sanitized-mozio-dispatch.ts` covering: (a) a dispatch with a non-zero discount is preserved with correct value and currency, (b) a dispatch with zero/null/undefined discount omits the discount field, and (c) a round-trip pair with different discounts produces distinct per-leg amounts in the sanitized output.
+
+9. Run the full test suite for all four modified files and verify no errors are thrown for round-trip orders with promo discounts applied, including edge cases of zero and differing per-segment discount amounts.
+=== End Prompt ===
+

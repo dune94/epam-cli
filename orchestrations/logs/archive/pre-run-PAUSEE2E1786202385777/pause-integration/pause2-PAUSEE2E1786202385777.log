@@ -1,0 +1,16 @@
+# pause2 run=PAUSEE2E1786202385777
+[1;33m[tier3-mock][0m Project config: /tmp/pause-e2e-Ld4IDZ/projectcfg
+[1;33m[tier3-mock][0m test perimeter: logs=/tmp/pause-e2e-Ld4IDZ/logs agents=/tmp/pause-e2e-Ld4IDZ/agents
+[1;33m[tier3-mock][0m profiles.json restored from canonical original into /tmp/pause-e2e-Ld4IDZ/agents
+[1;33m[tier3-mock][0m Predictable teardown: resetting codelines to last verified baseline...
+[brownfield-preflight-reset] resetting /tmp/pause-e2e-Ld4IDZ/workspace/codelines/mock-gotransit to baseline branch main (27ffc4d359988d99de317e628c97ddfd3e08fdc4) — discarding any prior-run fix on top (current: 27ffc4d359988d99de317e628c97ddfd3e08fdc4, dirty: yes)
+[brownfield-preflight-reset] reset complete — /tmp/pause-e2e-Ld4IDZ/workspace/codelines/mock-gotransit is now at baseline main (27ffc4d359988d99de317e628c97ddfd3e08fdc4)
+[brownfield-preflight-reset] resetting /tmp/pause-e2e-Ld4IDZ/workspace/codelines/mock-metrolinx to baseline branch main (dd642e20a6b4c047584429b5ac2765c9baf1e735) — discarding any prior-run fix on top (current: dd642e20a6b4c047584429b5ac2765c9baf1e735, dirty: yes)
+[brownfield-preflight-reset] reset complete — /tmp/pause-e2e-Ld4IDZ/workspace/codelines/mock-metrolinx is now at baseline main (dd642e20a6b4c047584429b5ac2765c9baf1e735)
+[brownfield-preflight-reset] resetting /tmp/pause-e2e-Ld4IDZ/workspace/codelines/mock-upexpress to baseline branch main (66b77fa656d0260699120fb32d0548ad50cef352) — discarding any prior-run fix on top (current: 66b77fa656d0260699120fb32d0548ad50cef352, dirty: yes)
+[brownfield-preflight-reset] reset complete — /tmp/pause-e2e-Ld4IDZ/workspace/codelines/mock-upexpress is now at baseline main (66b77fa656d0260699120fb32d0548ad50cef352)
+[0;32m[pre-run-reset] ✓[0m PRD: /tmp/pause-e2e-Ld4IDZ/workspace/synthesized-prd.json
+[0;32m[pre-run-reset] ✓[0m Log dir: /home/bradleyjerome/projects/ai/epam-cli/orchestrations/logs
+[1;33m[pre-run-reset][0m Configuring agent-monitor to serve: synthesized-prd.json...
+[0;32m[pre-run-reset] ✓[0m agent-monitor restarted → /prd-dir = /tmp/pause-e2e-Ld4IDZ/workspace (serving synthesized-prd.json), /logs-dir = /home/bradleyjerome/projects/ai/epam-cli/orchestrations/logs
+[1;33m[pre-run-reset][0m Archiving and clearing run logs...

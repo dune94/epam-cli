@@ -1,0 +1,13 @@
+spec-mode: fast-path qwen/z-ai/glm-5.2 (skipping MiniMax)
+spec-mode: fast-path qwen/z-ai/glm-5.1 (skipping MiniMax)
+spec-mode: AMSD-2041 — ACs are immutable (VC model); openspec AC edits redacted, verification captured in verificationCriteria
+spec-mode: AMSD-2041 — 7 verification criteria persisted (source: both, resolution: regenerated)
+spec-mode: split coherence violation for AMSD-2041: children [AMSD-2041-A, AMSD-2041-B] all write to useContent.ts — rejecting split (last writer wins = silent data loss)
+spec-mode: fast-path qwen/z-ai/glm-5.1 (skipping MiniMax)
+spec-mode: AMSD-2041 — ACs are immutable (VC model); openspec AC edits redacted, verification captured in verificationCriteria
+spec-mode: AMSD-2041 — 8 verification criteria persisted (source: description, resolution: regenerated)
+spec-mode: parent AMSD-2041 ACs redistributed → delegated to AMSD-2041-A, AMSD-2041-B
+spec-mode: fast-path qwen/z-ai/glm-5.2 (skipping MiniMax)
+spec-mode: fast-path qwen/z-ai/glm-5.2 (skipping MiniMax)
+spec-mode: LLM model review completed for 0 stories
+spec-mode: completed for phase core (run 20260728T131424Z)

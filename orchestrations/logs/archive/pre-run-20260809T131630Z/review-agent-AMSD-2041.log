@@ -1,0 +1,71 @@
+```json
+{
+  "verdict": "changes_requested",
+  "issues": [
+    {
+      "severity": "blocker",
+      "file": "package.json",
+      "line": 0,
+      "description": "Both required dependencies @contentstack/live-preview-sdk and @contentstack/live-preview-utils are ABSENT — not declared in package.json and not present in node_modules (verified via dependency_available tool). The implementation calls require('@contentstack/live-preview-sdk') inside a try/catch that silently swallows the ModuleNotFoundError, meaning live preview will silently never initialize in any environment. The prescribed fix explicitly requires these packages.",
+      "suggestedFix": "Add @contentstack/live-preview-sdk and @contentstack/live-preview-utils to package.json dependencies and install them. Replace the require() try/catch with a proper ES import so a missing dependency is a build error, not a silent runtime failure."
+    },
+    {
+      "severity": "blocker",
+      "file": "src/context/ContentstackContext.tsx",
+      "line": 0,
+      "description": "ContentstackProvider was NOT modified at all (git_state confirms no change to this file). The prescribed minimal fix requires: (1) adding onEntryChange prop to IContentStackProviderProps, (2) switching from useMemo to useState + merge logic so that when Contentstack pushes draft entry updates via the callback, the context state updates and all consuming components re-render. Without this, even if the SDK initializes and pushes draft data, no component will ever display it. This directly fails AC: 'When the page request includes live preview parameters, the rendered page displays the draft content values for the entry being previewed.'",
+      "suggestedFix": "Add onEntryChange?: (callback: (entry: IContentstackContent) => void) => void to IContentStackProviderProps. Replace useMemo with useState<IContentstackContent>(defaultContent). In a useEffect, register the onEntryChange callback to merge/replace content state. This is the CARRIER — without it, the entire live preview feature is non-functional."
+    },
+    {
+      "severity": "blocker",
+      "file": "src/services/pageService.ts",
+      "line": 0,
+      "description": "pageService was NOT modified at all (git_state confirms no change). The prescribed fix requires: (1) adding preview and live_preview parameters to pageService methods, (2) passing live_preview: true through to getEntry/getSingleEntry/findSingletonEntry when preview is enabled, (3) importing onEntryChange from @contentstack/live-preview-utils and returning it alongside page data so consuming pages can wire it into ContentstackProvider. Without this, pages have no way to pass preview params to the contentstack service or receive the onEntryChange callback. This fails AC: 'When the page request includes live preview parameters, the rendered page displays the draft content values.'",
+      "suggestedFix": "Extend pageService method signatures with preview?: boolean and live_preview?: boolean params. When preview is enabled, forward live_preview to the contentstack service calls. Import onEntryChange from @contentstack/live-preview-utils and include it in the return payload so pages can pass it to ContentstackProvider."
+    },
+    {
+      "severity": "blocker",
+      "file": "src/services/contentstack.ts",
+      "line": 0,
+      "description": "The live_preview parameter is destructured in getEntry (line ~150), getSingleEntry (line ~180), and findSingletonEntry (line ~210) but is NEVER actually passed to the Contentstack Query or Entry objects. The ContentstackFactory.createContentTypeQuery and createContentTypeEntryQuery methods do not receive or forward live_preview. This means even with the param in the interface, the SDK will never fetch draft content — the param is dead code. This fails AC: 'When the page request includes live preview parameters, the rendered page displays the draft content values for the entry being previewed.'",
+      "suggestedFix": "Pass live_preview into the ContentstackFactory methods and call the SDK's query param forwarding (e.g., query.addParam('live_preview', 'true') or the SDK's native .live_preview() chain method — verify the exact API via resolve_package_symbol on the installed package). The param must reach the actual HTTP request to Contentstack."
+    },
+    {
+      "severity": "blocker",
+      "file": "src/services/pageService.ts",
+      "line": 0,
+      "description": "No logic exists to suppress live preview draft content for unauthenticated visitors on protected pages. AC requires: 'For a page that requires authentication, draft content does not appear on the rendered page when live preview parameters are present and the visitor is unauthenticated.' Since pageService was not modified, there is no guard that checks authentication state before forwarding live_preview params. An unauthenticated visitor on a protected page with live_preview params in the URL would receive draft content if the rest of the pipeline were wired.",
+      "suggestedFix": "In pageService, before forwarding live_preview to contentstack service calls, check whether the page requires authentication and whether the visitor is authenticated. If the page is protected and the visitor is unauthenticated, do NOT forward live_preview (fetch published content only). This may also require coordination with applyMiddlewares or the auth middleware."
+    },
+    {
+      "severity": "blocker",
+      "file": "test/unit/",
+      "line": 0,
+      "description": "No unit tests exist for any of the live preview changes. git_state shows zero test file changes. The prescribed fix touches 3 source files (contentstack.ts, ContentstackContext.tsx, pageService.ts) and none have corresponding vitest tests. All 4 verification criteria lack test coverage: (1) draft content displayed when preview params present, (2) published content displayed when preview not active, (3) unauthenticated visitor cannot view protected page content, (4) draft content does not appear for unauthenticated visitor on protected page. Searched via resolve_test_file conventions and git_state — no test files found or changed.",
+      "suggestedFix": "Add vitest unit tests mirroring src/ paths: test for contentstack.ts verifying live_preview param forwarding to SDK queries; test for ContentstackContext.tsx verifying onEntryChange callback updates content state and triggers re-render; test for pageService.ts verifying preview param forwarding and auth-gated suppression of live_preview for protected pages. All 4 verification criteria must have explicit it()/test() blocks."
+    },
+    {
+      "severity": "major",
+      "file": "src/services/contentstack.ts",
+      "line": 0,
+      "description": "Hardcoded string 'api.contentstack.io' used as fallback for CONTENTSTACK_PREVIEW_HOST. This violates the review criterion: 'No hardcoded strings for model names, endpoint URLs, or file paths — all use named constants from src/config/constants.ts.'",
+      "suggestedFix": "Add a named constant (e.g., CONTENTSTACK_DEFAULT_PREVIEW_HOST) in src/config/constants.ts and reference it instead of the inline string literal."
+    },
+    {
+      "severity": "major",
+      "file": "src/services/contentstack.ts",
+      "line": 0,
+      "description": "Uses require() inside a try/catch to load @contentstack/live-preview-sdk, which is an anti-pattern: (1) it bypasses TypeScript type checking, (2) the try/catch silently swallows all errors (not just module-not-found), masking real initialization failures, (3) it prevents tree-shaking. The eslint-disable comment confirms this is intentional but unjustified.",
+      "suggestedFix": "Use a proper ES import: import ContentstackLivePreview from '@contentstack/live-preview-sdk'. Guard initialization with the env var check (CONTENTSTACK_LIVE_PREVIEW === 'true') only, not a try/catch. If the package is absent, the build should fail — that is correct behavior for a missing required dependency."
+    },
+    {
+      "severity": "minor",
+      "file": "src/services/contentstack.ts",
+      "line": 0,
+      "description": "The live_preview parameter in the interface types (IContentstackGetEntry, IContentstackGetSingleEntry, IContentstackGetSingletonEntry) is added but its type is not visible in the source read — ensure it is explicitly typed as boolean | undefined (or the SDK's LivePreviewConfig type), not implicit any.",
+      "suggestedFix": "Verify the interface in src/interface/contentstack.ts explicitly types live_preview as boolean | undefined or the appropriate SDK type."
+    }
+  ],
+  "summary": "The implementation is incomplete and cannot function. Of the 4 files the prescribed minimal fix requires changes to, only 2 were modified (contentstack.ts and interface/contentstack.ts), and the contentstack.ts changes are non-functional: the live_preview param is destructured but never forwarded to SDK queries, and the SDK initialization uses require() in a try/catch that silently fails because the package is not installed. ContentstackContext.tsx (the CARRIER) and pageService.ts (the orchestrator) were not touched at all, meaning no draft content can ever reach a component. Both required npm packages are absent from the project. No unit tests exist for any change. 3 of 4 verification criteria are demonstrably unmet (draft content display, auth-gated draft suppression, published content fallback when preview inactive is untested). Verdict: changes_requested."
+}
+```

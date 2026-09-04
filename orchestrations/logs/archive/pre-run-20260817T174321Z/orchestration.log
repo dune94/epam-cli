@@ -1,0 +1,22 @@
+[mint-step] codeline mocka: /home/bradleyjerome/projects/mock3/mock-a (2 declared deps)
+[mint-step] codeline mockb: /home/bradleyjerome/projects/mock3/mock-b (2 declared deps)
+[mint-step] plugins provisioned: 1 · mint tools: read_file,list_files,search,codegraph_query
+spec-mode: fast-path qwen/z-ai/glm-5.2 (skipping MiniMax)
+[mint-step]   survey: mocka — in_scope (src/fares.ts, test/fares.test.ts)
+[mint-step]   survey: mockb — in_scope (src/schedule.ts, test/schedule.test.ts)
+[mint-step]   survey recommends an investigator for mocka: The fare boundary in fareFor() (src/fares.ts line 10): the comparison `rider.age > 65` excludes exactly-65 riders from the concession fare contrary to the documented rule. The test suite has no age-65 case and should gain one.
+[mint-step]   survey recommends an investigator for mockb: The stop-omission in formatStops() (src/schedule.ts): the loop bound `stops.length - 1` skips the final stop. totalMinutes() is correct and should not be touched. The existing tests do not assert the last stop appears.
+spec-mode: fast-path qwen/z-ai/glm-5.2 (skipping MiniMax)
+spec-mode: fast-path qwen/z-ai/glm-5.2 (skipping MiniMax)
+[mint-step] proposed=4 minted=2 unchanged=0 rejected=0 superseded=2
+[mint-step]   + [investigator:mocka] transit-fare-engineer (profiles.json, kb, project-investigators, project-profiles) — mocka's fareFor() in src/fares.ts has an off-by-one at the age-65 boundary that this investigator must locate and characterize precisely so the implementer's fix targets the right comparison operator without disturbing the child-fare or pass-holder branches.
+[mint-step]   + [investigator:mockb] transit-schedule-engineer (profiles.json, kb, project-investigators, project-profiles) — mockb's formatStops() in src/schedule.ts drops the final stop due to a loop bound of stops.length - 1, and this investigator must pin the exact line, confirm totalMinutes() is correct and must not be touched, and map the test coverage gap that let the omission through.
+spec-mode: fast-path qwen/z-ai/glm-5.2 (skipping MiniMax)
+spec-mode: roster finding DISCARDED — path_exists: "src/fares.ts" is present in mocka, the finding says absent
+spec-mode: roster finding DISCARDED — path_exists: "src/fares.ts" is present in mocka, the finding says absent
+spec-mode: roster finding DISCARDED — path_exists: "test/fares.test.ts" is present in mocka, the finding says absent
+spec-mode: roster finding DISCARDED — path_exists: "src/schedule.ts" is present in mockb, the finding says absent
+spec-mode: roster finding DISCARDED — path_exists: "src/schedule.ts" is present in mockb, the finding says absent
+spec-mode: roster finding DISCARDED — path_exists: "test/schedule.test.ts" is present in mockb, the finding says absent
+[mint-step] roster review (cycle 1): sound — 0 finding(s), 0 blocking
+[mint-step] FAILED: [assign] no project implementation roles are registered for this project — nothing was minted, so there is no role any story could honestly be assigned.

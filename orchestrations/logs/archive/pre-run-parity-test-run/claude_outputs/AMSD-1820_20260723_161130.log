@@ -1,0 +1,475 @@
+=== Prompt for AMSD-1820 (attempt 1) ===
+CRITICAL — these files already exist. Their real content is injected below (## Existing File Contents) — you do NOT need to ReadFile them to see what's already there.
+Do NOT import or reference anything that doesn't appear in the injected content below — a plausible-sounding module name is not a real one.
+Only call ReadFile yourself if you need to see MORE of a file than what's shown (e.g. it was truncated), or a file not listed below.
+
+
+---
+
+Implement user story AMSD-1820: [Mozio] - The Promo code amount is NOT displayed as expected for Return trip tickets in the Mozio email confirmation
+
+## Story Description
+[Mozio] - The Promo code amount is NOT displayed as expected for Return trip tickets in the Mozio email confirmation
+
+## Acceptance Criteria
+- Given a Mozio dispatch corresponding to a return trip ticket with an applicable promo code, When the dispatch is processed through the sanitization pipeline, Then the resulting `report.price.discount.amount.value` reflects the correct promo code discount for the return leg (not zero or omitted).
+- Given a Mozio dispatch corresponding to a return trip ticket with an applicable promo code, When the dispatch is processed through the sanitization pipeline, Then the resulting `report.price.discount.name` contains the promo code name (not masked to empty or omitted).
+- Given a return trip dispatch with a promo code discount, When the discount amount is populated in the dispatch report, Then the amount equals the per-unit discount multiplied by the line item quantity, consistent with how discounts are calculated for outbound trip dispatches.
+- Given a return trip dispatch where no promo code applies (discount is zero or undefined), When the dispatch is processed, Then the `discount` field is omitted entirely from the dispatch report (undefined, not an object with amount 0).
+- Given an order containing both outbound and return trip dispatches with a promo code applying to the full order, When both dispatches are processed, Then each dispatch carries the correct proportional discount amount in their `report.price.discount`, and the Mozio email confirmation displays both discounts.
+- Given a processed return trip dispatch with a promo code discount, When compared to the order payload or API response for the same order ID, Then the discount amount in the sanitized Mozio dispatch matches the discount value in the order data.
+- Given both outbound and return trip dispatches with promo code discounts, When the Mozio email confirmation is rendered, Then the return trip discount appears in the same format and position as the outbound trip discount (same discount structure in the sanitized dispatch for both legs).
+- Given a promo code that applies only to the return leg and not the outbound leg, When both dispatches are processed, Then the return dispatch carries the correct discount and the outbound dispatch omits the discount field entirely.
+- Given a return trip dispatch with a promo code discount, When the discount amount is written to the dispatch report, Then the amount is a numeric value (not a string representation of a number) and the currency code is preserved.
+- Given a promo code discount that would exceed the return trip price, When the dispatch is processed, Then the discount amount does not produce a negative total price in the dispatch report.
+
+
+
+
+
+
+## Technical Notes
+None specified
+
+
+## Files to Create/Modify (EXACT ABSOLUTE PATHS — write to these paths exactly)
+
+
+## Dependencies
+None
+
+
+
+## Instructions
+CRITICAL — these files already exist. Their real content is injected below (## Existing File Contents) — you do NOT need to ReadFile them to see what's already there.
+Do NOT import or reference anything that doesn't appear in the injected content below — a plausible-sounding module name is not a real one.
+Only call ReadFile yourself if you need to see MORE of a file than what's shown (e.g. it was truncated), or a file not listed below.
+
+**The content of every file listed above is already shown in ## Existing File Contents — use that, do not spend a tool call re-reading them. Use Edit for targeted changes to existing files — do NOT overwrite an existing file wholesale with WriteFile.**
+
+1. Use the injected ## Existing File Contents above to verify what actually exists (exports, types, existing utilities) before writing any code — do not guess, and do not re-read a file already shown in full
+2. Implement all acceptance criteria for this story
+3. Follow the project's existing code patterns and conventions
+4. Do NOT create tests unless explicitly required in acceptance criteria
+
+After implementation, provide a brief summary of what was created/modified.
+
+## Relevant Knowledge Base Entries
+The following was learned from previous story implementations and is relevant to your agent role. Apply this knowledge before writing any code:
+
+- [2026-07-06T18:11:26Z] Use vi.fn().mockResolvedValue(value) to make a mock return a resolved Promise.
+- [2026-07-06T20:31:11Z] Use `test: { passWithNoTests: true }` in vitest.config.ts or create a stub test file when no *.test.ts files exist.
+- [2026-07-06T20:33:03Z] Enable globals:true in vitest.config.ts so describe, it, and expect work without imports, reducing boilerplate in test files.
+- [2026-07-06T23:47:34Z] Use CommonJS-compatible patterns in src/server.ts: avoid `import.meta.url` and top-level `await`; gate listen with `if (require.main === module)`.
+- [2026-07-07T02:35:30Z] Always include a non-test source file in src/ alongside any src/*.test.ts file, since tsconfig.json excludes test files from tsc --noEmit.
+- [2026-07-07T19:01:34Z] Only modify or create files explicitly listed in the story's acceptance criteria. Do not touch files belonging to other stories or outside the current task scope.
+- [2026-07-07T20:17:57Z] [unreviewed-fallback] Avoid using deprecated TypeScript compiler options like 'moduleResolution=node10'; use 'moduleResolution=node' instead.
+- [2026-07-17T20:20:58Z] Always: Before importing a module or referencing a type/property, always read the actual source file to verify the export exists, its exact path, its properties, and its constructor/factory signatures
+- [2026-07-23T01:15:16Z] Always: In tsconfig.json, always use moduleResolution 'node' (not 'node10' or 'Node10') — 'node10' was removed in TypeScript 5.x. The correct value for CommonJS + Node resolution is 'node'.
+- [2026-07-23T14:30:00Z] CORRECTION to a prior entry (2026-07-23T01:17:52Z, now removed): that entry wrongly claimed 'moduleResolution: node' itself is removed and must become 'node16'/'nodenext'. Root-caused via mock1 (epam-cli orchestration test): 'node' is valid and correct through TypeScript 5.x (confirmed on 5.9.3) — it was only removed in TypeScript 7.x. The real defect was an unpinned `typescript` devDependency letting a fallback `npm install` pull latest (7.x) instead of the project's intended version. Do NOT rewrite a working tsconfig.json's moduleResolution in response to a TS5108 error — first check `node_modules/typescript/package.json`'s version; if it's 7.x and the rest of the project expects 5.x, the fix is pinning/reinstalling the correct typescript version, not changing moduleResolution.
+
+## Knowledge Base Contribution (do this LAST — after writing all implementation files)
+Your assigned KB entry ID for this run: **KB-012**
+
+IMPORTANT: Write ALL implementation files first. Only AFTER writing every required file should you optionally append a KB entry.
+Do NOT read orchestrations/agents/KB.md before writing implementation files. The relevant KB entries are already injected above.
+
+If (and only if) you discover a non-obvious pattern during implementation, append one entry to `orchestrations/agents/KB.md`:
+
+```markdown
+## KB-012 -- 2026-07-23
+
+**Category:** <backend|frontend|infrastructure|testing|orchestration>
+**AgentRole:** <your agentRole from the story>
+**Tags:** <comma-separated tech keywords, e.g. typescript, node, cli>
+**Trigger:** <retry|first-success>
+**StoryRef:** AMSD-1820
+
+<One concise paragraph: the specific pattern, gotcha, or anti-pattern.>
+```
+
+Only write an entry if the knowledge is genuinely non-obvious. Skip trivial observations.
+
+## Execution Plan
+Follow this plan step by step:
+1. Search the codebase for the Mozio sanitization pipeline — grep for "mozio" in dispatch/report sanitization modules — to locate where outbound trip discounts are processed and where return trip discounts are dropped or zeroed out.
+
+2. In the identified sanitization module, find the function that maps Mozio dispatch data to the `report.price.discount` structure (containing `amount.value`, `amount.currency`, and `name`). Compare how it handles outbound vs. return legs — the bug is likely that the return-leg promo code is not read from the correct field or the discount mapping is skipped for return trips.
+
+3. Fix the discount mapping logic so that return trip dispatches use the same discount extraction path as outbound trips: read the promo code amount and name from the return-leg data, compute `amount = per_unit_discount * quantity`, and populate `report.price.discount` with `{ amount: { value: <number>, currency: <code> }, name: <promo_code_name> }`.
+
+4. Add a guard so that when no promo code applies (discount is zero, null, or undefined), the `discount` field is set to `undefined` (omitted entirely) rather than an object with `amount.value: 0`.
+
+5. Add a cap so the discount amount never exceeds the line item price — clamp `discount.amount.value` to `min(discount, price_total)` to prevent negative totals.
+
+6. Ensure the discount `amount.value` is cast to a numeric type (not a string) and the currency code is preserved from the source data for both outbound and return legs.
+
+7. For orders with both outbound and return dispatches sharing a single order-level promo code, verify that proportional discount allocation is applied per-leg (each dispatch carries its own proportional share), matching the outbound behavior.
+
+8. Add unit tests covering: (a) return trip with promo code → correct `discount.amount.value` and `discount.name`; (b) return trip with no promo → `discount` omitted; (c) promo on return only → outbound omits discount, return includes it; (d) discount exceeding price → clamped, no negative total; (e) both legs with order-level promo → proportional discounts on both; (f) numeric type and currency preservation assertions.
+
+9. Run the full test suite for the Mozio sanitization module and verify all existing outbound discount tests still pass alongside the new return-trip discount tests.
+=== End Prompt ===
+
+=== epam Output (attempt 1) ===
+This is a real Azure Functions project. Let me look at the relevant Mozio sanitization files.
+This is a real Azure Functions project. Let me look at the relevant Mozio sanitization files.
+
+=== epam exited with code 1 ===
+=== Prompt for AMSD-1820 (attempt 2) ===
+CRITICAL — these files already exist. Their real content is injected below (## Existing File Contents) — you do NOT need to ReadFile them to see what's already there.
+Do NOT import or reference anything that doesn't appear in the injected content below — a plausible-sounding module name is not a real one.
+Only call ReadFile yourself if you need to see MORE of a file than what's shown (e.g. it was truncated), or a file not listed below.
+
+
+---
+
+Implement user story AMSD-1820: [Mozio] - The Promo code amount is NOT displayed as expected for Return trip tickets in the Mozio email confirmation
+
+## Story Description
+[Mozio] - The Promo code amount is NOT displayed as expected for Return trip tickets in the Mozio email confirmation
+
+## Acceptance Criteria
+- Given a Mozio dispatch corresponding to a return trip ticket with an applicable promo code, When the dispatch is processed through the sanitization pipeline, Then the resulting `report.price.discount.amount.value` reflects the correct promo code discount for the return leg (not zero or omitted).
+- Given a Mozio dispatch corresponding to a return trip ticket with an applicable promo code, When the dispatch is processed through the sanitization pipeline, Then the resulting `report.price.discount.name` contains the promo code name (not masked to empty or omitted).
+- Given a return trip dispatch with a promo code discount, When the discount amount is populated in the dispatch report, Then the amount equals the per-unit discount multiplied by the line item quantity, consistent with how discounts are calculated for outbound trip dispatches.
+- Given a return trip dispatch where no promo code applies (discount is zero or undefined), When the dispatch is processed, Then the `discount` field is omitted entirely from the dispatch report (undefined, not an object with amount 0).
+- Given an order containing both outbound and return trip dispatches with a promo code applying to the full order, When both dispatches are processed, Then each dispatch carries the correct proportional discount amount in their `report.price.discount`, and the Mozio email confirmation displays both discounts.
+- Given a processed return trip dispatch with a promo code discount, When compared to the order payload or API response for the same order ID, Then the discount amount in the sanitized Mozio dispatch matches the discount value in the order data.
+- Given both outbound and return trip dispatches with promo code discounts, When the Mozio email confirmation is rendered, Then the return trip discount appears in the same format and position as the outbound trip discount (same discount structure in the sanitized dispatch for both legs).
+- Given a promo code that applies only to the return leg and not the outbound leg, When both dispatches are processed, Then the return dispatch carries the correct discount and the outbound dispatch omits the discount field entirely.
+- Given a return trip dispatch with a promo code discount, When the discount amount is written to the dispatch report, Then the amount is a numeric value (not a string representation of a number) and the currency code is preserved.
+- Given a promo code discount that would exceed the return trip price, When the dispatch is processed, Then the discount amount does not produce a negative total price in the dispatch report.
+
+
+
+
+
+
+## Technical Notes
+None specified
+
+
+## Files to Create/Modify (EXACT ABSOLUTE PATHS — write to these paths exactly)
+
+
+## Dependencies
+None
+
+
+
+## Instructions
+CRITICAL — these files already exist. Their real content is injected below (## Existing File Contents) — you do NOT need to ReadFile them to see what's already there.
+Do NOT import or reference anything that doesn't appear in the injected content below — a plausible-sounding module name is not a real one.
+Only call ReadFile yourself if you need to see MORE of a file than what's shown (e.g. it was truncated), or a file not listed below.
+
+**The content of every file listed above is already shown in ## Existing File Contents — use that, do not spend a tool call re-reading them. Use Edit for targeted changes to existing files — do NOT overwrite an existing file wholesale with WriteFile.**
+
+1. Use the injected ## Existing File Contents above to verify what actually exists (exports, types, existing utilities) before writing any code — do not guess, and do not re-read a file already shown in full
+2. Implement all acceptance criteria for this story
+3. Follow the project's existing code patterns and conventions
+4. Do NOT create tests unless explicitly required in acceptance criteria
+
+After implementation, provide a brief summary of what was created/modified.
+
+## Relevant Knowledge Base Entries
+The following was learned from previous story implementations and is relevant to your agent role. Apply this knowledge before writing any code:
+
+- [2026-07-06T18:11:26Z] Use vi.fn().mockResolvedValue(value) to make a mock return a resolved Promise.
+- [2026-07-06T20:31:11Z] Use `test: { passWithNoTests: true }` in vitest.config.ts or create a stub test file when no *.test.ts files exist.
+- [2026-07-06T20:33:03Z] Enable globals:true in vitest.config.ts so describe, it, and expect work without imports, reducing boilerplate in test files.
+- [2026-07-06T23:47:34Z] Use CommonJS-compatible patterns in src/server.ts: avoid `import.meta.url` and top-level `await`; gate listen with `if (require.main === module)`.
+- [2026-07-07T02:35:30Z] Always include a non-test source file in src/ alongside any src/*.test.ts file, since tsconfig.json excludes test files from tsc --noEmit.
+- [2026-07-07T19:01:34Z] Only modify or create files explicitly listed in the story's acceptance criteria. Do not touch files belonging to other stories or outside the current task scope.
+- [2026-07-07T20:17:57Z] [unreviewed-fallback] Avoid using deprecated TypeScript compiler options like 'moduleResolution=node10'; use 'moduleResolution=node' instead.
+- [2026-07-17T20:20:58Z] Always: Before importing a module or referencing a type/property, always read the actual source file to verify the export exists, its exact path, its properties, and its constructor/factory signatures
+- [2026-07-23T01:15:16Z] Always: In tsconfig.json, always use moduleResolution 'node' (not 'node10' or 'Node10') — 'node10' was removed in TypeScript 5.x. The correct value for CommonJS + Node resolution is 'node'.
+- [2026-07-23T14:30:00Z] CORRECTION to a prior entry (2026-07-23T01:17:52Z, now removed): that entry wrongly claimed 'moduleResolution: node' itself is removed and must become 'node16'/'nodenext'. Root-caused via mock1 (epam-cli orchestration test): 'node' is valid and correct through TypeScript 5.x (confirmed on 5.9.3) — it was only removed in TypeScript 7.x. The real defect was an unpinned `typescript` devDependency letting a fallback `npm install` pull latest (7.x) instead of the project's intended version. Do NOT rewrite a working tsconfig.json's moduleResolution in response to a TS5108 error — first check `node_modules/typescript/package.json`'s version; if it's 7.x and the rest of the project expects 5.x, the fix is pinning/reinstalling the correct typescript version, not changing moduleResolution.
+
+## Knowledge Base Contribution (do this LAST — after writing all implementation files)
+Your assigned KB entry ID for this run: **KB-012**
+**This is retry attempt 1** — a previous attempt failed. You MUST write a KB entry documenting what went wrong and what you changed.
+
+IMPORTANT: Write ALL implementation files first. Only AFTER writing every required file should you optionally append a KB entry.
+Do NOT read orchestrations/agents/KB.md before writing implementation files. The relevant KB entries are already injected above.
+
+If (and only if) you discover a non-obvious pattern during implementation, append one entry to `orchestrations/agents/KB.md`:
+
+```markdown
+## KB-012 -- 2026-07-23
+
+**Category:** <backend|frontend|infrastructure|testing|orchestration>
+**AgentRole:** <your agentRole from the story>
+**Tags:** <comma-separated tech keywords, e.g. typescript, node, cli>
+**Trigger:** <retry|first-success>
+**StoryRef:** AMSD-1820
+
+<One concise paragraph: the specific pattern, gotcha, or anti-pattern.>
+```
+
+Only write an entry if the knowledge is genuinely non-obvious. Skip trivial observations.
+
+## Execution Plan
+Follow this plan step by step:
+1. Search the codebase for the Mozio sanitization pipeline — grep for "mozio" in dispatch/report sanitization modules — to locate where outbound trip discounts are processed and where return trip discounts are dropped or zeroed out.
+
+2. In the identified sanitization module, find the function that maps Mozio dispatch data to the `report.price.discount` structure (containing `amount.value`, `amount.currency`, and `name`). Compare how it handles outbound vs. return legs — the bug is likely that the return-leg promo code is not read from the correct field or the discount mapping is skipped for return trips.
+
+3. Fix the discount mapping logic so that return trip dispatches use the same discount extraction path as outbound trips: read the promo code amount and name from the return-leg data, compute `amount = per_unit_discount * quantity`, and populate `report.price.discount` with `{ amount: { value: <number>, currency: <code> }, name: <promo_code_name> }`.
+
+4. Add a guard so that when no promo code applies (discount is zero, null, or undefined), the `discount` field is set to `undefined` (omitted entirely) rather than an object with `amount.value: 0`.
+
+5. Add a cap so the discount amount never exceeds the line item price — clamp `discount.amount.value` to `min(discount, price_total)` to prevent negative totals.
+
+6. Ensure the discount `amount.value` is cast to a numeric type (not a string) and the currency code is preserved from the source data for both outbound and return legs.
+
+7. For orders with both outbound and return dispatches sharing a single order-level promo code, verify that proportional discount allocation is applied per-leg (each dispatch carries its own proportional share), matching the outbound behavior.
+
+8. Add unit tests covering: (a) return trip with promo code → correct `discount.amount.value` and `discount.name`; (b) return trip with no promo → `discount` omitted; (c) promo on return only → outbound omits discount, return includes it; (d) discount exceeding price → clamped, no negative total; (e) both legs with order-level promo → proportional discounts on both; (f) numeric type and currency preservation assertions.
+
+9. Run the full test suite for the Mozio sanitization module and verify all existing outbound discount tests still pass alongside the new return-trip discount tests.
+=== End Prompt ===
+
+=== epam Output (attempt 2) ===
+Now let me look at the MozioDispatch model and the related types:
+Now let me look at the MozioDispatch model and the related types:
+
+=== epam exited with code 1 ===
+=== Prompt for AMSD-1820 (attempt 3) ===
+CRITICAL — these files already exist. Their real content is injected below (## Existing File Contents) — you do NOT need to ReadFile them to see what's already there.
+Do NOT import or reference anything that doesn't appear in the injected content below — a plausible-sounding module name is not a real one.
+Only call ReadFile yourself if you need to see MORE of a file than what's shown (e.g. it was truncated), or a file not listed below.
+
+
+---
+
+Implement user story AMSD-1820: [Mozio] - The Promo code amount is NOT displayed as expected for Return trip tickets in the Mozio email confirmation
+
+## Story Description
+[Mozio] - The Promo code amount is NOT displayed as expected for Return trip tickets in the Mozio email confirmation
+
+## Acceptance Criteria
+- Given a Mozio dispatch corresponding to a return trip ticket with an applicable promo code, When the dispatch is processed through the sanitization pipeline, Then the resulting `report.price.discount.amount.value` reflects the correct promo code discount for the return leg (not zero or omitted).
+- Given a Mozio dispatch corresponding to a return trip ticket with an applicable promo code, When the dispatch is processed through the sanitization pipeline, Then the resulting `report.price.discount.name` contains the promo code name (not masked to empty or omitted).
+- Given a return trip dispatch with a promo code discount, When the discount amount is populated in the dispatch report, Then the amount equals the per-unit discount multiplied by the line item quantity, consistent with how discounts are calculated for outbound trip dispatches.
+- Given a return trip dispatch where no promo code applies (discount is zero or undefined), When the dispatch is processed, Then the `discount` field is omitted entirely from the dispatch report (undefined, not an object with amount 0).
+- Given an order containing both outbound and return trip dispatches with a promo code applying to the full order, When both dispatches are processed, Then each dispatch carries the correct proportional discount amount in their `report.price.discount`, and the Mozio email confirmation displays both discounts.
+- Given a processed return trip dispatch with a promo code discount, When compared to the order payload or API response for the same order ID, Then the discount amount in the sanitized Mozio dispatch matches the discount value in the order data.
+- Given both outbound and return trip dispatches with promo code discounts, When the Mozio email confirmation is rendered, Then the return trip discount appears in the same format and position as the outbound trip discount (same discount structure in the sanitized dispatch for both legs).
+- Given a promo code that applies only to the return leg and not the outbound leg, When both dispatches are processed, Then the return dispatch carries the correct discount and the outbound dispatch omits the discount field entirely.
+- Given a return trip dispatch with a promo code discount, When the discount amount is written to the dispatch report, Then the amount is a numeric value (not a string representation of a number) and the currency code is preserved.
+- Given a promo code discount that would exceed the return trip price, When the dispatch is processed, Then the discount amount does not produce a negative total price in the dispatch report.
+
+
+
+
+
+
+## Technical Notes
+None specified
+
+
+## Files to Create/Modify (EXACT ABSOLUTE PATHS — write to these paths exactly)
+
+
+## Dependencies
+None
+
+
+
+## Instructions
+CRITICAL — these files already exist. Their real content is injected below (## Existing File Contents) — you do NOT need to ReadFile them to see what's already there.
+Do NOT import or reference anything that doesn't appear in the injected content below — a plausible-sounding module name is not a real one.
+Only call ReadFile yourself if you need to see MORE of a file than what's shown (e.g. it was truncated), or a file not listed below.
+
+**The content of every file listed above is already shown in ## Existing File Contents — use that, do not spend a tool call re-reading them. Use Edit for targeted changes to existing files — do NOT overwrite an existing file wholesale with WriteFile.**
+
+1. Use the injected ## Existing File Contents above to verify what actually exists (exports, types, existing utilities) before writing any code — do not guess, and do not re-read a file already shown in full
+2. Implement all acceptance criteria for this story
+3. Follow the project's existing code patterns and conventions
+4. Do NOT create tests unless explicitly required in acceptance criteria
+
+After implementation, provide a brief summary of what was created/modified.
+
+## Relevant Knowledge Base Entries
+The following was learned from previous story implementations and is relevant to your agent role. Apply this knowledge before writing any code:
+
+- [2026-07-06T18:11:26Z] Use vi.fn().mockResolvedValue(value) to make a mock return a resolved Promise.
+- [2026-07-06T20:31:11Z] Use `test: { passWithNoTests: true }` in vitest.config.ts or create a stub test file when no *.test.ts files exist.
+- [2026-07-06T20:33:03Z] Enable globals:true in vitest.config.ts so describe, it, and expect work without imports, reducing boilerplate in test files.
+- [2026-07-06T23:47:34Z] Use CommonJS-compatible patterns in src/server.ts: avoid `import.meta.url` and top-level `await`; gate listen with `if (require.main === module)`.
+- [2026-07-07T02:35:30Z] Always include a non-test source file in src/ alongside any src/*.test.ts file, since tsconfig.json excludes test files from tsc --noEmit.
+- [2026-07-07T19:01:34Z] Only modify or create files explicitly listed in the story's acceptance criteria. Do not touch files belonging to other stories or outside the current task scope.
+- [2026-07-07T20:17:57Z] [unreviewed-fallback] Avoid using deprecated TypeScript compiler options like 'moduleResolution=node10'; use 'moduleResolution=node' instead.
+- [2026-07-17T20:20:58Z] Always: Before importing a module or referencing a type/property, always read the actual source file to verify the export exists, its exact path, its properties, and its constructor/factory signatures
+- [2026-07-23T01:15:16Z] Always: In tsconfig.json, always use moduleResolution 'node' (not 'node10' or 'Node10') — 'node10' was removed in TypeScript 5.x. The correct value for CommonJS + Node resolution is 'node'.
+- [2026-07-23T14:30:00Z] CORRECTION to a prior entry (2026-07-23T01:17:52Z, now removed): that entry wrongly claimed 'moduleResolution: node' itself is removed and must become 'node16'/'nodenext'. Root-caused via mock1 (epam-cli orchestration test): 'node' is valid and correct through TypeScript 5.x (confirmed on 5.9.3) — it was only removed in TypeScript 7.x. The real defect was an unpinned `typescript` devDependency letting a fallback `npm install` pull latest (7.x) instead of the project's intended version. Do NOT rewrite a working tsconfig.json's moduleResolution in response to a TS5108 error — first check `node_modules/typescript/package.json`'s version; if it's 7.x and the rest of the project expects 5.x, the fix is pinning/reinstalling the correct typescript version, not changing moduleResolution.
+
+## Knowledge Base Contribution (do this LAST — after writing all implementation files)
+Your assigned KB entry ID for this run: **KB-012**
+**This is retry attempt 2** — a previous attempt failed. You MUST write a KB entry documenting what went wrong and what you changed.
+
+IMPORTANT: Write ALL implementation files first. Only AFTER writing every required file should you optionally append a KB entry.
+Do NOT read orchestrations/agents/KB.md before writing implementation files. The relevant KB entries are already injected above.
+
+If (and only if) you discover a non-obvious pattern during implementation, append one entry to `orchestrations/agents/KB.md`:
+
+```markdown
+## KB-012 -- 2026-07-23
+
+**Category:** <backend|frontend|infrastructure|testing|orchestration>
+**AgentRole:** <your agentRole from the story>
+**Tags:** <comma-separated tech keywords, e.g. typescript, node, cli>
+**Trigger:** <retry|first-success>
+**StoryRef:** AMSD-1820
+
+<One concise paragraph: the specific pattern, gotcha, or anti-pattern.>
+```
+
+Only write an entry if the knowledge is genuinely non-obvious. Skip trivial observations.
+
+## Execution Plan
+Follow this plan step by step:
+1. Search the codebase for the Mozio sanitization pipeline — grep for "mozio" in dispatch/report sanitization modules — to locate where outbound trip discounts are processed and where return trip discounts are dropped or zeroed out.
+
+2. In the identified sanitization module, find the function that maps Mozio dispatch data to the `report.price.discount` structure (containing `amount.value`, `amount.currency`, and `name`). Compare how it handles outbound vs. return legs — the bug is likely that the return-leg promo code is not read from the correct field or the discount mapping is skipped for return trips.
+
+3. Fix the discount mapping logic so that return trip dispatches use the same discount extraction path as outbound trips: read the promo code amount and name from the return-leg data, compute `amount = per_unit_discount * quantity`, and populate `report.price.discount` with `{ amount: { value: <number>, currency: <code> }, name: <promo_code_name> }`.
+
+4. Add a guard so that when no promo code applies (discount is zero, null, or undefined), the `discount` field is set to `undefined` (omitted entirely) rather than an object with `amount.value: 0`.
+
+5. Add a cap so the discount amount never exceeds the line item price — clamp `discount.amount.value` to `min(discount, price_total)` to prevent negative totals.
+
+6. Ensure the discount `amount.value` is cast to a numeric type (not a string) and the currency code is preserved from the source data for both outbound and return legs.
+
+7. For orders with both outbound and return dispatches sharing a single order-level promo code, verify that proportional discount allocation is applied per-leg (each dispatch carries its own proportional share), matching the outbound behavior.
+
+8. Add unit tests covering: (a) return trip with promo code → correct `discount.amount.value` and `discount.name`; (b) return trip with no promo → `discount` omitted; (c) promo on return only → outbound omits discount, return includes it; (d) discount exceeding price → clamped, no negative total; (e) both legs with order-level promo → proportional discounts on both; (f) numeric type and currency preservation assertions.
+
+9. Run the full test suite for the Mozio sanitization module and verify all existing outbound discount tests still pass alongside the new return-trip discount tests.
+=== End Prompt ===
+
+=== epam Output (attempt 3) ===
+Now let me look at where this sanitized dispatch is used, particularly for return trips:
+Now let me look at where this sanitized dispatch is used, particularly for return trips:
+
+=== epam exited with code 1 ===
+=== Prompt for AMSD-1820 (attempt 4) ===
+CRITICAL — these files already exist. Their real content is injected below (## Existing File Contents) — you do NOT need to ReadFile them to see what's already there.
+Do NOT import or reference anything that doesn't appear in the injected content below — a plausible-sounding module name is not a real one.
+Only call ReadFile yourself if you need to see MORE of a file than what's shown (e.g. it was truncated), or a file not listed below.
+
+
+---
+
+Implement user story AMSD-1820: [Mozio] - The Promo code amount is NOT displayed as expected for Return trip tickets in the Mozio email confirmation
+
+## Story Description
+[Mozio] - The Promo code amount is NOT displayed as expected for Return trip tickets in the Mozio email confirmation
+
+## Acceptance Criteria
+- Given a Mozio dispatch corresponding to a return trip ticket with an applicable promo code, When the dispatch is processed through the sanitization pipeline, Then the resulting `report.price.discount.amount.value` reflects the correct promo code discount for the return leg (not zero or omitted).
+- Given a Mozio dispatch corresponding to a return trip ticket with an applicable promo code, When the dispatch is processed through the sanitization pipeline, Then the resulting `report.price.discount.name` contains the promo code name (not masked to empty or omitted).
+- Given a return trip dispatch with a promo code discount, When the discount amount is populated in the dispatch report, Then the amount equals the per-unit discount multiplied by the line item quantity, consistent with how discounts are calculated for outbound trip dispatches.
+- Given a return trip dispatch where no promo code applies (discount is zero or undefined), When the dispatch is processed, Then the `discount` field is omitted entirely from the dispatch report (undefined, not an object with amount 0).
+- Given an order containing both outbound and return trip dispatches with a promo code applying to the full order, When both dispatches are processed, Then each dispatch carries the correct proportional discount amount in their `report.price.discount`, and the Mozio email confirmation displays both discounts.
+- Given a processed return trip dispatch with a promo code discount, When compared to the order payload or API response for the same order ID, Then the discount amount in the sanitized Mozio dispatch matches the discount value in the order data.
+- Given both outbound and return trip dispatches with promo code discounts, When the Mozio email confirmation is rendered, Then the return trip discount appears in the same format and position as the outbound trip discount (same discount structure in the sanitized dispatch for both legs).
+- Given a promo code that applies only to the return leg and not the outbound leg, When both dispatches are processed, Then the return dispatch carries the correct discount and the outbound dispatch omits the discount field entirely.
+- Given a return trip dispatch with a promo code discount, When the discount amount is written to the dispatch report, Then the amount is a numeric value (not a string representation of a number) and the currency code is preserved.
+- Given a promo code discount that would exceed the return trip price, When the dispatch is processed, Then the discount amount does not produce a negative total price in the dispatch report.
+
+
+
+
+
+
+## Technical Notes
+None specified
+
+
+## Files to Create/Modify (EXACT ABSOLUTE PATHS — write to these paths exactly)
+
+
+## Dependencies
+None
+
+
+
+## Instructions
+CRITICAL — these files already exist. Their real content is injected below (## Existing File Contents) — you do NOT need to ReadFile them to see what's already there.
+Do NOT import or reference anything that doesn't appear in the injected content below — a plausible-sounding module name is not a real one.
+Only call ReadFile yourself if you need to see MORE of a file than what's shown (e.g. it was truncated), or a file not listed below.
+
+**The content of every file listed above is already shown in ## Existing File Contents — use that, do not spend a tool call re-reading them. Use Edit for targeted changes to existing files — do NOT overwrite an existing file wholesale with WriteFile.**
+
+1. Use the injected ## Existing File Contents above to verify what actually exists (exports, types, existing utilities) before writing any code — do not guess, and do not re-read a file already shown in full
+2. Implement all acceptance criteria for this story
+3. Follow the project's existing code patterns and conventions
+4. Do NOT create tests unless explicitly required in acceptance criteria
+
+After implementation, provide a brief summary of what was created/modified.
+
+## Relevant Knowledge Base Entries
+The following was learned from previous story implementations and is relevant to your agent role. Apply this knowledge before writing any code:
+
+- [2026-07-06T18:11:26Z] Use vi.fn().mockResolvedValue(value) to make a mock return a resolved Promise.
+- [2026-07-06T20:31:11Z] Use `test: { passWithNoTests: true }` in vitest.config.ts or create a stub test file when no *.test.ts files exist.
+- [2026-07-06T20:33:03Z] Enable globals:true in vitest.config.ts so describe, it, and expect work without imports, reducing boilerplate in test files.
+- [2026-07-06T23:47:34Z] Use CommonJS-compatible patterns in src/server.ts: avoid `import.meta.url` and top-level `await`; gate listen with `if (require.main === module)`.
+- [2026-07-07T02:35:30Z] Always include a non-test source file in src/ alongside any src/*.test.ts file, since tsconfig.json excludes test files from tsc --noEmit.
+- [2026-07-07T19:01:34Z] Only modify or create files explicitly listed in the story's acceptance criteria. Do not touch files belonging to other stories or outside the current task scope.
+- [2026-07-07T20:17:57Z] [unreviewed-fallback] Avoid using deprecated TypeScript compiler options like 'moduleResolution=node10'; use 'moduleResolution=node' instead.
+- [2026-07-17T20:20:58Z] Always: Before importing a module or referencing a type/property, always read the actual source file to verify the export exists, its exact path, its properties, and its constructor/factory signatures
+- [2026-07-23T01:15:16Z] Always: In tsconfig.json, always use moduleResolution 'node' (not 'node10' or 'Node10') — 'node10' was removed in TypeScript 5.x. The correct value for CommonJS + Node resolution is 'node'.
+- [2026-07-23T14:30:00Z] CORRECTION to a prior entry (2026-07-23T01:17:52Z, now removed): that entry wrongly claimed 'moduleResolution: node' itself is removed and must become 'node16'/'nodenext'. Root-caused via mock1 (epam-cli orchestration test): 'node' is valid and correct through TypeScript 5.x (confirmed on 5.9.3) — it was only removed in TypeScript 7.x. The real defect was an unpinned `typescript` devDependency letting a fallback `npm install` pull latest (7.x) instead of the project's intended version. Do NOT rewrite a working tsconfig.json's moduleResolution in response to a TS5108 error — first check `node_modules/typescript/package.json`'s version; if it's 7.x and the rest of the project expects 5.x, the fix is pinning/reinstalling the correct typescript version, not changing moduleResolution.
+
+## Knowledge Base Contribution (do this LAST — after writing all implementation files)
+Your assigned KB entry ID for this run: **KB-012**
+**This is retry attempt 3** — a previous attempt failed. You MUST write a KB entry documenting what went wrong and what you changed.
+
+IMPORTANT: Write ALL implementation files first. Only AFTER writing every required file should you optionally append a KB entry.
+Do NOT read orchestrations/agents/KB.md before writing implementation files. The relevant KB entries are already injected above.
+
+If (and only if) you discover a non-obvious pattern during implementation, append one entry to `orchestrations/agents/KB.md`:
+
+```markdown
+## KB-012 -- 2026-07-23
+
+**Category:** <backend|frontend|infrastructure|testing|orchestration>
+**AgentRole:** <your agentRole from the story>
+**Tags:** <comma-separated tech keywords, e.g. typescript, node, cli>
+**Trigger:** <retry|first-success>
+**StoryRef:** AMSD-1820
+
+<One concise paragraph: the specific pattern, gotcha, or anti-pattern.>
+```
+
+Only write an entry if the knowledge is genuinely non-obvious. Skip trivial observations.
+
+## Execution Plan
+Follow this plan step by step:
+1. Search the codebase for the Mozio sanitization pipeline — grep for "mozio" in dispatch/report sanitization modules — to locate where outbound trip discounts are processed and where return trip discounts are dropped or zeroed out.
+
+2. In the identified sanitization module, find the function that maps Mozio dispatch data to the `report.price.discount` structure (containing `amount.value`, `amount.currency`, and `name`). Compare how it handles outbound vs. return legs — the bug is likely that the return-leg promo code is not read from the correct field or the discount mapping is skipped for return trips.
+
+3. Fix the discount mapping logic so that return trip dispatches use the same discount extraction path as outbound trips: read the promo code amount and name from the return-leg data, compute `amount = per_unit_discount * quantity`, and populate `report.price.discount` with `{ amount: { value: <number>, currency: <code> }, name: <promo_code_name> }`.
+
+4. Add a guard so that when no promo code applies (discount is zero, null, or undefined), the `discount` field is set to `undefined` (omitted entirely) rather than an object with `amount.value: 0`.
+
+5. Add a cap so the discount amount never exceeds the line item price — clamp `discount.amount.value` to `min(discount, price_total)` to prevent negative totals.
+
+6. Ensure the discount `amount.value` is cast to a numeric type (not a string) and the currency code is preserved from the source data for both outbound and return legs.
+
+7. For orders with both outbound and return dispatches sharing a single order-level promo code, verify that proportional discount allocation is applied per-leg (each dispatch carries its own proportional share), matching the outbound behavior.
+
+8. Add unit tests covering: (a) return trip with promo code → correct `discount.amount.value` and `discount.name`; (b) return trip with no promo → `discount` omitted; (c) promo on return only → outbound omits discount, return includes it; (d) discount exceeding price → clamped, no negative total; (e) both legs with order-level promo → proportional discounts on both; (f) numeric type and currency preservation assertions.
+
+9. Run the full test suite for the Mozio sanitization module and verify all existing outbound discount tests still pass alongside the new return-trip discount tests.
+=== End Prompt ===
+
+=== epam Output (attempt 4) ===
+Let me check the existing mozio mappers test, the related controllers, and the place where `mapToSanitizedMozioDispatch` is consumed:
+Let me check the existing mozio mappers test, the related controllers, and the place where `mapToSanitizedMozioDispatch` is consumed:
+
+=== epam exited with code 1 ===

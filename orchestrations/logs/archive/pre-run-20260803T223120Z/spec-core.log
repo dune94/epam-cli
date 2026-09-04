@@ -1,0 +1,7 @@
+spec-mode: fast-path qwen/z-ai/glm-5.2 (skipping MiniMax)
+spec-mode: fast-path qwen/z-ai/glm-5.2 (skipping MiniMax)
+spec-mode: MOCK-HW-1 — 1 verification criteria persisted (source: description, resolution: clean)
+spec-mode: fast-path qwen/z-ai/glm-5.2 (skipping MiniMax)
+spec-mode: fast-path qwen/z-ai/glm-5.2 (skipping MiniMax)
+Failed to parse JSON for tag MODEL_REVIEW: Unexpected token '<', "<tool_call"... is not valid JSON
+spec-mode: completed for phase core (run 20260803T223120Z)

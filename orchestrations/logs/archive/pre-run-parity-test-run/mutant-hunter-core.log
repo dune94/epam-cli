@@ -1,0 +1,10 @@
+[coverage-gate] writer: no pre-flight has gated this run — standing down
+{
+  "agent": "mutant-hunter",
+  "phase": "core",
+  "summary": { "mutationsProposed": 0, "killed": 0, "survived": 0, "noCoverage": 0, "mutationScore": 100 },
+  "mutations": [],
+  "verdict": "warn"
+}
+
+Insufficient evidence to ground findings: the injected `CheckoutForm.tsx` excerpt cuts off at line 100 of 436 before reaching any email field, validation, or comparison logic, and the ticket's actual change (case-insensitive email confirmation) is AMSD-1919's core diff — not visible in the shown lines. Similarly, the test file excerpt (60 of 380 lines) shows only mock setup, no assertions on email comparison. Proposing mutations on unseen code would mean guessing line numbers and original code, which violates the grounding rule requiring a verbatim `originalCode` line for any `survived` finding. Reporting `warn` with 0 mutations rather than fabricating coverage of code not actually inspected.

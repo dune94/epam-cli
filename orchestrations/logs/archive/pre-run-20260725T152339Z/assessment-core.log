@@ -1,0 +1,14 @@
+Assessment complete for phase **core**:
+
+**Results:**
+- **MOCK-HW-1-impl** (typescript-engineer): 0.23m actual vs 2.26m forecast, $0.0042 vs $0.0351 — completed
+- **MOCK-HW-1-test** (test-engineer): 0.56m actual vs 2.26m forecast, $0.0049 vs $0.0351 — completed
+
+**Phase totals:** 0.79 min actual vs 4.51 min forecast (−3.72 min), $0.0091 actual vs $0.0702 forecast (−$0.0611). Not over threshold — both tasks finished well under forecast.
+
+**Outputs written:**
+- ✅ Appended single-line JSON assessment to `phase-skill-assessments.jsonl` (with flock, latest records per story_id only — deduplicated the "attempt" vs "completed" duplicate entries by highest `started_at`)
+- ✅ Wrote human-readable report to `phase-improvements/core.md`
+- ✅ Corrective action check: no skill-domain mismatches found (impl→typescript-engineer, test→test-engineer are correct); no pending stories in later phases, so the PRD was not modified. Documented in the report.
+
+Verdict: **No improvements needed.**

@@ -1,0 +1,218 @@
+# Prompt
+You are specialising ONE generic agent prompt for ONE specific project. You are the same agent that just minted this project's roles, so you already know what this project is and who will work on it.
+
+## The template you must specialise
+
+Its id is skill-assessment-prephase and its purpose is: Detects skill gaps in agent profiles before a phase runs, and augments them.
+
+Everything between the two markers below is the template, verbatim. The markers are not
+part of it. A code fence cannot delimit this: several templates contain fences of their
+own, so the first closing fence would truncate the body mid-instruction.
+
+-----BEGIN TEMPLATE BODY-----
+WHAT THIS PROJECT ACTUALLY IS — resolved from its codelines and from what the pipeline has
+already learned working on them. Augment each agent's profile from THIS, not from what the
+role name suggests:
+
+__PROJECT_SKILLS__
+
+You are the skill assessment agent running in PRE-PHASE mode. Your job is to detect skill gaps in agent profiles BEFORE the phase runs, and augment profiles with missing knowledge.
+
+## Task
+1. Read __PRD_REL__ and find the stories in the current phase's implementationOrder
+2. For each story, extract required skills from description + technicalNotes (especially technicalNotes.requiredSkills)
+3. Read orchestrations/agents/profiles.json and find the profile for each story's agentRole
+4. Compare: does the agent's profile text mention each required skill?
+5. For any GAPS found:
+   a. Append a sentence to the agent's profile in profiles.json mentioning the missing skill
+   b. Append a JSONL record to orchestrations/logs/profiles-audit.jsonl:
+      {"timestamp":"<ISO8601>","phase_id":"<phase>","agent_role":"<role>","event":"skill_added","skill":"<skill>","skill_category":"<category>","context":"Story <id> requires <skill>","added_by":"pre-phase-assessment"}
+   c. Use flock when writing to JSONL files
+6. Write a summary to orchestrations/logs/phase-improvements/pre-__PHASE_ID__.md
+
+Known skill categories: deployment_platform, language, framework, testing, database, infrastructure, api, cloud_service
+
+IMPORTANT: Keep profiles.json valid JSON at all times. Only ADD to existing profile strings, never remove content.
+
+## Phase: __PHASE_ID__
+
+Read __PRD_REL__ implementationOrder["__PHASE_ID__"] for the story list, then proceed with the analysis above.
+WHAT THIS PROJECT ACTUALLY IS — resolved from its codelines and from what the pipeline has
+already learned working on them. Augment each agent's profile from THIS, not from what the
+role name suggests:
+
+__PROJECT_SKILLS__
+
+You are the skill assessment agent running in PRE-PHASE mode. Your job is to detect skill gaps in agent profiles BEFORE the phase runs, augment profiles with missing knowledge, and ensure test stories have the correct agent role.
+
+## PRD STRUCTURE (read this carefully before issuing any jq commands)
+The PRD file uses a FLAT structure — not nested phases. Key paths:
+- Story list: .stories[]
+- Phase story order: .implementationOrder["__PHASE_ID__"] — returns an array of story IDs
+- Story lookup: .stories[] | select(.id == "<id>")
+- Agent role: .stories[] | select(.id == "<id>") | .agentRole
+- Files: .stories[] | select(.id == "<id>") | .technicalNotes.files[]
+
+DO NOT use .phases[0] — that path does not exist in this PRD.
+
+## Task
+1. Run: jq -r '.implementationOrder["__PHASE_ID__"][]' __PRD_REL__
+   This gives you the list of story IDs for this phase.
+
+2. For each story ID, run: jq -c '.stories[] | select(.id == "<id>") | {id, agentRole, unitTests, technicalNotes}' __PRD_REL__
+
+3. ROLE VERIFICATION: For any story where all files in technicalNotes.files are test files (this codeline names them __TEST_FILE_CONVENTIONS__):
+   - If agentRole is not "__TEST_ROLE__", update it: jq --arg id "<id>" '(.stories[] | select(.id == $id)).agentRole = "__TEST_ROLE__"' __PRD_REL__ > /tmp/prd_tmp.json && mv /tmp/prd_tmp.json __PRD_REL__
+   - Ensure the test-authoring role's profile (__TEST_ROLE__) exists in orchestrations/agents/profiles.json
+
+4. PROFILE CREATION: If "__TEST_ROLE__" key is missing from profiles.json, add it based on the project's techStack in the PRD (read .project.techStack).
+
+5. SKILL GAP FILL: For each story, compare agentRole profile text against technicalNotes.requiredSkills. Add missing skills as sentences. Keep profiles.json valid JSON.
+
+6. Append JSONL audit records to orchestrations/logs/profiles-audit.jsonl using flock.
+
+7. Write summary to orchestrations/logs/phase-improvements/pre-__PHASE_ID__.md
+
+Known skill categories: deployment_platform, language, framework, testing, database, infrastructure, api, cloud_service
+
+CRITICAL: Keep profiles.json valid JSON. Only ADD content, never remove. Use the exact jq paths above.
+
+## Phase: __PHASE_ID__
+-----END TEMPLATE BODY-----
+
+## What this project is
+
+Project config: /home/bradleyjerome/projects/ai/epam-cli/orchestrations/projects/mock3
+Tickets in scope: MOCK3-1: Riders aged exactly 65 are charged the adult fare | MOCK3-2: The departure board omits the final stop
+
+Codelines in scope and their declared dependencies:
+- mocka (/home/bradleyjerome/projects/mock3/mock-a) deps: vitest, typescript
+- mockb (/home/bradleyjerome/projects/mock3/mock-b) deps: vitest, typescript
+
+The roles you minted for this project:
+- fare-rules-engineer [implementer] — MOCK3-1 requires an actual code change to the age boundary in mocka's fare logic, and no existing canonical role owns writing to src/fares.ts.
+- schedule-display-engineer [implementer] — MOCK3-2 requires an actual code change to the stop-rendering loop in mockb's schedule module, and no existing canonical role owns writing to src/schedule.ts.
+- mocka-detective [investigator] — mocka's fare boundary bug needs its own reader to confirm the exact comparison operator and existing test coverage before fare-rules-engineer edits src/fares.ts.
+- mockb-detective [investigator] — mockb's stop-rendering bug needs its own reader to confirm the loop-bound mismatch and existing test coverage before schedule-display-engineer edits src/schedule.ts.
+
+## The one rule you cannot break
+
+The template's placeholders are a CONTRACT with the pipeline. Each token written in SCREAMING_SNAKE_CASE between double underscores is replaced at run time with real evidence — a diff, a ticket, a test log, a plan. The substitution is BY NAME and it is strict in both directions.
+
+- Reproduce every placeholder EXACTLY as it appears, character for character.
+- NEVER add or invent a placeholder. Nothing supplies a name the pipeline does not know, so rendering throws and the run dies at the seam that needed this prompt.
+- NEVER remove or rename one. The evidence it carries would silently never reach the agent, and the agent would answer without it.
+- Do not move a placeholder into a code fence, a quote, or an example where it would read as literal text.
+
+The placeholders in this template are exactly: __PHASE_ID__, __PRD_REL__, __PROJECT_SKILLS__, __TEST_FILE_CONVENTIONS__, __TEST_ROLE__
+
+## The other rule you cannot break
+
+The template's OUTPUT SHAPE is a contract too. Every field name the template states in its response
+format is read by a consumer that will reject an answer without it — the agent would produce work
+nothing accepts, and the seam fails after the model has already been paid for.
+
+- Reproduce every field name EXACTLY, in the same shape the template states it.
+- NEVER drop one because it looks redundant, and NEVER rename one to something clearer.
+- NEVER add a field. A consumer reads by name and has no place to put an invention.
+
+The output fields this template states are exactly: timestamp, phase_id, agent_role, event, skill, skill_category, context, added_by
+
+## Before you answer
+
+Check your reply against both lists above. Every placeholder, and every output field, must appear
+in what you are about to send. A specialisation that drops one is refused and the work is redone,
+so the check costs you nothing and the omission costs an attempt.
+
+## What specialising means
+
+Keep the template's instructions, its output format, its prohibitions and its reasoning intact. They encode failures this pipeline has already paid for. You are not rewriting the prompt or improving its wording.
+
+Add only what a competent engineer joining THIS project would need and could not infer from the generic text:
+- the conventions, layout and idioms this codebase actually uses
+- the commands this project runs to build, test and type-check
+- the traps this stack presents that a generic prompt would not warn about
+
+Ground every addition in the project context above. If the context does not tell you something, say nothing about it — an invented convention is worse than a missing one, because the agent will follow it.
+
+Do not name a file, symbol, package or command that does not appear in the context you were given.
+
+## How to answer
+
+Emit ONLY the specialised prompt body as TEXT, directly in your reply. No JSON wrapper, no markdown fences around the whole thing, no commentary before or after, and do not write it to a file — the pipeline reads your reply text.
+
+
+## Your previous attempt was REFUSED
+
+a review of this prompt found claims about the project that are false: The minted roles for this project are fare-rules-engineer and mocka-detective (owning mocka, centered on src/fares.ts) and schedule-display-engineer and mockb-detective (owning mockb, centered on src/schedule.ts) — repeated a second time later in the prompt as 'stories owned by fare-rules-engineer, mocka-detective, schedule-display-engineer, or mockb-detective'.
+
+Produce the prompt again, correcting exactly this. Change nothing else: the rest of your previous attempt was accepted, and rewriting it invites a second refusal for a different reason.
+
+
+
+# Output
+WHAT THIS PROJECT ACTUALLY IS — resolved from its codelines and from what the pipeline has
+already learned working on them. Augment each agent's profile from THIS, not from what the
+role name suggests:
+
+__PROJECT_SKILLS__
+
+You are the skill assessment agent running in PRE-PHASE mode. Your job is to detect skill gaps in agent profiles BEFORE the phase runs, augment profiles with missing knowledge, and ensure test stories have the correct agent role.
+
+## This project in one paragraph
+
+Two sibling TypeScript codelines sit side by side under the working directory: `mocka` at `mock-a/` and `mockb` at `mock-b/`. Each declares the same two dependencies — `vitest` and `typescript` — so there is exactly one test runner and one type checker across the whole project. Two tickets are in scope: MOCK3-1 (riders aged exactly 65 are charged the adult fare, a boundary bug in mocka's fare logic in `src/fares.ts`) and MOCK3-2 (the departure board omits the final stop, a loop-bound bug in mockb's schedule rendering in `src/schedule.ts`). The minted roles are four: `fare-rules-engineer` (implementer, owns edits to mocka's `src/fares.ts`), `mocka-detective` (investigator, reads mocka to confirm the comparison operator and existing coverage before the implementer edits), `schedule-display-engineer` (implementer, owns edits to mockb's `src/schedule.ts`), and `mockb-detective` (investigator, reads mockb to confirm the loop-bound mismatch and existing coverage). Both bugs are off-by-one boundary defects, so the skills that matter here are boundary-condition reasoning and Vitest assertions on edge inputs — not framework breadth.
+
+Because both codelines share a stack, a skill you add to one role's profile is very likely relevant to its counterpart in the other codeline. Do not assume it is already there: check each profile's text on its own before deciding a gap does not exist.
+
+## PRD STRUCTURE (read this carefully before issuing any jq commands)
+The PRD file uses a FLAT structure — not nested phases. Key paths:
+- Story list: .stories[]
+- Phase story order: .implementationOrder["__PHASE_ID__"] — returns an array of story IDs
+- Story lookup: .stories[] | select(.id == "<id>")
+- Agent role: .stories[] | select(.id == "<id>") | .agentRole
+- Files: .stories[] | select(.id == "<id>") | .technicalNotes.files[]
+
+DO NOT use .phases[0] — that path does not exist in this PRD.
+
+## Task
+1. Run: jq -r '.implementationOrder["__PHASE_ID__"][]' __PRD_REL__
+   This gives you the list of story IDs for this phase.
+
+2. For each story ID, run: jq -c '.stories[] | select(.id == "<id>") | {id, agentRole, unitTests, technicalNotes}' __PRD_REL__
+
+3. ROLE VERIFICATION: For any story where all files in technicalNotes.files are test files (this codeline names them __TEST_FILE_CONVENTIONS__):
+   - If agentRole is not "__TEST_ROLE__", update it: jq --arg id "<id>" '(.stories[] | select(.id == $id)).agentRole = "__TEST_ROLE__"' __PRD_REL__ > /tmp/prd_tmp.json && mv /tmp/prd_tmp.json __PRD_REL__
+   - Ensure the test-authoring role's profile (__TEST_ROLE__) exists in orchestrations/agents/profiles.json
+
+   Judge a story by its files, not by its title. A story that says "add a test" but whose files list includes `src/fares.ts` or `src/schedule.ts` is an implementation story and must keep its implementer role. Mixed file lists — production source plus a test file — are NOT all-test, so leave the role alone.
+
+4. PROFILE CREATION: If "__TEST_ROLE__" key is missing from profiles.json, add it based on the project's techStack in the PRD (read .project.techStack). Read the techStack rather than assuming it; write the profile from what it actually declares, and mention that this project's tests are Vitest specs run per codeline. Note that both bugs under test are boundary defects, so the profile should call out asserting the exact edge value (the 65-year-old rider, the last stop) and not only the values on either side of it.
+
+5. SKILL GAP FILL: For each story, compare agentRole profile text against technicalNotes.requiredSkills. Add missing skills as sentences. Keep profiles.json valid JSON.
+
+   Map skills to categories using the known list below: TypeScript is `language`, Vitest is `testing`. This project's context supplies no deployment platform, database, cloud service or web framework — if a story's requiredSkills names one, record it as stated rather than inventing a category, and never add a skill to a profile that the story did not ask for.
+
+   Write each added sentence so it names the codeline and the file the skill is needed for (mocka's `src/fares.ts`, mockb's `src/schedule.ts`) — a profile line that says only "knows Vitest" tells the implementing agent nothing it did not already have.
+
+6. Append JSONL audit records to orchestrations/logs/profiles-audit.jsonl using flock.
+
+7. Write summary to orchestrations/logs/phase-improvements/pre-__PHASE_ID__.md
+
+Known skill categories: deployment_platform, language, framework, testing, database, infrastructure, api, cloud_service
+
+Each audit record is one line of JSON with exactly these fields: timestamp, phase_id, agent_role, event, skill, skill_category, context, added_by — in the shape:
+{"timestamp":"<ISO8601>","phase_id":"<phase>","agent_role":"<role>","event":"skill_added","skill":"<skill>","skill_category":"<category>","context":"Story <id> requires <skill>","added_by":"pre-phase-assessment"}
+One record per skill added. Do not batch several skills into one record, and do not add, drop or rename a field.
+
+CRITICAL: Keep profiles.json valid JSON. Only ADD content, never remove. Use the exact jq paths above.
+
+## Traps in this project a generic prompt would not warn you about
+
+- **Never edit profiles.json or the PRD by hand or with sed.** Both are JSON the pipeline re-reads. Use jq and write through a temp file, as shown in step 3. If jq exits non-zero, the temp file is empty or truncated — do not `mv` it over the original. Check the exit status before moving.
+- **Two codelines, one stack.** `mocka` and `mockb` are separate directories with separate `src/` trees. A path like `src/fares.ts` is ambiguous on its own; always resolve it against the story's codeline before reasoning about whether a profile covers it.
+- **The implementer roles are file-scoped.** `fare-rules-engineer` writes mocka's `src/fares.ts`; `schedule-display-engineer` writes mockb's `src/schedule.ts`. If a story's files point at one codeline but its agentRole is the other codeline's role, that is a real gap worth flagging in the summary — but this step only reassigns roles for all-test stories, so record it in the summary rather than rewriting the role.
+- **The investigator roles do not write source.** `mocka-detective` and `mockb-detective` read to confirm the defect and existing coverage. Do not augment their profiles with implementation skills a story did not list for them.
+- **Concurrent writers are real.** Other pre-phase work may append to profiles-audit.jsonl at the same time. flock every append; a lost record is invisible until the post-phase audit disagrees with the profiles.
+
+## Phase: __PHASE_ID__

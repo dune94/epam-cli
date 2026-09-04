@@ -1,0 +1,155 @@
+# Prompt
+You are specialising ONE generic agent prompt for ONE specific project. You are the same agent that just minted this project's roles, so you already know what this project is and who will work on it.
+
+## The template you must specialise
+
+Its id is code-review-cycle and its purpose is: Review an implementation and return a verdict with issues.
+
+Everything between the two markers below is the template, verbatim. The markers are not
+part of it. A code fence cannot delimit this: several templates contain fences of their
+own, so the first closing fence would truncate the body mid-instruction.
+
+-----BEGIN TEMPLATE BODY-----
+__REVIEW_PROFILE__
+
+---
+REVIEW TASK (Iteration __ITERATION__): Story __STORY_ID__ — __STORY_TITLE__
+AGENT: __STORY_AGENT__
+
+DESCRIPTION: __STORY_DESCRIPTION__
+
+ACCEPTANCE CRITERIA:
+__STORY_ACS__
+
+RELEVANT FILES: __STORY_FILES__
+
+GIT DIFF:
+```diff
+__STORY_DIFF__
+```
+__PRIOR_CONTEXT__
+PROJECT ROOT: __PROJECT_ROOT__
+
+Review the implementation against each acceptance criterion.
+Check: TypeScript strict compliance, test coverage, error handling, security.
+
+Respond with ONLY a JSON object:
+{"verdict":"approved","issues":[],"summary":"..."}
+  OR
+{"verdict":"changes_requested","issues":[{"severity":"blocker|major|minor","file":"...","line":0,"description":"...","evidence":"<path>:<line> you read, or the command you ran and its result","suggestedFix":"..."}],"summary":"..."}
+
+Every issue MUST carry an `evidence` field: the exact thing you READ that establishes it — `<path>:<line>` you opened, or the command you ran and what it returned. Not a restatement of the claim, not a plan reference: what you looked at. An issue without evidence is DISCARDED before it reaches anyone, so an unsupported finding is worse than no finding — it costs you the issue. If a claim is about a library's API, the evidence is that library's installed types or source in this repository, and the installed contract beats the plan.
+
+-----END TEMPLATE BODY-----
+
+## What this project is
+
+Project config: /home/bradleyjerome/projects/ai/epam-cli/orchestrations/projects/mock3
+Tickets in scope: MOCK3-1: Riders aged exactly 65 are charged the adult fare | MOCK3-2: The departure board omits the final stop
+
+Codelines in scope and their declared dependencies:
+- mocka (/home/bradleyjerome/projects/mock3/mock-a) deps: vitest, typescript
+- mockb (/home/bradleyjerome/projects/mock3/mock-b) deps: vitest, typescript
+
+The roles you minted for this project:
+- mocka-investigator [investigator] — MOCK3-1 is isolated to mocka's src/fares.ts and the survey's evidence needs a dedicated reader to confirm the exact branch ordering and test coverage gap before any fix is written.
+- mockb-investigator [investigator] — MOCK3-2 is isolated to mockb's src/schedule.ts and the loop-bound versus totalMinutes distinction needs a dedicated reader who has actually opened schedule.test.ts to confirm the coverage gap.
+- fare-rules-engineer [implementer] — MOCK3-1 requires an actual code change to the age comparison in fareFor(), and the fixed canonical roster has no role that authors this project's TypeScript fare logic.
+- departure-board-engineer [implementer] — MOCK3-2 requires an actual code change to the loop bound in formatStops(), and the fixed canonical roster has no role that authors this project's TypeScript departure-board rendering.
+
+## The one rule you cannot break
+
+The template's placeholders are a CONTRACT with the pipeline. Each token written in SCREAMING_SNAKE_CASE between double underscores is replaced at run time with real evidence — a diff, a ticket, a test log, a plan. The substitution is BY NAME and it is strict in both directions.
+
+- Reproduce every placeholder EXACTLY as it appears, character for character.
+- NEVER add or invent a placeholder. Nothing supplies a name the pipeline does not know, so rendering throws and the run dies at the seam that needed this prompt.
+- NEVER remove or rename one. The evidence it carries would silently never reach the agent, and the agent would answer without it.
+- Do not move a placeholder into a code fence, a quote, or an example where it would read as literal text.
+
+The placeholders in this template are exactly: __ITERATION__, __PRIOR_CONTEXT__, __PROJECT_ROOT__, __REVIEW_PROFILE__, __STORY_ACS__, __STORY_AGENT__, __STORY_DESCRIPTION__, __STORY_DIFF__, __STORY_FILES__, __STORY_ID__, __STORY_TITLE__
+
+## The other rule you cannot break
+
+The template's OUTPUT SHAPE is a contract too. Every field name the template states in its response
+format is read by a consumer that will reject an answer without it — the agent would produce work
+nothing accepts, and the seam fails after the model has already been paid for.
+
+- Reproduce every field name EXACTLY, in the same shape the template states it.
+- NEVER drop one because it looks redundant, and NEVER rename one to something clearer.
+- NEVER add a field. A consumer reads by name and has no place to put an invention.
+
+The output fields this template states are exactly: verdict, issues, summary, severity, file, line, description, evidence, suggestedFix
+
+## Before you answer
+
+Check your reply against both lists above. Every placeholder, and every output field, must appear
+in what you are about to send. A specialisation that drops one is refused and the work is redone,
+so the check costs you nothing and the omission costs an attempt.
+
+## What specialising means
+
+Keep the template's instructions, its output format, its prohibitions and its reasoning intact. They encode failures this pipeline has already paid for. You are not rewriting the prompt or improving its wording.
+
+Add only what a competent engineer joining THIS project would need and could not infer from the generic text:
+- the conventions, layout and idioms this codebase actually uses
+- the commands this project runs to build, test and type-check
+- the traps this stack presents that a generic prompt would not warn about
+
+Ground every addition in the project context above. If the context does not tell you something, say nothing about it — an invented convention is worse than a missing one, because the agent will follow it.
+
+Do not name a file, symbol, package or command that does not appear in the context you were given.
+
+## How to answer
+
+Emit ONLY the specialised prompt body as TEXT, directly in your reply. No JSON wrapper, no markdown fences around the whole thing, no commentary before or after, and do not write it to a file — the pipeline reads your reply text.
+
+
+
+# Output
+__REVIEW_PROFILE__
+
+---
+REVIEW TASK (Iteration __ITERATION__): Story __STORY_ID__ — __STORY_TITLE__
+AGENT: __STORY_AGENT__
+
+DESCRIPTION: __STORY_DESCRIPTION__
+
+ACCEPTANCE CRITERIA:
+__STORY_ACS__
+
+RELEVANT FILES: __STORY_FILES__
+
+GIT DIFF:
+```diff
+__STORY_DIFF__
+```
+__PRIOR_CONTEXT__
+PROJECT ROOT: __PROJECT_ROOT__
+
+## Project context
+
+This project comprises two independent TypeScript codelines:
+- mocka (mock-a): Handles fare calculation logic in src/fares.ts with vitest tests
+- mockb (mock-b): Handles departure board rendering logic in src/schedule.ts with vitest tests
+
+Both use strict TypeScript and vitest for testing.
+
+## Review checklist
+
+Review the implementation against each acceptance criterion:
+
+- **Correctness**: Does the change fix the reported bug? Trace the exact logic path the code takes.
+- **Test coverage**: Does the test suite in the relevant .test.ts file cover the fixed case? Check for edge cases (MOCK3-1: exact age boundaries; MOCK3-2: final stop inclusion).
+- **TypeScript**: Ensure strict compliance. Check types are explicit and inference is sound.
+- **Logic bounds**: For loop-based logic (MOCK3-2), verify off-by-one errors—count the iterations and confirm the final index is included.
+
+## Running tests
+
+From the package root (mock-a or mock-b), run: `vitest` to execute the test suite and confirm coverage.
+
+Respond with ONLY a JSON object:
+{"verdict":"approved","issues":[],"summary":"..."}
+  OR
+{"verdict":"changes_requested","issues":[{"severity":"blocker|major|minor","file":"...","line":0,"description":"...","evidence":"<path>:<line> you read, or the command you ran and its result","suggestedFix":"..."}],"summary":"..."}
+
+Every issue MUST carry an `evidence` field: the exact thing you READ that establishes it — `<path>:<line>` you opened, or the command you ran and what it returned. Not a restatement of the claim, not a plan reference: what you looked at. An issue without evidence is DISCARDED before it reaches anyone, so an unsupported finding is worse than no finding — it costs you the issue. If a claim is about a library's API, the evidence is that library's installed types or source in this repository, and the installed contract beats the plan.

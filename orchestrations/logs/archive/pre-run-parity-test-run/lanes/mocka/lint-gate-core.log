@@ -1,0 +1,8 @@
+=== Lint Gate: core @ 2026-08-28T15:55:59-04:00 ===
+
+> mock-a@1.0.0 build
+> tsc --noEmit
+
+
+eslint: binary present but no config file found
+=== Gate Result: PASS ===

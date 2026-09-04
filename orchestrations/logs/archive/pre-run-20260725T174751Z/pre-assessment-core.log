@@ -1,0 +1,34 @@
+Now I have all the information I need. Let me analyze the situation:
+
+**Story MOCK-HW-1:**
+- `agentRole`: "typescript-engineer" (already assigned)
+- `unitTests`: null
+- Files: `src/hello.ts`, `src/hello.test.ts`, `.codegraph/.gitignore`
+- The story has BOTH implementation and test files mixed together
+- `unitTests` is null, not true — so the split rule (3c) doesn't apply (it requires `unitTests:true`)
+- The agentRole is already assigned as "typescript-engineer"
+
+Since `unitTests` is null (not true), rule 3c (split) doesn't apply. The agentRole is already set. Let me now proceed with steps 4-7.
+
+**Step 3 analysis:**
+- MOCK-HW-1 already has `agentRole: "typescript-engineer"` — no assignment needed
+- `unitTests` is null, not true, so no split required
+- The story has mixed files (impl + test) but since unitTests is null, the agent handles both
+
+**Step 4:** No new agent roles needed — "typescript-engineer" and "test-engineer" already exist in profiles.json.
+
+**Step 5:** Proactive skill inference for MOCK-HW-1 with typescript-engineer role.
+
+Let me reason about the pitfalls:
+
+1. The story is a bug fix — change `'hello world'` to `'hello dolly'` in `src/hello.ts`. The test file `src/hello.test.ts` currently asserts `toBe('hello world')`. After the fix, the test will FAIL unless the agent also updates the test assertion. This is a critical pitfall — the agent must update BOTH files.
+
+2. The project has vitest 2.1.9 installed in node_modules but NOT listed in package.json devDependencies (only typescript is). If the agent tries to add vitest as a devDependency, that would modify package.json which is scaffold-owned and immutable.
+
+3. The `.codegraph/.gitignore` file is listed in technicalNotes.files — the agent should not modify it.
+
+4. The test file uses `import { describe, it, expect } from 'vitest'` — the agent must maintain this pattern.
+
+5. Since both files need changes (implementation + test), the agent might change the implementation and forget to update the test, causing vitest to fail.
+
+Let me now add the inferred skills and update the profiles.

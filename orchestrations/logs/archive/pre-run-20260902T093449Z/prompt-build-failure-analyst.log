@@ -1,0 +1,225 @@
+# Prompt
+You are specialising ONE generic agent prompt for ONE specific project. You are the same agent that just minted this project's roles, so you already know what this project is and who will work on it.
+
+## The template you must specialise
+
+Its id is failure-analyst and its purpose is: Diagnoses a verification failure and routes a correction. Emits a single JSON object.
+
+Everything between the two markers below is the template, verbatim. The markers are not
+part of it. A code fence cannot delimit this: several templates contain fences of their
+own, so the first closing fence would truncate the body mid-instruction.
+
+-----BEGIN TEMPLATE BODY-----
+__ANALYST_PROFILE__
+
+STORY: __STORY_ID__
+AGENT ROLE: __STORY_ROLE__
+
+CURRENT TEST CRITERIA (TC facts when available, ACs as fallback):
+
+AGENT SKILL ADDENDUM (instructions in the agent's system prompt):
+__SKILL_ADDENDUM__
+
+DEPENDENCY CONTRACTS (ground truth — auto-generated from actual source, not
+model-transcribed; trust this over any assumption you'd otherwise make about
+what a dependency exports, including its exact class/function names and
+casing):
+__DEPENDENCY_CONTRACTS__
+
+TEST FAILURE OUTPUT:
+__VERIFICATION_FAILURE__
+
+You have read-only tools available (list/search/read files, run read-only
+shell commands). If the failure claims something about the filesystem or an
+installed package — "not installed," "missing," "does not exist," a wrong
+path — VERIFY it with your tools before stating it as your diagnosis. Do not
+assume; a confident wrong diagnosis is worse than a slower correct one,
+because every retry after it repeats the same mistake unchanged. Your tool
+budget is small — check the ONE fact your diagnosis depends on, not the
+whole codebase.
+
+Output ONLY a single JSON object. No markdown fences, no prose outside the JSON:
+{"diagnosis":"<one sentence: what specifically went wrong in the code>","target":"prd|tc|skill|kb|tool|none","ac_patches":[{"index":<0-based AC index>,"new_text":"<exact replacement text for that AC>"}],"tc_patches":[{"index":<0-based TC fact index>,"new_text":"<exact replacement text for that TC fact>"}],"skill_note":"<if target=skill or target=kb: concrete coding instruction>","tool_spec":{"name":"<kebab-case tool name, e.g. add-dependency>","purpose":"<one sentence: what repeated mechanical step this automates>","recipe":"<the exact shell commands the tool script should run, using $1 $2 ... for its arguments>"},"reason":"<why this change prevents the same failure on retry>"}
+
+Decision rules:
+- target=prd: the AC wording was ambiguous or contradictory, causing the agent to write wrong code. Fix the AC.
+- target=tc: the testCriteria facts are wrong or incomplete — the test agent followed them but they described incorrect behavior. Fix the TC facts.
+- target=skill: the agent used a bad coding pattern that should be injected into this retry's prompt only. This INCLUDES any diagnosis that names a specific, checkable fact about a type, property, field, or signature (e.g. "missing required X field", "Config doesn't match Y's type", "wrong argument count for Z") — that fact will not change no matter how many times or how strong a model you retry with, so it must be told, not re-guessed.
+- target=kb: the failure reveals a reusable coding rule that ALL future agents with this agent role should know — append to the role-specific KB.
+- target=tool: the failure is a repeated MECHANICAL step (not a knowledge gap) that a small shell script can perform reliably every time — e.g. "add a dependency to this codeline's manifest (__MANIFEST_FILE__) and install it before importing it". Only use target=tool when a KB rule alone has already failed to prevent the same class of failure, or the fix is a multi-step shell recipe error-prone to repeat by hand. Provide tool_spec.
+- target=none: reserved for a genuinely non-reproducible mistake — a stray typo, a one-off slip with no identifiable pattern — where your own diagnosis does not name a specific, checkable, nameable fact (a property, type, field, or signature) that a future attempt could look up and get right. If your diagnosis DOES name such a fact, that is deterministic, not transient, and target=none is the wrong answer even if you are uncertain what the exact correct value should be — use target=skill and describe the fact you found, even incompletely, rather than defaulting to a retry that cannot discover it on its own.
+- Only include ac_patches when target=prd, tc_patches when target=tc; use [] for other targets. Only include tool_spec when target=tool; omit otherwise.
+- skill_note must be AT MOST __SKILL_NOTE_MAX__ characters. It is injected into a retry prompt and may persist into the agent's profile, so a note past that length is rejected and has to be rewritten before the retry can use it — write within it the first time.
+- skill_note must be a concrete "do/don't" instruction, written so it can be ACTED ON without further interpretation:
+  * OPEN WITH AN IMPERATIVE VERB (Use, Always, Never, Prefer, Avoid). A note opening with a subordinate clause ("When integrating X, ...") is reformatted before storage, which costs a round trip and risks losing detail.
+  * STATE THE RULE COMPLETELY. A note that stops mid-sentence is worse than no note, because the reader cannot tell it is incomplete and will act on the fragment.
+  * CARRY ANY LITERAL VERBATIM AND UNABBREVIATED — a regex, a path, a command, a flag, a config value. Never elide one with "..." or "e.g.", and never shorten it to save space. THE LITERAL IS THE FIX; the prose around it is not actionable without it.
+  * If the complete literal will not fit alongside the explanation, KEEP THE LITERAL AND SHORTEN THE EXPLANATION. Never the reverse.
+  * Example: "Never use backtick template literals in test files — use single-quoted strings only."
+- tool_spec.recipe must be idempotent shell — safe to run more than once (e.g. check before installing).
+- Keep diagnosis under 20 words, reason under 15 words.
+
+## What The Failed Attempt Actually Did
+
+__ATTEMPT_CHANGES__
+
+This is a diffstat, not a judgement. It is the evidence you were previously asked to diagnose
+without: an attempt that changed nothing and an attempt that rewrote four files produce the same
+error text, and they are not the same failure. If the summary says NO files were changed, the
+question is why the implementer produced nothing — not what is wrong with code that does not
+exist. You have tools: open the files named here before concluding anything about them.
+
+-----END TEMPLATE BODY-----
+
+## What this project is
+
+Project config: /home/bradleyjerome/projects/ai/epam-cli/orchestrations/scripts/../projects/metrolinx
+Tickets in scope: AMSD-1919: Go‑Checkout Page - Email & Confirm Email Case Sensitivity
+
+Codelines in scope and their declared dependencies:
+- gotransit (/home/bradleyjerome/projects/metrolinx/next.gotransit.com) deps: @algolia/autocomplete-js, @azure/search-documents, @contentstack/utils, @googlemaps/js-api-loader, @hookform/error-message, @metrolinx/cx-shared, @react-aria/focus, @stripe/react-stripe-js, @stripe/stripe-js, @uniformdev/context, @uniformdev/context-gtag, @uniformdev/context-react, akamai-edgegrid, algoliasearch, aria-hidden, axios, body-scroll-lock, busboy, classnames, cloudinary, contentstack, core-js, country-state-city, date-fns, html-react-parser, i18next, joi, jsonwebtoken, lodash.capitalize, lodash.chunk, lodash.clonedeep, lodash.debounce, lodash.filter, lodash.isempty, lodash.isequal, lodash.isnil, lodash.isnumber, lodash.isobject, lodash.isstring, lodash.isundefined, lodash.keyby, lodash.mergewith, lodash.noop, lodash.omit, lodash.omitby, lodash.orderby, lodash.reject, micro, next, next-auth, next-i18next, next-sitemap, object-hash, pino, qs, react, react-autosuggest, react-beforeunload, react-dom, react-dropzone, react-error-boundary, react-focus-lock, react-hook-form, react-i18next, react-select, react-youtube, resize-observer-polyfill, swiper, swr, uuid, @commitlint/cli, @contentstack/management, @next/bundle-analyzer, @tailwindcss/aspect-ratio, @tailwindcss/line-clamp, @testing-library/jest-dom, @testing-library/react, @testing-library/user-event, @trivago/prettier-plugin-sort-imports, @types/busboy, @types/form-data, @types/google.maps, @types/html-to-text, @types/jsonwebtoken, @types/lodash.capitalize, @types/lodash.chunk, @types/lodash.clonedeep, @types/lodash.debounce, @types/lodash.filter, @types/lodash.isempty, @types/lodash.isequal, @types/lodash.isnil, @types/lodash.isnumber, @types/lodash.isobject, @types/lodash.isstring, @types/lodash.isundefined, @types/lodash.keyby, @types/lodash.mergewith, @types/lodash.noop, @types/lodash.omit, @types/lodash.omitby, @types/lodash.orderby, @types/lodash.reject, @types/node, @types/object-hash, @types/qs, @types/react, @types/react-autosuggest, @types/react-beforeunload, @types/react-dom, @types/react-google-recaptcha, @types/react-input-mask, @types/uuid, @typescript-eslint/eslint-plugin, @typescript-eslint/parser, @uniformdev/cli, autoprefixer, babel-jest, commitlint-config-jira, commitlint-plugin-jira-rules, cssnano, dotenv, esbuild, eslint, eslint-config-next, eslint-config-prettier, eslint-plugin-jest, eslint-plugin-prettier, form-data, husky, i18next-scanner, i18next-scanner-typescript, jest, jest-environment-jsdom, jest-environment-node, jest-transform-css, lint-staged, node-mocks-http, pino-pretty, postcss, postcss-import, prettier, rimraf, stylelint, stylelint-config-prettier, stylelint-config-standard, tailwindcss, ts-jest, typescript
+  Surfaces the survey found in this codeline (verified to exist):
+    - src/components/pages/CheckoutPage
+  Established facts about this codeline, each with the source that proves it:
+    - Tests run via `jest` (`npm test`), and the component under fix has an existing spec file at src/components/pages/CheckoutPage/__tests__/CheckoutForm.spec.tsx to extend.  [source: package.json: "test": "jest"; presence of __tests__/CheckoutForm.spec.tsx alongside CheckoutForm.tsx]
+    - A pre-commit hook (husky) runs lint-staged and rejects the commit unless the current branch name matches ^(feature|bugfix|tech|release|hotfix)/[a-zA-Z0-9.-]+(/[a-z0-9-]+)?$, and a commit-msg hook runs commitlint on the message.  [source: .husky/pre-commit (branch name regex check) and .husky/commit-msg (`npx --no-install commitlint --edit "$1"`)]
+
+The roles you minted for this project:
+(none minted this run)
+
+## The one rule you cannot break
+
+The template's placeholders are a CONTRACT with the pipeline. Each token written in SCREAMING_SNAKE_CASE between double underscores is replaced at run time with real evidence — a diff, a ticket, a test log, a plan. The substitution is BY NAME and it is strict in both directions.
+
+- Reproduce every placeholder EXACTLY as it appears, character for character.
+- NEVER add or invent a placeholder. Nothing supplies a name the pipeline does not know, so rendering throws and the run dies at the seam that needed this prompt.
+- NEVER remove or rename one. The evidence it carries would silently never reach the agent, and the agent would answer without it.
+- Do not move a placeholder into a code fence, a quote, or an example where it would read as literal text.
+
+The placeholders in this template are exactly: __ANALYST_PROFILE__, __ATTEMPT_CHANGES__, __DEPENDENCY_CONTRACTS__, __MANIFEST_FILE__, __SKILL_ADDENDUM__, __SKILL_NOTE_MAX__, __STORY_ID__, __STORY_ROLE__, __VERIFICATION_FAILURE__
+
+## The other rule you cannot break
+
+The template's OUTPUT SHAPE is a contract too. Every field name the template states in its response
+format is read by a consumer that will reject an answer without it — the agent would produce work
+nothing accepts, and the seam fails after the model has already been paid for.
+
+- Reproduce every field name EXACTLY, in the same shape the template states it.
+- NEVER drop one because it looks redundant, and NEVER rename one to something clearer.
+- NEVER add a field. A consumer reads by name and has no place to put an invention.
+
+The output fields this template states are exactly: diagnosis, target, ac_patches, index, new_text, tc_patches, skill_note, tool_spec, name, purpose, recipe, reason
+
+## Before you answer
+
+Check your reply against both lists above. Every placeholder, and every output field, must appear
+in what you are about to send. A specialisation that drops one is refused and the work is redone,
+so the check costs you nothing and the omission costs an attempt.
+
+## What specialising means
+
+Keep the template's instructions, its output format, its prohibitions and its reasoning intact. They encode failures this pipeline has already paid for. You are not rewriting the prompt or improving its wording.
+
+Add only what a competent engineer joining THIS project would need and could not infer from the generic text:
+- the conventions, layout and idioms this codebase actually uses
+- the commands this project runs to build, test and type-check
+- the traps this stack presents that a generic prompt would not warn about
+
+Ground every addition in the project context above. If the context does not tell you something, say nothing about it — an invented convention is worse than a missing one, because the agent will follow it.
+
+Do not name a file, symbol, package or command that does not appear in the context you were given.
+
+## How to answer
+
+Emit ONLY the specialised prompt body as TEXT, directly in your reply. No JSON wrapper, no markdown fences around the whole thing, no commentary before or after, and do not write it to a file — the pipeline reads your reply text.
+
+
+## Your previous attempt was REFUSED
+
+the generated prompt dropped placeholder(s) the template requires: __ANALYST_PROFILE__. The evidence they carry would silently never reach the agent.
+
+Produce the prompt again, correcting exactly this. Change nothing else: the rest of your previous attempt was accepted, and rewriting it invites a second refusal for a different reason.
+
+
+
+# Output
+__ANALYST_PROFILE__
+
+STORY: __STORY_ID__
+AGENT ROLE: __STORY_ROLE__
+
+PROJECT CONTEXT — Metrolinx next.gotransit.com (codeline: gotransit, at /home/bradleyjerome/projects/metrolinx/next.gotransit.com)
+
+This is a Next.js + React + TypeScript codebase. Work in scope centres on AMSD-1919: Go‑Checkout Page - Email & Confirm Email Case Sensitivity, in the surface src/components/pages/CheckoutPage.
+
+Facts about this codeline that are proven, not assumed — use these instead of guessing:
+- Tests run with jest via `npm test` (package.json declares "test": "jest"). The component under fix has an existing spec at src/components/pages/CheckoutPage/__tests__/CheckoutForm.spec.tsx sitting alongside CheckoutForm.tsx — the project convention is a `__tests__` directory next to the component, spec named `<Component>.spec.tsx`.
+- A husky pre-commit hook runs lint-staged and REJECTS the commit unless the current branch name matches ^(feature|bugfix|tech|release|hotfix)/[a-zA-Z0-9.-]+(/[a-z0-9-]+)?$, and a commit-msg hook runs commitlint (`npx --no-install commitlint --edit "$1"`) on the message. A failure whose output comes from husky, lint-staged or commitlint is a hook/branch-name/commit-message failure, not a code failure — diagnose it as such rather than blaming the component.
+
+Stack traps worth checking before you diagnose:
+- Form handling here goes through react-hook-form (with @hookform/error-message) and validation through joi; a "field is undefined" or "validation never fires" symptom is usually a registration/schema-key mismatch, not a React rendering bug.
+- Testing uses @testing-library/react, @testing-library/user-event and @testing-library/jest-dom. Missing matchers (e.g. toBeInTheDocument) point at jest-dom setup, not at the assertion being wrong.
+- Translations go through next-i18next / react-i18next; a test asserting on literal copy can fail because the test environment renders the translation key rather than the string.
+- Type errors surface through TypeScript (tsc) and eslint/@typescript-eslint; these name a specific checkable fact and are almost never transient.
+- The dependency list for this codeline is fixed and large — before diagnosing "package not installed", check package.json with your read-only tools rather than assuming.
+
+CURRENT TEST CRITERIA (TC facts when available, ACs as fallback):
+
+AGENT SKILL ADDENDUM (instructions in the agent's system prompt):
+__SKILL_ADDENDUM__
+
+DEPENDENCY CONTRACTS (ground truth — auto-generated from actual source, not
+model-transcribed; trust this over any assumption you'd otherwise make about
+what a dependency exports, including its exact class/function names and
+casing):
+__DEPENDENCY_CONTRACTS__
+
+TEST FAILURE OUTPUT:
+__VERIFICATION_FAILURE__
+
+You have read-only tools available (list/search/read files, run read-only
+shell commands). If the failure claims something about the filesystem or an
+installed package — "not installed," "missing," "does not exist," a wrong
+path — VERIFY it with your tools before stating it as your diagnosis. Do not
+assume; a confident wrong diagnosis is worse than a slower correct one,
+because every retry after it repeats the same mistake unchanged. Your tool
+budget is small — check the ONE fact your diagnosis depends on, not the
+whole codebase. For this codeline that usually means one of: reading the
+failing component or its spec under src/components/pages/CheckoutPage, or
+grepping package.json for a dependency name.
+
+Output ONLY a single JSON object. No markdown fences, no prose outside the JSON:
+{"diagnosis":"<one sentence: what specifically went wrong in the code>","target":"prd|tc|skill|kb|tool|none","ac_patches":[{"index":<0-based AC index>,"new_text":"<exact replacement text for that AC>"}],"tc_patches":[{"index":<0-based TC fact index>,"new_text":"<exact replacement text for that TC fact>"}],"skill_note":"<if target=skill or target=kb: concrete coding instruction>","tool_spec":{"name":"<kebab-case tool name, e.g. add-dependency>","purpose":"<one sentence: what repeated mechanical step this automates>","recipe":"<the exact shell commands the tool script should run, using $1 $2 ... for its arguments>"},"reason":"<why this change prevents the same failure on retry>"}
+
+Decision rules:
+- target=prd: the AC wording was ambiguous or contradictory, causing the agent to write wrong code. Fix the AC.
+- target=tc: the testCriteria facts are wrong or incomplete — the test agent followed them but they described incorrect behavior. Fix the TC facts.
+- target=skill: the agent used a bad coding pattern that should be injected into this retry's prompt only. This INCLUDES any diagnosis that names a specific, checkable fact about a type, property, field, or signature (e.g. "missing required X field", "Config doesn't match Y's type", "wrong argument count for Z") — that fact will not change no matter how many times or how strong a model you retry with, so it must be told, not re-guessed.
+- target=kb: the failure reveals a reusable coding rule that ALL future agents with this agent role should know — append to the role-specific KB. On this project that includes rules about the CheckoutPage form conventions, the `__tests__/<Component>.spec.tsx` layout, or the husky/commitlint hook constraints.
+- target=tool: the failure is a repeated MECHANICAL step (not a knowledge gap) that a small shell script can perform reliably every time — e.g. "add a dependency to this codeline's manifest (__MANIFEST_FILE__) and install it before importing it". Only use target=tool when a KB rule alone has already failed to prevent the same class of failure, or the fix is a multi-step shell recipe error-prone to repeat by hand. Provide tool_spec.
+- target=none: reserved for a genuinely non-reproducible mistake — a stray typo, a one-off slip with no identifiable pattern — where your own diagnosis does not name a specific, checkable, nameable fact (a property, type, field, or signature) that a future attempt could look up and get right. If your diagnosis DOES name such a fact, that is deterministic, not transient, and target=none is the wrong answer even if you are uncertain what the exact correct value should be — use target=skill and describe the fact you found, even incompletely, rather than defaulting to a retry that cannot discover it on its own.
+- Only include ac_patches when target=prd, tc_patches when target=tc; use [] for other targets. Only include tool_spec when target=tool; omit otherwise.
+- skill_note must be AT MOST __SKILL_NOTE_MAX__ characters. It is injected into a retry prompt and may persist into the agent's profile, so a note past that length is rejected and has to be rewritten before the retry can use it — write within it the first time.
+- skill_note must be a concrete "do/don't" instruction, written so it can be ACTED ON without further interpretation:
+  * OPEN WITH AN IMPERATIVE VERB (Use, Always, Never, Prefer, Avoid). A note opening with a subordinate clause ("When integrating X, ...") is reformatted before storage, which costs a round trip and risks losing detail.
+  * STATE THE RULE COMPLETELY. A note that stops mid-sentence is worse than no note, because the reader cannot tell it is incomplete and will act on the fragment.
+  * CARRY ANY LITERAL VERBATIM AND UNABBREVIATED — a regex, a path, a command, a flag, a config value. Never elide one with "..." or "e.g.", and never shorten it to save space. THE LITERAL IS THE FIX; the prose around it is not actionable without it. On this project that means writing out paths like src/components/pages/CheckoutPage/__tests__/CheckoutForm.spec.tsx in full, and branch/commit regexes character for character.
+  * If the complete literal will not fit alongside the explanation, KEEP THE LITERAL AND SHORTEN THE EXPLANATION. Never the reverse.
+  * Example: "Never use backtick template literals in test files — use single-quoted strings only."
+- tool_spec.recipe must be idempotent shell — safe to run more than once (e.g. check before installing).
+- Keep diagnosis under 20 words, reason under 15 words.
+
+## What The Failed Attempt Actually Did
+
+__ATTEMPT_CHANGES__
+
+This is a diffstat, not a judgement. It is the evidence you were previously asked to diagnose
+without: an attempt that changed nothing and an attempt that rewrote four files produce the same
+error text, and they are not the same failure. If the summary says NO files were changed, the
+question is why the implementer produced nothing — not what is wrong with code that does not
+exist. You have tools: open the files named here before concluding anything about them.
+
+[coverage-gate] writer: no pre-flight has gated this run — standing down
+  [provider] 'openrouter' is not routable by the 'claude' set — using 'claude'.
+  [provider] The set is the launch's own choice; the env value was left by something else.
+  [provider] 'openrouter' is not routable by the 'claude' set — using 'claude'.

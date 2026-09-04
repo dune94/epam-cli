@@ -1,0 +1,119 @@
+=== Prompt for SKY-003-a (attempt 1) ===
+CRITICAL — WRITE FILES FIRST. Your FIRST tool call MUST be WriteFile.
+Do NOT output any text before calling WriteFile. Do NOT plan or say "I will...".
+Call WriteFile NOW for the EXACT ABSOLUTE PATHS listed below:
+
+   - WRITE /home/bradleyjerome/projects/skyscanner-app/src/cli.ts first, before any other action
+---
+
+Implement user story SKY-003-a: Implement flight search CLI entry point with argument parsing and table rendering
+
+## Story Description
+Create `src/cli.ts` — a standalone Node entry point that accepts flight search arguments via `process.argv` and prints results as an aligned table. Parse flags manually (no commander, no yargs, zero new runtime deps). Require `RAPIDAPI_KEY` env var; exit 1 with a human-readable message if absent. Instantiate `SkyscannerClient` from `src/skyscanner/client.ts` (SKY-002), call `searchFlights` forwarding all parsed arguments including adults count, and render results in a dynamically-padded table. Export `main()` so it can be tested. Guard execution with `require.main === module` or VITEST env var pattern. The compiled output must be invokable as `node dist/cli.js ...` after `tsc`.
+
+## Acceptance Criteria
+- `src/cli.ts` exists and `tsc --noEmit` reports zero errors; `tsconfig.json` sets `outDir` to `dist` and emits CommonJS-compatible output invocable as `node dist/cli.js`
+- Flags `--from`, `--to`, and `--date` are all required; if any is absent the CLI prints a usage hint to stderr (showing correct flag names) and exits with code 2
+- The `--date` flag value must match the pattern `YYYY-MM-DD`; a value that does not match causes exit code 2 with a human-readable message to stderr before any network call
+- Optional `--adults` flag defaults to 1 when omitted; a non-integer value (e.g. 1.5), a value ≤ 0, or a non-numeric string causes exit code 2 with a human-readable message to stderr; parsed value is forwarded to `searchFlights`
+- If `RAPIDAPI_KEY` env var is unset or empty, CLI prints 'Error: RAPIDAPI_KEY environment variable is required' to stderr and exits 1 before making any network call
+- When `searchFlights` resolves with results, stdout contains: header row (Airline, Price, Departure, Arrival, Duration, Stops), separator row of hyphen segments per column padded to column width separated by the same whitespace between column values, and one data row per result; all columns padded to the widest value width (including header)
+- All columns except Price are left-aligned; Price is right-aligned and prefixed with the currency symbol from the API response (fallback £ if absent)
+- Empty results → stdout `No flights found.`, exit 0; `searchFlights` rejection → error message to stderr, exit 1, stdout empty; no new runtime deps added; `main()` is exported and execution is guarded so the module is testable
+
+
+
+
+
+## Technical Notes
+- files: ["/home/bradleyjerome/projects/skyscanner-app/src/cli.ts"]
+- dependsOn: ["SKY-002"]
+- implementationNotes: CRITICAL — argument parsing pitfall: use Number() not parseInt() to parse --adults. parseInt('1.5', 10) silently truncates to 1 (a valid integer), making the non-integer validation impossible — Number.isInteger(1) is true so exit code 2 is never triggered. Number('1.5') returns 1.5, which correctly fails Number.isInteger() and triggers exit 2. The adults validation must reject: non-integer values (e.g. 1.5), zero, negative numbers, and non-numeric strings. All must exit with code 2.
+
+CRITICAL — separator row format: the table renders one hyphen-segment per column, padded to that column's width, separated by the same whitespace used between column values. The separator is NOT a single run of unbroken hyphens.
+
+CRITICAL — main() must be exported and guarded. Export the function: `export async function main()`. Guard execution: `if (require.main === module) { main(); }` or use the VITEST env var pattern. Unexported main cannot be tested via require('./cli').main.
+
+## Files to Create/Modify (EXACT ABSOLUTE PATHS — write to these paths exactly)
+/home/bradleyjerome/projects/skyscanner-app/src/cli.ts
+
+## Dependencies
+SKY-002
+
+
+
+## Instructions
+**CRITICAL — WRITE FILES FIRST:**
+   - WRITE /home/bradleyjerome/projects/skyscanner-app/src/cli.ts first, before any other action
+**You MUST write every file listed above to its EXACT absolute path. Do NOT write to a different path, do NOT write to the current directory unless it matches the path above. Use your WriteFile or Edit tools with the full absolute path shown.**
+
+1. Write each required file to its exact absolute path listed above — do this FIRST before anything else
+2. Implement all acceptance criteria for this story
+3. Follow the project's existing code patterns and conventions
+4. Do NOT create tests unless explicitly required in acceptance criteria
+
+After implementation, provide a brief summary of what was created/modified.
+
+## Relevant Knowledge Base Entries
+The following was learned from previous story implementations and is relevant to your agent role. Apply this knowledge before writing any code:
+
+- [2026-07-06T17:45:30Z] Always resolve mocked fetch calls to a Response-shaped object with ok, status, statusText, and a json method returning a Promise.
+- [2026-07-06T17:50:20Z] Use valid module and moduleResolution pairs in tsconfig.json: CommonJS with Node, Node16 with Node16, ESNext with Bundler. Use CommonJS and Node for the stack. Mismatched pairs cause build errors.
+- [2026-07-06T18:11:26Z] Use vi.fn().mockResolvedValue(value) to make a mock return a resolved Promise.
+- [2026-07-06T20:31:11Z] Use `test: { passWithNoTests: true }` in vitest.config.ts or create a stub test file when no *.test.ts files exist.
+- [2026-07-06T20:33:03Z] Enable globals:true in vitest.config.ts so describe, it, and expect work without imports, reducing boilerplate in test files.
+- [2026-07-06T23:47:34Z] Use CommonJS-compatible patterns in src/server.ts: avoid `import.meta.url` and top-level `await`; gate listen with `if (require.main === module)`.
+- [2026-07-07T02:35:30Z] Always include a non-test source file in src/ alongside any src/*.test.ts file, since tsconfig.json excludes test files from tsc --noEmit.
+- [2026-07-07T19:01:34Z] Only modify or create files explicitly listed in the story's acceptance criteria. Do not touch files belonging to other stories or outside the current task scope.
+- [2026-07-07T20:17:57Z] [unreviewed-fallback] Avoid using deprecated TypeScript compiler options like 'moduleResolution=node10'; use 'moduleResolution=node' instead.
+- [2026-07-17T20:20:58Z] Always: Before importing a module or referencing a type/property, always read the actual source file to verify the export exists, its exact path, its properties, and its constructor/factory signatures
+
+## Knowledge Base Contribution (do this LAST — after writing all implementation files)
+Your assigned KB entry ID for this run: **KB-009**
+
+IMPORTANT: Write ALL implementation files first. Only AFTER writing every required file should you optionally append a KB entry.
+Do NOT read orchestrations/agents/KB.md before writing implementation files. The relevant KB entries are already injected above.
+
+If (and only if) you discover a non-obvious pattern during implementation, append one entry to `orchestrations/agents/KB.md`:
+
+```markdown
+## KB-009 -- 2026-07-20
+
+**Category:** <backend|frontend|infrastructure|testing|orchestration>
+**AgentRole:** <your agentRole from the story>
+**Tags:** <comma-separated tech keywords, e.g. typescript, node, cli>
+**Trigger:** <retry|first-success>
+**StoryRef:** SKY-003-a
+
+<One concise paragraph: the specific pattern, gotcha, or anti-pattern.>
+```
+
+Only write an entry if the knowledge is genuinely non-obvious. Skip trivial observations.
+
+## Execution Plan
+Follow this plan step by step:
+1. Inspect the existing project structure (`tsconfig.json`, `package.json`, and any existing `searchFlights` function signature) to understand module paths, import style, and TypeScript configuration.
+
+2. Create `/home/bradleyjerome/projects/skyscanner-app/src/cli.ts` with imports for `searchFlights` (from its existing module) and Node's `process`/`stderr`/`stdout`; define a `main()` function that is exported and wrap the auto-execution block in `if (require.main === module)` so the module remains testable.
+
+3. Implement argument parsing inside `main()`: parse `process.argv` for `--from`, `--to`, `--date`, and `--adults`; if any of the three required flags is missing, print a usage hint listing all flag names to `stderr` and `process.exit(2)`.
+
+4. Add validation for `--date` against the regex `/^\d{4}-\d{2}-\d{2}$/`; on mismatch print a human-readable message to `stderr` and `process.exit(2)` before any network call. Add validation for `--adults`: default to `1` when omitted; reject non-integer (e.g. `1.5`), non-numeric, or `≤ 0` values with a human-readable `stderr` message and `process.exit(2)`; parse to an integer for forwarding.
+
+5. Check `process.env.RAPIDAPI_KEY`; if unset or empty, print exactly `Error: RAPIDAPI_KEY environment variable is required` to `stderr` and `process.exit(1)` before any network call.
+
+6. Call `searchFlights({ from, to, date, adults })` (adjust parameter shape to match the existing function signature); on rejection, print the error message to `stderr`, ensure `stdout` is empty, and `process.exit(1)`.
+
+7. Implement table rendering: compute column widths for header row (`Airline`, `Price`, `Departure`, `Arrival`, `Duration`, `Stops`) and all data rows; print a header row, a separator row of hyphen segments (one per column, padded to column width, separated by the same whitespace used between columns), then one data row per result — all columns left-aligned except `Price` which is right-aligned and prefixed with the currency symbol from the API response (fallback `£`).
+
+8. Handle the empty-results case: print `No flights found.` to `stdout` and `process.exit(0)`.
+
+9. Run `tsc --noEmit` to confirm zero type errors; run `node dist/cli.js --from LON --to NYC --date 2025-01-01` (with and without `RAPIDAPI_KEY`) to verify exit codes, stderr messages, and table output format; confirm no new runtime dependencies were added to `package.json`.
+=== End Prompt ===
+
+=== epam Output (attempt 1) ===
+Now let me test various CLI scenarios:
+  [tc-writer] No test stories need TCs in phase 'unknown' — skipping
+Now let me test various CLI scenarios:
+
+=== End epam Output ===

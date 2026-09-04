@@ -1,0 +1,9 @@
+spec-mode: fast-path qwen/z-ai/glm-5.2 (skipping MiniMax)
+spec-mode: fast-path qwen/z-ai/glm-5.2 (skipping MiniMax)
+spec-mode: ⚠️ VC could not be made mechanism-free for MOCK-HW-1 after 2 cycle(s) — using conservative fallback VC. Last flags: VC 3 uses 'matches' — a forbidden cross-comparison; restate as the greeting the user observes is 'hello dolly'
+spec-mode: MOCK-HW-1 — 2 verification criteria persisted (source: fallback, resolution: fallback)
+spec-mode: fast-path qwen/z-ai/glm-5.2 (skipping MiniMax)
+spec-mode: fast-path qwen/z-ai/glm-5.2 (skipping MiniMax)
+spec-mode: LLM model review completed for 1 stories
+spec-mode: model set MOCK-HW-1: MiniMax-M3 → MiniMax-M2.5 [LLM override]
+spec-mode: completed for phase core (run 20260731T152033Z)

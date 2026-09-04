@@ -1,0 +1,86 @@
+=== Prompt for SKY-001 (attempt 1) ===
+Implement user story SKY-001: Scaffold TypeScript project with Vitest and Express
+
+## Story Description
+Create the project skeleton at /tmp/skyscanner-app. Initialize a TypeScript Node.js project with: package.json (name: skyscanner-app, scripts for build/test/start/dev), tsconfig.json (strict mode, target ES2022, module CommonJS, moduleResolution Node, outDir dist/), vitest.config.ts, .gitignore, and a src/index.ts entry-point placeholder. Install runtime dependency express and devDependencies typescript, tsx, vitest, @types/express, @types/node. Do NOT install Skyscanner SDKs — RapidAPI is called directly via fetch. The project must compile cleanly and vitest must exit 0 with no test files present.
+
+## Acceptance Criteria
+- /tmp/skyscanner-app/package.json exists and the 'name' field equals exactly 'skyscanner-app'
+- package.json 'scripts' object contains all four keys: build, test, start, dev
+- package.json 'scripts.build' value invokes 'tsc' (e.g. 'tsc' or 'tsc -p tsconfig.json')
+- package.json 'scripts.dev' value invokes 'tsx' pointing at src/index.ts
+- package.json 'dependencies' includes 'express'
+- package.json 'devDependencies' includes all of: typescript, tsx, vitest, @types/express, @types/node
+- package.json contains no dependency whose name includes 'skyscanner', 'rapidapi', or any Skyscanner SDK
+- /tmp/skyscanner-app/tsconfig.json exists with compilerOptions: strict=true, target='ES2022', module='CommonJS', moduleResolution='Node', outDir='dist/'
+- /tmp/skyscanner-app/vitest.config.ts exists, imports defineConfig from 'vitest/config', and exports a default config object
+- /tmp/skyscanner-app/.gitignore exists and contains entries for both 'node_modules' and 'dist'
+- /tmp/skyscanner-app/src/index.ts exists as a placeholder entry point (may be empty or contain a minimal export/import so tsc has at least one file to check)
+- /tmp/skyscanner-app/node_modules/ directory exists (npm install completed successfully)
+- Running ~/.nvm/versions/node/v20.20.0/bin/node ./node_modules/.bin/tsc --noEmit inside /tmp/skyscanner-app exits with code 0 and produces no output
+- Running ~/.nvm/versions/node/v20.20.0/bin/node ./node_modules/.bin/vitest run inside /tmp/skyscanner-app exits with code 0 (no test files is an acceptable passing state)
+
+## Technical Notes
+- workingDir: /tmp/skyscanner-app
+- files: ["/tmp/skyscanner-app/package.json","/tmp/skyscanner-app/tsconfig.json","/tmp/skyscanner-app/vitest.config.ts"]
+
+## Files to Create/Modify
+/tmp/skyscanner-app/package.json, /tmp/skyscanner-app/tsconfig.json, /tmp/skyscanner-app/vitest.config.ts
+
+## Dependencies
+None
+
+## Instructions
+1. Implement all acceptance criteria for this story
+2. Follow the project's existing code patterns and conventions
+3. Create any necessary files in the locations specified
+4. Ensure code compiles/runs without errors
+5. Do NOT create tests unless explicitly required in acceptance criteria
+
+After implementation, provide a brief summary of what was created/modified.
+
+## Relevant Knowledge Base Entries
+No prior KB entries match your agent role yet.
+
+## Knowledge Base Contribution
+Your assigned KB entry ID for this run: **KB-008**
+
+If you discover a non-obvious pattern, gotcha, or anti-pattern during this implementation (or this is a retry), append exactly one entry to `orchestrations/agents/KB.md` using this format:
+
+```markdown
+## KB-008 -- 2026-06-03
+
+**Category:** <backend|frontend|infrastructure|testing|orchestration>
+**AgentRole:** <your agentRole from the story>
+**Tags:** <comma-separated tech keywords, e.g. typescript, node, cli>
+**Trigger:** <retry|first-success>
+**StoryRef:** SKY-001
+
+<One concise paragraph: the specific pattern, gotcha, or anti-pattern. Precise enough that a future Claude instance can apply it without re-discovering it.>
+```
+
+Only write an entry if the knowledge is genuinely non-obvious. Skip trivial observations.
+=== End Prompt ===
+
+=== claude Output (attempt 1) ===
+## Summary
+
+I've successfully scaffolded the TypeScript project at `/tmp/skyscanner-app` with all acceptance criteria met:
+
+**Files Created:**
+- `package.json` — name: skyscanner-app, with build/test/start/dev scripts and express runtime + required devDependencies
+- `tsconfig.json` — strict mode enabled, ES2022 target, CommonJS module, Node moduleResolution, dist/ output
+- `vitest.config.ts` — defineConfig exported with `passWithNoTests: true` (allows vitest to exit 0 when no tests exist)
+- `.gitignore` — entries for node_modules and dist
+- `src/index.ts` — placeholder entry point importing express
+
+**Verification Results:**
+- ✅ TypeScript compilation: `tsc --noEmit` exits 0 with no errors
+- ✅ Vitest: `vitest run` exits 0 with no test files
+- ✅ Dependencies: express installed as runtime; typescript, tsx, vitest, @types/* installed as devDependencies
+- ✅ No SDK dependencies: no skyscanner/rapidapi packages
+
+**Knowledge Base Entry:**
+Added KB-008 documenting the vitest `passWithNoTests: true` configuration requirement for project scaffolds.
+
+=== End claude Output ===

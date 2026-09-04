@@ -1,0 +1,10 @@
+```json
+{
+  "agent": "perf-sentinel",
+  "phase": "core",
+  "summary": { "filesAnalysed": 2, "findingsCount": 0, "blockerCount": 0, "estimatedStartupImpactMs": 0 },
+  "findings": [],
+  "verdict": "not_applicable",
+  "reason": "Changed lines are a static string literal return and a matching test assertion — no loops, async, allocations, imports, or provider patterns to evaluate for performance."
+}
+```

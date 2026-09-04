@@ -1,0 +1,13 @@
+spec-mode: fast-path qwen/z-ai/glm-5.2 (skipping MiniMax)
+spec-mode: ⚠️ code-graph-detective plan/execution MISMATCH for AMSD-2041 — plan named [usecontent, getvalue, show, next, getstaticprops], final answer named [page, slug], no shared term and no stated reason for the change.
+spec-mode: fast-path qwen/z-ai/glm-5.1 (skipping MiniMax)
+spec-mode: SPEC_AGENT (story AMSD-2041): missing required field "acceptanceCriteria" — required by its own tool definition
+spec-mode: ⚠️ VC review DISPUTED for AMSD-2041 — the reviewer's flags would leave 0/6 criteria, below the floor of 3. Keeping the 6 the deterministic guard certified; a review that condemns most of a set is treated as an outlier. Flags: VC 1 cross-compares rendered page to CMS content and prescribes 'real time' mechanism — restate as observable outcome | VC 2 cross-compares rendered page to CMS content — restate as observable outcome | VC 3 cross-compares rendered page to CMS edits — restate as observable outcome
+spec-mode: AMSD-2041 — 6 verification criteria persisted (source: description, resolution: disputed)
+spec-mode: fast-path qwen/z-ai/glm-5.1 (skipping MiniMax)
+spec-mode: SPEC_AGENT: missing required field "storyId" — required by its own tool definition
+spec-mode: fast-path qwen/z-ai/glm-5.2 (skipping MiniMax)
+spec-mode: fast-path qwen/z-ai/glm-5.2 (skipping MiniMax)
+spec-mode: MODEL_REVIEW: the array is empty — a report about nothing is not a report
+spec-mode: LLM model review completed for 0 stories
+spec-mode: completed for phase core (run 20260805T222335Z)

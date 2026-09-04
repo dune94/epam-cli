@@ -132,7 +132,11 @@ describe('a fresh install reaches the end of pre-launch with the operator\'s own
     expect(out, '#57: orchestrations/logs was root-owned again').not.toMatch(/Permission denied/);
     expect(out, '#56: agent-monitor restart hit the subnet mismatch again').not.toMatch(/is not connected to the network/);
     expect(out, '#56: pre-run-reset did not finish its state clearing').toContain('PRE_RUN_RESET_STATE_CLEARED');
-    expect(out, '#58: Langfuse/Grafana resolved to the wrong ports again').toMatch(/Observability preflight passed/);
+    // #58: either the gate ran and passed (a stack whose runner emits traces), or it correctly
+    // stood down for one that never will — both are right, and demanding only the first made this
+    // fail on the very stack it exists to protect.
+    expect(out, '#58: the observability gate neither passed nor stood down — it aborted again')
+      .toMatch(/Observability preflight passed|Observability preflight: skipped/);
     expect(out, '#58: nginx could not serve healing-events.jsonl again').toMatch(/nginx serves \/logs\/healing-events\.jsonl/);
     // #59: pre-flight must not validate a PRD the run has not written yet — whether that is the
     // whole file (a fresh install has none at all) or just its outputDir (a PRD is present but the

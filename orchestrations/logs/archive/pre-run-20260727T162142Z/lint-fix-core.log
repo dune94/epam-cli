@@ -1,0 +1,6 @@
+Both findings are already resolved in the current file state:
+
+1. **Line 151 (`'lineItem-1'` — duplicated 3 times)**: Extracted into the constant `LINE_ITEM_ID`, which is used in all 3 call sites (lines 154, 166, 176, 188).
+2. **Line 152 (`'lineItem-1#return'` — duplicated 5 times)**: Extracted into the constant `LINE_ITEM_ID_RETURN`, which is used in all 4 call sites (lines 153, 177, 186) plus the constant definition itself.
+
+The linter passes cleanly (exit 0, no output), and all 4 tests pass. No test assertions, expected values, or scenarios were changed — only the repeated string literals were replaced with constant references.

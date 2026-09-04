@@ -1,0 +1,131 @@
+Looking at the injected evidence, I need to assess:
+
+1. **TypeScript compiler**: PASS (exit 0) — no type errors to report.
+2. **Semgrep**: skipped — no code-level pattern findings.
+3. **Dependency audit**: Pre-computed ground truth showing CVEs across runtime, dev, and transitive dependencies. The `dependency-cve-` prefix makes these eligible to be reported as pre-existing repository debt.
+4. **Code-level security**: No diff or source provided; TypeScript passed; Semgrep skipped. Cannot identify injection/path-traversal/eval/secrets without code access.
+
+The changed files (package.json, package-lock.json, src/pages/_app.tsx, src/services/contentstack.ts, src/services/contentstack.spec.ts) were subject to TypeScript compilation (passed) and dependency audit. I'll report every dependency CVE I can identify from the injected audit, classified per the severity rules.
+
+```json
+{
+  "agent": "sast-sentinel",
+  "phase": "core",
+  "summary": { "filesScanned": 5, "findingsCount": 14, "blockerCount": 1 },
+  "findings": [
+    {
+      "severity": "blocker",
+      "rule": "dependency-cve-critical-runtime",
+      "file": "package.json",
+      "line": 0,
+      "description": "Critical CVE in next-auth (runtime dependency): Auth.js email normalizer validates the address before Unicode normalization, allowing a homoglyph @ bypass. This is a runtime dependency loaded by the shipped artefact.",
+      "suggestedFix": "Upgrade next-auth to a patched version that performs Unicode normalization before email validation."
+    },
+    {
+      "severity": "major",
+      "rule": "dependency-cve-high-runtime",
+      "file": "package.json",
+      "line": 0,
+      "description": "High CVE in next (runtime dependency): Denial of Service in App Router using Server Actions; Server-Side Request Forgery via Server Actions.",
+      "suggestedFix": "Upgrade next to a patched version."
+    },
+    {
+      "severity": "major",
+      "rule": "dependency-cve-high-transitive",
+      "file": "package-lock.json",
+      "line": 0,
+      "description": "High CVE in axios (transitive): Excessive recursion in formDataToJSON can cause denial of service; deep formToJSON key collision.",
+      "suggestedFix": "Update the direct dependency that resolves axios to pull a patched version."
+    },
+    {
+      "severity": "major",
+      "rule": "dependency-cve-high-transitive",
+      "file": "package-lock.json",
+      "line": 0,
+      "description": "High CVE in brace-expansion (transitive): DoS via exponential-time expansion of consecutive non-expanding {} groups.",
+      "suggestedFix": "Update the direct dependency that resolves brace-expansion to pull a patched version."
+    },
+    {
+      "severity": "major",
+      "rule": "dependency-cve-high-transitive",
+      "file": "package-lock.json",
+      "line": 0,
+      "description": "High CVE in fast-uri (transitive): Host confusion via literal backslash authority delimiter.",
+      "suggestedFix": "Update the direct dependency that resolves fast-uri to pull a patched version."
+    },
+    {
+      "severity": "major",
+      "rule": "dependency-cve-high-transitive",
+      "file": "package-lock.json",
+      "line": 0,
+      "description": "High CVE in js-yaml (transitive): YAML merge-key chains can force quadratic CPU consumption.",
+      "suggestedFix": "Update the direct dependency that resolves js-yaml to pull a patched version."
+    },
+    {
+      "severity": "major",
+      "rule": "dependency-cve-high-transitive",
+      "file": "package-lock.json",
+      "line": 0,
+      "description": "High CVE in nanoid (transitive): Non-secure generators can loop indefinitely with negative size; custom generators can produce non-unique IDs.",
+      "suggestedFix": "Update the direct dependency that resolves nanoid to pull a patched version."
+    },
+    {
+      "severity": "major",
+      "rule": "dependency-cve-high-transitive",
+      "file": "package-lock.json",
+      "line": 0,
+      "description": "High CVE in sharp (transitive): Inherited vulnerabilities in libvips (CVE-2026-33327, CVE-2026-33328, CVE-2026-35590, and additional CVEs).",
+      "suggestedFix": "Update the direct dependency that resolves sharp to pull a patched version."
+    },
+    {
+      "severity": "minor",
+      "rule": "dependency-cve-dev-only",
+      "file": "package.json",
+      "line": 0,
+      "description": "High CVE in postcss (dev dependency): Incomplete fix of GHSA-6g55-p6wh-862q — attacker-controlled sourceMappingURL reads arbitrary files. Classified as minor because dev/build-time tooling does not run in production.",
+      "suggestedFix": "Upgrade postcss to a patched version."
+    },
+    {
+      "severity": "minor",
+      "rule": "dependency-cve-moderate-runtime",
+      "file": "package.json",
+      "line": 0,
+      "description": "Moderate CVE in @metrolinx/cx-shared (runtime dependency): Vulnerable react-tooltip transitive dependency (uuid).",
+      "suggestedFix": "Upgrade @metrolinx/cx-shared to a version using a patched react-tooltip."
+    },
+    {
+      "severity": "minor",
+      "rule": "dependency-cve-moderate-runtime",
+      "file": "package.json",
+      "line": 0,
+      "description": "Moderate CVE in react-tooltip (runtime dependency): Vulnerable uuid transitive dependency.",
+      "suggestedFix": "Upgrade react-tooltip to a version using a patched uuid."
+    },
+    {
+      "severity": "minor",
+      "rule": "dependency-cve-moderate-transitive",
+      "file": "package-lock.json",
+      "line": 0,
+      "description": "Moderate CVE in @azure/core-http (transitive via @azure/search-documents): Vulnerable uuid dependency.",
+      "suggestedFix": "Upgrade @azure/search-documents to pull a patched @azure/core-http."
+    },
+    {
+      "severity": "minor",
+      "rule": "dependency-cve-moderate-transitive",
+      "file": "package-lock.json",
+      "line": 0,
+      "description": "Moderate CVE in cloudinary-video-analytics (transitive): Vulnerable uuid dependency.",
+      "suggestedFix": "Update the direct dependency that resolves cloudinary-video-analytics to pull a patched version."
+    },
+    {
+      "severity": "minor",
+      "rule": "dependency-cve-moderate-transitive",
+      "file": "package-lock.json",
+      "line": 0,
+      "description": "Moderate CVE in cloudinary-video-player (transitive): Vulnerable cloudinary-video-analytics and uuid dependencies.",
+      "suggestedFix": "Upgrade cloudinary-video-player to a patched version."
+    }
+  ],
+  "verdict": "fail"
+}
+```

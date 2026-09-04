@@ -1,0 +1,30 @@
+# Prompt
+Assign an implementation agent role to every story below.
+
+AVAILABLE ROLES — these are this project's own engineering roles. Choose from these and
+nothing else; the name you return must match one of them verbatim:
+- contentstack-live-preview-engineer
+    You are a Contentstack Live Preview integration specialist for a Next.js CSR App Router project spanning three codelines: nextgotransit, nextupexpress, and nextmetrolinx. Your expertise is wiring Contentstack's Delivery SDK live_preview config and the @contentstack/live-preview-utils SDK into existing Next.js applications. Key responsibilities: - Locate the Contentstack Stack initialization (Conte
+- nextjs-preview-routing-engineer
+    You are a Next.js routing and preview-URL configuration engineer for three codelines: nextgotransit, nextupexpress, and nextmetrolinx. Your focus is the routing layer that supports Contentstack Custom Preview URLs and ensures draft entries resolve to the correct pages during live preview. Key responsibilities: - Review each codeline's Next.js App Router (or Pages Router) structure under src/app/ o
+- contentstack-preview-config-specialist
+    You are a Contentstack configuration and environment specialist for the nextgotransit, nextupexpress, and nextmetrolinx codelines. Your domain is the Contentstack stack-level configuration that Live Preview depends on — but implemented through code and environment management, not just the vendor console. Key responsibilities: - Audit each codeline's environment variable files (.env, .env.example, 
+
+STORIES — a story listing more than one codeline needs ONE ASSIGNMENT PER CODELINE:
+- AMSD-2041: [GO, UP, MX] Live Preview of Content in CMS
+    codelines (assign one role for EACH): nextgotransit, nextupexpress, nextmetrolinx
+    Original Requirements (discovery) AS a Content Author, I WANT to preview draft entries in CMS, SO THAT I can see how content will be shown on the website ability to preview draft entries in CMS Notes& Assumptions Limitation: Might not be possible to preview protected pages and content. Original Total Estimate: 8 Original FE Estimate: 8 Original DAM Estimate: 0 Original BE Estimate: 0
+
+Pick the role whose stated expertise actually covers the work the story describes. If two
+roles could plausibly own a story, prefer the one whose brief names the surface the story
+touches. Every story must be assigned exactly one role.
+
+THE OWNER MUST AUTHOR THE CODE. Assign the role that will EDIT THE FILES this story changes —
+the one whose brief names those files or directories. A role whose brief is about settings in
+a vendor's console, or about documentation, cannot deliver a story here: the agent's output is
+a change in a repository. Live 2026-08-07: this story went to the one role of three that owned
+no source files, and all such a role can produce is a configuration note. Where the story needs
+both console configuration and code, the code owner is the assignee.
+
+# Output
+{"assignments": [{"storyId": "AMSD-2041", "codeline": "nextgotransit", "agentRole": "contentstack-live-preview-engineer", "reason": "The story delivers live preview of draft CMS content by wiring Contentstack's Delivery SDK live_preview config and the @contentstack/live-preview-utils SDK into the Next.js app — exactly the code-editing surface this role's brief names. The config specialist only manages env vars and the routing engineer only handles preview-URL routing; neither owns the core SDK integration files this story changes. The live-preview-engineer is the one role that authors the actual live-preview code."}, {"storyId": "AMSD-2041", "codeline": "nextupexpress", "agentRole": "contentstack-live-preview-engineer", "reason": "Same story, same core work — wiring the Contentstack live-preview SDK into the Next.js application. The live-preview-engineer owns the source files that enable draft-content preview; the other two roles are supplementary (env config, routing) and cannot deliver the primary code change."}, {"storyId": "AMSD-2041", "codeline": "nextmetrolinx", "agentRole": "contentstack-live-preview-engineer", "reason": "Identical requirement across the third codeline. The contentstack-live-preview-engineer is the role whose brief directly names the surface the story touches (live preview SDK integration) and who edits the repository files that implement it. Per the guidance, the code owner — not the console-config or routing-only role — is the assignee."}]}

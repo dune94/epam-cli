@@ -1,0 +1,9 @@
+spec-mode: fast-path qwen/z-ai/glm-5.2 (skipping MiniMax)
+spec-mode: fast-path qwen/z-ai/glm-5.2 (skipping MiniMax)
+spec-mode: MOCK-HW-1 — ACs are immutable (VC model); openspec AC edits redacted, verification captured in verificationCriteria
+spec-mode: ⚠️ VC could not be made mechanism-free for MOCK-HW-1 after 2 cycle(s) — using conservative fallback VC. Last flags: VC 2 is a cross-comparison against the old value — presumes a replacement mechanism rather than asserting the required value on its own
+spec-mode: MOCK-HW-1 — 2 verification criteria persisted (source: fallback, resolution: fallback)
+spec-mode: fast-path qwen/z-ai/glm-5.2 (skipping MiniMax)
+spec-mode: fast-path qwen/z-ai/glm-5.2 (skipping MiniMax)
+spec-mode: LLM model review completed for 0 stories
+spec-mode: completed for phase core (run 20260731T132053Z)

@@ -1,0 +1,3 @@
+Both pending stories now have all three fields set correctly.
+
+{"assigned_count":2,"stories":["MOCK-HW-1-impl","MOCK-HW-1-test"],"reason":"Defaults applied to 2 split children"}

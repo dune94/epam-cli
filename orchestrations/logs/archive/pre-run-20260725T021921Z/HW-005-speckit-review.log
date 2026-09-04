@@ -1,0 +1,74 @@
+# Prompt
+You are the speckit specification agent for EPAM CLI. Phase hello_world_test, story HW-005.
+
+You are reviewing and building on the openspec agent's output for this story.
+Your role is COLLABORATIVE — you are NOT starting from scratch. Instead:
+1. Review openspec's proposed acceptance criteria for testability and completeness
+2. Add missing edge-case, error-handling, security, and accessibility criteria
+3. Flag any AC that are vague, untestable, or overlapping
+4. If openspec proposed story splits, validate the decomposition and refine AC per split
+5. Do NOT remove or duplicate openspec's good work — build on it
+
+OPENSPEC'S OUTPUT (your input to review):
+{
+  "storyId": "HW-005",
+  "agent": "openspec",
+  "notes": "Original story requires implementation of truncate utility with tests. All acceptance criteria are clear and complete. No splits needed as functionality is atomic and well-scoped.",
+  "acceptanceCriteria": [
+    "truncate.ts exists and exports truncate with correct signature: export function truncate(text: string, maxLength: number, suffix?: string): string",
+    "truncate('hello world', 5) returns 'he...'",
+    "truncate('hi', 10) returns 'hi' unchanged",
+    "truncate('hello', 5, '!') returns 'hell!'",
+    "truncate.test.ts exists with at least 5 passing vitest tests covering edge cases (empty string, maxLength=0, suffix overridden, exact match, Unicode characters)",
+    "tsc --noEmit exits 0",
+    "vitest run exits 0 with all tests passing"
+  ],
+  "description": "Create truncate.ts in the project root. Export a single function `export function truncate(text: string, maxLength: number, suffix?: string): string` that truncates text to maxLength characters appending suffix (default '...'). If text.length <= maxLength return text unchanged. Create truncate.test.ts with at least 5 vitest tests. Do not modify any existing files.",
+  "title": "Implement truncate() utility with structured output",
+  "splitStories": [],
+  "runId": "20260610T235514Z"
+}
+
+ORIGINAL STORY CONTEXT:
+{
+  "id": "HW-005",
+  "title": "Implement truncate() utility with structured output",
+  "description": "Create truncate.ts in the project root. Export a single function `export function truncate(text: string, maxLength: number, suffix?: string): string` that truncates text to maxLength characters appending suffix (default '...'). If text.length <= maxLength return text unchanged. Create truncate.test.ts with at least 5 vitest tests. Do not modify any existing files.",
+  "originalAcceptanceCriteria": [
+    "truncate.ts exists and exports truncate with correct signature: export function truncate(text: string, maxLength: number, suffix?: string): string",
+    "truncate('hello world', 5) returns 'he...'",
+    "truncate('hi', 10) returns 'hi' unchanged",
+    "truncate('hello', 5, '!') returns 'hell!'",
+    "truncate.test.ts exists with at least 5 passing vitest tests covering edge cases (empty string, maxLength=0, suffix overridden, exact match, Unicode characters)",
+    "tsc --noEmit exits 0",
+    "vitest run exits 0 with all tests passing"
+  ],
+  "technicalNotes": {
+    "dependsOn": [
+      "HW-001"
+    ],
+    "files": [
+      "truncate.ts",
+      "truncate.test.ts"
+    ]
+  },
+  "dependencies": []
+}
+
+Produce your refined output between <SPEC_AGENT> tags. Include:
+- "acceptanceCriteria": The FULL merged list (openspec's criteria + your additions/refinements)
+- "notes": What you changed and why (be specific — cite which criteria you added/modified)
+- "splitStories": Include if you refined openspec's splits, otherwise omit or pass through
+- "acAddedBySpeckit": Array of criteria YOU added that were not in openspec's output
+- "acModifiedBySpeckit": Array of {"original":"...","revised":"..."} for criteria you reworded
+- "acFlagged": Array of {"criterion":"...","flag":"..."} for criteria that need human attention
+
+<SPEC_AGENT>
+
+# Output
+<function=bash>
+<parameter=command>
+find . -name "truncate.ts" -o -name "truncate.test.ts"
+</parameter>
+</function>
+</tool_call>

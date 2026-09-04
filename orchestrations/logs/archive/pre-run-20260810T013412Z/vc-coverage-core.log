@@ -1,0 +1,10 @@
+  [vc-coverage] UNCOVERED When the page request includes live preview parameters, the rendered page displays the draft content values fo
+  [vc-coverage]           The tests only assert that the live_preview configuration object is present in options, but never simulate a p
+  [vc-coverage] UNCOVERED When live preview is not active, the rendered page displays the correct published content for every entry — al
+  [vc-coverage]           The tests only assert on the presence or absence of the live_preview property in the options object, never ren
+  [vc-coverage] UNCOVERED For a page that requires authentication, an unauthenticated visitor cannot view the page's content.
+  [vc-coverage]           The tests only assert Contentstack live preview SDK configuration options (management tokens, hosts, env flags
+  [vc-coverage] UNCOVERED For a page that requires authentication, draft content does not appear on the rendered page when live preview 
+  [vc-coverage]           The tests only assert the shape of the ContentStack configuration options object based on environment variable
+  [vc-coverage] VC_UNCOVERED=4 of 4
+  [vc-coverage] the change is still proven by the bug-reproduction gate — this is a COVERAGE gap, not a correctness one

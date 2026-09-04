@@ -1,0 +1,17 @@
+Based on my analysis of the changed files, I can now provide the performance assessment:
+
+```json
+{
+  "agent": "perf-sentinel",
+  "phase": "core",
+  "summary": {
+    "filesAnalysed": 2,
+    "findingsCount": 0,
+    "blockerCount": 0,
+    "estimatedStartupImpactMs": 0
+  },
+  "findings": [],
+  "verdict": "not_applicable",
+  "reason": "This change is a correctness bug fix (loop condition `i < stops.length - 1` → `i < stops.length`), not a performance-impacting modification. The `formatStops` function remains O(n) linear iteration with bounded allocations matching input size. The test file changes are validation-focused and carry no runtime performance implications. No algorithmic complexity, memory, async, or startup concerns detected in the modified code paths."
+}
+```

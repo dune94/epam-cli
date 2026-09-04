@@ -1,0 +1,84 @@
+# Prompt
+You are the specification coordinator for the epam-cli orchestration system. Before every phase you read orchestrations/prd.json (implementationOrder and stories), evaluate risk, dependencies, and technical readiness, then assign the correct specification runners: OpenSpec, Speckit, both, or none. You write assignments into each story's specification.assignedAgents field along with coordinatorNotes, target provider/model, and timestamps. You understand the provider policy ledger (configuration.aiRuntime.providerPolicies), token guardrails, and know when to skip stories that were already hand-curated. When you plan a run you emit JSON compliant with spec-mode-runner.js so that automation can apply deltas deterministically. You never invent story IDs or mutate acceptance criteria directly; only delegate to spec agents and record their status.
+
+You are the EPAM CLI specification coordinator reviewing the completed spec outputs for phase core.
+
+Each story was processed by a sequential agent pipeline:
+  1. openspec elaborated requirements (AC refinement, story splits, technical depth)
+  2. speckit reviewed openspec's output (testability, security, edge cases, gap analysis)
+
+For each story, evaluate the quality of the collaborative spec work:
+1. Did both agents add meaningful, non-overlapping value?
+2. Are the acceptance criteria complete, testable, and non-overlapping?
+3. Are story splits logical and properly scoped?
+4. Flag any story needing human review.
+
+Respond with JSON between <SPEC_REVIEW> and </SPEC_REVIEW> using this schema:
+[
+  {"storyId":"REM-xxx","verdict":"approved|needs_review","reviewNotes":"coordinator observations","qualityScore":0.0-1.0,"flags":[]}
+]
+
+Stories to review:
+[
+  {
+    "id": "AMSD-2041",
+    "title": "[GO, UP, MX] Live Preview of Content in CMS",
+    "acceptanceCriteria": [],
+    "specification": {
+      "runId": "20260728T103005Z",
+      "assignedAgents": [
+        "openspec",
+        "speckit"
+      ],
+      "coordinatorNotes": "",
+      "status": "completed",
+      "updatedAt": "2026-07-28T10:56:04.910Z",
+      "appliedAgents": [
+        "openspec",
+        "speckit"
+      ],
+      "agentContributions": [
+        {
+          "agent": "openspec",
+          "applied": true,
+          "notes": "ACs were empty; derived from description promises of 'real-time content preview' and 'without a full page reload' for GO/UP/MX. Location hints target the content-fetching layer where preview wiring would integrate.",
+          "acceptanceChanged": false,
+          "splitCount": 0,
+          "timestamp": "2026-07-28T10:55:37.741Z"
+        },
+        {
+          "agent": "speckit",
+          "applied": true,
+          "notes": "Openspec provided empty ACs, so all criteria were derived from the story description and technical file hints. AC-1 covers the core 'real-time preview without full reload' promise. AC-2 through AC-4 ensure multi-market (GO/UP/MX) coverage. AC-5 and AC-6 address connection interruption and recovery edge cases. AC-7 ensures preview survives client-side navigation. AC-8 and AC-9 cover specific content types mentioned in the technical notes (contentCard, ContentstackLink). AC-10 ensures no performance or behavioral regression in production mode. AC-11 addresses concurrent edit scenarios. AC-12 addresses the security/boundary concern that preview content must not leak to production users. AC-13 covers accessibility preservation. AC-14 covers referenced/linked content updates.",
+          "acceptanceChanged": false,
+          "splitCount": 0,
+          "timestamp": "2026-07-28T10:56:04.910Z"
+        }
+      ]
+    },
+    "splitChildren": []
+  }
+]
+
+<SPEC_REVIEW>
+</SPEC_REVIEW>
+
+# Output
+<SPEC_REVIEW>
+[
+  {
+    "storyId": "AMSD-2041",
+    "verdict": "needs_review",
+    "reviewNotes": "OpenSpec was effectively a no-op: acceptanceChanged=false, splitCount=0, and its notes merely acknowledge that ACs were empty without producing any elaboration, splits, or technical depth. This defeats the purpose of the sequential pipeline where OpenSpec should elaborate requirements before Speckit reviews them. Speckit then compensated by deriving all 14 ACs from the story description and technical file hints — but this means Speckit performed both elaboration and review roles, collapsing the intended separation of concerns. The 14 derived ACs are thematically sound (multi-market coverage, connection recovery, security boundary, accessibility, concurrent edits), but because they were invented from a description rather than refined from original acceptance criteria, they carry scope-drift risk and must be validated against actual product intent. Additionally, both agents report acceptanceChanged=false despite 14 new ACs being created — a data-integrity failure that could cause downstream automation to miss the delta. No story splits were proposed despite the feature spanning three markets (GO/UP/MX) with real-time preview, content-type-specific behavior, and multiple edge-case categories — this likely warrants decomposition into 2-3 child stories. Human review needed to: (1) confirm the 14 ACs match product intent, (2) correct the acceptanceChanged flags, (3) evaluate whether story splits are warranted, (4) determine if OpenSpec should be re-run with explicit instructions to produce output.",
+    "qualityScore": 0.35,
+    "flags": [
+      "openspec_no_value_added",
+      "acs_derived_not_refined",
+      "acceptanceChanged_flag_incorrect",
+      "no_story_splits_for_complex_multi_market_feature",
+      "speckit_performed_dual_role",
+      "scope_drift_risk"
+    ]
+  }
+]
+</SPEC_REVIEW>

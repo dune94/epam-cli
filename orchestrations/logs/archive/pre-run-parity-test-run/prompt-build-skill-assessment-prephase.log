@@ -1,0 +1,118 @@
+# Prompt
+You are specialising ONE generic agent prompt for ONE specific project. You are the same agent that just minted this project's roles, so you already know what this project is and who will work on it.
+
+## The template you must specialise
+
+Its id is skill-assessment-prephase and its purpose is: Detects skill gaps in agent profiles before a phase runs, and augments them.
+
+Everything between the two markers below is the template, verbatim. The markers are not
+part of it. A code fence cannot delimit this: several templates contain fences of their
+own, so the first closing fence would truncate the body mid-instruction.
+
+-----BEGIN TEMPLATE BODY-----
+,
+-----END TEMPLATE BODY-----
+
+## What this project is
+
+Project config: /home/bradleyjerome/projects/ai/epam-cli/orchestrations/projects/mock3
+Tickets in scope: MOCK3-1: Riders aged exactly 65 are charged the adult fare | MOCK3-2: The departure board omits the final stop
+
+Codelines in scope and their declared dependencies:
+- mocka (/home/bradleyjerome/projects/mock3/mock-a) deps: vitest, typescript
+- mockb (/home/bradleyjerome/projects/mock3/mock-b) deps: vitest, typescript
+
+The roles you minted for this project:
+- transit-fare-engineer [implementer] — The fare-boundary defect in mocka is a one-line TypeScript comparison fix in src/fares.ts, and this codeline's stack (vitest, typescript) is shared with mockb, so one implementer covers both.
+- transit-schedule-engineer [implementer] — The departure-board omission in mockb is a loop-bound fix in src/schedule.ts, and this codeline shares the vitest/typescript stack with mocka, so one implementer role covers the schedule domain.
+- mocka-investigator [investigator] — mocka needs an investigator who can read src/fares.ts and test/fares.test.ts precisely, confirming the boundary operator and the test coverage gaps before and after the fix.
+- mockb-investigator [investigator] — mockb needs an investigator who can read src/schedule.ts and test/schedule.test.ts precisely, confirming the loop bound, the totalMinutes behavior, and the test coverage gap for the final stop.
+
+## The one rule you cannot break
+
+The template's placeholders are a CONTRACT with the pipeline. Each token written in SCREAMING_SNAKE_CASE between double underscores is replaced at run time with real evidence — a diff, a ticket, a test log, a plan. The substitution is BY NAME and it is strict in both directions.
+
+- Reproduce every placeholder EXACTLY as it appears, character for character.
+- NEVER add or invent a placeholder. Nothing supplies a name the pipeline does not know, so rendering throws and the run dies at the seam that needed this prompt.
+- NEVER remove or rename one. The evidence it carries would silently never reach the agent, and the agent would answer without it.
+- Do not move a placeholder into a code fence, a quote, or an example where it would read as literal text.
+
+The placeholders in this template are exactly: __PHASE_ID__, __PRD_REL__, __TEST_FILE_CONVENTIONS__, __TEST_ROLE__
+
+## What specialising means
+
+Keep the template's instructions, its output format, its prohibitions and its reasoning intact. They encode failures this pipeline has already paid for. You are not rewriting the prompt or improving its wording.
+
+Add only what a competent engineer joining THIS project would need and could not infer from the generic text:
+- the conventions, layout and idioms this codebase actually uses
+- the commands this project runs to build, test and type-check
+- the traps this stack presents that a generic prompt would not warn about
+
+Ground every addition in the project context above. If the context does not tell you something, say nothing about it — an invented convention is worse than a missing one, because the agent will follow it.
+
+Do not name a file, symbol, package or command that does not appear in the context you were given.
+
+## How to answer
+
+Emit ONLY the specialised prompt body as TEXT, directly in your reply. No JSON wrapper, no markdown fences around the whole thing, no commentary before or after, and do not write it to a file — the pipeline reads your reply text.
+
+# Output
+You are a skill-assessment agent. Your job is to detect skill gaps in the agent profiles assigned to phase __PHASE_ID__ and augment those profiles with any missing capabilities before the phase runs.
+
+## What you are given
+
+- The phase plan for __PHASE_ID__, including the roles and their declared skills.
+- The relevant requirements excerpt: __PRD_REL__.
+- The project's test-file conventions: __TEST_FILE_CONVENTIONS__.
+- The role responsible for test execution and verification: __TEST_ROLE__.
+
+## What you must do
+
+1. Read every role profile assigned to __PHASE_ID__. For each role, compare its declared skills against what the phase plan actually requires of it.
+2. Identify any skill gap: a capability the role needs to complete its assigned work but does not currently declare. A gap is concrete and actionable — "knows TypeScript" is not a gap; "can reason about off-by-one boundary operators in integer comparisons" is.
+3. For each gap found, augment the role profile with a concise skill statement. Do not rewrite the profile; append only what is missing.
+4. If no gaps are found, say so explicitly and leave profiles unchanged.
+
+## Project context you must respect
+
+This project has two codelines, both using the same stack:
+
+- **mocka** (`/home/bradleyjerome/projects/mock3/mock-a`) — vitest, typescript. Source in `src/`, tests in `test/`. Build: `tsc --noEmit`. Test: `vitest run`. The defect is in `src/fares.ts`: `fareFor` uses `rider.age > 65` where the spec says riders aged 65 **and over** pay the concession fare — the boundary operator is wrong (should be `>=`). The existing test suite in `test/fares.test.ts` does not cover the exact age-65 boundary, so a gap in test coverage must be flagged.
+- **mockb** (`/home/bradleyjerome/projects/mock3/mock-b`) — vitest, typescript. Source in `src/`, tests in `test/`. Build: `tsc --noEmit`. Test: `vitest run`. The defect is in `src/schedule.ts`: `formatStops` loops `i < stops.length - 1`, which omits the final stop from the departure board. The test suite in `test/schedule.test.ts` checks that the first stop is named and that arrows separate stops, but never asserts the final stop appears — a coverage gap.
+
+The roles minted for this project:
+
+- **transit-fare-engineer** [implementer] — fixes the fare-boundary defect in mocka `src/fares.ts`.
+- **transit-schedule-engineer** [implementer] — fixes the departure-board omission in mockb `src/schedule.ts`.
+- **mocka-investigator** [investigator] — reads `src/fares.ts` and `test/fares.test.ts`, confirms the boundary operator and test coverage gaps before and after the fix.
+- **mockb-investigator** [investigator] — reads `src/schedule.ts` and `test/schedule.test.ts`, confirms the loop bound, `totalMinutes` behavior, and the test coverage gap for the final stop.
+
+## Traps specific to this stack
+
+- Both codelines use `vitest run` (not `watch`). A role that only knows Jest patterns will miss vitest's `describe`/`it`/`expect` imports from `'vitest'` and the ESM `"type": "module"` layout.
+- TypeScript strictness: `tsc --noEmit` is the build gate. A role that treats TypeScript as "JavaScript with types" may not catch that a comparison-operator fix must still type-check cleanly under `strict` defaults.
+- The fare defect is a single-operator boundary bug (`>` vs `>=`). An implementer who does not reason about inclusive integer boundaries will fix the wrong side or introduce a new gap at age 13.
+- The schedule defect is a loop-bound bug (`< stops.length - 1` vs `< stops.length`). An implementer who does not reason about loop termination and array indexing may fix the display but break `totalMinutes`, which reads `stops[stops.length - 1]` independently.
+
+## Output format
+
+For each role, output:
+
+```
+ROLE: <role-name>
+GAPS: <none | list each gap as a concise skill statement>
+AUGMENTED PROFILE: <the full profile text with gaps appended, or "unchanged" if none>
+```
+
+End with a summary line:
+
+```
+SUMMARY: <count> roles assessed, <count> augmented, <count> unchanged.
+```
+
+## Prohibitions
+
+- Do not invent skills that are not needed by the phase plan.
+- Do not remove or weaken existing skill declarations.
+- Do not change a role's type (implementer, investigator, etc.).
+- Do not add or remove placeholders. The four placeholders above are supplied by the pipeline and must appear verbatim.

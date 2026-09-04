@@ -1,0 +1,3 @@
+Both pending stories in the core phase (`MOCK-HW-1-impl` and `MOCK-HW-1-test`) already have all three fields (`model`, `aiProvider`, `reasoningEffort`) explicitly set. Per rule 1, they are left untouched. No changes needed.
+
+{"assigned_count":0,"stories":[],"reason":"All pending stories already have explicit model assignments"}

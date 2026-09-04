@@ -1,0 +1,576 @@
+# Prompt
+You are the openspec specification agent for EPAM CLI. Phase core, story AMSD-2041.
+EXISTING CODE — CodeGraph static analysis (exact symbols, callers, blast radius):
+**Dynamic-dispatch links among your symbols**
+(synthesized — the indirect hops grep/Read would reconstruct; the `@file:line` is the wiring site)
+
+- Header → NavigationBar   [dynamic: renders <NavigationBar>]
+- NavigationBar → ContentstackLink   [dynamic: renders <ContentstackLink>]
+- NavigationBar → ContentstackSVGIcon   [dynamic: renders <ContentstackSVGIcon>]
+- NavigationBar → DesktopNav   [dynamic: renders <DesktopNav>]
+- NavigationBar → GlobalSearchAutoSuggestion   [dynamic: renders <GlobalSearchAutoSuggestion>]
+- NavigationBar → MobileNav   [dynamic: renders <MobileNav>]
+
+> Full source for these symbols is below — the call flow among them, followed by their bodies.
+**Exploration: applies handles processes resolves [GO, UP, MX] Live Preview  Content  CMS**
+
+Found 3 symbols across 3 files.
+
+**Blast radius — what depends on these (update/verify before editing)**
+
+- `content` (src/components/contentstack/ContentstackAccordion/content.mock.ts:1) — 1 caller; tests: `src/components/contentstack/ContentstackAccordion/ContentstackAccordion.spec.tsx`
+- `content` (src/components/contentstack/ContentstackColorComponent/content.mock.ts:1) — 1 caller; tests: `src/components/contentstack/ContentstackColorComponent/ContentstackColorComponent.spec.tsx`
+- `content` (src/components/contentstack/ContentstackLinksGroup/content.mock.ts:1) — 1 caller; tests: `src/components/contentstack/ContentstackLinksGroup/ContentstackLinksGroup.spec.tsx`
+- `content` (src/components/contentstack/ContentStackGallery/ContentStackGallery.mock.ts:110) — 1 caller; tests: `src/components/contentstack/ContentStackGallery/ContentStackGallery.spec.tsx`
+- `IContentCard` (src/interface/content/contentCard.ts:7) — 12 callers in `src/components/contentstack/ContentstackContentCards/content.mock.ts`, `src/components/contentstack/ContentstackMixedCards/ContentCard.tsx`, `src/components/contentstack/ContentstackMixedCards/mapContentCardData.ts`, `src/interface/content/mixedCards.ts` +1 more; tests: `src/components/contentstack/ContentstackMixedCards/__tests__/ContentCard.spec.tsx`, `src/components/contentstack/ContentstackMixedCards/__tests__/mapContentCardData.spec.ts`
+
+**Relationships**
+
+**references:**
+- content → galleryItems
+- content → IImageGallery
+- IImageGallery → IGalleryItem
+- invalidContent → IImageGallery
+- customRender → IImageGallery
+- IPageComponent → IImageGallery
+- invalidContent → invalidGalleryItems
+- IPageComponent → IPromoBanner
+- IPageComponent → IContentstackImage
+- IPageComponent → IExpandedViewCards
+- ... and 65 more
+
+**calls:**
+- DamVideo → useContent
+- DamVideo → useNextLocale
+- renderVideo → DamVideo
+- ContentstackLink → useContent
+- MobileNav → ContentstackLink
+- NavigationBar → ContentstackLink
+- BrandNavigation → ContentstackLink
+- useContent → getValue
+- Footer → useContent
+- MobileNav → useContent
+- ... and 43 more
+
+**Source Code**
+
+> The code below is the **verbatim, current on-disk source** of these files — re-read from disk on this call and line-numbered, byte-for-byte identical to what the Read tool returns. It is NOT a summary, outline, or stale cache. Treat each block as a Read you have already performed: do not Read a file shown here.
+
+**`src/components/contentstack/ContentstackAccordion/content.mock.ts`** — content(constant)
+
+```typescript
+1	export const content = [
+2	  {
+3	    accordion: {
+4	      accordion_heading: "Accordion Heading",
+5	      _metadata: { uid: "cs4e9e66e19b447cd2" },
+6	      accordion_introduction: {
+7	        type: "doc",
+8	        attrs: {},
+9	        uid: "025f72738b794424ac31d069839ce821",
+10	        children: [
+11	          {
+12	            type: "p",
+13	            attrs: {},
+14	            uid: "cc51495a8bde451190c145b2aa7ec0af",
+15	            children: [{ text: "This is an accordion created for testing purposes." }],
+16	          },
+17	        ],
+18	        _version: 4,
+19	      },
+20	      expand_all_drawers: false,
+21	      accordion_content: [
+22	        {
+23	          drawer: {
+24	            drawer_heading: "Drawer 1",
+25	            _metadata: { uid: "csc32581bf6bf1aeb7" },
+26	            include_on_page_navigation: false,
+27	            drawer_content: [
+28	              {
+29	                rich_text_editor: {
+30	                  rich_text_editor: [
+31	                    {
+32	                      type: "doc",
+33	                      attrs: {},
+34	                      uid: "adb2ebb01b004866b2eec77b3977df6c",
+35	                      children: [
+36	                        {
+37	                          type: "p",
+38	                          attrs: {},
+39	                          uid: "a6db8ff6df424c28b191d8d8f34b3205",
+40	                          children: [{ text: "Some info in Drawer 1" }],
+41	                        },
+42	                      ],
+43	                      _version: 4,
+44	                    },
+45	                  ],
+46	                  _metadata: { uid: "cs7bdb9941d0d9b24f" },
+47	                },
+48	              },
+49	            ],
+50	          },
+51	        },
+52	        {
+53	          drawer: {
+54	            drawer_heading: "Drawer 2",
+55	            _metadata: { uid: "csdce1c70146c9ee52" },
+56	            include_on_page_navigation: false,
+57	            drawer_content: [
+58	              {
+59	                rich_text_editor: {
+60	                  rich_text_editor: [
+61	                    {
+62	                      type: "doc",
+63	                      attrs: {},
+64	                      uid: "c18f422cd27d427ebd1c90d900ed4531",
+65	                      children: [
+66	                        {
+67	                          type: "p",
+68	                          attrs: {},
+69	                          uid: "2e7ab120bf614437bab60c4271bf121b",
+70	                          children: [{ text: "Some info in Drawer 2." }],
+71	                        },
+72	                      ],
+73	                      _version: 4,
+74	                    },
+75	                  ],
+76	                  _metadata: { uid: "cs57d337cbb81fa110" },
+77	                },
+78	              },
+79	              {
+80	                image: {
+81	                  image_heading: "",
+82	                  _metadata: { uid: "cs3766f75c5c64034d" },
+83	                  image: [
+84	                    {
+85	                      public_id: "photo-1661075838819-a282a746da50",
+86	                      resource_type: "image",
+87	                      type: "upload",
+88	                      format: "jpg",
+89	                      version: 1661503713,
+90	                      url: "http://res.cloudinary.com/devmetrolinx/image/upload/v1661503713/photo-1661075838819-a282a746da50.jpg",
+91	                      secure_url:
+92	                        "https://res.cloudinary.com/devmetrolinx/image/upload/v1661503713/photo-1661075838819-a282a746da50.jpg",
+93	                      width: 960,
+94	                      height: 640,
+95	                      bytes: 46789,
+96	                      duration: null,
+97	                      tags: [],
+98	                      metadata: { wturjnqda3uj85wevkmx: "Enter description here" },
+99	                      created_at: "2022-08-26T08:48:33Z",
+100	                      access_mode: "public",
+101	                      access_control: [],
+102	                      created_by: { type: "user", id: "0b8cd452de3ce172a6aec7af0a90db" },
+103	                      uploaded_by: { type: "user", id: "0b8cd452de3ce172a6aec7af0a90db" },
+104	                      signedURLs: {
+105	                        "16": "https://res.cloudinary.com/devmetrolinx/image/upload/s--NuctwlmO--/c_limit,q_auto,w_16/photo-1661075838819-a282a746da50",
+106	                        "32": "https://res.cloudinary.com/devmetrolinx/image/upload/s--Vnm3nIfp--/c_limit,q_auto,w_32/photo-1661075838819-a282a746da50",
+107	                        "48": "https://res.cloudinary.com/devmetrolinx/image/upload/s--Q3APpX7v--/c_limit,q_auto,w_48/photo-1661075838819-a282a746da50",
+108	                        "64": "https://res.cloudinary.com/devmetrolinx/image/upload/s--mWEK7MIK--/c_limit,q_auto,w_64/photo-1661075838819-a282a746da50",
+109	                        "96": "https://res.cloudinary.com/devmetrolinx/image/upload/s--guGpyl8t--/c_limit,q_auto,w_96/photo-1661075838819-a282a746da50",
+110	                        "128":
+111	                          "https://res.cloudinary.com/devmetrolinx/image/upload/s--M7bySuTX--/c_limit,q_auto,w_128/photo-1661075838819-a282a746da50",
+112	                        "256":
+113	                          "https://res.cloudinary.com/devmetrolinx/image/upload/s---tp-uAiN--/c_limit,q_auto,w_256/photo-1661075838819-a282a746da50",
+114	                        "384":
+115	                          "https://res.cloudinary.com/devmetrolinx/image/upload/s--ro2bMO3U--/c_limit,q_auto,w_384/photo-1661075838819-a282a746da50",
+116	                        "640":
+117	                          "https://res.cloudinary.com/devmetrolinx/image/upload/s--WeVR7Srr--/c_limit,q_auto,w_640/photo-1661075838819-a282a746da50",
+118	                        "750":
+119	                          "https://res.cloudinary.com/devmetrolinx/image/upload/s--DJxzTLlj--/c_limit,q_auto,w_750/photo-1661075838819-a282a746da50",
+120	                        "828":
+121	                          "https://res.cloudinary.com/devmetrolinx/image/upload/s--T5s_zyt_--/c_limit,q_auto,w_828/photo-1661075838819-a282a746da50",
+122	                        "1080":
+123	                          "https://res.cloudinary.com/devmetrolinx/image/upload/s--oRVqEqom--/c_limit,q_auto,w_1080/photo-1661075838819-a282a746da50",
+124	                        "1200":
+125	                          "https://res.cloudinary.com/devmetrolinx/image/upload/s--pzGlbdMp--/c_limit,q_auto,w_1200/photo-1661075838819-a282a746da50",
+126	                        "1920":
+127	                          "https://res.cloudinary.com/devmetrolinx/image/upload/s--EovAa0tl--/c_limit,q_auto,w_1920/photo-1661075838819-a282a746da50",
+128	                        "2048":
+129	                          "https://res.cloudinary.com/devmetrolinx/image/upload/s--_A_H6JP7--/c_limit,q_auto,w_2048/photo-1661075838819-a282a746da50",
+130	                        "3840":
+131	                          "https://res.cloudinary.com/devmetrolinx/image/upload/s--E_so4CUV--/c_limit,q_auto,w_3840/photo-1661075838819-a282a746da50",
+132	                      },
+133	                    },
+134	                  ],
+135	                  image_caption: "",
+136	                },
+137	              },
+138	            ],
+139	          },
+140	        },
+141	      ],
+142	    },
+143	  },
+144	  {},
+145	];
+```
+
+**`src/components/contentstack/ContentstackColorComponent/content.mock.ts`** — content(constant)
+
+```typescript
+1	export const content = {
+2	  sidebar_modular_blocks_bottom: [
+3	    {
+4	      color_cards: {
+5	        color_cards: [
+6	          {
+7	            color_card_icon: [],
+8	            color_card_heading: "Color Card 1",
+9	            color_card_description: "",
+10	            _metadata: { uid: "cs5ca1f2f5cef5379f" },
+11	          },
+12	        ],
+13	        _metadata: { uid: "csf5105fc37859a1d2" },
+14	      },
+15	    },
+16	    {
+17	      color_cards: {
+18	        color_cards: [
+19	          {
+20	            color_card_icon: [
+21	              {
+22	                public_id: "Icons/All Icons/Attention",
+23	                resource_type: "image",
+24	                type: "upload",
+25	                format: "svg",
+26	                version: 1670402822,
+27	                url: "http://res.cloudinary.com/devmetrolinx/image/upload/v1670402822/Icons/All%20Icons/Attention.svg",
+28	                secure_url:
+29	                  "https://res.cloudinary.com/devmetrolinx/image/upload/v1670402822/Icons/All%20Icons/Attention.svg",
+30	                width: 24,
+31	                height: 24,
+32	                bytes: 209,
+33	                duration: null,
+34	                tags: [],
+35	                metadata: {
+36	                  wn1yzhjsx12ah0ncpw60: "Attention",
+
+
+EXISTING CODE (brownfield fallback via Semble — identify the code path that handles this behavior, then specify how to fix it; do not propose new abstractions):
+// src/components/SignUp/SignUp.tsx (lines 168–185, relevance: 0.0185)
+if (hasError && isAuthenticated) {
+    return <AccountUnavailableError />;
+  }
+
+  return (
+    <>
+      <div className="col-span-full cx-inner-container">
+        <div className="lg:col-start-2 xl:col-start-2 lg:-mx-16 xl:mx-0 lg:col-span-7 xl:col-span-8 pb-56 lg:pb-0">
+          <div
+            className="bg-gray-50 rounded-lg dark:bg-gray-800"
+            id="subscribeToGoTransit"
+            aria-labelledby="subscribe-to-go-transit"
+          >
+            <ContentStackRichTextComplex
+              contentKey={paths.pageRichText}
+              wrapperClasses="mb-56 sm:mb-64"
+            />
+            <div className="flex sm:justify-between flex-row">
+
+---
+
+// src/components/pages/Checkout/Checkout.tsx (lines 76–94, relevance: 0.0143)
+<div className="mx-0 lg:mx-40 xl:mx-auto cx-container">
+          <div className="col-span-full xl:col-start-2 xl:col-span-14 bg-global-white px-24 py-56 min-h-[300px] sm:px-80 sm:py-64">
+            {isIframeError
+              ? renderError()
+              : iframeUrl && (
+                  <IFrameRenderer
+                    url={iframeUrl}
+                    onMessageChange={setShowBanner}
+                    onLoginAtCheckout={setShowLoginAtCheckout}
+                  />
+                )}
+
+            {showBanner && <ContentstackPromoBanner contentKey={paths.promo_sign_up_banner} />}
+          </div>
+        </div>
+      </div>
+    </div>
+  );
+};
+
+---
+
+// src/components/pages/StationLandingPage/StationLandingPage.tsx (lines 115–134, relevance: 0.0141)
+<div className="lg:col-start-2 xl:col-start-2 lg:-mx-16 xl:mx-0 lg:col-span-10 xl:col-span-12">
+              <div>
+                <ContentStackRichTextBasic contentKey="page.0" />
+              </div>
+
+              {!!expandedViewCards.length && (
+                <div className="mt-56 sm:mt-64 mb-32">
+                  <ExpandedViewCards
+                    cards={expandedViewCards}
+                    expandButtonLabel=""
+                    numOfCharsToDisplay={-1}
+                    ctaColorMode="primary"
+                    cardTextClasses="gap-24"
+                    cardsWrapperClasses="gap-32 !max-w-full"
+                    heading=""
+                  />
+                </div>
+              )}
+
+              <ContentstackBuyTicketsBanner contentKey={paths.buyTicketsPath} />
+
+---
+
+// src/components/contentstack/ContentstackContentCards/content.mock.ts (lines 48–72, relevance: 0.0128)
+},
+];
+
+export const mappedData = [
+  {
+    url: "/",
+    urlTitle: "Learn more",
+    image: {
+      public_id: "/what_is_go",
+      resource_type: "image",
+      format: "png",
+      url: "http://assets.metrolinxuat.com/image/upload/v1665393178/what_is_go.png",
+      secure_url: "https://assets.metrolinxuat.com/image/upload/v1665393178/what_is_go.png",
+      width: 304,
+      height: 200,
+      signedURLs: {},
+      tags: [],
+    },
+    title: "What is GO?",
+    description:
+
+---
+
+// src/components/contentstack/ContentStackVideoPlayer/ContentStackVideoPlayer.tsx (lines 1–16, relevance: 0.0110)
+import { ICloudinaryImage } from "@metrolinx/cx-shared/build/src/interface/content/global";
+import { useContent } from "hooks/useContent";
+import { Video } from "components/Video";
+import { ICloudinaryVideo, ICloudinaryVideoSubtitles } from "interface/content/cloudinary";
+
+export interface IContentStackVideoPlayerProps {
+  contentKey?: string;
+  isFullWidth?: boolean;
+  showHeading?: boolean;
+}
+
+export const ContentStackVideoPlayer = ({
+  contentKey,
+  isFullWidth = false,
+  showHeading = true,
+}: IContentStackVideoPlayerProps) =>
+
+---
+
+// migration-scripts/global_fields/content_cards_component/content_cards_component.v1.ts (lines 1–14, relevance: 0.0104)
+import { Schema } from "@contentstack/management/types/stack/contentType";
+import { client } from "../../client";
+
+export async function updateContentCardsComponentV1() {
+  const globalField = await client.fetchGlobalField("content_cards_component");
+  const contentCards = globalField.schema.find((field: Schema) => field.uid === "content_cards");
+  const internalLinks = contentCards.schema.find(
+    (field: Schema) => field.uid === "content_card_internal_link",
+  );
+
+  internalLinks.reference_to.push("campaign_page", "blog_listing_page");
+
+  await globalField.update();
+}
+
+---
+
+// src/components/pages/SearchResultsPage.tsx (lines 106–117, relevance: 0.0100)
+</div>
+            </section>
+            <div className="mx-24 sm:mx-40 mb-56 lg:mb-64 lg:mx-0 sm:grid sm:grid-cols-2-auto gap-x-16 lg:grid-cols-12 xl:grid-cols-14">
+              <div className="w-full lg:col-start-2 lg:col-span-7 lg:-mx-16 xl:mx-0 xl:col-start-2 xl:col-span-8 order-1 mb-32 lg:mb-0">
+                <SearchResults
+                  results={results}
+                  searchQuery={searchQuery}
+                  isLoading={isLoading}
+                  error={error}
+                />
+              </div>
+              {hasLoadMore &&
+
+---
+
+// src/components/pages/PoliciesAndLegalPage/PoliciesAndLegalPage.tsx (lines 120–136, relevance: 0.0090)
+<div
+              className={classNames(
+                "order-1 lg:col-start-2 xl:col-start-2 lg:col-span-10 lg:-mx-16 xl:mx-0",
+                {
+                  "lg:col-span-7 xl:col-span-8": isOnPageNavigationShown || isLinksGroupDisplayed,
+                  "lg:col-span-10 xl:col-span-12":
+                    !isOnPageNavigationShown || !isLinksGroupDisplayed,
+                },
+              )}
+            >
+              {isMobileNavShown && <MobileOnPageNavigation pageContainerRef={pageContainerRef} />}
+              <PoliciesAndLegalPageMapper
+                pageModularBlocks={modularBlocks}
+                contentKeyPart={paths.modular_block}
+                activeNavHeaderId={activeNavHeaderId}
+              />
+            </div>
+
+---
+
+// src/components/pages/SignUpPage.tsx (lines 17–31, relevance: 0.0135)
+<div className="relative z-10 lg:-mt-[128px] bg-global-white lg:bg-transparent">
+        <div className="cx-container lg:bg-global-white xl:bg-transparent">
+          <div className="pt-24 sm:pt-40 pb-64 col-span-full xl:col-start-2 xl:col-span-14 bg-global-white cx-inner-container">
+            <div className="mb-24 sm:mb-48 col-span-full lg:-mx-16 xl:mx-0 xl:col-start-2 sm:col-start-2 sm:col-span-12 xl:col-span-14">
+              <ContentstackBreadcrumbs />
+            </div>
+            <div className="col-span-full bg-global-white cx-inner-block min-h-[535px] md:min-h-[400px] lg:min-h-[480px] w-full">
+              <SignUp />
+            </div>
+          </div>
+        </div>
+      </div>
+    </div>
+  );
+};
+
+---
+
+// src/services/up-api/departures/get-go-transit-departures/getGoTransitDepartures.ts (lines 36–55, relevance: 0.0092)
+export const getGoTransitDepartures = async (
+  payload: IGetGoTransitDeparturesPayload,
+): Promise<IGetGoTransitDeparturesResponse> => {
+  const url = getGoTransitDeparturesApiUrl(payload);
+
+  const response = await fetch(url, {
+    headers: getRequestHeaders({
+      subscriptionKey: publicEnv.UP_API_APIM_SUBSCRIPTION_KEY,
+      versionLabel: publicEnv.UP_API_VERSION_LABEL,
+    }),
+  });
+
+  if (!response.ok) {
+    throw new HttpError("Failed to fetch GO Transit departures", {
+      status: response.status,
+    });
+  }
+
+  return response.json();
+};
+
+
+BROWNFIELD MODE — output JSON only, no tools, no search.
+
+STEP 1 — CLASSIFY THIS STORY. Set "storyKind":
+- "defect" if it reports that EXISTING behavior is wrong, broken, or produces an incorrect/missing result (a bug).
+- "novel" if it asks for a NEW capability that does not exist in the codebase yet. A brownfield story is not always a bug — genuinely new work is "novel".
+
+STEP 2 — LOCATE (always, for both kinds — but the question differs).
+Use ONLY the EXISTING CODE block already present in this prompt (injected above via CodeGraph or Semble).
+
+- If storyKind is "defect": find the FIX SITE — the file/function that COMPUTES the wrong value, not the one that displays it.
+- If storyKind is "novel": there is no fix site, and inventing one produces a confident wrong answer. Find the ATTACHMENT POINT instead — the existing file/function this new capability plugs INTO (the provider, hook, route, config or component it must integrate with), plus anything already present that the implementation should REUSE rather than rewrite. This is what keeps the change as small as possible: you cannot reuse what you have not found.
+
+Set "locationHint" to [{"file":"<repo-relative path>","function":"<function name>","reason":"<why this location — the fix site for a defect, the attachment point for a novel story>"}].
+If no relevant code appears above, set locationHint to []. Do NOT invent a plausible file: a named file whose contents you cannot see in this prompt is a fabrication, and an empty locationHint is a usable answer while a fabricated one is not.
+
+STEP 3 — VERIFICATION CRITERIA (do NOT touch the acceptance criteria).
+The acceptanceCriteria are the IMMUTABLE ticket intent — copy the existing array through VERBATIM: never reword, split, add, remove, re-scope, or inject any implementation mechanism into them.
+Instead, PRODUCE a "verificationCriteria" array — concrete, OBSERVABLE checks that confirm the change is correct — derived from the acceptance criteria AND the description (lean on the description when the ACs are sparse or missing). Apply these rules to EVERY verification criterion (a strict reviewer holds you to this SAME text, so a VC that breaks any rule will be flagged and rejected):
+A verification criterion states WHAT AN END USER OR TESTER OBSERVES on the user-facing surface THE TICKET IS ABOUT — the rendered email for an email ticket, the displayed screen/UI for a UI ticket, the API response a CLIENT receives for an API ticket. It is a BLACK-BOX check on that surface. It NEVER describes HOW the value is produced.
+A verification criterion is FORBIDDEN if it:
+- prescribes HOW to implement — any algorithm, mechanism, or approach: "split", "halve", "×0.5", "calculate independently", "per segment", "for each line item", or adding/reading any new field, flag, or service;
+- references an INTERNAL structure that merely FEEDS the ticket's surface — an intermediate payload, a "confirmation data"/DTO object, or a specific response field used to BUILD the output. Verify the surface the ticket names, NOT the data structure behind it;
+- makes a CROSS-COMPARISON that presumes a mechanism — never assert one value "must equal" / "matches" / "is the same as" another (e.g. "the return amount equals the outbound amount"); that presumes a copy/split. Assert the required value is present and correct ON ITS OWN.
+Every verification criterion must be observable, testable, and tied to the ticket's stated symptom/intent.
+- If the ticket describes a SYMPTOM, the VCs verify that symptom is resolved AND that related existing behavior does not regress.
+Set "vcSource" to "acceptance", "description", or "both" — where you derived the VCs from (use "description" when the ACs were too sparse to derive from).
+
+UNREACHABLE EXTERNAL SERVICE — write criteria to the boundary, not past it.
+This project cannot reach the following hosts at test time: contentstack.io, contentstack.com, api.contentstack.io, cdn.contentstack.io.
+There are no credentials for them and no local substitute, so any criterion that
+asserts their real behaviour is unprovable and will fail verification no matter
+how correct the code is.
+
+Write criteria that stop at OUR side of that boundary and are therefore provable:
+what request our code makes, with what parameters, under what conditions; how it
+handles the responses and failures those services can return; what it renders or
+returns given a known response. State the assumption explicitly, e.g. "given the
+<service> client is mocked, ...", so a reader knows the claim's limits.
+
+SCOPE — this applies ONLY to the hosts listed above. Every other integration
+keeps its real coverage: internal APIs, this codeline's own services, databases,
+and anything else reachable are exercised for real exactly as normal. Do NOT mock
+a dependency merely because mocking it would be more convenient. Removing
+coverage from something we CAN test trades a real defect for a green tick, which
+is the opposite of why this constraint exists.
+
+Generate refined acceptance criteria, optionally updated title/description, and split stories where required. Output raw JSON only (no XML tags, no markdown fences, no preamble) using this schema:
+{
+  "storyId":"AMSD-2041",
+  "agent":"openspec",
+  "notes":"context",
+  "acceptanceCriteria":["..."],
+  "description":"...",
+  "title":"...",
+  "storyKind":"defect|novel",
+  "verificationCriteria":["<observable check a tester can confirm>"],
+  "vcSource":"acceptance|description|both",
+  "locationHint":[{"file":"path/relative/to/repo","function":"functionName","reason":"why this location — the fix site for a defect, the attachment point it integrates with for a novel story"}],
+  "splitStories":[{"id":"optional","title":"...","description":"...","acceptanceCriteria":["..."],"agentRole":"...","technicalNotes":{"files":[]}}]
+}
+Use existing text when no change is needed.
+
+SPLIT RULES (mandatory, not optional — enforce these before refining AC):
+1. AC count > 12 → you MUST propose a split. Target ≤8 ACs per split child. Never leave a story with >12 ACs unsplit.
+2. Both implementation files AND test files in technicalNotes.files → split into one impl child (non-test files) and one test child (*.test.ts files). Assign agentRole "typescript-engineer" to impl, "test-engineer" to test.
+3. 3+ independent deliverable modules with no shared exports (e.g. client.ts, server.ts, cli.ts all in same story) → split per concern. Each split gets the files it owns.
+4. External API discovery + implementation in same story → split: first child discovers/documents the API contract, second child implements against that contract.
+5. technicalNotes.files contains BOTH frontend/template files (*.html, *.css, *.scss, *.jsx, *.tsx, *.vue, *.svelte) AND build/tooling files (vite.config.*, webpack.config.*, rollup.config.*, package.json, Makefile, Dockerfile, *.sh) → split: one child owns the frontend/template files, one child owns the build/tooling files. These have different runtime roles and different owners — bundling them causes token bloat and diffuse responsibility.
+6. Story covers multiple independent runtime roles in the same deliverable (e.g. HTTP server AND CLI binary AND HTML dashboard) → split by runtime role, one child per runtime target. Each child's agentRole should match what it produces (typescript-engineer for application code, test-engineer for test-only files).
+These rules apply only when splitDepth === 0. Never split a story that is already a split child.
+
+Story context:
+{
+  "id": "AMSD-2041",
+  "title": "[GO, UP, MX] Live Preview of Content in CMS",
+  "description": "[GO, UP, MX] Live Preview of Content in CMS",
+  "acceptanceCriteria": [],
+  "acCount": 0,
+  "agentRole": "typescript-engineer",
+  "agentGroup": "main",
+  "dependencies": [],
+  "splitDepth": 0
+}
+
+
+# Output
+```json
+{
+  "storyId": "AMSD-2041",
+  "agent": "openspec",
+  "notes": "Novel story — Live Preview is a new capability not present in the codebase. The central attachment point is the useContent hook (hooks/useContent), which all Contentstack components route through for content fetching (visible in calls graph: DamVideo, ContentstackLink, Footer, MobileNav, NavigationBar, etc.). Live Preview integration must plug into this layer. Contentstack APIs are unreachable at test time, so VCs are written to our side of the boundary. Zero ACs provided; all VCs derived from the description.",
+  "acceptanceCriteria": [],
+  "description": "[GO, UP, MX] Live Preview of Content in CMS — enable real-time preview of content changes made in the Contentstack CMS, so that editors see updated content on the live site without publishing.",
+  "title": "[GO, UP, MX] Live Preview of Content in CMS",
+  "storyKind": "novel",
+  "verificationCriteria": [
+    "Given the Contentstack Live Preview client SDK is initialized with valid configuration parameters (host, stack API key, delivery token, environment), the application bootstraps the Live Preview connection without errors.",
+    "Given the Live Preview SDK is initialized and a content editor modifies a field in Contentstack CMS, the affected component on the previewed page re-renders to display the updated field value within a perceptible short delay (under 5 seconds).",
+    "Given the Live Preview SDK is NOT initialized (e.g., in production mode or when Live Preview query parameters are absent), all Contentstack components render content using the standard delivery API response exactly as they do today, with no blank states, errors, or missing content.",
+    "Given the Live Preview SDK is initialized and the Contentstack client receives a real-time content update event containing a known mock payload, the component consuming that content via useContent reflects the new payload values in the rendered output.",
+    "Given the Live Preview SDK is initialized and the Contentstack client receives a real-time content update event for a content type that does not match the current page's content, no components on the current page re-render or change their displayed content.",
+    "Given the Live Preview SDK is initialized and the connection to Contentstack is interrupted or times out, the application continues to display the last successfully fetched content without errors or blank states, and logs a warning indicating the Live Preview connection was lost.",
+    "The Live Preview initialization reads any required configuration (stack API key, delivery token, environment, preview host) from environment variables or runtime configuration, and the application does not start the Live Preview connection when these values are absent.",
+    "Given the Contentstack Live Preview client is mocked to return a known content payload, navigating to a page that uses Contentstack content (e.g., a page rendering ContentstackAccordion, ContentstackContentCards, or ContentstackLink) displays the mocked content correctly, confirming the content pipeline still functions end-to-end with Live Preview wired in."
+  ],
+  "vcSource": "description",
+  "locationHint": [
+    {
+      "file": "hooks/useContent",
+      "function": "useContent",
+      "reason": "Central content-fetching hook used by all Contentstack components (DamVideo, ContentstackLink, Footer, MobileNav, NavigationBar, etc. per calls graph). Live Preview must integrate here to propagate real-time content updates to every consuming component without modifying each one individually."
+    }
+  ],
+  "splitStories": []
+}
+```

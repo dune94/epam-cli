@@ -1,0 +1,166 @@
+# Prompt
+You are the speckit specification agent for EPAM CLI. Phase core, story SKY-004.
+
+You are reviewing and building on the openspec agent's output for this story.
+Your role is COLLABORATIVE — you are NOT starting from scratch. Instead:
+1. Review openspec's proposed acceptance criteria for testability and completeness
+2. Add missing edge-case, error-handling, security, and accessibility criteria
+3. Flag any AC that are vague, untestable, or overlapping
+4. Splitting is openspec's decision alone — you do NOT split stories. If openspec already split
+   this story, do NOT include a "splitStories" field in your output at all (it will be ignored if
+   you do). Review and refine the acceptanceCriteria openspec gave you for the UNSPLIT story as
+   normal; per-child refinement of an already-split story's children happens on a later turn, not
+   here.
+5. Do NOT remove or duplicate openspec's good work — build on it
+
+━━━ WHAT-NOT-HOW RULE (MANDATORY) ━━━
+Every AC must describe an OBSERVABLE OUTCOME (what a test can verify from outside the code),
+NOT an implementation instruction. If an AC names vi.mock, jest.fn, mockReturnValue,
+mockResolvedValue, import statements, or require() calls, REPLACE it with a
+Given/When/Then behaviour statement. Never tell the implementer which library or mock pattern to use.
+
+OPENSPEC'S OUTPUT (your input to review — ACs and split proposals only):
+{
+  "acceptanceCriteria": [
+    "Importing the server module does not cause any port to be bound; the module exports a named `app` that is an Express application instance usable with supertest without starting a listener; the server reads PORT from the environment with a default of 3000",
+    "GET /health returns HTTP 200 with JSON body { status: 'ok', uptime: <number ≥ 0> } and Content-Type application/json, regardless of whether RAPIDAPI_KEY is set, empty, or absent",
+    "GET / returns HTTP 200 with Content-Type text/html; the response body is byte-identical to the current contents of src/public/index.html on disk; / is never gated by RAPIDAPI_KEY; if index.html is missing at request time, the response is HTTP 500 with JSON { error: string }",
+    "src/public/index.html is a styled dashboard with: a blue (#1a73e8) header containing 'Skyscanner Dashboard' title and subtitle; a centered card (max-width 700px) with a 2-column grid search form containing labeled inputs for from, to, date, and adults; a search button; a status area for error, empty, and success states; client-side JavaScript that calls GET /search and renders results without full page reload; all form inputs have associated <label> elements; the page uses semantic HTML elements (e.g., <header>, <main>, <section>)",
+    "GET /search with valid params (from, to, date in YYYY-MM-DD format, optional adults) returns 200 with JSON { flights: FlightResult[], count, searchedAt } where count === flights.length, searchedAt is a valid ISO-8601 timestamp, and two sequential requests produce distinct searchedAt values; adults defaults to 1 when absent; returns 400 with JSON { error: string } when any required param (from, to, date) is missing, adults is non-numeric, adults ≤ 0, or date is not in YYYY-MM-DD format; all responses have Content-Type application/json",
+    "GET /cheapest with valid params (from, to, date, optional adults) returns 200 with JSON body containing the single cheapest FlightResult (price ≤ all other results); adults defaults to 1 when absent; returns 404 with JSON { error: string } when no flights are found; returns 400 with JSON { error: string } when required params are missing, adults is non-numeric or ≤ 0, or date format is invalid; all responses have Content-Type application/json",
+    "When RAPIDAPI_KEY is absent or empty at startup, /search and /cheapest return 503 with JSON { error: 'RAPIDAPI_KEY not configured' }; when SkyscannerClient throws, /search and /cheapest return 500 with JSON { error: string } and the server continues handling subsequent requests without crash or unhandled rejection; the FlightResult shape in responses matches the type exported by SKY-002",
+    "package.json 'start' script runs 'node dist/server.js'; 'build' script produces dist/server.js and ensures dist/public/index.html exists with content matching src/public/index.html; supertest and @types/supertest are in devDependencies; npx tsc --noEmit exits 0; the / route handler resolves the file path correctly both under tsx src/server.ts (dev) and node dist/server.js (built)",
+    "No JSON error response (any 4xx or 5xx) includes a stack trace, internal file path, or environment variable value in its body",
+    "Requests to undefined routes return HTTP 404"
+  ],
+  "notes": "Mid-execution split registered by agent during story execution",
+  "splitStories": [
+    {
+      "id": "SKY-004-impl",
+      "title": "Implement Express REST API server with /health, /search, /cheapest, and static dashboard",
+      "description": "Create src/server.ts with Express app exporting named `app`, guarded listen(), and all four routes. Create src/public/index.html as a styled dashboard SPA. Configure package.json build/start scripts including public/ asset copying to dist/. Depends on SKY-002 for SkyscannerClient and FlightResult type.",
+      "acceptanceCriteria": [
+        "src/server.ts exports named `app` (Express instance) separately from `listen()` call, which is guarded by main-module check matching the output format (ESM or CJS) so tests never bind a port",
+        "GET /health returns HTTP 200 { status: 'ok', uptime: <positive number> } regardless of RAPIDAPI_KEY presence",
+        "GET / returns HTTP 200 with Content-Type text/html, body equal to contents of src/public/index.html read at runtime via fs.readFileSync (not hardcoded inline), never gated by RAPIDAPI_KEY",
+        "src/public/index.html is a styled dashboard: blue (#1a73e8) header with 'Skyscanner Dashboard' title and subtitle, centered card (max-width ~700px) with 2-column grid search form (from, to, date, adults with labels), search button, status area (error/empty/success), client-side JS calling GET /search and rendering results without page reload",
+        "GET /search with valid params returns 200 { flights: FlightResult[], count, searchedAt } where count === flights.length and searchedAt is ISO-8601 distinct per request; adults defaults to 1 if absent; returns 400 { error } if required params missing or adults non-numeric",
+        "GET /cheapest with valid params returns 200 with cheapest FlightResult (price ≤ all others); adults defaults to 1; returns 404 { error } if no flights found; returns 400 { error } if required params missing",
+        "RAPIDAPI_KEY absent at startup → /search and /cheapest return 503 { error: 'RAPIDAPI_KEY not configured' }; SkyscannerClient throws → 500 { error: string } without crash/unhandled rejection; FlightResult type imported from SKY-002 export, not redeclared inline",
+        "package.json: 'start' → 'node dist/server.js'; 'build' produces dist/server.js and copies src/public/ to dist/public/; supertest + @types/supertest in devDependencies; `npx tsc --noEmit` exits 0"
+      ],
+      "dependencies": [
+        "SKY-002"
+      ],
+      "agentRole": "typescript-engineer"
+    },
+    {
+      "id": "SKY-004-test",
+      "title": "Test suite for Express REST API server",
+      "description": "Create src/server.test.ts using vitest + supertest with at least 8 tests covering all server route scenarios. SkyscannerClient must be mocked (vi.mock or equivalent) so no real HTTP calls are made. Depends on SKY-004-impl for the server implementation.",
+      "acceptanceCriteria": [
+        "src/server.test.ts uses vitest + supertest with SkyscannerClient mocked (vi.mock or equivalent); contains ≥8 tests covering: /health returns 200 with correct body, /health works without RAPIDAPI_KEY, / serves HTML content from file, /search valid params returns flights with correct structure, /search missing/invalid params returns 400, /cheapest returns cheapest flight or 404 when empty, RAPIDAPI_KEY absent returns 503 for /search and /cheapest, SkyscannerClient error returns 500 without crash",
+        "`vitest run` exits 0 with all tests passing"
+      ],
+      "dependencies": [
+        "SKY-002",
+        "SKY-004-impl"
+      ],
+      "agentRole": "test-engineer"
+    }
+  ]
+}
+
+ORIGINAL STORY CONTEXT:
+{
+  "id": "SKY-004",
+  "title": "Build Express REST API with /health, /search, /cheapest, and static dashboard endpoints",
+  "description": "Create src/server.ts — an Express HTTP server that exposes: (1) GET /health → { status: 'ok', uptime: number }, (2) GET /search?from=LHR&to=JFK&date=2026-08-01&adults=1 → { flights: FlightResult[], count: number, searchedAt: string }, (3) GET /cheapest?from=LHR&to=JFK&date=2026-08-01 → the single cheapest FlightResult or 404 JSON { error: string } if none found, (4) GET / → serves src/public/index.html by reading the file at runtime (e.g. fs.readFileSync) — the handler must NOT hardcode a separate inline HTML string that merely happens to match; content and implementation must not be able to diverge. Server reads PORT from env (default 3000); reads RAPIDAPI_KEY from env and passes to SkyscannerClient. If RAPIDAPI_KEY is absent at startup all API routes (/search, /cheapest) return 503 { error: 'RAPIDAPI_KEY not configured' }; /health and / are never gated. The listen() call must be guarded so importing `app` in tests does not bind a port. Add 'start' script in package.json pointing to 'node dist/server.js'. Install supertest and @types/supertest. Create src/server.test.ts using vitest + supertest with at least 8 tests covering the scenarios in acceptance criteria. Depends on SKY-002 (SkyscannerClient and FlightResult type must exist before this story is started). The build script must copy src/public/ (or equivalent static assets) into dist/public/ as part of `npm run build`, since tsc alone does not copy non-.ts files — the file path used by the / route handler must resolve correctly both under `tsx src/server.ts` (dev) and `node dist/server.js` (built).",
+  "originalAcceptanceCriteria": [
+    "Importing the server module does not cause any port to be bound; the module exports a named `app` that is an Express application instance usable with supertest without starting a listener; the server reads PORT from the environment with a default of 3000",
+    "GET /health returns HTTP 200 with JSON body { status: 'ok', uptime: <number ≥ 0> } and Content-Type application/json, regardless of whether RAPIDAPI_KEY is set, empty, or absent",
+    "GET / returns HTTP 200 with Content-Type text/html; the response body is byte-identical to the current contents of src/public/index.html on disk; / is never gated by RAPIDAPI_KEY; if index.html is missing at request time, the response is HTTP 500 with JSON { error: string }",
+    "src/public/index.html is a styled dashboard with: a blue (#1a73e8) header containing 'Skyscanner Dashboard' title and subtitle; a centered card (max-width 700px) with a 2-column grid search form containing labeled inputs for from, to, date, and adults; a search button; a status area for error, empty, and success states; client-side JavaScript that calls GET /search and renders results without full page reload; all form inputs have associated <label> elements; the page uses semantic HTML elements (e.g., <header>, <main>, <section>)",
+    "GET /search with valid params (from, to, date in YYYY-MM-DD format, optional adults) returns 200 with JSON { flights: FlightResult[], count, searchedAt } where count === flights.length, searchedAt is a valid ISO-8601 timestamp, and two sequential requests produce distinct searchedAt values; adults defaults to 1 when absent; returns 400 with JSON { error: string } when any required param (from, to, date) is missing, adults is non-numeric, adults ≤ 0, or date is not in YYYY-MM-DD format; all responses have Content-Type application/json",
+    "GET /cheapest with valid params (from, to, date, optional adults) returns 200 with JSON body containing the single cheapest FlightResult (price ≤ all other results); adults defaults to 1 when absent; returns 404 with JSON { error: string } when no flights are found; returns 400 with JSON { error: string } when required params are missing, adults is non-numeric or ≤ 0, or date format is invalid; all responses have Content-Type application/json",
+    "When RAPIDAPI_KEY is absent or empty at startup, /search and /cheapest return 503 with JSON { error: 'RAPIDAPI_KEY not configured' }; when SkyscannerClient throws, /search and /cheapest return 500 with JSON { error: string } and the server continues handling subsequent requests without crash or unhandled rejection; the FlightResult shape in responses matches the type exported by SKY-002",
+    "package.json 'start' script runs 'node dist/server.js'; 'build' script produces dist/server.js and ensures dist/public/index.html exists with content matching src/public/index.html; supertest and @types/supertest are in devDependencies; npx tsc --noEmit exits 0; the / route handler resolves the file path correctly both under tsx src/server.ts (dev) and node dist/server.js (built)",
+    "No JSON error response (any 4xx or 5xx) includes a stack trace, internal file path, or environment variable value in its body",
+    "Requests to undefined routes return HTTP 404"
+  ],
+  "technicalNotes": {
+    "workingDir": "/home/bradleyjerome/projects/skyscanner-app",
+    "files": [
+      "/home/bradleyjerome/projects/skyscanner-app/src/server.ts",
+      "/home/bradleyjerome/projects/skyscanner-app/src/server.test.ts"
+    ],
+    "dependsOn": [
+      "SKY-002"
+    ]
+  },
+  "dependencies": [
+    "SKY-002"
+  ]
+}
+
+Produce your refined output as raw JSON only (no XML tags, no markdown fences, no preamble). Include:
+- "acceptanceCriteria": The FULL merged list (openspec's criteria + your additions/refinements). Every item MUST be an observable outcome, not an implementation instruction.
+- "notes": What you changed and why (be specific — cite which criteria you added/modified/replaced)
+- "splitStories": ALWAYS omit this field. Splitting is openspec's decision alone — never propose
+  split children of your own, even if openspec already split this story.
+- "acAddedBySpeckit": Array of criteria YOU added that were not in openspec's output
+- "acModifiedBySpeckit": Array of {"original":"...","revised":"..."} for criteria you reworded
+- "acFlagged": Array of {"criterion":"...","flag":"..."} for criteria that need human attention
+
+
+# Output
+```json
+{
+  "acceptanceCriteria": [
+    "Importing the server module does not cause any port to be bound; the module exports a named `app` that is an Express application instance usable with supertest without starting a listener; the server reads PORT from the environment with a default of 3000",
+    "GET /health returns HTTP 200 with JSON body { status: 'ok', uptime: <number ≥ 0> } and Content-Type application/json, regardless of whether RAPIDAPI_KEY is set, empty, or absent",
+    "GET / returns HTTP 200 with Content-Type text/html; the response body is byte-identical to the current contents of src/public/index.html on disk; / is never gated by RAPIDAPI_KEY; if index.html is missing at request time, the response is HTTP 500 with JSON { error: string }",
+    "src/public/index.html is a styled dashboard with: a blue (#1a73e8) header containing 'Skyscanner Dashboard' title and subtitle; a centered card (max-width 700px) with a 2-column grid search form containing labeled inputs for from, to, date, and adults; a search button; a status area for error, empty, and success states; client-side JavaScript that calls GET /search and renders results without full page reload; all form inputs have associated <label> elements; the page uses semantic HTML elements (e.g., <header>, <main>, <section>); the status area uses an ARIA live region so that dynamic content updates (error, empty, success) are announced to assistive technology",
+    "GET /search with valid params (from, to, date in YYYY-MM-DD format, optional adults) returns 200 with JSON { flights: FlightResult[], count, searchedAt } where count === flights.length, searchedAt is a valid ISO-8601 timestamp, and two sequential requests produce distinct searchedAt values; adults defaults to 1 when absent; returns 400 with JSON { error: string } when any required param (from, to, date) is missing or an empty string, adults is non-numeric or a decimal value, adults ≤ 0, or date is not a valid calendar date in YYYY-MM-DD format (e.g., 2026-02-30 returns 400); all responses have Content-Type application/json",
+    "GET /cheapest with valid params (from, to, date, optional adults) returns 200 with JSON body containing the single cheapest FlightResult (price ≤ all other results; when multiple flights share the lowest price, exactly one is returned); adults defaults to 1 when absent; returns 404 with JSON { error: string } when no flights are found; returns 400 with JSON { error: string } when required params are missing or empty strings, adults is non-numeric or a decimal value, adults ≤ 0, or date is not a valid calendar date in YYYY-MM-DD format; all responses have Content-Type application/json",
+    "When RAPIDAPI_KEY is absent, empty, or whitespace-only at startup, /search and /cheapest return 503 with JSON { error: 'RAPIDAPI_KEY not configured' }; when SkyscannerClient throws, /search and /cheapest return 500 with JSON { error: string } and the server continues handling subsequent requests without crash or unhandled rejection; the FlightResult shape in responses matches the type exported by SKY-002",
+    "package.json 'start' script runs 'node dist/server.js'; 'build' script produces dist/server.js and ensures dist/public/index.html exists with content matching src/public/index.html; supertest and @types/supertest are in devDependencies; npx tsc --noEmit exits 0; the / route handler resolves the file path correctly both under tsx src/server.ts (dev) and node dist/server.js (built)",
+    "No JSON error response (any 4xx or 5xx) includes a stack trace, internal file path, or environment variable value in its body",
+    "Requests to undefined routes or unsupported HTTP methods on defined routes return HTTP 404 with JSON { error: string } and Content-Type application/json"
+  ],
+  "notes": "Reviewed openspec's 10 ACs for testability, completeness, edge cases, security, and accessibility. Modified 4 criteria and flagged 1 ambiguity. Key changes: (1) AC4 — added ARIA live region requirement for the status area so screen readers announce dynamic updates; (2) AC5 — added empty-string-as-missing for required params, decimal adults rejection, and clarified that date validation includes semantic calendar validity (not just regex pattern); (3) AC6 — same param validation additions as AC5, plus explicit tie-breaking note for cheapest when multiple flights share the lowest price; (4) AC7 — added whitespace-only RAPIDAPI_KEY as equivalent to absent/empty; (5) AC10 — expanded to cover unsupported HTTP methods on defined routes and specified JSON body format for 404 responses. No criteria removed or duplicated.",
+  "acAddedBySpeckit": [],
+  "acModifiedBySpeckit": [
+    {
+      "original": "src/public/index.html is a styled dashboard with: a blue (#1a73e8) header containing 'Skyscanner Dashboard' title and subtitle; a centered card (max-width 700px) with a 2-column grid search form containing labeled inputs for from, to, date, and adults; a search button; a status area for error, empty, and success states; client-side JavaScript that calls GET /search and renders results without full page reload; all form inputs have associated <label> elements; the page uses semantic HTML elements (e.g., <header>, <main>, <section>)",
+      "revised": "src/public/index.html is a styled dashboard with: a blue (#1a73e8) header containing 'Skyscanner Dashboard' title and subtitle; a centered card (max-width 700px) with a 2-column grid search form containing labeled inputs for from, to, date, and adults; a search button; a status area for error, empty, and success states; client-side JavaScript that calls GET /search and renders results without full page reload; all form inputs have associated <label> elements; the page uses semantic HTML elements (e.g., <header>, <main>, <section>); the status area uses an ARIA live region so that dynamic content updates (error, empty, success) are announced to assistive technology"
+    },
+    {
+      "original": "GET /search with valid params (from, to, date in YYYY-MM-DD format, optional adults) returns 200 with JSON { flights: FlightResult[], count, searchedAt } where count === flights.length, searchedAt is a valid ISO-8601 timestamp, and two sequential requests produce distinct searchedAt values; adults defaults to 1 when absent; returns 400 with JSON { error: string } when any required param (from, to, date) is missing, adults is non-numeric, adults ≤ 0, or date is not in YYYY-MM-DD format; all responses have Content-Type application/json",
+      "revised": "GET /search with valid params (from, to, date in YYYY-MM-DD format, optional adults) returns 200 with JSON { flights: FlightResult[], count, searchedAt } where count === flights.length, searchedAt is a valid ISO-8601 timestamp, and two sequential requests produce distinct searchedAt values; adults defaults to 1 when absent; returns 400 with JSON { error: string } when any required param (from, to, date) is missing or an empty string, adults is non-numeric or a decimal value, adults ≤ 0, or date is not a valid calendar date in YYYY-MM-DD format (e.g., 2026-02-30 returns 400); all responses have Content-Type application/json"
+    },
+    {
+      "original": "GET /cheapest with valid params (from, to, date, optional adults) returns 200 with JSON body containing the single cheapest FlightResult (price ≤ all other results); adults defaults to 1 when absent; returns 404 with JSON { error: string } when no flights are found; returns 400 with JSON { error: string } when required params are missing, adults is non-numeric or ≤ 0, or date format is invalid; all responses have Content-Type application/json",
+      "revised": "GET /cheapest with valid params (from, to, date, optional adults) returns 200 with JSON body containing the single cheapest FlightResult (price ≤ all other results; when multiple flights share the lowest price, exactly one is returned); adults defaults to 1 when absent; returns 404 with JSON { error: string } when no flights are found; returns 400 with JSON { error: string } when required params are missing or empty strings, adults is non-numeric or a decimal value, adults ≤ 0, or date is not a valid calendar date in YYYY-MM-DD format; all responses have Content-Type application/json"
+    },
+    {
+      "original": "When RAPIDAPI_KEY is absent or empty at startup, /search and /cheapest return 503 with JSON { error: 'RAPIDAPI_KEY not configured' }; when SkyscannerClient throws, /search and /cheapest return 500 with JSON { error: string } and the server continues handling subsequent requests without crash or unhandled rejection; the FlightResult shape in responses matches the type exported by SKY-002",
+      "revised": "When RAPIDAPI_KEY is absent, empty, or whitespace-only at startup, /search and /cheapest return 503 with JSON { error: 'RAPIDAPI_KEY not configured' }; when SkyscannerClient throws, /search and /cheapest return 500 with JSON { error: string } and the server continues handling subsequent requests without crash or unhandled rejection; the FlightResult shape in responses matches the type exported by SKY-002"
+    },
+    {
+      "original": "Requests to undefined routes return HTTP 404",
+      "revised": "Requests to undefined routes or unsupported HTTP methods on defined routes return HTTP 404 with JSON { error: string } and Content-Type application/json"
+    }
+  ],
+  "acFlagged": [
+    {
+      "criterion": "GET /cheapest with valid params ... when multiple flights share the lowest price, exactly one is returned",
+      "flag": "Tie-breaking for cheapest is unspecified — the AC says 'exactly one is returned' but does not mandate which one (e.g., first by departure time, first in API response order, etc.). If deterministic output matters for testing, a tie-break rule should be specified. Otherwise, tests should only assert that the returned flight's price equals the minimum, not which specific flight is returned."
+    },
+    {
+      "criterion": "GET /search ... date is not a valid calendar date in YYYY-MM-DD format (e.g., 2026-02-30 returns 400)",
+      "flag": "Clarified 'YYYY-MM-DD format' to include semantic calendar validation (rejecting impossible dates like Feb 30). This raises the bar beyond a simple regex check — implementer must use date parsing that rejects invalid calendar dates, not just pattern matching. If only format-pattern validation is intended, this should be relaxed."
+    }
+  ]
+}
+```

@@ -1,0 +1,11 @@
+[0;36m[wt-health][0m Checking worktree: primary (/home/bradleyjerome/projects/ai/epam-test-apps/hello-world/../hello-world-wt-primary)
+[0;36m[wt-health][0m Checking worktree: independent (/home/bradleyjerome/projects/ai/epam-test-apps/hello-world/../hello-world-wt-independent)
+[1;33m[wt-health WARN][0m Worktree 'independent' has 2 uncommitted file(s):
+[1;33m[wt-health WARN][0m   ?? formatDate.test.ts
+[1;33m[wt-health WARN][0m   ?? formatDate.ts
+[1;33m[wt-health WARN][0m Worktree 'independent': 0 commits AND 2 untracked files -- agent ran but never committed
+[0;36m[wt-health][0m AUTO_COMMIT=true -- committing uncommitted files in 'independent'...
+[wt-independent 74f8ff4] chore(wt-independent): auto-commit agent output for phase hello_world_test
+ 2 files changed, 18 insertions(+), 21 deletions(-)
+[0;32m[wt-health OK][0m Auto-committed 2 file(s) in worktree 'independent'
+[0;32m[wt-health OK][0m All worktrees healthy

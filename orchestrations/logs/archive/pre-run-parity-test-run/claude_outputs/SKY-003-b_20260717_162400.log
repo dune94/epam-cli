@@ -1,0 +1,141 @@
+=== Prompt for SKY-003-b (attempt 1) ===
+## SPEC-REALITY MISMATCH (auto-detected — the description/ACs above contain a WRONG file path)
+The following path(s) in this story's own description/ACs do NOT match the real file a dependency actually built. TRUST THE CONTRACT SECTION BELOW, NOT THE WRONG PATH ABOVE:
+- Description/ACs say `src/cli.test.ts` — the REAL file is at `/home/bradleyjerome/projects/skyscanner-app/src/cli.ts`. Use the real path.CRITICAL — WRITE FILES FIRST. Your FIRST tool call MUST be WriteFile.
+Do NOT output any text before calling WriteFile. Do NOT plan or say "I will...".
+Call WriteFile NOW for the EXACT ABSOLUTE PATHS listed below:
+
+   - WRITE /home/bradleyjerome/projects/skyscanner-app/src/cli.test.ts first, before any other action
+---
+
+Implement user story SKY-003-b: Test flight search CLI — argument validation, table rendering, and error paths
+
+## Story Description
+Create `src/cli.test.ts` with vitest tests covering all CLI behaviours: argument validation (missing flags, invalid --date, invalid --adults), missing RAPIDAPI_KEY env var, successful multi-row table rendering with separator and alignment verification, empty-result output, and error handling when the client throws. `SkyscannerClient` must be mocked at the module boundary.
+
+## Acceptance Criteria
+- `src/cli.test.ts` exists and uses vitest with `SkyscannerClient` mocked at the module boundary
+- Test: missing `--from` → exit 2 with usage hint to stderr; missing `--to` → exit 2; missing `--date` → exit 2
+- Test: `--date` value not matching `YYYY-MM-DD` → exit 2 with message to stderr before any network call
+- Test: invalid `--adults` value (non-integer, ≤0, non-numeric) → exit 2 with message to stderr
+- Test: missing `RAPIDAPI_KEY` env var → exit 1 with 'Error: RAPIDAPI_KEY environment variable is required' to stderr
+- Test: table rendered correctly for valid multi-row results — verifies header row labels, separator row present, column alignment (left-aligned except Price right-aligned), and currency symbol prefix with £ fallback
+- Test: empty-array result renders exactly `No flights found.` to stdout and exits 0
+- Test: client throws → error message written to stderr, exit 1, stdout empty; `vitest run` exits 0 with all tests green; no new runtime deps added
+
+
+## Test Criteria (ground truth — written from actual source; overrides any conflicting AC)
+- CLI entry point is src/cli.ts with shebang #!/usr/bin/env node
+- Imports SkyscannerClient, FlightResult, SearchParams from './skyscanner/client'
+- USAGE string is 'Usage: node dist/cli.js --from <IATA> --to <IATA> --date <YYYY-MM-DD> [--adults <n>]'
+- parseArgs function parses process.argv starting at index 2
+- CLI flags use double-dash format: --from, --to, --date, --adults
+- Missing --from → printUsageAndExit() writes USAGE to stderr and exits with code 2
+- Missing --to → printUsageAndExit() writes USAGE to stderr and exits with code 2
+- Missing --date → printUsageAndExit() writes USAGE to stderr and exits with code 2
+- --date validation uses regex /^\d{4}-\d{2}-\d{2}$/ - exits 2 with message 'Error: --date must match pattern YYYY-MM-DD (received "<value>")' to stderr if invalid
+- --adults defaults to 1 when not provided
+- --adults validation uses /^-?\d+$/ regex - exits 2 with message 'Error: --adults must be a positive integer (received "<value>")' to stderr if non-numeric
+- --adults exits 2 with same message if parsed value <= 0 (includes negative numbers and zero)
+- ensureApiKey() checks process.env['RAPIDAPI_KEY'] - exits 1 with 'Error: RAPIDAPI_KEY environment variable is required' to stderr if missing or empty
+- SkyscannerClient instantiated with { apiKey: process.env['RAPIDAPI_KEY'] }
+- client.searchFlights() receives SearchParams with keys: origin (from parsed.from), destination (from parsed.to), date, adults
+- renderTable() uses headers: ['Airline', 'Price', 'Departure', 'Arrival', 'Duration', 'Stops']
+- Currency symbol taken from results[0]?.currency ?? '£' (pounds fallback)
+- Price column uses padRight (left-padded, right-aligned) - all other columns use padLeft (right-padded, left-aligned)
+- Table format: header row, separator row of dashes, data rows; cells joined with '  ' (two spaces)
+- Empty results array → writes 'No flights found.\n' to stdout and exits 0
+- Non-empty results → writes rendered table to stdout and exits 0
+- Client throws → writes 'Error: <message>\n' to stderr, exits 1, stdout empty
+- Error handling catches any error, uses err.message if Error instance, else String(err)
+
+## Mock Strategy
+vi.mock('./skyscanner/client') with vi.hoisted(() => ({ SkyscannerClient: vi.fn() })) and mock constructor return value; use vi.stubGlobal('process', { ...process, exit: vi.fn(), stdout: { write: vi.fn() }, stderr: { write: vi.fn() } }) to capture exit codes and output; beforeEach uses vi.clearAllMocks()
+
+## Banned Patterns (must NOT appear in your file)
+origin/destination as CLI flags (CLI uses --from/--to, only SearchParams uses origin/destination), --origin or --destination flags, jest instead of vitest, @jest/globals, mocking at './client' (must be './skyscanner/client'), exit code 0 for missing required args, exit code 2 for RAPIDAPI_KEY error (must be exit 1), exit code 1 for missing --from/--to/--date (must be exit 2), positive integer validation allowing zero (zero is rejected), right-aligned Price column (Price is left-padded/right-aligned, others are left-aligned)
+
+## Technical Notes
+- files: ["/home/bradleyjerome/projects/skyscanner-app/src/cli.test.ts"]
+- dependsOn: ["SKY-003-a","SKY-002"]
+
+## Files to Create/Modify (EXACT ABSOLUTE PATHS — write to these paths exactly)
+/home/bradleyjerome/projects/skyscanner-app/src/cli.test.ts
+
+## Dependencies
+SKY-002, SKY-003-a
+
+
+## Instructions
+**CRITICAL — WRITE FILES FIRST:**
+   - WRITE /home/bradleyjerome/projects/skyscanner-app/src/cli.test.ts first, before any other action
+**You MUST write every file listed above to its EXACT absolute path. Do NOT write to a different path, do NOT write to the current directory unless it matches the path above. Use your WriteFile or Edit tools with the full absolute path shown.**
+
+1. Write each required file to its exact absolute path listed above — do this FIRST before anything else
+2. Implement all acceptance criteria for this story
+3. Test Criteria facts above are ground truth — your test assertions MUST match them exactly
+4. Do NOT create tests unless explicitly required in acceptance criteria
+
+After implementation, provide a brief summary of what was created/modified.
+
+## Relevant Knowledge Base Entries
+The following was learned from previous story implementations and is relevant to your agent role. Apply this knowledge before writing any code:
+
+- [2026-07-07T14:33:39Z] Check the source before writing CLI tests to verify whether output uses console.log or process.stdout.write, then spy on whichever it actually uses.
+- [2026-07-07T18:54:47Z] Always export classes using a named export. Never use a default export for a class, and never declare a class without exporting it.
+- [2026-07-14T10:23:13Z] Always: In strict TypeScript, always annotate callback parameters with explicit types (e.g., `.map((c: Column) =>` not `.map(c =>`). Never rely on implicit any inference for array method callbacks.
+- [2026-07-15T02:48:02Z] Never access ECMAScript private fields (#fieldName) from outside the class in test code — TypeScript cannot parse it and will emit TS1005/TS1109. Test private state indirectly through public methods o
+- [2026-07-15T03:53:06Z] NEVER modify files inside node_modules/ — if a dependency is missing or has wrong types, add it to package.json devDependencies/dependencies and run npm install. If a type mismatch exists, use declara
+- [2026-07-15T04:03:31Z] Never modify any file inside node_modules/ — only edit source files under src/ or config files like package.json/tsconfig.json. If a dependency is missing, add it to package.json devDependencies and r
+- [2026-07-16T16:27:50Z] Never use top-level await in test files — the project uses CommonJS modules which forbid it. Wrap any async setup in an async function called from the test body or inside beforeAll/beforeEach.
+
+## Knowledge Base Contribution (do this LAST — after writing all implementation files)
+Your assigned KB entry ID for this run: **KB-008**
+
+IMPORTANT: Write ALL implementation files first. Only AFTER writing every required file should you optionally append a KB entry.
+Do NOT read orchestrations/agents/KB.md before writing implementation files. The relevant KB entries are already injected above.
+
+If (and only if) you discover a non-obvious pattern during implementation, append one entry to `orchestrations/agents/KB.md`:
+
+```markdown
+## KB-008 -- 2026-07-17
+
+**Category:** <backend|frontend|infrastructure|testing|orchestration>
+**AgentRole:** <your agentRole from the story>
+**Tags:** <comma-separated tech keywords, e.g. typescript, node, cli>
+**Trigger:** <retry|first-success>
+**StoryRef:** SKY-003-b
+
+<One concise paragraph: the specific pattern, gotcha, or anti-pattern.>
+```
+
+Only write an entry if the knowledge is genuinely non-obvious. Skip trivial observations.
+
+## Execution Plan
+Follow this plan step by step:
+1. Read `/home/bradleyjerome/projects/skyscanner-app/src/cli.ts` to understand the CLI entry point function signature, argument parsing logic, table rendering implementation, error handling paths, and how `SkyscannerClient` is imported/used.
+
+2. Read `/home/bradleyjerome/projects/skyscanner-app/package.json` to confirm vitest is already a dev dependency and identify any existing test configuration or scripts.
+
+3. Create `/home/bradleyjerome/projects/skyscanner-app/src/cli.test.ts` with vitest imports, `vi.mock()` to mock the module that exports `SkyscannerClient` at the boundary, and a helper that spawns the CLI as a child process (or invokes the main function directly with mocked `process.argv`, `process.exit`, `console.error`, `console.log`, and `process.env`) to capture exit codes, stdout, and stderr per test case.
+
+4. Add test group for missing required arguments: three tests asserting that omitting `--from`, `--to`, and `--date` respectively causes exit code 2 and a usage-hint message on stderr — verify no network call is made by checking the mocked client constructor/search method was never invoked.
+
+5. Add test for invalid `--date` format: pass values like `2024-1-1`, `not-a-date`, `2024/01/01` and assert exit 2 with a descriptive stderr message, confirming the mock client's search method is never called.
+
+6. Add test for invalid `--adults` values: pass `0`, `-1`, `1.5`, `abc` and assert each produces exit 2 with an error message to stderr, with no client invocation.
+
+7. Add test for missing `RAPIDAPI_KEY` env var: delete `process.env.RAPIDAPI_KEY`, provide valid `--from`, `--to`, `--date`, and assert exit 1 with exact stderr string `Error: RAPIDAPI_KEY environment variable is required`.
+
+8. Add test for successful multi-row results: mock `SkyscannerClient.searchFlights` to resolve with an array of ≥2 flight objects, invoke CLI with valid args and `RAPIDAPI_KEY` set, then assert stdout contains the header row with correct column labels, a separator row (`---` or similar), left-aligned columns except Price right-aligned, and currency symbol prefix (e.g., `£`) on price values.
+
+9. Add test for empty-array results: mock the client to resolve with `[]`, assert stdout is exactly `No flights found.` and exit code is 0. Add test for client error: mock the client to reject/throw, assert the error message appears on stderr, stdout is empty, and exit code is 1.
+
+10. Run `npx vitest run src/cli.test.ts` and verify all tests pass with exit code 0; confirm no new runtime dependencies were added to `package.json`.
+=== End Prompt ===
+
+=== epam Output (attempt 1) ===
+All tests pass. However, I need to add more tests for the empty results and client error scenarios. The current empty results test is conditional and doesn't actually verify the behavior. I need to mock the client properly. Let me rewrite the tests to use a proper mocking approach with vitest's mocking capabilities:
+All tests pass. However, I need to add more tests for the empty results and client error scenarios. The current empty results test is conditional and doesn't actually verify the behavior. I need to mock the client properly. Let me rewrite the tests to use a proper mocking approach with vitest's mocking capabilities:
+
+=== End epam Output ===

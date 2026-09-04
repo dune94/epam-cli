@@ -1,0 +1,78 @@
+Completion message appended to the agent-messages bus. Here is the execution-ready plan.
+
+---
+
+# Execution Plan — HW-003
+
+**Title:** Code review `greet.ts` against HW-001 acceptance criteria
+**Type:** review · **Role:** review-agent · **Phase:** hello_world_test · **Priority:** high
+**Single deliverable:** `<git-root>/review/HW-003-review.md` (Markdown report; 4 sections in fixed order)
+
+## 0. Situational summary (verified now)
+| Fact | State | Consequence |
+|---|---|---|
+| `greet.ts` | Present, correct impl | Happy path; not the missing-file branch (AC-4) |
+| `greet.test.ts` | Present (3 tests, imports `./greet.js`) | Test suite will execute |
+| `node_modules/.bin/vitest` | Present (symlink) | Not the missing-binary branch (AC-5) |
+| `~/.nvm/.../v20.20.0/bin/node` | **MISSING** | Literal test command in AC-9 fails → need node fallback |
+| Git repo (`.git` up the tree) | **None** | AC-1 git-root + AC-13 git-diff unsatisfiable as written |
+| `review/HW-003-review.md` | Absent | Happy path; not pre-existing-report branch (AC-3) |
+| `review/` dir | Exists | AC-2 dir-creation is a no-op |
+| HW-001 ACs | 15 (N=15) | Checklist = AC-1…AC-15 verbatim |
+
+## 1. Implementation steps (with target paths)
+1. **Resolve git root** → ascend from project dir for nearest `.git/`. *None exists.* Apply documented fallback: use project root `/home/bradleyjerome/projects/ai/epam-test-apps/hello-world` as the base and record a finding (see Risk R1). Target base for all paths below.
+2. **Ensure `review/` exists** (unconditional `mkdir -p`) → `review/` (already present).
+3. **Pre-existing report check** → stat `review/HW-003-review.md`. Absent ⇒ proceed (no halt).
+4. **Source-file presence check** → confirm `greet.ts` + `greet.test.ts` exist (both do). If either absent, short-circuit to AC-4 branch.
+5. **Vitest binary check** → confirm `./node_modules/.bin/vitest` resolvable (it is). If absent, AC-5 branch.
+6. **Run tests with 60 s wall-clock timeout** → preferred command `./node_modules/.bin/vitest run` via a resolvable node (fallback for missing v20.20.0 path: current `node`/`npx`). Capture combined stdout+stderr + numeric exit code; SIGTERM on timeout.
+7. **Evaluate all 15 HW-001 ACs** against `greet.ts`/`greet.test.ts` + test result; mark each PASS/FAIL. Includes HW-001 AC-15 (`tsc --noEmit`) and AC-8 (no side effects) — evaluate, don't just copy.
+8. **Compute verdict** per AC-10/AC-11 (PASS only if all 15 PASS ∧ exit 0 ∧ zero Blockers).
+9. **Assemble & write report** → `review/HW-003-review.md` with `## Summary`, `## Criteria Checklist`, `## Findings`, `## Test Output` in that order. Findings sorted Blocker→Major→Minor, then file-path alphabetical.
+10. **Verify no source mutation** → AC-13 `git diff -- greet.ts greet.test.ts package.json`. No git ⇒ fallback integrity check (hash/mtime compare) + record finding.
+11. **Exit code** → `0` if verdict PASS, `≥1` if FAIL (AC-12).
+
+## 2. Dependency validation
+| Dependency | Satisfied | Reason |
+|---|---|---|
+| HW-001 (greet impl) | **Yes** | Story `completed:true`; `greet.ts` present with exact signature |
+| HW-002 (tests pass) | **Yes** | Story `completed:true`; vitest + 3 tests present |
+| HW-001 AC payload (for verbatim checklist) | **Yes** | 15 ACs available from PRD; N=15 confirmed |
+| `node_modules`/vitest binary | **Yes** | `./node_modules/.bin/vitest` resolves |
+| node v20.20.0 at hardcoded path | **No** | Path absent; requires resolvable-node fallback |
+| Git root / `git` for AC-1 & AC-13 | **No** | No `.git` anywhere up the tree |
+| Output log bus | **Yes** | `epam-cli/orchestrations/logs/agent-messages.jsonl` exists & writable (message already appended) |
+
+## 3. Risk register (top 3)
+1. **R1 — No git repository (AC-1 + AC-13 unsatisfiable).** *Mitigation:* fall back to project root as the path base; replace `git diff` with a content-hash/mtime integrity check on the 3 protected files; record a **Major** finding documenting the deviation so the verdict reflects reality rather than silently passing.
+2. **R2 — Hardcoded node `v20.20.0` path missing (AC-9 command fails → false "timeout"/non-zero).** *Mitigation:* detect the missing interpreter and invoke vitest through a resolvable node (`node ./node_modules/.bin/vitest run` or `npx vitest run`); note the substitution in `## Test Output` so exit-code semantics stay honest.
+3. **R3 — Verbatim/format invariants drift (AC-6 single-word verdict line, AC-7 sort order, AC-8 exact AC text, AC-9 fenced block + `Exit code:` line).** *Mitigation:* template the report; copy HW-001 AC strings programmatically from the PRD payload (never retype); lint the output (one-word `## Summary` line, severity sort, exit-code line outside the fence) before writing.
+
+## 4. Test plan
+- **No new product tests** — review story; it adds no source code, only a report.
+- **Verification actions the agent performs:** run `vitest run` (expect `Test Files: 1 passed`, `Tests: 3 passed`, exit 0); evaluate HW-001 AC-15 via `tsc --noEmit`.
+- **Regression scope:** `greet.ts`, `greet.test.ts`, `package.json` must be byte-identical pre/post (AC-13 / integrity fallback). Protected paths `.epam/`, `orchestrations/` untouched. No modification to `tsconfig.json`/`main.ts`.
+
+## 5. Acceptance-criteria → step mapping
+| AC | Step |
+|---|---|
+| AC-1 git-root resolution | Step 1 (+R1 fallback) |
+| AC-2 create `review/` unconditionally | Step 2 |
+| AC-3 pre-existing-report halt | Step 3 |
+| AC-4 missing source files branch | Step 4 |
+| AC-5 vitest-binary-missing branch | Step 5 |
+| AC-6 single-word `## Summary` verdict | Steps 8, 9 |
+| AC-7 `## Findings` format + severity sort | Step 9 |
+| AC-8 HW-001 ACs verbatim (AC-1…15) | Step 7, 9 |
+| AC-9 60 s timeout, fenced output + `Exit code:` | Step 6, 9 (+R2) |
+| AC-10 PASS conditions | Step 8 |
+| AC-11 FAIL conditions | Step 8 |
+| AC-12 process exit code mirrors verdict | Step 11 |
+| AC-13 no source mutation (git diff) | Step 10 (+R1 fallback) |
+
+## 6. Cost / effort forecast
+- **PRD estimate:** `estimatedHours 0.0701` (~4.2 AI-min, 8 turns, ~33.6k tokens, ~$0.16).
+- **Assessment:** **Adjust upward to ~0.10–0.12 h (~6–7 AI-min).** The two environment deviations (R1 no git, R2 missing node path) each force a detection-and-fallback branch plus a documented finding that the base estimate assumes away. Token/turn count likely +25–40%. Cost remains well under $0.25 — low absolute, but the base figure understates the branching now required.
+
+**Hand-off:** plan_summary record written to `agent-messages.jsonl` (`to_agent: review-agent`). No source or protected files were modified during planning.

@@ -1,0 +1,3 @@
+The story AMSD-1820 already has all three fields set (model="MiniMax-M3", aiProvider="minimax", reasoningEffort="medium"). Per rule 1, it should be left completely untouched. My earlier plan was incorrect — no assignment is needed.
+
+{"assigned_count":0,"stories":[],"reason":"All pending stories already have model assignments"}

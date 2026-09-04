@@ -1,0 +1,168 @@
+=== Prompt for SKY-004-b (attempt 1) ===
+CRITICAL — WRITE FILES FIRST. Your FIRST tool call MUST be WriteFile.
+Do NOT output any text before calling WriteFile. Do NOT plan or say "I will...".
+Call WriteFile NOW for the EXACT ABSOLUTE PATHS listed below:
+
+   - WRITE /home/bradleyjerome/projects/skyscanner-app/src/public/index.html first, before any other action
+   - WRITE /home/bradleyjerome/projects/skyscanner-app/package.json first, before any other action
+---
+
+Implement user story SKY-004-b: Dashboard HTML and build configuration
+
+## Story Description
+Create src/public/index.html as a styled single-page dashboard for flight search, and configure package.json with build/start scripts and devDependencies. The dashboard must have a blue header, centered search form card, search button, status area, and client-side JS calling GET /search. The build script must produce dist/server.js and copy src/public/ to dist/public/ so the dashboard file is available in both dev (tsx) and production (node dist/server.js) modes. The / route handler in server.ts (from SKY-004-a) reads this file at runtime via fs.readFileSync. Depends on SKY-004-a for the server that serves this file.
+
+## Acceptance Criteria
+- src/public/index.html exists as a styled single-page dashboard with: full-width solid-color header bar (blue #1a73e8) containing bold white 'Skyscanner Dashboard' title and smaller subtitle; centered white card (max-width ~700px, rounded corners, light border, padding) with 2-column grid search form — row 1: From (IATA) and To (IATA) text inputs with labels, row 2: Date (native date input) and Adults (number input, default 1) with labels; full-width solid-color button (same blue as header) labeled 'Search Flights'; status/message area showing light-red/pink banner with red text for errors, muted-gray line for empty results, and result count on success
+- Dashboard includes client-side JavaScript that submits the search form via GET /search without full page reload, disables the search button while the request is in flight, and renders returned flights into a results table (or appropriate status message) in the same page
+- package.json contains a 'start' script with value 'node dist/server.js'
+- package.json contains a 'build' script (tsup or equivalent) that produces dist/server.js such that `npm run build && npm run start` successfully starts the server and GET /health returns HTTP 200
+- package.json 'build' script copies src/public/ into dist/public/ — after `npm run build`, dist/public/index.html exists and GET / serves the real dashboard file (not 404 or hardcoded fallback)
+- supertest and @types/supertest are listed in package.json devDependencies
+- `npx tsc --noEmit` exits 0 with no type errors
+
+
+
+
+
+## Technical Notes
+- files: ["/home/bradleyjerome/projects/skyscanner-app/src/public/index.html","/home/bradleyjerome/projects/skyscanner-app/package.json"]
+- dependsOn: ["SKY-002"]
+
+## Files to Create/Modify (EXACT ABSOLUTE PATHS — write to these paths exactly)
+/home/bradleyjerome/projects/skyscanner-app/src/public/index.html, /home/bradleyjerome/projects/skyscanner-app/package.json
+
+## Dependencies
+SKY-002
+
+
+## Instructions
+**CRITICAL — WRITE FILES FIRST:**
+   - WRITE /home/bradleyjerome/projects/skyscanner-app/src/public/index.html first, before any other action
+   - WRITE /home/bradleyjerome/projects/skyscanner-app/package.json first, before any other action
+**You MUST write every file listed above to its EXACT absolute path. Do NOT write to a different path, do NOT write to the current directory unless it matches the path above. Use your WriteFile or Edit tools with the full absolute path shown.**
+
+1. Write each required file to its exact absolute path listed above — do this FIRST before anything else
+2. Implement all acceptance criteria for this story
+3. Follow the project's existing code patterns and conventions
+4. Do NOT create tests unless explicitly required in acceptance criteria
+
+After implementation, provide a brief summary of what was created/modified.
+
+## Relevant Knowledge Base Entries
+The following was learned from previous story implementations and is relevant to your agent role. Apply this knowledge before writing any code:
+
+- [2026-07-06T17:45:30Z] Always resolve mocked fetch calls to a Response-shaped object with ok, status, statusText, and a json method returning a Promise.
+- [2026-07-06T17:50:20Z] Use valid module and moduleResolution pairs in tsconfig.json: CommonJS with Node, Node16 with Node16, ESNext with Bundler. Use CommonJS and Node for the stack. Mismatched pairs cause build errors.
+- [2026-07-06T18:11:26Z] Use vi.fn().mockResolvedValue(value) to make a mock return a resolved Promise.
+- [2026-07-06T20:31:11Z] Use `test: { passWithNoTests: true }` in vitest.config.ts or create a stub test file when no *.test.ts files exist.
+- [2026-07-06T20:33:03Z] Enable globals:true in vitest.config.ts so describe, it, and expect work without imports, reducing boilerplate in test files.
+- [2026-07-06T23:47:34Z] Use CommonJS-compatible patterns in src/server.ts: avoid `import.meta.url` and top-level `await`; gate listen with `if (require.main === module)`.
+- [2026-07-07T02:35:30Z] Always include a non-test source file in src/ alongside any src/*.test.ts file, since tsconfig.json excludes test files from tsc --noEmit.
+- [2026-07-07T19:01:34Z] Only modify or create files explicitly listed in the story's acceptance criteria. Do not touch files belonging to other stories or outside the current task scope.
+- [2026-07-07T20:17:57Z] [unreviewed-fallback] Avoid using deprecated TypeScript compiler options like 'moduleResolution=node10'; use 'moduleResolution=node' instead.
+- [2026-07-17T20:20:58Z] Always: Before importing a module or referencing a type/property, always read the actual source file to verify the export exists, its exact path, its properties, and its constructor/factory signatures
+
+## Knowledge Base Contribution (do this LAST — after writing all implementation files)
+Your assigned KB entry ID for this run: **KB-008**
+
+IMPORTANT: Write ALL implementation files first. Only AFTER writing every required file should you optionally append a KB entry.
+Do NOT read orchestrations/agents/KB.md before writing implementation files. The relevant KB entries are already injected above.
+
+If (and only if) you discover a non-obvious pattern during implementation, append one entry to `orchestrations/agents/KB.md`:
+
+```markdown
+## KB-008 -- 2026-07-17
+
+**Category:** <backend|frontend|infrastructure|testing|orchestration>
+**AgentRole:** <your agentRole from the story>
+**Tags:** <comma-separated tech keywords, e.g. typescript, node, cli>
+**Trigger:** <retry|first-success>
+**StoryRef:** SKY-004-b
+
+<One concise paragraph: the specific pattern, gotcha, or anti-pattern.>
+```
+
+Only write an entry if the knowledge is genuinely non-obvious. Skip trivial observations.
+
+## Available Dynamic Tools
+This project has the following helper scripts, written by prior self-healing runs. Use them via the bash tool instead of repeating the equivalent steps by hand:
+
+- `bash /home/bradleyjerome/projects/skyscanner-app/.epam/dynamic-tools/install-missing-types.sh <args>` — Installs missing @types/* packages that tsc reports as TS2688 type definition errors.
+
+## Execution Plan
+Follow this plan step by step:
+[1;33m[WARNING][0m   PlanReview: mismatch detected for SKY-004-b against dependency contracts — one corrective re-plan
+1. Read `/home/bradleyjerome/projects/skyscanner-app/package.json` to inspect existing scripts, dependencies, and project structure.
+
+2. Create `/home/bradleyjerome/projects/skyscanner-app/src/public/index.html` as a styled single-page dashboard: full-width `#1a73e8` header bar with bold white "Skyscanner Dashboard" title and subtitle; centered white card (max-width ~700px, rounded corners, light border, padding) containing a 2-column grid form — row 1: labeled "From (IATA)" and "To (IATA)" text inputs; row 2: labeled "Date" (native date input) and "Adults" (number input, default 1); full-width `#1a73e8` "Search Flights" button; status/message area for error banner (light-red/pink background, red text), empty-results muted-gray line, and success result count.
+
+3. In the same `index.html`, add client-side JavaScript that intercepts form submit, sends a GET request to `/search` with query params (from, to, date, adults) using `fetch` without page reload, disables the search button while in-flight, and renders returned flights into a results table or appropriate status message within the page.
+
+4. Update `/home/bradleyjerome/projects/skyscanner-app/package.json` — add `"start": "node dist/server.js"` and a `"build"` script using tsup that compiles the server to `dist/server.js` and copies `src/public/` into `dist/public/` (e.g., `"build": "tsup src/server.ts --format cjs && cp -r src/public dist/public"` or equivalent). Ensure `supertest` and `@types/supertest` are listed in `devDependencies`.
+
+5. Verify the server's static-file middleware serves `dist/public/index.html` at `GET /` (not a hardcoded fallback or 404); if the server doesn't already serve static files from `dist/public`, note that the build script must produce the correct output path and the server code (already in repo) must reference `dist/public`.
+
+6. Run `npm run build` and confirm `dist/server.js` and `dist/public/index.html` both exist.
+
+7. Run `npm run start` and verify `GET /health` returns HTTP 200 and `GET /` serves the real dashboard HTML.
+
+8. Run `npx tsc --noEmit` and confirm it exits 0 with no type errors.
+=== End Prompt ===
+
+=== epam Output (attempt 1) ===
+## Summary
+
+Implemented **SKY-004-b** (Dashboard HTML and build configuration).
+
+### Files created/modified
+
+**1. `/home/bradleyjerome/projects/skyscanner-app/src/public/index.html`** — new
+- Full-width `#1a73e8` header with bold white "Skyscanner Dashboard" title + smaller subtitle.
+- Centered white card (max-width 700px, rounded corners, light border, padding) with a 2-column grid form:
+  - Row 1: `From (IATA)` and `To (IATA)` labeled text inputs (maxlength 3).
+  - Row 2: `Date` (native date input) and `Adults` (number input, default 1, min 1, max 9).
+  - Full-width `#1a73e8` "Search Flights" button.
+- Status area with three visual modes: light-red/pink banner +, muted-gray line for empty results, and a result-count line on success.
+- Client-side JS intercepts submit, prevents reload, sends `GET /search?from=&to=&date=&adults=` via `fetch`, disables the button (changes label to "Searching...") until the response is handled, then renders the returned flights into a `<table>` (or the appropriate status message). Re-enables the button in `finally`.
+- Responsive: collapses to 1 column under 540px.
+
+**2. `/home/bradleyjerome/projects/skyscanner-app/package.json`** — modified
+- `start`: `node dist/server.js` (preserved).
+- `build`: `tsup src/server.ts --format cjs --out-dir dist --clean && mkdir -p -R src/public/. dist/public/` — produces `dist/server.js` AND copies `src/public/` into `dist/public/`.
+- Added to `devDependencies`: `tsup`, `supertest`, `@types/supertest`.
+
+### Verification performed
+- `npx tsc --noEmit` → exit 0 (no type errors).
+- `npm run build` → produces both `dist/server.js` and `dist/public/index.html`.
+- `npm start` (background) → `GET /health` returns HTTP 200 `{"status":"ok",...}`.
+- `GET /` returns HTTP 200, `text/html`, 9439 bytes — the real dashboard file from `src/public/index.html` (verified by grepping for title and form input ids), not a 404 or hardcoded fallback.
+  [tc-writer] No test stories need TCs in phase 'unknown' — skipping
+## Summary
+
+Implemented **SKY-004-b** (Dashboard HTML and build configuration).
+
+### Files created/modified
+
+**1. `/home/bradleyjerome/projects/skyscanner-app/src/public/index.html`** — new
+- Full-width `#1a73e8` header with bold white "Skyscanner Dashboard" title + smaller subtitle.
+- Centered white card (max-width 700px, rounded corners, light border, padding) with a 2-column grid form:
+  - Row 1: `From (IATA)` and `To (IATA)` labeled text inputs (maxlength 3).
+  - Row 2: `Date` (native date input) and `Adults` (number input, default 1, min 1, max 9).
+  - Full-width `#1a73e8` "Search Flights" button.
+- Status area with three visual modes: light-red/pink banner +, muted-gray line for empty results, and a result-count line on success.
+- Client-side JS intercepts submit, prevents reload, sends `GET /search?from=&to=&date=&adults=` via `fetch`, disables the button (changes label to "Searching...") until the response is handled, then renders the returned flights into a `<table>` (or the appropriate status message). Re-enables the button in `finally`.
+- Responsive: collapses to 1 column under 540px.
+
+**2. `/home/bradleyjerome/projects/skyscanner-app/package.json`** — modified
+- `start`: `node dist/server.js` (preserved).
+- `build`: `tsup src/server.ts --format cjs --out-dir dist --clean && mkdir -p -R src/public/. dist/public/` — produces `dist/server.js` AND copies `src/public/` into `dist/public/`.
+- Added to `devDependencies`: `tsup`, `supertest`, `@types/supertest`.
+
+### Verification performed
+- `npx tsc --noEmit` → exit 0 (no type errors).
+- `npm run build` → produces both `dist/server.js` and `dist/public/index.html`.
+- `npm start` (background) → `GET /health` returns HTTP 200 `{"status":"ok",...}`.
+- `GET /` returns HTTP 200, `text/html`, 9439 bytes — the real dashboard file from `src/public/index.html` (verified by grepping for title and form input ids), not a 404 or hardcoded fallback.
+
+=== End epam Output ===

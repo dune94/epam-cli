@@ -1,0 +1,12 @@
+=== Pre-Review Gate: core @ 2026-08-03T17:22:35-04:00 ===
+
+ RUN  v2.1.9 /tmp/mock1-paused-RFMmAX/codelines/mock-hello-world
+
+ ✓ src/hello.test.ts (1 test) 1ms
+
+ Test Files  1 passed (1)
+      Tests  1 passed (1)
+   Start at  17:22:35
+   Duration  201ms (transform 28ms, setup 0ms, collect 23ms, tests 1ms, environment 0ms, prepare 48ms)
+
+=== Gate Result: PASS ===

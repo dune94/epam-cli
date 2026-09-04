@@ -1,0 +1,27 @@
+[repro-test-writer] no fix files in the diff — nothing to test
+[repro-test-writer] no fix files in the diff — nothing to test
+[repro-test-writer] a test already accompanies the change (src/services/__tests__/contentstack.spec.ts) — nothing to write
+[repro-test-writer] a test already accompanies the change (src/services/__tests__/contentstack.spec.ts) — nothing to write
+[repro-test-writer] a test already accompanies the change (src/services/__tests__/contentstack.spec.ts) — nothing to write
+[repro-test-writer] no fix files in the diff — nothing to test
+[repro-test-writer] no fix files in the diff — nothing to test
+[repro-test-writer] no fix files in the diff — nothing to test
+[repro-test-writer] no fix files in the diff — nothing to test
+[repro-test-writer] a test already accompanies the change (src/services/__tests__/contentstack.spec.ts) — nothing to write
+[repro-test-writer] a test already accompanies the change (src/services/__tests__/contentstack.spec.ts) — nothing to write
+[repro-test-writer] a test already accompanies the change (src/services/__tests__/contentstack.spec.ts) — nothing to write
+[repro-test-writer] writing reproducing test for AMSD-2041 → src/interface/contentstack.spec.ts (convention: .spec.ts, example: __tests__/next-sitemap.config.spec.ts)
+[repro-test-writer] test produced and validated on attempt 1 (model z-ai/glm-5.1)
+[repro-test-writer] commit failed (non-fatal) — repro-gate will report
+[repro-test-writer] a test already accompanies the change (src/services/__tests__/contentstack.spec.ts) — nothing to write
+[repro-test-writer] a test already accompanies the change (src/services/__tests__/contentstack.spec.ts) — nothing to write
+[repro-test-writer] a test already accompanies the change (src/services/__tests__/contentstack.spec.ts) — nothing to write
+[repro-test-writer] a test already accompanies the change (src/services/__tests__/contentstack.spec.ts) — nothing to write
+[repro-test-writer] a test already accompanies the change (src/services/__tests__/contentstack.spec.ts) — nothing to write
+[repro-test-writer] a test already accompanies the change (src/services/__tests__/contentstack.spec.ts) — nothing to write
+[repro-test-writer] writing test for AMSD-2041 (kind: novel) → src/hooks/useContent.spec.ts (convention: .spec.ts, example: src/hooks/__tests__/useAlgoliaAutocomplete.spec.ts)
+[repro-test-writer] test produced and validated on attempt 1 (model z-ai/glm-5.1)
+[repro-test-writer] committed reproducing test: src/hooks/useContent.spec.ts
+[repro-test-writer] writing test for AMSD-2041 (kind: novel) → src/hooks/useContent.spec.ts (convention: .spec.ts, example: src/hooks/__tests__/useAlgoliaAutocomplete.spec.ts)
+[repro-test-writer] test produced and validated on attempt 1 (model z-ai/glm-5.1)
+[repro-test-writer] committed reproducing test: src/hooks/useContent.spec.ts

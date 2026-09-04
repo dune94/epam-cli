@@ -1,0 +1,13 @@
+spec-mode: fast-path claude/claude-haiku-4-5-20251001 (skipping MiniMax)
+spec-mode: detective for mockb = mockb-detective (minted for this codeline)
+spec-mode: fast-path claude/claude-haiku-4-5-20251001 (skipping MiniMax)
+spec-mode: fast-path claude/claude-haiku-4-5-20251001 (skipping MiniMax)
+spec-mode: fast-path claude/claude-haiku-4-5-20251001 (skipping MiniMax)
+spec-mode: MOCK3-2 — 4 verification criteria persisted (source: acceptance, resolution: clean)
+spec-mode: ⚠️ MOCK3-2 — fixSiteAnalysis does not cover 1 verification criterion/criteria (e.g. "An empty input produces an empty output without throwing an error."). The prescribed fix may be structurally incomplete.
+spec-mode: fast-path claude/claude-haiku-4-5-20251001 (skipping MiniMax)
+spec-mode: brownfield — ignoring 6 AC(s) speckit produced for MOCK3-2; ACs are out of scope and VCs come from the description
+spec-mode: fast-path claude/claude-haiku-4-5-20251001 (skipping MiniMax)
+spec-mode: fast-path claude/claude-haiku-4-5-20251001 (skipping MiniMax)
+spec-mode: MODEL_REVIEW: "items" is empty — a report about nothing is not a report
+spec-mode: completed for phase core (run 20260828T172102Z)

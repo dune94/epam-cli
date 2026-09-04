@@ -1,0 +1,25 @@
+{
+  "agent": "spec-validator",
+  "phase": "core",
+  "stories": [{
+    "storyId": "MOCK-HW-1",
+    "title": "Hello world greeting should say hello dolly",
+    "criteria": [
+      {
+        "text": "The behavior described in the ticket is observed to be correct after the change: Hello world greeting should say hello dolly",
+        "status": "met",
+        "evidence": "src/hello.ts returns 'hello dolly'; src/hello.test.ts asserts getGreeting().toBe('hello dolly') and that test passes (2/2 tests pass).",
+        "gaps": ""
+      },
+      {
+        "text": "Existing behavior related to this area is unchanged (no regression)",
+        "status": "met",
+        "evidence": "src/hello.test.ts includes a regression test asserting getGreeting().toMatch(/^hello/), which passes. The greeting still starts with 'hello', preserving the core contract.",
+        "gaps": ""
+      }
+    ],
+    "overallCompliance": 100,
+    "verdict": "pass"
+  }],
+  "overallVerdict": "pass"
+}

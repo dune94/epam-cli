@@ -1,0 +1,58 @@
+[1;33m[tier3-travel][0m Tier 3 travel app run — MiniMax + GLM + Kimi multi-model pipeline (USES CREDITS)
+[1;33m[tier3-travel][0m   PRD: /home/bradleyjerome/projects/ai/epam-cli/orchestrations/travel-app-prd.json
+[1;33m[tier3-travel][0m   Output: /home/bradleyjerome/projects/skyscanner-app
+[1;33m[tier3-travel][0m   Estimated cost: $0.05–0.15
+[1;33m[tier3-travel][0m   Log: /tmp/tier3-travel-app-run-20260719T210542.log
+
+[1;33m[tier3-travel][0m Auto-confirmed (--yes flag)
+[1;33m[tier3-travel][0m OpenRouter usage before: $239.207107809
+
+[1;33m[tier3-travel][0m Tearing down output directory: /home/bradleyjerome/projects/skyscanner-app
+[1;33m[tier3-travel][0m Output directory clean (deleted and reinitialised)
+[1;33m[tier3-travel][0m profiles.json restored from canonical original (52 profiles)
+[1;33m[tier3-travel][0m prd.json restored from canonical file (4 base user stories)
+
+[1;33m[tier3-travel][0m Pre-run PRD remediation...
+[1;33m[prd-remediate][0m Remediating PRD: /home/bradleyjerome/projects/ai/epam-cli/orchestrations/travel-app-prd.json
+  fixed: reset 4 active stories to pending
+  fixed: added testCriteria stub to 3 stor(y/ies): ['SKY-004', 'SKY-002', 'SKY-003']
+[1;33m[prd-remediate][0m Verifying PRD integrity post-remediation...
+[0;32m[prd-remediate] ✓[0m PRD is canonical (pre-spec-pass, 4 base user stories) — strict checks skipped until spec pass elaborates
+
+  PRD integrity OK: 4 stories, all pending, zero mid-execution splits
+
+
+
+━━━ Pre-flight checks ━━━
+[ Runner script ]
+  ✓ Runner exists: tier3-travel-app-run.sh
+  ✓ shellcheck clean
+[ Critical exports in runner ]
+  ✓ export OUTPUT_DIR present
+  ✓ export PROJECT_ROOT present
+  ✓ export PRD_FILE present
+  ✓ export ORCH_GATE_MODEL present
+  ✓ export ORCH_GATE_PROVIDER present
+[ PRD integrity ]
+  ✓ PRD integrity OK — 4 base user stories (canonical/pre-spec-pass — strict phase checks deferred until after spec pass elaboration)
+[ PRD file ]
+  ✓ PRD exists: travel-app-prd.json
+  ✓ PRD valid JSON
+  ✓ PRD project.outputDir = /home/bradleyjerome/projects/skyscanner-app
+  ✓ Runner OUTPUT_DIR matches PRD outputDir (/home/bradleyjerome/projects/skyscanner-app)
+  ✓ Story field checks deferred — canonical PRD has no implementation stories yet
+[ API keys ]
+  ✓ OPENROUTER_API_KEY is set
+  ✓ OPENAI_API_KEY is set
+[ Dashboard ]
+  ✓ Dashboard serving prd.json at http://localhost:8092
+[ Self-heal observability ]
+  ✓ LOG_DIR (/home/bradleyjerome/projects/ai/epam-cli/orchestrations/logs) is writable — healing-events.jsonl will land here
+  ✓ healing-events.jsonl is empty/absent — clean slate for this run
+  ✓ nginx serves /logs/healing-events.jsonl — agent-activity.html and health.html will read it
+  ✓ build-info.json has metrics.selfHealing — health.html will render correctly
+  ✗ snapshot-watch.js is NOT running — health.html will stay permanently stale during the run; start it with: node orchestrations/scripts/snapshot-watch.js 10 &
+  ✓ build-info.json is 0s old — snapshot watcher is actively refreshing
+
+━━━ ✗ 1 check(s) FAILED — DO NOT run pipeline ━━━
+[0;31m[tier3-travel] ✗[0m Pre-flight checks failed — aborting run. Fix issues above first.

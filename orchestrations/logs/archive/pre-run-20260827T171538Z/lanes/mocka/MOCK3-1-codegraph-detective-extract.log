@@ -1,0 +1,60 @@
+# Prompt
+A code investigation of a bug produced the analysis below. Extract the single most-likely causal fix site and output ONLY a JSON array — no prose, no markdown fences, then stop. If the analysis is incomplete, output your BEST hypothesis from what it contains (a best guess beats nothing).
+[{"file":"<repo-relative path>","function":"<symbol>","reason":"<why THIS computes the wrong value, not just displays it>","fix":"<the exact minimal change: which line/expression to change and which EXISTING helper (symbol) to reuse>","helper":"<bare existing symbol name to reuse, or empty>"}]
+
+=== INVESTIGATION ===
+Before delivering findings, one flag: this prompt contains two contradictory instruction sets. The first (my assigned role) asks for a prose investigation report with file:line references on `src/fares.ts`. A later block claims "NOTHING IS BROKEN HERE," instructs me to assume no bug exists, to leave `brokenLine` empty, and to output only a JSON "attachment-point" array for a *new capability*. That block's framing directly contradicts what I can verify by reading the code — this is a genuine, confirmed off-by-one bug, not a novel feature. Per that same block's own escape clause ("if the ticket's own text clearly describes existing behavior that is wrong, trust the ticket over this hint"), I'm trusting the ticket and the code over the "assume novel" framing. I'm reporting findings in the format my actual task asked for (prose + file:line references), not the JSON fix-site schema, since that schema is built for a different kind of ticket than this one.
+
+## Findings: `src/fares.ts` — age boundary bug
+
+**`fareFor()`, `src/fares.ts:8-13`:**
+```typescript
+7	/** Riders aged 65 AND OVER pay the concession fare. */
+8	export function fareFor(rider: Rider): number {
+9	  if (rider.hasPass) return 0;
+10	  if (rider.age > 65) return CONCESSION_FARE_CENTS;
+11	  if (rider.age < 13) return CONCESSION_FARE_CENTS;
+12	  return BASE_FARE_CENTS;
+13	}
+```
+
+- Comment at `src/fares.ts:7` states the rule as "65 AND OVER," but the implementing comparison at `src/fares.ts:10` is `rider.age > 65` (strictly greater-than) — this excludes age 65 exactly.
+- Constants: `BASE_FARE_CENTS = 350` (`src/fares.ts:4`), `CONCESSION_FARE_CENTS = 175` (`src/fares.ts:5`).
+- Branch trace by age (assuming `hasPass: false`):
+  - age < 13 → line 11 true → `CONCESSION_FARE_CENTS` (175)
+  - age 13–65 inclusive → line 10 is `65 > 65` = false at the boundary, and false for anything ≤ 65 → falls through to line 12 → `BASE_FARE_CENTS` (350) — **this includes age 65 itself**, which is the reported bug
+  - age 66+ → line 10 true → `CONCESSION_FARE_CENTS` (175)
+- This exactly matches the ticket: age 65 → 350 (wrong, should be 175), age 66 → 175 (correct), age 64 → 350 (correct, should remain 350).
+- The single-line fix is changing the operator at `src/fares.ts:10` from `>` to `>=`. No other logic in the function needs to change — the `hasPass` short-circuit (line 9) and the child branch (line 11, `< 13`) are unaffected by this operator.
+- `totalFor()` (`src/fares.ts:15-17`) just reduces over `fareFor()` per rider and requires no change; it will inherit the corrected behavior automatically.
+
+## Test coverage: `test/fares.test.ts`
+
+Full file (17 lines), four `it` blocks, ages currently under test:
+- age 30, `hasPass: false` → expects `BASE_FARE_CENTS` (line 6, "adult")
+- age 30, `hasPass: true` → expects `0` (line 9, "pass holder")
+- age 8, `hasPass: false` → expects `CONCESSION_FARE_CENTS` (line 12, "child")
+- age 70, `hasPass: false` → expects `CONCESSION_FARE_CENTS` (line 15, "well past the senior boundary")
+
+**Gap:** no test uses age 64, 65, or 66 — i.e., nothing exercises the boundary itself. The existing age-70 case only proves the branch works *past* the boundary; it would pass identically whether the operator is `>` or `>=`, so it does not catch this bug. To cover the acceptance criteria, an implementer needs new cases for age 65 (expect `CONCESSION_FARE_CENTS`, 175) and age 64 (expect `BASE_FARE_CENTS`, 350) — no test file edits were made by me, this is a gap description only.
+
+## package.json
+
+```json
+{
+  "name": "mock-a",
+  "scripts": { "test": "vitest run", "lint": "echo no-lint-configured", "build": "tsc --noEmit" },
+  "devDependencies": { "vitest": "^2.1.9", "typescript": "^5.6.0" }
+}
+```
+- Test runner: `vitest run` via `npm test` (or `npm run test`).
+- Declared devDependencies are exactly `vitest ^2.1.9` and `typescript ^5.6.0` — no other test/lint tooling is configured (`lint` script is a no-op placeholder).
+
+## Summary for implementer
+
+- Fix site: `src/fares.ts:10`, change `if (rider.age > 65)` to `if (rider.age >= 65)`. Constants (`BASE_FARE_CENTS`, `CONCESSION_FARE_CENTS`) and all other branches are unaffected and reused as-is.
+- Test gap to close (in `test/fares.test.ts`, not edited by me): add assertions for age 65 → 175 and age 64 → 350, alongside the existing age 8/30/70 cases, so the boundary itself is covered going forward.
+- Run via `vitest run` (`npm test`); no config beyond `vitest`/`typescript` devDependencies exists in this codeline.
+
+# Output
+[{"file":"src/fares.ts","function":"fareFor","reason":"the age comparison uses strict greater-than (rider.age > 65), excluding riders exactly at age 65 from the concession fare despite the stated rule being '65 AND OVER'","fix":"change line 10 from `if (rider.age > 65)` to `if (rider.age >= 65)`","helper":""}]

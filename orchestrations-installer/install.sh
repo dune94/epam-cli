@@ -96,13 +96,11 @@ if [ "$UNINSTALL" = "1" ]; then
     # STOP THE RUNNER HOST FIRST — it is NOT docker-related (a plain host process), so it must not
     # be skipped by the "no container runtime, nothing to uninstall" exit below.
     _UN_RH_PIDFILE="$_UN_ROOT/launch-dashboard/.runner-host.pid"
-    if [ -f "$_UN_RH_PIDFILE" ]; then
-        _UN_RH_PID="$(cat "$_UN_RH_PIDFILE" 2>/dev/null)"
-        if [ -n "$_UN_RH_PID" ] && kill -0 "$_UN_RH_PID" 2>/dev/null; then
-            kill "$_UN_RH_PID" 2>/dev/null
-            _ok "stopped runner-host (pid $_UN_RH_PID)"
-        fi
-        rm -f "$_UN_RH_PIDFILE"
+    _UN_RH_WAS_RUNNING=""
+    [ -f "$_UN_RH_PIDFILE" ] && _UN_RH_WAS_RUNNING="$(cat "$_UN_RH_PIDFILE" 2>/dev/null)"
+    . "$INSTALLER_DIR/lib/runner-host-control.sh"
+    if stop_runner_host "$_UN_ROOT/launch-dashboard" && [ -n "$_UN_RH_WAS_RUNNING" ]; then
+        _ok "stopped runner-host (pid $_UN_RH_WAS_RUNNING)"
     fi
 
     . "$INSTALLER_DIR/lib/isolated-compose-identity.sh"
@@ -626,6 +624,19 @@ compose_up() {
         rm -f "$_log" 2>/dev/null
         return 1
     fi
+    # PERSISTED so `pipeline-services.sh --start` can bring this exact stack back up later
+    # (after a WSL restart, a deliberate stop) WITHOUT re-rolling a different subnet/port —
+    # `down` (no -v) removes the network, so a later `up` with no env at all would fall back to
+    # the compose file's own default subnet and could collide with the dev stack or another
+    # install. Written fresh on every successful compose_up() — this IS the current identity.
+    {
+        printf 'OBS_PROJECT=%s\n' "$_OBS_PROJECT"
+        printf 'OBS_SUBNET=%s\n' "$_subnet"
+        printf 'OBS_CLICKHOUSE_PORT=%s\n' "$((8123 + _off))"
+        printf 'OBS_LANGFUSE_PORT=%s\n' "$((3100 + _off))"
+        printf 'OBS_DASHBOARD_PORT=%s\n' "$((8092 + _off))"
+        printf 'OBS_GRAFANA_PORT=%s\n' "$((3001 + _off))"
+    } > "$ROOT/.pipeline-services-state.env"
     rm -f "$_log" 2>/dev/null
     return 0
 }
@@ -670,33 +681,32 @@ else
     # system — a blank one previously meant install.sh already knew this stack could not start
     # (it had just written this exact warning) and then attempted `up -d` anyway, hard-failing on
     # compose's `${LAUNCH_PASSWORD:?...}` interpolation instead of the warning it already gave.
-    # Operator decision 2026-09-03: generate one so the dashboard starts unattended; changeable
-    # any time by editing launch-dashboard/.env directly.
+    #
+    # Operator decision 2026-09-04, SUPERSEDING the 2026-09-03 random-generation decision: a
+    # RANDOM value made every install's password unknowable without reading the file, and
+    # unrecoverable once a running container had it in memory — copying a newer .env over an
+    # older one (exactly what moving credentials between two installs looks like) silently
+    # desynced the file from the live process, and the only fix was a manual docker restart.
+    # A FIXED, KNOWN default removes the ambiguity entirely: every fresh install starts on the
+    # same well-known password, printed here and in the file either way, and the change-password
+    # flow (Flutter UI, not this script) is how an operator actually secures it afterward.
+    _DEFAULT_LAUNCH_PW="abcd1234"
     if [ ! -f "$LAUNCH_DIR/.env" ]; then
         if [ -f "$LAUNCH_DIR/.env.example" ]; then
             cp "$LAUNCH_DIR/.env.example" "$LAUNCH_DIR/.env"
-            _GENERATED_PW="$("$NODE_BIN" -e 'process.stdout.write(require("crypto").randomBytes(18).toString("base64url"))' 2>/dev/null)"
-            if [ -n "$_GENERATED_PW" ]; then
-                # REPLACE the template's blank line in place — never append a second
-                # LAUNCH_PASSWORD= key. Both parse fine (bash sourcing takes the last one) but a
-                # duplicate key is a needless trap for whoever reads this file by hand next.
-                if grep -q '^LAUNCH_PASSWORD=' "$LAUNCH_DIR/.env"; then
-                    _LD_TMP="$(mktemp)"
-                    sed "s|^LAUNCH_PASSWORD=.*|LAUNCH_PASSWORD=$_GENERATED_PW|" "$LAUNCH_DIR/.env" > "$_LD_TMP" \
-                        && mv "$_LD_TMP" "$LAUNCH_DIR/.env"
-                else
-                    printf '\nLAUNCH_PASSWORD=%s\n' "$_GENERATED_PW" >> "$LAUNCH_DIR/.env"
-                fi
-                _ok "launch-dashboard/.env created with a generated LAUNCH_PASSWORD"
-                # SHOWN ONCE, HERE — otherwise the only way to learn it is to already know to go
-                # read the file by hand, which is exactly the gap an operator hit live: the
-                # dashboard was up and healthy with no way to log into it from the install output
-                # alone. Also saved in launch-dashboard/.env for every time after this one.
-                printf '      LAUNCH_PASSWORD: %s\n' "$_GENERATED_PW"
-                printf '      (also saved in launch-dashboard/.env — edit that file to change it)\n'
+            # REPLACE the template's blank line in place — never append a second
+            # LAUNCH_PASSWORD= key. Both parse fine (bash sourcing takes the last one) but a
+            # duplicate key is a needless trap for whoever reads this file by hand next.
+            if grep -q '^LAUNCH_PASSWORD=' "$LAUNCH_DIR/.env"; then
+                _LD_TMP="$(mktemp)"
+                sed "s|^LAUNCH_PASSWORD=.*|LAUNCH_PASSWORD=$_DEFAULT_LAUNCH_PW|" "$LAUNCH_DIR/.env" > "$_LD_TMP" \
+                    && mv "$_LD_TMP" "$LAUNCH_DIR/.env"
             else
-                _warn "launch-dashboard/.env created from .env.example — FILL IN LAUNCH_PASSWORD before it can start"
+                printf '\nLAUNCH_PASSWORD=%s\n' "$_DEFAULT_LAUNCH_PW" >> "$LAUNCH_DIR/.env"
             fi
+            _ok "launch-dashboard/.env created with the default LAUNCH_PASSWORD"
+            printf '      LAUNCH_PASSWORD: %s\n' "$_DEFAULT_LAUNCH_PW"
+            printf '      CHANGE THIS after your first login — it is the same on every fresh install.\n'
         else
             _bad "launch-dashboard/.env is missing and there is no .env.example to create one from"
             FAILED=1
@@ -777,6 +787,13 @@ else
         elif wait_for_health "$_LD_HEALTH_URL" "$LAUNCH_HEALTH_TRIES" "$LAUNCH_HEALTH_INTERVAL"; then
             LAUNCH_STATUS=up
             _ok "up and healthy at $_LD_HEALTH_URL (project: $_LD_PROJECT, subnet: $_LD_SUBNET)"
+            # Same reason as the observability stack's own state file — appended, not truncated:
+            # that one is always written first in a single install.sh run.
+            {
+                printf 'LAUNCH_PROJECT=%s\n' "$_LD_PROJECT"
+                printf 'LAUNCH_SUBNET=%s\n' "$_LD_SUBNET"
+                printf 'LAUNCH_UI_PORT=%s\n' "$_LD_PORT"
+            } >> "$ROOT/.pipeline-services-state.env"
         else
             LAUNCH_STATUS=unhealthy
             _bad "containers started but never answered healthy at $_LD_HEALTH_URL"
@@ -798,52 +815,8 @@ fi
 # launch-api); containerizing what it SPAWNS on a hit would mean containerizing the whole pipeline.
 _head "Runner host (launches pipeline runs the dashboard queues)"
 if [ "$LAUNCH_STATUS" = "up" ]; then
-    _RH_PIDFILE="$LAUNCH_DIR/.runner-host.pid"
-    _RH_LOG="$LAUNCH_DIR/.runner-host.log"
-    _RH_OLD_PID=""
-    [ -f "$_RH_PIDFILE" ] && _RH_OLD_PID="$(cat "$_RH_PIDFILE" 2>/dev/null)"
-    if [ -n "$_RH_OLD_PID" ] && kill -0 "$_RH_OLD_PID" 2>/dev/null; then
-        _ok "already running (pid $_RH_OLD_PID)"
-    else
-        # setsid, NEVER nohup — found live: nohup here made install.sh hang forever whenever its
-        # own stdio is piped (any parent that captures its output, including this test suite).
-        # setsid fully detaches into a new session (immune to SIGHUP by construction, survives the
-        # launching shell/terminal closing — the WSL-restart case this exists for). Falls back to
-        # a plain backgrounded process on a host with no setsid (macOS ships none by default).
-        #
-        # `</dev/null >>log 2>&1` on the command ALONE was still not enough — the daemon kept the
-        # pipe to install.sh's own stdout open regardless (Node's spawn() never saw 'close', even
-        # though every byte of real output arrived and install.sh itself had long since exited).
-        # bash forking a background job inherits ALL open fds, not just 0/1/2; a plain per-command
-        # redirect only dup2's those three. `exec` with no command applies the redirect to the
-        # CURRENT shell — including whatever else it inherited — before the second `exec` replaces
-        # that shell's own process image with the daemon, so nothing is left holding the pipe open.
-        _RH_DAEMONIZE="setsid"
-        command -v setsid >/dev/null 2>&1 || _RH_DAEMONIZE=""
-        # launch-dashboard/.env MUST BE SOURCED HERE. Docker Compose auto-loads a .env file next
-        # to the compose file into the CONTAINER's environment; a bare host process gets none of
-        # that for free. Found live: runner-host.js's own config.js hard-requires LAUNCH_PASSWORD
-        # from process.env ("gates a button that spends real money") and crashed instantly with it
-        # unset, even though the value was sitting right there in the file the whole time.
-        # SPOOL_DIR's default ('/spool') is the CONTAINER's bind-mount path — correct for
-        # launch-api running inside docker, meaningless for a bare host process. Found live, right
-        # after the LAUNCH_PASSWORD fix above stopped masking it: EACCES on mkdir '/spool/requests'
-        # (no permission to create a directory at the filesystem root). The real, same, host
-        # directory this container has bind-mounted as /spool is $LAUNCH_DIR/spool.
-        ( exec </dev/null >>"$_RH_LOG" 2>&1
-          cd "$ROOT" && set -a && . "$LAUNCH_DIR/.env" 2>/dev/null; set +a
-          EPAM_HOME="$ROOT" SPOOL_DIR="$LAUNCH_DIR/spool" RUNS_DB="$LAUNCH_DIR/data/runs.db" \
-              exec $_RH_DAEMONIZE "$NODE_BIN" "$LAUNCH_DIR/backend/src/runner-host.js" ) &
-        echo $! > "$_RH_PIDFILE"
-        sleep 0.3
-        _RH_NEW_PID="$(cat "$_RH_PIDFILE" 2>/dev/null)"
-        if [ -n "$_RH_NEW_PID" ] && kill -0 "$_RH_NEW_PID" 2>/dev/null; then
-            _ok "started (pid $_RH_NEW_PID, log: $_RH_LOG)"
-        else
-            _bad "runner-host failed to start — see $_RH_LOG"
-            FAILED=1
-        fi
-    fi
+    . "$INSTALLER_DIR/lib/runner-host-control.sh"
+    start_runner_host "$ROOT" "$LAUNCH_DIR" || FAILED=1
 else
     _ok "skipped — launch dashboard status is '$LAUNCH_STATUS', nothing to poll for"
 fi

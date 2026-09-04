@@ -29,7 +29,7 @@ function fixture() {
   fs.mkdirSync(bin, { recursive: true });
   fs.copyFileSync(path.join(REPO, INSTALLER_REL), path.join(dir, INSTALLER_REL));
   fs.chmodSync(path.join(dir, INSTALLER_REL), 0o755);
-  for (const f of ['container-runtime.sh', 'isolated-compose-identity.sh']) {
+  for (const f of ['container-runtime.sh', 'isolated-compose-identity.sh', 'runner-host-control.sh']) {
     fs.copyFileSync(path.join(REPO, 'orchestrations-installer/lib', f), path.join(dir, 'orchestrations-installer/lib', f));
   }
   fs.writeFileSync(path.join(dir, 'docker-compose.observability.yml'), 'services: {}\n');

@@ -27,7 +27,47 @@ function writeStatus(dir, id, body) {
   fs.renameSync(tmp, target);
 }
 
+/**
+ * WHAT IS THE PIPELINE DOING RIGHT NOW — read from what the pipeline already publishes.
+ *
+ * The pipeline maintains step-status.json and rewrites it as it advances: every step with
+ * pass/fail/skip/running, and a detail line that carries the model. Nothing read it, so the launch
+ * dashboard showed "running — starting" for the whole of a two-and-a-half hour run and then
+ * "no update in 10m" — on a healthy run. Operator, 2026-09-04: "dashboard not useful at all."
+ *
+ * NOTHING IS HARDCODED. No step list, no step name, no phase: the current step is whichever one
+ * the pipeline itself marks `running`, and the label shown is the pipeline's own. A step added
+ * tomorrow appears tomorrow.
+ *
+ * Returns null when there is nothing to say — a missing file, a half-written one (this file is
+ * rewritten constantly, so a poll WILL eventually catch one mid-write), or no step in flight.
+ * Observability must never fail the run it observes.
+ */
+function readCurrentStage(progressFile) {
+  if (!progressFile) return null;
+  let doc;
+  try { doc = JSON.parse(fs.readFileSync(progressFile, 'utf8')); } catch { return null; }
+  const steps = Array.isArray(doc?.steps) ? doc.steps : [];
+  if (!steps.length) return null;
+
+  // The step in flight. Failing that, the furthest one that has actually been reached — after the
+  // last step completes there is a real gap before the run ends, and "the last thing that
+  // happened" is far more use than silence.
+  const running = steps.find((s) => s && s.status === 'running');
+  const reached = [...steps].reverse().find((s) => s && s.status && s.status !== 'pending');
+  const step = running || reached;
+  if (!step || !step.label) return null;
+
+  const label = String(step.label).trim();
+  const detail = String(step.detail || '').trim();
+  return detail ? `${label} · ${detail}` : label;
+}
+
 function createRunner({ spoolDir, launcher, dry = false, pollMs = 1000,
+                       // Where the pipeline publishes its own progress, and how often to look.
+                       // Absent means the runner simply reports nothing extra — it never invents.
+                       progressFile = process.env.EPAM_STEP_STATUS_FILE || null,
+                       progressMs = 5000,
                        // Default FALSE: the only production caller is a daemon whose sole job is this
                        // timer. An embedding caller that must not have its event loop held open can
                        // opt in, but that is the unusual case and it should have to say so.
@@ -113,6 +153,19 @@ function createRunner({ spoolDir, launcher, dry = false, pollMs = 1000,
 
       writeStatus(spoolDir, id, { status: 'running', stage: 'starting' });
 
+      // FOLLOW THE RUN WHILE IT RUNS. Started before the launcher and cleared in a finally below,
+      // so it cannot outlive the run and overwrite its outcome with "running" — a finished run
+      // that looks live forever would be worse than no progress at all.
+      let lastStage = 'starting';
+      const progress = setInterval(() => {
+        try {
+          const stage = readCurrentStage(progressFile);
+          if (!stage || stage === lastStage) return;
+          lastStage = stage;
+          writeStatus(spoolDir, id, { status: 'running', stage });
+        } catch { /* observability never fails the run it observes */ }
+      }, progressMs);
+
       let result;
       try {
         result = await launcher(req, env, argv, { waitForStop: () => waitForStop(id), stopRequested: () => stopRequested(id) });
@@ -122,6 +175,8 @@ function createRunner({ spoolDir, launcher, dry = false, pollMs = 1000,
         // hitting.
         writeStatus(spoolDir, id, { status: 'failed', detail: String(e && e.message ? e.message : e) });
         return { id, failed: true };
+      } finally {
+        clearInterval(progress);
       }
 
       const { code = 0, runId = null, paused = false, stopped = false } = result ?? {};

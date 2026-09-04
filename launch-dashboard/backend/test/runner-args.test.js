@@ -14,11 +14,20 @@ import assert from 'node:assert/strict';
 import { buildLaunchEnv, buildLaunchArgv } from '../src/runner-args.js';
 
 describe('the launch environment', () => {
-  test('a plain run sets the provider set and neither pause', () => {
+  test('a plain run sets the provider set and DECLINES both pauses explicitly', () => {
+    // THIS ASSERTION WAS `undefined`, AND THAT WAS THE DEFECT — it ratified the reasoning in
+    // runner-args.js that "absent means absent". Absent is not absent to the pipeline: the
+    // launcher goes on to source the project's config.env, which set both pauses to 1
+    // unconditionally, so an unticked box was silently overwritten. Live 2026-09-04, the operator
+    // ticked neither box and the run paused anyway.
+    //
+    // The requirement was always "the operator's answer reaches the pipeline". The old assertion
+    // described the implementation instead, and a descriptive test ratifies the bug. `no` is an
+    // answer, so it travels as one.
     const env = buildLaunchEnv({ ticket: 'AMSD-1919' }, { providerSet: 'claude' });
     assert.equal(env.EPAM_PROVIDER_SET, 'claude');
-    assert.equal(env.EPAM_PAUSE_AFTER_AGENT_MINT, undefined);
-    assert.equal(env.EPAM_PAUSE_BEFORE_WRITER, undefined);
+    assert.equal(env.EPAM_PAUSE_AFTER_AGENT_MINT, '0');
+    assert.equal(env.EPAM_PAUSE_BEFORE_WRITER, '0');
     assert.equal(env.EPAM_RESUME_RUN, undefined);
   });
 

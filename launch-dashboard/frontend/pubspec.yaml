@@ -14,5 +14,13 @@ dependencies:
   # it is an SDK-aligned package, not a plugin, so there is nothing to register.
   web: ^1.1.0
 
+# The frontend shipped with NO dev_dependencies, so `flutter test` could not run at all and the
+# generated widget_test.dart had never executed. Every control on the dashboard — resume, replay,
+# stop — is derived from a status string in api.dart, and those derivations had no test of any
+# kind. The 2026-09-04 stale-resume-button report was in exactly that code.
+dev_dependencies:
+  flutter_test:
+    sdk: flutter
+
 flutter:
   uses-material-design: true

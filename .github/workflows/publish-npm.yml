@@ -38,6 +38,13 @@ jobs:
           else
             VERSION="${GITHUB_REF_NAME#v}"
           fi
+          # THIS REPO'S OWN TAGS ARE TWO-PART (v1.10, v1.9, ...) — npm requires full x.y.z semver
+          # and rejects anything else outright ("Invalid version: 1.10"). Pad a bare x.y to x.y.0
+          # rather than requiring every future tag to change shape just for this workflow.
+          case "$VERSION" in
+            *.*.*) : ;;
+            *.*) VERSION="${VERSION}.0" ;;
+          esac
           npm --prefix npm-package/amsd-pipeline version "$VERSION" --no-git-tag-version --allow-same-version
 
       - name: Publish

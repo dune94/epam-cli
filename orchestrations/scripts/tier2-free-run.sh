@@ -55,6 +55,13 @@ PRD_FILE="$REPO_ROOT/orchestrations/hello-world-prd.json"
 # this launcher could only ever patch one; it is a setting now.
 FREE_PROVIDER="${FREE_PROVIDER:-openrouter}"
 
+# THE MODEL IS THE OPERATOR'S CHOICE, exactly like FREE_PROVIDER just above — which WAS given a
+# default when it became a setting, while this one was left referenced and never assigned. Under
+# `set -u` the info line below aborted the run with a bare "FREE_MODEL: unbound variable". Refused
+# loudly rather than defaulted: a provider may sensibly default, a MODEL may not — guessing one is
+# how the wrong vendor reaches a run.
+: "${FREE_MODEL:?FREE_MODEL is not set — name the zero-cost model this run should use (e.g. FREE_MODEL=deepseek/deepseek-r1:free). This launcher never chooses one for you.}"
+
 info "Tier 2 free-model run"
 info "  Model: $FREE_MODEL (zero credits)"
 info "  Log:   $LOG_FILE"

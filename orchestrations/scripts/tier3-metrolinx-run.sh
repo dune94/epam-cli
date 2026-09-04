@@ -485,7 +485,6 @@ echo ""
 # DECLARED, NOT INFERRED: each runner in llm-defaults.<set>.json carries emitsTraces. A runner that
 # does route through the epam CLI sets it true and gets the gate back, with no edit here.
 _traces_expected=0
-if [ -f "$CONFIG_DIR/provider-sets.json" ] 2>/dev/null || [ -n "${ORCH_CONFIG_DIR:-}" ]; then :; fi
 _traces_expected="$("$NODE_BIN" -e '
   const fs = require("fs"), path = require("path");
   try {

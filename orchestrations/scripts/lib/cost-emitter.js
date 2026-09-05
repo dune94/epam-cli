@@ -258,6 +258,75 @@ function toolCallsForThisCall(startedAt, endedAt) {
   } catch { return []; }
 }
 
+/**
+ * THE CALLS THIS CALL MADE — answered from the record the emitter is ALREADY holding.
+ *
+ * toolCallsForThisCall above needs a start AND an end, because transcriptForCall rejects a window
+ * whose ends are not both finite. Measured 2026-09-05 by test/tool-call-recording-harness.js,
+ * driving the resolver with each real call site's own argument shape:
+ *
+ *     lib/ac-gate.js:77             startedAt=NO  endedAt=NO   → 0 calls
+ *     lib/codeline-discovery.js:47  startedAt=NO  endedAt=NO   → 0 calls
+ *     lib/cpa-inference.js:363      startedAt=NO  endedAt=NO   → 0 calls
+ *     lib/handlers/emit-cost.js:28  startedAt=NO  endedAt=NO   → 0 calls
+ *     spec-mode-runner.js:9334      startedAt=yes endedAt=NO   → 0 calls
+ *
+ * Not one site supplies both, so this returned [] on every call ever made, whatever the model did.
+ * Three separate "fixes" landed on the other links — all five of which the same harness proves
+ * work, including Langfuse storing and returning the calls — while this one was never exercised
+ * with the arguments the callers actually pass.
+ *
+ * REPAIRING THE FIVE SITES WOULD BE THE WRONG FIX. It fixes today and leaves the sixth site added
+ * next month silently recording nothing, in a feature whose entire failure mode is silence. The
+ * window is also the weakest key available: it needs slack for flush timing, and it goes ambiguous
+ * exactly when parallel lanes run, which is when a run is most worth recording.
+ *
+ * The record identifies its own call on both arms, and this function is handed it, so nothing is
+ * asked of the caller.
+ */
+function toolCallsForCall(record, startedAt, endedAt) {
+  try {
+    const r = record && typeof record === 'object' ? record : {};
+
+    // 1. THE EPAM ARM CARRIES THEM INLINE, and writes no transcript to go looking for.
+    //    Measured: 16 calls in timings[].toolCalls[] of the 2026-08-17 estate-survey record.
+    if (Array.isArray(r.timings)) {
+      const inline = [];
+      for (const t of r.timings) {
+        if (!t || !Array.isArray(t.toolCalls)) continue;
+        for (const c of t.toolCalls) {
+          // Name only: this arm records what was called, not the arguments. Honest about what it
+          // has rather than inventing an empty input that reads as "called with nothing".
+          if (c && c.name) inline.push({ name: String(c.name), input: {}, id: '' });
+        }
+      }
+      if (inline.length) return inline;
+    }
+
+    // eslint-disable-next-line global-require
+    const tx = require('./transcript-tool-calls.js');
+    const dirs = tx.transcriptDirsToSearch(process.env, process.cwd());
+
+    // 2. THE CLAUDE ARM NAMES ITS OWN SESSION, and the session id IS the transcript's filename.
+    //    Exact — no window, no flush slack, and unaffected by how many lanes ran alongside it.
+    //    Measured live: session 521698d3… → its transcript → 1 Bash call.
+    if (typeof r.session_id === 'string' && r.session_id) {
+      const named = [];
+      for (const d of dirs) {
+        const f = path.join(d, `${r.session_id}.jsonl`);
+        if (fs.existsSync(f)) named.push(f);
+      }
+      // IDENTIFIED BUT ABSENT STAYS EMPTY. Falling back to the window here would guess about a
+      // call we can name exactly, which is precisely how another agent's actions enter this
+      // recording — and a cassette built from it replays the wrong action, undetectably.
+      return named.length === 1 ? tx.toolCallsInTranscript(named[0]) : [];
+    }
+
+    // 3. NOTHING IDENTIFIES IT: the time window, unchanged, still exactly-one-or-nothing.
+    return toolCallsForThisCall(startedAt, endedAt);
+  } catch { return []; }
+}
+
 function replyTextFrom(j) {
   if (!j || typeof j !== 'object') return '';
   if (typeof j.result === 'string' && j.result) return j.result;
@@ -394,7 +463,7 @@ function emitCostSnapshot({
         // afterwards leaves no file behind. The runner's `--print --output-format json` result
         // never carries them; its session transcript does. Matched to THIS call or not at all:
         // attributing another seam's transcript would replay the wrong action, undetectably.
-        toolCalls: toolCallsForThisCall(startedAt, endedAt),
+        toolCalls: toolCallsForCall(_parsedResult(raw), startedAt, endedAt),
         costUsd: cost.costUsd, tokensIn: cost.tokensIn, tokensOut: cost.tokensOut,
         cacheRead: cost.tokensCached, cacheCreate: cost.tokensCacheCreate,
         costIsEstimate: cost.costIsEstimate,
@@ -459,7 +528,7 @@ function emitCostSnapshot({
 }
 
 module.exports = {
-  toolCallsForThisCall,
+  toolCallsForThisCall, toolCallsForCall,
   parseCostRecord, buildCostSnapshot, appendLedgerRecord, emitCostSnapshot,
   replyTextFrom,
   promptForTrace,

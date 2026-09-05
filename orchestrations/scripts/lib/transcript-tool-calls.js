@@ -120,4 +120,33 @@ function transcriptForCall(dir, startedAt, endedAt) {
   return hits.length === 1 ? hits[0] : '';
 }
 
-module.exports = { toolCallsInTranscript, transcriptForCall, transcriptDirFor };
+
+/**
+ * EVERY DIRECTORY A CALL'S TRANSCRIPT COULD BE IN — because the runner does not execute where the
+ * cost emitter sits.
+ *
+ * Live run 20260905T011131Z recorded ZERO tool calls while the transcripts were full of them:
+ * roster-specialiser 23, project-roster-review 17 and 10, estate-survey 8. They were all under the
+ * CODELINE's directory, because run-agent-orchestration.sh does `cd "$PROJECT_ROOT"` before
+ * invoking a seam, while this matcher derived its directory from the emitter's own process.cwd() —
+ * the install root. It looked in the wrong place on every call.
+ *
+ * The feature had been proved with a synthetic transcript placed under the cwd by hand, which is
+ * exactly the assumption that was false.
+ *
+ * Both are searched, de-duplicated, and the caller's "exactly one or nothing" rule is applied
+ * across the whole set — widening WHERE we look must not widen WHAT we accept.
+ */
+function transcriptDirsToSearch(env, cwd, home) {
+  const e = env || {};
+  const roots = [e.PROJECT_ROOT, cwd].filter((r) => r && String(r).trim());
+  const seen = new Set();
+  const dirs = [];
+  for (const r of roots) {
+    const d = transcriptDirFor(r, home);
+    if (!seen.has(d)) { seen.add(d); dirs.push(d); }
+  }
+  return dirs;
+}
+
+module.exports = { toolCallsInTranscript, transcriptForCall, transcriptDirFor, transcriptDirsToSearch };

@@ -4730,6 +4730,65 @@ function seamDeclares(seam) {
   } catch (e) { return {}; }
 }
 
+/**
+ * The reviewer's payload translated into the verdict buildProjectRoster acts on.
+ *
+ * Named and exported so it can be DRIVEN in a test: the live defect here — an empty
+ * findings list becoming changes_requested and consuming a roster attempt — survived a
+ * source-text check, because the string it grepped for also appears in the reason below.
+ */
+function rosterReviewVerdict(payload, findings, blocking) {
+  if (payload.verdict === 'sound' && !blocking.length) {
+    return { verdict: 'approved', findings };
+  }
+
+  // A REVIEW THAT EXAMINED NOTHING IS NOT A DEFECTIVE ROSTER.
+  //
+  // 'nothing_to_review' means the reviewer did not look — live 2026-08-23 it returned its own
+  // PLAN as a blocking finding ("PLAN: I will read both roster files...") and that verdict.
+  // Treating it as changes_requested threw away a roster that had PASSED its contract and paid to
+  // generate another, blaming the artefact for the judge's failure. The distinction the schema
+  // draws deliberately — examined-and-sound, examined-and-defective, did-not-examine — has to
+  // survive the translation, or the caller cannot tell which happened.
+  // A VERDICT THAT NAMES NO FINDING HAS CONTRADICTED NOTHING, and belongs in this same branch.
+  //
+  // Live 20260905T011131Z: the reviewer answered 'defects_found' with an EMPTY findings list,
+  // twice. The first was read correctly as a failed review; the second reached the branch below,
+  // became changes_requested, and consumed one of three roster attempts — forcing a full rewrite
+  // whose roster-specialiser call alone is $1.33 and 7.4 minutes. The run was killed at $3.65.
+  //
+  // The schema draws the distinction on purpose: examined-and-sound, examined-and-defective,
+  // did-not-examine. A claim of defects with nothing to point at is the third, whatever word the
+  // reviewer chose — there is no finding for the next attempt to act on, so a rewrite could only
+  // be a guess at what to change.
+  if (payload.verdict === 'nothing_to_review' || !payload.verdict || !findings.length) {
+    return {
+      verdict: 'review_failed',
+      findings,
+      reason: !findings.length && payload.verdict && payload.verdict !== 'nothing_to_review'
+        ? `the roster review answered '${payload.verdict}' but listed no findings, so nothing about `
+          + 'the roster was actually contradicted. The roster is not implicated.'
+        : 'the roster review did not examine anything — it returned '
+          + `'${payload.verdict || 'no verdict'}'. The roster is not implicated.`,
+    };
+  }
+
+  // The schema's finding fields are claim/found/checked — NOT finding/description, which is what
+  // this read and why the operator saw "roster-review: " with nothing after it. A rejection whose
+  // reason is empty is a rejection nobody can act on.
+  const describe = (f) => [f.claim, f.found, f.checked]
+    .map((x) => String(x || '').trim())
+    .filter((x) => x && x !== 'N/A')
+    .join(' — ') || '(the finding carried no text)';
+  return {
+    verdict: 'changes_requested',
+    findings,
+    reason: blocking.length
+      ? blocking.map((f) => `${f.agent || '?'}: ${describe(f)}`).join('; ')
+      : `roster review returned '${payload.verdict}'`,
+  };
+}
+
 async function reviewProjectRoster({
   promptExec, rosterPath, canonicalPath, codelines, logDir, repoPath, toolGrant,
 }) {
@@ -4959,41 +5018,8 @@ async function reviewProjectRoster({
     };
   }
 
-  if (payload.verdict === 'sound' && !blocking.length) {
-    return { verdict: 'approved', findings };
-  }
+  return rosterReviewVerdict(payload, findings, blocking);
 
-  // A REVIEW THAT EXAMINED NOTHING IS NOT A DEFECTIVE ROSTER.
-  //
-  // 'nothing_to_review' means the reviewer did not look — live 2026-08-23 it returned its own
-  // PLAN as a blocking finding ("PLAN: I will read both roster files...") and that verdict.
-  // Treating it as changes_requested threw away a roster that had PASSED its contract and paid to
-  // generate another, blaming the artefact for the judge's failure. The distinction the schema
-  // draws deliberately — examined-and-sound, examined-and-defective, did-not-examine — has to
-  // survive the translation, or the caller cannot tell which happened.
-  if (payload.verdict === 'nothing_to_review' || !payload.verdict) {
-    return {
-      verdict: 'review_failed',
-      findings,
-      reason: 'the roster review did not examine anything — it returned '
-        + `'${payload.verdict || 'no verdict'}'. The roster is not implicated.`,
-    };
-  }
-
-  // The schema's finding fields are claim/found/checked — NOT finding/description, which is what
-  // this read and why the operator saw "roster-review: " with nothing after it. A rejection whose
-  // reason is empty is a rejection nobody can act on.
-  const describe = (f) => [f.claim, f.found, f.checked]
-    .map((x) => String(x || '').trim())
-    .filter((x) => x && x !== 'N/A')
-    .join(' — ') || '(the finding carried no text)';
-  return {
-    verdict: 'changes_requested',
-    findings,
-    reason: blocking.length
-      ? blocking.map((f) => `${f.agent || '?'}: ${describe(f)}`).join('; ')
-      : `roster review returned '${payload.verdict}'`,
-  };
 }
 
 /**
@@ -10225,6 +10251,7 @@ function costLabelFor(tag, env) {
 }
 
 module.exports = {
+  rosterReviewVerdict,
   aggregateRosterReview,
   reviewOutcomeKeepsChange,
   // Exported so the brief lookup can be asserted without a run.

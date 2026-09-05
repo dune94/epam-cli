@@ -45,7 +45,19 @@ function verdictsReturnedBy(source: string, fnSignature: string, span = 20000): 
   const at = source.indexOf(fnSignature);
   if (at < 0) return [];
   const body = source.slice(at, at + span);
-  return [...new Set([...body.matchAll(/verdict:\s*['"]([a-z_]+)['"]/g)].map((m) => m[1]))];
+  const found = [...body.matchAll(/verdict:\s*['"]([a-z_]+)['"]/g)].map((m) => m[1]);
+
+  // FOLLOW A DELEGATION. The producer may hand the translation to a named helper — it does now,
+  // so that the empty-findings case can be DRIVEN in a test rather than grepped for. Scanning
+  // only the caller's own body then finds none of the verdicts it still emits, and this check
+  // silently stops guarding the producer/consumer parity it exists for.
+  for (const m of body.matchAll(/return\s+([A-Za-z_][A-Za-z0-9_]*)\s*\(/g)) {
+    const helper = source.indexOf(`function ${m[1]}(`);
+    if (helper < 0) continue;
+    const hb = source.slice(helper, helper + span);
+    found.push(...[...hb.matchAll(/verdict:\s*['"]([a-z_]+)['"]/g)].map((x) => x[1]));
+  }
+  return [...new Set(found)];
 }
 
 describe('every verdict a producer emits is handled by its consumer', () => {

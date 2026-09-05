@@ -64,6 +64,9 @@ const runner = createRunner({
   launcher,
   dry,
   progressFile,
+  // The mint runs before any phase step exists, and it is the longest stage of a run.
+  progressFallbackFile: process.env.EPAM_AGENT_STATUS_FILE
+    ?? path.join(cwd, 'orchestrations/logs/agent-status.json'),
   // How often to look. Seconds-scale is right for a run measured in hours; overridable because a
   // test cannot wait five seconds to observe a poll, and a slow filesystem may want less traffic.
   progressMs: Number(process.env.EPAM_PROGRESS_MS || 5000),

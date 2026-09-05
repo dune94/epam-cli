@@ -231,6 +231,24 @@ function appendLedgerRecord({ ledgerFile, agent, storyId, phase, model, cost, tu
  * input_tokens, inputTokens and input. This reads text with the same tolerance, and returns empty
  * rather than inventing something when there is genuinely no text to find.
  */
+
+/**
+ * The tool calls this one call made, or none.
+ *
+ * Read-only and unfailable, like every other part of this seam's observability: any problem at all
+ * yields an empty list, which reads honestly as "no calls recorded" rather than as a call that
+ * never happened. Requires no change to how the runner is invoked.
+ */
+function toolCallsForThisCall(startedAt, endedAt) {
+  try {
+    // eslint-disable-next-line global-require
+    const tx = require('./transcript-tool-calls.js');
+    const dir = tx.transcriptDirFor(process.cwd());
+    const file = tx.transcriptForCall(dir, startedAt, endedAt);
+    return file ? tx.toolCallsInTranscript(file) : [];
+  } catch { return []; }
+}
+
 function replyTextFrom(j) {
   if (!j || typeof j !== 'object') return '';
   if (typeof j.result === 'string' && j.result) return j.result;
@@ -362,6 +380,12 @@ function emitCostSnapshot({
         // And the prompt. The caller passes it when it has one; otherwise it is read from the
         // pointer the invoker left, which is the only channel that crosses to the shell edge.
         input: promptForTrace(input, agent),
+        // AND THE CALLS IT MADE. A seam that DELIVERS by tool call cannot be replayed from its
+        // text — roster-specialiser writes roster.json, and serving the sentence it wrote
+        // afterwards leaves no file behind. The runner's `--print --output-format json` result
+        // never carries them; its session transcript does. Matched to THIS call or not at all:
+        // attributing another seam's transcript would replay the wrong action, undetectably.
+        toolCalls: toolCallsForThisCall(startedAt, endedAt),
         costUsd: cost.costUsd, tokensIn: cost.tokensIn, tokensOut: cost.tokensOut,
         cacheRead: cost.tokensCached, cacheCreate: cost.tokensCacheCreate,
         costIsEstimate: cost.costIsEstimate,

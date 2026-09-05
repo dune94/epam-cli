@@ -699,8 +699,16 @@ async function buildProjectPrompts({
  * pre-run-reset deletes and recreates prompts/ on any run that is not reusing, so a marker in
  * there could never survive to be read by the run that needs it.
  */
-function _markerPath(outDir) {
-  return path.join(outDir, '..', '.prompt-cache', '.complete');
+function _markerPath(outDir, codeline) {
+  // THE CODELINE IS THE FILENAME, and the file is empty.
+  //
+  // This was a JSON document carrying {codeline, provisioned, refused} that the consumer parsed
+  // and compared field by field. Every one of those fields was redundant: the producer only runs
+  // after EVERY prompt installed (it throws otherwise), so the file's EXISTENCE already proves
+  // completeness, and putting the codeline in the NAME turns "does it match?" into "does it
+  // exist?". That deletes the parse, the field comparison, and the corrupt-marker case — a file
+  // with no content cannot be malformed.
+  return path.join(outDir, '..', '.prompt-cache', `.complete-${codeline}`);
 }
 
 /**
@@ -725,15 +733,9 @@ function writeCompletionMarker({ outDir, codeline, provisioned } = {}) {
     if (!outDir) return;
     if (!codeline || !String(codeline).trim()) return;
     if (!(Number(provisioned) > 0)) return;
-    const p = _markerPath(outDir);
+    const p = _markerPath(outDir, String(codeline).trim());
     fs.mkdirSync(path.dirname(p), { recursive: true });
-    fs.writeFileSync(p, JSON.stringify({
-      codeline: String(codeline).trim(),
-      provisioned: Number(provisioned),
-      // Zero by construction: a refusal that exhausted its attempts threw before reaching here.
-      refused: 0,
-      at: new Date().toISOString(),
-    }, null, 2) + '\n');
+    fs.writeFileSync(p, '');
   } catch { /* an optimisation must never fail the run it optimises */ }
 }
 
@@ -748,7 +750,12 @@ function writeCompletionMarker({ outDir, codeline, provisioned } = {}) {
 function clearCompletionMarker({ outDir } = {}) {
   try {
     if (!outDir) return;
-    fs.rmSync(_markerPath(outDir), { force: true });
+    // Every marker, whatever codeline it names: this run is about to rewrite the prompts, so no
+    // previous completion claim survives it.
+    const dir = path.join(outDir, '..', '.prompt-cache');
+    for (const n of (fs.existsSync(dir) ? fs.readdirSync(dir) : [])) {
+      if (n.startsWith('.complete-')) fs.rmSync(path.join(dir, n), { force: true });
+    }
   } catch { /* best effort, same reasoning as above */ }
 }
 

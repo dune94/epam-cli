@@ -50,7 +50,7 @@ const CODELINE = 'next.gotransit.com';
  * A project config dir shaped like a real one AFTER a completed run: a minted roster, the
  * profiles that go with it, provisioned prompts and the prompt cache.
  */
-function project(opts: { marker?: object | null } = {}) {
+function project(opts: { marker?: string | null } = {}) {
   const root = mkdtempSync(join(tmpdir(), 'codeline-assets-'));
   dirs.push(root);
   const cfg = join(root, 'projects', 'metrolinx');
@@ -67,9 +67,10 @@ function project(opts: { marker?: object | null } = {}) {
   writeFileSync(join(cfg, '.prompt-cache', 'roster-review.json'),
     JSON.stringify({ base: 'aaa', roles: 'bbb', reviewed: true }));
 
+  // The marker is a FILENAME: .complete-<codeline>, empty. Its name is the claim.
   if (opts.marker !== null) {
-    writeFileSync(join(cfg, '.prompt-cache', '.complete'),
-      JSON.stringify(opts.marker ?? { codeline: CODELINE, provisioned: 39, refused: 0 }));
+    const cl = typeof opts.marker === 'string' ? opts.marker : CODELINE;
+    writeFileSync(join(cfg, '.prompt-cache', `.complete-${cl}`), '');
   }
   return { root, cfg };
 }
@@ -148,19 +149,24 @@ describe('the conditions on that reuse — each one a defect this repo has paid 
       .toBe(false);
   });
 
-  it('INCOMPLETE MARKER — a run that refused prompts is not cache-eligible', () => {
-    // "if prompts complete this run we consider for the cache". Refusals mean the set is partial.
-    const { cfg } = project({ marker: { codeline: CODELINE, provisioned: 31, refused: 8 } });
+  it('A REFUSED RUN LEAVES NO MARKER — so its partial set is never reused', () => {
+    /**
+     * "if prompts complete this run we consider for the cache." Completeness is expressed by the
+     * marker EXISTING, not by a count inside it: the builder writes it only after the last prompt
+     * installs and throws instead when one cannot, and clears every marker on the way in. So a run
+     * that refused prompts leaves none behind — which is this case.
+     */
+    const { cfg } = project({ marker: null });
     runReset(cfg, { EPAM_CODELINE_ID: CODELINE });
     expect(kept(cfg, 'roster.json'),
-      'assets from a run with refused prompts were reused; the missing ones never regenerate')
+      'assets from a run that never completed provisioning were reused')
       .toBe(false);
   });
 
   it('DIFFERENT CODELINE — no cross-codeline reuse', () => {
     // The stale-survey defect with a different filename: assets specialised for one codeline
     // silently applied to another.
-    const { cfg } = project({ marker: { codeline: 'next.upexpress.com', provisioned: 39, refused: 0 } });
+    const { cfg } = project({ marker: 'next.upexpress.com' });
     runReset(cfg, { EPAM_CODELINE_ID: CODELINE });
     expect(kept(cfg, 'roster.json'),
       "another codeline's roster was reused for this one").toBe(false);
@@ -189,16 +195,20 @@ describe('the conditions on that reuse — each one a defect this repo has paid 
       'assets were reused without any codeline to match them against').toBe(false);
   });
 
-  it('a CORRUPT marker clears, never reuses', () => {
+  it('THE MARKER CANNOT BE CORRUPT — it has no content to corrupt', () => {
     const root = mkdtempSync(join(tmpdir(), 'codeline-corrupt-'));
     dirs.push(root);
     const cfg = join(root, 'projects', 'metrolinx');
     mkdirSync(join(cfg, '.prompt-cache'), { recursive: true });
     mkdirSync(join(cfg, 'prompts'), { recursive: true });
     writeFileSync(join(cfg, 'roster.json'), '{"agents":{}}');
-    writeFileSync(join(cfg, '.prompt-cache', '.complete'), '{"codeline":');   // truncated
+    // The old marker was JSON and a truncated write was a real failure mode. The name IS the
+    // claim now, so the only states are "the file for this codeline exists" or "it does not".
+    // Content is never read: even a file full of garbage under the RIGHT name is a valid claim,
+    // and no file under the right name is refusal.
+    writeFileSync(join(cfg, '.prompt-cache', '.complete-some-other-codeline'), 'garbage');
     runReset(cfg, { EPAM_CODELINE_ID: CODELINE });
     expect(kept(cfg, 'roster.json'),
-      'an unreadable marker was treated as permission to reuse').toBe(false);
+      'a marker naming another codeline was accepted for this one').toBe(false);
   });
 });

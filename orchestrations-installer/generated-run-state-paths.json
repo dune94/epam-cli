@@ -1,0 +1,15 @@
+{
+  "$comment": "Files a RUN generated that an update must preserve WHEN THEY ALREADY EXIST at $DEST — while still letting a fresh install (or a project a later ref newly adds) receive them for the first time. Same mechanism as operator-config-paths.json (snapshot, extract, restore), deliberately NOT run-state-paths.json's tar --exclude: every path below is TRACKED in git, so excluding it outright would leave a first install without it.",
+  "$why": "Live 2026-09-05. A run reached pause 1 after 1h10m and $8.89 — a 49-agent roster, 41 provisioned prompts, the story assigned to a minted 'checkout-forms-engineer'. Updating that install in place with install.sh --dest replaced the mint's own outputs with whatever the ref's history held: the roster came back holding 'checkout-form-engineer' while the PRD still named the minted one, and the resume died with 'roster derivation FAILED — refusing to continue with agents that have no identity'. No copy of the minted profile survived anywhere on disk, so the entire mint was unrecoverable.",
+  "$boundary": "run-state-paths.json already covers what LOOKS like evidence — logs, runs, spool, kb. These are evidence too: each is the product of a paid model call and cannot be reproduced without paying again. They are listed here rather than there because they are tracked and a first install needs them.",
+  "paths": [
+    "orchestrations/projects/*/roster.json",
+    "orchestrations/projects/*/agent-profiles.json",
+    "orchestrations/projects/*/project-roles.json",
+    "orchestrations/projects/*/project-investigators.json",
+    "orchestrations/projects/*/project-profiles.json",
+    "orchestrations/projects/*/prompt-agent-link.json",
+    "orchestrations/projects/*/prompts/*.json",
+    "orchestrations/agents/profiles.json"
+  ]
+}

@@ -234,6 +234,27 @@ if [ -n "$DEST" ]; then
         snapshot_operator_config "$DEST" "$INSTALLER_DIR/operator-config-paths.json" "$_OPCFG_TMP"
     fi
 
+    # AND WHAT A RUN GENERATED — the same mechanism, a SEPARATE list and a SEPARATE snapshot dir.
+    #
+    # Live 2026-09-05: an update to a paused install replaced the mint's own outputs with whatever
+    # the ref's history held. The roster came back holding 'checkout-form-engineer' while the PRD
+    # still named the minted 'checkout-forms-engineer', and the resume died — "roster derivation
+    # FAILED — refusing to continue with agents that have no identity". 1h10m and $8.89 of mint,
+    # unrecoverable: no copy of the minted profile survived anywhere on disk.
+    #
+    # NOT run-state-paths.json's tar --exclude, deliberately: every one of these paths is TRACKED,
+    # so excluding it would leave a FRESH install without it. Snapshot/extract/restore lets a first
+    # install (and a project a later ref newly adds) receive them while an existing run keeps its own.
+    #
+    # Its own temp directory: sharing one with the operator-config snapshot would have the second
+    # snapshot overwrite the first.
+    _GENSTATE_TMP=""
+    if [ -f "$INSTALLER_DIR/generated-run-state-paths.json" ]; then
+        . "$INSTALLER_DIR/lib/preserve-operator-config.sh"
+        _GENSTATE_TMP="$(mktemp -d)"
+        snapshot_operator_config "$DEST" "$INSTALLER_DIR/generated-run-state-paths.json" "$_GENSTATE_TMP"
+    fi
+
     # The ${arr[@]+"${arr[@]}"} form, not bare "${arr[@]}": bash <4.4 (macOS ships 3.2 by default,
     # GPLv3 licensing) throws "unbound variable" under `set -u` expanding an empty array the plain
     # way. This form is safe on every bash this installer might run under.
@@ -241,12 +262,20 @@ if [ -n "$DEST" ]; then
             | tar -x -C "$DEST" "${_RUN_STATE_EXCLUDES[@]+"${_RUN_STATE_EXCLUDES[@]}"}"; then
         _bad "packaging '$_PKG_REF' into $DEST failed"
         [ -n "$_OPCFG_TMP" ] && rm -rf "$_OPCFG_TMP"
+        [ -n "$_GENSTATE_TMP" ] && rm -rf "$_GENSTATE_TMP"
         exit 1
     fi
 
     if [ -n "$_OPCFG_TMP" ]; then
         restore_operator_config "$DEST" "$_OPCFG_TMP"
         rm -rf "$_OPCFG_TMP"
+    fi
+    # RESTORED AFTER the operator config, and cleaned up on its own: the two snapshots are
+    # independent, and tying either one's cleanup to the other's presence leaks a temp directory
+    # whenever only one list is configured.
+    if [ -n "$_GENSTATE_TMP" ]; then
+        restore_operator_config "$DEST" "$_GENSTATE_TMP"
+        rm -rf "$_GENSTATE_TMP"
     fi
     # THE EXCLUDES ABOVE MEAN TAR NEVER CREATES THESE PATHS, FRESH INSTALL INCLUDED — see
     # run_state_ensure_dirs in lib/preserve-run-state.sh for why that is a real defect (root-owned

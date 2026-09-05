@@ -399,6 +399,13 @@ async function buildProjectPrompts({
   const outDir = path.join(projectConfigDir, 'prompts');
   fs.mkdirSync(outDir, { recursive: true });
 
+  // THE PREVIOUS RUN'S COMPLETION MARKER GOES FIRST.
+  //
+  // From here on this run is rewriting the project's prompts. If it dies partway, a marker
+  // left by the LAST run still reads 'complete', and the NEXT run would inherit a
+  // half-written set as finished. Cleared on the way in, rewritten only on the way out.
+  clearCompletionMarker({ outDir });
+
   // ── Bootstrap: verbatim, byte for byte ──────────────────────────────────
   const copied = [];
   for (const id of copyVerbatim) {
@@ -668,10 +675,85 @@ async function buildProjectPrompts({
     }
   }
 
+  // EVERY PROMPT INSTALLED — say so, so the next run against this codeline reuses them.
+  //
+  // Reaching this line is the proof: the loop above THROWS when a prompt cannot be
+  // installed within its attempts ('a project missing one prompt must not look
+  // provisioned'), so there is no partial path to here. The marker records that fact
+  // rather than forming a second opinion that could disagree with it.
+  //
+  // Untagged is unusable: with no codeline the marker is not written at all, because a
+  // marker any codeline could claim is the cross-codeline reuse pre-run-reset refuses.
+  writeCompletionMarker({
+    outDir,
+    codeline: process.env.EPAM_CODELINE_ID || '',
+    provisioned: copied.length + built.length,
+  });
+
   return { copied, generated: built };
 }
 
+/**
+ * WHERE THE COMPLETION MARKER LIVES — beside the cache, never inside prompts/.
+ *
+ * pre-run-reset deletes and recreates prompts/ on any run that is not reusing, so a marker in
+ * there could never survive to be read by the run that needs it.
+ */
+function _markerPath(outDir) {
+  return path.join(outDir, '..', '.prompt-cache', '.complete');
+}
+
+/**
+ * RECORD THAT THIS CODELINE'S PROMPTS ARE COMPLETE, so the next run reuses them.
+ *
+ * Operator, 2026-09-05: "not regenerated unless there is an override for the codeline to
+ * regenerate", and "if prompts complete this run we consider for the cache".
+ *
+ * The fact is already established by control flow — buildProjectPrompts THROWS when a prompt
+ * cannot be installed, so reaching the end means every one of them was. This writes that down
+ * rather than forming a second opinion that could disagree with it.
+ *
+ * UNTAGGED IS UNUSABLE. Without a codeline the marker would be honoured by whichever codeline ran
+ * next, which is exactly the cross-codeline reuse the consumer refuses — so it writes nothing.
+ *
+ * NEVER THROWS. The marker is a cost optimisation; the worst case of losing it is that the next
+ * run regenerates, which is today's behaviour. Failing a provisioned run over it would trade a
+ * saving for an outage.
+ */
+function writeCompletionMarker({ outDir, codeline, provisioned } = {}) {
+  try {
+    if (!outDir) return;
+    if (!codeline || !String(codeline).trim()) return;
+    if (!(Number(provisioned) > 0)) return;
+    const p = _markerPath(outDir);
+    fs.mkdirSync(path.dirname(p), { recursive: true });
+    fs.writeFileSync(p, JSON.stringify({
+      codeline: String(codeline).trim(),
+      provisioned: Number(provisioned),
+      // Zero by construction: a refusal that exhausted its attempts threw before reaching here.
+      refused: 0,
+      at: new Date().toISOString(),
+    }, null, 2) + '\n');
+  } catch { /* an optimisation must never fail the run it optimises */ }
+}
+
+/**
+ * DROP THE PREVIOUS RUN'S MARKER BEFORE THIS RUN PROVISIONS.
+ *
+ * The dangerous ordering, and the reason this exists separately: this run wipes prompts/ and
+ * starts regenerating. If it dies partway, a marker left by the LAST run still reads "complete",
+ * and the NEXT run inherits a half-written set as though it were finished. Cleared on the way in,
+ * rewritten only on the way out.
+ */
+function clearCompletionMarker({ outDir } = {}) {
+  try {
+    if (!outDir) return;
+    fs.rmSync(_markerPath(outDir), { force: true });
+  } catch { /* best effort, same reasoning as above */ }
+}
+
 module.exports = { buildProjectPrompts, renderGeneratorPrompt, provisioningList, rolesIdentity,
+  writeCompletionMarker, clearCompletionMarker,
   // Exported so the prompt REVIEWER reads a template the same way the generator and the
   // contract check do. Three readers of one shape is how the last three of these drifted.
   templateBodyText };

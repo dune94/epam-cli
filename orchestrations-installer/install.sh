@@ -4,6 +4,10 @@
 #   ./orchestrations-installer/install.sh                      install for the default stack, with dashboards if docker is up
 #   ./install.sh --stack codemie      install for a specific stack
 #   ./install.sh --no-docker          skip dashboards entirely
+#   ./install.sh --replay on          record every run to Langfuse so it can be replayed for $0
+#                                     (default off; needs LANGFUSE_SECRET_KEY + LANGFUSE_PUBLIC_KEY
+#                                      in .env or the environment — recording without them is
+#                                      silent, and a run not recorded can never be replayed)
 #   ./install.sh --check              verify an existing install, change nothing
 #   ./install.sh --dest ~/somewhere --ref v1.7   package that ref into a NEW tree, then install it
 #
@@ -60,6 +64,20 @@ while [ $# -gt 0 ]; do
         --stack)     STACK="${2:-}"; shift 2 ;;
         --no-docker) USE_DOCKER=no; shift ;;
         --docker)    USE_DOCKER=yes; shift ;;
+        # DOCUMENTED SINCE BEFORE IT EXISTED. orchestrations/config/env-vars.json describes both
+        # Langfuse keys as belonging to "replay (--replay on / EPAM_REPLAY=on)", and this parser
+        # had no --replay arm — so an operator following the configuration got
+        # "unknown option '--replay'" and exit 1. The env var keeps working; this is the flag the
+        # docs already promised.
+        --replay)
+            REPLAY_MODE="${2:-}"
+            case "$REPLAY_MODE" in
+                on|off) ;;
+                # Never silently fall back to off: that produces an install recording nothing
+                # while the operator believes it records, and the loss is one-way.
+                *) _bad "--replay takes 'on' or 'off', not '${2:-}'"; exit 1 ;;
+            esac
+            shift 2 ;;
         --check)     CHECK_ONLY=1; shift ;;
         --uninstall) UNINSTALL=1; shift ;;
         --help|-h)   sed -n '2,15p' "$0" | sed 's/^# \{0,1\}//'; exit 0 ;;
@@ -591,9 +609,29 @@ case "$REPLAY_MODE" in
         # LangfuseTracer.ts:30 gates on BOTH keys. A fresh install has empty volumes, so no project
         # and no keys exist — and recording is silently off while the containers run and capture
         # nothing. That is the one case where a warning is not enough.
+        # READ THE INSTALL'S .env, NOT THIS SHELL.
+        #
+        # This tested ${LANGFUSE_SECRET_KEY:-} from the installer's own environment. .env IS loaded
+        # earlier — but inside a command substitution (_missing_creds="$( set -a; . .env; ... )"),
+        # so it dies with that subshell and never reaches here. An operator whose .env was
+        # correctly filled in was told "replay: on but missing: LANGFUSE_SECRET_KEY
+        # LANGFUSE_PUBLIC_KEY" and the install FAILED — while the credentials step three sections
+        # above read the same file and reported it filled. One file, one run, two answers.
+        #
+        # A value already exported still wins: an operator who exports the keys in their shell
+        # must not start failing because .env does not repeat them. Read in a subshell so the keys
+        # are not leaked into everything the installer runs afterwards.
+        _lf_sk="${LANGFUSE_SECRET_KEY:-}"
+        _lf_pk="${LANGFUSE_PUBLIC_KEY:-}"
+        if [ -f "$ROOT/.env" ]; then
+            _lf_from_env="$( set -a; . "$ROOT/.env" 2>/dev/null; set +a
+                             printf '%s\t%s' "${LANGFUSE_SECRET_KEY:-}" "${LANGFUSE_PUBLIC_KEY:-}" )"
+            [ -z "$_lf_sk" ] && _lf_sk="$(printf '%s' "$_lf_from_env" | cut -f1)"
+            [ -z "$_lf_pk" ] && _lf_pk="$(printf '%s' "$_lf_from_env" | cut -f2)"
+        fi
         _lf_missing=""
-        [ -z "${LANGFUSE_SECRET_KEY:-}" ] && _lf_missing="$_lf_missing LANGFUSE_SECRET_KEY"
-        [ -z "${LANGFUSE_PUBLIC_KEY:-}" ] && _lf_missing="$_lf_missing LANGFUSE_PUBLIC_KEY"
+        [ -z "$_lf_sk" ] && _lf_missing="$_lf_missing LANGFUSE_SECRET_KEY"
+        [ -z "$_lf_pk" ] && _lf_missing="$_lf_missing LANGFUSE_PUBLIC_KEY"
         if [ -n "$_lf_missing" ]; then
             _bad "replay: on but missing:$_lf_missing — nothing would be recorded, and a run not recorded can never be replayed"
             FAILED=1

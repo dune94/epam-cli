@@ -129,6 +129,36 @@ function createRunner({ spoolDir, launcher, dry = false, pollMs = 1000,
     }, 25);
   });
 
+  /**
+   * A CLAIM MUST SURVIVE A RESTART, or an update re-runs paid work.
+   *
+   * `claimed` is in-memory and nothing ever removes a request file, so every request the spool has
+   * ever held became pending again the moment this process restarted — and install.sh restarts
+   * runner-host whenever launch-dashboard/.env changes, which an ordinary update does.
+   *
+   * Live 2026-09-05: run 4ee80472 launched at 01:53 and PAUSED at 03:03. An in-place update at
+   * ~10:50 restarted runner-host, which found the same request "pending", launched the pipeline
+   * again, and that second run wrote `failed, exit 1` over a run that had paused seven hours
+   * earlier. On a healthy codeline it would have re-run the entire pipeline instead of dying early.
+   *
+   * THE STATUS FILE IS THE DURABLE CLAIM. The runner writes one the instant it takes a request
+   * ("running", stage "starting"), so its presence means taken — by this process or a previous
+   * one. Deleting the request instead would destroy the record of what was asked for, which
+   * spool.js keeps deliberately.
+   *
+   * A status that cannot be read is treated as ABSENT, so a request whose status write failed is
+   * still launchable: the failure mode of this check must be "run it", never "silently never run
+   * it and leave the operator waiting".
+   */
+  const takenAlready = (id) => {
+    // PRESENCE, NOT READABILITY. spool.readStatus returns null for an absent file AND for a
+    // corrupt one, and those must not be treated alike: a status that exists but cannot be parsed
+    // still means the runner got as far as writing it, and relaunching on that basis would put a
+    // second pipeline on the same codeline. A stranded request is visible — nothing happens and
+    // the operator re-queues it; a double launch spends money silently.
+    try { return fs.existsSync(path.join(spoolDir, 'status', `${id}.json`)); } catch { return true; }
+  };
+
   function pending() {
     let names = [];
     try { names = fs.readdirSync(path.join(spoolDir, REQUESTS)); } catch { return []; }
@@ -136,6 +166,7 @@ function createRunner({ spoolDir, launcher, dry = false, pollMs = 1000,
       .filter((n) => n.endsWith('.json'))
       .map((n) => n.replace(/\.json$/, ''))
       .filter((id) => !claimed.has(id))
+      .filter((id) => !takenAlready(id))
       .sort();                            // oldest id first; ids are stable so this is deterministic
   }
 

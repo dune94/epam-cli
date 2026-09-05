@@ -12,6 +12,7 @@
     "  shellDefects       — handlers/scan-shell-defects.js  (shellcheck warning+ across every .sh)"
   ],
   "duplicatedLiterals": 10,
-  "uncalibratedGuards": 29,
-  "shellDefects": 0
+  "uncalibratedGuards": 31,
+  "shellDefects": 0,
+  "$uncalibratedGuardsNote": "Re-derived 2026-09-05 by CORRECTING the scanner, not by waiving guards. It read node_modules into its corpus (39.6MB in a checkout with dependencies installed vs 11MB in a packaged install), so the same tree reported different calibration and vendored code could satisfy the check: TypeScript's own diagnostics calibrated the guard named _body. It also matched substrings, so any longer identifier ending in a guard name counted. Both faults UNDER-reported, which is the dangerous direction for a check that exists to find guards nobody has tested. Source and packaged install now agree on the same number."
 }

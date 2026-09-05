@@ -70,7 +70,20 @@ function testCorpus(root) {
     try { names = fs.readdirSync(dir, { withFileTypes: true }); } catch { return; }
     for (const e of names) {
       const p = path.join(dir, e.name);
-      if (e.isDirectory()) walk(p);
+      // NOT node_modules, AND NOT A DOT DIRECTORY.
+      //
+      // The corpus was 39.6MB in a checkout with dependencies installed and 11MB in a packaged
+      // install without them — the same tree reporting different calibration, which is how the
+      // source repo passed pre-flight while the install it produced failed. `_body` counted as
+      // covered because TypeScript's own diagnostics contain
+      // "A_return_statement_can_only_be_used_within_a_function_body".
+      //
+      // Vendored code is not a test of anything here, and a check whose answer depends on whether
+      // someone has run `npm install` cannot ratchet.
+      if (e.isDirectory()) {
+        if (e.name === 'node_modules' || e.name.startsWith('.')) continue;
+        walk(p);
+      }
       // .bats INCLUDED. The corpus was ts|js|sh, so the entire shell suite under
       // test/shell was invisible: a guard whose only coverage is a bats receiver test
       // counted as uncalibrated, and every bats test added made this ratchet's number
@@ -86,16 +99,27 @@ function testCorpus(root) {
   return all;
 }
 
+/**
+ * Does the suite NAME this guard — as a name, not as a fragment of a longer word?
+ *
+ * A plain substring test called `_body` covered because some other identifier ended in it, and
+ * `run_suite` covered by any mention of `run_suite_variants`. The bar here is deliberately weak
+ * (a mention, not a good test), but it has to be a mention of THIS function.
+ */
+function corpusNames(corpus, name) {
+  return new RegExp(`\\b${name.replace(/[.*+?^${}()|[\]\\]/g, '\\$&')}\\b`).test(corpus);
+}
+
 function scan(root) {
   const guards = blockingGuards(root);
   const corpus = testCorpus(root);
   const uncovered = corpus
-    ? guards.filter((g) => !corpus.includes(g.name))
+    ? guards.filter((g) => !corpusNames(corpus, g.name))
     : guards;
   return { guards, uncovered, corpusBytes: corpus.length };
 }
 
-module.exports = { scan, blockingGuards, testCorpus };
+module.exports = { scan, blockingGuards, testCorpus, corpusNames };
 
 if (require.main === module) {
   const root = process.argv[2] || process.cwd();

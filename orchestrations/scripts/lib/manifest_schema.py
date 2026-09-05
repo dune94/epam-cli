@@ -65,8 +65,11 @@ class LocalDependencyOverride(BaseModel):
     )
     localSourcePath: str = Field(
         min_length=1,
-        description="Absolute path to a local directory or tarball npm can install "
-                    "via the file: protocol",
+        description="Path to a local directory or tarball npm can install via the "
+                    "file: protocol. RELATIVE paths resolve against the codeline root "
+                    "this install declares (JIRA_CODELINE_ROOT), which is how a project "
+                    "avoids naming one machine tree; absolute paths are still accepted "
+                    "for sources that legitimately live outside that root.",
     )
 
 
@@ -194,12 +197,40 @@ def validate(manifest: dict, repo: str) -> dict:
         except re.error as exc:
             issues.append(f"commentPatterns entry '{cp}' does not compile: {exc}")
 
+    # AN OVERRIDE FOLLOWS THE CODELINE ROOT THIS INSTALL DECLARES.
+    #
+    # This accepted only absolute paths, and checked them with os.path.exists — which asks whether
+    # the path is real, never whether it is real in the RIGHT TREE. Found 2026-09-05 on a fresh
+    # test install: metrolinx declared
+    #     "localSourcePath": "/home/bradleyjerome/projects/metrolinx/cx-shared"
+    # while that install's JIRA_CODELINE_ROOT was .../projects/tests/codelines. Both roots hold a
+    # cx-shared, so it validated cleanly while pointing npm at the REAL working copies — silently,
+    # and against a standing rule that the test project never addresses them.
+    #
+    # A relative path is resolved against the root the install already declares once, so the value
+    # cannot be right on one machine and wrong on every other. Absolute paths keep working: a
+    # project may legitimately point outside the root, and this field already ships absolute values.
     for override in m.localDependencyOverrides:
-        if not os.path.exists(override.localSourcePath):
+        _src = override.localSourcePath
+        if not os.path.isabs(_src):
+            _root = (os.environ.get("JIRA_CODELINE_ROOT") or "").strip()
+            if not _root:
+                # NEVER FALL BACK TO THE CWD. That resolves to whatever directory the validator
+                # happened to run in — passing on one machine and pointing elsewhere on the next,
+                # which is precisely the "real path, wrong tree" failure above.
+                issues.append(
+                    f"localDependencyOverrides entry for '{override.package}' "
+                    f"(codeline '{override.codeline}'): localSourcePath '{_src}' is relative but "
+                    f"no codeline root is declared — set JIRA_CODELINE_ROOT (the project's "
+                    f"config.env declares it) or give an absolute path"
+                )
+                continue
+            _src = os.path.join(_root, _src)
+        if not os.path.exists(_src):
             issues.append(
                 f"localDependencyOverrides entry for '{override.package}' "
                 f"(codeline '{override.codeline}'): localSourcePath "
-                f"'{override.localSourcePath}' does not exist — npm install would fail"
+                f"'{_src}' does not exist — npm install would fail"
             )
 
     if m.testFailurePattern is not None:

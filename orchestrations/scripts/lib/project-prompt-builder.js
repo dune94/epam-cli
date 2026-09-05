@@ -58,6 +58,33 @@ function templateBodyText(template) {
   return Object.values(bodies).filter((b) => typeof b === 'string').join('\n');
 }
 
+
+/**
+ * WHAT IDENTIFIES A ROSTER, FOR CACHING — its roles, not the prose describing them.
+ *
+ * The mint reports each role as `- <name> [<kind>] — <rationale>`, and the rationale is written
+ * by a model, so it is reworded on every mint of the same codeline. Digesting the whole string
+ * meant two runs producing IDENTICAL roles got different cache keys: measured 2026-09-04, 39
+ * cache entries and 0 hits, 28 of them blocked on exactly this — regenerating 28 prompts at model
+ * prices every run for a difference no prompt can observe.
+ *
+ * The key is decided by what a prompt can OBSERVE. usesRoles() marks a prompt as roster-dependent
+ * by extracting role NAMES and asking whether the generated text mentions any of them, so names
+ * are the only thing that can invalidate it — with kinds, because a kind decides whether an agent
+ * may author code at all. The rationale is commentary the generator reads and never quotes.
+ *
+ * Sorted, because the mint promises no ordering. Nothing here names a role, a kind or a count.
+ */
+function rolesIdentity(mintedRoles) {
+  const out = [];
+  for (const line of String(mintedRoles || '').split('\n')) {
+    // `- <name> [<kind>]` — the identity the mint declares, whatever follows it.
+    const m = line.match(/^\s*-\s*([A-Za-z0-9][A-Za-z0-9-]*)\s*\[([^\]]*)\]/);
+    if (m) out.push(`${m[1]}[${m[2].trim()}]`);
+  }
+  return out.sort().join(',');
+}
+
 function renderGeneratorPrompt({ generatorBody, template, projectContext, codelineContext, mintedRoles, refusal }) {
   let out = generatorBody
     .split('__GEN_TEMPLATE_ID__').join(template.id)
@@ -443,7 +470,9 @@ async function buildProjectPrompts({
   const cacheDir = path.join(outDir, '..', '.prompt-cache');
   const sha = (t) => crypto.createHash('sha256').update(String(t)).digest('hex');
   const baseDigest = (t) => sha(JSON.stringify({ t, generatorBody, projectContext, codelineContext }));
-  const rolesDigest = sha(String(mintedRoles || ''));
+  // The ROLES, not the prose about them — see rolesIdentity. Digesting the mint's raw text
+  // rebuilt every roster-dependent prompt on every run because a model rewords itself.
+  const rolesDigest = sha(rolesIdentity(mintedRoles));
   const usesRoles = (doc, roles) => {
     const names = String(roles || '').match(/[a-z][a-z0-9]*(?:-[a-z0-9]+)+/g) || [];
     const body = JSON.stringify(doc);
@@ -642,7 +671,7 @@ async function buildProjectPrompts({
   return { copied, generated: built };
 }
 
-module.exports = { buildProjectPrompts, renderGeneratorPrompt, provisioningList,
+module.exports = { buildProjectPrompts, renderGeneratorPrompt, provisioningList, rolesIdentity,
   // Exported so the prompt REVIEWER reads a template the same way the generator and the
   // contract check do. Three readers of one shape is how the last three of these drifted.
   templateBodyText };

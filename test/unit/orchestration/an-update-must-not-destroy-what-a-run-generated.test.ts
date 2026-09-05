@@ -52,6 +52,44 @@ describe('the generated-run-state list', () => {
   const declared: string[] = existsSync(file) ? readJson(file).paths || [] : [];
 
   /**
+   * THE PROMPT CACHE IS A PER-INSTALL ASSET, AND AN UPDATE WAS RESETTING IT.
+   *
+   * Operator, 2026-09-05: "it does not have to be generated again and again... I want it to be
+   * tagged to a codeline and reused for the codeline."
+   *
+   * project-prompt-builder.js caches each generated prompt under the project's `.prompt-cache`,
+   * keyed by the template digest and (when the prompt names a minted role) the roster digest, so
+   * an unchanged prompt is reused instead of regenerated. The mechanism works. What defeated it is
+   * that `.prompt-cache` is TRACKED — 78 files, 39 for metrolinx at v1.43 — so every
+   * `install.sh --dest --ref` extracts the committed cache over the install's live one. The
+   * committed entries were written against some other run's roster, so their rolesDigest never
+   * matches and every prompt regenerates.
+   *
+   * Measured on the 2026-09-05 run: 39 templates regenerated, each then reviewed by a second
+   * model — prompt-builder $1.25 over 25 calls plus prompt-review $1.51 over 16, together 36% of
+   * the run's spend before the pipeline did any work of its own.
+   *
+   * It belongs on THIS list rather than run-state-paths.json for the same reason the roster does:
+   * that list works by tar --exclude, so the path is never extracted at all and a FRESH install
+   * would receive no cache. The needed semantic is "do not overwrite what is already there".
+   */
+  it('declares the prompt cache — an update must not reset it', () => {
+    expect(declared.join('|'), [
+      'orchestrations/projects/*/.prompt-cache is not declared, so every republish overwrites the',
+      "install's accumulated cache with the ref's committed copy. Those entries were generated",
+      'against a different roster, so nothing matches and all 39 prompts are regenerated and',
+      're-reviewed — 36% of a run\'s spend, repeated every install.',
+    ].join('\n')).toContain('.prompt-cache');
+  });
+
+  it('and the cache is NOT excluded — a fresh install may still receive one', () => {
+    const excluded: string[] = readJson(join(INSTALLER, 'run-state-paths.json')).paths || [];
+    expect(excluded.join('|'),
+      '.prompt-cache was added to the exclude list, so a fresh install would never receive it')
+      .not.toContain('.prompt-cache');
+  });
+
+  /**
    * THE ARTEFACTS ARE DERIVED FROM WHAT THE MINT ACTUALLY WRITES, not from a list I typed. Each
    * name is taken from the code that produces it, so a new mint output is caught by this test
    * rather than by another dead run.
@@ -168,6 +206,35 @@ describe('the mechanism, driven end to end against a real tree', () => {
     expect(out['orchestrations/scripts/claude.sh'],
       'the preserve list is too broad — it is now stopping real code updates from landing')
       .toBe('NEW');
+  });
+
+  it('THE PROMPT CACHE SURVIVES — the install\'s own entry beats the ref\'s', () => {
+    /**
+     * The declaration above only says the path is listed. This drives the real snapshot/restore
+     * shell functions to prove an update actually keeps the install's cache — the difference
+     * between "declared" and "preserved" being exactly what made the roster loss possible.
+     *
+     * The two bodies differ in rolesDigest, which is what decides reuse: if the ref's copy wins,
+     * every prompt naming a minted role regenerates, which is the 36%-of-spend defect.
+     */
+    const p = 'orchestrations/projects/metrolinx/.prompt-cache/roster-review.json';
+    const { out } = roundTrip(
+      { [p]: '{"base":"aaa","roles":"THIS_INSTALL","usesRoles":true,"reviewed":true}' },
+      { [p]: '{"base":"aaa","roles":"FROM_THE_REF","usesRoles":true,"reviewed":false}' },
+    );
+    expect(out[p], [
+      "the update replaced this install's prompt cache with the ref's committed copy. The ref's",
+      'entries were generated against a different roster, so no rolesDigest matches and all 39',
+      'prompts are regenerated and re-reviewed — every republish, forever.',
+    ].join('\n')).toContain('THIS_INSTALL');
+  });
+
+  it('and a FRESH install still receives the ref\'s cache', () => {
+    // The other end: excluding the path outright would leave a first install with no cache at
+    // all, which is why this is on the preserve list and not the tar --exclude list.
+    const p = 'orchestrations/projects/metrolinx/.prompt-cache/roster-review.json';
+    const { out } = roundTrip({}, { [p]: '{"base":"seed"}' });
+    expect(out[p], 'a fresh install received no prompt cache').toContain('seed');
   });
 
   it('a project the ref newly adds is still created', () => {

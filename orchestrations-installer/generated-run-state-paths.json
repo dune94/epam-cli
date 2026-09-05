@@ -10,6 +10,8 @@
     "orchestrations/projects/*/project-profiles.json",
     "orchestrations/projects/*/prompt-agent-link.json",
     "orchestrations/projects/*/prompts/*.json",
+    "orchestrations/projects/*/.prompt-cache/*.json",
     "orchestrations/agents/profiles.json"
-  ]
+  ],
+  "$promptCache": "The cache is what makes a prompt generated ONCE per codeline instead of once per run. project-prompt-builder.js keys each entry by the template digest and, for prompts naming a minted role, the roster digest — so an unchanged prompt is reused. The mechanism worked; the update defeated it. .prompt-cache is TRACKED (78 files, 39 for metrolinx at v1.43), so every install.sh --dest --ref extracted the committed cache over the install's own. Those entries were generated against another run's roster, so no rolesDigest matched and all 39 regenerated. Measured 2026-09-05: prompt-builder $1.25/25 calls + prompt-review $1.51/16 calls = 36% of the run's spend, paid again on every republish. Operator: 'it does not have to be generated again and again ... I want it to be tagged to a codeline and reused for the codeline.'"
 }

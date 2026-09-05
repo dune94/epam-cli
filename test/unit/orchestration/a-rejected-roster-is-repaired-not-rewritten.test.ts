@@ -36,22 +36,39 @@ import { mkdtempSync, writeFileSync, rmSync, readFileSync, existsSync, mkdirSync
 import { tmpdir } from 'node:os';
 import { join } from 'node:path';
 
-const { buildProjectRoster } = require('../../../orchestrations/scripts/lib/project-roster.js');
+const { buildProjectRoster, personaDigest, agentKinds } =
+  require('../../../orchestrations/scripts/lib/project-roster.js');
 
-/** A canonical roster with N personas, the shape the specialiser derives from. */
+/**
+ * A canonical roster and a contract-satisfying derived roster, in the shapes the library actually
+ * requires — canonical is a flat `name -> persona text` map, and a roster is
+ * `{ agents: { name: {persona, kind, ancestor, derivedFromSha256} } }` covering EVERY canonical
+ * name. Nothing here is invented: the digest convention and the kind vocabulary are read from the
+ * library itself, so a change there fails this file rather than drifting from it.
+ */
 function fixture(n = 4) {
   const dir = mkdtempSync(join(tmpdir(), 'roster-repair-'));
   const logDir = join(dir, 'logs');
   const cfgDir = join(dir, 'cfg');
   mkdirSync(logDir, { recursive: true });
   mkdirSync(cfgDir, { recursive: true });
-  const agents: Record<string, unknown> = {};
-  for (let i = 1; i <= n; i++) {
-    agents[`agent-${i}`] = { name: `agent-${i}`, role: 'implementer', brief: `brief ${i}` };
-  }
+
+  const canonical: Record<string, string> = {};
+  for (let i = 1; i <= n; i++) canonical[`agent-${i}`] = `canonical persona for agent-${i}`;
   const canonicalPath = join(dir, 'canonical.json');
-  writeFileSync(canonicalPath, JSON.stringify({ agents }, null, 2));
-  return { dir, logDir, cfgDir, canonicalPath, agents };
+  writeFileSync(canonicalPath, JSON.stringify(canonical, null, 2));
+
+  const kind = agentKinds()[0];          // the library's own vocabulary, not a literal
+  const roster = () => ({
+    agents: Object.fromEntries(Object.keys(canonical).map((name) => [name, {
+      persona: `specialised persona for ${name}`,
+      kind,
+      ancestor: name,
+      derivedFromSha256: personaDigest(canonical[name]),
+    }])),
+  });
+
+  return { dir, logDir, cfgDir, canonicalPath, canonical, roster };
 }
 
 describe('a rejected roster is REPAIRED, not rewritten from scratch', () => {
@@ -62,7 +79,7 @@ describe('a rejected roster is REPAIRED, not rewritten from scratch', () => {
 
     const produce = async (opts: any) => {
       calls.push(opts);
-      writeFileSync(opts.outPath, readFileSync(f.canonicalPath, 'utf8'));
+      writeFileSync(opts.outPath, JSON.stringify(f.roster()));
     };
     const review = async () => {
       reviewed += 1;
@@ -100,7 +117,7 @@ describe('a rejected roster is REPAIRED, not rewritten from scratch', () => {
         seenOnRetry = existsSync(opts.previousRosterPath as string)
           ? readFileSync(opts.previousRosterPath as string, 'utf8') : null;
       }
-      writeFileSync(opts.outPath, readFileSync(f.canonicalPath, 'utf8'));
+      writeFileSync(opts.outPath, JSON.stringify(f.roster()));
     };
     const review = async () => (++reviewed === 1
       ? { verdict: 'defects_found', findings: [{ agent: 'agent-1', severity: 'blocking', claim: 'x' }] }
@@ -127,7 +144,7 @@ describe('a rejected roster is REPAIRED, not rewritten from scratch', () => {
     let reviewed = 0;
     const produce = async (opts: any) => {
       calls.push(opts);
-      writeFileSync(opts.outPath, readFileSync(f.canonicalPath, 'utf8'));
+      writeFileSync(opts.outPath, JSON.stringify(f.roster()));
     };
     const review = async () => (++reviewed === 1
       ? { verdict: 'defects_found', findings: [{ severity: 'blocking', claim: 'two agents own the same file' }] }
@@ -151,7 +168,7 @@ describe('a rejected roster is REPAIRED, not rewritten from scratch', () => {
     const f = fixture(4);
     let reviewed = 0;
     const seenByReview: number[] = [];
-    const produce = async (opts: any) => writeFileSync(opts.outPath, readFileSync(f.canonicalPath, 'utf8'));
+    const produce = async (opts: any) => writeFileSync(opts.outPath, JSON.stringify(f.roster()));
     const review = async ({ roster }: any) => {
       reviewed += 1;
       seenByReview.push(Object.keys(roster.agents).length);

@@ -331,6 +331,35 @@ function checkEntry(name, entry, canonical) {
 }
 
 /** Every entry's verdict, in one pass. Names offenders — a bare count cannot be acted on. */
+
+/**
+ * WHICH AGENTS A REVIEW ACTUALLY BLAMES — read from the findings, never from a list.
+ *
+ * A finding names the agent it is about. Only names the roster ACTUALLY HOLDS are accepted: a
+ * review that blames something absent cannot be repaired agent-by-agent, and treating its name as
+ * a repair target would ask the producer to fix a brief that does not exist.
+ *
+ * Returns [] whenever the findings name nobody, which the caller must read as "rewrite in full" —
+ * a finding about the roster AS A WHOLE ("two agents own the same file") is not repairable one
+ * brief at a time.
+ */
+
+/** Where the roster being repaired is kept for the next attempt. Run-scoped, like every other
+ * working copy — never beside the output, which the derive loop unlinks. */
+function repairSourcePath(logDir) {
+  return path.join(String(logDir || ''), 'roster-repair-source.json');
+}
+
+function faultedAgents(findings, roster) {
+  const present = new Set(Object.keys((roster && roster.agents) || {}));
+  const named = new Set();
+  for (const f of (Array.isArray(findings) ? findings : [])) {
+    const who = f && (f.agent || f.agentName || f.name);
+    if (who && present.has(String(who))) named.add(String(who));
+  }
+  return [...named];
+}
+
 function checkRoster(roster, canonical) {
   const entries = (roster && roster.agents) || {};
   const names = Object.keys(entries);
@@ -457,6 +486,10 @@ async function buildProjectRoster({
   }
 
   let lastReason = '';
+  // Which agents the LAST review blamed, and where the roster it judged still sits. Both are
+  // reset each attempt: a repair target from two attempts ago is not evidence about this one.
+  let _repairOnly = [];
+  let _previousRosterPath = '';
   for (let attempt = 1; attempt <= attempts; attempt++) {
     // A fresh start each attempt: a retry must not inherit half of the previous answer, or a
     // roster that failed once can pass by accumulation.
@@ -471,7 +504,17 @@ async function buildProjectRoster({
     // produced a contract-passing roster. Declaring `attempts: 3` and spending one on a transient
     // is the same as declaring one.
     try {
-      await produce({ canonicalCopyPath: copyPath, outPath, attempt, refusal: lastReason });
+      await produce({ canonicalCopyPath: copyPath,
+        outPath,
+        attempt,
+        refusal: lastReason,
+        // REPAIR, WHEN THE REVIEW SAID WHO. Empty means rewrite in full — which is what a finding
+        // that names nobody ("two agents own the same file") requires, and what the first attempt
+        // always is. The producer is handed the roster to repair FROM; without it there is nothing
+        // to repair and it can only rewrite.
+        ...(_repairOnly.length
+          ? { repairOnly: _repairOnly, previousRosterPath: _previousRosterPath }
+          : {}) });
     } catch (e) {
       lastReason = `the specialiser call failed: ${(e && e.message) || e}`;
       log(`[roster] attempt ${attempt}/${attempts} CALL FAILED: ${lastReason}`);
@@ -575,11 +618,30 @@ async function buildProjectRoster({
         // The findings themselves, not "[object Object]": the next attempt can only fix what it
         // is told, and joining an array of objects tells it nothing.
         lastReason = _cls.reason || 'review returned no verdict';
+        // WHO, not just THAT. A review that names the agent at fault lets the next attempt repair
+        // one brief instead of rewriting every one of them — live 2026-09-04 that difference was
+        // $4.58 and 17 minutes (sonnet 24,562 out, then opus-4-8 57,560 out) for ONE wrong
+        // sentence, on a run that had spent $7.51 in total. The escalation compounds it: `attempt`
+        // drives the ladder rung, so the rewrite lands on a costlier model AND on the largest call
+        // in the run, within 10% of the output ceiling — a third attempt risks a TRUNCATED roster.
+        _repairOnly = faultedAgents(_cls.findings, roster);
         log(`[roster] attempt ${attempt}/${attempts} REJECTED by review: ${lastReason}`);
         break;
       }
 
       if (!approved) {
+        // THE ROSTER SURVIVES A TARGETED REPAIR, and only then.
+        //
+        // Unlinking it is what forced a full rewrite: the next attempt had nothing to repair FROM.
+        // The invariant that unlink protects — "a retry must not inherit half of the previous
+        // answer, or a roster that failed once can pass by accumulation" — is about UNJUDGED
+        // state, and repair does not weaken it: the contract check and the review both run again
+        // over the COMPLETE roster on the next attempt, so every agent is re-judged either way.
+        // What changes is only how many the model must WRITE.
+        if (_repairOnly.length) {
+          _previousRosterPath = repairSourcePath(logDir);
+          try { fs.copyFileSync(outPath, _previousRosterPath); } catch { _repairOnly = []; }
+        }
         try { fs.unlinkSync(outPath); } catch { /* nothing to remove */ }
         if (reviewReason && !lastReason) {
           throw new Error(
@@ -690,11 +752,15 @@ function classifyReviewVerdict(verdict) {
     .map((f) => `${f.agent || 'roster'}: ${f.claim || f.found || f.remedy || 'no detail given'}`)
     .join('; ');
 
-  if (v === 'approved' || v === 'sound') return { outcome: 'approved', reason: '' };
+  if (v === 'approved' || v === 'sound') return { outcome: 'approved', reason: '', findings: [] };
 
   if (v === 'changes_requested') {
     return {
       outcome: 'rejected',
+      // THE FINDINGS TRAVEL WITH THE VERDICT. Without them the caller can only know THAT the
+      // roster was rejected, never WHICH agent is at fault — so its only remedy is to rewrite
+      // every brief.
+      findings: blocking.length ? blocking : findings,
       reason: (verdict && verdict.reason) || describe(blocking.length ? blocking : findings)
         || 'the review requested changes without naming one',
     };
@@ -702,8 +768,8 @@ function classifyReviewVerdict(verdict) {
 
   if (v === 'defects_found') {
     return blocking.length
-      ? { outcome: 'rejected', reason: describe(blocking) }
-      : { outcome: 'approved', reason: findings.length ? describe(findings) : '' };
+      ? { outcome: 'rejected', findings: blocking, reason: describe(blocking) }
+      : { outcome: 'approved', findings: [], reason: findings.length ? describe(findings) : '' };
   }
 
   if (v === 'review_failed' || v === 'nothing_to_review') {

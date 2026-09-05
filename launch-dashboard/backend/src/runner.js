@@ -43,6 +43,36 @@ function writeStatus(dir, id, body) {
  * rewritten constantly, so a poll WILL eventually catch one mid-write), or no step in flight.
  * Observability must never fail the run it observes.
  */
+
+/**
+ * WHAT IS RUNNING BEFORE ANY PHASE STEP EXISTS.
+ *
+ * step-status.json is written by step_emit, which only starts once the PHASE begins. The mint runs
+ * before that — codeline discovery, the agent mint, the roster specialiser, the prompt build — and
+ * it is the longest and most expensive part of a run. Live 20260905T011131Z: the dashboard showed
+ * "starting" for eighteen minutes and $3.65 while all of that happened, which is exactly the
+ * complaint the progress work existed to answer. The phase steps were covered and the dark part
+ * was not.
+ *
+ * agent-status.json DOES exist through the mint, and already carries what is needed: the cost seam
+ * writes an `agent_call` event for every model call, on every arm, with the agent, model and
+ * elapsed time resolved. Nothing new has to be produced — only read.
+ *
+ * Returns null on anything unexpected: this is observability and may never fail a run.
+ */
+function readFallbackStage(file) {
+  if (!file) return null;
+  let doc;
+  try { doc = JSON.parse(fs.readFileSync(file, 'utf8')); } catch { return null; }
+  const events = Array.isArray(doc?.events) ? doc.events : [];
+  for (let i = events.length - 1; i >= 0; i -= 1) {
+    const e = events[i];
+    const msg = e && String(e.message || '').trim();
+    if (msg) return msg;
+  }
+  return null;
+}
+
 function readCurrentStage(progressFile) {
   if (!progressFile) return null;
   let doc;
@@ -67,6 +97,9 @@ function createRunner({ spoolDir, launcher, dry = false, pollMs = 1000,
                        // Where the pipeline publishes its own progress, and how often to look.
                        // Absent means the runner simply reports nothing extra — it never invents.
                        progressFile = process.env.EPAM_STEP_STATUS_FILE || null,
+                       // The pre-phase source. step-status.json does not exist during the mint,
+                       // which is the longest stage of a run; agent-status.json does.
+                       progressFallbackFile = process.env.EPAM_AGENT_STATUS_FILE || null,
                        progressMs = 5000,
                        // Default FALSE: the only production caller is a daemon whose sole job is this
                        // timer. An embedding caller that must not have its event loop held open can
@@ -159,7 +192,7 @@ function createRunner({ spoolDir, launcher, dry = false, pollMs = 1000,
       let lastStage = 'starting';
       const progress = setInterval(() => {
         try {
-          const stage = readCurrentStage(progressFile);
+          const stage = readCurrentStage(progressFile) || readFallbackStage(progressFallbackFile);
           if (!stage || stage === lastStage) return;
           lastStage = stage;
           writeStatus(spoolDir, id, { status: 'running', stage });

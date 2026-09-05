@@ -243,9 +243,18 @@ function toolCallsForThisCall(startedAt, endedAt) {
   try {
     // eslint-disable-next-line global-require
     const tx = require('./transcript-tool-calls.js');
-    const dir = tx.transcriptDirFor(process.cwd());
-    const file = tx.transcriptForCall(dir, startedAt, endedAt);
-    return file ? tx.toolCallsInTranscript(file) : [];
+    // WHERE THE RUNNER RAN, not where this process sits. run-agent-orchestration.sh does
+    // `cd "$PROJECT_ROOT"` before invoking a seam, so the transcript lands under the CODELINE.
+    // Deriving the directory from process.cwd() alone recorded nothing on a live run.
+    const dirs = tx.transcriptDirsToSearch(process.env, process.cwd());
+    const hits = [];
+    for (const d of dirs) {
+      const f = tx.transcriptForCall(d, startedAt, endedAt);
+      if (f) hits.push(f);
+    }
+    // Exactly one across the WHOLE set: a second candidate anywhere is still ambiguity, and a
+    // mis-attributed transcript replays another agent's action.
+    return hits.length === 1 ? tx.toolCallsInTranscript(hits[0]) : [];
   } catch { return []; }
 }
 
@@ -450,6 +459,7 @@ function emitCostSnapshot({
 }
 
 module.exports = {
+  toolCallsForThisCall,
   parseCostRecord, buildCostSnapshot, appendLedgerRecord, emitCostSnapshot,
   replyTextFrom,
   promptForTrace,

@@ -38,7 +38,7 @@ import re
 import sys
 from typing import List, Optional
 
-from pydantic import BaseModel, Field
+from pydantic import BaseModel, Field, StrictBool
 
 
 class LocalDependencyOverride(BaseModel):
@@ -135,6 +135,72 @@ class DependencyManifest(BaseModel):
                     "registry, per codeline. Optional: empty list keeps today's "
                     "behaviour (real registry install) unchanged.",
     )
+    # ── FIELDS THE ENGINE ALREADY READS ──────────────────────────────────────────────────────
+    #
+    # These nine were live in project manifests and absent from this model, so `extra: forbid`
+    # rejected real configuration: metrolinx's manifest failed with 8 extra_forbidden errors and
+    # skyscanner's with one. Validation aborts on a schema error, so it never reached the semantic
+    # checks below — the importPattern compile, the manifestFile existence check, and the
+    # localSourcePath check that keeps an override out of the wrong codeline tree. The reviewer
+    # this module's docstring describes was INERT for every project that declared any of them.
+    #
+    # extra: forbid stays. "A mistyped field must fail, not vanish" is exactly why this drift was
+    # visible at all; the repair is to declare what is real, not to stop checking.
+    #
+    # ALL OPTIONAL. mock3 and skyscanner declare far fewer fields than metrolinx, and making any
+    # of these required would break every project that has not opted in.
+    buildArtifactDirs: List[str] = Field(
+        default_factory=list,
+        description="Directories holding build output, excluded from source scanning like "
+                    "vendorDirs. Read by plugins/dependency-scan-plugin.js.",
+    )
+    indexFileNames: List[str] = Field(
+        default_factory=list,
+        description="Basenames that make a file its directory's barrel (e.g. 'index'), so a "
+                    "directory import resolves to it. Read by plugins/dependency-scan-plugin.js.",
+    )
+    moduleConfigGlob: Optional[str] = Field(
+        default=None,
+        description="Glob matching the file that declares module path aliases "
+                    "(e.g. 'tsconfig*.json'). Read by plugins/dependency-scan-plugin.js.",
+    )
+    moduleAliasPath: Optional[str] = Field(
+        default=None,
+        description="Dotted path to the alias map inside moduleConfigGlob's file "
+                    "(e.g. 'compilerOptions.paths'). Read by plugins/dependency-scan-plugin.js.",
+    )
+    moduleRoots: List[str] = Field(
+        default_factory=list,
+        description="Directory prefixes a non-relative import may resolve against before it "
+                    "counts as an external package — '' means the codeline root. Read by "
+                    "scripts/claude.sh and lib/eslint-baseline-gate.sh.",
+    )
+    # STRICT. Plain `bool` coerces: pydantic accepts the STRING 'yes' — and, worse, the
+    # string 'false', which is truthy as a string and would read as enabled. A setting that
+    # decides whether the pipeline installs packages onto a client codeline must be the
+    # boolean it looks like, or be refused.
+    autoInstall: StrictBool = Field(
+        default=False,
+        description="Whether a missing dependency may be installed automatically. Read by "
+                    "scripts/claude.sh. Defaults false: installing on a client codeline is an "
+                    "opt-in, never a surprise.",
+    )
+    dependencySensitiveConfigFiles: List[str] = Field(
+        default_factory=list,
+        description="Config files whose behaviour depends on installed dependencies (e.g. "
+                    "'jest.config.js'), so a change to one invalidates prior analysis. Read by "
+                    "detective-rerun-step.js and lib/plan-fidelity-gate.sh.",
+    )
+    coupledFilePairs: List[List[str]] = Field(
+        default_factory=list,
+        description="Files that must change together (e.g. package.json with its lockfile). Read "
+                    "by scripts/claude.sh and lib/coupled-pair-gate.sh.",
+    )
+    vendorCacheExcludePatterns: List[str] = Field(
+        default_factory=list,
+        description="Globs inside vendorDirs that are build caches rather than installed code "
+                    "(e.g. '.vite/*'), excluded from vendor scanning.",
+    )
     testFailurePattern: Optional[str] = Field(
         default=None,
         description="Regex with one capturing group identifying a FAILING test's "
@@ -174,8 +240,23 @@ def validate(manifest: dict, repo: str) -> dict:
     """
     issues: List[str] = []
 
+    # SELF-DOCUMENTING KEYS ARE DOCUMENTATION, NOT CONFIGURATION.
+    #
+    # This repository writes the reason for a setting beside it, in the same file: `_what`,
+    # `_shape`, `$why`, `$comment`. Every project manifest opens with one, and `extra: forbid`
+    # rejected it — mock3's ONLY validation error was its own `_what` string. So a file that is
+    # entirely correct failed, and because validation aborts on a schema error, none of the
+    # semantic checks below ever ran for it.
+    #
+    # Dropped rather than declared: adding a `_what` field would invite `_why`, `_note` and the
+    # rest, each needing its own declaration. The convention is a PREFIX, so the prefix is what is
+    # honoured. Everything without one still meets extra: forbid, so a mistyped real field fails
+    # exactly as before.
+    _config = {k: v for k, v in manifest.items()
+               if not (k.startswith("_") or k.startswith("$"))}
+
     try:
-        m = DependencyManifest(**manifest)
+        m = DependencyManifest(**_config)
     except Exception as exc:  # schema violation is itself a reviewable failure
         return {"verdict": "fail", "issues": [f"schema: {exc}"]}
 

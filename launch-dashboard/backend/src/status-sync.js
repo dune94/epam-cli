@@ -35,7 +35,19 @@ function syncActiveRunsFromSpool(db, spoolDir) {
     if (!store.ACTIVE.includes(row.status)) continue;
     let s = null;
     try { s = spool.readStatus(spoolDir, row.id); } catch { s = null; }
-    if (!s || !s.status || s.status === row.status) continue;
+    if (!s || !s.status) continue;
+    // A STAGE CHANGE IS A CHANGE. This compared the STATUS only — and a run's status is `running`
+    // from the moment it starts until it ends, so every stage update in between was discarded,
+    // which is the entire point of live progress. Live 2026-09-05: the runner had written
+    // "roster-review · claude-sonnet-5 · 33s" into the spool while the dashboard still showed a
+    // CodeGraph message from three minutes earlier. The runner was right all along; this refused
+    // to carry it.
+    //
+    // Every field the sync would write is compared, so an identical status still writes nothing
+    // and updatedAt stays meaningful as a freshness signal.
+    const same = (a, b) => (a ?? null) === (b ?? null);
+    if (same(s.status, row.status) && same(s.stage, row.stage)
+        && same(s.runId, row.runId) && same(s.detail, row.detail)) continue;
     // updateProgress carries stage/runId/detail through unchanged when the status file omits them
     // (it coalesces against the current row), so a progress update never blanks what a previous
     // one recorded. The runId matters most: without it a paused or failed run can never be

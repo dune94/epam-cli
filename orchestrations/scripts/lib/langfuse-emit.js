@@ -124,6 +124,27 @@ function sessionId(env) {
  * send it to. The fields that were missing for the life of this pipeline — input and output —
  * are exactly the ones no test could have caught while the body was built inside the request.
  */
+
+/**
+ * THE CALL THE MODEL MADE TRAVELS WITH WHAT IT SAID.
+ *
+ * A seam that DELIVERS by tool call cannot be replayed from its text: roster-specialiser writes
+ * roster.json, and serving the sentence it wrote afterwards leaves no file behind — which is
+ * exactly why a $0 rehearsal of a fully recorded run still could not get past the mint on
+ * 2026-09-04.
+ *
+ * SHAPE CHOSEN TO MATCH THE READER THAT ALREADY EXISTS. mock-expectations takes the body from
+ * `output.text` when the output is an object, and the calls from `output.toolCalls`. So a reply
+ * with calls becomes {text, toolCalls} and a reply without them stays exactly the STRING it has
+ * always been — the entire existing corpus is text-only and must not be reshaped.
+ */
+function outputWithCalls(output, toolCalls) {
+  const calls = Array.isArray(toolCalls) ? toolCalls : [];
+  if (!calls.length) return output;
+  return { text: typeof output === 'string' ? output : String(output == null ? '' : output),
+    toolCalls: calls };
+}
+
 function buildIngestionBody(f, ids) {
   const num = (v) => (typeof v === 'number' && Number.isFinite(v) ? v : Number(v) || 0);
   const traceId = (ids && ids.traceId) || '';
@@ -153,7 +174,8 @@ function buildIngestionBody(f, ids) {
         // empty-stringed: absent reads as "nothing was recorded", "" reads as "the model was sent
         // nothing", and those are different claims.
         ...(f.input === undefined || f.input === null ? {} : { input: f.input }),
-        ...(f.output === undefined || f.output === null ? {} : { output: f.output }),
+        ...(f.output === undefined || f.output === null
+          ? {} : { output: outputWithCalls(f.output, f.toolCalls) }),
         userId: f.storyId || undefined,
         metadata: {
           phase: f.phase || '',
@@ -192,8 +214,12 @@ function buildIngestionBody(f, ids) {
         // Absent stays absent: an empty string would read as "the model answered with nothing"
         // rather than "we never captured it".
         ...(f.input ? { input: f.input } : {}),
-        ...(f.output ? { output: f.output } : {}),
+        ...(f.output ? { output: outputWithCalls(f.output, f.toolCalls) } : {}),
         metadata: {
+          // The COUNT, which is what mock-expectations ranks candidates by when choosing between
+          // a prose capture and one that actually did something.
+          ...(Array.isArray(f.toolCalls) && f.toolCalls.length
+            ? { toolCalls: f.toolCalls.length } : {}),
           turns: num(f.turns),
           cache_read_tokens: num(f.cacheRead),
           cache_create_tokens: num(f.cacheCreate),

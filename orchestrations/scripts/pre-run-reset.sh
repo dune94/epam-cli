@@ -638,30 +638,20 @@ _ROSTER_FILE="${EPAM_PROJECT_CONFIG_DIR:+$EPAM_PROJECT_CONFIG_DIR/roster.json}"
 # the assets belong to this run is not the same as proving they do, and reuse is the unsafe
 # direction.
 _CODELINE_ASSETS_REUSED=0
-_CODELINE_MARKER="${EPAM_PROJECT_CONFIG_DIR:+$EPAM_PROJECT_CONFIG_DIR/.prompt-cache/.complete}"
+# THE MARKER IS A FILENAME. `.prompt-cache/.complete-<codeline>` — empty, and its NAME is the
+# claim. Presence means the prompt builder finished provisioning every template for THAT codeline;
+# it writes the file only after the last one installs, and throws instead if any could not, so
+# there is no partial state that leaves one behind. Cleared on the way in to every provisioning
+# run, so a run that dies midway leaves no claim for the next one to inherit.
+#
+# One test, no parse. This was a JSON document read by node and compared field by field, which
+# added a corrupt-marker case that a file with no content cannot have.
 if [ "${EPAM_REGENERATE_CODELINE_ASSETS:-0}" = "1" ]; then
-    [ -n "$_CODELINE_MARKER" ] && [ -f "$_CODELINE_MARKER" ] \
-        && info "  EPAM_REGENERATE_CODELINE_ASSETS=1 — override: regenerating this codeline's agents and prompts"
-# The EPAM_CODELINE_ID test here is a SHORT-CIRCUIT, not the guard: it avoids spawning node when
-# no codeline is declared. The decision is made below, where an empty id cannot equal a marker's
-# codeline. Mutation-checked 2026-09-05 — removing this line changes no behaviour, which is why it
-# must not be read as the thing keeping cross-codeline reuse out.
-elif [ -n "${EPAM_CODELINE_ID:-}" ] && [ -n "$_CODELINE_MARKER" ] && [ -f "$_CODELINE_MARKER" ]; then
-    # Read by a parser, never by grep: a truncated marker must fail, and a substring match on a
-    # half-written file is exactly how "unreadable" gets mistaken for "matching".
-    _CL_OK="$("${NODE_BIN:-node}" -e '
-      try {
-        const m = require("fs").readFileSync(process.argv[1], "utf8");
-        const j = JSON.parse(m);
-        const sameCodeline = j.codeline && j.codeline === process.argv[2];
-        const complete = Number(j.provisioned) > 0 && Number(j.refused) === 0;
-        process.stdout.write(sameCodeline && complete ? "1" : "0");
-      } catch { process.stdout.write("0"); }
-    ' "$_CODELINE_MARKER" "$EPAM_CODELINE_ID" 2>/dev/null || echo 0)"
-    if [ "$_CL_OK" = "1" ]; then
-        _CODELINE_ASSETS_REUSED=1
-        info "  Reusing this codeline's completed agents and prompts (${EPAM_CODELINE_ID}) — not re-derived; EPAM_REGENERATE_CODELINE_ASSETS=1 forces regeneration"
-    fi
+    info "  EPAM_REGENERATE_CODELINE_ASSETS=1 — override: regenerating this codeline's agents and prompts"
+elif [ -n "${EPAM_CODELINE_ID:-}" ] && [ -n "${EPAM_PROJECT_CONFIG_DIR:-}" ] \
+     && [ -f "$EPAM_PROJECT_CONFIG_DIR/.prompt-cache/.complete-${EPAM_CODELINE_ID}" ]; then
+    _CODELINE_ASSETS_REUSED=1
+    info "  Reusing this codeline's completed agents and prompts (${EPAM_CODELINE_ID}) — not re-derived; EPAM_REGENERATE_CODELINE_ASSETS=1 forces regeneration"
 fi
 
 # A RESUME IS NOT THE NEXT RUN, so the argument above does not reach it.

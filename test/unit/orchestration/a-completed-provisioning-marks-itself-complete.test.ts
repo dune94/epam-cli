@@ -24,47 +24,52 @@ import { join } from 'node:path';
 
 const BUILDER = join(__dirname, '../../../orchestrations/scripts/lib/project-prompt-builder.js');
 // eslint-disable-next-line @typescript-eslint/no-var-requires
-const { writeCompletionMarker } = require(BUILDER);
+const { writeCompletionMarker, clearCompletionMarker } = require(BUILDER);
 
 function outDir() {
   const root = mkdtempSync(join(tmpdir(), 'marker-'));
   const out = join(root, 'projects', 'metrolinx', 'prompts');
   mkdirSync(out, { recursive: true });
-  return { root, out, marker: join(root, 'projects', 'metrolinx', '.prompt-cache', '.complete') };
+  const cache = join(root, 'projects', 'metrolinx', '.prompt-cache');
+  // The codeline is the FILENAME — that is the whole marker contract now.
+  const marker = (codeline: string) => join(cache, `.complete-${codeline}`);
+  return { root, out, cache, marker };
 }
 
 describe('the completion marker', () => {
   it('is written beside the cache, not inside prompts/', () => {
     // prompts/ is deleted and recreated by pre-run-reset on a non-reusing run; a marker in there
     // could never survive to be read.
-    const { root, out, marker } = outDir();
+    const { root, out, cache, marker } = outDir();
     try {
       writeCompletionMarker({ outDir: out, codeline: 'next.gotransit.com', provisioned: 39 });
-      expect(existsSync(marker),
+      expect(existsSync(marker('next.gotransit.com')),
         'the marker was not written where pre-run-reset reads it (.prompt-cache/.complete)')
         .toBe(true);
     } finally { rmSync(root, { recursive: true, force: true }); }
   });
 
   it('records the codeline and the count, with refused: 0', () => {
-    const { root, out, marker } = outDir();
+    const { root, out, cache, marker } = outDir();
     try {
       writeCompletionMarker({ outDir: out, codeline: 'next.gotransit.com', provisioned: 39 });
-      const j = JSON.parse(readFileSync(marker, 'utf8'));
-      expect(j.codeline).toBe('next.gotransit.com');
-      expect(Number(j.provisioned)).toBe(39);
-      expect(Number(j.refused), 'refused must be 0 — provisioning throws rather than finishing partial')
-        .toBe(0);
+      // The NAME is the claim; the file is empty by design, so there is nothing to parse and
+      // nothing that can be malformed.
+      expect(existsSync(marker('next.gotransit.com'))).toBe(true);
+      expect(readFileSync(marker('next.gotransit.com'), 'utf8')).toBe('');
+      expect(existsSync(marker('next.upexpress.com')),
+        'a marker for a DIFFERENT codeline exists — the name must be the identity')
+        .toBe(false);
     } finally { rmSync(root, { recursive: true, force: true }); }
   });
 
   it('THE OTHER END — no codeline declared writes NO marker', () => {
     // An untagged marker would be honoured by whichever codeline ran next.
-    const { root, out, marker } = outDir();
+    const { root, out, cache, marker } = outDir();
     try {
       for (const codeline of [undefined, '', '   ', null]) {
         writeCompletionMarker({ outDir: out, codeline: codeline as string, provisioned: 39 });
-        expect(existsSync(marker),
+        expect(existsSync(marker('next.gotransit.com')),
           `codeline=${JSON.stringify(codeline)} produced a marker that any codeline could claim`)
           .toBe(false);
       }
@@ -72,21 +77,25 @@ describe('the completion marker', () => {
   });
 
   it('provisioned: 0 writes no marker — nothing was provisioned to reuse', () => {
-    const { root, out, marker } = outDir();
+    const { root, out, cache, marker } = outDir();
     try {
       writeCompletionMarker({ outDir: out, codeline: 'next.gotransit.com', provisioned: 0 });
-      expect(existsSync(marker)).toBe(false);
+      expect(existsSync(marker('next.gotransit.com'))).toBe(false);
     } finally { rmSync(root, { recursive: true, force: true }); }
   });
 
-  it('overwrites a previous marker rather than leaving a stale count', () => {
-    const { root, out, marker } = outDir();
+  it('clears EVERY codeline\'s marker when provisioning starts', () => {
+    const { root, out, cache, marker } = outDir();
     try {
+      // Two codelines are two files. clearCompletionMarker removes ALL of them on the way in,
+      // so a stale claim for another codeline cannot survive a provisioning run.
       writeCompletionMarker({ outDir: out, codeline: 'a', provisioned: 10 });
       writeCompletionMarker({ outDir: out, codeline: 'b', provisioned: 39 });
-      const j = JSON.parse(readFileSync(marker, 'utf8'));
-      expect(j.codeline, 'the previous run\'s codeline survived into this run\'s marker').toBe('b');
-      expect(Number(j.provisioned)).toBe(39);
+      expect(existsSync(marker('a'))).toBe(true);
+      expect(existsSync(marker('b'))).toBe(true);
+      clearCompletionMarker({ outDir: out });
+      expect(existsSync(marker('a')), 'a previous codeline\'s claim survived the clear').toBe(false);
+      expect(existsSync(marker('b'))).toBe(false);
     } finally { rmSync(root, { recursive: true, force: true }); }
   });
 
@@ -120,14 +129,12 @@ describe('the completion marker', () => {
      * marker left by the LAST run still says "complete" — and the next run reuses a half-written
      * set. The marker must be cleared before provisioning begins and rewritten only on success.
      */
-    const { root, out, marker } = outDir();
+    const { root, out, cache, marker } = outDir();
     try {
-      mkdirSync(join(root, 'projects', 'metrolinx', '.prompt-cache'), { recursive: true });
-      writeFileSync(marker, JSON.stringify({ codeline: 'stale', provisioned: 39, refused: 0 }));
-      // eslint-disable-next-line @typescript-eslint/no-var-requires
-      const { clearCompletionMarker } = require(BUILDER);
+      mkdirSync(cache, { recursive: true });
+      writeFileSync(marker('stale'), '');
       clearCompletionMarker({ outDir: out });
-      expect(existsSync(marker),
+      expect(existsSync(marker('next.gotransit.com')),
         "the previous run's completion marker survived into this run; if this run dies partway "
         + 'its half-written prompts are inherited as complete').toBe(false);
     } finally { rmSync(root, { recursive: true, force: true }); }

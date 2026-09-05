@@ -66,6 +66,36 @@ describe('1. the transcript is looked for where the RUNNER ran, not where the em
     expect(dirs.join('|')).toMatch(/-home-u-install$/m);
   });
 
+  it('PROJECT_ROOT IS THE CODELINE ROOT, not the codeline — its children are searched too', () => {
+    // Measured from the live process on 2026-09-05:
+    //   PROJECT_ROOT=/home/u/projects/tests/codelines
+    // the PARENT holding 33 repositories, while the runner works inside one of them and the
+    // transcript lands under .../tests-codelines-next-gotransit-com. Slugging PROJECT_ROOT alone
+    // produced a directory with no transcripts, so the second attempt at this feature recorded
+    // nothing either — right variable, wrong granularity.
+    const home = mkdtempSync(join(tmpdir(), 'home2-'));
+    const root = join(home, 'projects', 'tests', 'codelines');
+    mkdirSync(join(root, 'next.gotransit.com'), { recursive: true });
+    mkdirSync(join(root, 'other.repo'), { recursive: true });
+    try {
+      const dirs = transcriptDirsToSearch({ PROJECT_ROOT: root }, join(home, 'install'), home);
+      expect(dirs.join('|'), [
+        'only the codeline ROOT is searched. The runner works inside a CHILD of it, which is where',
+        'every transcript lands — 7 tool calls for estate-survey alone, recorded as none.',
+      ].join('\n')).toMatch(/next-gotransit-com/);
+    } finally { rmSync(home, { recursive: true, force: true }); }
+  });
+
+  it('a PROJECT_ROOT with no children still yields its own directory', () => {
+    const home = mkdtempSync(join(tmpdir(), 'home3-'));
+    const root = join(home, 'solo');
+    mkdirSync(root, { recursive: true });
+    try {
+      const dirs = transcriptDirsToSearch({ PROJECT_ROOT: root }, join(home, 'x'), home);
+      expect(dirs.some((d: string) => d.endsWith('-solo'))).toBe(true);
+    } finally { rmSync(home, { recursive: true, force: true }); }
+  });
+
   it('does not search the same directory twice', () => {
     const dirs = transcriptDirsToSearch({ PROJECT_ROOT: '/home/u/install' }, '/home/u/install', '/home/u');
     expect(new Set(dirs).size).toBe(dirs.length);

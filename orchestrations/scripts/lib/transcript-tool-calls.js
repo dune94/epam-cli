@@ -139,7 +139,28 @@ function transcriptForCall(dir, startedAt, endedAt) {
  */
 function transcriptDirsToSearch(env, cwd, home) {
   const e = env || {};
-  const roots = [e.PROJECT_ROOT, cwd].filter((r) => r && String(r).trim());
+  const roots = [];
+  for (const r of [e.PROJECT_ROOT, cwd]) {
+    if (!r || !String(r).trim()) continue;
+    roots.push(r);
+    // PROJECT_ROOT IS THE CODELINE ROOT, NOT THE CODELINE.
+    //
+    // Measured from the live process on 2026-09-05:
+    //   PROJECT_ROOT=/home/u/projects/tests/codelines
+    // the PARENT holding 33 repositories, while a seam works INSIDE one of them and its
+    // transcript lands under .../tests-codelines-next-gotransit-com. Slugging the root alone gave
+    // a directory with no transcripts at all, so the second attempt at this feature also recorded
+    // nothing — the right variable at the wrong granularity.
+    //
+    // The children are read from the filesystem, so nothing here names a repository. Adding
+    // candidates cannot loosen correctness: the caller still requires EXACTLY ONE hit across the
+    // whole set, so an ambiguous window yields nothing exactly as before.
+    try {
+      for (const child of fs.readdirSync(r, { withFileTypes: true })) {
+        if (child.isDirectory()) roots.push(path.join(r, child.name));
+      }
+    } catch { /* not a directory we can list: its own slug is still searched */ }
+  }
   const seen = new Set();
   const dirs = [];
   for (const r of roots) {

@@ -88,7 +88,7 @@
     {
       "codeline": "next.upexpress.com",
       "package": "@metrolinx/cx-shared",
-      "localSourcePath": "/home/bradleyjerome/projects/metrolinx/cx-shared"
+      "localSourcePath": "cx-shared"
     }
   ],
   "buildArtifactDirs": [

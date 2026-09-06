@@ -58,7 +58,20 @@ services:
     volumes:
       - obs_postgres_data:/var/lib/postgresql/data
     healthcheck:
-      test: ["CMD-SHELL", "pg_isready -U epam"]
+      # NAMES THE DATABASE, NOT JUST THE SERVER.
+      #
+      # `pg_isready -U epam` answers a question about the POSTMASTER: it succeeds as soon as one
+      # accepts connections, and during first-boot initialisation that happens BEFORE initdb has
+      # created POSTGRES_DB. langfuse-server waits on `condition: service_healthy`, so the gate
+      # opened early and its Prisma migration ran against a database that did not exist:
+      #
+      #   langfuse: Error: P1001: Can't reach database server ... Exiting...
+      #   postgres: FATAL:  database "epam" does not exist
+      #
+      # Live on pipeline-tests-28 and again on a clean pipeline-tests-29, so it is this file's
+      # behaviour, not a damaged volume. Adding -d makes the check fail while the database is
+      # absent, which is what every dependant already assumes service_healthy means.
+      test: ["CMD-SHELL", "pg_isready -U epam -d epam"]
       interval: 5s
       retries: 5
 

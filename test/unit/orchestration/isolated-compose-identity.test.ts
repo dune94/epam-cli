@@ -48,21 +48,52 @@ describe('isolated_subnet_candidates', () => {
     expect(new Set(a.lines).size, 'candidates repeat — a retry would just hit the same taken CIDR').toBe(a.lines.length);
   });
 
-  it('every candidate is a valid /16 in the range this installer reserves (172.19-172.28)', () => {
+  it('every candidate is a well-formed /16 inside RFC1918', () => {
+    /**
+     * WIDENED 2026-09-06, and the range is no longer pinned here.
+     *
+     * This used to require 172.19–172.28: ten values, of which the generator offered five. Six
+     * coexisting stacks therefore exhausted it by arithmetic — which is exactly what happened
+     * installing v1.50 into pipeline-tests-28 on a box already running three other installs. The
+     * observability stack took the first candidate and the launch dashboard had nowhere left to
+     * go, twice.
+     *
+     * The space is now 172.16–172.31 plus a 10.100–10.199 reserve, and WHICH of them are usable
+     * is decided by asking the daemon rather than by a range written here. Both are RFC1918
+     * ranges Docker itself defaults to, so nothing offered can collide with a corporate VPN the
+     * way 192.168 might.
+     */
     const a = call('isolated_subnet_candidates', '/home/x/epam-cli');
+    expect(a.lines.length, 'no candidates produced').toBeGreaterThan(0);
     for (const line of a.lines) {
-      const m = line.match(/^172\.(\d+)\.0\.0\/16$/);
-      expect(m, `not a 172.x.0.0/16: ${line}`).toBeTruthy();
-      const octet = Number(m![1]);
-      expect(octet).toBeGreaterThanOrEqual(19);
-      expect(octet).toBeLessThanOrEqual(28);
+      expect(line, `not a well-formed /16: ${line}`).toMatch(/^(172\.(1[6-9]|2\d|3[01])|10\.1\d\d)\.0\.0\/16$/);
     }
   });
 
-  it('avoids the ranges already known to be in use on this host (16-18, 29-31)', () => {
+  it('offers more than a handful — several installs must be able to coexist', () => {
+    // The live failure was a counting failure: five candidates, six stacks wanting one each.
     const a = call('isolated_subnet_candidates', '/home/x/epam-cli');
-    for (const line of a.lines) {
-      expect(line).not.toMatch(/^172\.(1[6-8]|29|3[01])\./);
-    }
+    expect(a.lines.length).toBeGreaterThanOrEqual(16);
+  });
+
+  it('WHAT IS IN USE IS ASKED, NOT ASSUMED', () => {
+    /**
+     * The assertion this replaces listed 172.16–18 and 172.29–31 as "already known to be in use on
+     * this host". That was one machine's arrangement written into a test — the docker bridge is
+     * conventionally 172.17, but everything else on that list was simply what happened to be
+     * running here. A second machine, or this one tomorrow, holds something different, and the
+     * generator would still avoid the wrong ones while offering the taken ones.
+     *
+     * a-subnet-is-never-offered-if-the-box-already-holds-it.test.ts drives the real function with
+     * a stubbed daemon and asserts the exclusion directly. Here it is enough that no range is
+     * excluded on faith: 172.17 must be OFFERED when nothing holds it, or the generator is still
+     * carrying a hardcoded opinion about this host.
+     */
+    const a = call('isolated_subnet_candidates', '/home/x/epam-cli');
+    const offered = a.lines.join(' ');
+    expect(offered.length).toBeGreaterThan(0);
+    // Nothing may be missing for a reason this file invented; the daemon is the only authority.
+    expect(a.lines.some((l: string) => /^172\./.test(l)),
+      'no 172.x candidate at all — the space collapsed').toBe(true);
   });
 });

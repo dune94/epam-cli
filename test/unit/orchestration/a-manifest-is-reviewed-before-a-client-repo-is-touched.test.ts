@@ -30,6 +30,15 @@ const SCRIPTS = join(__dirname, '../../../orchestrations/scripts');
 const GATE = join(SCRIPTS, 'lib/manifest-preflight.sh');
 const REAL_MANIFEST = join(SCRIPTS, '../projects/metrolinx/dependency-check.json');
 const dirs: string[] = [];
+
+/** A SCRIPT_DIR holding the real reviewer but NO .venv — the shape every install actually has. */
+function venvlessScriptDir(dir: string) {
+  const sd = join(dir, 'scripts');
+  mkdirSync(join(sd, 'lib'), { recursive: true });
+  writeFileSync(join(sd, 'lib', 'manifest_schema.py'),
+    readFileSync(join(SCRIPTS, 'lib', 'manifest_schema.py'), 'utf8'));
+  return sd;
+}
 afterAll(() => { for (const d of dirs) rmSync(d, { recursive: true, force: true }); });
 
 /** A codeline that looks like one: a git repo with a manifest the ecosystem registry recognises. */
@@ -48,7 +57,7 @@ function codeline(name = 'next.gotransit.com') {
 }
 
 function runGate(manifest: unknown, cl: { root: string; repo: string }, opts: {
-  python?: string | null; manifestPath?: string; codelineRoot?: string } = {}) {
+  python?: string | null; manifestPath?: string; codelineRoot?: string; noVenv?: boolean } = {}) {
   const dir = mkdtempSync(join(tmpdir(), 'mfgate-run-'));
   dirs.push(dir);
   let mf = opts.manifestPath;
@@ -62,7 +71,7 @@ function runGate(manifest: unknown, cl: { root: string; repo: string }, opts: {
     'error() { printf "ERR %s\\n" "$*"; }',
     'info()  { printf "%s\\n" "$*"; }',
     'warning() { printf "WARN %s\\n" "$*"; }',
-    `SCRIPT_DIR=${JSON.stringify(SCRIPTS)}`,
+    `SCRIPT_DIR=${JSON.stringify(opts.noVenv ? venvlessScriptDir(dir) : SCRIPTS)}`,
     ...(opts.python !== undefined
       ? [`MANIFEST_PYTHON=${JSON.stringify(opts.python === null ? '/nonexistent/python' : opts.python)}`]
       : []),
@@ -184,6 +193,25 @@ describe('the manifest gate', () => {
     expect(r.rc, 'the gate stood down when python was unavailable and let the launch proceed')
       .not.toBe(0);
     expect(r.out).toMatch(/manifest/i);
+  });
+
+  it('FALLS BACK TO python3 WHEN THERE IS NO VENV — every install is like this', () => {
+    /**
+     * Live 2026-09-06, resuming run 20260906T174618Z from pipeline-tests-28: the gate refused the
+     * launch with "no usable python at .../orchestrations/scripts/.venv/bin/python". NO INSTALL
+     * HAS THAT VENV — not tests-28, not tests-26 which produced the Sept 5 green run. Only the
+     * source checkout does, which is the only place this was tried before wiring it.
+     *
+     * So the gate was refusing every launch on every install: the exact "a gate that fails a good
+     * manifest is worse than no gate" failure this file's header warns about, committed by the
+     * same change that warned about it. System python3 runs the validator fine — pydantic is
+     * there — so the venv is a preference, not a requirement.
+     */
+    const cl = codeline();
+    mkdirSync(join(cl.root, 'cx-shared'), { recursive: true });
+    // MANIFEST_PYTHON unset AND no venv on the SCRIPT_DIR the gate is given.
+    const r = runGate(VALID(cl.name), cl, { noVenv: true });
+    expect(r.rc, `the gate refused a valid manifest because there was no venv:\n${r.out}`).toBe(0);
   });
 
   it('NO MANIFEST is not a failure — a project need not declare one', () => {

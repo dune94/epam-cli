@@ -34,8 +34,31 @@ manifest_preflight_gate() {
         return 1
     fi
 
-    local _py="${MANIFEST_PYTHON:-$SCRIPT_DIR/.venv/bin/python}"
-    [ -x "$_py" ] || _py="${MANIFEST_PYTHON:-}"
+    # THE VENV IS A PREFERENCE, NOT A REQUIREMENT.
+    #
+    # Wired on 2026-09-06 keyed to $SCRIPT_DIR/.venv/bin/python, which exists in the SOURCE
+    # CHECKOUT and in NO INSTALL — not pipeline-tests-28, not tests-26 which produced the Sept 5
+    # green run. So the gate refused the resume of run 20260906T174618Z, and would have refused
+    # every launch on every install: the "a gate that fails a good manifest is worse than no gate"
+    # failure this file's own header warns about, committed by the change that warned about it.
+    #
+    # System python3 runs the reviewer fine — pydantic is present on this box and the installer
+    # already checks for python3 because 88 handlers need it. So try the venv first, then the
+    # interpreter the installer guarantees.
+    local _py="" _cand
+    if [ -n "${MANIFEST_PYTHON:-}" ]; then
+        # AN EXPLICIT CHOICE IS EXCLUSIVE. An operator or a test naming an interpreter must see
+        # THAT one fail, never a fallback quietly succeeding somewhere else — a gate that silently
+        # reviews with something other than what it was told to use is not the gate anyone checked.
+        [ -x "$MANIFEST_PYTHON" ] && _py="$MANIFEST_PYTHON"
+    else
+        for _cand in "$SCRIPT_DIR/.venv/bin/python" "$SCRIPT_DIR/.venv/bin/python3"; do
+            [ -x "$_cand" ] && { _py="$_cand"; break; }
+        done
+        [ -n "$_py" ] || for _cand in python3 python; do
+            command -v "$_cand" >/dev/null 2>&1 && { _py="$(command -v "$_cand")"; break; }
+        done
+    fi
     if [ -z "$_py" ] || [ ! -x "$_py" ]; then
         # A GATE THAT CANNOT RUN DOES NOT PASS BY DEFAULT.
         #

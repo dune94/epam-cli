@@ -824,6 +824,35 @@ if (require.main !== module) return;
   // Fresh every run, fixed within one. A roster carried over from a previous run is a mutated
   // base, and two runs already left five roles behind — including two whose vendor was wrong.
   // Same run means a resume: reuse exactly what the operator reviewed at the pause.
+  // A CODELINE WHOSE ASSETS ARE COMPLETE IS TREATED AS A SKIPPED MINT.
+  //
+  // Operator, 2026-09-06: "mint should not run nor prompt builder", "no regeneration if profiles
+  // mint prompts".
+  //
+  // Set as the FLAG rather than as a new branch in each gate: EPAM_SKIP_AGENT_MINT already has
+  // gates below (decline the mint), in run-agent-orchestration.sh (roster-only, which refuses when
+  // there is no roster to skip to) and in pre-run-reset.sh. Adding a second condition to each
+  // would be three places to keep in step; setting the flag reuses paths already exercised.
+  //
+  // The signal is the one pre-run-reset trusts: .prompt-cache/.complete-<codeline>, written only
+  // after every prompt installed and named for the codeline, plus prompts actually on disk.
+  const _clId = String(process.env.EPAM_CODELINE_ID || '').trim();
+  if (_clId && process.env.EPAM_SKIP_AGENT_MINT !== '1'
+      && String(process.env.EPAM_REGENERATE_CODELINE_ASSETS || '0') !== '1') {
+    const _cfg = process.env.EPAM_PROJECT_CONFIG_DIR || '';
+    let _done = false;
+    try {
+      _done = !!_cfg && fs.existsSync(path.join(_cfg, '.prompt-cache', `.complete-${_clId}`))
+        && fs.readdirSync(path.join(_cfg, 'prompts')).some((n) => n.endsWith('.json'));
+    } catch { _done = false; }
+    if (_done) {
+      process.stderr.write(
+        `[mint-step] codeline ${_clId} is already provisioned — the mint is skipped; `
+        + 'EPAM_REGENERATE_CODELINE_ASSETS=1 forces a re-mint\n');
+      process.env.EPAM_SKIP_AGENT_MINT = '1';
+    }
+  }
+
   const sameRun = !!storedRunId && storedRunId === thisRunId;
   const remint = process.env.EPAM_REMINT_AGENTS === '1';
   let _mintedNames = [];
@@ -1226,16 +1255,44 @@ if (require.main !== module) return;
     // verification that what is on disk covers the roster.
     let _skipProvisioning = false;
     const _resumingRun = String(process.env.EPAM_RESUME_RUN || '').trim();
-    if (_resumingRun) {
+
+    // A CODELINE WHOSE PROMPTS ARE COMPLETE IS THE SAME CASE AS A RESUME.
+    //
+    // Operator, 2026-09-06: "mint should not run nor prompt builder". The skip below already
+    // states the principle — "THE INSTALLED PROMPTS ARE THE SIGNAL ... NOT A CACHE, A SKIP" — and
+    // was gated on EPAM_RESUME_RUN alone, so a FRESH run against a codeline whose set was already
+    // complete rebuilt all 39.
+    //
+    // A CACHE CANNOT COVER THIS, for the reason the comment above already gives: the key includes
+    // mintedRoles, and a run that does not mint passes '(none minted this run)'. Measured on the
+    // 2026-09-06 run — 39 entries on disk, 0 hits. The answer is to not run the builder, not to
+    // make the key cleverer.
+    //
+    // The signal is the one pre-run-reset already trusts: .prompt-cache/.complete-<codeline>,
+    // written only after every prompt installed, cleared when provisioning starts, and named for
+    // the codeline so one codeline's set cannot serve another.
+    const _codelineId = String(process.env.EPAM_CODELINE_ID || '').trim();
+    let _codelineComplete = false;
+    if (_codelineId) {
+      try {
+        _codelineComplete = fs.existsSync(
+          path.join(projectConfigDir, '.prompt-cache', `.complete-${_codelineId}`));
+      } catch { _codelineComplete = false; }
+    }
+
+    if (_resumingRun || _codelineComplete) {
       const _installedDir = path.join(projectConfigDir, 'prompts');
       let _installed = [];
       try {
         _installed = fs.readdirSync(_installedDir).filter((f) => f.endsWith('.json'));
       } catch { _installed = []; }
       if (_installed.length) {
-        process.stderr.write(
-          `[mint-step] prompts already provisioned for this run (${_installed.length} on disk) — `
-          + 'not rebuilt; a resume repeats no stage it has already completed\n');
+        process.stderr.write(_resumingRun
+          ? `[mint-step] prompts already provisioned for this run (${_installed.length} on disk) — `
+            + 'not rebuilt; a resume repeats no stage it has already completed\n'
+          : `[mint-step] prompts already complete for codeline ${_codelineId} `
+            + `(${_installed.length} on disk) — not rebuilt; `
+            + 'EPAM_REGENERATE_CODELINE_ASSETS=1 forces regeneration\n');
         _skipProvisioning = true;
       }
       // Empty is NOT silently accepted: something cleared them, and continuing without saying so

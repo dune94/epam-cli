@@ -476,7 +476,26 @@ async function buildProjectPrompts({
   // on an exact key, not surviving state.
   const cacheDir = path.join(outDir, '..', '.prompt-cache');
   const sha = (t) => crypto.createHash('sha256').update(String(t)).digest('hex');
-  const baseDigest = (t) => sha(JSON.stringify({ t, generatorBody, projectContext, codelineContext }));
+  // THE TEMPLATE AND THE GENERATOR — NOT THE PROSE ABOUT THE PROJECT.
+  //
+  // This keyed on { t, generatorBody, projectContext, codelineContext }. The last two are written
+  // by the estate survey and codeline discovery, both of which run EVERY run, and a model rewords
+  // itself every time. So the key changed on every run and the cache never hit once: measured
+  // 2026-09-06 on pipeline-tests-27, 39 entries and 0 hits, with the templates byte-identical
+  // between v1.43 and v1.47 (git diff over prompts/templates: 0 files).
+  //
+  // Exactly the defect rolesIdentity fixes immediately below, one layer up and left unfixed:
+  // "Digesting the mint's raw text rebuilt every roster-dependent prompt on every run because a
+  // model rewords itself."
+  //
+  // What remains in the key is what actually decides the generated text: the template, and the
+  // generator body that rewrites it. The contexts are still PASSED to the generator — they shape
+  // the prompt — they just no longer invalidate a prompt that would come out the same.
+  //
+  // Codeline identity is not weakened by this: it is enforced separately and more strictly by the
+  // per-codeline completion marker (.complete-<codeline>), so one codeline's prompts cannot serve
+  // another even though the prose is no longer in the key.
+  const baseDigest = (t) => sha(JSON.stringify({ t, generatorBody }));
   // The ROLES, not the prose about them — see rolesIdentity. Digesting the mint's raw text
   // rebuilt every roster-dependent prompt on every run because a model rewords itself.
   const rolesDigest = sha(rolesIdentity(mintedRoles));

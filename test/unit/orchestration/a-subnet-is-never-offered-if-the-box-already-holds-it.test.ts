@@ -19,7 +19,7 @@
  */
 import { describe, it, expect } from 'vitest';
 import { spawnSync } from 'node:child_process';
-import { mkdtempSync, writeFileSync, chmodSync, rmSync, mkdirSync } from 'node:fs';
+import { mkdtempSync, writeFileSync, chmodSync, rmSync, mkdirSync, readFileSync } from 'node:fs';
 import { tmpdir } from 'node:os';
 import { join, resolve } from 'node:path';
 
@@ -102,5 +102,57 @@ describe('the subnet candidates', () => {
     const c = candidates(SEED, null);
     expect(c.length, 'no docker on PATH produced no candidates — the installer cannot even try')
       .toBeGreaterThanOrEqual(16);
+  });
+});
+
+describe('the two stacks of ONE install do not compete for one list', () => {
+  /**
+   * Live 2026-09-06, pipeline-tests-29: the observability stack and the launch dashboard were both
+   * seeded with the bare $ROOT, so they were handed the SAME ordered candidates. The launch stack
+   * ended up holding the subnet the observability stack wanted, and the observability stack then
+   * failed its network create, retried onto another candidate, and came up with containers that
+   * had NO network aliases at all — `getent hosts postgres` unresolved, so langfuse could never
+   * reach its database however healthy postgres was.
+   *
+   * The mock stack already avoids this by seeding with "$ROOT-mock" (install.sh:750). The launch
+   * dashboard was never given the same treatment.
+   *
+   * WHAT IS ASSERTED IS THE FIRST CHOICE, not whole-list disjointness. These are ordered
+   * preferences over a shared space; two seeds must not RACE for the same first pick, and each
+   * still walks the rest of the space as a fallback. Requiring the lists to be disjoint would
+   * demand a partition the space cannot give, which is why an earlier attempt at that assertion
+   * was withdrawn rather than shipped.
+   */
+  it('the launch stack does not want the same subnet the obs stack wants', () => {
+    const root = '/home/someone/projects/ai/pipeline-tests-29';
+    const obs = candidates(root, []);
+    const launch = candidates(`${root}-launch`, []);
+    const mock = candidates(`${root}-mock`, []);
+    expect(obs[0], 'no candidates').toBeTruthy();
+    expect(launch[0],
+      'the launch dashboard races the observability stack for one subnet, and the loser retries '
+      + 'onto a network whose containers come up with no aliases').not.toBe(obs[0]);
+    expect(mock[0], 'the mock stack races one of them').not.toBe(obs[0]);
+    expect(mock[0]).not.toBe(launch[0]);
+  });
+});
+
+describe('each stack asks with its own seed', () => {
+  /**
+   * The generator hands different seeds different first choices — proven above. That is worth
+   * nothing if the CALL SITES all pass the same seed, which is exactly what happened: the
+   * observability stack and the launch dashboard both passed the bare $ROOT.
+   *
+   * This reads install.sh because the alternative is running a full install, and the property is
+   * a wiring fact rather than a behaviour: three stacks, three distinct seeds. A fourth stack
+   * added later with a copied line fails here.
+   */
+  it('no two stacks are seeded identically in install.sh', () => {
+    const src = readFileSync(resolve(__dirname, '../../../orchestrations-installer/install.sh'), 'utf8');
+    const seeds = [...src.matchAll(/isolated_subnet_candidates\s+"([^"]+)"/g)].map((m) => m[1]);
+    expect(seeds.length, 'no call sites found — this test is measuring nothing').toBeGreaterThanOrEqual(3);
+    expect(new Set(seeds).size,
+      `two stacks share a seed and will race for one subnet: ${seeds.join(', ')}`)
+      .toBe(seeds.length);
   });
 });

@@ -904,7 +904,14 @@ else
         _LD_UP=1
         _LD_LOG="$(mktemp)"
         _LD_SUBNET=""; _LD_I=0
-        for _LD_SUBNET in $(isolated_subnet_candidates "$ROOT"); do
+        # SEEDED APART FROM THE OBSERVABILITY STACK. Both used the bare $ROOT, so one install's
+        # two stacks were handed the SAME ordered candidates and raced for the first one. Live
+        # 2026-09-06 on pipeline-tests-29: the launch dashboard took the subnet the observability
+        # stack wanted, that stack's network create then failed, and its retry came up with
+        # containers carrying NO network aliases — `getent hosts postgres` unresolved, so langfuse
+        # could never reach its database however healthy postgres reported itself. The mock stack
+        # has been seeded with "$ROOT-mock" since it was added; this one never was.
+        for _LD_SUBNET in $(isolated_subnet_candidates "$ROOT-launch"); do
             _LD_TRY_PORT=$((_LD_PORT + _LD_I * 10))
             if (cd "$LAUNCH_DIR" && LAUNCH_SUBNET="$_LD_SUBNET" LAUNCH_UI_PORT="$_LD_TRY_PORT" \
                     container_compose -f "$LAUNCH_COMPOSE" -p "$_LD_PROJECT" up -d --build) >"$_LD_LOG" 2>&1; then

@@ -55,7 +55,8 @@ isolated_project_name() {
 # THE SPACE IS 172.16–172.31 THEN 10.100–10.199: 116 candidates, all inside RFC1918 ranges Docker
 # itself defaults to, so nothing here can collide with a corporate VPN range that 192.168 might.
 isolated_subnet_candidates() {
-    local _root="$1" _h _base _i _v _held=""
+    local _root="$1" _h _base _i _v _held="" _can_probe=0
+    command -v docker >/dev/null 2>&1 && _can_probe=1
     _h=$(printf '%s' "$_root" | cksum | cut -d' ' -f1)
 
     # WHAT THE DAEMON ALREADY HAS. Never fatal: no docker, no daemon, or a slow one all fall
@@ -67,10 +68,34 @@ isolated_subnet_candidates() {
             | tr ' ' '\n' | grep -E '^[0-9]+\.' || true)
     fi
 
+    # THE LISTING IS NOT THE AUTHORITY; THE DAEMON IS.
+    #
+    # Docker keeps the address pool of a network it has REMOVED — recorded on this box 2026-09-04
+    # and again 2026-09-06 — so a /16 can be absent from `network ls` and still be ungrantable.
+    # Offering it is not a harmless retry: when `compose up` cannot create the network it still
+    # creates the CONTAINERS, and the next attempt connects them to a network WITHOUT their
+    # service aliases. The stack then comes up with every container healthy and no DNS at all
+    # (`getent hosts postgres` unresolved), and langfuse dies on "Can't reach database server"
+    # while postgres sits healthy beside it. Two installs were lost reading that as a database
+    # fault before it was read as a naming one.
+    #
+    # So a candidate is PROVEN by actually creating it and removing it again. A create names its
+    # own subnet and never consults the allocator, so this is the only question whose answer is
+    # the one compose will get. Cheap, and only until the first one succeeds.
+    _probe_ok() {
+        docker network create --subnet "$1" "$2" >/dev/null 2>&1 || return 1
+        docker network rm "$2" >/dev/null 2>&1 || true
+        return 0
+    }
+    _probe_n=0
     _offer() {
         case "$_held" in
-            *"$1"*) return 0 ;;   # already on this box — not a candidate
+            *"$1"*) return 0 ;;   # listed as held — not a candidate, no probe needed
         esac
+        if [ "$_can_probe" = "1" ]; then
+            _probe_n=$((_probe_n + 1))
+            _probe_ok "$1" "epam-subnet-probe-$$-$_probe_n" || return 0
+        fi
         printf '%s\n' "$1"
     }
 

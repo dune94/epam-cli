@@ -35,9 +35,28 @@ function candidates(seed: string, allocated: string[] | null): string[] {
     const bin = join(dir, 'bin');
     mkdirSync(bin);
     if (allocated !== null) {
-      // Answers `network inspect`-style queries the way the daemon does, and nothing else.
+      /**
+       * A daemon that LISTS what it holds and REFUSES to create what it holds.
+       *
+       * Both halves matter. Docker does not reliably release the pool of a removed network, so a
+       * subnet can be absent from `network ls` and still be ungrantable — asking only the listing
+       * offers it, `compose up` fails at network creation, and compose then creates the containers
+       * unattached and connects them afterwards WITHOUT service aliases. That is how a stack ends
+       * up with DNS that resolves nothing while every container reports itself healthy.
+       */
       const docker = join(bin, 'docker');
-      writeFileSync(docker, `#!/usr/bin/env bash\nprintf '%s\\n' ${allocated.map((s) => `'${s}'`).join(' ') || "''"}\nexit 0\n`);
+      const held = allocated.map((s) => `'${s}'`).join(' ') || "''";
+      writeFileSync(docker, [
+        '#!/usr/bin/env bash',
+        'if [ "$1" = "network" ] && [ "$2" = "create" ]; then',
+        `  for h in ${held}; do`,
+        '    for a in "$@"; do [ "$a" = "$h" ] && { echo "Error response from daemon: invalid pool request: Pool overlaps with other one on this address space" >&2; exit 1; }; done',
+        '  done',
+        '  exit 0',
+        'fi',
+        `printf '%s\\n' ${held}`,
+        'exit 0',
+      ].join('\n'));
       chmodSync(docker, 0o755);
     }
     const r = spawnSync('bash', ['-c', `. ${JSON.stringify(LIB)}; isolated_subnet_candidates "$1"`, '--', seed], {
@@ -154,5 +173,53 @@ describe('each stack asks with its own seed', () => {
     expect(new Set(seeds).size,
       `two stacks share a seed and will race for one subnet: ${seeds.join(', ')}`)
       .toBe(seeds.length);
+  });
+});
+
+describe('a candidate the daemon will not grant is not a candidate', () => {
+  /**
+   * THE LISTING IS NOT THE AUTHORITY. Docker keeps the address pool of a network it has removed —
+   * recorded on this box on 2026-09-04 and again on 2026-09-06 — so `network ls` can show a /16
+   * free while `network create --subnet` on it fails "Pool overlaps with other one on this
+   * address space".
+   *
+   * That is not a cosmetic difference. When compose cannot create the network it still creates the
+   * CONTAINERS, and a later attempt connects them to a network without their service aliases. The
+   * stack then comes up with every container healthy and no DNS at all: `getent hosts postgres`
+   * unresolved, and langfuse dying on "Can't reach database server" while postgres sits healthy
+   * beside it. Two installs were lost to reading that as a database fault.
+   */
+  it('skips a subnet the daemon refuses to create, even when the listing omits it', () => {
+    // The stub lists NOTHING as allocated but refuses to create these — exactly the released-but-
+    // still-held case, which a listing-only check cannot see.
+    const dir = mkdtempSync(join(tmpdir(), 'subnet-probe-'));
+    const bin = join(dir, 'bin');
+    mkdirSync(bin);
+    const refuse = ['172.16.0.0/16', '172.17.0.0/16'];
+    writeFileSync(join(bin, 'docker'), [
+      '#!/usr/bin/env bash',
+      'if [ "$1" = "network" ] && [ "$2" = "create" ]; then',
+      `  for h in ${refuse.map((s) => `'${s}'`).join(' ')}; do`,
+      '    for a in "$@"; do [ "$a" = "$h" ] && { echo "invalid pool request: Pool overlaps" >&2; exit 1; }; done',
+      '  done',
+      '  exit 0',
+      'fi',
+      "printf ''",          // the listing claims nothing is allocated
+      'exit 0',
+    ].join('\n'));
+    chmodSync(join(bin, 'docker'), 0o755);
+    const r = spawnSync('bash', ['-c', `. ${JSON.stringify(LIB)}; isolated_subnet_candidates "$1"`, '--',
+      '/home/someone/projects/ai/pipeline-tests-29'], {
+      encoding: 'utf8', timeout: 60_000,
+      env: { PATH: `${bin}:/usr/bin:/bin`, HOME: process.env.HOME || '' },
+    });
+    const out = (r.stdout || '').trim().split('\n').filter(Boolean);
+    expect(out.length, 'no candidates produced').toBeGreaterThan(0);
+    try {
+      for (const s of refuse) {
+        expect(out, `${s} cannot be created on this daemon and was offered anyway — compose will `
+          + 'fail its network create and connect the containers without aliases').not.toContain(s);
+      }
+    } finally { rmSync(dir, { recursive: true, force: true }); }
   });
 });

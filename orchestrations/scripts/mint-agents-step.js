@@ -821,38 +821,6 @@ if (require.main !== module) return;
   const existingRoles = rosterLib.projectRoles(AGENTS_DIR);
   const storedRunId = rosterLib.rosterRunId(AGENTS_DIR);
   const thisRunId = process.env.ORCH_RUN_ID || '';
-  // Fresh every run, fixed within one. A roster carried over from a previous run is a mutated
-  // base, and two runs already left five roles behind — including two whose vendor was wrong.
-  // Same run means a resume: reuse exactly what the operator reviewed at the pause.
-  // A CODELINE WHOSE ASSETS ARE COMPLETE IS TREATED AS A SKIPPED MINT.
-  //
-  // Operator, 2026-09-06: "mint should not run nor prompt builder", "no regeneration if profiles
-  // mint prompts".
-  //
-  // Set as the FLAG rather than as a new branch in each gate: EPAM_SKIP_AGENT_MINT already has
-  // gates below (decline the mint), in run-agent-orchestration.sh (roster-only, which refuses when
-  // there is no roster to skip to) and in pre-run-reset.sh. Adding a second condition to each
-  // would be three places to keep in step; setting the flag reuses paths already exercised.
-  //
-  // The signal is the one pre-run-reset trusts: .prompt-cache/.complete-<codeline>, written only
-  // after every prompt installed and named for the codeline, plus prompts actually on disk.
-  const _clId = String(process.env.EPAM_CODELINE_ID || '').trim();
-  if (_clId && process.env.EPAM_SKIP_AGENT_MINT !== '1'
-      && String(process.env.EPAM_REGENERATE_CODELINE_ASSETS || '0') !== '1') {
-    const _cfg = process.env.EPAM_PROJECT_CONFIG_DIR || '';
-    let _done = false;
-    try {
-      _done = !!_cfg && fs.existsSync(path.join(_cfg, '.prompt-cache', `.complete-${_clId}`))
-        && fs.readdirSync(path.join(_cfg, 'prompts')).some((n) => n.endsWith('.json'));
-    } catch { _done = false; }
-    if (_done) {
-      process.stderr.write(
-        `[mint-step] codeline ${_clId} is already provisioned — the mint is skipped; `
-        + 'EPAM_REGENERATE_CODELINE_ASSETS=1 forces a re-mint\n');
-      process.env.EPAM_SKIP_AGENT_MINT = '1';
-    }
-  }
-
   const sameRun = !!storedRunId && storedRunId === thisRunId;
   const remint = process.env.EPAM_REMINT_AGENTS === '1';
   let _mintedNames = [];

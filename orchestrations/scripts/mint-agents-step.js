@@ -1186,7 +1186,7 @@ if (require.main !== module) return;
     const promptsLib = require('./lib/prompt-library.js');
     const { makePromptReviewer, makePromptRenderer } = require('./lib/prompt-review.js');
     const { seamInvocationEnv } = require('./lib/seam-invocation.js');
-    const { buildProjectPrompts } = require('./lib/project-prompt-builder.js');
+    const { buildProjectPrompts, codelineFromPrd } = require('./lib/project-prompt-builder.js');
     const engineRoot = path.join(__dirname, '..', '..');
     const templatesDir = path.join(engineRoot, promptsLib.TEMPLATE_DIR_REL);
     const bootstrapFile = path.join(engineRoot, 'orchestrations', 'prompts', 'bootstrap.json');
@@ -1239,7 +1239,14 @@ if (require.main !== module) return;
     // The signal is the one pre-run-reset already trusts: .prompt-cache/.complete-<codeline>,
     // written only after every prompt installed, cleared when provisioning starts, and named for
     // the codeline so one codeline's set cannot serve another.
-    const _codelineId = String(process.env.EPAM_CODELINE_ID || '').trim();
+    // THE CODELINE IS DETECTED, NEVER PRESET. EPAM_CODELINE_ID is read in six places in this repo
+    // and SET in none — no launcher, config file or env file exports it — so keying this skip on
+    // it alone meant it could never fire in a live run: every run re-provisioned all 41 prompts
+    // while the marker sat correct on disk. The run's own resolved scope is in the PRD, and
+    // codelineFromPrd is the SAME function the prompt builder keys its cache with, so the two
+    // cannot disagree about which codeline this run is for.
+    const _codelineId = String(process.env.EPAM_CODELINE_ID || '').trim()
+      || String(codelineFromPrd(process.env.PRD_FILE || PRD_PATH) || '').trim();
     let _codelineComplete = false;
     if (_codelineId) {
       try {

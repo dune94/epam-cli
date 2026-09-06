@@ -638,6 +638,7 @@ _ROSTER_FILE="${EPAM_PROJECT_CONFIG_DIR:+$EPAM_PROJECT_CONFIG_DIR/roster.json}"
 # the assets belong to this run is not the same as proving they do, and reuse is the unsafe
 # direction.
 _CODELINE_ASSETS_REUSED=0
+_CODELINE_DECISION_DEFERRED=0
 # THE MARKER IS A FILENAME. `.prompt-cache/.complete-<codeline>` — empty, and its NAME is the
 # claim. Presence means the prompt builder finished provisioning every template for THAT codeline;
 # it writes the file only after the last one installs, and throws instead if any could not, so
@@ -652,6 +653,30 @@ elif [ -n "${EPAM_CODELINE_ID:-}" ] && [ -n "${EPAM_PROJECT_CONFIG_DIR:-}" ] \
      && [ -f "$EPAM_PROJECT_CONFIG_DIR/.prompt-cache/.complete-${EPAM_CODELINE_ID}" ]; then
     _CODELINE_ASSETS_REUSED=1
     info "  Reusing this codeline's completed agents and prompts (${EPAM_CODELINE_ID}) — not re-derived; EPAM_REGENERATE_CODELINE_ASSETS=1 forces regeneration"
+elif [ -z "${EPAM_CODELINE_ID:-}" ] && [ -n "${EPAM_PROJECT_CONFIG_DIR:-}" ]; then
+    # THE CODELINE IS NOT KNOWN YET, SO THE DECISION IS NOT MINE TO TAKE.
+    #
+    # Operator, 2026-09-06: "the prompts and profile cannot be deleted until the codeline or
+    # codelines are known the order is now incorrect."
+    #
+    # This script runs from the LAUNCHER, before run-agent-orchestration.sh, so it runs before
+    # ingest-jira-tickets.sh and resolve-codeline-scope.sh have resolved the run's scope. And
+    # EPAM_CODELINE_ID is set by no launcher, config file or env file in this repo — read in six
+    # places, exported in none. Deleting here therefore destroyed a completed codeline's roster,
+    # registries and prompts on EVERY live run, whichever codeline the run turned out to be for:
+    # a paid roster-specialiser call and ~13 minutes, thrown away before the run had the
+    # information needed to decide whether to throw it away.
+    #
+    # DEFERRED IS NOT SKIPPED. The sentinel makes the decision owed, and _run_agent_mint settles it
+    # at the first point it can be settled correctly — after discovery has persisted the scope,
+    # before any profile is generated, on the path BOTH callers take. A run that dies in between
+    # leaves the sentinel behind, so the next run still owes the same decision.
+    _CODELINE_ASSETS_REUSED=1
+    _CODELINE_DECISION_DEFERRED=1
+    mkdir -p "$EPAM_PROJECT_CONFIG_DIR/.prompt-cache" 2>/dev/null || true
+    : > "$EPAM_PROJECT_CONFIG_DIR/.prompt-cache/.reset-pending" 2>/dev/null || true
+    info "  Codeline not resolved yet — the agents/prompts decision is DEFERRED to the mint, which"
+    info "  settles it once discovery has named the codeline. Nothing is deleted here."
 fi
 
 # A RESUME IS NOT THE NEXT RUN, so the argument above does not reach it.

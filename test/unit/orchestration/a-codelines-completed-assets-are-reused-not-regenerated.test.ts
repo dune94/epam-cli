@@ -186,13 +186,36 @@ describe('the conditions on that reuse — each one a defect this repo has paid 
     expect(out).toMatch(/regenerat|override/i);
   });
 
-  it('NO CODELINE DECLARED — cannot prove a match, so it clears', () => {
-    // Unable to prove the assets belong to this run is not the same as proving they do. The
-    // unsafe direction here is reuse.
+  it('NO CODELINE DECLARED — cannot prove a match, so it DEFERS the decision', () => {
+    /**
+     * THIS ASSERTION WAS INVERTED ON 2026-09-06, deliberately, and the reason matters.
+     *
+     * It used to require the reset to CLEAR when no codeline was declared: unable to prove the
+     * assets belong to this run is not the same as proving they do, so the unsafe direction is
+     * reuse. That argument is still right about reuse — and it is answered here, because nothing
+     * is reused. What was wrong was the assumption that CLEARING is therefore safe.
+     *
+     * EPAM_CODELINE_ID is set by no launcher, config file or env file in this repo. So "no
+     * codeline declared" is not an edge case: it is EVERY live run. This branch destroyed a
+     * completed codeline's roster, registries and prompts on every one of them — a paid
+     * roster-specialiser call and ~13 minutes — before discovery had run and before the run had
+     * any way to know whether the assets were its own.
+     *
+     * Operator, 2026-09-06: "the prompts and profile cannot be deleted until the codeline or
+     * codelines are known the order is now incorrect."
+     *
+     * The clean slate is not weakened, it is correctly timed. The reset records that the decision
+     * is owed and _run_agent_mint takes it after discovery names the codeline — clearing for a
+     * different codeline, no codeline, two codelines, or the override. See
+     * nothing-is-deleted-before-the-codeline-is-known.test.ts, which asserts both halves.
+     */
     const { cfg } = project();
     runReset(cfg, { EPAM_CODELINE_ID: '' });
     expect(kept(cfg, 'roster.json'),
-      'assets were reused without any codeline to match them against').toBe(false);
+      'the roster was destroyed before the run knew which codeline it was for').toBe(true);
+    expect(kept(cfg, join('.prompt-cache', '.reset-pending')),
+      'the decision was deferred without recording that it is owed — nothing would settle it')
+      .toBe(true);
   });
 
   it('THE MARKER CANNOT BE CORRUPT — it has no content to corrupt', () => {

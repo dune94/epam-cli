@@ -1,0 +1,35 @@
+{
+  "base": "5cd42c715e5695d1ac883426dbc46b7a6aedd1e0dad7e9ee862caa6fe9af06a5",
+  "roles": "a1b414332fe6679109d050c86764db58ecc58364eb3b6cdba21bbb54cb8cd86e",
+  "usesRoles": false,
+  "doc": {
+    "$why": [
+      "Generated from the guard-vocabulary template by the agent that minted this project's roster.",
+      "The template is never executed; this copy is. Placeholders were checked against the",
+      "template before installation — see lib/project-prompt-contract.js."
+    ],
+    "authority": "project",
+    "body": "__PERSONA_PREFIX__GUARD SEAM: __SEAM__\n\nTHE RULE THIS GUARD ENFORCES:\n__RULE__\n\nTHE STATEMENTS THE GUARD WILL CHECK:\n__STATEMENT_LIST__\n\nDECLARED MANIFEST (the files this story says it will touch):\n__MANIFEST__\n\n__DOC_SECTION__CODE EVIDENCE (real findings from this repository — ground truth; derive from these, not from your own knowledge of any library):\n__EVIDENCE__\n\nSTORY CONTEXT:\nTitle: __STORY_TITLE__\nDescription: __STORY_DESCRIPTION__\n__CODEGRAPH_SECTION__\n\nPROJECT CONTEXT FOR THIS GUARD:\nThis guard sits on the gotransit codeline (next.gotransit.com), for AMSD-1919, Go-Checkout Page - Email & Confirm Email Case Sensitivity. Any vocabulary you derive should stay consistent with the terms this codebase already uses for checkout email confirmation logic: the checkout form component (under the checkout page's component tree), its confirmEmail comparison/validation, and the existing unit test spec that covers this form. Tests in this codeline run via Jest (`test` and `test:coverage-check` scripts, configured by jest.config.js at the repo root) — phrase any test-related vocabulary in Jest terms, not another test runner's. Remember that merges here are gated by required workflows (a QA review check and a master-only merge restriction), so vocabulary implying \"done\" should reflect that review and test updates are both expected before this is mergeable.",
+    "derivedFromSha256": "0d6528c4becd35c59315fd3ec95de7f16112cc789b5a3d484ec2e2871e257060",
+    "derivedFromVersion": 1,
+    "id": "guard-vocabulary",
+    "placeholders": [
+      "__CODEGRAPH_SECTION__",
+      "__DOC_SECTION__",
+      "__EVIDENCE__",
+      "__MANIFEST__",
+      "__PERSONA_PREFIX__",
+      "__RULE__",
+      "__SEAM__",
+      "__STATEMENT_LIST__",
+      "__STORY_DESCRIPTION__",
+      "__STORY_TITLE__"
+    ],
+    "mayBeEmpty": [
+      "__CODEGRAPH_SECTION__",
+      "__DOC_SECTION__",
+      "__PERSONA_PREFIX__"
+    ]
+  },
+  "reviewed": true
+}

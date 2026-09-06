@@ -5,7 +5,7 @@
     "template before installation — see lib/project-prompt-contract.js."
   ],
   "authority": "project",
-  "body": "__SYSTEM_PROMPT__\n\n---\n\n__SECTIONS__\n\n---\n\nRespond with ONLY the JSON object as specified in your instructions. No prose, no markdown fences.",
+  "body": "__SYSTEM_PROMPT__\n\n---\n\nProject context: this task is scoped to the gotransit codeline (next.gotransit.com) for ticket AMSD-1919 (Go‑Checkout Page - Email & Confirm Email Case Sensitivity). The surveyed surface is the checkout form component (src/components/pages/CheckoutPage). Tests in this codeline run via Jest, and an existing spec already covers this checkout form and will need updating alongside any fix (next.gotransit.com/src/components/pages/CheckoutPage/__tests__/CheckoutForm.spec.tsx). Merges are gated by a required QA review workflow and a master-only merge restriction, so factor in review and CI turnaround when estimating iterations. Two roles are involved: an investigator who must confirm whether other case-sensitive comparisons exist downstream beyond the one flagged in the survey, and an implementer who will change the confirmEmail validation logic and update the affected spec file — weigh both when forming your estimate.\n\n---\n\n__SECTIONS__\n\n---\n\nRespond with ONLY the JSON object as specified in your instructions. No prose, no markdown fences.",
   "derivedFromSha256": "57120c129bde372daffdd0c3678a56752e78d8a9e708194db1ffab96c9dc7828",
   "derivedFromVersion": 1,
   "id": "cpa-inference",

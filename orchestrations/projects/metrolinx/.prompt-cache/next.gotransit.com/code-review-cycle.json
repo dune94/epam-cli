@@ -1,0 +1,35 @@
+{
+  "base": "97ec2c0211187c9e74faef87208ae587daa5d4626afc69f62a351d0a0de4018b",
+  "roles": "a1b414332fe6679109d050c86764db58ecc58364eb3b6cdba21bbb54cb8cd86e",
+  "usesRoles": true,
+  "doc": {
+    "$why": [
+      "Generated from the code-review-cycle template by the agent that minted this project's roster.",
+      "The template is never executed; this copy is. Placeholders were checked against the",
+      "template before installation — see lib/project-prompt-contract.js."
+    ],
+    "authority": "project",
+    "body": "__REVIEW_PROFILE__\n\n---\nREVIEW TASK (Iteration __ITERATION__): Story __STORY_ID__ — __STORY_TITLE__\nAGENT: __STORY_AGENT__\n\nDESCRIPTION: __STORY_DESCRIPTION__\n\nRELEVANT FILES: __STORY_FILES__\n\nGIT DIFF:\n```diff\n__STORY_DIFF__\n```\n__PRIOR_CONTEXT__\n__VC_BLOCK__\nPROJECT ROOT: __PROJECT_ROOT__\n\n## Project Context: gotransit Checkout Form — Case-Sensitivity Fix\n\nThis gotransit codeline uses Next.js with TypeScript strict mode, Jest for testing, and React Hook Form for checkout validation. The issue concerns case-sensitive email comparisons in CheckoutForm.tsx that fail when user input differs in case from the confirmation field (e.g., \"user@example.com\" vs \"User@example.com\").\n\nVerification must confirm:\n1. **Email comparison correctness**: The confirmEmail validation now performs case-insensitive comparison (using .toLowerCase() or .localeCompare({sensitivity: 'accent'})) before equality check.\n2. **Test coverage**: Existing tests in src/components/pages/CheckoutPage/__tests__/CheckoutForm.spec.tsx cover both matching and non-matching emails in different cases (lowercase, UPPERCASE, Mixed Case, with leading/trailing whitespace).\n3. **No whitespace trap**: Confirm the fix does not create a new vulnerability where \" user@example.com \" and \"user@example.com\" incorrectly match. Validation should trim and normalize.\n4. **TypeScript strict compliance**: No `any` types, all form values properly typed, no implicit `undefined` comparisons.\n5. **Error message clarity**: If confirmEmail fails validation, the error message does not leak implementation details about case handling.\n6. **Jest test execution**: Run `npm run test -- CheckoutForm.spec.tsx` and verify all tests pass, including new case-insensitivity tests.\n7. **No regressions**: Confirm existing checkout form tests still pass with the change.\n\nRun `npm run test -- CheckoutForm.spec.tsx --coverage` to verify new test cases exercise the email comparison logic. Inspect src/components/pages/CheckoutPage/__tests__/CheckoutForm.spec.tsx for test cases covering: matching emails with case differences, non-matching emails, and edge cases (empty strings, whitespace).\n\nCheck: TypeScript strict compliance, test coverage for case-insensitive email comparison, no new security gaps (whitespace handling, injection), existing checkout tests remain green.\n\nRespond with ONLY a JSON object:\n{\"verdict\":\"approved\",\"issues\":[],\"summary\":\"...\"}\n  OR\n{\"verdict\":\"changes_requested\",\"issues\":[{\"severity\":\"blocker|major|minor\",\"file\":\"...\",\"line\":0,\"description\":\"...\",\"evidence\":\"<path>:<line> you read, or the command you ran and its result\",\"suggestedFix\":\"...\"}],\"summary\":\"...\"}\n\nEvery issue MUST carry an `evidence` field: the exact thing you READ that establishes it — `<path>:<line>` you opened, or the command you ran and what it returned. Not a restatement of the claim, not a plan reference: what you looked at. An issue without evidence is DISCARDED before it reaches anyone, so an unsupported finding is worse than no finding — it costs you the issue. If a claim is about a library's API, the evidence is that library's installed types or source in this repository, and the installed contract beats the plan.",
+    "derivedFromSha256": "55c48b61072ca44c58e2dfc4b3e8c5bdb8c22e2f6e48a4e036067ca13259b0cc",
+    "derivedFromVersion": 1,
+    "id": "code-review-cycle",
+    "placeholders": [
+      "__ITERATION__",
+      "__PRIOR_CONTEXT__",
+      "__PROJECT_ROOT__",
+      "__REVIEW_PROFILE__",
+      "__STORY_AGENT__",
+      "__STORY_DESCRIPTION__",
+      "__STORY_DIFF__",
+      "__STORY_FILES__",
+      "__STORY_ID__",
+      "__STORY_TITLE__",
+      "__VC_BLOCK__"
+    ],
+    "mayBeEmpty": [
+      "__PRIOR_CONTEXT__",
+      "__VC_BLOCK__"
+    ]
+  },
+  "reviewed": true
+}

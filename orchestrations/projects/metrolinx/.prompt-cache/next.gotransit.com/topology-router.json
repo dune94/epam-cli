@@ -1,0 +1,26 @@
+{
+  "base": "ee9bad20e16eda4719b587233276e812189b8e4ee0a95dfda6877cfb293f44ee",
+  "roles": "a1b414332fe6679109d050c86764db58ecc58364eb3b6cdba21bbb54cb8cd86e",
+  "usesRoles": true,
+  "doc": {
+    "$why": [
+      "Generated from the topology-router template by the agent that minted this project's roster.",
+      "The template is never executed; this copy is. Placeholders were checked against the",
+      "template before installation — see lib/project-prompt-contract.js."
+    ],
+    "authority": "project",
+    "body": "You are selecting an execution topology for orchestration phase \"__PHASE__\".\n\nStories to classify:\n__STORIES__\n__CPA_SIGNALS__\n\nProject context (gotransit, next.gotransit.com):\nThis is a Next.js checkout application addressing email validation case sensitivity (AMSD-1919). Both stories involve CheckoutForm.tsx at src/components/pages/CheckoutPage, with Jest unit tests at src/components/pages/CheckoutPage/__tests__/CheckoutForm.spec.tsx that must be updated alongside any fix.\n\nRole interdependencies:\n- gotransit-checkout-investigator: Searches the codebase for all case-sensitive email comparisons, verifies scope beyond the initial survey finding, and checks existing test coverage. This investigation must complete before the implementer can trust their fix is comprehensive.\n- checkout-forms-engineer: Fixes confirmEmail validation logic in CheckoutForm.tsx and updates affected unit tests. This work depends on the investigator's findings to ensure the fix addresses all discovered issues, not just the one flagged initially.\n\nFile scope warning:\nBoth stories modify the same component file (CheckoutForm.tsx) and its test file (CheckoutForm.spec.tsx). Parallel worktrees over these shared files will produce merge conflicts the orchestration cannot resolve automatically.\n\nRules:\n- single: 0-1 worktree stories, OR one high-effort story that needs focused attention\n- parallel: 2-4 independent stories with no shared file scope\n- sequential: stories with overlapping file scope, tight coupling, or shared state risk\n\nOverlapping file scope outranks story count. Stories that edit the same file must not run in\nparallel worktrees, even when there are only two or three of them: the count alone cannot see\nthat, and parallel worktrees over a shared file produce a merge conflict the run cannot resolve.\n\nRespond with ONLY this JSON object. No prose, no markdown fences:\n{\"topology\":\"single|parallel|sequential\",\"reason\":\"<one sentence naming the deciding factor>\"}",
+    "derivedFromSha256": "b4c3438df71eb71922697b957dbb1f6d448451bac32e3948af4d507c1b54fa34",
+    "derivedFromVersion": 1,
+    "id": "topology-router",
+    "placeholders": [
+      "__CPA_SIGNALS__",
+      "__PHASE__",
+      "__STORIES__"
+    ],
+    "mayBeEmpty": [
+      "__CPA_SIGNALS__"
+    ]
+  },
+  "reviewed": true
+}

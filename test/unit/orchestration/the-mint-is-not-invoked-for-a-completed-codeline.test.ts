@@ -90,7 +90,7 @@ function invokeMint(env: Record<string, string>) {
 
 /** Same, but the fixture is prepared (marker + prompts) before the function runs. */
 function invokeMintPrepared(opts: { codeline: string; marker: string | null; prompts: number;
-  skipFlag?: string; regen?: string }) {
+  skipFlag?: string; regen?: string; prdCodelines?: string[] }) {
   const dir = mkdtempSync(join(tmpdir(), 'mintcall-'));
   try {
     const cfg = join(dir, 'projects', 'metrolinx');
@@ -99,7 +99,14 @@ function invokeMintPrepared(opts: { codeline: string; marker: string | null; pro
     mkdirSync(join(dir, 'agents'), { recursive: true });
     writeFileSync(join(dir, 'agents', 'profiles.json'),
       JSON.stringify({ agents: { 'checkout-forms-engineer': { role: 'implementer' } } }));
-    writeFileSync(join(cfg, 'prd.json'), JSON.stringify({ phases: [], stories: [] }));
+    // THE PRD CARRIES THE RUN'S RESOLVED SCOPE, exactly as synthesize-prd-from-jira.js writes it
+    // (project.outputDirs / project.outputDir). That is where a live run's codeline actually is.
+    writeFileSync(join(cfg, 'prd.json'), JSON.stringify({
+      phases: [], stories: [],
+      ...(opts.prdCodelines
+        ? { project: { outputDirs: opts.prdCodelines.map((c) => ({ path: `/codelines/${c}` })) } }
+        : {}),
+    }));
     for (let i = 0; i < opts.prompts; i++) writeFileSync(join(cfg, 'prompts', `p${i}.json`), '{}');
     if (opts.marker) writeFileSync(join(cfg, '.prompt-cache', `.complete-${opts.marker}`), '');
 
@@ -133,7 +140,9 @@ function invokeMintPrepared(opts: { codeline: string; marker: string | null; pro
         env: {
           PATH: process.env.PATH || '', HOME: process.env.HOME || '',
           EPAM_PROJECT_CONFIG_DIR: cfg,
-          EPAM_CODELINE_ID: opts.codeline,
+          // An EMPTY codeline means the variable is ABSENT, which is what a live run has: no
+          // launcher, config or env file in this repo sets EPAM_CODELINE_ID.
+          ...(opts.codeline ? { EPAM_CODELINE_ID: opts.codeline } : {}),
           ...(opts.skipFlag ? { EPAM_SKIP_AGENT_MINT: opts.skipFlag } : {}),
           ...(opts.regen ? { EPAM_REGENERATE_CODELINE_ASSETS: opts.regen } : {}),
         },
@@ -192,5 +201,56 @@ describe('_run_agent_mint, executed for real with a recording NODE_BIN', () => {
     const r = invokeMintPrepared({ codeline: 'next.gotransit.com', marker: 'next.gotransit.com',
       prompts: 41, regen: '1' });
     expect(r.mintCalls, 'EPAM_REGENERATE_CODELINE_ASSETS=1 did not force a re-mint').toBeGreaterThan(0);
+  });
+});
+
+describe('the mint gate reads the codeline the RUN DETECTED', () => {
+  /**
+   * Operator, 2026-09-06: "code line is detected in a live run ... this var will never be preset
+   * in a live run."
+   *
+   * The gate was written against EPAM_CODELINE_ID, which nothing in this repo sets. In a live run
+   * the variable is absent, the marker path becomes `.complete-` which never exists, and the gate
+   * silently never fires — so the mint runs and is paid for on every run while the reuse machinery
+   * reports itself as working. The PRD holds the resolved scope by the time the mint is reached:
+   * synthesize-prd-from-jira.js writes project.outputDirs, and the mint is invoked with that PRD.
+   */
+  it('skips the mint with NO EPAM_CODELINE_ID, on the codeline the PRD resolved', () => {
+    const r = invokeMintPrepared({
+      codeline: '', marker: 'next.gotransit.com', prompts: 3,
+      prdCodelines: ['next.gotransit.com'],
+    });
+    expect(r.mintCalls,
+      'the mint ran on a completed codeline because it waited for a variable no launcher sets — '
+      + 'this is the paid mint on every live run').toBe(0);
+  });
+
+  it('still mints when the PRD resolves a DIFFERENT codeline than the marker names', () => {
+    const r = invokeMintPrepared({
+      codeline: '', marker: 'next.upexpress.com', prompts: 3,
+      prdCodelines: ['next.gotransit.com'],
+    });
+    expect(r.mintCalls, 'another codeline\'s marker was accepted as this one\'s').toBe(1);
+  });
+
+  it('still mints when the PRD resolves TWO codelines — neither is attributable', () => {
+    const r = invokeMintPrepared({
+      codeline: '', marker: 'next.gotransit.com', prompts: 3,
+      prdCodelines: ['next.gotransit.com', 'next.upexpress.com'],
+    });
+    expect(r.mintCalls, 'a two-codeline run claimed one codeline\'s completed assets').toBe(1);
+  });
+
+  it('still mints when the PRD resolves no scope at all', () => {
+    const r = invokeMintPrepared({ codeline: '', marker: 'next.gotransit.com', prompts: 3 });
+    expect(r.mintCalls, 'a scopeless run reused a codeline\'s assets on no evidence').toBe(1);
+  });
+
+  it('the override still forces a mint on the detected codeline', () => {
+    const r = invokeMintPrepared({
+      codeline: '', marker: 'next.gotransit.com', prompts: 3,
+      prdCodelines: ['next.gotransit.com'], regen: '1',
+    });
+    expect(r.mintCalls, 'EPAM_REGENERATE_CODELINE_ASSETS=1 did not force a re-mint').toBe(1);
   });
 });

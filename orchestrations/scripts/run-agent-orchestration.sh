@@ -3644,12 +3644,69 @@ _run_agent_mint() {
   # .prompt-cache/.complete-<codeline>, written only after every prompt installed, named for the
   # codeline, and cleared whenever provisioning restarts. Prompts must also actually be on disk —
   # a marker beside an empty directory would skip the mint and leave the run with no prompts.
+  # THE CODELINE IS DETECTED, NEVER PRESET.
+  #
+  # Operator, 2026-09-06: "code line is detected in a live run ... this var will never be preset in
+  # a live run." EPAM_CODELINE_ID is READ in six places in this repo and SET in none — no launcher,
+  # config file or env file exports it. Gated on it alone, this test built the path
+  # `.complete-` on every live run, matched nothing, and the mint ran and was PAID FOR every time
+  # while the reuse machinery reported itself as working. A gate that cannot fire is worse than no
+  # gate: it is a saving that appears in the log and never in the bill.
+  #
+  # The PRD holds the run's resolved scope by the time the mint is reached — synthesize-prd-from-
+  # jira.js writes project.outputDirs and project.outputDir, and the mint is invoked with that PRD
+  # ($1). Those are the fields lib/codeline-scope.sh already treats as the run's scope, so both
+  # sides of the engine answer "which codeline?" from the same place.
+  #
+  # EXACTLY ONE, or nothing: a run scoped to two codelines produces assets specialised for both,
+  # and claiming either would hand the other's run a set built for a repository it is not in.
+  local _detected_cl="${EPAM_CODELINE_ID:-}"
+  if [ -z "$_detected_cl" ] && [ -n "${1:-}" ] && [ -f "${1:-}" ] && command -v jq >/dev/null 2>&1; then
+      _detected_cl=$(jq -r '
+          [ (.project.outputDirs // [])[]?.path,
+            (.project.outputDir // empty) ]
+          | map(select(type == "string" and . != "") | sub("/+$"; "") | split("/") | last)
+          | unique
+          | if length == 1 then .[0] else empty end
+      ' "$1" 2>/dev/null || true)
+  fi
+
+  # SETTLE WHAT pre-run-reset COULD NOT DECIDE.
+  #
+  # The reset runs from the launcher, before discovery, so it cannot know which codeline the run is
+  # for. Rather than guess — and destroy a completed codeline's roster, registries and prompts on
+  # every live run — it defers and leaves `.prompt-cache/.reset-pending` behind. This is the first
+  # point the decision can be taken correctly: discovery has persisted the scope, both call paths
+  # reach here, and no profile has been generated yet.
+  #
+  # THE CLEAN SLATE IS NOT WEAKENED, only correctly timed. Anything unproven still clears: another
+  # codeline's marker, no codeline resolved, two codelines resolved, or the override. And exactly
+  # what pre-run-reset clears is cleared here — never more, or this becomes a second, divergent
+  # clean-slate policy that nothing reconciles.
+  local _pending="${EPAM_PROJECT_CONFIG_DIR:+$EPAM_PROJECT_CONFIG_DIR/.prompt-cache/.reset-pending}"
+  if [ -n "$_pending" ] && [ -f "$_pending" ]; then
+    if [ "${EPAM_REGENERATE_CODELINE_ASSETS:-0}" != "1" ] \
+       && [ -n "$_detected_cl" ] \
+       && [ -f "$EPAM_PROJECT_CONFIG_DIR/.prompt-cache/.complete-${_detected_cl}" ]; then
+      log "[mint] deferred decision settled: ${_detected_cl} completed its agents and prompts — kept"
+    else
+      log "[mint] deferred decision settled: this run is not ${_detected_cl:-<unresolved>}'s completed codeline — clearing the previous run's agents and prompts"
+      rm -f "$EPAM_PROJECT_CONFIG_DIR/roster.json" \
+            "$EPAM_PROJECT_CONFIG_DIR/project-roles.json" \
+            "$EPAM_PROJECT_CONFIG_DIR/project-investigators.json" \
+            "$EPAM_PROJECT_CONFIG_DIR/agent-profiles.json" 2>/dev/null || true
+      rm -rf "$EPAM_PROJECT_CONFIG_DIR/prompts" 2>/dev/null || true
+      mkdir -p "$EPAM_PROJECT_CONFIG_DIR/prompts" 2>/dev/null || true
+    fi
+    rm -f "$_pending" 2>/dev/null || true
+  fi
+
   if [ "${EPAM_SKIP_AGENT_MINT:-0}" != "1" ] \
      && [ "${EPAM_REGENERATE_CODELINE_ASSETS:-0}" != "1" ] \
-     && [ -n "${EPAM_CODELINE_ID:-}" ] && [ -n "${EPAM_PROJECT_CONFIG_DIR:-}" ] \
-     && [ -f "$EPAM_PROJECT_CONFIG_DIR/.prompt-cache/.complete-${EPAM_CODELINE_ID}" ] \
+     && [ -n "$_detected_cl" ] && [ -n "${EPAM_PROJECT_CONFIG_DIR:-}" ] \
+     && [ -f "$EPAM_PROJECT_CONFIG_DIR/.prompt-cache/.complete-${_detected_cl}" ] \
      && ls "$EPAM_PROJECT_CONFIG_DIR/prompts/"*.json >/dev/null 2>&1; then
-      log "[mint] codeline ${EPAM_CODELINE_ID} is already provisioned — the mint is skipped; EPAM_REGENERATE_CODELINE_ASSETS=1 forces a re-mint"
+      log "[mint] codeline ${_detected_cl} is already provisioned — the mint is skipped; EPAM_REGENERATE_CODELINE_ASSETS=1 forces a re-mint"
       EPAM_SKIP_AGENT_MINT=1
   fi
 
@@ -5674,6 +5731,48 @@ step_emit "6" "pass" "Step 6: mkdir src/ dirs"
 # the single source of truth for per-story model assignment.
 # ──────────────────────────────────────────────
 step_emit "7" "running" "Step 7: PRD model coordinator"
+# _mc_enforce_ladder <prd-file> [when]
+#
+# EVERY STORY'S MODEL IS ON THIS SET'S DECLARED LADDER, OR IT IS PUT THERE.
+#
+# Extracted 2026-09-06 so it can run on BOTH sides of the coordinator. It used to run only BEFORE,
+# and the guard selects `(.model // "") != ""` — so a story with NO model yet matched nothing, and
+# the coordinator then assigned one with nothing left to check it. Validate-then-write, in that
+# order, is not validation: it inspects the state the writer is about to replace.
+#
+# Live 2026-09-05, run 20260905T172837Z on the claude-only set: the PRD held model=undefined at the
+# pause-1 checkpoint and before CPA, and model="MiniMax-M3"/aiProvider="minimax" after step 7 — a
+# model that appears zero times in llm-defaults.claude.json. Pre-flight refused to start the
+# writer, correctly, but only after the run had reached that point.
+#
+# The permitted set is the project's own resolved ladder, READ and never listed, so a project
+# declaring other models needs no change here. Idempotent by construction: a second call over an
+# already-corrected PRD selects nothing and rewrites nothing.
+_mc_enforce_ladder() {
+    local _prd="${1:-}" _when="${2:-}"
+    [ -n "$_prd" ] && [ -f "$_prd" ] || return 0
+    command -v jq >/dev/null 2>&1 || return 0
+    local _allowed _fixed _start _tmp
+    _allowed="$("${NODE_BIN:-node}" "$SCRIPT_DIR/lib/handlers/ladder-models.js" 2>/dev/null || echo "")"
+    # AN EMPTY LADDER CORRECTS NOTHING. Rewriting every model to "" because the ladder could not be
+    # resolved would break a PRD that was fine; the resolution failure is reported by the refusal
+    # further down, which is where it belongs.
+    [ -n "$_allowed" ] && [ "$_allowed" != "[]" ] || return 0
+    _fixed=$(jq -r --argjson allowed "$_allowed" '
+        [ .stories[]? | select((.model // "") != "" and ((.model) as $m | $allowed | index($m) | not)) | .id ]
+        | join(", ")' "$_prd" 2>/dev/null || echo "")
+    [ -n "$_fixed" ] || return 0
+    _start=$(printf '%s' "$_allowed" | jq -r '.[0] // empty')
+    [ -n "$_start" ] || return 0
+    warning "  [prd-model-coordinator] assigned a model on no declared ladder${_when:+ ($_when)} for: ${_fixed}"
+    warning "    corrected to '${_start}' — a model off the ladder has no successor and cannot escalate"
+    _tmp=$(mktemp)
+    jq --argjson allowed "$_allowed" --arg start "$_start" '
+        .stories |= map(if ((.model // "") != "" and ((.model) as $m | $allowed | index($m) | not))
+                        then .model = $start else . end)' "$_prd" > "$_tmp" 2>/dev/null \
+        && mv "$_tmp" "$_prd" || rm -f "$_tmp"
+}
+
 _emit_agent start "prd-model-coordinator" "PRD Model Coordinator"
 if is_truthy "${SKIP_PRD_MODEL_COORDINATOR:-}"; then
     info "  [prd-model-coordinator] Skipped (SKIP_PRD_MODEL_COORDINATOR=1)"
@@ -5713,23 +5812,7 @@ else
     # outside it is corrected to that ladder's opening model and said out loud: the run keeps
     # moving on a model that can actually escalate, and the deviation is visible rather than
     # discovered a run later.
-    if command -v jq >/dev/null 2>&1; then
-        _mc_allowed="$("${NODE_BIN:-node}" "$SCRIPT_DIR/lib/handlers/ladder-models.js" 2>/dev/null || echo "")"
-        if [ -n "$_mc_allowed" ]; then
-            _mc_fixed=$(jq -r --argjson allowed "$_mc_allowed" '
-                [ .stories[]? | select((.model // "") != "" and ((.model) as $m | $allowed | index($m) | not)) | .id ]
-                | join(", ")' "$_mc_prd_target" 2>/dev/null || echo "")
-            if [ -n "$_mc_fixed" ]; then
-                _mc_start=$(printf '%s' "$_mc_allowed" | jq -r '.[0] // empty')
-                warning "  [prd-model-coordinator] assigned a model on no declared ladder for: ${_mc_fixed}"
-                warning "    corrected to '${_mc_start}' — a model off the ladder has no successor and cannot escalate"
-                _mc_tmp=$(mktemp)
-                jq --argjson allowed "$_mc_allowed" --arg start "$_mc_start" '
-                    .stories |= map(if ((.model // "") != "" and ((.model) as $m | $allowed | index($m) | not))
-                                    then .model = $start else . end)'                         "$_mc_prd_target" > "$_mc_tmp" 2>/dev/null && mv "$_mc_tmp" "$_mc_prd_target" || rm -f "$_mc_tmp"
-            fi
-        fi
-    fi
+    _mc_enforce_ladder "$_mc_prd_target" "before the coordinator"
 
     if [ "${_mc_missing_count:-0}" -eq 0 ]; then
         info "  [prd-model-coordinator] All pending stories already have model/aiProvider/reasoningEffort"
@@ -5912,6 +5995,17 @@ else
     python3 "$SCRIPT_DIR/lib/handlers/mc-fallback.py" "$_mc_prd_target" "$_mc_phase"
     ) 200>"${_mc_prd_target}.lock"
 fi
+# AFTER EVERY WRITER ON THIS STEP, WHICHEVER RAN.
+#
+# The check above runs before the coordinator, and its selector `(.model // "") != ""` cannot see a
+# story that has no model YET — which is precisely the story the coordinator is about to assign.
+# Three writers land between there and here: the coordinator itself, its corrective-note retries,
+# and mc-fallback.py's post-condition default. None of them was checked against the ladder.
+#
+# Deliberately OUTSIDE the if/else, so it also covers SKIP_PRD_MODEL_COORDINATOR=1: a set that
+# skips the coordinator can still carry an off-ladder model written by an earlier run, and that
+# set — the claude one — is where the failure was actually paid for.
+_mc_enforce_ladder "${MAIN_PRD_FILE:-$PRD_FILE}" "after the coordinator"
 _emit_agent complete "prd-model-coordinator" "PRD model assignments done"
 step_emit "7" "pass" "Step 7: PRD model coordinator"
 assert_no_story_ids_lost "presplit" "Step 7: PRD model coordinator"

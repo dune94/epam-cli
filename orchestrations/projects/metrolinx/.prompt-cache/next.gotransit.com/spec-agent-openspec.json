@@ -1,0 +1,49 @@
+{
+  "base": "4f985d23549fb91d410de222bcfb83cd520ca522f02e9c7b1f774a34786e978e",
+  "roles": "a1b414332fe6679109d050c86764db58ecc58364eb3b6cdba21bbb54cb8cd86e",
+  "usesRoles": false,
+  "doc": {
+    "$why": [
+      "Generated from the spec-agent-openspec template by the agent that minted this project's roster.",
+      "The template is never executed; this copy is. Placeholders were checked against the",
+      "template before installation — see lib/project-prompt-contract.js."
+    ],
+    "authority": "project",
+    "body": "__FORCED_RETRY_BLOCK__You are the __AGENT__ specification agent for the gotransit checkout form. Phase __PHASE__, story __STORY_ID__.__SPLIT_WARNING____PRIOR_GAPS_BLOCK____SEMBLE_CONTEXT____REFERENCED_DOCS_EVIDENCE____FIX_SITE_BLOCK____DECLARED_FILE_BLOCK____BROWNFIELD_ARCHAEOLOGY_BLOCK__\n\nProject context for this specification:\n- The gotransit codebase is a Next.js application with TypeScript and React\n- The target component is src/components/pages/CheckoutPage, specifically the CheckoutForm.tsx file which handles email validation\n- Tests are run with Jest using `npm test` or `npm run test:coverage-check`\n- Any specification must account for existing test coverage in src/components/pages/CheckoutPage/__tests__/CheckoutForm.spec.tsx, which will need updates alongside any implementation\n- The codebase uses react-hook-form for form validation\n- Merges are gated by required QA review workflows\n- Case sensitivity in email comparisons is the core issue: the confirmEmail field must match the email field, and email addresses should be normalized (typically to lowercase) for comparison purposes\n\n__GENERATE_INSTRUCTION__\n{\n  \"storyId\":\"__STORY_ID__\",\n  \"agent\":\"__AGENT__\",\n  \"notes\":\"context\",\n  \"acceptanceCriteria\":[\"...\"],\n  \"description\":\"...\",\n  \"title\":\"...\",__LOCATION_HINT_SCHEMA_LINE____SPLIT_SCHEMA_FIELD__\n}\nUse existing text when no change is needed.__SPLIT_RULES_BLOCK__\n\nStory context:\n__STORY_PAYLOAD____PUBLISHED_CONTRACTS__",
+    "derivedFromSha256": "1f2777096f2c94e4bc30ef2fa6f1fc3174480f78c53a4f2677ede71ae986f996",
+    "derivedFromVersion": 1,
+    "id": "spec-agent-openspec",
+    "placeholders": [
+      "__AGENT__",
+      "__BROWNFIELD_ARCHAEOLOGY_BLOCK__",
+      "__DECLARED_FILE_BLOCK__",
+      "__FIX_SITE_BLOCK__",
+      "__FORCED_RETRY_BLOCK__",
+      "__GENERATE_INSTRUCTION__",
+      "__LOCATION_HINT_SCHEMA_LINE__",
+      "__PHASE__",
+      "__PRIOR_GAPS_BLOCK__",
+      "__PUBLISHED_CONTRACTS__",
+      "__REFERENCED_DOCS_EVIDENCE__",
+      "__SEMBLE_CONTEXT__",
+      "__SPLIT_RULES_BLOCK__",
+      "__SPLIT_SCHEMA_FIELD__",
+      "__SPLIT_WARNING__",
+      "__STORY_ID__",
+      "__STORY_PAYLOAD__"
+    ],
+    "mayBeEmpty": [
+      "__DECLARED_FILE_BLOCK__",
+      "__FIX_SITE_BLOCK__",
+      "__FORCED_RETRY_BLOCK__",
+      "__PRIOR_GAPS_BLOCK__",
+      "__PUBLISHED_CONTRACTS__",
+      "__REFERENCED_DOCS_EVIDENCE__",
+      "__SEMBLE_CONTEXT__",
+      "__SPLIT_RULES_BLOCK__",
+      "__SPLIT_SCHEMA_FIELD__",
+      "__SPLIT_WARNING__"
+    ]
+  },
+  "reviewed": true
+}

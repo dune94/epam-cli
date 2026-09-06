@@ -33,6 +33,8 @@ const SRC = readFileSync(join(__dirname, '../../../orchestrations/scripts/mint-a
 /** The real guard, lifted and driven — not a reimplementation of its logic. */
 function skipsProvisioning(opts: {
   resume?: string; codeline?: string; installed: number; marker?: string | null;
+  /** The run's RESOLVED scope, which is where a live run's codeline actually comes from. */
+  prdCodelines?: string[];
 }) {
   const root = mkdtempSync(join(tmpdir(), 'reprov-'));
   try {
@@ -47,14 +49,27 @@ function skipsProvisioning(opts: {
     if (start < 0 || end < 0) throw new Error('guard block not found — harness is stale');
     const body = SRC.slice(start, end);
 
+    // THE PRD IS WHERE A LIVE RUN'S CODELINE IS. EPAM_CODELINE_ID is set by no launcher, config
+    // or env file in this repo, so a guard keyed on it alone could never fire in a live run.
+    const prd = join(root, 'prd.json');
+    writeFileSync(prd, JSON.stringify(opts.prdCodelines
+      ? { project: { outputDirs: opts.prdCodelines.map((c) => ({ path: `/codelines/${c}` })) } }
+      : {}));
+
+    // The REAL derivation, not a stand-in: the same function the prompt builder keys its cache
+    // with, so this test cannot pass on a copy that has drifted from it.
+    // eslint-disable-next-line @typescript-eslint/no-var-requires
+    const { codelineFromPrd } = require(join(__dirname,
+      '../../../orchestrations/scripts/lib/project-prompt-builder.js'));
+
     // eslint-disable-next-line no-new-func
-    return new Function('fs', 'path', 'process', 'projectConfigDir', `
+    return new Function('fs', 'path', 'process', 'projectConfigDir', 'codelineFromPrd', 'PRD_PATH', `
       ${body}
       return _skipProvisioning;
     `)(require('node:fs'), require('node:path'),
        { env: { EPAM_RESUME_RUN: opts.resume || '', EPAM_CODELINE_ID: opts.codeline || '' },
          stderr: { write: () => {} } },
-       cfg) as boolean;
+       cfg, codelineFromPrd, prd) as boolean;
   } finally { rmSync(root, { recursive: true, force: true }); }
 }
 
@@ -90,5 +105,41 @@ describe('provisioning is skipped when this codeline already completed it', () =
   it('no codeline declared -> provisions', () => {
     expect(skipsProvisioning({ codeline: '', installed: 41, marker: 'next.gotransit.com' }),
       'provisioning was skipped without a codeline to match the marker against').toBe(false);
+  });
+});
+
+describe('the codeline comes from the run, not from a variable nobody sets', () => {
+  /**
+   * The live-run case, and the reason the reuse machinery never once paid off: with
+   * EPAM_CODELINE_ID absent this guard saw no codeline, so all 41 prompts were re-provisioned on
+   * every run while .complete-next.gotransit.com sat correct on disk beside them.
+   */
+  it('SKIPS with no EPAM_CODELINE_ID when the PRD resolves the completed codeline', () => {
+    expect(skipsProvisioning({
+      codeline: '', marker: 'next.gotransit.com', installed: 41,
+      prdCodelines: ['next.gotransit.com'],
+    }), 'provisioning ran for a codeline that had already completed it — 41 prompts re-installed '
+      + 'and every cache miss paid for again').toBe(true);
+  });
+
+  it('PROVISIONS when the PRD resolves a DIFFERENT codeline than the marker names', () => {
+    expect(skipsProvisioning({
+      codeline: '', marker: 'next.upexpress.com', installed: 41,
+      prdCodelines: ['next.gotransit.com'],
+    }), 'another codeline\'s completion was accepted as this one\'s').toBe(false);
+  });
+
+  it('PROVISIONS when the PRD resolves TWO codelines — neither is attributable', () => {
+    expect(skipsProvisioning({
+      codeline: '', marker: 'next.gotransit.com', installed: 41,
+      prdCodelines: ['next.gotransit.com', 'next.upexpress.com'],
+    })).toBe(false);
+  });
+
+  it('PROVISIONS when the marker names the codeline but NO prompts are installed', () => {
+    expect(skipsProvisioning({
+      codeline: '', marker: 'next.gotransit.com', installed: 0,
+      prdCodelines: ['next.gotransit.com'],
+    }), 'a marker beside an empty prompts directory was trusted').toBe(false);
   });
 });

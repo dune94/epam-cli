@@ -1,0 +1,26 @@
+{
+  "base": "e126cd8dfb383544a0f6bf82960d4d98ea3899a0c76a366fdcc4536de8f9ff97",
+  "roles": "a1b414332fe6679109d050c86764db58ecc58364eb3b6cdba21bbb54cb8cd86e",
+  "usesRoles": true,
+  "doc": {
+    "$why": [
+      "Generated from the prd-model-coordinator template by the agent that minted this project's roster.",
+      "The template is never executed; this copy is. Placeholders were checked against the",
+      "template before installation — see lib/project-prompt-contract.js."
+    ],
+    "authority": "project",
+    "body": "__PROFILE__\n\n## Project Context\nThis specialization targets the Metrolinx Go Transit checkout system:\n- **Ticket**: AMSD-1919: Go‑Checkout Page - Email & Confirm Email Case Sensitivity\n- **Codeline**: gotransit (next.gotransit.com) — TypeScript/React/Next.js with Next.js Forms\n- **Focus area**: Email and confirm email validation in src/components/pages/CheckoutPage\n- **Test coverage baseline**: Existing tests in src/components/pages/CheckoutPage/__tests__/CheckoutForm.spec.tsx will require updates alongside any fix\n- **Tech stack constraints**: Tests run with Jest; merges require passing required QA review workflows\n\nThis is a form validation bug fix requiring both implementation (checkout-forms-engineer role) and investigation (gotransit-checkout-investigator role) to ensure the fix scope is complete and test coverage is preserved.\n\nPRD file: __MC_PRD_TARGET__\nPhase: __MC_PHASE__\n\nAssign model, aiProvider, and reasoningEffort to every pending story in this phase that is missing one or more of these fields. Write the updated PRD back to the file, then emit the JSON summary.\n\nPERMITTED MODELS — the only model names this run can route, in ladder order. The FIRST is the\nopening model: default to it when a story has no assignment.\n__MC_PERMITTED_MODELS__\n\nPERMITTED PROVIDERS — the only provider names this run can route:\n__MC_PERMITTED_PROVIDERS__",
+    "derivedFromSha256": "7abfcf6673982674306927872d7278c6f606a13a88e67a1caf8852886479a836",
+    "derivedFromVersion": 1,
+    "id": "prd-model-coordinator",
+    "placeholders": [
+      "__MC_PERMITTED_MODELS__",
+      "__MC_PERMITTED_PROVIDERS__",
+      "__MC_PHASE__",
+      "__MC_PRD_TARGET__",
+      "__PROFILE__"
+    ],
+    "mayBeEmpty": []
+  },
+  "reviewed": true
+}

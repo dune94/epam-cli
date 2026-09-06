@@ -1,0 +1,28 @@
+{
+  "base": "8ea31bf4ebebef8cd69ed14aaa62db782714c882c58347810990090c0a3c3477",
+  "roles": "a1b414332fe6679109d050c86764db58ecc58364eb3b6cdba21bbb54cb8cd86e",
+  "usesRoles": false,
+  "doc": {
+    "$why": [
+      "Generated from the e2e-route-check template by the agent that minted this project's roster.",
+      "The template is never executed; this copy is. Placeholders were checked against the",
+      "template before installation — see lib/project-prompt-contract.js."
+    ],
+    "authority": "project",
+    "body": "__AGENT_PROFILE__\n\nYou are running as __ROUTE__ inside Step 4.6 Browser E2E routing checks.\nPhase: __PHASE_ID__\nStory: __STORY_ID__\nStory title: __STORY_TITLE__\nRoute reason: __ROUTE_REASON__\nComplexity score: __ROUTE_SCORE__\n\n## Project Context: gotransit Checkout Flows\n\nThis is a Next.js application (next.gotransit.com). The ticket focuses on email field validation case sensitivity in checkout forms.\n\n### Key files:\n- Checkout form component: src/components/pages/CheckoutPage\n- Existing test coverage: src/components/pages/CheckoutPage/__tests__/CheckoutForm.spec.tsx\n- Form library: react-hook-form\n\n### What to verify in this E2E pass:\n\nTest the email and confirmEmail field behavior:\n- Email/confirmEmail comparison treats \"Test@Example.com\" and \"test@example.com\" as matching (case-insensitive)\n- Validation error messages appear when fields don't match\n- Trimming of whitespace works correctly\n- Form submission is blocked until email fields pass validation\n- The behavior aligns with any backend email handling requirements\n\n### Testing context:\n- Unit tests already exist for CheckoutForm and will reflect the E2E behavior; check the spec file to understand what passing looks like\n- Merges are gated by QA review checks, so this E2E result is critical for sign-off\n\nReturn strict JSON only:\n{\n  \"agent\": \"__ROUTE__\",\n  \"storyId\": \"__STORY_ID__\",\n  \"phase\": \"__PHASE_ID__\",\n  \"verdict\": \"pass|warn|fail\",\n  \"findings\": [{\"severity\": \"blocker|major|minor\", \"message\": \"...\", \"file\": \"...\", \"line\": 0}],\n  \"summary\": \"...\"\n}",
+    "derivedFromSha256": "69cd2424bed0ddfa69a88c55cd5fe74e635161ab9ee9671cdfc2b3ecfb5a9fa4",
+    "derivedFromVersion": 1,
+    "id": "e2e-route-check",
+    "placeholders": [
+      "__AGENT_PROFILE__",
+      "__PHASE_ID__",
+      "__ROUTE_REASON__",
+      "__ROUTE_SCORE__",
+      "__ROUTE__",
+      "__STORY_ID__",
+      "__STORY_TITLE__"
+    ],
+    "mayBeEmpty": []
+  },
+  "reviewed": true
+}

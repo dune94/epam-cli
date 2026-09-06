@@ -410,6 +410,31 @@ info "Predictable teardown: resetting codelines to last verified baseline..."
 . "$SCRIPT_DIR/lib/codeline-scope.sh"
 _scoped=0
 require_codeline_root "the brownfield codeline reset" || exit 1
+
+# THE MANIFEST IS REVIEWED BEFORE ANY CLIENT REPOSITORY IS TOUCHED.
+#
+# brownfield-preflight-reset.sh below reads localDependencyOverrides[].localSourcePath, npm-installs
+# from it, and runs `git reset --hard` plus `clean -fd` on a CLIENT repo. lib/manifest_schema.py has
+# always described itself as the reviewer of that manifest and was called by NOTHING — only by
+# tests. Every semantic check in it, including the localSourcePath resolution that keeps an
+# override out of the wrong tree, has never run in a live pipeline.
+#
+# A SEPARATE LOOP, DELIBERATELY. The verdict must be in for EVERY in-scope codeline before the
+# first reset runs — a gate that refuses the second codeline after the first has already been
+# hard-reset has not prevented anything.
+# shellcheck source=lib/manifest-preflight.sh
+. "$SCRIPT_DIR/lib/manifest-preflight.sh"
+_manifest_file="${EPAM_PROJECT_CONFIG_DIR:+$EPAM_PROJECT_CONFIG_DIR/dependency-check.json}"
+for _cl_dir in "$JIRA_CODELINE_ROOT"/*/; do
+  [ -d "${_cl_dir}.git" ] || continue
+  codeline_in_scope "${_cl_dir%/}" "$PRD_FILE" || continue
+  manifest_preflight_gate "$_manifest_file" "${_cl_dir%/}" || {
+    error "[preflight] refusing to launch: the dependency manifest is not valid for this codeline."
+    error "[preflight]   Nothing has been reset and no package has been installed."
+    exit 1
+  }
+done
+
 for _cl_dir in "$JIRA_CODELINE_ROOT"/*/; do
   [ -d "${_cl_dir}.git" ] || continue
   codeline_in_scope "${_cl_dir%/}" "$PRD_FILE" || continue

@@ -11,9 +11,11 @@
     "orchestrations/projects/*/prompt-agent-link.json",
     "orchestrations/projects/*/prompts/*.json",
     "orchestrations/projects/*/.prompt-cache/*.json",
+    "orchestrations/projects/*/.prompt-cache/*/*.json",
     "orchestrations/projects/*/.prompt-cache/.complete-*",
     "orchestrations/agents/profiles.json"
   ],
   "$promptCache": "The cache is what makes a prompt generated ONCE per codeline instead of once per run. project-prompt-builder.js keys each entry by the template digest and, for prompts naming a minted role, the roster digest \u2014 so an unchanged prompt is reused. The mechanism worked; the update defeated it. .prompt-cache is TRACKED (78 files, 39 for metrolinx at v1.43), so every install.sh --dest --ref extracted the committed cache over the install's own. Those entries were generated against another run's roster, so no rolesDigest matched and all 39 regenerated. Measured 2026-09-05: prompt-builder $1.25/25 calls + prompt-review $1.51/16 calls = 36% of the run's spend, paid again on every republish. Operator: 'it does not have to be generated again and again ... I want it to be tagged to a codeline and reused for the codeline.'",
+  "$codelineNote": "The cache is keyed BY CODELINE: entries live at .prompt-cache/<codeline>/<id>.json, so the nested pattern is what preserves them. The flat pattern above is kept because entries written before that change sit at the root until the first run declaring a codeline adopts them (project-prompt-builder.js migrateFlatEntries) \u2014 dropping it would discard them mid-migration.",
   "$markerNote": "The completion marker has NO .json extension \u2014 its NAME is the claim (.complete-<codeline>) \u2014 so the *.json pattern above does not match it. Without this line an update silently drops the marker and the next run re-mints and re-provisions everything, which is exactly the cost the cache exists to avoid."
 }

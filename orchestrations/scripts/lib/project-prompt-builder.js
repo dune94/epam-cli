@@ -75,6 +75,99 @@ function templateBodyText(template) {
  *
  * Sorted, because the mint promises no ordering. Nothing here names a role, a kind or a count.
  */
+/**
+ * THE CODELINE THIS RUN DETECTED, from the artifact the run itself wrote.
+ *
+ * Operator, 2026-09-06: "code line is detected in a live run ... this var will never be preset in
+ * a live run." EPAM_CODELINE_ID is read in six places in this repo and SET in none — no launcher,
+ * config or env file exports it. In a live run the codeline becomes known when discovery resolves
+ * the PRD's scope: after pre-run-reset has finished, before the mint and this builder run. So
+ * waiting for the variable means the cache never hits, silently, while the log reports normally.
+ *
+ * The PRD is the run, and run-agent-orchestration.sh exports PRD_FILE, so it is already in this
+ * process's environment — there is no call site to wire and no seam to rot. The fields read are
+ * the ones lib/codeline-scope.sh's codeline_scope_paths already treats as the run's scope, so
+ * both sides of the engine answer "which codeline?" from one place.
+ *
+ * EXACTLY ONE, or nothing. A run scoped to two codelines produces prompts specialised for both;
+ * attributing them to either would hand the other's run a set built for a repository it is not
+ * working in. Nothing is a legitimate answer — the entries stay project-level, as before.
+ */
+function codelineFromPrd(prdFile) {
+  try {
+    const f = String(prdFile || '').trim();
+    if (!f || !fs.existsSync(f)) return '';
+    const prd = JSON.parse(fs.readFileSync(f, 'utf8'));
+    const project = (prd && prd.project) || {};
+    const dirs = []
+      .concat(Array.isArray(project.outputDirs) ? project.outputDirs.map((o) => o && o.path) : [])
+      .concat(project.outputDir ? [project.outputDir] : [])
+      .filter((d) => typeof d === 'string' && d.trim());
+    const unique = [...new Set(dirs.map((d) => path.basename(String(d).replace(/\/+$/, ''))))]
+      .filter(Boolean);
+    return unique.length === 1 ? unique[0] : '';
+  } catch { return ''; }
+}
+
+/**
+ * ONE SAFE PATH SEGMENT from a codeline id, or '' when none is declared.
+ *
+ * The id names a directory under .prompt-cache. It arrives from configuration and from a
+ * discovery step's output, so a separator or a traversal in it must decide nothing about where
+ * this process writes. Everything outside [A-Za-z0-9._-] collapses to '-', leading dots are
+ * dropped so '..' cannot survive, and an id that reduces to nothing is treated as undeclared
+ * rather than as a directory named ''.
+ */
+function codelineSegment(raw) {
+  const t = String(raw == null ? '' : raw).trim();
+  if (!t) return '';
+  const seg = t.replace(/[^A-Za-z0-9._-]/g, '-').replace(/^\.+/, '');
+  return seg || '';
+}
+
+/**
+ * ADOPT PRE-CODELINE CACHE ENTRIES, ONCE.
+ *
+ * Before the cache was keyed by codeline, entries sat flat at <project>/.prompt-cache/<id>.json
+ * and recorded nothing about which codeline produced them. The only evidence that can attribute
+ * them is the codeline the run declares, so they move under it the first time one does. metrolinx
+ * carries 39 such entries beside a marker naming next.gotransit.com.
+ *
+ * Only when the codeline's directory does not exist yet: once it does, this codeline has its own
+ * entries and a flat file is a leftover, not an ancestor. The completion markers (.complete-*)
+ * carry no .json extension and are not moved — they already name their codeline.
+ *
+ * Never throws. A migration that cannot run costs a regeneration, never correctness.
+ */
+function migrateFlatEntries(cacheRoot, cacheDir, log) {
+  if (!cacheRoot || !cacheDir || cacheDir === cacheRoot) return 0;
+  try {
+    if (fs.existsSync(cacheDir)) return 0;
+    if (!fs.existsSync(cacheRoot)) return 0;
+    // ONLY WHAT PREDATES CODELINE KEYING, never what merely sits at the root today. If ANY
+    // codeline directory already exists, this cache has been keyed before, so a flat file is a
+    // leftover from a run that declared no codeline — and adopting it would attribute one
+    // codeline's prompts to another on no evidence. That guess is the contamination this whole
+    // change exists to remove, so the migration declines it and the prompts regenerate.
+    const alreadyKeyed = fs.readdirSync(cacheRoot)
+      .some((f) => { try { return fs.statSync(path.join(cacheRoot, f)).isDirectory(); } catch { return false; } });
+    if (alreadyKeyed) return 0;
+    const flat = fs.readdirSync(cacheRoot).filter((f) => f.endsWith('.json')
+      && fs.statSync(path.join(cacheRoot, f)).isFile());
+    if (!flat.length) return 0;
+    fs.mkdirSync(cacheDir, { recursive: true });
+    let moved = 0;
+    for (const f of flat) {
+      try { fs.renameSync(path.join(cacheRoot, f), path.join(cacheDir, f)); moved += 1; } catch { /* leave it */ }
+    }
+    if (moved && typeof log === 'function') {
+      log(`[prompt-builder] adopted ${moved} pre-codeline cache entr${moved === 1 ? 'y' : 'ies'} `
+        + `under ${path.basename(cacheDir)} — nothing regenerated`);
+    }
+    return moved;
+  } catch { return 0; }
+}
+
 function rolesIdentity(mintedRoles) {
   const out = [];
   for (const line of String(mintedRoles || '').split('\n')) {
@@ -474,7 +567,26 @@ async function buildProjectPrompts({
   //
   // The cache lives OUTSIDE prompts/ so the reset's clean slate is untouched. This is memoisation
   // on an exact key, not surviving state.
-  const cacheDir = path.join(outDir, '..', '.prompt-cache');
+  const cacheRoot = path.join(outDir, '..', '.prompt-cache');
+  // KEYED BY CODELINE, because that is what a generated prompt is specialised FOR.
+  //
+  // Operator: "tagged to a CODELINE and reused for the CODELINE". The completion marker already
+  // carries the codeline in its name; the entries it vouches for did not, so a run under codeline
+  // B reused prompts naming codeline A's repositories, modules and dependencies. That is the
+  // cross-codeline contamination the marker exists to prevent, arriving through what it points at.
+  //
+  // A codeline id reaches here from configuration and from a discovery step's output, so it is
+  // reduced to a single safe path segment before it names a directory — 'a/b' and '../x' must not
+  // decide where this process writes.
+  // The operator's explicit id still wins; otherwise the run's own detected scope decides.
+  const safeCodeline = codelineSegment(process.env.EPAM_CODELINE_ID)
+    || codelineSegment(codelineFromPrd(process.env.PRD_FILE));
+  const cacheDir = safeCodeline ? path.join(cacheRoot, safeCodeline) : cacheRoot;
+  // MIGRATION, not discard. Entries written before this change sit flat at the cache root and
+  // record no codeline, so they can only be attributed by the codeline the run declares. Moving
+  // them costs nothing; discarding them would charge a full regeneration for a change that is
+  // purely about where they live. It happens once: after the move the root holds no *.json.
+  migrateFlatEntries(cacheRoot, cacheDir, log);
   const sha = (t) => crypto.createHash('sha256').update(String(t)).digest('hex');
   // THE TEMPLATE AND THE GENERATOR — NOT THE PROSE ABOUT THE PROJECT.
   //
@@ -505,6 +617,11 @@ async function buildProjectPrompts({
     return names.some((n) => body.includes(n));
   };
   const cacheRead = (id) => {
+    // NO CODELINE DECLARED CHANGES NOTHING. The requirement is that a codeline's prompts are
+    // reused FOR that codeline; it says nothing about a run that declares none, and no launcher in
+    // this repo sets EPAM_CODELINE_ID — the operator exports it. Making an undeclared run stop
+    // reusing would silently charge a full regeneration for a forgotten variable, and would break
+    // the remedy a-reused-prompt-was-reviewed encodes. Such a run reads the flat root, as before.
     try { return JSON.parse(fs.readFileSync(path.join(cacheDir, `${id}.json`), 'utf8')); }
     catch { return null; }
   };
@@ -705,7 +822,9 @@ async function buildProjectPrompts({
   // marker any codeline could claim is the cross-codeline reuse pre-run-reset refuses.
   writeCompletionMarker({
     outDir,
-    codeline: process.env.EPAM_CODELINE_ID || '',
+    // THE SAME codeline the entries were filed under. A marker naming one codeline while
+    // the cache holds another lets the mint gate skip against a set it never checked.
+    codeline: safeCodeline,
     provisioned: copied.length + built.length,
   });
 
@@ -780,6 +899,9 @@ function clearCompletionMarker({ outDir } = {}) {
 
 module.exports = { buildProjectPrompts, renderGeneratorPrompt, provisioningList, rolesIdentity,
   writeCompletionMarker, clearCompletionMarker,
+  // Exported so the codeline keying is assertable without provisioning: a segment that escapes
+  // the cache directory is a defect no end-to-end assertion would localise.
+  codelineSegment, migrateFlatEntries, codelineFromPrd,
   // Exported so the prompt REVIEWER reads a template the same way the generator and the
   // contract check do. Three readers of one shape is how the last three of these drifted.
   templateBodyText };

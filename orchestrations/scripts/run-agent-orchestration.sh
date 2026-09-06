@@ -3629,6 +3629,30 @@ _run_agent_mint() {
     return 1
   fi
 
+  # A CODELINE THAT IS ALREADY PROVISIONED IS NOT RE-MINTED.
+  #
+  # Operator, 2026-09-06: "mint should not run nor prompt builder".
+  #
+  # THE DECISION IS HERE, IN BASH, and that is the whole point of this block sitting where it does.
+  # A first attempt set EPAM_SKIP_AGENT_MINT inside mint-agents-step.js — a CHILD of the gate
+  # below, spawned only after that gate has already decided and logged "Minting project agents".
+  # A child cannot change the mind of the parent that spawned it. It was covered by twelve green
+  # tests that lifted the child's guard and ran it directly: they proved a value is computed and
+  # could not observe the decision. The live run said MINTING=1.
+  #
+  # The signal is the one pre-run-reset and the prompt builder already trust:
+  # .prompt-cache/.complete-<codeline>, written only after every prompt installed, named for the
+  # codeline, and cleared whenever provisioning restarts. Prompts must also actually be on disk —
+  # a marker beside an empty directory would skip the mint and leave the run with no prompts.
+  if [ "${EPAM_SKIP_AGENT_MINT:-0}" != "1" ] \
+     && [ "${EPAM_REGENERATE_CODELINE_ASSETS:-0}" != "1" ] \
+     && [ -n "${EPAM_CODELINE_ID:-}" ] && [ -n "${EPAM_PROJECT_CONFIG_DIR:-}" ] \
+     && [ -f "$EPAM_PROJECT_CONFIG_DIR/.prompt-cache/.complete-${EPAM_CODELINE_ID}" ] \
+     && ls "$EPAM_PROJECT_CONFIG_DIR/prompts/"*.json >/dev/null 2>&1; then
+      log "[mint] codeline ${EPAM_CODELINE_ID} is already provisioned — the mint is skipped; EPAM_REGENERATE_CODELINE_ASSETS=1 forces a re-mint"
+      EPAM_SKIP_AGENT_MINT=1
+  fi
+
   # SKIPPING THE MINT REQUIRES A ROSTER TO SKIP TO. Travels with the mint rather than sitting in
   # one caller, so the other path cannot skip into nothing.
   if [ "${EPAM_SKIP_AGENT_MINT:-0}" = "1" ]; then

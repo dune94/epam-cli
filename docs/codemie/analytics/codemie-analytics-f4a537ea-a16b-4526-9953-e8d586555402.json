@@ -1,0 +1,91 @@
+{
+  "meta": {
+    "generatedAt": "2026-09-07T19:55:15.940Z",
+    "rangeLabel": "all",
+    "agents": [
+      "claude"
+    ],
+    "projectFilter": "all",
+    "totals": {
+      "sessions": 1,
+      "durationMs": 6911,
+      "turns": 1,
+      "files": 0,
+      "netLines": 0,
+      "toolCallsTotal": 0,
+      "toolSuccessRate": 0,
+      "totalCostUSD": 0.0796698,
+      "cacheReadCostUSD": 0.0116598,
+      "pricedSessions": 1
+    },
+    "unpricedModels": [],
+    "coverage": [
+      {
+        "agentName": "claude",
+        "total": 1,
+        "priced": 1,
+        "withLog": 1
+      }
+    ],
+    "periodStart": "2026-09-07T19:55:03.839Z",
+    "periodEnd": "2026-09-07T19:55:10.750Z"
+  },
+  "sessions": [
+    {
+      "sessionId": "f4a537ea-a16b-4526-9953-e8d586555402",
+      "agentName": "claude",
+      "provider": "ai-run-sso",
+      "title": "Reply with the single word OK and nothing else. --- BEFORE YOU ANSWER: state your PLAN, and nothing else. Say what you believe the answer is going to be and WHY, name the specific targets you will examine or produce, and state how you will know if you are wrong. If the task above sets a requirement your answer must satisfy, say in one line how your plan satisfies it. Do NOT produce the final answer yet. Do NOT emit the output format the task asks for. Plain prose, at most 200 words. You have NO tools available for THIS plan and cannot call any — do not emit tool-call syntax ( , , ) or invent what a tool would return. Nothing executes it, so any such text is fiction, not evidence — state your INTENT to examine a target, not a fabricated result from having done so. If tools are available for the answer that follows this plan, you will use them for real then.",
+      "project": "/home/bradleyjerome/projects/ai/epam-cli",
+      "branch": "master",
+      "startTime": 1788810903839,
+      "durationMs": 6911,
+      "turns": 1,
+      "fileOps": 0,
+      "linesAdded": 0,
+      "linesRemoved": 0,
+      "linesModified": 0,
+      "netLines": 0,
+      "filesChanged": 0,
+      "filesWritten": 0,
+      "filesEdited": 0,
+      "toolCallsTotal": 0,
+      "toolCallsSuccess": 0,
+      "toolCallsFailure": 0,
+      "models": [
+        "claude-sonnet-5"
+      ],
+      "languages": [],
+      "tools": [],
+      "tokens": {
+        "input": 2871,
+        "output": 93,
+        "cacheRead": 38866,
+        "cacheCreation": 9667,
+        "cacheCreation1h": 9667,
+        "total": 51497
+      },
+      "costUSD": 0.0796698,
+      "cacheReadCostUSD": 0.0116598,
+      "perModelCost": [
+        {
+          "model": "claude-sonnet-5",
+          "tokens": {
+            "input": 2871,
+            "output": 93,
+            "cacheRead": 38866,
+            "cacheCreation": 9667,
+            "cacheCreation1h": 9667,
+            "total": 51497
+          },
+          "costUSD": 0.0796698,
+          "unpriced": false
+        }
+      ],
+      "skillInvocations": [],
+      "agentInvocations": [],
+      "commandInvocations": [],
+      "sessionSource": "Pure chat"
+    }
+  ]
+}

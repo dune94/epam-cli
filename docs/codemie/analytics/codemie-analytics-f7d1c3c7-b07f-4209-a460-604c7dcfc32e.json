@@ -1,0 +1,91 @@
+{
+  "meta": {
+    "generatedAt": "2026-09-07T19:57:55.294Z",
+    "rangeLabel": "all",
+    "agents": [
+      "claude"
+    ],
+    "projectFilter": "all",
+    "totals": {
+      "sessions": 1,
+      "durationMs": 4712,
+      "turns": 1,
+      "files": 0,
+      "netLines": 0,
+      "toolCallsTotal": 0,
+      "toolSuccessRate": 0,
+      "totalCostUSD": 0.0231483,
+      "cacheReadCostUSD": 0.0144753,
+      "pricedSessions": 1
+    },
+    "unpricedModels": [],
+    "coverage": [
+      {
+        "agentName": "claude",
+        "total": 1,
+        "priced": 1,
+        "withLog": 1
+      }
+    ],
+    "periodStart": "2026-09-07T19:57:45.623Z",
+    "periodEnd": "2026-09-07T19:57:50.335Z"
+  },
+  "sessions": [
+    {
+      "sessionId": "f7d1c3c7-b07f-4209-a460-604c7dcfc32e",
+      "agentName": "claude",
+      "provider": "ai-run-sso",
+      "title": "Reply with the single word OK and nothing else.",
+      "project": "/home/bradleyjerome/projects/ai/epam-cli",
+      "branch": "master",
+      "startTime": 1788811065623,
+      "durationMs": 4712,
+      "turns": 1,
+      "fileOps": 0,
+      "linesAdded": 0,
+      "linesRemoved": 0,
+      "linesModified": 0,
+      "netLines": 0,
+      "filesChanged": 0,
+      "filesWritten": 0,
+      "filesEdited": 0,
+      "toolCallsTotal": 0,
+      "toolCallsSuccess": 0,
+      "toolCallsFailure": 0,
+      "models": [
+        "claude-sonnet-5"
+      ],
+      "languages": [],
+      "tools": [],
+      "tokens": {
+        "input": 2871,
+        "output": 4,
+        "cacheRead": 48251,
+        "cacheCreation": 0,
+        "cacheCreation1h": 0,
+        "total": 51126
+      },
+      "costUSD": 0.0231483,
+      "cacheReadCostUSD": 0.0144753,
+      "perModelCost": [
+        {
+          "model": "claude-sonnet-5",
+          "tokens": {
+            "input": 2871,
+            "output": 4,
+            "cacheRead": 48251,
+            "cacheCreation": 0,
+            "cacheCreation1h": 0,
+            "total": 51126
+          },
+          "costUSD": 0.0231483,
+          "unpriced": false
+        }
+      ],
+      "skillInvocations": [],
+      "agentInvocations": [],
+      "commandInvocations": [],
+      "sessionSource": "Pure chat"
+    }
+  ]
+}

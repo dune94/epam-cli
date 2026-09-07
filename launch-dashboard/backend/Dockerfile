@@ -1,6 +1,6 @@
 # The API. Node 22 for node:sqlite — zero runtime dependencies, so there is no npm install here and
 # nothing for a client security review to accept beyond Node itself.
-FROM node:22-alpine
+FROM docker.io/node:22-alpine
 
 # Non-root. The only thing this container writes is the spool and its database, both bind mounts.
 RUN addgroup -S epam && adduser -S epam -G epam

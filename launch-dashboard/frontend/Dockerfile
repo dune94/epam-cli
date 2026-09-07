@@ -16,7 +16,7 @@ ARG APP_TITLE=
 # to know where the API lives and there is no CORS surface.
 RUN flutter build web --release --dart-define=API_BASE= --dart-define=APP_TITLE="$APP_TITLE"
 
-FROM nginx:alpine
+FROM docker.io/nginx:alpine
 COPY --from=build /app/build/web /usr/share/nginx/html
 COPY nginx.conf /etc/nginx/conf.d/default.conf
 EXPOSE 80

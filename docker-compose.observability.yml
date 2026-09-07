@@ -45,7 +45,7 @@ networks:
 services:
 
   postgres:
-    image: postgres:16-alpine
+    image: docker.io/postgres:16-alpine
     # Bounded: an unbounded container is entitled to the whole host, and on WSL the OOM
     # victim is the environment, not the container. memswap_limit matches mem_limit so a
     # throttled process cannot escape the ceiling into swap.
@@ -76,7 +76,7 @@ services:
       retries: 5
 
   redis:
-    image: redis:7-alpine
+    image: docker.io/redis:7-alpine
     # Bounded: an unbounded container is entitled to the whole host, and on WSL the OOM
     # victim is the environment, not the container. memswap_limit matches mem_limit so a
     # throttled process cannot escape the ceiling into swap.
@@ -91,7 +91,7 @@ services:
       retries: 5
 
   clickhouse:
-    image: clickhouse/clickhouse-server:24
+    image: docker.io/clickhouse/clickhouse-server:24
     ports:
       - "${EPAM_OBS_CLICKHOUSE_PORT:-8123}:8123"
       # Port 9000 intentionally NOT exposed — conflicts with SonarQube on host.
@@ -125,7 +125,7 @@ services:
       retries: 10
 
   langfuse-server:
-    image: langfuse/langfuse:2
+    image: docker.io/langfuse/langfuse:2
     # Bounded: an unbounded container is entitled to the whole host, and on WSL the OOM
     # victim is the environment, not the container. memswap_limit matches mem_limit so a
     # throttled process cannot escape the ceiling into swap.
@@ -178,7 +178,7 @@ services:
   # (not the web image with an overridden command).
 
   agent-monitor:
-    image: nginx:alpine
+    image: docker.io/nginx:alpine
     # Bounded: an unbounded container is entitled to the whole host, and on WSL the OOM
     # victim is the environment, not the container. memswap_limit matches mem_limit so a
     # throttled process cannot escape the ceiling into swap.
@@ -210,7 +210,7 @@ services:
       retries: 3
 
   grafana:
-    image: grafana/grafana:11.4.0
+    image: docker.io/grafana/grafana:11.4.0
     # Bounded: an unbounded container is entitled to the whole host, and on WSL the OOM
     # victim is the environment, not the container. memswap_limit matches mem_limit so a
     # throttled process cannot escape the ceiling into swap.

@@ -6,7 +6,7 @@ version: '3.8'
 
 services:
   postgres:
-    image: postgres:15-alpine
+    image: docker.io/postgres:15-alpine
     # Bounded: an unbounded container is entitled to the whole host, and on WSL the OOM
     # victim is the environment, not the container. memswap_limit matches mem_limit so a
     # throttled process cannot escape the ceiling into swap.
@@ -29,7 +29,7 @@ services:
       - jira-net
 
   jira:
-    image: atlassian/jira-software:9.12
+    image: docker.io/atlassian/jira-software:9.12
     # Bounded: an unbounded container is entitled to the whole host, and on WSL the OOM
     # victim is the environment, not the container. memswap_limit matches mem_limit so a
     # throttled process cannot escape the ceiling into swap.

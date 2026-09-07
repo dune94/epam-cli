@@ -32,7 +32,7 @@ services:
   # the JVM sizes its heap against the container rather than the host, and caps on what it retains
   # so a long rehearsal cannot grow without end.
   mockserver:
-    image: mockserver/mockserver:latest
+    image: docker.io/mockserver/mockserver:latest
     mem_limit: 1g
     memswap_limit: 1g
     environment:

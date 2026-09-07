@@ -137,3 +137,33 @@ _podman_runtime_dir() {
     export XDG_RUNTIME_DIR
     return 0
 }
+
+# ensure_shared_bind_mount <dir...> — a mount BOTH the host and the container write.
+#
+# ./spool is the boundary between the containerised API and runner-host.js, which runs ON THE
+# HOST. The compose file states it: "a host process must own it". So the container-ownership
+# remap that is correct for ./data (a container-private database) is WRONG here — applying it
+# took the directory away from the host runner, which died on
+#
+#   EACCES: mkdir '.../launch-dashboard/spool/requests'
+#
+# and the install reported "runner-host failed to start". Caused by the ownership fix itself, on
+# the next install after it landed.
+#
+# Ownership stays with the host user; the mode is widened so the container's mapped uid — which
+# owns nothing here — can still write. Podman only: under docker the two uids are the same and
+# nothing needs widening.
+ensure_shared_bind_mount() {
+    local _rt
+    _rt=$(container_runtime) || return $?
+    [ "$_rt" = "podman" ] || return 0
+
+    local _d
+    for _d in "$@"; do
+        [ -n "$_d" ] && [ -d "$_d" ] || continue
+        chmod -R a+rwX "$_d" 2>/dev/null || {
+            echo "[container-runtime] could not widen $_d — the host runner and the container cannot both write it" >&2
+        }
+    done
+    return 0
+}

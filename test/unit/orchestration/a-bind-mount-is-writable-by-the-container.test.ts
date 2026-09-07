@@ -16,7 +16,7 @@
  */
 import { describe, it, expect, afterAll } from 'vitest';
 import { execFileSync } from 'node:child_process';
-import { mkdtempSync, writeFileSync, rmSync, chmodSync, existsSync, readFileSync } from 'node:fs';
+import { mkdtempSync, writeFileSync, rmSync, chmodSync, existsSync, readFileSync, statSync } from 'node:fs';
 import { tmpdir } from 'node:os';
 import { join } from 'node:path';
 
@@ -60,6 +60,46 @@ describe('a bind mount under rootless podman', () => {
   it('honours a project that runs the container as a different uid', () => {
     expect(run('podman', '1500'), 'LAUNCH_UID was ignored — a project running as another uid '
       + 'still cannot write').toMatch(/1500:1500/);
+  });
+
+  it('A SHARED MOUNT STAYS WRITABLE BY THE HOST TOO', () => {
+    /**
+     * ./spool is not the container's to own. The compose file says so: "it is the boundary the
+     * HOST runner reads and writes, so a host process must own it". Chowning it into the
+     * container's user namespace — which is right for ./data, a container-private database —
+     * took it away from runner-host.js, which then died on
+     *
+     *   EACCES: mkdir '.../launch-dashboard/spool/requests'
+     *
+     * and the install reported "runner-host failed to start". Caused by the podman ownership fix
+     * itself, on the very next install after it landed.
+     *
+     * A shared mount must be writable from BOTH sides, so ownership is left alone and the mode is
+     * widened instead.
+     */
+    const bin = tmp('bin-');
+    const rec = join(bin, 'calls.txt');
+    const stub = join(bin, 'podman');
+    writeFileSync(stub, `#!/usr/bin/env bash\necho "$@" >> ${JSON.stringify(rec)}\n`);
+    chmodSync(stub, 0o755);
+    const shared = tmp('shared-');
+
+    const drive = join(tmp('drv-'), 'drive.sh');
+    writeFileSync(drive, [
+      '#!/usr/bin/env bash', 'set -uo pipefail',
+      `export PATH=${JSON.stringify(bin)}:$PATH`,
+      'export EPAM_CONTAINER_RUNTIME=podman',
+      `. ${JSON.stringify(LIB)}`,
+      `ensure_shared_bind_mount ${JSON.stringify(shared)}`,
+    ].join('\n'));
+    execFileSync('bash', [drive], { encoding: 'utf8', timeout: 30_000 });
+
+    const calls = existsSync(rec) ? readFileSync(rec, 'utf8') : '';
+    expect(calls, 'a SHARED mount was chowned into the container namespace — the host runner '
+      + 'can no longer write it').not.toMatch(/chown/);
+    const mode = statSync(shared).mode & 0o777;
+    expect(mode & 0o007, `a shared mount must stay writable from both sides (mode ${mode.toString(8)})`)
+      .toBe(0o007);
   });
 
   it('does nothing under docker, where the host uid IS the container uid', () => {

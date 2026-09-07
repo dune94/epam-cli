@@ -891,7 +891,10 @@ else
     # ...and make them writable by the uid the CONTAINER runs as. Creating them as the host user
     # is the whole fix under docker, where those uids are the same. Under rootless podman they are
     # not, and the mkdir above reproduces the very failure this block exists to prevent.
-    ensure_bind_mount_ownership "$LAUNCH_DIR/data" "$LAUNCH_DIR/spool"
+    # ./data is the container's own database — it may own that outright.
+    ensure_bind_mount_ownership "$LAUNCH_DIR/data"
+    # ./spool is the boundary the HOST runner writes; it must stay writable from both sides.
+    ensure_shared_bind_mount "$LAUNCH_DIR/spool"
 
     _LD_PORT="$(grep -E '^LAUNCH_UI_PORT=' "$LAUNCH_DIR/.env" 2>/dev/null | tail -1 | cut -d= -f2)"
     _LD_PORT="${_LD_PORT:-8099}"

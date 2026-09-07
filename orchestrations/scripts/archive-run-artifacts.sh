@@ -71,6 +71,11 @@ _take "${_prd:-/nonexistent}" "working-prd.json" "working-prd.json"
 # The agent instructions this run actually used.
 _take "${AUTOMATION_DIR}/agents/profiles.json" "profiles.json" "profiles.json"
 
+# What each story actually wrote, recorded at its commit by commit_completed_story(). The run
+# report reads this in preference to re-deriving a diff from the live codeline, which by report
+# time has been reset for the next cycle — see generate-run-report.py's own note.
+_take "${LOG_DIR}/story-changes.jsonl" "story-changes.jsonl" "story-changes.jsonl"
+
 # Self-healing: the episodic scratchpad and the compiled constraint store.
 _take "${LOG_DIR}/kb-scratchpad" "kb/kb-scratchpad" "kb/kb-scratchpad"
 _take "${AUTOMATION_DIR}/agents/kb/constraints.json"     "kb/constraints.json"     "kb/constraints.json"

@@ -148,7 +148,10 @@ def collect(args):
     d['manifest_source'] = 'commits'
 
     # Per-agent cost from the activity stream
-    costs = collections.defaultdict(lambda: [0.0, 0, 0, 0])
+    # CACHE TOKENS ARE PART OF THE BILL. The emitter has always recorded tokensCached (read from
+    # cache) and tokensCacheCreate (written to it); this table summed only in/out, so a run whose
+    # spend was mostly cache reads showed a token count that did not explain its own cost.
+    costs = collections.defaultdict(lambda: [0.0, 0, 0, 0, 0, 0])
     for line in read(os.path.join(args.logs_dir, 'agent-activity.jsonl')).splitlines():
         try:
             e = json.loads(line)
@@ -161,7 +164,9 @@ def collect(args):
         row[0] += float(det.get('costUsd') or 0)
         row[1] += int(det.get('tokensIn') or 0)
         row[2] += int(det.get('tokensOut') or 0)
-        row[3] += 1
+        row[3] += int(det.get('tokensCached') or 0)
+        row[4] += int(det.get('tokensCacheCreate') or 0)
+        row[5] += 1
     d['costs'] = sorted(((a, *v) for a, v in costs.items()), key=lambda r: -r[1])
     d['cost_tracked'] = sum(v[0] for v in costs.values())
 
@@ -204,9 +209,53 @@ def collect(args):
             'wrote_file_instead': 'has been written' in body,
         })
 
-    # Commits produced in the codeline
+    # WHAT THE STORIES ACTUALLY WROTE.
+    #
+    # Recorded by commit_completed_story() at the moment of each commit, into
+    # LOG_DIR/story-changes.jsonl. This is the authority, because it is the only
+    # record taken while the facts were still unambiguous.
+    #
+    # Reconstructing instead from `git log <baseline>..HEAD` — what this did until
+    # 2026-09-07 — asks the LIVE codeline a question about a run that has since been
+    # reset out from under it, with a baseline read from a file every phase overwrites.
+    # Live, that produced an empty range for a run that committed a proven fix, and the
+    # page rendered "0 files changed / 0 lines / not recorded" as though it were a
+    # finding. Git remains the fallback for runs recorded before this existed.
     d['commits'] = []
-    if args.codeline and args.baseline:
+    d['changes_source'] = 'none'
+    _recorded = []
+    for _cand in (os.path.join(args.logs_dir or '', 'story-changes.jsonl'),
+                  os.path.join(args.out or '', 'story-changes.jsonl')):
+        if _cand and os.path.isfile(_cand):
+            try:
+                with open(_cand, encoding='utf-8') as fh:
+                    _recorded = [json.loads(l) for l in fh if l.strip()]
+            except (OSError, ValueError):
+                _recorded = []
+            if _recorded:
+                break
+
+    if _recorded:
+        d['changes_source'] = 'recorded'
+        d['manifest_source'] = 'story-changes'
+        d['commits'] = [[r.get('sha', '')[:8], r.get('subject', ''), r.get('committedAt', '')]
+                        for r in _recorded]
+        seen = []
+        for r in _recorded:
+            for f in r.get('files') or []:
+                if f not in seen:
+                    seen.append(f)
+        d['manifest'] = seen
+        d['diff'] = '\n'.join(r.get('diff') or '' for r in _recorded).strip()
+        d['diffstat'] = '\n'.join((r.get('diffstat') or '').strip()
+                                   for r in _recorded).strip()
+        # A diff dropped for size is said to be dropped. Silence here would read as
+        # "this story changed nothing", the shape this whole change exists to remove.
+        if any(r.get('diffOmitted') for r in _recorded) and not d['diff']:
+            d['diff_unavailable'] = ('the diff was too large to record and was dropped whole — '
+                                     'the file list and counts below are still this run\'s own')
+
+    if not _recorded and args.codeline and args.baseline:
         try:
             out = subprocess.run(
                 ['git', '-C', args.codeline, 'log', '--format=%h|%s|%ad', '--date=iso',
@@ -224,6 +273,8 @@ def collect(args):
                 ['git', '-C', args.codeline, 'diff', '--name-only', f'{args.baseline}..{args.head}'],
                 capture_output=True, text=True, timeout=30).stdout
             d['manifest'] = [l for l in names.splitlines() if l.strip()]
+            if d['commits'] or d['manifest']:
+                d['changes_source'] = 'git-range'
         except (OSError, subprocess.SubprocessError):
             pass
 
@@ -1428,6 +1479,108 @@ def _proof_section(d):
         'reviewer reads intent, while the RED run is the only thing that tests reality.</div>')
 
 
+FLOW_CSS = """
+.flowwrap { overflow-x: auto; border: 1px solid var(--hair, #c9d0d8); background: #fff; margin: 18px 0; }
+.flowwrap svg { display: block; width: 100%; min-width: 720px; height: auto; }
+.fx-box { fill: #fff; stroke: #39414a; stroke-width: 1.4; }
+.fx-ok { stroke: #2f7a4a; }
+.fx-warn { stroke: #a8650f; }
+.fx-bad { stroke: #b3261e; }
+.fx-skip { stroke: #a8b0b9; stroke-dasharray: 5 4; }
+.fx-lbl { fill: #13161a; font: 650 12.5px ui-sans-serif, -apple-system, "Segoe UI", Roboto, sans-serif; }
+.fx-sub { fill: #5c646d; font: 400 10px ui-sans-serif, -apple-system, "Segoe UI", Roboto, sans-serif; }
+.fx-t { fill: #6b737c; font: 400 9.5px ui-monospace, SFMono-Regular, Menlo, monospace; }
+.fx-edge { stroke: #39414a; stroke-width: 1.4; fill: none; }
+.fx-arrow { fill: #39414a; }
+"""
+
+
+# How a stage ENDED, and how that reads on the page. A flow that draws every box the same way
+# hides the skips, and a run whose stages were mostly skipped would look like a full execution.
+_FLOW_STATUS = {
+    'ok':   ('fx-ok', 'passed'),
+    'warn': ('fx-warn', 'warning'),
+    'fail': ('fx-bad', 'failed'),
+    'bad':  ('fx-bad', 'failed'),
+    'skip': ('fx-skip', 'did not apply'),
+    'info': ('', ''),
+}
+
+
+def flow_html(d):
+    """The run\'s own execution flow, drawn from the stages it actually executed.
+
+    NOTHING about any project is written here. The stage names, their order, their outcomes and
+    the codeline all come from this run\'s timeline, so the same code draws whatever project ran.
+    A stage list hardcoded here would be a hand drawing again, just checked into the engine.
+    """
+    steps = [e for e in d.get('timeline') or []
+             if (e.get('kind') in ('ingest', 'step', 'terminal')) and (e.get('head') or '').strip()]
+
+    if not steps:
+        body = ('<p class="intro">' + MISSING + ' — this run recorded no stages, so there is no '
+                'flow to draw. The timeline is read from the run log; an empty one means the log '
+                'was unavailable, not that nothing ran.</p>')
+        return (head_block('Execution flow' + (' — ' + esc(d['story']) if d.get('story') else ''),
+                           'The stages this run executed, in the order it executed them.', '')
+                + body + '</main>')
+
+    # Geometry. One box per stage, stacked; the SVG grows with the run rather than the run being
+    # trimmed to fit a fixed canvas.
+    W, BOX_H, GAP, TOP = 900, 52, 26, 30
+    x, bw = 200, 500
+    height = TOP + len(steps) * (BOX_H + GAP)
+
+    parts = ['<div class="flowwrap"><svg viewBox="0 0 %d %d" role="img" aria-label="%s">' % (
+        W, height, esc('Execution flow: %d stages, in the order this run ran them' % len(steps)))]
+    parts.append('<defs><marker id="fx-a" viewBox="0 0 10 10" refX="9" refY="5" '
+                 'markerWidth="7" markerHeight="7" orient="auto-start-reverse">'
+                 '<path d="M0 0 L10 5 L0 10 z" class="fx-arrow"/></marker></defs>')
+
+    y = TOP
+    for i, e in enumerate(steps):
+        cls, word = _FLOW_STATUS.get((e.get('status') or '').lower(), ('', ''))
+        head = (e.get('head') or '').strip()
+        # The outcome is already spelled out in most headings ("— passed", "— did not apply");
+        # repeating it under the box would read as two different facts about one stage.
+        sub = '' if (word and word in head.lower()) else word
+        parts.append('<rect class="fx-box %s" x="%d" y="%d" width="%d" height="%d" rx="2"/>'
+                     % (cls, x, y, bw, BOX_H))
+        parts.append('<text class="fx-lbl" x="%d" y="%d" text-anchor="middle">%s</text>'
+                     % (x + bw // 2, y + (24 if sub else 31), esc(head[:78])))
+        if sub:
+            parts.append('<text class="fx-sub" x="%d" y="%d" text-anchor="middle">%s</text>'
+                         % (x + bw // 2, y + 40, esc(sub)))
+        if e.get('t'):
+            parts.append('<text class="fx-t" x="%d" y="%d" text-anchor="end">%s</text>'
+                         % (x - 12, y + 30, esc(e['t'])))
+        if i < len(steps) - 1:
+            parts.append('<path class="fx-edge" d="M%d %d L%d %d" marker-end="url(#fx-a)"/>'
+                         % (x + bw // 2, y + BOX_H, x + bw // 2, y + BOX_H + GAP - 2))
+        y += BOX_H + GAP
+    parts.append('</svg></div>')
+
+    counts = collections.Counter((e.get('status') or 'info').lower() for e in steps)
+    cards = (
+        '<div class="card"><div class="k">Stages</div><div class="v">' + str(len(steps)) + '</div></div>'
+        '<div class="card"><div class="k">Passed</div><div class="v ok">' + str(counts.get('ok', 0)) + '</div></div>'
+        '<div class="card"><div class="k">Did not apply</div><div class="v">' + str(counts.get('skip', 0)) + '</div></div>'
+        '<div class="card"><div class="k">Warnings</div><div class="v">'
+        + str(counts.get('warn', 0) + counts.get('fail', 0) + counts.get('bad', 0)) + '</div></div>')
+
+    where = (' on <code>' + esc(d['codeline']) + '</code>') if d.get('codeline') else ''
+    return (head_block('Execution flow' + (' — ' + esc(d['story']) if d.get('story') else ''),
+                       'The stages this run executed, in the order it executed them' + where + '.',
+                       cards)
+            + '<style>' + FLOW_CSS + '</style>'
+            + '<p class="intro">Every box below is a stage this run actually reached. The order is '
+              'the run\'s own; a stage that did not apply is drawn dashed rather than omitted, so '
+              'the page cannot make a partial run look like a full one.</p>'
+            + '\n'.join(parts)
+            + '<footer>Drawn from this run&rsquo;s timeline. No stage list is built into the '
+              'generator: another project&rsquo;s run draws that project&rsquo;s stages.</footer></main>')
+
+
 def narrative_html(d):
     verdict_cls = 'ok' if d['passed'] else 'bad'
     verdict = 'PASSED' if d['passed'] else 'DID NOT COMPLETE'
@@ -1441,9 +1594,11 @@ def narrative_html(d):
 
     costs = '\n'.join(
         '<tr><td><code>%s</code></td><td class="num">$%.4f</td><td class="num">%s</td>'
-        '<td class="num">%s</td><td class="num">%d</td></tr>'
-        % (esc(a), c, format(i, ','), format(o, ','), n)
-        for a, c, i, o, n in d['costs'])
+        '<td class="num">%s</td><td class="num">%s</td><td class="num">%s</td>'
+        '<td class="num">%d</td></tr>'
+        % (esc(a), c, format(i, ','), format(o, ','),
+           format(cr, ','), format(cw, ','), n)
+        for a, c, i, o, cr, cw, n in d['costs'])
 
     vc_items = ''.join('<li>' + esc(v) + '</li>' for v in d['vcs'])
     if not vc_items and d.get('vc_count'):
@@ -1480,14 +1635,20 @@ def narrative_html(d):
             + render_selfheal(d)
             + '\n<h2>Verification criteria</h2>\n<ul>' + (vc_items or '<li>' + MISSING + '</li>') + '</ul>\n' + vc_note
             + '\n<h2>Cost</h2>\n<table><tr><th>Agent</th><th class="num">Cost</th><th class="num">Tokens in</th>'
-              '<th class="num">Tokens out</th><th class="num">Calls</th></tr>\n'
-            + (costs or '<tr><td colspan="5">' + MISSING + '</td></tr>')
-            + '\n<tr><th>Tracked total</th><th class="num">$%.4f</th><th colspan="3"></th></tr>' % d['cost_tracked']
-            + ('\n<tr><th>Billed by provider</th><th class="num">$%s</th><th colspan="3"></th></tr></table>\n'
+              '<th class="num">Tokens out</th><th class="num">Cache read</th>'
+              '<th class="num">Cache write</th><th class="num">Calls</th></tr>\n'
+            + (costs or '<tr><td colspan="7">' + MISSING + '</td></tr>')
+            + '\n<tr><th>Tracked total</th><th class="num">$%.4f</th><th colspan="5"></th></tr>' % d['cost_tracked']
+            + ('\n<tr><th>Billed by provider</th><th class="num">$%s</th><th colspan="5"></th></tr>'
                % esc(d['cost_total']) if d['cost_total'] else
                '\n<tr><th>Billed by provider</th><th class="num">$%.4f</th>'
-               '<th colspan="3" class="soft">summed from the per-call records &mdash; the provider\u2019s '
-               'own usage counter was not captured for this run</th></tr></table>\n' % d['cost_tracked'])
+               '<th colspan="5" class="soft">summed from the per-call records &mdash; the provider\u2019s '
+               'own usage counter was not captured for this run</th></tr>' % d['cost_tracked'])
+            + ('\n<tr><td colspan="7" class="soft">Cache read is input served from the prompt cache and '
+               'cache write is input stored into it. Both are billed, at different rates from fresh input, '
+               'and both are already inside the cost column — they are broken out because a run whose spend '
+               'is mostly cache reads otherwise shows a token count that does not explain its own '
+               'cost.</td></tr></table>\n')
             + gap_note
             + '\n<footer>Generated from <code>' + esc(d['launch_log']) + '</code>, the gate logs, '
               '<code>agent-activity.jsonl</code> and the codeline git history. Anything without a supporting '
@@ -1698,7 +1859,8 @@ def main():
     os.makedirs(args.out, exist_ok=True)
     for name, body in (('narrative.html', narrative_html(d)),
                        ('qa-summary.html', qa_html(d)),
-                       ('code.html', render_code_page(d))):
+                       ('code.html', render_code_page(d)),
+                       ('flow.html', flow_html(d))):
         with open(os.path.join(args.out, name), 'w') as f:
             f.write(body)
         print('wrote', os.path.join(args.out, name))

@@ -458,6 +458,68 @@ ensure_story_branch() {
     return 1
 }
 
+# record_story_changes <story_id> <commit_root>
+# Appends one JSON line describing the commit just made to $LOG_DIR/story-changes.jsonl:
+# the sha, subject, changed files, insertion/deletion counts and the diff itself.
+#
+# Never fails its caller. A missing record degrades the report; a raised error here would fail a
+# story that has already succeeded, which is strictly worse.
+record_story_changes() {
+    local story_id="$1" root="$2"
+    local _t="${EPAM_COMMIT_TIMEOUT_SECS:-60}"
+
+    if [ -z "${LOG_DIR:-}" ]; then
+        # Loud, not silent: without this the report has only the live codeline to go on.
+        warning "  [record_story_changes] LOG_DIR unset — ${story_id}'s changes were not recorded for the run report"
+        return 1
+    fi
+    mkdir -p "$LOG_DIR" 2>/dev/null || return 1
+
+    local _sha _subject _when
+    _sha=$(timeout "$_t" git -C "$root" rev-parse HEAD 2>/dev/null) || return 1
+    [ -n "$_sha" ] || return 1
+    _subject=$(timeout "$_t" git -C "$root" log -1 --format=%s "$_sha" 2>/dev/null)
+    _when=$(timeout "$_t" git -C "$root" log -1 --format=%aI "$_sha" 2>/dev/null)
+
+    local _names _stat _diff
+    _names=$(timeout "$_t" git -C "$root" diff --name-only "${_sha}^" "$_sha" 2>/dev/null) \
+        || _names=$(timeout "$_t" git -C "$root" show --pretty=format: --name-only "$_sha" 2>/dev/null)
+    _stat=$(timeout "$_t" git -C "$root" diff --stat "${_sha}^" "$_sha" 2>/dev/null) \
+        || _stat=$(timeout "$_t" git -C "$root" show --pretty=format: --stat "$_sha" 2>/dev/null)
+    _diff=$(timeout "$_t" git -C "$root" diff "${_sha}^" "$_sha" 2>/dev/null) \
+        || _diff=$(timeout "$_t" git -C "$root" show --pretty=format: "$_sha" 2>/dev/null)
+
+    # BOUNDED. A pathological story must not write an unbounded diff into the evidence. Over the
+    # cap the diff is dropped WHOLE and said to be dropped — never truncated mid-hunk into
+    # something that reads like a complete diff but is not one.
+    local _cap="${EPAM_STORY_DIFF_MAX_BYTES:-2000000}"
+    local _omitted=false
+    if [ "${#_diff}" -gt "$_cap" ]; then
+        _diff=""
+        _omitted=true
+    fi
+
+    STORY_ID="$story_id" SHA="$_sha" SUBJECT="$_subject" WHEN="$_when" \
+    NAMES="$_names" STAT="$_stat" DIFF="$_diff" OMITTED="$_omitted" \
+    "${NODE_BIN:-node}" -e '
+        const g = (k) => process.env[k] || "";
+        const files = g("NAMES").split("\n").map(s => s.trim()).filter(Boolean);
+        const diff = g("DIFF");
+        const count = (p, q) => diff.split("\n")
+            .filter(l => l.startsWith(p) && !l.startsWith(q)).length;
+        process.stdout.write(JSON.stringify({
+            storyId: g("STORY_ID"), sha: g("SHA"), subject: g("SUBJECT"),
+            committedAt: g("WHEN"), files,
+            insertions: count("+", "+++"), deletions: count("-", "---"),
+            diffstat: g("STAT"), diff, diffOmitted: g("OMITTED") === "true",
+        }) + "\n");
+    ' >> "$LOG_DIR/story-changes.jsonl" 2>/dev/null || {
+        warning "  [record_story_changes] could not record ${story_id}'s changes for the run report"
+        return 1
+    }
+    return 0
+}
+
 # commit_completed_story <story_id>
 # Stages and commits whatever a completed story wrote, scoped to the current
 # GIT_WORK_ROOT (the worktree checkout when running --worktree, the main repo
@@ -570,6 +632,19 @@ commit_completed_story() {
     set -e
     if [ "$_commit_rc" -eq 0 ]; then
         log "  Committed ${_changed_count} file(s) for ${story_id}"
+        # RECORD WHAT THIS STORY WROTE, HERE, NOW.
+        #
+        # The run report used to reconstruct the diff at report time — `git log <baseline>..HEAD`
+        # against the live codeline, baseline read from the shared, every-phase-overwritten
+        # phase-baseline-sha.txt. The codeline is reset to origin/<base> at the start of each
+        # cycle, so by report time that pair no longer brackets the story: the range comes back
+        # empty and code.html renders "0 files changed / 0 lines / not recorded" for a run that
+        # demonstrably committed a fix. Live: Successful-Run-Sept-07-1, AMSD-1919.
+        #
+        # This commit is the only moment the story's changes are unambiguously identifiable, so
+        # they are captured now, into LOG_DIR (which archive-run-artifacts.sh carries into the
+        # run's evidence directory). A later reset cannot invalidate a fact already on disk.
+        record_story_changes "$story_id" "$_commit_root" || true
         # Refresh the CodeGraph index now that this story's writes are final
         # on disk. Until 2026-08-06 the index was built ONCE per run, before
         # any writer ran, and never rebuilt — so the reviewer's codegraph_query

@@ -188,6 +188,79 @@ Feature-scoped variables the generated template includes (`orchestrations/config
 `GITHUB_PERSONAL_ACCESS_TOKEN`. With `--replay on`, the two Langfuse keys are a hard requirement —
 "a run not recorded can never be replayed", so the installer refuses rather than recording nothing.
 
+### 3.1 Every variable — what it means, an example, and where to get it
+
+Fill in only the rows whose "Needed when" applies to you. A variable for a feature you are not
+using stays empty. Example values show the SHAPE of a correct value — they are not real
+credentials and will not work.
+
+#### Root `.env` — `<install>/.env`
+
+| Variable | What it means | Example | Needed when | Where to get the value |
+| --- | --- | --- | --- | --- |
+| `OPENROUTER_API_KEY` | The key the pipeline uses to call models through OpenRouter. Every model call on this stack is billed to the account that owns it. | `sk-or-v1-XXXXXXXX…  (64 hex characters after the prefix)` | You installed with `--stack openrouter` | openrouter.ai → Keys → Create key. Copy the whole string, `sk-or-v1-` prefix included. |
+| `MINIMAX_API_KEY` | The key for MiniMax models, used alongside OpenRouter on the same stack. | `eyJhbGciOiJSUzI1…  (a long JWT-shaped string)` | You installed with `--stack openrouter` | The MiniMax platform console → API keys. |
+| `ANTHROPIC_API_KEY` | An Anthropic API credential. **Leave empty on the `claude` stack.** If present it OUTRANKS the `claude login` session on disk, so runs bill your API account instead of your subscription — silently. | *(leave blank)* | Only when you deliberately want runs billed to an Anthropic API account | console.anthropic.com → API keys. |
+| `JIRA_EMAIL` | The Atlassian account the API token below belongs to. Jira rejects the token without the matching email. | `jane.doe@yourcompany.com` | Your project pulls tickets from Jira | The email you sign in to Jira with. |
+| `JIRA_TOKEN` | The API token that lets the pipeline READ tickets. The pipeline never writes to Jira. | `ATATT3xFfGF0…  (starts ATATT, ~190 characters)` | Your project pulls tickets from Jira | id.atlassian.com → Security → Create and manage API tokens → Create API token. Copy it immediately; Atlassian will not show it again. |
+| `LANGFUSE_PUBLIC_KEY` | Identifies the Langfuse project that records each model call, so a run can be replayed later at no cost. | `pk-lf-epam-dev` | You installed with `--replay on` | Seeded by the stack itself — `docker-compose.observability.yml` creates the project with this exact value. Use it as-is unless you changed the seed. |
+| `LANGFUSE_SECRET_KEY` | The matching secret for that Langfuse project. | `sk-lf-epam-dev` | You installed with `--replay on` | The same seeded pair. |
+| `GITHUB_PERSONAL_ACCESS_TOKEN` | Read access to GitHub-hosted client repositories. | `ghp_XXXXXXXX…  (starts ghp_, 36 characters)` | Your codelines are on GitHub and you use the copilot provider | github.com → Settings → Developer settings → Personal access tokens. Read access to the repositories the pipeline will scan is enough. |
+
+#### Launch dashboard — `<install>/launch-dashboard/.env`
+
+| Variable | What it means | Example | Needed when | Where to get the value |
+| --- | --- | --- | --- | --- |
+| `LAUNCH_PASSWORD` | The password on the dashboard login screen. It gates the launch button, and anyone holding it can start runs that spend real money. | `s7Kq2!vRm9dT` | **Always** — the API refuses to start without it | You choose it. A fresh install ships `abcd1234`; change it from the dashboard's own change-password screen after your first login. |
+| `LAUNCH_UI_PORT` | The port the dashboard is served on. | `8099` | Only to move it off the default | You choose it. |
+| `LAUNCH_TITLE` | The name shown on the login screen, dashboard header and browser tab. | `Metrolinx Pipeline` | Only to brand your install | You choose it. It is compiled into the UI bundle, so after changing it run `docker compose build launch-ui`. |
+| `EPAM_CODE_LEVEL` | The installed version, recorded on every run so a replay targets the same code level. | `v2.0.0` | Never — **do not hand-edit** | `install.sh` stamps it with the version it actually installed. |
+| `EPAM_HOME` | Absolute path to your install root. | `/home/jane/amsd-pipeline` | You run the host-side runner | The `--dest` you installed into. |
+| `EPAM_LAUNCHER` | Absolute path to the launcher script the runner executes. | `/home/jane/amsd-pipeline/orchestrations/scripts/tier3-metrolinx-run.sh` | You run the host-side runner | Inside your install, under `orchestrations/scripts/`. |
+
+#### The project's own `config.env` — `<install>/orchestrations/projects/<project>/config.env`
+
+Operational settings, not secrets.
+
+| Variable | What it means | Example | Needed when | Where to get the value |
+| --- | --- | --- | --- | --- |
+| `JIRA_URL` | Your Jira site's base URL. The pipeline builds every ticket URL from it. | `https://yourcompany.atlassian.net` | The project pulls tickets from Jira | The address you open Jira at, with no path after the hostname. |
+| `JIRA_PROJECT_KEY` | The project key that prefixes your ticket IDs. | `AMSD` (the prefix in `AMSD-1919`) | The project pulls tickets from Jira | Read it off any ticket in the project. |
+| `JIRA_CODELINE_ROOT` | The directory holding your cloned client repositories. The pipeline scans every immediate subdirectory of it for git repos, and **writes to the ones it selects**. | `/home/jane/projects/codelines` | **Every brownfield project** | **You must supply this — nothing ships a value, deliberately.** Point it at checkouts you are willing to have modified, not at your working clones. |
+| `JIRA_BASELINE_BRANCH` | The branch story branches are cut from and merged back into. | `develop` | Your baseline is not the repository default | Your team's integration branch. |
+| `SECRETS_FILE` | Path to a per-project credentials file that overrides the root `.env`. | `orchestrations/jira/metrolinx.env` | You run against more than one client's Jira from one install | You choose the path; see §5. |
+| `EPAM_PAUSE_AFTER_AGENT_MINT` | Stops the run after the agent roster is minted so you can review it before any spend on stories. | `1` to pause, `0` to run through | You want that review point | You choose it. |
+| `EPAM_PAUSE_BEFORE_WRITER` | Stops the run immediately before any code is written. | `1` to pause, `0` to run through | You want that review point | You choose it. |
+
+#### A project's own secrets file — `<install>/orchestrations/jira/<project>.env`
+
+Used only when that project's `config.env` sets `SECRETS_FILE` to point at it. It holds
+`JIRA_EMAIL` and `JIRA_TOKEN` (obtained exactly as above) plus `CODEGRAPH_ENABLED` (`1` or `0` —
+whether the code-graph index is built for this project). Values here override the root `.env`,
+which is how one install serves several clients without sharing credentials. The installer never
+creates or copies this file — see §5.
+
+A complete example, for a project whose `config.env` sets
+`SECRETS_FILE=orchestrations/jira/metrolinx.env`:
+
+```bash
+# <install>/orchestrations/jira/metrolinx.env
+JIRA_EMAIL=jane.doe@yourcompany.com
+JIRA_TOKEN=ATATT3xFfGF0…  (starts ATATT, ~190 characters)
+CODEGRAPH_ENABLED=1
+```
+
+#### Confirming the values are right
+
+```bash
+./orchestrations-installer/install.sh --dest <install>   # validates, and restarts services whose .env changed
+<install>/orchestrations/scripts/pipeline-health.sh      # reports what is ready
+```
+
+The installer names every required variable that is still empty and stops. It does not test
+whether a token is valid: a present-but-wrong token passes the install and fails at the first Jira
+call, reporting Jira's own error.
+
 ---
 
 ## 4. Project configuration (the three things nothing can derive)

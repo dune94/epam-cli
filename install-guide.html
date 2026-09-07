@@ -82,7 +82,7 @@ footer{margin-top:64px;padding-top:18px;border-top:1px solid var(--line);color:v
 <li><a href="#prereq">Prerequisites — what the installer actually checks</a></li>
 <li><a href="#install">Install — <code>npx amsd-pipeline</code>, and every flag</a></li>
 <li><a href="#docker">Docker or Podman — no Docker Desktop license needed</a></li>
-<li><a href="#env">The <code>.env</code> files</a></li>
+<li><a href="#env">The <code>.env</code> files — and every variable in them</a></li>
 <li><a href="#jira">Jira credentials are NOT carried into a new install</a></li>
 <li><a href="#run">Running a ticket — <code>orchestrations/scripts/pipeline</code></a></li>
 <li><a href="#uis">Where to watch it — dashboards, Langfuse, Grafana</a></li>
@@ -286,7 +286,7 @@ still runs; only dashboards and the launch UI are unavailable.</p>
 deterministically, so two installs (or an install alongside a hand-run dev checkout) never collide
 on the same machine.</p>
 
-<h2 id="env">4. The <code>.env</code> files</h2>
+<h2 id="env">4. The <code>.env</code> files — and every variable in them</h2>
 
 <div class="warn">
 <strong>Order matters:</strong> place these into <code>--dest</code> <em>before</em> running the
@@ -306,6 +306,71 @@ mid-run:</p>
 <tr><td>A project's own <code>config.env</code></td><td>Operational settings, not secrets — <code>JIRA_URL</code>, <code>JIRA_PROJECT_KEY</code>, <code>JIRA_CODELINE_ROOT</code> (the brownfield discovery root — a real host path to the client repos), etc. Preserved across installer updates.</td></tr>
 <tr><td>A project's own <code>orchestrations/jira/&lt;project&gt;.env</code></td><td>Per-project Jira credentials, when a project's <code>config.env</code> declares <code>SECRETS_FILE=</code> pointing at it — an opt-in override of the root <code>.env</code> defaults, for running against multiple clients' Jira instances without sharing credentials. <strong>Not provisioned by <code>install.sh</code> at all, and not carried into a new install either</strong> — see <a href="#jira">§5</a>.</td></tr>
 </table>
+
+<h3>4.1 Every variable — what it means, an example, and where to get it</h3>
+
+<p>Fill in only the rows whose &ldquo;Needed when&rdquo; applies to you. A variable for a feature
+you are not using stays empty. Example values show the <em>shape</em> of a correct value — they are
+not real credentials and will not work.</p>
+
+<h4>Root <code>.env</code> — <code>&lt;install&gt;/.env</code></h4>
+<table>
+<tr><th>Variable</th><th>What it means</th><th>Example</th><th>Needed when</th><th>Where to get the value</th></tr>
+<tr><td><code>OPENROUTER_API_KEY</code></td><td>The key the pipeline uses to call models through OpenRouter. Every model call on this stack is billed to the account that owns it.</td><td><code>sk-or-v1-XXXXXXXX…  (64 hex characters after the prefix)</code></td><td>You installed with <code>--stack openrouter</code></td><td>openrouter.ai &rarr; Keys &rarr; Create key. Copy the whole string, <code>sk-or-v1-</code> prefix included.</td></tr>
+<tr><td><code>MINIMAX_API_KEY</code></td><td>The key for MiniMax models, used alongside OpenRouter on the same stack.</td><td><code>eyJhbGciOiJSUzI1…  (a long JWT-shaped string)</code></td><td>You installed with <code>--stack openrouter</code></td><td>The MiniMax platform console &rarr; API keys.</td></tr>
+<tr><td><code>ANTHROPIC_API_KEY</code></td><td>An Anthropic API credential. <strong>Leave empty on the <code>claude</code> stack.</strong> If present it <strong>outranks</strong> the <code>claude login</code> session on disk, so runs bill your API account instead of your subscription — silently.</td><td><code>(leave blank)</code></td><td>Only when you deliberately want runs billed to an Anthropic API account</td><td>console.anthropic.com &rarr; API keys.</td></tr>
+<tr><td><code>JIRA_EMAIL</code></td><td>The Atlassian account the API token below belongs to. Jira rejects the token without the matching email.</td><td><code>jane.doe@yourcompany.com</code></td><td>Your project pulls tickets from Jira</td><td>The email you sign in to Jira with.</td></tr>
+<tr><td><code>JIRA_TOKEN</code></td><td>The API token that lets the pipeline <strong>read</strong> tickets. The pipeline never writes to Jira.</td><td><code>ATATT3xFfGF0…  (starts ATATT, ~190 characters)</code></td><td>Your project pulls tickets from Jira</td><td>id.atlassian.com &rarr; Security &rarr; Create and manage API tokens &rarr; Create API token. Copy it immediately; Atlassian will not show it again.</td></tr>
+<tr><td><code>LANGFUSE_PUBLIC_KEY</code></td><td>Identifies the Langfuse project that records each model call, so a run can be replayed later at no cost.</td><td><code>pk-lf-epam-dev</code></td><td>You installed with <code>--replay on</code></td><td>Seeded by the stack itself — <code>docker-compose.observability.yml</code> creates the project with this exact value. Use it as-is unless you changed the seed.</td></tr>
+<tr><td><code>LANGFUSE_SECRET_KEY</code></td><td>The matching secret for that Langfuse project.</td><td><code>sk-lf-epam-dev</code></td><td>You installed with <code>--replay on</code></td><td>The same seeded pair.</td></tr>
+<tr><td><code>GITHUB_PERSONAL_ACCESS_TOKEN</code></td><td>Read access to GitHub-hosted client repositories.</td><td><code>ghp_XXXXXXXX…  (starts ghp_, 36 characters)</code></td><td>Your codelines are on GitHub and you use the copilot provider</td><td>github.com &rarr; Settings &rarr; Developer settings &rarr; Personal access tokens. Read access to the repositories the pipeline will scan is enough.</td></tr>
+</table>
+
+<h4>Launch dashboard — <code>&lt;install&gt;/launch-dashboard/.env</code></h4>
+<table>
+<tr><th>Variable</th><th>What it means</th><th>Example</th><th>Needed when</th><th>Where to get the value</th></tr>
+<tr><td><code>LAUNCH_PASSWORD</code></td><td>The password on the dashboard login screen. It gates the launch button, and anyone holding it can start runs that spend real money.</td><td><code>s7Kq2!vRm9dT</code></td><td><strong>Always</strong> — the API refuses to start without it</td><td>You choose it. A fresh install ships <code>abcd1234</code>; change it from the dashboard&rsquo;s own change-password screen after your first login.</td></tr>
+<tr><td><code>LAUNCH_UI_PORT</code></td><td>The port the dashboard is served on.</td><td><code>8099</code></td><td>Only to move it off the default</td><td>You choose it.</td></tr>
+<tr><td><code>LAUNCH_TITLE</code></td><td>The name shown on the login screen, dashboard header and browser tab.</td><td><code>Metrolinx Pipeline</code></td><td>Only to brand your install</td><td>You choose it. It is compiled into the UI bundle, so after changing it run <code>docker compose build launch-ui</code>.</td></tr>
+<tr><td><code>EPAM_CODE_LEVEL</code></td><td>The installed version, recorded on every run so a replay targets the same code level.</td><td><code>v2.0.0</code></td><td>Never — <strong>do not hand-edit</strong></td><td><code>install.sh</code> stamps it with the version it actually installed.</td></tr>
+<tr><td><code>EPAM_HOME</code></td><td>Absolute path to your install root.</td><td><code>/home/jane/amsd-pipeline</code></td><td>You run the host-side runner</td><td>The <code>--dest</code> you installed into.</td></tr>
+<tr><td><code>EPAM_LAUNCHER</code></td><td>Absolute path to the launcher script the runner executes.</td><td><code>/home/jane/amsd-pipeline/orchestrations/scripts/tier3-metrolinx-run.sh</code></td><td>You run the host-side runner</td><td>Inside your install, under <code>orchestrations/scripts/</code>.</td></tr>
+</table>
+
+<h4>The project&rsquo;s own <code>config.env</code> — <code>&lt;install&gt;/orchestrations/projects/&lt;project&gt;/config.env</code></h4>
+<p>Operational settings, not secrets.</p>
+<table>
+<tr><th>Variable</th><th>What it means</th><th>Example</th><th>Needed when</th><th>Where to get the value</th></tr>
+<tr><td><code>JIRA_URL</code></td><td>Your Jira site&rsquo;s base URL. The pipeline builds every ticket URL from it.</td><td><code>https://yourcompany.atlassian.net</code></td><td>The project pulls tickets from Jira</td><td>The address you open Jira at, with no path after the hostname.</td></tr>
+<tr><td><code>JIRA_PROJECT_KEY</code></td><td>The project key that prefixes your ticket IDs.</td><td><code>AMSD</code></td><td>The project pulls tickets from Jira</td><td>Read it off any ticket in the project — the <code>AMSD</code> of <code>AMSD-1919</code>.</td></tr>
+<tr><td><code>JIRA_CODELINE_ROOT</code></td><td>The directory holding your cloned client repositories. The pipeline scans every immediate subdirectory of it for git repos, and <strong>writes to the ones it selects</strong>.</td><td><code>/home/jane/projects/codelines</code></td><td><strong>Every brownfield project</strong></td><td><strong>You must supply this — nothing ships a value, deliberately.</strong> Point it at checkouts you are willing to have modified, not at your working clones.</td></tr>
+<tr><td><code>JIRA_BASELINE_BRANCH</code></td><td>The branch story branches are cut from and merged back into.</td><td><code>develop</code></td><td>Your baseline is not the repository default</td><td>Your team&rsquo;s integration branch.</td></tr>
+<tr><td><code>SECRETS_FILE</code></td><td>Path to a per-project credentials file that overrides the root <code>.env</code>.</td><td><code>orchestrations/jira/metrolinx.env</code></td><td>You run against more than one client&rsquo;s Jira from one install</td><td>You choose the path; see <a href="#jira">&sect;5</a>.</td></tr>
+<tr><td><code>EPAM_PAUSE_AFTER_AGENT_MINT</code></td><td>Stops the run after the agent roster is minted, so you can review it before any spend on stories.</td><td><code>1</code></td><td>You want that review point</td><td>You choose it: <code>1</code> to pause, <code>0</code> to run through.</td></tr>
+<tr><td><code>EPAM_PAUSE_BEFORE_WRITER</code></td><td>Stops the run immediately before any code is written.</td><td><code>1</code></td><td>You want that review point</td><td>You choose it: <code>1</code> to pause, <code>0</code> to run through.</td></tr>
+</table>
+
+<h4>A project&rsquo;s own secrets file — <code>&lt;install&gt;/orchestrations/jira/&lt;project&gt;.env</code></h4>
+<p>Used only when that project&rsquo;s <code>config.env</code> sets <code>SECRETS_FILE</code> to
+point at it. It holds <code>JIRA_EMAIL</code> and <code>JIRA_TOKEN</code> (obtained exactly as
+above) plus <code>CODEGRAPH_ENABLED</code> (<code>1</code> or <code>0</code> — whether the
+code-graph index is built for this project). Values here override the root <code>.env</code>,
+which is how one install serves several clients without sharing credentials. The installer never
+creates or copies this file — see <a href="#jira">&sect;5</a>.</p>
+
+<p>A complete example, for a project whose <code>config.env</code> sets
+<code>SECRETS_FILE=orchestrations/jira/metrolinx.env</code>:</p>
+<pre><code># &lt;install&gt;/orchestrations/jira/metrolinx.env
+JIRA_EMAIL=jane.doe@yourcompany.com
+JIRA_TOKEN=ATATT3xFfGF0…  (starts ATATT, ~190 characters)
+CODEGRAPH_ENABLED=1</code></pre>
+
+<h4>Confirming the values are right</h4>
+<pre><code>./orchestrations-installer/install.sh --dest &lt;install&gt;   # validates, and restarts services whose .env changed
+&lt;install&gt;/orchestrations/scripts/pipeline-health.sh      # reports what is ready</code></pre>
+<p>The installer names every required variable that is still empty and stops. It does not test
+whether a token is valid: a present-but-wrong token passes the install and fails at the first Jira
+call, reporting Jira&rsquo;s own error.</p>
 
 <h2 id="jira">5. Jira credentials are NOT carried into a new install</h2>
 <div class="bad">

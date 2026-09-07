@@ -943,11 +943,16 @@ else
         # 2026-09-07 under podman-compose: launch-ui kept a stale image and a stale network mode
         # after both were changed, so the install re-tested exactly what it had just replaced and
         # reported the old failure. A down first costs seconds and makes the up mean something.
-        (cd "$LAUNCH_DIR" && container_compose -f "$LAUNCH_COMPOSE" -p "$_LD_PROJECT" down) \
-            >/dev/null 2>&1 || true
-
         for _LD_SUBNET in $(isolated_subnet_candidates "$ROOT-launch"); do
             _LD_TRY_PORT=$((_LD_PORT + _LD_I * 10))
+            # EVERY ATTEMPT STARTS CLEAN. `up -d --build` leaves an EXISTING container alone, so a
+            # retry's new port/subnet is silently ignored and the stack stays on the previous
+            # attempt's values — live 2026-09-07: attempt 0 published 8099, attempt 1 raised the
+            # port to 8109, compose reused the containers, and the installer then health-checked
+            # 8109 while the dashboard answered perfectly on 8099. The same trap the observability
+            # stack's retry was already fixed for; this loop never got it.
+            (cd "$LAUNCH_DIR" && container_compose -f "$LAUNCH_COMPOSE" -p "$_LD_PROJECT" down) \
+                >/dev/null 2>&1 || true
             if (cd "$LAUNCH_DIR" && LAUNCH_SUBNET="$_LD_SUBNET" LAUNCH_UI_PORT="$_LD_TRY_PORT" \
                     container_compose -f "$LAUNCH_COMPOSE" -p "$_LD_PROJECT" up -d --build) >"$_LD_LOG" 2>&1; then
                 _LD_UP=0

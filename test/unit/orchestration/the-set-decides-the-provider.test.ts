@@ -39,7 +39,11 @@ function resolve(env: Record<string, string>) {
      # The metrolinx run of 2026-08-29 failed a second time on exactly that, with the fix in place.
      # The harness leaves them undefined so the resolver must not depend on them.
      SCRIPT_DIR=${JSON.stringify(join(ROOT, 'orchestrations/scripts'))}
-     eval "$(sed -n '/^resolve_primary_provider() {/,/^}/p' ${JSON.stringify(HANDLER)})"
+     # SOURCED FROM WHERE IT LIVES. This used to sed the function out of llm-handler.sh; the
+     # function was extracted into lib/resolve-primary-provider.sh and the sed then matched
+     # nothing, so every case in this file failed with "resolve_primary_provider: command not
+     # found" while asserting things about a resolver it never ran.
+     . ${JSON.stringify(join(ROOT, 'orchestrations/scripts/lib/resolve-primary-provider.sh'))}
      resolve_primary_provider`,
   ], { encoding: 'utf8', timeout: 60000, env: { ...process.env, AI_PROVIDER: '', EPAM_ORCHESTRATION_PROVIDER: '', EPAM_PROVIDER_SET: '', ...env } });
   return { out: (r.stdout || '').trim(), err: (r.stderr || '').trim() };

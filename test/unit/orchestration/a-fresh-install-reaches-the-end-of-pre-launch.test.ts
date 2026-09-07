@@ -83,9 +83,15 @@ describe('a fresh install reaches the end of pre-launch with the operator\'s own
 
     // The project must point at the TEST codelines. An install ships the committed default; an
     // operator repoints it. Doing it here is what makes this test safe to run at all.
+    // REPLACE IF PRESENT, OTHERWISE ADD. The project deliberately ships NO codeline root — a
+    // default path here once aimed every fresh install at the operator's REAL client checkouts,
+    // so the value is now the operator's to supply. A replace-only edit was silently a no-op
+    // against that config, and this test then failed asserting a line nothing had written.
     const cfg = path.join(dest, 'orchestrations/projects/metrolinx/config.env');
-    fs.writeFileSync(cfg, fs.readFileSync(cfg, 'utf8')
-      .replace(/^JIRA_CODELINE_ROOT=.*$/m, `JIRA_CODELINE_ROOT=${TEST_CODELINE_ROOT}`));
+    const before = fs.readFileSync(cfg, 'utf8');
+    fs.writeFileSync(cfg, /^JIRA_CODELINE_ROOT=.*$/m.test(before)
+      ? before.replace(/^JIRA_CODELINE_ROOT=.*$/m, `JIRA_CODELINE_ROOT=${TEST_CODELINE_ROOT}`)
+      : `${before}\nJIRA_CODELINE_ROOT=${TEST_CODELINE_ROOT}\n`);
     expect(fs.readFileSync(cfg, 'utf8'), 'the run would target the REAL client checkout')
       .toContain(`JIRA_CODELINE_ROOT=${TEST_CODELINE_ROOT}`);
 

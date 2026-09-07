@@ -31,7 +31,10 @@ function resolve(env: Record<string, string>) {
   const script = `
     set -uo pipefail
     SCRIPT_DIR=${path.dirname(HANDLER)}
-    eval "$(sed -n '/^resolve_primary_provider()/,/^}/p' "${HANDLER}")"
+    # Sourced from where the function LIVES. Extracting it out of llm-handler.sh stopped working
+    # when it moved to lib/resolve-primary-provider.sh: the sed matched nothing and both cases
+    # here failed on "resolve_primary_provider: command not found" instead of testing it.
+    . "${path.dirname(HANDLER)}/lib/resolve-primary-provider.sh"
     resolve_primary_provider
   `;
   const r = spawnSync('bash', ['-c', script],

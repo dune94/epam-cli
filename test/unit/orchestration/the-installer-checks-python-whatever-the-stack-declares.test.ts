@@ -14,7 +14,7 @@
  */
 import { describe, it, expect, afterAll } from 'vitest';
 import { execFileSync } from 'node:child_process';
-import { mkdtempSync, writeFileSync, rmSync, mkdirSync, chmodSync, readFileSync } from 'node:fs';
+import { mkdtempSync, writeFileSync, rmSync, mkdirSync, chmodSync, readFileSync, existsSync, symlinkSync } from 'node:fs';
 import { tmpdir } from 'node:os';
 import { join } from 'node:path';
 
@@ -35,13 +35,25 @@ function checkPrereqs(runner: string): { out: string; failed: boolean } {
 
   const dir = mkdtempSync(join(tmpdir(), 'prereq-'));
   dirs.push(dir);
-  // A PATH with NOTHING on it but the shell builtins we need: python3 is genuinely absent.
+  // A PATH THAT LACKS PYTHON3 — NOT ONE THAT LACKS EVERYTHING.
+  //
+  // This used to put only awk/sed/grep/cat wrappers on PATH, which left no `bash` for Node to
+  // exec and no `env` for the wrappers' own shebangs. execFileSync threw ENOENT, `out` came back
+  // empty, and all three cases failed reporting "python3 was not reported at all" — about an
+  // installer block that reports it correctly. The harness was the defect, and it hid the very
+  // check it exists to prove.
+  //
+  // Symlinks to the real tools, so the block runs for real; python3 is simply not among them.
   const bin = join(dir, 'bin'); mkdirSync(bin);
-  for (const t of ['awk', 'sed', 'grep', 'cat']) {
-    const real = `/usr/bin/${t}`;
-    writeFileSync(join(bin, t), `#!/usr/bin/env bash\nexec ${real} "$@"\n`);
-    chmodSync(join(bin, t), 0o755);
+  for (const t of ['bash', 'sh', 'env', 'awk', 'sed', 'grep', 'cat', 'printf', 'head', 'tr']) {
+    for (const d of ['/usr/bin', '/bin']) {
+      if (existsSync(join(d, t))) { symlinkSync(join(d, t), join(bin, t)); break; }
+    }
   }
+  expect(existsSync(join(bin, 'bash')), 'no shell on the harness PATH — the block cannot run')
+    .toBe(true);
+  expect(existsSync(join(bin, 'python3')), 'python3 must be ABSENT for this test to mean anything')
+    .toBe(false);
   const drive = join(dir, 'drive.sh');
   writeFileSync(drive, ['#!/usr/bin/env bash', 'set -uo pipefail',
     'FAILED=0', 'STACK=teststack',

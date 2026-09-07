@@ -64,5 +64,18 @@ container_compose() {
         return 2
     fi
 
+    # PODMAN COMPOSE IS A WRAPPER, NOT AN IMPLEMENTATION. It hands the file to an EXTERNAL
+    # provider, and left to choose it picks docker-compose — which speaks the Docker API over a
+    # daemon socket. Rootless podman starts no such socket and neither does this installer, so
+    # live (2026-09-07, a clean podman install) every stack died on its first image with
+    # "failed to connect to the docker API at unix://…/podman.sock", having created zero
+    # containers. podman-compose drives the podman CLI directly and needs no daemon.
+    #
+    # := so an operator who has a socket and prefers docker-compose keeps their choice.
+    if [ "$_rt" = "podman" ]; then
+        : "${PODMAN_COMPOSE_PROVIDER:=podman-compose}"
+        export PODMAN_COMPOSE_PROVIDER
+    fi
+
     "$_rt" compose "$@"
 }

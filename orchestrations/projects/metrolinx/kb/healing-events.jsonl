@@ -1,0 +1,2 @@
+{"ts":"2026-09-07T13:26:21Z","id":"evt-1788787581447-445929","agent_role":"repro-test-writer","failure_class":null,"story_id":"CODEMIE-TEST","phase":null,"model":null,"diagnosis":"model call produced no usable output","signature":null,"signature_source":null}
+{"ts":"2026-09-07T13:26:23Z","id":"evt-1788787583582-70323","agent_role":"repro-test-writer","failure_class":null,"story_id":"CODEMIE-TEST","phase":null,"model":null,"diagnosis":"model call produced no usable output","signature":null,"signature_source":null}

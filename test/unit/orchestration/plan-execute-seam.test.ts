@@ -360,6 +360,24 @@ describe('every caller allows room for both passes', () => {
           /timeout:\s*Number\(\s*process\.env\.\w+\s*\|\|\s*\(?\s*Number\(process\.env\.\w+\s*\|\|\s*(\d+)\)\s*\*\s*Number\(process\.env\.\w+\s*\|\|\s*(\d+)\)/g)]
             .map(m => Number(m[1]) * Number(m[2])),
       ];
+      // A SEAM-DECLARED DEADLINE COUNTS. ac-gate.js stopped hardcoding a number and now takes the
+      // window from the seam's own timeoutSecs (invocation-profiles.json, falling back to
+      // defaults) — which is strictly better: the declaration is the source of truth and a seam
+      // asking for 1800s is no longer killed at a literal 360s. This test only recognised
+      // literals, so it read "no timeout" from a file that has a correct one and failed on code
+      // that was right. Resolve the effective value the same way the caller does.
+      if (timeouts.length === 0 && /seamDeclaredTimeoutMs\(/.test(src)) {
+        const profiles = JSON.parse(readFileSync(
+          join(__dirname, '../../../orchestrations/agents/invocation-profiles.json'), 'utf8'));
+        const seams = [...src.matchAll(/seamDeclaredTimeoutMs\('([^']+)'\)/g)].map(m => m[1]);
+        expect(seams.length, `${caller} names no seam to take a deadline from`).toBeGreaterThan(0);
+        for (const seam of new Set(seams)) {
+          const secs = profiles?.profiles?.[seam]?.timeoutSecs ?? profiles?.defaults?.timeoutSecs;
+          expect(secs, `seam '${seam}' declares no timeout and inherits no default — the call `
+            + 'runs unbounded or dies on someone else\'s number').toBeGreaterThan(0);
+          timeouts.push(Number(secs) * 1000);
+        }
+      }
       expect(timeouts.length, `${caller} declares no timeout to check`).toBeGreaterThan(0);
       for (const t of timeouts) {
         expect(t,

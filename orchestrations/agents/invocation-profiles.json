@@ -264,7 +264,7 @@
     "ac-classification": {
       "_what": "Classifies acceptance criteria.",
       "maxOutputTokens": 16384,
-      "timeoutSecs": 90,
+      "timeoutSecs": 360,
       "ladder": "medium",
       "produces": "ac-classification",
       "consumes": [
@@ -276,12 +276,13 @@
       "template": "ac-classification",
       "toolGrant": "read-only",
       "layer": "bootstrap",
-      "_why_bootstrap": "renders during Jira ingest, from lib/ac-gate.js, for the same reason."
+      "_why_bootstrap": "renders during Jira ingest, from lib/ac-gate.js, for the same reason.",
+      "_why_timeout": "Holds a plan pass AND an execute pass. It declared 90s — exactly the plan pass's own budget (EPAM_PLAN_TIMEOUT_SECS), so the plan alone could consume the whole window and the answer had none left. The caller then reported an empty response rather than a timeout."
     },
     "ac-elaboration": {
       "_what": "Elaborates an acceptance criterion into verification criteria.",
       "maxOutputTokens": 32768,
-      "timeoutSecs": 180,
+      "timeoutSecs": 600,
       "ladder": "high",
       "produces": "verification-criteria",
       "consumes": [
@@ -293,7 +294,8 @@
       "template": "ac-elaboration",
       "toolGrant": "read-only",
       "layer": "bootstrap",
-      "_why_bootstrap": "renders during Jira ingest, from lib/ac-gate.js, for the same reason."
+      "_why_bootstrap": "renders during Jira ingest, from lib/ac-gate.js, for the same reason.",
+      "_why_timeout": "Same reason as ac-classification, with more work to do: 180s left too little behind a 90s plan pass. It was also being bounded by ac-classification's clock, which is fixed in ac-gate.js."
     },
     "codeline-discovery": {
       "_what": "Picks which local codeline a Jira ticket belongs to.",

@@ -442,7 +442,11 @@ function elaborateAcs(issue) {
   try {
     const cmd = `bash ${AI_RUN_SH}${flagArg('provider', PROVIDER)}`
       + `${flagArg('model', MODEL)} < ${tmpPrompt} 2>${_errFile}`;
-    const raw = execSync(cmd, { encoding: 'utf8', timeout: seamDeclaredTimeoutMs('ac-classification'), env: seamEnv('ac-elaboration', _costFile) }).trim();
+    // ITS OWN SEAM'S DEADLINE. This bounded an ac-ELABORATION call with the ac-CLASSIFICATION
+    // seam's timeout while handing it ac-elaboration's environment, so the longer of the two
+    // seams ran under the shorter one's clock and could be killed mid-answer — reported upstream
+    // as "Empty elaboration response", a format complaint about a call that never finished.
+    const raw = execSync(cmd, { encoding: 'utf8', timeout: seamDeclaredTimeoutMs('ac-elaboration'), env: seamEnv('ac-elaboration', _costFile) }).trim();
     if (!raw) throw new Error(`Empty elaboration response${_why(_errFile)}`);
     const parsed = parseLooseJson(raw, 'elaboration');
     return Array.isArray(parsed.enrichedAcs) && parsed.enrichedAcs.length > 0

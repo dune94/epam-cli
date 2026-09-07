@@ -687,6 +687,22 @@ compose_up() {
     fi
     local _up=1 _log _subnet _i=0
     _log="$(mktemp)"
+
+    # A CONTAINER GETS ITS SERVICE ALIAS WHEN IT IS CREATED, AND ONLY THEN.
+    #
+    # `up -d` leaves an existing container alone. If that container was created while the network
+    # create was failing — the pool-overlap case this loop exists to walk past — compose made it
+    # unattached and CONNECTED it afterwards, and a plain connect carries no service alias. The
+    # stack then comes up with every container healthy and no DNS at all: `getent hosts postgres`
+    # unresolved, `nc: bad address`, and langfuse crash-looping on "Can't reach database server"
+    # while postgres sits healthy beside it. Measured 2026-09-07 on pipeline-tests-29 — postgres
+    # aliases=[] before, aliases=[...-postgres-1 postgres] after a down/up — and it survived three
+    # re-installs because every one of them was an `up` over containers that already existed.
+    #
+    # So a re-install starts them fresh. Volumes are untouched (no -v), which is what keeps the
+    # langfuse database and its migrations across installs; only the containers are rebuilt.
+    (cd "$ROOT" && container_compose -f "$COMPOSE_FILE" -p "$_OBS_PROJECT" down) >/dev/null 2>&1 || true
+
     for _subnet in $(isolated_subnet_candidates "$ROOT"); do
         # ATTEMPT 0 KEEPS THE WELL-KNOWN PORTS EXACTLY (offset 0) — a normal single-install machine
         # sees no change at all, still :3100, :8092, :8123, :3001. Only a genuine collision (this

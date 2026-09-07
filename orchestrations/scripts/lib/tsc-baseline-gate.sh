@@ -109,7 +109,17 @@ baseline_new_failures() {
         baseline_sha=$(tr -d '[:space:]' < "$baseline_sha_file")
         if [ -n "$baseline_sha" ]; then
             local baseline_cache="$log_dir/baseline-failures-${section}-${baseline_sha:0:12}.txt"
-            if [ ! -f "$baseline_cache" ]; then
+            # PRESENCE IS NOT VALIDITY. This tested `-f`, so a cache file that EXISTS but holds
+            # nothing was read as "no failures at baseline" — the safest-looking value and the
+            # most dangerous, because it charges the story with every pre-existing failure.
+            #
+            # Live 2026-09-07: a run whose baseline could not execute wrote
+            # baseline-failures-test-d1b54620cb87.txt at 0 bytes. The next run found the file,
+            # skipped rebuilding, and failed the same story for the same untouched tests through
+            # the same twelve retries. `-s` rebuilds when the cache is missing OR empty, so a
+            # failed baseline is never mistaken for a clean one; a cache with real content is
+            # still reused, which is what keeps the expensive gate cheap.
+            if [ ! -s "$baseline_cache" ] || [ -z "$(tr -d '[:space:]' < "$baseline_cache" 2>/dev/null)" ]; then
                 local wt_dir
                 wt_dir=$(mktemp -d)
                 _wt_err=$(git -C "$project_root" worktree add --detach "$wt_dir" "$baseline_sha" 2>&1) && _wt_ok=1 || _wt_ok=0

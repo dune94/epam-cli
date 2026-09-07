@@ -86,9 +86,15 @@ function codeline(opts: { manifestIn: 'project-config' | 'codeline-epam' | 'nowh
 }
 
 /** Drives the REAL baseline_new_failures, exactly as run_external_verification does. */
-function baselineDelta(cl: { root: string; repo: string; cfg: string; sha: string }) {
+function baselineDelta(cl: { root: string; repo: string; cfg: string; sha: string },
+                       opts: { seedCache?: string } = {}) {
   const logDir = join(cl.root, 'logs');
   mkdirSync(logDir, { recursive: true });
+  // WHAT THE PREVIOUS RUN LEFT BEHIND. A pipeline is almost never on its first run, and this cache
+  // is keyed by baseline SHA — so the file a broken run wrote is exactly what the next one reads.
+  if (opts.seedCache !== undefined) {
+    writeFileSync(join(logDir, `baseline-failures-test-${cl.sha.slice(0, 12)}.txt`), opts.seedCache);
+  }
   writeFileSync(join(logDir, 'phase-baseline-sha.txt'), cl.sha);
   // The caller hands in the ALREADY-CAPTURED current output — one pre-existing failure and nothing else.
   const cur = join(cl.root, 'current.txt');
@@ -148,5 +154,49 @@ describe('the baseline comparison', () => {
      */
     const r = baselineDelta(codeline({ manifestIn: 'nowhere' }));
     expect(r.rc, 'an unresolvable baseline was treated as a clean one').not.toBe(0);
+  });
+});
+
+describe('a cache left behind by a previous run', () => {
+  /**
+   * THE CASE THE FIRST FIX DID NOT COVER, and a live run proved it within the hour.
+   *
+   * Making the baseline able to run was necessary and not sufficient: the gate rebuilds the cache
+   * only `if [ ! -f "$baseline_cache" ]`. The failed run of 2026-09-07 left
+   * baseline-failures-test-d1b54620cb87.txt at 0 BYTES; the next run found the file PRESENT,
+   * skipped rebuilding, and read it as "nothing was broken at baseline" — charging the story with
+   * the same pre-existing failures again, for the same twelve retries.
+   *
+   * The harness had built a fresh log directory for every case, so `[ ! -f ]` was always true and
+   * the branch the real pipeline takes on its SECOND run was never executed once.
+   *
+   * Presence is not validity. An empty cache is a FAILED baseline, never a clean one.
+   */
+  it('REBUILDS a 0-byte cache instead of trusting it', () => {
+    const cl = codeline({ manifestIn: 'project-config' });
+    const r = baselineDelta(cl, { seedCache: '' });
+    expect(r.cacheBytes,
+      'an empty cache from a previous run was trusted as "nothing was previously broken"')
+      .toBeGreaterThan(0);
+    expect(r.rc,
+      'the story was charged for a pre-existing failure because of a stale empty cache').toBe(0);
+  });
+
+  it('REUSES a cache that has content — the saving is not thrown away', () => {
+    // The cache exists to avoid re-running the most expensive gate in the run. A valid one must
+    // still be honoured, or this trades one defect for a slower pipeline.
+    const cl = codeline({ manifestIn: 'project-config' });
+    // THE CACHE HOLDS PARSED IDENTITIES, not raw output — the gate writes ids.join("\n"), and
+    // with failureIdentity "{1}" over ^\s*FAIL\s+(\S+) the identity is the spec path. Seeding the
+    // raw line instead would test a format the pipeline never writes.
+    const r = baselineDelta(cl, { seedCache: 'src/pre-existing.spec.ts\n' });
+    expect(r.rc, 'a valid cached baseline did not cancel the pre-existing failure').toBe(0);
+    expect(r.cacheBytes, 'a valid cache was discarded').toBeGreaterThan(0);
+  });
+
+  it('a WHITESPACE-ONLY cache is treated as empty, not as content', () => {
+    const cl = codeline({ manifestIn: 'project-config' });
+    const r = baselineDelta(cl, { seedCache: '   \n\n  \n' });
+    expect(r.rc, 'a blank cache passed as a real baseline').toBe(0);
   });
 });

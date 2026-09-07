@@ -95,14 +95,36 @@ _epam_write_verification_manifest() {
       //
       // Per-key precedence keeps the original intent: a hand-tuned command still wins over
       // detection, while keys nobody set are filled in.
-      const merged = { ...d, ...existing };
-      for (const k of Object.keys(d)) {
-        const det = d[k]; const ex = existing[k];
-        if (det && ex && typeof det === "object" && typeof ex === "object"
-            && !Array.isArray(det) && !Array.isArray(ex)) {
-          merged[k] = { ...det, ...ex };
-        }
+      // WHAT THE PROJECT DECLARES SURVIVES THE RESET; WHAT THE CODELINE HOLDS DOES NOT.
+      //
+      // .epam/ is untracked and the brownfield reset runs `git clean -fd`, so this whole file is
+      // destroyed before every run and rebuilt by detection. Anything hand-written here lives
+      // exactly one run — which is how a declared clock pin vanished on 2026-09-07 and AMSD-1919
+      // met the same wall-clock failure the pin exists to remove.
+      //
+      // A project declares its overrides in ITS OWN config dir, which no codeline reset can touch.
+      // Precedence, lowest to highest: detected < project-declared < hand-tuned in the codeline.
+      // Detection still fills in what nobody declared, and an operator editing this file for one
+      // run still wins for that run.
+      let declared = {};
+      const declFile = process.env.EPAM_PROJECT_CONFIG_DIR
+        ? path.join(process.env.EPAM_PROJECT_CONFIG_DIR, "verification.json") : "";
+      if (declFile && fs.existsSync(declFile)) {
+        try { declared = JSON.parse(fs.readFileSync(declFile, "utf8")) || {}; }
+        catch { declared = {}; }   // an unreadable declaration changes nothing, and says nothing
       }
+      const layer = (lo, hi) => {
+        const out = { ...lo, ...hi };
+        for (const k of Object.keys(lo)) {
+          const a = lo[k]; const b = hi[k];
+          if (a && b && typeof a === "object" && typeof b === "object"
+              && !Array.isArray(a) && !Array.isArray(b)) {
+            out[k] = { ...a, ...b };
+          }
+        }
+        return out;
+      };
+      const merged = layer(layer(d, declared), existing);
       fs.mkdirSync(path.join(root, ".epam"), { recursive: true });
       fs.writeFileSync(out, JSON.stringify(merged, null, 2) + "\n");
     ' "$_plugin" "$_root" 2>/dev/null || true

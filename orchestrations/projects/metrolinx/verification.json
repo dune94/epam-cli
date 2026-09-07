@@ -1,0 +1,10 @@
+{
+  "$what": "Verification overrides this PROJECT declares. Merged into each codeline's generated .epam/verification.json by lib/git-ops.sh, under whatever detection finds and over nothing the operator hand-tuned in the codeline for a single run.",
+  "$why": "The codeline's .epam/ is untracked and the brownfield reset runs `git clean -fd`, so anything declared there lives exactly one run. Declared here, it comes back after every reset.",
+  "test": {
+    "$clockWhy": "This suite is wall-clock dependent. src/components/Schedules/utils.ts hides service updates for the first two hours of the day (BUSINESS_HOURS = 2) and jest.config.js pins TZ=UTC, so two tests in schedules.spec.tsx fail between 00:00 and 02:00 UTC and pass the other twenty-two hours. Run 20260906T225844Z started at 00:29 and burned 12 writer retries on a fix that was already correct and byte-identical to the one two green runs produced. Measured 2026-09-07, whole suite: wall clock 3358 passed / 2 FAILED; pinned 3360 passed / 0 failed, 746 of 746 suites.",
+    "clockInstant": "2026-01-15T15:00:00Z",
+    "clockPinnedCommand": "npm run test -- --setupFiles={setupFile}",
+    "$commandWhy": "The engine knows how to freeze a Node clock; it does not know that jest spells the flag --setupFiles. The project supplies the template and the engine substitutes {setupFile}, the same split scopedCommand already uses for {files}."
+  }
+}

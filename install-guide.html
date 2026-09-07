@@ -3,7 +3,7 @@
 <head>
 <meta charset="utf-8">
 <meta name="viewport" content="width=device-width, initial-scale=1">
-<title>amsd-pipeline — Install &amp; Run Guide</title>
+<title>amsd-pipeline — Install Guide</title>
 <style>
 :root{
   --bg:#fbfbfa; --panel:#fff; --ink:#1c1c1a; --muted:#5f5f58; --line:#e2e0da;
@@ -72,8 +72,8 @@ footer{margin-top:64px;padding-top:18px;border-top:1px solid var(--line);color:v
 <div class="wrap">
 
 <header class="top">
-<h1>amsd-pipeline — Install &amp; Run Guide</h1>
-<p class="sub">Install and run the orchestration pipeline.</p>
+<h1>amsd-pipeline — Install Guide</h1>
+<p class="sub">Install the orchestration pipeline and confirm it is ready. Running a ticket is covered by the <a href="execution-guide.html">execution guide</a>.</p>
 </header>
 
 <nav class="toc">
@@ -84,8 +84,8 @@ footer{margin-top:64px;padding-top:18px;border-top:1px solid var(--line);color:v
 <li><a href="#docker">Docker or Podman — no Docker Desktop license needed</a></li>
 <li><a href="#env">The <code>.env</code> files — and every variable in them</a></li>
 <li><a href="#jira">Jira credentials are NOT carried into a new install</a></li>
-<li><a href="#run">Running a ticket — <code>orchestrations/scripts/pipeline</code></a></li>
-<li><a href="#uis">Where to watch it — dashboards, Langfuse, Grafana</a></li>
+<li><a href="#run">Running a ticket — see the execution guide</a></li>
+<li><a href="#uis">Where to watch a run</a></li>
 <li><a href="#dashboard">The launch dashboard &amp; runner</a></li>
 <li><a href="#services">Bouncing services — <code>pipeline-services.sh</code></a></li>
 <li><a href="#health">Checking readiness — <code>pipeline-health.sh</code></a></li>
@@ -407,97 +407,20 @@ chmod 600 ~/amsd-pipeline/orchestrations/jira/metrolinx.env</code></pre>
 <p>Skip it and the run stops at the launcher, because metrolinx's <code>config.env</code> declares
 <code>REQUIRED_KEYS=JIRA_TOKEN</code>.</p>
 
-<h2 id="run">6. Running a ticket — <code>orchestrations/scripts/pipeline</code></h2>
-<p>One command. Everything else is derived: the ticket's prefix names the project (each project's
-<code>config.env</code> declares its own <code>JIRA_PROJECT_KEY</code>), the project names its
-codelines, and the active provider set names the models.</p>
-<pre><code>cd &lt;install&gt;
-./orchestrations/scripts/pipeline --list                     # projects, and the ticket prefix each owns
-./orchestrations/scripts/pipeline --jira AMSD-1919 --dry-run # check everything, start nothing
-./orchestrations/scripts/pipeline --jira AMSD-1919           # run it</code></pre>
+<h2 id="run">6. Running a ticket — see the execution guide</h2>
 
-<div class="note">
-This is a <strong>wrapper, not a second pipeline</strong> — its own header says why: "A second
-implementation of the run is how two things that must agree start to drift." It checks what a run
-needs, says plainly what is missing, and hands off to the tested launcher. Do not write another one.
-</div>
+<p>Running is not covered here. Open the
+<a href="execution-guide.html">execution guide</a>, which covers running a ticket, the review
+pause points, resuming, stopping a run and cleaning up after it, and what a run cost.</p>
 
-<h4>Environment it needs</h4>
-<p>Normally none — the values come from files. Two optional overrides:</p>
-<ul>
-<li><code>EPAM_PROVIDER_SET</code> picks the stack; unset, <code>provider-sets.json</code>'s
-<code>defaultSet</code> wins. The installer's own closing hint spells the switch out:
-<code>EPAM_PROVIDER_SET=&lt;claude|codemie|openrouter|mockserver&gt; ./orchestrations/scripts/pipeline --jira ABC-1234</code></li>
-<li><code>NODE_BIN</code>, if Node 20 is not the <code>node</code> on <code>PATH</code>.</li>
-</ul>
+<p>To confirm the install itself is finished, use
+<a href="#health">&sect;10, <code>pipeline-health.sh</code></a>.</p>
 
-<h4>What it refuses to start on</h4>
-<p>Printed as one <code>✗ this run cannot start:</code> list, before anything is spent:</p>
-<ul>
-<li>no <code>.env</code> at the install root;</li>
-<li>no active provider set, and none declared as the default;</li>
-<li>the project has no overlay <code>config.&lt;set&gt;.env</code> for the active stack;</li>
-<li>the stack's runner is not on <code>PATH</code>;</li>
-<li><code>jq</code> or <code>git</code> missing.</li>
-</ul>
-<p>Docker is <em>reported</em>, never required: "dashboards unavailable (docker not running) — the
-run itself does not need them".</p>
+<h2 id="uis">7. Where to watch a run</h2>
 
-<h4>The env-sourcing chain</h4>
-<p>The wrapper then <code>exec</code>s the tested launcher,
-<code>orchestrate.sh --project &lt;name&gt; --yes</code>, which is what loads the env files — in this
-order, project config deliberately last so a stale global <code>.env</code> can never point a run at
-the wrong Jira:</p>
-<ol>
-<li><code>&lt;install&gt;/.env</code></li>
-<li><code>orchestrations/projects/&lt;name&gt;/config.env</code></li>
-<li>the <code>SECRETS_FILE</code> that config declares — e.g.
-<code>orchestrations/jira/metrolinx.env</code></li>
-<li>the project config again, so it wins over the secrets file</li>
-</ol>
-<p>It then hard-fails on any key in the project's <code>REQUIRED_KEYS</code> — unioned with the
-active set's own required keys, read from <code>provider-sets.json</code> rather than named in any
-script — that is still empty. That is the loud failure you get if <a href="#jira">§5</a> was
-skipped.</p>
-
-<h2 id="uis">7. Where to watch it — dashboards, Langfuse, Grafana</h2>
-
-<p>The installer starts these with the observability stack. The ports below are the defaults; if
-another install already holds one, this install steps every port by +10 and records what it
-actually used in <code>&lt;install&gt;/.pipeline-services-state.env</code>. Read that file to get
-the real URLs for a given install:</p>
-
-<pre><code>grep '^OBS_' &lt;install&gt;/.pipeline-services-state.env</code></pre>
-
-<table>
-<tr><th>What</th><th>Default URL</th><th>Port variable</th><th>What it shows</th></tr>
-<tr><td>Pipeline dashboards</td><td><code>http://localhost:8092</code></td><td><code>OBS_DASHBOARD_PORT</code></td><td>The run itself — see the pages below</td></tr>
-<tr><td>Langfuse</td><td><code>http://localhost:3100</code></td><td><code>OBS_LANGFUSE_PORT</code></td><td>Every model call: prompt, reply, tokens, cost, latency</td></tr>
-<tr><td>Grafana</td><td><code>http://localhost:3001</code></td><td><code>OBS_GRAFANA_PORT</code></td><td>Cost and throughput over time</td></tr>
-<tr><td>Launch dashboard</td><td><code>http://localhost:8099</code></td><td><code>LAUNCH_UI_PORT</code></td><td>Queue and launch runs from a browser</td></tr>
-<tr><td>ClickHouse</td><td><code>http://localhost:8123</code></td><td><code>OBS_CLICKHOUSE_PORT</code></td><td>Langfuse's store — not browsed directly</td></tr>
-</table>
-
-<p>The dashboard pages, all under the dashboard URL:</p>
-
-<table>
-<tr><th>Page</th><th>Use it for</th></tr>
-<tr><td><code>/monitor.html</code></td><td>Live run progress — the one to keep open while a run is going</td></tr>
-<tr><td><code>/agent-activity.html</code></td><td>What each agent did, per story, with its tool calls</td></tr>
-<tr><td><code>/health.html</code></td><td>Self-healing events and whether the run is recovering</td></tr>
-<tr><td><code>/scorecard.html</code></td><td>The end-of-run result</td></tr>
-<tr><td><code>/quality-dashboard.html</code></td><td>Gate outcomes and coverage</td></tr>
-<tr><td><code>/cpa-details.html</code></td><td>Cost and iteration estimates per story</td></tr>
-</table>
-
-<div class="note"><strong>Langfuse credentials.</strong> The keys are the
-<code>LANGFUSE_PUBLIC_KEY</code> and <code>LANGFUSE_SECRET_KEY</code> in the install's
-<code>.env</code>. With <code>--replay on</code> the install refuses to complete unless both are
-set, because a run that is not recorded cannot be replayed.</div>
-
-<div class="warn"><strong>Before the first run</strong> the dashboards serve
-<code>404</code> for <code>/logs/…</code> and <code>/prd.json</code>. That is expected —
-<code>pre-run-reset.sh</code> mounts them when a run starts.</div>
+<p>The dashboards, Langfuse and Grafana — what each one shows and the address of each — are in
+the <a href="execution-guide.html">execution guide</a>. The install-side checks for those services
+being up are <a href="#services">&sect;9</a> and <a href="#health">&sect;10</a>.</p>
 
 <h2 id="dashboard">8. The launch dashboard &amp; runner</h2>
 <p><code>install.sh</code> provisions the launch dashboard (Flutter frontend + Node backend) fully

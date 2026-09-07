@@ -7,7 +7,7 @@ Everything below is derived from the scripts that actually do the work:
 | The installer | `orchestrations-installer/install.sh` |
 | "Can this machine launch a run right now?" | `orchestrations-installer/pipeline-health.sh` |
 | Stop/start the services without re-installing | `orchestrations-installer/pipeline-services.sh` |
-| Run one ticket | `orchestrations/scripts/pipeline` |
+| Run one ticket (documented in the execution guide) | `orchestrations/scripts/pipeline` |
 
 `npx amsd-pipeline` is the same script: `npm-package/amsd-pipeline/bin/amsd-pipeline.js` does nothing
 but `spawnSync('bash', [install.sh, ...argv])`, so every flag documented here works identically
@@ -348,72 +348,10 @@ If you skip this, the install still reports ready, and the run dies at the launc
 
 ---
 
-## 7. Running a ticket — the simplified start script
+## 7. Running a ticket — see the execution guide
 
-**It already exists: `orchestrations/scripts/pipeline`.** Do not write another one; its own header
-says why — "It is a WRAPPER, not a second pipeline ... A second implementation of the run is how two
-things that must agree start to drift."
+Running is not covered here. `execution-guide.html` covers running a ticket, the review pause
+points, resuming, stopping a run and cleaning up after it, where to watch it, and what a run cost.
 
-```bash
-cd <install>
-./orchestrations/scripts/pipeline --list                    # projects and the ticket prefix each owns
-./orchestrations/scripts/pipeline --jira AMSD-1919 --dry-run # check everything, start nothing
-./orchestrations/scripts/pipeline --jira AMSD-1919           # run it
-```
+To confirm the install itself is finished, use `pipeline-health.sh`.
 
-Everything else is derived. The ticket's prefix selects the project (each project's `config.env`
-declares its own `JIRA_PROJECT_KEY`), the project names its codelines, and the active provider set
-names the models.
-
-**Environment it needs:** normally none — the values come from files.
-
-- `EPAM_PROVIDER_SET` (optional) picks the stack; unset, `provider-sets.json`'s `defaultSet` wins.
-  `install.sh`'s closing hint spells the switch out:
-  `EPAM_PROVIDER_SET=<claude|codemie|openrouter|mockserver> ./orchestrations/scripts/pipeline --jira ABC-1234`
-- `NODE_BIN` (optional) if Node 20 is not the `node` on `PATH`.
-
-**What it refuses to start on**, printed as a single "✗ this run cannot start:" list:
-
-- no `.env` at the repo root;
-- no active provider set and no declared default;
-- the project has no overlay `config.<set>.env` for the active stack;
-- the stack's runner is not on `PATH`;
-- `jq` or `git` missing.
-
-Docker is reported, never required — "dashboards unavailable (docker not running) — the run itself
-does not need them".
-
-It then `exec`s the tested launcher: `orchestrate.sh --project <name> --yes`, which is what loads
-the env files, in this order (project config wins, deliberately, so a stale global `.env` can never
-point a run at the wrong Jira):
-
-1. `<install>/.env`
-2. `orchestrations/projects/<name>/config.env`
-3. the `SECRETS_FILE` that config declares — e.g. `orchestrations/jira/metrolinx.env`
-4. the project config again, so it wins over the secrets file
-
-`orchestrate.sh` then hard-fails on any key listed in the project's `REQUIRED_KEYS` (plus the active
-set's own required keys) that is still empty. That is the loud failure you get if §5 was skipped.
-
-### Stopping and restarting the services
-
-Not the same as installing, and **not** `--uninstall` (which deletes volumes):
-
-```bash
-bash orchestrations-installer/pipeline-services.sh --stop  [--dest PATH]
-bash orchestrations-installer/pipeline-services.sh --start [--dest PATH] [--mock]
-```
-
-`--start` reuses the exact subnet/ports/project names recorded in `.pipeline-services-state.env`, so
-a stop/start never re-rolls a different identity. `--mock` additionally brings up the MockServer
-rehearsal stack; `--stop` always takes it down.
-
-### Checking a machine at any time
-
-```bash
-bash orchestrations-installer/pipeline-health.sh --dest <install>   # can I launch a run right now?
-./orchestrations-installer/install.sh --check                       # did the install itself complete?
-```
-
-They ask different questions on purpose — `--check` is about files and build state, health is about
-runtimes, credentials, daemons and probed service endpoints.

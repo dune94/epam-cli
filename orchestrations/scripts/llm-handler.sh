@@ -272,11 +272,54 @@ run_provider_once() {
       if [ -n "${ORCH_JSON_RESULT:-}" ]; then
         local _cm_json
         _cm_json=$(mktemp)
+        # STDERR IS KEPT — the same fix the plain claude arm got on 2026-08-26 (916ea6f2, "the hub
+        # was hiding the reason") and this arm never received. Without it an empty answer explains
+        # nothing: live 2026-09-07, codeline-discovery reported "the answer was EMPTY (a transport
+        # or budget failure, not a format one)" and aborted the run, when the real fault was a
+        # one-line parse error visible right here.
+        local _cm_err; _cm_err="$(mktemp "${TMPDIR:-/tmp}/codemie-err-XXXXXX")"
         codemie-claude --print --output-format json --dangerously-skip-permissions "${model_args[@]}" ${runner_args[@]+"${runner_args[@]}"} \
-            < "$PROMPT_FILE" > "$_cm_json" 2>/dev/null
-        jq -r '.result // empty' "$_cm_json" 2>/dev/null
-        cp "$_cm_json" "$ORCH_JSON_RESULT" 2>/dev/null || true
-        rm -f "$_cm_json"
+            < "$PROMPT_FILE" > "$_cm_json" 2>"$_cm_err"
+
+        # THE WRAPPER DOES NOT ANSWER IN BARE JSON. This arm's own comment used to claim it "runs
+        # Claude Code underneath and answers in the same JSON shape" — it does not. It prints a
+        # human banner first:
+        #
+        #     CLI Version  │ 0.10.1
+        #     Profile      │ default
+        #     Session      │ 66499ae7-…
+        #     {"type":"result", ... }
+        #
+        # so `jq -r '.result'` died on "Invalid numeric literal at line 2" and produced EMPTY.
+        # The payload starts at the first line that opens an object; everything before it is the
+        # banner. Written back to ORCH_JSON_RESULT too, or the cost ledger stores the banner and
+        # every codemie call reads as an unknown cost.
+        # The payload is ONE line — the wrapper prints the banner before it and a sign-off after
+        # ("Shutting down...", a motivational line, "Powered by AI/Run CodeMie CLI"). Taking from
+        # the first '{' to END OF FILE swallows that tail and the result is still not JSON, which
+        # is how the first attempt at this fix stayed broken. Take the first line that opens an
+        # object AND parses; fall back to the whole-range trim only if that fails, so a future
+        # pretty-printed payload still works.
+        local _cm_payload; _cm_payload="$(mktemp "${TMPDIR:-/tmp}/codemie-json-XXXXXX")"
+        grep -m1 '^[[:space:]]*{' "$_cm_json" > "$_cm_payload" 2>/dev/null || true
+        if ! jq -e . "$_cm_payload" >/dev/null 2>&1; then
+            sed -n '/^[[:space:]]*{/,$p' "$_cm_json" 2>/dev/null \
+                | sed -n '1,/^[[:space:]]*}[[:space:]]*$/p' > "$_cm_payload" 2>/dev/null || true
+        fi
+        if ! jq -e . "$_cm_payload" >/dev/null 2>&1; then
+            # Keep whatever came back, so the failure is judgeable rather than silently empty.
+            cp "$_cm_json" "$_cm_payload" 2>/dev/null || true
+        fi
+
+        if ! jq -e . "$_cm_payload" >/dev/null 2>&1; then
+            echo "[llm-handler] codemie-claude returned no parseable JSON: $(head -c 200 "$_cm_payload" | tr '\n' ' ')${_cm_err:+ | stderr: $(head -c 200 "$_cm_err")}" >&2
+        elif [ ! -s "$_cm_json" ] && [ -s "$_cm_err" ]; then
+            echo "[llm-handler] codemie-claude produced no output: $(head -c 400 "$_cm_err")" >&2
+        fi
+
+        jq -r '.result // empty' "$_cm_payload" 2>/dev/null
+        cp "$_cm_payload" "$ORCH_JSON_RESULT" 2>/dev/null || true
+        rm -f "$_cm_json" "$_cm_err" "$_cm_payload"
       else
         codemie-claude --print --output-format text --dangerously-skip-permissions "${model_args[@]}" ${runner_args[@]+"${runner_args[@]}"} < "$PROMPT_FILE"
       fi

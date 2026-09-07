@@ -5791,6 +5791,16 @@ _project_repo_has_tests() {
 }
 
 # The declared suite command, or empty when the project declared none.
+# testCommandFor RETURNS THE DECLARED COMMAND, pinned to the clock the project declares when it
+# declares one. A project that declares no clock gets exactly what readTestManifest returned
+# before, byte-identical — which is every project passing today.
+#
+# WHY PIN AT ALL: a suite must answer the same way whenever it runs. AMSD-1919 burned 12 writer
+# retries on 2026-09-07 because the client suite hides service updates for the first two hours of
+# the day and its jest config pins TZ=UTC, so two tests fail between 00:00 and 02:00 UTC. The fix
+# was already correct; the run simply started at 00:29.
+#
+# The fallback keeps an older plugin working: no testCommandFor, no pin, same command as before.
 _project_test_command() {
     local _root="${1:-$PROJECT_ROOT}"
     local _plugin="${AUTOMATION_DIR}/plugins/verification-plugin.js"
@@ -5798,8 +5808,10 @@ _project_test_command() {
     [ -f "$_plugin" ] || return 0
     "$_node" -e '
       const p = require(process.argv[1]);
-      const m = p.readTestManifest(process.argv[2]);
-      if (m && m.ok) console.log(m.command);
+      const cmd = typeof p.testCommandFor === "function"
+        ? p.testCommandFor(process.argv[2])
+        : ((m) => (m && m.ok ? m.command : ""))(p.readTestManifest(process.argv[2]));
+      if (cmd) console.log(cmd);
     ' "$_plugin" "$_root" 2>/dev/null
 }
 

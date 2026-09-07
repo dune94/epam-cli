@@ -47,6 +47,39 @@ _run_project_verification() {
 # With an output_file, the caller has ALREADY run the check and captured it — every live caller
 # has, and re-running would double the cost of the most expensive gate in the run. Without one,
 # the check is run here.
+# _bg_vendor_dirs <codeline> — the directories a baseline checkout must borrow, or nothing.
+#
+# SELF-CONTAINED ON PURPOSE, exactly like lib/eslint-baseline-gate.sh says of itself. This used to
+# call _get_vendor_dirs, which is defined in claude.sh — so the gate only worked inside that one
+# process, and it read the manifest from ONE place: <codeline>/.epam/dependency-check.json.
+#
+# metrolinx does not have that file. Its codeline .epam/ holds codeline-facts.json, settings.json
+# and verification.json; the manifest declaring vendorDirs lives in EPAM_PROJECT_CONFIG_DIR. So the
+# lookup returned nothing, no node_modules was linked into the baseline worktree, the baseline
+# suite could not start, and the cache was written 0 BYTES — which reads as "nothing was previously
+# broken" and charges every pre-existing failure to the story.
+#
+# Live 2026-09-07, run 20260906T225844Z: two clock-dependent tests in the client suite (service
+# updates are hidden for the first two hours of the day, and jest pins TZ=UTC) failed the story 12
+# times. They fail at the baseline too — that is precisely what this comparison exists to cancel,
+# and it would have, had the baseline been able to run.
+#
+# The resolution order is the one claude.sh already uses for this same manifest at two other call
+# sites: the project's own config dir first, the codeline's .epam as fallback. Nothing about which
+# directories are vendor directories is decided here — that stays the project's declaration.
+_bg_vendor_dirs() {
+    local _root="${1:-}" _cfg=""
+    [ -n "$_root" ] || return 0
+    command -v jq >/dev/null 2>&1 || return 0
+    _cfg="${EPAM_PROJECT_CONFIG_DIR:+$EPAM_PROJECT_CONFIG_DIR/dependency-check.json}"
+    [ -n "$_cfg" ] && [ -f "$_cfg" ] || _cfg="$_root/.epam/dependency-check.json"
+    [ -f "$_cfg" ] || return 0
+    jq -r '.vendorDirs[]? // empty' "$_cfg" 2>/dev/null | while IFS= read -r _d; do
+        [ -z "$_d" ] && continue
+        [ -d "$_root/$_d" ] && printf '%s\n' "$_root/$_d"
+    done
+}
+
 baseline_new_failures() {
     local project_root="$1"
     local node_cmd="$2"
@@ -112,7 +145,7 @@ baseline_new_failures() {
                     while IFS= read -r _vd; do
                         [ -n "$_vd" ] && [ -e "$_vd" ] \
                             && ln -s "$_vd" "$wt_dir/$(basename "$_vd")" 2>/dev/null || true
-                    done < <(_get_vendor_dirs "$project_root" 2>/dev/null)
+                    done < <(_bg_vendor_dirs "$project_root" 2>/dev/null)
 
                     # THE BASELINE CHECK IS SUPPOSED TO FAIL. That is the whole premise: the
                     # baseline carries pre-existing failures, and capturing them is the point.

@@ -81,6 +81,85 @@ def collect(args):
     # announced "no run directory" for a run sitting on disk the whole time. The runs are a
     # contiguous series under the project — find the parent among them, wherever this report is
     # being written to.
+    def _agent_facts(paths_cost, paths_activity):
+        """What each agent was actually run with, from the run's own records.
+
+        The boxes carry this because a stage name alone does not say how the work was done: the
+        model that answered, the effort it was asked for, whether the ladder climbed, whether
+        self-heal fired. Every value is READ, never assumed — an agent with no record shows
+        nothing rather than a plausible default.
+        """
+        facts = {}
+        def _f(name):
+            return facts.setdefault(name, {'model': '', 'effort': '', 'tokens_out': 0,
+                                           'cost': 0.0, 'calls': 0, 'retries': 0,
+                                           'rung': '', 'selfheal': False, 'mode': ''})
+        for pc in paths_cost:
+            if not os.path.isfile(pc):
+                continue
+            try:
+                fh = open(pc, encoding='utf-8', errors='replace')
+            except OSError:
+                continue
+            with fh:
+                for line in fh:
+                    line = line.strip()
+                    if not line:
+                        continue
+                    try:
+                        e = json.loads(line)
+                    except ValueError:
+                        continue
+                    n = (e.get('agent_name') or '').strip()
+                    if not n:
+                        continue
+                    f = _f(n)
+                    f['model'] = e.get('resolvedModel') or f['model']
+                    f['effort'] = (e.get('effort') or '').strip() or f['effort']
+                    f['mode'] = (e.get('invokeMode') or '').strip() or f['mode']
+                    try:
+                        f['tokens_out'] += int(e.get('task_tokens_out') or 0)
+                        f['cost'] += float(e.get('task_cost_usd') or 0)
+                    except (TypeError, ValueError):
+                        pass
+                    f['calls'] += 1
+        for ap in paths_activity:
+            if not os.path.isfile(ap):
+                continue
+            try:
+                fh = open(ap, encoding='utf-8', errors='replace')
+            except OSError:
+                continue
+            with fh:
+                for line in fh:
+                    line = line.strip()
+                    if not line:
+                        continue
+                    try:
+                        e = json.loads(line)
+                    except ValueError:
+                        continue
+                    n = (e.get('agent') or '').strip()
+                    if not n:
+                        continue
+                    f = _f(n)
+                    t = e.get('type') or ''
+                    if e.get('model'):
+                        f['model'] = f['model'] or e['model']
+                    msg = ((e.get('detail') or {}).get('message') or '')
+                    if t == 'retry':
+                        f['retries'] += 1
+                    elif t == 'ladder_rung':
+                        m = re.search(r'Rung(\d+)', msg)
+                        if m:
+                            f['rung'] = 'rung ' + m.group(1)
+                        m2 = re.search(r'effort=(\w+)', msg)
+                        if m2 and not f['effort']:
+                            f['effort'] = m2.group(1)
+                    elif t in ('self_heal_start', 'self_heal_result'):
+                        f['selfheal'] = True
+        return facts
+
     def _archive_dir_for(run_id):
         """The pre-run archive holding that run's logs.
 
@@ -201,6 +280,15 @@ def collect(args):
         d['ancestors'].append({'run_id': _pid, 'timeline': _ptimeline})
         _pid = _pnext
     d['ancestors'].reverse()   # oldest first — the order the work actually happened in
+
+    _cost_paths = [os.path.join(args.logs_dir or '', 'phase-cost.jsonl')]
+    _act_paths = [os.path.join(args.logs_dir or '', 'agent-activity.jsonl')]
+    for _a in d['ancestors']:
+        _ad = _archive_dir_for(_a.get('run_id') or '')
+        if _ad:
+            _cost_paths.append(os.path.join(_ad, 'phase-cost.jsonl'))
+            _act_paths.append(os.path.join(_ad, 'agent-activity.jsonl'))
+    d['agent_facts'] = _agent_facts(_cost_paths, _act_paths)
     # Codeline selection evidence — how the repo was chosen, not just which.
     d['title'] = first(r'Title:\s*([^\n]+)', log) or first(r'\[Mozio\][^\n]{10,140}', log) or ''
     d['codeline_path'] = first(r"\[orch\] Codeline '\S+' → (\S+)", log)
@@ -1630,6 +1718,18 @@ FLOW_CSS = """
 .fx-skip { stroke: #a8b0b9; stroke-dasharray: 5 4; }
 .fx-lbl { fill: #13161a; font: 650 12.5px ui-sans-serif, -apple-system, "Segoe UI", Roboto, sans-serif; }
 .fx-sub { fill: #5c646d; font: 400 10px ui-sans-serif, -apple-system, "Segoe UI", Roboto, sans-serif; }
+
+.tiers { border: 1px solid #c9d0d8; background: #fff; padding: 12px 14px; margin: 16px 0;
+         display: flex; flex-wrap: wrap; gap: 6px 24px; align-items: baseline; }
+.tiers h2 { margin: 0; font-size: 11px; font-weight: 650; letter-spacing: 0.09em;
+            text-transform: uppercase; color: #5c646d; flex: 0 0 100%; }
+.tier { font-size: 12px; color: #13161a; }
+.tier span { color: #5c646d; }
+.flowlegend { border-top: 1px solid #c9d0d8; margin-top: 20px; padding-top: 16px; display: grid;
+              grid-template-columns: repeat(auto-fit, minmax(230px, 1fr)); gap: 14px 26px; }
+.flowlegend div { font-size: 12.5px; line-height: 1.55; color: #5c646d; }
+.flowlegend b { color: #13161a; font-weight: 600; display: block; font-size: 12px; }
+.fx-set { fill: #6b737c; font: 400 9.5px ui-monospace, SFMono-Regular, Menlo, Consolas, monospace; }
 .fx-cap { fill: #a8650f; font: 650 10.5px ui-sans-serif, -apple-system, "Segoe UI", Roboto, sans-serif; letter-spacing: 0.06em; }
 .fx-t { fill: #6b737c; font: 400 9.5px ui-monospace, SFMono-Regular, Menlo, monospace; }
 .fx-edge { stroke: #39414a; stroke-width: 1.4; fill: none; }
@@ -1647,6 +1747,24 @@ _FLOW_STATUS = {
     'skip': ('fx-skip', 'did not apply'),
     'info': ('', ''),
 }
+
+
+def _models_strip(d):
+    """The models this run actually used, counted from its own records.
+
+    The operator's hand-drawn diagram carries a declared tier table. Declaring it here would bake
+    one project's ladder into the engine; counting what answered is the same information, true of
+    THIS run, and needs no config to stay correct.
+    """
+    facts = d.get('agent_facts') or {}
+    tally = collections.Counter(f['model'] for f in facts.values() if f.get('model'))
+    if not tally:
+        return ''
+    items = ''.join(
+        '<div class="tier"><code>%s</code> <span>&middot; %d agent%s</span></div>'
+        % (esc(m), n, '' if n == 1 else 's')
+        for m, n in tally.most_common())
+    return ('<div class="tiers"><h2>Models this run used</h2>' + items + '</div>')
 
 
 def flow_html(d):
@@ -1677,8 +1795,8 @@ def flow_html(d):
 
     # Geometry. One box per stage, stacked; the SVG grows with the run rather than the run being
     # trimmed to fit a fixed canvas.
-    W, BOX_H, GAP, TOP = 900, 52, 26, 30
-    x, bw = 200, 500
+    W, BOX_H, GAP, TOP = 900, 62, 24, 30
+    x, bw = 170, 560
     height = TOP + len(steps) * (BOX_H + GAP) + 24 * max(0, len(chain) - 1)
 
     parts = ['<div class="flowwrap"><svg viewBox="0 0 %d %d" role="img" aria-label="%s">' % (
@@ -1695,6 +1813,40 @@ def flow_html(d):
             _banner_at[_n] = seg
             _n += len(seg['steps'])
 
+    facts = d.get('agent_facts') or {}
+
+    def _settings_for(head):
+        """The mono line under a box: how this stage was actually run.
+
+        Matched on the agent name appearing in the stage heading, longest first so
+        'qa-gate:fuzz-weaver' wins over a shorter substring. Only what was RECORDED is shown —
+        a deterministic step with no model call correctly shows nothing.
+        """
+        low = head.lower()
+        best = ''
+        for name in facts:
+            if name and name.lower() in low and len(name) > len(best):
+                best = name
+        if not best:
+            return ''
+        f = facts[best]
+        bits = []
+        if f.get('model'):
+            bits.append(f['model'])
+        if f.get('effort'):
+            bits.append(f['effort'])
+        if f.get('tokens_out'):
+            bits.append('%s tok out' % format(f['tokens_out'], ','))
+        if f.get('cost'):
+            bits.append('$%.4f' % f['cost'])
+        if f.get('rung'):
+            bits.append(f['rung'])
+        if f.get('retries'):
+            bits.append('%d retr%s' % (f['retries'], 'y' if f['retries'] == 1 else 'ies'))
+        if f.get('selfheal'):
+            bits.append('self-heal')
+        return ' \u00b7 '.join(bits)
+
     for i, e in enumerate(steps):
         seg = _banner_at.get(i)
         if seg is not None and len(chain) > 1:
@@ -1709,10 +1861,14 @@ def flow_html(d):
         parts.append('<rect class="fx-box %s" x="%d" y="%d" width="%d" height="%d" rx="2"/>'
                      % (cls, x, y, bw, BOX_H))
         parts.append('<text class="fx-lbl" x="%d" y="%d" text-anchor="middle">%s</text>'
-                     % (x + bw // 2, y + (24 if sub else 31), esc(head[:78])))
+                     % (x + bw // 2, y + 22, esc(head[:74])))
         if sub:
             parts.append('<text class="fx-sub" x="%d" y="%d" text-anchor="middle">%s</text>'
-                         % (x + bw // 2, y + 40, esc(sub)))
+                         % (x + bw // 2, y + 37, esc(sub)))
+        _set = _settings_for(head)
+        if _set:
+            parts.append('<text class="fx-set" x="%d" y="%d" text-anchor="middle">%s</text>'
+                         % (x + bw // 2, y + (52 if sub else 46), esc(_set)))
         if e.get('t'):
             parts.append('<text class="fx-t" x="%d" y="%d" text-anchor="end">%s</text>'
                          % (x - 12, y + 30, esc(e['t'])))
@@ -1759,12 +1915,24 @@ def flow_html(d):
                        cards)
             + '<style>' + FLOW_CSS + '</style>'
             + resume_note
+            + _models_strip(d)
             + '<p class="intro">Every box below is a stage this run actually reached. The order is '
               'the run\'s own; a stage that did not apply is drawn dashed rather than omitted, so '
               'the page cannot make a partial run look like a full one.</p>'
             + '\n'.join(parts)
-            + '<footer>Drawn from this run&rsquo;s timeline. No stage list is built into the '
-              'generator: another project&rsquo;s run draws that project&rsquo;s stages.</footer></main>')
+            + '<div class="flowlegend">'
+              '<div><b>The line under a stage</b> How that stage was actually run: '
+              '<code>model &middot; effort &middot; output tokens &middot; cost &middot; ladder rung &middot; '
+              'retries &middot; self-heal</code>, showing only what was recorded. A stage with no '
+              'line made no model call.</div>'
+              '<div><b>Dashed box</b> The stage did not apply — drawn rather than omitted, so a '
+              'partial run cannot read as a full one.</div>'
+              '<div><b>Amber caption</b> Which run executed the stages beneath it. A resume is one '
+              'continuous run across several run directories.</div>'
+              '</div>'
+            + '<footer>Drawn from this run&rsquo;s timeline, its phase-cost records and its '
+              'activity stream. No stage list, model or project name is built into the generator: '
+              'another project&rsquo;s run draws that project&rsquo;s stages.</footer></main>')
 
 
 def narrative_html(d):

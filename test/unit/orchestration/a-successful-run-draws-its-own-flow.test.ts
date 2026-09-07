@@ -64,6 +64,49 @@ describe('a run emits its own execution flow', () => {
     expect(h, 'a stage that did not apply is drawn as though it ran').toMatch(/did not apply|skip/i);
   });
 
+  it('each stage carries HOW it was run — model, effort, cost — read, never assumed', () => {
+    /**
+     * A stage name alone does not say how the work was done. The operator's own diagram carries a
+     * settings line under every agent box, and the run records all of it: resolvedModel and
+     * effort and cost in phase-cost.jsonl, ladder rungs and retries and self-heal in the activity
+     * stream. A box with no record shows NOTHING rather than a plausible default.
+     */
+    const logs = tmp('logs-');
+    writeFileSync(join(logs, 'phase-cost.jsonl'), JSON.stringify({
+      agent_name: 'checkout-form-engineer', resolvedModel: 'claude-sonnet-5',
+      effort: 'high', task_tokens_out: 10726, task_cost_usd: 0.4687,
+    }) + '\n');
+    writeFileSync(join(logs, 'agent-activity.jsonl'), JSON.stringify({
+      agent: 'checkout-form-engineer', type: 'retry',
+      detail: { message: 'Retry R1 Rung0: model=claude-sonnet-5 (self-heal active)' },
+    }) + '\n');
+    const out = tmp('out-');
+    const logFile = join(tmp('log-'), 'run.log');
+    writeFileSync(logFile, [
+      "Codeline 'gotransit' → /tmp/cl/x",
+      '▶ Step 8: checkout-form-engineer',
+      '✓ Step 8: checkout-form-engineer — passed',
+      '⊘ Step 23: Browser E2E — did not apply',
+      '✓ Pipeline complete',
+    ].join('\n'));
+    execFileSync('python3', [REPORT, '--launch-log', logFile, '--logs-dir', logs, '--out', out],
+      { encoding: 'utf8', timeout: 120_000, stdio: 'pipe' });
+    const h = readFileSync(join(out, 'flow.html'), 'utf8');
+
+    expect(h, 'the model that answered is not on the stage').toContain('claude-sonnet-5');
+    expect(h, 'the effort asked for is not shown').toContain('high');
+    expect(h, 'output tokens are not shown').toContain('10,726');
+    expect(h, 'cost is not shown').toContain('$0.4687');
+    expect(h, 'a retry is not shown').toMatch(/1 retry/);
+    expect(h, 'self-heal firing is not shown').toContain('self-heal');
+    expect(h, 'the models this run used are not summarised').toMatch(/Models this run used/i);
+
+    // A stage with no record must not be decorated with someone else's settings.
+    const e2e = h.indexOf('Browser E2E');
+    expect(h.slice(e2e, e2e + 400), 'a deterministic stage was given invented settings')
+      .not.toContain('claude-sonnet-5');
+  });
+
   it('NO PROJECT DETAILS: a different project gets a different drawing', () => {
     // The engine is generic. Same code, another project's log — nothing from the first may leak.
     const h = flowFor([

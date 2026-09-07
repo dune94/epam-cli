@@ -75,6 +75,7 @@ container_compose() {
     if [ "$_rt" = "podman" ]; then
         : "${PODMAN_COMPOSE_PROVIDER:=podman-compose}"
         export PODMAN_COMPOSE_PROVIDER
+        _podman_runtime_dir
     fi
 
     "$_rt" compose "$@"
@@ -107,5 +108,32 @@ ensure_bind_mount_ownership() {
             echo "[container-runtime] could not remap $_d into the user namespace — a rootless container may not be able to write it" >&2
         }
     done
+    return 0
+}
+
+# _podman_runtime_dir — give podman a runtime directory that actually has systemd in it.
+#
+# Podman starts aardvark-dns (container DNS) and healthchecks as TRANSIENT SYSTEMD UNITS, found
+# through $XDG_RUNTIME_DIR. A tool that exports its own value breaks both: `fnm` (a Node version
+# manager) sets XDG_RUNTIME_DIR=/tmp/fnm-runtime, which has no systemd/, and podman says
+#
+#   unable to get systemd connection to add healthchecks: lstat /tmp/fnm-runtime/systemd:
+#   no such file or directory
+#
+# once, at debug level, then carries on WITH NO DNS SERVER. Every name lookup between containers
+# then fails, which live looked like three unrelated bugs: nginx "host not found in upstream
+# launch-api", langfuse "Can't reach database server at postgres:5432", and grafana failing to
+# resolve grafana.com to fetch a plugin.
+#
+# Only replaces a value that cannot work, only with one that does, and never invents a path.
+# EPAM_RUNTIME_DIR_PROBE exists so this is testable without a real login session.
+_podman_runtime_dir() {
+    [ -d "${XDG_RUNTIME_DIR:-}/systemd" ] && return 0
+
+    local _real="${EPAM_RUNTIME_DIR_PROBE:-/run/user/$(id -u 2>/dev/null)}"
+    [ -d "$_real/systemd" ] || return 0
+
+    XDG_RUNTIME_DIR="$_real"
+    export XDG_RUNTIME_DIR
     return 0
 }

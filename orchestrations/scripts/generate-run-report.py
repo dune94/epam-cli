@@ -60,6 +60,48 @@ def collect(args):
     d = {'launch_log': args.launch_log, 'logs_dir': args.logs_dir}
 
     d['timeline'] = build_timeline(read(args.launch_log))
+
+    # RESUME ANCESTRY. A resume is ONE piece of work spread across several run directories: the
+    # stages upstream of the resume point ran in the parent and are deliberately not repeated here.
+    # Reporting only this run's own segment is truthful and still misleading — live, a resumed run
+    # showed 14 of 29 stages "did not apply" and read as a run that had barely executed, while the
+    # half that did that work sat in a sibling directory the page never named.
+    d['resumed_from'] = first(r"resumed run '([^']+)'", log) or ''
+    d['resumed_at_stage'] = first(r'resume: EPAM_RESUMED_FROM_STAGE=(\S+)', log) or ''
+    # The flags a resume carried are part of how the run happened. One of them (
+    # SKIP_REGRESSION_GUARD=true, against a project declaring false) stood down two gates on a run
+    # recorded as passed, and said so only at line 79 of a 2.5MB log.
+    d['resume_flags'] = re.findall(r'resume:\s*([A-Z_][A-Z0-9_]*=\S+)', log)
+    d['ancestors'] = []
+    d['ancestors_missing'] = []
+    _seen = set()
+    _pid = d['resumed_from']
+    _runs_root = os.path.dirname(os.path.abspath(args.out)) if args.out else ''
+    while _pid and _pid not in _seen and _runs_root:
+        _seen.add(_pid)
+        _pdir = os.path.join(_runs_root, _pid)
+        _pfacts = os.path.join(_pdir, 'run-facts.json')
+        _plog = os.path.join(_pdir, 'run.log')
+        _ptimeline, _pnext = None, ''
+        if os.path.isfile(_pfacts):
+            try:
+                _pj = json.load(open(_pfacts, encoding='utf-8'))
+                _ptimeline = _pj.get('timeline') or []
+                _pnext = _pj.get('resumed_from') or ''
+            except (OSError, ValueError):
+                _ptimeline = None
+        elif os.path.isfile(_plog):
+            _plogtext = read(_plog)
+            _ptimeline = build_timeline(_plogtext)
+            _pnext = first(r"resumed run '([^']+)'", strip_ansi(_plogtext)) or ''
+        if _ptimeline is None:
+            # SAID, not silently dropped: an absent parent leaves exactly the partial flow that
+            # caused the confusion, so the page has to name what it could not read.
+            d['ancestors_missing'].append(_pid)
+            break
+        d['ancestors'].append({'run_id': _pid, 'timeline': _ptimeline})
+        _pid = _pnext
+    d['ancestors'].reverse()   # oldest first — the order the work actually happened in
     # Codeline selection evidence — how the repo was chosen, not just which.
     d['title'] = first(r'Title:\s*([^\n]+)', log) or first(r'\[Mozio\][^\n]{10,140}', log) or ''
     d['codeline_path'] = first(r"\[orch\] Codeline '\S+' → (\S+)", log)
@@ -1489,6 +1531,7 @@ FLOW_CSS = """
 .fx-skip { stroke: #a8b0b9; stroke-dasharray: 5 4; }
 .fx-lbl { fill: #13161a; font: 650 12.5px ui-sans-serif, -apple-system, "Segoe UI", Roboto, sans-serif; }
 .fx-sub { fill: #5c646d; font: 400 10px ui-sans-serif, -apple-system, "Segoe UI", Roboto, sans-serif; }
+.fx-cap { fill: #a8650f; font: 650 10.5px ui-sans-serif, -apple-system, "Segoe UI", Roboto, sans-serif; letter-spacing: 0.06em; }
 .fx-t { fill: #6b737c; font: 400 9.5px ui-monospace, SFMono-Regular, Menlo, monospace; }
 .fx-edge { stroke: #39414a; stroke-width: 1.4; fill: none; }
 .fx-arrow { fill: #39414a; }
@@ -1514,8 +1557,16 @@ def flow_html(d):
     the codeline all come from this run\'s timeline, so the same code draws whatever project ran.
     A stage list hardcoded here would be a hand drawing again, just checked into the engine.
     """
-    steps = [e for e in d.get('timeline') or []
-             if (e.get('kind') in ('ingest', 'step', 'terminal')) and (e.get('head') or '').strip()]
+    def _steps(tl):
+        return [e for e in tl or []
+                if (e.get('kind') in ('ingest', 'step', 'terminal')) and (e.get('head') or '').strip()]
+
+    # The chain, oldest run first: a resume continues work the parent started, so the parent's
+    # stages come first and are labelled with the run that actually executed them.
+    chain = [{'run_id': a.get('run_id') or '?', 'steps': _steps(a.get('timeline')), 'own': False}
+             for a in (d.get('ancestors') or [])]
+    chain.append({'run_id': '', 'steps': _steps(d.get('timeline')), 'own': True})
+    steps = [e for seg in chain for e in seg['steps']]
 
     if not steps:
         body = ('<p class="intro">' + MISSING + ' — this run recorded no stages, so there is no '
@@ -1529,7 +1580,7 @@ def flow_html(d):
     # trimmed to fit a fixed canvas.
     W, BOX_H, GAP, TOP = 900, 52, 26, 30
     x, bw = 200, 500
-    height = TOP + len(steps) * (BOX_H + GAP)
+    height = TOP + len(steps) * (BOX_H + GAP) + 24 * max(0, len(chain) - 1)
 
     parts = ['<div class="flowwrap"><svg viewBox="0 0 %d %d" role="img" aria-label="%s">' % (
         W, height, esc('Execution flow: %d stages, in the order this run ran them' % len(steps)))]
@@ -1538,7 +1589,19 @@ def flow_html(d):
                  '<path d="M0 0 L10 5 L0 10 z" class="fx-arrow"/></marker></defs>')
 
     y = TOP
+    _banner_at = {}
+    _n = 0
+    for seg in chain:
+        if seg['steps']:
+            _banner_at[_n] = seg
+            _n += len(seg['steps'])
+
     for i, e in enumerate(steps):
+        seg = _banner_at.get(i)
+        if seg is not None and len(chain) > 1:
+            label = ('this run' if seg['own']
+                     else 'run %s — resumed from' % seg['run_id'])
+            parts.append('<text class="fx-cap" x="%d" y="%d">%s</text>' % (x, y - 8, esc(label)))
         cls, word = _FLOW_STATUS.get((e.get('status') or '').lower(), ('', ''))
         head = (e.get('head') or '').strip()
         # The outcome is already spelled out in most headings ("— passed", "— did not apply");

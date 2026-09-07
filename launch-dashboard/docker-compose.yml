@@ -35,6 +35,10 @@ services:
       # This is where the picker's OWN options come from, read once at startup (provider-sets.js);
       # a mount, not a value, so a set added upstream needs no rebuild here.
       PROVIDER_SETS_FILE: /orchestrations-config/provider-sets.json
+    # THE UI'S PORT IS PUBLISHED HERE. launch-ui shares this container's network namespace, so
+    # this is the only place the dashboard's port can be exposed from.
+    ports:
+      - "${LAUNCH_UI_PORT:-8099}:80"
     volumes:
       - ./data:/data          # runs.db — history survives a restart
       - ./spool:/spool        # the only channel to the host runner
@@ -54,8 +58,13 @@ services:
         APP_TITLE: ${LAUNCH_TITLE:-}
     restart: unless-stopped
     depends_on: [launch-api]
-    ports:
-      - "${LAUNCH_UI_PORT:-8099}:80"
+    # ONE NETWORK NAMESPACE, SO THE PROXY NEEDS NO DNS. nginx reached the API by service name,
+    # which requires the engine to run a DNS server: docker does, rootless podman on some hosts
+    # never starts aardvark-dns, and the UI then crash-looped on "host not found in upstream"
+    # (124 times in one install) while the API was healthy the whole time. Sharing the namespace
+    # makes the API this container's own loopback. The port is published by launch-api below —
+    # a service using another's namespace cannot publish its own, and compose refuses to start.
+    network_mode: "service:launch-api"
     mem_limit: 128m
     memswap_limit: 128m
 

@@ -888,6 +888,10 @@ else
     # symptom of the crash — same bug CLASS as the dashboards live/ directory fixed above, here for
     # ./data and ./spool specifically.
     mkdir -p "$LAUNCH_DIR/data" "$LAUNCH_DIR/spool"
+    # ...and make them writable by the uid the CONTAINER runs as. Creating them as the host user
+    # is the whole fix under docker, where those uids are the same. Under rootless podman they are
+    # not, and the mkdir above reproduces the very failure this block exists to prevent.
+    ensure_bind_mount_ownership "$LAUNCH_DIR/data" "$LAUNCH_DIR/spool"
 
     _LD_PORT="$(grep -E '^LAUNCH_UI_PORT=' "$LAUNCH_DIR/.env" 2>/dev/null | tail -1 | cut -d= -f2)"
     _LD_PORT="${_LD_PORT:-8099}"
@@ -933,6 +937,15 @@ else
         # containers carrying NO network aliases — `getent hosts postgres` unresolved, so langfuse
         # could never reach its database however healthy postgres reported itself. The mock stack
         # has been seeded with "$ROOT-mock" since it was added; this one never was.
+        # RECREATE, DO NOT REUSE. `up -d --build` leaves an EXISTING container alone even when the
+        # compose file that defined it has changed — the same trap the observability stack's
+        # compose_up was fixed for, where reused containers came up with no network aliases. Live
+        # 2026-09-07 under podman-compose: launch-ui kept a stale image and a stale network mode
+        # after both were changed, so the install re-tested exactly what it had just replaced and
+        # reported the old failure. A down first costs seconds and makes the up mean something.
+        (cd "$LAUNCH_DIR" && container_compose -f "$LAUNCH_COMPOSE" -p "$_LD_PROJECT" down) \
+            >/dev/null 2>&1 || true
+
         for _LD_SUBNET in $(isolated_subnet_candidates "$ROOT-launch"); do
             _LD_TRY_PORT=$((_LD_PORT + _LD_I * 10))
             if (cd "$LAUNCH_DIR" && LAUNCH_SUBNET="$_LD_SUBNET" LAUNCH_UI_PORT="$_LD_TRY_PORT" \

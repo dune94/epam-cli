@@ -79,3 +79,33 @@ container_compose() {
 
     "$_rt" compose "$@"
 }
+
+# ensure_bind_mount_ownership <dir...> — make bind-mount sources writable by the container.
+#
+# install.sh pre-creates ./data and ./spool as the HOST user, and that is correct for docker:
+# host uid 1000 IS container uid 1000, so the container owns what it mounts.
+#
+# Under ROOTLESS PODMAN it is not. The host user maps to uid 0 INSIDE the user namespace and the
+# container's uid maps to a subuid owning nothing, so the same mkdir reproduces exactly the
+# failure install.sh's own comment was written for: "unable to open database file", launch-api
+# crash-looping, and nginx reporting "host not found in upstream" downstream of that crash.
+#
+# `podman unshare` runs the chown INSIDE the namespace, so the uid given is the one the container
+# sees. Docker needs none of this and gets none of it — the ownership is already right there.
+ensure_bind_mount_ownership() {
+    local _rt
+    _rt=$(container_runtime) || return $?
+    [ "$_rt" = "podman" ] || return 0
+
+    local _uid="${LAUNCH_UID:-1000}"
+    case "$_uid" in ''|*[!0-9]*) _uid=1000 ;; esac
+
+    local _d
+    for _d in "$@"; do
+        [ -n "$_d" ] || continue
+        podman unshare chown -R "${_uid}:${_uid}" "$_d" 2>/dev/null || {
+            echo "[container-runtime] could not remap $_d into the user namespace — a rootless container may not be able to write it" >&2
+        }
+    done
+    return 0
+}

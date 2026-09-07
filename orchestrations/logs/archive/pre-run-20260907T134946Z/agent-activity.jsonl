@@ -1,0 +1,1 @@
+{"event_id":"evt-1788788986231341869-27401","timestamp":"2026-09-07T09:49:46-04:00","agent":"repro-test-writer","story_id":null,"phase":null,"type":"info","model":null,"provider":null,"detail":{"lane":"main","message":"repro-test-writer","source":"update-monitor.sh","rawType":"agent_call","prevModel":null}}

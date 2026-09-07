@@ -1,0 +1,1 @@
+{"event_id":"evt-1788788987550217925-2052","timestamp":"2026-09-07T09:49:47-04:00","agent":"cpa-inference","story_id":null,"phase":null,"type":"info","model":null,"provider":null,"detail":{"lane":"main","message":"cpa-inference · 1s","source":"update-monitor.sh","rawType":"agent_call","prevModel":null}}

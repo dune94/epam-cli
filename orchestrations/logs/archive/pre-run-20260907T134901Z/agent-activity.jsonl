@@ -1,0 +1,1 @@
+{"event_id":"evt-1788788940829767122-31221","timestamp":"2026-09-07T09:49:00-04:00","agent":"agent-failure-analyst","story_id":null,"phase":null,"type":"info","model":"claude-sonnet-5","provider":null,"detail":{"lane":"main","message":"agent-failure-analyst · claude-sonnet-5 · 21s","source":"update-monitor.sh","rawType":"agent_call","prevModel":null}}

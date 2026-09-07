@@ -800,6 +800,9 @@ for provider in "${providers[@]}"; do
     if declare -f record_call_cost >/dev/null 2>&1 \
        && [ "${_EPAM_IN_PLAN_PASS:-0}" != "1" ] \
        && [ "${EPAM_COST_RECORDED_BY_CALLER:-0}" != "1" ]; then
+      # THE PROMPT THIS CALL SENT, so the trace carries both halves of the turn and the cassette
+      # is replayable. PROMPT_FILE is the exact bytes handed to the runner a few lines above.
+      EPAM_TRACE_PROMPT_FILE="${PROMPT_FILE:-}" \
       record_call_cost "${ORCH_JSON_RESULT:-}" "${EPAM_AGENT_NAME:-agent}" \
           "${EPAM_STORY_ID:-pipeline}" "${AI_MODEL:-${EPAM_MODEL:-}}" "$_call_started_at" || true
     fi

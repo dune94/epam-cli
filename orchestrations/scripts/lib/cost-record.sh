@@ -56,16 +56,28 @@ record_call_cost() {
     # Backgrounded and silenced: observability must never add latency to, or fail, the call it
     # observes. lib/langfuse-emit.js already returns quietly when Langfuse is absent, so a project
     # without it behaves exactly as before.
+    # THE CONTENT, NOT JUST THE COST. This payload carried agent, model, tokens and cost and no
+    # content at all, so every seam recorded through the SHELL exported as
+    # {"text": "", "toolCalls": []} — the writer, the failure analyst, repro-test-writer,
+    # team-lead-review and all seven qa-gate sentinels: fourteen unreplayable seams against
+    # seventeen rich ones, measured on the Sept-05 cassettes and again on 2026-09-07.
+    #
+    # Both files are already in hand: $reply IS $ORCH_JSON_RESULT, and llm-handler.sh exports
+    # EPAM_TRACE_PROMPT_FILE for the prompt it just sent. lib/langfuse-emit.js extracts the text
+    # and the tool calls through the same functions the JS path uses, so the two cannot drift.
+    # An empty promptFile records no input, exactly as today — never an error.
     if [ -f "$_COST_RECORD_DIR/langfuse-emit.js" ] && { [ -n "${NODE_BIN:-}" ] || command -v node >/dev/null 2>&1; }; then
         jq -cn \
             --arg agent "$agent" --arg storyId "$story" --arg phase "$phase_id" \
             --arg model "$model" --arg startedAt "$started" --arg endedAt "$ended" \
             --arg rung "${EPAM_LADDER_RUNG:-}" \
+            --arg resultFile "$reply" --arg promptFile "${EPAM_TRACE_PROMPT_FILE:-}" \
             --argjson costUsd "${cost:-0}" --argjson tokensIn "${tin:-0}" \
             --argjson tokensOut "${tout:-0}" --argjson turns "${turns:-0}" \
             '{agent:$agent, storyId:$storyId, phase:$phase, model:$model, rung:$rung,
               startedAt:$startedAt, endedAt:$endedAt, costUsd:$costUsd,
-              tokensIn:$tokensIn, tokensOut:$tokensOut, turns:$turns}' \
+              tokensIn:$tokensIn, tokensOut:$tokensOut, turns:$turns,
+              resultFile:$resultFile, promptFile:$promptFile}' \
           | "${NODE_BIN:-node}" "$_COST_RECORD_DIR/langfuse-emit.js" >/dev/null 2>&1 &
     fi
 }

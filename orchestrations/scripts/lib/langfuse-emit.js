@@ -145,7 +145,66 @@ function outputWithCalls(output, toolCalls) {
     toolCalls: calls };
 }
 
+/**
+ * FILL CONTENT FROM FILES WHEN THE CALLER HAS FILES INSTEAD OF STRINGS.
+ *
+ * Both recording paths end here, and only one of them was sending content:
+ *   lib/cost-emitter.js (JS)   passes input, output and toolCalls  -> 17 seams record richly
+ *   lib/cost-record.sh (shell) passes agent, model, tokens, cost   -> 14 seams record NOTHING
+ *
+ * Measured on the Sept-05 cassettes and again on 2026-09-07: fourteen seams — the WRITER, the
+ * failure analyst, repro-test-writer, team-lead-review and all seven qa-gate sentinels — export
+ * as {"text": "", "toolCalls": []} for every turn. Structurally valid, entirely unreplayable, and
+ * the same blindness that makes the analyst report "no raw output file to read".
+ *
+ * The shell caller HAS both: record_call_cost receives $ORCH_JSON_RESULT and llm-handler.sh holds
+ * $PROMPT_FILE. It just never sent them. So it now sends the paths, and the extraction happens
+ * here through the SAME functions the JS path uses — one implementation, so the two cannot drift
+ * into recording different things.
+ *
+ * AN EXPLICIT VALUE ALWAYS WINS, so every seam that records correctly today is untouched.
+ * Nothing here throws: recording is fire-and-forget by contract, and recording less is always
+ * better than failing a call.
+ */
+function fillContentFromFiles(f) {
+  if (!f || typeof f !== 'object') return f;
+  const out = { ...f };
+  const fs = require('fs');
+  let parsed;
+  const result = () => {
+    if (parsed !== undefined) return parsed;
+    parsed = null;
+    try {
+      const raw = fs.readFileSync(out.resultFile, 'utf8');
+      // THE SAME EXTRACTORS THE JS PATH USES. Required lazily so a caller that supplies no files
+      // never pays for the module, and a load failure degrades to no content rather than a throw.
+      parsed = require('./cost-emitter.js')._parsedResultForTrace
+        ? require('./cost-emitter.js')._parsedResultForTrace(raw)
+        : JSON.parse(raw);
+    } catch { parsed = null; }
+    return parsed;
+  };
+  try {
+    if ((out.output === undefined || out.output === null || out.output === '') && out.resultFile) {
+      const r = result();
+      if (r) out.output = require('./cost-emitter.js').replyTextFrom(r);
+    }
+    if ((!Array.isArray(out.toolCalls) || !out.toolCalls.length) && out.resultFile) {
+      const r = result();
+      if (r) {
+        out.toolCalls = require('./cost-emitter.js')
+          .toolCallsForCall(r, out.startedAt, out.endedAt) || [];
+      }
+    }
+    if ((out.input === undefined || out.input === null || out.input === '') && out.promptFile) {
+      out.input = fs.readFileSync(out.promptFile, 'utf8');
+    }
+  } catch { /* recording less, never failing */ }
+  return out;
+}
+
 function buildIngestionBody(f, ids) {
+  f = fillContentFromFiles(f);
   const num = (v) => (typeof v === 'number' && Number.isFinite(v) ? v : Number(v) || 0);
   const traceId = (ids && ids.traceId) || '';
   const genId = (ids && ids.genId) || `${traceId}-gen`;

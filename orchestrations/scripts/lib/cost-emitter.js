@@ -529,6 +529,10 @@ function emitCostSnapshot({
 
 module.exports = {
   toolCallsForThisCall, toolCallsForCall,
+  // Exported so lib/langfuse-emit.js can parse a runner result the SAME way this file does when a
+  // SHELL caller hands it a file instead of strings. Two parsers would drift, and the drift would
+  // be invisible: both would still produce a structurally valid cassette.
+  _parsedResultForTrace: _parsedResult,
   parseCostRecord, buildCostSnapshot, appendLedgerRecord, emitCostSnapshot,
   replyTextFrom,
   promptForTrace,

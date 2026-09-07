@@ -1631,11 +1631,38 @@ def flow_html(d):
         '<div class="card"><div class="k">Warnings</div><div class="v">'
         + str(counts.get('warn', 0) + counts.get('fail', 0) + counts.get('bad', 0)) + '</div></div>')
 
+    # THE RESUME, STATED ON THE PAGE. Live, a resumed run's flow showed 14 of 29 stages as "did
+    # not apply" and read as a run that had barely executed — while the half that ran those stages
+    # sat in a sibling directory the page never named. The chain above now draws both; this says
+    # which run is which, and what the resume changed.
+    resume_note = ''
+    if d.get('resumed_from') or d.get('ancestors_missing'):
+        bits = []
+        if d.get('resumed_from'):
+            bits.append('This run <strong>resumed run <code>' + esc(d['resumed_from'])
+                        + '</code></strong>'
+                        + (' from its <code>' + esc(d['resumed_at_stage']) + '</code> checkpoint'
+                           if d.get('resumed_at_stage') else '')
+                        + '. Stages that ran there were deliberately not repeated here, which is '
+                          'why this run alone shows them as having nothing to do.')
+        for m in d.get('ancestors_missing') or []:
+            bits.append('The evidence for run <code>' + esc(m) + '</code> <strong>could not be '
+                        'read</strong> — its directory is not beside this one, so its stages are '
+                        'not drawn. What that run did is ' + MISSING + ' on this page.')
+        flags = [f for f in (d.get('resume_flags') or [])]
+        if flags:
+            bits.append('The resume carried: '
+                        + ', '.join('<code>' + esc(f) + '</code>' for f in flags)
+                        + '. A flag that stands a stage down is part of how this run happened: '
+                          'that stage did not run, whatever the project declares.')
+        resume_note = '<div class="warn">' + ' '.join(bits) + '</div>'
+
     where = (' on <code>' + esc(d['codeline']) + '</code>') if d.get('codeline') else ''
     return (head_block('Execution flow' + (' — ' + esc(d['story']) if d.get('story') else ''),
                        'The stages this run executed, in the order it executed them' + where + '.',
                        cards)
             + '<style>' + FLOW_CSS + '</style>'
+            + resume_note
             + '<p class="intro">Every box below is a stage this run actually reached. The order is '
               'the run\'s own; a stage that did not apply is drawn dashed rather than omitted, so '
               'the page cannot make a partial run look like a full one.</p>'

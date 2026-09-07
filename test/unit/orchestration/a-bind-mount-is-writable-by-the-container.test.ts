@@ -95,8 +95,13 @@ describe('a bind mount under rootless podman', () => {
     execFileSync('bash', [drive], { encoding: 'utf8', timeout: 30_000 });
 
     const calls = existsSync(rec) ? readFileSync(rec, 'utf8') : '';
-    expect(calls, 'a SHARED mount was chowned into the container namespace — the host runner '
-      + 'can no longer write it').not.toMatch(/chown/);
+    // It DOES chown — back to uid 0 in the namespace, which is the host user. That direction is
+    // the fix: after a container remap the host cannot even chmod what it no longer owns, so
+    // ownership must be returned before the mode is widened. Handing it to 1000 is the defect.
+    expect(calls, 'a SHARED mount was chowned INTO the container namespace — the host runner can '
+      + 'no longer write it').not.toMatch(/chown -R 1000:1000/);
+    expect(calls, 'ownership was never returned to the host, so the widening cannot apply')
+      .toMatch(/unshare chown -R 0:0/);
     const mode = statSync(shared).mode & 0o777;
     expect(mode & 0o007, `a shared mount must stay writable from both sides (mode ${mode.toString(8)})`)
       .toBe(0o007);

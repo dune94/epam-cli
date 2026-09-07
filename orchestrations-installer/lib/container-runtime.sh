@@ -158,12 +158,33 @@ ensure_shared_bind_mount() {
     _rt=$(container_runtime) || return $?
     [ "$_rt" = "podman" ] || return 0
 
-    local _d
+    local _d _rc=0
     for _d in "$@"; do
-        [ -n "$_d" ] && [ -d "$_d" ] || continue
-        chmod -R a+rwX "$_d" 2>/dev/null || {
-            echo "[container-runtime] could not widen $_d — the host runner and the container cannot both write it" >&2
-        }
+        [ -n "$_d" ] || continue
+        if [ ! -d "$_d" ]; then
+            echo "[container-runtime] cannot share '$_d' — not a directory" >&2
+            _rc=1
+            continue
+        fi
+
+        # OWNERSHIP BACK TO THE HOST FIRST. After a container-ownership remap the host user does
+        # not own this directory, so `chmod` returns EPERM and changes nothing — that is how the
+        # first correction shipped broken and the next install failed identically. uid 0 INSIDE
+        # the user namespace is the host user, so this is the exact inverse of the remap.
+        podman unshare chown -R 0:0 "$_d" 2>/dev/null || true
+
+        # Then widen, so the container's mapped uid — which owns nothing here — can still write.
+        chmod -R a+rwX "$_d" 2>/dev/null || true
+
+        # VERIFIED, NOT ASSUMED. Both failures above were silent; the install only learned of them
+        # when runner-host.js died on EACCES minutes later. A probe costs nothing and turns a
+        # silent no-op into a named install failure.
+        if : > "$_d/.epam-share-probe" 2>/dev/null; then
+            rm -f "$_d/.epam-share-probe" 2>/dev/null || true
+        else
+            echo "[container-runtime] '$_d' is still not writable by the host — runner-host.js needs it" >&2
+            _rc=1
+        fi
     done
-    return 0
+    return "$_rc"
 }

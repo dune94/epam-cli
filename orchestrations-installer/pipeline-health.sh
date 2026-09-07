@@ -281,13 +281,21 @@ _daemon_alive() {
     _pid="$(cat "$_pidfile" 2>/dev/null)"
     [ -n "$_pid" ] && kill -0 "$_pid" 2>/dev/null
 }
-if [ -f "$ROOT/launch-dashboard/backend/src/runner-host.js" ]; then
+# REQUIRED ONLY WHERE THERE IS A DASHBOARD TO POLL FOR. This keyed on the FILE existing, which it
+# always does — it is packaged into every tree. A deliberate `--no-docker` install therefore
+# hard-failed its own health check over a daemon whose only job is to poll a dashboard that
+# install was told not to deploy. The dashboard's .env is written only when it is provisioned, so
+# it is the honest signal for "a dashboard exists here".
+if [ -f "$ROOT/launch-dashboard/backend/src/runner-host.js" ] \
+   && [ -f "$ROOT/launch-dashboard/.env" ]; then
     if _daemon_alive "$ROOT/launch-dashboard/.runner-host.pid"; then
         _ok "runner-host.js is running"
     else
         _bad "runner-host.js is NOT running — a run saved through the dashboard will sit 'pending' forever"
         _fix "bash orchestrations-installer/pipeline-services.sh --start"
     fi
+elif [ -f "$ROOT/launch-dashboard/backend/src/runner-host.js" ]; then
+    _ok "runner-host.js not needed — no launch dashboard is provisioned here"
 fi
 if [ -f "$ROOT/orchestrations/scripts/snapshot-watch.js" ]; then
     if _daemon_alive "$ROOT/orchestrations/dashboards/.snapshot-watch.pid"; then
@@ -447,7 +455,12 @@ fi
 
 # ── epam shim ────────────────────────────────────────────────────────────
 _head "epam command"
-_SHIM="$HOME/.local/bin/epam"
+# THE SAME PLACE THE INSTALLER WROTE IT. install.sh honours EPAM_BIN_DIR (default
+# ~/.local/bin), so a health check that only ever looks in $HOME reports on a DIFFERENT
+# install's shim than the one just written — and a test install into a temp dir left the
+# global shim dangling, so every later health check on this machine failed on a file no
+# operator had asked for.
+_SHIM="${EPAM_BIN_DIR:-$HOME/.local/bin}/epam"
 if [ -f "$_SHIM" ]; then
     _TARGET="$(grep -o '"[^"]*epam\.js"' "$_SHIM" 2>/dev/null | tr -d '"' | head -1)"
     if [ -n "$_TARGET" ] && [ -f "$_TARGET" ]; then

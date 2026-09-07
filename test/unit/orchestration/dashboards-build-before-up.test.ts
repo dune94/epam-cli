@@ -49,7 +49,11 @@ function fixture(withSrc: boolean) {
 const run = (f: { dir: string; bin: string }) =>
   spawnSync('bash', [path.join(f.dir, INSTALLER_REL), '--docker'], {
     cwd: f.dir, encoding: 'utf8', timeout: 30_000,
-    env: { ...process.env, PATH: `${f.bin}:${process.env.PATH}`, EPAM_NONINTERACTIVE: '1', EPAM_CONTAINER_RUNTIME: 'docker' },
+    env: { ...process.env,
+        // ISOLATE THE GLOBAL SHIM. install.sh points ~/.local/bin/epam at whatever tree it
+        // installed; a test install into a temp dir therefore hijacks the operator's shim and
+        // leaves it dangling when the temp dir is removed, failing every later health check.
+        EPAM_BIN_DIR: path.join(f.dir, 'bin-shim'), PATH: `${f.bin}:${process.env.PATH}`, EPAM_NONINTERACTIVE: '1', EPAM_CONTAINER_RUNTIME: 'docker' },
   });
 
 describe('install.sh builds dashboards before bringing the observability stack up', () => {

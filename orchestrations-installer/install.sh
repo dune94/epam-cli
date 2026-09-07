@@ -894,7 +894,13 @@ else
     # ./data is the container's own database — it may own that outright.
     ensure_bind_mount_ownership "$LAUNCH_DIR/data"
     # ./spool is the boundary the HOST runner writes; it must stay writable from both sides.
-    ensure_shared_bind_mount "$LAUNCH_DIR/spool"
+    # ITS FAILURE IS THE INSTALL'S FAILURE. When this silently did nothing, the install carried on
+    # and runner-host.js died minutes later on "EACCES: mkdir .../spool/requests" — a symptom three
+    # steps from its cause. Say it where it happens.
+    if ! ensure_shared_bind_mount "$LAUNCH_DIR/spool"; then
+        _bad "spool is not writable by both the host runner and the container — the dashboard can queue no runs"
+        FAILED=1
+    fi
 
     _LD_PORT="$(grep -E '^LAUNCH_UI_PORT=' "$LAUNCH_DIR/.env" 2>/dev/null | tail -1 | cut -d= -f2)"
     _LD_PORT="${_LD_PORT:-8099}"
@@ -946,18 +952,16 @@ else
         # 2026-09-07 under podman-compose: launch-ui kept a stale image and a stale network mode
         # after both were changed, so the install re-tested exactly what it had just replaced and
         # reported the old failure. A down first costs seconds and makes the up mean something.
+        # --force-recreate: `up -d --build` alone leaves an EXISTING container untouched even when
+        # the compose file that defined it has changed, so a re-install silently kept the previous
+        # install's image, network mode and published port. Live 2026-09-07: the dashboard answered
+        # on 8099 while this install health-checked 8109, and a rebuilt UI image was never used.
+        # A flag rather than an extra `down` — the retry below already tears down between its own
+        # attempts, and a second teardown here changes what one attempt means.
         for _LD_SUBNET in $(isolated_subnet_candidates "$ROOT-launch"); do
             _LD_TRY_PORT=$((_LD_PORT + _LD_I * 10))
-            # EVERY ATTEMPT STARTS CLEAN. `up -d --build` leaves an EXISTING container alone, so a
-            # retry's new port/subnet is silently ignored and the stack stays on the previous
-            # attempt's values — live 2026-09-07: attempt 0 published 8099, attempt 1 raised the
-            # port to 8109, compose reused the containers, and the installer then health-checked
-            # 8109 while the dashboard answered perfectly on 8099. The same trap the observability
-            # stack's retry was already fixed for; this loop never got it.
-            (cd "$LAUNCH_DIR" && container_compose -f "$LAUNCH_COMPOSE" -p "$_LD_PROJECT" down) \
-                >/dev/null 2>&1 || true
             if (cd "$LAUNCH_DIR" && LAUNCH_SUBNET="$_LD_SUBNET" LAUNCH_UI_PORT="$_LD_TRY_PORT" \
-                    container_compose -f "$LAUNCH_COMPOSE" -p "$_LD_PROJECT" up -d --build) >"$_LD_LOG" 2>&1; then
+                    container_compose -f "$LAUNCH_COMPOSE" -p "$_LD_PROJECT" up -d --build --force-recreate) >"$_LD_LOG" 2>&1; then
                 _LD_UP=0
                 _LD_PORT="$_LD_TRY_PORT"
                 _LD_HEALTH_URL="http://localhost:${_LD_PORT}/api/health"

@@ -5272,7 +5272,9 @@ run_external_verification() {
     # (600s for low-effort stories) so this always fires first and gives a
     # clear, actionable diagnosis instead of a generic outer timeout.
     local _test_timeout="${EPAM_TEST_TIMEOUT_SECS:-300}"
-    test_output=$(cd "$PROJECT_ROOT" && timeout "$_test_timeout" bash -c "${_orch_env_unset_prefix}${test_cmd}" 2>&1) || test_exit=$?
+    # BOUNDED, both dimensions — see _bounded_test_command. Unbounded, this suite starves the host.
+    local _bounded_cmd; _bounded_cmd="$(_bounded_test_command "$test_cmd")"
+    test_output=$(cd "$PROJECT_ROOT" && timeout "$_test_timeout" bash -c "${_orch_env_unset_prefix}${_bounded_cmd}" 2>&1) || test_exit=$?
 
     if [ "$test_exit" -eq 124 ]; then
         warning "External verification TIMED OUT for $story_id after ${_test_timeout}s (test command: $test_cmd)"
@@ -5801,6 +5803,60 @@ _project_repo_has_tests() {
 # was already correct; the run simply started at 00:29.
 #
 # The fallback keeps an older plugin working: no testCommandFor, no pin, same command as before.
+# _bounded_test_command <cmd> — the project's test command, bounded in BOTH dimensions.
+#
+# This suite is the heaviest thing the pipeline runs and it ran with no bound at all: jest takes
+# cores-1 workers by default (15 on a 16-core box) against thousands of jsdom tests, on EVERY
+# writer attempt, up to twelve. It took the host down twice on 2026-09-07 and cost a WSL restart.
+# The same suite is bounded at every one of run-agent-orchestration.sh's six call sites, which say
+# why: "an unbounded suite starves the host". Only the writer's copy was left out.
+#
+# TWO DIMENSIONS, NEITHER SUBSTITUTING FOR THE OTHER:
+#   CPU     run_test_bounded uses taskset — it caps CORES.
+#   MEMORY  taskset does not cap heap. Only an explicit ceiling does, and for a node runner that is
+#           NODE_OPTIONS=--max-old-space-size. Operator, repeatedly: "all processes have to have
+#           memory bounded". A worker limit is not a memory limit.
+#
+# DECLARED, NOT HARDCODED. How much heap a project's suite may use is that project's fact, so it
+# declares `maxOldSpaceMb` in .epam/verification.json beside its command. A project that declares
+# none gets no invented ceiling — inventing one would break a suite that legitimately needs more —
+# but it still gets the CPU bound, because that one is safe for everybody.
+_bounded_test_command() {
+    local _cmd="${1:-}" _mb=""
+    [ -n "$_cmd" ] || return 0
+
+    if command -v jq >/dev/null 2>&1; then
+        local _vf="${PROJECT_ROOT:-}/.epam/verification.json"
+        [ -f "$_vf" ] && _mb=$(jq -r '.test.maxOldSpaceMb // empty' "$_vf" 2>/dev/null)
+    fi
+    case "$_mb" in ''|*[!0-9]*) _mb="" ;; esac        # a malformed ceiling is no ceiling
+
+    [ -n "$_mb" ] && _cmd="NODE_OPTIONS=\"\${NODE_OPTIONS:+\$NODE_OPTIONS }--max-old-space-size=${_mb}\" ${_cmd}"
+
+    # The CPU half, through the same helper the orchestration script uses. If the lib is not
+    # loadable or affinity is unavailable it degrades to today's behaviour rather than failing the
+    # verification — a bound that cannot be applied must never fail a run.
+    local _bx="${SCRIPT_DIR:-$(cd "$(dirname "${BASH_SOURCE[0]}")" && pwd)}/lib/bounded-exec.sh"
+    if [ -f "$_bx" ]; then
+        # shellcheck source=/dev/null
+        . "$_bx" 2>/dev/null || true
+    fi
+    # EMIT SOMETHING A FRESH SHELL CAN RUN. The caller executes this through `bash -c`, which is a
+    # NEW shell: a run_test_bounded call would be "command not found" (exit 127) and would fail
+    # every story. Caught live before release — the function exists only in the sourcing shell, so
+    # the bound has to be an actual binary invocation with the worker count already resolved.
+    local _w=""
+    command -v resolve_test_workers >/dev/null 2>&1 && _w="$(resolve_test_workers 2>/dev/null)"
+    case "$_w" in ''|*[!0-9]*) _w="" ;; esac
+    if [ -n "$_w" ] && [ "$_w" -ge 1 ] 2>/dev/null && command -v taskset >/dev/null 2>&1 \
+       && taskset -c 0 true >/dev/null 2>&1; then
+        printf 'taskset -c 0-%d sh -c %s' "$(( _w - 1 ))" "$(printf '%q' "$_cmd")"
+    else
+        # No affinity available: today's behaviour, and the memory ceiling above still applies.
+        printf '%s' "$_cmd"
+    fi
+}
+
 _project_test_command() {
     local _root="${1:-$PROJECT_ROOT}"
     local _plugin="${AUTOMATION_DIR}/plugins/verification-plugin.js"

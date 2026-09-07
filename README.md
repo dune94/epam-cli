@@ -165,7 +165,7 @@ EPAM CLI v1 uses a **bridge model** for provider authentication (see [DEC-005](.
 - **cpa-details.html** — Cost/Plan/Analysis estimate detail
 - **scorecard.html** — Run-level scorecard summary
 - **swe-bench.html** — SWE-bench-style benchmark results
-- **epam-cli-guide.html** — In-dashboard CLI guide
+- **amsd-pipeline-guide.html** — In-dashboard CLI guide
 - **health.html** — Self-healing signals (analyst cycles, skill-note growth, dynamic tools) plus prompt-eval retry/revert/block outcomes for the reviewer-gated writes above, including a cross-run trend table and violation-type breakdown per step
 
 ### LLM Observability (Langfuse)
@@ -182,7 +182,7 @@ export LANGFUSE_SECRET_KEY=sk-lf-epam-dev
 export LANGFUSE_PUBLIC_KEY=pk-lf-epam-dev
 
 # Open dashboard
-open http://localhost:3100   # dev@epam-cli.local / dev1234
+open http://localhost:3100   # dev@amsd-pipeline.local / dev1234
 ```
 
 Traces include: model, provider, token usage, cost (USD), latency, tool calls, stop reason.
@@ -245,14 +245,17 @@ the ref, provisions docker in isolation, starts the launch dashboard):
 npx amsd-pipeline --dest ~/amsd-pipeline
 ```
 
-Run `npx amsd-pipeline --help` for flags (`--dest`, `--ref`, `--uninstall`, `--no-docker`, ...).
+Run `npx amsd-pipeline --help` for flags. The full flag list (`--dest`, `--ref`, `--stack`,
+`--replay on|off`, `--docker`/`--no-docker`, `--check`, `--uninstall`, `--repo`), the prerequisites
+the installer actually checks, the two-step `.env` first install, the Jira-credentials gotcha, and
+how to run a ticket afterwards are all in **[INSTALL.md](INSTALL.md)**.
 
 Already working from a checkout of this repo, or want the CLI (`epam`) itself rather than the full
 orchestration install:
 
 ```bash
-git clone https://github.com/dune94/epam-cli.git
-cd epam-cli
+git clone https://github.com/dune94/amsd-pipeline.git
+cd amsd-pipeline
 npm install
 npm run build
 ```

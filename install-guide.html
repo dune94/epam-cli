@@ -1,0 +1,499 @@
+<!doctype html>
+<html lang="en">
+<head>
+<meta charset="utf-8">
+<meta name="viewport" content="width=device-width, initial-scale=1">
+<title>amsd-pipeline — Install &amp; Run Guide</title>
+<style>
+:root{
+  --bg:#fbfbfa; --panel:#fff; --ink:#1c1c1a; --muted:#5f5f58; --line:#e2e0da;
+  --accent:#7a4a1e; --accent-soft:#f5ede3;
+  --code-bg:#f4f2ee; --code-ink:#3a3a34;
+  --pre-bg:#211f1c; --pre-ink:#e8e5de;
+  --ok:#2f6b3d; --ok-bg:#eaf3ec;
+  --warn:#8a5a00; --warn-bg:#fdf3e0;
+  --bad:#9a2f2f; --bad-bg:#fbecec;
+}
+@media (prefers-color-scheme: dark){
+  :root{
+    --bg:#16150f; --panel:#1e1d17; --ink:#eae7dd; --muted:#a09b8d; --line:#33312a;
+    --accent:#d5a26a; --accent-soft:#2a251c;
+    --code-bg:#26241d; --code-ink:#ded9cc;
+    --pre-bg:#0e0d0a; --pre-ink:#e2ded2;
+    --ok:#8fd0a0; --ok-bg:#1c2a1f;
+    --warn:#e2b566; --warn-bg:#2c2417;
+    --bad:#e59a9a; --bad-bg:#2c1b1b;
+  }
+}
+*{box-sizing:border-box}
+body{
+  margin:0; background:var(--bg); color:var(--ink);
+  font:16px/1.62 -apple-system,BlinkMacSystemFont,"Segoe UI",Roboto,Helvetica,Arial,sans-serif;
+  -webkit-font-smoothing:antialiased;
+}
+.wrap{max-width:860px;margin:0 auto;padding:48px 22px 96px}
+header.top{border-bottom:2px solid var(--accent);padding-bottom:20px;margin-bottom:8px}
+h1{font-size:2rem;margin:0 0 6px;letter-spacing:-.02em}
+.sub{color:var(--muted);margin:0;font-size:1.02rem}
+h2{font-size:1.42rem;margin:52px 0 14px;padding-top:14px;border-top:1px solid var(--line);letter-spacing:-.01em}
+h2:first-of-type{border-top:none}
+h3{font-size:1.1rem;margin:30px 0 10px}
+h4{font-size:.97rem;margin:22px 0 8px;color:var(--muted);text-transform:uppercase;letter-spacing:.06em}
+p,li{margin:.6em 0}
+code{background:var(--code-bg);color:var(--code-ink);padding:.13em .4em;border-radius:4px;
+  font:.88em/1.5 ui-monospace,SFMono-Regular,Menlo,Consolas,"Liberation Mono",monospace;
+  word-break:break-word}
+pre{background:var(--pre-bg);color:var(--pre-ink);padding:15px 17px;border-radius:8px;
+  overflow-x:auto;font:13px/1.65 ui-monospace,SFMono-Regular,Menlo,Consolas,"Liberation Mono",monospace;
+  margin:.7em 0}
+pre code{background:none;color:inherit;padding:0;font-size:inherit}
+table{border-collapse:collapse;width:100%;margin:1em 0;font-size:.93rem;display:block;overflow-x:auto}
+th,td{border:1px solid var(--line);padding:8px 11px;text-align:left;vertical-align:top}
+th{background:var(--accent-soft);font-weight:600}
+td:first-child{white-space:nowrap;color:var(--muted);font-variant-numeric:tabular-nums}
+.note{border-left:3px solid var(--accent);background:var(--panel);padding:12px 16px;border-radius:0 6px 6px 0;margin:1.1em 0}
+.ok{border-left:3px solid var(--ok);background:var(--ok-bg);padding:12px 16px;border-radius:0 6px 6px 0;margin:1.1em 0}
+.warn{border-left:3px solid var(--warn);background:var(--warn-bg);padding:12px 16px;border-radius:0 6px 6px 0;margin:1.1em 0}
+.bad{border-left:3px solid var(--bad);background:var(--bad-bg);padding:12px 16px;border-radius:0 6px 6px 0;margin:1.1em 0}
+.tag{display:inline-block;font-size:.72rem;font-weight:700;letter-spacing:.06em;text-transform:uppercase;
+  padding:2px 8px;border-radius:99px;vertical-align:middle;margin-left:8px}
+.tag-unver{background:var(--warn-bg);color:var(--warn);border:1px solid var(--warn)}
+.tag-ver{background:var(--ok-bg);color:var(--ok);border:1px solid var(--ok)}
+nav.toc{background:var(--panel);border:1px solid var(--line);border-radius:8px;padding:16px 20px;margin:26px 0}
+nav.toc h4{margin-top:0}
+nav.toc ol{margin:0;padding-left:20px}
+nav.toc a{color:var(--accent);text-decoration:none}
+nav.toc a:hover{text-decoration:underline}
+.flow{background:var(--panel);border:1px solid var(--line);border-radius:8px;padding:4px 20px 18px;margin:20px 0}
+footer{margin-top:64px;padding-top:18px;border-top:1px solid var(--line);color:var(--muted);font-size:.87rem}
+</style>
+</head>
+<body>
+<div class="wrap">
+
+<header class="top">
+<h1>amsd-pipeline — Install &amp; Run Guide</h1>
+<p class="sub">Install and run the orchestration pipeline.</p>
+</header>
+
+<nav class="toc">
+<h4>Contents</h4>
+<ol>
+<li><a href="#prereq">Prerequisites — what the installer actually checks</a></li>
+<li><a href="#install">Install — <code>npx amsd-pipeline</code>, and every flag</a></li>
+<li><a href="#docker">Docker or Podman — no Docker Desktop license needed</a></li>
+<li><a href="#env">The <code>.env</code> files</a></li>
+<li><a href="#jira">Jira credentials are NOT carried into a new install</a></li>
+<li><a href="#run">Running a ticket — <code>orchestrations/scripts/pipeline</code></a></li>
+<li><a href="#uis">Where to watch it — dashboards, Langfuse, Grafana</a></li>
+<li><a href="#dashboard">The launch dashboard &amp; runner</a></li>
+<li><a href="#services">Bouncing services — <code>pipeline-services.sh</code></a></li>
+<li><a href="#health">Checking readiness — <code>pipeline-health.sh</code></a></li>
+<li><a href="#uninstall">Uninstalling</a></li>
+<li><a href="#trouble">Troubleshooting</a></li>
+</ol>
+</nav>
+
+<h2 id="prereq">1. Prerequisites — what the installer actually checks</h2>
+<p>Nothing here is aspirational. Each row names the check that enforces it, so an operator can go
+and read the line rather than take this page's word for it.</p>
+
+<h4>Hard requirements — <code>install.sh</code> marks these ✗ and exits 1</h4>
+<table>
+<tr><th>Requirement</th><th>The installer's own reason</th><th>Where it is checked</th></tr>
+<tr><td><code>git</code></td><td>"the pipeline works on git codelines"</td><td><code>install.sh</code> → <code>need git</code></td></tr>
+<tr><td><code>jq</code></td><td>"the pipeline parses JSON with it throughout"</td><td><code>install.sh</code> → <code>need jq</code></td></tr>
+<tr><td><code>node</code></td><td>"the engine and the CLI are node"</td><td><code>install.sh</code> → <code>need node</code></td></tr>
+<tr><td><code>python3</code></td><td>88 handlers under <code>orchestrations/scripts/lib/handlers</code> are executed with it. Every import is stdlib plus one local module — <strong>no venv, no <code>pip install</code>, no <code>requirements.txt</code></strong>: the interpreter is the whole requirement</td><td><code>install.sh</code>, the <code>python3</code> block</td></tr>
+<tr><td>The active stack's <strong>runner CLI</strong> on <code>PATH</code></td><td>"the commonest real failure" — the run shells out to it</td><td><code>install.sh</code>, resolved from <code>provider-sets.json</code> → the stack's <code>settingsFile</code> → its first <code>runners</code> key</td></tr>
+</table>
+
+<p>The runner is never named in a script — it is read from config. As declared today:</p>
+<table>
+<tr><th>Stack (<code>--stack</code>)</th><th>Runner that must be on <code>PATH</code></th><th>Credentials it declares REQUIRED</th></tr>
+<tr><td><code>claude</code> <em>(default)</em></td><td><code>claude</code></td><td>none</td></tr>
+<tr><td><code>openrouter</code></td><td><code>claude</code></td><td><code>OPENROUTER_API_KEY</code>, <code>MINIMAX_API_KEY</code></td></tr>
+<tr><td><code>codemie</code></td><td><code>codemie-claude</code></td><td>none</td></tr>
+<tr><td><code>mockserver</code></td><td><code>claude</code></td><td>none</td></tr>
+</table>
+<p>Neither <code>claude</code> nor <code>codemie-claude</code> is installed by this repo —
+<code>codemie-claude</code> is an internal EPAM tool obtained through your organization's own
+distribution. Rather than trusting the table above, have the machine answer for itself:
+<code>./orchestrations-installer/install.sh --check</code>.</p>
+
+<h4>Node version</h4>
+<div class="warn">
+<strong><code>install.sh</code> only checks that <code>node</code> EXISTS — it never checks the
+version.</strong> The requirement is real and enforced elsewhere: <code>package.json</code> declares
+<code>"engines": { "node": "&gt;=20.0.0" }</code>, <code>.nvmrc</code> says <code>20</code>, and
+<code>pipeline-health.sh</code> warns below major 18 ("20 is what's tested"). On the development
+machine the system <code>node</code> is v14.17.0 and is far too old.
+<p>An install with an old <code>node</code> on <code>PATH</code> passes <code>need node</code> and
+then fails at <code>npm run build</code>, because tsup needs 20. Put 20 on <code>PATH</code> first,
+or pass it explicitly — <code>install.sh</code>, <code>pipeline-services.sh</code> and
+<code>pipeline-health.sh</code> all honour <code>NODE_BIN</code>:</p>
+<pre><code>export PATH="$HOME/.nvm/versions/node/v20.20.0/bin:$PATH"
+# or
+NODE_BIN=~/.nvm/versions/node/v20.20.0/bin/node ./orchestrations-installer/install.sh</code></pre>
+</div>
+
+<h4>Optional — a container runtime</h4>
+<p><strong>Docker is optional, always</strong>, and never a reason for the install to fail:
+"an installer that fails because a container is missing teaches people to skip the installer". With
+no runtime running, the default <code>auto</code> mode warns and carries on — the dashboards,
+Langfuse and Grafana are observability, and the pipeline runs without them. See
+<a href="#docker">§3</a>.</p>
+
+<h4>Platform and headroom — from <code>pipeline-health.sh</code></h4>
+<ul>
+<li>Linux, WSL2 or macOS. Anything else is warned about as untested.</li>
+<li><code>bash &gt;= 4</code> — "this pipeline's own scripts assume bash &gt;=4 in places".</li>
+<li><strong>≥ 2 GB free memory</strong>, or it is a hard FAIL: "a run is likely to OOM this
+machine". Under 4 GB is a warning — "fine for a single run, tight for a run plus dashboards".</li>
+<li><strong>≥ 5 GB free disk</strong> at the install root, or it warns.</li>
+</ul>
+
+<h4>What the installer cannot supply for you</h4>
+<ul>
+<li><strong>Client codelines cloned on disk.</strong> A brownfield project's
+<code>JIRA_CODELINE_ROOT</code> must exist and contain git repos — the pipeline <em>scans</em> that
+directory, nothing lists repos by name.</li>
+<li><strong>Jira credentials</strong> — see <a href="#jira">§5</a>. This is the one that catches
+people.</li>
+</ul>
+
+<h2 id="install">2. Install — <code>npx amsd-pipeline</code>, and every flag</h2>
+<p>No git commands required. This clones the repo itself, packages the requested ref into a fresh
+tree at <code>--dest</code>, then runs every step below against that tree.</p>
+
+<div class="warn">
+<strong>SEED YOUR <code>.env</code> FILES INTO <code>--dest</code> FIRST — before you run the
+installer, not after.</strong> This is the difference between an install that works in one run and
+one that silently does not.
+
+<p><code>install.sh</code> starts two long-lived host daemons as part of the install, and
+<strong>runner-host</strong> reads its credentials once, at startup, from the <code>.env</code>
+files as they stand <em>at that moment</em>. Install first and fill the files in afterwards and the
+daemon keeps the blank values it started with: Langfuse traces silently never appear, and the
+installer reports <code>✓ ready</code> the whole time, because nothing is wrong with the install —
+only with what the daemon is holding.</p>
+
+<p>So do this, in this order:</p>
+<pre><code>DEST=~/amsd-pipeline
+
+# 1. Create the tree and seed the credentials BEFORE installing.
+mkdir -p "$DEST/launch-dashboard" "$DEST/orchestrations/jira"
+cp /path/to/your/.env                    "$DEST/.env"
+cp /path/to/your/launch-dashboard.env    "$DEST/launch-dashboard/.env"
+cp /path/to/your/&lt;project&gt;.env           "$DEST/orchestrations/jira/&lt;project&gt;.env"
+
+# 2. Now install. It packages around the files you placed and never overwrites them.
+npx amsd-pipeline --dest "$DEST"</code></pre>
+
+<p><code>install.sh</code> only creates a <code>.env</code> from its template when one is
+<strong>absent</strong>, so seeding first is safe: your file is used as-is, and you will not see the
+<code>! .env created from .env.example — FILL IT IN</code> warning, which is itself the signal that
+you installed before seeding.</p>
+
+<p>If you have already installed and are fixing it up afterwards, that is recoverable — edit the
+<code>.env</code> files and <strong>re-run <code>install.sh</code> against the same
+<code>--dest</code></strong>. It compares the daemon's startup environment against the files as they
+stand now and restarts it when they differ (saying so: <code>restarting runner-host … its .env has
+changed since it started</code>). Nothing else restarts daemons: not by hand, not with
+<code>pipeline-services.sh</code> — the installer owns them.</p>
+</div>
+
+<p>The plain form, once your files are in place:</p>
+<pre><code>npx amsd-pipeline --dest ~/amsd-pipeline</code></pre>
+<p>From an existing checkout, the same script works directly, in place:</p>
+<pre><code>./orchestrations-installer/install.sh                    # install for the default stack, with dashboards if docker is up
+./orchestrations-installer/install.sh --stack codemie     # install for a specific stack
+./orchestrations-installer/install.sh --no-docker         # skip dashboards entirely
+./orchestrations-installer/install.sh --check             # verify an existing install, change nothing
+./orchestrations-installer/install.sh --dest ~/somewhere --ref v1.7   # package that ref into a NEW tree, then install it</code></pre>
+
+<p><code>npx amsd-pipeline</code> is the very same script — <code>bin/amsd-pipeline.js</code> does
+nothing but <code>spawnSync('bash', [install.sh, ...argv])</code>, so every flag below works
+identically through either entry point. Read straight out of <code>install.sh</code>'s own argument
+parser, this is the complete list:</p>
+<table>
+<tr><th>Flag</th><th>Effect</th></tr>
+<tr><td><code>--dest &lt;path&gt;</code></td><td>Package the ref into <code>&lt;path&gt;</code> and install <strong>that</strong> tree; creates it if absent. Without it, <code>install.sh</code> only ever configures the tree it is already sitting inside.</td></tr>
+<tr><td><code>--ref &lt;tag|sha|branch&gt;</code></td><td>Which commit to package. Default <code>HEAD</code>. Tags are fetched first, so a ref a colleague just pushed still resolves.</td></tr>
+<tr><td><code>--repo &lt;url&gt;</code></td><td>Clone source when <code>install.sh</code> was obtained alone (npx, a raw download). Default <code>https://github.com/dune94/amsd-pipeline.git</code>; also settable as <code>EPAM_REPO</code>.</td></tr>
+<tr><td><code>--stack &lt;name&gt;</code></td><td>Which provider set to install for. Default: <code>provider-sets.json</code>'s <code>defaultSet</code>, or <code>EPAM_PROVIDER_SET</code>. An unknown name errors and lists the declared stacks — never a silent fall-through onto another stack.</td></tr>
+<tr><td><code>--no-docker</code></td><td>Skip the observability stack and the launch dashboard entirely.</td></tr>
+<tr><td><code>--docker</code></td><td>REQUIRE a container runtime — fails if none is running. The default <code>auto</code> merely warns.</td></tr>
+<tr><td><code>--replay on|off</code></td><td>Default <code>off</code>. <code>on</code> makes Langfuse record every run so it can be replayed later for $0. Also settable as <code>EPAM_REPLAY</code>. An invalid value is rejected outright — never silently downgraded to <code>off</code>, because "a run not recorded can never be replayed" is a one-way loss.</td></tr>
+<tr><td><code>--check</code></td><td>Verify an existing install, change nothing.</td></tr>
+<tr><td><code>--uninstall</code></td><td>Remove only this install's docker footprint and host daemons — never files. Accepts <code>--dest</code>. See <a href="#uninstall">§10</a>.</td></tr>
+<tr><td><code>--help</code>, <code>-h</code></td><td>Prints the script's own header.</td></tr>
+</table>
+<p>Environment variables the installer reads: <code>EPAM_PROVIDER_SET</code>,
+<code>EPAM_REPLAY</code>, <code>EPAM_CONTAINER_RUNTIME</code>, <code>EPAM_REPO</code>,
+<code>EPAM_PROJECT</code>, <code>EPAM_BIN_DIR</code> (default <code>~/.local/bin</code>, where the
+<code>epam</code> shim is written), <code>EPAM_COMPOSE_FILE</code>,
+<code>EPAM_MIN_DIST_BYTES</code>, <code>EPAM_LAUNCH_HEALTH_TRIES</code>,
+<code>EPAM_LAUNCH_HEALTH_INTERVAL</code>, <code>NODE_BIN</code>, and — together with
+<code>EPAM_PROJECT</code> — <code>JIRA_URL</code>, <code>JIRA_PROJECT_KEY</code> and
+<code>JIRA_CODELINE_ROOT</code>, which it writes into that project's <code>config.env</code> for
+you (non-secret values only; it never writes a token into project config).</p>
+
+<h3>If you did not seed <code>.env</code> first, the first install is a TWO-STEP operation</h3>
+<p>Seeding beforehand (above) is the one-run path. Starting from nothing instead, the installer
+copies its template and says so — <code>! .env created from .env.example — FILL IT IN before
+running</code> — and then <strong>checks the values, not just the file</strong>: if the selected
+stack declares a required credential that is still empty, the install FAILS with
+<code>✗ the '&lt;stack&gt;' stack needs these, still empty in .env: OPENROUTER_API_KEY ...</code>.
+So:</p>
+<pre><code>./orchestrations-installer/install.sh --dest ~/amsd-pipeline --ref v1.51   # creates .env, then fails
+$EDITOR ~/amsd-pipeline/.env                                              # fill it in
+./orchestrations-installer/install.sh --dest ~/amsd-pipeline --ref v1.51  # re-run — now it completes</code></pre>
+<p>On the default <code>claude</code> stack, which declares no required credentials, an install can
+complete with an empty <code>.env</code> — the file is still created, and still needs the Jira
+values before a brownfield run will start.</p>
+
+<div class="bad">
+<strong><code>--replay on</code> FAILS the install unless both Langfuse keys are set.</strong> Not a
+warning, deliberately: <code>LangfuseTracer</code> gates on <strong>both</strong>
+<code>LANGFUSE_SECRET_KEY</code> and <code>LANGFUSE_PUBLIC_KEY</code>, so with either missing the
+containers run and capture nothing while the operator believes recording is on — and a run that was
+never recorded can never be replayed.
+<p>The installer reads them from the install's own
+<code>.env</code> as well as the surrounding shell, and reports
+<code>✗ replay: on but missing: …</code> rather than proceeding. With <code>--replay off</code>
+(the default) it states the consequence either way: "runs will NOT be replayable".</p>
+</div>
+<p>Re-running <code>install.sh</code> against an existing <code>--dest</code> is an UPDATE, not a
+fresh install: app code updates, but an operator's edited project config
+(<code>config.env</code>, <code>llm-settings.json</code>, five engine-wide
+<code>orchestrations/config/*.json</code> files) and accumulated run state
+(<code>orchestrations/logs</code>, <code>phase-cost.jsonl</code>, KB files) both survive untouched.</p>
+<p>Prerequisites are listed in full in <a href="#prereq">§1</a> — <code>git</code>,
+<code>jq</code>, <code>node</code> (version <strong>unchecked by the installer</strong>, but 20 is
+required), <code>python3</code>, and the declared stack's own runner.</p>
+
+<h2 id="docker">3. Docker or Podman — no Docker Desktop license needed</h2>
+<p><code>install.sh</code> discovers whichever is on <code>PATH</code> — Docker first, Podman as a
+fallback (<code>EPAM_CONTAINER_RUNTIME</code> to force one). Docker <em>Desktop</em> requires a paid
+subscription above 250 employees or $10M revenue — that is a procurement conversation, not a
+technical requirement, and this installer never needs it: install Docker Engine directly inside a
+WSL2 Ubuntu distro (the standard <code>apt</code>-based Docker CE install), or use Podman, either is
+fully supported and tested (<code>test/unit/orchestration/the-installer-installs-on-podman.test.ts</code>).
+Neither docker nor podman is required at all — pass <code>--no-docker</code> and the pipeline itself
+still runs; only dashboards and the launch UI are unavailable.</p>
+<p>Every docker resource — container names, network subnet, ports — is isolated per install,
+deterministically, so two installs (or an install alongside a hand-run dev checkout) never collide
+on the same machine.</p>
+
+<h2 id="env">4. The <code>.env</code> files</h2>
+
+<div class="warn">
+<strong>Order matters:</strong> place these into <code>--dest</code> <em>before</em> running the
+installer — see <a href="#install">§2</a>. The runner-host daemon reads them once at startup, so
+filling them in afterwards leaves it holding blank credentials while the install still reports
+<code>✓ ready</code>. Recoverable by re-running <code>install.sh</code>, but seeding first makes it
+one run.
+</div>
+
+<p>Several separate files, each scoped to a different concern — documented here in full because an
+earlier version of this install flow omitted some of them entirely and it caused real confusion
+mid-run:</p>
+<table>
+<tr><th>File</th><th>Holds</th></tr>
+<tr><td>Root <code>.env</code></td><td>Provider credentials (<code>OPENROUTER_API_KEY</code>, <code>MINIMAX_API_KEY</code> — only for the <code>openrouter</code> stack) plus feature-scoped vars (<code>JIRA_EMAIL</code>/<code>JIRA_TOKEN</code>, <code>LANGFUSE_SECRET_KEY</code>/<code>LANGFUSE_PUBLIC_KEY</code>, <code>GITHUB_PERSONAL_ACCESS_TOKEN</code>). Generated by <code>install.sh</code> from <code>provider-sets.json</code> + <code>env-vars.json</code> — a var added to either needs no installer edit. The <code>claude</code> stack needs none of these: it authenticates via <code>claude login</code> (an OAuth session on disk), and an <code>ANTHROPIC_API_KEY</code> present here <strong>outranks</strong> that session and silently bills the API account instead — leave it unset for the claude stack.</td></tr>
+<tr><td><code>launch-dashboard/.env</code></td><td><code>LAUNCH_PASSWORD</code> (a fixed default, <code>abcd1234</code>, the same on every fresh install — change it via the dashboard's own change-password flow after your first login) and <code>LAUNCH_UI_PORT</code>.</td></tr>
+<tr><td>A project's own <code>config.env</code></td><td>Operational settings, not secrets — <code>JIRA_URL</code>, <code>JIRA_PROJECT_KEY</code>, <code>JIRA_CODELINE_ROOT</code> (the brownfield discovery root — a real host path to the client repos), etc. Preserved across installer updates.</td></tr>
+<tr><td>A project's own <code>orchestrations/jira/&lt;project&gt;.env</code></td><td>Per-project Jira credentials, when a project's <code>config.env</code> declares <code>SECRETS_FILE=</code> pointing at it — an opt-in override of the root <code>.env</code> defaults, for running against multiple clients' Jira instances without sharing credentials. <strong>Not provisioned by <code>install.sh</code> at all, and not carried into a new install either</strong> — see <a href="#jira">§5</a>.</td></tr>
+</table>
+
+<h2 id="jira">5. Jira credentials are NOT carried into a new install</h2>
+<div class="bad">
+<strong>A fresh <code>--dest</code> install has no Jira token, and nothing tells you so until the
+run dies.</strong> The install reports ready; the launcher then stops with
+<code>JIRA_TOKEN is not set. Export it or add it to .env before launching.</code>
+</div>
+
+<p>A project's tokens live in the file its own <code>config.env</code> declares as
+<code>SECRETS_FILE</code>. For the metrolinx project that is:</p>
+<pre><code>&lt;install&gt;/orchestrations/jira/metrolinx.env</code></pre>
+<p>It holds <code>JIRA_EMAIL</code> and <code>JIRA_TOKEN</code> (plus
+<code>CODEGRAPH_ENABLED</code>) — <strong>not</strong> the root <code>.env</code>, and not
+<code>orchestrations/projects/metrolinx/config.env</code>, which deliberately carries only
+<code>JIRA_URL</code>, <code>JIRA_PROJECT_KEY</code> and this tracker's field schema.</p>
+
+<p>Three independent reasons a new install cannot have inherited it — each checked, not assumed:</p>
+<ul>
+<li><code>.gitignore:104</code> ignores <code>orchestrations/jira/*.env</code> (only
+<code>*.env.example</code> is committed), so the file is untracked —
+<code>git ls-files orchestrations/jira/</code> returns only <code>.env.example</code>,
+<code>docker-compose.yml</code> and <code>setup.sh</code>.</li>
+<li><code>--dest</code> populates the new tree with <code>git archive</code>, which can only ship
+tracked files.</li>
+<li>It appears in neither <code>operator-config-paths.json</code> nor
+<code>generated-run-state-paths.json</code>, so no snapshot/restore step touches it either.</li>
+</ul>
+
+<p>Copy it forward yourself — ideally <em>before</em> installing, along with the other
+<code>.env</code> files (<a href="#install">§2</a>):</p>
+<pre><code>cp ~/previous-install/orchestrations/jira/metrolinx.env \
+   ~/amsd-pipeline/orchestrations/jira/metrolinx.env
+chmod 600 ~/amsd-pipeline/orchestrations/jira/metrolinx.env</code></pre>
+<p>Skip it and the run stops at the launcher, because metrolinx's <code>config.env</code> declares
+<code>REQUIRED_KEYS=JIRA_TOKEN</code>.</p>
+
+<h2 id="run">6. Running a ticket — <code>orchestrations/scripts/pipeline</code></h2>
+<p>One command. Everything else is derived: the ticket's prefix names the project (each project's
+<code>config.env</code> declares its own <code>JIRA_PROJECT_KEY</code>), the project names its
+codelines, and the active provider set names the models.</p>
+<pre><code>cd &lt;install&gt;
+./orchestrations/scripts/pipeline --list                     # projects, and the ticket prefix each owns
+./orchestrations/scripts/pipeline --jira AMSD-1919 --dry-run # check everything, start nothing
+./orchestrations/scripts/pipeline --jira AMSD-1919           # run it</code></pre>
+
+<div class="note">
+This is a <strong>wrapper, not a second pipeline</strong> — its own header says why: "A second
+implementation of the run is how two things that must agree start to drift." It checks what a run
+needs, says plainly what is missing, and hands off to the tested launcher. Do not write another one.
+</div>
+
+<h4>Environment it needs</h4>
+<p>Normally none — the values come from files. Two optional overrides:</p>
+<ul>
+<li><code>EPAM_PROVIDER_SET</code> picks the stack; unset, <code>provider-sets.json</code>'s
+<code>defaultSet</code> wins. The installer's own closing hint spells the switch out:
+<code>EPAM_PROVIDER_SET=&lt;claude|codemie|openrouter|mockserver&gt; ./orchestrations/scripts/pipeline --jira ABC-1234</code></li>
+<li><code>NODE_BIN</code>, if Node 20 is not the <code>node</code> on <code>PATH</code>.</li>
+</ul>
+
+<h4>What it refuses to start on</h4>
+<p>Printed as one <code>✗ this run cannot start:</code> list, before anything is spent:</p>
+<ul>
+<li>no <code>.env</code> at the install root;</li>
+<li>no active provider set, and none declared as the default;</li>
+<li>the project has no overlay <code>config.&lt;set&gt;.env</code> for the active stack;</li>
+<li>the stack's runner is not on <code>PATH</code>;</li>
+<li><code>jq</code> or <code>git</code> missing.</li>
+</ul>
+<p>Docker is <em>reported</em>, never required: "dashboards unavailable (docker not running) — the
+run itself does not need them".</p>
+
+<h4>The env-sourcing chain</h4>
+<p>The wrapper then <code>exec</code>s the tested launcher,
+<code>orchestrate.sh --project &lt;name&gt; --yes</code>, which is what loads the env files — in this
+order, project config deliberately last so a stale global <code>.env</code> can never point a run at
+the wrong Jira:</p>
+<ol>
+<li><code>&lt;install&gt;/.env</code></li>
+<li><code>orchestrations/projects/&lt;name&gt;/config.env</code></li>
+<li>the <code>SECRETS_FILE</code> that config declares — e.g.
+<code>orchestrations/jira/metrolinx.env</code></li>
+<li>the project config again, so it wins over the secrets file</li>
+</ol>
+<p>It then hard-fails on any key in the project's <code>REQUIRED_KEYS</code> — unioned with the
+active set's own required keys, read from <code>provider-sets.json</code> rather than named in any
+script — that is still empty. That is the loud failure you get if <a href="#jira">§5</a> was
+skipped.</p>
+
+<h2 id="uis">7. Where to watch it — dashboards, Langfuse, Grafana</h2>
+
+<p>The installer starts these with the observability stack. The ports below are the defaults; if
+another install already holds one, this install steps every port by +10 and records what it
+actually used in <code>&lt;install&gt;/.pipeline-services-state.env</code>. Read that file to get
+the real URLs for a given install:</p>
+
+<pre><code>grep '^OBS_' &lt;install&gt;/.pipeline-services-state.env</code></pre>
+
+<table>
+<tr><th>What</th><th>Default URL</th><th>Port variable</th><th>What it shows</th></tr>
+<tr><td>Pipeline dashboards</td><td><code>http://localhost:8092</code></td><td><code>OBS_DASHBOARD_PORT</code></td><td>The run itself — see the pages below</td></tr>
+<tr><td>Langfuse</td><td><code>http://localhost:3100</code></td><td><code>OBS_LANGFUSE_PORT</code></td><td>Every model call: prompt, reply, tokens, cost, latency</td></tr>
+<tr><td>Grafana</td><td><code>http://localhost:3001</code></td><td><code>OBS_GRAFANA_PORT</code></td><td>Cost and throughput over time</td></tr>
+<tr><td>Launch dashboard</td><td><code>http://localhost:8099</code></td><td><code>LAUNCH_UI_PORT</code></td><td>Queue and launch runs from a browser</td></tr>
+<tr><td>ClickHouse</td><td><code>http://localhost:8123</code></td><td><code>OBS_CLICKHOUSE_PORT</code></td><td>Langfuse's store — not browsed directly</td></tr>
+</table>
+
+<p>The dashboard pages, all under the dashboard URL:</p>
+
+<table>
+<tr><th>Page</th><th>Use it for</th></tr>
+<tr><td><code>/monitor.html</code></td><td>Live run progress — the one to keep open while a run is going</td></tr>
+<tr><td><code>/agent-activity.html</code></td><td>What each agent did, per story, with its tool calls</td></tr>
+<tr><td><code>/health.html</code></td><td>Self-healing events and whether the run is recovering</td></tr>
+<tr><td><code>/scorecard.html</code></td><td>The end-of-run result</td></tr>
+<tr><td><code>/quality-dashboard.html</code></td><td>Gate outcomes and coverage</td></tr>
+<tr><td><code>/cpa-details.html</code></td><td>Cost and iteration estimates per story</td></tr>
+</table>
+
+<div class="note"><strong>Langfuse credentials.</strong> The keys are the
+<code>LANGFUSE_PUBLIC_KEY</code> and <code>LANGFUSE_SECRET_KEY</code> in the install's
+<code>.env</code>. With <code>--replay on</code> the install refuses to complete unless both are
+set, because a run that is not recorded cannot be replayed.</div>
+
+<div class="warn"><strong>Before the first run</strong> the dashboards serve
+<code>404</code> for <code>/logs/…</code> and <code>/prd.json</code>. That is expected —
+<code>pre-run-reset.sh</code> mounts them when a run starts.</div>
+
+<h2 id="dashboard">8. The launch dashboard &amp; runner</h2>
+<p><code>install.sh</code> provisions the launch dashboard (Flutter frontend + Node backend) fully
+by itself: builds and isolates its docker stack, creates <code>launch-dashboard/.env</code> with
+the default password, and starts <code>runner-host.js</code> — the HOST process (not dockerized;
+a container cannot exec a host process) that actually polls the spool and launches real pipeline
+runs — as a managed, pidfile-tracked daemon. A second daemon, <code>snapshot-watch.js</code>, is
+also started automatically: it keeps <code>agent-monitor</code>'s <code>build-info.json</code>
+fresh, and without it every launched run's own pre-flight hard-fails immediately.</p>
+
+<h2 id="services">9. Bouncing services — <code>pipeline-services.sh</code></h2>
+<p>For a WSL restart, or just wanting to restart cleanly, without losing any data (never
+<code>-v</code>, never <code>--rmi</code> — this is a pause, not an uninstall):</p>
+<pre><code>bash orchestrations-installer/pipeline-services.sh --stop
+bash orchestrations-installer/pipeline-services.sh --start</code></pre>
+<p><code>--start</code> reconnects to the exact subnet/ports/project identity the original install
+resolved (persisted in <code>.pipeline-services-state.env</code>), never re-rolling a different one.</p>
+
+<h2 id="health">10. Checking readiness — <code>pipeline-health.sh</code></h2>
+<p>A different question from <code>install.sh --check</code> ("did the install complete") — this
+asks "can I launch a real run from here, right now":</p>
+<pre><code>bash orchestrations-installer/pipeline-health.sh                       # the tree this script lives in
+bash orchestrations-installer/pipeline-health.sh --dest ~/amsd-pipeline  # a specific install</code></pre>
+<p>Pass <code>--dest</code> whenever you are not standing inside the install you mean: without it
+the script resolves the tree from its own location, which is wrong the moment anything else runs it.
+<code>install.sh</code> runs this itself as its last step — advisory, but if it reports problems the
+installer's final word is "installed, but NOT ready to launch" and it exits 1.</p>
+<p>Checks platform/tooling, probes the container runtime rather than trusting <code>command -v</code>,
+reads the active provider set live and flags the API-key-outranks-OAuth trap explicitly, checks
+memory/disk headroom, verifies a selected project's codeline-discovery root actually resolves to
+git repos, and confirms both host daemons (<code>runner-host.js</code>, <code>snapshot-watch.js</code>)
+are actually running — reporting unhealthy, not just a warning, if either is declared but not
+running.</p>
+
+<h2 id="uninstall">11. Uninstalling</h2>
+<pre><code>bash orchestrations-installer/install.sh --uninstall --dest ~/amsd-pipeline</code></pre>
+<p>Removes this install's docker footprint — containers, network, volumes, locally-built images —
+and stops both host daemons. Structurally incapable of touching another install or the dev
+checkout: an isolated install's project names never share the dev checkout's own naming shape, by
+construction. Files on disk are never touched; remove the directory yourself once you are done
+with it.</p>
+
+<h2 id="trouble">12. Troubleshooting</h2>
+<table>
+<tr><th>Symptom</th><th>What it means</th></tr>
+<tr><td>Install reports "ready" but the dashboard login fails</td><td>The running container may have started before a <code>.env</code> edit — the file and the live process can desync. Restart with <code>pipeline-services.sh --stop</code> then <code>--start</code> to pick up the current file.</td></tr>
+<tr><td>A launched run fails pre-flight instantly</td><td>Run <code>pipeline-health.sh</code> first — it checks exactly the things a run's own pre-flight also checks (both host daemons, credentials, memory), before you spend anything.</td></tr>
+<tr><td>"MINIMAX_API_KEY is not set" on the <code>claude</code> stack</td><td>You are on one of the older per-project launchers, which check every vendor's key unconditionally regardless of the active stack — <code>tier3-metrolinx-run.sh:153</code> and <code>tier3-skyscanner-app-run.sh:89</code>. Neither <code>install.sh</code> nor the supported entry point has this problem: <code>orchestrations/scripts/pipeline</code> → <code>orchestrate.sh</code> reads the ACTIVE set's declared credentials (<code>lib/set-credentials.sh</code>), and the <code>claude</code> stack declares none. Use <a href="#run">§6</a>.</td></tr>
+<tr><td><code>JIRA_TOKEN is not set</code> right after a successful install</td><td>A fresh <code>--dest</code> install cannot have inherited the project's secrets file — it is gitignored, so <code>git archive</code> could not carry it. Copy it from your previous install: <a href="#jira">§5</a>.</td></tr>
+<tr><td>The install fails at <code>npm run build</code> with the prerequisites all ✓</td><td>Almost certainly the node version. <code>install.sh</code> checks that <code>node</code> exists, never which version it is; tsup needs 20. <a href="#prereq">§1</a>.</td></tr>
+<tr><td>A saved run stays "pending" forever after it actually failed</td><td>The dashboard's database and the pipeline's own status file can desync — check <code>launch-dashboard/spool/status/&lt;id&gt;.json</code> for the real outcome.</td></tr>
+</table>
+
+<footer>
+<p>Revised 2026-09-07: prerequisites (§1), the complete flag set and the two-step first install
+(§2), the Jira-credentials gotcha (§5) and how to actually run a ticket (§6) were added, each
+verified against <code>install.sh</code>, <code>pipeline-health.sh</code>,
+<code>orchestrations/scripts/pipeline</code> and <code>orchestrate.sh</code> as they stand today.
+The same content, in markdown, is <code>INSTALL.md</code> at the repo root.</p>
+</footer>
+
+</div>
+</body>
+</html>

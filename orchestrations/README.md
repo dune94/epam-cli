@@ -1,6 +1,6 @@
 # EPAM CLI — Agent Orchestration
 
-Multi-agent orchestration system for building epam-cli features autonomously using Claude Code (and other AI CLIs) with parallel execution, phase gates, cost tracking, and live dashboards.
+Multi-agent orchestration system for building amsd-pipeline features autonomously using Claude Code (and other AI CLIs) with parallel execution, phase gates, cost tracking, and live dashboards.
 
 Based on the fitnessapp/shadow-play orchestration pattern. Supports: **claude**, **codex**, **opencode**, **codemie-claude**, and (future) **epam** itself.
 
@@ -64,7 +64,15 @@ orchestrations/
 
 ## Quick Start
 
+Installation, prerequisites and the two-step first `.env` are in **[../INSTALL.md](../INSTALL.md)**.
+
 ```bash
+# ── Run one Jira ticket end to end — the supported entry point ──
+# The ticket's prefix selects the project; everything else is derived.
+./orchestrations/scripts/pipeline --list                      # projects, and the prefix each owns
+./orchestrations/scripts/pipeline --jira AMSD-1919 --dry-run  # check everything, start nothing
+./orchestrations/scripts/pipeline --jira AMSD-1919
+
 # Run a phase (bash mode — default)
 ./orchestrations/scripts/run-agent-orchestration.sh --phase finops
 
@@ -80,7 +88,9 @@ orchestrations/
 # View dashboards (requires the observability docker stack)
 # Installed automatically by orchestrations-installer/install.sh (or npx amsd-pipeline);
 # to bring it up by hand instead: docker compose -f docker-compose.observability.yml up -d
-# Then open: http://localhost:8092/monitor.html
+# Then open: http://localhost:8092/monitor.html   (baseline port; an install that hit a
+#   collision steps it by +10 — the value it actually used is in .pipeline-services-state.env)
+```
 
 ### Dashboard builds (Eleventy)
 
@@ -292,7 +302,7 @@ View in the **Agent Activity** dashboard (`agent-activity.html`) — filterable 
 
 ## Future: CLI Integration
 
-Once epam-cli is mature, the orchestration mechanism will be injected into the CLI as a first-class feature:
+Once amsd-pipeline is mature, the orchestration mechanism will be injected into the CLI as a first-class feature:
 
 ```bash
 epam orchestrate --phase finops          # Run a phase
@@ -301,4 +311,4 @@ epam orchestrate status                  # Show phase/story status
 epam orchestrate story EPAM-001          # Run single story
 ```
 
-This transforms epam-cli from an AI assistant into a full **autonomous development orchestrator** — using itself to build itself.
+This transforms amsd-pipeline from an AI assistant into a full **autonomous development orchestrator** — using itself to build itself.

@@ -405,16 +405,48 @@ function emitCostSnapshot({
   // The PROMPT, when the caller has it: the cost seam never sees the prompt, only the caller
   // that built it does, so it is offered here rather than guessed at downstream.
   input,
+  // The REPLY, for a runner that returned text rather than a result document. Same reasoning as
+  // `input`: only the caller has it, and without it those seams record an empty turn.
+  outputText,
 }) {
   try {
-    if (!resultFile || !activityFile) return null;
+    if (!activityFile) return null;
+    // A REPLY IS A REPLY, whatever shape the runner returned it in.
+    //
+    // This required a resultFile and returned null without one — so every seam invoked with
+    // `--output-format text` and no ORCH_JSON_RESULT recorded NOTHING. Confirmed from /proc on a
+    // live writer child 2026-09-07: `claude --print --output-format text`, EPAM_AGENT_NAME set,
+    // ORCH_JSON_RESULT absent. That is the writer, repro-test-writer and the qa-gates — the
+    // fourteen seams whose cassettes export as {"text": "", "toolCalls": []}.
+    //
+    // outputText lets the ONE standard function serve those callers too, instead of a second
+    // recording path growing beside it. A caller with a result document still passes resultFile
+    // and nothing changes for it.
     let raw = '';
-    try { raw = fs.readFileSync(resultFile, 'utf8'); } catch { return null; }
-    const cost = parseCostRecord(raw);
-    if (!cost) return null;
+    if (resultFile) {
+      try { raw = fs.readFileSync(resultFile, 'utf8'); } catch { raw = ''; }
+    }
+    if (!raw && !outputText) return null;
+    let cost = raw ? parseCostRecord(raw) : null;
+    if (!cost && !outputText) return null;
+    // A TEXT-FORMAT RUNNER REPORTS NO USAGE, and every consumer below reads cost.* directly —
+    // buildCostSnapshot and appendLedgerRecord both do. Passing null threw, the outer catch
+    // swallowed it, and emitCostSnapshot returned null: the call was made, the reply was in hand,
+    // and nothing was recorded. A zero record says exactly what is true — this call happened and
+    // its usage is unknown — instead of pretending the call did not happen.
+    if (!cost) {
+      cost = {
+        costUsd: 0, tokensIn: 0, tokensOut: 0, tokensCached: 0, tokensCacheCreate: 0,
+        costIsEstimate: false, costUnknown: true,
+      };
+    }
     // Nothing happened at all — don't clutter the timeline with empty records. Cached tokens
     // count as something happening: a fully-cached call still consumed input and still bills.
-    if (!cost.costUsd && !cost.tokensIn && !cost.tokensOut && !cost.tokensCached) return null;
+    // A CALL WITH NO PRICED USAGE STILL HAPPENED. An all-zero cost record used to mean "nothing
+    // happened" and was dropped; with a reply in hand it plainly did happen, and dropping it is
+    // how a seam ends up with no trace at all rather than a cheap one.
+    if (!cost.costUsd && !cost.tokensIn && !cost.tokensOut && !cost.tokensCached
+        && !outputText) return null;
     // AN UNEXPLAINED $0 KEEPS ITS EVIDENCE.
     //
     // costUnknown flags a zero cost alongside real tokens — a provider that did not price the
@@ -454,7 +486,9 @@ function emitCostSnapshot({
         agent, storyId, phase, model, provider, turns, rung,
         startedAt, endedAt,
         // The words, not just the price. Read from the result this function already holds.
-        output: replyTextFrom(_parsedResult(raw)),
+        // The result document when there is one, the caller's text when there is not — so a
+        // text-format runner records a real turn instead of an empty one.
+        output: (raw ? replyTextFrom(_parsedResult(raw)) : '') || outputText || '',
         // And the prompt. The caller passes it when it has one; otherwise it is read from the
         // pointer the invoker left, which is the only channel that crosses to the shell edge.
         input: promptForTrace(input, agent),
@@ -463,7 +497,7 @@ function emitCostSnapshot({
         // afterwards leaves no file behind. The runner's `--print --output-format json` result
         // never carries them; its session transcript does. Matched to THIS call or not at all:
         // attributing another seam's transcript would replay the wrong action, undetectably.
-        toolCalls: toolCallsForCall(_parsedResult(raw), startedAt, endedAt),
+        toolCalls: raw ? toolCallsForCall(_parsedResult(raw), startedAt, endedAt) : [],
         costUsd: cost.costUsd, tokensIn: cost.tokensIn, tokensOut: cost.tokensOut,
         cacheRead: cost.tokensCached, cacheCreate: cost.tokensCacheCreate,
         costIsEstimate: cost.costIsEstimate,

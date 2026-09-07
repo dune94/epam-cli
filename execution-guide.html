@@ -1,0 +1,214 @@
+<!doctype html>
+<html lang="en">
+<head>
+<meta charset="utf-8">
+<meta name="viewport" content="width=device-width, initial-scale=1">
+<title>amsd-pipeline — Execution Guide</title>
+<style>
+:root{
+  --bg:#fbfbfa; --panel:#fff; --ink:#1c1c1a; --muted:#5f5f58; --line:#e2e0da;
+  --accent:#7a4a1e; --accent-soft:#f5ede3;
+  --code-bg:#f4f2ee; --code-ink:#3a3a34;
+  --pre-bg:#211f1c; --pre-ink:#e8e5de;
+  --ok:#2f6b3d; --ok-bg:#eaf3ec;
+  --warn:#8a5a00; --warn-bg:#fdf3e0;
+  --bad:#9a2f2f; --bad-bg:#fbecec;
+}
+@media (prefers-color-scheme: dark){
+  :root{
+    --bg:#16150f; --panel:#1e1d17; --ink:#eae7dd; --muted:#a09b8d; --line:#33312a;
+    --accent:#d5a26a; --accent-soft:#2a251c;
+    --code-bg:#26241d; --code-ink:#ded9cc;
+    --pre-bg:#0e0d0a; --pre-ink:#e2ded2;
+    --ok:#8fd0a0; --ok-bg:#1c2a1f;
+    --warn:#e2b566; --warn-bg:#2c2417;
+    --bad:#e59a9a; --bad-bg:#2c1b1b;
+  }
+}
+*{box-sizing:border-box}
+body{
+  margin:0; background:var(--bg); color:var(--ink);
+  font:16px/1.62 -apple-system,BlinkMacSystemFont,"Segoe UI",Roboto,Helvetica,Arial,sans-serif;
+  -webkit-font-smoothing:antialiased;
+}
+.wrap{max-width:860px;margin:0 auto;padding:48px 22px 96px}
+header.top{border-bottom:2px solid var(--accent);padding-bottom:20px;margin-bottom:8px}
+h1{font-size:2rem;margin:0 0 6px;letter-spacing:-.02em}
+.sub{color:var(--muted);margin:0;font-size:1.02rem}
+h2{font-size:1.42rem;margin:52px 0 14px;padding-top:14px;border-top:1px solid var(--line);letter-spacing:-.01em}
+h2:first-of-type{border-top:none}
+h3{font-size:1.1rem;margin:30px 0 10px}
+h4{font-size:.97rem;margin:22px 0 8px;color:var(--muted);text-transform:uppercase;letter-spacing:.06em}
+p,li{margin:.6em 0}
+code{background:var(--code-bg);color:var(--code-ink);padding:.13em .4em;border-radius:4px;
+  font:.88em/1.5 ui-monospace,SFMono-Regular,Menlo,Consolas,"Liberation Mono",monospace;
+  word-break:break-word}
+pre{background:var(--pre-bg);color:var(--pre-ink);padding:15px 17px;border-radius:8px;
+  overflow-x:auto;font:13px/1.65 ui-monospace,SFMono-Regular,Menlo,Consolas,"Liberation Mono",monospace;
+  margin:.7em 0}
+pre code{background:none;color:inherit;padding:0;font-size:inherit}
+table{border-collapse:collapse;width:100%;margin:1em 0;font-size:.93rem;display:block;overflow-x:auto}
+th,td{border:1px solid var(--line);padding:8px 11px;text-align:left;vertical-align:top}
+th{background:var(--accent-soft);font-weight:600}
+td:first-child{white-space:nowrap;color:var(--muted);font-variant-numeric:tabular-nums}
+.note{border-left:3px solid var(--accent);background:var(--panel);padding:12px 16px;border-radius:0 6px 6px 0;margin:1.1em 0}
+.ok{border-left:3px solid var(--ok);background:var(--ok-bg);padding:12px 16px;border-radius:0 6px 6px 0;margin:1.1em 0}
+.warn{border-left:3px solid var(--warn);background:var(--warn-bg);padding:12px 16px;border-radius:0 6px 6px 0;margin:1.1em 0}
+.bad{border-left:3px solid var(--bad);background:var(--bad-bg);padding:12px 16px;border-radius:0 6px 6px 0;margin:1.1em 0}
+.tag{display:inline-block;font-size:.72rem;font-weight:700;letter-spacing:.06em;text-transform:uppercase;
+  padding:2px 8px;border-radius:99px;vertical-align:middle;margin-left:8px}
+.tag-unver{background:var(--warn-bg);color:var(--warn);border:1px solid var(--warn)}
+.tag-ver{background:var(--ok-bg);color:var(--ok);border:1px solid var(--ok)}
+nav.toc{background:var(--panel);border:1px solid var(--line);border-radius:8px;padding:16px 20px;margin:26px 0}
+nav.toc h4{margin-top:0}
+nav.toc ol{margin:0;padding-left:20px}
+nav.toc a{color:var(--accent);text-decoration:none}
+nav.toc a:hover{text-decoration:underline}
+.flow{background:var(--panel);border:1px solid var(--line);border-radius:8px;padding:4px 20px 18px;margin:20px 0}
+footer{margin-top:64px;padding-top:18px;border-top:1px solid var(--line);color:var(--muted);font-size:.87rem}
+</style>
+
+</head>
+<body>
+<div class="wrap">
+
+<header class="top">
+<h1>amsd-pipeline — Execution Guide</h1>
+<p class="sub">Run a ticket, watch it, pause it, resume it, stop it.</p>
+</header>
+
+<div class="ok"><strong>The one command.</strong> Everything on this page is optional detail
+around a single script — <code>orchestrations/scripts/pipeline</code>:
+
+<pre><code>cd &lt;install&gt;
+./orchestrations/scripts/pipeline --jira AMSD-1234</code></pre>
+
+That is a complete run. Add <code>--dry-run</code> to check first without spending, or
+<code>--list</code> to see what this install can run. The script resolves the project, the stack
+and the credentials itself, refuses to start with a plain list of anything missing, and then hands
+off to the tested launcher — it reimplements no pipeline logic.</div>
+
+<nav class="toc">
+<h4>Contents</h4>
+<ol>
+<li><a href="#before">Before you run</a></li>
+<li><a href="#run">Run a ticket</a></li>
+<li><a href="#watch">Where to watch it — dashboards, Langfuse, Grafana</a></li>
+<li><a href="#pauses">Pausing for review</a></li>
+<li><a href="#resume">Resuming a paused or interrupted run</a></li>
+<li><a href="#stop">Stopping a run, and cleaning up after it</a></li>
+<li><a href="#cost">What a run cost</a></li>
+<li><a href="#trouble">When a run will not start</a></li>
+</ol>
+</nav>
+
+<h2 id="before">1. Before you run</h2>
+<p>Install first — see <code>install-guide.html</code> or <code>INSTALL.md</code>. A run needs
+three things that the installer does not supply for you:</p>
+<table>
+<tr><th>What</th><th>Where it lives</th></tr>
+<tr><td>Credentials for the stack</td><td>the install's <code>.env</code></td></tr>
+<tr><td>Jira credentials</td><td><code>&lt;install&gt;/orchestrations/jira/&lt;project&gt;.env</code> — copy it from a previous install; <code>install.sh</code> does not carry it</td></tr>
+<tr><td>The codeline root</td><td><code>JIRA_CODELINE_ROOT</code>, the directory holding the repositories the run may modify</td></tr>
+</table>
+<div class="warn"><strong>Check before spending.</strong> <code>--dry-run</code> resolves the
+ticket, the project and the stack, and reports what is missing, without making a model call.</div>
+
+<h2 id="run">2. Run a ticket</h2>
+<pre><code>cd &lt;install&gt;
+
+# what this install can run
+./orchestrations/scripts/pipeline --list
+
+# check without spending
+./orchestrations/scripts/pipeline --jira AMSD-1234 --dry-run
+
+# run it
+./orchestrations/scripts/pipeline --jira AMSD-1234</code></pre>
+<p>The ticket prefix chooses the project: each project declares its own
+<code>JIRA_PROJECT_KEY</code>. The wrapper refuses to start with a plain list of anything missing,
+then hands off to the tested launcher. It reimplements nothing.</p>
+<p>To run on a different stack for one run:</p>
+<pre><code>EPAM_PROVIDER_SET=openrouter ./orchestrations/scripts/pipeline --jira AMSD-1234</code></pre>
+
+<h2 id="watch">3. Where to watch it — dashboards, Langfuse, Grafana</h2>
+<p>Defaults below. If another install already holds a port, this install steps every port by +10
+and records what it used. Read the real values for an install with:</p>
+<pre><code>grep '^OBS_\|^LAUNCH_' &lt;install&gt;/.pipeline-services-state.env</code></pre>
+<table>
+<tr><th>What</th><th>Default URL</th><th>Shows</th></tr>
+<tr><td>Pipeline dashboards</td><td><code>http://localhost:8092</code></td><td>The run — pages below</td></tr>
+<tr><td>Langfuse</td><td><code>http://localhost:3100</code></td><td>Every model call: prompt, reply, tokens, cost, latency</td></tr>
+<tr><td>Grafana</td><td><code>http://localhost:3001</code></td><td>Cost and throughput over time</td></tr>
+<tr><td>Launch dashboard</td><td><code>http://localhost:8099</code></td><td>Queue and launch runs from a browser</td></tr>
+</table>
+<table>
+<tr><th>Dashboard page</th><th>Use it for</th></tr>
+<tr><td><code>/monitor.html</code></td><td>Live progress — keep this open during a run</td></tr>
+<tr><td><code>/agent-activity.html</code></td><td>What each agent did, per story, with its tool calls</td></tr>
+<tr><td><code>/health.html</code></td><td>Self-healing events and whether the run is recovering</td></tr>
+<tr><td><code>/scorecard.html</code></td><td>The end-of-run result</td></tr>
+<tr><td><code>/quality-dashboard.html</code></td><td>Gate outcomes and coverage</td></tr>
+<tr><td><code>/cpa-details.html</code></td><td>Cost and iteration estimates per story</td></tr>
+</table>
+<div class="note">Before the first run the dashboards serve <code>404</code> for
+<code>/logs/…</code> and <code>/prd.json</code>. That is expected: <code>pre-run-reset.sh</code>
+mounts them when a run starts.</div>
+<div class="warn">Langfuse only records when the install was made with <code>--replay on</code> and
+both <code>LANGFUSE_PUBLIC_KEY</code> and <code>LANGFUSE_SECRET_KEY</code> are set. A run that is
+not recorded cannot be replayed.</div>
+
+<h2 id="pauses">4. Pausing for review</h2>
+<p>Two checkpoints, each opt-in, so you can approve what the run produced before it spends more:</p>
+<table>
+<tr><th>Variable</th><th>Stops</th><th>Review</th></tr>
+<tr><td><code>EPAM_PAUSE_AFTER_AGENT_MINT=1</code></td><td>After the roster is minted and assigned, before the spec pass</td><td>The agents and who owns each story</td></tr>
+<tr><td><code>EPAM_PAUSE_BEFORE_WRITER=1</code></td><td>After inputs are ready, before the writer changes code</td><td>The PRD and the story inputs</td></tr>
+</table>
+<pre><code>EPAM_PAUSE_AFTER_AGENT_MINT=1 EPAM_PAUSE_BEFORE_WRITER=1 \
+  ./orchestrations/scripts/pipeline --jira AMSD-1234</code></pre>
+<p>At each pause the run prints the files to inspect and the exact command to continue.</p>
+
+<h2 id="resume">5. Resuming a paused or interrupted run</h2>
+<p>A resume continues the SAME run from its checkpoint. It does not re-mint the roster and does not
+re-assign over your edits.</p>
+<pre><code>EPAM_RESUME_RUN=&lt;run-id&gt; bash orchestrations/scripts/&lt;launcher&gt; --yes</code></pre>
+<p>The run id is printed at every pause (for example <code>20260907T111214Z</code>). To run
+straight through the remaining stages, set both pause variables to <code>0</code> on the resume.</p>
+
+<h2 id="stop">6. Stopping a run, and cleaning up after it</h2>
+<pre><code># stop the run
+pkill -f tier3-.*-run.sh ; pkill -f run-agent-orchestration.sh
+
+# stop this install's services
+bash orchestrations-installer/pipeline-services.sh --stop --dest &lt;install&gt;</code></pre>
+<div class="warn"><strong>Killing the run is not the whole job.</strong> The observability and
+launch stacks keep running — postgres, clickhouse, langfuse, grafana, the dashboards, the launch
+UI. They hold memory, and their networks hold subnets that the next install needs. Stop the
+services as well.</div>
+
+<h2 id="cost">7. What a run cost</h2>
+<p>Every priced call is appended to the run's ledger:</p>
+<pre><code>&lt;install&gt;/orchestrations/logs/phase-cost.jsonl</code></pre>
+<p>Each line carries the agent, the resolved model, tokens in and out, and
+<code>task_cost_usd</code>. Grafana charts the same data over time, and Langfuse shows the
+individual call.</p>
+
+<h2 id="trouble">8. When a run will not start</h2>
+<table>
+<tr><th>Message</th><th>Cause</th></tr>
+<tr><td><code>.env is missing</code></td><td>Copy <code>.env.example</code> and fill it in.</td></tr>
+<tr><td><code>JIRA_TOKEN is not set</code></td><td>The project's secrets file is missing — copy <code>orchestrations/jira/&lt;project&gt;.env</code> from a previous install.</td></tr>
+<tr><td><code>no provider configured</code></td><td>No provider set resolved. Set <code>EPAM_PROVIDER_SET</code>, or run from an install whose project config declares one.</td></tr>
+<tr><td><code>JIRA_CODELINE_ROOT: unbound variable</code></td><td>Export it, pointing at the directory holding the codelines.</td></tr>
+<tr><td><code>refusing to launch: the dependency manifest is not valid</code></td><td>The project's <code>dependency-check.json</code> failed review. The message names the issue; nothing was reset and nothing installed.</td></tr>
+<tr><td>Pre-flight <code>✗ langfuse: NOT serving</code></td><td>The stack is down or still starting. <code>pipeline-services.sh --start</code>, then re-check.</td></tr>
+</table>
+
+<footer>
+<p>Install: <code>install-guide.html</code> / <code>INSTALL.md</code>.</p>
+</footer>
+
+</div>
+</body>
+</html>

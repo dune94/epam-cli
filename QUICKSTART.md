@@ -1,26 +1,23 @@
 # EPAM CLI — Quick Start
 
-## Live demo (Skyscanner travel app, ~10 min)
+## Run a ticket (the supported path)
 
-**Required:** `RAPIDAPI_KEY` (Skyscanner subscription on RapidAPI)
+Install first — see **[INSTALL.md](INSTALL.md)** for prerequisites and the two-step install.
 
 ```bash
-# 1. Clone and install
-git clone https://github.com/dune94/epam-cli && cd epam-cli
-npm install
+# what this install can run
+./orchestrations/scripts/pipeline --list
 
-# 2. Set your API key
-export EPAM_API_KEY_ANTHROPIC=<your-anthropic-key>
-export RAPIDAPI_KEY=<your-rapidapi-key>
+# check a ticket without spending anything
+./orchestrations/scripts/pipeline --jira AMSD-1234 --dry-run
 
-# 3. Build the Skyscanner app from scratch via multi-agent orchestration
-bash orchestrations/scripts/run-travel-app-test.sh
+# run it
+./orchestrations/scripts/pipeline --jira AMSD-1234
 ```
 
-The orchestration runs three phases (scaffold → core → ui\_and\_review), builds a
-full TypeScript + Express + HTML dashboard app autonomously, and prints a scorecard
-at the end. Open `orchestrations/dashboards/live/monitor.html` in a browser to watch
-progress in real time.
+The wrapper resolves the project from the ticket prefix, refuses to start with a plain list of
+what is missing, and hands off to the tested launcher. Watch progress at
+`orchestrations/dashboards/live/monitor.html`.
 
 ---
 

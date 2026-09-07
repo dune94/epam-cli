@@ -358,6 +358,7 @@ RUNNER="$("$NODE_BIN" -e '
 if [ -n "$RUNNER" ]; then
     if command -v "$RUNNER" >/dev/null 2>&1; then _ok "$RUNNER (the '$STACK' runner)"
     else _bad "'$RUNNER' is not on PATH — the '$STACK' stack cannot run without it"; FAILED=1; fi
+fi
 
 # PYTHON IS A RUNTIME DEPENDENCY, not an optional extra: 88 handlers under
 # orchestrations/scripts/lib/handlers are executed with it.
@@ -366,11 +367,16 @@ if [ -n "$RUNNER" ]; then
 # stdlib, plus one LOCAL module (_testfile, imported by siblings in the same directory). So there
 # is no venv to provision, no pip install, no requirements.txt — the interpreter is the whole
 # requirement, and checking for it is the whole job.
+#
+# UNCONDITIONAL, and it was not. This check sat INSIDE the `[ -n "$RUNNER" ]` block above, so a
+# stack whose settings file declares no runner skipped a stated hard requirement entirely and the
+# install reported ready without it. pipeline-health.sh has always checked python3
+# unconditionally, so the two disagreed about whether the machine was fit to run — and the
+# installer, the one an operator trusts first, was the lenient one.
 if command -v python3 >/dev/null 2>&1; then
     _ok "python3 ($(python3 -V 2>&1 | awk '{print $2}')) — 88 handlers need it"
 else
     _bad "python3 is not on PATH — 88 pipeline handlers cannot run without it"; FAILED=1
-fi
 fi
 
 # ── Credentials: what this stack needs, from what it declares ───────────────

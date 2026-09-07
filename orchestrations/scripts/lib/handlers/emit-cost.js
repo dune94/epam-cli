@@ -34,5 +34,17 @@ try {
     phase: process.env.PHASE || '',
     model: process.env.AI_MODEL || '',
     provider: process.env.AI_PROVIDER || '',
+    // THE TWO HALVES OF THE TURN, from the pointers the shell caller leaves. Without these the
+    // trace records cost and nothing else, and the exported cassette turn is
+    // {"text": "", "toolCalls": []} — unreplayable. EPAM_TRACE_REPLY_TEXT carries the reply for a
+    // runner that returned text rather than a result document.
+    input: (() => {
+      const f = process.env.EPAM_TRACE_PROMPT_FILE;
+      if (!f) return '';
+      try { return require('fs').readFileSync(f, 'utf8'); } catch { return ''; }
+    })(),
+    outputText: process.env.EPAM_TRACE_REPLY_TEXT || '',
+    startedAt: process.env.EPAM_TRACE_STARTED_AT || '',
+    endedAt: process.env.EPAM_TRACE_ENDED_AT || '',
   });
 } catch { /* cost emission must never break the step it measured */ }

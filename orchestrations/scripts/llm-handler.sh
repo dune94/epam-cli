@@ -1,7 +1,8 @@
 #!/usr/bin/env bash
 
 # WHAT A CALL COST, recorded where every call passes. See lib/cost-record.sh.
-. "$(cd "$(dirname "${BASH_SOURCE[0]}")" && pwd)/lib/cost-record.sh" 2>/dev/null || true
+_LLM_HANDLER_DIR="$(cd "$(dirname "${BASH_SOURCE[0]}")" && pwd)"
+. "$_LLM_HANDLER_DIR/lib/cost-record.sh" 2>/dev/null || true
 # llm-handler.sh — THE CENTRAL LLM HANDLER.
 #
 # Every LLM call in the pipeline enters here and is dispatched to a vendor handler. Nothing
@@ -805,6 +806,33 @@ for provider in "${providers[@]}"; do
       EPAM_TRACE_PROMPT_FILE="${PROMPT_FILE:-}" \
       record_call_cost "${ORCH_JSON_RESULT:-}" "${EPAM_AGENT_NAME:-agent}" \
           "${EPAM_STORY_ID:-pipeline}" "${AI_MODEL:-${EPAM_MODEL:-}}" "$_call_started_at" || true
+    fi
+
+    # THE ONE STANDARD RECORDER, FOR EVERY SEAM, WHATEVER THE RUNNER RETURNED.
+    #
+    # record_call_cost above keeps the local cost ledger, and it can only do that when the runner
+    # wrote a result DOCUMENT: its first line returns immediately when ORCH_JSON_RESULT is unset.
+    # Confirmed from /proc on a live writer child 2026-09-07 — `claude --print --output-format
+    # text`, EPAM_AGENT_NAME=repro-test-writer, ORCH_JSON_RESULT ABSENT — so the writer, the
+    # repro-test-writer and the qa-gates recorded nothing at all. Fourteen seams exported as
+    # {"text": "", "toolCalls": []}, which is a cassette that cannot be replayed.
+    #
+    # lib/handlers/emit-cost.js is the shell bridge to emitCostSnapshot, the standard function
+    # run-agent-orchestration.sh and update-invalidated-tests.sh already use. Routing here means
+    # ONE function records every call rather than a second path growing beside it, and the
+    # handler passes what only it holds: the prompt it sent and the reply it is about to print.
+    if [ "${_EPAM_IN_PLAN_PASS:-0}" != "1" ] \
+       && [ -f "$_LLM_HANDLER_DIR/lib/handlers/emit-cost.js" ] \
+       && { [ -n "${NODE_BIN:-}" ] || command -v node >/dev/null 2>&1; }; then
+      _trace_reply="${ORCH_JSON_RESULT:-}"
+      [ -n "$_trace_reply" ] && [ -s "$_trace_reply" ] || _trace_reply=""
+      EPAM_TRACE_PROMPT_FILE="${PROMPT_FILE:-}" \
+      EPAM_TRACE_REPLY_TEXT="$out" \
+      EPAM_TRACE_STARTED_AT="$_call_started_at" \
+      EPAM_TRACE_ENDED_AT="$(date -Iseconds)" \
+      AI_MODEL="${AI_MODEL:-${EPAM_MODEL:-}}" \
+      "${NODE_BIN:-node}" "$_LLM_HANDLER_DIR/lib/handlers/emit-cost.js" \
+          "${_trace_reply:-/dev/null}" "${EPAM_AGENT_NAME:-agent}" >/dev/null 2>&1 || true
     fi
     [ -n "$out" ] && printf '%s\n' "$out"
     rm -f "$err_file"

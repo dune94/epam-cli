@@ -91,7 +91,11 @@ PROJECT="$(project_for_prefix "$PREFIX")" || die \
 PROBLEMS=()
 note_problem() { PROBLEMS+=("$1"); }
 
-[ -f "$REPO_ROOT/.env" ] || note_problem ".env is missing at $REPO_ROOT/.env — copy .env.sample and fill it in"
+# THE TEMPLATE IS .env.example, AND ALWAYS HAS BEEN. This said `.env.sample`, a file that has
+# never existed in this repository — so an operator following the instruction found nothing to
+# copy. install.sh carried the identical mistake and it was fixed there; this copy of the message
+# was missed. The check itself was always right; only what it told the operator to do was wrong.
+[ -f "$REPO_ROOT/.env" ] || note_problem ".env is missing at $REPO_ROOT/.env — copy .env.example and fill it in"
 
 # The active set decides which credentials matter. A set that needs none needs none.
 SET_NAME="${EPAM_PROVIDER_SET:-$(

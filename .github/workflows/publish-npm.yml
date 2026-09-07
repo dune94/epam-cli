@@ -47,8 +47,22 @@ jobs:
           esac
           npm --prefix npm-package/amsd-pipeline version "$VERSION" --no-git-tag-version --allow-same-version
 
+      # A TAG THAT MOVES MUST NOT GO RED. npm versions are immutable, so re-pushing a tag (a
+      # release re-cut, a corrected commit) fires this workflow again and `npm publish` fails
+      # with E403 "cannot publish over the previously published versions". That failure says
+      # nothing is wrong — but a publish job that goes red for a non-problem trains everyone to
+      # ignore a red publish job, which is how a REAL failure gets missed. Already-published is
+      # reported and skipped; anything else still fails the job.
       - name: Publish
         working-directory: npm-package/amsd-pipeline
-        run: npm publish --access public
+        run: |
+          VERSION="$(node -p "require('./package.json').version")"
+          NAME="$(node -p "require('./package.json').name")"
+          if npm view "${NAME}@${VERSION}" version >/dev/null 2>&1; then
+            echo "::notice::${NAME}@${VERSION} is already on the registry — nothing to publish."
+            echo "A published version is immutable; publish a new version to ship changes."
+            exit 0
+          fi
+          npm publish --access public
         env:
           NODE_AUTH_TOKEN: ${{ secrets.NPM_TOKEN }}

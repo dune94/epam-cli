@@ -76,10 +76,99 @@ def collect(args):
     d['ancestors_missing'] = []
     _seen = set()
     _pid = d['resumed_from']
-    _runs_root = os.path.dirname(os.path.abspath(args.out)) if args.out else ''
-    while _pid and _pid not in _seen and _runs_root:
+    # WHERE THE PARENT RUN LIVES. Resolving this from the OUTPUT directory's parent alone was
+    # wrong: generating a report anywhere but in place made the lookup miss, and the page then
+    # announced "no run directory" for a run sitting on disk the whole time. The runs are a
+    # contiguous series under the project — find the parent among them, wherever this report is
+    # being written to.
+    def _archive_dir_for(run_id):
+        """The pre-run archive holding that run's logs.
+
+        A run that PAUSES saves a checkpoint, not its launch log — so a resumed run's parent has
+        no run.log to read. Its evidence is not gone, though: the next run's pre-run reset
+        archives the whole logs directory, and every phase-cost record in there carries the run
+        id that produced it. That is the correlation key.
+        """
+        base = os.path.join(os.path.dirname(os.path.abspath(args.logs_dir or '')), 'logs', 'archive')
+        if not os.path.isdir(base):
+            base = os.path.join(os.path.abspath(args.logs_dir or ''), 'archive')
+        if not os.path.isdir(base):
+            return ''
+        for name in sorted(os.listdir(base), reverse=True):
+            cand = os.path.join(base, name)
+            pc = os.path.join(cand, 'phase-cost.jsonl')
+            if not os.path.isfile(pc):
+                continue
+            try:
+                with open(pc, encoding='utf-8', errors='replace') as fh:
+                    for line in fh:
+                        if run_id in line:
+                            return cand
+            except OSError:
+                continue
+        return ''
+
+    def _timeline_from_activity(path):
+        """A stage timeline built from the activity stream, when no launch log survives.
+
+        Coarser than the log-derived one — it records what each agent did and when, not the
+        numbered steps — but it is this run's own evidence, and drawing it is the difference
+        between showing the pipeline's work and asserting that none happened.
+        """
+        out, seen_agents = [], set()
+        try:
+            fh = open(path, encoding='utf-8', errors='replace')
+        except OSError:
+            return None
+        with fh:
+            for line in fh:
+                line = line.strip()
+                if not line:
+                    continue
+                try:
+                    e = json.loads(line)
+                except ValueError:
+                    continue
+                agent = e.get('agent') or ''
+                typ = e.get('type') or ''
+                if not agent or typ not in ('info', 'story_start', 'story_complete', 'cost_snapshot'):
+                    continue
+                key = (agent, e.get('phase') or '', e.get('story_id') or '')
+                if key in seen_agents:
+                    continue
+                seen_agents.add(key)
+                ts = (e.get('timestamp') or '')
+                t = ts[11:19] if len(ts) >= 19 else ''
+                head = agent + (' — ' + e['story_id'] if e.get('story_id') else '')
+                out.append({'t': t, 'kind': 'step', 'status': 'ok', 'head': head, 'note': ''})
+        return out or None
+
+    def _runs_roots():
+        roots, seen_r = [], set()
+        def _add(r):
+            if r and r not in seen_r and os.path.isdir(r):
+                seen_r.add(r)
+                roots.append(r)
+        if args.out:
+            _add(os.path.dirname(os.path.abspath(args.out)))
+        # <install>/orchestrations/logs → <install>/orchestrations/projects/*/runs
+        if args.logs_dir:
+            _projects = os.path.join(os.path.dirname(os.path.abspath(args.logs_dir)), 'projects')
+            if os.path.isdir(_projects):
+                for _p in sorted(os.listdir(_projects)):
+                    _add(os.path.join(_projects, _p, 'runs'))
+        return roots
+
+    def _find_run_dir(run_id):
+        for r in _runs_roots():
+            cand = os.path.join(r, run_id)
+            if os.path.isdir(cand):
+                return cand
+        return ''
+
+    while _pid and _pid not in _seen:
         _seen.add(_pid)
-        _pdir = os.path.join(_runs_root, _pid)
+        _pdir = _find_run_dir(_pid)
         _pfacts = os.path.join(_pdir, 'run-facts.json')
         _plog = os.path.join(_pdir, 'run.log')
         _ptimeline, _pnext = None, ''
@@ -95,9 +184,19 @@ def collect(args):
             _ptimeline = build_timeline(_plogtext)
             _pnext = first(r"resumed run '([^']+)'", strip_ansi(_plogtext)) or ''
         if _ptimeline is None:
+            # No log for that run — recover its stages from the archived activity stream.
+            _arch = _archive_dir_for(_pid)
+            if _arch:
+                _ptimeline = _timeline_from_activity(os.path.join(_arch, 'agent-activity.jsonl'))
+
+        if _ptimeline is None:
             # SAID, not silently dropped: an absent parent leaves exactly the partial flow that
-            # caused the confusion, so the page has to name what it could not read.
-            d['ancestors_missing'].append(_pid)
+            # caused the confusion. Which of the two cases it is matters — a directory that is
+            # there but holds no log is a pause that never archived one, not a missing run.
+            d['ancestors_missing'].append(
+                {'run_id': _pid,
+                 'why': ('kept no log — a run that pauses saves a checkpoint, not its log'
+                         if _pdir else 'run directory not found')})
             break
         d['ancestors'].append({'run_id': _pid, 'timeline': _ptimeline})
         _pid = _pnext
@@ -1631,31 +1730,28 @@ def flow_html(d):
         '<div class="card"><div class="k">Warnings</div><div class="v">'
         + str(counts.get('warn', 0) + counts.get('fail', 0) + counts.get('bad', 0)) + '</div></div>')
 
-    # THE RESUME, STATED ON THE PAGE. Live, a resumed run's flow showed 14 of 29 stages as "did
-    # not apply" and read as a run that had barely executed — while the half that ran those stages
-    # sat in a sibling directory the page never named. The chain above now draws both; this says
-    # which run is which, and what the resume changed.
+    # THE RESUME, STATED ON THE PAGE — briefly. Live, a resumed run's flow showed 14 of 29 stages
+    # as "did not apply" and read as a run that had barely executed, while the run that executed
+    # them went unnamed. One line each: what it continued, and what the resume switched off.
     resume_note = ''
     if d.get('resumed_from') or d.get('ancestors_missing'):
-        bits = []
+        lines = []
         if d.get('resumed_from'):
-            bits.append('This run <strong>resumed run <code>' + esc(d['resumed_from'])
-                        + '</code></strong>'
-                        + (' from its <code>' + esc(d['resumed_at_stage']) + '</code> checkpoint'
-                           if d.get('resumed_at_stage') else '')
-                        + '. Stages that ran there were deliberately not repeated here, which is '
-                          'why this run alone shows them as having nothing to do.')
+            lines.append('Continues run <code>' + esc(d['resumed_from']) + '</code>'
+                         + (' from <code>' + esc(d['resumed_at_stage']) + '</code>'
+                            if d.get('resumed_at_stage') else '')
+                         + '. Earlier stages ran there.')
         for m in d.get('ancestors_missing') or []:
-            bits.append('The evidence for run <code>' + esc(m) + '</code> <strong>could not be '
-                        'read</strong> — its directory is not beside this one, so its stages are '
-                        'not drawn. What that run did is ' + MISSING + ' on this page.')
-        flags = [f for f in (d.get('resume_flags') or [])]
-        if flags:
-            bits.append('The resume carried: '
-                        + ', '.join('<code>' + esc(f) + '</code>' for f in flags)
-                        + '. A flag that stands a stage down is part of how this run happened: '
-                          'that stage did not run, whatever the project declares.')
-        resume_note = '<div class="warn">' + ' '.join(bits) + '</div>'
+            _id = m.get('run_id') if isinstance(m, dict) else m
+            _why = m.get('why') if isinstance(m, dict) else 'not readable'
+            lines.append('Run <code>' + esc(_id) + '</code> ' + esc(_why)
+                         + ' — its stages cannot be drawn.')
+        skips = [f for f in (d.get('resume_flags') or [])
+                 if f.split('=')[0].startswith('SKIP') or '_SKIP_' in f.split('=')[0]]
+        if skips:
+            lines.append('Switched off by the resume: '
+                         + ', '.join('<code>' + esc(f) + '</code>' for f in skips) + '.')
+        resume_note = ('<div class="warn">' + '<br>'.join(lines) + '</div>')
 
     where = (' on <code>' + esc(d['codeline']) + '</code>') if d.get('codeline') else ''
     return (head_block('Execution flow' + (' — ' + esc(d['story']) if d.get('story') else ''),

@@ -29,6 +29,14 @@ const REPO_ROOT = join(__dirname, '../../../');
 const BUILDER = join(REPO_ROOT, 'orchestrations/scripts/lib/project-prompt-builder.js');
 // eslint-disable-next-line @typescript-eslint/no-var-requires
 const builder = require(BUILDER);
+
+/** Emulates the model under the SEGMENTS contract: echo back the segments it was shown. */
+const echoSegments = (p: string) => {
+  const segs = [...String(p).matchAll(/--- SEGMENT \d+ ---\n([\s\S]*?)(?=\n--- SEGMENT \d+ ---|\n--- END SEGMENTS ---)/g)]
+    .map((m) => m[1]);
+  return JSON.stringify({ segments: segs.length ? segs : [''] });
+};
+
 const { buildProjectPrompts, writeCompletionMarker } = builder;
 
 const dirs: string[] = [];
@@ -79,7 +87,7 @@ async function run(p: any, brownfield: boolean) {
       projectContext: 'ctx', codelineContext: 'cl', mintedRoles: '',
       runText: async (prompt: string) => {
         prompts.push(String(prompt)); generations += 1;
-        return 'Do the work for __X__.';
+        return echoSegments(prompt);
       },
       log: () => {},
     });
@@ -152,6 +160,7 @@ describe('the completion marker carries the variant', () => {
     require('node:fs').readdirSync(join(proj, '.prompt-cache'))
       .filter((n: string) => n.startsWith('.complete-'));
 
+
   function markerFor(codeline: string, brownfield: boolean) {
     const dir = mkdtempSync(join(tmpdir(), 'marker-')); dirs.push(dir);
     const proj = join(dir, 'project');
@@ -222,8 +231,7 @@ describe('the real spec seam gets its variant', () => {
         projectConfigDir: dir,
         projectContext: 'ctx', codelineContext: 'cl', mintedRoles: '',
         runText: async (p: string) => {
-          const m = /-----BEGIN TEMPLATE BODY-----\n([\s\S]*?)\n-----END TEMPLATE BODY-----/.exec(String(p));
-          return m ? m[1] : 'STUB';
+          return echoSegments(p);
         },
         log: () => {},
       }).catch(() => { /* a later prompt may refuse the echo stub; this one is what matters */ });

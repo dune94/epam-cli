@@ -59,9 +59,16 @@ afterEach(() => { rmSync(work, { recursive: true, force: true }); });
  * `body` produced an empty string here and made every attempt fail for the wrong reason.
  */
 function goodBody(): string {
+  // UNDER THE SEGMENTS CONTRACT the trivially-correct answer is the template's own PROSE, returned
+  // as segments — the model is shown the text between placeholders and returns the same count. It
+  // never handles a placeholder, so it cannot drop one; the pipeline restores them on assembly.
   const t = JSON.parse(readFileSync(join(TEMPLATES, `${TEMPLATE_ID}.json`), 'utf8'));
-  if (typeof t.body === 'string' && t.body) return t.body;
-  return Object.values(t.bodies || {}).filter((v) => typeof v === 'string').join('\n');
+  const body = (typeof t.body === 'string' && t.body)
+    ? t.body
+    : Object.values(t.bodies || {}).filter((v) => typeof v === 'string').join('\n');
+  // eslint-disable-next-line @typescript-eslint/no-var-requires
+  const { splitByPlaceholders } = require(join(__dirname, '../../../orchestrations/scripts/lib/project-prompt-contract.js'));
+  return JSON.stringify({ segments: splitByPlaceholders(body).segments });
 }
 
 function build(runText: (p: string, meta: any) => Promise<string>, log: string[] = []) {

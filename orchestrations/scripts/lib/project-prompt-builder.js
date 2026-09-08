@@ -236,7 +236,19 @@ function renderGeneratorPrompt({ generatorBody, template, projectContext, codeli
   //
   // Substituted last, the body is inert text by the time it arrives: nothing after this line can
   // reach inside it.
-  out = out.split('__GEN_TEMPLATE_BODY__').join(templateBodyText(template));
+  out = out    // SEGMENTS, NOT THE BODY. The model is shown only the prose BETWEEN placeholders and asked
+    // for the same number back; the slots never enter its input or its output, so it cannot drop
+    // one. 25 refusals on 2026-09-08 were all "dropped placeholder(s) the template requires", and
+    // a dropped slot silently starves the agent of the evidence that slot carries.
+    .split('__GEN_TEMPLATE_BODY__').join((() => {
+      const { splitByPlaceholders } = require('./project-prompt-contract.js');
+      const { segments } = splitByPlaceholders(templateBodyText(template));
+      return segments.map((seg, i) => `--- SEGMENT ${i + 1} ---\n${seg}`).join('\n')
+        + `\n--- END SEGMENTS ---\n\nReturn JSON only: {"segments": [ ... ${segments.length} strings, in order ... ]}.`
+        + '\nSpecialise the WORDING of each segment for this project. Return exactly '
+        + `${segments.length} segments. Do not write any __PLACEHOLDER__ tokens — the pipeline `
+        + 'restores them between your segments.';
+    })());
   return out;
 }
 
@@ -738,7 +750,30 @@ async function buildProjectPrompts({
         log(`[prompt-builder] ! ${id} attempt ${attempt}/${attempts} CALL FAILED: ${why}`);
         continue;
       }
-      const doc = buildGeneratedDoc(template, body);
+      // THE PIPELINE ASSEMBLES THE BODY; THE MODEL ONLY WORDS THE PROSE.
+      //
+      // The reply is {"segments":[...]} — the prose between placeholders, in order. The slots are
+      // put back here, in their original positions, so nothing the model wrote can drop or invent
+      // one. Every contract invariant below then holds by construction rather than by retry.
+      //
+      // A reply that is not parseable segments costs one attempt, exactly like any other refusal,
+      // and says so precisely: the fix for "wrong segment count" is in the prompt, and the reader
+      // must not be sent looking for a dropped placeholder that cannot happen any more.
+      let assembled;
+      try {
+        const parsed = JSON.parse(
+          (body.match(/\{[\s\S]*\}/) || [body])[0]);
+        const { splitByPlaceholders, assembleFromSegments } = require('./project-prompt-contract.js');
+        const { slots } = splitByPlaceholders(templateBodyText(template));
+        assembled = assembleFromSegments(parsed && parsed.segments, slots);
+      } catch (err) {
+        refusal = `your answer could not be assembled: ${(err && err.message) || String(err)}. `
+          + 'Return JSON only, of the form {"segments": [...]}, with one string per segment shown, '
+          + 'in order, and no __PLACEHOLDER__ tokens.';
+        log(`[prompt-builder] ! ${id} attempt ${attempt}/${attempts} refused: ${refusal}`);
+        continue;
+      }
+      const doc = buildGeneratedDoc(template, assembled);
       const verdict = checkGeneratedPrompt(template, doc);
 
       if (verdict.ok) {

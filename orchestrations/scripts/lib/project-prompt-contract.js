@@ -214,4 +214,61 @@ function buildGeneratedDoc(template, generatedBody) {
   };
 }
 
-module.exports = { checkGeneratedPrompt, buildGeneratedDoc, placeholdersIn, outputFieldsIn };
+/**
+ * splitByPlaceholders(body) — prose segments and the slots between them.
+ *
+ * THE SLOTS ARE DELIMITERS, AND TREATING THEM AS PAYLOAD IS THE DEFECT. prompt-builder asked the
+ * model to rewrite a whole template while transcribing every __SLOT__ character-for-character:
+ * a writing task and a copying task at once. Models lose literals while rewriting the prose around
+ * them — live 2026-09-08, 25 refusals, every one "dropped placeholder(s) the template requires",
+ * and runtime-boundary-review lost all six of its slots five attempts running and aborted the run.
+ *
+ * Split here, and the model is only ever shown, and only ever returns, the prose BETWEEN slots.
+ * It cannot drop a placeholder it was never given.
+ *
+ * INVARIANT: body === segments[0] + slots[0] + segments[1] + ... + segments[n], so segments is
+ * always exactly one longer than slots, and every occurrence of a repeated slot is kept in order.
+ */
+function splitByPlaceholders(body) {
+  const text = String(body == null ? '' : body);
+  const slots = [];
+  const segments = [];
+  const re = /__[A-Z][A-Z0-9_]*?__/g;
+  let last = 0;
+  let m = re.exec(text);
+  while (m) {
+    segments.push(text.slice(last, m.index));
+    slots.push(m[0]);
+    last = m.index + m[0].length;
+    m = re.exec(text);
+  }
+  segments.push(text.slice(last));
+  return { segments, slots };
+}
+
+/**
+ * assembleFromSegments(segments, slots) — the body the pipeline builds, never the model.
+ *
+ * The slots go back exactly where they were, in their original order, however the model reworded
+ * the prose. Every contract invariant — nothing dropped, nothing invented, declared == used —
+ * therefore holds BY CONSTRUCTION rather than by inspection and retry.
+ *
+ * REFUSES A WRONG COUNT rather than padding. A model that returns the wrong number of segments has
+ * misunderstood the task, and quietly filling the gap would install a prompt whose prose no longer
+ * lines up with the evidence its slots carry — the same silent-wrongness this whole change exists
+ * to remove.
+ */
+function assembleFromSegments(segments, slots) {
+  const segs = Array.isArray(segments) ? segments : [];
+  const sl = Array.isArray(slots) ? slots : [];
+  if (segs.length !== sl.length + 1) {
+    throw new Error(
+      `[project-prompt-contract] expected ${sl.length + 1} segment(s) for ${sl.length} placeholder(s), got ${segs.length}`);
+  }
+  let out = '';
+  for (let i = 0; i < sl.length; i += 1) out += String(segs[i]) + sl[i];
+  return out + String(segs[segs.length - 1]);
+}
+
+module.exports = { checkGeneratedPrompt, buildGeneratedDoc, placeholdersIn, outputFieldsIn,
+  splitByPlaceholders, assembleFromSegments };

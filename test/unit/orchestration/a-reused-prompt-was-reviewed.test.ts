@@ -20,6 +20,15 @@ const REPO_ROOT = join(__dirname, '../../../');
 // eslint-disable-next-line @typescript-eslint/no-var-requires
 const { buildProjectPrompts } = require(join(REPO_ROOT, 'orchestrations/scripts/lib/project-prompt-builder.js'));
 
+/** Emulates the model under the SEGMENTS contract: echo back the segments it was shown. */
+const echoSegments = (p: string) => {
+  const segs = [...String(p).matchAll(/--- SEGMENT \d+ ---\n([\s\S]*?)(?=\n--- SEGMENT \d+ ---|\n--- END SEGMENTS ---)/g)]
+    .map((m) => m[1]);
+  return JSON.stringify({ segments: segs.length ? segs : [''] });
+};
+
+
+
 /** A project with one template, so the assertion is about caching and nothing else. */
 function project() {
   const dir = mkdtempSync(join(tmpdir(), 'reused-review-'));
@@ -52,7 +61,7 @@ const run = (p: any, opts: any = {}) => buildProjectPrompts({
   registryFile: join(p.dir, 'registry.json'),
   projectConfigDir: p.proj,
   projectContext: 'ctx', codelineContext: 'cl', mintedRoles: '',
-  runText: async () => 'Do the work for __X__.',
+  runText: async (p: string) => echoSegments(p),
   log: (m: string) => { (globalThis as any).__log = ((globalThis as any).__log||[]).concat(m); },
   ...opts,
 });

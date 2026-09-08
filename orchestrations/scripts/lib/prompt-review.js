@@ -14,6 +14,8 @@
 // and each announces itself rather than passing silently.
 'use strict';
 
+const fs = require('fs');
+
 /**
  * Build the reviewPrompt callback buildProjectPrompts expects.
  *
@@ -36,10 +38,51 @@ function makePromptReviewer({ render, invoke, values, logPathFor, warn, projectC
     try {
       prompt = render('prompt-review', projectConfigDir, values({ id, template, generated }));
     } catch (e) {
-      // The strict renderer refuses a values/placeholder mismatch. That is a defect in THIS
-      // wiring, not in the artefact under review — say so loudly and install unreviewed.
-      _warn(`[prompt-review] ${id}: could not build the reviewer's prompt (${e && e.message}) — installing UNREVIEWED`);
-      return { ok: true };
+      // THE ONE FALLBACK THE MANDATE ALLOWS, AND ONLY THIS ONE.
+      //
+      // prompt-library's header is emphatic — operator 2026-08-11: "WE WILL NEVER EVER run the
+      // template version of the prompts - NEVER. NEVER - no fallbacks." That rule is about AGENT
+      // prompts: a generic template running unspecialised gives every project the same prompt.
+      //
+      // The reviewer's own prompt cannot obey it at bootstrap. Prompts are reviewed AS they are
+      // generated and prompt-review.json is itself generated, so on a fresh project the first
+      // prompts are judged by a reviewer whose project copy does not exist yet. Live 2026-09-08,
+      // pipeline-tests-45: every early prompt installed UNREVIEWED while the run logged that
+      // review was enabled — a gate failing open behind a log that claims cover.
+      //
+      // Operator, 2026-09-08: "If a project level prompt-review prompt is not available - then
+      // defer to app level prompt." Kept as narrow as its reason: the REVIEWER'S OWN prompt, only
+      // when genuinely absent, and announced — a template-sourced review must never be silently
+      // indistinguishable from a project-authority one.
+      //
+      // ONE FAIL-OPEN EXIT, not two: whichever source failed, this ends at the single return
+      // below. no-gate-reports-pass-when-it-could-not-run counts these paths, and a fix that adds
+      // one while removing none is not a fix.
+      let why = (e && e.message) || String(e);
+      if (/project-authority prompt missing/i.test(why)) {
+        try {
+          // FROM THE TEMPLATE FILE DIRECTLY, on purpose: renderEngineTemplate refuses a
+          // seam-declared prompt ("an agent executes it, so it renders from THIS PROJECT's copy"),
+          // which is the very rule being excepted, so going through it restates the refusal.
+          // eslint-disable-next-line global-require
+          const ep = require('./engine-prompt.js');
+          const tplDoc = JSON.parse(fs.readFileSync(ep.templatePathFor('prompt-review'), 'utf8'));
+          const tplBody = tplDoc.body
+            || Object.values(tplDoc.bodies || {}).filter((b) => typeof b === 'string').join('\n');
+          prompt = ep.substituteOnce(tplBody, values({ id, template, generated }));
+          _warn(`[prompt-review] ${id}: this project has no reviewer prompt yet — reviewing from `
+            + 'the TEMPLATE for this bootstrap generation; the project copy takes over once minted');
+        } catch (e2) {
+          why = `the project copy is missing and the template would not render either: `
+            + `${(e2 && e2.message) || String(e2)}`;
+        }
+      }
+      if (typeof prompt !== 'string' || !prompt) {
+        // The strict renderer refuses a values/placeholder mismatch. That is a defect in THIS
+        // wiring, not in the artefact under review — say so loudly and install unreviewed.
+        _warn(`[prompt-review] ${id}: could not build the reviewer's prompt (${why}) — installing UNREVIEWED`);
+        return { ok: true };
+      }
     }
 
     // The renderer returning nothing means the reviewer never had an artefact to judge.

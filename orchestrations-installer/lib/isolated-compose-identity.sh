@@ -54,42 +54,16 @@ isolated_project_name() {
 #
 # THE SPACE IS 172.16–172.31 THEN 10.100–10.199: 116 candidates, all inside RFC1918 ranges Docker
 # itself defaults to, so nothing here can collide with a corporate VPN range that 192.168 might.
-# THE RUNTIME THAT WILL ACTUALLY CREATE THE NETWORK — asked, never assumed.
-#
-# Everything below said `docker` literally. On a PODMAN install of a box that also has docker
-# installed, that listed docker's held subnets and proved candidates against docker's allocator —
-# a different network namespace from the one compose was about to use. Live 2026-09-08: it offered
-# 172.28.0.0/16, free in docker and held by another install's podman launch network, and the obs
-# stack died on "subnet ... is already used on the host or by another config" (exit 125).
-#
-# install.sh:680 already carries this correction for its own probe. This is the same one, at the
-# place that chooses the address space rather than merely reporting it.
-_isolated_runtime() {
-    local _r="${EPAM_CONTAINER_RUNTIME:-}" _c
-    if [ -z "$_r" ] && declare -F container_runtime >/dev/null 2>&1; then
-        _r="$(container_runtime 2>/dev/null || true)"
-    fi
-    # Docker first when nothing declares otherwise, so an install that resolved docker before this
-    # change resolves docker after it.
-    if [ -z "$_r" ]; then
-        for _c in docker podman; do
-            command -v "$_c" >/dev/null 2>&1 && { _r="$_c"; break; }
-        done
-    fi
-    printf '%s' "$_r"
-}
-
 isolated_subnet_candidates() {
-    local _root="$1" _h _base _i _v _held="" _can_probe=0 _rt
-    _rt="$(_isolated_runtime)"
-    [ -n "$_rt" ] && command -v "$_rt" >/dev/null 2>&1 && _can_probe=1
+    local _root="$1" _h _base _i _v _held="" _can_probe=0
+    command -v docker >/dev/null 2>&1 && _can_probe=1
     _h=$(printf '%s' "$_root" | cksum | cut -d' ' -f1)
 
     # WHAT THE DAEMON ALREADY HAS. Never fatal: no docker, no daemon, or a slow one all fall
     # through to the unfiltered list rather than leaving the installer with nothing to try.
-    if [ "$_can_probe" = "1" ]; then
-        _held=$(timeout 15 "$_rt" network ls --quiet 2>/dev/null \
-            | timeout 20 xargs -r "$_rt" network inspect \
+    if command -v docker >/dev/null 2>&1; then
+        _held=$(timeout 15 docker network ls --quiet 2>/dev/null \
+            | timeout 20 xargs -r docker network inspect \
                 --format '{{range .IPAM.Config}}{{.Subnet}} {{end}}' 2>/dev/null \
             | tr ' ' '\n' | grep -E '^[0-9]+\.' || true)
     fi
@@ -109,8 +83,8 @@ isolated_subnet_candidates() {
     # own subnet and never consults the allocator, so this is the only question whose answer is
     # the one compose will get. Cheap, and only until the first one succeeds.
     _probe_ok() {
-        "$_rt" network create --subnet "$1" "$2" >/dev/null 2>&1 || return 1
-        "$_rt" network rm "$2" >/dev/null 2>&1 || true
+        docker network create --subnet "$1" "$2" >/dev/null 2>&1 || return 1
+        docker network rm "$2" >/dev/null 2>&1 || true
         return 0
     }
     _probe_n=0

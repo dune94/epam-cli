@@ -162,6 +162,11 @@ function invokeMint(opts: { marker: string | null; prdCodelines?: string[]; pend
     'error() { printf "ERR %s\\n" "$*"; }',
     'info()  { printf "%s\\n" "$*"; }',
     'require_stage_coverage() { return 0; }',
+    // THE AMBIENT DEPENDENCY THE REAL SCRIPT PROVIDES. run-agent-orchestration.sh sources
+    // lib/prompt-variant.sh (line ~158) before _run_agent_mint runs, and the mint's marker check
+    // calls prompt_marker_key from it. The REAL lib is sourced here, not a stub, so the name this
+    // harness looks for is the name the builder actually writes.
+    `. ${JSON.stringify(join(__dirname, '../../../orchestrations/scripts/lib/prompt-variant.sh'))}`,
     `NODE_BIN=${JSON.stringify(fakeNode)}`,
     `SCRIPT_DIR=${JSON.stringify(join(__dirname, '../../../orchestrations/scripts'))}`,
     `EPAM_AGENTS_DIR=${JSON.stringify(join(dir, 'agents'))}`,

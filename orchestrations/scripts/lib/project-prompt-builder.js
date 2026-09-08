@@ -46,6 +46,11 @@ const readJson = (p) => JSON.parse(fs.readFileSync(p, 'utf8'));
  * copy of its text is precisely the thing this whole design removes.
  */
 const { refusalBlock } = require('./refusal-block.js');
+// THE VARIANT RULE, IMPORTED — NOT RE-EXPRESSED. engine-prompt resolves a brownfield variant for
+// the seams it renders; this builder resolves templates out of a directory handed to it, so it
+// answers existence itself and takes the same decision from the same function. Two copies of a
+// routing rule drift, and the drift is invisible: both sides keep working, on different prompts.
+const { variantIdFor } = require('./engine-prompt.js');
 
 /**
  * The template's body as one string — the SAME expression checkGeneratedPrompt uses, so the text
@@ -345,6 +350,19 @@ async function buildProjectPrompts({
       + '(seam-declared, plus bootstrap auxiliaries)');
   }
 
+  // WHICH TEMPLATE AN ID ACTUALLY MEANS FOR THIS RUN.
+  //
+  // A brownfield run wants different text from the same seam. The variant is a dimension of the
+  // ID, so it is resolved once, here, and every reader that must follow it calls this — nobody
+  // chooses per call site and nobody can forget.
+  //
+  // WHAT DELIBERATELY DOES NOT USE IT: the existence guards and _layerOf, which stay on the BASE.
+  // The base must exist for every provisioned id regardless of variant — that is what makes the
+  // fallback total — and a variant must never move a prompt between layers, because that is the
+  // same seam being served from a different zone.
+  const _tplId = (id) => variantIdFor(id, (v) => fs.existsSync(path.join(templatesDir, `${v}.json`)));
+  const _tplPath = (id) => path.join(templatesDir, `${_tplId(id)}.json`);
+
   // ONLY WHAT A PROJECT-LAYER RENDERER READS.
   //
   // There are two renderers and the split is deliberate: prompt-library.js reads the PROJECT
@@ -465,7 +483,7 @@ async function buildProjectPrompts({
   // the parts correct now, and it is reversible.
   const _multiPart = (id) => {
     try {
-      const t = readJson(path.join(templatesDir, `${id}.json`));
+      const t = readJson(_tplPath(id));
       return t && t.bodies && typeof t.bodies === 'object'
         && Object.values(t.bodies).filter((b) => typeof b === 'string').length > 1;
     } catch { return false; }
@@ -502,7 +520,7 @@ async function buildProjectPrompts({
   // ── Bootstrap: verbatim, byte for byte ──────────────────────────────────
   const copied = [];
   for (const id of copyVerbatim) {
-    const src = path.join(templatesDir, `${id}.json`);
+    const src = _tplPath(id);
     const doc = readJson(src);
 
     // THE TEXT IS COPIED VERBATIM; THE PROVENANCE IS ADDED.
@@ -622,13 +640,13 @@ async function buildProjectPrompts({
     // this repo sets EPAM_CODELINE_ID — the operator exports it. Making an undeclared run stop
     // reusing would silently charge a full regeneration for a forgotten variable, and would break
     // the remedy a-reused-prompt-was-reviewed encodes. Such a run reads the flat root, as before.
-    try { return JSON.parse(fs.readFileSync(path.join(cacheDir, `${id}.json`), 'utf8')); }
+    try { return JSON.parse(fs.readFileSync(path.join(cacheDir, `${_tplId(id)}.json`), 'utf8')); }
     catch { return null; }
   };
   const cacheWrite = (id, entry) => {
     try {
       fs.mkdirSync(cacheDir, { recursive: true });
-      fs.writeFileSync(path.join(cacheDir, `${id}.json`), JSON.stringify(entry, null, 2) + '\n');
+      fs.writeFileSync(path.join(cacheDir, `${_tplId(id)}.json`), JSON.stringify(entry, null, 2) + '\n');
     } catch { /* a cache that cannot be written costs money, never correctness */ }
   };
 
@@ -656,7 +674,7 @@ async function buildProjectPrompts({
       : b === _reviewerTemplate ? 1 : 0));
   }
   for (const id of generated) {
-    const template = readJson(path.join(templatesDir, `${id}.json`));
+    const template = readJson(_tplPath(id));
     // Per-template, only when it could matter: a template whose seam name differs from its id is
     // the one case where losing `seams` is visible at all. 36 of 37 hide the same rewrite.
     if (Array.isArray(template.seams) && template.seams.some((sm) => sm !== template.id)) {
@@ -846,7 +864,15 @@ function _markerPath(outDir, codeline) {
   // completeness, and putting the codeline in the NAME turns "does it match?" into "does it
   // exist?". That deletes the parse, the field comparison, and the corrupt-marker case — a file
   // with no content cannot be malformed.
-  return path.join(outDir, '..', '.prompt-cache', `.complete-${codeline}`);
+  // THE VARIANT IS PART OF THE CLAIM. The marker makes the mint skip ENTIRELY (four call sites),
+  // so without this a codeline provisioned greenfield would skip provisioning on the next
+  // brownfield run and serve the greenfield prompts sitting on disk — on a cached codeline, the
+  // normal case, the brownfield variant would never once execute.
+  //
+  // Greenfield's name is unchanged, byte for byte, so no marker already on disk is invalidated.
+  // Kept in step with prompt_marker_key in lib/prompt-variant.sh, which the shell call sites use.
+  const variant = process.env.EPAM_BROWNFIELD === '1' ? '.brownfield' : '';
+  return path.join(outDir, '..', '.prompt-cache', `.complete-${codeline}${variant}`);
 }
 
 /**

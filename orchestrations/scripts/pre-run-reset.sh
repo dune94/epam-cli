@@ -116,6 +116,7 @@ fail()    { echo -e "${RED}[pre-run-reset] ✗${NC} $*" >&2; exit 1; }
 # problem. See lib/contamination-exit.sh.
 # shellcheck source=lib/contamination-exit.sh
 . "$(dirname "${BASH_SOURCE[0]}")/lib/contamination-exit.sh"
+. "$(dirname "${BASH_SOURCE[0]}")/lib/prompt-variant.sh"
 
 # ── Parse args ────────────────────────────────────────────────────────────────
 PRD_FILE=""
@@ -650,7 +651,7 @@ _CODELINE_DECISION_DEFERRED=0
 if [ "${EPAM_REGENERATE_CODELINE_ASSETS:-0}" = "1" ]; then
     info "  EPAM_REGENERATE_CODELINE_ASSETS=1 — override: regenerating this codeline's agents and prompts"
 elif [ -n "${EPAM_CODELINE_ID:-}" ] && [ -n "${EPAM_PROJECT_CONFIG_DIR:-}" ] \
-     && [ -f "$EPAM_PROJECT_CONFIG_DIR/.prompt-cache/.complete-${EPAM_CODELINE_ID}" ]; then
+     && [ -f "$EPAM_PROJECT_CONFIG_DIR/.prompt-cache/$(prompt_marker_key "$EPAM_CODELINE_ID")" ]; then
     _CODELINE_ASSETS_REUSED=1
     info "  Reusing this codeline's completed agents and prompts (${EPAM_CODELINE_ID}) — not re-derived; EPAM_REGENERATE_CODELINE_ASSETS=1 forces regeneration"
 elif [ -z "${EPAM_CODELINE_ID:-}" ] && [ -n "${EPAM_PROJECT_CONFIG_DIR:-}" ]; then

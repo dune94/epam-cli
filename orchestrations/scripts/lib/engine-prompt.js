@@ -120,6 +120,51 @@ function templatePath(id) {
   return path.join(templatesDir(), `${id}.json`);
 }
 
+/**
+ * templatePathFor(id) — the file an id ACTUALLY resolves to, variant included.
+ *
+ * A brownfield run wants different text from a greenfield one: on brownfield the spec pass
+ * consumes verificationCriteria, fixSiteAnalysis and technicalNotes, and acceptance criteria are
+ * out of scope — yet the engine asked for ACs and discarded them afterwards ("brownfield —
+ * ignoring 8 AC(s) speckit produced", live 2026-09-08). Paying output tokens, the dearest kind,
+ * for a deliverable policy guarantees to throw away.
+ *
+ * A VARIANT IS A DIMENSION OF THE ID, resolved in ONE place, so no call site chooses and no call
+ * site can forget. Two properties make it safe to enable:
+ *
+ *   - GREENFIELD IS UNCHANGED BY CONSTRUCTION. Without EPAM_BROWNFIELD=1 the id is not modified,
+ *     so it reads exactly the file it reads today. The greenfield path is working; it is not
+ *     what this fixes.
+ *   - IT FALLS BACK. A prompt with no variant resolves to its base, so turning the flag on
+ *     cannot break the prompts nobody has written a variant for yet — which is all of them on
+ *     day one.
+ *
+ * Same shape as config.<providerset>.env overlaying config.env, which this project already
+ * reasons in.
+ */
+/**
+ * variantIdFor(id, hasTemplate) — THE RULE, with no filesystem and no zone of its own.
+ *
+ * The prompt builder resolves templates out of a DIFFERENT directory than this module does (its
+ * templatesDir is a parameter), so expressing the rule as a path would have forced a second copy
+ * of it over there — and two copies of a routing rule drift. The rule takes an existence
+ * predicate instead: each zone answers "do you have this id?" its own way, and both get the same
+ * answer to "which id do I run?".
+ */
+function variantIdFor(id, hasTemplate) {
+  if (process.env.EPAM_BROWNFIELD !== '1') return id;
+  const variant = `${id}.brownfield`;
+  try {
+    return hasTemplate(variant) ? variant : id;
+  } catch {
+    return id;
+  }
+}
+
+function templatePathFor(id) {
+  return templatePath(variantIdFor(id, (v) => fs.existsSync(templatePath(v))));
+}
+
 /** Placeholders present in a body, deduped — the same rule prompt-library applies. */
 function placeholdersIn(body) {
   return [...new Set(String(body == null ? '' : body).match(PLACEHOLDER_RE) || [])];
@@ -233,7 +278,9 @@ function renderEngineTemplate(id, values, bodyKey) {
     }
     return lib.render(doc, merged);
   }
-  const file = templatePath(id);
+  // RESOLVED THROUGH THE VARIANT, so a brownfield run reads its own text where one exists and
+  // the base everywhere else. Greenfield returns templatePath(id) unchanged.
+  const file = templatePathFor(id);
   let doc;
   try {
     doc = JSON.parse(fs.readFileSync(file, 'utf8'));
@@ -334,4 +381,7 @@ function renderEngineTemplate(id, values, bodyKey) {
   return out;
 }
 
-module.exports = { renderEngineTemplate, placeholdersIn, templatePath, templatesDir, substituteOnce };
+module.exports = {
+  renderEngineTemplate, placeholdersIn, templatePath, templatePathFor, templatesDir,
+  substituteOnce, variantIdFor,
+};

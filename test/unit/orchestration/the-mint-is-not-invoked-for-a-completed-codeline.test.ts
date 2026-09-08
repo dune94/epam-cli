@@ -64,6 +64,11 @@ function invokeMint(env: Record<string, string>) {
       'error() { printf "ERR %s\\n" "$*"; }',
       'info()  { printf "%s\\n" "$*"; }',
       'require_stage_coverage() { return 0; }',
+      // THE AMBIENT DEPENDENCY THE REAL SCRIPT PROVIDES. run-agent-orchestration.sh sources
+      // lib/prompt-variant.sh before _run_agent_mint runs, and the mint's marker check calls
+      // prompt_marker_key from it. The REAL lib is sourced here, not a stub, so the name this
+      // harness looks for is the name the builder actually writes.
+      `. ${JSON.stringify(join(__dirname, '../../../orchestrations/scripts/lib/prompt-variant.sh'))}`,
       `NODE_BIN=${JSON.stringify(fakeNode)}`,
       `SCRIPT_DIR=${JSON.stringify(join(__dirname, '../../../orchestrations/scripts'))}`,
       `EPAM_AGENTS_DIR=${JSON.stringify(join(dir, 'agents'))}`,
@@ -125,6 +130,8 @@ function invokeMintPrepared(opts: { codeline: string; marker: string | null; pro
       'error() { printf "ERR %s\\n" "$*"; }',
       'info()  { printf "%s\\n" "$*"; }',
       'require_stage_coverage() { return 0; }',
+      // The ambient dependency the real script provides — see the note on the harness above.
+      `. ${JSON.stringify(join(__dirname, '../../../orchestrations/scripts/lib/prompt-variant.sh'))}`,
       `NODE_BIN=${JSON.stringify(fakeNode)}`,
       `SCRIPT_DIR=${JSON.stringify(join(__dirname, '../../../orchestrations/scripts'))}`,
       `EPAM_AGENTS_DIR=${JSON.stringify(join(dir, 'agents'))}`,

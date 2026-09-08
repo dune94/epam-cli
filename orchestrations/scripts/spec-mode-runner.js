@@ -723,6 +723,51 @@ const TOOL_SPEC_AGENT = {
   },
 };
 
+/**
+ * specAgentContract() — the contract THIS run's spec agents must answer with.
+ *
+ * On brownfield the spec pass consumes verificationCriteria, fixSiteAnalysis and technicalNotes.
+ * Acceptance criteria are out of scope: they are discarded a few hundred lines below —
+ * "brownfield — ignoring 8 AC(s) speckit produced" — yet TOOL_SPEC_AGENT still lists
+ * acceptanceCriteria as REQUIRED with minItems 1, so the agent cannot return a valid result
+ * without inventing them. Live 2026-09-08 a whole speckit invocation produced 8 ACs, all thrown
+ * away, and openspec's AC edits were redacted for the same reason. Output is the dearest token
+ * class, and a required field steers the entire call's reasoning toward a deliverable policy has
+ * already rejected.
+ *
+ * DERIVED FROM THE GREENFIELD CONTRACT, never written twice. Two hand-maintained schemas drift,
+ * and the drift is invisible — both still produce structurally valid answers. Add a field to
+ * TOOL_SPEC_AGENT and brownfield inherits it here automatically.
+ *
+ * GREENFIELD IS UNCHANGED BY CONSTRUCTION: it returns the identical object, not a copy, so there
+ * is nothing to diverge and nothing to review.
+ */
+const AC_ONLY_FIELDS = ['acceptanceCriteria', 'acAddedBySpeckit', 'acModifiedBySpeckit', 'acFlagged'];
+
+function specAgentContract() {
+  if (process.env.EPAM_BROWNFIELD !== '1') return TOOL_SPEC_AGENT;
+
+  // structuredClone, so deriving cannot mutate the greenfield contract for the rest of the
+  // process — a shared-reference edit here would corrupt every later greenfield call in-process.
+  const c = typeof structuredClone === 'function'
+    ? structuredClone(TOOL_SPEC_AGENT)
+    : JSON.parse(JSON.stringify(TOOL_SPEC_AGENT));
+
+  c.parameters.required = (c.parameters.required || []).filter((f) => !AC_ONLY_FIELDS.includes(f));
+  for (const f of AC_ONLY_FIELDS) delete c.parameters.properties[f];
+
+  // splitStories carries its own nested acceptanceCriteria with minItems 1 — the same demand,
+  // one level down, and just as discarded.
+  const split = c.parameters.properties.splitStories;
+  if (split && split.items && split.items.properties) {
+    delete split.items.properties.acceptanceCriteria;
+    if (Array.isArray(split.items.required)) {
+      split.items.required = split.items.required.filter((f) => f !== 'acceptanceCriteria');
+    }
+  }
+  return c;
+}
+
 const TOOL_SPEC_REVIEW = {
   name: 'submit_spec_review',
   description: 'Submit coordinator quality review results for all stories.',
@@ -7192,8 +7237,15 @@ async function runSpecAgent({ promptExec, agent, story, phase, runId, logDir, fo
   const splitRulesBlock = isBrownfieldSpec
     ? ''
     : renderEngineTemplate('speckit-split-rules', {});
+  // THE INSTRUCTION MUST NOT ORDER WHAT THE SCHEMA AND THE TOOL BOTH REFUSE.
+  //
+  // This said "Generate refined acceptance criteria" on brownfield while the Step-2 caller
+  // discarded every AC that came back ("brownfield — ignoring 8 AC(s)"), the brownfield template
+  // stopped listing acceptanceCriteria in its schema hint, and specAgentContract() removed the
+  // field from the tool. A prompt that demands a field its own schema omits and its tool rejects
+  // produces a refused call and a retry — paid for twice, to deliver nothing.
   const generateInstruction = isBrownfieldSpec
-    ? 'Generate refined acceptance criteria and optionally updated title/description. Output raw JSON only (no XML tags, no markdown fences, no preamble) using this schema:'
+    ? 'Refine this story\'s specification and optionally update its title/description. Output raw JSON only (no XML tags, no markdown fences, no preamble) using this schema:'
     : 'Generate refined acceptance criteria, optionally updated title/description, and split stories where required. Output raw JSON only (no XML tags, no markdown fences, no preamble) using this schema:';
 
   // GROUND THE PRODUCER BEFORE IT WRITES, not after.
@@ -7298,7 +7350,7 @@ async function runSpecAgent({ promptExec, agent, story, phase, runId, logDir, fo
   });
   try {
     const payload = await runAgentForJson(
-      promptExec, prompt, TOOL_SPEC_AGENT, 'SPEC_AGENT',
+      promptExec, prompt, specAgentContract(), 'SPEC_AGENT',
       path.join(logDir, `${story.id}-${agent}-spec.log`), null, story.id, repoPath,
       // THE SEAM, asked for. This call passed no env, so it ran with no ladder, no budget
       // and no tool grant — the settings sat in the registry reaching nothing.
@@ -7623,7 +7675,7 @@ async function runSpeckitReview({ promptExec, story, openspecOutput, phase, runI
     });
   try {
     const payload = await runAgentForJson(
-      promptExec, prompt, TOOL_SPEC_AGENT, 'SPEC_AGENT',
+      promptExec, prompt, specAgentContract(), 'SPEC_AGENT',
       path.join(logDir, `${story.id}-speckit-review.log`), null, story.id, repoPath
     );
     if (payload) {
@@ -10251,6 +10303,7 @@ function costLabelFor(tag, env) {
 }
 
 module.exports = {
+  specAgentContract,
   rosterReviewVerdict,
   aggregateRosterReview,
   reviewOutcomeKeepsChange,

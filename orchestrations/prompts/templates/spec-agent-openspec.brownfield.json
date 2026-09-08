@@ -1,0 +1,60 @@
+{
+  "$why": [
+    "THE BROWNFIELD VARIANT OF THE SPEC PASS. Resolved by variantIdFor when EPAM_BROWNFIELD=1;",
+    "greenfield reads spec-agent-openspec.json and is untouched by this file existing.",
+    "",
+    "WHY IT EXISTS. On a brownfield ticket the spec pass output is consumed as verification",
+    "criteria, fix-site analysis and technical notes. Acceptance criteria are NOT consumed — the",
+    "runner discards them on arrival, logging \"brownfield — ignoring 8 AC(s) speckit produced;",
+    "ACs are out of scope\" and \"ACs are immutable (VC model); openspec AC edits redacted\"",
+    "(live 2026-09-08, AMSD-1919). The greenfield template asks for them anyway, so the agent",
+    "spent output tokens — the dearest kind — producing a deliverable policy guarantees to bin.",
+    "",
+    "THE PROMPT AND THE SCHEMA MUST AGREE. specAgentContract() removes the AC fields from the",
+    "tool under the same flag. Asking for a field the tool will not accept produces a refused",
+    "call and a retry, so the two are asserted to match by",
+    "test/unit/orchestration/a-brownfield-contract-asks-only-for-what-it-uses.test.ts.",
+    "",
+    "IDENTICAL PLACEHOLDERS TO THE BASE, deliberately: the renderer supplies the same seventeen",
+    "named blocks either way, so switching variant cannot fail on a token nobody computed."
+  ],
+  "body": "__FORCED_RETRY_BLOCK__You are the __AGENT__ specification agent for EPAM CLI. Phase __PHASE__, story __STORY_ID__.__SPLIT_WARNING____PRIOR_GAPS_BLOCK____SEMBLE_CONTEXT____REFERENCED_DOCS_EVIDENCE____FIX_SITE_BLOCK____DECLARED_FILE_BLOCK____BROWNFIELD_ARCHAEOLOGY_BLOCK__\n__GENERATE_INSTRUCTION__\n{\n  \"storyId\":\"__STORY_ID__\",\n  \"agent\":\"__AGENT__\",\n  \"notes\":\"context\",\n  \"description\":\"...\",\n  \"title\":\"...\",__LOCATION_HINT_SCHEMA_LINE____SPLIT_SCHEMA_FIELD__\n}\nDo NOT produce acceptance criteria. This story is judged on its verification criteria; any\nacceptance criteria you emit are discarded unread, so producing them only costs output.\nUse existing text when no change is needed.__SPLIT_RULES_BLOCK__\n\nStory context:\n__STORY_PAYLOAD____PUBLISHED_CONTRACTS__\n",
+  "description": "Produce or revise the specification for one story on a BROWNFIELD ticket, as the openspec agent.",
+  "id": "spec-agent-openspec.brownfield",
+  "placeholders": [
+    "__AGENT__",
+    "__BROWNFIELD_ARCHAEOLOGY_BLOCK__",
+    "__DECLARED_FILE_BLOCK__",
+    "__FIX_SITE_BLOCK__",
+    "__FORCED_RETRY_BLOCK__",
+    "__GENERATE_INSTRUCTION__",
+    "__LOCATION_HINT_SCHEMA_LINE__",
+    "__PHASE__",
+    "__PRIOR_GAPS_BLOCK__",
+    "__PUBLISHED_CONTRACTS__",
+    "__REFERENCED_DOCS_EVIDENCE__",
+    "__SEMBLE_CONTEXT__",
+    "__SPLIT_RULES_BLOCK__",
+    "__SPLIT_SCHEMA_FIELD__",
+    "__SPLIT_WARNING__",
+    "__STORY_ID__",
+    "__STORY_PAYLOAD__"
+  ],
+  "version": 1,
+  "seams": [
+    "spec-agent"
+  ],
+  "mayBeEmpty": [
+    "__DECLARED_FILE_BLOCK__",
+    "__FIX_SITE_BLOCK__",
+    "__FORCED_RETRY_BLOCK__",
+    "__PRIOR_GAPS_BLOCK__",
+    "__PUBLISHED_CONTRACTS__",
+    "__REFERENCED_DOCS_EVIDENCE__",
+    "__SEMBLE_CONTEXT__",
+    "__SPLIT_RULES_BLOCK__",
+    "__SPLIT_SCHEMA_FIELD__",
+    "__SPLIT_WARNING__"
+  ],
+  "$whyMayBeEmpty": "Declared 2026-08-27 after run 20260827T125654Z aborted here. Each of these is a CONDITIONAL INSERT: the story is not being split, no earlier pass left gaps, no documentation was fetched, no contract has been published yet and attempt one carries no forced-retry note. The renderer's own rule is that absence must be a real state rather than a failed lookup — and a first pass having no prior gaps is exactly that. All ten rendered empty during normal operation and the render refused, three times per story, with no model involved; both lanes halted at the specification pass. __FIX_SITE_BLOCK__ is the one to watch: empty is legitimate before discovery has run, but it is ALSO what an unavailable code-graph-detective produces, and that failure is reported separately rather than inferred from this blank."
+}

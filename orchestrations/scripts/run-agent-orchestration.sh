@@ -155,6 +155,7 @@ SCRIPT_DIR="$(cd "$(dirname "${BASH_SOURCE[0]}")" && pwd)"
 # Nothing the pipeline spawns is entitled to the whole machine. See the file header:
 # an unbounded client suite is what defeated RG-DELTA and aborted the 2026-09-04 run.
 source "$SCRIPT_DIR/lib/bounded-exec.sh"
+source "$SCRIPT_DIR/lib/prompt-variant.sh"
 source "$SCRIPT_DIR/lib/seam-ladder.sh"
 # The pipeline does not run code nobody has tested. Every stage below asks this first.
 source "$SCRIPT_DIR/lib/stage-coverage-gate.sh"
@@ -3687,7 +3688,7 @@ _run_agent_mint() {
   if [ -n "$_pending" ] && [ -f "$_pending" ]; then
     if [ "${EPAM_REGENERATE_CODELINE_ASSETS:-0}" != "1" ] \
        && [ -n "$_detected_cl" ] \
-       && [ -f "$EPAM_PROJECT_CONFIG_DIR/.prompt-cache/.complete-${_detected_cl}" ]; then
+       && [ -f "$EPAM_PROJECT_CONFIG_DIR/.prompt-cache/$(prompt_marker_key "$_detected_cl")" ]; then
       log "[mint] deferred decision settled: ${_detected_cl} completed its agents and prompts — kept"
     else
       log "[mint] deferred decision settled: this run is not ${_detected_cl:-<unresolved>}'s completed codeline — clearing the previous run's agents and prompts"
@@ -3704,7 +3705,7 @@ _run_agent_mint() {
   if [ "${EPAM_SKIP_AGENT_MINT:-0}" != "1" ] \
      && [ "${EPAM_REGENERATE_CODELINE_ASSETS:-0}" != "1" ] \
      && [ -n "$_detected_cl" ] && [ -n "${EPAM_PROJECT_CONFIG_DIR:-}" ] \
-     && [ -f "$EPAM_PROJECT_CONFIG_DIR/.prompt-cache/.complete-${_detected_cl}" ] \
+     && [ -f "$EPAM_PROJECT_CONFIG_DIR/.prompt-cache/$(prompt_marker_key "$_detected_cl")" ] \
      && ls "$EPAM_PROJECT_CONFIG_DIR/prompts/"*.json >/dev/null 2>&1; then
       log "[mint] codeline ${_detected_cl} is already provisioned — the mint is skipped; EPAM_REGENERATE_CODELINE_ASSETS=1 forces a re-mint"
       EPAM_SKIP_AGENT_MINT=1

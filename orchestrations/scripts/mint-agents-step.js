@@ -1250,8 +1250,11 @@ if (require.main !== module) return;
     let _codelineComplete = false;
     if (_codelineId) {
       try {
+        // The variant is part of the claim — see _markerPath in project-prompt-builder.js. A
+        // greenfield codeline's marker must not let a brownfield run skip the mint.
+        const _variant = process.env.EPAM_BROWNFIELD === '1' ? '.brownfield' : '';
         _codelineComplete = fs.existsSync(
-          path.join(projectConfigDir, '.prompt-cache', `.complete-${_codelineId}`));
+          path.join(projectConfigDir, '.prompt-cache', `.complete-${_codelineId}${_variant}`));
       } catch { _codelineComplete = false; }
     }
 

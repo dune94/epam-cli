@@ -145,11 +145,20 @@ if [ "$UNINSTALL" = "1" ]; then
         _UN_FILE="${_UN_SPEC%%:*}"; _UN_PROJECT="${_UN_SPEC##*:}"
         _UN_COMPOSE="$_UN_ROOT/$_UN_FILE"
         if [ -f "$_UN_COMPOSE" ]; then
-            if (cd "$(dirname "$_UN_COMPOSE")" && container_compose \
-                    -f "$(basename "$_UN_COMPOSE")" -p "$_UN_PROJECT" down -v --remove-orphans --rmi local) >/dev/null 2>&1; then
+            (cd "$(dirname "$_UN_COMPOSE")" && container_compose \
+                    -f "$(basename "$_UN_COMPOSE")" -p "$_UN_PROJECT" down -v --remove-orphans --rmi local) >/dev/null 2>&1 || true
+            # COMPOSE DOWN IS NOT THE WHOLE JOB, AND ITS EXIT CODE IS NOT THE ANSWER. A non-zero
+            # `down` used to be reported as "nothing to remove or already gone" — the most
+            # reassuring wording available for the case where nothing was removed. Live
+            # 2026-09-07 that left EIGHT containers and TWO networks behind, which then held the
+            # ports the next install needed, so a fresh install validated itself against the
+            # previous install's services. Sweep by label, then verify, then report the machine's
+            # actual state rather than a command's exit code.
+            if purge_project "$_UN_PROJECT"; then
                 _ok "removed $_UN_PROJECT (containers, network, volumes, images)"
             else
-                _ok "$_UN_PROJECT: nothing to remove or already gone"
+                _bad "$_UN_PROJECT: containers remain after uninstall — they will hold this install's ports"
+                FAILED=1
             fi
             # SCOPED PRUNE, never a bare `docker system prune` — that would also sweep up the dev
             # environment's own dangling layers. Compose stamps every image it builds with this
@@ -715,14 +724,32 @@ compose_up() {
         # exact stack already running, or a second install) steps to the next attempt's offset, so
         # no manual port flag is ever required for this to just work.
         local _off=$((_i * 10))
+        # PROBED, NOT ASSUMED. The offset says where to START looking; whether a port is free is
+        # a question only the machine can answer. Deriving them arithmetically meant a clash was
+        # discovered only when compose failed — and compose does not always fail: live 2026-09-07
+        # it exited 0 over six containers stuck in `created` with "address already in use", so
+        # nothing discovered the clash at all. Each service takes the first genuinely free port
+        # at or after its candidate, so another install holding 3100 costs one step, not a run.
+        local _p_ch _p_lf _p_dash _p_graf
+        _p_ch="$(find_free_port $((8123 + _off)))"   || { _bad "no free port for clickhouse"; return 1; }
+        _p_lf="$(find_free_port $((3100 + _off)))"   || { _bad "no free port for langfuse"; return 1; }
+        _p_dash="$(find_free_port $((8092 + _off)))" || { _bad "no free port for the dashboard"; return 1; }
+        _p_graf="$(find_free_port $((3001 + _off)))" || { _bad "no free port for grafana"; return 1; }
         if (cd "$ROOT" && EPAM_OBS_SUBNET="$_subnet" \
-                EPAM_OBS_CLICKHOUSE_PORT=$((8123 + _off)) \
-                EPAM_OBS_LANGFUSE_PORT=$((3100 + _off)) \
-                EPAM_OBS_DASHBOARD_PORT=$((8092 + _off)) \
-                EPAM_OBS_GRAFANA_PORT=$((3001 + _off)) \
+                EPAM_OBS_CLICKHOUSE_PORT="$_p_ch" \
+                EPAM_OBS_LANGFUSE_PORT="$_p_lf" \
+                EPAM_OBS_DASHBOARD_PORT="$_p_dash" \
+                EPAM_OBS_GRAFANA_PORT="$_p_graf" \
                 container_compose -f "$COMPOSE_FILE" -p "$_OBS_PROJECT" up -d) >"$_log" 2>&1; then
-            _up=0
-            break
+            # UP EXITED 0 — THAT IS NOT THE SAME AS RUNNING. podman-compose returns 0 with
+            # containers left in `created`; live 2026-09-07 six of eight sat there holding
+            # "address already in use" while this loop recorded success and never retried the
+            # next port offset. Appending to the SAME log the retry greps means the container's
+            # own error can match 'address already in use' and drive the next attempt.
+            if compose_services_running "$_OBS_PROJECT" >>"$_log" 2>&1; then
+                _up=0
+                break
+            fi
         fi
         # ONLY RETRY ON A SUBNET OR PORT COLLISION — any other failure would fail identically on
         # every candidate, burning through all of them and hiding the real error behind repeats.
@@ -750,10 +777,15 @@ compose_up() {
     {
         printf 'OBS_PROJECT=%s\n' "$_OBS_PROJECT"
         printf 'OBS_SUBNET=%s\n' "$_subnet"
-        printf 'OBS_CLICKHOUSE_PORT=%s\n' "$((8123 + _off))"
-        printf 'OBS_LANGFUSE_PORT=%s\n' "$((3100 + _off))"
-        printf 'OBS_DASHBOARD_PORT=%s\n' "$((8092 + _off))"
-        printf 'OBS_GRAFANA_PORT=%s\n' "$((3001 + _off))"
+        # THE PORTS ACTUALLY USED, not the ones arithmetic proposed. These are probed now
+        # (find_free_port), so an offset that was occupied yields a different port — recording
+        # the formula instead of the result would make this file name ports no container listens
+        # on, and service_url()/langfuse-emit.js read it to find this install's own services.
+        printf 'OBS_CLICKHOUSE_PORT=%s\n' "$_p_ch"
+        printf 'OBS_LANGFUSE_PORT=%s\n' "$_p_lf"
+        printf 'OBS_DASHBOARD_PORT=%s\n' "$_p_dash"
+        printf 'OBS_GRAFANA_PORT=%s\n' "$_p_graf"
+        # (the rest of the identity — mock server, etc — follows below)
         # THE REHEARSAL SERVER'S IDENTITY, resolved here and started nowhere.
         #
         # llm-defaults.mockserver.json points all 40 seams at MockServer, and until now nothing in
@@ -771,6 +803,16 @@ compose_up() {
         printf 'MOCK_PROJECT=%s\n' "$(isolated_project_name "$ROOT" mock)"
         printf 'MOCK_SUBNET=%s\n' "$(isolated_subnet_candidates "$ROOT-mock" | head -1)"
     } > "$ROOT/.pipeline-services-state.env"
+
+    # THE .env MUST NAME THIS INSTALL'S OWN SERVICES. langfuse-emit.js resolves
+    # `env.LANGFUSE_BASE_URL || allocatedBase()`, so a literal in .env WINS over what this install
+    # allocated. Live 2026-09-07: an install whose Langfuse came up on 3120 carried a copied
+    # LANGFUSE_BASE_URL=http://localhost:3100 — a PREVIOUS install's — so every trace from a run
+    # would have been written into that other install's database, while looking perfectly healthy.
+    # Copied .env files are the normal case here, not an edge one.
+    if reconcile_env_endpoint "$ROOT/.env" LANGFUSE_BASE_URL "http://localhost:${_p_lf}"; then
+        _ok "LANGFUSE_BASE_URL points at this install's own Langfuse (port ${_p_lf})"
+    fi
     rm -f "$_log" 2>/dev/null
     return 0
 }
@@ -960,12 +1002,25 @@ else
         # attempts, and a second teardown here changes what one attempt means.
         for _LD_SUBNET in $(isolated_subnet_candidates "$ROOT-launch"); do
             _LD_TRY_PORT=$((_LD_PORT + _LD_I * 10))
+            # WRITTEN INTO THE .env COMPOSE READS, not only exported. Docker Compose lets the
+            # shell environment win over the project .env; PODMAN-COMPOSE DOES NOT — with
+            # LAUNCH_UI_PORT=8109 exported, `podman compose config` still resolved `ports:
+            # 8099:80` from launch-dashboard/.env. So every retry republished the SAME port while
+            # the installer health-checked the next one, and a dashboard that was up and serving
+            # on 8099 was declared "never answered healthy at :8109". Writing the file is correct
+            # on both runtimes — docker reads it too — and removes the precedence difference
+            # rather than depending on it.
+            reconcile_env_endpoint "$LAUNCH_DIR/.env" LAUNCH_UI_PORT "$_LD_TRY_PORT" || true
             if (cd "$LAUNCH_DIR" && LAUNCH_SUBNET="$_LD_SUBNET" LAUNCH_UI_PORT="$_LD_TRY_PORT" \
                     container_compose -f "$LAUNCH_COMPOSE" -p "$_LD_PROJECT" up -d --build --force-recreate) >"$_LD_LOG" 2>&1; then
-                _LD_UP=0
-                _LD_PORT="$_LD_TRY_PORT"
-                _LD_HEALTH_URL="http://localhost:${_LD_PORT}/api/health"
-                break
+                # Same trap as the observability stack: compose can exit 0 over containers that
+                # never started, and the port-collision retry below only fires on a failure.
+                if compose_services_running "$_LD_PROJECT" >>"$_LD_LOG" 2>&1; then
+                    _LD_UP=0
+                    _LD_PORT="$_LD_TRY_PORT"
+                    _LD_HEALTH_URL="http://localhost:${_LD_PORT}/api/health"
+                    break
+                fi
             fi
             grep -qiE 'overlap|pool|port is already allocated|address already in use' "$_LD_LOG" || break
             # TEAR DOWN BEFORE THE NEXT ATTEMPT — same fix as the observability stack's retry

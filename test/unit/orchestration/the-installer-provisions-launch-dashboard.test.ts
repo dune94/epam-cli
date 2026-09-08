@@ -86,6 +86,7 @@ function fixture(opts: { withCompose?: boolean; withEnvExample?: boolean; port?:
   const log = path.join(dir, 'docker.log');
   fs.writeFileSync(path.join(bin, 'docker'), `#!/bin/bash
 { printf 'ARGV: %s\\n' "$*"; printf 'LAUNCH_SUBNET=%s\\n' "\${LAUNCH_SUBNET:-}"; printf '%s\\n' '---'; } >> ${JSON.stringify(log)}
+if [ "$1" = "ps" ]; then printf '%s\\n' 'stub_service_1|running'; exit 0; fi
 exit 0
 `);
   fs.chmodSync(path.join(bin, 'docker'), 0o755);
@@ -285,6 +286,7 @@ describe('the installer provisions launch-dashboard', () => {
     // not be confused with it, so matching is scoped to that specific compose file.
     fs.writeFileSync(path.join(f.bin, 'docker'), `#!/bin/bash
 { printf 'ARGV: %s\\n' "$*"; printf 'LAUNCH_SUBNET=%s\\n' "\${LAUNCH_SUBNET:-}"; printf '%s\\n' '---'; } >> ${JSON.stringify(f.log)}
+if [ "$1" = "ps" ]; then printf '%s\\n' 'stub_service_1|running'; exit 0; fi
 if [[ "$*" == *launch-dashboard/docker-compose.yml* ]]; then
   n=$(grep -c '^ARGV: .*launch-dashboard/docker-compose\\.yml' ${JSON.stringify(f.log)} 2>/dev/null || echo 0)
   [ "$n" = "1" ] && { echo "Error response from daemon: Pool overlaps with other one on this address space" >&2; exit 1; }
@@ -322,6 +324,7 @@ exit 0
     const f = fixture({ port: 18110 });
     fs.writeFileSync(path.join(f.bin, 'docker'), `#!/bin/bash
 { printf 'ARGV: %s\\n' "$*"; printf '%s\\n' '---'; } >> ${JSON.stringify(f.log)}
+if [ "$1" = "ps" ]; then printf '%s\\n' 'stub_service_1|running'; exit 0; fi
 if [[ "$*" == *launch-dashboard/docker-compose.yml* ]]; then
   echo "Error: Dockerfile not found" >&2
   exit 1

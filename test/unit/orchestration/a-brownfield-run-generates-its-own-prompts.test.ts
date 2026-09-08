@@ -34,7 +34,8 @@ const builder = require(BUILDER);
 const echoSegments = (p: string) => {
   const segs = [...String(p).matchAll(/--- SEGMENT \d+ ---\n([\s\S]*?)(?=\n--- SEGMENT \d+ ---|\n--- END SEGMENTS ---)/g)]
     .map((m) => m[1]);
-  return JSON.stringify({ segments: segs.length ? segs : [''] });
+  const out = (segs.length ? segs : ['']);
+  return out.map((x, i) => `--- SEGMENT ${i + 1} ---\n${x}`).join('\n') + '\n--- END SEGMENTS ---';
 };
 
 const { buildProjectPrompts, writeCompletionMarker } = builder;

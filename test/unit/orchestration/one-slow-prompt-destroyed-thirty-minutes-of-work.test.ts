@@ -68,7 +68,9 @@ function goodBody(): string {
     : Object.values(t.bodies || {}).filter((v) => typeof v === 'string').join('\n');
   // eslint-disable-next-line @typescript-eslint/no-var-requires
   const { splitByPlaceholders } = require(join(__dirname, '../../../orchestrations/scripts/lib/project-prompt-contract.js'));
-  return JSON.stringify({ segments: splitByPlaceholders(body).segments });
+  const segs = splitByPlaceholders(body).segments;
+  return segs.map((x: string, i: number) => `--- SEGMENT ${i + 1} ---\n${x}`).join('\n')
+    + '\n--- END SEGMENTS ---';
 }
 
 function build(runText: (p: string, meta: any) => Promise<string>, log: string[] = []) {

@@ -244,10 +244,11 @@ function renderGeneratorPrompt({ generatorBody, template, projectContext, codeli
       const { splitByPlaceholders } = require('./project-prompt-contract.js');
       const { segments } = splitByPlaceholders(templateBodyText(template));
       return segments.map((seg, i) => `--- SEGMENT ${i + 1} ---\n${seg}`).join('\n')
-        + `\n--- END SEGMENTS ---\n\nReturn JSON only: {"segments": [ ... ${segments.length} strings, in order ... ]}.`
-        + '\nSpecialise the WORDING of each segment for this project. Return exactly '
-        + `${segments.length} segments. Do not write any __PLACEHOLDER__ tokens — the pipeline `
-        + 'restores them between your segments.';
+        + '\n--- END SEGMENTS ---\n\n'
+        + `Reply with the same ${segments.length} markers, in order, each followed by your wording `
+        + 'for that segment, and close with the END SEGMENTS marker. Plain text between the '
+        + 'markers — no JSON, no escaping, no code fences. A segment may be empty. Do not write '
+        + 'any placeholder tokens; the pipeline restores them between your segments.';
     })());
   return out;
 }
@@ -761,17 +762,19 @@ async function buildProjectPrompts({
       // must not be sent looking for a dropped placeholder that cannot happen any more.
       let assembled;
       try {
-        const { splitByPlaceholders, assembleFromSegments, extractSegmentsReply } =
+        const { splitByPlaceholders, assembleFromSegments, parseSegmentsReply } =
           require('./project-prompt-contract.js');
         const { slots } = splitByPlaceholders(templateBodyText(template));
-        // The reply may carry a false start before the real answer — models think out loud, and
-        // that is not worth a paid retry. extractSegmentsReply takes the last usable object, and
-        // prefers one whose length matches what this template actually needs.
-        assembled = assembleFromSegments(extractSegmentsReply(body, slots.length + 1), slots);
+        // DELIMITED, NOT JSON. Escaping 7kB of prose containing quotes, commas and newlines is
+        // where the JSON form broke — team-lead-review burned five attempts on replies that were
+        // complete but unparseable. parseSegmentsReply reads the same marker shape the prompt
+        // shows, tolerates a false start by taking the last complete set, and still accepts JSON.
+        assembled = assembleFromSegments(parseSegmentsReply(body, slots.length + 1), slots);
       } catch (err) {
         refusal = `your answer could not be assembled: ${(err && err.message) || String(err)}. `
-          + 'Return JSON only, of the form {"segments": [...]}, with one string per segment shown, '
-          + 'in order, and no __PLACEHOLDER__ tokens.';
+          + 'Reply with one --- SEGMENT n --- marker per segment shown, in order, each followed by '
+          + 'your wording, closing with --- END SEGMENTS ---. Plain text, no JSON, no code fences, '
+          + 'and no placeholder tokens.';
         log(`[prompt-builder] ! ${id} attempt ${attempt}/${attempts} refused: ${refusal}`);
         continue;
       }

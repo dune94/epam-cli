@@ -145,7 +145,8 @@ describe('the builder assembles, the model does not', () => {
       runText: async (prompt: string) => {
         // The generator is asked for prose only; it must not be handed raw slots to transcribe.
         if (/__STORY_ID__|__PROJECT_ROOT__/.test(String(prompt))) sawSlotInPrompt = true;
-        return JSON.stringify({ segments: ['Inspect ', ' within ', ' with care for THIS project.'] });
+        return ['Inspect ', ' within ', ' with care for THIS project.']
+          .map((x, i) => `--- SEGMENT ${i + 1} ---\n${x}`).join('\n') + '\n--- END SEGMENTS ---';
       },
       log: () => {},
     });
@@ -169,7 +170,8 @@ describe('the builder assembles, the model does not', () => {
       projectConfigDir: p.proj,
       projectContext: 'ctx', codelineContext: 'cl', mintedRoles: '',
       // Exactly the behaviour that produced 25 refusals: prose, no slots anywhere.
-      runText: async () => JSON.stringify({ segments: ['A ', ' B ', ' C'] }),
+      runText: async () => ['A ', ' B ', ' C']
+        .map((x, i) => `--- SEGMENT ${i + 1} ---\n${x}`).join('\n') + '\n--- END SEGMENTS ---',
       log: () => {},
     });
     const doc = JSON.parse(readFileSync(join(p.proj, 'prompts', 'probe.json'), 'utf8'));

@@ -329,5 +329,68 @@ function extractSegmentsReply(text, expectedCount) {
   return found[found.length - 1];
 }
 
+/**
+ * parseSegmentsReply(text, expectedCount) — the segments a reply meant to give, delimited.
+ *
+ * WHY NOT JSON. The segments contract asked for the prose between placeholders as a JSON array.
+ * Live 2026-09-08, pipeline-tests-45: team-lead-review (17 placeholders, 5,545-char body) burned
+ * all five attempts and aborted the run at 7 of 39 prompts. The replies were not truncated -- they
+ * ended correctly with "]} -- they simply did not parse:
+ *
+ *   Expected ',' or ']' after array element at position 609
+ *   ..."worse than no fix.","\n---\nREVIEW TASK: Story ","," — ","\n\nDESCRIPTION:\n"...
+ *
+ * Segments that ARE punctuation -- ", ", "," -- sit badly beside JSON's own delimiters, and
+ * escaping quotes, commas and newlines across 7kB of prose is where it breaks. Another reply
+ * showed the model catching itself ("Wait — that response is invalid") and the corrected object
+ * failing to parse as well.
+ *
+ * The INPUT already uses --- SEGMENT n --- markers and the model reads them perfectly. Using the
+ * same shape for the OUTPUT removes escaping entirely: a newline is a newline and a segment that
+ * is a single comma is a line containing a comma.
+ *
+ * JSON is still accepted. A model that answers correctly in the harder format should not be
+ * refused for it.
+ *
+ * A FALSE START IS NORMAL. Models correct themselves mid-answer, so the LAST complete set wins.
+ */
+function parseSegmentsReply(text, expectedCount) {
+  const s = String(text == null ? '' : text);
+
+  // Delimited form first: split on marker LINES so prose that merely mentions the marker inline
+  // cannot be mistaken for one.
+  const marker = /^[ \t]*-{2,}[ \t]*SEGMENT[ \t]+(\d+)[ \t]*-{2,}[ \t]*$/gm;
+  const hits = [];
+  let m = marker.exec(s);
+  while (m) { hits.push({ n: Number(m[1]), start: m.index, end: marker.lastIndex }); m = marker.exec(s); }
+  if (hits.length) {
+    // A reply may contain several attempts. Each time the numbering restarts at 1 a new set begins;
+    // the last set is the model's final answer.
+    let setStart = 0;
+    for (let i = 1; i < hits.length; i += 1) if (hits[i].n === 1) setStart = i;
+    const set = hits.slice(setStart);
+    const endMarker = /^[ \t]*-{2,}[ \t]*END SEGMENTS[ \t]*-{2,}[ \t]*$/gm;
+    endMarker.lastIndex = set[set.length - 1].end;
+    const tail = endMarker.exec(s);
+    const segs = set.map((h, i) => {
+      const from = h.end;
+      const to = i + 1 < set.length ? set[i + 1].start : (tail ? tail.index : s.length);
+      return s.slice(from, to).replace(/^\n/, '').replace(/\n$/, '');
+    });
+    if (typeof expectedCount !== 'number' || segs.length === expectedCount) return segs;
+    throw new Error(
+      `[project-prompt-contract] expected ${expectedCount} segment(s), got ${segs.length}`);
+  }
+
+  // JSON fallback, for a reply that got the harder format right.
+  const viaJson = (() => { try { return extractSegmentsReply(s, expectedCount); } catch { return null; } })();
+  if (viaJson) {
+    if (typeof expectedCount !== 'number' || viaJson.length === expectedCount) return viaJson;
+    throw new Error(
+      `[project-prompt-contract] expected ${expectedCount} segment(s), got ${viaJson.length}`);
+  }
+  throw new Error('[project-prompt-contract] no --- SEGMENT n --- blocks and no usable JSON in the reply');
+}
+
 module.exports = { checkGeneratedPrompt, buildGeneratedDoc, placeholdersIn, outputFieldsIn,
-  splitByPlaceholders, assembleFromSegments, extractSegmentsReply };
+  splitByPlaceholders, assembleFromSegments, extractSegmentsReply, parseSegmentsReply };

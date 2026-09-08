@@ -679,6 +679,11 @@ if (require.main !== module) return;
             ? `Agents this project minted: ${mintedDetail.map((mm) => `${mm.name} [${mm.kind}]`).join(', ')}`
             : 'Agents this project minted: (none this run)',
         ].join('\n'),
+        // WHAT THE SURVEY OBSERVED, not merely what the PRD declares. Everything else handed to
+        // this seam — paths, dependency lists, ticket titles — is a claim about the code rather
+        // than an observation of it, and the specialiser writes the project-facts paragraph that
+        // every persona inherits. Handed over WITH its caveat; see surveyLeadsBlock.
+        __SURVEY_LEADS__: spec.surveyLeadsBlock(survey),
         __CODELINE_CONTEXT__: codelines
           .map((c) => `- ${c.name} (${c.path})${c.dependencies && c.dependencies.length ? ` deps: ${c.dependencies.join(', ')}` : ''}`)
           .join('\n'),

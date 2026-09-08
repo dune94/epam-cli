@@ -43,6 +43,10 @@ const asTheMintSupplies = (refusal?: string) => ({
   __OUT_PATH__: '/tmp/out.json',
   __PROJECT_CONTEXT__: 'Project config: /tmp/cfg\nTickets in scope: X-1: a ticket',
   __CODELINE_CONTEXT__: '- cl (/tmp/cl)',
+  // DERIVED THE WAY THE CALLER DERIVES IT, like __DECLARED_SEAMS__ below: the mint passes
+  // surveyLeadsBlock(survey), and a run with no survey yields '' — which is why the slot is
+  // declared mayBeEmpty. Hand-writing a string here would stop tracking what the caller sends.
+  __SURVEY_LEADS__: require(join(LIB, '..', 'spec-mode-runner.js')).surveyLeadsBlock(null),
   __PREVIOUS_REFUSAL__: refusalBlock(refusal, 'roster'),
   // DERIVED THE WAY THE CALLER DERIVES IT, not copied. The seam field is judged against a closed
   // list in the registry, and the prompt now carries that list; hand-writing a second copy here

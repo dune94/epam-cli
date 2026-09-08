@@ -6269,6 +6269,47 @@ function prescriptionMissingSource(sites) {
  * fabricated starting point is worse than none.
  */
 /**
+ * surveyLeadsBlock(estateSurvey) — what a survey of the repositories OBSERVED, with its caveat.
+ *
+ * THE OBSERVATION HALF, SEPARATED FROM THE INSTRUCTION HALF. mintProjectAgents builds a block that
+ * mixes the survey's findings with instructions to PROPOSE roles and investigators. Those
+ * instructions are about staffing a team and mean nothing to a seam that is specialising personas,
+ * but the findings mean everything to it: they are the only input in the whole roster stage
+ * derived from opening the repositories.
+ *
+ * WHY THIS EXISTS AT ALL. estateSurvey was consumed only by mintProjectAgents, so the seam that
+ * chooses WHICH agents to make saw the repositories and the seam that decides WHAT THEY BELIEVE
+ * did not. The specialiser was handed codeline names, paths and dependency lists, and asked to
+ * write the project-facts paragraph that goes into every persona. Live 2026-09-08: it wrote that
+ * this repo colocates .spec.tsx beside the component, the roster review refuted it (338 of 368
+ * files are under __tests__/), and three attempts escalating to opus-4-8 cost $8.23 plus $3.47 of
+ * review — to establish something `find` answers instantly, and which the survey had already read.
+ *
+ * THE CAVEAT IS PART OF THE EVIDENCE, never separable from it. A survey line handed over bare is
+ * worse than none: bare is exactly how "as this repo already does" became an instruction inherited
+ * by every agent. A survey has been wrong before — 2026-08-08 it reported a repository contained
+ * no reference to a package its own source uses in twenty files.
+ */
+function surveyLeadsBlock(estateSurvey) {
+  const sv = estateSurvey && estateSurvey.ran === true && Array.isArray(estateSurvey.codelines)
+    ? estateSurvey : null;
+  if (!sv) return '';
+  const lines = sv.codelines.filter(Boolean).map(surveyLineFor);
+  if (!lines.length) return '';
+  return [
+    'WHAT A SURVEY OF THESE REPOSITORIES REPORTED. These are LEADS, not settled facts.',
+    '',
+    'This was read from the repositories before the roster existed. It has been wrong before, so',
+    'treat every line below as what the survey BELIEVES. Do NOT restate any of it in an agent brief',
+    'as established, verified or confirmed — a brief is inherited whole and re-checked by nothing,',
+    'so a wrong lead written as a fact becomes an instruction every agent obeys.',
+    '',
+    ...lines,
+    '',
+  ].join('\n');
+}
+
+/**
  * configSurfaceBlock — the configuration files this codeline carries that govern what its code is
  * permitted to do, one per line, or an explicit statement that there are none.
  *
@@ -10381,6 +10422,7 @@ module.exports = {
   buildRosterReviewPrompt,
   buildSurveyPrompt,
   surveyLineFor,
+  surveyLeadsBlock,
   reconcileMintTally,
   SURVEY_STATES,
   TOOL_ROSTER_REVIEW,

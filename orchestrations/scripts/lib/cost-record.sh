@@ -39,6 +39,31 @@ record_call_cost() {
     cread=$(jq -r  '.usage.cache_read_input_tokens     // .usage.cacheReadInputTokens     // 0' "$reply" 2>/dev/null || echo 0)
     cwrite=$(jq -r '.usage.cache_creation_input_tokens // .usage.cacheCreationInputTokens // 0' "$reply" 2>/dev/null || echo 0)
 
+    # WHAT THE LOOP ACTUALLY DID, which one aggregate row cannot say.
+    #
+    # task_turns read .num_turns and recorded 1 for calls that consumed over a MILLION cached
+    # tokens — a single request cannot do that, so the row was hiding an agentic loop behind one
+    # number. usage.iterations[] is one entry per internal iteration and was already in the reply.
+    #
+    # This is the figure Anthropic's own sizing method needs ("sum usage.output_tokens across
+    # every request in the loop ... start with the p99"), and without it the ladder's iteration
+    # budgets — 40 at medium/high, 250 at highest — are unfalsifiable: a cheap rung that ran out
+    # of room reads exactly like one that was not capable.
+    local iters
+    iters=$(jq -r '(.usage.iterations // []) | length' "$reply" 2>/dev/null || echo 0)
+
+    # THE TTL DECIDES THE PRICE OF A CACHE WRITE: ephemeral_1h bills at input x2.0, ephemeral_5m at
+    # x1.25, and cache writes are the dearest token class there is. One run wrote 2,956,614 of them
+    # and the ledger could not say which rate it paid.
+    local cw1h cw5m
+    cw1h=$(jq -r '.usage.cache_creation.ephemeral_1h_input_tokens // 0' "$reply" 2>/dev/null || echo 0)
+    cw5m=$(jq -r '.usage.cache_creation.ephemeral_5m_input_tokens // 0' "$reply" 2>/dev/null || echo 0)
+
+    # A TRUNCATED ANSWER MUST NOT READ AS A FINISHED ONE. stop_reason distinguishes a response that
+    # hit max_tokens from one that completed, which is otherwise invisible downstream.
+    local stopr
+    stopr=$(jq -r '.stop_reason // .stopReason // "unknown"' "$reply" 2>/dev/null || echo unknown)
+
     local cost_file="${PHASE_COST_FILE:-${LOG_DIR:-.}/phase-cost.jsonl}"
     local lock_file="${cost_file}.lock"
     local phase_id="${CURRENT_PHASE:-${PHASE:-unknown}}"
@@ -56,10 +81,14 @@ record_call_cost() {
             --argjson cu "${cost:-0}" --argjson ti "${tin:-0}" \
             --argjson to "${tout:-0}" --argjson tt "${turns:-0}" \
             --argjson cr "${cread:-0}" --argjson cw "${cwrite:-0}" \
+            --argjson it "${iters:-0}" --argjson c1 "${cw1h:-0}" --argjson c5 "${cw5m:-0}" \
+            --arg sr "$stopr" \
             '{phase_id:$pid, story_id:$sid, agent_type:$at, agent_name:$at, resolvedModel:$rm,
               started_at:$sa, ended_at:$ea, task_cost_usd:$cu,
               task_tokens_in:$ti, task_tokens_out:$to, task_turns:$tt,
               cache_read_tokens:$cr, cache_create_tokens:$cw,
+              task_iterations:$it, cache_create_1h_tokens:$c1, cache_create_5m_tokens:$c5,
+              stop_reason:$sr,
               status:"completed", invokeMode:"cli"}' >> "$cost_file"
     ) 200>"$lock_file"
 

@@ -270,5 +270,64 @@ function assembleFromSegments(segments, slots) {
   return out + String(segs[segs.length - 1]);
 }
 
+/**
+ * extractSegmentsReply(text, expectedCount) — the segments a reply meant to give.
+ *
+ * MODELS THINK OUT LOUD, and that is not an error worth a paid retry. Live 2026-09-08 with real
+ * tokens, replies routinely looked like:
+ *
+ *   {"segments":["","","","","","","",""][0:0]}
+ *   Let me answer properly.
+ *   {"segments":["","\n\n---\nRUNTIME BOUNDARY REVIEW: "," — ", ...
+ *
+ * The first extractor used /\{[\s\S]*\}/ — greedy — so it spanned the abandoned attempt, the
+ * prose, and the real answer as one string and failed to parse every time. runtime-boundary-review
+ * burned all three attempts on replies whose FINAL object was perfectly good.
+ *
+ * Scanned with a brace counter that respects strings and escapes, because segment prose legitimately
+ * contains braces and quotes. The LAST candidate that parses and carries a segments array wins; when
+ * a count is known, a candidate matching it wins over one that does not, so a false start of the
+ * wrong length cannot beat the real answer.
+ */
+function extractSegmentsReply(text, expectedCount) {
+  const s = String(text == null ? '' : text);
+  const found = [];
+  for (let i = 0; i < s.length; i += 1) {
+    if (s[i] !== '{') continue;
+    let depth = 0; let inStr = false; let esc = false;
+    for (let j = i; j < s.length; j += 1) {
+      const ch = s[j];
+      if (esc) { esc = false; continue; }
+      if (inStr) {
+        if (ch === '\\') esc = true;
+        else if (ch === '"') inStr = false;
+        continue;
+      }
+      if (ch === '"') { inStr = true; continue; }
+      if (ch === '{') depth += 1;
+      else if (ch === '}') {
+        depth -= 1;
+        if (depth === 0) {
+          try {
+            const o = JSON.parse(s.slice(i, j + 1));
+            if (o && Array.isArray(o.segments)) found.push(o.segments);
+          } catch { /* not this candidate */ }
+          i = j; // continue scanning AFTER this object
+          break;
+        }
+      }
+    }
+  }
+  if (!found.length) {
+    throw new Error('[project-prompt-contract] no {"segments":[...]} object in the reply');
+  }
+  if (typeof expectedCount === 'number') {
+    for (let k = found.length - 1; k >= 0; k -= 1) {
+      if (found[k].length === expectedCount) return found[k];
+    }
+  }
+  return found[found.length - 1];
+}
+
 module.exports = { checkGeneratedPrompt, buildGeneratedDoc, placeholdersIn, outputFieldsIn,
-  splitByPlaceholders, assembleFromSegments };
+  splitByPlaceholders, assembleFromSegments, extractSegmentsReply };

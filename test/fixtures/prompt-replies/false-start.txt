@@ -1,0 +1,5 @@
+{"segments":["","","","","","","" ]}
+
+Wait — that is not a valid answer. Let me give the real one.
+
+{"segments":["","","","GO Transit checkout web app — runtime boundary review for the gotransit.web codeline","","This codeline declares a single root at /repo. Read the configuration files listed above from that root before you judge anything: they, not your expectations of a checkout stack, decide what this application may do.","Below is the change under review, as a unified diff. Judge only what it does at runtime."]}

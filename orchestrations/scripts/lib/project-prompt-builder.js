@@ -761,11 +761,13 @@ async function buildProjectPrompts({
       // must not be sent looking for a dropped placeholder that cannot happen any more.
       let assembled;
       try {
-        const parsed = JSON.parse(
-          (body.match(/\{[\s\S]*\}/) || [body])[0]);
-        const { splitByPlaceholders, assembleFromSegments } = require('./project-prompt-contract.js');
+        const { splitByPlaceholders, assembleFromSegments, extractSegmentsReply } =
+          require('./project-prompt-contract.js');
         const { slots } = splitByPlaceholders(templateBodyText(template));
-        assembled = assembleFromSegments(parsed && parsed.segments, slots);
+        // The reply may carry a false start before the real answer — models think out loud, and
+        // that is not worth a paid retry. extractSegmentsReply takes the last usable object, and
+        // prefers one whose length matches what this template actually needs.
+        assembled = assembleFromSegments(extractSegmentsReply(body, slots.length + 1), slots);
       } catch (err) {
         refusal = `your answer could not be assembled: ${(err && err.message) || String(err)}. `
           + 'Return JSON only, of the form {"segments": [...]}, with one string per segment shown, '

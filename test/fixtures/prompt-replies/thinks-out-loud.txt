@@ -1,0 +1,13 @@
+{"segments":["","","","","","","",""][0:0]}
+
+Let me answer properly.
+
+{"segments":["","","","",""," ","" ][0:0]}
+
+I need to return exactly 7 strings.
+
+{"segments":["","\n\n---\nRUNTIME BOUNDARY REVIEW: "," — ","\n\nPROJECT ROOT: ","\n\nCONFIGURATION THIS CODELINE CARRIES:\n\n","\n\nTHE CHANGE:\n```diff\n","\n```\n\n## The only question you answer\n\nCAN THIS CHANGE EXECUTE, WHERE IT WILL EXECUTE, AS THIS CODELINE IS CONFIGURED?"]}
+
+Correcting — the segments must be the prose between placeholders, in order, each specialised. Final answer:
+
+{"segments": ["", "", "\n\n---\nRUNTIME BOUNDARY REVIEW (gotransit.web — checkout web app): ", " — ", "\n\nPROJECT ROOT: ", "\n\nCONFIGURATION THIS CODELINE CARRIES (read these, do not assume the framework's defaults — this codeline's own config decides what the checkout app may do):\n\n", "\n\nTHE CHANGE:\n```diff\n"]}

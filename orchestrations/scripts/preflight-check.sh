@@ -394,10 +394,25 @@ else
 fi
 
 # 6c. Dashboard /logs/healing-events.jsonl is served by nginx (routing sanity)
-if curl -sf ${_DASH}/logs/healing-events.jsonl >/dev/null 2>&1; then
+#
+# WAITED FOR, NOT SAMPLED ONCE. pre-run-reset.sh restarts agent-monitor with --force-recreate one
+# step before this runs, so the container being probed was deliberately destroyed and rebuilt
+# seconds earlier and is not yet accepting connections. A single curl therefore read a healthy
+# stack as a broken mount and refused the launch -- live 2026-09-08, pipeline-tests-40, where the
+# same URL answered 200 moments later with the file present and empty exactly as intended.
+#
+# That message has now been misread twice, once as a container-runtime fault and once as a missing
+# file. It was neither: the probe raced a restart the pipeline itself had just forced. Bounded, so
+# a mount that genuinely never comes up still refuses the launch rather than hanging.
+_logs_ok=0
+for _try in $(seq 1 15); do
+  if curl -sf ${_DASH}/logs/healing-events.jsonl >/dev/null 2>&1; then _logs_ok=1; break; fi
+  sleep 1
+done
+if [ "$_logs_ok" = "1" ]; then
   ok "nginx serves /logs/healing-events.jsonl — agent-activity.html and health.html will read it"
 else
-  fail "nginx /logs/healing-events.jsonl not reachable — docker /logs-dir mount may be wrong; run pre-run-reset.sh"
+  fail "nginx /logs/healing-events.jsonl not reachable after 15s — docker /logs-dir mount may be wrong; run pre-run-reset.sh"
 fi
 
 # 6d. build-info.json is fresh and contains selfHealing (health.html depends on it)

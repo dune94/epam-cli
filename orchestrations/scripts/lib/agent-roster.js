@@ -191,6 +191,22 @@ function ungroundedBriefPaths(proposal, codelines) {
     const segs = tok.replace(/\/+$/, '').split('/');
     if (segs.length < 2) return false;
     if (tok.endsWith('/')) return true;
+    // A TWO-SEGMENT TOKEN MUST START SOMEWHERE THE ESTATE ACTUALLY HAS.
+    //
+    // The extension rule alone read "React/Next.js" as a file, because its last segment ends in
+    // ".js". On a Next.js codeline that is the most natural phrase a brief can contain, so the
+    // implementer was refused and the run died at assignment with only investigators minted —
+    // live 2026-09-08, pipeline-tests-47, $6.89 spent; and the identical rejection appears in
+    // plans-unknown.jsonl on 2026-08-25, so it recurs for any .js-suffixed product name.
+    //
+    // Structural, not a vocabulary list: no set of framework names would have the next one on it,
+    // and the hardcoding rule forbids the list anyway. Depth is the signal — one slash is as
+    // common in prose and product names as in paths, while three segments effectively never are.
+    //
+    // THE PRICE, stated: a two-segment invented path rooted somewhere the estate does not have
+    // ("vendor/thing.ts") is no longer caught. That is narrower than refusing every brief which
+    // names the framework it works in.
+    if (segs.length === 2 && !roots.has(segs[0])) return false;
     if (/\.[A-Za-z0-9]+$/.test(segs[segs.length - 1])) return true;
     return roots.has(segs[0]);
   };

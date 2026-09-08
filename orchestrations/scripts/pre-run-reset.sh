@@ -303,18 +303,41 @@ _obs_compose() {
 # here, and that is the difference between a suite that gets run and one that does not.
 #
 # Skipped only when asked. A run never sets this, so the live path is unchanged.
+# REPLACING THE CONTAINER, NOT RESTARTING IT.
+#
+# --force-recreate is honoured by docker compose and IGNORED by podman-compose, which restarts the
+# existing container instead. A restarted container keeps the volumes it was created with, so the
+# override this script just wrote -- carrying THIS run's /prd-dir and /logs-dir -- was reported as
+# applied and had no effect. Live 2026-09-08, pipeline-tests-41: override written 08:28,
+# agent-monitor created 08:23 at install time and merely started at 08:28, mounts holding neither
+# /logs-dir nor /prd-dir, and the run then died at a pre-flight check for a /logs path nginx could
+# not serve.
+#
+# The same class this file already records for nginx.conf ("without --force-recreate the container
+# keeps serving the nginx.conf it started with") -- one runtime further down. Removing the service
+# first makes the replacement explicit and true on both runtimes; --force-recreate stays for
+# docker, where it is meaningful and cheap.
+_obs_replace_agent_monitor() {
+  EPAM_OBS_SUBNET="${OBS_SUBNET:-}" \
+  EPAM_OBS_CLICKHOUSE_PORT="${OBS_CLICKHOUSE_PORT:-}" \
+  EPAM_OBS_LANGFUSE_PORT="${OBS_LANGFUSE_PORT:-}" \
+  EPAM_OBS_DASHBOARD_PORT="${OBS_DASHBOARD_PORT:-}" \
+  EPAM_OBS_GRAFANA_PORT="${OBS_GRAFANA_PORT:-}" \
+  _obs_compose -f "$COMPOSE_BASE" -f "$COMPOSE_OVERRIDE" -p "$OBS_PROJECT" \
+    rm -sf agent-monitor >/dev/null 2>&1 || true
+  EPAM_OBS_SUBNET="${OBS_SUBNET:-}" \
+  EPAM_OBS_CLICKHOUSE_PORT="${OBS_CLICKHOUSE_PORT:-}" \
+  EPAM_OBS_LANGFUSE_PORT="${OBS_LANGFUSE_PORT:-}" \
+  EPAM_OBS_DASHBOARD_PORT="${OBS_DASHBOARD_PORT:-}" \
+  EPAM_OBS_GRAFANA_PORT="${OBS_GRAFANA_PORT:-}" \
+  _obs_compose -f "$COMPOSE_BASE" -f "$COMPOSE_OVERRIDE" -p "$OBS_PROJECT" \
+    up -d --force-recreate agent-monitor 2>/dev/null
+}
+
 if [ "${EPAM_SKIP_CONTAINER_RESTART:-0}" = "1" ]; then
   info "  Container restart skipped (EPAM_SKIP_CONTAINER_RESTART=1)"
-elif EPAM_OBS_SUBNET="${OBS_SUBNET:-}" \
-     EPAM_OBS_CLICKHOUSE_PORT="${OBS_CLICKHOUSE_PORT:-}" \
-     EPAM_OBS_LANGFUSE_PORT="${OBS_LANGFUSE_PORT:-}" \
-     EPAM_OBS_DASHBOARD_PORT="${OBS_DASHBOARD_PORT:-}" \
-     EPAM_OBS_GRAFANA_PORT="${OBS_GRAFANA_PORT:-}" \
-     _obs_compose \
-     -f "$COMPOSE_BASE" \
-     -f "$COMPOSE_OVERRIDE" \
-     -p "$OBS_PROJECT" \
-     up -d --force-recreate agent-monitor 2>/dev/null; then
+
+elif _obs_replace_agent_monitor; then
   if [ "$PRD_PRESENT" = "1" ]; then
     success "agent-monitor restarted → /prd-dir = $PRD_DIR (serving $PRD_BASENAME), /logs-dir = $LOG_DIR"
   else

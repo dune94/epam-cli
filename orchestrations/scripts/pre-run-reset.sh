@@ -323,6 +323,7 @@ _obs_replace_agent_monitor() {
   EPAM_OBS_LANGFUSE_PORT="${OBS_LANGFUSE_PORT:-}" \
   EPAM_OBS_DASHBOARD_PORT="${OBS_DASHBOARD_PORT:-}" \
   EPAM_OBS_GRAFANA_PORT="${OBS_GRAFANA_PORT:-}" \
+  EPAM_PRD_DIR="$PRD_DIR" EPAM_LOG_DIR="$LOG_DIR" \
   _obs_compose -f "$COMPOSE_BASE" -f "$COMPOSE_OVERRIDE" -p "$OBS_PROJECT" \
     rm -sf agent-monitor >/dev/null 2>&1 || true
   EPAM_OBS_SUBNET="${OBS_SUBNET:-}" \
@@ -330,6 +331,7 @@ _obs_replace_agent_monitor() {
   EPAM_OBS_LANGFUSE_PORT="${OBS_LANGFUSE_PORT:-}" \
   EPAM_OBS_DASHBOARD_PORT="${OBS_DASHBOARD_PORT:-}" \
   EPAM_OBS_GRAFANA_PORT="${OBS_GRAFANA_PORT:-}" \
+  EPAM_PRD_DIR="$PRD_DIR" EPAM_LOG_DIR="$LOG_DIR" \
   _obs_compose -f "$COMPOSE_BASE" -f "$COMPOSE_OVERRIDE" -p "$OBS_PROJECT" \
     up -d --force-recreate agent-monitor 2>/dev/null
 }

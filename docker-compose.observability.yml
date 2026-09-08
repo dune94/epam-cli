@@ -204,6 +204,20 @@ services:
       # is rewritten via atomic tmp+rename by the pipeline, which orphans a
       # single-file bind mount the instant it happens (found live 2026-07-13).
       - ./orchestrations/agents:/profiles-dir:ro
+      # THIS RUN'S PRD AND LOGS — IN THE BASE FILE, NOT AN OVERRIDE.
+      #
+      # These lived in docker-compose.observability.override.yml, written per run by
+      # pre-run-reset.sh and passed as a second -f. Docker compose merges that; podman-compose
+      # 1.0.6 does not do so reliably -- live 2026-09-08 it produced a container carrying only the
+      # base volumes, and separately fell back to `podman start` on the OLD container after
+      # `podman run` hit a name clash, reporting exit 0 either way. The run then failed pre-flight
+      # on a /logs path nginx could not serve, with pre-run-reset having printed "✓ agent-monitor
+      # restarted → /logs-dir = ...".
+      #
+      # A value substituted into ONE file needs no merge semantics and behaves identically on both
+      # runtimes. Defaults keep a plain `up` working before any run has set them.
+      - ${EPAM_PRD_DIR:-./orchestrations/projects}:/prd-dir:ro
+      - ${EPAM_LOG_DIR:-./orchestrations/logs}:/logs-dir:ro
     healthcheck:
       test: ["CMD", "wget", "-qO-", "http://127.0.0.1:80/"]
       interval: 10s

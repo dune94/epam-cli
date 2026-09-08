@@ -399,6 +399,55 @@ function promptForTrace(explicit, agent) {
   }
 }
 
+/**
+ * ONE CALL, ONE RECORD — even when two emitters describe it.
+ *
+ * Every call reaches this function TWICE by design: the hub emits after the runner returns
+ * (llm-handler.sh runs lib/handlers/emit-cost.js), and the CALLER emits too — spec-mode-runner,
+ * ac-gate, cpa-inference — because only the caller holds the prompt the hub never sees. Live
+ * 2026-09-08 that wrote every spec-mode call twice and the ledger reported $14.5179 against
+ * ~$7.26 of real spend, with matching duplicate generations in Langfuse.
+ *
+ * Neither site can be deleted: the caller has the input, the hub has the coverage. So the write
+ * is made idempotent instead. The identity of a CALL is the runner result it is describing plus
+ * the agent describing it — not the timestamps, which is exactly why the duplicates looked
+ * distinct (one emitter records when the runner was invoked, the other when it returned).
+ *
+ * A later emit carrying a PROMPT replaces an earlier one that had none, so making it idempotent
+ * never costs the richer record. And a genuinely new call through the same result path records
+ * normally, because its content — and therefore its identity — differs.
+ */
+function _callIdentity(resultRaw, agent) {
+  return require('crypto').createHash('sha256')
+    .update(String(resultRaw || '')).update('\u0000').update(String(agent || ''))
+    .digest('hex');
+}
+
+/** Reads the sidecar that remembers which calls this result file has already emitted. */
+function _emittedIndex(resultFile) {
+  if (!resultFile) return { file: '', map: {} };
+  const file = `${resultFile}.cost-emitted.json`;
+  try {
+    return { file, map: JSON.parse(fs.readFileSync(file, 'utf8')) || {} };
+  } catch {
+    return { file, map: {} };
+  }
+}
+
+/** Replaces one line in a JSONL file — used when a richer record supersedes a thinner one. */
+function _replaceLine(file, previous, next) {
+  try {
+    if (!file || !previous) return false;
+    const body = fs.readFileSync(file, 'utf8');
+    const at = body.lastIndexOf(previous);
+    if (at === -1) return false;
+    fs.writeFileSync(file, body.slice(0, at) + next + body.slice(at + previous.length));
+    return true;
+  } catch {
+    return false;
+  }
+}
+
 function emitCostSnapshot({
   resultFile, activityFile, ledgerFile, agent, storyId, phase, model, provider, turns, startedAt, endedAt, rung,
   logDir,
@@ -545,16 +594,59 @@ function emitCostSnapshot({
     } catch { /* the screen must never break the run it is describing */ }
 
     const evt = buildCostSnapshot({ agent, storyId, phase, model, provider, cost, turns });
-    fs.appendFileSync(activityFile, JSON.stringify(evt) + '\n');
+
+    // IDEMPOTENT PER CALL — see _callIdentity. The hub and the caller both describe this same
+    // runner result; whichever arrives first writes, the second is a no-op, and a second emit
+    // carrying the prompt supersedes a first one that had none.
+    const _idx = _emittedIndex(resultFile);
+    const _id = _callIdentity(raw, agent);
+    const _prior = _idx.map[_id];
+    const _evtLine = JSON.stringify(evt) + '\n';
+    const _hasInput = !!(input && String(input).trim());
+
+    if (_prior && !(_hasInput && !_prior.hadInput)) {
+      // Already recorded, and this emit brings nothing the stored one lacks.
+      return null;
+    }
+
+    if (_prior && _hasInput && !_prior.hadInput) {
+      // The richer record wins: replace what the input-less emitter wrote.
+      _replaceLine(activityFile, _prior.evtLine, _evtLine);
+    } else {
+      fs.appendFileSync(activityFile, _evtLine);
+    }
 
     // The same measurement, to the file that every consumer of money actually reads. Resolved at
     // call time from LOG_DIR — never captured once — for the reason resolve_cost_ledger gives:
     // a lane that sets its own LOG_DIR must write to its own ledger.
+    const _ledgerFile = ledgerFile || process.env.PHASE_COST_FILE
+      || path.join(process.env.LOG_DIR || path.join(__dirname, '..', 'logs'), 'phase-cost.jsonl');
+    let _ledgerBefore = '';
+    if (_prior && _hasInput && !_prior.hadInput && _prior.ledgerLine) {
+      // Same supersede on the money side, so the ledger keeps ONE row for this call.
+      _replaceLine(_ledgerFile, _prior.ledgerLine, '');
+    }
+    try { _ledgerBefore = fs.readFileSync(_ledgerFile, 'utf8'); } catch { _ledgerBefore = ''; }
+
     appendLedgerRecord({
-      ledgerFile: ledgerFile || process.env.PHASE_COST_FILE
-        || path.join(process.env.LOG_DIR || path.join(__dirname, '..', 'logs'), 'phase-cost.jsonl'),
+      ledgerFile: _ledgerFile,
       agent, storyId, phase, model, cost, turns, startedAt, rung,
     });
+
+    // REMEMBER THIS CALL, so the other emitter's turn is a no-op. Stored beside the result file
+    // it describes: a new call rewrites that file, gets a new identity, and records normally.
+    try {
+      let _ledgerLine = '';
+      const _after = fs.readFileSync(_ledgerFile, 'utf8');
+      if (_after.startsWith(_ledgerBefore)) {
+        _ledgerLine = _after.slice(_ledgerBefore.length);
+      }
+      if (_idx.file) {
+        _idx.map[_id] = { hadInput: _hasInput, evtLine: _evtLine, ledgerLine: _ledgerLine };
+        fs.writeFileSync(_idx.file, JSON.stringify(_idx.map));
+      }
+    } catch { /* a missing sidecar costs a duplicate, never the record itself */ }
+
     return evt;
   } catch {
     return null;

@@ -29,12 +29,25 @@ record_call_cost() {
     tin=$(jq -r   '.usage.input_tokens  // .usage.inputTokens  // 0'       "$reply" 2>/dev/null || echo 0)
     tout=$(jq -r  '.usage.output_tokens // .usage.outputTokens // 0'       "$reply" 2>/dev/null || echo 0)
     turns=$(jq -r '.num_turns // .turns // .iterations // 0'               "$reply" 2>/dev/null || echo 0)
+    # CACHE TOKENS ARE PART OF THE BILL, AND THE ONLY EXPLANATION FOR IT. This writer captured
+    # input/output only, so a heavily cached call — every real call in this pipeline reads 30k-200k
+    # from cache — recorded as though it paid full price, and the largest record of a live run
+    # ($6.76, 81k in) showed cacheRead 0 and could not be explained. lib/cost-emitter.js has always
+    # captured them; two writers with two shapes is how the same call reads differently depending
+    # on which one logged it.
+    local cread cwrite
+    cread=$(jq -r  '.usage.cache_read_input_tokens     // .usage.cacheReadInputTokens     // 0' "$reply" 2>/dev/null || echo 0)
+    cwrite=$(jq -r '.usage.cache_creation_input_tokens // .usage.cacheCreationInputTokens // 0' "$reply" 2>/dev/null || echo 0)
 
     local cost_file="${PHASE_COST_FILE:-${LOG_DIR:-.}/phase-cost.jsonl}"
     local lock_file="${cost_file}.lock"
     local phase_id="${CURRENT_PHASE:-${PHASE:-unknown}}"
     local ended; ended=$(date -Iseconds)
 
+    # agent_name IS WRITTEN TOO, not instead of agent_type. Every per-agent cost view reads
+    # agent_name, so records from this writer were anonymous to all of them: in a live run 62% of
+    # the spend — including its single largest call — could not be attributed to any seam.
+    # agent_type stays, because existing consumers (sync-monitor-stories.sh) already read it.
     (
         flock -w 5 200 2>/dev/null || true
         jq -cn \
@@ -42,9 +55,11 @@ record_call_cost() {
             --arg sa "$started" --arg ea "$ended" \
             --argjson cu "${cost:-0}" --argjson ti "${tin:-0}" \
             --argjson to "${tout:-0}" --argjson tt "${turns:-0}" \
-            '{phase_id:$pid, story_id:$sid, agent_type:$at, resolvedModel:$rm,
+            --argjson cr "${cread:-0}" --argjson cw "${cwrite:-0}" \
+            '{phase_id:$pid, story_id:$sid, agent_type:$at, agent_name:$at, resolvedModel:$rm,
               started_at:$sa, ended_at:$ea, task_cost_usd:$cu,
               task_tokens_in:$ti, task_tokens_out:$to, task_turns:$tt,
+              cache_read_tokens:$cr, cache_create_tokens:$cw,
               status:"completed", invokeMode:"cli"}' >> "$cost_file"
     ) 200>"$lock_file"
 

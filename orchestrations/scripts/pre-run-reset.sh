@@ -256,6 +256,44 @@ sed -i "s|alias /prd-dir/[^;]*;|alias /prd-dir/${PRD_BASENAME};|" \
 # with, silently ignoring this run's PRD-basename patch (found live
 # 2026-07-13 verifying this exact fix — even the fix's own docs file wasn't
 # safe from the bug it documents).
+# THE COMPOSE THAT MATCHES THE INSTALL, resolved once.
+#
+# This shelled out to `docker compose` literally. A podman install therefore never remounted
+# agent-monitor, so the run's own log dir was never served and the pre-flight gate
+# "nginx /logs/healing-events.jsonl not reachable" failed on every podman run -- after the
+# installer's health check had already reported the box "ready", because that check probes host
+# ports and cannot see a mount that was never made.
+#
+# container_compose() already resolves the runtime and knows podman needs PODMAN_COMPOSE_PROVIDER
+# and a real runtime dir, and the installer lib ships inside every install. Sourced, never
+# reimplemented: a second copy of the resolution is how this drifted from install.sh in the first
+# place.
+_obs_runtime_lib() {
+  local _c
+  for _c in "${INSTALLER_LIB:-}" \
+            "$(dirname "${BASH_SOURCE[0]}")/../../orchestrations-installer/lib/container-runtime.sh" \
+            "${REPO_ROOT:-}/orchestrations-installer/lib/container-runtime.sh"; do
+    [ -n "$_c" ] && [ -f "$_c" ] && { printf '%s' "$_c"; return 0; }
+  done
+  return 1
+}
+_obs_runtime_name() {
+  local _l; _l="$(_obs_runtime_lib)" || { printf 'none'; return 1; }
+  # shellcheck disable=SC1090
+  . "$_l" 2>/dev/null || { printf 'none'; return 1; }
+  container_runtime 2>/dev/null || printf 'none'
+}
+_obs_have_runtime() {
+  local _n; _n="$(_obs_runtime_name)"
+  [ -n "$_n" ] && [ "$_n" != "none" ]
+}
+_obs_compose() {
+  local _l; _l="$(_obs_runtime_lib)" || return 1
+  # shellcheck disable=SC1090
+  . "$_l" 2>/dev/null || return 1
+  container_compose "$@"
+}
+
 # THE DASHBOARD RESTART IS THE ONLY SLOW STEP, AND A TEST DOES NOT NEED IT.
 #
 # `docker compose up --force-recreate` costs ~3 seconds. Everything else this script does — the
@@ -272,7 +310,7 @@ elif EPAM_OBS_SUBNET="${OBS_SUBNET:-}" \
      EPAM_OBS_LANGFUSE_PORT="${OBS_LANGFUSE_PORT:-}" \
      EPAM_OBS_DASHBOARD_PORT="${OBS_DASHBOARD_PORT:-}" \
      EPAM_OBS_GRAFANA_PORT="${OBS_GRAFANA_PORT:-}" \
-     docker compose \
+     _obs_compose \
      -f "$COMPOSE_BASE" \
      -f "$COMPOSE_OVERRIDE" \
      -p "$OBS_PROJECT" \
@@ -282,8 +320,15 @@ elif EPAM_OBS_SUBNET="${OBS_SUBNET:-}" \
   else
     success "agent-monitor restarted → /prd-dir = $PRD_DIR (serving $PRD_BASENAME once ingest writes it), /logs-dir = $LOG_DIR"
   fi
+elif ! _obs_have_runtime; then
+  info "  no container runtime found — skipping container restart"
 else
-  info "  Docker not available or agent-monitor not running — skipping container restart"
+  # NOT "docker is missing". The runtime IS here and the remount FAILED, which is a different
+  # fact and a different fix. The old text blamed an absent docker for every outcome, and on
+  # 2026-09-08 that sent the reader hunting containers "stuck in Created" while the real cause
+  # was this call naming a runtime the box does not use.
+  info "  agent-monitor remount FAILED with $(_obs_runtime_name) — this run's /logs-dir and /prd-dir are NOT mounted;"
+  info "  the pre-flight check 'nginx /logs/healing-events.jsonl not reachable' will fail because of this"
 fi
 
 # Step 2 (removed 2026-07-13): used to sed-patch a BUDGET_TOTAL constant into

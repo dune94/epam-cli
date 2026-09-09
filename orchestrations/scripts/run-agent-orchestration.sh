@@ -3601,11 +3601,6 @@ assert_cost_ledger_not_silently_empty || true
 # Here, at completion, because that is when the run knows its own id and the recording is
 # whole. It cannot fail the run: the work is finished by this point, and a run that succeeded
 # must not be reported failed because a recording could not be fetched.
-if declare -F export_run_cassette >/dev/null 2>&1; then
-    export_run_cassette "${ORCH_RUN_ID:-${EPAM_RUN_ID:-${RUN_NUMBER:-}}}" \
-        "$(basename "${EPAM_PROJECT_CONFIG_DIR:-project}")" \
-        "${EPAM_CASSETTE_DIR:-$AUTOMATION_DIR/cassettes}" || true
-fi
 log "[orch] ✅ Pipeline complete." \
     || error "[orch] ⚠️  Pipeline completed with errors."
 
@@ -4125,6 +4120,32 @@ ORCH_MODE="${ORCH_MODE:-bash}"
 # Cleanup on exit
 cleanup() {
     local exit_code=$?
+    # THE RUN LEAVES A CASSETTE HOWEVER IT ENDS — and this is the only place that can promise it.
+    #
+    # Export-on-completion sat at the end of _run_codeline_loop(), which a run reaches only by
+    # running to the end. pause-before-writer ends the process with `exit 0` hundreds of lines
+    # earlier, and every failure path is a bare `exit 1`/`2`/`3`. pipeline-tests-48 is the one
+    # install that carried that hook and has no cassettes directory at all: the run paused, so the
+    # hook never ran, while Langfuse held all 286 traces the whole time. Langfuse records each call
+    # as it happens, so the recording was never pending — waiting for completion to harvest it was
+    # the defect.
+    #
+    # `trap ... EXIT` fires on every exit path bash controls, including ones added later, so this
+    # cannot be forgotten by whoever writes the next `exit`. FIRST in the trap, before the control
+    # plane is torn down, because the export reads a service that teardown is about to stop. It
+    # cannot change what the run reports: $? is already captured above, and export_run_cassette
+    # never fails the caller.
+    #
+    # NOT COVERED HERE: `kill -9` and an OOM kill bypass every trap. Only a harvest that does not
+    # depend on this process can cover those.
+    if declare -F export_run_cassette >/dev/null 2>&1; then
+        _cas_run_id="${ORCH_RUN_ID:-${EPAM_RUN_ID:-${RUN_NUMBER:-}}}"
+        if [ -n "$_cas_run_id" ]; then
+            export_run_cassette "$_cas_run_id" \
+                "$(basename "${EPAM_PROJECT_CONFIG_DIR:-project}")" \
+                "${EPAM_CASSETTE_DIR:-$AUTOMATION_DIR/cassettes}" || true
+        fi
+    fi
     stop_control_plane
     stop_dashboards_watch
     if [ "$SKIP_CLEANUP" = "true" ]; then

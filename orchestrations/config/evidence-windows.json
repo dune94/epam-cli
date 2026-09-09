@@ -100,6 +100,10 @@
     "quarantineRawChars": {
       "value": 2000,
       "$why": "The raw agent output kept on a quarantined KB record. Enough to diagnose why it was rejected without storing an entire transcript."
+    },
+    "qaGateDiffLines": {
+      "value": 2000,
+      "$why": "The phase diff handed to a QA gate. Was an undeclared head -2000 at the runtime-boundary call site, beside a diff base (${_rev_base:-HEAD~1}) that nothing ever set."
     }
   }
 }

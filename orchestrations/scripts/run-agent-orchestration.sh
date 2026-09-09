@@ -280,6 +280,9 @@ _load_timeout_config
 [ -f "$SCRIPT_DIR/lib/project-config.sh" ] && source "$SCRIPT_DIR/lib/project-config.sh"
 # shellcheck source=lib/model-ladders.sh
 [ -f "$SCRIPT_DIR/lib/model-ladders.sh" ] && source "$SCRIPT_DIR/lib/model-ladders.sh"
+# What a QA gate is SHOWN decides what it can conclude — see lib/qa-gate-evidence.sh.
+# shellcheck source=lib/qa-gate-evidence.sh
+[ -f "$SCRIPT_DIR/lib/qa-gate-evidence.sh" ] && source "$SCRIPT_DIR/lib/qa-gate-evidence.sh"
 if command -v export_model_ladders >/dev/null 2>&1; then
     # THE VERDICT IS READ. This was `|| true`, which made the loader's return value decorative and
     # meant the else-branch below was the only way this could ever warn — a branch that fires when
@@ -9421,7 +9424,11 @@ $review_prompt"
                         # was invisible past that point with no indication anything
                         # was cut — the agent could confidently judge mutations
                         # against a partial file and never know it.
-                        if [ "${_mut_src_total_lines:-0}" -gt 100 ]; then
+                        # THE DECLARED WINDOW, not a second copy of it. This literal 100 sat
+                        # beside `head -n "$(evidence_window mutationSourceLines)"`, so widening
+                        # the declaration silently stopped the notice from firing.
+                        local _mut_src_win; _mut_src_win=$(evidence_window mutationSourceLines 2>/dev/null || echo 0)
+                        if [ "${_mut_src_total_lines:-0}" -gt "${_mut_src_win:-0}" ]; then
                             _cp_vals=$(mktemp "${TMPDIR:-/tmp}/qa-evidence-labels-vals-XXXXXX.json")
                             jq_vals \
                                   --arg mut_src_total_lines "${_mut_src_total_lines}" \
@@ -9429,9 +9436,11 @@ $review_prompt"
                             _mut_src_marker="$(render_engine_prompt qa-evidence-labels "$_cp_vals" truncation_notice_source)"
                             rm -f "$_cp_vals"
                         fi
+                        # CENTRED ON THE CHANGE. `head -n` showed the first N lines of the file,
+                        # so a 436-line component fixed at line 306 was out of reach at any window
+                        # size — the mutant hunter said so itself and could only answer WARN.
                         _src_content="$_src_content
---- $_f ---
-$(head -n "$(evidence_window mutationSourceLines)" "$PROJECT_ROOT/$_f" 2>/dev/null || echo '(unreadable)')${_mut_src_marker}"
+$(qa_gate_excerpt "$PROJECT_ROOT" "$LOG_DIR" "$_f" mutationSourceLines)${_mut_src_marker}"
                     done <<< "$_changed_src"
                 fi
                 # The tests to judge are THIS RUN'S tests. This used to be
@@ -9452,7 +9461,8 @@ $(head -n "$(evidence_window mutationSourceLines)" "$PROJECT_ROOT/$_f" 2>/dev/nu
                     [ -f "$_tf" ] || continue
                     local _mut_test_total_lines _mut_test_marker=""
                     _mut_test_total_lines=$(wc -l < "$_tf" 2>/dev/null || echo 0)
-                    if [ "${_mut_test_total_lines:-0}" -gt 60 ]; then
+                    local _mut_test_win; _mut_test_win=$(evidence_window mutationTestLines 2>/dev/null || echo 0)
+                    if [ "${_mut_test_total_lines:-0}" -gt "${_mut_test_win:-0}" ]; then
                         _cp_vals=$(mktemp "${TMPDIR:-/tmp}/qa-evidence-labels-vals-XXXXXX.json")
                         jq_vals \
                               --arg mut_test_total_lines "${_mut_test_total_lines}" \
@@ -9461,8 +9471,7 @@ $(head -n "$(evidence_window mutationSourceLines)" "$PROJECT_ROOT/$_f" 2>/dev/nu
                         rm -f "$_cp_vals"
                     fi
                     _test_content="$_test_content
---- $_tf ---
-$(head -n "$(evidence_window mutationTestLines)" "$_tf" 2>/dev/null || echo '(unreadable)')${_mut_test_marker}"
+$(qa_gate_excerpt "$PROJECT_ROOT" "$LOG_DIR" "$_tf" mutationTestLines)${_mut_test_marker}"
                 done <<< "$_test_files"
                 _cp_vals=$(mktemp "${TMPDIR:-/tmp}/qa-evidence-labels-vals-XXXXXX.json")
                 jq_vals \
@@ -9696,9 +9705,14 @@ $perf_prompt"
               } catch { process.stdout.write("(configuration could not be resolved)"); }
             ' "$AUTOMATION_DIR/plugins/client-env-boundary-plugin.js" "$PROJECT_ROOT" 2>/dev/null || echo "")
             local _rb_vals; _rb_vals=$(mktemp "${TMPDIR:-/tmp}/qa-runtime-boundary-vals-XXXXXX.json")
+            # THIS PHASE'S DIFF, not the last commit. `${_rev_base:-HEAD~1}` had no assignment
+            # anywhere in this file, so the fallback WAS the behaviour — and repro-test-writer
+            # commits after the writer, so that window held the reproducing test and never the fix.
+            # Live 2026-09-09: this gate reported "CheckoutForm.tsx itself is unmodified (git diff
+            # confirms no changes)" about a run that had just changed it.
             jq_vals --arg story_id "${phase_id}" \
                   --arg story_title "$(_brownfield_gate_scope runtime-boundary)" \
-                  --arg story_diff "$(git -C "$PROJECT_ROOT" diff "${_rev_base:-HEAD~1}" HEAD 2>/dev/null | head -2000)" \
+                  --arg story_diff "$(qa_gate_diff "$PROJECT_ROOT" "$LOG_DIR")" \
                   --arg config_surface "$_rb_config" \
                   --arg project_root "$PROJECT_ROOT" \
                   --arg review_profile "$_rb_profile" \

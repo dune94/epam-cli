@@ -10,12 +10,12 @@
     "qa-gate:mutant-hunter"
   ],
   "id": "qa-evidence-labels",
-  "version": 1,
+  "version": 2,
   "bodies": {
     "review_diff": "Files changed:\n__DIFF_STAT__\n\nTypeScript diff (first 300 lines):\n__DIFF_PATCH__",
     "mutant_oracle": "Changed source files:\n__SRC_CONTENT__\n\nExisting test files (first 60 lines each):\n__TEST_CONTENT__",
-    "truncation_notice_source": "\n[TRUNCATED — __MUT_SRC_TOTAL_LINES__ total lines, showing first 100. Do not assume the omitted tail is unmutated.]",
-    "truncation_notice_test": "\n[TRUNCATED — __MUT_TEST_TOTAL_LINES__ total lines, showing first 60. Do not assume the omitted tail has no assertions.]"
+    "truncation_notice_source": "\n[PARTIAL VIEW — __MUT_SRC_TOTAL_LINES__ total lines. The window above is centred on the lines THIS PHASE changed and states its own range. Do not assume the omitted remainder is unmutated.]",
+    "truncation_notice_test": "\n[PARTIAL VIEW — __MUT_TEST_TOTAL_LINES__ total lines. The window above is centred on the lines THIS PHASE changed and states its own range. Do not assume the omitted remainder has no assertions.]"
   },
   "placeholders": [
     "__DIFF_PATCH__",

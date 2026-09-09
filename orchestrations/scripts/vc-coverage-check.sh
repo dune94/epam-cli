@@ -39,6 +39,10 @@ source "$SCRIPT_DIR/lib/render-engine-prompt.sh"
 # block is lifted verbatim by tests that build a minimal script tree, and a source
 # line inside it makes those probes fail on a library they have no reason to carry.
 source "$SCRIPT_DIR/lib/jq-vals.sh"
+# THE SEAM'S OWN MODEL. This gate read an ambient EPAM_MODEL that nothing sets for it — see
+# the resolution below. seam_model_or_fail is the single reader of identity -> seam -> tier.
+# shellcheck source=lib/seam-ladder.sh
+[ -f "$SCRIPT_DIR/lib/seam-ladder.sh" ] && source "$SCRIPT_DIR/lib/seam-ladder.sh"
 AI_RUNNER_CMD="${AI_RUNNER_CMD:-$SCRIPT_DIR/ai-run.sh}"
 
 PRD_FILE=""; STORY_ID=""; TEST_FILE=""; OUT_FILE=""
@@ -101,18 +105,61 @@ for _i in $(seq 0 $(( _vc_count - 1 ))); do
     # real. An absent coverage finding is honest; a fabricated one is acted on.
     # ORCH_GATE_MODEL removed 2026-08-25 — one pinned model outranked every seam ladder.
     # EPAM_MODEL carries this seam's resolved rung, which is what the others already read.
-    _vcc_model="${VC_COVERAGE_MODEL:-${EPAM_MODEL:-}}"
+    # ASK THE SEAM. EPAM_MODEL is set by RESOLVING a seam, and nothing resolves one for this
+    # gate — it runs at the top level of a phase, where EPAM_MODEL is whatever the last seam
+    # happened to leave behind, or empty. The comment here used to claim "EPAM_MODEL carries this
+    # seam's resolved rung, which is what the others already read"; the others read it because
+    # their caller resolved it first.
+    #
+    # Live 2026-09-09, run 20260908T215555Z: this refused itself once per verification criterion,
+    # four times, reporting "its ladder declares none, or the tier's chain is unset" — while the
+    # run had every EPAM_MODEL_LADDER_<TIER> exported and vc-coverage sat on the same tier as 23
+    # seams that ran all night. A gate that never ran, reported as a project misconfiguration.
+    #
+    # Order matters: an operator's explicit choice outranks the ladder, the ladder outranks an
+    # inherited ambient value, and NOTHING substitutes a literal. lib/tc-writer-gate.sh already
+    # resolves its own seam exactly this way.
+    _vcc_model="${VC_COVERAGE_MODEL:-}"
+    if [ -z "$_vcc_model" ] && command -v seam_model_or_fail >/dev/null 2>&1; then
+        _vcc_model=$(seam_model_or_fail "vc-coverage" 2>/dev/null || true)
+    fi
+    [ -n "$_vcc_model" ] || _vcc_model="${EPAM_MODEL:-}"
     if [ -z "$_vcc_model" ]; then
         log "no model resolved for this seam — its ladder declares none, or the tier's chain is unset."
         log "Refusing to substitute one: NO coverage verdict this run, rather than a guessed model's."
         _raw=""
     else
+    # A FLAG WITH NO VALUE IS NOT AN EMPTY ARGUMENT — omit it, and let the hub resolve.
+    #
+    # ORCH_GATE_PROVIDER is normally unset, so this passed `--provider ""`. llm-handler.sh
+    # re-derives the provider from the active set when no flag is given, and its own arg parsing
+    # then overwrites that correct answer with whatever --provider says, including an explicit
+    # empty string. Measured against the real runner on 2026-09-09:
+    #
+    #     --provider ""  ->  "llm-handler.sh: no provider configured."  rc=1, empty output
+    #     flag omitted   ->  {"covered": true}                          rc=0
+    #
+    # So with the seam finally resolving a model, every verdict still came back UNKNOWN — the
+    # gate ran, was paid for, and could not answer. code-review-cycle.sh was fixed for this
+    # exact shape; this call site was missed.
+    # Not `local`: this runs at top level, where `local` is an error on every iteration.
+    _vcc_args=()
+    [ -n "${ORCH_GATE_PROVIDER:-}" ] && _vcc_args+=(--provider "$ORCH_GATE_PROVIDER")
+    _vcc_args+=(--model "$_vcc_model")
+
+    # STDERR IS KEPT, NEVER DISCARDED. `2>/dev/null` turned "no provider configured", a timeout
+    # and a refusal into the same silent empty string — and this gate reports UNKNOWN for all
+    # three, so the one line that said which was thrown away.
+    _vcc_err=$(mktemp "${TMPDIR:-/tmp}/vc-coverage-err-XXXXXX")
     _raw=$(printf '%s' "$_prompt" | \
         EPAM_ALLOWED_TOOLS="${VC_COVERAGE_ALLOWED_TOOLS:-}" \
         EPAM_AGENT_NAME="vc-coverage" EPAM_STORY_ID="$STORY_ID" \
         timeout "${VC_COVERAGE_TIMEOUT_SECS:-300}" \
-        bash "$AI_RUNNER_CMD" --provider "${ORCH_GATE_PROVIDER:-}" \
-             --model "$_vcc_model" 2>/dev/null || echo "")
+        bash "$AI_RUNNER_CMD" "${_vcc_args[@]}" 2>"$_vcc_err" || echo "")
+    if [ -z "$_raw" ] && [ -s "$_vcc_err" ]; then
+        log "the checker produced nothing — $(tr '\n' ' ' < "$_vcc_err" | tail -c 300)"
+    fi
+    rm -f "$_vcc_err"
     fi
 
     _verdict=$(printf '%s' "$_raw" | python3 -c '

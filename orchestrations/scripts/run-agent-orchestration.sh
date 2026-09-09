@@ -6171,6 +6171,11 @@ if [ -n "$main_stories" ]; then
             # the change was "confined to a Jest/RTL spec file" because its diff was taken from an
             # orphan, and mutant-hunter proposed 0 mutations from the same baseline and scored
             # 100% against them.
+            # PROVISIONAL. ensure_story_branch has not run yet, so this is the fork point of
+            # whatever branch is checked out NOW. It is refreshed immediately after the first
+            # reset below; it stands only for a phase where no story branch is created (no
+            # remote, greenfield, ensure_story_branch declining), which would otherwise leave
+            # every diff-based gate with no baseline at all.
             _phase_baseline="$(qa_phase_baseline_sha "$PROJECT_ROOT" "${JIRA_BASELINE_BRANCH:-}" 2>/dev/null || echo "")"
             if [ -n "$_phase_baseline" ]; then
                 echo "$_phase_baseline" > "$LOG_DIR/phase-baseline-sha.txt"
@@ -6255,6 +6260,30 @@ if [ -n "$main_stories" ]; then
             # remote) must never abort the whole phase; the story just
             # proceeds on whatever branch is already checked out.
             ensure_story_branch "${PROJECT_ROOT:-}" "$story" "${JIRA_BASELINE_BRANCH:-}" || true
+
+            # THE BASELINE IS ONLY TRUE ONCE THE BRANCH IT DESCRIBES EXISTS.
+            #
+            # The capture above runs before the story loop; ensure_story_branch (the line above)
+            # then rebases this story onto origin/<baseline>. Anything a colleague merged upstream
+            # in that window lands inside the recorded range and is attributed to THIS story by
+            # every diff-based gate.
+            #
+            # Live 2026-09-09, run 20260908T215555Z: PR #5669 merged that morning, the baseline was
+            # recorded one commit behind the branch's real fork point, and the gates were shown
+            # three files of that colleague's work. plan-fidelity duly reported "the change went
+            # outside the plan of record" — a finding about someone else's commit.
+            #
+            # Re-derived here, after the reset, and only for the FIRST story: the baseline is a
+            # property of the phase, and every story in it branches from the same base.
+            if [ -z "${_phase_baseline_after_reset:-}" ] && [ -d "$PROJECT_ROOT/.git" ]; then
+                _phase_baseline_after_reset=1
+                _pb_now="$(qa_phase_baseline_sha "$PROJECT_ROOT" "${JIRA_BASELINE_BRANCH:-}" 2>/dev/null || echo "")"
+                if [ -n "$_pb_now" ] && [ "$_pb_now" != "${_phase_baseline:-}" ]; then
+                    info "[orch] phase baseline re-derived after the story branch was based: ${_phase_baseline:-<none>} -> $_pb_now"
+                    _phase_baseline="$_pb_now"
+                    echo "$_phase_baseline" > "$LOG_DIR/phase-baseline-sha.txt"
+                fi
+            fi
 
             log "  Running: $story"
             local _story_monitor_role _story_model_hint _story_provider_hint

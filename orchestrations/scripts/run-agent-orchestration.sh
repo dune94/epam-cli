@@ -280,6 +280,10 @@ _load_timeout_config
 [ -f "$SCRIPT_DIR/lib/project-config.sh" ] && source "$SCRIPT_DIR/lib/project-config.sh"
 # shellcheck source=lib/model-ladders.sh
 [ -f "$SCRIPT_DIR/lib/model-ladders.sh" ] && source "$SCRIPT_DIR/lib/model-ladders.sh"
+# A run that finishes leaves a cassette — see lib/cassette-archive.sh for the four runs that did
+# not, and why a Langfuse trace is not one.
+# shellcheck source=lib/cassette-archive.sh
+[ -f "$SCRIPT_DIR/lib/cassette-archive.sh" ] && source "$SCRIPT_DIR/lib/cassette-archive.sh"
 # What a QA gate is SHOWN decides what it can conclude — see lib/qa-gate-evidence.sh.
 # shellcheck source=lib/qa-gate-evidence.sh
 [ -f "$SCRIPT_DIR/lib/qa-gate-evidence.sh" ] && source "$SCRIPT_DIR/lib/qa-gate-evidence.sh"
@@ -3589,6 +3593,19 @@ _run_codeline_loop() {
     && # A RUN THAT SPENT MONEY MUST NOT REPORT NOTHING. Checked here, at the end, where the run knows
 # both what it did and what it recorded — see lib/cost-ledger.sh for the run this exists for.
 assert_cost_ledger_not_silently_empty || true
+# THE RECORDING IS NOT THE ARTEFACT. Langfuse holds the traces; a cassette is a directory on
+# disk, and it exists only if something writes it. Nothing did — the exporter had no caller —
+# so four runs on 2026-09-09 recorded 278 traces and left nothing replayable once the machine
+# restarted and Langfuse went down with it.
+#
+# Here, at completion, because that is when the run knows its own id and the recording is
+# whole. It cannot fail the run: the work is finished by this point, and a run that succeeded
+# must not be reported failed because a recording could not be fetched.
+if declare -F export_run_cassette >/dev/null 2>&1; then
+    export_run_cassette "${ORCH_RUN_ID:-${EPAM_RUN_ID:-${RUN_NUMBER:-}}}" \
+        "$(basename "${EPAM_PROJECT_CONFIG_DIR:-project}")" \
+        "${EPAM_CASSETTE_DIR:-$AUTOMATION_DIR/cassettes}" || true
+fi
 log "[orch] ✅ Pipeline complete." \
     || error "[orch] ⚠️  Pipeline completed with errors."
 

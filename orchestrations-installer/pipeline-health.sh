@@ -305,6 +305,17 @@ if [ -f "$ROOT/orchestrations/scripts/snapshot-watch.js" ]; then
         _fix "bash orchestrations-installer/pipeline-services.sh --start"
     fi
 fi
+# The harvest is the only thing that survives a kill -9 or an OOM of the run, so "is it running"
+# is a real readiness question, not a nicety: with it down, a run killed that way leaves nothing
+# replayable, exactly as four runs did before it existed.
+if [ -f "$ROOT/orchestrations/scripts/cassette-watch.js" ]; then
+    if _daemon_alive "$ROOT/orchestrations/dashboards/.cassette-watch.pid"; then
+        _ok "cassette-watch.js is running"
+    else
+        _bad "cassette-watch.js is NOT running — a run killed outright will leave no cassette"
+        _fix "bash orchestrations-installer/pipeline-services.sh --start"
+    fi
+fi
 
 # ── Service endpoints — PROBED, not assumed from a container being "Up" ────
 #

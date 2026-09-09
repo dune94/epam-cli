@@ -127,6 +127,15 @@ if [ "$UNINSTALL" = "1" ]; then
     if stop_snapshot_watch "$_UN_ROOT" && [ -n "$_UN_SW_WAS_RUNNING" ]; then
         _ok "stopped snapshot-watch (pid $_UN_SW_WAS_RUNNING)"
     fi
+    # The cassette harvest is a host process too, and it outlives runs by design — an uninstall
+    # that left it running would keep sweeping an install that no longer exists.
+    _UN_CW_PIDFILE="$_UN_ROOT/orchestrations/dashboards/.cassette-watch.pid"
+    _UN_CW_WAS_RUNNING=""
+    [ -f "$_UN_CW_PIDFILE" ] && _UN_CW_WAS_RUNNING="$(cat "$_UN_CW_PIDFILE" 2>/dev/null)"
+    . "$INSTALLER_DIR/lib/cassette-watch-control.sh"
+    if stop_cassette_watch "$_UN_ROOT" && [ -n "$_UN_CW_WAS_RUNNING" ]; then
+        _ok "stopped cassette-watch (pid $_UN_CW_WAS_RUNNING)"
+    fi
 
     . "$INSTALLER_DIR/lib/isolated-compose-identity.sh"
     if [ -f "$INSTALLER_DIR/lib/container-runtime.sh" ]; then
@@ -835,6 +844,20 @@ _head "Snapshot watch (keeps the dashboard's build-info.json fresh)"
 if [ "$CHECK_ONLY" != "1" ] && [ -f "$ROOT/orchestrations/scripts/snapshot-watch.js" ]; then
     . "$INSTALLER_DIR/lib/snapshot-watch-control.sh"
     start_snapshot_watch "$ROOT" || FAILED=1
+else
+    _ok "skipped"
+fi
+
+# ── Cassette harvest: the ONLY thing that survives a kill -9 or an OOM ────────
+#
+# The run's EXIT trap archives its own cassette on every exit bash controls. Neither kill -9 nor an
+# OOM kill runs a trap, and both are how recordings were actually lost here. Langfuse holds the
+# turns as they happen, so this sweeps them into a partial cassette from OUTSIDE the run — it
+# belongs to the install, and cannot be taken down by the run it is protecting.
+_head "Cassette harvest (a killed run still leaves its recording)"
+if [ "$CHECK_ONLY" != "1" ] && [ -f "$ROOT/orchestrations/scripts/cassette-watch.js" ]; then
+    . "$INSTALLER_DIR/lib/cassette-watch-control.sh"
+    start_cassette_watch "$ROOT" || FAILED=1
 else
     _ok "skipped"
 fi

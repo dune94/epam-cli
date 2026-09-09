@@ -82,6 +82,7 @@ else
 fi
 . "$HERE/lib/runner-host-control.sh"
 . "$HERE/lib/snapshot-watch-control.sh"
+. "$HERE/lib/cassette-watch-control.sh"
 
 FAILED=0
 
@@ -123,6 +124,16 @@ stop)
         fi
     else
         _ok "snapshot-watch: nothing to stop or already gone"
+    fi
+    if [ -f "$ROOT/orchestrations/dashboards/.cassette-watch.pid" ]; then
+        _CW_PID="$(cat "$ROOT/orchestrations/dashboards/.cassette-watch.pid" 2>/dev/null)"
+        if stop_cassette_watch "$ROOT" && [ -n "$_CW_PID" ]; then
+            _ok "stopped cassette-watch (pid $_CW_PID)"
+        else
+            _ok "cassette-watch: nothing to stop or already gone"
+        fi
+    else
+        _ok "cassette-watch: nothing to stop or already gone"
     fi
     ;;
 
@@ -184,6 +195,9 @@ start)
     fi
     if [ -f "$ROOT/orchestrations/scripts/snapshot-watch.js" ]; then
         start_snapshot_watch "$ROOT" || FAILED=1
+    fi
+    if [ -f "$ROOT/orchestrations/scripts/cassette-watch.js" ]; then
+        start_cassette_watch "$ROOT" || FAILED=1
     fi
     ;;
 esac

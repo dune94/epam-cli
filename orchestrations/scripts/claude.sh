@@ -357,6 +357,10 @@ GIT_WORK_ROOT="${GIT_WORK_ROOT:-$PROJECT_ROOT}"
 # environment; needed here by validate_mid_execution_splits and
 # wait_if_paused (lib/story-guards.sh) for worktree lanes.
 AI_RUNNER_CMD="${AI_RUNNER_CMD:-$SCRIPT_DIR/ai-run.sh}"
+# Replay lives in ONE place (lib/llm-handler.sh). This file carries a SECOND provider dispatch
+# that never reaches it — see lib/replay-delegate.sh for the rehearsal that proved it.
+# shellcheck source=lib/replay-delegate.sh
+[ -f "$SCRIPT_DIR/lib/replay-delegate.sh" ] && source "$SCRIPT_DIR/lib/replay-delegate.sh"
 CONTROL_PLANE_PORT="${CONTROL_PLANE_PORT:-8094}"
 
 # Worktree configuration (set by --worktree flag)
@@ -9560,10 +9564,18 @@ implement_story() {
     fi
     # For epam-run providers, prd.json .model field overrides effort-based model
     STORY_PROVIDER="$(resolve_primary_provider "${STORY_PROVIDER:-}")"
+    # A RECORDING OWNS THE CALL. This dispatch invokes the vendor CLI directly and never execs
+    # ai-run.sh, so a rehearsal set EPAM_REPLAY_CASSETTE_DIR and the writer called claude anyway —
+    # five attempts, ladder climbed to opus-5, "REHEARSAL: replaying" printed zero times.
+    # Delegated, never reimplemented: llm-handler.sh owns replay and keeps owning it.
+    if replay_delegate "$prompt" "$json_result_file" "$output_file" "${STORY_MODEL:-}"; then
+        invoke_success=true
+    else
     case "$STORY_PROVIDER" in
         codex) resolve_codex_model_settings "$story_id" ;;
         copilot|openai|openrouter|cursor|minimax) resolve_model_from_story "$story_id" ;;
     esac
+    fi
     # prd-model-coordinator's .reasoningEffort field overrides the "low" reset above
     resolve_reasoning_effort_from_story "$story_id"
     # Resolve optional plannerModel — runs a planning pass before execution

@@ -59,6 +59,22 @@ qa_gate_diff() {
         return 1
     fi
 
+    # A BASELINE THAT IS NOT AN ANCESTOR OF HEAD CANNOT DESCRIBE THIS PHASE.
+    #
+    # Live 2026-09-09, the second resume of run 20260908T215555Z: the baseline was recorded before
+    # ensure_story_branch hard-reset the story branch onto origin/<baseline>, so it named a commit
+    # from the PREVIOUS leg that the reset then orphaned. Diffing an orphan is not empty — it is a
+    # cross-branch comparison, and it produced 8 insertions and 11 deletions in the reproducing
+    # test with no sign of the source fix. runtime-boundary read that and reported the change was
+    # "confined to a Jest/RTL spec file" for the second run running.
+    #
+    # Refused rather than diffed: this whole file exists to keep "nothing changed" apart from
+    # "I cannot tell what changed", and a plausible wrong diff is the worse of the two.
+    if ! git -C "$_root" merge-base --is-ancestor "$_base" HEAD >/dev/null 2>&1; then
+        printf '(the recorded phase baseline %s is not an ancestor of HEAD — it does not describe this phase, so this gate has no diff to judge. A branch reset after the baseline was recorded is the usual cause.)' "$_base"
+        return 1
+    fi
+
     # The size is DECLARED, like every other evidence window. A literal here would be the exact
     # thing config/evidence-windows.json exists to stop.
     local _cap
@@ -157,4 +173,45 @@ qa_gate_excerpt() {
 
     printf -- ' (lines %s-%s of %s, %s) ---\n' "$_from" "$_to" "$_total" "$_anchored"
     sed -n "${_from},${_to}p" "$_abs"
+}
+
+# qa_phase_baseline_sha <project_root> [baseline_branch]
+#
+# THE COMMIT THIS PHASE'S WORK DIVERGED FROM, which is not the same as HEAD.
+#
+# run-agent-orchestration.sh captured `rev-parse HEAD` before the story loop, and
+# ensure_story_branch then hard-reset the story branch onto origin/<baseline> — orphaning the very
+# commit just recorded. On a FIRST run the two agree, because HEAD is already the base; on every
+# RESUME the recorded baseline is the previous leg's tip and every diff-based gate reads it:
+# review-ranger, mutant-hunter, fuzz-weaver, sast-sentinel, runtime-boundary and the tsc/eslint
+# baseline gates.
+#
+# The merge-base gives the same answer before and after the reset, which is what makes it a
+# baseline rather than a snapshot of whatever the branch happened to be carrying.
+#
+# NOTHING IS INVENTED. A base branch that does not resolve falls back to HEAD — the previous
+# behaviour exactly — rather than to a guessed ref.
+qa_phase_baseline_sha() {
+    local _root="${1:-}" _branch="${2:-}"
+    [ -n "$_root" ] || return 1
+
+    local _head
+    _head=$(git -C "$_root" rev-parse --verify --quiet HEAD 2>/dev/null) || _head=""
+    [ -n "$_head" ] || return 1
+
+    if [ -n "$_branch" ]; then
+        # origin/<branch> first, as ensure_story_branch resolves it, then the bare name.
+        local _ref
+        for _ref in "origin/$_branch" "$_branch"; do
+            git -C "$_root" rev-parse --verify --quiet "${_ref}^{commit}" >/dev/null 2>&1 || continue
+            local _mb
+            _mb=$(git -C "$_root" merge-base "$_head" "$_ref" 2>/dev/null) || _mb=""
+            if [ -n "$_mb" ]; then
+                printf '%s' "$_mb"
+                return 0
+            fi
+        done
+    fi
+
+    printf '%s' "$_head"
 }

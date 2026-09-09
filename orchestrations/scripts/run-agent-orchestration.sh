@@ -6161,7 +6161,17 @@ if [ -n "$main_stories" ]; then
         # could not read produced no file and every gate silently compared against nothing —
         # which reads as "this story changed no files", the shape of a false pass.
         if [ -d "$PROJECT_ROOT/.git" ]; then
-            _phase_baseline="$(git -C "$PROJECT_ROOT" rev-parse --verify --quiet HEAD 2>/dev/null || echo "")"
+            # THE DIVERGENCE POINT, not whatever HEAD happens to be right now. `rev-parse HEAD`
+            # ran BEFORE the story loop, and ensure_story_branch (a few lines below) hard-resets
+            # the story branch onto origin/<baseline> — orphaning the commit just recorded. The
+            # two agree on a first run and disagree on every resume, where this recorded the
+            # PREVIOUS leg's tip and every diff-based gate then read it.
+            #
+            # Live 2026-09-09, second resume of run 20260908T215555Z: runtime-boundary reported
+            # the change was "confined to a Jest/RTL spec file" because its diff was taken from an
+            # orphan, and mutant-hunter proposed 0 mutations from the same baseline and scored
+            # 100% against them.
+            _phase_baseline="$(qa_phase_baseline_sha "$PROJECT_ROOT" "${JIRA_BASELINE_BRANCH:-}" 2>/dev/null || echo "")"
             if [ -n "$_phase_baseline" ]; then
                 echo "$_phase_baseline" > "$LOG_DIR/phase-baseline-sha.txt"
             else

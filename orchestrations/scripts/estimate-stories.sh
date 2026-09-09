@@ -53,6 +53,10 @@ SCRIPT_DIR="$(cd "$(dirname "${BASH_SOURCE[0]}")" && pwd)"
 AUTOMATION_DIR="$(dirname "$SCRIPT_DIR")"
 PROJECT_ROOT="$(dirname "$AUTOMATION_DIR")"
 PRD_FILE="${PRD_FILE:-$AUTOMATION_DIR/prd.json}"
+# What "total tokens" means is declared ONCE — see lib/ledger-tokens.sh. Summing input and
+# output alone silently drops the cached classes, which is most of the prompt.
+# shellcheck source=lib/ledger-tokens.sh
+. "$(cd "$(dirname "${BASH_SOURCE[0]}")" && pwd)/lib/ledger-tokens.sh"
 COST_LOG="${COST_LOG:-$AUTOMATION_DIR/logs/phase-cost.jsonl}"
 MODEL_PRICING_FILE="${MODEL_PRICING_FILE:-$SCRIPT_DIR/model-pricing.json}"
 
@@ -234,7 +238,13 @@ if [ "$REFINE_MODE" = true ]; then
                 high) filter='select((.forecast_hours // 0) > 6)' ;;
             esac
 
-            tier_tokens=$(echo "$completed_data" | jq -s "[.[] | $filter | ((.task_tokens_in // 0) + (.task_tokens_out // 0))] | add // 0")
+            # EVERY TOKEN CLASS THE ROW RECORDS. `task_tokens_in` is the provider's
+            # input_tokens, which on a cached request is only the UNCACHED remainder — measured
+            # live 2026-09-09, a call with 31,417 input tokens reported 9 of them there and the
+            # other 31,408 under cache_read/cache_create. Adding in+out counted 540 of 31,948, so
+            # TOKENS_PER_MIN was calibrated some sixty times too low and every forecast built on
+            # it was wrong in the same direction.
+            tier_tokens=$(echo "$completed_data" | ledger_total_tokens "$filter")
             tier_minutes=$(echo "$completed_data" | jq -s "[.[] | $filter | (.elapsed_minutes // 0)] | add // 0")
 
             if (( $(echo "$tier_minutes > 0" | bc -l) )); then

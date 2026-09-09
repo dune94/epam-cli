@@ -116,10 +116,12 @@ describe('a run that is killed outright still leaves its recording', () => {
     expect(left, `a failed export left ${left.join(',')}`).toEqual([]);
   });
 
-  it('keeps sweeping after one session fails', () => {
+  it('sweeps every run in one pass, not just the first', () => {
+    // Run-shaped ids: the sweep recognises a run by the shape the pipeline mints, declared in
+    // config/observability.json, so placeholder names are correctly ignored.
     const d = tmp('cw-'); const cass = join(d, 'cassettes');
-    const { exporter } = stubExporter(d, { 'aaa': 1, 'bbb': 2 });
+    const { exporter } = stubExporter(d, { '20260908T215555Z': 1, '20260909T010203Z': 2 });
     const r = harvest(cass, exporter);
-    expect(r.harvested.sort()).toEqual(['aaa', 'bbb']);
+    expect(r.harvested.sort()).toEqual(['20260908T215555Z', '20260909T010203Z']);
   });
 });

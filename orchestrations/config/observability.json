@@ -1,5 +1,7 @@
 {
   "$why": "How long the pipeline waits for the observability backend, declared rather than written into lib/langfuse-emit.js where it was a literal 4000. Observability must never add latency to the call it observes, so this is deliberately short and the emit is fire-and-forget.",
   "$whyNoEndpoint": "The backend's URL is NOT here. A host is a deployment fact, and naming one in engine config is the same hardcoding as naming it in engine code — config is not an exemption. It is declared as LANGFUSE_BASE_URL in the environment the run already loads, alongside the keys it must travel with; with no endpoint declared anywhere, tracing is off rather than pointed at a guess.",
-  "trace": { "timeoutMs": 4000 }
+  "trace": { "timeoutMs": 4000 },
+  "$whyRunSession": "WHAT A RUN SESSION LOOKS LIKE, declared once for the consumers that must recognise one among everything Langfuse holds. The cassette harvest proved why: one live sweep found 21 sessions and exactly ONE was a run — the rest were single-trace probes (a cost-seam check, an emitter smoke test, a bash capability probe). Filtering those out by prefix would hardcode a naming convention nobody declared, and the next probe would pick a new prefix. The pipeline mints a run id as a UTC compact timestamp (run-agent-orchestration.sh), so THAT is the shape, and a test executes the real mint to prove this pattern still accepts it.",
+  "runSession": { "idPattern": "^[0-9]{8}T[0-9]{6}Z$" }
 }

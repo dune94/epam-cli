@@ -26,6 +26,18 @@ const { spawnSync } = require('child_process');
 
 const DEFAULT_EXPORTER = path.join(__dirname, 'cassette-export.js');
 
+/**
+ * WHAT COUNTS AS A RUN has one home: config/observability.json. Langfuse holds far more than runs
+ * — a live sweep found 21 sessions of which one was a run — and a partial for every probe anyone
+ * ever fires buries the recordings that matter. The shape is declared, never written here: a
+ * prefix filter would hardcode a convention nobody declared and the next probe would evade it.
+ */
+function declaredRunSessionPattern() {
+  try {
+    return require(path.join(__dirname, '..', 'config', 'observability.json')).runSession.idPattern || '';
+  } catch { return ''; }
+}
+
 /** The sessions Langfuse currently holds, newest-first as the exporter lists them. */
 function listSessions(node, exporter) {
   const r = spawnSync(node, [exporter, '--list'], { encoding: 'utf8', timeout: 120_000 });
@@ -55,14 +67,23 @@ const partialName = (session) => `session-${session}.partial`;
  * leave something that reads as a cassette — a replayer would accept it and diverge, which is worse
  * than having nothing. One session's failure never ends the sweep.
  */
-function harvestOnce({ cassetteDir, exporter, node }) {
+function harvestOnce({ cassetteDir, exporter, node, runSessionPattern }) {
   const _node = node || process.execPath;
   const _exporter = exporter || DEFAULT_EXPORTER;
   const harvested = [];
   const skipped = [];
   const failed = [];
 
+  // NO FALLBACK TO EVERYTHING. With nothing declaring what a run looks like, sweeping the lot is
+  // exactly the behaviour this exists to end — so it refuses, and says so, rather than guessing.
+  const _pat = runSessionPattern !== undefined ? runSessionPattern : declaredRunSessionPattern();
+  if (!_pat) {
+    return { harvested, skipped, failed, refused: true };
+  }
+  const isRun = new RegExp(_pat);
+
   for (const session of listSessions(_node, _exporter)) {
+    if (!isRun.test(session)) continue;
     const dest = path.join(cassetteDir, partialName(session));
 
     // The run archived it: stand down, and take the superseded partial with us.
@@ -97,7 +118,7 @@ function harvestOnce({ cassetteDir, exporter, node }) {
 
   // Only after a sweep, and only if it produced something: an empty cassette directory is the
   // honest state when nothing could be harvested.
-  return { harvested, skipped, failed };
+  return { harvested, skipped, failed, refused: false };
 }
 
 module.exports = { harvestOnce };
@@ -113,6 +134,11 @@ if (require.main === module) {
   const sweep = () => {
     try {
       const r = harvestOnce({ cassetteDir, exporter, node: process.execPath });
+      if (r.refused) {
+        process.stderr.write('[cassette-watch] config/observability.json declares no runSession.idPattern'
+          + ' — refusing to sweep rather than archiving every probe\n');
+        return;
+      }
       if (r.harvested.length || r.failed.length) {
         process.stdout.write(`[cassette-watch] harvested ${r.harvested.length}, `
           + `superseded ${r.skipped.length}, failed ${r.failed.length}\n`);

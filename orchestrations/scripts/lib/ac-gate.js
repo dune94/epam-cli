@@ -59,10 +59,14 @@ function _why(errFile) {
   } catch { return ' (no stderr captured)'; }
 }
 
-function seamEnv(seam, costFile) {
+function seamEnv(seam, costFile, rung) {
   let granted = {};
   try {
-    granted = require('./seam-invocation.js').seamInvocationEnv(seam);
+    // THE RUNG THIS ATTEMPT IS ON. A retry that re-invokes the model that just refused is the
+    // same coin flipped again; the rung is the caller's because only it knows an answer came
+    // back unusable. Absent (the ordinary first call) resolves exactly as before.
+    granted = require('./seam-invocation.js')
+      .seamInvocationEnv(seam, undefined, rung ? { rung } : undefined);
   } catch (e) {
     // Loud. Running anyway on ambient settings is what this replaced.
     process.stderr.write(`[ac-gate] seam '${seam}' did not resolve: ${(e && e.message) || e}\n`);
@@ -220,6 +224,67 @@ function parseLooseJson(raw, what) {
   return JSON.parse(m[0]);
 }
 
+/**
+ * ONE PAID CALL, PARSED ONCE, THROWN AWAY ON THE FIRST BAD CHARACTER.
+ *
+ * All three of this file's model calls had the same shape: render a prompt, run it, parse the
+ * answer, and on any parse failure degrade. The degradations are deliberate and safe — 'unknown',
+ * the inclusive split, a rethrow — so this never invented a verdict. But content-retry.js exists
+ * precisely for these sites (its header names `ac-gate.js 'No JSON in <what> response'`) and this
+ * file referenced it nowhere, so a reply that was one unescaped quote away from usable cost a call
+ * and produced nothing.
+ *
+ * Live 2026-09-08: the same class killed the CPA pre-pass outright on run 20260908T215555Z.
+ *
+ * Nothing here repairs the model's JSON — this file already argues that case at parseLooseJson,
+ * and repairing a malformed answer once masked a provider outage as a parse quirk. It asks again,
+ * says what broke, and climbs a rung.
+ */
+function askJson({ seam, prompt, what, tmpPrompt, costFile, errFile }) {
+  // eslint-disable-next-line global-require
+  const { retryUntilParsed } = require('./content-retry.js');
+  return retryUntilParsed({
+    what,
+    attempts: Number(process.env.EPAM_CONTENT_RETRY_ATTEMPTS || 3),
+    // The reply is kept WHOLE. It reached stderr truncated at 200 characters, and nothing
+    // captures that stream — so the one artefact a diagnosis needs did not survive the run.
+    logDir: process.env.LOG_DIR || process.env.OUTPUT_DIR || '',
+    log: (m) => process.stderr.write(`[ac-gate] ${m}\n`),
+    call: (note, attempt) => {
+      const rung = Math.max(0, (attempt || 1) - 1);
+      const env = seamEnv(seam, `${costFile}.${attempt}`, rung);
+      // THE FLAG CARRIES THE RUNG'S MODEL, or the climb is invisible to the runner: an explicit
+      // --model overrides whatever the seam env resolved, and every attempt would re-run MODEL.
+      const model = env.EPAM_MODEL || MODEL;
+      fs.writeFileSync(tmpPrompt, note ? `${note}${prompt}` : prompt);
+      const cmd = `bash ${AI_RUN_SH}${flagArg('provider', PROVIDER)}`
+        + `${flagArg('model', model)} < ${tmpPrompt} 2>${errFile}`;
+      try {
+        const raw = execSync(cmd, {
+          encoding: 'utf8', timeout: seamDeclaredTimeoutMs(seam), env,
+        }).trim();
+        if (!raw) throw new Error(`Empty response from ai-run.sh${_why(errFile)}`);
+        return raw;
+      } finally {
+        // PER ATTEMPT. A single cost file across attempts records the last one and loses the
+        // rest — and a failed attempt spent exactly as much as a successful one.
+        emitSpend(`${costFile}.${attempt}`, seam);
+        try { fs.unlinkSync(`${costFile}.${attempt}`); } catch { /* ignore */ }
+      }
+    },
+    parse: (raw) => {
+      try {
+        return { ok: true, value: parseLooseJson(raw, what) };
+      } catch (e) {
+        return { ok: false,
+          reason: `${e.message.split('\n')[0]}. Answer with ONE JSON object and nothing else. `
+            + 'Every " inside a string value must be escaped as \\" — an unescaped quote around '
+            + 'an example makes the whole object unparseable.' };
+      }
+    },
+  });
+}
+
 function resolveCodelines(issues) {
   if (process.env.JIRA_CODELINES) {
     return process.env.JIRA_CODELINES.split(',').map(c => c.trim()).filter(Boolean);
@@ -308,18 +373,8 @@ function classifyWithLLM(issue, knownCodelines) {
   fs.writeFileSync(tmpPrompt, prompt);
 
   try {
-    // Use ai-run.sh for provider-agnostic LLM call with proper env/key routing
-    const cmd = `bash ${AI_RUN_SH}${flagArg('provider', PROVIDER)}`
-      + `${flagArg('model', MODEL)} < ${tmpPrompt} 2>${_errFile}`;
-    const raw = execSync(cmd, {
-      encoding: 'utf8',
-      timeout: seamDeclaredTimeoutMs('ac-classification'),
-      env: seamEnv('ac-classification', _costFile),
-    }).trim();
-
-    if (!raw) throw new Error(`Empty response from ai-run.sh${_why(_errFile)}`);
-
-    return parseLooseJson(raw, 'classification');
+    return askJson({ seam: 'ac-classification', prompt, what: 'classification',
+                     tmpPrompt, costFile: _costFile, errFile: _errFile });
   } catch (e) {
     process.stderr.write(`[ac-gate] LLM call failed for ${issue.jiraKey}: ${e.message}${_why(_errFile)}\n`);
     // A FAILED CALL IS NOT A VERDICT. This used to return 'enrichable', which
@@ -382,15 +437,8 @@ function classifyCodelineOnly(issue, knownCodelines) {
   const _errFile = `${tmpPrompt}.err`;
   fs.writeFileSync(tmpPrompt, prompt);
   try {
-    const cmd = `bash ${AI_RUN_SH}${flagArg('provider', PROVIDER)}`
-      + `${flagArg('model', MODEL)} < ${tmpPrompt} 2>${_errFile}`;
-    const raw = execSync(cmd, {
-      encoding: 'utf8',
-      timeout: seamDeclaredTimeoutMs('ac-classification'),
-      env: seamEnv('ac-classification', _costFile),
-    }).trim();
-    if (!raw) throw new Error(`Empty response from ai-run.sh${_why(_errFile)}`);
-    const parsed = parseLooseJson(raw, 'codeline classification');
+    const parsed = askJson({ seam: 'ac-classification', prompt, what: 'codeline classification',
+                             tmpPrompt, costFile: _costFile, errFile: _errFile });
     return { verdict, reason, gaps: [], enrichedAcs: [], codeline: parsed.codeline || SPLIT_VALUE };
   } catch (e) {
     // A failed call is not a routing decision. SPLIT_VALUE is the inclusive fallback —
@@ -440,15 +488,12 @@ function elaborateAcs(issue) {
   const _errFile = `${tmpPrompt}.err`;
   fs.writeFileSync(tmpPrompt, prompt);
   try {
-    const cmd = `bash ${AI_RUN_SH}${flagArg('provider', PROVIDER)}`
-      + `${flagArg('model', MODEL)} < ${tmpPrompt} 2>${_errFile}`;
     // ITS OWN SEAM'S DEADLINE. This bounded an ac-ELABORATION call with the ac-CLASSIFICATION
     // seam's timeout while handing it ac-elaboration's environment, so the longer of the two
     // seams ran under the shorter one's clock and could be killed mid-answer — reported upstream
     // as "Empty elaboration response", a format complaint about a call that never finished.
-    const raw = execSync(cmd, { encoding: 'utf8', timeout: seamDeclaredTimeoutMs('ac-elaboration'), env: seamEnv('ac-elaboration', _costFile) }).trim();
-    if (!raw) throw new Error(`Empty elaboration response${_why(_errFile)}`);
-    const parsed = parseLooseJson(raw, 'elaboration');
+    const parsed = askJson({ seam: 'ac-elaboration', prompt, what: 'elaboration',
+                             tmpPrompt, costFile: _costFile, errFile: _errFile });
     return Array.isArray(parsed.enrichedAcs) && parsed.enrichedAcs.length > 0
       ? parsed.enrichedAcs
       : [`Implement the behaviour described in ${issue.jiraKey}: ${issue.title}`];

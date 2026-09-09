@@ -332,78 +332,130 @@ async function main() {
   delete env.CLAUDECODE;
   delete env.CLAUDE_CODE_ENTRYPOINT;
 
-  // THE SEAM, asked for. This call passed none, so it ran with no ladder, no effort, no output
-  // budget and no tool grant — the cpa-inference profile sat in the registry reaching nothing.
+  // A MALFORMED ANSWER IS NOT A DEAD RUN — AND THIS SITE IS WHY THE LIBRARY EXISTS.
   //
-  // IDENTITY AFTER THE SPREAD. It was `{ EPAM_AGENT_NAME: 'cpa-inference', ...env }`, and env is
-  // process.env — so a parent stage that had set EPAM_AGENT_NAME overrode it, and this agent ran,
-  // was costed, and had its self-heal episodes filed under whatever ran before it.
-  let seam = {};
-  try { seam = require('./seam-invocation.js').seamInvocationEnv('cpa-inference'); }
-  catch (e) { process.stderr.write(`WARN: seam 'cpa-inference' did not resolve: ${(e && e.message) || e}\n`); }
+  // content-retry.js's own header names `cpa-inference.js 'No valid JSON object found in
+  // response'` as one of the four parse sites it was extracted for. This file then referenced it
+  // nowhere: the answer was parsed once and, when it did not parse, degraded straight to a review
+  // that "did not happen" — which the gate correctly reads as BLOCK, halting the codeline.
+  //
+  // Live 2026-09-08, run 20260908T215555Z: the spec pass passed and Step 2 halted the run on a
+  // COMPLETE review (confidence 0.80, five substantive risk flags) whose only defect was an
+  // unescaped quote inside one string — `(e.g., "user@münchen.de")`, position 959. One character
+  // class, one attempt, one dead run. Langfuse kept the reply; the pipeline did not.
+  //
+  // Nothing here repairs the model's JSON. Guessing at an escape the model did not write is how a
+  // silently wrong estimate gets authorised — it asks again, says what broke, and climbs a rung.
+  let latencyMs = 0;
+  // The last reply seen, whichever attempt produced it — the metrics below size the answer that
+  // was actually returned, and on a give-up that is the reply that failed.
+  let rawText = '';
+  const _t0all = Date.now();
 
-  // ai-run.sh writes the normalized result JSON when this is set; it was never asked to, so a call
-  // made once per story recorded no spend at all.
-  const _costFile = `${require('os').tmpdir()}/cpa-cost-${process.pid}-${Date.now()}.json`;
+  const callRunner = (note, attempt) => {
+    // THE SEAM, ASKED FOR AT THE RUNG THIS ATTEMPT IS ON. A retry that does not climb is the same
+    // coin flipped again — the rung is the caller's decision because only the caller knows the
+    // answer came back wrong.
+    let seam = {};
+    try {
+      seam = require('./seam-invocation.js')
+        .seamInvocationEnv('cpa-inference', undefined, { rung: Math.max(0, (attempt || 1) - 1) });
+    } catch (e) {
+      process.stderr.write(`WARN: seam 'cpa-inference' did not resolve: ${(e && e.message) || e}\n`);
+    }
 
-  const t0 = Date.now();
-  // A flag with no value is not an empty argument — omit it, and let the hub resolve.
-  const cliArgs = AI_PROVIDER ? ['--provider', AI_PROVIDER] : [];
-  const result = spawnSync(
-    AI_RUNNER_CMD,
-    cliArgs,
-    { input: fullPrompt, encoding: 'utf8', timeout: TIMEOUT_MS,
-      env: { ...env, ...seam, EPAM_AGENT_NAME: 'cpa-inference', ORCH_JSON_RESULT: _costFile } }
-  );
-  const latencyMs = Date.now() - t0;
+    // ai-run.sh writes the normalized result JSON when this is set; it was never asked to, so a
+    // call made once per story recorded no spend at all. Per ATTEMPT, because a failed attempt
+    // spent too and dropping its record is how the expensive failures become the invisible ones.
+    const _costFile = `${require('os').tmpdir()}/cpa-cost-${process.pid}-${Date.now()}-${attempt}.json`;
 
-  // Recorded whether the call returned or failed: a failed call spent too, and dropping its record
-  // is how the expensive failures become the invisible ones.
-  try {
-    require('./cost-emitter.js').emitCostSnapshot({
-      resultFile: _costFile,
-      activityFile: process.env.ACTIVITY_FILE
-        || path.join(process.env.LOG_DIR || path.join(__dirname, '..', '..', 'logs'), 'agent-activity.jsonl'),
-      agent: 'cpa-inference',
-      storyId: (input && input.storyId) || '',
-      phase: process.env.PHASE || '',
-      model: process.env.AI_MODEL || '',
-      provider: AI_PROVIDER,
-    });
-  } catch { /* cost emission must never break the agent call */ }
-  try { fs.unlinkSync(_costFile); } catch { /* ignore */ }
+    // A flag with no value is not an empty argument — omit it, and let the hub resolve.
+    const cliArgs = AI_PROVIDER ? ['--provider', AI_PROVIDER] : [];
+    const t0 = Date.now();
+    const result = spawnSync(
+      AI_RUNNER_CMD,
+      cliArgs,
+      { input: note ? `${note}${fullPrompt}` : fullPrompt,
+        encoding: 'utf8', timeout: TIMEOUT_MS,
+        env: { ...env, ...seam, EPAM_AGENT_NAME: 'cpa-inference', ORCH_JSON_RESULT: _costFile } }
+    );
+    latencyMs = Date.now() - _t0all;
 
-  // ── Handle CLI failure ────────────────────────────────────────────────────
-  if (result.error || result.status !== 0) {
-    const reason = result.error?.message || (result.stderr || '').slice(0, 200) || `exit ${result.status}`;
-    process.stderr.write(`WARN: prompt runner failed: ${reason}\n`);
-    const review = skippedReview(formulaEstimate, `prompt runner unavailable: ${reason}`);
-    review._metrics.latencyMs = latencyMs;
-    process.stdout.write(JSON.stringify(review) + '\n');
-    return;
-  }
+    // Recorded whether the call returned or failed: a failed call spent too.
+    try {
+      require('./cost-emitter.js').emitCostSnapshot({
+        resultFile: _costFile,
+        activityFile: process.env.ACTIVITY_FILE
+          || path.join(process.env.LOG_DIR || path.join(__dirname, '..', '..', 'logs'), 'agent-activity.jsonl'),
+        agent: 'cpa-inference',
+        storyId: (input && input.storyId) || '',
+        phase: process.env.PHASE || '',
+        model: seam.EPAM_MODEL || process.env.AI_MODEL || '',
+        provider: AI_PROVIDER,
+      });
+    } catch { /* cost emission must never break the agent call */ }
+    try { fs.unlinkSync(_costFile); } catch { /* ignore */ }
 
-  const rawText = (result.stdout || '').trim();
-  if (!rawText) {
-    process.stderr.write('WARN: prompt runner returned empty response\n');
-    const review = skippedReview(formulaEstimate, 'empty response from prompt runner');
-    review._metrics.latencyMs = latencyMs;
-    process.stdout.write(JSON.stringify(review) + '\n');
-    return;
-  }
+    // A THROW COSTS ONE ATTEMPT, NOT THE RUN — content-retry feeds it back like any refusal.
+    if (result.error || result.status !== 0) {
+      const reason = result.error?.message || (result.stderr || '').slice(0, 200) || `exit ${result.status}`;
+      throw new Error(`prompt runner unavailable: ${reason}`);
+    }
+    rawText = (result.stdout || '').trim();
+    return rawText;
+  };
 
-  // ── Parse JSON from response ───────────────────────────────────────────────
+  // The reply is written whole, where the diagnosis will look for it. stderr carried the first
+  // 400 characters and nothing captured that stream, so on 2026-09-08 the one artefact that could
+  // explain the halt existed only in Langfuse.
+  const _logDir = process.env.LOG_DIR || process.env.OUTPUT_DIR || '';
+
   let reviewData;
   try {
-    reviewData = extractJSON(rawText);
+    reviewData = require('./content-retry.js').retryUntilParsed({
+      what: 'cpa-inference',
+      attempts: Number(process.env.EPAM_CONTENT_RETRY_ATTEMPTS || 3),
+      logDir: _logDir,
+      log: (m) => process.stderr.write(`${m}\n`),
+      call: callRunner,
+      parse: (raw) => {
+        // EMPTY AND MALFORMED ARE DIFFERENT FAILURES: one is transport or budget, the other is
+        // contract, and they are fixed in different places.
+        if (!raw || !String(raw).trim()) {
+          return { ok: false, reason: 'you returned nothing at all. Answer with the review object.' };
+        }
+        try {
+          return { ok: true, value: extractJSON(raw) };
+        } catch (e) {
+          return { ok: false,
+            reason: `${e.message}. Your answer must be ONE JSON object and nothing else. `
+              + 'Check that every " inside a string value is escaped as \\" — an unescaped quote '
+              + 'in an example (e.g. a quoted email address) makes the whole object unparseable.' };
+        }
+      },
+    });
   } catch (e) {
-    process.stderr.write(`WARN: JSON parse failed: ${e.message}\nRaw (first 400): ${rawText.slice(0, 400)}\n`);
-    reviewData = skippedReview(formulaEstimate, `parse error: ${e.message}`);
-    reviewData._inferenceSkipped = false; // inference ran, output was malformed
+    // EVERY ATTEMPT FAILED. The formula estimate is still carried — it is a real estimate and the
+    // caller needs it — but the confidence is what it actually is, and the reason is a RISK FLAG
+    // so the gate counts it rather than narrating it.
+    process.stderr.write(`WARN: ${(e && e.message) || e}\n`);
+    const _short = String((e && e.message) || e).split('\n')[0];
+    reviewData = skippedReview(formulaEstimate, _short);
+    reviewData._inferenceSkipped = false; // inference ran, output was unusable
   }
 
   // ── Clamp required fields ──────────────────────────────────────────────────
-  reviewData.confidence           = Math.max(0, Math.min(1, parseFloat(reviewData.confidence) || 0.3));
+  // ZERO IS A CONFIDENCE, NOT A MISSING VALUE.
+  //
+  // `parseFloat(x) || 0.3` treats 0 as absent, so skippedReview's deliberate confidence of 0 —
+  // written under "A REVIEW THAT DID NOT HAPPEN HAS NO CONFIDENCE" — was raised back to 0.3 on
+  // the very next line. Run 20260908T215555Z filed exactly that in cpa-review.jsonl: a review
+  // that never happened, recorded at 0.3. The gate blocked on the risk flag, so this never showed
+  // as a false pass; it showed as a falsified number in the record every calibration reads.
+  //
+  // Only a value that is genuinely absent or non-numeric takes the default.
+  const _conf = parseFloat(reviewData.confidence);
+  reviewData.confidence           = Math.max(0, Math.min(1, Number.isFinite(_conf) ? _conf : 0.3));
   reviewData.complexityAdjustment = Math.max(0.5, Math.min(2.5, parseFloat(reviewData.complexityAdjustment) || 1.0));
   // Brownfield-only ABSOLUTE iteration estimate (see cpa-system.md "Iteration
   // Estimate" — a real turn count, not a multiplier: a 1.0-3.0x multiplier on

@@ -1,0 +1,34 @@
+```json
+{
+  "confidence": 0.80,
+  "complexityAdjustment": 0.95,
+  "adjustedEstimate": {
+    "aiMinutes": 72,
+    "cost": 0.22,
+    "tokens": 14500,
+    "turns": 4
+  },
+  "riskFlags": [
+    "Story appears in AGENTS.md logs as 'completed' on three prior dates (2026-09-02/03); unclear why re-estimation is needed or whether prior attempts encountered blocking issues",
+    "React Hook Form validate function return pattern requires correct test mocking — unfamiliar codebase patterns could extend turn count by 1–2x if fixtures are complex",
+    "CheckoutForm test file location unknown (CheckoutForm.test.tsx vs CheckoutForm.spec.tsx vs __tests__/CheckoutForm.tsx); file discovery adds ~5–10 min if naming convention is non-standard",
+    "Unclear if other email comparison logic exists in checkout flow; single-fix assumption may be incomplete (e.g., server-side validation, API contract validation)",
+    "toLowerCase() is ASCII-only; non-ASCII domain names (e.g., "user@münchen.de") may be handled differently by backend — low risk but worth verifying acceptance criteria intent"
+  ],
+  "missingKbCoverage": [
+    "Why AMSD-1919 is being re-estimated after three 'completed' marks in phase logs (2026-09-02 to 09-03); prior blockers or incomplete closure?",
+    "CheckoutForm test structure: how are validate functions tested in this codebase? (factory, fixtures, form context mocking pattern)",
+    "Are there prior PR or commit references showing the fix attempt(s) that were already completed?",
+    "Definition of 'completed' in AGENTS.md — does it mean code merged, or just estimate/spec phase finished?",
+    "Email normalization scope: are backend validation or API contracts also affected, or is this front-end only?"
+  ],
+  "citedSources": [
+    "RCA: Line 306 of CheckoutForm.tsx identified as sole fix point (file verified, change confirmed)",
+    "File previews: CheckoutForm.tsx 436 LOC, uses react-hook-form + TranslationI18n + Stripe",
+    "Verification criteria: 4 scenarios (case mismatch, genuine diff, identical case, empty confirm)",
+    "Codebase signals: 1018 LOC across 4 files, 85 imports; target file is 42% of total LOC",
+    "AGENTS.md: three prior 'completed' runs recorded for AMSD-1919 (log paths suggest output exists)"
+  ],
+  "reasoning": "Isolated 1-liner fix with verified root cause. Main variable is react-hook-form test setup complexity and whether prior completion attempts uncovered blocking issues. Conservatively estimated at 72 AI minutes (4 turns) assuming moderate test scaffolding overhead. Confidence capped at 0.80 due to unclear re-estimation context (why 'completed' runs exist already) and potential prior-work gaps not surfaced. Recommend: (1) check AGENTS.md logs for prior failures, (2) locate test file before implementation, (3) confirm whether backend validation also needs case-insensitive fix."
+}
+```

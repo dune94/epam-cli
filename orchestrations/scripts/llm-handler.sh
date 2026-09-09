@@ -222,6 +222,32 @@ run_provider_once() {
       fi
     fi
 
+    # A RUNAWAY CALL HAD NO STOP.
+    #
+    # The project declares its cost stop in llm-settings.json costControls —
+    # storyBudgetHardLimitUsd, described there as "the actual cost stop" — and claude.sh already
+    # exports it as EPAM_STORY_BUDGET_HARD_LIMIT_USD. Nothing passed it to the runner, so the
+    # declaration bounded reporting and nothing else.
+    #
+    # It matters because the pipeline's other bound does not exist on this stack: every seam
+    # declares maxOutputTokens and no CLI arm reads it. Measured live 2026-09-09, a seam pinned to
+    # 128 output tokens produced 1,665 — 13x its declared cap, exit 0, silent. A call that loops
+    # therefore had no token stop AND no spend stop.
+    #
+    # A BACKSTOP, NOT A SQUEEZE: the cap is the whole STORY's hard limit, so a single call is only
+    # stopped by exceeding what the entire story was allowed. The dearest call in run
+    # 20260908T215555Z was $1.70 against a $15 limit; nothing legitimate comes near it.
+    #
+    # Nothing is authored here. The number is the project's own declaration, the flag is used only
+    # where the installed runner advertises it in --help — the same probe the schema binding above
+    # performs — and a non-numeric value is ignored rather than passed on, because `-s` reaching a
+    # runner that rejects it is how a whole run once died with the reason hidden.
+    if [ -n "${EPAM_STORY_BUDGET_HARD_LIMIT_USD:-}" ] \
+       && printf '%s' "$EPAM_STORY_BUDGET_HARD_LIMIT_USD" | grep -qE '^[0-9]+(\.[0-9]+)?$' \
+       && "$CLAUDE_CMD" --help 2>/dev/null | grep -q -- '--max-budget-usd'; then
+      runner_args+=(--max-budget-usd "$EPAM_STORY_BUDGET_HARD_LIMIT_USD")
+    fi
+
 
   case "$provider" in
     claude)

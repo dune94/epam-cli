@@ -8,6 +8,10 @@
 # literal, and so did claude.sh and eslint-baseline-gate.sh — four copies, four independent
 # fail-open paths on any repo whose checker speaks a different dialect.
 _SG_LIB_DIR="$(cd "$(dirname "${BASH_SOURCE[0]}")" && pwd)"
+# THE COST PARTITION HAS ONE HOME. Without this, ${LEDGER_BILLABLE_JQ} expands empty and the jq
+# filter below is malformed — which fails silently into an empty cost, the worst of both errors.
+# shellcheck source=ledger-tokens.sh
+. "$_SG_LIB_DIR/ledger-tokens.sh"
 # shellcheck source=/dev/null
 [ -f "$_SG_LIB_DIR/tsc-baseline-gate.sh" ] && . "$_SG_LIB_DIR/tsc-baseline-gate.sh"
 
@@ -224,8 +228,9 @@ record_story_actual_cost() {
     if [ -z "$actual_cost" ] || [ "$actual_cost" = "0" ]; then
         local cost_file="${PHASE_COST_FILE:-$LOG_DIR/phase-cost.jsonl}"
         if [ -f "$cost_file" ]; then
+            # Billable rows only — a terminal row restates a call already counted here.
             actual_cost=$(jq -rs --arg sid "$story_id" \
-                '[.[] | select(.story_id == $sid) | .task_cost_usd // 0] | add // 0' \
+                "[.[] | select(.story_id == \$sid) | ${LEDGER_BILLABLE_JQ} | .task_cost_usd // 0] | add // 0" \
                 "$cost_file" 2>/dev/null || echo "")
         fi
     fi

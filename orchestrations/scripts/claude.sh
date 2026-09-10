@@ -10722,10 +10722,14 @@ $_kb_section"
                 # accumulated $11.20 of history against AMSD-2041. A limit that counts spend the
                 # operator never authorised this run is not a limit, it is a lottery.
                 # Records predating run stamping carry no run_id and are correctly excluded.
+                # BILLABLE ROWS ONLY. Every call is written twice — `attempt`/`agent` and a
+                # terminal restatement — so this summed each one twice and halted a story at HALF
+                # its configured hard limit. The partition has one home: lib/ledger-tokens.sh.
                 _story_cost_so_far=$(jq -s --arg id "$story_id" --arg rid "${ORCH_RUN_ID:-}" \
-                    '[.[] | select(.story_id == $id)
-                          | select(($rid == "") or (.run_id == $rid))
-                          | (.task_cost_usd // 0)] | add // 0' \
+                    "[.[] | select(.story_id == \$id)
+                          | select((\$rid == \"\") or (.run_id == \$rid))
+                          | ${LEDGER_BILLABLE_JQ}
+                          | (.task_cost_usd // 0)] | add // 0" \
                     "$_cost_file" 2>/dev/null || echo 0)
                 # Warning: advisory only, logged once per story per run.
                 if [ "$_budget_warned" != "1" ] && [ -n "${EPAM_STORY_BUDGET_WARNING_USD:-}" ] \

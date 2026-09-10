@@ -54,6 +54,10 @@ fi
 
 PHASE_ID=$1
 SCRIPT_DIR="$(cd "$(dirname "${BASH_SOURCE[0]}")" && pwd)"
+# THE COST PARTITION HAS ONE HOME — see lib/ledger-tokens.sh. Sourced, never re-typed: this gate
+# judged every phase twice as expensive as it was by summing terminal restatements too.
+# shellcheck source=lib/ledger-tokens.sh
+. "$SCRIPT_DIR/lib/ledger-tokens.sh"
 AUTOMATION_DIR="$(dirname "$SCRIPT_DIR")"
 PROJECT_ROOT="$(dirname "$AUTOMATION_DIR")"
 export PROJECT_ROOT
@@ -205,7 +209,8 @@ if [ -f "$COST_LOG" ]; then
     phase_cost_data=$(grep "\"phase_id\":\"$PHASE_ID\"" "$COST_LOG" 2>/dev/null || true)
 
     if [ -n "$phase_cost_data" ]; then
-        actual_cost=$(echo "$phase_cost_data" | jq -s 'map(.task_cost_usd // 0) | add')
+        # Billable rows only: this gate judged every phase twice as expensive as it was.
+        actual_cost=$(echo "$phase_cost_data" | jq -s "[.[] | ${LEDGER_BILLABLE_JQ} | (.task_cost_usd // 0)] | add // 0")
         actual_minutes=$(echo "$phase_cost_data" | jq -s 'map(.elapsed_minutes // 0) | add')
         forecast_hours=$(echo "$phase_cost_data" | jq -s 'map(.forecast_hours // 0) | add')
         forecast_minutes=$(echo "scale=2; $forecast_hours * 60" | bc)

@@ -28,7 +28,14 @@ _release_write_perimeter() {
     . "$_lib" 2>/dev/null || return 0
     perimeter_release_all "${JIRA_CODELINE_ROOT:-}" || true
 }
-trap '_release_write_perimeter' EXIT
+# ONE TRAP, MANY HANDLERS — see lib/exit-handlers.sh. bash keeps a single EXIT trap, so a later
+# `trap ... EXIT` silently DELETES this one. That is exactly what happened: the heartbeat trap at
+# the bottom of this file ate both this release and cleanup(), so a paused run left no cassette, no
+# worktree cleanup and no perimeter release, in silence (live 20260910T222155Z).
+# BASH_SOURCE, not SCRIPT_DIR: that is defined a hundred lines below this point.
+# shellcheck source=lib/exit-handlers.sh
+. "$(cd "$(dirname "${BASH_SOURCE[0]}")" && pwd)/lib/exit-handlers.sh"
+add_exit_handler _release_write_perimeter
 
 # ── Take them, on every run ──────────────────────────────────────────────────
 # The other half of the pair above, and it lived in ONE launcher. Sealing was an inline loop in
@@ -4159,7 +4166,7 @@ cleanup() {
     "$CLAUDE_SH" --cleanup-worktrees 2>/dev/null || true
 }
 
-trap cleanup EXIT
+add_exit_handler cleanup
 
 # ──────────────────────────────────────────────
 # resolve_orch_mode <phase_id>
@@ -4919,8 +4926,9 @@ _checklist_heartbeat() {
 }
 _checklist_heartbeat &
 _HEARTBEAT_PID=$!
-# Kill heartbeat on exit
-trap 'kill "$_HEARTBEAT_PID" 2>/dev/null || true' EXIT
+# Kill heartbeat on exit — ADDED, never replacing the handlers registered above.
+_epam_kill_heartbeat() { kill "${_HEARTBEAT_PID:-}" 2>/dev/null || true; }
+add_exit_handler _epam_kill_heartbeat
 
 # ──────────────────────────────────────────────
 # Initialize monitor status file for HTML dashboard

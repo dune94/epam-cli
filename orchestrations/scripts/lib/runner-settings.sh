@@ -141,3 +141,82 @@ apply_runner_settings() {
     done <<< "$_decl"
     return 0
 }
+
+# runner_name_for <provider> <claude_cmd_basename>
+#
+# WHICH RUNNER DECLARATION APPLIES — resolved from the CLI THAT WILL ACTUALLY BE INVOKED.
+#
+# Both call sites used to pass `basename "$CLAUDE_CMD"`, and CLAUDE_CMD is "claude" under every
+# set: nothing assigns it from provider_to_cli, and the codemie arms invoke the literal string
+# `codemie-claude` (claude.sh, llm-handler.sh) while CLAUDE_CMD stays "claude".
+# llm-defaults.openrouter.json:235 already recorded the consequence —
+#
+#   "apply_runner_settings is called with the BASENAME of CLAUDE_CMD, which is 'claude' under every
+#    set, so a set declaring no runner by that name resolves nothing and the flags, env and scrubs
+#    of whatever ran before are simply carried over."
+#
+# claude, openrouter and mockserver each dodge it by declaring a runner literally named "claude".
+# The codemie set declares "codemie-claude" — the binary it really invokes — and so resolved
+# NOTHING. Its only alwaysFlags entry is `-s`, which its own declaration calls "a CORRECTNESS
+# requirement, not a preference. Without it the wrapper opens an INTERACTIVE menu ... in a pipeline
+# that is a HANG, not a failure: the run waits for a keypress until its timeout."
+#
+# FIRST HIT WINS, provider before CLAUDE_CMD. The three sets that name their runner "claude" keep
+# resolving exactly as before — their provider name resolves nothing and the fallback finds them —
+# and codemie starts resolving at all. Nothing is renamed, so no set has to remember a convention.
+runner_name_for() {
+    local _provider="${1:-}" _fallback="${2:-}"
+    local _libdir _resolver
+    _libdir=$(cd "$(dirname "${BASH_SOURCE[0]}")" && pwd) || return 1
+    _resolver="$_libdir/llm-settings-resolve.js"
+
+    if [ -n "$_provider" ] && [ -f "$_resolver" ] \
+       && { [ -n "${NODE_BIN:-}" ] || command -v node >/dev/null 2>&1; }; then
+        if "${NODE_BIN:-node}" -e '
+              const { resolveRunner } = require(process.argv[1]);
+              process.exit(resolveRunner(process.argv[2]) ? 0 : 1);
+            ' "$_resolver" "$_provider" 2>/dev/null; then
+            printf '%s' "$_provider"
+            return 0
+        fi
+    fi
+    printf '%s' "$_fallback"
+}
+
+# runner_bin_for <provider> <fallback>
+#
+# THE BINARY THAT WILL ACTUALLY BE INVOKED, for capability probes.
+#
+# The probes that gate --json-schema and --max-budget-usd asked `"$CLAUDE_CMD" --help`, which is
+# `claude` under every set. The codemie arm invokes `codemie-claude`, a WRAPPER whose own --help
+# advertises only wrapper options and which forwards the rest to a DIFFERENT, older Claude Code
+# (2.1.218 against 2.1.265 locally). So a flag was gated on one binary's help and handed to
+# another — and a wrapper that does not forward it turns a cost control into a failed call.
+#
+# Derived from config/providers.json's own cliBinary map, so no vendor name appears here and a new
+# provider needs no edit. $EPAM_CLI entries resolve to the epam runner, as provider_to_cli does.
+runner_bin_for() {
+    local _provider="${1:-}" _fallback="${2:-}"
+    local _cfg _bin
+
+    # AN EXPLICIT OVERRIDE WINS. CLAUDE_CMD is the documented substitution point
+    # ("Allow override via environment", claude.sh) and is what a sandbox wrapper and every test
+    # stub set. Deriving from the provider map would silently probe the REAL binary while the call
+    # goes to the substitute — the same mistake this function exists to fix, pointed the other way.
+    # Compared WHOLE, not by basename: a substitute is routinely named `claude` and merely lives
+    # somewhere else (/tmp/.../claude in the budget-flag test, a sandbox wrapper on a private path).
+    # Only the bare literal "claude" — the value claude.sh defaults to — means "nobody chose", and
+    # only then does the provider map decide.
+    if [ -n "$_fallback" ] && [ "$_fallback" != "claude" ]; then
+        printf '%s' "$_fallback"; return 0
+    fi
+    _cfg="$(cd "$(dirname "${BASH_SOURCE[0]}")" && pwd)/../../config/providers.json"
+    if [ -n "$_provider" ] && [ -f "$_cfg" ] && command -v jq >/dev/null 2>&1; then
+        _bin=$(jq -r --arg p "$_provider" '.cliBinary[$p] // empty' "$_cfg" 2>/dev/null)
+        if [ "$_bin" = '$EPAM_CLI' ]; then
+            printf '%s' "${EPAM_CLI:-epam}"; return 0
+        fi
+        if [ -n "$_bin" ]; then printf '%s' "$_bin"; return 0; fi
+    fi
+    printf '%s' "$_fallback"
+}

@@ -196,7 +196,7 @@ run_provider_once() {
   local runner_args=()
   RUNNER_FLAGS=()
   if declare -F apply_runner_settings >/dev/null 2>&1; then
-    apply_runner_settings "$(basename "$CLAUDE_CMD")" "${EPAM_PROJECT_CONFIG_DIR:-}" || true
+    apply_runner_settings "$(runner_name_for "${PRIMARY_PROVIDER:-}" "$(basename "$CLAUDE_CMD")")" "${EPAM_PROJECT_CONFIG_DIR:-}" || true
     runner_args=(${RUNNER_FLAGS[@]+"${RUNNER_FLAGS[@]}"})
   fi
     # BIND THE OUTPUT CONTRACT AT THE PROVIDER, WHERE IT CAN ACTUALLY BE ENFORCED.
@@ -217,7 +217,7 @@ run_provider_once() {
     # precondition.
     if [ -n "${EPAM_RESPONSE_SCHEMA:-}" ] && command -v jq >/dev/null 2>&1; then
       _rs_schema="$(printf '%s' "$EPAM_RESPONSE_SCHEMA" | jq -c '.schema // empty' 2>/dev/null || true)"
-      if [ -n "$_rs_schema" ] && "$CLAUDE_CMD" --help 2>/dev/null | grep -q -- '--json-schema'; then
+      if [ -n "$_rs_schema" ] && "$(runner_bin_for "${PRIMARY_PROVIDER:-}" "$CLAUDE_CMD")" --help 2>/dev/null | grep -q -- '--json-schema'; then
         runner_args+=(--json-schema "$_rs_schema")
       fi
     fi
@@ -244,7 +244,7 @@ run_provider_once() {
     # runner that rejects it is how a whole run once died with the reason hidden.
     if [ -n "${EPAM_STORY_BUDGET_HARD_LIMIT_USD:-}" ] \
        && printf '%s' "$EPAM_STORY_BUDGET_HARD_LIMIT_USD" | grep -qE '^[0-9]+(\.[0-9]+)?$' \
-       && "$CLAUDE_CMD" --help 2>/dev/null | grep -q -- '--max-budget-usd'; then
+       && "$(runner_bin_for "${PRIMARY_PROVIDER:-}" "$CLAUDE_CMD")" --help 2>/dev/null | grep -q -- '--max-budget-usd'; then
       runner_args+=(--max-budget-usd "$EPAM_STORY_BUDGET_HARD_LIMIT_USD")
     fi
 

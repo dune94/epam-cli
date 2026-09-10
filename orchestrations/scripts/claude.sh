@@ -9650,7 +9650,7 @@ implement_story() {
     # takes, and apply_runner_settings passes exactly those. A runner that declares nothing
     # gets nothing, so every other path behaves exactly as before.
     RUNNER_FLAGS=()
-    apply_runner_settings "$(basename "${CLAUDE_CMD:-}")" "${EPAM_PROJECT_CONFIG_DIR:-}" || true
+    apply_runner_settings "$(runner_name_for "${STORY_PROVIDER:-}" "$(basename "${CLAUDE_CMD:-}")")" "${EPAM_PROJECT_CONFIG_DIR:-}" || true
     local story_cli
     STORY_PROVIDER="$(resolve_primary_provider "${STORY_PROVIDER:-}")"
     story_cli=$(provider_to_cli "$STORY_PROVIDER")

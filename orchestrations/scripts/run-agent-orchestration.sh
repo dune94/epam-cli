@@ -4168,6 +4168,29 @@ cleanup() {
 
 add_exit_handler cleanup
 
+# _mc_no_assignment_verdict <call_exit_status>
+#
+# A GATE MUST HAVE A VERDICT SOMEONE CAN READ.
+#
+# When the coordinator assigned nothing, this reported "No assignments made (agent found nothing to
+# do or failed)" and recorded outcome "noop" — one line and one audit value covering two OPPOSITE
+# outcomes. Live 2026-09-10 (openrouter run 20260910T222155Z) AMSD-1919 entered the writer queue
+# with aiProvider and model unset and nothing could say whether that was intended.
+#
+# The information was already in hand: _mc_rc holds the call's exit status, captured ~60 lines
+# above and already warned about separately. This just uses it. Nothing about control flow changes
+# — only what the run says, and what the audit record carries.
+_mc_no_assignment_verdict() {
+    local _rc="${1:-0}"
+    if [ "$_rc" != "0" ]; then
+        warning "  [prd-model-coordinator] assigned nothing because the call FAILED (exit ${_rc}) — stories keep their existing assignment"
+        _mc_final_outcome="failed"
+    else
+        info "  [prd-model-coordinator] the call succeeded and had nothing to assign — every story already carries a model"
+        _mc_final_outcome="noop"
+    fi
+}
+
 # ──────────────────────────────────────────────
 # resolve_orch_mode <phase_id>
 # Precedence: prd.json phasesConfig[phase].orchestrationMode
@@ -6015,8 +6038,7 @@ else
                 break
             fi
         else
-            info "  [prd-model-coordinator] No assignments made (agent found nothing to do or failed)"
-            _mc_final_outcome="noop"
+            _mc_no_assignment_verdict "${_mc_rc:-0}"
             break
         fi
         done

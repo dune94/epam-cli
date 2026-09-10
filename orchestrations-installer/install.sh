@@ -542,7 +542,39 @@ if [ "$CHECK_ONLY" = "1" ]; then
     else _warn "no epam shim at $BIN_DIR/epam"; fi
 else
     mkdir -p "$BIN_DIR"
-    printf '#!/usr/bin/env bash\nexec node "%s/dist/epam.js" "$@"\n' "$ROOT" > "$BIN_DIR/epam"
+    # AN INSTALL MAY TAKE OVER THE NAME. IT MAY NOT DESTROY WHAT WAS THERE WITHOUT A TRACE.
+    #
+    # BIN_DIR is machine-wide, so an install into a THROWAWAY dest repoints the operator's `epam`
+    # at a directory that is about to be deleted, and the command dies with it. Found live
+    # 2026-09-09: `epam` had pointed at /tmp/installer-creds-f7Uyoe since an install test hours
+    # earlier and had been broken ever since, silently. Most test files that invoke install.sh do
+    # not set EPAM_BIN_DIR, so this is routine rather than rare.
+    #
+    # The shim is still written and `epam` still works after a normal install — nothing here
+    # withdraws that. What changes is that a shim pointing at a DIFFERENT install is copied aside
+    # first, so the previous command can always be restored. Re-installing the same tree replaces
+    # its own shim and keeps no backup, since there is nothing to lose.
+    if [ -f "$BIN_DIR/epam" ] && ! grep -qF "$ROOT/dist/epam.js" "$BIN_DIR/epam" 2>/dev/null; then
+        _bk="$BIN_DIR/epam.$(date -u +%Y%m%dT%H%M%SZ).bak"
+        if cp -p "$BIN_DIR/epam" "$_bk" 2>/dev/null; then
+            _warn "an epam shim was already here pointing elsewhere — kept as $_bk"
+        else
+            _warn "an epam shim was already here pointing elsewhere and could NOT be backed up"
+        fi
+    fi
+    # THE SHIM DIAGNOSES ITSELF. Pointing at a deleted install used to surface as a bare node
+    # module-resolution stack ("Cannot find module .../dist/epam.js"), which names the symptom and
+    # not the cause; an operator reads it as a broken build rather than a stale command.
+    {
+        printf '#!/usr/bin/env bash\n'
+        printf '_target="%s/dist/epam.js"\n' "$ROOT"
+        printf 'if [ ! -f "$_target" ]; then\n'
+        printf '    echo "epam: this command points at an install that is gone: %s" >&2\n' "$ROOT"
+        printf '    echo "epam: re-run install.sh, or point this shim at a current install: $0" >&2\n'
+        printf '    exit 127\n'
+        printf 'fi\n'
+        printf 'exec node "$_target" "$@"\n'
+    } > "$BIN_DIR/epam"
     chmod +x "$BIN_DIR/epam"
     _ok "epam shim written to $BIN_DIR/epam -> $ROOT/dist/epam.js"
     case ":$PATH:" in

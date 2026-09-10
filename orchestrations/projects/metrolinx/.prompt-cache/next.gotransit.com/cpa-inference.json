@@ -1,7 +1,7 @@
 {
-  "base": "d0bc70f24c8f85e1ce19aa4a1721f395a3d1abc9a20f124b2d4c941a3f6627a0",
-  "roles": "a1b414332fe6679109d050c86764db58ecc58364eb3b6cdba21bbb54cb8cd86e",
-  "usesRoles": true,
+  "base": "c10be8ddc701e3d3e843baa4a1430b76fefe6be0736c54e3e247bdf7d86762cd",
+  "roles": "dc020365309141110050af2cedbdce54c886d91d9dd81fded1473552f2806c59",
+  "usesRoles": false,
   "doc": {
     "$why": [
       "Generated from the cpa-inference template by the agent that minted this project's roster.",
@@ -9,7 +9,7 @@
       "template before installation — see lib/project-prompt-contract.js."
     ],
     "authority": "project",
-    "body": "__SYSTEM_PROMPT__\n\n---\n\nProject context: this task is scoped to the gotransit codeline (next.gotransit.com) for ticket AMSD-1919 (Go‑Checkout Page - Email & Confirm Email Case Sensitivity). The surveyed surface is the checkout form component (src/components/pages/CheckoutPage). Tests in this codeline run via Jest, and an existing spec already covers this checkout form and will need updating alongside any fix (next.gotransit.com/src/components/pages/CheckoutPage/__tests__/CheckoutForm.spec.tsx). Merges are gated by a required QA review workflow and a master-only merge restriction, so factor in review and CI turnaround when estimating iterations. Two roles are involved: an investigator who must confirm whether other case-sensitive comparisons exist downstream beyond the one flagged in the survey, and an implementer who will change the confirmEmail validation logic and update the affected spec file — weigh both when forming your estimate.\n\n---\n\n__SECTIONS__\n\n---\n\nRespond with ONLY the JSON object as specified in your instructions. No prose, no markdown fences.",
+    "body": "You are estimating development effort for ticket AMSD-1919: a fix to the Go Transit checkout form that makes email validation case-insensitive. Currently, the confirmEmail field comparison in the checkout flow treats \"user@example.com\" and \"USER@EXAMPLE.COM\" as different values, causing validation failures when users capitalize or copy-paste with different casing.\n__SYSTEM_PROMPT__The work is localized to the checkout form validation logic. The project uses TypeScript with Jest testing. The change involves: modifying the email comparison in CheckoutForm.tsx's validate rule (line 306 area), updating related validation types, and adding or updating test cases in the existing test directory at src/components/pages/CheckoutPage/__tests__/. No API changes, database migrations, or external service integrations are required.\n__SECTIONS__Based on this scope, estimate the iteration count needed to implement the case-insensitive email comparison, add test coverage for the fix, and verify no regressions in existing checkout validation.\n",
     "derivedFromSha256": "57120c129bde372daffdd0c3678a56752e78d8a9e708194db1ffab96c9dc7828",
     "derivedFromVersion": 1,
     "id": "cpa-inference",

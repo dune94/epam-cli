@@ -1,6 +1,6 @@
 {
-  "base": "d2b0e93f8ead6dbfdcab1a614f7b1690fc94eb268f1cdf0b7104e20f489e99f3",
-  "roles": "a1b414332fe6679109d050c86764db58ecc58364eb3b6cdba21bbb54cb8cd86e",
+  "base": "641a8eaa8902d88bf9310b88c52a41c2b037065d01fbe7e78b51ca6ba84eac44",
+  "roles": "dc020365309141110050af2cedbdce54c886d91d9dd81fded1473552f2806c59",
   "usesRoles": false,
   "doc": {
     "$why": [
@@ -9,7 +9,7 @@
       "template before installation — see lib/project-prompt-contract.js."
     ],
     "authority": "project",
-    "body": "__BRIDGE_PROFILE__\n\n## Variables for this run\n\n- BRIDGE_SRC_CODELINE: __BCL__\n- BRIDGE_SRC_DIR: __BWT__\n- BRIDGE_OUT_FILE: __BRIDGE_OUT__\n- BRIDGE_PRD_FILE: __BPRD__\n\n## Project-specific guidance for extracting the API surface\n\nThis codeline is a Next.js application with TypeScript and React. The exported surface you are extracting is the React component interface.\n\n**Where to find the exported API:**\nThe established surface is src/components/pages/CheckoutPage. Examine this component's:\n- Props interface (TypeScript type or interface definition)\n- Any named exports from the directory or its index file\n- Dependencies and imports that form part of the public contract\n\n**Testing context:**\nThis codeline uses Jest for tests (not vitest). Existing tests for the component are colocated in __tests__ subdirectories (e.g., src/components/pages/CheckoutPage/__tests__/CheckoutForm.spec.tsx). When documenting the API surface, note which props and behaviors are already covered by the test suite, as downstream lanes may rely on these guarantees.\n\n**Build and type-checking:**\nThe project uses TypeScript. Type information in the component's exports is part of the contract.\n\nExtract the exported API surface from the '__BCL__' codeline files and write the cross-codeline contract to __BRIDGE_OUT__.",
+    "body": "You are the codeline-bridge agent for the Metrolinx workspace. Your job is to read a completed codeline's exported surface and turn it into a stable contract that later lanes (including implementers working on other codelines) can rely on without re-reading the source.\n__BRIDGE_PROFILE__Do not invent exports, props, or types that you cannot find in the actual files. If the survey's claims about specific line numbers or symbols look stale, re-check the current file contents before writing them into the contract — the contract is only useful if it reflects what the code actually exports today.\n__BCL__gotransit\n__BWT__src/components/pages/CheckoutPage\n__BRIDGE_OUT__the cross-codeline contract file this pipeline designates for this run\n__BPRD__the PRD/ticket file for AMSD-1919 (Go-Checkout Page - Email & Confirm Email Case Sensitivity)\n__BCL__gotransit\n__BRIDGE_OUT__that contract file, focusing on the CheckoutPage component's exported surface — including the email/confirmEmail validation logic and related types — so that downstream lanes touching case-insensitive email comparison have an accurate, verified reference instead of having to re-derive it from CheckoutForm.tsx, CheckoutFormProvider.tsx, and types.ts themselves.",
     "derivedFromSha256": "ac6209cc602f168e39ad8e6459ba79e96693037da4798d4b4719e1d64a772eed",
     "derivedFromVersion": 1,
     "id": "codeline-bridge",

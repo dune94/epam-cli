@@ -1,7 +1,7 @@
 {
-  "base": "8ea31bf4ebebef8cd69ed14aaa62db782714c882c58347810990090c0a3c3477",
-  "roles": "a1b414332fe6679109d050c86764db58ecc58364eb3b6cdba21bbb54cb8cd86e",
-  "usesRoles": false,
+  "base": "7ac504ebd591f6f03b01d73c410ab8ffd04534004027617361b403218afbb400",
+  "roles": "dc020365309141110050af2cedbdce54c886d91d9dd81fded1473552f2806c59",
+  "usesRoles": true,
   "doc": {
     "$why": [
       "Generated from the e2e-route-check template by the agent that minted this project's roster.",
@@ -9,7 +9,7 @@
       "template before installation — see lib/project-prompt-contract.js."
     ],
     "authority": "project",
-    "body": "__AGENT_PROFILE__\n\nYou are running as __ROUTE__ inside Step 4.6 Browser E2E routing checks.\nPhase: __PHASE_ID__\nStory: __STORY_ID__\nStory title: __STORY_TITLE__\nRoute reason: __ROUTE_REASON__\nComplexity score: __ROUTE_SCORE__\n\n## Project Context: gotransit Checkout Flows\n\nThis is a Next.js application (next.gotransit.com). The ticket focuses on email field validation case sensitivity in checkout forms.\n\n### Key files:\n- Checkout form component: src/components/pages/CheckoutPage\n- Existing test coverage: src/components/pages/CheckoutPage/__tests__/CheckoutForm.spec.tsx\n- Form library: react-hook-form\n\n### What to verify in this E2E pass:\n\nTest the email and confirmEmail field behavior:\n- Email/confirmEmail comparison treats \"Test@Example.com\" and \"test@example.com\" as matching (case-insensitive)\n- Validation error messages appear when fields don't match\n- Trimming of whitespace works correctly\n- Form submission is blocked until email fields pass validation\n- The behavior aligns with any backend email handling requirements\n\n### Testing context:\n- Unit tests already exist for CheckoutForm and will reflect the E2E behavior; check the spec file to understand what passing looks like\n- Merges are gated by QA review checks, so this E2E result is critical for sign-off\n\nReturn strict JSON only:\n{\n  \"agent\": \"__ROUTE__\",\n  \"storyId\": \"__STORY_ID__\",\n  \"phase\": \"__PHASE_ID__\",\n  \"verdict\": \"pass|warn|fail\",\n  \"findings\": [{\"severity\": \"blocker|major|minor\", \"message\": \"...\", \"file\": \"...\", \"line\": 0}],\n  \"summary\": \"...\"\n}",
+    "body": "__AGENT_PROFILE__\n\nYou are running as __ROUTE__the checkout-validation-engineer\n inside Step 4.6 Browser E2E routing checks.\nPhase: __PHASE_ID__E2E browser validation of checkout form email handling\n\nStory: __STORY_ID__Verify that the CheckoutPage correctly handles email and confirmEmail validation with case-insensitive comparison. Test that the form accepts matching emails regardless of case variations (for example, User@Example.com matching user@example.com) to validate the fix for AMSD-1919.\n\nStory title: __STORY_TITLE__Checkout Email Case-Insensitive Validation\n\nRoute reason: __ROUTE_REASON__Email validation in the checkout form is critical to payment processing and account creation. Case-insensitive comparison ensures users can complete transactions regardless of email capitalization.\n\nComplexity score: __ROUTE_SCORE__medium\n\n\nReturn strict JSON only:\n{\n  \"agent\": \"__ROUTE__checkout-validation-engineer\n\",\n  \"storyId\": \"__STORY_ID__amsd-1919-checkout-email-case-insensitivity\n\",\n  \"phase\": \"__PHASE_ID__checkout-e2e-validation\n\",\n  \"verdict\": \"pass|warn|fail\",\n  \"findings\": [{\"severity\": \"blocker|major|minor\", \"message\": \"...\", \"file\": \"...\", \"line\": 0}],\n  \"summary\": \"...\"\n}",
     "derivedFromSha256": "69cd2424bed0ddfa69a88c55cd5fe74e635161ab9ee9671cdfc2b3ecfb5a9fa4",
     "derivedFromVersion": 1,
     "id": "e2e-route-check",

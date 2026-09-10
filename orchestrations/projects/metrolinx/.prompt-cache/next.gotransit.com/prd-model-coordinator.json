@@ -1,6 +1,6 @@
 {
-  "base": "e126cd8dfb383544a0f6bf82960d4d98ea3899a0c76a366fdcc4536de8f9ff97",
-  "roles": "a1b414332fe6679109d050c86764db58ecc58364eb3b6cdba21bbb54cb8cd86e",
+  "base": "3b7c581182eb7aeda2c20801433222186ecccde70539936b22ad7b47de280df2",
+  "roles": "dc020365309141110050af2cedbdce54c886d91d9dd81fded1473552f2806c59",
   "usesRoles": true,
   "doc": {
     "$why": [
@@ -9,7 +9,7 @@
       "template before installation — see lib/project-prompt-contract.js."
     ],
     "authority": "project",
-    "body": "__PROFILE__\n\n## Project Context\nThis specialization targets the Metrolinx Go Transit checkout system:\n- **Ticket**: AMSD-1919: Go‑Checkout Page - Email & Confirm Email Case Sensitivity\n- **Codeline**: gotransit (next.gotransit.com) — TypeScript/React/Next.js with Next.js Forms\n- **Focus area**: Email and confirm email validation in src/components/pages/CheckoutPage\n- **Test coverage baseline**: Existing tests in src/components/pages/CheckoutPage/__tests__/CheckoutForm.spec.tsx will require updates alongside any fix\n- **Tech stack constraints**: Tests run with Jest; merges require passing required QA review workflows\n\nThis is a form validation bug fix requiring both implementation (checkout-forms-engineer role) and investigation (gotransit-checkout-investigator role) to ensure the fix scope is complete and test coverage is preserved.\n\nPRD file: __MC_PRD_TARGET__\nPhase: __MC_PHASE__\n\nAssign model, aiProvider, and reasoningEffort to every pending story in this phase that is missing one or more of these fields. Write the updated PRD back to the file, then emit the JSON summary.\n\nPERMITTED MODELS — the only model names this run can route, in ladder order. The FIRST is the\nopening model: default to it when a story has no assignment.\n__MC_PERMITTED_MODELS__\n\nPERMITTED PROVIDERS — the only provider names this run can route:\n__MC_PERMITTED_PROVIDERS__",
+    "body": "You are coordinating model assignments for the Metrolinx GO Transit checkout validation work (AMSD-1919: email case sensitivity in the checkout page).\n__PROFILE__The gotransit codebase is a Next.js/React/TypeScript application. Checkout form validation logic is located in src/components/pages/CheckoutPage/CheckoutForm.tsx, with existing test patterns in src/components/pages/CheckoutPage/__tests__/. Stories will involve investigating the current email validation implementation and implementing fixes to case-sensitive email comparisons, along with regression test updates.\n__MC_PRD_TARGET__(PRD target location follows)\n__MC_PHASE__(Phase specification follows)\n__MC_PERMITTED_MODELS__Select models strong in TypeScript/React form validation, Jest test patterns, and code analysis. Investigator stories need symbol location and validation-pattern recognition across the CheckoutForm component tree; implementer stories need code generation for validation fixes and test authoring.\n__MC_PERMITTED_PROVIDERS__(Provider selection follows)\n",
     "derivedFromSha256": "7abfcf6673982674306927872d7278c6f606a13a88e67a1caf8852886479a836",
     "derivedFromVersion": 1,
     "id": "prd-model-coordinator",

@@ -39,9 +39,13 @@ function runCostControlCheck(opts: {
   const dir = mkdtempSync(join(tmpdir(), 'cost-control-test-'));
   try {
     const costFile = join(dir, 'phase-cost.jsonl');
-    writeFileSync(costFile, opts.costRecords.map(r => JSON.stringify(r)).join('\n') + '\n');
+    // BILLABLE ROWS. The ledger writes every call as an `attempt` row plus a terminal restatement;
+    // the guard sums the attempt rows only (lib/ledger-tokens.sh, c214c75f). A fixture row with no
+    // status is a marker, not a call, and is correctly ignored — so the fixtures are attempts.
+    writeFileSync(costFile, opts.costRecords.map(r => JSON.stringify({ status: 'attempt', ...r })).join('\n') + '\n');
     const scriptPath = join(dir, 'run.sh');
     const script = `
+. ${JSON.stringify(join(__dirname, '../../../orchestrations/scripts/lib/ledger-tokens.sh'))}
 LOG_DIR="${dir}"
 PHASE_COST_FILE="${costFile}"
 story_id="${opts.storyId}"

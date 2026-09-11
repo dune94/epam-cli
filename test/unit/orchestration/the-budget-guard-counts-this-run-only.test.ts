@@ -40,8 +40,12 @@ function sum(records: Record<string, unknown>[], runId: string, storyId = 'AMSD-
   const dir = mkdtempSync(join(tmpdir(), 'budget-')); dirs.push(dir);
   const f = join(dir, 'phase-cost.jsonl');
   writeFileSync(f, records.map((r) => JSON.stringify(r)).join('\n') + '\n');
+  // The partition of billable rows has one home, lib/ledger-tokens.sh (c214c75f): the block
+  // reads LEDGER_BILLABLE_JQ from it, so the harness sources it as claude.sh does.
+  const LEDGER = join(__dirname, '../../../orchestrations/scripts/lib/ledger-tokens.sh');
   const out = execFileSync('bash', ['-c',
     `set -u
+     . ${JSON.stringify(LEDGER)}
      _cost_file=${JSON.stringify(f)}
      story_id=${JSON.stringify(storyId)}
      export ORCH_RUN_ID=${JSON.stringify(runId)}
@@ -50,8 +54,10 @@ function sum(records: Record<string, unknown>[], runId: string, storyId = 'AMSD-
   return Number(out.trim());
 }
 
+// A BILLABLE row (status attempt) — the shape the ledger sums. Every call is written twice, as an
+// attempt and as a terminal restatement; only the attempt counts (lib/ledger-tokens.sh).
 const rec = (cost: number, runId?: string, storyId = 'AMSD-2041') => ({
-  story_id: storyId, task_cost_usd: cost, ...(runId ? { run_id: runId } : {}),
+  story_id: storyId, task_cost_usd: cost, status: 'attempt', ...(runId ? { run_id: runId } : {}),
 });
 
 const THIS_RUN = '20260810T024709Z';
@@ -79,9 +85,12 @@ describe('THE DEFECT: only this run counts', () => {
     expect(sum([rec(9.99, THIS_RUN, 'OTHER-1'), rec(0.5, THIS_RUN)], THIS_RUN)).toBeCloseTo(0.5, 5);
   });
 
-  it('a killed attempt in THIS run does count — it spent real money', () => {
-    const killed = { story_id: 'AMSD-2041', run_id: THIS_RUN, status: 'timeout', task_cost_usd: 0.813 };
-    expect(sum([killed, rec(0.68, THIS_RUN)], THIS_RUN)).toBeCloseTo(1.493, 5);
+  it('a killed attempt in THIS run does count ONCE — it spent real money, and its terminal row restates it', () => {
+    // The ledger writes every call twice: the billable `attempt` row, then a terminal row
+    // (`timeout` here) restating it. Summing both halted a story at half its limit (c214c75f).
+    const killed = rec(0.813, THIS_RUN);
+    const terminal = { story_id: 'AMSD-2041', run_id: THIS_RUN, status: 'timeout', task_cost_usd: 0.813 };
+    expect(sum([killed, terminal, rec(0.68, THIS_RUN)], THIS_RUN)).toBeCloseTo(1.493, 5);
   });
 
   it('the real historical file shape is handled — the records that caused this', () => {

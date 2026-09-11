@@ -78,7 +78,7 @@ require_codeline_root() {
         echo "[codeline-scope] JIRA_CODELINE_ROOT is not set — refusing to continue." >&2
         echo "  ${_who} iterates \"\$JIRA_CODELINE_ROOT\"/*/, which with an empty value expands to" >&2
         echo "  '/*/' — every top-level directory on this machine, each one hard-reset." >&2
-        echo "  Set it in the project's config.env or the environment, pointing at the directory" >&2
+        echo "  Set it in the project's declared env (config/provider-sets.json: projectEnv) or the environment, pointing at the directory" >&2
         echo "  that holds this project's repositories." >&2
         return 1
     fi

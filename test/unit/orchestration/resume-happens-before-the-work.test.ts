@@ -19,53 +19,47 @@ import { join } from 'node:path';
 
 const ORCH = readFileSync(
   join(__dirname, '../../../orchestrations/scripts/run-agent-orchestration.sh'), 'utf8');
+// The block itself moved to lib/orchestration-resume.sh (0bc775b3) so its refusals can be
+// EXECUTED (a-resume-refuses-to-guess-what-to-skip); the orchestrator sources it and calls
+// apply_resume_if_requested. The ordering is the orchestrator's; the content is the library's.
+const RESUME_LIB = readFileSync(
+  join(__dirname, '../../../orchestrations/scripts/lib/orchestration-resume.sh'), 'utf8');
 
 describe('the resume decision precedes the work', () => {
-  it('the resume block comes BEFORE the jira dispatch that exits', () => {
-    const resume = ORCH.indexOf('EPAM_RESUME_RUN:-}" ]; then');
+  it('the resume call comes BEFORE the jira dispatch that exits', () => {
+    const resume = ORCH.indexOf('\napply_resume_if_requested');
     const dispatch = ORCH.indexOf('_run_jira_pipeline; exit $?');
-    expect(resume, 'the resume block is gone').toBeGreaterThan(-1);
+    expect(resume, 'the resume call is gone').toBeGreaterThan(-1);
     expect(dispatch, 'the jira dispatch is gone').toBeGreaterThan(-1);
     expect(
       resume,
       'resume is evaluated after a dispatch that exits — on a Jira run it never happens',
     ).toBeLessThan(dispatch);
+    expect(ORCH, 'the orchestrator no longer sources the resume library')
+      .toMatch(/\. "\$SCRIPT_DIR\/lib\/orchestration-resume\.sh"/);
   });
 
-  // Window widened 2026-08-10: resume_spec_output_present() (the guard that refuses a resume
-  // whose spec output has been overwritten) is defined between this comment and the resume
-  // block, so a 2200-char slice no longer reached restore_run_checkpoint.
   it('it restores the checkpoint and derives what to skip', () => {
-    const start = ORCH.indexOf('# RESUME IS DECIDED BEFORE ANY WORK');
-    const block = ORCH.slice(start, start + 6000);
-    expect(block).toMatch(/restore_run_checkpoint/);
-    expect(block).toMatch(/resume_skip_env/);
+    expect(RESUME_LIB).toMatch(/restore_run_checkpoint/);
+    expect(RESUME_LIB).toMatch(/resume_skip_env/);
   });
 
   it('the resumed run adopts the run id its roster was stored against', () => {
-    const start = ORCH.indexOf('# RESUME IS DECIDED BEFORE ANY WORK');
-    const block = ORCH.slice(start, start + 6000);
     expect(
-      block,
+      RESUME_LIB,
       'the roster store is keyed by run id — without adopting it, the reviewed roster is not re-applied',
     ).toMatch(/export ORCH_RUN_ID="\$EPAM_RESUME_RUN"/);
   });
 
   it('a resume that cannot be honoured HALTS rather than running on stale state', () => {
-    const start = ORCH.indexOf('# RESUME IS DECIDED BEFORE ANY WORK');
-    const block = ORCH.slice(start, start + 6000);
-    expect(block).toMatch(/refusing to continue against un-restored state/);
-    expect(block).toMatch(/refusing to guess/);
+    expect(RESUME_LIB).toMatch(/refusing to continue against un-restored state/);
+    expect(RESUME_LIB).toMatch(/refusing to guess/);
   });
 
   it('lanes do not resume — the parent decides and they inherit', () => {
-    const start = ORCH.indexOf('# RESUME IS DECIDED BEFORE ANY WORK');
-    const block = ORCH.slice(start, start + 6000);
     expect(
-      block,
+      RESUME_LIB,
       'each lane would restore the checkpoint over its own state',
-    // The role is now derived once, at the top of the script, so the guard reads through the
-    // named helper instead of testing the raw variable here.
     ).toMatch(/if is_parent && \[ -n "\$\{EPAM_RESUME_RUN/);
   });
 });

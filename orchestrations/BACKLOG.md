@@ -22,6 +22,19 @@ Source: competitive gap analysis (`dark-factory-gap-analysis.md`).
 | 2 | PROMPT-BUDGET-1 | **Prompt trim measures total size but cuts only guidance — file injection is 39% and untrimmable** | pending | Live AMSD-2041, 2026-08-09 |
 | 2 | TEST-GAP-1 | **Writer-phase test coverage gaps — see "Writer-Phase Test Coverage Gaps" below** | pending | Coverage audit, 2026-08-09 |
 | 2 | SCHEMA-1 | **Schema-bind agent output — BLOCKED on the reviewer: strict schema suppresses tool calls** | blocked | Live metrolinx failures + probe, 2026-07-25 |
+| 2 | HITL-REVISE-1 | **Human-on-the-loop revision: operator feedback on a delivered branch re-enters the writer** | pending | Architecture assessment, 2026-09-10 |
+| 1 | REPLAY-SEAMS-1 | **Per-seam replay test must enumerate the pipeline's declared seams, not the recording's** — built as "the recording is the list"; passed 29/32 while the pipeline declares 40+; the six QA gates were never in scope and failed the first time they were replayed. Rebuild: universe = invocation-profiles.json, red for every declared seam with no recording. | pending | 2026-09-11 |
+| 1 | REPLAY-EXPORT-1 | **Exporter writes tool-using gates one turn per attempt, not per model call** — qa-gate:fuzz-weaver/perf-sentinel/runtime-boundary in 20260910T222155Z carry 5–33 tool calls per turn; the replay loop needs one turn per call. The writer (9 turns) exports per call; the gates do not. Find which trace the exporter draws from and make it per-call for every seam. | pending | 2026-09-11 |
+| 1 | REPLAY-POSTURE-1 | **prd-change-reviewer and code-graph-detective: caller runs them with tools OFF while invocation-profiles.json declares a toolGrant** — the recording cannot say which; replay fails either way. Either the callers honour the profile (live change) or the recorder writes the tool posture into each turn. | pending | 2026-09-11 |
+| 1 | RECORD-CODEMIE-1 | **No codemie recording exists** — the one that did was lost with the Sept 5–7 volumes (`down -v`). One recorded codemie run is required before codemie can be rehearsed. Operator-authorised only (paid-run gate). | pending | 2026-09-11 |
+| 2 | GATES-2ND-ATTEMPT-1 | **5 of 6 QA gates need a second attempt on MiniMax-M3 ("no structured output") every run** — each escalates to glm-5.2/kimi; largest remaining wall-clock cost (~20 min/run). Check the gate prompt / JSON-mode flag before touching the ladder. | pending | 2026-09-11 |
+| 2 | GLM53-STALL-1 | **z-ai/glm-5.3 stalls at the end of the repro-test-writer loop 4/4 times today** (10–15 min each) before escalating to kimi-k3. Ladder declaration in llm-settings.json — a config change. | pending | 2026-09-11 |
+| 2 | REPRO-EXIT2-1 | **A repro-gate block still exits 2 → self-heal retry → branch reset → the WRITER re-implements a correct fix.** The common trigger (hook-refused test) is now retried inside the writer (234a9414); the last-resort path remains and is one level too coarse. Design first. | pending | 2026-09-11 |
+| 2 | GREENFIELD-UNVERIFIED-1 | **No greenfield run has executed since the brownfield work began** (mid-Aug). 39 greenfield unit tests pass; not proof. A mockserver rehearsal of the greenfield launcher is prepared (scratchpad/greenfield-mock.sh) and parked at the operator's request. Live run is operator-authorised only. | parked | 2026-09-11 |
+| 2 | CLAUDE-REPLAY-ACTIONS-1 | **Claude-set replay is answer-level only** — Claude Code's tool calls (Bash/Read/Write/Agent…) are not the epam CLI's tools, so writer/repro seams replay their words, not their edits. Gates/reviews/spec replay exactly. | pending | 2026-09-11 |
+| 3 | TEARDOWN-STACKS-1 | **Deleting an install folder leaves its compose stacks running** — five orphan Langfuse stacks (~7GB) accumulated; teardown must stop stacks before the folder goes. | pending | 2026-09-11 |
+| 3 | CLICKHOUSE-DEADWEIGHT-1 | **ClickHouse holds zero rows in every stack (Langfuse v2 uses postgres)** — ~800MB RSS per install for nothing. Decide whether the obs compose should still declare it. | pending | 2026-09-11 |
+| 3 | PIPELINE-WRAPPER-GREENFIELD-1 | **`pipeline --jira` cannot launch a PRD-authored (greenfield) project** — those launch via their tier3 launcher only. | pending | 2026-09-11 |
 | 3 | GAP-P5 | Intra-story planner/executor model split | done | Aider, CrewAI |
 | 4 | GAP-P4 | Semantic RAG — replace TF-IDF in CPA | done | CrewAI, OpenHands |
 | 5 | GAP-P6 | OpenTelemetry emission alongside Langfuse | done | MAF, OAI Agents SDK |
@@ -1689,3 +1702,98 @@ output shape (pino lines plus the result object), assert a ledger record lands w
 `task_cost_usd`, then fix whichever of the two is at fault: the CLI not emitting cost, or the jq
 selection dropping it. Do NOT record a zero when cost is absent — a zero says the call was free.
 
+
+---
+
+## HITL-REVISE-1 — Human-on-the-loop revision of a delivered branch
+
+**Status:** pending · **Raised:** 2026-09-10 · **Value:** high · **Urgency:** low
+
+### What
+
+The pipeline hands a developer a local branch; the developer reviews it and cuts the PR. Today that
+loop returns nothing. This adds: the operator attaches feedback (typed text or an uploaded document)
+to a completed run in the Flutter launch dashboard, and the writer revises the code **already on the
+branch**. No teardown, no fresh run.
+
+### Why it is worth doing
+
+Beyond the feature itself, every revision request is a labelled example — *this output was not
+acceptable, and here is why, in a human's words*. That is the highest-quality signal this system can
+obtain, and it currently evaporates into a developer's IDE. Captured, it becomes an evaluation set
+built from real rejections rather than synthetic tasks. See §7.1 of
+`architecture-assessment-2026-09.md`.
+
+### Design — the channel already exists
+
+`story-writer` already declares `review-feedback` among what it consumes, and two seams already
+produce it (`team-lead-review`, `code-review-cycle`). **The operator becomes a third producer of the
+same artefact kind. The writer needs no change.**
+
+Two channels, because the distinction is load-bearing:
+
+| operator means | artefact | routed to | effect |
+|---|---|---|---|
+| "this is wrong / do it differently" | `review-feedback` | `story-writer` | revises code on the existing branch |
+| "the requirement was wrong" | `proposed-change` | `prd-change-reviewer` | spec updates first, then the writer |
+
+Feeding a requirement change in as `review-feedback` produces code that contradicts the PRD and the
+gates then fight it. The operator picks the mode in the UI — they know which they mean.
+
+Scope feedback **per story**, not per run: `review-feedback` is consumed per story, so the UI lists
+the run's stories and attaches feedback to the chosen ones. An uploaded document is the same
+artefact as typed text, not a separate mechanism.
+
+### BLOCKING PREREQUISITE — a revision run would destroy the branch it revises
+
+`ensure_story_branch` (`lib/git-ops.sh:353`) does this unconditionally on a brownfield run:
+
+```
+checkout -B AI-<story> origin/<baseline>
+reset --hard origin/<baseline>
+clean -fd
+```
+
+It **does not distinguish a resume from a first attempt** — no caller passes such a flag, and its own
+comment says it runs "once, before a story's FIRST attempt even begins". Metrolinx is brownfield, so
+it fires. A revision run reaching it empties the developer's branch.
+
+The commits survive: `:405` pins anything unreachable to `epam-rescue/<story>-<sha>` and refuses to
+reset if it cannot. That was added after 2026-08-14 orphaned three FINISHED gotransit commits
+(e780a8b7 / 45c82f2a / 20c2cea4), recovered by hand. But recovery is manual and the branch is still
+gone.
+
+**The naive fix is wrong.** The client repo is chmod'd read-only while on the baseline branch
+(`codeline-write-perimeter.sh`), and `perimeter_apply` — the call that reopens it — lives *inside*
+`ensure_story_branch`, after the reset. Skipping the function leaves the repo sealed and the writer
+locked out; that exact failure is recorded in its comments.
+
+**Requirement:** reopen the write perimeter **without** performing the reset, and assert the expected
+story branch is already checked out rather than creating it.
+
+### Risk — high, and containable
+
+`ensure_story_branch` is on the critical path of every brownfield story and carries four documented
+incident fixes. Its failure modes are: writer locked out (no story can be written), resets when it
+should not (developer's work destroyed), does not reset when it should (stale debris burns the
+agent's whole budget — live 2026-08-02, 1500s lost).
+
+**Do not modify it.** Add a separate narrow function for the revision path — assert branch, reopen
+perimeter, nothing else — so the existing function stays byte-identical and its four behaviours
+cannot regress. The blast radius is then only revision runs, which do not exist yet.
+
+Fully testable without a live run: real git fixture repos under `spawnSync`, perimeter state
+observable via file modes, branch state observable directly. Negative tests first — that the existing
+path is unchanged, that the revision path never resets, and that it refuses outright when the
+expected branch is not checked out.
+
+### Also required
+
+- A revision is a **new run id with `parentRunId`** — never a mutation of the original run's evidence.
+- **Gates must re-run** on the revision, or changed code is handed back unverified.
+- **Bound and count** the human rounds, so "five operator rounds on one story" becomes visible data.
+- Surface `epam-rescue/*` refs in the dashboard — today nothing looks there.
+
+### Sequencing
+
+Branch-safety primitive first, proven, alone. Dashboard afterwards. Do not bundle.

@@ -575,7 +575,9 @@ describe('validate_mid_execution_splits — shared implementation (lib/story-gua
 
   it('validate_mid_execution_splits calls spec-mode-runner with --validate-splits', () => {
     const fnIdx = guardsSrc.indexOf('validate_mid_execution_splits()');
-    const fnBlock = guardsSrc.slice(fnIdx, fnIdx + 2000);
+    // The whole function, to its closing brace — a fixed 2000-char window stopped inside the
+    // comments the function has since acquired.
+    const fnBlock = guardsSrc.slice(fnIdx, guardsSrc.indexOf('\n}', fnIdx) + 2);
     expect(fnBlock).toContain('--validate-splits');
     expect(fnBlock).toContain('spec-mode-runner.js');
   });

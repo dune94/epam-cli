@@ -133,7 +133,10 @@ CODELINE_ROOT="$WORKSPACE/codelines"
 CLONE="$CODELINE_ROOT/mock-hello-world"
 SYNTH_PRD="$WORKSPACE/synthesized-prd.json"
 # The PRD above does not exist yet — ingest writes it — so the project is declared, not read.
-MOCK_PROJECT="hello-dolly"
+# DECLARED BY THE CONFIG DIR ALREADY RESOLVED ABOVE, not written here: an engine script naming
+# a project is the hardcoding the-engine-names-no-project exists to refuse, and this launcher had
+# resolved PROJECT_CONFIG_DIR forty lines earlier only to ignore it.
+MOCK_PROJECT="$(basename "$PROJECT_CONFIG_DIR")"
 
 echo ""
 echo "════════════════════════════════════════════════════════════════════"

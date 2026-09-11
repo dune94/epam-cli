@@ -94,27 +94,41 @@ describe('the baseline sha is a sha', () => {
  * setup write was never read at all. And the two values differ on a multi-phase run: the
  * project-branch reading would report a previous phase's work as this phase's changes.
  */
-describe('the baseline has exactly one writer', () => {
+describe('the baseline has one meaning and one resolver', () => {
   const ORCH_SRC = readFileSync(ORCH, 'utf8');
+  const LIB_SRC = readFileSync(join(__dirname, '../../../orchestrations/scripts/lib/qa-gate-evidence.sh'), 'utf8');
+  const lines = ORCH_SRC.split('\n');
+  const writerLines = lines
+    .map((l, i) => ({ l, i }))
+    .filter(({ l }) => /> *"\$LOG_DIR\/phase-baseline-sha\.txt"/.test(l) && !/^\s*#/.test(l));
 
-  it('only one place writes the file', () => {
-    const writers = ORCH_SRC.split('\n')
-      .filter((l) => /> *"\$LOG_DIR\/phase-baseline-sha\.txt"/.test(l) && !/^\s*#/.test(l));
-    expect(writers.length,
-      `${writers.length} writers of phase-baseline-sha.txt:\n  ${writers.map((l) => l.trim()).join('\n  ')}`,
-    ).toBe(1);
+  it('every writer writes the SAME value — the phase baseline, resolved by qa_phase_baseline_sha', () => {
+    // 19828f28 (2026-09-09) added a second write: the baseline is re-derived after the story branch
+    // is based, because a merge-base taken before the branch exists is one commit behind the real
+    // fork point. Same meaning, same resolver — what "one writer" was protecting. Two writes with
+    // two meanings (the setup loop's origin/<branch> vs step 8's HEAD) is the defect; two writes
+    // of one resolved value is not.
+    expect(writerLines.length, 'phase-baseline-sha.txt has no writer').toBeGreaterThan(0);
+    for (const { l, i } of writerLines) {
+      expect(l, `a writer echoes something other than _phase_baseline: ${l.trim()}`).toMatch(/echo "\$_phase_baseline"/);
+      const above = lines.slice(Math.max(0, i - 12), i).join('\n');
+      expect(above, `the write at line ${i + 1} is not fed by qa_phase_baseline_sha:\n${above}`).toMatch(/qa_phase_baseline_sha/);
+    }
   });
 
-  it('that writer resolves the ref rather than echoing it', () => {
-    const writerBlock = ORCH_SRC.slice(ORCH_SRC.indexOf('_phase_baseline='), ORCH_SRC.indexOf('_phase_baseline=') + 400);
-    expect(writerBlock, 'a bare rev-parse echoes an unresolvable ref and exits 128')
+  it('the resolver resolves the ref rather than echoing it', () => {
+    const at = LIB_SRC.indexOf('qa_phase_baseline_sha() {');
+    expect(at, 'qa_phase_baseline_sha is gone from lib/qa-gate-evidence.sh').toBeGreaterThan(-1);
+    expect(LIB_SRC.slice(at, at + 1200), 'a bare rev-parse echoes an unresolvable ref and exits 128')
       .toMatch(/rev-parse --verify --quiet/);
   });
 
   it('says so when it cannot resolve one, instead of leaving no file', () => {
     // It ended in `|| true`: a repository the run could not read produced no file, every gate
     // compared against nothing, and that reads as "this story changed no files" — a false pass.
-    const writerBlock = ORCH_SRC.slice(ORCH_SRC.indexOf('_phase_baseline='), ORCH_SRC.indexOf('_phase_baseline=') + 700);
+    const first = ORCH_SRC.indexOf('_phase_baseline="$(qa_phase_baseline_sha');
+    expect(first).toBeGreaterThan(-1);
+    const writerBlock = ORCH_SRC.slice(first, first + 700);
     expect(writerBlock, 'an unresolvable baseline is silent').toMatch(/warning .*baseline/);
   });
 });

@@ -64,6 +64,8 @@ const NOT_INVOKERS: Record<string, string> = {
   'kill-tier3-run.sh': 'sweeps ai-run.sh processes by name when killing a run',
   'lib/cost-emitter.js': 'reads cost records after the fact; makes no model call',
   'lib/agent-invoke.sh': 'the gateway itself — it sets the name for its callers',
+  'lib/replay-delegate.sh': 'a relay: it hands an already-named call to ai-run.sh, inheriting '
+    + 'EPAM_AGENT_NAME from the caller (claude.sh prefixes it; the-writer-names-its-seam executes that)',
   'lib/agent-tools.js': 'a pure module computing a read-only tool grant; it mentions ai-run.sh in '
     + 'a comment explaining why an empty grant is unsafe, and executes no process at all '
     + '(no child_process import anywhere in the file)',
@@ -74,7 +76,6 @@ const KNOWN_UNNAMED: string[] = [
   // without EPAM_AGENT_NAME, so its cost row, Langfuse trace and plan record are attributed to
   // a default. Six entries below had been fixed and never removed, which is how a ratchet stops
   // ratcheting — the baseline outlives the debt and the list stops meaning anything.
-  'claude.sh',
   'lib/constraint-compiler.js',
   'lib/kb-cli.js',
   'lib/story-guards.sh',

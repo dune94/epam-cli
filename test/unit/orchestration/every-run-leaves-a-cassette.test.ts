@@ -122,19 +122,28 @@ describe('a completed run leaves a cassette in the durable directory', () => {
  * lifted from run-agent-orchestration.sh and executed, and the cassette must appear.
  */
 describe("the pipeline's own completion block", () => {
+  /**
+   * The export moved out of cleanup() into its own exit handler, `_epam_export_cassette`,
+   * registered near the top of the script so an early failure exports too
+   * (a-paused-run-leaves-a-cassette-too). This lifts that function and CALLS it — the block under
+   * test is still the one the real script runs at exit.
+   */
   function completionBlock(): string {
     const lines = readFileSync(
       join(ROOT, 'orchestrations/scripts/run-agent-orchestration.sh'), 'utf8').split('\n');
-    const i = lines.findIndex((l) => l.includes('if declare -F export_run_cassette'));
+    const i = lines.findIndex((l) => /^_epam_export_cassette\(\)\s*\{/.test(l));
     if (i === -1) {
-      throw new Error('run-agent-orchestration.sh does not call export_run_cassette — the exporter '
+      throw new Error('run-agent-orchestration.sh has no _epam_export_cassette handler — the exporter '
         + 'has no caller again, which is exactly how four runs left no cassette');
     }
-    const pad = lines[i].length - lines[i].trimStart().length;
-    const close = ' '.repeat(pad) + 'fi';
-    const j = lines.findIndex((l, n) => n > i && l === close);
-    if (j === -1) throw new Error('completion block has no closing fi at its indentation');
-    return lines.slice(i, j + 1).map((l) => l.slice(pad)).join('\n');
+    const j = lines.findIndex((l, n) => n > i && l === '}');
+    if (j === -1) throw new Error('_epam_export_cassette has no closing brace');
+    const body = lines.slice(i, j + 1).join('\n');
+    if (!/export_run_cassette/.test(body)) throw new Error('_epam_export_cassette does not call export_run_cassette');
+    if (!lines.some((l) => /^add_exit_handler _epam_export_cassette\b/.test(l))) {
+      throw new Error('_epam_export_cassette is defined but never registered as an exit handler');
+    }
+    return `${body}\n_epam_export_cassette`;
   }
 
   it('ARCHIVES the run when the pipeline completes', () => {

@@ -153,10 +153,21 @@ describe('THE BOUND ACTUALLY BINDS — measured in a real child process', () => 
 describe('EVERY site that spawns a client test command is bounded', () => {
   const src = readFileSync(GUARD, 'utf8');
 
-  /** Every line that runs a resolved client test command through a shell. */
-  const sites = src.split('\n')
-    .map((line, i) => ({ line, n: i + 1 }))
-    .filter(({ line }) => /sh -c "\$_[a-z]+_test_cmd"/.test(line))
+  /**
+   * Every line that runs a resolved client test command through a shell — in EITHER shape:
+   * a variable already holding the command, or the resolver called inline. The scan covered
+   * only the first; Step 22b's oracle used the second, was never in view, and fanned jest out to
+   * 18 processes inside a capped scope on 2026-09-11.
+   */
+  // A statement may be split over `\`-continued lines; judge the statement, not the fragment.
+  const statements: { line: string; n: number }[] = [];
+  src.split('\n').forEach((raw, i) => {
+    const last = statements[statements.length - 1];
+    if (last && /\\\s*$/.test(last.line)) last.line = `${last.line.replace(/\\\s*$/, ' ')}${raw.trim()}`;
+    else statements.push({ line: raw, n: i + 1 });
+  });
+  const sites = statements
+    .filter(({ line }) => /sh -c "\$_[a-z]+_test_cmd"/.test(line) || /sh -c "\$\(_codeline_test_command\b/.test(line))
     .filter(({ line }) => !/^\s*#/.test(line));
 
   it('the guard sources the library', () => {

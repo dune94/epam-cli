@@ -9264,7 +9264,15 @@ $spec_prompt"
                     --reporter=json --outputFile="$oracle_json" --root "$PROJECT_ROOT" \
                     > /dev/null 2>&1
             else
-                ( cd "$PROJECT_ROOT" && timeout "${EPAM_TEST_TIMEOUT_SECS:-300}" \
+                # BOUNDED LIKE THE OTHER SIX SITES. This was the one client-suite spawn in this
+                # file without run_test_bounded, and its `$(…)` shape escaped the guard scan that
+                # covers the `"$_x_test_cmd"` ones. Live 2026-09-11 13:45:50Z, inside a 4623MB
+                # scope: Step 19 ran bounded (3 processes), Step 22b's oracle then spawned jest on
+                # every core — 18 processes — and the cgroup killed the run after the writer, the
+                # repro test, the invalidated-tests step, the review and the build gate had all
+                # passed. Uncapped, every earlier run paid the same peak out of the host.
+                ( cd "$PROJECT_ROOT" && run_test_bounded "$(resolve_test_workers)" \
+                    timeout "${EPAM_TEST_TIMEOUT_SECS:-300}" \
                     sh -c "$(_codeline_test_command "$PROJECT_ROOT")" ) > "${oracle_json}.txt" 2>&1
             fi
             local _oracle_rc=$?

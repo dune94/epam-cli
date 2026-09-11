@@ -1,7 +1,7 @@
 {
   "name": "amsd-pipeline",
-  "version": "2.0.20",
-  "description": "Installer for the amsd-pipeline orchestration stack. Clones, packages and provisions the full stack with one command — no separate git clone step.",
+  "version": "2.0.21",
+  "description": "Installer for the amsd-pipeline orchestration stack. Clones, packages and provisions the full stack with one command \u2014 no separate git clone step.",
   "bin": {
     "amsd-pipeline": "bin/amsd-pipeline.js"
   },

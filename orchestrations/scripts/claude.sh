@@ -7684,6 +7684,43 @@ run_diagnosis_groundedness_check() {
 # amendment (for bad coding patterns) — before the next retry.
 # Only meaningful when VERIFICATION_FAILURE is set (external test suite failed).
 # Uses ORCH_GATE_PROVIDER/ORCH_GATE_MODEL (same gate as assess_model_escalation).
+# _gate_call_failure_detail <stderr_file>
+#
+# WHY THE GATE CALL FAILED, IN THE RUN LOG, WHERE THE OPERATOR IS LOOKING.
+#
+# The analyst's stderr is appended to the story's output file under logs/claude_outputs/ — a path
+# nothing points the operator at. So a failed gate call reported "no response to parse" and nothing
+# else, while the provider's own explanation sat on disk.
+#
+# Live 2026-09-11 (openrouter run 20260910T222155Z): three analyst calls failed across two models
+# and the run log gave no cause. The real one was
+#
+#   OpenRouter API error: 404 {"error":{"message":"No endpoints found for z-ai/glm-5.3.",
+#    "metadata":{"routing_funnel":[... {"step":"Filter by Fallback","endpoint_count":0}]}}}
+#
+# — our own provider pin eliminating every surviving endpoint. Reading only the run log, that was
+# diagnosed twice, wrongly and confidently, before the funnel was found. A message that hides the
+# cause does not merely cost time; it manufactures wrong answers.
+#
+# Prefers the most specific line available, and NEVER invents one: a call that produced no error
+# text says exactly that. Bounded, because a gate's stderr can be megabytes and the run log is read
+# by a human.
+_gate_call_failure_detail() {
+    local _err_file="${1:-}" _line=""
+    if [ -n "$_err_file" ] && [ -s "$_err_file" ]; then
+        # The provider's own error first; then any error line; then the last non-empty line.
+        _line=$(grep -aoE '[A-Za-z/]*API error: [0-9]{3}.*' "$_err_file" 2>/dev/null | tail -1)
+        [ -z "$_line" ] && _line=$(grep -aiE 'error|refus|exhausted|denied|unauthor' "$_err_file" 2>/dev/null | tail -1)
+        [ -z "$_line" ] && _line=$(grep -av '^[[:space:]]*$' "$_err_file" 2>/dev/null | tail -1)
+    fi
+    if [ -z "$_line" ]; then
+        printf 'the call produced no error output at all (0 bytes) — nothing to report but the failure itself'
+        return 0
+    fi
+    # One line, bounded. tr first so a multi-line JSON payload cannot break the log line.
+    printf '%s' "$_line" | tr -d '\r' | tr '\n' ' ' | cut -c1-400
+}
+
 run_failure_analyst() {
     local story_id="$1"
     local output_file="${2:-/dev/null}"
@@ -7996,7 +8033,7 @@ $(cat "$_fa_vendor_contract")
             # unreachable or erroring gate model left NO trace in the run log — the operator
             # saw a story retry with no guidance and no reason given.
             _analyst_call_ok="false"
-            warning "  [FailureAnalyst] Gate invocation FAILED for ${gate_model:-unknown} (attempt ${_analyst_attempt}/${_analyst_max_attempts}) — no response to parse"
+            warning "  [FailureAnalyst] Gate invocation FAILED for ${gate_model:-unknown} (attempt ${_analyst_attempt}/${_analyst_max_attempts}) — $(_gate_call_failure_detail "${output_file:-}")"
         fi
 
         # RETRYING A MODEL THAT SAID NOTHING IS NOT A RECOVERY STRATEGY.

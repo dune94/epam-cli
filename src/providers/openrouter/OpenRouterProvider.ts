@@ -132,14 +132,60 @@ async function postOpenRouter(
 ): Promise<Response> {
   const pinned = body.provider !== undefined;
   const first = await fetch(url, { method: 'POST', headers, body: JSON.stringify(body) });
-  if (first.ok || first.status !== 429 || !pinned) return first;
+  if (first.ok || !pinned) return first;
+
+  const why = await pinReleaseReason(first);
+  if (!why) return first;
 
   // Deliberate, announced reroute — not the silent one allow_fallbacks:false exists to prevent.
   const { provider: _dropped, ...unpinned } = body;
   process.stderr.write(
-    '[openrouter] the pinned upstream is rate-limited (429) — retrying once without the pin; '
+    `[openrouter] ${why} — retrying once without the pin; `
     + 'this turn loses the cache stickiness the pin buys\n');
   return fetch(url, { method: 'POST', headers, body: JSON.stringify(unpinned) });
+}
+
+/**
+ * WHY THIS RESPONSE IS WORTH RETRYING UNPINNED — or undefined, meaning it is not.
+ *
+ * 429 was the original case (live 2026-08-18): the pinned upstream rate-limited us, the pin left
+ * nowhere to go, and a coordinator read the empty result as an environment crash, burning 10 of 12
+ * attempts.
+ *
+ * 404 "No endpoints found" is the SAME failure wearing a different status code, and it cost a run
+ * on 2026-09-11 (openrouter 20260910T222155Z): the failure analyst lost three calls across two
+ * models, retries then proceeded with no diagnosis, and 4 of 12 attempts and 3 ladder rungs went
+ * before it was killed. OpenRouter's own routing_funnel said precisely what happened —
+ *
+ *     Initial Endpoints 28 -> Filter by Tool Compatibility 27 -> Apply Status Sorting 27
+ *     -> Filter by Fallback 0
+ *
+ * 27 endpoints survived every CAPABILITY filter and our own `order` + allow_fallbacks:false removed
+ * all of them. A funnel that collapses at that step is by definition reroutable: the candidates
+ * existed and only the pin excluded them.
+ *
+ * A 404 WITHOUT that shape is a genuinely unavailable model and must still fail — otherwise a typo
+ * in a ladder reroutes silently to whatever OpenRouter chooses, which is the variance the pin
+ * exists to prevent. So the funnel is read, not the status code alone.
+ */
+async function pinReleaseReason(res: Response): Promise<string | undefined> {
+  if (res.status === 429) return 'the pinned upstream is rate-limited (429)';
+  if (res.status !== 404) return undefined;
+  try {
+    const funnel = (((await res.clone().json()) as {
+      error?: { metadata?: { routing_funnel?: Array<{ step?: string; endpoint_count?: number }> } };
+    })?.error?.metadata?.routing_funnel) ?? [];
+    const collapsed = funnel.some(
+      (s) => /fallback/i.test(String(s?.step ?? '')) && Number(s?.endpoint_count) === 0);
+    if (!collapsed) return undefined;
+    const survived = funnel.filter((s) => !/fallback/i.test(String(s?.step ?? '')))
+      .reduce((n, s) => Number.isFinite(Number(s?.endpoint_count)) ? Number(s.endpoint_count) : n, 0);
+    return `the pin eliminated every endpoint (404 "No endpoints found"; ${survived} survived every `
+      + 'capability filter and only the provider pin removed them)';
+  } catch {
+    // A 404 we cannot read is not evidence of a reroutable failure.
+    return undefined;
+  }
 }
 
 export function openRouterSessionId(): string {

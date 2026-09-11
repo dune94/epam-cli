@@ -147,10 +147,13 @@ describe('A MINTED AGENT GETS A REAL LADDER, NOT AN EMPTY OBJECT', () => {
     expect(out.EPAM_MODEL_LADDER).toBe('a=b|b=c');
   });
 
-  it('and the seam\'s declared effort', () => {
+  it('but NOT a flat effort of its own — effort belongs to the ladder rung (operator decision 2026-09-01, fb16b266)', () => {
+    // The fixture profile still carries reasoningEffort: 'high'. Exporting it made the seam's
+    // flat value a floor over every rung, so the cheap entry rung was never cheap. A seam is
+    // assigned to a ladder; it does not renegotiate what that ladder costs.
     const { seamInvocationEnv } = load();
     const out = seamInvocationEnv('gotransit-investigator', null, { registryFile: registry(withPatterns), env });
-    expect(out.EPAM_REASONING_EFFORT).toBe('high');
+    expect(out.EPAM_REASONING_EFFORT, 'the seam exported its own effort over the ladder rung\'s').toBeUndefined();
   });
 });
 

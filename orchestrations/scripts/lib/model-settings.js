@@ -81,6 +81,16 @@ function iterationMap(settingsFile) {
   } catch (_) {
     return '';
   }
+  return iterationMapFrom(doc);
+}
+
+/**
+ * The same map from an already-resolved declaration. seam-invocation.js holds the project's
+ * EFFECTIVE settings (engine, set, project) as an object, not a file; reading the project file
+ * here instead gave it only the project's own overrides — and the set's, where the ladders live
+ * since 2026-08-25, were missing exactly when nothing had exported EPAM_MODEL_ITERATIONS.
+ */
+function iterationMapFrom(doc) {
   const overrides = (doc && doc.modelOverrides) || {};
   const parts = [];
   for (const key of Object.keys(overrides)) {
@@ -95,4 +105,4 @@ function iterationMap(settingsFile) {
   return parts.join('|');
 }
 
-module.exports = { modelOverridesFor, maxIterationsFor, iterationMap };
+module.exports = { modelOverridesFor, maxIterationsFor, iterationMap, iterationMapFrom };

@@ -104,13 +104,23 @@ describe('every verdict a producer emits is handled by its consumer', () => {
       .filter(([n, p]) => !n.startsWith('_') && !n.startsWith('$') && p && typeof p === 'object' && p.ladder);
     expect(seams.length, 'no seams declare a ladder — this proves nothing').toBeGreaterThan(10);
 
+    // A seam declares a POSITION; the set's ladderTierOrder names the tier it lands on, through
+    // the engine's own resolver (2026-08-15 rule, restored 2026-09-11). The boundary is that the
+    // resolved tier exists in every set's ladders.
+    // eslint-disable-next-line @typescript-eslint/no-var-requires
+    const { resolveTierPosition } = require(join(REPO, 'orchestrations/scripts/lib/seam-invocation.js'));
     const sets = readdirSync(CONFIG).filter((f) => /^llm-defaults\..*\.json$/.test(f));
     const missing: string[] = [];
     for (const f of sets) {
-      const tiers = new Set(Object.keys(JSON.parse(readFileSync(join(CONFIG, f), 'utf8')).ladders || {}));
-      for (const [name, p] of seams) if (!tiers.has(p.ladder)) missing.push(`${f}: ${name} -> ${p.ladder}`);
+      const cfg = JSON.parse(readFileSync(join(CONFIG, f), 'utf8'));
+      const tiers = new Set(Object.keys(cfg.ladders || {}));
+      const order = (Array.isArray(cfg.ladderTierOrder) ? cfg.ladderTierOrder : [...tiers]).join(' ');
+      for (const [name, p] of seams) {
+        const tier = resolveTierPosition(p.ladder, { EPAM_MODEL_LADDER_TIER_ORDER: order });
+        if (!tier || !tiers.has(tier)) missing.push(`${f}: ${name} -> ${p.ladder} -> '${tier}'`);
+      }
     }
-    expect(missing, `${missing.length} seam(s) name a tier no provider set defines`).toEqual([]);
+    expect(missing, `${missing.length} seam(s) declare a position that lands on no tier a provider set defines`).toEqual([]);
   });
 
   it('BOUNDARY 4: seam ladder tier -> the launcher env convention', () => {

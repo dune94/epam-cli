@@ -121,26 +121,40 @@ describe('REVIEWERS TOO', () => {
 });
 
 
-/** The rungs a tier declares, from whichever provider set declares that tier. */
-function ladderRungs(tier: string): any[] {
+// A SEAM DECLARES A POSITION (base/mid/top); the provider set owns the tier names and their
+// order, and the engine's own resolver maps one onto the other. Asking the resolver, not
+// comparing literals, is what keeps this test true when a set renames a tier (2026-09-11).
+// eslint-disable-next-line @typescript-eslint/no-var-requires
+const { resolveTierPosition } = require(join(process.cwd(), 'orchestrations/scripts/lib/seam-invocation.js'));
+
+function providerSets(): Array<{ file: string; cfg: any; order: string[] }> {
   const dir = join(process.cwd(), 'orchestrations/config');
-  for (const f of readdirSync(dir).filter((x) => /^llm-defaults\..*\.json$/.test(x))) {
-    const c = JSON.parse(readFileSync(join(dir, f), 'utf8'));
-    const t = (c.ladders || {})[tier];
+  return readdirSync(dir).filter((x) => /^llm-defaults\..*\.json$/.test(x)).map((f) => {
+    const cfg = JSON.parse(readFileSync(join(dir, f), 'utf8'));
+    const order = Array.isArray(cfg.ladderTierOrder) ? cfg.ladderTierOrder.map(String) : Object.keys(cfg.ladders || {});
+    return { file: f, cfg, order };
+  }).filter((s) => s.order.length);
+}
+
+/** The rungs the tier a POSITION resolves to declares, from the first provider set that declares rungs there. */
+function ladderRungs(position: string): any[] {
+  for (const s of providerSets()) {
+    const tier = resolveTierPosition(position, { EPAM_MODEL_LADDER_TIER_ORDER: s.order.join(' ') });
+    const t = (s.cfg.ladders || {})[tier];
     if (t && Array.isArray(t.rungs) && t.rungs.length) return t.rungs;
   }
   return [];
 }
 
-/** The strongest tier the project declares — last in its own declared order. */
-function strongestTier(): string {
-  const dir = join(process.cwd(), 'orchestrations/config');
-  for (const f of readdirSync(dir).filter((x) => /^llm-defaults\..*\.json$/.test(x))) {
-    const c = JSON.parse(readFileSync(join(dir, f), 'utf8'));
-    const order = Array.isArray(c.ladderTierOrder) ? c.ladderTierOrder : Object.keys(c.ladders || {});
-    if (order.length) return String(order[order.length - 1]).toLowerCase();
-  }
-  return '';
+/** Whether a POSITION resolves to the strongest tier — the last in the order — on every provider set. */
+function resolvesToStrongestEverywhere(position: string): { ok: boolean; detail: string } {
+  const sets = providerSets();
+  if (!sets.length) return { ok: false, detail: 'no provider set declares a ladder tier order' };
+  const misses = sets
+    .map((s) => ({ s, tier: resolveTierPosition(position, { EPAM_MODEL_LADDER_TIER_ORDER: s.order.join(' ') }) }))
+    .filter(({ s, tier }) => tier !== s.order[s.order.length - 1])
+    .map(({ s, tier }) => `${s.file}: '${position}' -> '${tier}', strongest is '${s.order[s.order.length - 1]}'`);
+  return { ok: misses.length === 0, detail: misses.join('; ') };
 }
 
 describe('NO LOW OR MEDIUM INFERENCE ON THESE SEAMS', () => {
@@ -175,11 +189,9 @@ describe('NO LOW OR MEDIUM INFERENCE ON THESE SEAMS', () => {
       // seams says 'highest', so this assertion was already failing before today; it is not part of
       // the effort change. The intent is what matters: the strongest tier the project declares,
       // whatever that project calls it. Resolved from the declaration, never a literal.
-      const strongest = strongestTier();
-      expect(strongest, 'no provider set declares a ladder tier order').toBeTruthy();
-      expect(String(profiles()[role].ladder || '').toLowerCase(),
-        `${role} is on '${profiles()[role].ladder}', not the strongest declared tier '${strongest}'`)
-        .toBe(strongest);
+      const position = String(profiles()[role].ladder || '').toLowerCase();
+      const r = resolvesToStrongestEverywhere(position);
+      expect(r.ok, `${role} is on '${position}', which is not the strongest declared tier: ${r.detail}`).toBe(true);
     });
   }
 });

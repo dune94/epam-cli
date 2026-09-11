@@ -50,30 +50,36 @@ describe('a seam tier matches the work it does', () => {
   //
   // What remains below are the INVARIANTS, which hold whatever the tiers are.
 
+  // A SEAM DECLARES A POSITION (base/mid/top) in the set's declared tier order; the set owns the
+  // tier names (2026-08-15 rule, restored 2026-09-11). 'top' IS the strongest tier on every set
+  // by construction of the resolver, so the top-tier invariant is a position check.
   it('THE SEAMS THAT WRITE OR JUDGE CODE STAY AT THE TOP TIER', () => {
     const p = profiles();
     for (const s of ['story-writer', 'team-lead-review', 'code-review-cycle', 'spec-agent',
       'qa-gate:review-ranger', 'qa-gate:mutant-hunter', 'qa-gate:spec-validator']) {
-      expect(p[s].ladder, `${s} writes or judges code and must keep the top tier`).toBe('highest');
+      expect(p[s].ladder, `${s} writes or judges code and must keep the top tier`).toBe('top');
     }
     // The reviews that refuted a false roster claim on 2026-09-08 pay for themselves.
     for (const s of ['roster-review', 'project-roster-review']) {
       expect(p[s].ladder, `${s} is the falsifier that caught a fabricated project convention`)
-        .toBe('highest');
+        .toBe('top');
     }
   });
 
-  it('EVERY SEAM DECLARES A TIER, and every tier exists on BOTH stacks', () => {
+  it('EVERY SEAM DECLARES A POSITION, and every position resolves to a tier on BOTH stacks', () => {
     const p = profiles();
     const missing = Object.entries(p).filter(([, v]: any) => !v.ladder).map(([k]) => k);
     expect(missing, `these seams declare no ladder, so they resolve no model: ${missing.join(', ')}`)
       .toEqual([]);
-    const tiers = [...new Set(Object.values(p).map((v: any) => v.ladder))];
+    // eslint-disable-next-line @typescript-eslint/no-var-requires
+    const { resolveTierPosition } = require(join(process.cwd(), 'orchestrations/scripts/lib/seam-invocation.js'));
+    const positions = [...new Set(Object.values(p).map((v: any) => v.ladder))];
     for (const set of ['claude', 'codemie']) {
       const L = stackLadders(set);
       expect(L, `no ladder file for the ${set} stack`).not.toBeNull();
-      const absent = tiers.filter((t) => !L![t as string]);
-      expect(absent, `${set} defines no ladder for tier(s): ${absent.join(', ')}`).toEqual([]);
+      const order = Object.keys(L!);
+      const absent = positions.filter((pos) => !L![resolveTierPosition(pos, { EPAM_MODEL_LADDER_TIER_ORDER: order.join(' ') })]);
+      expect(absent, `${set} resolves no ladder for position(s): ${absent.join(', ')}`).toEqual([]);
     }
   });
 

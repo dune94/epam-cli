@@ -76,18 +76,46 @@ function readRegistry(file) {
  * The environment still WINS where it is set: an exported chain is an operator override and this
  * is only the fallback for a caller that exported nothing.
  */
+//
+// THE EFFECTIVE DECLARATION, NOT THE PROJECT FILE ALONE. Ladders, ladderTierOrder and
+// modelOverrides moved to the provider SET on 2026-08-25 (a ladder names models; models belong to
+// a stack), and the project file says so in its own words: `_laddersMovedToSet`. This kept
+// reading only the project file, so a caller that had not sourced model-ladders.sh found no tier
+// order and no chain — every seam "asks for ladder position X but EPAM_MODEL_LADDER_TIER_ORDER is
+// unset", on every set, for every project, whatever the seam declared. The 2026-09-01 response
+// renamed all 40 seams from positions to literal tier names, which resolved nothing either (the
+// warning still printed on every run) and put the tier vocabulary into the engine, against the
+// 2026-08-15 rule: "you cannot hard code highest or high or medium — it must be injected from
+// config." Found 2026-09-11 by snapshotting every seam's resolution with and without the exports.
+//
+// lib/llm-settings-resolve.js is the one place that answers "what settings does this project
+// run with" — engine defaults, then the active set, then the project's differences — and
+// model-ladders.sh exports from exactly that. Reading it here makes the two paths one. The
+// exported environment still wins where it is set, as before. Cached per project AND set: a
+// hot-swap in the same process must not read the previous set's ladders.
 const _ladderDeclCache = new Map();
 function projectLadderDecl(sourceEnv) {
   const dir = (sourceEnv && sourceEnv.EPAM_PROJECT_CONFIG_DIR) || '';
   if (!dir) return null;
-  if (_ladderDeclCache.has(dir)) return _ladderDeclCache.get(dir);
+  const set = String((sourceEnv && sourceEnv.EPAM_PROVIDER_SET) || process.env.EPAM_PROVIDER_SET || '');
+  const cacheKey = `${dir}\u0000${set}\u0000${String((sourceEnv && sourceEnv.EPAM_LLM_DEFAULTS_FILE) || process.env.EPAM_LLM_DEFAULTS_FILE || '')}`;
+  if (_ladderDeclCache.has(cacheKey)) return _ladderDeclCache.get(cacheKey);
   let decl = null;
   try {
-    decl = JSON.parse(fs.readFileSync(path.join(dir, 'llm-settings.json'), 'utf8'));
+    // eslint-disable-next-line global-require
+    const { resolveLlmSettings } = require('./llm-settings-resolve.js');
+    decl = resolveLlmSettings({ projectConfigDir: dir });   // what model-ladders.sh exports from
   } catch {
-    decl = null;                    // a project that declares none gets none, and says so above
+    decl = null;
   }
-  _ladderDeclCache.set(dir, decl);
+  if (!decl || typeof decl !== 'object' || !Object.keys(decl).length) {
+    try {
+      decl = JSON.parse(fs.readFileSync(path.join(dir, 'llm-settings.json'), 'utf8'));
+    } catch {
+      decl = null;                  // a project that declares none gets none, and says so above
+    }
+  }
+  _ladderDeclCache.set(cacheKey, decl);
   return decl;
 }
 
@@ -660,13 +688,17 @@ function seamInvocationEnv(agent, agentsDir, opts) {
         // own modelOverrides via lib/model-settings.js; a caller that never sourced that library
         // had no map, so the rung's budget was absent for reasons that had nothing to do with the
         // project declaring one. Built here from the same function, so the two cannot disagree.
+        // FROM THE EFFECTIVE DECLARATION — engine, set, project — the same document
+        // model-ladders.sh builds EPAM_MODEL_ITERATIONS from. Reading the project file alone here
+        // lost every override the SET declares (ac-classification on openrouter: 90 exported,
+        // nothing resolved), found 2026-09-11 by snapshotting both paths.
         const itMap = String(sourceEnv.EPAM_MODEL_ITERATIONS || (() => {
-          const dir = (sourceEnv && sourceEnv.EPAM_PROJECT_CONFIG_DIR) || '';
-          if (!dir) return '';
+          const decl = projectLadderDecl(sourceEnv);
+          if (!decl) return '';
           try {
             // eslint-disable-next-line global-require
-            const { iterationMap } = require('./model-settings.js');
-            return iterationMap(path.join(dir, 'llm-settings.json')) || '';
+            const { iterationMapFrom } = require('./model-settings.js');
+            return iterationMapFrom(decl) || '';
           } catch { return ''; }
         })());
         // AN EXPLICIT PER-MODEL BUDGET FIRST: a project that named this model on purpose is

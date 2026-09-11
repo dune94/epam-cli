@@ -43,7 +43,7 @@ function run(replies: string[]) {
 n=1; [ -f "${d}/count" ] && n=\$(( \$(cat "${d}/count") + 1 ))
 echo "\$n" > "${d}/count"
 cat > "${d}/prompt\$n.txt"
-echo "\${EPAM_MODEL:-none}" >> "${d}/models.txt"
+printf '%s\t%s\n' "\${EPAM_MODEL:-none}" "\$(head -c 60 "${d}/prompt\$n.txt" | tr '\n' ' ')" >> "${d}/models.txt"
 f="${d}/reply\$n.txt"; [ -f "\$f" ] || f="${d}/reply${replies.length}.txt"
 cat "\$f"
 `);
@@ -59,14 +59,22 @@ cat "\$f"
       AI_RUNNER_CMD: runner,
       JIRA_CODELINES: 'core',
       LOG_DIR: d, OUTPUT_DIR: d,
+      // What model-ladders.sh exports: the tier ORDER beside the chain. A seam declares a position
+      // (base/mid/top) and the order is what a position resolves against; a chain with no order is
+      // an export no real caller makes.
+      EPAM_MODEL_LADDER_TIER_ORDER: 'medium',
       EPAM_MODEL_LADDER_MEDIUM: 'model-A=model-B|model-B=model-C',
       EPAM_MODEL_LADDER_MEDIUM_START: 'model-A',
     },
   });
   const read = (f: string) => { try { return readFileSync(join(d, f), 'utf8'); } catch { return ''; } };
   return { dir: d, stdout: r.stdout || '', stderr: r.stderr || '', status: r.status,
-           calls: Number(read('count') || '0'), models: read('models.txt').trim().split('\n').filter(Boolean),
-           prompt2: read('prompt2.txt'),
+           calls: Number(read('count') || '0'),
+           // Every runner call, as [model, first 60 chars of its prompt]. The gate's retry is not the
+           // only call between attempts: a resolved seam also runs the self-heal analyst on the
+           // rejected attempt, so attempts are found by what they ASK, never by position.
+           models: read('models.txt').trim().split('\n').filter(Boolean).map((l) => l.split('\t') as [string, string]),
+           retryPrompt: (() => { for (let i = 1; i <= 8; i += 1) { const t = read(`prompt${i}.txt`); if (/YOUR PREVIOUS ANSWER WAS REJECTED/.test(t)) return t; } return ''; })(),
            cleanup: () => rmSync(d, { recursive: true, force: true }) };
 }
 
@@ -77,15 +85,18 @@ describe('ac-gate survives a malformed reply', () => {
       expect(h.calls, 'no retry fired — the call was parsed once and abandoned').toBeGreaterThan(1);
       expect(h.stdout).not.toMatch(/"verdict"\s*:\s*"unknown"/);
       // The retry must say WHAT broke, or the model has no reason to answer differently.
-      expect(h.prompt2).toMatch(/JSON|did not parse|unescaped/i);
+      expect(h.retryPrompt, 'no retry prompt was sent').not.toBe('');
+      expect(h.retryPrompt).toMatch(/JSON|did not parse|unescaped/i);
     } finally { h.cleanup(); }
   });
 
   it('CLIMBS A RUNG between attempts — a retry on the same model is the same coin flipped again', () => {
     const h = run([MALFORMED, GOOD]);
     try {
-      expect(h.models[0]).toBe('model-A');
-      expect(h.models[1], 'attempt 2 re-ran the identical model').toBe('model-B');
+      const first = h.models.find(([, p]) => /AC sufficiency gate/.test(p));
+      const retry = h.models.find(([, p]) => /YOUR PREVIOUS ANSWER WAS REJECTED/.test(p));
+      expect(first?.[0], 'the first attempt did not run on the start model').toBe('model-A');
+      expect(retry?.[0], 'attempt 2 re-ran the identical model').toBe('model-B');
     } finally { h.cleanup(); }
   });
 

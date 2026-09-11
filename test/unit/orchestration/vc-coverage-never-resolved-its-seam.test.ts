@@ -44,13 +44,26 @@ let PROJECT = '';
 beforeAll(() => { PROJECT = provisionProject(['vc-coverage']); });
 afterAll(() => { cleanupProvisioned(); });
 
-/** The tier vc-coverage actually declares, read from the registry rather than assumed. */
+/** The ladder POSITION vc-coverage actually declares, read from the registry rather than assumed. */
 const LADDER: string = (() => {
   const reg = JSON.parse(readFileSync(
     join(ROOT, 'orchestrations/agents/invocation-profiles.json'), 'utf8'));
   const p = (reg.profiles || reg)['vc-coverage'];
   return (p && p.ladder) || '';
 })();
+
+/**
+ * THE TIER THAT POSITION LANDS ON for the provisioned project — resolved by the engine's own rule
+ * against the project's effective settings (engine, set, project), which is what model-ladders.sh
+ * exports EPAM_MODEL_LADDER_<TIER> for. A seam declares a position; the set names the tier.
+ */
+function exportedTier(): string {
+  // eslint-disable-next-line @typescript-eslint/no-var-requires
+  const { resolveTierPosition } = require(join(ROOT, 'orchestrations/scripts/lib/seam-invocation.js'));
+  const tier = resolveTierPosition(LADDER, { EPAM_PROJECT_CONFIG_DIR: PROJECT });
+  if (!tier) throw new Error(`position '${LADDER}' resolves to no tier for the provisioned project`);
+  return String(tier).toUpperCase();
+}
 
 function run(env: Record<string, string>) {
   const d = mkdtempSync(join(tmpdir(), 'vcc-'));
@@ -89,7 +102,7 @@ describe('vc-coverage resolves its own seam', () => {
 
   it('RESOLVES a model from the seam when EPAM_MODEL is empty, instead of refusing', () => {
     // The ladder the project declares for that tier, exactly as the pipeline exports it.
-    const tier = LADDER.toUpperCase();
+    const tier = exportedTier();
     const h = run({
       [`EPAM_MODEL_LADDER_${tier}`]: 'model-A=model-B',
       [`EPAM_MODEL_LADDER_${tier}_START`]: 'model-A',
@@ -103,9 +116,14 @@ describe('vc-coverage resolves its own seam', () => {
     } finally { h.cleanup(); }
   });
 
-  it('STILL refuses — never substitutes — when the project genuinely declares no start model', () => {
-    // The refusal is the valuable half and must survive the fix.
-    const h = run({});
+  it('STILL refuses — never substitutes — when nothing declares a start model', () => {
+    // The refusal is the valuable half and must survive the fix. Ladders live in the provider
+    // SET since 2026-08-25, so a project that declares none inherits the set's; "nothing declares
+    // one" means the whole stack is empty: EPAM_LLM_DEFAULTS_FILE names an empty declaration,
+    // which the resolver honours as the explicit engine base and then reads no set.
+    const empty = join(mkdtempSync(join(tmpdir(), 'vcc-empty-')), 'llm-defaults.json');
+    writeFileSync(empty, '{}');
+    const h = run({ EPAM_LLM_DEFAULTS_FILE: empty });
     try {
       expect(h.out).toMatch(/no model resolved for this seam/);
       expect(h.out).toMatch(/Refusing to substitute/);
@@ -142,7 +160,7 @@ describe('vc-coverage resolves its own seam', () => {
  */
 describe('vc-coverage never passes an empty --provider', () => {
   it('OMITS the flag when no gate provider is configured', () => {
-    const tier = LADDER.toUpperCase();
+    const tier = exportedTier();
     const h = run({
       [`EPAM_MODEL_LADDER_${tier}`]: 'model-A=model-B',
       [`EPAM_MODEL_LADDER_${tier}_START`]: 'model-A',
@@ -157,7 +175,7 @@ describe('vc-coverage never passes an empty --provider', () => {
   });
 
   it('PASSES the flag when a gate provider IS configured', () => {
-    const tier = LADDER.toUpperCase();
+    const tier = exportedTier();
     const h = run({
       [`EPAM_MODEL_LADDER_${tier}`]: 'model-A=model-B',
       [`EPAM_MODEL_LADDER_${tier}_START`]: 'model-A',
@@ -180,7 +198,7 @@ describe('vc-coverage never passes an empty --provider', () => {
  */
 describe('vc-coverage runs clean', () => {
   it('emits no shell errors of its own', () => {
-    const tier = LADDER.toUpperCase();
+    const tier = exportedTier();
     const h = run({
       [`EPAM_MODEL_LADDER_${tier}`]: 'model-A=model-B',
       [`EPAM_MODEL_LADDER_${tier}_START`]: 'model-A',

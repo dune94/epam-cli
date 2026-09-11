@@ -28,5 +28,9 @@
     "__PRIOR_DIAGNOSIS_SECTION__",
     "__VERIFICATION_FAILURE__",
     "__EXISTING_AMENDMENT__"
+  ],
+  "$mayBeEmptyWhy": "__PRIOR_DIAGNOSIS_SECTION__ is absent on the FIRST deterministic-check violation, before any failure-analyst has run — claude.sh supplies it with ${_last_fa_diagnosis:+...}, which is empty by design in that state. Without this declaration engine-prompt.js threw, render_or_keep fell back to the PREVIOUS amendment, and the retry was never told what it did wrong: it repeated the same violation and HealingBroken then invoked the analyst the skip was meant to avoid. Live 2026-09-11 (openrouter 20260910T222155Z) that happened twice, at 00:58:55 and 01:02:35, both before the first healing event at 01:04:08, and never after — the timing matches the cause exactly. Only this placeholder is optional; every other value here is a real requirement.",
+  "mayBeEmpty": [
+    "__PRIOR_DIAGNOSIS_SECTION__"
   ]
 }

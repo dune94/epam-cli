@@ -1,6 +1,12 @@
 {
-  "$why": "One recording per provider set, made by the pipeline itself, that the per-seam replay test drives. A set with no recording is RED, not skipped: the gap is the finding. Paths are relative to the repository root.",
-  "openrouter": "orchestrations/cassettes/harvested-20260910T222155Z-r5",
-  "claude": "orchestrations/cassettes/metrolinx-20260908T215555Z",
+  "$why": "One recording per provider set, made by the pipeline itself, that the per-seam replay test drives. A set with no recording is RED, not skipped: the gap is the finding. Paths are relative to the repository root. Each recording names the PROJECT it was made for: the replayer renders that project's prompts and reads its config, and a test naming a project in code would tie every set to one.",
+  "openrouter": {
+    "cassette": "orchestrations/cassettes/harvested-20260910T222155Z-r5",
+    "project": "metrolinx"
+  },
+  "claude": {
+    "cassette": "orchestrations/cassettes/metrolinx-20260908T215555Z",
+    "project": "metrolinx"
+  },
   "codemie": null
 }

@@ -19,6 +19,7 @@ import { spawnSync } from 'node:child_process';
 import { mkdtempSync, mkdirSync, writeFileSync, readFileSync, readdirSync, symlinkSync, rmSync, chmodSync, existsSync } from 'node:fs';
 import { join } from 'node:path';
 import { tmpdir } from 'node:os';
+import { provisionProject, cleanupProvisioned } from '../../support/provisioned-project';
 
 const ROOT = join(__dirname, '../../../');
 const SCRIPTS = join(ROOT, 'orchestrations/scripts');
@@ -26,7 +27,7 @@ const CLAUDE_SH = join(SCRIPTS, 'claude.sh');
 const SPEC_RUNNER = join(SCRIPTS, 'spec-mode-runner.js');
 
 const dirs: string[] = [];
-afterAll(() => { for (const d of dirs) rmSync(d, { recursive: true, force: true }); });
+afterAll(() => { for (const d of dirs) rmSync(d, { recursive: true, force: true }); cleanupProvisioned(); });
 
 const lines = readFileSync(CLAUDE_SH, 'utf8').split('\n');
 
@@ -72,10 +73,22 @@ describe('every runner call in claude.sh names its seam', () => {
     return { d, scripts, dump };
   }
 
+  // The functions need SOME gate provider and SOME project to render their prompts against; which
+  // ones is not what is being tested, so both are the first the repository declares — never named.
+  const anyDeclaredSet = () => Object.keys(JSON.parse(readFileSync(join(ROOT, 'orchestrations/config/provider-sets.json'), 'utf8')).sets)[0];
+  // A project whose prompts are PROVISIONED (every template) (copied from the templates — the
+  // established fixture, test/support/provisioned-project.ts): a fresh checkout mints none, and
+  // a real project named here would tie the test to whatever that project has minted.
+  let provisioned = '';
+  const anyDeclaredProject = () => {
+    if (!provisioned) provisioned = provisionProject();
+    return provisioned;
+  };
+
   function callThroughRealFile(scripts: string, d: string, body: string) {
     const r = spawnSync('bash', ['-c', `. ${JSON.stringify(CLAUDE_SH)} >/dev/null 2>&1\nSCRIPT_DIR=${JSON.stringify(scripts)}\nLOG_DIR=${JSON.stringify(d)}\nprofiles_file=${JSON.stringify(join(ROOT, 'orchestrations/agents/profiles.json'))}\n${body}`], {
       encoding: 'utf8', timeout: 120_000, cwd: ROOT,
-      env: { ...process.env, NODE_BIN: process.execPath, ORCH_GATE_PROVIDER: 'openrouter', EPAM_PROJECT_CONFIG_DIR: join(ROOT, 'orchestrations/projects/mock3'), EPAM_COVERAGE_GATED: '0' },
+      env: { ...process.env, NODE_BIN: process.execPath, ORCH_GATE_PROVIDER: anyDeclaredSet(), EPAM_PROJECT_CONFIG_DIR: anyDeclaredProject(), EPAM_COVERAGE_GATED: '0' },
     });
     return `${r.stdout ?? ''}\n${r.stderr ?? ''}`;
   }

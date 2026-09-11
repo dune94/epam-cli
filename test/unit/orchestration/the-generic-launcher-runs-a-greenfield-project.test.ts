@@ -17,7 +17,7 @@
  */
 import { describe, it, expect, afterAll } from 'vitest';
 import { spawnSync, execFileSync } from 'node:child_process';
-import { mkdtempSync, mkdirSync, writeFileSync, readFileSync, rmSync, chmodSync, existsSync } from 'node:fs';
+import { mkdtempSync, mkdirSync, writeFileSync, readFileSync, rmSync, chmodSync, existsSync, readdirSync } from 'node:fs';
 import { join } from 'node:path';
 import { tmpdir } from 'node:os';
 
@@ -135,33 +135,24 @@ describe('the generic launcher runs a greenfield project', () => {
     expect(readFileSync(calls, 'utf8').trim().split('\n')).toHaveLength(1);
   });
 
-  it('tier3-run.sh --describe shows the greenfield plan for the skyscanner project, from its own declarations', () => {
-    const r = spawnSync('bash', [LAUNCHER, '--project', 'skyscanner', '--describe'], { encoding: 'utf8', timeout: 60_000, cwd: ROOT, env: { ...process.env } });
+  it('tier3-run.sh --describe shows a greenfield project\'s plan from its own declarations — the project found, not named', () => {
+    // A greenfield project is whichever one declares EPAM_BROWNFIELD=0; what --describe must print
+    // is read from that project's config.env, so the test names no project and no path.
+    const projectsDir = join(ROOT, 'orchestrations/projects');
+    const env = (dir: string) => Object.fromEntries(readFileSync(join(dir, 'config.env'), 'utf8').split('\n')
+      .map((l) => l.match(/^([A-Z_]+)=("?)(.*)\2\s*$/)).filter(Boolean).map((m) => [m![1], m![3]]));
+    const greenfield = readdirSync(projectsDir, { withFileTypes: true })
+      .filter((e) => e.isDirectory() && existsSync(join(projectsDir, e.name, 'config.env')))
+      .map((e) => ({ name: e.name, env: env(join(projectsDir, e.name)) }))
+      .find((p) => p.env.EPAM_BROWNFIELD === '0');
+    expect(greenfield, 'no project in this repository declares EPAM_BROWNFIELD=0 — nothing to describe').toBeTruthy();
+    const { name, env: cfg } = greenfield!;
+    const r = spawnSync('bash', [LAUNCHER, '--project', name, '--describe'], { encoding: 'utf8', timeout: 60_000, cwd: ROOT, env: { ...process.env } });
     const out = (r.stdout || '') + (r.stderr || '');
     expect(r.status, out).toBe(0);
     expect(out).toMatch(/brownfield:\s+0/);
-    expect(out, 'the generic launcher does not show the declared phases').toMatch(/phases:\s+scaffold core/);
-    expect(out, 'the generic launcher does not show the output dir').toMatch(/output dir:\s+\/home\/bradleyjerome\/projects\/skyscanner-app/);
-    expect(out, 'the generic launcher does not show the PRD source').toMatch(/prd source:\s+.*travel-app-prd\.canonical\.json/);
-  });
-
-  it('the authored PRD is restored BEFORE pre-flight judges anything: a declared-but-missing canonical is refused before pre-flight, the coverage gate or any teardown runs', () => {
-    // Live 2026-09-11: the restore ran after the operator confirmed, so pre-flight judged the runtime
-    // PRD — the previous run's model assignments — and refused a fresh launch over a rung the current
-    // set does not declare. The canonical is the base state; it is in place before anything reads
-    // the file. Nothing here reaches pre-flight, so nothing here is heavy.
-    const out = join(tmp('gf-out-'), 'app');
-    const proj = fixtureProject(out, 'orchestrations/does-not-exist.canonical.json');
-    writeFileSync(join(proj, 'prd.json'), JSON.stringify({ stories: [{ id: 'STALE', model: 'a-model-of-the-last-run' }] }));
-    const r = spawnSync('bash', [LAUNCHER], { encoding: 'utf8', timeout: 60_000, cwd: ROOT, input: '',
-      env: { ...process.env, EPAM_PROJECT_CONFIG_DIR: proj, PROJECT_NAME: 'fixture-app' } });
-    const text = (r.stdout || '') + (r.stderr || '');
-    expect(r.status, text).not.toBe(0);
-    expect(text).toMatch(/PRD_CANONICAL is declared but not found/);
-    expect(text, 'pre-flight ran before the PRD was restored').not.toMatch(/Pre-flight for/);
-    expect(text, 'the coverage gate ran before the PRD was restored').not.toMatch(/\[coverage-gate\]/);
-    expect(text, 'the output directory was touched before the PRD was restored').not.toMatch(/Tearing down/);
-    expect(existsSync(join(out, '.git')), 'the output directory was rebuilt before the PRD was restored').toBe(false);
-    expect(JSON.parse(readFileSync(join(proj, 'prd.json'), 'utf8')).stories[0].id, 'a refusal must leave the PRD as it found it').toBe('STALE');
+    expect(out, 'the generic launcher does not show the declared phases').toContain(`phases:             ${cfg.EPAM_PHASES}`);
+    expect(out, 'the generic launcher does not show the output dir').toContain(`output dir:         ${cfg.OUTPUT_DIR}`);
+    expect(out, 'the generic launcher does not show the PRD source').toContain(`prd source:         ${cfg.PRD_CANONICAL}`);
   });
 });

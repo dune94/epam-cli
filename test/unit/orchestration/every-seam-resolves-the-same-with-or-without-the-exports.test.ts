@@ -18,14 +18,19 @@
  */
 import { describe, it, expect } from 'vitest';
 import { spawnSync } from 'node:child_process';
-import { readFileSync, mkdtempSync, writeFileSync } from 'node:fs';
+import { readFileSync, mkdtempSync, writeFileSync, readdirSync, existsSync } from 'node:fs';
 import { join } from 'node:path';
 import { tmpdir } from 'node:os';
 
 const ROOT = join(__dirname, '../../../');
 const SCRIPTS = join(ROOT, 'orchestrations/scripts');
-const PROJECT = join(ROOT, 'orchestrations/projects/metrolinx');
 const sets = Object.keys(JSON.parse(readFileSync(join(ROOT, 'orchestrations/config/provider-sets.json'), 'utf8')).sets);
+// EVERY project the repository declares — derived, none named. A project is data; a test that names
+// one tests that one and certifies the rest by assumption.
+const PROJECTS = readdirSync(join(ROOT, 'orchestrations/projects'), { withFileTypes: true })
+  .filter((e) => e.isDirectory() && existsSync(join(ROOT, 'orchestrations/projects', e.name, 'config.env')))
+  .map((e) => join(ROOT, 'orchestrations/projects', e.name));
+const cases = sets.flatMap((set) => PROJECTS.map((project) => ({ set, project, name: `${set} × ${project.split('/').pop()}` })));
 
 /** One line per seam: the resolved env, in a fresh process so nothing leaks between sets. */
 const snapshotJs = `
@@ -37,7 +42,7 @@ for (const seam of Object.keys(reg.profiles).sort()) {
   process.stdout.write(seam + ' ' + JSON.stringify(Object.fromEntries(keep)) + '\\n');
 }`;
 
-function snapshot(set: string, withExports: boolean) {
+function snapshot(set: string, project: string, withExports: boolean) {
   const d = mkdtempSync(join(tmpdir(), 'seam-snap-'));
   writeFileSync(join(d, 'snap.js'), snapshotJs);
   const exports = withExports
@@ -45,17 +50,17 @@ function snapshot(set: string, withExports: boolean) {
     : '';
   const r = spawnSync('bash', ['-c', `${exports} exec "$NODE_BIN" ${JSON.stringify(join(d, 'snap.js'))}`], {
     encoding: 'utf8', timeout: 60_000, cwd: ROOT,
-    env: { ...process.env, NODE_BIN: process.execPath, EPAM_PROVIDER_SET: set, EPAM_PROJECT_CONFIG_DIR: PROJECT },
+    env: { ...process.env, NODE_BIN: process.execPath, EPAM_PROVIDER_SET: set, EPAM_PROJECT_CONFIG_DIR: project },
   });
   return { out: (r.stdout || '').trim(), err: r.stderr || '' };
 }
 
 describe('every seam resolves the same with or without the exports', () => {
-  it('there are sets to check', () => { expect(sets.length).toBeGreaterThan(1); });
+  it('there are sets and projects to check', () => { expect(sets.length).toBeGreaterThan(1); expect(PROJECTS.length).toBeGreaterThan(0); });
 
-  it.each(sets)('on the %s set: nothing exported resolves exactly what model-ladders.sh exports, and every seam has a model', (set) => {
-    const bare = snapshot(set, false);
-    const exported = snapshot(set, true);
+  it.each(cases)('on $name: nothing exported resolves exactly what model-ladders.sh exports, and every seam has a model', ({ set, project }) => {
+    const bare = snapshot(set, project, false);
+    const exported = snapshot(set, project, true);
     expect(exported.out.split('\n').length, 'the exported snapshot is empty').toBeGreaterThan(20);
     expect(exported.out.split('\n').filter((l) => !/"EPAM_MODEL":/.test(l)), `seams with no model even after the exports (${set})`).toEqual([]);
     expect(bare.out.split('\n').filter((l) => !/"EPAM_MODEL":/.test(l)), `seams with no model without the exports (${set}):\n${bare.err.slice(-600)}`).toEqual([]);

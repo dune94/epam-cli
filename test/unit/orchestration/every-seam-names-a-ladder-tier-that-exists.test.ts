@@ -23,13 +23,16 @@
  * start model — with nothing exported into the environment.
  */
 import { describe, it, expect } from 'vitest';
-import { readFileSync, readdirSync } from 'node:fs';
+import { readFileSync, readdirSync, existsSync } from 'node:fs';
 import { join } from 'node:path';
 
 const REPO = process.cwd();
 const CONFIG = join(REPO, 'orchestrations/config');
 const REGISTRY = join(REPO, 'orchestrations/agents/invocation-profiles.json');
-const PROJECT = join(REPO, 'orchestrations/projects/metrolinx');
+// Every project the repository declares, derived — a position must land on a tier for each.
+const PROJECTS = readdirSync(join(REPO, 'orchestrations/projects'), { withFileTypes: true })
+  .filter((e) => e.isDirectory() && existsSync(join(REPO, 'orchestrations/projects', e.name, 'config.env')))
+  .map((e) => join(REPO, 'orchestrations/projects', e.name));
 
 const registry = JSON.parse(readFileSync(REGISTRY, 'utf8'));
 const profiles = registry.profiles || registry;
@@ -42,8 +45,9 @@ const sets = JSON.parse(readFileSync(join(CONFIG, 'provider-sets.json'), 'utf8')
 const { resolveTierPosition } = require(join(REPO, 'orchestrations/scripts/lib/seam-invocation.js'));
 
 describe('every seam names a ladder position that resolves in every provider set', () => {
-  it('there are seams, positions and provider sets to check — otherwise this proves nothing', () => {
+  it('there are seams, positions, provider sets and projects to check — otherwise this proves nothing', () => {
     expect(seams.length, 'no seams found in the registry').toBeGreaterThan(20);
+    expect(PROJECTS.length, 'no projects declared').toBeGreaterThan(0);
     expect(positions.length, 'the registry names no positions').toBeGreaterThan(1);
     expect(Object.keys(sets).length, 'no provider sets found').toBeGreaterThan(1);
   });
@@ -57,14 +61,17 @@ describe('every seam names a ladder position that resolves in every provider set
     const misses: string[] = [];
     for (const [set, cfg] of Object.entries(sets)) {
       const decl = JSON.parse(readFileSync(join(CONFIG, cfg.settingsFile), 'utf8'));
-      const env = { EPAM_PROJECT_CONFIG_DIR: PROJECT, EPAM_PROVIDER_SET: set };
       const prev = process.env.EPAM_PROVIDER_SET; process.env.EPAM_PROVIDER_SET = set;
       try {
-        for (const [name, p] of seams) {
-          if (!p.ladder) continue;
-          const tier = resolveTierPosition(p.ladder, env);
-          if (!tier) { misses.push(`${set}: ${name} position '${p.ladder}' resolves to no tier`); continue; }
-          if (!decl.ladders?.[tier]?.startModel) misses.push(`${set}: ${name} -> '${tier}' declares no startModel`);
+        for (const project of PROJECTS) {
+          const env = { EPAM_PROJECT_CONFIG_DIR: project, EPAM_PROVIDER_SET: set };
+          const who = `${set}/${project.split('/').pop()}`;
+          for (const [name, p] of seams) {
+            if (!p.ladder) continue;
+            const tier = resolveTierPosition(p.ladder, env);
+            if (!tier) { misses.push(`${who}: ${name} position '${p.ladder}' resolves to no tier`); continue; }
+            if (!decl.ladders?.[tier]?.startModel) misses.push(`${who}: ${name} -> '${tier}' declares no startModel`);
+          }
         }
       } finally { if (prev === undefined) delete process.env.EPAM_PROVIDER_SET; else process.env.EPAM_PROVIDER_SET = prev; }
     }

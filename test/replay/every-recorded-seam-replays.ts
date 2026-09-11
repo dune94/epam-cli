@@ -68,8 +68,11 @@ function repoCli(): string {
 
 export function describeSet(set: string) {
   const declared = JSON.parse(readFileSync(RECORDINGS, 'utf8'));
-  const rel = declared[set] as string | null;
+  const entry = declared[set] as { cassette: string; project: string } | null;
+  const rel = entry ? entry.cassette : null;
   const cassette = rel ? join(ROOT, rel) : null;
+  // The project the recording was made for — declared beside the recording, never named here.
+  const projectDir = entry ? join(ROOT, 'orchestrations/projects', entry.project) : '';
 
   describe(`every seam recorded on the ${set} set replays`, () => {
     it(`a recording exists for the ${set} set — a set nobody has recorded cannot be rehearsed`, () => {
@@ -143,7 +146,7 @@ export function describeSet(set: string) {
               // THE REPOSITORY'S OWN BUILD. `epam` on PATH is a shim to whichever install was made last;
               // a test of this tree must run this tree's dist, or it tests a published version.
               EPAM_CLI: repoCli(),
-              EPAM_PROJECT_CONFIG_DIR: join(ROOT, 'orchestrations/projects/metrolinx'),
+              EPAM_PROJECT_CONFIG_DIR: projectDir,
             },
           });
           const out = (r.stdout || '') + (r.stderr || '');

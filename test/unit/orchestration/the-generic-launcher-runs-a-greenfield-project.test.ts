@@ -144,4 +144,24 @@ describe('the generic launcher runs a greenfield project', () => {
     expect(out, 'the generic launcher does not show the output dir').toMatch(/output dir:\s+\/home\/bradleyjerome\/projects\/skyscanner-app/);
     expect(out, 'the generic launcher does not show the PRD source').toMatch(/prd source:\s+.*travel-app-prd\.canonical\.json/);
   });
+
+  it('the authored PRD is restored BEFORE pre-flight judges anything: a declared-but-missing canonical is refused before pre-flight, the coverage gate or any teardown runs', () => {
+    // Live 2026-09-11: the restore ran after the operator confirmed, so pre-flight judged the runtime
+    // PRD — the previous run's model assignments — and refused a fresh launch over a rung the current
+    // set does not declare. The canonical is the base state; it is in place before anything reads
+    // the file. Nothing here reaches pre-flight, so nothing here is heavy.
+    const out = join(tmp('gf-out-'), 'app');
+    const proj = fixtureProject(out, 'orchestrations/does-not-exist.canonical.json');
+    writeFileSync(join(proj, 'prd.json'), JSON.stringify({ stories: [{ id: 'STALE', model: 'a-model-of-the-last-run' }] }));
+    const r = spawnSync('bash', [LAUNCHER], { encoding: 'utf8', timeout: 60_000, cwd: ROOT, input: '',
+      env: { ...process.env, EPAM_PROJECT_CONFIG_DIR: proj, PROJECT_NAME: 'fixture-app' } });
+    const text = (r.stdout || '') + (r.stderr || '');
+    expect(r.status, text).not.toBe(0);
+    expect(text).toMatch(/PRD_CANONICAL is declared but not found/);
+    expect(text, 'pre-flight ran before the PRD was restored').not.toMatch(/Pre-flight for/);
+    expect(text, 'the coverage gate ran before the PRD was restored').not.toMatch(/\[coverage-gate\]/);
+    expect(text, 'the output directory was touched before the PRD was restored').not.toMatch(/Tearing down/);
+    expect(existsSync(join(out, '.git')), 'the output directory was rebuilt before the PRD was restored').toBe(false);
+    expect(JSON.parse(readFileSync(join(proj, 'prd.json'), 'utf8')).stories[0].id, 'a refusal must leave the PRD as it found it').toBe('STALE');
+  });
 });

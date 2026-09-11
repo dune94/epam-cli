@@ -141,13 +141,20 @@ if [ "$DESCRIBE" = "1" ]; then
   exit 0
 fi
 
-[ -f "$PRD_FILE" ] || fail "no PRD at $PRD_FILE"
 if [ "$GREENFIELD" = "1" ]; then
   # Half a declaration is a refusal, not a guess: nothing here decides where a codeline is built
   # or what phases a project runs.
   [ -n "${OUTPUT_DIR:-}" ] || fail "greenfield project '$PROJECT_NAME' declares no OUTPUT_DIR — nothing says where the codeline is built"
   [ -n "${EPAM_PHASES:-}" ] || fail "greenfield project '$PROJECT_NAME' declares no EPAM_PHASES — nothing says what to run"
+  # THE AUTHORED PRD IS WHAT PRE-FLIGHT JUDGES. The runtime PRD carries whatever the previous run
+  # left in it — model assignments among them — and pre-flight refused a fresh launch over a stale
+  # rung on a set that no longer declares it. Restoring the canonical is not a run action: it is the
+  # base state, and it happens before anything reads the file.
+  if [ -n "${PRD_CANONICAL:-}" ]; then
+    greenfield_restore_prd "$PRD_CANONICAL" "$PRD_FILE" "$REPO_ROOT"
+  fi
 fi
+[ -f "$PRD_FILE" ] || fail "no PRD at $PRD_FILE"
 
 # THE WHOLE MAP, BEFORE ANY MONEY MOVES — now that the project's policy is the one being read.
 # A paid launcher measures EVERY stage against the project's threshold here, and only then declares
@@ -204,9 +211,6 @@ if [ "$GREENFIELD" = "1" ]; then
   greenfield_prepare_output_dir "$OUTPUT_DIR" "$PROJECT_DIR" "$PROJECT_NAME"
   export OUTPUT_DIR
   export PROJECT_ROOT="$OUTPUT_DIR"
-  if [ -n "${PRD_CANONICAL:-}" ]; then
-    greenfield_restore_prd "$PRD_CANONICAL" "$PRD_FILE" "$REPO_ROOT"
-  fi
 fi
 
 # shellcheck source=lib/pre-run-reset-gate.sh

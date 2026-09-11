@@ -291,6 +291,29 @@ _load_timeout_config
 # not, and why a Langfuse trace is not one.
 # shellcheck source=lib/cassette-archive.sh
 [ -f "$SCRIPT_DIR/lib/cassette-archive.sh" ] && source "$SCRIPT_DIR/lib/cassette-archive.sh"
+
+# REGISTERED HERE, NOT IN cleanup() — BECAUSE bash INSTALLS A HANDLER WHEN IT REACHES IT.
+#
+# The export used to ride along inside cleanup(), which is registered at the foot of this file.
+# A run only ever had a cassette handler installed if it survived that far. The first `exit` in
+# this script is thousands of lines earlier, so ingest, codeline discovery, spec-mode, the mint
+# and roster derivation all failed into a trap that did not yet include the export.
+#
+# Measured 2026-09-11 by the free mockserver rehearsal: roster derivation failed, the write
+# perimeter released (registered at the top of this file, so it was installed), cleanup never
+# ran, and the run left nothing to replay. An early structural failure is exactly the run worth
+# replaying, and it was the one guaranteed to leave no recording.
+#
+# Registered beside the recorder it uses: reaching the source line is the only precondition.
+_epam_export_cassette() {
+    declare -F export_run_cassette >/dev/null 2>&1 || return 0
+    local _cas_run_id="${ORCH_RUN_ID:-${EPAM_RUN_ID:-${RUN_NUMBER:-}}}"
+    [ -n "$_cas_run_id" ] || return 0
+    export_run_cassette "$_cas_run_id" \
+        "$(basename "${EPAM_PROJECT_CONFIG_DIR:-project}")" \
+        "${EPAM_CASSETTE_DIR:-${AUTOMATION_DIR:-$SCRIPT_DIR/..}/cassettes}" || true
+}
+add_exit_handler _epam_export_cassette
 # What a QA gate is SHOWN decides what it can conclude — see lib/qa-gate-evidence.sh.
 # shellcheck source=lib/qa-gate-evidence.sh
 [ -f "$SCRIPT_DIR/lib/qa-gate-evidence.sh" ] && source "$SCRIPT_DIR/lib/qa-gate-evidence.sh"
@@ -4145,14 +4168,8 @@ cleanup() {
     #
     # NOT COVERED HERE: `kill -9` and an OOM kill bypass every trap. Only a harvest that does not
     # depend on this process can cover those.
-    if declare -F export_run_cassette >/dev/null 2>&1; then
-        _cas_run_id="${ORCH_RUN_ID:-${EPAM_RUN_ID:-${RUN_NUMBER:-}}}"
-        if [ -n "$_cas_run_id" ]; then
-            export_run_cassette "$_cas_run_id" \
-                "$(basename "${EPAM_PROJECT_CONFIG_DIR:-project}")" \
-                "${EPAM_CASSETTE_DIR:-$AUTOMATION_DIR/cassettes}" || true
-        fi
-    fi
+    # The cassette export is registered beside lib/cassette-archive.sh, near the top of this
+    # file, so that a run failing before cleanup() is even registered still leaves a recording.
     stop_control_plane
     stop_dashboards_watch
     if [ "$SKIP_CLEANUP" = "true" ]; then

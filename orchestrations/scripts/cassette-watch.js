@@ -39,9 +39,22 @@ function declaredRunSessionPattern() {
 }
 
 /** The sessions Langfuse currently holds, newest-first as the exporter lists them. */
+/**
+ * AN EXPORTER THAT CANNOT LIST IS NOT AN EMPTY LANGFUSE.
+ *
+ * This returned [] on a non-zero exit, so "no credentials", "Langfuse is down" and "there are
+ * genuinely no sessions" were the same answer — and the sweep only logs when it harvests or fails,
+ * so the watcher reported nothing at all. That is how it ran 12 hours dead with a log saying
+ * "sweeping every 60s". The failure is now carried out, and the caller announces it.
+ */
 function listSessions(node, exporter) {
   const r = spawnSync(node, [exporter, '--list'], { encoding: 'utf8', timeout: 120_000 });
-  if (r.status !== 0) return [];
+  if (r.status !== 0) {
+    const why = ((r.stderr || '') + (r.stdout || '')).trim().split('\n').pop() || `exit ${r.status}`;
+    listSessions.lastError = why;
+    return null;
+  }
+  listSessions.lastError = null;
   return (r.stdout || '')
     .split('\n')
     .map((l) => l.split('\t')[0].trim())
@@ -82,7 +95,12 @@ function harvestOnce({ cassetteDir, exporter, node, runSessionPattern }) {
   }
   const isRun = new RegExp(_pat);
 
-  for (const session of listSessions(_node, _exporter)) {
+  const sessions = listSessions(_node, _exporter);
+  if (sessions === null) {
+    return { harvested, skipped, failed, refused: false, unreadable: true,
+             reason: listSessions.lastError || 'the exporter could not list sessions' };
+  }
+  for (const session of sessions) {
     if (!isRun.test(session)) continue;
     const dest = path.join(cassetteDir, partialName(session));
 
@@ -137,6 +155,11 @@ if (require.main === module) {
       if (r.refused) {
         process.stderr.write('[cassette-watch] config/observability.json declares no runSession.idPattern'
           + ' — refusing to sweep rather than archiving every probe\n');
+        return;
+      }
+      if (r.unreadable) {
+        process.stderr.write('[cassette-watch] CANNOT READ LANGFUSE — nothing is being harvested: '
+          + r.reason + '\n');
         return;
       }
       if (r.harvested.length || r.failed.length) {

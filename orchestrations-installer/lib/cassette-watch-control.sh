@@ -30,6 +30,22 @@ start_cassette_watch() {
 
     ( exec </dev/null >>"$_log" 2>&1
       export EPAM_CASSETTE_DIR="${EPAM_CASSETTE_DIR:-$_root/orchestrations/cassettes}"
+      # THE CREDENTIALS ARE HANDED OVER HERE, BECAUSE NOTHING ELSE WAS HANDING THEM OVER.
+      #
+      # This block exported EPAM_CASSETTE_DIR and nothing else, while the header above claimed both
+      # it and the Langfuse keys "come from the install's own environment". They did not:
+      # pipeline-services.sh is the only caller and it never loads the install's .env, so no
+      # LANGFUSE_ variable was in scope at spawn time. Live on pipeline-tests-49, 2026-09-11: the
+      # watcher had been up 12 hours with ZERO LANGFUSE_ variables in /proc/<pid>/environ, its
+      # --list call exited non-zero every sweep, and a 154-trace run sat unharvested in Langfuse.
+      #
+      # Read through the shared loader rather than `source`, so a .env line that is not an
+      # assignment cannot execute, and an operator's exported value still wins.
+      if [ -f "$_root/orchestrations/scripts/lib/env-file.sh" ]; then
+          . "$_root/orchestrations/scripts/lib/env-file.sh"
+          load_env_file_safe "$_root/.env" keep-existing
+      fi
+      export LANGFUSE_PUBLIC_KEY LANGFUSE_SECRET_KEY LANGFUSE_BASE_URL
       exec $_daemonize "${NODE_BIN:-node}" "$_script" "${EPAM_CASSETTE_WATCH_INTERVAL:-60}" ) &
     echo $! > "$_pidfile"
     sleep 0.3

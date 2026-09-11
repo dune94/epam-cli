@@ -291,7 +291,15 @@ describe.skipIf(!RUN_REAL)('Full mock brownfield pipeline — REAL Jira ingest +
       // The story shape is mock3's own, with this run's id: invented fields would be a fixture
       // asserting my assumptions rather than the producer's values.
       const canonicalPrd = JSON.parse(
-        readFileSync(join(REPO_ROOT, 'orchestrations/projects/mock3/prd.json'), 'utf8'));
+      //
+      // READ FROM THE AUTHORED INPUT, NOT THE RUNTIME PRD. prd.json is gitignored and rewritten
+      // by pre-run-reset every launch, so it exists only on a machine where some earlier run
+      // left it behind — a fresh clone, and every fresh install.sh --dest, died here before
+      // MockServer was ever touched, which made the one confirmation path that costs nothing
+      // the one that needed a prior run to exist. pre-run-reset names the base state in its own
+      // words: "its authored input IS the base state". That file is tracked, always present,
+      // and carries the same story shape.
+        readFileSync(join(REPO_ROOT, 'orchestrations/projects/mock3/prd.authored.json'), 'utf8'));
       const mockPrdPath = join(codelineRoot, '..', 'mock-expectations-prd.json');
       writeFileSync(mockPrdPath, JSON.stringify({
         ...canonicalPrd,

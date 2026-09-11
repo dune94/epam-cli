@@ -163,23 +163,6 @@ fi
 # shellcheck source=lib/stage-coverage-gate.sh
 [ -f "$_scg_lib" ] && . "$_scg_lib" && require_all_stage_coverage || exit 1
 
-# ── Pre-flight, before anything is spent ──────────────────────────────────────
-info "Pre-flight for '$PROJECT_NAME'..."
-# PASS WHAT IT ASKS FOR. Called bare, preflight-check.sh reports failures that are about the
-# INVOCATION rather than the environment — "No --runner specified", "PRD_FILE is unset", "No --prd
-# specified" — so this launcher could never pass its own gate and refused every launch. It knows
-# all three values; withholding them turned a real environment check into a permanent no.
-bash "$SCRIPT_DIR/preflight-check.sh" \
-    --runner "run-agent-orchestration.sh" \
-    --prd "$PRD_FILE" \
-    --project-config "$PROJECT_DIR" \
-    || fail "pre-flight failed — not launching"
-# NO PRD-INTEGRITY GATE HERE. I added one and it blocked every authored PRD, because it checks
-# fields LATER STEPS populate: project.outputDir comes from scope resolution, aiProvider from the
-# PRD model coordinator, and the scaffold phase from the mint. No working launcher runs this gate
-# at launch — it is invoked with --phase from inside the pipeline, after those steps. Running it
-# here was a deviation that turned a healthy project into a refusal.
-
 # ── Confirm ───────────────────────────────────────────────────────────────────
 # Every launch is approved. A run writes to client repositories and spends money; a launcher that
 # starts without a human saying so is the one that starts by accident.
@@ -216,6 +199,31 @@ fi
 # shellcheck source=lib/pre-run-reset-gate.sh
 . "$(dirname "$(readlink -f "${BASH_SOURCE[0]}")")/lib/pre-run-reset-gate.sh"
 pre_run_reset_or_abort --prd "$PRD_FILE"
+
+# ── Pre-flight, after the reset and before anything is spent ──────────────────
+# THE RESET FIRST, THEN THE JUDGEMENT — the order the proven launcher (tier3-metrolinx-run.sh,
+# four green paid runs) uses. Pre-flight's "Self-heal observability" check asks nginx for
+# /logs/healing-events.jsonl, a file pre-run-reset.sh creates and a mount pre-run-reset.sh
+# writes into the compose override. Run before the reset, on a fresh install that has never had
+# a run, there is nothing to serve, so the check refused every first launch with a hint to run
+# the very step this launcher had not reached yet. Found 2026-09-11 on a fresh regintel install
+# at v2.0.24. The reset is a return to base state, not a spend, and the operator has already
+# said yes above; a pre-flight refusal still stops the launch before any model is called.
+info "Pre-flight for '$PROJECT_NAME'..."
+# PASS WHAT IT ASKS FOR. Called bare, preflight-check.sh reports failures that are about the
+# INVOCATION rather than the environment — "No --runner specified", "PRD_FILE is unset", "No --prd
+# specified" — so this launcher could never pass its own gate and refused every launch. It knows
+# all three values; withholding them turned a real environment check into a permanent no.
+bash "$SCRIPT_DIR/preflight-check.sh" \
+    --runner "run-agent-orchestration.sh" \
+    --prd "$PRD_FILE" \
+    --project-config "$PROJECT_DIR" \
+    || fail "pre-flight failed — not launching"
+# NO PRD-INTEGRITY GATE HERE. I added one and it blocked every authored PRD, because it checks
+# fields LATER STEPS populate: project.outputDir comes from scope resolution, aiProvider from the
+# PRD model coordinator, and the scaffold phase from the mint. No working launcher runs this gate
+# at launch — it is invoked with --phase from inside the pipeline, after those steps. Running it
+# here was a deviation that turned a healthy project into a refusal.
 
 # ── Run ───────────────────────────────────────────────────────────────────────
 # The orchestrator owns codeline routing: it resolves scope when the project declared none, counts

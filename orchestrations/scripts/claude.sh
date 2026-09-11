@@ -357,6 +357,14 @@ GIT_WORK_ROOT="${GIT_WORK_ROOT:-$PROJECT_ROOT}"
 # environment; needed here by validate_mid_execution_splits and
 # wait_if_paused (lib/story-guards.sh) for worktree lanes.
 AI_RUNNER_CMD="${AI_RUNNER_CMD:-$SCRIPT_DIR/ai-run.sh}"
+# WHICH SEAM THE STORY WRITER IS — declared ONCE. Every other seam names itself at its call
+# (lib/orch-prompt.sh: "NAME THE AGENT AT THE CALL"); the writer never did, because it invokes the
+# runner directly and the anonymous-agent guard only watches callers of the hub. So the recorder
+# labelled its turns with whatever EPAM_AGENT_NAME the child inherited: `prompt-review` on
+# 2026-09-09, the bare story id on 2026-09-10 — 232 turns no replayer or mock loader could find by
+# seam. Passed as an env prefix at each runner invocation and at the replay delegate, never
+# exported into this shell, so nothing lingers into the seams that follow the writer.
+STORY_WRITER_SEAM="story-writer"
 # Replay lives in ONE place (lib/llm-handler.sh). This file carries a SECOND provider dispatch
 # that never reaches it — see lib/replay-delegate.sh for the rehearsal that proved it.
 # shellcheck source=lib/replay-delegate.sh
@@ -9605,7 +9613,7 @@ implement_story() {
     # ai-run.sh, so a rehearsal set EPAM_REPLAY_CASSETTE_DIR and the writer called claude anyway —
     # five attempts, ladder climbed to opus-5, "REHEARSAL: replaying" printed zero times.
     # Delegated, never reimplemented: llm-handler.sh owns replay and keeps owning it.
-    if replay_delegate "$prompt" "$json_result_file" "$output_file" "${STORY_MODEL:-}"; then
+    if EPAM_AGENT_NAME="${STORY_WRITER_SEAM}" EPAM_STORY_ID="${story_id}" replay_delegate "$prompt" "$json_result_file" "$output_file" "${STORY_MODEL:-}"; then
         invoke_success=true
     else
     case "$STORY_PROVIDER" in
@@ -10360,7 +10368,7 @@ $_kb_section"
                 ;;
             codemie-claude)
                 # codemie-claude: same invocation pattern as claude — --print --output-format json
-                if echo "$prompt" | "${_timeout_prefix[@]}" codemie-claude --print --output-format json \
+                if echo "$prompt" | EPAM_AGENT_NAME="${STORY_WRITER_SEAM}" EPAM_STORY_ID="${story_id}" "${_timeout_prefix[@]}" codemie-claude --print --output-format json \
                         "${model_flag[@]}" "${RUNNER_FLAGS[@]}" "${effective_permissions[@]}" \
                         2>>"$output_file" > "$json_result_file"; then
                     invoke_success=true
@@ -10625,6 +10633,7 @@ $_kb_section"
                 if echo "$prompt" | \
                         EPAM_DANGEROUS_SKIP_APPROVAL=1 \
                         EPAM_AGENT_ROLE="${_story_agent_role}" \
+                        EPAM_AGENT_NAME="${STORY_WRITER_SEAM}" \
                         EPAM_STORY_ID="${story_id}" \
                         EPAM_ACTIVITY_LOG_DIR="${LOG_DIR}" \
                         EPAM_USAGE_PROGRESS_FILE="${LOG_DIR}/usage-progress-${story_id}.json" \
@@ -10694,7 +10703,7 @@ $_kb_section"
                         invoke_success=true
                     fi
                 else
-                    if echo "$prompt" | "${_timeout_prefix[@]}" "$CLAUDE_CMD" --print --output-format json \
+                    if echo "$prompt" | EPAM_AGENT_NAME="${STORY_WRITER_SEAM}" EPAM_STORY_ID="${story_id}" "${_timeout_prefix[@]}" "$CLAUDE_CMD" --print --output-format json \
                             "${model_flag[@]}" "${RUNNER_FLAGS[@]}" "${effective_permissions[@]}" \
                             2>>"$output_file" > "$json_result_file"; then
                         invoke_success=true
@@ -10724,7 +10733,7 @@ $_kb_section"
                         invoke_success=true
                     fi
                 else
-                    if echo "$prompt" | "${_timeout_prefix[@]}" "$CLAUDE_CMD" --print --output-format json \
+                    if echo "$prompt" | EPAM_AGENT_NAME="${STORY_WRITER_SEAM}" EPAM_STORY_ID="${story_id}" "${_timeout_prefix[@]}" "$CLAUDE_CMD" --print --output-format json \
                             "${model_flag[@]}" "${RUNNER_FLAGS[@]}" "${effective_permissions[@]}" \
                             2>>"$output_file" > "$json_result_file"; then
                         invoke_success=true

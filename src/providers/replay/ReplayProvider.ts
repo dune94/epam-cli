@@ -121,11 +121,21 @@ export class ReplayProvider implements LLMProvider {
    * month's failures looked — so it is replayed as an empty end_turn rather than being treated as
    * a missing recording.
    */
-  private static toResponse(turn: RecordedTurn): ProviderResponse {
+  private static toResponse(turn: RecordedTurn, offered: Set<string>): ProviderResponse {
     const content: ContentPart[] = [];
     if (turn.text) content.push({ type: 'text', text: turn.text });
 
-    const calls = Array.isArray(turn.toolCalls) ? turn.toolCalls : [];
+    // A PROVIDER CANNOT CALL A TOOL THE REQUEST DID NOT OFFER, AND NEITHER CAN A REPLAY.
+    //
+    // The recorder derives toolCalls from what the model emitted. Under `--no-tools` a model
+    // that still writes call markup (MiniMax-M3 does — the reason --no-tools exists) has that
+    // markup recorded as toolCalls, while live it was TEXT the loop never executed. Replayed as
+    // real tool_use blocks, the loop had no such tool, judged the turn a failure, and its fix
+    // loop drew extra turns the recording never had: prd-change-reviewer, 3 recorded, 4 asked.
+    // Found by the per-seam replay test 2026-09-11. When the request names its tools, only
+    // calls to those are replayed as calls; the rest stay in the text where they were.
+    const recorded = Array.isArray(turn.toolCalls) ? turn.toolCalls : [];
+    const calls = recorded.filter((c) => offered.has(String(c.name || '')));
     calls.forEach((c, i) => {
       content.push({
         type: 'tool_use',
@@ -152,8 +162,12 @@ export class ReplayProvider implements LLMProvider {
     };
   }
 
-  async complete(_request: ProviderRequest): Promise<ProviderResponse> {
-    return ReplayProvider.toResponse(this.nextTurn());
+  /** The tools this request offers. A request that offers none — `--no-tools` — offers none. */
+  private static offeredTools(request: ProviderRequest): Set<string> {
+    return new Set((Array.isArray(request.tools) ? request.tools : []).map((t) => t.name));
+  }
+  async complete(request: ProviderRequest): Promise<ProviderResponse> {
+    return ReplayProvider.toResponse(this.nextTurn(), ReplayProvider.offeredTools(request));
   }
 
   /**

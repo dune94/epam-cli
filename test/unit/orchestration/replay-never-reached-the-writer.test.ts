@@ -112,7 +112,7 @@ describe("claude.sh's second dispatch", () => {
 
   it('DELEGATES before it dispatches — an unreached guard is this same defect again', () => {
     const lines = src().split('\n');
-    const guard = lines.findIndex((l) => l.includes('if replay_delegate "$prompt"'));
+    const guard = lines.findIndex((l) => /^\s*if (?:[A-Z_]+=\S+ )*replay_delegate "\$prompt"/.test(l));
     const dispatch = lines.findIndex((l) => l.trim() === 'case "$STORY_PROVIDER" in');
     expect(guard, 'claude.sh does not call replay_delegate — the writer bypasses replay again')
       .toBeGreaterThan(-1);

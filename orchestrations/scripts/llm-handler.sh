@@ -490,6 +490,13 @@ if [ -n "${EPAM_REPLAY_CASSETTE_DIR:-}" ]; then
   fi
   providers=("replay")
   AI_PROVIDER="replay"; export AI_PROVIDER
+  # A REPLAY IS ONE ORDERED SEQUENCE, SO IT GETS ONE READER. The epam CLI's RalphWiggumLoop runs
+  # three fix strategies concurrently; under replay all three drew from one seam's cursor, the
+  # turns went to whichever asked first, and the seam ran off the end of its recording ("has been
+  # called N times and the recorded run called it M"). Found by the per-seam replay test on
+  # 2026-09-11, on code-graph-detective and prd-change-reviewer — the seams whose every recorded
+  # turn carries tool calls. Same rule the e2e harness states for parallel lanes.
+  EPAM_RALPH_WIGGUM_AGENTS=1; export EPAM_RALPH_WIGGUM_AGENTS
   # The FALLBACK CHAIN IS DROPPED DELIBERATELY. A fallback exists so a failing provider is retried
   # on a paid one, which is exactly what must not happen here: a replay that diverges from its
   # recording is a finding, and falling back would convert that finding into a bill.

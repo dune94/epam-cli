@@ -24,12 +24,14 @@
 
 
 # A launcher decides what a run costs. It does not get to do that untested.
+#
+# THE PROJECT MUST BE KNOWN BEFORE THE GATE READS ITS POLICY. The coverage gate resolves
+# thresholdPercent and blocker from EPAM_PROJECT_CONFIG_DIR. It ran here, at the top of the file,
+# before the project was resolved below — so it always read the repository default instead of the
+# project's own declaration, and refused `--describe`, which spends nothing and exists so this
+# launcher can be tested without launching. Same defect a project-specific launcher already fixed for
+# itself. The gate now runs after the project is loaded and only when a run will follow.
 _scg_lib="$(cd "$(dirname "${BASH_SOURCE[0]}")" && pwd)/lib/stage-coverage-gate.sh"
-# shellcheck source=/dev/null
-# THE WHOLE MAP, BEFORE ANY MONEY MOVES. A paid launcher measures EVERY stage against the project's
-# threshold here, and only then declares the run gated — which is what turns on the per-stage gates
-# for the rest of the run. Failing here costs nothing; failing mid-run costs everything spent so far.
-[ -f "$_scg_lib" ] && . "$_scg_lib" && require_all_stage_coverage || exit 1
 
 set -euo pipefail
 
@@ -100,8 +102,24 @@ load_project_env "$PROJECT_DIR" preserve || exit 1
 export EPAM_PROJECT_CONFIG_DIR="$PROJECT_DIR"
 export PROJECT_NAME
 
-# A project may name its own PRD; otherwise it is the one beside its config.
-export PRD_FILE="${PRD_FILE:-$PROJECT_DIR/prd.json}"
+# A project may name its own PRD; otherwise it is the one beside its config. A declared path may be
+# repo-relative — resolved here, once.
+PRD_FILE="${PRD_FILE:-$PROJECT_DIR/prd.json}"
+case "$PRD_FILE" in /*) ;; *) PRD_FILE="$REPO_ROOT/$PRD_FILE" ;; esac
+export PRD_FILE
+
+# GREENFIELD IS A DECLARATION, NOT A LAUNCHER. A project that declares EPAM_BROWNFIELD=0 gets the
+# lifecycle in lib/greenfield-lifecycle.sh: output directory rebuilt, PRD restored from the authored
+# canonical, declared phases run in order. That lifecycle used to exist only inside one project's
+# own launcher, with the project named by hand, so a second greenfield project (2026-09-11) was
+# data that nothing could launch. A project that declares nothing, and every brownfield project,
+# takes the path below this block unchanged.
+GREENFIELD=0
+[ "${EPAM_BROWNFIELD:-}" = "0" ] && GREENFIELD=1
+if [ "$GREENFIELD" = "1" ]; then
+  # shellcheck source=lib/greenfield-lifecycle.sh
+  . "$SCRIPT_DIR/lib/greenfield-lifecycle.sh" || fail "lib/greenfield-lifecycle.sh did not load"
+fi
 
 # ── Describe and stop ─────────────────────────────────────────────────────────
 # A launcher that can only be exercised by launching cannot be tested, and an untested launcher is
@@ -115,10 +133,28 @@ if [ "$DESCRIBE" = "1" ]; then
   echo "brownfield:         ${EPAM_BROWNFIELD:-0}"
   echo "jira pipeline:      ${JIRA_PIPELINE:-0}"
   echo "phase:              ${PHASE_ARG:-<all declared phases>}"
+  if [ "$GREENFIELD" = "1" ]; then
+    echo "phases:             ${EPAM_PHASES:-<none declared>}"
+    echo "output dir:         ${OUTPUT_DIR:-<none declared>}"
+    echo "prd source:         ${PRD_CANONICAL:-prd.authored.json beside the PRD (pre-run-reset)}"
+  fi
   exit 0
 fi
 
 [ -f "$PRD_FILE" ] || fail "no PRD at $PRD_FILE"
+if [ "$GREENFIELD" = "1" ]; then
+  # Half a declaration is a refusal, not a guess: nothing here decides where a codeline is built
+  # or what phases a project runs.
+  [ -n "${OUTPUT_DIR:-}" ] || fail "greenfield project '$PROJECT_NAME' declares no OUTPUT_DIR — nothing says where the codeline is built"
+  [ -n "${EPAM_PHASES:-}" ] || fail "greenfield project '$PROJECT_NAME' declares no EPAM_PHASES — nothing says what to run"
+fi
+
+# THE WHOLE MAP, BEFORE ANY MONEY MOVES — now that the project's policy is the one being read.
+# A paid launcher measures EVERY stage against the project's threshold here, and only then declares
+# the run gated, which is what turns on the per-stage gates for the rest of the run. Failing here
+# costs nothing; failing mid-run costs everything spent so far.
+# shellcheck source=lib/stage-coverage-gate.sh
+[ -f "$_scg_lib" ] && . "$_scg_lib" && require_all_stage_coverage || exit 1
 
 # ── Pre-flight, before anything is spent ──────────────────────────────────────
 info "Pre-flight for '$PROJECT_NAME'..."
@@ -163,6 +199,16 @@ fi
 # AFTER the confirmation above and BEFORE the orchestrator: the reset archives logs and restores
 # the PRD and roster, so it must not fire for a run the operator declines, and must be complete
 # before anything reads either file.
+if [ "$GREENFIELD" = "1" ]; then
+  # The codeline is built from nothing each run; the PRD is the authored one, never last run's.
+  greenfield_prepare_output_dir "$OUTPUT_DIR" "$PROJECT_DIR" "$PROJECT_NAME"
+  export OUTPUT_DIR
+  export PROJECT_ROOT="$OUTPUT_DIR"
+  if [ -n "${PRD_CANONICAL:-}" ]; then
+    greenfield_restore_prd "$PRD_CANONICAL" "$PRD_FILE" "$REPO_ROOT"
+  fi
+fi
+
 # shellcheck source=lib/pre-run-reset-gate.sh
 . "$(dirname "$(readlink -f "${BASH_SOURCE[0]}")")/lib/pre-run-reset-gate.sh"
 pre_run_reset_or_abort --prd "$PRD_FILE"
@@ -172,10 +218,19 @@ pre_run_reset_or_abort --prd "$PRD_FILE"
 # the codelines and fans out one lane each. This launcher's job is to make sure it has the
 # project's data when it does.
 info "Launching '$PROJECT_NAME'..."
-bash "$SCRIPT_DIR/run-agent-orchestration.sh" \
-  ${PHASE_ARG:+--phase "$PHASE_ARG"} \
-  ${ORCH_ARGS[0]+"${ORCH_ARGS[@]}"}
-_exit=$?
+if [ "$GREENFIELD" = "1" ]; then
+  # pre-run-reset points the dashboard at its LOG_DIR; a greenfield run's files are under
+  # OUTPUT_DIR. Same correction the project-specific greenfield launcher makes.
+  echo -n "$OUTPUT_DIR" > "$REPO_ROOT/orchestrations/dashboards/.active-output-dir" 2>/dev/null || true
+  _log="/tmp/tier3-run-${PROJECT_NAME}-$(date +%Y%m%dT%H%M%S).log"
+  _exit=0
+  greenfield_run_phases "${PHASE_ARG:-$EPAM_PHASES}" "$PRD_FILE" "$_log" || _exit=$?
+else
+  bash "$SCRIPT_DIR/run-agent-orchestration.sh" \
+    ${PHASE_ARG:+--phase "$PHASE_ARG"} \
+    ${ORCH_ARGS[0]+"${ORCH_ARGS[@]}"}
+  _exit=$?
+fi
 
 [ "$_exit" = "0" ] && success "'$PROJECT_NAME' completed" || fail "'$PROJECT_NAME' failed (exit $_exit)"
 exit "$_exit"

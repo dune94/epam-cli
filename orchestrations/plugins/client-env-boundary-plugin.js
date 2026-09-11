@@ -64,7 +64,16 @@ const ADAPTERS = [
     // unit under test, which is the correct way to write it, and it runs in the test runner where
     // every variable is present. Live 2026-08-14 the first wiring of this check flagged nine such
     // reads in one gotransit spec file and would have failed a run whose code was correct.
-    serverOnlyPaths: ['/pages/api/', '/app/api/', '/middleware.', '.server.',
+    // THE FRAMEWORK'S OWN CONFIG, IN ANY VARIANT. next.config.* is read by Node at build and
+    // server time; nothing in it reaches a browser bundle. exposureConfig below names the three
+    // spellings Next.js itself loads, but a codeline may author the config under another name
+    // and bundle it into one of those (gotransit: next.config.source.ts → esbuild → next.config.js
+    // on every pretest). Scanned as client code, its `process.env.ANALYZE` was flagged on every
+    // run of AMSD-1919 from 2026-09-10: a free retry, then HealingBroken and a ladder climb on the
+    // identical second hit, and on 2026-09-11 the writer edited the client's build config to
+    // silence it. A fragment, like the entries beside it, so the variant is covered by the rule
+    // and not by a list of filenames.
+    serverOnlyPaths: ['/pages/api/', '/app/api/', '/middleware.', '.server.', 'next.config.',
       '.test.', '.spec.', '/__tests__/', '/__mocks__/', '.mock.'],
     exposureConfig: ['next.config.js', 'next.config.mjs', 'next.config.ts'],
     // THE CONFIGURATION THAT GOVERNS WHETHER BEHAVIOUR IS PERMITTED TO HAPPEN — build settings,
@@ -79,7 +88,7 @@ const ADAPTERS = [
     clientPrefixes: ['VITE_'],
     alwaysExposed: ['NODE_ENV', 'MODE', 'BASE_URL'],
     serverOnly: [],
-    serverOnlyPaths: ['.server.', '/server/', '.test.', '.spec.', '/__tests__/', '/__mocks__/', '.mock.'],
+    serverOnlyPaths: ['.server.', '/server/', 'vite.config.', '.test.', '.spec.', '/__tests__/', '/__mocks__/', '.mock.'],
     exposureConfig: ['vite.config.js', 'vite.config.ts'],
     configFiles: ['vite.config.js', 'vite.config.ts'],
   },

@@ -111,7 +111,11 @@ describe('and it actually runs', () => {
   });
 
   it('is handed the configuration surface the detective also gets', () => {
-    const block = sh().slice(sh().indexOf('runtime-boundary'), sh().indexOf('runtime-boundary') + 2500);
+    // Anchored on the render call, not the first mention of the word — a comment elsewhere in
+    // the file now says 'runtime-boundary' long before the gate's own block.
+    const at = sh().indexOf('render_engine_prompt runtime-boundary-review');
+    expect(at, 'the runtime-boundary render call is gone').toBeGreaterThan(-1);
+    const block = sh().slice(Math.max(0, at - 2500), at + 500);
     expect(block).toMatch(/__CONFIG_SURFACE__/);
   });
 

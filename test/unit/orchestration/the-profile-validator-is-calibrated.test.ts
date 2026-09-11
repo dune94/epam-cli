@@ -1,6 +1,6 @@
 import { describe, it, expect } from 'vitest'
 import { spawnSync } from 'node:child_process'
-import { mkdtempSync, writeFileSync, rmSync } from 'node:fs'
+import { mkdtempSync, writeFileSync, rmSync, readFileSync } from 'node:fs'
 import { tmpdir } from 'node:os'
 import { join } from 'node:path'
 
@@ -15,7 +15,14 @@ import { join } from 'node:path'
 // about whichever seams happen to be declared today.
 const REPO = process.cwd()
 const LIB = join(REPO, 'orchestrations/scripts/lib/agent-invoke.sh')
-const REQUIRED = ['maxOutputTokens', 'reasoningEffort', 'timeoutSecs', 'captureCost']
+// reasoningEffort is NOT required of a profile: the ladder rung owns it (fb16b266, operator
+// 2026-09-01 — "it cannot override ladder"). The required set is agent-invoke.sh's own,
+// AGENT_INVOKE_REQUIRED_KEYS, read from the library so this test cannot restate it.
+const REQUIRED = (() => {
+  const m = readFileSync(LIB, 'utf8').match(/^AGENT_INVOKE_REQUIRED_KEYS="([^"]+)"/m)
+  if (!m) throw new Error('agent-invoke.sh no longer declares AGENT_INVOKE_REQUIRED_KEYS')
+  return m[1].trim().split(/\s+/)
+})()
 
 function validate(profiles: any, role: string) {
   const dir = mkdtempSync(join(tmpdir(), 'profval-'))
@@ -31,7 +38,7 @@ function validate(profiles: any, role: string) {
 }
 
 const COMPLETE = {
-  maxOutputTokens: 32768, reasoningEffort: 'medium', timeoutSecs: 300, captureCost: true,
+  maxOutputTokens: 32768, timeoutSecs: 300, captureCost: true,
 }
 
 describe('the profile validator is calibrated', () => {
@@ -62,7 +69,7 @@ describe('the profile validator is calibrated', () => {
     const v = validate({ 'some-seam': { captureCost: true } }, 'some-seam')
     expect(v.rc).toBe(2)
     // reporting one at a time turns a single fix into three round trips
-    for (const k of ['maxOutputTokens', 'reasoningEffort', 'timeoutSecs']) {
+    for (const k of REQUIRED.filter((x) => x !== 'captureCost')) {
       expect(v.out, `${k} was missing but not reported`).toContain(k)
     }
   })

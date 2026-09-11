@@ -1,5 +1,5 @@
 /**
- * EVERY SEAM A REAL RUN RECORDED MUST REPLAY, THROUGH THE PATH THE PIPELINE USES.
+ * EVERY SEAM THE PIPELINE DECLARES MUST REPLAY, THROUGH THE PATH THE PIPELINE USES.
  *
  * Three days of cassette work — harvester, exporter, exit traps, replay provider, mock loader —
  * each with a green test, and not one replay of a run the pipeline had actually recorded. When
@@ -8,12 +8,17 @@
  * replayer looked up names the recorder never wrote. "Isolation is not acceptable — and no longer
  * permitted." (2026-09-11)
  *
- * This is the whole-feature test. It takes a recording THE PIPELINE MADE (one per provider set,
- * declared in test/fixtures/replay/recordings.json), enumerates the seams IN THAT RECORDING — the
- * recording is the list, nothing is named here — and drives each one through ai-run.sh in replay
- * mode, inside the same overlay sandbox rehearse.sh uses, so recorded tool calls really execute
- * against the real trees and are discarded. Every seam is one case. A set with no recording is a
- * RED case, not a skip.
+ * THE UNIVERSE IS THE PIPELINE'S DECLARATION, NOT THE RECORDING'S. The first build of this test
+ * enumerated the seams in the recording and passed 29/32 while orchestrations/agents/
+ * invocation-profiles.json declares 40+; the six QA gates were never in scope and failed the first
+ * time they were replayed. "I don't want faster." Every declared seam is one case: red when the
+ * recording has no turns for it, red when its turns do not replay. A recorded seam the pipeline
+ * does not declare is red too — the caller and the declaration disagree on the seam's name.
+ *
+ * One recording per provider set (test/fixtures/replay/recordings.json), made by the pipeline
+ * itself. Each declared seam's recorded files are driven through ai-run.sh in replay mode, inside
+ * the same overlay sandbox rehearse.sh uses, so recorded tool calls really execute against the real
+ * trees and are discarded. A set with no recording is RED, not a skip.
  *
  * What a case proves: invoked as the pipeline invokes it, the seam is answered from the recording
  * (no provider, £0), completes, and its consumed turns come back in order.
@@ -80,6 +85,22 @@ export function describeSet(set: string) {
       expect(files.length).toBeGreaterThan(0);
     });
 
+    // THE PIPELINE'S OWN LIST. Nothing is named here.
+    const profiles = JSON.parse(readFileSync(join(ROOT, 'orchestrations/agents/invocation-profiles.json'), 'utf8'));
+    const declared = profiles.profiles || profiles;
+    const seams: string[] = Object.keys(declared).sort();
+    const filesOf = (seam: string) => files.filter((f) => splitLabel(seamOfFile(f)).agent === seam);
+
+    it('the declaration is not empty — otherwise there is no universe', () => {
+      expect(seams.length).toBeGreaterThan(0);
+    });
+
+    it('every recorded seam is a declared one — a label the pipeline does not declare is a caller and a declaration disagreeing on a name', () => {
+      const undeclared = files.map(seamOfFile).map((l) => splitLabel(l).agent)
+        .filter((a) => a && !/^[A-Z][A-Z0-9]+-\d+$/.test(a) && !(a in declared));
+      expect([...new Set(undeclared)].sort(), 'recorded under a name invocation-profiles.json does not declare').toEqual([]);
+    });
+
     it('no seam was recorded anonymously — a file named only by a story id is a seam nobody named', () => {
       const anonymous = files.map(seamOfFile).filter((l) => !splitLabel(l).agent || /^[A-Z][A-Z0-9]+-\d+$/.test(splitLabel(l).agent));
       expect(anonymous, [
@@ -93,40 +114,43 @@ export function describeSet(set: string) {
     // grant gets `--no-tools`: the model's tool call is never executed and the turn is the answer.
     // Granting tools to every seam here made the CLI execute recorded calls the live run never ran,
     // and ask for turns the recording never had (prd-change-reviewer: 3 recorded, 4 asked).
-    const profiles = JSON.parse(readFileSync(join(ROOT, 'orchestrations/agents/invocation-profiles.json'), 'utf8'));
-    const declared = profiles.profiles || profiles;
     const toolsFor = (agent: string) => {
       const prof = declared[agent];
       if (!prof) return '1';                 // undeclared (writer, spec agents): tools, as they run live
       return prof.toolGrant ? '1' : '0';
     };
 
-    it.each(files.map((f) => ({ file: f, label: seamOfFile(f) })))(
-      'seam "$label" replays through ai-run.sh, tools executing in the sandbox', ({ file, label }) => {
-        const turns = JSON.parse(readFileSync(join(cassette, file), 'utf8'));
-        expect(Array.isArray(turns) && turns.length > 0, `${file} holds no turns`).toBe(true);
-        const { agent, story } = splitLabel(label);
-        const logDir = mkdtempSync(join(tmpdir(), 'seam-replay-'));
+    it.each(seams)(
+      'declared seam %s was recorded and replays through ai-run.sh, tools executing in the sandbox', (seam) => {
+        const recorded = filesOf(seam);
+        expect(recorded, `invocation-profiles.json declares "${seam}" and the ${set} recording has no turns for it — the seam has never been recorded on this set, so it cannot be rehearsed`).not.toEqual([]);
+        for (const file of recorded) {
+          const label = seamOfFile(file);
+          const turns = JSON.parse(readFileSync(join(cassette, file), 'utf8'));
+          expect(Array.isArray(turns) && turns.length > 0, `${file} holds no turns`).toBe(true);
+          const { agent, story } = splitLabel(label);
+          const logDir = mkdtempSync(join(tmpdir(), 'seam-replay-'));
 
-        const r = spawnSync('bash', [REHEARSE, '--cassette', cassette, '--', 'bash', AI_RUN, '--provider', provider, '--model', model], {
-          encoding: 'utf8', timeout: 240_000, cwd: ROOT, input: `replay of ${label}\n`,
-          env: {
-            ...process.env,
-            EPAM_PROVIDER_SET: set,
-            EPAM_REPLAY_CASSETTE_DIR: cassette,
-            EPAM_AGENT_NAME: agent, EPAM_STORY_ID: story,
-            AI_GATE_ALLOW_TOOLS: toolsFor(agent), EPAM_DANGEROUS_SKIP_APPROVAL: '1',
-            LOG_DIR: logDir, NODE_BIN: NODE,
-            // THE REPOSITORY'S OWN BUILD. `epam` on PATH is a shim to whichever install was made last;
-            // a test of this tree must run this tree's dist, or it tests a published version.
-            EPAM_CLI: repoCli(),
-            EPAM_PROJECT_CONFIG_DIR: join(ROOT, 'orchestrations/projects/metrolinx'),
-          },
-        });
-        const out = (r.stdout || '') + (r.stderr || '');
-        expect(out, `the rehearsal did not engage replay for "${label}":\n${out.slice(-1200)}`).toMatch(/REHEARSAL: replaying/);
-        expect(out, `"${label}" was not answered from the recording:\n${out.slice(-1500)}`).not.toMatch(/has been called \d+ times and the recorded run called it|All providers exhausted|failed after \d+ attempt/);
-        expect(r.status, `ai-run.sh exited ${r.status} replaying "${label}":\n${out.slice(-1500)}`).toBe(0);
+          const r = spawnSync('bash', [REHEARSE, '--cassette', cassette, '--', 'bash', AI_RUN, '--provider', provider, '--model', model], {
+            encoding: 'utf8', timeout: 240_000, cwd: ROOT, input: `replay of ${label}\n`,
+            env: {
+              ...process.env,
+              EPAM_PROVIDER_SET: set,
+              EPAM_REPLAY_CASSETTE_DIR: cassette,
+              EPAM_AGENT_NAME: agent, EPAM_STORY_ID: story,
+              AI_GATE_ALLOW_TOOLS: toolsFor(agent), EPAM_DANGEROUS_SKIP_APPROVAL: '1',
+              LOG_DIR: logDir, NODE_BIN: NODE,
+              // THE REPOSITORY'S OWN BUILD. `epam` on PATH is a shim to whichever install was made last;
+              // a test of this tree must run this tree's dist, or it tests a published version.
+              EPAM_CLI: repoCli(),
+              EPAM_PROJECT_CONFIG_DIR: join(ROOT, 'orchestrations/projects/metrolinx'),
+            },
+          });
+          const out = (r.stdout || '') + (r.stderr || '');
+          expect(out, `the rehearsal did not engage replay for "${label}":\n${out.slice(-1200)}`).toMatch(/REHEARSAL: replaying/);
+          expect(out, `"${label}" was not answered from the recording:\n${out.slice(-1500)}`).not.toMatch(/has been called \d+ times and the recorded run called it|All providers exhausted|failed after \d+ attempt/);
+          expect(r.status, `ai-run.sh exited ${r.status} replaying "${label}":\n${out.slice(-1500)}`).toBe(0);
+        }
       });
   });
 }

@@ -7717,7 +7717,11 @@ async function runSpeckitReview({ promptExec, story, openspecOutput, phase, runI
   try {
     const payload = await runAgentForJson(
       promptExec, prompt, specAgentContract(), 'SPEC_AGENT',
-      path.join(logDir, `${story.id}-speckit-review.log`), null, story.id, repoPath
+      path.join(logDir, `${story.id}-speckit-review.log`), null, story.id, repoPath,
+      // THE SEAM, asked for — the same one the generate call above declares. Passed no env, this
+      // call was labelled by its JSON tag: Langfuse and the cassette filed it as `SPEC_AGENT`, a
+      // name the registry cannot resolve, so it could never be replayed (2026-09-11).
+      { ...seamInvocationEnv('spec-agent', logDir), EPAM_AGENT_NAME: 'spec-agent' },
     );
     if (payload) {
       payload.agent = 'speckit';

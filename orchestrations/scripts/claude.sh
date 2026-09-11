@@ -2095,6 +2095,7 @@ run_plan_mode() {
         # agent has no way to actually read anything, so the plan gets
         # fabricated from whatever it happens to guess (found live 2026-07-08).
         elif echo "$plan_prompt" | \
+                EPAM_AGENT_NAME="story-plan-agent" EPAM_STORY_ID="${story_id}" \
                 AI_GATE_ALLOW_TOOLS=1 \
                 AI_PROVIDER="$_orch_provider" \
                 AI_MODEL="$_orch_model" \
@@ -6192,6 +6193,7 @@ $(cat "$_cf")
                 [ -n "${EPAM_PLANNING_TOP_P:-}" ] && export EPAM_TOP_P="$EPAM_PLANNING_TOP_P"
                 [ -n "${EPAM_PLANNING_EFFORT:-}" ] && export EPAM_REASONING_EFFORT="$EPAM_PLANNING_EFFORT"
                 echo "$planning_prompt" | \
+                EPAM_AGENT_NAME="plan-producer" EPAM_STORY_ID="${story_id}" \
                 AI_PROVIDER="$_orch_provider" \
                 AI_MODEL="$_orch_model" \
                 EPAM_CLI="$EPAM_CLI" \
@@ -6288,6 +6290,7 @@ $(cat "$_contract_file")
     # command. Placing it there silently split the pipeline, and the invocation ran with
     # nothing on stdin — which is exactly how the writer burned 8 attempts at $0 cost.
     review_output=$(echo "$review_prompt" | \
+        EPAM_AGENT_NAME="plan-reviewer" EPAM_STORY_ID="${story_id}" \
         AI_PROVIDER="$_orch_provider" \
         AI_MODEL="${EPAM_MODEL:-}" \
         EPAM_CLI="$EPAM_CLI" \
@@ -6329,6 +6332,7 @@ $(cat "$_contract_file")
 
     local corrected_plan
     corrected_plan=$(echo "$corrective_prompt" | \
+        EPAM_AGENT_NAME="plan-corrective" EPAM_STORY_ID="${story_id}" \
         AI_PROVIDER="$_orch_provider" \
         AI_MODEL="${STORY_PLANNER_MODEL:-${EPAM_MODEL:-}}" \
         EPAM_CLI="$EPAM_CLI" \
@@ -7176,6 +7180,7 @@ assess_model_escalation() {
 
     local coord_raw=""
     if coord_raw=$(echo "$coordinator_prompt" | \
+            EPAM_AGENT_NAME="inference-ladder-coordinator" EPAM_STORY_ID="${story_id}" \
             AI_PROVIDER="$gate_provider" \
             AI_MODEL="$gate_model" \
             EPAM_CLI="$EPAM_CLI" \
@@ -7279,6 +7284,7 @@ run_prd_change_reviewer() {
     # Reuses the same shared, read-only allowlist every other gate agent draws
     # from, bounded the same way.
     review_raw=$(echo "$review_prompt" | \
+        EPAM_AGENT_NAME="prd-change-reviewer" EPAM_STORY_ID="${story_id}" \
         AI_PROVIDER="$gate_provider" \
         AI_MODEL="$gate_model" \
         EPAM_CLI="$EPAM_CLI" \
@@ -7411,6 +7417,7 @@ run_prd_change_summarizer() {
 
     local summarized=""
     summarized=$(echo "$summarize_prompt" | \
+        EPAM_AGENT_NAME="prd-change-summarizer" EPAM_STORY_ID="${story_id}" \
         AI_PROVIDER="$gate_provider" \
         AI_MODEL="$gate_model" \
         EPAM_CLI="$EPAM_CLI" \
@@ -7976,6 +7983,7 @@ $(cat "$_fa_vendor_contract")
         # mirrors that fix's own measured number — enough to check one
         # file/directory, not enough to re-explore the codebase.
         if analyst_raw=$(echo "$analyst_prompt" | \
+                EPAM_AGENT_NAME="${_ANALYST_SEAM}" EPAM_STORY_ID="${story_id}" \
                 AI_PROVIDER="$gate_provider" \
                 AI_MODEL="$gate_model" \
                 EPAM_CLI="$EPAM_CLI" \
@@ -9341,6 +9349,7 @@ run_retry_extension_coordinator() {
 
     local coord_raw=""
     coord_raw=$(echo "$coord_prompt" | \
+        EPAM_AGENT_NAME="retry-extension-coordinator" EPAM_STORY_ID="${story_id}" \
         AI_PROVIDER="$gate_provider" \
         AI_MODEL="$gate_model" \
         EPAM_CLI="$EPAM_CLI" \
@@ -12509,6 +12518,7 @@ run_pre_phase_assessment() {
     # profiles.json validity check below only runs on that branch, so a failed agent skipped it.
     # THREE pipeline elements here (echo, ai-run, tee), so the agent's status is PIPESTATUS[1].
     elif { echo "$assessment_prompt" | \
+            EPAM_AGENT_NAME="phase-assessment" EPAM_STORY_ID="${phase_id}" \
             AI_GATE_ALLOW_TOOLS=1 \
             AI_PROVIDER="$_orch_provider" \
             AI_MODEL="$_orch_model" \

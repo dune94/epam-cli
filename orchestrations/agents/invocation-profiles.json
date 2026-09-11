@@ -875,6 +875,11 @@
   ],
   "seamPatterns": [
     {
+      "match": "^(story-)?plan-",
+      "seam": "cpa-inference",
+      "_why": "THE PLANNING FAMILY, declared 2026-09-11. claude.sh plans a story before the writer runs (story-plan-agent, plan-producer), reviews and corrects that plan (plan-reviewer, plan-corrective). These are engine seams named after their templates; they named nothing before and were recorded under the calling script's name. Planning is reasoning over the story, the family cpa-inference already holds. First in the list so plan-reviewer is a planner, not a code reviewer."
+    },
+    {
       "match": "(^|-)investigator$",
       "seam": "code-graph-detective",
       "_why": "investigates one codeline and reports where the work lands",

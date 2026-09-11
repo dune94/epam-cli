@@ -230,6 +230,10 @@
         "issues",
         "summary"
       ]
+    },
+    "kb-synthesizer": {
+      "kind": "artefact",
+      "checkedBy": "lib/kb-synthesizer.js — parses the proposal; unparseable, declined and unmapped replies are quarantined, never stored"
     }
   },
   "$declaredWhy": "A seam whose output nothing validates lets a bad answer flow on looking authoritative — the roster-specialiser answered with prose on a paid run and only its artefact check stopped that becoming the identity every downstream agent reads. requiredKeys is the key a CONSUMER cannot proceed without, taken from the shape the seam PROMPT already states, so the contract and the prompt cannot drift. knownKeys is the rest of that shape, reported but not enforced: requiring every optional field would reject valid answers, and the defect being caught is an answer that is not the artefact at all."

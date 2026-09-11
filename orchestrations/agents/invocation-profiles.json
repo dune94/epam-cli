@@ -856,7 +856,10 @@
       "_why": "It made LLM calls while declaring nothing, so its timeout and output budget lived as literals in lib/kb-synthesizer.js and no run could see or change them. Declared here with the values it was already using, so the numbers are visible and the code reads them instead of carrying its own.",
       "ladder": "base",
       "timeoutSecs": 180,
-      "maxOutputTokens": 32768
+      "maxOutputTokens": 32768,
+      "template": "kb-enforcement-synthesis",
+      "toolGrant": "none",
+      "_toolGrantWhy": "The episodes are IN the prompt; the reply is one schema-bound JSON proposal. Nothing to read, nothing to run."
     }
   },
   "_seamResolution": [

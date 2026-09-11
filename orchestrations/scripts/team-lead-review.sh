@@ -370,7 +370,7 @@ run_review_prompt() {
     # feedback file exists for a phase-level synthetic verdict), then escalated
     # with tagged-stories=0 — on a story whose fix AND reproducing test had already
     # passed every gate.
-    echo "REVIEW_INCOMPLETE" > "${AUTOMATION_DIR}/logs/review-incomplete-${PHASE_ID:-phase}.flag" 2>/dev/null || true
+    echo "REVIEW_INCOMPLETE" > "${LOG_DIR:-$AUTOMATION_DIR/logs}/review-incomplete-${PHASE_ID:-phase}.flag" 2>/dev/null || true
     echo '{"verdict":"changes_requested","reviewIncomplete":true,"issues":[{"severity":"blocker","description":"review-agent did not complete — it thrashed/stalled and produced no verdict even after ladder escalation. The change was NOT reviewed; blocking rather than auto-approving.","suggestedFix":"Re-run the reviewer, or review manually before merge."}],"summary":"review incomplete — not reviewed"}'
     return 0
 }
@@ -792,8 +792,17 @@ $(render_engine_prompt story-diff-not-inlined "$_sdni_vals" excluded)"
         # not match the work is not a review, and saying so is the only honest outcome.
         error "  no rung on record for $story_id — the writer never persisted one, so there is"
         error "  no setup to review it on. Refusing to judge converged work on a guessed rung."
-        echo '{"verdict":"changes_requested","reviewIncomplete":true,"issues":[{"severity":"blocker","description":"no writer rung on record for this story — the reviewer cannot reproduce the setup that produced the work"}]}' \
-            > "$AUTOMATION_DIR/logs/review-feedback-${story_id}.json"
+        # THE REFUSAL MUST BE COUNTED, OR IT IS AN APPROVAL. This wrote its blocker to a file and
+        # `continue`d; the phase decision below counts ISSUES, which only a completed review
+        # appends to, so the phase came out "Code review passed - no issues found / APPROVED"
+        # with no model called (£0 harness, 2026-09-11). Same file, same flag, same array as
+        # every other verdict — and in LOG_DIR, where the rest of this review's artefacts go,
+        # not $AUTOMATION_DIR/logs.
+        _no_rung_issue='{"severity":"blocker","description":"no writer rung on record for this story — the reviewer cannot reproduce the setup that produced the work"}'
+        printf '{"verdict":"changes_requested","reviewIncomplete":true,"issues":[%s]}\n' "$_no_rung_issue" \
+            > "${LOG_DIR:-$AUTOMATION_DIR/logs}/review-feedback-${story_id}.json"
+        echo "REVIEW_INCOMPLETE" > "${LOG_DIR:-$AUTOMATION_DIR/logs}/review-incomplete-${PHASE_ID:-phase}.flag" 2>/dev/null || true
+        ISSUES+=("$(echo "$_no_rung_issue" | jq --arg sid "$story_id" '. + {story_id: $sid}' 2>/dev/null || echo "$_no_rung_issue")")
         continue
     fi
 
@@ -1041,7 +1050,7 @@ success "Team Lead code review completed"
 # cycles. Same fail-open class as the gates fixed earlier that day.
 if [ "${_reviewed_count:-0}" -eq 0 ]; then
     warning "Team Lead review reviewed NO stories — refusing to report approved (nothing was reviewed)"
-    echo "REVIEW_INCOMPLETE" > "${AUTOMATION_DIR}/logs/review-incomplete-${PHASE_ID:-phase}.flag" 2>/dev/null || true
+    echo "REVIEW_INCOMPLETE" > "${LOG_DIR:-$AUTOMATION_DIR/logs}/review-incomplete-${PHASE_ID:-phase}.flag" 2>/dev/null || true
     exit 1
 fi
 

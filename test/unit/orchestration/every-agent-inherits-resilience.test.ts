@@ -58,7 +58,10 @@ function callSites(): Array<{ path: string; src: string }> {
   return allSources()
     .filter((p) => !/\/ai-run\.sh$/.test(p) && !/\/test\//.test(p))
     .map((p) => ({ path: p, src: readFileSync(p, 'utf8') }))
-    .filter(({ src }) => /ai-run\.sh|AI_RUNNER_CMD|EPAM_CLI["'\s]/.test(src));
+    // A file INVOKES the epam runner when it executes "$EPAM_CLI" (run/chat). A file that merely
+    // compares a provider map entry to the literal '$EPAM_CLI' (lib/runner-settings.sh, resolving
+    // which binary to probe --help on — fdf851c3) names the runner and calls nothing.
+    .filter(({ src }) => /ai-run\.sh|AI_RUNNER_CMD|"?\$\{?EPAM_CLI\}?"?\s+(run|chat)\b/.test(src));
 }
 
 describe('the seam provides all three guarantees', () => {

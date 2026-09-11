@@ -71,12 +71,16 @@ describe('the claude stack does not pay to plan twice', () => {
     }
   })
 
-  it('THE LIMIT: openrouter is untouched, where the behaviour was tuned', () => {
+  it('and so does every openrouter overlay — operator decision 2026-09-08: NO set makes the plan pass', () => {
+    // This case used to assert openrouter was UNTOUCHED (the limit of the original change). On
+    // 2026-09-08 the operator retired the plan pass for every set (7c6b1c67), and each overlay
+    // now states the value rather than inheriting the hub's default — see
+    // every-provider-set-declares-its-plan-pass. Silence is no longer the openrouter position.
     for (const p of readdirSync(PROJECTS)) {
       const f = join(PROJECTS, p, 'config.openrouter.env')
       if (!existsSync(f)) continue
-      expect(readFileSync(f, 'utf8'), `${p}'s openrouter overlay was changed too`)
-        .not.toMatch(/EPAM_PLAN_EXECUTE/)
+      expect(readFileSync(f, 'utf8'), `${p}'s openrouter overlay does not declare the plan pass off`)
+        .toMatch(/^EPAM_PLAN_EXECUTE=0$/m)
     }
   })
 

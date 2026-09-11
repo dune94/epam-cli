@@ -554,7 +554,10 @@ describe('claude.sh InferenceLadder — skipLadder (VERY HIGH complexity) skips 
     // The export is now wrapped in max_effort, so effort can only ever RISE as rungs climb.
     // The invariant this test guards is the PLACEMENT — outside the skipLadder if/else — which
     // is unchanged.
-    const rung2End = claudeSrc.indexOf('export EPAM_REASONING_EFFORT="$(max_effort', rung2SkipIdx);
+    // c8250335 split `export X="$(...)"` into an assignment and an `export X` (SC2155); the
+    // assignment is the line whose placement matters.
+    const rung2End = claudeSrc.indexOf('EPAM_REASONING_EFFORT="$(max_effort', rung2SkipIdx);
+    expect(rung2End, 'rung 2 no longer assigns EPAM_REASONING_EFFORT through max_effort').toBeGreaterThan(-1);
     const rung2Block = claudeSrc.slice(rung2SkipIdx, rung2End + 220);
     // EPAM_REASONING_EFFORT=... must appear OUTSIDE the skipLadder if/else
     // (after the closing fi of the inner if), so it always runs regardless of
@@ -562,7 +565,8 @@ describe('claude.sh InferenceLadder — skipLadder (VERY HIGH complexity) skips 
     // pattern as before this change. Now env-overridable via
     // EPAM_RUNG2_REASONING_EFFORT — default raised to "high" 2026-08-10 (operator rule:
     // effort must never decrease as rungs climb; rung 2 defaulting to "medium" undercut rung 1).
-    expect(rung2Block).toMatch(/fi\s*\n\s*fi\s*\n\s*export EPAM_REASONING_EFFORT="\$\(max_effort/);
+    expect(rung2Block).toMatch(/fi\s*\n\s*fi\s*\n\s*(export )?EPAM_REASONING_EFFORT="\$\(max_effort/);
+    expect(rung2Block).toMatch(/EPAM_REASONING_EFFORT="\$\(max_effort[^\n]*\n\s*export EPAM_REASONING_EFFORT\b/);
     expect(rung2Block).toContain('EPAM_RUNG2_REASONING_EFFORT:-high');
   });
 });

@@ -369,7 +369,14 @@ describe('every caller allows room for both passes', () => {
       if (timeouts.length === 0 && /seamDeclaredTimeoutMs\(/.test(src)) {
         const profiles = JSON.parse(readFileSync(
           join(__dirname, '../../../orchestrations/agents/invocation-profiles.json'), 'utf8'));
-        const seams = [...src.matchAll(/seamDeclaredTimeoutMs\('([^']+)'\)/g)].map(m => m[1]);
+        // The seam is a literal at the call, or — since c3e1534d, when the call became one shared
+        // askJson({ seam }) — the `seam:` each caller passes into it. Both are the seams whose
+        // declared timeoutSecs bound the call.
+        const seams = [
+          ...[...src.matchAll(/seamDeclaredTimeoutMs\('([^']+)'\)/g)].map(m => m[1]),
+          ...(/seamDeclaredTimeoutMs\(seam\)/.test(src)
+            ? [...src.matchAll(/askJson\(\{\s*seam:\s*'([^']+)'/g)].map(m => m[1]) : []),
+        ];
         expect(seams.length, `${caller} names no seam to take a deadline from`).toBeGreaterThan(0);
         for (const seam of new Set(seams)) {
           const secs = profiles?.profiles?.[seam]?.timeoutSecs ?? profiles?.defaults?.timeoutSecs;

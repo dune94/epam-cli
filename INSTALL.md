@@ -139,7 +139,7 @@ Read from `install.sh`'s own argument parser — this is the complete list:
 | `--stack <name>` | Which provider set to install for. Default: `provider-sets.json`'s `defaultSet`, or `EPAM_PROVIDER_SET`. An unknown name errors and lists the declared stacks. |
 | `--no-docker` | Skip the observability stack and the launch dashboard entirely. |
 | `--docker` | Require a container runtime — fails if none is running (`auto` merely warns). |
-| `--replay on\|off` | Default `off`. `on` installs/uses Langfuse as the **recorder** so a run can be replayed later for $0. Also settable as `EPAM_REPLAY`. An invalid value is rejected, never silently downgraded to `off`. |
+| `--replay on\|off` | Default `off`. `on` installs/uses Langfuse as the **recorder** so a run can be replayed later for $0. Also settable as `EPAM_REPLAY`. An invalid value is rejected, never silently downgraded to `off`. Recorded runs are archived to `orchestrations/cassettes/<project>-<run-id>/` by the cassette watcher that `pipeline-services.sh --start` runs; it reads the Langfuse keys from the install's `.env`. |
 | `--check` | Verify an existing install, change nothing. |
 | `--uninstall` | Remove **only** this install's docker footprint (containers, network, volumes, images it built) plus the host daemons. **Never deletes files** — your `.env` and run evidence stay. Accepts `--dest`. |
 | `--help`, `-h` | Prints the header comment. |

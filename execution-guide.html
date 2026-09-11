@@ -156,7 +156,7 @@ and records what it used. Read the real values for an install with:</p>
 mounts them when a run starts.</div>
 <div class="warn">Langfuse only records when the install was made with <code>--replay on</code> and
 both <code>LANGFUSE_PUBLIC_KEY</code> and <code>LANGFUSE_SECRET_KEY</code> are set. A run that is
-not recorded cannot be replayed.</div>
+not recorded cannot be replayed. Recorded runs are archived to <code>orchestrations/cassettes/&lt;project&gt;-&lt;run-id&gt;/</code> by the cassette watcher started with the services.</div>
 
 <h2 id="pauses">4. Pausing for review</h2>
 <p>Two checkpoints, each opt-in, so you can approve what the run produced before it spends more:</p>

@@ -813,7 +813,7 @@ $(render_engine_prompt story-diff-not-inlined "$_sdni_vals" excluded)"
     log "  review-agent takes the writer's rung for $story_id: model=$_rung_model provider=$_rung_provider effort=${_rung_effort:-unset} temp=${_rung_temperature:-unset}"
 
     log "  Invoking review-agent for $story_id... (model=$_rung_model provider=$_rung_provider)"
-    REVIEW_OUTPUT_FILE="$AUTOMATION_DIR/logs/review-agent-${story_id}.log"
+    REVIEW_OUTPUT_FILE="${LOG_DIR:-$AUTOMATION_DIR/logs}/review-agent-${story_id}.log"
     # B25 — the reviewer used to fail leaving NO evidence: `$(... | tee FILE)` never
     # creates FILE when the pipeline dies before producing stdout, so a filesystem
     # search after a failed run found no log at all and the failure could only be

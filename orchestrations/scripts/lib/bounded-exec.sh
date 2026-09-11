@@ -57,6 +57,36 @@ resolve_test_workers() {
     else
         avail_mb="$(free -m 2>/dev/null | awk 'NR==2{print $7}')"
     fi
+    case "$avail_mb" in ''|*[!0-9]*) avail_mb=1024 ;; esac
+
+    # THE CGROUP'S LIMIT WINS OVER THE HOST'S FREE COLUMN. Every launch on a bounded host runs
+    # inside a memory-capped scope, and the workers will live in that cgroup, not on the host's
+    # headroom. Live 2026-09-11: host showed 8467MB available, the scope allowed 5120MB, this
+    # budgeted 7 workers against the host figure, and the cgroup OOM-killed the suite — bounded,
+    # and still killed, because the bound was computed against a limit the process was not under.
+    #
+    # Walk up from our own cgroup to the root: the tightest ancestor limit applies. The override
+    # holds the WHOLE machine constant, cgroup included — it is the seam a derivation test uses.
+    local _cg_path _cg_dir _cg_max _cg_cur _cg_room_mb
+    _cg_path=""
+    [ -z "${EPAM_TEST_AVAIL_MB_OVERRIDE:-}" ] && _cg_path="$(awk -F: '$1=="0"{print $3}' /proc/self/cgroup 2>/dev/null)"
+    _cg_dir="/sys/fs/cgroup${_cg_path}"
+    while [ -n "$_cg_path" ] && [ "$_cg_dir" != "/sys/fs/cgroup" ]; do
+        _cg_max="$(cat "$_cg_dir/memory.max" 2>/dev/null)"
+        case "$_cg_max" in
+            ''|max|*[!0-9]*) ;;
+            *)
+                _cg_cur="$(cat "$_cg_dir/memory.current" 2>/dev/null)"
+                case "$_cg_cur" in ''|*[!0-9]*) _cg_cur=0 ;; esac
+                _cg_room_mb=$(( (_cg_max - _cg_cur) / 1048576 ))
+                [ "$_cg_room_mb" -lt 0 ] && _cg_room_mb=0
+                if [ "$_cg_room_mb" -lt "$avail_mb" ]; then
+                    avail_mb="$_cg_room_mb"
+                fi
+                ;;
+        esac
+        _cg_dir="$(dirname "$_cg_dir")"
+    done
     # Unknown memory is not an excuse to run unbounded; it is a reason to be conservative.
     case "$avail_mb" in ''|*[!0-9]*) avail_mb=1024 ;; esac
 

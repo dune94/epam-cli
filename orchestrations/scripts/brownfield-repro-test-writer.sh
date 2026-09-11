@@ -652,8 +652,58 @@ _validate_written_test() {
 # THIS agent just wrote in THIS attempt — in-band, deterministic, tied to the exact
 # action, the same category as a gate rejection returned as a tool result.
 # Withholding it makes the agent guess at an error the toolchain knows exactly.
+# _commit_written_test <rel>
+# Commits a VALIDATED test. Returns non-zero when the CLIENT REPOSITORY refuses it — its commit
+# hook has the last word — and records the hook's own output as the reason the next attempt is
+# given. Called INSIDE the attempt loop: a refusal is a failed attempt, never a finished one.
+#
+# Ticket-ID-first message (found live 2026-08-02, AMSD-2041 Writer Retest: gotransit AND
+# upexpress both permanently HALTed at the repro-gate — the test this writer produced was
+# validated and staged correctly, but this commit silently failed every time because both
+# codelines' commitlint requires the ticket ID as the FIRST token, and "test: ..." isn't one).
+#
+# The hook's output is captured, never discarded (found live 2026-08-02): a client repo's hook can
+# reject for ANY reason and guessing every hook's rule set in advance is not something this
+# pipeline can or should hardcode per project. Surfacing the hook's own words is the generic fix
+# — and, since 2026-09-11, feeding them back is the generic remedy: lint-staged rejected one
+# `export` (jest/no-export), the test stayed uncommitted, the repro gate blocked, and the WRITER
+# re-implemented a correct fix from a reset branch.
+_commit_written_test() {
+    local rel="$1"
+    git -C "$PROJECT_ROOT" add "$rel" 2>/dev/null || true
+    if git -C "$PROJECT_ROOT" diff --cached --quiet 2>/dev/null; then
+        log "nothing staged for $rel — nothing to commit"
+        return 0
+    fi
+    local _commit_output _commit_rc
+    _commit_output=$(git -C "$PROJECT_ROOT" commit -m "${STORY_ID}: add ${_commit_noun}" --quiet 2>&1)
+    _commit_rc=$?
+    if [ "$_commit_rc" -eq 0 ]; then
+        _test_committed=1
+        log "committed reproducing test: $rel"
+        # Reindex CodeGraph so this commit's writes are visible to the reviewer's
+        # codegraph_query tool (see codegraph-reindex.sh).
+        [ -f "$SCRIPT_DIR/codegraph-reindex.sh" ] && bash "$SCRIPT_DIR/codegraph-reindex.sh" "$PROJECT_ROOT" "post-commit repro-test ${STORY_ID}" || true
+        return 0
+    fi
+    warning "the repository refused to commit $rel — the hook's output is the next attempt's brief:"
+    warning "$_commit_output"
+    # Leave the file in place for the next attempt to correct; unstage so a later `git status`
+    # in the loop (validation, diff) sees the working tree, not a half-staged index.
+    git -C "$PROJECT_ROOT" reset -q -- "$rel" 2>/dev/null || true
+    _cp_vals=$(mktemp "${TMPDIR:-/tmp}/repro-feedback-vals-XXXXXX.json")
+    jq_vals \
+          --arg hook_output "$(printf '%s\n' "$_commit_output" | tail -c "$(evidence_window reproFailureJsonChars 2>/dev/null || echo 4000)")" \
+          '{"__HOOK_OUTPUT__":$hook_output}' > "$_cp_vals"
+    _hook_feedback="$(render_engine_prompt repro-feedback "$_cp_vals" commitRejected)"
+    rm -f "$_cp_vals"
+    return 1
+}
+
 _typecheck_feedback=""
 _assertion_feedback=""
+_hook_feedback=""
+_test_committed=0
 _ctx_file="$(mktemp 2>/dev/null || echo /tmp/rtw-ctx-$$)"; printf '%s' "$_prompt" > "$_ctx_file"
 _max_attempts="${REPRO_TEST_WRITER_MAX_ATTEMPTS:-3}"
 # Self-heal enforcement seam: constraints compiled onto this shell's knobs.
@@ -713,7 +763,7 @@ for _attempt in $(seq 1 "$_max_attempts"); do
     # --provider (change-log/SEAM-CONSISTENCY-ANALYSIS.md).
     _srw_provider_flag=()
     [ -n "$_provider" ] && _srw_provider_flag=(--provider "$_provider")
-    { printf '%s' "$_prompt"; [ -n "$_typecheck_feedback" ] && printf '%s' "$_typecheck_feedback"; [ -n "$_assertion_feedback" ] && printf '%s' "$_assertion_feedback"; } | \
+    { printf '%s' "$_prompt"; [ -n "$_typecheck_feedback" ] && printf '%s' "$_typecheck_feedback"; [ -n "$_assertion_feedback" ] && printf '%s' "$_assertion_feedback"; [ -n "$_hook_feedback" ] && printf '%s' "$_hook_feedback"; } | \
       AI_GATE_ALLOW_TOOLS=1 \
       EPAM_DANGEROUS_SKIP_APPROVAL=1 \
       EPAM_ALLOWED_WRITE_PATHS="${_target_rel}" \
@@ -728,13 +778,27 @@ for _attempt in $(seq 1 "$_max_attempts"); do
     _fclass_override=""
     if [ -f "$PROJECT_ROOT/$_target_rel" ]; then
         _validate_written_test "$_target_rel"
-        case "$?" in
-            0) _test_validated=1
-               log "test produced and validated on attempt ${_attempt} (model ${_model})"
-               break ;;
-            3) _test_validated=1
-               log "test produced on attempt ${_attempt} (model ${_model}) — no usable test runner, cannot validate (not treated as failure)"
-               break ;;
+        _vrc=$?
+        case "$_vrc" in
+            0|3)
+               # VALIDATED IS NOT FINISHED. The client repository has the last word, through its
+               # commit hook, and it can refuse for any reason it enforces. This commit used to
+               # happen once, after the loop: a refusal left the test uncommitted, the repro gate
+               # found no test on the branch and blocked, the phase exited 2, the retry reset the
+               # branch to the baseline, and the WRITER re-implemented a story whose fix was
+               # correct. Live 2026-09-11 14:46Z on AMSD-1919: one `export`, jest/no-export,
+               # ~$0.70 and 25 minutes to redo the fix. A refusal is a failed attempt with the
+               # hook's own words as the reason — fed back exactly like a compiler error is.
+               if [ "$_vrc" = "3" ]; then
+                   log "test produced on attempt ${_attempt} (model ${_model}) — no usable test runner, cannot validate (not treated as failure)"
+               else
+                   log "test produced and validated on attempt ${_attempt} (model ${_model})"
+               fi
+               if _commit_written_test "$_target_rel"; then
+                   _test_validated=1
+                   break
+               fi
+               _fclass_override="commit_rejected" ;;
             *) log "attempt ${_attempt}: test was written but does NOT parse/run — discarding it (class=invalid_test)"
                # Remove it so a later attempt starts clean and no stale broken file
                # can ever reach the commit step.
@@ -769,47 +833,10 @@ for _attempt in $(seq 1 "$_max_attempts"); do
 done
 rm -f "$_ctx_file" 2>/dev/null || true
 
-# ── Commit the test if one was written ──────────────────────────────────────
-# Only a VALIDATED test may be committed — an unparseable one proves nothing and
-# breaks the regression guard on every subsequent cycle (live deadlock 2026-07-24).
-if [ -f "$PROJECT_ROOT/$_target_rel" ] && [ "${_test_validated:-0}" = "1" ]; then
-    git -C "$PROJECT_ROOT" add "$_target_rel" 2>/dev/null || true
-    if ! git -C "$PROJECT_ROOT" diff --cached --quiet 2>/dev/null; then
-        # Ticket-ID-first message (found live 2026-08-02, AMSD-2041 Writer
-        # Retest: gotransit AND upexpress both permanently HALTed at the
-        # repro-gate — the test file this writer produced was validated and
-        # staged correctly, but this commit silently failed every time
-        # because both codelines' commitlint (commitlint-plugin-jira-rules)
-        # requires the ticket ID as the FIRST token, and "test: ..." isn't
-        # one. Same root cause, same fix shape as commit_completed_story()'s
-        # 2026-08-02 fix (lib/git-ops.sh) — ticket-ID-first is the standard
-        # shape most commit-message linters expect, not Jira-specific
-        # knowledge baked in here. This call site was missed when that fix
-        # was applied because it's a separate, independent `git commit`, not
-        # a shared helper.
-        # Capture real stderr instead of discarding it (found live 2026-08-02,
-        # same investigation as the message-format fix above): a swallowed
-        # "(non-fatal)" log line gave zero signal about WHY a commit failed —
-        # a client repo's commit-msg hook can reject for ANY reason (a
-        # different commitlint rule, a totally unrelated lint-staged/husky
-        # check, etc.), and guessing at every possible hook's exact rule set
-        # in advance is not something this pipeline can or should hardcode
-        # per project. Surfacing the hook's own output is the generic fix:
-        # whatever the real reason is, it's now visible in the log instead of
-        # requiring live-run archaeology to rediscover. Same pattern as
-        # commit_completed_story()'s 2026-08-01 fix (lib/git-ops.sh).
-        _commit_output=$(git -C "$PROJECT_ROOT" commit -m "${STORY_ID}: add ${_commit_noun}" --quiet 2>&1)
-        _commit_rc=$?
-        if [ "$_commit_rc" -eq 0 ]; then
-            log "committed reproducing test: $_target_rel"
-            # Reindex CodeGraph so this commit's writes are visible to the
-            # reviewer's codegraph_query tool (see codegraph-reindex.sh).
-            [ -f "$SCRIPT_DIR/codegraph-reindex.sh" ] && bash "$SCRIPT_DIR/codegraph-reindex.sh" "$PROJECT_ROOT" "post-commit repro-test ${STORY_ID}" || true
-        else
-            warning "commit failed — repro-gate will report. Output:"
-            warning "$_commit_output"
-        fi
-    fi
+# ── Record the test the loop committed ──────────────────────────────────────
+# The commit itself happens inside the attempt loop (see _commit_written_test): a test the
+# repository refuses is a failed attempt, retried with the hook's own output as the reason.
+if [ -f "$PROJECT_ROOT/$_target_rel" ] && [ "${_test_validated:-0}" = "1" ] && [ "${_test_committed:-0}" = "1" ]; then
     _emit_tw "spec_update" "repro-test-writer committed reproducing test: ${_target_rel}"
 
     # Record this test as writer output. The manifest is what the phase gates

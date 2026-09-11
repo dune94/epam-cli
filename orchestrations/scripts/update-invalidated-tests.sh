@@ -87,11 +87,31 @@ log() { echo "[update-invalidated-tests] $*" >&2; }
 [ "${EPAM_BROWNFIELD:-0}" = "1" ] || { log "not brownfield — nothing to do"; exit 0; }
 
 # ── Run the suite ────────────────────────────────────────────────────────────
+# BOUNDED, THE SAME WAY THE OTHER TWO SITES ARE. "Nothing the pipeline spawns is unbounded"
+# (c24d501d) reached the writer's verification suite and the regression guard, and not this one:
+# the runner was spawned bare, and jest sized its pool from every core it could see. Live
+# 2026-09-11, inside a 5621MB memory scope: 29 processes, 6068MB, and the run was OOM-killed after
+# the writer and the repro test had both already committed. Every earlier brownfield run did the
+# same thing with no cap and the host absorbed it.
+#
+# The bound is CPU affinity via lib/bounded-exec.sh, so the engine still names no runner argument
+# and the command is unchanged; if the library or affinity is unavailable it degrades to running
+# unbounded AND says so — a bound that cannot be applied must never fail the step.
+# shellcheck source=lib/bounded-exec.sh
+[ -f "$SCRIPT_DIR/lib/bounded-exec.sh" ] && . "$SCRIPT_DIR/lib/bounded-exec.sh"
+_bounded() {
+    if command -v run_test_bounded >/dev/null 2>&1; then
+        run_test_bounded "$(resolve_test_workers)" "$@"
+    else
+        log "WARNING: lib/bounded-exec.sh not loaded — the client suite is running UNBOUNDED"
+        "$@"
+    fi
+}
 run_suite() {
     ( cd "$PROJECT_ROOT" || exit 3
-      if   [ -x node_modules/.bin/vitest ]; then node_modules/.bin/vitest run 2>&1
-      elif [ -x node_modules/.bin/jest ];   then node_modules/.bin/jest 2>&1
-      elif [ -f package.json ] && grep -q '"test"' package.json 2>/dev/null; then npm test 2>&1
+      if   [ -x node_modules/.bin/vitest ]; then _bounded node_modules/.bin/vitest run 2>&1
+      elif [ -x node_modules/.bin/jest ];   then _bounded node_modules/.bin/jest 2>&1
+      elif [ -f package.json ] && grep -q '"test"' package.json 2>/dev/null; then _bounded npm test 2>&1
       else exit 3; fi )
 }
 

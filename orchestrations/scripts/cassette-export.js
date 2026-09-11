@@ -82,6 +82,54 @@ function turnOf(trace) {
 }
 
 /**
+ * ONE TURN PER MODEL CALL — THE ONLY GRANULARITY A REPLAY CAN SERVE.
+ *
+ * Two recorders write to Langfuse. The provider decorator (src/observability/TracedProvider.ts)
+ * records one trace per model call, named `agent · story` — the label the replayer looks up. The
+ * cost seam (lib/langfuse-emit.js, reached from every arm including the vendor binaries the
+ * decorator never sees) records one trace per ATTEMPT, named by the agent alone, with every tool
+ * call of the attempt aggregated into one output. Both are the same calls.
+ *
+ * Exported as turns, the attempt trace is unreplayable: qa-gate:runtime-boundary in run
+ * 20260910T222155Z carried 33 tool calls in one turn, and the loop executed them all and asked for
+ * a second turn the recording did not have. Found by the per-seam replay test, 2026-09-11.
+ *
+ * So: where an agent was recorded per call, its per-attempt traces are folded — counted in the
+ * manifest, never written as turns. Where the per-attempt trace is the ONLY record (a vendor
+ * binary arm), it is exported, and under the label a replay will ask for: `agent · story`, the
+ * story taken from the trace's own metadata. That label rule has one home, agentLabel.ts.
+ *
+ * Each recorder declares its granularity in metadata. Traces from before that declaration
+ * existed are told apart by the field only the cost seam ever wrote: story_id.
+ */
+function granularityOf(trace) {
+  const md = (trace && trace.metadata) || {};
+  if (md.granularity === 'call' || md.granularity === 'attempt') return md.granularity;
+  return md.story_id !== undefined ? 'attempt' : 'call';
+}
+
+/** `agent · story` → agent; a bare name is the agent. The separator is agentLabel.ts's. */
+function agentOf(name) {
+  const i = String(name).indexOf(' · ');
+  return i < 0 ? String(name) : String(name).slice(0, i);
+}
+
+function agentsRecordedPerCall(traces) {
+  const agents = new Set();
+  for (const t of traces) {
+    const name = String((t && t.name) || '').trim();
+    if (name && granularityOf(t) === 'call') agents.add(agentOf(name));
+  }
+  return agents;
+}
+
+function replayLabel(name, storyId) {
+  const s = String(storyId || '').trim();
+  if (!s || String(name).includes(' · ')) return String(name);
+  return `${name} · ${s}`;
+}
+
+/**
  * WHICH TREES A REHEARSAL WILL WRITE INTO — derived from the recording, never named here.
  *
  * Replay executes the recorded tool calls for real, so a rehearsal touches whatever the recorded
@@ -148,15 +196,28 @@ async function main() {
 
   const bySeam = new Map();
   const models = new Map();
+  const attemptsFolded = new Map();
+  const callAgents = agentsRecordedPerCall(traces);
   for (const t of traces) {
-    const seam = String(t.name || '').trim();
+    const name = String(t.name || '').trim();
     // A trace with no name cannot be attributed to a seam, and a replay is looked up BY seam. Kept
     // out of the cassette and counted, so the export says what it could not place rather than
     // silently recording fewer turns than the run had.
-    if (!seam) continue;
+    if (!name) continue;
+    const md = (t && t.metadata) || {};
+    let seam = name;
+    if (granularityOf(t) === 'attempt') {
+      const agent = agentOf(name);
+      if (callAgents.has(agent)) {
+        // The same calls, already recorded one turn each. Folded, not written.
+        attemptsFolded.set(agent, (attemptsFolded.get(agent) || 0) + 1);
+        continue;
+      }
+      // The only record of this seam. Filed under the label the replayer looks up.
+      seam = replayLabel(name, md.story_id);
+    }
     if (!bySeam.has(seam)) bySeam.set(seam, []);
     bySeam.get(seam).push(turnOf(t));
-    const md = (t && t.metadata) || {};
     if (md.model && !models.has(seam)) models.set(seam, { model: md.model, provider: md.provider || '' });
   }
 
@@ -173,6 +234,8 @@ async function main() {
     exportedFrom: BASE(),
     traceCount: traces.length,
     unattributableTraces: unnamed,
+    // Per-attempt summaries of seams that were also recorded per call: the same calls twice.
+    attemptTracesFolded: [...attemptsFolded.entries()].sort().map(([agent, n]) => ({ agent, traces: n })),
     seams: [...bySeam.keys()].sort().map((s) => ({
       seam: s,
       turns: bySeam.get(s).length,
@@ -181,6 +244,10 @@ async function main() {
   });
 
   process.stdout.write(`${bySeam.size} seam(s), ${traces.length} turn(s) -> ${out}\n`);
+  if (attemptsFolded.size) {
+    const n = [...attemptsFolded.values()].reduce((a, b) => a + b, 0);
+    process.stdout.write(`  ${n} per-attempt trace(s) of ${attemptsFolded.size} seam(s) already recorded per call were folded, not written as turns\n`);
+  }
   process.stdout.write(`  rehearsing this writes into: ${touched.roots.join(', ') || '(no repository)'}\n`);
   if (touched.pathsOutsideAnyRepo) {
     process.stdout.write(`  ${touched.pathsOutsideAnyRepo} recorded path(s) lie under no repository\n`);

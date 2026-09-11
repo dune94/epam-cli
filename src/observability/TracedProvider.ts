@@ -84,7 +84,8 @@ export class TracedProvider implements LLMProvider {
       input: this.tracePreview(request),
       sessionId: this.sessionId,
       userId: this.userId,
-      metadata: { provider: this.name, model: request.model },
+      // ONE TRACE PER MODEL CALL — the granularity a replay serves (cassette-export.js).
+      metadata: { provider: this.name, model: request.model, granularity: 'call' },
     });
 
     const generation = trace?.generation({
@@ -147,7 +148,8 @@ export class TracedProvider implements LLMProvider {
       input: this.tracePreview(request),
       sessionId: this.sessionId,
       userId: this.userId,
-      metadata: { provider: this.name, model: request.model },
+      // ONE TRACE PER MODEL CALL — the granularity a replay serves (cassette-export.js).
+      metadata: { provider: this.name, model: request.model, granularity: 'call' },
     });
 
     const generation = trace?.generation({

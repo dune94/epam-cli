@@ -237,6 +237,9 @@ function buildIngestionBody(f, ids) {
           ? {} : { output: outputWithCalls(f.output, f.toolCalls) }),
         userId: f.storyId || undefined,
         metadata: {
+          // ONE TRACE PER ATTEMPT, its tool calls aggregated. The exporter folds these where the
+          // provider recorded the same calls one turn each (cassette-export.js).
+          granularity: 'attempt',
           phase: f.phase || '',
           story_id: f.storyId || '',
           provider: f.provider || '',

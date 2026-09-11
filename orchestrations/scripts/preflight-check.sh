@@ -324,6 +324,15 @@ elif [[ -z "${PRD_FILE:-}" || ! -f "${PRD_FILE:-}" ]]; then
 elif [[ ! -f "$_mlm_settings" ]]; then
   # UNKNOWN, not fine: a project whose ladders cannot be read must not look verified.
   fail "no llm-settings.json at '$_mlm_settings' — cannot tell whether assigned models can escalate"
+elif [[ "$_prd_pending_ingest" == "1" ]]; then
+  # THE SAME DEFERRAL THE PRD CHECKS ABOVE ALREADY MAKE. Jira ingest rewrites this file before
+  # anything reads it, so whatever model the LAST run assigned is not this run's assignment.
+  # Live 2026-09-11: the previous run was openrouter and left `AMSD-1919 -> MiniMax-M3`; the next
+  # launch was the claude set, on whose ladders that model does not exist, and pre-flight refused
+  # the run over a value it was about to discard. Provider sets are hot-swappable on one install;
+  # a pre-flight that fails the swap on the last run's leftovers breaks that.
+  ok "model assignments belong to the last run; Jira ingest rewrites the PRD before anything reads it — deferred"
+  PASS=$((PASS+1))
 else
   # shellcheck source=lib/model-ladder-membership.sh
   . "$_mlm_lib"

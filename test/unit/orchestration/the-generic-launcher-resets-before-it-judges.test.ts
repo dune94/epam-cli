@@ -25,7 +25,7 @@ const dirs: string[] = [];
 afterAll(() => { for (const d of dirs) rmSync(d, { recursive: true, force: true }); });
 
 /** A scripts dir identical to the real one, with the three steps replaced by recorders. */
-function stubbed(opts: { preflightExit: number }) {
+function stubbed(opts: { preflightExit: number; provisionMode?: string | null }) {
   const d = mkdtempSync(join(tmpdir(), 'launch-order-')); dirs.push(d);
   const scripts = join(d, 'orchestrations/scripts'); mkdirSync(scripts, { recursive: true });
   for (const f of readdirSync(SCRIPTS)) {
@@ -50,7 +50,10 @@ function stubbed(opts: { preflightExit: number }) {
   writeFileSync(join(scripts, 'tier3-run.sh'), readFileSync(join(SCRIPTS, 'tier3-run.sh'), 'utf8'));
   chmodSync(join(scripts, 'tier3-run.sh'), 0o755);
   const proj = join(d, 'project'); mkdirSync(proj);
-  writeFileSync(join(proj, 'config.env'), 'EPAM_BROWNFIELD=1\n');
+  // A project declares how its prompts are provisioned; the launcher refuses one that does not
+  // (the mint would, mid-run). null = leave it undeclared, to prove that refusal.
+  const mode = opts.provisionMode === undefined ? 'copy' : opts.provisionMode;
+  writeFileSync(join(proj, 'config.env'), `EPAM_BROWNFIELD=1\n${mode === null ? '' : `EPAM_PROMPT_PROVISION_MODE=${mode}\n`}`);
   writeFileSync(join(proj, 'prd.json'), JSON.stringify({ stories: [] }));
   return { d, scripts, proj, calls };
 }
@@ -75,6 +78,22 @@ describe('the generic launcher resets before it judges', () => {
       'pre-run-reset.sh', 'preflight-check.sh', 'run-agent-orchestration.sh',
     ]);
     expect(r.status, r.out.slice(-800)).toBe(0);
+  });
+
+  it('a project that declares no EPAM_PROMPT_PROVISION_MODE is refused before the reset, the pre-flight and any spend', () => {
+    // mint-agents-step.js throws on an unset mode — after the roster has been minted and paid
+    // for. Both greenfield projects had declared nothing (2026-09-12).
+    const r = launch(stubbed({ preflightExit: 0, provisionMode: null }));
+    expect(r.status).not.toBe(0);
+    expect(r.out).toMatch(/declares no EPAM_PROMPT_PROVISION_MODE/);
+    expect(r.order, 'the launch went on without a provisioning mode').toEqual([]);
+  });
+
+  it('a mode the mint does not accept is refused the same way', () => {
+    const r = launch(stubbed({ preflightExit: 0, provisionMode: 'improvise' }));
+    expect(r.status).not.toBe(0);
+    expect(r.out).toMatch(/EPAM_PROMPT_PROVISION_MODE='improvise'/);
+    expect(r.order).toEqual([]);
   });
 
   it('a pre-flight refusal still stops the launch before the orchestrator', () => {

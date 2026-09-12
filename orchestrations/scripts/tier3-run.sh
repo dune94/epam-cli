@@ -156,6 +156,18 @@ if [ "$GREENFIELD" = "1" ]; then
 fi
 [ -f "$PRD_FILE" ] || fail "no PRD at $PRD_FILE"
 
+# THE MINT REFUSES WITHOUT THIS, MID-RUN. mint-agents-step.js (2da831a9) throws when
+# EPAM_PROMPT_PROVISION_MODE is unset — "there is no engine default: picking one silently is how
+# a project ends up running prompts nobody chose" — and it runs after the roster has been minted
+# and paid for. A project that declares neither 'copy' nor 'generate' is refused HERE, before
+# anything is spent, with the same words. Found 2026-09-12: the two greenfield projects declared
+# nothing; --describe had been printing "<none declared>" and nothing acted on it.
+case "${EPAM_PROMPT_PROVISION_MODE:-}" in
+  copy|generate) ;;
+  '') fail "project '$PROJECT_NAME' declares no EPAM_PROMPT_PROVISION_MODE — declare 'copy' (install the generic templates as they are) or 'generate' (specialise each one for this project) in its config.env; the mint would refuse mid-run" ;;
+  *)  fail "project '$PROJECT_NAME' declares EPAM_PROMPT_PROVISION_MODE='$EPAM_PROMPT_PROVISION_MODE'; the mint accepts 'copy' or 'generate'" ;;
+esac
+
 # THE WHOLE MAP, BEFORE ANY MONEY MOVES — now that the project's policy is the one being read.
 # A paid launcher measures EVERY stage against the project's threshold here, and only then declares
 # the run gated, which is what turns on the per-stage gates for the rest of the run. Failing here

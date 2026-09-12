@@ -1,3 +1,4 @@
+#!/usr/bin/env bash
 # exit-handlers.sh — AN EXIT HANDLER IS ADDED, NEVER REPLACED.
 #
 # bash keeps exactly ONE EXIT trap. `trap X EXIT` does not add a handler, it REPLACES the one

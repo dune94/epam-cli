@@ -21,7 +21,10 @@ const CLAUDE_SH     = join(__dirname, '../../../orchestrations/scripts/claude.sh
 const MOCK_PRD      = join(__dirname, '../../fixtures/mock-prd.json');
 const MOCK_PROFILES = join(__dirname, '../../fixtures/mock-profiles.json');
 
-const claudeSrc  = engineAndPrompt(readFileSync(CLAUDE_SH, 'utf8'));
+// The AC list is built by lib/story-acs-block.sh (one shape for four seams) and rendered into the
+// analyst's template through claude.sh, so the engine text under test is all three.
+const ACS_LIB = join(__dirname, '../../../orchestrations/scripts/lib/story-acs-block.sh');
+const claudeSrc  = engineAndPrompt(`${readFileSync(CLAUDE_SH, 'utf8')}\n${readFileSync(ACS_LIB, 'utf8')}`);
 const mockPrd    = JSON.parse(readFileSync(MOCK_PRD, 'utf8'));
 const mockProfiles = JSON.parse(readFileSync(MOCK_PROFILES, 'utf8'));
 

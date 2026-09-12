@@ -42,16 +42,17 @@ describe('the detective runs on a brownfield defect', () => {
     expect(String(tpl.body || '').length, 'the template body is empty').toBeGreaterThan(2000);
   });
 
-  it('ACs ARE OUT OF SCOPE FOR THIS TEMPLATE — not optional, ABSENT', () => {
-    // Operator ruling: a brownfield detective must not take acceptance criteria as an input at
-    // all. Declaring them mayBeEmpty would keep a field in the contract that has no business
-    // being there, and would leave the prompt carrying an empty "Acceptance criteria:" heading.
-    expect(tpl.placeholders, '__STORY_ACS__ is still a declared input to the detective')
-      .not.toContain('__STORY_ACS__');
-    expect(String(tpl.body || ''), '__STORY_ACS__ is still substituted into the body')
-      .not.toContain('__STORY_ACS__');
+  it('ACs are a BLOCK OR NOTHING — the body carries no heading, and absent is a legal state', () => {
+    // Operator ruling 2026-09-01: a brownfield detective must not be handed an empty
+    // "Acceptance criteria:" heading. Operator ruling 2026-09-11: a greenfield PRD is authored WITH
+    // acceptance criteria and they are in scope. Both hold when the heading travels with the
+    // criteria (spec-mode-runner.js storyAcsBlock): the template's own body names no heading, the
+    // placeholder is mayBeEmpty, and a brownfield story renders nothing there. Executed end to
+    // end in a-greenfield-story-hands-its-acceptance-criteria-to-the-seams-that-judge-it.
+    expect(tpl.placeholders).toContain('__STORY_ACS__');
+    expect(tpl.mayBeEmpty, 'a brownfield story (no criteria) must still render').toContain('__STORY_ACS__');
     expect(String(tpl.body || ''),
-      'the "Acceptance criteria:" heading survives with nothing under it')
+      'the "Acceptance criteria:" heading is in the body — it would survive with nothing under it')
       .not.toMatch(/Acceptance criteria:/i);
   });
 

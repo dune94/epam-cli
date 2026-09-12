@@ -65,6 +65,8 @@ REVIEW_LOG="${REVIEW_LOG:-$AUTOMATION_DIR/logs/code-reviews.jsonl}"
 . "$SCRIPT_DIR/lib/roster-read.sh"
 # shellcheck source=lib/review-criteria.sh
 . "$SCRIPT_DIR/lib/review-criteria.sh"
+# shellcheck source=lib/story-acs-block.sh
+. "$SCRIPT_DIR/lib/story-acs-block.sh"
 # shellcheck source=lib/render-engine-prompt.sh
 . "$SCRIPT_DIR/lib/render-engine-prompt.sh"
 AI_RUNNER_CMD="${AI_RUNNER_CMD:-$SCRIPT_DIR/ai-run.sh}"
@@ -465,9 +467,9 @@ while IFS= read -r story_id; do
     log "  Agent: $STORY_AGENT"
 
     # Load acceptance criteria and technical notes for this story
-    STORY_ACS=$(jq -r --arg id "$story_id" \
-        '.stories[] | select(.id == $id) | .acceptanceCriteria[]?' \
-        "$PRD_FILE" 2>/dev/null | awk '{print NR". "$0}')
+    # A BLOCK OR NOTHING — heading and numbered criteria together (lib/story-acs-block.sh):
+    # greenfield stories carry them, brownfield stories carry none and get no empty heading.
+    STORY_ACS=$(story_acs_block "$PRD_FILE" "$story_id")
     STORY_DESC=$(jq -r --arg id "$story_id" \
         '.stories[] | select(.id == $id) | .description // ""' \
         "$PRD_FILE" 2>/dev/null)
@@ -740,7 +742,7 @@ $(render_engine_prompt story-diff-not-inlined "$_sdni_vals" excluded)"
         --arg prior_review "${_review_prior_block:-}" \
         '{"__REVIEW_PROFILE__":$profile,"__BLOCKER_DISCIPLINE__":$blocker,
           "__TEST_OWNERSHIP__":$ownership,"__STORY_ID__":$story_id,"__STORY_TITLE__":$title,
-          "__STORY_DESC__":$desc,"__STORY_DIFF__":$diff,
+          "__STORY_DESC__":$desc,"__STORY_ACS__":$acs,"__STORY_DIFF__":$diff,
           "__STORY_FILES__":$files,"__TEST_FILES__":$test_files,"__PROJECT_ROOT__":$project_root,
           "__FIX_ANALYSIS_BLOCK__":$fix_analysis,"__UNCOVERED_VC_BLOCK__":$uncovered,
           "__VC_BLOCK__":$vc,"__CODEGRAPH_TOOL_BLOCK__":$codegraph,

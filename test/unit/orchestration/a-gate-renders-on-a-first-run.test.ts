@@ -47,9 +47,14 @@ const ORDINARY_ABSENCES: Record<string, Record<string, string>> = {
     __PROJECT_TOOLS_BLOCK__: 'the producer is `--arg tools "${_review_project_tools_block:-}"`, an '
       + 'explicit `:-` default and therefore a deliberate empty: a project that declares no tools '
       + 'has nothing to say here, which is not the same as a failed lookup',
+    __STORY_ACS__: 'a brownfield story has no acceptance criteria — it judges on VCs — and the '
+      + 'producer (lib/story-acs-block.sh) returns nothing rather than a heading over nothing; a '
+      + 'greenfield story fills the block (operator 2026-09-11: ACs are in scope for greenfield)',
   },
   'failure-analyst': {
     __SKILL_ADDENDUM__: 'a role may carry no accumulated skill notes',
+    __STORY_ACS__: 'the same block: TC facts when the story has them, its acceptance criteria on '
+      + 'greenfield, nothing on a brownfield defect — never an empty "criteria" heading',
   },
   'prd-change-reviewer': {
     __BEFORE__: 'an ac_patch on a story whose acceptanceCriteria were absent is an ADDITION, so the '

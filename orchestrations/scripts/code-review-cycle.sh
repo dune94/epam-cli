@@ -65,6 +65,8 @@ source "$SCRIPT_DIR/lib/render-engine-prompt.sh"
 # block is lifted verbatim by tests that build a minimal script tree, and a source
 # line inside it makes those probes fail on a library they have no reason to carry.
 source "$SCRIPT_DIR/lib/jq-vals.sh"
+# shellcheck source=lib/story-acs-block.sh
+source "$SCRIPT_DIR/lib/story-acs-block.sh"
 
 # THIS SEAM ASKS FOR ITS LADDER.
 #
@@ -216,9 +218,8 @@ log "Performing code review (iteration $ITERATION)..."
 echo ""
 
 # Load story context
-_STORY_ACS=$(jq -r --arg id "$STORY_ID" \
-    '.stories[] | select(.id == $id) | .acceptanceCriteria[]?' \
-    "$PRD_FILE" 2>/dev/null | awk '{print NR". "$0}')
+# A BLOCK OR NOTHING — heading and numbered criteria together (lib/story-acs-block.sh).
+_STORY_ACS=$(story_acs_block "$PRD_FILE" "$STORY_ID")
 _STORY_DESC=$(jq -r --arg id "$STORY_ID" \
     '.stories[] | select(.id == $id) | .description // ""' \
     "$PRD_FILE" 2>/dev/null)
@@ -295,11 +296,12 @@ jq_vals --arg iteration "$ITERATION" \
       --arg vc_block "$_REVIEW_VC_BLOCK" \
       --arg story_agent "$STORY_AGENT" \
       --arg story_description "$_STORY_DESC" \
+      --arg story_acs "$_STORY_ACS" \
       --arg story_diff "$_STORY_DIFF" \
       --arg story_files "$_STORY_FILES" \
       --arg story_id "$STORY_ID" \
       --arg story_title "$STORY_TITLE" \
-      '{"__VC_BLOCK__":$vc_block,"__ITERATION__":$iteration,"__PRIOR_CONTEXT__":$prior_context,"__PROJECT_ROOT__":$project_root,"__REVIEW_PROFILE__":$review_profile,"__STORY_AGENT__":$story_agent,"__STORY_DESCRIPTION__":$story_description,"__STORY_DIFF__":$story_diff,"__STORY_FILES__":$story_files,"__STORY_ID__":$story_id,"__STORY_TITLE__":$story_title}' > "$_tpl_vals" 2>/dev/null
+      '{"__VC_BLOCK__":$vc_block,"__ITERATION__":$iteration,"__PRIOR_CONTEXT__":$prior_context,"__PROJECT_ROOT__":$project_root,"__REVIEW_PROFILE__":$review_profile,"__STORY_AGENT__":$story_agent,"__STORY_DESCRIPTION__":$story_description,"__STORY_ACS__":$story_acs,"__STORY_DIFF__":$story_diff,"__STORY_FILES__":$story_files,"__STORY_ID__":$story_id,"__STORY_TITLE__":$story_title}' > "$_tpl_vals" 2>/dev/null
 if ! _REVIEW_PROMPT=$(render_engine_prompt code-review-cycle "$_tpl_vals"); then
     echo "[code-review-cycle] cannot render its prompt — refusing to run with no instructions" >&2
     rm -f "$_tpl_vals"; exit 1

@@ -12,6 +12,8 @@
 
 # How much evidence each agent is shown, by name — see config/evidence-windows.json.
 . "$(cd "$(dirname "${BASH_SOURCE[0]}")" && pwd)/lib/evidence-windows.sh" 2>/dev/null || true
+# shellcheck source=lib/story-acs-block.sh
+. "$(cd "$(dirname "${BASH_SOURCE[0]}")" && pwd)/lib/story-acs-block.sh"
 
 # EPAM CLI Orchestration Script - AI-driven development loop
 # This script orchestrates Claude Code CLI for autonomous story implementation
@@ -7781,12 +7783,13 @@ run_failure_analyst() {
     tc_facts_raw=$(jq -r --arg id "$story_id" \
         '.stories[] | select(.id == $id) | .testCriteria.facts // [] | to_entries | map("TC\(.key+1): \(.value)") | join("\n")' \
         "$prd_target" 2>/dev/null || echo "")
+    # A BLOCK OR NOTHING. The heading travels with the criteria (lib/story-acs-block.sh): TC facts
+    # when the story has them, else its acceptance criteria (greenfield), else nothing — a
+    # brownfield story gets no empty "criteria" heading (ea920ee7), and never a "(no ACs found)".
     if [ -n "$tc_facts_raw" ]; then
-        story_acs="$tc_facts_raw"
+        story_acs="$(printf 'CURRENT TEST CRITERIA (TC facts):\n%s\n\n' "$tc_facts_raw")"
     else
-        story_acs=$(jq -r --arg id "$story_id" \
-            '.stories[] | select(.id == $id) | .acceptanceCriteria // [] | to_entries | map("AC\(.key+1): \(.value)") | join("\n")' \
-            "$prd_target" 2>/dev/null || echo "(no ACs found)")
+        story_acs=$(story_acs_block "$prd_target" "$story_id" "CURRENT TEST CRITERIA (acceptance criteria):")
     fi
     story_role=$(jq -r --arg id "$story_id" \
         '.stories[] | select(.id == $id) | .agentRole // ""' \
@@ -7936,6 +7939,7 @@ $(cat "$_fa_vendor_contract")
           "__SKILL_NOTE_MAX__":$skill_note_max,
           "__STORY_ID__":$story_id,
           "__STORY_ROLE__":$story_role,
+          "__STORY_ACS__":$story_acs,
           "__SKILL_ADDENDUM__":$skill_addendum,
           "__DEPENDENCY_CONTRACTS__":$dependency_contracts,
           "__VERIFICATION_FAILURE__":$verification_failure,

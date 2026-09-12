@@ -6493,21 +6493,13 @@ async function runCodeGraphDetective(story, logDir, opts = {}) {
       __TOOL_PATH__: toolPath,
       __STORY_TITLE__: story.title || '',
       __STORY_DESCRIPTION__: story.description ? 'Description: ' + String(story.description) + '\n' : '',
-      // NO __STORY_ACS__. It used to be computed and supplied here, and the detective template
-      // has no placeholder for it, so prompt-library dropped it every run with a stderr warning
-      // nobody read: "'code-graph-detective' was given values it does not use: __STORY_ACS__"
-      // (live 2026-09-04, and at least the run before it).
-      //
-      // The value is removed rather than the template given a slot, because the template's
-      // omission is DELIBERATE. Operator ruling, 2026-09-01 (run 20260901T224029Z, AMSD-1919):
-      // a brownfield detective must not take acceptance criteria as an input at all — the ticket
-      // class it exists to serve does not have meaningful ones, it reasons from the description
-      // and the survey hypothesis, and an empty "Acceptance criteria:" heading is worse than no
-      // heading. That ruling is pinned by
-      // test/unit/orchestration/the-detective-runs-on-a-brownfield-defect.test.ts.
-      //
-      // So this half of the seam was simply never updated to match. Computing evidence for a
-      // consumer that has been told not to want it is the defect; the drop was correct.
+      // A BLOCK OR NOTHING — the same shape lib/story-acs-block.sh gives the shell seams. The
+      // detective template took no ACs at all after the 2026-09-01 ruling (a brownfield ticket
+      // has none; an empty "Acceptance criteria:" heading is worse than no heading), which threw
+      // away the greenfield case where the PRD is authored WITH them and they are in scope
+      // (operator, 2026-09-11). The heading travels with the criteria, so brownfield still renders
+      // no heading, and __STORY_ACS__ is mayBeEmpty in the template.
+      __STORY_ACS__: storyAcsBlock(story),
       // Adjacent in the original with no separator; the library reads __A____B__ as one token.
       __KIND_AND_CORRECTIVE_CONTEXT__: String(_kindHintBlock) + String(correctiveContext),
       // What the estate survey already found here — a hypothesis for the detective to verify,
@@ -10342,12 +10334,24 @@ if (require.main === module) {
  *   tag              the caller's literal, so a site not yet carrying a seam still records a row.
  *                    Losing the row entirely would be worse than an unjoinable name.
  */
+/**
+ * The acceptance-criteria block a seam prompt receives, or ''. Heading and numbered criteria travel
+ * together so an absent list renders no heading. Same shape as lib/story-acs-block.sh.
+ */
+function storyAcsBlock(story, heading = 'Acceptance criteria:') {
+  const acs = (story && Array.isArray(story.acceptanceCriteria) ? story.acceptanceCriteria : [])
+    .filter((a) => a !== null && a !== undefined && String(a).trim() !== '');
+  if (!acs.length) return '';
+  return `${heading}\n${acs.map((a, i) => `AC${i + 1}: ${a}`).join('\n')}\n\n`;
+}
+
 function costLabelFor(tag, env) {
   const e = env || {};
   return e.EPAM_AGENT_NAME || e.EPAM_SEAM || tag;
 }
 
 module.exports = {
+  storyAcsBlock,
   specAgentContract,
   rosterReviewVerdict,
   aggregateRosterReview,

@@ -351,6 +351,40 @@ function detectTests(projectRoot) {
       };
     }
   }
+  // NOT A NODE REPOSITORY, OR ONE WITH NO TEST SCRIPT: ASK THE ECOSYSTEM THAT RECOGNISES IT.
+  //
+  // Every provider under orchestrations/ecosystems declares how its suite is run (testCommand),
+  // how one file is run (testFileCommand) and how a test file is told from a source file
+  // (codelineManifests.contractGeneration.testFilePattern). This function consulted package.json
+  // only, so a Python codeline — requirements.txt, pytest, tests/ — had no test command anywhere:
+  // the test oracle, external verification and the QA gates all read "no test command" and
+  // proved nothing. Found 2026-09-12 on the first Python greenfield project. The provider is
+  // resolved the way the codeline's own manifests are (lib/handlers/codeline-manifests.js), so
+  // the two never disagree about which ecosystem this is.
+  try {
+    // eslint-disable-next-line global-require
+    const { resolveEcosystem } = require(join(__dirname, '..', 'scripts', 'lib', 'handlers', 'codeline-manifests.js'));
+    const hit = resolveEcosystem(projectRoot);
+    if (hit && typeof hit.eco.testCommand === 'function') {
+      const text = readFileSync(join(projectRoot, hit.present), 'utf8');
+      const command = String(hit.eco.testCommand(text, '') || '').trim();
+      if (command) {
+        const scoped = typeof hit.eco.testFileCommand === 'function'
+          ? String(hit.eco.testFileCommand(command, ['{files}']) || '') : '';
+        const pattern = ((hit.eco.codelineManifests || {}).contractGeneration || {}).testFilePattern || null;
+        return {
+          test: {
+            command,
+            ...(scoped ? { scopedCommand: scoped } : {}),
+            ...(pattern ? { testFilePattern: pattern } : {}),
+            detected: `${hit.present} via the ${hit.eco.file} ecosystem provider`,
+          },
+        };
+      }
+    }
+  } catch (e) {
+    process.stderr.write(`[verification-plugin] ecosystem test detection failed: ${(e && e.message) || e}\n`);
+  }
   return null;
 }
 

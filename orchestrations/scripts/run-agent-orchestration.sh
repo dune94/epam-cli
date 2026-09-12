@@ -3053,7 +3053,27 @@ _run_codeline_loop() {
     # lib/handlers/codeline-manifests.js assembles them from the provider whose manifest the
     # repository actually carries. A codeline no provider recognises gets NOTHING and is reported
     # -- an undeclared codeline is a state to surface, never one to invent an answer for.
-    if [ ! -f "$_wt/.epam/dependency-check.json" ]; then
+    #
+    # A DECLARATION THE CODELINE CONTRADICTS IS RE-DERIVED. A greenfield launch seeds .epam/ from
+    # the project directory before the codeline exists, so those files are the project author's
+    # word about a stack not yet built. When the codeline then carries a manifest a provider
+    # recognises and the seeded declaration names a manifest file that is not there, the codeline
+    # is the truth and the seed was a guess: live 2026-09-12, a Python greenfield project carried
+    # package.json / npm / vitest manifests copied from another project, and every generic gate
+    # would have judged a pytest repository as TypeScript. Derived, and the seeded siblings the
+    # provider does not declare are removed with it — they described the same wrong stack.
+    local _clm_contradicted=0
+    if [ -f "$_wt/.epam/dependency-check.json" ]; then
+      local _clm_declared_manifest
+      _clm_declared_manifest=$(jq -r '.manifestFile // ""' "$_wt/.epam/dependency-check.json" 2>/dev/null || echo "")
+      if [ -n "$_clm_declared_manifest" ] && [ ! -f "$_wt/$_clm_declared_manifest" ] \
+         && "$NODE_BIN" -e 'process.exit(require(process.argv[1]).resolveEcosystem(process.argv[2]) ? 0 : 1)' \
+              "$SCRIPT_DIR/lib/handlers/codeline-manifests.js" "$_wt" 2>/dev/null; then
+        _clm_contradicted=1
+        warning "[orch] ${_wt}: .epam/dependency-check.json declares manifest '${_clm_declared_manifest}', which this codeline does not carry — the declaration is re-derived from the ecosystem the codeline actually has"
+      fi
+    fi
+    if [ ! -f "$_wt/.epam/dependency-check.json" ] || [ "$_clm_contradicted" = "1" ]; then
       local _clm _clm_rc=0
       _clm=$("$NODE_BIN" "$SCRIPT_DIR/lib/handlers/codeline-manifests.js" "$_wt" 2>&1) || _clm_rc=$?
       if [ "$_clm_rc" -ne 0 ]; then
@@ -3061,6 +3081,15 @@ _run_codeline_loop() {
         printf '%s\n' "$_clm" | sed 's/^/    /' >&2
       else
         mkdir -p "$_wt/.epam"
+        if [ "$_clm_contradicted" = "1" ]; then
+          local _clm_stale
+          for _clm_stale in dependency-check.json contract-generation.json known-fixes.json; do
+            if [ -f "$_wt/.epam/$_clm_stale" ] && ! printf '%s' "$_clm" | jq -e --arg k "$_clm_stale" 'has($k)' >/dev/null 2>&1; then
+              rm -f "$_wt/.epam/$_clm_stale"
+              log "[orch] Removed seeded .epam/${_clm_stale}: it described a stack this codeline is not, and its ecosystem declares no replacement"
+            fi
+          done
+        fi
         printf '%s' "$_clm" | jq -r 'keys[]' | while IFS= read -r _mf; do
           [ -z "$_mf" ] && continue
           printf '%s' "$_clm" | jq --arg k "$_mf" '.[$k]' > "$_wt/.epam/$_mf"

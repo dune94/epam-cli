@@ -55,7 +55,11 @@ greenfield_prepare_output_dir() {
         if [ -f "$proj/$_m" ]; then
             cp "$proj/$_m" "$out/.epam/$_m"
         else
-            echo "[tier3] WARNING: $_m not found in $proj — .epam/$_m NOT written" >&2
+            # Not a defect: a project that declares none gets its manifests DERIVED from the
+            # codeline's own ecosystem once the scaffold phase has written its manifest file
+            # (the orchestrator's codeline loop, lib/handlers/codeline-manifests.js). A seeded
+            # declaration the codeline later contradicts is re-derived the same way.
+            echo "[tier3] $_m not declared by $proj — .epam/$_m will be derived from the codeline's ecosystem" >&2
         fi
     done
 }

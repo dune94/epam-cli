@@ -50,9 +50,25 @@ module.exports = {
   codelineManifests: {
     dependencyCheck: {
       scanFileExtensions: [".py"],
+      importPattern: "^\\s*(?:from\\s+([A-Za-z_][\\w]*)|import\\s+([A-Za-z_][\\w]*))",
+    },
+    // HOW THIS ECOSYSTEM'S TESTS ARE TOLD FROM ITS SOURCES. pytest's own collection rule
+    // (test_*.py / *_test.py). Without it the change classifier and the test gates read every
+    // .py file as source, and a codeline that added a test was told it added none.
+    contractGeneration: {
+      language: 'python',
+      sourceExtensions: ['.py'],
+      excludePattern: '(^|/)(test_[^/]*|[^/]*_test)\\.py$',
+      testFilePattern: '(^|/)(test_[^/]*|[^/]*_test)\\.py$',
     },
   },
   stack: 'python',
+  // A requirements.txt project runs its suite with whatever test runner it depends on. pytest is
+  // the one this provider recognises: listed in requirements.txt, the suite is `pytest`; absent,
+  // '' — "cannot prove", never a guess. The 2026-09-12 greenfield project (Python, FastAPI,
+  // pytest, requirements.txt) had every gate reading "no test command" because only package.json
+  // scripts were ever consulted.
+  testCommand: (text) => (module.exports.deps(String(text || '')).some((d) => d.toLowerCase() === 'pytest') ? 'pytest' : ''),
     installDir: null,
     deps: (text) => text.split('\n')
       .map((l) => l.trim())

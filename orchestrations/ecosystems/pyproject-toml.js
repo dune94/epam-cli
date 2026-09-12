@@ -46,6 +46,14 @@ module.exports = {
   codelineManifests: {
     dependencyCheck: {
       scanFileExtensions: [".py"],
+      importPattern: "^\\s*(?:from\\s+([A-Za-z_][\\w]*)|import\\s+([A-Za-z_][\\w]*))",
+    },
+    // pytest's collection rule (test_*.py / *_test.py) — see requirements-txt.js.
+    contractGeneration: {
+      language: 'python',
+      sourceExtensions: ['.py'],
+      excludePattern: '(^|/)(test_[^/]*|[^/]*_test)\\.py$',
+      testFilePattern: '(^|/)(test_[^/]*|[^/]*_test)\\.py$',
     },
   },
   stack: 'python',

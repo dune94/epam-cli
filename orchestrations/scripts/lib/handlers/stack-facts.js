@@ -40,8 +40,36 @@ const rolesFile = process.argv[3] || '';
 
 const read = (p) => { try { return fs.readFileSync(p, 'utf8'); } catch { return null; } };
 
-const eco = allManifests().find((e) => fs.existsSync(path.join(repo, e.file))) || null;
-const manifestText = eco ? read(path.join(repo, eco.file)) : null;
+let eco = allManifests().find((e) => fs.existsSync(path.join(repo, e.file))) || null;
+let manifestText = eco ? read(path.join(repo, eco.file)) : null;
+let prdDeclared = false;
+// A GREENFIELD CODELINE HAS NO MANIFEST YET — THE PRD DECLARES THE STACK. Before the scaffold story
+// runs, the output directory is an empty repository, so every fact above resolved to 'unknown' and
+// the mint's roster specialiser was told "The stack in use: unknown" for a project whose PRD says
+// Python, pytest and requirements.txt in its first story (2026-09-12: it went looking with a shell
+// instead of writing its roster). The PRD names the files the scaffold story creates; the provider
+// whose manifest is among them is this codeline's ecosystem, in the providers' own precedence.
+// Its declared skills stand in for the manifest text the test-command rule reads.
+if (!eco && process.env.PRD_FILE && fs.existsSync(process.env.PRD_FILE)) {
+  try {
+    const prd = JSON.parse(fs.readFileSync(process.env.PRD_FILE, 'utf8'));
+    const stories = Array.isArray(prd.stories) ? prd.stories : [];
+    const named = new Set();
+    const skills = [];
+    for (const st of stories) {
+      const tn = st && st.technicalNotes;
+      for (const f of (tn && Array.isArray(tn.files) ? tn.files : [])) named.add(path.basename(String(f)));
+      for (const sk of (tn && Array.isArray(tn.requiredSkills) ? tn.requiredSkills : [])) skills.push(String(sk));
+    }
+    const declared = allManifests().find((e) => [e.file, ...(Array.isArray(e.alsoMatches) ? e.alsoMatches : [])]
+      .some((n) => named.has(n)));
+    if (declared) {
+      eco = declared;
+      prdDeclared = true;
+      manifestText = skills.join('\n');
+    }
+  } catch { /* an unreadable PRD declares nothing; the facts below say so */ }
+}
 
 const call = (fn, ...args) => {
   if (typeof fn !== 'function') return '';
@@ -106,7 +134,9 @@ function rolesFromRoster() {
 const roles = rolesFromRoster();
 
 const facts = {
-  __STACK__: eco ? eco.stack : 'unknown',
+  __STACK__: eco
+    ? (prdDeclared ? `${eco.stack} (declared by the PRD; the codeline is not built yet — the scaffold story creates ${eco.file})` : eco.stack)
+    : 'unknown',
   __MANIFEST_FILE__: eco ? eco.file : '(this codeline declares no manifest)',
   __TEST_COMMAND__: testCommand || '(this codeline declares no test command)',
   __TEST_FILE_CONVENTIONS__: TEST_CONVENTIONS,

@@ -698,7 +698,8 @@
         }
       ],
       "template": "skill-assessment-prephase",
-      "toolGrant": "write"
+      "toolGrant": "write-file",
+      "_toolGrantWhy": "write-file, not write: this seam produces one JSON file from what it reads. With bash in its grant the roster specialiser did the scaffold story's work and wrote no roster (2026-09-12, three paid attempts)."
     },
     "prd-model-coordinator": {
       "_what": "Assigns every pending story its model, provider and reasoning effort, and writes them into the PRD.",
@@ -713,9 +714,10 @@
         }
       ],
       "template": "prd-model-coordinator",
-      "toolGrant": "write",
+      "toolGrant": "write-file",
       "_outputShapeIn": "MODEL_REVIEW",
-      "_outputShapeInWhy": "JSON Schema in lib/agent-output-schema.js (required: storyId, finalModel). The tag name matches no name rule, so the link cannot be derived — guard-vocabulary and ticket-links CAN be derived from their tags and carry no such note."
+      "_outputShapeInWhy": "JSON Schema in lib/agent-output-schema.js (required: storyId, finalModel). The tag name matches no name rule, so the link cannot be derived — guard-vocabulary and ticket-links CAN be derived from their tags and carry no such note.",
+      "_toolGrantWhy": "write-file, not write: this seam produces one JSON file from what it reads. With bash in its grant the roster specialiser did the scaffold story's work and wrote no roster (2026-09-12, three paid attempts)."
     },
     "prompt-review": {
       "_what": "Falsifies what a generated project prompt claims about this project, before any agent inherits it.",
@@ -798,7 +800,7 @@
       "timeoutSecs": 1800,
       "maxOutputTokens": 65536,
       "_why_maxOutputTokens": "THE WHOLE CANONICAL ROSTER IS ONE ARTEFACT. This seam must emit every canonical agent in a single file — the contract in project-roster.js refuses a subset — and 57 specialised personas measure ~51k tokens. At the 32768 every other seam uses it produced 38 of 57 and stopped, which the roster contract then refused, so the stage burned its attempts on a budget that could not hold the answer.",
-      "toolGrant": "write",
+      "toolGrant": "write-file",
       "produces": "project-roster",
       "consumes": [
         {
@@ -810,7 +812,10 @@
       "_outputIsArtefact": "Writes projects/<project>/roster.json with its tools. The deliverable is the file; there is no response payload to shape, and the pipeline validates the artefact it finds.",
       "_why_grant": "Reads the codeline to learn what each agent must know, and writes ONE file: the project roster. read-only cannot deliver the artefact, and the artefact is the deliverable.",
       "layer": "bootstrap",
-      "_why_bootstrap": "produces the project roster; runs before the project has prompts. A prompt that runs before the project prompt layer exists cannot be a project prompt."
+      "_why_bootstrap": "produces the project roster; runs before the project has prompts. A prompt that runs before the project prompt layer exists cannot be a project prompt.",
+      "_toolGrantWhy": "write-file, not write: this seam produces one JSON file from what it reads. With bash in its grant the roster specialiser did the scaffold story's work and wrote no roster (2026-09-12, three paid attempts).",
+      "maxToolCalls": 16,
+      "_maxToolCallsWhy": "Read the canonical copy, read what the project declares, write the roster: a handful of calls. The rung's iteration budget is sized for the writer; without a budget of its own this seam spent 150 calls per attempt and never wrote the file."
     },
     "project-roster-review": {
       "_what": "Falsifies the project roster against canonical before any agent is invoked from it.",

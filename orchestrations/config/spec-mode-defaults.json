@@ -48,6 +48,12 @@
           "bash",
           "write_file"
         ]
+      },
+      "write-file": {
+        "$what": "Must produce ONE file the pipeline then reads, from what it is given and what it can read — and never run anything. The roster specialiser, handed `write` (bash + write_file), spent three attempts and ~350 shell calls exploring the registry and copying a source repository into the codeline instead of writing its roster (2026-09-12). A seam whose output is a file does not need a shell to write it.",
+        "adds": [
+          "write_file"
+        ]
       }
     }
   },

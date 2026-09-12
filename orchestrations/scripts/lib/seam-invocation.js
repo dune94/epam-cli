@@ -572,6 +572,15 @@ function seamInvocationEnv(agent, agentsDir, opts) {
   // that. See lib/model-settings.js.
   if (profile.maxIterations !== undefined) env.EPAM_MAX_ITERATIONS = String(profile.maxIterations);
   if (profile.maxOutputTokens !== undefined) env.EPAM_MAX_OUTPUT_TOKENS = String(profile.maxOutputTokens);
+  // THE TOOL-CALL BUDGET, DECLARED AND DELIVERED. The registry has carried maxToolCalls per seam
+  // since the review seam asked for it, but only the shell gateway (agent-invoke.sh) read it; this
+  // path — every JS seam, the mint's roster specialiser among them — exported nothing, so a
+  // declared budget reached no runner. Live 2026-09-12: the specialiser spent 350 tool calls over
+  // three attempts on a job that needs a handful, because the only cap it had was the rung's
+  // 150-iteration budget sized for the writer.
+  if (profile.maxToolCalls !== undefined && profile.maxToolCalls !== null && profile.maxToolCalls !== '') {
+    env.EPAM_MAX_TOOL_CALLS = String(profile.maxToolCalls);
+  }
   if (profile.timeoutSecs !== undefined) {
     // A CEILING FOR RUNS THAT ARE NOT WAITING ON A MODEL.
     //

@@ -53,15 +53,32 @@ function ask(prompt: string): Promise<string> {
   });
 }
 
+const reg = JSON.parse(readFileSync(join(ROOT, 'orchestrations/agents/invocation-profiles.json'), 'utf8')).profiles as Record<string, any>;
+const WRITER = Object.entries(reg).find(([, p]) => p && p.produces === 'implementation')![0];
+const TPL = join(ROOT, 'orchestrations/prompts/templates');
+/**
+ * The prompts a writer call CARRIES WHOLE: single-body templates that declare the writer seam AND
+ * that the writer's own runner script renders as a prompt (`render_engine_prompt <id>`) and that
+ * name the story they are for. A note that only ever rides inside another prompt is not one of
+ * them — read from the call sites and the template, not listed here.
+ */
+const rendered = new Set([...readFileSync(join(ROOT, 'orchestrations/scripts/claude.sh'), 'utf8').matchAll(/render_engine_prompt ([a-z0-9-]+)/g)].map((m) => m[1]));
+const writerTemplates = readdirSync(TPL).filter((f) => f.endsWith('.json')).map((f) => f.replace(/\.json$/, ''))
+  .filter((id) => rendered.has(id))
+  // A prompt FOR a story names the story; a note that rides inside another prompt does not.
+  .filter((id) => { const t = JSON.parse(readFileSync(join(TPL, `${id}.json`), 'utf8')); return typeof t.body === 'string' && Array.isArray(t.seams) && t.seams.includes(WRITER) && placeholdersIn(t.body).includes('__STORY_ID__'); });
+
 describe('the writer is answered by its own seam at £0', () => {
-  it('a writer prompt with NO fix plan and no other optional section reaches the story-writer seam', async () => {
-    const doc = JSON.parse(readFileSync(templatePath('story-writer-main'), 'utf8'));
+  it('there are templates the writer renders — otherwise nothing below is tested', () => {
+    expect(writerTemplates.length).toBeGreaterThan(0);
+  });
+  it.each(writerTemplates)('%s rendered with NO optional section reaches the writer seam', async (id) => {
+    const doc = JSON.parse(readFileSync(templatePath(id), 'utf8'));
     const values: Record<string, string> = {};
     const optional = new Set(doc.mayBeEmpty || []);
     for (const p of placeholdersIn(doc.body)) values[p] = optional.has(p) ? '' : `value of ${p.replace(/_/g, ' ').trim()}`;
-    values.__STORY_ID__ = 'GF-1'; values.__TITLE__ = 'a greenfield story'; values.__DESCRIPTION__ = 'build it';
-    const prompt = renderEngineTemplate('story-writer-main', values);
+    const prompt = renderEngineTemplate(id, values);
     const seam = await ask(prompt);
-    expect(seam, 'the writer call matched no registered seam').toMatch(/^story-writer/);
+    expect(seam, `${id}: the writer call matched no registered seam`).toMatch(new RegExp(`^${WRITER}(:|$)`));
   });
 });

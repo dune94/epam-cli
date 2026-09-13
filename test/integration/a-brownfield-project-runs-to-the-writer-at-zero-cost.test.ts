@@ -34,7 +34,7 @@ import { mkdtempSync, mkdirSync, readFileSync, rmSync, existsSync, readdirSync, 
 import { join } from 'node:path';
 import { tmpdir } from 'node:os';
 import { MiniMockServer } from './lib/mini-mockserver';
-import { fixtureInstall, edgeFor, zeroCostEnv, run } from './lib/fixture-install';
+import { ROOT, fixtureInstall, edgeFor, zeroCostEnv, run } from './lib/fixture-install';
 
 const dirs: string[] = [];
 const children: ChildProcess[] = [];
@@ -56,6 +56,17 @@ beforeAll(async () => {
 afterAll(() => mock.stop());
 
 const LAUNCHER = 'orchestrations/scripts/mock1-paused-run.sh';
+
+/** A seam named by what the registry says it PRODUCES — never by its name. */
+const seamProducing = (what: string): string => {
+  const reg = JSON.parse(readFileSync(join(ROOT, 'orchestrations/agents/invocation-profiles.json'), 'utf8')).profiles as Record<string, any>;
+  const hit = Object.entries(reg).find(([, p]) => p && p.produces === what);
+  if (!hit) throw new Error(`no seam produces '${what}'`);
+  return hit[0];
+};
+const WRITER = seamProducing('implementation');
+const SPECIALISER = seamProducing('project-roster');
+const isSeam = (hit: { seam: string }, seam: string) => hit.seam === seam || hit.seam.startsWith(`${seam}:`);
 
 /** The project the paused launcher runs when none is named: the one carrying the seed it builds from. */
 function launcherProject(): string {
@@ -99,7 +110,7 @@ describe('a brownfield project runs to the writer at £0', () => {
     // cannot locate a fix site or estimate one, and CPA blocks an unlocated defect by design.
     const recorded = (seam: string) => new RegExp(`^\\s+${seam}\\s+<-\\s+cassette:`, 'm').test(text)
       && !new RegExp(`^\\s+${seam}\\s+<-.*another project's answer`, 'm').test(text);
-    const investigated = recorded('code-graph-detective') && recorded('cpa-inference');
+    const investigated = recorded(seamProducing('fix-plan')) && recorded(seamProducing('estimate'));
 
     const failedSteps = [...text.matchAll(/✗[^\n]{0,12}?Step (\d+):\s*([^\n]*)/g)].map((m) => `${m[1]}: ${m[2].trim()}`);
     const specStep = (text.match(/▶[^\n]{0,12}?Step (\d+):\s*Specification pass/) || [])[1];
@@ -119,7 +130,7 @@ describe('a brownfield project runs to the writer at £0', () => {
     }
 
     // The mint ran, on a brownfield codeline, and left what the writer stage reads.
-    expect(mock.hits.some((h) => /^roster-specialiser/.test(h.seam)), 'the roster specialiser was never invoked — the mint did not run').toBe(true);
+    expect(mock.hits.some((h) => isSeam(h, SPECIALISER)), 'the roster specialiser was never invoked — the mint did not run').toBe(true);
     for (const f of ['roster.json', 'agent-profiles.json', 'project-roles.json']) {
       expect(existsSync(join(projDir, f)), `${f} was not written by the mint`).toBe(true);
     }
@@ -136,14 +147,14 @@ describe('a brownfield project runs to the writer at £0', () => {
 
     // RESUME: the same launcher continues at implementation. The writer is invoked; whether it
     // completes depends on a recording of this project's writer existing.
-    const writerRecorded = /^\s+story-writer\s+<-\s+cassette:/m.test(text) && !/^\s+story-writer\s+<-.*another project's answer/m.test(text);
+    const writerRecorded = recorded(WRITER);
     const hitsBefore = mock.hits.length;
     const r2 = await run('bash', [join(install, LAUNCHER), '--resume', runId], { cwd: install, env: env(), timeout: 40 * 60_000 });
     const text2 = r2.stdout + r2.stderr;
     keep('brownfield-resume', text2, projDir);
     const tail2 = text2.split('\n').slice(-60).join('\n') + '\n--- model calls served ---\n' + mock.hits.slice(hitsBefore).map((h, i) => `${i + 1}. ${h.seam}`).join('\n');
     expect(text2, `the resume did not reach implementation — log tail:\n${tail2}`).toMatch(/resume finished/);
-    expect(mock.hits.slice(hitsBefore).some((h) => /^story-writer/.test(h.seam)), `the writer was never invoked on resume — log tail:\n${tail2}`).toBe(true);
+    expect(mock.hits.slice(hitsBefore).some((h) => isSeam(h, WRITER)), `the writer was never invoked on resume — log tail:\n${tail2}`).toBe(true);
     if (writerRecorded) {
       expect(r2.status, `resume exited ${r2.status} — log tail:\n${tail2}`).toBe(0);
       expect(text2).toMatch(/greeting now: return 'hello dolly'/);

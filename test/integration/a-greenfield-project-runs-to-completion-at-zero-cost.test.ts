@@ -55,13 +55,63 @@ function greenfieldProjects(): string[] {
   });
 }
 
+/**
+ * ANOTHER INSTALL'S GREENFIELD PROJECTS, RUN HERE AT £0 BEFORE THEY ARE LAUNCHED ANYWHERE.
+ *
+ * A project authored in another install — its config.env and the canonical PRD it names — is
+ * copied into the fixture install (its generated artefacts left behind: roster, profiles, prompts,
+ * runs, kb) and takes its place in the universe. Set EPAM_GREENFIELD_TEST_INSTALL to that install's
+ * root. This is how a project is proven at £0 with ITS data before a single paid launch: the four
+ * paid runs of 2026-09-13 each found a defect this test would have found first had it run their
+ * project rather than only this repository's.
+ */
+function adoptExternalProjects(install: string) {
+  const src = process.env.EPAM_GREENFIELD_TEST_INSTALL;
+  if (!src) return [] as string[];
+  const generated = JSON.parse(readFileSync(join(ROOT, 'orchestrations-installer/generated-run-state-paths.json'), 'utf8')).paths as string[];
+  const runState = JSON.parse(readFileSync(join(ROOT, 'orchestrations-installer/run-state-paths.json'), 'utf8')).paths as string[];
+  // What a project directory carries that a run generated — EXACTLY what the installer declares it
+  // must never overwrite, read as globs relative to the project directory. No name is listed here.
+  const leaveBehind = [...generated, ...runState]
+    .map((p) => p.match(/^orchestrations\/projects\/\*\/(.+)$/)).filter(Boolean)
+    .map((m) => new RegExp('^' + m![1].replace(/[.+^${}()|[\]\\]/g, '\\$&').replace(/\*/g, '[^/]*') + '(/|$)'));
+  const adopted: string[] = [];
+  const projectsSrc = join(src, 'orchestrations/projects');
+  for (const p of readdirSync(projectsSrc)) {
+    const cfgPath = join(projectsSrc, p, 'config.env');
+    if (!existsSync(cfgPath)) continue;
+    const cfg = readFileSync(cfgPath, 'utf8');
+    if (!/^EPAM_BROWNFIELD=0\s*$/m.test(cfg)) continue;
+    const dest = join(install, 'orchestrations/projects', p);
+    // THEIR projects, not this repository's: a project the repository already carries is run as
+    // the repository declares it (the other install may hold an older copy of it).
+    if (existsSync(dest)) continue;
+    cpSync(join(projectsSrc, p), dest, { recursive: true, filter: (f) => {
+      const rel = f.slice(join(projectsSrc, p).length + 1);
+      // A directory is copied when anything under it may be kept; a generated file is not.
+      return !rel || !leaveBehind.some((r) => r.test(rel) || r.test(rel + '/'));
+    } });
+    const canonical = (cfg.match(/^PRD_CANONICAL=(.*)$/m) || [, ''])[1].trim();
+    if (canonical) {
+      const from = canonical.startsWith('/') ? canonical : join(src, canonical);
+      const to = canonical.startsWith('/') ? canonical : join(install, canonical);
+      if (!canonical.startsWith('/')) { mkdirSync(join(to, '..'), { recursive: true }); cpSync(from, to); }
+    }
+    adopted.push(p);
+  }
+  return adopted;
+}
+
 const mock = new MiniMockServer();
 let install = '';
 let bin = '';
+let adopted: string[] = [];
 beforeAll(async () => {
   await mock.start();
   install = fixtureInstall(dirs);
   bin = edgeFor(install, mock.url, children).bin;
+  adopted = adoptExternalProjects(install);
+  if (adopted.length) console.log(`[greenfield £0] adopted from ${process.env.EPAM_GREENFIELD_TEST_INSTALL}: ${adopted.join(', ')}`);
 }, 120_000);
 afterAll(() => mock.stop());
 
@@ -73,7 +123,22 @@ function runEnv(_project: string, outputDir: string): Record<string, string> {
   });
 }
 
-const projects = greenfieldProjects();
+/** A seam named by what the registry says it PRODUCES — never by its name. */
+const seamProducing = (what: string): string => {
+  const reg = JSON.parse(readFileSync(join(ROOT, 'orchestrations/agents/invocation-profiles.json'), 'utf8')).profiles as Record<string, any>;
+  const hit = Object.entries(reg).find(([, p]) => p && p.produces === what);
+  if (!hit) throw new Error(`no seam produces '${what}'`);
+  return hit[0];
+};
+const WRITER = seamProducing('implementation');
+const isSeam = (hit: { seam: string }, seam: string) => hit.seam === seam || hit.seam.startsWith(`${seam}:`);
+
+const projects = [...new Set([...greenfieldProjects(), ...(process.env.EPAM_GREENFIELD_TEST_INSTALL
+  ? readdirSync(join(process.env.EPAM_GREENFIELD_TEST_INSTALL, 'orchestrations/projects')).filter((p) => {
+    if (existsSync(join(ROOT, 'orchestrations/projects', p))) return false;   // the repository's own copy is the one run
+    const f = join(process.env.EPAM_GREENFIELD_TEST_INSTALL!, 'orchestrations/projects', p, 'config.env');
+    return existsSync(f) && /^EPAM_BROWNFIELD=0\s*$/m.test(readFileSync(f, 'utf8'));
+  }) : [])])];
 
 describe('a greenfield project runs to completion at £0', () => {
   it('the launcher has at least one greenfield project to run, and the runner CLI exists', () => {
@@ -122,8 +187,8 @@ describe('a greenfield project runs to completion at £0', () => {
       }
       // Does THIS project have a recording of its own writer? The registration says so per seam:
       // a capture from another project is labelled as such and cannot write this project's code.
-      const writerRecorded = reg.stdout.split('\n').some((l) => /^\s+story-writer\s+<-\s+cassette:/.test(l))
-        && !reg.stdout.split('\n').some((l) => /^\s+story-writer\s+<-.*another project's answer/.test(l));
+      const writerRecorded = reg.stdout.split('\n').some((l) => new RegExp(`^\\s+${WRITER}\\s+<-\\s+cassette:`).test(l))
+        && !reg.stdout.split('\n').some((l) => new RegExp(`^\\s+${WRITER}\\s+<-.*another project's answer`).test(l));
 
       // Every stage BEFORE the writer passed: the first failed step, if any, is the writer's own.
       const failedSteps = [...text.matchAll(/✗[^\n]{0,12}?Step (\d+):\s*([^\n]*)/g)].map((m) => `${m[1]}: ${m[2].trim()}`);
@@ -131,7 +196,7 @@ describe('a greenfield project runs to completion at £0', () => {
       expect(writerStep, `the run never reached the writer — log tail:\n${tail}`).toBeTruthy();
       const before = failedSteps.filter((f) => Number(f.split(':')[0]) < Number(writerStep));
       expect(before, `a stage before the writer failed — log tail:\n${tail}`).toEqual([]);
-      expect(mock.hits.some((h) => /^story-writer/.test(h.seam)), 'the writer was never invoked').toBe(true);
+      expect(mock.hits.some((h) => isSeam(h, WRITER)), 'the writer was never invoked').toBe(true);
       // Calls that matched no seam are REPORTED, not refused: the `claude` CLI makes auxiliary calls
       // of its own (measured live: 4 POSTs where 2 were expected), and the catch-all exists to
       // absorb exactly those. A seam that fell through shows up as a failed stage above instead.

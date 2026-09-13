@@ -56,6 +56,12 @@ const { variantIdFor } = require('./engine-prompt.js');
  * The template's body as one string — the SAME expression checkGeneratedPrompt uses, so the text
  * the generator is shown and the text its output is judged against cannot drift apart.
  */
+/**
+ * THE SLOT THE GENERATOR EMBEDS THE TEMPLATE'S SEGMENTS IN — named once. The rehearsal mock finds
+ * the generator template by this slot; a second spelling there would drift from this one.
+ */
+const GEN_BODY_SLOT = '__GEN_TEMPLATE_BODY__';
+
 function templateBodyText(template) {
   if (!template) return '';
   if (typeof template.body === 'string' && template.body) return template.body;
@@ -240,7 +246,7 @@ function renderGeneratorPrompt({ generatorBody, template, projectContext, codeli
     // for the same number back; the slots never enter its input or its output, so it cannot drop
     // one. 25 refusals on 2026-09-08 were all "dropped placeholder(s) the template requires", and
     // a dropped slot silently starves the agent of the evidence that slot carries.
-    .split('__GEN_TEMPLATE_BODY__').join((() => {
+    .split(GEN_BODY_SLOT).join((() => {
       const { splitByPlaceholders, formatSegments } = require('./project-prompt-contract.js');
       const { segments } = splitByPlaceholders(templateBodyText(template));
       return formatSegments(segments) + '\n'
@@ -962,7 +968,7 @@ function clearCompletionMarker({ outDir } = {}) {
   } catch { /* best effort, same reasoning as above */ }
 }
 
-module.exports = { buildProjectPrompts, renderGeneratorPrompt, provisioningList, rolesIdentity,
+module.exports = { buildProjectPrompts, renderGeneratorPrompt, provisioningList, rolesIdentity, GEN_BODY_SLOT,
   writeCompletionMarker, clearCompletionMarker,
   // Exported so the codeline keying is assertable without provisioning: a segment that escapes
   // the cache directory is a defect no end-to-end assertion would localise.

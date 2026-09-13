@@ -107,6 +107,8 @@ let _titles;
 // Declared here, above the library/CLI split: a `let` below `if (require.main !== module) return;`
 // is never initialised for a caller that requires this file.
 let _trackerStories = null;
+/** The word every stand-in is marked with — generated and recognised with this one constant. */
+const STAND_IN_MARK = 'stand-in';
 function storyDiscriminator(storyId) {
   if (!storyId) return null;
   if (!_titles) {
@@ -889,7 +891,9 @@ function TAG_ITEMS_KEY(seam) {
 /** A body this loader itself invented — never a capture, whatever recorded it. */
 function isStandInBody(body) {
   const b = String(body || '');
-  return /stand-in (artefact )?for [a-z0-9:_-]+/i.test(b) || /"note"\s*:\s*"stand-in/.test(b) || /stand-in reply for the [a-z0-9:_-]+ seam/i.test(b);
+  // THE ONE TELL EVERY STAND-IN CARRIES: its text begins with the mark below, whichever shape it
+  // took (a note, a reply sentence, a minted name). The generators and this reader share the mark.
+  return new RegExp(`(^|["'\\s:(])${STAND_IN_MARK}[ -]`, 'i').test(b);
 }
 
 function contractStandIn(seam) {
@@ -915,14 +919,14 @@ function contractStandIn(seam) {
       return estateRepos().map((r) => ({
         ...r,
         evidence: `a git repository under the declared codeline root ${path.dirname(r.path)}`,
-        reason: `stand-in for ${seam}: every repository the run declares is selected`,
+        reason: `${STAND_IN_MARK} for ${seam}: every repository the run declares is selected`,
       }));
     }
     if (/s$/.test(k) && !/status|address/i.test(k)) return [];
     if (/^(is|has|should|can|must)/i.test(k)) return false;
     if (/count|total|score|index|number/i.test(k)) return 0;
     if (/verdict/i.test(k)) return 'pass';
-    return `stand-in for ${seam}: no captured reply exists for this seam`;
+    return `${STAND_IN_MARK} for ${seam}: no captured reply exists for this seam`;
   };
 
   if (c.kind === 'declared') {
@@ -958,10 +962,10 @@ function contractStandIn(seam) {
       if (/role|agent|name/i.test(name) && ents.length) return ents[0];
       // A NAME MUST LOOK LIKE A NAME: the mint refuses one that is not kebab-case.
       if (/name|role|id$/i.test(name)) {
-        return `stand-in-${String(seam).toLowerCase().replace(/[^a-z0-9]+/g, '-').replace(/^-|-$/g, '')}`;
+        return `${STAND_IN_MARK}-${String(seam).toLowerCase().replace(/[^a-z0-9]+/g, '-').replace(/^-|-$/g, '')}`;
       }
       // LENGTH IS PART OF THE CONTRACT: a rationale under the declared minimum "says nothing".
-      const base = `stand-in reply for the ${seam} seam, long enough to satisfy the contract's`
+      const base = `${STAND_IN_MARK} reply for the ${seam} seam, long enough to satisfy the contract's`
         + ' declared minimum so the consumer judges the WIRING rather than the prose';
       const min = Number(spec && spec.minLength) || 0;
       return base.length >= min ? base : base.padEnd(min, ' .');
@@ -1030,10 +1034,10 @@ function contractStandIn(seam) {
     }
     return { verdict: 'pass', findings: [] };
   }
-  if (c.kind === 'artefact') return { note: `stand-in artefact for ${seam}` };
+  if (c.kind === 'artefact') return { note: `${STAND_IN_MARK} artefact for ${seam}` };
   // A seam that declares NO contract is satisfied by any JSON object — so it gets one, rather than
   // being left to the catch-all and reported as uncovered when nothing is in fact missing.
-  if (c.kind === 'none') return { note: `stand-in for ${seam}: this seam declares no output contract` };
+  if (c.kind === 'none') return { note: `${STAND_IN_MARK} for ${seam}: this seam declares no output contract` };
   return null;
 }
 
@@ -1074,7 +1078,7 @@ function standInRoleName(kind) {
   for (const r of ordered) {
     const suffix = String(r.match || r.pattern || '').replace(/[^a-z-]/gi, '').replace(/^-+/, '');
     if (!suffix) continue;
-    const candidate = `stand-in-${suffix}`;
+    const candidate = `${STAND_IN_MARK}-${suffix}`;
     try {
       if (resolveSeam(candidate)) return candidate;
     } catch (_) { /* this suffix does not route; try the next the registry declares */ }
@@ -1850,11 +1854,13 @@ function endsInToolCall(cap, seam) {
   // text the builder showed, which the contract check accepts as a faithful copy. The generator is
   // found by the slot it fills, never by name.
   const _generator = (() => {
+    // eslint-disable-next-line global-require
+    const { GEN_BODY_SLOT } = require('./lib/project-prompt-builder.js');
     for (const f of fs.readdirSync(TPL).filter((x) => x.endsWith('.json'))) {
       try {
         const t = JSON.parse(fs.readFileSync(path.join(TPL, f), 'utf8'));
         const body = t.bodies ? Object.values(t.bodies).join('\n') : String(t.body || '');
-        if (body.includes('__GEN_TEMPLATE_BODY__')) return f.replace(/\.json$/, '');
+        if (body.includes(GEN_BODY_SLOT)) return f.replace(/\.json$/, '');
       } catch { /* not a template */ }
     }
     return null;

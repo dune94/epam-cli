@@ -104,6 +104,9 @@ describe('buildProjectRoster, end to end, with a specialiser that writes only a 
     expect(roster.extractDeltaJson('{"agents":{}} — nothing to specialise')).toEqual({ agents: {} });
     expect(roster.extractDeltaJson('I could not read the canonical.')).toBeNull();
     expect(roster.extractDeltaJson('{"note":"stand-in"}')).toBeNull();
+    // A list is a delta too: a contract stand-in derives a list for a plural key, and a model may.
+    expect(roster.extractDeltaJson('{"agents":[]}')).toEqual({ agents: {} });
+    expect(roster.extractDeltaJson('{"agents":[{"name":"alpha","persona":"p"}]}')).toEqual({ agents: { alpha: { persona: 'p' } } });
   });
 
   it('the mint writes the answer where the roster lives, and only when the agent did not write it', () => {

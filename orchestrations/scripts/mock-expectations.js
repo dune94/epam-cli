@@ -327,6 +327,12 @@ async function langfuseReply(seam) {
   const candidates = [];
   for (const t of ((list && list.data) || [])) {
     if (!t || !t.id || /:plan$/.test(String(t.name || ''))) continue;
+    // A REHEARSAL'S OWN TRACES ARE NOT CAPTURES. Recorded while a set that declares itself a
+    // rehearsal (or a cassette replay) answered from stand-ins and recordings, they carry no
+    // model's word; served back, one rehearsal's stand-in became the next one's "recorded" turn
+    // and the roster stage failed on its own echo three launches running (2026-09-13). The
+    // recorder stamps them (lib/langfuse-emit.js); the stand-in's own text is the second tell.
+    if (t.metadata && t.metadata.rehearsal === true) continue;
     const full = await get(`/api/public/traces/${encodeURIComponent(t.id)}`);
     for (const o of (((full && full.observations) || [])).slice().reverse()) {
       const out = o && o.output;
@@ -345,6 +351,7 @@ async function langfuseReply(seam) {
       const body = text.trim();
       if (body === '{}' || /^\{"text"\s*:\s*"\{\}"/.test(body)) continue;
       if (String(o.model || '') === 'replay') continue;
+      if (isStandInBody(body)) continue;
 
       let parsed = null;
       try { parsed = JSON.parse(body); } catch { /* prose is a real reply too */ }
@@ -748,7 +755,9 @@ module.exports = {
   captureIsOwned,
   sse, sseToolCalls, anthropicSse, anthropicSseToolCalls,
   // Exported so a test can put the stand-in through the CONSUMER'S OWN GATE, without a run.
-  contractStandIn, expectsARole, standInRoleName,
+  contractStandIn, expectsARole, standInRoleName, isStandInBody,
+  // Exported so a test can drive the capture selection against a stub Langfuse.
+  langfuseReply,
 };
 
 // RUNNING IS OPT-IN. Requiring this file used to EXECUTE the whole registration pass — which
@@ -807,6 +816,12 @@ function TAG_ITEMS_KEY(seam) {
     const t = c && c.tag && TAG_TO_TOOL[c.tag];
     return (t && t.itemsKey) || '';
   } catch { return ''; }
+}
+
+/** A body this loader itself invented — never a capture, whatever recorded it. */
+function isStandInBody(body) {
+  const b = String(body || '');
+  return /stand-in (artefact )?for [a-z0-9:_-]+/i.test(b) || /"note"\s*:\s*"stand-in/.test(b) || /stand-in reply for the [a-z0-9:_-]+ seam/i.test(b);
 }
 
 function contractStandIn(seam) {

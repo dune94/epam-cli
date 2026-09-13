@@ -106,7 +106,20 @@ function extractDeltaJson(text) {
   for (const c of candidates) {
     try {
       const parsed = JSON.parse(c);
-      if (parsed && typeof parsed === 'object' && parsed.agents && typeof parsed.agents === 'object') return parsed;
+      if (!parsed || typeof parsed !== 'object' || !parsed.agents || typeof parsed.agents !== 'object') continue;
+      // A LIST IS A DELTA TOO. A model (or a contract stand-in, which derives a list for a plural
+      // key) may answer `agents: [...]`; entries carrying a name are keyed by it, and an empty
+      // list is an empty delta — nothing specialised, everything adopted.
+      if (Array.isArray(parsed.agents)) {
+        const keyed = {};
+        for (const e of parsed.agents) {
+          if (e && typeof e === 'object' && typeof e.name === 'string' && e.name.trim()) {
+            const { name, ...rest } = e; keyed[name.trim()] = rest;
+          }
+        }
+        return { ...parsed, agents: keyed };
+      }
+      return parsed;
     } catch { /* try the next candidate */ }
   }
   return null;

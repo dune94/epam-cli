@@ -138,6 +138,18 @@ function sessionId(env) {
  * with calls becomes {text, toolCalls} and a reply without them stays exactly the STRING it has
  * always been — the entire existing corpus is text-only and must not be reshaped.
  */
+/** Whether this process is a rehearsal: a cassette replay, or a set that declares itself one. */
+function isRehearsal(env) {
+  const e = env || process.env;
+  if (e.EPAM_REPLAY_CASSETTE_DIR) return true;
+  try {
+    // eslint-disable-next-line global-require
+    const { activeSetFile } = require('./llm-settings-resolve.js');
+    const f = activeSetFile();
+    return !!(f && JSON.parse(require('fs').readFileSync(f, 'utf8')).rehearsal === true);
+  } catch { return false; }
+}
+
 function outputWithCalls(output, toolCalls) {
   const calls = Array.isArray(toolCalls) ? toolCalls : [];
   if (!calls.length) return output;
@@ -240,6 +252,11 @@ function buildIngestionBody(f, ids) {
           // ONE TRACE PER ATTEMPT, its tool calls aggregated. The exporter folds these where the
           // provider recorded the same calls one turn each (cassette-export.js).
           granularity: 'attempt',
+          // A REHEARSAL'S OWN TRACES ARE NOT CAPTURES. Answered from a recording or a stand-in,
+          // they carry no model's word, and a loader that took them as captures fed one
+          // rehearsal's stand-ins to the next (2026-09-13). Declared by the active set
+          // (llm-defaults.<set>.json rehearsal:true) or by a cassette replay.
+          ...(isRehearsal(process.env) ? { rehearsal: true } : {}),
           phase: f.phase || '',
           story_id: f.storyId || '',
           provider: f.provider || '',

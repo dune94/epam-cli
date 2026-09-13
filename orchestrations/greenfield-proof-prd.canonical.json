@@ -1,0 +1,111 @@
+{
+  "id": "greenfield-proof",
+  "title": "greenfield-proof",
+  "version": "1.0",
+  "lastUpdated": "2026-09-13",
+  "project": {
+    "name": "greenfield-proof",
+    "description": "The smallest greenfield project that exercises every stage of the pipeline: a Python package with one behaviour and its tests, built from nothing in two phases.",
+    "stack": {
+      "language": "Python",
+      "runtime": "Python 3.12 (.venv)",
+      "framework": "FastAPI",
+      "testing": "pytest",
+      "devEnvironment": "Ubuntu WSL2"
+    },
+    "outputDir": "/tmp/greenfield-proof-build"
+  },
+  "configuration": {
+    "llmGateway": "dial/client.py get_async_client() only",
+    "confidenceThresholdDefault": 0.7,
+    "protectedPaths": [
+      ".claude/",
+      "dial/",
+      "docs/",
+      ".env",
+      ".env.example",
+      "manifest.md"
+    ],
+    "sourceRepoReadOnly": "/home/bradleyjerome/projects/ai/bogota-workshop-exercise",
+    "$sourceRepoReadOnly": "The workshop repo. READ-ONLY source of dial/, docs/, requirements.txt, .env.example, manifest.md. Never write to it; never copy its .env."
+  },
+  "implementationOrder": {
+    "scaffold": [
+      "GFP-001"
+    ],
+    "core": [
+      "GFP-002"
+    ]
+  },
+  "phasesConfig": {
+    "scaffold": {
+      "description": "Package skeleton, SQLite store, test harness",
+      "parallelWorktrees": false
+    },
+    "core": {
+      "description": "Ingest, dedup, DIAL classification, escalation, injection proof, review API and portal, cost ledger, run script",
+      "parallelWorktrees": true
+    }
+  },
+  "stories": [
+    {
+      "id": "GFP-001",
+      "title": "Scaffold the Python package with a pytest harness",
+      "phase": "scaffold",
+      "agentGroup": "main",
+      "status": "pending",
+      "completed": false,
+      "effort": "low",
+      "storyKind": "novel",
+      "description": "Create the project skeleton at the codeline root: requirements.txt declaring pytest, a src/proof/__init__.py package exposing __version__ = '0.1.0', a tests/ directory with tests/test_smoke.py asserting the package imports and __version__ equals '0.1.0', and a .gitignore ignoring .venv and __pycache__. Create a .venv, install requirements, and confirm pytest exits 0.",
+      "acceptanceCriteria": [
+        "requirements.txt exists and lists pytest",
+        "src/proof/__init__.py exists and defines __version__ = '0.1.0'",
+        "tests/test_smoke.py exists and asserts proof.__version__ == '0.1.0'",
+        ".gitignore exists and contains .venv and __pycache__",
+        "Running python -m pytest at the codeline root exits 0 with at least one test collected"
+      ],
+      "technicalNotes": {
+        "files": [
+          "requirements.txt",
+          "src/proof/__init__.py",
+          "tests/test_smoke.py",
+          ".gitignore"
+        ],
+        "workingDir": ".",
+        "testCommand": "python -m pytest"
+      }
+    },
+    {
+      "id": "GFP-002",
+      "title": "Add slugify with tests",
+      "phase": "core",
+      "agentGroup": "primary",
+      "status": "pending",
+      "completed": false,
+      "effort": "low",
+      "storyKind": "novel",
+      "dependencies": [
+        "GFP-001"
+      ],
+      "description": "Add src/proof/slug.py exporting slugify(text: str) -> str: lowercase the text, replace runs of whitespace with a single hyphen, drop every character that is not a-z, 0-9 or hyphen, and strip leading and trailing hyphens. Add tests/test_slug.py covering each acceptance criterion. pytest must stay green.",
+      "acceptanceCriteria": [
+        "slugify('Hello World') returns 'hello-world'",
+        "slugify('  many   spaces ') returns 'many-spaces'",
+        "slugify('Rock & Roll!') returns 'rock-roll'",
+        "slugify('') returns ''",
+        "tests/test_slug.py exists and covers every criterion above",
+        "Running python -m pytest at the codeline root exits 0"
+      ],
+      "technicalNotes": {
+        "files": [
+          "src/proof/slug.py",
+          "tests/test_slug.py"
+        ],
+        "workingDir": ".",
+        "testCommand": "python -m pytest"
+      }
+    }
+  ],
+  "currentIteration": 1
+}

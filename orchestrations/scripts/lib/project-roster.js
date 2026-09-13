@@ -162,12 +162,19 @@ function composeFromDelta(delta, canonical) {
     const ancestor = (typeof entry.ancestor === 'string' && entry.ancestor.trim())
       ? entry.ancestor.trim() : (inCanonical ? name : '');
     const ancestorPersona = ancestor && typeof canonical[ancestor] === 'string' ? canonical[ancestor] : null;
+    // A MINTED AGENT'S ANCESTOR IS ITSELF, so its digest is of its OWN persona — the rule
+    // rosterFromCanonical and the canonical-mode adoption already apply, and the one checkEntry
+    // judges by. This path set a digest only for a canonical ancestor, so a delta that ADDED minted
+    // agents ("0 specialised, 2 added") left them digestless and the contract refused them three
+    // times — a digest no agent can compute (2026-09-13, $0.34).
+    const selfMinted = ancestor === name && ancestorPersona === null && isRegisteredProjectAgent(name);
     const { rationale: _baseRationale, ...baseEntry } = base.agents[name] || {};
     const composed = {
       ...baseEntry,
       ...entry,
       ancestor,
-      ...(ancestorPersona !== null ? { derivedFromSha256: personaDigest(ancestorPersona) } : {}),
+      ...(ancestorPersona !== null ? { derivedFromSha256: personaDigest(ancestorPersona) }
+        : selfMinted ? { derivedFromSha256: personaDigest(String(entry.persona || '')) } : {}),
     };
     if (!composed.kind && base.agents[ancestor]) composed.kind = base.agents[ancestor].kind;
     if (typeof entry.rationale !== 'string' || !entry.rationale.trim()) {

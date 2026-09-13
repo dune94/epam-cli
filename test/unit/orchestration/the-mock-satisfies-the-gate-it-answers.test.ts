@@ -215,3 +215,37 @@ describe("a tracker run's stories come from the tracker", () => {
     } finally { for (const [k, v] of Object.entries(saved)) { if (v === undefined) delete process.env[k]; else process.env[k] = v; } }
   });
 });
+
+/**
+ * THE SPECIALISER STAND-IN ANSWERS AS THE MODEL DID: IT ADDS THE MINTED AGENTS.
+ *
+ * Run 5 (2026-09-13, $0.34) wrote "0 specialised, 2 added" and the engine refused both minted
+ * agents for a digest it had not computed. The stand-in had always written an empty delta, so the
+ * £0 test never reached that path. The stand-in now adds every agent the mint stand-in mints, each
+ * its own ancestor — and the delta is put through the engine's own compose and contract check.
+ */
+describe('the specialiser stand-in adds the minted agents and the engine accepts them', () => {
+  it('composes through composeFromDelta and passes checkRoster', () => {
+    const { mkdtempSync: mk, writeFileSync: wf } = require('node:fs');
+    const os = require('node:os');
+    const rosterLib = require('../../../orchestrations/scripts/lib/project-roster.js');
+    const delta = mock.contractStandIn('roster-specialiser');
+    const names = Object.keys((delta && delta.agents) || {});
+    expect(names.length, 'the stand-in delta adds nothing — it does not answer as a model does').toBeGreaterThan(0);
+    for (const n of names) expect(delta.agents[n].ancestor, `${n} is not its own ancestor`).toBe(n);
+    // The mint registers what it minted before the specialiser runs; the fixture does the same.
+    const d = mk(path.join(os.tmpdir(), 'stand-in-delta-'));
+    const byKind: Record<string, string[]> = {};
+    for (const n of names) (byKind[delta.agents[n].kind || 'implementer'] ||= []).push(n);
+    wf(path.join(d, 'project-roles.json'), JSON.stringify({ roles: byKind.implementer || [] }));
+    wf(path.join(d, 'project-investigators.json'), JSON.stringify({ investigators: byKind.investigator || [] }));
+    const prev = process.env.EPAM_PROJECT_CONFIG_DIR; process.env.EPAM_PROJECT_CONFIG_DIR = d;
+    try {
+      const canon = { 'team-lead-review': 'a canonical persona' };
+      const { roster: r, added } = rosterLib.composeFromDelta(delta, canon);
+      expect(added).toBe(names.length);
+      const check = rosterLib.checkRoster(r, canon);
+      expect(check.ok, `the engine refused the stand-in delta: ${check.reason}`).toBe(true);
+    } finally { if (prev === undefined) delete process.env.EPAM_PROJECT_CONFIG_DIR; else process.env.EPAM_PROJECT_CONFIG_DIR = prev; }
+  });
+});

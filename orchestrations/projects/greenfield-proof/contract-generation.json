@@ -1,0 +1,32 @@
+{
+  "language": "typescript",
+  "sourceExtensions": [
+    ".ts"
+  ],
+  "excludePattern": "\\.(test|spec)\\.ts$",
+  "interfacePattern": "export\\s+interface\\s+(\\w+)\\s*\\{([^}]*)\\}",
+  "classPattern": "export\\s+class\\s+(\\w+)\\s*(?:extends\\s+\\w+\\s*)?\\{",
+  "ctorPattern": "constructor\\s*\\(([^)]*)\\)",
+  "methodPattern": "^\\s*(?:public\\s+|private\\s+|protected\\s+)?(async\\s+)?(\\w+)\\s*\\(([^)]*)\\)\\s*(?::\\s*([^{;]+))?\\s*\\{",
+  "interfaceRenderTemplate": "export interface {{name}} {{{body}}}",
+  "classDeclarationTemplate": "export class {{className}} {\n  constructor({{ctorParams}});\n{{methodSignatures}}\n}",
+  "methodSignatureTemplate": "  {{asyncPrefix}}{{methodName}}({{params}}){{returnAnnotation}};",
+  "asyncPrefixKeyword": "async ",
+  "returnAnnotationPrefix": ": ",
+  "mockFactoryTemplate": "vi.mock('<import-path-to-{{className}}>', () => ({\n  {{className}}: vi.fn().mockImplementation(() => ({\n{{methodMocks}}\n  })),\n}));",
+  "mockMethodTemplateSync": "    {{methodName}}: vi.fn(),",
+  "mockMethodTemplateAsync": "    {{methodName}}: vi.fn().mockResolvedValue(undefined),",
+  "testFileExtensions": [
+    ".ts",
+    ".tsx",
+    ".js",
+    ".jsx",
+    ".mjs",
+    ".cjs"
+  ],
+  "testFilePattern": "\\.(test|spec)\\.[a-zA-Z0-9]+$",
+  "mockFactoryStartPattern": "vi\\.mock\\(\\s*['\"](\\.[^'\"]+)['\"]\\s*,\\s*\\(\\)\\s*=>\\s*\\(\\{",
+  "mockClassPattern": "(\\w+)\\s*:\\s*vi\\.fn\\(\\)\\.mockImplementation\\(\\(\\)\\s*=>\\s*\\(\\{",
+  "mockedMethodPattern": "^\\s*(\\w+)\\s*:",
+  "testFileAgentRole": "test-engineer"
+}

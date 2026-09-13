@@ -1,0 +1,163 @@
+#!/bin/bash
+# greenfield-harness.sh — the WHOLE greenfield flow, end to end, in a fresh install, with a verdict.
+#
+#   install.sh → real observability stack (and the mock stack for a £0 pass) → tier3-run.sh on the
+#   named provider set → every declared phase → assertions on what landed: the launcher's exit, each
+#   phase completed, commits in the codeline, the codeline's own tests green, every story completed
+#   in the PRD, and EVERY SEAM THE REGISTRY DECLARES — executed or not, by name.
+#
+# Usage:
+#   greenfield-harness.sh --set openrouter [--project greenfield-proof] [--ref <git ref>]
+#                         [--dest <dir>] [--ceiling-usd 5]
+#   greenfield-harness.sh --set mockserver ...        # the same flow at £0: the model is MockServer
+#
+# A paid set spends money: the run is halted the moment the ledger passes --ceiling-usd. The
+# install is kept for evidence; its stacks are stopped (volumes preserved) at the end.
+# Nothing here names a seam, a stage or a project: seams come from the registry, phases and
+# projects from config, the test command from the codeline's ecosystem provider.
+set -uo pipefail
+
+SCRIPT_DIR="$(cd "$(dirname "${BASH_SOURCE[0]}")" && pwd)"
+REPO_ROOT="$(cd "$SCRIPT_DIR/../.." && pwd)"
+NODE_BIN="${NODE_BIN:-$(command -v node)}"
+
+SET=""; PROJECT="greenfield-proof"; REF="HEAD"; DEST=""; CEILING="5"
+while [ $# -gt 0 ]; do
+  case "$1" in
+    --set)         SET="$2"; shift 2 ;;
+    --project)     PROJECT="$2"; shift 2 ;;
+    --ref)         REF="$2"; shift 2 ;;
+    --dest)        DEST="$2"; shift 2 ;;
+    --ceiling-usd) CEILING="$2"; shift 2 ;;
+    *) echo "unknown argument: $1" >&2; exit 2 ;;
+  esac
+done
+[ -n "$SET" ] || { echo "--set <provider set> is required" >&2; exit 2; }
+DEST="${DEST:-$(mktemp -d "${TMPDIR:-/tmp}/greenfield-harness-XXXXXX")}"
+SHA="$(git -C "$REPO_ROOT" rev-parse --short "$REF")" || exit 2
+LOG="$DEST/harness.log"; mkdir -p "$DEST"
+VERDICT="$DEST/harness-verdict.json"
+say() { printf '[harness] %s\n' "$*" | tee -a "$LOG"; }
+red() { printf '[harness] ✗ %s\n' "$*" | tee -a "$LOG" >&2; }
+FAILS=()
+check() { local ok="$1"; shift; if [ "$ok" = "0" ]; then say "✓ $*"; else red "$*"; FAILS+=("$*"); fi; }
+
+say "ref $SHA · set $SET · project $PROJECT · install $DEST · ceiling \$$CEILING"
+
+# ── 1. Install, as an operator does ──────────────────────────────────────────
+_replay=off; [ "$SET" = "mockserver" ] && _replay=on
+bash "$REPO_ROOT/orchestrations-installer/install.sh" --dest "$DEST" --ref "$REF" --stack "$SET" --docker --replay "$_replay" >>"$LOG" 2>&1
+check $? "install.sh --stack $SET --replay $_replay"
+if [ "${#FAILS[@]}" -gt 0 ]; then tail -20 "$LOG" >&2; exit 1; fi
+# A paid set's credentials come from the operator's environment, never from this script.
+if [ -n "${OPENROUTER_API_KEY:-}" ]; then
+  grep -q '^OPENROUTER_API_KEY=' "$DEST/.env" && sed -i "s|^OPENROUTER_API_KEY=.*|OPENROUTER_API_KEY=$OPENROUTER_API_KEY|" "$DEST/.env" || printf 'OPENROUTER_API_KEY=%s\n' "$OPENROUTER_API_KEY" >> "$DEST/.env"
+fi
+if [ "$SET" = "mockserver" ]; then
+  bash "$DEST/orchestrations-installer/pipeline-services.sh" --start --mock >>"$LOG" 2>&1
+  check $? "mock stack started"
+fi
+bash "$DEST/orchestrations-installer/pipeline-health.sh" >>"$LOG" 2>&1
+check $? "pipeline-health.sh"
+if [ "${#FAILS[@]}" -gt 0 ]; then tail -30 "$LOG" >&2; exit 1; fi
+
+# ── 2. The run ───────────────────────────────────────────────────────────────
+cd "$DEST" || exit 1
+set -a; . "$DEST/.env"; set +a
+export EPAM_PROVIDER_SET="$SET" OUTPUT_DIR="$DEST/build" EPAM_PAUSE_AFTER_AGENT_MINT=0 EPAM_PAUSE_BEFORE_WRITER=0 NODE_BIN
+export PATH="$(dirname "$NODE_BIN"):$PATH"
+PROJECT_DIR="$DEST/orchestrations/projects/$PROJECT"
+[ -d "$PROJECT_DIR" ] || { red "no project '$PROJECT' in the install"; exit 1; }
+PRD_CANONICAL="$(sed -n 's/^PRD_CANONICAL=//p' "$PROJECT_DIR/config.env" | tr -d '"')"
+PRD_FILE="$(sed -n 's/^PRD_FILE=//p' "$PROJECT_DIR/config.env" | tr -d '"')"
+PHASES="$(sed -n 's/^EPAM_PHASES=//p' "$PROJECT_DIR/config.env" | tr -d '"')"
+if [ "$SET" = "mockserver" ]; then
+  export EPAM_FREE_RUN=1 ANTHROPIC_API_KEY=mock-no-spend
+  _mock_host="${EPAM_MOCK_BASE_URL:-$("$NODE_BIN" -e '
+    const r = require(process.argv[1]);
+    process.stdout.write(String(r.resolveLlmSettings({ projectConfigDir: process.argv[2] }).mockBaseUrl || ""));
+  ' "$DEST/orchestrations/scripts/lib/llm-settings-resolve.js" "$PROJECT_DIR")}"
+  export EPAM_MOCK_BASE_URL="$_mock_host"
+  PRD_FILE="$DEST/$PRD_CANONICAL" EPAM_PROJECT_CONFIG_DIR="$PROJECT_DIR" "$NODE_BIN" "$DEST/orchestrations/scripts/mock-expectations.js" --host "$_mock_host" >>"$LOG" 2>&1
+  check $? "mock answers registered at $_mock_host"
+fi
+
+LEDGER_DIRS=("$DEST/orchestrations/logs")
+ledger_total() {
+  find "$DEST/orchestrations/logs" -name phase-cost.jsonl -print0 2>/dev/null | xargs -0 cat 2>/dev/null \
+    | "$NODE_BIN" -e 'let t=0;require("readline").createInterface({input:process.stdin}).on("line",l=>{try{t+=Number(JSON.parse(l).task_cost_usd)||0}catch{}}).on("close",()=>process.stdout.write(t.toFixed(4)))'
+}
+
+say "launching tier3-run.sh --project $PROJECT (set $SET)"
+setsid bash "$DEST/orchestrations/scripts/tier3-run.sh" --project "$PROJECT" --yes >>"$LOG" 2>&1 &
+RUN_PID=$!
+HALTED=""
+while kill -0 "$RUN_PID" 2>/dev/null; do
+  sleep 20
+  _spent="$(ledger_total)"
+  if [ "$SET" != "mockserver" ] && awk -v s="$_spent" -v c="$CEILING" 'BEGIN{exit !(s>c)}'; then
+    HALTED="spend \$$_spent passed the ceiling \$$CEILING"
+    red "$HALTED — halting the run"
+    kill -TERM -- -"$RUN_PID" 2>/dev/null; sleep 5; kill -KILL -- -"$RUN_PID" 2>/dev/null
+    break
+  fi
+done
+wait "$RUN_PID"; RUN_EXIT=$?
+SPENT="$(ledger_total)"
+say "run exited $RUN_EXIT · spend \$$SPENT"
+
+# ── 3. What landed ───────────────────────────────────────────────────────────
+check "$RUN_EXIT" "launcher exit 0"
+[ -z "$HALTED" ]; check $? "run completed under the ceiling"
+for p in $PHASES; do
+  grep -q "Phase '$p' completed" "$LOG"; check $? "phase '$p' completed"
+done
+_commits="$(git -C "$DEST/build" rev-list --count HEAD 2>/dev/null || echo 0)"
+[ "${_commits:-0}" -gt 1 ]; check $? "codeline holds committed work ($_commits commits)"
+# THE CODELINE'S OWN TESTS, by the command its ecosystem provider declares for it.
+_test_cmd="$("$NODE_BIN" -e '
+  const fs = require("fs"), path = require("path");
+  const { resolveEcosystem } = require(process.argv[1]); const root = process.argv[2];
+  const hit = resolveEcosystem(root); if (!hit) process.exit(0);
+  const tc = hit.eco.testCommand;
+  const text = fs.readFileSync(path.join(root, hit.present), "utf8");
+  process.stdout.write(String(typeof tc === "function" ? tc(text) : (tc || "")));
+' "$DEST/orchestrations/scripts/lib/handlers/codeline-manifests.js" "$DEST/build" 2>/dev/null)"
+if [ -n "$_test_cmd" ]; then
+  (cd "$DEST/build" && { [ -x .venv/bin/python ] && export PATH="$DEST/build/.venv/bin:$PATH"; } ; bash -c "$_test_cmd") >>"$LOG" 2>&1
+  check $? "codeline tests green: $_test_cmd"
+else
+  check 1 "the codeline's ecosystem declares a test command"
+fi
+_incomplete="$("$NODE_BIN" -e 'const p=require(process.argv[1]);process.stdout.write((p.stories||[]).filter(s=>!s.completed).map(s=>s.id).join(" "))' "$DEST/$PRD_FILE" 2>/dev/null)"
+[ -z "$_incomplete" ]; check $? "every story completed in the PRD${_incomplete:+ (incomplete: $_incomplete)}"
+
+# ── 4. Every seam the registry declares ──────────────────────────────────────
+_seams="$("$NODE_BIN" -e 'const r=require(process.argv[1]);process.stdout.write(Object.keys(r.profiles||{}).sort().join("\n"))' "$DEST/orchestrations/agents/invocation-profiles.json")"
+_executed="$(find "$DEST/orchestrations/logs" -name phase-cost.jsonl -print0 | xargs -0 cat 2>/dev/null \
+  | "$NODE_BIN" -e 'const s=new Set();require("readline").createInterface({input:process.stdin}).on("line",l=>{try{const j=JSON.parse(l);if(j.agent_name)s.add(String(j.agent_name).split(":")[0])}catch{}}).on("close",()=>process.stdout.write([...s].sort().join("\n")))')"
+_n=0; _x=0; _missing=()
+say "seams (registry): executed / NOT EXECUTED"
+while IFS= read -r s; do
+  [ -n "$s" ] || continue; _n=$((_n+1))
+  if printf '%s\n' "$_executed" | grep -Fxq -- "$s" || printf '%s\n' "$_executed" | grep -Fxq -- "${s%%:*}"; then
+    say "  ✓ $s"; _x=$((_x+1))
+  else
+    say "  ✗ $s — NOT EXECUTED"; _missing+=("$s")
+  fi
+done <<< "$_seams"
+[ "${#_missing[@]}" -eq 0 ]; check $? "every declared seam executed ($_x of $_n)"
+
+# ── 5. Verdict, teardown ─────────────────────────────────────────────────────
+bash "$DEST/orchestrations-installer/pipeline-services.sh" --stop >>"$LOG" 2>&1 || true
+"$NODE_BIN" -e '
+  const [sha,set,project,spent,exit,fails,missing,x,n]=process.argv.slice(1);
+  process.stdout.write(JSON.stringify({sha,set,project,spentUsd:Number(spent),runExit:Number(exit),
+    verdict: fails==="" ? "GREEN" : "RED", failures: fails? fails.split(""):[], seamsExecuted:Number(x), seamsDeclared:Number(n),
+    seamsNotExecuted: missing? missing.split(""):[], at:new Date().toISOString()},null,2)+"\n")
+' "$SHA" "$SET" "$PROJECT" "$SPENT" "$RUN_EXIT" "$(IFS=$'\x1f'; echo "${FAILS[*]-}")" "$(IFS=$'\x1f'; echo "${_missing[*]-}")" "$_x" "$_n" > "$VERDICT"
+if [ "${#FAILS[@]}" -eq 0 ]; then
+  say "VERDICT GREEN — $PROJECT on $SET at $SHA, \$$SPENT, $_x/$_n seams · $VERDICT"; exit 0
+else
+  red "VERDICT RED — ${#FAILS[@]} failure(s): $(IFS='; '; echo "${FAILS[*]}") · $VERDICT · log $LOG"; exit 1
+fi

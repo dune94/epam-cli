@@ -913,6 +913,18 @@ function contractStandIn(seam) {
   // real absolute paths, which is what the discovery seam's parse demands (an empty selection,
   // or a path that is not a repository here, is refused). Nothing is invented: no root, no list.
   const valueFor = (k) => {
+    // THE DELTA A MODEL ACTUALLY WRITES: it ADDS the agents this project minted, each with itself
+    // as ancestor. An empty delta ("0 specialised, 0 added") never reached the engine path a real
+    // one does — the minted agent's digest — and a live run found that path instead (2026-09-13,
+    // Run 5). The agents are the mint stand-in's own, so the two cannot disagree.
+    if (/^agents$/i.test(k)) {
+      const o = {};
+      for (const a of mintedAgents()) {
+        o[a.name] = { persona: `${STAND_IN_MARK} persona for ${a.name}, written for this project by the specialiser`,
+          ancestor: a.name, ...(a.kind ? { kind: a.kind } : {}) };
+      }
+      return o;
+    }
     // Named the way the engine names them (lib/codeline-name.js), with the grounding the
     // discovery consumer requires — an entry with no evidence is dropped as a hunch.
     if (/^codelines$/i.test(k)) {
@@ -1104,7 +1116,7 @@ function nameItForItsKind(o, schema) {
  * asks the mint's stand-in what it will register, and the assigner offers exactly those. The two
  * cannot disagree, because there is only one answer and both read it.
  */
-function mintedRoleNames() {
+function mintedAgents() {
   // WHICH SEAM PROPOSES AGENTS IS A STRUCTURAL QUESTION, NOT A NAME TO TYPE HERE.
   //
   // Naming the seam would be the only literal seam name in the engine, and it would go stale the
@@ -1141,10 +1153,9 @@ function mintedRoleNames() {
   if (!stood) return [];
   const items = Array.isArray(stood) ? stood
     : (stood.agents || stood.projectAgents || [stood]);
-  return items
-    .map((a) => a && a.name)
-    .filter((n) => typeof n === 'string' && n.trim());
+  return items.filter((a) => a && typeof a.name === 'string' && a.name.trim());
 }
+function mintedRoleNames() { return mintedAgents().map((a) => a.name); }
 
 function projectEntities() {
   const dir = process.env.EPAM_PROJECT_CONFIG_DIR || '';

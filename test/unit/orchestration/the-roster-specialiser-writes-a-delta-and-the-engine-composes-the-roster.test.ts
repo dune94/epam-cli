@@ -67,6 +67,30 @@ describe('composeFromDelta', () => {
     const { roster: r } = roster.composeFromDelta({ agents: { alpha: { persona: 'x', derivedFromSha256: 'REPLACE_WITH_SHA256' } } }, CANON);
     expect(r.agents.alpha.derivedFromSha256).toBe(sha(CANON.alpha));
   });
+  it('THE DEFECT: a MINTED agent added by the delta — its ancestor is itself — takes the engine\'s digest of its OWN persona, and the contract accepts it', () => {
+    // Run 5 (2026-09-13, $0.34): "0 specialised, 2 added" — the pure minted case. composeFromDelta
+    // set a digest only when the ancestor was found in canonical; a minted agent's ancestor is
+    // itself, not canonical, so no digest was set, and checkEntry then demanded the digest of its
+    // own persona: refused three times, and no retry could supply a SHA-256 the agent cannot compute.
+    // The two other digest sites (rosterFromCanonical, the canonical-mode mint adoption) already do
+    // this; the delta path is judged by the contract here, not by a copy of its rule.
+    const d = tmp('minted-');
+    writeFileSync(join(d, 'project-roles.json'), JSON.stringify({ roles: ['regintel-core-engineer'] }));
+    writeFileSync(join(d, 'project-investigators.json'), JSON.stringify({ investigators: ['regintel-build-investigator'] }));
+    const prev = process.env.EPAM_PROJECT_CONFIG_DIR; process.env.EPAM_PROJECT_CONFIG_DIR = d;
+    try {
+      const { roster: r, added } = roster.composeFromDelta({ agents: {
+        'regintel-core-engineer': { persona: 'builds the core', ancestor: 'regintel-core-engineer', kind: 'implementer' },
+        'regintel-build-investigator': { persona: 'investigates the build', ancestor: 'regintel-build-investigator', kind: 'investigator' },
+      } }, CANON);
+      expect(added).toBe(2);
+      expect(r.agents['regintel-core-engineer'].derivedFromSha256).toBe(sha('builds the core'));
+      expect(r.agents['regintel-build-investigator'].derivedFromSha256).toBe(sha('investigates the build'));
+      const check = roster.checkRoster(r, CANON);
+      expect(check.ok, `the contract refused the composed roster: ${check.reason}`).toBe(true);
+    } finally { if (prev === undefined) delete process.env.EPAM_PROJECT_CONFIG_DIR; else process.env.EPAM_PROJECT_CONFIG_DIR = prev; }
+  });
+
   it('an ancestor canonical does not have is left for the contract check to refuse, by name', () => {
     const { roster: r } = roster.composeFromDelta({ agents: { omega: { persona: 'x', ancestor: 'nobody', kind: 'implementer' } } }, CANON);
     const v = roster.checkRoster(r, CANON);

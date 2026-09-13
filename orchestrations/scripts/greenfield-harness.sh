@@ -73,10 +73,18 @@ PRD_FILE="$(sed -n 's/^PRD_FILE=//p' "$PROJECT_DIR/config.env" | tr -d '"')"
 PHASES="$(sed -n 's/^EPAM_PHASES=//p' "$PROJECT_DIR/config.env" | tr -d '"')"
 if [ "$SET" = "mockserver" ]; then
   export EPAM_FREE_RUN=1 ANTHROPIC_API_KEY=mock-no-spend
+  # WHERE THE MOCK LISTENS is what the set redirects its runners to: the first URL among the env
+  # values the set's runners resolve — the same value the run itself will export.
+  # WHERE THE MOCK LISTENS is what the set redirects the run's runner to: the URL among the env
+  # values that runner resolves — the same value the run itself exports. The runner is the one the
+  # project's set overlay names for orchestration.
+  _runner="$(sed -n 's/^EPAM_ORCHESTRATION_PROVIDER=//p' "$PROJECT_DIR/config.$SET.env" | tr -d '"')"
   _mock_host="${EPAM_MOCK_BASE_URL:-$("$NODE_BIN" -e '
-    const r = require(process.argv[1]);
-    process.stdout.write(String(r.resolveLlmSettings({ projectConfigDir: process.argv[2] }).mockBaseUrl || ""));
-  ' "$DEST/orchestrations/scripts/lib/llm-settings-resolve.js" "$PROJECT_DIR")}"
+    const r = require(process.argv[1]); const v = r.runnerValues(process.argv[3], { projectConfigDir: process.argv[2] });
+    process.stdout.write(Object.values((v && v.env) || {}).find((x) => /^https?:\/\//.test(String(x))) || "");
+  ' "$DEST/orchestrations/scripts/lib/llm-settings-resolve.js" "$PROJECT_DIR" "$_runner")}"
+  [ -n "$_mock_host" ] || { red "the $SET set redirects runner '$_runner' to no mock endpoint"; exit 1; }
+  [ -n "$_mock_host" ] || { red "the $SET set redirects no runner to a mock endpoint"; exit 1; }
   export EPAM_MOCK_BASE_URL="$_mock_host"
   PRD_FILE="$DEST/$PRD_CANONICAL" EPAM_PROJECT_CONFIG_DIR="$PROJECT_DIR" "$NODE_BIN" "$DEST/orchestrations/scripts/mock-expectations.js" --host "$_mock_host" >>"$LOG" 2>&1
   check $? "mock answers registered at $_mock_host"
@@ -95,7 +103,7 @@ HALTED=""
 while kill -0 "$RUN_PID" 2>/dev/null; do
   sleep 20
   _spent="$(ledger_total)"
-  if [ "$SET" != "mockserver" ] && awk -v s="$_spent" -v c="$CEILING" 'BEGIN{exit !(s>c)}'; then
+  if awk -v s="$_spent" -v c="$CEILING" 'BEGIN{exit !(s>c)}'; then
     HALTED="spend \$$_spent passed the ceiling \$$CEILING"
     red "$HALTED — halting the run"
     kill -TERM -- -"$RUN_PID" 2>/dev/null; sleep 5; kill -KILL -- -"$RUN_PID" 2>/dev/null
@@ -134,8 +142,12 @@ _incomplete="$("$NODE_BIN" -e 'const p=require(process.argv[1]);process.stdout.w
 
 # ── 4. Every seam the registry declares ──────────────────────────────────────
 _seams="$("$NODE_BIN" -e 'const r=require(process.argv[1]);process.stdout.write(Object.keys(r.profiles||{}).sort().join("\n"))' "$DEST/orchestrations/agents/invocation-profiles.json")"
-_executed="$(find "$DEST/orchestrations/logs" -name phase-cost.jsonl -print0 | xargs -0 cat 2>/dev/null \
-  | "$NODE_BIN" -e 'const s=new Set();require("readline").createInterface({input:process.stdin}).on("line",l=>{try{const j=JSON.parse(l);if(j.agent_name)s.add(String(j.agent_name).split(":")[0])}catch{}}).on("close",()=>process.stdout.write([...s].sort().join("\n")))')"
+# From the run's own records, resolved through the registry (lib/seams-executed.js): the ledger,
+# the activity log and Langfuse, every name put through resolveSeam.
+_run_id="$(grep -o 'RUN NUMBER:[[:space:]]*[0-9TZ]*' "$LOG" | head -1 | awk '{print $NF}')"
+_lf_port="$(sed -n 's/^OBS_LANGFUSE_PORT=//p' "$DEST/.pipeline-services-state.env" 2>/dev/null)"
+_executed="$(LANGFUSE_BASE_URL="${LANGFUSE_BASE_URL:-http://localhost:${_lf_port:-3100}}" EPAM_PROJECT_CONFIG_DIR="$PROJECT_DIR" \
+  "$NODE_BIN" "$DEST/orchestrations/scripts/lib/seams-executed.js" "$DEST" "$_run_id" | "$NODE_BIN" -e 'let b="";process.stdin.on("data",d=>b+=d).on("end",()=>{const j=JSON.parse(b);process.stdout.write(j.executed.join("\n"));if(j.unresolved.length)process.stderr.write("[harness] names resolving to no seam: "+j.unresolved.join(", ")+"\n")})')"
 _n=0; _x=0; _missing=()
 say "seams (registry): executed / NOT EXECUTED"
 while IFS= read -r s; do

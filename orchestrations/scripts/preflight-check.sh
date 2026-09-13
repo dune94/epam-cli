@@ -52,8 +52,23 @@ elif [[ ! -f "$RUNNER_SCRIPT" ]]; then
 else
   ok "Runner exists: $(basename "$RUNNER_SCRIPT")"
   if command -v shellcheck &>/dev/null; then
-    if shellcheck --severity=error "$RUNNER_SCRIPT" 2>/dev/null; then
+    # THE VERDICT IS A FUNCTION OF THE BYTES, SO IT IS KEPT PER DIGEST. shellcheck holds ~3.3 GB
+    # for the 11,000-line orchestrator and takes ten seconds; running it on every launch cost that
+    # every launch, and under a memory cap sized to the host it was the one step that could not
+    # fit (2026-09-13: the £0 greenfield rehearsal was killed here twice). The same file yields the
+    # same verdict, so a clean verdict is recorded beside the script under its sha256 and a launch
+    # of unchanged bytes reads the record. A failing verdict is never recorded: it is re-run and
+    # re-reported until the script changes.
+    _sc_cache_dir="${EPAM_PREFLIGHT_CACHE_DIR:-$SCRIPT_DIR/.preflight-cache}"
+    _sc_digest="$(sha256sum "$RUNNER_SCRIPT" 2>/dev/null | cut -d' ' -f1)"
+    _sc_mark="$_sc_cache_dir/shellcheck-${_sc_digest:-nodigest}.ok"
+    if [[ -n "$_sc_digest" && -f "$_sc_mark" ]]; then
+      ok "shellcheck clean (verdict recorded for these exact bytes, ${_sc_digest:0:12}; not re-run)"
+    elif shellcheck --severity=error "$RUNNER_SCRIPT" 2>/dev/null; then
       ok "shellcheck clean"
+      if [[ -n "$_sc_digest" ]]; then
+        mkdir -p "$_sc_cache_dir" 2>/dev/null && : > "$_sc_mark" 2>/dev/null || true
+      fi
     else
       fail "shellcheck errors in $(basename "$RUNNER_SCRIPT")"
     fi

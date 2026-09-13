@@ -132,3 +132,4 @@ npm-package/amsd-pipeline/install.sh
 # artefacts may reach the next run. Kept on disk for history; never tracked.
 orchestrations/projects/*/prd.json
 orchestrations/projects/*/prd.json.pre-*
+orchestrations/scripts/.preflight-cache/

@@ -43,21 +43,29 @@ function fixture(opts: { mounted: boolean; serves: boolean }) {
   const bin = join(d, 'bin'); mkdirSync(bin);
   for (const cmd of ['git', 'jq-unused', 'python3', 'claude']) { writeFileSync(join(bin, cmd), '#!/bin/bash\nexit 0\n'); chmodSync(join(bin, cmd), 0o755); }
   // docker: the agent-monitor container exists and (when mounted) reports /logs-dir from logDir.
-  writeFileSync(join(bin, 'docker'), `#!/bin/bash
-case "$1 $2" in
-  "ps --format") echo "fixture-obs-agent-monitor-1" ;;
-  "inspect fixture-obs-agent-monitor-1")
-    # Two formats are asked for: destinations only, or destination=source per line.
-    if [ "${opts.mounted ? '1' : '0'}" = "1" ]; then
-      case "$*" in
-        *Source*) printf '%s\\n' '/logs-dir=${logDir}' '/prd-dir=${join(d, 'orchestrations/projects')}' ;;
-        *) echo '/logs-dir /prd-dir ' ;;
-      esac
-    else echo; fi
-    ;;
-  *) exit 0 ;;
-esac
-`);
+  // A sliver of Go templating in the inspect stub: {{"\n"}} renders a newline; {{"\\n"}} renders
+  // the two characters backslash-n — exactly the mistake a shell-quoted format string can make,
+  // and the one that made the real check silently fail to find the mount's source.
+  const BS = String.fromCharCode(92);
+  const dockerStub = [
+    '#!/bin/bash',
+    'case "$1 $2" in',
+    '  "ps --format") echo "fixture-obs-agent-monitor-1" ;;',
+    '  "inspect fixture-obs-agent-monitor-1")',
+    `    if [ "${opts.mounted ? '1' : '0'}" = "1" ]; then`,
+    '      case "$*" in',
+    `        *Source*)`,
+    `          case "$*" in *'{{"${BS}${BS}n"}}'*) sep='${BS}n' ;; *'{{"${BS}n"}}'*) sep=$'${BS}n' ;; *) sep=' ' ;; esac`,
+    `          printf '%s%s%s%s' '/logs-dir=${logDir}' "$sep" '/prd-dir=${join(d, 'orchestrations/projects')}' "$sep" ;;`,
+    `        *) echo '/logs-dir /prd-dir ' ;;`,
+    '      esac',
+    '    else echo; fi',
+    '    ;;',
+    '  *) exit 0 ;;',
+    'esac',
+    '',
+  ].join('\n');
+  writeFileSync(join(bin, 'docker'), dockerStub);
   chmodSync(join(bin, 'docker'), 0o755);
   // curl: 200 for a /logs/<file> that exists in the mounted directory when serving; 404 otherwise.
   writeFileSync(join(bin, 'curl'), `#!/bin/bash

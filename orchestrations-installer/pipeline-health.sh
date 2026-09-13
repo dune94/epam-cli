@@ -428,7 +428,7 @@ EOF
         local _want="$1" _name
         _name="$(docker ps --format '{{.Names}}' 2>/dev/null | grep -m1 "${OBS_PROJECT:-__none__}-agent-monitor" || true)"
         [ -n "$_name" ] || return 1
-        docker inspect "$_name" --format '{{range .Mounts}}{{.Destination}}={{.Source}}{{"\\n"}}{{end}}' 2>/dev/null \
+        docker inspect "$_name" --format '{{range .Mounts}}{{.Destination}}={{.Source}}{{"\n"}}{{end}}' 2>/dev/null \
             | sed -n "s|^${_want}=||p" | head -1
     }
     # SERVING IS PROVED WITH A FILE THAT EXISTS. Asking for agent-status.json on a fresh install

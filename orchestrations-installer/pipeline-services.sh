@@ -172,12 +172,40 @@ start)
             elif [ -z "${MOCK_PROJECT:-}" ]; then
                 _bad "this install recorded no MOCK_PROJECT — refusing to invent one, because a stop could not then find what a start created. Re-run install.sh to resolve it."
                 FAILED=1
-            elif (cd "$ROOT/orchestrations/mock-llm" && EPAM_MOCK_SUBNET="${MOCK_SUBNET:-}" \
-                    container_compose -f "docker-compose.yml" -p "$MOCK_PROJECT" up -d mockserver) >/dev/null 2>&1; then
-                _ok "$MOCK_PROJECT is up (subnet: ${MOCK_SUBNET:-default}) — the rehearsal server"
             else
-                _bad "failed to bring $MOCK_PROJECT up"
-                FAILED=1
+                # THE SUBNET IS RESOLVED WHEN THE STACK COMES UP, NOT WHEN IT WAS RECORDED. install.sh
+                # wrote MOCK_SUBNET before the launch stack existed, and the launch stack then took the
+                # same range as free — so the first `--start --mock` on a fresh install died with
+                # "Pool overlaps with other one on this address space" (2026-09-13). The recorded
+                # subnet is tried first; on a pool overlap the candidate sequence is walked, exactly as
+                # the observability stack is brought up, and the one that worked is recorded back.
+                . "$HERE/lib/isolated-compose-identity.sh"
+                _mock_up=0
+                for _mock_subnet in ${MOCK_SUBNET:-} $(isolated_subnet_candidates "$ROOT-mock"); do
+                    _mock_log="$(mktemp)"
+                    if (cd "$ROOT/orchestrations/mock-llm" && EPAM_MOCK_SUBNET="$_mock_subnet" \
+                            container_compose -f "docker-compose.yml" -p "$MOCK_PROJECT" up -d mockserver) >"$_mock_log" 2>&1; then
+                        _mock_up=1; rm -f "$_mock_log"; break
+                    fi
+                    if ! grep -qiE 'pool overlaps|address space' "$_mock_log"; then
+                        _bad "failed to bring $MOCK_PROJECT up: $(tail -3 "$_mock_log" | tr '\n' ' ')"
+                        rm -f "$_mock_log"; break
+                    fi
+                    rm -f "$_mock_log"
+                    (cd "$ROOT/orchestrations/mock-llm" && container_compose -f "docker-compose.yml" -p "$MOCK_PROJECT" down) >/dev/null 2>&1 || true
+                done
+                if [ "$_mock_up" = "1" ]; then
+                    if [ "$_mock_subnet" != "${MOCK_SUBNET:-}" ]; then
+                        # Recorded back, so --stop finds what --start created and the next start tries it first.
+                        _tmp_state="$(mktemp)"
+                        grep -v '^MOCK_SUBNET=' "$STATE_FILE" > "$_tmp_state"; printf 'MOCK_SUBNET=%s\n' "$_mock_subnet" >> "$_tmp_state"
+                        mv "$_tmp_state" "$STATE_FILE"
+                    fi
+                    _ok "$MOCK_PROJECT is up (subnet: ${_mock_subnet:-default}) — the rehearsal server"
+                else
+                    _bad "failed to bring $MOCK_PROJECT up"
+                    FAILED=1
+                fi
             fi
         fi
         if [ -f "$LAUNCH_COMPOSE" ] && [ -n "${LAUNCH_PROJECT:-}" ]; then

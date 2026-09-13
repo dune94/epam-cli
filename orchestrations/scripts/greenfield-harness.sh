@@ -21,9 +21,10 @@ SCRIPT_DIR="$(cd "$(dirname "${BASH_SOURCE[0]}")" && pwd)"
 REPO_ROOT="$(cd "$SCRIPT_DIR/../.." && pwd)"
 NODE_BIN="${NODE_BIN:-$(command -v node)}"
 
-SET=""; PROJECT="greenfield-proof"; REF="HEAD"; DEST=""; CEILING="5"
+SET=""; PROJECT="greenfield-proof"; REF="HEAD"; DEST=""; CEILING="5"; ASSESS_ONLY=0
 while [ $# -gt 0 ]; do
   case "$1" in
+    --assess-only) ASSESS_ONLY=1; DEST="$2"; shift 2 ;;   # judge a kept install again; no install, no run, no spend
     --set)         SET="$2"; shift 2 ;;
     --project)     PROJECT="$2"; shift 2 ;;
     --ref)         REF="$2"; shift 2 ;;
@@ -32,6 +33,11 @@ while [ $# -gt 0 ]; do
     *) echo "unknown argument: $1" >&2; exit 2 ;;
   esac
 done
+if [ "$ASSESS_ONLY" = "1" ]; then
+  [ -f "$DEST/harness-verdict.json" ] || { echo "--assess-only: no harness verdict in $DEST — nothing ran there" >&2; exit 2; }
+  SET="$("$NODE_BIN" -e 'process.stdout.write(require(process.argv[1]).set)' "$DEST/harness-verdict.json")"
+  PROJECT="$("$NODE_BIN" -e 'process.stdout.write(require(process.argv[1]).project)' "$DEST/harness-verdict.json")"
+fi
 [ -n "$SET" ] || { echo "--set <provider set> is required" >&2; exit 2; }
 DEST="${DEST:-$(mktemp -d "${TMPDIR:-/tmp}/greenfield-harness-XXXXXX")}"
 SHA="$(git -C "$REPO_ROOT" rev-parse --short "$REF")" || exit 2
@@ -44,6 +50,18 @@ check() { local ok="$1"; shift; if [ "$ok" = "0" ]; then say "✓ $*"; else red 
 
 say "ref $SHA · set $SET · project $PROJECT · install $DEST · ceiling \$$CEILING"
 
+if [ "$ASSESS_ONLY" = "1" ]; then
+  # A kept install is judged again: the run's exit and spend are read back from its verdict.
+  cd "$DEST" || exit 1
+  PROJECT_DIR="$DEST/orchestrations/projects/$PROJECT"
+  PRD_FILE="$(sed -n 's/^PRD_FILE=//p' "$PROJECT_DIR/config.env" | tr -d '"')"
+  PHASES="$(sed -n 's/^EPAM_PHASES=//p' "$PROJECT_DIR/config.env" | tr -d '"')"
+  RUN_EXIT="$("$NODE_BIN" -e 'process.stdout.write(String(require(process.argv[1]).runExit))' "$VERDICT")"
+  SPENT="$("$NODE_BIN" -e 'process.stdout.write(String(require(process.argv[1]).spentUsd))' "$VERDICT")"
+  HALTED=""; grep -q "passed the ceiling" "$LOG" && HALTED="halted"
+  say "assessing again: run exited $RUN_EXIT · spend \$$SPENT"
+fi
+if [ "$ASSESS_ONLY" != "1" ]; then
 # ── 1. Install, as an operator does ──────────────────────────────────────────
 _replay=off; [ "$SET" = "mockserver" ] && _replay=on
 bash "$REPO_ROOT/orchestrations-installer/install.sh" --dest "$DEST" --ref "$REF" --stack "$SET" --docker --replay "$_replay" >>"$LOG" 2>&1
@@ -115,6 +133,7 @@ done
 wait "$RUN_PID"; RUN_EXIT=$?
 SPENT="$(ledger_total)"
 say "run exited $RUN_EXIT · spend \$$SPENT"
+fi   # not --assess-only
 
 # ── 3. What landed ───────────────────────────────────────────────────────────
 check "$RUN_EXIT" "launcher exit 0"
@@ -149,7 +168,7 @@ _seams="$("$NODE_BIN" -e 'const r=require(process.argv[1]);process.stdout.write(
 _run_id="$(grep -o 'RUN NUMBER:[[:space:]]*[0-9TZ]*' "$LOG" | head -1 | awk '{print $NF}')"
 _lf_port="$(sed -n 's/^OBS_LANGFUSE_PORT=//p' "$DEST/.pipeline-services-state.env" 2>/dev/null)"
 _executed="$(LANGFUSE_BASE_URL="${LANGFUSE_BASE_URL:-http://localhost:${_lf_port:-3100}}" EPAM_PROJECT_CONFIG_DIR="$PROJECT_DIR" \
-  "$NODE_BIN" "$DEST/orchestrations/scripts/lib/seams-executed.js" "$DEST" "$_run_id" | "$NODE_BIN" -e 'let b="";process.stdin.on("data",d=>b+=d).on("end",()=>{const j=JSON.parse(b);process.stdout.write(j.executed.join("\n"));if(j.unresolved.length)process.stderr.write("[harness] names resolving to no seam: "+j.unresolved.join(", ")+"\n")})')"
+  "$NODE_BIN" "$REPO_ROOT/orchestrations/scripts/lib/seams-executed.js" "$DEST" "$_run_id" | "$NODE_BIN" -e 'let b="";process.stdin.on("data",d=>b+=d).on("end",()=>{const j=JSON.parse(b);process.stdout.write(j.executed.join("\n"));if(j.unresolved.length)process.stderr.write("[harness] names resolving to no seam: "+j.unresolved.join(", ")+"\n")})')"
 _n=0; _x=0; _missing=()
 say "seams (registry): executed / NOT EXECUTED"
 while IFS= read -r s; do
@@ -163,7 +182,7 @@ done <<< "$_seams"
 [ "${#_missing[@]}" -eq 0 ]; check $? "every declared seam executed ($_x of $_n)"
 
 # ── 5. Verdict, teardown ─────────────────────────────────────────────────────
-bash "$DEST/orchestrations-installer/pipeline-services.sh" --stop >>"$LOG" 2>&1 || true
+[ "$ASSESS_ONLY" = "1" ] || bash "$DEST/orchestrations-installer/pipeline-services.sh" --stop >>"$LOG" 2>&1 || true
 "$NODE_BIN" -e '
   const [sha,set,project,spent,exit,fails,missing,x,n]=process.argv.slice(1);
   process.stdout.write(JSON.stringify({sha,set,project,spentUsd:Number(spent),runExit:Number(exit),

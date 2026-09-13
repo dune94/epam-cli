@@ -44,8 +44,10 @@ function fixture(envBody: string) {
   fs.mkdirSync(path.join(dir, 'orchestrations-installer/lib'), { recursive: true });
   fs.copyFileSync(INSTALLER, path.join(dir, 'orchestrations-installer/install.sh'));
   fs.chmodSync(path.join(dir, 'orchestrations-installer/install.sh'), 0o755);
-  fs.copyFileSync(path.join(REPO, 'orchestrations-installer/lib/container-runtime.sh'),
-    path.join(dir, 'orchestrations-installer/lib/container-runtime.sh'));
+  // THE WHOLE lib DIRECTORY: the installer sources what it needs by name, and a fixture that
+  // copies one file by name breaks the moment the installer gains a second (langfuse-keys.sh,
+  // 2026-09-13 — the replay block reads the recorder's keys through it).
+  fs.cpSync(path.join(REPO, 'orchestrations-installer/lib'), path.join(dir, 'orchestrations-installer/lib'), { recursive: true });
   for (const f of ['provider-sets.json', 'llm-defaults.claude.json']) {
     const src = path.join(REPO, 'orchestrations/config', f);
     if (fs.existsSync(src)) fs.copyFileSync(src, path.join(dir, 'orchestrations/config', f));

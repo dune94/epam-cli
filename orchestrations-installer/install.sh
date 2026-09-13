@@ -656,6 +656,7 @@ fi
 
 # ── Replay ────────────────────────────────────────────────────────────────────
 _head "Replay"
+COMPOSE_FILE="${EPAM_COMPOSE_FILE:-$ROOT/docker-compose.observability.yml}"
 case "$REPLAY_MODE" in
     off)
         # The cost is one-way and must be stated: nothing recorded now can be replayed later.
@@ -677,14 +678,15 @@ case "$REPLAY_MODE" in
         # A value already exported still wins: an operator who exports the keys in their shell
         # must not start failing because .env does not repeat them. Read in a subshell so the keys
         # are not leaked into everything the installer runs afterwards.
-        _lf_sk="${LANGFUSE_SECRET_KEY:-}"
-        _lf_pk="${LANGFUSE_PUBLIC_KEY:-}"
-        if [ -f "$ROOT/.env" ]; then
-            _lf_from_env="$( set -a; . "$ROOT/.env" 2>/dev/null; set +a
-                             printf '%s\t%s' "${LANGFUSE_SECRET_KEY:-}" "${LANGFUSE_PUBLIC_KEY:-}" )"
-            [ -z "$_lf_sk" ] && _lf_sk="$(printf '%s' "$_lf_from_env" | cut -f1)"
-            [ -z "$_lf_pk" ] && _lf_pk="$(printf '%s' "$_lf_from_env" | cut -f2)"
-        fi
+        # THE INSTALL'S OWN RECORDER DECLARES ITS KEYS. Environment, then .env, then the keys the
+        # observability compose file declares for the Langfuse this installer brings up — written
+        # into .env so every reader finds them. See lib/langfuse-keys.sh.
+        . "$INSTALLER_DIR/lib/langfuse-keys.sh"
+        _lf_resolved="$(langfuse_keys_for_install "$ROOT" "$COMPOSE_FILE")"
+        _lf_sk="$(printf '%s' "$_lf_resolved" | cut -f1)"
+        _lf_pk="$(printf '%s' "$_lf_resolved" | cut -f2)"
+        _lf_src="$(printf '%s' "$_lf_resolved" | cut -f3)"
+        [ "$_lf_src" = "compose" ] && _ok "Langfuse keys taken from this install's own observability stack and written to .env"
         _lf_missing=""
         [ -z "$_lf_sk" ] && _lf_missing="$_lf_missing LANGFUSE_SECRET_KEY"
         [ -z "$_lf_pk" ] && _lf_missing="$_lf_missing LANGFUSE_PUBLIC_KEY"
@@ -729,7 +731,7 @@ runtime_up() {
 # THE COMPOSE FILE IS NAMED. This ran `docker compose up -d` with no -f, and there is no
 # docker-compose.yml at the repo root — only the named files below. It ended in `|| true`, so the
 # failure was swallowed and the installer reported "docker is up" having started nothing.
-COMPOSE_FILE="${EPAM_COMPOSE_FILE:-$ROOT/docker-compose.observability.yml}"
+# COMPOSE_FILE is declared above the Replay section: the recorder's keys are read from it there.
 # ISOLATED FROM EVERY OTHER INSTALL ON THIS MACHINE, DETERMINISTICALLY — never a human hand-picking
 # a free subnet. The compose file's own default (EPAM_OBS_SUBNET:-172.31.0.0/16) is a FIXED
 # constant: two installs, or this exact install colliding with an already-running dev checkout on

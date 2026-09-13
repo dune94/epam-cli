@@ -63,6 +63,16 @@ module.exports = {
     },
   },
   stack: 'python',
+  // THE CHECKS THIS ECOSYSTEM PROVIDES WITHOUT A DEPENDENCY: a syntax-level type check the standard
+  // library runs, with the pattern its failures print. Read by the verification plugin when the
+  // codeline declares none of its own — a check nobody could run failed every writer attempt.
+  verification: {
+    typecheck: {
+      command: "python3 -m compileall -q -x '(^|/)(\\.venv|venv|\\.tox|node_modules)(/|$)' .",
+      failurePattern: 'File "([^"]+)", line (\\d+)',
+      failureIdentity: '{1}:{2}',
+    },
+  },
   // WHAT A STAND-IN DELIVERABLE HOLDS, so a £0 rehearsal's writer can land files the gates will
   // run: a manifest that names the test runner, a test that passes, a source module that imports.
   standIn: {

@@ -108,7 +108,16 @@ function detectVerification(projectRoot) {
       };
     }
   }
-  // Other ecosystems declare their own check command the same way; none are guessed at here.
+  // THE ECOSYSTEM'S OWN VERIFICATION, for a codeline whose manifest is not package.json. The
+  // provider declares the check and its failure pattern; nothing is guessed here.
+  try {
+    const { resolveEcosystem } = require(join(__dirname, '..', 'scripts', 'lib', 'handlers', 'codeline-manifests.js'));
+    const hit = resolveEcosystem(projectRoot);
+    const v = hit && hit.eco && hit.eco.verification;
+    if (v && v.typecheck && v.typecheck.command) {
+      return { typecheck: { ...v.typecheck, detected: `${hit.present} (ecosystem ${hit.eco.file})` } };
+    }
+  } catch { /* no ecosystem resolves — nothing declared */ }
   return null;
 }
 

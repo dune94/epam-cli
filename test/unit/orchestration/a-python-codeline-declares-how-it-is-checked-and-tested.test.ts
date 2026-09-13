@@ -47,6 +47,24 @@ describe('the verification plugin asks the ecosystem that recognises the codelin
     expect(t.test.detected).toMatch(/requirements\.txt/);
   });
 
+  it('a Python codeline declares a type check the ecosystem provides, so the writer is not failed for a check nobody could run', () => {
+    // "[tsc-verify] the project declares no typecheck command — the check could not run" failed
+    // every attempt of the £0 greenfield run (2026-09-13): the plugin detected verification from
+    // package.json only. The ecosystem provider declares one for Python; the plugin reads it.
+    const d = codeline(PY);
+    const v = plugin.detectVerification(d);
+    expect(v && v.typecheck && v.typecheck.command, 'no typecheck detected for a Python codeline').toBeTruthy();
+    expect(v.typecheck.failurePattern).toBeTruthy();
+    // And it RUNS: the command the ecosystem declares exits 0 on this codeline.
+    const r = spawnSync('bash', ['-c', v.typecheck.command], { cwd: d, encoding: 'utf8' });
+    expect(r.status, r.stdout + r.stderr).toBe(0);
+    // And catches a syntax error, by file and line, in the identity the plugin declares.
+    writeFileSync(join(d, 'regintel/broken.py'), 'def x(:\n');
+    const bad = spawnSync('bash', ['-c', v.typecheck.command], { cwd: d, encoding: 'utf8' });
+    expect(bad.status).not.toBe(0);
+    expect(new RegExp(v.typecheck.failurePattern, 'm').test(bad.stdout + bad.stderr), `pattern misses: ${(bad.stdout + bad.stderr).slice(0, 300)}`).toBe(true);
+  });
+
   it('one that does not depend on pytest declares NO suite — cannot prove, never a guess', () => {
     expect(plugin.detectTests(codeline({ 'requirements.txt': 'fastapi\n' }))).toBeNull();
   });

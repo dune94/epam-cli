@@ -58,6 +58,31 @@ function seams() {
       }
     }
   }(reg.profiles || reg));
+  // A SEAM WHOSE REGISTRY TEMPLATE IS NOT A WHOLE PROMPT SPEAKS THROUGH THE TEMPLATES THAT
+  // DECLARE IT. The registry names one template per seam; story-writer's is a multi-part document
+  // (fix-plan, attempt-evidence — sections the writer CONSUMES through agent-inputs.js), while the
+  // prompt every writer call actually carries is story-writer-main, a single-body template that
+  // declares `seams: [story-writer]`. Keyed on the registry template alone, a greenfield writer
+  // call — no fix plan — matched nothing and fell to the catch-all (2026-09-13). So where the
+  // registry template is multi-part, every single-body template declaring the seam is an ALIAS:
+  // same answer, its own fingerprint, counted separately in the report. A seam whose registry
+  // template is itself a whole prompt gets none — its fragments would only duplicate it.
+  const templateDoc = (id) => {
+    try { return JSON.parse(fs.readFileSync(path.join(TPL, `${id}.json`), 'utf8')); } catch { return null; }
+  };
+  const multiPart = new Set(out.filter((x) => { const d = templateDoc(x.template); return d && d.bodies && !d.body; }).map((x) => x.seam));
+  const declared = new Set(out.map((x) => `${x.seam}\u0000${x.template}`));
+  for (const f of fs.readdirSync(TPL).filter((x) => x.endsWith('.json'))) {
+    const id = f.replace(/\.json$/, '');
+    const t = templateDoc(id);
+    if (!t || typeof t.body !== 'string') continue;
+    for (const seam of (Array.isArray(t.seams) ? t.seams : [])) {
+      if (!multiPart.has(seam)) continue;
+      if (declared.has(`${seam}\u0000${id}`)) continue;
+      declared.add(`${seam}\u0000${id}`);
+      out.push({ seam, template: id, alias: true });
+    }
+  }
   return out;
 }
 
@@ -933,7 +958,22 @@ function contractStandIn(seam) {
     const o = mk(null);
     return Object.keys(o).length ? o : null;
   }
-  if (c.kind === 'verdict') return { verdict: 'pass', findings: [] };
+  if (c.kind === 'verdict') {
+    // THE JUDGE'S OWN VOCABULARY. A verdict seam that declares the tag it is judged under gets the
+    // first value that tag's tool definition allows — `pass` was refused by the roster reviews,
+    // whose enum is sound | defects_found | nothing_to_review, and read as a review that never
+    // looked. A seam declaring no tag keeps the plain answer.
+    if (c.tag) {
+      try {
+        // eslint-disable-next-line global-require
+        const { itemSchemaFor } = require('./lib/agent-output-schema.js');
+        const sch = itemSchemaFor(c.tag);
+        const v = sch && sch.properties && sch.properties.verdict;
+        if (Array.isArray(v && v.enum) && v.enum.length) return { verdict: v.enum[0], findings: [] };
+      } catch { /* fall through to the plain answer */ }
+    }
+    return { verdict: 'pass', findings: [] };
+  }
   if (c.kind === 'artefact') return { note: `stand-in artefact for ${seam}` };
   // A seam that declares NO contract is satisfied by any JSON object — so it gets one, rather than
   // being left to the catch-all and reported as uncovered when nothing is in fact missing.
@@ -1717,6 +1757,77 @@ function endsInToolCall(cap, seam) {
       else stoodIn.push(`${seam}  <- contract stand-in (${Object.keys(stood).join(', ') || 'artefact'})`);
   }
 
+  // A GENERATED PROMPT IS ANSWERED SEGMENT FOR SEGMENT.
+  //
+  // In `generate` provisioning mode the prompt builder shows the model a template's prose between
+  // its placeholders — N `--- SEGMENT n ---` blocks — and requires exactly N back. N belongs to the
+  // template being generated, different for each of ~40, so no single recording and no contract
+  // stand-in can answer it: the £0 greenfield run was refused five times on its first template and
+  // the mint aborted (2026-09-13). One answer per template, then: matched on the generator's own
+  // fingerprint AND the template's, returning that template's segments as they are — the same
+  // text the builder showed, which the contract check accepts as a faithful copy. The generator is
+  // found by the slot it fills, never by name.
+  const _generator = (() => {
+    for (const f of fs.readdirSync(TPL).filter((x) => x.endsWith('.json'))) {
+      try {
+        const t = JSON.parse(fs.readFileSync(path.join(TPL, f), 'utf8'));
+        const body = t.bodies ? Object.values(t.bodies).join('\n') : String(t.body || '');
+        if (body.includes('__GEN_TEMPLATE_BODY__')) return f.replace(/\.json$/, '');
+      } catch { /* not a template */ }
+    }
+    return null;
+  })();
+  const _genKey = _generator ? matchKey(_generator) : null;
+  // WHICH TEMPLATE IS BEING GENERATED is stated by the generator itself: the line where it names
+  // the template's id. The text around that slot is the discriminator — a fingerprint of the
+  // template's own prose is not, because templates share lines (story-writer-main answered with
+  // story-writer's count) and some have no placeholder-free line at all.
+  const _idFrame = (() => {
+    if (!_generator) return null;
+    const t = JSON.parse(fs.readFileSync(path.join(TPL, `${_generator}.json`), 'utf8'));
+    const body = t.bodies ? Object.values(t.bodies).join('\n') : String(t.body || '');
+    const line = body.split('\n').find((l) => l.includes('__GEN_TEMPLATE_ID__'));
+    if (!line) return null;
+    const [before, afterRaw] = line.split('__GEN_TEMPLATE_ID__');
+    const after = String(afterRaw || '').split(/__[A-Z0-9_]+__/)[0];
+    return { before: before.replace(/^.*__[A-Z0-9_]+__/, ''), after };
+  })();
+  let _generated = 0;
+  if (_genKey && _idFrame) {
+    // eslint-disable-next-line global-require
+    const { splitByPlaceholders, formatSegments } = require('./lib/project-prompt-contract.js');
+    const PROTOCOLS = [
+      { path: '/api/v1/chat/completions', text: sse },
+      { path: '/v1/messages', text: anthropicSse },
+    ];
+    for (const f of fs.readdirSync(TPL).filter((x) => x.endsWith('.json'))) {
+      const id = f.replace(/\.json$/, '');
+      if (id === _generator) continue;
+      let body = '';
+      try {
+        const t = JSON.parse(fs.readFileSync(path.join(TPL, f), 'utf8'));
+        body = (typeof t.body === 'string' && t.body) ? t.body
+          : Object.values(t.bodies || {}).filter((b) => typeof b === 'string').join('\n');
+      } catch { continue; }
+      if (!body) continue;
+      const idMark = `${_idFrame.before}${id}${_idFrame.after}`;
+      const { segments } = splitByPlaceholders(body);
+      const reply = formatSegments(segments);
+      for (const proto of PROTOCOLS) {
+        // eslint-disable-next-line no-await-in-loop
+        await put('/mockserver/expectation', {
+          priority: 60,
+          httpRequest: { method: 'POST', path: proto.path,
+            body: { type: 'REGEX', regex: `(?s)(?=.*${rx(wireForm(_genKey))})(?=.*${rx(wireForm(idMark))}).*` } },
+          httpResponse: { statusCode: 200,
+            headers: { 'content-type': ['text/event-stream'], 'x-seam': [`generate:${id}`] },
+            body: proto.text(reply) },
+        });
+      }
+      _generated += 1;
+    }
+  }
+
   // A catch-all so an unmatched seam is visibly empty rather than reaching the network.
   await put('/mockserver/expectation', {
     priority: 1,
@@ -1756,6 +1867,7 @@ function endsInToolCall(cap, seam) {
     if (list.length > 20) console.log(`  ... and ${list.length - 20} more`);
   };
 
+  console.log(`GENERATED ${_generated} template(s) answered segment for segment when the prompt builder generates them`);
   console.log(`covered ${covered.length} seam(s) from real captures:`);
   covered.forEach((c) => console.log(`  ${c}`));
 
@@ -1780,7 +1892,9 @@ function endsInToolCall(cap, seam) {
   // is what made this line report 37 of 40 the first time it ran — the accounting caught its own
   // omission, which is the whole reason it prints a total rather than a list.
   const accounted = covered.length + stoodIn.length + uncovered.length + shared.length;
+  const _aliases = all.filter((x) => x.alias).length;
   console.log(`\n${accounted} of ${all.length} declared seam(s) accounted for`
+    + (_aliases ? ` (${all.length - _aliases} seams + ${_aliases} template alias(es) a seam also renders)` : '')
     + ` (${covered.length} recorded, ${stoodIn.length} stand-in, ${shared.length} shared,`
     + ` ${uncovered.length} uncovered)`);
   // STATED EVERY TIME, NOT ONLY WHEN WRONG. As a conditional this was a branch nobody executed

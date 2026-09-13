@@ -112,18 +112,33 @@ describe('specCorrectiveNote says what was wrong with the LAST answer', () => {
 });
 
 describe('buildGateExec refuses to route somewhere nobody chose', () => {
+  const NO_LADDERS = (() => {
+    const f = require('node:path').join(require('node:os').tmpdir(), `no-ladders-${process.pid}.json`);
+    require('node:fs').writeFileSync(f, JSON.stringify({ ladders: {} }));
+    return f;
+  })();
+  const withNoLadders = (fn: () => void) => {
+    const prev = process.env.EPAM_LLM_DEFAULTS_FILE;
+    process.env.EPAM_LLM_DEFAULTS_FILE = NO_LADDERS;
+    try { fn(); } finally { if (prev === undefined) delete process.env.EPAM_LLM_DEFAULTS_FILE; else process.env.EPAM_LLM_DEFAULTS_FILE = prev; }
+  };
   it('REFUSES when its seam ladder resolves no model, rather than routing to a vendor literal', () => {
     // Both call sites for this review used to end in a vendor literal that always answered, so a
     // ladder that resolved nothing was indistinguishable from one that resolved correctly. Failing
     // here is the point: an unresolved ladder must stop the call, not pick something.
-    expect(() => buildGateExec('/bin/runner', { ...process.env, ORCH_GATE_PROVIDER: 'claude' }))
-      .toThrow(/no model resolved from its seam ladder/);
+    // A LADDER THAT RESOLVES NOTHING is a set that declares none: the engine reads the tier order
+    // and start models from the provider set even when the environment carries no EPAM_MODEL_LADDER_*
+    // (2026-09-13), so "nothing exported" alone no longer leaves the seam unresolved.
+    // The seam resolver reads the process environment (seamStartModel takes none), so the set
+    // with no ladders is declared there for the duration of the call.
+    withNoLadders(() => expect(() => buildGateExec('/bin/runner', { ...process.env, ORCH_GATE_PROVIDER: 'claude' }))
+      .toThrow(/no model resolved from its seam ladder/));
   });
 
   it('and it names the seam in the refusal, so the operator knows which ladder to fix', () => {
     let msg = '';
-    try { buildGateExec('/bin/runner', { ...process.env, ORCH_GATE_PROVIDER: '' }); }
-    catch (e) { msg = String((e as Error).message); }
+    withNoLadders(() => { try { buildGateExec('/bin/runner', { ...process.env, ORCH_GATE_PROVIDER: '' }); }
+    catch (e) { msg = String((e as Error).message); } });
     expect(msg, 'the refusal does not name the seam').toContain('prd-change-reviewer');
   });
 });

@@ -53,32 +53,31 @@
     {
       "id": "SKY-001",
       "title": "Scaffold TypeScript project with Vitest and Express",
-      "agentRole": "typescript-engineer",
       "agentGroup": "main",
       "status": "pending",
       "completed": false,
-      "description": "Create the project skeleton at /home/bradleyjerome/projects/skyscanner-app. Initialize a TypeScript Node.js project with: package.json (name: skyscanner-app, main: 'dist/server.js', scripts: build='tsc', test='vitest run', start='node dist/server.js', dev='tsx src/server.ts' — src/server.ts is the app's real entry point, built later by the REST API story; do NOT create a src/index.ts or reference dist/index.js anywhere), tsconfig.json (strict mode, target ES2022, module CommonJS, outDir dist/), vitest.config.ts, .gitignore, and a src/ directory. Install runtime dependency express and devDependencies typescript, tsx, vitest, @types/express, @types/node. Do NOT install Skyscanner SDKs — RapidAPI is called directly via fetch. The project must compile cleanly and vitest must exit 0 with no test files present.",
+      "description": "Create the project skeleton at the codeline root. Initialize a TypeScript Node.js project with: package.json (name: skyscanner-app, main: 'dist/server.js', scripts: build='tsc', test='vitest run', start='node dist/server.js', dev='tsx src/server.ts' — src/server.ts is the app's real entry point, built later by the REST API story; do NOT create a src/index.ts or reference dist/index.js anywhere), tsconfig.json (strict mode, target ES2022, module CommonJS, outDir dist/), vitest.config.ts, .gitignore, and a src/ directory. Install runtime dependency express and devDependencies typescript, tsx, vitest, @types/express, @types/node. Do NOT install Skyscanner SDKs — RapidAPI is called directly via fetch. The project must compile cleanly and vitest must exit 0 with no test files present.",
       "acceptanceCriteria": [
-        "/home/bradleyjerome/projects/skyscanner-app/package.json exists and the 'name' field equals exactly 'skyscanner-app'",
+        "package.json exists and the 'name' field equals exactly 'skyscanner-app'",
         "package.json 'scripts' object contains exactly: build='tsc', test='vitest run', start='node dist/server.js', dev='tsx src/server.ts' — and 'main' equals 'dist/server.js'",
         "package.json 'dependencies' includes 'express'",
         "package.json 'devDependencies' includes all of: typescript, tsx, vitest, @types/express, @types/node",
         "package.json contains no dependency whose name includes 'skyscanner', 'rapidapi', or any Skyscanner SDK",
-        "/home/bradleyjerome/projects/skyscanner-app/tsconfig.json exists with compilerOptions: strict=true, target='ES2022', module='CommonJS', outDir='dist/'",
-        "/home/bradleyjerome/projects/skyscanner-app/vitest.config.ts exists, imports defineConfig from 'vitest/config', exports a default config object, and sets test.globals to true (so test files can use describe/it/expect/vi/beforeEach/afterEach without importing them explicitly)",
-        "/home/bradleyjerome/projects/skyscanner-app/.gitignore exists and contains entries for both 'node_modules' and 'dist'",
-        "/home/bradleyjerome/projects/skyscanner-app/src/ directory exists",
-        "/home/bradleyjerome/projects/skyscanner-app/node_modules/ directory exists (npm install completed successfully)",
-        "Running ~/.nvm/versions/node/v20.20.0/bin/node ./node_modules/.bin/tsc --noEmit inside /home/bradleyjerome/projects/skyscanner-app exits with code 0 and produces no output",
-        "Running ~/.nvm/versions/node/v20.20.0/bin/node ./node_modules/.bin/vitest run inside /home/bradleyjerome/projects/skyscanner-app exits with code 0 (no test files is an acceptable passing state)",
+        "tsconfig.json exists with compilerOptions: strict=true, target='ES2022', module='CommonJS', outDir='dist/'",
+        "vitest.config.ts exists, imports defineConfig from 'vitest/config', exports a default config object, and sets test.globals to true (so test files can use describe/it/expect/vi/beforeEach/afterEach without importing them explicitly)",
+        ".gitignore exists and contains entries for both 'node_modules' and 'dist'",
+        "src/ directory exists",
+        "node_modules/ directory exists (npm install completed successfully)",
+        "Running ~/.nvm/versions/node/v20.20.0/bin/node ./node_modules/.bin/tsc --noEmit inside the codeline root exits with code 0 and produces no output",
+        "Running ~/.nvm/versions/node/v20.20.0/bin/node ./node_modules/.bin/vitest run inside the codeline root exits with code 0 (no test files is an acceptable passing state)",
         "package.json contains no reference anywhere to 'index.ts' or 'index.js' (the real entry point is src/server.ts, built by a later story)"
       ],
       "technicalNotes": {
-        "workingDir": "/home/bradleyjerome/projects/skyscanner-app",
+        "workingDir": ".",
         "files": [
-          "/home/bradleyjerome/projects/skyscanner-app/package.json",
-          "/home/bradleyjerome/projects/skyscanner-app/tsconfig.json",
-          "/home/bradleyjerome/projects/skyscanner-app/vitest.config.ts"
+          "package.json",
+          "tsconfig.json",
+          "vitest.config.ts"
         ]
       },
       "estimate": 10,
@@ -90,14 +89,11 @@
       "effort": "medium",
       "cpaConfidence": 0.78,
       "cpaGate": "pass",
-      "completedAt": "2026-05-30T18:30:32-04:00",
-      "aiProvider": "minimax",
-      "model": "MiniMax-M3"
+      "completedAt": "2026-05-30T18:30:32-04:00"
     },
     {
       "id": "SKY-002",
       "title": "Implement typed Skyscanner API client",
-      "agentRole": "typescript-engineer",
       "agentGroup": "primary",
       "status": "pending",
       "completed": false,
@@ -123,10 +119,10 @@
         "A real HTTP/API failure (4xx, 5xx, network error, malformed body) is NEVER silently replaced with mock/fixture data — mock mode only ever activates via the explicit MOCK_SKYSCANNER_API='true' env var, never as an automatic fallback"
       ],
       "technicalNotes": {
-        "workingDir": "/home/bradleyjerome/projects/skyscanner-app",
+        "workingDir": ".",
         "files": [
-          "/home/bradleyjerome/projects/skyscanner-app/src/skyscanner/client.ts",
-          "/home/bradleyjerome/projects/skyscanner-app/src/skyscanner/client.test.ts"
+          "src/skyscanner/client.ts",
+          "src/skyscanner/client.test.ts"
         ],
         "dependsOn": [
           "SKY-001"
@@ -141,14 +137,11 @@
       "effort": "medium",
       "cpaConfidence": 0.52,
       "cpaGate": "review",
-      "completedAt": "2026-05-31T07:26:29-04:00",
-      "aiProvider": "minimax",
-      "model": "MiniMax-M3"
+      "completedAt": "2026-05-31T07:26:29-04:00"
     },
     {
       "id": "SKY-003",
       "title": "Implement flight search CLI entry point with formatted table output",
-      "agentRole": "typescript-engineer",
       "agentGroup": "primary",
       "status": "pending",
       "completed": false,
@@ -171,10 +164,10 @@
         "No runtime dependency other than Node built-ins and packages already in `package.json` (from SKY-001/SKY-002) is added"
       ],
       "technicalNotes": {
-        "workingDir": "/home/bradleyjerome/projects/skyscanner-app",
+        "workingDir": ".",
         "files": [
-          "/home/bradleyjerome/projects/skyscanner-app/src/cli.ts",
-          "/home/bradleyjerome/projects/skyscanner-app/src/cli.test.ts"
+          "src/cli.ts",
+          "src/cli.test.ts"
         ],
         "dependsOn": [
           "SKY-002"
@@ -191,8 +184,6 @@
       "cpaConfidence": 0.58,
       "cpaGate": "review",
       "completedAt": "2026-05-31T07:29:46-04:00",
-      "aiProvider": "minimax",
-      "model": "MiniMax-M3",
       "dependencies": [
         "SKY-002"
       ]
@@ -200,7 +191,6 @@
     {
       "id": "SKY-004",
       "title": "Build Express REST API with /health, /search, /cheapest, and static dashboard endpoints",
-      "agentRole": "typescript-engineer",
       "agentGroup": "primary",
       "status": "pending",
       "completed": false,
@@ -232,10 +222,10 @@
         "`vitest run` exits 0 with all tests passing"
       ],
       "technicalNotes": {
-        "workingDir": "/home/bradleyjerome/projects/skyscanner-app",
+        "workingDir": ".",
         "files": [
-          "/home/bradleyjerome/projects/skyscanner-app/src/server.ts",
-          "/home/bradleyjerome/projects/skyscanner-app/src/server.test.ts"
+          "src/server.ts",
+          "src/server.test.ts"
         ],
         "dependsOn": [
           "SKY-002"
@@ -251,8 +241,6 @@
       "cpaConfidence": 0.52,
       "cpaGate": "review",
       "completedAt": "2026-05-31T07:30:50-04:00",
-      "aiProvider": "minimax",
-      "model": "MiniMax-M3",
       "dependencies": [
         "SKY-002"
       ]

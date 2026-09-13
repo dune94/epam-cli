@@ -3137,8 +3137,15 @@ $(cat "$_vendor_contract")
 )
     fi
 
+    # THE CRITERIA THE WRITER MUST SATISFY, from the run's PRD. The template's "## Acceptance
+    # Criteria" heading stood over nothing AC-related — only the brownfield VC block — so a
+    # greenfield writer, whose whole brief is the ACs, read an empty heading (2026-09-13). The
+    # heading is the template's; the block carries the numbered criteria, or nothing.
+    local story_acs
+    story_acs=$(story_acs_block "${MAIN_PRD_FILE:-$PRD_FILE}" "$story_id" "")
     _sw_vals=$(mktemp "${TMPDIR:-/tmp}/story-writer-main-vals-XXXXXX.json")
     jq -n \
+          --arg story_acs "$story_acs" \
           --arg spec_reality_warning "$([ -n "$spec_reality_warning" ] && printf '%s\n\n' "$spec_reality_warning" || true)" \
           --arg write_first_lines "$(printf '%b' "$write_first_lines")" \
           --arg string_invariants_block "$([ -n "$string_invariants_block" ] && printf '%s\n' "$string_invariants_block" || true)" \
@@ -3180,7 +3187,7 @@ fi)" \
           --arg story_id "$story_id" \
           --arg title "$title" \
           --arg files "$files" \
-          '{"__SPEC_REALITY_WARNING__":$spec_reality_warning,"__WRITE_FIRST_LINES__":$write_first_lines,"__STRING_INVARIANTS_BLOCK__":$string_invariants_block,"__REVIEW_FEEDBACK__":$review_feedback,"__SKILL_NOTE_BLOCK__":$skill_note_block,"__VERIFICATION_CRITERIA__":$verification_criteria,"__CODELINE_FACTS_BLOCK__":$codeline_facts_block,"__PROJECT_TOOLS_BLOCK__":$project_tools_block,"__TEST_OWNERSHIP_BLOCK__":$test_ownership_block,"__CODEGRAPH_TOOL_BLOCK__":$codegraph_tool_block,"__UNCOVERED_VC_BLOCK__":$uncovered_vc_block,"__BROWNFIELD_TEST_POLICY__":$brownfield_test_policy,"__NEW_DEPENDENCY_DIRECTIVE__":$new_dependency_directive,"__TC_FACTS__":$tc_facts,"__TC_MOCK_STRATEGY__":$tc_mock_strategy,"__TC_BANNED__":$tc_banned,"__TECHNICAL_NOTES__":$technical_notes,"__EXISTING_FILE_CONTENTS__":$existing_file_contents,"__DEPENDENCY_CONTRACTS__":$dependency_contracts,"__MODULE_RESOLUTION__":$module_resolution,"__CROSS_CODELINE_CONTRACT__":$cross_codeline_contract,"__WRITE_FIRST_LINES_2__":$write_first_lines_2,"__CONDITIONAL_SECTION__":$conditional_section,"__CONDITIONAL_SECTION_2__":$conditional_section_2,"__TC_FACTS_2__":$tc_facts_2,"__WRITE_FIRST_DIRECTIVE__":$write_first_directive,"__DEPENDENCIES__":$dependencies,"__AGENT_INPUTS__":$agent_inputs,"__DESCRIPTION__":$description,"__STORY_ID__":$story_id,"__TITLE__":$title,"__FILES__":$files}' > "$_sw_vals"
+          '{"__STORY_ACS__":$story_acs,"__SPEC_REALITY_WARNING__":$spec_reality_warning,"__WRITE_FIRST_LINES__":$write_first_lines,"__STRING_INVARIANTS_BLOCK__":$string_invariants_block,"__REVIEW_FEEDBACK__":$review_feedback,"__SKILL_NOTE_BLOCK__":$skill_note_block,"__VERIFICATION_CRITERIA__":$verification_criteria,"__CODELINE_FACTS_BLOCK__":$codeline_facts_block,"__PROJECT_TOOLS_BLOCK__":$project_tools_block,"__TEST_OWNERSHIP_BLOCK__":$test_ownership_block,"__CODEGRAPH_TOOL_BLOCK__":$codegraph_tool_block,"__UNCOVERED_VC_BLOCK__":$uncovered_vc_block,"__BROWNFIELD_TEST_POLICY__":$brownfield_test_policy,"__NEW_DEPENDENCY_DIRECTIVE__":$new_dependency_directive,"__TC_FACTS__":$tc_facts,"__TC_MOCK_STRATEGY__":$tc_mock_strategy,"__TC_BANNED__":$tc_banned,"__TECHNICAL_NOTES__":$technical_notes,"__EXISTING_FILE_CONTENTS__":$existing_file_contents,"__DEPENDENCY_CONTRACTS__":$dependency_contracts,"__MODULE_RESOLUTION__":$module_resolution,"__CROSS_CODELINE_CONTRACT__":$cross_codeline_contract,"__WRITE_FIRST_LINES_2__":$write_first_lines_2,"__CONDITIONAL_SECTION__":$conditional_section,"__CONDITIONAL_SECTION_2__":$conditional_section_2,"__TC_FACTS_2__":$tc_facts_2,"__WRITE_FIRST_DIRECTIVE__":$write_first_directive,"__DEPENDENCIES__":$dependencies,"__AGENT_INPUTS__":$agent_inputs,"__DESCRIPTION__":$description,"__STORY_ID__":$story_id,"__TITLE__":$title,"__FILES__":$files}' > "$_sw_vals"
     render_engine_prompt story-writer-main "$_sw_vals"
     rm -f "$_sw_vals"
 }
@@ -3638,8 +3645,18 @@ verify_story_deliverables() {
         if [[ "$file" = /* ]]; then
             if [ -n "${WORKTREE_MODE:-}" ] && [ -n "${MAIN_PROJECT_ROOT:-}" ] && [[ "$file" = "${MAIN_PROJECT_ROOT}"* ]]; then
                 check_path="${PROJECT_ROOT}${file#${MAIN_PROJECT_ROOT}}"
-            else
+            elif [[ "$file" = "${PROJECT_ROOT}/"* ]]; then
                 check_path="$file"
+            else
+                # A DELIVERABLE OUTSIDE THE CODELINE IS NOT A DELIVERABLE. Resolved as given, an
+                # absolute path into some other directory verifies whatever happens to be there:
+                # the greenfield canonical named an August run's output directory, still present
+                # on the host, and a run building into a fresh directory reported all three
+                # deliverables present with nothing written (2026-09-13). Refused by name, so the
+                # declaration gets corrected rather than the verdict.
+                STORY_REJECTION_KEY="outside-codeline:$file"
+                error "Story $story_id declares a deliverable outside the codeline ($PROJECT_ROOT): $file — a deliverable is a path within the codeline; declare it relative to the codeline root"
+                return 1
             fi
         else
             check_path="$PROJECT_ROOT/$file"

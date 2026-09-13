@@ -165,11 +165,14 @@ describe('PRD integrity — clean pre-run state', () => {
     expect(missing.map((s) => s.id)).toHaveLength(0);
   });
 
-  it('all active stories have an aiProvider field', () => {
-    const missing = [...activeIds]
+  // THE LADDER OWNS THE MODEL AND THE SET OWNS THE PROVIDER. This once demanded aiProvider on
+  // every story; an authored PRD that carries one pins a vendor past the provider set (see
+  // an-authored-prd-does-not-pin-a-model). The coordinator assigns it during the run.
+  it('no active story pins a provider in the authored PRD', () => {
+    const pinned = [...activeIds]
       .map((id) => byId.get(id)!)
-      .filter((s) => !s?.aiProvider);
-    expect(missing.map((s) => s.id)).toHaveLength(0);
+      .filter((s) => s?.aiProvider);
+    expect(pinned.map((s) => s.id)).toHaveLength(0);
   });
 });
 
@@ -196,13 +199,17 @@ describe('PRD integrity — path integrity', () => {
     expect(tmpPaths).toHaveLength(0);
   });
 
-  it('all active story file paths start with project.outputDir', () => {
+  // A DELIVERABLE IS A PATH WITHIN THE CODELINE: relative to its root, or absolute under it. An
+  // authored PRD names no host directory (the run declares where the codeline lives), and the
+  // verifier refuses an absolute path outside PROJECT_ROOT — so the only wrong shape here is an
+  // absolute path that is not under outputDir.
+  it('no active story file path points outside project.outputDir', () => {
     if (!outputDir || outputDir.includes('$')) return;
     const bad: string[] = [];
     for (const id of activeIds) {
       const s = byId.get(id);
       for (const f of s?.technicalNotes?.files ?? []) {
-        if (!f.startsWith(outputDir)) bad.push(`${id}: ${f}`);
+        if (f.startsWith('/') && !f.startsWith(outputDir)) bad.push(`${id}: ${f}`);
       }
     }
     expect(bad).toHaveLength(0);
@@ -283,6 +290,22 @@ describe('preflight-prd-integrity.sh — real subprocess execution', () => {
       implementationOrder: { scaffold: [], core: ['FIX-001'] },
     };
   }
+
+  it('a story declaring its deliverables RELATIVE to the codeline passes the path check', () => {
+    const prd = baseFixture();
+    prd.stories[0].technicalNotes.files = ['src/thing.ts', 'package.json'];
+    const r = runPreflight(prd);
+    expect(r.stdout).toMatch(/All active story file paths are (under|within) outputDir/);
+    expect(r.stdout).not.toMatch(/Story file paths not under outputDir/);
+  });
+
+  it('an absolute path outside outputDir still fails the path check', () => {
+    const prd = baseFixture();
+    prd.stories[0].technicalNotes.files = ['/somewhere/else/thing.ts'];
+    const r = runPreflight(prd);
+    expect(r.code).not.toBe(0);
+    expect(r.stdout).toMatch(/Story file paths not under outputDir/);
+  });
 
   function runPreflight(prd: any): { code: number; stdout: string } {
     const dir = mkdtempSync(join(tmpdir(), 'preflight-fixture-'));

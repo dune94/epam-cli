@@ -76,3 +76,26 @@ describe('an absent prior diagnosis is a real state, not a failure', () => {
       .toThrow(/EMPTY values/);
   });
 });
+
+/**
+ * AN ABSENT EXISTING AMENDMENT IS A REAL STATE TOO.
+ *
+ * The FIRST deterministic-check violation of a story has no earlier amendment to carry forward —
+ * __EXISTING_AMENDMENT__ is empty by construction. Undeclared, the render threw exactly as the
+ * prior-diagnosis case did, render_or_keep kept the previous (absent) amendment, and the retry
+ * was never told which deliverables it had failed to write. Seen on every first violation in the
+ * £0 greenfield run of 2026-09-13; the same path serves brownfield.
+ */
+describe('an absent existing amendment is a real state, not a failure', () => {
+  it('renders the deterministic_check variant with NO existing amendment, carrying the failure', () => {
+    const out = renderEngineTemplate(ID, { ...VALUES_NO_DIAGNOSIS, __EXISTING_AMENDMENT__: '' }, 'deterministic_check');
+    expect(out).toContain('Deterministic Check Failure');
+    expect(out).toContain(VALUES_NO_DIAGNOSIS.__VERIFICATION_FAILURE__);
+    expect(out).not.toMatch(/__[A-Z_]+__/);
+  });
+
+  it('still carries the existing amendment when there is one', () => {
+    const out = renderEngineTemplate(ID, VALUES_NO_DIAGNOSIS, 'deterministic_check');
+    expect(out).toContain('previous guidance');
+  });
+});

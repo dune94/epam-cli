@@ -23,9 +23,21 @@ import * as path from 'node:path';
 // to export PRD_FILE; without it projectStories() is empty, every per-story stand-in loses its
 // story, and the assertion fails for a reason that has nothing to do with what it tests. The
 // project is DISCOVERED — the first one declaring stories — so no path is written down here.
-const PROJECTS = path.join(__dirname, '../../../orchestrations/projects');
+//
+// The AUTHORED PRD, not the runtime one: prd.json is what a run restores from prd.authored.json
+// (pre-run-reset) or from PRD_CANONICAL (greenfield), and it is not tracked — a checkout may hold
+// none at all, which left this test red for a reason that had nothing to do with what it tests.
+const ROOT = path.join(__dirname, '../../../');
+const PROJECTS = path.join(ROOT, 'orchestrations/projects');
 const withStories = fs.readdirSync(PROJECTS)
-  .map((d) => path.join(PROJECTS, d, 'prd.json'))
+  .flatMap((d) => {
+    const out = [path.join(PROJECTS, d, 'prd.authored.json')];
+    try {
+      const m = fs.readFileSync(path.join(PROJECTS, d, 'config.env'), 'utf8').match(/^PRD_CANONICAL=(.+)$/m);
+      if (m) out.push(path.isAbsolute(m[1].trim()) ? m[1].trim() : path.join(ROOT, m[1].trim()));
+    } catch { /* a project with no config declares no canonical */ }
+    return out;
+  })
   .find((f) => {
     try { return (JSON.parse(fs.readFileSync(f, 'utf8')).stories || []).length > 0; } catch { return false; }
   });
@@ -87,4 +99,37 @@ describe('the mock satisfies the gate it answers', () => {
         .toContain(row.agentRole);
     }
   });
+});
+
+/**
+ * A VERDICT SEAM'S STAND-IN SPEAKS THE VOCABULARY ITS JUDGE DECLARES.
+ *
+ * The verdict stand-in answered `pass` for every verdict-kind seam. Both roster reviews are judged
+ * against TOOL_ROSTER_REVIEW, whose enum is sound | defects_found | nothing_to_review — so the
+ * stand-in was refused ("does not allow — declared values are…"), read as a review that did not
+ * look, retried three times identically, and the mint aborted. Found 2026-09-13 by the £0
+ * greenfield integration test, one stage past the sizing defect it had just uncovered.
+ *
+ * The contract now names the tag a verdict is judged under; the stand-in reads the vocabulary
+ * from that tag's live tool definition and is put through the same validator the pipeline uses.
+ */
+describe('a verdict stand-in satisfies the validator its seam is judged by', () => {
+  const schema = require('../../../orchestrations/scripts/lib/agent-output-schema.js');
+  const contracts = schema.declaredContracts() as Record<string, any>;
+  const tagged = Object.entries(contracts).filter(([, c]) => c.kind === 'verdict' && c.tag);
+
+  it('the roster reviews declare the tag they are judged under', () => {
+    for (const seam of ['roster-review', 'project-roster-review']) {
+      expect(contracts[seam] && contracts[seam].tag, `${seam} declares no tag`).toBeTruthy();
+    }
+  });
+
+  for (const [seam, c] of tagged) {
+    it(`${seam}: the stand-in passes validateTaggedOutput for <${c.tag}>`, () => {
+      const standIn = mock.contractStandIn(seam);
+      expect(standIn, 'no stand-in').toBeTruthy();
+      const r = schema.validateTaggedOutput(c.tag, standIn);
+      expect(r.ok, r.reason).toBe(true);
+    });
+  }
 });

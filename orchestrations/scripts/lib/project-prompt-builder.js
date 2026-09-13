@@ -241,10 +241,9 @@ function renderGeneratorPrompt({ generatorBody, template, projectContext, codeli
     // one. 25 refusals on 2026-09-08 were all "dropped placeholder(s) the template requires", and
     // a dropped slot silently starves the agent of the evidence that slot carries.
     .split('__GEN_TEMPLATE_BODY__').join((() => {
-      const { splitByPlaceholders } = require('./project-prompt-contract.js');
+      const { splitByPlaceholders, formatSegments } = require('./project-prompt-contract.js');
       const { segments } = splitByPlaceholders(templateBodyText(template));
-      return segments.map((seg, i) => `--- SEGMENT ${i + 1} ---\n${seg}`).join('\n')
-        + '\n--- END SEGMENTS ---\n\n'
+      return formatSegments(segments) + '\n'
         + `Reply with the same ${segments.length} markers, in order, each followed by your wording `
         + 'for that segment, and close with the END SEGMENTS marker. Plain text between the '
         + 'markers — no JSON, no escaping, no code fences. A segment may be empty. Do not write '

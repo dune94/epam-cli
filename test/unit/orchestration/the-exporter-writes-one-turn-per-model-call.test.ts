@@ -13,7 +13,7 @@
  */
 import { describe, it, expect, beforeAll, afterAll } from 'vitest';
 import { spawn } from 'node:child_process';
-import { mkdtempSync, rmSync, readdirSync, readFileSync } from 'node:fs';
+import { mkdtempSync, rmSync, readdirSync, readFileSync, existsSync } from 'node:fs';
 import { tmpdir } from 'node:os';
 import { join } from 'node:path';
 import { createServer, Server } from 'node:http';
@@ -28,7 +28,12 @@ const attempt = (name: string, ts: string, output: any, story: string, extra: an
   ({ name, timestamp: ts, output, metadata: { phase: 'core', story_id: story, provider: 'openrouter', ladder_rung: null, ...extra } });
 
 /** A session as Langfuse would answer it: a gate recorded both ways, and a seam recorded only per attempt. */
+// A rehearsal's own trace: stamped by the recorder, never a capture.
+const rehearsalEcho = (name: string, ts: string, output: any) =>
+  ({ name, timestamp: ts, output, metadata: { granularity: 'attempt', rehearsal: true, story_id: '' } });
+
 const SESSION = [
+  rehearsalEcho('roster-specialiser', '2026-09-11T09:59:59Z', { text: '{"note":"stand-in artefact for roster-specialiser"}', toolCalls: [] }),
   call('qa-gate:x · core', '2026-09-11T10:00:01Z', { text: '', toolCalls: [{ name: 'read_file', input: { path: 'a' } }] }),
   call('qa-gate:x · core', '2026-09-11T10:00:02Z', { text: '', toolCalls: [{ name: 'read_file', input: { path: 'b' } }] }),
   call('qa-gate:x · core', '2026-09-11T10:00:03Z', { text: 'verdict', toolCalls: [] }),
@@ -95,6 +100,30 @@ describe('the exporter writes one turn per model call', () => {
     const { seams } = await exportSession();
     expect(seams['spec-agent · S-1']).toEqual([{ text: 'spec', toolCalls: [] }]);
     expect(seams['spec-agent']).toBeUndefined();
+  });
+
+  it('a rehearsal\'s own traces are left out of the cassette, and counted', async () => {
+    const { seams, manifest } = await exportSession();
+    expect(seams['roster-specialiser'], 'a rehearsal echo was written as a recording').toBeUndefined();
+    expect(manifest.rehearsalTracesLeftOut).toBe(1);
+  });
+
+  it('a session holding only rehearsal traces writes no cassette and says why', async () => {
+    const only = SESSION.filter((t: any) => t.metadata.rehearsal === true);
+    const prev = SESSION.splice(0, SESSION.length, ...only);
+    try {
+      const out = join(mkdtempSync(join(tmpdir(), 'export-')), 'cassette'); dirs.push(join(out, '..'));
+      const r = await new Promise<{ status: number | null; stderr: string }>((resolve) => {
+        const c = spawn(process.execPath, [EXPORTER, '--session', 's1', '--out', out], {
+          env: { ...process.env, LANGFUSE_PUBLIC_KEY: 'pk', LANGFUSE_SECRET_KEY: 'sk', LANGFUSE_BASE_URL: `http://127.0.0.1:${port}` },
+        });
+        let stderr = ''; c.stderr.on('data', (d) => { stderr += d; });
+        c.on('close', (status) => resolve({ status, stderr }));
+      });
+      expect(r.status).not.toBe(0);
+      expect(r.stderr).toMatch(/holds only rehearsal traces/);
+      expect(existsSync(out)).toBe(false);
+    } finally { SESSION.splice(0, SESSION.length, ...prev); }
   });
 
   it('the recorders declare their granularity', () => {

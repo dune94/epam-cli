@@ -145,22 +145,14 @@ describe('PRD — structural invariants (all phases)', () => {
     expect(bad.map((s: any) => s.id)).toHaveLength(0);
   });
 
-  it('all declared file paths are absolute', () => {
-    const bad: string[] = [];
-    for (const s of activeStories) {
-      for (const f of filesOf(s)) {
-        if (!f.startsWith('/')) bad.push(`${s.id}: ${f}`);
-      }
-    }
-    expect(bad).toHaveLength(0);
-  });
-
-  it('all declared file paths are under the project outputDir (prd.project.outputDir)', () => {
+  // A DELIVERABLE IS A PATH WITHIN THE CODELINE — relative to its root (an authored PRD names no
+  // host directory; the run declares where the codeline lives), or absolute under outputDir.
+  it('no declared file path is absolute outside the project outputDir', () => {
     const outputDir = prd.project?.outputDir;
     const bad: string[] = [];
     for (const s of activeStories) {
       for (const f of filesOf(s)) {
-        if (!f.startsWith(outputDir)) bad.push(`${s.id}: ${f}`);
+        if (f.startsWith('/') && !f.startsWith(outputDir)) bad.push(`${s.id}: ${f}`);
       }
     }
     expect(bad).toHaveLength(0);

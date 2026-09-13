@@ -100,7 +100,13 @@ describe('an unresolvable ladder position is never silent', () => {
     // to the run's own chain. That is survivable; being silent about it is not. It cost every
     // agent its declared ladder for a whole run with nothing in the log to show for it.
     const { dir, logDir, binDir } = setup();
-    const { out } = invoke(dir, logDir, binDir, { EPAM_MODEL_LADDER_TIER_ORDER: '' });
+    // MISSING EVERYWHERE, not merely un-exported: the tier order is a declaration of the provider
+    // set, and the engine reads it from there when the environment does not carry it (2026-09-13)
+    // — so a blank variable alone no longer makes the position unresolvable. A set declaring no
+    // order is the state this test is about.
+    const noOrder = join(dir, 'llm-defaults.none.json');
+    writeFileSync(noOrder, JSON.stringify({ ladders: {} }));
+    const { out } = invoke(dir, logDir, binDir, { EPAM_MODEL_LADDER_TIER_ORDER: '', EPAM_LLM_DEFAULTS_FILE: noOrder });
     expect(out, 'the position resolved to nothing and nothing said so')
       .toMatch(/declares a ladder position but it resolves to no tier/);
   });

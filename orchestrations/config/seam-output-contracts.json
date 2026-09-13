@@ -42,13 +42,17 @@
       "kind": "verdict"
     },
     "project-roster-review": {
-      "kind": "verdict"
+      "kind": "verdict",
+      "tag": "ROSTER_REVIEW",
+      "_why_tag": "Judged by validateTaggedOutput against TOOL_ROSTER_REVIEW; the verdict vocabulary is that tool's enum, and the rehearsal stand-in reads it from there."
     },
     "prompt-review": {
       "kind": "verdict"
     },
     "roster-review": {
-      "kind": "verdict"
+      "kind": "verdict",
+      "tag": "ROSTER_REVIEW",
+      "_why_tag": "Judged by validateTaggedOutput against TOOL_ROSTER_REVIEW; the verdict vocabulary is that tool's enum, and the rehearsal stand-in reads it from there."
     },
     "survey-review": {
       "kind": "verdict"

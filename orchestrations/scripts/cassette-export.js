@@ -187,11 +187,23 @@ async function main() {
     process.exit(2);
   }
 
-  const traces = await tracesOf(session);
-  if (!traces.length) {
+  const allTraces = await tracesOf(session);
+  // A REHEARSAL IS NOT A RECORDING. Its traces were answered from recordings and stand-ins and
+  // carry no model's word; exported, they became a cassette the next rehearsal preferred over its
+  // own stand-ins, and the roster stage failed on its own echo (2026-09-13). The recorder stamps
+  // them (lib/langfuse-emit.js rehearsal:true); they are left out here, and a session holding
+  // nothing else writes no cassette.
+  const traces = allTraces.filter((t) => !(t && t.metadata && t.metadata.rehearsal === true));
+  const rehearsalTraces = allTraces.length - traces.length;
+  if (!allTraces.length) {
     throw new Error(
       `[cassette-export] session '${session}' has no traces. Either the id is wrong or that run `
       + 'produced no model calls — an empty cassette would rehearse nothing and is not written.');
+  }
+  if (!traces.length) {
+    throw new Error(
+      `[cassette-export] session '${session}' holds only rehearsal traces (${rehearsalTraces}) — answered from `
+      + 'recordings and stand-ins, not by a model. A rehearsal is not a recording and is not written.');
   }
 
   const bySeam = new Map();
@@ -233,6 +245,7 @@ async function main() {
     pathsOutsideAnyRepo: touched.pathsOutsideAnyRepo,
     exportedFrom: BASE(),
     traceCount: traces.length,
+    rehearsalTracesLeftOut: rehearsalTraces,
     unattributableTraces: unnamed,
     // Per-attempt summaries of seams that were also recorded per call: the same calls twice.
     attemptTracesFolded: [...attemptsFolded.entries()].sort().map(([agent, n]) => ({ agent, traces: n })),

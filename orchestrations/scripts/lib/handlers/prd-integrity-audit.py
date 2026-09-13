@@ -222,18 +222,22 @@ elif output_dir.startswith('/') and '$' not in output_dir and '{' not in output_
 else:
     err(f"project.outputDir is not an absolute literal path (no shell vars allowed): '{output_dir}'")
 
-# ── 13. All active story file paths under outputDir (no /tmp/ stragglers) ────
+# ── 13. All active story file paths within outputDir (no /tmp/ stragglers) ───
+# A deliverable is a path WITHIN the codeline: relative to its root, or absolute under
+# outputDir. An authored PRD names no host directory (the run declares where the codeline
+# lives, and the writer resolves relative declarations against it), so only an ABSOLUTE path
+# that points elsewhere is drift — the stragglers this check exists to catch.
 if output_dir and '$' not in output_dir:
     bad_paths = []
     for sid in active_ids:
         s = by_id.get(sid, {})
         for f in s.get('technicalNotes', {}).get('files', []):
-            if not f.startswith(output_dir):
+            if f.startswith('/') and not f.startswith(output_dir):
                 bad_paths.append(f"{sid}: {f}")
     if bad_paths:
         err(f"Story file paths not under outputDir ({output_dir}): {bad_paths[:5]}{'...' if len(bad_paths)>5 else ''}")
     else:
-        print(f"  ✓ All active story file paths are under outputDir")
+        print(f"  ✓ All active story file paths are within outputDir")
 
 # ── 14. No story exceeds 24 ACs ─────────────────────────────────────────────
 oversized = [(s['id'], len(s.get('acceptanceCriteria', []))) for s in stories

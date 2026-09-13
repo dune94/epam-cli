@@ -23,6 +23,23 @@ import { join } from 'node:path';
 const spec = require(join(__dirname, '../../../orchestrations/scripts/spec-mode-runner.js'));
 
 /** A roster of `n` agents, each persona `size` characters long. */
+/**
+ * The batch budget is the resolved model's declared capacity (autoCompressAt x charsPerToken from
+ * the active provider set) — so "a roster far over the budget" is sized from that declaration,
+ * never from a number remembered from when the budget was a literal.
+ */
+const declaredBudgetChars = (() => {
+  const resolver = require('../../../orchestrations/scripts/lib/llm-settings-resolve.js');
+  const settings = resolver.resolveLlmSettings({ projectConfigDir: process.env.EPAM_PROJECT_CONFIG_DIR });
+  const caps = Object.entries(settings.modelOverrides || {})
+    .filter(([k, v]: [string, any]) => !k.startsWith('$') && v && v.autoCompressAt && v.charsPerToken)
+    .map(([, v]: [string, any]) => Number(v.autoCompressAt) * Number(v.charsPerToken));
+  if (!caps.length) throw new Error('the active provider set declares no model capacity');
+  return Math.max(...caps);
+})();
+/** Per-agent persona size that makes n agents overflow one batch (two personas each). */
+const overflowing = (n: number) => Math.ceil((declaredBudgetChars * 1.5) / (n * 2));
+
 const fixture = (n: number, size = 500) => {
   const dir = mkdtempSync(join(tmpdir(), 'roster-review-'));
   const agents: Record<string, unknown> = {};
@@ -87,7 +104,7 @@ describe('the personas reach the prompt', () => {
 
   it('splits a large roster into several batches', async () => {
     // 40 agents x ~1000 chars of pairs exceeds one batch, so more than one pass must happen.
-    const f = fixture(40, 1000);
+    const f = fixture(40, overflowing(40));
     const r = recorder({ verdict: 'sound', findings: [] });
     await review(f, r.promptExec);
     expect(r.prompts().length, 'a roster far over the batch budget was sent as one prompt')
@@ -95,7 +112,7 @@ describe('the personas reach the prompt', () => {
   });
 
   it('covers EVERY agent across the batches — none is silently dropped', async () => {
-    const f = fixture(40, 1000);
+    const f = fixture(40, overflowing(40));
     const r = recorder({ verdict: 'sound', findings: [] });
     await review(f, r.promptExec);
     const all = r.prompts().join('\n');
@@ -105,7 +122,7 @@ describe('the personas reach the prompt', () => {
   });
 
   it('never splits one agent across two batches', async () => {
-    const f = fixture(40, 1000);
+    const f = fixture(40, overflowing(40));
     const r = recorder({ verdict: 'sound', findings: [] });
     await review(f, r.promptExec);
     for (const p of r.prompts()) {

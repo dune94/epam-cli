@@ -83,14 +83,20 @@ describe('the JS block the detective uses is the same shape', () => {
 });
 
 describe('the four seams render in both states through the real renderer', () => {
-  it('the templates that take the block are the four the ruling named — found, not listed', () => {
-    expect(AC_TEMPLATES.sort()).toEqual(['code-graph-detective', 'code-review-cycle', 'failure-analyst', 'team-lead-review']);
+  it('the templates that take the block are the four judges the ruling named, and the writer — found, not listed', () => {
+    // THE WRITER TOO. story-writer-main carried a "## Acceptance Criteria" heading with nothing
+    // AC-related beneath it — only the brownfield verification-criteria block — so a greenfield
+    // writer, whose whole brief is the ACs, was handed an empty heading. Found 2026-09-13 by the
+    // £0 greenfield integration test in the writer's own prompt capture.
+    expect(AC_TEMPLATES.sort()).toEqual(['code-graph-detective', 'code-review-cycle', 'failure-analyst', 'story-writer-main', 'team-lead-review']);
   });
 
   it.each(AC_TEMPLATES)('%s declares __STORY_ACS__ mayBeEmpty and carries no fixed criteria heading of its own', (id) => {
     const doc = JSON.parse(readFileSync(join(TPL_DIR, `${id}.json`), 'utf8'));
     expect(doc.mayBeEmpty, `${id}: absent criteria (brownfield) must be a legal state`).toContain('__STORY_ACS__');
-    expect(doc.body, `${id}: a heading in the body renders over nothing on brownfield`).not.toMatch(/acceptance criteria:|CURRENT TEST CRITERIA/i);
+    // The writer's own "## Acceptance Criteria" heading also covers the brownfield VC block, so it
+    // stays; the judges carry none of their own.
+    if (id !== 'story-writer-main') expect(doc.body, `${id}: a heading in the body renders over nothing on brownfield`).not.toMatch(/acceptance criteria:|CURRENT TEST CRITERIA/i);
   });
 
   function renderWith(id: string, acs: string) {
@@ -111,7 +117,23 @@ describe('the four seams render in both states through the real renderer', () =>
   it.each(AC_TEMPLATES)('%s: a brownfield story renders — and with no criteria heading anywhere', (id) => {
     const out = renderWith(id, '');
     expect(out.length, 'the render refused or produced nothing').toBeGreaterThan(200);
-    expect(out).not.toMatch(/acceptance criteria:|CURRENT TEST CRITERIA/i);
+    if (id !== 'story-writer-main') expect(out).not.toMatch(/acceptance criteria:|CURRENT TEST CRITERIA/i);
     expect(out).not.toContain('__STORY_ACS__');
+  });
+});
+
+/**
+ * THE WRITER IS HANDED THE CRITERIA IN claude.sh, NOT ONLY IN THE TEMPLATE. The value block that
+ * renders story-writer-main must carry __STORY_ACS__ built by story_acs_block from the run's PRD —
+ * lifted from the real script and executed against a PRD with criteria.
+ */
+describe('the writer render in claude.sh hands over the criteria', () => {
+  const SRC = readFileSync(join(ROOT, 'orchestrations/scripts/claude.sh'), 'utf8');
+  it('the value block names __STORY_ACS__ and builds it from the block library', () => {
+    const at = SRC.indexOf('story-writer-main-vals-');
+    expect(at).toBeGreaterThan(-1);
+    const block = SRC.slice(Math.max(0, at - 6000), SRC.indexOf('render_engine_prompt story-writer-main', at));
+    expect(block).toMatch(/"__STORY_ACS__":\$story_acs/);
+    expect(block).toMatch(/story_acs=\$\(story_acs_block /);
   });
 });

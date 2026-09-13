@@ -4890,8 +4890,12 @@ async function reviewProjectRoster({
     // live 2026-09-01. seamInvocationEnv only resolves a model when EPAM_MODEL_LADDER_* are already
     // exported, which they are not here either.
     //
-    // The seam declares its ladder position (project-roster-review: "top") and the provider set
-    // declares that tier's start model. Both are config, both are readable without a run.
+    // The seam declares its ladder POSITION (project-roster-review: "top"); the provider set
+    // declares the tier ORDER and each tier's start model. Position -> tier is the engine's own
+    // rule in lib/seam-invocation.js (resolveTierPosition), the same one every runner call uses.
+    // Reading the position as if it were a tier name — settings.ladders['top'] — found nothing
+    // once the registry went back to positions, and the review refused to size itself three
+    // attempts running; found 2026-09-13 by the £0 greenfield integration test.
     let model = String(process.env.EPAM_MODEL || process.env.AI_MODEL || '').trim();
     let overrides = {};
     let settings = null;
@@ -4904,8 +4908,9 @@ async function reviewProjectRoster({
     }
     if (!model) {
       try {
-        const reg = require(require('path').join(__dirname, '../agents/invocation-profiles.json'));
-        const tier = ((reg.profiles || reg)['project-roster-review'] || {}).ladder;
+        const si = require(require('path').join(__dirname, 'lib/seam-invocation.js'));
+        const position = si.seamLadderFor('project-roster-review', process.env.EPAM_PROJECT_CONFIG_DIR || '');
+        const tier = si.resolveTierPosition(position, process.env);
         const ladder = tier && settings && settings.ladders ? settings.ladders[tier] : null;
         model = String((ladder && ladder.startModel) || '').trim();
       } catch (e) { /* reported below */ }

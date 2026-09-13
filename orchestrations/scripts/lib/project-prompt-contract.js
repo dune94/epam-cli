@@ -354,6 +354,16 @@ function extractSegmentsReply(text, expectedCount) {
  *
  * A FALSE START IS NORMAL. Models correct themselves mid-answer, so the LAST complete set wins.
  */
+/**
+ * THE SEGMENT FORM, WRITTEN ONCE. The generator shows segments in this form and asks for the same
+ * form back; the parser below reads it. A second spelling anywhere — the builder's prompt, the
+ * rehearsal mock — is a copy that drifts, so both call this.
+ */
+function formatSegments(segments) {
+  return segments.map((seg, i) => `--- SEGMENT ${i + 1} ---\n${seg}`).join('\n')
+    + '\n--- END SEGMENTS ---\n';
+}
+
 function parseSegmentsReply(text, expectedCount) {
   const s = String(text == null ? '' : text);
 
@@ -393,4 +403,4 @@ function parseSegmentsReply(text, expectedCount) {
 }
 
 module.exports = { checkGeneratedPrompt, buildGeneratedDoc, placeholdersIn, outputFieldsIn,
-  splitByPlaceholders, assembleFromSegments, extractSegmentsReply, parseSegmentsReply };
+  splitByPlaceholders, assembleFromSegments, extractSegmentsReply, parseSegmentsReply, formatSegments };

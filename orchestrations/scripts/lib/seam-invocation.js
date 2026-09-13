@@ -95,8 +95,11 @@ function readRegistry(file) {
 // hot-swap in the same process must not read the previous set's ladders.
 const _ladderDeclCache = new Map();
 function projectLadderDecl(sourceEnv) {
+  // NO PROJECT DIRECTORY IS STILL A DECLARATION: the ladders live in the provider SET since
+  // 2026-08-25, and a project only overlays them. Returning null here left every caller that
+  // runs before a project is named — the roster review sizing itself, a test with no fixture
+  // project — with no tier order at all, while the set had declared one the whole time.
   const dir = (sourceEnv && sourceEnv.EPAM_PROJECT_CONFIG_DIR) || '';
-  if (!dir) return null;
   const set = String((sourceEnv && sourceEnv.EPAM_PROVIDER_SET) || process.env.EPAM_PROVIDER_SET || '');
   const cacheKey = `${dir}\u0000${set}\u0000${String((sourceEnv && sourceEnv.EPAM_LLM_DEFAULTS_FILE) || process.env.EPAM_LLM_DEFAULTS_FILE || '')}`;
   if (_ladderDeclCache.has(cacheKey)) return _ladderDeclCache.get(cacheKey);
@@ -108,7 +111,7 @@ function projectLadderDecl(sourceEnv) {
   } catch {
     decl = null;
   }
-  if (!decl || typeof decl !== 'object' || !Object.keys(decl).length) {
+  if (dir && (!decl || typeof decl !== 'object' || !Object.keys(decl).length)) {
     try {
       decl = JSON.parse(fs.readFileSync(path.join(dir, 'llm-settings.json'), 'utf8'));
     } catch {

@@ -949,6 +949,14 @@ while IFS= read -r sid; do
     if [ "${_has_attachment:-0}" -gt 0 ]; then
       gate="review"
       info "  CPA: '$sid' is a NOVEL story with an attachment point — block downgraded to review (a missing target is expected for new work)"
+    elif [ "${EPAM_BROWNFIELD:-}" = "0" ]; then
+      # A GREENFIELD STORY PLUGS INTO THE CODELINE THE RUN IS BUILDING. The attachment evidence
+      # above is produced by the brownfield spec pass (the location-hint schema line renders empty
+      # for a project declaring EPAM_BROWNFIELD=0), so no greenfield story can ever carry it — and
+      # this gate blocked every greenfield scaffold at its first story (2026-09-13). Same
+      # downgrade as a placed feature, never a pass: the estimate is still reviewed.
+      gate="review"
+      info "  CPA: '$sid' is a NOVEL story in a greenfield project — block downgraded to review (it plugs into the codeline this run creates)"
     else
       info "  CPA: '$sid' is a NOVEL story with NO attachment point — block STANDS (nothing identifies where this plugs in)"
     fi

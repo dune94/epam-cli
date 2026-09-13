@@ -75,13 +75,20 @@ describe('the generic launcher runs a greenfield project', () => {
     }
   });
 
-  it('restores the PRD from PRD_CANONICAL, resolving a repo-relative path against the repo root', () => {
+  it('restores the PRD from PRD_CANONICAL, resolving a repo-relative path against the repo root, and the runtime PRD takes the project\'s OUTPUT_DIR', () => {
     const repo = tmp('gf-repo-'); mkdirSync(join(repo, 'orchestrations'));
-    writeFileSync(join(repo, 'orchestrations/x.canonical.json'), JSON.stringify({ stories: [{ id: 'A' }, { id: 'B' }] }));
+    writeFileSync(join(repo, 'orchestrations/x.canonical.json'), JSON.stringify({ project: { name: 'x', outputDir: '/somebody/elses/machine/build' }, stories: [{ id: 'A' }, { id: 'B' }] }));
     const prd = join(repo, 'orchestrations/x.json'); writeFileSync(prd, JSON.stringify({ stories: [{ id: 'STALE', status: 'done' }] }));
-    const r = sh(`greenfield_restore_prd "orchestrations/x.canonical.json" ${JSON.stringify(prd)} ${JSON.stringify(repo)}`);
+    const out = join(tmp('gf-out-'), 'build');
+    const r = sh(`greenfield_restore_prd "orchestrations/x.canonical.json" ${JSON.stringify(prd)} ${JSON.stringify(repo)}`, { OUTPUT_DIR: out });
     expect(r.status, r.out).toBe(0);
-    expect(JSON.parse(readFileSync(prd, 'utf8')).stories.map((s: any) => s.id)).toEqual(['A', 'B']);
+    const restored = JSON.parse(readFileSync(prd, 'utf8'));
+    expect(restored.stories.map((s: any) => s.id)).toEqual(['A', 'B']);
+    // The canonical's absolute path belongs to the machine it was authored on; the project's
+    // OUTPUT_DIR is what this launch builds into, and pre-flight compares the two.
+    expect(restored.project.outputDir).toBe(out);
+    expect(restored.project.name).toBe('x');
+    expect(JSON.parse(readFileSync(join(repo, 'orchestrations/x.canonical.json'), 'utf8')).project.outputDir, 'the canonical must not be rewritten').toBe('/somebody/elses/machine/build');
   });
 
   it('refuses when PRD_CANONICAL is declared but missing — never launches on a stale PRD', () => {

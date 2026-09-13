@@ -284,21 +284,38 @@ fi
 
 # ── 4. Required API keys ──────────────────────────────────────────────────────
 echo "[ API keys ]"
-# Load .env if present
-load_env_file_safe "$REPO_ROOT/.env"
-
-for key in OPENROUTER_API_KEY OPENAI_API_KEY; do
+# THE ACTIVE SET SAYS WHICH KEYS A RUN NEEDS; THE PROJECT SAYS WHICH IT NEEDS BESIDES.
+# This named OPENROUTER_API_KEY and OPENAI_API_KEY as required for every run — two vendors, in the
+# engine, whatever set was active — and RAPIDAPI_KEY, one project's contract-discovery key, as a
+# warning for all of them. On the claude, codemie and mockserver sets the first two are absent by
+# design (the mockserver set REMOVES vendor credentials so a rehearsal cannot spend), so pre-flight
+# refused every £0 rehearsal and every subscription-billed run over keys nothing would use.
+# Found 2026-09-13 opening the greenfield rehearsal. Derived: the set's own credential declarations
+# (config/provider-sets.json, via lib/set-credentials.sh) and the project's REQUIRED_KEYS.
+load_env_file_safe "$REPO_ROOT/.env" keep-existing
+. "$SCRIPT_DIR/lib/set-credentials.sh"
+_pf_set_keys="$(set_required_keys 2>/dev/null || printf '')"
+if [[ -z "$_pf_set_keys" ]]; then
+  ok "the active provider set (${EPAM_PROVIDER_SET:-default}) declares no required credentials"
+fi
+IFS=',' read -ra _pf_keys <<< "${_pf_set_keys}"
+for key in "${_pf_keys[@]}"; do
+  key="${key// /}"; [[ -z "$key" ]] && continue
   if [[ -n "${!key:-}" ]]; then
-    ok "$key is set"
+    ok "$key is set (required by the active provider set)"
   else
-    fail "$key is NOT set — run will fail"
+    fail "$key is NOT set — the active provider set requires it; the run will fail"
   fi
 done
-
-# RAPIDAPI optional but warn
-if [[ -z "${RAPIDAPI_KEY:-}" ]]; then
-  echo "  ⚠ RAPIDAPI_KEY not set — API contract discovery story may fail"
-fi
+IFS=',' read -ra _pf_project_keys <<< "${REQUIRED_KEYS:-}"
+for key in "${_pf_project_keys[@]}"; do
+  key="${key// /}"; [[ -z "$key" ]] && continue
+  if [[ -n "${!key:-}" ]]; then
+    ok "$key is set (required by this project)"
+  else
+    echo "  ⚠ $key not set — this project declares it in REQUIRED_KEYS; the story that needs it may fail"
+  fi
+done
 
 # ── 5. Every assigned model is a rung of a declared ladder ───────────────────
 #

@@ -76,8 +76,20 @@ greenfield_restore_prd() {
         fail "PRD_CANONICAL is declared but not found at $canonical — cannot restore a clean PRD. Aborting."
     fi
     cp "$canonical" "$prd"
+    # THE OUTPUT DIRECTORY IS THE PROJECT'S DECLARATION, NOT THE PRD'S. A canonical PRD written on one
+    # machine carries project.outputDir as an absolute path of that machine, and pre-flight refuses a
+    # launch whose OUTPUT_DIR differs — so the same PRD could not be built anywhere else, nor rehearsed
+    # into a scratch directory (2026-09-13). The runtime PRD takes OUTPUT_DIR; the canonical is untouched.
+    if [ -n "${OUTPUT_DIR:-}" ] && command -v jq >/dev/null 2>&1; then
+        local _tmp; _tmp=$(mktemp)
+        if jq --arg o "$OUTPUT_DIR" '.project = ((.project // {}) + {outputDir: $o})' "$prd" > "$_tmp" 2>/dev/null; then
+            mv "$_tmp" "$prd"
+        else
+            rm -f "$_tmp"
+        fi
+    fi
     local _n; _n=$(jq '.stories | length' "$prd" 2>/dev/null || echo '?')
-    info "PRD restored from canonical file ($_n base user stories)"
+    info "PRD restored from canonical file ($_n base user stories; project.outputDir = ${OUTPUT_DIR:-<as authored>})"
 }
 
 # greenfield_run_phases "<phases>" <prd_file> <log_file>

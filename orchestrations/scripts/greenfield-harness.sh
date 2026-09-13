@@ -83,6 +83,10 @@ if [ "${#FAILS[@]}" -gt 0 ]; then tail -30 "$LOG" >&2; exit 1; fi
 cd "$DEST" || exit 1
 set -a; . "$DEST/.env"; set +a
 export EPAM_PROVIDER_SET="$SET" OUTPUT_DIR="$DEST/build" EPAM_PAUSE_AFTER_AGENT_MINT=0 EPAM_PAUSE_BEFORE_WRITER=0 NODE_BIN
+# Pre-flight's shellcheck verdict is cached per digest of the orchestrator's bytes; the same bytes
+# in a fresh install carry the same verdict, so the harness shares the repository's cache and a
+# run needs the 3.6 GB shellcheck pass only when the orchestrator actually changed.
+export EPAM_PREFLIGHT_CACHE_DIR="${EPAM_PREFLIGHT_CACHE_DIR:-$REPO_ROOT/orchestrations/scripts/.preflight-cache}"
 export PATH="$(dirname "$NODE_BIN"):$PATH"
 PROJECT_DIR="$DEST/orchestrations/projects/$PROJECT"
 [ -d "$PROJECT_DIR" ] || { red "no project '$PROJECT' in the install"; exit 1; }

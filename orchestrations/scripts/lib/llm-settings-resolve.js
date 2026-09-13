@@ -226,7 +226,15 @@ function resolveRunner(runnerName, { projectConfigDir, defaultsFile } = {}) {
     // Variables this runner must NOT see. A credential the runner would PREFER over the one we
     // intend it to use is not removed by setting anything — only by taking it away.
     unsetEnv: Array.isArray(declared.unsetEnv) ? declared.unsetEnv : [],
+    // The runner's file-writing tool, by the vocabulary the runner itself uses (name and the two
+    // argument keys) — declared by the set so a rehearsal's stand-in writer never spells one.
+    writeTool: declared.writeTool && typeof declared.writeTool === 'object' ? declared.writeTool : null,
   };
+}
+/** Every runner the active stack declares, by name. */
+function declaredRunners({ projectConfigDir, defaultsFile } = {}) {
+  const settings = resolveLlmSettingsFull({ projectConfigDir, defaultsFile });
+  return Object.keys((settings && settings.runners) || {});
 }
 
 /**
@@ -292,5 +300,5 @@ function runnerValues(runnerName, { projectConfigDir, defaultsFile } = {}) {
 
 module.exports = {
   resolveLlmSettings, merge, activeSet, activeSetFile, providerSetsPath, projectEnvFiles,
-  resolveRunner, runnerSettingNames, runnerValues,
+  resolveRunner, runnerSettingNames, runnerValues, declaredRunners,
 };

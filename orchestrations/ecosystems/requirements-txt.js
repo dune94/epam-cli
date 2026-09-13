@@ -63,6 +63,13 @@ module.exports = {
     },
   },
   stack: 'python',
+  // WHAT A STAND-IN DELIVERABLE HOLDS, so a £0 rehearsal's writer can land files the gates will
+  // run: a manifest that names the test runner, a test that passes, a source module that imports.
+  standIn: {
+    manifest: 'pytest\n',
+    test: 'def test_stand_in():\n    assert True\n',
+    source: '"""stand-in module written by the rehearsal"""\n',
+  },
   // A requirements.txt project runs its suite with whatever test runner it depends on. pytest is
   // the one this provider recognises: listed in requirements.txt, the suite is `pytest`; absent,
   // '' — "cannot prove", never a guess. The 2026-09-12 greenfield project (Python, FastAPI,

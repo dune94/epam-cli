@@ -207,7 +207,13 @@
       ],
       "$whyUnsetEnv": "A REHEARSAL MUST NOT BE ABLE TO SPEND SOMEWHERE ELSE. Under this set the writer once ran provider=minimax with MINIMAX_API_KEY present: the mockBaseUrl redirect covers Anthropic traffic and nothing else, so any other vendor's credential is a live route out. Those are removed. ANTHROPIC_API_KEY and CLAUDE_* are deliberately NOT removed: Claude Code falls back to the OAuth credentials on disk when it finds no key, and that bills for real — the exact inversion this is meant to prevent, recorded in seam-the-subscription-pays-not-the-api-key. The operator's fake key stays, and the redirect is what makes it harmless. The vendors come from llm-channel.json's credentialPattern, so one added there is covered without editing this.",
       "emitsTraces": true,
-      "$emitsTraces": "Whether model calls made through this runner reach Langfuse. TRUE for every runner: traces are emitted by lib/cost-emitter.js at the cost seam — the point every arm passes through with its model, tokens, cost and timing resolved — not by the TypeScript provider decorator, which only the epam arm reaches. Verified end-to-end 2026-09-04 by driving the real emitter and reading the session back out of Langfuse."
+      "$emitsTraces": "Whether model calls made through this runner reach Langfuse. TRUE for every runner: traces are emitted by lib/cost-emitter.js at the cost seam — the point every arm passes through with its model, tokens, cost and timing resolved — not by the TypeScript provider decorator, which only the epam arm reaches. Verified end-to-end 2026-09-04 by driving the real emitter and reading the session back out of Langfuse.",
+      "writeTool": {
+        "name": "Write",
+        "path": "file_path",
+        "content": "content"
+      },
+      "$whyWriteTool": "The rehearsal's stand-in writer delivers by calling the runner's own file-writing tool, and this is that tool's vocabulary for plain Claude Code (recorded sessions: 'Write' {file_path, content}). Declared here so the harness never spells a tool name."
     }
   },
   "mockBaseUrl": "http://localhost:1080",

@@ -107,6 +107,70 @@ let _titles;
 // Declared here, above the library/CLI split: a `let` below `if (require.main !== module) return;`
 // is never initialised for a caller that requires this file.
 let _trackerStories = null;
+
+/** The seam the registry says PRODUCES the implementation — the writer — never named here. */
+function producesImplementation(seam) {
+  try {
+    const reg = JSON.parse(fs.readFileSync(REG, 'utf8')).profiles || {};
+    return !!(reg[seam] && reg[seam].produces === 'implementation');
+  } catch { return false; }
+}
+function _projectName() { return path.basename(process.env.EPAM_PROJECT_CONFIG_DIR || ''); }
+
+/**
+ * THE STAND-IN WRITER'S CALLS FOR ONE STORY: every deliverable the story declares, written with the
+ * content its codeline's ecosystem declares for a file of that kind (manifest / test / source),
+ * through the write tool the active set declares for its runner. Nothing here knows a language, a
+ * tool name or a path: the story names the files, the ecosystem the content, the set the tool.
+ */
+function writerStandInCalls(story) {
+  const root = process.env.OUTPUT_DIR || process.env.PROJECT_ROOT || '';
+  if (!root) return null;
+  let tool = null;
+  try {
+    // eslint-disable-next-line global-require
+    const r = require('./lib/llm-settings-resolve.js');
+    for (const name of r.declaredRunners({ projectConfigDir: process.env.EPAM_PROJECT_CONFIG_DIR })) {
+      const decl = r.resolveRunner(name, { projectConfigDir: process.env.EPAM_PROJECT_CONFIG_DIR });
+      if (decl && decl.writeTool && decl.writeTool.name) { tool = decl.writeTool; break; }
+    }
+  } catch { tool = null; }
+  if (!tool) return null;
+  // The ecosystem: the codeline's own manifest if one exists yet, else the one the PRD's stack
+  // resolves to (lib/handlers/stack-facts.js already makes that fallback for greenfield).
+  let eco = null;
+  try {
+    // eslint-disable-next-line global-require
+    const cm = require('./lib/handlers/codeline-manifests.js');
+    const hit = cm.resolveEcosystem(root);
+    if (hit) eco = hit.eco;
+  } catch { eco = null; }
+  if (!eco) {
+    try {
+      const prd = JSON.parse(fs.readFileSync(process.env.PRD_FILE, 'utf8'));
+      const stack = String((prd.project && prd.project.stack && (prd.project.stack.language || prd.project.stack.testing)) || '').toLowerCase();
+      for (const f of fs.readdirSync(path.join(__dirname, '..', 'ecosystems')).filter((x) => x.endsWith('.js'))) {
+        // eslint-disable-next-line global-require
+        const e = require(path.join(__dirname, '..', 'ecosystems', f));
+        if (e.standIn && stack && String(e.stack || '').toLowerCase() === stack.split(/\s/)[0]) { eco = e; break; }
+      }
+    } catch { eco = null; }
+  }
+  if (!eco || !eco.standIn) return null;
+  const testRe = eco.codelineManifests && eco.codelineManifests.contractGeneration && eco.codelineManifests.contractGeneration.testFilePattern
+    ? new RegExp(eco.codelineManifests.contractGeneration.testFilePattern) : null;
+  const srcExt = (eco.codelineManifests && eco.codelineManifests.contractGeneration && eco.codelineManifests.contractGeneration.sourceExtensions) || [];
+  const files = ((story.technicalNotes && story.technicalNotes.files) || []).filter((f) => typeof f === 'string' && f.trim());
+  if (!files.length) return null;
+  return files.map((f) => {
+    const abs = path.isAbsolute(f) ? f : path.join(root, f);
+    let content = '';
+    if (path.basename(f) === eco.file) content = eco.standIn.manifest || '';
+    else if (testRe && testRe.test(f)) content = eco.standIn.test || '';
+    else if (srcExt.some((x) => f.endsWith(x))) content = eco.standIn.source || '';
+    return { name: tool.name, input: { [tool.path]: abs, [tool.content]: content } };
+  });
+}
 /** The word every stand-in is marked with — generated and recognised with this one constant. */
 const STAND_IN_MARK = 'stand-in';
 function storyDiscriminator(storyId) {
@@ -1567,6 +1631,14 @@ function endsInToolCall(cap, seam) {
       unusable.push(`${seam}  <- ${cap.file} (prose — never satisfied its contract)`);
       cap = null;
     }
+    // ANOTHER PROJECT'S WRITER SESSION WRITES ANOTHER PROJECT'S FILES. The seam that produces the
+    // implementation delivers by tool calls that name paths; replayed against this codeline those
+    // paths are a different estate's. Set aside; the stand-in writer below lands this project's own
+    // declared deliverables instead.
+    if (cap && producesImplementation(seam) && !String(cap.file || '').includes(`${_projectName()}-`)) {
+      unusable.push(`${seam}  <- ${cap.file} (another project's writer session — its calls write that project's files)`);
+      cap = null;
+    }
     // AN ANSWER THAT SCOPES ANOTHER ESTATE IS NOT AN ANSWER HERE. A recording of the discovery
     // seam names repositories by absolute path, and its consumer refuses any path that is not a
     // git repository on THIS host — so a capture from another estate is refused three times and
@@ -1676,6 +1748,43 @@ function endsInToolCall(cap, seam) {
       { path: '/api/v1/chat/completions', text: sse, calls: sseToolCalls },
       { path: '/v1/messages', text: anthropicSse, calls: anthropicSseToolCalls },
     ];
+
+    // THE STAND-IN WRITER LANDS THE STORY'S DECLARED DELIVERABLES, so every seam after the writer —
+    // the gates, the reviews, the commit, the phase — executes at £0 instead of stopping at a
+    // writer that wrote nothing. One turn of write calls per story, then the answer.
+    if (!cap && producesImplementation(seam)) {
+      let _wrote = 0;
+      for (const st of projectStories()) {
+        const _story = (() => { try { return (JSON.parse(fs.readFileSync(process.env.PRD_FILE, 'utf8')).stories || []).find((x) => x && x.id === st.id) || st; } catch { return st; } })();
+        const calls = writerStandInCalls(_story);
+        if (!calls) continue;
+        const disc = storyDiscriminator(st.id) || st.id;
+        const _wmark = key;
+        for (const proto of PROTOCOLS) {
+          // eslint-disable-next-line no-await-in-loop
+          await put('/mockserver/expectation', {
+            priority: 55, times: { remainingTimes: 1, unlimited: false },
+            httpRequest: { method: 'POST', path: proto.path,
+              body: { type: 'REGEX', regex: `(?s)(?=.*${rx(wireForm(_wmark))})(?=.*${rx(wireForm(disc))}).*` } },
+            httpResponse: { statusCode: 200, headers: { 'content-type': ['text/event-stream'], 'x-seam': [`${seam}:${st.id}`] },
+              body: proto.calls(calls) },
+          });
+          // eslint-disable-next-line no-await-in-loop
+          await put('/mockserver/expectation', {
+            priority: 54,
+            httpRequest: { method: 'POST', path: proto.path,
+              body: { type: 'REGEX', regex: `(?s)(?=.*${rx(wireForm(_wmark))})(?=.*${rx(wireForm(disc))}).*` } },
+            httpResponse: { statusCode: 200, headers: { 'content-type': ['text/event-stream'], 'x-seam': [`${seam}:${st.id}`] },
+              body: proto.text(`${STAND_IN_MARK} writer: wrote the ${calls.length} deliverable(s) ${st.id} declares`) },
+          });
+        }
+        _wrote += 1;
+      }
+      if (_wrote) stoodIn.push(`${seam}  <- ${STAND_IN_MARK} writer: declared deliverables written for ${_wrote} story/ies (ecosystem stand-in content)`);
+      else stoodIn.push(`${seam}  <- ${STAND_IN_MARK} writer could land nothing: no OUTPUT_DIR/PROJECT_ROOT, no write tool declared by the set, or no ecosystem stand-in`);
+      seen.add(_dedup);
+      continue;
+    }
 
     // A PER-STORY SEAM NEEDS ONE ANSWER PER STORY, WHETHER OR NOT A CAPTURE NAMES ONE.
     //

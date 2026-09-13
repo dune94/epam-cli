@@ -106,7 +106,9 @@ while kill -0 "$RUN_PID" 2>/dev/null; do
   if awk -v s="$_spent" -v c="$CEILING" 'BEGIN{exit !(s>c)}'; then
     HALTED="spend \$$_spent passed the ceiling \$$CEILING"
     red "$HALTED — halting the run"
-    kill -TERM -- -"$RUN_PID" 2>/dev/null; sleep 5; kill -KILL -- -"$RUN_PID" 2>/dev/null
+    # THE WHOLE SESSION, not the launcher alone: the runner CLI re-parents into its own process
+    # group and survived a group kill (one `claude --print` was still spending after a halt).
+    pkill -TERM -s "$RUN_PID" 2>/dev/null; sleep 5; pkill -KILL -s "$RUN_PID" 2>/dev/null
     break
   fi
 done

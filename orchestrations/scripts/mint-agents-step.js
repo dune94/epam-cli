@@ -671,6 +671,9 @@ if (require.main !== module) return;
           } catch { return ''; }
         })(),
         __CANONICAL_COPY_PATH__: canonicalCopyPath,
+        // One persona per file, written beside the JSON copy by copyCanonicalForRun; the agent
+        // reads what it specialises and nothing else.
+        __CANONICAL_DIR__: require('./lib/project-roster.js').canonicalCopyDir(LOG_DIR),
         __OUT_PATH__: outPath,
         __PROJECT_CONTEXT__: [
           `Project config: ${projectConfigDir}`,

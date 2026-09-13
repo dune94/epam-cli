@@ -79,7 +79,70 @@ function copyCanonicalForRun(canonicalPath, logDir) {
   }
   fs.mkdirSync(path.dirname(canonicalCopyPath(logDir)), { recursive: true });
   fs.writeFileSync(canonicalCopyPath(logDir), raw, 'utf8');
+  // ONE FILE PER PERSONA, beside the JSON. The specialiser reads with a tool that returns 8,192
+  // characters per call; the canonical JSON is ~133,000 on 50 lines, so an agent that had to see
+  // the whole file spent its entire tool budget reading and never wrote (2026-09-13, three
+  // attempts). It reads the personas it specialises, one file each, and needs nothing else.
+  const dir = canonicalCopyDir(logDir);
+  fs.rmSync(dir, { recursive: true, force: true });
+  fs.mkdirSync(dir, { recursive: true });
+  for (const n of names) fs.writeFileSync(path.join(dir, `${n}.txt`), parsed[n], 'utf8');
   return canonicalCopyPath(logDir);
+}
+
+/** The directory of per-persona canonical copies, beside the JSON copy. */
+function canonicalCopyDir(logDir) {
+  return canonicalCopyPath(logDir).replace(/\.json$/, '');
+}
+
+/**
+ * THE SPECIALISER WRITES A DELTA; THE ENGINE COMPOSES THE ROSTER.
+ *
+ * The contract used to ask the agent for the whole roster: every canonical agent reproduced,
+ * each carrying the SHA-256 of its ancestor's persona. On the runner arm that reads files 8,192
+ * characters at a time and grants no shell, that is a contract no model can meet — it cannot
+ * hash, and it cannot see 133,000 characters inside its budget. Run 20260913T002259Z said so in
+ * its own words three times and emitted COMPUTE:/REPLACE_WITH_SHA256 sentinels rather than
+ * fabricate a digest (correctly).
+ *
+ * The digest was never the agent's to produce: it is a function of the ancestor's canonical
+ * persona, which the engine holds. So the agent writes only the agents it specialised or added
+ * — persona, ancestor, kind (optional), seam (optional), rationale — and this composes: every
+ * canonical agent it did not mention is adopted verbatim (as rosterMode=canonical already does),
+ * every entry it did write takes the engine's digest of its ancestor, and checkRoster judges the
+ * result exactly as before. An entry naming an ancestor canonical does not have is left as
+ * written, so the contract check refuses it with the reason it always gave.
+ */
+function composeFromDelta(delta, canonical) {
+  const base = rosterFromCanonical(canonical);
+  for (const e of Object.values(base.agents)) {
+    e.rationale = 'canonical persona, adopted verbatim: the specialiser wrote no entry for it';
+  }
+  const written = (delta && delta.agents && typeof delta.agents === 'object') ? delta.agents : {};
+  let specialised = 0;
+  let added = 0;
+  for (const [name, entry] of Object.entries(written)) {
+    if (!entry || typeof entry !== 'object') continue;
+    const inCanonical = Object.prototype.hasOwnProperty.call(canonical, name);
+    const ancestor = (typeof entry.ancestor === 'string' && entry.ancestor.trim())
+      ? entry.ancestor.trim() : (inCanonical ? name : '');
+    const ancestorPersona = ancestor && typeof canonical[ancestor] === 'string' ? canonical[ancestor] : null;
+    const { rationale: _baseRationale, ...baseEntry } = base.agents[name] || {};
+    const composed = {
+      ...baseEntry,
+      ...entry,
+      ancestor,
+      ...(ancestorPersona !== null ? { derivedFromSha256: personaDigest(ancestorPersona) } : {}),
+    };
+    if (!composed.kind && base.agents[ancestor]) composed.kind = base.agents[ancestor].kind;
+    if (typeof entry.rationale !== 'string' || !entry.rationale.trim()) {
+      composed.rationale = inCanonical ? 'specialised for this project by roster-specialiser'
+        : `added for this project by roster-specialiser, derived from '${ancestor || '?'}'`;
+    }
+    base.agents[name] = composed;
+    if (inCanonical) specialised += 1; else added += 1;
+  }
+  return { roster: base, specialised, added, adopted: Object.keys(canonical).length - specialised };
 }
 
 // DECLARED IN THE REGISTRY, not here. This and agent-roster.js each held the list and they
@@ -548,6 +611,14 @@ async function buildProjectRoster({
       try { fs.unlinkSync(outPath); } catch { /* nothing to remove */ }
       continue;
     }
+    {
+      // A DELTA, COMPOSED HERE — see composeFromDelta. The agent wrote what it specialised or
+      // added; canonical fills the rest and the engine computes every provenance digest.
+      const composed = composeFromDelta(roster, canonical);
+      roster = composed.roster;
+      log(`[roster] composed from the specialiser's delta: ${composed.specialised} specialised, `
+        + `${composed.added} added, ${composed.adopted} canonical persona(s) adopted verbatim; provenance digests computed by the engine`);
+    }
 
     // THE MINT'S AGENTS BELONG TO EVERY MODE, NOT JUST canonical.
     //
@@ -788,6 +859,8 @@ function classifyReviewVerdict(verdict) {
 module.exports = {
   classifyReviewVerdict,
   buildProjectRoster,
+  composeFromDelta,
+  canonicalCopyDir,
   loadRoster,
   personaFor,
   agentsOfKind,

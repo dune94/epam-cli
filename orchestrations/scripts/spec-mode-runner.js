@@ -5420,13 +5420,25 @@ async function assignAgentRoles({ promptExec, stories, profilesPath, logDir, rep
     const cls = Array.isArray(s.codelines) && s.codelines.length ? s.codelines : (s.codeline ? [s.codeline] : ['']);
     for (const cl of cls) _pairs.push({ story: s, codeline: cl });
   }
+  // A STORY THAT DECLARES NO CODELINE ACCEPTS ITS ASSIGNMENT UNDER WHATEVER CODELINE THE
+  // ASSIGNER NAMED. The prompt offers the codeline, so the assigner names it — `codeline:
+  // "regintel"` on every row — while a greenfield story declares none and was looked up under
+  // the empty codeline only; the fallback ran the other way. Ten correct rows were dropped, the
+  // seam was retried at the top of its ladder, and the refusal blamed the agent (2026-09-13,
+  // $0.66). One codeline, one owner: the first row for the story is its assignment.
+  const _anyCodeline = new Map();
+  for (const [k, v] of byStory) { const id = k.split('\u0000')[0]; if (!_anyCodeline.has(id)) _anyCodeline.set(id, v); }
   const _lookup = (storyId, cl) =>
-    byStory.get(storyId + '\u0000' + cl) || (cl ? byStory.get(storyId + '\u0000' + '') : null);
+    byStory.get(storyId + '\u0000' + cl)
+    || (cl ? byStory.get(storyId + '\u0000' + '') : _anyCodeline.get(storyId) || null);
   const missing = _pairs.filter((x) => !_lookup(x.story.id, x.codeline))
     .map((x) => x.story.id + (x.codeline ? ' @ ' + x.codeline : ''));
   if (missing.length) {
+    // WHAT WAS RECEIVED AGAINST WHAT WAS NEEDED — the join's failure, stated as the join's.
+    const _received = [...byStory.values()].map((v) => `${v.storyId}${v.codeline ? ' @ ' + v.codeline : ''} -> ${v.role}`);
     throw new Error(
-      `[assign] unassigned after the agent's full retry/ladder budget: ${missing.join(', ')}. ` +
+      `[assign] ${_received.length} assignment(s) received for ${_pairs.length} story/ies; unassigned: ${missing.join(', ')}. ` +
+      (_received.length ? `Received: ${_received.join('; ')}. ` : 'The reply held no assignment rows the contract could read. ') +
       'A null agentRole is read as "unknown" by every consumer downstream rather than failing.',
     );
   }

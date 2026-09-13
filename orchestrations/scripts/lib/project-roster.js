@@ -384,6 +384,12 @@ function checkEntry(name, entry, canonical) {
   const _selfMinted = entry.ancestor === name && isRegisteredProjectAgent(name);
   if (!_selfMinted) {
     if (!Object.prototype.hasOwnProperty.call(canonical, entry.ancestor)) {
+      // A MINTED AGENT'S ANCESTOR IS ITSELF, and the refusal says so: this reason is the retry
+      // prompt's previous refusal, and "is not in canonical" alone sent the specialiser hunting
+      // for a canonical name that does not exist (four invented ancestors, one wasted attempt).
+      if (isRegisteredProjectAgent(name)) {
+        return { ok: false, reason: `ancestor '${entry.ancestor}' is not in canonical — '${name}' is a minted agent of this project, and its ancestor is itself: set "ancestor": "${name}"` };
+      }
       return { ok: false, reason: `ancestor '${entry.ancestor}' is not in canonical` };
     }
     if (entry.derivedFromSha256 !== personaDigest(canonical[entry.ancestor])) {

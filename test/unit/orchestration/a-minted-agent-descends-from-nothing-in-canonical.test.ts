@@ -105,3 +105,36 @@ describe('a minted agent descends from nothing in canonical', () => {
     expect(String(r.reason)).toMatch(/no-such-canonical-role/)
   })
 })
+
+/**
+ * THE REFUSAL TELLS A MINTED AGENT WHAT ITS ANCESTOR IS. The specialiser named invented
+ * ancestors (data-engineer, classifier-engineer …) for the four minted agents, was refused with
+ * "ancestor 'data-engineer' is not in canonical", and only found the rule by trial on attempt 2
+ * (the other project's Run 4, 2026-09-13). The refusal — which is the retry prompt's previous
+ * refusal — now states the rule: a minted agent's ancestor is itself.
+ */
+describe('the refusal tells a minted agent what its ancestor is', () => {
+  it('names the rule for a registered minted agent with an invented ancestor', () => {
+    project({ roles: ['regintel-data-engineer'] })
+    const r = checkRoster({ agents: {
+      'team-lead-review': canonicalEntry,
+      'regintel-data-engineer': {
+        persona: 'implements data', kind: 'implementer',
+        ancestor: 'data-engineer', derivedFromSha256: digest('implements data'),
+      },
+    } }, CANON)
+    expect(r.ok).toBe(false)
+    expect(r.reason).toMatch(/minted agent of this project/)
+    expect(r.reason).toMatch(/its ancestor is itself/)
+    expect(r.reason).toContain('regintel-data-engineer')
+  })
+  it('a derived agent with an unknown ancestor keeps the plain refusal', () => {
+    project({ roles: [] })
+    const r = checkRoster({ agents: {
+      'team-lead-review': { ...canonicalEntry, ancestor: 'nobody' },
+    } }, CANON)
+    expect(r.ok).toBe(false)
+    expect(r.reason).toMatch(/ancestor 'nobody' is not in canonical/)
+    expect(r.reason).not.toMatch(/its ancestor is itself/)
+  })
+})

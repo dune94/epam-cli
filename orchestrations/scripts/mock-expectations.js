@@ -164,10 +164,11 @@ function writerStandInCalls(story) {
   if (!files.length) return null;
   return files.map((f) => {
     const abs = path.isAbsolute(f) ? f : path.join(root, f);
-    let content = '';
-    if (path.basename(f) === eco.file) content = eco.standIn.manifest || '';
-    else if (testRe && testRe.test(f)) content = eco.standIn.test || '';
-    else if (srcExt.some((x) => f.endsWith(x))) content = eco.standIn.source || '';
+    // Never an empty file: the deliverable check reads an empty file as missing.
+    let content = `${STAND_IN_MARK} deliverable ${path.basename(f)}, written by the rehearsal\n`;
+    if (path.basename(f) === eco.file) content = eco.standIn.manifest || content;
+    else if (testRe && testRe.test(f)) content = eco.standIn.test || content;
+    else if (srcExt.some((x) => f.endsWith(x))) content = eco.standIn.source || content;
     return { name: tool.name, input: { [tool.path]: abs, [tool.content]: content } };
   });
 }

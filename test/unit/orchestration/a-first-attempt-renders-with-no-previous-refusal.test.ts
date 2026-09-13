@@ -41,7 +41,6 @@ const { renderEngineTemplate } = require(join(LIB, 'engine-prompt.js'));
 const asTheMintSupplies = (refusal?: string) => ({
   __CANONICAL_COPY_PATH__: '/tmp/canonical.json',
   __CANONICAL_DIR__: '/tmp/canonical',
-  __OUT_PATH__: '/tmp/out.json',
   __PROJECT_CONTEXT__: 'Project config: /tmp/cfg\nTickets in scope: X-1: a ticket',
   __CODELINE_CONTEXT__: '- cl (/tmp/cl)',
   // DERIVED THE WAY THE CALLER DERIVES IT, like __DECLARED_SEAMS__ below: the mint passes

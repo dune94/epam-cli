@@ -44,10 +44,13 @@ describe('a grant that writes a file and runs nothing', () => {
     expect(granted).not.toContain('bash');
     for (const t of tools.readOnlyToolGrant().split(',').filter(Boolean)) expect(granted).toContain(t);
   });
-  it('every seam whose job is one JSON file for the pipeline takes it', () => {
+  it('every seam whose job is one JSON file for the pipeline holds no shell', () => {
+    // roster-specialiser went one step further the same day: its delta is its ANSWER and the
+    // engine writes the file, so it is read-only (the-roster-specialiser-writes-a-delta…).
     for (const seam of ['roster-specialiser', 'phase-assessment', 'prd-model-coordinator']) {
-      expect(registry.profiles[seam].toolGrant, `${seam} still holds a shell`).toBe('write-file');
+      expect(['write-file', 'read-only'], `${seam} still holds a shell`).toContain(registry.profiles[seam].toolGrant);
     }
+    for (const seam of ['phase-assessment', 'prd-model-coordinator']) expect(registry.profiles[seam].toolGrant).toBe('write-file');
   });
 });
 
@@ -61,7 +64,7 @@ describe('the specialiser\'s budget reaches the runner', () => {
     const env = seamInvocationEnv('roster-specialiser', join(ROOT, 'orchestrations/agents'), { env: { EPAM_PROJECT_CONFIG_DIR: anyProject() } });
     expect(env.EPAM_MAX_TOOL_CALLS).toBe(String(declared));
     expect(env.EPAM_ALLOWED_TOOLS.split(',')).not.toContain('bash');
-    expect(env.EPAM_ALLOWED_TOOLS.split(',')).toContain('write_file');
+    expect(env.EPAM_ALLOWED_TOOLS.split(',')).toContain('read_file');
   });
 });
 

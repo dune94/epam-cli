@@ -81,8 +81,14 @@
       "kind": "verdict"
     },
     "roster-specialiser": {
-      "kind": "artefact",
-      "checkedBy": "lib/project-roster.js checkRoster"
+      "kind": "declared",
+      "requiredKeys": [
+        "agents"
+      ],
+      "knownKeys": [
+        "agents"
+      ],
+      "_why": "The delta the engine composes the roster from (lib/project-roster.js composeFromDelta): {agents:{name:{persona,ancestor,kind?,seam?,rationale?}}}. Was 'artefact' while the agent wrote the file itself."
     },
     "codeline-bridge-agent": {
       "kind": "artefact"

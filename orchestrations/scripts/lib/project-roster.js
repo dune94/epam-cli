@@ -90,6 +90,28 @@ function copyCanonicalForRun(canonicalPath, logDir) {
   return canonicalCopyPath(logDir);
 }
 
+/**
+ * THE DELTA IN A REPLY. The specialiser answers with one JSON object; a model may still wrap it in a
+ * fence or a sentence, so the outermost {...} carrying an `agents` object is what is taken. Nothing
+ * parseable, or no `agents`, is null — the caller then reports "wrote no roster", the same refusal
+ * as before, never a fabricated empty roster.
+ */
+function extractDeltaJson(text) {
+  const t = String(text || '');
+  const candidates = [];
+  const fenced = t.match(/```(?:json)?\s*([\s\S]*?)```/g) || [];
+  for (const f of fenced) candidates.push(f.replace(/^```(?:json)?\s*/, '').replace(/```$/, ''));
+  const first = t.indexOf('{'); const last = t.lastIndexOf('}');
+  if (first >= 0 && last > first) candidates.push(t.slice(first, last + 1));
+  for (const c of candidates) {
+    try {
+      const parsed = JSON.parse(c);
+      if (parsed && typeof parsed === 'object' && parsed.agents && typeof parsed.agents === 'object') return parsed;
+    } catch { /* try the next candidate */ }
+  }
+  return null;
+}
+
 /** The directory of per-persona canonical copies, beside the JSON copy. */
 function canonicalCopyDir(logDir) {
   return canonicalCopyPath(logDir).replace(/\.json$/, '');
@@ -860,6 +882,7 @@ module.exports = {
   classifyReviewVerdict,
   buildProjectRoster,
   composeFromDelta,
+  extractDeltaJson,
   canonicalCopyDir,
   loadRoster,
   personaFor,

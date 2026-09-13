@@ -99,12 +99,38 @@ describe('buildProjectRoster, end to end, with a specialiser that writes only a 
     expect(seen.sort()).toEqual(['alpha', 'beta', 'gamma']);
   });
 
-  it('the contract the agent is handed says so: no digest asked for, one persona per file, write only the delta', () => {
+  it('the delta in a reply is found under a fence or in prose, and a reply with no delta is nothing', () => {
+    expect(roster.extractDeltaJson('Here is the roster:\n```json\n{"agents":{"alpha":{"persona":"p"}}}\n```')).toEqual({ agents: { alpha: { persona: 'p' } } });
+    expect(roster.extractDeltaJson('{"agents":{}} — nothing to specialise')).toEqual({ agents: {} });
+    expect(roster.extractDeltaJson('I could not read the canonical.')).toBeNull();
+    expect(roster.extractDeltaJson('{"note":"stand-in"}')).toBeNull();
+  });
+
+  it('the mint writes the answer where the roster lives, and only when the agent did not write it', () => {
+    // The mint's produce step, executed: a reply carrying the delta lands at outPath; a file the
+    // agent wrote itself (the Claude Code arm may) is left as written.
+    const src = readFileSync(join(ROOT, 'orchestrations/scripts/mint-agents-step.js'), 'utf8');
+    const at = src.indexOf('if (!fs.existsSync(outPath)) {');
+    expect(at, 'the mint no longer writes the delta from the reply').toBeGreaterThan(-1);
+    const block = src.slice(at, src.indexOf('};', at));
+    expect(block).toMatch(/extractDeltaJson\(String\(reply/);
+    expect(block).toMatch(/fs\.writeFileSync\(outPath/);
+    expect(src).not.toMatch(/__OUT_PATH__/);
+  });
+
+  it('the contract the agent is handed says so: no digest asked for, one persona per file, the delta is the ANSWER', () => {
     const tpl = JSON.parse(readFileSync(join(ROOT, 'orchestrations/prompts/templates/roster-specialisation.json'), 'utf8'));
     expect(tpl.placeholders).toContain('__CANONICAL_DIR__');
     expect(tpl.body).not.toMatch(/derivedFromSha256.*sha256 of/i);
     expect(tpl.body).not.toMatch(/EVERY AGENT IN THE CANONICAL ROSTER MUST APPEAR/);
     expect(tpl.body).toMatch(/adopted verbatim/);
     expect(tpl.body).toMatch(/ONLY the agents you specialised or added/);
+    expect(tpl.placeholders).not.toContain('__OUT_PATH__');
+    expect(tpl.body).toMatch(/Your ANSWER is one JSON object/);
+    expect(tpl.body).not.toMatch(/write_file/);
+    const reg = JSON.parse(readFileSync(join(ROOT, 'orchestrations/agents/invocation-profiles.json'), 'utf8'));
+    expect(reg.profiles['roster-specialiser'].toolGrant, 'a seam whose answer is the artefact needs no write tool').toBe('read-only');
+    const contracts = JSON.parse(readFileSync(join(ROOT, 'orchestrations/config/seam-output-contracts.json'), 'utf8'));
+    expect(contracts.seams['roster-specialiser']).toMatchObject({ kind: 'declared', requiredKeys: ['agents'] });
   });
 });

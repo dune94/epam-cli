@@ -674,7 +674,6 @@ if (require.main !== module) return;
         // One persona per file, written beside the JSON copy by copyCanonicalForRun; the agent
         // reads what it specialises and nothing else.
         __CANONICAL_DIR__: require('./lib/project-roster.js').canonicalCopyDir(LOG_DIR),
-        __OUT_PATH__: outPath,
         __PROJECT_CONTEXT__: [
           `Project config: ${projectConfigDir}`,
           `Tickets in scope: ${stories.map((t) => `${t.jiraKey || t.id}: ${t.title || ''}`).join(' | ')}`,
@@ -716,10 +715,22 @@ if (require.main !== module) return;
       // an agent that quietly has nothing, and this one's whole job is to read the codeline and
       // write a file.
       if (seamEnv.EPAM_ALLOWED_TOOLS) seamEnv.AI_GATE_ALLOW_TOOLS = '1';
-      await spec.runClaude(
+      const reply = await spec.runClaude(
         promptExec, prompt,
         path.join(LOG_DIR, 'roster-specialiser.log'),
         seamEnv, { costAgent: 'roster-specialiser' });
+      // THE ENGINE PERFORMS THE WRITE. The delta is the seam's ANSWER — the same delivery the
+      // prompt-builder seam uses — so the agent needs no write tool, and a rehearsal that answers
+      // from a recording or a contract stand-in delivers exactly what a live model does. Delivered
+      // by tool call, the seam was unrehearsable (a stand-in cannot write a file) and, live, three
+      // paid attempts on 2026-09-13 ended with "the agent wrote no roster". A file the agent wrote
+      // itself (the Claude Code arm may) is still accepted; the answer is written only when it did
+      // not. lib/project-roster.js composes the roster from whatever lands at outPath.
+      if (!fs.existsSync(outPath)) {
+        const { extractDeltaJson } = require('./lib/project-roster.js');
+        const delta = extractDeltaJson(String(reply || ''));
+        if (delta) fs.writeFileSync(outPath, JSON.stringify(delta, null, 2));
+      }
     };
 
     // REVIEWED AGAINST BOTH. With only the roster a reviewer can judge plausibility; falsifying

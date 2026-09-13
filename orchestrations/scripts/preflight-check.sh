@@ -286,10 +286,25 @@ else
     fi
   fi
 
-  # Story field checks — skip for canonical PRD (aiProvider/model added by spec pass)
+  # Story field checks — a canonical PRD is judged on what it must NOT carry; an elaborated one on
+  # what it must.
   if [[ "$_prd_is_canonical" == "true" ]]; then
-    ok "Story field checks deferred — canonical PRD has no implementation stories yet"
-    PASS=$((PASS+1))
+    # A CANONICAL PRD PINS NOTHING THE RUN DECIDES. A story's agent is the assigner's decision, its
+    # model the ladder's, its provider the set's. Authored with any of them, the PRD bypasses that
+    # stage and the mint refuses MID-RUN — "assigned python-engineer, which is not in the roster" —
+    # after the roster was minted, the prompts generated and the spend made (2026-09-13, a
+    # generated greenfield PRD). This used to say "deferred" and pass. Refused here by story and
+    # field, before any model is called, so the correction costs nothing.
+    _pinned=$(jq -r '
+      [ .stories[]? | select(.id) as $s
+        | ["agentRole","model","aiProvider"][] as $k
+        | select(($s[$k] // "") != "") | "\($s.id): \($k)=\($s[$k])" ] | .[]' "$PRD_FILE" 2>/dev/null || true)
+    if [[ -n "$_pinned" ]]; then
+      fail "the canonical PRD pins what the run decides — the assigner owns agentRole, the ladder owns model, the set owns aiProvider. Remove these from the authored PRD:"
+      while IFS= read -r _line; do [[ -n "$_line" ]] && echo "      $_line" >&2; done <<< "$_pinned"
+    else
+      ok "canonical PRD pins no agent, model or provider — the run will decide each"
+    fi
   else
     python3 "$SCRIPT_DIR/lib/handlers/prd-story-assignment-check.py" "$PRD_FILE" "$SCRIPT_DIR/../config/providers.json"
     story_exit=$?

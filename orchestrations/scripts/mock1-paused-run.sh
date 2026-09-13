@@ -34,11 +34,21 @@ REPO_ROOT="$(cd "$SCRIPT_DIR/../.." && pwd)"
 # stays valid for the next unknown mock project.
 PROJECT_CONFIG_DIR="${EPAM_PROJECT_CONFIG_DIR:-}"
 if [ -z "$PROJECT_CONFIG_DIR" ]; then
-  PROJECT_CONFIG_DIR=$(
-    sed -n 's|^export EPAM_PROJECT_CONFIG_DIR="\${EPAM_PROJECT_CONFIG_DIR:-\(.*\)}".*$|\1|p' \
-      "$SCRIPT_DIR/tier3-mock-run.sh" 2>/dev/null | head -1
-  )
-  PROJECT_CONFIG_DIR="${PROJECT_CONFIG_DIR//\$REPO_ROOT/$REPO_ROOT}"
+  # THE PROJECT THAT CARRIES THE SEED THIS LAUNCHER BUILDS ITS CODELINE FROM. This used to scrape a
+  # default out of tier3-mock-run.sh with sed; that line went when the project became a resolved
+  # value, so a bare launch has refused with "cannot determine" ever since (2026-09-13). The
+  # launcher needs $PROJECT_CONFIG_DIR/seed to exist, so the project is whichever one has a seed —
+  # exactly one, or the operator names it.
+  _seeded=()
+  for _p in "$REPO_ROOT"/orchestrations/projects/*/; do
+    [ -d "${_p}seed" ] && _seeded+=("${_p%/}")
+  done
+  if [ "${#_seeded[@]}" -eq 1 ]; then
+    PROJECT_CONFIG_DIR="${_seeded[0]}"
+  elif [ "${#_seeded[@]}" -gt 1 ]; then
+    echo "[mock1-paused] ${#_seeded[@]} projects carry a seed/ — set EPAM_PROJECT_CONFIG_DIR to the one this run is for" >&2
+    exit 2
+  fi
 fi
 MOCK_JIRA_SERVER="$REPO_ROOT/test/fixtures/mock-pipeline/mock-jira-server.js"
 NODE_BIN="${NODE_BIN:-$HOME/.nvm/versions/node/v20.20.0/bin/node}"
@@ -244,12 +254,31 @@ export JIRA_EMAIL="mock@test.com"
 export JIRA_TOKEN="mock-token"
 export JIRA_PROJECT_KEY="MOCK"
 export JIRA_STATUS_FILTER="To Do"
+
 export JIRA_SYNTH_PRD_PATH="$SYNTH_PRD"
 export EPAM_BROWNFIELD=1
 export JIRA_CODELINE_ROOT="$CODELINE_ROOT"
 export JIRA_BASELINE_BRANCH="main"
 export AGENT_PROFILES_FILE="$REPO_ROOT/orchestrations/agents/profiles.json"
 export EPAM_DANGEROUS_SKIP_APPROVAL=1
+
+# A £0 RUN REGISTERS ITS OWN ANSWERS, HERE, AFTER THE TRACKER IS UP AND THE ESTATE IS DECLARED. Under the mockserver set
+# every model call is answered by what mock-expectations.js registered, and for a tracker run
+# the stories that registration keys on exist only on the tracker until ingest synthesises the
+# PRD — after the AC gate has already called a model. Registered by hand before this launcher
+# there was nothing to key on; registered here, with the tracker listening, the harness reads the
+# same issues the run will — and the same JIRA_CODELINE_ROOT, so the discovery stand-in selects this run's repositories (registered before that export it selected none, 2026-09-13). The mock endpoint is the set's own declaration (mockBaseUrl), never a
+# port spelled in this file.
+if [ "${EPAM_PROVIDER_SET:-}" = "mockserver" ]; then
+  _mock_host="${EPAM_MOCK_BASE_URL:-$("$NODE_BIN" -e '
+    const r = require(process.argv[1]);
+    process.stdout.write(String(r.resolveLlmSettings({ projectConfigDir: process.argv[2] }).mockBaseUrl || ""));
+  ' "$SCRIPT_DIR/lib/llm-settings-resolve.js" "$PROJECT_CONFIG_DIR")}"
+  [ -n "$_mock_host" ] || { echo "[mock1-paused] the mockserver set declares no mockBaseUrl — nothing to register against" >&2; exit 1; }
+  echo "[mock1-paused] registering the mock's answers at $_mock_host from the tracker's issues"
+  EPAM_BROWNFIELD=1 "$NODE_BIN" "$SCRIPT_DIR/mock-expectations.js" --host "$_mock_host" \
+    || { echo "[mock1-paused] mock registration failed — a rehearsal with no answers is not a rehearsal" >&2; exit 1; }
+fi
 # PROVIDER PINS REMOVED 2026-08-25. These were exported here as "openrouter", and a launcher export
 # is already-set, so it OUTRANKED anything hello-dolly declared — which is why the project had
 # no config.env at all. Both now come from its config.<set>.env, chosen by EPAM_PROVIDER_SET,

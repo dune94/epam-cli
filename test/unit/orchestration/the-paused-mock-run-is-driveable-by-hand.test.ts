@@ -68,6 +68,21 @@ describe('the paused mock run can be inspected without starting one', () => {
       'the seed produced no fixture at all').toBeTruthy();
   }, 240_000);
 
+  it('launched bare, it finds its project by the seed it needs — no scrape of another launcher', () => {
+    // The default was scraped from tier3-mock-run.sh with sed; that line went and every bare
+    // launch refused with "cannot determine the mock project config dir" (2026-09-13). The
+    // project is the one under orchestrations/projects carrying seed/, discovered here the same
+    // way so the test names none.
+    const projects = join(__dirname, '../../../orchestrations/projects');
+    const seeded = readdirSync(projects).filter((d) => existsSync(join(projects, d, 'seed')));
+    expect(seeded.length, 'no project carries a seed/ — the launcher would have nothing to build').toBe(1);
+    const dir = join(mkdtempSync(join(tmpdir(), 'seed-bare-')), 'fixture');
+    const r = mock1(['--seed', dir], { EPAM_PROJECT_CONFIG_DIR: '' });
+    expect(r.out).not.toMatch(/cannot determine the mock project config dir/);
+    expect(r.code, `seeding failed: ${r.out.slice(0, 500)}`).toBe(0);
+    expect(existsSync(dir) && readdirSync(dir).length).toBeTruthy();
+  }, 240_000);
+
   it('--resume REQUIRES a run number rather than guessing the latest', () => {
     // Guessing would resume a different run than the operator means, and a resume writes.
     const r = mock1(['--resume']);

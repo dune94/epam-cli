@@ -14,7 +14,7 @@
  * isUsableProposal — the mint's own gate, not a copy of it — and the harness can never again
  * fail the run it was built to make free.
  */
-import { describe, it, expect } from 'vitest';
+import { describe, it, expect, beforeAll, afterAll } from 'vitest';
 
 import * as fs from 'node:fs';
 import * as path from 'node:path';
@@ -132,4 +132,86 @@ describe('a verdict stand-in satisfies the validator its seam is judged by', () 
       expect(r.ok, r.reason).toBe(true);
     });
   }
+});
+
+/**
+ * THE DISCOVERY STAND-IN NAMES THE REPOSITORIES THIS RUN ACTUALLY HAS.
+ *
+ * codeline-discovery's parse refuses an answer that selects no codeline, or one whose path is not
+ * an existing git repository. The declared stand-in filled `codelines` with [] (a plural key is a
+ * list), and the only recording of the seam came from another estate, whose paths do not exist
+ * here — so the £0 brownfield run was refused three times at its first model stage (2026-09-13).
+ * The repositories a tracker run scopes are the ones under JIRA_CODELINE_ROOT — the run's own
+ * declaration — so the stand-in selects exactly those, with their real absolute paths.
+ */
+describe('the discovery stand-in names the repositories this run has', () => {
+  const { mkdtempSync, mkdirSync, existsSync: exists } = require('node:fs');
+  const { execFileSync } = require('node:child_process');
+  const os = require('node:os');
+  it('selects every git repository under JIRA_CODELINE_ROOT, by real absolute path', () => {
+    const root = mkdtempSync(path.join(os.tmpdir(), 'cl-root-'));
+    for (const n of ['alpha', 'beta']) { mkdirSync(path.join(root, n)); execFileSync('git', ['-C', path.join(root, n), 'init', '-q']); }
+    mkdirSync(path.join(root, 'not-a-repo'));
+    const prev = process.env.JIRA_CODELINE_ROOT; process.env.JIRA_CODELINE_ROOT = root;
+    try {
+      const standIn = mock.contractStandIn('codeline-discovery');
+      const picked = (standIn && standIn.codelines) || [];
+      expect(picked.map((c: any) => c.name).sort()).toEqual(['alpha', 'beta']);
+      for (const c of picked) {
+        expect(path.isAbsolute(c.path)).toBe(true);
+        expect(exists(path.join(c.path, '.git')), `${c.path} is not a git repository`).toBe(true);
+      }
+    } finally { if (prev === undefined) delete process.env.JIRA_CODELINE_ROOT; else process.env.JIRA_CODELINE_ROOT = prev; }
+  });
+  it('with no codeline root declared, the list stays empty — nothing is invented', () => {
+    const prev = process.env.JIRA_CODELINE_ROOT; delete process.env.JIRA_CODELINE_ROOT;
+    try { expect((mock.contractStandIn('codeline-discovery') || {}).codelines).toEqual([]); }
+    finally { if (prev !== undefined) process.env.JIRA_CODELINE_ROOT = prev; }
+  });
+});
+
+/**
+ * A TRACKER RUN'S STORIES COME FROM THE TRACKER — before the PRD exists.
+ *
+ * Under JIRA_PIPELINE=1 the PRD is synthesised during the run, after the AC gate has already
+ * called a model, so registration keyed on a PRD had nothing to key on and refused. The stand-ins
+ * now ask the same fetcher the ingest uses, and register a ticket under every id the AC gate may
+ * give it: its own key (a spanning story) and `<key>-<codeline>` for each repository in the estate
+ * (a split story). Driven through the real stub tracker and the real fetcher.
+ */
+describe("a tracker run's stories come from the tracker", () => {
+  const { spawn } = require('node:child_process');
+  const { mkdtempSync, mkdirSync, readFileSync: rf, existsSync: ex } = require('node:fs');
+  const { execFileSync: exec } = require('node:child_process');
+  const os = require('node:os');
+  let jira: any; let port = '';
+  beforeAll(async () => {
+    const out = path.join(mkdtempSync(path.join(os.tmpdir(), 'jira-')), 'jira.out');
+    jira = spawn(process.execPath, [path.join(ROOT, 'test/fixtures/mock-pipeline/mock-jira-server.js'), 'TRK-7', 'a summary', 'a description'], { stdio: ['ignore', 'pipe', 'pipe'] });
+    let buf = '';
+    await new Promise<void>((resolve, reject) => {
+      const t = setTimeout(() => reject(new Error('the stub tracker never reported a port')), 15_000);
+      jira.stdout.on('data', (d: Buffer) => { buf += d; const m = buf.match(/LISTENING:(\d+)/); if (m) { port = m[1]; clearTimeout(t); resolve(); } });
+    });
+    void out; void rf; void ex;
+  }, 20_000);
+  afterAll(() => { try { jira.kill('SIGKILL'); } catch { /* gone */ } });
+
+  it('registers the ticket under its key and under <key>-<codeline> for every estate repository', () => {
+    const root = mkdtempSync(path.join(os.tmpdir(), 'estate-'));
+    mkdirSync(path.join(root, 'hello-svc')); exec('git', ['-C', path.join(root, 'hello-svc'), 'init', '-q']);
+    const saved: Record<string, string | undefined> = {};
+    const set = (k: string, v: string | undefined) => { saved[k] = process.env[k]; if (v === undefined) delete process.env[k]; else process.env[k] = v; };
+    set('JIRA_PIPELINE', '1'); set('JIRA_URL', `http://127.0.0.1:${port}`); set('JIRA_EMAIL', 'mock@test.com'); set('JIRA_TOKEN', 'mock-token');
+    set('JIRA_PROJECT_KEY', 'TRK'); set('JIRA_STATUS_FILTER', 'To Do'); set('JIRA_CODELINE_ROOT', root); set('PRD_FILE', path.join(root, 'no-prd.json'));
+    try {
+      // Every module-level cache is per process: a fresh require sees this environment.
+      delete require.cache[require.resolve('../../../orchestrations/scripts/mock-expectations.js')];
+      const fresh = require('../../../orchestrations/scripts/mock-expectations.js');
+      const rows = fresh.contractStandIn('role-assigner');
+      const ids = (Array.isArray(rows) ? rows : [rows]).map((r: any) => r.storyId).sort();
+      const { deriveCodelineName } = require('../../../orchestrations/scripts/lib/codeline-name.js');
+      expect(ids).toEqual(['TRK-7', `TRK-7-${deriveCodelineName('hello-svc')}`].sort());
+    } finally { for (const [k, v] of Object.entries(saved)) { if (v === undefined) delete process.env[k]; else process.env[k] = v; } }
+  });
 });

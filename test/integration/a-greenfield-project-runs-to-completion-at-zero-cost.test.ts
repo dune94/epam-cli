@@ -31,14 +31,13 @@
  * is a failure of this test's environment, reported as such.
  */
 import { describe, it, expect, beforeAll, afterAll } from 'vitest';
-import { spawn, spawnSync, execFileSync, type ChildProcess } from 'node:child_process';
-import { mkdtempSync, mkdirSync, writeFileSync, readFileSync, rmSync, chmodSync, existsSync, readdirSync, symlinkSync, cpSync } from 'node:fs';
+import { spawnSync, type ChildProcess } from 'node:child_process';
+import { mkdtempSync, mkdirSync, writeFileSync, readFileSync, rmSync, existsSync, readdirSync, cpSync } from 'node:fs';
 import { join } from 'node:path';
 import { tmpdir } from 'node:os';
 import { MiniMockServer } from './lib/mini-mockserver';
+import { ROOT, NODE, fixtureInstall, edgeFor, zeroCostEnv, run } from './lib/fixture-install';
 
-const ROOT = join(__dirname, '../../');
-const NODE = process.execPath;
 const dirs: string[] = [];
 const children: ChildProcess[] = [];
 afterAll(() => {
@@ -56,67 +55,22 @@ function greenfieldProjects(): string[] {
   });
 }
 
-/** What an install of this working tree looks like: tracked files minus run state, plus the built CLI. */
-function fixtureInstall(): string {
-  const dest = tmp('gf-install-');
-  const runState = JSON.parse(readFileSync(join(ROOT, 'orchestrations-installer/run-state-paths.json'), 'utf8')).paths as string[];
-  const excluded = runState.map((p) => new RegExp('^' + p.replace(/[.+^${}()|[\]\\]/g, '\\$&').replace(/\*/g, '[^/]*') + '(/|$)'));
-  const files = execFileSync('git', ['-C', ROOT, 'ls-files', '-z'], { maxBuffer: 64 << 20 })
-    .toString('utf8').split('\0').filter((f) => f && !excluded.some((r) => r.test(f)) && !f.startsWith('test/'));
-  const list = join(dest, '.files'); writeFileSync(list, files.join('\0'));
-  execFileSync('bash', ['-c', `cd ${JSON.stringify(ROOT)} && tar --null -T ${JSON.stringify(list)} -cf - | tar -xf - -C ${JSON.stringify(dest)}`]);
-  rmSync(list);
-  cpSync(join(ROOT, 'dist'), join(dest, 'dist'), { recursive: true });
-  symlinkSync(join(ROOT, 'node_modules'), join(dest, 'node_modules'));
-  mkdirSync(join(dest, 'orchestrations/logs'), { recursive: true });
-  return dest;
-}
-
-/** spawn, awaited: the edge server lives in THIS process, so nothing here may block the event loop. */
-function run(cmd: string, args: string[], opts: { cwd: string; env: Record<string, string>; timeout: number }) {
-  return new Promise<{ status: number | null; stdout: string; stderr: string }>((resolve) => {
-    const c = spawn(cmd, args, { cwd: opts.cwd, env: opts.env, stdio: ['ignore', 'pipe', 'pipe'] });
-    let stdout = ''; let stderr = '';
-    c.stdout.on('data', (d) => { stdout += d; }); c.stderr.on('data', (d) => { stderr += d; });
-    const t = setTimeout(() => { try { process.kill(-c.pid!, 'SIGKILL'); } catch { c.kill('SIGKILL'); } }, opts.timeout);
-    c.on('close', (status) => { clearTimeout(t); resolve({ status, stdout, stderr }); });
-  });
-}
-
 const mock = new MiniMockServer();
 let install = '';
 let bin = '';
 beforeAll(async () => {
   await mock.start();
-  install = fixtureInstall();
-  // The container runtime, at the edge: a run restarts the dashboard container; nothing here is one.
-  bin = join(install, '.edge-bin'); mkdirSync(bin);
-  writeFileSync(join(bin, 'docker'), '#!/bin/bash\nexit 0\n'); chmodSync(join(bin, 'docker'), 0o755);
-  // The snapshot watcher is a machine daemon pre-flight looks for by pid file; a process stands there.
-  const watcher = spawn('sleep', ['7200'], { stdio: 'ignore' }); children.push(watcher);
-  writeFileSync(join(install, 'orchestrations/logs/dashboards-watch.pid'), String(watcher.pid));
-  writeFileSync(join(install, '.env'), [
-    `LANGFUSE_BASE_URL=${mock.url}`, 'LANGFUSE_SECRET_KEY=sk-lf-test', 'LANGFUSE_PUBLIC_KEY=pk-lf-test',
-    'OPENROUTER_API_KEY=', 'MINIMAX_API_KEY=', 'OPENAI_API_KEY=', '',
-  ].join('\n'));
+  install = fixtureInstall(dirs);
+  bin = edgeFor(install, mock.url, children).bin;
 }, 120_000);
 afterAll(() => mock.stop());
 
-function runEnv(project: string, outputDir: string): Record<string, string> {
-  return {
-    ...process.env as Record<string, string>,
-    PATH: `${bin}:${join(ROOT, 'node_modules/.bin')}:${process.env.PATH}`,
-    HOME: process.env.HOME!,
-    EPAM_PROVIDER_SET: 'mockserver', EPAM_FREE_RUN: '1',
-    EPAM_PAUSE_AFTER_AGENT_MINT: '0', EPAM_PAUSE_BEFORE_WRITER: '0',
-    EPAM_PROMPT_PROVISION_MODE: 'generate',
+function runEnv(_project: string, outputDir: string): Record<string, string> {
+  return zeroCostEnv(bin, mock.url, {
+    EPAM_PAUSE_BEFORE_WRITER: '0',
     OUTPUT_DIR: outputDir,
-    EPAM_MOCK_BASE_URL: mock.url, EPAM_DASHBOARD_URL: mock.url, LANGFUSE_BASE_URL: mock.url, EPAM_GRAFANA_URL: mock.url,
-    ANTHROPIC_API_KEY: 'mock-no-spend',
-    EPAM_PREFLIGHT_CACHE_DIR: join(ROOT, 'orchestrations/scripts/.preflight-cache'),
-    NODE_BIN: NODE,
     EPAM_PROJECT_CONFIG_DIR: '', // the launcher resolves it from --project
-  };
+  });
 }
 
 const projects = greenfieldProjects();

@@ -104,16 +104,15 @@ function seams() {
  * no story text is written here and a project with different stories needs no change.
  */
 let _titles;
+// Declared here, above the library/CLI split: a `let` below `if (require.main !== module) return;`
+// is never initialised for a caller that requires this file.
+let _trackerStories = null;
 function storyDiscriminator(storyId) {
   if (!storyId) return null;
   if (!_titles) {
+    // The same source the stand-ins use — a PRD when one exists, the tracker otherwise.
     _titles = {};
-    try {
-      const prd = process.env.PRD_FILE
-        || path.join(process.env.EPAM_PROJECT_CONFIG_DIR || '', 'prd.json');
-      const j = JSON.parse(fs.readFileSync(prd, 'utf8'));
-      for (const st of (j.stories || [])) if (st && st.id) _titles[st.id] = String(st.title || '');
-    } catch { _titles = {}; }
+    for (const st of projectStories()) _titles[st.id] = String(st.title || '');
   }
   const t = _titles[storyId];
   // Long enough to be this story's alone; a title too short to distinguish is not used.
@@ -808,14 +807,58 @@ if (require.main !== module) return;
  * reason.
  */
 /** The stories this project declares, read from its PRD — never listed here. */
+/**
+ * THE REPOSITORIES THIS RUN SCOPES: the git repositories under JIRA_CODELINE_ROOT — the run's own
+ * declaration of its estate — named the way the engine names a codeline. No root, no list.
+ */
+function estateRepos() {
+  const root = process.env.JIRA_CODELINE_ROOT || '';
+  if (!root || !fs.existsSync(root)) return [];
+  // eslint-disable-next-line global-require
+  const { deriveCodelineName } = require('./lib/codeline-name.js');
+  return fs.readdirSync(root, { withFileTypes: true })
+    .filter((e) => e.isDirectory() && fs.existsSync(path.join(root, e.name, '.git')))
+    .map((e) => ({ name: deriveCodelineName(e.name), path: path.join(root, e.name) }));
+}
+
 function projectStories() {
   try {
     const prd = process.env.PRD_FILE
       || path.join(process.env.EPAM_PROJECT_CONFIG_DIR || '', 'prd.json');
     const j = JSON.parse(fs.readFileSync(prd, 'utf8'));
-    return (j.stories || []).filter((s) => s && s.id)
-      .map((s) => ({ id: s.id, codeline: s.codeline || (s.files && s.files[0]) || '' }));
-  } catch { return []; }
+    const out = (j.stories || []).filter((s) => s && s.id)
+      .map((s) => ({ id: s.id, codeline: s.codeline || (s.files && s.files[0]) || '', title: s.title || '' }));
+    if (out.length) return out;
+  } catch { /* no PRD yet — a tracker run synthesises one during the run */ }
+  // THE STORIES A TRACKER RUN WILL HAVE, FROM THE TRACKER. Under JIRA_PIPELINE=1 the PRD does not
+  // exist before the run — ingest synthesises it after the AC gate has already called a model —
+  // so registration keyed on a PRD had nothing to key on and refused every such rehearsal. The
+  // stories are asked of the SAME fetcher the ingest uses (lib/handlers/fetch-tracker-issues.js
+  // over lib/jira-client.js), so what is registered is what the run will read.
+  if (String(process.env.JIRA_PIPELINE || '') === '1' && process.env.JIRA_PROJECT_KEY) {
+    if (_trackerStories) return _trackerStories;
+    try {
+      // eslint-disable-next-line global-require
+      const { execFileSync } = require('child_process');
+      const out = execFileSync(process.execPath, [
+        path.join(__dirname, 'lib/handlers/fetch-tracker-issues.js'), __dirname,
+        process.env.JIRA_PROJECT_KEY, process.env.JIRA_STATUS_FILTER || '',
+      ], { encoding: 'utf8', env: process.env, stdio: ['ignore', 'pipe', 'pipe'] });
+      // A TICKET BECOMES ONE STORY PER CODELINE IT IS SPLIT ACROSS — `<key>-<codeline>` — or one
+      // spanning story under its own key; which one is the AC gate's decision, made during the
+      // run. Both shapes are registered for every repository in the estate, so whichever the
+      // gate chooses has an answer; an assignment for a story that does not exist is never read.
+      const repos = estateRepos();
+      _trackerStories = [];
+      for (const i of (JSON.parse(out) || []).filter((x) => x && (x.storyId || x.jiraKey))) {
+        const id = i.storyId || i.jiraKey;
+        _trackerStories.push({ id, codeline: i.codeline || '', title: i.title || '' });
+        for (const r of repos) _trackerStories.push({ id: `${id}-${r.name}`, codeline: r.name, title: i.title || '' });
+      }
+      return _trackerStories;
+    } catch { return []; }
+  }
+  return [];
 }
 
 /** Does this property's own schema say its value must be one of the project's roles? */
@@ -861,7 +904,20 @@ function contractStandIn(seam) {
 
   // A value whose SHAPE matches what the key's name says it holds, so a consumer that indexes or
   // iterates finds something rather than a string where it expected a list.
+  // THE REPOSITORIES THIS RUN SCOPES. A key holding codelines is answered with the git
+  // repositories under JIRA_CODELINE_ROOT — the run's own declaration of its estate — by their
+  // real absolute paths, which is what the discovery seam's parse demands (an empty selection,
+  // or a path that is not a repository here, is refused). Nothing is invented: no root, no list.
   const valueFor = (k) => {
+    // Named the way the engine names them (lib/codeline-name.js), with the grounding the
+    // discovery consumer requires — an entry with no evidence is dropped as a hunch.
+    if (/^codelines$/i.test(k)) {
+      return estateRepos().map((r) => ({
+        ...r,
+        evidence: `a git repository under the declared codeline root ${path.dirname(r.path)}`,
+        reason: `stand-in for ${seam}: every repository the run declares is selected`,
+      }));
+    }
     if (/s$/.test(k) && !/status|address/i.test(k)) return [];
     if (/^(is|has|should|can|must)/i.test(k)) return false;
     if (/count|total|score|index|number/i.test(k)) return 0;
@@ -1495,6 +1551,32 @@ function endsInToolCall(cap, seam) {
         && !(standCallRequired(seam) && endsInToolCall(cap, seam))) {
       unusable.push(`${seam}  <- ${cap.file} (prose — never satisfied its contract)`);
       cap = null;
+    }
+    // AN ANSWER THAT SCOPES ANOTHER ESTATE IS NOT AN ANSWER HERE. A recording of the discovery
+    // seam names repositories by absolute path, and its consumer refuses any path that is not a
+    // git repository on THIS host — so a capture from another estate is refused three times and
+    // the run stops at its first model stage (£0 brownfield run, 2026-09-13). Judged by the same
+    // rule the consumer applies, on the key the contract declares; the stand-in then selects the
+    // repositories this run actually has.
+    if (cap) {
+      const _declaredKeys = (() => {
+        try {
+          // eslint-disable-next-line global-require
+          const c = require('./lib/agent-output-schema.js').declaredContracts()[seam];
+          return (c && c.kind === 'declared' && Array.isArray(c.requiredKeys)) ? c.requiredKeys : [];
+        } catch { return []; }
+      })();
+      if (_declaredKeys.some((k) => /^codelines$/i.test(k))) {
+        let _parsedBody = null;
+        try { _parsedBody = JSON.parse(String(cap.body || '')); } catch { _parsedBody = null; }
+        const _picked = _parsedBody && Array.isArray(_parsedBody.codelines) ? _parsedBody.codelines : null;
+        const _foreign = _picked && _picked.some((c) => !c || typeof c.path !== 'string'
+          || !fs.existsSync(path.join(c.path, '.git')));
+        if (_foreign) {
+          unusable.push(`${seam}  <- ${cap.file} (selects repositories that do not exist in this run's estate)`);
+          cap = null;
+        }
+      }
     }
     if (cap) {
       // Retarget BEFORE refreshing entities: both rewrite the same capture, and the paths are what

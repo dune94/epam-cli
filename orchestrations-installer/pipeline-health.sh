@@ -423,6 +423,31 @@ EOF
         docker inspect "$_name" --format '{{range .Mounts}}{{.Destination}} {{end}}' 2>/dev/null \
             | tr ' ' '\n' | grep -qx "$_want"
     }
+    # THE HOST DIRECTORY BEHIND A MOUNT, so the check can put a file there and ask nginx for it.
+    _dashboard_mount_source() {
+        local _want="$1" _name
+        _name="$(docker ps --format '{{.Names}}' 2>/dev/null | grep -m1 "${OBS_PROJECT:-__none__}-agent-monitor" || true)"
+        [ -n "$_name" ] || return 1
+        docker inspect "$_name" --format '{{range .Mounts}}{{.Destination}}={{.Source}}{{"\\n"}}{{end}}' 2>/dev/null \
+            | sed -n "s|^${_want}=||p" | head -1
+    }
+    # SERVING IS PROVED WITH A FILE THAT EXISTS. Asking for agent-status.json on a fresh install
+    # — no run yet, nothing written — got a 404 from a mount that was correctly in place, and this
+    # reported "IS mounted but nginx will not serve it", a hard failure, on every fresh install
+    # since the base compose began mounting /logs-dir. The mount is what is under test, so a probe
+    # file is written into the mounted directory and fetched through nginx; the file's absence was
+    # never evidence about the mount.
+    _dashboard_serves_mount() {
+        local _mount="$1" _url_prefix="$2" _src _probe _code
+        _src="$(_dashboard_mount_source "$_mount")" || return 1
+        [ -n "$_src" ] && [ -d "$_src" ] && [ -w "$_src" ] || return 1
+        _probe="health-probe-$$.txt"
+        printf 'ok\n' > "$_src/$_probe" 2>/dev/null || return 1
+        # nginx has already answered the status probe above; one more round is enough here.
+        _code="$(_probe_code "$_url_prefix/$_probe" 2)"
+        rm -f "$_src/$_probe"
+        case "$_code" in 2??) return 0 ;; *) return 1 ;; esac
+    }
     # OBS_PROJECT comes from the install's own persisted identity, never re-derived here.
     if [ -f "$ROOT/.pipeline-services-state.env" ]; then
         # shellcheck source=/dev/null
@@ -439,7 +464,9 @@ EOF
         _lc="$(_probe_code "$_DASH_URL/logs/agent-status.json")"
         case "$_lc" in
             2??|3??) _ok "dashboard /logs mount: serving (HTTP $_lc)" ;;
-            *) if _dashboard_has_mount /logs-dir; then
+            *) if _dashboard_serves_mount /logs-dir "$_DASH_URL/logs"; then
+                   _ok "dashboard /logs mount: serving (probe file fetched through nginx; no run has written agent-status.json yet)"
+               elif _dashboard_has_mount /logs-dir; then
                    _bad "dashboard /logs mount: /logs-dir IS mounted but nginx will not serve it (HTTP $_lc) — agent-activity.html and health.html have nothing to read"
                    _fix "bash orchestrations-installer/install.sh --dest \"$ROOT\""
                else

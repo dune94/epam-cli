@@ -275,3 +275,75 @@ describe("the writer's per-story answers are registered whatever the generic key
     expect(r.seam).toBe(`${WRITER}:${storyId}`);
   });
 });
+
+/**
+ * THE STAND-IN WRITER DELIVERS WHAT THE PROJECT DECLARES ITS STORY'S FIX TO BE. A brownfield
+ * ticket asks for a change to an existing file (and "its test"); the ecosystem's generic stand-in
+ * content replaced the seed module with an empty one, the seed's own test then failed on every
+ * attempt, and the story never completed (£0 brownfield harness run 11, 2026-09-14). A model reads
+ * the ticket and writes the fix; the rehearsal project declares that fix as data — a `stand-in/`
+ * tree beside its `seed/`, mirroring the codeline — and the writer lands EVERY file in it, the
+ * ones the story names and the ones the ticket only implies, over the ecosystem's generic content.
+ */
+describe("the writer delivers the project's declared stand-in fix, not the ecosystem's generic content", () => {
+  const own = new MiniMockServer();
+  let codeline = ''; const storyId = 'TRK-1-codeline'; let fixed = ''; let extra = '';
+  beforeAll(async () => {
+    await own.start();
+    const { loadProviders } = require(join(ROOT, 'orchestrations/scripts/lib/ecosystem-registry.js'));
+    const eco = loadProviders().find((e: any) => e.standIn && e.codelineManifests && e.codelineManifests.contractGeneration);
+    const ws = mkdtempSync(join(tmpdir(), 'bf-fix-')); dirs.push(ws);
+    const estate = join(ws, 'codelines'); codeline = join(estate, 'codeline');
+    const { mkdirSync: md, writeFileSync: wf, cpSync: cp } = require('node:fs');
+    md(join(codeline, 'src'), { recursive: true });
+    spawnSync('git', ['-C', codeline, 'init', '-q']);
+    wf(join(codeline, eco.file), typeof eco.standIn.manifest === 'function' ? eco.standIn.manifest(eco.file) : eco.standIn.manifest);
+    const ext = eco.codelineManifests.contractGeneration.sourceExtensions[0];
+    const src = `src/module${ext}`; wf(join(codeline, src), 'before the fix\n');
+    // The project: a copy of a real one, plus the fix it declares for its story — the named file
+    // and one the ticket only implies (its test), both under a tree mirroring the codeline.
+    const base = anyProject(); const project = join(ws, 'project'); cp(base.dir, project, { recursive: true, filter: (p: string) => !/\/runs(\/|$)/.test(p) });
+    fixed = `after the fix, as the project declares it ${Date.now()}\n`; extra = `the implied file ${Date.now()}\n`;
+    md(join(project, 'stand-in', 'src'), { recursive: true });
+    wf(join(project, 'stand-in', src), fixed); wf(join(project, 'stand-in', `src/implied${ext}`), extra);
+    const prd = join(ws, 'synthesized-prd.json');
+    wf(prd, JSON.stringify({ project: { name: 'bf' }, stories: [{ id: storyId, codeline: 'codeline', title: 'a defect in the module', technicalNotes: { files: [src] } }] }));
+    await new Promise<void>((resolve, reject) => {
+      const c = spawn(process.execPath, [join(ROOT, 'orchestrations/scripts/mock-expectations.js'), '--host', own.url], {
+        cwd: ROOT, env: { ...process.env, PRD_FILE: prd, EPAM_PROJECT_CONFIG_DIR: project, OUTPUT_DIR: '', PROJECT_ROOT: '', JIRA_CODELINE_ROOT: estate, EPAM_BROWNFIELD: '1', EPAM_PROVIDER_SET: 'mockserver', LANGFUSE_SECRET_KEY: '', LANGFUSE_PUBLIC_KEY: '' }, stdio: ['ignore', 'pipe', 'pipe'],
+      });
+      let err = ''; c.stderr.on('data', (d) => { err += d; }); c.stdout.resume();
+      c.on('close', (s) => (s === 0 ? resolve() : reject(new Error(`mock-expectations.js exited ${s}: ${err}`))));
+    });
+  }, 300_000);
+  afterAll(() => own.stop());
+  it('every write turn of the story carries the declared content, and the implied file is written too', async () => {
+    const id = writerTemplates[0];
+    const doc = JSON.parse(readFileSync(templatePath(id), 'utf8'));
+    const values: Record<string, string> = {};
+    const optional = new Set(doc.mayBeEmpty || []);
+    for (const ph of placeholdersIn(doc.body)) values[ph] = optional.has(ph) ? '' : `value of ${ph.replace(/_/g, ' ').trim()}`;
+    values.__STORY_ID__ = storyId; if ('__TITLE__' in values) values.__TITLE__ = 'a defect in the module';
+    const prompt = renderEngineTemplate(id, values);
+    const askBody = () => new Promise<string>((resolve, reject) => {
+      const body = JSON.stringify({ model: 'x', max_tokens: 1, stream: true, messages: [{ role: 'user', content: prompt }] });
+      const req = httpRequest(`${own.url}/v1/messages`, { method: 'POST', headers: { 'content-type': 'application/json' } }, (res) => { let b = ''; res.on('data', (d) => { b += d; }); res.on('end', () => resolve(b)); });
+      req.on('error', reject); req.end(body);
+    });
+    const events = (sse: string) => sse.split('\n').filter((l) => l.startsWith('data: ')).map((l) => JSON.parse(l.slice(6)));
+    const inputs = (sse: string) => events(sse).filter((e) => e.type === 'content_block_delta' && e.delta.type === 'input_json_delta').map((e) => JSON.parse(e.delta.partial_json));
+    // Drain the story's whole sequence (reads, writes, texts) and collect every write.
+    const writes: Record<string, string> = {};
+    for (let i = 0; i < 12; i += 1) {
+      // eslint-disable-next-line no-await-in-loop
+      for (const inp of inputs(await askBody())) if (typeof inp.content === 'string') writes[inp.file_path || Object.values(inp).find((v: any) => typeof v === 'string' && v.startsWith('/'))] = inp.content;
+    }
+    const paths = Object.keys(writes);
+    expect(paths.some((p) => p.endsWith('/src/module' + (paths[0] || '').slice(-3)) || p.includes('/src/module')), `the named file was not written: ${paths}`).toBe(true);
+    const named = paths.find((p) => p.includes('/src/module'))!; const implied = paths.find((p) => p.includes('/src/implied'));
+    expect(writes[named], "the named file's content is not the fix the project declares").toBe(fixed);
+    expect(implied, `the implied file was not written: ${paths}`).toBeTruthy();
+    expect(writes[implied!]).toBe(extra);
+    expect(named.startsWith(codeline), 'the fix landed outside the codeline').toBe(true);
+  });
+});

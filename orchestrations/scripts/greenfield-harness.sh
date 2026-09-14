@@ -57,6 +57,9 @@ DEST="${DEST:-$(mktemp -d "${TMPDIR:-/tmp}/greenfield-harness-XXXXXX")}"
 SHA="$(git -C "$REPO_ROOT" rev-parse --short "$REF")" || exit 2
 LOG="$DEST/harness.log"; mkdir -p "$DEST"
 VERDICT="$DEST/harness-verdict.json"
+# Where the brownfield launcher builds its workspace — known to the launch AND to a later
+# --assess-only, which judges the codeline it left there.
+MOCK1_WORKSPACE_ROOT="$DEST/mock1-workspace"; export MOCK1_WORKSPACE_ROOT
 say() { printf '[harness] %s\n' "$*" | tee -a "$LOG"; }
 red() { printf '[harness] ✗ %s\n' "$*" | tee -a "$LOG" >&2; }
 FAILS=()
@@ -152,7 +155,6 @@ ledger_total() {
 # its ticket from the stub tracker, pauses before the writer, and resumes); any other project is
 # launched by the operator's launcher, tier3-run.sh. Neither is named by mode here.
 BROWNFIELD_SEED=""; [ -d "$PROJECT_DIR/seed" ] && BROWNFIELD_SEED="$PROJECT_DIR/seed"
-MOCK1_WORKSPACE_ROOT="$DEST/mock1-workspace"; export MOCK1_WORKSPACE_ROOT
 if [ -n "$BROWNFIELD_SEED" ]; then
   say "launching mock1-paused-run.sh for $PROJECT (set $SET): start, pause before the writer, resume"
   # Exported (set -a) for the launcher below — shellcheck cannot see the consumer.
@@ -217,7 +219,9 @@ for p in $PHASES; do
 done
 _commits="$(git -C "$CODELINE" rev-list --count HEAD 2>/dev/null || echo 0)"
 _rc=0; [ "${_commits:-0}" -gt 1 ] || _rc=1; check "$_rc" "codeline holds committed work ($_commits commits)"
-# THE CODELINE'S OWN TESTS, by the command its ecosystem provider declares for it.
+# THE CODELINE'S OWN TESTS, by the command its ecosystem provider declares for it — resolved from
+# the codeline being judged: looked up under the greenfield output dir, a brownfield codeline was
+# judged to declare nothing whatever it declared (run 11, 2026-09-14).
 _test_cmd="$("$NODE_BIN" -e '
   const fs = require("fs"), path = require("path");
   const { resolveEcosystem } = require(process.argv[1]); const root = process.argv[2];
@@ -225,7 +229,7 @@ _test_cmd="$("$NODE_BIN" -e '
   const tc = hit.eco.testCommand;
   const text = fs.readFileSync(path.join(root, hit.present), "utf8");
   process.stdout.write(String(typeof tc === "function" ? tc(text) : (tc || "")));
-' "$DEST/orchestrations/scripts/lib/handlers/codeline-manifests.js" "$DEST/build" 2>/dev/null)"
+' "$DEST/orchestrations/scripts/lib/handlers/codeline-manifests.js" "$CODELINE" 2>/dev/null)"
 if [ -n "$_test_cmd" ]; then
   (cd "$CODELINE" && bash -c "$_test_cmd") >>"$LOG" 2>&1
   check $? "codeline tests green: $_test_cmd"

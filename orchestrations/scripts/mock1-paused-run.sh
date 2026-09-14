@@ -174,18 +174,11 @@ build_workspace() {
   git -C "$seed" config user.email test@test.com
   git -C "$seed" config user.name Test
 
-  printf 'node_modules\n' > "$seed/.gitignore"
-  cat > "$seed/package.json" <<'JSON'
-{ "name": "mock-hello-world", "version": "1.0.0", "private": true,
-  "devDependencies": { "typescript": "5.9.3" } }
-JSON
-  cat > "$seed/tsconfig.json" <<'JSON'
-{ "compilerOptions": { "module": "CommonJS", "moduleResolution": "node", "target": "ES2020",
-    "strict": true, "esModuleInterop": true, "skipLibCheck": true, "noEmit": true,
-    "types": ["vitest/globals", "node"] },
-  "include": ["src/**/*.ts"] }
-JSON
-
+  # THE SEED IS THE PROJECT'S, WHOLE. Its manifest, its compiler config and its ignore file were
+  # heredocs here, and the manifest declared no scripts — so the verification plugin detected
+  # neither a typecheck nor a test command for the codeline, and every writer attempt ended
+  # "the project declares no typecheck command — the check could not run" (£0 brownfield harness
+  # run 11, 2026-09-14). The seed declares its own checks; nothing here writes into it.
   # PIN THE TEST GLOB. Without its own config, vitest walks UP the directory tree and
   # adopts whatever it finds — which on 2026-08-03 was epam-cli's own
   # include: ['test/**/*.test.ts','greet.test.ts']. The mock's src/hello.test.ts then

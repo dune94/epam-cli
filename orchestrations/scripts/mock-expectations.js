@@ -242,7 +242,18 @@ function writerStandInCalls(story) {
   const testRe = eco.codelineManifests && eco.codelineManifests.contractGeneration && eco.codelineManifests.contractGeneration.testFilePattern
     ? new RegExp(eco.codelineManifests.contractGeneration.testFilePattern) : null;
   const srcExt = (eco.codelineManifests && eco.codelineManifests.contractGeneration && eco.codelineManifests.contractGeneration.sourceExtensions) || [];
-  const files = ((story.technicalNotes && story.technicalNotes.files) || []).filter((f) => typeof f === 'string' && f.trim());
+  const declared = ((story.technicalNotes && story.technicalNotes.files) || []).filter((f) => typeof f === 'string' && f.trim());
+  // THE FIX THE PROJECT DECLARES, when it declares one. A brownfield ticket asks for a change to
+  // an existing file and to what that change implies (its test); the ecosystem's generic content
+  // replaced the seed module with an empty one, the seed's own test failed on every attempt, and
+  // the story never completed (£0 brownfield harness run 11, 2026-09-14). A model reads the
+  // ticket and writes the fix; a rehearsal project declares it as DATA — a `stand-in/` tree
+  // beside its `seed/` mirroring the codeline (`stand-in/<codeline>/` on a multi-codeline
+  // estate) — and every file in it is delivered, named by the story or only implied by it. The
+  // story's own deliverables are written last, so the first attempts' deliberate shortfall
+  // (below) still trips the deliverable check.
+  const fix = declaredFix(story);
+  const files = fix ? [...fix.files.filter((f) => !declared.includes(f)), ...fix.files.filter((f) => declared.includes(f))] : declared;
   if (!files.length) return null;
   return files.map((f) => {
     const abs = path.isAbsolute(f) ? f : path.join(root, f);
@@ -251,7 +262,8 @@ function writerStandInCalls(story) {
     // A stand-in is a string, or a function of the file's path where the content must agree with
     // the path (a Java class is named by its file, a package by its directory).
     const body = (v) => (typeof v === 'function' ? v(f) : v) || content;
-    if (path.basename(f) === eco.file) content = body(eco.standIn.manifest);
+    if (fix && fix.files.includes(f)) content = fs.readFileSync(path.join(fix.root, f), 'utf8') || content;
+    else if (path.basename(f) === eco.file) content = body(eco.standIn.manifest);
     else if (testRe && testRe.test(f)) content = body(eco.standIn.test);
     else if (srcExt.some((x) => f.endsWith(x))) content = body(eco.standIn.source);
     // A FILE THAT EXISTS IS READ FIRST. The runner's write tool refuses a file the session has not
@@ -262,6 +274,28 @@ function writerStandInCalls(story) {
     const read = readTool && readTool.name && fs.existsSync(abs) ? { name: readTool.name, input: { [readTool.path]: abs } } : null;
     return { name: tool.name, input: { [tool.path]: abs, [tool.content]: content }, read };
   });
+}
+/**
+ * The fix a rehearsal project declares for a story: its `stand-in/` tree (per codeline when the
+ * story's codeline has a directory of its own there), as { root, files: [relative paths] }.
+ * Null when the project declares none — the ecosystem's generic stand-in content then applies.
+ */
+function declaredFix(story) {
+  const project = process.env.EPAM_PROJECT_CONFIG_DIR || '';
+  if (!project) return null;
+  const base = path.join(project, 'stand-in');
+  const perCodeline = story && story.codeline ? path.join(base, String(story.codeline)) : '';
+  const root = perCodeline && fs.existsSync(perCodeline) ? perCodeline : base;
+  if (!fs.existsSync(root) || !fs.statSync(root).isDirectory()) return null;
+  const files = [];
+  const walk = (dir) => {
+    for (const ent of fs.readdirSync(dir, { withFileTypes: true })) {
+      const p = path.join(dir, ent.name);
+      if (ent.isDirectory()) walk(p); else if (ent.isFile()) files.push(path.relative(root, p));
+    }
+  };
+  walk(root);
+  return files.length ? { root, files: files.sort() } : null;
 }
 /** The word every stand-in is marked with — generated and recognised with this one constant. */
 const STAND_IN_MARK = 'stand-in';
@@ -1892,6 +1926,11 @@ function endsInToolCall(cap, seam) {
   const covered = [];
   const uncovered = [];
   const stoodIn = [];
+  // WHAT IS DONE ON PURPOSE beside a seam's terminal outcome — a first attempt that fails, a first
+  // verdict that rejects, the writer's per-story answers. Printed under their own heading, never
+  // counted: pushed into the stand-in bucket, the total ran over the declared count and the proof
+  // line the launcher test reads reported a negative shortfall (2026-09-14).
+  const onPurpose = [];
   const stale = [];
   const unusable = [];
   const shared = [];
@@ -1984,7 +2023,6 @@ function endsInToolCall(cap, seam) {
     // rehearsal's writer was answered eight times with the generic text and wrote nothing
     // (£0 brownfield harness run 8). Per-story answers are keyed on the story line, never on the
     // generic key, so they are registered regardless of it.
-    let _writerReported = false;
     if (!cap && producesImplementation(seam) && !_writerSeamsDone.has(seam)) {
       _writerSeamsDone.add(seam);
       let _wrote = 0;
@@ -2055,11 +2093,10 @@ function endsInToolCall(cap, seam) {
         }
         _wrote += 1;
       }
-      // Reported once, as the writer stand-in; the generic path below still registers the seam's
-      // plain answer (a writer call naming no story of this run) but does not count it again.
-      _writerReported = true;
-      if (_wrote) stoodIn.push(`${seam}  <- ${STAND_IN_MARK} writer: declared deliverables written for ${_wrote} story/ies (ecosystem stand-in content)`);
-      else stoodIn.push(`${seam}  <- ${STAND_IN_MARK} writer could land nothing: no OUTPUT_DIR/PROJECT_ROOT, no write tool declared by the set, or no ecosystem stand-in`);
+      // Reported once, on purpose; the generic path below still registers the seam's plain answer
+      // (a writer call naming no story of this run), which is the seam's terminal outcome.
+      if (_wrote) onPurpose.push(`${seam}  <- ${STAND_IN_MARK} writer: declared deliverables written for ${_wrote} story/ies (the project's declared fix, else ecosystem stand-in content)`);
+      else onPurpose.push(`${seam}  <- ${STAND_IN_MARK} writer could land nothing: no OUTPUT_DIR/PROJECT_ROOT, no write tool declared by the set, or no ecosystem stand-in`);
     }
     if (seen.has(_dedup)) {
       shared.push(`${seam} shares a matcher with an earlier seam — one answer serves both`);
@@ -2441,7 +2478,7 @@ function endsInToolCall(cap, seam) {
           });
         }
       }
-      stoodIn.push(`${seam}  <- ${STAND_IN_MARK} first attempt answers hollow/in prose (the registry says its failed attempts reach the analyst)`);
+      onPurpose.push(`${seam}  <- ${STAND_IN_MARK} first attempt answers hollow/in prose (the registry says its failed attempts reach the analyst)`);
     }
     // ONE FIRST VERDICT REJECTS ON PURPOSE, for a verdict seam whose rejection is what runs another
     // seam (prd-change-summarizer.runsOnRejectionBy). A stand-in that always approves never lets
@@ -2459,7 +2496,7 @@ function endsInToolCall(cap, seam) {
             body: proto.text(standInReplyText(seam, rejected, contractOf(seam, template))) },
         });
       }
-      stoodIn.push(`${seam}  <- ${STAND_IN_MARK} first verdict rejects (the registry says a seam runs on its rejection)`);
+      onPurpose.push(`${seam}  <- ${STAND_IN_MARK} first verdict rejects (the registry says a seam runs on its rejection)`);
     }
     // A REQUEST THAT DECLARES THE RUNNER'S STRUCTURED-OUTPUT TOOL IS ANSWERED BY CALLING IT. Under
     // --json-schema the runner requires the reply to call that tool; answered in text, every seam
@@ -2494,7 +2531,7 @@ function endsInToolCall(cap, seam) {
     const _actedCap = !!(cap && cap.multi && Array.isArray(cap.turns)
       && cap.turns.some((t) => t && Array.isArray(t.calls) && t.calls.length));
     if (cap) covered.push(`${seam}  <- ${cap.file}${(cap.parsed || _actedCap) ? '' : ' (prose)'}`);
-      else if (!_writerReported) stoodIn.push(`${seam}  <- contract stand-in (${Object.keys(stood).join(', ') || 'artefact'})`);
+      else stoodIn.push(`${seam}  <- contract stand-in (${Object.keys(stood).join(', ') || 'artefact'})`);
   }
 
   // A GENERATED PROMPT IS ANSWERED SEGMENT FOR SEGMENT.
@@ -2603,10 +2640,10 @@ function endsInToolCall(cap, seam) {
   // Three stages downstream of a decision this summary made in silence.
   //
   // A count whose method is not stated implies completeness it does not have.
+  // WHOLE, never truncated: a seam hidden behind "... and N more" is a seam nobody can check.
   const bucket = (label, list, note) => {
     console.log(`\n${label} ${list.length}${note ? ` — ${note}` : ''}${list.length ? ':' : ''}`);
-    list.slice(0, 20).forEach((x) => console.log(`  ${x}`));
-    if (list.length > 20) console.log(`  ... and ${list.length - 20} more`);
+    list.forEach((x) => console.log(`  ${x}`));
   };
 
   console.log(`GENERATED ${_generated} template(s) answered segment for segment when the prompt builder generates them`);
@@ -2623,8 +2660,9 @@ function endsInToolCall(cap, seam) {
     'share a matcher with an earlier seam, so one answer serves both — a terminal outcome, not an annotation');
   bucket('PER-STORY', perStory, 'bound to a specific story of this run');
   bucket('FOREIGN', foreign, 'matched a seam this project does not declare');
+  bucket('ON PURPOSE', onPurpose, 'done beside a seam\'s outcome so another seam executes — an annotation, not counted');
   console.log(`\nUNCOVERED ${uncovered.length} — these answer {} and will fail their contract:`);
-  uncovered.slice(0, 20).forEach((u) => console.log(`  ${u}`));
+  uncovered.forEach((u) => console.log(`  ${u}`));
 
   // THE BUCKETS MUST ACCOUNT FOR EVERY DECLARED SEAM. covered/stood-in/uncovered are the three
   // terminal outcomes of the loop above; the rest annotate them. If they stop adding up, a seam is

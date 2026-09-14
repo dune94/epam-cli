@@ -68,7 +68,7 @@ if [ "$ASSESS_ONLY" = "1" ]; then
   # A kept install is judged again: the run's exit and spend are read back from its verdict.
   cd "$DEST" || exit 1
   PROJECT_DIR="$DEST/orchestrations/projects/$PROJECT"
-  PROJECT_ENV="$(_project_env "$PROJECT_DIR")"
+  PROJECT_ENV="$(_project_env "$PROJECT_DIR")" || exit 2
   PRD_FILE="$(sed -n 's/^PRD_FILE=//p' "$PROJECT_ENV" | tr -d '"')"
   PHASES="$(sed -n 's/^EPAM_PHASES=//p' "$PROJECT_ENV" | tr -d '"')"
   if [ -f "$VERDICT" ]; then
@@ -110,6 +110,8 @@ export EPAM_PREFLIGHT_CACHE_DIR="${EPAM_PREFLIGHT_CACHE_DIR:-$REPO_ROOT/orchestr
 export PATH="$(dirname "$NODE_BIN"):$PATH"
 PROJECT_DIR="$DEST/orchestrations/projects/$PROJECT"
 [ -d "$PROJECT_DIR" ] || { red "no project '$PROJECT' in the install"; exit 1; }
+PROJECT_ENV="$(_project_env "$PROJECT_DIR")" || exit 2
+[ -n "$PROJECT_ENV" ] || { red "the provider-set registry resolves no env file for $PROJECT_DIR"; exit 2; }
 PRD_CANONICAL="$(sed -n 's/^PRD_CANONICAL=//p' "$PROJECT_ENV" | tr -d '"')"
 PRD_FILE="$(sed -n 's/^PRD_FILE=//p' "$PROJECT_ENV" | tr -d '"')"
 PHASES="$(sed -n 's/^EPAM_PHASES=//p' "$PROJECT_ENV" | tr -d '"')"
@@ -128,6 +130,7 @@ if [ "$SET" = "mockserver" ]; then
   [ -n "$_mock_host" ] || { red "the $SET set redirects runner '$_runner' to no mock endpoint"; exit 1; }
   [ -n "$_mock_host" ] || { red "the $SET set redirects no runner to a mock endpoint"; exit 1; }
   export EPAM_MOCK_BASE_URL="$_mock_host"
+  [ -n "$PRD_CANONICAL" ] || { red "project env declares no PRD_CANONICAL — the mock would register no story answers"; exit 2; }
   PRD_FILE="$DEST/$PRD_CANONICAL" EPAM_PROJECT_CONFIG_DIR="$PROJECT_DIR" "$NODE_BIN" "$DEST/orchestrations/scripts/mock-expectations.js" --host "$_mock_host" >>"$LOG" 2>&1
   check $? "mock answers registered at $_mock_host"
 fi

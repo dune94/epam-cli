@@ -770,6 +770,8 @@
       "_whyMaxOutputTokens": "4096, down from 32768. The deliverable is a JSON block that is 52 characters when clean and a few hundred when it has findings; 32768 was room to narrate, and the model used it — 3,366 output tokens per call, of which the consumer reads about 13. The budget still holds a verdict with several evidenced findings many times over, and no longer pays for prose that is discarded unread."
     },
     "survey-review": {
+      "layer": "bootstrap",
+      "_why_bootstrap": "Runs inside the mint immediately after the estate survey, before the project prompt layer exists — like the survey it reviews. Undeclared, it rendered from a project copy that was not yet generated (\"project-authority prompt missing\") and the survey stood UNREVIEWED in every £0 greenfield rehearsal (2026-09-14).",
       "_what": "Falsifies what the estate survey claims about the codelines, before a roster is minted from it.",
       "_why": "The survey decided scope and seeded every investigator brief, and NOTHING consumed it for review — no seam declared it as an input, so its claims reached the roster unchallenged. A codeline was reported in_scope on a file it does not contain and an implementer was briefed accordingly. A generated prompt already gets this treatment; the survey had none.",
       "ladder": "top",

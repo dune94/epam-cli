@@ -114,6 +114,20 @@ describe('the four seams render in both states through the real renderer', () =>
     expect(out).toContain('AC2: Behaviour B holds');
   });
 
+  // A GREENFIELD STORY HAS NO VERIFICATION CRITERIA. Every judge that takes __STORY_ACS__ and also
+  // a VC block must render with the VC block EMPTY — team-lead-review did not declare it, could not
+  // render for any greenfield story, and the phase halted after six no-verdict cycles (2026-09-13).
+  it.each(AC_TEMPLATES)('%s: a greenfield story renders with the criteria block and an EMPTY verification-criteria block', (id) => {
+    const doc = JSON.parse(readFileSync(join(TPL_DIR, `${id}.json`), 'utf8'));
+    const vcs = (doc.placeholders || []).filter((p: string) => /VC_BLOCK/.test(p));
+    for (const p of vcs) expect(doc.mayBeEmpty, `${id}: ${p} must be declared mayBeEmpty — a greenfield story has no verification criteria`).toContain(p);
+    const lib = require(join(ROOT, 'orchestrations/scripts/lib/prompt-library.js'));
+    const values: Record<string, string> = {};
+    for (const p of doc.placeholders || []) values[p] = p === '__STORY_ACS__' ? 'ACCEPTANCE CRITERIA:\nAC1: Behaviour A holds\n\n' : vcs.includes(p) ? '' : `value-for-${p}`;
+    const out = lib.buildPrompt(id, PROJECT, values);
+    expect(out).toContain('AC1: Behaviour A holds');
+  });
+
   it.each(AC_TEMPLATES)('%s: a brownfield story renders — and with no criteria heading anywhere', (id) => {
     const out = renderWith(id, '');
     expect(out.length, 'the render refused or produced nothing').toBeGreaterThan(200);

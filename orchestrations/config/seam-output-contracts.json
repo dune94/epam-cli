@@ -6,7 +6,8 @@
     "verdict": "validated by lib/gate_verdict_schema.py validate(gate, text)",
     "artefact": "writes a file; the caller parses and contract-checks it",
     "none": "NOTHING validates this seam's output — a declared gap, see $gapRatchet",
-    "declared": "required keys declared here, taken from the shape the seam PROMPT states; validated by lib/agent-output-schema.js validateDeclaredOutput(seam, parsed)"
+    "declared": "required keys declared here, taken from the shape the seam PROMPT states; validated by lib/agent-output-schema.js validateDeclaredOutput(seam, parsed)",
+    "per-story-map": "one object keyed by story id, each entry carrying the required keys declared here; the consumer applies an entry per story and skips one whose list keys are empty (lib/handlers/tc-apply-to-prd.py)"
   },
   "$gapRatchet": "The `none` list may only SHRINK. Adding a seam with no contract is adding a place a bad answer flows on unchecked.",
   "seams": {
@@ -228,7 +229,9 @@
       "kind": "none"
     },
     "tc-writer": {
-      "kind": "none"
+      "kind": "per-story-map",
+      "requiredKeys": ["facts", "sourceFiles", "mockStrategy", "bannedPatterns"],
+      "_why": "One object keyed by story id (lib/handlers/tc-apply-to-prd.py): a story whose entry lacks a non-empty facts list is skipped, so an answer of {} applies nothing and the gate reports every test story still missing criteria. Was 'none' — the rehearsal stand-in answered {} and the gate could never pass at £0 (2026-09-13)."
     },
     "team-lead-review": {
       "kind": "declared",

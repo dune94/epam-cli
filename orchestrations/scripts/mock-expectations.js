@@ -1095,6 +1095,20 @@ function contractStandIn(seam) {
     const o = mk(null);
     return Object.keys(o).length ? o : null;
   }
+  // ONE OBJECT KEYED BY STORY ID, each entry carrying the declared keys — a list key holds one
+  // stand-in item, never an empty list, because the consumer reads an empty list as nothing.
+  if (c.kind === 'per-story-map') {
+    const o = {};
+    for (const st of projectStories()) {
+      const entry = {};
+      for (const k of (c.requiredKeys || [])) {
+        const v = valueFor(k);
+        entry[k] = Array.isArray(v) ? [`${STAND_IN_MARK} ${k.replace(/s$/, '')} for ${st.id}`] : v;
+      }
+      o[st.id] = entry;
+    }
+    return Object.keys(o).length ? o : null;
+  }
   if (c.kind === 'verdict') {
     // THE JUDGE'S OWN VOCABULARY. A verdict seam that declares the tag it is judged under gets the
     // first value that tag's tool definition allows — `pass` was refused by the roster reviews,

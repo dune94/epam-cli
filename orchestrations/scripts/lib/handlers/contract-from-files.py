@@ -6,6 +6,18 @@ files = json.loads(files_json)
 with open(config_file) as f:
     cfg = json.load(f)
 
+# A CONTRACT NEEDS THE PATTERNS ITS ECOSYSTEM DECLARES. The interface, class and method patterns
+# and render templates below are one ecosystem's (its provider declares them); a codeline whose
+# ecosystem declares none has no contract this generator can extract, and says so rather than
+# crashing on a missing key after the story was already marked complete (2026-09-13).
+_NEEDED = ('sourceExtensions', 'excludePattern', 'interfacePattern', 'classPattern', 'ctorPattern',
+           'methodPattern', 'interfaceRenderTemplate', 'classDeclarationTemplate',
+           'methodSignatureTemplate', 'mockFactoryTemplate', 'mockMethodTemplateSync')
+_missing = [k for k in _NEEDED if k not in cfg]
+if _missing:
+    print(f"contract-from-files: this codeline's ecosystem declares no contract patterns ({', '.join(_missing)}) — no contract generated")
+    sys.exit(0)
+
 exts = tuple(cfg['sourceExtensions'])
 exclude_re = re.compile(cfg['excludePattern'])
 src_files = [f for f in files if f.endswith(exts) and not exclude_re.search(f)]

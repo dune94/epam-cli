@@ -199,3 +199,16 @@ describe('a check the ecosystem declares no convention for reports OK', () => {
     expect((r.stdout || '').split('\n')[0]).toBe('OK');
   });
 });
+
+describe('the post-story contract generator on a codeline whose ecosystem declares no contract patterns', () => {
+  it('says so and exits 0 — a completed story is not failed by a traceback', () => {
+    const d = codeline(PY);
+    const cm = require(join(SCRIPTS, 'lib/handlers/codeline-manifests.js'));
+    const built = cm.build(d);
+    mkdirSync(join(d, '.epam'), { recursive: true });
+    writeFileSync(join(d, '.epam/contract-generation.json'), JSON.stringify(built['contract-generation.json']));
+    const r = spawnSync('python3', [join(SCRIPTS, 'lib/handlers/contract-from-files.py'), d, join(d, 'contract.json'), JSON.stringify(['regintel/store.py']), 'S-1', join(d, '.epam/contract-generation.json')], { encoding: 'utf8' });
+    expect(r.status, r.stderr).toBe(0);
+    expect(r.stderr).not.toMatch(/Traceback/);
+  });
+});

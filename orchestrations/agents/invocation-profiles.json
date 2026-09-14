@@ -121,6 +121,8 @@
     },
     "agent-failure-analyst": {
       "_what": "Diagnoses a no-output/failed agent attempt, prescribes a corrective directive.",
+      "_whyDiagnosesAttemptsOf": "The seams whose failed attempts reach this analyst through agent-attempt-analyst.sh (lib/tc-writer-gate.sh, brownfield-repro-test-writer.sh, spec-mode-runner's detective via lib/self-heal.js). Declared so the £0 rehearsal can fail one first attempt of each on purpose and execute this seam.",
+      "diagnosesAttemptsOf": ["tc-writer", "repro-test-writer", "code-graph-detective"],
       "maxOutputTokens": 32768,
       "timeoutSecs": 360,
       "ladder": "top",

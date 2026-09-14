@@ -896,7 +896,12 @@ if (require.main !== module) return;
         }
         survey.reviewFindings = _sr.findings;
       }
-    } catch { /* the survey stands unreviewed; its own reviewer failing is not a finding */ }
+    } catch (e) {
+      // The survey stands unreviewed; its own reviewer failing is not a finding about the survey.
+      // But it is SAID: this was a bare catch, and the £0 greenfield harness ran twelve times with
+      // the survey review never executing and nothing in any log saying why (2026-09-14).
+      process.stderr.write(`[mint-step] survey review did not run — the survey stands UNREVIEWED: ${(e && e.message) || e}\n`);
+    }
 
     // A boundary crossed is reported, never swallowed: the surveyor is structurally barred
     // from naming fix sites, and an attempt to name one says something about the prompt.

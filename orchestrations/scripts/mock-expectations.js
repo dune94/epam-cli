@@ -122,6 +122,13 @@ function producesImplementation(seam) {
     return !!(reg[seam] && reg[seam].produces === 'implementation');
   } catch { return false; }
 }
+/** Whether the registry says this seam's failed attempts reach the attempt analyst. */
+function analystDiagnoses(seam) {
+  try {
+    const reg = JSON.parse(fs.readFileSync(REG, 'utf8')).profiles || {};
+    return Object.values(reg).some((p) => p && Array.isArray(p.diagnosesAttemptsOf) && p.diagnosesAttemptsOf.includes(seam));
+  } catch { return false; }
+}
 function _projectName() { return path.basename(process.env.EPAM_PROJECT_CONFIG_DIR || ''); }
 
 /**
@@ -1660,7 +1667,7 @@ function endsInToolCall(cap, seam) {
   // (its aliases) share them.
   const _writerSeamsDone = new Set();
 
-  for (const { seam, template } of all) {
+  for (const { seam, template, alias } of all) {
     const key = matchKey(template);
     if (!key) { uncovered.push(`${seam} (no template body)`); continue; }
     // WHICH SEAM OWNS THIS MATCHER, SAID OUT LOUD.
@@ -2139,6 +2146,23 @@ function endsInToolCall(cap, seam) {
             body: proto.calls(cap.calls) },
         });
       }
+    }
+    // ONE FIRST ATTEMPT FAILS ON PURPOSE, for the seams whose failed attempts the registry says
+    // reach the attempt analyst (agent-failure-analyst.diagnosesAttemptsOf). A stand-in that always
+    // answers never lets that analyst execute — the £0 harness reported it never run through
+    // twenty-two rehearsals (2026-09-14). The first call is answered in prose that satisfies no
+    // contract, consumed once; the caller classifies the failure, invokes the analyst, and the
+    // retry meets the real answer below. Never for a capture — a recording plays as recorded.
+    if (!cap && !alias && analystDiagnoses(seam)) {
+      for (const proto of PROTOCOLS) {
+        await put('/mockserver/expectation', {
+          priority: 30 + _tagRank, times: { remainingTimes: 1, unlimited: false },
+          httpRequest: { method: 'POST', path: proto.path, body: bodyMatch },
+          httpResponse: { statusCode: 200, headers: { 'content-type': ['text/event-stream; charset=utf-8'], 'x-seam': [`${seam}:first-attempt-fails`] },
+            body: proto.text(`${STAND_IN_MARK} first attempt for ${seam}: answered in prose on purpose, so the attempt analyst runs before the retry`) },
+        });
+      }
+      stoodIn.push(`${seam}  <- ${STAND_IN_MARK} first attempt answers in prose (the registry says its failed attempts reach the analyst)`);
     }
     // TURN TWO (or the only turn): what the model said once its work was done.
     for (const proto of PROTOCOLS) {

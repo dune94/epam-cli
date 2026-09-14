@@ -38,29 +38,30 @@ function greenfieldProject() {
   throw new Error('no greenfield project with stories');
 }
 
-const mock = new MiniMockServer();
-beforeAll(async () => {
-  await mock.start();
+function register(url: string): Promise<void> {
   const p = greenfieldProject();
-  await new Promise<void>((resolve, reject) => {
-    const c = spawn(process.execPath, [join(ROOT, 'orchestrations/scripts/mock-expectations.js'), '--host', mock.url], {
+  return new Promise<void>((resolve, reject) => {
+    const c = spawn(process.execPath, [join(ROOT, 'orchestrations/scripts/mock-expectations.js'), '--host', url], {
       cwd: ROOT, env: { ...process.env, PRD_FILE: p.prd, EPAM_PROJECT_CONFIG_DIR: p.dir, OUTPUT_DIR: p.out, EPAM_PROVIDER_SET: 'mockserver', LANGFUSE_SECRET_KEY: '', LANGFUSE_PUBLIC_KEY: '' }, stdio: ['ignore', 'pipe', 'pipe'],
     });
     let err = ''; c.stderr.on('data', (d) => { err += d; }); c.stdout.resume();
     c.on('close', (s) => (s === 0 ? resolve() : reject(new Error(`mock-expectations.js exited ${s}: ${err}`))));
   });
-}, 300_000);
-afterAll(() => mock.stop());
-
-function ask(prompt: string): Promise<{ seam: string; body: string }> {
+}
+function askAt(url: string, prompt: string): Promise<{ seam: string; body: string }> {
   return new Promise((resolve, reject) => {
     const body = JSON.stringify({ model: 'x', max_tokens: 1, stream: true, messages: [{ role: 'user', content: prompt }] });
-    const req = httpRequest(`${mock.url}/v1/messages`, { method: 'POST', headers: { 'content-type': 'application/json' } }, (res) => {
+    const req = httpRequest(`${url}/v1/messages`, { method: 'POST', headers: { 'content-type': 'application/json' } }, (res) => {
       let b = ''; res.on('data', (d) => { b += d; }); res.on('end', () => resolve({ seam: String(res.headers['x-seam'] || ''), body: b }));
     });
     req.on('error', reject); req.end(body);
   });
 }
+
+const mock = new MiniMockServer();
+beforeAll(async () => { await mock.start(); await register(mock.url); }, 300_000);
+afterAll(() => mock.stop());
+const ask = (prompt: string) => askAt(mock.url, prompt);
 
 const reg = JSON.parse(readFileSync(join(ROOT, 'orchestrations/agents/invocation-profiles.json'), 'utf8')).profiles as Record<string, any>;
 // Every single-body template that declares a registry seam and is a whole prompt (it opens with
@@ -127,5 +128,35 @@ describe('a prompt that embeds another prompt is answered as itself', () => {
     const out = await review({ id, template: { body: doc.body }, generated: { body: embedded } });
     expect(out.ok).toBe(true);
     expect(warnings.join('\n'), warnings.join('\n')).not.toMatch(/UNREVIEWED/);
+  });
+});
+
+/**
+ * THE ATTEMPT ANALYST IS REACHED: one first attempt fails on purpose. The registry declares whose
+ * failed attempts reach agent-failure-analyst (diagnosesAttemptsOf); a stand-in that always answers
+ * never lets that seam execute — twenty-two rehearsals reported it never run (2026-09-14). For each
+ * declared seam the first call is prose that satisfies no contract and the second is the answer.
+ */
+describe('one first attempt fails on purpose for the seams the analyst diagnoses', () => {
+  // A fresh mock: the first attempt is consumed once, and the suites above have already asked.
+  const own = new MiniMockServer();
+  beforeAll(async () => { await own.start(); await register(own.url); }, 300_000);
+  afterAll(() => own.stop());
+  const ask = (prompt: string) => askAt(own.url, prompt);
+  const declared = Object.values(reg).flatMap((p: any) => (Array.isArray(p.diagnosesAttemptsOf) ? p.diagnosesAttemptsOf : [])) as string[];
+  it('the registry declares whose attempts the analyst diagnoses', () => { expect(declared.length).toBeGreaterThan(0); });
+  it.each(declared.filter((s) => reg[s] && templates.some((t) => t.id === reg[s].template)))('%s: first prose, then the answer', async (seam) => {
+    const { doc } = templates.find((t) => t.id === reg[seam].template)!;
+    const values: Record<string, string> = {};
+    const optional = new Set(doc.mayBeEmpty || []);
+    for (const p of placeholdersIn(doc.body)) values[p] = optional.has(p) ? '' : `value of ${p.replace(/_/g, ' ').trim()}`;
+    const prompt = substituteOnce(doc.body, values);
+    const text = (b: string) => [...b.matchAll(/"text":"((?:[^"\\]|\\.)*)"/g)].map((m) => JSON.parse(`"${m[1]}"`)).join('');
+    const first = await ask(prompt);
+    expect(first.seam).toBe(`${seam}:first-attempt-fails`);
+    expect(() => JSON.parse(text(first.body))).toThrow();
+    const second = await ask(prompt);
+    expect(second.seam).toMatch(new RegExp(`^${seam}(:|$)`));
+    expect(second.seam).not.toBe(`${seam}:first-attempt-fails`);
   });
 });

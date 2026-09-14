@@ -671,6 +671,13 @@ function capturedReply(seam) {
 }
 
 /** OpenAI streaming framing — the CLI requests stream:true, so a plain body yields no output. */
+/**
+ * EVERY RESPONSE IS DECLARED UTF-8. MockServer serves a body whose content-type names no charset in
+ * ISO-8859-1, so every character outside it — an em dash in a template — arrived as "?". In
+ * generate mode the generator assembled those bytes into the project's prompt copies, and the
+ * fingerprint the mock matches on (a template line containing that dash) never matched again:
+ * the seam fell to the catch-all and answered {} (£0 greenfield harness, 2026-09-13).
+ */
 function sse(content) {
   const chunk = (delta) => `data: ${JSON.stringify({
     id: 'replay',
@@ -1781,7 +1788,7 @@ function endsInToolCall(cap, seam) {
             priority: 55, times: { remainingTimes: 1, unlimited: false },
             httpRequest: { method: 'POST', path: proto.path,
               body: { type: 'REGEX', regex: `(?s)(?=.*${rx(wireForm(_wmark))})(?=.*${rx(wireForm(disc))}).*` } },
-            httpResponse: { statusCode: 200, headers: { 'content-type': ['text/event-stream'], 'x-seam': [`${seam}:${st.id}`] },
+            httpResponse: { statusCode: 200, headers: { 'content-type': ['text/event-stream; charset=utf-8'], 'x-seam': [`${seam}:${st.id}`] },
               body: proto.calls(calls) },
           });
           // eslint-disable-next-line no-await-in-loop
@@ -1789,7 +1796,7 @@ function endsInToolCall(cap, seam) {
             priority: 54,
             httpRequest: { method: 'POST', path: proto.path,
               body: { type: 'REGEX', regex: `(?s)(?=.*${rx(wireForm(_wmark))})(?=.*${rx(wireForm(disc))}).*` } },
-            httpResponse: { statusCode: 200, headers: { 'content-type': ['text/event-stream'], 'x-seam': [`${seam}:${st.id}`] },
+            httpResponse: { statusCode: 200, headers: { 'content-type': ['text/event-stream; charset=utf-8'], 'x-seam': [`${seam}:${st.id}`] },
               body: proto.text(`${STAND_IN_MARK} writer: wrote the ${calls.length} deliverable(s) ${st.id} declares`) },
           });
         }
@@ -1857,7 +1864,7 @@ function endsInToolCall(cap, seam) {
               body: { type: 'REGEX',
                 regex: `(?s)(?=.*${rx(wireForm(_mark))})(?=.*${rx(wireForm(disc))}).*` } },
             httpResponse: { statusCode: 200,
-              headers: { 'content-type': ['text/event-stream'], 'x-seam': [`${seam}:${st.id}`] },
+              headers: { 'content-type': ['text/event-stream; charset=utf-8'], 'x-seam': [`${seam}:${st.id}`] },
               body: proto.text(refreshEntities(c2).body) },
           });
         }
@@ -1894,7 +1901,7 @@ function endsInToolCall(cap, seam) {
               body: { type: 'REGEX',
                 regex: `(?s)(?=.*${rx(wireForm(`<${_tag}>`))})(?=.*${rx(wireForm(disc))}).*` } },
             httpResponse: { statusCode: 200,
-              headers: { 'content-type': ['text/event-stream'], 'x-seam': [`${seam}:${item.storyId}`] },
+              headers: { 'content-type': ['text/event-stream; charset=utf-8'], 'x-seam': [`${seam}:${item.storyId}`] },
               body: proto.text(tagged) },
           });
         }
@@ -1935,7 +1942,7 @@ function endsInToolCall(cap, seam) {
             priority: 40, times: { remainingTimes: 1, unlimited: false },
             httpRequest: { method: 'POST', path: proto.path, body: bodyMatch },
             httpResponse: { statusCode: 200,
-              headers: { 'content-type': ['text/event-stream'], 'x-seam': [seam] }, body },
+              headers: { 'content-type': ['text/event-stream; charset=utf-8'], 'x-seam': [seam] }, body },
           });
         }
       }
@@ -1944,7 +1951,7 @@ function endsInToolCall(cap, seam) {
         await put('/mockserver/expectation', {
           priority: 40, times: { remainingTimes: 1, unlimited: false },
           httpRequest: { method: 'POST', path: proto.path, body: bodyMatch },
-          httpResponse: { statusCode: 200, headers: { 'content-type': ['text/event-stream'], 'x-seam': [seam] },
+          httpResponse: { statusCode: 200, headers: { 'content-type': ['text/event-stream; charset=utf-8'], 'x-seam': [seam] },
             body: proto.calls([standCall]) },
         });
       }
@@ -1955,7 +1962,7 @@ function endsInToolCall(cap, seam) {
         await put('/mockserver/expectation', {
           priority: 40, times: { remainingTimes: 1, unlimited: false },
           httpRequest: { method: 'POST', path: proto.path, body: bodyMatch },
-          httpResponse: { statusCode: 200, headers: { 'content-type': ['text/event-stream'], 'x-seam': [seam] },
+          httpResponse: { statusCode: 200, headers: { 'content-type': ['text/event-stream; charset=utf-8'], 'x-seam': [seam] },
             body: proto.calls(cap.calls) },
         });
       }
@@ -1965,7 +1972,7 @@ function endsInToolCall(cap, seam) {
       await put('/mockserver/expectation', {
         priority: 30,
         httpRequest: { method: 'POST', path: proto.path, body: bodyMatch },
-        httpResponse: { statusCode: 200, headers: { 'content-type': ['text/event-stream'], 'x-seam': [seam] },
+        httpResponse: { statusCode: 200, headers: { 'content-type': ['text/event-stream; charset=utf-8'], 'x-seam': [seam] },
           body: proto.text(cap ? cap.body : (standTagged || JSON.stringify(stood))) },
       });
     }
@@ -2043,7 +2050,7 @@ function endsInToolCall(cap, seam) {
           httpRequest: { method: 'POST', path: proto.path,
             body: { type: 'REGEX', regex: `(?s)(?=.*${rx(wireForm(_genKey))})(?=.*${rx(wireForm(idMark))}).*` } },
           httpResponse: { statusCode: 200,
-            headers: { 'content-type': ['text/event-stream'], 'x-seam': [`generate:${id}`] },
+            headers: { 'content-type': ['text/event-stream; charset=utf-8'], 'x-seam': [`generate:${id}`] },
             body: proto.text(reply) },
         });
       }
@@ -2059,7 +2066,7 @@ function endsInToolCall(cap, seam) {
     // catch-all, answered {}, and surfaced as 'the answer did not parse' inside
     // content-retry — fifteen minutes each to trace back. The header makes it one line.
     httpRequest: { method: 'POST', path: '/api/v1/.*' },
-    httpResponse: { statusCode: 200, headers: { 'content-type': ['text/event-stream'], 'x-seam': ['CATCH-ALL-no-seam-matched'] },
+    httpResponse: { statusCode: 200, headers: { 'content-type': ['text/event-stream; charset=utf-8'], 'x-seam': ['CATCH-ALL-no-seam-matched'] },
       body: sse('{}') },
   });
   // The Anthropic catch-all matters MORE than the other one: Claude Code makes AUXILIARY calls
@@ -2069,7 +2076,7 @@ function endsInToolCall(cap, seam) {
   await put('/mockserver/expectation', {
     priority: 1,
     httpRequest: { method: 'POST', path: '/v1/messages' },
-    httpResponse: { statusCode: 200, headers: { 'content-type': ['text/event-stream'], 'x-seam': ['CATCH-ALL-no-seam-matched'] },
+    httpResponse: { statusCode: 200, headers: { 'content-type': ['text/event-stream; charset=utf-8'], 'x-seam': ['CATCH-ALL-no-seam-matched'] },
       body: anthropicSse('{}') },
   });
 

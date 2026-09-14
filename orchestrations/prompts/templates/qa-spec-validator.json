@@ -22,5 +22,9 @@
   "version": 1,
   "seams": [
     "qa-gate:spec-validator"
-  ]
+  ],
+  "mayBeEmpty": [
+    "__GATE_SCOPE__"
+  ],
+  "$whyGateScopeMayBeEmpty": "__GATE_SCOPE__ is the brownfield addendum (_brownfield_gate_scope in run-agent-orchestration.sh) and is empty on greenfield by design — 'whose flow is deliberately unchanged'. Undeclared, every QA gate refused to render on a greenfield phase and the testing gates failed with no instructions (£0 greenfield harness, 2026-09-13)."
 }

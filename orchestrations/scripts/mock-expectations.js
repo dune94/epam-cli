@@ -204,7 +204,13 @@ function writerStoryLineFrames() {
  * tool name or a path: the story names the files, the ecosystem the content, the set the tool.
  */
 function writerStandInCalls(story) {
-  const root = process.env.OUTPUT_DIR || process.env.PROJECT_ROOT || '';
+  // THE STORY'S OWN CODELINE: on a brownfield estate the story names its codeline and the estate
+  // (JIRA_CODELINE_ROOT) holds that repository; a greenfield project has one output directory.
+  // Reading only OUTPUT_DIR meant the brownfield rehearsal's writer could land nothing — eight
+  // attempts answered with the generic text, no file written (£0 brownfield harness run 8,
+  // 2026-09-14). The repository whose derived name is the story's codeline, else the output dir.
+  const estate = estateRepos().find((r) => r.name === String(story.codeline || ''));
+  const root = (estate && estate.path) || process.env.OUTPUT_DIR || process.env.PROJECT_ROOT || '';
   if (!root) return null;
   let tool = null;
   try {
@@ -1890,6 +1896,11 @@ function endsInToolCall(cap, seam) {
   // (its aliases) share them.
   const _writerSeamsDone = new Set();
 
+  // The two request protocols the mock answers, each with its own framing (lib: sse / anthropicSse).
+  const PROTOCOLS = [
+    { path: '/api/v1/chat/completions', text: sse, calls: sseToolCalls },
+    { path: '/v1/messages', text: anthropicSse, calls: anthropicSseToolCalls },
+  ];
   for (const { seam, template, alias } of all) {
     const key = matchKey(template);
     if (!key) { uncovered.push(`${seam} (no template body)`); continue; }
@@ -1961,6 +1972,79 @@ function endsInToolCall(cap, seam) {
     // story gets its own. A capture that names no story keeps the old single-answer behaviour.
     const _story = (cap && String(cap.file || '').match(/\b[A-Z][A-Z0-9]+-\d+\b/) || [])[0] || '';
     const _dedup = _story ? `${key}::${_story}` : key;
+    // THE WRITER'S PER-STORY ANSWERS COME FIRST, BEFORE THE GENERIC-KEY DEDUP. The writer's
+    // registry template is multi-part and its joined fingerprint can equal an earlier entry's
+    // (per-body entries, 2026-09-14); the dedup then skipped the whole seam and the brownfield
+    // rehearsal's writer was answered eight times with the generic text and wrote nothing
+    // (£0 brownfield harness run 8). Per-story answers are keyed on the story line, never on the
+    // generic key, so they are registered regardless of it.
+    let _writerReported = false;
+    if (!cap && producesImplementation(seam) && !_writerSeamsDone.has(seam)) {
+      _writerSeamsDone.add(seam);
+      let _wrote = 0;
+      for (const st of projectStories()) {
+        const _story = (() => { try { return (JSON.parse(fs.readFileSync(process.env.PRD_FILE, 'utf8')).stories || []).find((x) => x && x.id === st.id) || st; } catch { return st; } })();
+        const calls = writerStandInCalls(_story);
+        if (!calls) continue;
+        // THE WRITER'S OWN LINE FOR THIS STORY, not a title: a story's title appears in other
+        // prompts too (the roster review lists the tickets), and the seam's registry fingerprint
+        // appears wherever the writer's persona is quoted — so key + title matched the roster
+        // review and handed it write calls (2026-09-14). The template the writer actually carries
+        // names the story on one line (`… __STORY_ID__ …`); that line, rendered for this story,
+        // occurs in the writer's request alone.
+        // THE STORY LINE ALONE, one per template the writer carries, rendered for this story.
+        // The seam's registry key is the multi-part document the writer CONSUMES, whose
+        // fingerprint no writer call carries; a template's own fingerprint is taken from the
+        // template, while the prompt that runs is the PROJECT's generated copy, which can differ
+        // in exactly the line chosen (a renumbered rule, 2026-09-14). The line the writer names
+        // its story with — "Implement user story <id>: …" — occurs in no other prompt.
+        const _frames = writerStoryLineFrames();
+        const _lines = _frames.map((fr) => `${fr.before}${st.id}${fr.after}`).filter((l) => l.replace(st.id, '').trim().length > FINGERPRINT_MINIMUM_CHARS);
+        if (!_lines.length) _lines.push(storyDiscriminator(st.id) || st.id);
+        // THE FIRST ATTEMPTS FAIL ON PURPOSE. A writer that never fails never exercises the
+        // failure analysts, the deterministic check or the retry ladder — seams a real run climbs
+        // through. The first attempts land every deliverable but the last, so the deliverable
+        // check refuses, the same violation repeats, the analyst is asked why, and the ladder
+        // climbs; the next attempt lands them all. Two short attempts: the check invokes the
+        // analyst only on a REPEATED violation.
+        const _turns = calls.length > 1 ? [calls.slice(0, -1), calls.slice(0, -1), calls] : [calls];
+        for (const proto of PROTOCOLS) {
+          const _match = { type: 'REGEX', regex: `(?s)(?=.*(?:${_lines.map((l) => rx(wireForm(l))).join('|')})).*` };
+          const _hdr = { 'content-type': ['text/event-stream; charset=utf-8'], 'x-seam': [`${seam}:${st.id}`] };
+          // Each attempt is ONE write turn then ONE answer: the answer is registered once per
+          // attempt at the same priority, so it is served before the next attempt's write turn.
+          for (const turn of _turns) {
+            // eslint-disable-next-line no-await-in-loop
+            await put('/mockserver/expectation', {
+              priority: 55, times: { remainingTimes: 1, unlimited: false },
+              httpRequest: { method: 'POST', path: proto.path, body: _match },
+              httpResponse: { statusCode: 200, headers: _hdr, body: proto.calls(turn) },
+            });
+            // eslint-disable-next-line no-await-in-loop
+            await put('/mockserver/expectation', {
+              priority: 55, times: { remainingTimes: 1, unlimited: false },
+              httpRequest: { method: 'POST', path: proto.path, body: _match },
+              httpResponse: { statusCode: 200, headers: _hdr,
+                body: proto.text(`${STAND_IN_MARK} writer: wrote ${turn.length} of the ${calls.length} deliverable(s) ${st.id} declares`) },
+            });
+          }
+          // eslint-disable-next-line no-await-in-loop
+          await put('/mockserver/expectation', {
+            priority: 54,
+            httpRequest: { method: 'POST', path: proto.path,
+              body: _match },
+            httpResponse: { statusCode: 200, headers: _hdr,
+              body: proto.text(`${STAND_IN_MARK} writer: wrote the ${calls.length} deliverable(s) ${st.id} declares`) },
+          });
+        }
+        _wrote += 1;
+      }
+      // Reported once, as the writer stand-in; the generic path below still registers the seam's
+      // plain answer (a writer call naming no story of this run) but does not count it again.
+      _writerReported = true;
+      if (_wrote) stoodIn.push(`${seam}  <- ${STAND_IN_MARK} writer: declared deliverables written for ${_wrote} story/ies (ecosystem stand-in content)`);
+      else stoodIn.push(`${seam}  <- ${STAND_IN_MARK} writer could land nothing: no OUTPUT_DIR/PROJECT_ROOT, no write tool declared by the set, or no ecosystem stand-in`);
+    }
     if (seen.has(_dedup)) {
       shared.push(`${seam} shares a matcher with an earlier seam — one answer serves both`);
       continue;
@@ -2071,7 +2155,6 @@ function endsInToolCall(cap, seam) {
     }
     let standCall = null;
     let standTagged = null;
-    let _writerReported = false;
     if (!cap) {
       stood = contractStandIn(seam, contractOf(seam, template));
       if (!stood) { uncovered.push(`${seam} (no captured reply, no declared contract)`); continue; }
@@ -2143,80 +2226,10 @@ function endsInToolCall(cap, seam) {
       : (_tagInPrompt
         ? { type: 'REGEX', regex: `(?s)(?=.*${rx(wireForm(key))})(?=.*${rx(wireForm(_capTag))}).*` }
         : { type: 'STRING', string: wireForm(key), subString: true });
-    const PROTOCOLS = [
-      { path: '/api/v1/chat/completions', text: sse, calls: sseToolCalls },
-      { path: '/v1/messages', text: anthropicSse, calls: anthropicSseToolCalls },
-    ];
 
     // THE STAND-IN WRITER LANDS THE STORY'S DECLARED DELIVERABLES, so every seam after the writer —
     // the gates, the reviews, the commit, the phase — executes at £0 instead of stopping at a
     // writer that wrote nothing. One turn of write calls per story, then the answer.
-    if (!cap && producesImplementation(seam) && !_writerSeamsDone.has(seam)) {
-      _writerSeamsDone.add(seam);
-      let _wrote = 0;
-      for (const st of projectStories()) {
-        const _story = (() => { try { return (JSON.parse(fs.readFileSync(process.env.PRD_FILE, 'utf8')).stories || []).find((x) => x && x.id === st.id) || st; } catch { return st; } })();
-        const calls = writerStandInCalls(_story);
-        if (!calls) continue;
-        // THE WRITER'S OWN LINE FOR THIS STORY, not a title: a story's title appears in other
-        // prompts too (the roster review lists the tickets), and the seam's registry fingerprint
-        // appears wherever the writer's persona is quoted — so key + title matched the roster
-        // review and handed it write calls (2026-09-14). The template the writer actually carries
-        // names the story on one line (`… __STORY_ID__ …`); that line, rendered for this story,
-        // occurs in the writer's request alone.
-        // THE STORY LINE ALONE, one per template the writer carries, rendered for this story.
-        // The seam's registry key is the multi-part document the writer CONSUMES, whose
-        // fingerprint no writer call carries; a template's own fingerprint is taken from the
-        // template, while the prompt that runs is the PROJECT's generated copy, which can differ
-        // in exactly the line chosen (a renumbered rule, 2026-09-14). The line the writer names
-        // its story with — "Implement user story <id>: …" — occurs in no other prompt.
-        const _frames = writerStoryLineFrames();
-        const _lines = _frames.map((fr) => `${fr.before}${st.id}${fr.after}`).filter((l) => l.replace(st.id, '').trim().length > FINGERPRINT_MINIMUM_CHARS);
-        if (!_lines.length) _lines.push(storyDiscriminator(st.id) || st.id);
-        // THE FIRST ATTEMPTS FAIL ON PURPOSE. A writer that never fails never exercises the
-        // failure analysts, the deterministic check or the retry ladder — seams a real run climbs
-        // through. The first attempts land every deliverable but the last, so the deliverable
-        // check refuses, the same violation repeats, the analyst is asked why, and the ladder
-        // climbs; the next attempt lands them all. Two short attempts: the check invokes the
-        // analyst only on a REPEATED violation.
-        const _turns = calls.length > 1 ? [calls.slice(0, -1), calls.slice(0, -1), calls] : [calls];
-        for (const proto of PROTOCOLS) {
-          const _match = { type: 'REGEX', regex: `(?s)(?=.*(?:${_lines.map((l) => rx(wireForm(l))).join('|')})).*` };
-          const _hdr = { 'content-type': ['text/event-stream; charset=utf-8'], 'x-seam': [`${seam}:${st.id}`] };
-          // Each attempt is ONE write turn then ONE answer: the answer is registered once per
-          // attempt at the same priority, so it is served before the next attempt's write turn.
-          for (const turn of _turns) {
-            // eslint-disable-next-line no-await-in-loop
-            await put('/mockserver/expectation', {
-              priority: 55, times: { remainingTimes: 1, unlimited: false },
-              httpRequest: { method: 'POST', path: proto.path, body: _match },
-              httpResponse: { statusCode: 200, headers: _hdr, body: proto.calls(turn) },
-            });
-            // eslint-disable-next-line no-await-in-loop
-            await put('/mockserver/expectation', {
-              priority: 55, times: { remainingTimes: 1, unlimited: false },
-              httpRequest: { method: 'POST', path: proto.path, body: _match },
-              httpResponse: { statusCode: 200, headers: _hdr,
-                body: proto.text(`${STAND_IN_MARK} writer: wrote ${turn.length} of the ${calls.length} deliverable(s) ${st.id} declares`) },
-            });
-          }
-          // eslint-disable-next-line no-await-in-loop
-          await put('/mockserver/expectation', {
-            priority: 54,
-            httpRequest: { method: 'POST', path: proto.path,
-              body: _match },
-            httpResponse: { statusCode: 200, headers: _hdr,
-              body: proto.text(`${STAND_IN_MARK} writer: wrote the ${calls.length} deliverable(s) ${st.id} declares`) },
-          });
-        }
-        _wrote += 1;
-      }
-      // Reported once, as the writer stand-in; the generic path below still registers the seam's
-      // plain answer (a writer call naming no story of this run) but does not count it again.
-      _writerReported = true;
-      if (_wrote) stoodIn.push(`${seam}  <- ${STAND_IN_MARK} writer: declared deliverables written for ${_wrote} story/ies (ecosystem stand-in content)`);
-      else stoodIn.push(`${seam}  <- ${STAND_IN_MARK} writer could land nothing: no OUTPUT_DIR/PROJECT_ROOT, no write tool declared by the set, or no ecosystem stand-in`);
-    }
 
     // A PER-STORY SEAM NEEDS ONE ANSWER PER STORY, WHETHER OR NOT A CAPTURE NAMES ONE.
     //

@@ -9,8 +9,12 @@
  * was never invoked. Proven through the real registration, the real engine renderer and the edge.
  */
 import { describe, it, expect, beforeAll, afterAll } from 'vitest';
-import { spawn } from 'node:child_process';
-import { readFileSync, readdirSync, existsSync } from 'node:fs';
+import { spawn, spawnSync } from 'node:child_process';
+import { readFileSync, readdirSync, existsSync, mkdtempSync } from 'node:fs';
+import { tmpdir } from 'node:os';
+import { rmSync } from 'node:fs';
+const dirs: string[] = [];
+afterAll(() => { for (const d of dirs) rmSync(d, { recursive: true, force: true }); });
 import { join } from 'node:path';
 import { request as httpRequest } from 'node:http';
 import { MiniMockServer } from './lib/mini-mockserver';
@@ -173,4 +177,56 @@ describe("the writer's call for a real story is answered with that story's write
       });
     }
   }
+});
+
+/**
+ * THE WRITER'S PER-STORY ANSWERS DO NOT DEPEND ON THE SEAM'S GENERIC KEY. The writer's registry
+ * template is multi-part and its joined fingerprint can equal an earlier entry's; the generic-key
+ * dedup then skipped the whole seam and the brownfield rehearsal's writer was answered eight
+ * times with the generic text and wrote nothing (£0 brownfield harness run 8, 2026-09-14).
+ * Driven with a tracker-shaped story (id suffixed by its codeline, files declared) over a codeline
+ * whose ecosystem the providers recognise — the brownfield shape, not the greenfield fixture's.
+ */
+describe("the writer's per-story answers are registered whatever the generic key collides with", () => {
+  const own = new MiniMockServer();
+  let codeline = ''; let storyId = '';
+  beforeAll(async () => {
+    await own.start();
+    const { loadProviders } = require(join(ROOT, 'orchestrations/scripts/lib/ecosystem-registry.js'));
+    const eco = loadProviders().find((e: any) => e.standIn && e.codelineManifests && e.codelineManifests.contractGeneration);
+    const ws = mkdtempSync(join(tmpdir(), 'bf-writer-')); dirs.push(ws);
+    // The estate: one repository under the codeline root, named for the story's codeline — as the
+    // brownfield launcher lays it out. No OUTPUT_DIR: the story's codeline is what the writer has.
+    const estate = join(ws, 'codelines'); codeline = join(estate, 'codeline'); require('node:fs').mkdirSync(join(codeline, 'src'), { recursive: true });
+    spawnSync('git', ['-C', codeline, 'init', '-q']);
+    const { writeFileSync: wf } = require('node:fs');
+    wf(join(codeline, eco.file), typeof eco.standIn.manifest === 'function' ? eco.standIn.manifest(eco.file) : eco.standIn.manifest);
+    const src = `src/module${eco.codelineManifests.contractGeneration.sourceExtensions[0]}`;
+    wf(join(codeline, src), typeof eco.standIn.source === 'function' ? eco.standIn.source(src) : eco.standIn.source);
+    storyId = 'TRK-1-codeline';
+    const prd = join(ws, 'synthesized-prd.json');
+    wf(prd, JSON.stringify({ project: { name: 'bf' }, stories: [{ id: storyId, codeline: 'codeline', title: 'a defect in the module', technicalNotes: { files: [src] } }] }));
+    const p = anyProject();
+    await new Promise<void>((resolve, reject) => {
+      const c = spawn(process.execPath, [join(ROOT, 'orchestrations/scripts/mock-expectations.js'), '--host', own.url], {
+        cwd: ROOT, env: { ...process.env, PRD_FILE: prd, EPAM_PROJECT_CONFIG_DIR: p.dir, OUTPUT_DIR: '', PROJECT_ROOT: '', JIRA_CODELINE_ROOT: estate, EPAM_BROWNFIELD: '1', EPAM_PROVIDER_SET: 'mockserver', LANGFUSE_SECRET_KEY: '', LANGFUSE_PUBLIC_KEY: '' }, stdio: ['ignore', 'pipe', 'pipe'],
+      });
+      let err = ''; c.stderr.on('data', (d) => { err += d; }); c.stdout.resume();
+      c.on('close', (s) => (s === 0 ? resolve() : reject(new Error(`mock-expectations.js exited ${s}: ${err}`))));
+    });
+  }, 300_000);
+  afterAll(() => own.stop());
+  it.each(writerTemplates)('%s rendered for the tracker story is answered with that story\'s write turn', async (id) => {
+    const doc = JSON.parse(readFileSync(templatePath(id), 'utf8'));
+    const values: Record<string, string> = {};
+    const optional = new Set(doc.mayBeEmpty || []);
+    for (const ph of placeholdersIn(doc.body)) values[ph] = optional.has(ph) ? '' : `value of ${ph.replace(/_/g, ' ').trim()}`;
+    values.__STORY_ID__ = storyId; if ('__TITLE__' in values) values.__TITLE__ = 'a defect in the module';
+    const body = JSON.stringify({ model: 'x', max_tokens: 1, stream: true, messages: [{ role: 'user', content: renderEngineTemplate(id, values) }] });
+    const r = await new Promise<{ seam: string }>((resolve, reject) => {
+      const req = httpRequest(`${own.url}/v1/messages`, { method: 'POST', headers: { 'content-type': 'application/json' } }, (res) => { res.resume(); res.on('end', () => resolve({ seam: String(res.headers['x-seam'] || '') })); });
+      req.on('error', reject); req.end(body);
+    });
+    expect(r.seam).toBe(`${WRITER}:${storyId}`);
+  });
 });

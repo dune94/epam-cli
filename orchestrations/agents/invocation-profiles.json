@@ -289,8 +289,6 @@
       "_why_timeout": "Holds a plan pass AND an execute pass. It declared 90s — exactly the plan pass's own budget (EPAM_PLAN_TIMEOUT_SECS), so the plan alone could consume the whole window and the answer had none left. The caller then reported an empty response rather than a timeout."
     },
     "ac-elaboration": {
-      "appliesTo": ["greenfield"],
-      "_whyAppliesTo": "Acceptance criteria are out of scope in brownfield: the AC gate skips AC processing for a brownfield story with no ACs (lib/ac-gate.js, skipAcProcessing) and its verification criteria come from the description — so this seam never executes there by design, not by defect (£0 brownfield harness run 14, 2026-09-14).",
       "appliesTo": ["brownfield"],
       "_whyAppliesTo": "Elaborates tracker tickets whose ACs the classifier found enrichable; a canonical greenfield PRD arrives with its ACs authored.",
       "_what": "Elaborates an acceptance criterion into verification criteria.",

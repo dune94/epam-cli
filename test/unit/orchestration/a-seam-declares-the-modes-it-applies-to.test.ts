@@ -20,7 +20,48 @@ const profiles = JSON.parse(readFileSync(REG, 'utf8')).profiles as Record<string
 const { projectModes, expectedSeams } = require(join(ROOT, 'orchestrations/scripts/lib/seams-expected.js'));
 const KNOWN = new Set(['brownfield', 'greenfield', 'multi-codeline']);
 
+/** Parse JSON into a tree that keeps every key, duplicates included — JSON.parse drops them. */
+function parseWithKeys(text: string): any {
+  let i = 0;
+  const ws = () => { while (i < text.length && /\s/.test(text[i])) i += 1; };
+  const str = (): string => { let out = ''; i += 1; while (text[i] !== '"') { if (text[i] === '\\') { out += text[i] + text[i + 1]; i += 2; } else { out += text[i]; i += 1; } } i += 1; return out; };
+  const value = (): any => {
+    ws();
+    if (text[i] === '{') {
+      i += 1; const children: any[] = []; ws();
+      while (text[i] !== '}') { ws(); const key = str(); ws(); i += 1; const v = value(); children.push({ key: { value: key }, value: v }); ws(); if (text[i] === ',') i += 1; ws(); }
+      i += 1; return { type: 'Object', children };
+    }
+    if (text[i] === '[') {
+      i += 1; const children: any[] = []; ws();
+      while (text[i] !== ']') { children.push(value()); ws(); if (text[i] === ',') i += 1; ws(); }
+      i += 1; return { type: 'Array', children };
+    }
+    if (text[i] === '"') { str(); return { type: 'Scalar' }; }
+    while (i < text.length && !/[,}\]]/.test(text[i])) i += 1; return { type: 'Scalar' };
+  };
+  return value();
+}
+
 describe('a seam declares the modes it applies to', () => {
+  it('the registry has no duplicate keys — a second declaration silently wins over the first', () => {
+    // JSON.parse keeps the LAST of two equal keys, so a duplicate `appliesTo` reads as whichever
+    // was written second and the file still parses (2026-09-14: a second appliesTo on
+    // ac-elaboration made a declaration nobody could see). Every object in the registry is
+    // checked for repeated keys by walking the text, not the parsed value.
+    const text = readFileSync(join(ROOT, 'orchestrations/agents/invocation-profiles.json'), 'utf8');
+    const dups: string[] = [];
+    const walk = (node: any, path: string) => {
+      if (node.type === 'Object') {
+        const seen = new Map<string, number>();
+        for (const c of node.children) { const k = c.key.value; seen.set(k, (seen.get(k) || 0) + 1); }
+        for (const [k, n] of seen) if (n > 1) dups.push(`${path}/${k} ×${n}`);
+        for (const c of node.children) walk(c.value, `${path}/${c.key.value}`);
+      } else if (node.type === 'Array') node.children.forEach((c: any, i: number) => walk(c, `${path}[${i}]`));
+    };
+    walk(parseWithKeys(text), '');
+    expect(dups, 'duplicate keys in the registry').toEqual([]);
+  });
   it('every appliesTo names known modes only, and is non-empty where present', () => {
     for (const [seam, p] of Object.entries(profiles)) {
       if (p.appliesTo === undefined) continue;

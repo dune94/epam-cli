@@ -2,7 +2,7 @@
   {
     "key": "MOCK-HW-1",
     "summary": "getGreeting should return hello dolly",
-    "description": "The getGreeting() function in this codebase currently returns the string 'hello world'. It should instead return 'hello dolly', which is the text the welcome screen shows. The change is a one-line edit in src/hello.ts; no existing test asserts the old value, so a test that reproduces the defect must be added. The greeting wording is specified in the product note at {{TRACKER_URL}}/docs/greeting-wording.md",
+    "description": "The getGreeting() function in this codebase currently returns the string 'hello world'. It should instead return 'hello dolly', which is the text the welcome screen shows. The change is a one-line edit in src/hello.ts; no existing test asserts the old value, so a test that reproduces the defect must be added. The greeting wording is specified in the product note at {{TRACKER_URL}}/docs/greeting-wording.md\n\nAcceptance criteria:\n- getGreeting() returns exactly 'hello dolly'\n- The welcome screen shows 'hello dolly' where it showed 'hello world'\n- A test reproduces the defect: it fails on the current code and passes with the fix\n",
     "docs": {
       "greeting-wording.md": "# Greeting wording\n\nThe application greets with the phrase `hello dolly` (lower case, no punctuation). Every surface that renders the greeting \u2014 the CLI output and the exported `getGreeting()` value \u2014 must return exactly this string.\n"
     }

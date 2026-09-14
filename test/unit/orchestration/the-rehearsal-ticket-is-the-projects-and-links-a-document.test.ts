@@ -54,6 +54,19 @@ describe("the rehearsal ticket is the project's, and links a document", () => {
     expect(d.status).toBe(200);
     expect(await d.text()).toBe(issues[0].docs[link.split('/docs/')[1]]);
   });
+  it.each(seeded)('%s: the ticket carries acceptance criteria the tracker client extracts — the elaboration seam has work', (name) => {
+    // ac-elaboration applies to brownfield tickets whose ACs the classifier finds enrichable; a
+    // ticket with none skips AC processing entirely (lib/ac-gate.js skipAcProcessing), so the
+    // seam never executed on this project (£0 brownfield harness run 16, 2026-09-14).
+    // Through the real client's normalisation of an issue shaped as the stub tracker serves it.
+    const { normalizeIssue } = require(join(ROOT, 'orchestrations/scripts/lib/jira-client.js'));
+    const issues = JSON.parse(readFileSync(join(PROJECTS, name, 'tracker-issues.json'), 'utf8'));
+    for (const i of issues) {
+      const raw = { key: i.key, fields: { summary: i.summary, description: i.description, status: { name: 'To Do' }, labels: [], issuetype: { name: 'Bug' }, assignee: null, priority: { name: 'Medium' } } };
+      const n = normalizeIssue(raw);
+      expect((n.acceptanceCriteria || []).length, `${i.key} carries no acceptance criteria the client can extract`).toBeGreaterThan(0);
+    }
+  });
   it('the launcher serves the project\'s issues and carries no ticket of its own', () => {
     expect(LAUNCHER).toMatch(/--issues "\$PROJECT_CONFIG_DIR\/tracker-issues\.json"/);
     expect(LAUNCHER).not.toMatch(/^(STORY_ID|SUMMARY|DESCRIPTION)=/m);

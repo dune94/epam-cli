@@ -157,7 +157,7 @@ _test_cmd="$("$NODE_BIN" -e '
   process.stdout.write(String(typeof tc === "function" ? tc(text) : (tc || "")));
 ' "$DEST/orchestrations/scripts/lib/handlers/codeline-manifests.js" "$DEST/build" 2>/dev/null)"
 if [ -n "$_test_cmd" ]; then
-  (cd "$DEST/build" && { [ -x .venv/bin/python ] && export PATH="$DEST/build/.venv/bin:$PATH"; } ; bash -c "$_test_cmd") >>"$LOG" 2>&1
+  (cd "$DEST/build" && bash -c "$_test_cmd") >>"$LOG" 2>&1
   check $? "codeline tests green: $_test_cmd"
 else
   check 1 "the codeline's ecosystem declares a test command"

@@ -350,3 +350,23 @@ describe('a declared key shape wins over what the key name suggests', () => {
     }
   });
 });
+
+/**
+ * A CONTRACT THAT ASKS FOR THE PROMPT'S EXEMPLAR GETS THE WHOLE ANSWER THE PROMPT STATES. The
+ * failure analyst's `target: prd` with one `ac_patches` entry is what reaches the change reviewer
+ * and, on a rejection, the summarizer; with `diagnosis` alone neither ever ran at £0 (2026-09-14).
+ */
+describe('a declared contract that asks for the prompt exemplar carries every key the prompt states', () => {
+  const schema = require('../../../orchestrations/scripts/lib/agent-output-schema.js');
+  const asking = Object.entries(schema.declaredContracts() as Record<string, any>).filter(([, c]) => c.kind === 'declared' && c.exemplarFromPrompt).map(([s]) => s);
+  it('some contract asks for it', () => { expect(asking.length).toBeGreaterThan(0); });
+  it.each(asking)('%s: every known key is present, lists carry one shaped item, choices are one member', (seam) => {
+    const c = (schema.declaredContracts() as Record<string, any>)[seam];
+    const standIn = mock.contractStandIn(seam);
+    for (const k of c.knownKeys) expect(standIn, `${seam}.${k}`).toHaveProperty(k);
+    for (const [k, v] of Object.entries(standIn)) {
+      if (Array.isArray(v)) { expect(v.length, `${seam}.${k} carries an item`).toBeGreaterThan(0); }
+      if (typeof v === 'string') expect(v, `${seam}.${k} is one member, not a|b|c`).not.toMatch(/\|/);
+    }
+  });
+});

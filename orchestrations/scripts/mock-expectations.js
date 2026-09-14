@@ -1109,6 +1109,33 @@ function contractOf(seam, template) {
   return c;
 }
 
+/** The JSON answer the seam's own prompt states, with its described values stood in for. */
+function promptExemplar(seam) {
+  const reg = JSON.parse(fs.readFileSync(REG, 'utf8')).profiles || {};
+  const id = reg[seam] && reg[seam].template;
+  const body = id ? (templateBodies().get(id) || '') : '';
+  const blocks = [];
+  for (let i = 0; i < body.length; i += 1) {
+    if (body[i] !== '{') continue;
+    let depth = 0;
+    for (let j = i; j < body.length; j += 1) {
+      if (body[j] === '{') depth += 1;
+      else if (body[j] === '}') { depth -= 1; if (depth === 0) { const b = body.slice(i, j + 1); if (/"[A-Za-z_]+"\s*:/.test(b)) blocks.push(b); break; } }
+    }
+  }
+  blocks.sort((a, b) => b.length - a.length);
+  for (const blk of blocks) {
+    const text = blk
+      .replace(/"<[^"]*>"/g, `"${STAND_IN_MARK} value"`)
+      .replace(/:\s*<[^>,}\]]*>/g, ': 0')
+      .replace(/<[^>"]*>/g, `${STAND_IN_MARK} value`)
+      .replace(/"([A-Za-z0-9_-]+)(\|[A-Za-z0-9_|-]+)"/g, '"$1"')
+      .replace(/\.\.\./g, '').replace(/,\s*([}\]])/g, '$1');
+    try { return JSON.parse(text); } catch { /* the next block */ }
+  }
+  return null;
+}
+
 function contractStandIn(seam, override) {
   let contracts = {};
   try {
@@ -1164,6 +1191,23 @@ function contractStandIn(seam, override) {
   if (c.kind === 'declared') {
     const o = {};
     for (const k of (c.requiredKeys || [])) o[k] = valueFor(k);
+    // THE REST OF THE SHAPE, FROM THE PROMPT THAT STATES IT. A declared contract lists the keys
+    // its consumer reads; the seam's own prompt states the whole answer as a JSON exemplar
+    // ("Output ONLY a single JSON object: {...}"). An answer carrying only the required key
+    // never took the consumer's other branches — the failure analyst's `target: prd` with an
+    // `ac_patches` entry is what reaches the change reviewer and, on a rejection, the summarizer;
+    // with `diagnosis` alone neither ever ran (£0 greenfield harness, 2026-09-14). The exemplar is
+    // read from the registry template's body; `<described>` values become stand-in text, an index
+    // becomes 0, an `a|b|c` choice its first member; a key the required set already filled — a
+    // verdict, above all — keeps the contract's value.
+    // Only where the contract asks for it: a review's exemplar shows the FAILING form (a blocker
+    // issue) beside a pass verdict, which no reviewer ever says.
+    if (c.exemplarFromPrompt) {
+      try {
+        const ex = promptExemplar(seam);
+        for (const k of (c.knownKeys || [])) if (ex && k in ex && !(k in o)) o[k] = ex[k];
+      } catch { /* the required keys stand alone */ }
+    }
     return Object.keys(o).length ? o : null;
   }
   if (c.kind === 'schema' && c.tag) {

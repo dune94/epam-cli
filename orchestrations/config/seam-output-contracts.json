@@ -146,6 +146,8 @@
     },
     "agent-failure-analyst": {
       "kind": "declared",
+      "exemplarFromPrompt": true,
+      "_whyExemplar": "The rehearsal stand-in carries the whole answer the prompt states — target: prd with one ac_patch — so the change reviewer and, on a rejection, the summarizer execute at £0; with diagnosis alone neither ever ran (2026-09-14).",
       "requiredKeys": [
         "diagnosis"
       ],
@@ -202,6 +204,8 @@
     },
     "impl-failure-analyst": {
       "kind": "declared",
+      "exemplarFromPrompt": true,
+      "_whyExemplar": "The rehearsal stand-in carries the whole answer the prompt states — target: prd with one ac_patch — so the change reviewer and, on a rejection, the summarizer execute at £0; with diagnosis alone neither ever ran (2026-09-14).",
       "requiredKeys": [
         "diagnosis"
       ],

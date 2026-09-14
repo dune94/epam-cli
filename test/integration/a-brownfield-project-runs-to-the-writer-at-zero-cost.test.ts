@@ -138,28 +138,53 @@ describe('a brownfield project runs to the writer at £0', () => {
     expect(Object.keys(roster.agents || {}).length, 'the roster holds no agents').toBeGreaterThan(0);
     expect(readdirSync(join(projDir, 'prompts')).filter((f) => f.endsWith('.json')).length, 'no prompts were provisioned').toBeGreaterThan(0);
 
-    if (!investigated) return;
+    // THE RESUME IS NOT OPTIONAL. It used to run only when a RECORDING of this project's
+    // investigating seams existed — recordings that never worked — so the writer, the gates, the
+    // reproduction test and the phase gate were never executed inside the suite, and two changes
+    // to the stand-ins were launched untested and regressed a harness run from 35/40 to 27/40
+    // (run 15, 2026-09-14). Stand-ins answer every seam; the whole path executes here, every time.
 
     // A checkpoint the resume can continue from.
     const runId = (text.match(/RUN NUMBER:\s+(\S+)/) || [])[1];
     expect(runId, 'no run number reported').toBeTruthy();
-    expect(existsSync(join(projDir, 'runs', runId, 'checkpoint')), 'no checkpoint written at the pause').toBe(true);
+    // Asked of the checkpoint library the launcher itself resumes from (lanes/<codeline>/ since
+    // lanes came in), never of a path this test spells.
+    const stage = spawnSync('bash', ['-c', `. ${JSON.stringify(join(install, 'orchestrations/scripts/lib/run-checkpoint.sh'))}; run_stage ${JSON.stringify(runId)}`],
+      { encoding: 'utf8', env: { ...process.env, EPAM_PROJECT_CONFIG_DIR: projDir } }).stdout.trim();
+    expect(stage, 'no checkpoint written at the pause (run_stage returned nothing)').toBeTruthy();
 
-    // RESUME: the same launcher continues at implementation. The writer is invoked; whether it
-    // completes depends on a recording of this project's writer existing.
-    const writerRecorded = recorded(WRITER);
+    // RESUME: the same launcher continues at implementation and runs to the end of the phase.
     const hitsBefore = mock.hits.length;
     const r2 = await run('bash', [join(install, LAUNCHER), '--resume', runId], { cwd: install, env: env(), timeout: 40 * 60_000 });
     const text2 = r2.stdout + r2.stderr;
     keep('brownfield-resume', text2, projDir);
-    const tail2 = text2.split('\n').slice(-60).join('\n') + '\n--- model calls served ---\n' + mock.hits.slice(hitsBefore).map((h, i) => `${i + 1}. ${h.seam}`).join('\n');
+    // The launcher re-registers the mock on resume, which RESETS its hit list; the resume's calls
+    // are whatever the list holds if it shrank, else everything after the pause.
+    const resumeHits = mock.hits.length < hitsBefore ? mock.hits : mock.hits.slice(hitsBefore);
+    const tail2 = text2.split('\n').slice(-60).join('\n') + '\n--- model calls served ---\n' + resumeHits.map((h, i) => `${i + 1}. ${h.seam}`).join('\n');
     expect(text2, `the resume did not reach implementation — log tail:\n${tail2}`).toMatch(/resume finished/);
-    expect(mock.hits.slice(hitsBefore).some((h) => isSeam(h, WRITER)), `the writer was never invoked on resume — log tail:\n${tail2}`).toBe(true);
-    if (writerRecorded) {
-      expect(r2.status, `resume exited ${r2.status} — log tail:\n${tail2}`).toBe(0);
-      expect(text2).toMatch(/greeting now: return 'hello dolly'/);
-    } else {
-      console.log('[brownfield £0] no recording of this project\'s writer — proven up to and including the writer\'s invocation on resume');
-    }
+    expect(resumeHits.some((h) => isSeam(h, WRITER)), `the writer was never invoked on resume — log tail:\n${tail2}`).toBe(true);
+    expect(r2.status, `resume exited ${r2.status} — log tail:\n${tail2}`).toBe(0);
+    // WHAT THE RUN LEFT: the story completed in the PRD, the phase gate's own record says GO, the
+    // fix is in the codeline and its own tests pass, and a reproducing test accompanies the change.
+    const ws = join(workspaceRoot, runId, 'workspace');
+    const prd = JSON.parse(readFileSync(join(ws, 'synthesized-prd.json'), 'utf8'));
+    const incomplete = (prd.stories || []).filter((st: any) => !st.completed).map((st: any) => st.id);
+    expect(incomplete, `stories not completed: ${incomplete} — log tail:\n${tail2}`).toEqual([]);
+    const gates = readFileSync(join(install, 'orchestrations/logs/phase-gates.jsonl'), 'utf8').split('\n').filter(Boolean).map((l) => JSON.parse(l));
+    expect(gates.some((g: any) => String(g.decision).toLowerCase() === 'go'), `no phase gate decided GO — log tail:\n${tail2}`).toBe(true);
+    const clone = readdirSync(join(ws, 'codelines')).map((d) => join(ws, 'codelines', d))[0];
+    const { resolveEcosystem } = require(join(install, 'orchestrations/scripts/lib/handlers/codeline-manifests.js'));
+    const hit = resolveEcosystem(clone);
+    const testCmd = typeof hit.eco.testCommand === 'function' ? hit.eco.testCommand(readFileSync(join(clone, hit.present), 'utf8')) : hit.eco.testCommand;
+    expect(testCmd, 'the codeline declares no test command').toBeTruthy();
+    const t = spawnSync('bash', ['-c', testCmd], { cwd: clone, encoding: 'utf8', timeout: 300_000 });
+    expect(t.status, `the codeline's own tests fail after the run:\n${(t.stdout || '') + (t.stderr || '')}`).toBe(0);
+    const committed = spawnSync('git', ['-C', clone, 'log', '--oneline'], { encoding: 'utf8' }).stdout.trim().split('\n');
+    expect(committed.length, 'the codeline holds no committed work beyond the seed').toBeGreaterThan(1);
+    const changed = spawnSync('git', ['-C', clone, 'diff', '--name-only', `HEAD~${committed.length - 1}`, 'HEAD'], { encoding: 'utf8' }).stdout.trim().split('\n').filter(Boolean);
+    const { classify } = (() => { try { return require(join(install, 'orchestrations/scripts/lib/handlers/classify-changed-files.js')); } catch { return { classify: null }; } })();
+    expect(changed.some((f) => /(\.|_)(spec|test)\.[A-Za-z0-9]+$|\/__tests__\/|(^|\/)test_[^/]+$/.test(f)), `no test accompanies the committed change (${changed.join(', ')})`).toBe(true);
+    void classify;
   }, 85 * 60_000);
 });

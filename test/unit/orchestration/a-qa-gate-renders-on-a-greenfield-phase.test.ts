@@ -20,6 +20,28 @@ const SRC = readFileSync(join(ROOT, 'orchestrations/scripts/run-agent-orchestrat
 const gates = readdirSync(TPL).filter((f) => f.endsWith('.json')).map((f) => f.replace(/\.json$/, ''))
   .filter((id) => (JSON.parse(readFileSync(join(TPL, `${id}.json`), 'utf8')).placeholders || []).includes('__GATE_SCOPE__'));
 
+/**
+ * THE UNIVERSE IS THE CALL SITES, NOT A PLACEHOLDER NAME. The runtime-boundary gate handed the
+ * scope to __STORY_TITLE__, not __GATE_SCOPE__, so the universe above never held it: on a greenfield
+ * phase it refused to render — "cannot render its prompt — refusing to gate with no instructions"
+ * — and reported "no structured output, non-blocking warn" (£0 harness run 23, 2026-09-14). Every
+ * (template, placeholder) that RECEIVES the scope is read from run-agent-orchestration.sh: the
+ * jq variable assigned from _brownfield_gate_scope, the placeholder that variable fills, and the
+ * template the next render_engine_prompt names.
+ */
+function scopeReceivers(): { id: string; placeholder: string }[] {
+  const out: { id: string; placeholder: string }[] = [];
+  const re = /--arg\s+(\w+)\s+"\$\(_brownfield_gate_scope\s+[\w-]+\)"/g;
+  let m: RegExpExecArray | null;
+  while ((m = re.exec(SRC))) {
+    const after = SRC.slice(m.index);
+    const ph = after.match(new RegExp(`"(__[A-Z0-9_]+__)":\\$${m[1]}\\b`));
+    const tpl = after.match(/render_engine_prompt\s+([a-z0-9-]+)/);
+    if (ph && tpl) out.push({ id: tpl[1], placeholder: ph[1] });
+  }
+  return out;
+}
+
 describe('a QA gate renders on a greenfield phase', () => {
   it('the orchestrator produces an EMPTY gate scope on greenfield — the premise', () => {
     const fn = SRC.slice(SRC.indexOf('_brownfield_gate_scope() {'));
@@ -44,5 +66,14 @@ describe('a QA gate renders on a greenfield phase', () => {
     finally { if (prev === undefined) delete process.env.EPAM_PROJECT_CONFIG_DIR; else process.env.EPAM_PROJECT_CONFIG_DIR = prev; fs.rmSync(projectDir, { recursive: true, force: true }); }
     expect(out.length).toBeGreaterThan(100);
     expect(out).not.toMatch(/__[A-Z0-9_]+__/);
+  });
+});
+
+describe('every placeholder that receives the gate scope may be empty', () => {
+  const receivers = scopeReceivers();
+  it('the orchestrator hands the scope to gates', () => { expect(receivers.length).toBeGreaterThan(3); });
+  it.each(receivers.map((r) => [r.id, r.placeholder]))('%s: %s is declared mayBeEmpty', (id, placeholder) => {
+    const doc = JSON.parse(readFileSync(join(TPL, `${id}.json`), 'utf8'));
+    expect(doc.mayBeEmpty || [], `${id} receives the brownfield scope in ${placeholder}`).toContain(placeholder);
   });
 });

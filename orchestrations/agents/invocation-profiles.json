@@ -224,6 +224,8 @@
       "toolGrant": "read-only"
     },
     "prd-change-summarizer": {
+      "runsOnRejectionBy": ["prd-change-reviewer"],
+      "_whyRunsOnRejectionBy": "claude.sh run_prd_change_summarizer is invoked only when run_prd_change_reviewer answers fail (the self-heal change loop). Declared so the £0 rehearsal can have that reviewer reject one change on purpose and execute this seam.",
       "_what": "Summarizes a rewrite for the change log.",
       "maxOutputTokens": 16384,
       "temperature": "0.7",

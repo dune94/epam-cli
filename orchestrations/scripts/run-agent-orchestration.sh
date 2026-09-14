@@ -9882,13 +9882,17 @@ $perf_prompt"
             # commits after the writer, so that window held the reproducing test and never the fix.
             # Live 2026-09-09: this gate reported "CheckoutForm.tsx itself is unmodified (git diff
             # confirms no changes)" about a run that had just changed it.
+            # THE SCOPE GOES IN __GATE_SCOPE__, as in every other gate. It went into __STORY_TITLE__,
+            # a slot that may not be empty, so on a greenfield phase — where the scope IS empty by
+            # design — this gate refused to render and reported "no structured output, non-blocking
+            # warn": a gate failing open (£0 greenfield harness run 23, 2026-09-14).
             jq_vals --arg story_id "${phase_id}" \
-                  --arg story_title "$(_brownfield_gate_scope runtime-boundary)" \
+                  --arg gate_scope "$(_brownfield_gate_scope runtime-boundary)" \
                   --arg story_diff "$(qa_gate_diff "$PROJECT_ROOT" "$LOG_DIR")" \
                   --arg config_surface "$_rb_config" \
                   --arg project_root "$PROJECT_ROOT" \
                   --arg review_profile "$_rb_profile" \
-                  '{"__STORY_ID__":$story_id,"__STORY_TITLE__":$story_title,"__STORY_DIFF__":$story_diff,"__CONFIG_SURFACE__":$config_surface,"__PROJECT_ROOT__":$project_root,"__REVIEW_PROFILE__":$review_profile}' > "$_rb_vals" 2>/dev/null
+                  '{"__STORY_ID__":$story_id,"__GATE_SCOPE__":$gate_scope,"__STORY_DIFF__":$story_diff,"__CONFIG_SURFACE__":$config_surface,"__PROJECT_ROOT__":$project_root,"__REVIEW_PROFILE__":$review_profile}' > "$_rb_vals" 2>/dev/null
             local _rb_prompt
             if ! _rb_prompt=$(render_engine_prompt runtime-boundary-review "$_rb_vals"); then
                 error "  [runtime-boundary] cannot render its prompt — refusing to gate with no instructions" >&2

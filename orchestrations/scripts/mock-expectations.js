@@ -129,6 +129,13 @@ function analystDiagnoses(seam) {
     return Object.values(reg).some((p) => p && Array.isArray(p.diagnosesAttemptsOf) && p.diagnosesAttemptsOf.includes(seam));
   } catch { return false; }
 }
+/** Whether the registry says some seam runs only when THIS seam rejects (answers fail). */
+function rejectionFeeds(seam) {
+  try {
+    const reg = JSON.parse(fs.readFileSync(REG, 'utf8')).profiles || {};
+    return Object.values(reg).some((p) => p && Array.isArray(p.runsOnRejectionBy) && p.runsOnRejectionBy.includes(seam));
+  } catch { return false; }
+}
 function _projectName() { return path.basename(process.env.EPAM_PROJECT_CONFIG_DIR || ''); }
 
 /**
@@ -2170,6 +2177,24 @@ function endsInToolCall(cap, seam) {
         });
       }
       stoodIn.push(`${seam}  <- ${STAND_IN_MARK} first attempt answers in prose (the registry says its failed attempts reach the analyst)`);
+    }
+    // ONE FIRST VERDICT REJECTS ON PURPOSE, for a verdict seam whose rejection is what runs another
+    // seam (prd-change-summarizer.runsOnRejectionBy). A stand-in that always approves never lets
+    // that seam execute. The first call answers `fail` with one finding, consumed once; the caller
+    // runs the rewrite and asks again, and meets the approval below.
+    if (!cap && !alias && rejectionFeeds(seam) && stood && typeof stood === 'object' && 'verdict' in stood) {
+      const rejected = { ...stood, verdict: 'fail', issues: [`${STAND_IN_MARK} rejection for ${seam}: rejected on purpose so the rewrite that follows a rejection executes`],
+        findings: [{ severity: 'minor', description: `${STAND_IN_MARK} rejection for ${seam}: rejected on purpose so the rewrite that follows a rejection executes` }],
+        reason: `${STAND_IN_MARK} rejection for ${seam}: rejected on purpose` };
+      for (const proto of PROTOCOLS) {
+        await put('/mockserver/expectation', {
+          priority: 30 + _tagRank, times: { remainingTimes: 1, unlimited: false },
+          httpRequest: { method: 'POST', path: proto.path, body: bodyMatch },
+          httpResponse: { statusCode: 200, headers: { 'content-type': ['text/event-stream; charset=utf-8'], 'x-seam': [`${seam}:first-verdict-rejects`] },
+            body: proto.text(standInReplyText(seam, rejected, contractOf(seam, template))) },
+        });
+      }
+      stoodIn.push(`${seam}  <- ${STAND_IN_MARK} first verdict rejects (the registry says a seam runs on its rejection)`);
     }
     // TURN TWO (or the only turn): what the model said once its work was done.
     for (const proto of PROTOCOLS) {

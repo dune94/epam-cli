@@ -160,3 +160,30 @@ describe('one first attempt fails on purpose for the seams the analyst diagnoses
     expect(second.seam).not.toBe(`${seam}:first-attempt-fails`);
   });
 });
+
+/**
+ * ONE FIRST VERDICT REJECTS ON PURPOSE, for the reviewer whose rejection runs another seam
+ * (runsOnRejectionBy): a stand-in that always approves never let the change summarizer execute.
+ */
+describe('one first verdict rejects on purpose for the reviewer whose rejection runs a seam', () => {
+  const own = new MiniMockServer();
+  beforeAll(async () => { await own.start(); await register(own.url); }, 300_000);
+  afterAll(() => own.stop());
+  const ask = (prompt: string) => askAt(own.url, prompt);
+  const reviewers = Object.values(reg).flatMap((p: any) => (Array.isArray(p.runsOnRejectionBy) ? p.runsOnRejectionBy : [])) as string[];
+  it('the registry declares a seam that runs on a rejection', () => { expect(reviewers.length).toBeGreaterThan(0); });
+  it.each(reviewers.filter((s) => reg[s] && templates.some((t) => t.id === reg[s].template)))('%s: fail first, then pass', async (seam) => {
+    const { doc } = templates.find((t) => t.id === reg[seam].template)!;
+    const values: Record<string, string> = {};
+    const optional = new Set(doc.mayBeEmpty || []);
+    for (const p of placeholdersIn(doc.body)) values[p] = optional.has(p) ? '' : `value of ${p.replace(/_/g, ' ').trim()}`;
+    const prompt = substituteOnce(doc.body, values);
+    const text = (b: string) => [...b.matchAll(/"text":"((?:[^"\\]|\\.)*)"/g)].map((m) => JSON.parse(`"${m[1]}"`)).join('');
+    const first = await ask(prompt);
+    expect(first.seam).toBe(`${seam}:first-verdict-rejects`);
+    expect(JSON.parse(text(first.body)).verdict).toBe('fail');
+    const second = await ask(prompt);
+    expect(second.seam).toBe(seam);
+    expect(JSON.parse(text(second.body)).verdict).toBe('pass');
+  });
+});

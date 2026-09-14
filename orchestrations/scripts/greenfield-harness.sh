@@ -39,9 +39,18 @@ while [ $# -gt 0 ]; do
   esac
 done
 if [ "$ASSESS_ONLY" = "1" ]; then
-  [ -f "$DEST/harness-verdict.json" ] || { echo "--assess-only: no harness verdict in $DEST — nothing ran there" >&2; exit 2; }
-  SET="$("$NODE_BIN" -e 'process.stdout.write(require(process.argv[1]).set)' "$DEST/harness-verdict.json")"
-  PROJECT="$("$NODE_BIN" -e 'process.stdout.write(require(process.argv[1]).project)' "$DEST/harness-verdict.json")"
+  # A kept install is judged from what it recorded: the verdict, or — when the harness itself died
+  # after the run and before judging (its script was edited while bash was reading it, run 24,
+  # 2026-09-14) — the run's exit and spend as its own log recorded them.
+  if [ -f "$DEST/harness-verdict.json" ]; then
+    SET="$("$NODE_BIN" -e 'process.stdout.write(require(process.argv[1]).set)' "$DEST/harness-verdict.json")"
+    PROJECT="$("$NODE_BIN" -e 'process.stdout.write(require(process.argv[1]).project)' "$DEST/harness-verdict.json")"
+  elif grep -q '^\[harness\] run exited [0-9]* · spend \$' "$DEST/harness.log" 2>/dev/null; then
+    SET="${SET:-$(sed -n 's/^\[harness\] ref .* · set \([^ ]*\) · project \([^ ]*\) .*/\1/p' "$DEST/harness.log" | head -1)}"
+    PROJECT="$(sed -n 's/^\[harness\] ref .* · set \([^ ]*\) · project \([^ ]*\) .*/\2/p' "$DEST/harness.log" | head -1)"
+  else
+    echo "--assess-only: no harness verdict and no recorded run in $DEST — nothing ran there" >&2; exit 2
+  fi
 fi
 [ -n "$SET" ] || { echo "--set <provider set> is required" >&2; exit 2; }
 DEST="${DEST:-$(mktemp -d "${TMPDIR:-/tmp}/greenfield-harness-XXXXXX")}"
@@ -62,8 +71,13 @@ if [ "$ASSESS_ONLY" = "1" ]; then
   PROJECT_ENV="$(_project_env "$PROJECT_DIR")"
   PRD_FILE="$(sed -n 's/^PRD_FILE=//p' "$PROJECT_ENV" | tr -d '"')"
   PHASES="$(sed -n 's/^EPAM_PHASES=//p' "$PROJECT_ENV" | tr -d '"')"
-  RUN_EXIT="$("$NODE_BIN" -e 'process.stdout.write(String(require(process.argv[1]).runExit))' "$VERDICT")"
-  SPENT="$("$NODE_BIN" -e 'process.stdout.write(String(require(process.argv[1]).spentUsd))' "$VERDICT")"
+  if [ -f "$VERDICT" ]; then
+    RUN_EXIT="$("$NODE_BIN" -e 'process.stdout.write(String(require(process.argv[1]).runExit))' "$VERDICT")"
+    SPENT="$("$NODE_BIN" -e 'process.stdout.write(String(require(process.argv[1]).spentUsd))' "$VERDICT")"
+  else
+    RUN_EXIT="$(sed -n 's/^\[harness\] run exited \([0-9]*\) · spend \$\(.*\)$/\1/p' "$LOG" | head -1)"
+    SPENT="$(sed -n 's/^\[harness\] run exited \([0-9]*\) · spend \$\(.*\)$/\2/p' "$LOG" | head -1)"
+  fi
   HALTED=""; grep -q "passed the ceiling" "$LOG" && HALTED="halted"
   say "assessing again: run exited $RUN_EXIT · spend \$$SPENT"
 fi

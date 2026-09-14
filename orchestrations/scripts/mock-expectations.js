@@ -331,10 +331,22 @@ function matchKey(template) {
     .sort((a, b) => b.length - a.length);
   const others = [...bodies.entries()].filter(([id]) => id !== template).map(([, b]) => b);
   const keyOf = (x) => x.slice(0, FINGERPRINT_MATCH_CHARS);
-  const unique = stretches.filter((x) => !others.some((b) => b.includes(keyOf(x))));
+  const isUnique = (w) => !others.some((b) => b.includes(w));
+  const unique = stretches.filter((x) => isUnique(keyOf(x)));
   const pick = (list) => list.find((x) => x.length > FINGERPRINT_PREFERRED_CHARS) || list[0];
-  const line = pick(unique) || pick(stretches);
-  return line ? keyOf(line) : null;
+  const line = pick(unique);
+  if (line) return keyOf(line);
+  // No stretch OPENS uniquely: two near-identical templates (the change reviewer and its
+  // spec-pass twin) share every opening and differ mid-sentence. The key is then the first
+  // window of the matched length, anywhere in a stretch, that no other template contains.
+  for (const x of stretches) {
+    for (let at = 0; at + FINGERPRINT_MATCH_CHARS <= x.length; at += 5) {
+      const w = x.slice(at, at + FINGERPRINT_MATCH_CHARS);
+      if (isUnique(w)) return w;
+    }
+  }
+  const shared = pick(stretches);
+  return shared ? keyOf(shared) : null;
 }
 
 /**
@@ -2184,15 +2196,38 @@ function endsInToolCall(cap, seam) {
     // retry meets the real answer below. Never for a capture — a recording plays as recorded.
     // Above the structured-output answer (32): a first failure must be met whichever way the runner asks.
     if (!cap && !alias && analystDiagnoses(seam)) {
+      // A RUNNER THAT ENFORCES ITS SCHEMA ABSORBS A PROSE ANSWER: under --json-schema the CLI
+      // re-asks until it gets a schema-valid reply, so a prose first turn never became a failed
+      // ATTEMPT — the gate saw one successful call and the analyst never ran (run 24,
+      // 2026-09-14). A request that declares the structured-output tool is answered with a
+      // HOLLOW payload instead: the contract's shape with every list and string emptied — valid
+      // to the runner, nothing to the consumer, which is how a real model's empty answer fails.
+      const _hollow = (v) => (Array.isArray(v) ? [] : (v && typeof v === 'object') ? Object.fromEntries(Object.entries(v).map(([k, x]) => [k, _hollow(x)])) : (typeof v === 'string' ? '' : v));
+      const _soFail = structuredOutputToolName();
       for (const proto of PROTOCOLS) {
-        await put('/mockserver/expectation', {
-          priority: 34 + _tagRank, times: { remainingTimes: 1, unlimited: false },
-          httpRequest: { method: 'POST', path: proto.path, body: bodyMatch },
-          httpResponse: { statusCode: 200, headers: { 'content-type': ['text/event-stream; charset=utf-8'], 'x-seam': [`${seam}:first-attempt-fails`] },
-            body: proto.text(`${STAND_IN_MARK} first attempt for ${seam}: answered in prose on purpose, so the attempt analyst runs before the retry`) },
-        });
+        if (_soFail) {
+          const _bodyRxF = bodyMatch.type === 'REGEX' ? bodyMatch.regex.replace(/^\(\?s\)/, '').replace(/\.\*$/, '') : `(?=.*${rx(wireForm(key))})`;
+          const _hollowPayload = _hollow(standCall ? standCall.input : stood);
+          await put('/mockserver/expectation', {
+            priority: 36 + _tagRank, times: { remainingTimes: 1, unlimited: false },
+            httpRequest: { method: 'POST', path: proto.path,
+              body: { type: 'REGEX', regex: `(?s)${_bodyRxF}(?=.*${rx(`"name":"${_soFail}"`)}).*` } },
+            httpResponse: { statusCode: 200, headers: { 'content-type': ['text/event-stream; charset=utf-8'], 'x-seam': [`${seam}:first-attempt-fails`] },
+              body: proto.calls([{ name: _soFail, input: _hollowPayload, arguments: _hollowPayload }]) },
+          });
+        }
+        // Prose only where the runner does not enforce a schema; otherwise the prose would be
+        // absorbed too, and the retry would meet it before the real answer.
+        if (!_soFail) {
+          await put('/mockserver/expectation', {
+            priority: 34 + _tagRank, times: { remainingTimes: 1, unlimited: false },
+            httpRequest: { method: 'POST', path: proto.path, body: bodyMatch },
+            httpResponse: { statusCode: 200, headers: { 'content-type': ['text/event-stream; charset=utf-8'], 'x-seam': [`${seam}:first-attempt-fails`] },
+              body: proto.text(`${STAND_IN_MARK} first attempt for ${seam}: answered in prose on purpose, so the attempt analyst runs before the retry`) },
+          });
+        }
       }
-      stoodIn.push(`${seam}  <- ${STAND_IN_MARK} first attempt answers in prose (the registry says its failed attempts reach the analyst)`);
+      stoodIn.push(`${seam}  <- ${STAND_IN_MARK} first attempt answers hollow/in prose (the registry says its failed attempts reach the analyst)`);
     }
     // ONE FIRST VERDICT REJECTS ON PURPOSE, for a verdict seam whose rejection is what runs another
     // seam (prd-change-summarizer.runsOnRejectionBy). A stand-in that always approves never lets

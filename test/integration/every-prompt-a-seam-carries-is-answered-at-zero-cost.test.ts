@@ -145,19 +145,36 @@ describe('one first attempt fails on purpose for the seams the analyst diagnoses
   const ask = (prompt: string) => askAt(own.url, prompt);
   const declared = Object.values(reg).flatMap((p: any) => (Array.isArray(p.diagnosesAttemptsOf) ? p.diagnosesAttemptsOf : [])) as string[];
   it('the registry declares whose attempts the analyst diagnoses', () => { expect(declared.length).toBeGreaterThan(0); });
+  const rr = require(join(ROOT, 'orchestrations/scripts/lib/llm-settings-resolve.js'));
+  const gp = greenfieldProject();
+  const prevSet2 = process.env.EPAM_PROVIDER_SET; process.env.EPAM_PROVIDER_SET = 'mockserver';
+  let soTool = '';
+  try { soTool = rr.declaredRunners({ projectConfigDir: gp.dir }).map((n: string) => rr.resolveRunner(n, { projectConfigDir: gp.dir }).structuredOutputTool).find(Boolean) as string; }
+  finally { if (prevSet2 === undefined) delete process.env.EPAM_PROVIDER_SET; else process.env.EPAM_PROVIDER_SET = prevSet2; }
+  it('the set declares the structured-output tool the first failure must survive', () => { expect(soTool).toBeTruthy(); });
   it.each(declared.filter((s) => reg[s] && templates.some((t) => t.id === reg[s].template)))('%s: first prose, then the answer', async (seam) => {
     const { doc } = templates.find((t) => t.id === reg[seam].template)!;
     const values: Record<string, string> = {};
     const optional = new Set(doc.mayBeEmpty || []);
     for (const p of placeholdersIn(doc.body)) values[p] = optional.has(p) ? '' : `value of ${p.replace(/_/g, ' ').trim()}`;
     const prompt = substituteOnce(doc.body, values);
-    const text = (b: string) => [...b.matchAll(/"text":"((?:[^"\\]|\\.)*)"/g)].map((m) => JSON.parse(`"${m[1]}"`)).join('');
-    const first = await ask(prompt);
+    // The runner enforces its schema, so the first failure is a HOLLOW structured answer — the
+    // contract's shape with nothing in it — delivered as a call to the structured-output tool.
+    const askSO = (p: string) => new Promise<{ seam: string; body: string }>((resolve, reject) => {
+      const body = JSON.stringify({ model: 'x', max_tokens: 1, stream: true, tools: [{ name: soTool, input_schema: { type: 'object' } }], messages: [{ role: 'user', content: p }] });
+      const req = httpRequest(`${own.url}/v1/messages`, { method: 'POST', headers: { 'content-type': 'application/json' } }, (res) => {
+        let b = ''; res.on('data', (d) => { b += d; }); res.on('end', () => resolve({ seam: String(res.headers['x-seam'] || ''), body: b }));
+      });
+      req.on('error', reject); req.end(body);
+    });
+    const payloadOf = (b: string) => JSON.parse(JSON.parse(`"${b.match(/"partial_json":"((?:[^"\\]|\\.)*)"/)![1]}"`));
+    const hollow = (v: any): boolean => (Array.isArray(v) ? v.length === 0 : v && typeof v === 'object' ? Object.values(v).every(hollow) : typeof v === 'string' ? v === '' : true);
+    const first = await askSO(prompt);
     expect(first.seam).toBe(`${seam}:first-attempt-fails`);
-    expect(() => JSON.parse(text(first.body))).toThrow();
-    const second = await ask(prompt);
-    expect(second.seam).toMatch(new RegExp(`^${seam}(:|$)`));
-    expect(second.seam).not.toBe(`${seam}:first-attempt-fails`);
+    expect(hollow(payloadOf(first.body)), 'the first answer carries nothing a consumer can use').toBe(true);
+    const second = await askSO(prompt);
+    expect(second.seam).toBe(`${seam}:structured`);
+    expect(hollow(payloadOf(second.body)), 'the second answer is the real one').toBe(false);
   });
 });
 

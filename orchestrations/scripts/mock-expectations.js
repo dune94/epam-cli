@@ -1211,6 +1211,20 @@ function contractStandIn(seam, override) {
     // A DECLARED PREFERENCE among the values the prompt offers — the contract says which branch
     // of the consumer the rehearsal should take, and why.
     for (const [k, v] of Object.entries(c.prefer || {})) if (k in o) o[k] = v;
+    // A VALUE OVER A DECLARED LIMIT — the limit read from the config file and key the contract
+    // names ("<file>#<dot.path>"), never a number typed here.
+    for (const [k, ref] of Object.entries(c.overDeclaredLimit || {})) {
+      if (!(k in o)) continue;
+      try {
+        const [file, dotPath] = String(ref).split('#');
+        const cfg = JSON.parse(fs.readFileSync(path.join(__dirname, '..', file), 'utf8'));
+        const limit = Number(dotPath.split('.').reduce((acc, kk) => (acc == null ? acc : acc[kk]), cfg));
+        if (Number.isFinite(limit) && limit > 0) {
+          const base = `${STAND_IN_MARK} ${k} for ${seam}, written past the declared limit of ${limit} characters on purpose so the reviewer, its rejection and the rewrite execute`;
+          o[k] = base.padEnd(limit + 1, ' .');
+        }
+      } catch { /* the limit is undeclared; the value stands as it is */ }
+    }
     return Object.keys(o).length ? o : null;
   }
   if (c.kind === 'schema' && c.tag) {

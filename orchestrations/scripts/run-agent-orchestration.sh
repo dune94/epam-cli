@@ -7003,6 +7003,20 @@ elif [ "${_tc_writer_needed:-0}" -gt 0 ]; then
             break
         fi
         warning "  Step 10 attempt ${_tc_batch_attempt}/3: still missing testCriteria for: $_tc_batch_still_missing"
+        # THE SAME SEAM SELF-HEALS THE SAME WAY AT BOTH ITS CALL SITES. The inline gate
+        # (lib/tc-writer-gate.sh) classifies a failed attempt and asks the attempt analyst before
+        # retrying; this batch loop retried blind, so a tc-writer that answered in prose was
+        # simply asked again and nothing was diagnosed or recorded (£0 greenfield harness run 28,
+        # 2026-09-14). Same classification, same analyst, same role — never fatal to the retry.
+        if [ "$_tc_batch_attempt" -lt 3 ]; then
+            _tc_batch_fclass="no_json"
+            grep -qiE "reached maximum iterations" "$LOG_DIR/tc-writer-${PHASE}.log" 2>/dev/null && _tc_batch_fclass="max_iterations"
+            grep -qiE "ai-run failed|no error output" "$LOG_DIR/tc-writer-${PHASE}.log" 2>/dev/null && _tc_batch_fclass="provider"
+            log "  [tc-writer] batch attempt ${_tc_batch_attempt} failed (class=${_tc_batch_fclass}) — invoking self-heal analyst"
+            AGENT_ANALYST_STORY_ID="${_tc_batch_still_missing%%,*}" STORY_ROLE="${STORY_ROLE:-tc-writer}" \
+                bash "$SCRIPT_DIR/agent-attempt-analyst.sh" "$_tc_batch_fclass" "$LOG_DIR/tc-writer-${PHASE}.log" 2>>"$LOG_DIR/tc-writer-${PHASE}.log" \
+                || warning "  [tc-writer] self-heal analyst FAILED (class=${_tc_batch_fclass}) — attempt $((_tc_batch_attempt + 1)) retries WITHOUT corrective guidance"
+        fi
     done
 
     _tc_batch_violation_types="[]"

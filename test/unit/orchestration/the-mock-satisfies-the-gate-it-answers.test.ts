@@ -382,3 +382,21 @@ describe('a declared preference among the values the prompt offers is honoured',
     for (const [k, v] of Object.entries(c.prefer)) expect(standIn[k], `${seam}.${k}`).toBe(v);
   });
 });
+
+/** A VALUE OVER A DECLARED LIMIT is built from the limit the config declares, never a number typed in the mock. */
+describe('a value the contract says must exceed a declared limit does, by the config that declares it', () => {
+  const schema = require('../../../orchestrations/scripts/lib/agent-output-schema.js');
+  const over = Object.entries(schema.declaredContracts() as Record<string, any>).filter(([, c]) => c.overDeclaredLimit);
+  it('some contract declares one', () => { expect(over.length).toBeGreaterThan(0); });
+  it.each(over.map(([s]) => s))('%s: the value is longer than the declared limit', (seam) => {
+    const c = (schema.declaredContracts() as Record<string, any>)[seam];
+    const standIn = mock.contractStandIn(seam);
+    for (const [k, ref] of Object.entries(c.overDeclaredLimit as Record<string, string>)) {
+      const [file, dotPath] = ref.split('#');
+      const cfg = JSON.parse(fs.readFileSync(path.join(ROOT, 'orchestrations', file), 'utf8'));
+      const limit = Number(dotPath.split('.').reduce((a: any, kk: string) => a && a[kk], cfg));
+      expect(limit).toBeGreaterThan(0);
+      expect(String(standIn[k]).length, `${seam}.${k}`).toBeGreaterThan(limit);
+    }
+  });
+});

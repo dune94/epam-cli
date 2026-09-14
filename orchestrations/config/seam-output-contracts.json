@@ -134,8 +134,10 @@
       },
       "_whyRejectsWith": "ac-elaboration runs only on an insufficient verdict (lib/ac-gate.js, AC_GATE_AUTO_ELABORATE=1): the first classification of a rehearsal is insufficient on purpose so the elaboration seam executes; the retry meets the passing form the prompt offers first.",
       "requiredKeys": [
-        "verdict"
+        "verdict",
+        "codeline"
       ],
+      "_whyCodeline": "The prompt asks which codeline the story touches and the PRD synthesiser keys the story on the answer (id suffix, agentGroup, worktree shape); a verdict alone left the story with no codeline, on main, with nothing for the topology router to route (£0 brownfield harness run 18, 2026-09-14). The stand-in names a repository the run discovered.",
       "knownKeys": [
         "verdict",
         "reason",

@@ -564,3 +564,28 @@ describe('a declared verdict is one its prompt offers', () => {
     expect(c.rejectsWith.verdict).not.toBe(s.verdict);
   });
 });
+
+/**
+ * THE CLASSIFIER NAMES A CODELINE THIS RUN HAS. Its prompt asks which codeline the story touches
+ * and the PRD synthesiser keys the story on the answer (id suffix, agentGroup, worktree shape);
+ * answering only a verdict left the story with no codeline, so it landed on main and the topology
+ * router had nothing to route (£0 brownfield harness run 18, 2026-09-14).
+ */
+describe('the classifier stand-in names a codeline this run has', () => {
+  const { mkdtempSync, mkdirSync } = require('node:fs');
+  const { execFileSync } = require('node:child_process');
+  const os = require('node:os');
+  it('codeline is a required key, and its value is the derived name of a repository under JIRA_CODELINE_ROOT', () => {
+    const root = mkdtempSync(path.join(os.tmpdir(), 'cl-root-'));
+    for (const n of ['alpha-repo']) { mkdirSync(path.join(root, n)); execFileSync('git', ['-C', path.join(root, n), 'init', '-q']); }
+    const prev = process.env.JIRA_CODELINE_ROOT; process.env.JIRA_CODELINE_ROOT = root;
+    try {
+      const reg = JSON.parse(fs.readFileSync(path.join(ROOT, 'orchestrations/agents/invocation-profiles.json'), 'utf8')).profiles;
+      const s = mock.contractStandIn('ac-classification', mock.contractOf('ac-classification', reg['ac-classification'].template));
+      const names = (mock.contractStandIn('codeline-discovery') || {}).codelines.map((c: any) => c.name || c.codeline || c);
+      expect(names.length, 'the discovery stand-in names no repository').toBeGreaterThan(0);
+      expect(typeof s.codeline, 'the classifier answered no codeline').toBe('string');
+      expect(names, `the classifier's codeline '${s.codeline}' is not one the run discovered`).toContain(s.codeline);
+    } finally { if (prev === undefined) delete process.env.JIRA_CODELINE_ROOT; else process.env.JIRA_CODELINE_ROOT = prev; }
+  });
+});

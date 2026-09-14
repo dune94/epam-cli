@@ -1400,6 +1400,13 @@ function contractStandIn(seam, override) {
         reason: `${STAND_IN_MARK} for ${seam}: every repository the run declares is selected`,
       }));
     }
+    // ONE CODELINE, BY THE NAME THE RUN DISCOVERED IT UNDER: the classifier says which codeline a
+    // story touches, and the synthesiser keys the story on it (id suffix, agentGroup, worktree
+    // shape). The first repository of the estate, else the story's own declared codeline.
+    if (/^codeline$/i.test(k)) {
+      const repo = estateRepos()[0]; const st = projectStories().find((x) => x.codeline);
+      return (repo && repo.name) || (st && st.codeline) || `${STAND_IN_MARK}-codeline`;
+    }
     // THE DECLARED SHAPE WINS over what the key's name suggests: `diagnosis` is one diagnosis.
     const shape = c.shapes && c.shapes[k];
     if (shape && typeof shape === 'object') {

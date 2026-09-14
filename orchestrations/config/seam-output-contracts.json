@@ -48,7 +48,11 @@
       "_why_tag": "Judged by validateTaggedOutput against TOOL_ROSTER_REVIEW; the verdict vocabulary is that tool's enum, and the rehearsal stand-in reads it from there."
     },
     "prompt-review": {
-      "kind": "verdict"
+      "kind": "declared",
+      "tag": "PROMPT_REVIEW",
+      "requiredKeys": ["falseClaims"],
+      "knownKeys": ["falseClaims"],
+      "_why": "lib/prompt-review.js reads ONE <PROMPT_REVIEW>{falseClaims:[...]}</PROMPT_REVIEW> block out of the reply and installs the prompt UNREVIEWED when it is absent. Declared 'verdict' (bare gate JSON), every prompt of the £0 greenfield harness was installed unreviewed behind a stand-in that satisfied the wrong judge (run 19, 2026-09-14)."
     },
     "roster-review": {
       "kind": "verdict",

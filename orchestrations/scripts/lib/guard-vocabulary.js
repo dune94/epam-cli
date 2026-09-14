@@ -62,6 +62,10 @@ const TOOL_GUARD_VOCABULARY = {
       blacklist: {
         type: 'array',
         description: 'Terms/phrases whose presence indicates a violation of the rule.',
+        // THE MINIMUM THE CONSUMER ENFORCES IS PART OF THE CONTRACT. isVocabularyUsable refuses
+        // an empty blacklist and the spec pass aborts; a schema that permitted [] let a reply
+        // satisfy the tool and kill the run (£0 greenfield harness run 19, 2026-09-14).
+        minItems: 1,
         items: {
           type: 'object',
           required: ['term', 'reason'],

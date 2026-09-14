@@ -61,7 +61,10 @@ describe('a contract matches the generated prompt', () => {
       }
       for (const body of prompts) {
         for (const key of required) {
-          expect(body.includes(`"${key}"`) || body.includes(`${key}:`),
+          // Stated as a JSON key, a `key:` line, or a `backticked` field name — all three are how
+          // a prompt names the field its consumer reads (the reviewer's prompt of 2026-08-26
+          // named `falseClaims` only in prose, and did state it).
+          expect(body.includes(`"${key}"`) || body.includes(`${key}:`) || body.includes(`\`${key}\``),
             `${seam} requires "${key}" but the prompt that actually ran never mentions it. `
             + 'The prompt is the authority — fix the contract, not the agent.').toBe(true)
         }

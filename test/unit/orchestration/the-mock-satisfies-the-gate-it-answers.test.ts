@@ -270,3 +270,61 @@ ok, why = validate(sys.argv[1], sys.argv[2]); print('OK' if ok else 'NO ' + str(
     expect((r.stdout || '').trim(), r.stderr).toBe('OK');
   });
 });
+
+/**
+ * THE GUARD'S STAND-IN ARMS THE GUARD. The vocabulary seam's consumer refuses an empty blacklist
+ * ("a guard with no vocabulary checks nothing") and aborts the spec pass; its tool schema declared
+ * no minimum, so the stand-in built from that schema answered `blacklist: []` and the £0 greenfield
+ * harness died at the first story (run 19, 2026-09-14). The contract states the minimum the
+ * consumer enforces; the stand-in is read from the contract; the consumer is the judge.
+ */
+describe('the vocabulary stand-in arms the guard that consumes it', () => {
+  const schema = require('../../../orchestrations/scripts/lib/agent-output-schema.js');
+  const guard = require('../../../orchestrations/scripts/lib/guard-vocabulary.js');
+  // The seam is the one whose contract is bound to the guard tool — never named here.
+  const contracts = schema.declaredContracts() as Record<string, any>;
+  const seams = Object.entries(contracts)
+    .filter(([, c]) => c.kind === 'schema' && c.tag && schema.itemSchemaFor(c.tag) === guard.TOOL_GUARD_VOCABULARY.parameters)
+    .map(([s]) => s);
+  it('exactly one seam is bound to the guard vocabulary tool', () => { expect(seams).toHaveLength(1); });
+  it('the tool declares the minimum its consumer enforces', () => {
+    expect(guard.TOOL_GUARD_VOCABULARY.parameters.properties.blacklist.minItems).toBeGreaterThanOrEqual(1);
+  });
+  it.each(seams)('%s: the stand-in is usable by isVocabularyUsable after normalisation', (seam) => {
+    const standIn = mock.contractStandIn(seam);
+    expect(standIn).toBeTruthy();
+    const v = guard.normaliseVocabulary(standIn);
+    expect(guard.isVocabularyUsable(v), JSON.stringify(standIn)).toBe(true);
+  });
+});
+
+/**
+ * THE PROMPT REVIEWER READS THE STAND-IN AS A REVIEW THAT RAN. The reviewer reads its verdict out
+ * of a `<PROMPT_REVIEW>` block (lib/prompt-review.js) and installs the prompt UNREVIEWED when the
+ * block is absent; the contract said "verdict", the stand-in was bare JSON, and every prompt of
+ * the £0 greenfield harness was installed unreviewed (run 19, 2026-09-14) — a gate failing open
+ * behind a stand-in. The contract now declares the tag the consumer reads; the mock delivers every
+ * tagged contract as its tag; the consumer is the judge.
+ */
+describe('the prompt reviewer reads the stand-in as a review that ran', () => {
+  const { makePromptReviewer } = require('../../../orchestrations/scripts/lib/prompt-review.js');
+  const schema = require('../../../orchestrations/scripts/lib/agent-output-schema.js');
+  // The seam is the one whose prompt the reviewer renders — its own id, read from the library.
+  const seam = 'prompt-review';
+  it('the contract declares the tag the reviewer reads', () => {
+    const c = (schema.declaredContracts() as Record<string, any>)[seam];
+    expect(c && c.tag, JSON.stringify(c)).toBeTruthy();
+  });
+  it('the delivered stand-in is a review that RAN, not UNREVIEWED', async () => {
+    const text = mock.standInReplyText(seam);
+    expect(text, 'no stand-in text for the reviewer').toBeTruthy();
+    const warnings: string[] = [];
+    const review = makePromptReviewer({
+      render: () => 'REVIEW', invoke: async () => text, values: () => ({}),
+      warn: (m: string) => warnings.push(m), projectConfigDir: '/proj',
+    });
+    const out = await review({ id: 'x', template: { body: 'g' }, generated: { body: 's' } });
+    expect(out.ok).toBe(true);
+    expect(warnings.join('\n')).not.toMatch(/UNREVIEWED/);
+  });
+});

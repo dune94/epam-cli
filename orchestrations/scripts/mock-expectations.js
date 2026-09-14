@@ -880,7 +880,7 @@ module.exports = {
   captureIsOwned,
   sse, sseToolCalls, anthropicSse, anthropicSseToolCalls,
   // Exported so a test can put the stand-in through the CONSUMER'S OWN GATE, without a run.
-  contractStandIn, expectsARole, standInRoleName, isStandInBody,
+  contractStandIn, standInReplyText, expectsARole, standInRoleName, isStandInBody,
   // Exported so a test can drive the capture selection against a stub Langfuse.
   langfuseReply,
 };
@@ -993,6 +993,25 @@ function isStandInBody(body) {
   // THE ONE TELL EVERY STAND-IN CARRIES: its text begins with the mark below, whichever shape it
   // took (a note, a reply sentence, a minted name). The generators and this reader share the mark.
   return new RegExp(`(^|["'\\s:(])${STAND_IN_MARK}[ -]`, 'i').test(b);
+}
+
+/**
+ * THE TEXT THE MOCK SERVES FOR A STAND-IN. A contract that declares the tag its consumer reads
+ * gets the stand-in inside that tag — tool-bound or not: the prompt reviewer reads a
+ * `<PROMPT_REVIEW>` block that no tool defines, and a bare JSON answer left every prompt installed
+ * UNREVIEWED (£0 greenfield harness run 19, 2026-09-14). Untagged contracts are served as JSON.
+ */
+function standInReplyText(seam, stood) {
+  const s = stood === undefined ? contractStandIn(seam) : stood;
+  if (s === null || s === undefined) return null;
+  let tag = '';
+  try {
+    // eslint-disable-next-line global-require
+    const { declaredContracts: dc } = require('./lib/agent-output-schema.js');
+    const c = dc()[seam];
+    tag = (c && c.tag) || '';
+  } catch { tag = ''; }
+  return tag ? `<${tag}>\n${JSON.stringify(s, null, 2)}\n</${tag}>` : JSON.stringify(s);
 }
 
 function contractStandIn(seam) {
@@ -1802,6 +1821,8 @@ function endsInToolCall(cap, seam) {
           standTagged = `<${c.tag}>\n${JSON.stringify(argv, null, 2)}\n</${c.tag}>`;
         }
       } catch { standCall = null; }
+      // Every tagged contract is delivered inside its tag, tool-bound or not (see standInReplyText).
+      if (!standTagged) { const _t = standInReplyText(seam, stood); if (_t && _t !== JSON.stringify(stood)) standTagged = _t; }
     }
     // A STORY-SPECIFIC CAPTURE IS MATCHED THE SAME WAY A STORY-SPECIFIC STAND-IN IS.
     //

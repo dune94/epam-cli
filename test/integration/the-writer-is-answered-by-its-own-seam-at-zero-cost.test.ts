@@ -281,8 +281,8 @@ describe("the writer's per-story answers are registered whatever the generic key
  * ticket asks for a change to an existing file (and "its test"); the ecosystem's generic stand-in
  * content replaced the seed module with an empty one, the seed's own test then failed on every
  * attempt, and the story never completed (£0 brownfield harness run 11, 2026-09-14). A model reads
- * the ticket and writes the fix; the rehearsal project declares that fix as data — a `stand-in/`
- * tree beside its `seed/`, mirroring the codeline — and the writer lands EVERY file in it, the
+ * the ticket and writes the fix; the rehearsal project declares that fix as data — a
+ * `stand-in/<writer seam>/` tree beside its `seed/`, mirroring the codeline — and the writer lands EVERY file in it, the
  * ones the story names and the ones the ticket only implies, over the ecosystem's generic content.
  */
 describe("the writer delivers the project's declared stand-in fix, not the ecosystem's generic content", () => {
@@ -304,8 +304,8 @@ describe("the writer delivers the project's declared stand-in fix, not the ecosy
     // and one the ticket only implies (its test), both under a tree mirroring the codeline.
     const base = anyProject(); const project = join(ws, 'project'); cp(base.dir, project, { recursive: true, filter: (p: string) => !/\/runs(\/|$)/.test(p) });
     fixed = `after the fix, as the project declares it ${Date.now()}\n`; extra = `the implied file ${Date.now()}\n`;
-    md(join(project, 'stand-in', 'src'), { recursive: true });
-    wf(join(project, 'stand-in', src), fixed); wf(join(project, 'stand-in', `src/implied${ext}`), extra);
+    md(join(project, 'stand-in', WRITER, 'src'), { recursive: true });
+    wf(join(project, 'stand-in', WRITER, src), fixed); wf(join(project, 'stand-in', WRITER, `src/implied${ext}`), extra);
     const prd = join(ws, 'synthesized-prd.json');
     wf(prd, JSON.stringify({ project: { name: 'bf' }, stories: [{ id: storyId, codeline: 'codeline', title: 'a defect in the module', technicalNotes: { files: [src] } }] }));
     await new Promise<void>((resolve, reject) => {

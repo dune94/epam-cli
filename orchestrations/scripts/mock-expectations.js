@@ -203,7 +203,7 @@ function writerStoryLineFrames() {
  * through the write tool the active set declares for its runner. Nothing here knows a language, a
  * tool name or a path: the story names the files, the ecosystem the content, the set the tool.
  */
-function writerStandInCalls(story) {
+function writerStandInCalls(story, seam) {
   // THE STORY'S OWN CODELINE: on a brownfield estate the story names its codeline and the estate
   // (JIRA_CODELINE_ROOT) holds that repository; a greenfield project has one output directory.
   // Reading only OUTPUT_DIR meant the brownfield rehearsal's writer could land nothing — eight
@@ -252,7 +252,7 @@ function writerStandInCalls(story) {
   // estate) — and every file in it is delivered, named by the story or only implied by it. The
   // Each call says whether the story DECLARES its file: the first attempts' deliberate shortfall
   // (below) lands the declared files and omits the implied ones.
-  const fix = declaredFix(story);
+  const fix = declaredFix(story, seam);
   const files = fix ? [...fix.files.filter((f) => declared.includes(f)), ...fix.files.filter((f) => !declared.includes(f))] : declared;
   if (!files.length) return null;
   return files.map((f) => {
@@ -262,28 +262,35 @@ function writerStandInCalls(story) {
     // A stand-in is a string, or a function of the file's path where the content must agree with
     // the path (a Java class is named by its file, a package by its directory).
     const body = (v) => (typeof v === 'function' ? v(f) : v) || content;
-    if (fix && fix.files.includes(f)) content = fs.readFileSync(path.join(fix.root, f), 'utf8') || content;
-    else if (path.basename(f) === eco.file) content = body(eco.standIn.manifest);
+    if (path.basename(f) === eco.file) content = body(eco.standIn.manifest);
     else if (testRe && testRe.test(f)) content = body(eco.standIn.test);
     else if (srcExt.some((x) => f.endsWith(x))) content = body(eco.standIn.source);
+    // THE ECOSYSTEM'S GENERIC CONTENT IS WHAT A WRONG ATTEMPT WRITES: where the project declares
+    // the fix, the generic content stands in for a first attempt that lands the right file with
+    // the wrong change — the codeline's own tests refuse it and the failure analyst is asked why.
+    const wrong = content;
+    if (fix && fix.files.includes(f)) content = fs.readFileSync(path.join(fix.root, f), 'utf8') || content;
     // A FILE THAT EXISTS IS READ FIRST. The runner's write tool refuses a file the session has not
     // read ("File has not been read yet. Read it first before writing to it."): the brownfield
     // rehearsal's write turn was served and rejected on every attempt, and the deliverable stayed
     // unchanged (£0 brownfield harness run 10, 2026-09-14). A brownfield story's files exist by
     // definition; each is read through the set's declared read tool before it is written.
     const read = readTool && readTool.name && fs.existsSync(abs) ? { name: readTool.name, input: { [readTool.path]: abs } } : null;
-    return { name: tool.name, input: { [tool.path]: abs, [tool.content]: content }, read, declared: declared.includes(f) };
+    return { name: tool.name, input: { [tool.path]: abs, [tool.content]: content }, read, declared: declared.includes(f), wrong: fix && fix.files.includes(f) ? { name: tool.name, input: { [tool.path]: abs, [tool.content]: wrong } } : null };
   });
 }
 /**
- * The fix a rehearsal project declares for a story: its `stand-in/` tree (per codeline when the
- * story's codeline has a directory of its own there), as { root, files: [relative paths] }.
+ * The files a rehearsal project declares a seam delivers for a story: its `stand-in/<seam>/` tree
+ * (per codeline when the story's codeline has a directory of its own there), as
+ * { root, files: [relative paths] }.
  * Null when the project declares none — the ecosystem's generic stand-in content then applies.
  */
-function declaredFix(story) {
+function declaredFix(story, seam) {
   const project = process.env.EPAM_PROJECT_CONFIG_DIR || '';
-  if (!project) return null;
-  const base = path.join(project, 'stand-in');
+  if (!project || !seam) return null;
+  // PER SEAM: `stand-in/<seam>/` — the writer's fix and, say, the repro-test writer's test are
+  // different deliverables of the same story, landed by different seams.
+  const base = path.join(project, 'stand-in', String(seam));
   const perCodeline = story && story.codeline ? path.join(base, String(story.codeline)) : '';
   const root = perCodeline && fs.existsSync(perCodeline) ? perCodeline : base;
   if (!fs.existsSync(root) || !fs.statSync(root).isDirectory()) return null;
@@ -296,6 +303,39 @@ function declaredFix(story) {
   };
   walk(root);
   return files.length ? { root, files: files.sort() } : null;
+}
+/**
+ * THE FILES A SEAM DELIVERS, for a seam the registry grants writes (toolGrant: write) and the
+ * project declares a tree for (`stand-in/<seam>/`): write calls through the set's declared tool,
+ * each preceded by a read where the file exists, rooted in the first story's codeline (the estate
+ * repository named by the story, else the output dir). Null where nothing is declared.
+ */
+function seamDelivery(seam) {
+  let grant = '';
+  try { grant = String((JSON.parse(fs.readFileSync(REG, 'utf8')).profiles || {})[seam].toolGrant || ''); } catch { grant = ''; }
+  if (grant !== 'write') return null;
+  const story = projectStories()[0];
+  if (!story) return null;
+  const fix = declaredFix(story, seam);
+  if (!fix) return null;
+  const estate = estateRepos().find((r) => r.name === String(story.codeline || ''));
+  const root = (estate && estate.path) || process.env.OUTPUT_DIR || process.env.PROJECT_ROOT || '';
+  if (!root) return null;
+  let tool = null; let readTool = null;
+  try {
+    // eslint-disable-next-line global-require
+    const r = require('./lib/llm-settings-resolve.js');
+    for (const name of r.declaredRunners({ projectConfigDir: process.env.EPAM_PROJECT_CONFIG_DIR })) {
+      const decl = r.resolveRunner(name, { projectConfigDir: process.env.EPAM_PROJECT_CONFIG_DIR });
+      if (decl && decl.writeTool && decl.writeTool.name) { tool = decl.writeTool; readTool = decl.readTool; break; }
+    }
+  } catch { tool = null; }
+  if (!tool) return null;
+  return fix.files.map((f) => {
+    const abs = path.join(root, f);
+    const read = readTool && readTool.name && fs.existsSync(abs) ? { name: readTool.name, input: { [readTool.path]: abs } } : null;
+    return { name: tool.name, input: { [tool.path]: abs, [tool.content]: fs.readFileSync(path.join(fix.root, f), 'utf8') }, read };
+  });
 }
 /** The word every stand-in is marked with — generated and recognised with this one constant. */
 const STAND_IN_MARK = 'stand-in';
@@ -2038,7 +2078,7 @@ function endsInToolCall(cap, seam) {
       let _wrote = 0;
       for (const st of projectStories()) {
         const _story = (() => { try { return (JSON.parse(fs.readFileSync(process.env.PRD_FILE, 'utf8')).stories || []).find((x) => x && x.id === st.id) || st; } catch { return st; } })();
-        const calls = writerStandInCalls(_story);
+        const calls = writerStandInCalls(_story, seam);
         if (!calls) continue;
         // THE WRITER'S OWN LINE FOR THIS STORY, not a title: a story's title appears in other
         // prompts too (the roster review lists the tickets), and the seam's registry fingerprint
@@ -2068,9 +2108,13 @@ function endsInToolCall(cap, seam) {
         // the pipeline resolves deterministically (ladder, worktree reset) without ever consulting
         // the analyst (£0 brownfield harness run 12, 2026-09-14). With no implied files, the
         // shortfall is the last declared one, so the deliverable check refuses.
+        // With nothing implied to omit, a declared fix falls short by being WRONG: the named
+        // files land with the ecosystem's generic content, which the codeline's tests refuse.
         const _named = calls.filter((c) => c.declared);
-        const _short = _named.length && _named.length < calls.length ? _named : calls.slice(0, -1);
-        const _turns = calls.length > 1 ? [_short, _short, calls] : [calls];
+        const _wrongOnes = calls.filter((c) => c.wrong);
+        const _short = _named.length && _named.length < calls.length ? _named
+          : (_wrongOnes.length ? calls.map((c) => (c.wrong ? { ...c.wrong, read: c.read } : c)) : calls.slice(0, -1));
+        const _turns = calls.length > 1 || _wrongOnes.length ? [_short, _short, calls] : [calls];
         for (const proto of PROTOCOLS) {
           const _match = { type: 'REGEX', regex: `(?s)(?=.*(?:${_lines.map((l) => rx(wireForm(l))).join('|')})).*` };
           const _hdr = { 'content-type': ['text/event-stream; charset=utf-8'], 'x-seam': [`${seam}:${st.id}`] };
@@ -2091,7 +2135,7 @@ function endsInToolCall(cap, seam) {
             await put('/mockserver/expectation', {
               priority: 55, times: { remainingTimes: 1, unlimited: false },
               httpRequest: { method: 'POST', path: proto.path, body: _match },
-              httpResponse: { statusCode: 200, headers: _hdr, body: proto.calls(turn.map(({ read, declared: _d, ...c }) => c)) },
+              httpResponse: { statusCode: 200, headers: _hdr, body: proto.calls(turn.map(({ read, declared: _d, wrong: _w, ...c }) => c)) },
             });
             // eslint-disable-next-line no-await-in-loop
             await put('/mockserver/expectation', {
@@ -2443,6 +2487,26 @@ function endsInToolCall(cap, seam) {
             body: proto.calls([standCall]) },
         });
       }
+    } else if (!cap && !alias && seamDelivery(seam)) {
+      // A SEAM THE REGISTRY GRANTS WRITES, WITH FILES THE PROJECT DECLARES IT DELIVERS
+      // (`stand-in/<seam>/`): read the ones that exist, write them all, then the text below —
+      // the repro-test writer's reproducing test, for one. A note in prose lands no file, and
+      // the gate that needs the file blocks (£0 brownfield harness run 14, 2026-09-14).
+      const _d = seamDelivery(seam);
+      const _reads = _d.filter((c) => c.read).map((c) => c.read);
+      for (const proto of PROTOCOLS) {
+        for (const turn of (_reads.length ? [_reads, _d] : [_d])) {
+          // Below the deliberate first failure (34/36), above the plain answer (30): a seam whose
+          // failed attempts reach the analyst fails first, delivers second, answers last.
+          await put('/mockserver/expectation', {
+            priority: 33 + _tagRank, times: { remainingTimes: 1, unlimited: false },
+            httpRequest: { method: 'POST', path: proto.path, body: bodyMatch },
+            httpResponse: { statusCode: 200, headers: { 'content-type': ['text/event-stream; charset=utf-8'], 'x-seam': [`${seam}:delivers`] },
+              body: proto.calls(turn.map(({ read, ...c }) => c)) },
+          });
+        }
+      }
+      onPurpose.push(`${seam}  <- ${STAND_IN_MARK} delivers the ${_d.length} file(s) the project declares for it (stand-in/${seam}/), read-then-write`);
     } else if (cap && cap.calls && cap.calls.length) {
       // TURN ONE: the calls, consumed once. MockServer serves expectations for the same matcher in
       // order, so the client executes the tools, comes back, and gets the answer below.

@@ -212,7 +212,15 @@ JSON
 
 if [ -n "$RESUME_ID" ]; then
   [ -d "$CLONE" ] || { echo "[mock1-paused] no workspace for run '$ORCH_RUN_ID' — cannot resume" >&2; exit 1; }
-  [ -d "$RUN_DIR/checkpoint" ] || { echo "[mock1-paused] no checkpoint for run '$ORCH_RUN_ID'" >&2; exit 1; }
+  # WHETHER THE RUN LEFT A CHECKPOINT IS THE CHECKPOINT LIBRARY'S QUESTION. The orchestrator saves a
+  # lane's checkpoint under runs/<id>/lanes/<codeline>/checkpoint since lanes came in; this looked
+  # only at runs/<id>/checkpoint, so every paused rehearsal refused to resume with "no checkpoint"
+  # while its checkpoint sat one directory down (£0 brownfield harness run 4, 2026-09-14).
+  # shellcheck source=lib/run-checkpoint.sh
+  . "$SCRIPT_DIR/lib/run-checkpoint.sh"
+  if [ -z "$(EPAM_PROJECT_CONFIG_DIR="$PROJECT_CONFIG_DIR" run_stage "$ORCH_RUN_ID" 2>/dev/null)" ]; then
+    echo "[mock1-paused] no checkpoint for run '$ORCH_RUN_ID' (none under $RUN_DIR/checkpoint or $RUN_DIR/lanes/*/checkpoint)" >&2; exit 1
+  fi
   echo "[mock1-paused] reusing the workspace this run paused against"
 else
   [ -e "$WORKSPACE" ] && { echo "[mock1-paused] workspace already exists for '$ORCH_RUN_ID'" >&2; exit 1; }

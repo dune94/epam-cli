@@ -42,6 +42,20 @@ services:
       # A recorder accumulates. These are what stop a day of rehearsals becoming a leak.
       MOCKSERVER_MAX_EXPECTATIONS: "2000"
       MOCKSERVER_MAX_LOG_ENTRIES: "250"
+      # At its default INFO level MockServer writes, for EVERY expectation a request fails to
+      # match, the whole request: 536 expectations × a 157KB prompt = 84MB of log per call. Run 18
+      # of the £0 greenfield harness (2026-09-14) produced 1.5GB of stdout in an hour and the JVM's
+      # log ring buffer ran out of heap 40 seconds in; every call after that hung or fell to the
+      # catch-all. WARN keeps the recorded request/response log (retrieval verified at WARN) and
+      # drops the per-expectation narration that was the leak.
+      MOCKSERVER_LOG_LEVEL: "WARN"
+    # The container log is capped for the same reason: what the JVM does write must not fill
+    # the disk over a day of rehearsals.
+    logging:
+      driver: json-file
+      options:
+        max-size: "20m"
+        max-file: "3"
     ports:
       - "1080:1080"
     restart: "no"

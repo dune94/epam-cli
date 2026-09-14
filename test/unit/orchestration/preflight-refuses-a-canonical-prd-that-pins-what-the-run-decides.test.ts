@@ -25,7 +25,7 @@ const SRC = readFileSync(join(SCRIPTS, 'preflight-check.sh'), 'utf8');
 const dirs: string[] = [];
 afterAll(() => { for (const d of dirs) rmSync(d, { recursive: true, force: true }); });
 
-function prdFileBlock(prd: object, canonical: boolean) {
+function prdFileBlock(prd: object, canonical: boolean, resumeRun = '') {
   const start = SRC.indexOf('# ── 4. PRD file valid JSON');
   const end = SRC.indexOf('# ── 4. Required API keys', start);
   expect(start).toBeGreaterThan(-1); expect(end).toBeGreaterThan(start);
@@ -38,7 +38,7 @@ PASS=0; FAIL=0
 ok(){ echo "OK: $*"; PASS=$((PASS+1)); }; fail(){ echo "FAIL: $*"; FAIL=$((FAIL+1)); }
 ${SRC.slice(start, end)}
 echo "FAILS=$FAIL"`;
-  const r = spawnSync('bash', ['-c', script], { encoding: 'utf8', timeout: 30_000, env: { PATH: process.env.PATH!, HOME: process.env.HOME! } });
+  const r = spawnSync('bash', ['-c', script], { encoding: 'utf8', timeout: 30_000, env: { PATH: process.env.PATH!, HOME: process.env.HOME!, ...(resumeRun ? { EPAM_RESUME_RUN: resumeRun } : {}) } });
   const out = (r.stdout || '') + (r.stderr || '');
   return { out, fails: Number((out.match(/FAILS=(\d+)/) || [])[1]) };
 }
@@ -70,5 +70,14 @@ describe('pre-flight refuses a canonical PRD that pins what the run decides', ()
     const prd = structuredClone(base); Object.assign(prd.stories[0] as any, { agentRole: 'x', model: 'm', aiProvider: 'v' });
     const r = prdFileBlock(prd, false);
     expect(r.out).not.toMatch(/pins/);
+  });
+  it('A RESUME IS NOT JUDGED BY THIS CHECK, whatever the canonical test says of its PRD — the assignments are the run\'s own', () => {
+    // The brownfield rehearsal's synthesised PRD has no split story, so prd-is-canonical calls it
+    // canonical on resume; the pin refusal then aborted every resume on the run\'s own assignments
+    // (£0 brownfield harness run 5, 2026-09-14).
+    const prd = structuredClone(base); Object.assign(prd.stories[0] as any, { agentRole: 'x', model: 'm', aiProvider: 'v' });
+    const r = prdFileBlock(prd, true, '20260914T000000Z');
+    expect(r.out).not.toMatch(/pins/);
+    expect(r.fails).toBe(0);
   });
 });

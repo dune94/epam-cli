@@ -288,7 +288,15 @@ else
 
   # Story field checks — a canonical PRD is judged on what it must NOT carry; an elaborated one on
   # what it must.
-  if [[ "$_prd_is_canonical" == "true" ]]; then
+  #
+  # A RESUME IS JUDGED BY NEITHER. Its PRD is the run's own working copy, restored from the
+  # checkpoint, and carries the run's own assignments; a story that was never split carries no
+  # specification.createdFrom, so prd-is-canonical calls that copy canonical and the pin refusal
+  # aborted every resume of the brownfield rehearsal on the assigner's own agentRole, the ladder's
+  # own model and the set's own aiProvider (£0 brownfield harness run 5, 2026-09-14).
+  if [[ -n "${EPAM_RESUME_RUN:-}" ]]; then
+    ok "resuming run ${EPAM_RESUME_RUN}: the PRD is the run's own working copy — the authored-PRD checks do not apply"
+  elif [[ "$_prd_is_canonical" == "true" ]]; then
     # A CANONICAL PRD PINS NOTHING THE RUN DECIDES. A story's agent is the assigner's decision, its
     # model the ladder's, its provider the set's. Authored with any of them, the PRD bypasses that
     # stage and the mint refuses MID-RUN — "assigned python-engineer, which is not in the roster" —

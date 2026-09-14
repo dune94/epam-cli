@@ -249,3 +249,24 @@ describe('the specialiser stand-in adds the minted agents and the engine accepts
     } finally { if (prev === undefined) delete process.env.EPAM_PROJECT_CONFIG_DIR; else process.env.EPAM_PROJECT_CONFIG_DIR = prev; }
   });
 });
+
+/**
+ * AN UNTAGGED VERDICT STAND-IN PASSES THE GATE VERDICT SCHEMA — the validator the contract names
+ * for that kind (lib/gate_verdict_schema.py). Every QA gate refused the bare {verdict, findings}
+ * for want of a summary, twice, and the testing gates failed (£0 greenfield harness, 2026-09-13).
+ */
+describe('an untagged verdict stand-in passes the gate verdict schema', () => {
+  const schema = require('../../../orchestrations/scripts/lib/agent-output-schema.js');
+  const { spawnSync } = require('node:child_process');
+  const contracts = schema.declaredContracts() as Record<string, any>;
+  const untagged = Object.entries(contracts).filter(([, c]) => c.kind === 'verdict' && !c.tag).map(([s]) => s);
+  it('there are untagged verdict seams to check', () => { expect(untagged.length).toBeGreaterThan(0); });
+  it.each(untagged)('%s: the stand-in is accepted by gate_verdict_schema.validate', (seam) => {
+    const standIn = mock.contractStandIn(seam);
+    const r = spawnSync('python3', ['-c', `
+import sys, json; sys.path.insert(0, ${JSON.stringify(path.join(ROOT, 'orchestrations/scripts/lib'))})
+from gate_verdict_schema import validate
+ok, why = validate(sys.argv[1], sys.argv[2]); print('OK' if ok else 'NO ' + str(why))`, seam, JSON.stringify(standIn)], { encoding: 'utf8' });
+    expect((r.stdout || '').trim(), r.stderr).toBe('OK');
+  });
+});

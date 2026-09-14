@@ -1130,7 +1130,10 @@ function contractStandIn(seam) {
         if (Array.isArray(v && v.enum) && v.enum.length) return { verdict: v.enum[0], findings: [] };
       } catch { /* fall through to the plain answer */ }
     }
-    return { verdict: 'pass', findings: [] };
+    // The untagged shape is judged by lib/gate_verdict_schema.py, which refuses a verdict that
+    // carries neither a per-item breakdown nor a summary — every QA gate rejected the bare
+    // {verdict, findings} twice and the testing gates failed (£0 greenfield harness, 2026-09-13).
+    return { verdict: 'pass', summary: `${STAND_IN_MARK} verdict for ${seam}: nothing was examined, the join is what is rehearsed`, findings: [] };
   }
   if (c.kind === 'artefact') return { note: `${STAND_IN_MARK} artefact for ${seam}` };
   // A seam that declares NO contract is satisfied by any JSON object — so it gets one, rather than

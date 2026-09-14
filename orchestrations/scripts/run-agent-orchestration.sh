@@ -1515,14 +1515,25 @@ _lint_fix_findings_directly() {
 # _run_qa_gate_with_retry now lives in lib/gate-verdicts.sh, beside the verdict rules it feeds,
 # so a gate becoming a decision can be executed by a test. Sourced above with that file.
 
+# Kill a process and every descendant, leaves first. `pkill -P` reaches only direct children:
+# `npx @11ty/eleventy` runs eleventy as ITS child, so killing npx's children and npx left eleventy
+# alive after every run — five of them, 4GB resident, measured 2026-09-14 after five finished
+# harness runs (one of which exited 0).
+_epam_kill_tree() {
+    local _pid="$1" _child
+    for _child in $(pgrep -P "$_pid" 2>/dev/null); do
+        _epam_kill_tree "$_child"
+    done
+    kill "$_pid" 2>/dev/null || true
+}
+
 stop_dashboards_watch() {
     if [ "$DASHBOARD_WATCH_OWNED" != "true" ] || [ -z "$DASHBOARD_WATCH_PID" ]; then
         return
     fi
     if ps -p "$DASHBOARD_WATCH_PID" > /dev/null 2>&1; then
         info "Stopping dashboards watcher (PID $DASHBOARD_WATCH_PID)..."
-        pkill -P "$DASHBOARD_WATCH_PID" 2>/dev/null || true
-        kill "$DASHBOARD_WATCH_PID" 2>/dev/null || true
+        _epam_kill_tree "$DASHBOARD_WATCH_PID"
         wait "$DASHBOARD_WATCH_PID" 2>/dev/null || true
     fi
     rm -f "$DASHBOARD_WATCH_PID_FILE"

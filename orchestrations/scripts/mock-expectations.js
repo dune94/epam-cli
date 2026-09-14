@@ -250,10 +250,10 @@ function writerStandInCalls(story) {
   // ticket and writes the fix; a rehearsal project declares it as DATA — a `stand-in/` tree
   // beside its `seed/` mirroring the codeline (`stand-in/<codeline>/` on a multi-codeline
   // estate) — and every file in it is delivered, named by the story or only implied by it. The
-  // story's own deliverables are written last, so the first attempts' deliberate shortfall
-  // (below) still trips the deliverable check.
+  // Each call says whether the story DECLARES its file: the first attempts' deliberate shortfall
+  // (below) lands the declared files and omits the implied ones.
   const fix = declaredFix(story);
-  const files = fix ? [...fix.files.filter((f) => !declared.includes(f)), ...fix.files.filter((f) => declared.includes(f))] : declared;
+  const files = fix ? [...fix.files.filter((f) => declared.includes(f)), ...fix.files.filter((f) => !declared.includes(f))] : declared;
   if (!files.length) return null;
   return files.map((f) => {
     const abs = path.isAbsolute(f) ? f : path.join(root, f);
@@ -272,7 +272,7 @@ function writerStandInCalls(story) {
     // unchanged (£0 brownfield harness run 10, 2026-09-14). A brownfield story's files exist by
     // definition; each is read through the set's declared read tool before it is written.
     const read = readTool && readTool.name && fs.existsSync(abs) ? { name: readTool.name, input: { [readTool.path]: abs } } : null;
-    return { name: tool.name, input: { [tool.path]: abs, [tool.content]: content }, read };
+    return { name: tool.name, input: { [tool.path]: abs, [tool.content]: content }, read, declared: declared.includes(f) };
   });
 }
 /**
@@ -1497,7 +1497,17 @@ function contractStandIn(seam, override) {
     // role-assigner returns an assignment for every story; a stand-in emitting a single item left
     // the rest unassigned, and the run halted with "unassigned after the agent's full retry budget"
     // — a stand-in that answers for one story is not an answer for the others.
-    const perStory = (schema.required || []).some((k) => /^storyid$/i.test(k));
+    // NOT WHERE THE PAYLOAD IS ONE OBJECT (SPEC_AGENT: asked once per story, answered with the
+    // story's own spec). Expanded to a list, the runner read an array where it expected an
+    // object, found no verification criteria in it, and persisted none (£0 brownfield harness
+    // run 12, 2026-09-14). The per-story registrations carry the story; the generic answer is one.
+    let payloadIsObject = false;
+    try {
+      // eslint-disable-next-line global-require
+      const { TAG_TO_TOOL } = require('./lib/agent-output-schema.js');
+      payloadIsObject = !!(TAG_TO_TOOL[c.tag] && TAG_TO_TOOL[c.tag].itemsKey === null);
+    } catch { payloadIsObject = false; }
+    const perStory = !payloadIsObject && (schema.required || []).some((k) => /^storyid$/i.test(k));
     if (perStory) {
       const stories = projectStories();
       if (stories.length) return stories.map((st, i) => mk(st, i));
@@ -2051,7 +2061,16 @@ function endsInToolCall(cap, seam) {
         // check refuses, the same violation repeats, the analyst is asked why, and the ladder
         // climbs; the next attempt lands them all. Two short attempts: the check invokes the
         // analyst only on a REPEATED violation.
-        const _turns = calls.length > 1 ? [calls.slice(0, -1), calls.slice(0, -1), calls] : [calls];
+        // WHAT THE SHORTFALL OMITS. Where the project declares the fix, the first attempts land
+        // every file the story NAMES and none the ticket only implies (its test): the deliverable
+        // check passes, the codeline's own tests fail, and the failure analyst is asked why — the
+        // path a live run climbs. Omitting a declared file instead left it UNCHANGED, a rejection
+        // the pipeline resolves deterministically (ladder, worktree reset) without ever consulting
+        // the analyst (£0 brownfield harness run 12, 2026-09-14). With no implied files, the
+        // shortfall is the last declared one, so the deliverable check refuses.
+        const _named = calls.filter((c) => c.declared);
+        const _short = _named.length && _named.length < calls.length ? _named : calls.slice(0, -1);
+        const _turns = calls.length > 1 ? [_short, _short, calls] : [calls];
         for (const proto of PROTOCOLS) {
           const _match = { type: 'REGEX', regex: `(?s)(?=.*(?:${_lines.map((l) => rx(wireForm(l))).join('|')})).*` };
           const _hdr = { 'content-type': ['text/event-stream; charset=utf-8'], 'x-seam': [`${seam}:${st.id}`] };
@@ -2072,7 +2091,7 @@ function endsInToolCall(cap, seam) {
             await put('/mockserver/expectation', {
               priority: 55, times: { remainingTimes: 1, unlimited: false },
               httpRequest: { method: 'POST', path: proto.path, body: _match },
-              httpResponse: { statusCode: 200, headers: _hdr, body: proto.calls(turn.map(({ read, ...c }) => c)) },
+              httpResponse: { statusCode: 200, headers: _hdr, body: proto.calls(turn.map(({ read, declared: _d, ...c }) => c)) },
             });
             // eslint-disable-next-line no-await-in-loop
             await put('/mockserver/expectation', {

@@ -755,6 +755,15 @@ function specAgentContract() {
 
   c.parameters.required = (c.parameters.required || []).filter((f) => !AC_ONLY_FIELDS.includes(f));
   for (const f of AC_ONLY_FIELDS) delete c.parameters.properties[f];
+  // AND DEMANDS WHAT BROWNFIELD USES. With ACs out of scope the verification criteria ARE the
+  // spec agent's deliverable — the guard, vc-coverage, the repro-test writer and the e2e route
+  // all read them. Optional, a spec pass that declared none passed silently and every one of
+  // those gates then reported "no verification criteria — skipping" (£0 brownfield harness run
+  // 12, 2026-09-14): a story judged against nothing. At least one, or the answer is not a spec.
+  if (c.parameters.properties.verificationCriteriaDetail) {
+    if (!c.parameters.required.includes('verificationCriteriaDetail')) c.parameters.required.push('verificationCriteriaDetail');
+    c.parameters.properties.verificationCriteriaDetail.minItems = 1;
+  }
 
   // splitStories carries its own nested acceptanceCriteria with minItems 1 — the same demand,
   // one level down, and just as discarded.

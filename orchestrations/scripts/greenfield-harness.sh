@@ -214,8 +214,12 @@ if [ -d "$PROJECT_DIR/seed" ]; then
 else
   CODELINE="$DEST/build"; PRD_FILE_ABS="$DEST/$PRD_FILE"
 fi
+# A PHASE IS COMPLETE WHEN ITS GATE SAID GO — the pipeline's own record (check-phase-gate.sh →
+# logs/phase-gates.jsonl), written by every launcher. Grepping the greenfield lifecycle's log
+# phrase judged the brownfield lane loop, which prints another, as never completing (run 12).
 for p in $PHASES; do
-  grep -q "Phase '$p' completed" "$LOG"; check $? "phase '$p' completed"
+  "$NODE_BIN" -e 'const fs=require("fs");const [f,p]=process.argv.slice(1);let ok=false;try{for(const l of fs.readFileSync(f,"utf8").split("\n")){try{const j=JSON.parse(l);if(j.phase_id===p&&String(j.decision).toLowerCase()==="go")ok=true}catch{}}}catch{}process.exit(ok?0:1)' "$DEST/orchestrations/logs/phase-gates.jsonl" "$p"
+  check $? "phase '$p' completed (its gate decided GO)"
 done
 _commits="$(git -C "$CODELINE" rev-list --count HEAD 2>/dev/null || echo 0)"
 _rc=0; [ "${_commits:-0}" -gt 1 ] || _rc=1; check "$_rc" "codeline holds committed work ($_commits commits)"

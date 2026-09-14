@@ -37,9 +37,12 @@ describe('the harness judges the brownfield codeline by its own tests', () => {
     const rid = '20260914T000000Z';
     writeFileSync(join(dest, 'harness.log'), [
       `[harness] ref abc1234 · set mockserver · project ${name} · install ${dest} · ceiling $5`,
-      `RUN NUMBER: ${rid}`, 'STOPPED before the writer', 'resume finished (exit 0)', "Phase 'core' completed",
+      `RUN NUMBER: ${rid}`, 'STOPPED before the writer', 'resume finished (exit 0)',
       '[harness] run exited 0 · spend $0', '',
     ].join('\n'));
+    // The phase gate's own record: GO for the phase — what every launcher's orchestration writes.
+    mkdirSync(join(dest, 'orchestrations/logs'), { recursive: true });
+    writeFileSync(join(dest, 'orchestrations/logs/phase-gates.jsonl'), JSON.stringify({ phase_id: 'core', decision: 'go', decision_maker: 'check-phase-gate.sh' }) + '\n');
     // The codeline: two commits, a manifest whose ecosystem declares a test command that passes.
     const ws = join(dest, 'mock1-workspace', rid, 'workspace'); const codeline = join(ws, 'codelines', 'the-codeline');
     mkdirSync(codeline, { recursive: true });
@@ -53,5 +56,6 @@ describe('the harness judges the brownfield codeline by its own tests', () => {
     const out = `${r.stdout}\n${r.stderr}`;
     expect(out, 'the harness did not run the test command the codeline declares').toMatch(/✓ codeline tests green: npm test/);
     expect(out).not.toMatch(/the codeline's ecosystem declares a test command/);
+    expect(out, 'the phase is judged by its gate record, not a log phrase').toMatch(/✓ phase 'core' completed/);
   });
 });

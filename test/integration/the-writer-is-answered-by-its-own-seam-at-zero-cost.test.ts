@@ -332,12 +332,23 @@ describe("the writer delivers the project's declared stand-in fix, not the ecosy
     });
     const events = (sse: string) => sse.split('\n').filter((l) => l.startsWith('data: ')).map((l) => JSON.parse(l.slice(6)));
     const inputs = (sse: string) => events(sse).filter((e) => e.type === 'content_block_delta' && e.delta.type === 'input_json_delta').map((e) => JSON.parse(e.delta.partial_json));
-    // Drain the story's whole sequence (reads, writes, texts) and collect every write.
-    const writes: Record<string, string> = {};
+    // Drain the story's whole sequence (reads, writes, texts); collect every write, in turn order.
+    const writes: Record<string, string> = {}; const writeTurns: string[][] = [];
     for (let i = 0; i < 12; i += 1) {
       // eslint-disable-next-line no-await-in-loop
-      for (const inp of inputs(await askBody())) if (typeof inp.content === 'string') writes[inp.file_path || Object.values(inp).find((v: any) => typeof v === 'string' && v.startsWith('/'))] = inp.content;
+      const turn = inputs(await askBody()).filter((inp) => typeof inp.content === 'string');
+      if (turn.length) writeTurns.push(turn.map((inp) => inp.file_path || Object.values(inp).find((v: any) => typeof v === 'string' && v.startsWith('/'))));
+      for (const inp of turn) writes[inp.file_path || Object.values(inp).find((v: any) => typeof v === 'string' && v.startsWith('/'))] = inp.content;
     }
+    // THE FIRST ATTEMPTS LAND THE FIX WITHOUT WHAT IT IMPLIES. Dropping the declared file left it
+    // UNCHANGED, a rejection the pipeline handles deterministically (ladder, worktree reset) and
+    // never hands to the failure analyst (£0 brownfield harness run 12, 2026-09-14). Landing the
+    // named file and not its test is what a real writer does wrong: the deliverable check passes,
+    // the codeline's own tests fail, and the analyst is asked why — the path a live run climbs.
+    expect(writeTurns.length, 'fewer than two write turns — no first attempt to fall short').toBeGreaterThan(1);
+    expect(writeTurns[0].filter((p) => p.includes('/src/module')).length, 'the first attempt did not land the named file').toBe(1);
+    expect(writeTurns[0].some((p) => p.includes('/src/implied')), 'the first attempt landed the implied file too — nothing for the tests to catch').toBe(false);
+    expect(writeTurns[writeTurns.length - 1].some((p) => p.includes('/src/implied')), 'the last attempt still omits the implied file').toBe(true);
     const paths = Object.keys(writes);
     expect(paths.some((p) => p.endsWith('/src/module' + (paths[0] || '').slice(-3)) || p.includes('/src/module')), `the named file was not written: ${paths}`).toBe(true);
     const named = paths.find((p) => p.includes('/src/module'))!; const implied = paths.find((p) => p.includes('/src/implied'));

@@ -54,9 +54,10 @@ MOCK_JIRA_SERVER="$REPO_ROOT/test/fixtures/mock-pipeline/mock-jira-server.js"
 NODE_BIN="${NODE_BIN:-$HOME/.nvm/versions/node/v20.20.0/bin/node}"
 command -v "$NODE_BIN" >/dev/null 2>&1 || NODE_BIN="$(command -v node)"
 
-STORY_ID="MOCK-HW-1"
-SUMMARY="getGreeting should return hello dolly"
-DESCRIPTION="The getGreeting() function in this codebase currently returns the string 'hello world'. It should instead return 'hello dolly'. Update any test that asserts the old value to match the new one. The change is a one-line edit in src/hello.ts plus its test."
+# THE TICKET IS THE PROJECT'S. Three string constants here were a project fact inside the
+# pipeline, and a description with no link meant the ticket-links seam could never execute for
+# this project (£0 brownfield harness run 12, 2026-09-14). The project declares its tracker issues
+# — and the documents they link, which the stub tracker serves itself — in tracker-issues.json.
 
 source "$SCRIPT_DIR/lib/run-checkpoint.sh"
 export EPAM_PROJECT_CONFIG_DIR="$PROJECT_CONFIG_DIR"
@@ -231,7 +232,8 @@ JIRA_PORT=""
 JIRA_PID=""
 start_jira() {
   local out; out="$WORKSPACE/jira.out"
-  "$NODE_BIN" "$MOCK_JIRA_SERVER" "$STORY_ID" "$SUMMARY" "$DESCRIPTION" > "$out" 2>&1 &
+  [ -f "$PROJECT_CONFIG_DIR/tracker-issues.json" ] || { echo "[mock1-paused] the project declares no tracker issues at $PROJECT_CONFIG_DIR/tracker-issues.json" >&2; return 1; }
+  "$NODE_BIN" "$MOCK_JIRA_SERVER" --issues "$PROJECT_CONFIG_DIR/tracker-issues.json" > "$out" 2>&1 &
   JIRA_PID=$!
   for _ in $(seq 1 100); do
     JIRA_PORT=$(grep -o 'LISTENING:[0-9]*' "$out" 2>/dev/null | head -1 | cut -d: -f2)

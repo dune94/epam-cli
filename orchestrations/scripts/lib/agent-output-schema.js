@@ -110,7 +110,14 @@ function toolDefs() {
 function itemSchemaFor(tag) {
   const map = TAG_TO_TOOL[tag];
   if (!map) return null;
-  const def = toolDefs()[map.tool];
+  // THE CONTRACT THE RUNNER ACTUALLY SENDS. The spec agent's is DERIVED per mode
+  // (specAgentContract: brownfield drops the AC channels and demands the verification criteria);
+  // read raw, the validator judged brownfield answers by the greenfield shape and a rehearsal's
+  // stand-in was built to it — a spec with no VCs, accepted (2026-09-14).
+  let def = toolDefs()[map.tool];
+  if (map.tool === 'TOOL_SPEC_AGENT') {
+    try { def = require('../spec-mode-runner.js').specAgentContract() || def; } catch { /* the raw definition */ }
+  }
   const params = def && def.parameters;
   if (!params || !params.properties) return null;
   if (!map.itemsKey) return params;            // the payload IS the object (SPEC_AGENT)

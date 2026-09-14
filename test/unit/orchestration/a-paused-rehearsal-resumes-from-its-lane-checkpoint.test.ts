@@ -39,6 +39,8 @@ describe('a paused rehearsal resumes from its lane checkpoint', () => {
     writeFileSync(join(project, 'seed', 'src', 'hello.ts'), "export const getGreeting = () => 'hello world';\n");
     writeFileSync(join(project, 'prd.authored.json'), JSON.stringify({ project: { name: 'paused-proj' }, stories: [] }));
     writeFileSync(join(project, 'config.env'), 'PROJECT_NAME=paused-proj\nEPAM_BROWNFIELD=1\n');
+    // The project's tracker issues — the launcher serves the project's ticket, never one of its own.
+    writeFileSync(join(project, 'tracker-issues.json'), JSON.stringify([{ key: 'PP-1', summary: 'a defect', description: 'fix it' }]));
     const rid = '20260914T000000Z';
     mkdirSync(join(project, 'runs', rid, 'lanes', 'mockhelloworld', 'checkpoint'), { recursive: true });
     writeFileSync(join(project, 'runs', rid, 'lanes', 'mockhelloworld', 'checkpoint', 'checkpoint.json'), JSON.stringify({ stage: 'pre-writer', runId: rid }));

@@ -145,4 +145,31 @@ describe('the brownfield spec prompt matches the brownfield contract', () => {
     const undeclared = [...inBody].filter((t) => !variant().placeholders.includes(t));
     expect(undeclared, `undeclared placeholders: ${undeclared.join(', ')}`).toEqual([]);
   });
+
+  /**
+   * BROWNFIELD DEMANDS WHAT BROWNFIELD USES. With ACs out of scope, the verification criteria
+   * ARE the spec agent's deliverable: every downstream gate reads them (guard, vc-coverage,
+   * repro-test-writer, e2e). Optional, a spec pass that declared none passed silently and every
+   * one of those gates then "skipped — no verification criteria" (£0 brownfield harness run 12,
+   * 2026-09-14). The brownfield contract requires at least one, and the validator that judges
+   * every SPEC_AGENT answer reads the SAME derived contract — one schema, not two.
+   */
+  it('BROWNFIELD DEMANDS verification criteria — the deliverable ACs make way for', () => {
+    const c = contract(true);
+    expect(c.parameters.required).toContain('verificationCriteriaDetail');
+    expect(c.parameters.properties.verificationCriteriaDetail.minItems).toBe(1);
+  });
+  it('greenfield does not — there the ACs are the contract and VCs derive from them', () => {
+    expect(contract(false).parameters.required).not.toContain('verificationCriteriaDetail');
+  });
+  it('the validator judges SPEC_AGENT answers by the derived contract, brownfield or not', () => {
+    const SCHEMA = join(process.cwd(), 'orchestrations/scripts/lib/agent-output-schema.js');
+    const read = (bf: boolean) => JSON.parse(execFileSync(process.execPath, ['-e', `
+      process.env.EPAM_BROWNFIELD = ${bf ? "'1'" : "''"};
+      const s = require(${JSON.stringify(SCHEMA)}).itemSchemaFor('SPEC_AGENT');
+      process.stdout.write(JSON.stringify(s.required));
+    `], { encoding: 'utf8', timeout: 60_000, env: { ...process.env, SPEC_MODE_NO_MAIN: '1' } }));
+    expect(read(true)).toEqual(contract(true).parameters.required);
+    expect(read(false)).toEqual(contract(false).parameters.required);
+  });
 });

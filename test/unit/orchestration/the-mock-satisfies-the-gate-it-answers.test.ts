@@ -486,3 +486,39 @@ describe("the CPA stand-in passes CPA's own gate", () => {
     expect(r.stdout.trim(), r.stderr).toBe('pass');
   });
 });
+
+/**
+ * THE BROWNFIELD SPEC STAND-IN DECLARES VERIFICATION CRITERIA THE RUNNER READS. Built to the raw
+ * greenfield shape, the stand-in answered ACs (discarded in brownfield) and no VCs, so the spec
+ * pass persisted none and vc-coverage, the repro-test writer and the e2e route all skipped
+ * (£0 brownfield harness run 12, 2026-09-14). Judged by the runner's own normaliser and validator,
+ * in a child process so the mode is the one the stand-in is asked for.
+ */
+describe('the brownfield spec stand-in declares verification criteria the runner reads', () => {
+  const ask = (bf: boolean) => JSON.parse(require('node:child_process').execFileSync(process.execPath, ['-e', `
+    process.env.EPAM_BROWNFIELD = ${bf ? "'1'" : "''"};
+    const m = require(${JSON.stringify(path.join(ROOT, 'orchestrations/scripts/mock-expectations.js'))});
+    const r = require(${JSON.stringify(path.join(ROOT, 'orchestrations/scripts/spec-mode-runner.js'))});
+    const v = require(${JSON.stringify(path.join(ROOT, 'orchestrations/scripts/lib/agent-output-schema.js'))});
+    const c = m.contractOf('spec-agent', 'spec-agent-openspec');
+    const s = m.contractStandIn('spec-agent', c);
+    const vcs = r.normalizeVerificationCriteria ? r.normalizeVerificationCriteria(s) : null;
+    const judged = v.validateTaggedOutput ? v.validateTaggedOutput('SPEC_AGENT', s) : null;
+    process.stdout.write(JSON.stringify({ c, s, vcs, judged }));
+  `], { encoding: 'utf8', timeout: 60_000, env: { ...process.env, SPEC_MODE_NO_MAIN: '1', EPAM_PROVIDER_SET: 'mockserver', EPAM_PROJECT_CONFIG_DIR: path.dirname(withStories as string), PRD_FILE: withStories as string } }));
+  it('the spec agent is judged under a schema tag — otherwise nothing below is tested', () => {
+    expect(ask(true).c).toMatchObject({ kind: 'schema', tag: 'SPEC_AGENT' });
+  });
+  it('brownfield: the stand-in carries at least one criterion with its observer and surface, and the runner normalises it', () => {
+    const { s, vcs } = ask(true);
+    expect(Array.isArray(s.verificationCriteriaDetail) && s.verificationCriteriaDetail.length, JSON.stringify(s)).toBeTruthy();
+    for (const d of s.verificationCriteriaDetail) { expect(typeof d.criterion).toBe('string'); expect(typeof d.observer).toBe('string'); expect(typeof d.surface).toBe('string'); }
+    expect(vcs, 'the runner read no verification criteria from the stand-in').not.toEqual([]);
+    expect(vcs).not.toBeNull();
+  });
+  it('brownfield: the stand-in passes the validator under the derived contract', () => {
+    const { judged } = ask(true);
+    expect(judged, 'validateTaggedOutput is not exported').not.toBeNull();
+    expect(judged.ok, JSON.stringify(judged)).toBe(true);
+  });
+});

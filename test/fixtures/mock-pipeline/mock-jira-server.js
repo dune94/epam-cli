@@ -53,6 +53,7 @@ function makeIssue(key, summary, description) {
 }
 
 let issues;
+const docs = new Map();
 if (process.argv[2] === '--issues') {
   const specPath = process.argv[3];
   if (!specPath) {
@@ -65,6 +66,11 @@ if (process.argv[2] === '--issues') {
     process.exit(1);
   }
   issues = spec.map(i => makeIssue(i.key, i.summary, i.description));
+  // THE DOCUMENTS A TICKET LINKS, served by this same stub: a spec entry may declare `docs`
+  // ({ name: text }) and reference them in its description as {{TRACKER_URL}}/docs/<name>. The
+  // placeholder is resolved to this server's own address once it listens — a ticket-link the
+  // pipeline can fetch with no network and nothing invented by a launcher.
+  for (const i of spec) for (const [name, text] of Object.entries(i.docs || {})) docs.set(name, String(text));
 } else {
   const [, , issueKey, summary, description] = process.argv;
   if (!issueKey || !summary || !description) {
@@ -79,6 +85,12 @@ const server = http.createServer((req, res) => {
   const url = new URL(req.url, 'http://localhost');
   res.setHeader('Content-Type', 'application/json');
 
+  const dm = url.pathname.match(/^\/docs\/(.+)$/);
+  if (dm && docs.has(decodeURIComponent(dm[1]))) {
+    res.setHeader('Content-Type', 'text/markdown; charset=utf-8');
+    res.end(docs.get(decodeURIComponent(dm[1])));
+    return;
+  }
   if (url.pathname === '/rest/api/3/search/jql') {
     res.end(JSON.stringify({ issues, total: issues.length, maxResults: 100 }));
     return;
@@ -99,6 +111,8 @@ const server = http.createServer((req, res) => {
 });
 
 server.listen(0, '127.0.0.1', () => {
+  const base = `http://127.0.0.1:${server.address().port}`;
+  for (const i of issues) i.fields.description = String(i.fields.description || '').split('{{TRACKER_URL}}').join(base);
   process.stdout.write(`LISTENING:${server.address().port}\n`);
 });
 

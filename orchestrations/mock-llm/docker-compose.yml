@@ -41,7 +41,9 @@ services:
       JAVA_TOOL_OPTIONS: "-XX:MaxRAMPercentage=60.0"
       # A recorder accumulates. These are what stop a day of rehearsals becoming a leak.
       MOCKSERVER_MAX_EXPECTATIONS: "2000"
-      MOCKSERVER_MAX_LOG_ENTRIES: "250"
+      # 600: the harness reads this log back as its diagnostic (which seam answered each call), and a
+      # two-phase greenfield run makes ~450 calls; at ~160KB a request that is ~100MB of a 600MB heap.
+      MOCKSERVER_MAX_LOG_ENTRIES: "600"
       # At its default INFO level MockServer writes, for EVERY expectation a request fails to
       # match, the whole request: 536 expectations × a 157KB prompt = 84MB of log per call. Run 18
       # of the £0 greenfield harness (2026-09-14) produced 1.5GB of stdout in an hour and the JVM's

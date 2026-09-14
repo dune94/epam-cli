@@ -90,3 +90,42 @@ describe('every prompt a seam carries is answered at £0', () => {
     }
   });
 });
+
+/**
+ * A PROMPT THAT EMBEDS ANOTHER PROMPT IS ANSWERED AS ITSELF. The prompt reviewer is handed the whole
+ * template it judges, so its request carries the reviewed seam's fingerprint too; matched on
+ * fingerprints alone it was answered as the reviewed seam — `{"verdict":"pass"}`, no
+ * <PROMPT_REVIEW> block — and seven prompts were installed UNREVIEWED (run 22, 2026-09-14). The real
+ * reviewer, rendering its real template around every whole prompt, judged by whether it read a
+ * review that RAN.
+ */
+describe('a prompt that embeds another prompt is answered as itself', () => {
+  const { makePromptReviewer } = require(join(ROOT, 'orchestrations/scripts/lib/prompt-review.js'));
+  // The reviewer's own template id, read from what the real reviewer asks its renderer for.
+  let reviewerId = '';
+  makePromptReviewer({ render: (id: string) => { reviewerId = id; return 'x'; }, invoke: async () => '', values: () => ({}), warn: () => {}, projectConfigDir: '/p' })({ id: 'probe', template: {}, generated: {} });
+  const reviewerDoc = () => JSON.parse(readFileSync(join(TPL, `${reviewerId}.json`), 'utf8'));
+  it('the reviewer renders a template that exists', () => { expect(reviewerId).toBeTruthy(); expect(existsSync(join(TPL, `${reviewerId}.json`))).toBe(true); });
+  it.each(templates.map((t) => t.id))('the reviewer of %s reads a review that RAN', async (id) => {
+    const { doc } = templates.find((t) => t.id === id)!;
+    const embedded = substituteOnce(doc.body, Object.fromEntries(placeholdersIn(doc.body).map((p: string) => [p, `value of ${p}`])));
+    const rdoc = reviewerDoc();
+    const warnings: string[] = [];
+    const review = makePromptReviewer({
+      // Every placeholder of the reviewer's template carries the reviewed prompt — the template
+      // under review and the generated copy are both that prompt, and anything else is at least
+      // as embedded.
+      render: () => substituteOnce(rdoc.body, Object.fromEntries(placeholdersIn(rdoc.body).map((p: string) => [p, embedded]))),
+      invoke: async (prompt: string) => {
+        const { seam, body } = await ask(prompt);
+        expect(seam, `the reviewer's request for ${id} was answered as "${seam}"`).toBe(reviewerId);
+        const text = [...body.matchAll(/"text":"((?:[^"\\]|\\.)*)"/g)].map((m) => JSON.parse(`"${m[1]}"`)).join('');
+        return text;
+      },
+      values: () => ({}), warn: (m: string) => warnings.push(m), projectConfigDir: '/p',
+    });
+    const out = await review({ id, template: { body: doc.body }, generated: { body: embedded } });
+    expect(out.ok).toBe(true);
+    expect(warnings.join('\n'), warnings.join('\n')).not.toMatch(/UNREVIEWED/);
+  });
+});

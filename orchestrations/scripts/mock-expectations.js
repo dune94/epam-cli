@@ -1706,12 +1706,18 @@ function endsInToolCall(cap, seam) {
     const _project = path.basename(process.env.EPAM_PROJECT_CONFIG_DIR || '');
     const _ownCtx = { project: _project, ownedSessions: _ownedSessions };
     const _mine = (c) => captureIsOwned(c, _ownCtx);
+    // NEVER SERVED. "Falls back rather than stalling" served another project's recording whenever
+    // this project had none: the prompt reviewer was answered with a metrolinx session that ran
+    // Bash against gotransit paths, so on a greenfield project every review it touched was
+    // installed UNREVIEWED (£0 harness run 22, 2026-09-14). Every contract has a stand-in now; a
+    // stand-in answers THIS project's question, a foreign recording answers another's. Set aside
+    // and reported, never served.
     let cap = _sources.find((c) => _mine(c) && c.parsed)
       || _sources.find((c) => _mine(c))
-      || _sources.find((c) => c.parsed)
-      || _sources[0] || null;
-    if (cap && _project && !_mine(cap)) {
-      foreign.push(`${seam}  <- ${cap.file} (no ${_project} capture; another project's answer)`);
+      || null;
+    const _foreignBest = !cap && (_sources.find((c) => c.parsed) || _sources[0]);
+    if (_foreignBest && _project) {
+      foreign.push(`${seam}  <- ${_foreignBest.file} (no ${_project} capture; another project's answer — set aside for the stand-in)`);
     }
     // A STORY-SPECIFIC CAPTURE MUST NOT ANSWER FOR ANOTHER STORY.
     //
@@ -1891,10 +1897,22 @@ function endsInToolCall(cap, seam) {
     const _capTag = (() => { const d = contractOf(seam, template); return (d && d.tag) ? `<${d.tag}>` : ''; })();
     const _disc = storyDiscriminator(_story);
     const _seamMark = _capTag || key;
+    // A PROMPT THAT EMBEDS ANOTHER PROMPT CARRIES THAT PROMPT'S FINGERPRINT. The prompt reviewer
+    // is handed the whole template it judges, so its request matched the reviewed seam's
+    // expectation and was answered as that seam — `{"verdict":"pass"}` with no <PROMPT_REVIEW>
+    // block, seven prompts installed UNREVIEWED (£0 greenfield harness run 22, 2026-09-14). A
+    // request that carries a seam's demanded tag is asking THAT seam's question: a tagged seam is
+    // matched on its fingerprint AND its tag, and outranks a fingerprint-only match.
+    // Only where the prompt's own text carries the tag: a seam whose tag reaches the model through
+    // the schema envelope alone has nothing in its request to match on but its fingerprint.
+    const _tagInPrompt = !!(_capTag && (templateBodies().get(template) || '').includes(_capTag));
+    const _tagRank = _tagInPrompt ? 5 : 0;
     const bodyMatch = _disc
       ? { type: 'REGEX',
           regex: `(?s)(?=.*${rx(wireForm(_seamMark))})(?=.*${rx(wireForm(_disc))}).*` }
-      : { type: 'STRING', string: wireForm(key), subString: true };
+      : (_tagInPrompt
+        ? { type: 'REGEX', regex: `(?s)(?=.*${rx(wireForm(key))})(?=.*${rx(wireForm(_capTag))}).*` }
+        : { type: 'STRING', string: wireForm(key), subString: true });
     const PROTOCOLS = [
       { path: '/api/v1/chat/completions', text: sse, calls: sseToolCalls },
       { path: '/v1/messages', text: anthropicSse, calls: anthropicSseToolCalls },
@@ -2094,7 +2112,7 @@ function endsInToolCall(cap, seam) {
           const body = (turn.calls && turn.calls.length)
             ? proto.calls(turn.calls) : proto.text(turn.body);
           await put('/mockserver/expectation', {
-            priority: 40, times: { remainingTimes: 1, unlimited: false },
+            priority: 40 + _tagRank, times: { remainingTimes: 1, unlimited: false },
             httpRequest: { method: 'POST', path: proto.path, body: bodyMatch },
             httpResponse: { statusCode: 200,
               headers: { 'content-type': ['text/event-stream; charset=utf-8'], 'x-seam': [seam] }, body },
@@ -2104,7 +2122,7 @@ function endsInToolCall(cap, seam) {
     } else if (!cap && standCall) {
       for (const proto of PROTOCOLS) {
         await put('/mockserver/expectation', {
-          priority: 40, times: { remainingTimes: 1, unlimited: false },
+          priority: 40 + _tagRank, times: { remainingTimes: 1, unlimited: false },
           httpRequest: { method: 'POST', path: proto.path, body: bodyMatch },
           httpResponse: { statusCode: 200, headers: { 'content-type': ['text/event-stream; charset=utf-8'], 'x-seam': [seam] },
             body: proto.calls([standCall]) },
@@ -2115,7 +2133,7 @@ function endsInToolCall(cap, seam) {
       // order, so the client executes the tools, comes back, and gets the answer below.
       for (const proto of PROTOCOLS) {
         await put('/mockserver/expectation', {
-          priority: 40, times: { remainingTimes: 1, unlimited: false },
+          priority: 40 + _tagRank, times: { remainingTimes: 1, unlimited: false },
           httpRequest: { method: 'POST', path: proto.path, body: bodyMatch },
           httpResponse: { statusCode: 200, headers: { 'content-type': ['text/event-stream; charset=utf-8'], 'x-seam': [seam] },
             body: proto.calls(cap.calls) },
@@ -2125,7 +2143,7 @@ function endsInToolCall(cap, seam) {
     // TURN TWO (or the only turn): what the model said once its work was done.
     for (const proto of PROTOCOLS) {
       await put('/mockserver/expectation', {
-        priority: 30,
+        priority: 30 + _tagRank,
         httpRequest: { method: 'POST', path: proto.path, body: bodyMatch },
         httpResponse: { statusCode: 200, headers: { 'content-type': ['text/event-stream; charset=utf-8'], 'x-seam': [seam] },
           body: proto.text(cap ? cap.body : (standTagged || JSON.stringify(stood))) },

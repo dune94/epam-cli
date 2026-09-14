@@ -130,9 +130,13 @@ if [ "$SET" = "mockserver" ]; then
   [ -n "$_mock_host" ] || { red "the $SET set redirects runner '$_runner' to no mock endpoint"; exit 1; }
   [ -n "$_mock_host" ] || { red "the $SET set redirects no runner to a mock endpoint"; exit 1; }
   export EPAM_MOCK_BASE_URL="$_mock_host"
-  [ -n "$PRD_CANONICAL" ] || { red "project env declares no PRD_CANONICAL — the mock would register no story answers"; exit 2; }
-  PRD_FILE="$DEST/$PRD_CANONICAL" EPAM_PROJECT_CONFIG_DIR="$PROJECT_DIR" "$NODE_BIN" "$DEST/orchestrations/scripts/mock-expectations.js" --host "$_mock_host" >>"$LOG" 2>&1
-  check $? "mock answers registered at $_mock_host"
+  if [ -d "$PROJECT_DIR/seed" ]; then
+    say "mock answers are registered by the paused launcher itself, from the tracker's issues (no PRD exists before ingest)"
+  else
+    [ -n "$PRD_CANONICAL" ] || { red "project env declares no PRD_CANONICAL — the mock would register no story answers"; exit 2; }
+    PRD_FILE="$DEST/$PRD_CANONICAL" EPAM_PROJECT_CONFIG_DIR="$PROJECT_DIR" "$NODE_BIN" "$DEST/orchestrations/scripts/mock-expectations.js" --host "$_mock_host" >>"$LOG" 2>&1
+    check $? "mock answers registered at $_mock_host"
+  fi
 fi
 
 LEDGER_DIRS=("$DEST/orchestrations/logs")
@@ -141,9 +145,26 @@ ledger_total() {
     | "$NODE_BIN" -e 'let t=0;require("readline").createInterface({input:process.stdin}).on("line",l=>{try{t+=Number(JSON.parse(l).task_cost_usd)||0}catch{}}).on("close",()=>process.stdout.write(t.toFixed(4)))'
 }
 
-say "launching tier3-run.sh --project $PROJECT (set $SET)"
-setsid bash "$DEST/orchestrations/scripts/tier3-run.sh" --project "$PROJECT" --yes >>"$LOG" 2>&1 &
-RUN_PID=$!
+# WHICH LAUNCHER: the project's own declaration decides. A project carrying a seed/ is the
+# pipeline's brownfield rehearsal estate (mock1-paused-run.sh builds the codeline from it, serves
+# its ticket from the stub tracker, pauses before the writer, and resumes); any other project is
+# launched by the operator's launcher, tier3-run.sh. Neither is named by mode here.
+BROWNFIELD_SEED=""; [ -d "$PROJECT_DIR/seed" ] && BROWNFIELD_SEED="$PROJECT_DIR/seed"
+MOCK1_WORKSPACE_ROOT="$DEST/mock1-workspace"; export MOCK1_WORKSPACE_ROOT
+if [ -n "$BROWNFIELD_SEED" ]; then
+  say "launching mock1-paused-run.sh for $PROJECT (set $SET): start, pause before the writer, resume"
+  ( set -a; EPAM_PROJECT_CONFIG_DIR="$PROJECT_DIR"; LOG_DIR="$DEST/orchestrations/logs"
+    bash "$DEST/orchestrations/scripts/mock1-paused-run.sh" && {
+      _rid="$(grep -o 'RUN NUMBER:[[:space:]]*[0-9TZ]*' "$LOG" | head -1 | awk '{print $NF}')"
+      [ -n "$_rid" ] || { echo "[harness] the paused launcher printed no RUN NUMBER — nothing to resume" >&2; exit 1; }
+      bash "$DEST/orchestrations/scripts/mock1-paused-run.sh" --resume "$_rid"
+    } ) >>"$LOG" 2>&1 &
+  RUN_PID=$!
+else
+  say "launching tier3-run.sh --project $PROJECT (set $SET)"
+  setsid bash "$DEST/orchestrations/scripts/tier3-run.sh" --project "$PROJECT" --yes >>"$LOG" 2>&1 &
+  RUN_PID=$!
+fi
 HALTED=""
 while kill -0 "$RUN_PID" 2>/dev/null; do
   sleep 20
@@ -175,10 +196,22 @@ fi   # not --assess-only
 # ── 3. What landed ───────────────────────────────────────────────────────────
 check "$RUN_EXIT" "launcher exit 0"
 [ -z "$HALTED" ]; check $? "run completed under the ceiling"
+if [ -d "$PROJECT_DIR/seed" ]; then
+  # The brownfield rehearsal: one phase, paused and resumed; the codeline is the clone the launcher
+  # built under the workspace root, and the PRD is the one ingest synthesised from the tracker.
+  grep -q "STOPPED before the writer" "$LOG"; check $? "the run paused before the writer"
+  grep -q "resume finished (exit 0)" "$LOG"; check $? "the resume finished (exit 0)"
+  _rid="$(grep -o 'RUN NUMBER:[[:space:]]*[0-9TZ]*' "$LOG" | head -1 | awk '{print $NF}')"
+  CODELINE="$(ls -d "$MOCK1_WORKSPACE_ROOT/$_rid/workspace/codelines"/*/ 2>/dev/null | head -1)"
+  PRD_FILE_ABS="$MOCK1_WORKSPACE_ROOT/$_rid/workspace/synthesized-prd.json"
+  PHASES="${PHASES:-core}"
+else
+  CODELINE="$DEST/build"; PRD_FILE_ABS="$DEST/$PRD_FILE"
+fi
 for p in $PHASES; do
   grep -q "Phase '$p' completed" "$LOG"; check $? "phase '$p' completed"
 done
-_commits="$(git -C "$DEST/build" rev-list --count HEAD 2>/dev/null || echo 0)"
+_commits="$(git -C "$CODELINE" rev-list --count HEAD 2>/dev/null || echo 0)"
 [ "${_commits:-0}" -gt 1 ]; check $? "codeline holds committed work ($_commits commits)"
 # THE CODELINE'S OWN TESTS, by the command its ecosystem provider declares for it.
 _test_cmd="$("$NODE_BIN" -e '
@@ -190,12 +223,12 @@ _test_cmd="$("$NODE_BIN" -e '
   process.stdout.write(String(typeof tc === "function" ? tc(text) : (tc || "")));
 ' "$DEST/orchestrations/scripts/lib/handlers/codeline-manifests.js" "$DEST/build" 2>/dev/null)"
 if [ -n "$_test_cmd" ]; then
-  (cd "$DEST/build" && bash -c "$_test_cmd") >>"$LOG" 2>&1
+  (cd "$CODELINE" && bash -c "$_test_cmd") >>"$LOG" 2>&1
   check $? "codeline tests green: $_test_cmd"
 else
   check 1 "the codeline's ecosystem declares a test command"
 fi
-_incomplete="$("$NODE_BIN" -e 'const p=require(process.argv[1]);process.stdout.write((p.stories||[]).filter(s=>!s.completed).map(s=>s.id).join(" "))' "$DEST/$PRD_FILE" 2>/dev/null)"
+_incomplete="$("$NODE_BIN" -e 'const p=require(process.argv[1]);process.stdout.write((p.stories||[]).filter(s=>!s.completed).map(s=>s.id).join(" "))' "$PRD_FILE_ABS" 2>/dev/null)"
 [ -z "$_incomplete" ]; check $? "every story completed in the PRD${_incomplete:+ (incomplete: $_incomplete)}"
 
 # ── 4. Every seam the registry declares ──────────────────────────────────────

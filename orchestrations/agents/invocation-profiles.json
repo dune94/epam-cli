@@ -127,7 +127,8 @@
       "timeoutSecs": 360,
       "ladder": "top",
       "produces": "diagnosis",
-      "template": "failure-analyst",
+      "template": "agent-failure-analyst",
+      "_whyTemplate": "agent-attempt-analyst.sh renders agent-failure-analyst (body prompt); this said failure-analyst — the impl analyst's template — so nothing keyed on this seam's real prompt matched it (£0 brownfield harness run 1, 2026-09-14)",
       "consumes": [
         {
           "kind": "failure-evidence",

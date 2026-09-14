@@ -21,7 +21,9 @@ import { MiniMockServer } from './lib/mini-mockserver';
 const ROOT = join(__dirname, '../../');
 const PROJECTS = join(ROOT, 'orchestrations/projects');
 const TPL = join(ROOT, 'orchestrations/prompts/templates');
-const { substituteOnce, placeholdersIn } = require(join(ROOT, 'orchestrations/scripts/lib/engine-prompt.js'));
+const { substituteOnce: _substituteOnce, placeholdersIn } = require(join(ROOT, 'orchestrations/scripts/lib/engine-prompt.js'));
+// The real one-pass substitution, over every placeholder the body carries.
+const substituteOnce = (body: string, values: Record<string, string>) => _substituteOnce(body, placeholdersIn(body), values);
 const { TAG_TO_TOOL } = require(join(ROOT, 'orchestrations/scripts/lib/agent-output-schema.js'));
 
 function greenfieldProject() {

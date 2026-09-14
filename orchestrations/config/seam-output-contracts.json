@@ -146,12 +146,7 @@
     },
     "agent-failure-analyst": {
       "kind": "declared",
-      "exemplarFromPrompt": true,
-      "prefer": { "target": "skill" },
-      "overDeclaredLimit": { "skill_note": "config/self-heal.json#skillNote.maxChars" },
-      "_whyOverDeclaredLimit": "A note within the declared length and opening imperatively is accepted by the deterministic format check and never reaches the LLM reviewer; the rehearsal stand-in exceeds the limit the config declares — the exact shape the reviewer, its rejection and the summarizer rewrite exist for — so that loop executes at £0 (run 28, 2026-09-14).",
-      "_whyPrefer": "Of the targets the prompt offers, skill is the one whose change goes through the reviewer's summarize-and-resubmit loop (claude.sh run_change_with_reviewer_retry: skill_note, kb_entry, tool_creation); an ac/tc patch reverts on rejection and reaches no summarizer. The rehearsal stand-in takes it so prd-change-summarizer executes at £0.",
-      "_whyExemplar": "The rehearsal stand-in carries the whole answer the prompt states — target: prd with one ac_patch — so the change reviewer and, on a rejection, the summarizer execute at £0; with diagnosis alone neither ever ran (2026-09-14).",
+      "_whyDiagnosisOnly": "Its consumer, agent-attempt-analyst.sh, records the diagnosis as a KB episode and reads nothing else — the target/patch branches belong to the impl analyst (claude.sh run_failure_analyst), whose contract asks for the prompt exemplar.",
       "requiredKeys": [
         "diagnosis"
       ],
@@ -169,6 +164,9 @@
     },
     "code-graph-detective": {
       "kind": "declared",
+      "exemplarFromPrompt": true,
+      "shapes": { "file": { "fromCodeline": "source" } },
+      "_whyShapes": "A fix site is a file this codeline HAS: the rehearsal stand-in names the first source file of the story's codeline (by its ecosystem's own source/test convention), never an invented path — CPA blocks a defect whose fix site does not exist, by design (£0 brownfield harness run 1, 2026-09-14).",
       "requiredKeys": [
         "file"
       ],

@@ -83,19 +83,19 @@ describe('the prompt-seam link is stored twice', () => {
   it('N:1 WORKS — one template serving two seams links for BOTH', () => {
     // failure-analyst is the template for agent-failure-analyst AND impl-failure-analyst. A seams
     // array can only name one; the registry names both.
+    // The capability is exercised on a registry of this test's own: the real registry's only N:1
+    // case was a mis-declaration (agent-failure-analyst named the impl analyst's template while
+    // running its own), corrected 2026-09-14, so the real data no longer carries one.
     const reg = registry();
-    const shared = Object.entries<any>(reg.profiles)
-      .filter(([, p]) => p.template)
-      .reduce((acc: Record<string, string[]>, [seam, p]) => {
-        (acc[p.template] = acc[p.template] || []).push(seam);
-        return acc;
-      }, {});
-    const [tpl, seams] = Object.entries(shared).find(([, s]) => s.length > 1)!;
-    expect(seams.length, 'no template serves two seams — this test proves nothing').toBeGreaterThan(1);
+    const [tpl] = Object.entries<any>(reg.profiles).find(([, p]) => p.template)!.slice(1).map((p: any) => p.template);
+    const seams = ['seam-a-of-the-test', 'seam-b-of-the-test'];
+    const own = { ...reg, profiles: { ...reg.profiles, [seams[0]]: { template: tpl, produces: 'x' }, [seams[1]]: { template: tpl, produces: 'y' } } };
+    const ownFile = join(projectDir, 'registry-n-to-1.json');
+    writeFileSync(ownFile, JSON.stringify(own));
 
     install(tpl);
     // Both seams must resolve to that one installed prompt.
-    const bySeam = link([]).promptsBySeam;
+    const bySeam = linkPromptsToRoster({ projectConfigDir: projectDir, registryFile: ownFile, agents: [], write: false }).promptsBySeam;
     for (const s of seams) {
       expect(bySeam[s], `seam '${s}' has no prompt though '${tpl}' is installed`).toContain(tpl);
     }

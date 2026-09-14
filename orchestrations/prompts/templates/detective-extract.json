@@ -1,0 +1,16 @@
+{
+  "$why": [
+    "Moved out of spec-mode-runner.js runCodeGraphDetective on 2026-09-14. It was a template literal in code — the one prompt of the detective's second phase (no tools; extract the fix site from an investigation that ended in prose) — so the prompt layer could not see it: no project copy, no review, and the £0 rehearsal answered it from the catch-all with {} (brownfield harness run 1).",
+    "One prompt = one JSON file; a prompt in code is hidden."
+  ],
+  "description": "Extracts the single most-likely causal fix site from a detective investigation that ended in prose.",
+  "id": "detective-extract",
+  "seams": [
+    "code-graph-detective"
+  ],
+  "version": 1,
+  "placeholders": [
+    "__INVESTIGATION__"
+  ],
+  "body": "A code investigation of a bug produced the analysis below. Extract the single most-likely causal fix site and output ONLY a JSON array — no prose, no markdown fences, then stop. If the analysis is incomplete, output your BEST hypothesis from what it contains (a best guess beats nothing).\n[{\"file\":\"<repo-relative path>\",\"function\":\"<symbol>\",\"reason\":\"<why THIS computes the wrong value, not just displays it>\",\"fix\":\"<the exact minimal change: which line/expression to change and which EXISTING helper (symbol) to reuse>\",\"helper\":\"<bare existing symbol name to reuse, or empty>\"}]\n\n=== INVESTIGATION ===\n__INVESTIGATION__"
+}

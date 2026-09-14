@@ -345,8 +345,9 @@ describe('a declared key shape wins over what the key name suggests', () => {
       if (!(k in standIn)) continue;
       const v = standIn[k];
       const actual = Array.isArray(v) ? 'array' : typeof v;
-      // An object-valued shape points at a schema; the value is an object built from it.
-      expect(actual, `${seam}.${k}`).toBe(typeof shape === 'object' ? 'object' : shape);
+      // An object-valued shape points at a schema (an object built from it) or at the codeline (a
+      // repo-relative file path, a string).
+      expect(actual, `${seam}.${k}`).toBe(typeof shape === 'object' ? (shape.fromCodeline ? 'string' : 'object') : shape);
       if (shape === 'string') expect(String(v).trim().length).toBeGreaterThan(0);
     }
   });

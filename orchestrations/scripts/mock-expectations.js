@@ -79,7 +79,7 @@ function seams() {
   for (const f of fs.readdirSync(TPL).filter((x) => x.endsWith('.json'))) {
     const id = f.replace(/\.json$/, '');
     const t = templateDoc(id);
-    if (!t || typeof t.body !== 'string') continue;
+    if (!t || (typeof t.body !== 'string' && !t.bodies)) continue;
     // A template declared for MORE THAN ONE seam is a fragment those seams share (the QA gates'
     // scope block): its fingerprint appears in every one of their prompts and identifies none of
     // them — registered once under the first, it answered the mutant hunter as the SAST gate.
@@ -1129,7 +1129,7 @@ function promptExemplar(seam) {
       .replace(/"<[^"]*>"/g, `"${STAND_IN_MARK} value"`)
       .replace(/:\s*<[^>,}\]]*>/g, ': 0')
       .replace(/<[^>"]*>/g, `${STAND_IN_MARK} value`)
-      .replace(/"([A-Za-z0-9_-]+)(\|[A-Za-z0-9_|-]+)"/g, '"$1"')
+      .replace(/"([A-Za-z0-9_\/-]+)(\|[A-Za-z0-9_|\/-]+)"/g, '"$1"')
       .replace(/\.\.\./g, '').replace(/,\s*([}\]])/g, '$1');
     try { return JSON.parse(text); } catch { /* the next block */ }
   }
@@ -1178,6 +1178,48 @@ function schemaFromShape(shape) {
   return node ? { node, root } : null;
 }
 
+/**
+ * A FILE THIS RUN'S CODELINE HAS, repo-relative: the first source (or test) file under the
+ * story's codeline, told apart by the codeline's own ecosystem convention. The estate's
+ * repositories (JIRA_CODELINE_ROOT) first, the output directory otherwise.
+ */
+function codelineFile(kind) {
+  const roots = [];
+  for (const r of estateRepos()) if (r && r.path) roots.push(r.path);
+  const out = process.env.OUTPUT_DIR || process.env.PROJECT_ROOT || '';
+  if (out) roots.push(out);
+  for (const root of roots) {
+    let eco = null;
+    try {
+      // eslint-disable-next-line global-require
+      const hit = require('./lib/handlers/codeline-manifests.js').resolveEcosystem(root); if (hit) eco = hit.eco;
+    } catch { eco = null; }
+    const cg = eco && eco.codelineManifests && eco.codelineManifests.contractGeneration;
+    if (!cg) continue;
+    const testRe = cg.testFilePattern ? new RegExp(cg.testFilePattern) : null;
+    const exts = cg.sourceExtensions || [];
+    const skip = new Set((eco.artifactDirs || []).concat(['.git']));
+    const walk = (dir, depth) => {
+      if (depth > 6) return null;
+      let ents = [];
+      try { ents = fs.readdirSync(dir, { withFileTypes: true }); } catch { return null; }
+      for (const e of ents) {
+        if (skip.has(e.name) || e.name.startsWith('.')) continue;
+        const p = path.join(dir, e.name);
+        if (e.isDirectory()) { const r = walk(p, depth + 1); if (r) return r; continue; }
+        if (!exts.some((x) => e.name.endsWith(x))) continue;
+        const rel = path.relative(root, p);
+        const isTest = testRe ? testRe.test(rel) : false;
+        if ((kind === 'test') === isTest) return rel;
+      }
+      return null;
+    };
+    const hit = walk(root, 0);
+    if (hit) return hit;
+  }
+  return null;
+}
+
 function contractStandIn(seam, override) {
   let contracts = {};
   try {
@@ -1219,6 +1261,7 @@ function contractStandIn(seam, override) {
     // THE DECLARED SHAPE WINS over what the key's name suggests: `diagnosis` is one diagnosis.
     const shape = c.shapes && c.shapes[k];
     if (shape && typeof shape === 'object') {
+      if (shape.fromCodeline) { const f = codelineFile(shape.fromCodeline); if (f) return f; }
       try { const sch = schemaFromShape(shape); if (sch) return valueFromSchema(sch.node, sch.root, seam); } catch { /* fall through */ }
     }
     if (shape === 'string') return `${STAND_IN_MARK} ${k} for ${seam}: no captured reply exists for this seam`;

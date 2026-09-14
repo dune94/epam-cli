@@ -6681,7 +6681,8 @@ async function runCodeGraphDetective(story, logDir, opts = {}) {
       // because it has no tools. This is the robust fix for "reasoning model
       // won't commit to structured output": separate exploration from output.
       if (findings === null && out && out.trim() && !/reached maximum iterations/i.test(out)) {
-        const extractPrompt = `A code investigation of a bug produced the analysis below. Extract the single most-likely causal fix site and output ONLY a JSON array — no prose, no markdown fences, then stop. If the analysis is incomplete, output your BEST hypothesis from what it contains (a best guess beats nothing).\n[{"file":"<repo-relative path>","function":"<symbol>","reason":"<why THIS computes the wrong value, not just displays it>","fix":"<the exact minimal change: which line/expression to change and which EXISTING helper (symbol) to reuse>","helper":"<bare existing symbol name to reuse, or empty>"}]\n\n=== INVESTIGATION ===\n${out}`;
+        // THE EXTRACTION PROMPT IS A TEMPLATE, not a literal in this file (2026-09-14).
+        const extractPrompt = renderEngineTemplate('detective-extract', { __INVESTIGATION__: out });
         const extractLog = logPath ? logPath.replace(/\.log$/, '-extract.log') : null;
         const out2 = await runClaude(exec, extractPrompt, extractLog, {
           // No AI_GATE_ALLOW_TOOLS → ai-run.sh adds --no-tools → pure extraction.

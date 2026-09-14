@@ -3809,7 +3809,7 @@ _run_agent_mint() {
     # top, and pre-flight is what actually gates a run.
     declare -f require_stage_coverage >/dev/null && { require_stage_coverage mint || exit 1; }
     log "[mint] Deriving this project's roster (roster-only — nothing is minted)..."
-    EPAM_ROSTER_ONLY=1 "$NODE_BIN" "$SCRIPT_DIR/mint-agents-step.js" \
+    EPAM_ROSTER_ONLY=1 EPAM_SKIP_AGENT_MINT=1 "$NODE_BIN" "$SCRIPT_DIR/mint-agents-step.js" \
         --prd "$_prd" \
         --agents-dir "$EPAM_AGENTS_DIR" \
         --log-dir "$LOG_DIR" \

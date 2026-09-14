@@ -155,3 +155,24 @@ describe('nothing to review is not the same as a failed review', () => {
       'an empty roster was treated as settled — the vacuous pass is back').toBe(true);
   }, 60_000);
 });
+
+/**
+ * ROSTER-ONLY DERIVES IDENTITIES FROM A ROSTER ALREADY REVIEWED. The second phase of a run skips
+ * the mint (the codeline is already provisioned) and derives identities from the roster on disk —
+ * the one reviewed and accepted when it was minted in the first phase. The guard read only
+ * EPAM_SKIP_AGENT_MINT, which the orchestrator decided but never exported to the child, so the
+ * £0 greenfield run's core phase was refused with "roster review did not run" (2026-09-13).
+ */
+describe('roster-only mode is not an unreviewed roster', () => {
+  const rosterLib = require('../../../orchestrations/scripts/lib/agent-roster.js');
+  it('a roster-only derivation with no review of its own is not refused', () => {
+    expect(rosterLib.rosterReviewIsRequired({ verdict: 'not_run', mintSkipped: false, rosterOnly: true, pauseConfigured: false })).toBe(false);
+  });
+  it('a real mint with no review is still refused', () => {
+    expect(rosterLib.rosterReviewIsRequired({ verdict: 'not_run', mintSkipped: false, rosterOnly: false, pauseConfigured: false })).toBe(true);
+  });
+  it('the orchestrator tells the roster-only child that the mint was skipped', () => {
+    const src = require('node:fs').readFileSync(require('node:path').join(__dirname, '../../../orchestrations/scripts/run-agent-orchestration.sh'), 'utf8');
+    expect(src).toMatch(/EPAM_ROSTER_ONLY=1 EPAM_SKIP_AGENT_MINT=1 "\$NODE_BIN" "\$SCRIPT_DIR\/mint-agents-step\.js"/);
+  });
+});

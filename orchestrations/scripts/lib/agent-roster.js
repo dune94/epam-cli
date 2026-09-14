@@ -832,8 +832,13 @@ function hasProjectRoster(agentsDir) {
  *
  * A configured pause defers to the operator rather than refusing: they are about to look at it.
  */
-function rosterReviewIsRequired({ verdict, mintSkipped, pauseConfigured } = {}) {
+function rosterReviewIsRequired({ verdict, mintSkipped, pauseConfigured, rosterOnly } = {}) {
   if (mintSkipped) return false;          // resumed: reviewed in the run being resumed
+  // ROSTER-ONLY DERIVES IDENTITIES FROM A ROSTER ALREADY ON DISK — one that was reviewed when it
+  // was minted, in an earlier phase of this run. The second phase of the £0 greenfield run was
+  // refused here: the orchestrator skipped the mint by its own decision but the child never saw
+  // EPAM_SKIP_AGENT_MINT, so a reviewed roster was called unreviewed (2026-09-13).
+  if (rosterOnly) return false;
   if (pauseConfigured) return false;      // a human is about to see it
   // 'nothing_to_review' joins them: an empty roster owes a review the moment it gains an agent.
   // Treating it as settled is how a vacuous pass returns by the back door.

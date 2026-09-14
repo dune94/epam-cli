@@ -1074,6 +1074,7 @@ if (require.main !== module) return;
   if (rosterLib.rosterReviewIsRequired({
     verdict: review.verdict,
     mintSkipped: _mintWasSkipped,
+    rosterOnly: String(process.env.EPAM_ROSTER_ONLY || '') === '1',
     pauseConfigured: /^(1|true|yes)$/i.test(process.env.EPAM_PAUSE_AFTER_AGENT_MINT || ''),
   })) {
     process.stderr.write(

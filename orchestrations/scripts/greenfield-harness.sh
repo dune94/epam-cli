@@ -26,7 +26,7 @@ _project_env() {
     "$DEST/orchestrations/scripts/lib/llm-settings-resolve.js" "$1"
 }
 
-SET=""; PROJECT="greenfield-proof"; REF="HEAD"; DEST=""; CEILING="5"; ASSESS_ONLY=0
+SET=""; PROJECT="greenfield-proof"; REF="HEAD"; DEST=""; CEILING="5"; ASSESS_ONLY=0; RATCHET=""
 while [ $# -gt 0 ]; do
   case "$1" in
     --assess-only) ASSESS_ONLY=1; DEST="$2"; shift 2 ;;   # judge a kept install again; no install, no run, no spend
@@ -35,6 +35,7 @@ while [ $# -gt 0 ]; do
     --ref)         REF="$2"; shift 2 ;;
     --dest)        DEST="$2"; shift 2 ;;
     --ceiling-usd) CEILING="$2"; shift 2 ;;
+    --ratchet)     RATCHET="$2"; shift 2 ;;   # a previous run's verdict: nothing it had may be lost
     *) echo "unknown argument: $1" >&2; exit 2 ;;
   esac
 done
@@ -270,14 +271,45 @@ while IFS= read -r s; do
 done <<< "$_seams"
 _rc=0; [ "${#_missing[@]}" -eq 0 ] || _rc=1; check "$_rc" "every seam declared for this project's modes executed ($_x of $_n; $_all_n in the registry)"
 
+# ── THE RATCHET ──────────────────────────────────────────────────────────────
+# A FIX THAT MAKES THE NEXT RUN WORSE IS NOT A FIX (operator, 2026-09-14: run 15 fell from 35/40 to
+# 27/40 on a "fix"). Judged against a previous run's verdict, a seam that executed then and not
+# now, or a check that passed then and fails now, is a failure of its own — whatever was gained.
+# A check is compared by its key: the label before any parenthesised count, so "(1 commits)" and
+# "(2 commits)" are the same check.
+_ckey() { printf '%s' "$1" | sed 's/ *(.*//'; }
+_executed_now="$(printf '%s\n' "$_seams" | while IFS= read -r s; do [ -n "$s" ] || continue; printf '%s\n' "${_missing[@]}" | grep -Fxq -- "$s" || printf '%s\n' "$s"; done)"
+if [ -n "$RATCHET" ]; then
+  [ -f "$RATCHET" ] || { echo "--ratchet: no verdict at $RATCHET" >&2; exit 2; }
+  _prev_sha="$("$NODE_BIN" -e 'process.stdout.write(String(require(process.argv[1]).sha||""))' "$RATCHET")"
+  _prev_seams="$("$NODE_BIN" -e 'process.stdout.write((require(process.argv[1]).seamsExecutedList||[]).join("\n"))' "$RATCHET")"
+  _prev_fails="$("$NODE_BIN" -e 'process.stdout.write((require(process.argv[1]).failureKeys||[]).join("\n"))' "$RATCHET")"
+  say "ratchet against $RATCHET ($_prev_sha): nothing that run had may be lost"
+  while IFS= read -r s; do
+    [ -n "$s" ] || continue
+    if ! printf '%s\n' "$_executed_now" | grep -Fxq -- "$s"; then check 1 "ratchet: $s executed on $_prev_sha and not on this run"; fi
+  done <<< "$_prev_seams"
+  # A check that failed then is not ratcheted; every other check of this run must still pass.
+  _fails_snapshot=("${FAILS[@]}")
+  for f in "${_fails_snapshot[@]}"; do
+    case "$f" in ratchet:*) continue ;; esac
+    if ! printf '%s\n' "$_prev_fails" | grep -Fxq -- "$(_ckey "$f")"; then check 1 "ratchet: '$(_ckey "$f")' passed on $_prev_sha and fails on this run"; fi
+  done
+fi
+
 # ── 5. Verdict, teardown ─────────────────────────────────────────────────────
 [ "$ASSESS_ONLY" = "1" ] || bash "$DEST/orchestrations-installer/pipeline-services.sh" --stop >>"$LOG" 2>&1 || true
 "$NODE_BIN" -e '
-  const [sha,set,project,spent,exit,fails,missing,x,n]=process.argv.slice(1);
+  const [sha,set,project,spent,exit,fails,missing,x,n,executed]=process.argv.slice(1);
+  const failures = fails? fails.split(""):[];
   process.stdout.write(JSON.stringify({sha,set,project,spentUsd:Number(spent),runExit:Number(exit),
-    verdict: fails==="" ? "GREEN" : "RED", failures: fails? fails.split(""):[], seamsExecuted:Number(x), seamsDeclared:Number(n),
-    seamsNotExecuted: missing? missing.split(""):[], at:new Date().toISOString()},null,2)+"\n")
-' "$SHA" "$SET" "$PROJECT" "$SPENT" "$RUN_EXIT" "$(IFS=$'\x1f'; echo "${FAILS[*]-}")" "$(IFS=$'\x1f'; echo "${_missing[*]-}")" "$_x" "$_n" > "$VERDICT"
+    verdict: fails==="" ? "GREEN" : "RED", failures, seamsExecuted:Number(x), seamsDeclared:Number(n),
+    seamsNotExecuted: missing? missing.split(""):[],
+    // What the next run is ratcheted against: the seams this run executed, and its failures by key.
+    seamsExecutedList: executed? executed.split("\n").filter(Boolean):[],
+    failureKeys: failures.filter((f)=>!f.startsWith("ratchet:")).map((f)=>f.replace(/ *\(.*$/,"")),
+    at:new Date().toISOString()},null,2)+"\n")
+' "$SHA" "$SET" "$PROJECT" "$SPENT" "$RUN_EXIT" "$(IFS=$'\x1f'; echo "${FAILS[*]-}")" "$(IFS=$'\x1f'; echo "${_missing[*]-}")" "$_x" "$_n" "$_executed_now" > "$VERDICT"
 if [ "${#FAILS[@]}" -eq 0 ]; then
   say "VERDICT GREEN — $PROJECT on $SET at $SHA, \$$SPENT, $_x/$_n seams · $VERDICT"; exit 0
 else

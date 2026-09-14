@@ -13,7 +13,7 @@
  */
 import { describe, it, expect, afterAll } from 'vitest';
 import { spawnSync } from 'node:child_process';
-import { mkdtempSync, rmSync, writeFileSync, mkdirSync, cpSync, readdirSync, existsSync } from 'node:fs';
+import { mkdtempSync, rmSync, writeFileSync, mkdirSync, cpSync, readdirSync, existsSync, readFileSync } from 'node:fs';
 import { tmpdir } from 'node:os';
 import { join, resolve } from 'node:path';
 
@@ -57,5 +57,31 @@ describe('the harness judges the brownfield codeline by its own tests', () => {
     expect(out, 'the harness did not run the test command the codeline declares').toMatch(/✓ codeline tests green: npm test/);
     expect(out).not.toMatch(/the codeline's ecosystem declares a test command/);
     expect(out, 'the phase is judged by its gate record, not a log phrase').toMatch(/✓ phase 'core' completed/);
+
+    // THE RATCHET. A fix that makes the next run worse is not permitted (operator, 2026-09-14: run
+    // 15 went from 35/40 to 27/40 on a "fix"). Judged again against the previous run's verdict, a
+    // seam that executed then and not now, or a check that passed then and fails now, is RED on
+    // its own — whatever else was gained.
+    const verdict = JSON.parse(readFileSync(join(dest, 'harness-verdict.json'), 'utf8'));
+    expect(Array.isArray(verdict.seamsExecutedList), 'the verdict does not record which seams executed').toBe(true);
+    expect(Array.isArray(verdict.failureKeys), 'the verdict does not record its failures as comparable keys').toBe(true);
+    const baseline = join(dest, 'previous-verdict.json');
+    const gained = verdict.seamsNotExecuted[0];   // something this run did NOT execute
+    expect(gained, 'this install executed every seam — nothing to ratchet on').toBeTruthy();
+    writeFileSync(baseline, JSON.stringify({ ...verdict, sha: 'prev1234', seamsExecutedList: [...verdict.seamsExecutedList, gained], failureKeys: [] }));
+    const r2 = spawnSync('bash', [join(ROOT, 'orchestrations/scripts/greenfield-harness.sh'), '--assess-only', dest, '--ratchet', baseline], {
+      encoding: 'utf8', timeout: 180000,
+      env: { ...process.env, NODE_BIN: process.execPath, EPAM_PROVIDER_SET: 'mockserver', LANGFUSE_BASE_URL: 'http://127.0.0.1:1' },
+    });
+    const out2 = `${r2.stdout}\n${r2.stderr}`;
+    expect(out2, 'a seam that executed on the previous run and not on this one did not fail the ratchet').toMatch(new RegExp(`✗ ratchet: ${gained.replace(/[.*+?^${}()|[\]\\]/g, '\\$&')} executed on prev1234 and not on this run`));
+    expect(out2).toMatch(/VERDICT RED/);
+    // And a previous run that was strictly worse ratchets nothing.
+    writeFileSync(baseline, JSON.stringify({ ...verdict, sha: 'prev1234', seamsExecutedList: [], failureKeys: verdict.failureKeys }));
+    const r3 = spawnSync('bash', [join(ROOT, 'orchestrations/scripts/greenfield-harness.sh'), '--assess-only', dest, '--ratchet', baseline], {
+      encoding: 'utf8', timeout: 180000,
+      env: { ...process.env, NODE_BIN: process.execPath, EPAM_PROVIDER_SET: 'mockserver', LANGFUSE_BASE_URL: 'http://127.0.0.1:1' },
+    });
+    expect(`${r3.stdout}\n${r3.stderr}`).not.toMatch(/✗ ratchet/);
   });
 });

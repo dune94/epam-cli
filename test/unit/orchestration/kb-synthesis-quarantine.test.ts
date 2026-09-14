@@ -81,7 +81,16 @@ function quarantine(root: string): any[] {
 }
 
 let ctx: ReturnType<typeof freshStore>;
-beforeEach(() => { ctx = freshStore(); });
+// The synthesizer's prompt is seam-declared and renders from a PROJECT copy — built here the way
+// the mint builds it, from the template through the contract, for a project of this test's own.
+function projectWithPrompt(id: string): string {
+  const { buildGeneratedDoc } = require(join(LIB, 'project-prompt-contract.js'));
+  const tpl = JSON.parse(readFileSync(join(LIB, '..', '..', 'prompts', 'templates', `${id}.json`), 'utf8'));
+  const dir = mkdtempSync(join(tmpdir(), 'kb-proj-')); dirs.push(dir); require('node:fs').mkdirSync(join(dir, 'prompts'));
+  writeFileSync(join(dir, 'prompts', `${id}.json`), JSON.stringify(buildGeneratedDoc(tpl, tpl.body)));
+  return dir;
+}
+beforeEach(() => { ctx = freshStore(); process.env.EPAM_PROJECT_CONFIG_DIR = projectWithPrompt('kb-enforcement-synthesis'); });
 
 describe('Pillar 4 — every refused synthesis leaves evidence', () => {
   it('quarantines a FAILED runner instead of returning a silent null', async () => {

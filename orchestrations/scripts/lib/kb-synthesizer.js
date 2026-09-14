@@ -106,8 +106,17 @@ async function maybeSynthesize(store, {
   if (provider) args.push('--provider', provider);
   if (model) args.push('--model', model);
 
+  // THE CALL IS ACCOUNTED FOR. Every other model call this pipeline makes lands in the cost
+  // ledger and the activity log through lib/cost-emitter.js; this one did not — the synthesizer
+  // ran, admitted a rule, and no record anywhere said a model had been called (£0 greenfield
+  // harness run 30, 2026-09-14: the seam reported never executed while its constraint sat in
+  // constraints.json). Same shape as spec-mode-runner's runClaude: the runner writes its JSON
+  // result to ORCH_JSON_RESULT and the emitter reads it back.
+  const _prompt = buildPrompt({ agent_role, signature, episodes });
+  const _costFile = path.join(require('os').tmpdir(), `kb-synth-cost-${process.pid}-${Date.now()}-${Math.floor(Math.random() * 1e6)}.json`);
+  const _startedAt = new Date().toISOString();
   const r = spawnSync('bash', [cmd, ...args], {
-    input: buildPrompt({ agent_role, signature, episodes }),
+    input: _prompt,
     encoding: 'utf8',
     // Declared by the seam (invocation-profiles.json: kb-synthesizer), not carried here. This was
     // a literal, so the seam bounded its own LLM call with a number no run could see or change.
@@ -117,6 +126,7 @@ async function maybeSynthesize(store, {
     // same allowance, so an undersized budget yields truncated output that never
     // reaches the closing brace and is quarantined as 'unparseable'.
     env: {
+      ORCH_JSON_RESULT: _costFile,
       EPAM_AGENT_NAME: 'kb-synthesizer',
       ...process.env,
       EPAM_MAX_OUTPUT_TOKENS: _seamDeclared().maxOutputTokens,
@@ -138,6 +148,18 @@ async function maybeSynthesize(store, {
       }),
     },
   });
+  try {
+    // eslint-disable-next-line global-require
+    require('./cost-emitter.js').emitCostSnapshot({
+      input: _prompt, startedAt: _startedAt,
+      logDir: process.env.LOG_DIR || process.env.EPAM_PROJECT_OUTPUT_DIR || '',
+      resultFile: _costFile,
+      activityFile: process.env.ACTIVITY_FILE || path.join(process.env.LOG_DIR || path.join(SCRIPT_DIR, '..', '..', 'logs'), 'agent-activity.jsonl'),
+      agent: 'kb-synthesizer', storyId: process.env.EPAM_STORY_ID || '', phase: process.env.PHASE || '',
+      model: model || '', provider: provider || process.env.EPAM_ORCHESTRATION_PROVIDER || '',
+    });
+  } catch { /* accounting must never break synthesis */ }
+  try { fs.unlinkSync(_costFile); } catch { /* ignore */ }
   const reply = (r.stdout || '').trim();
   const q = base => store.quarantine({ signature, agent_role, ...base });
 

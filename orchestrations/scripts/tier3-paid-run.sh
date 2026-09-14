@@ -93,13 +93,13 @@ pre_run_reset_or_abort --prd "$PRD_FILE"
 
 # These are forwarded to the child process invoked below. shellcheck cannot see the consumer,
 # so it reports them unused; removing them would take the values away from the child.
+# ORCH_GATE_MODEL is deliberately absent: a run-wide pin. The seam ladder decides.
 # shellcheck disable=SC2034
 OPENROUTER_API_KEY="$OPENROUTER_API_KEY" \
 EPAM_API_KEY_OPENROUTER="$OPENROUTER_API_KEY" \
 OPENAI_API_KEY="${OPENAI_API_KEY:-}" \
 EPAM_API_KEY_OPENAI="${OPENAI_API_KEY:-}" \
 ORCH_GATE_PROVIDER="openai" \
-# ORCH_GATE_MODEL removed: a run-wide pin. The seam ladder decides.
 PRD_FILE="$PRD_FILE" \
 SKIP_REGRESSION_GUARD=true \
 EPAM_RALPH_WIGGUM_ENABLED=0 \

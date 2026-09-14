@@ -103,11 +103,11 @@ echo ""
 pre_run_reset_or_abort --prd "$PRD_FILE"
 
 cd "$REPO_ROOT"
+# ORCH_GATE_MODEL is deliberately absent: a run-wide pin. The seam ladder decides.
 export OPENROUTER_API_KEY="mock-key" \
 OPENROUTER_BASE_URL="$MOCK_URL" \
 EPAM_API_KEY_OPENROUTER="mock-key" \
 ORCH_GATE_PROVIDER="openrouter" \
-# ORCH_GATE_MODEL removed: a run-wide pin. The seam ladder decides.
 PRD_FILE="$PRD_FILE" \
 SKIP_REGRESSION_GUARD=true \
 SKIP_CPA=1 \

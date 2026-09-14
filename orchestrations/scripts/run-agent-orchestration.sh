@@ -5237,9 +5237,6 @@ run_pre_phase_assessment() {
         # is what makes the deterministic apply safe, and removing the writes is
         # what makes the schema safe: a schema over an agent that still exhausts
         # returns a valid EMPTY object, which is a loud failure turned silent.
-        export EPAM_ALLOWED_WRITE_PATHS="" \
-        EPAM_MAX_TOOL_CALLS="${_pfa_tool_budget}" \
-        EPAM_RESPONSE_SCHEMA="${_pfa_schema:-}" \
         # ITS OWN IDENTITY. This passed "team-lead-agent", so the pre-phase skill assessment
         # resolved the REVIEWER's seam: the reviewer's tool grant, effort and timeout, not its
         # own. agents/invocation-profiles.json declares phase-assessment with toolGrant "write"
@@ -5248,6 +5245,19 @@ run_pre_phase_assessment() {
         #
         # The second argument to run_orch_prompt is the seam name (`local agent_type="${2:-...}"`),
         # so this line is the whole of the wiring. A profile nothing names cannot be applied.
+        #
+        # THIS CALL'S ENVIRONMENT, AND NOTHING ELSE'S. These three were `export`ed on a
+        # continuation line that a comment block later cut off from the call, so the export stood
+        # alone and was PERMANENT: every seam after the assessment — the writer, the gates, the
+        # failure analyst — inherited a write allow-list of nothing, a ten-call tool budget and the
+        # assessment's own response schema. Under a runner that enforces --json-schema the
+        # analyst's diagnosis was then rejected against storyRoleAssignments/profileAdditions and
+        # self-healing was reported broken (£0 greenfield harness run 26, 2026-09-14; latent since
+        # 2026-07-28). A per-command prefix on the call itself is scoped to the call, and bash
+        # exports it to the runner the function spawns.
+        EPAM_ALLOWED_WRITE_PATHS="" \
+        EPAM_MAX_TOOL_CALLS="${_pfa_tool_budget}" \
+        EPAM_RESPONSE_SCHEMA="${_pfa_schema:-}" \
         run_orch_prompt_with_tools "$_pfa_prompt_this_attempt" "phase-assessment" 2>&1 | tee "$assessment_log"
         # PIPESTATUS, not `|| _pfa_call_ok=0`: this is a PIPELINE, and its exit
         # status is tee's — always 0. The `||` branch could never fire on an agent
@@ -10144,13 +10154,20 @@ step_emit "22f" "skip" "Step 22f: Perf sentinel" "Phase A/B failed"
                     # Set for the child process invoked below, or for a script that sources this file. The
                     # analyser cannot see the consumer, so it reports these unused; removing them takes the value away.
                     # shellcheck disable=SC2034
+                    # NO PROVIDER DEFAULT. This read `:-minimax`, which no configuration
+                    # the literal was both unreachable in practice and wrong when reached,
+                    # and routing the same model through another provider is a different
+                    # setup, not a detail (MiniMax direct vs via a gateway differed 99.8%
+                    # on cache hits alone). Unset now fails loudly in ai-run.sh instead.
+                    #
+                    # ONE COMMAND. That comment sat between a continuation line and the rest of
+                    # the command, so `AI_GATE_ALLOW_TOOLS=1` stood alone as the whole of the
+                    # pipeline's right-hand side — it received the prompt on stdin and did
+                    # nothing with it — and the runner below ran as a separate command with no
+                    # prompt and no tool grant (found 2026-09-14 with the pre-phase assessment's
+                    # export, the same defect).
                     _gfa_raw=$(echo "$_gfa_prompt" | \
                         AI_GATE_ALLOW_TOOLS=1 \
-                        # NO PROVIDER DEFAULT. This read `:-minimax`, which no configuration
-                        # the literal was both unreachable in practice and wrong when reached,
-                        # and routing the same model through another provider is a different
-                        # setup, not a detail (MiniMax direct vs via a gateway differed 99.8%
-                        # on cache hits alone). Unset now fails loudly in ai-run.sh instead.
                         AI_PROVIDER="${ORCH_GATE_PROVIDER:-}" \
                         AI_MODEL="${_gfa_model}" \
                         EPAM_DANGEROUS_SKIP_APPROVAL=1 \

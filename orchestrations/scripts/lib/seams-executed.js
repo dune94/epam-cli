@@ -28,7 +28,11 @@ const registry = path.join(root, 'orchestrations/agents/invocation-profiles.json
 const logs = path.join(root, 'orchestrations/logs');
 
 const names = new Set();
-const bare = (v) => String(v || '').split(' · ')[0].split(':')[0].trim();
+const seams = new Set();          // stamped seams — a fact of the call, no resolution needed
+// A name as recorded, then the name before its ':' suffix — a gate is recorded as its own seam
+// key (`qa-gate:sast`), a writer call as `<seam>:<story>`; the exact key is tried first.
+const bare = (v) => String(v || '').split(' · ')[0].trim();
+const candidates = (n) => [n, n.split(':')[0].trim()].filter((x, i, a) => x && a.indexOf(x) === i);
 function walk(dir) {
   let out = [];
   for (const e of fs.readdirSync(dir, { withFileTypes: true })) {
@@ -40,7 +44,11 @@ function walk(dir) {
 }
 for (const f of walk(logs)) {
   for (const l of fs.readFileSync(f, 'utf8').split('\n')) {
-    try { const j = JSON.parse(l); const n = j.agent_name || j.agent; if (n) names.add(bare(n)); } catch { /* not a record */ }
+    try {
+      const j = JSON.parse(l);
+      if (j.seam) seams.add(String(j.seam).trim());
+      const n = j.agent_name || j.agent; if (n) names.add(bare(n));
+    } catch { /* not a record */ }
   }
 }
 
@@ -69,11 +77,11 @@ function langfuse() {
 
 langfuse().then((fromLangfuse) => {
   for (const n of fromLangfuse) names.add(n);
-  const executed = new Set(); const unresolved = [];
+  const executed = new Set(seams); const unresolved = [];
   for (const n of names) {
     if (!n) continue;
     let s = '';
-    try { s = si.resolveSeam(n, registry) || ''; } catch { s = ''; }
+    for (const c of candidates(n)) { try { s = si.resolveSeam(c, registry) || ''; } catch { s = ''; } if (s) break; }
     if (s) executed.add(s); else unresolved.push(n);
   }
   process.stdout.write(JSON.stringify({ executed: [...executed].sort(), unresolved: unresolved.sort() }) + '\n');

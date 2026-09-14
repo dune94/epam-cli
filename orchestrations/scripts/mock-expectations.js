@@ -901,7 +901,7 @@ function projectStories() {
       || path.join(process.env.EPAM_PROJECT_CONFIG_DIR || '', 'prd.json');
     const j = JSON.parse(fs.readFileSync(prd, 'utf8'));
     const out = (j.stories || []).filter((s) => s && s.id)
-      .map((s) => ({ id: s.id, codeline: s.codeline || (s.files && s.files[0]) || '', title: s.title || '' }));
+      .map((s) => ({ ...s, id: s.id, codeline: s.codeline || (s.files && s.files[0]) || '', title: s.title || '' }));
     if (out.length) return out;
   } catch { /* no PRD yet — a tracker run synthesises one during the run */ }
   // THE STORIES A TRACKER RUN WILL HAVE, FROM THE TRACKER. Under JIRA_PIPELINE=1 the PRD does not
@@ -1039,10 +1039,32 @@ function contractStandIn(seam) {
       // rationale under the declared minimum, then a name routing to no seam. Each read in the log
       // exactly like a pipeline defect. The contract states all four; this reads them.
       if (Array.isArray(spec && spec.enum) && spec.enum.length) return spec.enum[0];
-      if (t === 'array') return [];
+      // A LIST THE SCHEMA SAYS MUST NOT BE EMPTY holds one item built from its own item schema —
+      // a codeline entry names a codeline this run has. The estate survey demanded at least one
+      // and got [], failed its schema, and was recorded as never having run, so its review never
+      // executed either (£0 greenfield harness, 2026-09-13).
+      if (t === 'array') {
+        const min = Number(spec && spec.minItems) || 0;
+        if (!min || !spec.items || typeof spec.items !== 'object') return [];
+        const items = [];
+        for (let i = 0; i < min; i += 1) items.push(build(name.replace(/s$/, ''), spec.items));
+        return items;
+      }
       if (t === 'number' || t === 'integer') return 0;
       if (t === 'boolean') return false;
-      if (t === 'object') return {};
+      if (t === 'object') {
+        const o = {};
+        for (const k of (spec.required || Object.keys(spec.properties || {}))) o[k] = build(k, (spec.properties || {})[k]);
+        return o;
+      }
+      // A CODELINE IS ONE THIS RUN HAS: the estate's repositories, else the codeline the stories
+      // declare — never a name typed here.
+      if (/^codeline$/i.test(name)) {
+        const repo = estateRepos()[0];
+        const st = projectStories().find((x) => x.codeline);
+        const root = process.env.OUTPUT_DIR || process.env.PROJECT_ROOT || '';
+        return (repo && repo.name) || (st && st.codeline) || (root ? path.basename(root) : `${STAND_IN_MARK}-codeline`);
+      }
       if (/role|agent|name/i.test(name) && ents.length) return ents[0];
       // A NAME MUST LOOK LIKE A NAME: the mint refuses one that is not kebab-case.
       if (/name|role|id$/i.test(name)) {
@@ -1067,6 +1089,11 @@ function contractStandIn(seam) {
         // is for, not with a placeholder that belongs to no story.
         if (story && /^storyid$/i.test(k)) { o[k] = story.id; continue; }
         if (story && /^codeline$/i.test(k) && story.codeline) { o[k] = story.codeline; continue; }
+        // A STAND-IN ELABORATION ADDS, NEVER DROPS. A per-story list the story already carries
+        // (its acceptance criteria) comes back whole with one stand-in item appended — the change
+        // a spec pass makes, so the seams that judge a change (the PRD change reviewer and
+        // summariser) execute at £0; an unchanged story is never reviewed (2026-09-13).
+        if (story && Array.isArray(story[k]) && story[k].length) { o[k] = [...story[k], `${STAND_IN_MARK} ${k} item added by the rehearsal for ${story.id}`]; continue; }
         // A FIELD IS ROLE-VALUED WHEN ITS OWN SCHEMA SAYS SO, not when its name matches a list
         // kept here. The property describes itself — "MUST be one of the offered roles" — and that
         // description is the seam's statement about its own contract, which is the thing to read.
@@ -1785,15 +1812,33 @@ function endsInToolCall(cap, seam) {
         if (!calls) continue;
         const disc = storyDiscriminator(st.id) || st.id;
         const _wmark = key;
+        // THE FIRST ATTEMPTS FAIL ON PURPOSE. A writer that never fails never exercises the
+        // failure analysts, the deterministic check or the retry ladder — seams a real run climbs
+        // through. The first attempts land every deliverable but the last, so the deliverable
+        // check refuses, the same violation repeats, the analyst is asked why, and the ladder
+        // climbs; the next attempt lands them all. Two short attempts: the check invokes the
+        // analyst only on a REPEATED violation.
+        const _turns = calls.length > 1 ? [calls.slice(0, -1), calls.slice(0, -1), calls] : [calls];
         for (const proto of PROTOCOLS) {
-          // eslint-disable-next-line no-await-in-loop
-          await put('/mockserver/expectation', {
-            priority: 55, times: { remainingTimes: 1, unlimited: false },
-            httpRequest: { method: 'POST', path: proto.path,
-              body: { type: 'REGEX', regex: `(?s)(?=.*${rx(wireForm(_wmark))})(?=.*${rx(wireForm(disc))}).*` } },
-            httpResponse: { statusCode: 200, headers: { 'content-type': ['text/event-stream; charset=utf-8'], 'x-seam': [`${seam}:${st.id}`] },
-              body: proto.calls(calls) },
-          });
+          const _match = { type: 'REGEX', regex: `(?s)(?=.*${rx(wireForm(_wmark))})(?=.*${rx(wireForm(disc))}).*` };
+          const _hdr = { 'content-type': ['text/event-stream; charset=utf-8'], 'x-seam': [`${seam}:${st.id}`] };
+          // Each attempt is ONE write turn then ONE answer: the answer is registered once per
+          // attempt at the same priority, so it is served before the next attempt's write turn.
+          for (const turn of _turns) {
+            // eslint-disable-next-line no-await-in-loop
+            await put('/mockserver/expectation', {
+              priority: 55, times: { remainingTimes: 1, unlimited: false },
+              httpRequest: { method: 'POST', path: proto.path, body: _match },
+              httpResponse: { statusCode: 200, headers: _hdr, body: proto.calls(turn) },
+            });
+            // eslint-disable-next-line no-await-in-loop
+            await put('/mockserver/expectation', {
+              priority: 55, times: { remainingTimes: 1, unlimited: false },
+              httpRequest: { method: 'POST', path: proto.path, body: _match },
+              httpResponse: { statusCode: 200, headers: _hdr,
+                body: proto.text(`${STAND_IN_MARK} writer: wrote ${turn.length} of the ${calls.length} deliverable(s) ${st.id} declares`) },
+            });
+          }
           // eslint-disable-next-line no-await-in-loop
           await put('/mockserver/expectation', {
             priority: 54,
@@ -1807,8 +1852,8 @@ function endsInToolCall(cap, seam) {
       }
       if (_wrote) stoodIn.push(`${seam}  <- ${STAND_IN_MARK} writer: declared deliverables written for ${_wrote} story/ies (ecosystem stand-in content)`);
       else stoodIn.push(`${seam}  <- ${STAND_IN_MARK} writer could land nothing: no OUTPUT_DIR/PROJECT_ROOT, no write tool declared by the set, or no ecosystem stand-in`);
-      seen.add(_dedup);
-      continue;
+      // The seam's plain answer is still registered below (the generic path), so a writer call
+      // that names no story of this run is answered by the seam rather than the catch-all.
     }
 
     // A PER-STORY SEAM NEEDS ONE ANSWER PER STORY, WHETHER OR NOT A CAPTURE NAMES ONE.

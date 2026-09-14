@@ -177,6 +177,10 @@ function appendLedgerRecord({ ledgerFile, agent, storyId, phase, model, cost, tu
       story_title: '',
       agent_id: agent || 'unknown',
       agent_name: agent || 'unknown',
+      // THE SEAM THIS CALL ENTERED BY, as the invocation stamped it (EPAM_SEAM). agent_name is the
+      // caller's name for the agent — a minted role, a gate's short name — which resolves to a seam
+      // only by rule; the seam itself is a fact of the call and is recorded as one.
+      seam: process.env.EPAM_SEAM || '',
       forecast_hours: 0,
       forecast_cost_usd: 0,
       started_at: started,

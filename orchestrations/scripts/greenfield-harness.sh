@@ -20,6 +20,11 @@ set -uo pipefail
 SCRIPT_DIR="$(cd "$(dirname "${BASH_SOURCE[0]}")" && pwd)"
 REPO_ROOT="$(cd "$SCRIPT_DIR/../.." && pwd)"
 NODE_BIN="${NODE_BIN:-$(command -v node)}"
+# THE PROJECT'S BASE ENV FILE, resolved through the provider-set registry — never spelled here.
+_project_env() {
+  "$NODE_BIN" -e 'const {projectEnvFiles}=require(process.argv[1]);const f=projectEnvFiles(process.argv[2]);if(!f){process.stderr.write("no provider-set registry resolves the env files of "+process.argv[2]+"\n");process.exit(2)}process.stdout.write(f.base)' \
+    "$DEST/orchestrations/scripts/lib/llm-settings-resolve.js" "$1"
+}
 
 SET=""; PROJECT="greenfield-proof"; REF="HEAD"; DEST=""; CEILING="5"; ASSESS_ONLY=0
 while [ $# -gt 0 ]; do
@@ -54,8 +59,9 @@ if [ "$ASSESS_ONLY" = "1" ]; then
   # A kept install is judged again: the run's exit and spend are read back from its verdict.
   cd "$DEST" || exit 1
   PROJECT_DIR="$DEST/orchestrations/projects/$PROJECT"
-  PRD_FILE="$(sed -n 's/^PRD_FILE=//p' "$PROJECT_DIR/config.env" | tr -d '"')"
-  PHASES="$(sed -n 's/^EPAM_PHASES=//p' "$PROJECT_DIR/config.env" | tr -d '"')"
+  PROJECT_ENV="$(_project_env "$PROJECT_DIR")"
+  PRD_FILE="$(sed -n 's/^PRD_FILE=//p' "$PROJECT_ENV" | tr -d '"')"
+  PHASES="$(sed -n 's/^EPAM_PHASES=//p' "$PROJECT_ENV" | tr -d '"')"
   RUN_EXIT="$("$NODE_BIN" -e 'process.stdout.write(String(require(process.argv[1]).runExit))' "$VERDICT")"
   SPENT="$("$NODE_BIN" -e 'process.stdout.write(String(require(process.argv[1]).spentUsd))' "$VERDICT")"
   HALTED=""; grep -q "passed the ceiling" "$LOG" && HALTED="halted"
@@ -90,9 +96,9 @@ export EPAM_PREFLIGHT_CACHE_DIR="${EPAM_PREFLIGHT_CACHE_DIR:-$REPO_ROOT/orchestr
 export PATH="$(dirname "$NODE_BIN"):$PATH"
 PROJECT_DIR="$DEST/orchestrations/projects/$PROJECT"
 [ -d "$PROJECT_DIR" ] || { red "no project '$PROJECT' in the install"; exit 1; }
-PRD_CANONICAL="$(sed -n 's/^PRD_CANONICAL=//p' "$PROJECT_DIR/config.env" | tr -d '"')"
-PRD_FILE="$(sed -n 's/^PRD_FILE=//p' "$PROJECT_DIR/config.env" | tr -d '"')"
-PHASES="$(sed -n 's/^EPAM_PHASES=//p' "$PROJECT_DIR/config.env" | tr -d '"')"
+PRD_CANONICAL="$(sed -n 's/^PRD_CANONICAL=//p' "$PROJECT_ENV" | tr -d '"')"
+PRD_FILE="$(sed -n 's/^PRD_FILE=//p' "$PROJECT_ENV" | tr -d '"')"
+PHASES="$(sed -n 's/^EPAM_PHASES=//p' "$PROJECT_ENV" | tr -d '"')"
 if [ "$SET" = "mockserver" ]; then
   export EPAM_FREE_RUN=1 ANTHROPIC_API_KEY=mock-no-spend
   # WHERE THE MOCK LISTENS is what the set redirects its runners to: the first URL among the env
@@ -179,7 +185,7 @@ _incomplete="$("$NODE_BIN" -e 'const p=require(process.argv[1]);process.stdout.w
 # THE SEAMS THIS PROJECT'S RUN IS EXPECTED TO EXECUTE, from the registry's own declarations
 # (lib/seams-expected.js): a seam declaring appliesTo for modes this project is not in is listed
 # with its declared reason, and neither counted missing nor silently dropped.
-_expected_json="$("$NODE_BIN" "$REPO_ROOT/orchestrations/scripts/lib/seams-expected.js" "$DEST/orchestrations/agents/invocation-profiles.json" "$PROJECT_DIR/config.env")"
+_expected_json="$("$NODE_BIN" "$REPO_ROOT/orchestrations/scripts/lib/seams-expected.js" "$DEST/orchestrations/agents/invocation-profiles.json" "$PROJECT_DIR")"
 _seams="$(printf '%s' "$_expected_json" | "$NODE_BIN" -e 'let b="";process.stdin.on("data",d=>b+=d).on("end",()=>process.stdout.write(JSON.parse(b).expected.join("\n")))')"
 _all_n="$("$NODE_BIN" -e 'const r=require(process.argv[1]);process.stdout.write(String(Object.keys(r.profiles||{}).length))' "$DEST/orchestrations/agents/invocation-profiles.json")"
 say "seams the registry declares for this project's modes ($(printf '%s' "$_expected_json" | "$NODE_BIN" -e 'let b="";process.stdin.on("data",d=>b+=d).on("end",()=>process.stdout.write(JSON.parse(b).modes.join("+")))')): $(printf '%s\n' "$_seams" | grep -c .) of $_all_n"

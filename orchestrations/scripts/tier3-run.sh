@@ -1,7 +1,7 @@
 #!/usr/bin/env bash
 # tier3-run.sh — launch ANY project's multi-codeline run. The project is an argument.
 #
-# WHY THIS EXISTS. A project declares everything a run needs in its own config.env: the codeline
+# WHY THIS EXISTS. A project declares everything a run needs in its own base env file: the codeline
 # root, the scope bound on the destructive reset, the provisioning mode, its models and ladders.
 # Nothing generic ever loaded that file. The launcher that works names its project twice by
 # hardcoded path, so a project without a launcher of its own ran with NONE of its data applied —
@@ -164,7 +164,7 @@ fi
 # nothing; --describe had been printing "<none declared>" and nothing acted on it.
 case "${EPAM_PROMPT_PROVISION_MODE:-}" in
   copy|generate) ;;
-  '') fail "project '$PROJECT_NAME' declares no EPAM_PROMPT_PROVISION_MODE — declare 'copy' (install the generic templates as they are) or 'generate' (specialise each one for this project) in its config.env; the mint would refuse mid-run" ;;
+  '') fail "project '$PROJECT_NAME' declares no EPAM_PROMPT_PROVISION_MODE — declare 'copy' (install the generic templates as they are) or 'generate' (specialise each one for this project) in its project env; the mint would refuse mid-run" ;;
   *)  fail "project '$PROJECT_NAME' declares EPAM_PROMPT_PROVISION_MODE='$EPAM_PROMPT_PROVISION_MODE'; the mint accepts 'copy' or 'generate'" ;;
 esac
 

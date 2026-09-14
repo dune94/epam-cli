@@ -9,7 +9,10 @@
  * that cannot run on this kind of project is neither counted as missing nor quietly dropped — it
  * is listed with the declaration that excludes it.
  *
- *   node seams-expected.js <registry.json> <project config.env>  → { modes, expected, excluded: {seam: why} }
+ *   node seams-expected.js <registry.json> <project config dir>  → { modes, expected, excluded: {seam: why} }
+ *
+ * The project's base env file is resolved through the provider-set registry (projectEnvFiles),
+ * never spelled here.
  */
 'use strict';
 const fs = require('fs');
@@ -38,8 +41,12 @@ module.exports = { projectModes, expectedSeams };
 
 if (require.main === module) {
   const [reg, cfg] = process.argv.slice(2);
-  if (!reg || !cfg) { process.stderr.write('usage: seams-expected.js <registry.json> <config.env>\n'); process.exit(2); }
+  if (!reg || !cfg) { process.stderr.write('usage: seams-expected.js <registry.json> <project config dir>\n'); process.exit(2); }
   const profiles = JSON.parse(fs.readFileSync(reg, 'utf8')).profiles || {};
-  const modes = projectModes(fs.readFileSync(cfg, 'utf8'));
+  // eslint-disable-next-line global-require
+  const { projectEnvFiles } = require('./llm-settings-resolve.js');
+  const files = projectEnvFiles(cfg);
+  if (!files) { process.stderr.write(`no provider-set registry resolves the env files of ${cfg}\n`); process.exit(2); }
+  const modes = projectModes(fs.readFileSync(files.base, 'utf8'));
   process.stdout.write(JSON.stringify({ modes: [...modes], ...expectedSeams(profiles, modes) }) + '\n');
 }

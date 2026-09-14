@@ -40,11 +40,12 @@ describe('a seam declares the modes it applies to', () => {
     }
     expect(gf.expected.length + Object.keys(gf.excluded).length).toBe(Object.keys(profiles).length);
   });
-  it('the modes of every checked-in project derive from its config', () => {
+  it('the modes of every checked-in project derive from its env, resolved through the registry', () => {
     const dir = join(ROOT, 'orchestrations/projects');
+    const { projectEnvFiles } = require(join(ROOT, 'orchestrations/scripts/lib/llm-settings-resolve.js'));
     for (const d of readdirSync(dir)) {
-      const cfg = join(dir, d, 'config.env'); if (!existsSync(cfg)) continue;
-      const text = readFileSync(cfg, 'utf8');
+      const files = projectEnvFiles(join(dir, d)); if (!files || !existsSync(files.base)) continue;
+      const text = readFileSync(files.base, 'utf8');
       const modes = projectModes(text);
       expect(modes.has(/^EPAM_BROWNFIELD=1$/m.test(text) ? 'brownfield' : 'greenfield'), d).toBe(true);
     }

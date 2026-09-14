@@ -19,12 +19,14 @@ const ROOT = join(__dirname, '../../');
 const PROJECTS = join(ROOT, 'orchestrations/projects');
 const { renderEngineTemplate, placeholdersIn, templatePath } = require(join(ROOT, 'orchestrations/scripts/lib/engine-prompt.js'));
 
+let _prdPath = '';
+function anyProjectPrd(): string { return _prdPath; }
 function anyProject(): { dir: string; prd: string } {
   for (const d of readdirSync(PROJECTS)) {
     const dir = join(PROJECTS, d); const cfg = join(dir, 'config.env');
     const candidates = [join(dir, 'prd.authored.json')];
     if (existsSync(cfg)) { const m = readFileSync(cfg, 'utf8').match(/^PRD_CANONICAL=(.+)$/m); if (m) candidates.push(m[1].trim().startsWith('/') ? m[1].trim() : join(ROOT, m[1].trim())); }
-    for (const prd of candidates) { try { if ((JSON.parse(readFileSync(prd, 'utf8')).stories || []).length) return { dir, prd }; } catch { /* next */ } }
+    for (const prd of candidates) { try { if ((JSON.parse(readFileSync(prd, 'utf8')).stories || []).length) { _prdPath = prd; return { dir, prd }; } } catch { /* next */ } }
   }
   throw new Error('no project declares stories');
 }
@@ -80,5 +82,32 @@ describe('the writer is answered by its own seam at £0', () => {
     const prompt = renderEngineTemplate(id, values);
     const seam = await ask(prompt);
     expect(seam, `${id}: the writer call matched no registered seam`).toMatch(new RegExp(`^${WRITER}(:|$)`));
+  });
+});
+
+/**
+ * THE WRITER'S ANSWER GOES TO THE WRITER ALONE. A roster review quotes every persona — the writer's
+ * included — and lists the tickets in scope, so a writer matcher built from the seam's fingerprint
+ * plus a story title matched the ROSTER REVIEW and handed it a turn of file-writing calls
+ * (2026-09-14). The writer's per-story answer is keyed on the line the writer's own prompt names
+ * its story with, which no other prompt carries.
+ */
+describe("the writer's answer goes to the writer alone", () => {
+  it('a roster-review request quoting the writer persona and naming the stories is not answered as a writer', async () => {
+    const { readFileSync: rf } = require('node:fs');
+    const registry = JSON.parse(rf(join(ROOT, 'orchestrations/agents/invocation-profiles.json'), 'utf8')).profiles as Record<string, any>;
+    const reviewSeam = Object.entries(registry).find(([, p]) => p && p.produces === 'roster-verdict' && /project/.test(p.template || ''))?.[0];
+    expect(reviewSeam, 'no project roster review seam').toBeTruthy();
+    const reviewTpl = JSON.parse(rf(join(TPL, `${registry[reviewSeam!].template}.json`), 'utf8'));
+    // What a roster review really quotes: every CANONICAL persona (agents/profiles.json), plus
+    // the tickets in scope by id and title.
+    const canonical = JSON.parse(rf(join(ROOT, 'orchestrations/agents/profiles.json'), 'utf8')) as Record<string, any>;
+    const personas = Object.entries(canonical).filter(([k]) => !k.startsWith('_')).map(([k, v]) => `${k}: ${typeof v === 'string' ? v : (v && v.persona) || ''}`).join('\n');
+    const stories = JSON.parse(rf(anyProjectPrd(), 'utf8')).stories || [];
+    const values: Record<string, string> = {};
+    for (const p of placeholdersIn(reviewTpl.body || Object.values(reviewTpl.bodies || {}).join('\n'))) values[p] = `${personas}\n${stories.map((s: any) => `${s.id}: ${s.title}`).join('\n')}`;
+    const prompt = renderEngineTemplate(registry[reviewSeam!].template, values);
+    const seam = await ask(prompt);
+    expect(seam).not.toMatch(new RegExp(`^${WRITER}(:|$)`));
   });
 });

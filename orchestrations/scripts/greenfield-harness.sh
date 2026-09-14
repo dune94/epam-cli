@@ -137,6 +137,16 @@ done
 wait "$RUN_PID"; RUN_EXIT=$?
 SPENT="$(ledger_total)"
 say "run exited $RUN_EXIT · spend \$$SPENT"
+if [ "$SET" = "mockserver" ] && [ -n "${_mock_host:-}" ]; then
+  # WHAT THE MOCK ANSWERED, request by request: the recorded pairs, kept beside the log, and a
+  # count per answering seam — a request that fell to the catch-all is named here, not guessed at.
+  curl -s -X PUT "$_mock_host/mockserver/retrieve?type=REQUEST_RESPONSES&format=JSON" > "$DEST/mock-traffic.json" 2>/dev/null || true
+  "$NODE_BIN" -e '
+    const a = JSON.parse(require("fs").readFileSync(process.argv[1], "utf8")); const c = {};
+    for (const x of a) { const s = ((x.httpResponse && x.httpResponse.headers && x.httpResponse.headers["x-seam"]) || ["(no seam header)"])[0]; c[s] = (c[s] || 0) + 1; }
+    process.stdout.write(Object.entries(c).sort((p, q) => q[1] - p[1]).map(([k, v]) => `${v} × ${k}`).join("\n") + "\n");
+  ' "$DEST/mock-traffic.json" 2>/dev/null | sed 's/^/[harness]   mock served: /' | tee -a "$LOG" || true
+fi
 fi   # not --assess-only
 
 # ── 3. What landed ───────────────────────────────────────────────────────────

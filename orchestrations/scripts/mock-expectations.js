@@ -118,6 +118,33 @@ function producesImplementation(seam) {
 function _projectName() { return path.basename(process.env.EPAM_PROJECT_CONFIG_DIR || ''); }
 
 /**
+ * THE LINE ON WHICH THE WRITER'S PROMPT NAMES ITS STORY, and that prompt's fingerprint. Read from
+ * the single-body template that declares the writer seam and carries the story-id placeholder;
+ * `before`/`after` are the text around the placeholder on that line.
+ */
+let _writerFrame;
+function writerStoryLineFrame() {
+  if (_writerFrame !== undefined) return _writerFrame;
+  _writerFrame = null;
+  try {
+    const reg = JSON.parse(fs.readFileSync(REG, 'utf8')).profiles || {};
+    const writer = Object.keys(reg).find((k) => reg[k] && reg[k].produces === 'implementation');
+    for (const f of fs.readdirSync(TPL).filter((x) => x.endsWith('.json'))) {
+      const t = JSON.parse(fs.readFileSync(path.join(TPL, f), 'utf8'));
+      if (typeof t.body !== 'string' || !Array.isArray(t.seams) || !t.seams.includes(writer)) continue;
+      const line = t.body.split('\n').find((l) => l.includes('__STORY_ID__'));
+      if (!line) continue;
+      const [before, afterRaw] = line.split('__STORY_ID__');
+      const after = String(afterRaw || '').split(/__[A-Z0-9_]+__/)[0];
+      const id = f.replace(/\.json$/, '');
+      _writerFrame = { before: before.replace(/^.*__[A-Z0-9_]+__/, ''), after, key: matchKey(id) || '' , template: id };
+      break;
+    }
+  } catch { _writerFrame = null; }
+  return _writerFrame;
+}
+
+/**
  * THE STAND-IN WRITER'S CALLS FOR ONE STORY: every deliverable the story declares, written with the
  * content its codeline's ecosystem declares for a file of that kind (manifest / test / source),
  * through the write tool the active set declares for its runner. Nothing here knows a language, a
@@ -1732,6 +1759,7 @@ function endsInToolCall(cap, seam) {
     }
     let standCall = null;
     let standTagged = null;
+    let _writerReported = false;
     if (!cap) {
       stood = contractStandIn(seam);
       if (!stood) { uncovered.push(`${seam} (no captured reply, no declared contract)`); continue; }
@@ -1810,8 +1838,15 @@ function endsInToolCall(cap, seam) {
         const _story = (() => { try { return (JSON.parse(fs.readFileSync(process.env.PRD_FILE, 'utf8')).stories || []).find((x) => x && x.id === st.id) || st; } catch { return st; } })();
         const calls = writerStandInCalls(_story);
         if (!calls) continue;
-        const disc = storyDiscriminator(st.id) || st.id;
-        const _wmark = key;
+        // THE WRITER'S OWN LINE FOR THIS STORY, not a title: a story's title appears in other
+        // prompts too (the roster review lists the tickets), and the seam's registry fingerprint
+        // appears wherever the writer's persona is quoted — so key + title matched the roster
+        // review and handed it write calls (2026-09-14). The template the writer actually carries
+        // names the story on one line (`… __STORY_ID__ …`); that line, rendered for this story,
+        // occurs in the writer's request alone.
+        const _frame = writerStoryLineFrame();
+        const disc = _frame ? `${_frame.before}${st.id}${_frame.after}` : (storyDiscriminator(st.id) || st.id);
+        const _wmark = _frame ? _frame.key : key;
         // THE FIRST ATTEMPTS FAIL ON PURPOSE. A writer that never fails never exercises the
         // failure analysts, the deterministic check or the retry ladder — seams a real run climbs
         // through. The first attempts land every deliverable but the last, so the deliverable
@@ -1850,10 +1885,11 @@ function endsInToolCall(cap, seam) {
         }
         _wrote += 1;
       }
+      // Reported once, as the writer stand-in; the generic path below still registers the seam's
+      // plain answer (a writer call naming no story of this run) but does not count it again.
+      _writerReported = true;
       if (_wrote) stoodIn.push(`${seam}  <- ${STAND_IN_MARK} writer: declared deliverables written for ${_wrote} story/ies (ecosystem stand-in content)`);
       else stoodIn.push(`${seam}  <- ${STAND_IN_MARK} writer could land nothing: no OUTPUT_DIR/PROJECT_ROOT, no write tool declared by the set, or no ecosystem stand-in`);
-      // The seam's plain answer is still registered below (the generic path), so a writer call
-      // that names no story of this run is answered by the seam rather than the catch-all.
     }
 
     // A PER-STORY SEAM NEEDS ONE ANSWER PER STORY, WHETHER OR NOT A CAPTURE NAMES ONE.
@@ -2030,7 +2066,7 @@ function endsInToolCall(cap, seam) {
     const _actedCap = !!(cap && cap.multi && Array.isArray(cap.turns)
       && cap.turns.some((t) => t && Array.isArray(t.calls) && t.calls.length));
     if (cap) covered.push(`${seam}  <- ${cap.file}${(cap.parsed || _actedCap) ? '' : ' (prose)'}`);
-      else stoodIn.push(`${seam}  <- contract stand-in (${Object.keys(stood).join(', ') || 'artefact'})`);
+      else if (!_writerReported) stoodIn.push(`${seam}  <- contract stand-in (${Object.keys(stood).join(', ') || 'artefact'})`);
   }
 
   // A GENERATED PROMPT IS ANSWERED SEGMENT FOR SEGMENT.

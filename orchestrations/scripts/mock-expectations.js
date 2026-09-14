@@ -1127,28 +1127,42 @@ function contractOf(seam, template) {
 }
 
 /** The JSON answer the seam's own prompt states, with its described values stood in for. */
-function promptExemplar(seam) {
+function promptExemplar(seam, knownKeys = []) {
   const reg = JSON.parse(fs.readFileSync(REG, 'utf8')).profiles || {};
   const id = reg[seam] && reg[seam].template;
-  const body = id ? (templateBodies().get(id) || '') : '';
-  const blocks = [];
-  for (let i = 0; i < body.length; i += 1) {
-    if (body[i] !== '{') continue;
-    let depth = 0;
-    for (let j = i; j < body.length; j += 1) {
-      if (body[j] === '{') depth += 1;
-      else if (body[j] === '}') { depth -= 1; if (depth === 0) { const b = body.slice(i, j + 1); if (/"[A-Za-z_]+"\s*:/.test(b)) blocks.push(b); break; } }
-    }
+  // The registry template first; then every other template declaring this seam alone — the shape
+  // may be stated by a fragment the prompt embeds (cpa-system, embedded by cpa-inference). Each
+  // is read on its own, and the first exemplar carrying a key the contract knows is the answer.
+  const ids = [id].filter(Boolean);
+  for (const [tid] of templateBodies()) {
+    if (tid.includes('#') || ids.includes(tid)) continue;
+    try { const t = JSON.parse(fs.readFileSync(path.join(TPL, `${tid}.json`), 'utf8')); if (Array.isArray(t.seams) && t.seams.length === 1 && t.seams[0] === seam) ids.push(tid); } catch { /* not a template */ }
   }
-  blocks.sort((a, b) => b.length - a.length);
-  for (const blk of blocks) {
+  const parse = (blk) => {
     const text = blk
       .replace(/"<[^"]*>"/g, `"${STAND_IN_MARK} value"`)
       .replace(/:\s*<[^>,}\]]*>/g, ': 0')
       .replace(/<[^>"]*>/g, `${STAND_IN_MARK} value`)
       .replace(/"([A-Za-z0-9_\/-]+)(\|[A-Za-z0-9_|\/-]+)"/g, '"$1"')
       .replace(/\.\.\./g, '').replace(/,\s*([}\]])/g, '$1');
-    try { return JSON.parse(text); } catch { /* the next block */ }
+    try { return JSON.parse(text); } catch { return null; }
+  };
+  for (const tid of ids) {
+    const body = templateBodies().get(tid) || '';
+    const blocks = [];
+    for (let i = 0; i < body.length; i += 1) {
+      if (body[i] !== '{') continue;
+      let depth = 0;
+      for (let j = i; j < body.length; j += 1) {
+        if (body[j] === '{') depth += 1;
+        else if (body[j] === '}') { depth -= 1; if (depth === 0) { const b = body.slice(i, j + 1); if (/"[A-Za-z_]+"\s*:/.test(b)) blocks.push(b); break; } }
+      }
+    }
+    blocks.sort((a, b) => b.length - a.length);
+    for (const blk of blocks) {
+      const ex = parse(blk);
+      if (ex && typeof ex === 'object' && (!knownKeys.length || knownKeys.some((k) => k in ex))) return ex;
+    }
   }
   return null;
 }
@@ -1309,7 +1323,7 @@ function contractStandIn(seam, override) {
     // issue) beside a pass verdict, which no reviewer ever says.
     if (c.exemplarFromPrompt) {
       try {
-        const ex = promptExemplar(seam);
+        const ex = promptExemplar(seam, c.knownKeys || []);
         for (const k of (c.knownKeys || [])) if (ex && k in ex && !(k in o)) o[k] = ex[k];
       } catch { /* the required keys stand alone */ }
     }

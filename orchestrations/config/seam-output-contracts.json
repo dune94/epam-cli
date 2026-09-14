@@ -119,8 +119,13 @@
       "checkedBy": "lib/llm-call.js callLlmJson — refuses a reply with no JSON"
     },
     "cpa-inference": {
-      "kind": "artefact",
-      "checkedBy": "lib/cpa-inference.js — parses the estimate, refuses unparseable"
+      "kind": "declared",
+      "requiredKeys": ["confidence"],
+      "knownKeys": ["confidence", "complexityAdjustment", "adjustedEstimate", "riskFlags", "missingKbCoverage", "citedSources", "reasoning"],
+      "exemplarFromPrompt": true,
+      "prefer": { "confidence": 1 },
+      "_whyPrefer": "contextualize-stories.sh gates on .confidence (block below GATE_BLOCK); the prompt's exemplar states confidence 0.0, and a stand-in that copied it blocked every brownfield story at CPA (£0 brownfield harness runs 1–3, 2026-09-14). The rehearsal's estimate is fully confident — the join is what is rehearsed, not the estimate.",
+      "checkedBy": "contextualize-stories.sh reads .confidence, .complexityAdjustment, .adjustedEstimate.*, .riskFlags, .missingKbCoverage, .citedSources, .reasoning from the reply (an unparseable reply is replaced by a zero-confidence one); the shape is stated by cpa-system, the fragment cpa-inference embeds as __SYSTEM_PROMPT__."
     },
     "ac-classification": {
       "kind": "declared",

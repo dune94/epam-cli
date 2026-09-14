@@ -369,7 +369,8 @@ describe('a declared contract that asks for the prompt exemplar carries every ke
     const standIn = c.list ? delivered[0] : delivered;
     for (const k of c.knownKeys) expect(standIn, `${seam}.${k}`).toHaveProperty(k);
     for (const [k, v] of Object.entries(standIn)) {
-      if (Array.isArray(v)) { expect(v.length, `${seam}.${k} carries an item`).toBeGreaterThan(0); }
+      // A list the exemplar states WITH an item shape carries one; one it states as [] (no risk
+      // flags is a valid answer) stays empty — the exemplar decides, not this test.
       if (typeof v === 'string') expect(v, `${seam}.${k} is one member, not a|b|c`).not.toMatch(/\|/);
     }
   });
@@ -460,5 +461,28 @@ describe("a list contract's stand-in is read by the consumer that reads lists, a
       expect(findings[0].file).toBe(src);
       expect(findings[0].fileVerified, 'the fix site must exist in the codeline').toBe(true);
     } finally { rmSync(root, { recursive: true, force: true }); }
+  });
+});
+
+/**
+ * THE CPA STAND-IN PASSES CPA'S OWN GATE. contextualize-stories.sh gates a story on the
+ * inference's .confidence (block below its declared threshold); the prompt's exemplar states 0.0,
+ * and a stand-in that copied it blocked every brownfield story at CPA (£0 brownfield harness runs
+ * 1–3, 2026-09-14). The real compute_gate, with the real thresholds, over the stand-in.
+ */
+describe("the CPA stand-in passes CPA's own gate", () => {
+  const schema = require('../../../orchestrations/scripts/lib/agent-output-schema.js');
+  const { spawnSync } = require('node:child_process');
+  const SRC = fs.readFileSync(path.join(ROOT, 'orchestrations/scripts/contextualize-stories.sh'), 'utf8');
+  // The seam whose consumer is that script: the contract says so.
+  const seams = Object.entries(schema.declaredContracts() as Record<string, any>).filter(([, c]) => /contextualize-stories\.sh/.test(String(c.checkedBy || ''))).map(([s]) => s);
+  it('a contract names contextualize-stories.sh as its consumer', () => { expect(seams.length).toBeGreaterThan(0); });
+  it.each(seams)('%s: compute_gate says pass for the stand-in confidence', (seam) => {
+    const standIn = mock.contractStandIn(seam);
+    expect(typeof standIn.confidence).toBe('number');
+    const thresholds = SRC.split('\n').filter((l) => /^(GATE_BLOCK|BLEND_LOW|BLEND_HIGH|GATE_REVIEW_FLAGS)=/.test(l)).map((l) => l.replace(/\s+#.*$/, '')).join('\n');
+    const fn = SRC.slice(SRC.indexOf('compute_gate() {'), SRC.indexOf('\n}\n', SRC.indexOf('compute_gate() {')) + 3);
+    const r = spawnSync('bash', ['-c', `${thresholds}\n${fn}\ncompute_gate ${standIn.confidence} 0 0`], { encoding: 'utf8' });
+    expect(r.stdout.trim(), r.stderr).toBe('pass');
   });
 });

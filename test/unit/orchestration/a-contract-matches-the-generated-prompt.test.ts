@@ -59,7 +59,15 @@ describe('a contract matches the generated prompt', () => {
         expect(prompts.length, `no generated copy of ${seam} archived — contract UNVERIFIED`).toBe(0)
         return
       }
-      for (const body of prompts) {
+      // A key may be stated by a FRAGMENT the generated prompt embeds (cpa-system inside
+      // cpa-inference): a fragment is engine-layer and never generated, so it is read from the
+      // template layer — every template declaring this seam alone.
+      const fragments = readdirSync(join(REPO, 'orchestrations/prompts/templates')).filter((f) => f.endsWith('.json')).map((f) => {
+        try { return JSON.parse(readFileSync(join(REPO, 'orchestrations/prompts/templates', f), 'utf8')) } catch { return null }
+      }).filter((t: any) => t && Array.isArray(t.seams) && t.seams.length === 1 && t.seams[0] === seam)
+        .map((t: any) => String(t.body || Object.values(t.bodies || {}).join('\n')))
+      for (const body0 of prompts) {
+        const body = [body0, ...fragments].join('\n')
         for (const key of required) {
           // Stated as a JSON key, a `key:` line, or a `backticked` field name — all three are how
           // a prompt names the field its consumer reads (the reviewer's prompt of 2026-08-26

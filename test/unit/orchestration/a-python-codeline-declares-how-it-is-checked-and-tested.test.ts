@@ -180,3 +180,22 @@ cat ${JSON.stringify(join(d, '.epam/verification.json'))}`;
     expect(doc.test && doc.test.command, 'no test section in the written manifest').toBeTruthy();
   });
 });
+
+/**
+ * A CHECK THE ECOSYSTEM DECLARES NO CONVENTION FOR REPORTS OK, NEVER CRASHES. The mock-completeness
+ * check reads the mock-factory patterns the node ecosystem declares; on a Python codeline's
+ * contract-generation manifest it crashed with KeyError (£0 greenfield harness, 2026-09-13) and the
+ * attempt was judged on a traceback. Executed against the real handler with the real manifest.
+ */
+describe('a check the ecosystem declares no convention for reports OK', () => {
+  it('mock-completeness-check on a Python contract-generation manifest', () => {
+    const d = codeline(PY);
+    const cm = require(join(SCRIPTS, 'lib/handlers/codeline-manifests.js'));
+    const built = cm.build(d);
+    mkdirSync(join(d, '.epam'), { recursive: true });
+    writeFileSync(join(d, '.epam/contract-generation.json'), JSON.stringify(built['contract-generation.json']));
+    const r = spawnSync('python3', [join(SCRIPTS, 'lib/handlers/mock-completeness-check.py'), d, join(d, '.epam/contract-generation.json')], { encoding: 'utf8' });
+    expect(r.status, r.stderr).toBe(0);
+    expect((r.stdout || '').split('\n')[0]).toBe('OK');
+  });
+});

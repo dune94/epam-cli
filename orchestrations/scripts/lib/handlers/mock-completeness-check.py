@@ -3,6 +3,15 @@ import json, os, re, sys
 project_root, config_file = sys.argv[1], sys.argv[2]
 with open(config_file) as f:
     cfg = json.load(f)
+# A CHECK THE ECOSYSTEM DECLARES NO CONVENTION FOR IS NOT A CHECK THAT FAILED. The mock-factory
+# patterns below are one ecosystem's (declared in its provider); a codeline whose ecosystem
+# declares none has nothing this check can examine, and says OK rather than crashing on a
+# missing key and having the attempt judged on a traceback (2026-09-13).
+_REQUIRED = ('testFileExtensions', 'testFilePattern', 'mockFactoryStartPattern', 'mockClassPattern')
+if not all(k in cfg for k in _REQUIRED):
+    print("OK")
+    print("mock-completeness: this codeline's ecosystem declares no mock-factory convention — nothing to check")
+    sys.exit(0)
 TEST_FILE_EXTS = tuple(cfg['testFileExtensions'])
 
 def is_test_file(path):

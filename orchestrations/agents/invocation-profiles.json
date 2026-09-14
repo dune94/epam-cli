@@ -290,6 +290,8 @@
     },
     "ac-elaboration": {
       "appliesTo": ["brownfield"],
+      "runsOnRejectionBy": ["ac-classification"],
+      "_whyRunsOnRejectionBy": "lib/ac-gate.js elaborates a story's ACs only when the classifier's verdict is insufficient (and AC_GATE_AUTO_ELABORATE=1). Declared so the £0 rehearsal rejects one classification on purpose and this seam executes.",
       "_whyAppliesTo": "Elaborates tracker tickets whose ACs the classifier found enrichable; a canonical greenfield PRD arrives with its ACs authored.",
       "_what": "Elaborates an acceptance criterion into verification criteria.",
       "maxOutputTokens": 32768,

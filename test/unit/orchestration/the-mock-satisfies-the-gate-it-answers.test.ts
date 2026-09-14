@@ -522,3 +522,45 @@ describe('the brownfield spec stand-in declares verification criteria the runner
     expect(judged.ok, JSON.stringify(judged)).toBe(true);
   });
 });
+
+/**
+ * A DECLARED VERDICT IS ONE THE PROMPT OFFERS, AND ITS REJECTION IS THE PROMPT'S OWN. The AC
+ * classifier's stand-in answered `verdict: "pass"` — a word its prompt never offers (sufficient |
+ * enrichable | insufficient); the consumer read the unknown verdict as "proceed" with nothing else
+ * set, the story lost its worktree shape and the router never ran (£0 brownfield harness run 17,
+ * 2026-09-14). Every declared contract whose required keys include a verdict is judged against the
+ * quoted alternatives on its prompt's own `"verdict":` line; where the registry says a seam runs
+ * on this seam's rejection, the rejection is the prompt's rejecting word, declared by the contract.
+ */
+describe('a declared verdict is one its prompt offers', () => {
+  const contracts = JSON.parse(fs.readFileSync(path.join(ROOT, 'orchestrations/config/seam-output-contracts.json'), 'utf8')).seams as Record<string, any>;
+  const reg = JSON.parse(fs.readFileSync(path.join(ROOT, 'orchestrations/agents/invocation-profiles.json'), 'utf8')).profiles as Record<string, any>;
+  const verdictSeams = Object.entries(contracts).filter(([seam, c]) => c && c.kind === 'declared' && (c.requiredKeys || []).includes('verdict') && reg[seam] && reg[seam].template);
+  it('there are declared contracts with a verdict', () => { expect(verdictSeams.length).toBeGreaterThan(0); });
+  const offered = (seam: string): string[] => {
+    const t = JSON.parse(fs.readFileSync(path.join(ROOT, 'orchestrations/prompts/templates', `${reg[seam].template}.json`), 'utf8'));
+    // Every line stating a verdict: the quoted words after `"verdict":` up to the next key.
+    const out = new Set<string>();
+    for (const l of String(t.body || '').split('\n')) {
+      const m = l.match(/"verdict"\s*:\s*(.*)$/); if (!m) continue;
+      const seg = m[1].split(/,\s*"[A-Za-z_]+"\s*:/)[0];
+      for (const w of seg.matchAll(/"([a-z_-]+)"/g)) out.add(w[1]);
+    }
+    return [...out];
+  };
+  it.each(verdictSeams.map(([s]) => s))('%s: the stand-in verdict is one of the words its prompt offers', (seam) => {
+    const words = offered(seam);
+    expect(words.length, `${seam}'s prompt states no verdict alternatives`).toBeGreaterThan(0);
+    const s = mock.contractStandIn(seam, mock.contractOf(seam, reg[seam].template));
+    expect(words, `${seam} answered '${s.verdict}'`).toContain(s.verdict);
+  });
+  const fed = verdictSeams.map(([s]) => s).filter((s) => Object.values(reg).some((p: any) => Array.isArray(p.runsOnRejectionBy) && p.runsOnRejectionBy.includes(s)));
+  it('some declared verdict seam feeds another on rejection', () => { expect(fed.length).toBeGreaterThan(0); });
+  it.each(fed)('%s: its declared rejection is the rejecting word its prompt offers, and differs from the answer', (seam) => {
+    const c = contracts[seam];
+    expect(c.rejectsWith && typeof c.rejectsWith.verdict === 'string', `${seam} declares no rejectsWith.verdict`).toBe(true);
+    expect(offered(seam)).toContain(c.rejectsWith.verdict);
+    const s = mock.contractStandIn(seam, mock.contractOf(seam, reg[seam].template));
+    expect(c.rejectsWith.verdict).not.toBe(s.verdict);
+  });
+});

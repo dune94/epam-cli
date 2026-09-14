@@ -198,12 +198,19 @@ describe('one first verdict rejects on purpose for the reviewer whose rejection 
     for (const p of placeholdersIn(doc.body)) values[p] = optional.has(p) ? '' : `value of ${p.replace(/_/g, ' ').trim()}`;
     const prompt = substituteOnce(doc.body, values);
     const text = (b: string) => [...b.matchAll(/"text":"((?:[^"\\]|\\.)*)"/g)].map((m) => JSON.parse(`"${m[1]}"`)).join('');
+    // The rejecting and passing words are the seam's own: declared by its contract (rejectsWith)
+    // and offered first by its prompt, else the generic verdict vocabulary (fail / pass).
+    const contract = JSON.parse(readFileSync(join(ROOT, 'orchestrations/config/seam-output-contracts.json'), 'utf8')).seams[seam] || {};
+    const rejecting = (contract.rejectsWith && contract.rejectsWith.verdict) || 'fail';
     const first = await ask(prompt);
     expect(first.seam).toBe(`${seam}:first-verdict-rejects`);
-    expect(JSON.parse(text(first.body)).verdict).toBe('fail');
+    expect(JSON.parse(text(first.body)).verdict).toBe(rejecting);
     const second = await ask(prompt);
     expect(second.seam).toBe(seam);
-    expect(JSON.parse(text(second.body)).verdict).toBe('pass');
+    const passing = JSON.parse(text(second.body)).verdict;
+    expect(passing).not.toBe(rejecting);
+    const offered = [...String(doc.body).matchAll(/"verdict"\s*:\s*(.*)$/gm)].flatMap((m) => [...m[1].split(/,\s*"[A-Za-z_]+"\s*:/)[0].matchAll(/"([a-z_-]+)"/g)].map((w) => w[1]));
+    expect(offered.length ? offered : ['pass']).toContain(passing);
   });
 });
 

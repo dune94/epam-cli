@@ -129,6 +129,10 @@
     },
     "ac-classification": {
       "kind": "declared",
+      "rejectsWith": {
+        "verdict": "insufficient"
+      },
+      "_whyRejectsWith": "ac-elaboration runs only on an insufficient verdict (lib/ac-gate.js, AC_GATE_AUTO_ELABORATE=1): the first classification of a rehearsal is insufficient on purpose so the elaboration seam executes; the retry meets the passing form the prompt offers first.",
       "requiredKeys": [
         "verdict"
       ],

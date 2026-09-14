@@ -344,6 +344,24 @@ function seamDelivery(seam) {
  * across at most 2 phase passes.
  */
 const WRITER_ATTEMPTS_CEILING = (Number(process.env.EPAM_MAX_RETRIES) + 1 || 8) * 2;
+/**
+ * The verdict words a seam's prompt offers, in the order it states them: every `"verdict":` line
+ * of the registry template, the quoted words after it up to the next key.
+ */
+function verdictWordsOffered(seam) {
+  try {
+    const reg = JSON.parse(fs.readFileSync(REG, 'utf8')).profiles || {};
+    const t = reg[seam] && reg[seam].template;
+    const doc = t ? JSON.parse(fs.readFileSync(path.join(TPL, `${t}.json`), 'utf8')) : null;
+    const out = [];
+    for (const l of String((doc && doc.body) || '').split('\n')) {
+      const m = l.match(/"verdict"\s*:\s*(.*)$/); if (!m) continue;
+      const seg = m[1].split(/,\s*"[A-Za-z_]+"\s*:/)[0];
+      for (const w of seg.matchAll(/"([a-z_-]+)"/g)) if (!out.includes(w[1])) out.push(w[1]);
+    }
+    return out;
+  } catch { return []; }
+}
 /** The word every stand-in is marked with — generated and recognised with this one constant. */
 const STAND_IN_MARK = 'stand-in';
 function storyDiscriminator(storyId) {
@@ -1403,6 +1421,14 @@ function contractStandIn(seam, override) {
   if (c.kind === 'declared') {
     const o = {};
     for (const k of (c.requiredKeys || [])) o[k] = valueFor(k);
+    // A VERDICT IS ONE OF THE WORDS THE PROMPT OFFERS — the first, which every prompt here states
+    // as its passing form. The generic value was `pass`, a word the AC classifier's prompt never
+    // offers (sufficient | enrichable | insufficient); the consumer read the unknown verdict as
+    // "proceed" with nothing else set, the story lost its worktree shape, and the router never
+    // ran (£0 brownfield harness run 17, 2026-09-14). The reviews were answering `pass` where
+    // their prompts offer approved | changes_requested, accepted only because their consumers
+    // fail open on an unknown word.
+    if ('verdict' in o) { const words = verdictWordsOffered(seam); if (words.length) o.verdict = words[0]; }
     // THE REST OF THE SHAPE, FROM THE PROMPT THAT STATES IT. A declared contract lists the keys
     // its consumer reads; the seam's own prompt states the whole answer as a JSON exemplar
     // ("Output ONLY a single JSON object: {...}"). An answer carrying only the required key
@@ -2589,7 +2615,11 @@ function endsInToolCall(cap, seam) {
     // that seam execute. The first call answers `fail` with one finding, consumed once; the caller
     // runs the rewrite and asks again, and meets the approval below.
     if (!cap && !alias && rejectionFeeds(seam) && stood && typeof stood === 'object' && 'verdict' in stood) {
-      const rejected = { ...stood, verdict: 'fail', issues: [`${STAND_IN_MARK} rejection for ${seam}: rejected on purpose so the rewrite that follows a rejection executes`],
+      // THE REJECTING WORD IS THE PROMPT'S OWN, declared by the contract (`rejectsWith`): the AC
+      // classifier rejects with `insufficient`, a reviewer with `changes_requested`; `fail` is the
+      // generic verdict vocabulary's, kept where no contract declares otherwise.
+      const _rw = (contractOf(seam, template) || {}).rejectsWith || { verdict: 'fail' };
+      const rejected = { ...stood, ..._rw, issues: [`${STAND_IN_MARK} rejection for ${seam}: rejected on purpose so the rewrite that follows a rejection executes`],
         findings: [{ severity: 'minor', description: `${STAND_IN_MARK} rejection for ${seam}: rejected on purpose so the rewrite that follows a rejection executes` }],
         reason: `${STAND_IN_MARK} rejection for ${seam}: rejected on purpose` };
       for (const proto of PROTOCOLS) {

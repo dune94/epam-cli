@@ -370,3 +370,15 @@ describe('a declared contract that asks for the prompt exemplar carries every ke
     }
   });
 });
+
+/** A DECLARED PREFERENCE is honoured: the contract says which branch of the consumer the rehearsal takes. */
+describe('a declared preference among the values the prompt offers is honoured', () => {
+  const schema = require('../../../orchestrations/scripts/lib/agent-output-schema.js');
+  const preferring = Object.entries(schema.declaredContracts() as Record<string, any>).filter(([, c]) => c.prefer);
+  it('some contract prefers', () => { expect(preferring.length).toBeGreaterThan(0); });
+  it.each(preferring.map(([s]) => s))('%s: the stand-in carries the preferred value', (seam) => {
+    const c = (schema.declaredContracts() as Record<string, any>)[seam];
+    const standIn = mock.contractStandIn(seam);
+    for (const [k, v] of Object.entries(c.prefer)) expect(standIn[k], `${seam}.${k}`).toBe(v);
+  });
+});

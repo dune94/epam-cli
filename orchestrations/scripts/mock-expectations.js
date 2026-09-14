@@ -1208,6 +1208,9 @@ function contractStandIn(seam, override) {
         for (const k of (c.knownKeys || [])) if (ex && k in ex && !(k in o)) o[k] = ex[k];
       } catch { /* the required keys stand alone */ }
     }
+    // A DECLARED PREFERENCE among the values the prompt offers — the contract says which branch
+    // of the consumer the rehearsal should take, and why.
+    for (const [k, v] of Object.entries(c.prefer || {})) if (k in o) o[k] = v;
     return Object.keys(o).length ? o : null;
   }
   if (c.kind === 'schema' && c.tag) {

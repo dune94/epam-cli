@@ -147,6 +147,8 @@
     "agent-failure-analyst": {
       "kind": "declared",
       "exemplarFromPrompt": true,
+      "prefer": { "target": "skill" },
+      "_whyPrefer": "Of the targets the prompt offers, skill is the one whose change goes through the reviewer's summarize-and-resubmit loop (claude.sh run_change_with_reviewer_retry: skill_note, kb_entry, tool_creation); an ac/tc patch reverts on rejection and reaches no summarizer. The rehearsal stand-in takes it so prd-change-summarizer executes at £0.",
       "_whyExemplar": "The rehearsal stand-in carries the whole answer the prompt states — target: prd with one ac_patch — so the change reviewer and, on a rejection, the summarizer execute at £0; with diagnosis alone neither ever ran (2026-09-14).",
       "requiredKeys": [
         "diagnosis"
@@ -205,6 +207,8 @@
     "impl-failure-analyst": {
       "kind": "declared",
       "exemplarFromPrompt": true,
+      "prefer": { "target": "skill" },
+      "_whyPrefer": "Of the targets the prompt offers, skill is the one whose change goes through the reviewer's summarize-and-resubmit loop (claude.sh run_change_with_reviewer_retry: skill_note, kb_entry, tool_creation); an ac/tc patch reverts on rejection and reaches no summarizer. The rehearsal stand-in takes it so prd-change-summarizer executes at £0.",
       "_whyExemplar": "The rehearsal stand-in carries the whole answer the prompt states — target: prd with one ac_patch — so the change reviewer and, on a rejection, the summarizer execute at £0; with diagnosis alone neither ever ran (2026-09-14).",
       "requiredKeys": [
         "diagnosis"

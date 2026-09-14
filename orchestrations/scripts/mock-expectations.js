@@ -212,13 +212,13 @@ function writerStandInCalls(story) {
   const estate = estateRepos().find((r) => r.name === String(story.codeline || ''));
   const root = (estate && estate.path) || process.env.OUTPUT_DIR || process.env.PROJECT_ROOT || '';
   if (!root) return null;
-  let tool = null;
+  let tool = null; let readTool = null;
   try {
     // eslint-disable-next-line global-require
     const r = require('./lib/llm-settings-resolve.js');
     for (const name of r.declaredRunners({ projectConfigDir: process.env.EPAM_PROJECT_CONFIG_DIR })) {
       const decl = r.resolveRunner(name, { projectConfigDir: process.env.EPAM_PROJECT_CONFIG_DIR });
-      if (decl && decl.writeTool && decl.writeTool.name) { tool = decl.writeTool; break; }
+      if (decl && decl.writeTool && decl.writeTool.name) { tool = decl.writeTool; readTool = decl.readTool; break; }
     }
   } catch { tool = null; }
   if (!tool) return null;
@@ -254,7 +254,13 @@ function writerStandInCalls(story) {
     if (path.basename(f) === eco.file) content = body(eco.standIn.manifest);
     else if (testRe && testRe.test(f)) content = body(eco.standIn.test);
     else if (srcExt.some((x) => f.endsWith(x))) content = body(eco.standIn.source);
-    return { name: tool.name, input: { [tool.path]: abs, [tool.content]: content } };
+    // A FILE THAT EXISTS IS READ FIRST. The runner's write tool refuses a file the session has not
+    // read ("File has not been read yet. Read it first before writing to it."): the brownfield
+    // rehearsal's write turn was served and rejected on every attempt, and the deliverable stayed
+    // unchanged (£0 brownfield harness run 10, 2026-09-14). A brownfield story's files exist by
+    // definition; each is read through the set's declared read tool before it is written.
+    const read = readTool && readTool.name && fs.existsSync(abs) ? { name: readTool.name, input: { [readTool.path]: abs } } : null;
+    return { name: tool.name, input: { [tool.path]: abs, [tool.content]: content }, read };
   });
 }
 /** The word every stand-in is marked with — generated and recognised with this one constant. */
@@ -2014,11 +2020,21 @@ function endsInToolCall(cap, seam) {
           // Each attempt is ONE write turn then ONE answer: the answer is registered once per
           // attempt at the same priority, so it is served before the next attempt's write turn.
           for (const turn of _turns) {
+            // The files that already exist are read in a turn of their own before the write turn.
+            const _reads = turn.map((c) => c.read).filter(Boolean);
+            if (_reads.length) {
+              // eslint-disable-next-line no-await-in-loop
+              await put('/mockserver/expectation', {
+                priority: 55, times: { remainingTimes: 1, unlimited: false },
+                httpRequest: { method: 'POST', path: proto.path, body: _match },
+                httpResponse: { statusCode: 200, headers: _hdr, body: proto.calls(_reads) },
+              });
+            }
             // eslint-disable-next-line no-await-in-loop
             await put('/mockserver/expectation', {
               priority: 55, times: { remainingTimes: 1, unlimited: false },
               httpRequest: { method: 'POST', path: proto.path, body: _match },
-              httpResponse: { statusCode: 200, headers: _hdr, body: proto.calls(turn) },
+              httpResponse: { statusCode: 200, headers: _hdr, body: proto.calls(turn.map(({ read, ...c }) => c)) },
             });
             // eslint-disable-next-line no-await-in-loop
             await put('/mockserver/expectation', {

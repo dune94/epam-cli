@@ -216,6 +216,51 @@ describe("the writer's per-story answers are registered whatever the generic key
     });
   }, 300_000);
   afterAll(() => own.stop());
+  /**
+   * A DELIVERABLE THAT ALREADY EXISTS IS READ BEFORE IT IS WRITTEN. Claude Code's Write tool refuses
+   * to overwrite a file the session has not read ("File has not been read yet. Read it first before
+   * writing to it."): the brownfield rehearsal's per-story write turn was served and rejected eight
+   * times running, and the deliverable stayed unchanged (£0 brownfield harness run 10, 2026-09-14).
+   * A brownfield story's files exist by definition. The stand-in answers as a model would: a turn
+   * of read calls for the files that exist, then the write turn, then the text.
+   */
+  // FIRST: the per-story answer is a sequence, and only a fresh mock's first request is its first turn.
+  it('a story whose deliverable already exists is answered read turn → write turn → text', async () => {
+    const id = writerTemplates[0];
+    const doc = JSON.parse(readFileSync(templatePath(id), 'utf8'));
+    const values: Record<string, string> = {};
+    const optional = new Set(doc.mayBeEmpty || []);
+    for (const ph of placeholdersIn(doc.body)) values[ph] = optional.has(ph) ? '' : `value of ${ph.replace(/_/g, ' ').trim()}`;
+    values.__STORY_ID__ = storyId; if ('__TITLE__' in values) values.__TITLE__ = 'a defect in the module';
+    const prompt = renderEngineTemplate(id, values);
+    const askBody = () => new Promise<string>((resolve, reject) => {
+      const body = JSON.stringify({ model: 'x', max_tokens: 1, stream: true, messages: [{ role: 'user', content: prompt }] });
+      const req = httpRequest(`${own.url}/v1/messages`, { method: 'POST', headers: { 'content-type': 'application/json' } }, (res) => { let b = ''; res.on('data', (d) => { b += d; }); res.on('end', () => resolve(b)); });
+      req.on('error', reject); req.end(body);
+    });
+    const events = (sse: string) => sse.split('\n').filter((l) => l.startsWith('data: ')).map((l) => JSON.parse(l.slice(6)));
+    const calls = (sse: string) => events(sse).filter((e) => e.type === 'content_block_start' && e.content_block.type === 'tool_use').map((e) => e.content_block.name as string);
+    const inputs = (sse: string) => events(sse).filter((e) => e.type === 'content_block_delta' && e.delta.type === 'input_json_delta').map((e) => JSON.parse(e.delta.partial_json));
+    const { resolveRunner, declaredRunners } = require(join(ROOT, 'orchestrations/scripts/lib/llm-settings-resolve.js'));
+    const p = anyProject();
+    // Resolved under the set the mock was registered with — the rehearsal set.
+    const prior = process.env.EPAM_PROVIDER_SET; process.env.EPAM_PROVIDER_SET = 'mockserver';
+    let decl: any;
+    try { decl = declaredRunners({ projectConfigDir: p.dir }).map((n: string) => resolveRunner(n, { projectConfigDir: p.dir })).find((d: any) => d && d.writeTool); }
+    finally { if (prior === undefined) delete process.env.EPAM_PROVIDER_SET; else process.env.EPAM_PROVIDER_SET = prior; }
+    expect(decl, 'no runner of the rehearsal set declares a write tool').toBeTruthy();
+    expect(decl.readTool, 'the set declares no read tool beside its write tool').toBeTruthy();
+    const first = await askBody();
+    expect(calls(first), 'the first turn is not a turn of read calls').toEqual([decl.readTool.name]);
+    const target = join(codeline, 'src');
+    expect(inputs(first)[0][decl.readTool.path], 'the read is not of the existing deliverable').toContain(target);
+    const second = await askBody();
+    expect(calls(second), 'the second turn is not the write turn').toEqual([decl.writeTool.name]);
+    expect(inputs(second)[0][decl.writeTool.path]).toBe(inputs(first)[0][decl.readTool.path]);
+    const third = await askBody();
+    expect(calls(third), 'the third answer is not text').toEqual([]);
+    expect(third).toMatch(/"type":"text_delta"/);
+  });
   it.each(writerTemplates)('%s rendered for the tracker story is answered with that story\'s write turn', async (id) => {
     const doc = JSON.parse(readFileSync(templatePath(id), 'utf8'));
     const values: Record<string, string> = {};

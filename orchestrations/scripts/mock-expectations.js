@@ -1136,6 +1136,48 @@ function promptExemplar(seam) {
   return null;
 }
 
+/**
+ * A VALUE THAT SATISFIES A JSON SCHEMA NODE — required properties of the declared types, an enum's
+ * or const's first value, a oneOf's first branch, $refs resolved against the root. Read from the
+ * schema a contract points at (a file or the command the consumer itself runs), never typed here.
+ */
+function valueFromSchema(spec, root, seam) {
+  const resolve = (x) => (x && x.$ref ? String(x.$ref).replace(/^#\//, '').split('/').reduce((a, k) => (a == null ? a : a[k]), root) : x);
+  const sp = resolve(spec) || {};
+  if (sp.const !== undefined) return sp.const;
+  if (Array.isArray(sp.enum) && sp.enum.length) return sp.enum[0];
+  if (Array.isArray(sp.oneOf) && sp.oneOf.length) return valueFromSchema(sp.oneOf[0], root, seam);
+  if (Array.isArray(sp.anyOf) && sp.anyOf.length) return valueFromSchema(sp.anyOf[0], root, seam);
+  const t = Array.isArray(sp.type) ? sp.type[0] : (sp.type || (sp.properties ? 'object' : 'string'));
+  if (t === 'object') {
+    const o = {};
+    for (const k of (sp.required || Object.keys(sp.properties || {}))) o[k] = valueFromSchema((sp.properties || {})[k], root, seam);
+    return o;
+  }
+  if (t === 'array') { const n = Number(sp.minItems) || 0; return Array.from({ length: n }, () => valueFromSchema(sp.items, root, seam)); }
+  if (t === 'number' || t === 'integer') return Number(sp.minimum) || 0;
+  if (t === 'boolean') return false;
+  if (t === 'null') return null;
+  const base = `${STAND_IN_MARK} value for ${seam}`;
+  return base.length >= (Number(sp.minLength) || 0) ? base : base.padEnd(Number(sp.minLength), ' .');
+}
+
+/** The schema a contract's shape points at: a file path or a command, plus a dot path into it. */
+function schemaFromShape(shape) {
+  let root = null;
+  if (Array.isArray(shape.schemaCommand) && shape.schemaCommand.length) {
+    // eslint-disable-next-line global-require
+    const { execFileSync } = require('child_process');
+    const [cmd, ...args] = shape.schemaCommand.map((a) => (a.startsWith('lib/') ? path.join(__dirname, a) : a));
+    root = JSON.parse(execFileSync(cmd, args, { encoding: 'utf8', maxBuffer: 4 * 1024 * 1024 }));
+  } else if (shape.schemaFile) {
+    root = JSON.parse(fs.readFileSync(path.join(__dirname, '..', shape.schemaFile), 'utf8'));
+  }
+  if (!root) return null;
+  const node = shape.at ? String(shape.at).split('.').reduce((a, k) => (a == null ? a : a[k]), root) : root;
+  return node ? { node, root } : null;
+}
+
 function contractStandIn(seam, override) {
   let contracts = {};
   try {
@@ -1176,6 +1218,9 @@ function contractStandIn(seam, override) {
     }
     // THE DECLARED SHAPE WINS over what the key's name suggests: `diagnosis` is one diagnosis.
     const shape = c.shapes && c.shapes[k];
+    if (shape && typeof shape === 'object') {
+      try { const sch = schemaFromShape(shape); if (sch) return valueFromSchema(sch.node, sch.root, seam); } catch { /* fall through */ }
+    }
     if (shape === 'string') return `${STAND_IN_MARK} ${k} for ${seam}: no captured reply exists for this seam`;
     if (shape === 'array') return [];
     if (shape === 'object') return {};

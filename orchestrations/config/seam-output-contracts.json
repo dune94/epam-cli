@@ -265,8 +265,15 @@
       ]
     },
     "kb-synthesizer": {
-      "kind": "artefact",
-      "checkedBy": "lib/kb-synthesizer.js — parses the proposal; unparseable, declined and unmapped replies are quarantined, never stored"
+      "kind": "declared",
+      "requiredKeys": ["enforcement", "reason"],
+      "knownKeys": ["enforcement", "reason"],
+      "shapes": {
+        "enforcement": { "schemaCommand": ["python3", "lib/kb_schema.py", "json-schema", "constraint"], "at": "properties.enforcement" },
+        "reason": "string"
+      },
+      "checkedBy": "lib/kb-synthesizer.js — binds {enforcement, reason} as EPAM_RESPONSE_SCHEMA (additionalProperties false) and validates the enforcement against lib/kb_schema.py; unparseable, declined and unmapped replies are quarantined, never stored",
+      "_why": "Was 'artefact' — a stand-in of {note} was rejected fifteen times by the runner's schema enforcement and the synthesizer recorded no_output (£0 greenfield harness run 29, 2026-09-14). The enforcement's shape is read from the same schema command the synthesizer itself uses; nothing here spells a kind."
     }
   },
   "$declaredWhy": "A seam whose output nothing validates lets a bad answer flow on looking authoritative — the roster-specialiser answered with prose on a paid run and only its artefact check stopped that becoming the identity every downstream agent reads. requiredKeys is the key a CONSUMER cannot proceed without, taken from the shape the seam PROMPT already states, so the contract and the prompt cannot drift. knownKeys is the rest of that shape, reported but not enforced: requiring every optional field would reject valid answers, and the defect being caught is an answer that is not the artefact at all."

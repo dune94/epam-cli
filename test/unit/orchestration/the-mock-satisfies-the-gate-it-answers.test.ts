@@ -341,11 +341,12 @@ describe('a declared key shape wins over what the key name suggests', () => {
   it.each(shaped.map(([s]) => s))('%s: every declared shape is honoured by the stand-in', (seam) => {
     const c = (schema.declaredContracts() as Record<string, any>)[seam];
     const standIn = mock.contractStandIn(seam);
-    for (const [k, shape] of Object.entries(c.shapes as Record<string, string>)) {
+    for (const [k, shape] of Object.entries(c.shapes as Record<string, any>)) {
       if (!(k in standIn)) continue;
       const v = standIn[k];
       const actual = Array.isArray(v) ? 'array' : typeof v;
-      expect(actual, `${seam}.${k}`).toBe(shape);
+      // An object-valued shape points at a schema; the value is an object built from it.
+      expect(actual, `${seam}.${k}`).toBe(typeof shape === 'object' ? 'object' : shape);
       if (shape === 'string') expect(String(v).trim().length).toBeGreaterThan(0);
     }
   });
@@ -398,5 +399,25 @@ describe('a value the contract says must exceed a declared limit does, by the co
       expect(limit).toBeGreaterThan(0);
       expect(String(standIn[k]).length, `${seam}.${k}`).toBeGreaterThan(limit);
     }
+  });
+});
+
+/**
+ * THE SYNTHESIZER'S STAND-IN IS ADMISSIBLE. Wrapped exactly as lib/kb-synthesizer.js wraps a
+ * proposal, the constraint must pass the store's own validator (lib/kb_schema.py) — a {note}
+ * answer was rejected fifteen times by the runner and recorded no_output (run 29, 2026-09-14).
+ */
+describe("the synthesizer's stand-in is a constraint the KB store admits", () => {
+  const schema = require('../../../orchestrations/scripts/lib/agent-output-schema.js');
+  const seams = Object.entries(schema.declaredContracts() as Record<string, any>)
+    .filter(([, c]) => c.shapes && Object.values(c.shapes).some((v: any) => v && typeof v === 'object' && v.schemaCommand)).map(([s]) => s);
+  it('a contract points at a schema command', () => { expect(seams.length).toBeGreaterThan(0); });
+  it.each(seams)('%s: the wrapped proposal validates as a constraint', (seam) => {
+    const standIn = mock.contractStandIn(seam);
+    const candidate = { id: 'stand-in-role-class-x', scope: { agent_role: 'stand-in-role' }, trigger: { signature: 'class:x' },
+      enforcement: standIn.enforcement, reason: String(standIn.reason).slice(0, 300), origin_episodes: ['evt-1'] };
+    const { spawnSync } = require('node:child_process');
+    const r = spawnSync('python3', [path.join(ROOT, 'orchestrations/scripts/lib/kb_schema.py'), 'validate-constraint'], { input: JSON.stringify(candidate), encoding: 'utf8' });
+    expect(r.status, `${r.stdout}\n${r.stderr}`).toBe(0);
   });
 });

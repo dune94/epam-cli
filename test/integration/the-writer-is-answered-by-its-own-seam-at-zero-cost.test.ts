@@ -349,6 +349,10 @@ describe("the writer delivers the project's declared stand-in fix, not the ecosy
     expect(writeTurns[0].filter((p) => p.includes('/src/module')).length, 'the first attempt did not land the named file').toBe(1);
     expect(writeTurns[0].some((p) => p.includes('/src/implied')), 'the first attempt landed the implied file too — nothing for the tests to catch').toBe(false);
     expect(writeTurns[writeTurns.length - 1].some((p) => p.includes('/src/implied')), 'the last attempt still omits the implied file').toBe(true);
+    // A LATER ATTEMPT DELIVERS AGAIN: a gate downstream can refuse the story and the phase retry
+    // re-invokes the writer on a reset worktree; answered with text alone, six attempts wrote
+    // nothing (run 15). Twelve requests cover the three deliberate attempts and at least one more.
+    expect(writeTurns.length, 'after its deliberate attempts the writer answered text only').toBeGreaterThan(3);
     const paths = Object.keys(writes);
     expect(paths.some((p) => p.endsWith('/src/module' + (paths[0] || '').slice(-3)) || p.includes('/src/module')), `the named file was not written: ${paths}`).toBe(true);
     const named = paths.find((p) => p.includes('/src/module'))!; const implied = paths.find((p) => p.includes('/src/implied'));

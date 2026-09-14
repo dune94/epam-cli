@@ -337,6 +337,13 @@ function seamDelivery(seam) {
     return { name: tool.name, input: { [tool.path]: abs, [tool.content]: fs.readFileSync(path.join(fix.root, f), 'utf8') }, read };
   });
 }
+/**
+ * How many times the writer may be asked again for one story after its deliberate attempts:
+ * the story's attempt budget (EPAM_MAX_RETRIES + 1) per phase retry, over the phase's own retries.
+ * Read from the run's declaration where it is set, else the orchestrator's default of 8 attempts
+ * across at most 2 phase passes.
+ */
+const WRITER_ATTEMPTS_CEILING = (Number(process.env.EPAM_MAX_RETRIES) + 1 || 8) * 2;
 /** The word every stand-in is marked with — generated and recognised with this one constant. */
 const STAND_IN_MARK = 'stand-in';
 function storyDiscriminator(storyId) {
@@ -2145,14 +2152,28 @@ function endsInToolCall(cap, seam) {
                 body: proto.text(`${STAND_IN_MARK} writer: wrote ${turn.length} of the ${calls.length} deliverable(s) ${st.id} declares`) },
             });
           }
-          // eslint-disable-next-line no-await-in-loop
-          await put('/mockserver/expectation', {
-            priority: 54,
-            httpRequest: { method: 'POST', path: proto.path,
-              body: _match },
-            httpResponse: { statusCode: 200, headers: _hdr,
-              body: proto.text(`${STAND_IN_MARK} writer: wrote the ${calls.length} deliverable(s) ${st.id} declares`) },
-          });
+          // EVERY LATER ATTEMPT DELIVERS AGAIN. A gate downstream can refuse the story and the
+          // phase retry re-invokes the writer on a worktree reset to baseline; answered with text
+          // alone, six attempts wrote nothing and the story failed UNCHANGED (£0 brownfield
+          // harness run 15, 2026-09-14). As many full sequences as the writer has attempts.
+          for (let _again = 0; _again < WRITER_ATTEMPTS_CEILING; _again += 1) {
+            const _reads = calls.map((c) => c.read).filter(Boolean);
+            for (const turn of (_reads.length ? [_reads, calls.map(({ read, declared: _d, wrong: _w, ...c }) => c)] : [calls.map(({ read, declared: _d, wrong: _w, ...c }) => c)])) {
+              // eslint-disable-next-line no-await-in-loop
+              await put('/mockserver/expectation', {
+                priority: 54, times: { remainingTimes: 1, unlimited: false },
+                httpRequest: { method: 'POST', path: proto.path, body: _match },
+                httpResponse: { statusCode: 200, headers: _hdr, body: proto.calls(turn) },
+              });
+            }
+            // eslint-disable-next-line no-await-in-loop
+            await put('/mockserver/expectation', {
+              priority: 54, times: { remainingTimes: 1, unlimited: false },
+              httpRequest: { method: 'POST', path: proto.path, body: _match },
+              httpResponse: { statusCode: 200, headers: _hdr,
+                body: proto.text(`${STAND_IN_MARK} writer: wrote the ${calls.length} deliverable(s) ${st.id} declares`) },
+            });
+          }
         }
         _wrote += 1;
       }

@@ -8669,12 +8669,21 @@ run_healing_recorder() {
             # Here-string, NOT a pipe: a pipeline runs kb_record_episode in a
             # subshell and KB_LAST_SIGNATURE — the key kb_maybe_synthesize needs —
             # is lost when it exits, leaving synthesis unable to build anything.
-            kb_record_episode "$story_id" "${STORY_ROLE:-}" "$diagnosis" \
+            # THE ROLE IS THE STORY'S OWN AGENT. STORY_ROLE is set by no caller of this script,
+            # so every writer-path episode was recorded under a null role and synthesis — keyed on
+            # (role, signature) — could never fire; the KB never learned from a writer failure
+            # (£0 greenfield harness, 2026-09-14). The story's agentRole, as the analyst reads it.
+            # The class is the coordinator's classification of this attempt; "unknown" is not a
+            # class, and an episode with no derivable signature stays unkeyed, honestly.
+            local _kb_role _kb_class
+            _kb_role="${STORY_ROLE:-$(jq -r --arg id "$story_id" '.stories[] | select(.id == $id) | .agentRole // ""' "${PRD_FILE:-}" 2>/dev/null || echo "")}"
+            _kb_class="${COORDINATOR_FAILURE_CLASS:-}"; [ "$_kb_class" = "unknown" ] && _kb_class=""
+            kb_record_episode "$story_id" "$_kb_role" "$diagnosis" "$_kb_class" \
                 <<< "${VERIFICATION_FAILURE:-}" || true
             # Close the loop: episodes alone build nothing. Synthesis turns a
             # REPEATED signature into one arbitrated, schema-valid constraint that
             # the next attempt gets as enforcement — never as prompt prose.
-            kb_maybe_synthesize "${STORY_ROLE:-}" || true
+            kb_maybe_synthesize "$_kb_role" || true
         fi
     fi
 }

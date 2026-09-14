@@ -192,7 +192,11 @@ run_inline_tc_writer_gate() {
             [ "${_tc_gate_facts_len:-0}" -eq 0 ] && [ "$_tc_gate_exit" -eq 0 ] && _tc_fclass="no_json"
             log "  [tc-writer] attempt ${_tc_gate_attempt} failed (class=${_tc_fclass}) — invoking self-heal analyst"
             # B30: same three-valued contract as the repro-test-writer call site.
-            _tc_corrective="$(AGENT_ANALYST_STORY_ID="$story_id" \
+            # THE ROLE THAT FAILED IS THIS SEAM. The analyst records the episode under STORY_ROLE,
+            # and synthesis is keyed on (role, signature): unset, every tc-writer episode was
+            # recorded under a null role and the KB never learned from one (£0 greenfield harness,
+            # 2026-09-14). The repro-test-writer call site names itself the same way.
+            _tc_corrective="$(AGENT_ANALYST_STORY_ID="$story_id" STORY_ROLE="${STORY_ROLE:-tc-writer}" \
                 bash "$SCRIPT_DIR/../agent-attempt-analyst.sh" "$_tc_fclass" "$_tc_writer_log" 2>>"$_tc_writer_log")"
             _tc_analyst_rc=$?
             if [ "$_tc_analyst_rc" -eq 2 ]; then

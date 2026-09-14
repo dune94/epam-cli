@@ -2260,12 +2260,15 @@ function endsInToolCall(cap, seam) {
               body: proto.calls([{ name: _soFail, input: _hollowPayload, arguments: _hollowPayload }]) },
           });
         }
-        // Prose only where the runner does not enforce a schema; otherwise the prose would be
-        // absorbed too, and the retry would meet it before the real answer.
-        if (!_soFail) {
+        // Prose for a request that declares NO structured-output tool — a seam that binds no
+        // schema is asked in text, whatever the runner (run 27: the tc-writer, its schema no
+        // longer leaked from the assessment, was asked in text and met no first failure).
+        {
+          const _bodyRxP = bodyMatch.type === 'REGEX' ? bodyMatch.regex.replace(/^\(\?s\)/, '').replace(/\.\*$/, '') : `(?=.*${rx(wireForm(key))})`;
+          const _noTool = _soFail ? `(?!.*${rx(`"name":"${_soFail}"`)})` : '';
           await put('/mockserver/expectation', {
             priority: 34 + _tagRank, times: { remainingTimes: 1, unlimited: false },
-            httpRequest: { method: 'POST', path: proto.path, body: bodyMatch },
+            httpRequest: { method: 'POST', path: proto.path, body: { type: 'REGEX', regex: `(?s)${_bodyRxP}${_noTool}.*` } },
             httpResponse: { statusCode: 200, headers: { 'content-type': ['text/event-stream; charset=utf-8'], 'x-seam': [`${seam}:first-attempt-fails`] },
               body: proto.text(`${STAND_IN_MARK} first attempt for ${seam}: answered in prose on purpose, so the attempt analyst runs before the retry`) },
           });

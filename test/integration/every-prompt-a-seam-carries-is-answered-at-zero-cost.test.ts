@@ -245,3 +245,28 @@ describe('a schema-bound request is answered by calling the structured-output to
     expect(Object.keys(payload).length).toBeGreaterThan(0);
   });
 });
+
+/**
+ * A SEAM ASKED IN TEXT — no structured-output tool declared — meets a prose first failure. The
+ * tc-writer binds no schema; once the assessment's schema stopped leaking into it (run 27), it was
+ * asked in text and met no first failure at all.
+ */
+describe('a seam asked in text meets a prose first failure', () => {
+  const own = new MiniMockServer();
+  beforeAll(async () => { await own.start(); await register(own.url); }, 300_000);
+  afterAll(() => own.stop());
+  const declared = Object.values(reg).flatMap((p: any) => (Array.isArray(p.diagnosesAttemptsOf) ? p.diagnosesAttemptsOf : [])) as string[];
+  it.each(declared.filter((s) => reg[s] && templates.some((t) => t.id === reg[s].template)))('%s: prose first, the answer second', async (seam) => {
+    const { doc } = templates.find((t) => t.id === reg[seam].template)!;
+    const values: Record<string, string> = {};
+    const optional = new Set(doc.mayBeEmpty || []);
+    for (const p of placeholdersIn(doc.body)) values[p] = optional.has(p) ? '' : `value of ${p.replace(/_/g, ' ').trim()}`;
+    const prompt = substituteOnce(doc.body, values);
+    const text = (b: string) => [...b.matchAll(/"text":"((?:[^"\\]|\\.)*)"/g)].map((m) => JSON.parse(`"${m[1]}"`)).join('');
+    const first = await askAt(own.url, prompt);
+    expect(first.seam).toBe(`${seam}:first-attempt-fails`);
+    expect(() => JSON.parse(text(first.body))).toThrow();
+    const second = await askAt(own.url, prompt);
+    expect(second.seam).toBe(seam);
+  });
+});

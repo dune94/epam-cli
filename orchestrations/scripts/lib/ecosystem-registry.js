@@ -115,8 +115,27 @@ function allArtifactDirs(env = process.env) {
  */
 const lockfileFor = (eco, exists) => Object.keys((eco && eco.lockfiles) || {}).find((f) => exists(f)) || '';
 
+/**
+ * THE ECOSYSTEM A PRD DECLARES BEFORE ITS CODELINE EXISTS. A greenfield output directory carries no
+ * manifest until the scaffold story writes one; the PRD names the files that story creates, and
+ * the provider whose manifest is among them — in the providers' own precedence — is the codeline's
+ * ecosystem. One rule, read by the stack facts and by the rehearsal's stand-in writer, so the two
+ * cannot disagree about which stack a project is on.
+ */
+function declaredByStories(stories, env = process.env) {
+  const named = new Set();
+  for (const st of (Array.isArray(stories) ? stories : [])) {
+    const tn = st && st.technicalNotes;
+    for (const f of (tn && Array.isArray(tn.files) ? tn.files : [])) named.add(path.basename(String(f)));
+  }
+  if (!named.size) return null;
+  return allManifests(env).find((e) => [e.file, ...(Array.isArray(e.alsoMatches) ? e.alsoMatches : [])]
+    .some((n) => named.has(n))) || null;
+}
+
 module.exports = {
   lockfileFor,
+  declaredByStories,
   allManifests,
   extraManifests,
   allArtifactDirs,

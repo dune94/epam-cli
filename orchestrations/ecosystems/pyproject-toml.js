@@ -56,6 +56,14 @@ module.exports = {
       testFilePattern: '(^|/)(test_[^/]*|[^/]*_test)\\.py$',
     },
   },
+  // WHAT A STAND-IN DELIVERABLE HOLDS, so a £0 rehearsal's writer can land files the gates will
+  // run: a manifest that names the test runner, a test that passes, a source file that compiles.
+  // A function receives the deliverable's path where the content must agree with it.
+  standIn: {
+    manifest: '[project]\nname = "stand-in"\nversion = "0.0.0"\n\n[tool.pytest.ini_options]\ntestpaths = ["tests", "."]\n',
+    test: 'def test_stand_in():\n    assert True\n',
+    source: '"""stand-in module written by the rehearsal"""\n',
+  },
   stack: 'python',
     installDir: null, // a virtualenv commonly lives outside the repo
     lockfiles: { 'poetry.lock': 'poetry', 'uv.lock': 'uv', 'pdm.lock': 'pdm' },

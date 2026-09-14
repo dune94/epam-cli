@@ -47,6 +47,23 @@ module.exports = {
     dependencyCheck: {
       scanFileExtensions: [".rs"],
     },
+    // HOW THIS ECOSYSTEM'S TESTS ARE TOLD FROM ITS SOURCES — read by the change classifier, the
+    // test gates and the rehearsal's stand-in writer (which must write a test into a test file
+    // and a module into a module).
+    contractGeneration: {
+      language: 'rust',
+      sourceExtensions: ['.rs'],
+      excludePattern: '(^|/)tests/[^/]+\\.rs$',
+      testFilePattern: '(^|/)tests/[^/]+\\.rs$',
+    },
+  },
+  // WHAT A STAND-IN DELIVERABLE HOLDS, so a £0 rehearsal's writer can land files the gates will
+  // run: a manifest that names the test runner, a test that passes, a source file that compiles.
+  // A function receives the deliverable's path where the content must agree with it.
+  standIn: {
+    manifest: '[package]\nname = "stand_in"\nversion = "0.0.0"\nedition = "2021"\n\n[lib]\npath = "src/lib.rs"\n',
+    test: '#[test]\nfn stand_in() {\n    assert!(true);\n}\n',
+    source: '//! stand-in module written by the rehearsal\n',
   },
   stack: 'rust',
     installDir: null,

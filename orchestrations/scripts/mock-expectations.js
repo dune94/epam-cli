@@ -123,12 +123,17 @@ function _projectName() { return path.basename(process.env.EPAM_PROJECT_CONFIG_D
  * `before`/`after` are the text around the placeholder on that line.
  */
 let _writerFrame;
-function writerStoryLineFrame() {
+function writerStoryLineFrames() {
   if (_writerFrame !== undefined) return _writerFrame;
-  _writerFrame = null;
+  _writerFrame = [];
   try {
     const reg = JSON.parse(fs.readFileSync(REG, 'utf8')).profiles || {};
     const writer = Object.keys(reg).find((k) => reg[k] && reg[k].produces === 'implementation');
+    // EVERY line the writer's templates name a story on — not the first template in directory
+    // order. The writer has more than one prompt (implementation, file generation), and the first
+    // alphabetically was a mode this run never used, so no attempt matched and the writer wrote
+    // nothing (£0 greenfield harness run 20, 2026-09-14).
+    const seenLines = new Set();
     for (const f of fs.readdirSync(TPL).filter((x) => x.endsWith('.json'))) {
       const t = JSON.parse(fs.readFileSync(path.join(TPL, f), 'utf8'));
       if (typeof t.body !== 'string' || !Array.isArray(t.seams) || !t.seams.includes(writer)) continue;
@@ -136,11 +141,12 @@ function writerStoryLineFrame() {
       if (!line) continue;
       const [before, afterRaw] = line.split('__STORY_ID__');
       const after = String(afterRaw || '').split(/__[A-Z0-9_]+__/)[0];
-      const id = f.replace(/\.json$/, '');
-      _writerFrame = { before: before.replace(/^.*__[A-Z0-9_]+__/, ''), after, key: matchKey(id) || '' , template: id };
-      break;
+      const b = before.replace(/^.*__[A-Z0-9_]+__/, '');
+      if (seenLines.has(`${b}|${after}`)) continue;
+      seenLines.add(`${b}|${after}`);
+      _writerFrame.push({ before: b, after, template: f.replace(/\.json$/, '') });
     }
-  } catch { _writerFrame = null; }
+  } catch { _writerFrame = []; }
   return _writerFrame;
 }
 
@@ -174,13 +180,9 @@ function writerStandInCalls(story) {
   } catch { eco = null; }
   if (!eco) {
     try {
-      const prd = JSON.parse(fs.readFileSync(process.env.PRD_FILE, 'utf8'));
-      const stack = String((prd.project && prd.project.stack && (prd.project.stack.language || prd.project.stack.testing)) || '').toLowerCase();
-      for (const f of fs.readdirSync(path.join(__dirname, '..', 'ecosystems')).filter((x) => x.endsWith('.js'))) {
-        // eslint-disable-next-line global-require
-        const e = require(path.join(__dirname, '..', 'ecosystems', f));
-        if (e.standIn && stack && String(e.stack || '').toLowerCase() === stack.split(/\s/)[0]) { eco = e; break; }
-      }
+      // eslint-disable-next-line global-require
+      const { declaredByStories } = require('./lib/ecosystem-registry.js');
+      eco = declaredByStories(JSON.parse(fs.readFileSync(process.env.PRD_FILE, 'utf8')).stories);
     } catch { eco = null; }
   }
   if (!eco || !eco.standIn) return null;
@@ -193,9 +195,12 @@ function writerStandInCalls(story) {
     const abs = path.isAbsolute(f) ? f : path.join(root, f);
     // Never an empty file: the deliverable check reads an empty file as missing.
     let content = `${STAND_IN_MARK} deliverable ${path.basename(f)}, written by the rehearsal\n`;
-    if (path.basename(f) === eco.file) content = eco.standIn.manifest || content;
-    else if (testRe && testRe.test(f)) content = eco.standIn.test || content;
-    else if (srcExt.some((x) => f.endsWith(x))) content = eco.standIn.source || content;
+    // A stand-in is a string, or a function of the file's path where the content must agree with
+    // the path (a Java class is named by its file, a package by its directory).
+    const body = (v) => (typeof v === 'function' ? v(f) : v) || content;
+    if (path.basename(f) === eco.file) content = body(eco.standIn.manifest);
+    else if (testRe && testRe.test(f)) content = body(eco.standIn.test);
+    else if (srcExt.some((x) => f.endsWith(x))) content = body(eco.standIn.source);
     return { name: tool.name, input: { [tool.path]: abs, [tool.content]: content } };
   });
 }
@@ -1865,9 +1870,13 @@ function endsInToolCall(cap, seam) {
         // review and handed it write calls (2026-09-14). The template the writer actually carries
         // names the story on one line (`… __STORY_ID__ …`); that line, rendered for this story,
         // occurs in the writer's request alone.
-        const _frame = writerStoryLineFrame();
-        const disc = _frame ? `${_frame.before}${st.id}${_frame.after}` : (storyDiscriminator(st.id) || st.id);
-        const _wmark = _frame ? _frame.key : key;
+        // ONE MATCH PER TEMPLATE THE WRITER CARRIES: that template's own fingerprint AND its story
+        // line rendered for this story. The seam's registry key is the multi-part document the
+        // writer CONSUMES, whose fingerprint no writer call carries (see the header of
+        // test/integration/the-writer-is-answered-by-its-own-seam-at-zero-cost.test.ts).
+        const _frames = writerStoryLineFrames();
+        const _pairs = _frames.map((fr) => ({ mark: matchKey(fr.template) || key, line: `${fr.before}${st.id}${fr.after}` }));
+        if (!_pairs.length) _pairs.push({ mark: key, line: storyDiscriminator(st.id) || st.id });
         // THE FIRST ATTEMPTS FAIL ON PURPOSE. A writer that never fails never exercises the
         // failure analysts, the deterministic check or the retry ladder — seams a real run climbs
         // through. The first attempts land every deliverable but the last, so the deliverable
@@ -1876,7 +1885,8 @@ function endsInToolCall(cap, seam) {
         // analyst only on a REPEATED violation.
         const _turns = calls.length > 1 ? [calls.slice(0, -1), calls.slice(0, -1), calls] : [calls];
         for (const proto of PROTOCOLS) {
-          const _match = { type: 'REGEX', regex: `(?s)(?=.*${rx(wireForm(_wmark))})(?=.*${rx(wireForm(disc))}).*` };
+          const _alt = _pairs.map((pr) => `(?=.*${rx(wireForm(pr.mark))})(?=.*${rx(wireForm(pr.line))})`).join('|');
+          const _match = { type: 'REGEX', regex: `(?s)(?:${_alt}).*` };
           const _hdr = { 'content-type': ['text/event-stream; charset=utf-8'], 'x-seam': [`${seam}:${st.id}`] };
           // Each attempt is ONE write turn then ONE answer: the answer is registered once per
           // attempt at the same priority, so it is served before the next attempt's write turn.
@@ -1899,8 +1909,8 @@ function endsInToolCall(cap, seam) {
           await put('/mockserver/expectation', {
             priority: 54,
             httpRequest: { method: 'POST', path: proto.path,
-              body: { type: 'REGEX', regex: `(?s)(?=.*${rx(wireForm(_wmark))})(?=.*${rx(wireForm(disc))}).*` } },
-            httpResponse: { statusCode: 200, headers: { 'content-type': ['text/event-stream; charset=utf-8'], 'x-seam': [`${seam}:${st.id}`] },
+              body: _match },
+            httpResponse: { statusCode: 200, headers: _hdr,
               body: proto.text(`${STAND_IN_MARK} writer: wrote the ${calls.length} deliverable(s) ${st.id} declares`) },
           });
         }

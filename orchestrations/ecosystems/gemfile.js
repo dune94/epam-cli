@@ -47,6 +47,23 @@ module.exports = {
     dependencyCheck: {
       scanFileExtensions: [".rb"],
     },
+    // HOW THIS ECOSYSTEM'S TESTS ARE TOLD FROM ITS SOURCES — read by the change classifier, the
+    // test gates and the rehearsal's stand-in writer (which must write a test into a test file
+    // and a module into a module).
+    contractGeneration: {
+      language: 'ruby',
+      sourceExtensions: ['.rb'],
+      excludePattern: '(^|/)(test|spec)/.*(_test|_spec)\\.rb$',
+      testFilePattern: '(^|/)(test|spec)/.*(_test|_spec)\\.rb$',
+    },
+  },
+  // WHAT A STAND-IN DELIVERABLE HOLDS, so a £0 rehearsal's writer can land files the gates will
+  // run: a manifest that names the test runner, a test that passes, a source file that compiles.
+  // A function receives the deliverable's path where the content must agree with it.
+  standIn: {
+    manifest: 'source "https://rubygems.org"\n\ngem "minitest"\ngem "rake"\n',
+    test: 'require "minitest/autorun"\n\nclass StandInTest < Minitest::Test\n  def test_stand_in\n    assert true\n  end\nend\n',
+    source: '# stand-in module written by the rehearsal\n',
   },
   stack: 'ruby',
     installDir: null,

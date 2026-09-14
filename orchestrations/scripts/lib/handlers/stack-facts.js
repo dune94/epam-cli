@@ -29,7 +29,7 @@
 const fs = require('fs');
 const path = require('path');
 
-const { allManifests } = require('../ecosystem-registry.js');
+const { allManifests, declaredByStories } = require('../ecosystem-registry.js');
 
 const repo = process.argv[2];
 if (!repo) {
@@ -61,8 +61,7 @@ if (!eco && process.env.PRD_FILE && fs.existsSync(process.env.PRD_FILE)) {
       for (const f of (tn && Array.isArray(tn.files) ? tn.files : [])) named.add(path.basename(String(f)));
       for (const sk of (tn && Array.isArray(tn.requiredSkills) ? tn.requiredSkills : [])) skills.push(String(sk));
     }
-    const declared = allManifests().find((e) => [e.file, ...(Array.isArray(e.alsoMatches) ? e.alsoMatches : [])]
-      .some((n) => named.has(n)));
+    const declared = declaredByStories(stories);
     if (declared) {
       eco = declared;
       prdDeclared = true;

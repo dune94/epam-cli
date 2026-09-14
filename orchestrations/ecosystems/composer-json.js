@@ -18,6 +18,23 @@ module.exports = {
     dependencyCheck: {
       scanFileExtensions: [".php"],
     },
+    // HOW THIS ECOSYSTEM'S TESTS ARE TOLD FROM ITS SOURCES — read by the change classifier, the
+    // test gates and the rehearsal's stand-in writer (which must write a test into a test file
+    // and a module into a module).
+    contractGeneration: {
+      language: 'php',
+      sourceExtensions: ['.php'],
+      excludePattern: '(^|/)(tests?)/.*Test\\.php$',
+      testFilePattern: '(^|/)(tests?)/.*Test\\.php$',
+    },
+  },
+  // WHAT A STAND-IN DELIVERABLE HOLDS, so a £0 rehearsal's writer can land files the gates will
+  // run: a manifest that names the test runner, a test that passes, a source file that compiles.
+  // A function receives the deliverable's path where the content must agree with it.
+  standIn: {
+    manifest: JSON.stringify({ name: 'stand-in/stand-in', 'require-dev': { 'phpunit/phpunit': '^10' }, scripts: { test: 'phpunit tests' } }, null, 2) + '\n',
+    test: (f) => `<?php\nuse PHPUnit\\Framework\\TestCase;\n\nfinal class ${require('path').basename(f, '.php')} extends TestCase\n{\n    public function testStandIn(): void\n    {\n        $this->assertTrue(true);\n    }\n}\n`,
+    source: '<?php\n// stand-in module written by the rehearsal\n',
   },
   stack: 'php',
   installDir: 'vendor',
@@ -35,7 +52,8 @@ module.exports = {
   installCommand: () => 'composer install --no-interaction',
   addCommand: () => 'composer require {package}',
   selfName: (text) => { try { return JSON.parse(text).name || ''; } catch { return ''; } },
-  testCommand: () => '',
+  // The project's own `scripts.test`, run the way composer runs it; absent, '' — never a guess.
+  testCommand: (text) => { try { return (JSON.parse(text).scripts || {}).test ? 'composer test' : ''; } catch { return ''; } },
   testFileCommand: (run, files) => (run ? `${run} ${files.join(' ')}` : ''),
   deps: (text) => { try { const j = JSON.parse(text); return Object.keys({ ...(j.require || {}), ...(j['require-dev'] || {}) }); } catch { return []; } },
 };

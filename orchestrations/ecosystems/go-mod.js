@@ -47,6 +47,23 @@ module.exports = {
     dependencyCheck: {
       scanFileExtensions: [".go"],
     },
+    // HOW THIS ECOSYSTEM'S TESTS ARE TOLD FROM ITS SOURCES — read by the change classifier, the
+    // test gates and the rehearsal's stand-in writer (which must write a test into a test file
+    // and a module into a module).
+    contractGeneration: {
+      language: 'go',
+      sourceExtensions: ['.go'],
+      excludePattern: '_test\\.go$',
+      testFilePattern: '_test\\.go$',
+    },
+  },
+  // WHAT A STAND-IN DELIVERABLE HOLDS, so a £0 rehearsal's writer can land files the gates will
+  // run: a manifest that names the test runner, a test that passes, a source file that compiles.
+  // A function receives the deliverable's path where the content must agree with it.
+  standIn: {
+    manifest: 'module standin\n\ngo 1.21\n',
+    test: (f) => `package ${require('path').basename(require('path').dirname(f)).replace(/[^a-z0-9]/gi, '') || 'standin'}\n\nimport "testing"\n\nfunc TestStandIn(t *testing.T) {}\n`,
+    source: (f) => `package ${require('path').basename(require('path').dirname(f)).replace(/[^a-z0-9]/gi, '') || 'standin'}\n`,
   },
   stack: 'go',
     installDir: null, // module cache is global, not in-repo

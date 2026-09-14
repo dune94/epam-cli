@@ -172,6 +172,14 @@ module.exports = {
     // one wrongly included shows up in a diff a human reads. So Go's vendor/ and bin/ are absent
     // deliberately — vendor/ is committed by convention and bin/ is tracked in plenty of repos.
     artifactDirs: ['node_modules', 'build', 'dist', '.next', '.nuxt', '.turbo', 'coverage', '.parcel-cache'],
+  // WHAT A STAND-IN DELIVERABLE HOLDS, so a £0 rehearsal's writer can land files the gates will
+  // run: a manifest that names the test runner, a test that passes, a source file that compiles.
+  // A function receives the deliverable's path where the content must agree with it.
+  standIn: {
+    manifest: JSON.stringify({ name: 'stand-in', private: true, version: '0.0.0', scripts: { test: 'vitest run' }, devDependencies: { vitest: '^2.0.0', typescript: '^5.0.0' } }, null, 2) + '\n',
+    test: "import { test, expect } from 'vitest';\ntest('stand-in', () => { expect(true).toBe(true); });\n",
+    source: '// stand-in module written by the rehearsal\nexport {};\n',
+  },
     stack: 'node',
     installDir: 'node_modules',
     // Which tool installs it, decided by the lockfile the repository carries. First match wins.

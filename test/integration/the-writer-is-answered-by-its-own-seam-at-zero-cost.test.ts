@@ -111,3 +111,66 @@ describe("the writer's answer goes to the writer alone", () => {
     expect(seam).not.toMatch(new RegExp(`^${WRITER}(:|$)`));
   });
 });
+
+/**
+ * THE WRITER'S CALL FOR A REAL STORY IS ANSWERED WITH THAT STORY'S WRITES. The tests above render
+ * the story id as a placeholder value, so they are satisfied by the seam's generic answer — which
+ * writes nothing. The per-story answer is keyed on the line the writer's template names the story
+ * with; the frame was read from the FIRST writer template in directory order (file generation),
+ * the implementation prompt uses a different line, and every attempt fell to the generic answer:
+ * "missing 4 declared deliverables", eight attempts, HealingBroken (£0 greenfield harness run 20,
+ * 2026-09-14). Every greenfield project that declares stories and an OUTPUT_DIR is driven here.
+ */
+describe("the writer's call for a real story is answered with that story's writes", () => {
+  const greenfield = readdirSync(PROJECTS).map((d) => {
+    const dir = join(PROJECTS, d); const cfg = join(dir, 'config.env');
+    if (!existsSync(cfg)) return null;
+    const c = readFileSync(cfg, 'utf8');
+    if (!/^EPAM_BROWNFIELD=0$/m.test(c)) return null;
+    const prdM = c.match(/^PRD_CANONICAL=(.+)$/m); const outM = c.match(/^OUTPUT_DIR=(.+)$/m);
+    if (!prdM || !outM) return null;
+    const prd = prdM[1].trim().startsWith('/') ? prdM[1].trim() : join(ROOT, prdM[1].trim());
+    let stories: any[] = []; try { stories = JSON.parse(readFileSync(prd, 'utf8')).stories || []; } catch { return null; }
+    return stories.length ? { name: d, dir, prd, out: outM[1].trim(), stories } : null;
+  }).filter(Boolean) as { name: string; dir: string; prd: string; out: string; stories: any[] }[];
+  it('there is a greenfield project with stories and an OUTPUT_DIR', () => { expect(greenfield.length).toBeGreaterThan(0); });
+
+  for (const p of greenfield) {
+    const own = new MiniMockServer();
+    beforeAll(async () => {
+      await own.start();
+      await new Promise<void>((resolve, reject) => {
+        const c = spawn(process.execPath, [join(ROOT, 'orchestrations/scripts/mock-expectations.js'), '--host', own.url], {
+          cwd: ROOT, env: { ...process.env, PRD_FILE: p.prd, EPAM_PROJECT_CONFIG_DIR: p.dir, OUTPUT_DIR: p.out, EPAM_PROVIDER_SET: 'mockserver', LANGFUSE_SECRET_KEY: '', LANGFUSE_PUBLIC_KEY: '' }, stdio: ['ignore', 'pipe', 'pipe'],
+        });
+        let err = ''; c.stderr.on('data', (d) => { err += d; }); c.stdout.resume();
+        c.on('close', (s) => (s === 0 ? resolve() : reject(new Error(`mock-expectations.js exited ${s}: ${err}`))));
+      });
+    }, 300_000);
+    afterAll(() => own.stop());
+    const askOwn = (prompt: string) => new Promise<{ seam: string; body: string }>((resolve, reject) => {
+      const body = JSON.stringify({ model: 'x', max_tokens: 1, stream: true, messages: [{ role: 'user', content: prompt }] });
+      const req = httpRequest(`${own.url}/v1/messages`, { method: 'POST', headers: { 'content-type': 'application/json' } }, (res) => {
+        let b = ''; res.on('data', (d) => { b += d; }); res.on('end', () => resolve({ seam: String(res.headers['x-seam'] || ''), body: b }));
+      });
+      req.on('error', reject); req.end(body);
+    });
+    // The per-story answer is a SEQUENCE (write turn, answer, …) shared by every prompt the writer
+    // carries; only the first request to this fresh mock is asserted to be a write turn.
+    let first = true;
+    for (const id of writerTemplates) {
+      it(`${p.name}: ${id} rendered for a real story is answered as that story's writer, with write calls`, async () => {
+        const doc = JSON.parse(readFileSync(templatePath(id), 'utf8'));
+        const story = p.stories[0];
+        const values: Record<string, string> = {};
+        const optional = new Set(doc.mayBeEmpty || []);
+        for (const ph of placeholdersIn(doc.body)) values[ph] = optional.has(ph) ? '' : `value of ${ph.replace(/_/g, ' ').trim()}`;
+        values.__STORY_ID__ = story.id;
+        if ('__TITLE__' in values) values.__TITLE__ = story.title || 'title';
+        const { seam, body } = await askOwn(renderEngineTemplate(id, values));
+        expect(seam, `${id} for ${story.id} was not answered by the per-story writer stand-in`).toBe(`${WRITER}:${story.id}`);
+        if (first) { first = false; expect(body, 'the first answer is a turn of write calls').toMatch(/"type":"tool_use"/); }
+      });
+    }
+  }
+});

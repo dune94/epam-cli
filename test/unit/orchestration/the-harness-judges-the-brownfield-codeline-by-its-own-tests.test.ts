@@ -76,6 +76,18 @@ describe('the harness judges the brownfield codeline by its own tests', () => {
     const out2 = `${r2.stdout}\n${r2.stderr}`;
     expect(out2, 'a seam that executed on the previous run and not on this one did not fail the ratchet').toMatch(new RegExp(`✗ ratchet: ${gained.replace(/[.*+?^${}()|[\]\\]/g, '\\$&')} executed on prev1234 and not on this run`));
     expect(out2).toMatch(/VERDICT RED/);
+    // A seam the registry now declares inapplicable to this project is not ratcheted: it is
+    // excluded with its stated reason, not lost. (topology-router on a one-story project, run 19.)
+    const notExpected = (out.match(/- (\S+) — not expected:/) || [])[1];
+    expect(notExpected, 'no seam is excluded by declaration on this project').toBeTruthy();
+    writeFileSync(baseline, JSON.stringify({ ...verdict, sha: 'prev1234', seamsExecutedList: [notExpected], failureKeys: verdict.failureKeys }));
+    const r4 = spawnSync('bash', [join(ROOT, 'orchestrations/scripts/greenfield-harness.sh'), '--assess-only', dest, '--ratchet', baseline], {
+      encoding: 'utf8', timeout: 180000,
+      env: { ...process.env, NODE_BIN: process.execPath, EPAM_PROVIDER_SET: 'mockserver', LANGFUSE_BASE_URL: 'http://127.0.0.1:1' },
+    });
+    const out4 = `${r4.stdout}\n${r4.stderr}`;
+    expect(out4, 'a seam declared inapplicable was ratcheted').not.toMatch(/✗ ratchet/);
+    expect(out4).toMatch(new RegExp(`ratchet: ${notExpected} executed on prev1234 and is not expected here`));
     // And a previous run that was strictly worse ratchets nothing.
     writeFileSync(baseline, JSON.stringify({ ...verdict, sha: 'prev1234', seamsExecutedList: [], failureKeys: verdict.failureKeys }));
     const r3 = spawnSync('bash', [join(ROOT, 'orchestrations/scripts/greenfield-harness.sh'), '--assess-only', dest, '--ratchet', baseline], {

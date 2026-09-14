@@ -862,6 +862,8 @@
       "_why_bootstrap": "reviews that roster, in the same stage. A prompt that runs before the project prompt layer exists cannot be a project prompt."
     },
     "topology-router": {
+      "appliesTo": ["multi-story"],
+      "_whyAppliesTo": "Routes WORKTREE stories (primary/independent). synthesize-prd-from-jira.js puts a single-story run on main on purpose (defaultGroup: totalStoryCount <= 1 ? 'main' : 'primary', the worktree-merge bug of 2026-07-22), so a one-story project never routes; it ran on the one-ticket rehearsal only through the no-ACs shortcut that splits the story onto primary (£0 brownfield harness runs 16–19, 2026-09-14).",
       "_what": "Chooses the execution topology for a phase: single, parallel or sequential worktrees.",
       "_why": "Declared 2026-08-25. It was calling an LLM while matching NO seam, so resolveOrRefuse could never answer and the call threw at module load — every topology decision in every run was the count heuristic, silently. The count cannot see shared file scope, so four stories editing one file went to parallel worktrees.",
       "maxOutputTokens": 16384,

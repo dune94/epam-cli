@@ -18,7 +18,7 @@ const ROOT = join(__dirname, '../../..');
 const REG = join(ROOT, 'orchestrations/agents/invocation-profiles.json');
 const profiles = JSON.parse(readFileSync(REG, 'utf8')).profiles as Record<string, any>;
 const { projectModes, expectedSeams } = require(join(ROOT, 'orchestrations/scripts/lib/seams-expected.js'));
-const KNOWN = new Set(['brownfield', 'greenfield', 'multi-codeline']);
+const KNOWN = new Set(['brownfield', 'greenfield', 'multi-codeline', 'multi-story']);
 
 /** Parse JSON into a tree that keeps every key, duplicates included — JSON.parse drops them. */
 function parseWithKeys(text: string): any {
@@ -74,7 +74,7 @@ describe('a seam declares the modes it applies to', () => {
     const declared = Object.entries(profiles).filter(([, p]) => Array.isArray(p.appliesTo));
     expect(declared.length).toBeGreaterThan(0);
     const gf = expectedSeams(profiles, new Set(['greenfield']));
-    const bf = expectedSeams(profiles, new Set(['brownfield', 'multi-codeline']));
+    const bf = expectedSeams(profiles, new Set(['brownfield', 'multi-codeline', 'multi-story']));
     for (const [seam, p] of declared) {
       if (!p.appliesTo.includes('greenfield')) { expect(gf.expected).not.toContain(seam); expect(gf.excluded[seam]).toMatch(/applies to/); }
       expect(bf.expected, `${seam} on a brownfield multi-codeline project`).toContain(seam);
@@ -90,6 +90,46 @@ describe('a seam declares the modes it applies to', () => {
       const modes = projectModes(text);
       expect(modes.has(/^EPAM_BROWNFIELD=1$/m.test(text) ? 'brownfield' : 'greenfield'), d).toBe(true);
     }
+  });
+});
+
+describe('a seam that applies to multi-story runs is expected only where the project declares more than one story', () => {
+  // THE SYNTHESISER PUTS A SINGLE-STORY RUN ON MAIN ON PURPOSE (synthesize-prd-from-jira.js,
+  // defaultGroup: totalStoryCount <= 1 ? 'main' : 'primary' — the worktree-merge bug of
+  // 2026-07-22), and the topology router routes worktree stories only. So a one-ticket project
+  // can never execute it through the real classifier path; the harness held brownfield to it for
+  // three runs (17–19, 2026-09-14) on the strength of a shortcut path that split the story onto
+  // primary. The story count is the project's own data: its authored PRD, or its tracker issues.
+  const { projectModes, projectStoryCount } = require(join(ROOT, 'orchestrations/scripts/lib/seams-expected.js'));
+  it('the router declares multi-story, with the synthesiser as its reason', () => {
+    expect(profiles['topology-router'].appliesTo).toContain('multi-story');
+    expect(profiles['topology-router']._whyAppliesTo).toMatch(/synthesize-prd/);
+  });
+  it('the story count is read from the project: tracker issues, else the authored PRD', () => {
+    const { mkdtempSync, mkdirSync, writeFileSync } = require('node:fs'); const os = require('node:os');
+    const a = mkdtempSync(join(os.tmpdir(), 'ms-'));
+    writeFileSync(join(a, 'tracker-issues.json'), JSON.stringify([{ key: 'A-1' }]));
+    expect(projectStoryCount(a)).toBe(1);
+    const b = mkdtempSync(join(os.tmpdir(), 'ms-'));
+    writeFileSync(join(b, 'prd.authored.json'), JSON.stringify({ stories: [{ id: 'S-1' }, { id: 'S-2' }, { id: 'S-3' }] }));
+    expect(projectStoryCount(b)).toBe(3);
+    expect(projectModes('EPAM_BROWNFIELD=1\n', a).has('multi-story')).toBe(false);
+    expect(projectModes('', b).has('multi-story')).toBe(true);
+    void mkdirSync;
+  });
+  it('the checked-in projects: a one-ticket rehearsal excludes the router, a multi-story project expects it', () => {
+    const dir = join(ROOT, 'orchestrations/projects');
+    const { projectEnvFiles } = require(join(ROOT, 'orchestrations/scripts/lib/llm-settings-resolve.js'));
+    const seen: Record<string, boolean> = {};
+    for (const d of readdirSync(dir)) {
+      const files = projectEnvFiles(join(dir, d)); if (!files || !existsSync(files.base)) continue;
+      const modes = projectModes(readFileSync(files.base, 'utf8'), join(dir, d));
+      const { expected, excluded } = expectedSeams(profiles, modes);
+      const n = projectStoryCount(join(dir, d));
+      if (n > 1) { expect(expected, `${d} (${n} stories)`).toContain('topology-router'); seen.multi = true; }
+      else { expect(excluded['topology-router'], `${d} (${n} stories)`).toMatch(/multi-story/); seen.single = true; }
+    }
+    expect(seen.multi && seen.single, 'both shapes must be represented among the checked-in projects').toBe(true);
   });
 });
 

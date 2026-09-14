@@ -287,6 +287,9 @@ if [ -n "$RATCHET" ]; then
   say "ratchet against $RATCHET ($_prev_sha): nothing that run had may be lost"
   while IFS= read -r s; do
     [ -n "$s" ] || continue
+    # A seam the registry now declares inapplicable to this project is excluded with its stated
+    # reason (printed above), not lost: it is not held against this run.
+    if ! printf '%s\n' "$_seams" | grep -Fxq -- "$s"; then say "ratchet: $s executed on $_prev_sha and is not expected here — excluded by declaration, not lost"; continue; fi
     if ! printf '%s\n' "$_executed_now" | grep -Fxq -- "$s"; then check 1 "ratchet: $s executed on $_prev_sha and not on this run"; fi
   done <<< "$_prev_seams"
   # A check that failed then is not ratcheted; every other check of this run must still pass.

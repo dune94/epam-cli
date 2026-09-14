@@ -17,13 +17,31 @@
 'use strict';
 const fs = require('fs');
 
-function projectModes(configText) {
+/**
+ * How many stories the project declares: its tracker issues (a tracker-sourced project) else its
+ * authored PRD. The synthesiser puts a single-story run on main on purpose (synthesize-prd-from-
+ * jira.js: defaultGroup = totalStoryCount <= 1 ? 'main' : 'primary'), and seams that route or
+ * bridge worktree stories never run there — a mode of the project's own data, not of its env.
+ */
+function projectStoryCount(projectDir) {
+  if (!projectDir) return 0;
+  try {
+    const t = `${projectDir}/tracker-issues.json`;
+    if (fs.existsSync(t)) { const a = JSON.parse(fs.readFileSync(t, 'utf8')); return Array.isArray(a) ? a.length : 0; }
+    const p = `${projectDir}/prd.authored.json`;
+    if (fs.existsSync(p)) return (JSON.parse(fs.readFileSync(p, 'utf8')).stories || []).length;
+  } catch { return 0; }
+  return 0;
+}
+
+function projectModes(configText, projectDir) {
   const get = (k) => { const m = String(configText).match(new RegExp(`^${k}=(.*)$`, 'm')); return m ? m[1].trim().replace(/^["']|["']$/g, '') : ''; };
   const modes = new Set([get('EPAM_BROWNFIELD') === '1' ? 'brownfield' : 'greenfield']);
   const root = get('JIRA_CODELINE_ROOT');
   let codelines = 0;
   try { if (root && fs.existsSync(root)) codelines = fs.readdirSync(root, { withFileTypes: true }).filter((d) => d.isDirectory() && fs.existsSync(`${root}/${d.name}/.git`)).length; } catch { codelines = 0; }
   if (codelines > 1) modes.add('multi-codeline');
+  if (projectStoryCount(projectDir) > 1) modes.add('multi-story');
   return modes;
 }
 
@@ -37,7 +55,7 @@ function expectedSeams(profiles, modes) {
   return { expected: expected.sort(), excluded };
 }
 
-module.exports = { projectModes, expectedSeams };
+module.exports = { projectModes, expectedSeams, projectStoryCount };
 
 if (require.main === module) {
   const [reg, cfg] = process.argv.slice(2);
@@ -47,6 +65,6 @@ if (require.main === module) {
   const { projectEnvFiles } = require('./llm-settings-resolve.js');
   const files = projectEnvFiles(cfg);
   if (!files) { process.stderr.write(`no provider-set registry resolves the env files of ${cfg}\n`); process.exit(2); }
-  const modes = projectModes(fs.readFileSync(files.base, 'utf8'));
+  const modes = projectModes(fs.readFileSync(files.base, 'utf8'), cfg);
   process.stdout.write(JSON.stringify({ modes: [...modes], ...expectedSeams(profiles, modes) }) + '\n');
 }

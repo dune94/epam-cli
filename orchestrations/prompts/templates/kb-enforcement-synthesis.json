@@ -13,8 +13,9 @@
   "description": "Chooses the enforcement that prevents a repeated agent failure from recurring.",
   "id": "kb-enforcement-synthesis",
   "seams": [
-    "impl-failure-analyst"
+    "kb-synthesizer"
   ],
+  "$whySeam": "Executed by lib/kb-synthesizer.js under EPAM_AGENT_NAME kb-synthesizer, the registry seam whose template this is. It was declared for impl-failure-analyst — the seam whose repeated failure it prevents, not the one that runs it — so a rehearsal answered it under the wrong seam (2026-09-14).",
   "placeholders": [
     "__EPISODE_COUNT__",
     "__AGENT_ROLE__",

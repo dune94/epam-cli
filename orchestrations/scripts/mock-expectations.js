@@ -70,14 +70,21 @@ function seams() {
   const templateDoc = (id) => {
     try { return JSON.parse(fs.readFileSync(path.join(TPL, `${id}.json`), 'utf8')); } catch { return null; }
   };
-  const multiPart = new Set(out.filter((x) => { const d = templateDoc(x.template); return d && d.bodies && !d.body; }).map((x) => x.seam));
+  // EVERY PROMPT A SEAM CARRIES IS ANSWERED, not only the registry-named one. The multi-part
+  // restriction left spec-coordinator's review prompt (<SPEC_REVIEW>), its model review
+  // (<MODEL_REVIEW>), the change reviewer's spec-pass prompt, the post-phase failure analyst and
+  // both skill assessments unregistered: 24 calls to the catch-all in one £0 run (2026-09-14),
+  // each answered `{}` and read downstream as a seam that had nothing to say.
   const declared = new Set(out.map((x) => `${x.seam}\u0000${x.template}`));
   for (const f of fs.readdirSync(TPL).filter((x) => x.endsWith('.json'))) {
     const id = f.replace(/\.json$/, '');
     const t = templateDoc(id);
     if (!t || typeof t.body !== 'string') continue;
-    for (const seam of (Array.isArray(t.seams) ? t.seams : [])) {
-      if (!multiPart.has(seam)) continue;
+    // A template declared for MORE THAN ONE seam is a fragment those seams share (the QA gates'
+    // scope block): its fingerprint appears in every one of their prompts and identifies none of
+    // them — registered once under the first, it answered the mutant hunter as the SAST gate.
+    if (!Array.isArray(t.seams) || t.seams.length !== 1) continue;
+    for (const seam of t.seams) {
       if (declared.has(`${seam}\u0000${id}`)) continue;
       declared.add(`${seam}\u0000${id}`);
       out.push({ seam, template: id, alias: true });
@@ -249,11 +256,25 @@ const wireForm = (t) => JSON.stringify(t).slice(1, -1);
 /** Escape a literal so it can sit inside a regex matcher. */
 const rx = (t) => String(t).replace(/[.*+?^${}()|[\]\\]/g, '\\$&');
 
+let _bodiesByTemplate = null;
+function templateBodies() {
+  if (_bodiesByTemplate) return _bodiesByTemplate;
+  _bodiesByTemplate = new Map();
+  try {
+    for (const f of fs.readdirSync(TPL).filter((x) => x.endsWith('.json'))) {
+      try {
+        const t = JSON.parse(fs.readFileSync(path.join(TPL, f), 'utf8'));
+        _bodiesByTemplate.set(f.replace(/\.json$/, ''), t.bodies ? Object.values(t.bodies).join('\n') : String(t.body || ''));
+      } catch { /* not a template */ }
+    }
+  } catch { /* no template dir */ }
+  return _bodiesByTemplate;
+}
+
 function matchKey(template) {
-  const f = path.join(TPL, `${template}.json`);
-  if (!fs.existsSync(f)) return null;
-  const t = JSON.parse(fs.readFileSync(f, 'utf8'));
-  const body = t.bodies ? Object.values(t.bodies).join('\n') : String(t.body || '');
+  const bodies = templateBodies();
+  if (!bodies.has(template)) return null;
+  const body = bodies.get(template);
   // A FINGERPRINT MUST SURVIVE RENDERING.
   //
   // This rejected lines that BEGIN with a placeholder and accepted any that merely contain one, so
@@ -263,19 +284,28 @@ function matchKey(template) {
   // own required field as missing. Four attempts to fix that looked at the reply; the reply was
   // never the problem.
   //
-  // A line qualifies only if it carries no placeholder anywhere, so what the matcher holds is what
-  // the model is actually sent.
-  // Prefer a long placeholder-free line; some templates have none. spec-agent's body is a 617-char
-  // JSON schema fragment where every long line carries a placeholder, so demanding 45 characters
-  // left it with NO fingerprint and every one of its calls fell to the catch-all. Its literal
-  // schema text — `"acceptanceCriteria":["..."],` — is short but real, and reaches the model
-  // unchanged, which is the only property a matcher needs.
-  const survives = (l) => !/__[A-Z0-9_]+__/.test(l);
-  const lines = body.split('\n').map((l) => l.trim()).filter(survives);
-  const line = lines.find((l) => l.length > FINGERPRINT_PREFERRED_CHARS)
-    || lines.filter((l) => l.length > FINGERPRINT_MINIMUM_CHARS)
-      .sort((a, b) => b.length - a.length)[0];
-  return line ? line.trim().slice(0, FINGERPRINT_MATCH_CHARS) : null;
+  // What survives is every stretch of text BETWEEN placeholders — a whole line where the line has
+  // none, a segment of one where it has. A template written as one paragraph with a placeholder in
+  // it (skills-coordinator) had no placeholder-free line at all and fell to the catch-all.
+  //
+  // AND A FINGERPRINT MUST BE THIS TEMPLATE'S OWN. The six QA gates open with the same sentence;
+  // taking the first long line gave them one fingerprint between them, and the SAST answer was
+  // served to the mutant hunter and the review ranger (2026-09-14). A stretch found in any other
+  // template's body identifies nothing; the longest stretch found in no other template is the
+  // fingerprint, with the longest shared one only where no template-unique stretch exists.
+  // Uniqueness is judged on WHAT IS MATCHED — the truncated key — not on the whole stretch: two
+  // gates whose long sentences differ only past the cut share the key.
+  const stretches = body.split('\n')
+    .flatMap((l) => l.split(/__[A-Z0-9_]+__/))
+    .map((x) => x.trim())
+    .filter((x) => x.length > FINGERPRINT_MINIMUM_CHARS)
+    .sort((a, b) => b.length - a.length);
+  const others = [...bodies.entries()].filter(([id]) => id !== template).map(([, b]) => b);
+  const keyOf = (x) => x.slice(0, FINGERPRINT_MATCH_CHARS);
+  const unique = stretches.filter((x) => !others.some((b) => b.includes(keyOf(x))));
+  const pick = (list) => list.find((x) => x.length > FINGERPRINT_PREFERRED_CHARS) || list[0];
+  const line = pick(unique) || pick(stretches);
+  return line ? keyOf(line) : null;
 }
 
 /**
@@ -885,7 +915,7 @@ module.exports = {
   captureIsOwned,
   sse, sseToolCalls, anthropicSse, anthropicSseToolCalls,
   // Exported so a test can put the stand-in through the CONSUMER'S OWN GATE, without a run.
-  contractStandIn, standInReplyText, expectsARole, standInRoleName, isStandInBody,
+  contractStandIn, contractOf, standInReplyText, expectsARole, standInRoleName, isStandInBody,
   // Exported so a test can drive the capture selection against a stub Langfuse.
   langfuseReply,
 };
@@ -982,11 +1012,11 @@ function expectsARole(spec) {
 }
 
 /** The wrapper key a tagged payload uses for this seam, or '' when items are bare. */
-function TAG_ITEMS_KEY(seam) {
+function TAG_ITEMS_KEY(seam, template) {
   try {
     // eslint-disable-next-line global-require
-    const { declaredContracts: dc, TAG_TO_TOOL } = require('./lib/agent-output-schema.js');
-    const c = dc()[seam];
+    const { TAG_TO_TOOL } = require('./lib/agent-output-schema.js');
+    const c = contractOf(seam, template);
     const t = c && c.tag && TAG_TO_TOOL[c.tag];
     return (t && t.itemsKey) || '';
   } catch { return ''; }
@@ -1006,27 +1036,46 @@ function isStandInBody(body) {
  * `<PROMPT_REVIEW>` block that no tool defines, and a bare JSON answer left every prompt installed
  * UNREVIEWED (£0 greenfield harness run 19, 2026-09-14). Untagged contracts are served as JSON.
  */
-function standInReplyText(seam, stood) {
-  const s = stood === undefined ? contractStandIn(seam) : stood;
+function standInReplyText(seam, stood, contract) {
+  const c = contract || contractOf(seam);
+  const s = stood === undefined ? contractStandIn(seam, c) : stood;
   if (s === null || s === undefined) return null;
-  let tag = '';
-  try {
-    // eslint-disable-next-line global-require
-    const { declaredContracts: dc } = require('./lib/agent-output-schema.js');
-    const c = dc()[seam];
-    tag = (c && c.tag) || '';
-  } catch { tag = ''; }
+  const tag = (c && c.tag) || '';
   return tag ? `<${tag}>\n${JSON.stringify(s, null, 2)}\n</${tag}>` : JSON.stringify(s);
 }
 
-function contractStandIn(seam) {
+/**
+ * THE CONTRACT A GIVEN PROMPT ANSWERS UNDER. A seam declares one contract, but a seam may carry
+ * more than one prompt, and a prompt that demands its own tagged block (`<SPEC_REVIEW>` from the
+ * coordinator's review prompt, under a seam whose contract is the assignment list) is answered
+ * under THAT tag — read from the template body, resolved through the same tag→tool table the
+ * validator uses. Absent such a demand, the seam's declared contract.
+ */
+function contractOf(seam, template) {
+  let c = null;
+  try {
+    // eslint-disable-next-line global-require
+    const { declaredContracts: dc, TAG_TO_TOOL } = require('./lib/agent-output-schema.js');
+    c = dc()[seam] || null;
+    if (template) {
+      const f = path.join(TPL, `${template}.json`);
+      const t = fs.existsSync(f) ? JSON.parse(fs.readFileSync(f, 'utf8')) : null;
+      const body = t ? (typeof t.body === 'string' ? t.body : Object.values(t.bodies || {}).join('\n')) : '';
+      const demanded = [...body.matchAll(/<([A-Z][A-Z0-9_]{3,})>/g)].map((m) => m[1]).find((tag) => TAG_TO_TOOL[tag]);
+      if (demanded && (!c || c.tag !== demanded)) return { kind: 'schema', tag: demanded, _demandedBy: template };
+    }
+  } catch { /* the seam's own contract, below */ }
+  return c;
+}
+
+function contractStandIn(seam, override) {
   let contracts = {};
   try {
     // eslint-disable-next-line global-require
     ({ declaredContracts: contracts } = require('./lib/agent-output-schema.js'));
     contracts = contracts();
   } catch { return null; }
-  const c = contracts[seam];
+  const c = override || contracts[seam];
   if (!c) return null;
 
   // A value whose SHAPE matches what the key's name says it holds, so a consumer that indexes or
@@ -1607,6 +1656,9 @@ function endsInToolCall(cap, seam) {
   const perStory = [];
   const foreign = [];
   const seen = new Set();
+  // The writer's per-story answers are registered once per seam; the seam's other templates
+  // (its aliases) share them.
+  const _writerSeamsDone = new Set();
 
   for (const { seam, template } of all) {
     const key = matchKey(template);
@@ -1785,7 +1837,7 @@ function endsInToolCall(cap, seam) {
     let standTagged = null;
     let _writerReported = false;
     if (!cap) {
-      stood = contractStandIn(seam);
+      stood = contractStandIn(seam, contractOf(seam, template));
       if (!stood) { uncovered.push(`${seam} (no captured reply, no declared contract)`); continue; }
       // A SCHEMA SEAM ANSWERS BY CALLING ITS TOOL, NOT BY TALKING. Its contract is checked against
       // the arguments of a named tool call, so a stand-in delivered as text is invisible to the
@@ -1794,8 +1846,8 @@ function endsInToolCall(cap, seam) {
       // failed with 'missing required field "storyId"'.
       try {
         // eslint-disable-next-line global-require
-        const { declaredContracts: dc, TAG_TO_TOOL } = require('./lib/agent-output-schema.js');
-        const c = dc()[seam];
+        const { TAG_TO_TOOL } = require('./lib/agent-output-schema.js');
+        const c = contractOf(seam, template);
         const t = c && c.tag && TAG_TO_TOOL[c.tag];
         if (t) {
           const items = Array.isArray(stood) ? stood : [stood];
@@ -1827,7 +1879,7 @@ function endsInToolCall(cap, seam) {
         }
       } catch { standCall = null; }
       // Every tagged contract is delivered inside its tag, tool-bound or not (see standInReplyText).
-      if (!standTagged) { const _t = standInReplyText(seam, stood); if (_t && _t !== JSON.stringify(stood)) standTagged = _t; }
+      if (!standTagged) { const _t = standInReplyText(seam, stood, contractOf(seam, template)); if (_t && _t !== JSON.stringify(stood)) standTagged = _t; }
     }
     // A STORY-SPECIFIC CAPTURE IS MATCHED THE SAME WAY A STORY-SPECIFIC STAND-IN IS.
     //
@@ -1836,14 +1888,7 @@ function endsInToolCall(cap, seam) {
     // MOCK3-1's detective answer was served for MOCK3-2 and mockb was specified against mocka's
     // src/fares.ts. Both together identify the one call this capture belongs to; the seam is named
     // by its output tag where it has one, since that is what every prompt for it carries.
-    const _capTag = (() => {
-      try {
-        // eslint-disable-next-line global-require
-        const { declaredContracts: dc } = require('./lib/agent-output-schema.js');
-        const d = dc()[seam];
-        return (d && d.tag) ? `<${d.tag}>` : '';
-      } catch { return ''; }
-    })();
+    const _capTag = (() => { const d = contractOf(seam, template); return (d && d.tag) ? `<${d.tag}>` : ''; })();
     const _disc = storyDiscriminator(_story);
     const _seamMark = _capTag || key;
     const bodyMatch = _disc
@@ -1858,7 +1903,8 @@ function endsInToolCall(cap, seam) {
     // THE STAND-IN WRITER LANDS THE STORY'S DECLARED DELIVERABLES, so every seam after the writer —
     // the gates, the reviews, the commit, the phase — executes at £0 instead of stopping at a
     // writer that wrote nothing. One turn of write calls per story, then the answer.
-    if (!cap && producesImplementation(seam)) {
+    if (!cap && producesImplementation(seam) && !_writerSeamsDone.has(seam)) {
+      _writerSeamsDone.add(seam);
       let _wrote = 0;
       for (const st of projectStories()) {
         const _story = (() => { try { return (JSON.parse(fs.readFileSync(process.env.PRD_FILE, 'utf8')).stories || []).find((x) => x && x.id === st.id) || st; } catch { return st; } })();
@@ -1870,13 +1916,15 @@ function endsInToolCall(cap, seam) {
         // review and handed it write calls (2026-09-14). The template the writer actually carries
         // names the story on one line (`… __STORY_ID__ …`); that line, rendered for this story,
         // occurs in the writer's request alone.
-        // ONE MATCH PER TEMPLATE THE WRITER CARRIES: that template's own fingerprint AND its story
-        // line rendered for this story. The seam's registry key is the multi-part document the
-        // writer CONSUMES, whose fingerprint no writer call carries (see the header of
-        // test/integration/the-writer-is-answered-by-its-own-seam-at-zero-cost.test.ts).
+        // THE STORY LINE ALONE, one per template the writer carries, rendered for this story.
+        // The seam's registry key is the multi-part document the writer CONSUMES, whose
+        // fingerprint no writer call carries; a template's own fingerprint is taken from the
+        // template, while the prompt that runs is the PROJECT's generated copy, which can differ
+        // in exactly the line chosen (a renumbered rule, 2026-09-14). The line the writer names
+        // its story with — "Implement user story <id>: …" — occurs in no other prompt.
         const _frames = writerStoryLineFrames();
-        const _pairs = _frames.map((fr) => ({ mark: matchKey(fr.template) || key, line: `${fr.before}${st.id}${fr.after}` }));
-        if (!_pairs.length) _pairs.push({ mark: key, line: storyDiscriminator(st.id) || st.id });
+        const _lines = _frames.map((fr) => `${fr.before}${st.id}${fr.after}`).filter((l) => l.replace(st.id, '').trim().length > FINGERPRINT_MINIMUM_CHARS);
+        if (!_lines.length) _lines.push(storyDiscriminator(st.id) || st.id);
         // THE FIRST ATTEMPTS FAIL ON PURPOSE. A writer that never fails never exercises the
         // failure analysts, the deterministic check or the retry ladder — seams a real run climbs
         // through. The first attempts land every deliverable but the last, so the deliverable
@@ -1885,8 +1933,7 @@ function endsInToolCall(cap, seam) {
         // analyst only on a REPEATED violation.
         const _turns = calls.length > 1 ? [calls.slice(0, -1), calls.slice(0, -1), calls] : [calls];
         for (const proto of PROTOCOLS) {
-          const _alt = _pairs.map((pr) => `(?=.*${rx(wireForm(pr.mark))})(?=.*${rx(wireForm(pr.line))})`).join('|');
-          const _match = { type: 'REGEX', regex: `(?s)(?:${_alt}).*` };
+          const _match = { type: 'REGEX', regex: `(?s)(?=.*(?:${_lines.map((l) => rx(wireForm(l))).join('|')})).*` };
           const _hdr = { 'content-type': ['text/event-stream; charset=utf-8'], 'x-seam': [`${seam}:${st.id}`] };
           // Each attempt is ONE write turn then ONE answer: the answer is registered once per
           // attempt at the same priority, so it is served before the next attempt's write turn.
@@ -1945,14 +1992,7 @@ function endsInToolCall(cap, seam) {
       : [];
     const _perStorySeam = (_perStoryCaptures.length > 1)
       || (!cap && Array.isArray(stood) && stood.length > 1 && stood.every((x) => x && x.storyId));
-    const _tag = (() => {
-      try {
-        // eslint-disable-next-line global-require
-        const { declaredContracts: dc } = require('./lib/agent-output-schema.js');
-        const d = dc()[seam];
-        return (d && d.tag) || '';
-      } catch { return ''; }
-    })();
+    const _tag = (() => { const d = contractOf(seam, template); return (d && d.tag) || ''; })();
     // ONE CALL PER STORY, OR ONE CALL FOR ALL OF THEM? THE REGISTRY ALREADY SAYS.
     //
     // A tag with an itemsKey returns a LIST covering every story in a single call — role-assigner
@@ -1960,7 +2000,7 @@ function endsInToolCall(cap, seam) {
     // called separately for each. Registering per-story answers for the first kind means the one
     // call matches the first story's expectation and the rest are never served: MOCK3-1 was
     // answered six times and MOCK3-2 came back unassigned.
-    const _oneCallForAll = !!TAG_ITEMS_KEY(seam);
+    const _oneCallForAll = !!TAG_ITEMS_KEY(seam, template);
     // A SEAM WITHOUT A TAG IS IDENTIFIED BY ITS TEMPLATE. code-graph-detective produces an
     // artefact rather than a tagged block, so requiring a tag here skipped it entirely — and it is
     // precisely the seam whose per-story answers were being crossed.
@@ -1990,7 +2030,7 @@ function endsInToolCall(cap, seam) {
         const disc = storyDiscriminator(item.storyId);
         if (!disc) continue;
         const tagged = `<${_tag}>\n${JSON.stringify(
-          (TAG_ITEMS_KEY(seam) ? { [TAG_ITEMS_KEY(seam)]: [item] } : item), null, 2)}\n</${_tag}>`;
+          (TAG_ITEMS_KEY(seam, template) ? { [TAG_ITEMS_KEY(seam, template)]: [item] } : item), null, 2)}\n</${_tag}>`;
         for (const proto of PROTOCOLS) {
           // eslint-disable-next-line no-await-in-loop
           await put('/mockserver/expectation', {

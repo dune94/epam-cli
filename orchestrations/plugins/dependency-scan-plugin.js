@@ -53,9 +53,13 @@ const MANIFEST_REL = join('.epam', 'dependency-check.json');
 /** Optional manifest key. Absent means UNKNOWN, never "none" — see dependencySensitiveConfigFiles. */
 const DEPENDENCY_SENSITIVE_KEY = 'dependencySensitiveConfigFiles';
 
+// manifestKeys is NOT required: it names the sections of a JSON manifest (package.json's
+// dependencies/devDependencies) and means nothing to a text manifest. A requirements.txt project
+// was refused as "incomplete — missing: manifestKeys" on every writer attempt and its declared
+// dependencies were invisible (2026-09-14). A manifest an ecosystem provider claims is read by
+// that provider's own parser; manifestKeys is the JSON path for a manifest no provider claims.
 const REQUIRED_KEYS = [
   'manifestFile',
-  'manifestKeys',
   'scanFileExtensions',
   'importPattern',
   'vendorDirs',
@@ -235,8 +239,21 @@ function declaredDependencies(projectRoot, cfg) {
   const out = new Set();
   const file = join(projectRoot, String(cfg.manifestFile));
   if (!existsSync(file)) return out;
+  const text = readFileSync(file, 'utf8');
+  // THE ECOSYSTEM THAT OWNS THIS MANIFEST PARSES IT — the same deps() every other reader of the
+  // manifest uses, so a requirements.txt, a Gemfile or a go.mod declares through its own rules.
+  try {
+    // eslint-disable-next-line global-require
+    const { allManifests } = require('../scripts/lib/ecosystem-registry.js');
+    const base = String(cfg.manifestFile).split('/').pop();
+    const eco = allManifests().find((e) => e.file === base || (Array.isArray(e.alsoMatches) && e.alsoMatches.includes(base)));
+    if (eco && typeof eco.deps === 'function') {
+      for (const n of eco.deps(text) || []) if (n) out.add(String(n));
+      return out;
+    }
+  } catch { /* no provider claims it: the JSON keys below */ }
   let parsed;
-  try { parsed = JSON.parse(readFileSync(file, 'utf8')); } catch { return out; }
+  try { parsed = JSON.parse(text); } catch { return out; }
   for (const key of (Array.isArray(cfg.manifestKeys) ? cfg.manifestKeys : [])) {
     const section = parsed[key];
     if (section && typeof section === 'object') for (const n of Object.keys(section)) out.add(n);
@@ -526,5 +543,6 @@ module.exports = {
   isMalformedSpecifier,
   isNotAModuleName,
   REQUIRED_KEYS,
+  declaredDependencies,
   MANIFEST_REL,
 };

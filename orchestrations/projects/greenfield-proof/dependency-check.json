@@ -11,5 +11,7 @@
     ".tox",
     ".pytest_cache",
     ".mypy_cache"
-  ]
+  ],
+  "installCommand": "pip install {package}",
+  "_whyInstallCommand": "The ecosystem provider for requirements.txt declares addCommand as this (orchestrations/ecosystems/requirements-txt.js); the manifest schema requires it. No manifestKeys: a requirements.txt is a text manifest its provider parses."
 }

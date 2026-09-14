@@ -50,6 +50,11 @@ const ORDINARY_ABSENCES: Record<string, Record<string, string>> = {
     __STORY_ACS__: 'a brownfield story has no acceptance criteria — it judges on VCs — and the '
       + 'producer (lib/story-acs-block.sh) returns nothing rather than a heading over nothing; a '
       + 'greenfield story fills the block (operator 2026-09-11: ACs are in scope for greenfield)',
+    __VC_BLOCK__: 'the mirror of __STORY_ACS__: a greenfield story has no verification criteria — '
+      + 'it judges on its ACs — so the block is empty for exactly the stories the AC block fills, as '
+      + 'code-review-cycle already declares. Undeclared, the reviewer could not render for any '
+      + 'greenfield story and the phase halted after six no-verdict cycles (£0 greenfield harness, '
+      + '2026-09-13)',
   },
   'failure-analyst': {
     __SKILL_ADDENDUM__: 'a role may carry no accumulated skill notes',

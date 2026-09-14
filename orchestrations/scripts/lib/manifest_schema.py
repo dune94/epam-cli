@@ -84,9 +84,12 @@ class DependencyManifest(BaseModel):
                     "codeline root (e.g. the packaging manifest for this stack)",
     )
     manifestKeys: List[str] = Field(
-        min_length=1,
-        description="Top-level keys in manifestFile whose values map dependency "
-                    "name -> version",
+        default_factory=list,
+        description="Top-level keys of a JSON manifestFile whose values map dependency "
+                    "name -> version (package.json: dependencies, devDependencies). Empty for "
+                    "a text manifest — a requirements.txt, Gemfile or go.mod is parsed by its "
+                    "ecosystem provider (orchestrations/ecosystems/*.js deps()), which has no "
+                    "keys; requiring one refused every such project as incomplete (2026-09-14)",
     )
     scanFileExtensions: List[str] = Field(
         min_length=1,

@@ -101,13 +101,16 @@ if [ "${#FAILS[@]}" -gt 0 ]; then tail -30 "$LOG" >&2; exit 1; fi
 
 # ── 2. The run ───────────────────────────────────────────────────────────────
 cd "$DEST" || exit 1
-set -a; . "$DEST/.env"; set +a
+# The install's .env, through the pipeline's own loader — never sourced raw (a bare `cd` in it
+# would relocate the harness).
+# shellcheck source=/dev/null
+. "$DEST/orchestrations/scripts/lib/env-file.sh"; load_env_file_safe "$DEST/.env"
 export EPAM_PROVIDER_SET="$SET" OUTPUT_DIR="$DEST/build" EPAM_PAUSE_AFTER_AGENT_MINT=0 EPAM_PAUSE_BEFORE_WRITER=0 NODE_BIN
 # Pre-flight's shellcheck verdict is cached per digest of the orchestrator's bytes; the same bytes
 # in a fresh install carry the same verdict, so the harness shares the repository's cache and a
 # run needs the 3.6 GB shellcheck pass only when the orchestrator actually changed.
 export EPAM_PREFLIGHT_CACHE_DIR="${EPAM_PREFLIGHT_CACHE_DIR:-$REPO_ROOT/orchestrations/scripts/.preflight-cache}"
-export PATH="$(dirname "$NODE_BIN"):$PATH"
+_node_dir="$(dirname "$NODE_BIN")"; export PATH="$_node_dir:$PATH"
 PROJECT_DIR="$DEST/orchestrations/projects/$PROJECT"
 [ -d "$PROJECT_DIR" ] || { red "no project '$PROJECT' in the install"; exit 1; }
 PROJECT_ENV="$(_project_env "$PROJECT_DIR")" || exit 2
@@ -139,7 +142,6 @@ if [ "$SET" = "mockserver" ]; then
   fi
 fi
 
-LEDGER_DIRS=("$DEST/orchestrations/logs")
 ledger_total() {
   find "$DEST/orchestrations/logs" -name phase-cost.jsonl -print0 2>/dev/null | xargs -0 cat 2>/dev/null \
     | "$NODE_BIN" -e 'let t=0;require("readline").createInterface({input:process.stdin}).on("line",l=>{try{t+=Number(JSON.parse(l).task_cost_usd)||0}catch{}}).on("close",()=>process.stdout.write(t.toFixed(4)))'
@@ -153,6 +155,8 @@ BROWNFIELD_SEED=""; [ -d "$PROJECT_DIR/seed" ] && BROWNFIELD_SEED="$PROJECT_DIR/
 MOCK1_WORKSPACE_ROOT="$DEST/mock1-workspace"; export MOCK1_WORKSPACE_ROOT
 if [ -n "$BROWNFIELD_SEED" ]; then
   say "launching mock1-paused-run.sh for $PROJECT (set $SET): start, pause before the writer, resume"
+  # Exported (set -a) for the launcher below — shellcheck cannot see the consumer.
+  # shellcheck disable=SC2034
   ( set -a; EPAM_PROJECT_CONFIG_DIR="$PROJECT_DIR"; LOG_DIR="$DEST/orchestrations/logs"
     bash "$DEST/orchestrations/scripts/mock1-paused-run.sh" && {
       _rid="$(grep -o 'RUN NUMBER:[[:space:]]*[0-9TZ]*' "$LOG" | head -1 | awk '{print $NF}')"
@@ -195,7 +199,7 @@ fi   # not --assess-only
 
 # ── 3. What landed ───────────────────────────────────────────────────────────
 check "$RUN_EXIT" "launcher exit 0"
-[ -z "$HALTED" ]; check $? "run completed under the ceiling"
+_rc=0; [ -z "$HALTED" ] || _rc=1; check "$_rc" "run completed under the ceiling"
 if [ -d "$PROJECT_DIR/seed" ]; then
   # The brownfield rehearsal: one phase, paused and resumed; the codeline is the clone the launcher
   # built under the workspace root, and the PRD is the one ingest synthesised from the tracker.
@@ -212,7 +216,7 @@ for p in $PHASES; do
   grep -q "Phase '$p' completed" "$LOG"; check $? "phase '$p' completed"
 done
 _commits="$(git -C "$CODELINE" rev-list --count HEAD 2>/dev/null || echo 0)"
-[ "${_commits:-0}" -gt 1 ]; check $? "codeline holds committed work ($_commits commits)"
+_rc=0; [ "${_commits:-0}" -gt 1 ] || _rc=1; check "$_rc" "codeline holds committed work ($_commits commits)"
 # THE CODELINE'S OWN TESTS, by the command its ecosystem provider declares for it.
 _test_cmd="$("$NODE_BIN" -e '
   const fs = require("fs"), path = require("path");
@@ -229,7 +233,7 @@ else
   check 1 "the codeline's ecosystem declares a test command"
 fi
 _incomplete="$("$NODE_BIN" -e 'const p=require(process.argv[1]);process.stdout.write((p.stories||[]).filter(s=>!s.completed).map(s=>s.id).join(" "))' "$PRD_FILE_ABS" 2>/dev/null)"
-[ -z "$_incomplete" ]; check $? "every story completed in the PRD${_incomplete:+ (incomplete: $_incomplete)}"
+_rc=0; [ -z "$_incomplete" ] || _rc=1; check "$_rc" "every story completed in the PRD${_incomplete:+ (incomplete: $_incomplete)}"
 
 # ── 4. Every seam the registry declares ──────────────────────────────────────
 # THE SEAMS THIS PROJECT'S RUN IS EXPECTED TO EXECUTE, from the registry's own declarations
@@ -256,7 +260,7 @@ while IFS= read -r s; do
     say "  ✗ $s — NOT EXECUTED"; _missing+=("$s")
   fi
 done <<< "$_seams"
-[ "${#_missing[@]}" -eq 0 ]; check $? "every seam declared for this project's modes executed ($_x of $_n; $_all_n in the registry)"
+_rc=0; [ "${#_missing[@]}" -eq 0 ] || _rc=1; check "$_rc" "every seam declared for this project's modes executed ($_x of $_n; $_all_n in the registry)"
 
 # ── 5. Verdict, teardown ─────────────────────────────────────────────────────
 [ "$ASSESS_ONLY" = "1" ] || bash "$DEST/orchestrations-installer/pipeline-services.sh" --stop >>"$LOG" 2>&1 || true

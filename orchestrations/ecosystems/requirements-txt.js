@@ -25,6 +25,10 @@ module.exports = {
     // node_modules/.bin/vitest to exist. Returns '' when this ecosystem vendors nothing in-repo
     // and therefore has nothing to install before its tests can run.
     installCommand: () => 'pip install -r requirements.txt',
+    // HOW THIS ECOSYSTEM ADDS ONE NEW DEPENDENCY: installed with pip and declared by a line in the
+    // manifest — the project's dependency declaration (dependency-check.json installCommand) is
+    // this, so the two cannot disagree.
+    addCommand: () => 'pip install {package}',
     // A requirements.txt project declares no test command of its own, so it declares no way to
     // run one file either. '' means "cannot prove", which the bug-reproduction gate must report
     // rather than treat as a pass.

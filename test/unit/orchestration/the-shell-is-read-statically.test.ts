@@ -45,14 +45,28 @@ const FULL = scan(REPO);
 const LINES = FULL.out.split('\n').filter(Boolean);
 
 describe('the shell is read statically', () => {
-  it('reports findings across the engine, in a form naming file, line and rule', () => {
+  it('reports findings, in a form naming file, line and rule — proven on a script that HAS one', () => {
     expect(FULL.status, `the scanner failed:\n${FULL.err.slice(0, 300)}`).toBe(0);
-    const lines = LINES;
-    expect(lines.length, 'no findings at all — a silent scanner is the defect, not a clean sheet')
-      .toBeGreaterThan(0);
-    for (const l of lines.slice(0, 20)) {
+    for (const l of LINES.slice(0, 20)) {
       expect(l, `unreadable finding: ${l}`).toMatch(/^\S+:\d+:\d+ SC\d+ \w+ .+/);
     }
+    // PROOF OF LIFE FROM A PLANTED DEFECT, not from the engine carrying one: once the engine's
+    // own count reached zero (2026-09-14) a scanner that reports nothing became indistinguishable
+    // from a clean tree, so the scanner is shown a script with a known warning and must name it.
+    const { mkdtempSync, writeFileSync, rmSync } = require('node:fs');
+    const { tmpdir } = require('node:os');
+    const d = mkdtempSync(join(tmpdir(), 'shellscan-'));
+    try {
+      // The scanner reads <root>/orchestrations/scripts, as it does for the engine.
+      const scripts = join(d, 'orchestrations', 'scripts');
+      require('node:fs').mkdirSync(scripts, { recursive: true });
+      writeFileSync(join(scripts, 'planted.sh'), '#!/bin/bash\nx="$(date)"\nlocal y="$(date)"\n[ -n "$x" ]; echo "$?"\n');
+      const planted = scan(d);
+      expect(planted.status).toBe(0);
+      const lines = planted.out.split('\n').filter(Boolean);
+      expect(lines.length, 'the scanner reported nothing for a script with a known warning').toBeGreaterThan(0);
+      expect(lines[0]).toMatch(/planted\.sh:\d+:\d+ SC\d+ \w+ .+/);
+    } finally { rmSync(d, { recursive: true, force: true }); }
   }, 260_000);
 
   it('reports only warning and above — info noise would bury the classes that matter', () => {

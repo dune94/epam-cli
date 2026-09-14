@@ -140,6 +140,8 @@
       "toolGrant": "execute"
     },
     "repro-test-writer": {
+      "appliesTo": ["brownfield"],
+      "_whyAppliesTo": "Writes the failing test that reproduces a brownfield defect (brownfield-repro-test-writer.sh); a greenfield story has no defect to reproduce.",
       "_what": "Writes the bug-reproducing test for a brownfield fix.",
       "maxOutputTokens": 32768,
       "timeoutSecs": 900,
@@ -264,6 +266,8 @@
       "toolGrant": "execute"
     },
     "ac-classification": {
+      "appliesTo": ["brownfield"],
+      "_whyAppliesTo": "AC sufficiency is judged for TRACKER tickets (JIRA_PIPELINE=1); a canonical greenfield PRD arrives with its ACs authored.",
       "_what": "Classifies acceptance criteria.",
       "maxOutputTokens": 16384,
       "timeoutSecs": 360,
@@ -282,6 +286,8 @@
       "_why_timeout": "Holds a plan pass AND an execute pass. It declared 90s — exactly the plan pass's own budget (EPAM_PLAN_TIMEOUT_SECS), so the plan alone could consume the whole window and the answer had none left. The caller then reported an empty response rather than a timeout."
     },
     "ac-elaboration": {
+      "appliesTo": ["brownfield"],
+      "_whyAppliesTo": "Elaborates tracker tickets whose ACs the classifier found enrichable; a canonical greenfield PRD arrives with its ACs authored.",
       "_what": "Elaborates an acceptance criterion into verification criteria.",
       "maxOutputTokens": 32768,
       "timeoutSecs": 600,
@@ -300,6 +306,8 @@
       "_why_timeout": "Same reason as ac-classification, with more work to do: 180s left too little behind a 90s plan pass. It was also being bounded by ac-classification's clock, which is fixed in ac-gate.js."
     },
     "codeline-discovery": {
+      "appliesTo": ["brownfield"],
+      "_whyAppliesTo": "Selects codelines from an estate under JIRA_CODELINE_ROOT; a greenfield project has one output directory and no estate.",
       "_what": "Picks which local codeline a Jira ticket belongs to.",
       "maxOutputTokens": 16384,
       "timeoutSecs": 300,
@@ -336,6 +344,8 @@
       "_why_bootstrap": "certifies newly minted agents, inside the mint. A prompt that runs before the project prompt layer exists cannot be a project prompt."
     },
     "code-graph-detective": {
+      "appliesTo": ["brownfield"],
+      "_whyAppliesTo": "runCodeGraphDetective returns [] unless EPAM_BROWNFIELD=1: it investigates existing code for where a fix lands.",
       "_what": "Investigates one codeline and reports where the work actually lands.",
       "ladder": "top",
       "temperature": "0.7",
@@ -441,6 +451,8 @@
       "_outputIsArtefact": "Delivers the implementation through the filesystem (toolGrant execute, produces \"implementation\"). Nothing parses its stdout as a payload, so there is no shape to declare and a declared one would be fiction."
     },
     "vc-coverage": {
+      "appliesTo": ["brownfield"],
+      "_whyAppliesTo": "Verification criteria exist for brownfield stories only (spec-mode-runner: VCs are normalised when EPAM_BROWNFIELD=1); greenfield stories carry ACs.",
       "_what": "Judges whether the written tests cover each verification criterion.",
       "maxOutputTokens": 16384,
       "timeoutSecs": 900,
@@ -575,6 +587,8 @@
       "$whyLadder": "Moved off 'top' 2026-08-26 (operator decision, cost). This seam DECORATES a template — it reads the generic body and rewrites it for this project. It judges nothing, so the rule that a reviewer runs on the writer's rung does not bind it. Measured that day: 29 calls, $5.48, 80% of a run's cost before a story was touched, and a measured haiku-vs-sonnet comparison put sonnet at ~11x the cost per unit of output. 'mid' starts on the cheap rung and escalates.\n\nSAFE BECAUSE THE OUTPUT IS CHECKED, NOT TRUSTED: project-prompt-contract.js refuses a generation that drops a placeholder, a paired output tag or an output field, feeds the reason back, and reviewPrompt runs a second adversarial pass. A weaker model that fumbles is caught and escalated, never shipped. The residual risk is a prompt that is structurally valid and substantively worse, which only the review pass can see — watch the refusal counts in the log."
     },
     "codeline-bridge-agent": {
+      "appliesTo": ["multi-codeline"],
+      "_whyAppliesTo": "Bridges a completed codeline to the next; a project with one codeline has nothing to bridge.",
       "_what": "Extracts the exported surface of a completed codeline so a later lane's detective can read it. Producers run before consumers precisely so this exists when it is needed.",
       "ladder": "mid",
       "temperature": "0.1",
@@ -672,6 +686,8 @@
       "toolGrant": "read-only"
     },
     "ticket-links": {
+      "appliesTo": ["brownfield"],
+      "_whyAppliesTo": "Reviews documents linked on a tracker ticket; a canonical PRD story carries none.",
       "_what": "Reads the documents linked on a ticket and extracts what they say verbatim.",
       "maxOutputTokens": 16384,
       "timeoutSecs": 600,

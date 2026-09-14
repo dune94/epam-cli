@@ -176,7 +176,14 @@ _incomplete="$("$NODE_BIN" -e 'const p=require(process.argv[1]);process.stdout.w
 [ -z "$_incomplete" ]; check $? "every story completed in the PRD${_incomplete:+ (incomplete: $_incomplete)}"
 
 # ── 4. Every seam the registry declares ──────────────────────────────────────
-_seams="$("$NODE_BIN" -e 'const r=require(process.argv[1]);process.stdout.write(Object.keys(r.profiles||{}).sort().join("\n"))' "$DEST/orchestrations/agents/invocation-profiles.json")"
+# THE SEAMS THIS PROJECT'S RUN IS EXPECTED TO EXECUTE, from the registry's own declarations
+# (lib/seams-expected.js): a seam declaring appliesTo for modes this project is not in is listed
+# with its declared reason, and neither counted missing nor silently dropped.
+_expected_json="$("$NODE_BIN" "$REPO_ROOT/orchestrations/scripts/lib/seams-expected.js" "$DEST/orchestrations/agents/invocation-profiles.json" "$PROJECT_DIR/config.env")"
+_seams="$(printf '%s' "$_expected_json" | "$NODE_BIN" -e 'let b="";process.stdin.on("data",d=>b+=d).on("end",()=>process.stdout.write(JSON.parse(b).expected.join("\n")))')"
+_all_n="$("$NODE_BIN" -e 'const r=require(process.argv[1]);process.stdout.write(String(Object.keys(r.profiles||{}).length))' "$DEST/orchestrations/agents/invocation-profiles.json")"
+say "seams the registry declares for this project's modes ($(printf '%s' "$_expected_json" | "$NODE_BIN" -e 'let b="";process.stdin.on("data",d=>b+=d).on("end",()=>process.stdout.write(JSON.parse(b).modes.join("+")))')): $(printf '%s\n' "$_seams" | grep -c .) of $_all_n"
+printf '%s' "$_expected_json" | "$NODE_BIN" -e 'let b="";process.stdin.on("data",d=>b+=d).on("end",()=>{const e=JSON.parse(b).excluded;for(const [s,w] of Object.entries(e))process.stdout.write("  - "+s+" — not expected: "+w+"\n")})' | while IFS= read -r l; do say "$l"; done
 # From the run's own records, resolved through the registry (lib/seams-executed.js): the ledger,
 # the activity log and Langfuse, every name put through resolveSeam.
 _run_id="$(grep -o 'RUN NUMBER:[[:space:]]*[0-9TZ]*' "$LOG" | head -1 | awk '{print $NF}')"
@@ -193,7 +200,7 @@ while IFS= read -r s; do
     say "  ✗ $s — NOT EXECUTED"; _missing+=("$s")
   fi
 done <<< "$_seams"
-[ "${#_missing[@]}" -eq 0 ]; check $? "every declared seam executed ($_x of $_n)"
+[ "${#_missing[@]}" -eq 0 ]; check $? "every seam declared for this project's modes executed ($_x of $_n; $_all_n in the registry)"
 
 # ── 5. Verdict, teardown ─────────────────────────────────────────────────────
 [ "$ASSESS_ONLY" = "1" ] || bash "$DEST/orchestrations-installer/pipeline-services.sh" --stop >>"$LOG" 2>&1 || true

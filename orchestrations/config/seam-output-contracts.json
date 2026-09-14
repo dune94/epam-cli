@@ -149,6 +149,8 @@
       "requiredKeys": [
         "diagnosis"
       ],
+      "shapes": { "diagnosis": "string", "reason": "string", "target": "string" },
+      "_whyShapes": "diagnosis is ONE diagnosis, a prose paragraph the KB records as the episode; the rehearsal stand-in read the trailing s as a list and recorded \"[]\" as the diagnosis of every healing event (2026-09-14). A shape is stated where the key's name misleads.",
       "knownKeys": [
         "diagnosis",
         "target",
@@ -203,6 +205,8 @@
       "requiredKeys": [
         "diagnosis"
       ],
+      "shapes": { "diagnosis": "string", "reason": "string", "target": "string" },
+      "_whyShapes": "diagnosis is ONE diagnosis, a prose paragraph the KB records as the episode; the rehearsal stand-in read the trailing s as a list and recorded \"[]\" as the diagnosis of every healing event (2026-09-14). A shape is stated where the key's name misleads.",
       "knownKeys": [
         "diagnosis",
         "target",

@@ -1113,6 +1113,13 @@ function contractStandIn(seam, override) {
         reason: `${STAND_IN_MARK} for ${seam}: every repository the run declares is selected`,
       }));
     }
+    // THE DECLARED SHAPE WINS over what the key's name suggests: `diagnosis` is one diagnosis.
+    const shape = c.shapes && c.shapes[k];
+    if (shape === 'string') return `${STAND_IN_MARK} ${k} for ${seam}: no captured reply exists for this seam`;
+    if (shape === 'array') return [];
+    if (shape === 'object') return {};
+    if (shape === 'boolean') return false;
+    if (shape === 'number') return 0;
     if (/s$/.test(k) && !/status|address/i.test(k)) return [];
     if (/^(is|has|should|can|must)/i.test(k)) return false;
     if (/count|total|score|index|number/i.test(k)) return 0;

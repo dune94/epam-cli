@@ -328,3 +328,25 @@ describe('the prompt reviewer reads the stand-in as a review that ran', () => {
     expect(warnings.join('\n')).not.toMatch(/UNREVIEWED/);
   });
 });
+
+/**
+ * A DECLARED SHAPE WINS OVER THE KEY'S NAME. `diagnosis` ends in an s and is one diagnosis; the
+ * stand-in read it as a list and every healing event of the £0 harness recorded "[]" as its
+ * diagnosis (2026-09-14). A contract states a shape where the name misleads; the stand-in obeys it.
+ */
+describe('a declared key shape wins over what the key name suggests', () => {
+  const schema = require('../../../orchestrations/scripts/lib/agent-output-schema.js');
+  const shaped = Object.entries(schema.declaredContracts() as Record<string, any>).filter(([, c]) => c.kind === 'declared' && c.shapes);
+  it('some contract declares shapes', () => { expect(shaped.length).toBeGreaterThan(0); });
+  it.each(shaped.map(([s]) => s))('%s: every declared shape is honoured by the stand-in', (seam) => {
+    const c = (schema.declaredContracts() as Record<string, any>)[seam];
+    const standIn = mock.contractStandIn(seam);
+    for (const [k, shape] of Object.entries(c.shapes as Record<string, string>)) {
+      if (!(k in standIn)) continue;
+      const v = standIn[k];
+      const actual = Array.isArray(v) ? 'array' : typeof v;
+      expect(actual, `${seam}.${k}`).toBe(shape);
+      if (shape === 'string') expect(String(v).trim().length).toBeGreaterThan(0);
+    }
+  });
+});

@@ -136,6 +136,21 @@ function rejectionFeeds(seam) {
     return Object.values(reg).some((p) => p && Array.isArray(p.runsOnRejectionBy) && p.runsOnRejectionBy.includes(seam));
   } catch { return false; }
 }
+/** The structured-output tool the active set's runner declares, or '' when none does. */
+let _soToolName;
+function structuredOutputToolName() {
+  if (_soToolName !== undefined) return _soToolName;
+  _soToolName = '';
+  try {
+    // eslint-disable-next-line global-require
+    const r = require('./lib/llm-settings-resolve.js');
+    for (const name of r.declaredRunners({ projectConfigDir: process.env.EPAM_PROJECT_CONFIG_DIR })) {
+      const decl = r.resolveRunner(name, { projectConfigDir: process.env.EPAM_PROJECT_CONFIG_DIR });
+      if (decl && decl.structuredOutputTool) { _soToolName = decl.structuredOutputTool; break; }
+    }
+  } catch { _soToolName = ''; }
+  return _soToolName;
+}
 function _projectName() { return path.basename(process.env.EPAM_PROJECT_CONFIG_DIR || ''); }
 
 /**
@@ -2167,10 +2182,11 @@ function endsInToolCall(cap, seam) {
     // twenty-two rehearsals (2026-09-14). The first call is answered in prose that satisfies no
     // contract, consumed once; the caller classifies the failure, invokes the analyst, and the
     // retry meets the real answer below. Never for a capture — a recording plays as recorded.
+    // Above the structured-output answer (32): a first failure must be met whichever way the runner asks.
     if (!cap && !alias && analystDiagnoses(seam)) {
       for (const proto of PROTOCOLS) {
         await put('/mockserver/expectation', {
-          priority: 30 + _tagRank, times: { remainingTimes: 1, unlimited: false },
+          priority: 34 + _tagRank, times: { remainingTimes: 1, unlimited: false },
           httpRequest: { method: 'POST', path: proto.path, body: bodyMatch },
           httpResponse: { statusCode: 200, headers: { 'content-type': ['text/event-stream; charset=utf-8'], 'x-seam': [`${seam}:first-attempt-fails`] },
             body: proto.text(`${STAND_IN_MARK} first attempt for ${seam}: answered in prose on purpose, so the attempt analyst runs before the retry`) },
@@ -2188,13 +2204,31 @@ function endsInToolCall(cap, seam) {
         reason: `${STAND_IN_MARK} rejection for ${seam}: rejected on purpose` };
       for (const proto of PROTOCOLS) {
         await put('/mockserver/expectation', {
-          priority: 30 + _tagRank, times: { remainingTimes: 1, unlimited: false },
+          priority: 34 + _tagRank, times: { remainingTimes: 1, unlimited: false },
           httpRequest: { method: 'POST', path: proto.path, body: bodyMatch },
           httpResponse: { statusCode: 200, headers: { 'content-type': ['text/event-stream; charset=utf-8'], 'x-seam': [`${seam}:first-verdict-rejects`] },
             body: proto.text(standInReplyText(seam, rejected, contractOf(seam, template))) },
         });
       }
       stoodIn.push(`${seam}  <- ${STAND_IN_MARK} first verdict rejects (the registry says a seam runs on its rejection)`);
+    }
+    // A REQUEST THAT DECLARES THE RUNNER'S STRUCTURED-OUTPUT TOOL IS ANSWERED BY CALLING IT. Under
+    // --json-schema the runner requires the reply to call that tool; answered in text, every seam
+    // cost an enforcement turn and the runner's structured-output path — the one a real model
+    // takes — was never exercised. The tool's name is the set's declaration for its runner.
+    const _soTool = structuredOutputToolName();
+    if (!cap && _soTool && stood) {
+      const _payload = standCall ? standCall.input : stood;
+      const _bodyRx = bodyMatch.type === 'REGEX' ? bodyMatch.regex.replace(/^\(\?s\)/, '').replace(/\.\*$/, '') : `(?=.*${rx(wireForm(key))})`;
+      for (const proto of PROTOCOLS) {
+        await put('/mockserver/expectation', {
+          priority: 32 + _tagRank,
+          httpRequest: { method: 'POST', path: proto.path,
+            body: { type: 'REGEX', regex: `(?s)${_bodyRx}(?=.*${rx(`"name":"${_soTool}"`)}).*` } },
+          httpResponse: { statusCode: 200, headers: { 'content-type': ['text/event-stream; charset=utf-8'], 'x-seam': [`${seam}:structured`] },
+            body: proto.calls([{ name: _soTool, input: _payload, arguments: _payload }]) },
+        });
+      }
     }
     // TURN TWO (or the only turn): what the model said once its work was done.
     for (const proto of PROTOCOLS) {

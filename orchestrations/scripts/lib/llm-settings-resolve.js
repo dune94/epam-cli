@@ -229,6 +229,8 @@ function resolveRunner(runnerName, { projectConfigDir, defaultsFile } = {}) {
     // The runner's file-writing tool, by the vocabulary the runner itself uses (name and the two
     // argument keys) — declared by the set so a rehearsal's stand-in writer never spells one.
     writeTool: declared.writeTool && typeof declared.writeTool === 'object' ? declared.writeTool : null,
+    // The tool this runner declares for schema-bound output and requires the reply to call.
+    structuredOutputTool: typeof declared.structuredOutputTool === 'string' ? declared.structuredOutputTool : '',
   };
 }
 /** Every runner the active stack declares, by name. */

@@ -213,7 +213,9 @@
         "path": "file_path",
         "content": "content"
       },
-      "$whyWriteTool": "The rehearsal's stand-in writer delivers by calling the runner's own file-writing tool, and this is that tool's vocabulary for plain Claude Code (recorded sessions: 'Write' {file_path, content}). Declared here so the harness never spells a tool name."
+      "$whyWriteTool": "The rehearsal's stand-in writer delivers by calling the runner's own file-writing tool, and this is that tool's vocabulary for plain Claude Code (recorded sessions: 'Write' {file_path, content}). Declared here so the harness never spells a tool name.",
+      "structuredOutputTool": "StructuredOutput",
+      "$whyStructuredOutputTool": "Under --json-schema plain Claude Code declares a tool of this name and REQUIRES the reply to call it ('[structured-output-enforce] You MUST call the StructuredOutput tool', recorded 2026-09-14); a text reply costs a second, enforcement turn per seam and never exercises the runner's structured-output path — the one a real model takes. The rehearsal answers a request that declares this tool by calling it with the seam's stand-in payload."
     }
   },
   "mockBaseUrl": "http://localhost:1080",

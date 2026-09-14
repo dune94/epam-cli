@@ -187,3 +187,44 @@ describe('one first verdict rejects on purpose for the reviewer whose rejection 
     expect(JSON.parse(text(second.body)).verdict).toBe('pass');
   });
 });
+
+/**
+ * A REQUEST THAT DECLARES THE RUNNER'S STRUCTURED-OUTPUT TOOL IS ANSWERED BY CALLING IT. Under
+ * --json-schema the runner declares that tool and requires the reply to call it; answered in text,
+ * every seam of the £0 harness cost an enforcement turn and the structured-output path a real model
+ * takes was never exercised (2026-09-14). The tool's name is the set's declaration for its runner.
+ */
+describe('a schema-bound request is answered by calling the structured-output tool', () => {
+  const r = require(join(ROOT, 'orchestrations/scripts/lib/llm-settings-resolve.js'));
+  const p = greenfieldProject();
+  // The rehearsal set — the one the registration above runs under.
+  const prevSet = process.env.EPAM_PROVIDER_SET; process.env.EPAM_PROVIDER_SET = 'mockserver';
+  let tool = '';
+  try { tool = r.declaredRunners({ projectConfigDir: p.dir }).map((n: string) => r.resolveRunner(n, { projectConfigDir: p.dir }).structuredOutputTool).find(Boolean) as string; }
+  finally { if (prevSet === undefined) delete process.env.EPAM_PROVIDER_SET; else process.env.EPAM_PROVIDER_SET = prevSet; }
+  it('the set declares its runner\'s structured-output tool', () => { expect(tool).toBeTruthy(); });
+  const askWithTool = (prompt: string) => new Promise<{ seam: string; body: string }>((resolve, reject) => {
+    const body = JSON.stringify({ model: 'x', max_tokens: 1, stream: true, tools: [{ name: tool, input_schema: { type: 'object' } }], messages: [{ role: 'user', content: prompt }] });
+    const req = httpRequest(`${mock.url}/v1/messages`, { method: 'POST', headers: { 'content-type': 'application/json' } }, (res) => {
+      let b = ''; res.on('data', (d) => { b += d; }); res.on('end', () => resolve({ seam: String(res.headers['x-seam'] || ''), body: b }));
+    });
+    req.on('error', reject); req.end(body);
+  });
+  // The seams the analyst/rejection first-failures do not touch, so the first answer is the answer.
+  const plain = templates.filter(({ doc }) => !Object.values(reg).some((q: any) => (q.diagnosesAttemptsOf || []).concat(q.runsOnRejectionBy || []).includes(doc.seams[0])));
+  it.each(plain.slice(0, 12).map((t) => t.id))('%s: answered as a call to the structured-output tool carrying a payload', async (id) => {
+    const { doc } = templates.find((t) => t.id === id)!;
+    const values: Record<string, string> = {};
+    const optional = new Set(doc.mayBeEmpty || []);
+    for (const ph of placeholdersIn(doc.body)) values[ph] = optional.has(ph) ? '' : `value of ${ph.replace(/_/g, ' ').trim()}`;
+    const { seam, body } = await askWithTool(substituteOnce(doc.body, values));
+    expect(seam).toMatch(new RegExp(`^${doc.seams[0]}(:|$)`));
+    expect(seam).toMatch(/:structured$/);
+    expect(body).toContain(`"name":"${tool}"`);
+    const json = body.match(/"partial_json":"((?:[^"\\]|\\.)*)"/);
+    expect(json, 'the call carries a payload').toBeTruthy();
+    const payload = JSON.parse(JSON.parse(`"${json![1]}"`));
+    expect(payload && typeof payload === 'object').toBe(true);
+    expect(Object.keys(payload).length).toBeGreaterThan(0);
+  });
+});

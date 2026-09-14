@@ -250,6 +250,22 @@ function validateDeclaredOutput(seam, parsed) {
   if (!c || c.kind !== 'declared') {
     return { ok: true, reason: '', declared: false };
   }
+  // A LIST CONTRACT: the answer is an array of the declared shape; each element is judged.
+  if (c.list) {
+    if (!Array.isArray(parsed)) {
+      return { ok: false, declared: true, fatal: true,
+        reason: `${seam}: expected a JSON array of ${(c.requiredKeys || []).join('/')} entries, got ${parsed === null ? 'null' : typeof parsed}.` };
+    }
+    for (const [i, el] of parsed.entries()) {
+      const r = _judgeDeclaredObject(seam, c, el === undefined ? null : el);
+      if (!r.ok) return { ...r, reason: `${seam}[${i}]: ${r.reason}` };
+    }
+    return { ok: true, reason: '', declared: true };
+  }
+  return _judgeDeclaredObject(seam, c, parsed);
+}
+
+function _judgeDeclaredObject(seam, c, parsed) {
   if (parsed === null || typeof parsed !== 'object' || Array.isArray(parsed)) {
     return {
       ok: false,

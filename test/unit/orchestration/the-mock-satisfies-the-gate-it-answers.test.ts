@@ -364,7 +364,9 @@ describe('a declared contract that asks for the prompt exemplar carries every ke
   it('some contract asks for it', () => { expect(asking.length).toBeGreaterThan(0); });
   it.each(asking)('%s: every known key is present, lists carry one shaped item, choices are one member', (seam) => {
     const c = (schema.declaredContracts() as Record<string, any>)[seam];
-    const standIn = mock.contractStandIn(seam);
+    const delivered = mock.contractStandIn(seam);
+    // A list contract is delivered as an array of the shape; the shape is what is judged.
+    const standIn = c.list ? delivered[0] : delivered;
     for (const k of c.knownKeys) expect(standIn, `${seam}.${k}`).toHaveProperty(k);
     for (const [k, v] of Object.entries(standIn)) {
       if (Array.isArray(v)) { expect(v.length, `${seam}.${k} carries an item`).toBeGreaterThan(0); }
@@ -420,5 +422,43 @@ describe("the synthesizer's stand-in is a constraint the KB store admits", () =>
     const { spawnSync } = require('node:child_process');
     const r = spawnSync('python3', [path.join(ROOT, 'orchestrations/scripts/lib/kb_schema.py'), 'validate-constraint'], { input: JSON.stringify(candidate), encoding: 'utf8' });
     expect(r.status, `${r.stdout}\n${r.stderr}`).toBe(0);
+  });
+});
+
+/**
+ * THE DETECTIVE'S STAND-IN IS A FIX SITE ITS CONSUMER READS AND CAN VERIFY. parseDetectiveFindings
+ * matches a JSON ARRAY of findings and checks the file exists in the codeline; a bare object was
+ * "NO parseable JSON" three attempts running, and an invented path a fix site CPA blocks on
+ * (£0 brownfield harness runs 1–2, 2026-09-14). The seam is the one whose contract is a list
+ * of fix sites read from the codeline — never named here.
+ */
+describe("a list contract's stand-in is read by the consumer that reads lists, and its file exists", () => {
+  const schema = require('../../../orchestrations/scripts/lib/agent-output-schema.js');
+  const spec = require('../../../orchestrations/scripts/spec-mode-runner.js');
+  const lists = Object.entries(schema.declaredContracts() as Record<string, any>).filter(([, c]) => c.kind === 'declared' && c.list && c.shapes && Object.values(c.shapes).some((v: any) => v && v.fromCodeline)).map(([s]) => s);
+  it('some list contract names a codeline file', () => { expect(lists.length).toBeGreaterThan(0); });
+  it.each(lists)('%s: parseDetectiveFindings reads the stand-in and verifies the file against the codeline', (seam) => {
+    const { mkdtempSync, mkdirSync, writeFileSync, rmSync } = require('node:fs'); const { tmpdir } = require('node:os');
+    const root = mkdtempSync(path.join(tmpdir(), 'codeline-'));
+    try {
+      // A codeline with a manifest an ecosystem provider recognises and one source file — the
+      // provider's own stand-ins, so no stack is named here.
+      const { loadProviders } = require('../../../orchestrations/scripts/lib/ecosystem-registry.js');
+      const eco = loadProviders().find((e: any) => e.standIn && e.codelineManifests && e.codelineManifests.contractGeneration);
+      writeFileSync(path.join(root, eco.file), typeof eco.standIn.manifest === 'function' ? eco.standIn.manifest(eco.file) : eco.standIn.manifest);
+      mkdirSync(path.join(root, 'src'));
+      const src = path.join('src', `module${eco.codelineManifests.contractGeneration.sourceExtensions[0]}`);
+      writeFileSync(path.join(root, src), typeof eco.standIn.source === 'function' ? eco.standIn.source(src) : eco.standIn.source);
+      const prev = process.env.OUTPUT_DIR; process.env.OUTPUT_DIR = root;
+      let standIn: any;
+      try { delete require.cache[require.resolve('../../../orchestrations/scripts/mock-expectations.js')]; standIn = require('../../../orchestrations/scripts/mock-expectations.js').contractStandIn(seam); }
+      finally { if (prev === undefined) delete process.env.OUTPUT_DIR; else process.env.OUTPUT_DIR = prev; }
+      expect(Array.isArray(standIn), 'a list contract is delivered as an array').toBe(true);
+      expect(schema.validateDeclaredOutput(seam, standIn).ok).toBe(true);
+      const findings = spec.parseDetectiveFindings(JSON.stringify(standIn), root);
+      expect(findings && findings.length, 'the consumer read no finding').toBeGreaterThan(0);
+      expect(findings[0].file).toBe(src);
+      expect(findings[0].fileVerified, 'the fix site must exist in the codeline').toBe(true);
+    } finally { rmSync(root, { recursive: true, force: true }); }
   });
 });

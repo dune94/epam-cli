@@ -164,6 +164,8 @@
     },
     "code-graph-detective": {
       "kind": "declared",
+      "list": true,
+      "_whyList": "The detective answers with a JSON ARRAY of fix sites — parseDetectiveFindings (spec-mode-runner.js) matches `[ { … } ]` and reads nothing else; its prompts state the array. The keys below describe one element. A stand-in delivered as a bare object was 'NO parseable JSON' three attempts running (£0 brownfield harness run 2, 2026-09-14).",
       "exemplarFromPrompt": true,
       "shapes": { "file": { "fromCodeline": "source" } },
       "_whyShapes": "A fix site is a file this codeline HAS: the rehearsal stand-in names the first source file of the story's codeline (by its ecosystem's own source/test convention), never an invented path — CPA blocks a defect whose fix site does not exist, by design (£0 brownfield harness run 1, 2026-09-14).",

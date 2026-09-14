@@ -53,7 +53,18 @@ function seams() {
     for (const k of Object.keys(o)) {
       const v = o[k];
       if (v && typeof v === 'object') {
-        if (typeof v.template === 'string') out.push({ seam: k, template: v.template });
+        if (typeof v.template === 'string') {
+          out.push({ seam: k, template: v.template });
+          // A MULTI-PART REGISTRY TEMPLATE IS ANSWERED PER BODY. agent-failure-analyst's registry
+          // template carries a `prompt` body and five class hints; keyed on the joined text, the
+          // fingerprint came from a hint sent for one failure class only, and the analyst's real
+          // request fell to the catch-all (£0 brownfield harness run 2, 2026-09-14). One entry per
+          // body: whichever bodies a request carries, one of them answers.
+          try {
+            const d = JSON.parse(fs.readFileSync(path.join(TPL, `${v.template}.json`), 'utf8'));
+            if (d && d.bodies && !d.body) for (const b of Object.keys(d.bodies)) out.push({ seam: k, template: `${v.template}#${b}`, alias: true, part: b });
+          } catch { /* not a template on disk */ }
+        }
         walk(v);
       }
     }
@@ -293,7 +304,11 @@ function templateBodies() {
     for (const f of fs.readdirSync(TPL).filter((x) => x.endsWith('.json'))) {
       try {
         const t = JSON.parse(fs.readFileSync(path.join(TPL, f), 'utf8'));
-        _bodiesByTemplate.set(f.replace(/\.json$/, ''), t.bodies ? Object.values(t.bodies).join('\n') : String(t.body || ''));
+        const id = f.replace(/\.json$/, '');
+        _bodiesByTemplate.set(id, t.bodies ? Object.values(t.bodies).join('\n') : String(t.body || ''));
+        // Each named body of a multi-part template on its own: a rehearsal keys on the body
+        // that is actually SENT, not on a hint fragment that rides along only for one failure class.
+        if (t.bodies) for (const [k, b] of Object.entries(t.bodies)) if (typeof b === 'string') _bodiesByTemplate.set(`${id}#${k}`, b);
       } catch { /* not a template */ }
     }
   } catch { /* no template dir */ }
@@ -329,7 +344,9 @@ function matchKey(template) {
     .map((x) => x.trim())
     .filter((x) => x.length > FINGERPRINT_MINIMUM_CHARS)
     .sort((a, b) => b.length - a.length);
-  const others = [...bodies.entries()].filter(([id]) => id !== template).map(([, b]) => b);
+  // Another TEMPLATE's body — never this template's own joined text or its sibling parts.
+  const _base = String(template).split('#')[0];
+  const others = [...bodies.entries()].filter(([id]) => String(id).split('#')[0] !== _base).map(([, b]) => b);
   const keyOf = (x) => x.slice(0, FINGERPRINT_MATCH_CHARS);
   const isUnique = (w) => !others.some((b) => b.includes(w));
   const unique = stretches.filter((x) => isUnique(keyOf(x)));
@@ -1313,6 +1330,8 @@ function contractStandIn(seam, override) {
         }
       } catch { /* the limit is undeclared; the value stands as it is */ }
     }
+    // A LIST CONTRACT is delivered as a one-element array of the shape.
+    if (c.list) return Object.keys(o).length ? [o] : null;
     return Object.keys(o).length ? o : null;
   }
   if (c.kind === 'schema' && c.tag) {

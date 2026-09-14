@@ -28,6 +28,9 @@ module.exports = {
       sourceExtensions: ['.java', '.kt'],
       excludePattern: '(^|/)src/test/.*\\.(java|kt)$',
       testFilePattern: '(^|/)src/test/.*\\.(java|kt)$',
+      // One path this ecosystem itself reads as a test — declared beside the pattern so a test of the
+      // pattern needs no list of conventions.
+      exampleTestPath: 'src/test/java/a/XTest.java',
     },
   },
   // WHAT A STAND-IN DELIVERABLE HOLDS, so a £0 rehearsal's writer can land files the gates will

@@ -60,6 +60,9 @@ module.exports = {
       sourceExtensions: ['.py'],
       excludePattern: '(^|/)(test_[^/]*|[^/]*_test)\\.py$',
       testFilePattern: '(^|/)(test_[^/]*|[^/]*_test)\\.py$',
+      // One path this ecosystem itself reads as a test — declared beside the pattern so a test of the
+      // pattern needs no list of conventions.
+      exampleTestPath: 'tests/test_x.py',
     },
   },
   stack: 'python',

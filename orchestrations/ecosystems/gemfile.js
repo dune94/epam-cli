@@ -55,6 +55,9 @@ module.exports = {
       sourceExtensions: ['.rb'],
       excludePattern: '(^|/)(test|spec)/.*(_test|_spec)\\.rb$',
       testFilePattern: '(^|/)(test|spec)/.*(_test|_spec)\\.rb$',
+      // One path this ecosystem itself reads as a test — declared beside the pattern so a test of the
+      // pattern needs no list of conventions.
+      exampleTestPath: 'test/x_test.rb',
     },
   },
   // WHAT A STAND-IN DELIVERABLE HOLDS, so a £0 rehearsal's writer can land files the gates will

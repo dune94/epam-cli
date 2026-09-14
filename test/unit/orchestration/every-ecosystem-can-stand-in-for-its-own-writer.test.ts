@@ -36,14 +36,12 @@ describe('every ecosystem can stand in for its own writer', () => {
         expect(cmd, `${eco.file}: its own testCommand reads no test command from its own stand-in manifest`).toBeTruthy();
       });
       it('the stand-in test lands in a path its own pattern reads as a test, and is not empty', () => {
-        // A test path shaped the way this ecosystem's pattern requires: built from the pattern's
-        // own literal parts is not possible generically, so the provider is asked to recognise a
-        // conventional path for its language; the assertion is that SOME path it recognises exists
-        // and its stand-in for that path is non-empty and differs from the source stand-in.
+        // The provider declares one path it reads as a test (exampleTestPath), beside the pattern
+        // — no list of conventions lives here.
         const re = new RegExp(cg.testFilePattern);
-        const candidates = ['tests/test_x.py', 'src/x.test.ts', 'tests/x_test.rs', 'x_test.go', 'test/x_test.rb', 'src/test/java/a/XTest.java', 'tests/XTest.php', 'spec/x_spec.rb'];
-        const hit = candidates.find((c) => re.test(c));
-        expect(hit, `no conventional test path matches ${cg.testFilePattern}`).toBeTruthy();
+        const hit = cg.exampleTestPath;
+        expect(hit, `${eco.file} declares no exampleTestPath`).toBeTruthy();
+        expect(re.test(hit), `${eco.file}: its own exampleTestPath does not match its testFilePattern`).toBe(true);
         const t = typeof eco.standIn.test === 'function' ? eco.standIn.test(`/repo/${hit}`) : eco.standIn.test;
         const s = typeof eco.standIn.source === 'function' ? eco.standIn.source(`/repo/src/x${cg.sourceExtensions[0]}`) : eco.standIn.source;
         expect(t.trim().length).toBeGreaterThan(0);

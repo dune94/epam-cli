@@ -136,6 +136,9 @@ module.exports = {
         ".cjs"
       ],
       "testFilePattern": "\\.(test|spec)\\.[a-zA-Z0-9]+$",
+      // One path this ecosystem itself reads as a test — declared beside the pattern so a test of the
+      // pattern needs no list of conventions.
+      "exampleTestPath": "src/x.test.ts",
       "mockFactoryStartPattern": "vi\\.mock\\(\\s*['\"](\\.[^'\"]+)['\"]\\s*,\\s*\\(\\)\\s*=>\\s*\\(\\{",
       "mockClassPattern": "(\\w+)\\s*:\\s*vi\\.fn\\(\\)\\.mockImplementation\\(\\(\\)\\s*=>\\s*\\(\\{",
       "mockedMethodPattern": "^\\s*(\\w+)\\s*:",

@@ -55,6 +55,9 @@ module.exports = {
       sourceExtensions: ['.go'],
       excludePattern: '_test\\.go$',
       testFilePattern: '_test\\.go$',
+      // One path this ecosystem itself reads as a test — declared beside the pattern so a test of the
+      // pattern needs no list of conventions.
+      exampleTestPath: 'x_test.go',
     },
   },
   // WHAT A STAND-IN DELIVERABLE HOLDS, so a £0 rehearsal's writer can land files the gates will

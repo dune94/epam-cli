@@ -26,6 +26,9 @@ module.exports = {
       sourceExtensions: ['.php'],
       excludePattern: '(^|/)(tests?)/.*Test\\.php$',
       testFilePattern: '(^|/)(tests?)/.*Test\\.php$',
+      // One path this ecosystem itself reads as a test — declared beside the pattern so a test of the
+      // pattern needs no list of conventions.
+      exampleTestPath: 'tests/XTest.php',
     },
   },
   // WHAT A STAND-IN DELIVERABLE HOLDS, so a £0 rehearsal's writer can land files the gates will

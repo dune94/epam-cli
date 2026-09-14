@@ -5962,6 +5962,13 @@ run_tsc_verification() {
     # `check-types` as `tsc --noEmit --incremental` (gotransit) and plain `tsc` (metrolinx, which
     # EMITS) — so the hardcoded `./node_modules/.bin/tsc --noEmit` was running a different check
     # than the project's own, on every repo, for the life of this pipeline.
+    # THE MANIFEST IS DETECTED FROM WHAT THE CODELINE HOLDS NOW. Provisioning detects it at run
+    # start, when a greenfield codeline holds nothing — its first story CREATES the manifest the
+    # detection reads (requirements.txt, package.json). Detected again here, after the attempt,
+    # so a codeline that has just acquired an ecosystem is checked by that ecosystem's own
+    # command rather than failed for a check nobody could run (£0 greenfield harness, 2026-09-13).
+    # Idempotent and precedence-preserving: what the project or the operator declared still wins.
+    _epam_write_verification_manifest "$PROJECT_ROOT" >/dev/null 2>&1 || true
     _tsc_output=$(_run_project_verification "$PROJECT_ROOT" 2>&1) || _tsc_exit=$?
 
     # NOT DECLARED IS NOT FAILED. _run_project_verification exits 2 when the project declares no

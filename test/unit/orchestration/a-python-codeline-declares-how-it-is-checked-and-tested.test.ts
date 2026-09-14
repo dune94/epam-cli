@@ -158,3 +158,25 @@ f ${JSON.stringify(wt)}
     expect(out).toMatch(/no provider declares how this codeline is checked/);
   });
 });
+
+/**
+ * THE MANIFEST IS DETECTED FROM WHAT THE CODELINE HOLDS NOW. A greenfield codeline holds nothing
+ * at provisioning, so no verification manifest exists until its first story creates the ecosystem
+ * manifest; the type-check gate must detect at that moment. The real writer of the manifest
+ * (lib/git-ops.sh) is executed on a codeline that has just acquired requirements.txt.
+ */
+describe('the verification manifest is detected from what the codeline holds now', () => {
+  it('a codeline that just acquired requirements.txt gets typecheck and test sections', () => {
+    const d = codeline(PY);
+    const script = `set -uo pipefail
+AUTOMATION_DIR=${JSON.stringify(join(ROOT, 'orchestrations'))}
+NODE_BIN=${JSON.stringify(process.execPath)}
+. ${JSON.stringify(join(SCRIPTS, 'lib/git-ops.sh'))}
+_epam_write_verification_manifest ${JSON.stringify(d)}
+cat ${JSON.stringify(join(d, '.epam/verification.json'))}`;
+    const r = spawnSync('bash', ['-c', script], { encoding: 'utf8', env: { PATH: process.env.PATH!, HOME: process.env.HOME! } });
+    const doc = JSON.parse((r.stdout || '').trim().split('\n').filter((l) => l.startsWith('{') || l.startsWith(' ') || l.startsWith('}')).join('\n') || 'null');
+    expect(doc && doc.typecheck && doc.typecheck.command, `no typecheck in the written manifest: ${r.stdout} ${r.stderr}`).toBeTruthy();
+    expect(doc.test && doc.test.command, 'no test section in the written manifest').toBeTruthy();
+  });
+});

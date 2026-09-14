@@ -30,6 +30,10 @@ describe('a paused rehearsal resumes from its lane checkpoint', () => {
     cpSync(join(ROOT, 'test/fixtures/mock-pipeline/mock-jira-server.js'), join(root, 'test/fixtures/mock-pipeline/mock-jira-server.js'));
     writeFileSync(join(root, 'orchestrations/scripts/tier3-mock-run.sh'), '#!/bin/bash\necho "STUB PIPELINE RAN: $*"\nexit 0\n');
     chmodSync(join(root, 'orchestrations/scripts/tier3-mock-run.sh'), 0o755);
+    // The mock registration, recording which PRD it was handed: on a resume the run's synthesised
+    // PRD exists and carries the stories' deliverables; registered from the tracker alone, the
+    // writer had no files to land and answered eight times with the generic text (run 9).
+    writeFileSync(join(root, 'orchestrations/scripts/mock-expectations.js'), 'process.stdout.write("REGISTERED PRD_FILE=" + (process.env.PRD_FILE || "") + "\\n");\n');
     // The project: a seed (so the launcher owns it) and a run that paused with a LANE checkpoint.
     const project = join(root, 'orchestrations/projects/paused-proj'); mkdirSync(join(project, 'seed', 'src'), { recursive: true });
     writeFileSync(join(project, 'seed', 'src', 'hello.ts'), "export const getGreeting = () => 'hello world';\n");
@@ -44,10 +48,12 @@ describe('a paused rehearsal resumes from its lane checkpoint', () => {
     spawnSync('git', ['-C', clone, 'init', '-q']);
     const r = spawnSync('bash', [join(root, 'orchestrations/scripts/mock1-paused-run.sh'), '--resume', rid], {
       encoding: 'utf8', timeout: 120000,
-      env: { ...process.env, EPAM_PROJECT_CONFIG_DIR: project, MOCK1_WORKSPACE_ROOT: ws, NODE_BIN: process.execPath, EPAM_PROVIDER_SET: '' },
+      env: { ...process.env, EPAM_PROJECT_CONFIG_DIR: project, MOCK1_WORKSPACE_ROOT: ws, NODE_BIN: process.execPath, EPAM_PROVIDER_SET: 'mockserver', EPAM_MOCK_BASE_URL: 'http://127.0.0.1:1' },
     });
     const out = `${r.stdout}\n${r.stderr}`;
     expect(out, 'the launcher did not find the lane checkpoint').not.toMatch(/no checkpoint for run/);
     expect(out, 'the launcher did not hand over to the pipeline').toMatch(/STUB PIPELINE RAN/);
+    expect(out, "on a resume the mock is registered from the run's synthesised PRD, which carries the deliverables")
+      .toContain(`REGISTERED PRD_FILE=${join(ws, rid, 'workspace', 'synthesized-prd.json')}`);
   });
 });

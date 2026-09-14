@@ -283,8 +283,19 @@ if [ "${EPAM_PROVIDER_SET:-}" = "mockserver" ]; then
     process.stdout.write(String(r.resolveLlmSettings({ projectConfigDir: process.argv[2] }).mockBaseUrl || ""));
   ' "$SCRIPT_DIR/lib/llm-settings-resolve.js" "$PROJECT_CONFIG_DIR")}"
   [ -n "$_mock_host" ] || { echo "[mock1-paused] the mockserver set declares no mockBaseUrl — nothing to register against" >&2; exit 1; }
-  echo "[mock1-paused] registering the mock's answers at $_mock_host from the tracker's issues"
-  EPAM_BROWNFIELD=1 "$NODE_BIN" "$SCRIPT_DIR/mock-expectations.js" --host "$_mock_host" \
+  # THE RUN'S OWN PRD ONCE IT EXISTS. Before ingest the stories live only on the tracker; on a
+  # resume the synthesised PRD exists and carries what ingest gave each story — its codeline and
+  # the files it declares. Registered from the tracker alone on a resume, the stand-in writer had
+  # no deliverables to land and the writer was answered eight times with the generic text
+  # (£0 brownfield harness run 9, 2026-09-14). The mock reads PRD_FILE when it is set.
+  if [ -f "$SYNTH_PRD" ]; then
+    echo "[mock1-paused] registering the mock's answers at $_mock_host from the run's synthesised PRD ($SYNTH_PRD)"
+    _reg_prd="$SYNTH_PRD"
+  else
+    echo "[mock1-paused] registering the mock's answers at $_mock_host from the tracker's issues"
+    _reg_prd=""
+  fi
+  PRD_FILE="$_reg_prd" EPAM_BROWNFIELD=1 "$NODE_BIN" "$SCRIPT_DIR/mock-expectations.js" --host "$_mock_host" \
     || { echo "[mock1-paused] mock registration failed — a rehearsal with no answers is not a rehearsal" >&2; exit 1; }
 fi
 # PROVIDER PINS REMOVED 2026-08-25. These were exported here as "openrouter", and a launcher export

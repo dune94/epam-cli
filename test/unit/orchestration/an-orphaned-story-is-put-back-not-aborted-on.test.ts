@@ -103,7 +103,9 @@ describe('an orphaned story is put back, not aborted on', () => {
     const st = after.stories[0];
     expect(st.title).toBe(authored.title);
     expect(st.acceptanceCriteria).toEqual(authored.acceptanceCriteria);
-    expect(st.specification).toEqual({ status: 'completed' });
+    // Its elaboration described the content that was overwritten: cleared, so the resume's spec
+    // pass takes the story again (operator, 2026-09-15: no writer stage on an un-specified story).
+    expect(st.specification).toBeUndefined();
     expect(String(r.stderr)).toMatch(/REPAIRED/);
   });
   it('with no phase argument (fresh-run full reset) the orphan is placed in the first declared phase', () => {

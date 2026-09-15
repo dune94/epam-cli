@@ -217,6 +217,9 @@ for s in stories:
             for k, v in _c.items():
                 if k not in ('status', 'completed', 'specification'):
                     s[k] = v
+            # Its elaboration described the content that was overwritten: cleared, so the resume's
+            # spec pass takes this story again (lib/handlers/stories-lacking-spec.js).
+            s.pop('specification', None)
             _restored_content.append(s['id'])
 if _restored_content:
     print(f"  REPAIRED: authored content restored from the canonical PRD over placeholder fields: {_restored_content}", file=sys.stderr)
@@ -248,11 +251,13 @@ if orphaned_pending:
                 # placeholder criterion. The authored fields are beside the working PRD.
                 _canon = _canonical_story(sid=parent['id'])
                 if _canon:
-                    # Every field the authored story declares comes back; what the run wrote on top
-                    # (status, the specification block) is this run's and stays.
+                    # Every field the authored story declares comes back; the spec block described
+                    # the split that is being undone, so it goes too — the resume's spec pass takes
+                    # the story again (lib/handlers/stories-lacking-spec.js).
                     for k, v in _canon.items():
                         if k not in ('status', 'completed', 'specification'):
                             parent[k] = v
+                    parent.pop('specification', None)
                 spec = parent.get('specification') or {}
                 if isinstance(spec.get('splitIds'), list):
                     spec['splitIds'] = [c for c in spec['splitIds'] if c != sid]

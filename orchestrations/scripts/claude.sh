@@ -3469,11 +3469,20 @@ _resolve_deliverable_path() {
     # Takes the ABSOLUTE candidate path the caller already derived (which has
     # handled absolute declarations and worktree rewriting) and refines it.
     # Deriving it again from PROJECT_ROOT here would discard both.
-    local _abs="$1"
+    local _abs="${1%/}"
     # -f as well as -s: a DIRECTORY is non-empty by -s, so "src/hooks/useContent"
     # naming a directory would short-circuit here and never reach the index.*
     # lookup below.
     if [ -f "$_abs" ] && [ -s "$_abs" ]; then printf '%s\n' "$_abs"; return 0; fi
+    # A DECLARED DIRECTORY IS A DIRECTORY. `dial/` and `docs/` existed with contents and were
+    # reported missing because only a file could pass; a correct implementation was failed twice
+    # and HealingBroken declared on a check that could not pass (regintel run 20260915T101555Z,
+    # 2026-09-15). A directory delivers when it holds at least one non-empty file; the index.*
+    # lookup below still serves a directory declared FOR its index file.
+    if [ -d "$_abs" ] && [ -z "$(ls -A "$_abs"/index.* 2>/dev/null)" ]; then
+        if [ -n "$(find "$_abs" -type f -size +0 -print -quit 2>/dev/null)" ]; then printf '%s\n' "$_abs"; return 0; fi
+        return 1
+    fi
 
     local _cands=() _c
     # A declaration may carry the WRONG extension, not merely a missing one:
@@ -3482,7 +3491,12 @@ _resolve_deliverable_path() {
     # helps an extensionless declaration, so strip a trailing extension and try
     # that stem too. Determined, not assumed — the alternatives come from what
     # the repository actually contains.
-    local _stem="${_abs%.*}"
+    # THE STEM COMES FROM THE BASENAME, NOT THE PATH'S LAST DOT: for a dot-named entry (`.venv`)
+    # the last dot is the name itself, the stem became the parent directory, and `stem.*` matched
+    # every dotfile beside it — `.venv/` was resolved to `.env.example`, or reported ambiguous
+    # (regintel run 20260915T101555Z). A basename with no extension has no stem to try.
+    local _base="${_abs##*/}" _stem="$_abs"
+    case "${_base#.}" in *.*) _stem="${_abs%.*}" ;; esac
     if [ "$_stem" != "$_abs" ]; then
         for _c in "$_stem".*; do
             [ -f "$_c" ] && [ -s "$_c" ] && _cands+=("$_c")

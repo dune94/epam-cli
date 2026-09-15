@@ -15,6 +15,23 @@
 # Requires from its caller: is_parent, restore_run_checkpoint, list_run_checkpoints,
 # resume_skip_env, resume_spec_output_present, error/info/success, and PRD_FILE.
 
+# THE SPEC PASS RUNS ON A RESUME FOR THE STORIES THAT LACK IT. The run mode turns the pass off
+# for a resume, which is right only while every pending story was elaborated; a story whose
+# content the remediation restored from canonical (its elaboration had gone to a placeholder
+# child) reached the writer with no spec, paid for (regintel run 20260915T101555Z, 2026-09-15).
+# The pass is turned back on when any pending story of the phase carries no spec output; the
+# spec runner then takes those stories and skips the elaborated ones (storiesForSpecPass).
+resume_spec_mode_for_pending_stories() {
+    [ "${EPAM_SPEC_MODE:-1}" = "0" ] || return 0
+    [ -n "${PRD_FILE:-}" ] && [ -f "${PRD_FILE}" ] || return 0
+    local _lacking
+    _lacking=$("${NODE_BIN:-node}" "$SCRIPT_DIR/lib/handlers/stories-lacking-spec.js" "$PRD_FILE" "${PHASE:-}" 2>/dev/null | tr '\n' ' ')
+    [ -n "${_lacking// /}" ] || return 0
+    info "[orch]   resume: EPAM_SPEC_MODE=1 — pending story(ies) with no spec output: ${_lacking}(the spec pass runs for these and skips the rest)"
+    export EPAM_SPEC_MODE=1
+    return 0
+}
+
 apply_resume_if_requested() {
     if is_parent && [ -n "${EPAM_RESUME_RUN:-}" ]; then
         # The roster and its briefs are stored against the run that minted them, so a resumed run
@@ -40,6 +57,7 @@ apply_resume_if_requested() {
         # and resume_skip_env both refuse rather than guess; this is the third case and was the
         # silent one. Gated on the skip actually being in force — a resume that is about to RUN the
         # spec pass has nothing to protect.
+        resume_spec_mode_for_pending_stories
         if [ "${EPAM_SPEC_MODE:-1}" = "0" ] && ! resume_spec_output_present "$PRD_FILE"; then
             error "[orch] resume '${EPAM_RESUME_RUN}' skips the spec pass (EPAM_SPEC_MODE=0), but the PRD"
             error "[orch] at ${PRD_FILE} carries none of its output — no fixSiteAnalysis, no"

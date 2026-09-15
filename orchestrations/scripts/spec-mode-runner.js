@@ -1592,11 +1592,9 @@ async function run() {
   (Array.isArray(prd.stories) ? prd.stories : []).forEach((story) => {
     if (story && story.id) storiesById.set(story.id, story);
   });
-  const stories = phaseStories
-    .map((id) => storiesById.get(id))
-    .filter((story) => story && story.completed !== true);
+  const stories = storiesForSpecPass(prd, opts.phase, { resume: !!process.env.EPAM_RESUME_RUN });
   if (!stories.length) {
-    console.log(`spec-mode: phase ${opts.phase} has no pending stories.`);
+    console.log(`spec-mode: phase ${opts.phase} has no pending stories${process.env.EPAM_RESUME_RUN ? ' lacking spec output' : ''}.`);
     return;
   }
 
@@ -9129,6 +9127,19 @@ function firstBalancedJsonObject(text) {
 // carry a correction instead of repeating the question.
 const SPEC_TOOL_CALL_RE = /<\/?(?:tool_call|tool_use|function_call|invoke)\b/i;
 
+// THE STORIES THE SPEC PASS TAKES: every pending story of the phase on a fresh run; on a RESUME
+// only those that carry no spec output (lib/handlers/stories-lacking-spec.js) — the others were
+// elaborated by the run being resumed and paying for them again is what the resume exists to
+// avoid; a story whose elaboration was lost is the one that must not be skipped (2026-09-15).
+function storiesForSpecPass(prd, phase, { resume = false } = {}) {
+  const byId = new Map((prd.stories || []).map((s) => [s.id, s]));
+  const ids = Array.isArray(prd.implementationOrder && prd.implementationOrder[phase]) ? prd.implementationOrder[phase] : [];
+  const pending = ids.map((id) => byId.get(id)).filter((s) => s && s.completed !== true);
+  if (!resume) return pending;
+  const { storiesLackingSpec } = require('./lib/handlers/stories-lacking-spec.js');
+  const lacking = new Set(storiesLackingSpec(prd, phase));
+  return pending.filter((s) => lacking.has(s.id));
+}
 // A SPLIT CHILD THAT IS THE SCHEMA'S OWN EXAMPLE — declared ONCE in config/spec-split-example.json,
 // rendered into the prompt's schema hint from there and judged against from there (the Python
 // remediation reads the same file). A child whose id, title or description equals the example's
@@ -10518,6 +10529,7 @@ module.exports = {
   specPayloadFailure,
   dropPlaceholderSplits,
   specNeedsRetry,
+  storiesForSpecPass,
   SPLIT_CHILD_EXAMPLE,
   readAgentRawOutput,
   extractTaggedJson,

@@ -206,6 +206,22 @@ def _is_placeholder_story(st):
     return any(isinstance(ex.get(k), str) and str(st.get(k, '')).strip() == ex[k]
                for k in ('id', 'title', 'description'))
 
+# A PENDING STORY WHOSE OWN FIELDS ARE THE PLACEHOLDERS is the echo written over an authored story
+# (the split "redistributed" REGI-001's content and left '...'); placed or not, its authored
+# fields come back from the canonical PRD. Judged by the same declared vocabulary.
+_restored_content = []
+for s in stories:
+    if s.get('status') == 'pending' and not s.get('completed') and _is_placeholder_story(s):
+        _c = _canonical_story(sid=s['id'])
+        if _c:
+            for k, v in _c.items():
+                if k not in ('status', 'completed', 'specification'):
+                    s[k] = v
+            _restored_content.append(s['id'])
+if _restored_content:
+    print(f"  REPAIRED: authored content restored from the canonical PRD over placeholder fields: {_restored_content}", file=sys.stderr)
+    changes.append(f"placeholder content restored from canonical: {_restored_content}")
+
 all_active_ids = set(sid for ids in impl_order.values() for sid in ids)
 orphaned_pending = [s['id'] for s in stories
                     if s.get('status') == 'pending' and not s.get('completed') and s['id'] not in all_active_ids]

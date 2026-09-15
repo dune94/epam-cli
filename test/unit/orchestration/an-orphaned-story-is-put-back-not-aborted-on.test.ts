@@ -91,6 +91,21 @@ describe('an orphaned story is put back, not aborted on', () => {
     expect(after.implementationOrder.scaffold).toContain('REGI-001');
     expect(after.stories.map((s: any) => s.id)).not.toContain(EX.id);
   });
+  it('a pending story whose own fields are the placeholders gets its authored fields back even when it is already placed (the regintel state after the child was dropped)', () => {
+    const dir = mkdtempSync(join(tmpdir(), 'prd-orphan-repair-'));
+    const p = join(dir, 'regintel-prd.json'); const canon = join(dir, 'regintel-prd.canonical.json');
+    const authored = { id: 'REGI-001', title: 'Ingest the regulatory feed', description: 'Pull the feed on a schedule', acceptanceCriteria: ['a', 'b', 'c'], technicalNotes: { files: ['src/ingest.py'] }, status: 'pending', completed: false };
+    writeFileSync(canon, JSON.stringify({ stories: [authored], implementationOrder: { scaffold: ['REGI-001'] } }));
+    writeFileSync(p, JSON.stringify({ implementationOrder: { scaffold: ['REGI-001'] }, stories: [{ ...authored, title: EX.title, description: EX.description, acceptanceCriteria: EX.acceptanceCriteria, specification: { status: 'completed' } }] }));
+    const r = spawnSync('python3', [IMPL_PY, p, 'scaffold'], { encoding: 'utf8' });
+    const after = JSON.parse(readFileSync(p, 'utf8')); rmSync(dir, { recursive: true, force: true });
+    expect(r.status, String(r.stderr)).toBe(0);
+    const st = after.stories[0];
+    expect(st.title).toBe(authored.title);
+    expect(st.acceptanceCriteria).toEqual(authored.acceptanceCriteria);
+    expect(st.specification).toEqual({ status: 'completed' });
+    expect(String(r.stderr)).toMatch(/REPAIRED/);
+  });
   it('with no phase argument (fresh-run full reset) the orphan is placed in the first declared phase', () => {
     const dir = mkdtempSync(join(tmpdir(), 'prd-orphan-repair-')); const p = join(dir, 'prd.json');
     writeFileSync(p, JSON.stringify({ implementationOrder: { scaffold: [], core: [] }, stories: [{ id: 'SKY-002', status: 'pending', completed: false, technicalNotes: { files: ['a.ts'] } }] }));

@@ -94,6 +94,12 @@ if [ "$_is_canonical" = "true" ]; then
     # specific check when it says so.
     if [ "$MID_PHASE_RETRY" = "1" ]; then
         info "  (--mid-phase-retry: skipping stale-spec check — spec-pass already ran this invocation)"
+    elif [ -n "${EPAM_RESUME_RUN:-}" ]; then
+        # A RESUME IS THE SAME CASE: the specification blocks are this run's own spec pass, and the
+        # stories are pending only because the run paused before the writer. Read as contamination,
+        # the regintel run 20260915T101555Z could not resume — REGI-001 refused as "pre-baked"
+        # (2026-09-15). Never executed before because the greenfield resume was never tested.
+        info "  (resume of run ${EPAM_RESUME_RUN}: skipping stale-spec check — the specification blocks are this run's own)"
     else
     # Excludes deprecated stories (found live, 2026-07-11, tier3-travel-app
     # relaunch): a cross-stage split collision (openspec + speckit both

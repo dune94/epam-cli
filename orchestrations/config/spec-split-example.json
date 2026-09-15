@@ -1,0 +1,11 @@
+{
+  "$why": "THE ONE EXAMPLE SPLIT CHILD the spec prompt shows the model, and the one shape the pipeline recognises as 'the example echoed back, not an answer'. It was a string literal inside spec-mode-runner.js since 2026-03; on 2026-09-15 a model (regintel run 20260915T101555Z) returned it verbatim, the split accepted it as a story, and $9 ended at a phase gate. Declared once here: spec-mode-runner.js renders the schema hint from it, and both the split (JS) and the PRD remediation (Python) judge a child against it. Change the example here and nowhere else.",
+  "child": {
+    "id": "optional",
+    "title": "...",
+    "description": "...",
+    "acceptanceCriteria": ["..."],
+    "agentRole": "...",
+    "technicalNotes": { "files": [] }
+  }
+}

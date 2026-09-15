@@ -7305,7 +7305,7 @@ async function runSpecAgent({ promptExec, agent, story, phase, runId, logDir, fo
   // too, strip the dangling comma so the schema hint stays valid-looking JSON.
   const splitSchemaField = isBrownfieldSpec
     ? ''
-    : `\n  "splitStories":[{"id":"optional","title":"...","description":"...","acceptanceCriteria":["..."],"agentRole":"...","technicalNotes":{"files":[]}}]`;
+    : `\n  "splitStories":[${JSON.stringify(SPLIT_CHILD_EXAMPLE)}]`;
   const splitRulesBlock = isBrownfieldSpec
     ? ''
     : renderEngineTemplate('speckit-split-rules', {});
@@ -9129,15 +9129,15 @@ function firstBalancedJsonObject(text) {
 // carry a correction instead of repeating the question.
 const SPEC_TOOL_CALL_RE = /<\/?(?:tool_call|tool_use|function_call|invoke)\b/i;
 
-// A SPLIT CHILD THAT IS THE SCHEMA'S OWN EXAMPLE. The prompt's schema hint shows
-// `{"id":"optional","title":"...", ...}`; a model that echoes it has not answered.
-const SPLIT_PLACEHOLDER_ID = 'optional';
-const SPLIT_PLACEHOLDER_TEXT = '...';
+// A SPLIT CHILD THAT IS THE SCHEMA'S OWN EXAMPLE — declared ONCE in config/spec-split-example.json,
+// rendered into the prompt's schema hint from there and judged against from there (the Python
+// remediation reads the same file). A child whose id, title or description equals the example's
+// has not answered.
+const SPLIT_CHILD_EXAMPLE = require(path.join(__dirname, '..', 'config', 'spec-split-example.json')).child;
 function isPlaceholderSplitChild(c) {
   if (!c || typeof c !== 'object') return true;
-  return String(c.id || '').trim() === SPLIT_PLACEHOLDER_ID
-    || String(c.title || '').trim() === SPLIT_PLACEHOLDER_TEXT
-    || String(c.description || '').trim() === SPLIT_PLACEHOLDER_TEXT;
+  return ['id', 'title', 'description'].some((k) => typeof SPLIT_CHILD_EXAMPLE[k] === 'string'
+    && String(c[k] || '').trim() === SPLIT_CHILD_EXAMPLE[k]);
 }
 /** 'placeholder-split' when a parsed payload's split children include the schema placeholder; else null. */
 function specPayloadFailure(payload) {
@@ -9183,7 +9183,7 @@ function specCorrectiveNote(kind) {
              'and no unescaped newlines inside string values.';
     case 'placeholder-split':
       return 'CRITICAL — YOUR PREVIOUS RESPONSE WAS REJECTED: its "splitStories" repeated the ' +
-             'schema example ("id":"optional", "title":"...") instead of real stories. The example ' +
+             `schema example (${JSON.stringify({ id: SPLIT_CHILD_EXAMPLE.id, title: SPLIT_CHILD_EXAMPLE.title })}) instead of real stories. The example ` +
              'shows the SHAPE only. Either propose real split children with real ids, titles, ' +
              'descriptions and acceptance criteria, or return "splitStories": [] and refine the ' +
              'story as it is.';
@@ -10518,6 +10518,7 @@ module.exports = {
   specPayloadFailure,
   dropPlaceholderSplits,
   specNeedsRetry,
+  SPLIT_CHILD_EXAMPLE,
   readAgentRawOutput,
   extractTaggedJson,
   stripPrescriptiveACs,

@@ -147,11 +147,35 @@ const typeOk = (v, t) => {
   }
 };
 
+// AN ANSWER THAT ECHOES THE PROMPT'S EXAMPLE IS NOT AN ANSWER. The placeholder vocabulary every
+// example is written with is declared once (config/answer-placeholders.json); a required string
+// equal to one of them, a required list whose every element is one, or a nested object (a split
+// child) whose id/title/description is one, is the example copied back — refused here so the
+// hub's retry/ladder/self-heal fire for whichever seam it came from (2026-09-15, $9).
+let _placeholders;
+function placeholderValues() {
+  if (_placeholders) return _placeholders;
+  try { _placeholders = require('../../config/answer-placeholders.json').values || []; } catch { _placeholders = []; }
+  return _placeholders;
+}
+const isPlaceholder = (v) => typeof v === 'string' && placeholderValues().includes(v.trim());
+function echoedExample(item) {
+  for (const [k, v] of Object.entries(item || {})) {
+    if (isPlaceholder(v)) return `field "${k}" is the prompt example's placeholder ${JSON.stringify(v)}`;
+    if (Array.isArray(v) && v.length && v.every((e) => isPlaceholder(e))) return `list "${k}" holds only the prompt example's placeholder`;
+    if (Array.isArray(v)) {
+      for (const e of v) { if (e && typeof e === 'object' && !Array.isArray(e)) { const r = echoedExample(e); if (r) return `${k}[]: ${r}`; } }
+    }
+  }
+  return null;
+}
 function checkItem(item, schema, tag, index) {
   const where = index === null ? tag : `${tag}[${index}]`;
   if (!item || typeof item !== 'object' || Array.isArray(item)) {
     return fail(`${where}: expected an object, got ${item === null ? 'null' : typeof item}`);
   }
+  const echo = echoedExample(item);
+  if (echo) return fail(`${where}: ${echo} — the example was copied back, not answered`);
   for (const key of schema.required || []) {
     // ACs ARE NOT IN SCOPE IN BROWNFIELD. The AC gate skips acceptance-criteria processing
     // for a brownfield ticket entirely and records that verification criteria come from the
@@ -342,4 +366,4 @@ function unwrapEnvelope(payload, key) {
   return found.length === 1 ? found[0] : payload;
 }
 
-module.exports = { unwrapEnvelope, validateTaggedOutput, validateDeclaredOutput, declaredContracts, TAG_TO_TOOL, itemSchemaFor };
+module.exports = { unwrapEnvelope, validateTaggedOutput, validateDeclaredOutput, declaredContracts, TAG_TO_TOOL, itemSchemaFor, echoedExample };

@@ -1,0 +1,4 @@
+{
+  "$why": "THE PLACEHOLDER VALUES EVERY PROMPT'S EXAMPLE IS WRITTEN WITH. A prompt states its answer's shape as an example ('\"title\":\"...\"', a split child with id 'optional'); a model that copies the example back produces well-formed, schema-valid JSON that no check refused — on 2026-09-15 a split child echoed from the example was accepted as a story and a $9 greenfield run died at a phase gate. Declared once here and judged at the one validator every tagged answer passes through (lib/agent-output-schema.js): a required string field, or every element of a required list, or a nested object, equal to one of these values is an echoed example, not an answer — and the hub's retry, ladder and self-heal, which every seam has, get their turn. config/spec-split-example.json renders the split example from the same vocabulary.",
+  "values": ["...", "optional"]
+}

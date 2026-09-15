@@ -19,6 +19,8 @@ import { tmpdir } from 'node:os';
 import { join } from 'node:path';
 
 const IMPL_PY = join(__dirname, '../../../orchestrations/scripts/_prd_remediate_impl.py');
+// The example child the prompt shows, from where it is declared — never spelled here.
+const EX = JSON.parse(readFileSync(join(__dirname, '../../../orchestrations/config/spec-split-example.json'), 'utf8')).child;
 
 function run(prd: object, phase: string) {
   const dir = mkdtempSync(join(tmpdir(), 'prd-orphan-repair-')); const p = join(dir, 'prd.json');
@@ -34,14 +36,14 @@ describe('an orphaned story is put back, not aborted on', () => {
     const { exitCode, stderr, after } = run({
       implementationOrder: { scaffold: [], core: ['MOCK-HW-2-mockhelloworld'] },
       stories: [
-        { id: 'MOCK-HW-1-mockhelloworld', status: 'deprecated', completed: false, technicalNotes: { files: ['src/hello.ts'] }, specification: { splitIds: ['optional'] } },
-        { id: 'optional', title: '...', description: '...', status: 'pending', completed: false, acceptanceCriteria: ['...'], technicalNotes: { files: [] }, specification: { createdFrom: 'MOCK-HW-1-mockhelloworld' } },
+        { id: 'MOCK-HW-1-mockhelloworld', status: 'deprecated', completed: false, technicalNotes: { files: ['src/hello.ts'] }, specification: { splitIds: [EX.id] } },
+        { ...EX, status: 'pending', completed: false, specification: { createdFrom: 'MOCK-HW-1-mockhelloworld' } },
         { id: 'MOCK-HW-2-mockhelloworld', status: 'pending', completed: false, technicalNotes: { files: ['src/bye.ts'] } },
       ],
     }, 'core');
     expect(exitCode, stderr).toBe(0);
     expect(stderr).not.toMatch(/FATAL/);
-    expect(after.stories.map((s: any) => s.id)).not.toContain('optional');
+    expect(after.stories.map((s: any) => s.id)).not.toContain(EX.id);
     const parent = after.stories.find((s: any) => s.id === 'MOCK-HW-1-mockhelloworld');
     expect(parent.status).toBe('pending');
     expect(after.implementationOrder.core).toContain('MOCK-HW-1-mockhelloworld');
@@ -59,6 +61,35 @@ describe('an orphaned story is put back, not aborted on', () => {
     expect(stderr).not.toMatch(/FATAL/);
     expect(after.implementationOrder.core).toEqual(expect.arrayContaining(['SKY-002', 'SKY-003']));
     expect(stderr).toMatch(/REPAIRED/);
+  });
+  it('a parent whose content the placeholder split overwrote gets its content back from the canonical PRD', () => {
+    // The split "redistributed" REGI-001's ACs to the placeholder child and left the parent with
+    // title '...' and one AC of '...' (regintel run 20260915T101555Z). Placing it back is not enough;
+    // the writer would build a story with no title and one '...' criterion. The canonical PRD
+    // beside the working one (<name>.canonical.json) holds the authored content.
+    const dir = mkdtempSync(join(tmpdir(), 'prd-orphan-repair-'));
+    const p = join(dir, 'regintel-prd.json'); const canon = join(dir, 'regintel-prd.canonical.json');
+    const authored = { id: 'REGI-001', title: 'Ingest the regulatory feed', description: 'Pull the feed on a schedule', acceptanceCriteria: ['a', 'b', 'c'], technicalNotes: { files: ['src/ingest.py'] }, effort: 'medium', estimatedHours: 6, status: 'pending', completed: false };
+    writeFileSync(canon, JSON.stringify({ stories: [authored, { id: 'REGI-002', title: 't2', acceptanceCriteria: ['x'], technicalNotes: { files: ['b.py'] }, status: 'pending' }], implementationOrder: { scaffold: ['REGI-001'], core: ['REGI-002'] } }));
+    writeFileSync(p, JSON.stringify({
+      implementationOrder: { scaffold: [], core: ['REGI-002'] },
+      stories: [
+        { ...authored, title: EX.title, description: EX.description, acceptanceCriteria: EX.acceptanceCriteria, status: 'deprecated', specification: { splitIds: [EX.id], status: 'completed' } },
+        { ...EX, status: 'pending', completed: false, specification: { createdFrom: 'REGI-001' } },
+        { id: 'REGI-002', title: 't2', status: 'pending', completed: false, acceptanceCriteria: ['x'], technicalNotes: { files: ['b.py'] } },
+      ],
+    }));
+    const r = spawnSync('python3', [IMPL_PY, p, 'scaffold'], { encoding: 'utf8' });
+    const after = JSON.parse(readFileSync(p, 'utf8')); rmSync(dir, { recursive: true, force: true });
+    expect(r.status, String(r.stderr)).toBe(0);
+    const parent = after.stories.find((s: any) => s.id === 'REGI-001');
+    expect(parent.status).toBe('pending');
+    expect(parent.title).toBe(authored.title);
+    expect(parent.description).toBe(authored.description);
+    expect(parent.acceptanceCriteria).toEqual(authored.acceptanceCriteria);
+    expect(parent.technicalNotes).toEqual(authored.technicalNotes);
+    expect(after.implementationOrder.scaffold).toContain('REGI-001');
+    expect(after.stories.map((s: any) => s.id)).not.toContain(EX.id);
   });
   it('with no phase argument (fresh-run full reset) the orphan is placed in the first declared phase', () => {
     const dir = mkdtempSync(join(tmpdir(), 'prd-orphan-repair-')); const p = join(dir, 'prd.json');

@@ -383,3 +383,45 @@ describe('brownfield answers are not judged against greenfield requirements', ()
     });
   });
 });
+
+/**
+ * AN ANSWER THAT ECHOES THE PROMPT'S EXAMPLE IS NOT AN ANSWER — FOR EVERY SEAM.
+ *
+ * Every prompt states its shape with an example whose values are the declared placeholder text
+ * (config/answer-placeholders.json: "..." and the split example's id). A model that copies the
+ * example back produces well-formed, schema-valid JSON that passed here; the regintel run of
+ * 2026-09-15 accepted such a split child as a story and died at a phase gate ($9). Judged at
+ * the ONE validator every tagged answer passes through, the echo is a failed answer and the
+ * hub's retry/ladder/self-heal — which every seam has — get their turn.
+ */
+describe('an answer that echoes the prompt example is refused, at the shared validator', () => {
+  const { validateTaggedOutput } = require('../../../orchestrations/scripts/lib/agent-output-schema.js');
+  const placeholders = require('../../../orchestrations/config/answer-placeholders.json');
+  it('the placeholders are declared once, and include the split example\'s values', () => {
+    const ex = require('../../../orchestrations/config/spec-split-example.json').child;
+    expect(Array.isArray(placeholders.values) && placeholders.values.length).toBeTruthy();
+    for (const v of [ex.id, ex.title]) expect(placeholders.values).toContain(v);
+  });
+  it('a required string field carrying a placeholder fails the item', () => {
+    process.env.EPAM_BROWNFIELD = '';
+    const r = validateTaggedOutput('SPEC_AGENT', { storyId: 'S-1', agent: '...', acceptanceCriteria: ['does X'] });
+    expect(r.ok).toBe(false);
+    expect(r.reason).toMatch(/placeholder|example/i);
+  });
+  it('a required list whose every element is a placeholder fails the item', () => {
+    process.env.EPAM_BROWNFIELD = '';
+    const r = validateTaggedOutput('SPEC_AGENT', { storyId: 'S-1', agent: 'openspec', acceptanceCriteria: ['...'] });
+    expect(r.ok).toBe(false);
+  });
+  it('a split child that is the example fails the item, nested in splitStories', () => {
+    process.env.EPAM_BROWNFIELD = '';
+    const ex = require('../../../orchestrations/config/spec-split-example.json').child;
+    const r = validateTaggedOutput('SPEC_AGENT', { storyId: 'S-1', agent: 'openspec', acceptanceCriteria: ['does X'], splitStories: [ex] });
+    expect(r.ok).toBe(false);
+  });
+  it('real values pass as before', () => {
+    process.env.EPAM_BROWNFIELD = '';
+    const r = validateTaggedOutput('SPEC_AGENT', { storyId: 'S-1', agent: 'openspec', acceptanceCriteria: ['does X'], splitStories: [{ id: 'S-1-A', title: 'Ingest', description: 'Pull the feed', acceptanceCriteria: ['rows land'], agentRole: 'eng', technicalNotes: { files: ['a.py'] } }] });
+    expect(r.ok, r.reason).toBe(true);
+  });
+});

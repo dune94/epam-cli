@@ -19,11 +19,13 @@ const ROOT = join(__dirname, '../../..');
 process.env.SPEC_MODE_NO_MAIN = '1';
 const spec = require(join(ROOT, 'orchestrations/scripts/spec-mode-runner.js'));
 
-const placeholderChild = { id: 'optional', title: '...', description: '...', acceptanceCriteria: ['...'], agentRole: '...', technicalNotes: { files: [] } };
+// The example the prompt shows, read from where it is declared — never spelled here.
+const placeholderChild = JSON.parse(JSON.stringify(spec.SPLIT_CHILD_EXAMPLE));
 const realChild = { id: 'REGI-001-A', title: 'Ingest the feed', description: 'Pull the regulatory feed on a schedule', acceptanceCriteria: ['feed rows land in the store'], agentRole: 'regintel-pipeline-engineer', technicalNotes: { files: ['src/ingest.py'] } };
 
 describe('a placeholder split child is a failed answer, not a story', () => {
-  it('the runner exports the judgement and the remedy', () => {
+  it('the runner exports the judgement and the remedy, and renders its schema hint from the declared example', () => {
+    expect(spec.SPLIT_CHILD_EXAMPLE).toEqual(require(join(ROOT, 'orchestrations/config/spec-split-example.json')).child);
     expect(typeof spec.specPayloadFailure).toBe('function');
     expect(typeof spec.dropPlaceholderSplits).toBe('function');
   });
@@ -39,7 +41,7 @@ describe('a placeholder split child is a failed answer, not a story', () => {
   it('the class carries a corrective note for the retry, like the other four', () => {
     const note = spec.specCorrectiveNote('placeholder-split');
     expect(note).toMatch(/REJECTED/);
-    expect(note).toMatch(/optional/);
+    expect(note).toMatch(new RegExp(placeholderChild.id));
   });
   it('when retries are exhausted the placeholders are dropped and the parent is kept whole — no abort', () => {
     const p = { storyId: 'REGI-001', splitStories: [realChild, placeholderChild] };

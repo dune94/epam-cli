@@ -181,10 +181,30 @@ if reset_count:
 #   - any other pending story no phase lists is put into the phase being remediated (the phase
 #     the coordinator's corrupting write removed it from, in the July 8 case).
 # Every seam heals before it aborts; this one aborts only when a story cannot be placed.
+def _canonical_story(sid):
+    """The authored story of this id from <prd>.canonical.json beside the working PRD, or None."""
+    try:
+        _c = PRD_FILE[:-len('.json')] + '.canonical.json' if PRD_FILE.endswith('.json') else None
+        if not _c or not __import__('os').path.isfile(_c):
+            return None
+        with open(_c) as fh:
+            return next((x for x in json.load(fh).get('stories', []) if x.get('id') == sid), None)
+    except (OSError, ValueError):
+        return None
+
+def _split_child_example():
+    """The one example split child the spec prompt shows (config/spec-split-example.json) — declared once."""
+    try:
+        _cfg = os.path.join(os.path.dirname(os.path.abspath(__file__)), '..', 'config', 'spec-split-example.json')
+        with open(_cfg) as fh:
+            return json.load(fh).get('child', {})
+    except (OSError, ValueError):
+        return {}
+
 def _is_placeholder_story(st):
-    return (st.get('id') == 'optional'
-            or str(st.get('title', '')).strip() == '...'
-            or str(st.get('description', '')).strip() == '...')
+    ex = _split_child_example()
+    return any(isinstance(ex.get(k), str) and str(st.get(k, '')).strip() == ex[k]
+               for k in ('id', 'title', 'description'))
 
 all_active_ids = set(sid for ids in impl_order.values() for sid in ids)
 orphaned_pending = [s['id'] for s in stories
@@ -206,6 +226,17 @@ if orphaned_pending:
             if parent is not None:
                 parent['status'] = 'pending'
                 parent['completed'] = False
+                # THE CONTENT THE SPLIT OVERWROTE COMES BACK FROM THE CANONICAL PRD. "ACs
+                # redistributed → delegated" left the parent with title '...' and one AC of '...';
+                # placed back like that, the writer would build a story with no title and one
+                # placeholder criterion. The authored fields are beside the working PRD.
+                _canon = _canonical_story(sid=parent['id'])
+                if _canon:
+                    # Every field the authored story declares comes back; what the run wrote on top
+                    # (status, the specification block) is this run's and stays.
+                    for k, v in _canon.items():
+                        if k not in ('status', 'completed', 'specification'):
+                            parent[k] = v
                 spec = parent.get('specification') or {}
                 if isinstance(spec.get('splitIds'), list):
                     spec['splitIds'] = [c for c in spec['splitIds'] if c != sid]

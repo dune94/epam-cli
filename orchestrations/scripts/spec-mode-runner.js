@@ -1756,7 +1756,11 @@ async function run() {
       // The budget had been inert for the single most common failure mode there
       // is; earlier runs only recovered from this because the model happened to
       // fail in a way that returned nothing at all.
-      const _specNeedsRetry = (r) => !r || !r.payload;
+      // AND WHEN THE PAYLOAD IS ITSELF THE FAILURE: a split child that is the schema's own
+      // placeholder (`id:"optional"`) parsed, matched the schema, and was accepted as a story —
+      // deprecating the parent for it (regintel run 20260915T101555Z, $9). A failed answer the
+      // hub's retry/ladder/self-heal never learns of is never retried; this declares it.
+      const _specNeedsRetry = specNeedsRetry;
       while (_specNeedsRetry(agentResult) && _specRetry < _specMaxRetries) {
         _specRetry++;
         // WHAT did it do wrong? The payload is all that comes back through the
@@ -1769,7 +1773,8 @@ async function run() {
           logDir,
           agent === 'speckit' ? `${story.id}-speckit-review.log` : `${story.id}-${agent}-spec.log`
         );
-        const _specFailureKind = classifySpecFailure(readAgentRawOutput(_specRawLog));
+        const _specFailureKind = (agentResult && agentResult.payload && specPayloadFailure(agentResult.payload))
+          || classifySpecFailure(readAgentRawOutput(_specRawLog));
         const _specNote = specCorrectiveNote(_specFailureKind);
         // For retry 2+, escalate to the HIGH model if it differs from base — both agents.
         const _escalateOpenspec = _isOpenspec && _specRetry >= 2 && _openspecHighModel && _openspecHighModel !== _openspecBaseModel;
@@ -1824,6 +1829,13 @@ async function run() {
         } catch (err) { agentResult = _specAgentFailed(agent, story, err, `retry ${_specRetry}`); }
       }
 
+      // RETRIES EXHAUSTED WITH THE PLACEHOLDER STILL THERE: the remedy is known — the placeholders
+      // go and the parent stays whole. Never an abort for an answer the pipeline can repair.
+      if (agentResult && agentResult.payload && specPayloadFailure(agentResult.payload)) {
+        const _before = (agentResult.payload.splitStories || []).length;
+        agentResult.payload = dropPlaceholderSplits(agentResult.payload);
+        console.warn(`spec-mode: ${agent} answered ${story.id} with placeholder split children on every attempt — ${_before - agentResult.payload.splitStories.length} dropped, parent kept whole (no abort)`);
+      }
       if (!agentResult || !agentResult.payload) {
         // openspec/speckit failures are not permitted — hard abort so the run is clearly
         // contaminated and must be relaunched rather than proceeding with an unreviewed PRD.
@@ -9117,6 +9129,30 @@ function firstBalancedJsonObject(text) {
 // carry a correction instead of repeating the question.
 const SPEC_TOOL_CALL_RE = /<\/?(?:tool_call|tool_use|function_call|invoke)\b/i;
 
+// A SPLIT CHILD THAT IS THE SCHEMA'S OWN EXAMPLE. The prompt's schema hint shows
+// `{"id":"optional","title":"...", ...}`; a model that echoes it has not answered.
+const SPLIT_PLACEHOLDER_ID = 'optional';
+const SPLIT_PLACEHOLDER_TEXT = '...';
+function isPlaceholderSplitChild(c) {
+  if (!c || typeof c !== 'object') return true;
+  return String(c.id || '').trim() === SPLIT_PLACEHOLDER_ID
+    || String(c.title || '').trim() === SPLIT_PLACEHOLDER_TEXT
+    || String(c.description || '').trim() === SPLIT_PLACEHOLDER_TEXT;
+}
+/** 'placeholder-split' when a parsed payload's split children include the schema placeholder; else null. */
+function specPayloadFailure(payload) {
+  const kids = payload && Array.isArray(payload.splitStories) ? payload.splitStories : [];
+  return kids.some(isPlaceholderSplitChild) ? 'placeholder-split' : null;
+}
+/** The remedy when retries are exhausted: the placeholders go, the parent stays whole. */
+function dropPlaceholderSplits(payload) {
+  if (!payload || !Array.isArray(payload.splitStories)) return payload;
+  return { ...payload, splitStories: payload.splitStories.filter((c) => !isPlaceholderSplitChild(c)) };
+}
+/** Retry exactly when we would otherwise abort OR accept a failed answer. */
+function specNeedsRetry(r) {
+  return !r || !r.payload || !!specPayloadFailure(r.payload);
+}
 function classifySpecFailure(rawText) {
   const t = String(rawText || '').trim();
   if (!t) return 'empty';                          // genuinely no answer — a transient
@@ -9145,6 +9181,12 @@ function specCorrectiveNote(kind) {
       return 'CRITICAL — YOUR PREVIOUS RESPONSE WAS REJECTED: it began as JSON but could not be ' +
              'parsed. Emit strictly valid JSON — quote every key, no trailing commas, no comments ' +
              'and no unescaped newlines inside string values.';
+    case 'placeholder-split':
+      return 'CRITICAL — YOUR PREVIOUS RESPONSE WAS REJECTED: its "splitStories" repeated the ' +
+             'schema example ("id":"optional", "title":"...") instead of real stories. The example ' +
+             'shows the SHAPE only. Either propose real split children with real ids, titles, ' +
+             'descriptions and acceptance criteria, or return "splitStories": [] and refine the ' +
+             'story as it is.';
     default:
       return '';
   }
@@ -10473,6 +10515,9 @@ module.exports = {
   recordDetectiveRound,
   classifySpecFailure,
   specCorrectiveNote,
+  specPayloadFailure,
+  dropPlaceholderSplits,
+  specNeedsRetry,
   readAgentRawOutput,
   extractTaggedJson,
   stripPrescriptiveACs,

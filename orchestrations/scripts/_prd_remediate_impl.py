@@ -171,25 +171,65 @@ if reset_count:
 # prd-remediate.sh (it runs before that decision is even made) — the exact
 # scenario above looked "canonical" from core's own perspective (no splits of
 # ITS OWN stories yet), even though the orphaning had already happened.
-orphaned_pending = []
+# THE GATE REPAIRS; IT DOES NOT ABORT (2026-09-15). This used to print FATAL and "restore from
+# the canonical PRD or manually re-add these IDs" — an instruction to a human the pipeline does
+# not have — and that is how the regintel greenfield run 20260915T101555Z ended after $9: a split
+# child that was the schema's own placeholder (id "optional") displaced REGI-001, and the gate
+# stopped the run at the phase boundary. The remedy was always knowable:
+#   - a story whose fields are the schema placeholders is not a story: dropped, and the parent it
+#     deprecated is restored to pending and placed;
+#   - any other pending story no phase lists is put into the phase being remediated (the phase
+#     the coordinator's corrupting write removed it from, in the July 8 case).
+# Every seam heals before it aborts; this one aborts only when a story cannot be placed.
+def _is_placeholder_story(st):
+    return (st.get('id') == 'optional'
+            or str(st.get('title', '')).strip() == '...'
+            or str(st.get('description', '')).strip() == '...')
+
 all_active_ids = set(sid for ids in impl_order.values() for sid in ids)
-for s in stories:
-    if s.get('status') == 'pending' and not s.get('completed') and s['id'] not in all_active_ids:
-        orphaned_pending.append(s['id'])
+orphaned_pending = [s['id'] for s in stories
+                    if s.get('status') == 'pending' and not s.get('completed') and s['id'] not in all_active_ids]
 if orphaned_pending:
+    repaired = []
+    dropped = []
+    target = TARGET_PHASE if TARGET_PHASE in impl_order else (next(iter(impl_order)) if impl_order else None)
+    for sid in orphaned_pending:
+        st = by_id.get(sid) or next((x for x in stories if x['id'] == sid), None)
+        if st is None:
+            continue
+        if _is_placeholder_story(st):
+            parent_id = (st.get('specification') or {}).get('createdFrom')
+            prd['stories'] = [x for x in prd['stories'] if x['id'] != sid]
+            stories = prd['stories']
+            dropped.append(sid)
+            parent = next((x for x in stories if x['id'] == parent_id), None) if parent_id else None
+            if parent is not None:
+                parent['status'] = 'pending'
+                parent['completed'] = False
+                spec = parent.get('specification') or {}
+                if isinstance(spec.get('splitIds'), list):
+                    spec['splitIds'] = [c for c in spec['splitIds'] if c != sid]
+                if parent['id'] not in all_active_ids and target is not None:
+                    impl_order[target].append(parent['id'])
+                    all_active_ids.add(parent['id'])
+                    repaired.append(f"{parent['id']} restored to pending and placed in '{target}' (its placeholder child '{sid}' dropped)")
+                else:
+                    repaired.append(f"{parent['id']} restored to pending (its placeholder child '{sid}' dropped)")
+            continue
+        if target is None:
+            print(f"  FATAL: pending story {sid} is in no implementationOrder phase and there is no phase to place it in", file=sys.stderr)
+            sys.exit(1)
+        impl_order[target].append(sid)
+        all_active_ids.add(sid)
+        repaired.append(f"{sid} placed in '{target}'")
+    by_id = {s['id']: s for s in stories}
     print(
-        f"  FATAL: {len(orphaned_pending)} pending stor(y/ies) are not in ANY "
-        f"implementationOrder phase — a phase would silently run as a no-op: "
-        f"{orphaned_pending}",
+        f"  REPAIRED: {len(orphaned_pending)} pending stor(y/ies) were in no implementationOrder phase "
+        f"(a phase would have run as a no-op): {'; '.join(repaired)}"
+        + (f"; dropped placeholder stor(y/ies) {dropped}" if dropped else ''),
         file=sys.stderr,
     )
-    print(
-        "  This usually means a prior write (e.g. Step 0.9 prd-model-coordinator) "
-        "corrupted technicalNotes.files on these stories. Restore from the "
-        "canonical PRD or manually re-add these IDs to implementationOrder.",
-        file=sys.stderr,
-    )
-    sys.exit(1)
+    changes.append(f"orphaned stories repaired: {repaired}")
 
 # ── 8. Backfill split-sibling dependencies (backward-compat repair) ──────────
 # Root cause this repairs (found live, 2026-07-09, tier3-travel-app run): a

@@ -152,3 +152,37 @@ describe('THE BANNER AND THE CHECKPOINT READ THE SAME DECLARATION', () => {
       + 'two lists have drifted').toEqual([]);
   });
 });
+
+/**
+ * AND THE EDIT SURVIVES THE RESTORE WHATEVER THE PRD IS CALLED.
+ *
+ * The pause saves the shown copy as reviewed/<basename of PRD_FILE>; the restore's "was it edited
+ * at the pause" check compared the live PRD against reviewed/prd.json — a name only a PRD called
+ * prd.json produces. For every other project (regintel-prd.json, 2026-09-15) the check found
+ * nothing shown, decided nothing was edited, and overwrote the live PRD with the checkpoint:
+ * every edit at the pause — an operator's, or the remediation's repair — silently discarded.
+ * The test above used prd.json, the one name where this cannot show. Executed through the real
+ * save and restore.
+ */
+describe('an edit at the pause survives the restore whatever the PRD is called', () => {
+  it('a PRD named <project>-prd.json: the edit is kept and the stale assignment for a dropped story is gone', () => {
+    const w = workspace();
+    const named = join(w.cfg, 'regintel-prd.json');
+    writeFileSync(named, JSON.stringify({ stories: [{ id: 'S-1', agentRole: 'as-minted' }, { id: 'OPT', title: '...', agentRole: 'as-minted' }], implementationOrder: { core: ['OPT'] } }));
+    writeFileSync(join(w.logs, 'role-assignments.json'), JSON.stringify([{ storyId: 'S-1', agentRole: 'as-minted' }, { storyId: 'OPT', agentRole: 'as-minted' }]));
+    const w2 = { ...w, prd: named };
+    const saved = inLib(`save_run_checkpoint core pre-writer`, w2);
+    expect(saved.status, saved.stderr).toBe(0);
+    // The operator (or the remediation) edits the live PRD at the pause: OPT dropped, S-1 placed.
+    writeFileSync(named, JSON.stringify({ stories: [{ id: 'S-1', agentRole: 'as-minted' }], implementationOrder: { core: ['S-1'] } }));
+    const restored = inLib(`restore_run_checkpoint ${RUN}`, w2);
+    expect(restored.status, restored.stderr).toBe(0);
+    expect(restored.stderr, 'the restore did not recognise the edit').toMatch(/KEEPING the PRD on disk: it was EDITED/);
+    const after = JSON.parse(readFileSync(named, 'utf8'));
+    expect(after.stories.map((s: any) => s.id)).toEqual(['S-1']);
+    expect(after.implementationOrder.core).toEqual(['S-1']);
+    // A role assignment for a story the PRD no longer has is not carried into the resume.
+    const assignments = JSON.parse(readFileSync(join(w.logs, 'role-assignments.json'), 'utf8'));
+    expect(assignments.map((a: any) => a.storyId)).toEqual(['S-1']);
+  });
+});

@@ -519,9 +519,23 @@ restore_run_checkpoint() {
     local _live_stories=0 _kept_stories=0
     _live_stories=$(jq '(.stories // []) | length' "$PRD_FILE" 2>/dev/null || echo 0)
     _kept_stories=$(jq '(.stories // []) | length' "$_dir/prd.json" 2>/dev/null || echo 0)
-    if _operator_edited "$PRD_FILE" "$_rev/prd.json" \
-       && [ "${_live_stories:-0}" -ge "${_kept_stories:-0}" ]; then
+    # THE SHOWN COPY IS NAMED AS THE SAVE NAMED IT — reviewed/<basename of PRD_FILE>. This compared
+    # against reviewed/prd.json, a name only a PRD called prd.json produces; for every other project
+    # (regintel-prd.json, 2026-09-15) the check found nothing shown, decided nothing was edited, and
+    # overwrote the live PRD with the checkpoint — every edit at the pause, an operator's or the
+    # remediation's repair, silently discarded. And an edit that DROPS a story (a placeholder child)
+    # leaves fewer stories than the checkpoint; that is the edit, not a reason to distrust it.
+    if _operator_edited "$PRD_FILE" "$_rev/$(basename "$PRD_FILE")"; then
         echo "[checkpoint] KEEPING the PRD on disk: it was EDITED at the pause, after this checkpoint was taken." >&2
+        # A role assignment for a story the edited PRD no longer has is not carried into the resume.
+        if [ -n "${LOG_DIR:-}" ] && [ -f "$LOG_DIR/role-assignments.json" ]; then
+            local _ra_tmp; _ra_tmp=$(mktemp "${TMPDIR:-/tmp}/role-assign-XXXXXX.json")
+            if jq --slurpfile prd "$PRD_FILE" '[.[] | select(.storyId as $id | ($prd[0].stories // []) | any(.id == $id))]' "$LOG_DIR/role-assignments.json" > "$_ra_tmp" 2>/dev/null; then
+                mv "$_ra_tmp" "$LOG_DIR/role-assignments.json"
+            else
+                rm -f "$_ra_tmp"
+            fi
+        fi
     elif [ "${_live_spec:-0}" -gt "${_ckpt_spec:-0}" ]; then
         echo "[checkpoint] KEEPING the PRD on disk: it carries ${_live_spec} spec item(s) and the checkpoint carries ${_ckpt_spec} — restoring would discard the spec pass this resume is meant to skip past" >&2
     else

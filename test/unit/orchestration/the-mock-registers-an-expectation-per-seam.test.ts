@@ -52,7 +52,7 @@ function register(env: Record<string, string> = {}): Promise<{ code: number; out
   puts = [];
   return new Promise((resolve) => {
     const p = spawn(process.execPath, [SCRIPT, '--host', host], {
-      env: { ...process.env, EPAM_COVERAGE_GATED: '0', PRD_FILE: prdFile(), ...env },
+      env: { ...process.env, EPAM_COVERAGE_GATED: '0', PRD_FILE: prdFile(), EPAM_PROVIDER_SET: 'mockserver', ...env },
       stdio: ['ignore', 'pipe', 'pipe'],
     });
     let out = '';

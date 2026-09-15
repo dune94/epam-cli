@@ -10,7 +10,7 @@
  * The Anthropic shape asserted here is the one PROVEN against Claude Code on 2026-08-25
  * (is_error:false, result:"OK", stop_reason:"end_turn").
  */
-import { describe, it, expect } from 'vitest';
+import { describe, it, expect, beforeAll, afterAll } from 'vitest';
 import { readFileSync } from 'fs';
 import { join } from 'path';
 
@@ -21,6 +21,15 @@ const SRC = readFileSync(
 // so importing it registers nothing and touches no server.
 // eslint-disable-next-line @typescript-eslint/no-var-requires
 const b = require('../../../orchestrations/scripts/mock-expectations.js');
+
+// THE STAND-IN RUNS ON ITS OWN SET. Its wire shape (fragment size, chunk size) is that set's
+// declaration; on any other set the framing refuses, as it should.
+const priorSet = process.env.EPAM_PROVIDER_SET;
+beforeAll(() => { process.env.EPAM_PROVIDER_SET = 'mockserver'; });
+afterAll(() => { if (priorSet === undefined) delete process.env.EPAM_PROVIDER_SET; else process.env.EPAM_PROVIDER_SET = priorSet; });
+
+/** The `data:` payloads of an SSE body, parsed. */
+const events = (sse: string) => sse.split('\n').filter((l) => l.startsWith('data: ')).map((l) => l.slice(6)).filter((d) => d !== '[DONE]').map((d) => JSON.parse(d));
 
 describe('the mock speaks both protocols', () => {
   it('both Anthropic builders exist', () => {
@@ -58,5 +67,39 @@ describe('the mock speaks both protocols', () => {
     expect(openai).toContain('[DONE]');
     expect(openai).not.toContain('event: message_start');
     expect(anthropic).not.toContain('[DONE]');
+  });
+
+  // AS THE VENDOR SENDS IT. Run 20260915T101555Z: MiniMax streamed a write_file's arguments in
+  // fragments, the client's parser lost a slice at a read boundary, and 32 calls reached the tool
+  // empty — while every harness cell was green, because the stand-in served each call whole in
+  // one event. A stand-in that cannot produce the vendor's shape cannot find the vendor's bug.
+  it('an OpenAI tool call is streamed as the vendor streams it: name first, arguments in fragments', () => {
+    const content = 'x'.repeat(1000);
+    const evs = events(b.sseToolCalls([{ name: 'write_file', input: { path: '/a.py', content } }]));
+    const deltas = evs.map((e) => e.choices?.[0]?.delta?.tool_calls?.[0]).filter(Boolean);
+    expect(deltas[0].function.name).toBe('write_file');
+    expect(deltas[0].function.arguments, 'the first event names the tool and carries no arguments').toBe('');
+    const pieces = deltas.slice(1).map((d) => d.function.arguments);
+    expect(pieces.length, 'the arguments must arrive in more than one event').toBeGreaterThan(3);
+    for (const p of pieces) expect(p.length, 'no single event carries the whole input').toBeLessThan(200);
+    expect(JSON.parse(pieces.join(''))).toEqual({ path: '/a.py', content });
+    expect(evs.at(-1).choices[0].finish_reason).toBe('tool_calls');
+  });
+
+  it('an Anthropic tool call is streamed as the vendor streams it: input_json_delta in fragments', () => {
+    const content = 'y'.repeat(1000);
+    const evs = events(b.anthropicSseToolCalls([{ name: 'write_file', input: { path: '/b.py', content } }], 'm'));
+    const pieces = evs.filter((e) => e.type === 'content_block_delta').map((e) => e.delta.partial_json);
+    expect(pieces.length).toBeGreaterThan(3);
+    for (const p of pieces) expect(p.length).toBeLessThan(200);
+    expect(JSON.parse(pieces.join(''))).toEqual({ path: '/b.py', content });
+  });
+
+  it('the wire shape is the set\'s declaration, and every other set refuses it', () => {
+    const w = b.wire();
+    expect(w.argumentDeltaChars).toBeGreaterThan(0);
+    expect(w.chunkBytes).toBeGreaterThan(0);
+    process.env.EPAM_PROVIDER_SET = 'claude';
+    try { expect(() => b.wire()).toThrow(/wire shape/); } finally { process.env.EPAM_PROVIDER_SET = 'mockserver'; }
   });
 });

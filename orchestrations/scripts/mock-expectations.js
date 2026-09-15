@@ -932,14 +932,39 @@ function sseToolCalls(calls) {
     id: 'replay', object: 'chat.completion.chunk', model: 'replay',
     choices: [{ index: 0, delta, finish_reason: finish || null }],
   })}\n\n`;
-  const tool_calls = calls.map((c, i) => ({
-    index: i,
-    id: `call_replay_${i}`,
-    type: 'function',
-    function: { name: c.name, arguments: JSON.stringify(c.input || {}) },
-  }));
-  return chunk({ role: 'assistant', content: '', tool_calls })
-    + chunk({}, 'tool_calls') + 'data: [DONE]\n\n';
+  // AS THE VENDOR SENDS IT. The name arrives first with empty arguments; the arguments follow as
+  // many fragments, one event each. Served whole in one event, every harness turn passed a
+  // parser that lost a slice of any call too large for one socket read (run 20260915T101555Z:
+  // 32 empty write_file calls, $4.18). The fragment size is the set's declaration, see wire().
+  let out = chunk({ role: 'assistant', content: '', tool_calls: calls.map((c, i) => ({
+    index: i, id: `call_replay_${i}`, type: 'function', function: { name: c.name, arguments: '' },
+  })) });
+  calls.forEach((c, i) => {
+    for (const piece of fragments(JSON.stringify(c.input || {}))) {
+      out += chunk({ tool_calls: [{ index: i, function: { arguments: piece } }] });
+    }
+  });
+  return out + chunk({}, 'tool_calls') + 'data: [DONE]\n\n';
+}
+
+/** The stand-in's declared wire shape — the mockserver set's `wire` block. */
+function wire() {
+  // eslint-disable-next-line global-require
+  const r = require('./lib/llm-settings-resolve.js');
+  const file = r.activeSetFile();
+  const w = file ? (JSON.parse(fs.readFileSync(file, 'utf8')).wire || null) : null;
+  if (!w || !(w.argumentDeltaChars > 0) || !(w.chunkBytes > 0)) {
+    throw new Error(`[mock] the active provider set declares no wire shape (wire.argumentDeltaChars, wire.chunkBytes) in ${file}`);
+  }
+  return w;
+}
+
+/** A string in the vendor's argument fragments. */
+function fragments(s) {
+  const n = wire().argumentDeltaChars;
+  const out = [];
+  for (let i = 0; i < s.length; i += n) out.push(s.slice(i, i + n));
+  return out.length ? out : [''];
 }
 
 /**
@@ -991,8 +1016,11 @@ function anthropicSseToolCalls(calls, model) {
   calls.forEach((c, i) => {
     out += ev('content_block_start', { type: 'content_block_start', index: i,
       content_block: { type: 'tool_use', id: `toolu_replay_${i}`, name: c.name, input: {} } });
-    out += ev('content_block_delta', { type: 'content_block_delta', index: i,
-      delta: { type: 'input_json_delta', partial_json: JSON.stringify(c.input || {}) } });
+    // As the vendor sends it: the input in fragments, one delta each (see sseToolCalls).
+    for (const piece of fragments(JSON.stringify(c.input || {}))) {
+      out += ev('content_block_delta', { type: 'content_block_delta', index: i,
+        delta: { type: 'input_json_delta', partial_json: piece } });
+    }
     out += ev('content_block_stop', { type: 'content_block_stop', index: i });
   });
   out += ev('message_delta', { type: 'message_delta',
@@ -1002,6 +1030,13 @@ function anthropicSseToolCalls(calls, model) {
 }
 
 function put(urlPath, payload) {
+  // EVERY RESPONSE REACHES THE CLIENT IN SOCKET-SIZED PIECES. MockServer serves a body as one
+  // write; a vendor's body arrives in HTTP chunks that end inside events. The client's stream
+  // parser is only exercised when the boundaries fall where a socket puts them, so every
+  // expectation is served in chunks of the set's declared size (wire.chunkBytes).
+  if (payload && payload.httpResponse && payload.httpResponse.body !== undefined && !payload.httpResponse.connectionOptions) {
+    payload = { ...payload, httpResponse: { ...payload.httpResponse, connectionOptions: { chunkSize: wire().chunkBytes } } };
+  }
   return new Promise((resolve, reject) => {
     const u = new URL(HOST + urlPath);
     const req = http.request({
@@ -1082,7 +1117,7 @@ async function ownedLangfuseSessions() {
 module.exports = {
   ownedSessionsFromTraces,
   captureIsOwned,
-  sse, sseToolCalls, anthropicSse, anthropicSseToolCalls,
+  sse, sseToolCalls, anthropicSse, anthropicSseToolCalls, wire,
   // Exported so a test can put the stand-in through the CONSUMER'S OWN GATE, without a run.
   contractStandIn, contractOf, standInReplyText, expectsARole, standInRoleName, isStandInBody,
   // Exported so a test can drive the capture selection against a stub Langfuse.

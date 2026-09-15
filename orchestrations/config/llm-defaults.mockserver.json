@@ -226,5 +226,10 @@
   "mockBaseUrl": "http://localhost:1080",
   "$mockBaseUrl": "Where MockServer listens. Declared here so no script spells it — the same rule every other value in this layer follows.",
   "rehearsal": true,
-  "$rehearsalWhy": "A run on this set spends nothing and answers from recordings and stand-ins. Every recorder stamps its traces rehearsal:true (lib/langfuse-emit.js), and the mock loader never replays a rehearsal's own traces as captures — on 2026-09-13 a stand-in reply recorded by one rehearsal was served to the next as a 'recorded' turn, and the roster stage failed on its own echo three launches running."
+  "$rehearsalWhy": "A run on this set spends nothing and answers from recordings and stand-ins. Every recorder stamps its traces rehearsal:true (lib/langfuse-emit.js), and the mock loader never replays a rehearsal's own traces as captures — on 2026-09-13 a stand-in reply recorded by one rehearsal was served to the next as a 'recorded' turn, and the roster stage failed on its own echo three launches running.",
+  "wire": {
+    "$comment": "HOW THE STAND-IN PUTS A TOOL CALL ON THE WIRE. A vendor streams a tool call as many `function.arguments` (or `input_json_delta`) fragments, and the body reaches the client in HTTP chunks that end wherever the socket ends them — inside an event as often as not. Until 2026-09-15 the stand-in served every call whole, in one read: a shape no vendor sends and the one shape the client's stream parser could never fail on. Run 20260915T101555Z lost 32 write_file calls' arguments to exactly that parser ($4.18, nothing delivered) while every harness cell was green. argumentDeltaChars is the fragment size; chunkBytes is the HTTP chunk size. Both are deliberately unaligned with any event length so boundaries fall inside events.",
+    "argumentDeltaChars": 97,
+    "chunkBytes": 333
+  }
 }

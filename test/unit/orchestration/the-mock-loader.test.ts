@@ -82,7 +82,7 @@ function activeExpectations(): string {
 const UP = mockServerUp();
 const loaded = UP ? spawnSync(NODE20, [LOADER], {
   encoding: 'utf8', timeout: 560000, cwd: REPO,
-  env: { ...process.env, PRD_FILE: PRD, EPAM_PROJECT_CONFIG_DIR: PROJECT_DIR },
+  env: { ...process.env, PRD_FILE: PRD, EPAM_PROJECT_CONFIG_DIR: PROJECT_DIR, EPAM_PROVIDER_SET: 'mockserver' },
 }) : null;
 const out = loaded ? (loaded.stdout || '') + (loaded.stderr || '') : '';
 const served = UP ? activeExpectations() : '';

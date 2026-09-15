@@ -8,6 +8,7 @@
 import type { LLMProvider, ProviderRequest, ProviderResponse, StreamHandler, Message, ContentPart } from '../types.js';
 import { resolveTemperature, resolveTopP } from '../types.js';
 import { logger } from '../../utils/logger.js';
+import { SseDataReader, toolInput } from '../sse-stream.js';
 
 /**
  * Parse OpenRouter-style text-markup tool calls into ContentPart tool_use blocks.
@@ -441,7 +442,8 @@ export class OpenRouterProvider implements LLMProvider {
     if (!response.body) throw new Error('No response body');
 
     const reader = response.body.getReader();
-    const decoder = new TextDecoder();
+    // Complete events only, whatever the socket's read boundaries (see sse-stream.ts).
+    const sse = new SseDataReader();
     let accumulatedText = '';
     let cachedInputTokens: number | undefined;
     let inputTokens = 0;
@@ -452,10 +454,8 @@ export class OpenRouterProvider implements LLMProvider {
 
     while (true) {
       const { done, value } = await reader.read();
-      if (done) break;
-      const chunk = decoder.decode(value);
-      for (const line of chunk.split('\n').filter(l => l.startsWith('data:'))) {
-        const data = line.substring(5).trim();
+      const payloads = done ? sse.flush() : sse.push(value);
+      for (const data of payloads) {
         if (data === '[DONE]') continue;
         try {
           const parsed = JSON.parse(data);
@@ -492,6 +492,7 @@ export class OpenRouterProvider implements LLMProvider {
           }
         } catch { /* skip malformed */ }
       }
+      if (done) break;
     }
 
     const content: ContentPart[] = [];
@@ -501,7 +502,7 @@ export class OpenRouterProvider implements LLMProvider {
         type: 'tool_use',
         id: tc.id,
         name: tc.name,
-        input: (() => { try { return JSON.parse(tc.args); } catch { return {}; } })(),
+        input: toolInput(tc.name, tc.args),
       });
     }
     if (toolCalls.size > 0) stopReason = 'tool_use';
@@ -617,7 +618,8 @@ export class OpenRouterProvider implements LLMProvider {
       }
 
       const reader = response.body.getReader();
-      const decoder = new TextDecoder();
+      // Complete events only, whatever the socket's read boundaries (see sse-stream.ts).
+      const sse = new SseDataReader();
 
       let accumulatedText = '';
       let inputTokens = 0;
@@ -626,13 +628,9 @@ export class OpenRouterProvider implements LLMProvider {
 
       while (true) {
         const { done, value } = await reader.read();
-        if (done) break;
+        const payloads = done ? sse.flush() : sse.push(value);
 
-        const chunk = decoder.decode(value);
-        const lines = chunk.split('\n').filter(line => line.startsWith('data:'));
-
-        for (const line of lines) {
-          const data = line.substring(5).trim();
+        for (const data of payloads) {
           if (data === '[DONE]') continue;
 
           try {
@@ -659,6 +657,7 @@ export class OpenRouterProvider implements LLMProvider {
             // Skip malformed JSON
           }
         }
+        if (done) break;
       }
 
       const content: ContentPart[] = [

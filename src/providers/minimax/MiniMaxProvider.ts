@@ -14,6 +14,7 @@ import type { LLMProvider, ProviderRequest, ProviderResponse, StreamHandler, Mes
 import { resolveTemperature, resolveTopP } from '../types.js';
 import { stripThinkingBlocks, parseMarkupToolCalls } from '../openrouter/OpenRouterProvider.js';
 import { logger } from '../../utils/logger.js';
+import { SseDataReader, toolInput } from '../sse-stream.js';
 
 export const MINIMAX_BASE_URL = 'https://api.minimaxi.chat/v1';
 
@@ -193,7 +194,8 @@ export class MiniMaxProvider implements LLMProvider {
     if (!response.body) throw new Error('No response body');
 
     const reader = response.body.getReader();
-    const decoder = new TextDecoder();
+    // Complete events only, whatever the socket's read boundaries (see sse-stream.ts).
+    const sse = new SseDataReader();
     let accumulatedText = '';
     let inputTokens = 0;
     let cachedInputTokens: number | undefined;
@@ -204,10 +206,8 @@ export class MiniMaxProvider implements LLMProvider {
 
     while (true) {
       const { done, value } = await reader.read();
-      if (done) break;
-      const chunk = decoder.decode(value);
-      for (const line of chunk.split('\n').filter(l => l.startsWith('data:'))) {
-        const data = line.substring(5).trim();
+      const payloads = done ? sse.flush() : sse.push(value);
+      for (const data of payloads) {
         if (data === '[DONE]') continue;
         try {
           const parsed = JSON.parse(data);
@@ -246,6 +246,7 @@ export class MiniMaxProvider implements LLMProvider {
           }
         } catch { /* skip malformed chunk */ }
       }
+      if (done) break;
     }
 
     const content: ContentPart[] = [];
@@ -255,7 +256,7 @@ export class MiniMaxProvider implements LLMProvider {
         type: 'tool_use',
         id: tc.id,
         name: tc.name,
-        input: (() => { try { return JSON.parse(tc.args); } catch { return {}; } })(),
+        input: toolInput(tc.name, tc.args),
       });
     }
     if (toolCalls.size > 0) stopReason = 'tool_use';

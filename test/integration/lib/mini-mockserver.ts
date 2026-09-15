@@ -23,7 +23,7 @@ type Expectation = {
   priority: number; seq: number;
   times?: { remainingTimes: number; unlimited: boolean };
   httpRequest: { method?: string; path?: string; body?: any };
-  httpResponse: { statusCode?: number; headers?: Record<string, string[]>; body?: string };
+  httpResponse: { statusCode?: number; headers?: Record<string, string[]>; body?: string; connectionOptions?: { chunkSize?: number } };
 };
 
 export type Hit = { path: string; seam: string; body: string };
@@ -107,7 +107,20 @@ export class MiniMockServer {
     for (const [k, v] of Object.entries(e.httpResponse.headers || {})) headers[k] = v.join(', ');
     this.hits.push({ path, seam: headers['x-seam'] || '', body });
     res.writeHead(e.httpResponse.statusCode || 200, headers);
-    res.end(e.httpResponse.body || '');
+    // AS MOCKSERVER SERVES IT: `connectionOptions.chunkSize` puts the body on the wire in HTTP
+    // chunks of that size, each its own write, so a client read ends inside an event the way a
+    // socket's does. Served in one write, this stand-in exercised a stream parser that no vendor
+    // could reach (run 20260915T101555Z, 32 tool calls emptied in flight).
+    const bytes = Buffer.from(e.httpResponse.body || '', 'utf8');
+    const size = e.httpResponse.connectionOptions?.chunkSize;
+    if (!(size > 0) || bytes.length <= size) { res.end(bytes); return true; }
+    let at = 0;
+    const next = () => {
+      if (at >= bytes.length) { res.end(); return; }
+      res.write(bytes.subarray(at, at + size), () => setImmediate(next));
+      at += size;
+    };
+    next();
     return true;
   }
 

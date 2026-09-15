@@ -10,6 +10,7 @@ import type { BashToolResult, BashErrorClassification } from '../tools/builtin/B
 import { logger } from '../utils/logger.js';
 import type { MemoryLoader } from '../memory/MemoryLoader.js';
 import { LoopDetector } from './LoopDetector.js';
+import { TOOL_INPUT_ERROR } from '../providers/sse-stream.js';
 
 // Back to 8_192 (2026-08-10, same day it was raised). The raise argued that truncation "mutates
 // content inside the cacheable prefix" and that a larger stable result is cheaper than a smaller
@@ -510,6 +511,16 @@ export class AgentRunner {
       const blockedResults: (ToolCallRequest & { toolUseId: string; content: string; isError: boolean })[] = [];
       const toExecute: ToolCallRequest[] = [];
       for (const req of toolCallRequests) {
+        // ARGUMENTS THAT DID NOT ARRIVE ARE A FAILED CALL, NOT AN EMPTY ONE. The provider refuses
+        // arguments it could not parse (sse-stream.ts) and says why; the model is told, in the
+        // tool's own result slot, and asked again — it is never handed a tool run on nothing
+        // (run 20260915T101555Z: 32 write_file calls on {}, "paths[0] ... Received undefined").
+        const inputError = req.input[TOOL_INPUT_ERROR];
+        if (typeof inputError === 'string') {
+          blockedResults.push({ ...req, toolUseId: req.id, isError: true,
+            content: `Tool call ${req.name} was not executed: ${inputError}. Re-issue the call with complete arguments.` });
+          continue;
+        }
         const { blocked, interventionMessage } = this.loopDetector.preToolCheck(req.name, req.input);
         if (blocked) {
           blockedResults.push({ ...req, toolUseId: req.id, content: interventionMessage ?? '', isError: true });

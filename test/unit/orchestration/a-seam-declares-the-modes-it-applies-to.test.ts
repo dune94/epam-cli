@@ -115,7 +115,16 @@ describe('a seam that applies to multi-story runs is expected only where the pro
     expect(projectStoryCount(b)).toBe(3);
     expect(projectModes('EPAM_BROWNFIELD=1\n', a).has('multi-story')).toBe(false);
     expect(projectModes('', b).has('multi-story')).toBe(true);
-    void mkdirSync;
+    // A project whose PRD is named by PRD_CANONICAL in its config (greenfield-proof) — read 0 as
+    // "no stories", the router was wrongly excluded and a GREEN verdict claimed 32/32 where runs
+    // 31/32 had executed 33 (2026-09-14).
+    // Laid out as an install: <root>/orchestrations/projects/<name>, PRD_CANONICAL relative to <root>.
+    const rootDir = mkdtempSync(join(os.tmpdir(), 'ms-')); const c = join(rootDir, 'orchestrations', 'projects', 'proj'); mkdirSync(c, { recursive: true });
+    writeFileSync(join(rootDir, 'orchestrations', 'canon.json'), JSON.stringify({ stories: [{ id: 'S-1' }, { id: 'S-2' }] }));
+    const cfg = 'PRD_CANONICAL=orchestrations/canon.json\n';
+    writeFileSync(join(c, 'config.env'), cfg);
+    expect(projectStoryCount(c, cfg)).toBe(2);
+    expect(projectModes(cfg, c).has('multi-story')).toBe(true);
   });
   it('the checked-in projects: a one-ticket rehearsal excludes the router, a multi-story project expects it', () => {
     const dir = join(ROOT, 'orchestrations/projects');
@@ -125,7 +134,7 @@ describe('a seam that applies to multi-story runs is expected only where the pro
       const files = projectEnvFiles(join(dir, d)); if (!files || !existsSync(files.base)) continue;
       const modes = projectModes(readFileSync(files.base, 'utf8'), join(dir, d));
       const { expected, excluded } = expectedSeams(profiles, modes);
-      const n = projectStoryCount(join(dir, d));
+      const n = projectStoryCount(join(dir, d), readFileSync(files.base, 'utf8'));
       if (n > 1) { expect(expected, `${d} (${n} stories)`).toContain('topology-router'); seen.multi = true; }
       else { expect(excluded['topology-router'], `${d} (${n} stories)`).toMatch(/multi-story/); seen.single = true; }
     }

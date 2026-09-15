@@ -23,13 +23,23 @@ const fs = require('fs');
  * jira.js: defaultGroup = totalStoryCount <= 1 ? 'main' : 'primary'), and seams that route or
  * bridge worktree stories never run there — a mode of the project's own data, not of its env.
  */
-function projectStoryCount(projectDir) {
+function projectStoryCount(projectDir, configText) {
   if (!projectDir) return 0;
+  const get = (k) => { const m = String(configText || '').match(new RegExp(`^${k}=(.*)$`, 'm')); return m ? m[1].trim().replace(/^["']|["']$/g, '') : ''; };
   try {
     const t = `${projectDir}/tracker-issues.json`;
     if (fs.existsSync(t)) { const a = JSON.parse(fs.readFileSync(t, 'utf8')); return Array.isArray(a) ? a.length : 0; }
     const p = `${projectDir}/prd.authored.json`;
     if (fs.existsSync(p)) return (JSON.parse(fs.readFileSync(p, 'utf8')).stories || []).length;
+    // A project whose PRD is named by PRD_CANONICAL in its config (relative to the install root,
+    // else absolute): read as 0 stories, the router was wrongly excluded on greenfield-proof and a
+    // GREEN verdict claimed 32/32 where the previous runs executed 33 (2026-09-14).
+    const canon = get('PRD_CANONICAL');
+    if (canon) {
+      const path = require('path');
+      const abs = path.isAbsolute(canon) ? canon : path.resolve(projectDir, '..', '..', '..', canon);
+      if (fs.existsSync(abs)) return (JSON.parse(fs.readFileSync(abs, 'utf8')).stories || []).length;
+    }
   } catch { return 0; }
   return 0;
 }
@@ -41,7 +51,7 @@ function projectModes(configText, projectDir) {
   let codelines = 0;
   try { if (root && fs.existsSync(root)) codelines = fs.readdirSync(root, { withFileTypes: true }).filter((d) => d.isDirectory() && fs.existsSync(`${root}/${d.name}/.git`)).length; } catch { codelines = 0; }
   if (codelines > 1) modes.add('multi-codeline');
-  if (projectStoryCount(projectDir) > 1) modes.add('multi-story');
+  if (projectStoryCount(projectDir, configText) > 1) modes.add('multi-story');
   return modes;
 }
 

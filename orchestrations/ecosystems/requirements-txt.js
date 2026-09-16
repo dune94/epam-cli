@@ -24,7 +24,16 @@ module.exports = {
     // The unit-test gate ran `npm install` unconditionally and then required
     // node_modules/.bin/vitest to exist. Returns '' when this ecosystem vendors nothing in-repo
     // and therefore has nothing to install before its tests can run.
-    installCommand: () => 'pip install -r requirements.txt',
+    // PROVISIONING CREATES THE ENVIRONMENT IT INSTALLS INTO. A requirements file installs into
+    // whatever interpreter runs pip; a fresh worktree has none of its own, and a system pip
+    // refuses (externally-managed-environment) or pollutes the host. The environment is this
+    // ecosystem's, declared here — run 20260915T101555Z's verification worktree had no
+    // interpreter at all and every pytest exited 2 while the engine ran a Node-shaped install.
+    installCommand: () => 'python3 -m venv .venv && .venv/bin/pip install -r requirements.txt',
+    // WHERE COMMANDS RUN. The engine exports these when it runs any command in this codeline:
+    // PATH entries are codeline-relative directories put in front of PATH; other keys are set
+    // verbatim. So `pytest` resolves to the environment's own, not the host's.
+    runEnvironment: { PATH: ['.venv/bin'], VIRTUAL_ENV: '.venv' },
     // HOW THIS ECOSYSTEM ADDS ONE NEW DEPENDENCY: installed with pip and declared by a line in the
     // manifest — the project's dependency declaration (dependency-check.json installCommand) is
     // this, so the two cannot disagree.
@@ -93,7 +102,7 @@ module.exports = {
   // pytest, requirements.txt) had every gate reading "no test command" because only package.json
   // scripts were ever consulted.
   testCommand: (text) => (module.exports.deps(String(text || '')).some((d) => d.toLowerCase() === 'pytest') ? 'pytest' : ''),
-    installDir: null,
+    installDir: '.venv',
     deps: (text) => text.split('\n')
       .map((l) => l.trim())
       .filter((l) => l && !l.startsWith('#') && !l.startsWith('-'))

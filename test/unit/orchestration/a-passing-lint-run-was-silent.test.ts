@@ -36,6 +36,9 @@ function repo(eslintExit: number, message = ''): string {
   const bin = join(d, 'node_modules/.bin/eslint');
   writeFileSync(bin, `#!/bin/sh\ncase "$1" in --print-config) exit 0 ;; esac\n${message ? `echo "${message}"` : ''}\nexit ${eslintExit}\n`);
   chmodSync(bin, 0o755);
+  // THE CODELINE DECLARES ITS LINT (package.json scripts.lint); the engine hunts for no binary.
+  writeFileSync(join(d, 'package.json'), JSON.stringify({ name: 'x', scripts: { lint: 'eslint' } }));
+  writeFileSync(join(d, '.gitignore'), 'node_modules/\n');
   writeFileSync(join(d, 'src/a.ts'), 'export const a = 1;\n');
   g('init', '-q'); g('config', 'user.email', 't@t'); g('config', 'user.name', 't');
   g('add', '-A'); g('commit', '-qm', 'base');
@@ -51,7 +54,11 @@ info(){ :; }; success(){ echo "OK: $*"; }
 is_truthy(){ case "\${1:-}" in 1|true|yes) return 0;; *) return 1;; esac; }
 PROJECT_ROOT=${JSON.stringify(root)}
 SCRIPT_DIR=${JSON.stringify(join(ROOT, 'orchestrations/scripts'))}
+AUTOMATION_DIR=${JSON.stringify(join(ROOT, 'orchestrations'))}
+NODE_BIN=${JSON.stringify(process.execPath)}
 . "$SCRIPT_DIR/lib/engine-paths.sh"
+. "$SCRIPT_DIR/lib/evidence-windows.sh"
+eval "$(awk '/^_run_declared_lint_gate\\(\\) \\{/,/^\\}/' ${JSON.stringify(SH)})"
 eval "$(awk '/^run_repo_lint_verification\\(\\) \\{/,/^\\}/' ${JSON.stringify(SH)})"
 run_repo_lint_verification TEST-1 /dev/null
 echo "RC=$?"
@@ -89,20 +96,21 @@ describe('every outcome of the lint gate is distinguishable from the others', ()
   });
 });
 
-// The second silent exit: changed files exist, but none survive the `eslint --print-config` filter
-// (a file the project's config does not cover). The gate then examined NOTHING and said nothing —
-// same shape as the silent pass, and it reads as a clean lint to anyone watching the log.
+// The second silent exit: changed files exist, but none is source the codeline's ecosystem declares
+// (a markdown note). The gate then examined NOTHING and must say so — the same shape as the silent
+// pass, and it reads as a clean lint to anyone watching the log.
 describe('a lint run that examined nothing says so', () => {
-  it('reports when no changed file is covered by the eslint config', () => {
+  it('reports when no changed file is source this codeline declares', () => {
     const d = mkdtempSync(join(tmpdir(), 'lintnone-')); made.push(d);
     const g = (...a: string[]) => execFileSync('git', ['-C', d, ...a], { encoding: 'utf8' });
     mkdirSync(join(d, '.husky'), { recursive: true });
     mkdirSync(join(d, 'node_modules/.bin'), { recursive: true });
     writeFileSync(join(d, '.husky/pre-commit'), '#!/bin/sh\n');
-    // --print-config FAILS for every file: nothing is lintable.
     const bin = join(d, 'node_modules/.bin/eslint');
-    writeFileSync(bin, '#!/bin/sh\ncase "$1" in --print-config) exit 2 ;; esac\nexit 0\n');
+    writeFileSync(bin, '#!/bin/sh\nexit 0\n');
     chmodSync(bin, 0o755);
+    writeFileSync(join(d, 'package.json'), JSON.stringify({ name: 'x', scripts: { lint: 'eslint' } }));
+    writeFileSync(join(d, '.gitignore'), 'node_modules/\n');
     writeFileSync(join(d, 'notes.md'), 'a\n');
     g('init', '-q'); g('config', 'user.email', 't@t'); g('config', 'user.name', 't');
     g('add', '-A'); g('commit', '-qm', 'base');
@@ -111,6 +119,6 @@ describe('a lint run that examined nothing says so', () => {
     const r = runGate(d);
     expect(r.rc, 'examining nothing must not fail the story').toBe(0);
     expect(r.out, 'the gate examined no file and said nothing — indistinguishable from a clean lint')
-      .toMatch(/repo-lint/);
+      .toMatch(/repo-lint.*nothing to lint/);
   });
 });

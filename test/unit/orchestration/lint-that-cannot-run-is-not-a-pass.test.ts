@@ -59,12 +59,14 @@ function run(opts: { hook: boolean; eslint: boolean; changed: boolean }): Run {
     writeFileSync(join(dir, '.husky/pre-commit'), '#!/bin/sh\nnpx lint-staged\n');
   }
   if (opts.eslint) {
+    // THE CODELINE DECLARES ITS LINT (package.json scripts.lint); the engine names no linter and
+    // hunts for no binary (2026-09-16). The declared script runs a clean stand-in, which proves
+    // the "ran and found nothing" path is distinguishable from "could not run".
     mkdirSync(join(dir, 'node_modules/.bin'), { recursive: true });
     const bin = join(dir, 'node_modules/.bin/eslint');
-    // Clean linter: proves the "ran and found nothing" path is distinguishable from
-    // "could not run", which is the entire point of this test.
     writeFileSync(bin, '#!/usr/bin/env bash\nexit 0\n');
     chmodSync(bin, 0o755);
+    writeFileSync(join(dir, 'package.json'), JSON.stringify({ name: 'x', scripts: { lint: 'eslint' } }));
   }
   // Baseline committed AFTER the hook exists: an untracked .husky/pre-commit is itself a
   // "changed file", which silently defeated the no-changes case.
@@ -77,13 +79,16 @@ function run(opts: { hook: boolean; eslint: boolean; changed: boolean }): Run {
     # THIS MACHINE HAS /usr/bin/eslint, so no PATH trimming can produce the "no linter" case
     # while git still works. Hide the lookup itself instead — precise, and it leaves every
     # other command alone.
-    ${opts.eslint ? '' : 'command() { if [ "$1" = "-v" ] && [ "$2" = "eslint" ]; then return 1; fi; builtin command "$@"; }'}
     PROJECT_ROOT=${JSON.stringify(dir)}
+    SCRIPT_DIR=${JSON.stringify(join(ROOT, 'orchestrations/scripts'))}
+    AUTOMATION_DIR=${JSON.stringify(join(ROOT, 'orchestrations'))}
+    NODE_BIN=${JSON.stringify(process.execPath)}
     VERIFICATION_FAILURE=""
     warning() { echo "WARN:$*"; }; error() { echo "ERR:$*"; }
     log() { echo "LOG:$*"; }; info() { :; }; success() { :; }
     engine_paths_filter() { cat; }
     is_truthy() { case "\${1:-}" in true|1|yes) return 0 ;; *) return 1 ;; esac; }
+${lift('_run_declared_lint_gate')}
 ${lift('run_repo_lint_verification')}
     run_repo_lint_verification S1 /dev/null; echo "RC=$?"
     echo "__VF__"; printf '%s' "$VERIFICATION_FAILURE"`], { encoding: 'utf8' });
@@ -113,11 +118,12 @@ describe('A CHECK THAT COULD NOT RUN SAYS SO', () => {
     expect(r.out).toMatch(/pre-commit hook/i);
   });
 
-  it('no eslint binary is announced, not swallowed', () => {
+  it('no declared lint is announced, not swallowed — and no tool is named', () => {
     const r = run({ hook: true, eslint: false, changed: true });
     expect(r.out, 'lint silently did not run and the run reported nothing')
       .toMatch(/was NOT run/);
-    expect(r.out).toMatch(/eslint/i);
+    expect(r.out).toMatch(/declares no lint command/i);
+    expect(r.out, 'the engine must not name a linter it prefers').not.toMatch(/eslint/i);
   });
 
   it('and neither FAILS the story — the writer cannot install a linter', () => {

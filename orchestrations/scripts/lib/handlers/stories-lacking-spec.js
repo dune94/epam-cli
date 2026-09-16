@@ -25,7 +25,10 @@ function storiesLackingSpec(prd, phase) {
   return ids
     .map((id) => byId.get(id))
     .filter((s) => s && s.completed !== true && s.status !== 'deprecated')
-    .filter((s) => !(s.specification && Array.isArray(s.specification.appliedAgents) && s.specification.appliedAgents.length > 0))
+    // THE PASS'S WRITE IS THE MARK. Every spec-pass write stamps specification.runId — on the
+    // story it specified and on each child it split off. Judging by appliedAgents counted the
+    // pass's own children as spec-less, and every resume re-split them (run 20260915T101555Z).
+    .filter((s) => !(s.specification && s.specification.runId))
     .map((s) => s.id);
 }
 

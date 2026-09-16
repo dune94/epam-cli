@@ -40,9 +40,12 @@ describe('THE SCRIPT NAMES MOVED TO THE STACK THAT OWNS THEM', () => {
       .not.toMatch(/\['typecheck', 'type-check', 'tsc'/);
   });
 
-  it('the gate reads them from the ecosystem instead', () => {
-    expect(read('orchestrations/plugins/verification-plugin.js'))
-      .toMatch(/verificationScripts/);
+  it('the gate reads the ecosystem\'s own verification and names no manifest, lockfile or runner', () => {
+    const plugin = read('orchestrations/plugins/verification-plugin.js');
+    expect(plugin).toMatch(/\.verification\b/);
+    const code = plugin.split('\n').filter((l) => !/^\s*(\*|\/\/|\/\*)/.test(l)).join('\n');
+    expect(code, 'the plugin still names one ecosystem\'s manifest').not.toMatch(/package\.json/);
+    expect(code).not.toMatch(/pnpm-lock|yarn\.lock|npm run/);
   });
 });
 

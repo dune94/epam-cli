@@ -24,7 +24,10 @@ module.exports = {
     // The unit-test gate ran `npm install` unconditionally and then required
     // node_modules/.bin/vitest to exist. Returns '' when this ecosystem vendors nothing in-repo
     // and therefore has nothing to install before its tests can run.
-    installCommand: () => 'pip install -e .',
+    // PROVISIONING CREATES THE ENVIRONMENT IT INSTALLS INTO (see requirements-txt.js). A lockfile
+    // manager (poetry/uv/pdm) owns its own environment and installs with its own verb.
+    installCommand: (manager) => (manager ? `${manager} install` : 'python3 -m venv .venv && .venv/bin/pip install -e .'),
+    runEnvironment: { PATH: ['.venv/bin'], VIRTUAL_ENV: '.venv' },
     // WHAT THIS ECOSYSTEM LEAVES BEHIND. Never staged into a client repository and never reported
     // as uncommitted agent work. Was three hand-written lists in two shell files, naming
     // node_modules, build and .next between them — one ecosystem — so a Rust codeline staged

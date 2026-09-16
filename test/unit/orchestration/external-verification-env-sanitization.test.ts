@@ -60,9 +60,11 @@ describe('run_external_verification — env sanitization wiring (static)', () =>
     // dependency-check.json (installCommand). The INVARIANT is unchanged — whatever the project
     // declares must still be wrapped by the unset prefix, or the orchestrator's own .env leaks
     // into the child and the install resolves against the wrong registry/credentials.
-    const idx = claudeSrc.indexOf('${_orch_env_unset_prefix}${_dep_install_all}');
-    const block = claudeSrc.slice(Math.max(0, idx - 200), idx + 50);
-    expect(block).toMatch(/bash -c "\$\{_orch_env_unset_prefix\}\$\{_dep_install_all\}"/);
+    // Since 2026-09-16 the command is the manifest's provisionCommand, run inside the declared
+    // runEnvironment; the unset prefix still comes first.
+    const idx = claudeSrc.indexOf('${_orch_env_unset_prefix}${_dep_env_prefix}${_dep_provision}');
+    const block = claudeSrc.slice(Math.max(0, idx - 200), idx + 80);
+    expect(block).toMatch(/bash -c "\$\{_orch_env_unset_prefix\}\$\{_dep_env_prefix\}\$\{_dep_provision\}"/);
   });
 
   it('the test-command invocation is wrapped with the unset prefix via bash -c', () => {
@@ -71,14 +73,14 @@ describe('run_external_verification — env sanitization wiring (static)', () =>
     // invariant is unchanged: nothing runs the test command outside the prefix.
     const bounded = claudeSrc.indexOf('_bounded_cmd="$(_bounded_test_command "$test_cmd")"');
     expect(bounded, 'the test command is no longer bounded before it runs').toBeGreaterThan(-1);
-    const idx = claudeSrc.indexOf('bash -c "${_orch_env_unset_prefix}${_bounded_cmd}"');
+    const idx = claudeSrc.indexOf('bash -c "${_orch_env_unset_prefix}${_test_env_prefix}${_bounded_cmd}"');
     expect(idx, 'the bounded test command runs outside the unset prefix').toBeGreaterThan(bounded);
     expect(claudeSrc, 'a test-command invocation escapes the prefix').not.toMatch(/bash -c "\$\{test_cmd\}"/);
   });
 
   it('the sanitization is computed BEFORE the npm install call site (so it protects both install and test)', () => {
     const unsetIdx = claudeSrc.indexOf('_orch_env_unset_prefix=""');
-    const installIdx = claudeSrc.indexOf('${_orch_env_unset_prefix}${_dep_install_all}');
+    const installIdx = claudeSrc.indexOf('${_orch_env_unset_prefix}${_dep_env_prefix}${_dep_provision}');
     expect(unsetIdx).toBeGreaterThan(-1);
     expect(installIdx).toBeGreaterThan(unsetIdx);
   });
@@ -151,6 +153,9 @@ describe('run_external_verification — env sanitization REAL execution', () => 
       '_project_dep_config_value() { :; }',
       '_project_manifest_file() { :; }',
       '_project_install_command() { :; }',
+      '_project_provision_command() { :; }',
+      '_project_run_env_prefix() { :; }',
+      '_get_vendor_dirs() { :; }',
       // The bounding wrapper is identity here: the sanitization under test is the prefix, not the
       // ceiling. bounded-exec.sh has its own tests.
       '_bounded_test_command() { printf "%s" "${1:-}"; }',

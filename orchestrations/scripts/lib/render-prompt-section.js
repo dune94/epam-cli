@@ -10,7 +10,7 @@
  * A SEPARATE FILE ON PURPOSE. The obvious alternative — `node -e '...'` inline in claude.sh —
  * was tried three times on 2026-08-10 and broke the script every time: the JS carries braces and
  * quotes that have to survive a double-quoted shell string inside a command substitution. The
- * pattern that works is this one, already proven by lib/lint-staged-scope.js: a real file,
+ * pattern that works is this one: a real file,
  * invoked as `node render-prompt-section.js <catalog> <key> [k=v ...]`.
  *
  * Contract:

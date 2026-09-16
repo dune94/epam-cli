@@ -66,7 +66,7 @@
       "^orchestrations/scripts/lib/(gate-verdicts|tc-writer-gate|ac-gate|eslint-baseline-gate|vc-coverage-findings|codeline-write-perimeter|stage-coverage-gate)\\.(js|sh)$",
       "^orchestrations/scripts/lib/handlers/(stage-coverage|review|sast-.*|semgrep-.*|mutant|fuzz-.*|perf|vc-.*|plan-review-json|code-review-json|team-lead-review-json|findings-grounded|rg-.*|rgd-diff|pfa-.*)\\.(js|py)$",
       "^orchestrations/scripts/(brownfield-coverage-gate|brownfield-repro-test-gate|check-phase-gate|check-dependencies|scan-secrets|worktree-health-check)\\.sh$",
-      "^orchestrations/scripts/lib/(coupled-pair-gate|plan-fidelity-gate|pre-run-reset-gate|preflight|lint-staged-scope)\\.(js|sh)$",
+      "^orchestrations/scripts/lib/(coupled-pair-gate|plan-fidelity-gate|pre-run-reset-gate|preflight)\\.(js|sh)$",
       "^orchestrations/scripts/lib/handlers/(scan-duplicated-literals|scan-uncalibrated-guards)\\.js$"
     ],
     "selfheal": [

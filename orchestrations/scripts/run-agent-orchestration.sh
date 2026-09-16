@@ -3108,6 +3108,24 @@ _run_codeline_loop() {
         log "[orch] Wrote .epam/ manifests to ${_wt} from the resolved ecosystem provider"
       fi
     fi
+    # A DECLARATION MISSING A FACT ITS ECOSYSTEM DECLARES IS COMPLETED. The plug-in gained
+    # provisionCommand and runEnvironment on 2026-09-16; a manifest written before that carries
+    # neither, and a worktree provisioned from it has no environment. Only ABSENT keys are added
+    # — every key the manifest already holds is the project's word and stays as it is.
+    if [ -f "$_wt/.epam/dependency-check.json" ]; then
+      local _clm_more _clm_more_rc=0
+      _clm_more=$("$NODE_BIN" "$SCRIPT_DIR/lib/handlers/codeline-manifests.js" "$_wt" 2>/dev/null) || _clm_more_rc=$?
+      if [ "$_clm_more_rc" -eq 0 ]; then
+        local _clm_added
+        _clm_added=$(jq -n --argjson have "$(cat "$_wt/.epam/dependency-check.json")" --argjson derive "$(printf '%s' "$_clm_more" | jq '."dependency-check.json" // {}')" \
+          '[($derive | keys[]) as $k | select(($have | has($k)) | not) | $k]' 2>/dev/null || echo '[]')
+        if [ "$(printf '%s' "$_clm_added" | jq 'length')" -gt 0 ]; then
+          jq -s '.[1] * .[0]' "$_wt/.epam/dependency-check.json" <(printf '%s' "$_clm_more" | jq '."dependency-check.json"') > "$_wt/.epam/dependency-check.json.tmp" \
+            && mv "$_wt/.epam/dependency-check.json.tmp" "$_wt/.epam/dependency-check.json"
+          log "[orch] Completed .epam/dependency-check.json in ${_wt} with $(printf '%s' "$_clm_added" | jq -r 'join(", ")') from its ecosystem provider"
+        fi
+      fi
+    fi
 
     # ── Plugin provisioning: config-driven, zero project-specific hardcoding ──
     # This script has no idea what a "plugin" IS or does, with ONE exception:

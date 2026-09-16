@@ -38,6 +38,27 @@ describe('a resume runs the spec pass for the stories that lack it', () => {
     expect(spawnSync('node', [HANDLER, f], { encoding: 'utf8' }).stdout.trim()).toBe('S-1');
     rmSync(d, { recursive: true, force: true });
   });
+  // A STORY BORN OF THE SPEC PASS IS NOT LACKING IT. A split writes the children with
+  // createdFrom/splitOrigin/runId and no appliedAgents (spec-mode-runner applySpecChanges), so
+  // the predicate above counted the pass's own output as spec-less and every resume re-ran the
+  // pass on the split children — regintel run 20260915T101555Z re-rolled REGI-001A/B into
+  // REGI-001-A/-B on the next resume, on v2.0.39. The pass's write is the mark, not one agent list.
+  it('a split child carries the spec pass\'s write and is not listed; a story nothing ever wrote is', () => {
+    const split = {
+      implementationOrder: { scaffold: ['P-1', 'P-1-A', 'P-1-B'], core: ['P-2'] },
+      stories: [
+        { id: 'P-1', status: 'deprecated', completed: true, ...specified },
+        { id: 'P-1-A', status: 'completed', completed: true, specification: { createdFrom: 'P-1', createdAt: 'x', runId: 'R1', splitDepth: 1, splitOrigin: 'spec-pass' } },
+        { id: 'P-1-B', status: 'pending', completed: false, specification: { createdFrom: 'P-1', createdAt: 'x', runId: 'R1', splitDepth: 1, splitOrigin: 'spec-pass' } },
+        { id: 'P-2', status: 'pending', completed: false },
+      ],
+    };
+    const { d, f } = tmpPrd(split);
+    expect(spawnSync('node', [HANDLER, f, 'scaffold'], { encoding: 'utf8' }).stdout.trim(), 'the split child has its spec — the pass wrote it').toBe('');
+    expect(spawnSync('node', [HANDLER, f], { encoding: 'utf8' }).stdout.trim()).toBe('P-2');
+    rmSync(d, { recursive: true, force: true });
+  });
+
   it('the remediation clears the spec block of a story whose content it restores, so the pass will take it', () => {
     const d = mkdtempSync(join(tmpdir(), 'lack-spec-')); const p = join(d, 'regintel-prd.json'); const canon = join(d, 'regintel-prd.canonical.json');
     const authored = { id: 'REGI-001', title: 'Scaffold', description: 'd', acceptanceCriteria: ['a', 'b'], technicalNotes: { files: ['x.py'] }, status: 'pending', completed: false };

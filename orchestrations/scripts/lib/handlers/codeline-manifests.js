@@ -46,6 +46,14 @@ function resolveEcosystem(root) {
   return null;
 }
 
+/** The package manager the codeline's lockfile names, per the provider's own lockfile table; '' when none. */
+function packageManagerFor(eco, root) {
+  const lock = lockfileFor(eco, (f) => {
+    try { return fs.existsSync(path.join(root, f)); } catch { return false; }
+  });
+  return (lock && (eco.lockfiles || {})[lock]) || '';
+}
+
 function build(root) {
   const hit = resolveEcosystem(root);
   if (!hit) return null;
@@ -63,20 +71,30 @@ function build(root) {
   // THE ADD COMMAND, not the install command. `installCommand` provisions what the manifest already
   // declares and cannot add anything; the engine's heredoc wrote "npm install --save-dev {package}"
   // beside the provider's own addCommand — two spellings of one fact.
-  const lock = lockfileFor(eco, (f) => {
-    try { return fs.existsSync(path.join(root, f)); } catch { return false; }
-  });
-  const manager = (lock && (eco.lockfiles || {})[lock]) || '';
+  const manager = packageManagerFor(eco, root);
   let addCommand = '';
   if (typeof eco.addCommand === 'function') {
     try { addCommand = String(eco.addCommand(manager) || ''); } catch { addCommand = ''; }
   }
+
+  // HOW THE ENVIRONMENT IS PROVISIONED, AND WHERE COMMANDS RUN. Two more facts the plug-in
+  // declares and the engine only executes. Until 2026-09-16 the manifest carried the ADD command
+  // alone, and the engine provisioned a worktree by deleting `{package}` from it and running the
+  // remainder — a rule true of one ecosystem's package manager and of no other: a Python worktree
+  // got `pip install` with no arguments, no interpreter, and every test exited 2.
+  let provisionCommand = '';
+  if (typeof eco.installCommand === 'function') {
+    try { provisionCommand = String(eco.installCommand(manager) || ''); } catch { provisionCommand = ''; }
+  }
+  const runEnvironment = (eco.runEnvironment && typeof eco.runEnvironment === 'object') ? eco.runEnvironment : null;
 
   const dependencyCheck = {
     manifestFile: present,
     ...(declared.dependencyCheck || {}),
     vendorDirs,
     ...(addCommand ? { installCommand: addCommand } : {}),
+    ...(provisionCommand ? { provisionCommand } : {}),
+    ...(runEnvironment ? { runEnvironment } : {}),
   };
 
   const out = { 'dependency-check.json': dependencyCheck };
@@ -109,4 +127,4 @@ function main() {
 }
 
 if (require.main === module) process.exit(main());
-module.exports = { build, resolveEcosystem };
+module.exports = { build, resolveEcosystem, packageManagerFor };

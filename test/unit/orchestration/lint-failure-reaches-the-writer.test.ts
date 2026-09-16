@@ -51,6 +51,9 @@ EOF
 exit ${eslintExit}
 `);
   chmodSync(bin, 0o755);
+  // THE CODELINE DECLARES ITS LINT (package.json scripts.lint); the engine hunts for no binary.
+  writeFileSync(join(repo, 'package.json'), JSON.stringify({ name: 'x', scripts: { lint: 'eslint' } }));
+  writeFileSync(join(repo, '.gitignore'), 'node_modules/\n');
   writeFileSync(join(repo, 'src.ts'), 'export const x: any = 1;\n');
   spawnSync('git', ['-C', repo, 'add', '-A']);
   spawnSync('git', ['-C', repo, 'commit', '-qm', 'base']);
@@ -74,12 +77,16 @@ is_truthy() { case "\${1:-}" in 1|true|TRUE|yes) return 0 ;; *) return 1 ;; esac
 # The REAL engine-path filter, sourced from its single definition — not a convenient stub.
 . "${join(ROOT, 'orchestrations/scripts/lib/engine-paths.sh')}"
 SCRIPT_DIR="${join(ROOT, 'orchestrations/scripts')}"
+AUTOMATION_DIR="${join(ROOT, 'orchestrations')}"
+NODE_BIN="${process.execPath}"
+. "${join(ROOT, 'orchestrations/scripts/lib/evidence-windows.sh')}"
 PROJECT_ROOT="${repo}"
 DETERMINISTIC_CHECK_FAILURE=0
 VERIFICATION_FAILURE=""
 STORY_REJECTION_KEY=""
 
 # The real function, extracted verbatim from claude.sh.
+eval "$(awk '/^_run_declared_lint_gate\\(\\) \\{/,/^\\}/' "${CLAUDE_SH}")"
 eval "$(awk '/^run_repo_lint_verification\\(\\) \\{/,/^\\}/' "${CLAUDE_SH}")"
 
 run_repo_lint_verification "STORY-1" /dev/null
@@ -134,9 +141,15 @@ describe('a repo-lint rejection reaches the next attempt', () => {
     expect(r.key, 'no rejection key — a lint failure repeating forever looks novel each time')
       .toMatch(/^lint:/);
     // 'lint:' alone would satisfy the prefix while carrying no signal, and every distinct lint
-    // failure would then look identical — escalating the ladder on the first repeat forever.
-    expect(r.key, 'the key carries no rule id, so every lint failure collides')
-      .toContain('@typescript-eslint/no-explicit-any');
+    // failure would then look identical — escalating the ladder on the first repeat forever. The
+    // key is derived from the FAILURES (the identities the codeline declares, else the diagnostic
+    // lines): the same rejection keys the same, a different one keys differently.
+    expect(r.key, 'the key carries nothing beyond the prefix').not.toMatch(/^lint:$/);
+    expect(r.key, 'the key is the story id — every distinct lint failure collides').not.toBe('lint:STORY-1');
+    const again = runLintGate(makeRepo(1, MESSAGE));
+    expect(again.key, 'the same rejection must key the same').toBe(r.key);
+    const other = runLintGate(makeRepo(1, '/tmp/x/src.ts\n  4:1  error  Missing semicolon  semi\n'));
+    expect(other.key, 'a different rejection must key differently').not.toBe(r.key);
   });
 
   it('a CLEAN lint run neither fails nor sets the flag', () => {

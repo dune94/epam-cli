@@ -61,12 +61,12 @@ describe('an undeclared check was reported as type errors', () => {
     const i = block.search(/_tsc_exit["'\s]*(-eq|==|=)\s*["']?2/);
     const arm = block.slice(i, i + 900);
     expect(arm, 'the writer is still told to fix type errors that do not exist')
-      .not.toMatch(/Fix the type errors/);
+      .not.toMatch(/Fix the errors so the declared type check exits 0/);
   });
 
   it('A REAL TYPE FAILURE IS STILL A FAILURE — the gate is not weakened', () => {
     const block = gateBlock();
-    expect(block, 'the genuine type-error path was removed').toMatch(/Fix the type errors/);
+    expect(block, 'the genuine type-error path was removed').toMatch(/Fix the errors so the declared type check exits 0/);
     expect(block, 'the failure branch no longer feeds the retry loop')
       .toMatch(/TypeScript errors/);
   });

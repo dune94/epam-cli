@@ -64,61 +64,36 @@ function readManifest(projectRoot, section) {
  * the engine never learns the tool's name.
  */
 /**
- * The script names this stack verifies with — read from the ecosystem file that owns them.
- *
- * A gate that carries its own copy is the engine learning a tool's name, which this file's own
- * docstring forbids. Absent or unreadable, the caller gets an empty list and reports "not declared"
- * rather than guessing: a check that cannot run must never read as a pass.
+ * THE ECOSYSTEM'S OWN VERIFICATION. Whichever provider under orchestrations/ecosystems recognises
+ * the codeline is asked for the check `kind` (typecheck | test | lint): a function is called with
+ * the manifest text and the package manager the lockfile names; a plain object is taken as is.
+ * Nothing here names a manifest, a lockfile, a runner or a tool — those branches lived in this
+ * file for one ecosystem until 2026-09-16 and are that ecosystem's `verification` now. A codeline
+ * no provider recognises, or whose provider declares no such check, gets null: "not declared".
  */
-function verificationScriptNames(kind) {
+function ecosystemVerification(projectRoot, kind) {
   try {
-    // eslint-disable-line
-    const eco = require(join(__dirname, '..', 'ecosystems', 'package-json.js'));
-    const names = eco && eco.verificationScripts && eco.verificationScripts[kind];
-    return Array.isArray(names) ? names : [];
-  } catch {
-    return [];
+    // eslint-disable-next-line global-require
+    const { resolveEcosystem, packageManagerFor } = require(join(__dirname, '..', 'scripts', 'lib', 'handlers', 'codeline-manifests.js'));
+    const hit = resolveEcosystem(projectRoot);
+    const v = hit && hit.eco && hit.eco.verification && hit.eco.verification[kind];
+    if (!v) return null;
+    let out = v;
+    if (typeof v === 'function') {
+      const text = readFileSync(join(projectRoot, hit.present), 'utf8');
+      out = v(text, packageManagerFor(hit.eco, projectRoot));
+    }
+    if (!out || !out.command) return null;
+    return { ...out, detected: out.detected || `${hit.present} (ecosystem ${hit.eco.file})` };
+  } catch (e) {
+    process.stderr.write(`[verification-plugin] ecosystem ${kind} detection failed: ${(e && e.message) || e}\n`);
+    return null;
   }
 }
 
 function detectVerification(projectRoot) {
-  const pkgPath = join(projectRoot, 'package.json');
-  if (existsSync(pkgPath)) {
-    let pkg = null;
-    try { pkg = JSON.parse(readFileSync(pkgPath, 'utf8')); } catch { pkg = null; }
-    const scripts = (pkg && pkg.scripts) || {};
-    // The project's OWN script name, in the order a human would try them.
-    const named = verificationScriptNames('typecheck')
-      .find((s) => typeof scripts[s] === 'string' && scripts[s].trim() !== '');
-    if (named) {
-      const runner = existsSync(join(projectRoot, 'pnpm-lock.yaml')) ? 'pnpm'
-        : existsSync(join(projectRoot, 'yarn.lock')) ? 'yarn'
-          : 'npm run';
-      return {
-        typecheck: {
-          command: `${runner} ${named}`,
-          // HOW ITS FAILURES ARE IDENTIFIED, beside how they are produced. Without this the
-          // baseline delta cannot subtract and must report everything — correct, but useless.
-          // The identity omits the COLUMN deliberately: editing a line above shifts columns, and
-          // a baseline keyed on column reports every pre-existing error as new.
-          failurePattern: '^([^(]+)\\((\\d+),(\\d+)\\): error ([A-Z0-9]+)',
-          failureIdentity: '{1}:{2}:{4}',
-          detected: `package.json scripts.${named}`,
-        },
-      };
-    }
-  }
-  // THE ECOSYSTEM'S OWN VERIFICATION, for a codeline whose manifest is not package.json. The
-  // provider declares the check and its failure pattern; nothing is guessed here.
-  try {
-    const { resolveEcosystem } = require(join(__dirname, '..', 'scripts', 'lib', 'handlers', 'codeline-manifests.js'));
-    const hit = resolveEcosystem(projectRoot);
-    const v = hit && hit.eco && hit.eco.verification;
-    if (v && v.typecheck && v.typecheck.command) {
-      return { typecheck: { ...v.typecheck, detected: `${hit.present} (ecosystem ${hit.eco.file})` } };
-    }
-  } catch { /* no ecosystem resolves — nothing declared */ }
-  return null;
+  const typecheck = ecosystemVerification(projectRoot, 'typecheck');
+  return typecheck ? { typecheck } : null;
 }
 
 /**
@@ -323,53 +298,10 @@ function repoHasTests(projectRoot) {
  * prefer a script the project already defines, and return null rather than guess.
  */
 function detectTests(projectRoot) {
-  const pkgPath = join(projectRoot, 'package.json');
-  if (existsSync(pkgPath)) {
-    let pkg = null;
-    try { pkg = JSON.parse(readFileSync(pkgPath, 'utf8')); } catch { pkg = null; }
-    const scripts = (pkg && pkg.scripts) || {};
-    const named = verificationScriptNames('test')
-      .find((s) => typeof scripts[s] === 'string' && scripts[s].trim() !== '');
-    if (named) {
-      const runner = existsSync(join(projectRoot, 'pnpm-lock.yaml')) ? 'pnpm'
-        : existsSync(join(projectRoot, 'yarn.lock')) ? 'yarn'
-          : 'npm run';
-      return {
-        test: {
-          command: `${runner} ${named}`,
-          // RUN ONLY WHAT THE STORY OWNS.
-          //
-          // Without this claude.sh falls back to the whole suite, and its own comment says so: "A
-          // project that declares neither runs its whole suite, which is correct and never silent."
-          // Live 2026-09-02 (AMSD-1919): validating ONE line in CheckoutForm.tsx ran all 746 suites
-          // / 3,385 tests, pinned the run at 10,731MB of an 11,264MB cap with 15 jest workers at
-          // ~700-780MB each, and stretched a ~70-second suite past 10 minutes under constant
-          // reclaim. The story's own suite is a single file.
-          //
-          // Built from the SAME runner and script the full command uses, so there is no second
-          // guess at the tool's name. `--` passes the file list through npm/yarn/pnpm to the runner.
-          scopedCommand: `${runner} ${named} -- {files}`,
-          testFilePattern: '\\.(test|spec)\\.[jt]sx?$',
-          // A failing SUITE is the stable identity, not a test name: runners report the suite
-          // path consistently and individual case names churn. Subtracting on this is what lets
-          // a brownfield run inherit pre-existing failures without inheriting blame.
-          failurePattern: '^\\s*FAIL\\s+(\\S+)',
-          failureIdentity: '{1}',
-          detected: `package.json scripts.${named}`,
-        },
-      };
-    }
-  }
-  // NOT A NODE REPOSITORY, OR ONE WITH NO TEST SCRIPT: ASK THE ECOSYSTEM THAT RECOGNISES IT.
-  //
-  // Every provider under orchestrations/ecosystems declares how its suite is run (testCommand),
-  // how one file is run (testFileCommand) and how a test file is told from a source file
-  // (codelineManifests.contractGeneration.testFilePattern). This function consulted package.json
-  // only, so a Python codeline — requirements.txt, pytest, tests/ — had no test command anywhere:
-  // the test oracle, external verification and the QA gates all read "no test command" and
-  // proved nothing. Found 2026-09-12 on the first Python greenfield project. The provider is
-  // resolved the way the codeline's own manifests are (lib/handlers/codeline-manifests.js), so
-  // the two never disagree about which ecosystem this is.
+  const declared = ecosystemVerification(projectRoot, 'test');
+  if (declared) return { test: declared };
+  // A provider that declares no `verification.test` may still declare how its suite runs
+  // (testCommand / testFileCommand) and how a test file is told from a source file.
   try {
     // eslint-disable-next-line global-require
     const { resolveEcosystem } = require(join(__dirname, '..', 'scripts', 'lib', 'handlers', 'codeline-manifests.js'));
@@ -411,30 +343,8 @@ function detectTests(projectRoot) {
  * says so in its own scripts, and that is what runs.
  */
 function detectLint(projectRoot) {
-  const pkgPath = join(projectRoot, 'package.json');
-  if (existsSync(pkgPath)) {
-    let pkg = null;
-    try { pkg = JSON.parse(readFileSync(pkgPath, 'utf8')); } catch { pkg = null; }
-    const scripts = (pkg && pkg.scripts) || {};
-    const named = verificationScriptNames('lint')
-      .find((s) => typeof scripts[s] === 'string' && scripts[s].trim() !== '');
-    if (named) {
-      const runner = existsSync(join(projectRoot, 'pnpm-lock.yaml')) ? 'pnpm'
-        : existsSync(join(projectRoot, 'yarn.lock')) ? 'yarn'
-          : 'npm run';
-      return {
-        lint: {
-          command: `${runner} ${named}`,
-          // A lint diagnostic names the FILE it is about; rule ids churn between versions and
-          // configs, so the file is the stable identity for a baseline subtraction.
-          failurePattern: '^\\s*(\\S+\\.[A-Za-z0-9]+)',
-          failureIdentity: '{1}',
-          detected: `package.json scripts.${named}`,
-        },
-      };
-    }
-  }
-  return null;
+  const lint = ecosystemVerification(projectRoot, 'lint');
+  return lint ? { lint } : null;
 }
 
 

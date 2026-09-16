@@ -9,6 +9,15 @@
  *
  * Adding an ecosystem is a NEW FILE here and nothing else. Nothing in the engine names a stack.
  */
+/** The first script of `names` the manifest declares non-empty, or ''. */
+function scriptNamed(text, names) {
+  let scripts = {};
+  try { scripts = (JSON.parse(String(text || '')) || {}).scripts || {}; } catch { scripts = {}; }
+  return (names || []).find((n) => typeof scripts[n] === 'string' && scripts[n].trim() !== '') || '';
+}
+/** How this ecosystem runs a declared script, by the manager the lockfile names. */
+function runnerFor(manager) { return manager === 'pnpm' || manager === 'yarn' ? manager : 'npm run'; }
+
 module.exports = {
   /**
    * WHICH SCRIPTS VERIFY A PROJECT OF THIS STACK, in the order a human would try them.
@@ -27,6 +36,55 @@ module.exports = {
     typecheck: ['typecheck', 'type-check', 'tsc', 'check-types', 'lint:types'],
     test: ['test', 'tests', 'test:unit', 'jest', 'vitest'],
     lint: ['lint', 'lint:js', 'lint:src', 'eslint'],
+  },
+
+  // HOW A CODELINE OF THIS ECOSYSTEM IS VERIFIED — typecheck, test, lint — read from the
+  // scripts the codeline itself declares, run by the package manager its lockfile names. Each
+  // answers null when the codeline declares no such script: "not declared", never a guess.
+  //
+  // These three lived in orchestrations/plugins/verification-plugin.js as `if package.json
+  // exists` branches — the plugin that serves every ecosystem read one ecosystem's manifest,
+  // lockfiles and runner by name (moved here 2026-09-16). The plugin now asks whichever
+  // ecosystem resolves for the codeline and names no stack itself.
+  verification: {
+    typecheck: (text, manager) => {
+      const s = scriptNamed(text, module.exports.verificationScripts.typecheck);
+      return s ? {
+        command: `${runnerFor(manager)} ${s}`,
+        // HOW ITS FAILURES ARE IDENTIFIED, beside how they are produced. The identity omits the
+        // COLUMN deliberately: editing a line above shifts columns, and a baseline keyed on
+        // column reports every pre-existing error as new.
+        failurePattern: '^([^(]+)\\((\\d+),(\\d+)\\): error ([A-Z0-9]+)',
+        failureIdentity: '{1}:{2}:{4}',
+        detected: `package.json scripts.${s}`,
+      } : null;
+    },
+    test: (text, manager) => {
+      const s = scriptNamed(text, module.exports.verificationScripts.test);
+      const r = runnerFor(manager);
+      return s ? {
+        command: `${r} ${s}`,
+        // RUN ONLY WHAT THE STORY OWNS: `--` passes the file list through the package manager to
+        // the runner (AMSD-1919, 2026-09-02: one line validated by 746 suites).
+        scopedCommand: `${r} ${s} -- {files}`,
+        testFilePattern: '\\.(test|spec)\\.[jt]sx?$',
+        // A failing SUITE is the stable identity, not a test name.
+        failurePattern: '^\\s*FAIL\\s+(\\S+)',
+        failureIdentity: '{1}',
+        detected: `package.json scripts.${s}`,
+      } : null;
+    },
+    lint: (text, manager) => {
+      const s = scriptNamed(text, module.exports.verificationScripts.lint);
+      return s ? {
+        command: `${runnerFor(manager)} ${s}`,
+        // A lint diagnostic names the FILE it is about; rule ids churn between versions and
+        // configs, so the file is the stable identity for a baseline subtraction.
+        failurePattern: '^\\s*(\\S+\\.[A-Za-z0-9]+)',
+        failureIdentity: '{1}',
+        detected: `package.json scripts.${s}`,
+      } : null;
+    },
   },
 
   // WHAT A CODELINE OF THIS ECOSYSTEM DECLARES ABOUT ITSELF.
@@ -185,6 +243,9 @@ module.exports = {
   },
     stack: 'node',
     installDir: 'node_modules',
+    // WHERE COMMANDS RUN: the vendored binaries first, so a declared `vitest`/`tsc`/`eslint`
+    // resolves to the codeline's own. Declared here, never assembled by the engine.
+    runEnvironment: { PATH: ['node_modules/.bin'] },
     // Which tool installs it, decided by the lockfile the repository carries. First match wins.
     lockfiles: { 'pnpm-lock.yaml': 'pnpm', 'yarn.lock': 'yarn', 'package-lock.json': 'npm', 'npm-shrinkwrap.json': 'npm' },
     // HOW THIS ECOSYSTEM ADDS ONE NEW DEPENDENCY.

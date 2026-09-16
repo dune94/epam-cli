@@ -43,10 +43,13 @@ afterAll(() => { for (const d of dirs) rmSync(d, { recursive: true, force: true 
 /** The shipped function, lifted verbatim. */
 function shippedFn(): string {
   const src = readFileSync(CLAUDE_SH, 'utf8');
-  const start = src.indexOf('run_repo_lint_verification() {');
-  expect(start, 'run_repo_lint_verification not found in claude.sh').toBeGreaterThan(-1);
-  const end = src.indexOf('\n}\n', start);
-  return src.slice(start, end + 3);
+  const lift = (name: string) => {
+    const start = src.indexOf(`${name}() {`);
+    expect(start, `${name} not found in claude.sh`).toBeGreaterThan(-1);
+    const end = src.indexOf('\n}\n', start);
+    return src.slice(start, end + 3);
+  };
+  return `${lift('_run_declared_lint_gate')}\n${lift('run_repo_lint_verification')}`;
 }
 
 /**
@@ -96,6 +99,11 @@ function repo(opts: { hook?: boolean; eslint?: boolean; dirtyFileClean?: boolean
       `    echo "$f"; echo "  58:7  error  'CONTENTSTACK_DEFAULT_PREVIEW_HOST' is assigned a value but never used  @typescript-eslint/no-unused-vars"; rc=1\n` +
       `  fi\ndone\n[ $rc -ne 0 ] && echo "✖ 1 problem (1 error, 0 warnings)"\nexit $rc\n`);
     chmodSync(join(bin, 'eslint'), 0o755);
+    // THE CODELINE DECLARES ITS LINT. The engine names no linter and hunts for no binary
+    // (2026-09-16): what runs is package.json scripts.lint through the declared runner, on the
+    // changed files the codeline's own ecosystem calls source.
+    writeFileSync(join(dir, 'package.json'), JSON.stringify({ name: 'x', scripts: { lint: 'eslint' } }));
+    git('add', 'package.json'); git('commit', '-qm', 'declare lint');
   }
   if (opts.engineArtifacts) {
     // Exactly what next.gotransit.com carries during a run: untracked, NOT gitignored, and
@@ -119,6 +127,9 @@ function runGate(dir: string, env: Record<string, string> = {}) {
     `set -u
      PROJECT_ROOT=${JSON.stringify(dir)}
      LOG_DIR=${JSON.stringify(dir)}
+     SCRIPT_DIR=${JSON.stringify(join(__dirname, '../../../orchestrations/scripts'))}
+     AUTOMATION_DIR=${JSON.stringify(join(__dirname, '../../../orchestrations'))}
+     NODE_BIN=${JSON.stringify(process.execPath)}
      is_truthy() { case "$1" in true|1|yes|TRUE|True) return 0 ;; *) return 1 ;; esac; }
      log() { echo "LOG:$*"; }; error() { echo "ERR:$*"; }
      warning() { echo "WARN:$*"; }; success() { echo "OK:$*"; }; info() { echo "INFO:$*"; }
@@ -188,8 +199,11 @@ describe('it does not fail stories for things they did not do', () => {
     expect(runGate(repo({ hook: false })).rc).toBe(0);
   });
 
-  it('a repo with no eslint binary skips rather than erroring', () => {
-    expect(runGate(repo({ eslint: false })).rc).toBe(0);
+  it('a repo that declares no lint is left alone, and no tool is named', () => {
+    const r = runGate(repo({ eslint: false }));
+    expect(r.rc).toBe(0);
+    expect(r.log).toMatch(/declares no lint command/);
+    expect(r.log).not.toMatch(/eslint/i);
   });
 
   it('SKIP_STORY_LINT_GATE=true bypasses it', () => {

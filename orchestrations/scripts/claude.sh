@@ -3361,7 +3361,7 @@ verify_client_env_boundary() {
     export DETERMINISTIC_CHECK_FAILURE
     VERIFICATION_FAILURE=$(printf '\n## Verification Failure\n\n%d configuration value(s) are read where the build does not substitute them, so at runtime each is undefined and the branch it guards silently does nothing:\n\n%s\n\nRead the value where it IS substituted and pass the result through, as this codeline already does elsewhere, or expose it deliberately.\n' \
         "$_count" "$(printf '%s\n' "$_out" | sed 's/^/  - /')")
-    warning "Story $story_id: ${_count} value(s) read where the build never substitutes them — first: ${_first_var}. The guarded branch cannot execute; tsc and lint cannot see this."
+    warning "Story $story_id: ${_count} value(s) read where the build never substitutes them — first: ${_first_var}. The guarded branch cannot execute; the type check and lint cannot see this."
     return 1
 }
 
@@ -5207,18 +5207,30 @@ run_external_verification() {
     # consumed the rest of the 600s budget with zero further signal. Same
     # class of bug as the npm test / git-operation hangs fixed earlier this
     # session — this was the third unbounded external command, missed then.
-    # WHICH manifest, WHICH vendor directory, and WHICH install command are PROJECT facts.
-    # They were three ecosystem literals in engine code; the project already declares all three
-    # in .epam/dependency-check.json (manifestFile / vendorDirs / installCommand), which is the
-    # same file _get_vendor_dirs() and the dependency plugin read. A project that declares none
-    # of them provisions nothing here rather than having an ecosystem guessed for it.
-    local _dep_manifest _dep_vendor _dep_install
+    # WHICH manifest, WHICH vendor directory, and WHICH provisioning command are PROJECT facts,
+    # read from the codeline's .epam/dependency-check.json — the plug-in's declaration, assembled
+    # by lib/handlers/codeline-manifests.js. The engine executes them verbatim and knows no stack.
+    # Until 2026-09-16 it read the ADD command and ran it with `{package}` deleted: a rule true of
+    # one package manager and false of the rest, so a Python worktree got a bare `pip install`,
+    # no interpreter, and every test exited 2 (run 20260915T101555Z, REGI-001-B). A codeline that
+    # declares no provisionCommand is reported and left as it is — never guessed at.
+    # The vendor directory is the manifest's FIRST declared vendorDir (the one provisioning
+    # populates), read as declared — _get_vendor_dirs lists only directories that EXIST, so the
+    # old test `[ ! -d "$PROJECT_ROOT/<absolute path>" ]` was true whenever the directory existed
+    # and the whole branch was skipped whenever it did not: provisioning ran exactly when it was
+    # not needed.
+    local _dep_manifest _dep_vendor _dep_provision _dep_env_prefix
     _dep_manifest=$(_project_manifest_file "$PROJECT_ROOT")
-    _dep_vendor=$(_get_vendor_dirs "$PROJECT_ROOT" 2>/dev/null | head -1)
-    _dep_install=$(_project_install_command "$PROJECT_ROOT")
-    if [ -n "$_dep_manifest" ] && [ -n "$_dep_vendor" ] && [ -n "$_dep_install" ] \
-       && [ -f "$PROJECT_ROOT/$_dep_manifest" ] && [ ! -d "$PROJECT_ROOT/$_dep_vendor" ]; then
-        log "  Installing dependencies ($_dep_vendor missing in worktree)..."
+    _dep_vendor=""
+    [ -f "$PROJECT_ROOT/.epam/dependency-check.json" ] && _dep_vendor=$(jq -r '.vendorDirs[0]? // empty' "$PROJECT_ROOT/.epam/dependency-check.json" 2>/dev/null || true)
+    _dep_provision=$(_project_provision_command "$PROJECT_ROOT")
+    _dep_env_prefix=$(_project_run_env_prefix "$PROJECT_ROOT")
+    if [ -n "$_dep_manifest" ] && [ -f "$PROJECT_ROOT/$_dep_manifest" ] \
+       && { [ -z "$_dep_vendor" ] || [ ! -d "$PROJECT_ROOT/$_dep_vendor" ]; }; then
+        if [ -z "$_dep_provision" ]; then
+            warning "  [provision] $story_id: the codeline declares no provisionCommand in .epam/dependency-check.json — environment NOT provisioned; the test command runs as declared"
+        else
+        log "  Provisioning the environment (${_dep_vendor:-no vendor dir} absent in worktree): $_dep_provision"
         local _install_timeout="${EPAM_INSTALL_TIMEOUT_SECS:-180}"
         # Capture $? directly from the command substitution — NOT via
         # `if ! (cmd); then`, which collapses any non-zero exit code (124
@@ -5227,15 +5239,13 @@ run_external_verification() {
         # shipped in the first version of this fix and was caught by its own
         # test suite: the TIMED OUT branch never fired).
         local _install_output
-        # {package} is the placeholder the project's own installCommand uses for a single
-        # package; a bare provisioning install substitutes it away.
-        local _dep_install_all="${_dep_install//\{package\}/}"
-        _install_output=$(cd "$PROJECT_ROOT" && timeout "$_install_timeout" bash -c "${_orch_env_unset_prefix}${_dep_install_all}" 2>&1)
+        _install_output=$(cd "$PROJECT_ROOT" && timeout "$_install_timeout" bash -c "${_orch_env_unset_prefix}${_dep_env_prefix}${_dep_provision}" 2>&1)
         local _install_rc=$?
         if [ "$_install_rc" -eq 124 ]; then
-            warning "  dependency install TIMED OUT after ${_install_timeout}s — test may still fail"
+            warning "  provisioning TIMED OUT after ${_install_timeout}s — test may still fail"
         elif [ "$_install_rc" -ne 0 ]; then
-            warning "  dependency install failed — test may still fail"
+            warning "  provisioning failed (exit $_install_rc) — test may still fail: $(printf '%s' "$_install_output" | tail -3 | tr '\n' ' ')"
+        fi
         fi
     fi
 
@@ -5320,7 +5330,10 @@ run_external_verification() {
     local _test_timeout="${EPAM_TEST_TIMEOUT_SECS:-300}"
     # BOUNDED, both dimensions — see _bounded_test_command. Unbounded, this suite starves the host.
     local _bounded_cmd; _bounded_cmd="$(_bounded_test_command "$test_cmd")"
-    test_output=$(cd "$PROJECT_ROOT" && timeout "$_test_timeout" bash -c "${_orch_env_unset_prefix}${_bounded_cmd}" 2>&1) || test_exit=$?
+    # The declared command runs INSIDE the codeline's declared environment (runEnvironment in
+    # .epam/dependency-check.json): the environment's own runner answers, not the host's.
+    local _test_env_prefix; _test_env_prefix=$(_project_run_env_prefix "$PROJECT_ROOT")
+    test_output=$(cd "$PROJECT_ROOT" && timeout "$_test_timeout" bash -c "${_orch_env_unset_prefix}${_test_env_prefix}${_bounded_cmd}" 2>&1) || test_exit=$?
 
     if [ "$test_exit" -eq 124 ]; then
         warning "External verification TIMED OUT for $story_id after ${_test_timeout}s (test command: $test_cmd)"
@@ -5518,7 +5531,7 @@ _run_declared_lint_gate() {
     done <<< "$_dl_testable"
 
     if [ ${#_dl_files[@]} -eq 0 ]; then
-        log "  [repo-lint] $story_id: no changed file is source this codeline declares — nothing was linted"
+        log "  [repo-lint] $story_id: no changed files that this codeline declares as source — nothing to lint"
         return 0
     fi
 
@@ -5544,8 +5557,15 @@ _run_declared_lint_gate() {
 
     DETERMINISTIC_CHECK_FAILURE=1
     export DETERMINISTIC_CHECK_FAILURE
-    STORY_REJECTION_KEY="lint:${story_id}"
-    VERIFICATION_FAILURE=$(printf '\n## Verification Failure\n\nThe repository lints with `%s` and it rejects your change:\n\n```\n%s\n```\n\nFix these before the change can be committed.\n' \
+    # KEYED ON THE FAILURES, so an identical rejection twice escalates the ladder instead of
+    # looking novel on every attempt. The identities are the ones the codeline DECLARES for its
+    # lint (verification.json lint.failurePattern/failureIdentity, via the plugin); a codeline that
+    # declares none is keyed on the distinct diagnostic lines themselves. Neither names a tool.
+    local _dl_ids
+    _dl_ids=$(_verification_plugin_call parseFailures "$PROJECT_ROOT" "$_dl_out" lint 2>/dev/null | jq -r 'if type=="array" then sort | join(",") else empty end' 2>/dev/null)
+    [ -n "$_dl_ids" ] || _dl_ids=$(printf '%s\n' "$_dl_out" | grep -v '^\s*$' | sort -u | md5sum | cut -c1-12)
+    STORY_REJECTION_KEY="lint:${_dl_ids}"
+    VERIFICATION_FAILURE=$(printf '\n## Verification Failure\n\nThe repository lints with `%s` and it rejects your change:\n\n```\n%s\n```\n\nFix these before the change can be committed: the pre-commit hook will refuse this commit and may revert the work.\n' \
         "$_cmd" "$(printf '%s' "$_dl_out" | head -n "$(evidence_window lintOutputLines)")")
     export VERIFICATION_FAILURE
     printf '%s\n' "$_dl_out" >> "$output_file" 2>/dev/null || true
@@ -5585,10 +5605,7 @@ run_repo_lint_verification() {
     # coupled to a stack.
     #
     # .epam/verification.json already declares typecheck and test; lint is the third of the same
-    # shape, detected by the plugin that owns detection. The eslint probe below is KEPT as the
-    # fallback, so every repo that lints with eslint behaves exactly as before -- including the
-    # lint-staged routing and the --print-config coverage probe, which are questions only eslint
-    # can answer.
+    # shape, detected by the plugin that owns detection. Nothing below it names a tool.
     local _declared_lint=""
     _declared_lint=$("${NODE_BIN:-node}" -e '
       const fs = require("fs"), path = require("path");
@@ -5606,162 +5623,16 @@ run_repo_lint_verification() {
       process.stdout.write(cmd);
     ' "${AUTOMATION_DIR:-$(dirname "$SCRIPT_DIR")}/plugins/verification-plugin.js" "$PROJECT_ROOT" 2>/dev/null || echo "")
 
-    local _eslint_bin=""
-    for _candidate in "$PROJECT_ROOT/node_modules/.bin/eslint" "$(command -v eslint 2>/dev/null)"; do
-        [ -x "$_candidate" ] && { _eslint_bin="$_candidate"; break; }
-    done
-    if [ -z "$_eslint_bin" ] && [ -n "$_declared_lint" ]; then
+    # THE CODELINE'S DECLARED LINT, OR NONE. The engine names no linter: it does not look for a
+    # binary, route files through a particular tool's staging, or probe a particular tool's config.
+    # Every one of those was a question only one linter could answer, written into the engine
+    # (removed 2026-09-16). A codeline that declares no lint is told so, out loud, and not failed.
+    if [ -n "$_declared_lint" ]; then
         _run_declared_lint_gate "$story_id" "$output_file" "$_declared_lint"
         return $?
     fi
-    if [ -z "$_eslint_bin" ]; then
-        warning "  [repo-lint] $story_id: no eslint binary in $PROJECT_ROOT or on PATH — lint was NOT run; nothing here proves the change is clean"
-        return 0
-    fi
-
-    # Changed = modified/added tracked files plus untracked ones, which is the set that will be
-    # staged — minus anything the ENGINE owns. Live next.gotransit.com carries untracked
-    # .epam/settings.json and .epam/codeline-facts.json which are NOT gitignored and which
-    # eslint's flat config happily accepts, so without this filter the gate fails stories over
-    # the engine's own state — work the writer neither produced nor can fix. engine_paths_filter
-    # is the same single definition the commit seam uses (lib/engine-paths.sh); the list is not
-    # restated here, because restating it is how this rule already drifted three ways. Extensions come from what the repo's own eslint will accept, probed below, so no
-    # list is baked in here.
-    local _changed
-    _changed=$( { git -C "$PROJECT_ROOT" diff --name-only --diff-filter=d 2>/dev/null
-                  git -C "$PROJECT_ROOT" diff --cached --name-only --diff-filter=d 2>/dev/null
-                  git -C "$PROJECT_ROOT" ls-files --others --exclude-standard 2>/dev/null; } \
-                | sort -u | engine_paths_filter)
-    if [ -z "$_changed" ]; then
-        # Genuinely nothing to lint. Distinct from the two above: the check RAN and had no
-        # subject, rather than being unable to run.
-        log "  [repo-lint] $story_id: no changed files to lint"
-        return 0
-    fi
-
-    # WHICH of the changed files does the hook actually send to this linter?
-    #
-    # This used to ask the linter `--print-config <file>`: "do you have a configuration for this
-    # path". Under a flat config the answer is yes for ANY path, including data files. Live
-    # 2026-08-10 that fed package.json and package-lock.json to eslint, which parsed them as
-    # source and produced `1:1 Expected an assignment or function call`, and the gate failed the
-    # story claiming the pre-commit hook would revert the work. The repository's own routing sends
-    # those files to a formatter and never to the linter, so the hook would have passed them.
-    # A gate stricter than the hook it claims to reproduce blocks work nobody can fix.
-    #
-    # The routing is a REPOSITORY fact, so it is read from the repository — including with the
-    # repository's own matcher, so glob semantics are identical to the hook's by construction.
-    # No extension, language or tool name is named here; the linter's own basename is passed in.
-    local _scoped _scope_rc=0
-    _scoped=$(printf '%s\n' "$_changed" | "${NODE_BIN:-node}" \
-        "$SCRIPT_DIR/lib/lint-staged-scope.js" "$PROJECT_ROOT" "$(basename "$_eslint_bin")" 2>/dev/null) || _scope_rc=$?
-
-    local _files=() _f
-    if [ "$_scope_rc" -eq 0 ]; then
-        # The repo answered. An EMPTY answer is a real answer — "the hook lints none of these" —
-        # and must not fall through to linting everything, which is the defect being fixed.
-        while IFS= read -r _f; do
-            [ -n "$_f" ] || continue
-            [ -f "$PROJECT_ROOT/$_f" ] || continue
-            _files+=("$_f")
-        done <<< "$_scoped"
-    else
-        # UNKNOWN: no declaration, unreadable declaration, or no matcher. Fall back to the previous
-        # selection rather than to "lint nothing" — a repo that routes by some other mechanism is
-        # still held to its own standard, and silently disabling the gate would be a worse failure
-        # than the over-inclusion it replaces.
-        while IFS= read -r _f; do
-            [ -n "$_f" ] || continue
-            [ -f "$PROJECT_ROOT/$_f" ] || continue
-            (cd "$PROJECT_ROOT" && "$_eslint_bin" --print-config "$_f" >/dev/null 2>&1) || continue
-            _files+=("$_f")
-        done <<< "$_changed"
-    fi
-    # Same principle as the pass below: a run that examined NOTHING must not read as a clean lint.
-    # Changed files existed, but none survived the project's own `eslint --print-config` filter.
-    if [ ${#_files[@]} -eq 0 ]; then
-        log "  [repo-lint] $story_id: no changed file is covered by this project's eslint config — nothing was linted"
-        return 0
-    fi
-
-    local _lint_output _lint_exit=0
-    _lint_output=$(cd "$PROJECT_ROOT" && "$_eslint_bin" "${_files[@]}" 2>&1) || _lint_exit=$?
-    # A PASS SAYS SO. The three absent-check exits above were made loud under the comment "AN
-    # ABSENT CHECK IS NOT A PASS" — and this, the PASS itself, was left silent. So of the gate's
-    # outcomes only two of three were legible: failure loud, absence loud, success mute. A run
-    # where lint passed produced ZERO repo-lint lines and was therefore indistinguishable from a
-    # run where the gate never executed.
-    #
-    # Live 2026-08-19: a whole metrolinx writer run emitted no repo-lint output. It was read as
-    # "the gate never ran", which produced a false suppression hypothesis, hours of investigation,
-    # and an open defect reported to the operator that did not exist. Lint had run and passed.
-    if [ "$_lint_exit" -eq 0 ]; then
-        success "  [repo-lint] $story_id: the repository's own lint accepts ${#_files[@]} changed file(s)"
-        return 0
-    fi
-
-    error "  [repo-lint] $story_id: the repository's own eslint rejects ${#_files[@]} changed file(s) —"
-    error "  [repo-lint]   the pre-commit hook will refuse this commit and lint-staged will REVERT the work."
-    printf '%s\n' "$_lint_output" | head -n "$(evidence_window lintOutputLines)" >&2
-
-    # THE CHANNEL THE WRITER ACTUALLY READS.
-    #
-    # VERIFICATION_FAILURE is what the failure analyst consumes and turns into
-    # COORDINATOR_PROMPT_AMENDMENT — the text the next attempt sees. Every other gate in this
-    # file sets it. This one only appended to $output_file, the agent's OUTPUT log, which
-    # nothing reads back, so the gate fired correctly and the writer never learned why:
-    #
-    #   [repo-lint] AMSD-2041: the repository's own eslint rejects 5 changed file(s)
-    #
-    # and the next attempt produced the same rejected code. Worse, the analyst still ran, and
-    # with no failure text of its own it diagnosed from stale evidence — 'tsc incremental cache
-    # is stale' about the very constant lint was rejecting — twice, which is what tripped
-    # [HealingBroken]. The self-heal detector was right that healing was broken; it was broken
-    # because this gate fed it nothing.
-    #
-    # THE FLAG IS WHAT DELIVERS IT.
-    #
-    # This gate set VERIFICATION_FAILURE and returned 1 WITHOUT the flag, so the retry loop never
-    # routed the text into COORDINATOR_PROMPT_AMENDMENT -- the text the next attempt actually
-    # reads. Delivery fell to the failure-analyst's discretionary target, and live on 2026-08-18
-    # (AMSD-2041) it chose "kb": the knowledge base, which later runs inherit and THIS retry never
-    # sees. Attempt 6 was launched on the top model of the ladder with no idea which lint errors
-    # to fix, ran 22 minutes, and was killed. Exactly the failure the prescribed-helper check
-    # documents from 2026-08-09 -- "the finding was assigned and dropped, and the writer was never
-    # told" -- recurring at this site.
-    #
-    # Lint belongs in the deterministic class by this file's own definition: eslint either passes
-    # or it does not, and its message already names the rule and the line, so a gate-model call to
-    # restate it is waste.
-    DETERMINISTIC_CHECK_FAILURE=1
-    export DETERMINISTIC_CHECK_FAILURE
-    # Keyed so an identical lint rejection twice escalates the ladder instead of looking novel on
-    # every attempt. Keyed on the RULE IDS (eslint prints them as the last field), which are the
-    # stable part: the file list changes as the writer works, so keying on it would make every
-    # attempt look like a brand new problem.
-    local _lint_rules _lint_sorted
-    # HERESTRING, NOT A PIPE. In this shape it is SORT that takes SIGPIPE, not printf: sort buffers
-    # everything and only then writes, so when `head -5` exits after five lines sort dies 141,
-    # pipefail promotes it, and set -e ends the run on a lint output that was merely large.
-    _lint_sorted=$(awk 'NF{print $NF}' <<< "$_lint_output" | grep -E '^[a-z@]' | sort -u)
-    _lint_rules=$(head -5 <<< "$_lint_sorted" | tr '\n' ',')
-    STORY_REJECTION_KEY="lint:${_lint_rules}"
-
-    # Same '## Verification Failure' heading as the others so the analyst parses it identically.
-    VERIFICATION_FAILURE=$(printf '\n## Verification Failure\n\nThe repository'"'"'s own lint rejects file(s) THIS story changed. This is not advisory: the pre-commit hook runs these checks, refuses the commit, and lint-staged then REVERTS your work — the story cannot be delivered until every one is fixed. Fix these before anything else:\n\n%s\n' "$_lint_output")
-
-    # Also written to the story log, where a human reading the run afterwards will look.
-    {
-        echo ""
-        echo "## Repository Lint Failure — the commit WILL be rejected until these are fixed"
-        echo ""
-        echo "This repository runs its own checks in a pre-commit hook ($_hook)."
-        echo "These violations are in files THIS story changed. They are not optional:"
-        echo "the hook rejects the commit and lint-staged then reverts your work away."
-        echo ""
-        printf '%s\n' "$_lint_output" | head -n "$(evidence_window lintOutputLines)"
-    } >> "$output_file" 2>/dev/null || true
-    return 1
+    warning "  [repo-lint] $story_id: the codeline declares no lint command — lint was NOT run; nothing here proves the change is clean"
+    return 0
 }
 
 # run_tsc_verification <story_id> <output_file>
@@ -5830,6 +5701,26 @@ _project_dep_config_value() {
 }
 _project_manifest_file()  { _project_dep_config_value "${1:-$PROJECT_ROOT}" manifestFile; }
 _project_install_command() { _project_dep_config_value "${1:-$PROJECT_ROOT}" installCommand; }
+# HOW THE CODELINE'S ENVIRONMENT IS PROVISIONED — the manifest's provisionCommand, verbatim.
+# Until 2026-09-16 the engine had no such reading: it deleted `{package}` from the ADD command and
+# ran the remainder, which provisions under exactly one package manager and under no other.
+_project_provision_command() { _project_dep_config_value "${1:-$PROJECT_ROOT}" provisionCommand; }
+# WHERE COMMANDS RUN — the manifest's runEnvironment rendered as `export` statements for a
+# `bash -c` prefix: PATH entries are codeline-relative directories put in front of PATH, every
+# other key is exported verbatim (relative values resolved against the codeline). Empty when the
+# manifest declares none, so a command runs exactly as it would have before.
+_project_run_env_prefix() {
+    local _root="${1:-$PROJECT_ROOT}"
+    local _cfg="$_root/.epam/dependency-check.json"
+    [ -f "$_cfg" ] || _cfg="${EPAM_PROJECT_CONFIG_DIR:+$EPAM_PROJECT_CONFIG_DIR/dependency-check.json}"
+    [ -f "$_cfg" ] || return 0
+    jq -r --arg root "$_root" '
+      def abs: if startswith("/") then . else ($root + "/" + .) end;
+      (.runEnvironment // {}) | to_entries[] |
+        if .key == "PATH" then "export PATH=\"" + (([.value[]?] | map(abs) | join(":")) + ":$PATH") + "\"; "
+        else "export " + .key + "=\"" + (.value | tostring | abs) + "\"; " end
+    ' "$_cfg" 2>/dev/null | tr -d '\n'
+}
 
 # "true" | "false" | "unknown" — unknown when the project declared no test-file convention.
 _project_repo_has_tests() {
@@ -5996,7 +5887,7 @@ run_tsc_verification() {
     # Refusing an undeclared check stays — an undeclared repo must never silently pass. Only what
     # the writer is TOLD changes: declare the command, do not chase type errors.
     if [ "$_tsc_exit" -eq 2 ]; then
-        warning "  [tsc-verify] $story_id: the project declares no typecheck command — the check could not run"
+        warning "  [typecheck] $story_id: the project declares no typecheck command — the check could not run"
         VERIFICATION_FAILURE=$(printf '\n## Verification Failure\n\nThe orchestrator could not run this project'"'"'s type check because the verification manifest does not declare one. This is NOT a type error in your code — nothing was checked.\n\nDeclare the command in `.epam/verification.json` alongside the existing `test` entry, taking it from the project'"'"'s own manifest — read it and use whatever this project already declares — in this shape:\n\n```json\n"typecheck": { "command": "<the project'"'"'s own type-check command>" }\n```\n\nThe orchestrator reported:\n\n```\n%s\n```\n' \
             "$_tsc_output")
         return 1
@@ -6041,12 +5932,12 @@ run_tsc_verification() {
         # and an empty delta fell straight through to the failure branch below — reporting
         # "TypeScript errors" with an EMPTY error list, which is how it was caught.
         if [ -z "$(echo "$_new_errors" | tr -d '[:space:]')" ]; then
-            success "  [tsc-verify] $story_id: the type check has only pre-existing baseline errors — none introduced by this story"
+            success "  [typecheck] $story_id: the type check has only pre-existing baseline errors — none introduced by this story"
             return 0
         fi
 
-        warning "  [tsc-verify] $story_id: TypeScript errors — feeding into retry loop"
-        VERIFICATION_FAILURE=$(printf '\n## Verification Failure\n\nThe orchestrator ran the project type check after your files were written and it failed (exit code %d). Fix the type errors so tsc exits 0.\n\n```\n%s\n```\n' \
+        warning "  [typecheck] $story_id: the project type check rejects the change — feeding into retry loop"
+        VERIFICATION_FAILURE=$(printf '\n## Verification Failure\n\nThe orchestrator ran the project type check after your files were written and it failed (exit code %d). Fix the errors so the declared type check exits 0.\n\n```\n%s\n```\n' \
             "$_tsc_exit" "$_new_errors")
         {
             echo ""
@@ -6056,7 +5947,7 @@ run_tsc_verification() {
         return 1
     fi
 
-    success "  [tsc-verify] $story_id: the project type check passed"
+    success "  [typecheck] $story_id: the project type check passed"
     return 0
 }
 

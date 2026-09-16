@@ -362,7 +362,7 @@ describe('a path the PRD declares a story will create is grounded, even on an em
     mkdirSync(join(root, 'app', '.git'), { recursive: true });
     return [{ name: 'app', path: join(root, 'app') }];
   };
-  const declared = ['package.json', 'src/skyscanner/client.ts', 'src/skyscanner/client.test.ts', 'src/server.ts'];
+  const declared = ['package.json', 'tsconfig.json', 'src/skyscanner/client.ts', 'src/skyscanner/client.test.ts', 'src/server.ts'];
 
   it('the declared file, its directory, and a directory above it are grounded', () => {
     const brief = 'You scaffold src/skyscanner/client.ts and src/server.ts; tests live under src/skyscanner/.';
@@ -378,6 +378,20 @@ describe('a path the PRD declares a story will create is grounded, even on an em
   it('with nothing declared the empty codeline grounds nothing — the brownfield rule is unchanged', () => {
     const brief = 'You scaffold src/skyscanner/client.ts for the client.';
     expect(roster.ungroundedBriefPaths({ systemPrompt: brief, codeline: 'app', kind: 'investigator' }, empty())).toEqual(['src/skyscanner/client.ts']);
+  });
+
+  // A SLASH-JOINED LIST IS PROSE, NOT A PATH. Run 20260916T223442Z: the detective's brief said
+  // "package.json/tsconfig.json/src/" — three declared things written with slashes between them —
+  // and the whole token was refused as one nonexistent path, on every mint attempt.
+  it('a slash-joined list of declared files and directories is read as a list, not one path', () => {
+    const brief = 'Read package.json/tsconfig.json/src/ before proposing anything.';
+    expect(roster.ungroundedBriefPaths({ systemPrompt: brief, codeline: 'app', kind: 'investigator' }, empty(), declared)).toEqual([]);
+  });
+
+  it('a slash-joined list whose pieces are NOT declared is still reported, piece by piece', () => {
+    const brief = 'Read vendor.json/legacy.cfg/old/ before proposing anything.';
+    expect(roster.ungroundedBriefPaths({ systemPrompt: brief, codeline: 'app', kind: 'investigator' }, empty(), declared))
+      .toEqual(['vendor.json', 'legacy.cfg', 'old/']);
   });
 });
 

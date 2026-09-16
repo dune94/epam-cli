@@ -4230,9 +4230,14 @@ Do not propose a role that duplicates one of the canonical roles already listed 
   // candidates at all: the failure surfaces far downstream of its cause. The re-proposal is told
   // exactly what was refused and why. Merging is additive and convergent, so anything minted on
   // the first attempt is kept and only the gap is re-proposed.
-  const _maxAttempts = Math.max(1, Number(process.env.EPAM_ROSTER_MINT_ATTEMPTS || '2'));
+  // THE MINT IS A SEAM LIKE ANY OTHER: the retry budget every seam honours, and each re-proposal
+  // asked at the next rung of the mint's ladder (run 20260916T223442Z: two attempts on one rung,
+  // the same two refusals twice, then FAILED before the first story).
+  const _maxAttempts = Math.max(1, Number(process.env.EPAM_ROSTER_MINT_ATTEMPTS
+    || (1 + Number(process.env.SEAM_MAX_RETRIES || process.env.SPEC_AGENT_MAX_RETRIES || '3'))));
   while (result.rejected.length && attempts < _maxAttempts) {
     attempts += 1;
+    const _rungEnv = seamInvocationEnvAtRung('agent-mint', logDir, attempts - 1);
     const refusedBlock = [
       'YOUR PREVIOUS PROPOSAL WAS PARTLY REFUSED. Each line is a proposal that was NOT accepted,',
       'and the reason it failed the roster contract. Re-propose those roles correcting exactly',
@@ -4246,7 +4251,7 @@ Do not propose a role that duplicates one of the canonical roles already listed 
       promptExec, `${refusedBlock}${prompt}`, TOOL_PROJECT_AGENTS, 'PROJECT_AGENTS',
       logDir ? path.join(logDir, `project-agents-mint-attempt${attempts}.log`) : null,
       null, '', repoPath || '',
-      _mintEnv,
+      { ..._rungEnv, ..._mintEnv },
     );
     const retryProposals =
       (retryPayload && Array.isArray(retryPayload.proposedAgents)) ? retryPayload.proposedAgents : [];

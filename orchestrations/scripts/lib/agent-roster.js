@@ -223,8 +223,30 @@ function ungroundedBriefPaths(proposal, codelines, declaredPaths) {
     return roots.has(segs[0]);
   };
 
-  const cited = [...new Set(brief.match(CANDIDATE_RE) || [])]
-    .filter(looksLikePath)
+  // A SLASH-JOINED LIST IS PROSE, NOT A PATH. "package.json/tsconfig.json/src/" names three
+  // things with slashes between them; read as one path it exists nowhere and the brief was
+  // refused on every attempt (run 20260916T223442Z). A directory segment does not carry a file
+  // extension, so a token whose NON-final segment looks like a file is split at that segment and
+  // each piece is judged on its own — a piece that is not grounded is still reported.
+  const asList = (tok) => {
+    const segs = tok.split('/');
+    const inner = segs.slice(0, -1).filter(Boolean);
+    if (!inner.some((sg) => /\.[A-Za-z0-9]{1,8}$/.test(sg))) return [tok];
+    const out = []; let cur = [];
+    for (let i = 0; i < segs.length; i += 1) {
+      cur.push(segs[i]);
+      const last = i === segs.length - 1;
+      if (!last && /\.[A-Za-z0-9]{1,8}$/.test(segs[i])) { out.push(cur.join('/')); cur = []; }
+    }
+    if (cur.length) out.push(cur.join('/') + (tok.endsWith('/') && !cur.join('/').endsWith('/') ? '/' : ''));
+    return out.filter(Boolean);
+  };
+  const cited = [...new Set((brief.match(CANDIDATE_RE) || []).flatMap((tok) => {
+    const pieces = asList(tok);
+    // A whole token is judged by shape; the pieces of a list came from a path-shaped token and
+    // are each judged (a bare `old/` is a directory reference once it stands alone).
+    return pieces.length === 1 ? pieces.filter(looksLikePath) : pieces;
+  }))]
     // Trailing punctuation from prose ("at src/x.ts.") is not part of the path.
     .map((p) => p.replace(/[.,;:)\]]+$/, ''))
     .filter(Boolean)

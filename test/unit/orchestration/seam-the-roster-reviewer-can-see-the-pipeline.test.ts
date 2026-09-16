@@ -40,13 +40,26 @@ describe('the roster reviewer is shown the stages that run alongside the roster'
       .toContain('__PIPELINE_STAGES__');
   });
 
-  it('lists EVERY declared seam — derived from the registry, not written down', () => {
+  it('lists EVERY seam that applies to the mode — derived from the registry, not written down', () => {
     const declared = Object.keys(registry.profiles || {});
     expect(declared.length, 'the registry declares no seams — the fixture is empty').toBeGreaterThan(0);
-    const block = pipelineStagesBlock();
+    const block = pipelineStagesBlock(new Set(['brownfield', 'multi-story']));
     for (const seam of declared) {
+      const applies = (registry.profiles[seam] || {}).appliesTo;
+      if (Array.isArray(applies) && !applies.includes('brownfield') && !applies.includes('multi-story')) continue;
       expect(block, `the reviewer is not shown the '${seam}' stage`).toContain(seam);
     }
+  });
+
+  // skyscanner 20260916T224527Z: a greenfield reviewer was shown repro-test-writer (brownfield
+  // only) and blocked the roster on every cycle reasoning about a stage the run never reaches.
+  it('a greenfield reviewer is NOT shown a stage that applies to brownfield only', () => {
+    const brownfieldOnly = Object.entries(registry.profiles || {})
+      .filter(([, p]: any) => Array.isArray(p && p.appliesTo) && p.appliesTo.includes('brownfield') && !p.appliesTo.includes('greenfield'))
+      .map(([seam]) => seam);
+    expect(brownfieldOnly.length, 'no seam declares itself brownfield-only — this assertion would be vacuous').toBeGreaterThan(0);
+    const block = pipelineStagesBlock(new Set(['greenfield']));
+    for (const seam of brownfieldOnly) expect(block, `greenfield reviewer shown brownfield-only stage '${seam}'`).not.toContain(`- ${seam}`);
   });
 
   it('REPRODUCES run 13: a brief deferring test work names a stage the reviewer can now find', () => {
@@ -58,7 +71,7 @@ describe('the roster reviewer is shown the stages that run alongside the roster'
       .map(([seam]) => seam);
     expect(testStages.length, 'no seam declares it produces anything test-related — '
       + 'the briefs deferring test work would then be correctly refused').toBeGreaterThan(0);
-    const block = pipelineStagesBlock();
+    const block = pipelineStagesBlock(new Set(['brownfield', 'multi-story']));
     for (const seam of testStages) expect(block).toContain(seam);
   });
 

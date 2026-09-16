@@ -2,7 +2,7 @@
   "id": "test-ownership",
   "layer": "project",
   "version": 1,
-  "description": "Who owns the test for a brownfield fix. ONE policy, rendered into BOTH the writer and the reviewer, so neither can hold a belief the other contradicts.",
+  "description": "Who owns the tests. ONE policy per MODE, rendered into the mint (what a brief may claim), the writer and the reviewer, so no agent holds a belief another contradicts.",
   "$why": [
     "This lived as a heredoc in claude.sh — the WRITER's prompt builder — and nowhere else.",
     "team-lead-review.sh had never heard of it and was told 'Check: ... test coverage', so it",
@@ -17,12 +17,20 @@
     "",
     "The file patterns are NOT decoration: without them \"a test file\" is left to the agent to",
     "interpret. An existing test asserts they are present, and caught their loss the moment this",
-    "policy was first extracted."
+    "policy was first extracted.",
+    "",
+    "2026-09-16, skyscanner greenfield: the mint carried its own copy of the brownfield rule as a string in",
+    "spec-mode-runner.js ('a dedicated agent of this pipeline writes the tests'), so every greenfield brief",
+    "disowned its stories' test files; the roster reviewer then found, correctly, that no stage in a greenfield",
+    "run authors feature tests, and blocked the roster on every cycle. In greenfield the implementer owns the",
+    "test files its stories declare. The mode picks the body; the mint renders it from here."
   ],
   "placeholders": [],
   "bodies": {
     "writer": "## Tests are NOT your job this turn\nA dedicated test-writer agent runs immediately after your fix commits and owns the bug-reproducing test. Do NOT write, edit, or create any test file (*.test.*, *.spec.*, __tests__/). Write ONLY the fix.\n\nThis is not a suggestion you can trade against a review comment: the reviewer has been given the same rule and will not reject you for absent tests. If a prior review comment appears to demand a test, it is stale — resolve it by making the fix correct, and say in your final message that test authorship belongs to the test-writer.\n\nAdding a test here wastes your turn budget and has caused repeated failures.",
-    "reviewer": "## Test authorship is NOT this agent's responsibility\nThe implementer you are reviewing was explicitly forbidden to write, edit or create any test file (*.test.*, *.spec.*, __tests__/). A dedicated test-writer agent runs after the fix commits and owns that work, and its output is reviewed separately.\n\nTherefore: NEVER raise a blocker, or any finding, for absent or insufficient tests on the implementer's change. It could not have satisfied it, so the story cannot progress — that is an unwinnable gate, and it has cost whole runs.\n\nJudge the FIX: does it address the prescribed root cause, is it the smallest change that does so, does it preserve what the existing code guaranteed. Test coverage is checked elsewhere, by the coverage gate and by the test-writer's own review."
+    "reviewer": "## Test authorship is NOT this agent's responsibility\nThe implementer you are reviewing was explicitly forbidden to write, edit or create any test file (*.test.*, *.spec.*, __tests__/). A dedicated test-writer agent runs after the fix commits and owns that work, and its output is reviewed separately.\n\nTherefore: NEVER raise a blocker, or any finding, for absent or insufficient tests on the implementer's change. It could not have satisfied it, so the story cannot progress — that is an unwinnable gate, and it has cost whole runs.\n\nJudge the FIX: does it address the prescribed root cause, is it the smallest change that does so, does it preserve what the existing code guaranteed. Test coverage is checked elsewhere, by the coverage gate and by the test-writer's own review.",
+    "mint-brownfield": "WHO WRITES THE TESTS — NOT THESE ROLES.\n\nA dedicated agent of this pipeline writes the tests. It takes its own turn after the fix is committed and owns the reproducing test, and the roles you propose are separately FORBIDDEN from creating or editing any test file.\n\nSo: do not propose a test-writing, QA or test-automation role — that work is already owned. And a brief must not say the role writes, owns, colocates or maintains tests, in any words. A role whose brief claims test authorship is handed two contradictory instructions and spends its turns fighting itself. Describe what the role BUILDS.\n",
+    "mint-greenfield": "WHO WRITES THE TESTS — THESE ROLES DO.\n\nThis is a greenfield run: the codeline is built from nothing and no separate stage of this pipeline authors feature tests. The implementer you propose OWNS every test file its stories declare (the *.test.* / *.spec.* files named in the tickets) and writes them alongside the code, so the story's acceptance criteria can be executed.\n\nSo: do not propose a separate test-writing, QA or test-automation role, and a brief must not defer test authorship to another stage — there is none. Say plainly that the role writes the tests its stories declare.\n"
   },
   "seams": [
     "team-lead-review"

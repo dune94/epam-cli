@@ -4041,19 +4041,17 @@ async function mintProjectAgents({
     '',
   ].join('\n');
 
-  const testOwnershipRule = [
-    'WHO WRITES THE TESTS — NOT THESE ROLES.',
-    '',
-    'A dedicated agent of this pipeline writes the tests. It takes its own turn after the fix',
-    'is committed and owns the reproducing test, and the roles you propose are separately',
-    'FORBIDDEN from creating or editing any test file.',
-    '',
-    'So: do not propose a test-writing, QA or test-automation role — that work is already owned.',
-    'And a brief must not say the role writes, owns, colocates or maintains tests, in any words.',
-    'A role whose brief claims test authorship is handed two contradictory instructions and',
-    'spends its turns fighting itself. Describe what the role BUILDS.',
-    '',
-  ].join('\n');
+  // WHO WRITES THE TESTS is a policy declared once, per mode, in prompts/test-ownership.json —
+  // the writer and reviewer render theirs from it, and so does the mint. A brownfield copy lived
+  // here as a string and told every greenfield brief to disown its stories' test files (skyscanner
+  // 20260916T224527Z: the reviewer blocked the roster on every cycle for deferring tests to a
+  // stage that does not run in greenfield).
+  const testOwnershipRule = (() => {
+    const mode = process.env.EPAM_BROWNFIELD === '1' ? 'brownfield' : 'greenfield';
+    const body = renderEngineTemplate('test-ownership', {}, `mint-${mode}`);
+    if (!String(body || '').trim()) throw new Error(`[mint] prompts/test-ownership.json renders no 'mint-${mode}' body — refusing to mint without the test-ownership policy`);
+    return `${body}\n`;
+  })();
 
   const prompt = `${correctiveBlock}${retainedBlock}${existingRosterBlock}${surveyBlock}${vendorClaimRule}${testOwnershipRule}${basePrompt}
 
@@ -4531,14 +4529,27 @@ function rosterCoverageBlock(minted, registry) {
  * Derived, never listed: each seam and what it declares it produces, straight from the registry.
  * Adding or removing a seam changes this block with no edit here and none in the template.
  */
-function pipelineStagesBlock() {
+function pipelineStagesBlock(modes) {
   const unreadable = '- (the seam registry could not be read — treat any claim about a pipeline '
     + 'stage as UNVERIFIABLE rather than false)';
+  // THE STAGES THAT RUN IN THIS MODE. Every seam declares the modes it applies to (appliesTo),
+  // read by the same declaration the harness uses. Listing every registered seam told a
+  // greenfield reviewer that repro-test-writer exists, which it does — in brownfield — and the
+  // reviewer then had to reason about a stage this run would never reach.
+  let _modes = modes;
+  if (!_modes) {
+    try {
+      const se = require('./lib/seams-expected.js');
+      const cfg = process.env.EPAM_PROJECT_CONFIG_DIR ? fs.readFileSync(path.join(process.env.EPAM_PROJECT_CONFIG_DIR, 'config.env'), 'utf8') : '';
+      _modes = se.projectModes(cfg || `EPAM_BROWNFIELD=${process.env.EPAM_BROWNFIELD || '0'}`, process.env.EPAM_PROJECT_CONFIG_DIR || '');
+    } catch { _modes = null; }
+  }
   try {
     // eslint-disable-next-line global-require
     const { registryPath } = require(path.join(__dirname, 'lib', 'seam-invocation.js'));
     const reg = JSON.parse(fs.readFileSync(registryPath(), 'utf8'));
     const rows = Object.entries(reg.profiles || {})
+      .filter(([, prof]) => !_modes || !Array.isArray(prof && prof.appliesTo) || prof.appliesTo.some((m) => _modes.has(m)))
       .map(([seam, prof]) => `- ${seam}${prof && prof.produces ? ` — produces ${prof.produces}` : ''}`)
       .sort();
     // ABSENT IS NOT EMPTY. A blank list would read as "the pipeline has no stages", licensing

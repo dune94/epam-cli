@@ -26,7 +26,7 @@ import { engineSource } from '../../lib/engine-source';
 import { engineSourceFile } from '../../lib/engine-source';
 
 const ROOT = join(__dirname, '../../..');
-engineSourceFile(join(ROOT, 'orchestrations/scripts/claude.sh')); // the awk lifts below read the inlined program
+const INLINED_CLAUDE_SH = engineSourceFile(join(ROOT, 'orchestrations/scripts/claude.sh')); // the awk lifts below read the inlined program
 const CLAUDE_SH = join(ROOT, 'orchestrations/scripts/claude.sh');
 const NODE = join(process.env.HOME || '', '.nvm/versions/node/v20.20.0/bin/node');
 const made: string[] = [];
@@ -56,8 +56,8 @@ AUTOMATION_DIR='${join(ROOT, 'orchestrations')}'
 NODE_CMD='${NODE}'
 source "$SCRIPT_DIR/lib/jq-vals.sh"
 source "$SCRIPT_DIR/lib/render-engine-prompt.sh"
-eval "$(awk '/^_project_dep_config_value\\(\\) \\{/,/^\\}/' "$SCRIPT_DIR/.inlined/claude.sh")"
-eval "$(awk '/^_project_install_command\\(\\) \\{/,/^\\}/' "$SCRIPT_DIR/.inlined/claude.sh")"
+eval "$(awk '/^_project_dep_config_value\\(\\) \\{/,/^\\}/' "${INLINED_CLAUDE_SH}")"
+eval "$(awk '/^_project_install_command\\(\\) \\{/,/^\\}/' "${INLINED_CLAUDE_SH}")"
 command -v _project_install_command >/dev/null || { echo "HARNESS DID NOT LIFT" >&2; exit 3; }
 run_extracted() {
   local PROJECT_ROOT='${projectRoot}'

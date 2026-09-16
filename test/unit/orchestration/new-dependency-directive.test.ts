@@ -76,7 +76,7 @@ function makeRepo(withManifest: boolean): string {
 }
 
 const ROOT = join(__dirname, '../../..');
-engineSourceFile(join(ROOT, 'orchestrations/scripts/claude.sh')); // the awk lifts below read the inlined program
+const INLINED_CLAUDE_SH = engineSourceFile(join(ROOT, 'orchestrations/scripts/claude.sh')); // the awk lifts below read the inlined program
 const NODE = join(process.env.HOME || '', '.nvm/versions/node/v20.20.0/bin/node');
 
 function run(block: string, env: NodeJS.ProcessEnv, projectRoot: string): string {
@@ -94,8 +94,8 @@ source "$SCRIPT_DIR/lib/render-engine-prompt.sh"
 # argv). Unsourced it is command-not-found, the values file is EMPTY, and the render fails
 # — which reads here as "the directive did not fire".
 source "$SCRIPT_DIR/lib/jq-vals.sh"
-eval "$(awk '/^_project_dep_config_value\\(\\) \\{/,/^\\}/' "$SCRIPT_DIR/.inlined/claude.sh")"
-eval "$(awk '/^_project_install_command\\(\\) \\{/,/^\\}/' "$SCRIPT_DIR/.inlined/claude.sh")"
+eval "$(awk '/^_project_dep_config_value\\(\\) \\{/,/^\\}/' "${INLINED_CLAUDE_SH}")"
+eval "$(awk '/^_project_install_command\\(\\) \\{/,/^\\}/' "${INLINED_CLAUDE_SH}")"
 # A HARNESS THAT LIFTED NOTHING MUST NOT LOOK LIKE A DIRECTIVE THAT CORRECTLY STAYED SILENT.
 # The awk patterns above lost their backslashes through the template literal once already, which
 # defined no functions, emitted no directive, and made every empty-string expectation below pass.

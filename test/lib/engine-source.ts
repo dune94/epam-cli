@@ -10,10 +10,11 @@
  * split's layout record (tools/split-maps/<main>.golden.json: kept runs of main lines and moved
  * functions, in their original order) and the CURRENT module files (so an edit to a module is
  * seen). engineSourceFile(main) writes it beside the real file (gitignored) for tests that lift
- * with awk/sed in a shell. Neither is for EXECUTING the main — bash runs the real file.
+ * with awk/sed in a shell (under the OS temp dir). Neither is for EXECUTING the main — bash runs the real file.
  */
 import { readFileSync, existsSync, writeFileSync, mkdirSync } from 'node:fs';
 import { dirname, join, basename } from 'node:path';
+import { tmpdir } from 'node:os';
 import { spawnSync } from 'node:child_process';
 
 const FN = /^([A-Za-z_][A-Za-z0-9_]*)\(\)\s*\{/;
@@ -72,7 +73,10 @@ export function engineSource(mainPath: string): string {
 }
 
 export function engineSourceFile(mainPath: string): string {
-  const dir = join(dirname(mainPath), '.inlined');
+  // OUTSIDE the scripts tree: a copy under orchestrations/scripts/.inlined was found by every
+  // scanner that walks that tree — the shell-defect scan ran shellcheck over two extra 12k-line
+  // monoliths and was OOM-killed under the memory cap.
+  const dir = join(tmpdir(), 'epam-inlined');
   mkdirSync(dir, { recursive: true });
   const out = join(dir, basename(mainPath));
   writeFileSync(out, engineSource(mainPath));

@@ -70,18 +70,61 @@ if (!files.length) die(`no shell files found under ${SCAN_DIR} — the scan woul
 
 // shellcheck exits 1 when it HAS findings; that is a successful run, not a failure. Only a missing
 // binary or a crash (>1, or no parseable output) means it could not do its job.
-const r = spawnSync('shellcheck', ['-f', 'json', '-S', 'warning', ...files],
-  { encoding: 'utf8', maxBuffer: 64 * 1024 * 1024 });
-if (r.error) die(`shellcheck could not run: ${r.error.message}`);
-let findings;
-try {
-  findings = JSON.parse(r.stdout || '[]');
-} catch {
-  die(`shellcheck produced no parseable report (exit ${r.status}): ${(r.stderr || '').slice(0, 300)}`);
+// ONE FILE PER PROCESS. shellcheck's memory grows worse than linearly with what it is handed;
+// one call over every script in the tree exceeded the host's memory cap and the whole preflight
+// was killed (2026-09-16). Per file the largest costs ~2 GB (the orchestrator's loop) and the
+// rest a few hundred MB; the findings are the same list either way.
+const findings = [];
+for (const f of files) {
+  const r = spawnSync('shellcheck', ['-f', 'json', '-S', 'warning', f], { encoding: 'utf8', maxBuffer: 64 * 1024 * 1024 });
+  if (r.error) die(`shellcheck could not run on ${f}: ${r.error.message}`);
+  let part;
+  try {
+    part = JSON.parse(r.stdout || '[]');
+  } catch {
+    die(`shellcheck produced no parseable report for ${f} (exit ${r.status}): ${(r.stderr || '').slice(0, 300)}`);
+  }
+  if (!Array.isArray(part)) die(`shellcheck report for ${f} was not a list of findings`);
+  findings.push(...part);
 }
 if (!Array.isArray(findings)) die('shellcheck report was not a list of findings');
 
-for (const f of findings) {
+// A SPLIT PROGRAM IS JUDGED AS ONE PROGRAM. shellcheck reads one file at a time; a variable the
+// entrypoint assigns and a module uses is "unused" in the one and "unassigned" in the other, and
+// a `cd` in a module reads as unguarded although the module only ever runs under the entrypoint's
+// `set -e`. tools/split-maps declares which modules belong to which entrypoint (the 2026-09-16
+// split of the two mains), so those three verdicts are re-read across the program: a name
+// assigned in one member and referenced in another is neither unused nor unassigned, and a `cd`
+// in a module of an entrypoint that sets -e is guarded. Everything else stands as reported.
+const program = (() => {
+  const out = new Map(); // file (relative) -> [member files]
+  const maps = path.join(ROOT, 'orchestrations/scripts/tools/split-maps');
+  if (!require('node:fs').existsSync(maps)) return out;
+  for (const f of require('node:fs').readdirSync(maps)) {
+    if (!f.endsWith('.json') || f.endsWith('.golden.json') || f === 'ceilings.json') continue;
+    const main = `orchestrations/scripts/${f.replace(/\.json$/, '')}`;
+    let modules = [];
+    try { modules = Object.keys(JSON.parse(require('node:fs').readFileSync(path.join(maps, f), 'utf8'))).filter((m) => m !== '.').map((m) => `orchestrations/scripts/lib/${m}.sh`); } catch { continue; }
+    const members = [main, ...modules];
+    for (const m of members) out.set(m, { main, members });
+  }
+  return out;
+})();
+const textOf = new Map();
+const text = (rel) => { if (!textOf.has(rel)) { try { textOf.set(rel, require('node:fs').readFileSync(path.join(ROOT, rel), 'utf8')); } catch { textOf.set(rel, ''); } } return textOf.get(rel); };
+const usedElsewhere = (rel, name) => (program.get(rel) || { members: [] }).members
+  .some((m) => m !== rel && new RegExp(`(\\$\\{?${name}\\b|^\\s*(?:export\\s+|local\\s+)?${name}=)`, 'm').test(text(m)));
+const kept = findings.filter((f) => {
+  const rel = String(f.file || '').replace(`${ROOT}/`, '');
+  const prog = program.get(rel);
+  if (!prog) return true;
+  const m = /\b([A-Za-z_][A-Za-z0-9_]*) (?:appears unused|is referenced but not assigned)/.exec(String(f.message || ''));
+  if ((f.code === 2034 || f.code === 2154) && m && usedElsewhere(rel, m[1])) return false;
+  if (f.code === 2164 && rel !== prog.main && /^set -[a-z]*e/m.test(text(prog.main))) return false;
+  return true;
+});
+
+for (const f of kept) {
   const rel = String(f.file || '').replace(`${ROOT}/`, '');
   process.stdout.write(`${rel}:${f.line}:${f.column} SC${f.code} ${f.level} ${f.message}\n`);
 }

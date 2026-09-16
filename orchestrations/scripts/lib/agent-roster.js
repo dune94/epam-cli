@@ -163,6 +163,47 @@ function resolvesIn(repoPath, cited) {
     : e.startsWith(base + '.'));
 }
 
+/**
+ * THE PATHS THE STORIES NAME — declared files, and every path written into their own text.
+ *
+ * The mint's briefs cite what the tickets say: SKY-004's description says "serve src/public/
+ * index.html" and "build to dist/public/", so the engineer's brief said so too, and the
+ * `files` arrays alone did not cover it (run 20260916T223852Z: the implementer was refused on
+ * every cycle for citing the story's own words, and the mint failed). A path-shaped token in a
+ * story is the run's own statement that it will exist. Derived from the tickets handed to the
+ * mint, whatever fields they carry; nothing here names a field of one tracker.
+ */
+function declaredPathsOf(tickets) {
+  const out = new Set();
+  const clean = (v) => String(v || '').replace(/^\.\//, '').replace(/[.,;:)\]]+$/, '').replace(/\/+$/, '');
+  const add = (v) => { const n = clean(v); if (n && !n.split('/').includes('..')) out.add(n); };
+  const list = Array.isArray(tickets) ? tickets : [];
+  // Declared files first: their top-level directories are the roots a two-segment token may
+  // start with — the same rule the brief check applies with the codeline's real directories.
+  for (const t of list) {
+    if (!t || typeof t !== 'object') continue;
+    const tn = t.technicalNotes || {};
+    for (const v of [tn.files, tn.deliverables, t.files, t.deliverables]) if (Array.isArray(v)) v.forEach(add);
+  }
+  const roots = new Set([...out].map((p) => p.split('/')[0]).filter((r) => r && !r.includes('.')));
+  const tokens = [];
+  for (const t of list) {
+    if (!t || typeof t !== 'object') continue;
+    for (const raw of JSON.stringify(t).match(/\b[A-Za-z0-9_.\-[\]]+(?:\/[A-Za-z0-9_.\-[\]]*)+\/?/g) || []) tokens.push(raw);
+  }
+  // TWO PASSES. Directories the stories name (a trailing slash, or three segments deep) are roots;
+  // then a two-segment file token counts only under a root the stories declare somewhere —
+  // "TypeScript/Node.js" is a phrase, "dist/server.js" is a path once "dist/public/" is known.
+  const shapedTokens = tokens.map((raw) => ({ raw, tok: clean(raw), segs: clean(raw).split('/') })).filter((x) => x.segs.length >= 2);
+  for (const x of shapedTokens) {
+    if (x.raw.endsWith('/') || x.segs.length >= 3) { add(x.tok); if (!x.segs[0].includes('.')) roots.add(x.segs[0]); }
+  }
+  for (const x of shapedTokens) {
+    if (x.segs.length === 2 && /\.[A-Za-z0-9]{1,8}$/.test(x.segs[1]) && roots.has(x.segs[0])) add(x.tok);
+  }
+  return [...out];
+}
+
 function ungroundedBriefPaths(proposal, codelines, declaredPaths) {
   const brief = proposal && typeof proposal.systemPrompt === 'string' ? proposal.systemPrompt : '';
   const list = Array.isArray(codelines) ? codelines.filter((c) => c && c.name && c.path) : [];
@@ -911,6 +952,7 @@ function kindOfAgent(agent, agentsDir) {
 }
 
 module.exports = {
+  declaredPathsOf,
   kindOfAgent,
   partitionRosterFindings,
   kbFileForCodeline,

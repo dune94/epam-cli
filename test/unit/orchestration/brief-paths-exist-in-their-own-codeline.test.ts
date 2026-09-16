@@ -393,5 +393,20 @@ describe('a path the PRD declares a story will create is grounded, even on an em
     expect(roster.ungroundedBriefPaths({ systemPrompt: brief, codeline: 'app', kind: 'investigator' }, empty(), declared))
       .toEqual(['vendor.json', 'legacy.cfg', 'old/']);
   });
+
+  // THE STORIES' OWN WORDS DECLARE PATHS TOO. Run 20260916T223852Z: SKY-004's description says
+  // "serve src/public/index.html" and "dist/public/"; the engineer's brief repeated it and was
+  // refused on every correction cycle because only the `files` arrays were consulted.
+  it('a path named in a story\'s text grounds a brief, as a declared file does', () => {
+    const tickets = [
+      { id: 'SKY-001', technicalNotes: { files: ['package.json', 'src/server.ts'] }, description: 'Entry point src/index.ts compiles to dist/server.js.' },
+      { id: 'SKY-004', description: 'Serve src/public/index.html from the built dist/public/ directory (TypeScript/Node.js, Express).' },
+    ];
+    const paths = roster.declaredPathsOf(tickets);
+    expect(paths).toEqual(expect.arrayContaining(['package.json', 'src/index.ts', 'dist/server.js', 'src/public/index.html', 'dist/public']));
+    expect(paths, 'a product name is not a path').not.toContain('TypeScript/Node.js');
+    const brief = 'You write src/index.ts and serve src/public/index.html; builds land in dist/public/.';
+    expect(roster.ungroundedBriefPaths({ systemPrompt: brief, codeline: 'app', kind: 'implementer' }, empty(), paths)).toEqual([]);
+  });
 });
 

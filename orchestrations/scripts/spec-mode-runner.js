@@ -4214,10 +4214,7 @@ Do not propose a role that duplicates one of the canonical roles already listed 
   // THE PATHS THE STORIES DECLARE THEY WILL CREATE — grounding for a brief on a codeline that
   // does not hold them yet (a greenfield init commit). Read from whatever the tickets carry:
   // technicalNotes.files, files, deliverables — the same fields the deliverable check reads.
-  const declaredPaths = [...new Set((Array.isArray(tickets) ? tickets : []).flatMap((t) => {
-    const tn = (t && t.technicalNotes) || {};
-    return [tn.files, tn.deliverables, t && t.files, t && t.deliverables].flatMap((v) => (Array.isArray(v) ? v : [])).filter((x) => typeof x === 'string');
-  }))];
+  const declaredPaths = require('./lib/agent-roster.js').declaredPathsOf(tickets);
   let result = mergeProjectAgents({ profilesPath, agentsDir, proposals, codelines, declaredPaths });
   _persistProposals(1, proposals, result.rejected);
   let attempts = 1;

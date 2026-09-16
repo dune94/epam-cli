@@ -248,6 +248,27 @@ run_provider_once() {
       runner_args+=(--max-budget-usd "$EPAM_STORY_BUDGET_HARD_LIMIT_USD")
     fi
 
+    # BIND THE TOOL GRANT AT THE RUNNER, WHERE IT CAN ACTUALLY BE ENFORCED.
+    #
+    # A seam declares its grant kind and it travels as EPAM_ALLOWED_TOOLS with AI_GATE_ALLOW_TOOLS.
+    # The `epam run` arm below honours both; the one-shot CLI arms ran `--dangerously-skip-
+    # permissions` with the runner's whole tool set, so a read-only reviewer had a shell. Run
+    # 20260916T225207Z: project-roster-review ran `find / -iname prd.json`, read five earlier
+    # runs' cassettes out of the pipeline repo and refused the roster for disagreeing with them.
+    #
+    # The grant is translated through the RUNNER'S declared vocabulary (toolNames in its settings
+    # declaration) and passed with the flag the installed CLI advertises — the same probe the two
+    # bindings above use. Nothing is named here: which pipeline tool is which runner tool is the
+    # runner declaration's fact. A seam with no grant is passed nothing and keeps the default set.
+    if [ "${AI_GATE_ALLOW_TOOLS:-0}" = "1" ] && [ -n "${EPAM_ALLOWED_TOOLS:-}" ] \
+       && declare -F runner_tools_for_grant >/dev/null 2>&1 \
+       && "$(runner_bin_for "${PRIMARY_PROVIDER:-}" "$CLAUDE_CMD")" --help 2>/dev/null | grep -q -- '--tools'; then
+      local _runner_tools
+      if _runner_tools="$(runner_tools_for_grant "$EPAM_ALLOWED_TOOLS")"; then
+        runner_args+=(--tools "$_runner_tools")
+      fi
+    fi
+
 
   case "$provider" in
     claude)
@@ -911,6 +932,10 @@ for provider in "${providers[@]}"; do
           "${_trace_reply:-/dev/null}" "${EPAM_AGENT_NAME:-agent}" >/dev/null 2>&1 || true
     fi
     [ -n "$out" ] && printf '%s\n' "$out"
+    # A SUCCESSFUL CALL'S STDERR IS PASSED ON, NOT THROWN AWAY. It carried the hub's own notices —
+    # a granted tool the runner does not declare, dropped from the binding — and discarding it made
+    # that omission silent in the run log. A success has nothing to hide.
+    [ -s "$err_file" ] && cat "$err_file" >&2
     rm -f "$err_file"
     exit 0
   fi

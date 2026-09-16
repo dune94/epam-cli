@@ -83,6 +83,7 @@ _expand_magnitude() {
 apply_runner_settings() {
     local _runner="${1:-}" _projdir="${2:-}"
     [ -n "$_runner" ] || return 0
+    declare -gA RUNNER_TOOL_NAMES=()
 
     local _libdir _resolver
     _libdir=$(cd "$(dirname "${BASH_SOURCE[0]}")" && pwd) || return 1
@@ -107,6 +108,7 @@ apply_runner_settings() {
       for (const n of (r.unsetEnv || [])) process.stdout.write("U " + n + "\n");
       for (const [k, v] of Object.entries(r.env))   process.stdout.write("E " + k + " " + v + "\n");
       for (const [k, v] of Object.entries(r.flags)) process.stdout.write("F " + k + " " + v + "\n");
+      for (const [k, v] of Object.entries(r.toolNames || {})) process.stdout.write("T " + k + " " + [].concat(v).join(",") + "\n");
     ' "$_resolver" "$_runner" "$_projdir" 2>/dev/null) || return 0
     [ -n "$_decl" ] || return 0
 
@@ -114,6 +116,9 @@ apply_runner_settings() {
     while read -r _kind _a _b; do
         case "$_kind" in
             A)  RUNNER_FLAGS+=("$_a") ;;
+            # T <pipeline tool> <runner tool[,runner tool]> — the runner's vocabulary for a tool the
+            # pipeline grants by its own name. Read by runner_tools_for_grant.
+            T)  RUNNER_TOOL_NAMES["$_a"]="$_b" ;;
             # A CREDENTIAL THE RUNNER PREFERS IS NOT REMOVED BY SETTING ANYTHING.
             # Claude Code picks ANTHROPIC_API_KEY over the OAuth credentials on disk, so with
             # the key present the subscription never pays — which is the only reason this
@@ -139,6 +144,32 @@ apply_runner_settings() {
                 ;;
         esac
     done <<< "$_decl"
+    return 0
+}
+
+# runner_tools_for_grant <pipeline-grant-csv>
+#
+# THE SEAM'S GRANT, IN THE RUNNER'S OWN WORDS. Each pipeline tool name in the grant is translated
+# through the runner's declared toolNames (filled by apply_runner_settings); a name the runner does
+# not declare does not exist on it and is dropped, named on stderr so the omission is visible in the
+# run log. Prints the runner-side list, comma-separated, de-duplicated, in grant order. Prints
+# nothing and returns 1 when the runner declares no vocabulary at all — the caller then binds no
+# restriction, exactly as before, rather than an empty one it cannot justify.
+runner_tools_for_grant() {
+    local _grant="${1:-}"
+    [ "${#RUNNER_TOOL_NAMES[@]}" -gt 0 ] || return 1
+    local _out=() _seen="," _name _mapped _m _dropped=()
+    local IFS=','
+    for _name in $_grant; do
+        [ -n "$_name" ] || continue
+        _mapped="${RUNNER_TOOL_NAMES[$_name]:-}"
+        if [ -z "$_mapped" ]; then _dropped+=("$_name"); continue; fi
+        for _m in $_mapped; do
+            case "$_seen" in *",$_m,"*) ;; *) _out+=("$_m"); _seen="$_seen$_m,";; esac
+        done
+    done
+    [ "${#_dropped[@]}" -eq 0 ] || echo "[runner-settings] tool(s) granted but not declared by this runner, dropped: ${_dropped[*]}" >&2
+    printf '%s' "${_out[*]}"
     return 0
 }
 

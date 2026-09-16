@@ -158,6 +158,15 @@
       "$whyNoTurnCap": "maxIterations is deliberately absent. It binds the ReAct loop in src/agent/AgentRunner.ts, which only the `epam run` arm enters; a --print call has no turn cap and the loop is Claude Code's own. Declaring one here would name a knob nothing can turn.",
       "$whyNoOutputCap": "maxOutputTokens is deliberately unmapped: the installed CLI documents no flag or env for it. It stays declared in modelOverrides so the intent is visible, and is not routed anywhere pretending to work.",
       "emitsTraces": true,
+      "toolNames": {
+        "read_file": ["Read"],
+        "list_files": ["Glob"],
+        "search": ["Grep"],
+        "fetch_url": ["WebFetch"],
+        "bash": ["Bash"],
+        "write_file": ["Write", "Edit"]
+      },
+      "$whyToolNames": "A SEAM'S TOOL GRANT IS BOUND AT THE RUNNER, LIKE ITS SCHEMA AND ITS BUDGET. Every seam declares a grant kind (none, read-only, execute, write-file...) and it travels as EPAM_ALLOWED_TOOLS; that variable was read in ONE place, src/agent/AgentRunner.ts on the `epam run` arm, so on this runner it bound NOTHING and every seam ran `--print --dangerously-skip-permissions` with the CLI's whole tool set. Run 20260916T225207Z (skyscanner): project-roster-review, declared read-only, ran `find / -iname prd.json` and read five earlier runs' cassettes out of the pipeline repo, then refused the roster for disagreeing with them. The 2026-09-12 roster specialiser, declared write-file, spent ~350 shell calls copying a repository. This map is the runner's own vocabulary for the pipeline's tool names (`claude --help`: --tools takes built-in tool names; \"\" disables all). llm-handler.sh translates the grant through it and passes --tools when the installed CLI advertises the flag. A pipeline tool with no entry here does not exist on this runner and is dropped from the list, said aloud on stderr. A seam with NO grant (kind none) is passed nothing and keeps the CLI's default set: --tools \"\" may also remove the StructuredOutput tool --json-schema requires, and that has not been proven either way, so it is not done blind.",
       "$emitsTraces": "Whether model calls made through this runner reach Langfuse. TRUE for every runner: traces are emitted by lib/cost-emitter.js at the cost seam \u2014 the point every arm passes through with its model, tokens, cost and timing resolved \u2014 not by the TypeScript provider decorator, which only the epam arm reaches. Verified end-to-end 2026-09-04 by driving the real emitter and reading the session back out of Langfuse."
     }
   }

@@ -234,6 +234,10 @@ function resolveRunner(runnerName, { projectConfigDir, defaultsFile } = {}) {
     readTool: declared.readTool && typeof declared.readTool === 'object' ? declared.readTool : null,
     // The tool this runner declares for schema-bound output and requires the reply to call.
     structuredOutputTool: typeof declared.structuredOutputTool === 'string' ? declared.structuredOutputTool : '',
+    // The runner's names for the pipeline's tools: pipeline name -> [runner tool, ...]. A seam's
+    // grant (EPAM_ALLOWED_TOOLS) is translated through this at the hub and bound with the
+    // runner's own restriction flag; a name absent here does not exist on this runner.
+    toolNames: declared.toolNames && typeof declared.toolNames === 'object' ? declared.toolNames : {},
   };
 }
 /** Every runner the active stack declares, by name. */
@@ -297,7 +301,7 @@ function runnerValues(runnerName, { projectConfigDir, defaultsFile } = {}) {
   // unsetEnv carries NAMES ONLY — there is no value to resolve, because the whole point is
   // that the variable must not be there. It passes through untouched.
   const out = { env: {}, flags: {}, alwaysFlags: runner.alwaysFlags, unsetEnv: runner.unsetEnv,
-                envNames: {}, flagNames: {} };
+                envNames: {}, flagNames: {}, toolNames: runner.toolNames };
   for (const [k, name] of Object.entries(runner.env)) { out.env[k] = valueFor(name); out.envNames[k] = name; }
   for (const [k, name] of Object.entries(runner.flags)) { out.flags[k] = valueFor(name); out.flagNames[k] = name; }
   return out;

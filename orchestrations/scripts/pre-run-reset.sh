@@ -571,13 +571,17 @@ elif [ -n "${_RUN_ARTIFACT_DIR:-}" ] && [ -d "$_RUN_ARTIFACT_DIR" ]; then
     # codeline name — api, web, src — feed each other's. Found 2026-08-26 by the seam test that
     # asserts the rule rather than the instance, immediately after the Contentstack document leak
     # was fixed. Fourth artefact of this class.
-    for _td in referenced-docs.json ticket-documents.json estate-survey.json; do
+    # codeline-discovery.json and mint-inputs.json joined this list 2026-09-16: the greenfield
+    # skyscanner mint read a mock3 run's discovery (mock-a, mock-b) left here two days earlier,
+    # minted investigators for repositories the project does not have, and the roster review
+    # refused a roster with no implementer — the run aborted before its first story.
+    for _td in referenced-docs.json ticket-documents.json estate-survey.json codeline-discovery.json mint-inputs.json; do
         while IFS= read -r _f; do
             [ -n "$_f" ] || continue
             rm -f "$_f" 2>/dev/null && _TD_CLEARED=$((_TD_CLEARED+1)) || true
         done <<< "$(find "$_RUN_ARTIFACT_DIR" -type f -name "$_td" 2>/dev/null)"
     done
-    _TD_LEFT=$(find "$_RUN_ARTIFACT_DIR" -type f \( -name 'referenced-docs.json' -o -name 'ticket-documents.json' -o -name 'estate-survey.json' \) 2>/dev/null | wc -l)
+    _TD_LEFT=$(find "$_RUN_ARTIFACT_DIR" -type f \( -name 'referenced-docs.json' -o -name 'ticket-documents.json' -o -name 'estate-survey.json' -o -name 'codeline-discovery.json' -o -name 'mint-inputs.json' \) 2>/dev/null | wc -l)
     if [ "$_TD_LEFT" -gt 0 ]; then
         fail_contamination "$_TD_LEFT fetched-document cache(s) could NOT be cleared in $_RUN_ARTIFACT_DIR — a run started now would put another project's documents in its prompts"
     elif [ "$_TD_CLEARED" -gt 0 ]; then

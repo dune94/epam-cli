@@ -28,10 +28,11 @@ import { readFileSync, mkdtempSync, writeFileSync, chmodSync, rmSync } from 'nod
 import { execFileSync } from 'node:child_process';
 import { join } from 'node:path';
 import { tmpdir } from 'node:os';
+import { engineSource } from '../../lib/engine-source';
 
 const REPO_ROOT = join(__dirname, '../../../');
 const ORCH_SH = join(REPO_ROOT, 'orchestrations/scripts/run-agent-orchestration.sh');
-const orchSrc = readFileSync(ORCH_SH, 'utf8');
+const orchSrc = engineSource(ORCH_SH);
 
 describe('Step 1 loop — live status re-check (static)', () => {
   // The per-story status checks now live inside _run_one_main_story(), the

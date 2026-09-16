@@ -29,11 +29,12 @@ import { spawnSync } from 'node:child_process';
 import { mkdtempSync, writeFileSync, rmSync, readFileSync, existsSync } from 'node:fs';
 import { join } from 'node:path';
 import { tmpdir } from 'node:os';
+import { engineSource } from '../../lib/engine-source';
 
 const ROOT = join(__dirname, '../../..');
 const CLAUDE = join(ROOT, 'orchestrations/scripts/claude.sh');
 
-const src = () => readFileSync(CLAUDE, 'utf8');
+const src = () => engineSource(CLAUDE);
 const code = () => src().split('\n').filter((l) => !/^\s*#/.test(l)).join('\n');
 
 let work: string;
@@ -103,7 +104,7 @@ describe('claude.sh reports what actually happened', () => {
     git(dir, 'clean', '-fd', '--', '.');
 
     expect(existsSync(join(dir, 'untracked.txt')), 'the clean no longer deletes untracked work').toBe(false);
-    expect(readFileSync(join(dir, 'kept.txt'), 'utf8'),
+    expect(engineSource(join(dir, 'kept.txt')),
       'the tracked file was restored after a failed checkout — premise gone').toContain('AGENT MODIFIED');
   });
 

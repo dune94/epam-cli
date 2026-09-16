@@ -20,10 +20,11 @@ import { spawnSync } from 'node:child_process';
 import { mkdtempSync, mkdirSync, writeFileSync, chmodSync, rmSync, readFileSync } from 'node:fs';
 import { join } from 'node:path';
 import { tmpdir } from 'node:os';
+import { engineSource } from '../../lib/engine-source';
 
 const REPO_ROOT = join(__dirname, '../../../');
 const ORCH_SH = join(REPO_ROOT, 'orchestrations/scripts/run-agent-orchestration.sh');
-const orchSrc = readFileSync(ORCH_SH, 'utf8');
+const orchSrc = engineSource(ORCH_SH);
 
 function extractBlock(startMarker: string, endMarker: string): string {
   const start = orchSrc.indexOf(startMarker);
@@ -113,7 +114,7 @@ function runReviewLoop(opts: {
 
   const result = spawnSync('bash', [scriptPath], { encoding: 'utf8', timeout: 15000 });
   const output = (result.stdout || '') + (result.stderr || '');
-  return { exitCode: result.status ?? -1, output, finalPrd: JSON.parse(readFileSync(prdPath, 'utf8')) };
+  return { exitCode: result.status ?? -1, output, finalPrd: JSON.parse(engineSource(prdPath)) };
 }
 
 describe('Step 3.6 review loop — clears a stale escalated tag on real approval', () => {

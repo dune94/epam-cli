@@ -39,6 +39,7 @@ import { spawnSync } from 'node:child_process';
 import { mkdtempSync, writeFileSync, rmSync, mkdirSync, readFileSync } from 'node:fs';
 import { tmpdir } from 'node:os';
 import { join } from 'node:path';
+import { engineSource } from '../../lib/engine-source';
 
 const GATE = join(__dirname, '../../../orchestrations/scripts/lib/coupled-pair-gate.sh');
 
@@ -113,7 +114,7 @@ describe('a coupled file pair has one author', () => {
   });
 
   it('the gate names no file of its own — every pair comes from the declaration', () => {
-    const gateSrc = readFileSync(GATE, 'utf8');
+    const gateSrc = engineSource(GATE);
     // Strip the docstring: the live failure it documents necessarily names the files.
     const code = gateSrc.replace(/^#.*$/gm, '');
     expect(code).not.toContain('package.json');
@@ -146,7 +147,7 @@ describe('claude.sh feeds a split pair back to the writer', () => {
 
   /** Extract the wiring function verbatim and execute it with the real gate library. */
   function runWiring(reportFiles: Array<{ rung: string; model: string; files: string[] }>) {
-    const src = readFileSync(CLAUDE_SH, 'utf8');
+    const src = engineSource(CLAUDE_SH);
     const start = src.indexOf('_coupled_pair_gate_for_story() {');
     expect(start).toBeGreaterThan(-1);
     const end = src.indexOf('\n}\n', start);
@@ -235,7 +236,7 @@ describe('the gate finds the manifest where the project actually declares it', (
   const CLAUDE_SH_PATH = join(__dirname, '../../../orchestrations/scripts/claude.sh');
 
   function wiringFn(): string {
-    const src = readFileSync(CLAUDE_SH_PATH, 'utf8');
+    const src = engineSource(CLAUDE_SH_PATH);
     const at = src.indexOf('_coupled_pair_gate_for_story() {');
     expect(at, 'wiring function not found').toBeGreaterThan(-1);
     return src.slice(at, src.indexOf('\n}\n', at));

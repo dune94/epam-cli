@@ -30,6 +30,7 @@ import { execFileSync } from 'node:child_process';
 import { mkdtempSync, rmSync, existsSync, readFileSync } from 'node:fs';
 import { join } from 'node:path';
 import { tmpdir } from 'node:os';
+import { engineSource } from '../../lib/engine-source';
 
 const ROOT = join(__dirname, '../../../');
 const LIB = join(ROOT, 'orchestrations/scripts/lib/agent-io.sh');
@@ -160,7 +161,7 @@ describe('NO CONSUMER NAMES ANOTHER AGENT\'S FIELDS', () => {
   it('the lib itself knows no agent-specific field name', () => {
     // The framework must be generic: it moves opaque text with provenance. The moment it knows
     // what a fix site is, it becomes the eighth place that has to change.
-    const src = readFileSync(LIB, 'utf8');
+    const src = engineSource(LIB);
     for (const field of ['fixSiteAnalysis', 'deliveryRole', 'changeRequired', 'verificationCriteria']) {
       expect(src, `agent-io.sh knows about '${field}' — it is not generic`).not.toContain(field);
     }

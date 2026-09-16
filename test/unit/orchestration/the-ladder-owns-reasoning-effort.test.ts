@@ -30,9 +30,10 @@ import { readFileSync, mkdtempSync, writeFileSync } from 'node:fs';
 import { join } from 'node:path';
 import { tmpdir } from 'node:os';
 import { spawnSync } from 'node:child_process';
+import { engineSource } from '../../lib/engine-source';
 
 const REPO = process.cwd();
-const claudeSrc = readFileSync(join(REPO, 'orchestrations/scripts/claude.sh'), 'utf8');
+const claudeSrc = engineSource(join(REPO, 'orchestrations/scripts/claude.sh'));
 
 function extractFunctionBody(name: string): string {
   const start = claudeSrc.indexOf(`${name}()`);
@@ -106,7 +107,7 @@ describe('the ladder owns reasoning effort', () => {
   it('THE OVERRIDE CHANNEL IS CLOSED: seam-invocation no longer exports a seam effort', () => {
     // The floor rule is only half of it. While seam-invocation.js exports the seam's declared
     // effort, that value is what arrives as the current effort on every call.
-    const si = readFileSync(join(REPO, 'orchestrations/scripts/lib/seam-invocation.js'), 'utf8');
+    const si = engineSource(join(REPO, 'orchestrations/scripts/lib/seam-invocation.js'));
     expect(si,
       'seam-invocation.js still exports profile.reasoningEffort — the seam can still set the '
       + 'effort the ladder is supposed to own')
@@ -115,7 +116,7 @@ describe('the ladder owns reasoning effort', () => {
 
   it('AND NO SEAM STILL DECLARES ONE: a dead field reads as live', () => {
     const P = JSON.parse(
-      readFileSync(join(REPO, 'orchestrations/agents/invocation-profiles.json'), 'utf8'),
+      engineSource(join(REPO, 'orchestrations/agents/invocation-profiles.json')),
     ).profiles || {};
     const declaring = Object.entries<any>(P)
       .filter(([n, v]) => !n.startsWith('_') && v && v.reasoningEffort)

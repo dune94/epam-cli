@@ -38,6 +38,7 @@ import { tmpdir } from 'node:os';
 import { MiniMaxProvider } from '../../../src/providers/minimax/MiniMaxProvider';
 import { OpenRouterProvider } from '../../../src/providers/openrouter/OpenRouterProvider';
 import { buildRunResultJson } from '../../../src/cli/commands/run';
+import { engineSource } from '../../lib/engine-source';
 
 afterEach(() => vi.unstubAllGlobals());
 
@@ -136,7 +137,7 @@ describe('the CLI emits it in the shape the pipeline already reads', () => {
 
 describe('claude.sh reads what the CLI now writes, WITHOUT double-counting it', () => {
   const CLAUDE_SH = join(__dirname, '../../../orchestrations/scripts/claude.sh');
-  const SRC = readFileSync(CLAUDE_SH, 'utf8');
+  const SRC = engineSource(CLAUDE_SH);
 
   /**
    * Executes the pipeline's real token-accounting block against a result file.

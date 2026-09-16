@@ -25,6 +25,7 @@ import { describe, it, expect } from 'vitest';
 import { spawnSync } from 'node:child_process';
 import { existsSync } from 'node:fs';
 import { join } from 'node:path';
+import { engineSource } from '../../lib/engine-source';
 
 const REPO = process.cwd();
 const LIB = join(REPO, 'orchestrations/scripts/lib/orchestration-args.sh');
@@ -160,7 +161,7 @@ describe('the orchestrator parses its arguments', () => {
     // The half that makes this real. A library with a test and no caller looks covered and changes
     // nothing about the run.
     const { readFileSync } = require('node:fs');
-    const src = readFileSync(ORCH, 'utf8');
+    const src = engineSource(ORCH);
     expect(src, 'the orchestrator does not source the extracted parser')
       .toMatch(/lib\/orchestration-args\.sh/);
     expect(src, 'the orchestrator does not call the extracted parser')

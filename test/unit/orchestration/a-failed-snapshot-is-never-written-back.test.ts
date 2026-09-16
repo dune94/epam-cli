@@ -19,6 +19,7 @@ import { spawnSync } from 'node:child_process';
 import { mkdtempSync, writeFileSync, readFileSync, rmSync, chmodSync } from 'node:fs';
 import { join } from 'node:path';
 import { tmpdir } from 'node:os';
+import { engineSource } from '../../lib/engine-source';
 
 const ROOT = join(__dirname, '../../..');
 const ORCH = join(ROOT, 'orchestrations/scripts/run-agent-orchestration.sh');
@@ -27,7 +28,7 @@ let work: string;
 beforeEach(() => { work = mkdtempSync(join(tmpdir(), 'snapshot-')); });
 afterEach(() => { rmSync(work, { recursive: true, force: true }); });
 
-const src = () => readFileSync(ORCH, 'utf8');
+const src = () => engineSource(ORCH);
 
 /** Run a lifted fragment of the script under bash. */
 function sh(script: string): { out: string; code: number } {

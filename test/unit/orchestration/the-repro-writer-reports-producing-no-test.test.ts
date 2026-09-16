@@ -21,6 +21,7 @@ import { describe, it, expect } from 'vitest';
 import { spawnSync } from 'node:child_process';
 import { readFileSync } from 'node:fs';
 import { join } from 'node:path';
+import { engineSource } from '../../lib/engine-source';
 
 const ROOT = join(__dirname, '../../..');
 const SCRIPTS = join(ROOT, 'orchestrations/scripts');
@@ -28,7 +29,7 @@ const WRITER = join(SCRIPTS, 'brownfield-repro-test-writer.sh');
 const ORCH = join(SCRIPTS, 'run-agent-orchestration.sh');
 const ENGINE = join(SCRIPTS, 'lib/engine-prompt.js');
 
-const code = (f: string) => readFileSync(f, 'utf8').split('\n').filter((l) => !/^\s*#/.test(l)).join('\n');
+const code = (f: string) => engineSource(f).split('\n').filter((l) => !/^\s*#/.test(l)).join('\n');
 
 /** Render one body of repro-role exactly as the writer does. */
 function render(bodyKey: string): string {
@@ -50,14 +51,14 @@ describe('the repro writer reports producing no test', () => {
   });
 
   it('the "no test produced" branch sets a failing status', () => {
-    const src = readFileSync(WRITER, 'utf8');
+    const src = engineSource(WRITER);
     const i = src.indexOf('no test file produced at');
     expect(i, 'the no-test branch is gone').toBeGreaterThan(-1);
     expect(src.slice(i, i + 400), 'producing no test still reports success').toMatch(/_tw_exit=1/);
   });
 
   it('the caller reads the writer’s status through the pipe, not tee’s', () => {
-    const src = readFileSync(ORCH, 'utf8');
+    const src = engineSource(ORCH);
     const i = src.indexOf('brownfield-repro-test-writer.sh" "$_tw_story"');
     expect(i, 'the 3.54 call site is gone').toBeGreaterThan(-1);
     const block = src.slice(i, i + 700);
@@ -104,13 +105,13 @@ describe('the baseline branch is never guessed', () => {
   });
 
   it('a detached HEAD is not mistaken for a branch called HEAD', () => {
-    const src = readFileSync(ORCH, 'utf8');
+    const src = engineSource(ORCH);
     const i = src.indexOf('_tw_baseline=');
     expect(src.slice(i, i + 700)).toMatch(/_tw_baseline" = "HEAD" \]/);
   });
 
   it('an unresolvable baseline skips the writer rather than diffing against nothing', () => {
-    const src = readFileSync(ORCH, 'utf8');
+    const src = engineSource(ORCH);
     const i = src.indexOf('_tw_baseline=');
     const block = src.slice(i, i + 1100);
     expect(block, 'it still runs the writer with no baseline to diff against')

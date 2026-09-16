@@ -33,12 +33,13 @@ import { execFileSync } from 'node:child_process';
 import { mkdtempSync, writeFileSync, mkdirSync, rmSync, readFileSync, existsSync } from 'node:fs';
 import { tmpdir } from 'node:os';
 import { join } from 'node:path';
+import { engineSource } from '../../lib/engine-source';
 
 const REPO = join(__dirname, '../../../');
 const INSTALLER = join(REPO, 'orchestrations-installer');
 const LIB = join(INSTALLER, 'lib/preserve-operator-config.sh');
 
-const readJson = (p: string) => JSON.parse(readFileSync(p, 'utf8'));
+const readJson = (p: string) => JSON.parse(engineSource(p));
 
 describe('the generated-run-state list', () => {
   const file = join(INSTALLER, 'generated-run-state-paths.json');
@@ -100,7 +101,7 @@ describe('the generated-run-state list', () => {
     // (prd.json, project-profiles.json) are not required to be declared.
     const sources = ['orchestrations/scripts/mint-agents-step.js',
       'orchestrations/scripts/lib/project-roster.js'].map(
-      (f) => readFileSync(join(REPO, f), 'utf8')).join('\n');
+      (f) => engineSource(join(REPO, f))).join('\n');
     const names = new Set<string>();
     for (const m of sources.matchAll(/projectConfigDir,\s*['"]([a-z-]+\.json)['"]/g)) names.add(m[1]);
     // projectRosterPath() builds this one from a constant beside it.
@@ -169,7 +170,7 @@ describe('the mechanism, driven end to end against a real tree', () => {
     const r = execFileSync('bash', [script], { encoding: 'utf8', timeout: 60_000 });
     const out: Record<string, string | null> = {};
     for (const rel of new Set([...Object.keys(existingFiles), ...Object.keys(refFiles)])) {
-      out[rel] = existsSync(join(dest, rel)) ? readFileSync(join(dest, rel), 'utf8') : null;
+      out[rel] = existsSync(join(dest, rel)) ? engineSource(join(dest, rel)) : null;
     }
     rmSync(dir, { recursive: true, force: true });
     return { out, log: r };
@@ -249,7 +250,7 @@ describe('the mechanism, driven end to end against a real tree', () => {
 });
 
 describe('install.sh actually applies the list — an undeclared list preserves nothing', () => {
-  const src = readFileSync(join(INSTALLER, 'install.sh'), 'utf8');
+  const src = engineSource(join(INSTALLER, 'install.sh'));
 
   it('snapshots and restores it around the extraction', () => {
     expect(src, 'generated-run-state-paths.json is declared but install.sh never reads it')

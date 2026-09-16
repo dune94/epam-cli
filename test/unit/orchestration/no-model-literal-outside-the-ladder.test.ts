@@ -22,6 +22,7 @@
 import { describe, it, expect } from 'vitest';
 import { readFileSync, readdirSync, existsSync } from 'node:fs';
 import { join } from 'node:path';
+import { engineSource } from '../../lib/engine-source';
 
 const SCRIPTS = join(__dirname, '../../../orchestrations/scripts');
 
@@ -89,7 +90,7 @@ describe('no project config pins a model', () => {
     const name = f.split('/').slice(-2).join('/');
     it(`${name} declares no model literal`, () => {
       const bad: string[] = [];
-      readFileSync(f, 'utf8').split('\n').forEach((line, i) => {
+      engineSource(f).split('\n').forEach((line, i) => {
         const stripped = line.replace(/#.*$/, '').trim();
         if (!stripped || !stripped.includes('=')) return;
         const [k, ...rest] = stripped.split('=');
@@ -114,7 +115,7 @@ describe('no project config pins a model', () => {
 
 describe('no live-path script substitutes a model name', () => {
   it('the scan actually reads the scripts — otherwise it proves nothing', () => {
-    const total = LIVE_PATH.reduce((n, f) => n + readFileSync(join(SCRIPTS, f), 'utf8').length, 0);
+    const total = LIVE_PATH.reduce((n, f) => n + engineSource(join(SCRIPTS, f)).length, 0);
     expect(total).toBeGreaterThan(10000);
   });
 
@@ -128,7 +129,7 @@ describe('no live-path script substitutes a model name', () => {
   for (const f of LIVE_PATH) {
     it(`${f} names no model as a default`, () => {
       const bad: string[] = [];
-      readFileSync(join(SCRIPTS, f), 'utf8').split('\n').forEach((line, i) => {
+      engineSource(join(SCRIPTS, f)).split('\n').forEach((line, i) => {
         const hit = substituted(line);
         if (hit) bad.push(`${f}:${i + 1}  ${hit}`);
       });

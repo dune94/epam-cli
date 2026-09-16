@@ -27,6 +27,7 @@
 import { describe, it, expect } from 'vitest';
 import { readFileSync, readdirSync, statSync } from 'node:fs';
 import { join } from 'node:path';
+import { engineSource } from '../../lib/engine-source';
 
 const SCRIPTS = join(__dirname, '../../../orchestrations/scripts');
 
@@ -51,7 +52,7 @@ function engineFiles(): string[] {
 function codeLinesNaming(literal: RegExp): Array<{ file: string; line: number; text: string }> {
   const hits: Array<{ file: string; line: number; text: string }> = [];
   for (const f of engineFiles()) {
-    const lines = readFileSync(f, 'utf8').split('\n');
+    const lines = engineSource(f).split('\n');
     lines.forEach((text, i) => {
       const t = text.trim();
       if (t.startsWith('#') || t.startsWith('//') || t.startsWith('*') || t.startsWith('/*')) return;
@@ -84,14 +85,14 @@ describe('no project name is baked into the engine', () => {
 
 describe('a missing PRD is an error, never a substitution', () => {
   it('the orchestration PRD resolution has no project-named default', () => {
-    const src = readFileSync(join(SCRIPTS, 'run-agent-orchestration.sh'), 'utf8');
+    const src = engineSource(join(SCRIPTS, 'run-agent-orchestration.sh'));
     const m = /_synth_prd="\$\{JIRA_SYNTH_PRD_PATH:-[^"]*"/.exec(src);
     expect(m, 'the synth PRD resolution moved — re-point this test').not.toBeNull();
     expect(m![0], 'falls back to a project-named PRD').not.toMatch(/travel-app|metrolinx/i);
   });
 
   it('PRD synthesis requires a template rather than defaulting to one project\'s', () => {
-    const src = readFileSync(join(SCRIPTS, 'synthesize-prd-from-jira.js'), 'utf8');
+    const src = engineSource(join(SCRIPTS, 'synthesize-prd-from-jira.js'));
     // The project's own canonical is resolved from its config dir; there is no built-in.
     expect(src).not.toMatch(/travel-app-prd\.canonical\.json/);
   });

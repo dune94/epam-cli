@@ -19,6 +19,7 @@
 import { describe, it, expect } from 'vitest';
 import { readFileSync } from 'node:fs';
 import { join } from 'node:path';
+import { engineSource } from '../../lib/engine-source';
 
 const REPO = join(__dirname, '../../..');
 const ORCH = join(REPO, 'orchestrations/scripts/run-agent-orchestration.sh');
@@ -45,7 +46,7 @@ function armBody(lines: string[], from: number): string {
 }
 
 function fallThroughsAfterAVerdictRead(): { line: number; body: string }[] {
-  const lines = readFileSync(ORCH, 'utf8').split('\n');
+  const lines = engineSource(ORCH).split('\n');
   const out: { line: number; body: string }[] = [];
   lines.forEach((l, i) => {
     if (!/grep -q '"verdict"/.test(l)) return;

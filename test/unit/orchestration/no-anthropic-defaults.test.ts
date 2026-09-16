@@ -19,6 +19,7 @@
 import { describe, it, expect } from 'vitest';
 import { readFileSync, readdirSync } from 'node:fs';
 import { join } from 'node:path';
+import { engineSource } from '../../lib/engine-source';
 
 const SCRIPTS = join(__dirname, '../../../orchestrations/scripts');
 
@@ -40,7 +41,7 @@ describe('no Anthropic defaults in a openrouter/OpenRouter pipeline', () => {
       // codemie-claude.sh is the CodeMie provider adapter; 'claude-sonnet' there names
       // a CLI to invoke, not a model default for this pipeline.
       if (/codemie-claude\.sh$/.test(f)) continue;
-      readFileSync(f, 'utf8').split('\n').forEach((line, i) => {
+      engineSource(f).split('\n').forEach((line, i) => {
         if (/CLAUDE_CMD|codemie|^\s*#/.test(line)) return;
         if (ANTHROPIC_DEFAULT.test(line)) hits.push(`${f.replace(SCRIPTS + '/', '')}:${i + 1}  ${line.trim()}`);
       });
@@ -51,7 +52,7 @@ describe('no Anthropic defaults in a openrouter/OpenRouter pipeline', () => {
   it('gate timeouts allow for a reasoning model', () => {
     // `timeout 60 epam run` against glm-5.2: the model is still thinking when it is
     // killed, so the gate yields nothing and the retry burns too.
-    const src = readFileSync(join(SCRIPTS, 'run-agent-orchestration.sh'), 'utf8');
+    const src = engineSource(join(SCRIPTS, 'run-agent-orchestration.sh'));
     const short = [...src.matchAll(/timeout\s+(\d+)\s+epam run/g)]
       .filter(m => Number(m[1]) < 300).map(m => `timeout ${m[1]} epam run`);
     expect(short, 'too short for a reasoning model').toEqual([]);

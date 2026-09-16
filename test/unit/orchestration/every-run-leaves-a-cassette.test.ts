@@ -22,6 +22,7 @@ import { spawnSync } from 'node:child_process';
 import { mkdtempSync, writeFileSync, rmSync, mkdirSync, existsSync, readFileSync, chmodSync } from 'node:fs';
 import { join } from 'node:path';
 import { tmpdir } from 'node:os';
+import { engineSource } from '../../lib/engine-source';
 
 const ROOT = join(__dirname, '../../../');
 const LIB = join(ROOT, 'orchestrations/scripts/lib/cassette-archive.sh');
@@ -74,7 +75,7 @@ describe('a completed run leaves a cassette in the durable directory', () => {
     const expected = join(cass, 'metrolinx-20260908T215555Z');
     expect(existsSync(expected), `no cassette at ${expected}. out: ${r.out.slice(0, 300)}`).toBe(true);
     expect(existsSync(join(expected, 'manifest.json')), 'no manifest — not a cassette').toBe(true);
-    expect(JSON.parse(readFileSync(join(expected, 'manifest.json'), 'utf8')).session)
+    expect(JSON.parse(engineSource(join(expected, 'manifest.json'))).session)
       .toBe('20260908T215555Z');
   });
 
@@ -85,7 +86,7 @@ describe('a completed run leaves a cassette in the durable directory', () => {
     writeFileSync(join(existing, 'manifest.json'), '{"session":"ORIGINAL","traceCount":99}');
     const r = run({ session: '20260908T215555Z', project: 'metrolinx',
                     exporter: stubExporter(d, true), cassettes: cass });
-    expect(JSON.parse(readFileSync(join(existing, 'manifest.json'), 'utf8')).session,
+    expect(JSON.parse(engineSource(join(existing, 'manifest.json'))).session,
       'the existing cassette was overwritten').toBe('ORIGINAL');
     expect(r.out, 'it overwrote silently — say so instead').toMatch(/already|exists|keeping/i);
   });
@@ -129,8 +130,7 @@ describe("the pipeline's own completion block", () => {
    * test is still the one the real script runs at exit.
    */
   function completionBlock(): string {
-    const lines = readFileSync(
-      join(ROOT, 'orchestrations/scripts/run-agent-orchestration.sh'), 'utf8').split('\n');
+    const lines = engineSource(join(ROOT, 'orchestrations/scripts/run-agent-orchestration.sh')).split('\n');
     const i = lines.findIndex((l) => /^_epam_export_cassette\(\)\s*\{/.test(l));
     if (i === -1) {
       throw new Error('run-agent-orchestration.sh has no _epam_export_cassette handler — the exporter '

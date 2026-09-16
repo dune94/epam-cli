@@ -21,6 +21,7 @@ import { spawnSync } from 'node:child_process';
 import { mkdtempSync, writeFileSync, mkdirSync, rmSync, readFileSync, existsSync } from 'node:fs';
 import { join } from 'node:path';
 import { tmpdir } from 'node:os';
+import { engineSource } from '../../lib/engine-source';
 
 const ROOT = join(__dirname, '../../..');
 const SCRIPTS = join(ROOT, 'orchestrations/scripts');
@@ -171,7 +172,7 @@ describe('the engine runs the plan and judges the result', () => {
 describe('the engine names no ecosystem', () => {
   it('the installer library contains no manifest filename or package-manager name', () => {
     expect(existsSync(LIB), 'the installer still lives inline in the 11k-line engine file').toBe(true);
-    const src = readFileSync(LIB, 'utf8')
+    const src = engineSource(LIB)
       .split('\n').filter((l) => !/^\s*#/.test(l)).join('\n');
     for (const name of ['package.json', 'Pipfile', 'requirements.txt', 'pyproject.toml', 'Cargo.toml',
       'go.mod', 'pom.xml', 'build.gradle', 'Gemfile', 'composer.json',
@@ -181,7 +182,7 @@ describe('the engine names no ecosystem', () => {
   });
 
   it('and the engine sources the library rather than defining its own', () => {
-    const eng = readFileSync(join(SCRIPTS, 'run-agent-orchestration.sh'), 'utf8');
+    const eng = engineSource(join(SCRIPTS, 'run-agent-orchestration.sh'));
     expect(eng).toMatch(/deps-install\.sh/);
     const defs = eng.split('\n').filter((l) => /^detect_and_install_dependencies\(\)/.test(l));
     expect(defs, 'the inline nine-branch copy is still in the engine').toEqual([]);

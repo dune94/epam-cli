@@ -28,12 +28,13 @@ import { readFileSync, mkdtempSync, writeFileSync, rmSync } from 'node:fs';
 import { execFileSync } from 'node:child_process';
 import { join } from 'node:path';
 import { tmpdir } from 'node:os';
+import { engineSource } from '../../lib/engine-source';
 
 const REPO_ROOT = join(__dirname, '../../../');
 const CLAUDE_SH = join(REPO_ROOT, 'orchestrations/scripts/claude.sh');
 const CONTEXTUALIZE_SH = join(REPO_ROOT, 'orchestrations/scripts/contextualize-stories.sh');
-const claudeSrc = readFileSync(CLAUDE_SH, 'utf8');
-const contextualizeSrc = readFileSync(CONTEXTUALIZE_SH, 'utf8');
+const claudeSrc = engineSource(CLAUDE_SH);
+const contextualizeSrc = engineSource(CONTEXTUALIZE_SH);
 
 describe('contextualize-stories.sh — CPA pre-pass derives INITIAL ladderTier from complexity signals', () => {
   it('computes b_ladder_tier from cpaGate/effort using a deterministic case statement (no LLM call)', () => {

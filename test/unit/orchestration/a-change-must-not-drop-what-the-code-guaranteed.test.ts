@@ -32,6 +32,7 @@ import { describe, it, expect } from 'vitest';
 import { execFileSync } from 'node:child_process';
 import { readFileSync } from 'node:fs';
 import { join } from 'node:path';
+import { engineSource } from '../../lib/engine-source';
 
 const ROOT = join(__dirname, '../../../');
 const CONTRACT = join(ROOT, 'orchestrations/config/agent-contract.json');
@@ -122,7 +123,7 @@ describe('IT IS A CAPABILITY RULE, NOT A STACK FACT', () => {
     // The two shared rules were previously duplicated byte-identically nine lines apart, and
     // each copy then needed maintaining. Whatever mechanism the catalog uses, the text must not
     // appear twice.
-    const raw = readFileSync(CONTRACT, 'utf8');
+    const raw = engineSource(CONTRACT);
     const occurrences = raw.split('PRESERVE WHAT THE CODE ALREADY GUARANTEES').length - 1;
     expect(occurrences, 'duplicated rule text drifts — that is how one rule became two').toBe(1);
   });
@@ -130,7 +131,7 @@ describe('IT IS A CAPABILITY RULE, NOT A STACK FACT', () => {
 
 describe('the engine still renders the contract rather than composing it', () => {
   it('claude.sh selects the arm by story kind and renders through the catalog', () => {
-    const src = readFileSync(CLAUDE, 'utf8')
+    const src = engineSource(CLAUDE)
       .split('\n').filter((l) => !/^\s*#/.test(l)).join('\n');
     expect(src).toContain('render-prompt-section.js');
     expect(src).toContain('brownfieldNovel');

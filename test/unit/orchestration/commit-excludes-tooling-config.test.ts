@@ -23,6 +23,7 @@ import { execFileSync } from 'node:child_process';
 import { mkdtempSync, mkdirSync, writeFileSync, rmSync, readFileSync } from 'node:fs';
 import { tmpdir } from 'node:os';
 import { join } from 'node:path';
+import { engineSource } from '../../lib/engine-source';
 
 // commit_completed_story() moved to lib/git-ops.sh (2026-08-02 git-ops
 // consolidation) — single source of truth shared by claude.sh,
@@ -82,15 +83,14 @@ function stageInSandbox() {
 
 describe('the pathspec fallback cannot reintroduce it', () => {
   it('unstages .epam unconditionally, whichever add path ran', () => {
-    const src = readFileSync(CLAUDE_SH, 'utf8');
+    const src = engineSource(CLAUDE_SH);
     // The fallback `git add -A` carries no pathspec, so exclusion alone is not
     // enough — a failure of the pathspec form would put .epam straight back.
     // The dir names now come from _ENGINE_OWNED_DIRS (lib/engine-paths.sh), one shared
     // definition, so assert the unstage runs over that list rather than re-listing them.
     expect(src, 'no unconditional unstage — the no-pathspec fallback reintroduces them')
       .toMatch(/reset -q -- "\$\{_resets\[@\]\}"/);
-    const engineDirs = readFileSync(
-      join(__dirname, '../../../orchestrations/scripts/lib/engine-paths.sh'), 'utf8');
+    const engineDirs = engineSource(join(__dirname, '../../../orchestrations/scripts/lib/engine-paths.sh'));
     for (const d of ['orchestrations', '.epam', '.deepeval', '.codegraph', '.contracts']) {
       expect(engineDirs, `${d} missing from the shared engine-owned list`).toContain(`'${d}'`);
     }
@@ -115,8 +115,7 @@ describe('story commit excludes our own tooling config', () => {
 
 describe('the optional phase assessment has room for a reasoning model', () => {
   it('allows more than 120s per attempt', () => {
-    const src = readFileSync(
-      join(__dirname, '../../../orchestrations/scripts/run-agent-orchestration.sh'), 'utf8');
+    const src = engineSource(join(__dirname, '../../../orchestrations/scripts/run-agent-orchestration.sh'));
     const m = src.match(/PHASE_ASSESSMENT_TIMEOUT_SECS:-(\d+)/);
     expect(m, 'the assessment timeout default vanished').toBeTruthy();
     // 120 timed out twice live: these models spend <think> tokens against a

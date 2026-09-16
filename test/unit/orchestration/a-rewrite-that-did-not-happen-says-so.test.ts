@@ -27,13 +27,14 @@ import { describe, it, expect } from 'vitest';
 import { spawnSync } from 'node:child_process';
 import { readFileSync } from 'node:fs';
 import { join } from 'node:path';
+import { engineSource } from '../../lib/engine-source';
 
 const REPO = join(__dirname, '../../..');
 const CLAUDE_SH = join(REPO, 'orchestrations/scripts/claude.sh');
 
 /** The function as it actually is, taken from the file rather than retyped. */
 function functionBody(): string {
-  const src = readFileSync(CLAUDE_SH, 'utf8');
+  const src = engineSource(CLAUDE_SH);
   const start = src.indexOf('run_prd_change_summarizer() {');
   expect(start, 'run_prd_change_summarizer is gone — the shape has changed').toBeGreaterThan(-1);
   const end = src.indexOf('\n}', start);

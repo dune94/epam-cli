@@ -25,6 +25,7 @@
 import { describe, it, expect } from 'vitest';
 import { readFileSync } from 'node:fs';
 import { join } from 'node:path';
+import { engineSource } from '../../lib/engine-source';
 
 const ROOT = join(__dirname, '../../../');
 const TPL = join(ROOT, 'orchestrations/prompts/templates/coordinator-amendment.json');
@@ -41,7 +42,7 @@ const VALUES_NO_DIAGNOSIS = {
 
 describe('an absent prior diagnosis is a real state, not a failure', () => {
   it('the template really is the one that broke — it declares the placeholder', () => {
-    const t = JSON.parse(readFileSync(TPL, 'utf8'));
+    const t = JSON.parse(engineSource(TPL));
     const decl = JSON.stringify(t);
     expect(decl, 'the placeholder is gone — this test is stale')
       .toContain('__PRIOR_DIAGNOSIS_SECTION__');

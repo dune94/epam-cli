@@ -31,6 +31,7 @@ import { readFileSync, mkdtempSync, mkdirSync, writeFileSync, rmSync } from 'nod
 import { execFileSync } from 'node:child_process';
 import { join } from 'node:path';
 import { tmpdir } from 'node:os';
+import { engineSource } from '../../lib/engine-source';
 
 const REPO_ROOT = join(__dirname, '../../../');
 const CLAUDE_SH = join(REPO_ROOT, 'orchestrations/scripts/claude.sh');
@@ -40,9 +41,9 @@ const ORCH_SH = join(REPO_ROOT, 'orchestrations/scripts/run-agent-orchestration.
 // codemie-claude.sh, and run-agent-orchestration.sh. claudeSrc is still used
 // below for the CALL-SITE checks (claude.sh sources git-ops.sh and calls it).
 const GIT_OPS_SH = join(REPO_ROOT, 'orchestrations/scripts/lib/git-ops.sh');
-const claudeSrc = readFileSync(CLAUDE_SH, 'utf8');
-const orchSrc = readFileSync(ORCH_SH, 'utf8');
-const gitOpsSrc = readFileSync(GIT_OPS_SH, 'utf8');
+const claudeSrc = engineSource(CLAUDE_SH);
+const orchSrc = engineSource(ORCH_SH);
+const gitOpsSrc = engineSource(GIT_OPS_SH);
 
 describe('claude.sh — commit_completed_story()', () => {
   it('is defined in lib/git-ops.sh and sourced by claude.sh', () => {

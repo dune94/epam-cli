@@ -21,6 +21,7 @@
  */
 import { readFileSync } from 'node:fs';
 import { basename, join } from 'node:path';
+import { engineSource } from '../lib/engine-source';
 
 export const SCRIPTS = join(__dirname, '../../orchestrations/scripts');
 export const ORCHESTRATOR = join(SCRIPTS, 'run-agent-orchestration.sh');
@@ -37,11 +38,11 @@ export const EXTRACTED_LIBS = [
  * the text bash effectively executes.
  */
 export function orchestratorSource(): string {
-  let src = readFileSync(ORCHESTRATOR, 'utf8');
+  let src = engineSource(ORCHESTRATOR);
 
   for (const lib of EXTRACTED_LIBS) {
     const name = basename(lib);
-    const body = readFileSync(lib, 'utf8');
+    const body = engineSource(lib);
     // The line the orchestrator uses to pull this lib in, however it is spelled.
     const sourceLine = src
       .split('\n')

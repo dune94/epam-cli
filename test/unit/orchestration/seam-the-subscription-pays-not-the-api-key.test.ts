@@ -33,6 +33,7 @@ import { describe, it, expect } from 'vitest';
 import { execFileSync } from 'node:child_process';
 import { readFileSync } from 'node:fs';
 import { join } from 'node:path';
+import { engineSource } from '../../lib/engine-source';
 
 const REPO_ROOT = join(__dirname, '../../../');
 const RUNNER_SETTINGS = join(REPO_ROOT, 'orchestrations/scripts/lib/runner-settings.sh');
@@ -72,7 +73,7 @@ function childEnvAfterApply(providerSet: string, preset: Record<string, string>)
 describe('the claude stack bills the subscription, not an API key', () => {
   it('the runner DECLARES the credentials it must not see (config, not engine code)', () => {
     const defaults = JSON.parse(
-      readFileSync(join(REPO_ROOT, 'orchestrations/config/llm-defaults.claude.json'), 'utf8'),
+      engineSource(join(REPO_ROOT, 'orchestrations/config/llm-defaults.claude.json')),
     );
     expect(defaults.runners?.claude?.unsetEnv).toEqual(
       expect.arrayContaining(['ANTHROPIC_API_KEY', 'ANTHROPIC_AUTH_TOKEN']),
@@ -116,11 +117,11 @@ describe('the claude stack bills the subscription, not an API key', () => {
   it('both spawn seams take the credential away BEFORE launching the CLI', () => {
     // The declaration is only worth anything if it is applied on every path that starts the
     // runner. Asserted as ordering, since a call placed after the spawn would read as wired.
-    const hub = readFileSync(join(REPO_ROOT, 'orchestrations/scripts/llm-handler.sh'), 'utf8');
+    const hub = engineSource(join(REPO_ROOT, 'orchestrations/scripts/llm-handler.sh'));
     expect(hub.indexOf('apply_runner_settings'))
       .toBeLessThan(hub.indexOf('"$CLAUDE_CMD" --print'));
 
-    const claudeSh = readFileSync(join(REPO_ROOT, 'orchestrations/scripts/claude.sh'), 'utf8');
+    const claudeSh = engineSource(join(REPO_ROOT, 'orchestrations/scripts/claude.sh'));
     const applyAt = claudeSh.indexOf('apply_runner_settings "$(basename "${CLAUDE_CMD:-}")"');
     expect(applyAt, 'implement_story no longer applies the runner declaration').toBeGreaterThan(0);
     expect(applyAt).toBeLessThan(claudeSh.indexOf('"$CLAUDE_CMD" --print --output-format json'));

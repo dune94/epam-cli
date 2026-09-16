@@ -16,10 +16,11 @@ import { execFileSync } from 'node:child_process';
 import { readFileSync, mkdtempSync, writeFileSync, rmSync } from 'node:fs';
 import { join } from 'node:path';
 import { tmpdir } from 'node:os';
+import { engineSource } from '../../lib/engine-source';
 
 const REPO_ROOT = join(__dirname, '../../../');
 const SCRIPT_PATH = join(REPO_ROOT, 'orchestrations/scripts/contextualize-stories.sh');
-const src = readFileSync(SCRIPT_PATH, 'utf8');
+const src = engineSource(SCRIPT_PATH);
 
 function extractBlock(startMarker: string, endMarker: string): string {
   const start = src.indexOf(startMarker);

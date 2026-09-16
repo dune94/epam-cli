@@ -15,10 +15,11 @@ import { mkdtempSync, mkdirSync, writeFileSync, rmSync, readFileSync, existsSync
 import { spawnSync } from 'node:child_process';
 import { join } from 'node:path';
 import { tmpdir } from 'node:os';
+import { engineSource } from '../../lib/engine-source';
 
 const REPO_ROOT = join(__dirname, '../../../');
 const ORCH_SH = join(REPO_ROOT, 'orchestrations/scripts/run-agent-orchestration.sh');
-const orchSrc = readFileSync(ORCH_SH, 'utf8');
+const orchSrc = engineSource(ORCH_SH);
 
 function extractSnippet(): string {
   const start = orchSrc.indexOf('# ── Plugin provisioning: config-driven');
@@ -85,7 +86,7 @@ describe('plugin provisioning wiring — plugins.json', () => {
 
     const settingsPath = join(wt, '.epam/settings.json');
     expect(existsSync(settingsPath), 'settings.json was not written').toBe(true);
-    expect(JSON.parse(readFileSync(settingsPath, 'utf8'))).toEqual({ tools: ['/abs/path/tool.js'] });
+    expect(JSON.parse(engineSource(settingsPath))).toEqual({ tools: ['/abs/path/tool.js'] });
     expect(out).toContain("Provisioned .epam/settings.json (plugins, incl. built-in CodeGraph tool) for 'gotransit'");
   });
 
@@ -121,7 +122,7 @@ describe('plugin provisioning wiring — codeline-facts.json', () => {
 
     const factsPath = join(wt, '.epam/codeline-facts.json');
     expect(existsSync(factsPath)).toBe(true);
-    const written = JSON.parse(readFileSync(factsPath, 'utf8'));
+    const written = JSON.parse(engineSource(factsPath));
     expect(written).toEqual({ facts: ['gotransit-specific fact'] });
     expect(JSON.stringify(written)).not.toContain('upexpress-specific');
     expect(out).toContain("Provisioned .epam/codeline-facts.json for 'gotransit'");
@@ -173,10 +174,10 @@ describe('plugin provisioning wiring — both files together, per real Metrolinx
 
       runSnippet(cl, wt, configDir);
 
-      expect(JSON.parse(readFileSync(join(wt, '.epam/settings.json'), 'utf8'))).toEqual({
+      expect(JSON.parse(engineSource(join(wt, '.epam/settings.json')))).toEqual({
         tools: ['/abs/codeline-context-plugin.js'],
       });
-      expect(JSON.parse(readFileSync(join(wt, '.epam/codeline-facts.json'), 'utf8'))).toEqual({
+      expect(JSON.parse(engineSource(join(wt, '.epam/codeline-facts.json')))).toEqual({
         facts: [expectedFact],
       });
     }
@@ -201,7 +202,7 @@ describe('plugin provisioning wiring — .env.local (derived from the codeline\'
 
     const envPath = join(wt, '.env.local');
     expect(existsSync(envPath)).toBe(true);
-    const content = readFileSync(envPath, 'utf8');
+    const content = engineSource(envPath);
     expect(content).toMatch(/^CONTENTSTACK_API_KEY=\S+/m);
     expect(content).toMatch(/^CONTENTSTACK_BRANCH=\S+/m);
     expect(out).toContain("Provisioned .env.local for 'gotransit'");
@@ -227,7 +228,7 @@ describe('plugin provisioning wiring — anti-patterns.json (feeds check_anti_pa
 
     const provisioned = join(wt, '.epam/anti-patterns.json');
     expect(existsSync(provisioned)).toBe(true);
-    expect(readFileSync(provisioned, 'utf8')).toBe(rules);
+    expect(engineSource(provisioned)).toBe(rules);
     expect(out).toContain("Provisioned .epam/anti-patterns.json for 'gotransit'");
   });
 

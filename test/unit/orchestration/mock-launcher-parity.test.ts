@@ -31,6 +31,7 @@ import { readdirSync, readFileSync, existsSync, mkdtempSync, mkdirSync, writeFil
 import { spawnSync } from 'node:child_process';
 import { tmpdir } from 'node:os';
 import { join } from 'node:path';
+import { engineSource } from '../../lib/engine-source';
 
 const REPO_ROOT = join(__dirname, '../../../');
 const SCRIPTS = join(REPO_ROOT, 'orchestrations/scripts');
@@ -67,7 +68,7 @@ const EXEMPT_LAUNCHERS = ['tier1-mock-run.sh'];
 const EXEMPT_TESTS = ['brownfield-mock-e2e-2-worktree-topology.test.ts'];
 
 const isMock = (p: string) => /-mock-/.test(p) && !EXEMPT_LAUNCHERS.includes(p.split('/').pop()!);
-const read = (p: string) => readFileSync(p, 'utf8');
+const read = (p: string) => engineSource(p);
 const has = (src: string, cap: (typeof CAPABILITIES)[number]) => cap.re.test(src);
 
 /** The real brownfield launcher: sets EPAM_BROWNFIELD=1 and is not a mock. */
@@ -171,7 +172,7 @@ describe('archiving on failure is proven by EXECUTION, not by a string being pre
         `Expected artefacts at ${runDir}. stdout:\n${(r.stdout || '').slice(-600)}`,
     ).toBe(true);
     expect(existsSync(join(runDir, 'outcome.txt')), 'outcome.txt not written').toBe(true);
-    expect(readFileSync(join(runDir, 'outcome.txt'), 'utf8')).toMatch(/FAILED/);
+    expect(engineSource(join(runDir, 'outcome.txt'))).toMatch(/FAILED/);
 
     rmSync(tmp, { recursive: true, force: true });
   }, 130000);
@@ -187,7 +188,7 @@ describe('mock e2e tests go through a launcher, never straight to the orchestrat
   });
 
   it.each(mockTests)('%s launches via a tier launcher, not run-agent-orchestration.sh directly', (file) => {
-    const src = readFileSync(join(REPO_ROOT, 'test/unit/orchestration', file), 'utf8');
+    const src = engineSource(join(REPO_ROOT, 'test/unit/orchestration', file));
     const usesLauncher = /tier[0-9]+-[a-z0-9-]*-run\.sh/.test(src);
     expect(
       usesLauncher,

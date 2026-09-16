@@ -15,10 +15,11 @@ import { readFileSync, mkdtempSync, writeFileSync, rmSync } from 'node:fs';
 import { execFileSync, spawnSync } from 'node:child_process';
 import { join } from 'node:path';
 import { tmpdir } from 'node:os';
+import { engineSource } from '../../lib/engine-source';
 
 const REPO_ROOT = join(__dirname, '../../../');
 const CLAUDE_SH = join(REPO_ROOT, 'orchestrations/scripts/claude.sh');
-const claudeSrc = readFileSync(CLAUDE_SH, 'utf8');
+const claudeSrc = engineSource(CLAUDE_SH);
 
 function extractFunctionBody(src: string, name: string): string {
   const start = src.indexOf(`${name}() {`);
@@ -128,7 +129,7 @@ describe('classify_failure_class — logs an iteration-exhaustion event on capab
       );
       execFileSync('bash', [scriptPath], { encoding: 'utf8' });
       const logPath = join(dir, 'iteration-exhaustion.jsonl');
-      const lines = readFileSync(logPath, 'utf8').trim().split('\n');
+      const lines = engineSource(logPath).trim().split('\n');
       expect(lines).toHaveLength(1);
       const record = JSON.parse(lines[0]);
       expect(record.story_id).toBe('AMSD-9999');

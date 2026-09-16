@@ -34,6 +34,7 @@ import { spawnSync } from 'node:child_process';
 import { mkdtempSync, writeFileSync, rmSync, readFileSync } from 'node:fs';
 import { join } from 'node:path';
 import { tmpdir } from 'node:os';
+import { engineSource } from '../../lib/engine-source';
 
 const ROOT = join(__dirname, '../../../');
 const ORCH = join(ROOT, 'orchestrations/scripts/run-agent-orchestration.sh');
@@ -76,7 +77,7 @@ describe('THE HOLE: the deferral target excludes the deferring case', () => {
 });
 
 describe('STEP 3.545 MUST RECORD THE RED STATE, NOT ONLY LOG IT', () => {
-  const src = readFileSync(ORCH, 'utf8');
+  const src = engineSource(ORCH);
   const block = (() => {
     const start = src.indexOf('# Step 3.545:');
     expect(start, 'Step 3.545 moved — this test is anchored on it').toBeGreaterThan(0);
@@ -114,7 +115,7 @@ describe('STEP 3.545 MUST RECORD THE RED STATE, NOT ONLY LOG IT', () => {
        ${body}
        exit 0`,
     ], { encoding: 'utf8' });
-    return { code: r.status ?? 1, prd: JSON.parse(readFileSync(prd, 'utf8')) };
+    return { code: r.status ?? 1, prd: JSON.parse(engineSource(prd)) };
   }
 
   it('actually writes suiteState=red onto every story in the phase', () => {
@@ -138,7 +139,7 @@ describe('STEP 3.545 MUST RECORD THE RED STATE, NOT ONLY LOG IT', () => {
 });
 
 describe('STEP 3.55 MUST INHERIT A RED STATE IT DID NOT PRODUCE', () => {
-  const src = readFileSync(ORCH, 'utf8');
+  const src = engineSource(ORCH);
   const block = (() => {
     const start = src.indexOf('# Step 3.55:');
     const end = src.indexOf('# Step 3.56', start);
@@ -182,7 +183,7 @@ describe('STEP 3.55 MUST INHERIT A RED STATE IT DID NOT PRODUCE', () => {
 describe('EXECUTING the inherited-RED check', () => {
   /** The real jq + guard from Step 3.55, extracted verbatim from the script. */
   function runInheritedRedCheck(prd: string): { code: number; err: string } {
-    const src = readFileSync(ORCH, 'utf8');
+    const src = engineSource(ORCH);
     const start = src.indexOf('    _inherited_red=$(jq -r --arg phase "$PHASE"');
     expect(start, 'the inherited-RED check moved — this test is anchored on it').toBeGreaterThan(0);
     const end = src.indexOf('fi', src.indexOf('exit 2', start));
@@ -251,7 +252,7 @@ describe('EXECUTING the inherited-RED check', () => {
  */
 describe('STEP 3.545 SUBTRACTS THE BASELINE BEFORE IT STAMPS', () => {
   const block = (() => {
-    const src = readFileSync(ORCH, 'utf8');
+    const src = engineSource(ORCH);
     const start = src.indexOf('# Step 3.545:');
     const end = src.indexOf('# Step 3.55:', start);
     return src.slice(start, end).split('\n').filter((l) => !/^\s*#/.test(l)).join('\n');

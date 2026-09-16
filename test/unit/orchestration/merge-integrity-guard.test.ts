@@ -31,10 +31,11 @@ import { readFileSync, mkdtempSync, mkdirSync, writeFileSync, rmSync, existsSync
 import { execFileSync } from 'node:child_process';
 import { join } from 'node:path';
 import { tmpdir } from 'node:os';
+import { engineSource } from '../../lib/engine-source';
 
 const REPO_ROOT = join(__dirname, '../../../');
 const ORCH_SH = join(REPO_ROOT, 'orchestrations/scripts/run-agent-orchestration.sh');
-const orchSrc = readFileSync(ORCH_SH, 'utf8');
+const orchSrc = engineSource(ORCH_SH);
 
 function extractStep32Block(): string {
   const startMarker = '# Step 3.2: Merge worktree branches back to main branch';
@@ -132,7 +133,7 @@ describe('Step 3.2 merge — merge-integrity guard against silent -X ours data l
     try {
       setupConflictingRepo(dir);
       const { rc, output } = runStep32(dir);
-      const finalContent = readFileSync(join(dir, 'f.txt'), 'utf8');
+      const finalContent = engineSource(join(dir, 'f.txt'));
 
       // Desired behavior once fixed: the guard detects the would-be conflict
       // BEFORE merging and refuses to silently resolve it -- MERGE_FAILED,
@@ -160,7 +161,7 @@ describe('Step 3.2 merge — merge-integrity guard against silent -X ours data l
       runStep32(dir, 'test-phase');
       const artifactPath = join(dir, '.epam/merge-conflicts/test-phase-wt-primary.json');
       expect(existsSync(artifactPath)).toBe(true);
-      const artifact = JSON.parse(readFileSync(artifactPath, 'utf8'));
+      const artifact = JSON.parse(engineSource(artifactPath));
       expect(artifact.conflictingFiles).toContain('f.txt');
       expect(artifact.branch).toBe('wt-primary');
     } finally {
@@ -176,7 +177,7 @@ describe('Step 3.2 merge — merge-integrity guard against silent -X ours data l
       expect(rc).toBe(0);
       expect(output).toMatch(/Merged wt-primary into master/);
       expect(output).not.toMatch(/[Mm]erge-integrity guard/);
-      expect(readFileSync(join(dir, 'primary-only.txt'), 'utf8')).toBe('primary content\n');
+      expect(engineSource(join(dir, 'primary-only.txt'))).toBe('primary content\n');
       expect(existsSync(join(dir, '.epam/merge-conflicts'))).toBe(false);
     } finally {
       rmSync(dir, { recursive: true, force: true });

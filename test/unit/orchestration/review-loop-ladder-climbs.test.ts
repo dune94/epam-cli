@@ -20,11 +20,12 @@ import { spawnSync } from 'node:child_process';
 import { mkdtempSync, mkdirSync, writeFileSync, chmodSync, rmSync, readFileSync, existsSync } from 'node:fs';
 import { join } from 'node:path';
 import { tmpdir } from 'node:os';
+import { engineSource } from '../../lib/engine-source';
 
 const REPO_ROOT = join(__dirname, '../../../');
 const ORCH_SH = join(REPO_ROOT, 'orchestrations/scripts/run-agent-orchestration.sh');
 const STORY_RETRY_LIB = join(REPO_ROOT, 'orchestrations/scripts/lib/story-retry-state.sh');
-const orchSrc = readFileSync(ORCH_SH, 'utf8');
+const orchSrc = engineSource(ORCH_SH);
 
 function extractBlock(startMarker: string, endMarker: string): string {
   const start = orchSrc.indexOf(startMarker);
@@ -115,11 +116,11 @@ function runAlwaysRejecting(env: Record<string, string> = {}) {
   );
 
   const result = spawnSync('bash', [scriptPath], { encoding: 'utf8', timeout: 20000 });
-  const rungLog = existsSync(rungLogPath) ? readFileSync(rungLogPath, 'utf8').trim().split('\n').filter(Boolean) : [];
+  const rungLog = existsSync(rungLogPath) ? engineSource(rungLogPath).trim().split('\n').filter(Boolean) : [];
   return {
     exitCode: result.status ?? -1,
     output: (result.stdout || '') + (result.stderr || ''),
-    finalPrd: JSON.parse(readFileSync(prdPath, 'utf8')),
+    finalPrd: JSON.parse(engineSource(prdPath)),
     rungLog,
   };
 }

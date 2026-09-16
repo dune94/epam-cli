@@ -15,6 +15,7 @@ import { describe, it, expect, beforeEach, afterEach } from 'vitest';
 import { readFileSync, writeFileSync, mkdtempSync, rmSync } from 'node:fs';
 import { execSync } from 'node:child_process';
 import { join } from 'node:path';
+import { engineSource } from '../../lib/engine-source';
 import { engineAndPrompt } from '../../helpers/analyst-prompt';
 
 const CLAUDE_SH     = join(__dirname, '../../../orchestrations/scripts/claude.sh');
@@ -24,9 +25,9 @@ const MOCK_PROFILES = join(__dirname, '../../fixtures/mock-profiles.json');
 // The AC list is built by lib/story-acs-block.sh (one shape for four seams) and rendered into the
 // analyst's template through claude.sh, so the engine text under test is all three.
 const ACS_LIB = join(__dirname, '../../../orchestrations/scripts/lib/story-acs-block.sh');
-const claudeSrc  = engineAndPrompt(`${readFileSync(CLAUDE_SH, 'utf8')}\n${readFileSync(ACS_LIB, 'utf8')}`);
-const mockPrd    = JSON.parse(readFileSync(MOCK_PRD, 'utf8'));
-const mockProfiles = JSON.parse(readFileSync(MOCK_PROFILES, 'utf8'));
+const claudeSrc  = engineAndPrompt(`${engineSource(CLAUDE_SH)}\n${engineSource(ACS_LIB)}`);
+const mockPrd    = JSON.parse(engineSource(MOCK_PRD));
+const mockProfiles = JSON.parse(engineSource(MOCK_PROFILES));
 
 // ── 1. Framework reads ACs from the PRD correctly ─────────────────────────────
 describe('failure analyst — reads story ACs from PRD (mock data)', () => {
@@ -92,7 +93,7 @@ with open(prd_path, 'w') as f:
     json.dump(prd, f, indent=2)
 PYEOF`);
 
-    const patched = JSON.parse(readFileSync(prdPath, 'utf8'));
+    const patched = JSON.parse(engineSource(prdPath));
     const story   = patched.stories.find((s: any) => s.id === storyId);
     expect(story.acceptanceCriteria[0]).toBe(newAcText);
   });
@@ -121,7 +122,7 @@ with open(prd_path, 'w') as f:
     json.dump(prd, f, indent=2)
 PYEOF`);
 
-    const patched  = JSON.parse(readFileSync(prdPath, 'utf8'));
+    const patched  = JSON.parse(engineSource(prdPath));
     const mock002  = patched.stories.find((s: any) => s.id === 'MOCK-002');
     expect(mock002.acceptanceCriteria).toEqual(originalMock002ACs);
   });
@@ -149,7 +150,7 @@ with open(prd_path, 'w') as f:
 PYEOF`);
     }
 
-    const patched = JSON.parse(readFileSync(prdPath, 'utf8'));
+    const patched = JSON.parse(engineSource(prdPath));
     const story   = patched.stories.find((s: any) => s.id === 'MOCK-001');
     expect(story.acceptanceCriteria[0]).toBe(newText);
     expect(story.acceptanceCriteria.filter((ac: string) => ac === newText)).toHaveLength(1);
@@ -189,7 +190,7 @@ if role in profiles.get('profiles', {}):
         json.dump(profiles, f, indent=2)
 PYEOF`);
 
-    const updated  = JSON.parse(readFileSync(profilesPath, 'utf8'));
+    const updated  = JSON.parse(engineSource(profilesPath));
     const addendum = updated.profiles[role].addendum as string;
     expect(addendum).toContain('[Self-Heal]');
     expect(addendum).toContain(skillNote);
@@ -215,7 +216,7 @@ if role in profiles.get('profiles', {}):
         json.dump(profiles, f, indent=2)
 PYEOF`);
 
-    const updated  = JSON.parse(readFileSync(profilesPath, 'utf8'));
+    const updated  = JSON.parse(engineSource(profilesPath));
     const addendum = updated.profiles['typescript-engineer'].addendum as string;
     expect(addendum).toContain(originalAddendum);
   });
@@ -240,7 +241,7 @@ if role in profiles.get('profiles', {}):
         json.dump(profiles, f, indent=2)
 PYEOF`);
 
-    const updated = JSON.parse(readFileSync(profilesPath, 'utf8'));
+    const updated = JSON.parse(engineSource(profilesPath));
     expect(updated.profiles['frontend-engineer'].addendum).toBe(originalFrontendAddendum);
   });
 });

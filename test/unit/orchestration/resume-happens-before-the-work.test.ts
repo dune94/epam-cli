@@ -16,14 +16,13 @@
 import { describe, it, expect } from 'vitest';
 import { readFileSync } from 'node:fs';
 import { join } from 'node:path';
+import { engineSource } from '../../lib/engine-source';
 
-const ORCH = readFileSync(
-  join(__dirname, '../../../orchestrations/scripts/run-agent-orchestration.sh'), 'utf8');
+const ORCH = engineSource(join(__dirname, '../../../orchestrations/scripts/run-agent-orchestration.sh'));
 // The block itself moved to lib/orchestration-resume.sh (0bc775b3) so its refusals can be
 // EXECUTED (a-resume-refuses-to-guess-what-to-skip); the orchestrator sources it and calls
 // apply_resume_if_requested. The ordering is the orchestrator's; the content is the library's.
-const RESUME_LIB = readFileSync(
-  join(__dirname, '../../../orchestrations/scripts/lib/orchestration-resume.sh'), 'utf8');
+const RESUME_LIB = engineSource(join(__dirname, '../../../orchestrations/scripts/lib/orchestration-resume.sh'));
 
 describe('the resume decision precedes the work', () => {
   it('the resume call comes BEFORE the jira dispatch that exits', () => {
@@ -65,8 +64,7 @@ describe('the resume decision precedes the work', () => {
 });
 
 describe('the mint step honours the skip the checkpoint asks for', () => {
-  const STEP = readFileSync(
-    join(__dirname, '../../../orchestrations/scripts/mint-agents-step.js'), 'utf8');
+  const STEP = engineSource(join(__dirname, '../../../orchestrations/scripts/mint-agents-step.js'));
 
   it('EPAM_SKIP_AGENT_MINT suppresses re-proposing', () => {
     expect(STEP).toMatch(/EPAM_SKIP_AGENT_MINT === '1'/);

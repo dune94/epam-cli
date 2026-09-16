@@ -22,6 +22,7 @@ import { describe, it, expect } from 'vitest';
 import { spawnSync } from 'node:child_process';
 import { readFileSync } from 'node:fs';
 import { join } from 'node:path';
+import { engineSource } from '../lib/engine-source';
 
 const REPO = join(__dirname, '../..');
 const PROJECT = join(REPO, 'orchestrations/projects/mock3');
@@ -61,7 +62,7 @@ describe('a runner gets only flags it accepts', () => {
   it('the mock launcher loads the project config dir it resolves', () => {
     // ea776eb. Resolving a config directory and never reading it is why a run launched with
     // EPAM_PROVIDER_SET=claude ended up on the repo .env's stale provider.
-    const src = readFileSync(join(REPO, 'orchestrations/scripts/tier3-mock-run.sh'), 'utf8');
+    const src = engineSource(join(REPO, 'orchestrations/scripts/tier3-mock-run.sh'));
     const resolves = /EPAM_PROJECT_CONFIG_DIR=/.test(src);
     expect(resolves, 'the launcher no longer resolves a project config dir').toBe(true);
     expect(src, 'the launcher resolves a config dir and never loads config.env from it, so the '

@@ -16,6 +16,7 @@ import { spawnSync } from 'node:child_process';
 import { mkdtempSync, writeFileSync, rmSync, readFileSync, readdirSync } from 'node:fs';
 import { tmpdir } from 'node:os';
 import { join } from 'node:path';
+import { engineSource } from '../../lib/engine-source';
 
 const ROOT = join(__dirname, '../../..');
 const CLAUDE_SH = join(ROOT, 'orchestrations/scripts/claude.sh');
@@ -32,7 +33,7 @@ function runBash(script: string) {
 
 /** Pull a verbatim slice of the shipped script between two anchors. */
 function slab(file: string, startAnchor: string, endAnchor: string) {
-  const src = readFileSync(file, 'utf8');
+  const src = engineSource(file);
   const a = src.indexOf(startAnchor);
   expect(a, `anchor not found: ${startAnchor}`).toBeGreaterThan(-1);
   const b = src.indexOf(endAnchor, a);
@@ -142,7 +143,7 @@ describe('a search query is never shortened', () => {
 
   for (const [rel, re] of cases) {
     it(`${rel} passes the whole query (${re.source.slice(0, 20)}…)`, () => {
-      const src = readFileSync(join(ROOT, 'orchestrations/scripts', rel), 'utf8');
+      const src = engineSource(join(ROOT, 'orchestrations/scripts', rel));
       expect(src).not.toMatch(re);
       // Non-vacuous: the assignment still exists, it just no longer cuts.
       expect(src).toMatch(/const safeQuery = /);
@@ -151,7 +152,7 @@ describe('a search query is never shortened', () => {
 });
 
 describe('spec-pass inputs arrive whole', () => {
-  const SRC = readFileSync(join(ROOT, 'orchestrations/scripts/spec-mode-runner.js'), 'utf8');
+  const SRC = engineSource(join(ROOT, 'orchestrations/scripts/spec-mode-runner.js'));
 
   it('cross-codeline contracts are neither capped nor cut', () => {
     expect(SRC, 'contract list capped at N files').not.toMatch(/files\.slice\(0,\s*\d+\)/);
@@ -183,7 +184,7 @@ describe('no negative-offset truncation reaches an agent', () => {
     const hits: string[] = [];
     for (const f of readdirSync(SCRIPTS)) {
       if (!f.endsWith('.sh')) continue;
-      readFileSync(join(SCRIPTS, f), 'utf8').split('\n').forEach((l, i) => {
+      engineSource(join(SCRIPTS, f)).split('\n').forEach((l, i) => {
         if (l.trim().startsWith('#')) return;
         if (/\$\{[A-Za-z_][A-Za-z0-9_]*: +-[0-9]+\}/.test(l)) hits.push(`${f}:${i + 1}  ${l.trim().slice(0, 80)}`);
       });
@@ -192,7 +193,7 @@ describe('no negative-offset truncation reaches an agent', () => {
   });
 
   it('the profile reviewer is given the change, not a tail of the file', () => {
-    const src = readFileSync(join(SCRIPTS, 'run-agent-orchestration.sh'), 'utf8');
+    const src = engineSource(join(SCRIPTS, 'run-agent-orchestration.sh'));
     expect(src).toMatch(/THE CHANGE ITSELF \(unified diff/);
     expect(src, 'the tail excerpt is back').not.toMatch(/excerpt, last 500 chars/);
   });

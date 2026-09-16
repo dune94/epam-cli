@@ -17,6 +17,7 @@ import { describe, it, expect } from 'vitest';
 import { spawnSync } from 'node:child_process';
 import { readFileSync } from 'node:fs';
 import { join } from 'node:path';
+import { engineSource } from '../../lib/engine-source';
 
 const ROOT = join(__dirname, '../../..');
 const ORCH = join(ROOT, 'orchestrations/scripts/run-agent-orchestration.sh');
@@ -64,7 +65,7 @@ describe('the bug-fix story is not written in the script', () => {
   });
 
   it('the script no longer holds the story text or a test runner’s name', () => {
-    const src = readFileSync(ORCH, 'utf8')
+    const src = engineSource(ORCH)
       .split('\n').filter((l) => !/^\s*#/.test(l)).join('\n');   // comments record the removal
     expect(src, 'the bug-fix description is still a literal in the script')
       .not.toContain('Fix the failing vitest tests');
@@ -75,7 +76,7 @@ describe('the bug-fix story is not written in the script', () => {
   it('assigns no role the engine invented', () => {
     // typescript-engineer is epam-cli's own role. A client project never minted it, so the story
     // was assigned to an agent that does not exist there.
-    const src = readFileSync(ORCH, 'utf8')
+    const src = engineSource(ORCH)
       .split('\n')
       .map((l, i) => [i + 1, l] as const)
       .filter(([, l]) => !/^\s*#/.test(l) && l.includes('typescript-engineer'));

@@ -13,12 +13,13 @@ import { spawnSync } from 'node:child_process';
 import { mkdtempSync, rmSync, readFileSync, writeFileSync, mkdirSync, chmodSync } from 'node:fs';
 import { tmpdir } from 'node:os';
 import { join, resolve } from 'node:path';
+import { engineSource } from '../../lib/engine-source';
 
 const ROOT = resolve(__dirname, '../../..');
 const dirs: string[] = [];
 afterAll(() => { for (const d of dirs) rmSync(d, { recursive: true, force: true }); });
 function extractFn(file: string, name: string): string {
-  const lines = readFileSync(file, 'utf8').split('\n');
+  const lines = engineSource(file).split('\n');
   const start = lines.findIndex((l) => new RegExp(`^${name}\\(\\)\\s*\\{`).test(l));
   if (start < 0) throw new Error(`${name}() not found in ${file}`);
   const end = lines.findIndex((l, i) => i > start && /^\}/.test(l));
@@ -41,7 +42,7 @@ describe("the writer path's healing recorder hands the KB the story's own role a
       'COORDINATOR_FAILURE_CLASS=unknown run_healing_recorder S-1 2 prd "a diagnosis" 0 false',
     ].join('\n');
     const r = spawnSync('bash', ['-c', script], { encoding: 'utf8', env: { ...process.env, STORY_ROLE: '' } });
-    const out = (() => { try { return readFileSync(seen, 'utf8'); } catch { return ''; } })();
+    const out = (() => { try { return engineSource(seen); } catch { return ''; } })();
     expect(out, r.stderr).toContain('record role=stand-in-engineer class=env');
     expect(out).toContain('synth role=stand-in-engineer');
     expect(out, '"unknown" is not a class the KB can key on').toContain('record role=stand-in-engineer class=\n');
@@ -57,7 +58,7 @@ describe('the tc-writer gate names itself as the role whose attempt failed', () 
     // A tc-writer that produces nothing (a failed attempt), and an analyst that records its env.
     writeFileSync(join(scripts, 'post-impl-tc-writer.sh'), '#!/bin/bash\nexit 0\n'); chmodSync(join(scripts, 'post-impl-tc-writer.sh'), 0o755);
     writeFileSync(join(scripts, 'agent-attempt-analyst.sh'), `#!/bin/bash\nprintf 'analyst class=%s role=%s story=%s\\n' "$1" "\${STORY_ROLE:-}" "\${AGENT_ANALYST_STORY_ID:-}" >> "${seen}"\nexit 0\n`); chmodSync(join(scripts, 'agent-attempt-analyst.sh'), 0o755);
-    const gate = readFileSync(join(ROOT, 'orchestrations/scripts/lib/tc-writer-gate.sh'), 'utf8');
+    const gate = engineSource(join(ROOT, 'orchestrations/scripts/lib/tc-writer-gate.sh'));
     const script = [
       'set -u', 'log() { :; }; warning() { :; }; error() { :; }; success() { :; }; info() { :; }',
       'seam_model_or_fail() { echo m; }', 'jq_vals() { jq -n "$@"; }',
@@ -67,7 +68,7 @@ describe('the tc-writer gate names itself as the role whose attempt failed', () 
       'run_inline_tc_writer_gate S-1 p || true',
     ].join('\n');
     const r = spawnSync('bash', ['-c', script], { encoding: 'utf8', env: { ...process.env, STORY_ROLE: '' }, timeout: 60000 });
-    const out = (() => { try { return readFileSync(seen, 'utf8'); } catch { return ''; } })();
+    const out = (() => { try { return engineSource(seen); } catch { return ''; } })();
     expect(out, `the analyst was never invoked\n${r.stderr.slice(-800)}`).toMatch(/analyst class=no_json role=tc-writer story=S-1/);
   });
 });
@@ -89,7 +90,7 @@ describe("Step 10's batch loop asks the attempt analyst on a failed attempt, as 
     // Still missing after attempt 1, populated after attempt 2.
     writeFileSync(join(handlers, 'tc-stories-needing-criteria.py'), `import os\nn=open("${seen}").read().count("attempt")\nprint("S-1" if n < 2 else "")\n`);
     writeFileSync(join(scripts, 'agent-attempt-analyst.sh'), `#!/bin/bash\nprintf 'analyst class=%s role=%s story=%s\\n' "$1" "\${STORY_ROLE:-}" "\${AGENT_ANALYST_STORY_ID:-}" >> "${seen}"\nexit 0\n`); chmodSync(join(scripts, 'agent-attempt-analyst.sh'), 0o755);
-    const src = readFileSync(join(ROOT, 'orchestrations/scripts/run-agent-orchestration.sh'), 'utf8');
+    const src = engineSource(join(ROOT, 'orchestrations/scripts/run-agent-orchestration.sh'));
     const start = src.indexOf('    for _tc_batch_attempt in 1 2 3; do');
     const end = src.indexOf('    done\n', start) + '    done\n'.length;
     expect(start).toBeGreaterThan(0);
@@ -100,7 +101,7 @@ describe("Step 10's batch loop asks the attempt analyst on a failed attempt, as 
       loop,
     ].join('\n');
     const r = spawnSync('bash', ['-c', script], { encoding: 'utf8', env: { ...process.env, STORY_ROLE: '' }, timeout: 60000 });
-    const out = (() => { try { return readFileSync(seen, 'utf8'); } catch { return ''; } })();
+    const out = (() => { try { return engineSource(seen); } catch { return ''; } })();
     expect(out, r.stderr.slice(-600)).toMatch(/analyst class=no_json role=tc-writer story=S-1/);
     expect((out.match(/attempt/g) || []).length, 'the loop stops once criteria are populated').toBe(2);
     void calls;

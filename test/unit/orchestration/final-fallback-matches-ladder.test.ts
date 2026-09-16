@@ -16,6 +16,7 @@
 import { describe, it, expect } from 'vitest';
 import { readFileSync, existsSync } from 'node:fs';
 import { join } from 'node:path';
+import { engineSource } from '../../lib/engine-source';
 
 const CONFIGS = [
   'orchestrations/projects/metrolinx/config.env',
@@ -36,7 +37,7 @@ describe('final fallback agrees with the HIGH ladder', () => {
   for (const cfg of CONFIGS) {
     const name = cfg.split('/').slice(-2).join('/');
     it(`${name}: EPAM_FINAL_FALLBACK_MODEL is the HIGH ladder's top rung`, () => {
-      const src = readFileSync(cfg, 'utf8');
+      const src = engineSource(cfg);
       const ladder = src.match(/^EPAM_MODEL_LADDER_HIGH="?([^"\n]+)"?$/m);
       const final = src.match(/^EPAM_FINAL_FALLBACK_MODEL=(.+)$/m);
       if (!ladder || !final) return;                    // config does not set both
@@ -44,7 +45,7 @@ describe('final fallback agrees with the HIGH ladder', () => {
     });
 
     it(`${name}: does not route to the discontinued kimi-k2`, () => {
-      const src = readFileSync(cfg, 'utf8');
+      const src = engineSource(cfg);
       const final = src.match(/^EPAM_FINAL_FALLBACK_MODEL=(.+)$/m);
       // Moonshot EOL'd the k2 series 2026-05-25; one OpenRouter provider remains.
       expect(final?.[1].trim()).not.toBe('moonshotai/kimi-k2');

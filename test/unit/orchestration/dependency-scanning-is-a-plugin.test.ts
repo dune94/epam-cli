@@ -38,6 +38,7 @@ import { describe, it, expect, afterAll } from 'vitest';
 import { mkdtempSync, writeFileSync, mkdirSync, rmSync, existsSync, readFileSync } from 'node:fs';
 import { join } from 'node:path';
 import { tmpdir } from 'node:os';
+import { engineSource } from '../../lib/engine-source';
 
 const ROOT = join(__dirname, '../../../');
 const PLUGIN = join(ROOT, 'orchestrations/plugins/dependency-scan-plugin.js');
@@ -163,7 +164,7 @@ describe('CLASSIFICATION uses the declaration, and a repo directory is not a pac
 });
 
 describe('THE PLUGIN NEVER INSTALLS', () => {
-  const src = () => readFileSync(PLUGIN, 'utf8')
+  const src = () => engineSource(PLUGIN)
     .split('\n').filter((l) => !/^\s*(\*|\/\/|\/\*)/.test(l)).join('\n');
 
   it('it cannot execute a process at all', () => {
@@ -199,7 +200,7 @@ describe('DECLARED AND LITERAL MUST NOT COEXIST', () => {
    * working with its declaration missing, and answered confidently and wrongly.
    */
   it('no declared value appears as a literal in the plugin', () => {
-    const code = readFileSync(PLUGIN, 'utf8')
+    const code = engineSource(PLUGIN)
       .split('\n')
       .filter((l) => !/^\s*(\*|\/\/|\/\*)/.test(l))
       .join('\n');
@@ -230,7 +231,7 @@ describe('DECLARED AND LITERAL MUST NOT COEXIST', () => {
 describe('THE ENGINE ROUTES THROUGH THE PLUGIN AND NO LONGER SCANS', () => {
   const CLAUDE = join(ROOT, 'orchestrations/scripts/claude.sh');
   const fn = (() => {
-    const src = readFileSync(CLAUDE, 'utf8');
+    const src = engineSource(CLAUDE);
     const start = src.indexOf('run_dependency_check() {');
     expect(start, 'run_dependency_check moved — this test is anchored on it').toBeGreaterThan(0);
     const end = src.indexOf('\n}\n', start);

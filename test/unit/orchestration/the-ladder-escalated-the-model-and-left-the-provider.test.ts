@@ -30,6 +30,7 @@ import { describe, it, expect } from 'vitest';
 import { spawnSync } from 'node:child_process';
 import { readFileSync } from 'node:fs';
 import { join } from 'node:path';
+import { engineSource } from '../../lib/engine-source';
 
 const ROOT = join(__dirname, '../../..');
 const CLAUDE_SH = join(ROOT, 'orchestrations/scripts/claude.sh');
@@ -38,7 +39,7 @@ const MAP = 'zhipuai/*=openrouter|moonshotai/*=openrouter|z-ai/*=openrouter|glm-
 
 /** Extract a shell function from claude.sh by name and run it — the established pattern. */
 function extractFn(name: string): string {
-  const src = readFileSync(CLAUDE_SH, 'utf8');
+  const src = engineSource(CLAUDE_SH);
   const re = new RegExp(`^${name}\\(\\)\\s*\\{[\\s\\S]*?\\n\\}`, 'm');
   const m = src.match(re);
   if (!m) throw new Error(`claude.sh has no function ${name}()`);
@@ -97,7 +98,7 @@ describe('the ladder escalated the model and left the provider', () => {
   });
 
   it('THE INVOCATION SYNCS BEFORE IT RUNS — not just when an arm remembers', () => {
-    const src = readFileSync(CLAUDE_SH, 'utf8');
+    const src = engineSource(CLAUDE_SH);
     // A CALL, not the definition and not the comment above it — both contain the name, and a
     // substring search on it passed with the call site deleted.
     const call = src.match(/^[ \t]+sync_provider_to_model[ \t]*$/m);
@@ -109,7 +110,7 @@ describe('the ladder escalated the model and left the provider', () => {
   });
 
   it('AND THE PROVIDER IS RECORDED EVERY ATTEMPT — the log could not name the failing pair', () => {
-    const src = readFileSync(CLAUDE_SH, 'utf8');
+    const src = engineSource(CLAUDE_SH);
     // The per-attempt line must carry BOTH, or three very different failures look identical.
     expect(src, 'no per-attempt line records provider and model together')
       .toMatch(/Invoking \$story_cli \(attempt[^\n]*provider|Attempt\[[^\]]*\][^\n]*provider/i);

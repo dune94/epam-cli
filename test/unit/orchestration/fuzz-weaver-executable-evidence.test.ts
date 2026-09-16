@@ -26,6 +26,7 @@ import { readFileSync, mkdtempSync, mkdirSync, writeFileSync, symlinkSync, rmSyn
 import { execFileSync } from 'node:child_process';
 import { join } from 'node:path';
 import { tmpdir } from 'node:os';
+import { engineSource } from '../../lib/engine-source';
 import { orchestratorSource } from '../../helpers/orchestrator-source';
 
 const REPO_ROOT = join(__dirname, '../../../');
@@ -43,7 +44,7 @@ function extractFuzzVerifyPython(): string {
   //
   // Reading the file is also stronger: the test exercises the exact bytes the pipeline executes,
   // rather than a slice that happened to match.
-  return readFileSync(join(REPO_ROOT, 'orchestrations/scripts/lib/handlers/fuzz-verify.py'), 'utf8');
+  return engineSource(join(REPO_ROOT, 'orchestrations/scripts/lib/handlers/fuzz-verify.py'));
 }
 
 function makeFixtureProject(): string {
@@ -347,8 +348,7 @@ describe('fuzz-weaver prompt — structural checks', () => {
   // the moment the prompt moved into the template layer (2026-08-15). The template IS the
   // block, so there is nothing to delimit.
   function extractFuzzPromptBlock(): string {
-    return JSON.parse(readFileSync(
-      join(REPO_ROOT, 'orchestrations/prompts/templates/qa-fuzz-weaver.json'), 'utf8')).body as string;
+    return JSON.parse(engineSource(join(REPO_ROOT, 'orchestrations/prompts/templates/qa-fuzz-weaver.json'))).body as string;
   }
 
   it('the fuzz prompt includes an executableTest field in the output schema', () => {

@@ -22,6 +22,7 @@ import { spawnSync } from 'node:child_process';
 import { readFileSync, writeFileSync, mkdtempSync, rmSync } from 'node:fs';
 import { join } from 'node:path';
 import { tmpdir } from 'node:os';
+import { engineSource } from '../../lib/engine-source';
 
 const ROOT = join(__dirname, '../../..');
 const VOCAB = join(ROOT, 'orchestrations/config/sast-vocabulary.json');
@@ -31,21 +32,21 @@ const made: string[] = [];
 afterAll(() => { for (const d of made) rmSync(d, { recursive: true, force: true }); });
 
 const templateBody = () => {
-  const doc = JSON.parse(readFileSync(TEMPLATE, 'utf8'));
+  const doc = JSON.parse(engineSource(TEMPLATE));
   return String(doc.body ?? Object.values(doc.bodies ?? {})[0] ?? '');
 };
 
 describe('the vocabulary is declared once', () => {
   it('there is a single declaration of the dependency-CVE rule name', () => {
-    const v = JSON.parse(readFileSync(VOCAB, 'utf8'));
+    const v = JSON.parse(engineSource(VOCAB));
     expect(typeof v.dependencyCveRulePrefix, 'no single place declares it').toBe('string');
     expect(v.dependencyCveRulePrefix.length).toBeGreaterThan(3);
   });
 
   it('the gate does not carry its own copy of the string', () => {
-    const py = readFileSync(BLOCKERS, 'utf8');
+    const py = engineSource(BLOCKERS);
     const executable = py.split('\n').filter((l) => !/^\s*#/.test(l)).join('\n');
-    const prefix = JSON.parse(readFileSync(VOCAB, 'utf8')).dependencyCveRulePrefix;
+    const prefix = JSON.parse(engineSource(VOCAB)).dependencyCveRulePrefix;
     expect(executable, `sast-blockers.py hardcodes "${prefix}" instead of reading the declaration`)
       .not.toContain(prefix);
   });
@@ -59,12 +60,12 @@ describe('the prompt asks for what the gate matches', () => {
   });
 
   it('and declares the placeholder it uses', () => {
-    const doc = JSON.parse(readFileSync(TEMPLATE, 'utf8'));
+    const doc = JSON.parse(engineSource(TEMPLATE));
     expect(doc.placeholders).toContain('__DEPENDENCY_CVE_RULE_PREFIX__');
   });
 
   it('the producer supplies it', () => {
-    const sh = readFileSync(join(ROOT, 'orchestrations/scripts/run-agent-orchestration.sh'), 'utf8');
+    const sh = engineSource(join(ROOT, 'orchestrations/scripts/run-agent-orchestration.sh'));
     expect(sh).toMatch(/__DEPENDENCY_CVE_RULE_PREFIX__/);
   });
 });
@@ -89,7 +90,7 @@ describe('one declaration drives both sides', () => {
   };
 
   it('a finding named by the declared vocabulary is advisory (pre-existing debt)', () => {
-    const prefix = JSON.parse(readFileSync(VOCAB, 'utf8')).dependencyCveRulePrefix;
+    const prefix = JSON.parse(engineSource(VOCAB)).dependencyCveRulePrefix;
     expect(countBlockers(report(`${prefix}critical-runtime`))).toBe('0');
   });
 
@@ -110,7 +111,7 @@ describe('one declaration drives both sides', () => {
   it('moving the declaration moves what the PROMPT asks for', () => {
     // The template holds a placeholder, so the rendered prompt carries whatever the declaration
     // says. If the body ever hardcodes the value, this catches it.
-    const prefix = JSON.parse(readFileSync(VOCAB, 'utf8')).dependencyCveRulePrefix;
+    const prefix = JSON.parse(engineSource(VOCAB)).dependencyCveRulePrefix;
     expect(templateBody(), 'the template hardcodes the rule name instead of taking the value')
       .not.toContain(prefix);
   });

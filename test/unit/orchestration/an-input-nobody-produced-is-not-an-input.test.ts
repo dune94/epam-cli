@@ -21,6 +21,7 @@ import { spawnSync } from 'node:child_process';
 import { mkdtempSync, mkdirSync, copyFileSync, readFileSync } from 'node:fs';
 import { tmpdir } from 'node:os';
 import { join } from 'node:path';
+import { engineSource } from '../../lib/engine-source';
 
 const REPO = join(__dirname, '../../..');
 const ORCH = join(REPO, 'orchestrations/scripts/run-agent-orchestration.sh');
@@ -55,20 +56,20 @@ describe('an input nobody produced is not an input', () => {
   }, 60_000);
 
   it('the caller no longer invents a payload when it cannot build one', () => {
-    const src = readFileSync(ORCH, 'utf8');
+    const src = engineSource(ORCH);
     expect(src, 'the caller still falls back to a well-formed but empty router input')
       .not.toMatch(/\|\| echo '\{"phase":"","stories":\[\],"cpaSignals":\[\]\}'/);
   });
 
   it('it says the model router was skipped, so the heuristic is not mistaken for a decision', () => {
-    const src = readFileSync(ORCH, 'utf8');
+    const src = engineSource(ORCH);
     expect(src, 'the skip is silent — the topology cannot be told from a model-chosen one')
       .toMatch(/SKIPPING the model router/);
   });
 
   it('and the router is not called at all without a payload', () => {
     // Calling it with an empty string would reach the same refusal, just later and more quietly.
-    const src = readFileSync(ORCH, 'utf8');
+    const src = engineSource(ORCH);
     expect(src, 'the router is still invoked unconditionally')
       .toMatch(/\[ -n "\$_stories_payload" \] && _router_out=/);
   });

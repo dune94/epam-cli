@@ -20,10 +20,11 @@ import { spawnSync } from 'node:child_process';
 import { mkdtempSync, mkdirSync, writeFileSync, rmSync, readFileSync, existsSync } from 'node:fs';
 import { join } from 'node:path';
 import { tmpdir } from 'node:os';
+import { engineSource } from '../../lib/engine-source';
 
 const ROOT = join(__dirname, '../../../');
 const ORCH = join(ROOT, 'orchestrations/scripts/run-agent-orchestration.sh');
-const SRC = readFileSync(ORCH, 'utf8');
+const SRC = engineSource(ORCH);
 
 const dirs: string[] = [];
 afterAll(() => { for (const d of dirs) rmSync(d, { recursive: true, force: true }); });

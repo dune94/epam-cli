@@ -35,10 +35,11 @@ import { execFileSync, spawnSync } from 'node:child_process';
 import { mkdtempSync, mkdirSync, writeFileSync, rmSync } from 'node:fs';
 import { join, dirname } from 'node:path';
 import { tmpdir } from 'node:os';
+import { engineSource } from '../../lib/engine-source';
 
 const REPO_ROOT = join(__dirname, '../../../');
 const CLAUDE_SH = join(REPO_ROOT, 'orchestrations/scripts/claude.sh');
-const claudeSrc = require('node:fs').readFileSync(CLAUDE_SH, 'utf8');
+const claudeSrc = engineSource(CLAUDE_SH);
 
 function extractFunctionBody(name: string): string {
   const m = new RegExp(`^\\s*${name}\\(\\)\\s*\\{`, 'm').exec(claudeSrc);

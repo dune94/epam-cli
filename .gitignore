@@ -133,3 +133,4 @@ npm-package/amsd-pipeline/install.sh
 orchestrations/projects/*/prd.json
 orchestrations/projects/*/prd.json.pre-*
 orchestrations/scripts/.preflight-cache/
+orchestrations/scripts/.inlined/

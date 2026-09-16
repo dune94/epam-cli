@@ -14,6 +14,7 @@
 import { describe, it, expect } from 'vitest';
 import { readFileSync, readdirSync } from 'node:fs';
 import { join, extname } from 'node:path';
+import { engineSource } from '../../lib/engine-source';
 
 const REPO = join(__dirname, '../../..');
 const SCRIPTS_DIR = join(REPO, 'orchestrations/scripts');
@@ -21,7 +22,7 @@ const SCRIPTS_DIR = join(REPO, 'orchestrations/scripts');
 // ── helpers ──────────────────────────────────────────────────────────────────
 
 function scriptSrc(name: string): string {
-  return readFileSync(join(SCRIPTS_DIR, name), 'utf8');
+  return engineSource(join(SCRIPTS_DIR, name));
 }
 
 /** Strip bash/JS/TS comments from source so we only scan executable lines. */
@@ -122,9 +123,7 @@ describe('spec-mode-runner.js — no hardcoded story IDs in executable code', ()
 
 // ── 6. test infrastructure — test files use file-based lookup ────────────────
 describe('test-story-ac-integrity.test.ts — mock data only, no hardcoded story IDs', () => {
-  const src = readFileSync(
-    join(REPO, 'test/unit/orchestration/test-story-ac-integrity.test.ts'), 'utf8'
-  );
+  const src = engineSource(join(REPO, 'test/unit/orchestration/test-story-ac-integrity.test.ts'));
 
   it('uses mock PRD fixture data (not real travel-app PRD)', () => {
     // The file must use mock data, not the live travel-app-prd.canonical.json
@@ -142,9 +141,7 @@ describe('test-story-ac-integrity.test.ts — mock data only, no hardcoded story
 });
 
 describe('ui-phase-invariants.test.ts — property-based lookup, no hardcoded IDs', () => {
-  const src = readFileSync(
-    join(REPO, 'test/unit/orchestration/ui-phase-invariants.test.ts'), 'utf8'
-  );
+  const src = engineSource(join(REPO, 'test/unit/orchestration/ui-phase-invariants.test.ts'));
 
   it('does not use id.startsWith() with a literal story ID prefix', () => {
     expect(src).not.toMatch(/startsWith\(['"]SKY-/);
@@ -182,7 +179,7 @@ describe('storyByFile coverage — key source files have exactly one story owner
 
   let prd: any = null;
   try {
-    prd = JSON.parse(readFileSync(join(REPO, 'orchestrations/travel-app-prd.json'), 'utf8'));
+    prd = JSON.parse(engineSource(join(REPO, 'orchestrations/travel-app-prd.json')));
   } catch { /* not available */ }
 
   function ownersOf(fileSuffix: string): any[] {

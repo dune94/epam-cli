@@ -28,6 +28,7 @@
 import { describe, it, expect } from 'vitest';
 import { readFileSync, readdirSync } from 'node:fs';
 import { join } from 'node:path';
+import { engineSource } from '../../lib/engine-source';
 
 const ROOT = join(__dirname, '../../../');
 const SCRIPTS = join(ROOT, 'orchestrations/scripts');
@@ -44,7 +45,7 @@ function engineScripts(): Array<{ file: string; lines: string[] }> {
   for (const f of readdirSync(join(SCRIPTS, 'lib'))) {
     if (f.endsWith('.sh')) files.push(join(SCRIPTS, 'lib', f));
   }
-  return files.map((file) => ({ file: file.replace(ROOT, ''), lines: readFileSync(file, 'utf8').split('\n') }));
+  return files.map((file) => ({ file: file.replace(ROOT, ''), lines: engineSource(file).split('\n') }));
 }
 
 /** Lines that decide whether to verify by counting a language's source files. */

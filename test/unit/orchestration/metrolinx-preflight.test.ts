@@ -21,6 +21,7 @@ import { spawnSync } from 'node:child_process';
 import { mkdtempSync, writeFileSync, rmSync, readFileSync, existsSync } from 'node:fs';
 import { join } from 'node:path';
 import { tmpdir } from 'node:os';
+import { engineSource } from '../../lib/engine-source';
 
 const REPO_ROOT = join(__dirname, '../../../');
 const ORCH = join(REPO_ROOT, 'orchestrations/scripts/run-agent-orchestration.sh');
@@ -28,7 +29,7 @@ const CLAUDE_SH = join(REPO_ROOT, 'orchestrations/scripts/claude.sh');
 const CONFIG = join(REPO_ROOT, 'orchestrations/projects/metrolinx/config.env');
 
 function cfg(key: string): string {
-  const m = readFileSync(CONFIG, 'utf8').match(new RegExp(`^${key}="?([^"\\n]*)"?$`, 'm'));
+  const m = engineSource(CONFIG).match(new RegExp(`^${key}="?([^"\\n]*)"?$`, 'm'));
   return m ? m[1] : '';
 }
 
@@ -45,7 +46,7 @@ const HAVE_CODELINES = CODELINES.length > 0 && CODELINES.every((c) => c.path && 
  * closed is worse than none: it manufactures gaps.
  */
 function fnText(scriptPath: string, fnName: string): string {
-  const src = readFileSync(scriptPath, 'utf8');
+  const src = engineSource(scriptPath);
   const start = src.indexOf(`${fnName}() {`);
   if (start === -1) throw new Error(`${fnName} not found in ${scriptPath}`);
   const end = src.indexOf('\n}', start);
@@ -100,7 +101,7 @@ describe.skipIf(!HAVE_CODELINES)('metrolinx pre-flight — real codelines, real 
     // What the probe now depends on, checked directly so a failure names the
     // cause rather than surfacing as "unhealthy".
     for (const c of CODELINES) {
-      const pkg = JSON.parse(readFileSync(join(c.path, 'package.json'), 'utf8'));
+      const pkg = JSON.parse(engineSource(join(c.path, 'package.json')));
       const declared = String(pkg.scripts?.test || '');
       expect(declared, `${c.name} declares no scripts.test`).toBeTruthy();
       const runner = declared.split(' ')[0];

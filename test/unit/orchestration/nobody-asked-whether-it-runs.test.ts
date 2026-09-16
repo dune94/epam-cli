@@ -25,13 +25,14 @@
 import { describe, it, expect } from 'vitest';
 import { readFileSync } from 'node:fs';
 import { join } from 'node:path';
+import { engineSource } from '../../lib/engine-source';
 
 const ROOT = join(__dirname, '../../..');
 const REGISTRY = join(ROOT, 'orchestrations/agents/invocation-profiles.json');
 const TEMPLATE = join(ROOT, 'orchestrations/prompts/templates/runtime-boundary-review.json');
 
-const registry = () => JSON.parse(readFileSync(REGISTRY, 'utf8'));
-const template = () => JSON.parse(readFileSync(TEMPLATE, 'utf8'));
+const registry = () => JSON.parse(engineSource(REGISTRY));
+const template = () => JSON.parse(engineSource(TEMPLATE));
 const body = (): string => {
   const j = template();
   return String(j.body ?? Object.values(j.bodies ?? {}).join('\n'));
@@ -99,7 +100,7 @@ describe('and it actually runs', () => {
   // A registered seam nobody invokes is a capability that exists only on paper. Every other
   // capability found missing this week — the client-env boundary check, the escalation the
   // flip-flop guard calls — was written and then not reached.
-  const sh = () => readFileSync(join(ROOT, 'orchestrations/scripts/run-agent-orchestration.sh'), 'utf8');
+  const sh = () => engineSource(join(ROOT, 'orchestrations/scripts/run-agent-orchestration.sh'));
 
   it('is invoked through the same gate machinery as its siblings', () => {
     expect(sh(), 'the seam is registered but nothing calls it')
@@ -130,7 +131,7 @@ describe('and it actually runs', () => {
 });
 
 describe('its verdict is waited for', () => {
-  const sh = () => readFileSync(join(ROOT, 'orchestrations/scripts/run-agent-orchestration.sh'), 'utf8');
+  const sh = () => engineSource(join(ROOT, 'orchestrations/scripts/run-agent-orchestration.sh'));
 
   it('the background job is waited on, not left running past the phase', () => {
     // First wiring launched it with & and never waited: the phase would move on while the gate was

@@ -15,9 +15,10 @@
 import { describe, it, expect } from 'vitest';
 import { spawnSync } from 'node:child_process';
 import { join } from 'node:path';
+import { engineSourceFile } from '../../lib/engine-source';
 
 const ROOT = join(__dirname, '../../..');
-const CLAUDE_SH = join(ROOT, 'orchestrations/scripts/claude.sh');
+const CLAUDE_SH = engineSourceFile(join(ROOT, 'orchestrations/scripts/claude.sh')); // the inlined program: this test lifts text, it does not execute the main
 
 /** Executes the REAL phase-resolution helper with the given environment. */
 function resolvePhase(env: Record<string, string>): string {

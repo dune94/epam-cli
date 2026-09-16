@@ -17,6 +17,7 @@ import { describe, it, expect } from 'vitest';
 import { readFileSync, mkdtempSync, writeFileSync, rmSync } from 'node:fs';
 import { join } from 'node:path';
 import { tmpdir } from 'node:os';
+import { engineSource } from '../../lib/engine-source';
 
 const REPO_ROOT = join(__dirname, '../../../');
 const SPEC_MODE_RUNNER = join(REPO_ROOT, 'orchestrations/scripts/spec-mode-runner.js');
@@ -53,7 +54,7 @@ describe('resolveModelProvider() — JS port of resolve_model_provider (config-d
 });
 
 describe('spec-mode model-override path keeps aiProvider in sync (source inspection)', () => {
-  const src = readFileSync(SPEC_MODE_RUNNER, 'utf8');
+  const src = engineSource(SPEC_MODE_RUNNER);
 
   it('calls resolveModelProvider immediately after mutating story.model', () => {
     const idx = src.indexOf('story.model = fa.finalModel;');

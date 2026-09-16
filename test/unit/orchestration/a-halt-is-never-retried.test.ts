@@ -34,6 +34,7 @@ import { spawnSync } from 'node:child_process';
 import { mkdtempSync, rmSync, writeFileSync, readFileSync, existsSync, chmodSync, mkdirSync, readdirSync } from 'node:fs';
 import { tmpdir } from 'node:os';
 import { join } from 'node:path';
+import { engineSource } from '../../lib/engine-source';
 
 const SCRIPTS = join(__dirname, '../../../orchestrations/scripts');
 
@@ -53,7 +54,7 @@ const LAUNCHERS = [
  * run-agent-orchestration.sh that exits `code`. Returns how many times the stub ran.
  */
 function runPhaseWithStub(launcher: string, code: number) {
-  const src = readFileSync(join(SCRIPTS, launcher), 'utf8');
+  const src = engineSource(join(SCRIPTS, launcher));
   const start = src.indexOf('run_phase() {');
   if (start < 0) return { found: false, calls: 0, out: '' };
   // Balance to the function's closing brace at column 0.
@@ -79,7 +80,7 @@ function runPhaseWithStub(launcher: string, code: number) {
     // The real shared decision function — not a copy.
     writeFileSync(
       join(stubDir, 'lib', 'phase-exit.sh'),
-      readFileSync(join(SCRIPTS, 'lib', 'phase-exit.sh'), 'utf8'),
+      engineSource(join(SCRIPTS, 'lib', 'phase-exit.sh')),
     );
 
     const harness = `
@@ -101,7 +102,7 @@ function runPhaseWithStub(launcher: string, code: number) {
     `;
     const res = spawnSync('bash', ['-c', harness], { encoding: 'utf8' });
     const calls = existsSync(counter)
-      ? readFileSync(counter, 'utf8').split('\n').filter(Boolean).length
+      ? engineSource(counter).split('\n').filter(Boolean).length
       : 0;
     return { found: true, calls, out: (res.stdout || '') + (res.stderr || '') };
   } finally {
@@ -157,7 +158,7 @@ describe('every caller can actually reach the decision', () => {
   it('no script calls the function without sourcing the library', () => {
     const files = readdirSync(SCRIPTS).filter((f) => f.endsWith('.sh'));
     const offenders = files.filter((f) => {
-      const src = readFileSync(join(SCRIPTS, f), 'utf8');
+      const src = engineSource(join(SCRIPTS, f));
       return src.includes('phase_exit_is_retryable "') && !src.includes('lib/phase-exit.sh');
     });
     expect(offenders, `these call the function but never source it: ${offenders.join(', ')}`).toEqual([]);
@@ -168,7 +169,7 @@ describe('every caller can actually reach the decision', () => {
     // therefore fail loudly rather than continue with the function undefined.
     const files = readdirSync(SCRIPTS).filter((f) => f.endsWith('.sh'));
     const unguarded = files.filter((f) => {
-      const src = readFileSync(join(SCRIPTS, f), 'utf8');
+      const src = engineSource(join(SCRIPTS, f));
       const line = src.split('\n').find((l) => l.trim().startsWith('. "$SCRIPT_DIR/lib/phase-exit.sh"'));
       return line !== undefined && !/\|\|/.test(line);
     });

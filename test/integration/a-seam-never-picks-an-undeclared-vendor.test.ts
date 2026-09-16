@@ -23,6 +23,7 @@ import { mkdtempSync, writeFileSync, readFileSync, existsSync, chmodSync } from 
 import { tmpdir } from 'node:os';
 import { join } from 'node:path';
 import { LADDERS } from '../helpers/seam-receiver';
+import { engineSource } from '../lib/engine-source';
 
 const REPO = join(__dirname, '../..');
 const AC_GATE = join(REPO, 'orchestrations/scripts/lib/ac-gate.js');
@@ -30,7 +31,7 @@ const AC_GATE = join(REPO, 'orchestrations/scripts/lib/ac-gate.js');
 /** Vendors any declared set can route to — read from the sets, never listed here. */
 function declaredProviders(): Set<string> {
   const out = new Set<string>();
-  const src = readFileSync(join(REPO, 'orchestrations/scripts/run-agent-orchestration.sh'), 'utf8');
+  const src = engineSource(join(REPO, 'orchestrations/scripts/run-agent-orchestration.sh'));
   for (const m of src.matchAll(/^\s{4,}([a-z][a-z0-9-]*)\)\s+CLAUDE_SH=/gm)) out.add(m[1]);
   return out;
 }
@@ -85,7 +86,7 @@ function runAcGate(env: Record<string, string>) {
 
   const vectors: string[][] = [];
   if (existsSync(argvLog)) {
-    for (const line of readFileSync(argvLog, 'utf8').split('\n')) {
+    for (const line of engineSource(argvLog).split('\n')) {
       if (line === '--CALL--') { vectors.push([]); continue; }
       if (vectors.length) vectors[vectors.length - 1].push(line);
     }

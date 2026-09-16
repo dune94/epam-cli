@@ -35,14 +35,15 @@ import { readFileSync, mkdtempSync, writeFileSync, rmSync } from 'node:fs';
 import { execFileSync } from 'node:child_process';
 import { join } from 'node:path';
 import { tmpdir } from 'node:os';
+import { engineSource } from '../../lib/engine-source';
 
 const REPO_ROOT = join(__dirname, '../../../');
 const ORCH_SH = join(REPO_ROOT, 'orchestrations/scripts/run-agent-orchestration.sh');
-const orchSrc = readFileSync(ORCH_SH, 'utf8');
+const orchSrc = engineSource(ORCH_SH);
 const GATE_LIB = join(REPO_ROOT, 'orchestrations/scripts/lib/tc-writer-gate.sh');
-const gateSrc = readFileSync(GATE_LIB, 'utf8');
+const gateSrc = engineSource(GATE_LIB);
 const TC_WRITER_SH = join(REPO_ROOT, 'orchestrations/scripts/post-impl-tc-writer.sh');
-const tcWriterSrc = readFileSync(TC_WRITER_SH, 'utf8');
+const tcWriterSrc = engineSource(TC_WRITER_SH);
 
 /**
  * Ask the GATE ITSELF whether a story needs test criteria — sourced and called for real.
@@ -129,7 +130,7 @@ describe('TC-writer gating — combo-story scoping (static)', () => {
     // scraping the shell for `is_test_story` found nothing and passed on an empty set. Read the
     // handlers that actually carry it, and require at least the two that do.
     const handlers = ['tc-stories-needing-criteria.py', 'tc-story-context.py']
-      .map((h) => readFileSync(join(REPO_ROOT, 'orchestrations/scripts/lib/handlers', h), 'utf8'));
+      .map((h) => engineSource(join(REPO_ROOT, 'orchestrations/scripts/lib/handlers', h)));
     const matches = handlers.flatMap((src) => [...src.matchAll(/is_test_story = (.+)/g)]);
     expect(matches.length, 'the is_test_story classification is no longer where this looks')
       .toBeGreaterThanOrEqual(2);

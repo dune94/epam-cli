@@ -25,6 +25,7 @@ import { mkdtempSync, mkdirSync, writeFileSync, rmSync, existsSync, readFileSync
 import { execFileSync, execSync } from 'node:child_process';
 import { join } from 'node:path';
 import { tmpdir } from 'node:os';
+import { engineSource } from '../../lib/engine-source';
 
 function codegraphAvailable(): boolean {
   try { execSync('command -v codegraph', { stdio: 'ignore' }); return true; } catch { return false; }
@@ -102,7 +103,7 @@ describe('CodeGraph index survival across git clean (real git, real fixture)', (
     // Apply the protection (idempotent; runs on both the already-indexed and
     // freshly-indexed paths).
     cg.ensureIndexed(repo);
-    const exclude = readFileSync(join(repo, '.git', 'info', 'exclude'), 'utf8');
+    const exclude = engineSource(join(repo, '.git', 'info', 'exclude'));
     expect(exclude).toMatch(/^\.codegraph\/?$/m);
     // Now the exact sequence that destroyed the index before — 3 passes of a
     // BARE `git clean -fd` (no -e). With .codegraph/ excluded at the git level,
@@ -135,7 +136,7 @@ describe('CodeGraph index survival across git clean (real git, real fixture)', (
         .map((l) => l.replace(/#.*$/, '').trim())
         .filter((l) => /git\b.*\bclean\b/.test(l));
 
-    const preflightReset = readFileSync(join(REPO_ROOT, 'orchestrations/scripts/brownfield-preflight-reset.sh'), 'utf8');
+    const preflightReset = engineSource(join(REPO_ROOT, 'orchestrations/scripts/brownfield-preflight-reset.sh'));
     for (const line of commandLines(preflightReset)) {
       expect(line, `unprotected git clean in brownfield-preflight-reset.sh: ${line}`).toContain('-e .codegraph');
     }
@@ -143,7 +144,7 @@ describe('CodeGraph index survival across git clean (real git, real fixture)', (
     // run-agent-orchestration.sh also has greenfield-teardown cleans (those
     // repos are deleted wholesale, no index to protect). Assert specifically
     // that the brownfield merge-step clean IS protected.
-    const orch = readFileSync(join(REPO_ROOT, 'orchestrations/scripts/run-agent-orchestration.sh'), 'utf8');
+    const orch = engineSource(join(REPO_ROOT, 'orchestrations/scripts/run-agent-orchestration.sh'));
     expect(orch).toMatch(/clean -fd -e \.codegraph/);
   });
 });

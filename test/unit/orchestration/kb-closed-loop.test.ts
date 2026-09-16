@@ -26,6 +26,7 @@ import { execFileSync } from 'node:child_process';
 import { mkdtempSync, writeFileSync, chmodSync, rmSync, existsSync, readFileSync } from 'node:fs';
 import { tmpdir } from 'node:os';
 import { join } from 'node:path';
+import { engineSource } from '../../lib/engine-source';
 
 const SCRIPTS = join(__dirname, '../../../orchestrations/scripts');
 const KB_CLI = join(SCRIPTS, 'lib/kb-cli.js');
@@ -81,7 +82,7 @@ describe('self-heal loop — record → synthesize → apply → tick', () => {
       { AI_RUNNER_CMD: stubRunner(RULE) });
     expect(out, 'no constraint id returned — synthesis is not reachable from the CLI').toBeTruthy();
 
-    const constraints = JSON.parse(readFileSync(join(root, 'constraints.json'), 'utf8'));
+    const constraints = JSON.parse(engineSource(join(root, 'constraints.json')));
     expect(constraints.length, 'synthesis produced no stored constraint').toBe(1);
 
     // 3. APPLY — compiles to env exports, and to nothing else.
@@ -102,13 +103,13 @@ describe('self-heal loop — record → synthesize → apply → tick', () => {
     cli(root, ['synthesize-auto', '--agent-role', ROLE, '--signature', SIG],
       { AI_RUNNER_CMD: stubRunner(RULE) });
 
-    const before = JSON.parse(readFileSync(join(root, 'constraints.json'), 'utf8'))[0];
+    const before = JSON.parse(engineSource(join(root, 'constraints.json')))[0];
     expect(before.cycles_idle).toBe(0);
 
     // A cycle in which NOTHING fired.
     cli(root, ['tick', '--fired', '']);
 
-    const after = JSON.parse(readFileSync(join(root, 'constraints.json'), 'utf8'))[0];
+    const after = JSON.parse(engineSource(join(root, 'constraints.json')))[0];
     expect(after.cycles_idle,
       'tick is not reachable from the CLI, so no rule ever ages and stale knowledge is trusted forever')
       .toBe(1);
@@ -117,7 +118,7 @@ describe('self-heal loop — record → synthesize → apply → tick', () => {
 
 describe('self-heal loop — the shell seam the pipeline actually uses', () => {
   it('kb-apply.sh exposes synthesis and tick, not just record and apply', () => {
-    const src = readFileSync(join(SCRIPTS, 'lib/kb-apply.sh'), 'utf8');
+    const src = engineSource(join(SCRIPTS, 'lib/kb-apply.sh'));
     expect(src, 'no synthesis entry point — episodes accumulate but no rule is ever built')
       .toMatch(/kb_maybe_synthesize/);
     expect(src, 'no TTL entry point — rules never age out for re-validation')
@@ -125,7 +126,7 @@ describe('self-heal loop — the shell seam the pipeline actually uses', () => {
   });
 
   it('claude.sh drives synthesis after recording a failure', () => {
-    const src = readFileSync(join(SCRIPTS, 'claude.sh'), 'utf8');
+    const src = engineSource(join(SCRIPTS, 'claude.sh'));
     expect(src,
       'claude.sh records episodes but never synthesises, so apply can only ever find nothing')
       .toMatch(/kb_maybe_synthesize/);

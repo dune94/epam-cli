@@ -23,6 +23,7 @@ import { execFileSync } from 'node:child_process';
 import { readFileSync, writeFileSync, mkdtempSync, rmSync } from 'node:fs';
 import { join } from 'node:path';
 import { tmpdir } from 'node:os';
+import { engineSource } from '../../lib/engine-source';
 
 const ROOT = join(__dirname, '../../../');
 const CLAUDE_SH = join(ROOT, 'orchestrations/scripts/claude.sh');
@@ -44,7 +45,7 @@ function deriveDedupe(configPath: string): string {
 /** A copy of the real config with toolPolicy patched. */
 function configWith(patch: Record<string, unknown>): string {
   const dir = mkdtempSync(join(tmpdir(), 'toolpolicy-')); dirs.push(dir);
-  const cfg = JSON.parse(readFileSync(CONFIG, 'utf8'));
+  const cfg = JSON.parse(engineSource(CONFIG));
   cfg.toolPolicy = { ...(cfg.toolPolicy ?? {}), ...patch };
   const p = join(dir, 'spec-mode-defaults.json');
   writeFileSync(p, JSON.stringify(cfg, null, 2));
@@ -56,7 +57,7 @@ describe('the dedupe flag is derived from config, not from a literal', () => {
     // Comments are excluded deliberately: the fix documents the old literal in a comment above
     // the new derivation, and a whole-file substring match flagged that prose as the defect.
     // A sweep that cannot tell a call site from a description of one reports its own comment.
-    const code = readFileSync(CLAUDE_SH, 'utf8')
+    const code = engineSource(CLAUDE_SH)
       .split('\n')
       .filter((l) => !l.trim().startsWith('#'))
       .join('\n');

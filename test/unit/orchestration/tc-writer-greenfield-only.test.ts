@@ -27,9 +27,10 @@ import { describe, it, expect } from 'vitest';
 import { spawnSync } from 'node:child_process';
 import { readFileSync } from 'node:fs';
 import { join } from 'node:path';
+import { engineSource } from '../../lib/engine-source';
 
 const ORCH_PATH = join(__dirname, '../../../orchestrations/scripts/run-agent-orchestration.sh');
-const ORCH = readFileSync(ORCH_PATH, 'utf8');
+const ORCH = engineSource(ORCH_PATH);
 
 /**
  * Pull the REAL skip condition out of the script — not a copy of it. If the script stops

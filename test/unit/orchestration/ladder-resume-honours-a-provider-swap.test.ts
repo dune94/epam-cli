@@ -22,9 +22,10 @@ import { spawnSync } from 'node:child_process';
 import { mkdtempSync, writeFileSync, mkdirSync, rmSync, readFileSync } from 'node:fs';
 import { join } from 'node:path';
 import { tmpdir } from 'node:os';
+import { engineSource } from '../../lib/engine-source';
 
 const CLAUDE = join(__dirname, '../../../orchestrations/scripts/claude.sh');
-const SRC = readFileSync(CLAUDE, 'utf8');
+const SRC = engineSource(CLAUDE);
 const RETRY_STATE_LIB = join(__dirname, '../../../orchestrations/scripts/lib/story-retry-state.sh');
 const RESOLVE_PRIMARY_PROVIDER_LIB =
   join(__dirname, '../../../orchestrations/scripts/lib/resolve-primary-provider.sh');

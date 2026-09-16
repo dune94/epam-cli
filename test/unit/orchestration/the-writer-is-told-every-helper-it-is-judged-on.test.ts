@@ -36,6 +36,7 @@ import { spawnSync } from 'node:child_process';
 import { mkdtempSync, writeFileSync, rmSync, readFileSync } from 'node:fs';
 import { tmpdir } from 'node:os';
 import { join } from 'node:path';
+import { engineSource } from '../../lib/engine-source';
 
 const CLAUDE_SH = join(__dirname, '../../../orchestrations/scripts/claude.sh');
 
@@ -66,7 +67,7 @@ function guardSymbols(prdPath: string): string[] {
 
 /** What the PROMPT tells the writer — the real query, extracted from claude.sh. */
 function promptQuery(): string {
-  const src = readFileSync(CLAUDE_SH, 'utf8');
+  const src = engineSource(CLAUDE_SH);
   // The assignment is multi-line: `_prescribed_helper_list=$(echo ... | jq -r '<program>'`.
   // Extract the jq program itself, so the test reads whatever the engine actually runs.
   const at = src.indexOf('_prescribed_helper_list=$(');

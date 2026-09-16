@@ -30,13 +30,14 @@ import { readFileSync, mkdtempSync, mkdirSync, writeFileSync, rmSync, chmodSync 
 import { execFileSync } from 'node:child_process';
 import { join } from 'node:path';
 import { tmpdir } from 'node:os';
+import { engineSource } from '../../lib/engine-source';
 
 const REPO_ROOT = join(__dirname, '../../../');
 const SANDBOX_INVOKE_SH = join(REPO_ROOT, 'orchestrations/scripts/lib/sandbox-invoke.sh');
 const ORCH_SH = join(REPO_ROOT, 'orchestrations/scripts/run-agent-orchestration.sh');
 const CLAUDE_SH = join(REPO_ROOT, 'orchestrations/scripts/claude.sh');
-const orchSrc = readFileSync(ORCH_SH, 'utf8');
-const claudeSrc = readFileSync(CLAUDE_SH, 'utf8');
+const orchSrc = engineSource(ORCH_SH);
+const claudeSrc = engineSource(CLAUDE_SH);
 
 function extractFunctionByLineAnchor(src: string, name: string): string {
   const lines = src.split('\n');

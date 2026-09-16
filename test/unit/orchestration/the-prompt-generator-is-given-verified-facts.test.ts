@@ -32,6 +32,7 @@ import { describe, it, expect } from 'vitest';
 import { mkdtempSync, mkdirSync, writeFileSync, existsSync } from 'node:fs';
 import { join } from 'node:path';
 import { tmpdir } from 'node:os';
+import { engineSource } from '../../lib/engine-source';
 
 const REPO = process.cwd();
 const LIB = join(REPO, 'orchestrations/scripts/lib/codeline-context.js');
@@ -118,7 +119,7 @@ describe('the prompt generator is given verified facts', () => {
 
   it('THE MINT USES IT — a builder nothing calls changes no prompt', () => {
     const { readFileSync } = require('node:fs');
-    const src = readFileSync(MINT, 'utf8');
+    const src = engineSource(MINT);
     expect(src, 'mint-agents-step.js does not use the fact-carrying builder')
       .toMatch(/buildCodelineContext/);
   });

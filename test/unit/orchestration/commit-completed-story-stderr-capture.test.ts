@@ -17,13 +17,14 @@ import { execFileSync, spawnSync } from 'node:child_process';
 import { mkdtempSync, mkdirSync, writeFileSync, chmodSync, rmSync, readFileSync } from 'node:fs';
 import { join } from 'node:path';
 import { tmpdir } from 'node:os';
+import { engineSource } from '../../lib/engine-source';
 
 const REPO_ROOT = join(__dirname, '../../../');
 // commit_completed_story() moved to lib/git-ops.sh (2026-08-02 git-ops
 // consolidation) — single source of truth shared by claude.sh,
 // codemie-claude.sh, and run-agent-orchestration.sh.
 const CLAUDE_SH = join(REPO_ROOT, 'orchestrations/scripts/lib/git-ops.sh');
-const claudeSrc = readFileSync(CLAUDE_SH, 'utf8');
+const claudeSrc = engineSource(CLAUDE_SH);
 
 function extractFunctionBody(name: string): string {
   // Source the whole lib rather than slicing one function out of it.

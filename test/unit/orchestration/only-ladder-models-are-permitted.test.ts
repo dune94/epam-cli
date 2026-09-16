@@ -26,9 +26,10 @@ import { join } from 'node:path';
 // a model belongs to a STACK. This file read the project copy, which now carries only a note
 // saying so, and every lookup came back empty. See test/support/llm-settings.ts.
 import { stackSettings, defaultStack } from '../../support/llm-settings'
+import { engineSource } from '../../lib/engine-source';
 
 const ROOT = join(__dirname, '../../../');
-const SRC = readFileSync(join(ROOT, 'orchestrations/scripts/claude.sh'), 'utf8');
+const SRC = engineSource(join(ROOT, 'orchestrations/scripts/claude.sh'));
 const CFG = stackSettings(defaultStack());
 const TIERS = Object.keys(CFG.ladders);
 

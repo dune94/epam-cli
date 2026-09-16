@@ -35,6 +35,7 @@ import { execFileSync } from 'node:child_process';
 import { mkdtempSync, mkdirSync, writeFileSync, readFileSync, existsSync, rmSync } from 'node:fs';
 import { join } from 'node:path';
 import { tmpdir } from 'node:os';
+import { engineSource } from '../lib/engine-source';
 
 const REPO_ROOT = join(__dirname, '../../');
 const CLI = join(REPO_ROOT, 'dist/epam.js');
@@ -46,7 +47,7 @@ const GATE_MODEL = process.env.ORCH_GATE_MODEL || 'z-ai/glm-5.2';
 const hasKey = !!(process.env.OPENROUTER_API_KEY || process.env.EPAM_API_KEY_OPENROUTER);
 
 function bridgeProfileText(): string {
-  const profiles = JSON.parse(readFileSync(PROFILES_FILE, 'utf8'));
+  const profiles = JSON.parse(engineSource(PROFILES_FILE));
   const text = profiles['codeline-bridge-agent'];
   expect(text, 'codeline-bridge-agent profile is missing from profiles.json').toBeTruthy();
   return text;
@@ -134,7 +135,7 @@ describe.skipIf(!hasKey)('granting tools lets codeline-bridge-agent actually rea
         'the model narrated a response but BRIDGE_OUT_FILE was never actually written — ' +
         'this is the exact prior failure mode ("I have written the file" with nothing on disk)')
         .toBe(true);
-      const contract = readFileSync(outFile, 'utf8');
+      const contract = engineSource(outFile);
       expect(contract).toMatch(/renderWidget/);
     } finally {
       rmSync(root, { recursive: true, force: true });

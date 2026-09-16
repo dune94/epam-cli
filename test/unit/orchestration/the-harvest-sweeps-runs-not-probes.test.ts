@@ -21,6 +21,7 @@ import { spawnSync } from 'node:child_process';
 import { mkdtempSync, writeFileSync, rmSync, existsSync, readdirSync, chmodSync, readFileSync } from 'node:fs';
 import { join } from 'node:path';
 import { tmpdir } from 'node:os';
+import { engineSource } from '../../lib/engine-source';
 
 const ROOT = join(__dirname, '../../../');
 const WATCH = join(ROOT, 'orchestrations/scripts/cassette-watch.js');
@@ -78,23 +79,23 @@ describe('the harvest sweeps runs, not every probe anyone fired', () => {
   });
 
   it('the run-session shape is DECLARED, not written into the sweep', () => {
-    const cfg = JSON.parse(readFileSync(OBS_CONFIG, 'utf8'));
+    const cfg = JSON.parse(engineSource(OBS_CONFIG));
     expect(cfg.runSession?.idPattern, 'observability.json declares no run-session shape').toBeTruthy();
-    const src = readFileSync(WATCH, 'utf8');
+    const src = engineSource(WATCH);
     expect(/costseam|e2e-emitter|test-/.test(src),
       'the sweep hardcodes a probe naming convention instead of reading the declaration').toBe(false);
   });
 
   it('THE BINDING: the declared pattern accepts what the pipeline actually mints', () => {
     // Executes the real mint — not a re-typed copy, and not a source grep.
-    const line = readFileSync(ORCH, 'utf8').split('\n').find((l) => /ORCH_RUN_ID=.*date -u/.test(l));
+    const line = engineSource(ORCH).split('\n').find((l) => /ORCH_RUN_ID=.*date -u/.test(l));
     expect(line, 'run-agent-orchestration.sh no longer mints a run id with date -u').toBeTruthy();
     const fmt = /date -u (\+\S+?)\)/.exec(line!)?.[1];
     expect(fmt, `could not read the mint format out of: ${line}`).toBeTruthy();
     const minted = spawnSync('date', ['-u', fmt!], { encoding: 'utf8' }).stdout.trim();
     expect(minted, 'the mint produced nothing').toBeTruthy();
 
-    const pattern = JSON.parse(readFileSync(OBS_CONFIG, 'utf8')).runSession.idPattern;
+    const pattern = JSON.parse(engineSource(OBS_CONFIG)).runSession.idPattern;
     expect(new RegExp(pattern).test(minted),
       `the declared pattern ${pattern} rejects a freshly minted run id ${minted} — ` +
       'the harvest would skip every real run').toBe(true);

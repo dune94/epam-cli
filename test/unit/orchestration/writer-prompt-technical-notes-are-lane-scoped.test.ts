@@ -30,12 +30,13 @@ import { describe, it, expect } from 'vitest';
 import { execFileSync } from 'node:child_process';
 import { readFileSync } from 'node:fs';
 import { join } from 'node:path';
+import { engineSource } from '../../lib/engine-source';
 
 const CLAUDE_SH = join(__dirname, '../../../orchestrations/scripts/claude.sh');
 
 /** The shipped function body, lifted verbatim — never a paraphrase. */
 function shippedFn(): string {
-  const src = readFileSync(CLAUDE_SH, 'utf8');
+  const src = engineSource(CLAUDE_SH);
   const start = src.indexOf('_render_technical_notes() {');
   expect(start, '_render_technical_notes not found').toBeGreaterThan(-1);
   const end = src.indexOf('\n}\n', start);

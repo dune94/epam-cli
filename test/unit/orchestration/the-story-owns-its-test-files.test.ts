@@ -3,6 +3,7 @@ import { spawnSync } from 'node:child_process';
 import fs from 'node:fs';
 import os from 'node:os';
 import path from 'node:path';
+import { engineSource } from '../../lib/engine-source';
 
 /**
  * _project_owned_test_files RETURNED NOTHING FOR EVERY STORY, ALWAYS.
@@ -33,7 +34,7 @@ describe('the files a story owns', () => {
   // Drives the SHELL function end to end, which now delegates to the plugin through the one
   // generic invoker. Lifting all three keeps the harness faithful to what production executes.
   const runOwned = (root: string, sid: string, prd: string) => {
-    const body = fs.readFileSync(claude, 'utf8');
+    const body = engineSource(claude);
     const parts = ['_verification_plugin_call', '_project_owned_test_files', '_project_scoped_test_command']
       .map((n) => {
         const m = body.match(new RegExp(`${n}\\(\\)\\s*\\{[\\s\\S]*?\\n\\}`));
@@ -94,7 +95,7 @@ echo "SCOPED=$(_project_scoped_test_command "${root}" "$owned")"
       const prd = path.join(projectsDir, project, 'prd.json');
       if (!fs.existsSync(prd)) continue;
       let j: any;
-      try { j = JSON.parse(fs.readFileSync(prd, 'utf8')); } catch { continue; }
+      try { j = JSON.parse(engineSource(prd)); } catch { continue; }
       const dirs = (j.project && j.project.outputDirs) || [];
       for (const s of (j.stories || [])) {
         const files = (s && s.technicalNotes && s.technicalNotes.files) || [];
@@ -131,7 +132,7 @@ echo "SCOPED=$(_project_scoped_test_command "${root}" "$owned")"
     // Both of these were node programs written inside bash single-quoted strings: unrunnable
     // standalone, untestable, stderr to /dev/null. That is how an argument destructured one
     // position too far went unnoticed for the life of the function.
-    const body = fs.readFileSync(claude, 'utf8');
+    const body = engineSource(claude);
     for (const name of ['_project_owned_test_files', '_project_scoped_test_command']) {
       const m = body.match(new RegExp(`${name}\\(\\)\\s*\\{[\\s\\S]*?\\n\\}`));
       expect(m, `${name} not found`).toBeTruthy();

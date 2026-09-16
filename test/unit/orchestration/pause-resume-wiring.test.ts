@@ -16,12 +16,13 @@ import { spawnSync } from 'node:child_process';
 import { mkdtempSync, mkdirSync, writeFileSync, rmSync, readFileSync, existsSync } from 'node:fs';
 import { join } from 'node:path';
 import { tmpdir } from 'node:os';
+import { engineSource } from '../../lib/engine-source';
 
 const REPO_ROOT = join(__dirname, '../../../');
 const ORCH = join(REPO_ROOT, 'orchestrations/scripts/run-agent-orchestration.sh');
 const LIB = join(REPO_ROOT, 'orchestrations/scripts/lib/run-checkpoint.sh');
 const FLAGS = join(REPO_ROOT, 'orchestrations/scripts/lib/flags.sh');
-const orchSrc = readFileSync(ORCH, 'utf8');
+const orchSrc = engineSource(ORCH);
 
 const dirs: string[] = [];
 afterEach(() => {
@@ -309,7 +310,7 @@ describe('the pre-writer pause stops before any story is written', () => {
     const w = workspace();
     runPreWriter(w, { EPAM_PAUSE_BEFORE_WRITER: '1' });
     const meta = JSON.parse(
-      readFileSync(join(w.projectDir, 'runs', '20260803T120000Z', 'checkpoint', 'checkpoint.json'), 'utf8'),
+      engineSource(join(w.projectDir, 'runs', '20260803T120000Z', 'checkpoint', 'checkpoint.json')),
     );
     expect(meta.stage).toBe('pre-writer');
   });

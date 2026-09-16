@@ -25,13 +25,14 @@ import { execFileSync } from 'node:child_process';
 import { readFileSync, mkdtempSync, rmSync } from 'node:fs';
 import { join } from 'node:path';
 import { tmpdir } from 'node:os';
+import { engineSource } from '../../lib/engine-source';
 
 const ROOT = join(__dirname, '../../../');
 const tmpDirs: string[] = [];
 afterAll(() => { for (const d of tmpDirs) rmSync(d, { recursive: true, force: true }); });
-const ORCH = readFileSync(join(ROOT, 'orchestrations/scripts/run-agent-orchestration.sh'), 'utf8');
-const GUARDS = readFileSync(join(ROOT, 'orchestrations/scripts/lib/story-guards.sh'), 'utf8');
-const CFG = JSON.parse(readFileSync(join(ROOT, 'orchestrations/projects/metrolinx/llm-settings.json'), 'utf8'));
+const ORCH = engineSource(join(ROOT, 'orchestrations/scripts/run-agent-orchestration.sh'));
+const GUARDS = engineSource(join(ROOT, 'orchestrations/scripts/lib/story-guards.sh'));
+const CFG = JSON.parse(engineSource(join(ROOT, 'orchestrations/projects/metrolinx/llm-settings.json')));
 
 const SPI: number = CFG.timeouts.secondsPerIteration;
 const CAP: number = CFG.timeouts.storyTimeoutMaxSecs;

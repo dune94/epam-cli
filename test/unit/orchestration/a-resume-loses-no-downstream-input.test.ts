@@ -24,6 +24,7 @@ import { spawnSync } from 'node:child_process';
 import { mkdtempSync, mkdirSync, writeFileSync, rmSync, existsSync, readFileSync, readdirSync, statSync } from 'node:fs';
 import { join } from 'node:path';
 import { tmpdir } from 'node:os';
+import { engineSource } from '../../lib/engine-source';
 
 const ROOT = join(__dirname, '../../../');
 const SCRIPTS = join(ROOT, 'orchestrations/scripts');
@@ -39,7 +40,7 @@ function sources(dir: string, acc: string[] = []): string[] {
   }
   return acc;
 }
-const SRC = sources(SCRIPTS).map((f) => ({ f, text: readFileSync(f, 'utf8') }));
+const SRC = sources(SCRIPTS).map((f) => ({ f, text: engineSource(f) }));
 
 /** Artefacts the pipeline writes into its log directory. */
 function written(): Set<string> {

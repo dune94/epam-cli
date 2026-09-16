@@ -39,9 +39,10 @@ import { mkdtempSync, mkdirSync, writeFileSync, readFileSync, rmSync, existsSync
 import { execFileSync } from 'node:child_process';
 import { join } from 'node:path';
 import { tmpdir } from 'node:os';
+import { engineSource } from '../../lib/engine-source';
 
 const CLAUDE_SH = join(__dirname, '../../../orchestrations/scripts/claude.sh');
-const claudeSrc = readFileSync(CLAUDE_SH, 'utf8');
+const claudeSrc = engineSource(CLAUDE_SH);
 
 const PREAMBLE = [
   // The extracted function is a reporter now: it calls
@@ -123,7 +124,7 @@ function runDependencyCheck(configExtra: Record<string, unknown>) {
     execFileSync('bash', [scriptPath], { encoding: 'utf8', timeout: 15000 });
 
     const logPath = join(dir, 'installed.log');
-    const installed = existsSync(logPath) ? readFileSync(logPath, 'utf8') : '';
+    const installed = existsSync(logPath) ? engineSource(logPath) : '';
     return installed;
   } finally {
     rmSync(dir, { recursive: true, force: true });

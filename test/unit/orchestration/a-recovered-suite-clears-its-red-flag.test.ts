@@ -29,12 +29,13 @@ import { spawnSync } from 'node:child_process';
 import { mkdtempSync, writeFileSync, rmSync, readFileSync } from 'node:fs';
 import { tmpdir } from 'node:os';
 import { join } from 'node:path';
+import { engineSource } from '../../lib/engine-source';
 
 const ORCH = join(__dirname, '../../../orchestrations/scripts/run-agent-orchestration.sh');
 
 /** Run the real clearing function against a PRD fixture. */
 function clearAndRead(stories: Array<Record<string, unknown>>, phase = 'core') {
-  const src = readFileSync(ORCH, 'utf8');
+  const src = engineSource(ORCH);
   const start = src.indexOf('_clear_suite_state_for_phase() {');
   expect(start, '_clear_suite_state_for_phase not found').toBeGreaterThan(-1);
   const fn = src.slice(start, src.indexOf('\n}\n', start) + 3);
@@ -56,7 +57,7 @@ function clearAndRead(stories: Array<Record<string, unknown>>, phase = 'core') {
     `], { encoding: 'utf8' });
     return {
       out: (res.stdout || '') + (res.stderr || ''),
-      prd: JSON.parse(readFileSync(prd, 'utf8')),
+      prd: JSON.parse(engineSource(prd)),
     };
   } finally {
     rmSync(dir, { recursive: true, force: true });
@@ -89,7 +90,7 @@ describe('the RED flag is not a latch', () => {
     );
     // implementationOrder.core lists both here, so both clear; the guard is that the
     // function reads the phase list rather than clearing every story in the file.
-    const src = readFileSync(ORCH, 'utf8');
+    const src = engineSource(ORCH);
     const fn = src.slice(src.indexOf('_clear_suite_state_for_phase() {'));
     expect(fn.slice(0, 900)).toContain('implementationOrder');
     expect(r.prd.stories.every((s: any) => s.suiteState === undefined)).toBe(true);
@@ -104,7 +105,7 @@ describe('the RED flag is not a latch', () => {
   it('never writes a partial PRD if jq fails', () => {
     // The write path refuses to continue on an unrecordable state; clearing must be at
     // least as careful — a truncated PRD is worse than a stale flag.
-    const src = readFileSync(ORCH, 'utf8');
+    const src = engineSource(ORCH);
     const fn = src.slice(src.indexOf('_clear_suite_state_for_phase() {'));
     const body = fn.slice(0, fn.indexOf('\n}\n'));
     expect(body, 'must stage through a temp file, not redirect over the PRD').toMatch(/mktemp/);
@@ -116,7 +117,7 @@ describe('Step 3.55 still blocks a suite that is genuinely red', () => {
   it('the reading gate is unchanged — it still selects suiteState == "red"', () => {
     // The latch is being made clearable, NOT removed. A story whose suite never recovered
     // must still block before review.
-    const src = readFileSync(ORCH, 'utf8');
+    const src = engineSource(ORCH);
     expect(src).toMatch(/select\(\.suiteState == "red"\)/);
   });
 });

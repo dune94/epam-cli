@@ -32,9 +32,10 @@ import { mkdtempSync, writeFileSync, mkdirSync, rmSync, readFileSync, chmodSync,
 import { execFileSync } from 'node:child_process';
 import { join } from 'node:path';
 import { tmpdir } from 'node:os';
+import { engineSource } from '../../lib/engine-source';
 
 const CLAUDE_SH = join(__dirname, '../../../orchestrations/scripts/claude.sh');
-const SRC = readFileSync(CLAUDE_SH, 'utf8');
+const SRC = engineSource(CLAUDE_SH);
 const dirs: string[] = [];
 afterAll(() => { for (const d of dirs) rmSync(d, { recursive: true, force: true }); });
 
@@ -77,7 +78,7 @@ function invokeWriter(prompt: string) {
 ${block}`,
   ], { encoding: 'utf8' });
 
-  return existsSync(received) ? readFileSync(received, 'utf8') : '';
+  return existsSync(received) ? engineSource(received) : '';
 }
 
 describe('the writer invocation delivers its prompt', () => {

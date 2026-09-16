@@ -43,9 +43,10 @@ import { spawnSync } from 'node:child_process';
 import { mkdtempSync, writeFileSync, rmSync, readFileSync } from 'node:fs';
 import { join } from 'node:path';
 import { tmpdir } from 'node:os';
+import { engineSource } from '../../lib/engine-source';
 
 const CLAUDE = join(__dirname, '../../../orchestrations/scripts/claude.sh');
-const SRC = readFileSync(CLAUDE, 'utf8');
+const SRC = engineSource(CLAUDE);
 // resolve_provider_settings() now calls resolve_primary_provider() (2026-09-03, see
 // change-log/SEAM-CONSISTENCY-ANALYSIS.md) — a real dependency in a separate sourced file, not
 // something fnText()'s single-function extraction can see. Sourced by absolute path so it works

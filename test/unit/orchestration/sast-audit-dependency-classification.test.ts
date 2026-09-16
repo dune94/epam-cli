@@ -23,9 +23,10 @@ import { spawnSync } from 'node:child_process';
 import { mkdtempSync, writeFileSync, rmSync, readFileSync } from 'node:fs';
 import { join } from 'node:path';
 import { tmpdir } from 'node:os';
+import { engineSource } from '../../lib/engine-source';
 
 const REPO_ROOT = join(__dirname, '../../../');
-const orchSrc = readFileSync(join(REPO_ROOT, 'orchestrations/scripts/run-agent-orchestration.sh'), 'utf8');
+const orchSrc = engineSource(join(REPO_ROOT, 'orchestrations/scripts/run-agent-orchestration.sh'));
 
 /**
  * THE SUMMARISER, WHICH IS NOW A FILE.

@@ -35,6 +35,7 @@ import { execFileSync, spawn } from 'node:child_process';
 import { mkdtempSync, mkdirSync, writeFileSync, appendFileSync, readFileSync, rmSync, symlinkSync, existsSync } from 'node:fs';
 import { join } from 'node:path';
 import { tmpdir } from 'node:os';
+import { engineSource } from '../../lib/engine-source';
 
 const REPO_ROOT = join(__dirname, '../../../');
 // Launch through the REAL launcher, never the orchestrator directly. Invoking
@@ -129,7 +130,7 @@ function makeMockCodeline(name: string): { clone: string } {
 function makeRuntimePrd(laneA: string, laneB: string): string {
   const dir = mkdtempSync(join(tmpdir(), 'mock3-prd-'));
   cleanupDirs.push(dir);
-  const prd = JSON.parse(readFileSync(CANONICAL_PRD, 'utf8'));
+  const prd = JSON.parse(engineSource(CANONICAL_PRD));
   prd.project.outputDirs = [
     { codeline: 'mock-a', path: laneA },
     { codeline: 'mock-b', path: laneB },
@@ -168,7 +169,7 @@ function runPipeline(prdPath: string, phase: string): Promise<{ stdout: string; 
     // the epam-cli repo root here is precisely what the PROJECT_ROOT guard exists to
     // reject — it aborts the run in under a second, and worse, would point agents at
     // this repo instead of the disposable codeline.
-    const laneRoot = JSON.parse(readFileSync(prdPath, 'utf8')).project.outputDir as string;
+    const laneRoot = JSON.parse(engineSource(prdPath)).project.outputDir as string;
     const child = spawn('bash', [MOCK_LAUNCHER, '--prd', prdPath, '--project-root', laneRoot, '--phase', phase], {
       cwd: REPO_ROOT,
       env: {
@@ -203,7 +204,7 @@ function runPipeline(prdPath: string, phase: string): Promise<{ stdout: string; 
 function laneState(clone: string) {
   const branches = execFileSync('git', ['branch', '--list'], { cwd: clone, encoding: 'utf8' });
   let greeting = '';
-  try { greeting = readFileSync(join(clone, 'src/hello.ts'), 'utf8'); } catch { /* absent */ }
+  try { greeting = engineSource(join(clone, 'src/hello.ts')); } catch { /* absent */ }
   return { branches, greeting };
 }
 
@@ -248,7 +249,7 @@ describe.skipIf(!RUN_REAL)('Mock 3 — REAL multi-codeline lane loop, two codeli
 
     await runPipeline(prd, 'mock3_core');
 
-    const after = JSON.parse(readFileSync(prd, 'utf8'));
+    const after = JSON.parse(engineSource(prd));
     const story = after.stories.find((s: { id: string }) => s.id === 'SPAN-1');
     expect(story, 'SPAN-1 vanished from the PRD').toBeTruthy();
     expect(story.perCodeline, 'no per-lane state was merged back into canonical').toBeTruthy();
@@ -263,14 +264,14 @@ describe('mock3 wiring is valid without spending anything', () => {
   // These run in the FREE sweep: a fixture that has drifted out of shape should
   // fail loudly in CI, not silently skip until someone opts into a paid run.
   it('the canonical fixture declares one story spanning two codelines', () => {
-    const prd = JSON.parse(readFileSync(CANONICAL_PRD, 'utf8'));
+    const prd = JSON.parse(engineSource(CANONICAL_PRD));
     expect(prd.stories).toHaveLength(1);
     expect(prd.stories[0].codelines).toEqual(['mock-a', 'mock-b']);
   });
 
   it('the runtime PRD injects only the codeline paths, and nothing else', () => {
     const prd = JSON.parse(readFileSync(makeRuntimePrd('/tmp/a', '/tmp/b'), 'utf8'));
-    const canonical = JSON.parse(readFileSync(CANONICAL_PRD, 'utf8'));
+    const canonical = JSON.parse(engineSource(CANONICAL_PRD));
     expect(prd.project.outputDirs).toHaveLength(2);
     // Everything except the injected paths must be identical to canonical, so
     // the injection cannot quietly grow into hand-authored fixture content.

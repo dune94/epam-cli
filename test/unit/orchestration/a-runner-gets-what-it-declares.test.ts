@@ -16,6 +16,7 @@ import { describe, it, expect, afterEach } from 'vitest';
 import { mkdtempSync, writeFileSync, mkdirSync, rmSync, readFileSync, readdirSync } from 'fs';
 import { tmpdir } from 'os';
 import { join } from 'path';
+import { engineSource } from '../../lib/engine-source';
 
 const ROOT = join(__dirname, '../../..');
 const MOD = join(ROOT, 'orchestrations/scripts/lib/llm-settings-resolve.js');
@@ -98,7 +99,7 @@ describe('a runner gets what it declares', () => {
     expect(files.length).toBeGreaterThan(10);
     const offenders: string[] = [];
     for (const f of files) {
-      const code = readFileSync(f, 'utf8').split('\n')
+      const code = engineSource(f).split('\n')
         .filter((l) => !/^\s*(#|\/\/|\*)/.test(l)).join('\n');
       // THE BUDGET KNOBS ONLY. Not every CLAUDE_CODE_* name belongs in a declaration:
       // sandbox-invoke.sh suppresses telemetry and non-essential traffic, and cpa-inference.js

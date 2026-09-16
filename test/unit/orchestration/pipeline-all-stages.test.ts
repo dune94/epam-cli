@@ -16,6 +16,7 @@ import { describe, it, expect } from 'vitest';
 import { readFileSync, existsSync } from 'node:fs';
 import { join } from 'node:path';
 import { execSync } from 'node:child_process';
+import { engineSource } from '../../lib/engine-source';
 
 // ─── Shared fixtures ──────────────────────────────────────────────────────────
 
@@ -28,7 +29,7 @@ const TIER3_SCRIPT = join(REPO, 'orchestrations/scripts/tier3-travel-app-run.sh'
 const SPEC_RUNNER = join(REPO, 'orchestrations/scripts/spec-mode-runner.js');
 const AI_RUN = join(REPO, 'orchestrations/scripts/llm-handler.sh');
 
-const prd = JSON.parse(readFileSync(PRD_PATH, 'utf8'));
+const prd = JSON.parse(engineSource(PRD_PATH));
 const implementationOrder: Record<string, string[]> = prd.implementationOrder ?? {};
 const phaseNames = Object.keys(implementationOrder);
 const activeIds = new Set<string>(Object.values(implementationOrder).flat());
@@ -78,7 +79,7 @@ function basenameOf(f: string): string {
 describe('PRD — structural invariants (all phases)', () => {
   it('PRD file exists and is valid JSON', () => {
     expect(existsSync(PRD_PATH)).toBe(true);
-    expect(() => JSON.parse(readFileSync(PRD_PATH, 'utf8'))).not.toThrow();
+    expect(() => JSON.parse(engineSource(PRD_PATH))).not.toThrow();
   });
 
   it('implementationOrder has scaffold and core phases', () => {
@@ -677,7 +678,7 @@ describe('Expected output file contracts — PRD declares correct paths', () => 
 // ─────────────────────────────────────────────────────────────────────────────
 
 describe('spec-mode-runner.js — source code invariants', () => {
-  const src = readFileSync(SPEC_RUNNER, 'utf8');
+  const src = engineSource(SPEC_RUNNER);
 
   it('the runner keeps no ladder of its own — escalation belongs to the one channel', () => {
     /*
@@ -809,7 +810,7 @@ describe('spec-mode-runner.js — functional: resolvePromptExec ladder contract'
 // ─────────────────────────────────────────────────────────────────────────────
 
 describe('run-agent-orchestration.sh — flow invariants', () => {
-  const src = readFileSync(ORCH_SCRIPT, 'utf8');
+  const src = engineSource(ORCH_SCRIPT);
 
   it('Step 0: spec pass failure exits 1 (no silently continuing with broken specs)', () => {
     expect(src).toMatch(/Specification pass FAILED[\s\S]{0,200}exit 1/);
@@ -906,7 +907,7 @@ describe('run-agent-orchestration.sh — flow invariants', () => {
 // ─────────────────────────────────────────────────────────────────────────────
 
 describe('tier3-travel-app-run.sh — provider + timeout configuration', () => {
-  const src = readFileSync(TIER3_SCRIPT, 'utf8');
+  const src = engineSource(TIER3_SCRIPT);
 
   it('exports ORCH_GATE_PROVIDER (required by spec-mode)', () => {
     expect(src).toMatch(/export ORCH_GATE_PROVIDER=/);
@@ -955,7 +956,7 @@ describe('tier3-travel-app-run.sh — provider + timeout configuration', () => {
 // ─────────────────────────────────────────────────────────────────────────────
 
 describe('ai-run.sh — provider routing', () => {
-  const src = readFileSync(AI_RUN, 'utf8');
+  const src = engineSource(AI_RUN);
 
   it('--provider flag is supported', () => {
     expect(src).toMatch(/--provider/);
@@ -999,13 +1000,13 @@ describe('Preflight check — script exists and is runnable', () => {
   });
 
   it('preflight-check.sh accepts --runner and --prd flags', () => {
-    const src = readFileSync(PREFLIGHT, 'utf8');
+    const src = engineSource(PREFLIGHT);
     expect(src).toMatch(/--runner/);
     expect(src).toMatch(/--prd/);
   });
 
   it('preflight-check.sh validates PRD_FILE exists', () => {
-    const src = readFileSync(PREFLIGHT, 'utf8');
+    const src = engineSource(PREFLIGHT);
     expect(src).toMatch(/PRD_FILE|prd/i);
   });
 });

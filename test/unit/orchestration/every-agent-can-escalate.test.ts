@@ -36,12 +36,13 @@ import { join } from 'node:path';
 // a model belongs to a STACK. This file read the project copy, which now carries only a note
 // saying so, so every lookup came back empty. See test/support/llm-settings.ts.
 import { stackSettings, defaultStack } from '../../support/llm-settings'
+import { engineSource } from '../../lib/engine-source';
 
 const ROOT = join(__dirname, '../../../');
 const REGISTRY = join(ROOT, 'orchestrations/agents/invocation-profiles.json');
 
 function profiles(): Record<string, any> {
-  const parsed = JSON.parse(readFileSync(REGISTRY, 'utf8'));
+  const parsed = JSON.parse(engineSource(REGISTRY));
   const out: Record<string, any> = {};
   for (const [k, v] of Object.entries(parsed.profiles || parsed)) {
     if (k.startsWith('_') || k === 'defaults') continue;
@@ -129,13 +130,13 @@ describe('THE TIER IS A CHOICE, NOT A DEFAULT', () => {
 
 describe('BOTH CONSUMERS READ THE KEY — a ladder nothing reads is decoration', () => {
   it('the JS seam resolver reads profile.ladder', () => {
-    const src = readFileSync(join(ROOT, 'orchestrations/scripts/lib/seam-invocation.js'), 'utf8');
+    const src = engineSource(join(ROOT, 'orchestrations/scripts/lib/seam-invocation.js'));
     expect(src).toContain('profile.ladder');
     expect(src, 'the name must map to the project-declared rungs').toContain('EPAM_MODEL_LADDER_');
   });
 
   it('the shell invoke gateway reads it too', () => {
-    const src = readFileSync(join(ROOT, 'orchestrations/scripts/lib/agent-invoke.sh'), 'utf8');
+    const src = engineSource(join(ROOT, 'orchestrations/scripts/lib/agent-invoke.sh'));
     const code = src.split('\n').filter((l) => !/^\s*#/.test(l)).join('\n');
     expect(code, 'shell-invoked seams would silently have no ladder').toMatch(/agent_profile_get\s+"\$role"\s+ladder/);
   });
@@ -174,7 +175,7 @@ describe('EVERY TIER IN USE IS ACTUALLY EXPORTED BY THE LOADER', () => {
 
   function loadedLadderVars(): Record<string, string> {
     const claude = join(ROOT, 'orchestrations/scripts/claude.sh');
-    const src = readFileSync(claude, 'utf8');
+    const src = engineSource(claude);
     const start = src.indexOf('load_llm_settings_json() {');
     expect(start, 'load_llm_settings_json moved — this test is anchored on it').toBeGreaterThan(0);
     const body = src.slice(start, src.indexOf('\n}\n', start) + 2);

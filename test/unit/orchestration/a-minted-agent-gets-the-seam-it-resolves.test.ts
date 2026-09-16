@@ -21,6 +21,7 @@ import { describe, it, expect } from 'vitest';
 import { spawnSync } from 'node:child_process';
 import { readFileSync } from 'node:fs';
 import { join } from 'node:path';
+import { engineSource } from '../../lib/engine-source';
 
 const ROOT = join(__dirname, '../../..');
 const SCRIPTS = join(ROOT, 'orchestrations/scripts');
@@ -85,7 +86,7 @@ describe('a minted agent gets the seam it resolves', () => {
 
   it('apply and resolve agree — one resolution, not two', () => {
     // The defect in one line: two different notions of "does this agent have a seam".
-    const body = readFileSync(LADDER, 'utf8').split('\n').filter((l) => !/^\s*#/.test(l)).join('\n');
+    const body = engineSource(LADDER).split('\n').filter((l) => !/^\s*#/.test(l)).join('\n');
     expect(body, 'apply still does its own narrower lookup instead of asking resolveSeam')
       .toMatch(/resolveSeam\(process\.argv\[2\]\)/);
     expect(body, 'the exact-key-only check is back')
@@ -95,7 +96,7 @@ describe('a minted agent gets the seam it resolves', () => {
   it('every agent an exact entry covers is unaffected', () => {
     // The change must widen what works, never alter what already did. 57 of 60 profiles on the
     // real roster resolve by exact key; a regression there would silently re-tier the whole run.
-    const reg = JSON.parse(readFileSync(REGISTRY, 'utf8'));
+    const reg = JSON.parse(engineSource(REGISTRY));
     const exact = Object.keys(reg.agentSeams || {}).filter((a) => !/(^|-)(investigator|engineer|fixer|agent)$/.test(a));
     expect(exact.length, 'no exactly-declared agent found to check').toBeGreaterThan(5);
     for (const agent of exact.slice(0, 6)) {
@@ -108,7 +109,7 @@ describe('a minted agent gets the seam it resolves', () => {
 
   it('a new agent type is onboarded by naming it, not by editing the registry', () => {
     // The point of the whole mechanism: extensibility without enumeration.
-    const reg = JSON.parse(readFileSync(REGISTRY, 'utf8'));
+    const reg = JSON.parse(engineSource(REGISTRY));
     const novel = 'payments-ledger-investigator';
     expect(Object.keys(reg.agentSeams || {}), 'the fixture is pre-declared, so it proves nothing')
       .not.toContain(novel);

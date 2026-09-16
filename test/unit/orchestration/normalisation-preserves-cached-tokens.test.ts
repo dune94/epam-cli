@@ -29,13 +29,14 @@ import { describe, it, expect } from 'vitest';
 import { execFileSync } from 'node:child_process';
 import { readFileSync } from 'node:fs';
 import { join } from 'node:path';
+import { engineSource } from '../../lib/engine-source';
 
 const ROOT = join(__dirname, '../../../');
 const CLAUDE_SH = join(ROOT, 'orchestrations/scripts/claude.sh');
 
 /** The jq program the epam branch of normalize_provider_json runs, lifted by anchor. */
 function jqProgram(): string {
-  const src = readFileSync(CLAUDE_SH, 'utf8');
+  const src = engineSource(CLAUDE_SH);
   const start = src.indexOf(`jq -s '[.[] | select(has("result"))]`);
   const end = src.indexOf(`' "$raw_file"`, start);
   if (start === -1 || end === -1) throw new Error('normaliser anchors not found — extraction stale');

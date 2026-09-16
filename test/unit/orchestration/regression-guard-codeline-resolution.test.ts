@@ -15,9 +15,9 @@ import { describe, it, expect } from 'vitest';
 import { readFileSync } from 'node:fs';
 import { execFileSync } from 'node:child_process';
 import { join } from 'node:path';
+import { engineSource } from '../../lib/engine-source';
 
-const ORCH_RAW = readFileSync(
-  join(__dirname, '../../../orchestrations/scripts/run-agent-orchestration.sh'), 'utf8');
+const ORCH_RAW = engineSource(join(__dirname, '../../../orchestrations/scripts/run-agent-orchestration.sh'));
 // Strip comment lines: the fix DOCUMENTS the broken form in a comment, and a
 // code-scanning assertion must scan code, not prose about the code.
 const ORCH = ORCH_RAW.split('\n').filter(l => !/^\s*#/.test(l)).join('\n');

@@ -25,9 +25,10 @@ import { describe, it, expect } from 'vitest';
 import { execFileSync } from 'node:child_process';
 import { readFileSync } from 'node:fs';
 import { join } from 'node:path';
+import { engineSource } from '../../lib/engine-source';
 
 const CLAUDE_SH = join(__dirname, '../../../orchestrations/scripts/claude.sh');
-const SRC = readFileSync(CLAUDE_SH, 'utf8');
+const SRC = engineSource(CLAUDE_SH);
 
 function lift(name: string): string {
   const m = new RegExp(`^${name}\\(\\) \\{$`, 'm').exec(SRC);
@@ -38,8 +39,7 @@ function lift(name: string): string {
 
 const HELPERS = ['effort_rank', 'max_effort', 'next_effort'].map(lift).join('\n');
 
-const CFG = JSON.parse(readFileSync(
-  join(__dirname, '../../../orchestrations/projects/metrolinx/llm-settings.json'), 'utf8'));
+const CFG = JSON.parse(engineSource(join(__dirname, '../../../orchestrations/projects/metrolinx/llm-settings.json')));
 /** The ladder is CONFIG — level names live in llm-settings.json, not in this test. */
 const LADDER: string[] = CFG.effortLadder;
 const TOP = LADDER[LADDER.length - 1];
@@ -173,15 +173,13 @@ describe('rung 0 is never "low"', () => {
   });
 
   it('the project config agrees', () => {
-    const cfg = JSON.parse(readFileSync(
-      join(__dirname, '../../../orchestrations/projects/metrolinx/llm-settings.json'), 'utf8'));
+    const cfg = JSON.parse(engineSource(join(__dirname, '../../../orchestrations/projects/metrolinx/llm-settings.json')));
     const efforts = cfg.rungs.map((r: { reasoningEffort: string }) => r.reasoningEffort);
     expect(efforts, `rung efforts were ${efforts.join(', ')}`).not.toContain('low');
   });
 
   it('effort never decreases as rungs climb', () => {
-    const cfg = JSON.parse(readFileSync(
-      join(__dirname, '../../../orchestrations/projects/metrolinx/llm-settings.json'), 'utf8'));
+    const cfg = JSON.parse(engineSource(join(__dirname, '../../../orchestrations/projects/metrolinx/llm-settings.json')));
     // 'max' added 2026-08-12 when the top rung was raised to it. The rank table silently
     // produced undefined for an effort it did not know, so the comparison compared nothing —
     // an unknown level must be a failure, not a gap.

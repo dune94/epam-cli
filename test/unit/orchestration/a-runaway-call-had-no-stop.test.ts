@@ -28,6 +28,7 @@ import { execFileSync } from 'node:child_process';
 import { mkdtempSync, writeFileSync, rmSync, readFileSync, existsSync, chmodSync } from 'node:fs';
 import { tmpdir } from 'node:os';
 import { join } from 'node:path';
+import { engineSource } from '../../lib/engine-source';
 
 const HANDLER = join(process.cwd(), 'orchestrations', 'scripts', 'llm-handler.sh');
 const dirs: string[] = [];
@@ -72,7 +73,7 @@ function call(opts: { advertises: boolean; env?: Record<string, string> }) {
       },
     });
   } catch (e: any) { stderr = e.stderr || ''; status = e.status ?? -1; }
-  const argv = existsSync(argvLog) ? readFileSync(argvLog, 'utf8') : '';
+  const argv = existsSync(argvLog) ? engineSource(argvLog) : '';
   return { argv, stderr, status, ran: argv.trim().length > 0 };
 }
 

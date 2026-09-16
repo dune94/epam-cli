@@ -21,6 +21,7 @@ import { spawnSync } from 'node:child_process';
 import { mkdtempSync, writeFileSync, rmSync, readFileSync } from 'node:fs';
 import { join } from 'node:path';
 import { tmpdir } from 'node:os';
+import { engineSource } from '../../lib/engine-source';
 
 const ROOT = join(__dirname, '../../..');
 const SCRIPTS = join(ROOT, 'orchestrations/scripts');
@@ -95,7 +96,7 @@ describe('the regression delta gate cannot pass on no data', () => {
     // Three now — an uncompilable pattern, a suite that produced no output, a missing baseline —
     // fixed in three different places. Naming only the pattern sent every investigation at
     // dependency-check.json.
-    const body = readFileSync(ORCH, 'utf8');
+    const body = engineSource(ORCH);
     const i = body.indexOf('CANNOT VERIFY');
     expect(i, 'the cannot-verify branch is gone').toBeGreaterThan(-1);
     const block = body.slice(i - 700, i + 300);
@@ -104,7 +105,7 @@ describe('the regression delta gate cannot pass on no data', () => {
 
   it('an unverifiable result still blocks the phase', () => {
     // The whole value of "unknown": it must not be treated as a pass by the caller either.
-    const body = readFileSync(ORCH, 'utf8');
+    const body = engineSource(ORCH);
     const i = body.indexOf('CANNOT VERIFY');
     expect(body.slice(i, i + 900), 'a cannot-verify result no longer stops the phase').toMatch(/exit 1/);
   });

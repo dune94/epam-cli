@@ -54,6 +54,7 @@ import { execFileSync, spawn, spawnSync } from 'node:child_process';
 import { mkdtempSync, mkdirSync, writeFileSync, symlinkSync, rmSync, readFileSync, existsSync, chmodSync } from 'node:fs';
 import { join } from 'node:path';
 import { tmpdir } from 'node:os';
+import { engineSource } from '../../lib/engine-source';
 
 const REPO_ROOT = join(__dirname, '../../../');
 const TIER3_MOCK_RUN = join(REPO_ROOT, 'orchestrations/scripts/tier3-mock-run.sh');
@@ -77,14 +78,14 @@ const cleanupDirs: string[] = [];
 // file's own cleanup has just deleted.
 const REPO_COMPOSE_OVERRIDE = join(REPO_ROOT, 'docker-compose.observability.override.yml');
 const composeOverrideBefore = existsSync(REPO_COMPOSE_OVERRIDE)
-  ? readFileSync(REPO_COMPOSE_OVERRIDE, 'utf8')
+  ? engineSource(REPO_COMPOSE_OVERRIDE)
   : null;
 process.env.COMPOSE_OVERRIDE = REPO_COMPOSE_OVERRIDE;
 // Same opt-out for the dashboard pointer files: a real run must aim the live
 // dashboard at itself, and restores them below.
 const DASHBOARD_DIR = join(REPO_ROOT, 'orchestrations/dashboards');
 const dashStateBefore = ['.active-prd-path', '.active-output-dir'].map(f => ({
-  f, v: existsSync(join(DASHBOARD_DIR, f)) ? readFileSync(join(DASHBOARD_DIR, f), 'utf8') : null,
+  f, v: existsSync(join(DASHBOARD_DIR, f)) ? engineSource(join(DASHBOARD_DIR, f)) : null,
 }));
 process.env.DASHBOARD_STATE_DIR = DASHBOARD_DIR;
 
@@ -195,7 +196,7 @@ function startMockJiraServer(issueKey: string, summary: string, description: str
 }
 
 function readPrd(prdPath: string): any {
-  return JSON.parse(readFileSync(prdPath, 'utf8'));
+  return JSON.parse(engineSource(prdPath));
 }
 
 function findStory(prd: any, id: string): any {
@@ -299,7 +300,7 @@ describe.skipIf(!RUN_REAL)('Full mock brownfield pipeline — REAL Jira ingest +
       // the one that needed a prior run to exist. pre-run-reset names the base state in its own
       // words: "its authored input IS the base state". That file is tracked, always present,
       // and carries the same story shape.
-        readFileSync(join(REPO_ROOT, 'orchestrations/projects/mock3/prd.authored.json'), 'utf8'));
+        engineSource(join(REPO_ROOT, 'orchestrations/projects/mock3/prd.authored.json')));
       const mockPrdPath = join(codelineRoot, '..', 'mock-expectations-prd.json');
       writeFileSync(mockPrdPath, JSON.stringify({
         ...canonicalPrd,
@@ -417,7 +418,7 @@ describe.skipIf(!RUN_REAL)('Full mock brownfield pipeline — REAL Jira ingest +
       // tsconfig.json actually contained at the moment this run finished,
       // rather than requiring the disposable directory to survive cleanup.
       try {
-        const tsconfigAtEnd = readFileSync(join(clone, 'tsconfig.json'), 'utf8');
+        const tsconfigAtEnd = engineSource(join(clone, 'tsconfig.json'));
         console.log('[diagnostic] tsconfig.json at end of run:\n' + tsconfigAtEnd);
       } catch (e) {
         console.log('[diagnostic] could not read tsconfig.json at end of run:', e);
@@ -511,21 +512,21 @@ describe.skipIf(!RUN_REAL)('Full mock brownfield pipeline — REAL Jira ingest +
       for (const st of worked) {
         const reviewLog = join(LOG_DIR, `review-agent-${st.id}.log`);
         expect(existsSync(reviewLog), `no review log for ${st.id}: ${reviewLog}`).toBe(true);
-        expect(readFileSync(reviewLog, 'utf8').trim().length, `${st.id} review log empty`)
+        expect(engineSource(reviewLog).trim().length, `${st.id} review log empty`)
           .toBeGreaterThan(0);
       }
-      const codeReviews = readFileSync(join(LOG_DIR, 'code-reviews.jsonl'), 'utf8');
+      const codeReviews = engineSource(join(LOG_DIR, 'code-reviews.jsonl'));
       expect(codeReviews).toMatch(new RegExp(PHASE));
 
       // ── All 6 real QA testing gates ran and produced non-empty output ──
       for (const gate of GATE_LOG_NAMES) {
         const gateLog = join(LOG_DIR, `${gate}-${PHASE}.log`);
         expect(existsSync(gateLog), gateLog).toBe(true);
-        expect(readFileSync(gateLog, 'utf8').trim().length, `${gate} log empty`).toBeGreaterThan(0);
+        expect(engineSource(gateLog).trim().length, `${gate} log empty`).toBeGreaterThan(0);
       }
 
       // ── Real cost was actually recorded (not just "exited 0") ──
-      const activity = readFileSync(join(LOG_DIR, 'agent-activity.jsonl'), 'utf8');
+      const activity = engineSource(join(LOG_DIR, 'agent-activity.jsonl'));
       const costLines = activity.split('\n').filter(l => l.includes(STORY_ID));
       const totalCost = costLines.reduce((sum, l) => {
         try {

@@ -21,6 +21,7 @@ import { mkdtempSync, writeFileSync, rmSync, mkdirSync } from 'node:fs';
 import { join } from 'node:path';
 import { tmpdir } from 'node:os';
 import { readFileSync } from 'node:fs';
+import { engineSource } from '../../lib/engine-source';
 
 const ROOT = join(__dirname, '../../..');
 const PLUGIN = join(ROOT, 'orchestrations/plugins/client-env-boundary-plugin.js');
@@ -68,7 +69,7 @@ describe('the configuration surface comes from the codeline', () => {
 });
 
 describe('the detective is asked about it', () => {
-  const template = () => JSON.parse(readFileSync(TEMPLATE, 'utf8'));
+  const template = () => JSON.parse(engineSource(TEMPLATE));
   const body = (): string => {
     const j = template();
     return String(j.body ?? Object.values(j.bodies ?? {}).join('\n'));
@@ -91,12 +92,12 @@ describe('the detective is asked about it', () => {
   it('the producer supplies it', () => {
     // The detective prompt is rendered by spec-mode-runner.js, not claude.sh — the first version
     // of this test asserted the wrong file and failed against correct code.
-    const js = readFileSync(join(ROOT, 'orchestrations/scripts/spec-mode-runner.js'), 'utf8');
+    const js = engineSource(join(ROOT, 'orchestrations/scripts/spec-mode-runner.js'));
     expect(js).toMatch(/__CONFIG_SURFACE__/);
   });
 
   it('and resolves it through the codeline, naming no framework itself', () => {
-    const js = readFileSync(join(ROOT, 'orchestrations/scripts/spec-mode-runner.js'), 'utf8');
+    const js = engineSource(join(ROOT, 'orchestrations/scripts/spec-mode-runner.js'));
     const block = js.slice(js.indexOf('function configSurfaceBlock'), js.indexOf('function surveyHypothesisBlock'));
     expect(block).toMatch(/configSurface\(/);
     for (const f of ['next.config', 'vite.config']) expect(block).not.toContain(f);

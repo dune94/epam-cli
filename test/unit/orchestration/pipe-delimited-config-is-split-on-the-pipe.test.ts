@@ -25,6 +25,7 @@ import { describe, it, expect } from 'vitest';
 import { execFileSync } from 'node:child_process';
 import { readFileSync, readdirSync } from 'node:fs';
 import { join } from 'node:path';
+import { engineSource } from '../../lib/engine-source';
 
 const ROOT = join(__dirname, '../../../');
 const SCRIPTS = join(ROOT, 'orchestrations/scripts');
@@ -35,7 +36,7 @@ function shellSources(): Array<{ file: string; text: string }> {
   for (const f of readdirSync(join(SCRIPTS, 'lib'))) {
     if (f.endsWith('.sh')) files.push(join(SCRIPTS, 'lib', f));
   }
-  return files.map((file) => ({ file, text: readFileSync(file, 'utf8') }));
+  return files.map((file) => ({ file, text: engineSource(file) }));
 }
 
 /**

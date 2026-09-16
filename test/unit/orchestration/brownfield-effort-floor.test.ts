@@ -16,9 +16,10 @@ import { describe, it, expect } from 'vitest';
 import { readFileSync } from 'node:fs';
 import { execFileSync } from 'node:child_process';
 import { join } from 'node:path';
+import { engineSource } from '../../lib/engine-source';
 
 const CLAUDE_SH = join(__dirname, '../../../orchestrations/scripts/claude.sh');
-const src = readFileSync(CLAUDE_SH, 'utf8');
+const src = engineSource(CLAUDE_SH);
 
 function extractFn(name: string): string {
   const start = src.indexOf(`${name}() {`);

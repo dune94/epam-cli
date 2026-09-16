@@ -28,6 +28,7 @@ import { describe, it, expect, afterEach } from 'vitest';
 import { mkdtempSync, mkdirSync, writeFileSync, rmSync } from 'node:fs';
 import { join } from 'node:path';
 import { tmpdir } from 'node:os';
+import { engineSource } from '../../lib/engine-source';
 
 // eslint-disable-next-line @typescript-eslint/no-require-imports
 const spec = require('../../../orchestrations/scripts/spec-mode-runner.js');
@@ -147,8 +148,7 @@ describe('the per-codeline manifest is actually produced and consumed', () => {
   const specSrc = require('node:fs').readFileSync(
     require('node:path').join(__dirname, '../../../orchestrations/scripts/spec-mode-runner.js'), 'utf8');
   // eslint-disable-next-line @typescript-eslint/no-require-imports
-  const claudeSrc = require('node:fs').readFileSync(
-    require('node:path').join(__dirname, '../../../orchestrations/scripts/claude.sh'), 'utf8');
+  const claudeSrc = engineSource(require('node:path').join(__dirname, '../../../orchestrations/scripts/claude.sh'));
 
   it('applySpecChanges persists it onto the story', () => {
     const i = specSrc.indexOf('function applySpecChanges');

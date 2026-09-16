@@ -20,10 +20,11 @@ import { spawnSync } from 'node:child_process';
 import { mkdtempSync, writeFileSync, rmSync, readFileSync } from 'node:fs';
 import { join } from 'node:path';
 import { tmpdir } from 'node:os';
+import { engineSource } from '../../lib/engine-source';
 
 const REPO_ROOT = join(__dirname, '../../../');
 const ORCH_SCRIPT = join(REPO_ROOT, 'orchestrations/scripts/run-agent-orchestration.sh');
-const orchSrc = readFileSync(ORCH_SCRIPT, 'utf8');
+const orchSrc = engineSource(ORCH_SCRIPT);
 
 function extractResetBlock(): string {
   const start = orchSrc.indexOf('# Reset story completed flags if requested');
@@ -63,7 +64,7 @@ function runReset(prd: object, phase?: string): { stories: any[] } {
   if (result.status !== 0) {
     throw new Error(`reset block failed: ${result.stdout}\n${result.stderr}`);
   }
-  return JSON.parse(readFileSync(prdPath, 'utf8'));
+  return JSON.parse(engineSource(prdPath));
 }
 
 describe('RESET_STORIES block — status:"in-progress" is reset alongside completed/failed', () => {

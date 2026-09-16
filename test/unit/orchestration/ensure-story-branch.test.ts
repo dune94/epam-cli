@@ -22,6 +22,7 @@ import { execFileSync, spawnSync } from 'node:child_process';
 import { mkdtempSync, mkdirSync, writeFileSync, rmSync, existsSync, readFileSync } from 'node:fs';
 import { join } from 'node:path';
 import { tmpdir } from 'node:os';
+import { engineSource } from '../../lib/engine-source';
 
 const REPO_ROOT = join(__dirname, '../../../');
 const ORCH_SCRIPT = join(REPO_ROOT, 'orchestrations/scripts/run-agent-orchestration.sh');
@@ -170,7 +171,7 @@ describe('ensure_story_branch — real git repos, no mocking', () => {
     const { exitCode } = runFn(clone, 'STORY-DIRTY-TRACKED');
     expect(exitCode).toBe(0);
     expect(execFileSync('git', ['status', '--porcelain'], { cwd: clone, encoding: 'utf8' }).trim()).toBe('');
-    expect(readFileSync(join(clone, 'file.txt'), 'utf8')).toBe('v1\n');
+    expect(engineSource(join(clone, 'file.txt'))).toBe('v1\n');
   });
 
   it('REPRODUCES the live incident and confirms the fix: untracked stray files (leftover from a killed prior attempt) are removed by the working-tree clean', () => {
@@ -222,9 +223,9 @@ describe('ensure_story_branch — real git repos, no mocking', () => {
       rmSync(dir, { recursive: true, force: true });
     }
 
-    const settings = JSON.parse(readFileSync(join(clone, '.epam/settings.json'), 'utf8'));
+    const settings = JSON.parse(engineSource(join(clone, '.epam/settings.json')));
     expect(settings).toEqual({ tools: ['/abs/plugin.js'] });
-    const facts = JSON.parse(readFileSync(join(clone, '.epam/codeline-facts.json'), 'utf8'));
+    const facts = JSON.parse(engineSource(join(clone, '.epam/codeline-facts.json')));
     expect(facts).toEqual({ facts: ['fact-a'] });
   });
 

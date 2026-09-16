@@ -22,6 +22,7 @@ import { mkdtempSync, rmSync, writeFileSync, mkdirSync, chmodSync, readFileSync 
 import { execFileSync } from 'node:child_process';
 import { tmpdir } from 'node:os';
 import { join } from 'node:path';
+import { engineSource } from '../../lib/engine-source';
 
 const SCRIPT = join(__dirname, '../../../orchestrations/scripts/update-invalidated-tests.sh');
 const dirs: string[] = [];
@@ -93,7 +94,7 @@ function run(repo: string, mode: 'updates' | 'reports-regression' | 'writes-noth
       },
     });
   } catch (e: any) { out = (e.stdout || '') + (e.stderr || ''); code = e.status ?? 1; }
-  return { out, code, testSrc: readFileSync(join(repo, 'src', 'hello.test.ts'), 'utf8') };
+  return { out, code, testSrc: engineSource(join(repo, 'src', 'hello.test.ts')) };
 }
 
 describe('B12 — updating tests the fix legitimately invalidated', () => {
@@ -139,7 +140,7 @@ describe('B12 — updating tests the fix legitimately invalidated', () => {
     // commit itself (src/hello.ts), which this step is not responsible for.
     const before = git(repo, ['rev-parse', 'HEAD']).trim();
     run(repo, 'updates');
-    expect(readFileSync(join(repo, 'src', 'hello.ts'), 'utf8')).toContain('hello dolly');
+    expect(engineSource(join(repo, 'src', 'hello.ts'))).toContain('hello dolly');
     const changed = git(repo, ['diff', '--name-only', before, 'HEAD']);
     for (const f of changed.split('\n').filter(Boolean)) {
       expect(f, `edited a non-test file: ${f}`).toMatch(/\.(test|spec)\.[tj]sx?$|__tests__/);
@@ -148,8 +149,7 @@ describe('B12 — updating tests the fix legitimately invalidated', () => {
 });
 
 describe('B12 — pipeline wiring', () => {
-  const ORCH = readFileSync(
-    join(__dirname, '../../../orchestrations/scripts/run-agent-orchestration.sh'), 'utf8');
+  const ORCH = engineSource(join(__dirname, '../../../orchestrations/scripts/run-agent-orchestration.sh'));
 
   it('runs AFTER the test-writer and BEFORE the repro-gate', () => {
     const writer = ORCH.indexOf('brownfield-repro-test-writer.sh');

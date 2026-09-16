@@ -20,6 +20,7 @@ import { tmpdir } from 'node:os';
 import { join } from 'node:path';
 import { request as httpRequest } from 'node:http';
 import { MiniMockServer } from './lib/mini-mockserver';
+import { engineSource } from '../lib/engine-source';
 
 const ROOT = join(__dirname, '../../');
 const NODE20 = process.execPath;
@@ -99,7 +100,7 @@ describe('the epam runner delivers a write through the vendor\'s wire', () => {
       const r = await runEpam(provider, model, ws, { [urlEnv]: `${mock.url}/api/v1`, [keyEnv]: 'stand-in' });
       expect(r.status, `epam run failed:\n${r.stderr}\n${r.stdout}`).toBe(0);
       expect(existsSync(target), `the file was not written — the runner said:\n${r.stdout}\n${r.stderr}`).toBe(true);
-      expect(readFileSync(target, 'utf8')).toBe(CONTENT);
+      expect(engineSource(target)).toBe(CONTENT);
       expect(r.stdout + r.stderr).not.toMatch(/paths\[0\]|Received undefined/);
     });
   }

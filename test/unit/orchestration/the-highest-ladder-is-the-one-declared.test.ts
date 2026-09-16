@@ -38,6 +38,7 @@ import { join } from 'node:path';
 // a model belongs to a STACK. This file read the project copy, which now carries only a note
 // saying so, so every lookup came back empty. See test/support/llm-settings.ts.
 import { stackSettings, defaultStack } from '../../support/llm-settings'
+import { engineSource } from '../../lib/engine-source';
 const REPO_ROOT_CFG = join(__dirname, '../../../orchestrations/config');
 
 const ROOT = join(__dirname, '../../../');
@@ -46,7 +47,7 @@ const CONFIG_ENV = join(ROOT, 'orchestrations/projects/metrolinx/config.env');
 
 /** The chain llm-settings DECLARES for a tier. */
 function declared(tier: string): string[] {
-  const s = JSON.parse(readFileSync(SETTINGS, 'utf8'));
+  const s = JSON.parse(engineSource(SETTINGS));
   return ((s.ladders?.[tier]?.modelLadder) || []).map((p: any) => `${p.from}=${p.to}`);
 }
 
@@ -100,7 +101,7 @@ describe('ONE SOURCE FOR WHAT A TIER CONTAINS', () => {
     // Not a style preference: config.env is loaded first and its assignment is unconditional,
     // so anything it writes here silently wins over the declaration — the same defect as
     // SKIP_REGRESSION_GUARD=false a few lines below it in the same file.
-    const cfg = readFileSync(CONFIG_ENV, 'utf8')
+    const cfg = engineSource(CONFIG_ENV)
       .split('\n')
       .filter((l) => !/^\s*#/.test(l))
       .filter((l) => /^\s*EPAM_MODEL_LADDER[A-Z_]*=\S/.test(l));

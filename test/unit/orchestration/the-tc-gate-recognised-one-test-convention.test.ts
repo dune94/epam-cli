@@ -27,6 +27,7 @@ import { spawnSync } from 'node:child_process';
 import { mkdtempSync, writeFileSync, mkdirSync, rmSync, readFileSync } from 'node:fs';
 import { join } from 'node:path';
 import { tmpdir } from 'node:os';
+import { engineSource } from '../../lib/engine-source';
 
 const ROOT = join(__dirname, '../../..');
 const GATE = join(ROOT, 'orchestrations/scripts/lib/tc-writer-gate.sh');
@@ -116,13 +117,13 @@ describe('one definition, not a fourth copy', () => {
   it('the gate no longer carries its own test-file predicate', () => {
     // Paired with the behavioural tests above: those prove it works, this proves it works by
     // asking the shared handler rather than by growing a wider literal of its own.
-    const src = readFileSync(GATE, 'utf8')
+    const src = engineSource(GATE)
       .split('\n').filter((l) => !/^\s*#/.test(l)).join('\n');
     expect(src, 'the inline .test.ts filter is still there').not.toMatch(/endswith\("\.test\.ts"\)/);
   });
 
   it('and asks a handler that shares the _testfile.py conventions', () => {
-    const src = readFileSync(GATE, 'utf8');
+    const src = engineSource(GATE);
     expect(src).toMatch(/tc-story-is-pure-test\.py/);
   });
 });

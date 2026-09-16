@@ -20,12 +20,13 @@ import { describe, it, expect } from 'vitest';
 import { readFileSync } from 'node:fs';
 import { execFileSync } from 'node:child_process';
 import { join } from 'node:path';
+import { engineSource } from '../../lib/engine-source';
 
 const ROOT = join(__dirname, '../../..');
-const openrouter = JSON.parse(readFileSync(join(ROOT, 'orchestrations/config/llm-defaults.openrouter.json'), 'utf8'));
-const mockserver = JSON.parse(readFileSync(join(ROOT, 'orchestrations/config/llm-defaults.mockserver.json'), 'utf8'));
-const claudeSet = JSON.parse(readFileSync(join(ROOT, 'orchestrations/config/llm-defaults.claude.json'), 'utf8'));
-const codemieSet = JSON.parse(readFileSync(join(ROOT, 'orchestrations/config/llm-defaults.codemie.json'), 'utf8'));
+const openrouter = JSON.parse(engineSource(join(ROOT, 'orchestrations/config/llm-defaults.openrouter.json')));
+const mockserver = JSON.parse(engineSource(join(ROOT, 'orchestrations/config/llm-defaults.mockserver.json')));
+const claudeSet = JSON.parse(engineSource(join(ROOT, 'orchestrations/config/llm-defaults.claude.json')));
+const codemieSet = JSON.parse(engineSource(join(ROOT, 'orchestrations/config/llm-defaults.codemie.json')));
 
 /** Every model that is the TOP of some ladder chain in this set (never escalated past). */
 function topRungModels(set: any): Set<string> {

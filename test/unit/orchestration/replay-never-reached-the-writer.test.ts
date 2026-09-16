@@ -24,6 +24,7 @@ import { spawnSync } from 'node:child_process';
 import { mkdtempSync, writeFileSync, rmSync, readFileSync, existsSync, chmodSync } from 'node:fs';
 import { join } from 'node:path';
 import { tmpdir } from 'node:os';
+import { engineSource } from '../../lib/engine-source';
 
 const ROOT = join(__dirname, '../../../');
 const LIB = join(ROOT, 'orchestrations/scripts/lib/replay-delegate.sh');
@@ -72,7 +73,7 @@ fi
     encoding: 'utf8', timeout: 30_000,
     env: { ...process.env, EPAM_REPLAY_CASSETTE_DIR: opts.recording ? d : '' },
   });
-  const read = (f: string) => { try { return readFileSync(f, 'utf8'); } catch { return ''; } };
+  const read = (f: string) => { try { return engineSource(f); } catch { return ''; } };
   return { out: (r.stdout ?? '') + (r.stderr ?? ''), dir: d,
            log: read(log), argv: read(join(d, 'argv.txt')), stdin: read(join(d, 'stdin.txt')),
            json: read(json), jsonOut: read(join(d, 'jsonout.txt')) };
@@ -108,7 +109,7 @@ describe('replay_delegate', () => {
 });
 
 describe("claude.sh's second dispatch", () => {
-  const src = () => readFileSync(CLAUDE_SH, 'utf8');
+  const src = () => engineSource(CLAUDE_SH);
 
   it('DELEGATES before it dispatches — an unreached guard is this same defect again', () => {
     const lines = src().split('\n');

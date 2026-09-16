@@ -19,7 +19,8 @@
  */
 
 import { describe, it, expect } from 'vitest';
-import { readFileSync, readdirSync } from 'node:fs';
+import { readFileSync, readdirSync, existsSync } from 'node:fs';
+import { engineSource } from '../../lib/engine-source';
 import { join } from 'node:path';
 
 const SCRIPTS = join(__dirname, '../../../orchestrations/scripts');
@@ -33,7 +34,7 @@ function callSites(): string[] {
       else if (e.isFile() && /\.(sh|js)$/.test(e.name)) {
         const rel = prefix + e.name;
         if (rel.endsWith('ai-run.sh')) continue;      // the seam itself
-        const src = readFileSync(join(dir, e.name), 'utf8');
+        const src = engineSource(join(dir, e.name));
           // A MENTION IN A COMMENT IS NOT A CALL SITE.
           //
           // This matched the raw file, so three files that only DISCUSS the runner in prose
@@ -60,6 +61,27 @@ function callSites(): string[] {
  * the reason, so "it doesn't really call it" is a claim on the record rather
  * than a regex that quietly stops matching.
  */
+/**
+ * THE PROGRAM A CALL SITE BELONGS TO. This check is per FILE: a script that invokes the runner
+ * must set EPAM_AGENT_NAME somewhere in it. claude.sh and run-agent-orchestration.sh were split
+ * into lib/ modules on 2026-09-16 (tools/split-maps), so a module's call site is named by its
+ * main exactly as it was when the same lines sat in one file — judged on the reassembled program,
+ * not on the fragment. Any other file is judged on itself, as before.
+ */
+const SPLIT_MODULE_MAIN: Record<string, string> = (() => {
+  const out: Record<string, string> = {};
+  const maps = join(SCRIPTS, 'tools/split-maps');
+  if (!existsSync(maps)) return out;
+  for (const f of readdirSync(maps).filter((x) => x.endsWith('.json') && !x.endsWith('.golden.json') && x !== 'ceilings.json')) {
+    const main = f.replace(/\.json$/, '');
+    for (const mod of Object.keys(JSON.parse(engineSource(join(maps, f))))) if (mod !== '.') out[`lib/${mod}.sh`] = main;
+  }
+  return out;
+})();
+const programOf = (site: string): string => (SPLIT_MODULE_MAIN[site]
+  ? engineSource(join(SCRIPTS, SPLIT_MODULE_MAIN[site]))
+  : engineSource(join(SCRIPTS, site)));
+
 const NOT_INVOKERS: Record<string, string> = {
   'kill-tier3-run.sh': 'sweeps ai-run.sh processes by name when killing a run',
   'lib/cost-emitter.js': 'reads cost records after the fact; makes no model call',
@@ -96,7 +118,7 @@ describe('every ai-run.sh call site names its agent', () => {
   it('the seam names an unnamed caller rather than recording "agent"', () => {
     // The backstop that makes the list below survivable: until every site names
     // itself, ai-run.sh derives a name from the invoking script.
-    const src = readFileSync(join(SCRIPTS, 'llm-handler.sh'), 'utf8');
+    const src = engineSource(join(SCRIPTS, 'llm-handler.sh'));
     expect(src).toMatch(/\/proc\/\$?\{?PPID/);
   });
 
@@ -107,8 +129,7 @@ describe('every ai-run.sh call site names its agent', () => {
     // Fix them by setting EPAM_AGENT_NAME and deleting the entry. Nothing may
     // be ADDED: a new anonymous agent fails here rather than surfacing later as
     // a cost row nobody can reconcile.
-    const unnamed = sites.filter(
-      s => !/EPAM_AGENT_NAME/.test(readFileSync(join(SCRIPTS, s), 'utf8')));
+    const unnamed = sites.filter(s => !/EPAM_AGENT_NAME/.test(programOf(s)));
     const added = unnamed.filter(s => !KNOWN_UNNAMED.includes(s));
     expect(added, `new anonymous agent call site(s): ${added.join(', ')}`).toEqual([]);
   });
@@ -116,7 +137,7 @@ describe('every ai-run.sh call site names its agent', () => {
   it('the baseline has no stale entries', () => {
     // Keeps the list honest as sites get fixed.
     const stillUnnamed = KNOWN_UNNAMED.filter(s => {
-      try { return !/EPAM_AGENT_NAME/.test(readFileSync(join(SCRIPTS, s), 'utf8')); }
+      try { return !/EPAM_AGENT_NAME/.test(programOf(s)); }
       catch { return false; }
     });
     expect(KNOWN_UNNAMED.filter(s => !stillUnnamed.includes(s)),
@@ -125,7 +146,7 @@ describe('every ai-run.sh call site names its agent', () => {
 
   for (const site of KNOWN_UNNAMED.length ? [] : sites) {
     it(`${site}`, () => {
-      const src = readFileSync(join(SCRIPTS, site), 'utf8');
+      const src = engineSource(join(SCRIPTS, site));
       // Either it sets the name directly, or it derives one from the cost label
       // it already declares — both make the agent identifiable downstream.
       const names = /EPAM_AGENT_NAME/.test(src);

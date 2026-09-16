@@ -34,13 +34,14 @@ import { spawnSync } from 'node:child_process';
 import { mkdtempSync, writeFileSync, rmSync, readFileSync, statSync } from 'node:fs';
 import { tmpdir } from 'node:os';
 import { join } from 'node:path';
+import { engineSource } from '../../lib/engine-source';
 
 const CLAUDE_SH = join(__dirname, '../../../orchestrations/scripts/claude.sh');
 const MARKER = 'EVIDENCE_TAIL_MARKER';
 
 /** Extract the real values-building block and run it with a value of the given size. */
 function buildValues(bytes: number) {
-  const src = readFileSync(CLAUDE_SH, 'utf8');
+  const src = engineSource(CLAUDE_SH);
   const start = src.indexOf('    local _analyst_values _analyst_values_err');
   expect(start, 'analyst values block not found in claude.sh').toBeGreaterThan(-1);
   const end = src.indexOf('if ! analyst_prompt=', start);
@@ -77,7 +78,7 @@ function buildValues(bytes: number) {
     try { size = statSync(file).size; } catch { /* absent */ }
     let parsed: any = null;
     let why = '';
-    try { parsed = JSON.parse(readFileSync(file, 'utf8')); } catch (e: any) { why = e.message; }
+    try { parsed = JSON.parse(engineSource(file)); } catch (e: any) { why = e.message; }
     return {
       ok: parsed !== null,
       why,
@@ -121,7 +122,7 @@ describe('a values file that cannot be built is never silent', () => {
   it('the jq call does not discard its own error', () => {
     // `> file 2>/dev/null` turned "Argument list too long" into an empty file and an
     // unexplained parse error three log lines later. Exit status is a contract.
-    const src = readFileSync(CLAUDE_SH, 'utf8');
+    const src = engineSource(CLAUDE_SH);
     const start = src.indexOf('    local _analyst_values _analyst_values_err');
     const block = src.slice(start, src.indexOf('if ! analyst_prompt=', start));
     expect(block, 'the values build still swallows stderr').not.toMatch(/>\s*"\$_analyst_values"\s*2>\/dev\/null/);

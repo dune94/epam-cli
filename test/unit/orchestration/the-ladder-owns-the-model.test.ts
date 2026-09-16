@@ -30,10 +30,11 @@
 import { describe, it, expect } from 'vitest';
 import { readFileSync } from 'node:fs';
 import { join } from 'node:path';
+import { engineSource } from '../../lib/engine-source';
 
 const REPO = process.cwd();
 const CLAUDE_SH = join(REPO, 'orchestrations/scripts/claude.sh');
-const src = readFileSync(CLAUDE_SH, 'utf8');
+const src = engineSource(CLAUDE_SH);
 
 /** The body of a shell function, located by name so line drift does not break the test. */
 function fn(name: string): string {
@@ -77,7 +78,7 @@ describe('the ladder owns the model', () => {
 
   it('THE LADDER EXPORTS A START MODEL TO READ — the derivation has a real source', () => {
     // A rule that reads a variable nothing exports is as dead as a literal.
-    const ladders = readFileSync(join(REPO, 'orchestrations/scripts/lib/model-ladders.sh'), 'utf8');
+    const ladders = engineSource(join(REPO, 'orchestrations/scripts/lib/model-ladders.sh'));
     expect(ladders, 'model-ladders.sh no longer exports a per-tier start model')
       .toMatch(/_START=/);
     expect(ladders, 'the start model is not read from the project\'s declared startModel')

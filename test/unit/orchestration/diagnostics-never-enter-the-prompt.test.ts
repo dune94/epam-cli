@@ -35,6 +35,7 @@ import { describe, it, expect } from 'vitest';
 import { execFileSync } from 'node:child_process';
 import { readFileSync } from 'node:fs';
 import { join } from 'node:path';
+import { engineSource } from '../../lib/engine-source';
 
 const ROOT = join(__dirname, '../../../');
 const CLAUDE_SH = join(ROOT, 'orchestrations/scripts/claude.sh');
@@ -43,7 +44,7 @@ const DIAGNOSTICS = ['log', 'warning', 'info', 'success', 'error'];
 
 /** Extract one function definition from claude.sh, by name. */
 function fnBody(name: string): string {
-  const src = readFileSync(CLAUDE_SH, 'utf8');
+  const src = engineSource(CLAUDE_SH);
   const start = src.indexOf(`\n${name}() {`);
   if (start === -1) throw new Error(`${name}() not found in claude.sh`);
   const end = src.indexOf('\n}\n', start);
@@ -127,7 +128,7 @@ describe('the shipped prompt artifact carries no diagnostic residue', () => {
   it('the prompt builder emits no diagnostic markers on stdout', () => {
     // Render the deliverable-resolution path, which is where the live pollution came from:
     // _resolve_deliverable_path warns while the builder's stdout is being captured.
-    const src = readFileSync(CLAUDE_SH, 'utf8');
+    const src = engineSource(CLAUDE_SH);
     const start = src.indexOf('\n_resolve_deliverable_path() {');
     const end = src.indexOf('\n}\n', start);
     const resolver = src.slice(start, end + 3);

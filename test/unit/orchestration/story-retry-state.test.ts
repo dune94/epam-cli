@@ -20,6 +20,7 @@ import { spawnSync } from 'node:child_process';
 import { mkdtempSync, rmSync, readFileSync, existsSync } from 'node:fs';
 import { join } from 'node:path';
 import { tmpdir } from 'node:os';
+import { engineSource } from '../../lib/engine-source';
 
 const LIB = join(__dirname, '../../../orchestrations/scripts/lib/story-retry-state.sh');
 
@@ -83,7 +84,7 @@ describe('write_story_retry_count — the actual artifact on disk', () => {
     run(`write_story_retry_count ${JSON.stringify(d)} S-1 3`);
     const f = join(d, 'story-retry-state', 'S-1.count');
     expect(existsSync(f), 'state file was never written').toBe(true);
-    expect(readFileSync(f, 'utf8').trim()).toBe('3');
+    expect(engineSource(f).trim()).toBe('3');
   });
 });
 
@@ -185,11 +186,11 @@ describe('advance_story_retry_rung — the real fix: a review rejection must cli
     // Guards against a fix that "runs" but never actually changes state —
     // the exact class of bug this repo's testing rules call out explicitly.
     const d = newLogDir();
-    const brokenLib = readFileSync(LIB, 'utf8').replace(
+    const brokenLib = engineSource(LIB).replace(
       /advance_story_retry_rung\(\) \{[\s\S]*?\n\}/,
       'advance_story_retry_rung() { local log_dir="$1" story_id="$2"; write_story_retry_count "$log_dir" "$story_id" 0; }',
     );
-    expect(brokenLib, 'the replace did not match — test would vacuously pass').not.toBe(readFileSync(LIB, 'utf8'));
+    expect(brokenLib, 'the replace did not match — test would vacuously pass').not.toBe(engineSource(LIB));
     const tmp = join(newLogDir(), 'broken.sh');
     require('node:fs').writeFileSync(tmp, brokenLib);
     const r = spawnSync('bash', ['-c', `source ${JSON.stringify(tmp)}\nwrite_story_retry_count ${JSON.stringify(d)} S-1 4\nadvance_story_retry_rung ${JSON.stringify(d)} S-1 7\nread_story_retry_count ${JSON.stringify(d)} S-1`], { encoding: 'utf8' });
@@ -244,6 +245,6 @@ describe('read_story_retry_provider_set / write_story_retry_provider_set', () =>
     run(`write_story_retry_provider_set ${JSON.stringify(d)} S-1 codemie`);
     const f = join(d, 'story-retry-state', 'S-1.provider-set');
     expect(existsSync(f), 'state file was never written').toBe(true);
-    expect(readFileSync(f, 'utf8').trim()).toBe('codemie');
+    expect(engineSource(f).trim()).toBe('codemie');
   });
 });

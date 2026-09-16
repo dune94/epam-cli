@@ -24,6 +24,7 @@ import { spawnSync } from 'node:child_process';
 import { mkdtempSync, writeFileSync, mkdirSync, readFileSync, existsSync } from 'node:fs';
 import { tmpdir } from 'node:os';
 import { join } from 'node:path';
+import { engineSource } from '../../lib/engine-source';
 
 const REPO_ROOT = join(__dirname, '../../../');
 const KB_LIB = join(REPO_ROOT, 'orchestrations/scripts/lib/kb-canonical.sh');
@@ -53,7 +54,7 @@ function restore(opts: { canonical?: string; current?: string }) {
   );
   const r = spawnSync('bash', [script], { encoding: 'utf8', timeout: 20000 });
   return {
-    kb: existsSync(kb) ? readFileSync(kb, 'utf8') : null,
+    kb: existsSync(kb) ? engineSource(kb) : null,
     out: `${r.stdout || ''}${r.stderr || ''}`,
     rc: Number(/RC=(\d+)/.exec(r.stdout || '')?.[1] ?? -1),
   };
@@ -107,7 +108,7 @@ describe('the canonical exists and is wired into the run', () => {
   });
 
   it('pre-run-reset.sh performs the restore', () => {
-    const src = readFileSync(PRE_RUN_RESET, 'utf8');
+    const src = engineSource(PRE_RUN_RESET);
     expect(
       src,
       'pre-run-reset.sh cleared $LOG_DIR/kb-scratchpad but never the KB itself',
@@ -116,7 +117,7 @@ describe('the canonical exists and is wired into the run', () => {
 });
 
 describe('nothing grows the KB for future runs while the pipeline is unstable', () => {
-  const src = readFileSync(CLAUDE_SH, 'utf8');
+  const src = engineSource(CLAUDE_SH);
 
   it('the cross-run synthesis is gated OFF by default', () => {
     const i = src.indexOf('KB-PERSIST-');

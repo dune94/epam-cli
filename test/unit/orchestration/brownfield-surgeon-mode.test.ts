@@ -12,12 +12,13 @@
 import { describe, it, expect } from 'vitest';
 import { readFileSync } from 'node:fs';
 import { join } from 'node:path';
+import { engineSource } from '../../lib/engine-source';
 
 const REPO_ROOT   = join(__dirname, '../../../');
 const CLAUDE_SH   = join(REPO_ROOT, 'orchestrations/scripts/claude.sh');
 const SPEC_RUNNER = join(REPO_ROOT, 'orchestrations/scripts/spec-mode-runner.js');
 
-const claudeSrc = readFileSync(CLAUDE_SH, 'utf8');
+const claudeSrc = engineSource(CLAUDE_SH);
 
 // THE SURGEON RULES LIVE IN THE CONTRACT CATALOG NOW.
 //
@@ -26,8 +27,8 @@ const claudeSrc = readFileSync(CLAUDE_SH, 'utf8');
 // had merely MOVED as rules that had vanished — a prompt migration showing up as a pipeline
 // defect. The rules are real and still worth asserting, so they are asserted where they live.
 const AGENT_CONTRACT = join(REPO_ROOT, 'orchestrations/config/agent-contract.json');
-const contractSrc = readFileSync(AGENT_CONTRACT, 'utf8');
-const specSrc   = readFileSync(SPEC_RUNNER, 'utf8');
+const contractSrc = engineSource(AGENT_CONTRACT);
+const specSrc   = engineSource(SPEC_RUNNER);
 const { buildBrownfieldArchaeologyBlock } = require(SPEC_RUNNER);
 
 // ─── Change 1: claude.sh brownfield surgeon preamble ────────────────────────
@@ -148,7 +149,7 @@ describe('spec-mode-runner.js — Semble service-boundary query (Change 3)', () 
     // declared once in spec-mode-defaults.json retrieval.queryPrefix and both builders now read
     // it. Asserting the literal in the engine would forbid exactly that fix.
     const retrieval = JSON.parse(
-      readFileSync(join(REPO_ROOT, 'orchestrations/config/spec-mode-defaults.json'), 'utf8')).retrieval;
+      engineSource(join(REPO_ROOT, 'orchestrations/config/spec-mode-defaults.json'))).retrieval;
     expect(String(retrieval.queryPrefix)).toMatch(/handles.*applies.*processes|applies.*handles.*processes/);
     // and the engine reads it rather than carrying its own copy
     expect(specSrc).toMatch(/buildRetrievalQuery|retrievalConfig/);

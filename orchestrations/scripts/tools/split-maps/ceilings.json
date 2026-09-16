@@ -1,0 +1,8 @@
+{
+  "$comment": "Ceilings for a split entrypoint and its modules (test/unit/orchestration/a-split-main-is-the-same-program.test.ts). mainLines bounds each entrypoint, by name: what it may keep is argument parsing, sourcing and top-level control. moduleLines bounds one lib module; a module over it is split again. Set at the first split (2026-09-16) to what it produced, so growth from there fails. run-agent-orchestration.sh keeps ~4,400 lines of top-level phase loop that is not in functions \u2014 moving that into functions is an EDIT, the next extraction, not this move.",
+  "mainLines": {
+    "claude.sh": 1000,
+    "run-agent-orchestration.sh": 4700
+  },
+  "moduleLines": 2800
+}

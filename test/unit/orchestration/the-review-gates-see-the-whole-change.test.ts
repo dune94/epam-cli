@@ -25,6 +25,7 @@ import { spawnSync } from 'node:child_process';
 import { mkdtempSync, mkdirSync, writeFileSync, appendFileSync, rmSync, readFileSync } from 'node:fs';
 import { join } from 'node:path';
 import { tmpdir } from 'node:os';
+import { engineSource } from '../../lib/engine-source';
 
 const ROOT = join(__dirname, '../../..');
 const SCRIPTS = join(ROOT, 'orchestrations/scripts');
@@ -33,7 +34,7 @@ const EXCL = join(SCRIPTS, 'lib/handlers/repo-exclude-patterns.js');
 const NODE = process.execPath;
 
 function gatesFn(): string {
-  const src = readFileSync(ORCH, 'utf8');
+  const src = engineSource(ORCH);
   const i = src.indexOf('run_testing_gates() {');
   return src.slice(i, src.indexOf('\n}', i));
 }
@@ -116,7 +117,7 @@ describe('the review gates see the whole change', () => {
   it('the gates ask for the diff form, not the staging form', () => {
     // _gate_diff_excludes is defined just outside run_testing_gates, so read the helper itself
     // rather than the function that calls it.
-    const src = readFileSync(ORCH, 'utf8');
+    const src = engineSource(ORCH);
     const i = src.indexOf('_gate_diff_excludes() {');
     expect(i, 'the shared exclusion helper is gone').toBeGreaterThan(-1);
     expect(src.slice(i, i + 400), 'the gates resolve the staging list, which keeps lockfiles in')

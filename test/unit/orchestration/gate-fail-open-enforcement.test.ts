@@ -25,9 +25,10 @@ import { describe, it, expect } from 'vitest';
 import { readFileSync } from 'node:fs';
 import { execFileSync } from 'node:child_process';
 import { join } from 'node:path';
+import { engineSource } from '../../lib/engine-source';
 
 const ORCH = join(__dirname, '../../../orchestrations/scripts/run-agent-orchestration.sh');
-const src = readFileSync(ORCH, 'utf8');
+const src = engineSource(ORCH);
 
 // Run a bash snippet, return its exit code (0 = "phase proceeded", non-0 = "blocked").
 function bashCode(snippet: string): number {

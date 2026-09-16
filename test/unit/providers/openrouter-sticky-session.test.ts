@@ -34,6 +34,7 @@ import { describe, it, expect, vi, afterEach, beforeEach } from 'vitest';
 import { readFileSync } from 'node:fs';
 import { join } from 'node:path';
 import { OpenRouterProvider, openRouterSessionId } from '../../../src/providers/openrouter/OpenRouterProvider';
+import { engineSource } from '../../lib/engine-source';
 
 const REQ = { model: 'z-ai/glm-5.2', messages: [{ role: 'user' as const, content: 'hi' }], maxTokens: 8 };
 
@@ -112,8 +113,7 @@ describe('STABILITY: every turn of one attempt shares one id', () => {
 });
 
 describe('ISOLATION: the pipeline gives each attempt its own id', () => {
-  const CLAUDE_SH = readFileSync(
-    join(__dirname, '../../../orchestrations/scripts/claude.sh'), 'utf8');
+  const CLAUDE_SH = engineSource(join(__dirname, '../../../orchestrations/scripts/claude.sh'));
 
   it('claude.sh exports EPAM_SESSION_ID to the writer', () => {
     expect(
@@ -137,8 +137,7 @@ describe('ISOLATION: the pipeline gives each attempt its own id', () => {
 describe('the cached-token figure survives the STREAM path, not just complete()', () => {
   // Patching complete() alone left this undefined end-to-end twice in one session — once for
   // MiniMax, once here — because the CLI streams and unit tests reach complete().
-  const SRC = readFileSync(
-    join(__dirname, '../../../src/providers/openrouter/OpenRouterProvider.ts'), 'utf8');
+  const SRC = engineSource(join(__dirname, '../../../src/providers/openrouter/OpenRouterProvider.ts'));
 
   it('the streaming usage parser reads prompt_tokens_details.cached_tokens', () => {
     const i = SRC.indexOf('inputTokens = parsed.usage.prompt_tokens');

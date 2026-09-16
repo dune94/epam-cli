@@ -18,6 +18,7 @@
 import { describe, it, expect } from 'vitest';
 import { readFileSync } from 'node:fs';
 import { join } from 'node:path';
+import { engineSource } from '../../lib/engine-source';
 
 const REPO_ROOT = join(__dirname, '../../../');
 // REPOINTED 2026-08-25. The subject was codemie-claude.sh, a fork deleted that day; the
@@ -26,7 +27,7 @@ const REPO_ROOT = join(__dirname, '../../../');
 // tests lib/git-ops.sh (the shared implementation), never the WIRING in the script that
 // calls it. Deleting this test with the fork would have dropped that coverage silently.
 const SCRIPT = join(REPO_ROOT, 'orchestrations/scripts/claude.sh');
-const src = readFileSync(SCRIPT, 'utf8');
+const src = engineSource(SCRIPT);
 
 describe('the runner wires git-ops.sh — it keeps no copy of its own', () => {
   it('sources lib/git-ops.sh', () => {

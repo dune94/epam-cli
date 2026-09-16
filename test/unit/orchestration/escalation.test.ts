@@ -21,10 +21,11 @@ import { readFileSync, mkdtempSync, mkdirSync, writeFileSync, rmSync } from 'nod
 import { execFileSync } from 'node:child_process';
 import { join } from 'node:path';
 import { tmpdir } from 'node:os';
+import { engineSource } from '../../lib/engine-source';
 
 const REPO_ROOT = join(__dirname, '../../../');
 const CLAUDE_SH = join(REPO_ROOT, 'orchestrations/scripts/claude.sh');
-const claudeSrc = readFileSync(CLAUDE_SH, 'utf8');
+const claudeSrc = engineSource(CLAUDE_SH);
 
 // resolve_escalation() contains multiple jq heredocs/pipelines but no nested
 // bash heredocs — a plain '}' -at-column-0 search is safe here (unlike
@@ -135,7 +136,7 @@ describe('resolve_escalation() — REAL execution (sibling resolution + PRD look
       const exitCode = exitMatch ? parseInt(exitMatch[1], 10) : -1;
       let escalationFileExists = false;
       try {
-        readFileSync(join(dir, '.epam/escalations', `${opts.escalatingStoryId}.json`), 'utf8');
+        engineSource(join(dir, '.epam/escalations', `${opts.escalatingStoryId}.json`));
         escalationFileExists = true;
       } catch {
         /* expected to be deleted in most cases */

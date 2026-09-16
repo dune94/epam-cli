@@ -19,11 +19,12 @@
 import { describe, it, expect } from 'vitest';
 import { readFileSync } from 'node:fs';
 import { join } from 'node:path';
+import { engineSource } from '../../lib/engine-source';
 
 const ROOT = join(__dirname, '../../..');
 const ORCH = join(ROOT, 'orchestrations/scripts/run-agent-orchestration.sh');
 
-const lines = () => readFileSync(ORCH, 'utf8').split('\n');
+const lines = () => engineSource(ORCH).split('\n');
 
 /** The line range of a shell function, by name. */
 function functionRange(name: string): { start: number; end: number } | null {
@@ -69,7 +70,7 @@ describe('every project mints its own agents', () => {
     // The mint is piped to tee for the run log. Without pipefail the pipeline status is tee's,
     // which is why the Jira call site tests PIPESTATUS[0] explicitly. Any second call site has to
     // do the same or a failed mint reads as a success.
-    const src = readFileSync(ORCH, 'utf8');
+    const src = engineSource(ORCH);
     const callCount = (src.match(/"\$SCRIPT_DIR\/mint-agents-step\.js"/g) || []).length;
     const guardCount = (src.match(/PIPESTATUS\[0\]/g) || []).length;
     expect(guardCount,

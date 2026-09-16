@@ -33,6 +33,7 @@ import { execFileSync } from 'node:child_process';
 import { mkdtempSync, rmSync, readFileSync } from 'node:fs';
 import { join } from 'node:path';
 import { tmpdir } from 'node:os';
+import { engineSource } from '../../lib/engine-source';
 
 const ROOT = join(__dirname, '../../../');
 const CLAUDE_SH = join(ROOT, 'orchestrations/scripts/claude.sh');
@@ -44,7 +45,7 @@ const CLAUDE_SH = join(ROOT, 'orchestrations/scripts/claude.sh');
  * the line that joins both sections.
  */
 function promptAssignment(): string {
-  const src = readFileSync(CLAUDE_SH, 'utf8');
+  const src = engineSource(CLAUDE_SH);
   const start = src.indexOf('_impl_section="$(build_implementation_prompt "$story_id")"');
   expect(start, 'the prompt assembly moved — this test is anchored on it').toBeGreaterThan(0);
   const joinAt = src.indexOf('prompt="$_impl_section', start);

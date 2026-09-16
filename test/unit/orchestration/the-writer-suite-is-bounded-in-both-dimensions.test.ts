@@ -24,6 +24,7 @@ import { execFileSync } from 'node:child_process';
 import { mkdtempSync, writeFileSync, rmSync, mkdirSync, readFileSync } from 'node:fs';
 import { tmpdir } from 'node:os';
 import { join } from 'node:path';
+import { engineSource } from '../../lib/engine-source';
 
 const SCRIPTS = join(__dirname, '../../../orchestrations/scripts');
 const dirs: string[] = [];
@@ -34,7 +35,7 @@ afterAll(() => { for (const d of dirs) rmSync(d, { recursive: true, force: true 
  * declaration in place. The command is echoed rather than executed: what matters is the wrapper.
  */
 function boundedCommand(declared: Record<string, unknown> | null, cmd = 'npm run test'): string {
-  const src = readFileSync(join(SCRIPTS, 'claude.sh'), 'utf8');
+  const src = engineSource(join(SCRIPTS, 'claude.sh'));
   const start = src.indexOf('_bounded_test_command() {');
   expect(start, '_bounded_test_command was not found in claude.sh').toBeGreaterThan(0);
   const end = src.indexOf('\n}\n', start) + 3;

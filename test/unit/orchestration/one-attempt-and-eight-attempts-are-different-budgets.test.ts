@@ -41,10 +41,11 @@ import { describe, it, expect } from 'vitest';
 import { execFileSync } from 'node:child_process';
 import { readFileSync } from 'node:fs';
 import { join } from 'node:path';
+import { engineSource } from '../../lib/engine-source';
 
 const ROOT = join(__dirname, '../../../');
 const ORCH = join(ROOT, 'orchestrations/scripts/run-agent-orchestration.sh');
-const CFG = JSON.parse(readFileSync(join(ROOT, 'orchestrations/projects/metrolinx/llm-settings.json'), 'utf8'));
+const CFG = JSON.parse(engineSource(join(ROOT, 'orchestrations/projects/metrolinx/llm-settings.json')));
 
 /** Run a helper from run-agent-orchestration.sh in isolation. */
 function extractFn(src: string, name: string): string {
@@ -60,7 +61,7 @@ function extractFn(src: string, name: string): string {
 
 /** Both helpers are loaded: the story-scope one CALLS the attempt-scope one. */
 function callHelper(name: string, args: string, env: Record<string, string>): string {
-  const src = readFileSync(ORCH, 'utf8');
+  const src = engineSource(ORCH);
   // BOTH, always. _derive_story_wall_total calls _derive_attempt_wall, and loading only the
   // named one left that call undefined — awk then received an empty budget and printed 0,
   // which looks exactly like a wrong implementation rather than a broken harness.
@@ -168,7 +169,7 @@ describe('THE STORY WALL ACCOMMODATES EVERY ATTEMPT THE INNER LOOP MAY RUN', () 
 
 describe('NO SECONDS IN THE ENGINE', () => {
   it('neither helper hardcodes a duration', () => {
-    const src = readFileSync(ORCH, 'utf8');
+    const src = engineSource(ORCH);
     for (const name of ['_derive_attempt_wall', '_derive_story_wall_total']) {
       const start = src.indexOf(`${name}() {`);
       expect(start, `${name} missing`).toBeGreaterThan(-1);
@@ -242,7 +243,7 @@ describe('THE MULTIPLIER MUST SURVIVE THE PROCESS BOUNDARY', () => {
         // Reuse the brace-balanced extractor. Hand-rolled slice arithmetic here produced
         // `}    _derive_story_wall_total() {` on one line — both functions undefined, both
         // helpers printing empty, and a failure that looked like a wrong implementation.
-        const src = readFileSync(ORCH, 'utf8');
+        const src = engineSource(ORCH);
         return [extractFn(src, '_derive_attempt_wall'), extractFn(src, '_derive_story_wall_total')].join('\n');
       })()}
       printf 'attempt=%s story=%s' "$(_derive_attempt_wall ${FLOOR} 120)" "$(_derive_story_wall_total ${FLOOR} 120)"`],

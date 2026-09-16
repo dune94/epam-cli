@@ -28,6 +28,7 @@ import { spawnSync } from 'node:child_process';
 import { mkdtempSync, writeFileSync, readFileSync, rmSync, chmodSync, existsSync } from 'node:fs';
 import { join } from 'node:path';
 import { tmpdir } from 'node:os';
+import { engineSource } from '../../lib/engine-source';
 
 const AI_RUN = join(__dirname, '../../../orchestrations/scripts/ai-run.sh');
 
@@ -73,14 +74,14 @@ esac
   const prompts: string[] = [];
   for (let i = 0; i < 10; i++) {
     const f = join(calls, `${i}.prompt`);
-    if (existsSync(f)) prompts.push(readFileSync(f, 'utf8'));
+    if (existsSync(f)) prompts.push(engineSource(f));
   }
   return {
     code: r.status,
     stdout: (r.stdout || '').trim(),
     stderr: r.stderr || '',
     prompts,
-    json: existsSync(jsonOut) ? JSON.parse(readFileSync(jsonOut, 'utf8') || '{}') : null,
+    json: existsSync(jsonOut) ? JSON.parse(engineSource(jsonOut) || '{}') : null,
   };
 }
 
@@ -163,8 +164,7 @@ describe('the plan is observable', () => {
     // traces per agent with no way to tell plan from answer.
     const r = run({ env: { EPAM_AGENT_NAME: 'code-graph-detective' } });
     expect(r.prompts.length).toBe(2);
-    const src = readFileSync(
-      join(__dirname, '../../../orchestrations/scripts/llm-handler.sh'), 'utf8');
+    const src = engineSource(join(__dirname, '../../../orchestrations/scripts/llm-handler.sh'));
     expect(src, 'the plan pass is indistinguishable from the answer in tracing')
       .toMatch(/EPAM_AGENT_NAME="?\$\{?EPAM_AGENT_NAME[^\n]*:plan/);
   });
@@ -176,7 +176,7 @@ describe('the plan is observable', () => {
     expect(r.prompts.length).toBe(2);
     const f = join(dir, 'plans-core.jsonl');
     expect(existsSync(f), 'no plan record was written').toBe(true);
-    const rec = JSON.parse(readFileSync(f, 'utf8').trim().split('\n')[0]);
+    const rec = JSON.parse(engineSource(f).trim().split('\n')[0]);
     expect(rec.agent).toBe('code-graph-detective');
     expect(rec.plan, 'the plan text itself was not recorded')
       .toContain('inspect the service that computes it');
@@ -211,8 +211,7 @@ describe('the plan is observable', () => {
  */
 describe('planning is cheap by construction', () => {
   it('gives the planning call no tools', () => {
-    const src = readFileSync(
-      join(__dirname, '../../../orchestrations/scripts/llm-handler.sh'), 'utf8');
+    const src = engineSource(join(__dirname, '../../../orchestrations/scripts/llm-handler.sh'));
     const i = src.indexOf('_EPAM_IN_PLAN_PASS=1');
     expect(i, 'the plan pass is not marked').toBeGreaterThan(-1);
     const block = src.slice(i, i + 700);
@@ -223,8 +222,7 @@ describe('planning is cheap by construction', () => {
   });
 
   it('bounds the planning call so it cannot eat the execute budget', () => {
-    const src = readFileSync(
-      join(__dirname, '../../../orchestrations/scripts/llm-handler.sh'), 'utf8');
+    const src = engineSource(join(__dirname, '../../../orchestrations/scripts/llm-handler.sh'));
     const i = src.indexOf('_EPAM_IN_PLAN_PASS=1');
     expect(src.slice(Math.max(0, i - 400), i + 700),
       'a hung planning call consumes the whole agent deadline')
@@ -232,8 +230,7 @@ describe('planning is cheap by construction', () => {
   });
 
   it('tells the execute pass it may abandon a wrong plan', () => {
-    const src = readFileSync(
-      join(__dirname, '../../../orchestrations/scripts/llm-handler.sh'), 'utf8');
+    const src = engineSource(join(__dirname, '../../../orchestrations/scripts/llm-handler.sh'));
     expect(src, 'the agent is bound to a plan it made before looking')
       .toMatch(/showed it to be wrong|abandon/i);
   });
@@ -256,8 +253,7 @@ describe('planning is cheap by construction', () => {
  * plan and answer comparable.
  */
 describe('a plan can be attributed', () => {
-  const ORCH = readFileSync(
-    join(__dirname, '../../../orchestrations/scripts/run-agent-orchestration.sh'), 'utf8');
+  const ORCH = engineSource(join(__dirname, '../../../orchestrations/scripts/run-agent-orchestration.sh'));
 
   it('exports PHASE, so plans are filed under the phase that produced them', () => {
     expect(ORCH, 'PHASE never reaches ai-run.sh, so every plan files as "unknown"')
@@ -265,8 +261,7 @@ describe('a plan can be attributed', () => {
   });
 
   it('names every spec-mode agent, not only the detective', () => {
-    const SPEC = readFileSync(
-      join(__dirname, '../../../orchestrations/scripts/spec-mode-runner.js'), 'utf8');
+    const SPEC = engineSource(join(__dirname, '../../../orchestrations/scripts/spec-mode-runner.js'));
     // Named from the costAgent label each call already declares, in runClaude —
     // one place, so a new agent cannot be added without a name.
     expect(SPEC, "agents are named per-call-site, so any site that forgets is anonymous")
@@ -291,8 +286,7 @@ describe('a plan can be attributed', () => {
  */
 describe('an unnamed caller still gets identified', () => {
   it('derives the agent name from the invoking script', () => {
-    const src = readFileSync(
-      join(__dirname, '../../../orchestrations/scripts/llm-handler.sh'), 'utf8');
+    const src = engineSource(join(__dirname, '../../../orchestrations/scripts/llm-handler.sh'));
     expect(src, 'an unnamed caller stays anonymous in plans, traces and cost')
       .toMatch(/\/proc\/\$?\{?PPID/);
   });
@@ -304,7 +298,7 @@ describe('an unnamed caller still gets identified', () => {
     const r2 = run({ env: { EPAM_AGENT_NAME: 'code-graph-detective', PHASE: 'core', LOG_DIR: dir } });
     expect(r2.prompts.length).toBe(2);
     const rec = JSON.parse(
-      readFileSync(join(dir, 'plans-core.jsonl'), 'utf8').trim().split('\n')[0]);
+      engineSource(join(dir, 'plans-core.jsonl')).trim().split('\n')[0]);
     expect(rec.agent, 'the derived name clobbered an explicit one').toBe('code-graph-detective');
     expect(r.code).toBe(0);
   });
@@ -337,14 +331,13 @@ describe('every caller allows room for both passes', () => {
   const CALLERS = ['codeline-discovery.js', 'ac-gate.js'];
 
   it('the plan pass has a bounded cost that callers can budget against', () => {
-    const src = readFileSync(
-      join(__dirname, '../../../orchestrations/scripts/llm-handler.sh'), 'utf8');
+    const src = engineSource(join(__dirname, '../../../orchestrations/scripts/llm-handler.sh'));
     expect(src).toMatch(/EPAM_PLAN_TIMEOUT_SECS:-(\d+)/);
   });
 
   for (const caller of CALLERS) {
     it(`${caller}: deadline exceeds the plan pass with room to execute`, () => {
-      const src = readFileSync(join(LIB, caller), 'utf8');
+      const src = engineSource(join(LIB, caller));
       // Accepts a literal or an env-overridable default — what matters is the
       // effective value when nothing is set.
       const timeouts = [
@@ -367,8 +360,7 @@ describe('every caller allows room for both passes', () => {
       // literals, so it read "no timeout" from a file that has a correct one and failed on code
       // that was right. Resolve the effective value the same way the caller does.
       if (timeouts.length === 0 && /seamDeclaredTimeoutMs\(/.test(src)) {
-        const profiles = JSON.parse(readFileSync(
-          join(__dirname, '../../../orchestrations/agents/invocation-profiles.json'), 'utf8'));
+        const profiles = JSON.parse(engineSource(join(__dirname, '../../../orchestrations/agents/invocation-profiles.json')));
         // The seam is a literal at the call, or — since c3e1534d, when the call became one shared
         // askJson({ seam }) — the `seam:` each caller passes into it. Both are the seams whose
         // declared timeoutSecs bound the call.
@@ -400,7 +392,7 @@ describe('every caller allows room for both passes', () => {
   it('codeline-discovery does not discard the reason a call failed', () => {
     // `2>/dev/null` turned a timeout into "Empty response", so the run logged a
     // tidy fallback instead of the cause. A swallowed error costs a whole run.
-    const src = readFileSync(join(LIB, 'codeline-discovery.js'), 'utf8');
+    const src = engineSource(join(LIB, 'codeline-discovery.js'));
     // The invocation uses ${AI_RUN_SH}, a variable — matching the literal
     // 'ai-run.sh' silently passes while the redirect is still there.
     const i = src.indexOf('execSync(cmd');

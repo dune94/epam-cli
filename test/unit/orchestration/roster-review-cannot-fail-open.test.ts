@@ -24,6 +24,7 @@ import { mkdtempSync, writeFileSync, readFileSync, chmodSync, rmSync } from 'nod
 import { join } from 'node:path';
 import { tmpdir } from 'node:os';
 import { provisionProject, cleanupProvisioned } from '../../support/provisioned-project';
+import { engineSource } from '../../lib/engine-source';
 
 // A SEAM PROMPT RENDERS FROM THE PROJECT'S COPY, SO THIS FILE SUPPLIES A PROJECT.
 //
@@ -67,8 +68,7 @@ async function review(raw: string) {
   // an agent to answer about. The fixture supplied briefs for the MINTED agents only, so the
   // reviewer itself had none and every case failed on the refusal. Read from the canonical
   // roster rather than written here: a brief invented in a test proves the test's own text.
-  const canonicalProfiles = JSON.parse(readFileSync(
-    join(__dirname, '../../../orchestrations/agents/profiles.json'), 'utf8'));
+  const canonicalProfiles = JSON.parse(engineSource(join(__dirname, '../../../orchestrations/agents/profiles.json')));
   expect(canonicalProfiles['roster-reviewer'],
     'the canonical roster declares no roster-reviewer brief — reviewRoster cannot render at all')
     .toBeTruthy();
@@ -79,7 +79,7 @@ async function review(raw: string) {
   delete process.env.SPEC_MODE_PROVIDER;
   return spec.reviewRoster({
     promptExec: runnerEmitting(raw), minted: MINTED, codelines: CODELINES,
-    profiles: JSON.parse(readFileSync(profilesPath, 'utf8')),
+    profiles: JSON.parse(engineSource(profilesPath)),
     logDir: dir, repoPath: dir,
   });
 }
@@ -172,7 +172,7 @@ describe('roster-only mode is not an unreviewed roster', () => {
     expect(rosterLib.rosterReviewIsRequired({ verdict: 'not_run', mintSkipped: false, rosterOnly: false, pauseConfigured: false })).toBe(true);
   });
   it('the orchestrator tells the roster-only child that the mint was skipped', () => {
-    const src = require('node:fs').readFileSync(require('node:path').join(__dirname, '../../../orchestrations/scripts/run-agent-orchestration.sh'), 'utf8');
+    const src = engineSource(require('node:path').join(__dirname, '../../../orchestrations/scripts/run-agent-orchestration.sh'));
     expect(src).toMatch(/EPAM_ROSTER_ONLY=1 EPAM_SKIP_AGENT_MINT=1 "\$NODE_BIN" "\$SCRIPT_DIR\/mint-agents-step\.js"/);
   });
 });

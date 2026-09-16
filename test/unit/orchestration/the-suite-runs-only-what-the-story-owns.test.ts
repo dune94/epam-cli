@@ -3,6 +3,7 @@ import { spawnSync } from 'node:child_process';
 import fs from 'node:fs';
 import os from 'node:os';
 import path from 'node:path';
+import { engineSource } from '../../lib/engine-source';
 
 /**
  * A ONE-LINE CHANGE MUST NOT RUN 3,385 TESTS.
@@ -102,7 +103,7 @@ describe('scoped test verification', () => {
        fi`,
     ], { encoding: 'utf8', timeout: 60_000 });
 
-    const after = JSON.parse(fs.readFileSync(path.join(repo, '.epam', 'verification.json'), 'utf8'));
+    const after = JSON.parse(engineSource(path.join(repo, '.epam', 'verification.json')));
     expect(after.test.command, 'the hand-tuned command must survive').toBe('npm run test');
     expect(after.test.scopedCommand,
       `existing section kept wholesale, so the new key never arrives. stderr: ${r.stderr}`).toBeTruthy();

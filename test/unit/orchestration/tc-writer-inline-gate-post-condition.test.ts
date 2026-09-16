@@ -35,10 +35,11 @@
 import { describe, it, expect } from 'vitest';
 import { readFileSync } from 'node:fs';
 import { join } from 'node:path';
+import { engineSource } from '../../lib/engine-source';
 
 const REPO_ROOT = join(__dirname, '../../../');
 const GATE_LIB = join(REPO_ROOT, 'orchestrations/scripts/lib/tc-writer-gate.sh');
-const gateSrc = readFileSync(GATE_LIB, 'utf8');
+const gateSrc = engineSource(GATE_LIB);
 
 function extractInlineGateBlock(): string {
   const startMarker = 'for _tc_gate_attempt in 1 2 3; do';

@@ -20,9 +20,10 @@ import { readFileSync, mkdtempSync, writeFileSync, rmSync } from 'node:fs';
 import { execFileSync } from 'node:child_process';
 import { join } from 'node:path';
 import { tmpdir } from 'node:os';
+import { engineSource } from '../../lib/engine-source';
 
 const ORCH_SH = join(__dirname, '../../../orchestrations/scripts/run-agent-orchestration.sh');
-const src = readFileSync(ORCH_SH, 'utf8');
+const src = engineSource(ORCH_SH);
 
 function extractFailureExcerptBlock(): string {
   const startMarker = 'local failure_excerpt _failure_excerpt_full _failure_excerpt_lines';

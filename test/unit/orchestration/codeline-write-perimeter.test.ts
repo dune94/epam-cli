@@ -33,6 +33,7 @@ import { spawnSync } from 'node:child_process';
 import { mkdtempSync, mkdirSync, writeFileSync, readFileSync, rmSync, existsSync, accessSync, constants } from 'node:fs';
 import { join } from 'node:path';
 import { tmpdir } from 'node:os';
+import { engineSource } from '../../lib/engine-source';
 
 const REPO_ROOT = join(__dirname, '../../../');
 const PERIMETER = join(REPO_ROOT, 'orchestrations/scripts/lib/codeline-write-perimeter.sh');
@@ -79,14 +80,14 @@ const bashWrite = (repo: string, rel: string) =>
 describe('on the baseline branch, client source is unwritable', () => {
   it('THE INCIDENT: bash cannot overwrite a source file', () => {
     const repo = codeline();
-    const before = readFileSync(join(repo, 'src/service.ts'), 'utf8');
+    const before = engineSource(join(repo, 'src/service.ts'));
 
     sh(`perimeter_apply ${JSON.stringify(repo)}`);
     const w = bashWrite(repo, 'src/service.ts');
 
     expect(w.status, 'bash wrote to a locked client file').not.toBe(0);
     expect(
-      readFileSync(join(repo, 'src/service.ts'), 'utf8'),
+      engineSource(join(repo, 'src/service.ts')),
       'client source changed — this is the 669-line-to-13 failure',
     ).toBe(before);
   });
@@ -95,7 +96,7 @@ describe('on the baseline branch, client source is unwritable', () => {
     const repo = codeline();
     sh(`perimeter_apply ${JSON.stringify(repo)}`);
     sh(`: > ${JSON.stringify(join(repo, 'src/service.ts'))}`);
-    expect(readFileSync(join(repo, 'src/service.ts'), 'utf8').length).toBeGreaterThan(0);
+    expect(engineSource(join(repo, 'src/service.ts')).length).toBeGreaterThan(0);
   });
 
   it('the whole tracked tree is protected, not one sampled file', () => {
@@ -121,7 +122,7 @@ describe('the engine can still do its job while locked', () => {
     expect(spawnSync('git', ['-C', repo, 'checkout', '-qB', 'bugfix/AI-1', BASELINE]).status).toBe(0);
     expect(spawnSync('git', ['-C', repo, 'reset', '--hard', BASELINE, '--quiet']).status).toBe(0);
     expect(spawnSync('git', ['-C', repo, 'clean', '-fd', '--quiet']).status).toBe(0);
-    expect(readFileSync(join(repo, 'src/service.ts'), 'utf8')).toContain('client code');
+    expect(engineSource(join(repo, 'src/service.ts'))).toContain('client code');
   });
 });
 
@@ -204,7 +205,7 @@ describe('only agents that author code may write', () => {
 
 describe('wired into the pipeline, not merely available', () => {
   it('the launcher locks every codeline before any agent runs', () => {
-    const src = readFileSync(join(REPO_ROOT, 'orchestrations/scripts/tier3-metrolinx-run.sh'), 'utf8');
+    const src = engineSource(join(REPO_ROOT, 'orchestrations/scripts/tier3-metrolinx-run.sh'));
     expect(src).toMatch(/codeline-write-perimeter\.sh/);
     // 2026-08-09: the run-start loop calls perimeter_SEAL, not perimeter_apply. apply answers
     // "is this repo in its write window?" and unlocks on any non-baseline branch — at run
@@ -214,13 +215,13 @@ describe('wired into the pipeline, not merely available', () => {
   });
 
   it('ensure_story_branch reopens the repo once it is on the story branch', () => {
-    const src = readFileSync(join(REPO_ROOT, 'orchestrations/scripts/lib/git-ops.sh'), 'utf8');
+    const src = engineSource(join(REPO_ROOT, 'orchestrations/scripts/lib/git-ops.sh'));
     expect(src).toMatch(/codeline-write-perimeter\.sh/);
     expect(src).toMatch(/perimeter_apply "\$codeline_root"/);
   });
 
   it('the lock is applied AFTER the baseline reset, never before', () => {
-    const src = readFileSync(join(REPO_ROOT, 'orchestrations/scripts/tier3-metrolinx-run.sh'), 'utf8');
+    const src = engineSource(join(REPO_ROOT, 'orchestrations/scripts/tier3-metrolinx-run.sh'));
     expect(
       src.indexOf('perimeter_seal'),
       'locking before the reset would leave a dirty tree frozen in place',
@@ -306,7 +307,7 @@ describe('the perimeter is released when the run ends', () => {
   });
 
   it('the orchestrator releases on exit, so a PAUSE does not leave repos locked', () => {
-    const orch = readFileSync(join(REPO_ROOT, 'orchestrations/scripts/run-agent-orchestration.sh'), 'utf8');
+    const orch = engineSource(join(REPO_ROOT, 'orchestrations/scripts/run-agent-orchestration.sh'));
     expect(
       orch,
       'run-agent-orchestration.sh does not even source the perimeter library, so no exit path can release it',

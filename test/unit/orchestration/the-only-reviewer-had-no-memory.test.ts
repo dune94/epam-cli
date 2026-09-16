@@ -29,6 +29,7 @@ import { mkdtempSync, writeFileSync, rmSync } from 'node:fs';
 import { join } from 'node:path';
 import { tmpdir } from 'node:os';
 import { readFileSync } from 'node:fs';
+import { engineSource } from '../../lib/engine-source';
 
 const ROOT = join(__dirname, '../../..');
 const HANDLER = join(ROOT, 'orchestrations/scripts/lib/handlers/prior-reviews.py');
@@ -95,7 +96,7 @@ describe('the reviewer is handed its own history', () => {
 });
 
 describe('the reviewer is wired to receive it', () => {
-  const script = () => readFileSync(REVIEWER, 'utf8');
+  const script = () => engineSource(REVIEWER);
 
   it('the producer builds the prior-review block', () => {
     expect(script()).toMatch(/prior-reviews\.py/);
@@ -106,13 +107,13 @@ describe('the reviewer is wired to receive it', () => {
   });
 
   it('the template declares the placeholder', () => {
-    expect(JSON.parse(readFileSync(TEMPLATE, 'utf8')).placeholders).toContain('__PRIOR_REVIEW__');
+    expect(JSON.parse(engineSource(TEMPLATE)).placeholders).toContain('__PRIOR_REVIEW__');
   });
 });
 
 describe('and told what consistency requires', () => {
   const body = (): string => {
-    const j = JSON.parse(readFileSync(TEMPLATE, 'utf8'));
+    const j = JSON.parse(engineSource(TEMPLATE));
     return String(j.body ?? Object.values(j.bodies ?? {}).join('\n')).toLowerCase();
   };
 

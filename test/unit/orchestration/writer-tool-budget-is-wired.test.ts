@@ -25,13 +25,14 @@ import { describe, it, expect } from 'vitest';
 import { readFileSync } from 'node:fs';
 import { execFileSync } from 'node:child_process';
 import { join } from 'node:path';
+import { engineSource } from '../../lib/engine-source';
 
 const ROOT = join(__dirname, '../../..');
 const SETTINGS = join(ROOT, 'orchestrations/projects/metrolinx/llm-settings.json');
-const CLAUDE_SH = readFileSync(join(ROOT, 'orchestrations/scripts/claude.sh'), 'utf8');
+const CLAUDE_SH = engineSource(join(ROOT, 'orchestrations/scripts/claude.sh'));
 
 describe('the budget is configured', () => {
-  const cfg = () => JSON.parse(readFileSync(SETTINGS, 'utf8'));
+  const cfg = () => JSON.parse(engineSource(SETTINGS));
 
   it('is a real number, not null', () => {
     expect(typeof cfg().costControls.maxToolCallsPerStory).toBe('number');
@@ -62,7 +63,7 @@ describe('and it reaches the writer', () => {
     const out = execFileSync('bash', ['-c',
       `jq -r '.costControls.maxToolCallsPerStory // empty' ${JSON.stringify(SETTINGS)}`,
     ], { encoding: 'utf8' }).trim();
-    expect(Number(out)).toBe(JSON.parse(readFileSync(SETTINGS, 'utf8')).costControls.maxToolCallsPerStory);
+    expect(Number(out)).toBe(JSON.parse(engineSource(SETTINGS)).costControls.maxToolCallsPerStory);
     expect(Number(out)).toBeGreaterThan(0);
   });
 });
@@ -70,7 +71,7 @@ describe('and it reaches the writer', () => {
 describe('the schema no longer misstates reality', () => {
   it('does not claim the cap is unset anywhere', () => {
     // That sentence is what I read and repeated. It was true when written and false since.
-    const schema = readFileSync(join(ROOT, 'orchestrations/config/llm-settings.schema.json'), 'utf8');
+    const schema = engineSource(join(ROOT, 'orchestrations/config/llm-settings.schema.json'));
     expect(schema).not.toMatch(/this cap is not set anywhere today/);
   });
 });

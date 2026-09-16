@@ -32,9 +32,10 @@ import { spawnSync } from 'node:child_process';
 import { readFileSync, writeFileSync, mkdtempSync, rmSync, chmodSync } from 'node:fs';
 import { join } from 'node:path';
 import { tmpdir } from 'node:os';
+import { engineSource } from '../../lib/engine-source';
 
 const ORCH_SCRIPT = join(__dirname, '../../../orchestrations/scripts/run-agent-orchestration.sh');
-const orchSrc = readFileSync(ORCH_SCRIPT, 'utf8');
+const orchSrc = engineSource(ORCH_SCRIPT);
 
 // ─── Source invariants ─────────────────────────────────────────────────────
 

@@ -25,10 +25,11 @@ import { mkdtempSync, mkdirSync, writeFileSync, rmSync, readFileSync, existsSync
 import { execFileSync } from 'node:child_process';
 import { join } from 'node:path';
 import { tmpdir } from 'node:os';
+import { engineSource } from '../../lib/engine-source';
 
 const ROOT = join(__dirname, '../../../');
-const SRC = readFileSync(join(ROOT, 'orchestrations/scripts/claude.sh'), 'utf8');
-const LIB = readFileSync(join(ROOT, 'orchestrations/scripts/lib/story-retry-state.sh'), 'utf8');
+const SRC = engineSource(join(ROOT, 'orchestrations/scripts/claude.sh'));
+const LIB = engineSource(join(ROOT, 'orchestrations/scripts/lib/story-retry-state.sh'));
 const dirs: string[] = [];
 afterAll(() => { for (const d of dirs) rmSync(d, { recursive: true, force: true }); });
 

@@ -35,9 +35,10 @@
 import { describe, it, expect } from 'vitest';
 import { readFileSync, existsSync } from 'node:fs';
 import { join } from 'node:path';
+import { engineSource } from '../../lib/engine-source';
 
 const ROOT = join(__dirname, '../../../orchestrations/scripts');
-const SEAM = readFileSync(join(ROOT, 'llm-handler.sh'), 'utf8');
+const SEAM = engineSource(join(ROOT, 'llm-handler.sh'));
 
 describe('the seam retries a transport-level failure', () => {
   it('does not accept an empty response on the first attempt', () => {
@@ -101,7 +102,7 @@ describe('the guarantee cannot be bypassed by a new call site', () => {
     for (const f of ['lib/codeline-discovery.js', 'lib/ac-gate.js', 'lib/cpa-inference.js']) {
       const p = join(ROOT, f);
       if (!existsSync(p)) continue;
-      expect(readFileSync(p, 'utf8'), `${f} bypasses the seam`).toMatch(/ai-run\.sh/);
+      expect(engineSource(p), `${f} bypasses the seam`).toMatch(/ai-run\.sh/);
     }
   });
 

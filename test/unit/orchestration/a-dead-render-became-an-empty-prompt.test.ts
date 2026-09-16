@@ -21,6 +21,7 @@ import { describe, it, expect } from 'vitest';
 import { spawnSync } from 'node:child_process';
 import { readFileSync } from 'node:fs';
 import { join } from 'node:path';
+import { engineSource } from '../../lib/engine-source';
 
 const ROOT = join(__dirname, '../../..');
 const CLAUDE_SH = join(ROOT, 'orchestrations/scripts/claude.sh');
@@ -35,7 +36,7 @@ export NODE_CMD=${JSON.stringify(join(process.env.HOME || '', '.nvm/versions/nod
 `;
 
   it('exists', () => {
-    expect(readFileSync(LIB, 'utf8')).toMatch(/render_or_keep\(\)/);
+    expect(engineSource(LIB)).toMatch(/render_or_keep\(\)/);
   });
 
   it('leaves the target untouched when the render fails', () => {
@@ -72,7 +73,7 @@ export NODE_CMD=${JSON.stringify(join(process.env.HOME || '', '.nvm/versions/nod
 });
 
 describe('the call sites that must never blank', () => {
-  const src = readFileSync(CLAUDE_SH, 'utf8');
+  const src = engineSource(CLAUDE_SH);
   const lines = src.split('\n');
 
   /** Assignments where a dead render would blank the agent's whole prompt or its only feedback. */

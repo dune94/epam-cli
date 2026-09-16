@@ -28,6 +28,7 @@ import { describe, it, expect } from 'vitest';
 import { spawnSync } from 'node:child_process';
 import { readdirSync, readFileSync, existsSync } from 'node:fs';
 import { join } from 'node:path';
+import { engineSource } from '../../lib/engine-source';
 
 const REPO_ROOT = join(__dirname, '../../../');
 const LIB = join(REPO_ROOT, 'orchestrations/scripts/lib');
@@ -36,7 +37,7 @@ const LIB = join(REPO_ROOT, 'orchestrations/scripts/lib');
 function pythonSchemas(): string[] {
   return readdirSync(LIB)
     .filter((f) => f.endsWith('.py'))
-    .filter((f) => /^\s*(from|import)\s+pydantic/m.test(readFileSync(join(LIB, f), 'utf8')));
+    .filter((f) => /^\s*(from|import)\s+pydantic/m.test(engineSource(join(LIB, f))));
 }
 
 describe('the declared Python dependency is real', () => {
@@ -47,7 +48,7 @@ describe('the declared Python dependency is real', () => {
       'schema files import pydantic with no dependency manifest — the next machine to ' +
         'run this pipeline gets validators that crash on import and validate nothing',
     ).toBe(true);
-    expect(readFileSync(req, 'utf8')).toMatch(/pydantic/);
+    expect(engineSource(req)).toMatch(/pydantic/);
   });
 
   it('pydantic is importable by the SAME interpreter the pipeline invokes', () => {

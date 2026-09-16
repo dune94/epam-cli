@@ -25,6 +25,7 @@ import { execFileSync } from 'node:child_process';
 import { mkdtempSync, mkdirSync, writeFileSync, rmSync, existsSync, readFileSync, chmodSync } from 'node:fs';
 import { tmpdir } from 'node:os';
 import { join } from 'node:path';
+import { engineSource } from '../../lib/engine-source';
 
 const ORCH = join(__dirname, '../../../orchestrations/scripts/run-agent-orchestration.sh');
 
@@ -51,7 +52,7 @@ function invokeMint(env: Record<string, string>) {
 
     // Lift the function and the helpers it needs, then call it. Everything it decides with is
     // real; only the thing it would SPAWN is stubbed.
-    const src = readFileSync(ORCH, 'utf8');
+    const src = engineSource(ORCH);
     const start = src.indexOf('_run_agent_mint() {');
     const end = src.indexOf('\n}\n', start) + 3;
     const fn = src.slice(start, end);
@@ -86,7 +87,7 @@ function invokeMint(env: Record<string, string>) {
       });
     } catch (e: any) { out = `${e.stdout || ''}${e.stderr || ''}`; }
 
-    const recorded = existsSync(calls) ? readFileSync(calls, 'utf8').trim() : '';
+    const recorded = existsSync(calls) ? engineSource(calls).trim() : '';
     const mintCalls = recorded ? recorded.split('\n').filter((l) => l.includes('mint-agents-step.js')).length : 0;
     return { mintCalls, out, cfg,
       marker: (cl: string) => writeFileSync(join(cfg, '.prompt-cache', `.complete-${cl}`), '') };
@@ -120,7 +121,7 @@ function invokeMintPrepared(opts: { codeline: string; marker: string | null; pro
     writeFileSync(fakeNode, `#!/usr/bin/env bash\nprintf '%s\\n' "$*" >> ${JSON.stringify(calls)}\nexit 0\n`);
     chmodSync(fakeNode, 0o755);
 
-    const src = readFileSync(ORCH, 'utf8');
+    const src = engineSource(ORCH);
     const start = src.indexOf('_run_agent_mint() {');
     const end = src.indexOf('\n}\n', start) + 3;
     const script = join(dir, 'drive.sh');
@@ -156,7 +157,7 @@ function invokeMintPrepared(opts: { codeline: string; marker: string | null; pro
       });
     } catch (e: any) { out = `${e.stdout || ''}${e.stderr || ''}`; }
 
-    const rec = existsSync(calls) ? readFileSync(calls, 'utf8') : '';
+    const rec = existsSync(calls) ? engineSource(calls) : '';
     return {
       mintCalls: (rec.match(/mint-agents-step\.js/g) || []).length,
       rosterOnly: /EPAM_ROSTER_ONLY/.test(rec) || /roster-only/i.test(out),

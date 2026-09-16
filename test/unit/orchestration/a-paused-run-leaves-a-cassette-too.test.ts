@@ -28,6 +28,7 @@ import { spawnSync } from 'node:child_process';
 import { mkdtempSync, writeFileSync, rmSync, existsSync, readdirSync, chmodSync } from 'node:fs';
 import { join } from 'node:path';
 import { tmpdir } from 'node:os';
+import { engineSource } from '../../lib/engine-source';
 
 const ROOT = join(__dirname, '../../../');
 const ORCH = join(ROOT, 'orchestrations/scripts/run-agent-orchestration.sh');
@@ -64,7 +65,7 @@ function extractCassetteExport(): string {
 function extractCleanup(): string {
   return extractFn('cleanup', /stop_control_plane/);
 }
-function readFileSyncUtf8(p: string) { return require('node:fs').readFileSync(p, 'utf8') as string; }
+function readFileSyncUtf8(p: string) { return engineSource(p) as string; }
 
 /** Run the real cleanup() under a trap, exiting the way the pipeline actually exits. */
 function runExit(opts: { code: number; skipCleanup?: boolean; runId?: string }) {

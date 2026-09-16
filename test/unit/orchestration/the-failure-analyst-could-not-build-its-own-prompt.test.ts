@@ -27,6 +27,7 @@ import { spawnSync } from 'node:child_process';
 import { mkdtempSync, mkdirSync, writeFileSync, readFileSync, readdirSync, existsSync, rmSync } from 'node:fs';
 import { tmpdir } from 'node:os';
 import { join } from 'node:path';
+import { engineSource } from '../../lib/engine-source';
 
 const ROOT = join(__dirname, '../../..');
 const TEMPLATES = join(ROOT, 'orchestrations/prompts/templates');
@@ -39,7 +40,7 @@ const NODE = process.execPath;
 
 describe('the failure analyst could not build its own prompt', () => {
   it('EVERY PLACEHOLDER THE TEMPLATE DECLARES HAS A VALUE — rendered, not inspected', () => {
-    const tpl = JSON.parse(readFileSync(join(TEMPLATES, 'failure-analyst.json'), 'utf8'));
+    const tpl = JSON.parse(engineSource(join(TEMPLATES, 'failure-analyst.json')));
     const values: Record<string, string> = {};
     // The value must not itself contain the token, or the strict renderer sees it as unreplaced.
     for (const p of tpl.placeholders as string[]) values[p] = `value for ${p.replace(/_/g, ' ').trim()}`;
@@ -61,8 +62,8 @@ describe('the failure analyst could not build its own prompt', () => {
   it('THE CALLER SUPPLIES ALL OF THEM — the eight-of-nine that killed the diagnosis', () => {
     // The engine's values file is built by one jq call; every declared placeholder must be a key
     // in it, or the render throws exactly as it did live.
-    const src = readFileSync(join(ROOT, 'orchestrations/scripts/claude.sh'), 'utf8');
-    const tpl = JSON.parse(readFileSync(join(TEMPLATES, 'failure-analyst.json'), 'utf8'));
+    const src = engineSource(join(ROOT, 'orchestrations/scripts/claude.sh'));
+    const tpl = JSON.parse(engineSource(join(TEMPLATES, 'failure-analyst.json')));
     const start = src.indexOf('"__ANALYST_PROFILE__":$profile');
     expect(start, 'the analyst values block was not found').toBeGreaterThan(-1);
     const block = src.slice(start, src.indexOf('> "$_analyst_values"', start));
@@ -91,7 +92,7 @@ describe('the failure analyst could not build its own prompt', () => {
   });
 
   it('AND THE ENGINE READS IT FROM THERE, not from a name written into the engine', () => {
-    const src = readFileSync(join(ROOT, 'orchestrations/scripts/claude.sh'), 'utf8');
+    const src = engineSource(join(ROOT, 'orchestrations/scripts/claude.sh'));
     const i = src.indexOf('_analyst_manifest_file=$(jq');
     expect(i, 'the manifest name is not read from the project declaration').toBeGreaterThan(-1);
     expect(src.slice(i, i + 200), 'it reads from somewhere other than dependency-check.json')

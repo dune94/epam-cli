@@ -18,6 +18,7 @@ import { spawnSync } from 'node:child_process';
 import { mkdtempSync, writeFileSync, rmSync, readFileSync } from 'node:fs';
 import { join } from 'node:path';
 import { tmpdir } from 'node:os';
+import { engineSource } from '../../lib/engine-source';
 
 const ROOT = join(__dirname, '../../..');
 const SCRIPTS = join(ROOT, 'orchestrations/scripts');
@@ -26,7 +27,7 @@ const AUDIT = join(SCRIPTS, 'lib/handlers/dependency-audit-summary.py');
 
 /** run_testing_gates only — the rest of the file is not this step. */
 function gatesFn(): string {
-  const src = readFileSync(ORCH, 'utf8');
+  const src = engineSource(ORCH);
   const i = src.indexOf('run_testing_gates() {');
   expect(i, 'run_testing_gates is gone').toBeGreaterThan(-1);
   return src.slice(i, src.indexOf('\n}', i));

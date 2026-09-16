@@ -29,13 +29,14 @@
 import { describe, it, expect } from 'vitest';
 import { readFileSync } from 'node:fs';
 import { join } from 'node:path';
+import { engineSource } from '../../lib/engine-source';
 
 const REPO = process.cwd();
 const TPL = join(REPO, 'orchestrations/prompts/templates/story-writer-main.json');
 const CLAUDE_SH = join(REPO, 'orchestrations/scripts/claude.sh');
-const tpl = JSON.parse(readFileSync(TPL, 'utf8'));
+const tpl = JSON.parse(engineSource(TPL));
 const body = String(tpl.body || JSON.stringify(tpl.bodies || ''));
-const sh = readFileSync(CLAUDE_SH, 'utf8');
+const sh = engineSource(CLAUDE_SH);
 
 describe('the writer runs on a brownfield defect', () => {
   it('the template is real and still carries the writer\'s own instructions', () => {
@@ -74,7 +75,7 @@ describe('the writer runs on a brownfield defect', () => {
   });
 
   it('THE GUARD IS INTACT — a contract correction, not a disabled check', () => {
-    const guard = readFileSync(join(REPO, 'orchestrations/scripts/lib/engine-prompt.js'), 'utf8');
+    const guard = engineSource(join(REPO, 'orchestrations/scripts/lib/engine-prompt.js'));
     expect(guard, 'the empty-value guard was removed instead of the contract corrected')
       .toMatch(/was given EMPTY values for/);
   });

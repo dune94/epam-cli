@@ -20,6 +20,7 @@ import { spawnSync } from 'node:child_process';
 import { mkdtempSync, writeFileSync, readFileSync, rmSync, chmodSync } from 'node:fs';
 import { join } from 'node:path';
 import { tmpdir } from 'node:os';
+import { engineSource } from '../../lib/engine-source';
 
 const ROOT = join(__dirname, '../../../');
 const CLAUDE_SH = join(ROOT, 'orchestrations/scripts/claude.sh');
@@ -28,7 +29,7 @@ const DELEGATE = join(ROOT, 'orchestrations/scripts/lib/replay-delegate.sh');
 const dirs: string[] = [];
 afterAll(() => { for (const d of dirs) rmSync(d, { recursive: true, force: true }); });
 
-const src = readFileSync(CLAUDE_SH, 'utf8');
+const src = engineSource(CLAUDE_SH);
 const lines = src.split('\n');
 
 /** Every line in claude.sh that hands the writer's prompt to a runner binary or the delegate. */
@@ -79,7 +80,7 @@ describe('the writer names its seam', () => {
       delegateCall!.trim().replace(/; then$/, '; then :; fi'),
     ].join('\n'));
     const r = spawnSync('bash', [script], { encoding: 'utf8', timeout: 30_000, env: { ...process.env, EPAM_REPLAY_CASSETTE_DIR: d } });
-    const got = (() => { try { return readFileSync(envDump, 'utf8'); } catch { return ''; } })();
+    const got = (() => { try { return engineSource(envDump); } catch { return ''; } })();
     expect(got, `the runner was never reached:\n${r.stdout}${r.stderr}`).not.toBe('');
     expect(got).toMatch(/^EPAM_AGENT_NAME=story-writer$/m);
     expect(got).toMatch(/^EPAM_STORY_ID=FX-7$/m);

@@ -22,9 +22,10 @@ import { mkdtempSync, writeFileSync, rmSync } from 'node:fs';
 import { readFileSync } from 'node:fs';
 import { join } from 'node:path';
 import { tmpdir } from 'node:os';
+import { engineSource, engineSourceFile } from '../../lib/engine-source';
 
 const ROOT = join(__dirname, '../../../');
-const CLAUDE_SH = join(ROOT, 'orchestrations/scripts/claude.sh');
+const CLAUDE_SH = engineSourceFile(join(ROOT, 'orchestrations/scripts/claude.sh')); // the inlined program: this test lifts text, it does not execute the main
 const dirs: string[] = [];
 afterAll(() => { for (const d of dirs) rmSync(d, { recursive: true, force: true }); });
 
@@ -74,7 +75,7 @@ describe('A MISSING PERSONA IS A REFUSAL, NOT A SUBSTITUTION', () => {
 
 describe('AND NO INLINE PERSONA SURVIVES IN THE PIPELINE', () => {
   it('claude.sh carries no "You are ..." fallback', () => {
-    const src = readFileSync(CLAUDE_SH, 'utf8');
+    const src = engineSource(CLAUDE_SH);
     const offenders = src.split('\n')
       .map((l, i) => ({ l, n: i + 1 }))
       .filter(({ l }) => /=\s*"You are /.test(l) && !/^\s*#/.test(l))

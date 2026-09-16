@@ -33,6 +33,7 @@ import { execFileSync } from 'node:child_process';
 import { mkdtempSync, rmSync, existsSync, readFileSync, writeFileSync, chmodSync } from 'node:fs';
 import { join } from 'node:path';
 import { tmpdir } from 'node:os';
+import { engineSource } from '../../lib/engine-source';
 
 const SCRIPTS = join(__dirname, '../../../orchestrations/scripts');
 const KB_CLI = join(SCRIPTS, 'lib/kb-cli.js');
@@ -119,7 +120,7 @@ describe('a repeated failure produces a constraint the next attempt runs with', 
              '--diagnosis', 'the greeting change did not compile'], TSC_FAILURE);
     const events = join(dir, 'healing-events.jsonl');
     expect(existsSync(events), 'no episode was recorded').toBe(true);
-    const rec = JSON.parse(readFileSync(events, 'utf8').trim().split('\n')[0]);
+    const rec = JSON.parse(engineSource(events).trim().split('\n')[0]);
     expect(['tsc', 'vitest'],
       `signature_source is ${rec.signature_source} — a key guessed from prose ` +
       'scored 50.8% against 94.1% for reading tool output')
@@ -132,14 +133,14 @@ describe('a repeated failure produces a constraint the next attempt runs with', 
              '--diagnosis', 'the greeting change did not compile'], TSC_FAILURE);
     kb(dir, ['record', '--story', STORY, '--agent-role', ROLE,
              '--diagnosis', 'the greeting change did not compile'], TSC_FAILURE);
-    const events = readFileSync(join(dir, 'healing-events.jsonl'), 'utf8')
+    const events = engineSource(join(dir, 'healing-events.jsonl'))
       .trim().split('\n').filter(Boolean);
     expect(events.length, 'episodes are not append-only').toBe(2);
 
     kb(dir, ['synthesize-auto', '--agent-role', ROLE]);
     const cpath = join(dir, 'constraints.json');
     if (!existsSync(cpath)) return;                     // synthesis needs a model
-    const constraints = JSON.parse(readFileSync(cpath, 'utf8'));
+    const constraints = JSON.parse(engineSource(cpath));
     const list = Array.isArray(constraints) ? constraints : Object.values(constraints);
     expect(list.length, 'two episodes of one signature produced more than one rule')
       .toBeLessThanOrEqual(1 + 1);

@@ -32,6 +32,7 @@
 import { describe, it, expect } from 'vitest';
 import { readFileSync, existsSync } from 'node:fs';
 import { join } from 'node:path';
+import { engineSource } from '../../lib/engine-source';
 
 const ROOT = join(__dirname, '../../../');
 const RUNNER = join(ROOT, 'orchestrations/scripts/spec-mode-runner.js');
@@ -56,7 +57,7 @@ function parsed(extra: Record<string, unknown> = {}): any {
 }
 
 function parserLiteral(): string {
-  const src = readFileSync(RUNNER, 'utf8');
+  const src = engineSource(RUNNER);
   const start = src.indexOf('    findings.push({');
   expect(start, 'the findings.push literal moved — this test is anchored on it').toBeGreaterThan(0);
   const end = src.indexOf('      });', start);

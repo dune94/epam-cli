@@ -41,6 +41,7 @@ import { spawnSync } from 'node:child_process';
 import { readFileSync, mkdtempSync, writeFileSync, rmSync } from 'node:fs';
 import { tmpdir } from 'node:os';
 import { join } from 'node:path';
+import { engineSource } from '../../lib/engine-source';
 
 const REPO = join(__dirname, '../../../');
 const GUARD = join(REPO, 'orchestrations/scripts/run-agent-orchestration.sh');
@@ -52,7 +53,7 @@ const COVERAGE = join(REPO, 'orchestrations/scripts/lib/stage-coverage-gate.sh')
  * source text, which would pass on a comment or a dead branch.
  */
 function checklistRow(args: string[]): string {
-  const src = readFileSync(GUARD, 'utf8');
+  const src = engineSource(GUARD);
   const start = src.indexOf('    _checklist_row() {');
   expect(start, '_checklist_row() was not found — this test has drifted from the script')
     .toBeGreaterThan(-1);
@@ -107,7 +108,7 @@ describe('the stage table does not tell the operator a live gate is off', () => 
   });
 
   it('the real script has rows of both kinds — otherwise the rule above is theoretical', () => {
-    const src = readFileSync(GUARD, 'utf8');
+    const src = engineSource(GUARD);
     const rows = src.split('\n').filter((l) => l.includes('_checklist_row "'));
     expect(rows.length, '_checklist_row is never called').toBeGreaterThan(5);
     expect(rows.filter((l) => /"[A-Z_]+=true"\s*$/.test(l)).length,

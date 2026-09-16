@@ -29,6 +29,7 @@ import { spawnSync } from 'node:child_process';
 import { mkdtempSync, writeFileSync, rmSync, readFileSync } from 'node:fs';
 import { join } from 'node:path';
 import { tmpdir } from 'node:os';
+import { engineSource } from '../../lib/engine-source';
 
 const ROOT = join(__dirname, '../../..');
 const SCRIPTS = join(ROOT, 'orchestrations/scripts');
@@ -42,7 +43,7 @@ afterEach(() => { rmSync(work, { recursive: true, force: true }); });
 
 /** Run the lane's own phase-listing function, lifted from the script. */
 function phasesVia(prdPath: string): { lines: string[]; rc: number; err: string } {
-  const src = readFileSync(ORCH, 'utf8');
+  const src = engineSource(ORCH);
   const start = src.indexOf('  _prd_phases() {');
   expect(start, 'the phase-listing function is gone').toBeGreaterThan(-1);
   const body = src.slice(start, src.indexOf('\n  }', start) + 4)
@@ -72,14 +73,14 @@ function prdWith(phases: Record<string, string[]>): string {
 describe('a lane with no phases did nothing and said success', () => {
   it('the handler carries no unsubstituted shell placeholder', () => {
     // The literal defect: '$1' extracted into JavaScript as a filename.
-    const body = readFileSync(HANDLER, 'utf8')
+    const body = engineSource(HANDLER)
       .split('\n').filter((l) => !/^\s*(\*|\/\/)/.test(l)).join('\n');
     expect(body, "the handler still reads a file named '$1'").not.toMatch(/readFileSync\('\$\d'/);
     expect(body, 'the handler takes no argument').toMatch(/process\.argv\[2\]/);
   });
 
   it('the caller forwards the PRD path it was given', () => {
-    const src = readFileSync(ORCH, 'utf8');
+    const src = engineSource(ORCH);
     const start = src.indexOf('  _prd_phases() {');
     const body = src.slice(start, src.indexOf('\n  }', start));
     expect(body, 'the function still drops its argument').toMatch(/\$\{1:-/);
@@ -103,7 +104,7 @@ describe('a lane with no phases did nothing and said success', () => {
   it('the diagnosis names the consequence, not just the file', () => {
     // "cannot read X" sends the reader to the file. The thing they need to know is that a lane
     // with no phases does nothing and still reports success.
-    const src = readFileSync(ORCH, 'utf8');
+    const src = engineSource(ORCH);
     const start = src.indexOf('  _prd_phases() {');
     expect(src.slice(start, start + 1400))
       .toMatch(/does nothing and reports success/i);

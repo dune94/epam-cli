@@ -13,11 +13,12 @@ import { describe, it, expect } from 'vitest';
 import { readFileSync, mkdtempSync, mkdirSync, writeFileSync, rmSync } from 'node:fs';
 import { tmpdir } from 'node:os';
 import { join } from 'node:path';
+import { engineSource } from '../../lib/engine-source';
 
 const ROOT = join(__dirname, '../../../');
 const TPL = join(ROOT, 'orchestrations/prompts/templates');
 const { renderEngineTemplate, placeholdersIn } = require(join(ROOT, 'orchestrations/scripts/lib/engine-prompt.js'));
-const SRC = readFileSync(join(ROOT, 'orchestrations/scripts/claude.sh'), 'utf8');
+const SRC = engineSource(join(ROOT, 'orchestrations/scripts/claude.sh'));
 
 describe('the writer renders for a project with no dependency declaration', () => {
   it('the producer returns nothing for such a project — the premise', () => {
@@ -25,12 +26,12 @@ describe('the writer renders for a project with no dependency declaration', () =
     expect(fn.slice(0, 400)).toMatch(/\[ -f "\$_cfg" \] \|\| return 0/);
   });
   // Every template the writer's runner renders whole that carries the placeholder.
-  const ids = readFileSync(join(ROOT, 'orchestrations/scripts/claude.sh'), 'utf8').match(/render_engine_prompt ([a-z0-9-]+)/g)!.map((m) => m.split(' ')[1])
+  const ids = engineSource(join(ROOT, 'orchestrations/scripts/claude.sh')).match(/render_engine_prompt ([a-z0-9-]+)/g)!.map((m) => m.split(' ')[1])
     .filter((id, i, a) => a.indexOf(id) === i)
-    .filter((id) => { try { const d = JSON.parse(readFileSync(join(TPL, `${id}.json`), 'utf8')); return typeof d.body === 'string' && placeholdersIn(d.body).includes('__MODULE_RESOLUTION__'); } catch { return false; } });
+    .filter((id) => { try { const d = JSON.parse(engineSource(join(TPL, `${id}.json`))); return typeof d.body === 'string' && placeholdersIn(d.body).includes('__MODULE_RESOLUTION__'); } catch { return false; } });
   it('some rendered template carries __MODULE_RESOLUTION__', () => { expect(ids.length).toBeGreaterThan(0); });
   it.each(ids)('%s renders with __MODULE_RESOLUTION__ empty', (id) => {
-    const doc = JSON.parse(readFileSync(join(TPL, `${id}.json`), 'utf8'));
+    const doc = JSON.parse(engineSource(join(TPL, `${id}.json`)));
     const values: Record<string, string> = {};
     const optional = new Set(doc.mayBeEmpty || []);
     for (const p of placeholdersIn(doc.body)) values[p] = p === '__MODULE_RESOLUTION__' ? '' : optional.has(p) ? '' : `value of ${p.replace(/_/g, ' ').trim()}`;

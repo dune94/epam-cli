@@ -21,6 +21,7 @@ import { describe, it, expect } from 'vitest';
 import { spawnSync } from 'node:child_process';
 import { readFileSync, existsSync, readdirSync } from 'node:fs';
 import { join } from 'node:path';
+import { engineSource } from '../lib/engine-source';
 
 const REPO = join(__dirname, '../..');
 const CONFIG = join(REPO, 'orchestrations/config');
@@ -44,7 +45,7 @@ function resolve(set: string, expr: string) {
 
 /** The providers the orchestrator's dispatch table will accept. */
 function acceptedProviders(): string[] {
-  const src = readFileSync(join(SCRIPTS, 'run-agent-orchestration.sh'), 'utf8');
+  const src = engineSource(join(SCRIPTS, 'run-agent-orchestration.sh'));
   return [...src.matchAll(/^\s{4,}([a-z][a-z0-9-]*)\)\s+CLAUDE_SH=/gm)].map((m) => m[1]);
 }
 
@@ -89,7 +90,7 @@ describe('a stack swaps by config alone', () => {
     // The requirement itself: whatever differs between stacks lives in config. If two sets were
     // identical the switch would be meaningless; if selecting one needed an edit it would not be
     // a switch at all.
-    const bodies = SETS.map((s) => readFileSync(join(CONFIG, `llm-defaults.${s}.json`), 'utf8'));
+    const bodies = SETS.map((s) => engineSource(join(CONFIG, `llm-defaults.${s}.json`)));
     expect(new Set(bodies).size, 'two stacks are byte-identical, so one of them is not a stack')
       .toBe(SETS.length);
     for (const s of SETS) {

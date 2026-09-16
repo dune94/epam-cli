@@ -33,6 +33,7 @@
  */
 import { describe, it, expect } from 'vitest';
 import { templateBody } from '../../helpers/prompt-text';
+import { engineSource } from '../../lib/engine-source';
 
 const spec = require('../../../orchestrations/scripts/spec-mode-runner.js');
 const { normalizeVerificationCriteria, TOOL_DEFINITIONS } = spec;
@@ -125,7 +126,7 @@ describe('the declarations are kept, not discarded after use', () => {
 describe('the standard reaches the prompts, and the reviewer stops fighting it', () => {
   const { readFileSync } = require('node:fs');
   const { join } = require('node:path');
-  const SRC = readFileSync(join(__dirname, '../../../orchestrations/scripts/spec-mode-runner.js'), 'utf8');
+  const SRC = engineSource(join(__dirname, '../../../orchestrations/scripts/spec-mode-runner.js'));
   const BF = { EPAM_BROWNFIELD: '1' };
 
   it('the producer is asked for the declaration in its output shape', () => {

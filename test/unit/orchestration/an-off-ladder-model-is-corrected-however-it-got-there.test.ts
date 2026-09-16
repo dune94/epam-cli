@@ -35,10 +35,11 @@
 import { describe, it, expect } from 'vitest';
 import { readFileSync } from 'node:fs';
 import { join } from 'node:path';
+import { engineSource } from '../../lib/engine-source';
 
 const REPO = process.cwd();
 const ORCH = join(REPO, 'orchestrations/scripts/run-agent-orchestration.sh');
-const src = readFileSync(ORCH, 'utf8');
+const src = engineSource(ORCH);
 const lines = src.split('\n');
 
 /** Line index (0-based) of the first line matching, or -1. */

@@ -27,10 +27,11 @@ import { readFileSync, mkdtempSync, mkdirSync, writeFileSync, rmSync } from 'nod
 import { execFileSync } from 'node:child_process';
 import { join } from 'node:path';
 import { tmpdir } from 'node:os';
+import { engineSource } from '../../lib/engine-source';
 
 const REPO_ROOT = join(__dirname, '../../../');
 const CLAUDE_SH = join(REPO_ROOT, 'orchestrations/scripts/claude.sh');
-const claudeSrc = readFileSync(CLAUDE_SH, 'utf8');
+const claudeSrc = engineSource(CLAUDE_SH);
 
 function extractFunctionBody(name: string): string {
   const defRe = new RegExp(`^\\s*${name}\\(\\)\\s*\\{`, 'm');
@@ -101,7 +102,7 @@ function run(opts: {
     } catch (e: any) {
       stdout = (e.stdout ?? '').toString();
     }
-    const combined = stdout + readFileSync(stderrPath, 'utf8');
+    const combined = stdout + engineSource(stderrPath);
     const rc = parseInt(combined.match(/RC=(\d+)/)?.[1] ?? '-1', 10);
     return { rc, output: combined };
   } finally {
@@ -209,7 +210,7 @@ describe('verify_story_deliverables — 0-byte file check (REAL execution)', () 
       writeFileSync(wrapperPath, `bash ${JSON.stringify(scriptPath)} 2> ${JSON.stringify(stderrPath)}`);
       let stdout = '';
       try { stdout = execFileSync('bash', [wrapperPath], { encoding: 'utf8' }); } catch (e: any) { stdout = (e.stdout ?? '').toString(); }
-      const combined = stdout + readFileSync(stderrPath, 'utf8');
+      const combined = stdout + engineSource(stderrPath);
       const rc = parseInt(combined.match(/RC=(\d+)/)?.[1] ?? '-1', 10);
       return { rc, output: combined };
     } finally {

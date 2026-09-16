@@ -22,10 +22,11 @@ import { readFileSync, mkdtempSync, mkdirSync, symlinkSync, writeFileSync, chmod
 import { execFileSync } from 'node:child_process';
 import { join } from 'node:path';
 import { tmpdir } from 'node:os';
+import { engineSource } from '../../lib/engine-source';
 
 const REPO_ROOT = join(__dirname, '../../../');
 const CLAUDE_SH = join(REPO_ROOT, 'orchestrations/scripts/claude.sh');
-const src = readFileSync(CLAUDE_SH, 'utf8');
+const src = engineSource(CLAUDE_SH);
 
 // The real, unmodified path-resolution lines (claude.sh:20-25).
 function extractPathResolutionLines(): string {

@@ -35,12 +35,13 @@ import { describe, it, expect } from 'vitest';
 import { execFileSync } from 'node:child_process';
 import { readFileSync } from 'node:fs';
 import { join } from 'node:path';
+import { engineSource } from '../lib/engine-source';
 
 const REPO_ROOT = join(__dirname, '../../');
 const CLI = join(REPO_ROOT, 'dist/epam.js');
 const NODE_BIN = process.env.NODE_BIN || process.execPath;
 const CLAUDE_SH = join(REPO_ROOT, 'orchestrations/scripts/claude.sh');
-const SRC = readFileSync(CLAUDE_SH, 'utf8');
+const SRC = engineSource(CLAUDE_SH);
 
 const GATE_PROVIDER = process.env.ORCH_GATE_PROVIDER || 'openrouter';
 const GATE_MODEL = process.env.ORCH_GATE_MODEL || 'z-ai/glm-5.2';

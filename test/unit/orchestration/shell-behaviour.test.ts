@@ -15,6 +15,8 @@
 
 import { spawnSync } from 'child_process';
 import { describe, it, expect } from 'vitest';
+import { join } from 'node:path';
+import { engineSource } from '../../lib/engine-source';
 
 function bash(script: string, env: Record<string, string> = {}): {
   stdout: string;
@@ -79,20 +81,8 @@ describe('env var forwarding (claude.sh explicit block)', () => {
 
   for (const varName of FORWARDED_VARS) {
     it(`${varName} is present in claude.sh epam-run forward block`, () => {
-      const { stdout, status } = bash(
-        `grep -c '${varName}' orchestrations/scripts/claude.sh`,
-        { PWD: '/home/bradleyjerome/projects/ai/epam-cli' }
-      );
-      // spawnSync inherits cwd from process; use explicit path
-      const result2 = spawnSync(
-        'grep',
-        ['-c', varName, 'orchestrations/scripts/claude.sh'],
-        {
-          encoding: 'utf8',
-          cwd: '/home/bradleyjerome/projects/ai/epam-cli',
-        }
-      );
-      const count = parseInt((result2.stdout ?? '0').trim(), 10);
+      // The whole program: claude.sh is split into lib/ modules, and the forward block lives in one.
+      const count = engineSource(join(__dirname, '../../../orchestrations/scripts/claude.sh')).split('\n').filter((l) => l.includes(varName)).length;
       expect(count).toBeGreaterThan(0);
     });
   }

@@ -37,10 +37,11 @@ import {
 import { execFileSync, spawnSync } from 'node:child_process';
 import { join } from 'node:path';
 import { tmpdir } from 'node:os';
+import { engineSource } from '../../lib/engine-source';
 
 const REPO_ROOT = join(__dirname, '../../../');
 const CLAUDE_SH = join(REPO_ROOT, 'orchestrations/scripts/claude.sh');
-const claudeSrc = readFileSync(CLAUDE_SH, 'utf8');
+const claudeSrc = engineSource(CLAUDE_SH);
 
 function extractFunctionByLineAnchor(name: string): string {
   const lines = claudeSrc.split('\n');
@@ -121,7 +122,7 @@ describe('run_dynamic_tools_in_unlocked_window — REAL execution', () => {
     const exitCode = res.status ?? -1;
     let outputLog = '';
     try {
-      outputLog = readFileSync(outputFile, 'utf8');
+      outputLog = engineSource(outputFile);
     } catch {
       /* no output file written — fine */
     }

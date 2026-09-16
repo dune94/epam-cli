@@ -22,10 +22,11 @@ import { mkdtempSync, rmSync, readFileSync, existsSync, writeFileSync } from 'no
 import { execFileSync } from 'node:child_process';
 import { tmpdir } from 'node:os';
 import { join } from 'node:path';
+import { engineSource } from '../../lib/engine-source';
 
 const CLAUDE_SH = join(__dirname, '../../../orchestrations/scripts/claude.sh');
 const LIB = join(__dirname, '../../../orchestrations/scripts/lib');
-const src = readFileSync(CLAUDE_SH, 'utf8');
+const src = engineSource(CLAUDE_SH);
 const dirs: string[] = [];
 afterAll(() => { for (const d of dirs.splice(0)) rmSync(d, { recursive: true, force: true }); });
 
@@ -67,7 +68,7 @@ describe('RECORD — the pipeline writes a KB episode keyed by tool output', () 
       VERIFICATION_FAILURE: "src/svc/discount.ts(77,3): error TS1005: ';' expected.",
       STORY_ROLE: 'typescript-engineer',
     });
-    const ep = JSON.parse(readFileSync(join(kbRoot, 'healing-events.jsonl'), 'utf8').trim());
+    const ep = JSON.parse(engineSource(join(kbRoot, 'healing-events.jsonl')).trim());
     expect(ep.signature).toBe('TS1005');
     expect(ep.signature_source).toBe('tsc');
     expect(ep.agent_role).toBe('typescript-engineer');
@@ -79,7 +80,7 @@ describe('RECORD — the pipeline writes a KB episode keyed by tool output', () 
       VERIFICATION_FAILURE: 'src/a.ts(1,1): error TS2532: x',
       STORY_ROLE: 'r',
     });
-    const legacy = readFileSync(join(logDir, 'healing-events.jsonl'), 'utf8');
+    const legacy = engineSource(join(logDir, 'healing-events.jsonl'));
     expect(legacy).toContain('"story_id":"S-1"');
   });
 
@@ -92,7 +93,7 @@ describe('RECORD — the pipeline writes a KB episode keyed by tool output', () 
       STORY_ROLE: 'r',
     });
     const f = join(kbRoot, 'healing-events.jsonl');
-    expect(existsSync(f) && readFileSync(f, 'utf8').trim() !== '',
+    expect(existsSync(f) && engineSource(f).trim() !== '',
       'no episode recorded without a flag — self-heal is still gated').toBe(true);
   });
 
@@ -100,7 +101,7 @@ describe('RECORD — the pipeline writes a KB episode keyed by tool output', () 
     const { kbRoot } = runRecorder({
       EPAM_KB_SELFHEAL: '1', VERIFICATION_FAILURE: 'the agent was confused', STORY_ROLE: 'r',
     });
-    const ep = JSON.parse(readFileSync(join(kbRoot, 'healing-events.jsonl'), 'utf8').trim());
+    const ep = JSON.parse(engineSource(join(kbRoot, 'healing-events.jsonl')).trim());
     expect(ep.signature).toBeNull();
   });
 });

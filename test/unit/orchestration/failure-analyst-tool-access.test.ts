@@ -32,10 +32,11 @@ import { describe, it, expect } from 'vitest';
 import { readFileSync } from 'node:fs';
 import { join } from 'node:path';
 import { engineAndPrompt, analystPromptBody } from '../../helpers/analyst-prompt';
+import { engineSource } from '../../lib/engine-source';
 
-const SRC = engineAndPrompt(readFileSync(join(__dirname, '../../../orchestrations/scripts/claude.sh'), 'utf8'));
+const SRC = engineAndPrompt(engineSource(join(__dirname, '../../../orchestrations/scripts/claude.sh')));
 // ORCH_GATE_ALLOWED_TOOLS's default lives in the orchestrator, not claude.sh.
-const ORCH_SRC = readFileSync(join(__dirname, '../../../orchestrations/scripts/run-agent-orchestration.sh'), 'utf8');
+const ORCH_SRC = engineSource(join(__dirname, '../../../orchestrations/scripts/run-agent-orchestration.sh'));
 
 function analystInvocation(): string {
   const i = SRC.indexOf('if analyst_raw=$(echo "$analyst_prompt"');

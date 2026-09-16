@@ -30,13 +30,13 @@ import { describe, it, expect } from 'vitest';
 import { createRequire } from 'node:module';
 import { readFileSync } from 'node:fs';
 import { join } from 'node:path';
+import { engineSource } from '../../lib/engine-source';
 
 const require_ = createRequire(import.meta.url);
 const { parseCostRecord, buildCostSnapshot } = require_(
   '../../../orchestrations/scripts/lib/cost-emitter.js'
 );
-const SPEC_SRC = readFileSync(
-  join(__dirname, '../../../orchestrations/scripts/spec-mode-runner.js'), 'utf8');
+const SPEC_SRC = engineSource(join(__dirname, '../../../orchestrations/scripts/spec-mode-runner.js'));
 
 describe('cost-emitter — parsing the normalized result JSON', () => {
   it('reads the canonical shape ai-run.sh writes', () => {

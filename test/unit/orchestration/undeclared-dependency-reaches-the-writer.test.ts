@@ -24,9 +24,10 @@ import { spawnSync } from 'node:child_process';
 import { mkdtempSync, writeFileSync, mkdirSync, rmSync } from 'node:fs';
 import { join } from 'node:path';
 import { tmpdir } from 'node:os';
+import { engineSourceFile } from '../../lib/engine-source';
 
 const ROOT = join(__dirname, '../../..');
-const CLAUDE_SH = join(ROOT, 'orchestrations/scripts/claude.sh');
+const CLAUDE_SH = engineSourceFile(join(ROOT, 'orchestrations/scripts/claude.sh')); // the inlined program: this test lifts text, it does not execute the main
 const NODE = join(process.env.HOME || '', '.nvm/versions/node/v20.20.0/bin/node');
 const made: string[] = [];
 

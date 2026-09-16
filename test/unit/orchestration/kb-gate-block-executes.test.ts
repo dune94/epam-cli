@@ -19,11 +19,12 @@ import { mkdtempSync, rmSync, writeFileSync, readFileSync, existsSync } from 'no
 import { execFileSync } from 'node:child_process';
 import { tmpdir } from 'node:os';
 import { join } from 'node:path';
+import { engineSource } from '../../lib/engine-source';
 
 const SCRIPTS = join(__dirname, '../../../orchestrations/scripts');
 // Deliberately the orchestrator ALONE. This extracts a block by position and runs it verbatim,
 // and the KB gate block never moved — joining the extracted libs only shifts what it finds.
-const src = readFileSync(join(SCRIPTS, 'run-agent-orchestration.sh'), 'utf8');
+const src = engineSource(join(SCRIPTS, 'run-agent-orchestration.sh'));
 const dirs: string[] = [];
 afterAll(() => { for (const d of dirs.splice(0)) rmSync(d, { recursive: true, force: true }); });
 
@@ -58,8 +59,8 @@ echo "BLOCK_COMPLETED"
   const env: Record<string, string> = { ...process.env as any, KB_ROOT: dir, ...extraEnv };
   const out = execFileSync('bash', ['-c', script], { encoding: 'utf8', env });
   const f = join(dir, 'healing-events.jsonl');
-  const ep = existsSync(f) && readFileSync(f, 'utf8').trim()
-    ? JSON.parse(readFileSync(f, 'utf8').trim().split('\n')[0]) : null;
+  const ep = existsSync(f) && engineSource(f).trim()
+    ? JSON.parse(engineSource(f).trim().split('\n')[0]) : null;
   return { out, ep };
 }
 
@@ -99,7 +100,7 @@ describe('the real gate block, executed', () => {
 
 describe('mock1 is budgeted for pass + remediation retry', () => {
   it('the timeout exceeds two full passes at the observed ~19min each', () => {
-    const mock = readFileSync(join(__dirname, 'brownfield-mock-e2e.test.ts'), 'utf8');
+    const mock = engineSource(join(__dirname, 'brownfield-mock-e2e.test.ts'));
     const m = mock.match(/timeout:\s*(\d+)\s*\*\s*60\s*\*\s*1000/);
     expect(m, 'mock1 has no minute-based timeout').toBeTruthy();
     expect(Number(m![1]), 'cannot fit a first pass plus the exit-2 retry').toBeGreaterThanOrEqual(40);

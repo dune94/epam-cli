@@ -36,6 +36,7 @@ import { spawnSync } from 'node:child_process';
 import { mkdtempSync, mkdirSync, writeFileSync, rmSync, existsSync, readdirSync, readFileSync } from 'node:fs';
 import { join } from 'node:path';
 import { tmpdir } from 'node:os';
+import { engineSource } from '../../lib/engine-source';
 
 const ROOT = join(__dirname, '../../../');
 const RESET = join(ROOT, 'orchestrations/scripts/pre-run-reset.sh');
@@ -48,7 +49,7 @@ function sweep(files: string[]): string[] {
   const d = mkdtempSync(join(tmpdir(), 'runartifacts-')); dirs.push(d);
   for (const f of files) writeFileSync(join(d, f), '{}');
 
-  const src = readFileSync(RESET, 'utf8');
+  const src = engineSource(RESET);
   const start = src.indexOf('_RUN_ARTIFACT_DIR=');
   expect(start, 'the run-artifact sweep does not exist yet — that is what this test is for')
     .toBeGreaterThan(-1);
@@ -100,7 +101,7 @@ describe('IT SWEEPS BY PATTERN, SO TOMORROW\'S ARTIFACT IS COVERED TOO', () => {
 describe('THE RESET SAYS WHAT IT DID, AND FAILS IF IT COULD NOT', () => {
   it('leftovers it cannot remove abort the run rather than being announced as clean', () => {
     // Proceeding here means starting a run on another run's state, which is the whole defect.
-    const src = readFileSync(RESET, 'utf8');
+    const src = engineSource(RESET);
     const start = src.indexOf('_RUN_ARTIFACT_DIR=');
     const block = src.slice(start, src.indexOf('\nfi\n', start) + 4);
     // fail_contamination, specifically: plain fail() exits 1, which every launcher's `|| info`
@@ -113,7 +114,7 @@ describe('AND THE CONSUMER STILL TREATS IT AS THIS RUN\'S FEEDBACK', () => {
   it('the writer prompt calls it "your previous attempt" — so it MUST be this run\'s', () => {
     // Kept as a standing reminder of why the lifetime matters: the prompt asserts recency it
     // cannot verify, so the reset is the only thing that can make the claim true.
-    const claude = readFileSync(join(ROOT, 'orchestrations/scripts/claude.sh'), 'utf8');
+    const claude = engineSource(join(ROOT, 'orchestrations/scripts/claude.sh'));
     expect(claude).toMatch(/review-feedback-\$\{story_id\}\.json/);
     expect(claude).toMatch(/previous attempt/i);
   });

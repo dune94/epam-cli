@@ -25,6 +25,7 @@ import { mkdtempSync, writeFileSync, readFileSync, rmSync, readdirSync } from 'n
 import { join } from 'node:path';
 import { tmpdir } from 'node:os';
 import { provisionProject, cleanupProvisioned } from '../../support/provisioned-project';
+import { engineSource } from '../../lib/engine-source';
 
 const ROOT = join(__dirname, '../../../');
 const LIB = join(ROOT, 'orchestrations/scripts/lib/story-acs-block.sh');
@@ -33,7 +34,7 @@ const TPL_DIR = join(ROOT, 'orchestrations/prompts/templates');
 /** The templates that carry __STORY_ACS__ — discovered, not listed. */
 const AC_TEMPLATES = readdirSync(TPL_DIR).filter((f) => f.endsWith('.json'))
   .map((f) => f.replace(/\.json$/, ''))
-  .filter((id) => (JSON.parse(readFileSync(join(TPL_DIR, `${id}.json`), 'utf8')).placeholders || []).includes('__STORY_ACS__'));
+  .filter((id) => (JSON.parse(engineSource(join(TPL_DIR, `${id}.json`))).placeholders || []).includes('__STORY_ACS__'));
 
 const dirs: string[] = [];
 let PROJECT = '';
@@ -92,7 +93,7 @@ describe('the four seams render in both states through the real renderer', () =>
   });
 
   it.each(AC_TEMPLATES)('%s declares __STORY_ACS__ mayBeEmpty and carries no fixed criteria heading of its own', (id) => {
-    const doc = JSON.parse(readFileSync(join(TPL_DIR, `${id}.json`), 'utf8'));
+    const doc = JSON.parse(engineSource(join(TPL_DIR, `${id}.json`)));
     expect(doc.mayBeEmpty, `${id}: absent criteria (brownfield) must be a legal state`).toContain('__STORY_ACS__');
     // The writer's own "## Acceptance Criteria" heading also covers the brownfield VC block, so it
     // stays; the judges carry none of their own.
@@ -102,7 +103,7 @@ describe('the four seams render in both states through the real renderer', () =>
   function renderWith(id: string, acs: string) {
     // eslint-disable-next-line @typescript-eslint/no-var-requires
     const lib = require(join(ROOT, 'orchestrations/scripts/lib/prompt-library.js'));
-    const doc = JSON.parse(readFileSync(join(TPL_DIR, `${id}.json`), 'utf8'));
+    const doc = JSON.parse(engineSource(join(TPL_DIR, `${id}.json`)));
     const values: Record<string, string> = {};
     for (const p of doc.placeholders || []) values[p] = p === '__STORY_ACS__' ? acs : `value-for-${p}`;
     return lib.buildPrompt(id, PROJECT, values);
@@ -118,7 +119,7 @@ describe('the four seams render in both states through the real renderer', () =>
   // a VC block must render with the VC block EMPTY — team-lead-review did not declare it, could not
   // render for any greenfield story, and the phase halted after six no-verdict cycles (2026-09-13).
   it.each(AC_TEMPLATES)('%s: a greenfield story renders with the criteria block and an EMPTY verification-criteria block', (id) => {
-    const doc = JSON.parse(readFileSync(join(TPL_DIR, `${id}.json`), 'utf8'));
+    const doc = JSON.parse(engineSource(join(TPL_DIR, `${id}.json`)));
     const vcs = (doc.placeholders || []).filter((p: string) => /VC_BLOCK/.test(p));
     for (const p of vcs) expect(doc.mayBeEmpty, `${id}: ${p} must be declared mayBeEmpty — a greenfield story has no verification criteria`).toContain(p);
     const lib = require(join(ROOT, 'orchestrations/scripts/lib/prompt-library.js'));
@@ -142,7 +143,7 @@ describe('the four seams render in both states through the real renderer', () =>
  * lifted from the real script and executed against a PRD with criteria.
  */
 describe('the writer render in claude.sh hands over the criteria', () => {
-  const SRC = readFileSync(join(ROOT, 'orchestrations/scripts/claude.sh'), 'utf8');
+  const SRC = engineSource(join(ROOT, 'orchestrations/scripts/claude.sh'));
   it('the value block names __STORY_ACS__ and builds it from the block library', () => {
     const at = SRC.indexOf('story-writer-main-vals-');
     expect(at).toBeGreaterThan(-1);

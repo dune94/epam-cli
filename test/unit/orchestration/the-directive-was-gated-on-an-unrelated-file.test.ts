@@ -22,8 +22,11 @@ import { spawnSync } from 'node:child_process';
 import { mkdtempSync, writeFileSync, mkdirSync, rmSync } from 'node:fs';
 import { join } from 'node:path';
 import { tmpdir } from 'node:os';
+import { engineSource } from '../../lib/engine-source';
+import { engineSourceFile } from '../../lib/engine-source';
 
 const ROOT = join(__dirname, '../../..');
+engineSourceFile(join(ROOT, 'orchestrations/scripts/claude.sh')); // the awk lifts below read the inlined program
 const CLAUDE_SH = join(ROOT, 'orchestrations/scripts/claude.sh');
 const NODE = join(process.env.HOME || '', '.nvm/versions/node/v20.20.0/bin/node');
 const made: string[] = [];
@@ -53,8 +56,8 @@ AUTOMATION_DIR='${join(ROOT, 'orchestrations')}'
 NODE_CMD='${NODE}'
 source "$SCRIPT_DIR/lib/jq-vals.sh"
 source "$SCRIPT_DIR/lib/render-engine-prompt.sh"
-eval "$(awk '/^_project_dep_config_value\\(\\) \\{/,/^\\}/' "$SCRIPT_DIR/claude.sh")"
-eval "$(awk '/^_project_install_command\\(\\) \\{/,/^\\}/' "$SCRIPT_DIR/claude.sh")"
+eval "$(awk '/^_project_dep_config_value\\(\\) \\{/,/^\\}/' "$SCRIPT_DIR/.inlined/claude.sh")"
+eval "$(awk '/^_project_install_command\\(\\) \\{/,/^\\}/' "$SCRIPT_DIR/.inlined/claude.sh")"
 command -v _project_install_command >/dev/null || { echo "HARNESS DID NOT LIFT" >&2; exit 3; }
 run_extracted() {
   local PROJECT_ROOT='${projectRoot}'
@@ -71,7 +74,7 @@ run_extracted
 // eslint-disable-next-line @typescript-eslint/no-var-requires
 const { readFileSync } = require('node:fs');
 function block(): string {
-  const src = readFileSync(CLAUDE_SH, 'utf8');
+  const src = engineSource(CLAUDE_SH);
   const a = src.indexOf('    local new_dependency_directive=""');
   const b = src.indexOf('\n\n    # Deterministic contract injection', a);
   return src.slice(a, b);

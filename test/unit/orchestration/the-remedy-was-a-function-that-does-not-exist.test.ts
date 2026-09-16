@@ -23,6 +23,7 @@
 import { describe, it, expect } from 'vitest';
 import { readFileSync, readdirSync } from 'node:fs';
 import { join } from 'node:path';
+import { engineSource } from '../../lib/engine-source';
 
 const ROOT = join(__dirname, '../../..');
 const ORCH = join(ROOT, 'orchestrations/scripts/run-agent-orchestration.sh');
@@ -32,7 +33,7 @@ function definedFunctions(): Set<string> {
   const defined = new Set<string>();
   for (const d of ['orchestrations/scripts', 'orchestrations/scripts/lib']) {
     for (const f of readdirSync(join(ROOT, d)).filter((x) => x.endsWith('.sh'))) {
-      const s = readFileSync(join(ROOT, d, f), 'utf8');
+      const s = engineSource(join(ROOT, d, f));
       for (const m of s.matchAll(/^\s*(_[a-z0-9_]+)\(\)\s*\{/gm)) defined.add(m[1]);
     }
   }
@@ -52,7 +53,7 @@ function undefinedCalls(): string[] {
   const out: string[] = [];
   for (const d of ['orchestrations/scripts', 'orchestrations/scripts/lib']) {
     for (const f of readdirSync(join(ROOT, d)).filter((x) => x.endsWith('.sh'))) {
-      const s = readFileSync(join(ROOT, d, f), 'utf8');
+      const s = engineSource(join(ROOT, d, f));
       // A heredoc can carry another language whose syntax looks like a shell call.
       const inHeredoc = /<<-?\s*['"]?[A-Z_]+['"]?/.test(s);
       s.split('\n').forEach((l, i) => {
@@ -87,7 +88,7 @@ describe('no script calls a function nothing defines', () => {
 });
 
 describe('the guard that caught the flip-flop is kept', () => {
-  const src = () => readFileSync(ORCH, 'utf8');
+  const src = () => engineSource(ORCH);
 
   it('still detects an approval that follows an unresolved blocker', () => {
     expect(src()).toMatch(/_review_approval_is_giveup/);

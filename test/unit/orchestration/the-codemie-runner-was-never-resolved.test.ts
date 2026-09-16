@@ -26,6 +26,7 @@ import { spawnSync } from 'node:child_process';
 import { readFileSync, writeFileSync, mkdtempSync, rmSync } from 'node:fs';
 import { join } from 'node:path';
 import { tmpdir } from 'node:os';
+import { engineSource } from '../../lib/engine-source';
 
 const ROOT = join(__dirname, '../../../');
 const LIB = join(ROOT, 'orchestrations/scripts/lib/runner-settings.sh');
@@ -72,7 +73,7 @@ function applyAsCaller(set: string, provider: string, claudeCmdBasename: string)
 describe('a runner declaration is resolved by the CLI actually invoked', () => {
   it('the fixture really is the asymmetry: only codemie declares no "claude" runner', () => {
     const has = (set: string) => {
-      const j = JSON.parse(readFileSync(join(CONFIG, `llm-defaults.${set}.json`), 'utf8'));
+      const j = JSON.parse(engineSource(join(CONFIG, `llm-defaults.${set}.json`)));
       return Object.keys(j.runners || {});
     };
     expect(has('claude')).toContain('claude');
@@ -106,7 +107,7 @@ describe('a runner declaration is resolved by the CLI actually invoked', () => {
 
   it('the call sites resolve by the CLI they will actually invoke', () => {
     for (const rel of ['orchestrations/scripts/llm-handler.sh', 'orchestrations/scripts/claude.sh']) {
-      const src = readFileSync(join(ROOT, rel), 'utf8');
+      const src = engineSource(join(ROOT, rel));
       expect(/apply_runner_settings "\$\(basename "\$\{?CLAUDE_CMD/.test(src),
         `${rel} still resolves the runner from CLAUDE_CMD, which is "claude" under every set`)
         .toBe(false);

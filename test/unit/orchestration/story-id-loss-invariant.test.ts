@@ -27,17 +27,15 @@ import { readFileSync, mkdtempSync, writeFileSync, rmSync } from 'node:fs';
 import { execFileSync } from 'node:child_process';
 import { join } from 'node:path';
 import { tmpdir } from 'node:os';
+import { engineSource } from '../../lib/engine-source';
 
 // eslint-disable-next-line @typescript-eslint/no-require-imports
 const { assertNoStoryIdsLost } = require('../../../orchestrations/scripts/spec-mode-runner.js');
-const SPEC_MODE_RUNNER_SRC = readFileSync(
-  join(__dirname, '../../../orchestrations/scripts/spec-mode-runner.js'),
-  'utf8'
-);
+const SPEC_MODE_RUNNER_SRC = engineSource(join(__dirname, '../../../orchestrations/scripts/spec-mode-runner.js'));
 
 const REPO_ROOT = join(__dirname, '../../../');
 const ORCH_SH = join(REPO_ROOT, 'orchestrations/scripts/run-agent-orchestration.sh');
-const orchSrc = readFileSync(ORCH_SH, 'utf8');
+const orchSrc = engineSource(ORCH_SH);
 
 function extractFunctionByLineAnchor(name: string): string {
   const lines = orchSrc.split('\n');
@@ -159,7 +157,7 @@ describe('capture_story_ids_snapshot / assert_no_story_ids_lost — REAL executi
       'assert_no_story_ids_lost "presplit" "Step 3: Skill assessment"',
     ].join('\n');
     execFileSync('bash', ['-c', script], { encoding: 'utf8' });
-    const restored = JSON.parse(readFileSync(prdPath, 'utf8'));
+    const restored = JSON.parse(engineSource(prdPath));
     const sky003 = restored.stories.find((s: any) => s.id === 'SKY-003');
     expect(sky003.agentRole).toBe('backend-engineer');
     expect(sky003.technicalNotes.files).toEqual(['src/x.ts']);

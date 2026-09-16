@@ -22,11 +22,10 @@
 import { describe, it, expect } from 'vitest';
 import { readFileSync } from 'node:fs';
 import { join } from 'node:path';
+import { engineSource } from '../../lib/engine-source';
 
-const SPEC = readFileSync(
-  join(__dirname, '../../../orchestrations/scripts/spec-mode-runner.js'), 'utf8');
-const ORCH = readFileSync(
-  join(__dirname, '../../../orchestrations/scripts/run-agent-orchestration.sh'), 'utf8');
+const SPEC = engineSource(join(__dirname, '../../../orchestrations/scripts/spec-mode-runner.js'));
+const ORCH = engineSource(join(__dirname, '../../../orchestrations/scripts/run-agent-orchestration.sh'));
 
 describe('B5 — single source of truth for the run id', () => {
   it('spec-mode-runner never mints a runId without first consulting ORCH_RUN_ID', () => {

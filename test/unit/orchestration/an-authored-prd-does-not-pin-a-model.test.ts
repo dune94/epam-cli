@@ -17,6 +17,7 @@
 import { describe, it, expect } from 'vitest';
 import * as fs from 'node:fs';
 import * as path from 'node:path';
+import { engineSource } from '../../lib/engine-source';
 
 const PROJECTS = path.join(__dirname, '../../../orchestrations/projects');
 
@@ -35,7 +36,7 @@ function authoredPrds(): string[] {
     if (fs.existsSync(beside)) out.add(beside);
     const cfg = path.join(PROJECTS, d, 'config.env');
     if (!fs.existsSync(cfg)) continue;
-    const m = fs.readFileSync(cfg, 'utf8').match(/^PRD_CANONICAL=(.+)$/m);
+    const m = engineSource(cfg).match(/^PRD_CANONICAL=(.+)$/m);
     if (!m) continue;
     const c = m[1].trim().replace(/^["']|["']$/g, '');
     const f = path.isAbsolute(c) ? c : path.join(ROOT, c);
@@ -50,7 +51,7 @@ describe('an authored PRD does not pin a model', () => {
   });
 
   it.each(authoredPrds())('%s lets the ladder choose', (file) => {
-    const prd = JSON.parse(fs.readFileSync(file, 'utf8'));
+    const prd = JSON.parse(engineSource(file));
     // A provider pin is the same override by another name: EPAM_PROVIDER_SET routes the seams,
     // and a story that names its own vendor ignores it.
     const pinned = (prd.stories || [])
@@ -65,7 +66,7 @@ describe('an authored PRD does not pin a model', () => {
   // The greenfield canonical carried typescript-engineer on all four stories, the £0 run minted
   // stand-in-engineer, and the mint refused: "not in the roster — it has no profile entry".
   it.each(authoredPrds())('%s lets the assigner choose the agent', (file) => {
-    const prd = JSON.parse(fs.readFileSync(file, 'utf8'));
+    const prd = JSON.parse(engineSource(file));
     const assigned = (prd.stories || [])
       .filter((s: any) => s && (s.agentRole || s.assignedAgent || s.agent))
       .map((s: any) => `${s.id}=${s.agentRole || s.assignedAgent || s.agent}`);
@@ -84,7 +85,7 @@ describe('an authored PRD does not pin a model', () => {
  */
 describe('an authored PRD names its deliverables inside the codeline', () => {
   it.each(authoredPrds())('%s declares no absolute deliverable path', (file) => {
-    const prd = JSON.parse(fs.readFileSync(file, 'utf8'));
+    const prd = JSON.parse(engineSource(file));
     const absolute: string[] = [];
     for (const s of prd.stories || []) {
       const tn = (s && s.technicalNotes) || {};
@@ -97,7 +98,7 @@ describe('an authored PRD names its deliverables inside the codeline', () => {
   // The same host path had also been written into descriptions, acceptance criteria and
   // workingDir — text the model reads as where the work must land. A story's text names no host.
   it.each(authoredPrds())('%s writes the output directory into no story', (file) => {
-    const prd = JSON.parse(fs.readFileSync(file, 'utf8'));
+    const prd = JSON.parse(engineSource(file));
     const out = prd.project && prd.project.outputDir;
     if (!out) return;
     const hits: string[] = [];

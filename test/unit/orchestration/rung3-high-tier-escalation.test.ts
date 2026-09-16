@@ -23,11 +23,12 @@ import { readFileSync, mkdtempSync, writeFileSync, rmSync } from 'node:fs';
 import { execFileSync } from 'node:child_process';
 import { join } from 'node:path';
 import { tmpdir } from 'node:os';
+import { engineSource } from '../../lib/engine-source';
 
 const REPO_ROOT = join(__dirname, '../../../');
 const CLAUDE_SH = join(REPO_ROOT, 'orchestrations/scripts/claude.sh');
 const TIER3_SH = join(REPO_ROOT, 'orchestrations/scripts/tier3-travel-app-run.sh');
-const claudeSrc = readFileSync(CLAUDE_SH, 'utf8');
+const claudeSrc = engineSource(CLAUDE_SH);
 
 function extractFunctionBody(name: string): string {
   const start = claudeSrc.indexOf(`${name}()`);
@@ -148,7 +149,7 @@ echo "FINAL_MODEL=$STORY_MODEL"
 });
 
 describe('tier3-travel-app-run.sh — HIGH ladder actually contains a step from the MEDIUM target to the HIGH target', () => {
-  const tier3Src = readFileSync(TIER3_SH, 'utf8');
+  const tier3Src = engineSource(TIER3_SH);
 
   it('EPAM_MODEL_LADDER_HIGH maps ESCALATION_MODEL (medium target) to ESCALATION_MODEL_HIGH', () => {
     const idx = tier3Src.indexOf('EPAM_MODEL_LADDER_HIGH=');

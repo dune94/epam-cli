@@ -21,6 +21,7 @@ import { spawnSync } from 'node:child_process';
 import { mkdtempSync, mkdirSync, writeFileSync, appendFileSync, rmSync, readFileSync } from 'node:fs';
 import { join } from 'node:path';
 import { tmpdir } from 'node:os';
+import { engineSource } from '../../lib/engine-source';
 
 const ROOT = join(__dirname, '../../..');
 const SCRIPTS = join(ROOT, 'orchestrations/scripts');
@@ -29,7 +30,7 @@ const GIT_OPS = join(SCRIPTS, 'lib/git-ops.sh');
 const ENGINE_PATHS = join(SCRIPTS, 'lib/engine-paths.sh');
 const NODE = process.execPath;
 
-const code = () => readFileSync(ORCH, 'utf8').split('\n').filter((l) => !/^\s*#/.test(l)).join('\n');
+const code = () => engineSource(ORCH).split('\n').filter((l) => !/^\s*#/.test(l)).join('\n');
 
 let work: string;
 beforeEach(() => { work = mkdtempSync(join(tmpdir(), 'perimeter-')); });
@@ -83,7 +84,7 @@ describe('engine artefacts stay out of the client repo', () => {
   it('a CLIENT’s own review/ directory is still committed', () => {
     // Why "review" must NOT be added to _ENGINE_OWNED_DIRS: that list matches whole path
     // segments, so it would silently drop the customer's work from every commit.
-    const owned = readFileSync(ENGINE_PATHS, 'utf8');
+    const owned = engineSource(ENGINE_PATHS);
     expect(owned, '"review" was added to the engine-owned list — a client review/ is now dropped')
       .not.toMatch(/_ENGINE_OWNED_DIRS=\([^)]*'review'/);
     expect(staged(repo({ 'review/design-notes.md': 'ours\n' })))

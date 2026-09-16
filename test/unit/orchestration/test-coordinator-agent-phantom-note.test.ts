@@ -14,12 +14,13 @@
 import { describe, it, expect } from 'vitest';
 import { readFileSync } from 'node:fs';
 import { join } from 'node:path';
+import { engineSource } from '../../lib/engine-source';
 
 const AGENTS = join(__dirname, '../../../orchestrations/agents');
-const ORCH_SRC = readFileSync(join(__dirname, '../../../orchestrations/scripts/run-agent-orchestration.sh'), 'utf8');
+const ORCH_SRC = engineSource(join(__dirname, '../../../orchestrations/scripts/run-agent-orchestration.sh'));
 
 function profile(file: string): string {
-  const p = JSON.parse(readFileSync(join(AGENTS, file), 'utf8'));
+  const p = JSON.parse(engineSource(join(AGENTS, file)));
   const t = p['test-coordinator-agent'];
   expect(t, `test-coordinator-agent missing from ${file}`).toBeTruthy();
   return t as string;

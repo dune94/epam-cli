@@ -11,9 +11,10 @@ import { describe, it, expect, beforeEach, afterEach } from 'vitest';
 import { readFileSync, writeFileSync, mkdtempSync, rmSync, existsSync } from 'node:fs';
 import { execSync } from 'node:child_process';
 import { join } from 'node:path';
+import { engineSource } from '../../lib/engine-source';
 
 const CLAUDE_SH = join(__dirname, '../../../orchestrations/scripts/claude.sh');
-const claudeSrc = readFileSync(CLAUDE_SH, 'utf8');
+const claudeSrc = engineSource(CLAUDE_SH);
 
 // ── 1. Structural contract (no bash needed) ───────────────────────────────────
 describe('claude.sh — run_healing_recorder structural contract', () => {
@@ -176,7 +177,7 @@ ${calls}
     runScript(tmpDir, `run_healing_recorder "MOCK-001" "1" "skill" "constructor throws on missing key" "0" "false"`);
     const healLog = join(tmpDir, 'healing-events.jsonl');
     expect(existsSync(healLog)).toBe(true);
-    const record = JSON.parse(readFileSync(healLog, 'utf8').trim());
+    const record = JSON.parse(engineSource(healLog).trim());
     expect(record.story_id).toBe('MOCK-001');
     expect(record.retry).toBe(1);
     expect(record.target).toBe('skill');
@@ -189,7 +190,7 @@ ${calls}
 
   it('writes a valid JSONL record for target=prd with patches', () => {
     runScript(tmpDir, `run_healing_recorder "MOCK-002" "2" "prd" "AC missing 503 requirement" "3" "false"`);
-    const record = JSON.parse(readFileSync(join(tmpDir, 'healing-events.jsonl'), 'utf8').trim());
+    const record = JSON.parse(engineSource(join(tmpDir, 'healing-events.jsonl')).trim());
     expect(record.story_id).toBe('MOCK-002');
     expect(record.target).toBe('prd');
     expect(record.patches_applied).toBe(3);
@@ -201,7 +202,7 @@ ${calls}
       `run_healing_recorder "MOCK-002" "1" "prd" "AC ambiguous" "1" "false"`,
       `run_healing_recorder "MOCK-003" "2" "none" "transient failure" "0" "false"`,
     ].join('\n'));
-    const lines   = readFileSync(join(tmpDir, 'healing-events.jsonl'), 'utf8').trim().split('\n');
+    const lines   = engineSource(join(tmpDir, 'healing-events.jsonl')).trim().split('\n');
     expect(lines).toHaveLength(3);
     const records = lines.map(l => JSON.parse(l));
     expect(records[0].story_id).toBe('MOCK-001');
@@ -219,7 +220,7 @@ LOG_DIR="${tmpDir}"
 run_healing_recorder "MOCK-001" "1" "none" 'used "backtick" template incorrectly' "0" "false"
 `);
     execSync(`bash "${scriptPath}"`);
-    const line = readFileSync(join(tmpDir, 'healing-events.jsonl'), 'utf8').trim();
+    const line = engineSource(join(tmpDir, 'healing-events.jsonl')).trim();
     expect(() => JSON.parse(line)).not.toThrow();
   });
 });

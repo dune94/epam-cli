@@ -15,10 +15,11 @@
 import { describe, it, expect } from 'vitest';
 import { readFileSync } from 'fs';
 import { join } from 'path';
+import { engineSource } from '../../lib/engine-source';
 
 const ROOT = join(__dirname, '../../..');
 const CLAUDE_SH = join(ROOT, 'orchestrations/scripts/claude.sh');
-const src = readFileSync(CLAUDE_SH, 'utf8');
+const src = engineSource(CLAUDE_SH);
 const code = src.split('\n').filter((l) => !/^\s*#/.test(l)).join('\n');
 
 describe('the dead flag is gone and the live one is passed', () => {

@@ -21,9 +21,10 @@ import { readFileSync, writeFileSync, mkdtempSync, rmSync } from 'node:fs';
 import { execFileSync } from 'node:child_process';
 import { join } from 'node:path';
 import { tmpdir } from 'node:os';
+import { engineSource } from '../../lib/engine-source';
 
 const ORCH_PATH = join(__dirname, '../../../orchestrations/scripts/run-agent-orchestration.sh');
-const ORCH = readFileSync(ORCH_PATH, 'utf8');
+const ORCH = engineSource(ORCH_PATH);
 
 /** Source lines only — comments quote the variable by design and are not call sites. */
 const codeLines = ORCH.split('\n')

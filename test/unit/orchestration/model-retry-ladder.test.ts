@@ -19,11 +19,12 @@ import { describe, it, expect } from 'vitest';
 import { readFileSync } from 'node:fs';
 import { execFileSync } from 'node:child_process';
 import { join } from 'node:path';
+import { engineSource } from '../../lib/engine-source';
 
 const CLAUDE_SH = join(__dirname, '../../../orchestrations/scripts/claude.sh');
 const TIER3_SH  = join(__dirname, '../../../orchestrations/scripts/tier3-travel-app-run.sh');
-const src   = readFileSync(CLAUDE_SH, 'utf8');
-const tier3 = readFileSync(TIER3_SH, 'utf8');
+const src   = engineSource(CLAUDE_SH);
+const tier3 = engineSource(TIER3_SH);
 
 // ── 1. Ladder function must exist and be configurable ─────────────────────────
 describe('claude.sh — model ladder function is env-var-driven (no hardcoded models)', () => {
@@ -106,12 +107,8 @@ describe('claude.sh — three-phase inference ladder (R1: effort↑, R2: model�
 
 // ── 4. Reasoning effort reaches providers as native API parameter ─────────────
 describe('MiniMax + OpenRouter providers — EPAM_REASONING_EFFORT passed as native API parameter', () => {
-  const minimaxSrc = readFileSync(
-    join(__dirname, '../../../src/providers/minimax/MiniMaxProvider.ts'), 'utf8'
-  );
-  const openrouterSrc = readFileSync(
-    join(__dirname, '../../../src/providers/openrouter/OpenRouterProvider.ts'), 'utf8'
-  );
+  const minimaxSrc = engineSource(join(__dirname, '../../../src/providers/minimax/MiniMaxProvider.ts'));
+  const openrouterSrc = engineSource(join(__dirname, '../../../src/providers/openrouter/OpenRouterProvider.ts'));
 
   it('MiniMaxProvider reads EPAM_REASONING_EFFORT and passes reasoning_effort as its own native parameter, independent of temperature', () => {
     expect(minimaxSrc).toMatch(/EPAM_REASONING_EFFORT/);

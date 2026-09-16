@@ -20,6 +20,7 @@ import { spawnSync } from 'node:child_process';
 import { mkdtempSync, writeFileSync, readFileSync } from 'node:fs';
 import { tmpdir } from 'node:os';
 import { join } from 'node:path';
+import { engineSource } from '../lib/engine-source';
 
 const REPO = join(__dirname, '../..');
 const LIB = join(REPO, 'orchestrations/scripts/lib/gate-verdicts.sh');
@@ -68,7 +69,7 @@ describe('absence of "fail" is not success', () => {
 
   it('and the call site treats unknown as a failure, not as a pass', () => {
     // The receiver. A correct reader that the caller ignores changes nothing.
-    const src = readFileSync(ORCH, 'utf8');
+    const src = engineSource(ORCH);
     expect(src, 'the e2e gate no longer consults the reader')
       .toMatch(/case "\$\(qa_gate_verdict_of "\$story_log"\)" in/);
     const block = src.slice(src.indexOf('qa_gate_verdict_of "$story_log"'));

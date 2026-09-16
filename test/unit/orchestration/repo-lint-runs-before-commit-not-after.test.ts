@@ -35,6 +35,7 @@ import { mkdtempSync, writeFileSync, mkdirSync, rmSync, chmodSync, readFileSync 
 import { execFileSync } from 'node:child_process';
 import { join } from 'node:path';
 import { tmpdir } from 'node:os';
+import { engineSource } from '../../lib/engine-source';
 
 const CLAUDE_SH = join(__dirname, '../../../orchestrations/scripts/claude.sh');
 const dirs: string[] = [];
@@ -42,7 +43,7 @@ afterAll(() => { for (const d of dirs) rmSync(d, { recursive: true, force: true 
 
 /** The shipped function, lifted verbatim. */
 function shippedFn(): string {
-  const src = readFileSync(CLAUDE_SH, 'utf8');
+  const src = engineSource(CLAUDE_SH);
   const lift = (name: string) => {
     const start = src.indexOf(`${name}() {`);
     expect(start, `${name} not found in claude.sh`).toBeGreaterThan(-1);
@@ -146,13 +147,13 @@ ${shippedFn()}
      echo "__VF_START__"; printf '%s' "\${VERIFICATION_FAILURE:-}"; echo "__VF_END__"`,
   ], { encoding: 'utf8' });
   const vf = (res.match(/__VF_START__([\s\S]*)__VF_END__/) || [])[1] ?? '';
-  return { rc: Number((res.match(/RC=(\d+)/) || [])[1]), log: res, feedback: readFileSync(out, 'utf8'), vf };
+  return { rc: Number((res.match(/RC=(\d+)/) || [])[1]), log: res, feedback: engineSource(out), vf };
 }
 
 describe('the fixture reproduces the live condition', () => {
   it('the changed file carries the violation and the untouched file carries a pre-existing one', () => {
     const dir = repo();
-    expect(readFileSync(join(dir, 'src/services/contentstack.ts'), 'utf8')).toContain('UNUSED_MARKER');
+    expect(engineSource(join(dir, 'src/services/contentstack.ts'))).toContain('UNUSED_MARKER');
     expect(execFileSync('git', ['-C', dir, 'status', '--porcelain'], { encoding: 'utf8' }))
       .toContain('src/services/contentstack.ts');
   });
@@ -269,7 +270,7 @@ describe('the engine-path filter is actually reachable from claude.sh', () => {
 describe('the gate is actually wired into the writer loop', () => {
   /** Lifts the real verification chain and runs it with each check stubbed to a chosen verdict. */
   function runChain(verdicts: { tsc?: number; lint?: number; ext?: number }) {
-    const src = readFileSync(CLAUDE_SH, 'utf8');
+    const src = engineSource(CLAUDE_SH);
     const start = src.indexOf('        local _invoke_success_before_tsc="$invoke_success"');
     expect(start, 'the verification chain was not found').toBeGreaterThan(-1);
     const endMark = 'deliverables written but external tests failed';

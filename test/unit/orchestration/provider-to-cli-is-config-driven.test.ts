@@ -16,11 +16,12 @@ import { readFileSync, mkdtempSync, writeFileSync, rmSync } from 'node:fs';
 import { execFileSync } from 'node:child_process';
 import { join } from 'node:path';
 import { tmpdir } from 'node:os';
+import { engineSource } from '../../lib/engine-source';
 
 const ROOT = join(__dirname, '../../..');
 const CLAUDE_SH = join(ROOT, 'orchestrations/scripts/claude.sh');
-const claudeSrc = readFileSync(CLAUDE_SH, 'utf8');
-const realProviders = JSON.parse(readFileSync(join(ROOT, 'orchestrations/config/providers.json'), 'utf8'));
+const claudeSrc = engineSource(CLAUDE_SH);
+const realProviders = JSON.parse(engineSource(join(ROOT, 'orchestrations/config/providers.json')));
 
 function fnText(name: string): string {
   const start = claudeSrc.indexOf(`${name}() {`);

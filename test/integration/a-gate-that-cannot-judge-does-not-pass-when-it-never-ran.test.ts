@@ -23,10 +23,11 @@ import { describe, it, expect } from 'vitest';
 import { spawnSync } from 'node:child_process';
 import { readFileSync } from 'node:fs';
 import { join } from 'node:path';
+import { engineSource } from '../lib/engine-source';
 
 const REPO = join(__dirname, '../..');
 const CLAUDE_SH = join(REPO, 'orchestrations/scripts/claude.sh');
-const src = () => readFileSync(CLAUDE_SH, 'utf8');
+const src = () => engineSource(CLAUDE_SH);
 
 /** One shell function, taken from the file rather than retyped. */
 function fn(name: string): string {

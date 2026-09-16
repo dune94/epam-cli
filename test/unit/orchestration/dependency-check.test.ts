@@ -23,12 +23,13 @@ import { readFileSync, mkdtempSync, mkdirSync, writeFileSync, rmSync } from 'nod
 import { execFileSync, spawnSync } from 'node:child_process';
 import { join } from 'node:path';
 import { tmpdir } from 'node:os';
+import { engineSource } from '../../lib/engine-source';
 
 const REPO_ROOT = join(__dirname, '../../../');
 const CLAUDE_SH = join(REPO_ROOT, 'orchestrations/scripts/claude.sh');
 const TIER3_SH = join(REPO_ROOT, 'orchestrations/scripts/tier3-travel-app-run.sh');
-const claudeSrc = readFileSync(CLAUDE_SH, 'utf8');
-const tier3Src = readFileSync(TIER3_SH, 'utf8');
+const claudeSrc = engineSource(CLAUDE_SH);
+const tier3Src = engineSource(TIER3_SH);
 
 /**
  * The sample app's declaration, from where the project keeps it.
@@ -38,8 +39,7 @@ const tier3Src = readFileSync(TIER3_SH, 'utf8');
  * project config directory the launchers copy from, so the requirements below are asserted against
  * the file that actually reaches the codeline rather than against a copy of it in a shell script.
  */
-const tier3Manifest = readFileSync(
-  join(REPO_ROOT, 'orchestrations/projects/skyscanner/dependency-check.json'), 'utf8');
+const tier3Manifest = engineSource(join(REPO_ROOT, 'orchestrations/projects/skyscanner/dependency-check.json'));
 
 function extractFunctionBody(src: string, name: string): string {
   const start = src.indexOf(`${name}()`);
@@ -123,7 +123,7 @@ describe('claude.sh — run_dependency_check() design constraints (static)', () 
     // The keys still drive everything — they moved to the plugin, which is where hardcoding is
     // permitted. The engine's job is now to call it and report, so the assertion follows them.
     expect(body, 'the engine must route through the scan plugin').toContain('dependency-scan-plugin.js');
-    const plugin = readFileSync(join(REPO_ROOT, 'orchestrations/plugins/dependency-scan-plugin.js'), 'utf8');
+    const plugin = engineSource(join(REPO_ROOT, 'orchestrations/plugins/dependency-scan-plugin.js'));
     for (const key of ['manifestFile', 'manifestKeys', 'importPattern', 'scanFileExtensions', 'vendorDirs']) {
       expect(plugin, `${key} must be read from the project's declaration`).toContain(key);
     }
@@ -353,7 +353,7 @@ describe("the sample app's own dependency-check manifest", () => {
 
   it('and both launchers copy it rather than embedding their own', () => {
     for (const l of ['tier3-travel-app-run.sh', 'tier3-skyscanner-app-run.sh']) {
-      const src = readFileSync(join(REPO_ROOT, 'orchestrations/scripts', l), 'utf8');
+      const src = engineSource(join(REPO_ROOT, 'orchestrations/scripts', l));
       expect(src, `${l} embeds the manifest again`).not.toMatch(/DEPCHECK_EOF/);
       expect(src, `${l} does not copy the manifest`).toMatch(/dependency-check\.json/);
     }
@@ -647,7 +647,7 @@ describe('run_dependency_check — preInstallHook (brownfield full-install befor
       {
         ...NPM_CONFIG,
         preInstallHook: `${process.execPath} -e "const f='package.json',fs=require('fs');`
-          + `const p=JSON.parse(fs.readFileSync(f,'utf8'));p.dependencies.express='^4.0.0';`
+          + `const p=JSON.parse(engineSource(f));p.dependencies.express='^4.0.0';`
           + `fs.writeFileSync(f,JSON.stringify(p))"`,
       }
     );
@@ -756,7 +756,7 @@ describe('Metrolinx dependency-check.json — no client-repo tooling, no manifes
     REPO_ROOT,
     'orchestrations/projects/metrolinx/dependency-check.json'
   );
-  const metrolinxConfig = JSON.parse(readFileSync(metrolinxConfigPath, 'utf8'));
+  const metrolinxConfig = JSON.parse(engineSource(metrolinxConfigPath));
 
   it('lives inside epam-cli, not inside any client codeline', () => {
     expect(metrolinxConfigPath).toContain('/epam-cli/orchestrations/projects/metrolinx/');

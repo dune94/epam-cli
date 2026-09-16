@@ -17,9 +17,10 @@ import { readFileSync, mkdtempSync, mkdirSync, writeFileSync, rmSync } from 'nod
 import { spawnSync } from 'node:child_process';
 import { join } from 'node:path';
 import { tmpdir } from 'node:os';
+import { engineSource } from '../../lib/engine-source';
 
 const CLAUDE_SH = join(__dirname, '../../../orchestrations/scripts/claude.sh');
-const SRC = readFileSync(CLAUDE_SH, 'utf8');
+const SRC = engineSource(CLAUDE_SH);
 function fn(name: string): string {
   const m = new RegExp(`^\\s*${name}\\(\\)\\s*\\{`, 'm').exec(SRC);
   if (!m) throw new Error(`no ${name}()`);

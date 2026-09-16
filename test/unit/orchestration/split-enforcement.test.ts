@@ -17,6 +17,7 @@ import { describe, it, expect } from 'vitest';
 import { readFileSync, mkdtempSync, mkdirSync, writeFileSync, rmSync } from 'node:fs';
 import { join } from 'node:path';
 import { tmpdir } from 'node:os';
+import { engineSource } from '../../lib/engine-source';
 
 // eslint-disable-next-line @typescript-eslint/no-require-imports
 const {
@@ -36,19 +37,16 @@ const {
   MAX_ACS_PER_STORY,
   MAX_CHILDREN_PER_SPLIT,
 } = require('../../../orchestrations/scripts/spec-mode-runner.js');
-const SPEC_MODE_RUNNER_SRC = readFileSync(
-  join(__dirname, '../../../orchestrations/scripts/spec-mode-runner.js'),
-  'utf8'
-);
+const SPEC_MODE_RUNNER_SRC = engineSource(join(__dirname, '../../../orchestrations/scripts/spec-mode-runner.js'));
 
 const ORCH_SCRIPT = join(__dirname, '../../../orchestrations/scripts/run-agent-orchestration.sh');
-const orchSrc = readFileSync(ORCH_SCRIPT, 'utf8');
+const orchSrc = engineSource(ORCH_SCRIPT);
 // story_tsc_gate and validate_mid_execution_splits now live in
 // lib/story-guards.sh (2026-07-14) — a single shared implementation sourced
 // by both run-agent-orchestration.sh (main lane) and claude.sh (worktree
 // lanes), so every lane runs the identical gate.
 const GUARDS_LIB = join(__dirname, '../../../orchestrations/scripts/lib/story-guards.sh');
-const guardsSrc = readFileSync(GUARDS_LIB, 'utf8');
+const guardsSrc = engineSource(GUARDS_LIB);
 
 // ── Helpers ───────────────────────────────────────────────────────────────────
 
@@ -470,7 +468,7 @@ describe('story_tsc_gate — shared implementation (lib/story-guards.sh), called
 
   it('run-agent-orchestration.sh and claude.sh both source the shared lib', () => {
     expect(orchSrc).toContain('source "$SCRIPT_DIR/lib/story-guards.sh"');
-    const claudeSrc = readFileSync(join(__dirname, '../../../orchestrations/scripts/claude.sh'), 'utf8');
+    const claudeSrc = engineSource(join(__dirname, '../../../orchestrations/scripts/claude.sh'));
     expect(claudeSrc).toContain('source "$SCRIPT_DIR/lib/story-guards.sh"');
   });
 
@@ -523,7 +521,7 @@ describe('story_tsc_gate — shared implementation (lib/story-guards.sh), called
   });
 
   it('tsc gate is also called in worktree lanes, only after implement_story succeeds (parity fix, 2026-07-14)', () => {
-    const claudeSrc = readFileSync(join(__dirname, '../../../orchestrations/scripts/claude.sh'), 'utf8');
+    const claudeSrc = engineSource(join(__dirname, '../../../orchestrations/scripts/claude.sh'));
     const wtIdx = claudeSrc.indexOf('story_tsc_gate "$story_id"');
     expect(wtIdx).toBeGreaterThan(-1);
     const implIdx = claudeSrc.indexOf('if implement_story "$story_id"; then');
@@ -564,7 +562,7 @@ describe('validate_mid_execution_splits — shared implementation (lib/story-gua
   });
 
   it('validate_mid_execution_splits is also called after each worktree-lane story (parity fix, 2026-07-14)', () => {
-    const claudeSrc = readFileSync(join(__dirname, '../../../orchestrations/scripts/claude.sh'), 'utf8');
+    const claudeSrc = engineSource(join(__dirname, '../../../orchestrations/scripts/claude.sh'));
     const implIdx = claudeSrc.indexOf('if implement_story "$story_id"; then');
     const elseIdx = claudeSrc.indexOf('\n        else\n', implIdx);
     expect(implIdx).toBeGreaterThan(-1);
@@ -602,10 +600,7 @@ describe('validate_mid_execution_splits — shared implementation (lib/story-gua
 
 describe('spec-mode-runner.js — validateMidExecutionSplits export', () => {
   it('validates splits CLI mode is handled in require.main block', () => {
-    const src = readFileSync(
-      join(__dirname, '../../../orchestrations/scripts/spec-mode-runner.js'),
-      'utf8'
-    );
+    const src = engineSource(join(__dirname, '../../../orchestrations/scripts/spec-mode-runner.js'));
     expect(src).toContain('--validate-splits');
     expect(src).toContain('validateMidExecutionSplits');
   });
@@ -641,10 +636,7 @@ describe('spec-mode-runner.js — validateMidExecutionSplits export', () => {
 // MAX_CHILDREN_PER_SPLIT, unit-tested in the describe block just above this
 // one, both still passing/unchanged), independent of any prompt text.
 describe('speckit prompt — split hard-limits intentionally removed (speckit no longer splits)', () => {
-  const src = readFileSync(
-    join(__dirname, '../../../orchestrations/scripts/spec-mode-runner.js'),
-    'utf8'
-  );
+  const src = engineSource(join(__dirname, '../../../orchestrations/scripts/spec-mode-runner.js'));
   const promptIdx = src.indexOf('You are the speckit specification agent');
   const promptBlock = src.slice(promptIdx, promptIdx + 3000);
 
@@ -653,8 +645,7 @@ describe('speckit prompt — split hard-limits intentionally removed (speckit no
     // Both branches must stay free of the split hard limits: speckit never emits splitStories,
     // so documenting a limit it cannot reach only invites it to try.
     for (const id of ['spec-agent-speckit', 'spec-agent-speckit-refine']) {
-      const body = JSON.parse(readFileSync(
-        join(__dirname, '../../../orchestrations/prompts/templates', id + '.json'), 'utf8')).body as string;
+      const body = JSON.parse(engineSource(join(__dirname, '../../../orchestrations/prompts/templates', id + '.json'))).body as string;
       expect(body, id).not.toMatch(/HARD LIMITS/i);
       expect(body, id).not.toContain('4 split children');
     }
@@ -881,7 +872,7 @@ describe('Correct story sizing — a well-formed split resolves the split mandat
 });
 
 describe('runSpecAgent / applySpecChanges wiring — split-mandate check runs after the agent loop, shares the threshold with the prompt warning', () => {
-  const src = readFileSync(join(__dirname, '../../../orchestrations/scripts/spec-mode-runner.js'), 'utf8');
+  const src = engineSource(join(__dirname, '../../../orchestrations/scripts/spec-mode-runner.js'));
 
   it('the prompt warning (splitWarning) is derived from storyRequiresSplit, not a separately hardcoded threshold', () => {
     const idx = src.indexOf('const splitRequirement = storyRequiresSplit(');
@@ -927,16 +918,14 @@ describe('runSpecAgent / applySpecChanges wiring — split-mandate check runs af
 // back to the next-pass flag as a last resort.
 
 describe('split-MANDATE reject-and-retry — immediate same-run enforcement', () => {
-  const src = readFileSync(join(__dirname, '../../../orchestrations/scripts/spec-mode-runner.js'), 'utf8');
+  const src = engineSource(join(__dirname, '../../../orchestrations/scripts/spec-mode-runner.js'));
 
   it('runSpecAgent prepends forcedRetryNote at the very top of the prompt (primacy — the mid-prompt splitWarning already failed once)', () => {
     // PRIMACY IS NOW A PROPERTY OF THE TEMPLATE, and this asserts it directly rather than
     // inferring it from the order of two lines of source: the retry note must be the FIRST
     // thing in the prompt, because the mid-prompt warning already failed once.
     expect(src.indexOf('const forcedRetryBlock = forcedRetryNote')).toBeGreaterThan(-1);
-    const body = JSON.parse(readFileSync(
-      join(__dirname, '../../../orchestrations/prompts/templates/spec-agent-openspec.json'),
-      'utf8')).body as string;
+    const body = JSON.parse(engineSource(join(__dirname, '../../../orchestrations/prompts/templates/spec-agent-openspec.json'))).body as string;
     expect(body.startsWith('__FORCED_RETRY_BLOCK__'),
       'the forced-retry note is no longer first in the prompt').toBe(true);
   });
@@ -998,7 +987,7 @@ describe('split-MANDATE reject-and-retry — immediate same-run enforcement', ()
 // existing bounded flag mechanism instead.
 
 describe('split-MANDATE reject-and-retry — lazy-split cascade fix', () => {
-  const src = readFileSync(join(__dirname, '../../../orchestrations/scripts/spec-mode-runner.js'), 'utf8');
+  const src = engineSource(join(__dirname, '../../../orchestrations/scripts/spec-mode-runner.js'));
 
   it('verifies newly-created children are individually compliant, not just that splitCount > 0', () => {
     const idx = src.indexOf('nonCompliantChildren');
@@ -1184,7 +1173,7 @@ describe('isSplitDelegationOnlyChange — decides when the reviewer gate should 
 });
 
 describe('spec-mode-runner.js — call site skips prd-change-reviewer for split-only changes, and informs it when mixed with other changes', () => {
-  const src = readFileSync(join(__dirname, '../../../orchestrations/scripts/spec-mode-runner.js'), 'utf8');
+  const src = engineSource(join(__dirname, '../../../orchestrations/scripts/spec-mode-runner.js'));
 
   it('the review-gate call site checks isSplitDelegationOnlyChange before calling reviewPrdChange', () => {
     const idx = src.indexOf('isSplitDelegationOnlyChange(beforeSnapshot, afterSnapshot, changes.splitCount)');

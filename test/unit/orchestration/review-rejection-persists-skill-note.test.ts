@@ -24,10 +24,11 @@ import { spawnSync } from 'node:child_process';
 import { mkdtempSync, mkdirSync, writeFileSync, chmodSync, rmSync, readFileSync } from 'node:fs';
 import { join } from 'node:path';
 import { tmpdir } from 'node:os';
+import { engineSource } from '../../lib/engine-source';
 
 const REPO_ROOT = join(__dirname, '../../../');
 const ORCH_SH = join(REPO_ROOT, 'orchestrations/scripts/run-agent-orchestration.sh');
-const orchSrc = readFileSync(ORCH_SH, 'utf8');
+const orchSrc = engineSource(ORCH_SH);
 
 function extractBlock(startMarker: string, endMarker: string): string {
   const start = orchSrc.indexOf(startMarker);
@@ -123,7 +124,7 @@ function runReviewLoop(opts: {
   const output = (result.stdout || '') + (result.stderr || '');
   let calls: Array<{ profilesFile: string; role: string; text: string }> = [];
   try {
-    calls = readFileSync(callLogPath, 'utf8')
+    calls = engineSource(callLogPath)
       .split('\x1e')
       .filter(Boolean)
       .map((record) => {

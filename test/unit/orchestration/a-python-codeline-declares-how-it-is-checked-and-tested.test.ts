@@ -20,6 +20,7 @@ import { spawnSync } from 'node:child_process';
 import { mkdtempSync, mkdirSync, writeFileSync, readFileSync, rmSync, existsSync } from 'node:fs';
 import { join } from 'node:path';
 import { tmpdir } from 'node:os';
+import { engineSource } from '../../lib/engine-source';
 
 const ROOT = join(__dirname, '../../../');
 const SCRIPTS = join(ROOT, 'orchestrations/scripts');
@@ -104,7 +105,7 @@ describe('the manifests a Python codeline gets are its own', () => {
 describe('the orchestrator re-derives a seeded declaration the codeline contradicts', () => {
   /** The re-derivation block, lifted from the orchestrator by its own heading and executed. */
   function rederive(wt: string) {
-    const src = readFileSync(join(SCRIPTS, 'run-agent-orchestration.sh'), 'utf8').split('\n');
+    const src = engineSource(join(SCRIPTS, 'run-agent-orchestration.sh')).split('\n');
     const start = src.findIndex((l) => l.includes('A DECLARATION THE CODELINE CONTRADICTS IS RE-DERIVED'));
     expect(start, 'the re-derivation block is gone from the orchestrator').toBeGreaterThan(-1);
     const end = src.findIndex((l, i) => i > start && l.includes('Wrote .epam/ manifests to'));
@@ -134,20 +135,20 @@ f ${JSON.stringify(wt)}
     const wt = codeline({ ...PY, ...seededTs });
     const out = rederive(wt);
     expect(out).toMatch(/declares manifest 'package.json', which this codeline does not carry/);
-    const dc = JSON.parse(readFileSync(join(wt, '.epam/dependency-check.json'), 'utf8'));
+    const dc = JSON.parse(engineSource(join(wt, '.epam/dependency-check.json')));
     expect(dc.manifestFile).toBe('requirements.txt');
     expect(dc.scanFileExtensions).toEqual(['.py']);
-    expect(JSON.parse(readFileSync(join(wt, '.epam/contract-generation.json'), 'utf8')).language).toBe('python');
+    expect(JSON.parse(engineSource(join(wt, '.epam/contract-generation.json'))).language).toBe('python');
     expect(existsSync(join(wt, '.epam/known-fixes.json')), 'a known-fixes file about vitest.config.ts survived in a Python codeline').toBe(false);
     expect(out).toMatch(/Removed seeded \.epam\/known-fixes\.json/);
   });
 
   it('a declaration the codeline agrees with is left exactly as declared', () => {
     const wt = codeline({ 'package.json': JSON.stringify({ name: 'x', scripts: { test: 'vitest run' } }), ...seededTs });
-    const before = readFileSync(join(wt, '.epam/dependency-check.json'), 'utf8');
+    const before = engineSource(join(wt, '.epam/dependency-check.json'));
     const out = rederive(wt);
     expect(out).not.toMatch(/re-derived/);
-    expect(readFileSync(join(wt, '.epam/dependency-check.json'), 'utf8')).toBe(before);
+    expect(engineSource(join(wt, '.epam/dependency-check.json'))).toBe(before);
     expect(existsSync(join(wt, '.epam/known-fixes.json'))).toBe(true);
   });
 

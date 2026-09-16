@@ -20,8 +20,9 @@
 import { describe, it, expect } from 'vitest';
 import { readFileSync } from 'node:fs';
 import { join } from 'node:path';
+import { engineSource } from '../../lib/engine-source';
 
-const ORCH_SRC = readFileSync(join(__dirname, '../../../orchestrations/scripts/run-agent-orchestration.sh'), 'utf8');
+const ORCH_SRC = engineSource(join(__dirname, '../../../orchestrations/scripts/run-agent-orchestration.sh'));
 
 describe('gate-finding-analyst — lint-gate variant', () => {
   // Only the actual call statement, not the explanatory comment above it

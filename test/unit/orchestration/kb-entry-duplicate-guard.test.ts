@@ -29,10 +29,11 @@ import { readFileSync, mkdtempSync, writeFileSync, rmSync } from 'node:fs';
 import { execFileSync } from 'node:child_process';
 import { join } from 'node:path';
 import { tmpdir } from 'node:os';
+import { engineSource } from '../../lib/engine-source';
 
 const REPO_ROOT = join(__dirname, '../../../');
 const CLAUDE_SH = join(REPO_ROOT, 'orchestrations/scripts/claude.sh');
-const claudeSrc = readFileSync(CLAUDE_SH, 'utf8');
+const claudeSrc = engineSource(CLAUDE_SH);
 
 function extractKbCaseBody(): string {
   const start = claudeSrc.indexOf('                kb)');
@@ -110,7 +111,7 @@ describe('run_failure_analyst kb case — REAL execution', () => {
         ].join('\n'),
       );
       const logOutput = execFileSync('bash', [scriptPath], { encoding: 'utf8' });
-      const kbAfter = readFileSync(join(dir, 'agents', 'KB-test-codeline.md'), 'utf8');
+      const kbAfter = engineSource(join(dir, 'agents', 'KB-test-codeline.md'));
       return { kbAfter, logOutput };
     } finally {
       rmSync(dir, { recursive: true, force: true });

@@ -33,6 +33,7 @@ import { mkdtempSync, writeFileSync, rmSync, mkdirSync, readFileSync, existsSync
 import { join } from 'node:path';
 import { tmpdir } from 'node:os';
 import { provisionProject, cleanupProvisioned } from '../../support/provisioned-project';
+import { engineSource } from '../../lib/engine-source';
 
 const ROOT = join(__dirname, '../../../');
 const VCC = join(ROOT, 'orchestrations/scripts/vc-coverage-check.sh');
@@ -46,8 +47,7 @@ afterAll(() => { cleanupProvisioned(); });
 
 /** The ladder POSITION vc-coverage actually declares, read from the registry rather than assumed. */
 const LADDER: string = (() => {
-  const reg = JSON.parse(readFileSync(
-    join(ROOT, 'orchestrations/agents/invocation-profiles.json'), 'utf8'));
+  const reg = JSON.parse(engineSource(join(ROOT, 'orchestrations/agents/invocation-profiles.json')));
   const p = (reg.profiles || reg)['vc-coverage'];
   return (p && p.ladder) || '';
 })();
@@ -90,7 +90,7 @@ echo '{"covered":[],"uncovered":[],"verdict":"pass"}'
     env: { ...process.env, EPAM_PROJECT_CONFIG_DIR: PROJECT,
            AI_RUNNER_CMD: runner, EPAM_MODEL: '', VC_COVERAGE_MODEL: '', ...env },
   });
-  const calls = (() => { try { return readFileSync(join(d, 'calls.txt'), 'utf8'); } catch { return ''; } })();
+  const calls = (() => { try { return engineSource(join(d, 'calls.txt')); } catch { return ''; } })();
   return { out: (r.stdout ?? '') + (r.stderr ?? ''), calls,
            cleanup: () => rmSync(d, { recursive: true, force: true }) };
 }

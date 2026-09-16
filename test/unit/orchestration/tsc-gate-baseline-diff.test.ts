@@ -23,10 +23,11 @@ import { readFileSync, mkdtempSync, mkdirSync, writeFileSync, symlinkSync, rmSyn
 import { execFileSync, spawnSync } from 'node:child_process';
 import { join } from 'node:path';
 import { tmpdir } from 'node:os';
+import { engineSource } from '../../lib/engine-source';
 
 const REPO_ROOT = join(__dirname, '../../../');
 const GUARDS_LIB = join(REPO_ROOT, 'orchestrations/scripts/lib/story-guards.sh');
-const guardsSrc = readFileSync(GUARDS_LIB, 'utf8');
+const guardsSrc = engineSource(GUARDS_LIB);
 const NODE_BIN = process.execPath;
 
 function extractStoryTscGate(): string {
@@ -42,11 +43,10 @@ function extractStoryTscGate(): string {
   // copy-pasted into this gate, claude.sh and eslint-baseline-gate.sh, each with its own tsc
   // regex and node_modules literal, so each failed open independently. story-guards.sh sources
   // it in the real script; the harness does the same.
-  const LIB = readFileSync(
-    join(__dirname, '../../../orchestrations/scripts/lib/tsc-baseline-gate.sh'), 'utf8');
+  const LIB = engineSource(join(__dirname, '../../../orchestrations/scripts/lib/tsc-baseline-gate.sh'));
   const vStart = guardsSrc.indexOf('_get_vendor_dirs() {');
   const vendor = vStart < 0
-    ? readFileSync(join(__dirname, '../../../orchestrations/scripts/claude.sh'), 'utf8')
+    ? engineSource(join(__dirname, '../../../orchestrations/scripts/claude.sh'))
         .match(/_get_vendor_dirs\(\) \{[\s\S]*?\n\}/)?.[0] ?? ''
     : guardsSrc.slice(vStart, guardsSrc.indexOf('\n}\n', vStart) + 2);
   return [guardsSrc.slice(hStart, hEnd), vendor, LIB, guardsSrc.slice(start, end)].join('\n');
@@ -193,8 +193,7 @@ describe('story_tsc_gate — source invariants', () => {
 
   // THE MECHANICS MOVED, THE REQUIREMENTS DID NOT. These described an inline block in
   // story_tsc_gate that was one of four copies; they now hold for lib/tsc-baseline-gate.sh.
-  const libBody = readFileSync(
-    join(__dirname, '../../../orchestrations/scripts/lib/tsc-baseline-gate.sh'), 'utf8');
+  const libBody = engineSource(join(__dirname, '../../../orchestrations/scripts/lib/tsc-baseline-gate.sh'));
 
   it('reads the baseline SHA from phase-baseline-sha.txt', () => {
     expect(libBody).toContain('phase-baseline-sha.txt');

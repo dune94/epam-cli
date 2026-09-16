@@ -44,6 +44,7 @@ import { execFileSync, execSync } from 'node:child_process';
 import { mkdtempSync, writeFileSync, rmSync, existsSync, readFileSync, mkdirSync, symlinkSync } from 'node:fs';
 import { join } from 'node:path';
 import { tmpdir } from 'node:os';
+import { engineSource } from '../lib/engine-source';
 
 const REPO_ROOT = join(__dirname, '../../');
 
@@ -283,7 +284,7 @@ function runRealImplementer(
   } catch (e: any) {
     exitCode = typeof e?.status === 'number' ? e.status : 1;
   }
-  return { exitCode, log: readFileSync(liveLogPath, 'utf8') };
+  return { exitCode, log: engineSource(liveLogPath) };
 }
 
 function diffAgainstBaseline(codelineDir: string): string {

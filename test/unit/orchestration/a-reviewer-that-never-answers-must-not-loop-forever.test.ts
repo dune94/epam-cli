@@ -38,11 +38,12 @@ import { spawnSync } from 'node:child_process';
 import { mkdtempSync, mkdirSync, writeFileSync, chmodSync, rmSync, readFileSync } from 'node:fs';
 import { join } from 'node:path';
 import { tmpdir } from 'node:os';
+import { engineSource } from '../../lib/engine-source';
 
 const REPO_ROOT = join(__dirname, '../../../');
 const ORCH_SH = join(REPO_ROOT, 'orchestrations/scripts/run-agent-orchestration.sh');
 const STORY_RETRY_LIB = join(REPO_ROOT, 'orchestrations/scripts/lib/story-retry-state.sh');
-const orchSrc = readFileSync(ORCH_SH, 'utf8');
+const orchSrc = engineSource(ORCH_SH);
 
 /** The REAL Step 3.6 loop, lifted verbatim — same extraction the ladder test uses. */
 function extractBlock(startMarker: string, endMarker: string): string {
@@ -121,7 +122,7 @@ function runNeverAnswering(env: Record<string, string> = {}) {
   const started = Date.now();
   const result = spawnSync('bash', [scriptPath], { encoding: 'utf8', timeout: TIMEOUT_MS });
   let cycles = 0;
-  try { cycles = readFileSync(cycleLog, 'utf8').trim().split('\n').filter(Boolean).length; } catch { /* none */ }
+  try { cycles = engineSource(cycleLog).trim().split('\n').filter(Boolean).length; } catch { /* none */ }
   return {
     exitCode: result.status,
     timedOut: Date.now() - started >= TIMEOUT_MS - 500,

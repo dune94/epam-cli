@@ -32,6 +32,7 @@ import { describe, it, expect } from 'vitest';
 import { readFileSync, readdirSync, existsSync } from 'node:fs';
 import { execFileSync } from 'node:child_process';
 import { join } from 'node:path';
+import { engineSource } from '../../lib/engine-source';
 
 const REPO_ROOT = join(__dirname, '../../../');
 const PROJECTS_DIR = join(REPO_ROOT, 'orchestrations/projects');
@@ -66,7 +67,7 @@ function everyProjectEnvFile(): string[] {
 
 /** Real assignments only — a commented-out mention is documentation, not a pin. */
 function assignsKey(file: string, key: string): boolean {
-  return readFileSync(file, 'utf8')
+  return engineSource(file)
     .split('\n')
     .some((l) => new RegExp(`^\\s*(export\\s+)?${key}\\s*=`).test(l));
 }
@@ -90,7 +91,7 @@ describe('no project pins its codeline scope', () => {
   it('NO env file assigns JIRA_WORKTREE_<NAME> — those are hardcoded client repo paths', () => {
     const offenders: string[] = [];
     for (const f of files) {
-      for (const line of readFileSync(f, 'utf8').split('\n')) {
+      for (const line of engineSource(f).split('\n')) {
         if (/^\s*(export\s+)?JIRA_WORKTREE_[A-Z0-9_]+\s*=/.test(line)) {
           offenders.push(`${f.replace(REPO_ROOT, '')}: ${line.trim().split('=')[0]}`);
         }
@@ -109,7 +110,7 @@ describe('no project pins its codeline scope', () => {
 });
 
 describe('the consumer stays gated on JIRA_CODELINES being empty', () => {
-  const ingest = readFileSync(join(REPO_ROOT, 'orchestrations/scripts/ingest-jira-tickets.sh'), 'utf8');
+  const ingest = engineSource(join(REPO_ROOT, 'orchestrations/scripts/ingest-jira-tickets.sh'));
 
   it('discovery runs only when JIRA_CODELINES is empty — the gate that made the pin lethal', () => {
     expect(

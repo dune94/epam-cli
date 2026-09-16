@@ -29,9 +29,10 @@ import { spawnSync } from 'node:child_process';
 import { mkdtempSync, writeFileSync, rmSync } from 'node:fs';
 import { join } from 'node:path';
 import { tmpdir } from 'node:os';
+import { engineSourceFile } from '../../lib/engine-source';
 
 const ROOT = join(__dirname, '../../..');
-const CLAUDE_SH = join(ROOT, 'orchestrations/scripts/claude.sh');
+const CLAUDE_SH = engineSourceFile(join(ROOT, 'orchestrations/scripts/claude.sh')); // the inlined program: this test lifts text, it does not execute the main
 
 const PRD_MODEL = 'MiniMax-M3';        // what prd.json declares for the story
 const CLIMBED_TO = 'moonshotai/kimi-k3'; // where the ladder actually got to

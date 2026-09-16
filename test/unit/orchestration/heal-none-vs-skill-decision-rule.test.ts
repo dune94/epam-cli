@@ -37,8 +37,9 @@ import { describe, it, expect } from 'vitest';
 import { readFileSync } from 'node:fs';
 import { join } from 'node:path';
 import { engineAndPrompt } from '../../helpers/analyst-prompt';
+import { engineSource } from '../../lib/engine-source';
 
-const SRC = engineAndPrompt(readFileSync(join(__dirname, '../../../orchestrations/scripts/claude.sh'), 'utf8'));
+const SRC = engineAndPrompt(engineSource(join(__dirname, '../../../orchestrations/scripts/claude.sh')));
 
 function decisionRulesBlock(): string {
   const i = SRC.indexOf('Decision rules:');

@@ -31,6 +31,7 @@ import { readFileSync, writeFileSync, mkdtempSync, mkdirSync } from 'node:fs';
 import { join } from 'node:path';
 import { tmpdir } from 'node:os';
 import { provisionProject, cleanupProvisioned } from '../../support/provisioned-project';
+import { engineSource } from '../../lib/engine-source';
 
 let PROVISIONED = '';
 beforeAll(() => { PROVISIONED = provisionProject(); });
@@ -77,7 +78,7 @@ const REAL_FNS = [
 
 let extracted = '';
 beforeAll(() => {
-  const src = readFileSync(CLAUDE_SH, 'utf8');
+  const src = engineSource(CLAUDE_SH);
   extracted = REAL_FNS.map((f) => extractFn(src, f)).join('\n\n') + '\n';
 });
 
@@ -290,7 +291,7 @@ describe('a lane is never shown another codeline', () => {
  * it is a deliberate, reviewable act, not a side effect.
  */
 describe('the writer prompt stays within its token budget', () => {
-  const budget = JSON.parse(readFileSync(BUDGET_FILE, 'utf8')) as {
+  const budget = JSON.parse(engineSource(BUDGET_FILE)) as {
     baselineBytes: Record<string, number>;
     allowancePct: number;
   };

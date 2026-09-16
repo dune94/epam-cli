@@ -31,11 +31,12 @@ import { describe, it, expect } from 'vitest';
 import { readFileSync } from 'node:fs';
 import { join } from 'node:path';
 import { spawnSync } from 'node:child_process';
+import { engineSource } from '../../lib/engine-source';
 
 const ROOT = join(__dirname, '../../..');
 const SCRIPT = join(ROOT, 'orchestrations/scripts/run-agent-orchestration.sh');
 
-const source = () => readFileSync(SCRIPT, 'utf8').split('\n');
+const source = () => engineSource(SCRIPT).split('\n');
 
 /**
  * Declaration-shaped lines, located by shape rather than by line number so the test does not rot

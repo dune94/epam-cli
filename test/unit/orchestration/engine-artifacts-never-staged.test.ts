@@ -37,6 +37,7 @@ import { spawnSync } from 'node:child_process';
 import { mkdtempSync, writeFileSync, mkdirSync, readFileSync } from 'node:fs';
 import { tmpdir } from 'node:os';
 import { join, dirname } from 'node:path';
+import { engineSource } from '../../lib/engine-source';
 
 const REPO_ROOT = join(__dirname, '../../../');
 const GIT_OPS = join(REPO_ROOT, 'orchestrations/scripts/lib/git-ops.sh');
@@ -162,8 +163,8 @@ describe('no staging path discards the exclusions', () => {
  */
 describe('every client-repo staging site uses the shared helper', () => {
   const sources: Record<string, string> = {
-    'run-agent-orchestration.sh (Step 9)': readFileSync(ORCH, 'utf8'),
-    'worktree-health-check.sh': readFileSync(WT_HEALTH, 'utf8'),
+    'run-agent-orchestration.sh (Step 9)': engineSource(ORCH),
+    'worktree-health-check.sh': engineSource(WT_HEALTH),
   };
 
   for (const [name, src] of Object.entries(sources)) {

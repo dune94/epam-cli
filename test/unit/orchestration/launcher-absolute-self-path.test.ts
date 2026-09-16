@@ -20,6 +20,7 @@
 import { describe, it, expect } from 'vitest';
 import { readdirSync, readFileSync } from 'node:fs';
 import { join } from 'node:path';
+import { engineSource } from '../../lib/engine-source';
 
 const SCRIPTS = join(__dirname, '../../../orchestrations/scripts');
 const launchers = readdirSync(SCRIPTS).filter((f) => /^tier\d.*-run\.sh$/.test(f));
@@ -30,7 +31,7 @@ describe('launchers invoke the orchestrator by absolute path', () => {
   });
 
   it.each(launchers)('%s uses no relative path to run-agent-orchestration.sh', (f) => {
-    const relative = readFileSync(join(SCRIPTS, f), 'utf8')
+    const relative = engineSource(join(SCRIPTS, f))
       .split('\n')
       .filter((l) => !l.trim().startsWith('#') && !l.trim().startsWith('echo'))
       .filter((l) => /(^|\s)bash\s+(\S+\s+)*orchestrations\/scripts\/run-agent-orchestration\.sh/.test(l));

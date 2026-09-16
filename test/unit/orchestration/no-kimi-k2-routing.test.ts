@@ -28,6 +28,7 @@
 import { describe, it, expect } from 'vitest';
 import { readFileSync, readdirSync, existsSync } from 'node:fs';
 import { join } from 'node:path';
+import { engineSource } from '../../lib/engine-source';
 
 const ROOT = join(__dirname, '../../../');
 const ORCH = join(ROOT, 'orchestrations');
@@ -36,6 +37,9 @@ function* files(dir: string): Generator<string> {
   for (const e of readdirSync(dir, { withFileTypes: true })) {
     if (e.isDirectory()) {
       if (/^(logs|node_modules|\.git)$/.test(e.name)) continue;   // logs are history
+      // tools/split-maps holds the goldens of the split mains: a byte record of code already
+      // scanned in lib/, where a bash COMMENT is a JSON string value this line filter cannot see.
+      if (e.name === 'split-maps') continue;
       yield* files(join(dir, e.name));
     } else if (/\.(sh|js|json|env)$/.test(e.name)) yield join(dir, e.name);
   }
@@ -49,7 +53,7 @@ describe('kimi-k2 is not reachable from any routing path', () => {
     const hits: string[] = [];
     for (const f of files(ORCH)) {
       if (PRICING.test(f)) continue;
-      readFileSync(f, 'utf8').split('\n').forEach((line, i) => {
+      engineSource(f).split('\n').forEach((line, i) => {
         if (!/kimi-k2(?!\.5)/.test(line)) return;
         // A past-tense comment explaining history is fine; a value is not.
         const isComment = /^\s*(#|\/\/|\*)/.test(line);
@@ -65,7 +69,7 @@ describe('kimi-k2 is not reachable from any routing path', () => {
     // fixture detail — and the orchestration guard above deliberately skips test/.
     const dir = join(__dirname);
     for (const f of readdirSync(dir).filter(n => /^brownfield-mock-e2e.*\.test\.ts$/.test(n))) {
-      expect(readFileSync(join(dir, f), 'utf8'),
+      expect(engineSource(join(dir, f)),
         `${f} routes an escalation to the discontinued k2`).not.toMatch(/ESCALATION_MODEL[^\n]*kimi-k2/);
     }
   });
@@ -73,6 +77,6 @@ describe('kimi-k2 is not reachable from any routing path', () => {
   it('the agent profiles do not permit assigning it', () => {
     const p = join(ORCH, 'agents/profiles.json');
     if (!existsSync(p)) return;
-    expect(readFileSync(p, 'utf8')).not.toMatch(/kimi-k2/);
+    expect(engineSource(p)).not.toMatch(/kimi-k2/);
   });
 });

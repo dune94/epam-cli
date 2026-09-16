@@ -28,12 +28,13 @@ import { spawnSync } from 'node:child_process';
 import { mkdtempSync, writeFileSync, readFileSync, utimesSync, rmSync } from 'node:fs';
 import { tmpdir } from 'node:os';
 import { join } from 'node:path';
+import { engineSource } from '../../lib/engine-source';
 
 const ROOT = join(__dirname, '../../..');
 const CLAUDE_SH = join(ROOT, 'orchestrations/scripts/claude.sh');
 
 function extractFn(name: string): string {
-  const src = readFileSync(CLAUDE_SH, 'utf8');
+  const src = engineSource(CLAUDE_SH);
   const m = src.match(new RegExp(`^${name}\\(\\)\\s*\\{[\\s\\S]*?\\n\\}`, 'm'));
   if (!m) throw new Error(`claude.sh has no function ${name}()`);
   return m[0];
@@ -88,7 +89,7 @@ describe('a failed attempt billed the previous ones tokens', () => {
   });
 
   it('AND THE LEDGER CONSULTS IT — not just a helper nobody calls', () => {
-    const src = readFileSync(CLAUDE_SH, 'utf8');
+    const src = engineSource(CLAUDE_SH);
     const fnStart = src.indexOf('append_cost_record() {');
     const fnEnd = src.indexOf('\n}', src.indexOf('cost_snapshot', fnStart));
     const body = src.slice(fnStart, fnEnd > 0 ? fnEnd : fnStart + 8000);

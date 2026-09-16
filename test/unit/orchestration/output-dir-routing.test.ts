@@ -25,15 +25,16 @@ import {
 import { execSync } from 'node:child_process';
 import { join, dirname } from 'node:path';
 import { tmpdir } from 'node:os';
+import { engineSource } from '../../lib/engine-source';
 
 const REPO_ROOT = join(__dirname, '../../..');
 const SNAPSHOT_JS = join(REPO_ROOT, 'orchestrations/dashboards/build/snapshot.js');
 const PRE_RUN_RESET_SH = join(REPO_ROOT, 'orchestrations/scripts/pre-run-reset.sh');
 const CLAUDE_SH = join(REPO_ROOT, 'orchestrations/scripts/claude.sh');
 const RUN_ORCH_SH = join(REPO_ROOT, 'orchestrations/scripts/run-agent-orchestration.sh');
-const PRE_RUN_RESET_SRC = readFileSync(PRE_RUN_RESET_SH, 'utf8');
-const SNAPSHOT_SRC = readFileSync(SNAPSHOT_JS, 'utf8');
-const CLAUDE_SRC = readFileSync(CLAUDE_SH, 'utf8');
+const PRE_RUN_RESET_SRC = engineSource(PRE_RUN_RESET_SH);
+const SNAPSHOT_SRC = engineSource(SNAPSHOT_JS);
+const CLAUDE_SRC = engineSource(CLAUDE_SH);
 
 // ── 1. snapshot.js path invariants (source analysis) ─────────────────────────
 
@@ -195,7 +196,7 @@ describe('pre-run-reset.sh — EPAM_PROJECT_OUTPUT_DIR propagation', () => {
     ];
     for (const script of tier3Scripts) {
       if (!existsSync(script)) continue;
-      const src = readFileSync(script, 'utf8');
+      const src = engineSource(script);
       // Skip comment lines — find the actual invocation line
       const callLine = src.split('\n').find(
         (l) => l.includes('pre-run-reset.sh') && !l.trim().startsWith('#')
@@ -215,7 +216,7 @@ describe('pre-run-reset.sh — EPAM_PROJECT_OUTPUT_DIR propagation', () => {
     // This test verifies that overwrite exists in the tier3 script.
     const tier3SkyPath = join(REPO_ROOT, 'orchestrations/scripts/tier3-skyscanner-app-run.sh');
     if (!existsSync(tier3SkyPath)) return;
-    const tier3Sky = readFileSync(tier3SkyPath, 'utf8');
+    const tier3Sky = engineSource(tier3SkyPath);
     // Must write OUTPUT_DIR to .active-output-dir after pre-run-reset
     expect(tier3Sky).toMatch(/echo.*OUTPUT_DIR.*active-output-dir|active-output-dir.*OUTPUT_DIR/);
   });
@@ -230,7 +231,7 @@ describe('pre-run-reset.sh — EPAM_PROJECT_OUTPUT_DIR propagation', () => {
 // ── 5. pipeline warm-up — pre-flight checks ──────────────────────────────────
 
 describe('run-agent-orchestration.sh — EPAM_PROJECT_OUTPUT_DIR routing', () => {
-  const RUN_ORCH_SRC = readFileSync(RUN_ORCH_SH, 'utf8');
+  const RUN_ORCH_SRC = engineSource(RUN_ORCH_SH);
 
   it('references EPAM_PROJECT_OUTPUT_DIR in its source', () => {
     expect(RUN_ORCH_SRC).toMatch(/EPAM_PROJECT_OUTPUT_DIR/);
@@ -293,7 +294,7 @@ run_healing_recorder "TEST-001" "0" "skill" "test diagnosis" "0" "false"
     const wrongPath    = join(tmpDir, 'healing-events.jsonl');
     expect(existsSync(expectedPath)).toBe(true);
     expect(existsSync(wrongPath)).toBe(false);
-    const record = JSON.parse(readFileSync(expectedPath, 'utf8').trim());
+    const record = JSON.parse(engineSource(expectedPath).trim());
     expect(record.story_id).toBe('TEST-001');
     expect(record.rung).toBe(0);
   });
@@ -313,7 +314,7 @@ run_healing_recorder "TEST-002" "1" "prd" "ac patch" "2" "true"
 
     const wroteAt = join(logDir, 'healing-events.jsonl');
     expect(existsSync(wroteAt)).toBe(true);
-    const record = JSON.parse(readFileSync(wroteAt, 'utf8').trim());
+    const record = JSON.parse(engineSource(wroteAt).trim());
     expect(record.story_id).toBe('TEST-002');
     expect(record.rung).toBe(0);  // retry 1 / 2 = 0 in integer division
   });

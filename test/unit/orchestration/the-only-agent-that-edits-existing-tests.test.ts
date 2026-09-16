@@ -19,6 +19,7 @@ import { describe, it, expect } from 'vitest';
 import { spawnSync } from 'node:child_process';
 import { readFileSync } from 'node:fs';
 import { join } from 'node:path';
+import { engineSource } from '../../lib/engine-source';
 
 const ROOT = join(__dirname, '../../..');
 const SCRIPTS = join(ROOT, 'orchestrations/scripts');
@@ -26,7 +27,7 @@ const UIT = join(SCRIPTS, 'update-invalidated-tests.sh');
 const ORCH = join(SCRIPTS, 'run-agent-orchestration.sh');
 const ENGINE = join(SCRIPTS, 'lib/engine-prompt.js');
 
-const code = (f: string) => readFileSync(f, 'utf8').split('\n').filter((l) => !/^\s*#/.test(l)).join('\n');
+const code = (f: string) => engineSource(f).split('\n').filter((l) => !/^\s*#/.test(l)).join('\n');
 
 function render(values: Record<string, string>): { status: number; out: string; err: string } {
   const r = spawnSync(process.execPath, ['-e',
@@ -79,7 +80,7 @@ describe('the only agent that edits existing tests', () => {
   });
 
   it('the caller skips a story with no criteria rather than passing empty ones', () => {
-    const src = readFileSync(ORCH, 'utf8');
+    const src = engineSource(ORCH);
     const i = src.indexOf('_uit_vcs=');
     expect(i, 'the 3.545 call site is gone').toBeGreaterThan(-1);
     expect(src.slice(i, i + 900), 'a story with no criteria is still handed to the agent')

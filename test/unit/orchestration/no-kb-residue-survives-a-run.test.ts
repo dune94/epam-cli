@@ -30,6 +30,7 @@ import { spawnSync } from 'node:child_process';
 import { mkdtempSync, mkdirSync, writeFileSync, rmSync, existsSync, readdirSync, readFileSync } from 'node:fs';
 import { join } from 'node:path';
 import { tmpdir } from 'node:os';
+import { engineSource } from '../../lib/engine-source';
 
 const ROOT = join(__dirname, '../../../');
 const KBLIB = join(ROOT, 'orchestrations/scripts/lib/kb-canonical.sh');
@@ -70,7 +71,7 @@ describe('the harness is real — otherwise every assertion is vacuous', () => {
     spawnSync('bash', ['-c',
       `warning() { :; }; success() { :; }; info() { :; }\n. '${KBLIB}'\nkb_restore_canonical '${d}'`],
       { encoding: 'utf8' });
-    expect(readFileSync(join(d, 'agents', 'KB.md'), 'utf8')).toBe('# canonical\n');
+    expect(engineSource(join(d, 'agents', 'KB.md'))).toBe('# canonical\n');
   });
 });
 
@@ -105,7 +106,7 @@ describe('AND THE RUN STATE UNDER agents/kb/', () => {
       `. '${KBLIB}'\nkb_restore_canonical '${d}'`], { encoding: 'utf8' });
     const out: Record<string, string> = {};
     for (const g of readdirSync(join(d, 'agents', 'kb'))) {
-      out[g] = readFileSync(join(d, 'agents', 'kb', g), 'utf8');
+      out[g] = engineSource(join(d, 'agents', 'kb', g));
     }
     return out;
   }
@@ -138,12 +139,12 @@ describe('A RESET THAT CANNOT CLEAN SAYS SO', () => {
   it('a missing canonical is reported, never silent', () => {
     // Pre-existing behaviour worth keeping: the KB grew unnoticed for weeks precisely because
     // a skipped reset looked like a clean start.
-    const src = readFileSync(KBLIB, 'utf8');
+    const src = engineSource(KBLIB);
     expect(src).toMatch(/NEVER silent|warning /);
   });
 
   it('the old "meant to persist" policy is gone from the reset', () => {
-    const reset_sh = readFileSync(join(ROOT, 'orchestrations/scripts/pre-run-reset.sh'), 'utf8');
+    const reset_sh = engineSource(join(ROOT, 'orchestrations/scripts/pre-run-reset.sh'));
     expect(reset_sh, 'the reset still declares per-agent KB is meant to persist')
       .not.toMatch(/NOT cleared: KB-<role>\.md/);
   });

@@ -22,13 +22,14 @@
 import { describe, it, expect } from 'vitest';
 import { readFileSync } from 'node:fs';
 import { join } from 'node:path';
+import { engineSource } from '../../lib/engine-source';
 
 const REPO = join(__dirname, '../../../');
 const ORCH = join(REPO, 'orchestrations/scripts/run-agent-orchestration.sh');
 const ARCHIVER = join(REPO, 'orchestrations/scripts/archive-run-artifacts.sh');
 
 const codeLines = (rel: string) =>
-  readFileSync(join(REPO, rel), 'utf8')
+  engineSource(join(REPO, rel))
     .split('\n')
     .map((l, i) => ({ l: l.trim(), n: i + 1 }))
     .filter(({ l }) => l && !l.startsWith('#'));
@@ -56,7 +57,7 @@ describe('working files are scoped to the run, not a shared namespace', () => {
   });
 
   it('the archiver fails loudly when it is not told which PRD to capture', () => {
-    const src = readFileSync(ARCHIVER, 'utf8');
+    const src = engineSource(ARCHIVER);
     expect(
       src,
       'silently archiving nothing is better than archiving another project\'s PRD, but ' +

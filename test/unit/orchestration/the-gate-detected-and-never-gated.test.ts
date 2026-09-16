@@ -26,9 +26,10 @@ import { describe, it, expect } from 'vitest';
 import { spawnSync } from 'node:child_process';
 import { readFileSync } from 'node:fs';
 import { join } from 'node:path';
+import { engineSource, engineSourceFile } from '../../lib/engine-source';
 
 const ROOT = join(__dirname, '../../..');
-const CLAUDE_SH = join(ROOT, 'orchestrations/scripts/claude.sh');
+const CLAUDE_SH = engineSourceFile(join(ROOT, 'orchestrations/scripts/claude.sh')); // the inlined program: this test lifts text, it does not execute the main
 
 /**
  * Run the REAL run_external_verification with every collaborator stubbed to succeed EXCEPT the
@@ -97,7 +98,7 @@ describe('run_external_verification propagates the checks it calls', () => {
 describe('no deterministic check is invoked bare', () => {
   // The class, not the two sites: any check called for its verdict must have that verdict read.
   it('every run_*_check call inside run_external_verification is guarded', () => {
-    const src = readFileSync(CLAUDE_SH, 'utf8');
+    const src = engineSource(CLAUDE_SH);
     const fn = src.slice(src.indexOf('run_external_verification() {'));
     const body = fn.slice(0, fn.indexOf('\n}\n'));
     const bare = body.split('\n')

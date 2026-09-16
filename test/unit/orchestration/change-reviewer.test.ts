@@ -12,15 +12,16 @@
 import { describe, it, expect } from 'vitest';
 import { readFileSync } from 'node:fs';
 import { join } from 'node:path';
+import { engineSource } from '../../lib/engine-source';
 
 const REPO         = join(__dirname, '../../../');
 const PROFILES_FILE = join(REPO, 'orchestrations/agents/profiles.json');
 const CLAUDE_SH    = join(REPO, 'orchestrations/scripts/claude.sh');
 const ORCH_SH      = join(REPO, 'orchestrations/scripts/run-agent-orchestration.sh');
 
-const profiles  = JSON.parse(readFileSync(PROFILES_FILE, 'utf8'));
-const claudeSrc = readFileSync(CLAUDE_SH, 'utf8');
-const orchSrc   = readFileSync(ORCH_SH, 'utf8');
+const profiles  = JSON.parse(engineSource(PROFILES_FILE));
+const claudeSrc = engineSource(CLAUDE_SH);
+const orchSrc   = engineSource(ORCH_SH);
 
 // ─────────────────────────────────────────────────────────────────────────────
 // prd-change-reviewer profile
@@ -490,8 +491,7 @@ describe('run-agent-orchestration.sh — story-recovery reviewer gate is fail-sa
     // handler. Slicing on 'python3 -c' returned -1, so this read the LAST CHARACTER of the
     // block and matched nothing — a test that failed for the wrong reason and would have
     // passed for the wrong reason just as easily.
-    const handler = readFileSync(
-      join(REPO, 'orchestrations/scripts/lib/handlers/run-story-recovery-analyst.py'), 'utf8');
+    const handler = engineSource(join(REPO, 'orchestrations/scripts/lib/handlers/run-story-recovery-analyst.py'));
     expect(handler.length, 'the handler must exist — otherwise this asserts nothing').toBeGreaterThan(50);
     expect(handler).not.toMatch(/get\('verdict','pass'\)/);
     expect(handler).not.toMatch(/if m else 'pass'/);
@@ -552,8 +552,7 @@ describe('run-agent-orchestration.sh — profile-augmentor reviewer gate is fail
 
   it('python parser no longer defaults to pass — exits without printing on unparseable input', () => {
     // Same extraction as H1 — the parser is a handler file, not inline shell.
-    const handler2 = readFileSync(
-      join(REPO, 'orchestrations/scripts/lib/handlers/run-testing-gates.py'), 'utf8');
+    const handler2 = engineSource(join(REPO, 'orchestrations/scripts/lib/handlers/run-testing-gates.py'));
     expect(handler2.length, 'the handler must exist — otherwise this asserts nothing').toBeGreaterThan(50);
     expect(handler2).not.toMatch(/get\('verdict','pass'\)/);
     expect(handler2).not.toMatch(/if m else 'pass'/);

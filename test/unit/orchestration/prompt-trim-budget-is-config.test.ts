@@ -25,6 +25,7 @@ import { readFileSync, writeFileSync, mkdtempSync, rmSync } from 'node:fs';
 import { execFileSync } from 'node:child_process';
 import { join } from 'node:path';
 import { tmpdir } from 'node:os';
+import { engineSource } from '../../lib/engine-source';
 
 const CONFIG = join(__dirname, '../../../orchestrations/config/spec-mode-defaults.json');
 const CLAUDE = join(__dirname, '../../../orchestrations/scripts/claude.sh');
@@ -41,7 +42,7 @@ const sh = (script: string, env = '') =>
     { encoding: 'utf8' }).trim();
 
 describe('the config carries both numbers', () => {
-  const cfg = () => JSON.parse(readFileSync(CONFIG, 'utf8'));
+  const cfg = () => JSON.parse(engineSource(CONFIG));
 
   it('a positive character threshold', () => {
     expect(cfg().promptTrim.thresholdChars).toBeGreaterThan(0);
@@ -60,12 +61,12 @@ describe('the config carries both numbers', () => {
 
 describe('THE DEFECT: the numbers come from the file', () => {
   it('the threshold is read from config', () => {
-    const want = JSON.parse(readFileSync(CONFIG, 'utf8')).promptTrim.thresholdChars;
+    const want = JSON.parse(engineSource(CONFIG)).promptTrim.thresholdChars;
     expect(sh('prompt_trim_threshold')).toBe(String(want));
   });
 
   it('the keep-count is read from config', () => {
-    const want = JSON.parse(readFileSync(CONFIG, 'utf8')).promptTrim.keepRecentSections;
+    const want = JSON.parse(engineSource(CONFIG)).promptTrim.keepRecentSections;
     expect(sh('prompt_trim_keep_sections')).toBe(String(want));
   });
 
@@ -115,7 +116,7 @@ describe('a missing or unusable value is an ERROR, never a silent default', () =
 
 describe('the engine no longer carries the numbers', () => {
   it('claude.sh has no literal trim budget', () => {
-    const src = readFileSync(CLAUDE, 'utf8');
+    const src = engineSource(CLAUDE);
     const offenders = src.split('\n')
       .map((l, i) => ({ l, n: i + 1 }))
       .filter(({ l }) => /SCRATCHPAD_THRESHOLD_CHARS:-\s*\d/.test(l) || /heading_idxs\[-\d\]/.test(l));

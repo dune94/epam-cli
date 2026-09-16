@@ -19,9 +19,10 @@ import { mkdtempSync, writeFileSync, readFileSync, existsSync, rmSync, mkdirSync
 import { execFileSync } from 'node:child_process';
 import { join } from 'node:path';
 import { tmpdir } from 'node:os';
+import { engineSource } from '../../lib/engine-source';
 
 const ORCH = join(__dirname, '../../../orchestrations/scripts/run-agent-orchestration.sh');
-const src = readFileSync(ORCH, 'utf8');
+const src = engineSource(ORCH);
 
 const dirs: string[] = [];
 afterAll(() => { for (const d of dirs) rmSync(d, { recursive: true, force: true }); });
@@ -76,26 +77,26 @@ describe('THE DEFECT: the not-checked state is persisted', () => {
 
   it('it says explicitly that the check did not run', () => {
     const { logDir } = runNoTestFile();
-    const a = JSON.parse(readFileSync(join(logDir, 'vc-coverage-S-1.json'), 'utf8'));
+    const a = JSON.parse(engineSource(join(logDir, 'vc-coverage-S-1.json')));
     expect(a.state).toBe('not_checked');
   });
 
   it('it says WHY, so the reader is not left guessing', () => {
     const { logDir } = runNoTestFile();
-    const a = JSON.parse(readFileSync(join(logDir, 'vc-coverage-S-1.json'), 'utf8'));
+    const a = JSON.parse(engineSource(join(logDir, 'vc-coverage-S-1.json')));
     expect(String(a.reason)).toMatch(/test file|manifest/i);
   });
 
   it('it does not claim coverage it never measured', () => {
     const { logDir } = runNoTestFile();
-    const a = JSON.parse(readFileSync(join(logDir, 'vc-coverage-S-1.json'), 'utf8'));
+    const a = JSON.parse(engineSource(join(logDir, 'vc-coverage-S-1.json')));
     // A `covered: true` anywhere in a not-checked record would be a fabricated pass.
     expect(JSON.stringify(a)).not.toMatch(/"covered"\s*:\s*true/);
   });
 
   it('it names the story it is about', () => {
     const { logDir } = runNoTestFile();
-    const a = JSON.parse(readFileSync(join(logDir, 'vc-coverage-S-1.json'), 'utf8'));
+    const a = JSON.parse(engineSource(join(logDir, 'vc-coverage-S-1.json')));
     expect(a.story).toBe('S-1');
   });
 });

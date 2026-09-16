@@ -20,10 +20,11 @@ import { mkdtempSync, writeFileSync, mkdirSync, rmSync, chmodSync, readFileSync,
 import { spawnSync } from 'node:child_process';
 import { join } from 'node:path';
 import { tmpdir } from 'node:os';
+import { engineSource } from '../../lib/engine-source';
 
 const ROOT = join(__dirname, '../../..');
 const SCRIPTS = join(ROOT, 'orchestrations/scripts');
-const CLAUDE_SH = readFileSync(join(SCRIPTS, 'claude.sh'), 'utf8');
+const CLAUDE_SH = engineSource(join(SCRIPTS, 'claude.sh'));
 const dirs: string[] = [];
 afterAll(() => { if (!process.env.KEEP_DIRS) for (const d of dirs) rmSync(d, { recursive: true, force: true }); });
 
@@ -103,7 +104,7 @@ describe('the worktree is provisioned as its ecosystem declares, and the test ru
     tool(host, 'pip', 'exit 0');
     tool(host, 'pytest', 'echo "host pytest ran — the wrong one"; exit 2');
     const r = run(codeline, host, record, 'pytest tests/test_x.py');
-    const rec = readFileSync(record, 'utf8');
+    const rec = engineSource(record);
     expect(rec, 'the declared provisioning command must run verbatim').toContain('python3 -m venv .venv');
     expect(rec).toContain('venv-pip install -r requirements.txt');
     expect(rec, 'the ADD command with its placeholder deleted must never run as provisioning').not.toMatch(/^pip install\s*@/m);
@@ -128,7 +129,7 @@ describe('the worktree is provisioned as its ecosystem declares, and the test ru
     ].join('\n'));
     tool(host, 'vitest', 'echo "host vitest ran — the wrong one"; exit 1');
     const r = run(codeline, host, record, 'npm run test');
-    const rec = readFileSync(record, 'utf8');
+    const rec = engineSource(record);
     expect(rec).toMatch(/^npm install --no-audit --no-fund @/m);
     expect(rec).toContain('vendored-vitest run');
     expect(rec).not.toContain('host vitest');
@@ -144,7 +145,7 @@ describe('the worktree is provisioned as its ecosystem declares, and the test ru
     const host = join(ws, 'hostbin');
     tool(host, 'tool', 'exit 0'); tool(host, 'check', 'exit 0');
     const r = run(codeline, host, record, 'check');
-    expect(readFileSync(record, 'utf8'), 'nothing derived from the add command may run').not.toMatch(/^tool /m);
+    expect(engineSource(record), 'nothing derived from the add command may run').not.toMatch(/^tool /m);
     expect(r.stderr).toMatch(/declares no provisionCommand/);
     expect(r.stdout + r.stderr).toMatch(/RC=0/);
   });

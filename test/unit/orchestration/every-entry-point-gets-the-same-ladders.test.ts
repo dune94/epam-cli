@@ -33,6 +33,7 @@ import { join } from 'node:path';
 // a model belongs to a STACK. This file read the project copy, which now carries only a note
 // saying so, so every lookup came back empty. See test/support/llm-settings.ts.
 import { stackSettings, defaultStack } from '../../support/llm-settings'
+import { engineSource } from '../../lib/engine-source';
 const REPO_ROOT_CFG = join(__dirname, '../../../orchestrations/config');
 
 const ROOT = join(__dirname, '../../../');
@@ -41,7 +42,7 @@ const LIB = join(SCRIPTS, 'lib/model-ladders.sh');
 const SETTINGS = join(REPO_ROOT_CFG, `llm-defaults.${defaultStack()}.json`);
 
 function declared(tier: string): string {
-  const s = JSON.parse(readFileSync(SETTINGS, 'utf8'));
+  const s = JSON.parse(engineSource(SETTINGS));
   return ((s.ladders?.[tier]?.modelLadder) || []).map((p: any) => `${p.from}=${p.to}`).join('|');
 }
 
@@ -57,7 +58,7 @@ function exported(tier: string, preset: Record<string, string> = {}): string {
 
 describe('THE EXPORT IS A SHARED LIB, NOT A COPY INSIDE ONE SCRIPT', () => {
   it('lib/model-ladders.sh exists', () => {
-    expect(() => readFileSync(LIB, 'utf8'),
+    expect(() => engineSource(LIB),
       'the ladder export lives inside claude.sh, so any other entry point has no ladders')
       .not.toThrow();
   });
@@ -86,7 +87,7 @@ describe('EVERY ENTRY POINT THAT INVOKES AN AGENT LOADS IT', () => {
   const entryPoints = readdirSync(SCRIPTS)
     .filter((f) => f.endsWith('.sh'))
     .filter((f) => {
-      const s = readFileSync(join(SCRIPTS, f), 'utf8');
+      const s = engineSource(join(SCRIPTS, f));
       const code = s.split('\n').filter((l) => !/^\s*#/.test(l)).join('\n');
       // "invokes an agent" = resolves a seam or invokes the runner directly
       return /seam_ladder_export|invoke_agent|runCodeGraphDetective|ai-run\.sh/.test(code);
@@ -99,7 +100,7 @@ describe('EVERY ENTRY POINT THAT INVOKES AN AGENT LOADS IT', () => {
 
   for (const f of readdirSync(SCRIPTS).filter((x) => x === 'detective-rerun.sh' || x === 'claude.sh')) {
     it(`${f} sources the shared ladder lib`, () => {
-      const s = readFileSync(join(SCRIPTS, f), 'utf8');
+      const s = engineSource(join(SCRIPTS, f)); // the whole program: claude.sh is split into modules
       const code = s.split('\n').filter((l) => !/^\s*#/.test(l)).join('\n');
       expect(code, `${f} does not load lib/model-ladders.sh, so its seams get whatever happens to be in the environment`)
         .toMatch(/model-ladders\.sh/);
@@ -117,7 +118,7 @@ describe('THE OLD COPY IS GONE', () => {
   it('claude.sh no longer serialises the ladders itself', () => {
     // Two copies is one defect waiting: the inline block is what config.env was able to
     // outrank, and what no other entry point could reuse.
-    const s = readFileSync(join(SCRIPTS, 'claude.sh'), 'utf8');
+    const s = engineSource(join(SCRIPTS, 'claude.sh'));
     const code = s.split('\n').filter((l) => !/^\s*#/.test(l)).join('\n');
     expect(code, 'claude.sh still has its own ladder serialisation')
       .not.toMatch(/ladders\.highest\.modelLadder/);

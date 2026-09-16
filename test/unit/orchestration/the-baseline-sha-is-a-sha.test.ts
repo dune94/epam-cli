@@ -18,6 +18,7 @@ import { spawnSync } from 'child_process';
 import { mkdtempSync, writeFileSync, rmSync, readFileSync } from 'fs';
 import { join } from 'path';
 import { tmpdir } from 'os';
+import { engineSource } from '../../lib/engine-source';
 
 const ROOT = join(__dirname, '../../..');
 const ORCH = join(ROOT, 'orchestrations/scripts/run-agent-orchestration.sh');
@@ -43,7 +44,7 @@ function repoWithoutRemote(): string {
 
 /** The resolution exactly as the codeline loop performs it. */
 function resolveBaseline(repo: string, branch: string): string {
-  const src = readFileSync(ORCH, 'utf8');
+  const src = engineSource(ORCH);
   const line = src.split('\n').find((l) => l.includes('_baseline_sha=$(git -C'));
   expect(line, 'the baseline resolution was not found — this test is measuring nothing').toBeTruthy();
 
@@ -95,8 +96,8 @@ describe('the baseline sha is a sha', () => {
  * project-branch reading would report a previous phase's work as this phase's changes.
  */
 describe('the baseline has one meaning and one resolver', () => {
-  const ORCH_SRC = readFileSync(ORCH, 'utf8');
-  const LIB_SRC = readFileSync(join(__dirname, '../../../orchestrations/scripts/lib/qa-gate-evidence.sh'), 'utf8');
+  const ORCH_SRC = engineSource(ORCH);
+  const LIB_SRC = engineSource(join(__dirname, '../../../orchestrations/scripts/lib/qa-gate-evidence.sh'));
   const lines = ORCH_SRC.split('\n');
   const writerLines = lines
     .map((l, i) => ({ l, i }))

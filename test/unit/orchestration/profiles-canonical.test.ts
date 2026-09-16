@@ -18,6 +18,7 @@
 import { describe, it, expect } from 'vitest';
 import { readFileSync, existsSync } from 'node:fs';
 import { join } from 'node:path';
+import { engineSource } from '../../lib/engine-source';
 
 const ORCH_DIR = join(__dirname, '../../../orchestrations');
 const PRD_PATH = join(ORCH_DIR, 'travel-app-prd.json');
@@ -56,8 +57,8 @@ const CORE_AGENT_PROFILES = [
   'profile-augmentor',
 ];
 
-const prd = JSON.parse(readFileSync(PRD_PATH, 'utf8'));
-const profiles: Record<string, unknown> = JSON.parse(readFileSync(PROFILES_PATH, 'utf8'));
+const prd = JSON.parse(engineSource(PRD_PATH));
+const profiles: Record<string, unknown> = JSON.parse(engineSource(PROFILES_PATH));
 const implementationOrder: Record<string, string[]> = prd.implementationOrder ?? {};
 const activeIds = new Set(Object.values(implementationOrder).flat());
 
@@ -72,7 +73,7 @@ describe('profiles.json — canonical invariants', () => {
 
   it('profiles.json.original contains all core agent profiles', () => {
     const original: Record<string, unknown> = JSON.parse(
-      readFileSync(PROFILES_ORIGINAL_PATH, 'utf8'),
+      engineSource(PROFILES_ORIGINAL_PATH),
     );
     const missing = CORE_AGENT_PROFILES.filter((p) => !(p in original));
     expect(missing, `Missing core profiles in profiles.json.original: ${missing.join(', ')}`).toHaveLength(0);
@@ -100,7 +101,7 @@ describe('profiles.json — canonical invariants', () => {
 
   it('profiles.json is a superset of profiles.json.original (original is the floor)', () => {
     const original: Record<string, unknown> = JSON.parse(
-      readFileSync(PROFILES_ORIGINAL_PATH, 'utf8'),
+      engineSource(PROFILES_ORIGINAL_PATH),
     );
     const missing = Object.keys(original).filter((k) => !(k in profiles));
     expect(

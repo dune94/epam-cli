@@ -22,6 +22,7 @@
 import { describe, it, expect } from 'vitest';
 import { existsSync, readdirSync, readFileSync } from 'node:fs';
 import { join } from 'node:path';
+import { engineSource } from '../../lib/engine-source';
 
 const PROJECTS_DIR = join(__dirname, '../../../orchestrations/projects');
 
@@ -40,7 +41,7 @@ describe('project config carries no hand-authored, failure-derived rules', () =>
       if (!existsSync(file)) continue;
       let parsed: unknown;
       try {
-        parsed = JSON.parse(readFileSync(file, 'utf8'));
+        parsed = JSON.parse(engineSource(file));
       } catch {
         offenders.push(`${file} (unparseable)`);
         continue;
@@ -81,7 +82,7 @@ describe('project config carries no hand-authored, failure-derived rules', () =>
       if (!existsSync(file)) continue;
       let parsed: Record<string, unknown>;
       try {
-        parsed = JSON.parse(readFileSync(file, 'utf8'));
+        parsed = JSON.parse(engineSource(file));
       } catch {
         continue;
       }

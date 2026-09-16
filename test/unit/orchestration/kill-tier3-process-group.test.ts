@@ -25,6 +25,7 @@ import { readFileSync, mkdtempSync, writeFileSync, chmodSync, rmSync } from 'nod
 import { execFileSync, spawn, execSync } from 'node:child_process';
 import { join } from 'node:path';
 import { tmpdir } from 'node:os';
+import { engineSource } from '../../lib/engine-source';
 
 const REPO_ROOT = join(__dirname, '../../../');
 const KILL_SCRIPT = join(REPO_ROOT, 'orchestrations/scripts/kill-tier3-run.sh');
@@ -87,12 +88,12 @@ wait
 
     waitUntil(() => {
       try {
-        return readFileSync(pidFile, 'utf8').trim().length > 0;
+        return engineSource(pidFile).trim().length > 0;
       } catch {
         return false;
       }
     });
-    const leaderPid = parseInt(readFileSync(pidFile, 'utf8').trim(), 10);
+    const leaderPid = parseInt(engineSource(pidFile).trim(), 10);
     expect(pidAlive(leaderPid)).toBe(true);
 
     // Confirm there really is a nested tree alive under this process group
@@ -144,7 +145,7 @@ wait
 });
 
 describe('tier3-travel-app-run.sh — setsid self-relaunch and pidfile wiring (structural)', () => {
-  const src = readFileSync(TIER3_SCRIPT, 'utf8');
+  const src = engineSource(TIER3_SCRIPT);
 
   it('guards the setsid re-exec with an idempotency env var so it does not loop forever', () => {
     expect(src).toMatch(/TIER3_SETSID_DONE/);

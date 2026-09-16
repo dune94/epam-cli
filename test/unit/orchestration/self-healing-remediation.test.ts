@@ -9,15 +9,16 @@
 import { describe, it, expect } from 'vitest';
 import * as fs from 'fs';
 import * as path from 'path';
+import { engineSource } from '../../lib/engine-source';
 
 const REPO_ROOT  = path.resolve(__dirname, '../../../');
 const ORCH       = path.join(REPO_ROOT, 'orchestrations/scripts/run-agent-orchestration.sh');
 const TIER3      = path.join(REPO_ROOT, 'orchestrations/scripts/tier3-travel-app-run.sh');
 const PROFILES   = path.join(REPO_ROOT, 'orchestrations/agents/profiles.json');
 
-const orchSrc  = fs.readFileSync(ORCH, 'utf8');
-const tier3Src = fs.readFileSync(TIER3, 'utf8');
-const profiles = JSON.parse(fs.readFileSync(PROFILES, 'utf8'));
+const orchSrc  = engineSource(ORCH);
+const tier3Src = engineSource(TIER3);
+const profiles = JSON.parse(engineSource(PROFILES));
 
 // ── Orch script: three-agent remediation pipeline ───────────────────────────
 

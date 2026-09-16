@@ -20,10 +20,11 @@ import { spawnSync } from 'node:child_process';
 import { mkdtempSync, writeFileSync, rmSync, readFileSync } from 'node:fs';
 import { join } from 'node:path';
 import { tmpdir } from 'node:os';
+import { engineSource } from '../../lib/engine-source';
 
 const CLAUDE_SH = join(__dirname, '../../../orchestrations/scripts/claude.sh');
 const STORY_RETRY_LIB = join(__dirname, '../../../orchestrations/scripts/lib/story-retry-state.sh');
-const SRC = readFileSync(CLAUDE_SH, 'utf8');
+const SRC = engineSource(CLAUDE_SH);
 
 const dirs: string[] = [];
 afterEach(() => { for (const d of dirs.splice(0)) rmSync(d, { recursive: true, force: true }); });

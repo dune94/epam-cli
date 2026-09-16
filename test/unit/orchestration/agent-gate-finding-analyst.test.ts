@@ -8,14 +8,15 @@
 import { describe, it, expect } from 'vitest';
 import * as fs from 'fs';
 import * as path from 'path';
+import { engineSource } from '../../lib/engine-source';
 
 const REPO_ROOT = path.resolve(__dirname, '../../../');
 const PROFILES  = path.join(REPO_ROOT, 'orchestrations/agents/profiles.json');
 const ORCH      = path.join(REPO_ROOT, 'orchestrations/scripts/run-agent-orchestration.sh');
 
-const profiles = JSON.parse(fs.readFileSync(PROFILES, 'utf8'));
+const profiles = JSON.parse(engineSource(PROFILES));
 const agent: string = profiles['gate-finding-analyst'];
-const orchSrc = fs.readFileSync(ORCH, 'utf8');
+const orchSrc = engineSource(ORCH);
 
 // ── Profile existence ────────────────────────────────────────────────────────
 

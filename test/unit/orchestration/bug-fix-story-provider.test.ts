@@ -18,13 +18,14 @@
 import { describe, it, expect } from 'vitest';
 import { readFileSync } from 'fs';
 import { join } from 'path';
+import { engineSource } from '../../lib/engine-source';
 
 const ROOT = join(__dirname, '../../..');
 const ORCH = join(ROOT, 'orchestrations/scripts/run-agent-orchestration.sh');
 const PROVIDERS_JSON = join(ROOT, 'orchestrations/config/providers.json');
 
-const orchSrc = readFileSync(ORCH, 'utf8');
-const providers = JSON.parse(readFileSync(PROVIDERS_JSON, 'utf8'));
+const orchSrc = engineSource(ORCH);
+const providers = JSON.parse(engineSource(PROVIDERS_JSON));
 
 /** The providers the orchestrator's dispatch will route — the single source of truth. */
 function acceptedProviders(): string[] {

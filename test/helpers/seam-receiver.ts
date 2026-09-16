@@ -16,6 +16,7 @@ import { spawnSync } from 'node:child_process';
 import { mkdtempSync, writeFileSync, readFileSync, existsSync, chmodSync, mkdirSync, readdirSync } from 'node:fs';
 import { tmpdir } from 'node:os';
 import { join } from 'node:path';
+import { engineSource } from '../lib/engine-source';
 
 export const REPO = join(__dirname, '../..');
 export const SCRIPTS = join(REPO, 'orchestrations/scripts');
@@ -128,7 +129,7 @@ export function callSeamThroughHub(seam: string, prompt: string, o: HubOptions =
 
   const runnerArgv: string[][] = [];
   if (existsSync(argvLog)) {
-    for (const line of readFileSync(argvLog, 'utf8').split('\n')) {
+    for (const line of engineSource(argvLog).split('\n')) {
       if (line === '--CALL--') { runnerArgv.push([]); continue; }
       if (runnerArgv.length) runnerArgv[runnerArgv.length - 1].push(line);
     }
@@ -136,7 +137,7 @@ export function callSeamThroughHub(seam: string, prompt: string, o: HubOptions =
     for (const v of runnerArgv) if (v.length && v[v.length - 1] === '') v.pop();
   }
   const prompts = existsSync(promptDir)
-    ? readdirSync(promptDir).map((f) => readFileSync(join(promptDir, f), 'utf8'))
+    ? readdirSync(promptDir).map((f) => engineSource(join(promptDir, f)))
     : [];
 
   return {

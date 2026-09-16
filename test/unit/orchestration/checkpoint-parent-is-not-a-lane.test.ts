@@ -17,10 +17,11 @@ import { mkdtempSync, writeFileSync, readFileSync, rmSync } from 'node:fs';
 import { execFileSync } from 'node:child_process';
 import { join } from 'node:path';
 import { tmpdir } from 'node:os';
+import { engineSource } from '../../lib/engine-source';
 
 const REPO = join(__dirname, '../../../');
-const CKPT = readFileSync(join(REPO, 'orchestrations/scripts/lib/run-checkpoint.sh'), 'utf8');
-const ORCH = readFileSync(join(REPO, 'orchestrations/scripts/run-agent-orchestration.sh'), 'utf8');
+const CKPT = engineSource(join(REPO, 'orchestrations/scripts/lib/run-checkpoint.sh'));
+const ORCH = engineSource(join(REPO, 'orchestrations/scripts/run-agent-orchestration.sh'));
 
 const dirs: string[] = [];
 afterAll(() => { for (const d of dirs) rmSync(d, { recursive: true, force: true }); });
@@ -63,7 +64,7 @@ function lane(env: Record<string, string>): string {
 
 describe('the fixture reproduces the real PRD shape', () => {
   it('the synthesizer really does point outputDir at the first codeline', () => {
-    const syn = readFileSync(join(REPO, 'orchestrations/scripts/synthesize-prd-from-jira.js'), 'utf8');
+    const syn = engineSource(join(REPO, 'orchestrations/scripts/synthesize-prd-from-jira.js'));
     expect(syn).toMatch(/project\.outputDir\s*=\s*outputDirs\[0\]\.path/);
   });
 });

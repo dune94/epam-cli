@@ -1,4 +1,5 @@
 /**
+import { engineSource } from '../../lib/engine-source';
  * SEAM: LAUNCHER → ORCHESTRATOR. THE STACK THE OPERATOR CHOSE MUST REACH THE RUN.
  *
  * A launcher resolves the project config dir; run-agent-orchestration.sh then loads the repo .env
@@ -34,7 +35,7 @@ function projectLaunchers(): string[] {
   return readdirSync(SCRIPTS)
     .filter((f) => /^(tier3-.*|orchestrate)\.sh$/.test(f))
     .filter((f) => {
-      const src = readFileSync(join(SCRIPTS, f), 'utf8')
+      const src = engineSource(join(SCRIPTS, f))
       return /EPAM_PROJECT_CONFIG_DIR=|project_config_dir|PROJECT_DIR=/.test(src)
     })
 }
@@ -46,7 +47,7 @@ describe('seam: the project stack survives the launcher', () => {
 
   it('THE DEFECT: every project launcher reads the project env', () => {
     const blind = projectLaunchers().filter((f) => {
-      const src = readFileSync(join(SCRIPTS, f), 'utf8')
+      const src = engineSource(join(SCRIPTS, f))
       // Either it loads the project env itself, or it delegates to something that does.
       return !/load_project_env/.test(src) && !/orchestrate\.sh/.test(src)
     })

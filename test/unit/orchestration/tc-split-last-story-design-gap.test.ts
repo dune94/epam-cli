@@ -24,11 +24,12 @@ import { readFileSync, mkdtempSync, writeFileSync, rmSync } from 'node:fs';
 import { execFileSync } from 'node:child_process';
 import { join } from 'node:path';
 import { tmpdir } from 'node:os';
+import { engineSource } from '../../lib/engine-source';
 
 const REPO_ROOT = join(__dirname, '../../../');
 const ORCH_SH   = join(REPO_ROOT, 'orchestrations/scripts/run-agent-orchestration.sh');
 const SPEC_RUNNER = join(REPO_ROOT, 'orchestrations/scripts/spec-mode-runner.js');
-const orchSrc   = readFileSync(ORCH_SH, 'utf8');
+const orchSrc   = engineSource(ORCH_SH);
 
 // ── helpers ──────────────────────────────────────────────────────────────────
 
@@ -191,7 +192,7 @@ describe('TC-density split design gap — behavioural (FAILS until fix is applie
       // Read what was executed
       let executed: string[] = [];
       try {
-        executed = readFileSync(executedLog, 'utf8').trim().split('\n').filter(Boolean);
+        executed = engineSource(executedLog).trim().split('\n').filter(Boolean);
       } catch {
         // file not written at all = nothing executed
       }

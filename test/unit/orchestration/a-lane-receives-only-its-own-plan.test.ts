@@ -28,6 +28,7 @@ import { describe, it, expect, afterAll } from 'vitest';
 import { mkdtempSync, writeFileSync, rmSync } from 'node:fs';
 import { join } from 'node:path';
 import { tmpdir } from 'node:os';
+import { engineSource } from '../../lib/engine-source';
 
 const ROOT = join(__dirname, '../../../');
 // eslint-disable-next-line @typescript-eslint/no-var-requires
@@ -144,8 +145,7 @@ describe('LANES DO NOT SHARE A STORE', () => {
     // all three read one store, defeating the per-lane LOG_DIR that exists because shared lane
     // state has already caused a false pass on unreviewed code.
     // eslint-disable-next-line @typescript-eslint/no-var-requires
-    const src = require('node:fs')
-      .readFileSync(join(ROOT, 'orchestrations/scripts/run-agent-orchestration.sh'), 'utf8');
+    const src = engineSource(join(ROOT, 'orchestrations/scripts/run-agent-orchestration.sh'));
     const laneInvocations = src.split('LOG_DIR="$_lane_log_dir"').length - 1;
     const laneStores = src.split('AGENT_IO_DIR="$_lane_log_dir/agent-io"').length - 1;
     expect(laneInvocations, 'the per-lane LOG_DIR wiring moved; this check is anchored on it')
@@ -166,7 +166,7 @@ describe('PUBLICATION DOES NOT DEPEND ON THE SPEC PASS RUNNING', () => {
     const { execFileSync } = require('node:child_process');
     // eslint-disable-next-line @typescript-eslint/no-var-requires
     const fs = require('node:fs');
-    const src = fs.readFileSync(join(ROOT, 'orchestrations/scripts/run-agent-orchestration.sh'), 'utf8');
+    const src = engineSource(join(ROOT, 'orchestrations/scripts/run-agent-orchestration.sh'));
 
     const start = src.indexOf('_publish_agent_outputs() {');
     expect(start, 'the publication step is gone or renamed').toBeGreaterThan(-1);

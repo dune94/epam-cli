@@ -31,9 +31,10 @@ import { execFileSync } from 'node:child_process';
 import { mkdtempSync, mkdirSync, writeFileSync, rmSync, readFileSync } from 'node:fs';
 import { join } from 'node:path';
 import { tmpdir } from 'node:os';
+import { engineSource } from '../../lib/engine-source';
 
 const CLAUDE_SH = join(__dirname, '../../../orchestrations/scripts/claude.sh');
-const SRC = readFileSync(CLAUDE_SH, 'utf8');
+const SRC = engineSource(CLAUDE_SH);
 const dirs: string[] = [];
 afterEach(() => { for (const d of dirs.splice(0)) rmSync(d, { recursive: true, force: true }); });
 
@@ -106,7 +107,7 @@ const FOUR = ['src/a.ts', 'src/b.ts', 'src/c.ts', 'src/d.ts'];
 describe('the fixture reproduces the live shape', () => {
   it('four declared files, all verified, one changed', () => {
     const { prd } = scenario({ files: FOUR, changed: [FOUR[0]], verified: FOUR });
-    const sites = JSON.parse(readFileSync(prd, 'utf8')).stories[0].fixSiteAnalysis;
+    const sites = JSON.parse(engineSource(prd)).stories[0].fixSiteAnalysis;
     expect(sites.filter((s: { fixVerified: boolean }) => s.fixVerified)).toHaveLength(4);
   });
 });
@@ -160,7 +161,7 @@ describe('CANDIDATES stay optional — the AMSD-1820 fix is not undone', () => {
   it('no fixSiteAnalysis at all falls back to the old rule — one change suffices', () => {
     // Older stories carry no fix-site analysis; they must keep working.
     const { dir, prd } = scenario({ files: FOUR, changed: [FOUR[0]], verified: [] });
-    const cfg = JSON.parse(readFileSync(prd, 'utf8'));
+    const cfg = JSON.parse(engineSource(prd));
     delete cfg.stories[0].fixSiteAnalysis;
     writeFileSync(prd, JSON.stringify(cfg));
     const out = execFileSync('bash', ['-c',

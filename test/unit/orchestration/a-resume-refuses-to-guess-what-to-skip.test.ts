@@ -23,6 +23,7 @@ import { describe, it, expect } from 'vitest';
 import { spawnSync } from 'node:child_process';
 import { existsSync } from 'node:fs';
 import { join } from 'node:path';
+import { engineSource } from '../../lib/engine-source';
 
 const REPO = process.cwd();
 const LIB = join(REPO, 'orchestrations/scripts/lib/orchestration-resume.sh');
@@ -141,7 +142,7 @@ describe('a resume refuses to guess what to skip', () => {
 
   it('THE ORCHESTRATOR USES IT — an extraction nothing calls is dead code', () => {
     const { readFileSync } = require('node:fs');
-    const src = readFileSync(ORCH, 'utf8');
+    const src = engineSource(ORCH);
     expect(src, 'the orchestrator does not source the extracted resume block')
       .toMatch(/lib\/orchestration-resume\.sh/);
     expect(src, 'the orchestrator does not call it').toMatch(/apply_resume_if_requested/);

@@ -27,10 +27,11 @@ import { describe, it, expect } from 'vitest';
 import { spawnSync } from 'node:child_process';
 import { readFileSync } from 'node:fs';
 import { join } from 'node:path';
+import { engineSource } from '../../lib/engine-source';
 
 const ROOT = join(__dirname, '../../..');
 const CLAUDE_SH = join(ROOT, 'orchestrations/scripts/claude.sh');
-const src = () => readFileSync(CLAUDE_SH, 'utf8');
+const src = () => engineSource(CLAUDE_SH);
 
 /** The gate's own source, sliced between the verification call and the failure branch. */
 function gateBlock() {

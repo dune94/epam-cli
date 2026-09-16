@@ -33,6 +33,7 @@ import { execFileSync } from 'node:child_process';
 import { mkdtempSync, writeFileSync, mkdirSync, rmSync, readFileSync, existsSync } from 'node:fs';
 import { join } from 'node:path';
 import { tmpdir } from 'node:os';
+import { engineSource } from '../../lib/engine-source';
 
 const ROOT = join(__dirname, '../../../');
 const RENDERER = join(ROOT, 'orchestrations/scripts/lib/vc-coverage-findings.js');
@@ -120,12 +121,12 @@ describe('ABSENT IS NOT CLEAN', () => {
 
 describe('THE WORDING IS CATALOG-OWNED, NOT COMPOSED IN THE ENGINE', () => {
   it('the section is declared in agent-contract.json', () => {
-    const c = JSON.parse(readFileSync(CONTRACT, 'utf8'));
+    const c = JSON.parse(engineSource(CONTRACT));
     expect(c.uncoveredCriteria, 'the block must be project-editable like every other prompt section').toBeTruthy();
   });
 
   it('the renderer composes no sentence of its own', () => {
-    const code = readFileSync(RENDERER, 'utf8')
+    const code = engineSource(RENDERER)
       .split('\n').filter((l) => !/^\s*(\*|\/\/|\/\*)/.test(l)).join('\n');
     // A bare list is data; a sentence explaining it is prose and belongs in the catalog.
     expect(code).not.toMatch(/'[A-Z][a-z]+ [a-z]+ [a-z]+ [a-z]+/);
@@ -138,7 +139,7 @@ describe('BOTH CONSUMERS ARE WIRED — the reviewer first', () => {
   // still being CALLED. A finding computed and never shown is the exact defect being fixed, so
   // both halves are asserted: the call, and the variable reaching the prompt.
   it('the reviewer collects the findings', () => {
-    const src = readFileSync(REVIEW_SH, 'utf8')
+    const src = engineSource(REVIEW_SH)
       .split('\n').filter((l) => !/^\s*#/.test(l)).join('\n');
     expect(
       src,
@@ -148,20 +149,20 @@ describe('BOTH CONSUMERS ARE WIRED — the reviewer first', () => {
   });
 
   it('and RENDERS them into its prompt', () => {
-    const src = readFileSync(REVIEW_SH, 'utf8')
+    const src = engineSource(REVIEW_SH)
       .split('\n').filter((l) => !/^\s*#/.test(l)).join('\n');
     expect(src, 'the variable is computed but never shown to the model').toMatch(
       /printf[^\n]*"\$STORY_UNCOVERED_VC"/);
   });
 
   it('the writer collects them too', () => {
-    const src = readFileSync(CLAUDE_SH, 'utf8')
+    const src = engineSource(CLAUDE_SH)
       .split('\n').filter((l) => !/^\s*#/.test(l)).join('\n');
     expect(src, 'advisory, inside the loop, where the writer can still act').toContain('vc-coverage-findings.js');
   });
 
   it('and RENDERS them into the implementation prompt', () => {
-    const src = readFileSync(CLAUDE_SH, 'utf8')
+    const src = engineSource(CLAUDE_SH)
       .split('\n').filter((l) => !/^\s*#/.test(l)).join('\n');
     expect(src).toMatch(/printf[^\n]*"\$_uncovered_vc_block"/);
   });

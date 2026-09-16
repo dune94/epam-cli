@@ -21,6 +21,7 @@ import { spawnSync } from 'node:child_process';
 import { mkdtempSync, rmSync, readFileSync, writeFileSync, mkdirSync } from 'node:fs';
 import { tmpdir } from 'node:os';
 import { join, resolve } from 'node:path';
+import { engineSource } from '../../lib/engine-source';
 
 const ROOT = resolve(__dirname, '../../..');
 const ORCH = join(ROOT, 'orchestrations/scripts/run-agent-orchestration.sh');
@@ -28,7 +29,7 @@ const dirs: string[] = [];
 afterAll(() => { for (const d of dirs) rmSync(d, { recursive: true, force: true }); });
 
 function extractFn(name: string): string {
-  const lines = readFileSync(ORCH, 'utf8').split('\n');
+  const lines = engineSource(ORCH).split('\n');
   const start = lines.findIndex((l) => new RegExp(`^${name}\\(\\)\\s*\\{`).test(l));
   if (start < 0) throw new Error(`${name}() not found`);
   const end = lines.findIndex((l, i) => i > start && /^\}/.test(l));
@@ -58,7 +59,7 @@ describe('the pre-phase assessment runs, and its schema stays its own', () => {
       `bash -c 'printf "after_export=%s\\n" "\${EPAM_RESPONSE_SCHEMA:+leaked}"' >> "${seen}"`,
     ].join('\n');
     const r = spawnSync('bash', ['-c', script], { encoding: 'utf8', cwd: d, env: { ...process.env, EPAM_RESPONSE_SCHEMA: '' } });
-    const out = (() => { try { return readFileSync(seen, 'utf8'); } catch { return ''; } })();
+    const out = (() => { try { return engineSource(seen); } catch { return ''; } })();
     expect(out, `the runner was never called\n${r.stderr}`).toMatch(/called=1/);
     expect(out).toMatch(/prompt=RENDERED /);
     expect(out).toMatch(/seam=phase-assessment/);

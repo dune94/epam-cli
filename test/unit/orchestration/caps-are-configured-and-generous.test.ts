@@ -28,11 +28,12 @@
 import { describe, it, expect } from 'vitest';
 import { readFileSync } from 'node:fs';
 import { join } from 'node:path';
+import { engineSource } from '../../lib/engine-source';
 
 const ROOT = join(__dirname, '../../..');
-const CLAUDE_SH = readFileSync(join(ROOT, 'orchestrations/scripts/claude.sh'), 'utf8');
-const QUERY_SH = readFileSync(join(ROOT, 'orchestrations/scripts/codegraph-agent-query.sh'), 'utf8');
-const CODEGRAPH = readFileSync(join(ROOT, 'orchestrations/plugins/codegraph-plugin.js'), 'utf8');
+const CLAUDE_SH = engineSource(join(ROOT, 'orchestrations/scripts/claude.sh'));
+const QUERY_SH = engineSource(join(ROOT, 'orchestrations/scripts/codegraph-agent-query.sh'));
+const CODEGRAPH = engineSource(join(ROOT, 'orchestrations/plugins/codegraph-plugin.js'));
 
 /** The upper bound of the tool's own advertised iterative usage. */
 function statedIterativeUsage(): number {

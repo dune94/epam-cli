@@ -25,13 +25,14 @@ import { describe, it, expect } from 'vitest';
 import { spawnSync } from 'node:child_process';
 import { readFileSync } from 'node:fs';
 import { join } from 'node:path';
+import { engineSource } from '../../lib/engine-source';
 
 const ROOT = join(__dirname, '../../../');
 const CLAUDE_SH = join(ROOT, 'orchestrations/scripts/claude.sh');
 
 /** Extract a function body from claude.sh and run it in isolation — the established pattern. */
 function runNormalizer(note: string, opener = 'Always', openers = 'do not|never|always|avoid|use|prefer') {
-  const src = readFileSync(CLAUDE_SH, 'utf8');
+  const src = engineSource(CLAUDE_SH);
   const start = src.indexOf('_ensure_imperative_opener() {');
   expect(start, '_ensure_imperative_opener not found — the test is stale, not the code').toBeGreaterThan(-1);
   // Balance braces from the opening line to capture the whole function.

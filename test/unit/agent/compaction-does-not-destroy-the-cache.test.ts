@@ -26,6 +26,7 @@
 import { describe, it, expect } from 'vitest';
 import { readFileSync, readdirSync } from 'node:fs';
 import { join } from 'node:path';
+import { engineSource } from '../../lib/engine-source';
 
 const ROOT = join(__dirname, '../../../');
 // THE MODEL OVERRIDES MOVED TO THE STACK THAT DECLARES THE MODELS.
@@ -42,15 +43,15 @@ const SET_FILES = readdirSync(join(ROOT, 'orchestrations/config'))
   .filter((f) => /^llm-defaults\..+\.json$/.test(f));
 const CFG = (() => {
   for (const f of SET_FILES) {
-    const j = JSON.parse(readFileSync(join(ROOT, 'orchestrations/config', f), 'utf8'));
+    const j = JSON.parse(engineSource(join(ROOT, 'orchestrations/config', f)));
     const mo = j.modelOverrides || {};
     // the stack that declares the caching models this file is about
     if (Object.keys(mo).some((k) => /minimax|glm|kimi/i.test(k))) return j;
   }
   return { modelOverrides: {} };
 })();
-const RUNNER = readFileSync(join(ROOT, 'src/agent/AgentRunner.ts'), 'utf8');
-const CLAUDE = readFileSync(join(ROOT, 'orchestrations/scripts/claude.sh'), 'utf8');
+const RUNNER = engineSource(join(ROOT, 'src/agent/AgentRunner.ts'));
+const CLAUDE = engineSource(join(ROOT, 'orchestrations/scripts/claude.sh'));
 const MO = CFG.modelOverrides as Record<string, Record<string, unknown>>;
 
 /** Routes measured 2026-08-10 as serving a stable prefix from cache. */

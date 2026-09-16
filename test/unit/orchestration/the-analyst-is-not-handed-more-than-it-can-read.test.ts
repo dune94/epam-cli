@@ -3,6 +3,7 @@ import { execFileSync, spawnSync } from 'node:child_process';
 import fs from 'node:fs';
 import os from 'node:os';
 import path from 'node:path';
+import { engineSource } from '../../lib/engine-source';
 
 /**
  * A PROMPT THAT CANNOT BE SENT IS NOT A DIAGNOSIS.
@@ -50,7 +51,7 @@ describe('the failure text handed to the analyst', () => {
   };
 
   it('bounds the text to the declared window', () => {
-    const limit = JSON.parse(fs.readFileSync(windows, 'utf8')).windows.failureExcerptLines.value;
+    const limit = JSON.parse(engineSource(windows)).windows.failureExcerptLines.value;
     const out = run(huge);
     expect(out.length, 'handler produced nothing — vacuous pass').toBeGreaterThan(0);
     expect(out.split('\n').length).toBeLessThanOrEqual(Number(limit) + 5); // + the dropped-note
@@ -77,6 +78,6 @@ describe('the failure text handed to the analyst', () => {
   });
 
   it('claude.sh actually calls it — a bound nothing invokes is not a bound', () => {
-    expect(fs.readFileSync(claude, 'utf8')).toContain('bound-failures.js');
+    expect(engineSource(claude)).toContain('bound-failures.js');
   });
 });

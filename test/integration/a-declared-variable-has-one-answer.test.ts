@@ -18,6 +18,7 @@
 import { describe, it, expect } from 'vitest';
 import { readFileSync, existsSync } from 'node:fs';
 import { join } from 'node:path';
+import { engineSource } from '../lib/engine-source';
 
 const SCRIPTS = join(__dirname, '../../orchestrations/scripts');
 const ORCH = join(SCRIPTS, 'run-agent-orchestration.sh');
@@ -26,7 +27,7 @@ describe('a declared variable has one answer', () => {
   it('AGENT_PROFILES_FILE is assigned, not only read', () => {
     // f600939. Three readers and no writer is not a default, it is an empty string that every
     // reader then builds a path out of.
-    const src = readFileSync(ORCH, 'utf8');
+    const src = engineSource(ORCH);
     const reads = (src.match(/\$\{?AGENT_PROFILES_FILE/g) || []).length;
     const assigns = (src.match(/^\s*(export\s+)?AGENT_PROFILES_FILE=/gm) || []).length;
     expect(reads, 'nothing reads it — this test is guarding nothing').toBeGreaterThan(0);
@@ -37,14 +38,14 @@ describe('a declared variable has one answer', () => {
   it('and it is EXPORTED, so a lane subprocess gets the same answer', () => {
     // The defect was specifically invisible until a lane ran: an unexported value is empty in the
     // child, which is where the three readers actually live.
-    const src = readFileSync(ORCH, 'utf8');
+    const src = engineSource(ORCH);
     expect(src, 'assigned but not exported: a lane still reads empty')
       .toMatch(/^\s*export\s+AGENT_PROFILES_FILE\b/m);
   });
 
   it('the value it defaults to actually exists', () => {
     // A variable that resolves to a path nobody shipped fails exactly like an empty one.
-    const m = /AGENT_PROFILES_FILE="\$\{AGENT_PROFILES_FILE:-([^"]+)\}"/.exec(readFileSync(ORCH, 'utf8'));
+    const m = /AGENT_PROFILES_FILE="\$\{AGENT_PROFILES_FILE:-([^"]+)\}"/.exec(engineSource(ORCH));
     expect(m, 'the default is not in the expected shape').toBeTruthy();
     const resolved = (m as RegExpExecArray)[1].replace('$EPAM_AGENTS_DIR', join(SCRIPTS, '../agents'));
     expect(existsSync(resolved), `AGENT_PROFILES_FILE defaults to ${resolved}, which does not exist`)

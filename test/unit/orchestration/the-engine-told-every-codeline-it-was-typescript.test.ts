@@ -25,6 +25,7 @@ import { spawnSync } from 'node:child_process';
 import { mkdtempSync, writeFileSync, rmSync, readFileSync } from 'node:fs';
 import { join } from 'node:path';
 import { tmpdir } from 'node:os';
+import { engineSource } from '../../lib/engine-source';
 
 const ROOT = join(__dirname, '../../..');
 const SCRIPTS = join(ROOT, 'orchestrations/scripts');
@@ -127,7 +128,7 @@ describe('a stack that has never existed', () => {
 });
 
 describe('the engine no longer authors the declaration', () => {
-  const src = () => readFileSync(ENGINE, 'utf8');
+  const src = () => engineSource(ENGINE);
 
   it('the heredocs are gone', () => {
     expect(src(), 'the engine still writes a declaration from a heredoc')

@@ -28,10 +28,11 @@ import { spawnSync } from 'node:child_process';
 import { mkdtempSync, writeFileSync, rmSync, readFileSync } from 'node:fs';
 import { join } from 'node:path';
 import { tmpdir } from 'node:os';
+import { engineSource } from '../../lib/engine-source';
 
 const REPO_ROOT = join(__dirname, '../../../');
 const ORCH = join(REPO_ROOT, 'orchestrations/scripts/run-agent-orchestration.sh');
-const orchSrc = readFileSync(ORCH, 'utf8');
+const orchSrc = engineSource(ORCH);
 
 const LANES = ['gotransit', 'upexpress', 'metrolinx'] as const;
 const BASE_PORT = 8094;

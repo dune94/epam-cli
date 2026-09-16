@@ -20,6 +20,7 @@ import { execFileSync } from 'node:child_process';
 import { mkdtempSync, mkdirSync, writeFileSync, rmSync, existsSync, readFileSync, chmodSync, readdirSync } from 'node:fs';
 import { tmpdir } from 'node:os';
 import { join } from 'node:path';
+import { engineSource } from '../../lib/engine-source';
 
 const RESET = join(__dirname, '../../../orchestrations/scripts/pre-run-reset.sh');
 const ORCH = join(__dirname, '../../../orchestrations/scripts/run-agent-orchestration.sh');
@@ -152,7 +153,7 @@ function invokeMint(opts: { marker: string | null; prdCodelines?: string[]; pend
   writeFileSync(fakeNode, `#!/usr/bin/env bash\nprintf '%s\\n' "$*" >> ${JSON.stringify(calls)}\nexit 0\n`);
   chmodSync(fakeNode, 0o755);
 
-  const src = readFileSync(ORCH, 'utf8');
+  const src = engineSource(ORCH);
   const start = src.indexOf('_run_agent_mint() {');
   const end = src.indexOf('\n}\n', start) + 3;
   const script = join(dir, 'drive.sh');
@@ -183,7 +184,7 @@ function invokeMint(opts: { marker: string | null; prdCodelines?: string[]; pend
              EPAM_PROJECT_CONFIG_DIR: cfg },
     });
   } catch (e: any) { out = `${e.stdout || ''}${e.stderr || ''}`; }
-  const recorded = existsSync(calls) ? readFileSync(calls, 'utf8').trim() : '';
+  const recorded = existsSync(calls) ? engineSource(calls).trim() : '';
   return { cfg, out,
     mintCalls: recorded ? recorded.split('\n').filter((l) => l.includes('mint-agents-step.js')).length : 0 };
 }

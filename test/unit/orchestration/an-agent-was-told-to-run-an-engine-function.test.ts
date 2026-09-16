@@ -33,6 +33,7 @@ import { spawnSync } from 'node:child_process';
 import { readFileSync, mkdtempSync, writeFileSync, mkdirSync, rmSync, readdirSync } from 'node:fs';
 import { join } from 'node:path';
 import { tmpdir } from 'node:os';
+import { engineSource } from '../../lib/engine-source';
 
 const ROOT = join(__dirname, '../../..');
 const TEMPLATE = join(ROOT, 'orchestrations/prompts/templates/repro-test-writer.json');
@@ -41,7 +42,7 @@ const made: string[] = [];
 afterAll(() => { for (const d of made) rmSync(d, { recursive: true, force: true }); });
 
 const body = (): string => {
-  const j = JSON.parse(readFileSync(TEMPLATE, 'utf8'));
+  const j = JSON.parse(engineSource(TEMPLATE));
   return String(j.body ?? Object.values(j.bodies ?? {}).join('\n'));
 };
 
@@ -52,7 +53,7 @@ describe('the instruction is falsifiable', () => {
   });
 
   it('takes the command from the project instead', () => {
-    expect(JSON.parse(readFileSync(TEMPLATE, 'utf8')).placeholders).toContain('__TYPECHECK_COMMAND__');
+    expect(JSON.parse(engineSource(TEMPLATE)).placeholders).toContain('__TYPECHECK_COMMAND__');
   });
 
   it('still tells the agent to verify before finishing', () => {
@@ -62,7 +63,7 @@ describe('the instruction is falsifiable', () => {
   });
 
   it('the producer supplies the command', () => {
-    expect(readFileSync(PRODUCER, 'utf8')).toMatch(/__TYPECHECK_COMMAND__/);
+    expect(engineSource(PRODUCER)).toMatch(/__TYPECHECK_COMMAND__/);
   });
 });
 
@@ -111,7 +112,7 @@ describe('the class, not the site', () => {
     const fns = new Set<string>();
     for (const d of ['orchestrations/scripts', 'orchestrations/scripts/lib']) {
       for (const f of readdirSync(join(ROOT, d)).filter((x) => x.endsWith('.sh'))) {
-        const s = readFileSync(join(ROOT, d, f), 'utf8');
+        const s = engineSource(join(ROOT, d, f));
         for (const m of s.matchAll(/^([a-z_][a-z0-9_]*)\(\)\s*\{/gm)) {
           // Short names collide with ordinary prose ("timestamp"); only distinctive ones are
           // evidence, and engine internals are conventionally prefixed or long.
@@ -124,7 +125,7 @@ describe('the class, not the site', () => {
     const tdir = join(ROOT, 'orchestrations/prompts/templates');
     const offenders: string[] = [];
     for (const f of readdirSync(tdir).filter((x) => x.endsWith('.json'))) {
-      const j = JSON.parse(readFileSync(join(tdir, f), 'utf8'));
+      const j = JSON.parse(engineSource(join(tdir, f)));
       const text = String(j.body ?? Object.values(j.bodies ?? {}).join('\n'));
       for (const fn of fns) if (text.includes(fn)) offenders.push(`${f} → ${fn}`);
     }

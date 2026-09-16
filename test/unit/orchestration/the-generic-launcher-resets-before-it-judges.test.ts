@@ -17,6 +17,7 @@ import { spawnSync } from 'node:child_process';
 import { mkdtempSync, mkdirSync, writeFileSync, readFileSync, readdirSync, symlinkSync, rmSync, chmodSync, existsSync } from 'node:fs';
 import { join } from 'node:path';
 import { tmpdir } from 'node:os';
+import { engineSource } from '../../lib/engine-source';
 
 const ROOT = join(__dirname, '../../../');
 const SCRIPTS = join(ROOT, 'orchestrations/scripts');
@@ -47,7 +48,7 @@ function stubbed(opts: { preflightExit: number; provisionMode?: string | null })
   chmodSync(join(scripts, 'pre-run-reset.sh'), 0o755);
   stub('run-agent-orchestration.sh', 0);
   // The launcher itself, at the stubbed location, so $SCRIPT_DIR is the stubbed dir.
-  writeFileSync(join(scripts, 'tier3-run.sh'), readFileSync(join(SCRIPTS, 'tier3-run.sh'), 'utf8'));
+  writeFileSync(join(scripts, 'tier3-run.sh'), engineSource(join(SCRIPTS, 'tier3-run.sh')));
   chmodSync(join(scripts, 'tier3-run.sh'), 0o755);
   const proj = join(d, 'project'); mkdirSync(proj);
   // A project declares how its prompts are provisioned; the launcher refuses one that does not

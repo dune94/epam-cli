@@ -42,6 +42,7 @@ import { execFileSync } from 'node:child_process';
 import { mkdtempSync, mkdirSync, writeFileSync, rmSync, readFileSync } from 'node:fs';
 import { join } from 'node:path';
 import { tmpdir } from 'node:os';
+import { engineSource } from '../../lib/engine-source';
 
 const ROOT = join(__dirname, '../../../');
 const REVIEW_SH = join(ROOT, 'orchestrations/scripts/team-lead-review.sh');
@@ -82,7 +83,7 @@ function repoWithStoryChange() {
 /** Run the reviewer's real diff-construction block against the fixture. */
 function reviewerDiff(): string {
   const { dir, base } = repoWithStoryChange();
-  const src = readFileSync(REVIEW_SH, 'utf8');
+  const src = engineSource(REVIEW_SH);
   const start = src.indexOf('    STORY_DIFF=""');
   const end = src.indexOf('if [ -n "$_diff_full" ]', start);
   if (start === -1 || end === -1) throw new Error('reviewer diff anchors not found — extraction stale');
@@ -146,7 +147,7 @@ describe('the reviewer receives the whole change', () => {
 
 describe('the rule is scope-by-baseline, not scope-by-list', () => {
   it('the diff is no longer filtered by the declared file list', () => {
-    const src = readFileSync(REVIEW_SH, 'utf8');
+    const src = engineSource(REVIEW_SH);
     const start = src.indexOf('    STORY_DIFF=""');
     const block = src.slice(start, src.indexOf('if [ -n "$_diff_full" ]', start))
       .split('\n').filter((l) => !l.trim().startsWith('#')).join('\n');

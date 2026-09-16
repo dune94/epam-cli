@@ -38,6 +38,7 @@ import { describe, it, expect } from 'vitest';
 import { spawnSync } from 'node:child_process';
 import { readFileSync, readdirSync, existsSync } from 'node:fs';
 import { join } from 'node:path';
+import { engineSource } from '../../lib/engine-source';
 
 const REPO = join(__dirname, '../../../');
 const PY = join(REPO, 'orchestrations/scripts/.venv/bin/python');
@@ -67,7 +68,7 @@ function declaredByProjects(): string[] {
   for (const p of readdirSync(PROJECTS)) {
     const f = join(PROJECTS, p, 'dependency-check.json');
     if (!existsSync(f)) continue;
-    for (const k of Object.keys(JSON.parse(readFileSync(f, 'utf8')))) {
+    for (const k of Object.keys(JSON.parse(engineSource(f)))) {
       if (!k.startsWith('_') && !k.startsWith('$')) names.add(k);
     }
   }
@@ -84,7 +85,7 @@ describe('every project\'s real manifest validates', () => {
 
   it.each(projects)('%s: no field is rejected as unknown', (p) => {
     const manifest = JSON.parse(
-      readFileSync(join(PROJECTS, p, 'dependency-check.json'), 'utf8'));
+      engineSource(join(PROJECTS, p, 'dependency-check.json')));
     const v = validate(manifest);
     expect(schemaIssues(v), [
       `${p}'s manifest carries fields the schema does not declare, so validation aborts before`,
@@ -110,10 +111,9 @@ describe('the schema declares what the engine reads', () => {
     'accepts %s', (field) => {
       // Driven with the REAL value a project uses, so the declared TYPE is exercised and not just
       // the name — a field declared with the wrong type would still be rejected here.
-      const dc = JSON.parse(readFileSync(
-        join(PROJECTS, 'metrolinx/dependency-check.json'), 'utf8'));
+      const dc = JSON.parse(engineSource(join(PROJECTS, 'metrolinx/dependency-check.json')));
       const value = dc[field] !== undefined ? dc[field]
-        : JSON.parse(readFileSync(join(PROJECTS, 'skyscanner/dependency-check.json'), 'utf8'))[field];
+        : JSON.parse(engineSource(join(PROJECTS, 'skyscanner/dependency-check.json')))[field];
       if (value === undefined) return;                    // not declared by these two; nothing to do
       const v = validate({ ...BASE, [field]: value });
       expect(schemaIssues(v),

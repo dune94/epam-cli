@@ -37,6 +37,7 @@ import { mkdtempSync, writeFileSync, mkdirSync, rmSync, existsSync, readFileSync
 import { execFileSync } from 'node:child_process';
 import { join } from 'node:path';
 import { tmpdir } from 'node:os';
+import { engineSource } from '../../lib/engine-source';
 
 const CLAUDE_SH = join(__dirname, '../../../orchestrations/scripts/claude.sh');
 const dirs: string[] = [];
@@ -115,7 +116,7 @@ function repo(opts: { importInChangedFile?: boolean; importInUntouchedFile?: boo
 /** Runs the real run_dependency_check; returns what it decided to install. */
 function depCheck(dir: string) {
   const fn = (() => {
-    const src = readFileSync(CLAUDE_SH, 'utf8');
+    const src = engineSource(CLAUDE_SH);
     const start = src.indexOf('run_dependency_check() {');
     expect(start, 'run_dependency_check not found').toBeGreaterThan(-1);
     const end = src.indexOf('\n}\n', start);
@@ -126,7 +127,7 @@ function depCheck(dir: string) {
   // reporter that calls orchestrations/plugins/dependency-scan-plugin.js and reads the project's
   // declaration through helpers. Without AUTOMATION_DIR / NODE_CMD / those helpers it produces
   // nothing at all, which is indistinguishable from "found nothing".
-  const src = readFileSync(CLAUDE_SH, 'utf8');
+  const src = engineSource(CLAUDE_SH);
   const helper = (name: string) => {
     const s = src.indexOf(`${name}()`);
     return s < 0 ? '' : src.slice(s, src.indexOf('\n}', s) + 2);
@@ -149,7 +150,7 @@ ${fn}
   const f = join(dir, 'installed.txt');
   return {
     out,
-    installed: existsSync(f) ? readFileSync(f, 'utf8').split('\n').filter(Boolean) : [],
+    installed: existsSync(f) ? engineSource(f).split('\n').filter(Boolean) : [],
   };
 }
 
@@ -157,8 +158,8 @@ describe('the fixture reproduces the live condition', () => {
   it('the package is in node_modules, absent from the manifest, and imported', () => {
     const d = repo({ importInChangedFile: true });
     expect(existsSync(join(d, 'node_modules', ...PKG.split('/')))).toBe(true);
-    expect(readFileSync(join(d, 'package.json'), 'utf8')).not.toContain(PKG);
-    expect(readFileSync(join(d, 'src', 'a.ts'), 'utf8')).toContain(PKG);
+    expect(engineSource(join(d, 'package.json'))).not.toContain(PKG);
+    expect(engineSource(join(d, 'src', 'a.ts'))).toContain(PKG);
   });
 
   it('and git reports that file as changed — the signal the fix depends on', () => {

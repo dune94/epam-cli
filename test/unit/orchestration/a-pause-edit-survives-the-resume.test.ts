@@ -20,10 +20,11 @@ import { spawnSync } from 'node:child_process';
 import { mkdtempSync, mkdirSync, writeFileSync, readFileSync, existsSync, rmSync } from 'node:fs';
 import { join } from 'node:path';
 import { tmpdir } from 'node:os';
+import { engineSource } from '../../lib/engine-source';
 
 const ROOT = join(__dirname, '../../../');
 const LIB = join(ROOT, 'orchestrations/scripts/lib/run-checkpoint.sh');
-const ORCH = readFileSync(join(ROOT, 'orchestrations/scripts/run-agent-orchestration.sh'), 'utf8');
+const ORCH = engineSource(join(ROOT, 'orchestrations/scripts/run-agent-orchestration.sh'));
 
 const dirs: string[] = [];
 afterAll(() => { for (const d of dirs) rmSync(d, { recursive: true, force: true }); });
@@ -178,11 +179,11 @@ describe('an edit at the pause survives the restore whatever the PRD is called',
     const restored = inLib(`restore_run_checkpoint ${RUN}`, w2);
     expect(restored.status, restored.stderr).toBe(0);
     expect(restored.stderr, 'the restore did not recognise the edit').toMatch(/KEEPING the PRD on disk: it was EDITED/);
-    const after = JSON.parse(readFileSync(named, 'utf8'));
+    const after = JSON.parse(engineSource(named));
     expect(after.stories.map((s: any) => s.id)).toEqual(['S-1']);
     expect(after.implementationOrder.core).toEqual(['S-1']);
     // A role assignment for a story the PRD no longer has is not carried into the resume.
-    const assignments = JSON.parse(readFileSync(join(w.logs, 'role-assignments.json'), 'utf8'));
+    const assignments = JSON.parse(engineSource(join(w.logs, 'role-assignments.json')));
     expect(assignments.map((a: any) => a.storyId)).toEqual(['S-1']);
   });
 });

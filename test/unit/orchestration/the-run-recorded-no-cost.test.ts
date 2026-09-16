@@ -33,6 +33,7 @@ import { spawnSync } from 'node:child_process';
 import { mkdtempSync, writeFileSync, mkdirSync, rmSync, readFileSync, existsSync } from 'node:fs';
 import { join } from 'node:path';
 import { tmpdir } from 'node:os';
+import { engineSource } from '../../lib/engine-source';
 
 const ROOT = join(__dirname, '../../..');
 const SCRIPTS = join(ROOT, 'orchestrations/scripts');
@@ -125,7 +126,7 @@ describe('the run recorded no cost', () => {
       });
       expect(existsSync(led), 'the JS side still records spend where no reader looks').toBe(true);
 
-      const rec = JSON.parse(readFileSync(led, 'utf8').trim());
+      const rec = JSON.parse(engineSource(led).trim());
       // Field names must match append_cost_record's exactly — a consumer must never need to know
       // which side of the pipeline paid.
       expect(rec.task_cost_usd).toBe(0.1626);
@@ -142,7 +143,7 @@ describe('the run recorded no cost', () => {
       writeFileSync(res, JSON.stringify(EPAM_SHAPE));
       process.env.ORCH_RUN_ID = '20260817T140130Z';
       emitCostSnapshot({ resultFile: res, activityFile: join(work, 'a.jsonl'), ledgerFile: led, agent: 'x' });
-      expect(JSON.parse(readFileSync(led, 'utf8').trim()).run_id).toBe('20260817T140130Z');
+      expect(JSON.parse(engineSource(led).trim()).run_id).toBe('20260817T140130Z');
     });
 
     it('agent spend is not attributed to a story', () => {
@@ -151,7 +152,7 @@ describe('the run recorded no cost', () => {
       const led = join(work, 'phase-cost.jsonl');
       writeFileSync(res, JSON.stringify(EPAM_SHAPE));
       emitCostSnapshot({ resultFile: res, activityFile: join(work, 'a.jsonl'), ledgerFile: led, agent: 'mint' });
-      const rec = JSON.parse(readFileSync(led, 'utf8').trim());
+      const rec = JSON.parse(engineSource(led).trim());
       expect(rec.story_id).toBeNull();
       expect(rec.status, 'agent records are indistinguishable from story terminal states')
         .toBe('agent');

@@ -38,10 +38,11 @@ import { readFileSync, mkdtempSync, mkdirSync, writeFileSync, rmSync } from 'nod
 import { execFileSync } from 'node:child_process';
 import { join } from 'node:path';
 import { tmpdir } from 'node:os';
+import { engineSource } from '../../lib/engine-source';
 
 const REPO_ROOT = join(__dirname, '../../../');
 const CLAUDE_SH = join(REPO_ROOT, 'orchestrations/scripts/claude.sh');
-const claudeSrc = readFileSync(CLAUDE_SH, 'utf8');
+const claudeSrc = engineSource(CLAUDE_SH);
 
 describe('run_external_verification — env sanitization wiring (static)', () => {
   it('computes _orch_env_unset_prefix from the orchestrator .env file using pure bash unset (not env -u)', () => {
@@ -191,7 +192,7 @@ describe('run_external_verification — env sanitization REAL execution', () => 
         encoding: 'utf8',
         env: { ...process.env, RAPIDAPI_KEY: 'leaked-orchestrator-secret' },
       });
-      const markerContent = readFileSync(markerFile, 'utf8');
+      const markerContent = engineSource(markerFile);
       expect(markerContent).toMatch(/RAPIDAPI_KEY=\[unset\]/);
     } finally {
       rmSync(dir, { recursive: true, force: true });
@@ -221,7 +222,7 @@ describe('run_external_verification — env sanitization REAL execution', () => 
         encoding: 'utf8',
         env: { ...process.env, OTHER_VAR: 'still-here' },
       });
-      const markerContent = readFileSync(markerFile, 'utf8');
+      const markerContent = engineSource(markerFile);
       expect(markerContent).toMatch(/OTHER_VAR=\[still-here\]/);
     } finally {
       rmSync(dir, { recursive: true, force: true });
@@ -244,7 +245,7 @@ describe('run_external_verification — env sanitization REAL execution', () => 
         buildHarness({ scriptsDir, projectRoot, testCommand: `echo OK > ${JSON.stringify(markerFile)}` }),
       );
       execFileSync('bash', [scriptPath], { encoding: 'utf8' });
-      expect(readFileSync(markerFile, 'utf8')).toMatch(/OK/);
+      expect(engineSource(markerFile)).toMatch(/OK/);
     } finally {
       rmSync(dir, { recursive: true, force: true });
     }
@@ -273,7 +274,7 @@ describe('run_external_verification — env sanitization REAL execution', () => 
         encoding: 'utf8',
         env: { ...process.env, FIRST_SECRET: 'one', SECOND_SECRET: 'two', THIRD_SECRET: 'three' },
       });
-      const markerContent = readFileSync(markerFile, 'utf8');
+      const markerContent = engineSource(markerFile);
       expect(markerContent).toMatch(/F=\[unset\] S=\[unset\] T=\[unset\]/);
     } finally {
       rmSync(dir, { recursive: true, force: true });

@@ -24,11 +24,12 @@ import { spawnSync } from 'node:child_process';
 import { mkdtempSync, mkdirSync, writeFileSync, readFileSync, readdirSync, existsSync, chmodSync } from 'node:fs';
 import { tmpdir } from 'node:os';
 import { join } from 'node:path';
+import { engineSource } from '../../lib/engine-source';
 
 const SCRIPTS = join(__dirname, '../../../orchestrations/scripts');
 const launchers = readdirSync(SCRIPTS).filter(
   (f) => /^tier\d.*-run\.sh$/.test(f) &&
-    /run-agent-orchestration\.sh/.test(readFileSync(join(SCRIPTS, f), 'utf8')),
+    /run-agent-orchestration\.sh/.test(engineSource(join(SCRIPTS, f))),
 );
 
 /**
@@ -48,7 +49,7 @@ function invokeFromForeignCwd(launcher: string) {
   writeFileSync(stub, `#!/usr/bin/env bash\nprintf '%s' "$0" > ${JSON.stringify(record)}\nexit 0\n`);
   chmodSync(stub, 0o755);
 
-  const src = readFileSync(join(SCRIPTS, launcher), 'utf8');
+  const src = engineSource(join(SCRIPTS, launcher));
   const start = src.indexOf('run_phase() {');
   if (start === -1) return { skipped: true } as const;
   const body = src.slice(start, src.indexOf('\n}', start) + 2);
@@ -73,10 +74,21 @@ function invokeFromForeignCwd(launcher: string) {
   // stays honest about what the body needs.
   const libDir = join(SCRIPTS, 'lib');
   const libSources: string[] = [];
+  // Modules a split main was cut into (tools/split-maps/*.json) are that main's OWN program, not
+  // a shared library: lib/common.sh defines log/warning/error, which this harness stubs on
+  // purpose, and lib/cli-commands.sh defines usage/initialize. Sourcing them here would replace
+  // the stubs with claude.sh's real functions. Only genuinely shared libs are candidates.
+  const mapsDir = join(SCRIPTS, 'tools/split-maps');
+  const splitModules = new Set<string>(
+    existsSync(mapsDir)
+      ? readdirSync(mapsDir).filter((f) => f.endsWith('.json') && !f.endsWith('.golden.json') && f !== 'ceilings.json')
+        .flatMap((f) => Object.keys(JSON.parse(engineSource(join(mapsDir, f)))).filter((m) => m !== '.').map((m) => `${m}.sh`))
+      : [],
+  );
   if (existsSync(libDir)) {
     mkdirSync(join(fakeScripts, 'lib'), { recursive: true });
-    for (const libFile of readdirSync(libDir).filter((f) => f.endsWith('.sh'))) {
-      const libSrc = readFileSync(join(libDir, libFile), 'utf8');
+    for (const libFile of readdirSync(libDir).filter((f) => f.endsWith('.sh') && !splitModules.has(f))) {
+      const libSrc = engineSource(join(libDir, libFile));
       const defines = [...libSrc.matchAll(/^([a-z_][a-z0-9_]*)\(\)\s*\{/gm)].map((m) => m[1]);
       if (defines.some((fnName) => new RegExp(`\\b${fnName}\\b`).test(body))) {
         writeFileSync(join(fakeScripts, 'lib', libFile), libSrc);
@@ -118,7 +130,7 @@ function invokeFromForeignCwd(launcher: string) {
   return {
     skipped: false,
     out,
-    invokedAs: existsSync(record) ? readFileSync(record, 'utf8') : null,
+    invokedAs: existsSync(record) ? engineSource(record) : null,
   } as const;
 }
 

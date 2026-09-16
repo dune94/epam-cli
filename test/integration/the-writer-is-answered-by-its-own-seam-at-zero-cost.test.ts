@@ -18,6 +18,7 @@ afterAll(() => { for (const d of dirs) rmSync(d, { recursive: true, force: true 
 import { join } from 'node:path';
 import { request as httpRequest } from 'node:http';
 import { MiniMockServer } from './lib/mini-mockserver';
+import { engineSource } from '../lib/engine-source';
 
 const ROOT = join(__dirname, '../../');
 const PROJECTS = join(ROOT, 'orchestrations/projects');
@@ -29,8 +30,8 @@ function anyProject(): { dir: string; prd: string } {
   for (const d of readdirSync(PROJECTS)) {
     const dir = join(PROJECTS, d); const cfg = join(dir, 'config.env');
     const candidates = [join(dir, 'prd.authored.json')];
-    if (existsSync(cfg)) { const m = readFileSync(cfg, 'utf8').match(/^PRD_CANONICAL=(.+)$/m); if (m) candidates.push(m[1].trim().startsWith('/') ? m[1].trim() : join(ROOT, m[1].trim())); }
-    for (const prd of candidates) { try { if ((JSON.parse(readFileSync(prd, 'utf8')).stories || []).length) { _prdPath = prd; return { dir, prd }; } } catch { /* next */ } }
+    if (existsSync(cfg)) { const m = engineSource(cfg).match(/^PRD_CANONICAL=(.+)$/m); if (m) candidates.push(m[1].trim().startsWith('/') ? m[1].trim() : join(ROOT, m[1].trim())); }
+    for (const prd of candidates) { try { if ((JSON.parse(engineSource(prd)).stories || []).length) { _prdPath = prd; return { dir, prd }; } } catch { /* next */ } }
   }
   throw new Error('no project declares stories');
 }
@@ -59,7 +60,7 @@ function ask(prompt: string): Promise<string> {
   });
 }
 
-const reg = JSON.parse(readFileSync(join(ROOT, 'orchestrations/agents/invocation-profiles.json'), 'utf8')).profiles as Record<string, any>;
+const reg = JSON.parse(engineSource(join(ROOT, 'orchestrations/agents/invocation-profiles.json'))).profiles as Record<string, any>;
 const WRITER = Object.entries(reg).find(([, p]) => p && p.produces === 'implementation')![0];
 const TPL = join(ROOT, 'orchestrations/prompts/templates');
 /**
@@ -68,11 +69,11 @@ const TPL = join(ROOT, 'orchestrations/prompts/templates');
  * name the story they are for. A note that only ever rides inside another prompt is not one of
  * them — read from the call sites and the template, not listed here.
  */
-const rendered = new Set([...readFileSync(join(ROOT, 'orchestrations/scripts/claude.sh'), 'utf8').matchAll(/render_engine_prompt ([a-z0-9-]+)/g)].map((m) => m[1]));
+const rendered = new Set([...engineSource(join(ROOT, 'orchestrations/scripts/claude.sh')).matchAll(/render_engine_prompt ([a-z0-9-]+)/g)].map((m) => m[1]));
 const writerTemplates = readdirSync(TPL).filter((f) => f.endsWith('.json')).map((f) => f.replace(/\.json$/, ''))
   .filter((id) => rendered.has(id))
   // A prompt FOR a story names the story; a note that rides inside another prompt does not.
-  .filter((id) => { const t = JSON.parse(readFileSync(join(TPL, `${id}.json`), 'utf8')); return typeof t.body === 'string' && Array.isArray(t.seams) && t.seams.includes(WRITER) && placeholdersIn(t.body).includes('__STORY_ID__'); });
+  .filter((id) => { const t = JSON.parse(engineSource(join(TPL, `${id}.json`))); return typeof t.body === 'string' && Array.isArray(t.seams) && t.seams.includes(WRITER) && placeholdersIn(t.body).includes('__STORY_ID__'); });
 
 describe('the writer is answered by its own seam at £0', () => {
   it('there are templates the writer renders — otherwise nothing below is tested', () => {
@@ -129,12 +130,12 @@ describe("the writer's call for a real story is answered with that story's write
   const greenfield = readdirSync(PROJECTS).map((d) => {
     const dir = join(PROJECTS, d); const cfg = join(dir, 'config.env');
     if (!existsSync(cfg)) return null;
-    const c = readFileSync(cfg, 'utf8');
+    const c = engineSource(cfg);
     if (!/^EPAM_BROWNFIELD=0$/m.test(c)) return null;
     const prdM = c.match(/^PRD_CANONICAL=(.+)$/m); const outM = c.match(/^OUTPUT_DIR=(.+)$/m);
     if (!prdM || !outM) return null;
     const prd = prdM[1].trim().startsWith('/') ? prdM[1].trim() : join(ROOT, prdM[1].trim());
-    let stories: any[] = []; try { stories = JSON.parse(readFileSync(prd, 'utf8')).stories || []; } catch { return null; }
+    let stories: any[] = []; try { stories = JSON.parse(engineSource(prd)).stories || []; } catch { return null; }
     return stories.length ? { name: d, dir, prd, out: outM[1].trim(), stories } : null;
   }).filter(Boolean) as { name: string; dir: string; prd: string; out: string; stories: any[] }[];
   it('there is a greenfield project with stories and an OUTPUT_DIR', () => { expect(greenfield.length).toBeGreaterThan(0); });

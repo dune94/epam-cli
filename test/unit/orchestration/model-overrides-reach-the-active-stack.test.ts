@@ -22,10 +22,11 @@ import { readFileSync, mkdtempSync, writeFileSync, rmSync, existsSync } from 'no
 import { execFileSync } from 'node:child_process';
 import { join } from 'node:path';
 import { tmpdir } from 'node:os';
+import { engineSource } from '../../lib/engine-source';
 
 const REPO_ROOT = join(__dirname, '../../../');
 const SCRIPT_DIR = join(REPO_ROOT, 'orchestrations/scripts');
-const claudeSrc = readFileSync(join(SCRIPT_DIR, 'claude.sh'), 'utf8');
+const claudeSrc = engineSource(join(SCRIPT_DIR, 'claude.sh'));
 const NODE_BIN = join(process.env.HOME || '', '.nvm/versions/node/v20.20.0/bin/node');
 
 function effortHelpers(): string {
@@ -94,7 +95,7 @@ describe('per-model overrides reach the run from the active stack', () => {
 
   it('THE DEFECT: a project settings file with no modelOverrides still gets the stack value', () => {
     const stack = JSON.parse(
-      readFileSync(join(REPO_ROOT, 'orchestrations/config/llm-defaults.claude.json'), 'utf8'));
+      engineSource(join(REPO_ROOT, 'orchestrations/config/llm-defaults.claude.json')));
     const declared = Object.entries<any>(stack.modelOverrides || {})
       .filter(([k]) => !k.startsWith('$'))
       .find(([, v]) => v && v.autoCompressAt);

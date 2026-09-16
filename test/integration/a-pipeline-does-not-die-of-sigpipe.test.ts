@@ -18,8 +18,9 @@
 import { describe, it, expect } from 'vitest';
 import { spawnSync } from 'node:child_process';
 import { join } from 'node:path';
+import { engineSourceFile } from '../lib/engine-source';
 
-const CLAUDE_SH = join(__dirname, '../../orchestrations/scripts/claude.sh');
+const CLAUDE_SH = engineSourceFile(join(__dirname, '../../orchestrations/scripts/claude.sh')); // the inlined program: this test greps text, it does not execute the main
 
 /**
  * Run the extraction exactly as the shipped function does, under pipefail — the condition the

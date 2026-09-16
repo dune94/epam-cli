@@ -19,6 +19,7 @@ import { spawnSync } from 'node:child_process';
 import { mkdtempSync, mkdirSync, writeFileSync, rmSync, utimesSync } from 'node:fs';
 import { join, dirname } from 'node:path';
 import { tmpdir } from 'node:os';
+import { engineSource } from '../../lib/engine-source';
 
 const LIB = join(__dirname, '../../../orchestrations/scripts/lib/dist-freshness.sh');
 
@@ -99,8 +100,7 @@ describe('the binary must be built from the source in the tree', () => {
 });
 
 describe('the guard runs before a run starts', () => {
-  const orchSrc = require('node:fs').readFileSync(
-    join(__dirname, '../../../orchestrations/scripts/run-agent-orchestration.sh'), 'utf8');
+  const orchSrc = engineSource(join(__dirname, '../../../orchestrations/scripts/run-agent-orchestration.sh'));
 
   it('the orchestration entrypoint consults it', () => {
     expect(orchSrc, 'nothing verifies the running binary matches the source tree')

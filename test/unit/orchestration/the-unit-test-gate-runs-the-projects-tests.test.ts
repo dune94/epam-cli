@@ -22,6 +22,7 @@ import { spawnSync } from 'node:child_process';
 import { mkdtempSync, mkdirSync, writeFileSync, rmSync, readFileSync } from 'node:fs';
 import { join } from 'node:path';
 import { tmpdir } from 'node:os';
+import { engineSource } from '../../lib/engine-source';
 
 const ROOT = join(__dirname, '../../..');
 const SCRIPTS = join(ROOT, 'orchestrations/scripts');
@@ -30,7 +31,7 @@ const ECO = join(SCRIPTS, 'lib/handlers/codeline-ecosystem.js');
 const NODE = process.execPath;
 
 function gateFn(): string {
-  const src = readFileSync(ORCH, 'utf8');
+  const src = engineSource(ORCH);
   const i = src.indexOf('run_unit_tests_gate() {');
   expect(i, 'run_unit_tests_gate is gone').toBeGreaterThan(-1);
   return src.slice(i, src.indexOf('\n}', i));

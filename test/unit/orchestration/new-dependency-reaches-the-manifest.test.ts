@@ -35,6 +35,7 @@ import { spawnSync } from 'node:child_process';
 import { mkdtempSync, writeFileSync, mkdirSync, readFileSync, existsSync } from 'node:fs';
 import { tmpdir } from 'node:os';
 import { dirname, join } from 'node:path';
+import { engineSource } from '../../lib/engine-source';
 
 const REPO_ROOT = join(__dirname, '../../../');
 const DEP_CONFIG = join(REPO_ROOT, 'orchestrations/projects/metrolinx/dependency-check.json');
@@ -70,7 +71,7 @@ function project() {
 
 /** Run the project's OWN configured installCommand, with {package} substituted. */
 function runConfiguredInstall(app: string, pkg: string) {
-  const cfg = JSON.parse(readFileSync(DEP_CONFIG, 'utf8'));
+  const cfg = JSON.parse(engineSource(DEP_CONFIG));
   const cmd: string = cfg.installCommand.replace('{package}', pkg);
   const r = spawnSync('bash', ['-c', cmd], {
     cwd: app,
@@ -81,7 +82,7 @@ function runConfiguredInstall(app: string, pkg: string) {
   return {
     cmd,
     status: r.status,
-    manifest: JSON.parse(readFileSync(join(app, 'package.json'), 'utf8')),
+    manifest: JSON.parse(engineSource(join(app, 'package.json'))),
     out: `${r.stdout || ''}${r.stderr || ''}`,
   };
 }
@@ -121,7 +122,7 @@ describe('the configured install reaches the manifest', () => {
       env: { ...process.env, PATH: npmPath() },
     });
     expect(r.status, `control install failed:\n${r.stderr}`).toBe(0);
-    const manifest = JSON.parse(readFileSync(join(p.app, 'package.json'), 'utf8'));
+    const manifest = JSON.parse(engineSource(join(p.app, 'package.json')));
     expect(
       manifest.dependencies,
       'if this ALSO saved, the test above would prove nothing about the flag',
@@ -185,7 +186,7 @@ describe('the dependency change is visible to the gates', () => {
       ].join('\n'),
     );
     spawnSync('bash', [script], { encoding: 'utf8', timeout: 30000 });
-    const manifest = readFileSync(join(f.logDir, 'story-outputs-core.txt'), 'utf8');
+    const manifest = engineSource(join(f.logDir, 'story-outputs-core.txt'));
     expect(
       manifest,
       'the manifest is what gates are handed as scope — a dependency addition absent from ' +
@@ -214,8 +215,8 @@ describe('the dependency change is visible to the gates', () => {
 });
 
 describe('the prompt and the mechanism do not contradict each other', () => {
-  const cfg = JSON.parse(readFileSync(DEP_CONFIG, 'utf8'));
-  const claudeSrc = readFileSync(CLAUDE_SH, 'utf8');
+  const cfg = JSON.parse(engineSource(DEP_CONFIG));
+  const claudeSrc = engineSource(CLAUDE_SH);
 
   it('the writer is still told to add a needed package directly', () => {
     // This asserted that claude.sh's SOURCE contained the heading. On 2026-08-19 the prose moved
@@ -225,7 +226,7 @@ describe('the prompt and the mechanism do not contradict each other', () => {
     const template = join(
       __dirname, '../../../orchestrations/prompts/templates/new-dependency-directive.json');
     expect(existsSync(template), 'the directive has no prompt file at all').toBe(true);
-    const body = JSON.parse(readFileSync(template, 'utf8')).body as string;
+    const body = JSON.parse(engineSource(template)).body as string;
     expect(
       body,
       'if this directive is removed, the writer must instead be given an explicit way to ' +

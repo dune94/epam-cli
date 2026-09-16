@@ -18,6 +18,7 @@ import { spawnSync } from 'node:child_process';
 import { mkdtempSync, writeFileSync, rmSync, readFileSync } from 'node:fs';
 import { join } from 'node:path';
 import { tmpdir } from 'node:os';
+import { engineSource } from '../../lib/engine-source';
 
 const ROOT = join(__dirname, '../../..');
 const SCRIPTS = join(ROOT, 'orchestrations/scripts');
@@ -46,7 +47,7 @@ function prd(): string {
 
 /** Run the gate's own count expression, lifted from the script. */
 function gateCount(prdPath: string): string {
-  const src = readFileSync(ORCH, 'utf8');
+  const src = engineSource(ORCH);
   const i = src.indexOf('_tc_writer_needed=$(python3');
   expect(i, 'the gate no longer counts via the handler — this test is measuring nothing')
     .toBeGreaterThan(-1);
@@ -85,7 +86,7 @@ describe('the TC gate fires on every test convention', () => {
   });
 
   it('neither the gate nor its retry check names a file extension any more', () => {
-    const body = readFileSync(ORCH, 'utf8')
+    const body = engineSource(ORCH)
       .split('\n').filter((l) => !/^\s*#/.test(l)).join('\n');   // comments record the removal
     expect(body, 'a test-file convention is still hardcoded in the gate')
       .not.toContain('endswith(".test.ts")');
@@ -104,7 +105,7 @@ describe('the TC gate fires on every test convention', () => {
   it('the writer refuses rather than inventing a prompt when its profile is missing', () => {
     // It substituted a one-sentence description of the job for the agent's minted profile,
     // silently — and those criteria go on to gate the phase.
-    const body = readFileSync(TCW, 'utf8')
+    const body = engineSource(TCW)
       .split('\n').filter((l) => !/^\s*#/.test(l)).join('\n');
     expect(body, 'a placeholder prompt is still hardcoded in the writer')
       .not.toContain('You are the TC writer agent');

@@ -27,6 +27,7 @@ import { describe, it, expect } from 'vitest';
 import { spawnSync } from 'node:child_process';
 import { readFileSync, readdirSync } from 'node:fs';
 import { join } from 'node:path';
+import { engineSource } from '../../lib/engine-source';
 
 const REPO = process.cwd();
 const SCRIPTS = join(REPO, 'orchestrations/scripts');
@@ -39,7 +40,7 @@ const NODE20 = '/home/bradleyjerome/.nvm/versions/node/v20.20.0/bin/node';
  * then asked the question the guard asks. This runs the file's actual text, not a paraphrase.
  */
 function preambleDeclaresFreeRun(): string {
-  const src = readFileSync(MOCK_LAUNCHER, 'utf8');
+  const src = engineSource(MOCK_LAUNCHER);
   const cut = src.indexOf('exec setsid');
   const preamble = src.slice(0, cut > 0 ? src.lastIndexOf('if [', cut) : src.length);
   const r = spawnSync('bash', ['-c',
@@ -64,7 +65,7 @@ describe('the mock launcher declares its run free', () => {
   it('the preamble extraction is real — it contains the coverage gate line it must precede', () => {
     // Vacuity guard: if the slice were empty, the bash below would run nothing and any
     // declaration would appear to be missing (or present) for the wrong reason.
-    const src = readFileSync(MOCK_LAUNCHER, 'utf8');
+    const src = engineSource(MOCK_LAUNCHER);
     const cut = src.indexOf('exec setsid');
     expect(cut, 'the setsid re-exec is gone; this extraction no longer describes the file')
       .toBeGreaterThan(0);
@@ -79,7 +80,7 @@ describe('the mock launcher declares its run free', () => {
   }, 130_000);
 
   it('and it is declared BEFORE the coverage gate that reads it', () => {
-    const src = readFileSync(MOCK_LAUNCHER, 'utf8');
+    const src = engineSource(MOCK_LAUNCHER);
     const declared = src.indexOf('EPAM_FREE_RUN');
     const gate = src.indexOf('require_all_stage_coverage');
     expect(declared, 'the launcher does not declare a free run at all').toBeGreaterThan(-1);
@@ -94,7 +95,7 @@ describe('the mock launcher declares its run free', () => {
     expect(paid.length, 'no paid launcher was found to check, so this proves nothing')
       .toBeGreaterThan(0);
     for (const f of paid) {
-      const src = readFileSync(join(SCRIPTS, f), 'utf8');
+      const src = engineSource(join(SCRIPTS, f));
       const setsIt = src.split('\n').filter((l) =>
         /(^|\s|;)(export\s+)?EPAM_FREE_RUN\s*=/.test(l) && !/^\s*#/.test(l));
       expect(setsIt, `${f} declares a free run; it spends real money`).toEqual([]);

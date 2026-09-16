@@ -26,10 +26,11 @@ import { execFileSync, spawnSync } from 'node:child_process';
 import { mkdtempSync, mkdirSync, writeFileSync, rmSync, readFileSync, existsSync } from 'node:fs';
 import { join } from 'node:path';
 import { tmpdir } from 'node:os';
+import { engineSource } from '../../lib/engine-source';
 
 const REPO_ROOT = join(__dirname, '../../../');
 const CLAUDE_SH = join(REPO_ROOT, 'orchestrations/scripts/claude.sh');
-const claudeSrc = readFileSync(CLAUDE_SH, 'utf8');
+const claudeSrc = engineSource(CLAUDE_SH);
 
 function extractFunctionBody(name: string): string {
   const defRe = new RegExp(`^\\s*${name}\\(\\)\\s*\\{`, 'm');
@@ -121,11 +122,11 @@ describe('_selective_worktree_reset — tsc-validated preservation', () => {
     writeFileSync(join(clone, 'src/new/undeclared-but-real.ts'), 'export const undeclaredRealWork = true;\n');
     runReset(clone, true);
     expect(
-      readFileSync(join(clone, 'src/tracked.ts'), 'utf-8'),
+      engineSource(join(clone, 'src/tracked.ts')),
       'a change to a VERIFIED fix site was destroyed',
     ).toContain('realFix');
     expect(existsSync(join(clone, 'src/new/undeclared-but-real.ts'))).toBe(true);
-    expect(readFileSync(join(clone, 'src/new/undeclared-but-real.ts'), 'utf-8')).toContain('undeclaredRealWork');
+    expect(engineSource(join(clone, 'src/new/undeclared-but-real.ts'))).toContain('undeclaredRealWork');
   });
 
   it('fully resets to baseline when NO verified fix site changed — nothing of value was produced', () => {
@@ -165,7 +166,7 @@ describe('_selective_worktree_reset — tsc-validated preservation', () => {
     const { clone } = makeFixture();
     writeFileSync(join(clone, 'src/tracked.ts'), 'export const original = 1;\nexport const shouldSurvive = true;\n');
     runReset(clone, false, { brownfield: false });
-    expect(readFileSync(join(clone, 'src/tracked.ts'), 'utf-8')).toContain('shouldSurvive');
+    expect(engineSource(join(clone, 'src/tracked.ts'))).toContain('shouldSurvive');
   });
 
   it('is a safe no-op when the project has no git repo at all', () => {
@@ -174,7 +175,7 @@ describe('_selective_worktree_reset — tsc-validated preservation', () => {
     mkdirSync(join(dir, 'src'), { recursive: true });
     writeFileSync(join(dir, 'src/f.ts'), 'content\n');
     runReset(dir, false);
-    expect(readFileSync(join(dir, 'src/f.ts'), 'utf-8')).toBe('content\n');
+    expect(engineSource(join(dir, 'src/f.ts'))).toBe('content\n');
   });
 
   it('is a safe no-op when the baseline branch ref cannot be resolved (no origin)', () => {
@@ -188,6 +189,6 @@ describe('_selective_worktree_reset — tsc-validated preservation', () => {
     execFileSync('git', ['add', '-A'], { cwd: root });
     execFileSync('git', ['commit', '-m', 'seed', '--quiet'], { cwd: root });
     runReset(root, false);
-    expect(readFileSync(join(root, 'src/f.ts'), 'utf-8')).toContain('no-origin-should-survive');
+    expect(engineSource(join(root, 'src/f.ts'))).toContain('no-origin-should-survive');
   });
 });

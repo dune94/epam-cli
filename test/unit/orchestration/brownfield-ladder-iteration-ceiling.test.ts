@@ -11,8 +11,9 @@ import { describe, it, expect } from 'vitest';
 import { readFileSync } from 'node:fs';
 import { execFileSync } from 'node:child_process';
 import { join } from 'node:path';
+import { engineSource } from '../../lib/engine-source';
 
-const CLAUDE_SH = readFileSync(join(__dirname, '../../../orchestrations/scripts/claude.sh'), 'utf8');
+const CLAUDE_SH = engineSource(join(__dirname, '../../../orchestrations/scripts/claude.sh'));
 
 function extractFn(name: string): string {
   const start = CLAUDE_SH.indexOf(`${name}() {`);

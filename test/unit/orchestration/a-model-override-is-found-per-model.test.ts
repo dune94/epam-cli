@@ -23,8 +23,9 @@ import { spawnSync } from 'node:child_process';
 import { mkdtempSync, writeFileSync, rmSync } from 'node:fs';
 import { join } from 'node:path';
 import { tmpdir } from 'node:os';
+import { engineSourceFile } from '../../lib/engine-source';
 
-const CLAUDE_SH = join(__dirname, '../../../orchestrations/scripts/claude.sh');
+const CLAUDE_SH = engineSourceFile(join(__dirname, '../../../orchestrations/scripts/claude.sh')); // the inlined program: this test lifts text, it does not execute the main
 
 const dirs: string[] = [];
 afterAll(() => { for (const d of dirs) rmSync(d, { recursive: true, force: true }); });

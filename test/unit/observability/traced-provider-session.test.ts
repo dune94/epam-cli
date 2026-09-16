@@ -16,11 +16,10 @@
 import { describe, it, expect, beforeEach, afterEach } from 'vitest';
 import { readFileSync } from 'node:fs';
 import { join } from 'node:path';
+import { engineSource } from '../../lib/engine-source';
 
-const SRC = readFileSync(
-  join(__dirname, '../../../src/observability/TracedProvider.ts'), 'utf8');
-const RUN_TS = readFileSync(
-  join(__dirname, '../../../src/cli/commands/run.ts'), 'utf8');
+const SRC = engineSource(join(__dirname, '../../../src/observability/TracedProvider.ts'));
+const RUN_TS = engineSource(join(__dirname, '../../../src/cli/commands/run.ts'));
 
 describe('TracedProvider — per-run session grouping', () => {
   const saved = { ...process.env };
@@ -64,8 +63,7 @@ describe('pipeline wiring — ORCH_RUN_ID must reach child processes', () => {
   it('run-agent-orchestration.sh EXPORTS ORCH_RUN_ID (not just assigns it)', () => {
     // Each agent call is a separate `epam run` subprocess. Assigned-but-unexported
     // meant children never saw it and every Langfuse trace had sessionId:null.
-    const ORCH = readFileSync(
-      join(__dirname, '../../../orchestrations/scripts/run-agent-orchestration.sh'), 'utf8');
+    const ORCH = engineSource(join(__dirname, '../../../orchestrations/scripts/run-agent-orchestration.sh'));
     expect(ORCH).toMatch(/export\s+ORCH_RUN_ID=/);
   });
 });

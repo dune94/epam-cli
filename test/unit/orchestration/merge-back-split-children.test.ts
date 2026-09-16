@@ -37,10 +37,11 @@ import { execFileSync } from 'node:child_process';
 import { mkdtempSync, writeFileSync, readFileSync, rmSync } from 'node:fs';
 import { join } from 'node:path';
 import { tmpdir } from 'node:os';
+import { engineSource } from '../../lib/engine-source';
 
 const SCRIPTS_DIR = join(__dirname, '../../../orchestrations/scripts');
 const ORCH = join(SCRIPTS_DIR, 'run-agent-orchestration.sh');
-const src = readFileSync(ORCH, 'utf8');
+const src = engineSource(ORCH);
 
 const dirs: string[] = [];
 afterEach(() => { for (const d of dirs.splice(0)) rmSync(d, { recursive: true, force: true }); });
@@ -72,7 +73,7 @@ function merge(canonical: any, perCodeline: any, codeline = 'mockhelloworld') {
     [MERGE_HANDLER, SCRIPTS_DIR, canonicalPath, codelinePath, codeline],
     { encoding: 'utf8', timeout: 20000 });
 
-  return JSON.parse(readFileSync(canonicalPath, 'utf8'));
+  return JSON.parse(engineSource(canonicalPath));
 }
 
 const parentPending = {

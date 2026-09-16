@@ -30,6 +30,7 @@ import { spawnSync } from 'node:child_process';
 import { mkdtempSync, mkdirSync, writeFileSync, rmSync } from 'node:fs';
 import { join, dirname } from 'node:path';
 import { tmpdir } from 'node:os';
+import { engineSource } from '../../lib/engine-source';
 
 const HELPER = join(__dirname, '../../../orchestrations/scripts/lib/profile_rule_grounding.py');
 
@@ -137,8 +138,7 @@ describe('a rule must not assert a file convention the repo does not use', () =>
 });
 
 describe('the check runs before the profile is trusted', () => {
-  const orchSrc = require('node:fs').readFileSync(
-    join(__dirname, '../../../orchestrations/scripts/run-agent-orchestration.sh'), 'utf8');
+  const orchSrc = engineSource(join(__dirname, '../../../orchestrations/scripts/run-agent-orchestration.sh'));
 
   it('profile-augmentor consults the grounding check', () => {
     expect(orchSrc, 'nothing verifies a proposed rule against the codebase it describes')

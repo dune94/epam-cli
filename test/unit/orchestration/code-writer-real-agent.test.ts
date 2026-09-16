@@ -26,6 +26,7 @@ import { execFileSync, spawnSync } from 'node:child_process';
 import { mkdtempSync, mkdirSync, writeFileSync, symlinkSync, rmSync, readFileSync, chmodSync } from 'node:fs';
 import { join } from 'node:path';
 import { tmpdir } from 'node:os';
+import { engineSource } from '../../lib/engine-source';
 
 const REPO_ROOT = join(__dirname, '../../../');
 const CLAUDE_SH = join(REPO_ROOT, 'orchestrations/scripts/claude.sh');
@@ -118,8 +119,8 @@ describe.skipIf(!RUN_REAL)('Code writer — REAL single-story claude.sh invocati
     const prdPath = join(clone, '..', 'prd.json');
     writePrd(prdPath, clone);
 
-    const tsconfigBefore = readFileSync(join(clone, 'tsconfig.json'), 'utf8');
-    const packageJsonBefore = readFileSync(join(clone, 'package.json'), 'utf8');
+    const tsconfigBefore = engineSource(join(clone, 'tsconfig.json'));
+    const packageJsonBefore = engineSource(join(clone, 'package.json'));
 
     const result = spawnSync('bash', [CLAUDE_SH, STORY_ID], {
       cwd: REPO_ROOT,
@@ -141,8 +142,8 @@ describe.skipIf(!RUN_REAL)('Code writer — REAL single-story claude.sh invocati
     const output = (result.stdout || '') + (result.stderr || '');
     console.log('[code-writer] claude.sh output tail:\n' + output.slice(-4000));
 
-    const tsconfigAfter = readFileSync(join(clone, 'tsconfig.json'), 'utf8');
-    const packageJsonAfter = readFileSync(join(clone, 'package.json'), 'utf8');
+    const tsconfigAfter = engineSource(join(clone, 'tsconfig.json'));
+    const packageJsonAfter = engineSource(join(clone, 'package.json'));
 
     // The actual finding this test is FOR — printed unconditionally so it's
     // visible even if the assertions below fail.
@@ -171,7 +172,7 @@ describe.skipIf(!RUN_REAL)('Code writer — REAL single-story claude.sh invocati
     expect(tsconfigAfter, 'agent mutated tsconfig.json despite being told not to').toBe(tsconfigBefore);
     expect(packageJsonAfter, 'agent mutated package.json despite being told not to').toBe(packageJsonBefore);
 
-    const hello = readFileSync(join(clone, 'src/hello.ts'), 'utf8');
+    const hello = engineSource(join(clone, 'src/hello.ts'));
     expect(hello).toMatch(/hello dolly/);
   }, 5 * 60 * 1000);
 });

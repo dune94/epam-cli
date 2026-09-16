@@ -25,6 +25,7 @@ import { execFileSync } from 'node:child_process';
 import { mkdtempSync, mkdirSync, writeFileSync, rmSync, readFileSync, chmodSync } from 'node:fs';
 import { tmpdir } from 'node:os';
 import { join } from 'node:path';
+import { engineSource } from '../../lib/engine-source';
 
 const ORCH = join(__dirname, '../../../orchestrations/scripts/run-agent-orchestration.sh');
 const LADDER = ['claude-opus-4-6', 'claude-sonnet-4-6'];
@@ -52,7 +53,7 @@ function enforce(stories: any[], opts: { models?: string[] | null } = {}) {
   dirs.push(dir);
   const prd = join(dir, 'prd.json');
   writeFileSync(prd, JSON.stringify({ stories }, null, 2));
-  const src = readFileSync(ORCH, 'utf8');
+  const src = engineSource(ORCH);
   const start = src.indexOf('_mc_enforce_ladder() {');
   const end = src.indexOf('\n}\n', start) + 3;
   expect(start, 'the function was not found — the test is measuring nothing').toBeGreaterThan(0);
@@ -68,7 +69,7 @@ function enforce(stories: any[], opts: { models?: string[] | null } = {}) {
   let out = '';
   try { out = execFileSync('bash', [script], { encoding: 'utf8', timeout: 60_000 }); }
   catch (e: any) { out = `${e.stdout || ''}${e.stderr || ''}`; }
-  return { out, prd: JSON.parse(readFileSync(prd, 'utf8')) };
+  return { out, prd: JSON.parse(engineSource(prd)) };
 }
 
 const modelOf = (p: any, id: string) => p.stories.find((s: any) => s.id === id)?.model;
@@ -169,7 +170,7 @@ describe('the enforcement runs AFTER the writers, on every set', () => {
     mkdirSync(join(dir, 'agents'), { recursive: true });
     writeFileSync(join(dir, 'agents', 'profiles.json'), '{}');
 
-    const src = readFileSync(ORCH, 'utf8');
+    const src = engineSource(ORCH);
     const fnStart = src.indexOf('_mc_enforce_ladder() {');
     const fnEnd = src.indexOf('\n}\n', fnStart) + 3;
     const stepStart = src.indexOf('_emit_agent start "prd-model-coordinator"');
@@ -203,7 +204,7 @@ describe('the enforcement runs AFTER the writers, on every set', () => {
         env: { ...process.env, ...env },
       });
     } catch (e: any) { out = `${e.stdout || ''}${e.stderr || ''}`; }
-    return { out, prd: JSON.parse(readFileSync(prd, 'utf8')) };
+    return { out, prd: JSON.parse(engineSource(prd)) };
   }
 
   it('SKIPPED SET — an off-ladder model is still corrected', () => {

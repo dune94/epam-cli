@@ -28,9 +28,10 @@ import { describe, it, expect } from 'vitest';
 import { spawnSync } from 'node:child_process';
 import { readFileSync } from 'node:fs';
 import { join } from 'node:path';
+import { engineSource } from '../../lib/engine-source';
 
 const ORCH = join(__dirname, '../../../orchestrations/scripts/run-agent-orchestration.sh');
-const SRC = readFileSync(ORCH, 'utf8');
+const SRC = engineSource(ORCH);
 
 /**
  * Top-level LOG_DIR ASSIGNMENTS only.

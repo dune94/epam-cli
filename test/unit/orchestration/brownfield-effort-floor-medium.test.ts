@@ -11,8 +11,9 @@ import { readFileSync, mkdtempSync, writeFileSync, rmSync } from 'node:fs';
 import { execFileSync } from 'node:child_process';
 import { tmpdir } from 'node:os';
 import { join } from 'node:path';
+import { engineSource } from '../../lib/engine-source';
 
-const CLAUDE_SH = readFileSync(join(__dirname, '../../../orchestrations/scripts/claude.sh'), 'utf8');
+const CLAUDE_SH = engineSource(join(__dirname, '../../../orchestrations/scripts/claude.sh'));
 const dirs: string[] = [];
 afterAll(() => { for (const d of dirs.splice(0)) rmSync(d, { recursive: true, force: true }); });
 

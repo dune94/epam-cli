@@ -23,10 +23,11 @@ import { readFileSync, mkdtempSync, writeFileSync, rmSync } from 'node:fs';
 import { execFileSync } from 'node:child_process';
 import { join } from 'node:path';
 import { tmpdir } from 'node:os';
+import { engineSource } from '../../lib/engine-source';
 
 const REPO_ROOT = join(__dirname, '../../../');
 const ORCH_SH = join(REPO_ROOT, 'orchestrations/scripts/run-agent-orchestration.sh');
-const orchSrc = readFileSync(ORCH_SH, 'utf8');
+const orchSrc = engineSource(ORCH_SH);
 
 function extractFunctionBodyBraceCounted(name: string): string {
   const start = orchSrc.indexOf(`${name}()`);
@@ -62,7 +63,7 @@ describe('run-agent-orchestration.sh — TC-density model upgrade wiring', () =>
     // mild upgrade priority — see tc-fact-density-split-and-very-high-
     // complexity.test.ts for that ordering's own dedicated test) — widened
     // window to clear them.
-    const gateSrc = readFileSync(join(REPO_ROOT, 'orchestrations/scripts/lib/tc-writer-gate.sh'), 'utf8');
+    const gateSrc = engineSource(join(REPO_ROOT, 'orchestrations/scripts/lib/tc-writer-gate.sh'));
     const idx = gateSrc.indexOf('success "  TC writer populated testCriteria for $story_id');
     expect(idx).toBeGreaterThan(-1);
     const nextLines = gateSrc.slice(idx, idx + 2500);
@@ -104,7 +105,7 @@ describe('maybe_upgrade_model_for_tc_density — REAL execution', () => {
           .join('\n'),
       );
       const stderr = execFileSync('bash', [scriptPath], { encoding: 'utf8', stdio: ['pipe', 'pipe', 'pipe'] });
-      const prd = JSON.parse(readFileSync(prdFile, 'utf8'));
+      const prd = JSON.parse(engineSource(prdFile));
       return {
         model: prd.stories[0].model,
         aiProvider: prd.stories[0].aiProvider,

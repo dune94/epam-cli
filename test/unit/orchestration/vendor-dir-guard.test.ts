@@ -27,10 +27,11 @@ import { readFileSync, mkdtempSync, mkdirSync, writeFileSync, rmSync, chmodSync,
 import { execFileSync, spawnSync } from 'node:child_process';
 import { join } from 'node:path';
 import { tmpdir } from 'node:os';
+import { engineSource } from '../../lib/engine-source';
 
 const REPO_ROOT = join(__dirname, '../../../');
 const CLAUDE_SH = join(REPO_ROOT, 'orchestrations/scripts/claude.sh');
-const claudeSrc = readFileSync(CLAUDE_SH, 'utf8');
+const claudeSrc = engineSource(CLAUDE_SH);
 
 /**
  * THE FUNCTION BODY, STILL — for the STATIC assertions below, which read the source text.
@@ -271,7 +272,7 @@ describe('run_vendor_integrity_check — REAL execution, reproduces the exact li
       const rc = parseInt(output.match(/RC=(\d+)/)?.[1] ?? '-1', 10);
       let details = '';
       try {
-        details = readFileSync(outLog, 'utf8');
+        details = engineSource(outLog);
       } catch {
         details = '';
       }
@@ -375,7 +376,7 @@ describe('run_vendor_integrity_check — vendorCacheExcludePatterns (fixes false
       const rc = parseInt(output.match(/RC=(\d+)/)?.[1] ?? '-1', 10);
       let details = '';
       try {
-        details = readFileSync(outLog, 'utf8');
+        details = engineSource(outLog);
       } catch {
         details = '';
       }

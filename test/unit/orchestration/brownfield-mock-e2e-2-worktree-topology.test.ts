@@ -37,6 +37,7 @@ import { execFileSync, spawn, spawnSync } from 'node:child_process';
 import { mkdtempSync, mkdirSync, writeFileSync, symlinkSync, rmSync, readFileSync, cpSync, existsSync, statSync, chmodSync } from 'node:fs';
 import { join } from 'node:path';
 import { tmpdir } from 'node:os';
+import { engineSource } from '../../lib/engine-source';
 
 const REPO_ROOT = join(__dirname, '../../../');
 const RUN_AGENT_ORCH = join(REPO_ROOT, 'orchestrations/scripts/run-agent-orchestration.sh');
@@ -145,7 +146,7 @@ const CANONICAL_PRD = join(REPO_ROOT, 'test/fixtures/mock-pipeline/hello-dolly-w
 const MOCK_JIRA_SERVER = join(REPO_ROOT, 'test/fixtures/mock-pipeline/mock-jira-server.js');
 
 function resetPrdFromCanonical(prdPath: string, projectRoot: string): void {
-  const canonical = JSON.parse(readFileSync(CANONICAL_PRD, 'utf8'));
+  const canonical = JSON.parse(engineSource(CANONICAL_PRD));
   canonical.project.outputDir = projectRoot;
   writeFileSync(prdPath, JSON.stringify(canonical, null, 2));
 }
@@ -162,7 +163,7 @@ function resetPrdFromCanonical(prdPath: string, projectRoot: string): void {
  *  Was JIRA_PIPELINE=0 until 2026-07-24 — a whole production stage unexercised
  *  (user: "mock2 should not skip jira", "no difference in piping"). */
 function startMockJiraServerForCanonical(dir: string): Promise<{ port: number; stop: () => void }> {
-  const canonical = JSON.parse(readFileSync(CANONICAL_PRD, 'utf8'));
+  const canonical = JSON.parse(engineSource(CANONICAL_PRD));
   const issues = (canonical.stories || []).map((st: any) => ({
     key: st.id,
     summary: st.title || st.id,
@@ -189,7 +190,7 @@ function startMockJiraServerForCanonical(dir: string): Promise<{ port: number; s
 }
 
 function readPrd(prdPath: string): any {
-  return JSON.parse(readFileSync(prdPath, 'utf8'));
+  return JSON.parse(engineSource(prdPath));
 }
 
 function findStory(prd: any, id: string): any {
@@ -309,8 +310,8 @@ describe.skipIf(!RUN_REAL)('Mock 2 — REAL run-agent-orchestration.sh, parallel
     // Real worktree merge landed BOTH parallel changes on the same branch —
     // no main-branch lane existed, so this is whatever branch was checked
     // out at run start (the clone's local "main").
-    const utilA = readFileSync(join(clone, 'src/util-a.ts'), 'utf8');
-    const utilB = readFileSync(join(clone, 'src/util-b.ts'), 'utf8');
+    const utilA = engineSource(join(clone, 'src/util-a.ts'));
+    const utilB = engineSource(join(clone, 'src/util-b.ts'));
     expect(utilA).toMatch(/utilA-ok/);
     expect(utilB).toMatch(/utilB-ok/);
 
@@ -360,9 +361,9 @@ describe.skipIf(!RUN_REAL)('Mock 2 — REAL run-agent-orchestration.sh, parallel
     expect(branches).toContain('AI-MAIN-1');
     execFileSync('git', ['checkout', 'AI-MAIN-1'], { cwd: clone });
 
-    const hello = readFileSync(join(clone, 'src/hello.ts'), 'utf8');
-    const utilA = readFileSync(join(clone, 'src/util-a.ts'), 'utf8');
-    const utilB = readFileSync(join(clone, 'src/util-b.ts'), 'utf8');
+    const hello = engineSource(join(clone, 'src/hello.ts'));
+    const utilA = engineSource(join(clone, 'src/util-a.ts'));
+    const utilB = engineSource(join(clone, 'src/util-b.ts'));
     expect(hello).toMatch(/hello dolly/);
     expect(utilA).toMatch(/utilA-ok/);
     expect(utilB).toMatch(/utilB-ok/);

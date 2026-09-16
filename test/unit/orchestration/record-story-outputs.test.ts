@@ -21,10 +21,11 @@ import { execFileSync, spawnSync } from 'node:child_process';
 import { mkdtempSync, mkdirSync, writeFileSync, readFileSync, rmSync, existsSync } from 'node:fs';
 import { join, dirname } from 'node:path';
 import { tmpdir } from 'node:os';
+import { engineSource } from '../../lib/engine-source';
 
 const REPO_ROOT = join(__dirname, '../../../');
 const CLAUDE_SH = join(REPO_ROOT, 'orchestrations/scripts/claude.sh');
-const claudeSrc = readFileSync(CLAUDE_SH, 'utf8');
+const claudeSrc = engineSource(CLAUDE_SH);
 
 function extractFunctionBody(name: string): string {
   const defRe = new RegExp(`^\\s*${name}\\(\\)\\s*\\{`, 'm');
@@ -96,7 +97,7 @@ function record(fx: { projectRoot: string; logDir: string }, storyId: string) {
     rc: (output.match(/RC=(\d+)/) || [])[1],
     output,
     lines: existsSync(manifest)
-      ? readFileSync(manifest, 'utf8').split('\n').filter(Boolean)
+      ? engineSource(manifest).split('\n').filter(Boolean)
       : null,
   };
 }

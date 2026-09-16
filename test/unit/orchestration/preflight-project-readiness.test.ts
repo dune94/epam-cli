@@ -20,6 +20,7 @@ import { spawnSync } from 'node:child_process';
 import { readFileSync, readdirSync, existsSync, mkdtempSync, mkdirSync, writeFileSync } from 'node:fs';
 import { tmpdir } from 'node:os';
 import { join } from 'node:path';
+import { engineSource } from '../../lib/engine-source';
 
 const REPO = join(__dirname, '../../../');
 const SCRIPTS = join(REPO, 'orchestrations/scripts');
@@ -33,7 +34,7 @@ describe('every launcher runs the pre-flight', () => {
   });
 
   it.each(launchers)('%s calls preflight-check.sh', (f) => {
-    const src = readFileSync(join(SCRIPTS, f), 'utf8')
+    const src = engineSource(join(SCRIPTS, f))
       .split('\n')
       .filter((l) => !l.trim().startsWith('#'))
       .join('\n');
@@ -46,7 +47,7 @@ describe('every launcher runs the pre-flight', () => {
 });
 
 describe('the pre-flight assesses PROJECT readiness', () => {
-  const src = readFileSync(PREFLIGHT, 'utf8');
+  const src = engineSource(PREFLIGHT);
 
   it('checks dist/ is newer than src/ — the pipeline runs dist, not src', () => {
     expect(

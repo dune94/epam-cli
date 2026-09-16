@@ -22,6 +22,7 @@ import { spawnSync } from 'node:child_process';
 import { mkdtempSync, writeFileSync, readFileSync, existsSync, chmodSync, mkdirSync } from 'node:fs';
 import { tmpdir } from 'node:os';
 import { join } from 'node:path';
+import { engineSource } from '../../lib/engine-source';
 
 const REPO_ROOT = join(__dirname, '../../../');
 const SCRIPTS = join(REPO_ROOT, 'orchestrations/scripts');
@@ -56,7 +57,7 @@ function cassetteHandlerName(src: string): string | null {
 }
 
 describe('an early failure leaves a cassette too', () => {
-  const src = readFileSync(ORCH, 'utf8');
+  const src = engineSource(ORCH);
 
   it('the script really does exit long before its late handlers — otherwise this proves nothing', () => {
     expect(firstExitLine(src)).toBeGreaterThan(0);

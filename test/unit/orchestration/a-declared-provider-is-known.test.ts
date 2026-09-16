@@ -14,10 +14,11 @@
 import { describe, it, expect } from 'vitest';
 import { readFileSync } from 'fs';
 import { join } from 'path';
+import { engineSource } from '../../lib/engine-source';
 
 const ROOT = join(__dirname, '../../..');
-const providers = JSON.parse(readFileSync(join(ROOT, 'orchestrations/config/providers.json'), 'utf8'));
-const claudeSrc = readFileSync(join(ROOT, 'orchestrations/scripts/claude.sh'), 'utf8');
+const providers = JSON.parse(engineSource(join(ROOT, 'orchestrations/config/providers.json')));
+const claudeSrc = engineSource(join(ROOT, 'orchestrations/scripts/claude.sh'));
 
 /**
  * The providers the engine ADVERTISES — read from providers.json's own `cliBinary`, which is

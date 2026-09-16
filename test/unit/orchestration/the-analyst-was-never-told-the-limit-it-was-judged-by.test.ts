@@ -25,17 +25,18 @@ import { describe, it, expect } from 'vitest';
 import { spawnSync } from 'node:child_process';
 import { readFileSync, existsSync } from 'node:fs';
 import { join } from 'node:path';
+import { engineSource } from '../../lib/engine-source';
 
 const ROOT = join(__dirname, '../../..');
 const CFG = join(ROOT, 'orchestrations/config/self-heal.json');
 const CLAUDE_SH = join(ROOT, 'orchestrations/scripts/claude.sh');
 const TPL = join(ROOT, 'orchestrations/prompts/templates/failure-analyst.json');
 
-const config = () => JSON.parse(readFileSync(CFG, 'utf8'));
+const config = () => JSON.parse(engineSource(CFG));
 
 /** Run the real _skill_note_format_ok against a note of a given length. */
 function accepts(note: string) {
-  const src = readFileSync(CLAUDE_SH, 'utf8');
+  const src = engineSource(CLAUDE_SH);
   const m = src.match(/^_skill_note_format_ok\(\)\s*\{[\s\S]*?\n\}/m);
   const h = src.match(/^_skill_note_max_chars\(\)\s*\{[\s\S]*?\n\}/m);
   if (!m) throw new Error('claude.sh has no _skill_note_format_ok()');
@@ -57,7 +58,7 @@ describe('the analyst was never told the limit it was judged by', () => {
   });
 
   it('THE CHECKER READS IT — not a number written beside it', () => {
-    const src = readFileSync(CLAUDE_SH, 'utf8');
+    const src = engineSource(CLAUDE_SH);
     const fn = src.match(/^_skill_note_format_ok\(\)\s*\{[\s\S]*?\n\}/m)![0];
     expect(fn, 'the checker still compares against a hardcoded length')
       .not.toMatch(/-le\s+200\b/);
@@ -74,7 +75,7 @@ describe('the analyst was never told the limit it was judged by', () => {
   });
 
   it('AND THE ANALYST IS TOLD IT — the round trip this removes', () => {
-    const tpl = JSON.parse(readFileSync(TPL, 'utf8'));
+    const tpl = JSON.parse(engineSource(TPL));
     expect(tpl.placeholders, 'the analyst template declares no limit placeholder')
       .toContain('__SKILL_NOTE_MAX__');
     expect(tpl.body, 'the template never mentions the length its answer is judged by')
@@ -82,7 +83,7 @@ describe('the analyst was never told the limit it was judged by', () => {
   });
 
   it('THE CALLER SUPPLIES IT FROM THE SAME DECLARATION — not a second copy', () => {
-    const src = readFileSync(CLAUDE_SH, 'utf8');
+    const src = engineSource(CLAUDE_SH);
     const start = src.indexOf('"__ANALYST_PROFILE__":$profile');
     const block = src.slice(start, src.indexOf('> "$_analyst_values"', start));
     expect(block, 'the analyst values block never supplies __SKILL_NOTE_MAX__')
@@ -94,7 +95,7 @@ describe('the analyst was never told the limit it was judged by', () => {
 
   it('the number is not restated anywhere it could drift from', () => {
     // The producer must read it, never carry its own copy.
-    const tpl = JSON.parse(readFileSync(TPL, 'utf8'));
+    const tpl = JSON.parse(engineSource(TPL));
     expect(tpl.body, 'the analyst template hardcodes a length beside the placeholder')
       .not.toMatch(/\b200\b/);
   });

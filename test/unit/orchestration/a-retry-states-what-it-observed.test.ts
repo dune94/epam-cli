@@ -25,6 +25,7 @@ import { spawnSync } from 'node:child_process';
 import { readFileSync, mkdtempSync, writeFileSync } from 'node:fs';
 import { tmpdir } from 'node:os';
 import { join } from 'node:path';
+import { engineSource } from '../../lib/engine-source';
 
 const REPO = join(__dirname, '../../..');
 const ORCH = join(REPO, 'orchestrations/scripts/run-agent-orchestration.sh');
@@ -34,7 +35,7 @@ const ORCH = join(REPO, 'orchestrations/scripts/run-agent-orchestration.sh');
  * Spliced from the script by anchor rather than retyped, so the test cannot drift from it.
  */
 function tcBnErrFor(fileBody: string): string {
-  const src = readFileSync(ORCH, 'utf8').split('\n');
+  const src = engineSource(ORCH).split('\n');
   const start = src.findIndex((l) => /_tc_bn_err=\$\(bash -n "\$_tc_path"/.test(l));
   expect(start, 'the syntax-check capture is gone — the shape has changed').toBeGreaterThan(-1);
   // Take that line plus the guard that follows it, skipping comments.

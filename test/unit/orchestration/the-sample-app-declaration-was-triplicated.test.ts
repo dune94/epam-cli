@@ -17,6 +17,7 @@
 import { describe, it, expect } from 'vitest';
 import { readFileSync, existsSync } from 'node:fs';
 import { join } from 'node:path';
+import { engineSource } from '../../lib/engine-source';
 
 const ROOT = join(__dirname, '../../..');
 const SCRIPTS = join(ROOT, 'orchestrations/scripts');
@@ -31,21 +32,21 @@ describe('the declaration lives with the project', () => {
     });
 
     it(`${m} is valid JSON`, () => {
-      expect(() => JSON.parse(readFileSync(join(PROJECT, m), 'utf8'))).not.toThrow();
+      expect(() => JSON.parse(engineSource(join(PROJECT, m)))).not.toThrow();
     });
   }
 
   it('and keeps the field that had drifted between the two copies', () => {
     // travel declared vendorCacheExcludePatterns and skyscanner did not. Dropping it on
     // consolidation would lose real configuration to a tidy-up.
-    const dep = JSON.parse(readFileSync(join(PROJECT, 'dependency-check.json'), 'utf8'));
+    const dep = JSON.parse(engineSource(join(PROJECT, 'dependency-check.json')));
     expect(dep.vendorCacheExcludePatterns).toEqual(['.vite/*']);
   });
 
   it('and the declaration a sample app OWNS is kept, not stripped', () => {
     // requiredDevDependencies is an imposition on a CLIENT repo and was removed there. For an app
     // these launchers create themselves it is a statement about what they will build.
-    const dep = JSON.parse(readFileSync(join(PROJECT, 'dependency-check.json'), 'utf8'));
+    const dep = JSON.parse(engineSource(join(PROJECT, 'dependency-check.json')));
     expect(dep.requiredDevDependencies).toContain('vitest');
     expect(dep.manifestFile).toBe('package.json');
   });
@@ -54,13 +55,13 @@ describe('the declaration lives with the project', () => {
 describe('no launcher carries its own copy', () => {
   for (const l of LAUNCHERS) {
     it(`${l} writes no manifest from a heredoc`, () => {
-      const src = readFileSync(join(SCRIPTS, l), 'utf8');
+      const src = engineSource(join(SCRIPTS, l));
       expect(src, `${l} still embeds the declaration`)
         .not.toMatch(/DEPCHECK_EOF|CONTRACTGEN_EOF|KNOWNFIXES_EOF/);
     });
 
     it(`${l} takes them from the project config directory instead`, () => {
-      const src = readFileSync(join(SCRIPTS, l), 'utf8');
+      const src = engineSource(join(SCRIPTS, l));
       expect(src).toMatch(/projects\/skyscanner|EPAM_PROJECT_CONFIG_DIR/);
       expect(src, `${l} does not copy the manifests anywhere`).toMatch(/dependency-check\.json/);
     });
@@ -68,7 +69,7 @@ describe('no launcher carries its own copy', () => {
 
   it('and the scan is real — the launchers exist and are non-trivial', () => {
     for (const l of LAUNCHERS) {
-      expect(readFileSync(join(SCRIPTS, l), 'utf8').length).toBeGreaterThan(2000);
+      expect(engineSource(join(SCRIPTS, l)).length).toBeGreaterThan(2000);
     }
   });
 });

@@ -19,9 +19,10 @@ import { spawnSync } from 'node:child_process';
 import { mkdtempSync, writeFileSync, readFileSync, existsSync } from 'node:fs';
 import { tmpdir } from 'node:os';
 import { join } from 'node:path';
+import { engineSource } from '../../lib/engine-source';
 
 const SCRIPT = join(__dirname, '../../../orchestrations/scripts/run-agent-orchestration.sh');
-const SCRIPT_SRC = readFileSync(SCRIPT, 'utf8');
+const SCRIPT_SRC = engineSource(SCRIPT);
 
 function extractFunctionBody(name: string): string {
   const start = SCRIPT_SRC.indexOf(`${name}() {`);
@@ -46,7 +47,7 @@ function provision(sampleContent: string | null) {
   return {
     dest,
     exists: existsSync(dest),
-    content: existsSync(dest) ? readFileSync(dest, 'utf8') : '',
+    content: existsSync(dest) ? engineSource(dest) : '',
     stderr: r.stderr || '',
   };
 }
@@ -105,7 +106,7 @@ describe('the engine no longer ships a hand-maintained per-codeline env list', (
   });
 
   it('nothing LIVE in the pipeline references env-vars.json anymore — only history in a comment', () => {
-    const src = readFileSync(SCRIPT, 'utf8');
+    const src = engineSource(SCRIPT);
     const liveLines = src.split('\n').filter((l) => !l.trim().startsWith('#'));
     expect(liveLines.join('\n')).not.toMatch(/env-vars\.json/);
   });

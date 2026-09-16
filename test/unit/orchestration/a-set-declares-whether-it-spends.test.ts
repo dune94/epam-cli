@@ -2,6 +2,7 @@ import { describe, it, expect } from 'vitest'
 import { spawnSync } from 'node:child_process'
 import { readFileSync } from 'node:fs'
 import { join } from 'node:path'
+import { engineSource } from '../../lib/engine-source';
 
 // THE OPERATOR DECLARES A FREE RUN. THE ENGINE DOES NOT GUESS.
 //
@@ -51,7 +52,7 @@ describe('the operator declares a free run', () => {
   })
 
   it('the launcher names no runner and no vendor when deciding this', () => {
-    const src = readFileSync(join(REPO, 'orchestrations/scripts/run-agent-orchestration.sh'), 'utf8')
+    const src = engineSource(join(REPO, 'orchestrations/scripts/run-agent-orchestration.sh'))
     const i = src.indexOf('free-run-guard.sh')
     const block = src.slice(Math.max(0, i - 500), i + 2000)
     expect(block, 'the launcher still infers freeness from a runner name')

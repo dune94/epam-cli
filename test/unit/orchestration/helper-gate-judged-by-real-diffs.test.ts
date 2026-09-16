@@ -26,6 +26,7 @@ import { existsSync } from 'node:fs';
 import { join } from 'node:path';
 import { replayRepo } from '../../support/replay-codeline';
 import { readFileSync } from 'node:fs';
+import { engineSource } from '../../lib/engine-source';
 
 const ROOT = join(__dirname, '../../..');
 const SH = join(ROOT, 'orchestrations/scripts/claude.sh');
@@ -38,7 +39,7 @@ const CORPUS: {
   repo: string; range: string; helper: string; paths?: string;
   verdict: 'accept' | 'reject'; minDiffBytes?: number; helperAbsentFromDiff?: boolean; why?: string;
   helpers?: string[]; inlineDiff?: string[];
-}[] = JSON.parse(readFileSync(join(ROOT, 'test/fixtures/helper-gate-corpus.json'), 'utf8')).entries;
+}[] = JSON.parse(engineSource(join(ROOT, 'test/fixtures/helper-gate-corpus.json'))).entries;
 
 /** Executes the REAL rule: does this diff duplicate a format the helper's module owns? */
 function judge(repo: string, diff: string, helper: string): { rc: number; out: string } {
@@ -116,7 +117,7 @@ describe('the rule is judged by real run artefacts, not fixtures', () => {
 describe('the committed-change gate uses the same rule', () => {
   it('is wired to the duplication rule, not to absence', () => {
     // eslint-disable-next-line @typescript-eslint/no-var-requires
-    const src: string = require('node:fs').readFileSync(SH, 'utf8');
+    const src: string = engineSource(SH);
     const fn = src.slice(src.indexOf('_committed_change_uses_helpers() {'));
     const body = fn.slice(0, fn.indexOf('\n}\n'));
     expect(body, 'still keying on absence — this is what halted the run')

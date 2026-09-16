@@ -36,6 +36,7 @@ import { execFileSync, spawnSync } from 'node:child_process';
 import { mkdtempSync, writeFileSync, rmSync, existsSync, readFileSync } from 'node:fs';
 import { tmpdir } from 'node:os';
 import { join } from 'node:path';
+import { engineSource } from '../../lib/engine-source';
 
 const REPO = join(__dirname, '../../../');
 const LIB = join(REPO, 'orchestrations/scripts/lib/bounded-exec.sh');
@@ -151,7 +152,7 @@ describe('THE BOUND ACTUALLY BINDS — measured in a real child process', () => 
  * The sites are DISCOVERED by scanning for the shape, so one added tomorrow is caught tomorrow.
  */
 describe('EVERY site that spawns a client test command is bounded', () => {
-  const src = readFileSync(GUARD, 'utf8');
+  const src = engineSource(GUARD);
 
   /**
    * Every line that runs a resolved client test command through a shell — in EITHER shape:

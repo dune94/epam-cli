@@ -25,6 +25,7 @@ import { mkdtempSync, writeFileSync, readFileSync, rmSync, mkdirSync } from 'nod
 import { execFileSync } from 'node:child_process';
 import { join } from 'node:path';
 import { tmpdir } from 'node:os';
+import { engineSource } from '../../lib/engine-source';
 
 const SCAN = join(__dirname, '../../../orchestrations/scripts/scan-secrets.sh');
 const ORCH = join(__dirname, '../../../orchestrations/scripts/run-agent-orchestration.sh');
@@ -77,7 +78,7 @@ describe('THE DEFECT: it cannot tell a literal from an identifier', () => {
 });
 
 describe('the commit path no longer consults it', () => {
-  const src = readFileSync(ORCH, 'utf8');
+  const src = engineSource(ORCH);
 
   /**
    * The whole Step 9 block, bounded by the next step rather than a character count. A fixed

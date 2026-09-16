@@ -10,6 +10,7 @@ import { describe, it, expect } from 'vitest';
 import { readFileSync } from 'node:fs';
 import { join } from 'node:path';
 import { execFileSync } from 'node:child_process';
+import { engineSource } from '../lib/engine-source';
 
 const REPO_ROOT = join(__dirname, '../../');
 const PROFILES = join(REPO_ROOT, 'orchestrations/agents/profiles.json');
@@ -32,7 +33,7 @@ FAIL src/server.test.ts
 
 describe.skipIf(!hasKey)('failure-analyst — LIVE call, real model, recurring supertest failure', () => {
   it('diagnoses the missing devDependency and does not pick target=none', () => {
-    const profiles = JSON.parse(readFileSync(PROFILES, 'utf8'));
+    const profiles = JSON.parse(engineSource(PROFILES));
     const analystProfile = profiles['failure-analyst'];
     expect(analystProfile).toBeTruthy();
 

@@ -29,6 +29,7 @@ import { spawnSync } from 'node:child_process';
 import { mkdtempSync, mkdirSync, readFileSync, rmSync, existsSync, readdirSync } from 'node:fs';
 import { join } from 'node:path';
 import { tmpdir } from 'node:os';
+import { engineSource } from '../../lib/engine-source';
 
 const ROOT = join(__dirname, '../../../');
 const STATE_LIB = join(ROOT, 'orchestrations/scripts/lib/story-retry-state.sh');
@@ -65,7 +66,7 @@ function roundTrip(iters: string): { written: string; read: string } {
  * The overhead is passed explicitly so these cases assert the arithmetic, not the config.
  */
 function derive(base: number, iters: number, spi: string, cap: string): string {
-  const src = readFileSync(ORCH, 'utf8');
+  const src = engineSource(ORCH);
   const start = src.indexOf('    _derive_attempt_wall() {');
   expect(start, 'the derivation helper is gone — the test is stale, not the code').toBeGreaterThan(-1);
   const end = src.indexOf('\n    }\n', start) + 6;
@@ -97,12 +98,12 @@ describe('the value travels UPWARD — the child persists what it granted', () =
 
   it('claude.sh actually CALLS the writer — a helper nobody invokes is inert', () => {
     // The 2026-08-10 fix failed exactly this way: correct code, never executed.
-    const src = readFileSync(CLAUDE_SH, 'utf8');
+    const src = engineSource(CLAUDE_SH);
     expect(src).toMatch(/write_story_effective_iterations "\$LOG_DIR" "\$story_id" "\$_effective_max_iterations"/);
   });
 
   it('the parent READS it rather than the unset env var', () => {
-    const src = readFileSync(ORCH, 'utf8');
+    const src = engineSource(ORCH);
     expect(src).toContain('read_story_effective_iterations');
     const fn = src.slice(src.indexOf('run_story_with_watchdog() {'), src.indexOf('\n    set +e'));
     expect(fn, 'still gated on an env var the parent never has').not.toMatch(/\$\{EPAM_MAX_ITERATIONS:-\}/);
@@ -136,7 +137,7 @@ describe('THE WALL HONOURS THE BUDGET', () => {
 
   it('no secondsPerIteration -> the base, unchanged (and the caller warns)', () => {
     expect(derive(1800, 185, '', '5400')).toBe('1800');
-    const src = readFileSync(ORCH, 'utf8');
+    const src = engineSource(ORCH);
     expect(src, 'an undeclared secondsPerIteration must be reported, not silently skipped')
       .toMatch(/secondsPerIteration is not configured/);
   });
@@ -146,7 +147,7 @@ describe('IT IS RE-DERIVED PER ATTEMPT, NOT ONCE PER STORY', () => {
   it('the retry path re-derives after the escalation', () => {
     // Scaling the OLD wall by a fixed multiplier polices the NEW budget with the previous
     // rung's arithmetic — which is how escalation kept making the timeout more likely.
-    const src = readFileSync(ORCH, 'utf8');
+    const src = engineSource(ORCH);
     const start = src.indexOf('while [ "$_rc" -eq 124 ]');
     expect(start, 'the ladder retry loop is gone — the test is stale, not the code').toBeGreaterThan(-1);
     // Search for the loop terminator FROM the loop start. Searching from 0 finds an earlier
@@ -160,7 +161,7 @@ describe('IT IS RE-DERIVED PER ATTEMPT, NOT ONCE PER STORY', () => {
 
   it('the derivation is announced when it changes the wall', () => {
     // Its absence from every run log to date is the only reason this went unnoticed.
-    const src = readFileSync(ORCH, 'utf8');
+    const src = engineSource(ORCH);
     expect(src).toMatch(/story timeout \$\{timeout_secs\}s -> \$\{_derived\}s \(derived from/);
     expect(src).toMatch(/retry wall .*re-derived from/);
   });

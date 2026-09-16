@@ -26,6 +26,7 @@ import { spawnSync } from 'node:child_process';
 import { mkdtempSync, writeFileSync, rmSync, readFileSync, mkdirSync } from 'node:fs';
 import { join } from 'node:path';
 import { tmpdir } from 'node:os';
+import { engineSource } from '../../lib/engine-source';
 
 const ROOT = join(__dirname, '../../..');
 const SCRIPTS = join(ROOT, 'orchestrations/scripts');
@@ -45,7 +46,7 @@ function parse(raw: string): Record<string, unknown> {
 
 /** The projection team-lead-review.sh applies before writing the per-story feedback file. */
 function writtenFeedback(reviewJson: Record<string, unknown>): Record<string, unknown> {
-  const src = readFileSync(REVIEW, 'utf8');
+  const src = engineSource(REVIEW);
   const m = /jq -c '(\{[^']*\})'\s*\\?\s*\n?\s*>\s*"\$\{LOG_DIR/.exec(src);
   expect(m, 'the per-story feedback write is no longer where this test looks').not.toBeNull();
   const r = spawnSync('jq', ['-c', m![1]], { input: JSON.stringify(reviewJson), encoding: 'utf8' });
@@ -56,7 +57,7 @@ function writtenFeedback(reviewJson: Record<string, unknown>): Record<string, un
 function guardSaysIncomplete(feedback: Record<string, unknown>): boolean {
   const d = tmp();
   writeFileSync(join(d, 'review-feedback-S-1.json'), JSON.stringify(feedback));
-  const src = readFileSync(ORCH, 'utf8');
+  const src = engineSource(ORCH);
   const start = src.indexOf('review_feedback_is_incomplete() {');
   expect(start, 'the guard is gone').toBeGreaterThan(-1);
   let end = start;

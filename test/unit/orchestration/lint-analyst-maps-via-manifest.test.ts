@@ -29,9 +29,10 @@
 import { describe, it, expect } from 'vitest';
 import { readFileSync } from 'node:fs';
 import { join } from 'node:path';
+import { engineSource } from '../../lib/engine-source';
 
 const ROOT = join(__dirname, '../../..');
-const ORCH = readFileSync(join(ROOT, 'orchestrations/scripts/run-agent-orchestration.sh'), 'utf8');
+const ORCH = engineSource(join(ROOT, 'orchestrations/scripts/run-agent-orchestration.sh'));
 
 // eslint-disable-next-line @typescript-eslint/no-var-requires
 const { renderEngineTemplate } = require(join(ROOT, 'orchestrations/scripts/lib/engine-prompt.js'));

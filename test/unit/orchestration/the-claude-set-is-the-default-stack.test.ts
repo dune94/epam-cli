@@ -1,6 +1,7 @@
 import { describe, it, expect } from 'vitest'
 import { readFileSync, existsSync } from 'node:fs'
 import { join } from 'node:path'
+import { engineSource } from '../../lib/engine-source';
 
 // THE CLAUDE STACK: plain Claude Code, on the user's own tokens.
 //
@@ -12,11 +13,11 @@ import { join } from 'node:path'
 // codemie and openrouter stay exactly as they are. They become hot swaps by not being the
 // default, and nothing about them is deleted.
 const REPO = process.cwd()
-const REG = JSON.parse(readFileSync(join(REPO, 'orchestrations/config/provider-sets.json'), 'utf8'))
+const REG = JSON.parse(engineSource(join(REPO, 'orchestrations/config/provider-sets.json')))
 const PROJECTS = ['mock3', 'metrolinx', 'skyscanner', 'hello-dolly']
 
 function settings(set: string) {
-  return JSON.parse(readFileSync(join(REPO, `orchestrations/config/llm-defaults.${set}.json`), 'utf8'))
+  return JSON.parse(engineSource(join(REPO, `orchestrations/config/llm-defaults.${set}.json`)))
 }
 
 describe('the claude set is the default stack', () => {
@@ -55,7 +56,7 @@ describe('the claude set is the default stack', () => {
     for (const p of PROJECTS) {
       const f = join(REPO, `orchestrations/projects/${p}/config.claude.env`)
       expect(existsSync(f), `${p} has no config.claude.env`).toBe(true)
-      const body = readFileSync(f, 'utf8')
+      const body = engineSource(f)
       expect(body, `${p} overlay does not set the orchestration provider`)
         .toMatch(/^EPAM_ORCHESTRATION_PROVIDER=claude$/m)
       expect(body, `${p} overlay must not name the codemie wrapper`).not.toMatch(/codemie-claude/)
@@ -64,7 +65,7 @@ describe('the claude set is the default stack', () => {
 
   it('a paid stack is NOT treated as a free run', () => {
     // the seal is opt-in via EPAM_FREE_RUN; nothing may infer freeness from the runner name
-    const src = readFileSync(join(REPO, 'orchestrations/scripts/run-agent-orchestration.sh'), 'utf8')
+    const src = engineSource(join(REPO, 'orchestrations/scripts/run-agent-orchestration.sh'))
     expect(src).not.toMatch(/runners\.every/)
   })
 })

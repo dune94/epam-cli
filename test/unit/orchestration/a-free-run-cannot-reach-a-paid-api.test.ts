@@ -21,6 +21,7 @@ import { describe, it, expect } from 'vitest';
 import { spawnSync } from 'child_process';
 import { readFileSync, existsSync } from 'fs';
 import { join } from 'path';
+import { engineSource } from '../../lib/engine-source';
 
 const ROOT = join(__dirname, '../../..');
 
@@ -55,7 +56,7 @@ describe('a free run cannot reach a paid API', () => {
   it('.env is PARSED, not executed — so unsetting a key before launch survives', () => {
     // EXECUTABLE lines only: the first version of this matched the COMMENT that explains why
     // the old form is gone, and reported the fix as the defect.
-    const src = readFileSync(join(ROOT, 'orchestrations/scripts/run-agent-orchestration.sh'), 'utf8')
+    const src = engineSource(join(ROOT, 'orchestrations/scripts/run-agent-orchestration.sh'))
       .split('\n').filter((l) => !/^\s*#/.test(l)).join('\n');
     expect(src, 'executing .env restores every key a cost guard unset')
       .not.toMatch(/set -a;\s*\.\s*"\$_env_file"/);
@@ -86,7 +87,7 @@ describe('a free run cannot reach a paid API', () => {
     for (const k of Object.keys(process.env)) {
       if (/API_KEY|_TOKEN$|SECRET/i.test(k)) scrub[k] = 'sk-mock-not-real';
     }
-    for (const k of readFileSync(join(ROOT, '.env'), 'utf8').split('\n')) {
+    for (const k of engineSource(join(ROOT, '.env')).split('\n')) {
       const m = k.match(/^\s*(?:export\s+)?([A-Za-z_][A-Za-z0-9_]*)\s*=/);
       if (m && /API_KEY|_TOKEN$|SECRET/i.test(m[1])) scrub[m[1]] = 'sk-mock-not-real';
     }

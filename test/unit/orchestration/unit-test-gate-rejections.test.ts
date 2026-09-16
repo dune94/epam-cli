@@ -27,9 +27,10 @@ import { mkdtempSync, writeFileSync, mkdirSync, rmSync, chmodSync, readFileSync 
 import { execFileSync } from 'node:child_process';
 import { join } from 'node:path';
 import { tmpdir } from 'node:os';
+import { engineSource } from '../../lib/engine-source';
 
 const ORCH = join(__dirname, '../../../orchestrations/scripts/run-agent-orchestration.sh');
-const SRC = readFileSync(ORCH, 'utf8');
+const SRC = engineSource(ORCH);
 const dirs: string[] = [];
 afterAll(() => { for (const d of dirs) rmSync(d, { recursive: true, force: true }); });
 

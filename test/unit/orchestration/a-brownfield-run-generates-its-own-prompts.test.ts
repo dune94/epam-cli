@@ -24,6 +24,7 @@ import { mkdtempSync, rmSync, writeFileSync, existsSync, mkdirSync, readFileSync
 import { join } from 'node:path';
 import { tmpdir } from 'node:os';
 import { spawnSync } from 'node:child_process';
+import { engineSource } from '../../lib/engine-source';
 
 const REPO_ROOT = join(__dirname, '../../../');
 const BUILDER = join(REPO_ROOT, 'orchestrations/scripts/lib/project-prompt-builder.js');
@@ -241,7 +242,7 @@ describe('the real spec seam gets its variant', () => {
     }
     const f = join(dir, 'prompts', 'spec-agent-openspec.json');
     if (!existsSync(f)) return null;
-    const doc = JSON.parse(readFileSync(f, 'utf8'));
+    const doc = JSON.parse(engineSource(f));
     return { doc, body: doc.body || Object.values(doc.bodies || {}).join('\n') };
   }
 

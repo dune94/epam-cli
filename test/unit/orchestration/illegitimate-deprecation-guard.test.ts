@@ -26,10 +26,11 @@ import { readFileSync, mkdtempSync, writeFileSync, rmSync } from 'node:fs';
 import { execFileSync } from 'node:child_process';
 import { join } from 'node:path';
 import { tmpdir } from 'node:os';
+import { engineSource } from '../../lib/engine-source';
 
 const REPO_ROOT = join(__dirname, '../../../');
 const ORCH_SH = join(REPO_ROOT, 'orchestrations/scripts/run-agent-orchestration.sh');
-const orchSrc = readFileSync(ORCH_SH, 'utf8');
+const orchSrc = engineSource(ORCH_SH);
 
 function extractFunctionByLineAnchor(name: string): string {
   const lines = orchSrc.split('\n');
@@ -88,12 +89,12 @@ describe('assert_no_illegitimate_deprecation — REAL execution', () => {
 
     try {
       const stdout = execFileSync('bash', ['-c', script], { encoding: 'utf8' });
-      return { exitCode: 0, stdout, prd: JSON.parse(readFileSync(prdPath, 'utf8')) };
+      return { exitCode: 0, stdout, prd: JSON.parse(engineSource(prdPath)) };
     } catch (e: any) {
       return {
         exitCode: e.status ?? -1,
         stdout: (e.stdout ?? '').toString() + (e.stderr ?? '').toString(),
-        prd: JSON.parse(readFileSync(prdPath, 'utf8')),
+        prd: JSON.parse(engineSource(prdPath)),
       };
     } finally {
       rmSync(dir, { recursive: true, force: true });

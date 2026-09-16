@@ -20,6 +20,7 @@ import { spawnSync } from 'node:child_process';
 import { mkdtempSync, writeFileSync, mkdirSync, rmSync } from 'node:fs';
 import { join } from 'node:path';
 import { tmpdir } from 'node:os';
+import { engineSource } from '../../lib/engine-source';
 
 const ROOT = join(__dirname, '../../..');
 const ORCH = join(ROOT, 'orchestrations/scripts/run-agent-orchestration.sh');
@@ -78,7 +79,7 @@ describe('the halt reports the recovery state it actually observed', () => {
 describe('the phase abort states what failed and how much budget remained', () => {
   it('names the recovery state rather than only the count', () => {
     // eslint-disable-next-line @typescript-eslint/no-var-requires
-    const src: string = require('node:fs').readFileSync(ORCH, 'utf8');
+    const src: string = engineSource(ORCH);
     const i = src.indexOf("story/stories failed — aborting phase");
     expect(i, 'the abort site moved; this test is stale').toBeGreaterThan(0);
     const around = src.slice(Math.max(0, i - 400), i + 400);

@@ -36,10 +36,11 @@ import { readFileSync, mkdtempSync, writeFileSync, rmSync } from 'node:fs';
 import { execFileSync } from 'node:child_process';
 import { join } from 'node:path';
 import { tmpdir } from 'node:os';
+import { engineSource } from '../../lib/engine-source';
 
 const REPO_ROOT = join(__dirname, '../../../');
 const ORCH_SH = join(REPO_ROOT, 'orchestrations/scripts/run-agent-orchestration.sh');
-const orchSrc = readFileSync(ORCH_SH, 'utf8');
+const orchSrc = engineSource(ORCH_SH);
 
 // THE PROMPT AND THE APPLIER BOTH MOVED OUT OF THE ORCHESTRATOR.
 //
@@ -49,10 +50,8 @@ const orchSrc = readFileSync(ORCH_SH, 'utf8');
 // prompt migration and a handler extraction both reported as the pipeline losing the behaviour.
 //
 // Asserted where they live: the rules are the same, the location is the prompt layer's business.
-const AC_TEMPLATE = readFileSync(
-  join(REPO_ROOT, 'orchestrations/prompts/templates/story-ac-remediator.json'), 'utf8');
-const AC_APPLIER = readFileSync(
-  join(REPO_ROOT, 'orchestrations/scripts/lib/handlers/ac-apply.py'), 'utf8');
+const AC_TEMPLATE = engineSource(join(REPO_ROOT, 'orchestrations/prompts/templates/story-ac-remediator.json'));
+const AC_APPLIER = engineSource(join(REPO_ROOT, 'orchestrations/scripts/lib/handlers/ac-apply.py'));
 
 describe('story-ac-remediator (Step 4.2) — wiring (static)', () => {
   it('no longer grants the agent tool access (AI_GATE_ALLOW_TOOLS) for this call', () => {
@@ -116,7 +115,7 @@ describe('story-ac-remediator AC-apply script — REAL execution', () => {
         encoding: 'utf8',
       });
       const added = parseInt(output.trim(), 10);
-      const prd = JSON.parse(readFileSync(prdPath, 'utf8'));
+      const prd = JSON.parse(engineSource(prdPath));
       const prdACs = prd.stories[0].acceptanceCriteria.map((a: any) => a.text);
       return { added, prdACs };
     } finally {

@@ -34,6 +34,7 @@ import { mkdtempSync, mkdirSync, writeFileSync, readFileSync, rmSync } from 'nod
 import { join } from 'node:path';
 import { tmpdir } from 'node:os';
 import { afterAll } from 'vitest';
+import { engineSource } from '../../lib/engine-source';
 
 const REPO = process.cwd();
 // eslint-disable-next-line @typescript-eslint/no-var-requires
@@ -119,7 +120,7 @@ describe('the dependency gate judges the change, not the file', () => {
   it('THE CALLER SUPPLIES IT — an unwired option leaves the gate silently inert', () => {
     // A plugin option no caller passes is worse than the bug it replaced: the gate reports nothing
     // and looks like a clean scan. claude.sh must hand over the ADDED LINES of the diff.
-    const sh = readFileSync(join(REPO, 'orchestrations/scripts/claude.sh'), 'utf8');
+    const sh = engineSource(join(REPO, 'orchestrations/scripts/claude.sh'));
     expect(sh, 'claude.sh does not pass introducedLines, so the dependency gate is inert')
       .toMatch(/introducedLines/);
     // AND IT MUST NOT CARRY ITS OWN IMPORT PATTERN. dependency-check.json declares importPattern

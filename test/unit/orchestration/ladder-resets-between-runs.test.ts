@@ -25,6 +25,7 @@ import { spawnSync } from 'node:child_process';
 import { mkdtempSync, mkdirSync, writeFileSync, existsSync, readFileSync, rmSync } from 'node:fs';
 import { join } from 'node:path';
 import { tmpdir } from 'node:os';
+import { engineSource } from '../../lib/engine-source';
 
 const ROOT = join(__dirname, '../../../');
 const RESET = join(ROOT, 'orchestrations/scripts/pre-run-reset.sh');
@@ -79,7 +80,7 @@ describe('between runs, the rung resets to zero', () => {
   it('the fixture is real — the counter exists before the reset', () => {
     const d = logDir({ 'AMSD-2041': '6' });
     expect(existsSync(join(d, 'story-retry-state/AMSD-2041.count'))).toBe(true);
-    expect(readFileSync(join(d, 'story-retry-state/AMSD-2041.count'), 'utf8')).toBe('6');
+    expect(engineSource(join(d, 'story-retry-state/AMSD-2041.count'))).toBe('6');
   });
 
   it('THE DEFECT: a counter left by a previous run is cleared', () => {
@@ -114,7 +115,7 @@ describe('between runs, the rung resets to zero', () => {
   });
 
   it('the module no longer claims a reset it does not get', () => {
-    const lib = readFileSync(STATE_LIB, 'utf8');
+    const lib = engineSource(STATE_LIB);
     // The correction QUOTES the old wording, so the phrase still appears. What must be gone
     // is the CLAIM built on it.
     expect(

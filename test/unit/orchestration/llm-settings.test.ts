@@ -22,6 +22,7 @@ import { tmpdir } from 'node:os';
 // a model belongs to a STACK. This file read the project copy, which now carries only a note
 // saying so, so every lookup came back empty. See test/support/llm-settings.ts.
 import { stackSettings, defaultStack } from '../../support/llm-settings'
+import { engineSource } from '../../lib/engine-source';
 const REPO_ROOT_CFG = join(__dirname, '../../../orchestrations/config');
 
 const REPO_ROOT = join(__dirname, '../../../');
@@ -38,7 +39,7 @@ const METROLINX_PROJECT_DIR = join(REPO_ROOT, 'orchestrations/projects/metrolinx
 const METROLINX_SETTINGS_FILE = join(METROLINX_PROJECT_DIR, 'llm-settings.json');
 const METROLINX_ENV_FILE = join(REPO_ROOT, 'orchestrations/jira/metrolinx.env');
 const METROLINX_CONFIG_ENV_FILE = join(REPO_ROOT, 'orchestrations/projects/metrolinx/config.env');
-const claudeSrc = readFileSync(CLAUDE_SH, 'utf8');
+const claudeSrc = engineSource(CLAUDE_SH);
 
 function extractFunctionBody(src: string, name: string): string {
   const start = src.indexOf(`${name}() {`);
@@ -168,7 +169,7 @@ const METROLINX_SETTINGS = (() => {
   process.env.EPAM_PROVIDER_SET = 'openrouter';
   try {
     return {
-      ...JSON.parse(readFileSync(METROLINX_SETTINGS_FILE, 'utf8')),
+      ...JSON.parse(engineSource(METROLINX_SETTINGS_FILE)),
       ..._resolve({ projectConfigDir: METROLINX_PROJECT_DIR }),
     };
   } finally {
@@ -311,7 +312,7 @@ describe('load_llm_settings_json() — applies JSON as fallback defaults', () =>
 });
 
 describe('llm-settings.schema.json / metrolinx llm-settings.json — structural validity', () => {
-  const schema = JSON.parse(readFileSync(SCHEMA_FILE, 'utf8'));
+  const schema = JSON.parse(engineSource(SCHEMA_FILE));
 
   it('the schema file is valid JSON with the expected top-level sections', () => {
     expect(schema.properties).toHaveProperty('temperatureFloor');
@@ -452,8 +453,8 @@ describe('model-override resolver — picks the right entry per resolved STORY_P
 });
 
 describe('metrolinx.env / config.env — ladder settings deduplicated, not just drifted', () => {
-  const envSrc = readFileSync(METROLINX_ENV_FILE, 'utf8');
-  const configEnvSrc = readFileSync(METROLINX_CONFIG_ENV_FILE, 'utf8');
+  const envSrc = engineSource(METROLINX_ENV_FILE);
+  const configEnvSrc = engineSource(METROLINX_CONFIG_ENV_FILE);
   const dedupedKeys = [
     'EPAM_MAX_RETRIES=', 'EPAM_RETRY_EXTENSION_ENABLED=', 'EPAM_RETRY_EXTENSION_MAX=',
     'EPAM_STORY_TIMEOUT_SECS=', 'EPAM_GATE_TIMEOUT_SECS=', 'EPAM_TEMPERATURE=',

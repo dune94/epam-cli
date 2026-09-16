@@ -17,6 +17,7 @@ import { spawnSync, execFileSync } from 'node:child_process';
 import { mkdtempSync, mkdirSync, writeFileSync, readFileSync, rmSync, chmodSync, existsSync } from 'node:fs';
 import { join } from 'node:path';
 import { tmpdir } from 'node:os';
+import { engineSource } from '../../lib/engine-source';
 
 const ROOT = join(__dirname, '../../../');
 const SCRIPTS = join(ROOT, 'orchestrations/scripts');
@@ -27,7 +28,7 @@ afterAll(() => { for (const d of dirs) rmSync(d, { recursive: true, force: true 
 
 /** The real run_suite(), lifted from the script, with any helper defined immediately before it. */
 function extractRunSuite(): string {
-  const lines = readFileSync(UIT, 'utf8').split('\n');
+  const lines = engineSource(UIT).split('\n');
   const rs = lines.findIndex((l) => /^run_suite\(\)\s*\{/.test(l));
   if (rs < 0) throw new Error('run_suite() not found in update-invalidated-tests.sh');
   const end = lines.findIndex((l, i) => i > rs && /^\}/.test(l));
@@ -89,7 +90,7 @@ describe('the invalidated-tests step is bounded too', () => {
       env: { ...process.env, EPAM_TEST_AVAIL_MB_OVERRIDE: '2000' },
     });
     expect(existsSync(seen), `the stand-in jest never ran:\n${r.stdout}${r.stderr}`).toBe(true);
-    const got = cpusAllowedCount(readFileSync(seen, 'utf8'));
+    const got = cpusAllowedCount(engineSource(seen));
     expect(got, [
       `update-invalidated-tests.sh spawned the client suite on ${got} of ${hostCpus} CPUs with 2000MB`,
       'available — jest will size a worker per CPU it can see. Live this was 29 processes and 6068MB',

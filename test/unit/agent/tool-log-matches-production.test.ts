@@ -33,6 +33,7 @@ import { AgentActivityLogger } from '../../../src/logging/AgentActivityLogger';
 import { AgentRunner } from '../../../src/agent/AgentRunner';
 import { createTools } from '../../../src/tools/createTools';
 import { resolveAgentLabel, toolLabel } from '../../../src/cli/commands/run';
+import { engineSource } from '../../lib/engine-source';
 
 const ROOT = join(__dirname, '../../..');
 const dirs: string[] = [];
@@ -81,7 +82,7 @@ describe('DEFECT 1: the log goes to the engine, not the client codeline', () => 
 
   it('the writer invocation passes the engine log directory', () => {
     // The orchestration knows LOG_DIR; the CLI cannot guess it.
-    const sh = readFileSync(join(ROOT, 'orchestrations/scripts/claude.sh'), 'utf8');
+    const sh = engineSource(join(ROOT, 'orchestrations/scripts/claude.sh'));
     expect(sh, 'claude.sh never tells the CLI where the engine log lives').toMatch(/EPAM_ACTIVITY_LOG_DIR=/);
   });
 });
@@ -150,7 +151,7 @@ describe('DEFECT 2: a batch of tool calls is not one tool named "bash, bash"', (
     await runner.run();
     await Promise.all(writes);
 
-    const events = readFileSync(join(d, 'orchestrations', 'logs', 'agent-activity.jsonl'), 'utf8')
+    const events = engineSource(join(d, 'orchestrations', 'logs', 'agent-activity.jsonl'))
       .split('\n').filter(Boolean).map((l) => JSON.parse(l));
     const counts = events.reduce<Record<string, number>>((a, e) => {
       a[String(e.detail.tool)] = (a[String(e.detail.tool)] ?? 0) + 1; return a;
@@ -161,7 +162,7 @@ describe('DEFECT 2: a batch of tool calls is not one tool named "bash, bash"', (
 
 // ── 3. attribution ───────────────────────────────────────────────────────────
 describe('DEFECT 3: events are attributed to the agent the orchestration named', () => {
-  const runSrc = () => readFileSync(join(ROOT, 'src/cli/commands/run.ts'), 'utf8');
+  const runSrc = () => engineSource(join(ROOT, 'src/cli/commands/run.ts'));
 
   it('EPAM_AGENT_ROLE is used — the variable the orchestration actually exports', () => {
     // CALLED, not grepped. The first version asserted run.ts mentioned EPAM_AGENT_ROLE, and a
@@ -180,7 +181,7 @@ describe('DEFECT 3: events are attributed to the agent the orchestration named',
   });
 
   it('claude.sh really does export it at the writer invocation', () => {
-    const sh = readFileSync(join(ROOT, 'orchestrations/scripts/claude.sh'), 'utf8');
+    const sh = engineSource(join(ROOT, 'orchestrations/scripts/claude.sh'));
     expect(sh).toMatch(/EPAM_AGENT_ROLE="\$\{_story_agent_role\}"/);
   });
 

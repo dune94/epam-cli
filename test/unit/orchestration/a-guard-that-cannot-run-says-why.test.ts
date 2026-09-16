@@ -14,9 +14,9 @@
 import { describe, it, expect } from 'vitest';
 import { readFileSync } from 'node:fs';
 import { join } from 'node:path';
+import { engineSource } from '../../lib/engine-source';
 
-const SRC = readFileSync(
-  join(__dirname, '../../../orchestrations/scripts/run-agent-orchestration.sh'), 'utf8');
+const SRC = engineSource(join(__dirname, '../../../orchestrations/scripts/run-agent-orchestration.sh'));
 
 /** Every line that marks the guard unable to run. */
 const notReadyLines = SRC.split('\n')

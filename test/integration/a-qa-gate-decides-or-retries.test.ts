@@ -16,6 +16,7 @@ import { spawnSync } from 'node:child_process';
 import { mkdtempSync, writeFileSync, readFileSync, rmSync, existsSync } from 'node:fs';
 import { join } from 'node:path';
 import { tmpdir } from 'node:os';
+import { engineSource } from '../lib/engine-source';
 
 const SCRIPTS = join(__dirname, '../../orchestrations/scripts');
 const LIB = join(SCRIPTS, 'lib/gate-verdicts.sh');
@@ -68,8 +69,8 @@ function runGate(replies: string[], maxRetries = 2) {
   return {
     rc: /RC=(\d+)/.exec(out)?.[1],
     climbAfter: /CLIMB_AFTER=(\S+)/.exec(out)?.[1],
-    attempts: Number(existsSync(calls) ? readFileSync(calls, 'utf8') : 0),
-    climbs: existsSync(climbs) ? readFileSync(climbs, 'utf8') : '',
+    attempts: Number(existsSync(calls) ? engineSource(calls) : 0),
+    climbs: existsSync(climbs) ? engineSource(climbs) : '',
   };
 }
 

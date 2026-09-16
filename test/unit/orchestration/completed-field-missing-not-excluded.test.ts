@@ -35,12 +35,13 @@ import { mkdtempSync, writeFileSync, rmSync } from 'node:fs';
 import { readFileSync } from 'node:fs';
 import { join } from 'node:path';
 import { tmpdir } from 'node:os';
+import { engineSource } from '../../lib/engine-source';
 
 const REPO_ROOT = join(__dirname, '../../../');
 const ORCH_SH = join(REPO_ROOT, 'orchestrations/scripts/run-agent-orchestration.sh');
 const CLAUDE_SH = join(REPO_ROOT, 'orchestrations/scripts/claude.sh');
-const orchSrc = readFileSync(ORCH_SH, 'utf8');
-const claudeSrc = readFileSync(CLAUDE_SH, 'utf8');
+const orchSrc = engineSource(ORCH_SH);
+const claudeSrc = engineSource(CLAUDE_SH);
 
 const cleanupDirs: string[] = [];
 afterEach(() => {

@@ -18,10 +18,11 @@ import { mkdtempSync, rmSync, writeFileSync, readFileSync, existsSync } from 'no
 import { execFileSync } from 'node:child_process';
 import { tmpdir } from 'node:os';
 import { join } from 'node:path';
+import { engineSource } from '../../lib/engine-source';
 
 const ORCH = join(__dirname, '../../../orchestrations/scripts/run-agent-orchestration.sh');
 const LIB = join(__dirname, '../../../orchestrations/scripts/lib');
-const src = readFileSync(ORCH, 'utf8');
+const src = engineSource(ORCH);
 const dirs: string[] = [];
 afterAll(() => { for (const d of dirs.splice(0)) rmSync(d, { recursive: true, force: true }); });
 
@@ -38,8 +39,8 @@ set -uo pipefail
 head -c 8000 ${JSON.stringify(logFile)} | kb_record_episode core lint-gate "lint gate failed"
 `], { encoding: 'utf8', env });
   const f = join(dir, 'healing-events.jsonl');
-  return existsSync(f) && readFileSync(f, 'utf8').trim()
-    ? JSON.parse(readFileSync(f, 'utf8').trim().split('\n')[0]) : null;
+  return existsSync(f) && engineSource(f).trim()
+    ? JSON.parse(engineSource(f).trim().split('\n')[0]) : null;
 }
 
 describe('gate remediation records an episode keyed by the lint log', () => {

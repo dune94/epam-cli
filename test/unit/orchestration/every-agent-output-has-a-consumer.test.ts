@@ -19,10 +19,10 @@
 import { describe, it, expect } from 'vitest';
 import { readFileSync, readdirSync, statSync } from 'node:fs';
 import { join } from 'node:path';
+import { engineSource } from '../../lib/engine-source';
 
 const ROOT = join(__dirname, '../../../');
-const REGISTRY = JSON.parse(readFileSync(
-  join(ROOT, 'orchestrations/agents/invocation-profiles.json'), 'utf8'));
+const REGISTRY = JSON.parse(engineSource(join(ROOT, 'orchestrations/agents/invocation-profiles.json')));
 const SCRIPTS = join(ROOT, 'orchestrations/scripts');
 
 function sources(dir: string, acc: string[] = []): string[] {
@@ -34,7 +34,7 @@ function sources(dir: string, acc: string[] = []): string[] {
   }
   return acc;
 }
-const SRC = sources(SCRIPTS).map((f) => ({ f: f.replace(`${ROOT}`, ''), text: readFileSync(f, 'utf8') }));
+const SRC = sources(SCRIPTS).map((f) => ({ f: f.replace(`${ROOT}`, ''), text: engineSource(f) }));
 
 const PROFILES: Record<string, any> = REGISTRY.profiles;
 const PRODUCED = [...new Set(Object.values(PROFILES).map((p: any) => p.produces).filter(Boolean))].sort();

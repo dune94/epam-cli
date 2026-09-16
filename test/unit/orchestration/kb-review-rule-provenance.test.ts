@@ -25,10 +25,11 @@ import { spawnSync } from 'node:child_process';
 import { mkdtempSync, mkdirSync, writeFileSync, rmSync, readFileSync } from 'node:fs';
 import { join } from 'node:path';
 import { tmpdir } from 'node:os';
+import { engineSource } from '../../lib/engine-source';
 
 const REPO_ROOT = join(__dirname, '../../../');
 const ORCH = join(REPO_ROOT, 'orchestrations/scripts/run-agent-orchestration.sh');
-const orchSrc = readFileSync(ORCH, 'utf8');
+const orchSrc = engineSource(ORCH);
 
 const dirs: string[] = [];
 afterEach(() => {
@@ -75,7 +76,7 @@ function appendKbRule(opts: { story: string; runId: string; description: string 
     ].join('\n'),
   );
   spawnSync('bash', [script], { encoding: 'utf8', timeout: 15000 });
-  return readFileSync(join(logDir, 'kb-scratchpad/KB-review-agent.md'), 'utf8');
+  return engineSource(join(logDir, 'kb-scratchpad/KB-review-agent.md'));
 }
 
 describe('KB review rules are attributable', () => {

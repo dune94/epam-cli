@@ -31,6 +31,7 @@ import { execFileSync, spawnSync } from 'node:child_process';
 import { mkdtempSync, writeFileSync, readFileSync, rmSync, mkdirSync } from 'node:fs';
 import { join } from 'node:path';
 import { tmpdir } from 'node:os';
+import { engineSource } from '../../lib/engine-source';
 
 const CTX = join(__dirname, '../../../orchestrations/scripts/lib/assessment_context.py');
 const APPLY = join(__dirname, '../../../orchestrations/scripts/lib/assessment_apply.py');
@@ -141,7 +142,7 @@ describe('a rule naming a file that does not exist is rejected', () => {
        '--repo-root', repoRoot],
       { encoding: 'utf8', timeout: 20000 });
     return {
-      profiles: JSON.parse(readFileSync(f, 'utf8')),
+      profiles: JSON.parse(engineSource(f)),
       stdout: (out.stdout || '') + (out.stderr || ''),
     };
   }
@@ -187,7 +188,7 @@ describe('a rule naming a file that does not exist is rejected', () => {
 });
 
 describe('the grounded facts actually reach the prompt', () => {
-  const src = readFileSync(ORCH, 'utf8');
+  const src = engineSource(ORCH);
 
   function fn(): string {
     const i = src.indexOf('run_pre_phase_assessment() {');

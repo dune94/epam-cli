@@ -36,9 +36,11 @@ import { readFileSync, mkdtempSync, mkdirSync, writeFileSync, rmSync } from 'nod
 import { execFileSync } from 'node:child_process';
 import { join } from 'node:path';
 import { tmpdir } from 'node:os';
+import { engineSource } from '../../lib/engine-source';
+import { engineSourceFile } from '../../lib/engine-source';
 
 const CLAUDE_SH = join(__dirname, '../../../orchestrations/scripts/claude.sh');
-const src = readFileSync(CLAUDE_SH, 'utf8');
+const src = engineSource(CLAUDE_SH);
 
 function extractBlock(startMarker: string, endMarker: string): string {
   const start = src.indexOf(startMarker);
@@ -74,6 +76,7 @@ function makeRepo(withManifest: boolean): string {
 }
 
 const ROOT = join(__dirname, '../../..');
+engineSourceFile(join(ROOT, 'orchestrations/scripts/claude.sh')); // the awk lifts below read the inlined program
 const NODE = join(process.env.HOME || '', '.nvm/versions/node/v20.20.0/bin/node');
 
 function run(block: string, env: NodeJS.ProcessEnv, projectRoot: string): string {
@@ -91,8 +94,8 @@ source "$SCRIPT_DIR/lib/render-engine-prompt.sh"
 # argv). Unsourced it is command-not-found, the values file is EMPTY, and the render fails
 # — which reads here as "the directive did not fire".
 source "$SCRIPT_DIR/lib/jq-vals.sh"
-eval "$(awk '/^_project_dep_config_value\\(\\) \\{/,/^\\}/' "$SCRIPT_DIR/claude.sh")"
-eval "$(awk '/^_project_install_command\\(\\) \\{/,/^\\}/' "$SCRIPT_DIR/claude.sh")"
+eval "$(awk '/^_project_dep_config_value\\(\\) \\{/,/^\\}/' "$SCRIPT_DIR/.inlined/claude.sh")"
+eval "$(awk '/^_project_install_command\\(\\) \\{/,/^\\}/' "$SCRIPT_DIR/.inlined/claude.sh")"
 # A HARNESS THAT LIFTED NOTHING MUST NOT LOOK LIKE A DIRECTIVE THAT CORRECTLY STAYED SILENT.
 # The awk patterns above lost their backslashes through the template literal once already, which
 # defined no functions, emitted no directive, and made every empty-string expectation below pass.
@@ -136,8 +139,7 @@ describe('the new-dependency directive exists and is wired into the prompt', () 
   });
 
   it('carries no ecosystem in the template itself — that is where hardcoding would live', () => {
-    const body = JSON.parse(readFileSync(
-      join(ROOT, 'orchestrations/prompts/templates/new-dependency-directive.json'), 'utf8')).body as string;
+    const body = JSON.parse(engineSource(join(ROOT, 'orchestrations/prompts/templates/new-dependency-directive.json'))).body as string;
     expect(body).not.toMatch(/npm|pip|cargo|yarn|pnpm|bundle|package\.json/i);
   });
 

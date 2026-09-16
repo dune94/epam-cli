@@ -22,13 +22,14 @@ import { spawnSync } from 'node:child_process';
 import { readFileSync, writeFileSync, mkdtempSync, rmSync } from 'node:fs';
 import { join } from 'node:path';
 import { tmpdir } from 'node:os';
+import { engineSource } from '../../lib/engine-source';
 
 const ROOT = join(__dirname, '../../../');
 const ORCH = join(ROOT, 'orchestrations/scripts/run-agent-orchestration.sh');
 
 /** The real decision function, lifted from the script — never a re-typed copy. */
 function extractVerdictFn(): string {
-  const lines = readFileSync(ORCH, 'utf8').split('\n');
+  const lines = engineSource(ORCH).split('\n');
   const start = lines.findIndex((l) => /^_mc_no_assignment_verdict\(\)\s*\{/.test(l));
   if (start < 0) throw new Error('_mc_no_assignment_verdict() not found in run-agent-orchestration.sh');
   const end = lines.findIndex((l, i) => i > start && /^\}/.test(l));
@@ -73,7 +74,7 @@ describe('a coordinator that assigned nothing says WHY', () => {
   });
 
   it('the ambiguous phrasing is gone from the script', () => {
-    expect(readFileSync(ORCH, 'utf8'),
+    expect(engineSource(ORCH),
       'the run can still log "found nothing to do or failed", which is two outcomes in one line')
       .not.toContain('found nothing to do or failed');
   });

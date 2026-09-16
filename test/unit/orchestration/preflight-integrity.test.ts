@@ -11,6 +11,7 @@ import { readFileSync, mkdtempSync, writeFileSync, rmSync } from 'node:fs';
 import { execFileSync } from 'node:child_process';
 import { join } from 'node:path';
 import { tmpdir } from 'node:os';
+import { engineSource } from '../../lib/engine-source';
 
 // Use canonical PRD — the runtime prd.json is reset before every run and should
 // not be used in tests (its content varies with run state).
@@ -33,7 +34,7 @@ interface Prd {
   implementationOrder: Record<string, string[]>;
 }
 
-const prd: Prd = JSON.parse(readFileSync(PRD_PATH, 'utf8'));
+const prd: Prd = JSON.parse(engineSource(PRD_PATH));
 const activeIds = new Set(Object.values(prd.implementationOrder).flat());
 const byId = new Map(prd.stories.map((s) => [s.id, s]));
 const outputDir = prd.project?.outputDir ?? '';
@@ -240,28 +241,19 @@ describe('PRD integrity — AC quality', () => {
 // ── Check 8: Control plane port (no EADDRINUSE on startup) ──────────────────
 describe('PRD integrity — control plane resilience', () => {
   it('run-agent-orchestration.sh kills stale process before starting control plane', () => {
-    const script = readFileSync(
-      join(__dirname, '../../../orchestrations/scripts/run-agent-orchestration.sh'),
-      'utf8'
-    );
+    const script = engineSource(join(__dirname, '../../../orchestrations/scripts/run-agent-orchestration.sh'));
     expect(script).toContain('lsof -ti');
     expect(script).toContain('CONTROL_PLANE_PORT');
   });
 
   it('control-plane.js binds 0.0.0.0 (WSL2 accessible)', () => {
-    const src = readFileSync(
-      join(__dirname, '../../../orchestrations/scripts/control-plane.js'),
-      'utf8'
-    );
+    const src = engineSource(join(__dirname, '../../../orchestrations/scripts/control-plane.js'));
     expect(src).toContain("'0.0.0.0'");
     expect(src).not.toContain("'127.0.0.1'");
   });
 
   it('control-plane.js handles EADDRINUSE gracefully (no crash)', () => {
-    const src = readFileSync(
-      join(__dirname, '../../../orchestrations/scripts/control-plane.js'),
-      'utf8'
-    );
+    const src = engineSource(join(__dirname, '../../../orchestrations/scripts/control-plane.js'));
     expect(src).toContain('EADDRINUSE');
   });
 });
@@ -373,7 +365,7 @@ describe('preflight-prd-integrity.sh — real subprocess execution', () => {
   // ui_and_review is no longer a required phase (removed 2026-07-07) — the
   // canonical PRD's 2 phases (scaffold, core) now satisfy the phase check.
   it('direct invocation on the raw canonical PRD fails only on the known pre-spec-pass gap (testCriteria stub) — phase check now passes with 2 phases', () => {
-    const result = runPreflight(JSON.parse(readFileSync(PRD_PATH, 'utf8')));
+    const result = runPreflight(JSON.parse(engineSource(PRD_PATH)));
     expect(result.code).toBe(1);
     expect(result.stdout).not.toMatch(/Missing required phases/);
     expect(result.stdout).toMatch(/Exactly 2 phases in correct order/);
@@ -446,7 +438,7 @@ describe('preflight-check.sh / prd-remediate.sh — canonical bypass catches sta
 
   it('preflight-check.sh and prd-remediate.sh both scope the stale-specification check by the completed flag (static contract, both files)', () => {
     for (const file of ['preflight-check.sh', 'prd-remediate.sh']) {
-      const script = readFileSync(join(__dirname, `../../../orchestrations/scripts/${file}`), 'utf8');
+      const script = engineSource(join(__dirname, `../../../orchestrations/scripts/${file}`));
       expect(script).toMatch(/_stale_spec=/);
       // THE PREDICATE MOVED OUT OF THE SHELL into a handler, so BOTH scripts now share ONE
       // copy instead of each carrying its own. Asserting the snippet's text against each
@@ -458,14 +450,14 @@ describe('preflight-check.sh / prd-remediate.sh — canonical bypass catches sta
   });
 
   it('the shared stale-specification predicate is still scoped by the completed flag', () => {
-    const handler = readFileSync(join(__dirname,
-      '../../../orchestrations/scripts/lib/handlers/prd-stale-specification-stories.py'), 'utf8');
+    const handler = engineSource(join(__dirname,
+      '../../../orchestrations/scripts/lib/handlers/prd-stale-specification-stories.py'));
     expect(handler.length, 'the handler must exist — otherwise this asserts nothing').toBeGreaterThan(50);
     expect(handler).toMatch(/s\.get\('specification'\) and not s\.get\('completed'\)/);
   });
 
   it('the real canonical PRD (as committed) has zero stale specification blocks — this is the bug that was just fixed', () => {
-    const prd = JSON.parse(readFileSync(PRD_PATH, 'utf8'));
+    const prd = JSON.parse(engineSource(PRD_PATH));
     const stale = prd.stories.filter((s: any) => s.specification);
     expect(stale.map((s: any) => s.id)).toHaveLength(0);
   });

@@ -21,6 +21,7 @@ import { spawnSync } from 'node:child_process';
 import { mkdtempSync, rmSync, writeFileSync, readFileSync } from 'node:fs';
 import { join } from 'node:path';
 import { tmpdir } from 'node:os';
+import { engineSource } from '../../lib/engine-source';
 
 const ROOT = join(__dirname, '../../..');
 const ORCH = join(ROOT, 'orchestrations/scripts/run-agent-orchestration.sh');
@@ -51,7 +52,7 @@ function divergedRepo(): string {
 
 /** The target-branch validation, lifted from the script and run as the script runs it. */
 function validateTarget(repo: string): { code: number; text: string } {
-  const src = readFileSync(ORCH, 'utf8');
+  const src = engineSource(ORCH);
   const start = src.indexOf('    # THE TARGET MUST BE A REAL BRANCH');
   expect(start, 'the target-branch validation is gone — this test is measuring nothing')
     .toBeGreaterThan(-1);
@@ -82,10 +83,10 @@ describe('the merge-back says what actually stopped it', () => {
     // And this is what it is protecting against: -X ours exits 0 and keeps the target's line.
     const merged = git(dir, 'merge', '--no-ff', '-X', 'ours', 'wt-primary', '-m', 'm');
     expect(merged.status, '-X ours no longer exits 0 on a conflict — re-derive the guard').toBe(0);
-    expect(readFileSync(join(dir, 'f.txt'), 'utf8'),
+    expect(engineSource(join(dir, 'f.txt')),
       'the agent’s change survived, so this fixture no longer reproduces the silent discard',
     ).toContain('MAIN');
-    expect(readFileSync(join(dir, 'f.txt'), 'utf8')).not.toContain('AGENT');
+    expect(engineSource(join(dir, 'f.txt'))).not.toContain('AGENT');
   });
 
   it('refuses, naming the target, when HEAD is detached', () => {

@@ -20,6 +20,7 @@ import { mkdtempSync, mkdirSync, writeFileSync, readFileSync, readdirSync, symli
 import { join } from 'node:path';
 import { tmpdir } from 'node:os';
 import { provisionProject, cleanupProvisioned } from '../../support/provisioned-project';
+import { engineSource } from '../../lib/engine-source';
 
 const ROOT = join(__dirname, '../../../');
 const SCRIPTS = join(ROOT, 'orchestrations/scripts');
@@ -29,7 +30,7 @@ const SPEC_RUNNER = join(SCRIPTS, 'spec-mode-runner.js');
 const dirs: string[] = [];
 afterAll(() => { for (const d of dirs) rmSync(d, { recursive: true, force: true }); cleanupProvisioned(); });
 
-const lines = readFileSync(CLAUDE_SH, 'utf8').split('\n');
+const lines = engineSource(CLAUDE_SH).split('\n');
 
 /** Each ai-run.sh invocation with the env prefix that precedes it (the `\`-continued lines back to the pipe). */
 const sites = lines
@@ -54,7 +55,7 @@ describe('every runner call in claude.sh names its seam', () => {
   });
 
   it('the speckit review pass in spec-mode-runner.js names the spec-agent seam, not its JSON tag', () => {
-    const src = readFileSync(SPEC_RUNNER, 'utf8');
+    const src = engineSource(SPEC_RUNNER);
     const anchor = 'path.join(logDir, `${story.id}-speckit-review.log`)';
     const at = src.indexOf(anchor);
     expect(at, 'the speckit review call was not found').toBeGreaterThan(-1);
@@ -75,7 +76,7 @@ describe('every runner call in claude.sh names its seam', () => {
 
   // The functions need SOME gate provider and SOME project to render their prompts against; which
   // ones is not what is being tested, so both are the first the repository declares — never named.
-  const anyDeclaredSet = () => Object.keys(JSON.parse(readFileSync(join(ROOT, 'orchestrations/config/provider-sets.json'), 'utf8')).sets)[0];
+  const anyDeclaredSet = () => Object.keys(JSON.parse(engineSource(join(ROOT, 'orchestrations/config/provider-sets.json'))).sets)[0];
   // A project whose prompts are PROVISIONED (every template) (copied from the templates — the
   // established fixture, test/support/provisioned-project.ts): a fresh checkout mints none, and
   // a real project named here would tie the test to whatever that project has minted.
@@ -97,13 +98,13 @@ describe('every runner call in claude.sh names its seam', () => {
     const { d, scripts, dump } = stubbedScripts();
     const out = callThroughRealFile(scripts, d, `run_prd_change_reviewer FX-7 skill_note '{}' '{"a":1}'`);
     expect(existsSync(dump), `the runner was never invoked:\n${out.slice(-800)}`).toBe(true);
-    expect(readFileSync(dump, 'utf8')).toContain('EPAM_AGENT_NAME=prd-change-reviewer EPAM_STORY_ID=FX-7');
+    expect(engineSource(dump)).toContain('EPAM_AGENT_NAME=prd-change-reviewer EPAM_STORY_ID=FX-7');
   }, 180_000);
 
   it('run_prd_change_summarizer, executed, hands the runner prd-change-summarizer and the story id', () => {
     const { d, scripts, dump } = stubbedScripts();
     const out = callThroughRealFile(scripts, d, `run_prd_change_summarizer FX-7 skill_note 'a note' 'too long'`);
     expect(existsSync(dump), `the runner was never invoked:\n${out.slice(-800)}`).toBe(true);
-    expect(readFileSync(dump, 'utf8')).toContain('EPAM_AGENT_NAME=prd-change-summarizer EPAM_STORY_ID=FX-7');
+    expect(engineSource(dump)).toContain('EPAM_AGENT_NAME=prd-change-summarizer EPAM_STORY_ID=FX-7');
   }, 180_000);
 });

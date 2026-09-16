@@ -36,6 +36,7 @@ import { execFileSync } from 'node:child_process';
 import { mkdtempSync, mkdirSync, writeFileSync, rmSync, readFileSync, readdirSync, symlinkSync } from 'node:fs';
 import { join, dirname } from 'node:path';
 import { tmpdir } from 'node:os';
+import { engineSource } from '../lib/engine-source';
 
 const ROOT = join(__dirname, '../../');
 const SCRIPTS = join(ROOT, 'orchestrations/scripts');
@@ -49,7 +50,7 @@ const NODE_BIN = join(process.env.HOME || '', '.nvm/versions/node/v20.20.0/bin/n
  * harness honest — there is no second, drifting copy of the setup that production performs.
  */
 export function claudeShAsLibrary(): string {
-  const src = readFileSync(CLAUDE_SH, 'utf8');
+  const src = engineSource(CLAUDE_SH);
   const lines = src.split('\n');
   const idx = lines.map((l) => l.trim()).lastIndexOf('main "$@"');
   if (idx === -1) {

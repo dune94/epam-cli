@@ -14,10 +14,11 @@
 import { describe, it, expect } from 'vitest';
 import { readFileSync } from 'fs';
 import { join } from 'path';
+import { engineSource } from '../../lib/engine-source';
 
 const ROOT = join(__dirname, '../../..');
-const claudeSrc = readFileSync(join(ROOT, 'orchestrations/scripts/claude.sh'), 'utf8');
-const invokePy = readFileSync(join(ROOT, 'orchestrations/scripts/invoke.py'), 'utf8');
+const claudeSrc = engineSource(join(ROOT, 'orchestrations/scripts/claude.sh'));
+const invokePy = engineSource(join(ROOT, 'orchestrations/scripts/invoke.py'));
 
 /** Every line that invokes invoke.py. */
 const callSites = claudeSrc.split('\n').filter((l) => /"\$INVOKE_PY"/.test(l));

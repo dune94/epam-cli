@@ -25,6 +25,7 @@ import { mkdtempSync, writeFileSync, readFileSync, mkdirSync, rmSync, existsSync
 import { execFileSync } from 'node:child_process';
 import { join } from 'node:path';
 import { tmpdir } from 'node:os';
+import { engineSource } from '../../lib/engine-source';
 
 const ROOT = join(__dirname, '../../..');
 const CKPT = join(ROOT, 'orchestrations/scripts/lib/run-checkpoint.sh');
@@ -53,7 +54,7 @@ const ingestedPrd = () => JSON.stringify({
 }, null, 2);
 
 const spec = (p: string) => {
-  const s = JSON.parse(readFileSync(p, 'utf8')).stories[0];
+  const s = JSON.parse(engineSource(p)).stories[0];
   return (s.verificationCriteria || []).length + (s.fixSiteAnalysis || []).length;
 };
 
@@ -113,7 +114,7 @@ function runIngestBlock(opts: { skip: boolean; prdBody?: string | null }) {
 
   // Extract the block verbatim from the real script: from the guard comment through the
   // closing `fi` after PIPESTATUS. Testing the shipped text, not a paraphrase of it.
-  const src = readFileSync(ORCH, 'utf8');
+  const src = engineSource(ORCH);
   const start = src.indexOf('  # A RESUME MUST NOT RE-INGEST.');
   const endMark = '  _ingest_exit="${PIPESTATUS[0]}"\n  fi\n';
   const end = src.indexOf(endMark, start);
@@ -165,7 +166,7 @@ describe('THE DEFECT: on resume the spec survives', () => {
     const base = mkdtempSync(join(tmpdir(), 'percl-')); dirs.push(base);
     const prd = join(base, 'prd.json');
     writeFileSync(prd, richPrd());
-    const before = JSON.parse(readFileSync(prd, 'utf8')).stories[0].verificationCriteriaPerCodeline;
+    const before = JSON.parse(engineSource(prd)).stories[0].verificationCriteriaPerCodeline;
     expect(Object.keys(before).sort()).toEqual(['gotransit', 'metrolinx', 'upexpress']);
   });
 

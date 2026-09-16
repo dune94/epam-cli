@@ -21,10 +21,11 @@ import { readFileSync, mkdtempSync, mkdirSync, writeFileSync, rmSync } from 'nod
 import { execFileSync, spawnSync } from 'node:child_process';
 import { join } from 'node:path';
 import { tmpdir } from 'node:os';
+import { engineSource } from '../../lib/engine-source';
 
 const REPO_ROOT = join(__dirname, '../../../');
 const CLAUDE_SH = join(REPO_ROOT, 'orchestrations/scripts/claude.sh');
-const claudeSrc = readFileSync(CLAUDE_SH, 'utf8');
+const claudeSrc = engineSource(CLAUDE_SH);
 
 // THE CHECK'S LOGIC LIVES IN ITS HANDLER NOW.
 //
@@ -37,7 +38,7 @@ const claudeSrc = readFileSync(CLAUDE_SH, 'utf8');
 // actually is. Read from the path the shell invokes rather than a name written here, so moving
 // it again fails loudly instead of silently passing.
 const NAMED_IMPORT_HANDLER = join(REPO_ROOT, 'orchestrations/scripts/lib/handlers/named-import-check.py');
-const handlerSrc = readFileSync(NAMED_IMPORT_HANDLER, 'utf8');
+const handlerSrc = engineSource(NAMED_IMPORT_HANDLER);
 
 function extractFunctionByLineAnchor(name: string): string {
   const lines = claudeSrc.split('\n');
@@ -132,7 +133,7 @@ describe('run_named_import_check — REAL execution against the exact live defec
       const rc = parseInt(output.match(/RC=(\d+)/)?.[1] ?? '-1', 10);
       const fileContents: Record<string, string> = {};
       for (const relPath of Object.keys(opts.files)) {
-        fileContents[relPath] = readFileSync(join(dir, relPath), 'utf8');
+        fileContents[relPath] = engineSource(join(dir, relPath));
       }
       return { rc, output, fileContents };
     } finally {

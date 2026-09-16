@@ -19,6 +19,7 @@ import { describe, it, expect, beforeAll } from 'vitest';
 import fs from 'fs';
 import path from 'path';
 import { orchestratorSource } from '../../helpers/orchestrator-source';
+import { engineSource } from '../../lib/engine-source';
 
 const ORCH_SCRIPT   = path.resolve(__dirname, '../../../orchestrations/scripts/run-agent-orchestration.sh');
 const AI_RUN        = path.resolve(__dirname, '../../../orchestrations/scripts/llm-handler.sh');
@@ -50,26 +51,25 @@ const orchCorpus = (() => {
   const walk = (d: string) => {
     for (const e of fs.readdirSync(d, { withFileTypes: true })) {
       const q = path.join(d, e.name);
-      if (e.isDirectory()) walk(q); else out.push(fs.readFileSync(q, 'utf8'));
+      if (e.isDirectory()) walk(q); else out.push(engineSource(q));
     }
   };
   try { walk(H); } catch { /* no handlers dir: the corpus is just the orchestrator */ }
   return out.join('\n');
 })();
-const aiRunSrc  = fs.readFileSync(AI_RUN, 'utf8');
-const tcSrc     = fs.readFileSync(TC_WRITER, 'utf8');
+const aiRunSrc  = engineSource(AI_RUN);
+const tcSrc     = engineSource(TC_WRITER);
 // The TC writer's exit/staleness logic was a python heredoc inside post-impl-tc-writer.sh and is
 // now lib/handlers/tc-apply-to-prd.py. The BEHAVIOUR is unchanged — these assertions are about
 // whether a failed agent's stale output can still reach the PRD, the same question wherever the
 // code lives.
-const tcApplySrc = fs.readFileSync(
-  path.resolve(__dirname, '../../../orchestrations/scripts/lib/handlers/tc-apply-to-prd.py'), 'utf8');
-const tier3Src  = fs.readFileSync(TIER3_RUNNER, 'utf8');
-const monitorSrc = fs.readFileSync(MONITOR_HTML, 'utf8');
+const tcApplySrc = engineSource(path.resolve(__dirname, '../../../orchestrations/scripts/lib/handlers/tc-apply-to-prd.py'));
+const tier3Src  = engineSource(TIER3_RUNNER);
+const monitorSrc = engineSource(MONITOR_HTML);
 
 let profiles: Record<string, string>;
 beforeAll(() => {
-  profiles = JSON.parse(fs.readFileSync(PROFILES, 'utf8'));
+  profiles = JSON.parse(engineSource(PROFILES));
 });
 
 // ─── Helpers ──────────────────────────────────────────────────────────────────
@@ -277,8 +277,7 @@ describe('Warn paths — grounding downgrades hallucinated fails', () => {
     // lib/handlers/spec-extractor.py (dispatched at run-agent-orchestration.sh:9270). Hunting
     // the old marker reported the extractor as missing rather than as moved, and a gate
     // reported missing reads as a gate that is gone.
-    const block = fs.readFileSync(
-      path.resolve(__dirname, '../../../orchestrations/scripts/lib/handlers/spec-extractor.py'), 'utf8');
+    const block = engineSource(path.resolve(__dirname, '../../../orchestrations/scripts/lib/handlers/spec-extractor.py'));
     expect(block.length, 'lib/handlers/spec-extractor.py is empty').toBeGreaterThan(0);
 
     // Must NOT use json.loads on the full blob (the root cause of the bug)
@@ -885,7 +884,7 @@ describe('Step 22a: SAST sentinel', () => {
     const carriers = fs.readdirSync(TEMPLATES)
       .filter((f) => f.endsWith('.json'))
       .filter((f) => /TypeScript Compiler Results[\s\S]*hard evidence/.test(
-        fs.readFileSync(path.join(TEMPLATES, f), 'utf8')));
+        engineSource(path.join(TEMPLATES, f))));
     expect(carriers.length,
       'no template carries the TypeScript compiler oracle — the SAST agent would judge with no '
       + 'compiler evidence and its findings would be unfalsifiable').toBeGreaterThan(0);
@@ -1383,12 +1382,12 @@ describe('PRD auto-remediation', () => {
   });
 
   it('prd-remediate.sh calls preflight-prd-integrity.sh after remediation', () => {
-    const src = fs.readFileSync(PRD_REMEDIATE, 'utf8');
+    const src = engineSource(PRD_REMEDIATE);
     expect(src).toMatch(/preflight-prd-integrity\.sh/);
   });
 
   it('prd-remediate.sh calls the Python impl script', () => {
-    const src = fs.readFileSync(PRD_REMEDIATE, 'utf8');
+    const src = engineSource(PRD_REMEDIATE);
     expect(src).toMatch(/_prd_remediate_impl\.py/);
   });
 
@@ -1397,19 +1396,19 @@ describe('PRD auto-remediation', () => {
   });
 
   it('remediation removes stale bug-fix split stories', () => {
-    const src = fs.readFileSync(PRD_REMEDIATE_IMPL, 'utf8');
+    const src = engineSource(PRD_REMEDIATE_IMPL);
     expect(src).toMatch(/stale_splits/);
     expect(src).toMatch(/split_re.*impl\|test\|table/);
   });
 
   it('remediation removes no-files stories from implementationOrder', () => {
-    const src = fs.readFileSync(PRD_REMEDIATE_IMPL, 'utf8');
+    const src = engineSource(PRD_REMEDIATE_IMPL);
     expect(src).toMatch(/no_files_removed/);
     expect(src).toMatch(/technicalNotes.*files/);
   });
 
   it('remediation removes extra/stale phases', () => {
-    const src = fs.readFileSync(PRD_REMEDIATE_IMPL, 'utf8');
+    const src = engineSource(PRD_REMEDIATE_IMPL);
     expect(src).toMatch(/extra_phases/);
     expect(src).toMatch(/REQUIRED_PHASES/);
     // ui_and_review removed (2026-07-07): pipeline is scaffold -> core only.
@@ -1424,26 +1423,26 @@ describe('PRD auto-remediation', () => {
   });
 
   it('remediation trims ACs exceeding 24 to exactly 24', () => {
-    const src = fs.readFileSync(PRD_REMEDIATE_IMPL, 'utf8');
+    const src = engineSource(PRD_REMEDIATE_IMPL);
     expect(src).toMatch(/MAX_ACS = 24/);
     expect(src).toMatch(/acceptanceCriteria.*MAX_ACS/);
     expect(src).toMatch(/acs\[:MAX_ACS\]/);
   });
 
   it('remediation deduplicates exact-duplicate file paths within a story', () => {
-    const src = fs.readFileSync(PRD_REMEDIATE_IMPL, 'utf8');
+    const src = engineSource(PRD_REMEDIATE_IMPL);
     expect(src).toMatch(/deduped_count/);
     expect(src).toMatch(/dict\.fromkeys|dedup/);
   });
 
   it('remediation resets active story status to pending', () => {
-    const src = fs.readFileSync(PRD_REMEDIATE_IMPL, 'utf8');
+    const src = engineSource(PRD_REMEDIATE_IMPL);
     expect(src).toMatch(/status.*pending/);
     expect(src).toMatch(/completed.*False/);
   });
 
   it('remediation strips runtime fields from stories', () => {
-    const src = fs.readFileSync(PRD_REMEDIATE_IMPL, 'utf8');
+    const src = engineSource(PRD_REMEDIATE_IMPL);
     expect(src).toMatch(/RUNTIME_FIELDS/);
     // actualCost must NOT be in RUNTIME_FIELDS — it is historical data that survives remediation
     expect(src).toMatch(/startedAt/);

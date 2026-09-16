@@ -36,9 +36,10 @@ import { spawnSync } from 'node:child_process';
 import { mkdtempSync, writeFileSync, rmSync, readFileSync } from 'node:fs';
 import { join } from 'node:path';
 import { tmpdir } from 'node:os';
+import { engineSource } from '../../lib/engine-source';
 
 const ORCH = join(__dirname, '../../../orchestrations/scripts/run-agent-orchestration.sh');
-const SRC = readFileSync(ORCH, 'utf8');
+const SRC = engineSource(ORCH);
 
 const dirs: string[] = [];
 afterEach(() => { for (const d of dirs.splice(0)) rmSync(d, { recursive: true, force: true }); });
@@ -74,7 +75,7 @@ _reset_story_for_reimplementation "AMSD-2041"
 `);
     const r = spawnSync('bash', [script], { encoding: 'utf8', timeout: 30000 });
     expect(r.status, `stderr: ${r.stderr}`).toBe(0);
-    const after = JSON.parse(readFileSync(prd, 'utf8'));
+    const after = JSON.parse(engineSource(prd));
     const story = after.stories.find((s: { id: string }) => s.id === 'AMSD-2041');
     expect(story.completed, 'is_story_completed will still short-circuit the retry').toBe(false);
     expect(story.status).toBe('pending');
@@ -96,7 +97,7 @@ ${fnText('_reset_story_for_reimplementation')}
 _reset_story_for_reimplementation "AMSD-2041"
 `);
     spawnSync('bash', [script], { encoding: 'utf8', timeout: 30000 });
-    const after = JSON.parse(readFileSync(prd, 'utf8'));
+    const after = JSON.parse(engineSource(prd));
     const sibling = after.stories.find((s: { id: string }) => s.id === 'AMSD-2041-B');
     expect(sibling.completed, 'a sibling story was reset — this must be scoped to ONE story').toBe(true);
   });
@@ -130,7 +131,7 @@ _reset_story_for_reimplementation "AMSD-2041"
 `);
     const r = spawnSync('bash', [script], { encoding: 'utf8', timeout: 30000 });
     expect(r.status).toBe(0);
-    const after = JSON.parse(readFileSync(prd, 'utf8'));
+    const after = JSON.parse(engineSource(prd));
     expect(after.stories[0].completed).toBe(false);
   });
 });

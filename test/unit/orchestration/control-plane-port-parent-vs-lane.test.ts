@@ -31,9 +31,10 @@ import { mkdtempSync, writeFileSync, readFileSync, rmSync } from 'node:fs';
 import { execFileSync } from 'node:child_process';
 import { join } from 'node:path';
 import { tmpdir } from 'node:os';
+import { engineSource } from '../../lib/engine-source';
 
 const ORCH = join(__dirname, '../../../orchestrations/scripts/run-agent-orchestration.sh');
-const orchSrc = readFileSync(ORCH, 'utf8');
+const orchSrc = engineSource(ORCH);
 
 const dirs: string[] = [];
 afterAll(() => { for (const d of dirs) rmSync(d, { recursive: true, force: true }); });
@@ -97,8 +98,7 @@ describe('the fixture is real', () => {
   it('the synthesizer really does point outputDir at the first codeline', () => {
     // If this stops being true the collision below changes shape, and this test should say so
     // rather than quietly passing for a new reason.
-    const syn = readFileSync(
-      join(__dirname, '../../../orchestrations/scripts/synthesize-prd-from-jira.js'), 'utf8');
+    const syn = engineSource(join(__dirname, '../../../orchestrations/scripts/synthesize-prd-from-jira.js'));
     expect(syn).toMatch(/project\.outputDir\s*=\s*outputDirs\[0\]\.path/);
   });
 });

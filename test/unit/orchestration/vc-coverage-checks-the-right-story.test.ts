@@ -20,13 +20,14 @@ import { spawnSync } from 'node:child_process';
 import { mkdtempSync, mkdirSync, writeFileSync, rmSync, readFileSync } from 'node:fs';
 import { join } from 'node:path';
 import { tmpdir } from 'node:os';
+import { engineSource } from '../../lib/engine-source';
 
 const ROOT = join(__dirname, '../../..');
 const SCRIPTS = join(ROOT, 'orchestrations/scripts');
 const LIB = join(SCRIPTS, 'lib/story-outputs.sh');
 const ORCH = join(SCRIPTS, 'run-agent-orchestration.sh');
 
-const code = (f: string) => readFileSync(f, 'utf8').split('\n').filter((l) => !/^\s*#/.test(l)).join('\n');
+const code = (f: string) => engineSource(f).split('\n').filter((l) => !/^\s*#/.test(l)).join('\n');
 
 let work: string;
 beforeEach(() => { work = mkdtempSync(join(tmpdir(), 'vc-cov-')); });

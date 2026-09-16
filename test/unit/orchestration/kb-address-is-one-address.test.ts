@@ -22,10 +22,10 @@ import { mkdtempSync, writeFileSync, readFileSync, existsSync, readdirSync, rmSy
 import { execFileSync } from 'node:child_process';
 import { join } from 'node:path';
 import { tmpdir } from 'node:os';
+import { engineSource } from '../../lib/engine-source';
 
 const roster = require('../../../orchestrations/scripts/lib/agent-roster.js');
-const CLAUDE_SH = readFileSync(
-  join(__dirname, '../../../orchestrations/scripts/claude.sh'), 'utf8');
+const CLAUDE_SH = engineSource(join(__dirname, '../../../orchestrations/scripts/claude.sh'));
 
 const dirs: string[] = [];
 afterAll(() => { for (const d of dirs) rmSync(d, { recursive: true, force: true }); });
@@ -123,7 +123,7 @@ describe('the mint seeds the address that is actually read', () => {
       proposals: [{ name: 'alpha-investigator', kind: 'investigator', codeline: 'alpha',
         systemPrompt: 'z'.repeat(80), rationale: 'Re-minted on a later run for this codeline.' }],
     });
-    expect(readFileSync(f, 'utf8'), 'a re-mint wiped what previous runs had learned')
+    expect(engineSource(f), 'a re-mint wiped what previous runs had learned')
       .toContain('a rule learned on an earlier run');
   });
 });

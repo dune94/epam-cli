@@ -25,15 +25,13 @@ import { describe, it, expect } from 'vitest';
 import { readFileSync, mkdtempSync, mkdirSync, writeFileSync, rmSync } from 'node:fs';
 import { join } from 'node:path';
 import { tmpdir } from 'node:os';
+import { engineSource } from '../../lib/engine-source';
 
 // eslint-disable-next-line @typescript-eslint/no-require-imports
 const { wireSplitSiblingDependencies, reorderSiblingsByDependency } = require(
   '../../../orchestrations/scripts/spec-mode-runner.js'
 );
-const SPEC_MODE_RUNNER_SRC = readFileSync(
-  join(__dirname, '../../../orchestrations/scripts/spec-mode-runner.js'),
-  'utf8'
-);
+const SPEC_MODE_RUNNER_SRC = engineSource(join(__dirname, '../../../orchestrations/scripts/spec-mode-runner.js'));
 
 const CONFIG = {
   testFilePattern: '\\.(test|spec)\\.[a-zA-Z0-9]+$',

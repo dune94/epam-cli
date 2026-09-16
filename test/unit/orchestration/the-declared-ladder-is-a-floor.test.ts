@@ -25,13 +25,14 @@ import { describe, it, expect } from 'vitest';
 import { execFileSync } from 'node:child_process';
 import { readFileSync } from 'node:fs';
 import { join } from 'node:path';
+import { engineSource } from '../../lib/engine-source';
 
 const ROOT = join(__dirname, '../../../');
 const ORCH = join(ROOT, 'orchestrations/scripts/run-agent-orchestration.sh');
 
 /** Execute the REAL tier/ladder resolution with a given story tier and archetype floor. */
 function resolve(opts: { storyTier?: string; archetypeLadder?: string; order?: string }): string {
-  const src = readFileSync(ORCH, 'utf8');
+  const src = engineSource(ORCH);
   const at = src.indexOf('_resolve_ladder_tier()');
   expect(at, 'the tier resolver is missing — this test is anchored on it').toBeGreaterThan(0);
   const fn = src.slice(at, src.indexOf('\n}', at) + 2);
@@ -78,7 +79,7 @@ describe('THE ENGINE HOLDS NO TIER VOCABULARY', () => {
     // An engine that ranks `highest > high > medium` embeds a project's vocabulary in shared code
     // and silently ranks an unknown tier lowest. lib/model-ladders.sh already refuses to list tier
     // names for exactly this reason; the reader must not reintroduce them.
-    const src = readFileSync(ORCH, 'utf8');
+    const src = engineSource(ORCH);
     const at = src.indexOf('_resolve_ladder_tier() {');
     const body = src.slice(at, src.indexOf('\n}', at))
       .split('\n').filter((l) => !l.trim().startsWith('#')).join('\n');
@@ -90,7 +91,7 @@ describe('THE ENGINE HOLDS NO TIER VOCABULARY', () => {
   it('the ladder variable is DERIVED from the tier, not selected by a branch', () => {
     // The branch this replaced knew only `high` and a medium default, so a story on any other
     // tier received the MEDIUM ladder while still appearing to have one.
-    const src = readFileSync(ORCH, 'utf8');
+    const src = engineSource(ORCH);
     expect(src, 'the tier-to-ladder branch is back')
       .not.toMatch(/case "\$tier" in[\s\S]{0,200}EPAM_MODEL_LADDER_HIGH/);
     expect(src, 'the ladder variable is not derived the way the exporter names it')

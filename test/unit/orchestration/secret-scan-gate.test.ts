@@ -21,6 +21,7 @@ import { readFileSync, mkdtempSync, writeFileSync, rmSync } from 'node:fs';
 import { execFileSync } from 'node:child_process';
 import { join } from 'node:path';
 import { tmpdir } from 'node:os';
+import { engineSource } from '../../lib/engine-source';
 
 const REPO_ROOT = join(__dirname, '../../../');
 const SCAN_SH = join(REPO_ROOT, 'orchestrations/scripts/scan-secrets.sh');
@@ -30,9 +31,9 @@ const ORCH_SH = join(REPO_ROOT, 'orchestrations/scripts/run-agent-orchestration.
 // consolidation) — single source of truth shared by claude.sh,
 // codemie-claude.sh, and run-agent-orchestration.sh.
 const GIT_OPS_SH = join(REPO_ROOT, 'orchestrations/scripts/lib/git-ops.sh');
-const claudeSrc = readFileSync(CLAUDE_SH, 'utf8');
-const orchSrc = readFileSync(ORCH_SH, 'utf8');
-const gitOpsSrc = readFileSync(GIT_OPS_SH, 'utf8');
+const claudeSrc = engineSource(CLAUDE_SH);
+const orchSrc = engineSource(ORCH_SH);
+const gitOpsSrc = engineSource(GIT_OPS_SH);
 
 function git(cwd: string, ...args: string[]) {
   return execFileSync('git', args, { cwd, encoding: 'utf8' });

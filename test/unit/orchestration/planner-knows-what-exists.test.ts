@@ -32,6 +32,7 @@ import { mkdtempSync, mkdirSync, writeFileSync, rmSync } from 'node:fs';
 import { execFileSync } from 'node:child_process';
 import { join } from 'node:path';
 import { tmpdir } from 'node:os';
+import { engineSource } from '../../lib/engine-source';
 
 const CLAUDE_SH = join(__dirname, '../../../orchestrations/scripts/claude.sh');
 const dirs: string[] = [];
@@ -39,7 +40,7 @@ afterEach(() => { for (const d of dirs.splice(0)) rmSync(d, { recursive: true, f
 
 /** Lifts the shipped helper and runs it against a real directory. */
 function classify(declared: string[], existing: Record<string, number>) {
-  const src = require('node:fs').readFileSync(CLAUDE_SH, 'utf8');
+  const src = engineSource(CLAUDE_SH);
   const start = src.indexOf('_classify_declared_paths() {');
   expect(start, '_classify_declared_paths not found in claude.sh').toBeGreaterThan(-1);
   const fn = src.slice(start, src.indexOf('\n}\n', start) + 3);
@@ -108,7 +109,7 @@ describe('the planner is told which declared paths already exist', () => {
 });
 
 describe('the planner prompt uses it', () => {
-  const sh = () => require('node:fs').readFileSync(CLAUDE_SH, 'utf8');
+  const sh = () => engineSource(CLAUDE_SH);
 
   it('run_planning_phase calls the classifier', () => {
     const src = sh();

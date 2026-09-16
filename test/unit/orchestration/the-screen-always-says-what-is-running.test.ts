@@ -31,6 +31,7 @@ import { execFileSync } from 'node:child_process';
 import { mkdtempSync, writeFileSync, readFileSync, rmSync, mkdirSync, existsSync } from 'node:fs';
 import { tmpdir } from 'node:os';
 import { join } from 'node:path';
+import { engineSource } from '../../lib/engine-source';
 
 const REPO = join(__dirname, '../../../');
 const cleanups: Array<() => void> = [];
@@ -79,7 +80,7 @@ function emitThrough(fields: Record<string, unknown>) {
     },
   });
 
-  return existsSync(log) ? readFileSync(log, 'utf8').trim().split('\n').filter(Boolean) : [];
+  return existsSync(log) ? engineSource(log).trim().split('\n').filter(Boolean) : [];
 }
 
 describe('every model call tells the screen what is running', () => {

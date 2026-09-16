@@ -29,6 +29,7 @@ import { spawnSync } from 'node:child_process';
 import { mkdtempSync, mkdirSync, writeFileSync, readFileSync, rmSync } from 'node:fs';
 import { tmpdir } from 'node:os';
 import { join } from 'node:path';
+import { engineSource } from '../../lib/engine-source';
 
 const ROOT = join(__dirname, '../../..');
 const LIB = join(ROOT, 'orchestrations/scripts/lib/run-checkpoint.sh');
@@ -84,7 +85,7 @@ describe('a run that never paused was never resumable', () => {
     laneCheckpoint('mockb', 3);
     const r = restore();
     expect(r.status, `refused a run whose checkpoints are on disk: ${r.stdout}${r.stderr}`).toBe(0);
-    const after = JSON.parse(readFileSync(prd, 'utf8'));
+    const after = JSON.parse(engineSource(prd));
     const items = after.stories.reduce(
       (n: number, s: any) => n + (s.verificationCriteria?.length || 0) + (s.fixSiteAnalysis?.length || 0), 0);
     expect(items, 'the resumed PRD carries no spec output').toBeGreaterThan(0);
@@ -104,7 +105,7 @@ describe('a run that never paused was never resumable', () => {
     laneCheckpoint('mocka', 6);
     const r = restore();
     expect(r.status).toBe(0);
-    expect(JSON.parse(readFileSync(prd, 'utf8')).stories[0].id,
+    expect(JSON.parse(engineSource(prd)).stories[0].id,
       'a lane checkpoint overrode the parent one').toBe('PARENT');
   });
 
@@ -113,7 +114,7 @@ describe('a run that never paused was never resumable', () => {
     laneCheckpoint('mocka', 6);
     const r = restore();
     expect(r.status).toBe(0);
-    expect(JSON.parse(readFileSync(prd, 'utf8')).stories[0].id,
+    expect(JSON.parse(engineSource(prd)).stories[0].id,
       'a poorer checkpoint overwrote a richer live PRD').toBe('LIVE');
   });
 
@@ -140,7 +141,7 @@ describe('a run that never paused was never resumable', () => {
     laneCheckpoint('mockb', 3);
     const r = restore();
     expect(r.status, `${r.stdout}${r.stderr}`).toBe(0);
-    const ids = JSON.parse(readFileSync(prd, 'utf8')).stories.map((s: any) => s.id).sort();
+    const ids = JSON.parse(engineSource(prd)).stories.map((s: any) => s.id).sort();
     expect(ids, 'a lane checkpoint was restored on its own and the other lane vanished')
       .toEqual(['S-mocka', 'S-mockb']);
   });
@@ -150,7 +151,7 @@ describe('a run that never paused was never resumable', () => {
     laneCheckpoint('mockb', 3);
     restore();
     const byId = Object.fromEntries(
-      JSON.parse(readFileSync(prd, 'utf8')).stories.map((s: any) => [s.id, s]));
+      JSON.parse(engineSource(prd)).stories.map((s: any) => [s.id, s]));
     expect(byId['S-mocka'].verificationCriteria.length).toBe(6);
     expect(byId['S-mockb'].verificationCriteria.length).toBe(3);
   });

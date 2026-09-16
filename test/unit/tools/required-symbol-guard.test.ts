@@ -37,6 +37,7 @@ import { mkdtempSync, rmSync, writeFileSync, readFileSync, existsSync } from 'no
 import { join } from 'node:path';
 import { tmpdir } from 'node:os';
 import { WriteFileTool } from '../../../src/tools/builtin/WriteFile';
+import { engineSource } from '../../lib/engine-source';
 
 const dirs: string[] = [];
 const ENV_KEYS = [
@@ -91,7 +92,7 @@ describe('a write to the prescribed fix site must use the prescribed helper', ()
     const good = 'import { Stack } from "./stack";\nexport const q = Stack.livePreviewQuery();';
     const r = await write(site, good);
     expect(r.isError).toBeFalsy();
-    expect(readFileSync(site, 'utf8')).toBe(good);
+    expect(engineSource(site)).toBe(good);
   });
 
   it('accepts any ONE of several prescribed symbols', async () => {
@@ -153,7 +154,7 @@ describe('it yields rather than deadlocking a story', () => {
       'the guard blocked a third time — a wrong fix-site prescription can now ' +
       'deadlock the story, which is worse than the prose it replaced')
       .toBeFalsy();
-    expect(readFileSync(site, 'utf8'), 'the yielded write did not land').toBe(bad);
+    expect(engineSource(site), 'the yielded write did not land').toBe(bad);
   });
 
   it('the yield is configurable and can be set to zero blocks', async () => {
@@ -185,8 +186,7 @@ describe('the pipeline hands the tool what it prescribed', () => {
   // from the SAME verified fixSiteAnalysis entry the post-hoc verifier reads,
   // or the two disagree about what was prescribed.
   // eslint-disable-next-line @typescript-eslint/no-require-imports
-  const CLAUDE = readFileSync(
-    join(__dirname, '../../../orchestrations/scripts/claude.sh'), 'utf8');
+  const CLAUDE = engineSource(join(__dirname, '../../../orchestrations/scripts/claude.sh'));
 
   it('exports both variables to the implementation agent', () => {
     expect(CLAUDE, 'EPAM_REQUIRED_SYMBOLS is never passed — the guard can never fire')

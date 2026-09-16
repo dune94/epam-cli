@@ -15,13 +15,14 @@ import { spawnSync, spawn } from 'child_process';
 import { mkdtempSync, rmSync, writeFileSync, readFileSync } from 'fs';
 import { tmpdir } from 'os';
 import { join, resolve } from 'path';
+import { engineSource } from '../../lib/engine-source';
 
 const ORCH = resolve(__dirname, '../../../orchestrations/scripts/run-agent-orchestration.sh');
 const dirs: string[] = [];
 afterAll(() => { for (const d of dirs) rmSync(d, { recursive: true, force: true }); });
 
 function extractFn(name: string, mustContain: RegExp): string {
-  const lines = readFileSync(ORCH, 'utf8').split('\n');
+  const lines = engineSource(ORCH).split('\n');
   const start = lines.findIndex((l) => new RegExp(`^${name}\\(\\)\\s*\\{`).test(l));
   if (start < 0) throw new Error(`${name}() not found`);
   const end = lines.findIndex((l, i) => i > start && /^\}/.test(l));
@@ -40,8 +41,8 @@ describe('the dashboards watcher dies with its run', () => {
     // records is the parent's — exactly what start_dashboards_watch() records.
     const marker = join(d, 'grandchild.pid');
     const parent = spawn('bash', ['-c', `bash -c 'echo $$ > "${marker}"; exec sleep 300' & wait`], { stdio: 'ignore' });
-    for (let i = 0; i < 50; i += 1) { try { if (readFileSync(marker, 'utf8').trim()) break; } catch { /* not yet */ } await wait(50); }
-    const grandchild = Number(readFileSync(marker, 'utf8').trim());
+    for (let i = 0; i < 50; i += 1) { try { if (engineSource(marker).trim()) break; } catch { /* not yet */ } await wait(50); }
+    const grandchild = Number(engineSource(marker).trim());
     expect(alive(parent.pid!)).toBe(true);
     expect(alive(grandchild)).toBe(true);
     writeFileSync(pidFile, String(parent.pid));

@@ -20,6 +20,7 @@ import { spawnSync } from 'node:child_process';
 import { mkdtempSync, writeFileSync, rmSync, readFileSync } from 'node:fs';
 import { join } from 'node:path';
 import { tmpdir } from 'node:os';
+import { engineSource } from '../../lib/engine-source';
 
 const ROOT = join(__dirname, '../../..');
 const SCRIPTS = join(ROOT, 'orchestrations/scripts');
@@ -27,7 +28,7 @@ const ORCH = join(SCRIPTS, 'run-agent-orchestration.sh');
 const INTERSECT = join(SCRIPTS, 'lib/handlers/rg-intersect.py');
 const JSON_BOOL = join(SCRIPTS, 'lib/handlers/json-bool.py');
 
-const src = () => readFileSync(ORCH, 'utf8');
+const src = () => engineSource(ORCH);
 const code = () => src().split('\n').filter((l) => !/^\s*#/.test(l)).join('\n');
 
 let work: string;

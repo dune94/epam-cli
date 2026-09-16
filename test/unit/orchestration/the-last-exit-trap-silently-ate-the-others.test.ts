@@ -29,6 +29,7 @@ import { spawnSync } from 'node:child_process';
 import { readFileSync, writeFileSync, mkdtempSync, rmSync, existsSync } from 'node:fs';
 import { join } from 'node:path';
 import { tmpdir } from 'node:os';
+import { engineSource } from '../../lib/engine-source';
 
 const ROOT = join(__dirname, '../../../');
 const ORCH = join(ROOT, 'orchestrations/scripts/run-agent-orchestration.sh');
@@ -39,7 +40,7 @@ const ORCH = join(ROOT, 'orchestrations/scripts/run-agent-orchestration.sh');
  * what lets this test fail before the fix and pass after it, against the real file either way.
  */
 function exitTrapLines(): { line: number; text: string }[] {
-  return readFileSync(ORCH, 'utf8').split('\n')
+  return engineSource(ORCH).split('\n')
     .map((text, i) => ({ line: i + 1, text: text.trim() }))
     .filter(({ text }) => /^trap\s+.*\bEXIT\b/.test(text) || /^add_exit_handler\s+\S/.test(text));
 }
@@ -79,7 +80,7 @@ exit 0
 `);
     const r = spawnSync('bash', [script], { encoding: 'utf8', timeout: 60_000 });
     const fired = existsSync(marker)
-      ? readFileSync(marker, 'utf8').split('\n').filter(Boolean) : [];
+      ? engineSource(marker).split('\n').filter(Boolean) : [];
     rmSync(d, { recursive: true, force: true });
 
     expect(fired, `only these handlers ran: [${fired.join(', ')}] — stderr: ${r.stderr.slice(0, 200)}. ` +
@@ -106,7 +107,7 @@ exit 0
 `);
     spawnSync('bash', [script], { encoding: 'utf8', timeout: 60_000 });
     const fired = existsSync(marker)
-      ? readFileSync(marker, 'utf8').split('\n').filter(Boolean) : [];
+      ? engineSource(marker).split('\n').filter(Boolean) : [];
     rmSync(d, { recursive: true, force: true });
     expect(fired, `handlers that ran: [${fired.join(', ')}]`).toContain('perimeter');
   });

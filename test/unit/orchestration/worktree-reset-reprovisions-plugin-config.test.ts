@@ -18,12 +18,13 @@ import { execFileSync, spawnSync } from 'node:child_process';
 import { mkdtempSync, mkdirSync, writeFileSync, rmSync, readFileSync, existsSync } from 'node:fs';
 import { join } from 'node:path';
 import { tmpdir } from 'node:os';
+import { engineSource } from '../../lib/engine-source';
 
 const REPO_ROOT = join(__dirname, '../../../');
 const CLAUDE_SH = join(REPO_ROOT, 'orchestrations/scripts/claude.sh');
 const GIT_OPS_SH = join(REPO_ROOT, 'orchestrations/scripts/lib/git-ops.sh');
-const claudeSrc = readFileSync(CLAUDE_SH, 'utf8');
-const gitOpsSrc = readFileSync(GIT_OPS_SH, 'utf8');
+const claudeSrc = engineSource(CLAUDE_SH);
+const gitOpsSrc = engineSource(GIT_OPS_SH);
 
 function extractFunctionBody(src: string, name: string): string {
   const defRe = new RegExp(`^${name}\\(\\)\\s*\\{`, 'm');
@@ -120,7 +121,7 @@ describe('_selective_worktree_reset — re-provisions plugin config after a real
 
     const settingsPath = join(clone, '.epam/settings.json');
     expect(existsSync(settingsPath), 'settings.json was not re-provisioned after the reset').toBe(true);
-    expect(JSON.parse(readFileSync(settingsPath, 'utf8'))).toEqual({ tools: ['/abs/plugin.js'] });
+    expect(JSON.parse(engineSource(settingsPath))).toEqual({ tools: ['/abs/plugin.js'] });
   });
 
   it("re-extracts THIS codeline's facts entry into .epam/codeline-facts.json, by matching PROJECT_ROOT against the PRD's outputDirs", () => {
@@ -144,7 +145,7 @@ describe('_selective_worktree_reset — re-provisions plugin config after a real
 
     const factsPath = join(clone, '.epam/codeline-facts.json');
     expect(existsSync(factsPath), 'codeline-facts.json was not re-provisioned').toBe(true);
-    const written = JSON.parse(readFileSync(factsPath, 'utf8'));
+    const written = JSON.parse(engineSource(factsPath));
     expect(written).toEqual({ facts: ['gotransit fact'] });
     expect(JSON.stringify(written)).not.toContain('upexpress fact');
   });
@@ -189,7 +190,7 @@ describe('_selective_worktree_reset — re-provisions plugin config after a real
     );
     spawnSync('bash', [scriptPath], { encoding: 'utf8', timeout: 15000 });
 
-    expect(JSON.parse(readFileSync(join(clone, '.epam/settings.json'), 'utf8'))).toEqual({
+    expect(JSON.parse(engineSource(join(clone, '.epam/settings.json')))).toEqual({
       tools: ['/abs/original.js'],
     });
   });

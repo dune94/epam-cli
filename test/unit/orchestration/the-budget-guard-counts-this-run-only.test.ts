@@ -26,9 +26,10 @@ import { mkdtempSync, writeFileSync, rmSync, readFileSync } from 'node:fs';
 import { execFileSync } from 'node:child_process';
 import { join } from 'node:path';
 import { tmpdir } from 'node:os';
+import { engineSource } from '../../lib/engine-source';
 
 const CLAUDE_SH = join(__dirname, '../../../orchestrations/scripts/claude.sh');
-const SRC = readFileSync(CLAUDE_SH, 'utf8');
+const SRC = engineSource(CLAUDE_SH);
 const dirs: string[] = [];
 afterAll(() => { for (const d of dirs) rmSync(d, { recursive: true, force: true }); });
 
@@ -116,8 +117,7 @@ describe('both writers stamp the record, or the filter excludes real spend', () 
   it('the watchdog timeout record carries run_id too', () => {
     // Missed here, every killed attempt would be filtered out — reintroducing the exact
     // blindness that made the guard useless in the first place.
-    const orch = readFileSync(
-      join(__dirname, '../../../orchestrations/scripts/run-agent-orchestration.sh'), 'utf8');
+    const orch = engineSource(join(__dirname, '../../../orchestrations/scripts/run-agent-orchestration.sh'));
     const i = orch.indexOf('--arg s   "timeout"');
     expect(i).toBeGreaterThan(-1);
     expect(orch.slice(i, i + 500)).toMatch(/run_id:\$rid/);

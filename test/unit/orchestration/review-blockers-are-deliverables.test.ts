@@ -29,10 +29,11 @@ import { spawnSync } from 'node:child_process';
 import { mkdtempSync, writeFileSync, readFileSync, rmSync } from 'node:fs';
 import { join } from 'node:path';
 import { tmpdir } from 'node:os';
+import { engineSource } from '../../lib/engine-source';
 
 const ROOT = join(__dirname, '../../../');
 const CLAUDE_SH = join(ROOT, 'orchestrations/scripts/claude.sh');
-const SRC = readFileSync(CLAUDE_SH, 'utf8');
+const SRC = engineSource(CLAUDE_SH);
 
 const dirs: string[] = [];
 afterAll(() => { for (const d of dirs) rmSync(d, { recursive: true, force: true }); });
@@ -149,7 +150,7 @@ describe('the instruction around the feedback no longer forbids what a blocker r
  */
 describe('an approval after an unresolved blocker is refused', () => {
   const ORCH = join(ROOT, 'orchestrations/scripts/run-agent-orchestration.sh');
-  const OSRC = readFileSync(ORCH, 'utf8');
+  const OSRC = engineSource(ORCH);
 
   /** Run the shipped decision function directly. */
   function isGiveUp(prevBlocker: string, prevFp: string, nowFp: string): boolean {

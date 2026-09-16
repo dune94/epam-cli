@@ -24,6 +24,7 @@ import { describe, it, expect, afterAll } from 'vitest';
 import { mkdtempSync, mkdirSync, writeFileSync, rmSync, existsSync, readFileSync } from 'node:fs';
 import { tmpdir } from 'node:os';
 import { join } from 'node:path';
+import { engineSource } from '../../lib/engine-source';
 
 const PLUGIN = join(__dirname, '../../../orchestrations/plugins/verification-plugin.js');
 // eslint-disable-next-line @typescript-eslint/no-var-requires
@@ -139,7 +140,7 @@ describe('the engine actually asks for the pinned command', () => {
   const { readFileSync: rf, writeFileSync: wf, mkdtempSync: mk } = require('node:fs');
 
   function projectTestCommand(projectRoot: string): string {
-    const src = rf(join(__dirname, '../../../orchestrations/scripts/claude.sh'), 'utf8');
+    const src = engineSource(join(__dirname, '../../../orchestrations/scripts/claude.sh'));
     const start = src.indexOf('_project_test_command() {');
     const end = src.indexOf('\n}\n', start) + 3;
     expect(start, '_project_test_command not found in claude.sh').toBeGreaterThan(0);

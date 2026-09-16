@@ -22,9 +22,10 @@
 import { describe, it, expect } from 'vitest';
 import { readFileSync } from 'node:fs';
 import { join } from 'node:path';
+import { engineSource } from '../../lib/engine-source';
 
 const CLAUDE = join(__dirname, '../../../orchestrations/scripts/claude.sh');
-const src = readFileSync(CLAUDE, 'utf8');
+const src = engineSource(CLAUDE);
 
 /** The post-story block: from the commit call to the tally. */
 function postStoryBlock(): string {

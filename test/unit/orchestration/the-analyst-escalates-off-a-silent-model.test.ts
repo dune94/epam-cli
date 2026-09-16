@@ -36,13 +36,14 @@ import { join } from 'node:path';
 // a model belongs to a STACK. This file read the project copy, which now carries only a note
 // saying so, so every lookup came back empty. See test/support/llm-settings.ts.
 import { stackSettings, defaultStack } from '../../support/llm-settings'
+import { engineSource } from '../../lib/engine-source';
 
 const ROOT = join(__dirname, '../../../');
 const CLAUDE_SH = join(ROOT, 'orchestrations/scripts/claude.sh');
 const CFG = stackSettings(defaultStack());
 
 function analystFn(): string {
-  const src = readFileSync(CLAUDE_SH, 'utf8');
+  const src = engineSource(CLAUDE_SH);
   const start = src.indexOf('run_failure_analyst() {');
   expect(start, 'run_failure_analyst is gone — the test is stale').toBeGreaterThan(-1);
   let depth = 0; let end = start;
@@ -86,7 +87,7 @@ describe('the machinery already exists — this reuses it, it does not reinvent 
   // and it is asked of them directly. It no longer names a tier either: the profile declares a
   // POSITION, and which tier that is belongs to the project.
   const analystChain = (): Array<{ from: string; to: string }> => {
-    const reg = JSON.parse(readFileSync(join(ROOT, 'orchestrations/agents/invocation-profiles.json'), 'utf8'));
+    const reg = JSON.parse(engineSource(join(ROOT, 'orchestrations/agents/invocation-profiles.json')));
     // eslint-disable-next-line @typescript-eslint/no-var-requires, global-require
     const { resolveTierPosition } = require(join(ROOT, 'orchestrations/scripts/lib/seam-invocation.js'));
     const tier = resolveTierPosition(reg.profiles['impl-failure-analyst'].ladder, {
@@ -112,7 +113,7 @@ describe('the machinery already exists — this reuses it, it does not reinvent 
   });
 
   it('the analyst profile declares its tier', () => {
-    const reg = JSON.parse(readFileSync(join(ROOT, 'orchestrations/agents/invocation-profiles.json'), 'utf8'));
+    const reg = JSON.parse(engineSource(join(ROOT, 'orchestrations/agents/invocation-profiles.json')));
     // HIGHEST since 2026-08-12: this analyst diagnoses why an attempt failed and its answer
     // drives model escalation, so it runs on the strongest ladder — and it now has tools, so
     // it can actually look at the code it is diagnosing.

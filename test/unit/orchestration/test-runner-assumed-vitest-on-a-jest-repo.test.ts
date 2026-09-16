@@ -22,10 +22,11 @@ import { describe, it, expect, afterAll } from 'vitest';
 import { spawnSync } from 'node:child_process';
 import { mkdtempSync, writeFileSync, mkdirSync, rmSync, chmodSync } from 'node:fs';
 import { join } from 'node:path';
+import { engineSourceFile } from '../../lib/engine-source';
 import { tmpdir } from 'node:os';
 
 const ROOT = join(__dirname, '../../..');
-const ORCH = join(ROOT, 'orchestrations/scripts/run-agent-orchestration.sh');
+const ORCH = engineSourceFile(join(ROOT, 'orchestrations/scripts/run-agent-orchestration.sh')); // the inlined program: this test lifts text, it does not execute the main
 const made: string[] = [];
 
 function makeRepo(runner: 'jest' | 'vitest'): string {

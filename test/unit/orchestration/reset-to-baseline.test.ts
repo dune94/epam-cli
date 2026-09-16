@@ -23,6 +23,7 @@ import { execFileSync, execSync } from 'node:child_process';
 import { mkdtempSync, mkdirSync, writeFileSync, rmSync, existsSync, readFileSync } from 'node:fs';
 import { join } from 'node:path';
 import { tmpdir } from 'node:os';
+import { engineSource } from '../../lib/engine-source';
 
 const REPO_ROOT = join(__dirname, '../../../');
 const SCRIPT = join(REPO_ROOT, 'orchestrations/scripts/reset-to-baseline.sh');
@@ -93,7 +94,7 @@ describe('reset-to-baseline.sh — design', () => {
   });
 
   it('never hardcodes a story ID or SHA — finds the baseline dynamically via git log --grep', () => {
-    const src = readFileSync(SCRIPT, 'utf8');
+    const src = engineSource(SCRIPT);
     expect(src).toMatch(/git log --grep='?\^?\[\^:\]\*: story complete /);
     expect(src).not.toMatch(/SKY-\d+/);
   });
@@ -170,7 +171,7 @@ describe('reset-to-baseline.sh — REAL execution against the exact live contami
   });
 
   it('uses `git worktree remove --force` as the primary removal method (not a raw rm -rf that could leave admin metadata dangling)', () => {
-    const src = readFileSync(SCRIPT, 'utf8');
+    const src = engineSource(SCRIPT);
     expect(src).toMatch(/git worktree remove --force/);
   });
 
@@ -195,7 +196,7 @@ describe('reset-to-baseline.sh — REAL execution against the exact live contami
   });
 
   it('verifies zero worktrees remain after cleanup and fails loudly (not silently) if any are still registered', () => {
-    const src = readFileSync(SCRIPT, 'utf8');
+    const src = engineSource(SCRIPT);
     expect(src).toMatch(/remaining_worktrees=/);
     expect(src).toMatch(/FATAL — .*worktree\(s\) still registered/);
   });

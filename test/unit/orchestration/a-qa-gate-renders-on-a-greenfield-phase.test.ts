@@ -11,14 +11,15 @@
 import { describe, it, expect } from 'vitest';
 import { readFileSync, readdirSync } from 'node:fs';
 import { join } from 'node:path';
+import { engineSource } from '../../lib/engine-source';
 
 const ROOT = join(__dirname, '../../../');
 const TPL = join(ROOT, 'orchestrations/prompts/templates');
 const { renderEngineTemplate, placeholdersIn } = require(join(ROOT, 'orchestrations/scripts/lib/engine-prompt.js'));
-const SRC = readFileSync(join(ROOT, 'orchestrations/scripts/run-agent-orchestration.sh'), 'utf8');
+const SRC = engineSource(join(ROOT, 'orchestrations/scripts/run-agent-orchestration.sh'));
 
 const gates = readdirSync(TPL).filter((f) => f.endsWith('.json')).map((f) => f.replace(/\.json$/, ''))
-  .filter((id) => (JSON.parse(readFileSync(join(TPL, `${id}.json`), 'utf8')).placeholders || []).includes('__GATE_SCOPE__'));
+  .filter((id) => (JSON.parse(engineSource(join(TPL, `${id}.json`))).placeholders || []).includes('__GATE_SCOPE__'));
 
 /**
  * THE UNIVERSE IS THE CALL SITES, NOT A PLACEHOLDER NAME. The runtime-boundary gate handed the
@@ -49,7 +50,7 @@ describe('a QA gate renders on a greenfield phase', () => {
     expect(gates.length, 'no template carries __GATE_SCOPE__').toBeGreaterThan(0);
   });
   it.each(gates)('%s declares __GATE_SCOPE__ may be empty and renders with it empty', (id) => {
-    const doc = JSON.parse(readFileSync(join(TPL, `${id}.json`), 'utf8'));
+    const doc = JSON.parse(engineSource(join(TPL, `${id}.json`)));
     expect(doc.mayBeEmpty, `${id}: __GATE_SCOPE__ is not declared mayBeEmpty`).toContain('__GATE_SCOPE__');
     const values: Record<string, string> = {};
     const optional = new Set(doc.mayBeEmpty || []);
@@ -73,7 +74,7 @@ describe('every placeholder that receives the gate scope may be empty', () => {
   const receivers = scopeReceivers();
   it('the orchestrator hands the scope to gates', () => { expect(receivers.length).toBeGreaterThan(3); });
   it.each(receivers.map((r) => [r.id, r.placeholder]))('%s: %s is declared mayBeEmpty', (id, placeholder) => {
-    const doc = JSON.parse(readFileSync(join(TPL, `${id}.json`), 'utf8'));
+    const doc = JSON.parse(engineSource(join(TPL, `${id}.json`)));
     expect(doc.mayBeEmpty || [], `${id} receives the brownfield scope in ${placeholder}`).toContain(placeholder);
   });
 });

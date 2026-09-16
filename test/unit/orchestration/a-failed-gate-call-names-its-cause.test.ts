@@ -25,6 +25,7 @@ import { spawnSync } from 'node:child_process';
 import { readFileSync, writeFileSync, mkdtempSync, rmSync } from 'node:fs';
 import { join } from 'node:path';
 import { tmpdir } from 'node:os';
+import { engineSource } from '../../lib/engine-source';
 
 const ROOT = join(__dirname, '../../../');
 const CLAUDE_SH = join(ROOT, 'orchestrations/scripts/claude.sh');
@@ -35,7 +36,7 @@ const tmp = (p: string) => { const d = mkdtempSync(join(tmpdir(), p)); dirs.push
 
 /** The real helper, lifted from claude.sh — never a re-typed copy. */
 function extractFn(): string {
-  const lines = readFileSync(CLAUDE_SH, 'utf8').split('\n');
+  const lines = engineSource(CLAUDE_SH).split('\n');
   const start = lines.findIndex((l) => /^_gate_call_failure_detail\(\)\s*\{/.test(l));
   if (start < 0) throw new Error('_gate_call_failure_detail() not found in claude.sh');
   const end = lines.findIndex((l, i) => i > start && /^\}/.test(l));
@@ -83,7 +84,7 @@ describe('a failed gate call names its cause', () => {
   });
 
   it('the failure warning actually uses it', () => {
-    const src = readFileSync(CLAUDE_SH, 'utf8');
+    const src = engineSource(CLAUDE_SH);
     const line = src.split('\n').find((l) => l.includes('Gate invocation FAILED for'));
     expect(line, 'the failure warning is gone').toBeTruthy();
     expect(line!, `the warning still reports only "no response to parse": ${line}`)

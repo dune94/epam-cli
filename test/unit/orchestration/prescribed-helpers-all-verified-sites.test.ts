@@ -36,9 +36,10 @@ import { execFileSync } from 'node:child_process';
 import { mkdtempSync, mkdirSync, writeFileSync, rmSync, readFileSync } from 'node:fs';
 import { join } from 'node:path';
 import { tmpdir } from 'node:os';
+import { engineSource } from '../../lib/engine-source';
 
 const CLAUDE_SH = join(__dirname, '../../../orchestrations/scripts/claude.sh');
-const SRC = readFileSync(CLAUDE_SH, 'utf8');
+const SRC = engineSource(CLAUDE_SH);
 const dirs: string[] = [];
 afterEach(() => { for (const d of dirs.splice(0)) rmSync(d, { recursive: true, force: true }); });
 
@@ -139,7 +140,7 @@ const FOUR = ['helperAlpha', 'helperBeta', 'helperGamma', 'helperDelta'];
 describe('a helper that owns no format is never a finding', () => {
   it('the fixture genuinely declares no separator — else this suite proves nothing', () => {
     const { dir } = fixture(FOUR, ['options']);
-    const src = readFileSync(join(dir, 'src', `${FOUR[0]}.ts`), 'utf8');
+    const src = engineSource(join(dir, 'src', `${FOUR[0]}.ts`));
     expect(src, 'fixture drift: the helper module now owns a literal').not.toMatch(/=\s*['"][^a-zA-Z0-9 ]{1,3}['"]/);
   });
 

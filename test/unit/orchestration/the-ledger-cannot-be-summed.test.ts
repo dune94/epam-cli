@@ -26,6 +26,7 @@ import { spawnSync } from 'node:child_process';
 import { readFileSync, writeFileSync, mkdtempSync, rmSync } from 'node:fs';
 import { join } from 'node:path';
 import { tmpdir } from 'node:os';
+import { engineSource } from '../../lib/engine-source';
 
 const ROOT = join(__dirname, '../../../');
 const LIB = join(ROOT, 'orchestrations/scripts/lib/ledger-tokens.sh');
@@ -38,13 +39,13 @@ function sh(body: string, stdinFile?: string) {
   writeFileSync(s, `#!/usr/bin/env bash\nset -uo pipefail\nsource "${LIB}"\n${body}\n`);
   const r = spawnSync('bash', [s], {
     encoding: 'utf8', timeout: 60_000,
-    input: stdinFile ? readFileSync(stdinFile, 'utf8') : undefined,
+    input: stdinFile ? engineSource(stdinFile) : undefined,
   });
   rmSync(d, { recursive: true, force: true });
   return { out: (r.stdout ?? '').trim(), err: r.stderr ?? '', status: r.status };
 }
 
-const rows = () => readFileSync(FIXTURE, 'utf8').trim().split('\n').map((l) => JSON.parse(l));
+const rows = () => engineSource(FIXTURE).trim().split('\n').map((l) => JSON.parse(l));
 const round = (n: number) => Math.round(n * 10000) / 10000;
 
 describe('the ledger has ONE definition of what a run cost', () => {
@@ -115,7 +116,7 @@ describe('every consumer that sums the ledger uses the one rule', () => {
 
   for (const [rel, why] of consumers) {
     it(`${rel.split('/').pop()} applies the partition (${why})`, () => {
-      const src = readFileSync(join(ROOT, rel), 'utf8');
+      const src = engineSource(join(ROOT, rel));
       expect(src.includes('ledger-tokens.sh'),
         `${rel} does not source the library, so LEDGER_BILLABLE_JQ expands EMPTY and its jq filter ` +
         'is malformed — which fails silently into an empty cost').toBe(true);

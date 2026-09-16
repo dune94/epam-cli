@@ -26,9 +26,9 @@
 import { describe, it, expect } from 'vitest';
 import { readFileSync } from 'node:fs';
 import { join } from 'node:path';
+import { engineSource } from '../../lib/engine-source';
 
-const ORCH = readFileSync(
-  join(__dirname, '../../../orchestrations/scripts/run-agent-orchestration.sh'), 'utf8');
+const ORCH = engineSource(join(__dirname, '../../../orchestrations/scripts/run-agent-orchestration.sh'));
 
 describe('a failed lane always fails the run — independence never touches the exit code', () => {
   it('lane failure sets _overall=1 unconditionally, under no flag', () => {

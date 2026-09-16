@@ -22,6 +22,7 @@ import { spawnSync } from 'node:child_process';
 import { mkdtempSync, mkdirSync, writeFileSync, chmodSync, rmSync, readFileSync, existsSync } from 'node:fs';
 import { join } from 'node:path';
 import { tmpdir } from 'node:os';
+import { engineSource } from '../../lib/engine-source';
 
 const REPO_ROOT = join(__dirname, '../../../');
 const AI_RUN_SH = join(REPO_ROOT, 'orchestrations/scripts/ai-run.sh');
@@ -118,13 +119,13 @@ describe('ai-run.sh persists ladder progress to LOG_DIR', () => {
     invoke(dir, logDir, binDir);
     const stateFile = join(logDir, 'agent-ladder', 'code-graph-detective.S-1');
     expect(existsSync(stateFile), 'ai-run.sh never persisted its ladder progress').toBe(true);
-    expect(Number(readFileSync(stateFile, 'utf8').trim())).toBeGreaterThan(0);
+    expect(Number(engineSource(stateFile).trim())).toBeGreaterThan(0);
   });
 
   it('a fresh AI_MODEL=model-a still escalates to model-b within one process (unchanged baseline behavior)', () => {
     const { dir, logDir, binDir, modelsSeenFile } = setup();
     invoke(dir, logDir, binDir);
-    const seen = readFileSync(modelsSeenFile, 'utf8').trim().split('\n').filter(Boolean);
+    const seen = engineSource(modelsSeenFile).trim().split('\n').filter(Boolean);
     expect(seen).toContain('model-b');
   });
 
@@ -133,7 +134,7 @@ describe('ai-run.sh persists ladder progress to LOG_DIR', () => {
     invoke(dir, logDir, binDir); // first process — escalates a=1
     writeFileSync(modelsSeenFile, ''); // clear for the second process's own observation
     invoke(dir, logDir, binDir); // second process — SAME agent+story, fresh subprocess
-    const seenSecondProcess = readFileSync(modelsSeenFile, 'utf8').trim().split('\n').filter(Boolean);
+    const seenSecondProcess = engineSource(modelsSeenFile).trim().split('\n').filter(Boolean);
     expect(
       seenSecondProcess,
       'the second process re-invoked model-a — the live bug: a fresh ai-run.sh subprocess silently restarted the ladder',

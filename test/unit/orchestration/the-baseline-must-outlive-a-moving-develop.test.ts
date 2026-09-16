@@ -30,6 +30,7 @@ import { spawnSync } from 'node:child_process';
 import { mkdtempSync, writeFileSync, rmSync, mkdirSync, readFileSync } from 'node:fs';
 import { join } from 'node:path';
 import { tmpdir } from 'node:os';
+import { engineSource } from '../../lib/engine-source';
 
 const ROOT = join(__dirname, '../../../');
 const EVID = join(ROOT, 'orchestrations/scripts/lib/qa-gate-evidence.sh');
@@ -40,7 +41,7 @@ afterAll(() => { for (const d of dirs) rmSync(d, { recursive: true, force: true 
 
 /** The real function body, lifted from the real file — never a paraphrase. */
 function fnText(file: string, name: string): string {
-  const src = readFileSync(file, 'utf8');
+  const src = engineSource(file);
   const start = src.indexOf(`${name}() {`);
   if (start === -1) throw new Error(`${name}() not found in ${file}`);
   const end = src.indexOf('\n}', start);
@@ -121,7 +122,7 @@ ${body.replace('__COLLEAGUE__', `bash "${join(e.d, 'colleague.sh')}"`)}
 
   const r = spawnSync('bash', [script], { encoding: 'utf8', timeout: 60_000 });
   const recorded = (() => {
-    try { return readFileSync(join(logs, 'phase-baseline-sha.txt'), 'utf8').trim(); } catch { return ''; }
+    try { return engineSource(join(logs, 'phase-baseline-sha.txt')).trim(); } catch { return ''; }
   })();
   const head = e.g(e.work, 'rev-parse', 'HEAD').stdout.trim();
   const forkPoint = e.g(e.work, 'merge-base', 'HEAD', 'origin/develop').stdout.trim();
@@ -170,8 +171,7 @@ describe("the script's own re-derive block", () => {
    * indexOf('\nfi') finds a column-0 `fi` hundreds of lines later and swallows all of Step 8.
    */
   function reDeriveBlock(): string {
-    const lines = readFileSync(
-      join(ROOT, 'orchestrations/scripts/run-agent-orchestration.sh'), 'utf8').split('\n');
+    const lines = engineSource(join(ROOT, 'orchestrations/scripts/run-agent-orchestration.sh')).split('\n');
     const i = lines.findIndex((l) => l.includes('if [ -z "${_phase_baseline_after_reset:-}" ]'));
     if (i === -1) {
       throw new Error('the post-reset re-derive is GONE from run-agent-orchestration.sh — '

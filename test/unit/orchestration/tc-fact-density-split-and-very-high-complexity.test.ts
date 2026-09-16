@@ -39,6 +39,7 @@ import { readFileSync, mkdtempSync, writeFileSync, rmSync } from 'node:fs';
 import { execFileSync } from 'node:child_process';
 import { join } from 'node:path';
 import { tmpdir } from 'node:os';
+import { engineSource } from '../../lib/engine-source';
 
 const REPO_ROOT = join(__dirname, '../../../');
 const SPEC_RUNNER = join(REPO_ROOT, 'orchestrations/scripts/spec-mode-runner.js');
@@ -47,9 +48,9 @@ const GATE_LIB = join(REPO_ROOT, 'orchestrations/scripts/lib/tc-writer-gate.sh')
 
 // eslint-disable-next-line @typescript-eslint/no-require-imports
 const specMode = require(SPEC_RUNNER);
-const specSrc = readFileSync(SPEC_RUNNER, 'utf8');
-const claudeSrc = readFileSync(CLAUDE_SH, 'utf8');
-const gateSrc = readFileSync(GATE_LIB, 'utf8');
+const specSrc = engineSource(SPEC_RUNNER);
+const claudeSrc = engineSource(CLAUDE_SH);
+const gateSrc = engineSource(GATE_LIB);
 
 function makeStory(id: string, overrides: Record<string, unknown> = {}) {
   return { id, title: `Story ${id}`, acceptanceCriteria: ['ac1', 'ac2'], status: 'pending', completed: false, ...overrides };
@@ -211,7 +212,7 @@ describe('spec-mode-runner.js --split-test-story CLI — REAL execution', () => 
       const stdout = execFileSync(nodeBin, [SPEC_RUNNER, '--split-test-story', prdPath, 'SKY-CLI'], { encoding: 'utf8' });
       expect(stdout).toMatch(/SKY-CLI-tc1, SKY-CLI-tc2/);
 
-      const updated = JSON.parse(readFileSync(prdPath, 'utf8'));
+      const updated = JSON.parse(engineSource(prdPath));
       expect(updated.stories.map((s: any) => s.id).sort()).toEqual(['SKY-CLI', 'SKY-CLI-tc1', 'SKY-CLI-tc2']);
       const parent = updated.stories.find((s: any) => s.id === 'SKY-CLI');
       expect(parent.status).toBe('deprecated');
@@ -328,7 +329,7 @@ describe('lib/tc-writer-gate.sh — _tc_writer_gate_maybe_split_test_story, REAL
         stdout = ((e.stdout ?? '').toString()) + ((e.stderr ?? '').toString());
       }
       const rcMatch = stdout.match(/RC=(\d)/);
-      const prdAfter = JSON.parse(readFileSync(prdPath, 'utf8'));
+      const prdAfter = JSON.parse(engineSource(prdPath));
       return { rc: rcMatch ? parseInt(rcMatch[1], 10) : -1, stdout, prd: prdAfter };
     } finally {
       rmSync(dir, { recursive: true, force: true });
@@ -397,7 +398,7 @@ describe('lib/tc-writer-gate.sh — _tc_writer_gate_maybe_mark_very_high_complex
       } catch (e: any) {
         stderr = (e.stderr ?? '').toString();
       }
-      const prdAfter = JSON.parse(readFileSync(prdPath, 'utf8'));
+      const prdAfter = JSON.parse(engineSource(prdPath));
       return { prd: prdAfter, stderr };
     } finally {
       rmSync(dir, { recursive: true, force: true });
@@ -507,7 +508,7 @@ describe('_tc_writer_gate_maybe_upgrade_model — skips when skipLadder already 
     `;
     execFileSync('bash', ['-c', script], { env, stdio: 'pipe' });
 
-    const story = JSON.parse(readFileSync(prdPath, 'utf8')).stories[0];
+    const story = JSON.parse(engineSource(prdPath)).stories[0];
     // Model must NOT have been touched — still at ceiling kimi-k2
     expect(story.model).toBe('moonshotai/kimi-k2');
     expect(story.skipLadder).toBe(true);

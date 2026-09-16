@@ -28,6 +28,7 @@
 import { describe, it, expect } from 'vitest';
 import { readFileSync, existsSync, readdirSync } from 'node:fs';
 import { join } from 'node:path';
+import { engineSource } from '../../lib/engine-source';
 
 const REPO_ROOT = join(__dirname, '../../../');
 const PROJECTS_DIR = join(REPO_ROOT, 'orchestrations/projects');
@@ -51,7 +52,7 @@ function allShippedFacts(): { file: string; codeline: string; fact: string | Fac
   for (const dir of projectDirs()) {
     const f = join(dir, 'codeline-facts.json');
     if (!existsSync(f)) continue;
-    const parsed = JSON.parse(readFileSync(f, 'utf8'));
+    const parsed = JSON.parse(engineSource(f));
     const buckets: [string, unknown][] = Array.isArray(parsed)
       ? [['(root)', parsed]]
       : Object.entries(parsed);
@@ -110,7 +111,7 @@ describe('the fabricated live-preview token claim does not come back', () => {
       for (const name of readdirSync(dir)) {
         if (!name.endsWith('.json')) continue;
         const p = join(dir, name);
-        const raw = readFileSync(p, 'utf8');
+        const raw = engineSource(p);
         // The shape of an unverifiable vendor-API assertion: "X, NOT Y".
         if (/\b\w*token\b[^"]{0,40}\bNOT\b[^"]{0,40}\b\w*token\b/i.test(raw)) {
           offenders.push(`${dir.split('/').pop()}/${name}`);
@@ -131,7 +132,7 @@ describe('hand-authored rule files carry provenance or do not exist', () => {
     for (const dir of projectDirs()) {
       const f = join(dir, 'anti-patterns.json');
       if (!existsSync(f)) continue;
-      const rules = JSON.parse(readFileSync(f, 'utf8'));
+      const rules = JSON.parse(engineSource(f));
       for (const r of Array.isArray(rules) ? rules : []) {
         if (!String(r?.source || '').trim()) {
           unsourced.push(`${dir.split('/').pop()}: ${r?.id || '(no id)'}`);
@@ -220,7 +221,7 @@ describe('the fabricated live-preview claim is not taught anywhere', () => {
       .replace(/\s+/g, ' ');
 
   it.each(SOURCES)('%s does not assert preview_token over management_token', (rel) => {
-    const text = normalise(readFileSync(join(REPO_ROOT, rel), 'utf8'));
+    const text = normalise(engineSource(join(REPO_ROOT, rel)));
     const hits = PRESCRIPTIVE.filter((re) => re.test(text)).map((re) => String(re));
     expect(
       hits,
@@ -233,7 +234,7 @@ describe('the fabricated live-preview claim is not taught anywhere', () => {
   });
 
   it('the knowledge base does not brand the correct answer a "false diagnosis"', () => {
-    const kb = readFileSync(join(REPO_ROOT, 'orchestrations/agents/KB.md'), 'utf8');
+    const kb = engineSource(join(REPO_ROOT, 'orchestrations/agents/KB.md'));
     expect(
       /false\s+diagnosis[\s\S]{0,200}management_token|management_token[\s\S]{0,200}false\s+diagnosis/i.test(kb),
       'KB.md calls the management_token finding a false diagnosis. It is the key the ' +

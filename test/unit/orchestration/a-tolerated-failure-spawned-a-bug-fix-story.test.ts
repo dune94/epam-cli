@@ -22,6 +22,7 @@ import { spawnSync } from 'node:child_process';
 import { mkdtempSync, writeFileSync, readFileSync, rmSync } from 'node:fs';
 import { tmpdir } from 'node:os';
 import { join } from 'node:path';
+import { engineSource } from '../../lib/engine-source';
 
 const ROOT = join(__dirname, '../../..');
 const ORCH = join(ROOT, 'orchestrations/scripts/run-agent-orchestration.sh');
@@ -32,7 +33,7 @@ afterEach(() => rmSync(dir, { recursive: true, force: true }));
 
 /** Run the extracted helper against a baseline file. */
 function tolerated(file: string, baseline: unknown | null, phase = 'core') {
-  const src = readFileSync(ORCH, 'utf8');
+  const src = engineSource(ORCH);
   const m = src.match(/^_failure_is_tolerated\(\)\s*\{[\s\S]*?\n\}/m);
   if (!m) throw new Error('run-agent-orchestration.sh has no _failure_is_tolerated()');
   if (baseline !== null) {
@@ -67,7 +68,7 @@ describe('a tolerated failure spawned a bug-fix story', () => {
 
   it('a malformed or empty baseline tolerates nothing rather than everything', () => {
     writeFileSync(join(dir, 'regression-guard-baseline-core.json'), '{ not json');
-    const src = readFileSync(ORCH, 'utf8');
+    const src = engineSource(ORCH);
     const m = src.match(/^_failure_is_tolerated\(\)\s*\{[\s\S]*?\n\}/m)![0];
     const r = spawnSync('bash', ['-c',
       `LOG_DIR=${JSON.stringify(dir)}\n${m}\nif _failure_is_tolerated "x" "core"; then echo YES; else echo NO; fi`,
@@ -77,7 +78,7 @@ describe('a tolerated failure spawned a bug-fix story', () => {
   });
 
   it('THE BUG-FIX LOOP CONSULTS IT — a helper nobody calls is the same defect', () => {
-    const src = readFileSync(ORCH, 'utf8');
+    const src = engineSource(ORCH);
     const loop = src.indexOf('while IFS= read -r failing_file; do');
     expect(loop, 'the bug-fix loop moved — this check is blind').toBeGreaterThan(-1);
     const body = src.slice(loop, loop + 2500);

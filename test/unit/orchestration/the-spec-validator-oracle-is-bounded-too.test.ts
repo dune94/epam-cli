@@ -23,6 +23,7 @@ import { spawnSync, execFileSync } from 'node:child_process';
 import { mkdtempSync, mkdirSync, writeFileSync, readFileSync, rmSync, chmodSync, existsSync } from 'node:fs';
 import { join } from 'node:path';
 import { tmpdir } from 'node:os';
+import { engineSource } from '../../lib/engine-source';
 
 const ROOT = join(__dirname, '../../../');
 const SCRIPTS = join(ROOT, 'orchestrations/scripts');
@@ -34,7 +35,7 @@ afterAll(() => { for (const d of dirs) rmSync(d, { recursive: true, force: true 
 
 /** A top-level function by name, lifted from the orchestrator. */
 function liftFn(name: string): string {
-  const lines = readFileSync(ORCH, 'utf8').split('\n');
+  const lines = engineSource(ORCH).split('\n');
   const s = lines.findIndex((l) => new RegExp(`^${name}\\(\\)\\s*\\{`).test(l));
   if (s < 0) throw new Error(`${name}() not found`);
   const e = lines.findIndex((l, i) => i > s && /^\}/.test(l));
@@ -43,7 +44,7 @@ function liftFn(name: string): string {
 
 /** The oracle block: from its section comment to the line that stores the exit code. */
 function liftOracleBlock(): string {
-  const lines = readFileSync(ORCH, 'utf8').split('\n');
+  const lines = engineSource(ORCH).split('\n');
   const s = lines.findIndex((l) => /Test Oracle: inject hard vitest evidence/.test(l));
   if (s < 0) throw new Error('the Test Oracle block was not found in the orchestrator');
   const skipped = lines.findIndex((l, i) => i > s && /vitest oracle skipped/.test(l));
@@ -105,7 +106,7 @@ describe('the spec validator oracle is bounded too', () => {
       env: { ...process.env, EPAM_TEST_AVAIL_MB_OVERRIDE: '2000' },
     });
     expect(existsSync(seen), `the stand-in jest never ran:\n${r.stdout}${r.stderr}`).toBe(true);
-    const got = cpusAllowedCount(readFileSync(seen, 'utf8'));
+    const got = cpusAllowedCount(engineSource(seen));
     expect(got, [
       `the spec validator oracle spawned the client suite on ${got} of ${hostCpus} CPUs with 2000MB`,
       'available. Live this was 18 jest processes and an OOM kill at Step 22b. Route it through',
@@ -114,7 +115,7 @@ describe('the spec validator oracle is bounded too', () => {
   });
 
   it('the guard scan would have caught this shape', () => {
-    const guard = readFileSync(GUARD_TEST, 'utf8');
+    const guard = engineSource(GUARD_TEST);
     // The scan must recognise `sh -c "$(_codeline_test_command ...)"` as a client test spawn.
     expect(guard, 'the-pipeline-never-spawns-an-unbounded-test-suite does not scan for the $(_codeline_test_command …) shape')
       .toMatch(/_codeline_test_command/);

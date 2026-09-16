@@ -29,6 +29,7 @@ import { describe, it, expect } from 'vitest';
 import { execFileSync } from 'node:child_process';
 import { readFileSync } from 'node:fs';
 import { join } from 'node:path';
+import { engineSource } from '../../lib/engine-source';
 
 const LIB = join(__dirname, '../../../orchestrations/scripts/lib');
 const compiler = require(join(LIB, 'constraint-compiler.js'));
@@ -94,7 +95,7 @@ describe('the tier compiles to an env override, not a PRD edit', () => {
 });
 
 describe('resolve_effort_settings applies the override UPGRADE-ONLY', () => {
-  const src = readFileSync(join(LIB, '..', 'claude.sh'), 'utf8');
+  const src = engineSource(join(LIB, '..', 'claude.sh'));
 
   it('honours EPAM_EFFORT_TIER', () => {
     expect(src, 'the compiled tier never reaches the effort resolver')

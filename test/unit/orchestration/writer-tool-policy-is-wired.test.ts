@@ -18,13 +18,14 @@ import { readFileSync, writeFileSync, mkdtempSync, mkdirSync, rmSync } from 'nod
 import { execFileSync } from 'node:child_process';
 import { join } from 'node:path';
 import { tmpdir } from 'node:os';
+import { engineSource } from '../../lib/engine-source';
 
 const ROOT = join(__dirname, '../../..');
-const CLAUDE_SH = readFileSync(join(ROOT, 'orchestrations/scripts/claude.sh'), 'utf8');
+const CLAUDE_SH = engineSource(join(ROOT, 'orchestrations/scripts/claude.sh'));
 const CONFIG = join(ROOT, 'orchestrations/config/spec-mode-defaults.json');
 
 describe('the policy exists as configuration', () => {
-  const cfg = () => JSON.parse(readFileSync(CONFIG, 'utf8'));
+  const cfg = () => JSON.parse(engineSource(CONFIG));
 
   it('the redirect is in config, not spelled out in the script', () => {
     const p = cfg().toolPolicy?.bashExplorationRedirect;

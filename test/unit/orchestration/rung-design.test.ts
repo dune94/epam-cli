@@ -15,9 +15,10 @@
 import { describe, it, expect } from 'vitest';
 import { readFileSync } from 'node:fs';
 import { join } from 'node:path';
+import { engineSource } from '../../lib/engine-source';
 
 const CLAUDE_SH = join(__dirname, '../../../orchestrations/scripts/claude.sh');
-const src = readFileSync(CLAUDE_SH, 'utf8');
+const src = engineSource(CLAUDE_SH);
 
 // ── 1. MAX_RETRIES = 7 (8 total attempts across 4 rungs) ─────────────────────
 describe('claude.sh — MAX_RETRIES=7 gives 8 total attempts', () => {

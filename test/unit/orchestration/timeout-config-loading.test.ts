@@ -12,10 +12,11 @@ import { readFileSync, mkdtempSync, writeFileSync, rmSync } from 'node:fs';
 import { execFileSync } from 'node:child_process';
 import { join } from 'node:path';
 import { tmpdir } from 'node:os';
+import { engineSource } from '../../lib/engine-source';
 
 const REPO_ROOT = join(__dirname, '../../../');
 const STORY_GUARDS_SH = join(REPO_ROOT, 'orchestrations/scripts/lib/story-guards.sh');
-const storyGuardsSrc = readFileSync(STORY_GUARDS_SH, 'utf8');
+const storyGuardsSrc = engineSource(STORY_GUARDS_SH);
 
 function extractFunctionBody(name: string): string {
   const start = storyGuardsSrc.indexOf(`${name}() {`);

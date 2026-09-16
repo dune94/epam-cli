@@ -33,6 +33,7 @@ import { spawnSync } from 'node:child_process';
 import { mkdtempSync, mkdirSync, writeFileSync, readFileSync, readdirSync, rmSync, existsSync } from 'node:fs';
 import { join } from 'node:path';
 import { tmpdir } from 'node:os';
+import { engineSource } from '../../lib/engine-source';
 
 const ROOT = join(__dirname, '../../../');
 const RESET = join(ROOT, 'orchestrations/scripts/pre-run-reset.sh');
@@ -48,7 +49,7 @@ function runClearBlock(files: string[]): { status: number | null; out: string; l
   mkdirSync(stateDir, { recursive: true });
   for (const f of files) writeFileSync(join(stateDir, f), 'x');
 
-  const src = readFileSync(RESET, 'utf8');
+  const src = engineSource(RESET);
   const start = src.indexOf('_RETRY_STATE_DIR="$LOG_DIR/story-retry-state"');
   expect(start, 'retry-state block not found — the test is stale, not the code').toBeGreaterThan(-1);
   const end = src.indexOf('\nfi\n', start) + 4;
@@ -75,7 +76,7 @@ describe('the state library really does persist more than a counter', () => {
   it('it writes .count, .model AND .iterbump', () => {
     // If this ever stops being true the test below is over-broad, not wrong — but the
     // whitelist bug came from exactly this set drifting unnoticed.
-    const lib = readFileSync(STATE_LIB, 'utf8');
+    const lib = engineSource(STATE_LIB);
     for (const ext of ['.count', '.model', '.iterbump']) {
       expect(lib, `${ext} is no longer persisted — re-check the reset`).toContain(ext);
     }
@@ -131,7 +132,7 @@ describe('THE RESET DOES NOT LIE', () => {
   it('a directory it cannot clear ABORTS rather than announcing a clean slate', () => {
     // Proceeding here means starting mid-ladder on a model nobody chose. This script's
     // entire job is the clean slate, so it must not report one it did not deliver.
-    const src = readFileSync(RESET, 'utf8');
+    const src = engineSource(RESET);
     const start = src.indexOf('_RETRY_STATE_DIR="$LOG_DIR/story-retry-state"');
     const block = src.slice(start, src.indexOf('\nfi\n', start) + 4);
     expect(block).toMatch(/_RETRY_LEFT/);
@@ -142,7 +143,7 @@ describe('THE RESET DOES NOT LIE', () => {
   });
 
   it('the sweep is by DIRECTORY, not by a list of extensions', () => {
-    const src = readFileSync(RESET, 'utf8');
+    const src = engineSource(RESET);
     const start = src.indexOf('_RETRY_STATE_DIR="$LOG_DIR/story-retry-state"');
     const block = src.slice(start, src.indexOf('\nfi\n', start) + 4);
     expect(block, "an extension whitelist here has gone stale twice").not.toMatch(/-name '\*\./);

@@ -33,11 +33,12 @@
 import { describe, it, expect } from 'vitest';
 import { readFileSync, readdirSync, existsSync } from 'node:fs';
 import { join } from 'node:path';
+import { engineSource } from '../../lib/engine-source';
 
 const SCRIPTS = join(__dirname, '../../../orchestrations/scripts');
-const SEAM = readFileSync(join(SCRIPTS, 'llm-handler.sh'), 'utf8');
+const SEAM = engineSource(join(SCRIPTS, 'llm-handler.sh'));
 const PROFILES: Record<string, unknown> = JSON.parse(
-  readFileSync(join(__dirname, '../../../orchestrations/agents/profiles.json'), 'utf8'));
+  engineSource(join(__dirname, '../../../orchestrations/agents/profiles.json')));
 
 /** Every script/module in the orchestration tree. */
 function allSources(): string[] {
@@ -57,7 +58,7 @@ function allSources(): string[] {
 function callSites(): Array<{ path: string; src: string }> {
   return allSources()
     .filter((p) => !/\/ai-run\.sh$/.test(p) && !/\/test\//.test(p))
-    .map((p) => ({ path: p, src: readFileSync(p, 'utf8') }))
+    .map((p) => ({ path: p, src: engineSource(p) }))
     // A file INVOKES the epam runner when it executes "$EPAM_CLI" (run/chat). A file that merely
     // compares a provider map entry to the literal '$EPAM_CLI' (lib/runner-settings.sh, resolving
     // which binary to probe --help on — fdf851c3) names the runner and calls nothing.
@@ -127,7 +128,7 @@ describe('a new agent inherits without being wired', () => {
     // It was called from claude.sh alone, so only story agents ever healed.
     const users = allSources()
       .filter((p) => !/kb-apply\.sh/.test(p))
-      .filter((p) => /kb_apply_constraints|kb-apply\.sh/.test(readFileSync(p, 'utf8')));
+      .filter((p) => /kb_apply_constraints|kb-apply\.sh/.test(engineSource(p)));
     expect(users.length,
       'self-heal reaches only one caller — a new agent would not inherit it')
       .toBeGreaterThan(1);

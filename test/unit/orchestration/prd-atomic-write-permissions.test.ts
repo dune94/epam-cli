@@ -24,15 +24,16 @@ import { readFileSync, mkdtempSync, writeFileSync, chmodSync, statSync, rmSync }
 import { execFileSync } from 'node:child_process';
 import { join } from 'node:path';
 import { tmpdir } from 'node:os';
+import { engineSource } from '../../lib/engine-source';
 
 const REPO_ROOT = join(__dirname, '../../../');
 const ORCH_SH = join(REPO_ROOT, 'orchestrations/scripts/run-agent-orchestration.sh');
-const orchSrc = readFileSync(ORCH_SH, 'utf8');
+const orchSrc = engineSource(ORCH_SH);
 // record_story_actual_cost now lives in lib/story-guards.sh (2026-07-14) —
 // a single shared implementation sourced by both run-agent-orchestration.sh
 // (main lane) and claude.sh (worktree lanes).
 const GUARDS_LIB = join(REPO_ROOT, 'orchestrations/scripts/lib/story-guards.sh');
-const guardsSrc = readFileSync(GUARDS_LIB, 'utf8');
+const guardsSrc = engineSource(GUARDS_LIB);
 
 function extractFunctionBodyBraceCounted(name: string, src: string = orchSrc): string {
   const start = src.indexOf(`${name}()`);
@@ -106,7 +107,7 @@ describe('PRD atomic-write permission regression — REAL execution', () => {
       // leaving the original untouched-644 file, which would make the
       // permission assertion below pass trivially without exercising
       // anything).
-      const updated = JSON.parse(readFileSync(prdFile, 'utf8'));
+      const updated = JSON.parse(engineSource(prdFile));
       expect(updated.stories[0].model).toBe('new-model');
       expect(permBits(prdFile)).toBe('644');
     } finally {
@@ -190,7 +191,7 @@ describe('PRD atomic-write permission regression — REAL execution', () => {
         ),
       );
       execFileSync('bash', [scriptPath], { encoding: 'utf8' });
-      const updated = JSON.parse(readFileSync(prdFile, 'utf8'));
+      const updated = JSON.parse(engineSource(prdFile));
       expect(updated.stories[0].actualCost).toBe(0.0123);
       expect(permBits(prdFile)).toBe('644');
     } finally {
@@ -231,7 +232,7 @@ describe('PRD atomic-write permission regression — REAL execution', () => {
         ].join('\n'),
       );
       execFileSync('bash', [scriptPath], { encoding: 'utf8' });
-      const updated = JSON.parse(readFileSync(prdFile, 'utf8'));
+      const updated = JSON.parse(engineSource(prdFile));
       expect(updated.stories[0].status).toBe('pending');
       expect(updated.stories[0].completed).toBe(false);
       expect(permBits(prdFile)).toBe('644');
@@ -255,7 +256,7 @@ describe('PRD atomic-write permission regression — REAL execution', () => {
         ),
       );
       execFileSync('bash', [scriptPath], { encoding: 'utf8' });
-      const updated = JSON.parse(readFileSync(prdFile, 'utf8'));
+      const updated = JSON.parse(engineSource(prdFile));
       expect(updated.stories[0].status).toBe('pending');
       expect(permBits(prdFile)).toBe('644');
     } finally {

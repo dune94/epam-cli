@@ -24,6 +24,7 @@ import { spawnSync } from 'node:child_process';
 import { mkdtempSync, writeFileSync, mkdirSync, rmSync, readFileSync } from 'node:fs';
 import { join } from 'node:path';
 import { tmpdir } from 'node:os';
+import { engineSource } from '../../lib/engine-source';
 
 const ROOT = join(__dirname, '../../..');
 const PLUGIN = join(ROOT, 'orchestrations/plugins/verification-plugin.js');
@@ -57,7 +58,7 @@ function detect(root: string): Record<string, unknown> | null {
 let _fnPath = '';
 function fnFile(): string {
   if (_fnPath) return _fnPath;
-  const src = readFileSync(join(ROOT, 'orchestrations/scripts/claude.sh'), 'utf8').split('\n');
+  const src = engineSource(join(ROOT, 'orchestrations/scripts/claude.sh')).split('\n');
   const start = src.findIndex((l) => l.startsWith('_run_declared_lint_gate() {'));
   if (start < 0) throw new Error('_run_declared_lint_gate is not in claude.sh');
   let end = start + 1;
@@ -70,7 +71,7 @@ function fnFile(): string {
 
 describe('lint is detected the way typecheck and test already are', () => {
   it('the plugin exports detectLint alongside its siblings', () => {
-    const src = readFileSync(PLUGIN, 'utf8');
+    const src = engineSource(PLUGIN);
     expect(src).toMatch(/function detectLint/);
     const exportBlock = src.slice(src.lastIndexOf('module.exports'));
     expect(exportBlock, 'detectLint is not exported, so nothing can call it').toMatch(/\bdetectLint\b/);

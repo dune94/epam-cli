@@ -19,6 +19,7 @@ import { spawnSync } from 'node:child_process';
 import { mkdtempSync, mkdirSync, writeFileSync, rmSync, readFileSync } from 'node:fs';
 import { join } from 'node:path';
 import { tmpdir } from 'node:os';
+import { engineSource } from '../../lib/engine-source';
 
 const ROOT = join(__dirname, '../../..');
 const SCRIPTS = join(ROOT, 'orchestrations/scripts');
@@ -27,7 +28,7 @@ const ORCH = join(SCRIPTS, 'run-agent-orchestration.sh');
 const ECO = join(SCRIPTS, 'lib/handlers/codeline-ecosystem.js');
 const NODE = process.execPath;
 
-const code = (f: string) => readFileSync(f, 'utf8').split('\n').filter((l) => !/^\s*#/.test(l)).join('\n');
+const code = (f: string) => engineSource(f).split('\n').filter((l) => !/^\s*#/.test(l)).join('\n');
 
 /** What command this ecosystem gives for running just these files. */
 function fileCommand(repo: string, files: string): string {
@@ -143,7 +144,7 @@ describe('the repro gate cannot pass what it cannot run', () => {
   it('a blocked story is recorded on the PRD, not only in the log', () => {
     // A finding that exists only in a log line cannot be inherited: the retry would not know
     // which story failed. Step 3.545 hard-fails on the same condition for the same reason.
-    const src = readFileSync(ORCH, 'utf8');
+    const src = engineSource(ORCH);
     const i = src.indexOf('reproGate: "failed"');
     expect(i, 'the 3.55 stamp is gone').toBeGreaterThan(-1);
     const block = src.slice(i - 600, i + 500);

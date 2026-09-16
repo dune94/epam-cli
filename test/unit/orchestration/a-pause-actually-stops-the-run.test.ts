@@ -20,9 +20,10 @@ import { spawnSync } from 'node:child_process';
 import { mkdtempSync, mkdirSync, writeFileSync, rmSync, readFileSync } from 'node:fs';
 import { join } from 'node:path';
 import { tmpdir } from 'node:os';
+import { engineSource } from '../../lib/engine-source';
 
 const ROOT = join(__dirname, '../../../');
-const ORCH = readFileSync(join(ROOT, 'orchestrations/scripts/run-agent-orchestration.sh'), 'utf8');
+const ORCH = engineSource(join(ROOT, 'orchestrations/scripts/run-agent-orchestration.sh'));
 const AFTER = 'REACHED-THE-WORK-THE-PAUSE-WAS-MEANT-TO-PRECEDE';
 
 const dirs: string[] = [];

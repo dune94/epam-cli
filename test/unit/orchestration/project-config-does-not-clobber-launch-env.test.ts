@@ -34,6 +34,7 @@ import { describe, it, expect } from 'vitest';
 import { spawnSync, execFileSync } from 'node:child_process';
 import { readdirSync, readFileSync } from 'node:fs';
 import { join } from 'node:path';
+import { engineSource } from '../../lib/engine-source';
 
 const ORCH = join(__dirname, '../../../orchestrations');
 
@@ -108,7 +109,7 @@ describe('a launch-time bypass survives the project config', () => {
     const project = config.split('/').slice(-2).join('/');
 
     for (const flag of BYPASS_FLAGS) {
-      const declared = readFileSync(config, 'utf8').match(new RegExp(`^\\s*${flag}=`, 'm'));
+      const declared = engineSource(config).match(new RegExp(`^\\s*${flag}=`, 'm'));
       if (!declared) continue; // the project does not set it — nothing to clobber
 
       it(`${project}: ${flag}=true set at launch is not overwritten`, () => {
@@ -129,7 +130,7 @@ describe('a launch-time bypass survives the project config', () => {
       it(`${project}: still applies its own default when nothing is set`, () => {
         // The fix must not delete the project's configured default — an unset
         // launch environment has to keep reading exactly what the file declares.
-        const literal = readFileSync(config, 'utf8')
+        const literal = engineSource(config)
           .match(new RegExp(`^\\s*${flag}=(.*)$`, 'm'))![1];
         const want = (literal.match(/:-([^}"']*)/) || [, literal.replace(/["']/g, '')])[1];
         expect(
@@ -179,7 +180,7 @@ describe('the discovery itself is sound', () => {
 
   it('found at least one project that declares a bypass flag', () => {
     const declaring = CONFIGS.filter((c) => {
-      const src = readFileSync(c, 'utf8');
+      const src = engineSource(c);
       return BYPASS_FLAGS.some((f) => new RegExp(`^\\s*${f}=`, 'm').test(src));
     });
     expect(declaring.length, 'every per-flag assertion above was skipped').toBeGreaterThan(0);

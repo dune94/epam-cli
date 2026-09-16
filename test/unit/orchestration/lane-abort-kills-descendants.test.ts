@@ -33,9 +33,10 @@ import { spawnSync } from 'node:child_process';
 import { mkdtempSync, writeFileSync, rmSync, readFileSync, existsSync } from 'node:fs';
 import { join } from 'node:path';
 import { tmpdir } from 'node:os';
+import { engineSource } from '../../lib/engine-source';
 
 const ORCH = join(__dirname, '../../../orchestrations/scripts/run-agent-orchestration.sh');
-const SRC = readFileSync(ORCH, 'utf8');
+const SRC = engineSource(ORCH);
 
 const dirs: string[] = [];
 afterEach(() => { for (const d of dirs.splice(0)) rmSync(d, { recursive: true, force: true }); });
@@ -93,7 +94,7 @@ echo "SELF_ALIVE=yes"
 `);
 
   const r = spawnSync('bash', [script], { encoding: 'utf8', timeout: 60000 });
-  const lines = (f: string) => (existsSync(join(d, f)) ? readFileSync(join(d, f), 'utf8').split('\n').filter(Boolean).length : 0);
+  const lines = (f: string) => (existsSync(join(d, f)) ? engineSource(join(d, f)).split('\n').filter(Boolean).length : 0);
   return {
     stillWorking: lines('after.txt') > lines('before.txt'),
     selfSurvived: /SELF_ALIVE=yes/.test(r.stdout || ''),

@@ -21,8 +21,9 @@ import { spawnSync } from 'node:child_process';
 import { mkdtempSync, writeFileSync, readFileSync, rmSync } from 'node:fs';
 import { join } from 'node:path';
 import { tmpdir } from 'node:os';
+import { engineSource } from '../../lib/engine-source';
 
-const CLAUDE = readFileSync(join(__dirname, '../../../orchestrations/scripts/claude.sh'), 'utf8');
+const CLAUDE = engineSource(join(__dirname, '../../../orchestrations/scripts/claude.sh'));
 const PERIM = join(__dirname, '../../../orchestrations/scripts/lib/codeline-write-perimeter.sh');
 
 const dirs: string[] = [];

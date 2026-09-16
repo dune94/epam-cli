@@ -24,9 +24,10 @@ import { execFileSync, spawnSync } from 'node:child_process';
 import { join } from 'node:path';
 import { tmpdir } from 'node:os';
 import { AgentRunner } from '../../../src/agent/AgentRunner';
+import { engineSource } from '../../lib/engine-source';
 
 const ORCH = join(__dirname, '../../../orchestrations/scripts/run-agent-orchestration.sh');
-const SRC = readFileSync(ORCH, 'utf8');
+const SRC = engineSource(ORCH);
 const dirs: string[] = [];
 afterAll(() => { for (const d of dirs) rmSync(d, { recursive: true, force: true }); });
 const tmp = (p: string) => { const d = mkdtempSync(join(tmpdir(), p)); dirs.push(d); return d; };
@@ -64,7 +65,7 @@ describe('usage is durable BEFORE the kill, not after the run', () => {
       } as never);
       await runner.run();
       expect(existsSync(file), 'nothing was persisted — a kill would lose everything').toBe(true);
-      const u = JSON.parse(readFileSync(file, 'utf8'));
+      const u = JSON.parse(engineSource(file));
       expect(u.inputTokens).toBeGreaterThan(0);
       expect(u.outputTokens).toBeGreaterThan(0);
     } finally { delete process.env.EPAM_USAGE_PROGRESS_FILE; }
@@ -82,7 +83,7 @@ describe('usage is durable BEFORE the kill, not after the run', () => {
         provider: hangingProvider({ inputTokens: 1000, outputTokens: 10 }) as never,
         model: 'stub', systemPrompt: 's', userMessage: 'u', tools: [], maxIterations: 2,
       } as never).run();
-      const persisted = JSON.parse(readFileSync(file, 'utf8'));
+      const persisted = JSON.parse(engineSource(file));
       expect(
         persisted.inputTokens,
         'the persisted figure disagrees with what the run itself reports',
@@ -115,7 +116,7 @@ describe('usage is durable BEFORE the kill, not after the run', () => {
       { encoding: 'utf8', timeout: 20000 });
     expect(r.stdout, 'the child was not actually killed — this test proves nothing').toMatch(/rc=137/);
     expect(existsSync(file), 'the kill took the usage with it').toBe(true);
-    expect(JSON.parse(readFileSync(file, 'utf8')).inputTokens).toBe(2214217);
+    expect(JSON.parse(engineSource(file)).inputTokens).toBe(2214217);
   });
 });
 
@@ -139,7 +140,7 @@ describe('the watchdog turns that file into a cost record the budget guard can s
        PHASE_COST_FILE=${JSON.stringify(costFile)}
        EPAM_USAGE_PROGRESS_FILE=${JSON.stringify(progressFile)}
 ${block}`], { encoding: 'utf8' });
-    return JSON.parse(readFileSync(costFile, 'utf8').trim());
+    return JSON.parse(engineSource(costFile).trim());
   }
 
   it('THE DEFECT: a killed attempt now carries its tokens and cost', () => {

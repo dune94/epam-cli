@@ -34,6 +34,7 @@ import { execFileSync } from 'node:child_process';
 import { mkdtempSync, rmSync, writeFileSync, readFileSync } from 'node:fs';
 import { join } from 'node:path';
 import { tmpdir } from 'node:os';
+import { engineSource } from '../../lib/engine-source';
 
 const ROOT = join(__dirname, '../../../');
 const CLAUDE_SH = join(ROOT, 'orchestrations/scripts/claude.sh');
@@ -42,7 +43,7 @@ const dirs: string[] = [];
 afterAll(() => { for (const d of dirs) rmSync(d, { recursive: true, force: true }); });
 
 function fnBody(name: string): string {
-  const src = readFileSync(CLAUDE_SH, 'utf8');
+  const src = engineSource(CLAUDE_SH);
   const start = src.indexOf(`\n${name}() {`);
   if (start === -1) throw new Error(`${name}() not found in claude.sh`);
   const end = src.indexOf('\n}\n', start);
@@ -124,7 +125,7 @@ describe('older PRDs keep working — absent perCodeline falls back', () => {
 
 describe('THE SWEEP: prompt-side consumers all route through the accessor', () => {
   it('the prompt builder derives the list once, not eight times', () => {
-    const src = readFileSync(CLAUDE_SH, 'utf8');
+    const src = engineSource(CLAUDE_SH);
     const start = src.indexOf('\nbuild_implementation_prompt() {');
     const end = src.indexOf('\n}\n', src.indexOf('\n_module_resolution_context', start) === -1 ? start : start);
     const body = src.slice(start, start + 40000);

@@ -22,15 +22,16 @@ import { describe, it, expect } from 'vitest';
 import { readFileSync } from 'node:fs';
 import { execFileSync } from 'node:child_process';
 import { join } from 'node:path';
+import { engineSource } from '../../lib/engine-source';
 
 const ROOT = join(__dirname, '../../..');
-const CLAUDE_SH = readFileSync(join(ROOT, 'orchestrations/scripts/claude.sh'), 'utf8');
+const CLAUDE_SH = engineSource(join(ROOT, 'orchestrations/scripts/claude.sh'));
 const CONFIG = join(ROOT, 'orchestrations/config/spec-mode-defaults.json');
 const BUDGET_SH = join(ROOT, 'orchestrations/scripts/lib/prompt-budget.sh');
 
 describe('the injection budget is configuration, not a literal', () => {
   it('spec-mode-defaults.json carries it', () => {
-    const cfg = JSON.parse(readFileSync(CONFIG, 'utf8'));
+    const cfg = JSON.parse(engineSource(CONFIG));
     expect(cfg.promptTrim ?? cfg.existingFileInjection, 'no budget section at all').toBeTruthy();
     const v = cfg.existingFileInjection?.maxLinesPerFile;
     expect(v, 'maxLinesPerFile is not configured').toBeTypeOf('number');
@@ -38,7 +39,7 @@ describe('the injection budget is configuration, not a literal', () => {
   });
 
   it('it is overridable by an environment variable, like every other budget here', () => {
-    const cfg = JSON.parse(readFileSync(CONFIG, 'utf8'));
+    const cfg = JSON.parse(engineSource(CONFIG));
     expect(cfg.existingFileInjection?.maxLinesPerFileEnv).toBeTruthy();
   });
 

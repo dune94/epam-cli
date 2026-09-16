@@ -17,10 +17,11 @@ import { readFileSync, mkdtempSync, mkdirSync, writeFileSync, rmSync } from 'nod
 import { execFileSync } from 'node:child_process';
 import { join } from 'node:path';
 import { tmpdir } from 'node:os';
+import { engineSource } from '../../lib/engine-source';
 
 const REPO_ROOT = join(__dirname, '../../../');
 const CLAUDE_SH = join(REPO_ROOT, 'orchestrations/scripts/claude.sh');
-const claudeSrc = readFileSync(CLAUDE_SH, 'utf8');
+const claudeSrc = engineSource(CLAUDE_SH);
 
 function extractFunctionBody(name: string): string {
   const defRe = new RegExp(`^\\s*${name}\\(\\)\\s*\\{`, 'm');
@@ -139,10 +140,10 @@ describe('run_diagnosis_groundedness_check() — REAL execution', () => {
       } catch (e: any) {
         output = (e.stdout ?? '').toString();
       }
-      output += readFileSync(stderrPath, 'utf8');
+      output += engineSource(stderrPath);
       let jsonlContent: string | null = null;
       try {
-        jsonlContent = readFileSync(join(logDir, 'failure-diagnosis-groundedness.jsonl'), 'utf8');
+        jsonlContent = engineSource(join(logDir, 'failure-diagnosis-groundedness.jsonl'));
       } catch {
         /* not written */
       }

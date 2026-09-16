@@ -33,6 +33,7 @@ import { execFileSync } from 'node:child_process';
 import { mkdtempSync, writeFileSync, readFileSync, rmSync, existsSync } from 'node:fs';
 import { join } from 'node:path';
 import { tmpdir } from 'node:os';
+import { engineSource } from '../../lib/engine-source';
 
 const SYNTH = join(__dirname, '../../../orchestrations/scripts/synthesize-prd-from-jira.js');
 // The synthesizer has no built-in template: a built-in one lent every run another
@@ -70,7 +71,7 @@ function synthesize(classifications: unknown[], env: Record<string, string> = {}
   });
   return {
     stderr: r,
-    prd: existsSync(out) ? JSON.parse(readFileSync(out, 'utf8')) : null,
+    prd: existsSync(out) ? JSON.parse(engineSource(out)) : null,
   };
 }
 
@@ -119,8 +120,7 @@ describe('the story stays whole', () => {
 });
 
 describe('the per-codeline filter includes a spanning story in every lane', () => {
-  const ORCH = readFileSync(
-    join(__dirname, '../../../orchestrations/scripts/run-agent-orchestration.sh'), 'utf8');
+  const ORCH = engineSource(join(__dirname, '../../../orchestrations/scripts/run-agent-orchestration.sh'));
 
   it('matches on codelines[] as well as the scalar codeline', () => {
     // The filter PARTITIONS stories across codelines. A story that spans them
@@ -129,8 +129,7 @@ describe('the per-codeline filter includes a spanning story in every lane', () =
     // THE HANDLER, which is the filter now. This sliced 1200 characters after a comment in
     // the shell script — a window that held the logic only while the logic was inline.
     // Reading the handler is also stronger: it is the exact file the pipeline executes.
-    const block = readFileSync(
-      join(__dirname, '../../../orchestrations/scripts/lib/handlers/filtered-prd.js'), 'utf8');
+    const block = engineSource(join(__dirname, '../../../orchestrations/scripts/lib/handlers/filtered-prd.js'));
     expect(block,
       'a story spanning codelines is filtered out of every lane and never runs')
       .toMatch(/codelines/);
@@ -209,8 +208,7 @@ describe('joined state — a spanning story completes only when every lane does'
  * neighbouring SURFACE.
  */
 describe('MC-2: the detective can see the neighbouring codeline', () => {
-  const SPEC = readFileSync(
-    join(__dirname, '../../../orchestrations/scripts/spec-mode-runner.js'), 'utf8');
+  const SPEC = engineSource(join(__dirname, '../../../orchestrations/scripts/spec-mode-runner.js'));
 
   it('reads published contracts for something other than counting tokens', () => {
     const uses = [...SPEC.matchAll(/\.contracts/g)].length;
@@ -254,8 +252,7 @@ describe('MC-2: the detective can see the neighbouring codeline', () => {
  * it examined fewer things than it should have.
  */
 describe('partial coverage is a failure, not a pass', () => {
-  const ORCH = readFileSync(
-    join(__dirname, '../../../orchestrations/scripts/run-agent-orchestration.sh'), 'utf8');
+  const ORCH = engineSource(join(__dirname, '../../../orchestrations/scripts/run-agent-orchestration.sh'));
 
   it('verifies every declared codeline actually produced a result', () => {
     expect(ORCH,

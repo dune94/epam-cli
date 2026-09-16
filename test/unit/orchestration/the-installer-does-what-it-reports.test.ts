@@ -3,6 +3,7 @@ import { spawnSync } from 'node:child_process';
 import fs from 'node:fs';
 import os from 'node:os';
 import path from 'node:path';
+import { engineSource } from '../../lib/engine-source';
 
 /**
  * THE INSTALLER MUST DO WHAT IT REPORTS.
@@ -81,7 +82,7 @@ describe('the installer', () => {
   it('names a compose file rather than assuming one at the repo root', () => {
     // `docker compose up -d` with no -f fails here: there is no docker-compose.yml at the root,
     // only docker-compose.observability.yml and friends. Ending in `|| true` hides that.
-    const body = fs.readFileSync(INSTALLER, 'utf8');
+    const body = engineSource(INSTALLER);
     const bare = body.split('\n').filter((l) => {
       const t = l.trim();
       if (t.startsWith('#')) return false;                     // a comment naming the defect
@@ -189,7 +190,7 @@ describe('the installer completes an install', () => {
     const out = `${r.stdout ?? ''}${r.stderr ?? ''}`;
     const shim = path.join(binDir, 'epam');
     expect(fs.existsSync(shim), `no shim was created. installer said:\n${out.slice(-500)}`).toBe(true);
-    const body = fs.readFileSync(shim, 'utf8');
+    const body = engineSource(shim);
     expect(body, 'the shim points somewhere other than this install').toContain(dir);
     expect((fs.statSync(shim).mode & 0o111) !== 0, 'the shim is not executable').toBe(true);
   });
@@ -207,7 +208,7 @@ describe('the installer completes an install', () => {
     const cfg = path.join(dir, 'orchestrations/projects/demo/config.env');
     const out = `${r.stdout ?? ''}${r.stderr ?? ''}`;
     expect(fs.existsSync(cfg), `no config.env written. installer said:\n${out.slice(-500)}`).toBe(true);
-    const body = fs.readFileSync(cfg, 'utf8');
+    const body = engineSource(cfg);
     expect(body).toMatch(/JIRA_URL=https:\/\/example\.atlassian\.net/);
     expect(body).toMatch(/JIRA_PROJECT_KEY=DEMO/);
     expect(body).toMatch(new RegExp(`JIRA_CODELINE_ROOT=${dir.replace(/[.*+?^${}()|[\]\\]/g, '\\$&')}`));
@@ -224,7 +225,7 @@ describe('the installer completes an install', () => {
                JIRA_TOKEN: 'should-never-be-written', ANTHROPIC_API_KEY: 'sk-must-not-appear' } });
     const cfg = path.join(dir, 'orchestrations/projects/demo/config.env');
     if (!fs.existsSync(cfg)) return;      // covered by the previous test
-    const body = fs.readFileSync(cfg, 'utf8');
+    const body = engineSource(cfg);
     expect(body, 'a token reached project config').not.toMatch(/should-never-be-written/);
     expect(body, 'an API key reached project config').not.toMatch(/sk-must-not-appear/);
   });
@@ -246,7 +247,7 @@ describe('the installer completes an install', () => {
 describe('the install records what it is', () => {
   const manifestOf = (dir: string) => {
     const p = path.join(dir, 'install-manifest.json');
-    return fs.existsSync(p) ? JSON.parse(fs.readFileSync(p, 'utf8')) : null;
+    return fs.existsSync(p) ? JSON.parse(engineSource(p)) : null;
   };
 
   const install = (dir: string, env: Record<string, string> = {}, args = ['--no-docker']) =>

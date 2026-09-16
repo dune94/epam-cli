@@ -21,10 +21,11 @@ import { spawnSync } from 'node:child_process';
 import { existsSync, readFileSync, writeFileSync, mkdtempSync } from 'node:fs';
 import { tmpdir } from 'node:os';
 import { join } from 'node:path';
+import { engineSource, engineSourceFile } from '../../lib/engine-source';
 
 const REPO = join(__dirname, '../../../');
 const DEFAULTS = join(REPO, 'orchestrations/config/llm-defaults.json');
-const CLAUDE_SH = join(REPO, 'orchestrations/scripts/claude.sh');
+const CLAUDE_SH = engineSourceFile(join(REPO, 'orchestrations/scripts/claude.sh')); // the inlined program: this test lifts text, it does not execute the main
 
 /** Run the REAL loader and report the resolved values. */
 function loadTiers(projectConfigDir = '') {
@@ -59,7 +60,7 @@ describe('effort budgets come from configuration', () => {
   });
 
   it('it declares every effort tier and the role overrides', () => {
-    const cfg = JSON.parse(readFileSync(DEFAULTS, 'utf8'));
+    const cfg = JSON.parse(engineSource(DEFAULTS));
     for (const tier of ['low', 'medium', 'high']) {
       expect(cfg.effortTiers?.[tier]?.maxIterations, `${tier}.maxIterations missing`).toBeGreaterThan(0);
       expect(cfg.effortTiers?.[tier]?.maxOutputTokens, `${tier}.maxOutputTokens missing`).toBeGreaterThan(0);
@@ -68,7 +69,7 @@ describe('effort budgets come from configuration', () => {
   });
 
   it('the loader resolves them', () => {
-    const cfg = JSON.parse(readFileSync(DEFAULTS, 'utf8'));
+    const cfg = JSON.parse(engineSource(DEFAULTS));
     const r = loadTiers();
     expect(r.LOW_ITER, `loader produced nothing:\n${r.out}${r.err}`).toBe(String(cfg.effortTiers.low.maxIterations));
     expect(r.HIGH_ITER).toBe(String(cfg.effortTiers.high.maxIterations));
@@ -78,7 +79,7 @@ describe('effort budgets come from configuration', () => {
   it('a project can override a single tier without restating the rest', () => {
     const dir = mkdtempSync(join(tmpdir(), 'proj-'));
     writeFileSync(join(dir, 'llm-settings.json'), JSON.stringify({ effortTiers: { low: { maxIterations: 99 } } }));
-    const cfg = JSON.parse(readFileSync(DEFAULTS, 'utf8'));
+    const cfg = JSON.parse(engineSource(DEFAULTS));
     const r = loadTiers(dir);
     expect(r.LOW_ITER, 'project override ignored').toBe('99');
     expect(r.LOW_TOK, 'untouched value should fall back to the engine default')
@@ -86,7 +87,7 @@ describe('effort budgets come from configuration', () => {
   });
 
   it('claude.sh no longer assigns these budgets as literals', () => {
-    const src = readFileSync(CLAUDE_SH, 'utf8')
+    const src = engineSource(CLAUDE_SH)
       .split('\n')
       .filter((l) => !l.trim().startsWith('#'))
       .join('\n');

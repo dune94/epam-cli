@@ -14,12 +14,13 @@
  */
 import { readFileSync } from 'node:fs';
 import { join } from 'node:path';
+import { engineSource } from '../lib/engine-source';
 
 const TEMPLATE = join(__dirname, '../../orchestrations/prompts/templates/failure-analyst.json');
 
 /** The rendered-prompt body, with placeholders still in place. */
 export function analystPromptBody(): string {
-  const doc = JSON.parse(readFileSync(TEMPLATE, 'utf8'));
+  const doc = JSON.parse(engineSource(TEMPLATE));
   if (typeof doc.body !== 'string' || doc.body.length < 500) {
     throw new Error('analyst prompt template is missing or implausibly short — tests would pass vacuously');
   }

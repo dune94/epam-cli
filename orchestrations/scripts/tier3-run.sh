@@ -141,6 +141,14 @@ if [ "$DESCRIBE" = "1" ]; then
   exit 0
 fi
 
+# A RESUME IS NOT A LAUNCH. EPAM_RESUME_RUN names a run whose codeline, PRD and ledger exist on
+# disk; the orchestrator restores that run's checkpoint. Until 2026-09-16 this launcher had no
+# notion of it: every greenfield "resume" restored the authored PRD, deleted the output directory
+# and ran each phase with --reset — a fresh launch wearing the old run id (run 20260915T101555Z,
+# four resumes, a verified story rebuilt from nothing each time). On a resume the base state IS
+# the run's state: nothing below restores, tears down or resets.
+GREENFIELD_RESUME=0
+[ "$GREENFIELD" = "1" ] && [ -n "${EPAM_RESUME_RUN:-}" ] && GREENFIELD_RESUME=1
 if [ "$GREENFIELD" = "1" ]; then
   # Half a declaration is a refusal, not a guess: nothing here decides where a codeline is built
   # or what phases a project runs.
@@ -150,7 +158,9 @@ if [ "$GREENFIELD" = "1" ]; then
   # left in it — model assignments among them — and pre-flight refused a fresh launch over a stale
   # rung on a set that no longer declares it. Restoring the canonical is not a run action: it is the
   # base state, and it happens before anything reads the file.
-  if [ -n "${PRD_CANONICAL:-}" ]; then
+  if [ "$GREENFIELD_RESUME" = "1" ]; then
+    info "Resuming run '${EPAM_RESUME_RUN}': the PRD on disk is the run's own — not restored from the authored canonical"
+  elif [ -n "${PRD_CANONICAL:-}" ]; then
     greenfield_restore_prd "$PRD_CANONICAL" "$PRD_FILE" "$REPO_ROOT"
   fi
 fi
@@ -202,8 +212,14 @@ fi
 # the PRD and roster, so it must not fire for a run the operator declines, and must be complete
 # before anything reads either file.
 if [ "$GREENFIELD" = "1" ]; then
-  # The codeline is built from nothing each run; the PRD is the authored one, never last run's.
-  greenfield_prepare_output_dir "$OUTPUT_DIR" "$PROJECT_DIR" "$PROJECT_NAME"
+  if [ "$GREENFIELD_RESUME" = "1" ]; then
+    # The codeline is the run's own work; a resume builds on it.
+    [ -d "$OUTPUT_DIR/.git" ] || fail "resume of '${EPAM_RESUME_RUN}': no codeline at $OUTPUT_DIR — nothing to resume on"
+    info "Resuming run '${EPAM_RESUME_RUN}': codeline at $OUTPUT_DIR kept as it is"
+  else
+    # The codeline is built from nothing each run; the PRD is the authored one, never last run's.
+    greenfield_prepare_output_dir "$OUTPUT_DIR" "$PROJECT_DIR" "$PROJECT_NAME"
+  fi
   export OUTPUT_DIR
   export PROJECT_ROOT="$OUTPUT_DIR"
 fi
@@ -226,7 +242,7 @@ info "Pre-flight for '$PROJECT_NAME'..."
 # INVOCATION rather than the environment — "No --runner specified", "PRD_FILE is unset", "No --prd
 # specified" — so this launcher could never pass its own gate and refused every launch. It knows
 # all three values; withholding them turned a real environment check into a permanent no.
-bash "$SCRIPT_DIR/preflight-check.sh" \
+bash "${EPAM_PREFLIGHT_BIN:-$SCRIPT_DIR/preflight-check.sh}" \
     --runner "run-agent-orchestration.sh" \
     --prd "$PRD_FILE" \
     --project-config "$PROJECT_DIR" \

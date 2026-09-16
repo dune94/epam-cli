@@ -97,26 +97,44 @@ greenfield_restore_prd() {
 # Each phase: remediate the PRD for that phase, run the orchestrator with --reset, and on exit 2
 # — a gate applied a remediation — remediate mid-phase and retry ONCE with the gate remediation
 # skipped. Any other non-zero exit aborts: the next phase must never start on a failed one.
+# greenfield_phase_completed <phase> — the phase's gate decided GO (logs/phase-gates.jsonl), the
+# same record the £0 harness judges completion by. A resume never re-runs a phase that finished.
+greenfield_phase_completed() {
+    local _phase="${1:?phase}"
+    local _gates="${EPAM_PROJECT_OUTPUT_DIR:-${LOG_DIR:-$_gfl_dir/../../logs}}/phase-gates.jsonl"
+    [ -f "$_gates" ] || return 1
+    jq -e --arg p "$_phase" 'select(.phase_id == $p and ((.decision // "") | ascii_downcase) == "go")' "$_gates" >/dev/null 2>&1
+}
+
 greenfield_run_phases() {
     local phases="${1:?phases}" prd="${2:?PRD_FILE}" log="${3:-/dev/null}"
     local orch="${EPAM_ORCHESTRATOR_BIN:-$_gfl_dir/../run-agent-orchestration.sh}"
     local rem="${EPAM_PRD_REMEDIATE_BIN:-$_gfl_dir/../prd-remediate.sh}"
+    # A RESUME KEEPS WHAT THE RUN HAS DONE. --reset clears every story's completed flag before a
+    # phase runs — right for a launch from nothing, and on a resume it erased the run's progress
+    # (2026-09-16). Phases the run's gate already passed are not run again.
+    local -a reset_flag=(--reset)
+    [ -n "${EPAM_RESUME_RUN:-}" ] && reset_flag=()
     local phase
     for phase in $phases; do
+        if [ -n "${EPAM_RESUME_RUN:-}" ] && greenfield_phase_completed "$phase"; then
+            info "━━━ Phase: $phase — completed in run '${EPAM_RESUME_RUN}' (gate GO); not run again ━━━"
+            continue
+        fi
         info "━━━ Phase: $phase ━━━"
         info "  Pre-phase PRD remediation..."
         if ! bash "$rem" --prd "$prd" --phase "$phase" 2>&1 | tee -a "$log"; then
             fail "PRD remediation failed for phase '$phase' — aborting. Fix the PRD before relaunching."
         fi
         local phase_exit=0
-        bash "$orch" --phase "$phase" --reset 2>&1 | tee -a "$log" || phase_exit=${PIPESTATUS[0]}
+        bash "$orch" --phase "$phase" "${reset_flag[@]}" 2>&1 | tee -a "$log" || phase_exit=${PIPESTATUS[0]}
         if command -v phase_exit_is_retryable >/dev/null 2>&1 && phase_exit_is_retryable "$phase_exit"; then
             info "  Self-healing: gate remediation applied — resetting and retrying phase '$phase'..."
             if ! bash "$rem" --prd "$prd" --phase "$phase" --mid-phase-retry 2>&1 | tee -a "$log"; then
                 fail "PRD remediation failed during self-healing retry for phase '$phase'"
             fi
             phase_exit=0
-            SKIP_GATE_REMEDIATION=1 bash "$orch" --phase "$phase" --reset 2>&1 | tee -a "$log" || phase_exit=${PIPESTATUS[0]}
+            SKIP_GATE_REMEDIATION=1 bash "$orch" --phase "$phase" "${reset_flag[@]}" 2>&1 | tee -a "$log" || phase_exit=${PIPESTATUS[0]}
             if [ "$phase_exit" -ne 0 ]; then
                 fail "Phase '$phase' failed after self-healing retry (exit $phase_exit) — aborting pipeline"
             fi

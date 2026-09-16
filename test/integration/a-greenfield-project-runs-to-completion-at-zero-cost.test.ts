@@ -226,5 +226,61 @@ describe('a greenfield project runs to completion at £0', () => {
 
       expect(mock.hits.length, 'no model call reached the mock — nothing was rehearsed').toBeGreaterThan(0);
     }, 50 * 60_000);
+
+    // A RESUME IS NOT A LAUNCH. Every greenfield "resume" of run 20260915T101555Z (2.0.38–2.0.41)
+    // began by tearing the codeline down, restoring the authored PRD and resetting every completed
+    // flag — a fresh launch wearing the old run id — because this cell launched and finished and
+    // never once resumed. This leg pauses before the writer, resumes the SAME run through the same
+    // launcher, and asserts what a resume must keep: the codeline, the PRD's own state, the run id.
+    it(`${project}: a run paused before the writer resumes as the same run — codeline, PRD and run id kept`, async () => {
+      const projDir = join(install, 'orchestrations/projects', project);
+      const cfg = readFileSync(join(projDir, 'config.env'), 'utf8');
+      const phases = (cfg.match(/^EPAM_PHASES="?([^"\n]*)"?/m) || [, ''])[1].trim().split(/\s+/).filter(Boolean);
+      const canonical = (cfg.match(/^PRD_CANONICAL=(.*)$/m) || [, ''])[1].trim();
+      const prdPath = join(install, (cfg.match(/^PRD_FILE=(.*)$/m) || [, ''])[1].trim());
+      const out = join(tmp('gf-resume-out-'), 'app');
+      const env = runEnv(project, out);
+      const reg = await run(NODE, [join(install, 'orchestrations/scripts/mock-expectations.js'), '--host', mock.url], {
+        cwd: install, timeout: 300_000, env: { ...env, PRD_FILE: join(install, canonical), EPAM_PROJECT_CONFIG_DIR: projDir },
+      });
+      expect(reg.status, `mock-expectations.js failed:\n${reg.stdout}\n${reg.stderr}`).toBe(0);
+      const launcher = join(install, 'orchestrations/scripts/tier3-run.sh');
+
+      // 1. Launch, pausing before the writer.
+      const first = await run('bash', [launcher, '--project', project, '--yes'], { cwd: install, timeout: 30 * 60_000, env: { ...env, EPAM_PAUSE_BEFORE_WRITER: '1' } });
+      const t1 = (first.stdout || '') + (first.stderr || '');
+      writeFileSync(join(install, 'greenfield-pause.log'), t1);
+      const tail1 = t1.split('\n').slice(-40).join('\n');
+      expect(t1, `the run did not pause before the writer — log tail:\n${tail1}`).toMatch(/PAUSED — inputs ready, writer NOT started/);
+      const runId = (t1.match(/RUN NUMBER:\s*\S*?(\d{8}T\d{6}Z)/) || [])[1];
+      expect(runId, `no run id printed at the pause — log tail:\n${tail1}`).toBeTruthy();
+      const prdAtPause = JSON.parse(readFileSync(prdPath, 'utf8'));
+      const specAtPause = Object.fromEntries((prdAtPause.stories || []).map((st: any) => [st.id, st.specification && st.specification.runId]));
+      expect(Object.values(specAtPause).some(Boolean), 'the spec pass wrote nothing before the pause').toBe(true);
+      const headAtPause = spawnSync('git', ['-C', out, 'rev-parse', 'HEAD'], { encoding: 'utf8' }).stdout.trim();
+      const hitsAtPause = mock.hits.length;
+
+      // 2. Resume the same run through the same launcher.
+      const second = await run('bash', [launcher, '--project', project, '--yes'], { cwd: install, timeout: 45 * 60_000, env: { ...env, EPAM_RESUME_RUN: runId } });
+      const t2 = (second.stdout || '') + (second.stderr || '');
+      writeFileSync(join(install, 'greenfield-resume.log'), t2);
+      const tail2 = t2.split('\n').slice(-60).join('\n');
+      expect(t2, `the resume tore the codeline down — log head:\n${t2.split('\n').slice(0, 12).join('\n')}`).not.toMatch(/Tearing down output directory/);
+      expect(t2, 'the resume restored the authored PRD over the run\'s own').not.toMatch(/PRD restored from canonical/);
+      expect(t2, `the resume ran under another run id — log tail:\n${tail2}`).toMatch(new RegExp(`RUN NUMBER:\\s*\\S*?${runId}`));
+      // The codeline the paused run left is the base the resumed run builds on.
+      const firstParent = spawnSync('git', ['-C', out, 'rev-list', '--max-parents=0', 'HEAD'], { encoding: 'utf8' }).stdout.trim();
+      expect(spawnSync('git', ['-C', out, 'merge-base', '--is-ancestor', headAtPause, 'HEAD']).status, 'the paused run\'s commit is no longer in the codeline\'s history').toBe(0);
+      expect(firstParent, 'the codeline was re-initialised').toBe(spawnSync('git', ['-C', out, 'rev-list', '--max-parents=0', headAtPause], { encoding: 'utf8' }).stdout.trim());
+      // The spec pass is not re-run: every story keeps the spec run id it had at the pause.
+      const prdAfter = JSON.parse(readFileSync(prdPath, 'utf8'));
+      for (const st of prdAfter.stories || []) {
+        if (specAtPause[st.id]) expect(st.specification && st.specification.runId, `${st.id}: the spec pass re-ran on resume`).toBe(specAtPause[st.id]);
+      }
+      expect(mock.hits.slice(hitsAtPause).some((h) => isSeam(h, WRITER)), 'the resumed run never reached the writer').toBe(true);
+      for (const p of phases) expect(t2, `phase '${p}' did not complete on the resume — log tail:\n${tail2}`).toMatch(new RegExp(`Phase '${p}' completed`));
+      expect(second.status, `resume exited ${second.status} — log tail:\n${tail2}`).toBe(0);
+      expect(Number(spawnSync('git', ['-C', out, 'rev-list', '--count', 'HEAD'], { encoding: 'utf8' }).stdout.trim()), 'the resumed run committed nothing').toBeGreaterThan(1);
+    }, 80 * 60_000);
   }
 });

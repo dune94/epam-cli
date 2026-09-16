@@ -264,6 +264,13 @@ describe('a greenfield project runs to completion at £0', () => {
       const second = await run('bash', [launcher, '--project', project, '--yes'], { cwd: install, timeout: 45 * 60_000, env: { ...env, EPAM_RESUME_RUN: runId } });
       const t2 = (second.stdout || '') + (second.stderr || '');
       writeFileSync(join(install, 'greenfield-resume.log'), t2);
+      if (process.env.EPAM_GREENFIELD_TEST_KEEP) {
+        const keep = join(process.env.EPAM_GREENFIELD_TEST_KEEP, `${project}-resume`); rmSync(keep, { recursive: true, force: true }); mkdirSync(keep, { recursive: true });
+        try { cpSync(out, join(keep, 'app'), { recursive: true }); } catch { /* no output dir */ }
+        try { cpSync(join(install, 'orchestrations/logs'), join(keep, 'logs'), { recursive: true }); } catch { /* no logs */ }
+        writeFileSync(join(keep, 'pause.log'), t1); writeFileSync(join(keep, 'resume.log'), t2);
+        try { cpSync(prdPath, join(keep, 'prd.json')); } catch { /* no prd */ }
+      }
       const tail2 = t2.split('\n').slice(-60).join('\n');
       expect(t2, `the resume tore the codeline down — log head:\n${t2.split('\n').slice(0, 12).join('\n')}`).not.toMatch(/Tearing down output directory/);
       expect(t2, 'the resume restored the authored PRD over the run\'s own').not.toMatch(/PRD restored from canonical/);

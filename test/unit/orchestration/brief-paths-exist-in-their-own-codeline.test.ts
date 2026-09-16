@@ -350,3 +350,34 @@ describe('an extension-less module path resolves to the real file', () => {
     expect(check('See src/hooks/useContent.js', estateWithModule())).toEqual(['src/hooks/useContent.js']);
   });
 });
+
+// A GREENFIELD CODELINE HAS NO FILES YET; THE PRD SAYS WHICH IT WILL HAVE. skyscanner run
+// 20260916T222906Z (claude set): the codeline was an empty init commit, every brief cited the
+// files the stories declare (src/skyscanner/client.ts, src/server.ts, …), every proposal was
+// refused as ungrounded, the roster review never ran, the mint FAILED before the first story.
+// A path a story declares it will create is grounded — that is what the declaration is for.
+describe('a path the PRD declares a story will create is grounded, even on an empty codeline', () => {
+  const empty = () => {
+    const root = mkdtempSync(join(tmpdir(), 'brief-empty-')); dirs.push(root);
+    mkdirSync(join(root, 'app', '.git'), { recursive: true });
+    return [{ name: 'app', path: join(root, 'app') }];
+  };
+  const declared = ['package.json', 'src/skyscanner/client.ts', 'src/skyscanner/client.test.ts', 'src/server.ts'];
+
+  it('the declared file, its directory, and a directory above it are grounded', () => {
+    const brief = 'You scaffold src/skyscanner/client.ts and src/server.ts; tests live under src/skyscanner/.';
+    expect(roster.ungroundedBriefPaths({ systemPrompt: brief, codeline: 'app', kind: 'investigator' }, empty(), declared)).toEqual([]);
+  });
+
+  it('a path nobody declares and nothing holds is still reported', () => {
+    const brief = 'You maintain src/public/index.html and src/public/assets/ for the site.';
+    expect(roster.ungroundedBriefPaths({ systemPrompt: brief, codeline: 'app', kind: 'investigator' }, empty(), declared))
+      .toEqual(['src/public/index.html', 'src/public/assets/']);
+  });
+
+  it('with nothing declared the empty codeline grounds nothing — the brownfield rule is unchanged', () => {
+    const brief = 'You scaffold src/skyscanner/client.ts for the client.';
+    expect(roster.ungroundedBriefPaths({ systemPrompt: brief, codeline: 'app', kind: 'investigator' }, empty())).toEqual(['src/skyscanner/client.ts']);
+  });
+});
+

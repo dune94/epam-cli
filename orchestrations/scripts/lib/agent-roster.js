@@ -163,10 +163,21 @@ function resolvesIn(repoPath, cited) {
     : e.startsWith(base + '.'));
 }
 
-function ungroundedBriefPaths(proposal, codelines) {
+function ungroundedBriefPaths(proposal, codelines, declaredPaths) {
   const brief = proposal && typeof proposal.systemPrompt === 'string' ? proposal.systemPrompt : '';
   const list = Array.isArray(codelines) ? codelines.filter((c) => c && c.name && c.path) : [];
   if (!brief || !list.length) return [];
+  // A PATH A STORY DECLARES IT WILL CREATE IS GROUNDED. A greenfield codeline is an init commit
+  // when the roster is minted; every brief cites the files the stories declare, and reading the
+  // tree alone refused all of them (skyscanner 20260916T222906Z, the mint failed before the first
+  // story). The declaration — technicalNotes.files, deliverables — is the run's own statement of
+  // what the tree will hold; a cited path that IS a declared path, or a directory on the way to
+  // one, is as grounded as a file already on disk. Nothing else is added: an undeclared, absent
+  // path is still reported.
+  const declaredSet = new Set((Array.isArray(declaredPaths) ? declaredPaths : []).map((d) => String(d || '').replace(/^\.\//, '').replace(/\/+$/, '')).filter(Boolean));
+  const declaredDirs = new Set();
+  for (const d of declaredSet) { const segs = d.split('/'); for (let i = 1; i < segs.length; i += 1) declaredDirs.add(segs.slice(0, i).join('/')); }
+  const isDeclared = (p) => { const n = p.replace(/^\.\//, '').replace(/\/+$/, ''); return declaredSet.has(n) || declaredDirs.has(n); };
 
   const declared = String((proposal && proposal.codeline) || '').trim();
   const spans = !declared || declared === PROJECT_WIDE;
@@ -178,6 +189,7 @@ function ungroundedBriefPaths(proposal, codelines) {
   // Roots come from the whole estate, so a sibling's directory is still recognised as a path
   // and can then be reported as absent from THIS codeline.
   const roots = codelineRoots(list);
+  for (const d of declaredDirs) if (!d.includes('/')) roots.add(d);
 
   // Every slash-bearing token in the brief, then kept on STRUCTURE rather than vocabulary:
   //   - its last segment carries an extension  (…/client.go, …/contentstack.ts), or
@@ -222,6 +234,7 @@ function ungroundedBriefPaths(proposal, codelines) {
 
   const missing = [];
   for (const p of cited) {
+    if (isDeclared(p)) continue;
     const foundSomewhere = scope.some((c) => resolvesIn(c.path, p));
     if (!foundSomewhere) missing.push(p);
   }
@@ -354,7 +367,7 @@ function permittedShapes(kind) {
  * @returns {{minted: object[], rejected: object[], unchanged: string[]}}
  */
 function mergeProjectAgents(opts) {
-  const { profilesPath, proposals, codelines } = opts || {};
+  const { profilesPath, proposals, codelines, declaredPaths } = opts || {};
   if (!profilesPath) throw new Error('[agent-roster] profilesPath is required');
   const agentsDir = opts.agentsDir || path.dirname(profilesPath);
   const fixed = protectedRoles();
@@ -389,7 +402,7 @@ function mergeProjectAgents(opts) {
     // A brief is inherited whole and re-checked by nothing, so a path it names becomes an
     // instruction. Refused here rather than surfaced later: the correction cycle re-mints on
     // a rejection, and the reason names the exact paths so the replacement can be grounded.
-    const _ungrounded = ungroundedBriefPaths(p, codelines);
+    const _ungrounded = ungroundedBriefPaths(p, codelines, declaredPaths);
     if (_ungrounded.length) {
       rejected.push({
         name: p.name,

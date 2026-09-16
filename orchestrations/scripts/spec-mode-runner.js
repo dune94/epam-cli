@@ -1426,6 +1426,48 @@ function outputContractFor(toolDef, tag) {
   ].join('\n');
 }
 
+/**
+ * A SEAM IS ASKED UNTIL ITS ANSWER IS ACCEPTED OR ITS LADDER IS SPENT.
+ *
+ * runAgentForJson binds the SHAPE of an answer; it cannot know whether the answer is COMPLETE —
+ * run 7 (20260916T184851Z): the role-assigner returned one well-formed assignment for ten
+ * stories, the shape passed, the completeness check threw, and the run aborted at $0.02 with no
+ * retry, no note and no climb. The operator's standing rule is that every seam has a ladder,
+ * self-heal and retries. This is the one loop: `accept(payload)` returns null to accept or a
+ * sentence saying what is wrong; that sentence is appended to the next prompt as the correction,
+ * and each retry is asked at the next rung of the seam's declared ladder (lib/seam-invocation.js
+ * resolves the rung to a model). Attempts are the seam's retry budget — the same
+ * SPEC_AGENT_MAX_RETRIES the spec pass already honours — plus the first ask.
+ *
+ * Returns { payload, attempts, refusals }. When no attempt was accepted, payload is null and the
+ * last refusal is what the caller reports.
+ */
+async function runSeamUntilAccepted({ seam, execSpec, prompt, toolDef, tag, logPath, itemsKey = null, storyId = '', repoPath = '', env = null, logDir = null, accept }) {
+  const retries = Math.max(0, parseInt(process.env.SEAM_MAX_RETRIES || process.env.SPEC_AGENT_MAX_RETRIES || '3', 10) || 0);
+  const refusals = [];
+  let ask = prompt;
+  let payload = null;
+  for (let attempt = 0; attempt <= retries; attempt += 1) {
+    const rungEnv = seam ? seamInvocationEnvAtRung(seam, logDir, attempt) : {};
+    // eslint-disable-next-line no-await-in-loop
+    payload = await runAgentForJson(execSpec, ask, toolDef, tag, logPath, itemsKey, storyId, repoPath, { ...rungEnv, ...(env || {}) });
+    const why = accept(payload);
+    if (!why) return { payload, attempts: attempt + 1, refusals };
+    refusals.push(why);
+    console.warn(`[seam] ${seam || tag}: answer refused (attempt ${attempt + 1}/${retries + 1}) — ${why}`);
+    ask = `${prompt}\n\nYOUR PREVIOUS ANSWER WAS REFUSED: ${why}\nAnswer again, completely. Every item the request lists must be present in this answer.\n`;
+  }
+  return { payload: null, attempts: retries + 1, refusals };
+}
+
+/** The seam's invocation environment at a given rung of its ladder — the retry's climb. */
+function seamInvocationEnvAtRung(seam, logDir, rung) {
+  try {
+    return require('./lib/seam-invocation.js')
+      .seamInvocationEnv(seam, path.join(automationDirFromLogDir(logDir), 'agents'), { rung });
+  } catch { return {}; }
+}
+
 async function runAgentForJson(execSpec, prompt, toolDef, tag, logPath, itemsKey, storyId = '', repoPath = '', envOverride = null) {
   // EVERY SEAM THAT DECLARES A SHAPE BINDS IT, NOT JUST THE ONES THAT REMEMBERED TO.
   //
@@ -5386,81 +5428,70 @@ async function assignAgentRoles({ promptExec, stories, profilesPath, logDir, rep
   // existing assignment is checked against the same rules a fresh one would face and kept.
   const preassigned = _stories.every((s) => typeof s.agentRole === 'string' && s.agentRole.trim()
                                             && s.agentRole !== 'unknown');
-  let rows;
-  if (preassigned || validateOnly) {
-    rows = _stories.map((s) => ({
-      storyId: s.id, agentRole: String(s.agentRole || '').trim(), reason: 'pre-assigned (validated, not regenerated)',
-    }));
-  } else {
-    const payload = await runAgentForJson(
-      promptExec, prompt, TOOL_ROLE_ASSIGNMENTS, 'ROLE_ASSIGNMENTS',
-      logDir ? path.join(logDir, 'role-assignments.log') : null,
-      null, '', repoPath || '',
-      {
-        ...seamInvocationEnv('role-assigner', logDir),
-        EPAM_AGENT_NAME: 'role-assigner',
-        EPAM_RESPONSE_SCHEMA: schemaEnv(TOOL_ROLE_ASSIGNMENTS),
-      },
-    );
-    rows = (payload && Array.isArray(payload.assignments)) ? payload.assignments : [];
-  }
-  // KEYED BY STORY AND CODELINE. One story spanning three repositories is three assignments:
-  // the repositories differ in tooling, so the right owner can differ too. Assigning one role
-  // to the story and handing it to every lane is how a role briefed for one codeline ends up
-  // working in another.
-  const byStory = new Map();
   const fixed = new Set(fixedRoles);
   const allowed = new Set(candidates);
-
-  for (const row of rows) {
-    if (!row || typeof row.storyId !== 'string' || typeof row.agentRole !== 'string') continue;
-    const role = row.agentRole.trim();
-    if (fixed.has(role)) {
-      throw new Error(
-        `[assign] ${row.storyId} was assigned "${role}", a canonical process role — it is not an ` +
-        'implementation role and cannot own a story.',
-      );
-    }
-    if (!allowed.has(role)) {
-      throw new Error(
-        `[assign] ${row.storyId} was assigned "${role}", which is not in the roster — it has no ` +
-        'profile entry, so the writer would run with an empty system prompt.',
-      );
-    }
-    const key = row.storyId + '\u0000' + (typeof row.codeline === 'string' ? row.codeline.trim() : '');
-    byStory.set(key, { storyId: row.storyId, codeline: (row.codeline || '').trim(), role, reason: row.reason || '' });
-  }
-
-  // Every (story, codeline) pair must be covered. A story spanning three codelines with one
-  // assignment leaves two lanes with no owner — and a null role is read as "unknown" downstream
-  // rather than failing.
   const _pairs = [];
   for (const s of _stories) {
     const cls = Array.isArray(s.codelines) && s.codelines.length ? s.codelines : (s.codeline ? [s.codeline] : ['']);
     for (const cl of cls) _pairs.push({ story: s, codeline: cl });
   }
-  // A STORY THAT DECLARES NO CODELINE ACCEPTS ITS ASSIGNMENT UNDER WHATEVER CODELINE THE
-  // ASSIGNER NAMED. The prompt offers the codeline, so the assigner names it — `codeline:
-  // "regintel"` on every row — while a greenfield story declares none and was looked up under
-  // the empty codeline only; the fallback ran the other way. Ten correct rows were dropped, the
-  // seam was retried at the top of its ladder, and the refusal blamed the agent (2026-09-13,
-  // $0.66). One codeline, one owner: the first row for the story is its assignment.
-  const _anyCodeline = new Map();
-  for (const [k, v] of byStory) { const id = k.split('\u0000')[0]; if (!_anyCodeline.has(id)) _anyCodeline.set(id, v); }
-  const _lookup = (storyId, cl) =>
-    byStory.get(storyId + '\u0000' + cl)
-    || (cl ? byStory.get(storyId + '\u0000' + '') : _anyCodeline.get(storyId) || null);
-  const missing = _pairs.filter((x) => !_lookup(x.story.id, x.codeline))
-    .map((x) => x.story.id + (x.codeline ? ' @ ' + x.codeline : ''));
-  if (missing.length) {
-    // WHAT WAS RECEIVED AGAINST WHAT WAS NEEDED — the join's failure, stated as the join's.
-    const _received = [...byStory.values()].map((v) => `${v.storyId}${v.codeline ? ' @ ' + v.codeline : ''} -> ${v.role}`);
-    throw new Error(
-      `[assign] ${_received.length} assignment(s) received for ${_pairs.length} story/ies; unassigned: ${missing.join(', ')}. ` +
-      (_received.length ? `Received: ${_received.join('; ')}. ` : 'The reply held no assignment rows the contract could read. ') +
-      'A null agentRole is read as "unknown" by every consumer downstream rather than failing.',
-    );
+
+  // THE ROWS AS THE CONTRACT READS THEM, and whether they cover every story/codeline pair. A row
+  // naming a role the roster does not hold, or a process role, is a refusal of the whole answer
+  // (the writer would run with an empty system prompt); a missing pair is a refusal too. Either
+  // refusal is a sentence the seam loop hands back to the model, not an abort (run 7,
+  // 20260916T184851Z: one assignment for ten stories aborted the mint with no retry).
+  const readRows = (rows) => {
+    const byStory = new Map();
+    for (const row of rows) {
+      if (!row || typeof row.storyId !== 'string' || typeof row.agentRole !== 'string') continue;
+      const role = row.agentRole.trim();
+      if (fixed.has(role)) {
+        return { refusal: `${row.storyId} was assigned "${role}", a canonical process role — it is not an implementation role and cannot own a story.` };
+      }
+      if (!allowed.has(role)) {
+        return { refusal: `${row.storyId} was assigned "${role}", which is not in the roster — it has no profile entry, so the writer would run with an empty system prompt. The roster's roles are: ${candidates.join(', ')}.` };
+      }
+      const key = row.storyId + ' ' + (typeof row.codeline === 'string' ? row.codeline.trim() : '');
+      byStory.set(key, { storyId: row.storyId, codeline: (row.codeline || '').trim(), role, reason: row.reason || '' });
+    }
+    const _anyCodeline = new Map();
+    for (const [k, v] of byStory) { const id = k.split(' ')[0]; if (!_anyCodeline.has(id)) _anyCodeline.set(id, v); }
+    const _lookup = (storyId, cl) =>
+      byStory.get(storyId + ' ' + cl)
+      || (cl ? byStory.get(storyId + ' ' + '') : _anyCodeline.get(storyId) || null);
+    const missing = _pairs.filter((x) => !_lookup(x.story.id, x.codeline))
+      .map((x) => x.story.id + (x.codeline ? ' @ ' + x.codeline : ''));
+    if (missing.length) {
+      const _received = [...byStory.values()].map((v) => `${v.storyId}${v.codeline ? ' @ ' + v.codeline : ''} -> ${v.role}`);
+      return { refusal:
+        `${_received.length} assignment(s) received for ${_pairs.length} story/ies; unassigned: ${missing.join(', ')}. ` +
+        (_received.length ? `Received: ${_received.join('; ')}. ` : 'The reply held no assignment rows the contract could read. ') +
+        'A null agentRole is read as "unknown" by every consumer downstream rather than failing.' };
+    }
+    return { byStory, _lookup };
+  };
+
+  let read;
+  if (preassigned || validateOnly) {
+    read = readRows(_stories.map((s) => ({
+      storyId: s.id, agentRole: String(s.agentRole || '').trim(), reason: 'pre-assigned (validated, not regenerated)',
+    })));
+    if (read.refusal) throw new Error(`[assign] ${read.refusal}`);
+  } else {
+    const asked = await runSeamUntilAccepted({
+      seam: 'role-assigner', execSpec: promptExec, prompt, toolDef: TOOL_ROLE_ASSIGNMENTS, tag: 'ROLE_ASSIGNMENTS',
+      logPath: logDir ? path.join(logDir, 'role-assignments.log') : null, repoPath: repoPath || '', logDir,
+      env: { EPAM_AGENT_NAME: 'role-assigner', EPAM_RESPONSE_SCHEMA: schemaEnv(TOOL_ROLE_ASSIGNMENTS) },
+      accept: (payload) => readRows((payload && Array.isArray(payload.assignments)) ? payload.assignments : []).refusal || null,
+    });
+    if (!asked.payload) {
+      throw new Error(`[assign] ${asked.refusals[asked.refusals.length - 1]} (${asked.attempts} attempt(s); the seam's ladder is spent)`);
+    }
+    read = readRows(asked.payload.assignments);
   }
+  const byStory = read.byStory;
+  const _lookup = read._lookup;
 
   const assigned = [];
   for (const s of _stories) {

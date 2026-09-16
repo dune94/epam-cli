@@ -587,7 +587,11 @@ CONTROL_PLANE_LOG="$LOG_DIR/control-plane.log"
 # `date -u`: the id ends in Z, which asserts UTC. It was LOCAL time, so the same
 # instant rendered as 15:36:35Z here and 19:37:20Z elsewhere — one run looking
 # like two, hours apart.
-export ORCH_RUN_ID="${ORCH_RUN_ID:-$(date -u +%Y%m%dT%H%M%SZ)}"
+# A RESUME IS THE SAME RUN FROM THE FIRST LINE. lib/orchestration-resume.sh sets ORCH_RUN_ID to
+# EPAM_RESUME_RUN later, but by then a fresh id had been minted here, announced below as the RUN
+# NUMBER, and baked into CHECKPOINT_FILE — so every resume printed a new run number and kept its
+# story checkpoints under it (the "phantom run id", 2026-09-15).
+export ORCH_RUN_ID="${ORCH_RUN_ID:-${EPAM_RESUME_RUN:-$(date -u +%Y%m%dT%H%M%SZ)}}"
 CHECKPOINT_FILE="${LOG_DIR}/checkpoint-${PHASE:-main}-${ORCH_RUN_ID}.jsonl"
 
 # Announce the run id IMMEDIATELY, before any work. The operator needs it to resume,

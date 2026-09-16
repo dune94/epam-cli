@@ -178,7 +178,7 @@ describe('a greenfield project runs to completion at £0', () => {
 
       // WHAT THE RUN LEFT BEHIND, kept where it can be read after the fixture is gone: a failure
       // one stage deep is diagnosed from the codeline and the logs, not from the assertion text.
-      if (r.status !== 0 && process.env.EPAM_GREENFIELD_TEST_KEEP) {
+      if ((r.status !== 0 || process.env.EPAM_GREENFIELD_TEST_KEEP_ALWAYS) && process.env.EPAM_GREENFIELD_TEST_KEEP) {
         const keep = join(process.env.EPAM_GREENFIELD_TEST_KEEP, project); rmSync(keep, { recursive: true, force: true }); mkdirSync(keep, { recursive: true });
         try { cpSync(out, join(keep, 'app'), { recursive: true }); } catch { /* no output dir */ }
         try { cpSync(join(install, 'orchestrations/logs'), join(keep, 'logs'), { recursive: true }); } catch { /* no logs */ }
@@ -285,9 +285,17 @@ describe('a greenfield project runs to completion at £0', () => {
         if (specAtPause[st.id]) expect(st.specification && st.specification.runId, `${st.id}: the spec pass re-ran on resume`).toBe(specAtPause[st.id]);
       }
       expect(mock.hits.slice(hitsAtPause).some((h) => isSeam(h, WRITER)), 'the resumed run never reached the writer').toBe(true);
-      for (const p of phases) expect(t2, `phase '${p}' did not complete on the resume — log tail:\n${tail2}`).toMatch(new RegExp(`Phase '${p}' completed`));
-      expect(second.status, `resume exited ${second.status} — log tail:\n${tail2}`).toBe(0);
-      expect(Number(spawnSync('git', ['-C', out, 'rev-list', '--count', 'HEAD'], { encoding: 'utf8' }).stdout.trim()), 'the resumed run committed nothing').toBeGreaterThan(1);
+      // Completion is judged by the same rule as the fresh leg: only a project with a recording of
+      // its own writer can complete at £0; the others are proven up to the writer's invocation.
+      const writerRecorded = reg.stdout.split('\n').some((l) => new RegExp(`^\\s+${WRITER}\\s+<-\\s+cassette:`).test(l))
+        && !reg.stdout.split('\n').some((l) => new RegExp(`^\\s+${WRITER}\\s+<-.*another project's answer`).test(l));
+      if (writerRecorded) {
+        for (const p of phases) expect(t2, `phase '${p}' did not complete on the resume — log tail:\n${tail2}`).toMatch(new RegExp(`Phase '${p}' completed`));
+        expect(second.status, `resume exited ${second.status} — log tail:\n${tail2}`).toBe(0);
+        expect(Number(spawnSync('git', ['-C', out, 'rev-list', '--count', 'HEAD'], { encoding: 'utf8' }).stdout.trim()), 'the resumed run committed nothing').toBeGreaterThan(1);
+      } else {
+        console.log(`[greenfield £0] ${project}: resume proven up to and including the writer's invocation — no recording of this project's writer`);
+      }
     }, 80 * 60_000);
   }
 });

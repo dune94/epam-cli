@@ -120,6 +120,21 @@ describe("a seam's tool grant is bound at the runner", () => {
     expect(tools).toBeUndefined();
   });
 
+  it('a runner that declares NO vocabulary binds no restriction — runner_tools_for_grant refuses, the flag is absent', () => {
+    // The openrouter set names a runner "claude" that declares no toolNames (its seams run
+    // through the epam arm, which enforces the grant itself). The guard says so with a non-zero
+    // status and prints nothing, and the hub then passes no --tools rather than an empty one.
+    const lib = join(ROOT, 'orchestrations/scripts/lib/runner-settings.sh');
+    const direct = spawnSync('bash', ['-c', `source ${JSON.stringify(lib)}; RUNNER_FLAGS=(); apply_runner_settings claude ""; runner_tools_for_grant read_file,search; echo "rc=$?"`], {
+      encoding: 'utf8', env: { ...process.env, EPAM_PROVIDER_SET: 'openrouter', EPAM_PROJECT_CONFIG_DIR: '' },
+    });
+    expect(direct.stdout.trim()).toBe('rc=1');
+    const s = stub('claude', true);
+    const { tools, argv } = callHub('claude', s, { AI_GATE_ALLOW_TOOLS: '1', EPAM_ALLOWED_TOOLS: 'read_file,search' }, 'openrouter');
+    expect(argv.length).toBeGreaterThan(0);
+    expect(tools).toBeUndefined();
+  });
+
   it('the codemie arm binds through ITS runner declaration the same way', () => {
     const codemie = declaredRunner('codemie', 'codemie-claude');
     const s = stub('codemie-claude', true);

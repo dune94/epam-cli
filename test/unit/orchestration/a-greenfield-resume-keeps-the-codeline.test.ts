@@ -34,7 +34,7 @@ function stub(dir: string, name: string, body: string) {
 }
 
 /** A greenfield project on disk, a codeline the previous phase built, and a launcher invocation. */
-function launch(opts: { resume?: string }) {
+function launch(opts: { resume?: string; pauseAt?: string }) {
   const ws = mkdtempSync(join(tmpdir(), 'gf-resume-')); dirs.push(ws);
   const projects = join(ws, 'projects'); const proj = join(projects, 'demo'); mkdirSync(proj, { recursive: true });
   const out = join(ws, 'build'); mkdirSync(out, { recursive: true });
@@ -55,7 +55,12 @@ function launch(opts: { resume?: string }) {
   spawnSync('git', ['-C', out, '-c', 'user.email=t@t', '-c', 'user.name=t', 'commit', '-qm', 'scaffold']);
   const head = spawnSync('git', ['-C', out, 'rev-parse', 'HEAD'], { encoding: 'utf8' }).stdout.trim();
   // Stand-ins: each records its argv; the orchestrator records which phase and flags it got.
-  stub(bins, 'orch.sh', `echo "orch $* RESUME=\${EPAM_RESUME_RUN:-}" >> "${record}"; exit 0`);
+  stub(bins, 'orch.sh', [
+    `echo "orch $* RESUME=\${EPAM_RESUME_RUN:-}" >> "${record}"`,
+    // A pause, as the real orchestrator records it: the run id and the stage, then exit 0.
+    `if [ -n "\${PAUSE_AT_PHASE:-}" ] && [ "$2" = "\$PAUSE_AT_PHASE" ]; then mkdir -p "\${EPAM_PROJECT_OUTPUT_DIR:-${ws}/logs}"; printf '{"runId":"20260916T200051Z","stage":"post-roster","phase":"%s"}' "$2" > "\${EPAM_PROJECT_OUTPUT_DIR:-${ws}/logs}/paused-run.json"; echo "  RUN NUMBER: 20260916T200051Z"; fi`,
+    'exit 0',
+  ].join('\n'));
   stub(bins, 'rem.sh', `echo "rem $*" >> "${record}"; exit 0`);
   stub(bins, 'preflight.sh', `echo "preflight $*" >> "${record}"; exit 0`);
   stub(bins, 'reset.sh', `echo "reset $*" >> "${record}"; echo PRE_RUN_RESET_STATE_CLEARED; exit 0`);
@@ -64,7 +69,8 @@ function launch(opts: { resume?: string }) {
     env: {
       ...process.env, EPAM_PROJECTS_DIR: projects, EPAM_ORCHESTRATOR_BIN: join(bins, 'orch.sh'), EPAM_PRD_REMEDIATE_BIN: join(bins, 'rem.sh'),
       EPAM_PREFLIGHT_BIN: join(bins, 'preflight.sh'), PRE_RUN_RESET_SCRIPT: join(bins, 'reset.sh'),
-      EPAM_FREE_RUN: '1', ...(opts.resume ? { EPAM_RESUME_RUN: opts.resume } : { EPAM_RESUME_RUN: '' }),
+      EPAM_FREE_RUN: '1', EPAM_PROJECT_OUTPUT_DIR: join(ws, 'logs'), ...(opts.pauseAt ? { PAUSE_AT_PHASE: opts.pauseAt } : {}),
+      ...(opts.resume ? { EPAM_RESUME_RUN: opts.resume } : { EPAM_RESUME_RUN: '' }),
     },
   });
   return { r, out, prd, head, calls: () => readFileSync(record, 'utf8'), log: `${r.stdout}\n${r.stderr}` };
@@ -91,6 +97,18 @@ describe('a greenfield resume keeps the codeline, the PRD and the run', () => {
     const prd = JSON.parse(readFileSync(t.prd, 'utf8'));
     expect(prd.stories[0].completed, 'the run\'s completed story was reset by the canonical restore').toBe(true);
     expect(prd.stories[1].specification?.runId, 'the spec pass\'s work was discarded — it will re-run and re-split').toBe('R1');
+  });
+
+  // A PAUSE IS NOT A COMPLETED PHASE. Run 8 (20260916T200051Z): the mint paused as designed, exit
+  // 0; the launcher read exit 0 as "Phase 'scaffold' completed", started 'core', which minted and
+  // paused AGAIN under a second run id (20260916T200108Z), then reported the project completed.
+  it('a phase that PAUSES stops the launcher: no next phase, no second run id, the resume line printed', () => {
+    const t = launch({ pauseAt: 'scaffold' });
+    expect(t.calls().match(/^orch --phase/gm) || [], 'the next phase was started after a pause').toHaveLength(1);
+    expect(t.log, 'a paused phase was reported completed').not.toMatch(/Phase 'scaffold' completed/);
+    expect(t.log).toMatch(/paused/i);
+    expect(t.log, 'the resume instruction must name the paused run').toMatch(/EPAM_RESUME_RUN=20260916T200051Z/);
+    expect(t.r.status, 'a pause is not a failure').toBe(0);
   });
 
   it('a RESUME runs the phases without --reset and hands the run id down', () => {

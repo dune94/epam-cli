@@ -127,7 +127,20 @@ greenfield_run_phases() {
             fail "PRD remediation failed for phase '$phase' — aborting. Fix the PRD before relaunching."
         fi
         local phase_exit=0
+        # A PAUSE IS NOT A COMPLETED PHASE. The orchestrator exits 0 at a pause and records it in
+        # paused-run.json; read after the phase, that record ends the loop with the resume line.
+        # Cleared before the phase so a stale record from an earlier launch cannot stop this one.
+        local _pause_record="${EPAM_PROJECT_OUTPUT_DIR:-${LOG_DIR:-$_gfl_dir/../../logs}}/paused-run.json"
+        rm -f "$_pause_record"
         bash "$orch" --phase "$phase" "${reset_flag[@]}" 2>&1 | tee -a "$log" || phase_exit=${PIPESTATUS[0]}
+        if [ "$phase_exit" -eq 0 ] && [ -f "$_pause_record" ]; then
+            local _paused_run _paused_stage
+            _paused_run=$(jq -r '.runId // ""' "$_pause_record" 2>/dev/null)
+            _paused_stage=$(jq -r '.stage // ""' "$_pause_record" 2>/dev/null)
+            info "━━━ Phase: $phase — PAUSED at ${_paused_stage:-a pause} (run '${_paused_run}'); the run stops here ━━━"
+            info "  Resume with:  EPAM_RESUME_RUN=${_paused_run} <your launcher>"
+            return 0
+        fi
         if command -v phase_exit_is_retryable >/dev/null 2>&1 && phase_exit_is_retryable "$phase_exit"; then
             info "  Self-healing: gate remediation applied — resetting and retrying phase '$phase'..."
             if ! bash "$rem" --prd "$prd" --phase "$phase" --mid-phase-retry 2>&1 | tee -a "$log"; then

@@ -254,6 +254,11 @@ describe('a greenfield project runs to completion at £0', () => {
       expect(t1, `the run did not pause before the writer — log tail:\n${tail1}`).toMatch(/PAUSED — inputs ready, writer NOT started/);
       const runId = (t1.match(/RUN NUMBER:\s*\S*?(\d{8}T\d{6}Z)/) || [])[1];
       expect(runId, `no run id printed at the pause — log tail:\n${tail1}`).toBeTruthy();
+      // ONE RUN, ONE ID. A pause exits 0; the launcher read that as a completed phase, started the
+      // next one, and it paused again under a second id (run 20260916T200051Z → 200108Z).
+      const ids = new Set([...t1.matchAll(/RUN NUMBER:\s*\S*?(\d{8}T\d{6}Z)/g)].map((m) => m[1]));
+      expect([...ids], `a paused launch printed more than one run id — log tail:\n${tail1}`).toEqual([runId]);
+      expect(t1, 'a paused phase was reported completed').not.toMatch(/Phase '[a-z]+' completed/);
       const prdAtPause = JSON.parse(readFileSync(prdPath, 'utf8'));
       const specAtPause = Object.fromEntries((prdAtPause.stories || []).map((st: any) => [st.id, st.specification && st.specification.runId]));
       expect(Object.values(specAtPause).some(Boolean), 'the spec pass wrote nothing before the pause').toBe(true);

@@ -2197,6 +2197,7 @@ if [ -n "$main_stories" ]; then
             echo -e "    ${GREEN}EPAM_RESUME_RUN=${ORCH_RUN_ID}${NC} <your launcher>"
             echo ""
             step_emit "8" "skip" "Step 8: Main-branch stories" "paused before the writer (EPAM_PAUSE_BEFORE_WRITER)"
+            record_run_pause pre-writer
             exit 0
         fi
 

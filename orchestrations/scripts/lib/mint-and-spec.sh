@@ -347,6 +347,7 @@ _pause_after_agent_mint() {
     #
     # The operator restarts with the command above; resume validates the roster rather than
     # regenerating it, so hand edits survive.
+    record_run_pause post-roster
     exit 0
   fi
 }

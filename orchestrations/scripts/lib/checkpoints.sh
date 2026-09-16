@@ -157,3 +157,19 @@ run_interstitial_e2e_phase() {
         return 1
     fi
 }
+
+# record_run_pause <stage>
+# THE PAUSE, ON DISK, FOR THE LAUNCHER. A pause exits 0 — it is not a failure — and the greenfield
+# phase loop read that 0 as "phase completed", started the next phase, minted a second run id and
+# reported the project done (run 20260916T200051Z → 200108Z). The launcher cannot tell a pause
+# from a completion by exit code alone, so the pause says so here: run id, stage and phase, in
+# the run's log dir, where the loop looks after every phase.
+record_run_pause() {
+    local _stage="${1:?stage}"
+    local _dir="${EPAM_PROJECT_OUTPUT_DIR:-${LOG_DIR:-}}"
+    [ -n "$_dir" ] || return 0
+    mkdir -p "$_dir" 2>/dev/null || return 0
+    jq -n --arg runId "${ORCH_RUN_ID:-}" --arg stage "$_stage" --arg phase "${PHASE:-}" --arg at "$(date -u +%Y-%m-%dT%H:%M:%SZ)" \
+        '{runId:$runId, stage:$stage, phase:$phase, pausedAt:$at}' > "$_dir/paused-run.json" 2>/dev/null || true
+}
+

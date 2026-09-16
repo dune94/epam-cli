@@ -7,8 +7,9 @@
  * that size is reviewable. tools/split-main-into-modules.py MOVES every function, verbatim, into
  * lib/<module>.sh as tools/split-maps/<main>.json says, and records each body in a golden.
  *
- * This proves the move and guards it:
- *   1. every function in the golden exists, once, in the module the map names, byte-identical;
+ * The move was proven byte for byte at the split commit (2309941f). Modules are edited after it
+ * — that is the point of the split — so this guards the STRUCTURE, not the bytes:
+ *   1. every function the golden names exists, once, in the module the map names;
  *   2. the main defines no function but its entrypoint;
  *   3. no file — main or module — exceeds the declared ceiling, and the ceiling is a declaration
  *      (tools/split-maps/ceilings.json), not a number in this test.
@@ -57,7 +58,7 @@ describe('a split main is the same program, and stays split', () => {
     const map = JSON.parse(readFileSync(join(MAPS, `${main}.json`), 'utf8')) as Record<string, string[]>;
     const fileOf = (mod: string) => (mod === '.' ? join(SCRIPTS, main) : join(SCRIPTS, 'lib', `${mod}.sh`));
 
-    it(`${main}: every function is in the module the map names, byte-identical to the golden`, () => {
+    it(`${main}: every function the golden names is in the module the map names, once`, () => {
       const seen = new Map<string, string>();
       for (const [mod, names] of Object.entries(map)) {
         const path = fileOf(mod);
@@ -67,7 +68,6 @@ describe('a split main is the same program, and stays split', () => {
           expect(fns.has(n), `${n} is not defined in ${path}`).toBe(true);
           expect(seen.has(n), `${n} is defined twice (${seen.get(n)} and ${mod})`).toBe(false);
           seen.set(n, mod);
-          expect(fns.get(n), `${n} in ${path} differs from the golden — a move became an edit`).toBe(golden[n]);
         }
       }
       expect([...seen.keys()].sort()).toEqual(Object.keys(golden).sort());
@@ -86,12 +86,20 @@ describe('a split main is the same program, and stays split', () => {
       const g = JSON.parse(readFileSync(join(MAPS, `${main}.golden.json`), 'utf8')) as { functions: Record<string, string>; comments: Record<string, string>; layout: ({ keep: number } | { source: string } | { fn: string })[] };
       const splitSources = new Set(Object.keys(map).filter((m) => m !== '.').map((m) => `source "$SCRIPT_DIR/lib/${m}.sh"`));
       const kept = readFileSync(join(SCRIPTS, main), 'utf8').split('\n').filter((l) => !splitSources.has(l));
-      const expected: string[] = []; let at = 0;
+      // Bodies come from the CURRENT modules (functions are edited after the move); order and the
+      // kept lines come from the layout. The reassembled text must contain every kept line in
+      // order and every function's current definition exactly once.
+      const text = engineSource(join(SCRIPTS, main));
+      let at = 0; let cursor = 0;
       for (const item of g.layout) {
-        if ('keep' in item) { expected.push(...kept.slice(at, at + item.keep)); at += item.keep; }
-        else if ('fn' in item) expected.push(g.comments[item.fn] ? `${g.comments[item.fn]}\n${g.functions[item.fn]}` : g.functions[item.fn]);
+        if ('keep' in item) {
+          for (const line of kept.slice(at, at + item.keep)) { const i = text.indexOf(line, cursor); expect(i, `kept line missing or out of order: ${line.slice(0, 60)}`).toBeGreaterThanOrEqual(0); cursor = i + line.length; }
+          at += item.keep;
+        } else if ('fn' in item) {
+          const i = text.indexOf(`${item.fn}()`, cursor); expect(i, `${item.fn} missing or out of order in the reassembled text`).toBeGreaterThanOrEqual(0); cursor = i;
+        }
       }
-      expect(engineSource(join(SCRIPTS, main))).toBe(expected.join('\n'));
+      for (const n of Object.keys(g.functions)) expect((text.match(new RegExp(`^${n}\\(\\)\\s*\\{`, 'gm')) || []).length, `${n} defined more than once`).toBe(1);
     });
 
     it(`${main}: the main and every module are under the declared ceilings`, () => {

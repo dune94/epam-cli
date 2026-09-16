@@ -1010,7 +1010,12 @@ if (require.main !== module) return;
     }
   };
 
-  const maxCycles = Number(process.env.EPAM_ROSTER_REVIEW_CYCLES || '2');
+  // THE CORRECTION BUDGET IS THE SEAM'S RETRY BUDGET — the same one every other seam retries on
+  // (SEAM_MAX_RETRIES / SPEC_AGENT_MAX_RETRIES, default 3) plus the first attempt. It was a
+  // literal 2: one correction, then refuse. A roster that needed two corrections was refused
+  // with the second review's findings unanswered (run 20260916T233216Z).
+  const _seamRetries = Math.max(0, parseInt(process.env.SEAM_MAX_RETRIES || process.env.SPEC_AGENT_MAX_RETRIES || '3', 10) || 0);
+  const maxCycles = Number(process.env.EPAM_ROSTER_REVIEW_CYCLES || String(_seamRetries + 1));
   let cycle = 1;
   let review = { verdict: 'not_run', findings: [], reviewed: 0 };
 
@@ -1049,7 +1054,7 @@ if (require.main !== module) return;
       promptExec, tickets: stories, referencedDocs: docs, declaredDependencies: deps,
       codelines, toolGrant, profilesPath: PROFILES_PATH, agentsDir: AGENTS_DIR,
       logDir: LOG_DIR, repoPath: REPO_PATH, correctiveFindings: blocking,
-      retainedAgents: _retained,
+      retainedAgents: _retained, replacedAgents: _mintedDetail.filter((m) => _indicted.includes(m.name)),
     });
     // The next review sees the WHOLE roster, not just the replacements: a new brief can
     // duplicate or contradict a retained one, and only a review of both would catch it.

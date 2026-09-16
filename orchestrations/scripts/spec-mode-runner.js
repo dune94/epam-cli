@@ -3784,7 +3784,7 @@ function reconcileMintTally(r) {
 
 async function mintProjectAgents({
   promptExec, tickets, referencedDocs, profilesPath, agentsDir, logDir, repoPath,
-  declaredDependencies, codelines, toolGrant, correctiveFindings, retainedAgents, estateSurvey,
+  declaredDependencies, codelines, toolGrant, correctiveFindings, retainedAgents, replacedAgents, estateSurvey,
 }) {
   const { mergeProjectAgents } = require('./lib/agent-roster.js');
   const { retryUntilParsedAsync } = require('./lib/content-retry.js');
@@ -3897,6 +3897,23 @@ async function mintProjectAgents({
        'only what is missing or what replaces a defect named above:',
        ..._ra.map((a) => `- ${a.name}${a.codeline && a.codeline !== '*' ? ` (codeline: ${a.codeline})` : ''}` +
                          `${a.rationale ? ` — ${String(a.rationale).replace(/\s+/g, ' ')}` : ''}`),
+       ''].join('\n')
+    : '';
+
+  // WHAT THE CORRECTION MUST STILL COVER. A finding indicts a brief for one sentence; the
+  // correction removes the whole role, and its WORK goes with it. Run 20260916T233216Z
+  // (skyscanner): the only implementer, owner of SKY-001..004, was indicted for not naming a
+  // vitest setting; the replacement proposed was an SKY-002 client engineer, and the next review
+  // correctly found three tickets with no one to implement them. The proposer had been told the
+  // defect and the survivors, never what the removed role had owned.
+  const _rp = Array.isArray(replacedAgents) ? replacedAgents.filter((a) => a && a.name) : [];
+  const replacedBlock = _rp.length
+    ? ['THESE ROLES WERE REMOVED FOR THE DEFECTS ABOVE, AND THEIR WORK STILL NEEDS AN OWNER. Each',
+       'one was proposed for a reason; that reason stands. Your replacement(s) must cover EVERYTHING',
+       'the removed role covered — every ticket, every codeline — with the defect corrected. A',
+       'narrower replacement leaves tickets with no implementer and is rejected at the next review:',
+       ..._rp.map((a) => `- ${a.name}${a.kind ? ` [${a.kind}]` : ''}${a.codeline && a.codeline !== '*' ? ` (codeline: ${a.codeline})` : ''}` +
+                         `${a.rationale ? ` — was proposed because: ${String(a.rationale).replace(/\s+/g, ' ')}` : ''}`),
        ''].join('\n')
     : '';
 
@@ -4053,7 +4070,7 @@ async function mintProjectAgents({
     return `${body}\n`;
   })();
 
-  const prompt = `${correctiveBlock}${retainedBlock}${existingRosterBlock}${surveyBlock}${vendorClaimRule}${testOwnershipRule}${basePrompt}
+  const prompt = `${correctiveBlock}${replacedBlock}${retainedBlock}${existingRosterBlock}${surveyBlock}${vendorClaimRule}${testOwnershipRule}${basePrompt}
 
 THE WORK THIS PROJECT HAS BEEN ASKED TO DO (real tickets from the tracker):
 ${ticketBlock || '- (no tickets available)'}

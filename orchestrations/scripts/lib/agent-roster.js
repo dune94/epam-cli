@@ -215,10 +215,6 @@ function ungroundedBriefPaths(proposal, codelines, declaredPaths) {
   // what the tree will hold; a cited path that IS a declared path, or a directory on the way to
   // one, is as grounded as a file already on disk. Nothing else is added: an undeclared, absent
   // path is still reported.
-  const declaredSet = new Set((Array.isArray(declaredPaths) ? declaredPaths : []).map((d) => String(d || '').replace(/^\.\//, '').replace(/\/+$/, '')).filter(Boolean));
-  const declaredDirs = new Set();
-  for (const d of declaredSet) { const segs = d.split('/'); for (let i = 1; i < segs.length; i += 1) declaredDirs.add(segs.slice(0, i).join('/')); }
-  const isDeclared = (p) => { const n = p.replace(/^\.\//, '').replace(/\/+$/, ''); return declaredSet.has(n) || declaredDirs.has(n); };
 
   const declared = String((proposal && proposal.codeline) || '').trim();
   const spans = !declared || declared === PROJECT_WIDE;
@@ -226,6 +222,18 @@ function ungroundedBriefPaths(proposal, codelines, declaredPaths) {
   // Named a codeline this estate does not have: nothing to check it against, and inventing a
   // verdict from the other repositories would be worse than silence.
   if (!scope.length) return [];
+  // ONLY WHERE THERE IS NOTHING TO BE UNGROUNDED AGAINST. On a codeline that holds source, the
+  // tree is the truth and a ticket's prose is not — a mistyped path in a ticket is exactly what
+  // this check exists to keep out of a brief. Declared paths ground a brief only while the
+  // codeline in scope holds no source of its own (a greenfield init commit).
+  const holdsSource = (c) => {
+    try { return fs.readdirSync(c.path).some((e) => !e.startsWith('.')); } catch { return false; }
+  };
+  const treeIsEmpty = !scope.some(holdsSource);
+  const declaredSet = new Set(treeIsEmpty ? (Array.isArray(declaredPaths) ? declaredPaths : []).map((d) => String(d || '').replace(/^\.\//, '').replace(/\/+$/, '')).filter(Boolean) : []);
+  const declaredDirs = new Set();
+  for (const d of declaredSet) { const segs = d.split('/'); for (let i = 1; i < segs.length; i += 1) declaredDirs.add(segs.slice(0, i).join('/')); }
+  const isDeclared = (p) => { const n = p.replace(/^\.\//, '').replace(/\/+$/, ''); return declaredSet.has(n) || declaredDirs.has(n); };
 
   // Roots come from the whole estate, so a sibling's directory is still recognised as a path
   // and can then be reported as absent from THIS codeline.

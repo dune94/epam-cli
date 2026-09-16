@@ -408,5 +408,14 @@ describe('a path the PRD declares a story will create is grounded, even on an em
     const brief = 'You write src/index.ts and serve src/public/index.html; builds land in dist/public/.';
     expect(roster.ungroundedBriefPaths({ systemPrompt: brief, codeline: 'app', kind: 'implementer' }, empty(), paths)).toEqual([]);
   });
+
+  // BROWNFIELD IS UNCHANGED: on a codeline that holds source, a path the ticket's prose names but
+  // the tree does not hold is still a fabrication — the tree is the truth there.
+  it('on a codeline that holds source, a prose-named path the tree lacks is still reported (brownfield)', () => {
+    const { codelines } = estate();
+    const brief = 'Start at src/services/content.ts, then wire src/public/index.html.';
+    expect(roster.ungroundedBriefPaths({ systemPrompt: brief, codeline: 'alpha', kind: 'investigator' }, codelines, ['src/public/index.html']))
+      .toEqual(['src/public/index.html']);
+  });
 });
 

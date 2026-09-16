@@ -34,7 +34,7 @@ function stub(dir: string, name: string, body: string) {
 }
 
 /** A greenfield project on disk, a codeline the previous phase built, and a launcher invocation. */
-function launch(opts: { resume?: string; pauseAt?: string }) {
+function launch(opts: { resume?: string; pauseAt?: string; completed?: string[] }) {
   const ws = mkdtempSync(join(tmpdir(), 'gf-resume-')); dirs.push(ws);
   const projects = join(ws, 'projects'); const proj = join(projects, 'demo'); mkdirSync(proj, { recursive: true });
   const out = join(ws, 'build'); mkdirSync(out, { recursive: true });
@@ -54,6 +54,11 @@ function launch(opts: { resume?: string; pauseAt?: string }) {
   spawnSync('git', ['-C', out, '-c', 'user.email=t@t', '-c', 'user.name=t', 'add', '-A']);
   spawnSync('git', ['-C', out, '-c', 'user.email=t@t', '-c', 'user.name=t', 'commit', '-qm', 'scaffold']);
   const head = spawnSync('git', ['-C', out, 'rev-parse', 'HEAD'], { encoding: 'utf8' }).stdout.trim();
+  // Phases the run already finished: the gate record greenfield_phase_completed reads.
+  if (opts.completed && opts.completed.length) {
+    mkdirSync(join(ws, 'logs'), { recursive: true });
+    writeFileSync(join(ws, 'logs', 'phase-gates.jsonl'), opts.completed.map((p) => JSON.stringify({ phase_id: p, decision: 'go', timestamp: 'x' })).join('\n') + '\n');
+  }
   // Stand-ins: each records its argv; the orchestrator records which phase and flags it got.
   stub(bins, 'orch.sh', [
     `echo "orch $* RESUME=\${EPAM_RESUME_RUN:-}" >> "${record}"`,
@@ -109,6 +114,13 @@ describe('a greenfield resume keeps the codeline, the PRD and the run', () => {
     expect(t.log).toMatch(/paused/i);
     expect(t.log, 'the resume instruction must name the paused run').toMatch(/EPAM_RESUME_RUN=20260916T200051Z/);
     expect(t.r.status, 'a pause is not a failure').toBe(0);
+  });
+
+  it('a RESUME does not re-run a phase whose gate already decided GO (greenfield_phase_completed)', () => {
+    const t = launch({ resume: '20260915T101555Z', completed: ['scaffold'] });
+    const phases = (t.calls().match(/^orch --phase (\S+)/gm) || []).map((l) => l.split(' ')[2]);
+    expect(phases, 'the completed phase was run again').toEqual(['core']);
+    expect(t.log).toMatch(/scaffold — completed in run '20260915T101555Z'/);
   });
 
   it('a RESUME runs the phases without --reset and hands the run id down', () => {

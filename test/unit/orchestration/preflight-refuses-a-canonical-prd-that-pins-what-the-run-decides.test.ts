@@ -25,7 +25,7 @@ const SRC = readFileSync(join(SCRIPTS, 'preflight-check.sh'), 'utf8');
 const dirs: string[] = [];
 afterAll(() => { for (const d of dirs) rmSync(d, { recursive: true, force: true }); });
 
-function prdFileBlock(prd: object, canonical: boolean, resumeRun = '') {
+function prdFileBlock(prd: object, canonical: boolean, resumeRun = '', pendingIngest = false) {
   const start = SRC.indexOf('# ── 4. PRD file valid JSON');
   const end = SRC.indexOf('# ── 4. Required API keys', start);
   expect(start).toBeGreaterThan(-1); expect(end).toBeGreaterThan(start);
@@ -33,7 +33,7 @@ function prdFileBlock(prd: object, canonical: boolean, resumeRun = '') {
   const f = join(d, 'prd.json'); writeFileSync(f, JSON.stringify(prd));
   const script = `set -uo pipefail
 SCRIPT_DIR=${JSON.stringify(SCRIPTS)}
-PRD_FILE=${JSON.stringify(f)}; OUTPUT_DIR=/x; _prd_pending_ingest=0; _codeline_root=""; _prd_is_canonical=${canonical ? 'true' : 'false'}
+PRD_FILE=${JSON.stringify(f)}; OUTPUT_DIR=/x; _prd_pending_ingest=${pendingIngest ? 1 : 0}; _codeline_root=""; _prd_is_canonical=${canonical ? 'true' : 'false'}
 PASS=0; FAIL=0
 ok(){ echo "OK: $*"; PASS=$((PASS+1)); }; fail(){ echo "FAIL: $*"; FAIL=$((FAIL+1)); }
 ${SRC.slice(start, end)}
@@ -61,6 +61,17 @@ describe('pre-flight refuses a canonical PRD that pins what the run decides', ()
     expect(r.fails, r.out).toBeGreaterThan(0);
     expect(r.out).toMatch(/S-1.*model/); expect(r.out).toMatch(/S-2.*aiProvider/);
   });
+  it("a PRD the run's own Jira ingest OVERWRITES is not refused for the previous run's assignments — deferred, and said", () => {
+    // £0 replay of a Sept 9 brownfield cassette, 2026-09-17: the previous run's synthesised PRD sat
+    // at the path ingest writes to, carrying its own agentRole, and the second launch was refused.
+    const pinned = { ...base, stories: [{ ...base.stories[0], agentRole: 'checkout-validation-engineer' }, base.stories[1]] };
+    const r = prdFileBlock(pinned, true, '', true);
+    expect(r.fails).toBe(0);
+    expect(r.out).toMatch(/Jira ingest overwrites this exact file .* deferred/);
+    // And with NO ingest pending the same PRD is still refused — the deferral is the ingest's, not a loophole.
+    expect(prdFileBlock(pinned, true, '', false).fails).toBeGreaterThan(0);
+  });
+
   it('a canonical PRD that pins nothing passes', () => {
     const r = prdFileBlock(base, true);
     expect(r.fails, r.out).toBe(0);

@@ -307,7 +307,14 @@ else
       [ .stories[]? | select(.id) as $s
         | ["agentRole","model","aiProvider"][] as $k
         | select(($s[$k] // "") != "") | "\($s.id): \($k)=\($s[$k])" ] | .[]' "$PRD_FILE" 2>/dev/null || true)
-    if [[ -n "$_pinned" ]]; then
+    if [[ -n "$_pinned" ]] && [[ "$_prd_pending_ingest" == "1" ]]; then
+      # THE FILE ON DISK IS THE PREVIOUS RUN'S, AND THIS RUN OVERWRITES IT. A Jira project's PRD is
+      # synthesised by ingest every run; what sits here now carries the previous run's own
+      # assignments, exactly as the stale-specification check above already understands. Refusing on
+      # it refused the second launch of every Jira project (£0 replay of a Sept 9 brownfield
+      # cassette, 2026-09-17). Reported, not refused — ingest replaces it before anything reads it.
+      ok "PRD on disk carries a previous run's assignments (agentRole/model/aiProvider), but this run's Jira ingest overwrites this exact file before anything reads it — deferred"
+    elif [[ -n "$_pinned" ]]; then
       fail "the canonical PRD pins what the run decides — the assigner owns agentRole, the ladder owns model, the set owns aiProvider. Remove these from the authored PRD:"
       while IFS= read -r _line; do [[ -n "$_line" ]] && echo "      $_line" >&2; done <<< "$_pinned"
     else

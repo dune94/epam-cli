@@ -211,8 +211,13 @@ if [ -f "$COST_LOG" ]; then
     if [ -n "$phase_cost_data" ]; then
         # Billable rows only: this gate judged every phase twice as expensive as it was.
         actual_cost=$(echo "$phase_cost_data" | jq -s "[.[] | ${LEDGER_BILLABLE_JQ} | (.task_cost_usd // 0)] | add // 0")
-        actual_minutes=$(echo "$phase_cost_data" | jq -s 'map(.elapsed_minutes // 0) | add')
-        forecast_hours=$(echo "$phase_cost_data" | jq -s 'map(.forecast_hours // 0) | add')
+        # LIKE-FOR-LIKE: only rows that carry a non-zero forecast participate in both sums.
+        # Seam overhead rows (spec, CPA, TC-writer, sentinels) all have forecast_hours=0 — the CPA
+        # does not forecast them individually. Including their elapsed_minutes against a writer-only
+        # forecast denominator inflated variance to 418% on run 20260917T124016Z (24 min of seam
+        # overhead divided against a 2.4-min writer forecast), triggering a false ESCALATE.
+        actual_minutes=$(echo "$phase_cost_data" | jq -s '[.[] | select((.forecast_hours // 0) > 0) | (.elapsed_minutes // 0)] | add // 0')
+        forecast_hours=$(echo "$phase_cost_data" | jq -s '[.[] | select((.forecast_hours // 0) > 0) | (.forecast_hours // 0)] | add // 0')
         forecast_minutes=$(echo "scale=2; $forecast_hours * 60" | bc)
 
         if (( $(echo "$forecast_minutes > 0" | bc -l) )); then

@@ -732,8 +732,49 @@ if [ "${EPAM_REGENERATE_CODELINE_ASSETS:-0}" = "1" ]; then
     info "  EPAM_REGENERATE_CODELINE_ASSETS=1 — override: regenerating this codeline's agents and prompts"
 elif [ -n "${EPAM_CODELINE_ID:-}" ] && [ -n "${EPAM_PROJECT_CONFIG_DIR:-}" ] \
      && [ -f "$EPAM_PROJECT_CONFIG_DIR/.prompt-cache/$(prompt_marker_key "$EPAM_CODELINE_ID")" ]; then
-    _CODELINE_ASSETS_REUSED=1
-    info "  Reusing this codeline's completed agents and prompts (${EPAM_CODELINE_ID}) — not re-derived; EPAM_REGENERATE_CODELINE_ASSETS=1 forces regeneration"
+    # STALE-PROMPT GUARD: the marker says provisioning completed, but a template may have changed
+    # since that run. On 20260917T124016Z, 12 of 41 metrolinx prompts carried a derivedFromSha256
+    # that no longer matched their template — the engine passed __GATE_SCOPE__ to a prompt still
+    # expecting __STORY_TITLE__, and the prompt-library refused at gate time.
+    #
+    # Validate each project prompt's derivedFromSha256 against the current template hash before
+    # deciding to reuse. A single mismatch clears the marker and forces regeneration.
+    _stale_prompt_count=0
+    _templates_dir="${EPAM_TEMPLATES_DIR:-$SCRIPT_DIR/../prompts/templates}"
+    if [ -d "$EPAM_PROJECT_CONFIG_DIR/prompts" ] && [ -d "$_templates_dir" ]; then
+        _stale_prompt_count=$("${NODE_BIN:-node}" -e '
+const crypto = require("crypto"), fs = require("fs"), path = require("path");
+const promptsDir   = process.argv[1];
+const templatesDir = process.argv[2];
+const sorted = (a) => [...(Array.isArray(a) ? a : [])].sort();
+let stale = 0;
+try {
+  const files = fs.readdirSync(promptsDir).filter((f) => f.endsWith(".json"));
+  for (const f of files) {
+    try {
+      const proj = JSON.parse(fs.readFileSync(path.join(promptsDir, f), "utf8"));
+      if (!proj.derivedFromSha256 || !proj.id) continue;
+      const tplPath = path.join(templatesDir, proj.id + ".json");
+      if (!fs.existsSync(tplPath)) continue;
+      const tpl = JSON.parse(fs.readFileSync(tplPath, "utf8"));
+      const hash = crypto.createHash("sha256")
+        .update(JSON.stringify({ id: tpl.id, body: tpl.body, placeholders: sorted(tpl.placeholders) }))
+        .digest("hex");
+      if (hash !== proj.derivedFromSha256) stale++;
+    } catch { /* skip unreadable */ }
+  }
+} catch { /* skip unreadable dir */ }
+process.stdout.write(String(stale));
+' "$EPAM_PROJECT_CONFIG_DIR/prompts" "$_templates_dir" 2>/dev/null || echo 0)
+    fi
+    if [ "${_stale_prompt_count:-0}" -gt 0 ]; then
+        warning "  ${_stale_prompt_count} project prompt(s) are stale against current templates — clearing cache, forcing regeneration"
+        rm -f "$EPAM_PROJECT_CONFIG_DIR/.prompt-cache/$(prompt_marker_key "$EPAM_CODELINE_ID")" 2>/dev/null || true
+        _CODELINE_ASSETS_REUSED=0
+    else
+        _CODELINE_ASSETS_REUSED=1
+        info "  Reusing this codeline's completed agents and prompts (${EPAM_CODELINE_ID}) — not re-derived; EPAM_REGENERATE_CODELINE_ASSETS=1 forces regeneration"
+    fi
 elif [ -z "${EPAM_CODELINE_ID:-}" ] && [ -n "${EPAM_PROJECT_CONFIG_DIR:-}" ]; then
     # THE CODELINE IS NOT KNOWN YET, SO THE DECISION IS NOT MINE TO TAKE.
     #

@@ -121,6 +121,27 @@ describe('divergence is REPORTED, never invented', () => {
     expect(res.content.map((c) => c.text).join('')).toBe('from the older recording');
   });
 
+  it('a legacy recording that holds every call twice (two recorders, pre-folding) replays each call ONCE', async () => {
+    // The Sept 9 brownfield cassette: cpa-inference turns [bad, bad, review, good, good, pass] —
+    // a retry after the bad reply received the same bad reply again.
+    dir = cassette({ 'cpa-inference': [{ text: 'bad', toolCalls: [] }, { text: 'bad', toolCalls: [] }, { text: 'good', toolCalls: [] }, { text: 'good', toolCalls: [] }] });
+    process.env.EPAM_AGENT_NAME = 'cpa-inference';
+    process.env.EPAM_STORY_ID = 'AMSD-1919';
+    const p = new ReplayProvider(dir);
+    expect((await p.complete(REQ)).content.map((c) => c.text).join('')).toBe('bad');
+    expect((await p.complete(REQ)).content.map((c) => c.text).join('')).toBe('good');
+    await expect(p.complete(REQ)).rejects.toThrow(/has been called 3 times/);
+  });
+
+  it('a scoped (post-folding) recording is replayed exactly as recorded, duplicates included', async () => {
+    dir = cassette({ 'cpa-inference · AMSD-1919': [{ text: 'same', toolCalls: [] }, { text: 'same', toolCalls: [] }] });
+    process.env.EPAM_AGENT_NAME = 'cpa-inference';
+    process.env.EPAM_STORY_ID = 'AMSD-1919';
+    const p = new ReplayProvider(dir);
+    expect((await p.complete(REQ)).content.map((c) => c.text).join('')).toBe('same');
+    expect((await p.complete(REQ)).content.map((c) => c.text).join('')).toBe('same');
+  });
+
   it('the scoped file is authoritative when both exist', async () => {
     dir = cassette({ 'spec-coordinator': [{ text: 'bare', toolCalls: [] }], 'spec-coordinator · phase:core': [{ text: 'scoped', toolCalls: [] }] });
     process.env.EPAM_AGENT_NAME = 'spec-coordinator';

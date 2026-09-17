@@ -84,11 +84,12 @@ export class ReplayProvider implements LLMProvider {
     // first step (2026-09-17). The scoped file is authoritative when it exists; the bare-agent
     // file is what an older recording has, and it is the same seam.
     let raw: string | null = null;
+    let legacy = false;
     const candidates = [seam];
     const dot = seam.indexOf(' · ');
     if (dot > 0) candidates.push(seam.slice(0, dot));
     for (const name of candidates) {
-      try { raw = readFileSync(join(this.cassetteDir, `${seamFile(name)}.json`), 'utf8'); break; } catch { raw = null; }
+      try { raw = readFileSync(join(this.cassetteDir, `${seamFile(name)}.json`), 'utf8'); legacy = name !== seam; break; } catch { raw = null; }
     }
     if (raw === null) {
       throw new Error(
@@ -104,9 +105,24 @@ export class ReplayProvider implements LLMProvider {
       throw new Error(`[replay] '${seam}' turns are not valid JSON: ${(e as Error).message}`);
     }
     if (!Array.isArray(parsed)) throw new Error(`[replay] '${seam}' is not a list of turns.`);
-
-    this.turns.set(seam, parsed as RecordedTurn[]);
-    return parsed as RecordedTurn[];
+    let turns = parsed as RecordedTurn[];
+    // A LEGACY RECORDING HOLDS EVERY CALL TWICE. Before the exporter folded per-attempt traces
+    // (cassette-export.js, 2026-09-11) both recorders' traces were written as turns — the same
+    // call, verbatim, consecutively. Replayed as two turns, a retry received the reply it had
+    // just rejected (the Sept 9 brownfield cassette's cpa-inference, 2026-09-17). Consecutive
+    // identical turns collapse to one; nothing is invented, and a scoped (post-folding) file is
+    // left exactly as recorded.
+    if (legacy) {
+      const folded: RecordedTurn[] = [];
+      for (const turn of turns) {
+        const prev = folded[folded.length - 1];
+        if (prev && JSON.stringify(prev) === JSON.stringify(turn)) continue;
+        folded.push(turn);
+      }
+      turns = folded;
+    }
+    this.turns.set(seam, turns);
+    return turns;
   }
 
   private nextTurn(): RecordedTurn {

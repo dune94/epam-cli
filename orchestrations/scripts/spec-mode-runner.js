@@ -716,6 +716,11 @@ const TOOL_SPEC_AGENT = {
             acceptanceCriteria: { type: 'array', items: { type: 'string' }, minItems: 1 },
             agentRole: { type: 'string' },
             technicalNotes: { type: 'object' },
+            // Sibling children this child needs COMPLETED before it runs, by id. The engine has
+            // always read split.dependencies; undeclared here, a schema-bound reply could not
+            // carry it, so a test child ran after its impl sibling had failed (regintel
+            // 20260916T200108Z, REGI-001a/b).
+            dependencies: { type: 'array', items: { type: 'string' } },
           },
         },
       },

@@ -4,8 +4,14 @@
     "id": "optional",
     "title": "...",
     "description": "...",
-    "acceptanceCriteria": ["..."],
+    "acceptanceCriteria": [
+      "..."
+    ],
     "agentRole": "...",
-    "technicalNotes": { "files": [] }
-  }
+    "technicalNotes": {
+      "files": []
+    },
+    "dependencies": []
+  },
+  "$whyDependencies": "Added 2026-09-17. regintel run 20260916T200108Z: REGI-001 split into REGI-001a (package) and REGI-001b (its tests); 001a failed after 8 attempts and 001b ran anyway, because a child had no field to say it needs a sibling first \u2014 the engine reads split.dependencies but the schema never declared it, and a schema-bound reply cannot carry an undeclared field. Sibling ids the child needs completed before it runs."
 }

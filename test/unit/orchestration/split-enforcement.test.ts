@@ -1435,3 +1435,40 @@ describe('correctSplitChildAgentRoleIfTestOnly — wired into both split-creatio
     }
   });
 });
+
+// ── a split child names the sibling it needs first ────────────────────────────
+//
+// regintel run 20260916T200108Z: REGI-001 split into 001a (package) and 001b (its tests); 001a
+// failed after 8 attempts and 001b ran anyway — 8 more attempts against a package that did not
+// exist. applySpecChanges had always read split.dependencies, but the tool schema never declared
+// the field, so a schema-bound reply could not carry it and no child ever had a sibling gate.
+describe('a split child names the sibling it needs first', () => {
+  it('the schema, the example and the rules all declare `dependencies` on a child', () => {
+    // eslint-disable-next-line @typescript-eslint/no-var-requires
+    const { TOOL_SPEC_AGENT } = require(join(__dirname, '../../../orchestrations/scripts/spec-mode-runner.js')).TOOL_DEFINITIONS;
+    const child = TOOL_SPEC_AGENT.parameters.properties.splitStories.items.properties;
+    expect(child.dependencies, 'the schema does not let a child declare a sibling dependency').toBeTruthy();
+    expect(child.dependencies.items.type).toBe('string');
+    const example = JSON.parse(readFileSync(join(__dirname, '../../../orchestrations/config/spec-split-example.json'), 'utf8')).child;
+    expect(Array.isArray(example.dependencies)).toBe(true);
+    const rules = JSON.parse(readFileSync(join(__dirname, '../../../orchestrations/prompts/templates/speckit-split-rules.json'), 'utf8')).body;
+    expect(rules).toMatch(/names that sibling's id in its "dependencies"/);
+  });
+
+  it("run 200108Z's shape: the test child declares the impl child, and the story carries it", () => {
+    const story = makeStory('REGI-001', { acceptanceCriteria: Array.from({ length: 10 }, (_, i) => `ac${i}`) });
+    const prd = makePrd([story]);
+    const newStories: any[] = [];
+    applySpecChanges(story, {
+      splitStories: [
+        { id: 'REGI-001a', title: 'package', acceptanceCriteria: ['a'], technicalNotes: { files: ['regintel/store.py'] } },
+        { id: 'REGI-001b', title: 'tests', acceptanceCriteria: ['b'], technicalNotes: { files: ['tests/conftest.py', 'tests/test_store.py', 'pytest.ini'] }, dependencies: ['REGI-001a'] },
+      ],
+    }, newStories, prd, 'core', 'run1');
+    const b = newStories.find((n) => n.story.id === 'REGI-001b').story;
+    const a = newStories.find((n) => n.story.id === 'REGI-001a').story;
+    expect(b.dependencies).toContain('REGI-001a');
+    expect(a.dependencies).not.toContain('REGI-001b');
+  });
+});
+

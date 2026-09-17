@@ -111,6 +111,24 @@ describe('it replays a recorded run', () => {
 });
 
 describe('divergence is REPORTED, never invented', () => {
+  it('a recording made BEFORE labels carried a scope still replays: `agent · scope` falls back to the bare agent file', async () => {
+    // The Sept 9 brownfield cassette names its files by agent alone; asked for
+    // `spec-coordinator · phase:core` the replay refused every seam (2026-09-17).
+    dir = cassette({ 'spec-coordinator': [{ text: 'from the older recording', toolCalls: [] }] });
+    process.env.EPAM_AGENT_NAME = 'spec-coordinator';
+    process.env.EPAM_STORY_ID = 'phase:core';
+    const res = await new ReplayProvider(dir).complete(REQ);
+    expect(res.content.map((c) => c.text).join('')).toBe('from the older recording');
+  });
+
+  it('the scoped file is authoritative when both exist', async () => {
+    dir = cassette({ 'spec-coordinator': [{ text: 'bare', toolCalls: [] }], 'spec-coordinator · phase:core': [{ text: 'scoped', toolCalls: [] }] });
+    process.env.EPAM_AGENT_NAME = 'spec-coordinator';
+    process.env.EPAM_STORY_ID = 'phase:core';
+    const res = await new ReplayProvider(dir).complete(REQ);
+    expect(res.content.map((c) => c.text).join('')).toBe('scoped');
+  });
+
   it('a seam the recording never exercised is a hard failure', async () => {
     dir = cassette({ 'some-other-seam': [{ text: 'x', toolCalls: [] }] });
     process.env.EPAM_AGENT_NAME = 'a-seam-that-was-never-recorded';

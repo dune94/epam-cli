@@ -77,10 +77,20 @@ export class ReplayProvider implements LLMProvider {
     const cached = this.turns.get(seam);
     if (cached) return cached;
 
-    let raw: string;
-    try {
-      raw = readFileSync(join(this.cassetteDir, `${seamFile(seam)}.json`), 'utf8');
-    } catch {
+    // A RECORDING MADE BEFORE LABELS CARRIED A SCOPE IS STILL A RECORDING. Labels became
+    // `agent · scope` on 2026-09-11 (cassette-export.js replayLabel); a cassette exported before
+    // that names its files by agent alone. Asked for `spec-coordinator · phase:core`, the Sept 9
+    // brownfield cassette was refused on every seam and the £0 replay of a green run died in its
+    // first step (2026-09-17). The scoped file is authoritative when it exists; the bare-agent
+    // file is what an older recording has, and it is the same seam.
+    let raw: string | null = null;
+    const candidates = [seam];
+    const dot = seam.indexOf(' · ');
+    if (dot > 0) candidates.push(seam.slice(0, dot));
+    for (const name of candidates) {
+      try { raw = readFileSync(join(this.cassetteDir, `${seamFile(name)}.json`), 'utf8'); break; } catch { raw = null; }
+    }
+    if (raw === null) {
       throw new Error(
         `[replay] the recording has no turns for '${seam}'. Either this seam did not run in the `
         + `recorded session, or it is new since. Export a session that exercises it — the `

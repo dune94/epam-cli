@@ -90,9 +90,24 @@ function build(root) {
   // Files the ecosystem says are complete when empty (a package marker), by basename.
   const emptyDeliverables = Array.isArray(eco.emptyDeliverables) ? eco.emptyDeliverables.filter((x) => typeof x === 'string' && x) : [];
 
+  // THE RUNTIME'S BUILT-IN MODULES, ASKED OF THE RUNTIME. An ecosystem declares HOW to ask
+  // (builtinModulesCommand); the answer is carried as data (builtinModules) so the scan plug-in
+  // — which must never run a process — reads a list. Python's `__future__` was reported as an
+  // undeclared import and failed a story through the ladder (regintel 20260916T200108Z).
+  let builtinModules = [];
+  const bmc = declared.dependencyCheck && typeof declared.dependencyCheck.builtinModulesCommand === 'string'
+    ? declared.dependencyCheck.builtinModulesCommand.trim() : '';
+  if (bmc) {
+    try {
+      builtinModules = require('node:child_process').execSync(bmc, { encoding: 'utf8', timeout: 20000, stdio: ['ignore', 'pipe', 'ignore'] })
+        .split(/\r?\n/).map((s) => s.trim()).filter(Boolean);
+    } catch { builtinModules = []; }
+  }
+
   const dependencyCheck = {
     manifestFile: present,
     ...(declared.dependencyCheck || {}),
+    ...(builtinModules.length ? { builtinModules } : {}),
     vendorDirs,
     ...(addCommand ? { installCommand: addCommand } : {}),
     ...(provisionCommand ? { provisionCommand } : {}),

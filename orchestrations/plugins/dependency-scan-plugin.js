@@ -270,6 +270,15 @@ function declaredDependencies(projectRoot, cfg) {
  *   declared         — the manifest declares it
  *   unknown_external — none of the above. A FINDING for the writer, never an install.
  */
+/**
+ * THE RUNTIME'S BUILT-IN MODULES, as the codeline's manifest carries them (`builtinModules`, an
+ * array derived by lib/handlers/codeline-manifests.js from the ecosystem's builtinModulesCommand
+ * — the runtime lists its own standard library). This plug-in runs no process: it reads the list.
+ */
+function builtinModules(cfg) {
+  return new Set(Array.isArray(cfg.builtinModules) ? cfg.builtinModules.filter((s) => typeof s === 'string' && s) : []);
+}
+
 function classifySpecifier(projectRoot, spec, env = process.env) {
   if (isNotAModuleName(spec)) return 'not_a_module';
   if (isMalformedSpecifier(spec)) return 'malformed';
@@ -280,6 +289,8 @@ function classifySpecifier(projectRoot, spec, env = process.env) {
   const prefixed = (set) => [...set].some((d) => spec === d || spec.startsWith(`${d}/`));
 
   if (prefixed(new Set(Array.isArray(cfg.ignorePackages) ? cfg.ignorePackages : []))) return 'ignored';
+  // THE RUNTIME'S BUILT-IN MODULES, listed by the runtime itself (manifest builtinModules).
+  if (prefixed(builtinModules(cfg))) return 'builtin';
   if (prefixed(declaredAliases(projectRoot, cfg))) return 'internal';
   if (resolvesInsideRepo(projectRoot, cfg, spec)) return 'internal';
 

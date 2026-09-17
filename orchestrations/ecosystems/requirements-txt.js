@@ -69,6 +69,11 @@ module.exports = {
     dependencyCheck: {
       scanFileExtensions: [".py"],
       importPattern: "^\\s*(?:from\\s+([A-Za-z_][\\w]*)|import\\s+([A-Za-z_][\\w]*))",
+      // THE RUNTIME'S OWN MODULES, ASKED OF THE RUNTIME. `from __future__ import annotations` was
+      // reported as an undeclared import and failed a story through the ladder (regintel
+      // 20260916T200108Z, 2026-09-17): the scan knew declared, internal and vendored, never
+      // built-in. The interpreter lists its standard library; nothing is spelled here.
+      builtinModulesCommand: "python3 -c 'import sys; print(\"\\n\".join(sorted(sys.stdlib_module_names)))'",
     },
     // HOW THIS ECOSYSTEM'S TESTS ARE TOLD FROM ITS SOURCES. pytest's own collection rule
     // (test_*.py / *_test.py). Without it the change classifier and the test gates read every

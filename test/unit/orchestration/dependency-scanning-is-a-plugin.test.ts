@@ -267,3 +267,49 @@ describe('THE ENGINE ROUTES THROUGH THE PLUGIN AND NO LONGER SCANS', () => {
     expect(fn).toContain('autoInstall');
   });
 });
+
+// THE RUNTIME'S OWN MODULES, ASKED OF THE RUNTIME.
+//
+// regintel 20260916T200108Z, 2026-09-17: `from __future__ import annotations` was reported as an
+// undeclared import and failed the story through the ladder — the scan knew declared, internal,
+// vendored and ignored, never built-in. An ecosystem may declare builtinModulesCommand; the
+// runtime lists its standard library; the plug-in spells no name.
+describe('a built-in module of the runtime is BUILTIN, never a finding', () => {
+  const python = {
+    manifestFile: 'requirements.txt', scanFileExtensions: ['.py'],
+    importPattern: '^\\s*(?:from\\s+([A-Za-z_][\\w]*)|import\\s+([A-Za-z_][\\w]*))',
+    vendorDirs: ['.venv'], buildArtifactDirs: ['.git'], indexFileNames: ['__init__'],
+    // As codeline-manifests.js derives it from the ecosystem's builtinModulesCommand: a LIST.
+    builtinModules: ['__future__', 'os', 'json', 'sys'],
+  };
+  it("run 200108Z's shape: __future__ (and os, json) are builtin under the Python declaration", () => {
+    const d = repo(python, { 'requirements.txt': 'fastapi\n', 'regintel/__init__.py': '' });
+    const p = plugin();
+    expect(p.classifySpecifier(d, '__future__')).toBe('builtin');
+    expect(p.classifySpecifier(d, 'os')).toBe('builtin');
+    expect(p.classifySpecifier(d, 'json')).toBe('builtin');
+  });
+  it('a third-party name is still unknown_external under the same declaration — the runtime does not claim it', () => {
+    const d = repo(python, { 'requirements.txt': 'fastapi\n' });
+    expect(plugin().classifySpecifier(d, 'httpx')).toBe('unknown_external');
+    expect(plugin().classifySpecifier(d, 'fastapi')).toBe('declared');
+  });
+  it('a declaration without builtinModules classifies exactly as before', () => {
+    const d = repo({ ...python, builtinModules: undefined }, { 'requirements.txt': 'fastapi\n' });
+    expect(plugin().classifySpecifier(d, '__future__')).toBe('unknown_external');
+  });
+  it('the Python ecosystems declare it and the built manifest carries it; the Node ecosystem keeps its own list', () => {
+    const eco = (n: string) => require(join(ROOT, 'orchestrations/ecosystems', n));
+    expect(eco('requirements-txt.js').codelineManifests.dependencyCheck.builtinModulesCommand).toMatch(/stdlib_module_names/);
+    expect(eco('pyproject-toml.js').codelineManifests.dependencyCheck.builtinModulesCommand).toMatch(/stdlib_module_names/);
+    expect(eco('package-json.js').codelineManifests.dependencyCheck.builtinModulesCommand).toBeUndefined();
+    const { build } = require(join(ROOT, 'orchestrations/scripts/lib/handlers/codeline-manifests.js'));
+    const d = repo(null, { 'requirements.txt': 'fastapi\n' });
+    const built = build(d)['dependency-check.json'];
+    expect(built.builtinModulesCommand).toMatch(/stdlib_module_names/);
+    // The command was RUN by the manifest builder and its answer carried as data.
+    expect(built.builtinModules).toContain('__future__');
+    expect(built.builtinModules).toContain('os');
+  });
+});
+

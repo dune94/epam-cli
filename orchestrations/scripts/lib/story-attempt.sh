@@ -176,6 +176,16 @@ _tc_writer_phase() {
 # change-log/SEAM-CONSISTENCY-ANALYSIS.md Section 5. This used to be a hardcoded `case`
 # statement naming every vendor, a second, independently-maintained list next to
 # providers.json's `known` — the two could (and did) drift.
+# _declared_read_roots <prd-file>
+# Every ABSOLUTE, EXISTING DIRECTORY named anywhere in the PRD's `configuration` object (author
+# comment keys, $-prefixed, excluded), one per line. Which key holds it is the project's business.
+_declared_read_roots() {
+    local _prd="${1:-}"
+    [ -n "$_prd" ] && [ -f "$_prd" ] || return 0
+    jq -r '(.configuration // {}) | with_entries(select(.key | startswith("$") | not)) | .. | strings | select(startswith("/"))' "$_prd" 2>/dev/null \
+        | sed 's:/*$::' | sort -u | while IFS= read -r _p; do [ -n "$_p" ] && [ -d "$_p" ] && printf '%s\n' "$_p"; done
+}
+
 provider_to_cli() {
     local _providers_json="${PROVIDERS_JSON:-$SCRIPT_DIR/../config/providers.json}"
     local cli
@@ -1151,6 +1161,21 @@ implement_story() {
     local story_cli
     STORY_PROVIDER="$(resolve_primary_provider "${STORY_PROVIDER:-}")"
     story_cli=$(provider_to_cli "$STORY_PROVIDER")
+    # THE DIRECTORIES THE PRD DECLARES ARE REACHABLE BY THE RUNNER. A runner confines its tools
+    # to the working directory; regintel 20260916T200108Z (2026-09-17): the writer, now told the
+    # PRD's configuration.sourceRepoReadOnly, was refused both Read and Bash on that path and
+    # reported the wall instead of copying. Every absolute directory the PRD's configuration
+    # names — whatever the key, the engine names none — is granted with the flag the installed
+    # runner advertises for it (the same --help probe the schema and budget bindings use).
+    local _rr _rr_flag=""
+    if "$(runner_bin_for "${STORY_PROVIDER:-}" "${CLAUDE_CMD:-claude}")" --help 2>/dev/null | grep -q -- '--add-dir'; then _rr_flag="--add-dir"; else _rr_flag=""; fi
+    if [ -n "$_rr_flag" ]; then
+        while IFS= read -r _rr; do
+            [ -n "$_rr" ] || continue
+            RUNNER_FLAGS+=("$_rr_flag" "$_rr")
+            log "  Runner may reach $_rr — a directory the PRD's configuration declares"
+        done <<< "$(_declared_read_roots "$prd_target")"
+    fi
 
     # Planning phase: when plannerModel is set, run one planning invocation first.
     # The returned plan is injected into every execution attempt as fixed context.

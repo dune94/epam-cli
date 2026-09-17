@@ -36,7 +36,7 @@ import json
 import os
 import re
 import sys
-from typing import List, Optional
+from typing import Dict, List, Optional
 
 from pydantic import BaseModel, Field, StrictBool
 
@@ -198,6 +198,17 @@ class DependencyManifest(BaseModel):
         default_factory=list,
         description="Files that must change together (e.g. package.json with its lockfile). Read "
                     "by scripts/claude.sh and lib/coupled-pair-gate.sh.",
+    )
+    provisionCommand: Optional[str] = Field(
+        default=None,
+        description="Shell command to provision the project's environment before scanning "
+                    "(e.g. 'npm install --no-audit --no-fund'). Read by "
+                    "scripts/external-verification.sh _project_provision_command().",
+    )
+    runEnvironment: Optional[Dict[str, List[str]]] = Field(
+        default=None,
+        description="Environment variable overrides injected when running the project's "
+                    "tooling (e.g. PATH extensions). Read by scripts/external-verification.sh.",
     )
     vendorCacheExcludePatterns: List[str] = Field(
         default_factory=list,

@@ -142,6 +142,20 @@ describe('divergence is REPORTED, never invented', () => {
     expect((await p.complete(REQ)).content.map((c) => c.text).join('')).toBe('same');
   });
 
+  it('THE CURSOR OUTLIVES THE PROCESS: a second provider instance (the next seam process) gets the NEXT turn, not the first', async () => {
+    // Every seam of the shell pipeline is its own process; cpa-inference's three attempts each
+    // received the recording's first (bad) reply and blocked the CPA gate (2026-09-17).
+    dir = cassette({ 'cpa-inference': [{ text: 'first', toolCalls: [] }, { text: 'second', toolCalls: [] }] });
+    process.env.EPAM_AGENT_NAME = 'cpa-inference'; process.env.EPAM_STORY_ID = 'AMSD-1919';
+    process.env.EPAM_REPLAY_CURSOR_FILE = join(dir, 'cursor.json');
+    expect((await new ReplayProvider(dir).complete(REQ)).content.map((c) => c.text).join('')).toBe('first');
+    expect((await new ReplayProvider(dir).complete(REQ)).content.map((c) => c.text).join('')).toBe('second');
+    await expect(new ReplayProvider(dir).complete(REQ)).rejects.toThrow(/has been called 3 times/);
+    // A rehearsal that clears the file starts over — what rehearse.sh does at launch.
+    rmSync(join(dir, 'cursor.json'));
+    expect((await new ReplayProvider(dir).complete(REQ)).content.map((c) => c.text).join('')).toBe('first');
+  });
+
   it('the scoped file is authoritative when both exist', async () => {
     dir = cassette({ 'spec-coordinator': [{ text: 'bare', toolCalls: [] }], 'spec-coordinator · phase:core': [{ text: 'scoped', toolCalls: [] }] });
     process.env.EPAM_AGENT_NAME = 'spec-coordinator';

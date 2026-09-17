@@ -22,9 +22,10 @@
  * Answering it with a repeat of the last turn, or with silence, would turn the one informative
  * event into a green run.
  */
-import { readFileSync } from 'node:fs';
+import { readFileSync, writeFileSync, renameSync } from 'node:fs';
 import { createHash } from 'node:crypto';
 import { join } from 'node:path';
+import { tmpdir } from 'node:os';
 import { agentLabel } from '../../observability/agentLabel.js';
 import type {
   ContentPart, LLMProvider, ProviderRequest, ProviderResponse, StreamHandler,
@@ -64,6 +65,16 @@ export class ReplayProvider implements LLMProvider {
 
   private turns = new Map<string, RecordedTurn[]>();
 
+  /**
+   * THE CURSOR OUTLIVES THE PROCESS. Every seam of the shell pipeline is its own `epam run`
+   * process, and a retry is another one; a cursor held only in memory started at turn 0 in each,
+   * so a whole-run rehearsal handed every attempt the recording's FIRST reply — the Sept 9
+   * brownfield cassette's cpa-inference gave its bad first turn three times and blocked the gate
+   * (2026-09-17). The position is kept beside the process in a file named for the cassette;
+   * rehearse.sh removes it when a rehearsal starts, and EPAM_REPLAY_CURSOR_FILE names it outright.
+   */
+  private readonly cursorFile: string;
+
   constructor(private readonly cassetteDir: string) {
     if (!cassetteDir) {
       throw new Error(
@@ -71,6 +82,26 @@ export class ReplayProvider implements LLMProvider {
         + 'orchestrations/scripts/cassette-export.js. There is no default: replaying an '
         + 'unspecified recording would rehearse a run nobody chose.');
     }
+    this.cursorFile = process.env.EPAM_REPLAY_CURSOR_FILE
+      || join(tmpdir(), `epam-replay-cursor-${createHash('sha256').update(cassetteDir).digest('hex').slice(0, 16)}.json`);
+    try {
+      const saved = JSON.parse(readFileSync(this.cursorFile, 'utf8')) as Record<string, number>;
+      for (const [k, v] of Object.entries(saved)) if (typeof v === 'number') this.cursor.set(k, v);
+    } catch { /* a fresh rehearsal: nothing handed out yet */ }
+  }
+
+  private persistCursor(): void {
+    const tmp = `${this.cursorFile}.${process.pid}.tmp`;
+    try {
+      writeFileSync(tmp, JSON.stringify(Object.fromEntries(this.cursor)));
+      renameSync(tmp, this.cursorFile);
+    } catch { /* the rehearsal still runs; the next process starts where this one could not record */ }
+  }
+
+  /** Where this provider keeps its position — for the rehearsal to clear at start. */
+  static cursorFileFor(cassetteDir: string): string {
+    return process.env.EPAM_REPLAY_CURSOR_FILE
+      || join(tmpdir(), `epam-replay-cursor-${createHash('sha256').update(cassetteDir).digest('hex').slice(0, 16)}.json`);
   }
 
   private recordedTurns(seam: string): RecordedTurn[] {
@@ -137,6 +168,7 @@ export class ReplayProvider implements LLMProvider {
         + 'which is what this rehearsal exists to find. Nothing is invented to cover it.');
     }
     this.cursor.set(seam, at + 1);
+    this.persistCursor();
     return turns[at] ?? {};
   }
 

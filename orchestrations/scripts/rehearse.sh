@@ -119,6 +119,13 @@ fi
 # provider with the replay one. Nothing else about the run changes, which is the point -- the
 # pipeline under rehearsal is the pipeline, not a variant of it.
 export EPAM_REPLAY_CASSETTE_DIR="$CASSETTE"
+# A REHEARSAL STARTS AT THE RECORDING'S FIRST TURN. The replay provider keeps its position across
+# processes in a file named for the cassette (every seam is its own process); a position left by
+# an earlier rehearsal of the same cassette would start this one mid-recording. Named here so the
+# provider and this script agree on one file.
+export EPAM_REPLAY_CURSOR_FILE="${EPAM_REPLAY_CURSOR_FILE:-${TMPDIR:-/tmp}/epam-replay-cursor-$(printf '%s' "$CASSETTE" | sha256sum | cut -c1-16).json}"
+rm -f "$EPAM_REPLAY_CURSOR_FILE"
+echo "[rehearse] cursor   : $EPAM_REPLAY_CURSOR_FILE (cleared)"
 
 set +e
 unshare --user --map-root-user --mount bash -c "

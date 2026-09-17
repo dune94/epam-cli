@@ -333,6 +333,15 @@ describe('preflight-prd-integrity.sh — real subprocess execution', () => {
     expect(r.code).toBe(0);
   });
 
+  it('a BLOCKED, uncompleted story is accepted on a resume too — the TC gate blocked it while its sibling was unwritten', () => {
+    const prd = baseFixture();
+    prd.stories[0].status = 'blocked'; prd.stories[0].completed = false;
+    expect(runPreflight(prd).code).not.toBe(0);
+    const r = runPreflight(prd, { EPAM_RESUME_RUN: 'x' });
+    expect(r.stdout).toMatch(/re-queued for retry by the resume/);
+    expect(r.code).toBe(0);
+  });
+
   it('a COMPLETED story is still refused on a resume — completed is not retried', () => {
     const prd = baseFixture();
     prd.stories[0].status = 'completed'; prd.stories[0].completed = true;

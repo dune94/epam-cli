@@ -1000,23 +1000,36 @@ fi
 # story-retry-state and the next attempt climbs from there. Completed stories are untouched.
 if [ "${RESET_STORIES:-false}" != "true" ] && [ -n "${EPAM_RESUME_RUN:-}" ]; then
     _requeue_tmp=$(mktemp); chmod 644 "$_requeue_tmp" 2>/dev/null
-    _requeued=$(jq -r '[.stories[]? | select(.status == "failed" and (.completed // false) == false) | .id] | join(", ")' "$PRD_FILE" 2>/dev/null || echo "")
+    # 'blocked' is re-queued with 'failed': the inline TC-writer gate blocks a test story after
+    # three attempts with no testCriteria, and on a greenfield tree that is the ordinary state of
+    # a test story whose impl sibling has not been written yet (regintel REGI-001b, blocked while
+    # REGI-001a had produced nothing). A resume that implements the sibling must let it try again.
+    _requeued=$(jq -r '[.stories[]? | select((.status == "failed" or .status == "blocked") and (.completed // false) == false) | .id] | join(", ")' "$PRD_FILE" 2>/dev/null || echo "")
     if [ -n "$_requeued" ]; then
-        jq '(.stories[]? | select(.status == "failed" and (.completed // false) == false)) |= (.status = "pending") |
-            (.phases[]?.stories[]? | select(.status == "failed" and (.completed // false) == false)) |= (.status = "pending")' \
+        jq '(.stories[]? | select((.status == "failed" or .status == "blocked") and (.completed // false) == false)) |= (.status = "pending") |
+            (.phases[]?.stories[]? | select((.status == "failed" or .status == "blocked") and (.completed // false) == false)) |= (.status = "pending")' \
             "$PRD_FILE" > "$_requeue_tmp" && mv "$_requeue_tmp" "$PRD_FILE"
-        success "Resume of run ${EPAM_RESUME_RUN}: re-queued failed story/ies for retry — ${_requeued}"
-        # AND THEIR CHECKPOINT RECORDS GO WITH THEM. The checkpoint used to be written for a failed
-        # story too (fixed beside checkpoint_complete), and a run that failed before that fix
-        # carries those records; left in place they make the story loop skip the very stories
-        # just re-queued. Only the re-queued ids are dropped; completed stories keep theirs.
-        if [ -n "${CHECKPOINT_FILE:-}" ] && [ -f "$CHECKPOINT_FILE" ]; then
-            _ck_tmp=$(mktemp)
-            jq -c --arg ids ",${_requeued// /}," '. as $r | select(($ids | index("," + $r.storyId + ",")) == null)' "$CHECKPOINT_FILE" > "$_ck_tmp" 2>/dev/null \
-                && mv "$_ck_tmp" "$CHECKPOINT_FILE" || rm -f "$_ck_tmp"
-        fi
+        success "Resume of run ${EPAM_RESUME_RUN}: re-queued failed/blocked story/ies for retry — ${_requeued}"
     else
         rm -f "$_requeue_tmp"
+    fi
+    # A CHECKPOINT RECORD FOR A STORY THE PRD DOES NOT HOLD AS COMPLETED IS STALE. The checkpoint
+    # used to be written for a failed story too (fixed beside checkpoint_complete), and a run that
+    # failed before that fix carries those records; left in place they make the story loop skip
+    # the very stories a resume is retrying ("already completed in checkpoint"). Judged against
+    # the PRD, not the re-queue list: a story re-queued by an EARLIER resume is pending already
+    # and its stale record is just as wrong. Completed stories keep theirs.
+    if [ -n "${CHECKPOINT_FILE:-}" ] && [ -f "$CHECKPOINT_FILE" ]; then
+        _ck_tmp=$(mktemp)
+        _ck_done=$(jq -c '[.stories[]? | select((.completed // false) == true or .status == "completed") | .id]' "$PRD_FILE" 2>/dev/null || echo "[]")
+        _ck_dropped=$(jq -r --argjson done "$_ck_done" '. as $r | select(($done | index($r.storyId)) == null) | .storyId' "$CHECKPOINT_FILE" 2>/dev/null | sort -u | tr '\n' ' ')
+        if [ -n "${_ck_dropped// /}" ]; then
+            jq -c --argjson done "$_ck_done" '. as $r | select(($done | index($r.storyId)) != null)' "$CHECKPOINT_FILE" > "$_ck_tmp" 2>/dev/null \
+                && mv "$_ck_tmp" "$CHECKPOINT_FILE" || rm -f "$_ck_tmp"
+            success "Resume of run ${EPAM_RESUME_RUN}: dropped stale checkpoint record(s) for story/ies the PRD does not hold as completed — ${_ck_dropped}"
+        else
+            rm -f "$_ck_tmp"
+        fi
     fi
 fi
 # (end of the resume re-queue)

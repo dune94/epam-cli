@@ -210,7 +210,9 @@ for sid in check_ids:
     s = by_id.get(sid, {})
     status    = s.get('status', 'pending')
     completed = s.get('completed', False)
-    if _resuming and status == 'failed' and not completed:
+    # 'blocked' too: the inline TC-writer gate blocks a test story whose impl sibling has not
+    # been written yet — the ordinary greenfield state — and the resume re-queues it with 'failed'.
+    if _resuming and status in ('failed', 'blocked') and not completed:
         retrying.append(sid)
         continue
     if status not in ('pending', 'deprecated') or completed:

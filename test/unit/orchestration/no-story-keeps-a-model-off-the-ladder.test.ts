@@ -98,6 +98,17 @@ describe('the PROVIDER is corrected with the model, not left behind', () => {
     expect(out).not.toMatch(/cannot route .*REGI-001a/);
   });
 
+  it("the provider is corrected even when EVERY model is already on the ladder (the 2.0.48 resume's state: models corrected by an earlier pass, providers still foreign)", () => {
+    const { prd, out } = enforce([
+      { id: 'REGI-002', model: 'claude-opus-4-6', aiProvider: 'minimax' },
+      { id: 'REGI-003', model: 'claude-sonnet-4-6', aiProvider: 'minimax' },
+    ]);
+    expect(providerOf(prd, 'REGI-002')).toBe('anthropic');
+    expect(providerOf(prd, 'REGI-003')).toBe('anthropic');
+    expect(out).toMatch(/cannot route/);
+    expect(out).not.toMatch(/model on no declared ladder/);
+  });
+
   it('a story with NO provider is left for the coordinator; an on-set provider is untouched', () => {
     const { prd, out } = enforce([
       { id: 'A', model: 'claude-opus-4-6' },

@@ -810,6 +810,11 @@ _mc_enforce_ladder() {
     local _prd="${1:-}" _when="${2:-}"
     [ -n "$_prd" ] && [ -f "$_prd" ] || return 0
     command -v jq >/dev/null 2>&1 || return 0
+    # THE PROVIDER FIRST, BEFORE ANY EARLY RETURN BELOW. Called at the end, it was never reached
+    # when every model was already on the ladder — the exact state of regintel 20260916T200108Z
+    # (models corrected by an earlier pass, providers still minimax), so the correction it exists
+    # for did not run.
+    _mc_enforce_providers "$_prd" "$_when"
     local _allowed _fixed _start _tmp
     _allowed="$("${NODE_BIN:-node}" "$SCRIPT_DIR/lib/handlers/ladder-models.js" 2>/dev/null || echo "")"
     # AN EMPTY LADDER CORRECTS NOTHING. Rewriting every model to "" because the ladder could not be
@@ -829,7 +834,6 @@ _mc_enforce_ladder() {
         .stories |= map(if ((.model // "") != "" and ((.model) as $m | $allowed | index($m) | not))
                         then .model = $start else . end)' "$_prd" > "$_tmp" 2>/dev/null \
         && mv "$_tmp" "$_prd" || rm -f "$_tmp"
-    _mc_enforce_providers "$_prd" "$_when"
 }
 
 # _mc_enforce_providers <prd-file> [when]

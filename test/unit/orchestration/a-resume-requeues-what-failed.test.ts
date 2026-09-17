@@ -51,6 +51,7 @@ const fixture = () => ({
     { id: 'REGI-000', status: 'completed', completed: true },
     { id: 'REGI-002', status: 'pending', completed: false },
     { id: 'REGI-001', status: 'deprecated', completed: true },
+    { id: 'REGI-003', status: 'blocked', completed: false },
   ],
 });
 
@@ -64,13 +65,25 @@ describe('a resume re-queues what failed, and only that', () => {
     expect(by['REGI-000']).toEqual({ id: 'REGI-000', status: 'completed', completed: true });
     expect(by['REGI-002'].status).toBe('pending');
     expect(by['REGI-001']).toEqual({ id: 'REGI-001', status: 'deprecated', completed: true });
-    expect(r.stdout).toMatch(/re-queued failed story\/ies for retry — REGI-001a, REGI-001b/);
+    // 'blocked' by the inline TC gate (a test story whose impl sibling had not been written) is retried too.
+    expect(by['REGI-003'].status).toBe('pending');
+    expect(r.stdout).toMatch(/re-queued failed\/blocked story\/ies for retry — REGI-001a, REGI-001b, REGI-003/);
   });
 
-  it("the re-queued stories' checkpoint records go with them; a completed story keeps its record (resume on 2.0.48 skipped 001a/b as 'already completed in checkpoint')", () => {
+  it("stale checkpoint records go — for re-queued stories AND for a story an earlier resume already set pending; a completed story keeps its record", () => {
+    // Resume on 2.0.48 skipped 001a/b as 'already completed in checkpoint'; the 2.0.49 resume
+    // found 001a already pending (re-queued earlier) with its stale record still there.
     const rec = (id: string) => ({ idempotencyKey: `x:scaffold:${id}`, storyId: id, phase: 'scaffold', runId: 'x', status: 'completed' });
-    const { ck } = run(fixture(), { EPAM_RESUME_RUN: 'x' }, [rec('REGI-001a'), rec('REGI-001b'), rec('REGI-000')]);
+    const { ck, r } = run(fixture(), { EPAM_RESUME_RUN: 'x' }, [rec('REGI-001a'), rec('REGI-001b'), rec('REGI-000'), rec('REGI-002')]);
     expect(ck.map((c) => c.storyId)).toEqual(['REGI-000']);
+    expect(r.stdout).toMatch(/dropped stale checkpoint record\(s\).*REGI-001a REGI-001b REGI-002/);
+  });
+
+  it('a resume with only sound checkpoint records drops nothing and says nothing about them', () => {
+    const rec = (id: string) => ({ idempotencyKey: `x:scaffold:${id}`, storyId: id, phase: 'scaffold', runId: 'x', status: 'completed' });
+    const { ck, r } = run(fixture(), { EPAM_RESUME_RUN: 'x' }, [rec('REGI-000')]);
+    expect(ck.map((c) => c.storyId)).toEqual(['REGI-000']);
+    expect(r.stdout).not.toMatch(/dropped stale/);
   });
 
   it('a FRESH launch (no EPAM_RESUME_RUN) changes nothing here — that is --reset\'s job', () => {

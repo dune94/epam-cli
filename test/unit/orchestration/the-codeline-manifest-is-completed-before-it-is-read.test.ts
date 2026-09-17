@@ -54,7 +54,7 @@ describe('the codeline manifest is completed before it is read', () => {
     expect(manifest.emptyDeliverables).toContain('__init__.py');
     expect(manifest.vendorDirs).toEqual(['__pycache__']);
     expect(manifest.installCommand).toBe('pip install {package}');
-    expect(r.stdout).toMatch(/completed \.epam\/dependency-check\.json .* with .*provisionCommand/);
+    expect(r.stdout).toMatch(/completed .*dependency-check\.json with .*provisionCommand/);
   });
 
   it('is idempotent — a second pass adds nothing and says nothing', () => {
@@ -71,8 +71,41 @@ describe('the codeline manifest is completed before it is read', () => {
     expect(r.stdout).toBe('');
   });
 
+  it("the PROJECT's declared copy (what the scan reads first) is completed too — absent keys only, its own kept", () => {
+    const d = mkdtempSync(join(tmpdir(), 'manifest-complete-proj-')); dirs.push(d);
+    writeFileSync(join(d, 'requirements.txt'), 'fastapi\n');
+    mkdirSync(join(d, '.epam'), { recursive: true }); writeFileSync(join(d, '.epam/dependency-check.json'), JSON.stringify(seed));
+    const proj = join(d, 'project'); mkdirSync(proj); writeFileSync(join(proj, 'dependency-check.json'), JSON.stringify({ ...seed, vendorDirs: ['custom'] }));
+    const script = ['set -uo pipefail', 'log(){ echo "LOG: $*"; }', `NODE_BIN=${JSON.stringify(NODE20)}`, `SCRIPT_DIR=${JSON.stringify(join(ROOT, 'orchestrations/scripts'))}`, `EPAM_PROJECT_CONFIG_DIR=${JSON.stringify(proj)}`, lift('complete_codeline_manifests'), `complete_codeline_manifests ${JSON.stringify(d)}`].join('\n');
+    const r = spawnSync('bash', ['-c', script], { encoding: 'utf8', timeout: 60_000 });
+    const p = JSON.parse(readFileSync(join(proj, 'dependency-check.json'), 'utf8'));
+    expect(p.builtinModules, 'the project copy did not learn the runtime modules').toContain('__future__');
+    expect(p.provisionCommand).toBeTruthy();
+    expect(p.vendorDirs).toEqual(['custom']);
+    expect(r.stdout).toMatch(/completed .*project\/dependency-check\.json/);
+  });
+
   it('a codeline with no .epam/dependency-check.json at all is not given one here', () => {
     const { manifest } = complete(null, { 'requirements.txt': 'x\n' });
     expect(manifest).toBeNull();
   });
 });
+
+// THE PATH, NOT THE PIECE: after completion, the scan plug-in — reading the project copy FIRST, as
+// it does in production (readScanManifest) — classifies the runtime's own module as builtin.
+describe('after completion the dependency scan itself sees the runtime modules', () => {
+  const seed = { manifestFile: 'requirements.txt', scanFileExtensions: ['.py'], importPattern: '^\\s*(?:from\\s+([A-Za-z_][\\w]*)|import\\s+([A-Za-z_][\\w]*))', vendorDirs: ['__pycache__'], buildArtifactDirs: ['.git'], indexFileNames: ['__init__'], installCommand: 'pip install {package}' };
+  it("run 200108Z's shape: __future__ is builtin to the scan, with EPAM_PROJECT_CONFIG_DIR pointing at the project's (completed) copy", () => {
+    const d = mkdtempSync(join(tmpdir(), 'manifest-scan-path-')); dirs.push(d);
+    writeFileSync(join(d, 'requirements.txt'), 'fastapi\n');
+    mkdirSync(join(d, '.epam'), { recursive: true }); writeFileSync(join(d, '.epam/dependency-check.json'), JSON.stringify(seed));
+    const proj = join(d, 'project'); mkdirSync(proj); writeFileSync(join(proj, 'dependency-check.json'), JSON.stringify(seed));
+    const plugin = join(ROOT, 'orchestrations/plugins/dependency-scan-plugin.js');
+    const classify = () => spawnSync(NODE20, ['-e', `process.stdout.write(require(${JSON.stringify(plugin)}).classifySpecifier(${JSON.stringify(d)}, '__future__'))`], { encoding: 'utf8', env: { ...process.env, EPAM_PROJECT_CONFIG_DIR: proj } }).stdout;
+    expect(classify(), 'the premise: before completion the scan calls the stdlib undeclared').toBe('unknown_external');
+    const script = ['set -uo pipefail', 'log(){ :; }', `NODE_BIN=${JSON.stringify(NODE20)}`, `SCRIPT_DIR=${JSON.stringify(join(ROOT, 'orchestrations/scripts'))}`, `EPAM_PROJECT_CONFIG_DIR=${JSON.stringify(proj)}`, lift('complete_codeline_manifests'), `complete_codeline_manifests ${JSON.stringify(d)}`].join('\n');
+    expect(spawnSync('bash', ['-c', script], { encoding: 'utf8', timeout: 60_000 }).status).toBe(0);
+    expect(classify(), 'the scan still reads a manifest without the runtime modules').toBe('builtin');
+  });
+});
+

@@ -1422,23 +1422,30 @@ _project_provision_command() { _project_dep_config_value "${1:-$PROJECT_ROOT}" p
 complete_codeline_manifests() {
     local _root="${1:-$PROJECT_ROOT}"
     [ -n "$_root" ] && [ -d "$_root" ] || return 0
-    local _cfg="$_root/.epam/dependency-check.json"
-    [ -f "$_cfg" ] || return 0
     command -v jq >/dev/null 2>&1 || return 0
     local _derived _rc=0
     _derived=$("${NODE_BIN:-node}" "$SCRIPT_DIR/lib/handlers/codeline-manifests.js" "$_root" 2>/dev/null) || _rc=$?
     [ "$_rc" -eq 0 ] && [ -n "$_derived" ] || return 0
-    local _added
-    _added=$(jq -n --argjson have "$(cat "$_cfg")" --argjson derive "$(printf '%s' "$_derived" | jq '."dependency-check.json" // {}')" \
-        '[($derive | keys[]) as $k | select(($have | has($k)) | not) | $k]' 2>/dev/null || echo '[]')
-    [ "$(printf '%s' "$_added" | jq 'length' 2>/dev/null || echo 0)" -gt 0 ] || return 0
-    local _tmp; _tmp=$(mktemp)
-    if jq -s '.[1] * .[0]' "$_cfg" <(printf '%s' "$_derived" | jq '."dependency-check.json"') > "$_tmp" 2>/dev/null; then
-        mv "$_tmp" "$_cfg"
-        log "  [manifest] completed .epam/dependency-check.json in ${_root} with $(printf '%s' "$_added" | jq -r 'join(", ")') from its ecosystem provider"
-    else
-        rm -f "$_tmp"
-    fi
+    # BOTH COPIES THE ENGINE READS. The dependency scan reads the PROJECT's declaration first
+    # (orchestrations/projects/<name>/dependency-check.json) and the codeline's .epam/ copy only as
+    # a fallback; completing the codeline's alone left the scan on the seed (regintel: the
+    # runtime's own modules still reported as undeclared after the codeline copy had learned them).
+    # A file that does not exist is not created here; absent keys only, the declared ones win.
+    local _cfg
+    for _cfg in "$_root/.epam/dependency-check.json" "${EPAM_PROJECT_CONFIG_DIR:+$EPAM_PROJECT_CONFIG_DIR/dependency-check.json}"; do
+        [ -n "$_cfg" ] && [ -f "$_cfg" ] || continue
+        local _added
+        _added=$(jq -n --argjson have "$(cat "$_cfg")" --argjson derive "$(printf '%s' "$_derived" | jq '."dependency-check.json" // {}')" \
+            '[($derive | keys[]) as $k | select(($have | has($k)) | not) | $k]' 2>/dev/null || echo '[]')
+        [ "$(printf '%s' "$_added" | jq 'length' 2>/dev/null || echo 0)" -gt 0 ] || continue
+        local _tmp; _tmp=$(mktemp)
+        if jq -s '.[1] * .[0]' "$_cfg" <(printf '%s' "$_derived" | jq '."dependency-check.json"') > "$_tmp" 2>/dev/null; then
+            mv "$_tmp" "$_cfg"
+            log "  [manifest] completed ${_cfg} with $(printf '%s' "$_added" | jq -r 'join(", ")') from its ecosystem provider"
+        else
+            rm -f "$_tmp"
+        fi
+    done
 }
 
 # WHERE COMMANDS RUN — the manifest's runEnvironment rendered as `export` statements for a

@@ -1766,6 +1766,9 @@ $_kb_section"
         # never got the chance. Running it here, before the lock, means the
         # dependency is already satisfied by the time the agent's turn
         # starts, so there's nothing left for the agent to (mis)fix itself.
+        # The manifest the scan reads is completed from the ecosystem FIRST — the pre-write scan
+        # ran against the seed and reported the runtime's own modules as undeclared imports.
+        complete_codeline_manifests "$PROJECT_ROOT"
         run_dependency_check "$PROJECT_ROOT"
         run_lockfile_sync_check "$PROJECT_ROOT"
 

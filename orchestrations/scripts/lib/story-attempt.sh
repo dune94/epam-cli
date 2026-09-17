@@ -2286,6 +2286,9 @@ $_kb_section"
         # this attempt. _vendor_unlock() is called from inside
         # run_external_verification itself, right after that check passes.
 
+        # The story may have just written the codeline's manifest file (a scaffold story does);
+        # complete the codeline's .epam declaration from its ecosystem before anything reads it.
+        complete_codeline_manifests "$PROJECT_ROOT"
         if [ "$invoke_success" = true ] && ! verify_story_deliverables "$story_id"; then
             warning "$story_cli returned success but story deliverables are incomplete"
             invoke_success=false

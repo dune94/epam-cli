@@ -127,7 +127,8 @@
     "_project_dep_config_value",
     "_project_manifest_file",
     "_project_install_command",
-    "_project_provision_command"
+    "_project_provision_command",
+    "complete_codeline_manifests"
   ],
   "deliverables": [
     "verify_story_deliverables",

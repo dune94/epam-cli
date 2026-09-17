@@ -1408,6 +1408,39 @@ _project_install_command() { _project_dep_config_value "${1:-$PROJECT_ROOT}" ins
 # ran the remainder, which provisions under exactly one package manager and under no other.
 _project_provision_command() { _project_dep_config_value "${1:-$PROJECT_ROOT}" provisionCommand; }
 
+# complete_codeline_manifests <codeline-root>
+#
+# THE CODELINE'S MANIFEST IS COMPLETED FROM ITS ECOSYSTEM BEFORE IT IS READ. A greenfield codeline
+# starts with the PROJECT's declared .epam/dependency-check.json (greenfield_seed_codeline) and the
+# only completion from the ecosystem provider ran in the orchestrator's codeline loop — the
+# brownfield/multi-codeline path — so a greenfield main-branch story was verified against a manifest
+# that never learned provisionCommand, runEnvironment or emptyDeliverables after the scaffold story
+# wrote requirements.txt (regintel 20260916T200108Z, 2026-09-17: "declares no provisionCommand",
+# pytest without the venv, an empty __init__.py judged missing). Keys the manifest already holds
+# are kept (the project's word wins); absent keys are added from the provider; a codeline whose
+# ecosystem no provider declares is left as it is. One node call; idempotent.
+complete_codeline_manifests() {
+    local _root="${1:-$PROJECT_ROOT}"
+    [ -n "$_root" ] && [ -d "$_root" ] || return 0
+    local _cfg="$_root/.epam/dependency-check.json"
+    [ -f "$_cfg" ] || return 0
+    command -v jq >/dev/null 2>&1 || return 0
+    local _derived _rc=0
+    _derived=$("${NODE_BIN:-node}" "$SCRIPT_DIR/lib/handlers/codeline-manifests.js" "$_root" 2>/dev/null) || _rc=$?
+    [ "$_rc" -eq 0 ] && [ -n "$_derived" ] || return 0
+    local _added
+    _added=$(jq -n --argjson have "$(cat "$_cfg")" --argjson derive "$(printf '%s' "$_derived" | jq '."dependency-check.json" // {}')" \
+        '[($derive | keys[]) as $k | select(($have | has($k)) | not) | $k]' 2>/dev/null || echo '[]')
+    [ "$(printf '%s' "$_added" | jq 'length' 2>/dev/null || echo 0)" -gt 0 ] || return 0
+    local _tmp; _tmp=$(mktemp)
+    if jq -s '.[1] * .[0]' "$_cfg" <(printf '%s' "$_derived" | jq '."dependency-check.json"') > "$_tmp" 2>/dev/null; then
+        mv "$_tmp" "$_cfg"
+        log "  [manifest] completed .epam/dependency-check.json in ${_root} with $(printf '%s' "$_added" | jq -r 'join(", ")') from its ecosystem provider"
+    else
+        rm -f "$_tmp"
+    fi
+}
+
 # WHERE COMMANDS RUN — the manifest's runEnvironment rendered as `export` statements for a
 # `bash -c` prefix: PATH entries are codeline-relative directories put in front of PATH, every
 # other key is exported verbatim (relative values resolved against the codeline). Empty when the

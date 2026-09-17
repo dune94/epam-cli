@@ -166,8 +166,8 @@ if [ "$GREENFIELD" = "1" ]; then
 fi
 # A PRD THAT DOES NOT EXIST YET IS NOT A FAILURE WHEN THE RUN CREATES IT. A Jira project's PRD is
 # synthesised by the run's own ingest (JIRA_JQL) at the path the project declares; demanding it
-# here refused every fresh brownfield launch through this launcher (found by the £0 replay of the
-# Sept 9 metrolinx cassette, 2026-09-17). Same rule as preflight-check.sh's _prd_pending_ingest.
+# here refused every fresh brownfield launch through this launcher (found by the £0 replay of a
+# Sept 9 brownfield cassette, 2026-09-17). Same rule as preflight-check.sh's _prd_pending_ingest.
 _prd_pending_ingest=0
 if [ -n "${JIRA_URL:-}" ] && [ -n "${JIRA_JQL:-}" ]; then
   _synth_target="${JIRA_SYNTH_PRD_PATH:-$PRD_FILE}"

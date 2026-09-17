@@ -829,4 +829,36 @@ _mc_enforce_ladder() {
         .stories |= map(if ((.model // "") != "" and ((.model) as $m | $allowed | index($m) | not))
                         then .model = $start else . end)' "$_prd" > "$_tmp" 2>/dev/null \
         && mv "$_tmp" "$_prd" || rm -f "$_tmp"
+    _mc_enforce_providers "$_prd" "$_when"
+}
+
+# _mc_enforce_providers <prd-file> [when]
+#
+# THE PROVIDER IS CORRECTED WITH THE MODEL, NOT LEFT BEHIND. _mc_enforce_ladder put every story's
+# model on this set's ladder and left aiProvider as it found it. regintel 20260916T200108Z
+# (2026-09-17, claude set): nine stories carried aiProvider=minimax with model=claude-haiku — a
+# pair no set declares — and pre-flight refused the resume on "test-authoring stories on a
+# provider the registry rules out". Same rule, same source: the set's own declared providers
+# (ladder-providers.js), READ and never listed; a provider this set cannot route becomes the
+# set's first. Idempotent: a corrected PRD selects nothing.
+_mc_enforce_providers() {
+    local _prd="${1:-}" _when="${2:-}"
+    [ -n "$_prd" ] && [ -f "$_prd" ] || return 0
+    command -v jq >/dev/null 2>&1 || return 0
+    local _providers _bad _first _tmp
+    _providers="$("${NODE_BIN:-node}" "$SCRIPT_DIR/lib/handlers/ladder-providers.js" 2>/dev/null || echo "")"
+    [ -n "$_providers" ] && [ "$_providers" != "[]" ] || return 0
+    _bad=$(jq -r --argjson p "$_providers" '
+        [ .stories[]? | select((.aiProvider // "") != "" and ((.aiProvider) as $x | $p | index($x) | not)) | .id ]
+        | join(", ")' "$_prd" 2>/dev/null || echo "")
+    [ -n "$_bad" ] || return 0
+    _first=$(printf '%s' "$_providers" | jq -r '.[0] // empty')
+    [ -n "$_first" ] || return 0
+    warning "  [prd-model-coordinator] assigned a provider this set cannot route${_when:+ ($_when)} for: ${_bad}"
+    warning "    corrected to '${_first}' — the set's own declared provider"
+    _tmp=$(mktemp)
+    jq --argjson p "$_providers" --arg first "$_first" '
+        .stories |= map(if ((.aiProvider // "") != "" and ((.aiProvider) as $x | $p | index($x) | not))
+                        then .aiProvider = $first else . end)' "$_prd" > "$_tmp" 2>/dev/null \
+        && mv "$_tmp" "$_prd" || rm -f "$_tmp"
 }

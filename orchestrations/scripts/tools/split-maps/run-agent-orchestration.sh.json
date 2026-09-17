@@ -1,113 +1,114 @@
 {
- ".": [
-  "_release_write_perimeter",
-  "_engage_write_perimeter",
-  "_render_change_reviewer",
-  "_codeline_test_command",
-  "_parse_failing_test_files",
-  "_run_project_verification"
- ],
- "gates-testing": [
-  "run_testing_gates",
-  "_lint_fix_findings_directly",
-  "_brownfield_gate_scope",
-  "_emit_agent",
-  "_gate_diff_excludes",
-  "run_unit_tests_gate",
-  "_create_bug_fix_phase",
-  "_emit_unfixed_bug_list"
- ],
- "phase-assessment": [
-  "run_pre_phase_assessment",
-  "run_phase_assessment",
-  "_pfa_capability_failed",
-  "run_orch_prompt_with_tools",
-  "_epam_prompt_version",
-  "_json_escape_str",
-  "review_feedback_is_incomplete",
-  "_review_approval_is_giveup",
-  "_review_tree_fingerprint",
-  "_escalate_review_story",
-  "_reset_story_for_reimplementation"
- ],
- "story-watchdog": [
-  "run_story_with_watchdog",
-  "run_story_recovery_analyst",
-  "hot_swap_story_model_if_unstable",
-  "resolve_role_timeout_multiplier",
-  "_resolve_ladder_tier",
-  "_story_archetype_ladder",
-  "maybe_upgrade_model_for_tc_density",
-  "_mc_enforce_ladder",
-  "_mc_no_assignment_verdict",
-  "_log_guarded_step_retry"
- ],
- "prd-integrity": [
-  "assert_no_story_ids_lost",
-  "assert_no_illegitimate_deprecation",
-  "assert_no_story_ids_gained",
-  "capture_story_ids_snapshot",
-  "check_ac_invariant",
-  "topo_sort_stories"
- ],
- "codeline-lanes": [
-  "_run_codeline_loop",
-  "_run_codeline_bridge",
-  "provision_env_local_from_sample",
-  "_kill_lane_tree",
-  "_run_work_dir",
-  "is_lane",
-  "orch_role",
-  "detect_node",
-  "resolve_codeline_node",
-  "_codeline_node_requirement",
-  "ensure_node_modules_healthy",
-  "derive_sandbox_base_image"
- ],
- "mint-and-spec": [
-  "_run_agent_mint",
-  "_run_jira_pipeline",
-  "_pause_after_agent_mint",
-  "run_specification_pass",
-  "append_pipeline_cost_record",
-  "_spec_pass_usage",
-  "run_hybrid_precoordination",
-  "_build_skill_domain_guidance",
-  "run_skills_audit_scan",
-  "run_tools_audit_scan",
-  "resolve_prompt_provider",
-  "resolve_orch_mode"
- ],
- "control-plane": [
-  "_resolve_control_plane_port",
-  "start_control_plane",
-  "cleanup",
-  "stop_dashboards_watch",
-  "stop_control_plane",
-  "_epam_kill_tree",
-  "is_parent",
-  "start_dashboards_watch",
-  "_epam_kill_heartbeat",
-  "_checklist_heartbeat",
-  "print_step_checklist",
-  "step_emit",
-  "seed_runtime_logs",
-  "_epam_export_cassette",
-  "_publish_agent_outputs"
- ],
- "checkpoints": [
-  "checkpoint_complete",
-  "checkpoint_already_done",
-  "checkpoint_clear",
-  "resume_spec_output_present",
-  "_clear_suite_state_for_phase",
-  "run_interstitial_e2e_phase"
- ],
- "orch-common": [
-  "log",
-  "success",
-  "warning",
-  "error",
-  "info"
- ]
+  ".": [
+    "_release_write_perimeter",
+    "_engage_write_perimeter",
+    "_render_change_reviewer",
+    "_codeline_test_command",
+    "_parse_failing_test_files",
+    "_run_project_verification"
+  ],
+  "gates-testing": [
+    "run_testing_gates",
+    "_lint_fix_findings_directly",
+    "_brownfield_gate_scope",
+    "_emit_agent",
+    "_gate_diff_excludes",
+    "run_unit_tests_gate",
+    "_create_bug_fix_phase",
+    "_emit_unfixed_bug_list"
+  ],
+  "phase-assessment": [
+    "run_pre_phase_assessment",
+    "run_phase_assessment",
+    "_pfa_capability_failed",
+    "run_orch_prompt_with_tools",
+    "_epam_prompt_version",
+    "_json_escape_str",
+    "review_feedback_is_incomplete",
+    "_review_approval_is_giveup",
+    "_review_tree_fingerprint",
+    "_escalate_review_story",
+    "_reset_story_for_reimplementation"
+  ],
+  "story-watchdog": [
+    "run_story_with_watchdog",
+    "run_story_recovery_analyst",
+    "hot_swap_story_model_if_unstable",
+    "resolve_role_timeout_multiplier",
+    "_resolve_ladder_tier",
+    "_story_archetype_ladder",
+    "maybe_upgrade_model_for_tc_density",
+    "_mc_enforce_ladder",
+    "_mc_enforce_providers",
+    "_mc_no_assignment_verdict",
+    "_log_guarded_step_retry"
+  ],
+  "prd-integrity": [
+    "assert_no_story_ids_lost",
+    "assert_no_illegitimate_deprecation",
+    "assert_no_story_ids_gained",
+    "capture_story_ids_snapshot",
+    "check_ac_invariant",
+    "topo_sort_stories"
+  ],
+  "codeline-lanes": [
+    "_run_codeline_loop",
+    "_run_codeline_bridge",
+    "provision_env_local_from_sample",
+    "_kill_lane_tree",
+    "_run_work_dir",
+    "is_lane",
+    "orch_role",
+    "detect_node",
+    "resolve_codeline_node",
+    "_codeline_node_requirement",
+    "ensure_node_modules_healthy",
+    "derive_sandbox_base_image"
+  ],
+  "mint-and-spec": [
+    "_run_agent_mint",
+    "_run_jira_pipeline",
+    "_pause_after_agent_mint",
+    "run_specification_pass",
+    "append_pipeline_cost_record",
+    "_spec_pass_usage",
+    "run_hybrid_precoordination",
+    "_build_skill_domain_guidance",
+    "run_skills_audit_scan",
+    "run_tools_audit_scan",
+    "resolve_prompt_provider",
+    "resolve_orch_mode"
+  ],
+  "control-plane": [
+    "_resolve_control_plane_port",
+    "start_control_plane",
+    "cleanup",
+    "stop_dashboards_watch",
+    "stop_control_plane",
+    "_epam_kill_tree",
+    "is_parent",
+    "start_dashboards_watch",
+    "_epam_kill_heartbeat",
+    "_checklist_heartbeat",
+    "print_step_checklist",
+    "step_emit",
+    "seed_runtime_logs",
+    "_epam_export_cassette",
+    "_publish_agent_outputs"
+  ],
+  "checkpoints": [
+    "checkpoint_complete",
+    "checkpoint_already_done",
+    "checkpoint_clear",
+    "resume_spec_output_present",
+    "_clear_suite_state_for_phase",
+    "run_interstitial_e2e_phase"
+  ],
+  "orch-common": [
+    "log",
+    "success",
+    "warning",
+    "error",
+    "info"
+  ]
 }

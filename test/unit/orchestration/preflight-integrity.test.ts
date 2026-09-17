@@ -340,6 +340,32 @@ describe('preflight-prd-integrity.sh — real subprocess execution', () => {
     expect(r.stdout).toMatch(/Active stories not in clean pending state/);
   });
 
+  it('a test-authoring story on a provider the registry rules out: REFUSED on a fresh launch, reported on a resume (the orchestrator corrects it)', () => {
+    const prd = baseFixture();
+    const s = prd.stories[0];
+    s.technicalNotes = { ...(s.technicalNotes || {}), files: [...((s.technicalNotes || {}).files || []), 'tests/test_thing.py'] };
+    s.aiProvider = 'minimax'; s.testCriteria = s.testCriteria || {};
+    const fresh = runPreflight(prd);
+    expect(fresh.stdout).toMatch(/provider the registry rules out/);
+    expect(fresh.code).not.toBe(0);
+    const resume = runPreflight(prd, { EPAM_RESUME_RUN: 'x' });
+    expect(resume.stdout).toMatch(/corrected by the resume's ladder enforcement/);
+    expect(resume.stdout).not.toMatch(/✗.*provider the registry rules out/);
+  });
+
+  it('a test story with no testCriteria stub: REFUSED on a fresh launch, reported on a resume (pre-phase remediation adds it)', () => {
+    const prd = baseFixture();
+    const s = prd.stories[0];
+    s.technicalNotes = { ...(s.technicalNotes || {}), files: [...((s.technicalNotes || {}).files || []), 'tests/test_thing.py'] };
+    delete s.testCriteria;
+    const fresh = runPreflight(prd);
+    expect(fresh.stdout).toMatch(/missing testCriteria field/);
+    expect(fresh.code).not.toBe(0);
+    const resume = runPreflight(prd, { EPAM_RESUME_RUN: 'x' });
+    expect(resume.stdout).toMatch(/added by pre-phase remediation/);
+    expect(resume.stdout).not.toMatch(/missing testCriteria field/);
+  });
+
   it('passes (exit 0) on a clean fixture', () => {
     const result = runPreflight(baseFixture());
     expect(result.code).toBe(0);

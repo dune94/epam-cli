@@ -184,7 +184,15 @@ for sid in check_ids:
     files = s.get('technicalNotes', {}).get('files', [])
     if any(_is_test_file(f) for f in files) and s.get('aiProvider') in _unsuitable:
         test_authoring_misassigned.append(f"{sid} ({s.get('aiProvider')})")
-if test_authoring_misassigned:
+# ON A RESUME THE PROVIDER IS THE ORCHESTRATOR'S TO CORRECT, NOT THIS GATE'S TO REFUSE. The
+# run's working PRD may carry an aiProvider written under another set's ladder (regintel
+# 20260916T200108Z: nine stories with aiProvider=minimax on the claude set); the orchestrator's
+# pre-writer ladder enforcement (_mc_enforce_ladder → _mc_enforce_providers, lib/story-watchdog.sh)
+# rewrites it to the active set's own provider before any story runs. Reported here, not refused —
+# a fresh launch is still refused, exactly as before.
+if test_authoring_misassigned and os.environ.get('EPAM_RESUME_RUN'):
+    print(f"  ✓ test-authoring stories on a provider the active set may not route — corrected by the resume's ladder enforcement before the writer: {test_authoring_misassigned[:5]}")
+elif test_authoring_misassigned:
     err(f"test-authoring stories on a provider the registry rules out: {test_authoring_misassigned}")
 else:
     print("  ✓ No test-authoring story sits on a provider the registry rules out")
@@ -306,7 +314,13 @@ for sid in check_ids:
     is_test_story = any(_is_test_file(f) for f in files)
     if is_test_story and 'testCriteria' not in s:
         test_stories_missing_tc_field.append(sid)
-if test_stories_missing_tc_field:
+# ON A RESUME THE STUB IS ADDED PER PHASE. pre-phase remediation writes the testCriteria stub for
+# the phase about to run; a resumed run's later phases have not been remediated yet, so their test
+# stories legitimately lack the field at this point (regintel 20260916T200108Z, ten stories of the
+# unstarted core phase). Reported, not refused; a fresh launch is still refused.
+if test_stories_missing_tc_field and os.environ.get('EPAM_RESUME_RUN'):
+    print(f"  ✓ test stories without a testCriteria stub yet — added by pre-phase remediation when their phase runs: {test_stories_missing_tc_field[:5]}{'...' if len(test_stories_missing_tc_field)>5 else ''}")
+elif test_stories_missing_tc_field:
     err(f"Test stories missing testCriteria field (add stub before run): {test_stories_missing_tc_field}")
 else:
     print("  ✓ All active test stories have testCriteria field")

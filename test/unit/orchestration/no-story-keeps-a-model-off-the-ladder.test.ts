@@ -57,6 +57,10 @@ function enforce(stories: any[], opts: { models?: string[] | null } = {}) {
   const start = src.indexOf('_mc_enforce_ladder() {');
   const end = src.indexOf('\n}\n', start) + 3;
   expect(start, 'the function was not found — the test is measuring nothing').toBeGreaterThan(0);
+  // _mc_enforce_ladder ends by correcting the provider the same way; lift that too.
+  const pStart = src.indexOf('_mc_enforce_providers() {');
+  const pEnd = src.indexOf('\n}\n', pStart) + 3;
+  expect(pStart, '_mc_enforce_providers was not found').toBeGreaterThan(0);
   const script = join(dir, 'drive.sh');
   writeFileSync(script, [
     '#!/usr/bin/env bash', 'set -uo pipefail',
@@ -64,6 +68,7 @@ function enforce(stories: any[], opts: { models?: string[] | null } = {}) {
     `NODE_BIN=${JSON.stringify(fakeNode(dir, opts.models === undefined ? LADDER : opts.models))}`,
     `SCRIPT_DIR=${JSON.stringify(join(__dirname, '../../../orchestrations/scripts'))}`,
     src.slice(start, end),
+    src.slice(pStart, pEnd),
     `_mc_enforce_ladder ${JSON.stringify(prd)} "test"`,
   ].join('\n'));
   let out = '';
@@ -73,6 +78,36 @@ function enforce(stories: any[], opts: { models?: string[] | null } = {}) {
 }
 
 const modelOf = (p: any, id: string) => p.stories.find((s: any) => s.id === id)?.model;
+const providerOf = (p: any, id: string) => p.stories.find((s: any) => s.id === id)?.aiProvider;
+
+describe('the PROVIDER is corrected with the model, not left behind', () => {
+  // regintel 20260916T200108Z, 2026-09-17 (claude set): nine stories carried aiProvider=minimax
+  // with model=claude-haiku — the model had been put on the ladder, the provider had not — and
+  // pre-flight refused the resume on "test-authoring stories on a provider the registry rules out".
+  it("run 200108Z's shape: an off-set provider becomes the set's first, on every offending story", () => {
+    const { prd, out } = enforce([
+      { id: 'REGI-002', model: 'claude-opus-4-6', aiProvider: 'minimax' },
+      { id: 'REGI-003', model: 'MiniMax-M3', aiProvider: 'minimax' },
+      { id: 'REGI-001a', model: 'claude-opus-4-6', aiProvider: 'anthropic' },
+    ]);
+    expect(providerOf(prd, 'REGI-002')).toBe('anthropic');
+    expect(providerOf(prd, 'REGI-003')).toBe('anthropic');
+    expect(modelOf(prd, 'REGI-003')).toBe('claude-opus-4-6');
+    expect(providerOf(prd, 'REGI-001a')).toBe('anthropic');
+    expect(out).toMatch(/provider this set cannot route .*for: REGI-002, REGI-003/);
+    expect(out).not.toMatch(/cannot route .*REGI-001a/);
+  });
+
+  it('a story with NO provider is left for the coordinator; an on-set provider is untouched', () => {
+    const { prd, out } = enforce([
+      { id: 'A', model: 'claude-opus-4-6' },
+      { id: 'B', model: 'claude-opus-4-6', aiProvider: 'anthropic' },
+    ]);
+    expect(providerOf(prd, 'A')).toBeUndefined();
+    expect(providerOf(prd, 'B')).toBe('anthropic');
+    expect(out).not.toMatch(/cannot route/);
+  });
+});
 
 describe('the ladder enforcement, as an artefact change', () => {
   it('rewrites an off-ladder model to the ladder\'s opening model', () => {

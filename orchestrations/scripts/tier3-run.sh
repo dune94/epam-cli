@@ -98,6 +98,21 @@ for _env in "$REPO_ROOT/.env" "$PROJECT_DIR/.env"; do
 done
 # The project env is TWO files and the registry names them — see lib/env-file.sh.
 load_project_env "$PROJECT_DIR" preserve || exit 1
+# THE PROJECT'S DECLARED SECRETS FILE (tokens, not connection config). orchestrate.sh loaded it as
+# its second pass; this launcher never did, so a Jira project's ingest died on "Missing required env
+# vars: JIRA_EMAIL JIRA_TOKEN" (found by the £0 replay of a Sept 9 brownfield cassette, 2026-09-17).
+# Declared repo-relative so the config file needs no interpolation — a config file is DATA; resolved
+# here, where REPO_ROOT is known. Loaded with `preserve`: a caller's export still wins, and the
+# project's own config is re-applied after it so the file cannot override a declared value.
+if [ -n "${SECRETS_FILE:-}" ]; then
+  case "$SECRETS_FILE" in /*) _secrets_abs="$SECRETS_FILE" ;; *) _secrets_abs="$REPO_ROOT/$SECRETS_FILE" ;; esac
+  if [ -f "$_secrets_abs" ]; then
+    load_env_file_safe "$_secrets_abs" preserve
+    load_project_env "$PROJECT_DIR" preserve || exit 1
+  else
+    info "SECRETS_FILE declared at $SECRETS_FILE but not found — nothing loaded from it"
+  fi
+fi
 
 export EPAM_PROJECT_CONFIG_DIR="$PROJECT_DIR"
 export PROJECT_NAME
@@ -132,6 +147,16 @@ if [ "$DESCRIBE" = "1" ]; then
   echo "provisioning mode:  ${EPAM_PROMPT_PROVISION_MODE:-<none declared>}"
   echo "brownfield:         ${EPAM_BROWNFIELD:-0}"
   echo "jira pipeline:      ${JIRA_PIPELINE:-0}"
+  # WHETHER THE DECLARED SECRETS ARRIVED — the values never. A launch that prints a token is a
+  # launch that pastes it into every log; a launch that says nothing is how a missing secrets pass
+  # went unnoticed. Names only, per REQUIRED_KEYS, each marked present or absent.
+  if [ -n "${SECRETS_FILE:-}" ]; then
+    _sk_report=""
+    for _sk in ${REQUIRED_KEYS//,/ }; do
+      if [ -n "${!_sk:-}" ]; then _sk_report="${_sk_report} ${_sk}=present"; else _sk_report="${_sk_report} ${_sk}=ABSENT"; fi
+    done
+    echo "secrets file:       ${SECRETS_FILE}${_sk_report:+ —${_sk_report}}"
+  fi
   echo "phase:              ${PHASE_ARG:-<all declared phases>}"
   if [ "$GREENFIELD" = "1" ]; then
     echo "phases:             ${EPAM_PHASES:-<none declared>}"

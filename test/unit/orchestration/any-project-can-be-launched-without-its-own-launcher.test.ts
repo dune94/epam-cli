@@ -81,6 +81,31 @@ describe('any project can be launched without its own launcher', () => {
       .toContain('generate');
   });
 
+  // THE PROJECT'S DECLARED SECRETS FILE IS LOADED. orchestrate.sh loaded SECRETS_FILE as its second
+  // pass; this launcher never did, and a Jira project's ingest died on "Missing required env vars:
+  // JIRA_EMAIL JIRA_TOKEN" (£0 replay of a Sept 9 brownfield cassette, 2026-09-17).
+  it('loads the secrets file the project declares, repo-relative, and the project file still wins over it', () => {
+    const projects = join(work, 'projects');
+    const dir = join(projects, 'demo-project');
+    mkdirSync(join(dir, 'secrets'), { recursive: true });
+    writeFileSync(join(dir, 'secrets', 'demo.env'), 'JIRA_EMAIL=someone@example.test\nJIRA_TOKEN=tok-from-secrets\nJIRA_CODELINE_ROOT=/from/secrets\n');
+    writeFileSync(join(dir, 'config.env'), [
+      'JIRA_CODELINE_ROOT=/somewhere/demo', 'EPAM_PROMPT_PROVISION_MODE=generate', 'REQUIRED_KEYS=JIRA_TOKEN,JIRA_EMAIL',
+      `SECRETS_FILE=${join(dir, 'secrets', 'demo.env')}`,
+    ].join('\n'));
+    const r = describeRun(['--project', 'demo-project'], { EPAM_PROJECTS_DIR: projects, JIRA_EMAIL: '', JIRA_TOKEN: '' });
+    expect(r.status, `launcher exited ${r.status}: ${r.stderr}`).toBe(0);
+    expect(r.stdout, 'the secrets file was not loaded').toMatch(/secrets file: .*JIRA_TOKEN=present.*JIRA_EMAIL=present/);
+    expect(r.stdout, 'a launch must never print a secret value').not.toContain('tok-from-secrets');
+    expect(r.stdout, 'the project file must win over the secrets file').toContain('/somewhere/demo');
+    expect(r.stdout).not.toContain('/from/secrets');
+    // Declared but missing: said, not silent, and the keys read ABSENT.
+    writeFileSync(join(dir, 'config.env'), ['JIRA_CODELINE_ROOT=/somewhere/demo', 'EPAM_PROMPT_PROVISION_MODE=generate', 'REQUIRED_KEYS=JIRA_TOKEN', `SECRETS_FILE=${join(dir, 'secrets', 'missing.env')}`].join('\n'));
+    const m = describeRun(['--project', 'demo-project'], { EPAM_PROJECTS_DIR: projects, JIRA_TOKEN: '' });
+    expect(m.stdout).toMatch(/SECRETS_FILE declared .* not found/);
+    expect(m.stdout).toMatch(/JIRA_TOKEN=ABSENT/);
+  });
+
   it('lets a caller-exported value win over the project file', () => {
     // `preserve` semantics: an operator overriding for one run must not be silently reverted by
     // the project's declaration — that is how a deliberate override becomes an invisible no-op.

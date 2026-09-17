@@ -164,7 +164,22 @@ if [ "$GREENFIELD" = "1" ]; then
     greenfield_restore_prd "$PRD_CANONICAL" "$PRD_FILE" "$REPO_ROOT"
   fi
 fi
-[ -f "$PRD_FILE" ] || fail "no PRD at $PRD_FILE"
+# A PRD THAT DOES NOT EXIST YET IS NOT A FAILURE WHEN THE RUN CREATES IT. A Jira project's PRD is
+# synthesised by the run's own ingest (JIRA_JQL) at the path the project declares; demanding it
+# here refused every fresh brownfield launch through this launcher (found by the £0 replay of the
+# Sept 9 metrolinx cassette, 2026-09-17). Same rule as preflight-check.sh's _prd_pending_ingest.
+_prd_pending_ingest=0
+if [ -n "${JIRA_URL:-}" ] && [ -n "${JIRA_JQL:-}" ]; then
+  _synth_target="${JIRA_SYNTH_PRD_PATH:-$PRD_FILE}"
+  [ "$(cd "$(dirname "$_synth_target")" 2>/dev/null && pwd)/$(basename "$_synth_target")" = "$(cd "$(dirname "$PRD_FILE")" 2>/dev/null && pwd)/$(basename "$PRD_FILE")" ] && _prd_pending_ingest=1
+fi
+if [ ! -f "$PRD_FILE" ]; then
+  if [ "$_prd_pending_ingest" = "1" ]; then
+    info "no PRD at $PRD_FILE yet — this run's Jira ingest (${JIRA_JQL}) creates it"
+  else
+    fail "no PRD at $PRD_FILE"
+  fi
+fi
 
 # THE MINT REFUSES WITHOUT THIS, MID-RUN. mint-agents-step.js (2da831a9) throws when
 # EPAM_PROMPT_PROVISION_MODE is unset — "there is no engine default: picking one silently is how

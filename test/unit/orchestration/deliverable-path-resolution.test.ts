@@ -35,6 +35,7 @@ import { tmpdir } from 'node:os';
 import { engineSource } from '../../lib/engine-source';
 
 const CLAUDE_SH = join(__dirname, '../../../orchestrations/scripts/claude.sh');
+const REPO_ROOT = join(__dirname, '../../..');
 const SRC = engineSource(CLAUDE_SH);
 
 const dirs: string[] = [];
@@ -228,3 +229,56 @@ describe('a declaration with the WRONG CASE still resolves', () => {
     expect(r.rc, 'matched a file outside the declared directory').not.toBe(0);
   });
 });
+
+// A FILE THE ECOSYSTEM DECLARES COMPLETE WHEN EMPTY.
+//
+// regintel 20260916T200108Z, 2026-09-17 (2.0.52): the writer produced the whole scaffold and the
+// check still reported regintel/__init__.py missing on every attempt — a package marker is empty
+// by design and the resolver demanded -s. Which basenames are complete empty is the ecosystem's
+// declaration (emptyDeliverables, carried into the codeline's manifest); the resolver reads it
+// through the same manifest accessor the provisioning uses, and never names a file itself.
+describe('a file the ecosystem declares complete when empty', () => {
+  function resolveWithManifest(files: { path: string; content: string }[], manifest: object | null, declared: string) {
+    const repo = mkdtempSync(join(tmpdir(), 'deliverable-empty-'));
+    dirs.push(repo);
+    for (const f of files) { const p = join(repo, f.path); mkdirSync(dirname(p), { recursive: true }); writeFileSync(p, f.content); }
+    if (manifest) { mkdirSync(join(repo, '.epam'), { recursive: true }); writeFileSync(join(repo, '.epam/dependency-check.json'), JSON.stringify(manifest)); }
+    const accessorStart = SRC.indexOf('_project_dep_config_value() {');
+    expect(accessorStart, '_project_dep_config_value is not in the program').toBeGreaterThan(-1);
+    const accessor = SRC.slice(accessorStart, SRC.indexOf('\n}', accessorStart) + 2);
+    const script = join(repo, '_probe.sh');
+    writeFileSync(script, `#!/usr/bin/env bash\nset -uo pipefail\nPROJECT_ROOT=${JSON.stringify(repo)}\nEPAM_PROJECT_CONFIG_DIR=\nwarning() { :; }\nlog() { :; }\n${accessor}\n${resolverSrc()}\n_resolve_deliverable_path "$PROJECT_ROOT/"${JSON.stringify(declared)}\necho "RC=$?"\n`);
+    const r = spawnSync('bash', [script], { encoding: 'utf8', timeout: 30000, cwd: repo });
+    return Number(((r.stdout || '').match(/RC=(\d+)/) || [, '1'])[1]);
+  }
+  const python = { manifestFile: 'requirements.txt', emptyDeliverables: ['__init__.py'] };
+
+  it("run 200108Z's shape: an EMPTY __init__.py resolves when the manifest declares it complete empty", () => {
+    expect(resolveWithManifest([{ path: 'regintel/__init__.py', content: '' }], python, 'regintel/__init__.py')).toBe(0);
+  });
+  it('an empty file the manifest does NOT name is still missing — the declaration is by basename', () => {
+    expect(resolveWithManifest([{ path: 'regintel/store.py', content: '' }], python, 'regintel/store.py')).toBe(1);
+  });
+  it('with no such declaration in the manifest an empty __init__.py is still missing (no engine default)', () => {
+    expect(resolveWithManifest([{ path: 'regintel/__init__.py', content: '' }], { manifestFile: 'package.json' }, 'regintel/__init__.py')).toBe(1);
+    expect(resolveWithManifest([{ path: 'regintel/__init__.py', content: '' }], null, 'regintel/__init__.py')).toBe(1);
+  });
+  it('a file that does not exist is missing whatever the manifest says', () => {
+    expect(resolveWithManifest([], python, 'regintel/__init__.py')).toBe(1);
+  });
+});
+
+describe('the Python ecosystems declare the package marker, and the manifest carries it', () => {
+  it('requirements.txt and pyproject.toml providers declare emptyDeliverables; the built manifest includes it; the Node provider does not', () => {
+    const eco = (n: string) => require(join(REPO_ROOT, 'orchestrations/ecosystems', n));
+    expect(eco('requirements-txt.js').emptyDeliverables).toContain('__init__.py');
+    expect(eco('pyproject-toml.js').emptyDeliverables).toContain('__init__.py');
+    expect(eco('package-json.js').emptyDeliverables).toBeUndefined();
+    const { build } = require(join(REPO_ROOT, 'orchestrations/scripts/lib/handlers/codeline-manifests.js'));
+    const repo = mkdtempSync(join(tmpdir(), 'manifest-empty-')); dirs.push(repo);
+    writeFileSync(join(repo, 'requirements.txt'), 'fastapi\n');
+    const out = build(repo);
+    expect(out['dependency-check.json'].emptyDeliverables).toEqual(['__init__.py']);
+  });
+});
+

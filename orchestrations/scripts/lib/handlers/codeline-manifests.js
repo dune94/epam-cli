@@ -87,6 +87,8 @@ function build(root) {
     try { provisionCommand = String(eco.installCommand(manager) || ''); } catch { provisionCommand = ''; }
   }
   const runEnvironment = (eco.runEnvironment && typeof eco.runEnvironment === 'object') ? eco.runEnvironment : null;
+  // Files the ecosystem says are complete when empty (a package marker), by basename.
+  const emptyDeliverables = Array.isArray(eco.emptyDeliverables) ? eco.emptyDeliverables.filter((x) => typeof x === 'string' && x) : [];
 
   const dependencyCheck = {
     manifestFile: present,
@@ -95,6 +97,7 @@ function build(root) {
     ...(addCommand ? { installCommand: addCommand } : {}),
     ...(provisionCommand ? { provisionCommand } : {}),
     ...(runEnvironment ? { runEnvironment } : {}),
+    ...(emptyDeliverables.length ? { emptyDeliverables } : {}),
   };
 
   const out = { 'dependency-check.json': dependencyCheck };

@@ -34,6 +34,11 @@ module.exports = {
     // PATH entries are codeline-relative directories put in front of PATH; other keys are set
     // verbatim. So `pytest` resolves to the environment's own, not the host's.
     runEnvironment: { PATH: ['.venv/bin'], VIRTUAL_ENV: '.venv' },
+    // FILES THAT ARE COMPLETE WHEN EMPTY. A package marker carries no content by design; the
+    // deliverable check demands a non-empty file for everything else, and an empty __init__.py
+    // read as "missing" through every attempt of a story that had written it (regintel
+    // 20260916T200108Z, 2026-09-17). Matched by basename.
+    emptyDeliverables: ['__init__.py'],
     // HOW THIS ECOSYSTEM ADDS ONE NEW DEPENDENCY: installed with pip and declared by a line in the
     // manifest — the project's dependency declaration (dependency-check.json installCommand) is
     // this, so the two cannot disagree.

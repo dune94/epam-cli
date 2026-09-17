@@ -28,6 +28,11 @@ module.exports = {
     // manager (poetry/uv/pdm) owns its own environment and installs with its own verb.
     installCommand: (manager) => (manager ? `${manager} install` : 'python3 -m venv .venv && .venv/bin/pip install -e .'),
     runEnvironment: { PATH: ['.venv/bin'], VIRTUAL_ENV: '.venv' },
+    // FILES THAT ARE COMPLETE WHEN EMPTY. A package marker carries no content by design; the
+    // deliverable check demands a non-empty file for everything else, and an empty __init__.py
+    // read as "missing" through every attempt of a story that had written it (regintel
+    // 20260916T200108Z, 2026-09-17). Matched by basename.
+    emptyDeliverables: ['__init__.py'],
     // WHAT THIS ECOSYSTEM LEAVES BEHIND. Never staged into a client repository and never reported
     // as uncommitted agent work. Was three hand-written lists in two shell files, naming
     // node_modules, build and .next between them — one ecosystem — so a Rust codeline staged

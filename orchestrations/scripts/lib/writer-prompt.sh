@@ -933,6 +933,15 @@ _resolve_deliverable_path() {
     # naming a directory would short-circuit here and never reach the index.*
     # lookup below.
     if [ -f "$_abs" ] && [ -s "$_abs" ]; then printf '%s\n' "$_abs"; return 0; fi
+    # A FILE THE ECOSYSTEM DECLARES COMPLETE WHEN EMPTY. A Python package marker is empty by
+    # design; -s failed it on every attempt of a story that had written it (regintel
+    # 20260916T200108Z, 2026-09-17). Which basenames those are is the ecosystem's declaration
+    # (emptyDeliverables in the codeline's manifest), never a name written here.
+    if [ -f "$_abs" ] && command -v _project_dep_config_value >/dev/null 2>&1; then
+        local _empty_ok
+        _empty_ok=$(_project_dep_config_value "${PROJECT_ROOT:-}" emptyDeliverables 2>/dev/null | jq -r --arg b "$(basename "$_abs")" 'if type == "array" then (index($b) != null) else false end' 2>/dev/null || echo false)
+        if [ "$_empty_ok" = "true" ]; then printf '%s\n' "$_abs"; return 0; fi
+    fi
     # A DECLARED DIRECTORY IS A DIRECTORY. `dial/` and `docs/` existed with contents and were
     # reported missing because only a file could pass; a correct implementation was failed twice
     # and HealingBroken declared on a check that could not pass (regintel run 20260915T101555Z,

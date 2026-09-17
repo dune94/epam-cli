@@ -299,12 +299,12 @@ describe('preflight-prd-integrity.sh — real subprocess execution', () => {
     expect(r.stdout).toMatch(/Story file paths not under outputDir/);
   });
 
-  function runPreflight(prd: any): { code: number; stdout: string } {
+  function runPreflight(prd: any, env: Record<string, string> = {}): { code: number; stdout: string } {
     const dir = mkdtempSync(join(tmpdir(), 'preflight-fixture-'));
     const prdPath = join(dir, 'prd.json');
     writeFileSync(prdPath, JSON.stringify(prd));
     try {
-      const stdout = execFileSync('bash', [SCRIPT, '--prd', prdPath], { encoding: 'utf8' });
+      const stdout = execFileSync('bash', [SCRIPT, '--prd', prdPath], { encoding: 'utf8', env: { ...process.env, EPAM_RESUME_RUN: '', ...env } });
       return { code: 0, stdout };
     } catch (e: any) {
       return { code: e.status ?? 1, stdout: (e.stdout ?? '').toString() + (e.stderr ?? '').toString() };
@@ -312,6 +312,33 @@ describe('preflight-prd-integrity.sh — real subprocess execution', () => {
       rmSync(dir, { recursive: true, force: true });
     }
   }
+
+  // A RESUME RETRIES WHAT FAILED. regintel 20260916T200108Z, 2026-09-17: resume 2 was refused
+  // at pre-flight on the two stories resume 1 had failed, while the orchestrator's own verdict was
+  // "recovery was NOT exhausted ... ladder still below its top rung".
+  it('a failed, uncompleted story REFUSES a fresh launch (unchanged)', () => {
+    const prd = baseFixture();
+    prd.stories[0].status = 'failed'; prd.stories[0].completed = false;
+    const r = runPreflight(prd);
+    expect(r.code).not.toBe(0);
+    expect(r.stdout).toMatch(/Active stories not in clean pending state/);
+  });
+
+  it('a failed, uncompleted story is ACCEPTED on a resume — it is what the resume retries', () => {
+    const prd = baseFixture();
+    prd.stories[0].status = 'failed'; prd.stories[0].completed = false;
+    const r = runPreflight(prd, { EPAM_RESUME_RUN: '20260916T200108Z' });
+    expect(r.stdout).not.toMatch(/Active stories not in clean pending state/);
+    expect(r.stdout).toMatch(/re-queued for retry by the resume/);
+    expect(r.code).toBe(0);
+  });
+
+  it('a COMPLETED story is still refused on a resume — completed is not retried', () => {
+    const prd = baseFixture();
+    prd.stories[0].status = 'completed'; prd.stories[0].completed = true;
+    const r = runPreflight(prd, { EPAM_RESUME_RUN: '20260916T200108Z' });
+    expect(r.stdout).toMatch(/Active stories not in clean pending state/);
+  });
 
   it('passes (exit 0) on a clean fixture', () => {
     const result = runPreflight(baseFixture());

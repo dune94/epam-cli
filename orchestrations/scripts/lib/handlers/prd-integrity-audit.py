@@ -23,6 +23,7 @@ a provider or a model rule is named. Two copies had already drifted — this gat
              warnings print and do not fail the gate
 """
 import json
+import os
 import re
 import sys
 
@@ -189,17 +190,28 @@ else:
     print("  ✓ No test-authoring story sits on a provider the registry rules out")
 
 # ── 10. Clean slate — all active stories pending/not completed ───────────────
+# A RESUME RETRIES WHAT FAILED. Without --reset a resume keeps the run's PRD as the last
+# invocation left it, so a story that failed there is still 'failed' here — and this check refused
+# the whole resume on it while the orchestrator's own verdict was "recovery was NOT exhausted"
+# (regintel 20260916T200108Z, 2026-09-17). On EPAM_RESUME_RUN a failed, uncompleted story is the
+# thing being resumed: the orchestrator re-queues it before the run. Completed ones stay refused.
+_resuming = bool(os.environ.get('EPAM_RESUME_RUN'))
 not_pending = []
+retrying = []
 for sid in check_ids:
     s = by_id.get(sid, {})
     status    = s.get('status', 'pending')
     completed = s.get('completed', False)
+    if _resuming and status == 'failed' and not completed:
+        retrying.append(sid)
+        continue
     if status not in ('pending', 'deprecated') or completed:
         not_pending.append(f"{sid}(status={status},completed={completed})")
 if not_pending:
     err(f"Active stories not in clean pending state: {not_pending[:5]}{'...' if len(not_pending)>5 else ''}")
 else:
-    print(f"  ✓ All {len(check_ids)} active stories are pending/clean")
+    print(f"  ✓ All {len(check_ids)} active stories are pending/clean"
+          + (f" ({len(retrying)} failed story/ies re-queued for retry by the resume: {retrying[:5]})" if retrying else ""))
 
 # ── 11. All active stories have required fields ──────────────────────────────
 missing_fields = []

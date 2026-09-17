@@ -991,6 +991,26 @@ if [ "${RESET_STORIES:-false}" = "true" ]; then
     fi
 fi
 
+# A RESUME RE-QUEUES WHAT FAILED, AND ONLY THAT. A resume runs without --reset (a reset would
+# tear down completed phases), so a story the previous invocation marked failed stayed failed —
+# and the pre-flight integrity audit refused the whole resume on it ("Active stories not in clean
+# pending state"), while the orchestrator's own last words were "recovery was NOT exhausted ...
+# ladder still below its top rung" (regintel 20260916T200108Z, 2026-09-17). A failed, uncompleted
+# story is exactly what a resume exists to retry: its ladder rung is persisted in
+# story-retry-state and the next attempt climbs from there. Completed stories are untouched.
+if [ "${RESET_STORIES:-false}" != "true" ] && [ -n "${EPAM_RESUME_RUN:-}" ]; then
+    _requeue_tmp=$(mktemp); chmod 644 "$_requeue_tmp" 2>/dev/null
+    _requeued=$(jq -r '[.stories[]? | select(.status == "failed" and (.completed // false) == false) | .id] | join(", ")' "$PRD_FILE" 2>/dev/null || echo "")
+    if [ -n "$_requeued" ]; then
+        jq '(.stories[]? | select(.status == "failed" and (.completed // false) == false)) |= (.status = "pending") |
+            (.phases[]?.stories[]? | select(.status == "failed" and (.completed // false) == false)) |= (.status = "pending")' \
+            "$PRD_FILE" > "$_requeue_tmp" && mv "$_requeue_tmp" "$PRD_FILE"
+        success "Resume of run ${EPAM_RESUME_RUN}: re-queued failed story/ies for retry — ${_requeued}"
+    else
+        rm -f "$_requeue_tmp"
+    fi
+fi
+
 # Verify prerequisites
 if [ ! -f "$CLAUDE_SH" ]; then
     error "claude.sh not found at $CLAUDE_SH"

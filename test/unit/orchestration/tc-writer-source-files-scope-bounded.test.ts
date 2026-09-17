@@ -40,7 +40,7 @@ describe('tc-writer: sourceFiles scope is bounded to the declared implementation
     // "restrict" in the context of IMPL_SOURCE_FILES — not just say to read them.
     const sourceFilesSection = b.slice(b.indexOf('"sourceFiles"'), b.indexOf('"sourceFiles"') + 300);
     const hasExplicitScope =
-      /only.*IMPL_SOURCE_FILES|IMPL_SOURCE_FILES.*only|restrict.*IMPL_SOURCE_FILES|from IMPL_SOURCE_FILES/i.test(b);
+      /only.*implSourceFiles|implSourceFiles.*only|restrict.*implSourceFiles|from implSourceFiles/i.test(b);
     expect(
       hasExplicitScope,
       `the prompt never restricts sourceFiles to IMPL_SOURCE_FILES; "${sourceFilesSection.slice(0, 200)}" says to read them but not to restrict the output to them`

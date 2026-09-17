@@ -72,14 +72,18 @@ describe('a brownfield story — implementation files, no paired test story', ()
 
   it('the brief carries the implementation files to read', () => {
     const c = context(fixture([story]), 'TICKET-1');
-    expect(c).toMatch(/IMPL_SOURCE_FILES/);
-    expect(c).toMatch(/_app\.tsx/);
+    expect(() => JSON.parse(c), 'brief must be parseable JSON').not.toThrow();
+    const j = JSON.parse(c) as Array<Record<string, unknown>>;
+    expect(Array.isArray(j[0]?.implSourceFiles), 'implSourceFiles must be an array').toBe(true);
+    expect(j[0].implSourceFiles as string[]).toContain('src/pages/_app.tsx');
   });
 
   it('the brief carries the verification criteria — the source the prompt derives from', () => {
     const c = context(fixture([story]), 'TICKET-1');
-    expect(c).toMatch(/VERIFICATION_CRITERIA/);
-    expect(c).toMatch(/published content renders unchanged/);
+    expect(() => JSON.parse(c), 'brief must be parseable JSON').not.toThrow();
+    const j = JSON.parse(c) as Array<Record<string, unknown>>;
+    expect(Array.isArray(j[0]?.verificationCriteria), 'verificationCriteria must be an array').toBe(true);
+    expect(j[0].verificationCriteria as string[]).toContain('With no preview signal, published content renders unchanged');
   });
 });
 

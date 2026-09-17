@@ -10,8 +10,6 @@ def _pair_key(f):
         if _m in f:
             return f[:f.rindex(_m)]
     return f.rsplit('.', 1)[0] if '.' in f.split('/')[-1] else f
-def _test_base(f):
-    return _pair_key((f or '').split('/')[-1])
 def _manifest_files():
     try:
         with open(_os.environ.get('_TCW_MANIFEST', '')) as fh:
@@ -87,33 +85,28 @@ for sid in phase_ids:
     # whenever impl+test lived together, causing the TC writer to see zero
     # IMPL_SOURCE_FILES and wrongly conclude "source files don't exist".
     impl_src = list(impl_files)
+    # Peer impl files come from the story's declared dependencies — stack-agnostic,
+    # encoded in the PRD. The previous filename-matching approach (_pair_key) only
+    # handled JS/TS infix markers and produced an empty result for Python test_ prefix.
+    story_deps = set(s.get('dependencies') or [])
     for peer_id in phase_ids:
         if peer_id == sid:
             continue
+        if peer_id not in story_deps:
+            continue
         ps = by_id.get(peer_id, {})
         peer_files = _files_for(ps)
-        # A peer is an impl story sharing a non-test filename base
-        test_bases = {_test_base(f) for f in test_files}
-        peer_bases = {_pair_key(f.split('/')[-1]) for f in peer_files if not _is_test_file(f)}
-        if test_bases & peer_bases:
-            impl_src.extend(peer_files)
+        peer_impl_files = [f for f in (peer_files or []) if not _is_test_file(f)]
+        impl_src.extend(peer_impl_files)
 
     impl_src = list(dict.fromkeys(impl_src))  # dedupe, preserve order
 
-    lines.append(f'STORY_ID: {sid}')
-    lines.append(f'TEST_FILE: {", ".join(f.split("/")[-1] for f in test_files)}')
-    lines.append(f'IMPL_SOURCE_FILES: {", ".join(f for f in impl_src)}')
-    lines.append(f'EXISTING_ACS:')
-    for ac in s.get('acceptanceCriteria', []):
-        lines.append(f'  - {ac}')
-    # Verification Criteria (VC) — the observable, mechanism-free checks the change
-    # must satisfy. TEST CRITERIA should assert these directly; they are the
-    # primary source of test facts (the ACs are the ticket intent).
-    vc = s.get('verificationCriteria', [])
-    if vc:
-        lines.append(f'VERIFICATION_CRITERIA (derive the test facts primarily from these — each should become an assertion):')
-        for v in vc:
-            lines.append(f'  - {v}')
-    lines.append('')
+    lines.append({
+        'storyId': sid,
+        'testFile': test_files[0] if test_files else None,
+        'implSourceFiles': impl_src,
+        'acceptanceCriteria': s.get('acceptanceCriteria', []),
+        'verificationCriteria': s.get('verificationCriteria', []),
+    })
 
-print('\n'.join(lines))
+print(json.dumps(lines, indent=2) if lines else '')

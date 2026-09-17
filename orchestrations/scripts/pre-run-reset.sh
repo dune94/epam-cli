@@ -578,10 +578,16 @@ elif [ -n "${_RUN_ARTIFACT_DIR:-}" ] && [ -d "$_RUN_ARTIFACT_DIR" ]; then
     for _td in referenced-docs.json ticket-documents.json estate-survey.json codeline-discovery.json mint-inputs.json; do
         while IFS= read -r _f; do
             [ -n "$_f" ] || continue
-            rm -f "$_f" 2>/dev/null && _TD_CLEARED=$((_TD_CLEARED+1)) || true
-        done <<< "$(find "$_RUN_ARTIFACT_DIR" -type f -name "$_td" 2>/dev/null)"
+            # ARCHIVED, NOT DELETED. These are the previous run's evidence — its discovered codelines,
+            # the inputs its mint was given — and the seam harness replays a failed run from exactly
+            # these files. `rm -f` here destroyed run 20260916T234139Z's mint-inputs.json the moment a
+            # test executed this reset, and the failing seam could no longer be reproduced.
+            # Moved into this reset's archive beside the logs; cleared from the live dir either way.
+            mkdir -p "$ARCHIVE_DIR" 2>/dev/null || true
+            mv -f "$_f" "$ARCHIVE_DIR/$(basename "$_f")" 2>/dev/null && _TD_CLEARED=$((_TD_CLEARED+1)) || { rm -f "$_f" 2>/dev/null && _TD_CLEARED=$((_TD_CLEARED+1)) || true; }
+        done <<< "$(find "$_RUN_ARTIFACT_DIR" -path "$_RUN_ARTIFACT_DIR/archive" -prune -o -type f -name "$_td" -print 2>/dev/null)"
     done
-    _TD_LEFT=$(find "$_RUN_ARTIFACT_DIR" -type f \( -name 'referenced-docs.json' -o -name 'ticket-documents.json' -o -name 'estate-survey.json' -o -name 'codeline-discovery.json' -o -name 'mint-inputs.json' \) 2>/dev/null | wc -l)
+    _TD_LEFT=$(find "$_RUN_ARTIFACT_DIR" -path "$_RUN_ARTIFACT_DIR/archive" -prune -o -type f \( -name 'referenced-docs.json' -o -name 'ticket-documents.json' -o -name 'estate-survey.json' -o -name 'codeline-discovery.json' -o -name 'mint-inputs.json' \) -print 2>/dev/null | wc -l)
     if [ "$_TD_LEFT" -gt 0 ]; then
         fail_contamination "$_TD_LEFT fetched-document cache(s) could NOT be cleared in $_RUN_ARTIFACT_DIR — a run started now would put another project's documents in its prompts"
     elif [ "$_TD_CLEARED" -gt 0 ]; then

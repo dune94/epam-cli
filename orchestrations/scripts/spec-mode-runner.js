@@ -4933,7 +4933,7 @@ function rosterReviewVerdict(payload, findings, blocking) {
 }
 
 async function reviewProjectRoster({
-  promptExec, rosterPath, canonicalPath, codelines, logDir, repoPath, toolGrant,
+  promptExec, rosterPath, canonicalPath, codelines, tickets, logDir, repoPath, toolGrant,
 }) {
   // THE REVIEWER IS HANDED THE TEXT IT MUST COMPARE, IN BATCHES.
   //
@@ -5069,8 +5069,11 @@ async function reviewProjectRoster({
   const _renderBatch = (batch) => renderEngineTemplate('project-roster-review', {
     __ROSTER_PATH__: String(rosterPath || ''),
     __CANONICAL_PATH__: String(canonicalPath || ''),
-    __CODELINE_CONTEXT__: (Array.isArray(codelines) ? codelines : [])
-      .map((c) => `- ${(c && c.name) || c}${c && c.path ? ` (${c.path})` : ''}`).join('\n'),
+    // THE SAME LINE THE SPECIALISER WAS GIVEN — codelines plus the paths the tickets declare —
+    // so a claim is judged against the declaration the brief was written from, not against
+    // whatever PRD copy the reviewer can find on the machine (run 20260916T234139Z's reviewer
+    // read a July copy under ~/projects). See lib/roster-seams.js codelineContext.
+    __CODELINE_CONTEXT__: require('./lib/roster-seams.js').codelineContext(codelines, tickets),
     __PAIR_BLOCK__: batch.map((pr) => [
       `--- AGENT: ${pr.name}`,
       'CANONICAL:',

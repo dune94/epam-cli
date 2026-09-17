@@ -136,7 +136,10 @@ describe('buildProjectRoster, end to end, with a specialiser that writes only a 
   it('the mint writes the answer where the roster lives, and only when the agent did not write it', () => {
     // The mint's produce step, executed: a reply carrying the delta lands at outPath; a file the
     // agent wrote itself (the Claude Code arm may) is left as written.
-    const src = readFileSync(join(ROOT, 'orchestrations/scripts/mint-agents-step.js'), 'utf8');
+    // The produce step lives in lib/roster-seams.js (moved verbatim from mint-agents-step.js so
+    // the seam harness runs the step's own code); the step calls it.
+    const src = readFileSync(join(ROOT, 'orchestrations/scripts/lib/roster-seams.js'), 'utf8');
+    expect(readFileSync(join(ROOT, 'orchestrations/scripts/mint-agents-step.js'), 'utf8')).toMatch(/rosterSeams\(\{/);
     const at = src.indexOf('if (!fs.existsSync(outPath)) {');
     expect(at, 'the mint no longer writes the delta from the reply').toBeGreaterThan(-1);
     const block = src.slice(at, src.indexOf('};', at));

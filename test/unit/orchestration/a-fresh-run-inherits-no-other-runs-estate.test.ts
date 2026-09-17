@@ -15,7 +15,7 @@
  * resume keeps them.
  */
 import { describe, it, expect, afterAll } from 'vitest';
-import { mkdtempSync, writeFileSync, mkdirSync, rmSync, existsSync } from 'node:fs';
+import { mkdtempSync, writeFileSync, mkdirSync, rmSync, existsSync, readdirSync } from 'node:fs';
 import { spawnSync } from 'node:child_process';
 import { join } from 'node:path';
 import { tmpdir } from 'node:os';
@@ -47,6 +47,13 @@ describe('a fresh run inherits no other run\'s estate', () => {
     expect(existsSync(join(t.logs, 'estate-survey.json')), 'the survey sweep regressed').toBe(false);
     expect(existsSync(join(t.logs, 'codeline-discovery.json')), 'a previous run\'s codeline discovery would name this run\'s estate').toBe(false);
     expect(existsSync(join(t.logs, 'mint-inputs.json')), 'a previous run\'s mint inputs survive').toBe(false);
+    // CLEARED FROM THE LIVE DIR, KEPT AS EVIDENCE: the seam harness replays a failed run from these
+    // files, and `rm -f` destroyed run 20260916T234139Z's the moment a test executed this reset.
+    const archives = readdirSync(join(t.logs, 'archive')).filter((d) => d.startsWith('pre-run-'));
+    expect(archives.length).toBeGreaterThan(0);
+    for (const f of ['codeline-discovery.json', 'mint-inputs.json', 'estate-survey.json']) {
+      expect(archives.some((a) => existsSync(join(t.logs, 'archive', a, f))), `${f} was deleted, not archived`).toBe(true);
+    }
   });
 
   it('a RESUME keeps its own run\'s discovery and mint inputs', () => {

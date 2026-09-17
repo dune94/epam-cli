@@ -906,6 +906,7 @@ function classifyReviewVerdict(verdict) {
 }
 module.exports = {
   classifyReviewVerdict,
+  withMintedAgents,
   buildProjectRoster,
   composeFromDelta,
   extractDeltaJson,

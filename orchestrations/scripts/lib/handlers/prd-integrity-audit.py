@@ -215,6 +215,11 @@ for sid in check_ids:
     if _resuming and status in ('failed', 'blocked') and not completed:
         retrying.append(sid)
         continue
+    # A COMPLETED STORY IS WHAT A RESUME KEEPS. The launcher restores the run's own PRD so that
+    # completed work is not redone; refusing on it refused the first resume that had ever
+    # completed a story (regintel 20260916T200108Z, REGI-001b, 2026-09-17).
+    if _resuming and completed:
+        continue
     if status not in ('pending', 'deprecated') or completed:
         not_pending.append(f"{sid}(status={status},completed={completed})")
 if not_pending:

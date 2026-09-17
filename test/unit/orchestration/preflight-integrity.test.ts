@@ -342,11 +342,14 @@ describe('preflight-prd-integrity.sh — real subprocess execution', () => {
     expect(r.code).toBe(0);
   });
 
-  it('a COMPLETED story is still refused on a resume — completed is not retried', () => {
+  it('a COMPLETED story is ACCEPTED on a resume and NOT listed for retry — it is what the resume keeps', () => {
+    // The first resume that had completed a story (REGI-001b) was refused here on that story.
     const prd = baseFixture();
     prd.stories[0].status = 'completed'; prd.stories[0].completed = true;
+    expect(runPreflight(prd).code, 'a fresh launch still refuses a completed story').not.toBe(0);
     const r = runPreflight(prd, { EPAM_RESUME_RUN: '20260916T200108Z' });
-    expect(r.stdout).toMatch(/Active stories not in clean pending state/);
+    expect(r.stdout).not.toMatch(/Active stories not in clean pending state/);
+    expect(r.stdout).not.toMatch(/re-queued for retry/);
   });
 
   it('a test-authoring story on a provider the registry rules out: REFUSED on a fresh launch, reported on a resume (the orchestrator corrects it)', () => {

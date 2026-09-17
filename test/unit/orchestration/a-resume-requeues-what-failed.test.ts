@@ -12,7 +12,7 @@
  * against a PRD file — flips failed+uncompleted to pending and touches nothing else.
  */
 import { describe, it, expect, afterAll } from 'vitest';
-import { mkdtempSync, writeFileSync, readFileSync, rmSync } from 'node:fs';
+import { mkdtempSync, writeFileSync, readFileSync, rmSync, existsSync } from 'node:fs';
 import { spawnSync } from 'node:child_process';
 import { join } from 'node:path';
 import { tmpdir } from 'node:os';
@@ -27,17 +27,21 @@ function requeueBlock(): string {
   const src = engineSource(ORCH);
   const start = src.indexOf('# A RESUME RE-QUEUES WHAT FAILED, AND ONLY THAT.');
   expect(start, 'the resume re-queue block is not in the orchestrator').toBeGreaterThan(-1);
-  const end = src.indexOf('\nfi\n', start);
-  return src.slice(start, end + 4);
+  const end = src.indexOf('# (end of the resume re-queue)', start);
+  expect(end, 'the block\'s end marker is missing').toBeGreaterThan(start);
+  return src.slice(start, end);
 }
 
-function run(prd: object, env: Record<string, string>) {
+function run(prd: object, env: Record<string, string>, checkpoint: object[] = []) {
   const d = mkdtempSync(join(tmpdir(), 'requeue-')); dirs.push(d);
   const prdFile = join(d, 'prd.json');
   writeFileSync(prdFile, JSON.stringify(prd, null, 2));
+  const ckFile = join(d, 'checkpoint-scaffold-x.jsonl');
+  if (checkpoint.length) writeFileSync(ckFile, checkpoint.map((c) => JSON.stringify(c)).join('\n') + '\n');
   const script = `set -uo pipefail\nsuccess(){ echo "SUCCESS: $*"; }\nlog(){ :; }\n${requeueBlock()}`;
-  const r = spawnSync('bash', ['-c', script], { encoding: 'utf8', env: { ...process.env, PRD_FILE: prdFile, RESET_STORIES: 'false', EPAM_RESUME_RUN: '', ...env } });
-  return { r, prd: JSON.parse(readFileSync(prdFile, 'utf8')) };
+  const r = spawnSync('bash', ['-c', script], { encoding: 'utf8', env: { ...process.env, PRD_FILE: prdFile, CHECKPOINT_FILE: ckFile, RESET_STORIES: 'false', EPAM_RESUME_RUN: '', ...env } });
+  const ck = existsSync(ckFile) ? readFileSync(ckFile, 'utf8').split('\n').filter(Boolean).map((l) => JSON.parse(l)) : [];
+  return { r, prd: JSON.parse(readFileSync(prdFile, 'utf8')), ck };
 }
 
 const fixture = () => ({
@@ -61,6 +65,12 @@ describe('a resume re-queues what failed, and only that', () => {
     expect(by['REGI-002'].status).toBe('pending');
     expect(by['REGI-001']).toEqual({ id: 'REGI-001', status: 'deprecated', completed: true });
     expect(r.stdout).toMatch(/re-queued failed story\/ies for retry — REGI-001a, REGI-001b/);
+  });
+
+  it("the re-queued stories' checkpoint records go with them; a completed story keeps its record (resume on 2.0.48 skipped 001a/b as 'already completed in checkpoint')", () => {
+    const rec = (id: string) => ({ idempotencyKey: `x:scaffold:${id}`, storyId: id, phase: 'scaffold', runId: 'x', status: 'completed' });
+    const { ck } = run(fixture(), { EPAM_RESUME_RUN: 'x' }, [rec('REGI-001a'), rec('REGI-001b'), rec('REGI-000')]);
+    expect(ck.map((c) => c.storyId)).toEqual(['REGI-000']);
   });
 
   it('a FRESH launch (no EPAM_RESUME_RUN) changes nothing here — that is --reset\'s job', () => {

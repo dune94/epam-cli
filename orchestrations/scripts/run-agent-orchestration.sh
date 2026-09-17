@@ -1006,10 +1006,20 @@ if [ "${RESET_STORIES:-false}" != "true" ] && [ -n "${EPAM_RESUME_RUN:-}" ]; the
             (.phases[]?.stories[]? | select(.status == "failed" and (.completed // false) == false)) |= (.status = "pending")' \
             "$PRD_FILE" > "$_requeue_tmp" && mv "$_requeue_tmp" "$PRD_FILE"
         success "Resume of run ${EPAM_RESUME_RUN}: re-queued failed story/ies for retry — ${_requeued}"
+        # AND THEIR CHECKPOINT RECORDS GO WITH THEM. The checkpoint used to be written for a failed
+        # story too (fixed beside checkpoint_complete), and a run that failed before that fix
+        # carries those records; left in place they make the story loop skip the very stories
+        # just re-queued. Only the re-queued ids are dropped; completed stories keep theirs.
+        if [ -n "${CHECKPOINT_FILE:-}" ] && [ -f "$CHECKPOINT_FILE" ]; then
+            _ck_tmp=$(mktemp)
+            jq -c --arg ids ",${_requeued// /}," '. as $r | select(($ids | index("," + $r.storyId + ",")) == null)' "$CHECKPOINT_FILE" > "$_ck_tmp" 2>/dev/null \
+                && mv "$_ck_tmp" "$CHECKPOINT_FILE" || rm -f "$_ck_tmp"
+        fi
     else
         rm -f "$_requeue_tmp"
     fi
 fi
+# (end of the resume re-queue)
 
 # Verify prerequisites
 if [ ! -f "$CLAUDE_SH" ]; then
@@ -2403,10 +2413,18 @@ if [ -n "$main_stories" ]; then
                 "$SCRIPT_DIR/update-monitor.sh" story_fail "$story" "main" "exit $_story_exit" 2>/dev/null || true
             else
                 # Story reported success — verify TypeScript still compiles before moving on
-                story_tsc_gate "$story" || { _phase_story_failures=$((_phase_story_failures+1)); _phase_failed_stories="${_phase_failed_stories:-} $story"; }
+                if story_tsc_gate "$story"; then
+                    # A CHECKPOINT RECORDS WHAT WAS PAID FOR AND DONE — NEVER A FAILURE. This
+                    # was recorded for every story whatever its exit, so a resume skipped the
+                    # stories the previous invocation had FAILED ("already completed in
+                    # checkpoint") and reviewed nothing (regintel 20260916T200108Z, 2026-09-17:
+                    # REGI-001a/b skipped, Step 3.6 refused six times, phase aborted, $0 of work).
+                    checkpoint_complete "$story"
+                else
+                    _phase_story_failures=$((_phase_story_failures+1)); _phase_failed_stories="${_phase_failed_stories:-} $story"
+                fi
                 "$SCRIPT_DIR/update-monitor.sh" story_complete "$story" "main" "" "${STORY_MODEL:-}" "${STORY_PROVIDER:-}" 2>/dev/null || true
             fi
-            checkpoint_complete "$story"
             # Validate any splits the agent registered mid-execution before the next story runs
             validate_mid_execution_splits "$PHASE"
         }

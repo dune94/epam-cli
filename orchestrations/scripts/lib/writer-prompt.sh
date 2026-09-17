@@ -220,6 +220,24 @@ build_implementation_prompt() {
         [ -n "$_codeline_facts" ] && codeline_facts_block=$(printf '\n## Codeline-Specific Facts (real, curated gotchas for THIS codeline — read before assuming local tooling behaves like a fully-configured environment)\n%s\n' "$_codeline_facts")
     fi
 
+    # THE PRD'S CONFIGURATION, AS DATA. A story may cite a PRD-level key by name (regintel's
+    # REGI-001a: "copy ... from the read-only source repo (configuration.sourceRepoReadOnly)"),
+    # and nothing rendered that object into any prompt — the writer was asked to copy from a
+    # repository it was never told the path of. Rendered from the template layer; $-prefixed
+    # keys are the PRD author's comments and are dropped. Empty when the PRD declares none.
+    local prd_configuration_block=""
+    if [ -n "${PRD_FILE:-}" ] && [ -f "$PRD_FILE" ]; then
+        local _prd_cfg
+        _prd_cfg=$(jq -c '(.configuration // {}) | with_entries(select(.key | startswith("$") | not))' "$PRD_FILE" 2>/dev/null || echo '{}')
+        if [ -n "$_prd_cfg" ] && [ "$_prd_cfg" != "{}" ]; then
+            local _pc_vals
+            _pc_vals=$(mktemp "${TMPDIR:-/tmp}/prd-configuration-vals-XXXXXX.json")
+            jq -n --arg j "$(printf '%s' "$_prd_cfg" | jq '.')" '{"__PRD_CONFIGURATION_JSON__":$j}' > "$_pc_vals"
+            prd_configuration_block=$(render_engine_prompt prd-configuration-block "$_pc_vals")
+            rm -f "$_pc_vals"
+        fi
+    fi
+
     # REQUIRED bug-reproducing test (brownfield defect). The repro-gate (Step 3.55)
     # HARD-BLOCKS any brownfield change that ships no test which FAILS on the pre-fix
     # baseline and PASSES with the fix. For a single-agent defect story NOTHING else
@@ -837,7 +855,8 @@ fi)" \
           --arg story_id "$story_id" \
           --arg title "$title" \
           --arg files "$files" \
-          '{"__STORY_ACS__":$story_acs,"__SPEC_REALITY_WARNING__":$spec_reality_warning,"__WRITE_FIRST_LINES__":$write_first_lines,"__STRING_INVARIANTS_BLOCK__":$string_invariants_block,"__REVIEW_FEEDBACK__":$review_feedback,"__SKILL_NOTE_BLOCK__":$skill_note_block,"__VERIFICATION_CRITERIA__":$verification_criteria,"__CODELINE_FACTS_BLOCK__":$codeline_facts_block,"__PROJECT_TOOLS_BLOCK__":$project_tools_block,"__TEST_OWNERSHIP_BLOCK__":$test_ownership_block,"__CODEGRAPH_TOOL_BLOCK__":$codegraph_tool_block,"__UNCOVERED_VC_BLOCK__":$uncovered_vc_block,"__BROWNFIELD_TEST_POLICY__":$brownfield_test_policy,"__NEW_DEPENDENCY_DIRECTIVE__":$new_dependency_directive,"__TC_FACTS__":$tc_facts,"__TC_MOCK_STRATEGY__":$tc_mock_strategy,"__TC_BANNED__":$tc_banned,"__TECHNICAL_NOTES__":$technical_notes,"__EXISTING_FILE_CONTENTS__":$existing_file_contents,"__DEPENDENCY_CONTRACTS__":$dependency_contracts,"__MODULE_RESOLUTION__":$module_resolution,"__CROSS_CODELINE_CONTRACT__":$cross_codeline_contract,"__WRITE_FIRST_LINES_2__":$write_first_lines_2,"__CONDITIONAL_SECTION__":$conditional_section,"__CONDITIONAL_SECTION_2__":$conditional_section_2,"__TC_FACTS_2__":$tc_facts_2,"__WRITE_FIRST_DIRECTIVE__":$write_first_directive,"__DEPENDENCIES__":$dependencies,"__AGENT_INPUTS__":$agent_inputs,"__DESCRIPTION__":$description,"__STORY_ID__":$story_id,"__TITLE__":$title,"__FILES__":$files}' > "$_sw_vals"
+          --arg prd_configuration_block "$prd_configuration_block" \
+          '{"__STORY_ACS__":$story_acs,"__SPEC_REALITY_WARNING__":$spec_reality_warning,"__WRITE_FIRST_LINES__":$write_first_lines,"__STRING_INVARIANTS_BLOCK__":$string_invariants_block,"__REVIEW_FEEDBACK__":$review_feedback,"__SKILL_NOTE_BLOCK__":$skill_note_block,"__VERIFICATION_CRITERIA__":$verification_criteria,"__CODELINE_FACTS_BLOCK__":$codeline_facts_block,"__PRD_CONFIGURATION_BLOCK__":$prd_configuration_block,"__PROJECT_TOOLS_BLOCK__":$project_tools_block,"__TEST_OWNERSHIP_BLOCK__":$test_ownership_block,"__CODEGRAPH_TOOL_BLOCK__":$codegraph_tool_block,"__UNCOVERED_VC_BLOCK__":$uncovered_vc_block,"__BROWNFIELD_TEST_POLICY__":$brownfield_test_policy,"__NEW_DEPENDENCY_DIRECTIVE__":$new_dependency_directive,"__TC_FACTS__":$tc_facts,"__TC_MOCK_STRATEGY__":$tc_mock_strategy,"__TC_BANNED__":$tc_banned,"__TECHNICAL_NOTES__":$technical_notes,"__EXISTING_FILE_CONTENTS__":$existing_file_contents,"__DEPENDENCY_CONTRACTS__":$dependency_contracts,"__MODULE_RESOLUTION__":$module_resolution,"__CROSS_CODELINE_CONTRACT__":$cross_codeline_contract,"__WRITE_FIRST_LINES_2__":$write_first_lines_2,"__CONDITIONAL_SECTION__":$conditional_section,"__CONDITIONAL_SECTION_2__":$conditional_section_2,"__TC_FACTS_2__":$tc_facts_2,"__WRITE_FIRST_DIRECTIVE__":$write_first_directive,"__DEPENDENCIES__":$dependencies,"__AGENT_INPUTS__":$agent_inputs,"__DESCRIPTION__":$description,"__STORY_ID__":$story_id,"__TITLE__":$title,"__FILES__":$files}' > "$_sw_vals"
     render_engine_prompt story-writer-main "$_sw_vals"
     rm -f "$_sw_vals"
 }

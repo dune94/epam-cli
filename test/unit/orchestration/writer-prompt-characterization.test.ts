@@ -100,11 +100,11 @@ interface Story {
  * than nothing, so the test can prove the real code path reached them instead of silently
  * skipping whole sections.
  */
-function renderPrompt(story: Story, env: Record<string, string> = {}): string {
+function renderPrompt(story: Story, env: Record<string, string> = {}, prdExtra: Record<string, unknown> = {}): string {
   const dir = mkdtempSync(join(tmpdir(), 'writer-prompt-'));
   mkdirSync(join(dir, 'logs'), { recursive: true });
   const prd = join(dir, 'prd.json');
-  writeFileSync(prd, JSON.stringify({ stories: [story] }));
+  writeFileSync(prd, JSON.stringify({ ...prdExtra, stories: [story] }));
 
   const runner = join(dir, 'run.sh');
   writeFileSync(
@@ -169,7 +169,7 @@ function renderPrompt(story: Story, env: Record<string, string> = {}): string {
   // Vacuous-pass guard: if the render collapsed, every not.toContain below would pass
   // while proving nothing. That is exactly how the original defect escaped.
   expect(r.status, `the prompt builder exited ${r.status}: ${r.stderr}`).toBe(0);
-  expect(out.length, 'HARNESS FAILURE: the prompt rendered empty').toBeGreaterThan(500);
+  expect(out.length, `HARNESS FAILURE: the prompt rendered empty. stderr: ${r.stderr.slice(-800)}`).toBeGreaterThan(500);
   expect(out, 'HARNESS FAILURE: the real code path never reached the helper calls')
     .toContain('[[STUB_MODULE_RESOLUTION]]');
   return out;
@@ -345,3 +345,31 @@ describe('the writer prompt stays within its token budget', () => {
     ).toBeLessThan(400);
   });
 });
+
+describe("the PRD's configuration reaches the writer as data", () => {
+  // regintel run 20260916T200108Z, resume on 2.0.45: REGI-001a's description said "copy ... from
+  // the read-only source repo (configuration.sourceRepoReadOnly)"; no prompt rendered the PRD's
+  // configuration, so the writer was never told the path and (correctly) refused to fabricate.
+  it('a key a story cites by name arrives with its value; $-prefixed author comments do not', () => {
+    const out = renderPrompt(threeCodelineStory(), {}, {
+      configuration: { sourceRepoReadOnly: '/srv/read-only-source', '$sourceRepoReadOnly': 'AUTHOR NOTE MUST NOT RENDER', protectedPaths: ['dial/', 'docs/'] },
+    });
+    expect(out).toContain('## Project Configuration (from the PRD');
+    expect(out).toContain('"sourceRepoReadOnly": "/srv/read-only-source"');
+    expect(out).toContain('"dial/"');
+    expect(out).not.toContain('AUTHOR NOTE MUST NOT RENDER');
+    expect(out).not.toContain('$sourceRepoReadOnly');
+  });
+
+  it('a PRD with no configuration renders no such block — the negative assertion', () => {
+    const out = renderPrompt(threeCodelineStory());
+    expect(out).not.toContain('## Project Configuration');
+    expect(out).not.toContain('__PRD_CONFIGURATION');
+  });
+
+  it('a configuration holding only author comments renders no block either', () => {
+    const out = renderPrompt(threeCodelineStory(), {}, { configuration: { '$only': 'a note' } });
+    expect(out).not.toContain('## Project Configuration');
+  });
+});
+

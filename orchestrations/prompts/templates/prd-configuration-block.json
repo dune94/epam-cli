@@ -1,0 +1,23 @@
+{
+  "$why": [
+    "Added 2026-09-17. regintel run 20260916T200108Z (resume on 2.0.45): the PRD declares",
+    "configuration.sourceRepoReadOnly \u2014 the read-only repository the scaffold story copies dial/,",
+    "docs/, manifest.md and requirements.txt from \u2014 and REGI-001a's description cites that key by",
+    "name. No prompt rendered the PRD's configuration object, so the writer was told to copy from a",
+    "repository it was never told the path of; it reported the blocker instead of fabricating files",
+    "(correctly), the deterministic check counted it a repeated violation, and the story failed.",
+    "",
+    "The block is DATA: the PRD's own configuration object, as JSON, with the $-prefixed comment",
+    "keys removed. The engine names no key; a project declares whatever its stories cite."
+  ],
+  "description": "The PRD-level configuration object, rendered into the writer's prompt so a story that cites a key by name has its value.",
+  "seams": [
+    "story-writer"
+  ],
+  "id": "prd-configuration-block",
+  "version": 1,
+  "body": "\n## Project Configuration (from the PRD \u2014 values a story may cite by key)\n```json\n__PRD_CONFIGURATION_JSON__\n```\n",
+  "placeholders": [
+    "__PRD_CONFIGURATION_JSON__"
+  ]
+}

@@ -1022,9 +1022,9 @@ if [ "${RESET_STORIES:-false}" != "true" ] && [ -n "${EPAM_RESUME_RUN:-}" ]; the
     if [ -n "${CHECKPOINT_FILE:-}" ] && [ -f "$CHECKPOINT_FILE" ]; then
         _ck_tmp=$(mktemp)
         _ck_done=$(jq -c '[.stories[]? | select((.completed // false) == true or .status == "completed") | .id]' "$PRD_FILE" 2>/dev/null || echo "[]")
-        _ck_dropped=$(jq -r --argjson done "$_ck_done" '. as $r | select(($done | index($r.storyId)) == null) | .storyId' "$CHECKPOINT_FILE" 2>/dev/null | sort -u | tr '\n' ' ')
+        _ck_dropped=$(jq -r --argjson finished "$_ck_done" '. as $r | select(($finished | index($r.storyId)) == null) | .storyId' "$CHECKPOINT_FILE" 2>/dev/null | sort -u | tr '\n' ' ')
         if [ -n "${_ck_dropped// /}" ]; then
-            jq -c --argjson done "$_ck_done" '. as $r | select(($done | index($r.storyId)) != null)' "$CHECKPOINT_FILE" > "$_ck_tmp" 2>/dev/null \
+            jq -c --argjson finished "$_ck_done" '. as $r | select(($finished | index($r.storyId)) != null)' "$CHECKPOINT_FILE" > "$_ck_tmp" 2>/dev/null \
                 && mv "$_ck_tmp" "$CHECKPOINT_FILE" || rm -f "$_ck_tmp"
             success "Resume of run ${EPAM_RESUME_RUN}: dropped stale checkpoint record(s) for story/ies the PRD does not hold as completed — ${_ck_dropped}"
         else

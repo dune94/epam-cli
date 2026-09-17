@@ -319,9 +319,21 @@ AGENT_CONSTITUTION="$("${NODE_BIN:-node}" -e '
   } catch (_) { process.stdout.write(""); }
 ' "$SCRIPT_DIR/../config/agent-contract.json" "${PROJECT_ROOT:-}" ".epam/, orchestrations/" 2>/dev/null || echo "")"
 
-# Claude CLI permission flags: the invocation assembles them itself (story-attempt.sh mirrors the
-# interactive-mode rule); the CLAUDE_PERMISSIONS array that once held them was assigned here and
-# never read — removed 2026-09-16 when per-file shellcheck reported it.
+# Claude CLI permission flags
+# These allow Claude to read/write files and execute commands without prompting.
+#
+# READ BY lib/story-attempt.sh (implement_story builds effective_permissions from it). Removed
+# on 2026-09-16 as "assigned here and never read" when per-file shellcheck reported SC2034 — a
+# read in another file of the same program — and from that release every writer on the claude
+# set ran WITHOUT --dangerously-skip-permissions and without the agent constitution: each write
+# was refused with "you haven't granted it yet", the writer reported the wall, and the story
+# failed after 8 attempts (regintel 20260916T200108Z, three resumes, 2026-09-17). Restored
+# verbatim. The cross-file read is what the split-program shellcheck exists to see.
+CLAUDE_PERMISSIONS=(
+    "--dangerously-skip-permissions"
+    "--append-system-prompt"
+    "$AGENT_CONSTITUTION"
+)
 
 # Alternative: Use granular permissions (uncomment if preferred over skip-permissions)
 # CLAUDE_PERMISSIONS=(
@@ -667,7 +679,9 @@ main() {
         esac
     done
 
+    # If interactive mode, clear the permission flags
     if [ "$interactive_mode" = true ]; then
+        CLAUDE_PERMISSIONS=()
         warning "Running in interactive mode - you will be prompted for permissions"
     fi
 

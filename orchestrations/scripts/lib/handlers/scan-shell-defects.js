@@ -112,8 +112,13 @@ const program = (() => {
 })();
 const textOf = new Map();
 const text = (rel) => { if (!textOf.has(rel)) { try { textOf.set(rel, require('node:fs').readFileSync(path.join(ROOT, rel), 'utf8')); } catch { textOf.set(rel, ''); } } return textOf.get(rel); };
+// EVERY WAY A SHELL READS A VARIABLE, NOT JUST $NAME AND ${NAME. `${#NAME[@]}` (an array's
+// length) and `${NAME[@]}` (its elements) put `#` between the brace and the name; the first
+// pattern here did not admit that, so CLAUDE_PERMISSIONS — read by lib/story-attempt.sh only as
+// `${#CLAUDE_PERMISSIONS[@]}` — was reported unused in claude.sh and REMOVED (771993fc,
+// 2026-09-16). From that release every writer on the claude set ran with no permission flags.
 const usedElsewhere = (rel, name) => (program.get(rel) || { members: [] }).members
-  .some((m) => m !== rel && new RegExp(`(\\$\\{?${name}\\b|^\\s*(?:export\\s+|local\\s+)?${name}=)`, 'm').test(text(m)));
+  .some((m) => m !== rel && new RegExp(`(\\$\\{?[#!]?${name}\\b|^\\s*(?:export\\s+|local\\s+|declare\\s+[-a-zA-Z]*\\s+)?${name}(=|\\+=))`, 'm').test(text(m)));
 const kept = findings.filter((f) => {
   const rel = String(f.file || '').replace(`${ROOT}/`, '');
   const prog = program.get(rel);

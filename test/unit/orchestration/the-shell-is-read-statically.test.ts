@@ -20,7 +20,7 @@
  */
 import { describe, it, expect } from 'vitest';
 import { spawnSync } from 'node:child_process';
-import { mkdtempSync, readFileSync, existsSync } from 'node:fs';
+import { mkdtempSync, readFileSync, existsSync, writeFileSync, mkdirSync, rmSync } from 'node:fs';
 import { join } from 'node:path';
 import { tmpdir } from 'node:os';
 
@@ -116,3 +116,39 @@ describe('the shell is read statically', () => {
     expect(n, `scanner reports ${n}, baseline says ${base}`).toBeLessThanOrEqual(base);
   }, 260_000);
 });
+
+// A VARIABLE READ AS AN ARRAY IN ANOTHER FILE OF THE SAME PROGRAM IS NOT UNUSED.
+//
+// 771993fc (2026-09-16): CLAUDE_PERMISSIONS, declared in claude.sh and read by lib/story-attempt.sh
+// only as `${#CLAUDE_PERMISSIONS[@]}` and `"${CLAUDE_PERMISSIONS[@]}"`, was reported SC2034 by
+// this scanner — the cross-file read pattern admitted `$NAME` and `${NAME` but not `${#NAME` —
+// and removed on the scanner's word. Every writer on the claude set then ran with no permission
+// flags. Planted as a split program of its own (a map under tools/split-maps names the module).
+describe('a split program is read as one program for ARRAY reads too', () => {
+  it('a main-file array read only as ${#NAME[@]} / "${NAME[@]}" in its module is not reported unused', () => {
+    const d = mkdtempSync(join(tmpdir(), 'scan-array-'));
+    try {
+      const scripts = join(d, 'orchestrations/scripts'); mkdirSync(join(scripts, 'lib'), { recursive: true }); mkdirSync(join(scripts, 'tools/split-maps'), { recursive: true });
+      writeFileSync(join(scripts, 'planted-main.sh'), '#!/bin/bash\nset -e\nPLANTED_FLAGS=(\n  "--one"\n)\nsource lib/planted-mod.sh\nuse_flags\n');
+      // Read ONLY as the array's length — exactly how story-attempt.sh reads CLAUDE_PERMISSIONS.
+      writeFileSync(join(scripts, 'lib/planted-mod.sh'), '#!/bin/bash\nuse_flags() {\n  if [ ${#PLANTED_FLAGS[@]} -gt 0 ]; then echo "has flags"; fi\n}\n');
+      writeFileSync(join(scripts, 'tools/split-maps/planted-main.sh.json'), JSON.stringify({ 'planted-mod': ['use_flags'] }));
+      const r = scan(d);
+      expect(r.status).toBe(0);
+      expect(r.out, 'the array read in the module was not seen; the declaration would be removed as unused').not.toMatch(/PLANTED_FLAGS appears unused/);
+    } finally { rmSync(d, { recursive: true, force: true }); }
+  });
+
+  it('and a main-file variable genuinely read by no member IS still reported — the negative assertion', () => {
+    const d = mkdtempSync(join(tmpdir(), 'scan-array-'));
+    try {
+      const scripts = join(d, 'orchestrations/scripts'); mkdirSync(join(scripts, 'lib'), { recursive: true }); mkdirSync(join(scripts, 'tools/split-maps'), { recursive: true });
+      writeFileSync(join(scripts, 'planted-main.sh'), '#!/bin/bash\nset -e\nPLANTED_ORPHAN=(\n  "--one"\n)\nsource lib/planted-mod.sh\nuse_flags\n');
+      writeFileSync(join(scripts, 'lib/planted-mod.sh'), '#!/bin/bash\nuse_flags() {\n  echo "no read of the array here"\n}\n');
+      writeFileSync(join(scripts, 'tools/split-maps/planted-main.sh.json'), JSON.stringify({ 'planted-mod': ['use_flags'] }));
+      const r = scan(d);
+      expect(r.out).toMatch(/PLANTED_ORPHAN appears unused/);
+    } finally { rmSync(d, { recursive: true, force: true }); }
+  });
+});
+

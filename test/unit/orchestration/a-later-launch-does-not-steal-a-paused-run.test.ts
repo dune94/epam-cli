@@ -214,6 +214,61 @@ describe('A RECLAIM MOVES THE OTHER RUN\'S FILE ASIDE — NOTHING IS OVERWRITTEN
   });
 });
 
+describe('THE PROJECT\'S PROMPTS ARE THE PAUSED RUN\'S TOO', () => {
+  // 43 generated prompts linked at 132928Z's pause were cleared by the next fresh launch; the
+  // resume then failed at prompt-link with "needs template ... which is not installed".
+  const promptDir = (w: W) => join(w.cfg, 'prompts');
+  const withPrompts = (w: W) => {
+    mkdirSync(promptDir(w), { recursive: true });
+    writeFileSync(join(promptDir(w), 'story-writer.json'), JSON.stringify({ seam: 'story-writer', run: PAUSED }));
+    writeFileSync(join(promptDir(w), 'cpa-inference.json'), JSON.stringify({ seam: 'cpa-inference', run: PAUSED }));
+  };
+
+  it('saves the linked prompts with the checkpoint', () => {
+    const w = workspace();
+    withPrompts(w);
+    pauseAsFirstRun(w);
+    const ck = join(w.cfg, 'runs', PAUSED, 'checkpoint', 'prompts');
+    expect(existsSync(join(ck, 'story-writer.json')), 'prompts/ was not saved').toBe(true);
+    expect(existsSync(join(ck, 'cpa-inference.json'))).toBe(true);
+  });
+
+  it('puts the prompts back when a later launch cleared them', () => {
+    const w = workspace();
+    withPrompts(w);
+    pauseAsFirstRun(w);
+    laterLaunchMintsAndAborts(w);
+    rmSync(promptDir(w), { recursive: true, force: true });
+    resumeFirstRun(w);
+    expect(existsSync(join(promptDir(w), 'story-writer.json')), 'prompts/ is still empty').toBe(true);
+    expect(json(join(promptDir(w), 'cpa-inference.json')).run).toBe(PAUSED);
+  });
+
+  it('puts the prompts back over the ones a later launch provisioned, keeping those aside', () => {
+    const w = workspace();
+    withPrompts(w);
+    pauseAsFirstRun(w);
+    laterLaunchMintsAndAborts(w);
+    rmSync(promptDir(w), { recursive: true, force: true });
+    mkdirSync(promptDir(w));
+    writeFileSync(join(promptDir(w), 'topology-router.json'), JSON.stringify({ run: LATER }));
+    resumeFirstRun(w);
+    expect(json(join(promptDir(w), 'story-writer.json')).run).toBe(PAUSED);
+    expect(existsSync(join(promptDir(w), 'topology-router.json')), 'the later run\'s prompt leaked into the paused run\'s set').toBe(false);
+    const kept = join(w.cfg, 'runs', PAUSED, 'checkpoint', 'displaced', LATER, 'prompts', 'topology-router.json');
+    expect(existsSync(kept), 'the later run\'s prompt was deleted, not displaced').toBe(true);
+  });
+
+  it('leaves this run\'s own prompts alone', () => {
+    const w = workspace();
+    withPrompts(w);
+    pauseAsFirstRun(w);
+    writeFileSync(join(promptDir(w), 'story-writer.json'), JSON.stringify({ seam: 'story-writer', run: PAUSED, edited: true }));
+    resumeFirstRun(w);
+    expect(json(join(promptDir(w), 'story-writer.json')).edited).toBe(true);
+  });
+});
+
 describe('AND AN OPERATOR EDIT AT THE PAUSE IS STILL AN EDIT', () => {
   it('keeps a registry the operator changed when no other run has minted since', () => {
     const w = workspace();

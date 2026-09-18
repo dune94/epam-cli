@@ -335,6 +335,13 @@ run_owned_roster_files() {
     return 0
 }
 
+# The project's generated prompt library — linked to the roster at the pause, reused on resume.
+run_owned_prompts_dir() {
+    local _cfg="${EPAM_PROJECT_CONFIG_DIR:-${EPAM_AGENTS_DIR:-}}"
+    [ -n "$_cfg" ] && printf '%s/prompts' "$_cfg"
+    return 0
+}
+
 # _written_by_another_run <file> <run-id>
 # True when the file names a run and it is not this one. A file with no runId says nothing.
 _written_by_another_run() {
@@ -412,6 +419,25 @@ _reclaim_run_state() {
         _displace "$_p" "$_dir" "$_foreign" || return 1
         cp "$_src" "$_p" || return 1
     done
+    # THE PROMPT LIBRARY, AS A UNIT. A later launch clears it or provisions its own; either way
+    # the set linked at this run's pause is the one the resume runs with. A dir this run wrote —
+    # unchanged or edited — is left alone.
+    local _pd; _pd=$(run_owned_prompts_dir)
+    if [ -n "$_pd" ] && [ -d "$_dir/prompts" ]; then
+        _why=""
+        if [ ! -d "$_pd" ] || [ -z "$(ls -A "$_pd" 2>/dev/null)" ]; then _why="missing"
+        elif [ -n "$_foreign" ]; then _why="provisioned by run ${_foreign}"
+        fi
+        if [ -n "$_why" ]; then
+            echo "[checkpoint] reclaiming prompts/ ($(ls "$_dir/prompts" | wc -l | tr -d ' ') prompt(s)) for run '$_rid' — the live set was ${_why}" >&2
+            if [ -d "$_pd" ] && [ -n "$(ls -A "$_pd" 2>/dev/null)" ]; then
+                local _to="$_dir/displaced/${_foreign:-other}/prompts"
+                mkdir -p "$(dirname "$_to")" && rm -rf "$_to" && mv "$_pd" "$_to" || return 1
+                echo "[checkpoint]   the displaced set is kept at $_to" >&2
+            fi
+            rm -rf "$_pd" && mkdir -p "$_pd" && cp -R "$_dir/prompts/." "$_pd/" || return 1
+        fi
+    fi
     return 0
 }
 
@@ -453,6 +479,13 @@ save_run_checkpoint() {
         [ -n "$_rp" ] && [ -f "$_rp" ] || continue
         cp "$_rp" "$_dir/$(basename "$_rp")" || return 1
     done < <(run_owned_roster_files)
+    # AND THE PROMPTS LINKED TO THAT ROSTER. Generated per codeline, paid for, and cleared by the
+    # next fresh launch (regintel 20260918T132928Z: 43 on disk at the pause, 0 at the resume).
+    local _pd; _pd=$(run_owned_prompts_dir)
+    if [ -n "$_pd" ] && [ -d "$_pd" ]; then
+        rm -rf "$_dir/prompts" && mkdir -p "$_dir/prompts" || return 1
+        cp -R "$_pd/." "$_dir/prompts/" || return 1
+    fi
 
     # Best-effort extras: useful for forensics, never required for a resume.
     # role-assignments.json is here because the resume REWRITES it in place (annotating each entry

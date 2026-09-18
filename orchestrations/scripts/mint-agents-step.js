@@ -656,7 +656,7 @@ if (require.main !== module) return;
 
     const { rosterSeams } = require('./lib/roster-seams.js');
     const { produce, review } = rosterSeams({
-      spec, promptExec, projectConfigDir, LOG_DIR, AGENTS_DIR, REPO_PATH, codelines, stories, mintedDetail, survey, toolGrant,
+      spec, promptExec, projectConfigDir, LOG_DIR, AGENTS_DIR, REPO_PATH, codelines, stories, prd, mintedDetail, survey, toolGrant,
     });
 
     const roster = await buildProjectRoster({

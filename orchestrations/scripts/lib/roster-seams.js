@@ -34,12 +34,25 @@ function codelineContext(codelines, stories) {
     .join('\n');
 }
 
-function rosterSeams({ spec, promptExec, projectConfigDir, LOG_DIR, AGENTS_DIR, REPO_PATH, codelines, stories, mintedDetail, survey, toolGrant }) {
+function rosterSeams({ spec, promptExec, projectConfigDir, LOG_DIR, AGENTS_DIR, REPO_PATH, codelines, stories, prd, mintedDetail, survey, toolGrant }) {
   const { seamInvocationEnv } = require('./seam-invocation.js');
   // eslint-disable-next-line global-require
   const { renderEngineTemplate } = require('./engine-prompt.js');
   const { refusalBlock } = require('./refusal-block.js');
   const renderSpecialisation = (vals) => renderEngineTemplate('roster-specialisation', vals);
+
+  // PRD configuration block — same derivation as spec-mode-runner.js prdConfigurationBlock.
+  // Strip $-prefixed comment keys; render empty string when the PRD declares no configuration.
+  const prdConfigurationBlock = (() => {
+    if (!prd || !prd.configuration) return '';
+    const cfg = Object.fromEntries(
+      Object.entries(prd.configuration).filter(([k]) => !k.startsWith('$')),
+    );
+    if (!Object.keys(cfg).length) return '';
+    return renderEngineTemplate('prd-configuration-block', {
+      __PRD_CONFIGURATION_JSON__: JSON.stringify(cfg, null, 2),
+    });
+  })();
 
 // THE AGENT WRITES THE FILE. The pipeline hands it the canonical copy and a destination,
 // then judges the artefact — it does not compose personas itself, because deciding what an
@@ -74,6 +87,7 @@ const produce = async ({ canonicalCopyPath, outPath, refusal, attempt }) => {
     // every persona inherits. Handed over WITH its caveat; see surveyLeadsBlock.
     __SURVEY_LEADS__: spec.surveyLeadsBlock(survey),
     __CODELINE_CONTEXT__: codelineContext(codelines, stories),
+    __PRD_CONFIGURATION_BLOCK__: prdConfigurationBlock,
     // __STACK__ is deliberately ABSENT. It is a stack-fact key, and engine-prompt.js injects
     // the ones a template declares — but only when the caller has not supplied them. Passing
     // an empty string here would win, and starve the agent of the codeline's real facts.

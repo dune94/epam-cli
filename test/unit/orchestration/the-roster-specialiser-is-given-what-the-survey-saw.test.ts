@@ -95,6 +95,7 @@ describe('the survey reaches the roster specialiser', () => {
       __PREVIOUS_REFUSAL__: '',
       __DECLARED_SEAMS__: '- spec-agent',
       __SURVEY_LEADS__: mod.surveyLeadsBlock(SURVEY),
+      __PRD_CONFIGURATION_BLOCK__: '',
     };
     const rendered = renderEngineTemplate('roster-specialisation', values);
     expect(rendered.length, 'nothing rendered — the assertions below would be vacuous')

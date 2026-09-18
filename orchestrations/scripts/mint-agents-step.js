@@ -765,6 +765,28 @@ if (require.main !== module) return;
     // topology-router.json missing, because the only thing that provisions it sits past that
     // return.
     process.stderr.write(`[mint-step] ${mintSkipReason(process.env)}\n`);
+    // RESUME PATH: re-register implementation roles from the stored roster so role-assignment
+    // finds them. registerProjectRoles is idempotent — it merges; a fresh-mint run that reaches
+    // this branch (sameRun guard above didn't match) would have already registered via the full
+    // mint path. This only fires when the mint was explicitly skipped (EPAM_SKIP_AGENT_MINT=1).
+    try {
+      const { projectRosterPath } = require('./lib/project-roster.js');
+      const rosterFile = projectRosterPath(process.env.EPAM_PROJECT_CONFIG_DIR || '');
+      const storedRoster = JSON.parse(fs.readFileSync(rosterFile, 'utf8'));
+      const implementerNames = Object.entries(storedRoster.agents || {})
+        .filter(([, a]) => a && a.kind === 'implementer')
+        .map(([name]) => name);
+      if (implementerNames.length > 0) {
+        rosterLib.registerProjectRoles(AGENTS_DIR, implementerNames);
+        process.stderr.write(
+          `[mint-step] re-registered ${implementerNames.length} implementation role(s) from stored roster: ` +
+          `${implementerNames.join(', ')}\n`);
+      } else {
+        process.stderr.write('[mint-step] stored roster has no implementers — role-assignment will refuse\n');
+      }
+    } catch (e) {
+      process.stderr.write(`[mint-step] could not re-register roles from roster: ${e.message}\n`);
+    }
   } else {
     // Start from the BASE roster, never a mutated one. Anything a previous run minted is
     // cleared before this run proposes: registry, stored briefs and live entries. Canonical

@@ -3791,7 +3791,7 @@ function reconcileMintTally(r) {
 
 async function mintProjectAgents({
   promptExec, tickets, referencedDocs, profilesPath, agentsDir, logDir, repoPath,
-  declaredDependencies, codelines, toolGrant, correctiveFindings, retainedAgents, replacedAgents, estateSurvey,
+  declaredDependencies, codelines, toolGrant, correctiveFindings, retainedAgents, replacedAgents, superfluousAgents, estateSurvey,
 }) {
   const { mergeProjectAgents } = require('./lib/agent-roster.js');
   const { retryUntilParsedAsync } = require('./lib/content-retry.js');
@@ -3921,6 +3921,20 @@ async function mintProjectAgents({
        'narrower replacement leaves tickets with no implementer and is rejected at the next review:',
        ..._rp.map((a) => `- ${a.name}${a.kind ? ` [${a.kind}]` : ''}${a.codeline && a.codeline !== '*' ? ` (codeline: ${a.codeline})` : ''}` +
                          `${a.rationale ? ` — was proposed because: ${String(a.rationale).replace(/\s+/g, ' ')}` : ''}`),
+       ''].join('\n')
+    : '';
+
+  // SUPERFLUOUS AGENTS: removed without replacement. Their work is already covered by the
+  // retained roles above. Telling the minter "their work still needs an owner" for a superfluous
+  // agent causes it to create a new catchall that re-introduces the overlap the reviewer flagged.
+  // These agents must NOT be replaced — any proposal for their remit will be rejected outright.
+  const _sa = Array.isArray(superfluousAgents) ? superfluousAgents.filter((a) => a && a.name) : [];
+  const superfluousBlock = _sa.length
+    ? ['THESE ROLES WERE REMOVED AS SUPERFLUOUS — their work is ALREADY FULLY COVERED by the',
+       'retained roles listed above. DO NOT propose a replacement for any of them. DO NOT create',
+       'a new role covering their remit in whole or in part. If you propose a role for this work,',
+       'it will be immediately rejected. Their work is owned — do not add another owner:',
+       ..._sa.map((a) => `- ${a.name}${a.rationale ? ` — was proposed because: ${String(a.rationale).replace(/\s+/g, ' ')}` : ''}`),
        ''].join('\n')
     : '';
 
@@ -4077,7 +4091,7 @@ async function mintProjectAgents({
     return `${body}\n`;
   })();
 
-  const prompt = `${correctiveBlock}${replacedBlock}${retainedBlock}${existingRosterBlock}${surveyBlock}${vendorClaimRule}${testOwnershipRule}${basePrompt}
+  const prompt = `${correctiveBlock}${replacedBlock}${superfluousBlock}${retainedBlock}${existingRosterBlock}${surveyBlock}${vendorClaimRule}${testOwnershipRule}${basePrompt}
 
 THE WORK THIS PROJECT HAS BEEN ASKED TO DO (real tickets from the tracker):
 ${ticketBlock || '- (no tickets available)'}

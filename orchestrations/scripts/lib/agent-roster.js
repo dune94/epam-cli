@@ -877,6 +877,14 @@ function projectRoles(agentsDir) {
  *
  * Returns { indicted: string[], retained: object[], gaps: number }.
  */
+// Remedies that say to REMOVE a role without replacement — its work is already covered by
+// retained roles. A minter told "this role's work still needs an owner" for a superfluous agent
+// creates a new catchall that re-introduces the same overlap the reviewer just flagged.
+// Remedies that say to REMOVE a role without any replacement — its work is already covered.
+// "collapse into one" is intentionally excluded: reducing 3 duplicate copies to 1 still
+// leaves the role present; only "remove entirely / fully subsumed" means no role at all.
+const _SUPERFLUOUS_REMEDY_RE = /\bremov\w*\b[^.]*\bentirely\b|\bfully subsumed\b/i;
+
 function partitionRosterFindings(blockingFindings, mintedAgents) {
   const minted = Array.isArray(mintedAgents) ? mintedAgents.filter((m) => m && m.name) : [];
   const names = new Set(minted.map((m) => m.name));
@@ -884,9 +892,17 @@ function partitionRosterFindings(blockingFindings, mintedAgents) {
 
   const indicted = [...new Set(
     findings.map((f) => f.agent).filter((n) => typeof n === 'string' && names.has(n)))];
+
+  // Superfluous: indicted agents whose remedy says to remove without replacement.
+  const superfluous = [...new Set(
+    findings
+      .filter((f) => f && typeof f.remedy === 'string' && _SUPERFLUOUS_REMEDY_RE.test(f.remedy)
+        && typeof f.agent === 'string' && names.has(f.agent))
+      .map((f) => f.agent))];
+
   const gaps = findings.filter((f) => !(typeof f.agent === 'string' && names.has(f.agent))).length;
 
-  return { indicted, retained: minted.filter((m) => !indicted.includes(m.name)), gaps };
+  return { indicted, retained: minted.filter((m) => !indicted.includes(m.name)), gaps, superfluous };
 }
 
 /**

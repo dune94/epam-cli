@@ -957,13 +957,14 @@ if (require.main !== module) return;
     // finding that names nothing — or names something not in this roster — is a statement
     // about a GAP ("no one covers this codeline"), which indicts no brief and must remove
     // nothing. Those still feed the corrective prompt, where they read as work to add.
-    const { indicted: _indicted, retained: _retained, gaps: _gapFindings } =
+    const { indicted: _indicted, retained: _retained, gaps: _gapFindings, superfluous: _superfluous } =
       rosterLib.partitionRosterFindings(blocking, _mintedDetail);
 
     process.stderr.write(
       `[mint-step] cycle ${cycle}: ${blocking.length} blocking finding(s) — ` +
       `${_indicted.length} agent(s) indicted, ${_retained.length} retained` +
-      `${_gapFindings ? `, ${_gapFindings} finding(s) name no agent (roster gaps)` : ''}\n`);
+      `${_gapFindings ? `, ${_gapFindings} finding(s) name no agent (roster gaps)` : ''}` +
+      `${_superfluous && _superfluous.length ? `, ${_superfluous.length} superfluous (no replacement needed)` : ''}\n`);
 
     // Nothing indicted and nothing to add would re-mint the same roster forever against the
     // same findings. Stop and let the operator see them rather than burn the budget.
@@ -975,14 +976,27 @@ if (require.main !== module) return;
     }
 
     const cleared = rosterLib.clearProjectRoster(AGENTS_DIR, PROFILES_PATH, _indicted);
-    for (const c of cleared) process.stderr.write(`[mint-step]   − ${c} (indicted, being replaced)\n`);
+    for (const c of cleared) {
+      const isSuper = _superfluous && _superfluous.includes(c);
+      process.stderr.write(`[mint-step]   − ${c} (${isSuper ? 'superfluous — no replacement' : 'indicted, being replaced'})\n`);
+    }
     for (const r of _retained) process.stderr.write(`[mint-step]   = ${r.name} (passed review, kept)\n`);
+
+    // Superfluous agents are removed without replacement: their work is already covered by
+    // retained roles. Telling the minter to "cover EVERYTHING" for a superfluous role causes it
+    // to create a new catchall that re-introduces the overlap the reviewer just flagged.
+    const _replacedForMint = _mintedDetail.filter(
+      (m) => _indicted.includes(m.name) && !(_superfluous && _superfluous.includes(m.name)));
+    const _superfluousForMint = _mintedDetail.filter(
+      (m) => _superfluous && _superfluous.includes(m.name));
 
     const remint = await spec.mintProjectAgents({
       promptExec, tickets: stories, referencedDocs: docs, declaredDependencies: deps,
       codelines, toolGrant, profilesPath: PROFILES_PATH, agentsDir: AGENTS_DIR,
       logDir: LOG_DIR, repoPath: REPO_PATH, correctiveFindings: blocking,
-      retainedAgents: _retained, replacedAgents: _mintedDetail.filter((m) => _indicted.includes(m.name)),
+      retainedAgents: _retained,
+      replacedAgents: _replacedForMint,
+      superfluousAgents: _superfluousForMint,
     });
     // The next review sees the WHOLE roster, not just the replacements: a new brief can
     // duplicate or contradict a retained one, and only a review of both would catch it.

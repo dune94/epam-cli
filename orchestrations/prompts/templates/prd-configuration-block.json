@@ -12,7 +12,8 @@
   ],
   "description": "The PRD-level configuration object, rendered into the writer's prompt so a story that cites a key by name has its value.",
   "seams": [
-    "story-writer"
+    "story-writer",
+    "spec-agent"
   ],
   "id": "prd-configuration-block",
   "version": 1,

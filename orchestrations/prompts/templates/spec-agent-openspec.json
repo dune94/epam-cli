@@ -12,7 +12,7 @@
     "supplies and threw on every render. The pattern is lazy now; substitution by key was always",
     "adjacency-safe."
   ],
-  "body": "__FORCED_RETRY_BLOCK__You are the __AGENT__ specification agent for EPAM CLI. Phase __PHASE__, story __STORY_ID__.__SPLIT_WARNING____PRIOR_GAPS_BLOCK____SEMBLE_CONTEXT____REFERENCED_DOCS_EVIDENCE____FIX_SITE_BLOCK____DECLARED_FILE_BLOCK____BROWNFIELD_ARCHAEOLOGY_BLOCK__\n__GENERATE_INSTRUCTION__\n{\n  \"storyId\":\"__STORY_ID__\",\n  \"agent\":\"__AGENT__\",\n  \"notes\":\"context\",\n  \"acceptanceCriteria\":[\"...\"],\n  \"description\":\"...\",\n  \"title\":\"...\",__LOCATION_HINT_SCHEMA_LINE____SPLIT_SCHEMA_FIELD__\n}\nUse existing text when no change is needed.__SPLIT_RULES_BLOCK__\n\nStory context:\n__STORY_PAYLOAD____PUBLISHED_CONTRACTS__\n",
+  "body": "__FORCED_RETRY_BLOCK__You are the __AGENT__ specification agent for EPAM CLI. Phase __PHASE__, story __STORY_ID__.__SPLIT_WARNING____PRIOR_GAPS_BLOCK____SEMBLE_CONTEXT____REFERENCED_DOCS_EVIDENCE____FIX_SITE_BLOCK____DECLARED_FILE_BLOCK____BROWNFIELD_ARCHAEOLOGY_BLOCK__\n__GENERATE_INSTRUCTION__\n{\n  \"storyId\":\"__STORY_ID__\",\n  \"agent\":\"__AGENT__\",\n  \"notes\":\"context\",\n  \"acceptanceCriteria\":[\"...\"],\n  \"description\":\"...\",\n  \"title\":\"...\",__LOCATION_HINT_SCHEMA_LINE____SPLIT_SCHEMA_FIELD__\n}\nUse existing text when no change is needed.__SPLIT_RULES_BLOCK__\n__PRD_CONFIGURATION_BLOCK__\nStory context:\n__STORY_PAYLOAD____PUBLISHED_CONTRACTS__\n",
   "description": "Produce or revise the specification for one story, as the openspec agent.",
   "id": "spec-agent-openspec",
   "placeholders": [
@@ -25,6 +25,7 @@
     "__LOCATION_HINT_SCHEMA_LINE__",
     "__PHASE__",
     "__PRIOR_GAPS_BLOCK__",
+    "__PRD_CONFIGURATION_BLOCK__",
     "__PUBLISHED_CONTRACTS__",
     "__REFERENCED_DOCS_EVIDENCE__",
     "__SEMBLE_CONTEXT__",
@@ -45,6 +46,7 @@
     "__FORCED_RETRY_BLOCK__",
     "__LOCATION_HINT_SCHEMA_LINE__",
     "__PRIOR_GAPS_BLOCK__",
+    "__PRD_CONFIGURATION_BLOCK__",
     "__PUBLISHED_CONTRACTS__",
     "__REFERENCED_DOCS_EVIDENCE__",
     "__SEMBLE_CONTEXT__",

@@ -7475,6 +7475,22 @@ async function runSpecAgent({ promptExec, agent, story, phase, runId, logDir, fo
     ? locationHintSchemaLine.replace(/,(\s*)$/, '$1')
     : locationHintSchemaLine;
 
+  // PRD configuration block — rendered as data so the spec agent knows values
+  // a story cites by key (e.g. configuration.sourceRepoReadOnly). Same pattern
+  // as prd_configuration_block in writer-prompt.sh: strip $-prefixed comment
+  // keys, render the remaining object. Empty when the PRD declares no
+  // configuration or every key is a $-prefixed comment.
+  const prdConfigurationBlock = (() => {
+    if (!prd || !prd.configuration) return '';
+    const cfg = Object.fromEntries(
+      Object.entries(prd.configuration).filter(([k]) => !k.startsWith('$')),
+    );
+    if (!Object.keys(cfg).length) return '';
+    return renderEngineTemplate('prd-configuration-block', {
+      __PRD_CONFIGURATION_JSON__: JSON.stringify(cfg, null, 2),
+    });
+  })();
+
   const prompt = renderEngineTemplate('spec-agent-openspec', {
     __FORCED_RETRY_BLOCK__: forcedRetryBlock,
     __AGENT__: agent,
@@ -7491,6 +7507,7 @@ async function runSpecAgent({ promptExec, agent, story, phase, runId, logDir, fo
     __LOCATION_HINT_SCHEMA_LINE__: locationHintSchemaLineTrimmed,
     __SPLIT_SCHEMA_FIELD__: splitSchemaField,
     __SPLIT_RULES_BLOCK__: splitRulesBlock,
+    __PRD_CONFIGURATION_BLOCK__: prdConfigurationBlock,
     __STORY_PAYLOAD__: storyPayload,
     __PUBLISHED_CONTRACTS__: publishedContracts(repoPath, story),
   });

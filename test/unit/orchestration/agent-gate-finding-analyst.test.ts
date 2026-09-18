@@ -164,3 +164,48 @@ describe('gate-finding-analyst — orch script wiring', () => {
     expect(analystBlock).toMatch(/PRD_FILE/);
   });
 });
+
+// ── spec-validator stories[].criteria[] schema ────────────────────────────────
+//
+// THE GAP THAT BLOCKED SELF-HEAL ON RUN 20260916T200108Z.
+//
+// The gate-finding-analyst profile was written for the findings/cases/blockers
+// schema that lint gates emit. The spec-validator emits a different schema:
+//   stories[{ storyId, criteria[{ text, status, evidence, gaps }] }]
+//
+// The mismatch meant: no blocker found → story_id: null → no retry fired.
+// The run stopped with AC8 unmet and no self-heal ever triggered.
+//
+// The fix: teach the analyst to recognise both schemas. When stories[] is
+// present, the first story with verdict:"fail" is the owning story (storyId
+// maps directly to story_id), and the first criterion with status:"unmet" is
+// the blocking finding.
+
+describe('gate-finding-analyst — spec-validator stories[] schema', () => {
+  it('THE GAP: profile handles the spec-validator stories[].criteria[] output format', () => {
+    expect(
+      agent,
+      'profile only knows findings/cases/blockers — it cannot extract a story_id from spec-validator output',
+    ).toMatch(/stories\s*\[\]|stories array|stories\[/i);
+  });
+
+  it('THE GAP: profile extracts story_id from storyId when using the stories schema', () => {
+    expect(
+      agent,
+      'profile never mentions storyId — it cannot map a spec-validator failure to its owning story',
+    ).toMatch(/storyId/);
+  });
+
+  it('profile identifies criteria with status "unmet" as blockers in the stories schema', () => {
+    expect(
+      agent,
+      'profile does not treat status:unmet criteria as blockers — self-heal cannot identify the failing AC',
+    ).toMatch(/unmet/i);
+  });
+
+  it('profile does not emit story_id: null when a stories[].storyId is present', () => {
+    // The fix ensures the analyst can extract story_id from the stories schema.
+    // Verified by asserting the profile describes this extraction path.
+    expect(agent).toMatch(/storyId.*story_id|story_id.*storyId|storyId.*output/i);
+  });
+});

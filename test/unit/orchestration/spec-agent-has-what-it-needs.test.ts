@@ -249,3 +249,123 @@ describe('1b. the located files come from the detective, at the moment the promp
     expect(used, 'the block is built before the detective has run').toBeGreaterThan(assigned);
   });
 });
+
+/**
+ * 4. PRD CONFIGURATION REACHES THE SPEC AGENT.
+ *
+ * prd.configuration is a free-form project-specific block the user authors.
+ * It can contain keys like sourceRepoReadOnly (a path), protectedPaths (an
+ * array), llmGateway, etc. A story may cite these keys by name.
+ *
+ * Root cause of REGI-001a AC1/AC8 contradiction: openspec received the story
+ * description (which cited configuration.sourceRepoReadOnly by name) but never
+ * the configuration values. The agent searched at depth 1 for the source repo,
+ * missed it at depth 2, and authored AC1 "no source repo found; author
+ * directly" — directly contradicting AC8 "do not modify dial/ or docs/".
+ *
+ * The fix: same pattern as prd_configuration_block in writer-prompt.sh — strip
+ * $-prefixed comment keys, render the remaining object as data into the prompt.
+ */
+describe('4. PRD configuration reaches the openspec prompt', () => {
+  const { renderEngineTemplate } = require('../../../orchestrations/scripts/lib/engine-prompt.js');
+
+  const TEMPLATE_PATH = join(__dirname, '../../../orchestrations/prompts/templates/spec-agent-openspec.json');
+  const CONFIG_BLOCK_TEMPLATE = join(__dirname, '../../../orchestrations/prompts/templates/prd-configuration-block.json');
+
+  // Minimal valid var set for spec-agent-openspec (non-mayBeEmpty fields only)
+  const minimalOpenspecVars = (extra: Record<string, string> = {}) => ({
+    __AGENT__: 'openspec',
+    __PHASE__: 'scaffold',
+    __STORY_ID__: 'TEST-1',
+    __GENERATE_INSTRUCTION__: 'Generate refined acceptance criteria.',
+    __STORY_PAYLOAD__: '{"id":"TEST-1"}',
+    __BROWNFIELD_ARCHAEOLOGY_BLOCK__: '',
+    __DECLARED_FILE_BLOCK__: '',
+    __FIX_SITE_BLOCK__: '',
+    __FORCED_RETRY_BLOCK__: '',
+    __LOCATION_HINT_SCHEMA_LINE__: '',
+    __PRIOR_GAPS_BLOCK__: '',
+    __PUBLISHED_CONTRACTS__: '',
+    __REFERENCED_DOCS_EVIDENCE__: '',
+    __SEMBLE_CONTEXT__: '',
+    __SPLIT_RULES_BLOCK__: '',
+    __SPLIT_SCHEMA_FIELD__: '',
+    __SPLIT_WARNING__: '',
+    ...extra,
+  });
+
+  it('THE GAP: __PRD_CONFIGURATION_BLOCK__ is declared in spec-agent-openspec.json', () => {
+    const template = JSON.parse(readFileSync(TEMPLATE_PATH, 'utf8'));
+    expect(
+      template.placeholders,
+      'spec-agent-openspec has no slot for prd configuration — openspec cannot see sourceRepoReadOnly or protectedPaths',
+    ).toContain('__PRD_CONFIGURATION_BLOCK__');
+  });
+
+  it('prd-configuration-block template renders configuration values into readable text', () => {
+    const block = renderEngineTemplate('prd-configuration-block', {
+      __PRD_CONFIGURATION_JSON__: JSON.stringify({
+        sourceRepoReadOnly: '/home/user/bogota-workshop-exercise',
+        protectedPaths: ['dial/', 'docs/'],
+      }, null, 2),
+    });
+    expect(block).toContain('sourceRepoReadOnly');
+    expect(block).toContain('/home/user/bogota-workshop-exercise');
+    expect(block).toContain('protectedPaths');
+  });
+
+  it('THE GAP: the openspec template body positions __PRD_CONFIGURATION_BLOCK__ before the story payload', () => {
+    // spec-agent-openspec is a seam-declared prompt (renders from the project copy at runtime,
+    // not via renderEngineTemplate in tests). We verify the template structure directly:
+    // the block must appear before Story context so the agent sees configuration before the story.
+    const template = JSON.parse(readFileSync(TEMPLATE_PATH, 'utf8'));
+    const cfgIdx = (template.body as string).indexOf('__PRD_CONFIGURATION_BLOCK__');
+    const storyIdx = (template.body as string).indexOf('__STORY_PAYLOAD__');
+    expect(cfgIdx, '__PRD_CONFIGURATION_BLOCK__ is not in the template body').toBeGreaterThan(-1);
+    expect(storyIdx, '__STORY_PAYLOAD__ is not in the template body').toBeGreaterThan(-1);
+    expect(cfgIdx, 'configuration block appears AFTER the story payload — agent sees the story before the config').toBeLessThan(storyIdx);
+  });
+
+  it('__PRD_CONFIGURATION_BLOCK__ is in mayBeEmpty (absent when PRD declares no configuration)', () => {
+    const template = JSON.parse(readFileSync(TEMPLATE_PATH, 'utf8'));
+    expect(
+      template.mayBeEmpty,
+      '__PRD_CONFIGURATION_BLOCK__ not in mayBeEmpty — renderer will reject empty string for projects with no configuration',
+    ).toContain('__PRD_CONFIGURATION_BLOCK__');
+  });
+
+  it('$-prefixed comment keys are never rendered into the block', () => {
+    const configJson = JSON.stringify(
+      Object.fromEntries(
+        Object.entries({
+          sourceRepoReadOnly: '/path/to/repo',
+          '$sourceRepoReadOnly': 'The workshop repo — READ-ONLY source of dial/, docs/...',
+          '$comment': 'internal note',
+        }).filter(([k]) => !k.startsWith('$')),
+      ),
+      null, 2,
+    );
+    const block = renderEngineTemplate('prd-configuration-block', { __PRD_CONFIGURATION_JSON__: configJson });
+    expect(block).not.toContain('$sourceRepoReadOnly');
+    expect(block).not.toContain('internal note');
+    expect(block).toContain('sourceRepoReadOnly');
+  });
+
+  it('WIRING: spec-mode-runner.js passes __PRD_CONFIGURATION_BLOCK__ to the openspec template', () => {
+    const src = readFileSync(
+      join(__dirname, '../../../orchestrations/scripts/spec-mode-runner.js'), 'utf8',
+    );
+    expect(
+      src,
+      'configuration block is not passed to the openspec renderEngineTemplate call',
+    ).toContain('__PRD_CONFIGURATION_BLOCK__: prdConfigurationBlock');
+  });
+
+  it('WIRING: prd-configuration-block template seams include spec-agent', () => {
+    const template = JSON.parse(readFileSync(CONFIG_BLOCK_TEMPLATE, 'utf8'));
+    expect(
+      template.seams,
+      'prd-configuration-block.json seams do not include spec-agent — it is story-writer only',
+    ).toContain('spec-agent');
+  });
+});

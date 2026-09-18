@@ -44,11 +44,19 @@ function block(startAnchor: string, endAnchor: string): string {
 // this same script do not each try to resume the parent's checkpoint. The guard reads through
 // the named role helper rather than testing JIRA_CODELINE_RUN directly, which is why the
 // harness below has to carry those helpers.
-const RESUME_BLOCK = () =>
-  block(
-    'if is_parent && [ -n "${EPAM_RESUME_RUN:-}" ]; then',
-    'if is_parent; then\n  if [ "${JIRA_PIPELINE:-0}" = "1" ]; then',
-  );
+// MOVED AGAIN 2026-09-01 (0bc775b3): the block is now apply_resume_if_requested in
+// lib/orchestration-resume.sh, called from the orchestrator. The test runs the real function.
+const RESUME_LIB = join(REPO_ROOT, 'orchestrations/scripts/lib/orchestration-resume.sh');
+const RESUME_BLOCK = () => {
+  expect(orchSrc.includes('apply_resume_if_requested'),
+    'the orchestrator no longer calls apply_resume_if_requested').toBe(true);
+  return [
+    `source ${JSON.stringify(RESUME_LIB)}`,
+    // needs NODE_BIN and a handler; its own test covers it (a-resume-runs-the-spec-pass-…)
+    'resume_spec_mode_for_pending_stories(){ :; }',
+    'apply_resume_if_requested',
+  ].join('\n');
+};
 
 /** The role helpers, lifted from the orchestrator — extracted blocks call is_parent/is_lane. */
 function roleHelpersSrc(): string {

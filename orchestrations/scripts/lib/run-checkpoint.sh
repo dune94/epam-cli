@@ -317,6 +317,104 @@ operator_reviewable_inputs() {
     return 0
 }
 
+# THE FILES THE RESUME READS THAT THE PAUSE NEVER SHOWED — the run's own roster state.
+#
+# The skip-mint resume re-registers implementers from <project>/roster.json and re-applies briefs
+# from the <project>/agent-profiles.json store. Neither was in the checkpoint: it kept the ENGINE
+# profiles.json, which holds canonical personas only. regintel 20260918T132928Z paused with four
+# minted roles in those two files; two later launches minted over the store and cleared the
+# roster, and the paused run's briefs existed nowhere on disk. Both files carry the runId that the
+# mint stamps, which is what lets the restore tell this run's state from another run's.
+#
+# Emits: <path>\t<what it is>, one per line.
+run_owned_roster_files() {
+    local _cfg="${EPAM_PROJECT_CONFIG_DIR:-${EPAM_AGENTS_DIR:-}}"
+    [ -n "$_cfg" ] || return 0
+    printf '%s\t%s\n' "${EPAM_PROJECT_PROFILES_FILE:-${_cfg}/agent-profiles.json}" "the minted briefs"
+    printf '%s\t%s\n' "${_cfg}/roster.json" "the settled roster"
+    return 0
+}
+
+# _written_by_another_run <file> <run-id>
+# True when the file names a run and it is not this one. A file with no runId says nothing.
+_written_by_another_run() {
+    local _f="${1:-}" _rid="${2:-}" _owner
+    [ -n "$_f" ] && [ -f "$_f" ] || return 1
+    _owner=$(jq -r '.runId // ""' "$_f" 2>/dev/null) || return 1
+    [ -n "$_owner" ] && [ "$_owner" != "$_rid" ]
+}
+
+# _reclaim_run_state <run-id> <checkpoint-dir> <reviewed-dir>
+#
+# A LATER LAUNCH IS NOT AN OPERATOR. Between a pause and its resume another run may have minted
+# over the project's roster files and cleared the settled roster and assignments — which is what
+# a fresh launch does to its own state. Read as "live differs from what was shown", that looked
+# like an edit at the pause and the live file was kept; and the files the resume actually reads
+# were never restored at all. Here a live file is put back from the checkpoint when it is missing
+# or when it carries another run's id. A file this run wrote — unchanged or edited — is left alone.
+# _foreign_roster_owner <run-id>
+# The run that wrote the project's roster store, when it is not the one being resumed; else empty.
+_foreign_roster_owner() {
+    local _rid="${1:-}" _store
+    _store=$(run_owned_roster_files | head -n1 | cut -f1)
+    if _written_by_another_run "$_store" "$_rid"; then
+        jq -r '.runId' "$_store" 2>/dev/null
+    fi
+    return 0
+}
+
+# _displace <live-file> <checkpoint-dir> <owner-run>
+# NOTHING IS OVERWRITTEN. A file another run wrote is moved under the resumed run's checkpoint,
+# named for the run that wrote it, before the checkpoint copy takes its place.
+_displace() {
+    local _p="${1:-}" _dir="${2:-}" _owner="${3:-other}"
+    [ -f "$_p" ] || return 0
+    local _to="$_dir/displaced/${_owner}"
+    mkdir -p "$_to" || return 1
+    mv "$_p" "$_to/$(basename "$_p")" || return 1
+    echo "[checkpoint]   the displaced copy is kept at $_to/$(basename "$_p")" >&2
+}
+
+_reclaim_run_state() {
+    local _rid="${1:-}" _dir="${2:-}" _rev="${3:-}"
+    local _foreign; _foreign=$(_foreign_roster_owner "$_rid")
+    local _p _what _src _why _owner
+    while IFS=$'\t' read -r _p _what; do
+        [ -n "$_p" ] || continue
+        _src="$_dir/$(basename "$_p")"
+        [ -f "$_src" ] || continue
+        _why=""; _owner="$_foreign"
+        if [ ! -f "$_p" ]; then _why="missing"
+        elif _written_by_another_run "$_p" "$_rid"; then
+            _owner=$(jq -r '.runId' "$_p" 2>/dev/null); _why="written by run ${_owner}"
+        elif [ -n "$_foreign" ]; then _why="written by run ${_foreign}"
+        fi
+        [ -n "$_why" ] || continue
+        echo "[checkpoint] reclaiming $(basename "$_p") (${_what}) for run '$_rid' — the live copy was ${_why}" >&2
+        _displace "$_p" "$_dir" "$_owner" || return 1
+        cp "$_src" "$_p" || return 1
+    done < <(run_owned_roster_files)
+    # The reviewable registries carry no runId of their own; they are written by the same mint as
+    # the store, so the store's owner is theirs.
+    local _cfg="${EPAM_PROJECT_CONFIG_DIR:-${EPAM_AGENTS_DIR:-}}"
+    local -a _reviewed_regs=()
+    [ -n "$_cfg" ] && _reviewed_regs+=("${_cfg}/project-roles.json" "${_cfg}/project-investigators.json")
+    [ -n "${LOG_DIR:-}" ] && _reviewed_regs+=("${LOG_DIR}/role-assignments.json")
+    for _p in "${_reviewed_regs[@]}"; do
+        _src="$_rev/$(basename "$_p")"
+        [ -f "$_src" ] || continue
+        _why=""
+        if [ ! -f "$_p" ]; then _why="missing"
+        elif [ -n "$_foreign" ]; then _why="written by run ${_foreign}"
+        fi
+        [ -n "$_why" ] || continue
+        echo "[checkpoint] reclaiming $(basename "$_p") for run '$_rid' from what the pause showed — the live copy was ${_why}" >&2
+        _displace "$_p" "$_dir" "$_foreign" || return 1
+        cp "$_src" "$_p" || return 1
+    done
+    return 0
+}
+
 save_run_checkpoint() {
     local _phase="${1:-${PHASE:-main}}"
     local _stage="${2:-post-spec}"
@@ -349,6 +447,12 @@ save_run_checkpoint() {
         [ -n "$_rp" ] && [ -f "$_rp" ] || continue
         cp "$_rp" "$_dir/reviewed/$(basename "$_rp")" || return 1
     done < <(operator_reviewable_inputs)
+
+    # THE RUN'S OWN ROSTER STATE, REQUIRED: the resume re-registers from these.
+    while IFS=$'\t' read -r _rp _rd; do
+        [ -n "$_rp" ] && [ -f "$_rp" ] || continue
+        cp "$_rp" "$_dir/$(basename "$_rp")" || return 1
+    done < <(run_owned_roster_files)
 
     # Best-effort extras: useful for forensics, never required for a resume.
     # role-assignments.json is here because the resume REWRITES it in place (annotating each entry
@@ -525,7 +629,17 @@ restore_run_checkpoint() {
     # overwrote the live PRD with the checkpoint — every edit at the pause, an operator's or the
     # remediation's repair, silently discarded. And an edit that DROPS a story (a placeholder child)
     # leaves fewer stories than the checkpoint; that is the edit, not a reason to distrust it.
-    if _operator_edited "$PRD_FILE" "$_rev/$(basename "$PRD_FILE")"; then
+    # A LATER LAUNCH IS NOT AN OPERATOR, HERE TOO. tier3-run.sh restores the authored PRD on every
+    # fresh launch; after a pause that leaves a live PRD without the reviewed agentRoles — different
+    # from what was shown, so "an edit", and kept (regintel 20260918T132928Z). The roster store
+    # says who wrote over the project: when another run did, the checkpoint PRD governs.
+    local _prd_owner; _prd_owner=$(_foreign_roster_owner "$_rid")
+    if [ -n "$_prd_owner" ] && _operator_edited "$PRD_FILE" "$_rev/$(basename "$PRD_FILE")"; then
+        echo "[checkpoint] reclaiming the PRD for run '$_rid' — the live copy was left by run ${_prd_owner}" >&2
+        _displace "$PRD_FILE" "$_dir" "$_prd_owner" || return 1
+        cp "$_dir/prd.json" "$PRD_FILE" || return 1
+    elif _operator_edited "$PRD_FILE" "$_rev/$(basename "$PRD_FILE")" \
+       && [ "${_live_stories:-0}" -gt 0 ]; then
         echo "[checkpoint] KEEPING the PRD on disk: it was EDITED at the pause, after this checkpoint was taken." >&2
         # A role assignment for a story the edited PRD no longer has is not carried into the resume.
         if [ -n "${LOG_DIR:-}" ] && [ -f "$LOG_DIR/role-assignments.json" ]; then
@@ -548,6 +662,8 @@ restore_run_checkpoint() {
             cp "$_dir/profiles.json" "$AGENT_PROFILES_FILE" || return 1
         fi
     fi
+
+    _reclaim_run_state "$_rid" "$_dir" "$_rev" || return 1
 
     # COUNTED FROM THE PRD BEING RESTORED, not from the metadata. A merged lane restore carries
     # every lane's stories while any single lane's checkpoint.json records only its own, so the

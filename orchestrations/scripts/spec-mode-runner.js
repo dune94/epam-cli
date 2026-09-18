@@ -2017,7 +2017,9 @@ async function run() {
             + `(${acReviewUnjudged}/2)`);
           // eslint-disable-next-line no-await-in-loop
           reviewResult = await reviewPrdChange({
-            promptExec, story, changeType: 'ac-review', agent, runId, logDir, phase: opts.phase,
+            aiRunnerCmd, profiles, storyId: story.id, changeType: 'spec_pass',
+            before: beforeSnapshot, after: afterSnapshot, logDir,
+            splitOccurred: changes.splitCount > 0
           });
         }
         if (reviewResult.verdict === 'unreviewed') {

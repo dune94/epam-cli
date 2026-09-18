@@ -123,6 +123,45 @@ describe('runSpeckitReview() — accepts forcedRetryNote with the same primacy p
   });
 });
 
+describe('AC-write reviewPrdChange — unreviewed-retry passes correct params (static)', () => {
+  // Bug (2026-09-18): the while(acReviewUnjudged<2) retry called reviewPrdChange with
+  // promptExec/story/agent/runId/phase — none of which the function accepts — and was
+  // missing `profiles`, causing a crash at profiles['prd-change-reviewer'].
+  // Fix: the retry must pass the same params as the initial call.
+  const unjudgedLoopStart = "while (reviewResult.verdict === 'unreviewed' && acReviewUnjudged < 2) {";
+  const loopStartIdx = src.indexOf(unjudgedLoopStart);
+  // Grab the body of the while loop (up to the closing brace line)
+  const closeIdx = src.indexOf('\n        }', loopStartIdx);
+  const loopBlock = loopStartIdx !== -1 && closeIdx !== -1
+    ? src.slice(loopStartIdx, closeIdx + 10)
+    : '';
+
+  it('the unreviewed-retry while loop exists in the source', () => {
+    expect(loopStartIdx, 'acReviewUnjudged while loop not found').toBeGreaterThan(0);
+  });
+
+  it('the retry reviewPrdChange call passes profiles so it does not crash on undefined', () => {
+    expect(loopBlock, 'profiles not passed in unreviewed-retry call').toMatch(/profiles/);
+  });
+
+  it('the retry reviewPrdChange call passes aiRunnerCmd', () => {
+    expect(loopBlock, 'aiRunnerCmd not passed in unreviewed-retry call').toMatch(/aiRunnerCmd/);
+  });
+
+  it('the retry reviewPrdChange call passes storyId', () => {
+    expect(loopBlock, 'storyId not passed in unreviewed-retry call').toMatch(/storyId/);
+  });
+
+  it('the retry reviewPrdChange call does NOT pass the wrong params (promptExec/story/agent/runId)', () => {
+    const callMatch = loopBlock.match(/await reviewPrdChange\(\{([^}]+)\}/);
+    const callArgs = callMatch ? callMatch[1] : '';
+    expect(callArgs, 'wrongly passing promptExec').not.toMatch(/\bpromptExec\b/);
+    expect(callArgs, 'wrongly passing bare story (not storyId)').not.toMatch(/\bstory\b,/);
+    expect(callArgs, 'wrongly passing agent').not.toMatch(/\bagent\b/);
+    expect(callArgs, 'wrongly passing runId').not.toMatch(/\brunId\b/);
+  });
+});
+
 describe('AC-review retry budget is independent from checkSplitMandateViolation\'s retry budget (static)', () => {
   it('checkSplitMandateViolation\'s own retry counter (summary.stats.agentAttempts) is a separate variable from acReviewAttempts', () => {
     // The two retry mechanisms must never share a counter — seeding both

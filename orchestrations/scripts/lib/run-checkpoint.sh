@@ -342,13 +342,27 @@ run_owned_prompts_dir() {
     return 0
 }
 
-# _written_by_another_run <file> <run-id>
-# True when the file names a run and it is not this one. A file with no runId says nothing.
+# _written_by_another_run <file> <own-id>
+# True when the file names a run and it is not the one that owns this state. A file with no
+# runId says nothing.
 _written_by_another_run() {
-    local _f="${1:-}" _rid="${2:-}" _owner
+    local _f="${1:-}" _own="${2:-}" _owner
     [ -n "$_f" ] && [ -f "$_f" ] || return 1
     _owner=$(jq -r '.runId // ""' "$_f" 2>/dev/null) || return 1
-    [ -n "$_owner" ] && [ "$_owner" != "$_rid" ]
+    [ -n "$_owner" ] && [ "$_owner" != "$_own" ]
+}
+
+# _state_owner <checkpoint-copy> <run-id>
+# THE RUN THAT MINTED IS NOT ALWAYS THE RUN THAT PAUSED. A project mints once and later runs
+# reuse the roster, so the store a run pauses on may carry an earlier run's id. The id that
+# marks the state as this run's is the one on the CHECKPOINT'S OWN COPY; only when the checkpoint
+# holds no copy is the run id itself the owner. Compared against the run id, a reused mint read as
+# foreign on every phase and the resume reclaimed a scaffold checkpoint over the core phase's
+# live PRD, reverting two completed stories (regintel 20260918T132928Z).
+_state_owner() {
+    local _copy="${1:-}" _rid="${2:-}" _o=""
+    [ -n "$_copy" ] && [ -f "$_copy" ] && _o=$(jq -r '.runId // ""' "$_copy" 2>/dev/null)
+    printf '%s' "${_o:-$_rid}"
 }
 
 # _reclaim_run_state <run-id> <checkpoint-dir> <reviewed-dir>
@@ -359,12 +373,13 @@ _written_by_another_run() {
 # like an edit at the pause and the live file was kept; and the files the resume actually reads
 # were never restored at all. Here a live file is put back from the checkpoint when it is missing
 # or when it carries another run's id. A file this run wrote — unchanged or edited — is left alone.
-# _foreign_roster_owner <run-id>
+# _foreign_roster_owner <run-id> <checkpoint-dir>
 # The run that wrote the project's roster store, when it is not the one being resumed; else empty.
 _foreign_roster_owner() {
-    local _rid="${1:-}" _store
+    local _rid="${1:-}" _dir="${2:-}" _store _own
     _store=$(run_owned_roster_files | head -n1 | cut -f1)
-    if _written_by_another_run "$_store" "$_rid"; then
+    _own=$(_state_owner "$_dir/$(basename "$_store")" "$_rid")
+    if _written_by_another_run "$_store" "$_own"; then
         jq -r '.runId' "$_store" 2>/dev/null
     fi
     return 0
@@ -384,7 +399,7 @@ _displace() {
 
 _reclaim_run_state() {
     local _rid="${1:-}" _dir="${2:-}" _rev="${3:-}"
-    local _foreign; _foreign=$(_foreign_roster_owner "$_rid")
+    local _foreign; _foreign=$(_foreign_roster_owner "$_rid" "$_dir")
     local _p _what _src _why _owner
     while IFS=$'\t' read -r _p _what; do
         [ -n "$_p" ] || continue
@@ -392,7 +407,7 @@ _reclaim_run_state() {
         [ -f "$_src" ] || continue
         _why=""; _owner="$_foreign"
         if [ ! -f "$_p" ]; then _why="missing"
-        elif _written_by_another_run "$_p" "$_rid"; then
+        elif _written_by_another_run "$_p" "$(_state_owner "$_src" "$_rid")"; then
             _owner=$(jq -r '.runId' "$_p" 2>/dev/null); _why="written by run ${_owner}"
         elif [ -n "$_foreign" ]; then _why="written by run ${_foreign}"
         fi
@@ -666,7 +681,7 @@ restore_run_checkpoint() {
     # fresh launch; after a pause that leaves a live PRD without the reviewed agentRoles — different
     # from what was shown, so "an edit", and kept (regintel 20260918T132928Z). The roster store
     # says who wrote over the project: when another run did, the checkpoint PRD governs.
-    local _prd_owner; _prd_owner=$(_foreign_roster_owner "$_rid")
+    local _prd_owner; _prd_owner=$(_foreign_roster_owner "$_rid" "$_dir")
     if [ -n "$_prd_owner" ] && _operator_edited "$PRD_FILE" "$_rev/$(basename "$PRD_FILE")"; then
         echo "[checkpoint] reclaiming the PRD for run '$_rid' — the live copy was left by run ${_prd_owner}" >&2
         _displace "$PRD_FILE" "$_dir" "$_prd_owner" || return 1

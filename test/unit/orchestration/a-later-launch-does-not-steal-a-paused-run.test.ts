@@ -269,6 +269,50 @@ describe('THE PROJECT\'S PROMPTS ARE THE PAUSED RUN\'S TOO', () => {
   });
 });
 
+describe('A MINT THIS RUN REUSED IS THIS RUN\'S STATE', () => {
+  // regintel 132928Z reused the roster minted by 20260915T101555Z, so its store carries that
+  // run's id. Compared against the run id, that read as foreign on EVERY phase: the resume
+  // reclaimed the scaffold pre-writer PRD over the live one at the core phase and reverted the
+  // two completed scaffold stories. The checkpoint's own copy carries the same id — that is
+  // the comparison.
+  const REUSED = '20260915T101555Z';
+  const pauseWithReusedMint = (w: W) => {
+    writeFileSync(w.files.prd, prd(PAUSED_ROLES));
+    writeFileSync(w.files.engineProfiles, JSON.stringify({ canonical: 'personas only' }));
+    writeFileSync(w.files.store, store(REUSED, PAUSED_ROLES));
+    writeFileSync(w.files.roster, roster(REUSED, PAUSED_ROLES));
+    writeFileSync(w.files.roles, registry(PAUSED_ROLES));
+    writeFileSync(w.files.investigators, investigators(PAUSED));
+    writeFileSync(w.files.assignments, assignments(PAUSED_ROLES));
+    const r = inLib('save_run_checkpoint core post-roster', w, PAUSED);
+    expect(r.status, `save failed: ${r.stdout}${r.stderr}`).toBe(0);
+  };
+
+  it('does not reclaim anything when the live store is the one the checkpoint holds', () => {
+    const w = workspace();
+    pauseWithReusedMint(w);
+    const out = resumeFirstRun(w);
+    expect(out).not.toMatch(/reclaiming/);
+  });
+
+  it('keeps the PRD the run itself advanced after the pause', () => {
+    const w = workspace();
+    pauseWithReusedMint(w);
+    const advanced = JSON.stringify({ stories: PAUSED_ROLES.map((r, i) => ({ id: `REGI-00${i + 1}`, agentRole: r, completed: i === 0 })) });
+    writeFileSync(w.files.prd, advanced);
+    resumeFirstRun(w);
+    expect(json(w.files.prd).stories[0].completed, 'a completion the run recorded was reverted').toBe(true);
+  });
+
+  it('still reclaims when a different run minted over a reused store', () => {
+    const w = workspace();
+    pauseWithReusedMint(w);
+    laterLaunchMintsAndAborts(w);
+    resumeFirstRun(w);
+    expect(json(w.files.store).runId).toBe(REUSED);
+  });
+});
+
 describe('AND AN OPERATOR EDIT AT THE PAUSE IS STILL AN EDIT', () => {
   it('keeps a registry the operator changed when no other run has minted since', () => {
     const w = workspace();

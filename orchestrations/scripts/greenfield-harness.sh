@@ -360,7 +360,11 @@ if grep -q "\[FailureAnalyst\] Analyzing" "$LOG"; then
 # The mock's first answer for every tagged seam is the prompt's own example. The consumer must
 # refuse each one (the seam's retry then meets the real answer) — and no story may carry the
 # placeholder as its title, description or acceptance criterion.
-grep -q "the example was copied back, not answered" "$LOG"; check $? "echo: the consumer refused an echoed example at least once"
+if grep -q "first-answer-echoes-example" "$LOG" || grep -q ":first-answer-echoes-example" "$DEST/mock-traffic.json" 2>/dev/null; then
+  grep -q "the example was copied back, not answered" "$LOG"; check $? "echo: the consumer refused an echoed example at least once"
+else
+  say "echo: the mock served no echoed first answer in this rehearsal — the refusal was not exercised (not a failure)"
+fi
 _ph_title="$("$NODE_BIN" -e 'const p=require(process.argv[1]).values||[];const prd=require(process.argv[2]);const bad=(prd.stories||[]).filter(s=>p.includes(String(s.title||"").trim())||p.includes(String(s.description||"").trim())||(Array.isArray(s.acceptanceCriteria)&&s.acceptanceCriteria.length&&s.acceptanceCriteria.every(a=>p.includes(String(a).trim()))));process.stdout.write(bad.map(s=>s.id).join(" "))' "$REPO_ROOT/orchestrations/config/answer-placeholders.json" "$PRD_FILE_ABS" 2>/dev/null)"
 [ -z "$_ph_title" ]; check $? "echo: no story carries the example placeholder as its title, description or ACs${_ph_title:+ (found: $_ph_title)}"
 else

@@ -335,15 +335,34 @@ else:
 # ── 18. testCriteria.sourceFiles align with known impl stories ───────────────
 tc_source_bad = []
 all_story_files = set()
+# A DECLARED DIRECTORY DECLARES WHAT IS UNDER IT. A story may declare `dial/` (a package taken
+# whole from a read-only source repo) and the TC writer then lists `dial/client.py`; matched by
+# basename alone, `client.py` was "unknown" and a completed, reviewed story refused the run's own
+# resume (regintel 20260919T141354Z). Paths are compared relative to the output dir, so an
+# absolute declaration covers a relative reference and vice versa.
+_out_dir = str(output_dir or '').rstrip('/')
+def _rel(path):
+    p = str(path or '')
+    if _out_dir and p.startswith(_out_dir + '/'):
+        p = p[len(_out_dir) + 1:]
+    return p.lstrip('./')
+all_story_dirs = set()
 for s in stories:
     for f in s.get('technicalNotes', {}).get('files', []):
-        all_story_files.add(f.split('/')[-1])
+        rf = _rel(f)
+        if rf.endswith('/'):
+            all_story_dirs.add(rf)
+        else:
+            all_story_files.add(rf.split('/')[-1])
+def _under_declared_dir(src):
+    rs = _rel(src)
+    return any(rs.startswith(d) for d in all_story_dirs)
 for sid in active_ids:
     s = by_id.get(sid, {})
     tc = s.get('testCriteria') or {}
     for src in tc.get('sourceFiles', []):
         bname = src.split('/')[-1]
-        if bname and bname not in all_story_files:
+        if bname and bname not in all_story_files and not _under_declared_dir(src):
             tc_source_bad.append(f"{sid}: sourceFiles references unknown file '{bname}'")
 if tc_source_bad:
     # Hard failure, not a warning (upgraded 2026-07-09, pipeline audit): unlike

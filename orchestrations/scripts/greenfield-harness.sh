@@ -197,9 +197,28 @@ else
           if [ -n "$_rid" ]; then
             echo "[harness] ━━━ resume after completion of run '$_rid' — nothing may run ━━━"
             EPAM_RESUME_RUN="$_rid" bash "$DEST/orchestrations/scripts/tier3-run.sh" --project "$PROJECT" --yes 2>&1 | tee "$LOG.after-completion"
-            exit "${PIPESTATUS[0]}"
+            _x=${PIPESTATUS[0]}; [ "$_x" -eq 0 ] || exit "$_x"
           fi
-          exit 0
+          # A CLEAN RESTART ON THE CACHED ROSTER AND PROMPTS. A fresh launch with the mint skipped:
+          # the codeline is torn down and rebuilt, the PRD is the canonical again, the ledgers are
+          # cleared — and the roster, briefs and prompts the first run paid for are reused because
+          # the codeline's asset set is complete. The operator's recovery for a run whose codeline
+          # went bad (2026-09-19). Pauses stay on; it is resumed through them like the first run.
+          echo "[harness] ━━━ fresh launch with EPAM_SKIP_AGENT_MINT=1 — rebuild the codeline on the cached roster and prompts ━━━"
+          _m=0; _rid2=""
+          while :; do
+            _m=$((_m + 1)); _mark2="$LOG.rebuild-$_m"
+            if [ -n "$_rid2" ]; then
+              EPAM_RESUME_RUN="$_rid2" EPAM_SKIP_AGENT_MINT=1 bash "$DEST/orchestrations/scripts/tier3-run.sh" --project "$PROJECT" --yes 2>&1 | tee "$_mark2"
+            else
+              EPAM_SKIP_AGENT_MINT=1 bash "$DEST/orchestrations/scripts/tier3-run.sh" --project "$PROJECT" --yes 2>&1 | tee "$_mark2"
+            fi
+            _x=${PIPESTATUS[0]}; [ "$_x" -eq 0 ] || { echo "[harness] rebuild launch $_m exited $_x"; exit "$_x"; }
+            _next2="$(grep -o "Resume with:[[:space:]]*EPAM_RESUME_RUN=[0-9TZ]*" "$_mark2" | tail -1 | sed 's/.*=//')"
+            [ -n "$_next2" ] || { echo "[harness] rebuild launch $_m completed with no pause — the rebuilt run is done"; exit 0; }
+            [ "$_m" -lt 6 ] || { echo "[harness] six rebuild launches and still pausing — refusing to loop"; exit 1; }
+            _rid2="$_next2"
+          done
         fi
         [ "$_n" -lt 6 ] || { echo "[harness] six launches and still pausing — refusing to loop"; exit 1; }
         _rid="$_next"
@@ -265,6 +284,23 @@ if [ "$PAUSED" = "1" ]; then
     done
     ! grep -q "Running main-branch stories\|marked as completed" "$_after"; check $? "after completion: no story was written again"
     ! grep -q "reset [0-9]* active stories to pending" "$_after"; check $? "after completion: no completed story was reset to pending"
+  fi
+  # ── 3b. The clean restart on cached assets ────────────────────────────────
+  _rb1="$LOG.rebuild-1"
+  [ -f "$_rb1" ]; check $? "a fresh EPAM_SKIP_AGENT_MINT=1 launch was made after the first run"
+  if [ -f "$_rb1" ]; then
+    grep -q "completed its agents and prompts — kept\|Keeping the roster" "$_rb1"; check $? "rebuild: the codeline's roster and prompts were kept, not regenerated"
+    grep -q "\[roster\] reusing the settled roster on disk" "$_rb1"; check $? "rebuild: the roster was reused, not re-derived"
+    ! grep -q "\[roster\] composed from the specialiser" "$LOG".rebuild-*; check $? "rebuild: the specialiser was never called"
+    grep -q "Tearing down output directory\|codeline .* (re)initialised\|greenfield_prepare_output_dir\|init: " "$_rb1"; check $? "rebuild: the codeline was torn down and rebuilt"
+    grep -q "prompts already complete for codeline .* not rebuilt" "$_rb1"; check $? "rebuild: the prompt set was reused, not rebuilt"
+    ! grep -q "needs template .* which is not installed" "$LOG".rebuild-*; check $? "rebuild: no prompt was missing"
+    _rbl="$(ls "$LOG".rebuild-* | tail -1)"
+    grep -q "PAUSED at post-roster" "$_rb1"; check $? "rebuild: pause 1 fired on the fresh run"
+    grep -q "Story .* marked as completed" "$_rbl"; check $? "rebuild: the writer ran on the rebuilt codeline"
+    for _p in $PHASES; do
+      grep -q "Phase '$_p' completed" "$LOG".rebuild-*; check $? "rebuild: phase '$_p' completed"
+    done
   fi
   ! grep -q "prd-change-reviewer REJECTED" "$LOG"; check $? "no spec-pass story was rejected by the change reviewer"
 fi

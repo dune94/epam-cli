@@ -174,8 +174,13 @@ function checkItem(item, schema, tag, index) {
   if (!item || typeof item !== 'object' || Array.isArray(item)) {
     return fail(`${where}: expected an object, got ${item === null ? 'null' : typeof item}`);
   }
+  // AN ECHO IS FATAL, STRICT OR NOT. The diagnostic-by-default policy above is for an unproven
+  // SHAPE validator; an echoed example is no answer in a valid shape — the case the placeholder
+  // vocabulary was declared to refuse. Returned as diagnostic, the payload flowed on: regintel
+  // 20260919T141354Z split REGI-001 into a child titled "..." with AC "...", and the scaffold
+  // writer, told nothing of the authored "copy these unchanged", authored stubs instead.
   const echo = echoedExample(item);
-  if (echo) return fail(`${where}: ${echo} — the example was copied back, not answered`);
+  if (echo) return fail(`${where}: ${echo} — the example was copied back, not answered`, true);
   for (const key of schema.required || []) {
     // ACs ARE NOT IN SCOPE IN BROWNFIELD. The AC gate skips acceptance-criteria processing
     // for a brownfield ticket entirely and records that verification criteria come from the

@@ -369,6 +369,18 @@ info "Archiving and clearing run logs..."
 ARCHIVE_DIR="$LOG_DIR/archive/pre-run-${ORCH_RUN_ID:-$(date -u +%Y%m%dT%H%M%SZ)}"
 mkdir -p "$ARCHIVE_DIR"
 
+# A RESUME KEEPS THE RUN'S OWN LEDGERS. On a fresh launch these are the previous run's and are
+# archived and cleared; on a resume they are THIS run's record — its phase gates, its spend, its
+# healing events. Cleared, the launcher found no GO for a finished phase and ran it again over
+# committed code (regintel 20260918T132928Z, 2026-09-18: $2.05 and a review deadlock, the next
+# phase never reached), and the run's cost could not be totalled.
+# THE ONE PLACE EPAM_RESUME_RUN IS TESTED. Every later "is this a resume?" reads _IS_RESUMED_RUN.
+_IS_RESUMED_RUN=0
+if [ -n "${EPAM_RESUME_RUN:-}" ]; then
+  _IS_RESUMED_RUN=1
+  info "  Resuming ${EPAM_RESUME_RUN} — keeping this run's own ledgers (phase gates, cost, healing, reviews); nothing archived or cleared"
+fi
+
 CLEARABLE_LOGS=(
   agent-activity.jsonl
   agent-messages.jsonl
@@ -390,6 +402,10 @@ CLEARABLE_LOGS=(
 ARCHIVED=0
 for f in "${CLEARABLE_LOGS[@]}"; do
   fp="$LOG_DIR/$f"
+  if [ "${_IS_RESUMED_RUN:-0}" = "1" ]; then
+    [ -f "$fp" ] || : > "$fp"
+    continue
+  fi
   if [ -f "$fp" ] && [ -s "$fp" ]; then
     cp "$fp" "$ARCHIVE_DIR/$f"
     : > "$fp"
@@ -519,10 +535,8 @@ done < <(find "$LOG_DIR" -type f \( -name '*.log' -o -name 'story-outputs-*.txt'
 # mint last produced, because nothing is going to rebuild it, but its LOG_DIR artefacts belong to
 # a PREVIOUS run and must still be cleared — a stale survey matched by codeline name (api, web,
 # src) is how one project's evidence reached another project's prompts.
-_IS_RESUMED_RUN=0
-if [ -n "${EPAM_RESUME_RUN:-}" ]; then
-    _IS_RESUMED_RUN=1
-fi
+# (_IS_RESUMED_RUN is derived once, above Step 2 — the ledgers there are the first thing a
+# resume must keep.)
 
 _RUN_ARTIFACT_DIR="${LOG_DIR:-}"
 if [ -n "$_RUN_ARTIFACT_DIR" ] && [ -d "$_RUN_ARTIFACT_DIR" ]; then

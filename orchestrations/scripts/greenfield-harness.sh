@@ -356,6 +356,13 @@ if grep -q "\[FailureAnalyst\] Analyzing" "$LOG"; then
     grep -lq "Guidance From This Story" "$DEST/orchestrations/logs/claude_outputs/${_healed_story}"_*.log "$DEST"/orchestrations/logs/archive/pre-run-*/claude_outputs/"${_healed_story}"_*.log 2>/dev/null; check $? "self-heal: ${_healed_story}'s next attempt was given the guidance"
   fi
   ! grep -q "Injected skill guidance into retry prompt" "$LOG"; check $? "self-heal: no injection is claimed that did not happen"
+# ── 3d. An echoed example is refused ────────────────────────────────────────
+# The mock's first answer for every tagged seam is the prompt's own example. The consumer must
+# refuse each one (the seam's retry then meets the real answer) — and no story may carry the
+# placeholder as its title, description or acceptance criterion.
+grep -q "the example was copied back, not answered" "$LOG"; check $? "echo: the consumer refused an echoed example at least once"
+_ph_title="$("$NODE_BIN" -e 'const p=require(process.argv[1]).values||[];const prd=require(process.argv[2]);const bad=(prd.stories||[]).filter(s=>p.includes(String(s.title||"").trim())||p.includes(String(s.description||"").trim())||(Array.isArray(s.acceptanceCriteria)&&s.acceptanceCriteria.length&&s.acceptanceCriteria.every(a=>p.includes(String(a).trim()))));process.stdout.write(bad.map(s=>s.id).join(" "))' "$REPO_ROOT/orchestrations/config/answer-placeholders.json" "$PRD_FILE_ABS" 2>/dev/null)"
+[ -z "$_ph_title" ]; check $? "echo: no story carries the example placeholder as its title, description or ACs${_ph_title:+ (found: $_ph_title)}"
 else
   say "self-heal: no story failure occurred in this rehearsal — the retry path was not exercised (not a failure)"
 fi

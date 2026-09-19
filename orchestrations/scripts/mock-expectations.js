@@ -2652,6 +2652,31 @@ function endsInToolCall(cap, seam) {
       }
       onPurpose.push(`${seam}  <- ${STAND_IN_MARK} first attempt answers hollow/in prose (the registry says its failed attempts reach the analyst)`);
     }
+    // ONE FIRST ANSWER ECHOES THE PROMPT'S EXAMPLE, for every tagged seam. A model that copies the
+    // example back produces well-formed JSON that no shape check refuses; on 2026-09-19 openspec
+    // did exactly that for REGI-001 and the runner split the story into a child titled "..." —
+    // the placeholder vocabulary was declared to refuse this, and the refusal had never run at
+    // £0 because the stand-in always answered. The first call is the seam's contract with every
+    // string set to the declared placeholder, consumed once; the consumer must refuse it and the
+    // retry meets the real answer below. Never for a capture — a recording plays as recorded.
+    // Above the real answer (32) and the hollow first failure (33+) so the echo is met first.
+    if (!cap && !alias && stood && typeof stood === 'object' && (contractOf(seam, template) || {}).tag) {
+      let _ph = [];
+      try { _ph = require(path.join(ROOT, 'orchestrations', 'config', 'answer-placeholders.json')).values || []; } catch { _ph = []; }
+      if (_ph.length) {
+        const _echo = (v) => (Array.isArray(v) ? (v.length ? [_ph[0]] : []) : (v && typeof v === 'object') ? Object.fromEntries(Object.entries(v).map(([k, x]) => [k, _echo(x)])) : (typeof v === 'string' ? _ph[0] : v));
+        const _echoed = { ..._echo(stood), storyId: stood.storyId, agent: stood.agent };
+        for (const proto of PROTOCOLS) {
+          await put('/mockserver/expectation', {
+            priority: 36 + _tagRank, times: { remainingTimes: 1, unlimited: false },
+            httpRequest: { method: 'POST', path: proto.path, body: bodyMatch },
+            httpResponse: { statusCode: 200, headers: { 'content-type': ['text/event-stream; charset=utf-8'], 'x-seam': [`${seam}:first-answer-echoes-example`] },
+              body: proto.text(standInReplyText(seam, _echoed, contractOf(seam, template))) },
+          });
+        }
+        onPurpose.push(`${seam}  <- ${STAND_IN_MARK} first answer echoes the prompt example (the consumer must refuse it, not split on it)`);
+      }
+    }
     // ONE FIRST VERDICT REJECTS ON PURPOSE, for a verdict seam whose rejection is what runs another
     // seam (prd-change-summarizer.runsOnRejectionBy). A stand-in that always approves never lets
     // that seam execute. The first call answers `fail` with one finding, consumed once; the caller

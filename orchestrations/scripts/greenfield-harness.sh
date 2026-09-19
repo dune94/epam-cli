@@ -362,6 +362,10 @@ if grep -q "\[FailureAnalyst\] Analyzing" "$LOG"; then
 # placeholder as its title, description or acceptance criterion.
 if grep -q "first-answer-echoes-example" "$LOG" || grep -q ":first-answer-echoes-example" "$DEST/mock-traffic.json" 2>/dev/null; then
   grep -q "the example was copied back, not answered" "$LOG"; check $? "echo: the consumer refused an echoed example at least once"
+  # The second refusal proves the retry: a correction in the next prompt and a climb to the
+  # ladder's next rung. Both are the seam's own log lines.
+  grep -q "placeholder contract violation, retrying WITH a correction" "$LOG"; check $? "echo: a refused spec answer was retried WITH the placeholder correction"
+  ! grep -q "retrying transient failure" "$LOG"; check $? "echo: no refused answer was mistaken for a transient"
 else
   say "echo: the mock served no echoed first answer in this rehearsal — the refusal was not exercised (not a failure)"
 fi

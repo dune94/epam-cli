@@ -2675,8 +2675,11 @@ function endsInToolCall(cap, seam) {
           if (_soEcho) {
             const _bodyRxE = bodyMatch.type === 'REGEX' ? bodyMatch.regex.replace(/^\(\?s\)/, '').replace(/\.\*$/, '') : `(?=.*${rx(wireForm(key))})`;
             const _echoInput = standCall ? { ..._echo(standCall.input), storyId: stood.storyId, agent: stood.agent } : _echoed;
+            // TWICE, so the SECOND refusal is exercised too: a correction that reaches the retry
+            // prompt and a climb to the ladder's next rung only show when the first retry also
+            // fails (regintel 20260919T224649Z: three echoes on one rung, no note, abort).
             await put('/mockserver/expectation', {
-              priority: 38 + _tagRank, times: { remainingTimes: 1, unlimited: false },
+              priority: 38 + _tagRank, times: { remainingTimes: 2, unlimited: false },
               httpRequest: { method: 'POST', path: proto.path,
                 body: { type: 'REGEX', regex: `(?s)${_bodyRxE}(?=.*${rx(`"name":"${_soEcho}"`)}).*` } },
               httpResponse: { statusCode: 200, headers: { 'content-type': ['text/event-stream; charset=utf-8'], 'x-seam': [`${seam}:first-answer-echoes-example`] },
@@ -2686,7 +2689,7 @@ function endsInToolCall(cap, seam) {
           const _bodyRxT = bodyMatch.type === 'REGEX' ? bodyMatch.regex.replace(/^\(\?s\)/, '').replace(/\.\*$/, '') : `(?=.*${rx(wireForm(key))})`;
           const _noToolE = _soEcho ? `(?!.*${rx(`"name":"${_soEcho}"`)})` : '';
           await put('/mockserver/expectation', {
-            priority: 36 + _tagRank, times: { remainingTimes: 1, unlimited: false },
+            priority: 36 + _tagRank, times: { remainingTimes: 2, unlimited: false },
             httpRequest: { method: 'POST', path: proto.path, body: { type: 'REGEX', regex: `(?s)${_bodyRxT}${_noToolE}.*` } },
             httpResponse: { statusCode: 200, headers: { 'content-type': ['text/event-stream; charset=utf-8'], 'x-seam': [`${seam}:first-answer-echoes-example`] },
               body: proto.text(standInReplyText(seam, _echoed, contractOf(seam, template))) },

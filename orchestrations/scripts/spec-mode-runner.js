@@ -1349,9 +1349,33 @@ function _validatedOrNull(parsed, tag, seam) {
   if (v.ok) return parsed;
   console.warn(`spec-mode: ${v.reason}`);
   // Diagnostic by default: a shape mismatch is reported and the payload still flows, so
-  // the pipeline's own recovery decides. Only a FATAL refusal (no parseable answer, or
-  // EPAM_SCHEMA_STRICT=1) drops it — an unproven validator must not halt a run.
-  return v.fatal ? null : parsed;
+  // the pipeline's own recovery decides. Only a FATAL refusal (no parseable answer, an echoed
+  // example, or EPAM_SCHEMA_STRICT=1) drops it — an unproven validator must not halt a run.
+  //
+  // THE REFUSAL IS KEPT FOR THE RETRY. A refused-and-dropped answer reads as "no answer" to the
+  // caller; the retry then had nothing to correct and called it a transient (regintel
+  // 20260919T224649Z: three identical echoes on the same rung, then abort). The reason survives
+  // here so the spec retry can classify it and carry the correction.
+  if (v.fatal) { _lastRefusal = { tag, seam: _seam, reason: v.reason }; return null; }
+  return parsed;
+}
+let _lastRefusal = null;
+/** The most recent fatal refusal at the tag-parse seam, consumed once. */
+function takeLastRefusal(tag) {
+  const r = _lastRefusal && (!tag || _lastRefusal.tag === tag) ? _lastRefusal : null;
+  _lastRefusal = null;
+  return r;
+}
+/**
+ * WHAT KIND OF FAILURE A REFUSED SPEC ANSWER IS. `empty` is a true transient (nothing came back);
+ * a refusal that named the placeholder is the model echoing the example, and the retry must say
+ * so or the same echo comes back.
+ */
+function classifySpecRefusal({ payload, refusal }) {
+  if (payload) return null;
+  const why = String(refusal || '');
+  if (/placeholder|copied back/i.test(why)) return 'placeholder';
+  return 'empty';
 }
 
 /**
@@ -1826,7 +1850,9 @@ async function run() {
           logDir,
           agent === 'speckit' ? `${story.id}-speckit-review.log` : `${story.id}-${agent}-spec.log`
         );
+        const _specRefused = takeLastRefusal('SPEC_AGENT');
         const _specFailureKind = (agentResult && agentResult.payload && specPayloadFailure(agentResult.payload))
+          || (_specRefused && classifySpecRefusal({ payload: null, refusal: _specRefused.reason }) === 'placeholder' ? 'placeholder' : null)
           || classifySpecFailure(readAgentRawOutput(_specRawLog));
         const _specNote = specCorrectiveNote(_specFailureKind);
         // For retry 2+, escalate to the HIGH model if it differs from base — both agents.
@@ -1860,7 +1886,7 @@ async function run() {
             const _savedModel = process.env.SPEC_MODE_OPENSPEC_MODEL;
             process.env.SPEC_MODE_OPENSPEC_MODEL = _openspecHighModel;
             try {
-              agentResult = await runSpecAgent({ promptExec, agent, story, phase: opts.phase, runId, logDir, forcedRetryNote: _specNote });
+              agentResult = await runSpecAgent({ promptExec, agent, story, phase: opts.phase, runId, logDir, forcedRetryNote: _specNote, attempt: _specRetry });
             } finally {
               if (_savedModel !== undefined) process.env.SPEC_MODE_OPENSPEC_MODEL = _savedModel;
               else delete process.env.SPEC_MODE_OPENSPEC_MODEL;
@@ -1877,7 +1903,7 @@ async function run() {
           } else {
             agentResult = agent === 'speckit' && openspecPayload
               ? await runSpeckitReview({ promptExec, story, openspecOutput: openspecPayload, phase: opts.phase, runId, logDir, forcedRetryNote: _specNote })
-              : await runSpecAgent({ promptExec, agent, story, phase: opts.phase, runId, logDir, forcedRetryNote: _specNote });
+              : await runSpecAgent({ promptExec, agent, story, phase: opts.phase, runId, logDir, forcedRetryNote: _specNote, attempt: _specRetry });
           }
         } catch (err) { agentResult = _specAgentFailed(agent, story, err, `retry ${_specRetry}`); }
       }
@@ -7323,7 +7349,7 @@ function referencedDocsBlock(docs) {
 }
 
 async function runSpecAgent({ promptExec, agent, story, phase, runId, logDir, forcedRetryNote,
-  runDetective = runCodeGraphDetective, prd = null }) {
+  runDetective = runCodeGraphDetective, prd = null, attempt = 0 }) {
   const acCount = Array.isArray(story.acceptanceCriteria) ? story.acceptanceCriteria.length : 0;
   const splitDepthVal = story.specification?.splitDepth ?? 0;
 
@@ -7541,7 +7567,9 @@ async function runSpecAgent({ promptExec, agent, story, phase, runId, logDir, fo
       path.join(logDir, `${story.id}-${agent}-spec.log`), null, story.id, repoPath,
       // THE SEAM, asked for. This call passed no env, so it ran with no ladder, no budget
       // and no tool grant — the settings sat in the registry reaching nothing.
-      { ...seamInvocationEnv('spec-agent', logDir), EPAM_AGENT_NAME: 'spec-agent' },
+      // EACH RETRY CLIMBS. Attempt N is asked at rung N of the spec-agent ladder — the engine's
+      // one rule for every seam (runSeamUntilAccepted). Rung 0 is exactly what it always was.
+      { ...(attempt > 0 ? seamInvocationEnvAtRung('spec-agent', logDir, attempt) : seamInvocationEnv('spec-agent', logDir)), EPAM_AGENT_NAME: 'spec-agent' },
     );
     // Merge fix-site candidates into locationHint. PRIMARY: the code-graph-
     // detective — a tool-using agent (GLM-5.1) that iterates CodeGraph queries
@@ -9309,6 +9337,11 @@ function specCorrectiveNote(kind) {
       return 'CRITICAL — YOUR PREVIOUS RESPONSE WAS REJECTED: it began as JSON but could not be ' +
              'parsed. Emit strictly valid JSON — quote every key, no trailing commas, no comments ' +
              'and no unescaped newlines inside string values.';
+    case 'placeholder':
+      return 'CRITICAL — YOUR PREVIOUS RESPONSE WAS REJECTED: it repeated the schema example ' +
+             '("...") as the answer. The example shows the SHAPE only. Every field must carry real ' +
+             'content for THIS story: real acceptance criteria, a real description and title, and ' +
+             'either real split children or "splitStories": []. Never return "..." anywhere.';
     case 'placeholder-split':
       return 'CRITICAL — YOUR PREVIOUS RESPONSE WAS REJECTED: its "splitStories" repeated the ' +
              `schema example (${JSON.stringify({ id: SPLIT_CHILD_EXAMPLE.id, title: SPLIT_CHILD_EXAMPLE.title })}) instead of real stories. The example ` +
@@ -10651,6 +10684,9 @@ module.exports = {
   advanceAgentLadderEscalation,
   recordDetectiveRound,
   classifySpecFailure,
+  classifySpecRefusal,
+  takeLastRefusal,
+  seamInvocationEnvAtRung,
   specCorrectiveNote,
   specPayloadFailure,
   dropPlaceholderSplits,

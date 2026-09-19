@@ -345,15 +345,21 @@ def _rel(path):
     p = str(path or '')
     if _out_dir and p.startswith(_out_dir + '/'):
         p = p[len(_out_dir) + 1:]
-    return p.lstrip('./')
+    while p.startswith('./'):
+        p = p[2:]
+    return p
 all_story_dirs = set()
-for s in stories:
-    for f in s.get('technicalNotes', {}).get('files', []):
-        rf = _rel(f)
-        if rf.endswith('/'):
-            all_story_dirs.add(rf)
-        else:
-            all_story_files.add(rf.split('/')[-1])
+# PROTECTED PATHS ARE PROJECT SCOPE TOO: files and directories the project declares as taken
+# from elsewhere and never authored by a story (regintel: .env.example, manifest.md, dial/,
+# docs/). The TC writer reads them; no story lists them; they are as declared as any file.
+_declared = [f for s in stories for f in s.get('technicalNotes', {}).get('files', [])]
+_declared += list((d.get('configuration') or {}).get('protectedPaths') or [])
+for f in _declared:
+    rf = _rel(f)
+    if rf.endswith('/'):
+        all_story_dirs.add(rf)
+    else:
+        all_story_files.add(rf.split('/')[-1])
 def _under_declared_dir(src):
     rs = _rel(src)
     return any(rs.startswith(d) for d in all_story_dirs)

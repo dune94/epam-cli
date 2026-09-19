@@ -23,9 +23,10 @@ const outputDir = '/tmp/prd-integrity-dir-fixture-app';
 const dirs: string[] = [];
 afterAll(() => { for (const d of dirs) rmSync(d, { recursive: true, force: true }); });
 
-function fixture(sourceFiles: string[], files: string[]): any {
+function fixture(sourceFiles: string[], files: string[], protectedPaths: string[] = []): any {
   return {
     project: { outputDir },
+    configuration: { protectedPaths },
     stories: [{
       id: 'REGI-001', status: 'pending', completed: false, effort: 'medium',
       aiProvider: 'openrouter', model: 'z-ai/glm-5.3',
@@ -57,6 +58,18 @@ describe('check #18 — testCriteria.sourceFiles against declared files', () => 
 
   it('accepts it when the declared directory is absolute and the source file relative', () => {
     const r = run(fixture(['dial/client.py'], [`${outputDir}/dial/`]));
+    expect(r.out).not.toMatch(/sourceFiles references unknown file/);
+  });
+
+  it('accepts a source file the project declares as a protected path — copied in, authored by no story', () => {
+    // regintel: `.env.example` and `manifest.md` come from the read-only source repo; the TC
+    // writer reads them and no story creates them.
+    const r = run(fixture(['.env.example', 'manifest.md'], ['requirements.txt'], ['.env.example', 'manifest.md', 'dial/']));
+    expect(r.out).not.toMatch(/sourceFiles references unknown file/);
+  });
+
+  it('a protected DIRECTORY covers the files under it too', () => {
+    const r = run(fixture(['docs/sample.md'], ['requirements.txt'], ['docs/']));
     expect(r.out).not.toMatch(/sourceFiles references unknown file/);
   });
 

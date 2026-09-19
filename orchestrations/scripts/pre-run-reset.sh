@@ -393,6 +393,7 @@ CLEARABLE_LOGS=(
   profiles-audit.jsonl
   phase-cost.jsonl
   healing-events.jsonl
+  run-guidance.jsonl
   failure-diagnosis-groundedness.jsonl
   story-failures.jsonl
   guarded-step-retries.jsonl

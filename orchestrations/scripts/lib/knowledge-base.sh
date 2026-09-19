@@ -66,6 +66,33 @@ get_relevant_kb_entries() {
 }
 
 # Build the KB section appended to every implementation prompt
+# ── The run's own guidance ledger ───────────────────────────────────────────
+# What the failure analyst prescribed for a story's NEXT attempt, in THIS run. Per story, under
+# LOG_DIR — pre-run-reset clears LOG_DIR ledgers on a fresh launch and keeps them on a resume, so
+# nothing lingers across runs (operator, 2026-08-12) and nothing is lost within one. This is the
+# in-run channel the analyst's comments described and never had; without it target=skill and
+# target=kb wrote nowhere the retry prompt reads.
+_run_guidance_file() {
+    printf '%s/run-guidance.jsonl' "${LOG_DIR:?LOG_DIR is required for the run guidance ledger}"
+}
+
+# record_run_guidance <story_id> <note> <target>
+record_run_guidance() {
+    local _sid="${1:?story id}" _note="${2:-}" _target="${3:-skill}"
+    [ -n "$_note" ] || return 0
+    local _f; _f=$(_run_guidance_file) || return 1
+    jq -cn --arg s "$_sid" --arg n "$_note" --arg t "$_target" --arg ts "$(date -u +%Y-%m-%dT%H:%M:%SZ)" \
+        '{storyId:$s, note:$n, target:$t, ts:$ts}' >> "$_f"
+}
+
+# run_guidance_for_story <story_id> — the notes recorded for this story, newest last, unique.
+run_guidance_for_story() {
+    local _sid="${1:?story id}" _f
+    _f=$(_run_guidance_file 2>/dev/null) || return 0
+    [ -f "$_f" ] || return 0
+    jq -r --arg s "$_sid" 'select(.storyId == $s) | .note' "$_f" 2>/dev/null | awk '!seen[$0]++'
+}
+
 build_kb_prompt_section() {
     local story_id=$1
     local retry_count=${2:-0}
@@ -84,6 +111,13 @@ build_kb_prompt_section() {
     # Inject external test failure context when available
     if [ -n "${VERIFICATION_FAILURE:-}" ]; then
         printf '%s\n' "$VERIFICATION_FAILURE"
+    fi
+
+    local _guidance; _guidance=$(run_guidance_for_story "$story_id")
+    if [ -n "$_guidance" ]; then
+        printf '\n## Guidance From This Story'"'"'s Previous Attempt\n'
+        printf 'The failure analyst diagnosed the previous attempt of this story and prescribed the following. It names a checkable fact the previous attempt got wrong; apply it before writing.\n'
+        printf '%s\n' "$_guidance" | sed 's/^/- /'
     fi
 
     printf '\n## Relevant Knowledge Base Entries\n'

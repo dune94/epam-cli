@@ -410,12 +410,12 @@ describe('claude.sh — kb-change-reviewer wired before KB file append', () => {
     const afterReview = claudeSrc.slice(kbCaseIdx, kbCaseIdx + 2200);
     expect(afterReview).toMatch(/rejected by reviewer/i);
     expect(afterReview).toMatch(/persisting raw fallback \(unreviewed\)/i);
-    // The '[unreviewed-fallback] %s' TAG belonged to the cross-run write, which was removed.
-    // Tagging is how an unreviewed entry stayed distinguishable in a file that outlived the
-    // run; with no such file, the distinction is the log line above. The remaining tag is the
-    // SKILL-note path, which does still hand its text on.
+    // Both rescues hand their text on — into the run's own guidance ledger, which the story's
+    // next attempt renders (2026-09-19: until then neither target reached a retry at all). The
+    // tag is how a reader of that prompt tells an unreviewed note from a reviewed one, so the
+    // KB path carries it exactly as the skill path does.
     expect(claudeSrc.match(/\[unreviewed-fallback\]/g) || [],
-      'exactly one unreviewed-fallback rescue should remain — the skill-note path').toHaveLength(1);
+      'both rescues — skill note and KB entry — hand a tagged note to the run guidance ledger').toHaveLength(2);
   });
 });
 

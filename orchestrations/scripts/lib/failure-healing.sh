@@ -1042,7 +1042,6 @@ PYEOF
                     ;;
                 skill)
                     if [ -n "$skill_note" ]; then
-                        log "  [FailureAnalyst] Injected skill guidance into retry prompt (${#skill_note} chars)"
                         # Persist skill note to the codeline KB so later runs inherit this learning
                         if [ -f "$profiles_file" ]; then
                             # Deterministic anti-pattern gate (found live, 2026-08-02): a skill
@@ -1143,9 +1142,18 @@ PYEOF
                             # 2026-08-12: "there can be no lingering anything to skew runs. That
                             # is strictly forbidden."
                             #
-                            # The note still reaches THIS run's retry through the in-run
-                            # amendment above; only the persistence is removed.
-                            log "  [FailureAnalyst] Skill note applied to this run only — not persisted across runs"
+                            # THE IN-RUN CHANNEL. When cross-run persistence was removed the
+                            # comment above said the note "still reaches THIS run's retry through
+                            # the in-run amendment" — no such amendment existed. Nothing wrote the
+                            # note anywhere the retry prompt reads, so target=skill was a no-op
+                            # behind a log line claiming an injection (regintel REGI-004-B and
+                            # REGI-001-tests, 2026-09-18/19: identical failure on every retry,
+                            # "self-healing is NOT working"). It now lands in the run's own
+                            # guidance ledger under LOG_DIR — per story, cleared by pre-run-reset
+                            # on a fresh launch, kept on a resume — which build_kb_prompt_section
+                            # renders into that story's next attempt. Nothing lingers across runs.
+                            record_run_guidance "$story_id" "$REVIEWER_RETRY_TEXT" "skill"
+                            log "  [FailureAnalyst] Skill note recorded for ${story_id}'s next attempt (${#REVIEWER_RETRY_TEXT} chars) — this run only, not persisted across runs"
                             _profile_updated="true"
                             fi
                             fi
@@ -1226,14 +1234,14 @@ ${_kb_target_role_profile}"
                             # unreviewed) instead of discarding the knowledge
                             # outright. A future reviewer/human pass can still
                             # clean up the wording; nothing is lost meanwhile.
-                            warning "  [FailureAnalyst] KB entry rejected by reviewer after 3 attempts — persisting raw fallback (unreviewed) instead of discarding"
-                            # Not persisted across runs — see the note on the skill-note path above.
+                            warning "  [FailureAnalyst] KB entry rejected by reviewer after 3 attempts — persisting raw fallback (unreviewed) for this run instead of discarding"
+                            record_run_guidance "$story_id" "[unreviewed-fallback] ${short_note}" "kb"
                             _profile_updated="true"
                         else
-                            # Compact 2-line format: timestamp + rule only (no verbose headers)
-                            # Not persisted across runs. The entry still reaches THIS run's retry
-                            # through the in-run amendment; only the cross-run write is removed.
-                            log "  [FailureAnalyst] KB entry applied to this run only (${#REVIEWER_RETRY_TEXT} chars) — not persisted"
+                            # Same in-run channel as the skill note — see there. The cross-run
+                            # write stays removed.
+                            record_run_guidance "$story_id" "$REVIEWER_RETRY_TEXT" "kb"
+                            log "  [FailureAnalyst] KB entry recorded for ${story_id}'s next attempt (${#REVIEWER_RETRY_TEXT} chars) — this run only, not persisted"
                             _profile_updated="true"
                         fi
                         fi

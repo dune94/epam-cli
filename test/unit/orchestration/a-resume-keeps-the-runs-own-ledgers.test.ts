@@ -35,6 +35,7 @@ function reset(env: Record<string, string>) {
   writeFileSync(join(logs, 'phase-gates.jsonl'), `${GATE}\n`);
   writeFileSync(join(logs, 'phase-cost.jsonl'), `${COST}\n`);
   writeFileSync(join(logs, 'healing-events.jsonl'), '{"story":"REGI-001-tests","retry":1}\n');
+  writeFileSync(join(logs, 'run-guidance.jsonl'), '{"storyId":"REGI-004-B","note":"Never import DEFAULT_MODEL from dial","target":"skill"}\n');
   const r = spawnSync('bash', [RESET, '--prd', prd, '--log-dir', logs], {
     encoding: 'utf8', timeout: 120_000,
     env: { ...process.env, COMPOSE_OVERRIDE: join(d, 'override.yml'), DASHBOARD_STATE_DIR: dash, ORCH_RUN_ID: RUN, ...env },
@@ -55,6 +56,11 @@ describe('a resume keeps the run\'s own ledgers', () => {
     expect(readFileSync(join(t.logs, 'healing-events.jsonl'), 'utf8')).toContain('REGI-001-tests');
   });
 
+  it('leaves the run guidance ledger intact — the analyst\'s notes for this run\'s retries', () => {
+    const t = reset({ EPAM_RESUME_RUN: RUN });
+    expect(readFileSync(join(t.logs, 'run-guidance.jsonl'), 'utf8')).toContain('REGI-004-B');
+  });
+
   it('says so', () => {
     const t = reset({ EPAM_RESUME_RUN: RUN });
     expect(t.out).toMatch(/resum\w+.*ledger|ledger.*resum\w+/i);
@@ -68,5 +74,10 @@ describe('a fresh launch still archives and clears them', () => {
     const archives = existsSync(join(t.logs, 'archive')) ? readdirSync(join(t.logs, 'archive')).filter((d) => d.startsWith('pre-run-')) : [];
     expect(archives.length, 'no archive was made').toBeGreaterThan(0);
     expect(readFileSync(join(t.logs, 'archive', archives[0], 'phase-gates.jsonl'), 'utf8')).toContain('"scaffold"');
+  });
+
+  it('clears the run guidance ledger — no note from one run reaches another (operator, 2026-08-12)', () => {
+    const t = reset({ EPAM_RESUME_RUN: '' });
+    expect(readFileSync(join(t.logs, 'run-guidance.jsonl'), 'utf8').trim()).toBe('');
   });
 });

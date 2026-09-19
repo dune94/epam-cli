@@ -339,6 +339,26 @@ _test_cmd="$("$NODE_BIN" -e '
 if [ -n "$_test_cmd" ]; then
   (cd "$CODELINE" && bash -c "$_test_cmd") >>"$LOG" 2>&1
   check $? "codeline tests green: $_test_cmd"
+# ── 3c. Self-heal reaches the retry ─────────────────────────────────────────
+# The mock fails one first attempt for every seam the analyst diagnoses, so the analyst RUNS at
+# £0; what was never checked is that its prescription reaches the next attempt. Until 2026-09-19
+# it did not — target=skill and target=kb wrote nowhere the retry prompt read. Judged on the
+# run's own artefacts: the guidance ledger holds a note, and a later prompt to the same story
+# carries the heading that renders it.
+# The ledger is cleared by the next fresh launch's reset (that is the rule it exists to keep),
+# so the copy to judge is the live one OR the newest archived copy a later launch put aside.
+_gl="$DEST/orchestrations/logs/run-guidance.jsonl"
+[ -s "$_gl" ] || _gl="$(ls -t "$DEST"/orchestrations/logs/archive/pre-run-*/run-guidance.jsonl 2>/dev/null | while read -r f; do [ -s "$f" ] && { echo "$f"; break; }; done)"
+if grep -q "\[FailureAnalyst\] Analyzing" "$LOG"; then
+  [ -n "$_gl" ] && [ -s "$_gl" ]; check $? "self-heal: the analyst's prescription was recorded in the run guidance ledger"
+  _healed_story="$("$NODE_BIN" -e 'try{const l=require("fs").readFileSync(process.argv[1],"utf8").trim().split("\n");process.stdout.write(JSON.parse(l[0]).storyId||"")}catch{}' "$_gl" 2>/dev/null)"
+  if [ -n "$_healed_story" ]; then
+    grep -lq "Guidance From This Story" "$DEST/orchestrations/logs/claude_outputs/${_healed_story}"_*.log "$DEST"/orchestrations/logs/archive/pre-run-*/claude_outputs/"${_healed_story}"_*.log 2>/dev/null; check $? "self-heal: ${_healed_story}'s next attempt was given the guidance"
+  fi
+  ! grep -q "Injected skill guidance into retry prompt" "$LOG"; check $? "self-heal: no injection is claimed that did not happen"
+else
+  say "self-heal: no story failure occurred in this rehearsal — the retry path was not exercised (not a failure)"
+fi
 else
   check 1 "the codeline's ecosystem declares a test command"
 fi

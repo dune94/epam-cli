@@ -2666,10 +2666,28 @@ function endsInToolCall(cap, seam) {
       if (_ph.length) {
         const _echo = (v) => (Array.isArray(v) ? (v.length ? [_ph[0]] : []) : (v && typeof v === 'object') ? Object.fromEntries(Object.entries(v).map(([k, x]) => [k, _echo(x)])) : (typeof v === 'string' ? _ph[0] : v));
         const _echoed = { ..._echo(stood), storyId: stood.storyId, agent: stood.agent };
+        // MET WHICHEVER WAY THE RUNNER ASKS. A schema-enforcing runner absorbs a bad TEXT turn
+        // and re-asks (the hollow first failure above learned this on run 24); served as text
+        // the echo never reached the consumer (greenfield rehearsal 8, 2026-09-19). A request
+        // that declares the structured-output tool is answered by CALLING it with the echo.
+        const _soEcho = structuredOutputToolName();
         for (const proto of PROTOCOLS) {
+          if (_soEcho) {
+            const _bodyRxE = bodyMatch.type === 'REGEX' ? bodyMatch.regex.replace(/^\(\?s\)/, '').replace(/\.\*$/, '') : `(?=.*${rx(wireForm(key))})`;
+            const _echoInput = standCall ? { ..._echo(standCall.input), storyId: stood.storyId, agent: stood.agent } : _echoed;
+            await put('/mockserver/expectation', {
+              priority: 38 + _tagRank, times: { remainingTimes: 1, unlimited: false },
+              httpRequest: { method: 'POST', path: proto.path,
+                body: { type: 'REGEX', regex: `(?s)${_bodyRxE}(?=.*${rx(`"name":"${_soEcho}"`)}).*` } },
+              httpResponse: { statusCode: 200, headers: { 'content-type': ['text/event-stream; charset=utf-8'], 'x-seam': [`${seam}:first-answer-echoes-example`] },
+                body: proto.calls([{ name: _soEcho, input: _echoInput, arguments: _echoInput }]) },
+            });
+          }
+          const _bodyRxT = bodyMatch.type === 'REGEX' ? bodyMatch.regex.replace(/^\(\?s\)/, '').replace(/\.\*$/, '') : `(?=.*${rx(wireForm(key))})`;
+          const _noToolE = _soEcho ? `(?!.*${rx(`"name":"${_soEcho}"`)})` : '';
           await put('/mockserver/expectation', {
             priority: 36 + _tagRank, times: { remainingTimes: 1, unlimited: false },
-            httpRequest: { method: 'POST', path: proto.path, body: bodyMatch },
+            httpRequest: { method: 'POST', path: proto.path, body: { type: 'REGEX', regex: `(?s)${_bodyRxT}${_noToolE}.*` } },
             httpResponse: { statusCode: 200, headers: { 'content-type': ['text/event-stream; charset=utf-8'], 'x-seam': [`${seam}:first-answer-echoes-example`] },
               body: proto.text(standInReplyText(seam, _echoed, contractOf(seam, template))) },
           });

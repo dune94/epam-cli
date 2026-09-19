@@ -458,7 +458,12 @@ fi
 # 6b. healing-events.jsonl at LOG_DIR is NOT stale from a prior run
 # (pre-run-reset.sh should have cleared it; non-empty means it was not reset)
 HEAL_LOG="$LOG_DIR_DEFAULT/healing-events.jsonl"
-if [[ -s "$HEAL_LOG" ]]; then
+# A RESUME CARRIES ITS OWN LEDGERS. pre-run-reset keeps them on a resume — they are this run's
+# record, and clearing them re-ran a finished phase (regintel 20260918T132928Z). Non-empty here
+# is the resumed run's own history, not a prior run's leftovers.
+if [[ -n "${EPAM_RESUME_RUN:-}" ]]; then
+  ok "resuming run ${EPAM_RESUME_RUN}: healing-events.jsonl is the run's own record — kept, not stale"
+elif [[ -s "$HEAL_LOG" ]]; then
   fail "healing-events.jsonl is non-empty from a prior run — run pre-run-reset.sh to clear it (stale data pollutes health.html)"
 else
   ok "healing-events.jsonl is empty/absent — clean slate for this run"

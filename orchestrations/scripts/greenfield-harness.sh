@@ -26,10 +26,11 @@ _project_env() {
     "$DEST/orchestrations/scripts/lib/llm-settings-resolve.js" "$1"
 }
 
-SET=""; PROJECT="greenfield-proof"; REF="HEAD"; DEST=""; CEILING="5"; ASSESS_ONLY=0; RATCHET=""
+SET=""; PROJECT="greenfield-proof"; REF="HEAD"; DEST=""; CEILING="5"; ASSESS_ONLY=0; RATCHET=""; PAUSED=0
 while [ $# -gt 0 ]; do
   case "$1" in
     --assess-only) ASSESS_ONLY=1; DEST="$2"; shift 2 ;;   # judge a kept install again; no install, no run, no spend
+    --paused)      PAUSED=1; shift ;;   # both pauses ON; resume after each; judge every handoff (see § 3a)
     --set)         SET="$2"; shift 2 ;;
     --project)     PROJECT="$2"; shift 2 ;;
     --ref)         REF="$2"; shift 2 ;;
@@ -109,7 +110,7 @@ cd "$DEST" || exit 1
 # would relocate the harness).
 # shellcheck source=/dev/null
 . "$DEST/orchestrations/scripts/lib/env-file.sh"; load_env_file_safe "$DEST/.env"
-export EPAM_PROVIDER_SET="$SET" OUTPUT_DIR="$DEST/build" EPAM_PAUSE_AFTER_AGENT_MINT=0 EPAM_PAUSE_BEFORE_WRITER=0 NODE_BIN
+export EPAM_PROVIDER_SET="$SET" OUTPUT_DIR="$DEST/build" EPAM_PAUSE_AFTER_AGENT_MINT="$PAUSED" EPAM_PAUSE_BEFORE_WRITER="$PAUSED" NODE_BIN
 # Pre-flight's shellcheck verdict is cached per digest of the orchestrator's bytes; the same bytes
 # in a fresh install carry the same verdict, so the harness shares the repository's cache and a
 # run needs the 3.6 GB shellcheck pass only when the orchestrator actually changed.
@@ -168,9 +169,47 @@ if [ -n "$BROWNFIELD_SEED" ]; then
     } ) >>"$LOG" 2>&1 &
   RUN_PID=$!
 else
-  say "launching tier3-run.sh --project $PROJECT (set $SET)"
-  setsid bash "$DEST/orchestrations/scripts/tier3-run.sh" --project "$PROJECT" --yes >>"$LOG" 2>&1 &
-  RUN_PID=$!
+  if [ "$PAUSED" = "1" ]; then
+    # THE HANDOFFS ARE THE TEST. Launch; at every pause the launcher exits 0 and prints the resume
+    # line; resume that run id — the same launcher, EPAM_RESUME_RUN set — until a launch ends with
+    # no pause. Every defect of 2026-09-18 (checkpoint contents, reclaim, prompts, roster cache,
+    # ledgers, phase re-run) lived in exactly these transitions, and none was ever rehearsed.
+    say "launching tier3-run.sh --project $PROJECT (set $SET) — PAUSED mode: both pauses on, resumed after each"
+    ( _n=0; _rid=""
+      while :; do
+        _n=$((_n + 1)); _mark="$LOG.paused-$_n"
+        if [ -n "$_rid" ]; then
+          echo "[harness] ━━━ resume $_n of run '$_rid' ━━━"
+          EPAM_RESUME_RUN="$_rid" bash "$DEST/orchestrations/scripts/tier3-run.sh" --project "$PROJECT" --yes 2>&1 | tee "$_mark"
+        else
+          bash "$DEST/orchestrations/scripts/tier3-run.sh" --project "$PROJECT" --yes 2>&1 | tee "$_mark"
+        fi
+        _x=${PIPESTATUS[0]}
+        [ "$_x" -eq 0 ] || { echo "[harness] launch $_n exited $_x"; exit "$_x"; }
+        _next="$(grep -o "Resume with:[[:space:]]*EPAM_RESUME_RUN=[0-9TZ]*" "$_mark" | tail -1 | sed 's/.*=//')"
+        if [ -z "$_next" ]; then
+          echo "[harness] launch $_n completed with no pause — the run is done"
+          # ONE MORE RESUME, AFTER COMPLETION. This is the launch regintel died on 2026-09-18: a
+          # resume after a phase gate said GO must recognise every finished phase and run nothing.
+          # With the ledgers cleared it re-ran the finished phase over committed code.
+          [ -n "$_rid" ] || _rid="$(grep -o "RUN NUMBER:[[:space:]]*[0-9TZ]*" "$_mark" | head -1 | awk '{print $NF}')"
+          [ -n "$_rid" ] || _rid="$(grep -o "resumed run '[0-9TZ]*'" "$LOG" | head -1 | grep -o '[0-9]\{8\}T[0-9]\{6\}Z')"
+          if [ -n "$_rid" ]; then
+            echo "[harness] ━━━ resume after completion of run '$_rid' — nothing may run ━━━"
+            EPAM_RESUME_RUN="$_rid" bash "$DEST/orchestrations/scripts/tier3-run.sh" --project "$PROJECT" --yes 2>&1 | tee "$LOG.after-completion"
+            exit "${PIPESTATUS[0]}"
+          fi
+          exit 0
+        fi
+        [ "$_n" -lt 6 ] || { echo "[harness] six launches and still pausing — refusing to loop"; exit 1; }
+        _rid="$_next"
+      done ) >>"$LOG" 2>&1 &
+    RUN_PID=$!
+  else
+    say "launching tier3-run.sh --project $PROJECT (set $SET)"
+    setsid bash "$DEST/orchestrations/scripts/tier3-run.sh" --project "$PROJECT" --yes >>"$LOG" 2>&1 &
+    RUN_PID=$!
+  fi
 fi
 HALTED=""
 while kill -0 "$RUN_PID" 2>/dev/null; do
@@ -203,6 +242,32 @@ fi   # not --assess-only
 # ── 3. What landed ───────────────────────────────────────────────────────────
 check "$RUN_EXIT" "launcher exit 0"
 _rc=0; [ -z "$HALTED" ] || _rc=1; check "$_rc" "run completed under the ceiling"
+if [ "$PAUSED" = "1" ]; then
+  # ── 3a. The handoffs ───────────────────────────────────────────────────────
+  _launches="$(ls "$LOG".paused-* 2>/dev/null | wc -l | tr -d ' ')"
+  [ "$_launches" -ge 3 ]; check $? "three launches at least: launch, resume past pause 1, resume past pause 2 (saw $_launches)"
+  grep -q "PAUSED at post-roster" "$LOG"; check $? "pause 1 fired (post-roster)"
+  grep -q "PAUSED at pre-writer" "$LOG"; check $? "pause 2 fired (pre-writer)"
+  grep -q "RESUMED run" "$LOG"; check $? "the resume restored the checkpoint"
+  ! grep -q "\[checkpoint\] reclaiming" "$LOG"; check $? "no reclaim: nothing else wrote over the paused run's state"
+  _resumes="$(ls "$LOG".paused-* 2>/dev/null | tail -n +2)"
+  for _m in $_resumes; do
+    grep -q "\[roster\] reusing the settled roster on disk" "$_m"; check $? "$(basename "$_m"): the roster was reused, not re-derived"
+    ! grep -q "\[roster\] composed from the specialiser" "$_m"; check $? "$(basename "$_m"): the specialiser was not called again"
+    grep -q "prompts already provisioned\|prompts already complete" "$_m"; check $? "$(basename "$_m"): the prompts were reused, not rebuilt"
+    ! grep -q "reset [0-9]* active stories to pending" "$_m"; check $? "$(basename "$_m"): no completed story was reset to pending"
+  done
+  _after="$LOG.after-completion"
+  [ -f "$_after" ]; check $? "a resume was launched after completion"
+  if [ -f "$_after" ]; then
+    for _p in $PHASES; do
+      grep -q "Phase: $_p — completed in run" "$_after"; check $? "after completion: phase '$_p' was recognised as completed, not run again"
+    done
+    ! grep -q "Running main-branch stories\|marked as completed" "$_after"; check $? "after completion: no story was written again"
+    ! grep -q "reset [0-9]* active stories to pending" "$_after"; check $? "after completion: no completed story was reset to pending"
+  fi
+  ! grep -q "prd-change-reviewer REJECTED" "$LOG"; check $? "no spec-pass story was rejected by the change reviewer"
+fi
 if [ -d "$PROJECT_DIR/seed" ]; then
   # The brownfield rehearsal: one phase, paused and resumed; the codeline is the clone the launcher
   # built under the workspace root, and the PRD is the one ingest synthesised from the tracker.

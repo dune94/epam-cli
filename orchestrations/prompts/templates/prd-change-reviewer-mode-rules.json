@@ -1,0 +1,28 @@
+{
+  "$why": [
+    "GREENFIELD JUDGES ACCEPTANCE CRITERIA. VERIFICATION CRITERIA ARE BROWNFIELD'S.",
+    "",
+    "The prd-change-reviewer persona states the VC-model rules — ACs immutable and never the spec",
+    "pass's output; reject when verificationCriteria is empty while the description names testable",
+    "behaviour. That is brownfield. On greenfield the spec pass REWRITES acceptance criteria and",
+    "verificationCriteria is never populated (enforceVerificationCriteria runs under",
+    "EPAM_BROWNFIELD=1 only), so the persona's rule rejected every non-split greenfield story three",
+    "times per agent — regintel 20260918T132928Z, core phase, model-independent.",
+    "",
+    "A fragment composed into the reviewer's profile value rather than an edit to the persona: the",
+    "persona is a canonical text whose provenance digest a settled roster carries, and a project's",
+    "own prd-change-reviewer-spec prompt is generated from its template and is not edited here.",
+    "Two bodies, selected by mode, so each reviewer is told the model it is judging under."
+  ],
+  "id": "prd-change-reviewer-mode-rules",
+  "description": "Which specification model the change reviewer judges under, by run mode.",
+  "version": 1,
+  "placeholders": [],
+  "seams": [
+    "prd-change-reviewer"
+  ],
+  "bodies": {
+    "greenfield": "MODE OVERRIDE — READ BEFORE APPLYING THE RULES ABOVE. This project runs the ACCEPTANCE-CRITERIA model (greenfield). Here the acceptance criteria ARE the spec pass's output: the spec pass MAY rewrite, add and sharpen acceptanceCriteria, and you judge the AFTER acceptanceCriteria — measurable, complete, consistent with the description, non-overlapping across split children. verificationCriteria is NOT produced on this project: an empty or absent verificationCriteria is NEVER a reason to reject, and the rule 'verificationCriteria is empty while the description names concrete testable behaviour' DOES NOT APPLY here. Likewise 'ACs are immutable / not the spec pass's output' does not apply: an AC edit is the change under review, not a violation.",
+    "brownfield": "This project runs the VERIFICATION-CRITERIA model (brownfield). The rules above apply as written: acceptance criteria come from upstream and are not the spec pass's output; the spec pass's deliverable is verificationCriteria."
+  }
+}

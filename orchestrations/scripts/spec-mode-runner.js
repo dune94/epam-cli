@@ -748,15 +748,23 @@ const TOOL_SPEC_AGENT = {
  * is nothing to diverge and nothing to review.
  */
 const AC_ONLY_FIELDS = ['acceptanceCriteria', 'acAddedBySpeckit', 'acModifiedBySpeckit', 'acFlagged'];
+// THE MIRROR. Greenfield judges acceptance criteria; verificationCriteria is populated from the
+// spec agent's answer only under EPAM_BROWNFIELD=1 (enforceVerificationCriteria), so a greenfield
+// answer's verificationCriteriaDetail is discarded unread — and the change reviewer then rejected
+// the story for having none (regintel 20260918T132928Z: every non-split core story, 3× per agent).
+const VC_ONLY_FIELDS = ['verificationCriteriaDetail'];
 
 function specAgentContract() {
-  if (process.env.EPAM_BROWNFIELD !== '1') return TOOL_SPEC_AGENT;
-
-  // structuredClone, so deriving cannot mutate the greenfield contract for the rest of the
-  // process — a shared-reference edit here would corrupt every later greenfield call in-process.
+  // structuredClone, so deriving cannot mutate the base contract for the rest of the
+  // process — a shared-reference edit here would corrupt every later call in-process.
   const c = typeof structuredClone === 'function'
     ? structuredClone(TOOL_SPEC_AGENT)
     : JSON.parse(JSON.stringify(TOOL_SPEC_AGENT));
+  if (process.env.EPAM_BROWNFIELD !== '1') {
+    c.parameters.required = (c.parameters.required || []).filter((f) => !VC_ONLY_FIELDS.includes(f));
+    for (const f of VC_ONLY_FIELDS) delete c.parameters.properties[f];
+    return c;
+  }
 
   c.parameters.required = (c.parameters.required || []).filter((f) => !AC_ONLY_FIELDS.includes(f));
   for (const f of AC_ONLY_FIELDS) delete c.parameters.properties[f];
@@ -9989,7 +9997,11 @@ function capReviewSnapshot(snapshot) {
   const acceptanceCriteria = ac.length > CAP
     ? [...ac.slice(0, CAP), `…and ${ac.length - CAP} more AC(s), omitted here for length`]
     : ac;
-  return { ...snapshot, acceptanceCriteria };
+  const out = { ...snapshot, acceptanceCriteria };
+  // Greenfield never populates verificationCriteria; shown, an always-empty field is a defect
+  // the reviewer is told to find. Not shown, there is nothing to misjudge.
+  if (process.env.EPAM_BROWNFIELD !== '1') delete out.verificationCriteria;
+  return out;
 }
 
 // reviewPrdChange <opts>
@@ -10046,8 +10058,13 @@ async function reviewPrdChange({ aiRunnerCmd, profiles, storyId, changeType, bef
   // 2026-07-23 on AMSD-1820. Fix: cap acceptanceCriteria (the only field whose
   // length is unbounded) independently, and always include technicalNotes/
   // description/title in full so structural fields can never be truncated away.
+  // THE MODEL THE REVIEWER JUDGES UNDER IS THE RUN'S MODE, NOT THE PERSONA'S DEFAULT. The persona
+  // states the VC-model (brownfield) rules; told nothing else, it rejected every non-split
+  // greenfield story for an empty verificationCriteria the greenfield path never fills.
+  const reviewMode = process.env.EPAM_BROWNFIELD === '1' ? 'brownfield' : 'greenfield';
+  const modeRules = renderEngineTemplate('prd-change-reviewer-mode-rules', {}, reviewMode);
   const prompt = renderEngineTemplate('prd-change-reviewer-spec', {
-    __REVIEWER_PROFILE__: reviewerProfile,
+    __REVIEWER_PROFILE__: `${reviewerProfile}\n\n${modeRules}`,
     __STORY_ID__: storyId,
     __CHANGE_TYPE__: changeType,
     __SPLIT_NOTE__: splitNote,

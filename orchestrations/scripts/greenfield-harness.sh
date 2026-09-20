@@ -366,6 +366,11 @@ if grep -q "first-answer-echoes-example" "$LOG" || grep -q ":first-answer-echoes
   # ladder's next rung. Both are the seam's own log lines.
   grep -q "placeholder contract violation, retrying WITH a correction" "$LOG"; check $? "echo: a refused spec answer was retried WITH the placeholder correction"
   ! grep -q "retrying transient failure" "$LOG"; check $? "echo: no refused answer was mistaken for a transient"
+  # THE CLIMB, ON THE RECORD. The fast-path logs the model it runs; a corrected retry must log a
+  # DIFFERENT model than rung 0 (regintel: three attempts, one model, abort). Two distinct
+  # fast-path models across the run proves a rung above 0 was actually asked.
+  _fp_models="$(grep -o 'spec-mode: fast-path [^ ]*' "$LOG" | sort -u | wc -l | tr -d ' ')"
+  [ "${_fp_models:-0}" -ge 2 ]; check $? "echo: a corrected retry ran on a rung above 0 (saw ${_fp_models} distinct fast-path model(s))"
 else
   say "echo: the mock served no echoed first answer in this rehearsal — the refusal was not exercised (not a failure)"
 fi

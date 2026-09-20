@@ -1,6 +1,7 @@
 import fs from 'fs/promises';
 import path from 'path';
 import type { Tool, ToolResult } from '../types.js';
+import { renderAgentMessage } from '../messages.js';
 import { ensureDir } from '../../utils/fs.js';
 
 /**
@@ -73,6 +74,27 @@ export class EscalateDefectTool implements Tool {
       };
     }
 
+    // THE FIX MAY BE THE CALLER'S OWN. regintel 20260919T224649Z resume 7 (2026-09-20): REGI-007a,
+    // which declares regintel/pipeline.py, escalated regintel/pipeline.py, was told "do not modify
+    // this file — it is outside your scope", obeyed, and burned its ladder on a defect it was
+    // allowed to fix all along. The scope the writer runs with is already in the environment —
+    // EPAM_ALLOWED_WRITE_PATHS, the same variable WriteFile's scope guard reads — so the answer is
+    // derived from it: a target inside the declared scope is refused with "the fix is yours", and
+    // nothing is filed. An undeclared scope (a caller that never computed one) files as before.
+    const scopeEnv = process.env.EPAM_ALLOWED_WRITE_PATHS;
+    if (scopeEnv) {
+      const resolvedTarget = path.resolve(projectRoot, targetFile);
+      const declared = scopeEnv.split(':').filter(Boolean).map((p) => path.resolve(projectRoot, p));
+      const own = declared.some((d) => resolvedTarget === d || resolvedTarget.startsWith(d + path.sep));
+      if (own) {
+        return {
+          toolUseId: '',
+          content: renderAgentMessage('escalation_refused_own_file', { path: targetFile, declared: declared.join(':') }),
+          isError: true,
+        };
+      }
+    }
+
     try {
       const escalationsDir = path.join(projectRoot, '.epam', 'escalations');
       await ensureDir(escalationsDir);
@@ -87,10 +109,7 @@ export class EscalateDefectTool implements Tool {
       await fs.writeFile(escalationPath, JSON.stringify(record, null, 2), 'utf-8');
       return {
         toolUseId: '',
-        content:
-          `Escalation filed for ${targetFile}. Do not attempt to modify this file — it is outside your scope. ` +
-          `The pipeline will apply the fix in the owning story and resume your task. Stop investigating ${targetFile} ` +
-          `for the remainder of this attempt.`,
+        content: renderAgentMessage('escalation_filed', { path: targetFile }),
         isError: false,
       };
     } catch (err) {

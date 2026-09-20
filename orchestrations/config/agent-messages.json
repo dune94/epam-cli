@@ -12,5 +12,7 @@
   "write_refused_settings_guard": "[settings-guard] Write blocked: {path} may only be written by the '{requiredRole}' role (this call ran as '{callerRole}'). LLM ladder/cost/model settings are not something a story implementer should change as a side effect of its own task.",
   "write_refused_invalid_json": "Error: refused to write {path} — the resulting content is not valid JSON ({hint}).",
   "append_breaks_json": "appending to an existing JSON file produces invalid JSON unless the appended text is not itself a full document",
-  "content_not_valid_json": "the content is not a single, complete, valid JSON document"
+  "content_not_valid_json": "the content is not a single, complete, valid JSON document",
+  "escalation_refused_own_file": "Escalation refused: {path} is inside YOUR declared scope ({declared}) — the fix is yours to make. No escalation was filed. Edit the file directly; escalate only a file another story owns.",
+  "escalation_filed": "Escalation filed for {path}. Do not attempt to modify this file — it is outside your scope. The pipeline will apply the fix in the owning story and resume your task. Stop investigating {path} for the remainder of this attempt."
 }

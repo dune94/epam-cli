@@ -113,6 +113,20 @@ if [ -n "$PROJECT_FROM" ]; then
   [ -d "$_src_proj" ] || { red "no project '$PROJECT' under $PROJECT_FROM/orchestrations/projects"; exit 2; }
   rm -rf "$DEST/orchestrations/projects/$PROJECT"
   cp -r "$_src_proj" "$DEST/orchestrations/projects/$PROJECT"
+  # OPERATOR CONFIG ONLY — never the source install's generated state. The installer declares
+  # what a run generates (generated-run-state-paths.json, run-state-paths.json: roster, profiles,
+  # project-roles, prompts, kb, runs...); copied in, the mock's role-assigner answered with the
+  # PAID run's minted roles while the mock mint had produced its own, and the rehearsal halted at
+  # assignment (regintel, 2026-09-20). Removed by the same declarations the installer uses.
+  for _decl in "$DEST/orchestrations-installer/generated-run-state-paths.json" "$DEST/orchestrations-installer/run-state-paths.json"; do
+    [ -f "$_decl" ] || continue
+    while IFS= read -r _pat; do
+      case "$_pat" in orchestrations/projects/\*/*) ;; *) continue ;; esac
+      _rel="${_pat#orchestrations/projects/\*/}"
+      # shellcheck disable=SC2086
+      rm -rf "$DEST/orchestrations/projects/$PROJECT"/$_rel 2>/dev/null || true
+    done < <("$NODE_BIN" -e 'const j=require(process.argv[1]); for (const p of (j.paths||j.excludes||[])) console.log(p)' "$_decl" 2>/dev/null)
+  done
   _src_canon="$(sed -n 's/^PRD_CANONICAL=//p' "$_src_proj/config.env" | tr -d '"')"
   if [ -n "$_src_canon" ] && [ -f "$PROJECT_FROM/$_src_canon" ]; then
     mkdir -p "$(dirname "$DEST/$_src_canon")"; cp "$PROJECT_FROM/$_src_canon" "$DEST/$_src_canon"

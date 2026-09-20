@@ -133,6 +133,21 @@ function producesImplementation(seam) {
     return !!(reg[seam] && reg[seam].produces === 'implementation');
   } catch { return false; }
 }
+/**
+ * THE HEADING UNDER WHICH THE ENGINE HANDS A WRITER ITS PREVIOUS ATTEMPT'S GUIDANCE — read from
+ * the engine's own source (knowledge-base.sh) rather than restated here, so the rehearsal keys on
+ * what the engine actually emits. A regex fragment; empty when the source cannot be read.
+ */
+function guidanceHeadingRegex() {
+  try {
+    const src = fs.readFileSync(path.join(ROOT, 'orchestrations', 'scripts', 'lib', 'knowledge-base.sh'), 'utf8');
+    const m = src.match(/printf '\\n## ([^\n]*?)\\n'/);
+    if (!m) return '';
+    const heading = m[1].replace(/'"'"'/g, "'");
+    return heading.split(/'/).map((part) => rx(wireForm(part))).join('.{0,8}');
+  } catch { return ''; }
+}
+
 /** Whether the registry says this seam's failed attempts reach the attempt analyst. */
 function analystDiagnoses(seam) {
   try {
@@ -2190,33 +2205,45 @@ function endsInToolCall(cap, seam) {
         const _short = _named.length && _named.length < calls.length ? _named
           : (_wrongOnes.length ? calls.map((c) => (c.wrong ? { ...c.wrong, read: c.read } : c)) : calls.slice(0, -1));
         const _turns = calls.length > 1 || _wrongOnes.length ? [_short, _short, calls] : [calls];
+        // A REAL SELF-HEAL, CAUSALLY. When the first attempts fall short on purpose, the FULL
+        // answer is served only to a prompt that carries the engine's own guidance heading — the
+        // analyst's prescription, recorded and rendered into the retry. A prompt without it keeps
+        // getting the short answer (priority 53, unlimited), so a writer that "heals" without the
+        // guidance having reached it cannot happen here: the story fails and the harness is red.
+        // Sequence alone (short, short, full) proved ordering, not that the note did anything.
+        const _healedBy = _turns.length > 1 ? guidanceHeadingRegex() : '';
         for (const proto of PROTOCOLS) {
           const _match = { type: 'REGEX', regex: `(?s)(?=.*(?:${_lines.map((l) => rx(wireForm(l))).join('|')})).*` };
+          const _matchHealed = _healedBy ? { type: 'REGEX', regex: `(?s)(?=.*(?:${_lines.map((l) => rx(wireForm(l))).join('|')}))(?=.*${_healedBy}).*` } : _match;
           const _hdr = { 'content-type': ['text/event-stream; charset=utf-8'], 'x-seam': [`${seam}:${st.id}`] };
+          const _hdrHealed = { 'content-type': ['text/event-stream; charset=utf-8'], 'x-seam': [`${seam}:${st.id}${_healedBy ? ':healed-by-guidance' : ''}`] };
           // Each attempt is ONE write turn then ONE answer: the answer is registered once per
           // attempt at the same priority, so it is served before the next attempt's write turn.
           for (const turn of _turns) {
+            const _full = turn === calls && _healedBy;
+            const _m = _full ? _matchHealed : _match;
+            const _h = _full ? _hdrHealed : _hdr;
             // The files that already exist are read in a turn of their own before the write turn.
             const _reads = turn.map((c) => c.read).filter(Boolean);
             if (_reads.length) {
               // eslint-disable-next-line no-await-in-loop
               await put('/mockserver/expectation', {
                 priority: 55, times: { remainingTimes: 1, unlimited: false },
-                httpRequest: { method: 'POST', path: proto.path, body: _match },
-                httpResponse: { statusCode: 200, headers: _hdr, body: proto.calls(_reads) },
+                httpRequest: { method: 'POST', path: proto.path, body: _m },
+                httpResponse: { statusCode: 200, headers: _h, body: proto.calls(_reads) },
               });
             }
             // eslint-disable-next-line no-await-in-loop
             await put('/mockserver/expectation', {
               priority: 55, times: { remainingTimes: 1, unlimited: false },
-              httpRequest: { method: 'POST', path: proto.path, body: _match },
-              httpResponse: { statusCode: 200, headers: _hdr, body: proto.calls(turn.map(({ read, declared: _d, wrong: _w, ...c }) => c)) },
+              httpRequest: { method: 'POST', path: proto.path, body: _m },
+              httpResponse: { statusCode: 200, headers: _h, body: proto.calls(turn.map(({ read, declared: _d, wrong: _w, ...c }) => c)) },
             });
             // eslint-disable-next-line no-await-in-loop
             await put('/mockserver/expectation', {
               priority: 55, times: { remainingTimes: 1, unlimited: false },
-              httpRequest: { method: 'POST', path: proto.path, body: _match },
-              httpResponse: { statusCode: 200, headers: _hdr,
+              httpRequest: { method: 'POST', path: proto.path, body: _m },
+              httpResponse: { statusCode: 200, headers: _h,
                 body: proto.text(`${STAND_IN_MARK} writer: wrote ${turn.length} of the ${calls.length} deliverable(s) ${st.id} declares`) },
             });
           }
@@ -2230,16 +2257,25 @@ function endsInToolCall(cap, seam) {
               // eslint-disable-next-line no-await-in-loop
               await put('/mockserver/expectation', {
                 priority: 54, times: { remainingTimes: 1, unlimited: false },
-                httpRequest: { method: 'POST', path: proto.path, body: _match },
-                httpResponse: { statusCode: 200, headers: _hdr, body: proto.calls(turn) },
+                httpRequest: { method: 'POST', path: proto.path, body: _matchHealed },
+                httpResponse: { statusCode: 200, headers: _hdrHealed, body: proto.calls(turn) },
               });
             }
             // eslint-disable-next-line no-await-in-loop
             await put('/mockserver/expectation', {
               priority: 54, times: { remainingTimes: 1, unlimited: false },
-              httpRequest: { method: 'POST', path: proto.path, body: _match },
-              httpResponse: { statusCode: 200, headers: _hdr,
+              httpRequest: { method: 'POST', path: proto.path, body: _matchHealed },
+              httpResponse: { statusCode: 200, headers: _hdrHealed,
                 body: proto.text(`${STAND_IN_MARK} writer: wrote the ${calls.length} deliverable(s) ${st.id} declares`) },
+            });
+          }
+          if (_healedBy) {
+            // Without the guidance in the prompt, the writer never gets past the shortfall.
+            await put('/mockserver/expectation', {
+              priority: 53, times: { unlimited: true },
+              httpRequest: { method: 'POST', path: proto.path, body: _match },
+              httpResponse: { statusCode: 200, headers: { ...(_hdr), 'x-seam': [`${seam}:${st.id}:unhealed-no-guidance`] },
+                body: proto.text(`${STAND_IN_MARK} writer: no guidance from the previous attempt in this prompt — the shortfall stands (wrote ${_short.length} of ${calls.length})`) },
             });
           }
         }

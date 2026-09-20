@@ -356,6 +356,33 @@ if grep -q "\[FailureAnalyst\] Analyzing" "$LOG"; then
     grep -lq "Guidance From This Story" "$DEST/orchestrations/logs/claude_outputs/${_healed_story}"_*.log "$DEST"/orchestrations/logs/archive/pre-run-*/claude_outputs/"${_healed_story}"_*.log 2>/dev/null; check $? "self-heal: ${_healed_story}'s next attempt was given the guidance"
   fi
   ! grep -q "Injected skill guidance into retry prompt" "$LOG"; check $? "self-heal: no injection is claimed that did not happen"
+  # THE CAUSAL PROOF. The mock serves a story's passing writer answer ONLY to a prompt that
+  # carries the engine's guidance heading (mock-expectations.js: :healed-by-guidance), and a
+  # prompt without it gets the shortfall again (:unhealed-no-guidance). So a story that fell
+  # short on purpose can complete only because the analyst's prescription reached its writer.
+  if [ -s "$DEST/mock-traffic.json" ] && grep -q ':healed-by-guidance\|:unhealed-no-guidance' "$DEST/mock-traffic.json"; then
+    _healed_served="$("$NODE_BIN" -e '
+      const a = JSON.parse(require("fs").readFileSync(process.argv[1], "utf8"));
+      const s = (x) => ((x.httpResponse && x.httpResponse.headers && x.httpResponse.headers["x-seam"]) || [""])[0];
+      process.stdout.write(String(a.filter((x) => /:healed-by-guidance$/.test(s(x))).length));
+    ' "$DEST/mock-traffic.json" 2>/dev/null)"
+    [ "${_healed_served:-0}" -ge 1 ]; check $? "self-heal (causal): a writer's passing answer was served to a prompt carrying the guidance (served ${_healed_served:-0} time(s)) — the prescription reached the writer and the writer then delivered"
+    _healed_story_id="$("$NODE_BIN" -e '
+      const a = JSON.parse(require("fs").readFileSync(process.argv[1], "utf8"));
+      const s = (x) => ((x.httpResponse && x.httpResponse.headers && x.httpResponse.headers["x-seam"]) || [""])[0];
+      const h = a.map(s).find((v) => /:healed-by-guidance$/.test(v)) || "";
+      process.stdout.write(h.split(":")[1] || "");
+    ' "$DEST/mock-traffic.json" 2>/dev/null)"
+    if [ -n "$_healed_story_id" ]; then
+      "$NODE_BIN" -e '
+        const p = JSON.parse(require("fs").readFileSync(process.argv[1], "utf8"));
+        const st = (p.stories || []).find((x) => x.id === process.argv[2]);
+        process.exit(st && st.completed === true ? 0 : 1);
+      ' "$PRD_FILE_ABS" "$_healed_story_id" 2>/dev/null; check $? "self-heal (causal): ${_healed_story_id} — the story that fell short on purpose — completed after the guidance reached it"
+    fi
+  else
+    say "self-heal (causal): the mock staged no guidance-conditional answer in this rehearsal (not a failure)"
+  fi
 # ── 3d. An echoed example is refused ────────────────────────────────────────
 # The mock's first answer for every tagged seam is the prompt's own example. The consumer must
 # refuse each one (the seam's retry then meets the real answer) — and no story may carry the

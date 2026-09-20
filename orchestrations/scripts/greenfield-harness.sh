@@ -26,13 +26,15 @@ _project_env() {
     "$DEST/orchestrations/scripts/lib/llm-settings-resolve.js" "$1"
 }
 
-SET=""; PROJECT="greenfield-proof"; REF="HEAD"; DEST=""; CEILING="5"; ASSESS_ONLY=0; RATCHET=""; PAUSED=0
+SET=""; PROJECT="greenfield-proof"; REF="HEAD"; DEST=""; CEILING="5"; ASSESS_ONLY=0; RATCHET=""; PAUSED=0; PROJECT_FROM=""
 while [ $# -gt 0 ]; do
   case "$1" in
     --assess-only) ASSESS_ONLY=1; DEST="$2"; shift 2 ;;   # judge a kept install again; no install, no run, no spend
     --paused)      PAUSED=1; shift ;;   # both pauses ON; resume after each; judge every handoff (see § 3a)
     --set)         SET="$2"; shift 2 ;;
     --project)     PROJECT="$2"; shift 2 ;;
+    # ANOTHER INSTALL'S PROJECT DATA GOES THROUGH £0 FIRST: see the copy block before the run.
+    --project-from) PROJECT_FROM="$2"; shift 2 ;;
     --ref)         REF="$2"; shift 2 ;;
     --dest)        DEST="$2"; shift 2 ;;
     --ceiling-usd) CEILING="$2"; shift 2 ;;

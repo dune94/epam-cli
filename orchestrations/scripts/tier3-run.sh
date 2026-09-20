@@ -173,7 +173,9 @@ fi
 # four resumes, a verified story rebuilt from nothing each time). On a resume the base state IS
 # the run's state: nothing below restores, tears down or resets.
 GREENFIELD_RESUME=0
-[ "$GREENFIELD" = "1" ] && [ -n "${EPAM_RESUME_RUN:-}" ] && GREENFIELD_RESUME=1
+# shellcheck source=lib/resume-semantics.sh
+. "$SCRIPT_DIR/lib/resume-semantics.sh"
+[ "$GREENFIELD" = "1" ] && resume_preserves prd-state && GREENFIELD_RESUME=1
 if [ "$GREENFIELD" = "1" ]; then
   # Half a declaration is a refusal, not a guess: nothing here decides where a codeline is built
   # or what phases a project runs.
@@ -252,7 +254,7 @@ fi
 # the PRD and roster, so it must not fire for a run the operator declines, and must be complete
 # before anything reads either file.
 if [ "$GREENFIELD" = "1" ]; then
-  if [ "$GREENFIELD_RESUME" = "1" ]; then
+  if [ "$GREENFIELD_RESUME" = "1" ] && resume_preserves codeline; then
     # The codeline is the run's own work; a resume builds on it.
     [ -d "$OUTPUT_DIR/.git" ] || fail "resume of '${EPAM_RESUME_RUN}': no codeline at $OUTPUT_DIR — nothing to resume on"
     info "Resuming run '${EPAM_RESUME_RUN}': codeline at $OUTPUT_DIR kept as it is"

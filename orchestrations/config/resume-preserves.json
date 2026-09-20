@@ -1,0 +1,24 @@
+{
+  "$why": [
+    "Between 2026-09-15 and 2026-09-20 five components each had to be taught 'this is a resume'",
+    "separately, one live failure at a time: the launcher tore the codeline down, the lifecycle",
+    "passed --reset, pre-run-reset archived the run's ledgers, pre-flight refused the run's own",
+    "spec blocks and healing ledger, and the remediation reset 14 completed stories ($20). Each",
+    "read EPAM_RESUME_RUN on its own and decided on its own what that meant. This file is the",
+    "one statement of what a resume keeps; lib/resume-semantics.sh (and its Python twin) answers",
+    "resume_preserves <aspect> from it; every consumer asks. An aspect not listed here is refused",
+    "loudly by the reader — never guessed."
+  ],
+  "preserves": {
+    "prd-state": "The PRD on disk is the run's own working copy — never restored from the authored canonical (tier3-run 2026-09-16, pre-flight 2026-09-15).",
+    "codeline": "The output directory holds the run's committed work; it is not torn down or reinitialised (tier3-run 2026-09-16).",
+    "ledgers": "phase-gates, phase-cost, healing-events, run-guidance, code-reviews and the other JSONL ledgers under LOG_DIR are this run's record — not archived or cleared (pre-run-reset 2026-09-18, pre-flight 2026-09-19).",
+    "roster": "The roster and agent profiles this run minted and reviewed are reused byte-for-byte; the specialiser is not called again (pre-run-reset 2026-09-19).",
+    "prompts": "The prompt set built for this run's codeline is reused, not rebuilt (2026-09-19).",
+    "fetched-documents": "Referenced documents and the estate survey fetched for this run are kept (pre-run-reset 2026-09-18).",
+    "phase-gates": "A phase whose gate already decided GO is recognised as completed and not run again (greenfield-lifecycle 2026-09-16).",
+    "completed-stories": "A story marked completed keeps its status and record; only failed, blocked or in-progress stories are re-queued; the orchestrator runs without --reset (greenfield-lifecycle 2026-09-16, prd-remediate 2026-09-20).",
+    "spec-blocks": "Specification blocks on pending stories are this run's own spec pass, not prior-run contamination (prd-remediate and pre-flight 2026-09-15).",
+    "checkpoint": "The run's checkpoint (roster, prompts, PRD, briefs) is restored and owned by this run; a later launch may displace, never overwrite (run-checkpoint 2026-09-19)."
+  }
+}

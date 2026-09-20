@@ -16,6 +16,8 @@ _DASH="$(service_url dashboard)"
 
 set -euo pipefail
 SCRIPT_DIR="$(cd "$(dirname "${BASH_SOURCE[0]}")" && pwd)"
+# shellcheck source=lib/resume-semantics.sh
+. "$SCRIPT_DIR/lib/resume-semantics.sh"
 REPO_ROOT="$(cd "$SCRIPT_DIR/../.." && pwd)"
 # Config files are DATA: load them without executing them. See lib/env-file.sh.
 . "$(cd "$(dirname "${BASH_SOURCE[0]}")" && pwd)/lib/env-file.sh"
@@ -185,7 +187,7 @@ else
     # resume of 20260818T101809Z — whose canonical was correctly lean while the runtime PRD held
     # 6 and 3 verification criteria, 2 fix sites each and both roles — for carrying exactly the
     # output the resume exists to reuse.
-    if [[ -n "$_stale_spec" ]] && [[ -n "${EPAM_RESUME_RUN:-}" ]]; then
+    if [[ -n "$_stale_spec" ]] && resume_preserves spec-blocks; then
       ok "PRD carries specification data for the run being resumed (EPAM_RESUME_RUN=${EPAM_RESUME_RUN}) — this is the resumed run's own output, not a prior run's"
       PASS=$((PASS+1))
     elif [[ -n "$_stale_spec" ]] && [[ "$_prd_pending_ingest" != "1" ]]; then
@@ -294,7 +296,7 @@ else
   # specification.createdFrom, so prd-is-canonical calls that copy canonical and the pin refusal
   # aborted every resume of the brownfield rehearsal on the assigner's own agentRole, the ladder's
   # own model and the set's own aiProvider (£0 brownfield harness run 5, 2026-09-14).
-  if [[ -n "${EPAM_RESUME_RUN:-}" ]]; then
+  if resume_preserves prd-state; then
     ok "resuming run ${EPAM_RESUME_RUN}: the PRD is the run's own working copy — the authored-PRD checks do not apply"
   elif [[ "$_prd_is_canonical" == "true" ]]; then
     # A CANONICAL PRD PINS NOTHING THE RUN DECIDES. A story's agent is the assigner's decision, its
@@ -461,7 +463,7 @@ HEAL_LOG="$LOG_DIR_DEFAULT/healing-events.jsonl"
 # A RESUME CARRIES ITS OWN LEDGERS. pre-run-reset keeps them on a resume — they are this run's
 # record, and clearing them re-ran a finished phase (regintel 20260918T132928Z). Non-empty here
 # is the resumed run's own history, not a prior run's leftovers.
-if [[ -n "${EPAM_RESUME_RUN:-}" ]]; then
+if resume_preserves ledgers; then
   ok "resuming run ${EPAM_RESUME_RUN}: healing-events.jsonl is the run's own record — kept, not stale"
 elif [[ -s "$HEAL_LOG" ]]; then
   fail "healing-events.jsonl is non-empty from a prior run — run pre-run-reset.sh to clear it (stale data pollutes health.html)"

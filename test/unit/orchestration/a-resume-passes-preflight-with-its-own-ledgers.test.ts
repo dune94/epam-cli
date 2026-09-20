@@ -34,6 +34,8 @@ function run(env: Record<string, string>) {
   writeFileSync(join(d, 'healing-events.jsonl'), '{"story":"REGI-001-tests","retry":1}\n');
   const r = spawnSync('bash', ['-c', [
     'FAILS=0; ok(){ echo "OK: $*"; }; fail(){ echo "FAIL: $*"; FAILS=$((FAILS+1)); }',
+    // The block asks lib/resume-semantics.sh (one declaration of what a resume keeps), as the script does.
+    `. ${JSON.stringify(join(__dirname, '../../../orchestrations/scripts/lib/resume-semantics.sh'))}`,
     `LOG_DIR_DEFAULT=${JSON.stringify(d)}`,
     healingBlock(),
     'exit $FAILS',

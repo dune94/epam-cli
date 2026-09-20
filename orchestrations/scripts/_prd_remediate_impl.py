@@ -144,7 +144,9 @@ if TARGET_PHASE is not None:
 # record; a story left in-progress or failed is what the resume exists to retry
 # and becomes pending. A fresh launch (no EPAM_RESUME_RUN) resets the phase as
 # before. Same signal prd-remediate.sh already reads for the stale-spec check.
-IS_RESUME = bool(os.environ.get('EPAM_RESUME_RUN'))
+sys.path.insert(0, os.path.join(os.path.dirname(os.path.abspath(__file__)), 'lib', 'handlers'))
+from resume_semantics import resume_preserves  # noqa: E402
+IS_RESUME = resume_preserves('completed-stories')
 
 reset_count = 0
 for s in stories:

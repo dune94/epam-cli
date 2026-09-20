@@ -374,9 +374,11 @@ mkdir -p "$ARCHIVE_DIR"
 # healing events. Cleared, the launcher found no GO for a finished phase and ran it again over
 # committed code (regintel 20260918T132928Z, 2026-09-18: $2.05 and a review deadlock, the next
 # phase never reached), and the run's cost could not be totalled.
-# THE ONE PLACE EPAM_RESUME_RUN IS TESTED. Every later "is this a resume?" reads _IS_RESUMED_RUN.
+# THE ONE PLACE THE RESUME QUESTION IS ASKED HERE — of lib/resume-semantics.sh, which answers
+# from config/resume-preserves.json. Every later "is this a resume?" reads _IS_RESUMED_RUN.
+. "$SCRIPT_DIR/lib/resume-semantics.sh"
 _IS_RESUMED_RUN=0
-if [ -n "${EPAM_RESUME_RUN:-}" ]; then
+if resume_preserves ledgers; then
   _IS_RESUMED_RUN=1
   info "  Resuming ${EPAM_RESUME_RUN} — keeping this run's own ledgers (phase gates, cost, healing, reviews); nothing archived or cleared"
 fi
@@ -577,7 +579,7 @@ fi
 # Third time the reset has been caught missing shared state after review artefacts and the
 # published agent-input store. The rule that keeps being relearned: anything a later step READS
 # out of LOG_DIR is run state, and run state is cleared here.
-if [ "${_IS_RESUMED_RUN:-0}" = "1" ]; then
+if [ "${_IS_RESUMED_RUN:-0}" = "1" ] && resume_preserves fetched-documents; then
     info "  Resuming — keeping this run's own fetched documents and estate survey"
 elif [ -n "${_RUN_ARTIFACT_DIR:-}" ] && [ -d "$_RUN_ARTIFACT_DIR" ]; then
     _TD_CLEARED=0
@@ -910,7 +912,7 @@ _PROJECT_CFG_DIR="${EPAM_PROJECT_CONFIG_DIR:-}"
 # runs are gone" — and the resumed run died at assignment with no agent. Any roster reset added
 # later must read _IS_RESUME rather than re-deriving this.
 _IS_RESUME=0
-if [ "${_IS_RESUMED_RUN:-0}" = "1" ]; then
+if [ "${_IS_RESUMED_RUN:-0}" = "1" ] && resume_preserves roster; then
     _IS_RESUME=1
     _PROJECT_CFG_DIR=""
     info "  Resuming ${EPAM_RESUME_RUN} — keeping the roster this run already minted and reviewed"

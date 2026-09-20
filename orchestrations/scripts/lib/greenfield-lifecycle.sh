@@ -114,10 +114,12 @@ greenfield_run_phases() {
     # phase runs — right for a launch from nothing, and on a resume it erased the run's progress
     # (2026-09-16). Phases the run's gate already passed are not run again.
     local -a reset_flag=(--reset)
-    [ -n "${EPAM_RESUME_RUN:-}" ] && reset_flag=()
+    # shellcheck source=resume-semantics.sh
+    . "$_gfl_dir/resume-semantics.sh"
+    resume_preserves completed-stories && reset_flag=()
     local phase
     for phase in $phases; do
-        if [ -n "${EPAM_RESUME_RUN:-}" ] && greenfield_phase_completed "$phase"; then
+        if resume_preserves phase-gates && greenfield_phase_completed "$phase"; then
             info "━━━ Phase: $phase — completed in run '${EPAM_RESUME_RUN}' (gate GO); not run again ━━━"
             continue
         fi

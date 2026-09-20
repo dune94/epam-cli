@@ -46,12 +46,37 @@ snapshot_operator_config() {
 #
 # Copies every snapshotted file back over whatever the extraction just wrote at the same relative
 # path — the operator's existing config always wins over the packaged ref's committed copy.
+# A PRESERVED JSON CATALOGUE IS MERGED, NOT REPLACED. The engine-wide catalogues (agent
+# messages, providers, pricing...) gain keys with every ref; preserving the operator's copy
+# byte-for-byte meant "a future update also stops delivering THOSE additions" and a hand merge
+# — the one thing the install rule forbids (2026-09-20: EscalateDefect's new message codes
+# never reached the regintel install). Every key the operator's copy holds keeps the
+# operator's value; every key the new ref adds arrives. Anything that is not a JSON object on
+# both sides is restored byte-for-byte, as before.
 restore_operator_config() {
     local _root="$1" _tmp="$2" _f _relpath
     [ -d "$_tmp" ] || return 0
     while IFS= read -r _f; do
         _relpath="${_f#"$_tmp"/}"
         mkdir -p "$(dirname "$_root/$_relpath")"
-        cp "$_f" "$_root/$_relpath"
+        case "$_relpath" in
+            *.json)
+                if [ -f "$_root/$_relpath" ] && "${NODE_BIN:-node}" -e '
+                    const fs = require("fs");
+                    const [ops, ref, out] = process.argv.slice(1);
+                    let o, r;
+                    try { o = JSON.parse(fs.readFileSync(ops, "utf8")); r = JSON.parse(fs.readFileSync(ref, "utf8")); } catch { process.exit(3); }
+                    const isObj = (x) => x && typeof x === "object" && !Array.isArray(x);
+                    if (!isObj(o) || !isObj(r)) process.exit(3);
+                    fs.writeFileSync(out, JSON.stringify({ ...r, ...o }, null, 2) + "\n");
+                  ' "$_f" "$_root/$_relpath" "$_root/$_relpath.merged" 2>/dev/null; then
+                    mv "$_root/$_relpath.merged" "$_root/$_relpath"
+                    continue
+                fi
+                rm -f "$_root/$_relpath.merged"
+                cp "$_f" "$_root/$_relpath"
+                ;;
+            *) cp "$_f" "$_root/$_relpath" ;;
+        esac
     done < <(find "$_tmp" -type f)
 }

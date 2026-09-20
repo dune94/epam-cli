@@ -235,14 +235,13 @@ _STORY_FILES=$(jq -r --arg id "$STORY_ID" \
 # with no indication anything was cut. Caps raised substantially; any actual
 # truncation is now an EXPLICIT marker in the reviewer's own input.
 _STORY_DIFF=""
+# THE STORY'S OWN COMMIT, EVERY FILE OF IT (lib/review-scope.sh). This was `git diff HEAD~5 HEAD
+# -- <declared files>`: the declared list filtered out-of-scope edits out of the review and
+# HEAD~5 guessed at what the story committed (regintel 20260919T224649Z, 2026-09-20).
+. "$SCRIPT_DIR/lib/review-scope.sh"
+_SCOPE_BLOCK=$(story_scope_block "$STORY_ID" 2>/dev/null || true)
 if [ -d "$PROJECT_ROOT/.git" ]; then
-    # The expansion is split into separate arguments ON PURPOSE: this passes a LIST to a command
-    # that takes them as individual operands. Quoting it would hand over one argument with spaces.
-    # shellcheck disable=SC2046
-    _diff_full=$(git -C "$PROJECT_ROOT" diff HEAD~5 HEAD -- \
-        $(echo "$_STORY_FILES") 2>/dev/null || true)
-    [ -z "$_diff_full" ] && \
-        _diff_full=$(git -C "$PROJECT_ROOT" diff HEAD~3 HEAD 2>/dev/null || true)
+    _diff_full=$(story_review_diff "$STORY_ID" 2>/dev/null || true)
     if [ -n "$_diff_full" ]; then
         _diff_total_lines=$(printf '%s\n' "$_diff_full" | wc -l)
         if [ "$_diff_total_lines" -gt 2000 ]; then
@@ -301,7 +300,8 @@ jq_vals --arg iteration "$ITERATION" \
       --arg story_files "$_STORY_FILES" \
       --arg story_id "$STORY_ID" \
       --arg story_title "$STORY_TITLE" \
-      '{"__VC_BLOCK__":$vc_block,"__ITERATION__":$iteration,"__PRIOR_CONTEXT__":$prior_context,"__PROJECT_ROOT__":$project_root,"__REVIEW_PROFILE__":$review_profile,"__STORY_AGENT__":$story_agent,"__STORY_DESCRIPTION__":$story_description,"__STORY_ACS__":$story_acs,"__STORY_DIFF__":$story_diff,"__STORY_FILES__":$story_files,"__STORY_ID__":$story_id,"__STORY_TITLE__":$story_title}' > "$_tpl_vals" 2>/dev/null
+      --arg scope_block "$_SCOPE_BLOCK" \
+      '{"__SCOPE_BLOCK__":$scope_block,"__VC_BLOCK__":$vc_block,"__ITERATION__":$iteration,"__PRIOR_CONTEXT__":$prior_context,"__PROJECT_ROOT__":$project_root,"__REVIEW_PROFILE__":$review_profile,"__STORY_AGENT__":$story_agent,"__STORY_DESCRIPTION__":$story_description,"__STORY_ACS__":$story_acs,"__STORY_DIFF__":$story_diff,"__STORY_FILES__":$story_files,"__STORY_ID__":$story_id,"__STORY_TITLE__":$story_title}' > "$_tpl_vals" 2>/dev/null
 if ! _REVIEW_PROMPT=$(render_engine_prompt code-review-cycle "$_tpl_vals"); then
     echo "[code-review-cycle] cannot render its prompt — refusing to run with no instructions" >&2
     rm -f "$_tpl_vals"; exit 1

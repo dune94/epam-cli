@@ -1,0 +1,18 @@
+{
+  "id": "review-scope-block",
+  "version": 1,
+  "description": "Composed into the code-review prompt when the story's commit changed files the story does not declare. Names each such file and the story that declares it; the reviewer judges what that means.",
+  "$why": [
+    "regintel 20260919T224649Z: 007a's commit rewrote classifier.py (+297/-98), a file it does not declare; the reviewer's diff was filtered to declared files, so it never saw it. Scope was a tool convention bash bypassed; nobody judged it. Engine layer: names no file, story or stack — the list is computed from git and the PRD."
+  ],
+  "placeholders": [
+    "__OUT_OF_SCOPE_FILES__"
+  ],
+  "mayBeEmpty": [
+    "__OUT_OF_SCOPE_FILES__"
+  ],
+  "$whyMayBeEmpty": {
+    "__OUT_OF_SCOPE_FILES__": "The caller renders this fragment only when at least one changed file is outside the story's declared scope."
+  },
+  "body": "\nFILES CHANGED OUTSIDE THIS STORY'S DECLARED SCOPE — each names the story that declares it:\n__OUT_OF_SCOPE_FILES__\nJudge each one. It is acceptable only when it is the interface change the declaring story consumes from this story, or a file no story owns that this work genuinely needed. Otherwise it is a finding (severity major): the edit belongs to the declaring story and must be escalated to it (escalate_defect_to_sibling_story), or this story's scope must be amended to declare the file — name which in suggestedFix. An unreviewed edit to another story's file is how two stories end up rewriting one function against each other.\n"
+}

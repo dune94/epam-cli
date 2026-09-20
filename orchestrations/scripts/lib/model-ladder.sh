@@ -1453,13 +1453,26 @@ resolve_escalation() {
     # flexible pattern the write side (run_relative_import_check) already
     # uses for its OWN "do I own this file" check: exact match OR the
     # candidate path ending in "/" + the (possibly relative) target file.
+    #
+    # AND THE OTHER WAY ROUND (found live, 2026-09-20, regintel 20260919T224649Z):
+    # the "ALWAYS absolute" premise above holds for brownfield PRDs only. A
+    # greenfield PRD declares files relative to outputDir ("regintel/classifier.py")
+    # while the agent's escalate_defect_to_sibling_story call names the ABSOLUTE
+    # path it had been reading — so the declaration ends with "/" + nothing the
+    # target is, and REGI-005b was told "no story declares it" for a file REGI-005a
+    # declares. Either side may be the longer spelling: a declaration and a target
+    # name the same file when either equals the other or ends with "/" + the other.
+    # A deprecated split parent still lists its pre-split combined files and is
+    # never the owner (the write side, run_relative_import_check, excludes it too).
     local sibling_id
     sibling_id=$(jq -r --arg parent "$parent_id" --arg file "$target_file" --arg self "$escalating_story_id" \
-        '.stories[] | select(($parent != "") and .specification.createdFrom == $parent and .id != $self) | select((.technicalNotes.files // []) | map(. == $file or endswith("/" + $file)) | any) | .id' \
+        'def owns: (.technicalNotes.files // []) | map(. as $c | $c == $file or ($c | endswith("/" + $file)) or ($file | endswith("/" + $c))) | any;
+         .stories[] | select(($parent != "") and .specification.createdFrom == $parent and .id != $self) | select(.status != "deprecated") | select(owns) | .id' \
         "$prd_target" 2>/dev/null | head -1)
     if [ -z "$sibling_id" ]; then
         sibling_id=$(jq -r --arg file "$target_file" --arg self "$escalating_story_id" \
-            '.stories[] | select(.id != $self) | select((.technicalNotes.files // []) | map(. == $file or endswith("/" + $file)) | any) | .id' \
+            'def owns: (.technicalNotes.files // []) | map(. as $c | $c == $file or ($c | endswith("/" + $file)) or ($file | endswith("/" + $c))) | any;
+             .stories[] | select(.id != $self) | select(.status != "deprecated") | select(owns) | .id' \
             "$prd_target" 2>/dev/null | head -1)
     fi
 

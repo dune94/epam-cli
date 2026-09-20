@@ -58,7 +58,11 @@ describe('resolve_escalation() — design constraints (static)', () => {
     // paths. The corrected query accepts an exact match OR the stored path
     // ending in "/" + the target file, matching the same flexible pattern
     // already used by the write side.
-    expect(body).toMatch(/map\(\. == \$file or endswith\("\/" \+ \$file\)\) \| any/);
+    // Updated 2026-09-20: greenfield PRDs declare RELATIVE paths and the agent may
+    // file the ABSOLUTE one, so the match is symmetric — either side may end with
+    // "/" + the other. Executed (not only pinned) in
+    // an-escalation-names-the-owner-however-the-path-is-spelled.test.ts.
+    expect(body).toMatch(/\$c == \$file or \(\$c \| endswith\("\/" \+ \$file\)\) or \(\$file \| endswith\("\/" \+ \$c\)\)/);
   });
 
   it('reuses implement_story() rather than duplicating provider-dispatch logic', () => {

@@ -134,9 +134,23 @@ reset_scope_ids = active_ids
 if TARGET_PHASE is not None:
     reset_scope_ids = set(impl_order.get(TARGET_PHASE, []))
 
+# A RESUME KEEPS WHAT THE RUN HAS DONE (found live, 2026-09-20, regintel
+# 20260919T224649Z resume 6): the resume was launched to retry ONE failed core
+# story; the lifecycle ran the orchestrator without --reset and the orchestrator
+# re-queued only that story — but this step ran first and "reset 15 active
+# stories to pending", so every completed core story was re-implemented,
+# re-reviewed and re-gated ($20+ of the run's $43). On a resume the completed
+# flags are the run's progress: a completed story keeps its status and its
+# record; a story left in-progress or failed is what the resume exists to retry
+# and becomes pending. A fresh launch (no EPAM_RESUME_RUN) resets the phase as
+# before. Same signal prd-remediate.sh already reads for the stale-spec check.
+IS_RESUME = bool(os.environ.get('EPAM_RESUME_RUN'))
+
 reset_count = 0
 for s in stories:
     if s['id'] not in reset_scope_ids:
+        continue
+    if IS_RESUME and s.get('completed') and s.get('status') == 'completed':
         continue
     changed = False
     if s.get('status') not in ('pending', 'deprecated') or s.get('completed'):
@@ -299,7 +313,6 @@ if orphaned_pending:
 # config lacks the (already-standard) testFilePattern/sourceExtensions keys —
 # same stack-agnostic, config-driven convention as every other consumer of
 # that file.
-import os
 
 output_dir = prd.get('project', {}).get('outputDir')
 backfilled = []

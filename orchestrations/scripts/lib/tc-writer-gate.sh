@@ -136,6 +136,7 @@ run_inline_tc_writer_gate() {
         fi
         log "  Story $story_id needs testCriteria — running TC writer inline before it starts... (attempt ${_tc_gate_attempt}/3, model ${_tc_model})"
         AI_MODEL="$_tc_model" \
+        TC_CORRECTIVE_NOTE="$_tc_corrective" \
         bash "$SCRIPT_DIR/post-impl-tc-writer.sh" \
             --prd "$PRD_FILE" \
             --phase "$phase" \
@@ -148,6 +149,34 @@ run_inline_tc_writer_gate() {
             '.stories[] | select(.id == $id) | (.testCriteria.facts // []) | length' \
             "$PRD_FILE" 2>/dev/null || echo 0)
 
+        # A REPORTED CONTRACT CONFLICT GOES TO THE REVIEWER. The writer, briefed with the criteria
+        # other stories hold on its source files, may say this story needs that contract to change
+        # (testCriteria.conflictsWith). The prd-change-reviewer judges it — the same seam that
+        # judges every other criteria change. Rejected: the facts are withdrawn and the reason is
+        # the writer's correction on its next attempt. Approved: the conflict is recorded as such.
+        if [ "$_tc_gate_exit" -eq 0 ] && [ "${_tc_gate_facts_len:-0}" -gt 0 ]; then
+            local _tc_conflicts
+            _tc_conflicts=$(jq -c --arg id "$story_id" '.stories[] | select(.id == $id) | .testCriteria.conflictsWith // [] | map(select(type == "object" and (.approved // false) == false))' "$PRD_FILE" 2>/dev/null || echo "[]")
+            if [ "$(printf '%s' "$_tc_conflicts" | jq 'length' 2>/dev/null || echo 0)" -gt 0 ]; then
+                local _tc_conflict_before _tc_conflict_after _tc_conflict_verdict
+                _tc_conflict_before=$(printf '%s' "$_tc_conflicts" | jq -c 'map({storyId, fact})')
+                _tc_conflict_after=$(jq -c --arg id "$story_id" '.stories[] | select(.id == $id) | {facts: (.testCriteria.facts // []), conflictsWith: (.testCriteria.conflictsWith // [])}' "$PRD_FILE" 2>/dev/null || echo "{}")
+                log "  [tc-writer] $story_id reports a contract conflict with $(printf '%s' "$_tc_conflicts" | jq -r 'map(.storyId) | unique | join(", ")') — asking the change reviewer"
+                _tc_conflict_verdict=$(run_prd_change_reviewer "$story_id" "tc_conflict" "$_tc_conflict_before" "$_tc_conflict_after" 2>"$LOG_DIR/tc-conflict-review-${story_id}.err")
+                if [ "$_tc_conflict_verdict" = "fail" ]; then
+                    _tc_corrective="The change reviewer REJECTED this story's contract conflict with $(printf '%s' "$_tc_conflicts" | jq -r 'map(.storyId) | unique | join(", ")'): $(cat "$LOG_DIR/tc-conflict-review-${story_id}.err" 2>/dev/null | tr '\n' ' '). Write facts consistent with the existing criteria on the shared file; do not restate the conflict."
+                    warning "  [tc-writer] contract conflict REJECTED for $story_id — withdrawing its facts; attempt $((_tc_gate_attempt + 1)) is corrected"
+                    local _tc_revert_tmp; _tc_revert_tmp=$(mktemp); chmod 644 "$_tc_revert_tmp" 2>/dev/null
+                    jq --arg id "$story_id" '(.stories[] | select(.id == $id)) |= del(.testCriteria)' "$PRD_FILE" > "$_tc_revert_tmp" && mv "$_tc_revert_tmp" "$PRD_FILE"
+                    _tc_gate_facts_len=0
+                    [ "$_tc_gate_attempt" -lt 3 ] && continue
+                else
+                    local _tc_approve_tmp; _tc_approve_tmp=$(mktemp); chmod 644 "$_tc_approve_tmp" 2>/dev/null
+                    jq --arg id "$story_id" --arg v "$_tc_conflict_verdict" '(.stories[] | select(.id == $id) | .testCriteria.conflictsWith // [] | .[]) |= (. + {approved: true, verdict: $v})' "$PRD_FILE" > "$_tc_approve_tmp" && mv "$_tc_approve_tmp" "$PRD_FILE"
+                    log "  [tc-writer] contract conflict for $story_id: reviewer said '$_tc_conflict_verdict' — recorded"
+                fi
+            fi
+        fi
         if [ "$_tc_gate_exit" -eq 0 ] && [ "${_tc_gate_facts_len:-0}" -gt 0 ]; then
             success "  TC writer populated testCriteria for $story_id (attempt ${_tc_gate_attempt}/3)"
             # Priority order (2026-07-15, see each function's own docstring

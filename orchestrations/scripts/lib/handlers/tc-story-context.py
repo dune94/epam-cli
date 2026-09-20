@@ -101,12 +101,43 @@ for sid in phase_ids:
 
     impl_src = list(dict.fromkeys(impl_src))  # dedupe, preserve order
 
+    # THE CONTRACT ALREADY IN FORCE ON A SHARED FILE. regintel 20260919T224649Z: REGI-005b's
+    # writer, reading only its own story, fixed classify_event as synchronous while REGI-004b's
+    # criteria already held it async; the two contracts then fought for 20 attempts. Every
+    # other story's testCriteria that names one of this story's source files is briefed here,
+    # with the interfaces this story (or its impl dependency) declared it consumes. A machine
+    # fact for the writer to honour; the prompt says how.
+    def _norm(f):
+        return (f or '').lstrip('./')
+    def _same(a, b):
+        a, b = _norm(a), _norm(b)
+        return a == b or a.endswith('/' + b) or b.endswith('/' + a)
+    shared = []
+    for src_file in impl_src:
+        for other_id, other in by_id.items():
+            if other_id == sid or other.get('status') == 'deprecated':
+                continue
+            otc = other.get('testCriteria') or {}
+            facts = otc.get('facts') or []
+            if not facts:
+                continue
+            names = list(otc.get('sourceFiles') or []) + list(_files_for(other))
+            if any(_same(n, src_file) for n in names):
+                shared.append({'storyId': other_id, 'file': src_file, 'facts': facts})
+    consumes = list(s.get('consumesInterfaces') or [])
+    for dep_id in story_deps:
+        for c in (by_id.get(dep_id, {}).get('consumesInterfaces') or []):
+            if c not in consumes:
+                consumes.append(c)
+
     lines.append({
         'storyId': sid,
         'testFile': test_files[0] if test_files else None,
         'implSourceFiles': impl_src,
         'acceptanceCriteria': s.get('acceptanceCriteria', []),
         'verificationCriteria': s.get('verificationCriteria', []),
+        'existingCriteriaOnSharedFiles': shared,
+        'consumesInterfaces': consumes,
     })
 
 print(json.dumps(lines, indent=2) if lines else '')

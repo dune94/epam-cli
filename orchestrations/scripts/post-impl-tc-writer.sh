@@ -170,11 +170,20 @@ _tc_command=$(printf '%s' "$_tc_facts_json" | jq -r '.__TEST_COMMAND__ // ""')
 
 # RENDERED FROM THE TEMPLATE LAYER. Values via a file, never argv.
 _tpl_vals=$(mktemp "${TMPDIR:-/tmp}/tc-writer-vals-XXXXXX.json")
+# THE PREVIOUS ATTEMPT'S CORRECTION (TC_CORRECTIVE_NOTE, from the inline gate): the self-heal
+# analyst's note or the change reviewer's rejection reason. Computed by the gate on every failed
+# attempt since B23 and never passed here until 2026-09-20 — three attempts, identical prompt.
+_tc_corrective_block=""
+[ -n "${TC_CORRECTIVE_NOTE:-}" ] && _tc_corrective_block="CORRECTION FROM THE PREVIOUS ATTEMPT — act on it before anything else:
+${TC_CORRECTIVE_NOTE}
+
+"
 jq_vals --arg story_context "$STORY_CONTEXT" \
       --arg tc_writer_profile "$TC_WRITER_PROFILE" \
       --arg test_file_conventions "$_tc_conventions" \
       --arg test_command "$_tc_command" \
-      '{"__STORY_CONTEXT__":$story_context,"__TC_WRITER_PROFILE__":$tc_writer_profile,"__TEST_FILE_CONVENTIONS__":$test_file_conventions,"__TEST_COMMAND__":$test_command}' > "$_tpl_vals" 2>/dev/null
+      --arg corrective_note "$_tc_corrective_block" \
+      '{"__STORY_CONTEXT__":$story_context,"__TC_WRITER_PROFILE__":$tc_writer_profile,"__TEST_FILE_CONVENTIONS__":$test_file_conventions,"__TEST_COMMAND__":$test_command,"__CORRECTIVE_NOTE__":$corrective_note}' > "$_tpl_vals" 2>/dev/null
 if ! TC_PROMPT=$(render_engine_prompt tc-writer "$_tpl_vals"); then
     echo "[tc-writer] cannot render its prompt — refusing to run with no instructions" >&2
     rm -f "$_tpl_vals"; exit 1

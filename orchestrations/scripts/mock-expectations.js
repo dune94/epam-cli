@@ -283,7 +283,9 @@ function writerStandInCalls(story, seam) {
     // A stand-in is a string, or a function of the file's path where the content must agree with
     // the path (a Java class is named by its file, a package by its directory).
     const body = (v) => (typeof v === 'function' ? v(f) : v) || content;
+    const byName = eco.standIn.byName && typeof eco.standIn.byName === 'object' ? eco.standIn.byName : {};
     if (path.basename(f) === eco.file) content = body(eco.standIn.manifest);
+    else if (Object.prototype.hasOwnProperty.call(byName, path.basename(f))) content = body(byName[path.basename(f)]);
     else if (testRe && testRe.test(f)) content = body(eco.standIn.test);
     else if (srcExt.some((x) => f.endsWith(x))) content = body(eco.standIn.source);
     // THE ECOSYSTEM'S GENERIC CONTENT IS WHAT A WRONG ATTEMPT WRITES: where the project declares

@@ -55,12 +55,28 @@ function projectModes(configText, projectDir) {
   return modes;
 }
 
-function expectedSeams(profiles, modes) {
+// A SEAM THE PROJECT OPTS OUT OF IS NOT EXPECTED. The registry lets a seam declare the project
+// setting that switches it off (`optOut: {env, value}`); a project whose config declares that
+// value is not expected to run it, and the reason is listed with the exclusion.
+function configValue(configText, key) {
+  const m = String(configText || '').match(new RegExp(`^${key}=(.*)$`, 'm'));
+  return m ? m[1].trim().replace(/^["']|["']$/g, '') : '';
+}
+
+function expectedSeams(profiles, modes, configText) {
   const expected = []; const excluded = {};
   for (const [seam, p] of Object.entries(profiles || {})) {
     const applies = Array.isArray(p && p.appliesTo) ? p.appliesTo : null;
-    if (!applies || applies.some((m) => modes.has(m))) expected.push(seam);
-    else excluded[seam] = `applies to ${applies.join('/')} only${p._whyAppliesTo ? ` — ${p._whyAppliesTo}` : ''}`;
+    if (applies && !applies.some((m) => modes.has(m))) {
+      excluded[seam] = `applies to ${applies.join('/')} only${p._whyAppliesTo ? ` — ${p._whyAppliesTo}` : ''}`;
+      continue;
+    }
+    const opt = p && p.optOut && typeof p.optOut === 'object' ? p.optOut : null;
+    if (opt && opt.env && configText !== undefined && configValue(configText, opt.env) === String(opt.value)) {
+      excluded[seam] = `the project declares ${opt.env}=${opt.value}${opt._why ? ` — ${opt._why}` : ''}`;
+      continue;
+    }
+    expected.push(seam);
   }
   return { expected: expected.sort(), excluded };
 }
@@ -75,6 +91,7 @@ if (require.main === module) {
   const { projectEnvFiles } = require('./llm-settings-resolve.js');
   const files = projectEnvFiles(cfg);
   if (!files) { process.stderr.write(`no provider-set registry resolves the env files of ${cfg}\n`); process.exit(2); }
-  const modes = projectModes(fs.readFileSync(files.base, 'utf8'), cfg);
-  process.stdout.write(JSON.stringify({ modes: [...modes], ...expectedSeams(profiles, modes) }) + '\n');
+  const configText = fs.readFileSync(files.base, 'utf8');
+  const modes = projectModes(configText, cfg);
+  process.stdout.write(JSON.stringify({ modes: [...modes], ...expectedSeams(profiles, modes, configText) }) + '\n');
 }

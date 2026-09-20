@@ -105,6 +105,14 @@ module.exports = {
     manifest: 'pytest\n',
     test: 'def test_stand_in():\n    assert True\n',
     source: '"""stand-in module written by the rehearsal"""\n',
+    // A FILE THE RUNNER PARSES. Generic prose in pytest.ini stopped the whole suite
+    // ("unexpected line") on regintel's £0 rehearsal; the stand-in writes what the file's
+    // reader can read. Keyed by basename; this ecosystem's own tool config, nothing else.
+    byName: {
+      'pytest.ini': '[pytest]\npythonpath = .\n',
+      'pyproject.toml': '[tool.pytest.ini_options]\npythonpath = ["."]\n',
+      '.gitignore': '.venv/\n__pycache__/\n.pytest_cache/\n',
+    },
   },
   // A requirements.txt project runs its suite with whatever test runner it depends on. pytest is
   // the one this provider recognises: listed in requirements.txt, the suite is `pytest`; absent,

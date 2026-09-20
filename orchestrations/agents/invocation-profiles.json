@@ -122,7 +122,11 @@
     "agent-failure-analyst": {
       "_what": "Diagnoses a no-output/failed agent attempt, prescribes a corrective directive.",
       "_whyDiagnosesAttemptsOf": "The seams whose failed attempts reach this analyst through agent-attempt-analyst.sh (lib/tc-writer-gate.sh, brownfield-repro-test-writer.sh, spec-mode-runner's detective via lib/self-heal.js). Declared so the £0 rehearsal can fail one first attempt of each on purpose and execute this seam.",
-      "diagnosesAttemptsOf": ["tc-writer", "repro-test-writer", "code-graph-detective"],
+      "diagnosesAttemptsOf": [
+        "tc-writer",
+        "repro-test-writer",
+        "code-graph-detective"
+      ],
       "maxOutputTokens": 32768,
       "timeoutSecs": 360,
       "ladder": "top",
@@ -141,7 +145,9 @@
       "toolGrant": "execute"
     },
     "repro-test-writer": {
-      "appliesTo": ["brownfield"],
+      "appliesTo": [
+        "brownfield"
+      ],
       "_whyAppliesTo": "Writes the failing test that reproduces a brownfield defect (brownfield-repro-test-writer.sh); a greenfield story has no defect to reproduce.",
       "_what": "Writes the bug-reproducing test for a brownfield fix.",
       "maxOutputTokens": 32768,
@@ -225,7 +231,9 @@
       "toolGrant": "read-only"
     },
     "prd-change-summarizer": {
-      "runsOnRejectionBy": ["prd-change-reviewer"],
+      "runsOnRejectionBy": [
+        "prd-change-reviewer"
+      ],
       "_whyRunsOnRejectionBy": "claude.sh run_prd_change_summarizer is invoked only when run_prd_change_reviewer answers fail (the self-heal change loop). Declared so the £0 rehearsal can have that reviewer reject one change on purpose and execute this seam.",
       "_what": "Summarizes a rewrite for the change log.",
       "maxOutputTokens": 16384,
@@ -269,7 +277,9 @@
       "toolGrant": "execute"
     },
     "ac-classification": {
-      "appliesTo": ["brownfield"],
+      "appliesTo": [
+        "brownfield"
+      ],
       "_whyAppliesTo": "AC sufficiency is judged for TRACKER tickets (JIRA_PIPELINE=1); a canonical greenfield PRD arrives with its ACs authored.",
       "_what": "Classifies acceptance criteria.",
       "maxOutputTokens": 16384,
@@ -289,8 +299,12 @@
       "_why_timeout": "Holds a plan pass AND an execute pass. It declared 90s — exactly the plan pass's own budget (EPAM_PLAN_TIMEOUT_SECS), so the plan alone could consume the whole window and the answer had none left. The caller then reported an empty response rather than a timeout."
     },
     "ac-elaboration": {
-      "appliesTo": ["brownfield"],
-      "runsOnRejectionBy": ["ac-classification"],
+      "appliesTo": [
+        "brownfield"
+      ],
+      "runsOnRejectionBy": [
+        "ac-classification"
+      ],
       "_whyRunsOnRejectionBy": "lib/ac-gate.js elaborates a story's ACs only when the classifier's verdict is insufficient (and AC_GATE_AUTO_ELABORATE=1). Declared so the £0 rehearsal rejects one classification on purpose and this seam executes.",
       "_whyAppliesTo": "Elaborates tracker tickets whose ACs the classifier found enrichable; a canonical greenfield PRD arrives with its ACs authored.",
       "_what": "Elaborates an acceptance criterion into verification criteria.",
@@ -311,7 +325,9 @@
       "_why_timeout": "Same reason as ac-classification, with more work to do: 180s left too little behind a 90s plan pass. It was also being bounded by ac-classification's clock, which is fixed in ac-gate.js."
     },
     "codeline-discovery": {
-      "appliesTo": ["brownfield"],
+      "appliesTo": [
+        "brownfield"
+      ],
       "_whyAppliesTo": "Selects codelines from an estate under JIRA_CODELINE_ROOT; a greenfield project has one output directory and no estate.",
       "_what": "Picks which local codeline a Jira ticket belongs to.",
       "maxOutputTokens": 16384,
@@ -349,7 +365,9 @@
       "_why_bootstrap": "certifies newly minted agents, inside the mint. A prompt that runs before the project prompt layer exists cannot be a project prompt."
     },
     "code-graph-detective": {
-      "appliesTo": ["brownfield"],
+      "appliesTo": [
+        "brownfield"
+      ],
       "_whyAppliesTo": "runCodeGraphDetective returns [] unless EPAM_BROWNFIELD=1: it investigates existing code for where a fix lands.",
       "_what": "Investigates one codeline and reports where the work actually lands.",
       "ladder": "top",
@@ -456,7 +474,9 @@
       "_outputIsArtefact": "Delivers the implementation through the filesystem (toolGrant execute, produces \"implementation\"). Nothing parses its stdout as a payload, so there is no shape to declare and a declared one would be fiction."
     },
     "vc-coverage": {
-      "appliesTo": ["brownfield"],
+      "appliesTo": [
+        "brownfield"
+      ],
       "_whyAppliesTo": "Verification criteria exist for brownfield stories only (spec-mode-runner: VCs are normalised when EPAM_BROWNFIELD=1); greenfield stories carry ACs.",
       "_what": "Judges whether the written tests cover each verification criterion.",
       "maxOutputTokens": 16384,
@@ -592,7 +612,9 @@
       "$whyLadder": "Moved off 'top' 2026-08-26 (operator decision, cost). This seam DECORATES a template — it reads the generic body and rewrites it for this project. It judges nothing, so the rule that a reviewer runs on the writer's rung does not bind it. Measured that day: 29 calls, $5.48, 80% of a run's cost before a story was touched, and a measured haiku-vs-sonnet comparison put sonnet at ~11x the cost per unit of output. 'mid' starts on the cheap rung and escalates.\n\nSAFE BECAUSE THE OUTPUT IS CHECKED, NOT TRUSTED: project-prompt-contract.js refuses a generation that drops a placeholder, a paired output tag or an output field, feeds the reason back, and reviewPrompt runs a second adversarial pass. A weaker model that fumbles is caught and escalated, never shipped. The residual risk is a prompt that is structurally valid and substantively worse, which only the review pass can see — watch the refusal counts in the log."
     },
     "codeline-bridge-agent": {
-      "appliesTo": ["multi-codeline"],
+      "appliesTo": [
+        "multi-codeline"
+      ],
       "_whyAppliesTo": "Bridges a completed codeline to the next; a project with one codeline has nothing to bridge.",
       "_what": "Extracts the exported surface of a completed codeline so a later lane's detective can read it. Producers run before consumers precisely so this exists when it is needed.",
       "ladder": "mid",
@@ -625,7 +647,12 @@
         }
       ],
       "template": "e2e-route-check",
-      "toolGrant": "execute"
+      "toolGrant": "execute",
+      "optOut": {
+        "env": "SKIP_BROWSER_E2E_ROUTING",
+        "value": "true",
+        "_why": "A project without a browser surface declares SKIP_BROWSER_E2E_ROUTING=true; the e2e gate is then never routed. Declared so the £0 rehearsal expects what the project declares."
+      }
     },
     "agent-mint": {
       "_what": "Proposes the roster of agents this project needs, from its tickets and its codelines.",
@@ -691,7 +718,9 @@
       "toolGrant": "read-only"
     },
     "ticket-links": {
-      "appliesTo": ["brownfield"],
+      "appliesTo": [
+        "brownfield"
+      ],
       "_whyAppliesTo": "Reviews documents linked on a tracker ticket; a canonical PRD story carries none.",
       "_what": "Reads the documents linked on a ticket and extracts what they say verbatim.",
       "maxOutputTokens": 16384,
@@ -862,7 +891,9 @@
       "_why_bootstrap": "reviews that roster, in the same stage. A prompt that runs before the project prompt layer exists cannot be a project prompt."
     },
     "topology-router": {
-      "appliesTo": ["multi-story"],
+      "appliesTo": [
+        "multi-story"
+      ],
       "_whyAppliesTo": "Routes WORKTREE stories (primary/independent). synthesize-prd-from-jira.js puts a single-story run on main on purpose (defaultGroup: totalStoryCount <= 1 ? 'main' : 'primary', the worktree-merge bug of 2026-07-22), so a one-story project never routes; it ran on the one-ticket rehearsal only through the no-ACs shortcut that splits the story onto primary (£0 brownfield harness runs 16–19, 2026-09-14).",
       "_what": "Chooses the execution topology for a phase: single, parallel or sequential worktrees.",
       "_why": "Declared 2026-08-25. It was calling an LLM while matching NO seam, so resolveOrRefuse could never answer and the call threw at module load — every topology decision in every run was the count heuristic, silently. The count cannot see shared file scope, so four stories editing one file went to parallel worktrees.",
@@ -881,7 +912,12 @@
       ],
       "template": "topology-router",
       "toolGrant": "none",
-      "$whyOutputBudget": "The base position's declared budget, shared with every peer at this rung. It was 1024, and reasoning tokens are billed as output: a medium-effort call could exhaust the budget before emitting a topology at all, and a truncated answer falls back to the count heuristic that cannot see shared file scope — the exact failure this agent was declared to fix."
+      "$whyOutputBudget": "The base position's declared budget, shared with every peer at this rung. It was 1024, and reasoning tokens are billed as output: a medium-effort call could exhaust the budget before emitting a topology at all, and a truncated answer falls back to the count heuristic that cannot see shared file scope — the exact failure this agent was declared to fix.",
+      "optOut": {
+        "env": "EPAM_TOPOLOGY_ROUTER",
+        "value": "0",
+        "_why": "A project may pin its topology (EPAM_TOPOLOGY) or take the heuristic (EPAM_TOPOLOGY_ROUTER=0); the model router is then never asked. Declared so the £0 rehearsal expects what the project declares (regintel, 2026-09-20)."
+      }
     },
     "kb-synthesizer": {
       "_what": "Synthesises repeated healing events into KB entries.",

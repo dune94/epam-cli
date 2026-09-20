@@ -106,6 +106,21 @@ if [ "${#FAILS[@]}" -gt 0 ]; then tail -30 "$LOG" >&2; exit 1; fi
 
 # ── 2. The run ───────────────────────────────────────────────────────────────
 cd "$DEST" || exit 1
+if [ -n "$PROJECT_FROM" ]; then
+  _src_proj="$PROJECT_FROM/orchestrations/projects/$PROJECT"
+  [ -d "$_src_proj" ] || { red "no project '$PROJECT' under $PROJECT_FROM/orchestrations/projects"; exit 2; }
+  rm -rf "$DEST/orchestrations/projects/$PROJECT"
+  cp -r "$_src_proj" "$DEST/orchestrations/projects/$PROJECT"
+  _src_canon="$(sed -n 's/^PRD_CANONICAL=//p' "$_src_proj/config.env" | tr -d '"')"
+  if [ -n "$_src_canon" ] && [ -f "$PROJECT_FROM/$_src_canon" ]; then
+    mkdir -p "$(dirname "$DEST/$_src_canon")"; cp "$PROJECT_FROM/$_src_canon" "$DEST/$_src_canon"
+  fi
+  # The project's runtime PRD starts from the canonical here — never the source install's
+  # working copy, which is that install's run state.
+  _src_prd="$(sed -n 's/^PRD_FILE=//p' "$_src_proj/config.env" | tr -d '"')"
+  [ -n "$_src_prd" ] && [ -n "$_src_canon" ] && [ -f "$DEST/$_src_canon" ] && { mkdir -p "$(dirname "$DEST/$_src_prd")"; cp "$DEST/$_src_canon" "$DEST/$_src_prd"; }
+  say "project '$PROJECT' copied from $PROJECT_FROM (canonical PRD: ${_src_canon:-none}); codeline builds under $DEST/build"
+fi
 # The install's .env, through the pipeline's own loader — never sourced raw (a bare `cd` in it
 # would relocate the harness).
 # shellcheck source=/dev/null

@@ -32,7 +32,7 @@ DIFFS_DIR="$LIVE_DIR/diffs"
 MANIFEST="$DIFFS_DIR/index.json"
 mkdir -p "$DIFFS_DIR"
 
-if [ ! -d "$REPO_PATH/.git" ]; then
+if [ ! -e "$REPO_PATH/.git" ]; then
   echo "[diff-view] Not a git repo: $REPO_PATH" >&2
   exit 1
 fi

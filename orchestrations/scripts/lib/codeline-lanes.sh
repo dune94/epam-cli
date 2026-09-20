@@ -535,7 +535,7 @@ _run_codeline_loop() {
         error "[orch] Codeline '${_cl}' must point to an existing local repository."
         return 1
       fi
-      if [ ! -d "$_wt/.git" ]; then
+      if [ ! -e "$_wt/.git" ]; then
         error "[orch] Brownfield worktree is not a git repository: ${_wt}"
         error "[orch] Ensure the path contains a .git directory."
         return 1

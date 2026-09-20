@@ -647,7 +647,7 @@ $(echo "$_tsc_out" | head -n "$(evidence_window typecheckLines)")"
         local _spec_impl_evidence=""
         local _spec_git_bin
         _spec_git_bin=$(command -v git 2>/dev/null || true)
-        if [ -n "$_spec_git_bin" ] && [ -d "$PROJECT_ROOT/.git" ]; then
+        if [ -n "$_spec_git_bin" ] && [ -e "$PROJECT_ROOT/.git" ]; then
             local _spec_baseline_sha=""
             [ -f "$LOG_DIR/phase-baseline-sha.txt" ] && \
                 _spec_baseline_sha=$(cat "$LOG_DIR/phase-baseline-sha.txt" 2>/dev/null | tr -d '[:space:]')
@@ -897,7 +897,7 @@ $spec_prompt"
             local review_diff_summary=""
             local _git_bin
             _git_bin=$(command -v git 2>/dev/null || true)
-            if [ -n "$_git_bin" ] && [ -d "$PROJECT_ROOT/.git" ]; then
+            if [ -n "$_git_bin" ] && [ -e "$PROJECT_ROOT/.git" ]; then
                 set +e
                 # Use the pre-story-loop baseline SHA when available so the diff
                 # covers ALL commits from this run, not just the last one.
@@ -969,7 +969,7 @@ $review_prompt"
             local mutant_oracle_summary=""
             local _git_bin2
             _git_bin2=$(command -v git 2>/dev/null || true)
-            if [ -n "$_git_bin2" ] && [ -d "$PROJECT_ROOT/.git" ]; then
+            if [ -n "$_git_bin2" ] && [ -e "$PROJECT_ROOT/.git" ]; then
                 set +e
                 # Use the same pre-story baseline SHA as review-ranger for consistency.
                 local _mut_baseline_sha=""

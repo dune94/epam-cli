@@ -240,7 +240,7 @@ _STORY_DIFF=""
 # HEAD~5 guessed at what the story committed (regintel 20260919T224649Z, 2026-09-20).
 . "$SCRIPT_DIR/lib/review-scope.sh"
 _SCOPE_BLOCK=$(story_scope_block "$STORY_ID" 2>/dev/null || true)
-if [ -d "$PROJECT_ROOT/.git" ]; then
+if [ -e "$PROJECT_ROOT/.git" ]; then
     _diff_full=$(story_review_diff "$STORY_ID" 2>/dev/null || true)
     if [ -n "$_diff_full" ]; then
         _diff_total_lines=$(printf '%s\n' "$_diff_full" | wc -l)

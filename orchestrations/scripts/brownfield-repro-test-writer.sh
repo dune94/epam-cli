@@ -130,7 +130,7 @@ warning() { echo "[repro-test-writer] WARNING: $*" >&2; }
 [ "${EPAM_SKIP_REPRO_TEST_WRITER:-0}" = "1" ] && { log "skipped (EPAM_SKIP_REPRO_TEST_WRITER=1)"; exit 0; }
 [ "${EPAM_BROWNFIELD:-0}" = "1" ] || { exit 0; }
 [ -n "$STORY_ID" ] || { log "no story id — skipping"; exit 0; }
-[ -n "$PROJECT_ROOT" ] && [ -d "$PROJECT_ROOT/.git" ] || { log "no git repo at PROJECT_ROOT — skipping"; exit 0; }
+[ -n "$PROJECT_ROOT" ] && [ -e "$PROJECT_ROOT/.git" ] || { log "no git repo at PROJECT_ROOT — skipping"; exit 0; }
 
 BASELINE_SHA=$(git -C "$PROJECT_ROOT" rev-parse --verify --quiet "origin/${BASELINE_BRANCH}" 2>/dev/null \
             || git -C "$PROJECT_ROOT" rev-parse --verify --quiet "${BASELINE_BRANCH}" 2>/dev/null || echo "")

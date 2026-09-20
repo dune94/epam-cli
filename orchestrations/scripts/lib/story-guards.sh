@@ -346,7 +346,7 @@ story_tsc_gate() {
 # Brownfield-only; a no-op elsewhere (the file simply never gets created).
 record_brownfield_verified_baseline() {
     [ "${EPAM_BROWNFIELD:-0}" = "1" ] || return 0
-    [ -d "${PROJECT_ROOT:-}/.git" ] || return 0
+    [ -e "${PROJECT_ROOT:-}/.git" ] || return 0
     local _sha=""
     # When a fixed baseline branch is configured (JIRA_BASELINE_BRANCH, e.g.
     # "develop"), the "verified baseline" is that BRANCH — never a story's own
@@ -399,7 +399,7 @@ record_brownfield_verified_baseline() {
 reset_brownfield_story_commit() {
     local _sid="$1"
     [ "${EPAM_BROWNFIELD:-0}" = "1" ] || return 0
-    [ -d "${PROJECT_ROOT:-}/.git" ] || return 0
+    [ -e "${PROJECT_ROOT:-}/.git" ] || return 0
     local _baseline_file="${LOG_DIR:-}/phase-baseline-sha.txt"
     [ -f "$_baseline_file" ] || return 0
     local _baseline_sha

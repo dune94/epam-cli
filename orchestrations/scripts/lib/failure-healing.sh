@@ -273,7 +273,7 @@ write_healing_summary() {
 # changed the files it never touched. It diagnosed code instead of the absence of an attempt.
 # Echoes nothing when there is no repository; the summary then falls back to the baseline.
 _attempt_start_snapshot() {
-    [ -d "$PROJECT_ROOT/.git" ] || return 0
+    [ -e "$PROJECT_ROOT/.git" ] || return 0
     local _tmp_index
     _tmp_index=$(mktemp "${TMPDIR:-/tmp}/attempt-index-XXXXXX") || return 0
     cp "$PROJECT_ROOT/.git/index" "$_tmp_index" 2>/dev/null || : > "$_tmp_index"
@@ -294,7 +294,7 @@ _attempt_start_snapshot() {
 # classifier.py). Says so and does nothing when there is no repository or no snapshot.
 _restore_tree_snapshot() {
     local _tree="${1:-}"
-    [ -n "$_tree" ] && [ -d "$PROJECT_ROOT/.git" ] || return 0
+    [ -n "$_tree" ] && [ -e "$PROJECT_ROOT/.git" ] || return 0
     git -C "$PROJECT_ROOT" cat-file -e "${_tree}^{tree}" 2>/dev/null || return 0
     local _now
     _now=$(_attempt_start_snapshot)
@@ -339,7 +339,7 @@ _attempt_change_summary() {
     local _ref="${2:-${ATTEMPT_START_REF:-$(_resolved_baseline_ref)}}"
     local _stat=""
 
-    if [ -d "$PROJECT_ROOT/.git" ] && git -C "$PROJECT_ROOT" rev-parse --verify "$_ref" >/dev/null 2>&1; then
+    if [ -e "$PROJECT_ROOT/.git" ] && git -C "$PROJECT_ROOT" rev-parse --verify "$_ref" >/dev/null 2>&1; then
         # TREE AGAINST TREE. The tree as it stands now — tracked, staged, untracked alike — is
         # snapshotted the same way the attempt's start was, and the two are compared. A working-
         # tree diff would read an untracked file that pre-dates the attempt as "deleted" (it is

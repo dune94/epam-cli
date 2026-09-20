@@ -45,7 +45,7 @@ _change_duplicates_owned_format() {
 _committed_change_uses_helpers() {
     local story_id="$1"
     local prd_target="${MAIN_PRD_FILE:-$PRD_FILE}"
-    [ -d "${PROJECT_ROOT:-}/.git" ] || return 0
+    [ -e "${PROJECT_ROOT:-}/.git" ] || return 0
 
     local _helpers
     _helpers=$(jq -r --arg id "$story_id" '
@@ -198,7 +198,7 @@ verify_client_env_boundary() {
 verify_prescribed_helper_used() {
     local story_id="$1"
     [ "${EPAM_BROWNFIELD:-0}" = "1" ] || return 0
-    [ -n "${PROJECT_ROOT:-}" ] && [ -d "$PROJECT_ROOT/.git" ] || return 0
+    [ -n "${PROJECT_ROOT:-}" ] && [ -e "$PROJECT_ROOT/.git" ] || return 0
     local prd_target="${MAIN_PRD_FILE:-${PRD_FILE:-}}"
     [ -f "$prd_target" ] || return 0
 
@@ -393,7 +393,7 @@ verify_story_deliverables() {
         # content diff, not just presence. A genuinely NEW file (didn't
         # exist at baseline) is already fully proven by the exists+non-empty
         # check above — no diff is possible or required for it.
-        if [ "${EPAM_BROWNFIELD:-0}" = "1" ] && [ -d "$PROJECT_ROOT/.git" ]; then
+        if [ "${EPAM_BROWNFIELD:-0}" = "1" ] && [ -e "$PROJECT_ROOT/.git" ]; then
             local _baseline_ref; _baseline_ref="$(_resolved_baseline_ref)"
             if git -C "$PROJECT_ROOT" rev-parse --verify "$_baseline_ref" >/dev/null 2>&1; then
                 local _rel_path="$check_path"
@@ -577,7 +577,7 @@ verify_story_deliverables() {
     # say WHICH file should have changed, since none were declared), but it
     # still catches "nothing real happened" — the actual failure pattern
     # behind three separate false-completion incidents today.
-    if [ "$declared" -eq 0 ] && [ "${EPAM_BROWNFIELD:-0}" = "1" ] && [ -d "$PROJECT_ROOT/.git" ]; then
+    if [ "$declared" -eq 0 ] && [ "${EPAM_BROWNFIELD:-0}" = "1" ] && [ -e "$PROJECT_ROOT/.git" ]; then
         local _baseline_ref; _baseline_ref="$(_resolved_baseline_ref)"
         if git -C "$PROJECT_ROOT" rev-parse --verify "$_baseline_ref" >/dev/null 2>&1; then
             local _real_changes

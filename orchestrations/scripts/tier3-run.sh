@@ -256,7 +256,7 @@ fi
 if [ "$GREENFIELD" = "1" ]; then
   if [ "$GREENFIELD_RESUME" = "1" ] && resume_preserves codeline; then
     # The codeline is the run's own work; a resume builds on it.
-    [ -d "$OUTPUT_DIR/.git" ] || fail "resume of '${EPAM_RESUME_RUN}': no codeline at $OUTPUT_DIR — nothing to resume on"
+    [ -e "$OUTPUT_DIR/.git" ] || fail "resume of '${EPAM_RESUME_RUN}': no codeline at $OUTPUT_DIR — nothing to resume on"
     info "Resuming run '${EPAM_RESUME_RUN}': codeline at $OUTPUT_DIR kept as it is"
   else
     # The codeline is built from nothing each run; the PRD is the authored one, never last run's.

@@ -54,7 +54,7 @@ story_outputs_record() {
     local project_root="$1"
     local log_dir="$2"
     [ -n "$log_dir" ] || return 0
-    [ -n "$project_root" ] && [ -d "$project_root/.git" ] || return 0
+    [ -n "$project_root" ] && [ -e "$project_root/.git" ] || return 0
 
     # THE BASELINE SHA IS THE LANE'S IDENTITY. It resolves only in that lane's own repo
     # (verified against all three live metrolinx lanes), so requiring it makes git's object
@@ -113,7 +113,7 @@ story_outputs_baseline_ref() {
 story_outputs_deleted() {
     local project_root="$1"
     local log_dir="$2"
-    [ -n "$project_root" ] && [ -d "$project_root/.git" ] || return 0
+    [ -n "$project_root" ] && [ -e "$project_root/.git" ] || return 0
     local _ref
     _ref=$(story_outputs_baseline_ref "$log_dir") || return 0
     git -C "$project_root" rev-parse --verify --quiet "${_ref}^{commit}" >/dev/null 2>&1 || return 0
@@ -129,7 +129,7 @@ story_outputs_files() {
     local log_dir="$2"
     STORY_OUTPUTS_SOURCE="none"
 
-    [ -n "$project_root" ] && [ -d "$project_root/.git" ] || return 0
+    [ -n "$project_root" ] && [ -e "$project_root/.git" ] || return 0
 
     local manifest="$log_dir/story-outputs-${PHASE:-core}.txt"
     local raw=""
@@ -181,7 +181,7 @@ story_outputs_tests() {
 # which the caller must report as "not checked", never as "covered".
 story_outputs_tests_for() {
     local project_root="$1" story_id="$3"
-    [ -n "$project_root" ] && [ -d "$project_root/.git" ] || return 0
+    [ -n "$project_root" ] && [ -e "$project_root/.git" ] || return 0
     [ -n "$story_id" ] || return 0
     # EVERY COMMIT OF THE STORY, not the one that says "story complete".
     #

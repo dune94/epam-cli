@@ -49,7 +49,7 @@ if [ "${EPAM_SKIP_REPRO_GATE:-0}" = "1" ]; then
     log "EPAM_SKIP_REPRO_GATE=1 — skipping reproduction gate for $STORY_ID (escape hatch)"
     exit 0
 fi
-if [ ! -d "$PROJECT_ROOT/.git" ]; then
+if [ ! -e "$PROJECT_ROOT/.git" ]; then
     log "$PROJECT_ROOT is not a git repo — skipping"; exit 0
 fi
 

@@ -37,7 +37,7 @@ set -euo pipefail
 
 PROJECT_ROOT="${1:?Usage: reset-to-baseline.sh <project_root>}"
 
-if [ ! -d "$PROJECT_ROOT/.git" ]; then
+if [ ! -e "$PROJECT_ROOT/.git" ]; then
     echo "reset-to-baseline: $PROJECT_ROOT is not a git repository — nothing to reset" >&2
     exit 1
 fi

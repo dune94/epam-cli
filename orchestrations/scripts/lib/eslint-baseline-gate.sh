@@ -165,7 +165,7 @@ eslint_baseline_gate() {
             [ -f "$project_root/$_f" ] || continue
             scope_files+=("$_f")
         done < "$manifest"
-    elif [ -n "$baseline_sha" ] && [ -d "$project_root/.git" ]; then
+    elif [ -n "$baseline_sha" ] && [ -e "$project_root/.git" ]; then
         # Loud on purpose: a gate that quietly changes how it computes its own
         # scope is indistinguishable from one that is broken.
         warning "  [lint] no writer-output manifest at $manifest — falling back to the baseline diff for lint scope"

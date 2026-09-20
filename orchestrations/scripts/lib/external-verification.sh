@@ -1405,7 +1405,7 @@ run_repo_lint_verification() {
     local story_id="$1"
     local output_file="${2:-/dev/null}"
     is_truthy "${SKIP_STORY_LINT_GATE:-}" && return 0
-    [ -d "$PROJECT_ROOT/.git" ] || return 0
+    [ -e "$PROJECT_ROOT/.git" ] || return 0
 
     # Does this repo check anything at commit time? Honour core.hooksPath (husky v9 sets it),
     # then the husky default, then the stock hook location.

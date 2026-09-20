@@ -221,7 +221,7 @@ _git_add_report_failure() {
 git_add_client_outputs() {
     local _repo="$1"
     local _timeout="${2:-${EPAM_COMMIT_TIMEOUT_SECS:-60}}"
-    [ -n "$_repo" ] && [ -d "$_repo/.git" ] || return 0
+    [ -n "$_repo" ] && [ -e "$_repo/.git" ] || return 0
 
     local _excludes=() _resets=() _d
     for _d in "${_ENGINE_OWNED_DIRS[@]}"; do
@@ -356,7 +356,7 @@ ensure_story_branch() {
     local baseline_branch="${3:-${JIRA_BASELINE_BRANCH:-main}}"
 
     [ "${EPAM_BROWNFIELD:-0}" = "1" ] || return 0
-    [ -d "$codeline_root/.git" ] || return 0
+    [ -e "$codeline_root/.git" ] || return 0
     [ -n "$story_id" ] || return 0
 
     # EPAM_BRANCH_PREFIX is project-configurable (set in the project's own

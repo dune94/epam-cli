@@ -2264,7 +2264,7 @@ if [ -n "$main_stories" ]; then
         # An unwritable baseline is LOUD. It used to end in `|| true`, so a repository the run
         # could not read produced no file and every gate silently compared against nothing —
         # which reads as "this story changed no files", the shape of a false pass.
-        if [ -d "$PROJECT_ROOT/.git" ]; then
+        if [ -e "$PROJECT_ROOT/.git" ]; then
             # THE DIVERGENCE POINT, not whatever HEAD happens to be right now. `rev-parse HEAD`
             # ran BEFORE the story loop, and ensure_story_branch (a few lines below) hard-resets
             # the story branch onto origin/<baseline> — orphaning the commit just recorded. The
@@ -2379,7 +2379,7 @@ if [ -n "$main_stories" ]; then
             #
             # Re-derived here, after the reset, and only for the FIRST story: the baseline is a
             # property of the phase, and every story in it branches from the same base.
-            if [ -z "${_phase_baseline_after_reset:-}" ] && [ -d "$PROJECT_ROOT/.git" ]; then
+            if [ -z "${_phase_baseline_after_reset:-}" ] && [ -e "$PROJECT_ROOT/.git" ]; then
                 _phase_baseline_after_reset=1
                 _pb_now="$(qa_phase_baseline_sha "$PROJECT_ROOT" "${JIRA_BASELINE_BRANCH:-}" 2>/dev/null || echo "")"
                 if [ -n "$_pb_now" ] && [ "$_pb_now" != "${_phase_baseline:-}" ]; then

@@ -86,7 +86,7 @@ _plan_fidelity_gate_for_story() {
     # shellcheck source=lib/plan-fidelity-gate.sh
     . "$_gate_lib"
     command -v plan_fidelity_check >/dev/null 2>&1 || return 0
-    [ -d "${PROJECT_ROOT:-}/.git" ] || return 0
+    [ -e "${PROJECT_ROOT:-}/.git" ] || return 0
 
     # THE COMMIT IS THE ARTIFACT, and the baseline is resolved the way every other consumer
     # in this file resolves it — the phase baseline if one was recorded, else the run's.

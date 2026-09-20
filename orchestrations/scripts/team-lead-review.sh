@@ -530,7 +530,7 @@ while IFS= read -r story_id; do
     # actual truncation is now an EXPLICIT marker in the reviewer's own
     # input, so a verdict is never silently based on incomplete data.
     STORY_DIFF=""
-    if [ -d "$PROJECT_ROOT/.git" ]; then
+    if [ -e "$PROJECT_ROOT/.git" ]; then
         # Diff against the STORY'S BASE, not HEAD~N. HEAD~5/HEAD~3 walk into the baseline
         # branch's OWN recent commits, so an unrelated upstream commit (live 2026-07-24:
         # AMSD-2285 get-sb-client.ts, nothing to do with the bug) appeared in the reviewer's

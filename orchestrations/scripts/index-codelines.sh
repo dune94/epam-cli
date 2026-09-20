@@ -69,7 +69,7 @@ for dir in "$ROOT"/*/; do
   # A codeline is indexed if discovery resolved it and it is a git repository. That is the shape of
   # the thing, not a judgement about relevance.
   # Must be a git repo
-  if [[ ! -d "$dir/.git" ]]; then
+  if [[ ! -e "$dir/.git" ]]; then
     echo "  SKIP (not git): $name"
     continue
   fi

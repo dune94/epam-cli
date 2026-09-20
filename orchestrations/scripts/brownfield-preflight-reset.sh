@@ -137,7 +137,7 @@ _apply_local_dependency_overrides() {
     rm -rf "$_pack_dir" 2>/dev/null || true
 }
 
-if [ ! -d "$PROJECT_ROOT/.git" ]; then
+if [ ! -e "$PROJECT_ROOT/.git" ]; then
     warn "$PROJECT_ROOT is not a git repository — skipping (nothing to reset)"
     _apply_local_dependency_overrides "$PROJECT_ROOT"
     exit 0

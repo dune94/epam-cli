@@ -22,7 +22,7 @@ _story_commit_sha() {
 # recent history when the story has no record, as the review did before.
 story_review_diff() {
     local _id="${1:-}" _sha
-    [ -d "${PROJECT_ROOT:-}/.git" ] || return 0
+    [ -e "${PROJECT_ROOT:-}/.git" ] || return 0
     _sha=$(_story_commit_sha "$_id")
     if [ -n "$_sha" ] && git -C "$PROJECT_ROOT" rev-parse --verify "${_sha}^{commit}" >/dev/null 2>&1; then
         git -C "$PROJECT_ROOT" diff "${_sha}^" "$_sha" 2>/dev/null \
@@ -35,7 +35,7 @@ story_review_diff() {
 # story_changed_files <story_id> — the files the story's commit touched.
 story_changed_files() {
     local _id="${1:-}" _sha
-    [ -d "${PROJECT_ROOT:-}/.git" ] || return 0
+    [ -e "${PROJECT_ROOT:-}/.git" ] || return 0
     _sha=$(_story_commit_sha "$_id")
     if [ -n "$_sha" ] && git -C "$PROJECT_ROOT" rev-parse --verify "${_sha}^{commit}" >/dev/null 2>&1; then
         git -C "$PROJECT_ROOT" diff --name-only "${_sha}^" "$_sha" 2>/dev/null \

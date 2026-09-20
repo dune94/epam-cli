@@ -42,7 +42,7 @@
 _selective_worktree_reset() {
     local story_id="$1"
     [ "${EPAM_BROWNFIELD:-0}" = "1" ] || return 0
-    [ -d "${PROJECT_ROOT:-}/.git" ] || return 0
+    [ -e "${PROJECT_ROOT:-}/.git" ] || return 0
     local _baseline_ref; _baseline_ref="$(_resolved_baseline_ref)"
     git -C "$PROJECT_ROOT" rev-parse --verify "$_baseline_ref" >/dev/null 2>&1 || return 0
 
@@ -161,7 +161,7 @@ _rung_snapshot_path() {
 _rung_snapshot_hashes() {
     local story_id="$1"
     [ "${EPAM_BROWNFIELD:-0}" = "1" ] || return 0
-    [ -d "${PROJECT_ROOT:-}/.git" ] || return 0
+    [ -e "${PROJECT_ROOT:-}/.git" ] || return 0
     local _baseline_ref; _baseline_ref="$(_resolved_baseline_ref)"
     git -C "$PROJECT_ROOT" rev-parse --verify "$_baseline_ref" >/dev/null 2>&1 || return 0
     local _snap_file
@@ -190,7 +190,7 @@ _rung_snapshot_hashes() {
 _rung_attribute_changes() {
     local story_id="$1" rung="$2" model="$3"
     [ "${EPAM_BROWNFIELD:-0}" = "1" ] || return 0
-    [ -d "${PROJECT_ROOT:-}/.git" ] || return 0
+    [ -e "${PROJECT_ROOT:-}/.git" ] || return 0
     local _snap_file
     _snap_file=$(_rung_snapshot_path "$story_id")
     [ -f "$_snap_file" ] || return 0
@@ -232,7 +232,7 @@ _rung_attribute_changes() {
 _generate_rung_contribution_report() {
     local story_id="$1"
     [ "${EPAM_BROWNFIELD:-0}" = "1" ] || return 0
-    [ -d "${PROJECT_ROOT:-}/.git" ] || return 0
+    [ -e "${PROJECT_ROOT:-}/.git" ] || return 0
     local _contribution_file="${LOG_DIR}/rung-contribution.jsonl"
     [ -f "$_contribution_file" ] || return 0
     local _baseline_ref; _baseline_ref="$(_resolved_baseline_ref)"

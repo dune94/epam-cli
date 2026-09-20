@@ -1751,6 +1751,11 @@ $_kb_section"
         echo "=== End Prompt ===" >> "$output_file"
         echo "" >> "$output_file"
 
+        # The tree as it stands NOW, so the analyst is told what THIS attempt did — not what the
+        # story did before it (see _attempt_start_snapshot). The raw record is named for the same
+        # reason: the tool counts are the evidence for "wrote nothing".
+        ATTEMPT_START_REF=$(_attempt_start_snapshot)
+        export ATTEMPT_START_REF
         log "Invoking $story_cli (attempt $((retry_count + 1))/$((MAX_RETRIES + 1)))..."
 
         # Proactive dependency install, BEFORE the vendor lock is applied for
@@ -2469,6 +2474,9 @@ $_kb_section"
             local _raw_for_coord="$attempt_raw_file"
             [ ! -f "$_raw_for_coord" ] && _raw_for_coord="${json_result_file%.json}_raw.jsonl"
             [ ! -f "$_raw_for_coord" ] && _raw_for_coord=""
+            # The attempt's own tool record, for _attempt_change_summary (analyst and retry prompt).
+            ATTEMPT_RAW_FILE="$_raw_for_coord"
+            export ATTEMPT_RAW_FILE
 
             # Layer 1: rule-based triage (always runs)
             # A REFUSED COMMAND LINE ENDS THE STORY -- it cannot differ on the next attempt.

@@ -81,36 +81,86 @@ run_dynamic_tools_in_unlocked_window() {
 #
 # ONE SOURCE, TWO CONSUMERS — the writer's retry prompt and the analyst's evidence read the same
 # text. Two pipelines is how they drifted into being fed differently in the first place.
+# _attempt_start_snapshot
+#
+# THE TREE AS IT STOOD WHEN THIS ATTEMPT STARTED — tracked and untracked alike — as a git
+# tree object, without touching the real index or the working tree. Taken by implement_story
+# right before every invocation; _attempt_change_summary diffs against it.
+#
+# Found live 2026-09-20 (regintel 20260919T224649Z resume 7): the summary diffed against the
+# STORY's baseline, which already carried the story's earlier completed work, so a scoped-fix
+# attempt that made 18 reads, 4 bash calls and ZERO writes was reported to the analyst as having
+# changed the files it never touched. It diagnosed code instead of the absence of an attempt.
+# Echoes nothing when there is no repository; the summary then falls back to the baseline.
+_attempt_start_snapshot() {
+    [ -d "$PROJECT_ROOT/.git" ] || return 0
+    local _tmp_index
+    _tmp_index=$(mktemp "${TMPDIR:-/tmp}/attempt-index-XXXXXX") || return 0
+    cp "$PROJECT_ROOT/.git/index" "$_tmp_index" 2>/dev/null || : > "$_tmp_index"
+    local _tree
+    _tree=$( cd "$PROJECT_ROOT" && GIT_INDEX_FILE="$_tmp_index" git add -A . >/dev/null 2>&1 && GIT_INDEX_FILE="$_tmp_index" git write-tree 2>/dev/null )
+    rm -f "$_tmp_index"
+    [ -n "$_tree" ] && printf '%s' "$_tree"
+    return 0
+}
+
+# _attempt_tool_record <raw-output-file>
+#
+# WHAT THE AGENT DID WITH ITS TURN, counted from the runner's own raw record — per tool name,
+# whichever runner wrote it: the epam runner's iteration record (.iterations[].toolCalls[].name),
+# claude's stream-json (tool_use blocks), codex's item stream (item.completed → item.type).
+# A machine fact for the analyst to judge: "18 read_file, 4 bash, no write_file" is the evidence
+# that separates "wrote the wrong thing" from "wrote nothing". Says so when there is no record.
+_attempt_tool_record() {
+    local _raw="${1:-}"
+    [ -n "$_raw" ] && [ -s "$_raw" ] || { printf '(no tool record available for this attempt)\n'; return 0; }
+    local _names
+    _names=$( { jq -r '.iterations[]?.toolCalls[]?.name // empty' "$_raw" 2>/dev/null
+               jq -r 'select(type=="object") | (.message.content[]? | select(.type=="tool_use") | .name), (select(.type=="item.completed") | .item.type // empty)' "$_raw" 2>/dev/null; } \
+             | grep -v '^$' | sort | uniq -c | sort -rn | awk '{printf "  %s × %s\n", $2, $1}' )
+    if [ -z "$_names" ]; then printf '(no tool record available for this attempt)\n'; return 0; fi
+    printf 'Tool calls this attempt (from the runner'"'"'s record):\n%s\n' "$_names"
+    if ! printf '%s' "$_names" | grep -qiE 'write|edit|file_change|patch'; then
+        printf '  no write/edit tool was called — the attempt produced no file changes of its own\n'
+    fi
+    return 0
+}
+
 _attempt_change_summary() {
     local _story_id="${1:-}"
-    local _ref="${2:-$(_resolved_baseline_ref)}"
+    # THIS attempt's start when a snapshot was taken (ATTEMPT_START_REF, see
+    # _attempt_start_snapshot); the story's baseline otherwise.
+    local _ref="${2:-${ATTEMPT_START_REF:-$(_resolved_baseline_ref)}}"
     local _stat=""
 
     if [ -d "$PROJECT_ROOT/.git" ] && git -C "$PROJECT_ROOT" rev-parse --verify "$_ref" >/dev/null 2>&1; then
-        # Committed work on the branch plus anything still in the tree: an attempt that
-        # committed and an attempt that did not are both "what it did".
-        # Untracked files are NOT in `diff --stat`, and a brand-new file is the most common
-        # shape of "what the attempt did" — omitting them reports a real attempt as empty.
-        local _untracked
-        _untracked=$(git -C "$PROJECT_ROOT" ls-files --others --exclude-standard 2>/dev/null | head -40)
-        _stat=$( { git -C "$PROJECT_ROOT" diff --stat "$_ref" 2>/dev/null
-                   git -C "$PROJECT_ROOT" diff --stat --cached 2>/dev/null
-                   if [ -n "$_untracked" ]; then
-                       printf '%s\n' "$_untracked" | while IFS= read -r _u; do
-                           [ -n "$_u" ] || continue
-                           printf ' %s | new file\n' "$_u"
-                       done
-                   fi; } | grep -vE '^[[:space:]]*$' | head -n "$(evidence_window changedFileLines)" )
+        # TREE AGAINST TREE. The tree as it stands now — tracked, staged, untracked alike — is
+        # snapshotted the same way the attempt's start was, and the two are compared. A working-
+        # tree diff would read an untracked file that pre-dates the attempt as "deleted" (it is
+        # in the snapshot, not in the index) and would miss a brand-new file altogether — and a
+        # brand-new file is the most common shape of "what the attempt did".
+        local _now
+        _now=$(_attempt_start_snapshot)
+        if [ -n "$_now" ]; then
+            _stat=$( git -C "$PROJECT_ROOT" diff --stat "$_ref" "$_now" 2>/dev/null | grep -vE '^[[:space:]]*$' | head -n "$(evidence_window changedFileLines)" )
+        else
+            _stat=$( git -C "$PROJECT_ROOT" diff --stat "$_ref" 2>/dev/null | grep -vE '^[[:space:]]*$' | head -n "$(evidence_window changedFileLines)" )
+        fi
     fi
+
+    local _record=""
+    [ -n "${ATTEMPT_RAW_FILE:-}" ] && _record=$(_attempt_tool_record "$ATTEMPT_RAW_FILE")
 
     if [ -z "$(printf '%s' "$_stat" | tr -d '[:space:]')" ]; then
         # THE MOST IMPORTANT CASE. An empty summary reads as "no information", and the next
         # attempt then behaves as though it were the first. Say it plainly instead.
         printf 'The previous attempt changed NO files — nothing was written. Treat this as an attempt that produced nothing, not as a fresh start.\n'
+        [ -n "$_record" ] && printf '\n%s\n' "$_record"
         return 0
     fi
 
     printf 'The previous attempt changed these files (diffstat against %s):\n\n%s\n' "$_ref" "$_stat"
+    [ -n "$_record" ] && printf '\n%s\n' "$_record"
     return 0
 }
 

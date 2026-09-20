@@ -296,8 +296,14 @@ function writerStandInCalls(story, seam) {
     // rehearsal's write turn was served and rejected on every attempt, and the deliverable stayed
     // unchanged (£0 brownfield harness run 10, 2026-09-14). A brownfield story's files exist by
     // definition; each is read through the set's declared read tool before it is written.
-    const read = readTool && readTool.name && fs.existsSync(abs) ? { name: readTool.name, input: { [readTool.path]: abs } } : null;
-    return { name: tool.name, input: { [tool.path]: abs, [tool.content]: content }, read, declared: declared.includes(f0), wrong: fix && fix.files.includes(f) ? { name: tool.name, input: { [tool.path]: abs, [tool.content]: wrong } } : null };
+    // THE PATH THE RUNNER RESOLVES AGAINST ITS OWN CWD. The writer runs with the codeline as its
+    // working directory — the main checkout in Step 8, a WORKTREE (build-wt-primary) in Step 14.
+    // An absolute path fixed at registration time named the main checkout for both, so a
+    // worktree lane's writes landed outside its tree and every deliverable was "missing"
+    // (regintel £0 rehearsal #17, 2026-09-20). A relative path lands where the runner runs.
+    const wire = f;
+    const read = readTool && readTool.name && fs.existsSync(abs) ? { name: readTool.name, input: { [readTool.path]: wire } } : null;
+    return { name: tool.name, input: { [tool.path]: wire, [tool.content]: content }, read, declared: declared.includes(f0), wrong: fix && fix.files.includes(f) ? { name: tool.name, input: { [tool.path]: wire, [tool.content]: wrong } } : null };
   });
 }
 /**

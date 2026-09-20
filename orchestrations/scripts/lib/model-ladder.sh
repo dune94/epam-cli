@@ -1511,6 +1511,10 @@ resolve_escalation() {
     _render_out="$(render_or_keep coordinator-amendment "$_cp_vals" sibling_escalation)" && COORDINATOR_PROMPT_AMENDMENT="$_render_out"
     rm -f "$_cp_vals"
     export COORDINATOR_PROMPT_AMENDMENT
+    # The tree as it stands before the owner's fix begins — restored if the fix does not converge,
+    # so nothing of a half-done edit reaches $escalating_story_id's commit (see _restore_tree_snapshot).
+    local _esc_start_tree=""
+    command -v _attempt_start_snapshot >/dev/null 2>&1 && _esc_start_tree=$(_attempt_start_snapshot)
 
     implement_story "$sibling_id"
     local fix_result=$?
@@ -1526,6 +1530,9 @@ resolve_escalation() {
         success "  [Escalation] Scoped fix resolved for $sibling_id — resuming $escalating_story_id"
         return 0
     else
+        if [ -n "$_esc_start_tree" ] && command -v _restore_tree_snapshot >/dev/null 2>&1; then
+            _restore_tree_snapshot "$_esc_start_tree" && log "  [Escalation] $sibling_id's partial edits reverted — nothing of a non-converged fix reaches $escalating_story_id's commit"
+        fi
         warning "  [Escalation] Scoped fix for $sibling_id did not converge this escalation (its ladder now at retry_count $(read_story_retry_count "$LOG_DIR" "$sibling_id")) — $escalating_story_id will re-diagnose on its next attempt and the next escalation climbs from there"
         return 1
     fi

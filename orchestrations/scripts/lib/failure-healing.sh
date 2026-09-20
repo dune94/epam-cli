@@ -104,6 +104,32 @@ _attempt_start_snapshot() {
     return 0
 }
 
+# _restore_tree_snapshot <tree>
+#
+# THE TREE AS IT WAS — tracked, staged and untracked alike — from a snapshot taken by
+# _attempt_start_snapshot. Files added since are removed, edits are undone, the index matches.
+# Used to withdraw a scoped fix that did not converge (see resolve_escalation), so a half-done
+# edit of another story's file never reaches the escalating story's commit under its name
+# (regintel 20260919T224649Z: 007a's "story complete" carried 005a's half-rewritten
+# classifier.py). Says so and does nothing when there is no repository or no snapshot.
+_restore_tree_snapshot() {
+    local _tree="${1:-}"
+    [ -n "$_tree" ] && [ -d "$PROJECT_ROOT/.git" ] || return 0
+    git -C "$PROJECT_ROOT" cat-file -e "${_tree}^{tree}" 2>/dev/null || return 0
+    local _now
+    _now=$(_attempt_start_snapshot)
+    [ -n "$_now" ] && [ "$_now" = "$_tree" ] && return 0
+    # Files that exist now and did not in the snapshot: delete them (git restore cannot).
+    if [ -n "$_now" ]; then
+        git -C "$PROJECT_ROOT" diff --name-only --diff-filter=A "$_tree" "$_now" 2>/dev/null | while IFS= read -r _f; do
+            [ -n "$_f" ] && rm -f "$PROJECT_ROOT/$_f"
+        done
+    fi
+    git -C "$PROJECT_ROOT" restore --source="$_tree" --worktree --staged -- . 2>/dev/null \
+        || git -C "$PROJECT_ROOT" checkout "$_tree" -- . 2>/dev/null || return 1
+    return 0
+}
+
 # _attempt_tool_record <raw-output-file>
 #
 # WHAT THE AGENT DID WITH ITS TURN, counted from the runner's own raw record — per tool name,

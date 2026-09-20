@@ -394,6 +394,7 @@ CLEARABLE_LOGS=(
   phase-cost.jsonl
   healing-events.jsonl
   run-guidance.jsonl
+  retry-extension-decisions.jsonl
   failure-diagnosis-groundedness.jsonl
   story-failures.jsonl
   guarded-step-retries.jsonl

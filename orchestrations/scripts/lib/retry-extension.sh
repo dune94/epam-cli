@@ -206,11 +206,14 @@ run_retry_extension_coordinator() {
         esac
     fi
 
-    mkdir -p "${OUTPUT_DIR:-$LOG_DIR}" 2>/dev/null
+    # A RUN LEDGER, WITH THE RUN'S OTHER LEDGERS. This defaulted to OUTPUT_DIR — the codeline on
+    # greenfield — and "REGI-005b: story complete" committed retry-extension-decisions.jsonl into
+    # the client repository (2026-09-20). LOG_DIR, cleared by the run's reset like the rest.
+    mkdir -p "${LOG_DIR}" 2>/dev/null
     jq -nc --arg story "$story_id" --argjson evidence "$evidence" --arg extend "$extend" \
         --argjson granted "${granted:-0}" --arg reason "$reason" --arg ts "$(date -Iseconds)" \
         '{storyId: $story, evidence: $evidence, extend: ($extend == "true"), extraRetriesGranted: $granted, reason: $reason, timestamp: $ts}' \
-        >> "${OUTPUT_DIR:-$LOG_DIR}/retry-extension-decisions.jsonl" 2>/dev/null || true
+        >> "${LOG_DIR}/retry-extension-decisions.jsonl" 2>/dev/null || true
 
     if [ "${granted:-0}" -gt 0 ] 2>/dev/null; then
         # >&2 -- see the identical rationale at this function's other log

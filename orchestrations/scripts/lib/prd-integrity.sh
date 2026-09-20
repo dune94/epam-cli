@@ -386,3 +386,23 @@ lane_stories_all_completed() {
     done <<< "$_list"
     return 0
 }
+
+# persist_lane_assignments <primary-list> <independent-list> — the lane a story runs in is PRD
+# data (agentGroup): the worktree agent (claude.sh --worktree <lane>) selects its stories by it,
+# not by the orchestrator's lists. A closure move that stays in a shell variable runs nowhere
+# (regintel £0 rehearsal #19, 2026-09-20: REGI-010 joined the primary lane and never ran).
+persist_lane_assignments() {
+    local _primary="${1:-}" _independent="${2:-}"
+    local _lane _sid _tmp
+    for _lane in primary independent; do
+        local _list; [ "$_lane" = primary ] && _list="$_primary" || _list="$_independent"
+        while IFS= read -r _sid; do
+            [ -n "$_sid" ] || continue
+            if [ "$(jq -r --arg id "$_sid" '.stories[] | select(.id == $id) | .agentGroup // "main"' "$PRD_FILE" 2>/dev/null)" != "$_lane" ]; then
+                _tmp=$(mktemp); chmod 644 "$_tmp" 2>/dev/null
+                jq --arg id "$_sid" --arg lane "$_lane" '(.stories[] | select(.id == $id) | .agentGroup) = $lane' "$PRD_FILE" > "$_tmp" && mv "$_tmp" "$PRD_FILE"
+                log "  [lanes] $_sid now runs in the $_lane lane (agentGroup written to the PRD)" 2>/dev/null || true
+            fi
+        done <<< "$_list"
+    done
+}

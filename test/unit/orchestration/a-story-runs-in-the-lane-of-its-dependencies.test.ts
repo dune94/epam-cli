@@ -144,3 +144,25 @@ REGI-008" && echo YES || echo NO`, p)).toContain('YES');
 REGI-010" && echo YES || echo NO`, p)).toContain('NO');
   });
 });
+
+describe('(5) a lane move is written to the PRD — the worktree agent reads agentGroup, not the orchestrator\'s list', () => {
+  // £0 rehearsal #19: REGI-010 joined the primary lane in the orchestrator, but claude.sh
+  // --worktree primary filters the phase's stories by the PRD's agentGroup, so the lane ran
+  // REGI-007 and REGI-008 only and REGI-010 never ran anywhere.
+  it('persist_lane_assignments sets agentGroup for every story in the primary and independent lists', () => {
+    const p = prdFile();
+    sh(`persist_lane_assignments "REGI-007
+REGI-008
+REGI-010" ""`, p);
+    const prd = JSON.parse(readFileSync(p, 'utf8'));
+    const g = (id: string) => prd.stories.find((s: any) => s.id === id).agentGroup;
+    expect(g('REGI-010')).toBe('primary'); expect(g('REGI-007')).toBe('primary'); expect(g('REGI-009')).toBe('main');
+  });
+  it('the orchestrator persists right after the closure', () => {
+    const src = readFileSync(ORCH, 'utf8');
+    const iClosure = src.indexOf('lane_dependency_closure "$main_stories"');
+    const iPersist = src.indexOf('persist_lane_assignments "$primary_stories" "$independent_stories"');
+    expect(iPersist).toBeGreaterThan(iClosure);
+    expect(iPersist).toBeLessThan(src.indexOf('main_stories=$(topo_sort_stories "$main_stories")'));
+  });
+});

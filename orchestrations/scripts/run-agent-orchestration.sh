@@ -1270,6 +1270,7 @@ _lanes_out=$(lane_dependency_closure "$main_stories" "$primary_stories" "$indepe
 main_stories=$(printf '%s\n' "$_lanes_out" | awk 'BEGIN{p=0} /^---$/{p++; next} p==0')
 primary_stories=$(printf '%s\n' "$_lanes_out" | awk 'BEGIN{p=0} /^---$/{p++; next} p==1')
 independent_stories=$(printf '%s\n' "$_lanes_out" | awk 'BEGIN{p=0} /^---$/{p++; next} p==2')
+persist_lane_assignments "$primary_stories" "$independent_stories"
 main_stories=$(topo_sort_stories "$main_stories")
 primary_stories=$(topo_sort_stories "$primary_stories")
 independent_stories=$(topo_sort_stories "$independent_stories")

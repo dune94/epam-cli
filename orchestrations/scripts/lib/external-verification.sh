@@ -1212,8 +1212,101 @@ run_external_verification() {
         return 1
     fi
 
+    # THE STORY'S OWN SUITE IS GREEN. THE CODELINE'S MUST BE TOO.
+    verify_codeline_suite "$story_id" "$output_file" "$test_cmd" || return 1
+
     success "External verification passed for $story_id"
     return 0
+}
+
+# verify_codeline_suite <story_id> <output_file> <command-that-just-passed>
+#
+# A STORY IS COMPLETE ONLY WHEN THE CODELINE IS GREEN (found live, 2026-09-20, regintel
+# 20260919T224649Z resume 7): REGI-005b ran its own scoped file, passed, and was marked
+# complete while the classify_event it had just landed broke 18 tests in three other files.
+# Every later story inherited the red suite.
+#
+# When the story's run was scoped to its own test files (the project declares how), the
+# codeline's WHOLE declared suite runs once more here. Failures the phase baseline already
+# holds are subtracted exactly as they are for the story's own run; a failure the baseline
+# does not hold is this story's to answer. The failure text names, per failing test file,
+# the story that DECLARES it — a machine fact from the PRD — so the analyst can attribute the
+# defect and the writer can escalate to the owner instead of re-guessing. When the story's
+# run already was the whole suite, nothing runs twice.
+verify_codeline_suite() {
+    local story_id="$1" output_file="${2:-/dev/null}" ran_cmd="${3:-}"
+    local prd_target="${MAIN_PRD_FILE:-$PRD_FILE}"
+    local whole_cmd
+    whole_cmd=$(_project_test_command "$PROJECT_ROOT")
+    [ -n "$whole_cmd" ] || return 0
+    [ "$whole_cmd" = "$ran_cmd" ] && return 0
+
+    log "  Running the codeline's whole suite after $story_id's own passed: $whole_cmd"
+    local _test_timeout="${EPAM_TEST_TIMEOUT_SECS:-300}"
+    local _bounded; _bounded="$(_bounded_test_command "$whole_cmd")"
+    local _env_prefix; _env_prefix=$(_project_run_env_prefix "$PROJECT_ROOT")
+    local whole_out whole_exit=0
+    whole_out=$(cd "$PROJECT_ROOT" && timeout "$_test_timeout" bash -c "${_env_prefix}${_bounded}" 2>&1) || whole_exit=$?
+    if [ "$whole_exit" -eq 0 ]; then
+        success "  Codeline suite green after $story_id"
+        return 0
+    fi
+    if [ "$whole_exit" -eq 124 ]; then
+        warning "  Codeline suite TIMED OUT after ${_test_timeout}s following $story_id — not a pass"
+        VERIFICATION_FAILURE=$(printf '\n## Verification Failure — the codeline suite TIMED OUT\n\nYour own tests passed. The orchestrator then ran the whole suite (`%s`) and it did not finish within %ds. A test that hangs after your change is yours to find.\n\n```\n%s\n```\n' "$whole_cmd" "$_test_timeout" "$(printf '%s' "$whole_out" | tail -n "$(evidence_window testOutputLines)")")
+        return 1
+    fi
+
+    local _new="$whole_out"
+    if command -v baseline_new_failures >/dev/null 2>&1; then
+        local _f _rc=0 _delta
+        _f=$(mktemp); printf '%s' "$whole_out" > "$_f"
+        _delta=$(baseline_new_failures "$PROJECT_ROOT" "${NODE_CMD:-${NODE_BIN:-node}}" "$LOG_DIR" test "$_f") || _rc=$?
+        rm -f "$_f"
+        [ "$_rc" -eq 0 ] && _new="" || _new="$_delta"
+    fi
+    if [ -z "$(printf '%s' "$_new" | tr -d '[:space:]')" ]; then
+        success "  Codeline suite after $story_id: only pre-existing baseline failures — none introduced by this story"
+        return 0
+    fi
+
+    # WHO DECLARES EACH FAILING TEST FILE — from the PRD, for the analyst and the writer.
+    local _pattern; _pattern=$(_project_test_file_pattern "$PROJECT_ROOT" 2>/dev/null || true)
+    local _owners="" _file _owner
+    while IFS= read -r _file; do
+        [ -n "$_file" ] || continue
+        _owner=$(jq -r --arg f "$_file" '[.stories[] | select(.status != "deprecated") | select((.technicalNotes.files // []) | map(. == $f or endswith("/" + $f) or ($f | endswith("/" + .))) | any) | .id] | unique | join(", ")' "$prd_target" 2>/dev/null)
+        if [ "$_owner" = "$story_id" ]; then
+            _owners="${_owners}- ${_file}: declared by ${story_id} (this story)
+"
+        else
+            _owners="${_owners}- ${_file}: declared by ${_owner:-no story} — outside ${story_id}'s own tests
+"
+        fi
+    done < <(printf '%s\n' "$_new" | grep -oE '[A-Za-z0-9_./-]+\.[A-Za-z0-9]+' | { if [ -n "$_pattern" ]; then grep -E "$_pattern"; else cat; fi; } | sort -u)
+
+    warning "  Codeline suite after $story_id has failures the baseline does not hold"
+    VERIFICATION_FAILURE=$(printf '\n## Verification Failure — the codeline suite\n\nYour own tests passed. The orchestrator then ran the whole suite (`%s`) and these failures are NEW since the phase baseline — introduced by this story'"'"'s change:\n\n```\n%s\n```\n\nWhich story declares each failing test file:\n%s\nA failing test outside this story'"'"'s own files means the change broke a contract another story relies on. Either restore that contract in the files you own, or — if the fix belongs in a file another story owns — escalate it to that story with escalate_defect_to_sibling_story.\n' \
+        "$whole_cmd" "$(printf '%s' "$_new" | head -n "$(evidence_window testOutputLines)")" "$_owners")
+    {
+        echo ""
+        echo "=== Codeline suite failed after $story_id (exit $whole_exit) ==="
+        printf '%s\n' "$whole_out" | head -n "$(evidence_window testOutputLines)"
+    } >> "$output_file"
+    return 1
+}
+
+# _project_test_file_pattern <root> — the project's declared test-file pattern, or nothing.
+_project_test_file_pattern() {
+    local _root="${1:-$PROJECT_ROOT}"
+    local _plugin="${AUTOMATION_DIR}/plugins/verification-plugin.js"
+    local _node="${NODE_CMD:-${NODE_BIN:-node}}"
+    [ -f "$_plugin" ] || return 0
+    "$_node" -e '
+      const p = require(process.argv[1]);
+      const m = p.readTestManifest(process.argv[2]);
+      if (m && m.ok && m.manifest && m.manifest.test && m.manifest.test.testFilePattern) console.log(m.manifest.test.testFilePattern);
+    ' "$_plugin" "$_root" 2>/dev/null
 }
 
 # run_repo_lint_verification <story_id> <output_file>

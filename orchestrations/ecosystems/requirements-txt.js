@@ -112,6 +112,15 @@ module.exports = {
   // pytest, requirements.txt) had every gate reading "no test command" because only package.json
   // scripts were ever consulted.
   testCommand: (text) => (module.exports.deps(String(text || '')).some((d) => d.toLowerCase() === 'pytest') ? 'pytest' : ''),
+  // HOW ONE PYTEST FAILURE IS RECOGNISED, so a baseline can be parsed and subtracted. pytest's
+  // short summary names each failure as `FAILED <file>::<test>`; the pair is the stable identity
+  // (a test name alone recurs across files). Without this, regintel 20260919T224649Z logged
+  // "CANNOT BUILD a test baseline" on every attempt and every pre-existing failure was
+  // attributed to whichever story ran next.
+  testFailure: {
+    failurePattern: '^(?:FAILED|ERROR)\\s+(\\S+?)::(\\S+?)(?:\\s+-\\s|\\s*$)',
+    failureIdentity: '{1}::{2}',
+  },
     installDir: '.venv',
     deps: (text) => text.split('\n')
       .map((l) => l.trim())

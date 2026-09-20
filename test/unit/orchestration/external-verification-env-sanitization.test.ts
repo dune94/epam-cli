@@ -149,6 +149,9 @@ describe('run_external_verification — env sanitization REAL execution', () => 
       // supplies technicalNotes.testCommand, so the declaration path is not exercised.
       '_project_repo_has_tests() { echo "true"; }',
       '_project_test_command() { :; }',
+      // The whole-suite pass that follows a green scoped run (2026-09-20) — its own test executes
+      // it; here it is isolated away like every other check above.
+      'verify_codeline_suite() { return 0; }',
       '_project_owned_test_files() { :; }',
       '_project_scoped_test_command() { :; }',
       '_project_dep_config_value() { :; }',

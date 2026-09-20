@@ -313,11 +313,16 @@ function detectTests(projectRoot) {
         const scoped = typeof hit.eco.testFileCommand === 'function'
           ? String(hit.eco.testFileCommand(command, ['{files}']) || '') : '';
         const pattern = ((hit.eco.codelineManifests || {}).contractGeneration || {}).testFilePattern || null;
+        // The provider's own failure identity (testFailure), so parseFailures can read this
+        // runner's output and a baseline can be built — declared beside the command it parses.
+        const failure = hit.eco.testFailure && typeof hit.eco.testFailure === 'object' ? hit.eco.testFailure : null;
         return {
           test: {
             command,
             ...(scoped ? { scopedCommand: scoped } : {}),
             ...(pattern ? { testFilePattern: pattern } : {}),
+            ...(failure && failure.failurePattern ? { failurePattern: failure.failurePattern } : {}),
+            ...(failure && failure.failureIdentity ? { failureIdentity: failure.failureIdentity } : {}),
             detected: `${hit.present} via the ${hit.eco.file} ecosystem provider`,
           },
         };

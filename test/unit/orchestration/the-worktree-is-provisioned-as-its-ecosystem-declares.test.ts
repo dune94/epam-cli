@@ -70,6 +70,7 @@ function run(codeline: string, hostBin: string, record: string, testCommand: str
     'run_dependency_check() { :; }', 'run_lockfile_sync_check() { :; }', 'run_relative_import_check() { return 0; }',
     'run_named_import_check() { return 0; }', 'run_anti_pattern_check() { return 0; }', 'run_mock_completeness_check() { return 0; }',
     '_project_repo_has_tests() { echo "true"; }', '_project_test_command() { :; }', '_project_owned_test_files() { :; }',
+    'verify_codeline_suite() { return 0; }',
     '_project_scoped_test_command() { :; }', '_bounded_test_command() { printf "%s" "${1:-}"; }',
     '_orch_env_unset_prefix=""',
     fn('_project_dep_config_value'), fn('_get_vendor_dirs'),

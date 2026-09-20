@@ -12,7 +12,7 @@
     "supplies and threw on every render. The pattern is lazy now; substitution by key was always",
     "adjacency-safe."
   ],
-  "body": "__FORCED_RETRY_BLOCK__You are the __AGENT__ specification agent for EPAM CLI. Phase __PHASE__, story __STORY_ID__.__SPLIT_WARNING____PRIOR_GAPS_BLOCK____SEMBLE_CONTEXT____REFERENCED_DOCS_EVIDENCE____FIX_SITE_BLOCK____DECLARED_FILE_BLOCK____BROWNFIELD_ARCHAEOLOGY_BLOCK__\n__GENERATE_INSTRUCTION__\n{\n  \"storyId\":\"__STORY_ID__\",\n  \"agent\":\"__AGENT__\",\n  \"notes\":\"context\",\n  \"acceptanceCriteria\":[\"...\"],\n  \"description\":\"...\",\n  \"title\":\"...\",__LOCATION_HINT_SCHEMA_LINE____SPLIT_SCHEMA_FIELD__\n}\nUse existing text when no change is needed.__SPLIT_RULES_BLOCK__\n__PRD_CONFIGURATION_BLOCK__\nStory context:\n__STORY_PAYLOAD____PUBLISHED_CONTRACTS__\n",
+  "body": "__FORCED_RETRY_BLOCK__You are the __AGENT__ specification agent for EPAM CLI. Phase __PHASE__, story __STORY_ID__.__SPLIT_WARNING____PRIOR_GAPS_BLOCK____SEMBLE_CONTEXT____REFERENCED_DOCS_EVIDENCE____FIX_SITE_BLOCK____DECLARED_FILE_BLOCK____SHARED_FILE_OWNERSHIP_BLOCK____BROWNFIELD_ARCHAEOLOGY_BLOCK__\n__GENERATE_INSTRUCTION__\n{\n  \"storyId\":\"__STORY_ID__\",\n  \"agent\":\"__AGENT__\",\n  \"notes\":\"context\",\n  \"acceptanceCriteria\":[\"...\"],\n  \"description\":\"...\",\n  \"title\":\"...\",__LOCATION_HINT_SCHEMA_LINE____SPLIT_SCHEMA_FIELD__\n}\nUse existing text when no change is needed.__SPLIT_RULES_BLOCK__\n__PRD_CONFIGURATION_BLOCK__\nStory context:\n__STORY_PAYLOAD____PUBLISHED_CONTRACTS__\n",
   "description": "Produce or revise the specification for one story, as the openspec agent.",
   "id": "spec-agent-openspec",
   "placeholders": [
@@ -24,18 +24,19 @@
     "__GENERATE_INSTRUCTION__",
     "__LOCATION_HINT_SCHEMA_LINE__",
     "__PHASE__",
-    "__PRIOR_GAPS_BLOCK__",
     "__PRD_CONFIGURATION_BLOCK__",
+    "__PRIOR_GAPS_BLOCK__",
     "__PUBLISHED_CONTRACTS__",
     "__REFERENCED_DOCS_EVIDENCE__",
     "__SEMBLE_CONTEXT__",
+    "__SHARED_FILE_OWNERSHIP_BLOCK__",
     "__SPLIT_RULES_BLOCK__",
     "__SPLIT_SCHEMA_FIELD__",
     "__SPLIT_WARNING__",
     "__STORY_ID__",
     "__STORY_PAYLOAD__"
   ],
-  "version": 1,
+  "version": 2,
   "seams": [
     "spec-agent"
   ],
@@ -52,7 +53,8 @@
     "__SEMBLE_CONTEXT__",
     "__SPLIT_RULES_BLOCK__",
     "__SPLIT_SCHEMA_FIELD__",
-    "__SPLIT_WARNING__"
+    "__SPLIT_WARNING__",
+    "__SHARED_FILE_OWNERSHIP_BLOCK__"
   ],
   "$whyMayBeEmpty": "Declared 2026-08-27 after run 20260827T125654Z aborted here. Each of these is a CONDITIONAL INSERT: the story is not being split, no earlier pass left gaps, no documentation was fetched, no contract has been published yet and attempt one carries no forced-retry note. The renderer's own rule is that absence must be a real state rather than a failed lookup — and a first pass having no prior gaps is exactly that. All ten rendered empty during normal operation and the render refused, three times per story, with no model involved; both lanes halted at the specification pass. __FIX_SITE_BLOCK__ is the one to watch: empty is legitimate before discovery has run, but it is ALSO what an unavailable code-graph-detective produces, and that failure is reported separately rather than inferred from this blank. __BROWNFIELD_ARCHAEOLOGY_BLOCK__ and __LOCATION_HINT_SCHEMA_LINE__ added 2026-09-13: both come from buildBrownfieldArchaeologyBlock, which produces nothing for a project declaring EPAM_BROWNFIELD=0 — there is no existing code to locate a fix site in. Undeclared, the £0 greenfield run refused its own spec prompt three times per story with no model involved and aborted at the specification pass."
 }

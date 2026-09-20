@@ -1,0 +1,24 @@
+{
+  "id": "shared-file-ownership",
+  "version": 1,
+  "description": "Composed into the spec-agent prompt (both modes) when one of the story's declared files is also declared by another story. Tells the agent a decision is required and how to answer it through the contract.",
+  "$why": [
+    "regintel 20260919T224649Z (2026-09-20): two impl stories both declared regintel/classifier.py;",
+    "each writer rewrote classify_event to its own story's criteria, each test child pinned the",
+    "other shape, and the codeline flip-flopped for 20 attempts. The spec agent never knew the file",
+    "was shared. This block is the input it lacked; the fields it names are the answer the",
+    "contract can carry. Engine layer: it names no file, story, stack or role — those come from",
+    "__SHARED_FILES__, computed from the PRD per story."
+  ],
+  "placeholders": [
+    "__SHARED_FILES__"
+  ],
+  "mayBeEmpty": [
+    "__SHARED_FILES__"
+  ],
+  "$whyMayBeEmpty": "Rendered only when the story shares at least one file; a story that shares nothing gets no block.",
+  "body": "\n\nSHARED FILES — a file another story also declares has exactly ONE owner, and you must decide which side this story is on:\n__SHARED_FILES__\nFor each file above, answer in one of two ways and never both:\n- CONSUME: this story does not own the file. Remove it from this story's technicalNotes.files and list what it needs from it in \"consumesInterfaces\": [{\"file\", \"ownerStoryId\", \"symbol\", \"signature\"}] — the exact function/class/endpoint and its full signature as the owner must expose it. Phrase this story's acceptance criteria against that interface, never against the file's internals. Prefer this when another story already owns or has claimed the file.\n- CLAIM: this story owns the file. List it in \"ownsSharedFiles\" and keep it in technicalNotes.files. Claim only when this story creates the file or is the one place its behaviour is specified; a file already claimed by a completed story is theirs.\nA file left in technicalNotes.files without a claim, while another story also declares it, is an undecided conflict and will be sent back.\n",
+  "$mayBeEmptyWhy": {
+    "__SHARED_FILES__": "The caller renders this fragment only when at least one shared file exists; the list is never empty in practice, and declared here because the runner supplies it from data."
+  }
+}

@@ -744,6 +744,11 @@ $(cat "$_contract_file")
         done < <(echo "$_dep_ids_json" | jq -r '.[]?')
     fi
 
+    # THE INTERFACE THIS STORY CONSUMES FROM A SHARED FILE IT DOES NOT OWN (spec-time decision,
+    # see sharedFileBlock in spec-mode-runner.js) — briefed here, beside the owner's contract,
+    # so the writer codes against the signature rather than reopening the file.
+    dependency_contracts="${dependency_contracts}$(consumed_interfaces_block "$story_json")"
+
     # Third-party package grounding (found live 2026-07-30, AMSD-2041): the
     # loop above ground-truths INTERNAL dependencies only. A story writing
     # config for a third-party SDK had nothing but training memory to go on —
@@ -1270,4 +1275,19 @@ generate_story_contract() {
     local contract_file="${contracts_dir}/${story_id}.md"
 
     _generate_contract_from_files "$_commit_root" "$contract_file" "$files_json" "$story_id" "$config_file"
+}
+
+# consumed_interfaces_block <story-json>
+#
+# Renders the interfaces a story declared it CONSUMES from files other stories own
+# (story.consumesInterfaces, written by the spec pass from the agent's own decision). Empty
+# when there are none. Composed into the writer's dependency-contracts input.
+consumed_interfaces_block() {
+    local _story_json="${1:-}"
+    [ -n "$_story_json" ] || return 0
+    printf '%s' "$_story_json" | jq -r '
+      (.consumesInterfaces // []) | map(select(type == "object")) | if length == 0 then empty else
+        "\n### Interfaces this story consumes (owned elsewhere — call them, do not reopen the file)\n" +
+        (map("- " + (.symbol // "?") + " from " + (.file // "?") + " (owned by " + (.ownerStoryId // "?") + "): " + (.signature // "")) | join("\n")) + "\n"
+      end' 2>/dev/null
 }

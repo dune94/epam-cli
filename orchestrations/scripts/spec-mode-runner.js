@@ -436,6 +436,36 @@ function getDeterministicCandidateFiles(story, topN = 3) {
  * for STORY agents. The detective was never given it. It does not need the
  * neighbouring codebase — only the neighbouring surface.
  */
+/**
+ * sharedFileBlock(story, prd) — which of THIS story's declared files other (non-deprecated)
+ * stories also declare, with their status and any ownership already claimed.
+ *
+ * regintel 20260919T224649Z: two impl stories both owned classifier.py and each rewrote its
+ * function to its own criteria; the spec agent was never told the file was shared. This is the
+ * input it lacked. Words from the template layer (shared-file-ownership); empty when nothing
+ * is shared.
+ */
+function sharedFileBlock(story, prd) {
+  const mine = (story && story.technicalNotes && Array.isArray(story.technicalNotes.files)) ? story.technicalNotes.files : [];
+  const stories = (prd && Array.isArray(prd.stories)) ? prd.stories : [];
+  if (!mine.length || !stories.length) return '';
+  const norm = (f) => String(f || '').replace(/^\.\//, '');
+  const lines = [];
+  for (const f of mine) {
+    const others = stories.filter((s) => s && s.id !== story.id && s.status !== 'deprecated'
+      && s.technicalNotes && Array.isArray(s.technicalNotes.files)
+      && s.technicalNotes.files.some((o) => norm(o) === norm(f) || norm(o).endsWith('/' + norm(f)) || norm(f).endsWith('/' + norm(o))));
+    if (!others.length) continue;
+    const who = others.map((s) => {
+      const claimed = Array.isArray(s.ownsSharedFiles) && s.ownsSharedFiles.some((o) => norm(o) === norm(f));
+      return `${s.id} (${s.status || 'pending'}${claimed ? ', CLAIMS ownership' : ''})`;
+    }).join(', ');
+    lines.push(`- ${f} — also declared by ${who}`);
+  }
+  if (!lines.length) return '';
+  return renderEngineTemplate('shared-file-ownership', { __SHARED_FILES__: lines.join('\n') });
+}
+
 function publishedContracts(repoPath, story) {
   // A story whose codeline cannot be resolved is ordinary — mocks, greenfield,
   // a lane not yet created. path.join(null, ...) throws, and this is called
@@ -724,6 +754,21 @@ const TOOL_SPEC_AGENT = {
           },
         },
       },
+      // A SHARED FILE HAS ONE OWNER (see sharedFileBlock). The agent's decision, carried by the
+      // contract in both modes and on every provider: consume the owner's interface, or claim.
+      consumesInterfaces: {
+        type: 'array',
+        items: {
+          type: 'object',
+          properties: {
+            file: { type: 'string' },
+            ownerStoryId: { type: 'string' },
+            symbol: { type: 'string' },
+            signature: { type: 'string' },
+          },
+        },
+      },
+      ownsSharedFiles: { type: 'array', items: { type: 'string' } },
     },
   },
 };
@@ -7575,6 +7620,7 @@ async function runSpecAgent({ promptExec, agent, story, phase, runId, logDir, fo
     __REFERENCED_DOCS_EVIDENCE__: referencedDocsEvidence,
     __FIX_SITE_BLOCK__: fixSiteBlock,
     __DECLARED_FILE_BLOCK__: declaredFileBlock,
+    __SHARED_FILE_OWNERSHIP_BLOCK__: sharedFileBlock(story, prd),
     __BROWNFIELD_ARCHAEOLOGY_BLOCK__: brownfieldArchaeologyBlock,
     __GENERATE_INSTRUCTION__: generateInstruction,
     __LOCATION_HINT_SCHEMA_LINE__: locationHintSchemaLineTrimmed,
@@ -8844,6 +8890,26 @@ function applySpecChanges(story, payload, newStories, prd, phaseId, runId, logDi
   }
   if (payload.technicalNotes && typeof payload.technicalNotes === 'object') {
     story.technicalNotes = payload.technicalNotes;
+  }
+  // THE SHARED-FILE DECISION, APPLIED (see sharedFileBlock). A consumed file leaves this story's
+  // files and its owner becomes a dependency — ordering and the writer's contract injection
+  // both follow from that field already. A claim is persisted so later stories see it.
+  if (Array.isArray(payload.consumesInterfaces) && payload.consumesInterfaces.length) {
+    const norm = (f) => String(f || '').replace(/^\.\//, '');
+    const consumed = payload.consumesInterfaces.filter((c) => c && typeof c === 'object' && c.file);
+    if (consumed.length) {
+      story.consumesInterfaces = consumed;
+      if (story.technicalNotes && Array.isArray(story.technicalNotes.files)) {
+        story.technicalNotes.files = story.technicalNotes.files.filter((f) => !consumed.some((c) => norm(c.file) === norm(f)));
+      }
+      const deps = new Set(Array.isArray(story.dependencies) ? story.dependencies : []);
+      for (const c of consumed) if (c.ownerStoryId && c.ownerStoryId !== story.id) deps.add(c.ownerStoryId);
+      if (deps.size) story.dependencies = Array.from(deps);
+      console.log(`spec-mode: ${story.id} consumes ${consumed.map((c) => `${c.symbol || c.file} from ${c.ownerStoryId || '?'}`).join(', ')} — file(s) left its scope`);
+    }
+  }
+  if (Array.isArray(payload.ownsSharedFiles) && payload.ownsSharedFiles.length) {
+    story.ownsSharedFiles = payload.ownsSharedFiles.filter((f) => typeof f === 'string' && f);
   }
   // ── Persist the classification, do not just use it in passing ─────────────
   // The spec agent classifies every story as "defect" or "novel", the runner
@@ -10784,6 +10850,7 @@ module.exports = {
   runCodeGraphDetective,
   runSpecAgent,
   publishedContracts,
+  sharedFileBlock,
   fetchCodeGraphContext,
   validateMidExecutionSplits,
   extractCodeRefs,

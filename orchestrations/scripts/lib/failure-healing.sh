@@ -81,6 +81,186 @@ run_dynamic_tools_in_unlocked_window() {
 #
 # ONE SOURCE, TWO CONSUMERS — the writer's retry prompt and the analyst's evidence read the same
 # text. Two pipelines is how they drifted into being fed differently in the first place.
+# ── THE ANALYST'S WIDER VIEW (2026-09-20) ─────────────────────────────────────────────────────
+#
+# regintel 20260919T224649Z: 30 healing events, 21 prescriptions, 0 patches applied, 4 of 5
+# stories unhealed. Every diagnosis was correct for the one story it read and wrong for the
+# run — 005b was told "never async", 005a "always async", 007a "accept both" — because each
+# analyst saw only its story's tests, prescribed rewrites of a file its writer was forbidden to
+# touch, and re-derived attempt 1's diagnosis on attempt 4 from the same evidence. Self-heal was
+# stateless, story-local and writer-directed; the failures were cross-story, cross-attempt and
+# out-of-scope. These three inputs, the three targets (escalate / spec / environment) and the
+# per-story summary give the seam what that shape could not express. Facts from the PRD and the
+# run's ledgers; the words are the template's; the analyst judges.
+
+# _analyst_write_scope <story_id> — what this story's writer may touch, and who owns the rest.
+_analyst_write_scope() {
+    local _id="${1:-}" _prd="${MAIN_PRD_FILE:-${PRD_FILE:-}}"
+    [ -n "$_id" ] && [ -f "$_prd" ] || return 0
+    jq -r --arg id "$_id" '
+      (.stories[] | select(.id == $id) | .technicalNotes.files // []) as $mine
+      | "Files this story may write (its declared scope):\n" + ($mine | map("  - " + .) | join("\n"))
+      + "\nFiles OTHER stories declare — a fix there is theirs, escalate it, never prescribe it to this writer:\n"
+      + ([.stories[] | select(.id != $id and .status != "deprecated") | . as $s | (.technicalNotes.files // [])[] | "  - " + . + " (" + $s.id + ")"] | unique | join("\n"))' \
+      "$_prd" 2>/dev/null
+}
+
+# _analyst_shared_criteria <story_id> — the criteria OTHER stories hold on this story's source
+# files: testCriteria facts (greenfield / TC-bearing stories) and verificationCriteria
+# (brownfield) alike. The contract in force; a fix that contradicts it is a spec conflict.
+_analyst_shared_criteria() {
+    local _id="${1:-}" _prd="${MAIN_PRD_FILE:-${PRD_FILE:-}}"
+    [ -n "$_id" ] && [ -f "$_prd" ] || return 0
+    jq -r --arg id "$_id" '
+      def norm: ltrimstr("./");
+      def same($a; $b): ($a | norm) == ($b | norm) or (($a | norm) | endswith("/" + ($b | norm))) or (($b | norm) | endswith("/" + ($a | norm)));
+      (.stories[] | select(.id == $id)) as $me
+      | ([($me.technicalNotes.files // [])[], ($me.testCriteria.sourceFiles // [])[]] | unique) as $files
+      | [ .stories[] | select(.id != $id and .status != "deprecated") | . as $s
+          | ([($s.technicalNotes.files // [])[], ($s.testCriteria.sourceFiles // [])[]] | unique) as $theirs
+          | ($files[] | . as $f | select(any($theirs[]; same(.; $f))) | $f) as $f
+          | (($s.testCriteria.facts // []) + ($s.verificationCriteria // [] | map(if type == "object" then (.criterion // tostring) else . end))) as $crit
+          | select(($crit | length) > 0)
+          | "- " + $s.id + " on " + $f + ":\n" + ($crit | map("    * " + .) | join("\n")) ]
+      | unique | join("\n")' "$_prd" 2>/dev/null
+}
+
+# _analyst_healing_history <story_id> — this story's prior diagnoses and prescriptions, in order,
+# from the run's own ledgers; and the fact that none of them resolved the failure (this attempt
+# failed too). Empty when there is no history.
+_analyst_healing_history() {
+    local _id="${1:-}" _ev="${LOG_DIR:-}/healing-events.jsonl" _gl="${LOG_DIR:-}/run-guidance.jsonl"
+    [ -n "$_id" ] && [ -s "$_ev" ] || return 0
+    local _events
+    _events=$(jq -c --arg id "$_id" 'select(.story_id == $id and (.event // "") != "HEALING_BROKEN")' "$_ev" 2>/dev/null)
+    [ -n "$_events" ] || return 0
+    local _notes="[]"
+    [ -s "$_gl" ] && _notes=$(jq -c -s --arg id "$_id" '[.[] | select(.storyId == $id) | .note // empty]' "$_gl" 2>/dev/null || echo "[]")
+    printf '%s\n' "$_events" | jq -r -s --argjson notes "$_notes" '
+      to_entries | map(
+        "attempt " + ((.key + 1) | tostring) + " (rung " + ((.value.rung // 0) | tostring) + "): diagnosed \"" + (.value.diagnosis // "") + "\" — target " + (.value.target // "none")
+        + (if (.value.note // ($notes[.key] // "")) != "" then "; prescribed: \"" + (.value.note // $notes[.key]) + "\"" else "" end)
+        + (if (.value.evidence // "") != "" then "; evidence: " + .value.evidence else "" end)
+        + (if (.value.expected_outcome // "") != "" then "; expected: " + .value.expected_outcome else "" end)
+      ) | join("\n")
+      + "\nNone of the " + (length | tostring) + " prescription(s) above resolved the failure — this attempt is still failing. A diagnosis that repeats one of them is not new information; say what is DIFFERENT about the cause, or name where the fix actually belongs (escalate / spec / environment)."'
+}
+
+# _apply_analyst_escalation <story_id> <analyst-json> — target=escalate: file the escalation
+# record resolve_escalation reads (the same record the writer's escalate_defect_to_sibling_story
+# tool writes). Refuses a target inside the story's own scope: that is a skill note, not an
+# escalation (exit 1). Exit 2 when the answer names no target file.
+_apply_analyst_escalation() {
+    local _id="${1:-}" _json="${2:-}" _prd="${MAIN_PRD_FILE:-${PRD_FILE:-}}"
+    local _tf _fix _diag _owner
+    _tf=$(printf '%s' "$_json" | jq -r '.escalation.targetFile // .targetFile // ""' 2>/dev/null)
+    _fix=$(printf '%s' "$_json" | jq -r '.escalation.requiredFix // .skill_note // ""' 2>/dev/null)
+    _diag=$(printf '%s' "$_json" | jq -r '.diagnosis // ""' 2>/dev/null)
+    _owner=$(printf '%s' "$_json" | jq -r '.escalation.ownerStoryId // ""' 2>/dev/null)
+    if [ -z "$_tf" ]; then
+        warning "  [FailureAnalyst] target=escalate but no escalation.targetFile — injecting diagnosis only"
+        return 2
+    fi
+    if [ -f "$_prd" ] && jq -e --arg id "$_id" --arg f "$_tf" '.stories[] | select(.id == $id) | (.technicalNotes.files // []) | map(. == $f or endswith("/" + $f) or ($f | endswith("/" + .))) | any' "$_prd" >/dev/null 2>&1; then
+        warning "  [FailureAnalyst] target=escalate names $_tf, which is inside $_id's own scope — the fix is this writer's; treating the prescription as a skill note"
+        return 1
+    fi
+    mkdir -p "${PROJECT_ROOT}/.epam/escalations"
+    jq -n --arg from "$_id" --arg tf "$_tf" --arg diag "$_diag" --arg fix "$_fix" --arg owner "$_owner" --arg ts "$(date -u +%Y-%m-%dT%H:%M:%SZ)" \
+        '{fromStoryId: $from, targetFile: $tf, diagnosis: $diag, requiredFix: $fix, filedBy: "failure-analyst", createdAt: $ts} + (if $owner != "" then {ownerStoryId: $owner} else {} end)' \
+        > "${PROJECT_ROOT}/.epam/escalations/${_id}.json"
+    log "  [FailureAnalyst] target=escalate — filed a defect in $_tf${_owner:+ (owner $_owner)} for the resolver: $_fix"
+    return 0
+}
+
+# _apply_reviewed_tc_patches <escalating-story> <tc_patches-json> — each patch names the story
+# whose testCriteria fact it changes (storyId; this story when absent). Applied per story, judged
+# by the prd-change-reviewer per story, reverted on rejection. Echoes the count applied.
+_apply_reviewed_tc_patches() {
+    local _id="${1:-}" _patches="${2:-[]}" _prd="${MAIN_PRD_FILE:-${PRD_FILE:-}}"
+    local _applied=0 _sid
+    for _sid in $(printf '%s' "$_patches" | jq -r --arg me "$_id" '[.[] | (.storyId // $me)] | unique | .[]' 2>/dev/null); do
+        local _before _after _mine _verdict
+        _mine=$(printf '%s' "$_patches" | jq -c --arg me "$_id" --arg sid "$_sid" '[.[] | select((.storyId // $me) == $sid)]')
+        _before=$(jq -c --arg id "$_sid" '.stories[] | select(.id == $id) | .testCriteria.facts // []' "$_prd" 2>/dev/null || echo "[]")
+        ( flock -w 10 200 || exit 1
+          python3 - "$_prd" "$_sid" "$_mine" <<'PYEOF'
+import json, sys, os
+prd_path, sid, patches = sys.argv[1], sys.argv[2], json.loads(sys.argv[3])
+with open(prd_path) as f:
+    prd = json.load(f)
+for s in prd.get('stories', []):
+    if s.get('id') == sid:
+        facts = s.setdefault('testCriteria', {}).setdefault('facts', [])
+        for p in patches:
+            i = p.get('index'); t = p.get('new_text')
+            if isinstance(i, int) and 0 <= i < len(facts) and t:
+                facts[i] = t
+        break
+tmp = prd_path + '.tmp'
+with open(tmp, 'w') as f:
+    json.dump(prd, f, indent=2)
+os.replace(tmp, prd_path)
+PYEOF
+        ) 200>"${_prd}.lock"
+        _after=$(jq -c --arg id "$_sid" '.stories[] | select(.id == $id) | .testCriteria.facts // []' "$_prd" 2>/dev/null || echo "[]")
+        [ "$_before" = "$_after" ] && continue
+        _verdict=$(run_prd_change_reviewer "$_sid" "tc_patch" "$_before" "$_after")
+        if [ "$_verdict" = "fail" ]; then
+            warning "  [FailureAnalyst] TC patch on $_sid rejected by the reviewer — reverting"
+            ( flock -w 10 200 || exit 1
+              python3 - "$_prd" "$_sid" "$_before" <<'PYEOF'
+import json, sys, os
+prd_path, sid, facts = sys.argv[1], sys.argv[2], json.loads(sys.argv[3])
+with open(prd_path) as f:
+    prd = json.load(f)
+for s in prd.get('stories', []):
+    if s.get('id') == sid:
+        s.setdefault('testCriteria', {})['facts'] = facts
+        break
+tmp = prd_path + '.tmp'
+with open(tmp, 'w') as f:
+    json.dump(prd, f, indent=2)
+os.replace(tmp, prd_path)
+PYEOF
+            ) 200>"${_prd}.lock"
+        else
+            _applied=$((_applied + $(printf '%s' "$_mine" | jq 'length')))
+            log "  [FailureAnalyst] TC patch on $_sid: reviewer said '$_verdict' — applied"
+        fi
+    done
+    echo "$_applied"
+}
+
+# write_healing_summary <story_id> <completed|failed> — the story's self-heal record, rendered
+# once when the story ends: diagnosed → prescribed → outcome, per attempt. The operator's summary
+# and the next run's evidence; one line to the log.
+write_healing_summary() {
+    local _id="${1:-}" _outcome="${2:-unknown}" _ev="${LOG_DIR:-}/healing-events.jsonl" _gl="${LOG_DIR:-}/run-guidance.jsonl"
+    [ -n "$_id" ] && [ -n "${LOG_DIR:-}" ] || return 0
+    local _events="" _n=0
+    [ -s "$_ev" ] && _events=$(jq -c --arg id "$_id" 'select(.story_id == $id and (.event // "") != "HEALING_BROKEN")' "$_ev" 2>/dev/null)
+    [ -n "$_events" ] && _n=$(printf '%s\n' "$_events" | grep -c .)
+    [ "$_n" -gt 0 ] || return 0
+    local _notes="[]"
+    [ -s "$_gl" ] && _notes=$(jq -c -s --arg id "$_id" '[.[] | select(.storyId == $id) | .note // empty]' "$_gl" 2>/dev/null || echo "[]")
+    mkdir -p "${LOG_DIR}/healing-summary"
+    {
+        printf '# Self-heal summary — %s (%s)\n\n' "$_id" "$_outcome"
+        printf 'attempts: %s (each with a diagnosis) · outcome: %s\n\n' "$_n" "$_outcome"
+        printf '%s\n' "$_events" | jq -r -s --argjson notes "$_notes" '
+          to_entries[] | "## attempt " + ((.key + 1) | tostring) + " (rung " + ((.value.rung // 0) | tostring) + ", target " + (.value.target // "none") + ")\n"
+            + "- diagnosed: " + (.value.diagnosis // "") + "\n"
+            + (if (.value.note // ($notes[.key] // "")) != "" then "- prescribed: " + (.value.note // $notes[.key]) + "\n" else "" end)
+            + (if (.value.evidence // "") != "" then "- evidence: " + .value.evidence + "\n" else "" end)
+            + (if (.value.expected_outcome // "") != "" then "- expected: " + .value.expected_outcome + "\n" else "" end)
+            + "- patches applied: " + ((.value.patches_applied // 0) | tostring) + "\n"'
+    } > "${LOG_DIR}/healing-summary/${_id}.md"
+    local _targets
+    _targets=$(printf '%s\n' "$_events" | jq -r -s 'map(.target // "none") | group_by(.) | map(.[0] + "×" + (length | tostring)) | join(", ")')
+    log "  [SelfHeal] $_id $_outcome after $_n diagnosed attempt(s) — targets: $_targets — summary: healing-summary/${_id}.md"
+}
+
 # _attempt_start_snapshot
 #
 # THE TREE AS IT STOOD WHEN THIS ATTEMPT STARTED — tracked and untracked alike — as a git
@@ -748,6 +928,9 @@ $(cat "$_fa_vendor_contract")
     printf '%s' "${dependency_contracts:-}"             > "$_av_dir/contracts"
     printf '%s' "${VERIFICATION_FAILURE:-}"             > "$_av_dir/vf"
     _attempt_change_summary "$story_id"                 > "$_av_dir/changes" 2>/dev/null || : > "$_av_dir/changes"
+    _analyst_write_scope "$story_id"                    > "$_av_dir/scope"   2>/dev/null || : > "$_av_dir/scope"
+    _analyst_shared_criteria "$story_id"                > "$_av_dir/shared"  2>/dev/null || : > "$_av_dir/shared"
+    _analyst_healing_history "$story_id"                > "$_av_dir/history" 2>/dev/null || : > "$_av_dir/history"
 
     # THE TEMPLATE DECLARES __MANIFEST_FILE__ AND NOTHING SUPPLIED IT.
     #
@@ -775,6 +958,9 @@ $(cat "$_fa_vendor_contract")
         --rawfile dependency_contracts "$_av_dir/contracts" \
         --rawfile verification_failure "$_av_dir/vf" \
         --rawfile attempt_changes "$_av_dir/changes" \
+        --rawfile write_scope "$_av_dir/scope" \
+        --rawfile shared_criteria "$_av_dir/shared" \
+        --rawfile healing_history "$_av_dir/history" \
         --arg manifest_file "$_analyst_manifest_file" \
         --arg skill_note_max "$_analyst_skill_note_max" \
         '{"__ANALYST_PROFILE__":$profile,
@@ -786,7 +972,10 @@ $(cat "$_fa_vendor_contract")
           "__SKILL_ADDENDUM__":$skill_addendum,
           "__DEPENDENCY_CONTRACTS__":$dependency_contracts,
           "__VERIFICATION_FAILURE__":$verification_failure,
-          "__ATTEMPT_CHANGES__":$attempt_changes}' > "$_analyst_values" 2>"$_analyst_values_err"; then
+          "__ATTEMPT_CHANGES__":$attempt_changes,
+          "__WRITE_SCOPE__":$write_scope,
+          "__SHARED_CRITERIA__":$shared_criteria,
+          "__HEALING_HISTORY__":$healing_history}' > "$_analyst_values" 2>"$_analyst_values_err"; then
         # NOT SILENT. An unbuildable values file is a defect to report, not an empty file to
         # hand downstream so it can fail with a parse error that names nothing.
         error "  [FailureAnalyst] cannot BUILD values file (jq failed): $(cat "$_analyst_values_err" 2>/dev/null)"
@@ -946,6 +1135,9 @@ $(cat "$_fa_vendor_contract")
             skill_note=$(echo "$analyst_json" | jq -r '.skill_note // ""' 2>/dev/null || echo "")
             [ -n "$skill_note" ] && skill_note=$(_ensure_imperative_opener "$skill_note")
             reason=$(echo "$analyst_json" | jq -r '.reason // ""' 2>/dev/null || echo "")
+            local analyst_evidence analyst_expected
+            analyst_evidence=$(echo "$analyst_json" | jq -r '.evidence // ""' 2>/dev/null || echo "")
+            analyst_expected=$(echo "$analyst_json" | jq -r '.expected_outcome // ""' 2>/dev/null || echo "")
             local tool_name tool_purpose tool_recipe
             tool_name=$(echo "$analyst_json" | jq -r '.tool_spec.name // ""' 2>/dev/null || echo "")
             tool_purpose=$(echo "$analyst_json" | jq -r '.tool_spec.purpose // ""' 2>/dev/null || echo "")
@@ -1376,6 +1568,37 @@ ${_kb_target_role_profile}"
                         log "  [FailureAnalyst] target=tool but tool_spec incomplete — falling back to diagnosis only"
                     fi
                     ;;
+                escalate)
+                    # THE FIX IS IN ANOTHER STORY'S FILE. Filed as the escalation record the
+                    # resolver reads on this same retry loop (resolve_escalation runs right after
+                    # the analyst); the owner's ladder does the work, this writer gets a free retry.
+                    if _apply_analyst_escalation "$story_id" "$analyst_json"; then
+                        :
+                    elif [ $? -eq 1 ] && [ -z "$skill_note" ]; then
+                        skill_note=$(echo "$analyst_json" | jq -r '.escalation.requiredFix // ""' 2>/dev/null)
+                        [ -n "$skill_note" ] && skill_note=$(_ensure_imperative_opener "$skill_note")
+                    fi
+                    ;;
+                spec)
+                    # ANOTHER STORY'S CRITERION IS THE DEFECT. Patched through the change reviewer,
+                    # per story; a rejection reverts. tc_patches carry storyId.
+                    local _spec_patches
+                    _spec_patches=$(echo "$analyst_json" | jq -c '.tc_patches // []' 2>/dev/null || echo "[]")
+                    if [ "$_spec_patches" != "[]" ]; then
+                        patch_count=$(_apply_reviewed_tc_patches "$story_id" "$_spec_patches" | tail -1)
+                        [ "${patch_count:-0}" -gt 0 ] && log "  [FailureAnalyst] target=spec — $patch_count reviewed criterion patch(es) applied across stories"
+                    else
+                        log "  [FailureAnalyst] target=spec but no tc_patches provided — injecting diagnosis only"
+                    fi
+                    ;;
+                environment)
+                    # NOT THE WRITER'S FAULT. No ladder is spent on a stronger model for a broken
+                    # environment; the coordinator's environment class handles the retry.
+                    COORDINATOR_FAILURE_CLASS="environment"
+                    COORDINATOR_ESCALATE="no"
+                    export COORDINATOR_FAILURE_CLASS COORDINATOR_ESCALATE
+                    log "  [FailureAnalyst] target=environment — the failure is environmental, not the writer's; no rung is spent on it"
+                    ;;
                 none)
                     log "  [FailureAnalyst] No structural fix needed — model escalation ladder handles retry"
                     ;;
@@ -1384,7 +1607,7 @@ ${_kb_target_role_profile}"
                     ;;
             esac
             # Record the healing event for observability and post-run audit
-            run_healing_recorder "$story_id" "$retry_num" "$target" "$diagnosis" "$patch_count" "$_profile_updated"
+            run_healing_recorder "$story_id" "$retry_num" "$target" "$diagnosis" "$patch_count" "$_profile_updated" "$skill_note" "$analyst_evidence" "$analyst_expected"
             # Emit self_heal_result so agent-activity dashboard shows target, diagnosis, and outcome
             "$SCRIPT_DIR/update-monitor.sh" event "self_heal_result" \
                 "Self-heal result for $story_id: target=$target patches=$patch_count profile=$_profile_updated — $diagnosis" \
@@ -1463,6 +1686,9 @@ run_healing_recorder() {
     local diagnosis="${4:-unknown}"
     local patches_applied="${5:-0}"
     local profile_updated="${6:-false}"
+    # The prescription, its evidence and its expected outcome travel with the event, so the next
+    # analyst (and the story's summary) can read what was tried and what was promised.
+    local note="${7:-}" evidence="${8:-}" expected_outcome="${9:-}"
     local rung
     rung=$(( retry_num / 2 ))
     local ts
@@ -1475,7 +1701,13 @@ run_healing_recorder() {
     # Safe JSON serialisation — escape quotes and backslashes in diagnosis
     local safe_diagnosis
     safe_diagnosis=$(printf '%s' "$diagnosis" | sed 's/\\/\\\\/g; s/"/\\"/g')
-    printf '{"ts":"%s","story_id":"%s","retry":%s,"rung":%s,"target":"%s","diagnosis":"%s","patches_applied":%s,"profile_updated":%s}\n' \
+    jq -nc --arg ts "$ts" --arg id "$story_id" --argjson retry "${retry_num:-0}" --argjson rung "$rung" --arg target "$target" \
+        --arg diag "$diagnosis" --argjson patches "${patches_applied:-0}" --argjson profile "$( [ "$profile_updated" = "true" ] && echo true || echo false )" \
+        --arg note "$note" --arg evidence "$evidence" --arg expected "$expected_outcome" \
+        '{ts:$ts, story_id:$id, retry:$retry, rung:$rung, target:$target, diagnosis:$diag, patches_applied:$patches, profile_updated:$profile}
+         + (if $note != "" then {note:$note} else {} end) + (if $evidence != "" then {evidence:$evidence} else {} end) + (if $expected != "" then {expected_outcome:$expected} else {} end)' \
+        >> "$heal_log" 2>/dev/null \
+    || printf '{"ts":"%s","story_id":"%s","retry":%s,"rung":%s,"target":"%s","diagnosis":"%s","patches_applied":%s,"profile_updated":%s}\n' \
         "$ts" "$story_id" "$retry_num" "$rung" "$target" "$safe_diagnosis" \
         "$patches_applied" "$profile_updated" \
         >> "$heal_log"

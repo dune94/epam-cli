@@ -2458,6 +2458,7 @@ $_kb_section"
             # leaves a rung name (e.g. MiniMax-M3) meaningless under the new set.
             write_story_retry_provider_set "$LOG_DIR" "$story_id" "${EPAM_PROVIDER_SET:-}"
             write_story_iteration_bump "$LOG_DIR" "$story_id" "${STORY_ITERATION_BUMP_TOTAL:-0}"
+            write_healing_summary "$story_id" "completed" 2>/dev/null || true
             post_completion_message "$story_id" "completed"
             return 0
         else
@@ -2753,6 +2754,7 @@ Apply the above diagnosis AND fix the deterministic check violation — both mus
     if ! escalation_budget_allows "$_total_attempts" && [ $retry_count -le $MAX_RETRIES ]; then
         warning "  [Escalation] attempt budget for this escalation spent — $story_id's ladder stands at retry_count $retry_count (rung $((retry_count / 2))); the next escalation resumes there"
         append_cost_record "$story_id" "failed" "$story_started_at" "$(date -Iseconds)" "$output_file" "$json_result_file"
+        write_healing_summary "$story_id" "failed" 2>/dev/null || true
         post_completion_message "$story_id" "failed"
         return 1
     fi
@@ -2760,6 +2762,7 @@ Apply the above diagnosis AND fix the deterministic check violation — both mus
     update_monitor_status "fail" "$story_id" "Failed after $((MAX_RETRIES + 1)) attempts"
     append_cost_record "$story_id" "failed" "$story_started_at" "$(date -Iseconds)" "$output_file" "$json_result_file"
     rm -f "$(_rung_snapshot_path "$story_id")" 2>/dev/null || true
-    post_completion_message "$story_id" "failed"
+    write_healing_summary "$story_id" "failed" 2>/dev/null || true
+        post_completion_message "$story_id" "failed"
     return 1
 }

@@ -50,8 +50,12 @@
     "prompt-review": {
       "kind": "declared",
       "tag": "PROMPT_REVIEW",
-      "requiredKeys": ["falseClaims"],
-      "knownKeys": ["falseClaims"],
+      "requiredKeys": [
+        "falseClaims"
+      ],
+      "knownKeys": [
+        "falseClaims"
+      ],
       "_why": "lib/prompt-review.js reads ONE <PROMPT_REVIEW>{falseClaims:[...]}</PROMPT_REVIEW> block out of the reply and installs the prompt UNREVIEWED when it is absent. Declared 'verdict' (bare gate JSON), every prompt of the £0 greenfield harness was installed unreviewed behind a stand-in that satisfied the wrong judge (run 19, 2026-09-14)."
     },
     "roster-review": {
@@ -120,10 +124,22 @@
     },
     "cpa-inference": {
       "kind": "declared",
-      "requiredKeys": ["confidence"],
-      "knownKeys": ["confidence", "complexityAdjustment", "adjustedEstimate", "riskFlags", "missingKbCoverage", "citedSources", "reasoning"],
+      "requiredKeys": [
+        "confidence"
+      ],
+      "knownKeys": [
+        "confidence",
+        "complexityAdjustment",
+        "adjustedEstimate",
+        "riskFlags",
+        "missingKbCoverage",
+        "citedSources",
+        "reasoning"
+      ],
       "exemplarFromPrompt": true,
-      "prefer": { "confidence": 1 },
+      "prefer": {
+        "confidence": 1
+      },
       "_whyPrefer": "contextualize-stories.sh gates on .confidence (block below GATE_BLOCK); the prompt's exemplar states confidence 0.0, and a stand-in that copied it blocked every brownfield story at CPA (£0 brownfield harness runs 1–3, 2026-09-14). The rehearsal's estimate is fully confident — the join is what is rehearsed, not the estimate.",
       "checkedBy": "contextualize-stories.sh reads .confidence, .complexityAdjustment, .adjustedEstimate.*, .riskFlags, .missingKbCoverage, .citedSources, .reasoning from the reply (an unparseable reply is replaced by a zero-confidence one); the shape is stated by cpa-system, the fragment cpa-inference embeds as __SYSTEM_PROMPT__."
     },
@@ -161,7 +177,11 @@
       "requiredKeys": [
         "diagnosis"
       ],
-      "shapes": { "diagnosis": "string", "reason": "string", "target": "string" },
+      "shapes": {
+        "diagnosis": "string",
+        "reason": "string",
+        "target": "string"
+      },
       "_whyShapes": "diagnosis is ONE diagnosis, a prose paragraph the KB records as the episode; the rehearsal stand-in read the trailing s as a list and recorded \"[]\" as the diagnosis of every healing event (2026-09-14). A shape is stated where the key's name misleads.",
       "knownKeys": [
         "diagnosis",
@@ -178,7 +198,11 @@
       "list": true,
       "_whyList": "The detective answers with a JSON ARRAY of fix sites — parseDetectiveFindings (spec-mode-runner.js) matches `[ { … } ]` and reads nothing else; its prompts state the array. The keys below describe one element. A stand-in delivered as a bare object was 'NO parseable JSON' three attempts running (£0 brownfield harness run 2, 2026-09-14).",
       "exemplarFromPrompt": true,
-      "shapes": { "file": { "fromCodeline": "source" } },
+      "shapes": {
+        "file": {
+          "fromCodeline": "source"
+        }
+      },
       "_whyShapes": "A fix site is a file this codeline HAS: the rehearsal stand-in names the first source file of the story's codeline (by its ecosystem's own source/test convention), never an invented path — CPA blocks a defect whose fix site does not exist, by design (£0 brownfield harness run 1, 2026-09-14).",
       "requiredKeys": [
         "file"
@@ -220,15 +244,25 @@
     "impl-failure-analyst": {
       "kind": "declared",
       "exemplarFromPrompt": true,
-      "prefer": { "target": "skill" },
-      "overDeclaredLimit": { "skill_note": "config/self-heal.json#skillNote.maxChars" },
+      "prefer": {
+        "target": "skill"
+      },
+      "overDeclaredLimit": {
+        "skill_note": "config/self-heal.json#skillNote.maxChars"
+      },
       "_whyOverDeclaredLimit": "A note within the declared length and opening imperatively is accepted by the deterministic format check and never reaches the LLM reviewer; the rehearsal stand-in exceeds the limit the config declares — the exact shape the reviewer, its rejection and the summarizer rewrite exist for — so that loop executes at £0 (run 28, 2026-09-14).",
       "_whyPrefer": "Of the targets the prompt offers, skill is the one whose change goes through the reviewer's summarize-and-resubmit loop (claude.sh run_change_with_reviewer_retry: skill_note, kb_entry, tool_creation); an ac/tc patch reverts on rejection and reaches no summarizer. The rehearsal stand-in takes it so prd-change-summarizer executes at £0.",
       "_whyExemplar": "The rehearsal stand-in carries the whole answer the prompt states — target: prd with one ac_patch — so the change reviewer and, on a rejection, the summarizer execute at £0; with diagnosis alone neither ever ran (2026-09-14).",
       "requiredKeys": [
         "diagnosis"
       ],
-      "shapes": { "diagnosis": "string", "reason": "string", "target": "string" },
+      "shapes": {
+        "diagnosis": "string",
+        "reason": "string",
+        "target": "string",
+        "evidence": "string",
+        "expected_outcome": "string"
+      },
       "_whyShapes": "diagnosis is ONE diagnosis, a prose paragraph the KB records as the episode; the rehearsal stand-in read the trailing s as a list and recorded \"[]\" as the diagnosis of every healing event (2026-09-14). A shape is stated where the key's name misleads.",
       "knownKeys": [
         "diagnosis",
@@ -238,7 +272,8 @@
         "skill_note",
         "tool_spec",
         "reason"
-      ]
+      ],
+      "_whyEvidence": "2026-09-20: evidence (what was read/run) and expected_outcome (what changes next attempt) let the ledger and the next analyst judge whether a prescription worked, instead of only whether the diagnosis text repeated."
     },
     "phase-assessment": {
       "kind": "declared",
@@ -261,7 +296,12 @@
     },
     "tc-writer": {
       "kind": "per-story-map",
-      "requiredKeys": ["facts", "sourceFiles", "mockStrategy", "bannedPatterns"],
+      "requiredKeys": [
+        "facts",
+        "sourceFiles",
+        "mockStrategy",
+        "bannedPatterns"
+      ],
       "_why": "One object keyed by story id (lib/handlers/tc-apply-to-prd.py): a story whose entry lacks a non-empty facts list is skipped, so an answer of {} applies nothing and the gate reports every test story still missing criteria. Was 'none' — the rehearsal stand-in answered {} and the gate could never pass at £0 (2026-09-13)."
     },
     "team-lead-review": {
@@ -277,10 +317,24 @@
     },
     "kb-synthesizer": {
       "kind": "declared",
-      "requiredKeys": ["enforcement", "reason"],
-      "knownKeys": ["enforcement", "reason"],
+      "requiredKeys": [
+        "enforcement",
+        "reason"
+      ],
+      "knownKeys": [
+        "enforcement",
+        "reason"
+      ],
       "shapes": {
-        "enforcement": { "schemaCommand": ["python3", "lib/kb_schema.py", "json-schema", "constraint"], "at": "properties.enforcement" },
+        "enforcement": {
+          "schemaCommand": [
+            "python3",
+            "lib/kb_schema.py",
+            "json-schema",
+            "constraint"
+          ],
+          "at": "properties.enforcement"
+        },
         "reason": "string"
       },
       "checkedBy": "lib/kb-synthesizer.js — binds {enforcement, reason} as EPAM_RESPONSE_SCHEMA (additionalProperties false) and validates the enforcement against lib/kb_schema.py; unparseable, declined and unmapped replies are quarantined, never stored",

@@ -1512,6 +1512,33 @@ function seamInvocationEnvAtRung(seam, logDir, rung) {
   } catch { return {}; }
 }
 
+/**
+ * THE FAST-PATH'S EXEC SPEC. Every provider set declares SPEC_MODE_PROVIDER, so the spec agents
+ * always take this path — and it built --model from seamStartModel (rung 0), ignoring the env the
+ * caller resolved. A retry that climbed the ladder therefore climbed nowhere: regintel
+ * 20260919T224649Z, REGI-003, three openspec attempts all on z-ai/glm-5.3 while rung 1 resolved
+ * moonshotai/kimi-k3. An EPAM_MODEL in the caller's env is a resolved rung and wins; the
+ * declared overrides and the seam's start model remain the fallback, exactly as before.
+ */
+function specFastPathExec(execSpec, specModeProvider, logPath, envOverride) {
+  const logName = (logPath || '').toLowerCase();
+  let specModel = (envOverride && envOverride.EPAM_MODEL) || '';
+  if (!specModel) {
+    if (logName.includes('speckit')) {
+      specModel = process.env.SPEC_MODE_SPECKIT_MODEL || seamStartModel('spec-agent');
+    } else if (logName.includes('openspec') || logName.includes('-openspec-') || logName.includes('-spec.log')) {
+      // Brownfield investigation requires tracing call chains through unfamiliar code —
+      // use the HIGH model as the base so archaeology doesn't fall back to generation.
+      specModel = (process.env.EPAM_BROWNFIELD === '1' && process.env.SPEC_MODE_OPENSPEC_MODEL_HIGH)
+        ? process.env.SPEC_MODE_OPENSPEC_MODEL_HIGH
+        : process.env.SPEC_MODE_OPENSPEC_MODEL || seamStartModel('spec-agent');
+    } else {
+      specModel = process.env.SPEC_MODE_MODEL || process.env.SPEC_MODE_OPENSPEC_MODEL || seamStartModel('spec-agent');
+    }
+  }
+  return { cmd: execSpec.cmd, args: ['--provider', specModeProvider, '--model', specModel] };
+}
+
 async function runAgentForJson(execSpec, prompt, toolDef, tag, logPath, itemsKey, storyId = '', repoPath = '', envOverride = null) {
   // EVERY SEAM THAT DECLARES A SHAPE BINDS IT, NOT JUST THE ONES THAT REMEMBERED TO.
   //
@@ -1545,21 +1572,8 @@ async function runAgentForJson(execSpec, prompt, toolDef, tag, logPath, itemsKey
   // Detects openspec vs speckit from logPath to pick the right model.
   const specModeProvider = (process.env.SPEC_MODE_PROVIDER || '').toLowerCase();
   if (specModeProvider) {
-    const logName = (logPath || '').toLowerCase();
-    let specModel;
-    if (logName.includes('speckit')) {
-      specModel = process.env.SPEC_MODE_SPECKIT_MODEL || seamStartModel('spec-agent');
-    } else if (logName.includes('openspec') || logName.includes('-openspec-') || logName.includes('-spec.log')) {
-      // Brownfield investigation requires tracing call chains through unfamiliar code —
-      // use the HIGH model as the base so archaeology doesn't fall back to generation.
-      specModel = (process.env.EPAM_BROWNFIELD === '1' && process.env.SPEC_MODE_OPENSPEC_MODEL_HIGH)
-        ? process.env.SPEC_MODE_OPENSPEC_MODEL_HIGH
-        : process.env.SPEC_MODE_OPENSPEC_MODEL || seamStartModel('spec-agent');
-    } else {
-      specModel = process.env.SPEC_MODE_MODEL || process.env.SPEC_MODE_OPENSPEC_MODEL || seamStartModel('spec-agent');
-    }
-    console.log(`spec-mode: fast-path ${specModeProvider}/${specModel} (skipping MiniMax)`);
-    const directExec = { cmd: execSpec.cmd, args: ['--provider', specModeProvider, '--model', specModel] };
+    const directExec = specFastPathExec(execSpec, specModeProvider, logPath, envOverride);
+    console.log(`spec-mode: fast-path ${specModeProvider}/${directExec.args[directExec.args.indexOf('--model') + 1]} (skipping MiniMax)`);
     // Spec-mode responses are large JSON blobs — use a higher output-token budget
     // than the implementation default (4096) so speckit never truncates mid-JSON.
     // SPEC_MODE_MAX_OUTPUT_TOKENS is spec-only; it doesn't affect implementation runs.
@@ -10665,6 +10679,7 @@ module.exports = {
   buildGuardEvidence,
   deriveGuardVocabulary,
   runSeamUntilAccepted,
+  specFastPathExec,
   mintProjectAgents,
   TOOL_PROJECT_AGENTS,
   assignAgentRoles,

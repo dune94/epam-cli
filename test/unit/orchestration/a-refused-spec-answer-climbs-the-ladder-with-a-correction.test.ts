@@ -92,3 +92,25 @@ describe('the one loop: a fatally refused answer is corrected with its own refus
   });
 });
 
+describe('the fast-path honours the rung the caller resolved', () => {
+  // Every set declares SPEC_MODE_PROVIDER, so the spec agents always take this path. It built
+  // --model from seamStartModel (rung 0) and ignored the env — on regintel 20260919T224649Z
+  // three REGI-003 attempts all ran on z-ai/glm-5.3 while rung 1 resolved moonshotai/kimi-k3.
+  it('the exec spec carries the env\'s EPAM_MODEL when the caller resolved a rung', () => {
+    const ex = spec.specFastPathExec({ cmd: 'x', args: [] }, 'openrouter', '/tmp/S-openspec-spec.log', { EPAM_MODEL: 'moonshotai/kimi-k3' });
+    expect(ex.args[ex.args.indexOf('--model') + 1]).toBe('moonshotai/kimi-k3');
+  });
+
+  it('falls back to the seam\'s start model when the env names none', () => {
+    const ex = spec.specFastPathExec({ cmd: 'x', args: [] }, 'openrouter', '/tmp/S-openspec-spec.log', {});
+    expect(ex.args[ex.args.indexOf('--model') + 1]).toBeTruthy();
+    expect(ex.args[ex.args.indexOf('--model') + 1]).not.toBe('moonshotai/kimi-k3');
+  });
+
+  it('runAgentForJson\'s fast-path builds its exec through it', () => {
+    // eslint-disable-next-line @typescript-eslint/no-require-imports
+    const src = require('node:fs').readFileSync(join(ROOT, 'orchestrations/scripts/spec-mode-runner.js'), 'utf8');
+    const fn = src.slice(src.indexOf('async function runAgentForJson('), src.indexOf('async function runAgentForJson(') + 4000);
+    expect(fn).toMatch(/const directExec = specFastPathExec\(execSpec, specModeProvider, logPath, envOverride\)/);
+  });
+});

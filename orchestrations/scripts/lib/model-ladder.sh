@@ -65,6 +65,7 @@ load_llm_settings_json() {
     _v=$(_get '.temperatureFloor'); [ -z "${EPAM_TEMPERATURE:-}" ] && [ -n "$_v" ] && export EPAM_TEMPERATURE="$_v"
 
     _v=$(_get '.retries.maxRetries'); [ -z "${EPAM_MAX_RETRIES:-}" ] && [ -n "$_v" ] && export EPAM_MAX_RETRIES="$_v"
+    _v=$(_get '.retries.escalationAttempts'); [ -z "${EPAM_ESCALATION_ATTEMPTS:-}" ] && [ -n "$_v" ] && export EPAM_ESCALATION_ATTEMPTS="$_v"
     _v=$(_get 'if .retries.selfHeal.enabled == true then "1" elif .retries.selfHeal.enabled == false then "0" else empty end')
     [ -z "${EPAM_RETRY_EXTENSION_ENABLED:-}" ] && [ -n "$_v" ] && export EPAM_RETRY_EXTENSION_ENABLED="$_v"
     _v=$(_get '.retries.selfHeal.extensionMax'); [ -z "${EPAM_RETRY_EXTENSION_MAX:-}" ] && [ -n "$_v" ] && export EPAM_RETRY_EXTENSION_MAX="$_v"
@@ -1486,6 +1487,20 @@ resolve_escalation() {
 
     local _saved_amendment="${COORDINATOR_PROMPT_AMENDMENT:-}"
     local _saved_max_retries="$MAX_RETRIES"
+    # THE OWNER RUNS ON ITS OWN LADDER, BUDGETED PER ESCALATION — see
+    # escalation_budget_allows in story-retry-state.sh for the live incident. MAX_RETRIES
+    # stays the ladder; the budget bounds this escalation's attempts; the owner's persisted
+    # count decides the rung it starts at. An owner whose ladder is already exhausted has
+    # nothing left to offer and is reported as such rather than "failed after N attempts".
+    if story_ladder_exhausted "$LOG_DIR" "$sibling_id" "$MAX_RETRIES" 2>/dev/null \
+       && [ "$(read_story_retry_count "$LOG_DIR" "$sibling_id")" -gt "$MAX_RETRIES" ]; then
+        warning "  [Escalation] $sibling_id's ladder is exhausted (retry_count $(read_story_retry_count "$LOG_DIR" "$sibling_id") > $MAX_RETRIES) — no further scoped fix is possible; $escalating_story_id will re-diagnose on its own ladder"
+        rm -f "$escalation_file"
+        return 1
+    fi
+    local _saved_budget="${EPAM_ESCALATION_ATTEMPT_BUDGET:-}"
+    export EPAM_ESCALATION_ATTEMPT_BUDGET="${EPAM_ESCALATION_ATTEMPTS:-${ESCALATION_FIX_MAX_RETRIES:-1}}"
+    log "  [Escalation] $sibling_id runs on its own ladder from retry_count $(read_story_retry_count "$LOG_DIR" "$sibling_id") (max $MAX_RETRIES), ${EPAM_ESCALATION_ATTEMPT_BUDGET} attempt(s) this escalation"
     _cp_vals=$(mktemp "${TMPDIR:-/tmp}/coordinator-amendment-vals-XXXXXX.json")
     jq_vals \
           --arg escalating_story_id "${escalating_story_id}" \
@@ -1496,7 +1511,6 @@ resolve_escalation() {
     _render_out="$(render_or_keep coordinator-amendment "$_cp_vals" sibling_escalation)" && COORDINATOR_PROMPT_AMENDMENT="$_render_out"
     rm -f "$_cp_vals"
     export COORDINATOR_PROMPT_AMENDMENT
-    MAX_RETRIES="${ESCALATION_FIX_MAX_RETRIES:-1}"
 
     implement_story "$sibling_id"
     local fix_result=$?
@@ -1504,6 +1518,7 @@ resolve_escalation() {
     COORDINATOR_PROMPT_AMENDMENT="$_saved_amendment"
     export COORDINATOR_PROMPT_AMENDMENT
     MAX_RETRIES="$_saved_max_retries"
+    if [ -n "$_saved_budget" ]; then export EPAM_ESCALATION_ATTEMPT_BUDGET="$_saved_budget"; else unset EPAM_ESCALATION_ATTEMPT_BUDGET; fi
 
     rm -f "$escalation_file"
 
@@ -1511,7 +1526,7 @@ resolve_escalation() {
         success "  [Escalation] Scoped fix resolved for $sibling_id — resuming $escalating_story_id"
         return 0
     else
-        warning "  [Escalation] Scoped fix for $sibling_id did not converge within ${ESCALATION_FIX_MAX_RETRIES:-1} retr(y/ies) — $escalating_story_id will re-diagnose on its next attempt"
+        warning "  [Escalation] Scoped fix for $sibling_id did not converge this escalation (its ladder now at retry_count $(read_story_retry_count "$LOG_DIR" "$sibling_id")) — $escalating_story_id will re-diagnose on its next attempt and the next escalation climbs from there"
         return 1
     fi
 }

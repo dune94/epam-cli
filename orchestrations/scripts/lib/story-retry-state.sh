@@ -280,3 +280,27 @@ advance_ladder_escalation() {
     write_story_retry_count "$log_dir" "$key" "$cur"
     echo "$cur"
 }
+
+# escalation_budget_allows <attempts_made_so_far>
+#
+# AN ESCALATED FIX CLIMBS THE OWNER'S LADDER (found live, 2026-09-20, regintel
+# 20260919T224649Z resume 7). resolve_escalation used to run the owning story with
+# MAX_RETRIES=1: one attempt at rung 0, then "HealingBroken: at max rung" — a
+# one-rung ladder has nothing to climb to, every re-escalation ran the same
+# model with the same amendment, and once the persisted count passed 1 the loop
+# never entered at all. Three stories burned their ladders re-escalating into a
+# fix that could not change.
+#
+# Now the owner keeps its FULL ladder and its persisted rung; what an escalation
+# bounds is how many attempts it may make THIS time. The budget is declared per
+# project (llm-settings.json retries.escalationAttempts → EPAM_ESCALATION_ATTEMPTS)
+# and set by resolve_escalation for the duration of the owner's call; an
+# ordinary story (no budget) is unaffected. The count persists between
+# escalations, so the next one resumes at the rung this one reached.
+escalation_budget_allows() {
+    local attempts_made="${1:-0}"
+    local budget="${EPAM_ESCALATION_ATTEMPT_BUDGET:-}"
+    [ -z "$budget" ] && return 0
+    case "$budget" in ''|*[!0-9]*) return 0 ;; esac
+    [ "$attempts_made" -lt "$budget" ]
+}

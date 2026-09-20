@@ -69,8 +69,13 @@ describe('resolve_escalation() — design constraints (static)', () => {
     expect(body).toMatch(/implement_story "\$sibling_id"/);
   });
 
-  it('bounds the fix invocation to a small retry budget (does not reuse the full MAX_RETRIES ladder)', () => {
-    expect(body).toMatch(/MAX_RETRIES="\$\{ESCALATION_FIX_MAX_RETRIES:-1\}"/);
+  it('bounds the fix per ESCALATION (attempt budget), on the owner\'s FULL ladder — not a one-rung ladder', () => {
+    // 2026-09-20: MAX_RETRIES=1 gave the owner one attempt at rung 0 and nothing to climb to;
+    // every re-escalation restarted identically. The owner keeps its ladder and its persisted
+    // rung; the budget bounds this escalation's attempts. Executed in
+    // an-escalated-fix-climbs-the-owners-ladder.test.ts.
+    expect(body).not.toMatch(/MAX_RETRIES="\$\{ESCALATION_FIX_MAX_RETRIES:-1\}"/);
+    expect(body).toMatch(/export EPAM_ESCALATION_ATTEMPT_BUDGET=/);
   });
 
   it('saves and restores MAX_RETRIES and COORDINATOR_PROMPT_AMENDMENT so the escalating story is unaffected afterward', () => {

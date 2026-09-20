@@ -1190,7 +1190,9 @@ implement_story() {
     fi
 
     while true; do
-    while [ $retry_count -le $MAX_RETRIES ]; do
+    # An escalated fix is bounded per escalation (escalation_budget_allows, story-retry-state.sh);
+    # the rung persisted below is where the next escalation resumes. No budget → no effect.
+    while [ $retry_count -le $MAX_RETRIES ] && escalation_budget_allows "$_total_attempts"; do
         _total_attempts=$((_total_attempts + 1))
         # Inference ladder: on retry, escalate to a stronger model + increase reasoning effort.
         # Priority: PRD retryModel > EPAM_RETRY_MODEL env var > built-in get_model_ladder_step().
@@ -2740,6 +2742,12 @@ Apply the above diagnosis AND fix the deterministic check violation — both mus
     break
     done
 
+    if ! escalation_budget_allows "$_total_attempts" && [ $retry_count -le $MAX_RETRIES ]; then
+        warning "  [Escalation] attempt budget for this escalation spent — $story_id's ladder stands at retry_count $retry_count (rung $((retry_count / 2))); the next escalation resumes there"
+        append_cost_record "$story_id" "failed" "$story_started_at" "$(date -Iseconds)" "$output_file" "$json_result_file"
+        post_completion_message "$story_id" "failed"
+        return 1
+    fi
     error "Failed to implement $story_id after $((MAX_RETRIES + 1)) attempts"
     update_monitor_status "fail" "$story_id" "Failed after $((MAX_RETRIES + 1)) attempts"
     append_cost_record "$story_id" "failed" "$story_started_at" "$(date -Iseconds)" "$output_file" "$json_result_file"

@@ -270,7 +270,13 @@ function writerStandInCalls(story, seam) {
   const fix = declaredFix(story, seam);
   const files = fix ? [...fix.files.filter((f) => declared.includes(f)), ...fix.files.filter((f) => !declared.includes(f))] : declared;
   if (!files.length) return null;
-  return files.map((f) => {
+  return files.map((f0) => {
+    // A DECLARED DIRECTORY IS DELIVERED AS A DIRECTORY. regintel's scaffold story declares
+    // `dial/` and `docs/` (packages copied whole from a read-only source repo); the deliverable
+    // check accepts a directory holding one non-empty file. The stand-in lands one source file
+    // inside it, named by the ecosystem's own source extension — never a path written here.
+    const isDir = /\/$/.test(f0);
+    const f = isDir ? path.posix.join(f0, `stand_in${srcExt[0] || '.txt'}`) : f0;
     const abs = path.isAbsolute(f) ? f : path.join(root, f);
     // Never an empty file: the deliverable check reads an empty file as missing.
     let content = `${STAND_IN_MARK} deliverable ${path.basename(f)}, written by the rehearsal\n`;
@@ -291,7 +297,7 @@ function writerStandInCalls(story, seam) {
     // unchanged (£0 brownfield harness run 10, 2026-09-14). A brownfield story's files exist by
     // definition; each is read through the set's declared read tool before it is written.
     const read = readTool && readTool.name && fs.existsSync(abs) ? { name: readTool.name, input: { [readTool.path]: abs } } : null;
-    return { name: tool.name, input: { [tool.path]: abs, [tool.content]: content }, read, declared: declared.includes(f), wrong: fix && fix.files.includes(f) ? { name: tool.name, input: { [tool.path]: abs, [tool.content]: wrong } } : null };
+    return { name: tool.name, input: { [tool.path]: abs, [tool.content]: content }, read, declared: declared.includes(f0), wrong: fix && fix.files.includes(f) ? { name: tool.name, input: { [tool.path]: abs, [tool.content]: wrong } } : null };
   });
 }
 /**

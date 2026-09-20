@@ -1479,16 +1479,23 @@ function outputContractFor(toolDef, tag) {
  * Returns { payload, attempts, refusals }. When no attempt was accepted, payload is null and the
  * last refusal is what the caller reports.
  */
-async function runSeamUntilAccepted({ seam, execSpec, prompt, toolDef, tag, logPath, itemsKey = null, storyId = '', repoPath = '', env = null, logDir = null, accept }) {
+async function runSeamUntilAccepted({ seam, execSpec, prompt, toolDef, tag, logPath, itemsKey = null, storyId = '', repoPath = '', env = null, logDir = null, accept, _ask = null }) {
   const retries = Math.max(0, parseInt(process.env.SEAM_MAX_RETRIES || process.env.SPEC_AGENT_MAX_RETRIES || '3', 10) || 0);
   const refusals = [];
   let ask = prompt;
   let payload = null;
+  const askOnce = _ask || runAgentForJson;
   for (let attempt = 0; attempt <= retries; attempt += 1) {
     const rungEnv = seam ? seamInvocationEnvAtRung(seam, logDir, attempt) : {};
+    takeLastRefusal(tag);
     // eslint-disable-next-line no-await-in-loop
-    payload = await runAgentForJson(execSpec, ask, toolDef, tag, logPath, itemsKey, storyId, repoPath, { ...rungEnv, ...(env || {}) });
-    const why = accept(payload);
+    payload = await askOnce(execSpec, ask, toolDef, tag, logPath, itemsKey, storyId, repoPath, { ...rungEnv, ...(env || {}) });
+    // A FATALLY REFUSED ANSWER IS ITS OWN CORRECTION. The tag-parse seam drops an echoed example
+    // and hands back null; `accept(null)` can only say "nothing came back". The refusal's reason
+    // is what the model must be told (guard-vocabulary, regintel 20260919T224649Z: refused on
+    // every rung with no correction, so the same echo came back every time).
+    const refused = payload ? null : takeLastRefusal(tag);
+    const why = refused ? refused.reason : accept(payload);
     if (!why) return { payload, attempts: attempt + 1, refusals };
     refusals.push(why);
     console.warn(`[seam] ${seam || tag}: answer refused (attempt ${attempt + 1}/${retries + 1}) — ${why}`);
@@ -3230,17 +3237,19 @@ async function deriveGuardVocabulary({ promptExec, rule, statements, story, find
   // ever supplied one, so this agent never ran; the null was dereferenced inside runAgentForJson
   // and the TypeError read as a considered fallback. Resolving here means no call site can hand
   // this agent something it cannot invoke, including the next one written.
-  const payload = await runAgentForJson(
-    promptExecFor({ promptExec }), prompt, TOOL_GUARD_VOCABULARY, 'GUARD_VOCABULARY',
-    logDir ? path.join(logDir, `${(story && story.id) || 'phase'}-guard-vocabulary.log`) : null,
-    null, (story && story.id) || '', _repo,
-    // The identity travels with the seam: ai-run.sh keys the ladder and the self-heal KB on
-    // EPAM_AGENT_NAME, so without it this agent's constraints and episodes are filed under
-    // whatever ran before it.
-    { ...seamInvocationEnv('guard-vocabulary', logDir),
-      EPAM_AGENT_NAME: 'guard-vocabulary',
-      EPAM_RESPONSE_SCHEMA: schemaEnv(TOOL_GUARD_VOCABULARY) },
-  );
+  // THE ONE LOOP: a refused answer is asked again with its refusal as the correction, on the
+  // next rung. A single call that returned null on an echo left the AC guard unarmed and
+  // aborted the spec pass (regintel 20260919T224649Z, REGI-003). The identity travels with the
+  // seam: ai-run.sh keys the ladder and the self-heal KB on EPAM_AGENT_NAME.
+  const asked = await runSeamUntilAccepted({
+    seam: 'guard-vocabulary', execSpec: promptExecFor({ promptExec }), prompt,
+    toolDef: TOOL_GUARD_VOCABULARY, tag: 'GUARD_VOCABULARY',
+    logPath: logDir ? path.join(logDir, `${(story && story.id) || 'phase'}-guard-vocabulary.log`) : null,
+    storyId: (story && story.id) || '', repoPath: _repo, logDir,
+    env: { EPAM_AGENT_NAME: 'guard-vocabulary', EPAM_RESPONSE_SCHEMA: schemaEnv(TOOL_GUARD_VOCABULARY) },
+    accept: (p) => (p && isVocabularyUsable(normaliseVocabulary(p)) ? null : 'the vocabulary holds no usable term'),
+  });
+  const payload = asked.payload;
   if (!payload) return null;
   const vocab = normaliseVocabulary(payload);
   if (isVocabularyUsable(vocab)) return vocab;
@@ -10655,6 +10664,7 @@ module.exports = {
   buildVcRegeneratePrompt,
   buildGuardEvidence,
   deriveGuardVocabulary,
+  runSeamUntilAccepted,
   mintProjectAgents,
   TOOL_PROJECT_AGENTS,
   assignAgentRoles,

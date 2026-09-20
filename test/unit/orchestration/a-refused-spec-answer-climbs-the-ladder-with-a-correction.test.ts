@@ -62,3 +62,33 @@ describe('the climb: attempt N runs at rung N of the spec-agent ladder', () => {
     expect(src).toMatch(/seamInvocationEnvAtRung\('spec-agent'/);
   });
 });
+
+describe('the one loop: a fatally refused answer is corrected with its own refusal and the next attempt climbs', () => {
+  it('runSeamUntilAccepted carries the tag-parse refusal into the retry prompt and asks the next rung', async () => {
+    const calls: Array<{ model: string; prompt: string }> = [];
+    // The runner: the first answer echoes the example (refused fatally by the real validator);
+    // the second is real. Each call records the model the seam env resolved for that rung.
+    const execSpec = { cmd: 'fake', args: [] };
+    const orig = spec.runAgentForJson;
+    const fake = async (_e: any, prompt: string, _t: any, tag: string, _l: any, _k: any, _s: any, _r: any, env: any) => {
+      calls.push({ model: (env && env.EPAM_MODEL) || '', prompt });
+      const text = calls.length === 1
+        ? '<GUARD_VOCABULARY>{"blacklist":[{"term":"optional","reason":"..."}],"whitelist":[]}</GUARD_VOCABULARY>'
+        : '<GUARD_VOCABULARY>{"blacklist":[{"term":"pytest","reason":"names the runner"}],"whitelist":[]}</GUARD_VOCABULARY>';
+      return spec._validatedOrNull(spec.extractTaggedJson(text, tag), tag, 'guard-vocabulary');
+    };
+    const r = await spec.runSeamUntilAccepted({
+      seam: 'guard-vocabulary', execSpec, prompt: 'derive the vocabulary', toolDef: { name: 'guard_vocabulary', description: '' },
+      tag: 'GUARD_VOCABULARY', logDir: join(ROOT, 'orchestrations/logs'),
+      accept: (p: any) => (p && Array.isArray(p.blacklist) && p.blacklist.length ? null : 'no usable terms'),
+      _ask: fake,
+    });
+    expect(r.payload, 'the seam never recovered').toBeTruthy();
+    expect(calls.length).toBe(2);
+    expect(calls[1].prompt, 'the retry did not carry the refusal as its correction').toMatch(/copied back|placeholder/);
+    expect(calls[1].model, 'the retry did not climb to the next rung').not.toBe(calls[0].model);
+    expect(r.refusals[0]).toMatch(/placeholder|copied back/);
+    void orig;
+  });
+});
+

@@ -271,3 +271,118 @@ check_ac_invariant() {
         log "  [ac-invariant] All stories within 24-AC limit for phase '$_phase_id'"
     fi
 }
+
+# ── LANES HONOUR DEPENDENCIES (2026-09-20, regintel £0 rehearsal #16) ─────────────────────────
+#
+# The topology heuristic put REGI-007/008 in the primary lane (a worktree that runs AFTER the
+# main lane) while REGI-010, which depends on REGI-007, stayed in the main lane: skipped for an
+# unmet dependency, then never revisited. The tail sweep then mistook the two primary-lane
+# stories for split children and ran them on main; the primary worktree ran empty; the merge
+# refused a branch with no commits; the phase failed with every story green. Four rules, all
+# deterministic scheduling, no gate: a dependent joins its dependency's lane; the sweep takes
+# only what no lane owns; a story skipped for a dependency is tried again once the pass has
+# completed more; a lane with nothing left to do is a no-op.
+
+# lane_dependency_closure <main> <primary> <independent> — newline lists in, three newline lists
+# out separated by lines of "---". A story whose dependency (transitively) sits in the primary or
+# independent lane joins that lane; a dependency in the main lane is already satisfied before
+# the lanes run and moves nothing. Says on stderr what it moved.
+lane_dependency_closure() {
+    local _main="$1" _primary="$2" _independent="$3"
+    python3 - "$PRD_FILE" "$_main" "$_primary" "$_independent" <<'PY'
+import json, sys
+prd_file, main, primary, independent = sys.argv[1], sys.argv[2], sys.argv[3], sys.argv[4]
+lists = {'main': [s for s in main.split('\n') if s.strip()],
+         'primary': [s for s in primary.split('\n') if s.strip()],
+         'independent': [s for s in independent.split('\n') if s.strip()]}
+try:
+    prd = json.load(open(prd_file))
+except Exception:
+    prd = {'stories': []}
+deps = {s['id']: list(s.get('dependencies') or []) for s in prd.get('stories', []) if s.get('id')}
+lane_of = {sid: lane for lane, ids in lists.items() for sid in ids}
+moved = True
+while moved:
+    moved = False
+    for sid in list(lane_of):
+        if lane_of[sid] != 'main':
+            continue
+        for d in deps.get(sid, []):
+            target = lane_of.get(d)
+            if target in ('primary', 'independent'):
+                lane_of[sid] = target
+                lists['main'].remove(sid); lists[target].append(sid)
+                sys.stderr.write(f"  [lanes] {sid} joins the {target} lane: it depends on {d}, which runs there\n")
+                moved = True
+                break
+print('\n'.join(lists['main'])); print('---'); print('\n'.join(lists['primary'])); print('---'); print('\n'.join(lists['independent']))
+PY
+}
+
+# tail_sweep_candidates <phase> <main-snapshot> <primary> <independent> — the phase's stories
+# still pending that the main snapshot did not hold and no other lane owns: split children
+# born mid-execution, nothing else.
+tail_sweep_candidates() {
+    local _phase="$1" _snapshot="$2" _primary="${3:-}" _independent="${4:-}"
+    local _owned; _owned=$(printf '%s\n%s\n%s\n' "$_snapshot" "$_primary" "$_independent" | grep -v '^$' || true)
+    jq -r --arg phase "$_phase" \
+        '(.implementationOrder[$phase] // []) as $ids |
+         .stories[] |
+         select((.id as $id | $ids | index($id) != null) and .status != "deprecated" and .status != "completed" and .status != "blocked") | .id' \
+        "$PRD_FILE" 2>/dev/null | { if [ -n "$_owned" ]; then grep -vxF -f <(printf '%s\n' "$_owned"); else cat; fi; } || true
+}
+
+# deferred_dependency_pass <phase> <main-list> — stories the first pass left pending because a
+# dependency was unmet are tried again, as long as each pass completes something; a story whose
+# dependency is still unmet is left, with the reason.
+deferred_dependency_pass() {
+    local _phase="$1" _list="$2"
+    local _dep_checker="$SCRIPT_DIR/check-dependencies.sh"
+    # PROGRESS IS A STORY COMPLETED, not a story attempted: a story that runs and stays pending
+    # must not be run again by this pass (it had its attempts), or the pass never ends.
+    local _completed_before _completed_after _tried=""
+    while :; do
+        _completed_before=$(jq -r '[.stories[] | select(.completed // false)] | length' "$PRD_FILE" 2>/dev/null || echo 0)
+        while IFS= read -r _sid; do
+            [ -n "$_sid" ] || continue
+            case $'\n'"$_tried"$'\n' in *$'\n'"$_sid"$'\n'*) continue ;; esac
+            local _st
+            _st=$(jq -r --arg id "$_sid" '.stories[] | select(.id == $id) | if (.completed // false) then "completed" else (.status // "pending") end' "$PRD_FILE" 2>/dev/null)
+            [ "$_st" = "pending" ] || continue
+            if [ -x "$_dep_checker" ] && ! PRD_FILE="$PRD_FILE" "$_dep_checker" "$_sid" >/dev/null 2>&1; then
+                continue
+            fi
+            log "  [deferred] $_sid was skipped for an unmet dependency earlier in this pass — its dependencies are complete now, running it"
+            _tried="${_tried}${_sid}"$'\n'
+            _run_one_main_story "$_sid"
+        done <<< "$_list"
+        _completed_after=$(jq -r '[.stories[] | select(.completed // false)] | length' "$PRD_FILE" 2>/dev/null || echo 0)
+        [ "${_completed_after:-0}" -gt "${_completed_before:-0}" ] || break
+    done
+    while IFS= read -r _sid; do
+        [ -n "$_sid" ] || continue
+        local _st2
+        _st2=$(jq -r --arg id "$_sid" '.stories[] | select(.id == $id) | if (.completed // false) then "completed" else (.status // "pending") end' "$PRD_FILE" 2>/dev/null)
+        [ "$_st2" = "pending" ] || continue
+        if [ -x "$_dep_checker" ] && ! PRD_FILE="$PRD_FILE" "$_dep_checker" "$_sid" >/dev/null 2>&1; then
+            local _unmet
+            _unmet=$(jq -r --arg id "$_sid" '.stories[] | select(.id == $id) | .dependencies // [] | .[]' "$PRD_FILE" 2>/dev/null | while IFS= read -r _d; do
+                [ -n "$_d" ] || continue
+                jq -e --arg d "$_d" '.stories[] | select(.id == $d) | (.completed // false)' "$PRD_FILE" >/dev/null 2>&1 || printf '%s ' "$_d"
+            done)
+            warning "  [deferred] $_sid still waits on ${_unmet:-a dependency} — not run in this pass"
+        fi
+    done <<< "$_list"
+    return 0
+}
+
+# lane_stories_all_completed <list> — true when every story in the list is completed in the PRD.
+lane_stories_all_completed() {
+    local _list="$1" _sid
+    [ -n "$(printf '%s' "$_list" | tr -d '[:space:]')" ] || return 0
+    while IFS= read -r _sid; do
+        [ -n "$_sid" ] || continue
+        jq -e --arg id "$_sid" '.stories[] | select(.id == $id) | (.completed // false)' "$PRD_FILE" >/dev/null 2>&1 || return 1
+    done <<< "$_list"
+    return 0
+}

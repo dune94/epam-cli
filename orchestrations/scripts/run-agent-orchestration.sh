@@ -1264,6 +1264,12 @@ review_stories=$(jq -r --arg phase "$PHASE" \
      select(.agentRole == "review-agent" and (.completed // false) == false) | .id' "$PRD_FILE")
 
 # Apply dependency-graph ordering within each group
+# A DEPENDENT RUNS IN THE LANE OF ITS DEPENDENCY (lane_dependency_closure): a main story that
+# depends on a primary-lane story can never be satisfied in Step 8, which runs first.
+_lanes_out=$(lane_dependency_closure "$main_stories" "$primary_stories" "$independent_stories")
+main_stories=$(printf '%s\n' "$_lanes_out" | awk 'BEGIN{p=0} /^---$/{p++; next} p==0')
+primary_stories=$(printf '%s\n' "$_lanes_out" | awk 'BEGIN{p=0} /^---$/{p++; next} p==1')
+independent_stories=$(printf '%s\n' "$_lanes_out" | awk 'BEGIN{p=0} /^---$/{p++; next} p==2')
 main_stories=$(topo_sort_stories "$main_stories")
 primary_stories=$(topo_sort_stories "$primary_stories")
 independent_stories=$(topo_sort_stories "$independent_stories")
@@ -2455,16 +2461,8 @@ if [ -n "$main_stories" ]; then
         # dropped and never executed in the same phase pass.
         # Re-read prd.json for any pending stories not present in the original
         # snapshot and run them through the same per-story logic.
-        _tail_sweep_candidates=$(jq -r --arg phase "$PHASE" \
-            '(.implementationOrder[$phase] // []) as $ids |
-             .stories[] |
-             select(
-               (.id as $id | $ids | index($id) != null) and
-               .status != "deprecated" and
-               .status != "completed" and
-               .status != "blocked"
-             ) | .id' \
-            "$PRD_FILE" 2>/dev/null || true)
+        # Only what no lane owns: primary/independent stories run in their worktrees, later.
+        _tail_sweep_candidates=$(tail_sweep_candidates "$PHASE" "$non_review_main" "$primary_stories" "$independent_stories")
         _tail_sweep_new=""
         while IFS= read -r _ts; do
             [ -z "$_ts" ] && continue
@@ -2480,6 +2478,8 @@ if [ -n "$main_stories" ]; then
                 _run_one_main_story "$story"
             done <<< "$_tail_sweep_new"
         fi
+        # A story skipped for an unmet dependency is tried again now that the pass completed more.
+        deferred_dependency_pass "$PHASE" "$non_review_main"
         if [ "$_phase_story_failures" -gt 0 ]; then
             step_emit "8" "fail" "Step 8: Main-branch stories"
             error "Phase '$PHASE': $_phase_story_failures story/stories failed — aborting phase"
@@ -2779,6 +2779,13 @@ if [ "$need_worktrees" = true ]; then
         # Check if the branch has commits ahead of the current branch
         _ahead=$(git -C "$_merge_git_root" rev-list --count "$_merge_current_branch..$_wt_branch" 2>/dev/null || echo "0")
         if [ "${_ahead:-0}" -eq 0 ]; then
+            # A LANE WITH NOTHING LEFT TO DO IS A NO-OP. Its stories completed elsewhere (the main
+            # lane, an earlier invocation); a branch with no commits is then the expected shape.
+            _lane_list="$primary_stories"; [ "$_wt_branch" = "wt-independent" ] && _lane_list="$independent_stories"
+            if lane_stories_all_completed "$_lane_list"; then
+                log "  Lane $_wt_branch has no new commits and every story it was given is completed — nothing to merge"
+                continue
+            fi
             error "  Active branch $_wt_branch has no new commits"
             MERGE_FAILED=true
             continue

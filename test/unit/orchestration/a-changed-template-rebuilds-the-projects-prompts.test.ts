@@ -97,7 +97,9 @@ describe('the bash mint gate asks the same question', () => {
     for (const f of ['orchestrations/scripts/lib/mint-and-spec.sh', 'orchestrations/scripts/pre-run-reset.sh']) {
       const src = readFileSync(join(ROOT, f), 'utf8');
       // A marker's existence may still tell "stale" from "never built" (elif) — never decide completeness.
-      const bare = src.split('\n').filter((l) => /\[ -f\s+"\$EPAM_PROJECT_CONFIG_DIR\/\.prompt-cache\/\$\(prompt_marker_key/.test(l) && !/^\s*#/.test(l) && !/elif/.test(l));
+      // Continuation lines are joined so `elif [ … ] \\\n && [ -f marker ]` reads as one condition.
+      const joined = src.replace(/\\\n\s*/g, ' ').split('\n');
+      const bare = joined.filter((l) => /\[ -f\s+"\$EPAM_PROJECT_CONFIG_DIR\/\.prompt-cache\/\$\(prompt_marker_key/.test(l) && !/^\s*#/.test(l) && !/elif/.test(l));
       expect(bare, `${f} still tests the marker's existence:\n${bare.join('\n')}`).toEqual([]);
       expect(src).toMatch(/codeline_prompts_complete/);
     }
@@ -114,7 +116,7 @@ describe('stale is not foreign', () => {
     const src = readFileSync(join(ROOT, 'orchestrations/scripts/lib/mint-and-spec.sh'), 'utf8');
     const at = src.indexOf('is this run\'s codeline but its prompt inputs changed');
     expect(at, 'no stale branch').toBeGreaterThan(0);
-    const branch = src.slice(at, at + 700);
+    const branch = src.slice(at, src.indexOf('\n    else', at));
     expect(branch).toMatch(/rm -rf "\$EPAM_PROJECT_CONFIG_DIR\/prompts"/);
     expect(branch).not.toMatch(/roster\.json/);
     expect(branch).toMatch(/EPAM_SKIP_AGENT_MINT=1/);

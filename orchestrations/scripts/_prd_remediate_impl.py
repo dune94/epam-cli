@@ -148,7 +148,30 @@ sys.path.insert(0, os.path.join(os.path.dirname(os.path.abspath(__file__)), 'lib
 from resume_semantics import resume_preserves  # noqa: E402
 IS_RESUME = resume_preserves('completed-stories')
 
+# A STORY THE RESUME RE-QUEUES STARTS ITS LADDER AFRESH. The resume keeps story-retry-state/ and
+# story-rung/ (a story continuing mid-ladder needs them; the reviewer needs a completed story's
+# rung). A story turned from failed back to pending here is not continuing — it is starting over,
+# and its ladder starts over with it. regintel 140717Z resume 3 (2026-09-21): REGI-004-A and
+# REGI-010-A were re-queued carrying retry_count=8 from the loop that had failed them, and each
+# "failed after 8 attempts" in four seconds, having made none.
+# The same default the orchestrator and the lifecycle use when LOG_DIR is not in the environment.
+LOG_DIR = os.environ.get('LOG_DIR') or os.path.join(os.path.dirname(os.path.abspath(__file__)), '..', 'logs')
+def _ladder_afresh(story_id):
+    if not LOG_DIR:
+        return False
+    removed = False
+    state_dir = os.path.join(LOG_DIR, 'story-retry-state')
+    if os.path.isdir(state_dir):
+        for name in os.listdir(state_dir):
+            if name == story_id or name.startswith(story_id + '.'):
+                os.remove(os.path.join(state_dir, name)); removed = True
+    rung = os.path.join(LOG_DIR, 'story-rung', story_id + '.json')
+    if os.path.isfile(rung):
+        os.remove(rung); removed = True
+    return removed
+
 reset_count = 0
+ladder_reset = []
 for s in stories:
     if s['id'] not in reset_scope_ids:
         continue
@@ -156,6 +179,8 @@ for s in stories:
         continue
     changed = False
     if s.get('status') not in ('pending', 'deprecated') or s.get('completed'):
+        if IS_RESUME and _ladder_afresh(s['id']):
+            ladder_reset.append(s['id'])
         s['status']    = 'pending'
         s['completed'] = False
         changed = True
@@ -167,6 +192,8 @@ for s in stories:
         reset_count += 1
 if reset_count:
     changes.append(f"reset {reset_count} active stories to pending")
+if ladder_reset:
+    changes.append(f"ladder started afresh for re-queued {', '.join(ladder_reset)} (retry state and rung of the failed attempts cleared)")
 
 # ── 7. Deterministic gate: no pending story may be orphaned from every
 #      implementationOrder phase ─────────────────────────────────────────────

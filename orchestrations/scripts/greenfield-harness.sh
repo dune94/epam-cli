@@ -493,7 +493,10 @@ fi
 # THE SEAMS THIS PROJECT'S RUN IS EXPECTED TO EXECUTE, from the registry's own declarations
 # (lib/seams-expected.js): a seam declaring appliesTo for modes this project is not in is listed
 # with its declared reason, and neither counted missing nor silently dropped.
-_expected_json="$("$NODE_BIN" "$REPO_ROOT/orchestrations/scripts/lib/seams-expected.js" "$DEST/orchestrations/agents/invocation-profiles.json" "$PROJECT_DIR")"
+# A run that reused the codeline's settled roster did not mint: the mint's seams are cached,
+# and the registry says which (cachedBy). Read from the run's own words, not assumed.
+_reused=""; grep -q "Agent mint skipped\|keeping the roster\|reusing the settled roster" "$LOG" && _reused="roster"
+_expected_json="$(EPAM_SEAMS_REUSED="$_reused" "$NODE_BIN" "$REPO_ROOT/orchestrations/scripts/lib/seams-expected.js" "$DEST/orchestrations/agents/invocation-profiles.json" "$PROJECT_DIR")"
 _seams="$(printf '%s' "$_expected_json" | "$NODE_BIN" -e 'let b="";process.stdin.on("data",d=>b+=d).on("end",()=>process.stdout.write(JSON.parse(b).expected.join("\n")))')"
 _all_n="$("$NODE_BIN" -e 'const r=require(process.argv[1]);process.stdout.write(String(Object.keys(r.profiles||{}).length))' "$DEST/orchestrations/agents/invocation-profiles.json")"
 say "seams the registry declares for this project's modes ($(printf '%s' "$_expected_json" | "$NODE_BIN" -e 'let b="";process.stdin.on("data",d=>b+=d).on("end",()=>process.stdout.write(JSON.parse(b).modes.join("+")))')): $(printf '%s\n' "$_seams" | grep -c .) of $_all_n"

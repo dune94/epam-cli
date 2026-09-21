@@ -63,9 +63,16 @@ function configValue(configText, key) {
   return m ? m[1].trim().replace(/^["']|["']$/g, '') : '';
 }
 
-function expectedSeams(profiles, modes, configText) {
+// A SEAM A CACHE HOLDS IS NOT EXPECTED WHEN THE CACHE WAS USED. A seam may declare `cachedBy`
+// (e.g. "roster"); a run that reused that cache did not execute it, and says so.
+function expectedSeams(profiles, modes, configText, reused) {
   const expected = []; const excluded = {};
+  const reusedSet = new Set(Array.isArray(reused) ? reused : []);
   for (const [seam, p] of Object.entries(profiles || {})) {
+    if (p && p.cachedBy && reusedSet.has(p.cachedBy)) {
+      excluded[seam] = `cached by the ${p.cachedBy}, which this run reused${p._whyCachedBy ? ` — ${p._whyCachedBy}` : ''}`;
+      continue;
+    }
     const applies = Array.isArray(p && p.appliesTo) ? p.appliesTo : null;
     if (applies && !applies.some((m) => modes.has(m))) {
       excluded[seam] = `applies to ${applies.join('/')} only${p._whyAppliesTo ? ` — ${p._whyAppliesTo}` : ''}`;
@@ -93,5 +100,6 @@ if (require.main === module) {
   if (!files) { process.stderr.write(`no provider-set registry resolves the env files of ${cfg}\n`); process.exit(2); }
   const configText = fs.readFileSync(files.base, 'utf8');
   const modes = projectModes(configText, cfg);
-  process.stdout.write(JSON.stringify({ modes: [...modes], ...expectedSeams(profiles, modes, configText) }) + '\n');
+  const reused = String(process.env.EPAM_SEAMS_REUSED || '').split(',').map((x) => x.trim()).filter(Boolean);
+  process.stdout.write(JSON.stringify({ modes: [...modes], ...expectedSeams(profiles, modes, configText, reused) }) + '\n');
 }

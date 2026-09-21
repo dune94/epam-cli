@@ -362,7 +362,9 @@
       "template": "roster-review",
       "toolGrant": "read-only",
       "layer": "bootstrap",
-      "_why_bootstrap": "certifies newly minted agents, inside the mint. A prompt that runs before the project prompt layer exists cannot be a project prompt."
+      "_why_bootstrap": "certifies newly minted agents, inside the mint. A prompt that runs before the project prompt layer exists cannot be a project prompt.",
+      "cachedBy": "roster",
+      "_whyCachedBy": "Runs only when the roster is minted. A launch that reuses a codeline's settled roster (the cache the operator requires) does not execute it, and the £0 rehearsal expects that (install-copy rehearsal #26, 2026-09-20)."
     },
     "code-graph-detective": {
       "appliesTo": [
@@ -668,7 +670,9 @@
         }
       ],
       "template": "agent-proposal",
-      "toolGrant": "read-only"
+      "toolGrant": "read-only",
+      "cachedBy": "roster",
+      "_whyCachedBy": "Runs only when the roster is minted. A launch that reuses a codeline's settled roster (the cache the operator requires) does not execute it, and the £0 rehearsal expects that (install-copy rehearsal #26, 2026-09-20)."
     },
     "role-assigner": {
       "_what": "Assigns every story one of the minted roles.",
@@ -829,7 +833,9 @@
           "authority": "the ground truth its claims are checked against"
         }
       ],
-      "template": "survey-review"
+      "template": "survey-review",
+      "cachedBy": "roster",
+      "_whyCachedBy": "Runs only when the roster is minted. A launch that reuses a codeline's settled roster (the cache the operator requires) does not execute it, and the £0 rehearsal expects that (install-copy rehearsal #26, 2026-09-20)."
     },
     "qa-gate:runtime-boundary": {
       "_what": "Asks whether a change can execute in the runtime it targets, given the codeline's own configuration.",
@@ -869,7 +875,9 @@
       "_why_bootstrap": "produces the project roster; runs before the project has prompts. A prompt that runs before the project prompt layer exists cannot be a project prompt.",
       "_toolGrantWhy": "read-only: the delta is its ANSWER and the engine writes the file (mint-agents-step.js). It reads the personas it specialises and the project's declarations; nothing it does needs a write tool, and a seam that delivered by writing could not be rehearsed.",
       "maxToolCalls": 16,
-      "_maxToolCallsWhy": "Read the canonical copy, read what the project declares, write the roster: a handful of calls. The rung's iteration budget is sized for the writer; without a budget of its own this seam spent 150 calls per attempt and never wrote the file."
+      "_maxToolCallsWhy": "Read the canonical copy, read what the project declares, write the roster: a handful of calls. The rung's iteration budget is sized for the writer; without a budget of its own this seam spent 150 calls per attempt and never wrote the file.",
+      "cachedBy": "roster",
+      "_whyCachedBy": "Runs only when the roster is minted. A launch that reuses a codeline's settled roster (the cache the operator requires) does not execute it, and the £0 rehearsal expects that (install-copy rehearsal #26, 2026-09-20)."
     },
     "project-roster-review": {
       "_what": "Falsifies the project roster against canonical before any agent is invoked from it.",
@@ -888,7 +896,9 @@
       ],
       "template": "project-roster-review",
       "layer": "bootstrap",
-      "_why_bootstrap": "reviews that roster, in the same stage. A prompt that runs before the project prompt layer exists cannot be a project prompt."
+      "_why_bootstrap": "reviews that roster, in the same stage. A prompt that runs before the project prompt layer exists cannot be a project prompt.",
+      "cachedBy": "roster",
+      "_whyCachedBy": "Runs only when the roster is minted. A launch that reuses a codeline's settled roster (the cache the operator requires) does not execute it, and the £0 rehearsal expects that (install-copy rehearsal #26, 2026-09-20)."
     },
     "topology-router": {
       "appliesTo": [

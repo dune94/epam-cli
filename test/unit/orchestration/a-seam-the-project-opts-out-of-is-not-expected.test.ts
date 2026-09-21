@@ -38,6 +38,19 @@ describe('the expectation honours it', () => {
   });
   it('the CLI passes the project config through', () => {
     const src = readFileSync(join(ROOT, 'orchestrations/scripts/lib/seams-expected.js'), 'utf8');
-    expect(src).toMatch(/expectedSeams\(profiles, modes, configText\)/);
+    expect(src).toMatch(/expectedSeams\(profiles, modes, configText, reused\)/);
+  });
+});
+
+describe('a seam a cache holds is not expected when the cache was used', () => {
+  it('the mint\'s seams declare cachedBy: roster', () => {
+    for (const k of ['agent-mint', 'project-roster-review', 'roster-review', 'roster-specialiser', 'survey-review']) expect(profiles[k].cachedBy).toBe('roster');
+  });
+  it('a run that reused the roster does not expect them; a run that minted does', () => {
+    const modes = new Set(['greenfield', 'multi-story']);
+    const reused = se.expectedSeams(profiles, modes, '', ['roster']);
+    expect(reused.expected).not.toContain('agent-mint');
+    expect(reused.excluded['roster-specialiser']).toMatch(/cached by the roster/);
+    expect(se.expectedSeams(profiles, modes, '', []).expected).toContain('agent-mint');
   });
 });

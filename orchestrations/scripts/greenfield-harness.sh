@@ -26,7 +26,7 @@ _project_env() {
     "$DEST/orchestrations/scripts/lib/llm-settings-resolve.js" "$1"
 }
 
-SET=""; PROJECT="greenfield-proof"; REF="HEAD"; DEST=""; CEILING="5"; ASSESS_ONLY=0; RATCHET=""; PAUSED=0; PROJECT_FROM=""
+SET=""; PROJECT="greenfield-proof"; REF="HEAD"; DEST=""; CEILING="5"; ASSESS_ONLY=0; RATCHET=""; PAUSED=0; PROJECT_FROM=""; INSTALL_COPY=""
 while [ $# -gt 0 ]; do
   case "$1" in
     --assess-only) ASSESS_ONLY=1; DEST="$2"; shift 2 ;;   # judge a kept install again; no install, no run, no spend
@@ -35,6 +35,12 @@ while [ $# -gt 0 ]; do
     --project)     PROJECT="$2"; shift 2 ;;
     # ANOTHER INSTALL'S PROJECT DATA GOES THROUGH £0 FIRST: see the copy block before the run.
     --project-from) PROJECT_FROM="$2"; shift 2 ;;
+    # TEST THE SECOND RUN — what the last run left on disk. Copies a REAL install (its prompt
+    # cache, completion markers, roster, provisioned prompts, run state) into DEST, then updates it
+    # with install.sh at REF exactly as the operator's install would be updated, and runs the
+    # project on the mock against a throwaway codeline. This is the only rehearsal that reproduces
+    # the install's cache decisions (regintel 20260920T232518Z, $5.73: stale prompts reused).
+    --install-copy) INSTALL_COPY="$2"; shift 2 ;;
     --ref)         REF="$2"; shift 2 ;;
     --dest)        DEST="$2"; shift 2 ;;
     --ceiling-usd) CEILING="$2"; shift 2 ;;
@@ -91,6 +97,14 @@ fi
 if [ "$ASSESS_ONLY" != "1" ]; then
 # ── 1. Install, as an operator does ──────────────────────────────────────────
 _replay=off; [ "$SET" = "mockserver" ] && _replay=on
+if [ -n "$INSTALL_COPY" ]; then
+  [ -d "$INSTALL_COPY/orchestrations" ] || { red "no install at $INSTALL_COPY"; exit 2; }
+  # Everything but node_modules (re-linked) and the launch dashboard's runtime state.
+  mkdir -p "$DEST"
+  ( cd "$INSTALL_COPY" && tar --exclude=./node_modules --exclude=./launch-dashboard/data --exclude=./launch-dashboard/spool -cf - . ) | ( cd "$DEST" && tar -xf - )
+  [ -d "$INSTALL_COPY/node_modules" ] && ln -s "$INSTALL_COPY/node_modules" "$DEST/node_modules" 2>/dev/null || true
+  say "install copied from $INSTALL_COPY — its prompt cache, markers, roster and prompts as they are on disk; updating it at $REF as the operator's install would be"
+fi
 bash "$REPO_ROOT/orchestrations-installer/install.sh" --dest "$DEST" --ref "$REF" --stack "$SET" --docker --replay "$_replay" >>"$LOG" 2>&1
 check $? "install.sh --stack $SET --replay $_replay"
 if [ "${#FAILS[@]}" -gt 0 ]; then tail -20 "$LOG" >&2; exit 1; fi
@@ -135,13 +149,20 @@ if [ -n "$PROJECT_FROM" ]; then
   # working copy, which is that install's run state.
   _src_prd="$(sed -n 's/^PRD_FILE=//p' "$_src_proj/config.env" | tr -d '"')"
   [ -n "$_src_prd" ] && [ -n "$_src_canon" ] && [ -f "$DEST/$_src_canon" ] && { mkdir -p "$(dirname "$DEST/$_src_prd")"; cp "$DEST/$_src_canon" "$DEST/$_src_prd"; }
-  say "project '$PROJECT' copied from $PROJECT_FROM (canonical PRD: ${_src_canon:-none}); codeline builds under $DEST/build"
+  say "project '$PROJECT' copied from $PROJECT_FROM (canonical PRD: ${_src_canon:-none}); codeline builds under $DEST"
 fi
 # The install's .env, through the pipeline's own loader — never sourced raw (a bare `cd` in it
 # would relocate the harness).
 # shellcheck source=/dev/null
 . "$DEST/orchestrations/scripts/lib/env-file.sh"; load_env_file_safe "$DEST/.env"
-export EPAM_PROVIDER_SET="$SET" OUTPUT_DIR="$DEST/build" EPAM_PAUSE_AFTER_AGENT_MINT="$PAUSED" EPAM_PAUSE_BEFORE_WRITER="$PAUSED" NODE_BIN
+# THE CODELINE KEEPS ITS NAME. The prompt cache, its completion marker and the roster are keyed
+# by the codeline's basename (regintel-build); a throwaway dir called "build" would be a
+# different codeline and every cache decision under test would be a miss. The throwaway dir
+# carries the project's own basename under DEST.
+_cl_base="$(sed -n 's/^OUTPUT_DIR=//p' "$DEST/orchestrations/projects/$PROJECT/config.env" 2>/dev/null | tr -d '"' | sed 's:/*$::' | xargs -r basename 2>/dev/null)"
+HARNESS_BUILD="$DEST/build"; [ -n "$_cl_base" ] && [ "$_cl_base" != "build" ] && HARNESS_BUILD="$DEST/codelines/$_cl_base"
+mkdir -p "$(dirname "$HARNESS_BUILD")"
+export EPAM_PROVIDER_SET="$SET" OUTPUT_DIR="$HARNESS_BUILD" EPAM_PAUSE_AFTER_AGENT_MINT="$PAUSED" EPAM_PAUSE_BEFORE_WRITER="$PAUSED" NODE_BIN
 # Pre-flight's shellcheck verdict is cached per digest of the orchestrator's bytes; the same bytes
 # in a fresh install carry the same verdict, so the harness shares the repository's cache and a
 # run needs the 3.6 GB shellcheck pass only when the orchestrator actually changed.
@@ -345,7 +366,7 @@ if [ -d "$PROJECT_DIR/seed" ]; then
   PRD_FILE_ABS="$MOCK1_WORKSPACE_ROOT/$_rid/workspace/synthesized-prd.json"
   PHASES="${PHASES:-core}"
 else
-  CODELINE="$DEST/build"; PRD_FILE_ABS="$DEST/$PRD_FILE"
+  CODELINE="${HARNESS_BUILD:-$DEST/build}"; PRD_FILE_ABS="$DEST/$PRD_FILE"
 fi
 # A PHASE IS COMPLETE WHEN ITS GATE SAID GO — the pipeline's own record (check-phase-gate.sh →
 # logs/phase-gates.jsonl), written by every launcher. Grepping the greenfield lifecycle's log
@@ -442,6 +463,18 @@ else
 fi
 _incomplete="$("$NODE_BIN" -e 'const p=require(process.argv[1]);process.stdout.write((p.stories||[]).filter(s=>!s.completed).map(s=>s.id).join(" "))' "$PRD_FILE_ABS" 2>/dev/null)"
 _rc=0; [ -z "$_incomplete" ] || _rc=1; check "$_rc" "every story completed in the PRD${_incomplete:+ (incomplete: $_incomplete)}"
+
+# ── 3e. Provisioning: the prompts the run used were built from THESE templates ─────────────
+# A value the engine computed that the installed prompt could not take is a stale prompt
+# (regintel 20260920T232518Z: 'given values it does not use: __SHARED_FILE_OWNERSHIP_BLOCK__ …
+# DROPPED', six times, and four fixes were inert). Zero such lines, or the rehearsal is red.
+_dropped="$(grep -c "was given values it does not use" "$LOG" 2>/dev/null || echo 0)"
+[ "${_dropped:-0}" -eq 0 ]; check $? "provisioning: no evidence was DROPPED for lack of a placeholder — every prompt the run used takes every input the engine computes (${_dropped} line(s))"
+if grep -q "the prompt inputs changed since its prompts were built" "$LOG"; then
+  grep -q "prompts provisioned" "$LOG"; check $? "provisioning: the template layer had changed and the prompts were rebuilt (roster kept)"
+elif grep -q "already provisioned from the current templates" "$LOG"; then
+  say "provisioning: prompts reused — built from the current templates"
+fi
 
 # ── 4. Every seam the registry declares ──────────────────────────────────────
 # THE SEAMS THIS PROJECT'S RUN IS EXPECTED TO EXECUTE, from the registry's own declarations

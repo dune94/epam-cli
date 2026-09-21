@@ -641,18 +641,19 @@ run_story_with_watchdog() {
         local _lad_attempt=1
         local _lad_max="${EPAM_MAX_LADDER_ATTEMPTS:-6}"
         while [ "$_rc" -eq 124 ] && [ "$_lad_attempt" -lt "$_lad_max" ]; do
-            local _lad_swapped=0
-            hot_swap_story_model_if_unstable "$story_id" || _lad_swapped=1
-            # The FIRST retry happens regardless — that is the pre-existing
-            # "retry once with an extended budget" behaviour, and a story whose
-            # project configures no ladder must not lose it. Only the SECOND and
-            # later retries require an actual escalation, because repeating a
-            # model that did not finish twice is the gamble the ladder exists to
-            # avoid.
-            if [ "$_lad_attempt" -gt 1 ] && [ "$_lad_swapped" -ne 0 ]; then
-                warning "Watchdog: $story_id — ladder exhausted, no further model to escalate to"
+            # ONE LADDER. The retry climbs where the writer looks: the story's persisted rung, which
+            # claude.sh reads on re-entry (InferenceLadder "resuming at retry_count=N"). The PRD
+            # hot-swap that stood here was keyed on ladder variables this shell does not hold; it
+            # swapped nothing and the message said "next ladder rung" anyway — regintel 140717Z
+            # (2026-09-21), four stories, every retry on the rung that had just timed out.
+            if story_ladder_exhausted "$LOG_DIR" "$story_id" "${EPAM_MAX_RETRIES:-7}"; then
+                warning "Watchdog: $story_id — ladder exhausted, no further rung to retry on"
                 break
             fi
+            local _rung_before _rung_after
+            _rung_before="$(story_ladder_rung "$(read_story_retry_count "$LOG_DIR" "$story_id")")"
+            advance_story_retry_rung "$LOG_DIR" "$story_id" "${EPAM_MAX_RETRIES:-7}"
+            _rung_after="$(story_ladder_rung "$(read_story_retry_count "$LOG_DIR" "$story_id")")"
             _lad_attempt=$(( _lad_attempt + 1 ))
             # RE-DERIVE AFTER THE ESCALATION, NOT BEFORE IT.
             #
@@ -669,7 +670,7 @@ run_story_with_watchdog() {
                 log "[orch] retry wall ${retry_timeout_secs}s -> ${_retry_derived}s (re-derived from ${_retry_iters} iterations granted on the attempt that timed out)"
                 retry_timeout_secs="$_retry_derived"
             fi
-            warning "Watchdog: $story_id timed out after ${timeout_secs}s — attempt ${_lad_attempt}/${_lad_max} on the next ladder rung with a ${retry_timeout_secs}s budget..."
+            warning "Watchdog: $story_id timed out after ${timeout_secs}s — attempt ${_lad_attempt}/${_lad_max}, rung ${_rung_before} → ${_rung_after}, with a ${retry_timeout_secs}s budget..."
             set +e
             timeout "$retry_timeout_secs" "$CLAUDE_SH" "$story_id" 2>&1 | tee -a "$log_file"
             _rc=${PIPESTATUS[0]}

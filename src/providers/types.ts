@@ -88,6 +88,8 @@ export interface ProviderResponse {
   content: ContentPart[];
   stopReason: 'end_turn' | 'tool_use' | 'max_tokens' | 'stop_sequence';
   usage: TokenUsage;
+  /** Stream events the provider could not parse and had to drop — when present, the text is incomplete. */
+  droppedChunks?: number;
 }
 
 export type StreamDelta =

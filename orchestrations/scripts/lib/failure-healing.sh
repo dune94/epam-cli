@@ -410,14 +410,52 @@ require_profile() {
     printf '%s' "$_brief"
 }
 
+# THE RETRY AFTER AN OUTPUT-CAP HIT GETS ROOM. When classify_failure_class reads the runner's
+# truncation message, the next attempt's output budget becomes the widest tier's — an identical cap
+# would truncate identically (regintel 140717Z: 8 attempts on REGI-004-A, all at 6144, all empty).
+raise_output_budget_after_cap_hit() {
+    [ "${COORDINATOR_FAILURE_CLASS:-}" = "output_cap" ] || return 0
+    local _widest="${EPAM_EFFORT_MAX_MAX_OUTPUT_TOKENS:-0}"
+    if [ "${_widest:-0}" -gt "${STORY_MAX_OUTPUT_TOKENS:-0}" ] 2>/dev/null; then
+        log "  Coordinator[L1]: output budget ${STORY_MAX_OUTPUT_TOKENS:-?} → ${_widest} for the retry (the last attempt was truncated at its cap)"
+        STORY_MAX_OUTPUT_TOKENS="$_widest"
+        export STORY_MAX_OUTPUT_TOKENS
+    fi
+    return 0
+}
+
 classify_failure_class() {
     local raw_file="${1:-}"
     local result_json="${2:-}"
     local exit_code="${3:-1}"
     local story_id="${4:-}"
+    local output_log="${5:-}"
 
     COORDINATOR_FAILURE_CLASS="unknown"
     COORDINATOR_ESCALATE="yes"
+
+    # TWO FAILURES THAT LOOK LIKE "0 BYTES, EXIT 1" AND ARE NOT ENVIRONMENT FAILURES (regintel
+    # 140717Z, 2026-09-21). The runner names an output-cap hit on stderr — "Response truncated at
+    # max_tokens" (src/agent/AgentRunner.ts) — and the attempt log is where that stderr lands; an
+    # identical retry truncates identically, so the class is output_cap and the retry gets room.
+    # And an account with no credit fails every call the same way while the API key stays valid;
+    # the balance probe the pre-flight already uses answers that in one call — class credit, halt.
+    if [ "$exit_code" -ne 0 ] && [ -n "$output_log" ] && [ -f "$output_log" ] \
+       && grep -q "truncated at max_tokens" "$output_log" 2>/dev/null; then
+        COORDINATOR_FAILURE_CLASS="output_cap"
+        COORDINATOR_ESCALATE="yes"
+        warning "  Coordinator[L1]: the attempt was truncated at its output cap (${STORY_MAX_OUTPUT_TOKENS:-?} tokens) — class output_cap; the retry is given the widest budget"
+        return 0
+    fi
+    if [ "$exit_code" -ne 0 ]; then
+        local _bal; _bal="$(balance_probe_read 2>/dev/null || true)"
+        if [ -n "$_bal" ] && awk -v b="$_bal" 'BEGIN{exit !(b+0 <= 0.05)}'; then
+            COORDINATOR_FAILURE_CLASS="credit"
+            COORDINATOR_ESCALATE="no"
+            error "  Coordinator[L1]: the provider account has no credit (balance \$${_bal}) — every attempt will fail the same way; halting this story instead of climbing its ladder"
+            return 0
+        fi
+    fi
 
     # Class A: environment crash — raw output is EMPTY and exit code != 0.
     #

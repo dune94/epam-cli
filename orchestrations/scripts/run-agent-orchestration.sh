@@ -3818,9 +3818,12 @@ while true; do
     # "Retries MUST proceed up the rungs — nothing is allowed to intercede" —
     # a fixed cycle cap must never cut a climbable story off early.
     _review_climbable_stories=()
-    for _fb in "$LOG_DIR"/review-feedback-*.json; do
+    # ONLY A STORY WITH A REAL VERDICT IS RE-IMPLEMENTED OR ESCALATED. A story whose review was never
+    # parsed (reviewIncomplete) is left for the next cycle's review to judge — see
+    # review_feedback_to_reimplement in lib/phase-assessment.sh (regintel 140717Z, 2026-09-21).
+    for _fb_story in $(review_feedback_to_reimplement); do
+        _fb="$LOG_DIR/review-feedback-${_fb_story}.json"
         [ -f "$_fb" ] || continue
-        _fb_story="$(basename "$_fb" | sed 's/^review-feedback-//; s/\.json$//')"
         if story_ladder_exhausted "$LOG_DIR" "$_fb_story" "$_review_max_retries"; then
             warning "Step 3.6: $_fb_story's ladder is exhausted (already tried its top rung) — escalating"
             _review_escalated=1

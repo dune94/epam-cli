@@ -203,6 +203,12 @@ export class MiniMaxProvider implements LLMProvider {
     let costUsd: number | undefined;
     let stopReason: ProviderResponse['stopReason'] = 'end_turn';
     const toolCalls: Map<number, { id: string; name: string; args: string }> = new Map();
+    // A DATA EVENT THE PARSER CANNOT READ IS REPORTED, NEVER SWALLOWED. regintel 140717Z
+    // (2026-09-21): three MiniMax-M3 answers reached the pipeline as `dict":"approved",…` — the
+    // first bytes gone, the text looking whole — and the engine recorded "no parseable verdict"
+    // on approved work. The only loss path in this loop was a silent catch. Now the raw payload
+    // goes to stderr (the evidence) and the count rides on the response (the text is incomplete).
+    let droppedChunks = 0;
 
     while (true) {
       const { done, value } = await reader.read();
@@ -244,7 +250,10 @@ export class MiniMaxProvider implements LLMProvider {
             // MiniMax field, opportunistic only.
             if (typeof parsed.usage.total_cost === 'number') costUsd = parsed.usage.total_cost;
           }
-        } catch { /* skip malformed chunk */ }
+        } catch (e) {
+          droppedChunks += 1;
+          process.stderr.write(`[minimax] dropped a malformed stream event (${(e as Error).message}); the reply is incomplete. raw: ${data.slice(0, 500)}\n`);
+        }
       }
       if (done) break;
     }
@@ -283,6 +292,7 @@ export class MiniMaxProvider implements LLMProvider {
       stopReason,
       usage: { inputTokens: finalIn, outputTokens: finalOut, ...(costUsd != null ? { costUsd } : {}),
         ...(cachedInputTokens != null ? { cachedInputTokens } : {}) },
+      ...(droppedChunks > 0 ? { droppedChunks } : {}),
     };
   }
 

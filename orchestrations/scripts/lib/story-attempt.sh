@@ -2488,7 +2488,12 @@ $_kb_section"
                 COORDINATOR_ESCALATE="no"
                 return 1
             fi
-            classify_failure_class "$_raw_for_coord" "$json_result_file" "$exit_code" "$story_id"
+            classify_failure_class "$_raw_for_coord" "$json_result_file" "$exit_code" "$story_id" "$output_file"
+            if [ "$COORDINATOR_FAILURE_CLASS" = "credit" ]; then
+                update_monitor_status "failed" "$story_id" "provider account has no credit — halted, not retried"
+                return 1
+            fi
+            raise_output_budget_after_cap_hit
 
             # Work carryover: verify_story_deliverables() (called above, on
             # whichever attempt last actually ran the agent) already knows

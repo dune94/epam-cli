@@ -180,3 +180,38 @@ describe('MiniMaxProvider.stream() — token fallback when streaming returns no 
     expect(longResult.usage.outputTokens).toBeGreaterThan(shortResult.usage.outputTokens);
   });
 });
+
+// ─── stream() — a chunk the parser cannot read is never dropped silently ─────
+//
+// regintel 140717Z (2026-09-21): three MiniMax-M3 reviews reached the pipeline as
+// `dict":"approved",…` — the first five bytes of the answer gone, and the engine recorded
+// "no parseable verdict" on approved work. The provider's own trace already lacked them: the
+// loss is in this stream loop, whose only loss path was `catch { /* skip malformed chunk */ }`.
+// A data event the parser cannot read is now REPORTED — on stderr with its raw payload, and
+// on the response as droppedChunks — so the text is known to be incomplete and the evidence
+// is captured, instead of an answer that looks whole and is not.
+describe('MiniMaxProvider.stream() — a malformed data event is reported, never swallowed', () => {
+  beforeEach(() => { vi.restoreAllMocks(); });
+
+  it('counts the dropped event on the response and writes its raw payload to stderr', async () => {
+    const enc = new TextEncoder();
+    const good1 = encodeSSE({ choices: [{ delta: { content: 'dict":"approved"' }, finish_reason: null }] });
+    const broken = enc.encode('data: {"choices":[{"delta":{"content":"{\\"ver"}}]\n\n'); // truncated JSON
+    const errSpy = vi.spyOn(process.stderr, 'write').mockImplementation(() => true);
+    vi.stubGlobal('fetch', vi.fn().mockResolvedValue({ ok: true, body: makeSseStream([broken, good1]) }));
+
+    const result = await makeProvider().stream(makeRequest(), () => {});
+
+    expect((result as any).droppedChunks, 'the dropped event was not counted').toBe(1);
+    const written = errSpy.mock.calls.map(c => String(c[0])).join('');
+    expect(written).toMatch(/malformed|unreadable|dropped/i);
+    expect(written).toContain('{\\"ver');   // the raw payload is the evidence
+  });
+
+  it('a clean stream reports zero dropped events', async () => {
+    const good = encodeSSE({ choices: [{ delta: { content: '{"verdict":"approved"}' }, finish_reason: 'stop' }] });
+    vi.stubGlobal('fetch', vi.fn().mockResolvedValue({ ok: true, body: makeSseStream([good]) }));
+    const result = await makeProvider().stream(makeRequest(), () => {});
+    expect((result as any).droppedChunks ?? 0).toBe(0);
+  });
+});

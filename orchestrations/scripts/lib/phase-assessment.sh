@@ -32,6 +32,25 @@ _json_escape_str() {
 # as incomplete too: that is not evidence the code is wrong either. A single
 # genuinely-reviewed story means real findings — the re-implementation loop is
 # how over-engineering gets corrected and must not be disabled.
+# THE STORIES A CHANGES-REQUESTED CYCLE RE-IMPLEMENTS. The set of review-feedback files is not the
+# set of rejected stories: a file whose verdict says reviewIncomplete is a story the reviewer could
+# not judge, and re-implementing it is re-implementing approved work against feedback whose only
+# content is that there was none. regintel 140717Z (2026-09-21): three approved reviews arrived with
+# their first bytes missing; beside ten real verdicts the loop advanced their ladders and rewrote them
+# — REGI-004-A and REGI-010-A ended FAILED, 004-B blocked behind them. Prints one story id per line:
+# only stories with a real verdict. Unreadable feedback is not evidence the code is wrong either.
+review_feedback_to_reimplement() {
+    local _f _id
+    for _f in "$LOG_DIR"/review-feedback-*.json; do
+        [ -f "$_f" ] || continue
+        jq -e . "$_f" >/dev/null 2>&1 || continue
+        [ "$(jq -r '.reviewIncomplete // false' "$_f" 2>/dev/null)" = "true" ] && continue
+        _id="$(basename "$_f" | sed 's/^review-feedback-//; s/\.json$//')"
+        printf '%s\n' "$_id"
+    done
+    return 0
+}
+
 review_feedback_is_incomplete() {
     [ -f "$LOG_DIR/review-incomplete-${PHASE}.flag" ] && return 0
     local _f _any=0

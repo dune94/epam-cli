@@ -495,7 +495,8 @@ fi
 # with its declared reason, and neither counted missing nor silently dropped.
 # A run that reused the codeline's settled roster did not mint: the mint's seams are cached,
 # and the registry says which (cachedBy). Read from the run's own words, not assumed.
-_reused=""; grep -q "Agent mint skipped\|keeping the roster\|reusing the settled roster" "$LOG" && _reused="roster"
+_reused=""
+if grep -q "Agent mint skipped\|keeping the roster\|reusing the settled roster" "$LOG" && ! grep -q "\[mint-step\] proposed=" "$LOG"; then _reused="roster"; fi
 _expected_json="$(EPAM_SEAMS_REUSED="$_reused" "$NODE_BIN" "$REPO_ROOT/orchestrations/scripts/lib/seams-expected.js" "$DEST/orchestrations/agents/invocation-profiles.json" "$PROJECT_DIR")"
 _seams="$(printf '%s' "$_expected_json" | "$NODE_BIN" -e 'let b="";process.stdin.on("data",d=>b+=d).on("end",()=>process.stdout.write(JSON.parse(b).expected.join("\n")))')"
 _all_n="$("$NODE_BIN" -e 'const r=require(process.argv[1]);process.stdout.write(String(Object.keys(r.profiles||{}).length))' "$DEST/orchestrations/agents/invocation-profiles.json")"

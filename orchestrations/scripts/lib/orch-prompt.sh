@@ -22,7 +22,14 @@ _ORCH_PROMPT_LIB_DIR="$(cd "$(dirname "${BASH_SOURCE[0]}")" && pwd)"
 # shellcheck source=seam-ladder.sh
 [ -f "$_ORCH_PROMPT_LIB_DIR/seam-ladder.sh" ] && . "$_ORCH_PROMPT_LIB_DIR/seam-ladder.sh"
 
-run_orch_prompt() {
+# THE SEAM'S ENVIRONMENT LIVES AND DIES WITH ITS INVOCATION. seam_ladder_export `export`s the
+# seam's ladder, effort and TOOL GRANT into the calling shell; this function is sourced into the
+# orchestrator, so the last seam's grant became every later child's environment. regintel resume 4
+# (2026-09-21): after the phase assessment (read-only) ran, five review-fix attempts of REGI-001
+# climbed the ladder to kimi-k3 and each ended "I have no file-write tool" — the writer had been
+# handed the assessor's grant. The body is a subshell: stdout, files and the return code come back;
+# the exports do not.
+run_orch_prompt() (
     # Bound the LOOP, not only the clock. Without this a gate agent — especially
     # one with tools, as the phase assessment has — can explore indefinitely and is
     # only stopped by its timeout. Live 2026-07-25 that produced a ZERO-BYTE log
@@ -181,4 +188,4 @@ run_orch_prompt() {
     fi
 
     return $_rc
-}
+)

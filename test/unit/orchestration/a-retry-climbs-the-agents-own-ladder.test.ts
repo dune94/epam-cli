@@ -67,7 +67,7 @@ describe('a retry climbs the agent’s own ladder', () => {
   it('run_orch_prompt honours the climb, and only after the seam has resolved', () => {
     // seam_ladder_export overwrites EPAM_MODEL, so a climb read before it would be clobbered.
     const body = src();
-    const fn = body.slice(body.indexOf('run_orch_prompt() {'));
+    const fn = body.slice(body.indexOf('run_orch_prompt() ('));
     const seamAt = fn.indexOf('seam_ladder_export "$agent_type"');
     const climbAt = fn.indexOf('ORCH_AGENT_MODEL_CLIMB:-');
     expect(seamAt, 'the seam is no longer resolved').toBeGreaterThan(-1);

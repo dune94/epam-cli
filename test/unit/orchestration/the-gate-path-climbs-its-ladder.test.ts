@@ -33,7 +33,7 @@ const SEAM_LADDER = join(ROOT, 'orchestrations/scripts/lib/seam-ladder.sh');
 /** Extract run_orch_prompt's model-resolution region from the shipped script. */
 function modelResolution(): string {
   const src = readFileSync(ORCH, 'utf8');
-  const at = src.indexOf('run_orch_prompt() {');
+  const at = src.indexOf('run_orch_prompt() (');
   expect(at, 'run_orch_prompt not found').toBeGreaterThan(-1);
   const end = src.indexOf('\n}\n', at);
   return src.slice(at, end);

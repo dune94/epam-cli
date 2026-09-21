@@ -30,7 +30,7 @@ const orch = orchestratorSource();
 
 describe('gate agents cannot loop forever', () => {
   it('run_orch_prompt sets an iteration bound', () => {
-    const i = orch.indexOf('run_orch_prompt() {');
+    const i = orch.indexOf('run_orch_prompt() (');
     expect(i, 'run_orch_prompt not found').toBeGreaterThan(-1);
     const body = orch.slice(i, i + 2500);
     expect(body,

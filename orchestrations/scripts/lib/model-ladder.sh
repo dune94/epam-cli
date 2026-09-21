@@ -137,6 +137,7 @@ load_llm_settings_json() {
     _v=$(_get '.costControls.maxToolCallsPerStory'); [ -z "${EPAM_STORY_MAX_TOOL_CALLS:-}" ] && [ -n "$_v" ] && export EPAM_STORY_MAX_TOOL_CALLS="$_v"
     _v=$(_get '.costControls.storyBudgetWarningUsd'); [ -z "${EPAM_STORY_BUDGET_WARNING_USD:-}" ] && [ -n "$_v" ] && export EPAM_STORY_BUDGET_WARNING_USD="$_v"
     _v=$(_get '.costControls.storyBudgetHardLimitUsd'); [ -z "${EPAM_STORY_BUDGET_HARD_LIMIT_USD:-}" ] && [ -n "$_v" ] && export EPAM_STORY_BUDGET_HARD_LIMIT_USD="$_v"
+    _v=$(_get '.costControls.runBudgetUsd'); [ -z "${EPAM_RUN_BUDGET_USD:-}" ] && [ -n "$_v" ] && export EPAM_RUN_BUDGET_USD="$_v"
 
     unset -f _get
     echo "  LLMSettings: loaded fallback defaults from $_settings_file" >&2

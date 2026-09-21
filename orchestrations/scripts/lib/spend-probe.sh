@@ -67,3 +67,40 @@ spend_probe_report() {
         echo "  usage: \$$_after"
     fi
 }
+
+# balance_probe_read — credits minus usage from the active set's declared balanceProbe
+# (provider-sets.json: url, keyEnv, creditsPath, usagePath). Prints a figure with two
+# decimals, or nothing: no probe declared, no key, or an unreadable body is no figure —
+# never a zero, which would read as "broke" and refuse a launch on a network blip.
+_balance_probe_cfg() {
+    local _lib; _lib=$(cd "$(dirname "${BASH_SOURCE[0]}")" && pwd)
+    "${NODE_BIN:-node}" -e '
+      const path=require("path");
+      const fs=require("fs");
+      const reg=JSON.parse(fs.readFileSync(path.join(process.argv[1],"..","..","config","provider-sets.json"),"utf8"));
+      const name=(process.env.EPAM_PROVIDER_SET||reg.defaultSet||"");
+      const p=((reg.sets||{})[name]||{}).balanceProbe;
+      if(!p) process.exit(0);
+      process.stdout.write([p.url,p.keyEnv,p.creditsPath,p.usagePath].join("\t"));
+    ' "$_lib" 2>/dev/null || true
+}
+balance_probe_read() {
+    local _cfg _url _keyenv _cpath _upath _key
+    _cfg="$(_balance_probe_cfg)"
+    [ -n "$_cfg" ] || return 0
+    IFS=$'\t' read -r _url _keyenv _cpath _upath <<<"$_cfg"
+    [ -n "$_url" ] && [ -n "$_keyenv" ] || return 0
+    _key="${!_keyenv:-}"
+    [ -n "$_key" ] || return 0
+    curl -s -m 20 "$_url" -H "Authorization: Bearer $_key" 2>/dev/null | \
+      "${NODE_BIN:-node}" -e '
+        let d="";process.stdin.on("data",c=>d+=c).on("end",()=>{
+          try{
+            const j=JSON.parse(d);
+            const get=(p)=>{let v=j;for(const k of p.split("."))v=v?.[k];return v;};
+            const c=Number(get(process.argv[1])), u=Number(get(process.argv[2]));
+            if(!Number.isFinite(c)||!Number.isFinite(u)) return;
+            process.stdout.write((c-u).toFixed(2));
+          }catch{ /* no figure */ }
+        });' "$_cpath" "$_upath" 2>/dev/null || true
+}

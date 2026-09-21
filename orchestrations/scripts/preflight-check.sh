@@ -354,6 +354,21 @@ for key in "${_pf_keys[@]}"; do
     fail "$key is NOT set — the active provider set requires it; the run will fail"
   fi
 done
+# ── Balance: what the account can still spend, against what this launch expects to ─────────
+# regintel 20260919T224649Z resume 6 burned attempts into 402s on an empty account; a launch on
+# 2026-09-20 was about to start on $13.50 for a ~$20 run. The set declares how to read the
+# balance (balanceProbe); the project may declare the launch's budget (costControls.runBudgetUsd).
+. "$SCRIPT_DIR/lib/spend-probe.sh" 2>/dev/null || true
+_pf_balance="$(balance_probe_read 2>/dev/null || true)"
+_pf_budget="${EPAM_RUN_BUDGET_USD:-}"
+if [[ -z "$_pf_balance" ]]; then
+  ok "balance: the active provider set (${EPAM_PROVIDER_SET:-default}) declares no balance probe, or it answered no figure — not judged"
+elif [[ -n "$_pf_budget" ]] && "${NODE_BIN:-node}" -e 'process.exit(Number(process.argv[1]) < Number(process.argv[2]) ? 0 : 1)' "$_pf_balance" "$_pf_budget" 2>/dev/null; then
+  fail "balance \$${_pf_balance} is below this project's declared run budget \$${_pf_budget} (costControls.runBudgetUsd) — top up before launching"
+else
+  ok "balance \$${_pf_balance}${_pf_budget:+ covers the declared run budget \$${_pf_budget}}"
+fi
+
 IFS=',' read -ra _pf_project_keys <<< "${REQUIRED_KEYS:-}"
 for key in "${_pf_project_keys[@]}"; do
   key="${key// /}"; [[ -z "$key" ]] && continue

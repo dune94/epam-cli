@@ -30,7 +30,14 @@
           "required": true
         }
       ],
-      "$credentials": "The two vendors this stack actually calls. Required, because a run that starts without them dies at the first seam instead of at the launcher."
+      "$credentials": "The two vendors this stack actually calls. Required, because a run that starts without them dies at the first seam instead of at the launcher.",
+      "balanceProbe": {
+        "url": "https://openrouter.ai/api/v1/credits",
+        "keyEnv": "OPENROUTER_API_KEY",
+        "creditsPath": "data.total_credits",
+        "usagePath": "data.total_usage",
+        "_why": "Pre-flight reports credits minus usage and refuses a launch the balance cannot cover (costControls.runBudgetUsd). regintel 20260919T224649Z resume 6 burned attempts into 402s; 2026-09-20 a launch was about to start on $13.50 for a ~$20 run."
+      }
     },
     "codemie": {
       "settingsFile": "llm-defaults.codemie.json",

@@ -277,6 +277,14 @@
           ],
           "minimum": 0,
           "description": "Enforced (added 2026-08-01): once a story's cumulative real cost across all its retry/ladder attempts (summed from phase-cost.jsonl) reaches this, no further retries are granted — including skipping the self-heal retry-extension coordinator, so a budget stop cannot be overridden into more spend. The attempt already in flight when the threshold is crossed is allowed to finish normally (its cost was already committed); only the NEXT retry is blocked. null = no hard limit (current default — unlimited spend per story, bounded only by EPAM_MAX_RETRIES and EPAM_STORY_TIMEOUT_SECS)."
+        },
+        "runBudgetUsd": {
+          "type": [
+            "number",
+            "null"
+          ],
+          "minimum": 0,
+          "description": "EPAM_RUN_BUDGET_USD — what one launch of this project is expected to spend. Pre-flight reads the provider set's balance probe and REFUSES a launch whose balance is below this; with no balance probe or no budget declared it reports what it can and proceeds. null = no refusal."
         }
       }
     },

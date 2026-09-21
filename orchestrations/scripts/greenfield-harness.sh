@@ -101,7 +101,13 @@ if [ -n "$INSTALL_COPY" ]; then
   [ -d "$INSTALL_COPY/orchestrations" ] || { red "no install at $INSTALL_COPY"; exit 2; }
   # Everything but node_modules (re-linked) and the launch dashboard's runtime state.
   mkdir -p "$DEST"
-  ( cd "$INSTALL_COPY" && tar --exclude=./node_modules --exclude=./launch-dashboard/data --exclude=./launch-dashboard/spool -cf - . ) | ( cd "$DEST" && tar -xf - )
+  # NOT the install's recorded answers: the mock prefers a captured reply over a stand-in, and
+  # the paid runs' captures (logs/archive, cassettes) answer for a different spec pass — the
+  # REGI-001 writer capture never landed this run's pytest.ini (install-copy rehearsal #25).
+  # The cache decision under test lives under projects/<name>; the run state does not.
+  ( cd "$INSTALL_COPY" && tar --exclude=./node_modules --exclude=./launch-dashboard/data --exclude=./launch-dashboard/spool \
+      --exclude=./orchestrations/logs --exclude=./orchestrations/cassettes --exclude='./orchestrations/projects/*/runs' -cf - . ) | ( cd "$DEST" && tar -xf - )
+  mkdir -p "$DEST/orchestrations/logs"
   [ -d "$INSTALL_COPY/node_modules" ] && ln -s "$INSTALL_COPY/node_modules" "$DEST/node_modules" 2>/dev/null || true
   say "install copied from $INSTALL_COPY — its prompt cache, markers, roster and prompts as they are on disk; updating it at $REF as the operator's install would be"
 fi

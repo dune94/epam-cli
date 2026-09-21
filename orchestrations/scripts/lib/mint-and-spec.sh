@@ -182,7 +182,7 @@ _run_agent_mint() {
   if [ -n "$_pending" ] && [ -f "$_pending" ]; then
     if [ "${EPAM_REGENERATE_CODELINE_ASSETS:-0}" != "1" ] \
        && [ -n "$_detected_cl" ] \
-       && [ -f "$EPAM_PROJECT_CONFIG_DIR/.prompt-cache/$(prompt_marker_key "$_detected_cl")" ]; then
+       && codeline_prompts_complete "$_detected_cl"; then
       log "[mint] deferred decision settled: ${_detected_cl} completed its agents and prompts — kept"
     else
       log "[mint] deferred decision settled: this run is not ${_detected_cl:-<unresolved>}'s completed codeline — clearing the previous run's agents and prompts"
@@ -196,13 +196,22 @@ _run_agent_mint() {
     rm -f "$_pending" 2>/dev/null || true
   fi
 
+  # PROVISIONED FOR THE CURRENT INPUTS, not merely provisioned once: codeline_prompts_complete
+  # compares the marker's digest with the template layer now. A changed template layer keeps the
+  # roster (the mint's LLM work) and rebuilds the prompts (regintel 20260920T232518Z, $5.73).
   if [ "${EPAM_SKIP_AGENT_MINT:-0}" != "1" ] \
      && [ "${EPAM_REGENERATE_CODELINE_ASSETS:-0}" != "1" ] \
      && [ -n "$_detected_cl" ] && [ -n "${EPAM_PROJECT_CONFIG_DIR:-}" ] \
-     && [ -f "$EPAM_PROJECT_CONFIG_DIR/.prompt-cache/$(prompt_marker_key "$_detected_cl")" ] \
      && ls "$EPAM_PROJECT_CONFIG_DIR/prompts/"*.json >/dev/null 2>&1; then
-      log "[mint] codeline ${_detected_cl} is already provisioned — the mint is skipped; EPAM_REGENERATE_CODELINE_ASSETS=1 forces a re-mint"
-      EPAM_SKIP_AGENT_MINT=1
+      if codeline_prompts_complete "$_detected_cl"; then
+          log "[mint] codeline ${_detected_cl} is already provisioned from the current templates — the mint is skipped; EPAM_REGENERATE_CODELINE_ASSETS=1 forces a re-mint"
+          EPAM_SKIP_AGENT_MINT=1
+      elif [ -f "$EPAM_PROJECT_CONFIG_DIR/.prompt-cache/$(prompt_marker_key "$_detected_cl")" ]; then
+          log "[mint] codeline ${_detected_cl}: the prompt inputs changed since its prompts were built — keeping the roster, rebuilding the prompts"
+          EPAM_SKIP_AGENT_MINT=1
+          EPAM_REBUILD_PROMPTS=1
+          export EPAM_REBUILD_PROMPTS
+      fi
   fi
 
   # SKIPPING THE MINT REQUIRES A ROSTER TO SKIP TO. Travels with the mint rather than sitting in

@@ -749,7 +749,7 @@ _CODELINE_DECISION_DEFERRED=0
 if [ "${EPAM_REGENERATE_CODELINE_ASSETS:-0}" = "1" ]; then
     info "  EPAM_REGENERATE_CODELINE_ASSETS=1 — override: regenerating this codeline's agents and prompts"
 elif [ -n "${EPAM_CODELINE_ID:-}" ] && [ -n "${EPAM_PROJECT_CONFIG_DIR:-}" ] \
-     && [ -f "$EPAM_PROJECT_CONFIG_DIR/.prompt-cache/$(prompt_marker_key "$EPAM_CODELINE_ID")" ]; then
+     && codeline_prompts_complete "$EPAM_CODELINE_ID"; then
     # STALE-PROMPT GUARD: the marker says provisioning completed, but a template may have changed
     # since that run. On 20260917T124016Z, 12 of 41 metrolinx prompts carried a derivedFromSha256
     # that no longer matched their template — the engine passed __GATE_SCOPE__ to a prompt still

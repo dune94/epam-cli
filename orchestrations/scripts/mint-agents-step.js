@@ -1222,11 +1222,17 @@ if (require.main !== module) return;
     let _codelineComplete = false;
     if (_codelineId) {
       try {
-        // The variant is part of the claim — see _markerPath in project-prompt-builder.js. A
-        // greenfield codeline's marker must not let a brownfield run skip the mint.
-        const _variant = process.env.EPAM_BROWNFIELD === '1' ? '.brownfield' : '';
-        _codelineComplete = fs.existsSync(
-          path.join(projectConfigDir, '.prompt-cache', `.complete-${_codelineId}${_variant}`));
+        // COMPLETE FOR THE CURRENT INPUTS, not merely marked: the marker's digest is compared
+        // with the template layer, registry and generator now (codelinePromptsComplete, which
+        // honours the brownfield variant). An empty marker let a launch reuse prompts built from
+        // the previous day's templates (regintel 20260920T232518Z, $5.73).
+        const { codelinePromptsComplete } = require('./lib/project-prompt-builder.js');
+        const _cc = codelinePromptsComplete({
+          projectConfigDir, codeline: _codelineId, templatesDir,
+          registryFile: path.join(AGENTS_DIR, 'invocation-profiles.json'),
+        });
+        _codelineComplete = _cc.complete === true;
+        if (!_codelineComplete) process.stderr.write(`[mint-step] prompts for codeline ${_codelineId}: ${_cc.reason}\n`);
       } catch { _codelineComplete = false; }
     }
 

@@ -889,9 +889,55 @@ async function buildProjectPrompts({
     // the cache holds another lets the mint gate skip against a set it never checked.
     codeline: safeCodeline,
     provisioned: copied.length + built.length,
+    // WHAT THESE PROMPTS WERE BUILT FROM, so the next launch can tell whether they still are.
+    templatesDir,
+    registryFile,
   });
 
   return { copied, generated: built };
+}
+
+/**
+ * promptInputsDigest({ templatesDir, registryFile }) — a digest of everything the project's
+ * prompts are built FROM: every template in the layer, the seam registry, and this builder's own
+ * generator. Two launches with the same digest would build byte-identical prompts.
+ *
+ * regintel 20260920T232518Z ($5.73, 2026-09-20): the completion marker was an empty file — it
+ * recorded that a build happened, not what it was built from — so a launch after a day of
+ * template changes reused prompts built from the previous day's templates, and four fixes were
+ * inert ("given values it does not use: __SHARED_FILE_OWNERSHIP_BLOCK__ … DROPPED").
+ */
+function promptInputsDigest({ templatesDir, registryFile } = {}) {
+  const h = crypto.createHash('sha256');
+  const dir = templatesDir || path.join(__dirname, '..', '..', 'prompts', 'templates');
+  let names = [];
+  try { names = fs.readdirSync(dir).filter((f) => f.endsWith('.json')).sort(); } catch { names = []; }
+  for (const n of names) {
+    h.update(n); h.update('\0');
+    try { h.update(fs.readFileSync(path.join(dir, n))); } catch { /* absent counts as absent */ }
+    h.update('\0');
+  }
+  const reg = registryFile || path.join(__dirname, '..', '..', 'agents', 'invocation-profiles.json');
+  try { h.update('registry\0'); h.update(fs.readFileSync(reg)); } catch { /* none */ }
+  try { h.update('builder\0'); h.update(fs.readFileSync(__filename)); } catch { /* none */ }
+  return h.digest('hex');
+}
+
+/**
+ * codelinePromptsComplete({ projectConfigDir, codeline, templatesDir, registryFile }) — whether
+ * the prompts on disk for this codeline were built from the CURRENT inputs. An empty marker (the
+ * old shape) proves nothing and reads as not complete. Returns { complete, reason }.
+ */
+function codelinePromptsComplete({ projectConfigDir, codeline, templatesDir, registryFile } = {}) {
+  if (!projectConfigDir || !codeline) return { complete: false, reason: 'no project or codeline named' };
+  const variant = process.env.EPAM_BROWNFIELD === '1' ? '.brownfield' : '';
+  const p = path.join(projectConfigDir, '.prompt-cache', `.complete-${String(codeline).trim()}${variant}`);
+  let stored = '';
+  try { stored = fs.readFileSync(p, 'utf8').trim(); } catch { return { complete: false, reason: `no completion marker at ${p}` }; }
+  if (!stored) return { complete: false, reason: 'the completion marker is empty — it records that a build happened, not what it was built from; rebuilding from the current templates' };
+  const now = promptInputsDigest({ templatesDir, registryFile });
+  if (stored !== now) return { complete: false, reason: `the prompt inputs changed since these prompts were built (template layer, registry or generator: ${stored.slice(0, 12)} → ${now.slice(0, 12)}) — rebuilding the changed prompts; the roster is kept` };
+  return { complete: true, reason: 'prompt inputs unchanged since the build' };
 }
 
 /**
@@ -937,14 +983,15 @@ function _markerPath(outDir, codeline) {
  * run regenerates, which is today's behaviour. Failing a provisioned run over it would trade a
  * saving for an outage.
  */
-function writeCompletionMarker({ outDir, codeline, provisioned } = {}) {
+function writeCompletionMarker({ outDir, codeline, provisioned, templatesDir, registryFile } = {}) {
   try {
     if (!outDir) return;
     if (!codeline || !String(codeline).trim()) return;
     if (!(Number(provisioned) > 0)) return;
     const p = _markerPath(outDir, String(codeline).trim());
     fs.mkdirSync(path.dirname(p), { recursive: true });
-    fs.writeFileSync(p, '');
+    // The digest of what was built from — never an empty file (see promptInputsDigest).
+    fs.writeFileSync(p, promptInputsDigest({ templatesDir, registryFile }) + '\n');
   } catch { /* an optimisation must never fail the run it optimises */ }
 }
 
@@ -969,7 +1016,7 @@ function clearCompletionMarker({ outDir } = {}) {
 }
 
 module.exports = { buildProjectPrompts, renderGeneratorPrompt, provisioningList, rolesIdentity, GEN_BODY_SLOT,
-  writeCompletionMarker, clearCompletionMarker,
+  writeCompletionMarker, clearCompletionMarker, promptInputsDigest, codelinePromptsComplete,
   // Exported so the codeline keying is assertable without provisioning: a segment that escapes
   // the cache directory is a defect no end-to-end assertion would localise.
   codelineSegment, migrateFlatEntries, codelineFromPrd,

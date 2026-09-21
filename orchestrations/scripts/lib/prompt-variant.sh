@@ -19,3 +19,26 @@ prompt_marker_key() {
         printf '.complete-%s' "$1"
     fi
 }
+
+# codeline_prompts_complete <codeline> — were this codeline's prompts built from the CURRENT
+# inputs? Answered by project-prompt-builder.js (the digest the marker records vs the digest
+# of the template layer, registry and generator now). A marker's mere existence is not an
+# answer: an empty one let a launch reuse prompts built from the previous day's templates
+# (regintel 20260920T232518Z, $5.73). Says why on stderr when the answer is no.
+codeline_prompts_complete() {
+    local _cl="${1:-}"
+    [ -n "$_cl" ] && [ -n "${EPAM_PROJECT_CONFIG_DIR:-}" ] || return 1
+    local _here; _here="$(cd "$(dirname "${BASH_SOURCE[0]}")" && pwd)"
+    local _builder="${_here}/project-prompt-builder.js"
+    local _out
+    _out=$("${NODE_BIN:-node}" -e '
+      const b = require(process.argv[1]);
+      const r = b.codelinePromptsComplete({ projectConfigDir: process.argv[2], codeline: process.argv[3],
+        templatesDir: process.env.EPAM_PROMPT_TEMPLATES_DIR || undefined, registryFile: process.env.EPAM_SEAM_REGISTRY_FILE || undefined });
+      process.stdout.write((r.complete ? "yes" : "no") + "\t" + (r.reason || ""));
+    ' "$_builder" "$EPAM_PROJECT_CONFIG_DIR" "$_cl" 2>/dev/null) || return 1
+    case "$_out" in
+        yes*) return 0 ;;
+        *) echo "[prompts] codeline ${_cl}: ${_out#*	}" >&2; return 1 ;;
+    esac
+}

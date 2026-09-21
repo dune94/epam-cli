@@ -43,11 +43,20 @@ load_llm_settings_json() {
         # to apply" is the normal case, not an error.
         return 0
     }
-    local _tier
-    for _tier in low medium high; do
+    # EVERY DECLARED TIER, NOT A LIST WRITTEN HERE. This iterated `low medium high`, so the
+    # config's `max` tier was never exported and the output-cap retry that reached for it got 0
+    # — regintel 140717Z resume 4 (2026-09-21): "the retry is given the widest budget", and the
+    # retry ran at the same 16384. The tiers come from the files; the widest output budget across
+    # them is derived here once, for whoever needs room.
+    local _tier _tiers _widest_out=0 _tier_out
+    _tiers=$( { jq -r '.effortTiers // {} | keys[]' "$_settings_file" 2>/dev/null; jq -r '.effortTiers // {} | keys[]' "$_defaults_file" 2>/dev/null; } | sort -u)
+    for _tier in $_tiers; do
         _budget ".effortTiers.${_tier}.maxIterations"   "EPAM_EFFORT_$(printf '%s' "$_tier" | tr '[:lower:]' '[:upper:]')_MAX_ITERATIONS"
         _budget ".effortTiers.${_tier}.maxOutputTokens" "EPAM_EFFORT_$(printf '%s' "$_tier" | tr '[:lower:]' '[:upper:]')_MAX_OUTPUT_TOKENS"
+        _tier_out=$(_get ".effortTiers.${_tier}.maxOutputTokens"); [ -n "$_tier_out" ] || _tier_out=$(_getd ".effortTiers.${_tier}.maxOutputTokens")
+        [ "${_tier_out:-0}" -gt "$_widest_out" ] 2>/dev/null && _widest_out="$_tier_out"
     done
+    [ "$_widest_out" -gt 0 ] && [ -z "${EPAM_EFFORT_WIDEST_MAX_OUTPUT_TOKENS:-}" ] && export EPAM_EFFORT_WIDEST_MAX_OUTPUT_TOKENS="$_widest_out"
     _budget '.roleOverrides.generator.maxIterations'   'EPAM_ROLE_GENERATOR_MAX_ITERATIONS'
     _budget '.roleOverrides.generator.maxOutputTokens' 'EPAM_ROLE_GENERATOR_MAX_OUTPUT_TOKENS'
     _budget '.outputTokenFloors.planning' 'EPAM_OUTPUT_FLOOR_PLANNING'

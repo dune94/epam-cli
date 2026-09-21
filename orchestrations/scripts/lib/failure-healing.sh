@@ -415,7 +415,7 @@ require_profile() {
 # would truncate identically (regintel 140717Z: 8 attempts on REGI-004-A, all at 6144, all empty).
 raise_output_budget_after_cap_hit() {
     [ "${COORDINATOR_FAILURE_CLASS:-}" = "output_cap" ] || return 0
-    local _widest="${EPAM_EFFORT_MAX_MAX_OUTPUT_TOKENS:-0}"
+    local _widest="${EPAM_EFFORT_WIDEST_MAX_OUTPUT_TOKENS:-0}"
     if [ "${_widest:-0}" -gt "${STORY_MAX_OUTPUT_TOKENS:-0}" ] 2>/dev/null; then
         log "  Coordinator[L1]: output budget ${STORY_MAX_OUTPUT_TOKENS:-?} → ${_widest} for the retry (the last attempt was truncated at its cap)"
         STORY_MAX_OUTPUT_TOKENS="$_widest"

@@ -47,7 +47,12 @@ log(){ echo "LOG: $*"; }; warning(){ echo "WARN: $*"; }; error(){ echo "ERR: $*"
 spend_probe_read(){ :; }
 balance_probe_read(){ printf '%s' "${opts.balance ?? ''}"; }
 EPAM_CLI=bash
-EPAM_EFFORT_MAX_MAX_OUTPUT_TOKENS=${opts.budget ?? '32768'}
+# The budgets come from the REAL loader over the REAL config — not a variable set here. The first
+# version of this test set EPAM_EFFORT_MAX_MAX_OUTPUT_TOKENS by hand, and live the loader had never
+# exported it (it iterated a written list of tiers), so the retry ran at the same cap.
+AUTOMATION_DIR="${join(ROOT, 'orchestrations')}"; PRD_FILE=/dev/null
+. "${join(ROOT, 'orchestrations/scripts/lib/model-ladder.sh')}"
+load_llm_settings_json 2>/dev/null || true
 STORY_MAX_OUTPUT_TOKENS=6144
 ${fn('classify_failure_class')}
 ${fn('raise_output_budget_after_cap_hit')}
@@ -67,9 +72,12 @@ describe('an output-cap hit is classified and the retry is given room', () => {
     expect(r.cls, r.out).toBe('output_cap');
     expect(r.esc).toBe('yes');
   });
-  it("the next attempt's output budget becomes the widest tier's", () => {
-    const r = classify({ log: TRUNCATION, budget: '32768' });
-    expect(r.budget).toBe('32768');
+  it("the next attempt's output budget becomes the widest tier the config declares", () => {
+    const tiers = JSON.parse(readFileSync(join(ROOT, 'orchestrations/config/llm-defaults.json'), 'utf8')).effortTiers;
+    const widest = Math.max(...Object.values(tiers).map((t: any) => Number(t.maxOutputTokens)));
+    const r = classify({ log: TRUNCATION });
+    expect(r.budget, r.out.slice(-600)).toBe(String(widest));
+    expect(widest).toBeGreaterThan(6144);
   });
   it('a plain 0-byte failure with credit in the account is still env (and the budget is untouched)', () => {
     const r = classify({ log: 'some other stderr\n', balance: '12.40' });

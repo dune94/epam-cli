@@ -258,8 +258,32 @@ story_rung_record() {
 # story_rung_get <log_dir> <story_id> <field>
 # Empty when the story has no rung on record. ABSENT IS NOT A DEFAULT: a caller that substitutes
 # something here makes a judge authoritative about work whose setup it never saw.
+# A RUNG RECORD THAT IS GONE IS DERIVED FROM THE RUN'S OWN LEDGER — never guessed, never written by
+# hand. regintel resume 3 (2026-09-21): the reset had wiped story-rung/ and the reviewer refused a
+# story the run itself had completed. The cost ledger holds the completed attempt's resolvedModel
+# and effort; the activity ledger the provider the story started on. What is derived is persisted,
+# marked derivedFrom, so the next reader finds a record. A story the ledger never completed derives
+# nothing, and the reviewer's refusal stands.
+_story_rung_derive() {
+    local log_dir="$1" story_id="$2" f cost act model effort provider
+    cost="$log_dir/phase-cost.jsonl"; act="$log_dir/agent-activity.jsonl"
+    [ -f "$cost" ] || return 0
+    model=$(jq -r --arg s "$story_id" 'select(.story_id == $s and .status == "completed") | .resolvedModel // ""' "$cost" 2>/dev/null | grep -v '^$' | tail -1)
+    [ -n "$model" ] || return 0
+    effort=$(jq -r --arg s "$story_id" 'select(.story_id == $s and .status == "completed") | .effort // ""' "$cost" 2>/dev/null | tail -1)
+    provider=""
+    [ -f "$act" ] && provider=$(jq -r --arg s "$story_id" 'select((.storyId // .story_id) == $s and .provider != null) | .provider' "$act" 2>/dev/null | grep -v '^$' | tail -1)
+    f="$(_story_rung_file "$log_dir" "$story_id")"
+    mkdir -p "$(dirname "$f")" 2>/dev/null || true
+    jq -n --arg model "$model" --arg provider "$provider" --arg effort "$effort" \
+        '{model:$model, provider:$provider, reasoningEffort:$effort, temperature:"", maxIterations:"", maxOutputTokens:"",
+          derivedFrom:"ledger: phase-cost.jsonl (completed attempt) + agent-activity.jsonl (provider)"}' > "$f" 2>/dev/null || true
+    echo "[story-rung] $story_id: no record on disk — rung derived from this run's ledger (model=$model provider=${provider:-?})" >&2
+}
+
 story_rung_get() {
     local f; f="$(_story_rung_file "$1" "$2")"
+    [ -f "$f" ] || _story_rung_derive "$1" "$2"
     [ -f "$f" ] || return 0
     jq -r --arg k "$3" '.[$k] // ""' "$f" 2>/dev/null || true
 }

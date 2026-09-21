@@ -847,8 +847,14 @@ elif [ -n "$_ROSTER_FILE" ] && [ -f "$_ROSTER_FILE" ]; then
     fi
 fi
 
+# THE RUNG A WRITER REACHED AND THE LADDER POSITION A STORY IS AT ARE THIS RUN'S RECORD. On a
+# resume both stay: the reviewer judges completed work on the rung that produced it (regintel
+# resume 3, 2026-09-21 — six refusals of "no rung on record" on a story the run had completed),
+# and an in-progress story continues its ladder rather than restarting at rung 0.
 _RUNG_STATE_DIR="$LOG_DIR/story-rung"
-if [ -d "$_RUNG_STATE_DIR" ]; then
+if [ "$_IS_RESUMED_RUN" = "1" ]; then
+    info "  Resuming — keeping this run's writer-rung and ladder-state records"
+elif [ -d "$_RUNG_STATE_DIR" ]; then
     _RUNG_REC_CLEARED=$(find "$_RUNG_STATE_DIR" -maxdepth 1 -type f 2>/dev/null | wc -l)
     find "$_RUNG_STATE_DIR" -maxdepth 1 -type f -delete 2>/dev/null || true
     _RUNG_REC_LEFT=$(find "$_RUNG_STATE_DIR" -maxdepth 1 -type f 2>/dev/null | wc -l)
@@ -860,7 +866,7 @@ if [ -d "$_RUNG_STATE_DIR" ]; then
 fi
 
 _RETRY_STATE_DIR="$LOG_DIR/story-retry-state"
-if [ -d "$_RETRY_STATE_DIR" ]; then
+if [ "$_IS_RESUMED_RUN" != "1" ] && [ -d "$_RETRY_STATE_DIR" ]; then
     _RETRY_CLEARED=$(find "$_RETRY_STATE_DIR" -maxdepth 1 -type f 2>/dev/null | wc -l)
     find "$_RETRY_STATE_DIR" -maxdepth 1 -type f -delete 2>/dev/null || true
     _RETRY_LEFT=$(find "$_RETRY_STATE_DIR" -maxdepth 1 -type f 2>/dev/null | wc -l)

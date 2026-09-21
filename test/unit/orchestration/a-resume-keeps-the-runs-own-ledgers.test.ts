@@ -36,6 +36,12 @@ function reset(env: Record<string, string>) {
   writeFileSync(join(logs, 'phase-cost.jsonl'), `${COST}\n`);
   writeFileSync(join(logs, 'healing-events.jsonl'), '{"story":"REGI-001-tests","retry":1}\n');
   writeFileSync(join(logs, 'run-guidance.jsonl'), '{"storyId":"REGI-004-B","note":"Never import DEFAULT_MODEL from dial","target":"skill"}\n');
+  // The writer's rung for a completed story, and the ladder position of an in-progress one — both
+  // this run's own record. regintel resume 3 (2026-09-21 12:15): the reset wiped story-rung/, and the
+  // reviewer refused REGI-001 six times — "no rung on record" — on work the run itself had completed.
+  mkdirSync(join(logs, 'story-rung')); mkdirSync(join(logs, 'story-retry-state'));
+  writeFileSync(join(logs, 'story-rung/REGI-001.json'), '{"model":"MiniMax-M3","provider":"minimax","reasoningEffort":"max"}\n');
+  writeFileSync(join(logs, 'story-retry-state/REGI-002.json'), '{"rung":1,"attempts":2}\n');
   const r = spawnSync('bash', [RESET, '--prd', prd, '--log-dir', logs], {
     encoding: 'utf8', timeout: 120_000,
     env: { ...process.env, COMPOSE_OVERRIDE: join(d, 'override.yml'), DASHBOARD_STATE_DIR: dash, ORCH_RUN_ID: RUN, ...env },
@@ -44,6 +50,24 @@ function reset(env: Record<string, string>) {
 }
 
 describe('a resume keeps the run\'s own ledgers', () => {
+  it('leaves the writer-rung record of a completed story — the reviewer judges it on the rung that produced it', () => {
+    const t = reset({ EPAM_RESUME_RUN: RUN });
+    expect(existsSync(join(t.logs, 'story-rung/REGI-001.json')),
+      `the rung record was cleared — the reviewer will refuse "no rung on record":\n${t.out.slice(-800)}`).toBe(true);
+    expect(readFileSync(join(t.logs, 'story-rung/REGI-001.json'), 'utf8')).toContain('MiniMax-M3');
+  });
+
+  it('leaves the ladder position of an in-progress story — the resume continues the ladder, not rung 0', () => {
+    const t = reset({ EPAM_RESUME_RUN: RUN });
+    expect(existsSync(join(t.logs, 'story-retry-state/REGI-002.json'))).toBe(true);
+  });
+
+  it('a fresh launch still clears both — no judge inherits a prior run\'s rung', () => {
+    const t = reset({});
+    expect(existsSync(join(t.logs, 'story-rung/REGI-001.json'))).toBe(false);
+    expect(existsSync(join(t.logs, 'story-retry-state/REGI-002.json'))).toBe(false);
+  });
+
   it('leaves phase-gates.jsonl intact, so a finished phase is not run again', () => {
     const t = reset({ EPAM_RESUME_RUN: RUN });
     expect(readFileSync(join(t.logs, 'phase-gates.jsonl'), 'utf8'),

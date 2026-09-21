@@ -199,9 +199,16 @@ if [ "$SET" = "mockserver" ]; then
   fi
 fi
 
-ledger_total() {
+# THIS REHEARSAL'S SPEND, not the install's history. An install copied in (--install-copy)
+# carries every earlier run's ledgers under logs/archive; summed raw, $260 of the operator's
+# real history read as this run's spend and halted the rehearsal at once (2026-09-20).
+_ledger_raw() {
   find "$DEST/orchestrations/logs" -name phase-cost.jsonl -print0 2>/dev/null | xargs -0 cat 2>/dev/null \
     | "$NODE_BIN" -e 'let t=0;require("readline").createInterface({input:process.stdin}).on("line",l=>{try{t+=Number(JSON.parse(l).task_cost_usd)||0}catch{}}).on("close",()=>process.stdout.write(t.toFixed(4)))'
+}
+LEDGER_BASELINE="$(_ledger_raw)"
+ledger_total() {
+  "$NODE_BIN" -e 'process.stdout.write((Number(process.argv[1]) - Number(process.argv[2])).toFixed(4))' "$(_ledger_raw)" "${LEDGER_BASELINE:-0}"
 }
 
 # WHICH LAUNCHER: the project's own declaration decides. A project carrying a seed/ is the

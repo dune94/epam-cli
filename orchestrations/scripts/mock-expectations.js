@@ -1601,7 +1601,7 @@ function contractStandIn(seam, override) {
     // Filling every story's role with the first declared implementer gave MOCK3-2 in codeline mockb
     // an engineer whose brief covers mocka, and assignment refused it — correctly. Stories are
     // matched to roles by position, so each story gets a distinct one wherever enough are declared.
-    const _ents = [...projectEntities()];
+    const _ents = [...projectImplementationRoles()];
     const mk = (story, idx) => {
       const o = {};
       for (const k of (schema.required || [])) {
@@ -1802,6 +1802,23 @@ function mintedAgents() {
   return items.filter((a) => a && typeof a.name === 'string' && a.name.trim());
 }
 function mintedRoleNames() { return mintedAgents().map((a) => a.name); }
+
+/**
+ * THE ROLES A STORY MAY BE ASSIGNED: the project's implementation roles (project-roles.json),
+ * never its investigators. An assignment answered from the whole entity set handed REGI-005 to
+ * "regintel-build-detective" and the perimeter refused it, as it should (install-copy
+ * rehearsal #24, 2026-09-20) — the real assigner never offers a detective a story.
+ */
+function projectImplementationRoles() {
+  const dir = process.env.EPAM_PROJECT_CONFIG_DIR || '';
+  const names = [];
+  if (!dir) return names;
+  try {
+    const j = JSON.parse(require('node:fs').readFileSync(require('node:path').join(dir, 'project-roles.json'), 'utf8'));
+    for (const n of (j.roles || [])) if (typeof n === 'string' && n.trim()) names.push(n);
+  } catch { /* none declared */ }
+  return names;
+}
 
 function projectEntities() {
   const dir = process.env.EPAM_PROJECT_CONFIG_DIR || '';

@@ -215,3 +215,49 @@ describe('MiniMaxProvider.stream() — a malformed data event is reported, never
     expect((result as any).droppedChunks ?? 0).toBe(0);
   });
 });
+
+// ─── stream() — the raw SSE payloads can be captured for diagnosis ──────────
+//
+// regintel 140717Z: MiniMax-M3 answers reached the pipeline as `dict":"approved"` — five bytes
+// gone — with NO malformed event reported, so the loss is not the parser's catch. Nothing in the
+// engine holds the raw stream, so every hypothesis so far was a guess. With
+// EPAM_STREAM_CAPTURE_DIR set, every data payload the provider read is appended, verbatim and in
+// order, to <dir>/minimax-<pid>-<n>.sse — the evidence the next occurrence needs.
+describe('MiniMaxProvider.stream() — raw SSE capture when EPAM_STREAM_CAPTURE_DIR is set', () => {
+  beforeEach(() => { vi.restoreAllMocks(); });
+
+  it('writes every data payload, verbatim and in order, to the capture dir', async () => {
+    const { mkdtempSync, readdirSync, readFileSync, rmSync } = await import('node:fs');
+    const { join } = await import('node:path');
+    const { tmpdir } = await import('node:os');
+    const dir = mkdtempSync(join(tmpdir(), 'sse-cap-'));
+    process.env.EPAM_STREAM_CAPTURE_DIR = dir;
+    try {
+      const c1 = encodeSSE({ choices: [{ delta: { content: '{"ver' }, finish_reason: null }] });
+      const c2 = encodeSSE({ choices: [{ delta: { content: 'dict":"approved"}' }, finish_reason: 'stop' }] });
+      vi.stubGlobal('fetch', vi.fn().mockResolvedValue({ ok: true, body: makeSseStream([c1, c2]) }));
+      await makeProvider().stream(makeRequest(), () => {});
+      const files = readdirSync(dir).filter(f => f.endsWith('.sse'));
+      expect(files.length).toBe(1);
+      const raw = readFileSync(join(dir, files[0]), 'utf8');
+      expect(raw.indexOf('{\\"ver')).toBeGreaterThanOrEqual(0);
+      expect(raw.indexOf('{\\"ver')).toBeLessThan(raw.indexOf('dict\\":'));
+    } finally {
+      delete process.env.EPAM_STREAM_CAPTURE_DIR;
+      rmSync(dir, { recursive: true, force: true });
+    }
+  });
+
+  it('captures nothing when the variable is unset', async () => {
+    const { mkdtempSync, readdirSync, rmSync } = await import('node:fs');
+    const { join } = await import('node:path');
+    const { tmpdir } = await import('node:os');
+    const dir = mkdtempSync(join(tmpdir(), 'sse-cap-'));
+    delete process.env.EPAM_STREAM_CAPTURE_DIR;
+    const c1 = encodeSSE({ choices: [{ delta: { content: 'x' }, finish_reason: 'stop' }] });
+    vi.stubGlobal('fetch', vi.fn().mockResolvedValue({ ok: true, body: makeSseStream([c1]) }));
+    await makeProvider().stream(makeRequest(), () => {});
+    expect(readdirSync(dir).length).toBe(0);
+    rmSync(dir, { recursive: true, force: true });
+  });
+});

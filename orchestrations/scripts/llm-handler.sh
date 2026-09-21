@@ -172,6 +172,14 @@ fi
 export EPAM_AGENT_NAME="${EPAM_AGENT_NAME:-agent}"
 
 PROMPT_FILE="$(mktemp)"
+# RAW STREAM CAPTURE FOR EVERY CALL. The CLI appends the SSE payloads it read to
+# EPAM_STREAM_CAPTURE_DIR when set (src/providers/minimax/MiniMaxProvider.ts). regintel 140717Z
+# (2026-09-21): four MiniMax answers arrived with their first five bytes missing and no record held
+# the raw stream — every hypothesis was a guess. Under LOG_DIR, so it is archived with the run.
+if [ -n "${LOG_DIR:-}" ] && [ -z "${EPAM_STREAM_CAPTURE_DIR:-}" ]; then
+  EPAM_STREAM_CAPTURE_DIR="${LOG_DIR}/stream-captures"
+  mkdir -p "$EPAM_STREAM_CAPTURE_DIR" 2>/dev/null && export EPAM_STREAM_CAPTURE_DIR || unset EPAM_STREAM_CAPTURE_DIR
+fi
 trap 'rm -f "$PROMPT_FILE"' EXIT
 cat > "$PROMPT_FILE"
 

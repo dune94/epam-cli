@@ -15,6 +15,8 @@ import { resolveTemperature, resolveTopP } from '../types.js';
 import { stripThinkingBlocks, parseMarkupToolCalls } from '../openrouter/OpenRouterProvider.js';
 import { logger } from '../../utils/logger.js';
 import { SseDataReader, toolInput } from '../sse-stream.js';
+import * as fs from 'node:fs';
+import * as path from 'node:path';
 
 export const MINIMAX_BASE_URL = 'https://api.minimaxi.chat/v1';
 
@@ -209,11 +211,19 @@ export class MiniMaxProvider implements LLMProvider {
     // on approved work. The only loss path in this loop was a silent catch. Now the raw payload
     // goes to stderr (the evidence) and the count rides on the response (the text is incomplete).
     let droppedChunks = 0;
+    // RAW CAPTURE FOR DIAGNOSIS. With EPAM_STREAM_CAPTURE_DIR set, every data payload read from
+    // the wire is appended verbatim, in order — the evidence that "five bytes missing" needs and
+    // that no downstream record holds (regintel 140717Z, 2026-09-21).
+    const captureDir = process.env.EPAM_STREAM_CAPTURE_DIR;
+    const captureFile = captureDir
+      ? path.join(captureDir, `minimax-${process.pid}-${Date.now()}.sse`)
+      : undefined;
 
     while (true) {
       const { done, value } = await reader.read();
       const payloads = done ? sse.flush() : sse.push(value);
       for (const data of payloads) {
+        if (captureFile) { try { fs.appendFileSync(captureFile, data + '\n'); } catch { /* capture is best-effort */ } }
         if (data === '[DONE]') continue;
         try {
           const parsed = JSON.parse(data);

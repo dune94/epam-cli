@@ -41,6 +41,7 @@ const claudeSrc = engineSource(CLAUDE_SH);
 // These budgets moved to orchestrations/config/llm-defaults.json, so a harness that runs the
 // extracted function ALONE leaves them unset. Run the real loader first, as the pipeline
 // does — this keeps the test measuring its own logic rather than missing configuration.
+const TIERS = JSON.parse(require('node:fs').readFileSync(require('node:path').join(__dirname, '../../../orchestrations/config/llm-defaults.json'), 'utf8')).effortTiers;
 const _AUTOMATION = join(__dirname, '../../../orchestrations');
 
 function extractFunctionByBraceCount(name: string): string {
@@ -121,13 +122,13 @@ describe('resolve_test_engineer_effort_floor — REAL execution', () => {
   it('REPRODUCES the exact live shape and proves the fix: a test-engineer story at effort=low is bumped to medium\'s budget (maxIter 6 -> 10)', () => {
     const { maxIter, maxOutTok } = run({ agentRole: 'test-engineer', effort: 'low' });
     expect(maxIter).toBe('10');
-    expect(maxOutTok).toBe('6144');
+    expect(maxOutTok).toBe(String(TIERS.medium.maxOutputTokens));
   });
 
   it('bumps effort=medium to high\'s budget (maxIter -> 15)', () => {
     const { maxIter, maxOutTok } = run({ agentRole: 'test-engineer', effort: 'medium' });
     expect(maxIter).toBe('15');
-    expect(maxOutTok).toBe('6144');
+    expect(maxOutTok).toBe(String(TIERS.high.maxOutputTokens));
   });
 
   it('leaves effort=high untouched (already the largest budget)', () => {

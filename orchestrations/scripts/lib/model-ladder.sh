@@ -365,12 +365,12 @@ resolve_test_engineer_effort_floor() {
         low)
             STORY_MAX_ITERATIONS="${EPAM_EFFORT_MEDIUM_MAX_ITERATIONS}"
             STORY_MAX_OUTPUT_TOKENS="${EPAM_EFFORT_MEDIUM_MAX_OUTPUT_TOKENS}"
-            log "  TestEngineerEffortFloor: low -> medium (maxIter=10 maxOutTok=6144) -- test-writing needs more research/verification turns than impl at the same tier"
+            log "  TestEngineerEffortFloor: low -> medium (maxIter=${STORY_MAX_ITERATIONS} maxOutTok=${STORY_MAX_OUTPUT_TOKENS}) -- test-writing needs more research/verification turns than impl at the same tier"
             ;;
         medium)
             STORY_MAX_ITERATIONS="${EPAM_EFFORT_HIGH_MAX_ITERATIONS}"
-            STORY_MAX_OUTPUT_TOKENS="${EPAM_EFFORT_MEDIUM_MAX_OUTPUT_TOKENS}"
-            log "  TestEngineerEffortFloor: medium -> high (maxIter=15 maxOutTok=6144)"
+            STORY_MAX_OUTPUT_TOKENS="${EPAM_EFFORT_HIGH_MAX_OUTPUT_TOKENS}"
+            log "  TestEngineerEffortFloor: medium -> high (maxIter=${STORY_MAX_ITERATIONS} maxOutTok=${STORY_MAX_OUTPUT_TOKENS})"
             ;;
         *) : ;;  # high already has the largest budget -- nothing to bump
     esac

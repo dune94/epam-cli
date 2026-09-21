@@ -1,28 +1,28 @@
 {
-  "$comment": "ENGINE-WIDE defaults for per-story budgets. A project overrides any of these in its own llm-settings.json and need not restate the rest. These are the knobs an operator reaches for when a run burns its budget or a model truncates its answer — they were literals inside a case statement in a 10,000-line shell script, changeable only by editing code.",
+  "$comment": "ENGINE-WIDE defaults for per-story budgets. A project overrides any of these in its own llm-settings.json and need not restate the rest. These are the knobs an operator reaches for when a run burns its budget or a model truncates its answer \u2014 they were literals inside a case statement in a 10,000-line shell script, changeable only by editing code.",
   "effortTiers": {
     "low": {
       "maxIterations": 6,
-      "maxOutputTokens": 3072
+      "maxOutputTokens": 8192
     },
     "medium": {
       "maxIterations": 10,
-      "maxOutputTokens": 6144
+      "maxOutputTokens": 16384
     },
     "high": {
       "maxIterations": 15,
-      "maxOutputTokens": 6144
+      "maxOutputTokens": 32768
     },
     "max": {
       "maxIterations": 20,
-      "maxOutputTokens": 24576
+      "maxOutputTokens": 32768
     }
   },
   "roleOverrides": {
     "generator": {
       "maxIterations": 3,
       "maxOutputTokens": 16384,
-      "description": "a generator writes one large artefact in few turns — the inverse budget of an implementer"
+      "description": "a generator writes one large artefact in few turns \u2014 the inverse budget of an implementer"
     }
   },
   "outputTokenFloors": {
@@ -30,5 +30,6 @@
     "planning": 8192,
     "review": 12288,
     "mutation": 16384
-  }
+  },
+  "$whyOutputCaps": "Raised 2026-09-21 (regintel run 140717Z): medium/high were 6144, and z-ai/glm-5.3 returned exactly 6144 output tokens on every iteration of REGI-003b and REGI-004-A \u2014 truncated mid-answer, so the runner ended with no result (raw=0 bytes) and the ladder retried the identical cap seven times. A cap must leave a reasoning model comfortable room to finish an answer; 32768 is within every set's models' output limits."
 }

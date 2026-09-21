@@ -475,7 +475,7 @@ _rc=0; [ -z "$_incomplete" ] || _rc=1; check "$_rc" "every story completed in th
 # A value the engine computed that the installed prompt could not take is a stale prompt
 # (regintel 20260920T232518Z: 'given values it does not use: __SHARED_FILE_OWNERSHIP_BLOCK__ …
 # DROPPED', six times, and four fixes were inert). Zero such lines, or the rehearsal is red.
-_dropped="$(grep -c "was given values it does not use" "$LOG" 2>/dev/null || echo 0)"
+_dropped="$(grep -c "was given values it does not use" "$LOG" 2>/dev/null)"; _dropped="${_dropped:-0}"
 [ "${_dropped:-0}" -eq 0 ]; check $? "provisioning: no evidence was DROPPED for lack of a placeholder — every prompt the run used takes every input the engine computes (${_dropped} line(s))"
 if grep -q "the prompt inputs changed since its prompts were built" "$LOG"; then
   grep -q "prompts provisioned" "$LOG"; check $? "provisioning: the template layer had changed and the prompts were rebuilt (roster kept)"

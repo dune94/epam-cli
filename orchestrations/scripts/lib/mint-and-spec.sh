@@ -184,6 +184,18 @@ _run_agent_mint() {
        && [ -n "$_detected_cl" ] \
        && codeline_prompts_complete "$_detected_cl"; then
       log "[mint] deferred decision settled: ${_detected_cl} completed its agents and prompts — kept"
+    elif [ "${EPAM_REGENERATE_CODELINE_ASSETS:-0}" != "1" ] \
+       && [ -n "$_detected_cl" ] \
+       && [ -f "$EPAM_PROJECT_CONFIG_DIR/.prompt-cache/$(prompt_marker_key "$_detected_cl")" ]; then
+      # STALE, NOT FOREIGN. The marker names this codeline, so the roster is this codeline's own
+      # (the mint's paid work) and is kept; only the prompts are built from inputs that have since
+      # changed, and the prompt builder rebuilds exactly those (regintel 20260920T232518Z, $5.73).
+      log "[mint] deferred decision settled: ${_detected_cl} is this run's codeline but its prompt inputs changed — keeping the roster, rebuilding the prompts"
+      rm -rf "$EPAM_PROJECT_CONFIG_DIR/prompts" 2>/dev/null || true
+      mkdir -p "$EPAM_PROJECT_CONFIG_DIR/prompts" 2>/dev/null || true
+      EPAM_SKIP_AGENT_MINT=1
+      EPAM_REBUILD_PROMPTS=1
+      export EPAM_REBUILD_PROMPTS
     else
       log "[mint] deferred decision settled: this run is not ${_detected_cl:-<unresolved>}'s completed codeline — clearing the previous run's agents and prompts"
       rm -f "$EPAM_PROJECT_CONFIG_DIR/roster.json" \

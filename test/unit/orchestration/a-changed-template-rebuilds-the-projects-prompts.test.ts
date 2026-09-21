@@ -108,3 +108,16 @@ describe('the bash mint gate asks the same question', () => {
     expect(src).not.toMatch(/_codelineComplete = fs\.existsSync\(/);
   });
 });
+
+describe('stale is not foreign', () => {
+  it('the mint gate keeps the roster and clears only the prompts when the codeline\'s marker is stale', () => {
+    const src = readFileSync(join(ROOT, 'orchestrations/scripts/lib/mint-and-spec.sh'), 'utf8');
+    const at = src.indexOf('is this run\'s codeline but its prompt inputs changed');
+    expect(at, 'no stale branch').toBeGreaterThan(0);
+    const branch = src.slice(at, at + 700);
+    expect(branch).toMatch(/rm -rf "\$EPAM_PROJECT_CONFIG_DIR\/prompts"/);
+    expect(branch).not.toMatch(/roster\.json/);
+    expect(branch).toMatch(/EPAM_SKIP_AGENT_MINT=1/);
+  });
+});
+

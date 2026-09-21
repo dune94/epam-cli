@@ -609,11 +609,11 @@ while IFS= read -r story_id; do
                 # script, unreviewable in the prompt layer and unchangeable per project. Only
                 # the FACTS are assembled here; the sentences are prompts/templates/.
                 _sdni_vals=$(mktemp)
-                "${NODE_BIN:-node}" -e '"'"'
+                "${NODE_BIN:-node}" -e '
                   const v = { __DIFF_BYTES__: process.argv[1], __PROJECT_ROOT__: process.argv[2],
                               __REV_BASE__: process.argv[3] };
                   process.stdout.write(JSON.stringify(v));
-                '"'"' "${_diff_bytes}" "${PROJECT_ROOT}" "${_rev_base}" > "$_sdni_vals"
+                ' "${_diff_bytes}" "${PROJECT_ROOT}" "${_rev_base}" > "$_sdni_vals"
                 STORY_DIFF="${_diff_stat}
 
 $(render_engine_prompt story-diff-not-inlined "$_sdni_vals" excluded)"

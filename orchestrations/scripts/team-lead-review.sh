@@ -69,6 +69,8 @@ REVIEW_LOG="${REVIEW_LOG:-$AUTOMATION_DIR/logs/code-reviews.jsonl}"
 . "$SCRIPT_DIR/lib/story-acs-block.sh"
 # shellcheck source=lib/render-engine-prompt.sh
 . "$SCRIPT_DIR/lib/render-engine-prompt.sh"
+# shellcheck source=lib/review-scope.sh
+. "$SCRIPT_DIR/lib/review-scope.sh"
 AI_RUNNER_CMD="${AI_RUNNER_CMD:-$SCRIPT_DIR/ai-run.sh}"
 # shellcheck source=lib/agent-invoke.sh
 source "$SCRIPT_DIR/lib/agent-invoke.sh"
@@ -543,12 +545,25 @@ while IFS= read -r story_id; do
             _rev_base=$(tr -d '[:space:]' < "${LOG_DIR}/phase-baseline-sha.txt" 2>/dev/null)
         [ -z "$_rev_base" ] && _rev_base=$(git -C "$PROJECT_ROOT" rev-parse --verify --quiet "origin/${JIRA_BASELINE_BRANCH:-develop}" 2>/dev/null || echo "")
         [ -z "$_rev_base" ] && _rev_base="HEAD~5"
+        # THE STORY'S OWN CHANGE, NOT THE PHASE'S. The story-changes record names the commit the
+        # story completed with (lib/review-scope.sh); the diff the reviewer judges is that commit.
+        # Baseline→HEAD stays the fallback for a story with no record. regintel 140717Z resume 4
+        # (2026-09-21): every core story was reviewed on the phase's whole diff — REGI-007, approved
+        # a cycle earlier, was rejected for REGI-010-A's rewrite of scripts/run_pipeline.py, and
+        # REGI-003a was told it "did not implement dedup.py" while its dedup.py sat in its own commit.
+        _rev_head="HEAD"; _story_sha=""
+        _story_sha=$(_story_commit_sha "$story_id" 2>/dev/null || true)
+        if [ -n "$_story_sha" ] && git -C "$PROJECT_ROOT" rev-parse --verify --quiet "${_story_sha}^{commit}" >/dev/null 2>&1 \
+           && git -C "$PROJECT_ROOT" rev-parse --verify --quiet "${_story_sha}^{commit}^" >/dev/null 2>&1; then
+            _rev_base="${_story_sha}^"; _rev_head="$_story_sha"
+            log "  Reviewing $story_id on its own commit ${_story_sha:0:8} (the story-changes record)"
+        fi
         # Also review the story's TEST files (the test-writer's output). They live at
         # co-located paths NOT in technicalNotes.files, so scoping to STORY_FILES alone never
         # showed them to the reviewer — the test got only the repro-gate's reproduction check,
         # never the reviewer's QUALITY judgment. The test-writer is an agent; its test must be
         # reviewed like the fix (2026-07-24). Add test files changed vs the story's baseline.
-        _test_files=$(git -C "$PROJECT_ROOT" diff --name-only "$_rev_base" HEAD 2>/dev/null | grep -iE '\.(spec|test)\.|/__tests__/|_test\.' | tr '\n' ' ' || true)
+        _test_files=$(git -C "$PROJECT_ROOT" diff --name-only "$_rev_base" "$_rev_head" 2>/dev/null | grep -iE '\.(spec|test)\.|/__tests__/|_test\.' | tr '\n' ' ' || true)
         # THE WHOLE CHANGE, NOT THE DECLARED PART OF IT.
         #
         # This filtered the diff by pathspec to the story's declared files. That hid any file
@@ -583,10 +598,10 @@ while IFS= read -r story_id; do
         # bumps. The reviewer's whole window was machine output and none of the source it was asked
         # to judge. Lockfiles have their own gate (lockfile-sync); they are not review material.
         _diff_excludes+=(":(exclude)*.lock" ":(exclude)*-lock.json" ":(exclude)go.sum" ":(exclude)*.snap")
-        _diff_full=$(git -C "$PROJECT_ROOT" diff "$_rev_base" HEAD -- . \
+        _diff_full=$(git -C "$PROJECT_ROOT" diff "$_rev_base" "$_rev_head" -- . \
             "${_diff_excludes[@]+"${_diff_excludes[@]}"}" 2>/dev/null || true)
         if [ -z "$_diff_full" ]; then
-            _diff_full=$(git -C "$PROJECT_ROOT" diff "$_rev_base" HEAD 2>/dev/null || true)
+            _diff_full=$(git -C "$PROJECT_ROOT" diff "$_rev_base" "$_rev_head" 2>/dev/null || true)
         fi
         if [ -n "$_diff_full" ]; then
             _diff_bytes=$(printf '%s' "$_diff_full" | wc -c)
@@ -602,7 +617,7 @@ while IFS= read -r story_id; do
                 # per-file summary -- whole units, nothing severed -- and an instruction to read
                 # what it needs. The execute grant includes bash, read_file and search precisely so
                 # it can, and asking is better evidence than a window someone else chose.
-                _diff_stat=$(git -C "$PROJECT_ROOT" diff --stat "$_rev_base" HEAD -- . \
+                _diff_stat=$(git -C "$PROJECT_ROOT" diff --stat "$_rev_base" "$_rev_head" -- . \
                     "${_diff_excludes[@]+"${_diff_excludes[@]}"}" 2>/dev/null || true)
                 # THE WORDS LIVE IN THE TEMPLATE LAYER. This block used to be written here and
                 # substituted into __STORY_DIFF__ — model-facing instruction inside a shell

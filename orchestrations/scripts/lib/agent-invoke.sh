@@ -342,6 +342,13 @@ invoke_agent() {
     (
         local _kv
         for _kv in "${_env[@]}"; do export "${_kv?}"; done
+        # THE AGENT RUNS INSIDE THE CODELINE IT JUDGES. --codeline named the tree whose plugins
+        # were granted, but the runner executed where the orchestrator stood — the pipeline
+        # install — so every relative read_file/search/bash looked at the wrong tree. regintel
+        # 140717Z resume 4 (2026-09-21): the reviewer of REGI-010-B reported "the current working
+        # directory is an orchestration/harness environment; regintel/, scripts/, tests/ are not
+        # present" and rejected work that sat in the codeline. Without a codeline nothing is guessed.
+        if [ -n "$_codeline" ] && [ -d "$_codeline" ]; then cd "$_codeline" || exit 1; fi
         exec "${_timeout_cmd[@]}" bash "$_cmd" ${_args[@]+"${_args[@]}"}
     )
 }

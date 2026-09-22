@@ -33,6 +33,7 @@ function prdFileBlock(prd: object, canonical: boolean, resumeRun = '', pendingIn
   const f = join(d, 'prd.json'); writeFileSync(f, JSON.stringify(prd));
   const script = `set -uo pipefail
 SCRIPT_DIR=${JSON.stringify(SCRIPTS)}
+. "$SCRIPT_DIR/lib/resume-semantics.sh"   # the block asks resume_preserves, as the real pre-flight does since 2026-09-20
 PRD_FILE=${JSON.stringify(f)}; OUTPUT_DIR=/x; _prd_pending_ingest=${pendingIngest ? 1 : 0}; _codeline_root=""; _prd_is_canonical=${canonical ? 'true' : 'false'}
 PASS=0; FAIL=0
 ok(){ echo "OK: $*"; PASS=$((PASS+1)); }; fail(){ echo "FAIL: $*"; FAIL=$((FAIL+1)); }

@@ -44,7 +44,10 @@ const SRC = engineAndPrompt(engineSource(join(__dirname, '../../../orchestration
 function decisionRulesBlock(): string {
   const i = SRC.indexOf('Decision rules:');
   expect(i, 'the failure-analyst decision rules are gone — this is anchored to nothing').toBeGreaterThan(-1);
-  return SRC.slice(i, i + 1800);
+  // The whole rules block, not a fixed window: three targets were added to it on 2026-09-21 and
+  // the none rule moved past 1,800 chars.
+  const end = SRC.indexOf('Output ONLY', i);
+  return SRC.slice(i, end > i ? end : i + 6000);
 }
 
 describe('the none/skill boundary excludes anything nameable', () => {

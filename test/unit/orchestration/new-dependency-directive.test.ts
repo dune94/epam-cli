@@ -201,7 +201,10 @@ describe('the directive is actually injected into the final prompt text', () => 
   it('is referenced in the prompt assembly, not just computed and discarded', () => {
     const i = src.indexOf('local new_dependency_directive=""');
     expect(i).toBeGreaterThan(-1);
-    const after = src.slice(i, i + 12000);
+    // To the end of the prompt assembly, not a fixed window: the blocks added between the
+    // declaration and the interpolation on 2026-09-21 pushed it past 12,000 chars, and the test
+    // failed for the distance between two lines rather than for their order.
+    const after = src.slice(i);
     expect(after, 'new_dependency_directive is computed but never interpolated into ' +
       'the prompt — the agent never sees it')
       .toMatch(/\$new_dependency_directive/);

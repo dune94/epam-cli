@@ -39,6 +39,7 @@ import { mkdtempSync, rmSync, mkdirSync, writeFileSync, existsSync, readFileSync
 import { execFileSync } from 'node:child_process';
 import { tmpdir } from 'node:os';
 import { join } from 'node:path';
+import { currentPromptDigest } from '../../helpers/prompt-marker';
 
 const RESET = join(__dirname, '../../../orchestrations/scripts/pre-run-reset.sh');
 const dirs: string[] = [];
@@ -70,7 +71,7 @@ function project(opts: { marker?: string | null } = {}) {
   // The marker is a FILENAME: .complete-<codeline>, empty. Its name is the claim.
   if (opts.marker !== null) {
     const cl = typeof opts.marker === 'string' ? opts.marker : CODELINE;
-    writeFileSync(join(cfg, '.prompt-cache', `.complete-${cl}`), '');
+    writeFileSync(join(cfg, '.prompt-cache', `.complete-${cl}`), currentPromptDigest());
   }
   return { root, cfg };
 }

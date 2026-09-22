@@ -55,7 +55,8 @@ describe('design constraint — dynamic tools are NOT hardcoded in the CLI core'
 
 describe('claude.sh — failure-analyst decision schema includes target=tool', () => {
   it('output schema lists tool as a valid target alongside prd|tc|skill|kb|none', () => {
-    expect(claudeSrc).toMatch(/"target":"prd\|tc\|skill\|kb\|tool\|none"/);
+    // The list grew (escalate|spec|environment, 2026-09-21); what matters is that tool sits in it.
+    expect(claudeSrc).toMatch(/"target":"prd\|tc\|skill\|kb\|tool\|(?:[a-z]+\|)*none"/);
   });
 
   it('output schema includes tool_spec with name/purpose/recipe fields', () => {

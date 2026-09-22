@@ -24,7 +24,7 @@ import { join } from 'node:path';
 
 const BUILDER = join(__dirname, '../../../orchestrations/scripts/lib/project-prompt-builder.js');
 // eslint-disable-next-line @typescript-eslint/no-var-requires
-const { writeCompletionMarker, clearCompletionMarker } = require(BUILDER);
+const { writeCompletionMarker, clearCompletionMarker, promptInputsDigest } = require(BUILDER);
 
 function outDir() {
   const root = mkdtempSync(join(tmpdir(), 'marker-'));
@@ -53,10 +53,11 @@ describe('the completion marker', () => {
     const { root, out, cache, marker } = outDir();
     try {
       writeCompletionMarker({ outDir: out, codeline: 'next.gotransit.com', provisioned: 39 });
-      // The NAME is the claim; the file is empty by design, so there is nothing to parse and
-      // nothing that can be malformed.
+      // The NAME is the claim of WHICH codeline; the CONTENT is the claim of WHAT it was built from —
+      // the digest of templates, registry and generator (2026-09-21). An empty marker let a template
+      // change go unapplied for a week; the content is now what the builder itself would recompute.
       expect(existsSync(marker('next.gotransit.com'))).toBe(true);
-      expect(readFileSync(marker('next.gotransit.com'), 'utf8')).toBe('');
+      expect(readFileSync(marker('next.gotransit.com'), 'utf8').trim()).toBe(promptInputsDigest());
       expect(existsSync(marker('next.upexpress.com')),
         'a marker for a DIFFERENT codeline exists — the name must be the identity')
         .toBe(false);

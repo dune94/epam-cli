@@ -58,6 +58,10 @@ const ORDINARY_ABSENCES: Record<string, Record<string, string>> = {
   },
   'failure-analyst': {
     __SKILL_ADDENDUM__: 'a role may carry no accumulated skill notes',
+    __HEALING_HISTORY__: 'the first diagnosis of a story has no earlier attempts to recount — the '
+      + 'history is what the analyst learns across attempts (2026-09-21)',
+    __SHARED_CRITERIA__: 'a story whose files no other story touches has no sibling criteria to '
+      + 'reconcile against — the block exists for the shared-file case (2026-09-21)',
     __STORY_ACS__: 'the same block: TC facts when the story has them, its acceptance criteria on '
       + 'greenfield, nothing on a brownfield defect — never an empty "criteria" heading',
   },

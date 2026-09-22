@@ -21,6 +21,7 @@ import { mkdtempSync, mkdirSync, writeFileSync, rmSync, existsSync, readFileSync
 import { tmpdir } from 'node:os';
 import { join } from 'node:path';
 import { engineSource } from '../../lib/engine-source';
+import { currentPromptDigest } from '../../helpers/prompt-marker';
 
 const RESET = join(__dirname, '../../../orchestrations/scripts/pre-run-reset.sh');
 const ORCH = join(__dirname, '../../../orchestrations/scripts/run-agent-orchestration.sh');
@@ -50,7 +51,7 @@ function project(opts: { marker?: string | null } = {}) {
   writeFileSync(join(cfg, 'prompts', 'roster-review.json'), JSON.stringify({ body: 'THE COMPLETED BODY' }));
   writeFileSync(join(cfg, '.prompt-cache', 'roster-review.json'), JSON.stringify({ base: 'a', reviewed: true }));
   if (opts.marker !== null) {
-    writeFileSync(join(cfg, '.prompt-cache', `.complete-${opts.marker || CODELINE}`), '');
+    writeFileSync(join(cfg, '.prompt-cache', `.complete-${opts.marker || CODELINE}`), currentPromptDigest());
   }
   return { root, cfg };
 }
@@ -140,7 +141,7 @@ function invokeMint(opts: { marker: string | null; prdCodelines?: string[]; pend
     writeFileSync(join(cfg, f), JSON.stringify({ from: 'the previous run' }));
   }
   writeFileSync(join(cfg, 'prompts', 'roster-review.json'), JSON.stringify({ body: 'PREVIOUS' }));
-  if (opts.marker) writeFileSync(join(cfg, '.prompt-cache', `.complete-${opts.marker}`), '');
+  if (opts.marker) writeFileSync(join(cfg, '.prompt-cache', `.complete-${opts.marker}`), currentPromptDigest());
   if (opts.pending) writeFileSync(join(cfg, '.prompt-cache', '.reset-pending'), '');
   writeFileSync(join(cfg, 'prd.json'), JSON.stringify({
     phases: [], stories: [],
@@ -150,7 +151,9 @@ function invokeMint(opts: { marker: string | null; prdCodelines?: string[]; pend
 
   const calls = join(dir, 'node-calls.txt');
   const fakeNode = join(dir, 'fake-node');
-  writeFileSync(fakeNode, `#!/usr/bin/env bash\nprintf '%s\\n' "$*" >> ${JSON.stringify(calls)}\nexit 0\n`);
+  // Records the MINT call and swallows it; every other node invocation (the prompt-digest check in
+  // prompt-variant.sh since 2026-09-21) runs on the real node, or the marker could never be judged.
+  writeFileSync(fakeNode, `#!/usr/bin/env bash\ncase "$*" in *mint-agents-step.js*) printf '%s ROSTER_ONLY=%s\\n' "$*" "\${EPAM_ROSTER_ONLY:-0}" >> ${JSON.stringify(calls)}; exit 0;; esac\nexec ${JSON.stringify(process.execPath)} "$@"\n`);
   chmodSync(fakeNode, 0o755);
 
   const src = engineSource(ORCH);
@@ -186,13 +189,15 @@ function invokeMint(opts: { marker: string | null; prdCodelines?: string[]; pend
   } catch (e: any) { out = `${e.stdout || ''}${e.stderr || ''}`; }
   const recorded = existsSync(calls) ? engineSource(calls).trim() : '';
   return { cfg, out,
-    mintCalls: recorded ? recorded.split('\n').filter((l) => l.includes('mint-agents-step.js')).length : 0 };
+    // Deriving the roster (EPAM_ROSTER_ONLY=1, 862ca17e) is not minting: it invents no agent. Only
+    // a real mint counts against "the mint ran for a codeline that had already completed".
+    mintCalls: recorded ? recorded.split('\n').filter((l) => l.includes('mint-agents-step.js') && !l.includes('ROSTER_ONLY=1')).length : 0 };
 }
 
 describe('the mint settles the deferred decision, once the codeline is known', () => {
   it('KEEPS the assets when the detected codeline is the one that completed', () => {
     const r = invokeMint({ marker: CODELINE, prdCodelines: [CODELINE], pending: true });
-    expect(has(r.cfg, 'roster.json'), 'the completed codeline\'s roster was cleared').toBe(true);
+    expect(has(r.cfg, 'roster.json'), `the completed codeline's roster was cleared:\n${r.out.slice(-1500)}`).toBe(true);
     expect(has(r.cfg, join('prompts', 'roster-review.json'))).toBe(true);
     expect(r.mintCalls, 'the mint ran for a codeline that had already completed').toBe(0);
     expect(has(r.cfg, PENDING), 'the deferred decision was never marked settled').toBe(false);

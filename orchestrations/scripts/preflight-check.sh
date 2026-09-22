@@ -188,7 +188,7 @@ else
     # 6 and 3 verification criteria, 2 fix sites each and both roles — for carrying exactly the
     # output the resume exists to reuse.
     if [[ -n "$_stale_spec" ]] && resume_preserves spec-blocks; then
-      ok "PRD carries specification data for the run being resumed (EPAM_RESUME_RUN=${EPAM_RESUME_RUN}) — this is the resumed run's own output, not a prior run's"
+      ok "PRD carries specification data for the run being resumed (EPAM_RESUME_RUN=${EPAM_RESUME_RUN:-}) — this is the resumed run's own output, not a prior run's"
       PASS=$((PASS+1))
     elif [[ -n "$_stale_spec" ]] && [[ "$_prd_pending_ingest" != "1" ]]; then
       fail "Canonical PRD has pre-baked 'specification' blocks on base stories (must be lean/unelaborated): $_stale_spec"
@@ -354,6 +354,17 @@ for key in "${_pf_keys[@]}"; do
     fail "$key is NOT set — the active provider set requires it; the run will fail"
   fi
 done
+
+IFS=',' read -ra _pf_project_keys <<< "${REQUIRED_KEYS:-}"
+for key in "${_pf_project_keys[@]}"; do
+  key="${key// /}"; [[ -z "$key" ]] && continue
+  if [[ -n "${!key:-}" ]]; then
+    ok "$key is set (required by this project)"
+  else
+    echo "  ⚠ $key not set — this project declares it in REQUIRED_KEYS; the story that needs it may fail"
+  fi
+done
+
 # ── Balance: what the account can still spend, against what this launch expects to ─────────
 # regintel 20260919T224649Z resume 6 burned attempts into 402s on an empty account; a launch on
 # 2026-09-20 was about to start on $13.50 for a ~$20 run. The set declares how to read the
@@ -368,16 +379,6 @@ elif [[ -n "$_pf_budget" ]] && "${NODE_BIN:-node}" -e 'process.exit(Number(proce
 else
   ok "balance \$${_pf_balance}${_pf_budget:+ covers the declared run budget \$${_pf_budget}}"
 fi
-
-IFS=',' read -ra _pf_project_keys <<< "${REQUIRED_KEYS:-}"
-for key in "${_pf_project_keys[@]}"; do
-  key="${key// /}"; [[ -z "$key" ]] && continue
-  if [[ -n "${!key:-}" ]]; then
-    ok "$key is set (required by this project)"
-  else
-    echo "  ⚠ $key not set — this project declares it in REQUIRED_KEYS; the story that needs it may fail"
-  fi
-done
 
 # ── 5. Every assigned model is a rung of a declared ladder ───────────────────
 #

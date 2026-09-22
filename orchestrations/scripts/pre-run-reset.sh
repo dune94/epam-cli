@@ -380,7 +380,7 @@ mkdir -p "$ARCHIVE_DIR"
 _IS_RESUMED_RUN=0
 if resume_preserves ledgers; then
   _IS_RESUMED_RUN=1
-  info "  Resuming ${EPAM_RESUME_RUN} — keeping this run's own ledgers (phase gates, cost, healing, reviews); nothing archived or cleared"
+  info "  Resuming ${EPAM_RESUME_RUN:-} — keeping this run's own ledgers (phase gates, cost, healing, reviews); nothing archived or cleared"
 fi
 
 CLEARABLE_LOGS=(

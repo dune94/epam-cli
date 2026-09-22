@@ -27,6 +27,7 @@ import { mkdtempSync, mkdirSync, writeFileSync, rmSync } from 'node:fs';
 import { tmpdir } from 'node:os';
 import { join } from 'node:path';
 import { readFileSync } from 'node:fs';
+import { currentPromptDigest } from '../../helpers/prompt-marker';
 
 const SRC = readFileSync(join(__dirname, '../../../orchestrations/scripts/mint-agents-step.js'), 'utf8');
 
@@ -42,7 +43,7 @@ function skipsProvisioning(opts: {
     mkdirSync(join(cfg, 'prompts'), { recursive: true });
     mkdirSync(join(cfg, '.prompt-cache'), { recursive: true });
     for (let i = 0; i < opts.installed; i++) writeFileSync(join(cfg, 'prompts', `p${i}.json`), '{}');
-    if (opts.marker) writeFileSync(join(cfg, '.prompt-cache', `.complete-${opts.marker}`), '');
+    if (opts.marker) writeFileSync(join(cfg, '.prompt-cache', `.complete-${opts.marker}`), currentPromptDigest());
 
     const start = SRC.indexOf('let _skipProvisioning = false;');
     const end = SRC.indexOf('const promptMode =', start);
@@ -63,13 +64,19 @@ function skipsProvisioning(opts: {
       '../../../orchestrations/scripts/lib/project-prompt-builder.js'));
 
     // eslint-disable-next-line no-new-func
-    return new Function('fs', 'path', 'process', 'projectConfigDir', 'codelineFromPrd', 'PRD_PATH', `
+    // The block asks the builder whether the marker matches the CURRENT prompt inputs (2026-09-21):
+    // it needs a require that resolves the script's own relative paths, and the template and
+    // registry locations the mint step holds.
+    const SCRIPTS_DIR = join(__dirname, '../../../orchestrations/scripts');
+    const scriptRequire = (m: string) => require(m.startsWith('.') ? join(SCRIPTS_DIR, m) : m);
+    return new Function('fs', 'path', 'process', 'projectConfigDir', 'codelineFromPrd', 'PRD_PATH', 'require', 'templatesDir', 'AGENTS_DIR', `
       ${body}
       return _skipProvisioning;
     `)(require('node:fs'), require('node:path'),
        { env: { EPAM_RESUME_RUN: opts.resume || '', EPAM_CODELINE_ID: opts.codeline || '' },
          stderr: { write: () => {} } },
-       cfg, codelineFromPrd, prd) as boolean;
+       cfg, codelineFromPrd, prd, scriptRequire,
+       join(SCRIPTS_DIR, '../prompts/templates'), join(SCRIPTS_DIR, '../agents')) as boolean;
   } finally { rmSync(root, { recursive: true, force: true }); }
 }
 

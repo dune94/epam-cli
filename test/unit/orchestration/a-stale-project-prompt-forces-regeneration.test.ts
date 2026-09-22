@@ -32,6 +32,7 @@ import { join } from 'node:path';
 import { tmpdir } from 'node:os';
 import { createHash } from 'node:crypto';
 import { engineSource } from '../../lib/engine-source';
+import { currentPromptDigest } from '../../helpers/prompt-marker';
 
 const ROOT = join(__dirname, '../../../');
 const RESET_SH = join(ROOT, 'orchestrations/scripts/pre-run-reset.sh');
@@ -81,7 +82,9 @@ function buildEnv(opts: {
   }));
 
   // Write the completion marker (brownfield = false → plain .complete-<codeline>)
-  writeFileSync(join(projectDir, '.prompt-cache', `.complete-${opts.codeline}`), '');
+  // The marker carries the digest of the current prompt inputs (2026-09-21); an empty one is
+  // now itself the stale signal, so a fixture standing up a COMPLETED codeline writes the digest.
+  writeFileSync(join(projectDir, '.prompt-cache', `.complete-${opts.codeline}`), currentPromptDigest());
 
   return { projectDir, templateDir, cleanup: () => rmSync(root, { recursive: true, force: true }) };
 }

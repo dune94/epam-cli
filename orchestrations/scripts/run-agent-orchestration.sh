@@ -732,6 +732,12 @@ export ORCH_GATE_ALLOWED_TOOLS
 # shellcheck source=lib/model-ladder.sh
 . "$SCRIPT_DIR/lib/model-ladder.sh" 2>/dev/null || true
 declare -F load_llm_settings_json >/dev/null 2>&1 && load_llm_settings_json || true
+# AND THE ANALYST IT CALLS. The watchdog diagnoses a timeout through run_failure_analyst, which
+# lives in lib/failure-healing.sh — sourced by claude.sh for itself, the child. Live resume 6
+# (2026-09-22, REGI-010-B): "timed out and no analyst is loaded in this context". Self-heal must be
+# reachable wherever a failure is decided.
+# shellcheck source=lib/failure-healing.sh
+. "$SCRIPT_DIR/lib/failure-healing.sh" 2>/dev/null || true
 source "$SCRIPT_DIR/lib/story-watchdog.sh"
 
 

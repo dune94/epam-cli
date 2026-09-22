@@ -32,6 +32,16 @@ describe('the orchestrator loads the declarations the watchdog enforces', () => 
     expect(at, 'the settings are loaded after the watchdog is in place').toBeLessThan(watchdog);
   });
 
+  it('the analyst the watchdog calls on a timeout is loaded in that process', () => {
+    // resume 6, 09:05: the new self-heal-on-timeout path reported "no analyst is loaded in this
+    // context" — run_failure_analyst lives in lib/failure-healing.sh, which claude.sh sources for
+    // itself. The watchdog runs in the parent, and the parent had never loaded it.
+    const src = readFileSync(ORCH, 'utf8');
+    const heal = src.indexOf('lib/failure-healing.sh');
+    expect(heal, 'the orchestrator cannot call the analyst it is supposed to call').toBeGreaterThan(-1);
+    expect(heal).toBeLessThan(src.indexOf('source "$SCRIPT_DIR/lib/story-watchdog.sh"'));
+  });
+
   it('with the settings loaded, the wall is derived — not the fallback', () => {
     // The real loader over the real engine defaults, in a project that declares no timeouts.
     const r = spawnSync('bash', ['-c', `

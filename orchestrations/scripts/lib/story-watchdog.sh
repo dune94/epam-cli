@@ -509,10 +509,10 @@ run_story_with_watchdog() {
             '.stories[] | select(.id == $id) | .effort // "medium"' \
             "${MAIN_PRD_FILE:-$PRD_FILE}" 2>/dev/null || echo "medium")
         case "$story_effort" in
-            low)    timeout_secs="${EPAM_STORY_EFFORT_TIMEOUT_LOW_SECS:-600}"     ;;
-            medium) timeout_secs="${EPAM_STORY_EFFORT_TIMEOUT_MEDIUM_SECS:-1200}" ;;
-            high)   timeout_secs="${EPAM_STORY_EFFORT_TIMEOUT_HIGH_SECS:-2400}"   ;;
-            *)      timeout_secs="${EPAM_STORY_EFFORT_TIMEOUT_DEFAULT_SECS:-900}" ;;
+            low)    timeout_secs="${EPAM_STORY_EFFORT_TIMEOUT_LOW_SECS:-}"     ;;
+            medium) timeout_secs="${EPAM_STORY_EFFORT_TIMEOUT_MEDIUM_SECS:-}" ;;
+            high)   timeout_secs="${EPAM_STORY_EFFORT_TIMEOUT_HIGH_SECS:-}"   ;;
+            *)      timeout_secs="${EPAM_STORY_EFFORT_TIMEOUT_DEFAULT_SECS:-}" ;;
         esac
         local role_multiplier
         role_multiplier=$(resolve_role_timeout_multiplier "$story_id")
@@ -679,6 +679,21 @@ run_story_with_watchdog() {
     fi
 
     if [ $_rc -eq 124 ]; then
+        # SELF-HEAL IS NOT OVERRIDDEN BY THE CLOCK. A timeout is a failing execution like any
+        # other, and self-heal is what the pipeline does with one: diagnose it, record the
+        # guidance, let the next attempt start informed. This path ended at "skip and continue" —
+        # so REGI-003b burned six attempts across two resumes without one diagnosis being made
+        # (regintel 140717Z, 2026-09-22). The analyst runs BEFORE any verdict is written, and its
+        # own failure never changes the outcome the watchdog was going to reach.
+        if declare -f run_failure_analyst >/dev/null 2>&1; then
+            warning "Watchdog: $story_id timed out — running the failure analyst before any verdict (self-heal is not skipped)"
+            local _to_log="${log_file:-/dev/null}" _to_retry
+            _to_retry="$(read_story_retry_count "$LOG_DIR" "$story_id" 2>/dev/null || echo 0)"
+            EPAM_FAILURE_CLASS=timeout run_failure_analyst "$story_id" "$_to_log" "${_to_retry:-0}" \
+                || warning "Watchdog: the analyst itself failed for $story_id — the timeout verdict stands, unhealed"
+        else
+            warning "Watchdog: $story_id timed out and no analyst is loaded in this context — the timeout is recorded undiagnosed"
+        fi
         if [ "${EPAM_PAUSE_ON_TIMEOUT:-false}" = "true" ]; then
             error "Watchdog: $story_id timed out twice — pausing (max ${EPAM_MAX_PAUSE_SECS}s)"
             printf '%s' "$(jq -n \

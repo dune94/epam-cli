@@ -79,17 +79,27 @@ load_llm_settings_json() {
     [ -z "${EPAM_RETRY_EXTENSION_ENABLED:-}" ] && [ -n "$_v" ] && export EPAM_RETRY_EXTENSION_ENABLED="$_v"
     _v=$(_get '.retries.selfHeal.extensionMax'); [ -z "${EPAM_RETRY_EXTENSION_MAX:-}" ] && [ -n "$_v" ] && export EPAM_RETRY_EXTENSION_MAX="$_v"
 
-    _v=$(_get '.timeouts.secondsPerIteration'); [ -z "${EPAM_SECONDS_PER_ITERATION:-}" ] && [ -n "$_v" ] && export EPAM_SECONDS_PER_ITERATION="$_v"
-    _v=$(_get '.timeouts.storyTimeoutMaxSecs'); [ -z "${EPAM_STORY_TIMEOUT_MAX_SECS:-}" ] && [ -n "$_v" ] && export EPAM_STORY_TIMEOUT_MAX_SECS="$_v"
-    _v=$(_get '.timeouts.storyTimeoutSecs'); [ -z "${EPAM_STORY_TIMEOUT_SECS:-}" ] && [ -n "$_v" ] && export EPAM_STORY_TIMEOUT_SECS="$_v"
-    _v=$(_get '.timeouts.gateTimeoutSecs'); [ -z "${EPAM_GATE_TIMEOUT_SECS:-}" ] && [ -n "$_v" ] && export EPAM_GATE_TIMEOUT_SECS="$_v"
+    # EVERY WALL COMES FROM A DECLARATION, project first then the engine's own defaults (_budget,
+    # the same rule the effort tiers use). These read the project file only (_get), so a project
+    # that declares no timeouts — regintel — fell through to literals inside story-watchdog.sh and
+    # REGI-003b was killed twice at 600s (2026-09-22).
+    _budget '.timeouts.secondsPerIteration'    'EPAM_SECONDS_PER_ITERATION'
+    _budget '.timeouts.storyTimeoutMaxSecs'    'EPAM_STORY_TIMEOUT_MAX_SECS'
+    _budget '.timeouts.storyTimeoutSecs'       'EPAM_STORY_TIMEOUT_SECS'
+    _budget '.timeouts.perAttemptOverheadSecs' 'EPAM_PER_ATTEMPT_OVERHEAD_SECS'
+    _budget '.timeouts.storyWallMaxSecs'       'EPAM_STORY_WALL_MAX_SECS'
+    _budget '.timeouts.gateTimeoutSecs'        'EPAM_GATE_TIMEOUT_SECS'
+    _budget '.timeouts.testTimeoutSecs'        'EPAM_TEST_TIMEOUT_SECS'
+    local _eff
+    for _eff in low medium high default; do
+        _budget ".timeouts.storyEffortTimeoutSecs.${_eff}" "EPAM_STORY_EFFORT_TIMEOUT_$(printf '%s' "$_eff" | tr '[:lower:]' '[:upper:]')_SECS"
+    done
     # The test timeout belongs with the other timeouts, not in config.env. It was the only one a
     # project could not declare: six call sites read a bare ${EPAM_TEST_TIMEOUT_SECS:-300} with no
     # declared source, so raising it meant reintroducing the duplication that consolidating
     # timeouts into this file removed (EPAM_STORY_TIMEOUT_SECS had already drifted 690 vs 600).
     # 300s is a real constraint on a large suite, and when `timeout` kills it the run reports
     # FAILING TESTS rather than a timeout.
-    _v=$(_get '.timeouts.testTimeoutSecs'); [ -z "${EPAM_TEST_TIMEOUT_SECS:-}" ] && [ -n "$_v" ] && export EPAM_TEST_TIMEOUT_SECS="$_v"
 
     _v=$(_get '.brownfield.minOutputTokens'); [ -z "${EPAM_BROWNFIELD_MIN_OUTPUT_TOKENS:-}" ] && [ -n "$_v" ] && export EPAM_BROWNFIELD_MIN_OUTPUT_TOKENS="$_v"
     _v=$(_get '.brownfield.maxScaledIterations'); [ -z "${EPAM_BROWNFIELD_MAX_SCALED_ITERATIONS:-}" ] && [ -n "$_v" ] && export EPAM_BROWNFIELD_MAX_SCALED_ITERATIONS="$_v"

@@ -31,5 +31,22 @@
     "review": 12288,
     "mutation": 16384
   },
-  "$whyOutputCaps": "Raised 2026-09-21 (regintel run 140717Z): medium/high were 6144, and z-ai/glm-5.3 returned exactly 6144 output tokens on every iteration of REGI-003b and REGI-004-A \u2014 truncated mid-answer, so the runner ended with no result (raw=0 bytes) and the ladder retried the identical cap seven times. A cap must leave a reasoning model comfortable room to finish an answer; 32768 is within every set's models' output limits."
+  "$whyOutputCaps": "Raised 2026-09-21 (regintel run 140717Z): medium/high were 6144, and z-ai/glm-5.3 returned exactly 6144 output tokens on every iteration of REGI-003b and REGI-004-A \u2014 truncated mid-answer, so the runner ended with no result (raw=0 bytes) and the ladder retried the identical cap seven times. A cap must leave a reasoning model comfortable room to finish an answer; 32768 is within every set's models' output limits.",
+  "timeouts": {
+    "$comment": "ENGINE-WIDE walls. A project overrides any of these in its own llm-settings.json; one that declares none inherits these, as with effortTiers. Added 2026-09-22: the loader read timeouts from the project only, so regintel \u2014 which declares none \u2014 fell back to literals written in story-watchdog.sh (600/1200/2400/900) and REGI-003b died twice at 600s having read a 369-line test file and planned inside the same budget.",
+    "storyTimeoutSecs": 3600,
+    "storyTimeoutMaxSecs": 7200,
+    "secondsPerIteration": 20,
+    "perAttemptOverheadSecs": 300,
+    "storyWallMaxSecs": 21600,
+    "gateTimeoutSecs": 2400,
+    "testTimeoutSecs": 1200,
+    "storyEffortTimeoutSecs": {
+      "$comment": "Per-effort floor for ONE attempt; the effective wall is derived from the attempt's own iteration budget (secondsPerIteration x maxIterations + perAttemptOverheadSecs) and capped at storyTimeoutMaxSecs. A floor exists so an attempt is never killed for being slower than the cheapest story in the phase.",
+      "low": 1800,
+      "medium": 3600,
+      "high": 5400,
+      "default": 3600
+    }
+  }
 }

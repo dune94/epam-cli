@@ -542,7 +542,15 @@ done < <(find "$LOG_DIR" -type f \( -name '*.log' -o -name 'story-outputs-*.txt'
 # (_IS_RESUMED_RUN is derived once, above Step 2 — the ledgers there are the first thing a
 # resume must keep.)
 
+# A RESUME KEEPS THE FINDINGS THAT REJECTED ITS OWN STORIES. review-feedback-<story>.json is the
+# reviewer's evidence, and the story a resume re-runs is the story it describes: deleting it
+# re-invokes the writer blind. regintel REGI-003b (2026-09-22) was re-implemented six times with
+# "13 failed / 6 passed" and both causes sitting in a file this reset had already removed.
 _RUN_ARTIFACT_DIR="${LOG_DIR:-}"
+if [ "$_IS_RESUMED_RUN" = "1" ]; then
+    info "  Resuming — keeping this run's review findings (review-*.json); the stories they reject are the stories it re-runs"
+    _RUN_ARTIFACT_DIR=""
+fi
 if [ -n "$_RUN_ARTIFACT_DIR" ] && [ -d "$_RUN_ARTIFACT_DIR" ]; then
     # EVERYWHERE A LANE CAN READ ONE, not just the parent directory.
     #

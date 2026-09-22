@@ -102,6 +102,82 @@ story_declared_files() {
     printf '%s\n' "$_out" | awk 'NF && !seen[$0]++'
 }
 
+# THE DECLARED FILES, AS THE PROMPT SEES THEM. Extracted 2026-09-22 so the rule "a file that
+# exists is shown" is executable by a test rather than only reachable through the whole prompt
+# build. Sets write_first_lines and existing_file_contents in the caller's scope; the bytes are
+# the loop that stood inline.
+story_declared_file_blocks() {
+    local story_json="${1:?story_json}"
+    write_first_lines=""; existing_file_contents=""
+    # The cap is the declaration's, asked here so this function is whole for any caller.
+    [ -n "${_EXISTING_FILE_MAX_LINES:-}" ] || _EXISTING_FILE_MAX_LINES="$(existing_file_max_lines)" || return 1
+    local _fixsite_rel
+    _fixsite_rel=$(echo "$story_json" | jq -r '[.fixSiteAnalysis[]?.file] | map(select(. != null and . != "")) | .[]' 2>/dev/null)
+    while IFS= read -r f; do
+        [ -z "$f" ] && continue
+        # Resolve to absolute path; in worktree mode, rewrite main-repo absolute paths
+        # to the worktree so the agent writes files in the correct directory.
+        local abs_f
+        if [[ "$f" = /* ]]; then
+            if [ -n "${WORKTREE_MODE:-}" ] && [ -n "${MAIN_PROJECT_ROOT:-}" ] && [[ "$f" = "${MAIN_PROJECT_ROOT}"* ]]; then
+                abs_f="${PROJECT_ROOT}${f#${MAIN_PROJECT_ROOT}}"
+            else
+                abs_f="$f"
+            fi
+        else
+            abs_f="$PROJECT_ROOT/$f"
+        fi
+        # A declared path may be wrong in extension or case while the real file
+        # genuinely exists (live 2026-07-30: declared ContentstackContext.tsx,
+        # repo holds contentstackContext.tsx — the model's conventional
+        # PascalCase guess for a React Context, not what the repo actually
+        # contains). A bare `[ -f "$abs_f" ]` here failed on that mismatch, so
+        # this loop told the agent the file did NOT exist and to WRITE it,
+        # which it did — leaving a duplicate file under the wrong name/case
+        # and the real one untouched, 7 identical attempts before this existed.
+        # Resolve through the SAME function verify_story_deliverables uses, so
+        # the prompt and the post-hoc check can never disagree about whether a
+        # declared file is real.
+        local _resolved_abs_f
+        if _resolved_abs_f="$(_resolve_deliverable_path "$abs_f")"; then
+            [ "$_resolved_abs_f" != "$abs_f" ] && \
+                log "  Deliverable '$f' resolved to '${_resolved_abs_f#"$PROJECT_ROOT"/}' for prompt injection (declaration's case/extension did not match the repository)"
+            abs_f="$_resolved_abs_f"
+        fi
+        # Inject CONTENT only for a fix-site file (or all, when no fixSiteAnalysis exists).
+        local _rel_f _inject_content
+        _rel_f="${abs_f#"$PROJECT_ROOT"/}"
+        if [ -z "$_fixsite_rel" ] || printf '%s\n' "$_fixsite_rel" | grep -qxF "$_rel_f"; then _inject_content=1; else _inject_content=0; fi
+        # A FILE THAT EXISTS IS SHOWN, WHATEVER THE MODE. This was brownfield-only, so a greenfield
+        # RE-implementation — a story re-queued after a rejection or a timeout — was told "WRITE
+        # <path> first" about a file already on disk and shown none of it. regintel REGI-003b
+        # (2026-09-22): 369 lines of red tests to reconcile against 17 ground-truth facts, invisible
+        # in the prompt; the writer spent its wall rediscovering them with tools, six attempts over
+        # two resumes. Rewriting a file blind is also how a good file gets replaced by a worse one.
+        if [ "$_inject_content" = "1" ] && [ -f "$abs_f" ]; then
+            write_first_lines="${write_first_lines}   - ${abs_f} (EXISTS — content injected below; reconcile it, do not rewrite it from nothing)\n"
+            local _total_lines
+            _total_lines=$(wc -l < "$abs_f" 2>/dev/null || echo 0)
+            local _body
+            _body=$(head -n "$_EXISTING_FILE_MAX_LINES" "$abs_f" 2>/dev/null)
+            existing_file_contents="${existing_file_contents}
+### ${abs_f}
+\`\`\`
+${_body}
+\`\`\`
+"
+            if [ "${_total_lines:-0}" -gt "$_EXISTING_FILE_MAX_LINES" ]; then
+                existing_file_contents="${existing_file_contents}(truncated at ${_EXISTING_FILE_MAX_LINES} of ${_total_lines} lines — ReadFile this path yourself if you need the rest)
+"
+            fi
+        elif [ "${EPAM_BROWNFIELD:-0}" = "1" ]; then
+            write_first_lines="${write_first_lines}   - ${abs_f} (ReadFile this only if you need it — not a fix site; content omitted to keep the prompt small)\n"
+        else
+            write_first_lines="${write_first_lines}   - WRITE ${abs_f} first, before any other action\n"
+        fi
+    done < <(story_declared_files "$story_json")
+}
+
 build_implementation_prompt() {
     local story_id=$1
     local story_json
@@ -420,67 +496,7 @@ build_implementation_prompt() {
     # (live 2026-07-24: in=137K out=1707, zero writes → deliverable gate failed → 8 retries).
     # Non-fix-site declared files are listed as paths (agent ReadFiles on demand). When there
     # is no fixSiteAnalysis (novel work / no detective result), inject all files (fallback).
-    local _fixsite_rel
-    _fixsite_rel=$(echo "$story_json" | jq -r '[.fixSiteAnalysis[]?.file] | map(select(. != null and . != "")) | .[]' 2>/dev/null)
-    while IFS= read -r f; do
-        [ -z "$f" ] && continue
-        # Resolve to absolute path; in worktree mode, rewrite main-repo absolute paths
-        # to the worktree so the agent writes files in the correct directory.
-        local abs_f
-        if [[ "$f" = /* ]]; then
-            if [ -n "${WORKTREE_MODE:-}" ] && [ -n "${MAIN_PROJECT_ROOT:-}" ] && [[ "$f" = "${MAIN_PROJECT_ROOT}"* ]]; then
-                abs_f="${PROJECT_ROOT}${f#${MAIN_PROJECT_ROOT}}"
-            else
-                abs_f="$f"
-            fi
-        else
-            abs_f="$PROJECT_ROOT/$f"
-        fi
-        # A declared path may be wrong in extension or case while the real file
-        # genuinely exists (live 2026-07-30: declared ContentstackContext.tsx,
-        # repo holds contentstackContext.tsx — the model's conventional
-        # PascalCase guess for a React Context, not what the repo actually
-        # contains). A bare `[ -f "$abs_f" ]` here failed on that mismatch, so
-        # this loop told the agent the file did NOT exist and to WRITE it,
-        # which it did — leaving a duplicate file under the wrong name/case
-        # and the real one untouched, 7 identical attempts before this existed.
-        # Resolve through the SAME function verify_story_deliverables uses, so
-        # the prompt and the post-hoc check can never disagree about whether a
-        # declared file is real.
-        local _resolved_abs_f
-        if _resolved_abs_f="$(_resolve_deliverable_path "$abs_f")"; then
-            [ "$_resolved_abs_f" != "$abs_f" ] && \
-                log "  Deliverable '$f' resolved to '${_resolved_abs_f#"$PROJECT_ROOT"/}' for prompt injection (declaration's case/extension did not match the repository)"
-            abs_f="$_resolved_abs_f"
-        fi
-        # Inject CONTENT only for a fix-site file (or all, when no fixSiteAnalysis exists).
-        local _rel_f _inject_content
-        _rel_f="${abs_f#"$PROJECT_ROOT"/}"
-        if [ -z "$_fixsite_rel" ] || printf '%s\n' "$_fixsite_rel" | grep -qxF "$_rel_f"; then _inject_content=1; else _inject_content=0; fi
-        if [ "${EPAM_BROWNFIELD:-0}" = "1" ]; then
-            if [ "$_inject_content" = "1" ] && [ -f "$abs_f" ]; then
-                write_first_lines="${write_first_lines}   - ${abs_f} (content already injected below — do not ReadFile it unless you need lines beyond what's shown)\n"
-                local _total_lines
-                _total_lines=$(wc -l < "$abs_f" 2>/dev/null || echo 0)
-                local _body
-                _body=$(head -n "$_EXISTING_FILE_MAX_LINES" "$abs_f" 2>/dev/null)
-                existing_file_contents="${existing_file_contents}
-### ${abs_f}
-\`\`\`
-${_body}
-\`\`\`
-"
-                if [ "${_total_lines:-0}" -gt "$_EXISTING_FILE_MAX_LINES" ]; then
-                    existing_file_contents="${existing_file_contents}(truncated at ${_EXISTING_FILE_MAX_LINES} of ${_total_lines} lines — ReadFile this path yourself if you need the rest)
-"
-                fi
-            else
-                write_first_lines="${write_first_lines}   - ${abs_f} (ReadFile this only if you need it — not a fix site; content omitted to keep the prompt small)\n"
-            fi
-        else
-            write_first_lines="${write_first_lines}   - WRITE ${abs_f} first, before any other action\n"
-        fi
-    done < <(story_declared_files "$story_json")
+    story_declared_file_blocks "$story_json"
 
     # Brownfield testing policy — the "no wild tests" gate. Greenfield writes
     # new code + its own new tests. Brownfield MODIFIES existing code: the

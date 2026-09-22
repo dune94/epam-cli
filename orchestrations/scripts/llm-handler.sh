@@ -541,6 +541,49 @@ else
   fi
 fi
 
+# A RUNG IS A MODEL *AND* A PROVIDER, AND THIS IS WHERE THE PAIR IS KEPT WHOLE.
+#
+# The list above is built from the provider this invocation was LAUNCHED with. The ladder then
+# changes the model — on the cross-process resume below, and again on every in-process
+# escalation — and nothing re-resolved the routing, so every rung above the launch vendor was
+# called on the wrong endpoint. Live 2026-09-22 (regintel resume 7, three empty reviews):
+#
+#   Attempted: minimax/moonshotai/kimi-k3: 400 invalid params, unknown model 'moonshotai/kimi-k3'
+#
+# An empty reply, recorded by the caller as "review output unparseable" — a routing error wearing
+# a model failure's clothes, and one that costs a whole review cycle every time it fires.
+#
+# The rule is lib/model-ladder.sh's own (sync_provider_to_model): "MODEL AND PROVIDER ARE ONE
+# DECISION ... Resolving at the point of USE means no arm can forget, including one written
+# later." Nothing is named here: the routing is the PROJECT's declaration
+# (EPAM_MODEL_PROVIDER_MAP), a model the map does not know leaves the list exactly as it was,
+# and a rehearsal — whose single "replay" provider is the whole point — is never re-routed.
+# shellcheck source=lib/provider-map.sh
+. "$_SCRIPT_DIR_AIRUN/lib/provider-map.sh" 2>/dev/null || true
+_ai_route_to_model() {
+  declare -F resolve_model_provider >/dev/null 2>&1 || return 0
+  [ -n "${EPAM_REPLAY_CASSETTE_DIR:-}" ] && return 0
+  local _p; _p="$(resolve_model_provider "${AI_MODEL:-}")"
+  [ -n "$_p" ] || return 0
+  [ "$_p" = "${providers[0]:-}" ] && return 0
+  echo "[ai-run] '${AI_MODEL}' is served by '${_p}' — routing there (the call was set up for '${providers[0]:-unset}')" >&2
+  # AND THE REST OF THE CHAIN GOES WITH IT. A fallback exists so a failing VENDOR is retried
+  # elsewhere; it is not a licence to ask a different vendor for a model the declaration says it
+  # does not serve. Keeping the displaced provider in the list reproduced the very 400 this
+  # routing exists to prevent, one attempt later. Only providers the declaration does not
+  # contradict for THIS model stay.
+  local _rest=() _q
+  for _q in ${providers[@]+"${providers[@]}"}; do
+    [ "$_q" = "$_p" ] && continue
+    [ -n "$(resolve_model_provider "${AI_MODEL:-}")" ] && continue
+    _rest+=("$_q")
+  done
+  providers=("$_p" ${_rest[@]+"${_rest[@]}"})
+  PRIMARY_PROVIDER="$_p"
+  AI_PROVIDER="$_p"; export AI_PROVIDER
+}
+_ai_route_to_model
+
 # ── Plan-execute ────────────────────────────────────────────────────────────
 # Every agent states what it intends to do before it does it.
 #
@@ -602,6 +645,7 @@ if [ -n "$_LADDER_AGENT" ] && [ -n "${LOG_DIR:-}" ] && [ "${_EPAM_IN_PLAN_PASS:-
   if [ -n "$_ai_resumed" ] && [ "$_ai_resumed" != "${AI_MODEL:-}" ]; then
     echo "[ai-run] '$_LADDER_AGENT' resuming ladder on '$_ai_resumed' (persisted from an earlier invocation)" >&2
     AI_MODEL="$_ai_resumed"; export AI_MODEL
+    _ai_route_to_model
   fi
 fi
 
@@ -875,6 +919,7 @@ if [ "$_call_attempt" -gt 1 ]; then
   if [ -n "$_ai_next" ] && [ "$_ai_next" != "${AI_MODEL:-}" ]; then
     echo "[ai-run] attempt ${_call_attempt}/${_ai_max_attempts} for '${_LADDER_AGENT:-unnamed}' — escalating ${AI_MODEL} -> ${_ai_next}" >&2
     AI_MODEL="$_ai_next"; export AI_MODEL
+    _ai_route_to_model
   elif agent_ladder_exhausted "$_LADDER_AGENT" "$_LADDER_STORY" "${AI_MODEL:-}"; then
     echo "[ai-run] attempt ${_call_attempt}/${_ai_max_attempts} for '${_LADDER_AGENT:-unnamed}' — at the top of its declared chain (${AI_MODEL:-default}), retrying the same rung" >&2
   else

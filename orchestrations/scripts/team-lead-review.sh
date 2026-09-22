@@ -71,6 +71,8 @@ REVIEW_LOG="${REVIEW_LOG:-$AUTOMATION_DIR/logs/code-reviews.jsonl}"
 . "$SCRIPT_DIR/lib/render-engine-prompt.sh"
 # shellcheck source=lib/review-scope.sh
 . "$SCRIPT_DIR/lib/review-scope.sh"
+# shellcheck source=lib/provider-map.sh
+. "$SCRIPT_DIR/lib/provider-map.sh"
 AI_RUNNER_CMD="${AI_RUNNER_CMD:-$SCRIPT_DIR/ai-run.sh}"
 # shellcheck source=lib/agent-invoke.sh
 source "$SCRIPT_DIR/lib/agent-invoke.sh"
@@ -192,17 +194,13 @@ _ladder_next_model() {
 # `[ -n "$_provider" ] && _args+=(--provider "$_provider")`, agent-invoke.sh). An empty return
 # means "no override" — the runner beneath invoke_agent resolves the active set on its own.
 _provider_for_model() {
-    local _m="$1" _map="${EPAM_MODEL_PROVIDER_MAP:-}" _pair _pat _prov
-    [ -z "$_map" ] && { echo "${EPAM_ORCHESTRATION_PROVIDER:-}"; return; }
-    IFS='|' read -ra _pairs <<< "$_map"
-    for _pair in "${_pairs[@]}"; do
-        _pat="${_pair%%=*}"; _prov="${_pair#*=}"
-        # The pattern is a GLOB from the provider map and must stay unquoted: quoting it would match the
-        # literal characters, and no mapping would ever fire.
-        # shellcheck disable=SC2254
-        case "$_m" in $_pat) echo "$_prov"; return ;; esac
-    done
-    echo "${EPAM_ORCHESTRATION_PROVIDER:-}"
+    # The matching itself is lib/provider-map.sh's — one home for the routing rule (it was
+    # copied here, and the copy is how a rung could be routed one way by the ladder and another
+    # way by this file). What stays here is this caller's own fallback: no declaration, or a
+    # model the declaration does not name, means no override to make.
+    local _m="$1" _prov=""
+    declare -F resolve_model_provider >/dev/null 2>&1 && _prov="$(resolve_model_provider "$_m")"
+    if [ -n "$_prov" ]; then echo "$_prov"; else echo "${EPAM_ORCHESTRATION_PROVIDER:-}"; fi
 }
 
 # Invoke the review-agent LLM for a single story, with ladder escalation + a
@@ -251,6 +249,14 @@ run_review_prompt() {
                 _rn="$(_ladder_next_model "$_base_model")"
                 [ -n "$_rn" ] && _base_model="$_rn"
             done
+            # AND THE PROVIDER WALKS WITH IT. The resume moved the MODEL and left the writer's
+            # provider in place, so attempt 1 of every resumed cycle announced a pair the
+            # project's own declaration contradicts. Live 2026-09-22: three reviews came back
+            # empty because the vendor answered 400 "unknown model" to a rung it does not serve.
+            # Same rule as lib/model-ladder.sh's sync_provider_to_model — a rung is a model AND
+            # a provider. A model the declaration does not name leaves the provider untouched.
+            local _rp; _rp="$(_provider_for_model "$_base_model")"
+            [ -n "$_rp" ] && _base_provider="$_rp"
         fi
     fi
     local _next_model; _next_model="$(_ladder_next_model "$_base_model")"

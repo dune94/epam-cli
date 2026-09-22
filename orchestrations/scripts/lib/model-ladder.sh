@@ -1259,24 +1259,11 @@ get_model_ladder_step() {
 # (or no) provider routing after a model-ladder step. Returns empty string
 # when no map is configured or no pattern matches (caller keeps STORY_PROVIDER
 # unchanged in that case, same as before).
-resolve_model_provider() {
-    local model="$1"
-    local map="${EPAM_MODEL_PROVIDER_MAP:-}"
-    [ -z "$map" ] && { echo ""; return; }
-    local pair pattern provider IFS_SAVE="$IFS"
-    IFS='|'
-    read -ra pairs <<< "$map"
-    IFS="$IFS_SAVE"
-    for pair in "${pairs[@]}"; do
-        pattern="${pair%%=*}"
-        provider="${pair#*=}"
-        # shellcheck disable=SC2254 # intentional glob match against a config-supplied pattern
-        case "$model" in
-            $pattern) echo "$provider"; return ;;
-        esac
-    done
-    echo ""
-}
+# The function itself lives in lib/provider-map.sh — one home for the routing rule, read by
+# the handler and the reviewer as well as by this ladder (2026-09-22: a rung climbed here was
+# called on the provider the run was launched with, and the vendor answered 400).
+# shellcheck source=provider-map.sh
+. "$(dirname "${BASH_SOURCE[0]}")/provider-map.sh"
 
 # sync_provider_to_model
 #

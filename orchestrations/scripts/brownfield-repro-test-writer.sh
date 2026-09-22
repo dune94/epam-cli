@@ -479,13 +479,13 @@ _ladder_skip_reason() {
 # _ladder_next_model was removed 2026-08-14: it walked a chain pinned to the HIGH tier while this
 # seam declares its own, and it became unreachable when the escalation moved to the shared handler.
 # A dead private chain is worse than none — the next reader assumes it is what runs.
+# The matching is lib/provider-map.sh's — the third copy of it lived here, and copies of a
+# routing rule are how the same model gets routed two ways in one run (2026-09-22).
+# shellcheck source=lib/provider-map.sh
+. "$(dirname "${BASH_SOURCE[0]}")/lib/provider-map.sh" 2>/dev/null || true
 _provider_for_model() {
-    local _m="$1" _map="${EPAM_MODEL_PROVIDER_MAP:-}" _pair _pat _prov
-    IFS='|' read -ra _pairs <<< "$_map"
-    # The pattern is a GLOB and must stay unquoted: quoting it matches the literal characters.
-    # shellcheck disable=SC2254
-    for _pair in "${_pairs[@]}"; do _pat="${_pair%%=*}"; _prov="${_pair#*=}"; case "$_m" in $_pat) echo "$_prov"; return 0 ;; esac; done
-    echo ""
+    declare -F resolve_model_provider >/dev/null 2>&1 || { echo ""; return 0; }
+    resolve_model_provider "$1"
 }
 
 # ── Invoke the write-capable agent, with RETRY + LADDER + SELF-HEAL ──

@@ -82,3 +82,18 @@ export function engineSourceFile(mainPath: string): string {
   writeFileSync(out, engineSource(mainPath));
   return out;
 }
+
+/**
+ * One shell function, by name, from a lib file — from `name() {` through its closing brace at
+ * column 0, with the comment block above it. For harnesses that execute a real function with its
+ * collaborators stubbed. Throws when the name is not there: a harness anchored to nothing proves
+ * nothing.
+ */
+export function shellFunction(path: string, name: string): string {
+  const lines = readFileSync(path, 'utf8').split('\n');
+  const start = lines.findIndex((l) => new RegExp(`^${name}\\(\\)\\s*\\{`).test(l));
+  if (start < 0) throw new Error(`${name}() not found in ${path}`);
+  const end = lines.findIndex((l, i) => i > start && /^\}/.test(l));
+  if (end < 0) throw new Error(`${name}() has no closing brace at column 0 in ${path}`);
+  return lines.slice(start, end + 1).join('\n');
+}

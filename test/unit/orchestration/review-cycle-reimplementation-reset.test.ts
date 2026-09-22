@@ -39,7 +39,8 @@ import { tmpdir } from 'node:os';
 import { engineSource } from '../../lib/engine-source';
 
 const ORCH = join(__dirname, '../../../orchestrations/scripts/run-agent-orchestration.sh');
-const SRC = engineSource(ORCH);
+// Step 3.6 moved to lib/review-cycle.sh on 2026-09-21 so the loop can be executed by a test.
+const SRC = engineSource(ORCH) + '\n' + engineSource(join(__dirname, '../../../orchestrations/scripts/lib/review-cycle.sh'));
 
 const dirs: string[] = [];
 afterEach(() => { for (const d of dirs.splice(0)) rmSync(d, { recursive: true, force: true }); });

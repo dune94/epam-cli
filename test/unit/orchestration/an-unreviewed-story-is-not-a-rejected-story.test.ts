@@ -23,7 +23,7 @@ import { tmpdir } from 'node:os';
 
 const ROOT = join(__dirname, '../../..');
 const LIB = join(ROOT, 'orchestrations/scripts/lib/phase-assessment.sh');
-const ORCH = join(ROOT, 'orchestrations/scripts/run-agent-orchestration.sh');
+const ORCH = join(ROOT, 'orchestrations/scripts/lib/review-cycle.sh');   // Step 3.6 lives here since 2026-09-21
 const dirs: string[] = [];
 afterAll(() => { for (const d of dirs) rmSync(d, { recursive: true, force: true }); });
 

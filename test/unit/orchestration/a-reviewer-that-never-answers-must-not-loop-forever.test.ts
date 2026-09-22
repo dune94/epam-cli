@@ -38,12 +38,13 @@ import { spawnSync } from 'node:child_process';
 import { mkdtempSync, mkdirSync, writeFileSync, chmodSync, rmSync, readFileSync } from 'node:fs';
 import { join } from 'node:path';
 import { tmpdir } from 'node:os';
-import { engineSource } from '../../lib/engine-source';
+import { engineSource, shellFunction } from '../../lib/engine-source';
 
 const REPO_ROOT = join(__dirname, '../../../');
 const ORCH_SH = join(REPO_ROOT, 'orchestrations/scripts/run-agent-orchestration.sh');
 const STORY_RETRY_LIB = join(REPO_ROOT, 'orchestrations/scripts/lib/story-retry-state.sh');
-const orchSrc = engineSource(ORCH_SH);
+const PHASE_ASSESSMENT_LIB = join(REPO_ROOT, 'orchestrations/scripts/lib/phase-assessment.sh');
+const orchSrc = engineSource(ORCH_SH) + '\n' + engineSource(join(REPO_ROOT, 'orchestrations/scripts/lib/review-cycle.sh'));
 
 /** The REAL Step 3.6 loop, lifted verbatim — same extraction the ladder test uses. */
 function extractBlock(startMarker: string, endMarker: string): string {
@@ -54,13 +55,13 @@ function extractBlock(startMarker: string, endMarker: string): string {
   return orchSrc.slice(start, end + endMarker.length);
 }
 const REVIEW_LOOP_BLOCK = extractBlock(
-  '_review_max_retries="${EPAM_MAX_RETRIES:-7}"',
+  'run_review_cycle() {',   // Step 3.6 is run_review_cycle in lib/review-cycle.sh since 2026-09-21
   // END THE BLOCK ON A STABLE ANCHOR, NOT ON AN EXIT CODE.
 // This pinned `exit 2`, so the suite failed to LOAD the moment Step 3.6 changed to
 // exit 3 (a HALT is not a remediation and must not be retried). Stopping at the message
 // instead left the enclosing `if` unclosed, and bash exited 2 on the syntax error.
 // The next section header is outside the block and does not move when a code does.
-  '# Step 3.7: Pre-review build gate',
+  '    return 0\n}',
 );
 
 const cleanupDirs: string[] = [];
@@ -115,7 +116,11 @@ function runNeverAnswering(env: Record<string, string> = {}) {
     '_persist_skill_note_simple() { :; }',
     'run_story_with_watchdog() { :; }',
     `source ${JSON.stringify(STORY_RETRY_LIB)}`,
+    'review_feedback_to_reimplement() { local _f; for _f in "$LOG_DIR"/review-feedback-*.json; do [ -f "$_f" ] || continue; _f=$(basename "$_f" .json); printf "%s\\n" "${_f#review-feedback-}"; done; }',
+    // the loop's collaborators, from the lib that owns them (lib/phase-assessment.sh)
+    ...['_escalate_review_story', '_review_tree_fingerprint', '_review_approval_is_giveup'].map((n) => shellFunction(PHASE_ASSESSMENT_LIB, n)),
     REVIEW_LOOP_BLOCK,
+    'run_review_cycle; _rc_review=$?; if [ "$_rc_review" -ne 0 ]; then exit "$_rc_review"; fi',
     'echo "REACHED_END"',
   ].join('\n'));
 

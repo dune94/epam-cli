@@ -724,6 +724,14 @@ export ORCH_GATE_ALLOWED_TOOLS
 
 
 
+# THE PROCESS THAT ENFORCES THE WALL READS THE WALL. run_story_with_watchdog lives here, and the
+# declarations it needs — timeouts.secondsPerIteration and the per-effort floors — are in the
+# settings claude.sh loads for ITSELF. Without this the parent derived nothing and fell back to
+# whatever the environment carried: regintel resume 6 (2026-09-22) logged "the story wall cannot be
+# derived and stays at 600s" on every story while the engine declared four hours.
+# shellcheck source=lib/model-ladder.sh
+. "$SCRIPT_DIR/lib/model-ladder.sh" 2>/dev/null || true
+declare -F load_llm_settings_json >/dev/null 2>&1 && load_llm_settings_json || true
 source "$SCRIPT_DIR/lib/story-watchdog.sh"
 
 

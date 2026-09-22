@@ -154,7 +154,7 @@ for _i in $(seq 0 $(( _vc_count - 1 ))); do
     _raw=$(printf '%s' "$_prompt" | \
         EPAM_ALLOWED_TOOLS="${VC_COVERAGE_ALLOWED_TOOLS:-}" \
         EPAM_AGENT_NAME="vc-coverage" EPAM_STORY_ID="$STORY_ID" \
-        timeout "${VC_COVERAGE_TIMEOUT_SECS:-300}" \
+        timeout "${VC_COVERAGE_TIMEOUT_SECS}" \
         bash "$AI_RUNNER_CMD" "${_vcc_args[@]}" 2>"$_vcc_err" || echo "")
     if [ -z "$_raw" ] && [ -s "$_vcc_err" ]; then
         log "the checker produced nothing — $(tr '\n' ' ' < "$_vcc_err" | tail -c 300)"

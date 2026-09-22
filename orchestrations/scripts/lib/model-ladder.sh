@@ -90,6 +90,17 @@ load_llm_settings_json() {
     _budget '.timeouts.storyWallMaxSecs'       'EPAM_STORY_WALL_MAX_SECS'
     _budget '.timeouts.gateTimeoutSecs'        'EPAM_GATE_TIMEOUT_SECS'
     _budget '.timeouts.testTimeoutSecs'        'EPAM_TEST_TIMEOUT_SECS'
+    # The rest of the pipeline's clocks, declared in the same block (2026-09-22 sweep).
+    _budget '.timeouts.callTimeoutSecs'                 'EPAM_TIMEOUT_SECS'
+    _budget '.timeouts.planTimeoutSecs'                 'EPAM_PLAN_TIMEOUT_SECS'
+    _budget '.timeouts.phaseAssessmentTimeoutSecs'      'PHASE_ASSESSMENT_TIMEOUT_SECS'
+    _budget '.timeouts.coverageTimeoutSecs'             'VC_COVERAGE_TIMEOUT_SECS'
+    _budget '.timeouts.depHookTimeoutSecs'              'EPAM_DEP_HOOK_TIMEOUT_SECS'
+    _budget '.timeouts.installTimeoutSecs'              'EPAM_INSTALL_TIMEOUT_SECS'
+    _budget '.timeouts.dependencyInstallTimeoutSecs'    'EPAM_DEPENDENCY_INSTALL_TIMEOUT_SECS'
+    _budget '.timeouts.codegraphReindexTimeoutSecs'     'EPAM_CODEGRAPH_REINDEX_TIMEOUT_SECS'
+    _budget '.timeouts.commitTimeoutSecs'               'EPAM_COMMIT_TIMEOUT_SECS'
+    _budget '.timeouts.toolCallTimeoutMs'               'MINIMAX_TOOL_TIMEOUT_MS'
     local _eff
     for _eff in low medium high default; do
         _budget ".timeouts.storyEffortTimeoutSecs.${_eff}" "EPAM_STORY_EFFORT_TIMEOUT_$(printf '%s' "$_eff" | tr '[:lower:]' '[:upper:]')_SECS"

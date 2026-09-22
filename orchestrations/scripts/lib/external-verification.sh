@@ -267,7 +267,7 @@ run_dependency_check() {
     _hook=$(_project_dep_config_value "$project_root" preInstallHook)
     if [ -n "$_hook" ]; then
         info "  [dependency-check] Running preInstallHook..."
-        _hook_timeout="${EPAM_DEP_HOOK_TIMEOUT_SECS:-300}"
+        _hook_timeout="${EPAM_DEP_HOOK_TIMEOUT_SECS}"
         if ( cd "$project_root" && timeout "$_hook_timeout" bash -c "$_hook" ); then
             info "  [dependency-check] preInstallHook complete"
         else
@@ -394,7 +394,7 @@ run_dependency_check() {
     _install_tpl=$(_project_install_command "$project_root")
     [ -n "$_install_tpl" ] || { warning "  [dependency-scan] autoInstall declared but no installCommand — nothing installed"; return 0; }
 
-    local _spec _pkg _cmd _timeout="${EPAM_DEPENDENCY_INSTALL_TIMEOUT_SECS:-120}"
+    local _spec _pkg _cmd _timeout="${EPAM_DEPENDENCY_INSTALL_TIMEOUT_SECS}"
     while IFS= read -r _line; do
         case "$_line" in unknown_external*|installed_undeclared*) ;; *) continue ;; esac
         _rest="${_line#*	}"; _spec="${_rest%%	*}"
@@ -1018,7 +1018,7 @@ run_external_verification() {
             warning "  [provision] $story_id: the codeline declares no provisionCommand in .epam/dependency-check.json — environment NOT provisioned; the test command runs as declared"
         else
         log "  Provisioning the environment (${_dep_vendor:-no vendor dir} absent in worktree): $_dep_provision"
-        local _install_timeout="${EPAM_INSTALL_TIMEOUT_SECS:-180}"
+        local _install_timeout="${EPAM_INSTALL_TIMEOUT_SECS}"
         # Capture $? directly from the command substitution — NOT via
         # `if ! (cmd); then`, which collapses any non-zero exit code (124
         # included) into a plain boolean 1 through the `!` negation, making
@@ -1114,7 +1114,7 @@ run_external_verification() {
     # (300s) is comfortably under the lowest story-level watchdog ceiling
     # (600s for low-effort stories) so this always fires first and gives a
     # clear, actionable diagnosis instead of a generic outer timeout.
-    local _test_timeout="${EPAM_TEST_TIMEOUT_SECS:-300}"
+    local _test_timeout="${EPAM_TEST_TIMEOUT_SECS}"
     # BOUNDED, both dimensions — see _bounded_test_command. Unbounded, this suite starves the host.
     local _bounded_cmd; _bounded_cmd="$(_bounded_test_command "$test_cmd")"
     # The declared command runs INSIDE the codeline's declared environment (runEnvironment in
@@ -1242,7 +1242,7 @@ verify_codeline_suite() {
     [ "$whole_cmd" = "$ran_cmd" ] && return 0
 
     log "  Running the codeline's whole suite after $story_id's own passed: $whole_cmd"
-    local _test_timeout="${EPAM_TEST_TIMEOUT_SECS:-300}"
+    local _test_timeout="${EPAM_TEST_TIMEOUT_SECS}"
     local _bounded; _bounded="$(_bounded_test_command "$whole_cmd")"
     local _env_prefix; _env_prefix=$(_project_run_env_prefix "$PROJECT_ROOT")
     local whole_out whole_exit=0

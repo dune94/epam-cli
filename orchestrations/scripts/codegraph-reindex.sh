@@ -122,7 +122,7 @@ fi
 
 _started=$(date +%s)
 set +e
-_out=$(timeout "${EPAM_CODEGRAPH_REINDEX_TIMEOUT_SECS:-180}" codegraph init "$REPO" 2>&1)
+_out=$(timeout "${EPAM_CODEGRAPH_REINDEX_TIMEOUT_SECS}" codegraph init "$REPO" 2>&1)
 _rc=$?
 set -e
 _elapsed=$(( $(date +%s) - _started ))
@@ -130,7 +130,7 @@ _elapsed=$(( $(date +%s) - _started ))
 if [ "$_rc" -eq 0 ]; then
   log "reindexed $REPO in ${_elapsed}s (${REASON}) — reviewer's codegraph_query now sees this story's writes"
 elif [ "$_rc" -eq 124 ]; then
-  warn "reindex TIMED OUT after ${EPAM_CODEGRAPH_REINDEX_TIMEOUT_SECS:-180}s for $REPO (${REASON}) — downstream codegraph_query results may be STALE"
+  warn "reindex TIMED OUT after ${EPAM_CODEGRAPH_REINDEX_TIMEOUT_SECS}s for $REPO (${REASON}) — downstream codegraph_query results may be STALE"
 else
   warn "reindex FAILED (exit ${_rc}) for $REPO (${REASON}) — downstream codegraph_query results may be STALE. Output:"
   warn "$_out"

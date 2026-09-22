@@ -52,6 +52,17 @@ function effectiveWall(opts: { effort?: string; projectConfigEnv?: string } = {}
   return { wall, out };
 }
 
+describe('the second clock — the one wrapped around each attempt inside claude.sh', () => {
+  it('honours the declared floor too, so a project pin cannot kill an attempt twice', () => {
+    const src = readFileSync(join(ROOT, 'orchestrations/scripts/lib/story-attempt.sh'), 'utf8');
+    const at = src.indexOf('_timeout_prefix=');
+    expect(at).toBeGreaterThan(-1);
+    const block = src.slice(at, at + 900);
+    expect(block, 'the attempt wall is taken raw from the env — a project pin kills every attempt')
+      .toMatch(/_attempt_floor|EPAM_STORY_EFFORT_TIMEOUT_DEFAULT_SECS/);
+  });
+});
+
 describe('the wall a story actually gets', () => {
   it('a medium story gets hours, not minutes — resolved where it is enforced', () => {
     const r = effectiveWall({ effort: 'medium' });

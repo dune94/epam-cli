@@ -418,6 +418,16 @@ else
   . "$_mlm_lib"
   if stories_with_unladdered_models "$PRD_FILE" "$_mlm_settings"; then
     ok "every assigned model is a rung of a declared ladder"
+  elif resume_preserves prd-state; then
+    # GREENFIELD RESUME WITH A PROVIDER-SET SWAP. The PRD carries model assignments from the
+    # prior set; _mc_enforce_ladder (story-watchdog.sh) corrects every unladdered model to the
+    # current set's start rung at the top of run-agent-orchestration.sh, before any coordinator
+    # call or story run. Refusing here blocks a legitimate swap — the same class of problem the
+    # Jira ingest deferral above already solves for brownfield projects.
+    # Live 2026-09-17, regintel 20260916T200108Z: resumed with EPAM_PROVIDER_SET=claude after
+    # an openrouter run; stories carried MiniMax-M2.7-highspeed, which is on no claude ladder.
+    ok "resume — stale model assignments from prior provider set; _mc_enforce_ladder corrects them at orchestration start"
+    PASS=$((PASS+1))
   else
     fail "a story is assigned a model that is on no declared ladder (see above) — it could never escalate"
   fi

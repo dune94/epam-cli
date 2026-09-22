@@ -3739,7 +3739,7 @@ if ! is_truthy "${SKIP_PRE_REVIEW_GATE:-}" && [ -f "$PROJECT_ROOT/package.json" 
             # "tests failed" blamed the story for the engine being unable to ask.
             warning "  Step 19: ${PROJECT_ROOT} declares no test command — pre-review tests NOT run"
             _pre_review_failed=1
-        elif run_test_bounded "$(resolve_test_workers)" timeout "${EPAM_TEST_TIMEOUT_SECS:-300}" sh -c "$_pr_test_cmd" \
+        elif run_test_bounded "$(resolve_test_workers)" timeout "${EPAM_TEST_TIMEOUT_SECS}" sh -c "$_pr_test_cmd" \
                 2>&1 | tee -a "$_pre_review_log"; then
             success "  vitest: PASS"
             "$SCRIPT_DIR/update-monitor.sh" event "pre_review_test_pass" \
@@ -4012,7 +4012,7 @@ if ! is_truthy "${SKIP_LINT_GATE:-}" && [ -n "$_node_bin" ] && [ -x "$_node_bin"
                 # did. See gate-finding-analyst-dual-mechanism.test.ts.
                 _gate_provider="$(resolve_primary_provider "${ORCH_GATE_PROVIDER:-}")"
                 _lga_raw="$(echo "$_lga_prompt" | \
-                    timeout "${EPAM_GATE_TIMEOUT_SECS:-1200}" epam run ${_gate_provider:+--provider "$_gate_provider"} \
+                    timeout "${EPAM_GATE_TIMEOUT_SECS}" epam run ${_gate_provider:+--provider "$_gate_provider"} \
                         --model "${_lga_model}" \
                         --json - 2>>"$_lint_rem_log" || echo "")"
                 if [ -n "$_lga_raw" ]; then
@@ -4064,7 +4064,7 @@ if m:
                     fi
                     _gate_provider="$(resolve_primary_provider "${ORCH_GATE_PROVIDER:-}")"
                     _lrem_raw="$(echo "$_lrem_prompt" | \
-                        timeout "${EPAM_GATE_TIMEOUT_SECS:-1200}" epam run ${_gate_provider:+--provider "$_gate_provider"} \
+                        timeout "${EPAM_GATE_TIMEOUT_SECS}" epam run ${_gate_provider:+--provider "$_gate_provider"} \
                             --model "${_lrem_model}" \
                             --json - 2>>"$_lint_rem_log" || echo "")"
                     if [ -n "$_lrem_raw" ]; then
@@ -4089,14 +4089,14 @@ if m:
                 info "  [lint-gate:augmentor] Recording lint anti-pattern in profile..."
                 _gate_provider="$(resolve_primary_provider "${ORCH_GATE_PROVIDER:-}")"
                 _laug_raw="$(echo "$_lint_finding_raw" | \
-                    timeout "${EPAM_GATE_TIMEOUT_SECS:-1200}" epam run ${_gate_provider:+--provider "$_gate_provider"} \
+                    timeout "${EPAM_GATE_TIMEOUT_SECS}" epam run ${_gate_provider:+--provider "$_gate_provider"} \
                         --model "$(seam_model_or_fail "gate-finding-analyst")" \
                         --json - 2>>"$_lint_rem_log" || echo "")"
                 if [ -z "$_laug_raw" ]; then
                     warning "  [lint-gate:augmentor] attempt 1 returned no output — retrying"
                     _gate_provider="$(resolve_primary_provider "${ORCH_GATE_PROVIDER:-}")"
                     echo "$_lint_finding_raw" | \
-                        timeout "${EPAM_GATE_TIMEOUT_SECS:-1200}" epam run ${_gate_provider:+--provider "$_gate_provider"} \
+                        timeout "${EPAM_GATE_TIMEOUT_SECS}" epam run ${_gate_provider:+--provider "$_gate_provider"} \
                             --model "$(seam_model_or_fail "story-ac-remediator")" \
                             --json - 2>>"$_lint_rem_log" || true
                 fi

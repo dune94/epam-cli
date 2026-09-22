@@ -47,6 +47,17 @@
       "medium": 14400,
       "high": 21600,
       "default": 14400
-    }
+    },
+    "callTimeoutSecs": 3600,
+    "planTimeoutSecs": 3600,
+    "phaseAssessmentTimeoutSecs": 2400,
+    "coverageTimeoutSecs": 2400,
+    "depHookTimeoutSecs": 2400,
+    "installTimeoutSecs": 2400,
+    "dependencyInstallTimeoutSecs": 2400,
+    "codegraphReindexTimeoutSecs": 1800,
+    "commitTimeoutSecs": 600,
+    "toolCallTimeoutMs": 900000,
+    "$whyEveryClock": "Fourteen clocks were found on 2026-09-22; three were declared and the rest were literals at the point of use \u2014 one LLM call 240s, plan mode 90s, a tool call 15s, a commit 60s. The story wall was raised to four hours and two stories were still killed, because the wall is not the only clock. Every clock the engine applies is declared here, generously: the work is governed by iteration budgets, gates and review, never by time."
   }
 }

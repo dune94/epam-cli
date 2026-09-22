@@ -584,7 +584,7 @@ run_phase_assessment() {
     # text-in/JSON-out judgment call, same class as openspec/speckit. The
     # 300s cap and 2-attempt/model-escalation retry are kept as a resilience
     # backstop, not because the task is expected to need them.
-    EPAM_GATE_TIMEOUT_SECS="${PHASE_ASSESSMENT_TIMEOUT_SECS:-300}"
+    EPAM_GATE_TIMEOUT_SECS="${PHASE_ASSESSMENT_TIMEOUT_SECS}"
     while [ "$_pa_attempt" -lt 2 ] && [ "$_pa_success" = "0" ]; do
         local _pa_prompt="$assessment_prompt"
         if [ "$_pa_attempt" -ge 1 ]; then

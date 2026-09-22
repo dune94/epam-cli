@@ -654,7 +654,7 @@ if [ "${EPAM_PLAN_EXECUTE:-1}" = "1" ] && [ "${_EPAM_IN_PLAN_PASS:-0}" != "1" ];
     EPAM_MAX_TOOL_CALLS=0 \
     ORCH_JSON_RESULT="$_plan_json" \
     PROMPT_FILE="$_plan_file" \
-    timeout "${EPAM_PLAN_TIMEOUT_SECS:-90}" \
+    timeout "${EPAM_PLAN_TIMEOUT_SECS}" \
     bash "$0" ${PRIMARY_PROVIDER:+--provider "$PRIMARY_PROVIDER"} ${AI_MODEL:+--model "$AI_MODEL"} \
       < "$_plan_file" 2>/dev/null || true
   )"
@@ -801,7 +801,7 @@ _ai_attempt_timeout() {
   # so 36 of 39 seams declared more than 240s and every one of them was killed at 240 — by SIGTERM,
   # which emits no stderr, so it surfaced as "failed with no error output" and burned all three
   # ladder attempts on the same silent kill.
-  local _secs="${EPAM_CALL_ATTEMPT_TIMEOUT_SECS:-${EPAM_TIMEOUT_SECS:-240}}" _rc=0
+  local _secs="${EPAM_CALL_ATTEMPT_TIMEOUT_SECS:-${EPAM_TIMEOUT_SECS}}" _rc=0
   local _o _e
   _o="$(mktemp)"; _e="$(mktemp)"
   set -m

@@ -1812,8 +1812,18 @@ $_kb_section"
 
         # Optional per-story wall-clock timeout — set EPAM_STORY_TIMEOUT_SECS in the tier script.
         # No default: if unset, no timeout is applied (behaviour is unchanged).
-        local _timeout_prefix=()
-        [ -n "${EPAM_STORY_TIMEOUT_SECS:-}" ] && _timeout_prefix=(timeout "$EPAM_STORY_TIMEOUT_SECS")
+        # THE SECOND CLOCK ON THE SAME ATTEMPT. The watchdog bounds the story; this bounds the
+        # invocation. Both read EPAM_STORY_TIMEOUT_SECS, so a project pin killed each attempt twice
+        # — the "raw=0 bytes, exit 1" the coordinator then classified as an environment failure
+        # (regintel, 2026-09-22). It honours the declared floor for the same reason the watchdog
+        # does: a project may raise a wall, not lower it past the declaration.
+        local _timeout_prefix=() _attempt_wall="${EPAM_STORY_TIMEOUT_SECS:-}"
+        local _attempt_floor="${EPAM_STORY_EFFORT_TIMEOUT_DEFAULT_SECS:-}"
+        if [ -n "$_attempt_wall" ] && [ -n "$_attempt_floor" ] && [ "$_attempt_wall" -lt "$_attempt_floor" ] 2>/dev/null; then
+            log "  [attempt] wall ${_attempt_wall}s is below the declared floor — using ${_attempt_floor}s"
+            _attempt_wall="$_attempt_floor"
+        fi
+        [ -n "$_attempt_wall" ] && _timeout_prefix=(timeout "$_attempt_wall")
 
         STORY_PROVIDER="$(resolve_primary_provider "${STORY_PROVIDER:-}")"
         case "$STORY_PROVIDER" in

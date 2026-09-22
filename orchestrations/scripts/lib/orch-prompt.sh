@@ -115,7 +115,7 @@ run_orch_prompt() (
     # live: spec-validator stalled 55 min with zero output on two consecutive
     # runs). EPAM_GATE_TIMEOUT_SECS defaults to 600 (10 min) — enough for any
     # real gate response; exit 124 from timeout is treated as a failure.
-    local _gate_timeout="${EPAM_GATE_TIMEOUT_SECS:-600}"
+    local _gate_timeout="${EPAM_GATE_TIMEOUT_SECS}"
     local _rc=0
     # NAME THE AGENT AT THE CALL. A caller that already set one keeps it — _run_qa_gate_with_retry
     # names the gate it is running — but this function knows its own agent_type, so an invocation

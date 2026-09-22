@@ -220,7 +220,7 @@ _git_add_report_failure() {
 # were bypassable at all three.
 git_add_client_outputs() {
     local _repo="$1"
-    local _timeout="${2:-${EPAM_COMMIT_TIMEOUT_SECS:-60}}"
+    local _timeout="${2:-${EPAM_COMMIT_TIMEOUT_SECS}}"
     [ -n "$_repo" ] && [ -e "$_repo/.git" ] || return 0
 
     local _excludes=() _resets=() _d
@@ -466,7 +466,7 @@ ensure_story_branch() {
 # story that has already succeeded, which is strictly worse.
 record_story_changes() {
     local story_id="$1" root="$2"
-    local _t="${EPAM_COMMIT_TIMEOUT_SECS:-60}"
+    local _t="${EPAM_COMMIT_TIMEOUT_SECS}"
 
     if [ -z "${LOG_DIR:-}" ]; then
         # Loud, not silent: without this the report has only the live codeline to go on.
@@ -537,7 +537,7 @@ commit_completed_story() {
     # lock, a slow filesystem). 60s is generous for `git add`/`git commit` on
     # this project's size; a hang here now fails fast and visibly instead of
     # silently consuming the entire story-level watchdog budget.
-    local _git_timeout="${EPAM_COMMIT_TIMEOUT_SECS:-60}"
+    local _git_timeout="${EPAM_COMMIT_TIMEOUT_SECS}"
 
     # set +e/-e around this block (found live, 2026-07-14, tier3-travel-app
     # run — first time a worktree lane ran real multi-story work): under

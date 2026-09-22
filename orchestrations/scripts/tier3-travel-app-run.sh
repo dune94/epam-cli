@@ -305,7 +305,7 @@ export EPAM_RETRY_EXTENSION_MAX="${EPAM_RETRY_EXTENSION_MAX:-2}"
 # vendors/providers would supply a different map here.
 export EPAM_MODEL_PROVIDER_MAP="${EPAM_MODEL_PROVIDER_MAP:-zhipuai/*=openrouter|moonshotai/*=openrouter|z-ai/*=openrouter|glm-*=openrouter|kimi-*=openrouter|deepseek/*=openrouter|MiniMax-*=minimax}"
 # MiniMax runtime settings
-export MINIMAX_TOOL_TIMEOUT_MS="${MINIMAX_TOOL_TIMEOUT_MS:-15000}"
+export MINIMAX_TOOL_TIMEOUT_MS="${MINIMAX_TOOL_TIMEOUT_MS}"
 export PRD_FILE
 export SKIP_REGRESSION_GUARD=true
 export EPAM_RALPH_WIGGUM_ENABLED=0

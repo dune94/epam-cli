@@ -267,7 +267,7 @@ export SPEC_MODE_MODEL="${SPEC_MODE_MODEL:-${ESCALATION_MODEL_HIGH}}"
 # already give openspec 4 attempts; a hard block here prevents running a known-bad
 # PRD through expensive implementation passes.
 export SPEC_PASS_BLOCK_ON_TIMEOUT="${SPEC_PASS_BLOCK_ON_TIMEOUT:-true}"
-export RUNCLAUDE_TIMEOUT_MS="${RUNCLAUDE_TIMEOUT_MS:-360000}"
+export RUNCLAUDE_TIMEOUT_MS="${RUNCLAUDE_TIMEOUT_MS}"
 export SPEC_MODE_MAX_OUTPUT_TOKENS="${SPEC_MODE_MAX_OUTPUT_TOKENS:-16384}"
 # Model escalation ladder: pipe-separated "from=to" pairs consumed by get_model_ladder_step().
 # R2: MiniMax-M3 → deepseek-r1 (reasoning escalation). Legacy GLM entries kept for story-level retryModel compat.
@@ -317,7 +317,7 @@ export EPAM_RETRY_EXTENSION_MAX="${EPAM_RETRY_EXTENSION_MAX:-2}"
 # vendors/providers would supply a different map here.
 export EPAM_MODEL_PROVIDER_MAP="${EPAM_MODEL_PROVIDER_MAP:-zhipuai/*=openrouter|moonshotai/*=openrouter|z-ai/*=openrouter|glm-*=openrouter|kimi-*=openrouter|deepseek/*=openrouter|MiniMax-*=minimax}"
 # MiniMax runtime settings
-export MINIMAX_TOOL_TIMEOUT_MS="${MINIMAX_TOOL_TIMEOUT_MS:-15000}"
+export MINIMAX_TOOL_TIMEOUT_MS="${MINIMAX_TOOL_TIMEOUT_MS}"
 export PRD_FILE
 export SKIP_REGRESSION_GUARD=true
 export EPAM_RALPH_WIGGUM_ENABLED=0

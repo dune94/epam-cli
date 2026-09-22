@@ -1,0 +1,6 @@
+test issues are unchanged from iter 9. The instruction says to raise blockers that still stand.
+
+Let me keepit concise.
+</think>
+
+{"verdict":"changes_requested","issues":[{"severity":"blocker","file":"tests/test_dedup.py","line":155,"description":"AC1/AC2 reason-string assertions

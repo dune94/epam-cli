@@ -31,6 +31,23 @@ if start != -1:
             result, _ = decoder.raw_decode(repaired, start)
         except (ValueError, json.JSONDecodeError):
             result = None
+# THE BRACE THE THINKING BLOCK ATE. MiniMax-M3 closes </think> after it has begun the answer, so
+# stripThinkingBlocks takes the answer's opening `{"` with the block and the review arrives as
+#     dict":"approved","issues":[...]}
+# — intact either side of a tag the model misplaced (raw SSE, logs/stream-captures/, 2026-09-22;
+# four reviews across two runs recorded "no parseable verdict" on work that was approved). Repair
+# that exact shape: a fragment whose first key is a verdict, re-headed with the brace it lost.
+if not isinstance(result, dict) or 'verdict' not in result:
+    # What survives is a SUFFIX of the first key: `{"ver` went with the block, leaving `dict":`.
+    m = re.match(r'\s*(\w+)"\s*:', text)
+    if m and m.group(1) and 'verdict'.endswith(m.group(1)):
+        try:
+            candidate, _ = json.JSONDecoder().raw_decode('{"verdict' + text[m.end(1):])
+            if isinstance(candidate, dict) and 'verdict' in candidate:
+                result = candidate
+        except (ValueError, json.JSONDecodeError):
+            pass
+
 if not isinstance(result, dict) or 'verdict' not in result:
     # No parseable verdict = the review did NOT happen. Never silently approve —
     # that rubber-stamped an unreviewed change live (2026-07-23). Block instead.

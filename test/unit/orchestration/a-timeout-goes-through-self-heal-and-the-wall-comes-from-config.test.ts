@@ -45,9 +45,12 @@ describe('the story wall is declared, not written into the script', () => {
   it('the declared walls are large enough for a story that must read before it writes', () => {
     // 003b died at 600s having read a 369-line file and planned. The engine's floor is now
     // measured against that story, not against the cheapest one.
-    expect(Number(cfg.timeouts.storyTimeoutSecs)).toBeGreaterThanOrEqual(1800);
-    expect(Number(cfg.timeouts.storyEffortTimeoutSecs.low)).toBeGreaterThanOrEqual(1200);
-    expect(Number(cfg.timeouts.storyWallMaxSecs)).toBeGreaterThanOrEqual(10800);
+    // Quadrupled on the operator's instruction (2026-09-22): the clock is not the pipeline's
+    // governance — the iteration budget, the deliverables gate and the review are. The wall sits
+    // far above the work so a slow attempt finishes and only a hung one is stopped.
+    expect(Number(cfg.timeouts.storyTimeoutSecs)).toBeGreaterThanOrEqual(14400);
+    expect(Number(cfg.timeouts.storyEffortTimeoutSecs.low)).toBeGreaterThanOrEqual(7200);
+    expect(Number(cfg.timeouts.storyWallMaxSecs)).toBeGreaterThanOrEqual(86400);
   });
 
   it('the watchdog carries no timeout literal — every tier comes from the declaration', () => {

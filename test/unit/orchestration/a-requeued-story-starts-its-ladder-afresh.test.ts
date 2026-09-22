@@ -33,19 +33,23 @@ function story(id: string, status: string, completed: boolean, extra: Record<str
 const PRD = {
   project: { name: 'regintel', outputDir: '/tmp/regintel-requeue-fixture' },
   configuration: { protectedPaths: [] },
-  implementationOrder: { scaffold: ['REGI-001'], core: ['REGI-002', 'REGI-004-A', 'REGI-010-A'] },
+  implementationOrder: { scaffold: ['REGI-001'], core: ['REGI-002', 'REGI-003b', 'REGI-004-A', 'REGI-010-A'] },
   stories: [
     story('REGI-001', 'completed', true, { completedAt: '2026-09-21T14:40:00Z' }),
     story('REGI-002', 'completed', true, { completedAt: '2026-09-21T15:43:00Z' }),
     story('REGI-004-A', 'failed', false, { error: 'Failed to implement after 8 attempts' }),
     story('REGI-010-A', 'failed', false, { error: 'Failed to implement after 8 attempts' }),
+    // Escalated: completed, then rejected by review with its ladder exhausted. Left as it is, every
+    // resume re-reviews it on the same exhausted ladder and escalates again — a dead end. A resume
+    // is the operator's answer to "human review required": the story goes round again, afresh.
+    story('REGI-003b', 'completed', true, { completedAt: '2026-09-21T16:02:00Z', reviewStatus: 'escalated' }),
   ],
 };
 
 function remediate() {
   const dir = mkdtempSync(join(tmpdir(), 'requeue-ladder-'));
   const logDir = join(dir, 'logs'); mkdirSync(join(logDir, 'story-retry-state'), { recursive: true }); mkdirSync(join(logDir, 'story-rung'));
-  for (const id of ['REGI-002', 'REGI-004-A', 'REGI-010-A']) {
+  for (const id of ['REGI-002', 'REGI-003b', 'REGI-004-A', 'REGI-010-A']) {
     writeFileSync(join(logDir, `story-retry-state/${id}.count`), id === 'REGI-002' ? '2' : '8');
     writeFileSync(join(logDir, `story-retry-state/${id}.model`), 'z-ai/glm-5.3');
     writeFileSync(join(logDir, `story-rung/${id}.json`), JSON.stringify({ model: 'z-ai/glm-5.3', provider: 'openrouter' }));
@@ -61,6 +65,7 @@ function remediate() {
     a_count: has('story-retry-state/REGI-004-A.count'), a_model: has('story-retry-state/REGI-004-A.model'), a_rung: has('story-rung/REGI-004-A.json'),
     b_count: has('story-retry-state/REGI-010-A.count'),
     kept_count: has('story-retry-state/REGI-002.count'), kept_rung: has('story-rung/REGI-002.json'),
+    esc_count: has('story-retry-state/REGI-003b.count'),
   };
   rmSync(dir, { recursive: true, force: true });
   return { out: `${r.stdout}\n${r.stderr}`, by, state };
@@ -85,6 +90,13 @@ describe('a story the resume re-queues starts its ladder afresh', () => {
     expect(r.by['REGI-002'].status).toBe('completed');
     expect(r.state.kept_count).toBe(true);
     expect(r.state.kept_rung).toBe(true);
+  });
+
+  it('an escalated story is re-queued too, afresh — a resume is the operator\'s answer to "human review required"', () => {
+    expect(r.by['REGI-003b'].status).toBe('pending');
+    expect(r.by['REGI-003b'].completed).toBe(false);
+    expect(r.by['REGI-003b'].reviewStatus ?? null).toBeNull();
+    expect(r.state.esc_count).toBe(false);
   });
 
   it('says what it did', () => {

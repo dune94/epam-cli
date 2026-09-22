@@ -175,7 +175,12 @@ ladder_reset = []
 for s in stories:
     if s['id'] not in reset_scope_ids:
         continue
-    if IS_RESUME and s.get('completed') and s.get('status') == 'completed':
+    # AN ESCALATED STORY GOES ROUND AGAIN ON A RESUME. "Escalated" is the review loop saying
+    # "human review required": the story completed, review rejected it, and its ladder was spent.
+    # A resume IS the human's answer. Left completed-but-escalated, the story is re-reviewed on
+    # the same spent ladder and escalates again, every resume — regintel 140717Z resume 4
+    # (2026-09-21): REGI-003b, red because a sibling's rewrite changed dedup.py under its tests.
+    if IS_RESUME and s.get('completed') and s.get('status') == 'completed' and s.get('reviewStatus') != 'escalated':
         continue
     changed = False
     if s.get('status') not in ('pending', 'deprecated') or s.get('completed'):
@@ -183,6 +188,7 @@ for s in stories:
             ladder_reset.append(s['id'])
         s['status']    = 'pending'
         s['completed'] = False
+        s.pop('reviewStatus', None)
         changed = True
     for k in RUNTIME_FIELDS:
         if k in s:

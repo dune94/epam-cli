@@ -498,13 +498,12 @@ run_story_with_watchdog() {
     # project-config-loaded fallback — same "manual env var beats project
     # config" precedence load_llm_settings_json() already uses elsewhere),
     # else scale by effort.
-    local timeout_secs
+    local timeout_secs story_effort=""
     if [ -n "${STORY_TIMEOUT_SECS:-}" ]; then
         timeout_secs="$STORY_TIMEOUT_SECS"
     elif [ -n "${EPAM_STORY_TIMEOUT_SECS:-}" ]; then
         timeout_secs="$EPAM_STORY_TIMEOUT_SECS"
     else
-        local story_effort
         story_effort=$(jq -r --arg id "$story_id" \
             '.stories[] | select(.id == $id) | .effort // "medium"' \
             "${MAIN_PRD_FILE:-$PRD_FILE}" 2>/dev/null || echo "medium")
@@ -517,6 +516,23 @@ run_story_with_watchdog() {
         local role_multiplier
         role_multiplier=$(resolve_role_timeout_multiplier "$story_id")
         timeout_secs=$(python3 "$SCRIPT_DIR/lib/handlers/scaled-timeout-secs.py" "${role_multiplier}" "${timeout_secs}" 2>/dev/null || echo "$timeout_secs")
+    fi
+
+    # A PROJECT MAY RAISE A WALL; IT MAY NOT SILENTLY DROP ONE BELOW THE DECLARED FLOOR. The
+    # per-invocation env var and a project's config.env both take priority over the tier — which is
+    # how EPAM_STORY_TIMEOUT_SECS=600 in a project's config.env survived the engine's four-hour
+    # declaration and killed REGI-004-A and REGI-010-B mid-fix (regintel resume 6, 2026-09-22).
+    # The floor is itself config (timeouts.storyEffortTimeoutSecs / storyTimeoutSecs), so this adds
+    # no number; it makes the declaration authoritative and says when it had to act.
+    local _wall_floor="${EPAM_STORY_EFFORT_TIMEOUT_DEFAULT_SECS:-${EPAM_STORY_TIMEOUT_SECS_FLOOR:-}}"
+    case "${story_effort:-medium}" in
+        low)    _wall_floor="${EPAM_STORY_EFFORT_TIMEOUT_LOW_SECS:-$_wall_floor}" ;;
+        medium) _wall_floor="${EPAM_STORY_EFFORT_TIMEOUT_MEDIUM_SECS:-$_wall_floor}" ;;
+        high)   _wall_floor="${EPAM_STORY_EFFORT_TIMEOUT_HIGH_SECS:-$_wall_floor}" ;;
+    esac
+    if [ -n "$_wall_floor" ] && [ "${timeout_secs:-0}" -lt "$_wall_floor" ] 2>/dev/null; then
+        warning "[orch] story wall ${timeout_secs}s is below the declared floor for effort '${story_effort:-medium}' — using ${_wall_floor}s (a project may raise a wall, not lower it past the declaration)"
+        timeout_secs="$_wall_floor"
     fi
 
     # THE WALL MUST HONOUR THE ITERATION BUDGET IT IS POLICING.

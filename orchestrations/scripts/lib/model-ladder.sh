@@ -1578,6 +1578,39 @@ resolve_escalation() {
     export COORDINATOR_PROMPT_AMENDMENT
     # The tree as it stands before the owner's fix begins — restored if the fix does not converge,
     # so nothing of a half-done edit reaches $escalating_story_id's commit (see _restore_tree_snapshot).
+    # AN ESCALATION ALREADY TRIED IS NOT TRIED AGAIN — ITS RESULT IS HANDED BACK INSTEAD.
+    #
+    # Nothing is refused and nothing is discarded: the scoped fix is simply not RE-RUN for a
+    # (sibling, file) pair that already failed this run, and what happened last time is given to
+    # the ESCALATING story, which is the only thing that lets it try something different. Running
+    # it again produces the same result at the price of a full writer attempt.
+    #
+    # Live 2026-09-23, one story, eight attempts, $5.28: three attempts re-entered escalations
+    # that had already failed in the same run (REGI-003a twice, REGI-002, REGI-005-B) — about $2
+    # of it. Earlier the same shape ran between REGI-002 and REGI-001a, each correctly diagnosing
+    # that the defect lived in the other story's file.
+    local _esc_ledger="${LOG_DIR}/escalations-tried.txt"
+    local _esc_key="${sibling_id}::${target_file}"
+    if [ -f "$_esc_ledger" ] && grep -Fxq "$_esc_key" "$_esc_ledger" 2>/dev/null; then
+        local _esc_prev_wt="${PROJECT_ROOT%/}-esc-$(printf '%s' "$sibling_id" | tr -c '[:alnum:]._-' '_')"
+        warning "  [Escalation] $sibling_id was already asked to fix $target_file this run and did not converge — NOT re-running it"
+        log "  [Escalation] what it tried is in ${_esc_prev_wt} (kept); ${escalating_story_id} is told, so it can take a different route"
+        COORDINATOR_PROMPT_AMENDMENT="${COORDINATOR_PROMPT_AMENDMENT:-}
+
+## This escalation was already attempted
+${sibling_id} was asked to fix ${target_file} earlier in this run and its scoped fix did not
+converge. Its work was NOT discarded — it is in ${_esc_prev_wt} — but asking again produces the
+same result. Diagnosis recorded then: ${diagnosis:-none recorded}.
+
+Treat that route as closed for this run: either solve it within your own declared files, or say
+what evidence would change the diagnosis."
+        export COORDINATOR_PROMPT_AMENDMENT
+        rm -f "$escalation_file"
+        return 1
+    fi
+    mkdir -p "$(dirname "$_esc_ledger")" 2>/dev/null || true
+    printf '%s\n' "$_esc_key" >> "$_esc_ledger"
+
     # THE SCOPED FIX RUNS IN ITS OWN WORKTREE — the pipeline's own isolation, used here so that
     # attribution is STRUCTURAL instead of enforced by deleting.
     #

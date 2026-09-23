@@ -2029,6 +2029,7 @@ $_kb_section"
                         _ov_temp_locked=$(jq -r '.temperatureLocked // false' <<<"$_override_json")
                         _ov_temp=$(jq -r '.temperature // empty' <<<"$_override_json")
                         _ov_iter=$(jq -r '.maxIterations // empty' <<<"$_override_json")
+                        _ov_out_tokens=$(jq -r '.maxOutputTokens // empty' <<<"$_override_json")
                         _ov_compress_at=$(jq -r '.autoCompressAt // empty' <<<"$_override_json")
                         _ov_compress_n=$(jq -r '.autoCompressEveryNIterations // empty' <<<"$_override_json")
                         # FLOOR, not overwrite — see max_effort(). The rung's escalation must survive.
@@ -2110,6 +2111,24 @@ $_kb_section"
                                 -v a="${_effective_max_iterations:-0}" \
                                 -v b="$_ov_iter" -v bump="${STORY_ITERATION_BUMP_TOTAL:-0}" \
                                 'BEGIN { base = (b + bump > a ? b + bump : a); printf "%d", base }')
+                        fi
+                        # THE MODEL'S OWN MAXIMUM IS THE OUTPUT BUDGET, AND A TIER CAN ONLY RAISE IT.
+                        #
+                        # A cap below what the model can emit has exactly one effect: truncation.
+                        # It saves nothing — spend is bounded by costControls.storyBudgetHardLimitUsd,
+                        # passed to the runner as --max-budget-usd — and a truncated attempt that gets
+                        # retried costs MORE than one that finishes. Every authored ceiling this
+                        # pipeline has had was eventually a wall: 6144, 8192, 12288, 16384, and on
+                        # 2026-09-23 the run's traces showed 85 of 6,301 iterations ending exactly at
+                        # one while the provider's registry said these models emit 131,072 to 943,718.
+                        #
+                        # The number is the PROVIDER'S (scripts/refresh-model-limits.sh writes it from
+                        # the model registry), so nothing here chooses it, and a model whose override
+                        # declares none leaves the tier's value exactly as it was.
+                        if [ -n "${_ov_out_tokens:-}" ] && [ "$_ov_out_tokens" -gt "${STORY_MAX_OUTPUT_TOKENS:-0}" ] 2>/dev/null; then
+                            log "  ModelOverride[${STORY_MODEL:-model}]: output budget ${STORY_MAX_OUTPUT_TOKENS:-?} → ${_ov_out_tokens} (the model's own maximum; a tier may raise this, never lower it)"
+                            STORY_MAX_OUTPUT_TOKENS="$_ov_out_tokens"
+                            export STORY_MAX_OUTPUT_TOKENS
                         fi
                         [ -n "$_ov_compress_at" ] && _effective_compress_at="$_ov_compress_at"
                         [ -n "$_ov_compress_n" ] && _effective_compress_every_n="$_ov_compress_n"

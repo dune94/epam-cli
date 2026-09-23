@@ -112,7 +112,8 @@
       "topP": 0.85,
       "temperature": 0.2,
       "miniTier": true,
-      "charsPerToken": 4
+      "charsPerToken": 4,
+      "maxOutputTokens": 128000
     },
     "minimax-m3": {
       "matchOn": "model",
@@ -122,7 +123,8 @@
       "autoCompressAt": 180000,
       "topP": 0.85,
       "temperature": 0.2,
-      "charsPerToken": 4
+      "charsPerToken": 4,
+      "maxOutputTokens": 512000
     },
     "glm-5.2": {
       "matchOn": "model",
@@ -135,7 +137,8 @@
       "providerOrder": [
         "CoreWeave"
       ],
-      "charsPerToken": 4
+      "charsPerToken": 4,
+      "maxOutputTokens": 131072
     },
     "kimi-k2.5": {
       "matchOn": "model",
@@ -147,7 +150,8 @@
       "autoCompressEveryNIterations": 20,
       "topP": 1,
       "temperatureLocked": true,
-      "charsPerToken": 4
+      "charsPerToken": 4,
+      "maxOutputTokens": 235929
     },
     "kimi-k3": {
       "matchOn": "model",
@@ -161,7 +165,8 @@
       "providerOrder": [
         "Moonshot AI"
       ],
-      "charsPerToken": 4
+      "charsPerToken": 4,
+      "maxOutputTokens": 943718
     },
     "minimax-m2.7": {
       "matchOn": "model",
@@ -174,7 +179,8 @@
       "topP": 0.85,
       "temperature": 0.2,
       "miniTier": true,
-      "charsPerToken": 4
+      "charsPerToken": 4,
+      "maxOutputTokens": 131072
     },
     "glm-5.3": {
       "matchOn": "model",
@@ -188,10 +194,17 @@
       "providerOrder": [
         "Z.AI"
       ],
-      "charsPerToken": 4
+      "charsPerToken": 4,
+      "maxOutputTokens": 131072
     },
     "$miniTierWhy": "miniTier marks the cheap, fast rung \u2014 the models that are quick but limited in generation capacity. It was decided in engine code by sniffing vendor naming habits (-mini, -flash, -haiku, minimax-m2), which breaks in both directions: a cheap model named differently read as capable, and a capable model containing -flash read as cheap. The set that declares the model declares its tier.",
-    "$whyCharsPerToken": "INPUT CAPACITY IN CHARACTERS. autoCompressAt is the models input ceiling in TOKENS; callers that must size a payload measure it in characters. The ratio belongs with the model, because it is a property of that models tokenizer, not of any caller. Declared so a caller derives its budget instead of inventing one: the roster review carried a literal 60000 in code, which split a 276KB roster into six calls and failed the whole review whenever any one of them answered off-schema."
+    "$whyCharsPerToken": "INPUT CAPACITY IN CHARACTERS. autoCompressAt is the models input ceiling in TOKENS; callers that must size a payload measure it in characters. The ratio belongs with the model, because it is a property of that models tokenizer, not of any caller. Declared so a caller derives its budget instead of inventing one: the roster review carried a literal 60000 in code, which split a 276KB roster into six calls and failed the whole review whenever any one of them answered off-schema.",
+    "glm-5.1": {
+      "matchOn": "model",
+      "matchSubstring": "glm-5.1",
+      "maxOutputTokens": 128000,
+      "_why": "created by refresh-model-limits.sh: a ladder rung with no override is capped by its tier, which is how truncation returns for one rung while the others are free."
+    }
   },
   "runners": {
     "claude": {
@@ -214,5 +227,6 @@
     "$whyNotYetLive": "As of this writing, nothing in the runtime ladder-exhaustion path (llm-handler.sh, claude.sh, brownfield-repro-test-writer.sh) reads finalFallback \u2014 exhaustion retries the same rung instead. agent-check.js's dry-run cost estimator is the only reader, and even there this is unreachable while any ladder tier has a startModel (all of them do). Declared for correctness and for whenever that wiring exists, not because a run can reach this today.",
     "model": "MiniMax-M3",
     "provider": "openrouter"
-  }
+  },
+  "$whyModelOutputLimits": "maxOutputTokens on each model override is the PROVIDER'S declared max_completion_tokens, written by scripts/refresh-model-limits.sh and never by hand. A cap below the model's own maximum has exactly one effect \u2014 truncation \u2014 because spend is bounded by costControls.storyBudgetHardLimitUsd, not by output length. Re-run the script when the provider's limits change."
 }

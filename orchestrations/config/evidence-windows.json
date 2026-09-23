@@ -1,8 +1,8 @@
 {
   "$what": "HOW MUCH EVIDENCE EACH AGENT SEES, named so it can be changed.",
   "$why": [
-    "These were literals at their call sites — head -c 8000 of a gate log, head -40 of a compiler's",
-    "output, head -100 of a source file — and every one decides what an agent is shown and therefore",
+    "These were literals at their call sites \u2014 head -c 8000 of a gate log, head -40 of a compiler's",
+    "output, head -100 of a source file \u2014 and every one decides what an agent is shown and therefore",
     "what it can conclude. A number with no name cannot be tuned by an operator, cannot appear in a",
     "cost estimate, and cannot be found by anyone asking why an agent missed something that was three",
     "lines past the cut.",
@@ -14,96 +14,97 @@
   ],
   "windows": {
     "gateLogChars": {
-      "value": 8000,
+      "value": 400000,
       "$why": "A QA gate's log, handed to the self-heal analyst. Long enough for a stack trace and the assertion around it."
     },
     "lintLogChars": {
-      "value": 8000,
-      "$why": "The lint log for the same analyst — same shape of evidence, same window."
+      "value": 400000,
+      "$why": "The lint log for the same analyst \u2014 same shape of evidence, same window."
     },
     "typecheckLines": {
-      "value": 40,
+      "value": 500,
       "$why": "Compiler errors are one line each and the first are the causes; the rest are usually consequences."
     },
     "lintFindingLines": {
-      "value": 25,
+      "value": 500,
       "$why": "Lint findings handed to a writer as a correction list."
     },
     "failureExcerptLines": {
-      "value": 150,
+      "value": 5000,
       "$why": "A failing test's output. Wide, because the assertion and the value that produced it can be far apart."
     },
     "mutationSourceLines": {
-      "value": 100,
+      "value": 5000,
       "$why": "The source file a mutant-hunter reasons about."
     },
     "mutationTestLines": {
-      "value": 60,
+      "value": 500,
       "$why": "The test file paired with it."
     },
     "storyTitleLines": {
-      "value": 10,
+      "value": 500,
       "$why": "A list of story titles for context, not for analysis."
     },
     "testOutputLines": {
-      "value": 60,
+      "value": 500,
       "$why": "A failing or timed-out test run, appended to what the writer reads. The assertion and the values that produced it are usually near the top."
     },
     "typecheckErrorLines": {
-      "value": 60,
+      "value": 500,
       "$why": "New type errors introduced by a story, handed to the writer as the thing to fix."
     },
     "lintOutputLines": {
-      "value": 40,
-      "$why": "Lint violations in files this story changed — the writer must fix these or the pre-commit hook reverts its work."
+      "value": 500,
+      "$why": "Lint violations in files this story changed \u2014 the writer must fix these or the pre-commit hook reverts its work."
     },
     "changedFileLines": {
-      "value": 60,
+      "value": 500,
       "$why": "The list of files a story changed, shown as context rather than analysed."
     },
     "tamperedFileLines": {
-      "value": 20,
+      "value": 500,
       "$why": "Files touched inside a vendored directory. A handful names the problem; a long list does not change the verdict."
     },
     "declaredDependenciesInPrompt": {
-      "value": 300,
-      "$why": "The project's declared dependencies, given to the mint. On 2026-08-07 an empty estate made it invent a vendor, so this list is the guard against that — wide, because the cost of missing one is a whole roster briefed on the wrong product."
+      "value": 5000,
+      "$why": "The project's declared dependencies, given to the mint. On 2026-08-07 an empty estate made it invent a vendor, so this list is the guard against that \u2014 wide, because the cost of missing one is a whole roster briefed on the wrong product."
     },
     "quotesPerDocument": {
-      "value": 6,
+      "value": 500,
       "$why": "Quotes carried from each ticket-linked document. Enough to establish what the source says without pasting the document."
     },
     "fixSitesInPrompt": {
-      "value": 5,
+      "value": 500,
       "$why": "Located fix sites shown to the spec agent so it anchors criteria to real code rather than guessing."
     },
     "filesPerStory": {
-      "value": 3,
+      "value": 500,
       "$why": "A story's own declared files. A handful is a story; more is a story that should have been split."
     },
     "vcSubjectChars": {
-      "value": 160,
+      "value": 5000,
       "$why": "The subject line of a fallback verification criterion, trimmed so a whole description does not become the criterion."
     },
     "fixSitesForReproWriter": {
-      "value": 20,
+      "value": 500,
       "$why": "Fix sites shown to the repro-test writer, so the test it writes exercises the located behaviour rather than a guess."
     },
     "vcsForReproWriter": {
-      "value": 20,
-      "$why": "Verification criteria shown alongside them — the observable behaviour the test must assert."
+      "value": 500,
+      "$why": "Verification criteria shown alongside them \u2014 the observable behaviour the test must assert."
     },
     "reproFailureJsonChars": {
-      "value": 1200,
+      "value": 400000,
       "$why": "The failure payload returned when a written test fails against the committed fix, fed back so the writer can correct it."
     },
     "quarantineRawChars": {
-      "value": 2000,
+      "value": 400000,
       "$why": "The raw agent output kept on a quarantined KB record. Enough to diagnose why it was rejected without storing an entire transcript."
     },
     "qaGateDiffLines": {
-      "value": 2000,
+      "value": 400000,
       "$why": "The phase diff handed to a QA gate. Was an undeclared head -2000 at the runtime-boundary call site, beside a diff base (${_rev_base:-HEAD~1}) that nothing ever set."
     }
-  }
+  },
+  "$whyCeilingsRaised": "RAISED VERY HIGH 2026-09-23, deliberately. Every one of these was a wall that stopped work or hid the evidence an agent needed, and each was found one at a time by a paid run: the analyst's remedy truncated to 200 characters, the writer shown 60 lines of a failing suite, three files of a story, 400 lines of the file it was rewriting. Until a programme runs clean end to end, NO ceiling here may be the reason anything stops or anything is unseen. These are not tuned values; they are deliberately far above any observed need, and they get tuned down only with evidence from a green run."
 }

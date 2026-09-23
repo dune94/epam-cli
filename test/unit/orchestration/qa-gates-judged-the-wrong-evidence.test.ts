@@ -36,7 +36,7 @@
  */
 import { describe, it, expect, beforeAll } from 'vitest';
 import { spawnSync } from 'node:child_process';
-import { mkdtempSync, writeFileSync, rmSync, mkdirSync, existsSync } from 'node:fs';
+import { mkdtempSync, writeFileSync, rmSync, mkdirSync, existsSync, readFileSync } from 'node:fs';
 import { join } from 'node:path';
 import { tmpdir } from 'node:os';
 
@@ -74,10 +74,14 @@ function repoWithFixThenTest() {
   git('config', 'user.email', 't@t');
   git('config', 'user.name', 't');
 
-  // A file long enough that a top-anchored window cannot reach the change — the live file was 436.
+  // LONGER THAN THE DECLARED WINDOW, WHATEVER THE WINDOW IS — the live file was 436 against a
+  // 100-line window. Pinned at 436, this stopped testing anything the moment the windows were
+  // raised on 2026-09-23: nothing truncated, so the excerpt carried no "lines X-Y of N" and the
+  // selection behaviour went unproven while being perfectly correct. The size follows the
+  // declaration, so the behaviour is proven at any ceiling.
   const before: string[] = [];
-  for (let i = 1; i <= 436; i += 1) {
-    before.push(i === 306 ? '  if (email && value && value !== email) {' : `  const line${i} = ${i};`);
+  for (let i = 1; i <= FILE_LINES; i += 1) {
+    before.push(i === CHANGE_AT ? '  if (email && value && value !== email) {' : `  const line${i} = ${i};`);
   }
   writeFileSync(join(repo, 'src/CheckoutForm.tsx'), before.join('\n') + '\n');
   git('add', '-A'); git('commit', '-qm', 'baseline');
@@ -101,6 +105,11 @@ function repoWithFixThenTest() {
 beforeAll(() => {
   expect(existsSync(LIB), `${LIB} does not exist`).toBe(true);
 });
+
+const _win = Number(JSON.parse(readFileSync(join(ROOT, 'orchestrations/config/evidence-windows.json'), 'utf8'))
+  .windows.mutationSourceLines.value);
+const FILE_LINES = Math.max(436, _win * 2);
+const CHANGE_AT = Math.floor(FILE_LINES * 0.7);
 
 describe('qa_gate_diff — the diff a gate must judge is THIS PHASE, not the last commit', () => {
   it('carries the FIX, which HEAD~1 structurally cannot', () => {
@@ -150,7 +159,7 @@ describe('qa_gate_diff — the diff a gate must judge is THIS PHASE, not the las
 });
 
 describe('qa_gate_excerpt — evidence is selected AROUND the change, never from the file head', () => {
-  it('SHOWS LINE 306 — the line every top-anchored window misses', () => {
+  it('SHOWS THE CHANGED LINE — the one every top-anchored window misses', () => {
     const r = repoWithFixThenTest();
     try {
       const got = bash(
@@ -168,7 +177,9 @@ describe('qa_gate_excerpt — evidence is selected AROUND the change, never from
         `qa_gate_excerpt "${r.repo}" "${r.logs}" "src/CheckoutForm.tsx" mutationSourceLines`);
       const lines = got.out.split('\n').filter(l => l.trim().length > 0);
       // 436-line file, 100-line window: a whole-file dump would defeat the window's purpose.
-      expect(lines.length).toBeLessThan(200);
+      // the declared window plus its annotation — not a literal, so raising the window
+      // cannot make this assertion false while the behaviour is correct
+      expect(lines.length).toBeLessThan(_win + 20);
       expect(lines.length).toBeGreaterThan(10);
     } finally { r.cleanup(); }
   });
@@ -178,7 +189,7 @@ describe('qa_gate_excerpt — evidence is selected AROUND the change, never from
     try {
       const got = bash(
         `qa_gate_excerpt "${r.repo}" "${r.logs}" "src/CheckoutForm.tsx" mutationSourceLines`);
-      expect(got.out).toMatch(/lines \d+-\d+ of 436/i);
+      expect(got.out).toMatch(new RegExp(`lines \\d+-\\d+ of ${FILE_LINES}`, 'i'));
     } finally { r.cleanup(); }
   });
 

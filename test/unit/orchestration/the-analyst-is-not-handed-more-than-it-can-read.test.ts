@@ -37,8 +37,14 @@ describe('the failure text handed to the analyst', () => {
     return r;
   };
 
-  // 40 failing suites, 12 lines each = 480 lines, well past any sane window
-  const huge = Array.from({ length: 40 }, (_, i) =>
+  // BIGGER THAN THE DECLARED WINDOW, WHATEVER THE WINDOW IS. This was 40 suites (480 lines),
+  // sized for a window of 150 — so when the windows were raised on 2026-09-23 nothing truncated,
+  // the dropped-note never appeared, and three assertions about truncation BEHAVIOUR failed while
+  // the behaviour itself was fine. A fixture pinned to yesterday's ceiling tests yesterday's
+  // ceiling; deriving it from the declaration tests the behaviour at any ceiling.
+  const _declaredWindow = Number(JSON.parse(engineSource(windows)).windows.failureExcerptLines.value);
+  const _suites = Math.max(40, Math.ceil(_declaredWindow / 12) + 10);
+  const huge = Array.from({ length: _suites }, (_, i) =>
     [`  FAIL src/area${i}/thing${i}.spec.tsx`,
       ...Array.from({ length: 11 }, (_, j) => `      detail line ${j} for suite ${i}`)].join('\n'),
   ).join('\n');

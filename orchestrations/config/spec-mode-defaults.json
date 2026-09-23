@@ -1,10 +1,10 @@
 {
   "$comment": "ENGINE-WIDE defaults for the spec pass. These were literals inside spec-mode-runner.js, changeable only by editing a 9,000-line script. An operator overrides any of them per run with the environment variable named beside each.",
   "toolCalls": {
-    "$comment": "How much an agent may LOOK before it must answer — the most consequential number in the spec pass. Live 2026-08-08 a survey told to open three repositories ran out of calls, reported 'no existing infrastructure, this is greenfield work' about a brownfield estate with 243 matching source files in the first codeline, and a roster was minted on that verdict.",
+    "$comment": "How much an agent may LOOK before it must answer \u2014 the most consequential number in the spec pass. Live 2026-08-08 a survey told to open three repositories ran out of calls, reported 'no existing infrastructure, this is greenfield work' about a brownfield estate with 243 matching source files in the first codeline, and a roster was minted on that verdict.",
     "perAgent": 8,
     "perAgentEnv": "SPEC_MODE_MAX_TOOL_CALLS",
-    "perCodelineSurvey": 8,
+    "perCodelineSurvey": 50,
     "perCodelineSurveyEnv": "EPAM_SURVEY_TOOL_CALLS_PER_CODELINE",
     "$perCodelineSurveyNote": "Multiplied by the number of codelines in scope. A single ceiling cannot serve both an agent looking at one repository and a survey instructed to open every repository in the estate.",
     "perSeam": {
@@ -20,14 +20,14 @@
       "list_files",
       "search"
     ],
-    "$grantComment": "GRANT KINDS. A seam declares WHICH KIND of access its work needs; the actual tool list is resolved per project at invocation, because a project's plugins decide part of it — mock3 grants codegraph_query because its codelines provision that plugin, and a project without it must not be handed a tool that does not exist. Naming tools per seam in the registry would freeze one project's answer into the engine, which is the defect this replaces: nine seams carried a literal 'bash,read_file,list_files,search' while twenty-six carried nothing at all, and the call sites resolved the real grant dynamically anyway.",
+    "$grantComment": "GRANT KINDS. A seam declares WHICH KIND of access its work needs; the actual tool list is resolved per project at invocation, because a project's plugins decide part of it \u2014 mock3 grants codegraph_query because its codelines provision that plugin, and a project without it must not be handed a tool that does not exist. Naming tools per seam in the registry would freeze one project's answer into the engine, which is the defect this replaces: nine seams carried a literal 'bash,read_file,list_files,search' while twenty-six carried nothing at all, and the call sites resolved the real grant dynamically anyway.",
     "grants": {
       "none": {
         "$what": "Judges text that is injected into its prompt. Reaching for a tool would mean the evidence it was given was incomplete.",
         "adds": []
       },
       "read-only": {
-        "$what": "Must read the repository to answer — the builtin floor plus whatever this project's plugins provide.",
+        "$what": "Must read the repository to answer \u2014 the builtin floor plus whatever this project's plugins provide.",
         "adds": []
       },
       "read-network": {
@@ -37,7 +37,7 @@
         ]
       },
       "execute": {
-        "$what": "Must RUN something to answer — tests, a build, a type check.",
+        "$what": "Must RUN something to answer \u2014 tests, a build, a type check.",
         "adds": [
           "bash"
         ]
@@ -50,7 +50,7 @@
         ]
       },
       "write-file": {
-        "$what": "Must produce ONE file the pipeline then reads, from what it is given and what it can read — and never run anything. The roster specialiser, handed `write` (bash + write_file), spent three attempts and ~350 shell calls exploring the registry and copying a source repository into the codeline instead of writing its roster (2026-09-12). A seam whose output is a file does not need a shell to write it.",
+        "$what": "Must produce ONE file the pipeline then reads, from what it is given and what it can read \u2014 and never run anything. The roster specialiser, handed `write` (bash + write_file), spent three attempts and ~350 shell calls exploring the registry and copying a source repository into the codeline instead of writing its roster (2026-09-12). A seam whose output is a file does not need a shell to write it.",
         "adds": [
           "write_file"
         ]
@@ -58,21 +58,21 @@
     }
   },
   "promptTrim": {
-    "$comment": "How much accumulated coordinator guidance an agent keeps. Live 2026-08-09 a writer's prompt hit 53366 chars against this threshold and was trimmed to the most recent sections — two thirds of its guidance discarded, with a WARNING the only trace. The section count replaced a 1 on 2026-07-11, after a run repeated an identical mistake five retries after being told not to, because a newer heading had pushed the earlier diagnosis out of a single-heading window.",
-    "thresholdChars": 16000,
+    "$comment": "How much accumulated coordinator guidance an agent keeps. Live 2026-08-09 a writer's prompt hit 53366 chars against this threshold and was trimmed to the most recent sections \u2014 two thirds of its guidance discarded, with a WARNING the only trace. The section count replaced a 1 on 2026-07-11, after a run repeated an identical mistake five retries after being told not to, because a newer heading had pushed the earlier diagnosis out of a single-heading window.",
+    "thresholdChars": 400000,
     "thresholdCharsEnv": "EPAM_PROMPT_SCRATCHPAD_THRESHOLD_CHARS",
     "$thresholdNote": "0 disables trimming entirely.",
     "keepRecentSections": 3,
     "keepRecentSectionsEnv": "EPAM_PROMPT_TRIM_KEEP_SECTIONS"
   },
   "existingFileInjection": {
-    "$comment": "How much of each declared file is injected verbatim into the writer prompt under '## Existing File Contents'. Measured live 2026-08-09 on AMSD-2041: that block was 34,510 of 86,809 prompt chars — 39% — and is paid again on every attempt. It is the term that DOMINATES prompt size: the guidance trim can only cut accumulated coordinator notes, and no amount of trimming touches the injected files. Lowering this shrinks the prompt directly and pushes the writer toward codegraph_query and ReadFile for what it actually needs. Was a literal 400 inside build_implementation_prompt.",
-    "maxLinesPerFile": 400,
+    "$comment": "How much of each declared file is injected verbatim into the writer prompt under '## Existing File Contents'. Measured live 2026-08-09 on AMSD-2041: that block was 34,510 of 86,809 prompt chars \u2014 39% \u2014 and is paid again on every attempt. It is the term that DOMINATES prompt size: the guidance trim can only cut accumulated coordinator notes, and no amount of trimming touches the injected files. Lowering this shrinks the prompt directly and pushes the writer toward codegraph_query and ReadFile for what it actually needs. Was a literal 400 inside build_implementation_prompt.",
+    "maxLinesPerFile": 20000,
     "maxLinesPerFileEnv": "EPAM_EXISTING_FILE_MAX_LINES",
-    "$note": "Truncation stays visible to the writer either way — a file silently cut is how an agent concludes an export does not exist and invents one."
+    "$note": "Truncation stays visible to the writer either way \u2014 a file silently cut is how an agent concludes an export does not exist and invents one."
   },
   "toolPolicy": {
-    "$comment": "What the writer's tools do instead of shelling out. Measured live 2026-08-09 on one story: bash 330 calls / 0.5 MB (56 grep, 45 cat, 21 ls, 16 sed, 10 find) and read_file 202 calls / 1.1 MB, against codegraph_query 1. Three of the four causes were BROKEN TOOLS, fixed the same day: search silently returned '(no matches found)' for patterns that existed (grep fallback lost -E and --include), read_file ignored startLine/endLine and returned whole files, and an unchanged file was re-sent in full on every read. This policy is the fourth part — it stops the shell being used for work the indexes answer better, and only makes sense now the tools it points at actually work.",
+    "$comment": "What the writer's tools do instead of shelling out. Measured live 2026-08-09 on one story: bash 330 calls / 0.5 MB (56 grep, 45 cat, 21 ls, 16 sed, 10 find) and read_file 202 calls / 1.1 MB, against codegraph_query 1. Three of the four causes were BROKEN TOOLS, fixed the same day: search silently returned '(no matches found)' for patterns that existed (grep fallback lost -E and --include), read_file ignored startLine/endLine and returned whole files, and an unchanged file was re-sent in full on every read. This policy is the fourth part \u2014 it stops the shell being used for work the indexes answer better, and only makes sense now the tools it points at actually work.",
     "bashExplorationRedirect": {
       "verbs": {
         "grep": "codegraph_query (mode \"explore\" for a feature, \"query\"/\"callers\" for a symbol) or the search tool",
@@ -85,7 +85,7 @@
       "pathOverrides": [
         {
           "match": "node_modules",
-          "use": "resolve_package_symbol (a symbol's real declared shape) or dependency_contract (which option keys a dependency accepts) — codegraph_query indexes THIS repository only and cannot answer questions about a dependency"
+          "use": "resolve_package_symbol (a symbol's real declared shape) or dependency_contract (which option keys a dependency accepts) \u2014 codegraph_query indexes THIS repository only and cannot answer questions about a dependency"
         }
       ],
       "$note": "sed is deliberately NOT redirected: it is used for editing as well as reading, and blocking it would break real work. A verb absent from this map is allowed."
@@ -93,18 +93,18 @@
     "readDedupe": true,
     "readDedupeEnv": "EPAM_READ_DEDUPE",
     "bashExplorationRedirectEnv": "EPAM_BASH_EXPLORATION_REDIRECT",
-    "$readDedupeNote": "RE-ENABLED 2026-08-10. Disabled 2026-08-09 after a live failure: the notice told the model 'call again with force: true', and the writer spent its whole attempt emitting <read_file force=\"true\" /> as TEXT rather than as tool calls, wrote nothing, and died. 13 green tests missed it because every fixture exercised a compliant caller. The stated precondition for re-enabling was a fixture reproducing a model that MISHANDLES the notice: test/unit/tools/read-dedupe-survives-a-noncompliant-model.test.ts, 11 tests, both behaviours mutation-verified. The DESIGN changed with it — recovery no longer requires the model to emit anything. A second request for the same unchanged file returns the body automatically, because asking again is itself evidence that compaction evicted it. `force` is still honoured, including as the string models actually send. Measured on the attempt that motivated this: 126 read_file calls, 44 distinct paths, 65.1% duplicates, one already-injected file read 34 times."
+    "$readDedupeNote": "RE-ENABLED 2026-08-10. Disabled 2026-08-09 after a live failure: the notice told the model 'call again with force: true', and the writer spent its whole attempt emitting <read_file force=\"true\" /> as TEXT rather than as tool calls, wrote nothing, and died. 13 green tests missed it because every fixture exercised a compliant caller. The stated precondition for re-enabling was a fixture reproducing a model that MISHANDLES the notice: test/unit/tools/read-dedupe-survives-a-noncompliant-model.test.ts, 11 tests, both behaviours mutation-verified. The DESIGN changed with it \u2014 recovery no longer requires the model to emit anything. A second request for the same unchanged file returns the body automatically, because asking again is itself evidence that compaction evicted it. `force` is still honoured, including as the string models actually send. Measured on the attempt that motivated this: 126 read_file calls, 44 distinct paths, 65.1% duplicates, one already-injected file read 34 times."
   },
   "timeouts": {
-    "$comment": "How long a model call may take, in SECONDS. Every seam in invocation-profiles.json declares its own timeoutSecs and seamInvocationEnv exports it as EPAM_TIMEOUT_SECS — but until 2026-08-17 no call site read it, so all 36 declarations were inert and every call was bounded by a literal in code instead. prompt-builder declared 900s, was cut off at 360s, and took a survey, a roster, an assignment and 12 generated prompts with it 30 minutes into a run. The writer, the reviewer and the repro-test writer all declare 900s and all got 360s, which is a plausible source of writer timeouts nobody could explain.",
+    "$comment": "How long a model call may take, in SECONDS. Every seam in invocation-profiles.json declares its own timeoutSecs and seamInvocationEnv exports it as EPAM_TIMEOUT_SECS \u2014 but until 2026-08-17 no call site read it, so all 36 declarations were inert and every call was bounded by a literal in code instead. prompt-builder declared 900s, was cut off at 360s, and took a survey, a roster, an assignment and 12 generated prompts with it 30 minutes into a run. The writer, the reviewer and the repro-test writer all declare 900s and all got 360s, which is a plausible source of writer timeouts nobody could explain.",
     "$precedence": "RUNCLAUDE_TIMEOUT_MS (an operator forcing a number while debugging) beats the seam's own timeoutSecs, which beats this default. This default applies only to calls made at no seam.",
-    "defaultSecs": 360,
-    "localToolMs": 20000,
-    "$localToolWhy": "How long a LOCAL tool subprocess may take — the ecosystem scan, not a model call. It was the literal 20000 at two call sites (mint-agents-step.js and lib/handlers/agent-skills.js), which is one decision with two homes: a codeline large enough to need longer got a truncated scan in both places, and raising it meant finding both."
+    "defaultSecs": 900,
+    "localToolMs": 120000,
+    "$localToolWhy": "How long a LOCAL tool subprocess may take \u2014 the ecosystem scan, not a model call. It was the literal 20000 at two call sites (mint-agents-step.js and lib/handlers/agent-skills.js), which is one decision with two homes: a codeline large enough to need longer got a truncated scan in both places, and raising it meant finding both."
   },
   "retrieval": {
-    "$why": "How a code-search query is built from a story. This lived as an inline regex and a fixed phrase inside two functions in spec-mode-runner.js, and the two copies had already drifted — one prefixed \"applies handles processes resolves\", the other \"applies handles processes calculates resolves\". A language's stopwords are an INPUT, not an engine fact: a ticket written in another language keeps every filler word while losing nothing meaningful, and nothing reports it.",
-    "$stopwordsWhy": "Removed from the story title before it becomes a search query, so the query carries domain terms rather than grammar. English only, because the tickets are English by operator decision — change this list, not the engine, when that stops being true.",
+    "$why": "How a code-search query is built from a story. This lived as an inline regex and a fixed phrase inside two functions in spec-mode-runner.js, and the two copies had already drifted \u2014 one prefixed \"applies handles processes resolves\", the other \"applies handles processes calculates resolves\". A language's stopwords are an INPUT, not an engine fact: a ticket written in another language keeps every filler word while losing nothing meaningful, and nothing reports it.",
+    "$stopwordsWhy": "Removed from the story title before it becomes a search query, so the query carries domain terms rather than grammar. English only, because the tickets are English by operator decision \u2014 change this list, not the engine, when that stops being true.",
     "stopwords": [
       "the",
       "a",
@@ -131,20 +131,21 @@
     ],
     "$queryPrefixWhy": "Verb terms that bias the search toward code that ACTS on the domain terms rather than merely mentioning them.",
     "queryPrefix": "applies handles processes calculates resolves",
-    "$limitsWhy": "Caps on what is sent to the search index. They were magic numbers at four call sites (200/300/400). Truncation drops whole terms at a word boundary, never mid-term — a half word matches nothing and silently narrows the search.",
-    "termChars": 200,
-    "queryChars": 400,
-    "symptomQueryChars": 400,
+    "$limitsWhy": "Caps on what is sent to the search index. They were magic numbers at four call sites (200/300/400). Truncation drops whole terms at a word boundary, never mid-term \u2014 a half word matches nothing and silently narrows the search.",
+    "termChars": 2000,
+    "queryChars": 4000,
+    "symptomQueryChars": 4000,
     "acsInSymptomQuery": 3,
-    "maxFiles": 4,
-    "maxChars": 12000,
-    "$readCapsWhy": "How much of the codebase one retrieval call may read. These were written at the call site as { maxFiles: 4, maxChars: 12000 } — an operating decision about a codeline, invisible to anyone reading configuration."
+    "maxFiles": 40,
+    "maxChars": 200000,
+    "$readCapsWhy": "How much of the codebase one retrieval call may read. These were written at the call site as { maxFiles: 4, maxChars: 12000 } \u2014 an operating decision about a codeline, invisible to anyone reading configuration."
   },
   "policy": {
     "$why": "Numbers that decide how the pipeline BEHAVES. They were named constants in spec-mode-runner.js, which reads like configuration and is not: changing one is a code edit, a rebuild and a review, and no deployment can differ. A codeline whose stories are routinely larger has a different right answer.",
-    "$splitMandateWhy": "Above this many acceptance criteria a story MUST be split. Greenfield only — the brownfield path returns early, deliberately, because a bug ticket is not made safer by being cut in half.",
+    "$splitMandateWhy": "Above this many acceptance criteria a story MUST be split. Greenfield only \u2014 the brownfield path returns early, deliberately, because a bug ticket is not made safer by being cut in half.",
     "splitMandateAcThreshold": 12,
     "$detectivePreseedWhy": "How much prior evidence the code-graph detective is pre-seeded with. Too little and it re-derives what is already known; too much and the useful part is buried. Truncation appends a notice so the agent knows it is reading an excerpt rather than the whole record.",
-    "detectivePreseedMaxChars": 8000
-  }
+    "detectivePreseedMaxChars": 200000
+  },
+  "$whyCeilingsRaised": "RAISED VERY HIGH 2026-09-23, deliberately. Every one of these was a wall that stopped work or hid the evidence an agent needed, and each was found one at a time by a paid run: the analyst's remedy truncated to 200 characters, the writer shown 60 lines of a failing suite, three files of a story, 400 lines of the file it was rewriting. Until a programme runs clean end to end, NO ceiling here may be the reason anything stops or anything is unseen. These are not tuned values; they are deliberately far above any observed need, and they get tuned down only with evidence from a green run."
 }

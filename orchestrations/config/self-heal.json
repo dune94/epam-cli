@@ -1,7 +1,8 @@
 {
-  "$comment": "Self-heal limits, declared once and read by everyone who asserts them. The skill-note length lived as a literal in _skill_note_format_ok and as prose in three prompt templates — and the ONE place that could have prevented the failure, the failure-analyst's own contract, did not state it at all. So the analyst wrote past the limit, the reviewer rejected on length and a summarizer rewrote: a full model round trip per attempt, costing both lanes about three of their twelve attempts on 2026-08-18.",
+  "$comment": "Self-heal limits, declared once and read by everyone who asserts them. The skill-note length lived as a literal in _skill_note_format_ok and as prose in three prompt templates \u2014 and the ONE place that could have prevented the failure, the failure-analyst's own contract, did not state it at all. So the analyst wrote past the limit, the reviewer rejected on length and a summarizer rewrote: a full model round trip per attempt, costing both lanes about three of their twelve attempts on 2026-08-18.",
   "skillNote": {
-    "maxChars": 200,
-    "$why": "A skill note is injected into a retry prompt and can persist into an agent's profile. Long notes crowd out the evidence the retry actually needs, and a paragraph is not an instruction. The producer is told this number so it writes within it, rather than discovering it as a rejection — the same contract the roster's rationale minimum already follows."
-  }
+    "maxChars": 20000,
+    "$why": "A skill note is injected into a retry prompt and can persist into an agent's profile. Long notes crowd out the evidence the retry actually needs, and a paragraph is not an instruction. The producer is told this number so it writes within it, rather than discovering it as a rejection \u2014 the same contract the roster's rationale minimum already follows."
+  },
+  "$whyCeilingsRaised": "RAISED VERY HIGH 2026-09-23, deliberately. Every one of these was a wall that stopped work or hid the evidence an agent needed, and each was found one at a time by a paid run: the analyst's remedy truncated to 200 characters, the writer shown 60 lines of a failing suite, three files of a story, 400 lines of the file it was rewriting. Until a programme runs clean end to end, NO ceiling here may be the reason anything stops or anything is unseen. These are not tuned values; they are deliberately far above any observed need, and they get tuned down only with evidence from a green run."
 }

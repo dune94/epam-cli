@@ -66,19 +66,24 @@ function audit(prd: unknown) {
 
 describe('a split leaves no story depending on a shell', () => {
   it('reports a dependency on a deprecated story, naming both ends', () => {
-    const { out, status } = audit(splitPrd());
+    const { out } = audit(splitPrd());
     expect(out, 'the stale edge P-002 -> P-001 was not reported at all').toMatch(/P-002/);
     expect(out).toMatch(/P-001/);
     expect(out.toLowerCase()).toMatch(/deprecated/);
-    expect(status, 'an untrue dependency graph passed the integrity audit').not.toBe(0);
+  });
+
+  it('REPORTS but does not REFUSE — the remedy is the splitting agent\'s, and brownfield builds its PRD at run time', () => {
+    // A refusal here would block a launch over a graph nothing outside the agent can repair, and
+    // a deprecated dependency reads as satisfied either way: the PRD is misleading, not unsafe.
+    const { status, out } = audit(splitPrd());
+    expect(status, `the audit refused a launch over a reported edge: ${out.slice(-300)}`).toBe(0);
   });
 
   it('a dependency naming a story that does not exist is reported', () => {
     const prd = splitPrd() as any;
     prd.stories.find((x: any) => x.id === 'P-002').dependencies = ['P-999'];
-    const { out, status } = audit(prd);
+    const { out } = audit(prd);
     expect(out).toMatch(/P-999/);
-    expect(status).not.toBe(0);
   });
 
   it('a graph that names only live stories passes', () => {

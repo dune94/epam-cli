@@ -164,11 +164,17 @@ for s in stories:
             dangling.append(f"{s['id']} -> {dep}")
         elif by_id[dep].get('status') == 'deprecated':
             retired.append(f"{s['id']} -> {dep}")
+# REPORTED, NEVER A REFUSAL. An untrue edge makes the PRD misleading; it does not make the run
+# unsafe — a deprecated dependency reads as satisfied, so nothing blocks on it either way. Failing
+# the audit here would refuse a launch over a graph the SPLITTING AGENT is the one who can repair,
+# and brownfield builds its PRD fresh from the ticket at run time, so a refusal would land on a
+# programme nobody could fix from outside. The remedy goes to the agent (speckit-split-rules rule
+# 8, rewireDependencies); this says the edge is there.
 if dangling:
-    err(f"Dependencies naming stories that do not exist: {sorted(dangling)}")
+    print(f"  ! Dependencies naming stories that do not exist: {sorted(dangling)}")
 if retired:
-    err(f"Dependencies naming DEPRECATED stories — a split left these edges on the parent "
-        f"instead of re-pointing them onto the children that carry the work: {sorted(retired)}")
+    print(f"  ! Dependencies naming DEPRECATED stories — a split left these edges on the parent "
+          f"instead of re-pointing them onto the children that carry the work: {sorted(retired)}")
 if not dangling and not retired:
     print("  \u2713 Every dependency names a live story")
 

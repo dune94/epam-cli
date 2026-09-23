@@ -119,7 +119,27 @@ module.exports = {
   // '' — "cannot prove", never a guess. The 2026-09-12 greenfield project (Python, FastAPI,
   // pytest, requirements.txt) had every gate reading "no test command" because only package.json
   // scripts were ever consulted.
-  testCommand: (text) => (module.exports.deps(String(text || '')).some((d) => d.toLowerCase() === 'pytest') ? 'pytest' : ''),
+  //
+  // AND IT IS RUN AS A MODULE, NOT AS A CONSOLE SCRIPT. `python -m pytest` puts the working
+  // directory on sys.path; the `pytest` script does not. For a codeline whose package is not
+  // pip-installed into its own environment — which is every requirements.txt project, since a
+  // requirements file installs DEPENDENCIES and not the project — the console script cannot
+  // import the code under test.
+  //
+  // This worked only because the scaffold below writes a pytest.ini carrying `pythonpath = .`,
+  // and on 2026-09-22 a story rewrote that file as `[pytest]\ntestpaths = tests`. The line
+  // vanished, and every external verification in the regintel run exited 2 with ZERO tests
+  // collected — invisible, because an empty failure set read as "only pre-existing failures"
+  // until fd3929c5. Measured in that codeline, same venv, same directory:
+  //
+  //     pytest                     -> ModuleNotFoundError: No module named 'regintel' (exit 2)
+  //     .venv/bin/python -m pytest -> 7 failed, 97 passed, 1 skipped
+  //
+  // A declared command must not depend on a file any story may overwrite. `python` resolves
+  // through this ecosystem's own runEnvironment (.venv/bin first), so it is the codeline's
+  // interpreter, not the host's — and `python3` rather than `python`, because a bare host may
+  // provide only python3 while a venv provides both, so this resolves wherever it runs.
+  testCommand: (text) => (module.exports.deps(String(text || '')).some((d) => d.toLowerCase() === 'pytest') ? 'python3 -m pytest' : ''),
   // HOW ONE PYTEST FAILURE IS RECOGNISED, so a baseline can be parsed and subtracted. pytest's
   // short summary names each failure as `FAILED <file>::<test>`; the pair is the stable identity
   // (a test name alone recurs across files). Without this, regintel 20260919T224649Z logged

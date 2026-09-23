@@ -40,8 +40,15 @@ describe('the verification plugin asks the ecosystem that recognises the codelin
 
   it('a requirements.txt codeline that depends on pytest runs pytest, one file at a time too, and knows its test files', () => {
     const t = plugin.detectTests(codeline(PY));
-    expect(t?.test?.command).toBe('pytest');
-    expect(t?.test?.scopedCommand).toBe('pytest {files}');
+    // RUN AS A MODULE, NOT AS THE CONSOLE SCRIPT (changed 2026-09-23). `python3 -m pytest` puts
+    // the working directory on sys.path; `pytest` does not, and a requirements.txt project's own
+    // package is never pip-installed — a requirements file installs dependencies. Bare pytest
+    // worked only while the scaffolded pytest.ini carried `pythonpath = .`, and a story rewrote
+    // that file: every external verification in the regintel run then exited 2 with ZERO tests
+    // collected. Measured in that codeline: `pytest` -> ModuleNotFoundError, `python3 -m pytest`
+    // -> 7 failed, 97 passed. See a-python-codeline-can-import-what-it-tests.
+    expect(t?.test?.command).toBe('python3 -m pytest');
+    expect(t?.test?.scopedCommand).toBe('python3 -m pytest {files}');  // derived from the command above
     const re = new RegExp(t.test.testFilePattern);
     expect(re.test('tests/test_store.py')).toBe(true);
     expect(re.test('regintel/store.py')).toBe(false);

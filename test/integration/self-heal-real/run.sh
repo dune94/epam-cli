@@ -26,7 +26,20 @@ mkdir -p "$WORK/install/orchestrations/logs"
 # 2. the codeline, copied at its current commit
 SRC_CODELINE="$(grep -E '^OUTPUT_DIR=' "$SRC_INSTALL/orchestrations/projects/regintel/config.env" | cut -d= -f2-)"
 CODELINE="$WORK/codeline"
-git clone -q "$SRC_CODELINE" "$CODELINE" || cp -a "$SRC_CODELINE" "$CODELINE"
+# THE CODELINE AS IT IS ON DISK, NOT AS GIT SEES IT.
+#
+# `git clone` carries tracked files only, so the copy arrived without .venv (98MB, provisioned by
+# the pipeline's own dependency step), .epam/, pytest.ini and the caches. The declared test command
+# then resolved to a SYSTEM pytest that cannot import the package, and the analyst correctly
+# diagnosed it twice — spending three real attempts on an environment the harness had broken:
+#
+#   [FailureAnalyst] Verification ran bare `pytest` (console script), which omits the codeline
+#                    root from sys.path — Target=tool
+#
+# Copying the directory reproduces the environment under test instead of rebuilding it, which the
+# harness is not entitled to do: provisioning is the pipeline's job, and a harness that provisions
+# differently is testing something the run never does.
+cp -a "$SRC_CODELINE" "$CODELINE"
 
 # 3. THE MUTATION ARM — re-impose the guard, to prove this test fails without the fix
 HEAL="$WORK/install/orchestrations/scripts/lib/failure-healing.sh"

@@ -63,11 +63,29 @@ set -a
 set +a
 # the copies, not the originals
 PRD_FILE="$PRD"; OUTPUT_DIR="$CODELINE"
+# THE STARVED PROVISIONING THAT PRODUCED THE FAILURE. REGI-009a ran at effort low — 6 iterations,
+# 8192 output tokens — and was truncated at its cap on four attempts. The cap is declared by the
+# effort tier and overridable per run, so the condition is reproduced by declaring it, not by
+# simulating a truncation: a real model, on real work, with the room the run actually gave it.
+# SELFHEAL_CAP overrides it; unset means "whatever the tier declares", i.e. the run's own value.
+[ -n "${SELFHEAL_CAP:-}" ]   && export EPAM_EFFORT_LOW_MAX_OUTPUT_TOKENS="$SELFHEAL_CAP"
+[ -n "${SELFHEAL_ITERS:-}" ] && export EPAM_EFFORT_LOW_MAX_ITERATIONS="$SELFHEAL_ITERS"
 PROJECT_ROOT="$CODELINE" PRD_FILE="$PRD" \
 EPAM_PROJECT_CONFIG_DIR="$WORK/install/orchestrations/projects/regintel" \
 EPAM_PROVIDER_SET=openrouter EPAM_MAX_RETRIES=2 \
   "${HOME}/.claude/bin/bounded" bash "$WORK/install/orchestrations/scripts/claude.sh" "$STORY" \
   > "$RUNLOG" 2>&1
-echo "[harness] loop exited with $? — asserting"
+_rc=$?
+# WAIT FOR THE PROCESS TREE, NOT JUST THE SCRIPT. claude.sh returns while its writer and analyst
+# children are still running — the same orphaning that kept an `epam run` alive after the
+# orchestrator was killed on 2026-09-22. Asserting at that moment read an EMPTY healing log and a
+# single Effort[final] line from a run that went on to record three attempts and three healing
+# events: a FAIL that was the harness's, not the engine's.
+_waited=0
+while pgrep -f "claude.sh ${STORY}" >/dev/null 2>&1 || pgrep -f "$WORK/install/orchestrations/scripts" >/dev/null 2>&1; do
+  sleep 5; _waited=$((_waited + 5))
+  if [ "$_waited" -ge 21600 ]; then echo "[harness] children still running after 6h — refusing to assert on a half-written run"; exit 4; fi
+done
+echo "[harness] loop exited with $_rc; children settled after ${_waited}s — asserting"
 WORK="$WORK" RUNLOG="$RUNLOG" STORY="$STORY" bash "$HERE/assert.sh"
 echo "[harness] kept for inspection: $WORK"

@@ -1687,7 +1687,7 @@ $_kb_section"
             # the last 3 distinct headings instead of 1 still bounds prompt growth
             # (the original purpose of this trim) while giving recent-but-not-
             # newest guidance a real chance to stay visible for a few more retries.
-            _trimmed_amendment=$(printf '%s' "$COORDINATOR_PROMPT_AMENDMENT" | EPAM_PROMPT_TRIM_KEEP="$_keep_sections" python3 "$SCRIPT_DIR/lib/handlers/trim-coordinator-amendment.py" 2>/dev/null || echo "$COORDINATOR_PROMPT_AMENDMENT")
+            _trimmed_amendment=$(printf '%s' "$COORDINATOR_PROMPT_AMENDMENT" | EPAM_PROMPT_TRIM_KEEP="$_keep_sections" EPAM_PROMPT_SCRATCHPAD_FILE="$_scratchpad_file" python3 "$SCRIPT_DIR/lib/handlers/trim-coordinator-amendment.py" 2>/dev/null || echo "$COORDINATOR_PROMPT_AMENDMENT")
 
             if [ -n "$_trimmed_amendment" ] && [ "${#_trimmed_amendment}" -lt "${#COORDINATOR_PROMPT_AMENDMENT}" ]; then
                 warning "  [PromptScratchpad] Prompt exceeded ${_scratchpad_threshold} chars ($(( ${#prompt} )) actual) — full history written to $_scratchpad_file, trimming to most recent guidance (up to 3)"

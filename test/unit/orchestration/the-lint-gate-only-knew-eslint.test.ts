@@ -164,11 +164,19 @@ describe('the gate runs what the codeline declares', () => {
     expect(out).not.toMatch(/eslint/i);
   });
 
-  it('FAILS rather than skipping when the declared command cannot be run', () => {
+  it('ANNOUNCES rather than skipping when the declared command cannot be run', () => {
     // Declared-but-unrunnable is the state the eslint probe could not express: it treated "no
-    // linter here" and "this project lints and I could not run it" as the same silent pass.
+    // linter here" and "this project lints and I could not run it" as the same silent pass. Both
+    // are still announced — that part never changes.
+    //
+    // It no longer FAILS THE STORY (2026-09-23). Once the declared path became reachable without
+    // a pre-commit hook, a codeline that names a linter its environment has not installed would
+    // have failed every story for a tool the writer cannot install — the same punishment this
+    // gate's own comment refuses for a missing hook. An uninstalled tool is an ABSENT CHECK: it
+    // is announced, it never reads as a pass, and self-heal sees an environment fault rather than
+    // a rejection of the change.
     const out = lint({ declare: 'no-such-linter-anywhere' });
     expect(out).toMatch(/ERROR:|WARN:/);
-    expect(out).not.toMatch(/RC=0/);
+    expect(out, 'an absent check was reported as a clean lint').toMatch(/not installed|could not be run|NOT run/i);
   });
 });

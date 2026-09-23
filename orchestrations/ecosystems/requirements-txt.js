@@ -98,6 +98,39 @@ module.exports = {
       failurePattern: 'File "([^"]+)", line (\\d+)',
       failureIdentity: '{1}:{2}',
     },
+    // HOW THIS ECOSYSTEM IS LINTED — with the linter the PROJECT lists, and with nothing at all
+    // when it lists none.
+    //
+    // There was no lint block here, so a python codeline could never be linted however it was set
+    // up: the repo-lint path runs only where a pre-commit hook enforces lint, and the declared
+    // path runs what .epam/verification.json declares — which, with nothing here to detect, was
+    // never written. Live 2026-09-23, seven warnings in ONE story run: "[repo-lint] no pre-commit
+    // hook — lint was NOT run; nothing here proves the change is clean". package.json codelines
+    // have had this since the ecosystems were written.
+    //
+    // Derived exactly as the test command is: `pytest` is the suite only because the project
+    // lists pytest. A project listing no linter gets NOTHING — "cannot prove", never a guess at a
+    // tool it never asked for, and never a linter installed behind its back.
+    lint: (text) => {
+      const deps = module.exports.deps(String(text || '')).map((d) => d.toLowerCase());
+      // Checked in the order a project would mean them: a dedicated linter before a formatter.
+      const known = [
+        { dep: 'ruff', command: 'ruff check .' },
+        { dep: 'flake8', command: 'flake8' },
+        { dep: 'pylint', command: 'pylint $(git ls-files "*.py")' },
+        { dep: 'black', command: 'black --check .' },
+      ];
+      const hit = known.find((k) => deps.includes(k.dep));
+      return hit ? {
+        command: hit.command,
+        // A lint diagnostic names the FILE it is about; rule ids churn between versions and
+        // configs, so the file is the stable identity for a baseline subtraction — the same
+        // reasoning as the package.json provider's lint block.
+        failurePattern: '^\\s*(\\S+\\.py)',
+        failureIdentity: '{1}',
+        detected: `requirements.txt lists ${hit.dep}`,
+      } : null;
+    },
   },
   // WHAT A STAND-IN DELIVERABLE HOLDS, so a £0 rehearsal's writer can land files the gates will
   // run: a manifest that names the test runner, a test that passes, a source module that imports.

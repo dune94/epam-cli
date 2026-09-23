@@ -1353,6 +1353,11 @@ _project_test_file_pattern() {
 # same thing as a project that does not lint. The old probe could not express that difference.
 _run_declared_lint_gate() {
     local story_id="$1" output_file="${2:-/dev/null}" _cmd="$3"
+    # WHETHER THIS REPO ENFORCES LINT AT COMMIT TIME. Findings are always RUN and always
+    # REPORTED; they fail the story only where a pre-commit hook would have refused the commit
+    # anyway. A repo without one is held to its own standard, not ours — the rule this gate was
+    # written with, preserved now that the linter runs whether or not a hook exists.
+    local _dl_enforcing="${4:-1}"
     local _dl_changed _dl_testable="" _dl_files=() _dl_f
 
     _dl_changed=$( { git -C "$PROJECT_ROOT" diff --name-only --diff-filter=d 2>/dev/null
@@ -1381,16 +1386,28 @@ _run_declared_lint_gate() {
     # shellcheck disable=SC2294
     _dl_out=$(cd "$PROJECT_ROOT" && eval "$_cmd" "${_dl_files[@]}" 2>&1) || _dl_rc=$?
 
-    if [ "$_dl_rc" -eq 127 ]; then
-        error "  [repo-lint] $story_id: this codeline declares [$_cmd] and it could not be run — lint NOT PERFORMED"
+    # A TOOL THAT IS NOT INSTALLED IS AN ABSENT CHECK, NOT A REJECTION — and an absent check does
+    # not fail a story, because the writer cannot install it. Said out loud either way.
+    #
+    # 127 alone does not catch it: a runner wraps the missing tool and exits 1, so
+    # `npm run lint` with no eslint present looked exactly like a lint that found real problems,
+    # and would have failed stories for an environment gap the moment declared lint became
+    # reachable without a hook (2026-09-23). The runner's own words are the evidence.
+    if [ "$_dl_rc" -eq 127 ] || printf '%s' "$_dl_out" | grep -qiE "command not found|not recognized|no such file or directory|ENOENT|could not determine executable|sh: [0-9]+: .*not found"; then
+        warning "  [repo-lint] $story_id: this codeline declares [$_cmd] and the tool is not installed — lint was NOT run; nothing here proves the change is clean"
         printf '%s\n' "$_dl_out" | head -10 >&2
-        return 1
+        return 0
     fi
     if [ "$_dl_rc" -eq 0 ]; then
         success "  [repo-lint] $story_id: the repository lint [$_cmd] accepts ${#_dl_files[@]} changed file(s)"
         return 0
     fi
 
+    if [ "$_dl_enforcing" != "1" ]; then
+        warning "  [repo-lint] $story_id: the repository lint [$_cmd] rejects ${#_dl_files[@]} changed file(s), and this repo does not enforce lint at commit time — reported, not failed"
+        printf '%s\n' "$_dl_out" | head -40 >&2
+        return 0
+    fi
     error "  [repo-lint] $story_id: the repository lint [$_cmd] rejects ${#_dl_files[@]} changed file(s) —"
     error "  [repo-lint]   the pre-commit hook will refuse this commit and may REVERT the work."
     printf '%s\n' "$_dl_out" | head -40 >&2
@@ -1432,11 +1449,11 @@ run_repo_lint_verification() {
     # "lint could not run" was indistinguishable from "lint found nothing" — the same fail-open
     # shape as every other defect in this pipeline. The story is not failed for them (the writer
     # cannot install a hook or a linter), but the run says so out loud.
-    if [ -z "$_hook" ]; then
-        warning "  [repo-lint] $story_id: no pre-commit hook in $PROJECT_ROOT — lint was NOT run; nothing here proves the change is clean"
-        return 0
-    fi
-
+    # ASKED OF THE CODELINE BEFORE THE HOOK. The hook check used to return here, so the declared
+    # path below — written for codelines that lint with something other than eslint — was
+    # unreachable on any repo without a pre-commit hook, which is most of them. Live 2026-09-23:
+    # seven "lint was NOT run" warnings in ONE story run, on a codeline that would not have been
+    # linted even had it declared a linter.
     # WHAT THIS CODELINE LINTS WITH, ASKED OF THE CODELINE FIRST.
     #
     # This probed for eslint and nothing else. On a codeline that lints with biome, oxlint, ruff or
@@ -1468,10 +1485,18 @@ run_repo_lint_verification() {
     # Every one of those was a question only one linter could answer, written into the engine
     # (removed 2026-09-16). A codeline that declares no lint is told so, out loud, and not failed.
     if [ -n "$_declared_lint" ]; then
-        _run_declared_lint_gate "$story_id" "$output_file" "$_declared_lint"
+        _run_declared_lint_gate "$story_id" "$output_file" "$_declared_lint" "$([ -n "$_hook" ] && echo 1 || echo 0)"
         return $?
     fi
-    warning "  [repo-lint] $story_id: the codeline declares no lint command — lint was NOT run; nothing here proves the change is clean"
+    # NOTHING DECLARED, SO NOTHING RAN — SAID OUT LOUD, WHICHEVER FACTS APPLY. Both branches
+    # announce; the difference is only what an operator would fix. Consolidating these into one
+    # message lost the hook-present case entirely for a few minutes on 2026-09-23, which is the
+    # same silence this gate exists to prevent.
+    if [ -z "$_hook" ]; then
+        warning "  [repo-lint] $story_id: this codeline declares no lint command and has no pre-commit hook — lint was NOT run; nothing here proves the change is clean"
+    else
+        warning "  [repo-lint] $story_id: this codeline declares no lint command — lint was NOT run; nothing here proves the change is clean"
+    fi
     return 0
 }
 

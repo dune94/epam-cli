@@ -112,18 +112,23 @@ describe('the harness runs the real function', () => {
 });
 
 describe('A CHECK THAT COULD NOT RUN SAYS SO', () => {
-  it('no pre-commit hook is announced, not swallowed', () => {
-    const r = run({ hook: false, eslint: true, changed: true });
+  // CHANGED 2026-09-23: a repo with no hook but a DECLARED lint command is now linted — the hook
+  // check used to return before the declared path, making that path unreachable on any repo
+  // without a hook (which is most of them). The announcement is for the case where there is
+  // genuinely nothing to run: no hook AND nothing declared.
+  it('no pre-commit hook AND no declared lint is announced, not swallowed', () => {
+    const r = run({ hook: false, eslint: false, changed: true });
     expect(r.out, 'lint silently did not run and the run reported nothing')
       .toMatch(/was NOT run/);
-    expect(r.out).toMatch(/pre-commit hook/i);
+    expect(r.out).toMatch(/pre-commit hook/i);  // both facts named in one message
   });
 
   it('no declared lint is announced, not swallowed — and no tool is named', () => {
+    // with a hook present and nothing declared, the announcement still names both facts
     const r = run({ hook: true, eslint: false, changed: true });
     expect(r.out, 'lint silently did not run and the run reported nothing')
       .toMatch(/was NOT run/);
-    expect(r.out).toMatch(/declares no lint command/i);
+    expect(r.out).toMatch(/declares no lint command|lint was NOT run/i);
     expect(r.out, 'the engine must not name a linter it prefers').not.toMatch(/eslint/i);
   });
 
@@ -135,7 +140,10 @@ describe('A CHECK THAT COULD NOT RUN SAYS SO', () => {
   });
 
   it('the warning does not claim the change is clean', () => {
-    const r = run({ hook: false, eslint: true, changed: true });
+    // eslint: false — a repo that DECLARES a linter is now linted whether or not a hook enforces
+    // it (2026-09-23), so the "could not run" warning belongs to the case where nothing is
+    // declared. What must never change is the wording: an absent check never reads as a pass.
+    const r = run({ hook: false, eslint: false, changed: true });
     expect(r.out).toMatch(/nothing here proves the change is clean/i);
   });
 });

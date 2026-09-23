@@ -22,6 +22,18 @@ tar -C "$SRC_INSTALL" -cf - --exclude='orchestrations/logs' --exclude='node_modu
     orchestrations 2>/dev/null | tar -C "$WORK/install" -xf -
 mkdir -p "$WORK/install/orchestrations/logs"
 : > "$WORK/install/orchestrations/logs/healing-events.jsonl"
+# THE RUN STATE A RESUME KEEPS. The logs directory was excluded wholesale, so the copy began with
+# no phase-baseline-sha.txt — and without it the baseline is never computed, every pre-existing
+# failure is charged to whichever story ran, and no scoped fix can converge. The harness was
+# testing a state no real run is ever in. A resume keeps these ledgers (pre-run-reset.sh), so the
+# copy does too: the baseline SHA, the per-story rungs and retry state, and the review findings.
+for _keep in phase-baseline-sha.txt story-rung story-retry-state agent-ladder; do
+  [ -e "$SRC_INSTALL/orchestrations/logs/$_keep" ] \
+    && cp -a "$SRC_INSTALL/orchestrations/logs/$_keep" "$WORK/install/orchestrations/logs/" 2>/dev/null || true
+done
+for _f in "$SRC_INSTALL"/orchestrations/logs/review-*.json; do
+  [ -e "$_f" ] && cp -a "$_f" "$WORK/install/orchestrations/logs/" 2>/dev/null || true
+done
 
 # 2. the codeline, copied at its current commit
 SRC_CODELINE="$(grep -E '^OUTPUT_DIR=' "$SRC_INSTALL/orchestrations/projects/regintel/config.env" | cut -d= -f2-)"

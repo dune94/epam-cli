@@ -104,6 +104,20 @@ baseline_new_failures() {
 
     local new_errors="$check_output"
     local baseline_sha_file="$log_dir/phase-baseline-sha.txt"
+    # A BASELINE THAT WAS NEVER DECLARED IS NOT A CLEAN BASELINE EITHER. Without the SHA — or
+    # without the plugin that parses failures — the builder below never runs, every pre-existing
+    # failure stays in new_errors, and the story is charged for the whole codeline's history. That
+    # is survivable; doing it SILENTLY is not. Found 2026-09-23 when a run copied its install with
+    # an empty logs directory: no baseline files, no diagnostics, and each story blamed for the
+    # five failures it inherited.
+    if [ ! -f "$baseline_sha_file" ]; then
+        echo "[baseline-gate] no ${section} baseline is declared for this run (${baseline_sha_file} is absent) —" >&2
+        echo "[baseline-gate] nothing can be subtracted, so PRE-EXISTING ${section} failures will be" >&2
+        echo "[baseline-gate] attributed to this story. This is not a pass." >&2
+    elif [ ! -f "$_plugin" ]; then
+        echo "[baseline-gate] the verification plugin is missing at ${_plugin} — no ${section} baseline can be" >&2
+        echo "[baseline-gate] parsed, so PRE-EXISTING failures will be attributed to this story. This is not a pass." >&2
+    fi
     if [ -f "$baseline_sha_file" ] && [ -f "$_plugin" ]; then
         local baseline_sha
         baseline_sha=$(tr -d '[:space:]' < "$baseline_sha_file")

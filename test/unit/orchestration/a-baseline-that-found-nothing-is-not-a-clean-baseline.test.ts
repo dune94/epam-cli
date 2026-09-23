@@ -115,3 +115,62 @@ describe('a baseline that found nothing is not a clean baseline', () => {
     expect(r.out, 'the run was told nothing about an unusable baseline').toMatch(/CANNOT BUILD|could not|unusable|not a pass/i);
   });
 });
+
+/** The same builder, but with NO phase-baseline-sha.txt — the baseline was never declared. */
+function buildWithoutBaselineSha() {
+  const dir = mkdtempSync(join(tmpdir(), 'baseline-undeclared-'));
+  dirs.push(dir);
+  const repo = join(dir, 'codeline');
+  mkdirSync(join(repo, '.epam'), { recursive: true });
+  writeFileSync(join(repo, '.epam', 'verification.json'), JSON.stringify({
+    test: { command: 'true', failurePattern: '^(?:FAILED)\\s+(\\S+?)::(\\S+?)(?:\\s+-\\s|\\s*$)', failureIdentity: '{1}::{2}' },
+  }));
+  const git = (...a: string[]) => spawnSync('git', ['-C', repo, ...a], { encoding: 'utf8' });
+  writeFileSync(join(repo, 'app.py'), 'x = 1\n');
+  git('init', '-q'); git('config', 'user.email', 't@t'); git('config', 'user.name', 't');
+  git('add', '-A'); git('commit', '-qm', 'baseline');
+  const logDir = join(dir, 'logs');
+  mkdirSync(logDir, { recursive: true });
+  const current = join(dir, 'current.txt');
+  writeFileSync(current, 'FAILED tests/test_a.py::test_one - AssertionError\n1 failed\n');
+  const script = join(dir, 'run.sh');
+  writeFileSync(script, [
+    '#!/usr/bin/env bash',
+    `export PROJECT_ROOT=${JSON.stringify(repo)}`,
+    `export LOG_DIR=${JSON.stringify(logDir)}`,
+    `export AUTOMATION_DIR=${JSON.stringify(join(ROOT, 'orchestrations'))}`,
+    `export NODE_BIN=${JSON.stringify(process.execPath)}`,
+    'log() { echo "LOG: $*"; }; warning() { echo "WARN: $*"; }; error() { echo "ERR: $*"; }',
+    'success() { echo "OK: $*"; }; info() { :; }',
+    shellFunction(GATE, '_bg_vendor_dirs'),
+    shellFunction(GATE, '_run_project_verification'),
+    shellFunction(GATE, 'baseline_new_failures'),
+    `baseline_new_failures "$PROJECT_ROOT" "$NODE_BIN" "$LOG_DIR" test ${JSON.stringify(current)}; echo "RC=$?"`,
+  ].join('\n'));
+  const r = spawnSync('bash', [script], { encoding: 'utf8', timeout: 60000 });
+  const out = (r.stdout || '') + (r.stderr || '');
+  return { out, rc: Number((out.match(/RC=(\d+)/) || [])[1]) };
+}
+
+/**
+ * A BASELINE THAT WAS NEVER DECLARED IS NOT A CLEAN BASELINE EITHER.
+ *
+ * Without phase-baseline-sha.txt the builder never runs, `new_errors` keeps the whole current
+ * output, and every pre-existing failure is charged to the story — silently, nothing logged.
+ * Found 2026-09-23: the one-story harness copies the install with an EMPTY logs directory, so no
+ * baseline files appeared and no diagnostics were printed, while each story was blamed for the
+ * five failures it inherited. A real run whose baseline SHA went missing would be told as little.
+ */
+describe('a baseline that was never declared is not a clean baseline either', () => {
+  it('says so, instead of blaming the story in silence', () => {
+    const r = buildWithoutBaselineSha();
+    expect(r.out, 'the run was told nothing, and the story was charged for failures it inherited')
+      .toMatch(/baseline/i);
+    expect(r.out).toMatch(/not a pass|cannot|could not|no .*declared/i);
+  });
+
+  it('does not report the inherited failures as the story\'s own', () => {
+    const r = buildWithoutBaselineSha();
+    expect(r.rc, 'a missing baseline read as "the story broke all of this"').not.toBe(0);
+  });
+});

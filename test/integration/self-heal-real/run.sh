@@ -31,6 +31,15 @@ for _keep in phase-baseline-sha.txt story-rung story-retry-state agent-ladder; d
   [ -e "$SRC_INSTALL/orchestrations/logs/$_keep" ] \
     && cp -a "$SRC_INSTALL/orchestrations/logs/$_keep" "$WORK/install/orchestrations/logs/" 2>/dev/null || true
 done
+# A RE-QUEUED STORY STARTS ITS LADDER AFRESH. The PRD copy below marks the story pending — which
+# is what a resume's remediation does to a FAILED story — and that remediation also clears its
+# rung and retry state (_prd_remediate_impl.py, _ladder_afresh). Carrying the spent rungs without
+# clearing them reproduced a state no resume produces: REGI-009a resumed at retry_count=8, its
+# ladder exhausted by the 402s, and the loop ended without running a single attempt.
+rm -f "$WORK/install/orchestrations/logs/story-rung/${STORY}".* 2>/dev/null || true
+rm -f "$WORK/install/orchestrations/logs/story-retry-state/${STORY}".* 2>/dev/null || true
+rm -f "$WORK/install/orchestrations/logs/agent-ladder/"*".${STORY}" 2>/dev/null || true
+
 for _f in "$SRC_INSTALL"/orchestrations/logs/review-*.json; do
   [ -e "$_f" ] && cp -a "$_f" "$WORK/install/orchestrations/logs/" 2>/dev/null || true
 done

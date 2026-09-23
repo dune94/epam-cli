@@ -204,6 +204,12 @@ baseline_new_failures() {
                         # command was bare `pytest`, which exited 2 having collected nothing. The
                         # codeline had five real failures throughout, and stories were rejected
                         # for inheriting them — REGI-002 twice, on a fix that was correct.
+                        # WHAT THE BUILD SAW, ALWAYS SAID. Reverse-engineering an empty cache
+                        # from the outside cost hours on 2026-09-23: the same builder produced 5
+                        # ids when run by hand and 0 inside the run, with nothing logged either
+                        # way. A build that reports its own exit code and parsed count cannot be
+                        # a mystery twice.
+                        echo "[baseline-gate] ${section} baseline at ${baseline_sha:0:12}: suite exit=${_bg_baseline_exit:-0}, parsed $(grep -c '[^[:space:]]' "$baseline_cache" 2>/dev/null || echo 0) failure id(s) from $(wc -c < "$_base_out" 2>/dev/null || echo 0) bytes of output" >&2
                         if [ ! -s "$baseline_cache" ] && [ "${_bg_baseline_exit:-0}" -ne 0 ]; then
                             echo "[baseline-gate] the ${section} baseline at ${baseline_sha:0:12} exited ${_bg_baseline_exit} and produced NO parseable failures —" >&2
                             echo "[baseline-gate] it did not observe a clean tree, it failed to run. Nothing will be subtracted," >&2

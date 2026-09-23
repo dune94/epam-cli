@@ -2030,6 +2030,7 @@ $_kb_section"
                         _ov_temp=$(jq -r '.temperature // empty' <<<"$_override_json")
                         _ov_iter=$(jq -r '.maxIterations // empty' <<<"$_override_json")
                         _ov_out_tokens=$(jq -r '.maxOutputTokens // empty' <<<"$_override_json")
+                        _ov_out_price=$(jq -r '.outputPricePerMillion // empty' <<<"$_override_json")
                         _ov_compress_at=$(jq -r '.autoCompressAt // empty' <<<"$_override_json")
                         _ov_compress_n=$(jq -r '.autoCompressEveryNIterations // empty' <<<"$_override_json")
                         # FLOOR, not overwrite — see max_effort(). The rung's escalation must survive.
@@ -2126,10 +2127,50 @@ $_kb_section"
                         # the model registry), so nothing here chooses it, and a model whose override
                         # declares none leaves the tier's value exactly as it was.
                         if [ -n "${_ov_out_tokens:-}" ] && [ "$_ov_out_tokens" -gt "${STORY_MAX_OUTPUT_TOKENS:-0}" ] 2>/dev/null; then
-                            log "  ModelOverride[${STORY_MODEL:-model}]: output budget ${STORY_MAX_OUTPUT_TOKENS:-?} → ${_ov_out_tokens} (the model's own maximum; a tier may raise this, never lower it)"
-                            STORY_MAX_OUTPUT_TOKENS="$_ov_out_tokens"
+                            # AND NEVER MORE THAN THE BALANCE CAN PAY FOR. The provider refuses any
+                            # request whose max_tokens COULD cost more than the credit remaining —
+                            # live 2026-09-23, kimi-k3 billing output at $15/M reserved $14.16 for
+                            # its 943,718-token maximum against an $11.66 balance, and every call on
+                            # that rung came back 402 in under a second: eight attempts, a spent
+                            # ladder, no tokens generated. Every other model on the ladder reserves
+                            # under a dollar, so it surfaced on one rung only, and only once the
+                            # balance was low.
+                            #
+                            # The budget is the smallest of three DECLARED things: the model maximum,
+                            # what the balance can pay for, and what one story may spend. Nothing is
+                            # authored — the price comes from the provider registry via
+                            # scripts/refresh-model-limits.sh, the balance from the set own
+                            # balanceProbe. An unpriced model or an unreadable balance caps nothing,
+                            # because a guess would be worse than the maximum.
+                            local _ov_capped="$_ov_out_tokens" _ov_ceiling=""
+                            if [ -n "${_ov_out_price:-}" ]; then
+                                local _ov_balance=""
+                                declare -F balance_probe_read >/dev/null 2>&1 && _ov_balance="$(balance_probe_read 2>/dev/null || true)"
+                                _ov_ceiling="$(awk -v b="${_ov_balance:-}" -v s="${EPAM_STORY_BUDGET_HARD_LIMIT_USD:-}" 'BEGIN{
+                                    c = -1
+                                    if (b != "" && b + 0 > 0) c = b + 0
+                                    if (s != "" && s + 0 > 0 && (c < 0 || s + 0 < c)) c = s + 0
+                                    if (c > 0) printf "%.6f", c
+                                }')"
+                                if [ -n "$_ov_ceiling" ]; then
+                                    _ov_capped="$(awk -v cap="$_ov_out_tokens" -v price="$_ov_out_price" -v usd="$_ov_ceiling" -v floor="${STORY_MAX_OUTPUT_TOKENS:-0}" 'BEGIN{
+                                        afford = (price > 0) ? int(usd * 1000000 / price) : cap
+                                        v = (afford < cap) ? afford : cap
+                                        if (v < floor) v = floor
+                                        printf "%d", v
+                                    }')"
+                                fi
+                            fi
+                            if [ "$_ov_capped" != "$_ov_out_tokens" ]; then
+                                log "  ModelOverride[${STORY_MODEL:-model}]: output budget ${STORY_MAX_OUTPUT_TOKENS:-?} → ${_ov_capped} — the model allows ${_ov_out_tokens}, but at \$${_ov_out_price}/M only ${_ov_capped} is affordable within \$${_ov_ceiling} of credit"
+                            else
+                                log "  ModelOverride[${STORY_MODEL:-model}]: output budget ${STORY_MAX_OUTPUT_TOKENS:-?} → ${_ov_capped} (the model's own maximum; a tier may raise this, never lower it)"
+                            fi
+                            STORY_MAX_OUTPUT_TOKENS="$_ov_capped"
                             export STORY_MAX_OUTPUT_TOKENS
                         fi
+                        # end output-budget decision — a marker, because this block now nests and
+                        # a test that sliced to the first `fi` cut it in half (2026-09-23).
                         [ -n "$_ov_compress_at" ] && _effective_compress_at="$_ov_compress_at"
                         [ -n "$_ov_compress_n" ] && _effective_compress_every_n="$_ov_compress_n"
                         log "  ModelOverride[${STORY_MODEL:-$STORY_PROVIDER}]: effort=${_ov_effort:-unchanged} temp=${_ov_temp:-unchanged} maxIter=${_effective_max_iterations} compaction=$([ -n "$_effective_compress_every_n" ] && echo "every ${_effective_compress_every_n} iter" || echo "token-threshold") (tokenThreshold=${_effective_compress_at:-none})"

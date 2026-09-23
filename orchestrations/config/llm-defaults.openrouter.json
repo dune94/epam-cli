@@ -113,7 +113,8 @@
       "temperature": 0.2,
       "miniTier": true,
       "charsPerToken": 4,
-      "maxOutputTokens": 128000
+      "maxOutputTokens": 128000,
+      "outputPricePerMillion": 1.08
     },
     "minimax-m3": {
       "matchOn": "model",
@@ -124,7 +125,8 @@
       "topP": 0.85,
       "temperature": 0.2,
       "charsPerToken": 4,
-      "maxOutputTokens": 512000
+      "maxOutputTokens": 512000,
+      "outputPricePerMillion": 1.2
     },
     "glm-5.2": {
       "matchOn": "model",
@@ -138,7 +140,8 @@
         "CoreWeave"
       ],
       "charsPerToken": 4,
-      "maxOutputTokens": 131072
+      "maxOutputTokens": 131072,
+      "outputPricePerMillion": 2.0416
     },
     "kimi-k2.5": {
       "matchOn": "model",
@@ -151,7 +154,8 @@
       "topP": 1,
       "temperatureLocked": true,
       "charsPerToken": 4,
-      "maxOutputTokens": 235929
+      "maxOutputTokens": 235929,
+      "outputPricePerMillion": 2.25
     },
     "kimi-k3": {
       "matchOn": "model",
@@ -166,7 +170,8 @@
         "Moonshot AI"
       ],
       "charsPerToken": 4,
-      "maxOutputTokens": 943718
+      "maxOutputTokens": 943718,
+      "outputPricePerMillion": 15.0
     },
     "minimax-m2.7": {
       "matchOn": "model",
@@ -180,7 +185,8 @@
       "temperature": 0.2,
       "miniTier": true,
       "charsPerToken": 4,
-      "maxOutputTokens": 131072
+      "maxOutputTokens": 131072,
+      "outputPricePerMillion": 1.2
     },
     "glm-5.3": {
       "matchOn": "model",
@@ -195,7 +201,8 @@
         "Z.AI"
       ],
       "charsPerToken": 4,
-      "maxOutputTokens": 131072
+      "maxOutputTokens": 131072,
+      "outputPricePerMillion": 2.64
     },
     "$miniTierWhy": "miniTier marks the cheap, fast rung \u2014 the models that are quick but limited in generation capacity. It was decided in engine code by sniffing vendor naming habits (-mini, -flash, -haiku, minimax-m2), which breaks in both directions: a cheap model named differently read as capable, and a capable model containing -flash read as cheap. The set that declares the model declares its tier.",
     "$whyCharsPerToken": "INPUT CAPACITY IN CHARACTERS. autoCompressAt is the models input ceiling in TOKENS; callers that must size a payload measure it in characters. The ratio belongs with the model, because it is a property of that models tokenizer, not of any caller. Declared so a caller derives its budget instead of inventing one: the roster review carried a literal 60000 in code, which split a 276KB roster into six calls and failed the whole review whenever any one of them answered off-schema.",
@@ -203,7 +210,8 @@
       "matchOn": "model",
       "matchSubstring": "glm-5.1",
       "maxOutputTokens": 128000,
-      "_why": "created by refresh-model-limits.sh: a ladder rung with no override is capped by its tier, which is how truncation returns for one rung while the others are free."
+      "_why": "created by refresh-model-limits.sh: a ladder rung with no override is capped by its tier, which is how truncation returns for one rung while the others are free.",
+      "outputPricePerMillion": 3.036
     }
   },
   "runners": {

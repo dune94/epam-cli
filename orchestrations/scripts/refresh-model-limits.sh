@@ -30,10 +30,21 @@ import json, sys, collections
 settings_path, registry_path = sys.argv[1], sys.argv[2]
 reg = json.load(open(registry_path)).get('data', [])
 limits = {}
+prices = {}
 for m in reg:
     tp = m.get('top_provider') or {}
     n = tp.get('max_completion_tokens')
     if n: limits[m['id'].lower()] = int(n)
+    # AND WHAT ITS OUTPUT COSTS, from the same registry. A ceiling is only usable if the balance
+    # can pay for it: OpenRouter refuses any request whose max_tokens could cost more than the
+    # credit remaining (402 "requested 930541 max_tokens exceeds affordable 790769 credits",
+    # regintel 2026-09-23, kimi-k3 at $15/M reserving $14.16 against an $11.66 balance). The
+    # engine leaves some prices null on purpose -- "an invented price is worse than a visible
+    # gap" -- so the number comes from the provider or not at all.
+    pr = (m.get('pricing') or {}).get('completion')
+    try:
+        if pr is not None and float(pr) > 0: prices[m['id'].lower()] = float(pr) * 1_000_000
+    except (TypeError, ValueError): pass
 
 d = json.load(open(settings_path), object_pairs_hook=collections.OrderedDict)
 mo = d.get('modelOverrides') or {}
@@ -60,8 +71,10 @@ for key, ov in mo.items():
     # so an id they name wins; otherwise the shortest id, which is the least-decorated match.
     exact = [h for h in hits if h[0] in ladder_ids]
     mid, n = (exact or sorted(hits, key=lambda h: len(h[0])))[0]
-    if ov.get('maxOutputTokens') != n:
+    price = prices.get(mid)
+    if ov.get('maxOutputTokens') != n or (price and ov.get('outputPricePerMillion') != round(price, 6)):
         ov['maxOutputTokens'] = n
+        if price: ov['outputPricePerMillion'] = round(price, 6)
         changed.append((key, mid, n))
 # A LADDER MODEL WITH NO OVERRIDE HAS NO DECLARED MAXIMUM, so the tier becomes its ceiling again
 # and truncation returns for that rung alone. Found by the test the moment this landed: z-ai/glm-5.1
@@ -78,6 +91,7 @@ for mid in sorted(ladder_ids):
     key = mid.split('/')[-1]
     mo[key] = collections.OrderedDict([
         ('matchOn', 'model'), ('matchSubstring', key), ('maxOutputTokens', n),
+        ('outputPricePerMillion', round(prices[mid], 6)) if mid in prices else ('_unpriced', True),
         ('_why', "created by refresh-model-limits.sh: a ladder rung with no override is capped by "
                  "its tier, which is how truncation returns for one rung while the others are free."),
     ])

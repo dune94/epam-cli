@@ -33,9 +33,10 @@ function budgetBlock(): string {
   const src = engineSource(ATTEMPT);
   const start = src.indexOf('                        if [ -n "${_ov_out_tokens:-}" ]');
   if (start === -1) throw new Error('the output-budget block moved');
-  const END = '                        fi\n';
+  const END = '                        # end output-budget decision';
   const stop = src.indexOf(END, start);
-  return src.slice(start, stop + END.length);
+  if (stop === -1) throw new Error('the output-budget end marker moved');
+  return src.slice(start, stop);
 }
 
 function decide(tierBudget: string, modelMax: string) {
@@ -48,7 +49,11 @@ function decide(tierBudget: string, modelMax: string) {
     `STORY_MAX_OUTPUT_TOKENS=${tierBudget}`,
     `_ov_out_tokens=${modelMax}`,
     'STORY_MODEL=fixture-model',
+    // the block uses `local`, which is only valid inside a function — as it is in the engine
+    '_decide() {',
     budgetBlock(),
+    '}',
+    '_decide',
     'echo "BUDGET=$STORY_MAX_OUTPUT_TOKENS"',
   ].join('\n'));
   const r = spawnSync('bash', [script], { encoding: 'utf8', timeout: 15000 });

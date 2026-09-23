@@ -292,7 +292,21 @@ _attempt_start_snapshot() {
 # edit of another story's file never reaches the escalating story's commit under its name
 # (regintel 20260919T224649Z: 007a's "story complete" carried 005a's half-rewritten
 # classifier.py). Says so and does nothing when there is no repository or no snapshot.
+# RETIRED 2026-09-23 — NOTHING MAY CALL THIS AGAIN.
+#
+# Its only caller was the escalation resolver, which used it to roll back a scoped fix that did
+# not converge — destroying correct work an agent had just written (live: REGI-002's RU-006 ingest
+# fix, twice). Escalated fixes now run in their own worktree, so the escalating story's tree is
+# protected by construction and nothing has to be deleted to protect it.
+#
+# Kept as a refusal rather than deleted, so that a future caller reaching for "just restore the
+# tree" finds this instead of writing it again. This pipeline does not remove an agent's code.
 _restore_tree_snapshot() {
+    warning "  [snapshot] a tree restore was requested and REFUSED — this pipeline does not discard an agent's work; isolate it in a worktree instead"
+    return 0
+}
+
+_restore_tree_snapshot__retired() {
     local _tree="${1:-}"
     [ -n "$_tree" ] && [ -e "$PROJECT_ROOT/.git" ] || return 0
     git -C "$PROJECT_ROOT" cat-file -e "${_tree}^{tree}" 2>/dev/null || return 0

@@ -415,7 +415,20 @@ reset_brownfield_story_commit() {
         return 0
     fi
 
-    warning "  [teardown] $_sid: resetting $PROJECT_ROOT to pre-run baseline $_baseline_sha — discarding this story's failed commit(s)"
+    # THE BRANCH IS CLEANED; THE WORK IS KEPT. `reset --hard` alone made the story's commits
+    # unreachable — everything the agent wrote, including a diagnosis that was most of the way
+    # there and the only starting point the next attempt had. Keeping the branch clean and keeping
+    # the work were never in conflict: a ref costs nothing, and this pipeline never discards an
+    # agent's code. The commits move to a branch named for the story; the branch the run works on
+    # goes back to the baseline exactly as before.
+    local _keep_ref="kept/${_sid}-$(date -u +%Y%m%dT%H%M%SZ)"
+    if git -C "$PROJECT_ROOT" branch -f "$_keep_ref" "$_current_sha" >/dev/null 2>&1; then
+        success "  [teardown] $_sid: its commit(s) are KEPT on branch $_keep_ref — nothing was discarded"
+    else
+        warning "  [teardown] $_sid: could not create a keep-branch — REFUSING to reset, because that would destroy this story's work"
+        return 0
+    fi
+    warning "  [teardown] $_sid: returning $PROJECT_ROOT to pre-run baseline $_baseline_sha (the work is on $_keep_ref)"
     git -C "$PROJECT_ROOT" reset --hard "$_baseline_sha" >/dev/null 2>&1 \
         && success "  [teardown] $_sid: reset complete — repo is back to the exact state before this run started"
 }

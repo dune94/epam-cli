@@ -1433,6 +1433,53 @@ assess_model_escalation() {
 # 1 if there was no escalation, or if it could not be resolved (caller falls
 # through to normal retry handling — the diagnosis will surface again and be
 # caught by check_healing_effectiveness like any other repeat).
+# _escalation_worktree <sibling_id> — the worktree an escalated scoped fix runs in.
+#
+# Reused across escalations of the same sibling, so a second attempt resumes from the first
+# attempt's work instead of re-deriving it from an empty tree. Prints the path, or nothing when
+# this codeline has no git (the caller then runs in place and still keeps the work).
+_escalation_worktree() {
+    local _sib="${1:?sibling}"
+    [ -e "${PROJECT_ROOT:-}/.git" ] || return 1
+    local _safe; _safe="$(printf '%s' "$_sib" | tr -c '[:alnum:]._-' '_')"
+    local _path="${PROJECT_ROOT%/}-esc-${_safe}"
+    _ESC_BRANCH="esc/${_safe}"; export _ESC_BRANCH
+    if [ -d "$_path" ] && git -C "$PROJECT_ROOT" worktree list --porcelain 2>/dev/null | grep -q "^worktree ${_path}$"; then
+        printf '%s' "$_path"; return 0
+    fi
+    [ -d "$_path" ] && rm -rf "$_path"
+    if git -C "$PROJECT_ROOT" show-ref --verify --quiet "refs/heads/${_ESC_BRANCH}"; then
+        git -C "$PROJECT_ROOT" worktree add "$_path" "$_ESC_BRANCH" >/dev/null 2>&1 || return 1
+    else
+        git -C "$PROJECT_ROOT" worktree add -b "$_ESC_BRANCH" "$_path" HEAD >/dev/null 2>&1 || return 1
+    fi
+    printf '%s' "$_path"
+}
+
+# _escalation_adopt_work <sibling_id> <worktree> — bring a CONVERGED scoped fix into the codeline.
+#
+# File by file, so the escalating story's own uncommitted work is untouched and only the files the
+# sibling actually changed cross over. The worktree and its branch are left in place: they are the
+# record of what that escalation did.
+_escalation_adopt_work() {
+    local _sib="${1:?sibling}" _wt="${2:?worktree}"
+    [ -d "$_wt" ] || return 1
+    git -C "$_wt" add -A >/dev/null 2>&1 || true
+    git -C "$_wt" -c user.email=pipeline@local -c user.name=pipeline commit -qm "${_sib}: scoped escalation fix" >/dev/null 2>&1 || true
+    local _files _f _n=0
+    _files=$(git -C "$_wt" show --name-only --format= HEAD 2>/dev/null)
+    while IFS= read -r _f; do
+        [ -n "$_f" ] || continue
+        [ -e "${_wt}/${_f}" ] || continue
+        mkdir -p "$(dirname "${PROJECT_ROOT}/${_f}")" 2>/dev/null || true
+        cp -a "${_wt}/${_f}" "${PROJECT_ROOT}/${_f}" 2>/dev/null && _n=$((_n + 1))
+    done <<EOF
+$_files
+EOF
+    log "  [Escalation] brought ${_n} file(s) of ${_sib}'s converged fix into the codeline from $_wt"
+    return 0
+}
+
 resolve_escalation() {
     local escalating_story_id="$1"
     local escalation_file="${PROJECT_ROOT}/.epam/escalations/${escalating_story_id}.json"
@@ -1531,8 +1578,29 @@ resolve_escalation() {
     export COORDINATOR_PROMPT_AMENDMENT
     # The tree as it stands before the owner's fix begins — restored if the fix does not converge,
     # so nothing of a half-done edit reaches $escalating_story_id's commit (see _restore_tree_snapshot).
-    local _esc_start_tree=""
-    command -v _attempt_start_snapshot >/dev/null 2>&1 && _esc_start_tree=$(_attempt_start_snapshot)
+    # THE SCOPED FIX RUNS IN ITS OWN WORKTREE — the pipeline's own isolation, used here so that
+    # attribution is STRUCTURAL instead of enforced by deleting.
+    #
+    # What stood here snapshotted the tree, ran the sibling in it, and restored the snapshot when
+    # the fix did not converge, destroying every file the sibling wrote. The hazard it addressed is
+    # real (a half-done fix must never be swept into the ESCALATING story's commit) but the remedy
+    # discarded correct work: live 2026-09-23, REGI-002 was handed the RU-006 ingest defect twice,
+    # wrote the right fix twice, passed its own tests twice, and had both deleted because the
+    # whole-codeline suite still failed on OTHER stories' tests. Every retry began from identical
+    # code, so four correct diagnoses bought nothing.
+    #
+    # A worktree gives the same guarantee without the loss: the sibling works on its own branch in
+    # its own directory, so the escalating story's tree is untouched by construction. A converged
+    # fix is brought across file by file; a non-converged one STAYS, and the next escalation of the
+    # same sibling resumes from it.
+    local _esc_wt="" _esc_prev_root="$PROJECT_ROOT"
+    _esc_wt="$(_escalation_worktree "$sibling_id")" || _esc_wt=""
+    if [ -n "$_esc_wt" ]; then
+        PROJECT_ROOT="$_esc_wt"; export PROJECT_ROOT
+        log "  [Escalation] $sibling_id works in its own worktree $_esc_wt (branch ${_ESC_BRANCH:-})"
+    else
+        warning "  [Escalation] no worktree available for $sibling_id — the fix runs in the main tree; its work is kept either way"
+    fi
 
     implement_story "$sibling_id"
     local fix_result=$?
@@ -1544,14 +1612,22 @@ resolve_escalation() {
 
     rm -f "$escalation_file"
 
+    PROJECT_ROOT="$_esc_prev_root"; export PROJECT_ROOT
     if [ "$fix_result" -eq 0 ]; then
+        if [ -n "$_esc_wt" ]; then
+            _escalation_adopt_work "$sibling_id" "$_esc_wt" || warning "  [Escalation] could not bring $sibling_id's converged fix across — it remains in $_esc_wt"
+        fi
         success "  [Escalation] Scoped fix resolved for $sibling_id — resuming $escalating_story_id"
         return 0
     else
-        if [ -n "$_esc_start_tree" ] && command -v _restore_tree_snapshot >/dev/null 2>&1; then
-            _restore_tree_snapshot "$_esc_start_tree" && log "  [Escalation] $sibling_id's partial edits reverted — nothing of a non-converged fix reaches $escalating_story_id's commit"
+        # NOTHING IS REVERTED. The work stays where it was written, and is named so the next
+        # escalation resumes from it and a human can read what was tried.
+        if [ -n "$_esc_wt" ]; then
+            log "  [Escalation] $sibling_id's work is KEPT in its worktree $_esc_wt (branch ${_ESC_BRANCH:-esc}) — the next escalation resumes from it, nothing was discarded"
+        else
+            log "  [Escalation] $sibling_id's work is KEPT in the main tree — nothing was discarded"
         fi
-        warning "  [Escalation] Scoped fix for $sibling_id did not converge this escalation (its ladder now at retry_count $(read_story_retry_count "$LOG_DIR" "$sibling_id")) — $escalating_story_id will re-diagnose on its next attempt and the next escalation climbs from there"
+        warning "  [Escalation] Scoped fix for $sibling_id did not converge this escalation (its ladder now at retry_count $(read_story_retry_count "$LOG_DIR" "$sibling_id"))"
         return 1
     fi
 }

@@ -413,7 +413,13 @@ require_profile() {
 # THE RETRY AFTER AN OUTPUT-CAP HIT GETS ROOM. When classify_failure_class reads the runner's
 # truncation message, the next attempt's output budget becomes the widest tier's — an identical cap
 # would truncate identically (regintel 140717Z: 8 attempts on REGI-004-A, all at 6144, all empty).
+# RETIRED 2026-09-22 — the analyst raises the budget now (see run_failure_analyst's provisioning
+# block). This jumped to the widest tier once, never touched iterations, and ran whether or not
+# anything had diagnosed the attempt; it existed because the analyst was unreachable on this
+# class, which is the defect that was actually fixed. Kept as a no-op so a caller that still
+# invokes it is not a syntax error, and so the reason is here rather than in a deleted line.
 raise_output_budget_after_cap_hit() {
+    return 0
     [ "${COORDINATOR_FAILURE_CLASS:-}" = "output_cap" ] || return 0
     local _widest="${EPAM_EFFORT_WIDEST_MAX_OUTPUT_TOKENS:-0}"
     if [ "${_widest:-0}" -gt "${STORY_MAX_OUTPUT_TOKENS:-0}" ] 2>/dev/null; then
@@ -814,8 +820,19 @@ run_failure_analyst() {
     # archetype name, so it never saw what production actually sent.
     local _ANALYST_SEAM="impl-failure-analyst"
 
-    # Only analyze test-suite failures; missing-deliverable failures lack useful output
-    [ -z "${VERIFICATION_FAILURE:-}" ] && return 0
+    # NO FAILURE IS FILTERED OUT OF SELF-HEAL. This returned here unless a test suite had run and
+    # failed, so every other class was invisible to the analyst: an attempt truncated at its
+    # output cap, a timeout, an empty reply, a crashed environment — none of them set
+    # VERIFICATION_FAILURE, because none of them ever reaches a suite.
+    #
+    # Live cost, regintel 2026-09-22: REGI-009a burned four attempts and ~$5.50 on effort low
+    # (maxIter=6, maxOutTok=8192), every attempt truncated at its cap, while healing-events.jsonl
+    # stayed 0 BYTES for two days across two runs. The analyst was never invoked once.
+    #
+    # The rule: when a retry is done, self-heal is invoked. The evidence differs by class — a
+    # suite failure carries its output, a cap hit carries a truncated log — and the analyst is
+    # told which class it is looking at rather than being kept away from the ones it was not
+    # written for.
 
     local gate_provider="${ORCH_GATE_PROVIDER:-}"
     # Failure analyst uses ESCALATION_MODEL (z-ai/glm-5.2) when set — never openrouter chat models;
@@ -825,7 +842,11 @@ run_failure_analyst() {
     # OpenRouter model. An unresolvable seam yields empty and the caller refuses, as before.
     local gate_model="${ESCALATION_MODEL:-$(seam_model_or_fail "agent-failure-analyst" 2>/dev/null || true)}"
     if [ -z "$gate_provider" ]; then
-        log "  [FailureAnalyst] No gate provider configured — skipping self-heal analysis"
+        # SAID OUT LOUD, NOT SKIPPED QUIETLY. A run with no analyst provider has no self-heal at
+        # all; logging that at info level put it in the same stream as routine progress and it
+        # went unread for a whole run. It still returns rather than halting — the retry itself is
+        # not the analyst's to abort — but the run is told it is running unhealed.
+        warning "  [FailureAnalyst] no analyst provider is configured — THIS RUN HAS NO SELF-HEAL; every retry will repeat the previous attempt's conditions"
         return 0
     fi
 
@@ -964,7 +985,36 @@ $(cat "$_fa_vendor_contract")
     printf '%s' "${story_acs:-}"                        > "$_av_dir/acs"
     printf '%s' "${skill_addendum:-}"                   > "$_av_dir/addendum"
     printf '%s' "${dependency_contracts:-}"             > "$_av_dir/contracts"
-    printf '%s' "${VERIFICATION_FAILURE:-}"             > "$_av_dir/vf"
+    # WHAT FAILED, FOR EVERY CLASS — not only for a suite that ran.
+    #
+    # This slot used to carry VERIFICATION_FAILURE and nothing else, so an attempt that never
+    # reached a suite arrived with an empty payload and the prompt refused to render: the analyst
+    # could not be asked about the failures it most needed to see. The summary below is assembled
+    # from what the attempt actually left — its class, the provisioning it ran under, how much it
+    # produced, and the tail of its own log — so the analyst can tell a starved attempt from a
+    # wrong one, and can decide to raise a budget rather than re-run the same conditions.
+    #
+    # Live: REGI-009a, effort low (maxIter=6, maxOutTok=8192), attempts 4 and 5 produced 932 bytes
+    # and then 0, class output_cap, and nothing diagnosed it.
+    if [ -n "${VERIFICATION_FAILURE:-}" ]; then
+        printf '%s' "$VERIFICATION_FAILURE"             > "$_av_dir/vf"
+    else
+        {
+            printf '## Attempt Failure — %s\n\n' "${EPAM_FAILURE_CLASS:-${COORDINATOR_FAILURE_CLASS:-unclassified}}"
+            printf 'The attempt did not reach the verification step, so there is no suite output. What it ran under:\n\n'
+            printf -- '- failure class: %s\n' "${EPAM_FAILURE_CLASS:-${COORDINATOR_FAILURE_CLASS:-unclassified}}"
+            printf -- '- max output tokens: %s\n' "${STORY_MAX_OUTPUT_TOKENS:-unknown}"
+            printf -- '- max iterations: %s\n' "${EPAM_MAX_ITERATIONS:-${STORY_MAX_TURNS:-unknown}}"
+            printf -- '- model / provider: %s / %s\n' "${STORY_MODEL:-unknown}" "${STORY_PROVIDER:-unknown}"
+            printf -- '- retry number: %s\n' "${retry_num:-0}"
+            if [ -f "$output_file" ]; then
+                printf -- '- bytes it produced: %s\n' "$(wc -c < "$output_file" 2>/dev/null || echo 0)"
+                printf '\nThe end of its own log:\n\n```\n%s\n```\n' \
+                    "$(tail -n "$(evidence_window attemptLogLines 2>/dev/null || echo 60)" "$output_file" 2>/dev/null)"
+            fi
+            printf '\nIf the attempt was starved — truncated at its cap, or out of iterations before it could finish — say so and say what it needs; the next attempt is provisioned from your answer.\n'
+        } > "$_av_dir/vf"
+    fi
     _attempt_change_summary "$story_id"                 > "$_av_dir/changes" 2>/dev/null || : > "$_av_dir/changes"
     _analyst_write_scope "$story_id"                    > "$_av_dir/scope"   2>/dev/null || : > "$_av_dir/scope"
     _analyst_shared_criteria "$story_id"                > "$_av_dir/shared"  2>/dev/null || : > "$_av_dir/shared"
@@ -1170,6 +1220,29 @@ $(cat "$_fa_vendor_contract")
             local diagnosis target skill_note reason patch_count _profile_updated
             diagnosis=$(echo "$analyst_json" | jq -r '.diagnosis // "unknown"' 2>/dev/null || echo "unknown")
             target=$(echo "$analyst_json" | jq -r '.target // "none"' 2>/dev/null || echo "none")
+            # THE ANALYST PROVISIONS THE NEXT ATTEMPT. A starved attempt is not a wrong one, and
+            # the agent that just read the evidence is the one that can tell them apart — so the
+            # budget for the retry is its decision, not a fixed engine bump applied once.
+            #
+            # What this replaces: raise_output_budget_after_cap_hit jumped to the widest declared
+            # tier the first time a cap was hit and never again, and never touched iterations at
+            # all. Live 2026-09-22, REGI-009a: the jump fired once (8192 -> 32768), maxIter stayed
+            # at 6 for every attempt, and attempts 4 and 5 hit the cap again with nothing left to
+            # give. Raising nothing is also a decision the analyst can make — a bigger budget
+            # cannot fix a wrong approach, and it says so when the attempt had room.
+            local _fa_out_tokens _fa_iters _fa_prov_why
+            _fa_out_tokens=$(echo "$analyst_json" | jq -r '.provisioning.maxOutputTokens // empty' 2>/dev/null || echo "")
+            _fa_iters=$(echo "$analyst_json" | jq -r '.provisioning.maxIterations // empty' 2>/dev/null || echo "")
+            _fa_prov_why=$(echo "$analyst_json" | jq -r '.provisioning.why // empty' 2>/dev/null || echo "")
+            if [ -n "$_fa_out_tokens" ] && [ "$_fa_out_tokens" -gt "${STORY_MAX_OUTPUT_TOKENS:-0}" ] 2>/dev/null; then
+                log "  [FailureAnalyst] output budget ${STORY_MAX_OUTPUT_TOKENS:-?} → ${_fa_out_tokens} for the next attempt — ${_fa_prov_why:-the analyst judged the attempt starved}"
+                STORY_MAX_OUTPUT_TOKENS="$_fa_out_tokens"; export STORY_MAX_OUTPUT_TOKENS
+            fi
+            if [ -n "$_fa_iters" ] && [ "$_fa_iters" -gt "${EPAM_MAX_ITERATIONS:-0}" ] 2>/dev/null; then
+                log "  [FailureAnalyst] iterations ${EPAM_MAX_ITERATIONS:-?} → ${_fa_iters} for the next attempt — ${_fa_prov_why:-the analyst judged the attempt starved}"
+                EPAM_MAX_ITERATIONS="$_fa_iters"; export EPAM_MAX_ITERATIONS
+                STORY_MAX_TURNS="$_fa_iters"; export STORY_MAX_TURNS
+            fi
             skill_note=$(echo "$analyst_json" | jq -r '.skill_note // ""' 2>/dev/null || echo "")
             [ -n "$skill_note" ] && skill_note=$(_ensure_imperative_opener "$skill_note")
             reason=$(echo "$analyst_json" | jq -r '.reason // ""' 2>/dev/null || echo "")

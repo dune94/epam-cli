@@ -2653,6 +2653,14 @@ Apply the above diagnosis AND fix the deterministic check violation — both mus
                     fi
                 fi
                 _prev_deterministic_violation="$VERIFICATION_FAILURE"
+                # AND THE ANALYST SEES IT EITHER WAY. The arm above invokes it only when the SAME
+                # violation returns after a remedy; a first-time deterministic violation went
+                # undiagnosed and the next attempt got nothing but the violation text it had
+                # already failed to act on. No failure is filtered out of self-heal — a repeat is
+                # a stronger signal, not the only one worth diagnosing.
+                if [ "$_same_violation" != "true" ] && [ "$retry_count" -lt "$MAX_RETRIES" ]; then
+                    run_failure_analyst "$story_id" "$output_file" "$retry_count"
+                fi
             elif [ $retry_count -lt $MAX_RETRIES ]; then
                 run_failure_analyst "$story_id" "$output_file" "$retry_count"
             fi

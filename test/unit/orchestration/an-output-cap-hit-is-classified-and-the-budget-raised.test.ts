@@ -72,13 +72,18 @@ describe('an output-cap hit is classified and the retry is given room', () => {
     expect(r.cls, r.out).toBe('output_cap');
     expect(r.esc).toBe('yes');
   });
-  it("the next attempt's output budget becomes the widest tier the config declares", () => {
-    const tiers = JSON.parse(readFileSync(join(ROOT, 'orchestrations/config/llm-defaults.json'), 'utf8')).effortTiers;
-    const widest = Math.max(...Object.values(tiers).map((t: any) => Number(t.maxOutputTokens)));
+  it("the engine no longer raises the budget on its own — the ANALYST decides (2026-09-22)", () => {
+    // WAS: the engine jumped to the widest declared tier the first time a cap was hit. It fired
+    // once, never touched iterations, and ran with nothing having diagnosed the attempt — so
+    // REGI-009a's attempts 4 and 5 hit the cap again with nothing left to give (932 bytes, then
+    // 0). The remedy moved to the agent that reads the evidence: run_failure_analyst applies
+    // .provisioning.maxOutputTokens / .maxIterations from the analyst's own answer, and raises
+    // nothing when it says the attempt had room. See no-failure-is-filtered-out-of-self-heal.
     const r = classify({ log: TRUNCATION });
-    expect(r.budget, r.out.slice(-600)).toBe(String(widest));
-    expect(widest).toBeGreaterThan(6144);
+    expect(r.cls, 'the cap hit must still be CLASSIFIED — that is what reaches the analyst').toBe('output_cap');
+    expect(r.budget, 'the engine raised a budget nothing had diagnosed').toBe('6144');
   });
+
   it('a plain 0-byte failure with credit in the account is still env (and the budget is untouched)', () => {
     const r = classify({ log: 'some other stderr\n', balance: '12.40' });
     expect(r.cls).toBe('env');

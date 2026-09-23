@@ -139,6 +139,39 @@ if deprecated_active:
 else:
     print("  ✓ No deprecated stories in active phases")
 
+# ── 6b. Every dependency names a story that is real and still alive ─────────
+#
+# A SPLIT MUST LEAVE THE GRAPH TRUE. When a story is split, the parent is deprecated and the
+# children carry the work — but the edges that pointed AT the parent were left pointing at it.
+# Found 2026-09-22 in the regintel PRD: eleven of seventeen active stories depended on a
+# deprecated shell (REGI-002 -> REGI-001, REGI-009a -> REGI-005, REGI-010-B -> REGI-009 ...).
+#
+# Nothing blocked, which is why it survived: a deprecated dependency reads as satisfied
+# ("+ Dependency REGI-003 satisfied (completed)" in the run log), so the PRD silently stopped
+# expressing what any story actually depends on. REGI-009a's real prerequisite is the dedup its
+# siblings implement; its declared one was a shell.
+#
+# Reported, not repaired: re-pointing an edge is the splitting agent's decision — only it knows
+# which child inherited which part of the parent — so this names the edge and the remedy goes
+# back to the agent that made the split.
+dangling = []
+retired = []
+for s in stories:
+    if s.get('status') == 'deprecated' or s.get('id') not in active_ids:
+        continue
+    for dep in (s.get('dependencies') or []):
+        if dep not in by_id:
+            dangling.append(f"{s['id']} -> {dep}")
+        elif by_id[dep].get('status') == 'deprecated':
+            retired.append(f"{s['id']} -> {dep}")
+if dangling:
+    err(f"Dependencies naming stories that do not exist: {sorted(dangling)}")
+if retired:
+    err(f"Dependencies naming DEPRECATED stories — a split left these edges on the parent "
+        f"instead of re-pointing them onto the children that carry the work: {sorted(retired)}")
+if not dangling and not retired:
+    print("  \u2713 Every dependency names a live story")
+
 # ── 7. Provider values are known to the registry ────────────────────────────
 # NAMES NO VENDOR. This carried a literal vendor name in its own comment and error
 # message — a stack fact compiled into the engine. It stayed invisible while that name

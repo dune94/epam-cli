@@ -234,6 +234,20 @@ baseline_new_failures() {
         fi
     fi
 
+    # HOW MANY FAILURES THE BASELINE ACTUALLY KNOWS ABOUT, published for the caller.
+    #
+    # An empty delta means "nothing here is new", and a caller reads that as "every failure was
+    # already in the codeline". That inference only holds if the baseline HAS failures. When the
+    # check exited non-zero and the baseline is empty, the truthful reading is the opposite:
+    # nothing the baseline can explain came back — the suite did not produce a judgeable result.
+    # Live 2026-09-22: `pytest` exited 2 on a collection error, emitted no failure records, the
+    # delta was empty, and two stories were marked complete on a suite that never ran.
+    BASELINE_KNOWN_FAILURES=0
+    if [ -n "${baseline_cache:-}" ] && [ -s "${baseline_cache:-}" ]; then
+        BASELINE_KNOWN_FAILURES="$(grep -c '[^[:space:]]' "$baseline_cache" 2>/dev/null || echo 0)"
+    fi
+    export BASELINE_KNOWN_FAILURES
+
     if [ -z "$(echo "$new_errors" | tr -d '[:space:]')" ]; then
         return 0
     fi

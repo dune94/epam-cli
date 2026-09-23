@@ -735,6 +735,22 @@ const TOOL_SPEC_AGENT = {
       acAddedBySpeckit: { type: 'array', items: { type: 'string' } },
       acModifiedBySpeckit: { type: 'array', items: { type: 'object' } },
       acFlagged: { type: 'array', items: { type: 'object' } },
+      // WHICH STORIES MUST FOLLOW THE CHILDREN INSTEAD OF THE PARENT. Splitting retires the
+      // parent, so any story that depended on it depends on a shell — and a deprecated
+      // dependency reads as satisfied, so nothing blocks (regintel 2026-09-22: eleven such
+      // edges). Only the splitting agent knows which child inherited which part, so it says so
+      // here. Declared in the schema because a schema-bound reply cannot carry an undeclared
+      // field — the same lesson as `dependencies` directly below.
+      rewireDependencies: {
+        type: 'array',
+        items: {
+          type: 'object',
+          properties: {
+            story: { type: 'string' },
+            dependsOn: { type: 'array', items: { type: 'string' } },
+          },
+        },
+      },
       splitStories: {
         type: 'array',
         items: {
@@ -8314,6 +8330,12 @@ function splitTestStoryByFacts(story, prd, phase, maxFactsPerChild = TC_FACTS_SP
   story.acceptanceCriteria = [`Delegated to TC-density split children: ${childIds.join(', ')}`];
   story.status = 'deprecated';
   story.completed = true;
+  // A FACTS PARTITION IS NOT A JUDGEMENT. This split is deterministic — the parent's deliverable
+  // is exactly the union of its children's facts — so an edge that waited for the parent waits
+  // for all of them. No agent is asked, because nothing here was decided by one.
+  rewireDependenciesOnSplit(prd, story.id, childIds,
+    prd.stories.filter((s) => s && Array.isArray(s.dependencies) && s.dependencies.includes(story.id))
+      .map((s) => ({ story: s.id, dependsOn: childIds })));
 
   const order = prd.implementationOrder?.[phase];
   if (Array.isArray(order)) {
@@ -9149,10 +9171,56 @@ function applySpecChanges(story, payload, newStories, prd, phaseId, runId, logDi
         // topology needed to do that safely).
         story.status = 'deprecated';
         story.completed = true;
+        // AND NO EDGE MAY STILL POINT AT IT. The agent that decided this split declares which
+        // child inherited the work each dependent story was waiting for (rewireDependencies,
+        // speckit-split-rules rule 8). Applied here; anything it did not declare is left alone
+        // and named, never guessed. Live 2026-09-22: eleven active regintel stories depended on
+        // parents retired exactly here, and a deprecated dependency reads as satisfied.
+        rewireDependenciesOnSplit(
+          prd, story.id,
+          newStories.filter((ns) => ns && ns.parentId === story.id).map((ns) => ns.id),
+          payload.rewireDependencies,
+        );
       }
     }
   }
   return result;
+}
+
+
+// REWIRE THE EDGES A SPLIT LEAVES BEHIND.
+//
+// Splitting retires the parent: it stays in the PRD as a deprecated record implementing nothing.
+// Every OTHER story that named it in `dependencies` then depends on a shell — and a deprecated
+// dependency reads as already satisfied ("+ Dependency REGI-003 satisfied (completed)"), so
+// nothing blocks and nothing says so. Found 2026-09-22 in the regintel PRD: eleven of seventeen
+// active stories depended on a parent that had been split away.
+//
+// WHICH child inherited the work an edge was waiting for is the SPLITTING AGENT'S call — only it
+// knows how it divided the parent — so the agent declares it as `rewireDependencies`
+// ([{story, dependsOn:[childId,...]}], speckit-split-rules) and this applies exactly that.
+// Nothing is inferred: when the agent declared nothing for an inbound edge, the edge is left
+// alone and named in the log, and prd-integrity-audit reports it rather than a guess being made.
+function rewireDependenciesOnSplit(prd, parentId, childIds, rewire) {
+  if (!prd || !Array.isArray(prd.stories) || !parentId) return;
+  const declared = new Map();
+  for (const r of Array.isArray(rewire) ? rewire : []) {
+    if (r && r.story && Array.isArray(r.dependsOn) && r.dependsOn.length) declared.set(r.story, r.dependsOn);
+  }
+  const unrewired = [];
+  for (const s of prd.stories) {
+    if (!s || s.id === parentId || !Array.isArray(s.dependencies)) continue;
+    if (!s.dependencies.includes(parentId)) continue;
+    const onto = declared.get(s.id);
+    if (!onto) { unrewired.push(s.id); continue; }
+    const kept = s.dependencies.filter((d) => d !== parentId);
+    for (const c of onto) if (!kept.includes(c)) kept.push(c);
+    s.dependencies = kept;
+    console.log(`spec-mode: split ${parentId} — ${s.id} now depends on ${onto.join(', ')} (the agent named the child that inherited the work)`);
+  }
+  if (unrewired.length) {
+    console.warn(`spec-mode: split ${parentId} — the agent declared no rewiring for ${unrewired.join(', ')}, which still depend on the parent it retired (children: ${(childIds || []).join(', ') || 'none recorded'})`);
+  }
 }
 
 function appendJsonl(filePath, obj) {
@@ -10679,6 +10747,7 @@ function costLabelFor(tag, env) {
 }
 
 module.exports = {
+  rewireDependenciesOnSplit,
   storyAcsBlock,
   specAgentContract,
   rosterReviewVerdict,

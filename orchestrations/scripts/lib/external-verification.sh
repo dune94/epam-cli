@@ -1168,6 +1168,17 @@ run_external_verification() {
         # baseline diff, and the policy it implements: inherit what the codeline already had,
         # never add to it. The tsc path lost precisely this guard once and an empty delta fell
         # through to the failure branch, reporting errors with an EMPTY error list.
+        # AND A SUITE THAT NEVER RAN IS NOT A SUITE THAT PASSED. An empty delta can mean two
+        # opposite things: every failure was already in the codeline, or the command produced no
+        # failure records at all because it never executed one. The baseline tells them apart —
+        # you cannot inherit failures from a baseline that has none. No exit code and no
+        # framework is named here: the question is whether anything the baseline knows about
+        # came back, which is true of every ecosystem the plugin parses.
+        if [ -z "$(echo "$_new_test_failures" | tr -d '[:space:]')" ] \
+           && [ "${BASELINE_KNOWN_FAILURES:-0}" -eq 0 ] 2>/dev/null; then
+            warning "External verification for $story_id exited $test_exit and produced no failures the baseline can explain — the suite did not run to a judgeable result; NOT treating it as pre-existing"
+            _new_test_failures="$test_output"
+        fi
         if [ -z "$(echo "$_new_test_failures" | tr -d '[:space:]')" ]; then
             success "External verification for $story_id: only pre-existing baseline test failures — none introduced by this story"
             return 0

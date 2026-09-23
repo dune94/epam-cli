@@ -167,7 +167,8 @@ baseline_new_failures() {
                     # the exact inverse of this gate. Capture first, parse second.
                     local _base_out
                     _base_out=$(mktemp)
-                    _run_project_verification "$wt_dir" "$section" > "$_base_out" 2>&1 || true
+                    local _bg_baseline_exit=0
+                    _run_project_verification "$wt_dir" "$section" > "$_base_out" 2>&1 || _bg_baseline_exit=$?
                     if "$_node" -e '
                             const fs = require("fs");
                             const p = require(process.argv[1]);
@@ -176,7 +177,25 @@ baseline_new_failures() {
                             if (ids === null) process.exit(3);   // undeclared parse — say nothing
                             process.stdout.write(ids.join("\n"));
                           ' "$_plugin" "$wt_dir" "$section" "$_base_out" > "$baseline_cache" 2>/dev/null; then
-                        :
+                        # A BASELINE THAT FOUND NOTHING IS NOT A CLEAN BASELINE.
+                        #
+                        # The parse succeeding with an EMPTY result is the most dangerous value
+                        # this file can hold: an empty cache reads as "nothing was failing", so
+                        # every pre-existing failure is charged to whichever story ran last. It is
+                        # only true when the baseline run REALLY passed — so that is what decides
+                        # it. A run that exited non-zero and yielded no parseable failure did not
+                        # observe a clean tree; it failed to produce a judgeable result.
+                        #
+                        # Live: ten 0-byte caches written across 2026-09-22/23 while the declared
+                        # command was bare `pytest`, which exited 2 having collected nothing. The
+                        # codeline had five real failures throughout, and stories were rejected
+                        # for inheriting them — REGI-002 twice, on a fix that was correct.
+                        if [ ! -s "$baseline_cache" ] && [ "${_bg_baseline_exit:-0}" -ne 0 ]; then
+                            echo "[baseline-gate] the ${section} baseline at ${baseline_sha:0:12} exited ${_bg_baseline_exit} and produced NO parseable failures —" >&2
+                            echo "[baseline-gate] it did not observe a clean tree, it failed to run. Nothing will be subtracted," >&2
+                            echo "[baseline-gate] so PRE-EXISTING ${section} failures will be attributed to this story. This is not a pass." >&2
+                            rm -f "$baseline_cache"
+                        fi
                     else
                         # LOUD, NOT SILENT. The cache could not be produced, so there is no baseline
                         # to subtract — every PRE-EXISTING failure is about to be charged to this

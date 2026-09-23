@@ -124,7 +124,27 @@ _epam_write_verification_manifest() {
         }
         return out;
       };
-      const merged = layer(layer(d, declared), existing);
+      // A VALUE DETECTION WROTE IS NOT A HAND-TUNING. `existing` wins so an operator can tune a
+      // command for one run -- but the file FIRST content was written by DETECTION, and it then
+      // outranked detection forever. Live 2026-09-23: this file had said test.command "pytest"
+      // since the codeline was created; the ecosystem command was corrected to
+      // `python3 -m pytest` (without which the suite cannot import what it tests, and every
+      // verification exited 2 with zero tests collected) and the fix could not reach the
+      // codeline. The comment above assumes the file is destroyed before every run -- true of
+      // brownfield `git clean -fd`, false of a greenfield RESUME, which keeps its codeline.
+      //
+      // Detection stamps each section it writes with `detected`. A section carrying that stamp
+      // belongs to detection and yields to fresh detection; a section without it was authored by
+      // a human or a project declaration and still wins. Nothing is guessed: the file records
+      // which half wrote each section.
+      //
+      // NO APOSTROPHES IN THIS BLOCK. It lives inside a single-quoted shell string, so one
+      // closes it: on 2026-09-23 an apostrophe here broke the quoting, the mangled shell ran
+      // fragments of its own source, and it deleted the test file that was proving this fix.
+      const minusOwnDetections = Object.fromEntries(
+        Object.entries(existing).filter(([k, v]) => !(v && typeof v === "object" && !Array.isArray(v) && v.detected)),
+      );
+      const merged = layer(layer(d, declared), minusOwnDetections);
       fs.mkdirSync(path.join(root, ".epam"), { recursive: true });
       fs.writeFileSync(out, JSON.stringify(merged, null, 2) + "\n");
     ' "$_plugin" "$_root" 2>/dev/null || true

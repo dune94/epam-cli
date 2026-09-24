@@ -1433,6 +1433,20 @@ assess_model_escalation() {
 # 1 if there was no escalation, or if it could not be resolved (caller falls
 # through to normal retry handling — the diagnosis will surface again and be
 # caught by check_healing_effectiveness like any other repeat).
+# _escalation_branch <sibling_id> — the branch an escalated scoped fix lives on.
+#
+# THE NAMING RULE HAS ONE HOME. _escalation_worktree used to set and export _ESC_BRANCH, but every
+# caller reads the worktree through `_esc_wt="$(_escalation_worktree ...)"` -- a command
+# substitution, which is a SUBSHELL. The export died with it, so every caller fell through to its
+# `${_ESC_BRANCH:-esc}` default and the live log read
+#     [Escalation] REGI-002 works in its own worktree ...-esc-REGI-002 (branch esc)
+# The operator could not tell which branch held the work, which is the one thing that line exists
+# to say. A caller asks for the name instead of inheriting it.
+_escalation_branch() {
+    local _sib="${1:?sibling}"
+    printf 'esc/%s' "$(printf '%s' "$_sib" | tr -c '[:alnum:]._-' '_')"
+}
+
 # _escalation_worktree <sibling_id> — the worktree an escalated scoped fix runs in.
 #
 # Reused across escalations of the same sibling, so a second attempt resumes from the first
@@ -1443,11 +1457,26 @@ _escalation_worktree() {
     [ -e "${PROJECT_ROOT:-}/.git" ] || return 1
     local _safe; _safe="$(printf '%s' "$_sib" | tr -c '[:alnum:]._-' '_')"
     local _path="${PROJECT_ROOT%/}-esc-${_safe}"
-    _ESC_BRANCH="esc/${_safe}"; export _ESC_BRANCH
+    _ESC_BRANCH="$(_escalation_branch "$_sib")"; export _ESC_BRANCH
     if [ -d "$_path" ] && git -C "$PROJECT_ROOT" worktree list --porcelain 2>/dev/null | grep -q "^worktree ${_path}$"; then
         printf '%s' "$_path"; return 0
     fi
-    [ -d "$_path" ] && rm -rf "$_path"
+    # THE ENGINE REMOVES NO CODE. This was `rm -rf "$_path"`, and it fired in exactly the state
+    # that means an agent wrote something here and git has forgotten about it: a directory at the
+    # worktree path that is NOT a registered worktree -- what `git worktree prune`, a re-clone or a
+    # teardown that swept .git leaves behind, with a non-converged escalated fix still inside it.
+    # It is moved aside under a name that says what it was, never deleted; the operator and the
+    # next escalation can both still read it. Both messages go to STDERR: every caller captures
+    # this function's stdout as the worktree PATH, and orch-common.sh's warning() writes stdout.
+    if [ -d "$_path" ]; then
+        local _kept="${_path}-kept-$(date -u +%Y%m%dT%H%M%SZ)"
+        if mv "$_path" "$_kept" 2>/dev/null; then
+            warning "  [Escalation] $_sib had unregistered work at $_path — KEPT at $_kept, nothing was deleted" >&2
+        else
+            warning "  [Escalation] $_sib has unregistered work at $_path that could not be moved aside — refusing to touch it" >&2
+            return 1
+        fi
+    fi
     if git -C "$PROJECT_ROOT" show-ref --verify --quiet "refs/heads/${_ESC_BRANCH}"; then
         git -C "$PROJECT_ROOT" worktree add "$_path" "$_ESC_BRANCH" >/dev/null 2>&1 || return 1
     else

@@ -77,6 +77,7 @@ function escalateTwice(opts: { secondTargetFile?: string } = {}) {
     `implement_story() { printf '%s\\n' "$1" >> ${JSON.stringify(invocations)}; return 1; }`,
     shellFunction(HEALING, '_attempt_start_snapshot'),
     shellFunction(HEALING, '_restore_tree_snapshot'),
+    shellFunction(LADDER, '_escalation_branch'),
     shellFunction(LADDER, '_escalation_worktree'),
     shellFunction(LADDER, '_escalation_adopt_work'),
     shellFunction(LADDER, 'resolve_escalation'),
@@ -121,5 +122,8 @@ describe('an escalation already tried is not tried again', () => {
   it('nothing is discarded: the first attempt\'s worktree still exists', () => {
     const { out } = escalateTwice();
     expect(out).toMatch(/KEPT|worktree/i);
+    // Not the fallback: "no worktree available" also contains "worktree".
+    expect(out).not.toContain('no worktree available');
+    expect(out).toMatch(/works in its own worktree \S+-esc-\S+ \(branch esc\/\S+\)/);
   });
 });

@@ -1659,7 +1659,7 @@ what evidence would change the diagnosis."
     _esc_wt="$(_escalation_worktree "$sibling_id")" || _esc_wt=""
     if [ -n "$_esc_wt" ]; then
         PROJECT_ROOT="$_esc_wt"; export PROJECT_ROOT
-        log "  [Escalation] $sibling_id works in its own worktree $_esc_wt (branch ${_ESC_BRANCH:-})"
+        log "  [Escalation] $sibling_id works in its own worktree $_esc_wt (branch $(_escalation_branch "$sibling_id"))"
     else
         warning "  [Escalation] no worktree available for $sibling_id — the fix runs in the main tree; its work is kept either way"
     fi
@@ -1685,7 +1685,7 @@ what evidence would change the diagnosis."
         # NOTHING IS REVERTED. The work stays where it was written, and is named so the next
         # escalation resumes from it and a human can read what was tried.
         if [ -n "$_esc_wt" ]; then
-            log "  [Escalation] $sibling_id's work is KEPT in its worktree $_esc_wt (branch ${_ESC_BRANCH:-esc}) — the next escalation resumes from it, nothing was discarded"
+            log "  [Escalation] $sibling_id's work is KEPT in its worktree $_esc_wt (branch $(_escalation_branch "$sibling_id")) — the next escalation resumes from it, nothing was discarded"
         else
             log "  [Escalation] $sibling_id's work is KEPT in the main tree — nothing was discarded"
         fi

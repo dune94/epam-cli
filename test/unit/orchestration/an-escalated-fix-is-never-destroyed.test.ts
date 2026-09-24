@@ -99,6 +99,7 @@ function escalate(opts: {
     shellFunction(HEALING, '_attempt_start_snapshot'),
     shellFunction(HEALING, '_restore_tree_snapshot'),
     stub(opts.converges, opts.writes),
+    shellFunction(LADDER, '_escalation_branch'),
     shellFunction(LADDER, '_escalation_worktree'),
     shellFunction(LADDER, '_escalation_adopt_work'),
     shellFunction(LADDER, 'resolve_escalation'),
@@ -183,5 +184,15 @@ describe('an escalated fix is never destroyed', () => {
   it("says where a non-converged fix was kept, so the next attempt can find it", () => {
     const { out } = escalate({ converges: false, writes: { 'regintel/ingest.py': 'fixed\n' } });
     expect(out, 'the work was kept but nothing said where').toMatch(/kept|preserved|worktree|branch/i);
+  });
+
+  // NON-VACUITY. Every negative above is about ISOLATION, and the old wording also matched the
+  // no-worktree fallback ("the fix runs in the main tree; its work is kept either way"). When this
+  // harness stopped lifting a function _escalation_worktree needs, the worktree failed silently,
+  // the fix ran in the main tree, and all six tests still passed. They must see the worktree.
+  it('the fix really ran in its own worktree, on the branch the log names — otherwise nothing above tested isolation', () => {
+    const { out } = escalate({ converges: false, writes: { 'regintel/ingest.py': 'fixed\n' } });
+    expect(out).not.toContain('no worktree available');
+    expect(out).toMatch(/works in its own worktree \S+-esc-B-1 \(branch esc\/B-1\)/);
   });
 });

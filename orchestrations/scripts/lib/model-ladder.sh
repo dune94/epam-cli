@@ -1469,7 +1469,7 @@ _escalation_worktree() {
     # next escalation can both still read it. Both messages go to STDERR: every caller captures
     # this function's stdout as the worktree PATH, and orch-common.sh's warning() writes stdout.
     if [ -d "$_path" ]; then
-        local _kept="${_path}-kept-$(date -u +%Y%m%dT%H%M%SZ)"
+        local _kept; _kept="${_path}-kept-$(date -u +%Y%m%dT%H%M%SZ)"
         if mv "$_path" "$_kept" 2>/dev/null; then
             warning "  [Escalation] $_sib had unregistered work at $_path — KEPT at $_kept, nothing was deleted" >&2
         else
@@ -1621,7 +1621,7 @@ resolve_escalation() {
     local _esc_ledger="${LOG_DIR}/escalations-tried.txt"
     local _esc_key="${sibling_id}::${target_file}"
     if [ -f "$_esc_ledger" ] && grep -Fxq "$_esc_key" "$_esc_ledger" 2>/dev/null; then
-        local _esc_prev_wt="${PROJECT_ROOT%/}-esc-$(printf '%s' "$sibling_id" | tr -c '[:alnum:]._-' '_')"
+        local _esc_prev_wt; _esc_prev_wt="${PROJECT_ROOT%/}-esc-$(printf '%s' "$sibling_id" | tr -c '[:alnum:]._-' '_')"
         warning "  [Escalation] $sibling_id was already asked to fix $target_file this run and did not converge — NOT re-running it"
         log "  [Escalation] what it tried is in ${_esc_prev_wt} (kept); ${escalating_story_id} is told, so it can take a different route"
         COORDINATOR_PROMPT_AMENDMENT="${COORDINATOR_PROMPT_AMENDMENT:-}

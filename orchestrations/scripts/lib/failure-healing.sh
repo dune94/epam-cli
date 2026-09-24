@@ -301,28 +301,13 @@ _attempt_start_snapshot() {
 #
 # Kept as a refusal rather than deleted, so that a future caller reaching for "just restore the
 # tree" finds this instead of writing it again. This pipeline does not remove an agent's code.
+# The old implementation (it deleted every file added since the snapshot) is in git history only:
+# a copy kept under another name was still a function that deletes an agent's work.
 _restore_tree_snapshot() {
     warning "  [snapshot] a tree restore was requested and REFUSED — this pipeline does not discard an agent's work; isolate it in a worktree instead"
     return 0
 }
 
-_restore_tree_snapshot__retired() {
-    local _tree="${1:-}"
-    [ -n "$_tree" ] && [ -e "$PROJECT_ROOT/.git" ] || return 0
-    git -C "$PROJECT_ROOT" cat-file -e "${_tree}^{tree}" 2>/dev/null || return 0
-    local _now
-    _now=$(_attempt_start_snapshot)
-    [ -n "$_now" ] && [ "$_now" = "$_tree" ] && return 0
-    # Files that exist now and did not in the snapshot: delete them (git restore cannot).
-    if [ -n "$_now" ]; then
-        git -C "$PROJECT_ROOT" diff --name-only --diff-filter=A "$_tree" "$_now" 2>/dev/null | while IFS= read -r _f; do
-            [ -n "$_f" ] && rm -f "$PROJECT_ROOT/$_f"
-        done
-    fi
-    git -C "$PROJECT_ROOT" restore --source="$_tree" --worktree --staged -- . 2>/dev/null \
-        || git -C "$PROJECT_ROOT" checkout "$_tree" -- . 2>/dev/null || return 1
-    return 0
-}
 
 # _attempt_tool_record <raw-output-file>
 #

@@ -200,6 +200,30 @@ describe('THE PRD IS THE PAUSED RUN\'S TOO', () => {
   });
 });
 
+describe('EACH GUARD IN THE RECLAIM DID ITS OWN PART', () => {
+  // The three guards restore_run_checkpoint relies on, pinned by the line each one alone prints —
+  // so a reclaim that happened by some other route cannot pass for them:
+  //   _written_by_another_run  decides the live copy is foreign  -> "was written by run <LATER>"
+  //   _reclaim_run_state       takes the paused run's copy back  -> "reclaiming <file> ... for run '<PAUSED>'"
+  //   _displace                keeps the foreign copy, never overwrites -> "the displaced copy is kept at"
+  it('_written_by_another_run, _reclaim_run_state and _displace each ran, on the file the later run wrote', () => {
+    const w = workspace();
+    pauseAsFirstRun(w);
+    laterLaunchMintsAndAborts(w);
+    const out = resumeFirstRun(w);
+    expect(out).toMatch(new RegExp(`reclaiming agent-profiles\\.json \\([^)]*\\) for run '${PAUSED}' — the live copy was written by run ${LATER}`));
+    expect(out).toMatch(new RegExp(`the displaced copy is kept at \\S*displaced/${LATER}/agent-profiles\\.json`));
+  });
+
+  it('_written_by_another_run says nothing about a file this run wrote: no reclaim, nothing displaced', () => {
+    const w = workspace();
+    pauseAsFirstRun(w);
+    const out = resumeFirstRun(w);
+    expect(out, 'the paused run reclaimed its own files from itself').not.toMatch(/reclaiming agent-profiles/);
+    expect(existsSync(join(w.cfg, 'runs', PAUSED, 'checkpoint', 'displaced'))).toBe(false);
+  });
+});
+
 describe('A RECLAIM MOVES THE OTHER RUN\'S FILE ASIDE — NOTHING IS OVERWRITTEN', () => {
   it('keeps the later run\'s store and registry under the paused run\'s checkpoint', () => {
     const w = workspace();

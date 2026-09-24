@@ -421,7 +421,7 @@ reset_brownfield_story_commit() {
     # the work were never in conflict: a ref costs nothing, and this pipeline never discards an
     # agent's code. The commits move to a branch named for the story; the branch the run works on
     # goes back to the baseline exactly as before.
-    local _keep_ref="kept/${_sid}-$(date -u +%Y%m%dT%H%M%SZ)"
+    local _keep_ref; _keep_ref="kept/${_sid}-$(date -u +%Y%m%dT%H%M%SZ)"
     if git -C "$PROJECT_ROOT" branch -f "$_keep_ref" "$_current_sha" >/dev/null 2>&1; then
         success "  [teardown] $_sid: its commit(s) are KEPT on branch $_keep_ref — nothing was discarded"
     else

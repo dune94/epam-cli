@@ -74,6 +74,10 @@ say() { printf '[harness] %s\n' "$*" | tee -a "$LOG"; }
 red() { printf '[harness] ✗ %s\n' "$*" | tee -a "$LOG" >&2; }
 FAILS=()
 check() { local ok="$1"; shift; if [ "$ok" = "0" ]; then say "✓ $*"; else red "$*"; FAILS+=("$*"); fi; }
+# check_that <description> <test expression...> -- a CONDITION, checked in one step. The form it
+# replaces, `[ X ]; check $? "..."`, reads the status of a test on the line before: anything put
+# between the two changes what is checked, silently (shellcheck SC2319).
+check_that() { local _d="$1"; shift; if [ "$@" ]; then check 0 "$_d"; else check 1 "$_d"; fi; }
 
 say "ref $SHA · set $SET · project $PROJECT · install $DEST · ceiling \$$CEILING"
 
@@ -329,7 +333,7 @@ _rc=0; [ -z "$HALTED" ] || _rc=1; check "$_rc" "run completed under the ceiling"
 if [ "$PAUSED" = "1" ]; then
   # ── 3a. The handoffs ───────────────────────────────────────────────────────
   _launches="$(ls "$LOG".paused-* 2>/dev/null | wc -l | tr -d ' ')"
-  [ "$_launches" -ge 3 ]; check $? "three launches at least: launch, resume past pause 1, resume past pause 2 (saw $_launches)"
+  check_that "three launches at least: launch, resume past pause 1, resume past pause 2 (saw $_launches)" "$_launches" -ge 3
   grep -q "PAUSED at post-roster" "$LOG"; check $? "pause 1 fired (post-roster)"
   grep -q "PAUSED at pre-writer" "$LOG"; check $? "pause 2 fired (pre-writer)"
   grep -q "RESUMED run" "$LOG"; check $? "the resume restored the checkpoint"
@@ -342,7 +346,7 @@ if [ "$PAUSED" = "1" ]; then
     ! grep -q "reset [0-9]* active stories to pending" "$_m"; check $? "$(basename "$_m"): no completed story was reset to pending"
   done
   _after="$LOG.after-completion"
-  [ -f "$_after" ]; check $? "a resume was launched after completion"
+  check_that "a resume was launched after completion" -f "$_after"
   if [ -f "$_after" ]; then
     for _p in $PHASES; do
       grep -q "Phase: $_p — completed in run" "$_after"; check $? "after completion: phase '$_p' was recognised as completed, not run again"
@@ -352,7 +356,7 @@ if [ "$PAUSED" = "1" ]; then
   fi
   # ── 3b. The clean restart on cached assets ────────────────────────────────
   _rb1="$LOG.rebuild-1"
-  [ -f "$_rb1" ]; check $? "a fresh EPAM_SKIP_AGENT_MINT=1 launch was made after the first run"
+  check_that "a fresh EPAM_SKIP_AGENT_MINT=1 launch was made after the first run" -f "$_rb1"
   if [ -f "$_rb1" ]; then
     grep -q "completed its agents and prompts — kept\|Keeping the roster" "$_rb1"; check $? "rebuild: the codeline's roster and prompts were kept, not regenerated"
     grep -q "\[roster\] reusing the settled roster on disk" "$_rb1"; check $? "rebuild: the roster was reused, not re-derived"
@@ -415,7 +419,7 @@ if [ -n "$_test_cmd" ]; then
 _gl="$DEST/orchestrations/logs/run-guidance.jsonl"
 [ -s "$_gl" ] || _gl="$(ls -t "$DEST"/orchestrations/logs/archive/pre-run-*/run-guidance.jsonl 2>/dev/null | while read -r f; do [ -s "$f" ] && { echo "$f"; break; }; done)"
 if grep -q "\[FailureAnalyst\] Analyzing" "$LOG"; then
-  [ -n "$_gl" ] && [ -s "$_gl" ]; check $? "self-heal: the analyst's prescription was recorded in the run guidance ledger"
+  check_that "self-heal: the analyst's prescription was recorded in the run guidance ledger" -s "$_gl"
   _healed_story="$("$NODE_BIN" -e 'try{const l=require("fs").readFileSync(process.argv[1],"utf8").trim().split("\n");process.stdout.write(JSON.parse(l[0]).storyId||"")}catch{}' "$_gl" 2>/dev/null)"
   if [ -n "$_healed_story" ]; then
     grep -lq "Guidance From This Story" "$DEST/orchestrations/logs/claude_outputs/${_healed_story}"_*.log "$DEST"/orchestrations/logs/archive/pre-run-*/claude_outputs/"${_healed_story}"_*.log 2>/dev/null; check $? "self-heal: ${_healed_story}'s next attempt was given the guidance"
@@ -431,7 +435,7 @@ if grep -q "\[FailureAnalyst\] Analyzing" "$LOG"; then
       const s = (x) => ((x.httpResponse && x.httpResponse.headers && x.httpResponse.headers["x-seam"]) || [""])[0];
       process.stdout.write(String(a.filter((x) => /:healed-by-guidance$/.test(s(x))).length));
     ' "$DEST/mock-traffic.json" 2>/dev/null)"
-    [ "${_healed_served:-0}" -ge 1 ]; check $? "self-heal (causal): a writer's passing answer was served to a prompt carrying the guidance (served ${_healed_served:-0} time(s)) — the prescription reached the writer and the writer then delivered"
+    check_that "self-heal (causal): a writer's passing answer was served to a prompt carrying the guidance (served ${_healed_served:-0} time(s)) — the prescription reached the writer and the writer then delivered" "${_healed_served:-0}" -ge 1
     _healed_story_id="$("$NODE_BIN" -e '
       const a = JSON.parse(require("fs").readFileSync(process.argv[1], "utf8"));
       const s = (x) => ((x.httpResponse && x.httpResponse.headers && x.httpResponse.headers["x-seam"]) || [""])[0];
@@ -462,12 +466,12 @@ if grep -q "first-answer-echoes-example" "$LOG" || grep -q ":first-answer-echoes
   # DIFFERENT model than rung 0 (regintel: three attempts, one model, abort). Two distinct
   # fast-path models across the run proves a rung above 0 was actually asked.
   _fp_models="$(grep -o 'spec-mode: fast-path [^ ]*' "$LOG" | sort -u | wc -l | tr -d ' ')"
-  [ "${_fp_models:-0}" -ge 2 ]; check $? "echo: a corrected retry ran on a rung above 0 (saw ${_fp_models} distinct fast-path model(s))"
+  check_that "echo: a corrected retry ran on a rung above 0 (saw ${_fp_models} distinct fast-path model(s))" "${_fp_models:-0}" -ge 2
 else
   say "echo: the mock served no echoed first answer in this rehearsal — the refusal was not exercised (not a failure)"
 fi
 _ph_title="$("$NODE_BIN" -e 'const p=require(process.argv[1]).values||[];const prd=require(process.argv[2]);const bad=(prd.stories||[]).filter(s=>p.includes(String(s.title||"").trim())||p.includes(String(s.description||"").trim())||(Array.isArray(s.acceptanceCriteria)&&s.acceptanceCriteria.length&&s.acceptanceCriteria.every(a=>p.includes(String(a).trim()))));process.stdout.write(bad.map(s=>s.id).join(" "))' "$REPO_ROOT/orchestrations/config/answer-placeholders.json" "$PRD_FILE_ABS" 2>/dev/null)"
-[ -z "$_ph_title" ]; check $? "echo: no story carries the example placeholder as its title, description or ACs${_ph_title:+ (found: $_ph_title)}"
+check_that "echo: no story carries the example placeholder as its title, description or ACs${_ph_title:+ (found: $_ph_title)}" -z "$_ph_title"
 else
   say "self-heal: no story failure occurred in this rehearsal — the retry path was not exercised (not a failure)"
 fi
@@ -482,7 +486,7 @@ _rc=0; [ -z "$_incomplete" ] || _rc=1; check "$_rc" "every story completed in th
 # (regintel 20260920T232518Z: 'given values it does not use: __SHARED_FILE_OWNERSHIP_BLOCK__ …
 # DROPPED', six times, and four fixes were inert). Zero such lines, or the rehearsal is red.
 _dropped="$(grep -c "was given values it does not use" "$LOG" 2>/dev/null)"; _dropped="${_dropped:-0}"
-[ "${_dropped:-0}" -eq 0 ]; check $? "provisioning: no evidence was DROPPED for lack of a placeholder — every prompt the run used takes every input the engine computes (${_dropped} line(s))"
+check_that "provisioning: no evidence was DROPPED for lack of a placeholder — every prompt the run used takes every input the engine computes (${_dropped} line(s))" "${_dropped:-0}" -eq 0
 if grep -q "the prompt inputs changed since its prompts were built" "$LOG"; then
   grep -q "prompts provisioned" "$LOG"; check $? "provisioning: the template layer had changed and the prompts were rebuilt (roster kept)"
 elif grep -q "already provisioned from the current templates" "$LOG"; then

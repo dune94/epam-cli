@@ -99,7 +99,12 @@ out=$("$NODE" -e '
 const fs=require("fs"),path=require("path");
 const SH=["orchestrations/scripts","orchestrations/scripts/lib"].flatMap(d=>fs.readdirSync(d).filter(f=>f.endsWith(".sh")).map(f=>path.join(d,f)));
 const T={};for(const f of fs.readdirSync("orchestrations/prompts/templates").filter(f=>f.endsWith(".json"))){const j=JSON.parse(fs.readFileSync(path.join("orchestrations/prompts/templates",f),"utf8"));T[j.id||f.replace(/\.json$/,"")]=j;}
-const ph=s=>[...new Set((String(s).match(/(?<![A-Z0-9_])__[A-Z0-9][A-Z0-9_]*__(?![A-Z0-9_])/g)||[]))];
+// THE RENDERER RULE, not a second copy of it. NO APOSTROPHES IN THIS BLOCK: it is single-quoted
+// shell. This line had its own regex, anchored so that __A____B__ read as ONE placeholder, while
+// engine-prompt.js matches non-greedily precisely because templates put placeholders ADJACENT.
+// The tc-writer body opens __CORRECTIVE_NOTE____TC_WRITER_PROFILE__, renders correctly, and
+// failed pre-flight as MISSING a placeholder that does not exist.
+const {placeholdersIn:ph}=require(path.resolve("orchestrations/scripts/lib/engine-prompt.js"));
 const bad=[];
 for(const f of SH){const L=fs.readFileSync(f,"utf8").split("\n");
  for(let i=0;i<L.length;i++){const m=/render_(?:engine_prompt|or_keep)\s+([a-z0-9-]+)\s+"?\$?\{?([A-Za-z_]*)\}?"?\s*("?([a-z_]+)"?)?/.exec(L[i]);

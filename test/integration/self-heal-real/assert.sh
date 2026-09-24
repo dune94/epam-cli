@@ -2,6 +2,7 @@
 # The assertions. Each one names the live failure it exists to prevent.
 # Read from what the pipeline itself wrote — nothing is inferred from what a model said.
 set -uo pipefail
+HERE="$(cd "$(dirname "${BASH_SOURCE[0]}")" && pwd)"
 W="${WORK:?}"; LOGS="$W/install/orchestrations/logs"; RUN="${RUNLOG:?}"
 PLAIN="$W/run.plain.log"; sed 's/\x1b\[[0-9;]*m//g' "$RUN" > "$PLAIN"
 FAILURES="$LOGS/story-failures.jsonl"; HEAL="$LOGS/healing-events.jsonl"
@@ -10,13 +11,21 @@ pass(){ printf '  PASS  %s\n' "$1"; }
 fail(){ printf '  FAIL  %s\n     -> %s\n' "$1" "$2"; rc=1; }
 
 echo "== the failure must be REAL, and the one that happened =="
-# 360 conversion functions plus their tests cannot be emitted in 8,192 tokens. The starvation is
-# arithmetic, not hope: if attempt 1 did NOT hit the cap, this fixture is no longer a valid
-# reproduction and the test says so rather than passing vacuously.
-if grep -q '"failureClass":"output_cap"' "$FAILURES" 2>/dev/null; then
-  pass "attempt 1 failed as output_cap — the live failure is reproduced"
+# WHAT THE ATTEMPT ACTUALLY FAILED AS -- not a class named here in advance.
+# This demanded output_cap, because that is what starved the writer when the harness was written:
+# 360 conversion functions in 8,192 tokens. The ceilings work of 2026-09-22 raised the writer to
+# the model's own maximum, so output_cap can no longer occur naturally -- and this assertion then
+# declared VACUOUS on every run, which meant the harness could never certify anything at all.
+#
+# The premise the harness actually rests on is NOT "the failure was output_cap". It is "attempt 1
+# really failed, and the self-heal loop then recovered the story". So it reads the class the
+# pipeline itself recorded and carries it forward. Vacuity is still refused, for the true reason:
+# no recorded failure at all means there was nothing to heal.
+CLASS="$(python3 "$HERE/failure-class.py" "$FAILURES" "$STORY" 2>/dev/null)"
+if [ -n "$CLASS" ]; then
+  pass "attempt 1 failed for real, as $CLASS — there is something to heal"
 else
-  fail "attempt 1 did not fail as output_cap" "no output_cap record in $FAILURES — the fixture no longer starves the writer, so nothing below is meaningful"
+  fail "no attempt failure was recorded at all" "nothing in $FAILURES for $STORY — the fixture no longer makes the writer fail, so nothing below is meaningful"
   echo "== VACUOUS — stopping =="; exit 1
 fi
 
@@ -24,7 +33,9 @@ echo "== no failure may be filtered out of self-heal =="
 # LIVE: healing-events.jsonl was 0 bytes for two days. run_failure_analyst returned at its second
 # line unless VERIFICATION_FAILURE was set, and an attempt truncated at its cap never reaches
 # verification — so the analyst was invoked ZERO times across two paid runs.
-if [ -s "$HEAL" ] && grep -q '${STORY:-REGI-009a}' "$HEAL"; then
+# THE LITERAL-STRING GREP. Single quotes meant this searched healing-events.jsonl for the twenty
+# characters ${STORY:-REGI-009a} rather than for the story, so it could only ever fail.
+if [ -s "$HEAL" ] && grep -q "$STORY" "$HEAL"; then
   pass "the analyst ran on the failed attempt"
 else
   fail "the analyst never ran" "healing-events.jsonl is empty — the failure was filtered out of self-heal"
@@ -33,11 +44,13 @@ fi
 echo "== the analyst must be told what failed =="
 # Its declared input failure-evidence has no declared producer (agent census, 2026-09-22), so
 # nothing governed what it received. It must contain the class, the provisioning and the evidence.
+# The class is whatever the pipeline recorded above, and the provisioning is whatever it handed
+# the attempt -- neither is named here. Hardcoding "output_cap" and "8192" pinned this to one run.
 ain="$(ls -t "$LOGS"/*analyst*.log 2>/dev/null | head -1)"
-if [ -n "$ain" ] && grep -q "output_cap" "$ain" && grep -qE "8192|max_tokens|truncat" "$ain"; then
-  pass "the analyst's input carried the failure summary"
+if [ -n "$ain" ] && grep -q "$CLASS" "$ain" && grep -qE "maxOutputTokens|maxIterations|max_tokens" "$ain"; then
+  pass "the analyst's input carried the failure summary (class $CLASS + provisioning)"
 else
-  fail "the analyst's input did not carry the failure summary" "${ain:-no analyst log at all}"
+  fail "the analyst's input did not carry the failure summary (expected class $CLASS and the provisioning)" "${ain:-no analyst log at all}"
 fi
 
 echo "== the analyst must remedy the next attempt =="

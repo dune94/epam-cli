@@ -928,6 +928,12 @@ $(render_engine_prompt story-diff-not-inlined "$_sdni_vals" excluded)"
     # (which filters on `story` and renders `issues`) got nothing back and the reviewer
     # approved code carrying its own prior `major` findings. Live 2026-08-21, AMSD-2041.
     #
+    # reviewIncomplete TRAVELS WITH THE RECORD. Live regintel 2026-09-21, REGI-003a: six reviews in
+    # a row produced no parseable verdict (16:45 -> 16:51). The per-story feedback file carried the
+    # marker so Step 3.6 correctly re-ran the REVIEW -- but this projection dropped it, so the
+    # LEDGER held six records shaped exactly like six rejections of the code, and prior-reviews.py
+    # read them straight back into the next reviewer prompt as its own prior blockers. Nothing is
+    # deleted: a failed iteration is a real fact about the reviewer, and it is recorded as that.
     # -c: the file is .jsonl and BOTH readers are line-based — prior-reviews.py parses per
     # line, and run-agent-orchestration.sh greps the compact '"phase_id":"<phase>"'.
     mkdir -p "$(dirname "$REVIEW_LOG")" 2>/dev/null || true
@@ -937,8 +943,10 @@ $(render_engine_prompt story-diff-not-inlined "$_sdni_vals" excluded)"
             --arg story "$story_id" \
             --arg verdict "$STORY_VERDICT" \
             --argjson issues "$(printf '%s' "$REVIEW_JSON" | jq -c '.issues // []' 2>/dev/null || echo '[]')" \
+            --argjson incomplete "$(printf '%s' "$REVIEW_JSON" | jq -c 'if (.reviewIncomplete // false) then true else false end' 2>/dev/null || echo 'false')" \
             '{phase_id:$phase, timestamp:$ts, story:$story, verdict:$verdict,
               review_status:$verdict, issues:$issues, issues_found:($issues|length),
+              reviewIncomplete:$incomplete,
               reviewer:"team-lead-agent"}' >> "$REVIEW_LOG"; then
         warning "  could not record this review for $story_id — the NEXT cycle will not see these findings"
     fi

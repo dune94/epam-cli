@@ -89,6 +89,18 @@ def main():
     lines = ['## YOUR PREVIOUS REVIEWS OF THIS STORY', '']
     for n, rec in enumerate(records, start=1):
         verdict = str(rec.get('verdict', '?'))
+        # AN ITERATION THAT PRODUCED NO VERDICT IS NOT A FINDING ABOUT THE CODE.
+        # The engine's own synthetic record for an unparseable review is shaped like a rejection:
+        # verdict changes_requested, one blocker reading "review-agent output had no parseable
+        # verdict". Rendering that as a prior finding tells the next reviewer the code was rejected
+        # six times (live regintel 2026-09-21, REGI-003a) when nothing was ever reviewed.
+        # The iteration is NOT dropped — it happened, and a reviewer that keeps failing should see
+        # that it keeps failing. It is named for what it is, and its synthetic issue is not listed.
+        if rec.get('reviewIncomplete') is True:
+            lines.append('Iteration %d — no verdict was produced. The reviewer failed to answer; '
+                         'the code was never reviewed. This says nothing about the change.' % n)
+            lines.append('')
+            continue
         lines.append('Iteration %d — you returned: %s' % (n, verdict))
         for sev, desc in _issues(rec):
             lines.append('  - [%s] %s' % (sev, desc))

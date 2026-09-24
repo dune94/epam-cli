@@ -209,9 +209,14 @@ def collect_review(story_id, phase_id):
                    or latest.get("review_status")
                    or "unknown")
 
+    # THE OPERATOR IS TOLD WHEN NOTHING WAS REVIEWED. An unparseable review is recorded with the
+    # shape of a rejection -- changes_requested, one synthetic blocker -- so a report that reads
+    # only the verdict shows "changes_requested, 1 blocker" for a story the reviewer never judged
+    # (live regintel 2026-09-21, REGI-003a: six in a row). The record is not hidden; it is named.
     return {
         "stage": "review",
         "verdict": raw_verdict,
+        "reviewIncomplete": bool(latest.get("reviewIncomplete")),
         "iteration": latest.get("iteration", 1),
         "blockers": len(blockers),
         "majors": len(majors),
@@ -515,7 +520,7 @@ def render_html(report):
   {"<p class='missing'>No review data found in code-reviews.jsonl</p>" if not review else f'''
   <table>
     <tr><th>Metric</th><th>Value</th></tr>
-    <tr><td>Verdict</td><td>{verdict_badge(review.get("verdict"))}</td></tr>
+    <tr><td>Verdict</td><td>{verdict_badge(review.get("verdict"))}{" &nbsp; <strong>the reviewer produced no verdict — the code was never reviewed</strong>" if review.get("reviewIncomplete") else ""}</td></tr>
     <tr><td>Iterations</td><td>{review.get("iteration",1)}</td></tr>
     <tr><td>Blockers</td><td>{review.get("blockers",0)}</td></tr>
     <tr><td>Majors</td><td>{review.get("majors",0)}</td></tr>

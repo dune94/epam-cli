@@ -115,7 +115,9 @@ describe('resolve_escalation runs the owner on ITS ladder, budgeted per escalati
 describe('the retry loop honours the budget (mutation-checked wiring)', () => {
   it('the loop condition consults escalation_budget_allows with the attempts made so far', () => {
     const loop = src.split('\n').find((l) => /^\s*while \[ \$retry_count -le \$MAX_RETRIES \]/.test(l)) || '';
-    expect(loop, 'the retry loop does not consult the per-escalation budget').toMatch(/escalation_budget_allows "\$_total_attempts"/);
+    // the attempts that COUNT — a free retry (resolved escalation, deterministic check) is free of the
+    // budget too, or the promised retry never runs (£0 escalation-chain run 6, 2026-09-24)
+    expect(loop, 'the retry loop does not consult the per-escalation budget').toMatch(/escalation_budget_allows "\$\(\(_total_attempts - _free_attempts\)\)"/);
   });
   it('the persisted count is written before the loop can be left on budget (a killed process must not lose the rung)', () => {
     // write_story_retry_count runs on every failure BEFORE the loop re-tests its condition.

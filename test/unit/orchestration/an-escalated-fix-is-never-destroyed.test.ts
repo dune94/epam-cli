@@ -25,6 +25,7 @@ import { mkdtempSync, mkdirSync, writeFileSync, rmSync, existsSync, readFileSync
 import { join } from 'node:path';
 import { tmpdir } from 'node:os';
 import { shellFunction } from '../../lib/engine-source';
+import { escalationMachinery } from '../../lib/escalation-engine';
 
 const ROOT = join(__dirname, '../../../');
 const LADDER = join(ROOT, 'orchestrations/scripts/lib/model-ladder.sh');
@@ -99,10 +100,7 @@ function escalate(opts: {
     shellFunction(HEALING, '_attempt_start_snapshot'),
     shellFunction(HEALING, '_restore_tree_snapshot'),
     stub(opts.converges, opts.writes),
-    shellFunction(LADDER, '_escalation_branch'),
-    shellFunction(LADDER, '_escalation_worktree'),
-    shellFunction(LADDER, '_escalation_adopt_work'),
-    shellFunction(LADDER, 'resolve_escalation'),
+    escalationMachinery(),
     'resolve_escalation A-1; echo "RC1=$?"',
     ...(opts.again ? [
       'rm -rf .stub && :',

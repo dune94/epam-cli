@@ -1,0 +1,10 @@
+{
+  "target": "escalate",
+  "diagnosis": "The registry test is correct. normalize() in src/esc/normalize.py strips whitespace but does not lowercase, so greet(' Bob ') is 'hello Bob' once greet delegates to it.",
+  "evidence": "python -m pytest: tests/test_registry.py AssertionError: 'hello Bob' == 'hello bob'; src/esc/normalize.py returns name.strip()",
+  "expected_outcome": "normalize lowercases; tests/test_registry.py passes",
+  "escalation": {
+    "targetFile": "src/esc/normalize.py",
+    "requiredFix": "normalize must return the name stripped AND lowercased."
+  }
+}

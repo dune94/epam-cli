@@ -1,0 +1,8 @@
+{
+  "language": "python",
+  "sourceExtensions": [
+    ".py"
+  ],
+  "excludePattern": "(^|/)(test_[^/]*|[^/]*_test)\\.py$",
+  "testFilePattern": "(^|/)(test_[^/]*|[^/]*_test)\\.py$"
+}

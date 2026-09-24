@@ -203,12 +203,31 @@ describe('a greenfield project runs to completion at £0', () => {
       const unmatched = mock.hits.filter((h) => /CATCH-ALL/.test(h.seam));
       if (unmatched.length) console.log(`[greenfield £0] ${project}: ${unmatched.length} call(s) matched no seam (the runner's own auxiliary calls, absorbed by the catch-all)`);
 
-      if (writerRecorded) {
+      // A PROJECT THAT DECLARES WHAT ITS WRITER DELIVERS (`stand-in/<writer>/`) is proven end to end
+      // too: the writer's code is the project's own data, so every phase must complete — the same
+      // bar a recording sets. That is what lets a project stage a failure the engine must heal.
+      const writerDeclared = existsSync(join(projDir, 'stand-in', WRITER));
+      if (writerRecorded || writerDeclared) {
         for (const p of phases) expect(text, `phase '${p}' did not complete — log tail:\n${tail}`).toMatch(new RegExp(`Phase '${p}' completed`));
         expect(r.status, `launcher exited ${r.status} — log tail:\n${tail}`).toBe(0);
         // The codeline holds the work: a repo with commits beyond the empty one the lifecycle makes.
         const commits = spawnSync('git', ['-C', out, 'rev-list', '--count', 'HEAD'], { encoding: 'utf8' }).stdout.trim();
         expect(Number(commits), 'the output directory holds no committed work').toBeGreaterThan(1);
+        // WHAT THE CODELINE MUST HOLD AT THE END, when the project declares it (`expect/`, mirroring
+        // the codeline): a fix another story made through an escalation reached the codeline — not
+        // only its worktree — and the escalating story's own change still stands.
+        const expectDir = join(projDir, 'expect');
+        if (existsSync(expectDir)) {
+          const walk = (d: string): string[] => readdirSync(d, { withFileTypes: true })
+            .flatMap((e) => (e.isDirectory() ? walk(join(d, e.name)) : [join(d, e.name)]));
+          const files = walk(expectDir);
+          expect(files.length, `${expectDir} declares nothing`).toBeGreaterThan(0);
+          for (const f of files) {
+            const rel = f.slice(expectDir.length + 1);
+            const got = existsSync(join(out, rel)) ? readFileSync(join(out, rel), 'utf8') : '<missing>';
+            expect(got, `the codeline's ${rel} is not what ${project} declares it must end as — log tail:\n${tail}`).toBe(readFileSync(f, 'utf8'));
+          }
+        }
       } else {
         console.log(`[greenfield £0] ${project}: no recording of this project's writer — proven up to and including the writer's invocation; the phases need one paid run recorded as a cassette to be proven end to end`);
       }

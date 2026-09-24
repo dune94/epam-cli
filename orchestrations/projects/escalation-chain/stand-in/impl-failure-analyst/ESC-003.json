@@ -1,0 +1,10 @@
+{
+  "target": "escalate",
+  "diagnosis": "tests/test_registry.py::test_a_greeting_registers_under_its_normalised_key now fails: greet(' Bob ') returns 'hello Bob'. ESC-003 correctly routes greet through the shared normaliser; the registry test that exposes it belongs to ESC-002.",
+  "evidence": "python -m pytest: tests/test_registry.py AssertionError: 'hello Bob' == 'hello bob'",
+  "expected_outcome": "tests/test_registry.py passes with greet using normalize",
+  "escalation": {
+    "targetFile": "tests/test_registry.py",
+    "requiredFix": "Make the registry's expectation hold with greet delegating to the shared normaliser."
+  }
+}

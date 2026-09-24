@@ -1,0 +1,15 @@
+{
+  "manifestFile": "requirements.txt",
+  "scanFileExtensions": [
+    ".py"
+  ],
+  "importPattern": "^\\s*(?:from\\s+([A-Za-z_][\\w]*)|import\\s+([A-Za-z_][\\w]*))",
+  "vendorDirs": [
+    "__pycache__",
+    ".venv",
+    "venv",
+    ".tox",
+    ".pytest_cache",
+    ".mypy_cache"
+  ]
+}

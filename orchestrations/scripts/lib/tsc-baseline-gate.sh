@@ -1,5 +1,17 @@
 #!/usr/bin/env bash
 
+# _bg_count_ids <file> — how many failure ids a baseline cache holds: ONE number, always.
+# `grep -c` prints 0 AND exits 1 when nothing matches, so `grep -c ... || echo 0` printed "0" twice —
+# the build logged "parsed 0\n0 failure id(s)" on every empty baseline, and BASELINE_KNOWN_FAILURES
+# became "0\n0", a value every numeric test errors on (external-verification.sh reads it with
+# errors silenced, so the "a suite that never ran is not a pass" guard failed open). The same
+# mistake is recorded as fixed in cost-ledger.sh, phase-assessment.sh and git-ops.sh.
+_bg_count_ids() {
+    local _n
+    _n=$(grep -c '[^[:space:]]' "${1:-/dev/null}" 2>/dev/null)
+    printf '%s' "${_n:-0}"
+}
+
 # _run_project_verification <project_root>
 # The project's declared check (.epam/verification.json) via the verification plugin. The engine
 # names no tool, extension, directory or runtime path. Undeclared -> non-zero with a reason.
@@ -209,7 +221,7 @@ baseline_new_failures() {
                         # ids when run by hand and 0 inside the run, with nothing logged either
                         # way. A build that reports its own exit code and parsed count cannot be
                         # a mystery twice.
-                        echo "[baseline-gate] ${section} baseline at ${baseline_sha:0:12}: suite exit=${_bg_baseline_exit:-0}, parsed $(grep -c '[^[:space:]]' "$baseline_cache" 2>/dev/null || echo 0) failure id(s) from $(wc -c < "$_base_out" 2>/dev/null || echo 0) bytes of output" >&2
+                        echo "[baseline-gate] ${section} baseline at ${baseline_sha:0:12}: suite exit=${_bg_baseline_exit:-0}, parsed $(_bg_count_ids "$baseline_cache") failure id(s) from $(wc -c < "$_base_out" 2>/dev/null || echo 0) bytes of output" >&2
                         if [ ! -s "$baseline_cache" ] && [ "${_bg_baseline_exit:-0}" -ne 0 ]; then
                             echo "[baseline-gate] the ${section} baseline at ${baseline_sha:0:12} exited ${_bg_baseline_exit} and produced NO parseable failures —" >&2
                             echo "[baseline-gate] it did not observe a clean tree, it failed to run. Nothing will be subtracted," >&2
@@ -283,7 +295,7 @@ baseline_new_failures() {
     # delta was empty, and two stories were marked complete on a suite that never ran.
     BASELINE_KNOWN_FAILURES=0
     if [ -n "${baseline_cache:-}" ] && [ -s "${baseline_cache:-}" ]; then
-        BASELINE_KNOWN_FAILURES="$(grep -c '[^[:space:]]' "$baseline_cache" 2>/dev/null || echo 0)"
+        BASELINE_KNOWN_FAILURES="$(_bg_count_ids "$baseline_cache")"
     fi
     export BASELINE_KNOWN_FAILURES
 

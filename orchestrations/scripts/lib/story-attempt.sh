@@ -931,6 +931,12 @@ implement_story() {
     # deliberately do NOT advance) — used to gate COORDINATOR_PROMPT_AMENDMENT
     # injection below ("is this the first attempt of THIS story or not").
     local _total_attempts=0
+    # FREE RETRIES ARE FREE OF THE ESCALATION BUDGET TOO. A retry granted as free — after an
+    # escalation this story raised was resolved, or a deterministic check — went back to the loop
+    # condition, which counted it against an escalated call's budget (1): the promised retry never
+    # ran, so a fix brought in from a nested escalation was never tried (£0 escalation-chain run 6:
+    # "Resolved — free retry for ESC-002", then "did not converge" with no attempt between).
+    local _free_attempts=0
     # Tracks the last deterministic-check violation message for this story, so a
     # repeat can be detected WITHOUT going through run_failure_analyst (which
     # deterministic-check failures deliberately skip). Confirmed live (run #15,
@@ -944,7 +950,11 @@ implement_story() {
     # previous story's failure-analyst/deterministic-check path and was never
     # reset between stories, so a stale amendment from story A could otherwise
     # leak into story B's first attempt.
-    COORDINATOR_PROMPT_AMENDMENT=""
+    # AN ESCALATED FIX IS TOLD WHAT TO FIX, FROM ITS FIRST ATTEMPT: resolve_escalation hands the
+    # brief in EPAM_ESCALATION_BRIEF for this call only, and it seeds the amendment that every
+    # attempt of this call carries (see the injection below).
+    local _escalation_brief="${EPAM_ESCALATION_BRIEF:-}"
+    COORDINATOR_PROMPT_AMENDMENT="$_escalation_brief"
     local output_file
     output_file="$CLAUDE_OUTPUT_DIR/${story_id}_$(date +'%Y%m%d_%H%M%S').log"
     local story_started_at
@@ -1192,7 +1202,7 @@ implement_story() {
     while true; do
     # An escalated fix is bounded per escalation (escalation_budget_allows, story-retry-state.sh);
     # the rung persisted below is where the next escalation resumes. No budget → no effect.
-    while [ $retry_count -le $MAX_RETRIES ] && escalation_budget_allows "$_total_attempts"; do
+    while [ $retry_count -le $MAX_RETRIES ] && escalation_budget_allows "$((_total_attempts - _free_attempts))"; do
         _total_attempts=$((_total_attempts + 1))
         # Inference ladder: on retry, escalate to a stronger model + increase reasoning effort.
         # Priority: PRD retryModel > EPAM_RETRY_MODEL env var > built-in get_model_ladder_step().
@@ -1634,7 +1644,7 @@ $_kb_section"
             publish_agent_output engine attempt-evidence "$story_id" "$(_attempt_change_summary "$story_id")"
         fi
 
-        if [ "$_total_attempts" -gt 1 ] && [ -n "${COORDINATOR_PROMPT_AMENDMENT:-}" ]; then
+        if { [ "$_total_attempts" -gt 1 ] || [ -n "$_escalation_brief" ]; } && [ -n "${COORDINATOR_PROMPT_AMENDMENT:-}" ]; then
             _cp_vals=$(mktemp "${TMPDIR:-/tmp}/writer-plan-section-vals-XXXXXX.json")
             jq_vals \
                   --arg coordinator_prompt_amendment "${COORDINATOR_PROMPT_AMENDMENT}" \
@@ -2732,6 +2742,7 @@ Apply the above diagnosis AND fix the deterministic check violation — both mus
             # retry ladder re-diagnosing something it structurally cannot fix.
             if resolve_escalation "$story_id"; then
                 success "  [Escalation] Resolved — free retry for $story_id (not counted against the ladder)"
+                _free_attempts=$((_free_attempts + 1))
                 continue
             fi
 
@@ -2749,6 +2760,7 @@ Apply the above diagnosis AND fix the deterministic check violation — both mus
                 DETERMINISTIC_CHECK_FAILURE=0
                 export DETERMINISTIC_CHECK_FAILURE
                 warning "  [DeterministicCheck] Free retry ${_free_retry_count}/3 for $story_id — not counted against the model-escalation ladder"
+                _free_attempts=$((_free_attempts + 1))
                 continue
             fi
             DETERMINISTIC_CHECK_FAILURE=0
@@ -2834,7 +2846,7 @@ Apply the above diagnosis AND fix the deterministic check violation — both mus
     break
     done
 
-    if ! escalation_budget_allows "$_total_attempts" && [ $retry_count -le $MAX_RETRIES ]; then
+    if ! escalation_budget_allows "$((_total_attempts - _free_attempts))" && [ $retry_count -le $MAX_RETRIES ]; then
         warning "  [Escalation] attempt budget for this escalation spent — $story_id's ladder stands at retry_count $retry_count (rung $((retry_count / 2))); the next escalation resumes there"
         append_cost_record "$story_id" "failed" "$story_started_at" "$(date -Iseconds)" "$output_file" "$json_result_file"
         write_healing_summary "$story_id" "failed" 2>/dev/null || true

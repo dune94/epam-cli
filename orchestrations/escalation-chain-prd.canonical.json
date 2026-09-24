@@ -1,0 +1,128 @@
+{
+  "id": "escalation-chain",
+  "title": "escalation-chain",
+  "version": "1.0",
+  "lastUpdated": "2026-09-24",
+  "project": {
+    "name": "escalation-chain",
+    "description": "A greenfield Python package whose last story can only complete through a two-hop cross-story escalation: its change exposes a defect in the scaffold's normaliser through the registry's test.",
+    "stack": {
+      "language": "Python",
+      "runtime": "Python 3.12 (.venv)",
+      "testing": "pytest",
+      "devEnvironment": "Ubuntu WSL2"
+    },
+    "outputDir": "/tmp/escalation-chain-build"
+  },
+  "configuration": {
+    "confidenceThresholdDefault": 0.7,
+    "protectedPaths": [
+      ".env"
+    ]
+  },
+  "implementationOrder": {
+    "scaffold": [
+      "ESC-001"
+    ],
+    "core": [
+      "ESC-002",
+      "ESC-003"
+    ]
+  },
+  "phasesConfig": {
+    "scaffold": {
+      "description": "Package skeleton, the shared normaliser, the first greeting",
+      "parallelWorktrees": false
+    },
+    "core": {
+      "description": "The registry and the greeting that uses the shared normaliser",
+      "parallelWorktrees": false
+    }
+  },
+  "stories": [
+    {
+      "id": "ESC-001",
+      "title": "Scaffold the esc package with its shared name normaliser",
+      "phase": "scaffold",
+      "agentGroup": "main",
+      "status": "pending",
+      "completed": false,
+      "effort": "low",
+      "storyKind": "novel",
+      "description": "Create requirements.txt declaring pytest, pytest.ini with pythonpath = src, a src/esc package, src/esc/normalize.py exporting normalize(name: str) -> str that strips surrounding whitespace, src/esc/greet.py exporting greet(name: str) -> str returning 'hello ' followed by the name stripped and lowercased, and tests/test_normalize.py asserting normalize strips whitespace.",
+      "acceptanceCriteria": [
+        "requirements.txt lists pytest and pytest.ini sets pythonpath = src",
+        "normalize('  Bob  ') returns a value with no surrounding whitespace",
+        "greet(' Bob ') returns 'hello bob'",
+        "Running python -m pytest at the codeline root exits 0"
+      ],
+      "technicalNotes": {
+        "files": [
+          "requirements.txt",
+          "pytest.ini",
+          "src/esc/__init__.py",
+          "src/esc/normalize.py",
+          "src/esc/greet.py",
+          "tests/test_normalize.py"
+        ],
+        "workingDir": ".",
+        "testCommand": "python -m pytest"
+      }
+    },
+    {
+      "id": "ESC-002",
+      "title": "Add the greeting registry with its tests",
+      "phase": "core",
+      "agentGroup": "primary",
+      "status": "pending",
+      "completed": false,
+      "effort": "low",
+      "storyKind": "novel",
+      "dependencies": [
+        "ESC-001"
+      ],
+      "description": "Add src/esc/registry.py exporting register(greeting: str) -> str that returns the key a greeting is registered under (the greeting itself), and tests/test_registry.py asserting that register(greet(' Bob ')) == 'hello bob'.",
+      "acceptanceCriteria": [
+        "register(greet(' Bob ')) returns 'hello bob'",
+        "tests/test_registry.py covers it",
+        "Running python -m pytest at the codeline root exits 0"
+      ],
+      "technicalNotes": {
+        "files": [
+          "src/esc/registry.py",
+          "tests/test_registry.py"
+        ],
+        "workingDir": ".",
+        "testCommand": "python -m pytest"
+      }
+    },
+    {
+      "id": "ESC-003",
+      "title": "Make the greeting use the shared name normaliser",
+      "phase": "core",
+      "agentGroup": "primary",
+      "status": "pending",
+      "completed": false,
+      "effort": "low",
+      "storyKind": "novel",
+      "dependencies": [
+        "ESC-002"
+      ],
+      "description": "Change src/esc/greet.py so greet(name) returns 'hello ' followed by normalize(name) from src/esc/normalize.py, with no normalisation of its own, and add tests/test_greet.py asserting greet('bob') == 'hello bob'. Every existing test must stay green.",
+      "acceptanceCriteria": [
+        "greet uses normalize from esc.normalize and normalises nothing itself",
+        "greet('bob') returns 'hello bob'",
+        "Running python -m pytest at the codeline root exits 0"
+      ],
+      "technicalNotes": {
+        "files": [
+          "src/esc/greet.py",
+          "tests/test_greet.py"
+        ],
+        "workingDir": ".",
+        "testCommand": "python -m pytest"
+      }
+    }
+  ],
+  "currentIteration": 1
+}

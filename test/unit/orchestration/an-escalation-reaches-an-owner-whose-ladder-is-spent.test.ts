@@ -25,6 +25,7 @@ import { mkdtempSync, mkdirSync, writeFileSync, rmSync, readFileSync } from 'nod
 import { join } from 'node:path';
 import { tmpdir } from 'node:os';
 import { shellFunction } from '../../lib/engine-source';
+import { escalationMachinery } from '../../lib/escalation-engine';
 
 const ROOT = join(__dirname, '../../../');
 const LIB = join(ROOT, 'orchestrations/scripts/lib');
@@ -75,17 +76,14 @@ function escalate(ownerCount: number | null) {
     'export MAX_RETRIES=2',
     'log() { echo "LOG: $*"; }; warning() { echo "WARN: $*"; }; error() { echo "ERR: $*"; }',
     'success() { echo "OK: $*"; }; info() { :; }',
-    'render_or_keep() { echo ""; }',
     `. ${JSON.stringify(RETRY)}`,                       // THE REAL retry state — nothing stubbed to 0
     // THE AGENT is the only stand-in: it reports what the engine handed it.
-    'implement_story() { echo "AGENT-RAN story=$1 budget=${EPAM_ESCALATION_ATTEMPT_BUDGET:-} start=$(escalation_start_retry_count "$(read_story_retry_count "$LOG_DIR" "$1")" "$MAX_RETRIES")"; return 1; }',
+    'implement_story() { echo "AGENT-RAN story=$1 budget=${EPAM_ESCALATION_ATTEMPT_BUDGET:-} start=$(escalation_start_retry_count "$(read_story_retry_count "$LOG_DIR" "$1")" "$MAX_RETRIES")"; printf "BRIEF<<%s>>BRIEF\\n" "${EPAM_ESCALATION_BRIEF:-}"; return 1; }',
+    'render_or_keep() { printf "## URGENT: escalated brief rendered from %s" "$(cat "$2" | tr -d "\\n")"; }',
     shellFunction(HEALING, '_attempt_start_snapshot'),
     shellFunction(HEALING, '_restore_tree_snapshot'),
-    shellFunction(LADDER, '_escalation_branch'),
-    shellFunction(LADDER, '_escalation_worktree'),
-    shellFunction(LADDER, '_escalation_adopt_work'),
-    shellFunction(LADDER, 'resolve_escalation'),
-    'resolve_escalation REGI-005-B; echo "RC=$?"',
+    escalationMachinery(),
+    'resolve_escalation REGI-005-B; echo "RC=$?"; echo "AFTER-BRIEF=[${EPAM_ESCALATION_BRIEF:-}]"',
   ].join('\n'));
   const r = spawnSync('bash', [script], { encoding: 'utf8', timeout: 60000 });
   return { out: (r.stdout || '') + (r.stderr || ''), logs };
@@ -119,6 +117,24 @@ describe('an escalation reaches an owner whose ladder is already spent', () => {
   it('the log says the owner runs on its top rung — not that nothing could be done', () => {
     const { out } = escalate(4);
     expect(out).toMatch(/REGI-005-A.*top rung/i);
+  });
+});
+
+describe('the owner is TOLD what to fix — the brief reaches its call', () => {
+  // Live 2026-09-24: REGI-005-A's and REGI-007's escalated prompts held no amendment at all — zero
+  // "URGENT: Escalated defect" lines — because implement_story wiped COORDINATOR_PROMPT_AMENDMENT
+  // on entry and injected it only from attempt 2. The owners worked blind ($2.57, and 30 minutes
+  // of reading). The brief now travels in EPAM_ESCALATION_BRIEF, which implement_story reads.
+  it('the owner\'s call carries the rendered brief with the diagnosis and the required fix', () => {
+    const { out } = escalate(1);
+    const brief = (out.match(/BRIEF<<([\s\S]*?)>>BRIEF/) || [])[1] || '';
+    expect(brief, out).toContain('URGENT');
+    expect(brief).toContain('getattr returns None for dict fields');
+    expect(brief).toContain('read fields from a dict by key');
+  });
+  it('and the brief does not outlive the escalation — the escalating story is not handed it', () => {
+    const { out } = escalate(1);
+    expect(out).toMatch(/AFTER-BRIEF=\[\]/);
   });
 });
 

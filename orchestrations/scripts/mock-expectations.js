@@ -218,7 +218,7 @@ function writerStoryLineFrames() {
  * through the write tool the active set declares for its runner. Nothing here knows a language, a
  * tool name or a path: the story names the files, the ecosystem the content, the set the tool.
  */
-function writerStandInCalls(story, seam) {
+function writerStandInCalls(story, seam, variant = '') {
   // THE STORY'S OWN CODELINE: on a brownfield estate the story names its codeline and the estate
   // (JIRA_CODELINE_ROOT) holds that repository; a greenfield project has one output directory.
   // Reading only OUTPUT_DIR meant the brownfield rehearsal's writer could land nothing — eight
@@ -267,7 +267,8 @@ function writerStandInCalls(story, seam) {
   // estate) — and every file in it is delivered, named by the story or only implied by it. The
   // Each call says whether the story DECLARES its file: the first attempts' deliberate shortfall
   // (below) lands the declared files and omits the implied ones.
-  const fix = declaredFix(story, seam);
+  const fix = declaredFix(story, seam, variant);
+  if (variant && !fix) return null;
   const files = fix ? [...fix.files.filter((f) => declared.includes(f)), ...fix.files.filter((f) => !declared.includes(f))] : declared;
   if (!files.length) return null;
   return files.map((f0) => {
@@ -304,7 +305,16 @@ function writerStandInCalls(story, seam) {
     // worktree lane's writes landed outside its tree and every deliverable was "missing"
     // (regintel £0 rehearsal #17, 2026-09-20). A relative path lands where the runner runs.
     const wire = f;
-    const read = readTool && readTool.name && fs.existsSync(abs) ? { name: readTool.name, input: { [readTool.path]: wire } } : null;
+    // A FILE AN EARLIER STORY CREATES EXISTS BY THE TIME THIS ONE RUNS. Existence is judged at
+    // registration, before the run — on a greenfield codeline nothing exists then — so a later
+    // story changing an earlier story's file had its write refused ("File has not been read yet")
+    // and completed without its change (£0 escalation-chain, 2026-09-24: ESC-003's greet.py).
+    const _earlier = fix && fix.perStory && earlierStoriesDeclare(story, f0);
+    // AN ESCALATED FIX CHANGES A FILE THAT EXISTS — that is what an escalation is — so its write is
+    // always read first. Judged at registration, ESC-001's normalize.py "did not exist" (it is the
+    // first story's), the read was skipped, the runner refused the write, and the fix never landed
+    // (£0 escalation-chain run 5, 2026-09-24).
+    const read = readTool && readTool.name && (fs.existsSync(abs) || _earlier || variant === 'escalated') ? { name: readTool.name, input: { [readTool.path]: wire } } : null;
     return { name: tool.name, input: { [tool.path]: wire, [tool.content]: content }, read, declared: declared.includes(f0), wrong: fix && fix.files.includes(f) ? { name: tool.name, input: { [tool.path]: wire, [tool.content]: wrong } } : null };
   });
 }
@@ -314,14 +324,26 @@ function writerStandInCalls(story, seam) {
  * { root, files: [relative paths] }.
  * Null when the project declares none — the ecosystem's generic stand-in content then applies.
  */
-function declaredFix(story, seam) {
+function declaredFix(story, seam, variant = '') {
   const project = process.env.EPAM_PROJECT_CONFIG_DIR || '';
   if (!project || !seam) return null;
   // PER SEAM: `stand-in/<seam>/` — the writer's fix and, say, the repro-test writer's test are
   // different deliverables of the same story, landed by different seams.
   const base = path.join(project, 'stand-in', String(seam));
+  // PER STORY, when the project declares it: `stand-in/<seam>/<storyId>/`, and
+  // `stand-in/<seam>/<storyId>@<variant>/` for what the story delivers in another mode — its
+  // escalated fix, for one. A cross-story escalation needs each story to write something different
+  // (the owner's original build and the owner's escalated fix are not the same file), and a
+  // per-seam tree gave every story the same files. A base holding any directory named for a story
+  // of this project is per-story: a story with no directory of its own delivers nothing from it.
+  const ids = new Set(projectStories().map((st) => String(st.id)));
+  const perStory = fs.existsSync(base) && fs.statSync(base).isDirectory()
+    && fs.readdirSync(base, { withFileTypes: true }).some((e) => e.isDirectory() && ids.has(e.name.replace(/@[^@]+$/, '')));
+  if (!perStory && variant) return null;
   const perCodeline = story && story.codeline ? path.join(base, String(story.codeline)) : '';
-  const root = perCodeline && fs.existsSync(perCodeline) ? perCodeline : base;
+  const root = perStory
+    ? path.join(base, `${String(story && story.id)}${variant ? `@${variant}` : ''}`)
+    : (perCodeline && fs.existsSync(perCodeline) ? perCodeline : base);
   if (!fs.existsSync(root) || !fs.statSync(root).isDirectory()) return null;
   const files = [];
   const walk = (dir) => {
@@ -331,7 +353,73 @@ function declaredFix(story, seam) {
     }
   };
   walk(root);
-  return files.length ? { root, files: files.sort() } : null;
+  return files.length ? { root, files: files.sort(), perStory } : null;
+}
+/**
+ * THE LINE AN ESCALATED ATTEMPT'S PROMPT OPENS ITS AMENDMENT WITH, up to the escalating story's id:
+ * whichever engine template carries the __ESCALATING_STORY_ID__ placeholder, its line, cut at the
+ * placeholder. Read, never named — the amendment's wording belongs to its template.
+ */
+let _escHeading;
+function escalationHeading() {
+  if (_escHeading !== undefined) return _escHeading;
+  _escHeading = '';
+  try {
+    for (const f of fs.readdirSync(TPL).filter((x) => x.endsWith('.json'))) {
+      const t = JSON.parse(fs.readFileSync(path.join(TPL, f), 'utf8'));
+      const bodies = [t.body, ...Object.values(t.bodies || {})].filter((b) => typeof b === 'string');
+      for (const b of bodies) {
+        const line = b.split('\n').find((l) => l.includes('__ESCALATING_STORY_ID__'));
+        if (!line) continue;
+        const cut = line.split('__ESCALATING_STORY_ID__')[0].replace(/^.*__[A-Z0-9_]+__/, '');
+        if (cut.trim().length > FINGERPRINT_MINIMUM_CHARS) { _escHeading = cut; return _escHeading; }
+      }
+    }
+  } catch { _escHeading = ''; }
+  return _escHeading;
+}
+/**
+ * WHAT A PROJECT DECLARES A SEAM ANSWERS FOR ONE STORY: `stand-in/<seam>/<storyId>.json`, for the
+ * stories of this project. A cross-story escalation is a DECISION the failure analyst makes about
+ * one story's failure; a contract stand-in answers every story alike and never names a file in
+ * another story's scope, so the escalation path could not run at £0.
+ */
+/** True when a story before this one, in the PRD's implementation order, declares the file. */
+function earlierStoriesDeclare(story, file) {
+  try {
+    const prd = JSON.parse(fs.readFileSync(process.env.PRD_FILE, 'utf8'));
+    const order = Object.values(prd.implementationOrder || {}).flat().map(String);
+    const mine = order.indexOf(String(story && story.id));
+    if (mine < 0) return false;
+    const before = new Set(order.slice(0, mine));
+    return (prd.stories || []).some((st) => st && before.has(String(st.id))
+      && ((st.technicalNotes && st.technicalNotes.files) || []).includes(file));
+  } catch { return false; }
+}
+const _declaredAnswerCarried = new Map();
+function declaredStoryAnswers(seam) {
+  const project = process.env.EPAM_PROJECT_CONFIG_DIR || '';
+  if (!project || !seam) return [];
+  const base = path.join(project, 'stand-in', String(seam));
+  const out = [];
+  for (const st of projectStories()) {
+    const f = path.join(base, `${String(st.id)}.json`);
+    if (!fs.existsSync(f)) continue;
+    try { out.push({ storyId: String(st.id), answer: JSON.parse(fs.readFileSync(f, 'utf8')) }); }
+    catch (e) { console.error(`[mock] ${f} is not JSON (${e.message}) — refused`); process.exitCode = 1; }
+  }
+  return out;
+}
+/** The lines a template names its story on, rendered for one story ("<before><id><after>"). */
+function templateStoryLines(template, storyId) {
+  const body = templateBodies().get(template) || '';
+  const out = [];
+  for (const line of body.split('\n').filter((l) => l.includes('__STORY_ID__'))) {
+    const [before, afterRaw] = line.split('__STORY_ID__');
+    const after = String(afterRaw || '').split(/__[A-Z0-9_]+__/)[0];
+    out.push(`${before.replace(/^.*__[A-Z0-9_]+__/, '')}${storyId}${after}`);
+  }
+  return [...new Set(out)];
 }
 /**
  * THE FILES A SEAM DELIVERS, for a seam the registry grants writes (toolGrant: write) and the
@@ -2235,14 +2323,20 @@ function endsInToolCall(cap, seam) {
         const _wrongOnes = calls.filter((c) => c.wrong);
         const _short = _named.length && _named.length < calls.length ? _named
           : (_wrongOnes.length ? calls.map((c) => (c.wrong ? { ...c.wrong, read: c.read } : c)) : calls.slice(0, -1));
-        const _turns = calls.length > 1 || _wrongOnes.length ? [_short, _short, calls] : [calls];
+        // A STORY THE PROJECT DECLARES FILES FOR ONE BY ONE fails only as its data says. The
+        // deliberate shortfall exists to exercise the analyst on a project that declares nothing
+        // about failure; a per-story project declares the failure itself (a cross-story defect its
+        // tests expose), and the shortfall — whose full answer waits for guidance an escalation never
+        // records — would stop the story from ever delivering its own code.
+        const _perStoryFix = (() => { const _f = declaredFix(_story, seam); return !!(_f && _f.perStory); })();
+        const _turns = _perStoryFix ? [calls] : (calls.length > 1 || _wrongOnes.length ? [_short, _short, calls] : [calls]);
         // A REAL SELF-HEAL, CAUSALLY. When the first attempts fall short on purpose, the FULL
         // answer is served only to a prompt that carries the engine's own guidance heading — the
         // analyst's prescription, recorded and rendered into the retry. A prompt without it keeps
         // getting the short answer (priority 53, unlimited), so a writer that "heals" without the
         // guidance having reached it cannot happen here: the story fails and the harness is red.
         // Sequence alone (short, short, full) proved ordering, not that the note did anything.
-        const _healedBy = _turns.length > 1 ? guidanceHeadingRegex() : '';
+        const _healedBy = _turns.length > 1 && !_perStoryFix ? guidanceHeadingRegex() : '';
         for (const proto of PROTOCOLS) {
           const _match = { type: 'REGEX', regex: `(?s)(?=.*(?:${_lines.map((l) => rx(wireForm(l))).join('|')})).*` };
           const _matchHealed = _healedBy ? { type: 'REGEX', regex: `(?s)(?=.*(?:${_lines.map((l) => rx(wireForm(l))).join('|')}))(?=.*${_healedBy}).*` } : _match;
@@ -2309,6 +2403,40 @@ function endsInToolCall(cap, seam) {
                 body: proto.text(`${STAND_IN_MARK} writer: no guidance from the previous attempt in this prompt — the shortfall stands (wrote ${_short.length} of ${calls.length})`) },
             });
           }
+        }
+        // THE OWNER'S ESCALATED FIX. A story another story escalated a defect to runs again with the
+        // engine's escalation amendment in its prompt; what it writes then is its own declared
+        // `stand-in/<seam>/<id>@escalated/` tree — the fix, not its original build. Matched on the
+        // story's own line AND the amendment's heading, above every plain answer for the story.
+        const _escCalls = writerStandInCalls(_story, seam, 'escalated');
+        const _heading = escalationHeading();
+        if (_escCalls && _heading) {
+          for (const proto of PROTOCOLS) {
+            const _mEsc = { type: 'REGEX', regex: `(?s)(?=.*(?:${_lines.map((l) => rx(wireForm(l))).join('|')}))(?=.*${rx(wireForm(_heading))}).*` };
+            const _hEsc = { 'content-type': ['text/event-stream; charset=utf-8'], 'x-seam': [`${seam}:${st.id}:escalated`] };
+            for (let _n = 0; _n < WRITER_ATTEMPTS_CEILING; _n += 1) {
+              const _reads = _escCalls.map((c) => c.read).filter(Boolean);
+              for (const turn of (_reads.length ? [_reads, _escCalls.map(({ read, declared: _d, wrong: _w, ...c }) => c)] : [_escCalls.map(({ read, declared: _d, wrong: _w, ...c }) => c)])) {
+                // eslint-disable-next-line no-await-in-loop
+                await put('/mockserver/expectation', {
+                  priority: 56, times: { remainingTimes: 1, unlimited: false },
+                  httpRequest: { method: 'POST', path: proto.path, body: _mEsc },
+                  httpResponse: { statusCode: 200, headers: _hEsc, body: proto.calls(turn) },
+                });
+              }
+              // eslint-disable-next-line no-await-in-loop
+              await put('/mockserver/expectation', {
+                priority: 56, times: { remainingTimes: 1, unlimited: false },
+                httpRequest: { method: 'POST', path: proto.path, body: _mEsc },
+                httpResponse: { statusCode: 200, headers: _hEsc,
+                  body: proto.text(`${STAND_IN_MARK} writer: ${st.id} applied the escalated fix (${_escCalls.length} file(s))`) },
+              });
+            }
+          }
+          onPurpose.push(`${seam}  <- ${STAND_IN_MARK} ${st.id}: its escalated fix (stand-in/${seam}/${st.id}@escalated/, ${_escCalls.length} file(s))`);
+        } else if (_escCalls && !_heading) {
+          console.error(`[mock] ${st.id} declares an escalated fix but no engine template carries __ESCALATING_STORY_ID__ — refused`);
+          process.exitCode = 1;
         }
         _wrote += 1;
       }
@@ -2805,6 +2933,38 @@ function endsInToolCall(cap, seam) {
         });
       }
     }
+    // WHAT THE PROJECT DECLARES THIS SEAM ANSWERS FOR ONE STORY (`stand-in/<seam>/<id>.json`),
+    // matched on the line the seam's own template names its story on, above every other answer
+    // of this seam — the structured-output call where the runner asks for one, the text otherwise.
+    for (const { storyId, answer } of (cap ? [] : declaredStoryAnswers(seam))) {
+      // A seam renders more than one template; only one that names its story can carry a per-story
+      // answer. The others are skipped here, and a declaration NO template of the seam can carry is
+      // refused once, after every template has been seen.
+      const _declKey = `${seam}/${storyId}`;
+      if (!_declaredAnswerCarried.has(_declKey)) _declaredAnswerCarried.set(_declKey, false);
+      const _sLines = templateStoryLines(template, storyId).filter((l) => l.replace(storyId, '').trim().length > 0);
+      if (!_sLines.length) continue;
+      _declaredAnswerCarried.set(_declKey, true);
+      const _bRx = bodyMatch.type === 'REGEX' ? bodyMatch.regex.replace(/^\(\?s\)/, '').replace(/\.\*$/, '') : `(?=.*${rx(wireForm(key))})`;
+      const _sRx = `(?=.*(?:${_sLines.map((l) => `${rx(wireForm(l))}(?![A-Za-z0-9_-])`).join('|')}))`;
+      const _soS = structuredOutputToolName();
+      const _hS = { 'content-type': ['text/event-stream; charset=utf-8'], 'x-seam': [`${seam}:${storyId}:declared`] };
+      for (const proto of PROTOCOLS) {
+        if (_soS) {
+          await put('/mockserver/expectation', {
+            priority: 58, times: { unlimited: true },
+            httpRequest: { method: 'POST', path: proto.path, body: { type: 'REGEX', regex: `(?s)${_bRx}${_sRx}(?=.*${rx(`"name":"${_soS}"`)}).*` } },
+            httpResponse: { statusCode: 200, headers: _hS, body: proto.calls([{ name: _soS, input: answer, arguments: answer }]) },
+          });
+        }
+        await put('/mockserver/expectation', {
+          priority: 57, times: { unlimited: true },
+          httpRequest: { method: 'POST', path: proto.path, body: { type: 'REGEX', regex: `(?s)${_bRx}${_sRx}.*` } },
+          httpResponse: { statusCode: 200, headers: _hS, body: proto.text(JSON.stringify(answer)) },
+        });
+      }
+      onPurpose.push(`${seam}  <- ${STAND_IN_MARK} ${storyId}: the answer the project declares (stand-in/${seam}/${storyId}.json)`);
+    }
     // TURN TWO (or the only turn): what the model said once its work was done.
     for (const proto of PROTOCOLS) {
       await put('/mockserver/expectation', {
@@ -2971,4 +3131,7 @@ function endsInToolCall(cap, seam) {
   console.log(accounted === all.length
     ? '  every declared seam reached a printed bucket'
     : `  WARNING: ${all.length - accounted} seam(s) reached no printed bucket`);
+  for (const [k, carried] of _declaredAnswerCarried) {
+    if (!carried) { console.error(`[mock] stand-in/${k}.json is declared but no template of that seam names its story (__STORY_ID__) — refused`); process.exitCode = 1; }
+  }
 })().catch((e) => { console.error(e.message); process.exit(1); });

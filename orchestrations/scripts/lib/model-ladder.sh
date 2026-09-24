@@ -1433,6 +1433,67 @@ assess_model_escalation() {
 # 1 if there was no escalation, or if it could not be resolved (caller falls
 # through to normal retry handling — the diagnosis will surface again and be
 # caught by check_healing_effectiveness like any other repeat).
+# ── WHAT AN ESCALATION CARRIES ────────────────────────────────────────────────────────────────
+# Found by the £0 escalation-chain scenario (orchestrations/projects/escalation-chain, 2026-09-24),
+# which reproduces the live regintel chain for nothing:
+#   D1 the owner's worktree was branched from HEAD, WITHOUT the escalating story's uncommitted
+#      change, so its suite passed and it "converged" having fixed nothing (live: REGI-007 spent 30
+#      minutes on a tree missing its parent's fix);
+#   D2 adoption committed `git add -A` and copied it across — 1981 files, .venv and __pycache__
+#      and the engine's own state among them.
+# The owner now starts from a SNAPSHOT of the escalating tree, and only what differs between that
+# snapshot and the owner's finished tree crosses back. The codeline's own content is everything
+# that is not the engine's (engine-paths.sh, _ENGINE_OWNED_DIRS) and not a vendor directory the
+# codeline declares (.epam/dependency-check.json vendorDirs) — whole path segments, as git ignores.
+
+# _escalation_vendor_names — the vendor directories the codeline declares: its own
+# .epam/dependency-check.json, else the project's (where that file is provisioned from). A NESTED
+# escalation's tree is the parent's worktree, which carries no .epam/ — reading the tree alone gave
+# an empty list and .venv crossed back ("brought 126 file(s)", £0 escalation-chain run 6).
+_escalation_vendor_names() {
+    local _cfg="${PROJECT_ROOT%/}/.epam/dependency-check.json"
+    [ -f "$_cfg" ] || _cfg="${EPAM_PROJECT_CONFIG_DIR:-}/dependency-check.json"
+    [ -f "$_cfg" ] || return 0
+    jq -r '.vendorDirs[]? // empty' "$_cfg" 2>/dev/null | sed -e 's#/*$##' -e 's#^\./##' | grep -v '^$' || true
+}
+
+# _escalation_owned_paths — stdin: repo-relative paths; stdout: the ones that are codeline content.
+_escalation_owned_paths() {
+    local _excl
+    _excl="$( { printf '%s\n' ${_ENGINE_OWNED_DIRS[@]+"${_ENGINE_OWNED_DIRS[@]}"}; _escalation_vendor_names; } | grep -v '^$' | sort -u | tr '\n' '\034')"
+    awk -v excl="$_excl" 'BEGIN { n = split(excl, e, "\034"); for (i = 1; i <= n; i++) if (e[i] != "") x[e[i]] = 1 }
+        $0 == "" { next }
+        { k = split($0, seg, "/"); drop = 0
+          for (i = 1; i <= k && !drop; i++) if (seg[i] in x) drop = 1
+          for (d in x) if (index($0, d "/") == 1) drop = 1
+          if (!drop) print }'
+}
+
+# _escalation_base_snapshot — prints a commit holding PROJECT_ROOT's working tree as it stands:
+# HEAD, plus every modified, added and deleted file of the codeline's own content. Built in a
+# private index: the escalating story's index, files and HEAD are untouched.
+_escalation_base_snapshot() {
+    local _root="${PROJECT_ROOT:?}"
+    [ -e "$_root/.git" ] || return 1
+    local _idx _head _p _tree
+    _head="$(git -C "$_root" rev-parse --verify HEAD 2>/dev/null)" || return 1
+    _idx="$(mktemp "${TMPDIR:-/tmp}/esc-index-XXXXXX")" || return 1
+    GIT_INDEX_FILE="$_idx" git -C "$_root" read-tree "$_head" || { rm -f "$_idx"; return 1; }
+    while IFS= read -r _p; do
+        [ -n "$_p" ] || continue
+        if [ -e "$_root/$_p" ] || [ -L "$_root/$_p" ]; then
+            GIT_INDEX_FILE="$_idx" git -C "$_root" add -f -- "$_p" >/dev/null 2>&1 || true
+        else
+            GIT_INDEX_FILE="$_idx" git -C "$_root" rm -q --cached --ignore-unmatch -- "$_p" >/dev/null 2>&1 || true
+        fi
+    done < <(git -C "$_root" ls-files -m -o -d --exclude-standard 2>/dev/null | sort -u | _escalation_owned_paths)
+    _tree="$(GIT_INDEX_FILE="$_idx" git -C "$_root" write-tree 2>/dev/null)"
+    rm -f "$_idx"
+    [ -n "$_tree" ] || return 1
+    git -C "$_root" -c user.email=pipeline@local -c user.name=pipeline \
+        commit-tree "$_tree" -p "$_head" -m "escalation base: the escalating story's working tree" 2>/dev/null
+}
+
 # _escalation_branch <sibling_id> — the branch an escalated scoped fix lives on.
 #
 # THE NAMING RULE HAS ONE HOME. _escalation_worktree used to set and export _ESC_BRANCH, but every
@@ -1447,13 +1508,16 @@ _escalation_branch() {
     printf 'esc/%s' "$(printf '%s' "$_sib" | tr -c '[:alnum:]._-' '_')"
 }
 
-# _escalation_worktree <sibling_id> — the worktree an escalated scoped fix runs in.
+# _escalation_worktree <sibling_id> [base-commit] — the worktree an escalated scoped fix runs in,
+# created at base-commit (the escalating tree's snapshot, _escalation_base_snapshot) else at HEAD.
+# The base is recorded on the branch (branch.<b>.escalationBase) so adoption measures the owner's
+# change against exactly where it started, however many escalations reuse the worktree.
 #
 # Reused across escalations of the same sibling, so a second attempt resumes from the first
 # attempt's work instead of re-deriving it from an empty tree. Prints the path, or nothing when
 # this codeline has no git (the caller then runs in place and still keeps the work).
 _escalation_worktree() {
-    local _sib="${1:?sibling}"
+    local _sib="${1:?sibling}" _base="${2:-}"
     [ -e "${PROJECT_ROOT:-}/.git" ] || return 1
     local _safe; _safe="$(printf '%s' "$_sib" | tr -c '[:alnum:]._-' '_')"
     local _path="${PROJECT_ROOT%/}-esc-${_safe}"
@@ -1480,33 +1544,55 @@ _escalation_worktree() {
     if git -C "$PROJECT_ROOT" show-ref --verify --quiet "refs/heads/${_ESC_BRANCH}"; then
         git -C "$PROJECT_ROOT" worktree add "$_path" "$_ESC_BRANCH" >/dev/null 2>&1 || return 1
     else
-        git -C "$PROJECT_ROOT" worktree add -b "$_ESC_BRANCH" "$_path" HEAD >/dev/null 2>&1 || return 1
+        git -C "$PROJECT_ROOT" worktree add -b "$_ESC_BRANCH" "$_path" "${_base:-HEAD}" >/dev/null 2>&1 || return 1
+        git -C "$PROJECT_ROOT" config "branch.${_ESC_BRANCH}.escalationBase" \
+            "$(git -C "$_path" rev-parse HEAD 2>/dev/null)" >/dev/null 2>&1 || true
     fi
     printf '%s' "$_path"
 }
 
-# _escalation_adopt_work <sibling_id> <worktree> — bring a CONVERGED scoped fix into the codeline.
+# _escalation_adopt_work <sibling_id> <worktree> [base] — bring a CONVERGED scoped fix into the codeline.
 #
-# File by file, so the escalating story's own uncommitted work is untouched and only the files the
-# sibling actually changed cross over. The worktree and its branch are left in place: they are the
-# record of what that escalation did.
+# Only what the owner CHANGED crosses: the owner's own content (never vendor or engine files) is
+# committed on its branch — the record of what the escalation did — and the difference between the
+# branch's recorded base and that commit is applied to the codeline: changed and added files are
+# copied, deleted files deleted. The escalating story's other work is untouched.
 _escalation_adopt_work() {
-    local _sib="${1:?sibling}" _wt="${2:?worktree}"
+    local _sib="${1:?sibling}" _wt="${2:?worktree}" _base="${3:-}"
     [ -d "$_wt" ] || return 1
-    git -C "$_wt" add -A >/dev/null 2>&1 || true
+    local _br; _br="$(git -C "$_wt" rev-parse --abbrev-ref HEAD 2>/dev/null)"
+    [ -n "$_base" ] || _base="$(git -C "$_wt" config "branch.${_br}.escalationBase" 2>/dev/null)"
+    [ -n "$_base" ] || _base="$(git -C "$_wt" rev-parse HEAD 2>/dev/null)"
+    local _p
+    while IFS= read -r _p; do
+        [ -n "$_p" ] || continue
+        if [ -e "$_wt/$_p" ] || [ -L "$_wt/$_p" ]; then
+            git -C "$_wt" add -f -- "$_p" >/dev/null 2>&1 || true
+        else
+            git -C "$_wt" rm -q --cached --ignore-unmatch -- "$_p" >/dev/null 2>&1 || true
+        fi
+    done < <(git -C "$_wt" ls-files -m -o -d --exclude-standard 2>/dev/null | sort -u | _escalation_owned_paths)
     git -C "$_wt" -c user.email=pipeline@local -c user.name=pipeline commit -qm "${_sib}: scoped escalation fix" >/dev/null 2>&1 || true
-    local _files _f _n=0
-    _files=$(git -C "$_wt" show --name-only --format= HEAD 2>/dev/null)
-    while IFS= read -r _f; do
+    local _st _f _n=0
+    while IFS=$'\t' read -r _st _f; do
         [ -n "$_f" ] || continue
-        [ -e "${_wt}/${_f}" ] || continue
-        mkdir -p "$(dirname "${PROJECT_ROOT}/${_f}")" 2>/dev/null || true
-        cp -a "${_wt}/${_f}" "${PROJECT_ROOT}/${_f}" 2>/dev/null && _n=$((_n + 1))
-    done <<EOF
-$_files
-EOF
+        case "$_st" in
+            D) rm -f "${PROJECT_ROOT}/${_f}" 2>/dev/null && _n=$((_n + 1)) ;;
+            *) mkdir -p "$(dirname "${PROJECT_ROOT}/${_f}")" 2>/dev/null || true
+               cp -a "${_wt}/${_f}" "${PROJECT_ROOT}/${_f}" 2>/dev/null && _n=$((_n + 1)) ;;
+        esac
+    done < <(git -C "$_wt" diff --no-renames --name-status "$_base" HEAD 2>/dev/null | _escalation_adopt_owned_status)
     log "  [Escalation] brought ${_n} file(s) of ${_sib}'s converged fix into the codeline from $_wt"
     return 0
+}
+
+# _escalation_adopt_owned_status — stdin: `git diff --name-status` lines; stdout: the owned ones.
+_escalation_adopt_owned_status() {
+    local _st _f
+    while IFS=$'\t' read -r _st _f; do
+        [ -n "$_f" ] || continue
+        [ -n "$(printf '%s\n' "$_f" | _escalation_owned_paths)" ] && printf '%s\t%s\n' "$_st" "$_f"
+    done
 }
 
 resolve_escalation() {
@@ -1606,9 +1692,23 @@ resolve_escalation() {
           --arg target_file "${target_file}" \
           --arg diagnosis "${diagnosis}" \
           '{"__ESCALATING_STORY_ID__":$escalating_story_id,"__REQUIRED_FIX__":$required_fix,"__TARGET_FILE__":$target_file,"__DIAGNOSIS__":$diagnosis}' > "$_cp_vals"
-    _render_out="$(render_or_keep coordinator-amendment "$_cp_vals" sibling_escalation)" && COORDINATOR_PROMPT_AMENDMENT="$_render_out"
+    # THE BRIEF TRAVELS IN ITS OWN VARIABLE. It was put in COORDINATOR_PROMPT_AMENDMENT, which
+    # implement_story empties on entry (so one story's amendment cannot leak into the next) and
+    # injects only from attempt 2 — an escalation gets one attempt. No escalated owner ever saw its
+    # brief: live 2026-09-24 REGI-005-A's and REGI-007's prompts held zero "URGENT" lines, and the
+    # £0 escalation-chain scenario showed the same. implement_story reads EPAM_ESCALATION_BRIEF and
+    # injects it from attempt 1; it is set for this owner's call only and restored after, so a
+    # nested escalation's brief never outlives it.
+    local _saved_brief="${EPAM_ESCALATION_BRIEF:-}" _had_brief="${EPAM_ESCALATION_BRIEF+x}"
+    local _brief=""
+    _brief="$(render_or_keep coordinator-amendment "$_cp_vals" sibling_escalation)" || _brief=""
     rm -f "$_cp_vals"
-    export COORDINATOR_PROMPT_AMENDMENT
+    if [ -n "$_brief" ]; then
+        export EPAM_ESCALATION_BRIEF="$_brief"
+    else
+        warning "  [Escalation] the brief for $sibling_id could not be rendered — it runs without being told what to fix"
+        unset EPAM_ESCALATION_BRIEF
+    fi
     # The tree as it stands before the owner's fix begins — restored if the fix does not converge,
     # so nothing of a half-done edit reaches $escalating_story_id's commit (see _restore_tree_snapshot).
     # AN ESCALATION ALREADY TRIED IS NOT TRIED AGAIN — ITS RESULT IS HANDED BACK INSTEAD.
@@ -1624,15 +1724,28 @@ resolve_escalation() {
     # that the defect lived in the other story's file.
     local _esc_ledger="${LOG_DIR}/escalations-tried.txt"
     local _esc_key="${sibling_id}::${target_file}"
+    # WHAT HAPPENED LAST TIME, as recorded when it happened (escalations-outcome.txt). The ledger
+    # entry above is written before the escalation runs, so reading it as "did not converge" was
+    # wrong whenever it had converged (£0 escalation-chain, 2026-09-24: a fix logged "resolved" and
+    # then reported "did not converge" on the repeat).
+    local _esc_outcomes="${LOG_DIR}/escalations-outcome.txt"
     if [ -f "$_esc_ledger" ] && grep -Fxq "$_esc_key" "$_esc_ledger" 2>/dev/null; then
         local _esc_prev_wt; _esc_prev_wt="${PROJECT_ROOT%/}-esc-$(printf '%s' "$sibling_id" | tr -c '[:alnum:]._-' '_')"
-        warning "  [Escalation] $sibling_id was already asked to fix $target_file this run and did not converge — NOT re-running it"
+        local _esc_last; _esc_last="$(awk -F'\t' -v k="$_esc_key" '$1 == k { o = $2 } END { print o }' "$_esc_outcomes" 2>/dev/null)"
+        local _esc_what
+        if [ "$_esc_last" = "converged" ]; then
+            _esc_what="its scoped fix CONVERGED and was brought into the codeline — and the same failure came back, so that fix was not the cause"
+            warning "  [Escalation] $sibling_id already fixed $target_file this run: its fix converged and the same failure came back — NOT re-running it"
+        else
+            _esc_what="its scoped fix did not converge"
+            warning "  [Escalation] $sibling_id was already asked to fix $target_file this run and did not converge — NOT re-running it"
+        fi
         log "  [Escalation] what it tried is in ${_esc_prev_wt} (kept); ${escalating_story_id} is told, so it can take a different route"
         COORDINATOR_PROMPT_AMENDMENT="${COORDINATOR_PROMPT_AMENDMENT:-}
 
 ## This escalation was already attempted
-${sibling_id} was asked to fix ${target_file} earlier in this run and its scoped fix did not
-converge. Its work was NOT discarded — it is in ${_esc_prev_wt} — but asking again produces the
+${sibling_id} was asked to fix ${target_file} earlier in this run: ${_esc_what}.
+Its work was NOT discarded — it is in ${_esc_prev_wt} — but asking again produces the
 same result. Diagnosis recorded then: ${diagnosis:-none recorded}.
 
 Treat that route as closed for this run: either solve it within your own declared files, or say
@@ -1659,8 +1772,9 @@ what evidence would change the diagnosis."
     # its own directory, so the escalating story's tree is untouched by construction. A converged
     # fix is brought across file by file; a non-converged one STAYS, and the next escalation of the
     # same sibling resumes from it.
-    local _esc_wt="" _esc_prev_root="$PROJECT_ROOT"
-    _esc_wt="$(_escalation_worktree "$sibling_id")" || _esc_wt=""
+    local _esc_wt="" _esc_prev_root="$PROJECT_ROOT" _esc_base=""
+    _esc_base="$(_escalation_base_snapshot 2>/dev/null)" || _esc_base=""
+    _esc_wt="$(_escalation_worktree "$sibling_id" "$_esc_base")" || _esc_wt=""
     if [ -n "$_esc_wt" ]; then
         PROJECT_ROOT="$_esc_wt"; export PROJECT_ROOT
         log "  [Escalation] $sibling_id works in its own worktree $_esc_wt (branch $(_escalation_branch "$sibling_id"))"
@@ -1670,6 +1784,7 @@ what evidence would change the diagnosis."
 
     implement_story "$sibling_id"
     local fix_result=$?
+    if [ -n "$_had_brief" ]; then export EPAM_ESCALATION_BRIEF="$_saved_brief"; else unset EPAM_ESCALATION_BRIEF; fi
 
     COORDINATOR_PROMPT_AMENDMENT="$_saved_amendment"
     export COORDINATOR_PROMPT_AMENDMENT
@@ -1679,6 +1794,8 @@ what evidence would change the diagnosis."
     rm -f "$escalation_file"
 
     PROJECT_ROOT="$_esc_prev_root"; export PROJECT_ROOT
+    printf '%s\t%s\n' "$_esc_key" "$([ "$fix_result" -eq 0 ] && echo converged || echo not-converged)" \
+        >> "${LOG_DIR}/escalations-outcome.txt" 2>/dev/null || true
     if [ "$fix_result" -eq 0 ]; then
         if [ -n "$_esc_wt" ]; then
             _escalation_adopt_work "$sibling_id" "$_esc_wt" || warning "  [Escalation] could not bring $sibling_id's converged fix across — it remains in $_esc_wt"

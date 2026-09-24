@@ -24,6 +24,7 @@ import { mkdtempSync, mkdirSync, writeFileSync, rmSync, readFileSync, existsSync
 import { join } from 'node:path';
 import { tmpdir } from 'node:os';
 import { shellFunction } from '../../lib/engine-source';
+import { escalationMachinery } from '../../lib/escalation-engine';
 
 const ROOT = join(__dirname, '../../../');
 const LADDER = join(ROOT, 'orchestrations/scripts/lib/model-ladder.sh');
@@ -33,7 +34,7 @@ const dirs: string[] = [];
 afterEach(() => { for (const d of dirs.splice(0)) rmSync(d, { recursive: true, force: true }); });
 
 /** Escalates the same defect twice in one run; records every scoped-fix invocation. */
-function escalateTwice(opts: { secondTargetFile?: string } = {}) {
+function escalateTwice(opts: { secondTargetFile?: string; firstConverges?: boolean } = {}) {
   const dir = mkdtempSync(join(tmpdir(), 'esc-repeat-'));
   dirs.push(dir);
   const repo = join(dir, 'codeline');
@@ -73,14 +74,11 @@ function escalateTwice(opts: { secondTargetFile?: string } = {}) {
     'success() { echo "OK: $*"; }; info() { :; }',
     'read_story_retry_count() { echo 0; }; write_story_retry_count() { :; }',
     'render_or_keep() { echo ""; }',
-    // the scoped fix never converges — the live shape
-    `implement_story() { printf '%s\\n' "$1" >> ${JSON.stringify(invocations)}; return 1; }`,
+    // the scoped fix never converges — the live shape — unless the case says the first one did
+    `implement_story() { printf '%s\\n' "$1" >> ${JSON.stringify(invocations)}; return ${opts.firstConverges ? '0' : '1'}; }`,
     shellFunction(HEALING, '_attempt_start_snapshot'),
     shellFunction(HEALING, '_restore_tree_snapshot'),
-    shellFunction(LADDER, '_escalation_branch'),
-    shellFunction(LADDER, '_escalation_worktree'),
-    shellFunction(LADDER, '_escalation_adopt_work'),
-    shellFunction(LADDER, 'resolve_escalation'),
+    escalationMachinery(),
     'resolve_escalation A-1; echo "RC1=$?"',
     // the same defect escalated a second time in the same run
     `cat > ${JSON.stringify(escFile)} <<'JSON'`,
@@ -117,6 +115,22 @@ describe('an escalation already tried is not tried again', () => {
   it('a DIFFERENT file is still escalated — only the repeat is withheld', () => {
     const { calls } = escalateTwice({ secondTargetFile: 'regintel/dedup.py' });
     expect(calls, 'a genuinely new escalation was suppressed').toContain('C-1');
+  });
+
+  // D3 (£0 escalation-chain, 2026-09-24): the ledger was written BEFORE the escalation ran, so a
+  // repeat was reported "did not converge" even of a fix the log had just called resolved.
+  it('a repeat of an escalation that CONVERGED says so — and that the same failure came back', () => {
+    const { out, amendment, calls } = escalateTwice({ firstConverges: true });
+    expect(calls, 'the repeat still is not re-run').toEqual(['B-1']);
+    expect(out).not.toMatch(/did not converge — NOT re-running/);
+    expect(out).toMatch(/converged.*same failure came back|same failure came back.*converged/i);
+    expect(amendment).toMatch(/converged/i);
+    expect(amendment).not.toMatch(/did not\s+converge/);
+  });
+
+  it('a repeat of an escalation that did NOT converge still says it did not', () => {
+    const { out } = escalateTwice({ firstConverges: false });
+    expect(out).toMatch(/did not converge — NOT re-running/);
   });
 
   it('nothing is discarded: the first attempt\'s worktree still exists', () => {

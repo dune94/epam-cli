@@ -11,6 +11,7 @@ import { getApiKey as getEnvApiKey } from '../../config/EnvVarOverrides.js';
 import { getApiKey as getStoredApiKey } from '../../billing/KeychainKeyStore.js';
 import { detectTier } from '../../billing/TierDetector.js';
 import { calculateCost } from '../../billing/pricing.js';
+import { BudgetGuard } from '../../billing/BudgetGuard.js';
 import { wrapWithTracing } from '../../observability/TracedProvider.js';
 import { flushLangfuse } from '../../observability/LangfuseTracer.js';
 
@@ -104,6 +105,7 @@ export function createRunCommand(): Command {
         tools,
         maxIterations: config.maxIterations,
         maxToolCalls: config.maxToolCalls,
+        budgetGuard: budgetGuardFromEnv(config.model),
         autoCompressAt: config.autoCompressAt,
           autoCompressEveryNIterations: config.autoCompressEveryNIterations,
         maxOutputTokens: config.maxOutputTokens,
@@ -171,6 +173,24 @@ export function createRunCommand(): Command {
  * The key is OMITTED, not zeroed, when the provider reported no cache detail — a provider that
  * says nothing must stay distinguishable from one that says "none".
  */
+/**
+ * THE SPEND STOP FOR ONE `epam run`, from EPAM_MAX_BUDGET_USD — undefined when it is unset, not a
+ * number, or not positive (a limit nobody declared is no limit, never a zero one).
+ *
+ * `epam run` had none: its limits arrive as environment variables and the only spend stop in the
+ * pipeline was the claude CLI's --max-budget-usd. Live 2026-09-24 an escalated fix on
+ * z-ai/glm-5.3 ran 28.6 minutes ($2.57) and the next hop read for 30 more, unbounded. BudgetGuard
+ * already ended a loop at a hard USD limit; nothing built one here. The loop records the stop as
+ * stopReason 'max_budget'.
+ */
+export function budgetGuardFromEnv(model: string, env: NodeJS.ProcessEnv = process.env): BudgetGuard | undefined {
+  const raw = String(env.EPAM_MAX_BUDGET_USD ?? '').trim();
+  if (!/^\d+(\.\d+)?$/.test(raw)) return undefined;
+  const limit = Number(raw);
+  if (!(limit > 0)) return undefined;
+  return new BudgetGuard({ warningAt: Infinity, hardLimitAt: limit, onHardLimit: 'pause' }, model);
+}
+
 export function buildRunResultJson(
   result: {
     finalResponse: string;

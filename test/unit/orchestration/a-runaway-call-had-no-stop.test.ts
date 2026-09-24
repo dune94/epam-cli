@@ -58,6 +58,22 @@ echo '{"result":"OK","usage":{"input_tokens":1,"output_tokens":1}}'
   return { cli, argvLog };
 }
 
+/**
+ * EVERY CLOCK THE ENGINE EXPORTS, as the engine exports it: the settings loader's own
+ * `_budget '.timeouts.X' 'VAR'` mapping in model-ladder.sh, valued from llm-defaults.json. The
+ * handler requires them (they have no inline defaults since 2026-09-22), and a run always has them;
+ * this fixture had none, so every case died of "unbound variable" before reaching the runner.
+ */
+function declaredClocks(): Record<string, string> {
+  const ladder = readFileSync(join(__dirname, '../../../orchestrations/scripts/lib/model-ladder.sh'), 'utf8');
+  const defaults = JSON.parse(readFileSync(join(__dirname, '../../../orchestrations/config/llm-defaults.json'), 'utf8')).timeouts || {};
+  const out: Record<string, string> = {};
+  for (const m of ladder.matchAll(/_budget '\.timeouts\.([A-Za-z]+)'\s+'([A-Z_]+)'/g)) {
+    if (typeof defaults[m[1]] === 'number') out[m[2]] = String(defaults[m[1]]);
+  }
+  return out;
+}
+
 function call(opts: { advertises: boolean; env?: Record<string, string> }) {
   const d = tmp('budget-');
   const { cli, argvLog } = stubCli(d, opts.advertises);
@@ -67,15 +83,40 @@ function call(opts: { advertises: boolean; env?: Record<string, string> }) {
     execFileSync('bash', [HANDLER, '--provider', 'claude', '--model', 'claude-haiku-4-5-20251001'], {
       input: 'hello\n', encoding: 'utf8', timeout: 60_000,
       env: {
-        ...process.env, CLAUDE_CMD: cli, ORCH_JSON_RESULT: jsonOut,
+        ...process.env, ...declaredClocks(), CLAUDE_CMD: cli, ORCH_JSON_RESULT: jsonOut,
         EPAM_PROVIDER_SET: 'claude', EPAM_RESPONSE_SCHEMA: '',
-        EPAM_STORY_BUDGET_HARD_LIMIT_USD: '', ...(opts.env || {}),
+        // As every provider set declares it (operator decision 2026-09-08). Unset, the handler took
+        // its plan-then-answer path, which needs EPAM_PLAN_TIMEOUT_SECS, and every case here died
+        // of "unbound variable" before reaching the runner.
+        EPAM_PLAN_EXECUTE: '0',
+        EPAM_STORY_BUDGET_HARD_LIMIT_USD: '', EPAM_MAX_BUDGET_USD: '', ...(opts.env || {}),
       },
     });
   } catch (e: any) { stderr = e.stderr || ''; status = e.status ?? -1; }
   const argv = existsSync(argvLog) ? engineSource(argvLog) : '';
   return { argv, stderr, status, ran: argv.trim().length > 0 };
 }
+
+describe('an escalated owner\'s per-call cap reaches the runner — the tighter cap wins', () => {
+  // resolve_escalation sets EPAM_MAX_BUDGET_USD from escalation.callBudgetUsd for the owner's call
+  // (2026-09-24: one escalated call ran $2.57). The claude CLI gets the tighter of it and the
+  // story's hard limit; `epam run` reads the same variable itself (a-spend-limit-stops-the-agent-loop).
+  it('the per-call cap alone is passed', () => {
+    const r = call({ advertises: true, env: { EPAM_MAX_BUDGET_USD: '1.5' } });
+    expect(r.ran, r.stderr.slice(0, 300)).toBe(true);
+    expect(r.argv).toMatch(/--max-budget-usd 1\.5\b/);
+  });
+  it('with both declared, the smaller one is passed', () => {
+    expect(call({ advertises: true, env: { EPAM_MAX_BUDGET_USD: '1.5', EPAM_STORY_BUDGET_HARD_LIMIT_USD: '15' } }).argv)
+      .toMatch(/--max-budget-usd 1\.5\b/);
+    expect(call({ advertises: true, env: { EPAM_MAX_BUDGET_USD: '20', EPAM_STORY_BUDGET_HARD_LIMIT_USD: '15' } }).argv)
+      .toMatch(/--max-budget-usd 15\b/);
+  });
+  it('exactly one budget flag is sent', () => {
+    const r = call({ advertises: true, env: { EPAM_MAX_BUDGET_USD: '1.5', EPAM_STORY_BUDGET_HARD_LIMIT_USD: '15' } });
+    expect((r.argv.match(/--max-budget-usd/g) || []).length).toBe(1);
+  });
+});
 
 describe('the declared story budget reaches the runner', () => {
   it('passes --max-budget-usd with the project\'s OWN declared limit', () => {

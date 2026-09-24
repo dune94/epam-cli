@@ -130,7 +130,7 @@ export interface AgentRunResult {
    * Optional so no existing caller breaks; the callers that must not accept a truncated
    * answer read it (see buildRunResultJson and lib/codeline-discovery.js).
    */
-  stopReason?: 'max_iterations';
+  stopReason?: 'max_iterations' | 'max_budget';
 }
 
 export interface PlanStep {

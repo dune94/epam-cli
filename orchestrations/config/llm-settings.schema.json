@@ -317,6 +317,23 @@
         }
       },
       "description": "The planning stage of plan-then-execute: which tiers get one, and the sampling it uses."
+    },
+    "escalation": {
+      "type": "object",
+      "additionalProperties": false,
+      "description": "Bounds on a cross-story escalation. Engine defaults in config/llm-defaults.json; a project overrides either here.",
+      "properties": {
+        "maxDepth": {
+          "type": "integer",
+          "minimum": 1,
+          "description": "EPAM_ESCALATION_MAX_DEPTH — how many stories deep a chain of escalations may go; at the limit the next hop is not run and the escalating story is handed the diagnosis."
+        },
+        "callBudgetUsd": {
+          "type": "number",
+          "exclusiveMinimum": 0,
+          "description": "EPAM_ESCALATION_BUDGET_USD — what each model call an escalated owner makes may spend (EPAM_MAX_BUDGET_USD for that call)."
+        }
+      }
     }
   },
   "definitions": {

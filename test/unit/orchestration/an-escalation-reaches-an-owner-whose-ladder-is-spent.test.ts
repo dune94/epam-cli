@@ -38,7 +38,7 @@ const dirs: string[] = [];
 afterEach(() => { for (const d of dirs.splice(0)) rmSync(d, { recursive: true, force: true }); });
 
 /** Drives the REAL resolve_escalation over a real repo, with the owner's retry state ON DISK. */
-function escalate(ownerCount: number | null) {
+function escalate(ownerCount: number | null, env: Record<string, string> = {}) {
   const dir = mkdtempSync(join(tmpdir(), 'esc-spent-')); dirs.push(dir);
   const repo = join(dir, 'codeline');
   mkdirSync(join(repo, '.epam', 'escalations'), { recursive: true });
@@ -74,16 +74,17 @@ function escalate(ownerCount: number | null) {
     `export PRD_FILE=${JSON.stringify(prd)}`,
     `export LOG_DIR=${JSON.stringify(logs)}`,
     'export MAX_RETRIES=2',
+    ...Object.entries(env).map(([k, v]) => `export ${k}=${JSON.stringify(v)}`),
     'log() { echo "LOG: $*"; }; warning() { echo "WARN: $*"; }; error() { echo "ERR: $*"; }',
     'success() { echo "OK: $*"; }; info() { :; }',
     `. ${JSON.stringify(RETRY)}`,                       // THE REAL retry state — nothing stubbed to 0
     // THE AGENT is the only stand-in: it reports what the engine handed it.
-    'implement_story() { echo "AGENT-RAN story=$1 budget=${EPAM_ESCALATION_ATTEMPT_BUDGET:-} start=$(escalation_start_retry_count "$(read_story_retry_count "$LOG_DIR" "$1")" "$MAX_RETRIES")"; printf "BRIEF<<%s>>BRIEF\\n" "${EPAM_ESCALATION_BRIEF:-}"; return 1; }',
+    'implement_story() { echo "AGENT-RAN story=$1 budget=${EPAM_ESCALATION_ATTEMPT_BUDGET:-} start=$(escalation_start_retry_count "$(read_story_retry_count "$LOG_DIR" "$1")" "$MAX_RETRIES")"; printf "BRIEF<<%s>>BRIEF\\n" "${EPAM_ESCALATION_BRIEF:-}"; echo "OWNER-DEPTH=${EPAM_ESCALATION_DEPTH:-} OWNER-BUDGET=${EPAM_MAX_BUDGET_USD:-}"; return 1; }',
     'render_or_keep() { printf "## URGENT: escalated brief rendered from %s" "$(cat "$2" | tr -d "\\n")"; }',
     shellFunction(HEALING, '_attempt_start_snapshot'),
     shellFunction(HEALING, '_restore_tree_snapshot'),
     escalationMachinery(),
-    'resolve_escalation REGI-005-B; echo "RC=$?"; echo "AFTER-BRIEF=[${EPAM_ESCALATION_BRIEF:-}]"',
+    'resolve_escalation REGI-005-B; echo "RC=$?"; echo "AFTER-BRIEF=[${EPAM_ESCALATION_BRIEF:-}] AFTER-DEPTH=[${EPAM_ESCALATION_DEPTH:-}] AFTER-BUDGET=[${EPAM_MAX_BUDGET_USD:-}]"; echo "AMEND<<${COORDINATOR_PROMPT_AMENDMENT:-}>>AMEND"; ls "$LOG_DIR"/escalations-tried.txt 2>/dev/null || echo "NO-LEDGER"',
   ].join('\n'));
   const r = spawnSync('bash', [script], { encoding: 'utf8', timeout: 60000 });
   return { out: (r.stdout || '') + (r.stderr || ''), logs };
@@ -135,6 +136,45 @@ describe('the owner is TOLD what to fix — the brief reaches its call', () => {
   it('and the brief does not outlive the escalation — the escalating story is not handed it', () => {
     const { out } = escalate(1);
     expect(out).toMatch(/AFTER-BRIEF=\[\]/);
+  });
+});
+
+describe('an escalation is bounded — in depth and in what each call may spend', () => {
+  // Live 2026-09-24 the chain went four stories deep (REGI-009a -> 005-B -> 005-A -> 007) and
+  // REGI-005-A's one call ran 28.6 minutes ($2.57). Both limits are declared
+  // (llm-defaults.json escalation.*, per project in llm-settings.json), never written here.
+  it('the owner runs one level deeper than its escalator, and the depth is restored after', () => {
+    const { out } = escalate(1, { EPAM_ESCALATION_DEPTH: '1', EPAM_ESCALATION_MAX_DEPTH: '3' });
+    expect(out).toMatch(/OWNER-DEPTH=2 /);
+    expect(out).toMatch(/AFTER-DEPTH=\[1\]/);
+  });
+  it('a top-level escalation starts the count', () => {
+    const { out } = escalate(1, { EPAM_ESCALATION_MAX_DEPTH: '3' });
+    expect(out).toMatch(/OWNER-DEPTH=1 /);
+    expect(out).toMatch(/AFTER-DEPTH=\[\]/);
+  });
+  it('AT the declared depth the next hop is NOT run — the escalating story is told why, nothing is filed as tried', () => {
+    const { out } = escalate(1, { EPAM_ESCALATION_DEPTH: '3', EPAM_ESCALATION_MAX_DEPTH: '3' });
+    expect(out, 'the owner ran past the declared depth').not.toMatch(/AGENT-RAN/);
+    expect(out).toMatch(/depth/i);
+    const amend = (out.match(/AMEND<<([\s\S]*?)>>AMEND/) || [])[1] || '';
+    expect(amend, 'the escalating story was not told the route is closed').toMatch(/depth/i);
+    expect(amend, 'the diagnosis must reach the escalating story, not be dropped').toContain('getattr returns None for dict fields');
+    expect(out).toContain('NO-LEDGER');
+  });
+  it('with no depth declared, nothing is refused on depth', () => {
+    const { out } = escalate(1, { EPAM_ESCALATION_DEPTH: '9' });
+    expect(out).toMatch(/AGENT-RAN story=REGI-005-A/);
+  });
+  it('each call the owner makes is capped at the declared escalation budget, and the cap is lifted after', () => {
+    const { out } = escalate(1, { EPAM_ESCALATION_BUDGET_USD: '1.50' });
+    expect(out).toMatch(/OWNER-BUDGET=1\.50/);
+    expect(out).toMatch(/AFTER-BUDGET=\[\]/);
+  });
+  it('an outer cap already in force is restored after the owner\'s call', () => {
+    const { out } = escalate(1, { EPAM_ESCALATION_BUDGET_USD: '1.50', EPAM_MAX_BUDGET_USD: '9' });
+    expect(out).toMatch(/OWNER-BUDGET=1\.50/);
+    expect(out).toMatch(/AFTER-BUDGET=\[9\]/);
   });
 });
 

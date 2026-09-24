@@ -75,6 +75,11 @@ load_llm_settings_json() {
 
     _v=$(_get '.retries.maxRetries'); [ -z "${EPAM_MAX_RETRIES:-}" ] && [ -n "$_v" ] && export EPAM_MAX_RETRIES="$_v"
     _v=$(_get '.retries.escalationAttempts'); [ -z "${EPAM_ESCALATION_ATTEMPTS:-}" ] && [ -n "$_v" ] && export EPAM_ESCALATION_ATTEMPTS="$_v"
+    # THE ESCALATION'S BOUNDS: how many stories deep a chain may go, and what each model call an
+    # escalated owner makes may spend (EPAM_MAX_BUDGET_USD for that call; `epam run` stops the loop
+    # at it). Engine default, project override. Live 2026-09-24: four stories deep, one call $2.57.
+    _budget '.escalation.maxDepth'      'EPAM_ESCALATION_MAX_DEPTH'
+    _budget '.escalation.callBudgetUsd' 'EPAM_ESCALATION_BUDGET_USD'
     _v=$(_get 'if .retries.selfHeal.enabled == true then "1" elif .retries.selfHeal.enabled == false then "0" else empty end')
     [ -z "${EPAM_RETRY_EXTENSION_ENABLED:-}" ] && [ -n "$_v" ] && export EPAM_RETRY_EXTENSION_ENABLED="$_v"
     _v=$(_get '.retries.selfHeal.extensionMax'); [ -z "${EPAM_RETRY_EXTENSION_MAX:-}" ] && [ -n "$_v" ] && export EPAM_RETRY_EXTENSION_MAX="$_v"
@@ -1722,6 +1727,30 @@ resolve_escalation() {
     # that had already failed in the same run (REGI-003a twice, REGI-002, REGI-005-B) — about $2
     # of it. Earlier the same shape ran between REGI-002 and REGI-001a, each correctly diagnosing
     # that the defect lived in the other story's file.
+    # A CHAIN HAS A DECLARED DEPTH. Each escalation runs its owner one level deeper
+    # (EPAM_ESCALATION_DEPTH); at EPAM_ESCALATION_MAX_DEPTH the next hop is not run. Nothing is
+    # dropped: the escalating story is handed the diagnosis and told this route is closed, as it is
+    # for a repeat. Live 2026-09-24 a chain went four stories deep and the last hop read for 30
+    # minutes on the wrong tree. No declared limit, no refusal.
+    local _esc_depth="${EPAM_ESCALATION_DEPTH:-0}"
+    case "$_esc_depth" in ''|*[!0-9]*) _esc_depth=0 ;; esac
+    if [ -n "${EPAM_ESCALATION_MAX_DEPTH:-}" ] && [ "$_esc_depth" -ge "$EPAM_ESCALATION_MAX_DEPTH" ] 2>/dev/null; then
+        warning "  [Escalation] $sibling_id would be hop $((_esc_depth + 1)) of this chain — the declared depth limit is ${EPAM_ESCALATION_MAX_DEPTH}; NOT running it"
+        COORDINATOR_PROMPT_AMENDMENT="${COORDINATOR_PROMPT_AMENDMENT:-}
+
+## This escalation was not run — the chain reached its declared depth
+${escalating_story_id} escalated a defect in ${target_file} (owned by ${sibling_id}), but this chain
+of escalations is already ${_esc_depth} deep, the declared limit (${EPAM_ESCALATION_MAX_DEPTH}).
+Diagnosis: ${diagnosis:-none recorded}
+Required fix: ${required_fix:-none recorded}
+
+Solve it within your own declared files, or report what you found so it can be fixed at the top
+of the chain."
+        export COORDINATOR_PROMPT_AMENDMENT
+        rm -f "$escalation_file"
+        return 1
+    fi
+
     local _esc_ledger="${LOG_DIR}/escalations-tried.txt"
     local _esc_key="${sibling_id}::${target_file}"
     # WHAT HAPPENED LAST TIME, as recorded when it happened (escalations-outcome.txt). The ledger
@@ -1782,9 +1811,17 @@ what evidence would change the diagnosis."
         warning "  [Escalation] no worktree available for $sibling_id — the fix runs in the main tree; its work is kept either way"
     fi
 
+    # One level deeper, and each of the owner's model calls capped at the escalation budget —
+    # both restored after, so they bound this owner's call and nothing outside it.
+    local _saved_depth="${EPAM_ESCALATION_DEPTH:-}" _had_depth="${EPAM_ESCALATION_DEPTH+x}"
+    local _saved_cap="${EPAM_MAX_BUDGET_USD:-}" _had_cap="${EPAM_MAX_BUDGET_USD+x}"
+    export EPAM_ESCALATION_DEPTH=$((_esc_depth + 1))
+    [ -n "${EPAM_ESCALATION_BUDGET_USD:-}" ] && export EPAM_MAX_BUDGET_USD="$EPAM_ESCALATION_BUDGET_USD"
     implement_story "$sibling_id"
     local fix_result=$?
     if [ -n "$_had_brief" ]; then export EPAM_ESCALATION_BRIEF="$_saved_brief"; else unset EPAM_ESCALATION_BRIEF; fi
+    if [ -n "$_had_depth" ]; then export EPAM_ESCALATION_DEPTH="$_saved_depth"; else unset EPAM_ESCALATION_DEPTH; fi
+    if [ -n "$_had_cap" ]; then export EPAM_MAX_BUDGET_USD="$_saved_cap"; else unset EPAM_MAX_BUDGET_USD; fi
 
     COORDINATOR_PROMPT_AMENDMENT="$_saved_amendment"
     export COORDINATOR_PROMPT_AMENDMENT

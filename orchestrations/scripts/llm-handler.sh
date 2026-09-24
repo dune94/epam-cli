@@ -250,10 +250,17 @@ run_provider_once() {
     # where the installed runner advertises it in --help — the same probe the schema binding above
     # performs — and a non-numeric value is ignored rather than passed on, because `-s` reaching a
     # runner that rejects it is how a whole run once died with the reason hidden.
-    if [ -n "${EPAM_STORY_BUDGET_HARD_LIMIT_USD:-}" ] \
-       && printf '%s' "$EPAM_STORY_BUDGET_HARD_LIMIT_USD" | grep -qE '^[0-9]+(\.[0-9]+)?$' \
+    # THE TIGHTER OF TWO DECLARED CAPS: the story's hard limit, and EPAM_MAX_BUDGET_USD — the
+    # per-call cap an escalated owner runs under (resolve_escalation sets it from
+    # escalation.callBudgetUsd; `epam run` reads the same variable and stops its loop at it).
+    local _llm_cap="" _llm_c
+    for _llm_c in "${EPAM_STORY_BUDGET_HARD_LIMIT_USD:-}" "${EPAM_MAX_BUDGET_USD:-}"; do
+      printf '%s' "$_llm_c" | grep -qE '^[0-9]+(\.[0-9]+)?$' || continue
+      if [ -z "$_llm_cap" ] || awk -v a="$_llm_c" -v b="$_llm_cap" 'BEGIN{exit !(a < b)}'; then _llm_cap="$_llm_c"; fi
+    done
+    if [ -n "$_llm_cap" ] \
        && "$(runner_bin_for "${PRIMARY_PROVIDER:-}" "$CLAUDE_CMD")" --help 2>/dev/null | grep -q -- '--max-budget-usd'; then
-      runner_args+=(--max-budget-usd "$EPAM_STORY_BUDGET_HARD_LIMIT_USD")
+      runner_args+=(--max-budget-usd "$_llm_cap")
     fi
 
     # BIND THE TOOL GRANT AT THE RUNNER, WHERE IT CAN ACTUALLY BE ENFORCED.

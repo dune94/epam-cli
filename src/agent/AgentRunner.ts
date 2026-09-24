@@ -333,7 +333,10 @@ export class AgentRunner {
           this.options.onBudgetCheck?.(check);
         }
         if (check.action === 'pause') {
-          // Hard stop — append what we have and return immediately
+          // Hard stop — append what we have and return immediately. Recorded STRUCTURALLY, as
+          // max_iterations is: a budget-stopped attempt returned text and exit 0, so a caller
+          // that checks only "did I get output?" would read it as a finished one.
+          this.stopReason = 'max_budget';
           this.recordTiming(modelLatencyMs, 0, []);
           messages.push({ role: 'assistant', content: response.content });
           return this.buildResult(
@@ -738,7 +741,7 @@ export class AgentRunner {
   private writtenPaths: string[] = [];
 
   /** Set only when the loop was cut short — see AgentRunResult.stopReason. */
-  private stopReason?: 'max_iterations';
+  private stopReason?: 'max_iterations' | 'max_budget';
 
   private buildResult(finalResponse: string, messages: Message[]): AgentRunResult {
     // Only expose a summed costUsd when EVERY turn reported real cost — a

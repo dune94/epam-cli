@@ -42,36 +42,68 @@ else
 fi
 
 echo "== the analyst must be told what failed =="
-# Its declared input failure-evidence has no declared producer (agent census, 2026-09-22), so
-# nothing governed what it received. It must contain the class, the provisioning and the evidence.
-# The class is whatever the pipeline recorded above, and the provisioning is whatever it handed
-# the attempt -- neither is named here. Hardcoding "output_cap" and "8192" pinned this to one run.
-ain="$(ls -t "$LOGS"/*analyst*.log 2>/dev/null | head -1)"
-if [ -n "$ain" ] && grep -q "$CLASS" "$ain" && grep -qE "maxOutputTokens|maxIterations|max_tokens" "$ain"; then
-  pass "the analyst's input carried the failure summary (class $CLASS + provisioning)"
+# Read from what the pipeline PERSISTED (LOG_DIR/analyst-inputs/<story>.attempt-N.md), not from a
+# log name guessed here. A suite that ran hands the analyst its output; an attempt that never
+# reached one hands it the class and the provisioning — so the class is required only then.
+ain="$(ls -t "$LOGS"/analyst-inputs/"$STORY".attempt-*.md 2>/dev/null | head -1)"
+if [ -z "$ain" ] || [ ! -s "$ain" ]; then
+  fail "the analyst's input is not on disk" "nothing under $LOGS/analyst-inputs for $STORY — its diagnosis cannot be checked"
+elif grep -q "Verification Failure\|FAILED\|AssertionError\|Error" "$ain" || grep -q "$CLASS" "$ain"; then
+  pass "the analyst's input is persisted and carries the failure ($(basename "$ain"))"
 else
-  fail "the analyst's input did not carry the failure summary (expected class $CLASS and the provisioning)" "${ain:-no analyst log at all}"
+  fail "the analyst's input carries neither the suite's failure nor the class $CLASS" "$ain"
 fi
 
-echo "== the analyst must remedy the next attempt =="
-# LIVE: the budget moved once, by a hardcoded engine bump (8192 -> 32768), and maxIter stayed at 6
-# for every attempt. The remedy must come from the analyst and must reach the next attempt.
-mapfile -t efforts < <(grep -ao 'Effort\[final\] -> maxIter=[0-9]* maxOutTok=[0-9]*' "$PLAIN")
-if [ "${#efforts[@]}" -ge 2 ]; then
-  a1_it=$(sed 's/.*maxIter=\([0-9]*\).*/\1/' <<<"${efforts[0]}"); a2_it=$(sed 's/.*maxIter=\([0-9]*\).*/\1/' <<<"${efforts[1]}")
-  a1_ot=$(sed 's/.*maxOutTok=\([0-9]*\).*/\1/' <<<"${efforts[0]}"); a2_ot=$(sed 's/.*maxOutTok=\([0-9]*\).*/\1/' <<<"${efforts[1]}")
-  if [ "$a2_ot" -gt "$a1_ot" ] || [ "$a2_it" -gt "$a1_it" ]; then
-    pass "attempt 2 was provisioned differently (iter $a1_it->$a2_it, out $a1_ot->$a2_ot)"
+echo "== the analyst's remedy must reach what comes next =="
+# THE REMEDY IT CHOSE, not one named here. The analyst answers with a target: a budget for a
+# starved attempt, an escalation for a defect in another story's file, guidance for a wrong
+# approach. Each has its own proof. (2026-09-24: this demanded a budget change when the analyst
+# had correctly escalated, and credited a ladder effort step to nobody.)
+TARGETS="$(python3 - "$HEAL" "$STORY" <<'PY' 2>/dev/null
+import json, sys
+seen = []
+try:
+    for line in open(sys.argv[1], encoding='utf-8'):
+        try: e = json.loads(line)
+        except ValueError: continue
+        if str(e.get('storyId', e.get('story', ''))) in ('', sys.argv[2]):
+            t = str(e.get('target', '') or '')
+            if t and t not in seen: seen.append(t)
+except OSError: pass
+print(' '.join(seen))
+PY
+)"
+echo "  the analyst chose: ${TARGETS:-nothing}"
+case " $TARGETS " in
+  *" escalate "*)
+    if grep -aqE "\[Escalation\] $STORY escalated a defect in .* \(owned by " "$PLAIN" \
+       && grep -aqE "\[Escalation\] .* (works in its own worktree|runs on its top rung|runs on its own ladder)" "$PLAIN"; then
+      pass "the escalation reached the owning story and ran"
+    else
+      fail "the analyst escalated and the owner never ran" "see [Escalation] lines in $RUN"
+    fi
+    if grep -aq "no further scoped fix is possible" "$PLAIN"; then
+      fail "an escalation was refused on a spent ladder" "the diagnosis of the defect was thrown away (see 2026-09-24)"
+    else
+      pass "no escalation was refused on a spent ladder"
+    fi ;;
+esac
+if python3 - "$HEAL" "$STORY" <<'PY' 2>/dev/null
+import json, sys
+for line in open(sys.argv[1], encoding='utf-8'):
+    try: e = json.loads(line)
+    except ValueError: continue
+    if str(e.get('storyId', '')) == sys.argv[2] and (e.get('provisioning') or {}):
+        sys.exit(0)
+sys.exit(1)
+PY
+then
+  mapfile -t efforts < <(grep -ao 'Effort\[final\] -> maxIter=[0-9]* maxOutTok=[0-9]*' "$PLAIN")
+  if [ "${#efforts[@]}" -ge 2 ] && [ "${efforts[0]}" != "${efforts[1]}" ]; then
+    pass "the analyst asked for provisioning and attempt 2 ran under different provisioning"
   else
-    fail "attempt 2 repeated the starved provisioning" "iter $a1_it->$a2_it, out $a1_ot->$a2_ot"
+    fail "the analyst asked for provisioning and attempt 2 did not get it" "${efforts[*]:-no Effort lines}"
   fi
-  if grep -qiE "analyst.*(budget|iteration|output|effort)|\[FailureAnalyst\].*(rais|increas|budget|iteration)" "$PLAIN"; then
-    pass "the change is attributable to the analyst"
-  else
-    fail "nothing attributes the change to the analyst" "a deterministic bump is not self-heal"
-  fi
-else
-  fail "there was no second attempt to inspect" "only ${#efforts[@]} Effort[final] line(s)"
 fi
 
 echo "== the loop must recover =="

@@ -890,7 +890,7 @@ implement_story() {
     # this fixes). Cleared for free by teardown at the start of every run,
     # since the state file lives under LOG_DIR.
     local retry_count
-    retry_count="$(read_story_retry_count "$LOG_DIR" "$story_id")"
+    retry_count="$(escalation_start_retry_count "$(read_story_retry_count "$LOG_DIR" "$story_id")" "$MAX_RETRIES")"
     if [ "$retry_count" -gt 0 ] 2>/dev/null; then
         log "  [InferenceLadder] $story_id resuming at retry_count=$retry_count (persisted from an earlier invocation)"
     fi

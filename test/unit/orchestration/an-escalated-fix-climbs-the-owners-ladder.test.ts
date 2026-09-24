@@ -99,10 +99,16 @@ describe('resolve_escalation runs the owner on ITS ladder, budgeted per escalati
     const out = resolve(0, { EPAM_ESCALATION_ATTEMPTS: '1' });
     expect(out).toMatch(/AFTER_BUDGET=unset AFTER_MAX=7/);
   });
-  it('an owner whose ladder is exhausted is reported as such, not as "failed after N attempts"', () => {
+  // REVERSED 2026-09-24. This used to require a refusal ("ladder exhausted", EXIT:1). Live that
+  // refusal threw away the diagnosis of the one defect failing the regintel codeline, on a count
+  // spent in earlier runs. An escalation is new evidence with its own budget: a spent owner takes
+  // it on its top rung. See an-escalation-reaches-an-owner-whose-ladder-is-spent.test.ts.
+  it('an owner whose ladder is spent still takes the escalated fix, and the log says it runs on its top rung', () => {
     const out = resolve(8, { EPAM_ESCALATION_ATTEMPTS: '1' });
-    expect(out).toMatch(/ladder (is )?exhausted/i);
-    expect(out).toMatch(/EXIT:1/);
+    expect(out, 'the escalation was refused on a spent ladder').not.toMatch(/no further scoped fix is possible/);
+    expect(out).toMatch(/OWNER=REGI-005a/);
+    expect(out).toMatch(/REGI-005a.*top rung/i);
+    expect(out).toMatch(/BUDGET=1/);
   });
 });
 

@@ -1584,17 +1584,21 @@ resolve_escalation() {
     # THE OWNER RUNS ON ITS OWN LADDER, BUDGETED PER ESCALATION — see
     # escalation_budget_allows in story-retry-state.sh for the live incident. MAX_RETRIES
     # stays the ladder; the budget bounds this escalation's attempts; the owner's persisted
-    # count decides the rung it starts at. An owner whose ladder is already exhausted has
-    # nothing left to offer and is reported as such rather than "failed after N attempts".
-    if story_ladder_exhausted "$LOG_DIR" "$sibling_id" "$MAX_RETRIES" 2>/dev/null \
-       && [ "$(read_story_retry_count "$LOG_DIR" "$sibling_id")" -gt "$MAX_RETRIES" ]; then
-        warning "  [Escalation] $sibling_id's ladder is exhausted (retry_count $(read_story_retry_count "$LOG_DIR" "$sibling_id") > $MAX_RETRIES) — no further scoped fix is possible; $escalating_story_id will re-diagnose on its own ladder"
-        rm -f "$escalation_file"
-        return 1
-    fi
+    # count decides the rung it starts at.
+    #
+    # AN OWNER WHOSE LADDER IS SPENT STILL TAKES THE FIX. This used to refuse -- "ladder is
+    # exhausted, no further scoped fix is possible" -- and live 2026-09-24 that threw away the
+    # diagnosis of the one defect failing the codeline, on a count spent in EARLIER runs. The
+    # escalation is new evidence with its own bounded budget; a spent owner runs it on its top
+    # rung (escalation_start_retry_count, story-retry-state.sh, seeds implement_story's loop).
     local _saved_budget="${EPAM_ESCALATION_ATTEMPT_BUDGET:-}"
     export EPAM_ESCALATION_ATTEMPT_BUDGET="${EPAM_ESCALATION_ATTEMPTS:-${ESCALATION_FIX_MAX_RETRIES:-1}}"
-    log "  [Escalation] $sibling_id runs on its own ladder from retry_count $(read_story_retry_count "$LOG_DIR" "$sibling_id") (max $MAX_RETRIES), ${EPAM_ESCALATION_ATTEMPT_BUDGET} attempt(s) this escalation"
+    local _esc_owner_count; _esc_owner_count="$(read_story_retry_count "$LOG_DIR" "$sibling_id")"
+    if [ "$_esc_owner_count" -gt "$MAX_RETRIES" ] 2>/dev/null; then
+        log "  [Escalation] $sibling_id's own ladder is spent (retry_count $_esc_owner_count > $MAX_RETRIES) — this escalation runs on its top rung, ${EPAM_ESCALATION_ATTEMPT_BUDGET} attempt(s)"
+    else
+        log "  [Escalation] $sibling_id runs on its own ladder from retry_count $_esc_owner_count (max $MAX_RETRIES), ${EPAM_ESCALATION_ATTEMPT_BUDGET} attempt(s) this escalation"
+    fi
     _cp_vals=$(mktemp "${TMPDIR:-/tmp}/coordinator-amendment-vals-XXXXXX.json")
     jq_vals \
           --arg escalating_story_id "${escalating_story_id}" \

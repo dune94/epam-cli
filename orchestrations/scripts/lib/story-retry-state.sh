@@ -297,6 +297,26 @@ advance_ladder_escalation() {
 # and set by resolve_escalation for the duration of the owner's call; an
 # ordinary story (no budget) is unaffected. The count persists between
 # escalations, so the next one resumes at the rung this one reached.
+# escalation_start_retry_count <persisted_count> <max_retries>
+#
+# WHERE AN ESCALATED FIX STARTS ON THE OWNER'S LADDER. Live 2026-09-24 (regintel, v2.0.65): the
+# codeline's real defect was diagnosed in REGI-005-A's file and escalated to it, but REGI-005-A's
+# count was 4 against a ladder of 2 -- spent in EARLIER runs and carried in by the resume. The
+# attempt loop runs while retry_count <= MAX_RETRIES, so the owner could never make one attempt,
+# and the one bug failing every story could never be fixed. An escalation brings NEW evidence and
+# its own bounded budget (escalation_budget_allows); an owner already past its ladder takes it on
+# its TOP rung. Without a budget (an ordinary story) the count is returned unchanged.
+escalation_start_retry_count() {
+    local count="${1:-0}" max="${2:-0}"
+    case "$count" in ''|*[!0-9]*) count=0 ;; esac
+    case "$max" in ''|*[!0-9]*) max=0 ;; esac
+    if [ -n "${EPAM_ESCALATION_ATTEMPT_BUDGET:-}" ] && [ "$count" -gt "$max" ]; then
+        echo "$max"
+    else
+        echo "$count"
+    fi
+}
+
 escalation_budget_allows() {
     local attempts_made="${1:-0}"
     local budget="${EPAM_ESCALATION_ATTEMPT_BUDGET:-}"

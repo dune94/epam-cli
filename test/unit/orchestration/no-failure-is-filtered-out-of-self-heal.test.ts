@@ -107,11 +107,38 @@ function analyse(env: Record<string, string>) {
   const r = spawnSync('bash', [script], { encoding: 'utf8', timeout: 20000 });
   if (process.env.SELFHEAL_DEBUG) console.log((r.stdout || '') + (r.stderr || ''));
   return {
+    dir,
     invoked: existsSync(seen) && readFileSync(seen, 'utf8').includes('INVOKED'),
     input: existsSync(join(dir, 'analyst-input.txt')) ? readFileSync(join(dir, 'analyst-input.txt'), 'utf8') : '',
     out: (r.stdout || '') + (r.stderr || ''),
   };
 }
+
+describe('what the analyst was asked is on disk', () => {
+  // Live 2026-09-24 (one-story run, v2.0.65): the analyst ran four times and nothing on disk held
+  // what it had been given — "Anything the pipeline generates must be written to disk at
+  // generation time". Its diagnosis could not be checked against its evidence.
+  it('a quality failure: the prompt the model received is persisted, byte for byte', () => {
+    const { dir, input } = analyse({
+      ORCH_GATE_PROVIDER: 'openrouter',
+      EPAM_FAILURE_CLASS: 'quality',
+      VERIFICATION_FAILURE: '## Verification Failure\ntests/test_escalation.py:420 AssertionError',
+    });
+    expect(input, 'the analyst was never asked — nothing below is tested').toContain('test_escalation.py:420');
+    const f = join(dir, 'analyst-inputs', 'S-1.attempt-1.md');
+    expect(existsSync(f), 'the analyst input exists nowhere on disk').toBe(true);
+    expect(readFileSync(f, 'utf8').trim()).toBe(input.trim());
+  });
+
+  it('an attempt that never reached the suite: its summary is persisted too', () => {
+    const { dir } = analyse({
+      ORCH_GATE_PROVIDER: 'openrouter', EPAM_FAILURE_CLASS: 'output_cap', STORY_MAX_OUTPUT_TOKENS: '8192',
+    });
+    const f = join(dir, 'analyst-inputs', 'S-1.attempt-1.md');
+    expect(existsSync(f)).toBe(true);
+    expect(readFileSync(f, 'utf8')).toMatch(/Attempt Failure — output_cap/);
+  });
+});
 
 describe('no failure is filtered out of self-heal', () => {
   it('REPRODUCES the live defect: an attempt that died at its output cap still reaches the analyst', () => {

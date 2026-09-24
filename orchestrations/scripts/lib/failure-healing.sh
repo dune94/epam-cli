@@ -1079,6 +1079,19 @@ $(cat "$_fa_vendor_contract")
     fi
     rm -f "$_analyst_values" "$_analyst_values_err"
 
+    # WHAT THE ANALYST WAS ASKED IS ON DISK, WRITTEN THE MOMENT IT EXISTS. Live 2026-09-24
+    # (one-story run, v2.0.65): the analyst ran four times and nothing on disk held its input, so
+    # no diagnosis could be checked against the evidence it was given. Per story and attempt, in
+    # LOG_DIR beside the healing events it produced; a write failure is reported, never fatal.
+    if [ -n "${LOG_DIR:-}" ]; then
+        if mkdir -p "$LOG_DIR/analyst-inputs" 2>/dev/null \
+           && printf '%s\n' "$analyst_prompt" > "$LOG_DIR/analyst-inputs/${story_id}.attempt-${retry_num}.md" 2>/dev/null; then
+            :
+        else
+            warning "  [FailureAnalyst] could not persist its input under $LOG_DIR/analyst-inputs — the diagnosis will not be checkable"
+        fi
+    fi
+
     local analyst_raw="" analyst_json="" _analyst_call_ok="false"
     # Which attempt the unusable-answer branch already recorded a rung for, so the call-failure
     # branch below does not record a second one for the same failure.

@@ -50,6 +50,7 @@ function seedRetryCount(logDir: string, storyId: string): number {
 set -uo pipefail
 source ${JSON.stringify(STORY_RETRY_LIB)}
 LOG_DIR=${JSON.stringify(logDir)}
+MAX_RETRIES=7   # claude.sh always sets it (EPAM_MAX_RETRIES, default 7); the seed reads it
 log(){ echo "LOG: $*" >&2; }
 ${realSeedBlock()}
 implement_story ${JSON.stringify(storyId)}
@@ -86,7 +87,9 @@ describe('implement_story() seeds retry_count from persisted state, not 0', () =
 
   it('MUTATION CHECK: reverting the seed line back to hardcoded 0 makes this test fail', () => {
     const mutated = realSeedBlock().replace(
-      /retry_count="\$\(read_story_retry_count "\$LOG_DIR" "\$story_id"\)"/,
+      // the whole seed line, whichever form it takes — a direct read or through
+      // escalation_start_retry_count (2026-09-24)
+      /retry_count="\$\((?:escalation_start_retry_count "\$\()?read_story_retry_count "\$LOG_DIR" "\$story_id"\)"(?: "\$MAX_RETRIES"\)")?/,
       'retry_count=0',
     );
     expect(mutated, 'the replace did not match — test would vacuously pass').not.toBe(realSeedBlock());
@@ -98,6 +101,7 @@ describe('implement_story() seeds retry_count from persisted state, not 0', () =
 set -uo pipefail
 source ${JSON.stringify(STORY_RETRY_LIB)}
 LOG_DIR=${JSON.stringify(d)}
+MAX_RETRIES=7
 log(){ :; }
 ${mutated}
 implement_story S-1

@@ -377,7 +377,7 @@ build_implementation_prompt() {
     # Inject them so THIS re-implementation directly addresses what the reviewer
     # flagged (e.g. "over-engineered — a more concise change would do; reuse the
     # existing helper"). This is the reviewer telling the impl agent what to fix.
-    local review_feedback="" _review_feedback_file="${LOG_DIR:-$(dirname "$SCRIPT_DIR")/logs}/review-feedback-${story_id}.json"
+    local review_feedback="" review_feedback_earlier_run="" _review_feedback_file="${LOG_DIR:-$(dirname "$SCRIPT_DIR")/logs}/review-feedback-${story_id}.json"
     if [ -f "$_review_feedback_file" ]; then
         # BLOCKERS FIRST, AND SEPARATELY. Rendering every finding into one flat list let a
         # blocker-severity requirement ("no tests were added") sit beside advisory notes about
@@ -396,6 +396,21 @@ build_implementation_prompt() {
           | (if ($blockers | length) > 0 then "### BLOCKERS — this attempt is REJECTED until every one is resolved\n" + ($blockers | render) + "\n" else "" end)
           + (if ($rest | length) > 0 then "### Advisory — apply where it makes the change smaller or clearer\n" + ($rest | render) else "" end)
           ' "$_review_feedback_file" 2>/dev/null || echo "")
+        # A REVIEW FROM BEFORE THIS RUN IS HISTORY, NOT A VERDICT ON THIS ATTEMPT. The file carries
+        # no run of its own; when it was written (its mtime) is compared with this run's start
+        # (ORCH_RUN_ID, the start stamp a resume keeps). Nothing is dropped — the findings may still
+        # be right — but a review of code written in an earlier run was being handed to a new run's
+        # first attempt as "BLOCKERS — this attempt is REJECTED": regintel REGI-009a, 2026-09-24,
+        # a review from 09-22 (£0 POC on the frozen live state, BREAK 1).
+        local _rf_written _rf_run_start
+        _rf_written=$(stat -c %Y "$_review_feedback_file" 2>/dev/null || echo 0)
+        _rf_run_start=$(date -u -d "$(printf '%s' "${ORCH_RUN_ID:-}" | sed -E 's/^([0-9]{4})([0-9]{2})([0-9]{2})T([0-9]{2})([0-9]{2})([0-9]{2})Z$/\1-\2-\3 \4:\5:\6 UTC/')" +%s 2>/dev/null || echo 0)
+        if [ -n "$review_feedback" ] && [ "$_rf_run_start" -gt 0 ] && [ "$_rf_written" -gt 0 ] && [ "$_rf_written" -lt "$_rf_run_start" ]; then
+            review_feedback_earlier_run="$(date -u -d "@$_rf_written" +%Y-%m-%dT%H:%MZ 2>/dev/null)"
+            review_feedback=$(printf '%s' "$review_feedback" | sed \
+                -e 's/^### BLOCKERS — this attempt is REJECTED until every one is resolved$/### What that review called blocking (then — check each against the code as it is now)/' \
+                -e 's/^### Advisory — apply where it makes the change smaller or clearer$/### What that review advised (then)/')
+        fi
     fi
 
     # Persisted skill notes (cross-run learning — found live 2026-08-02):
@@ -838,7 +853,7 @@ $(cat "$_vendor_contract")
           --arg spec_reality_warning "$([ -n "$spec_reality_warning" ] && printf '%s\n\n' "$spec_reality_warning" || true)" \
           --arg write_first_lines "$(printf '%b' "$write_first_lines")" \
           --arg string_invariants_block "$([ -n "$string_invariants_block" ] && printf '%s\n' "$string_invariants_block" || true)" \
-          --arg review_feedback "$([ -n "$review_feedback" ] && printf '\n## Reviewer Feedback — ADDRESS THESE (a prior code review requested changes)\nThe team-lead reviewer examined your previous attempt and requested the changes below. This is the highest priority.\n\nA BLOCKER is a required deliverable, not advice. If a blocker says something is MISSING — a test, a file, a case — the only way to resolve it is to CREATE it; leaving it out repeats the rejection. Minimality governs HOW MUCH you write, never WHETHER you write it.\n\nFor advisory points: make the smallest edits that resolve each one, and where a point says the change is over-engineered or an existing helper would do, REMOVE the excess rather than adding more.\n\nIf you genuinely cannot satisfy a blocker — no seam exists to test against, the behaviour lives entirely in a third-party package — say so explicitly in your final message, naming the blocker and why. An unexplained omission reads as a refusal and will be rejected again.\n%s\n' "$review_feedback" || true)" \
+          --arg review_feedback "$([ -n "$review_feedback" ] && [ -n "$review_feedback_earlier_run" ] && printf '\n## A Review From An Earlier Run (%s — before this run began)\nThis review judged code written in an earlier run, not your attempt. The code may have changed since. Its findings are evidence to check against the code as it is now: act on the ones that still hold, and say which no longer apply.\n%s\n' "$review_feedback_earlier_run" "$review_feedback" || true)$([ -n "$review_feedback" ] && [ -z "$review_feedback_earlier_run" ] && printf '\n## Reviewer Feedback — ADDRESS THESE (a prior code review requested changes)\nThe team-lead reviewer examined your previous attempt and requested the changes below. This is the highest priority.\n\nA BLOCKER is a required deliverable, not advice. If a blocker says something is MISSING — a test, a file, a case — the only way to resolve it is to CREATE it; leaving it out repeats the rejection. Minimality governs HOW MUCH you write, never WHETHER you write it.\n\nFor advisory points: make the smallest edits that resolve each one, and where a point says the change is over-engineered or an existing helper would do, REMOVE the excess rather than adding more.\n\nIf you genuinely cannot satisfy a blocker — no seam exists to test against, the behaviour lives entirely in a third-party package — say so explicitly in your final message, naming the blocker and why. An unexplained omission reads as a refusal and will be rejected again.\n%s\n' "$review_feedback" || true)" \
           --arg skill_note_block "$([ -n "$skill_note_block" ] && printf '%s\n' "$skill_note_block" || true)" \
           --arg verification_criteria "$([ -n "$verification_criteria" ] && printf '\n## Verification Criteria (what a tester will CONFIRM — your change must satisfy every one)\nThese are observable checks, derived from the acceptance criteria and description. They describe WHAT is observed, not how to build it. Make the minimal change that makes all of these true; your accompanying test should assert them:\n%s\n' "$verification_criteria" || true)" \
           --arg codeline_facts_block "$([ -n "$codeline_facts_block" ] && printf '%s\n' "$codeline_facts_block" || true)" \

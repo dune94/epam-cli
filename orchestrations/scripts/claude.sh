@@ -38,6 +38,8 @@ AUTOMATION_DIR="$(dirname "$SCRIPT_DIR")"
 PROJECT_ROOT="${PROJECT_ROOT:-$(dirname "$AUTOMATION_DIR")}"
 PRD_FILE="${PRD_FILE:-$AUTOMATION_DIR/prd.json}"
 LOG_DIR="$AUTOMATION_DIR/logs"
+# EXPORTED: every child — the agent-io store above all — must be in THIS run (lib/agent-io.js).
+export LOG_DIR
 
 # shellcheck source=lib/tc-writer-gate.sh
 source "$SCRIPT_DIR/lib/tc-writer-gate.sh"

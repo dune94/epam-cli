@@ -130,6 +130,8 @@ _analyst_shared_criteria() {
 # failed too). Empty when there is no history.
 _analyst_healing_history() {
     local _id="${1:-}" _ev="${LOG_DIR:-}/healing-events.jsonl" _gl="${LOG_DIR:-}/run-guidance.jsonl"
+    # Escalations filed before this attempt, whether or not this story has healing events yet.
+    [ -n "$_id" ] && declare -F _escalation_history_for >/dev/null 2>&1 && _escalation_history_for "$_id"
     [ -n "$_id" ] && [ -s "$_ev" ] || return 0
     local _events
     _events=$(jq -c --arg id "$_id" 'select(.story_id == $id and (.event // "") != "HEALING_BROKEN")' "$_ev" 2>/dev/null)
@@ -337,6 +339,17 @@ _attempt_change_summary() {
     # _attempt_start_snapshot); the story's baseline otherwise.
     local _ref="${2:-${ATTEMPT_START_REF:-$(_resolved_baseline_ref)}}"
     local _stat=""
+    # WHAT THE DIFF IS OF. With an attempt of this story already run in this process, _ref is
+    # where that attempt began and the diff IS its work. Without one — the first attempt of a run,
+    # a resume — _ref is the story's baseline and the diff is the whole codeline's drift, other
+    # stories' work included. It was described as "the previous attempt changed these files" and
+    # listed the engine's own state (.epam/, .codegraph/) as the writer's work (£0 POC on the
+    # frozen live state, BREAK 2, 2026-09-24). Said as what it is; the engine's own directories
+    # are never anyone's attempt (engine-paths.sh, the single definition).
+    local _of_attempt=0
+    [ -n "${2:-}" ] || [ -n "${ATTEMPT_START_REF:-}" ] && _of_attempt=1
+    local -a _ex=()
+    declare -F engine_paths_pathspec >/dev/null 2>&1 && mapfile -t _ex < <(engine_paths_pathspec)
 
     if [ -e "$PROJECT_ROOT/.git" ] && git -C "$PROJECT_ROOT" rev-parse --verify "$_ref" >/dev/null 2>&1; then
         # TREE AGAINST TREE. The tree as it stands now — tracked, staged, untracked alike — is
@@ -347,14 +360,23 @@ _attempt_change_summary() {
         local _now
         _now=$(_attempt_start_snapshot)
         if [ -n "$_now" ]; then
-            _stat=$( git -C "$PROJECT_ROOT" diff --stat "$_ref" "$_now" 2>/dev/null | grep -vE '^[[:space:]]*$' | head -n "$(evidence_window changedFileLines)" )
+            _stat=$( git -C "$PROJECT_ROOT" diff --stat "$_ref" "$_now" -- . ${_ex[@]+"${_ex[@]}"} 2>/dev/null | grep -vE '^[[:space:]]*$' | head -n "$(evidence_window changedFileLines)" )
         else
-            _stat=$( git -C "$PROJECT_ROOT" diff --stat "$_ref" 2>/dev/null | grep -vE '^[[:space:]]*$' | head -n "$(evidence_window changedFileLines)" )
+            _stat=$( git -C "$PROJECT_ROOT" diff --stat "$_ref" -- . ${_ex[@]+"${_ex[@]}"} 2>/dev/null | grep -vE '^[[:space:]]*$' | head -n "$(evidence_window changedFileLines)" )
         fi
     fi
 
     local _record=""
     [ -n "${ATTEMPT_RAW_FILE:-}" ] && _record=$(_attempt_tool_record "$ATTEMPT_RAW_FILE")
+
+    if [ "$_of_attempt" -eq 0 ]; then
+        if [ -z "$(printf '%s' "$_stat" | tr -d '[:space:]')" ]; then
+            printf 'No attempt of this story has run in this run yet, and the codeline does not differ from %s.\n' "$_ref"
+        else
+            printf 'No attempt of this story has run in this run yet — this is NOT your previous attempt. The codeline differs from %s in these files (other stories'"'"' work included; what an earlier run left):\n\n%s\n' "$_ref" "$_stat"
+        fi
+        return 0
+    fi
 
     if [ -z "$(printf '%s' "$_stat" | tr -d '[:space:]')" ]; then
         # THE MOST IMPORTANT CASE. An empty summary reads as "no information", and the next

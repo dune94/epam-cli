@@ -1600,6 +1600,39 @@ _escalation_adopt_owned_status() {
     done
 }
 
+# _archive_prior_escalation <story_id> — at the START of an attempt, an escalation record already on
+# the codeline was filed before this attempt: by an earlier attempt, or an earlier run that stopped
+# before resolving it. It is INFORMATION, not a decision this attempt made. It is kept — moved to
+# .epam/escalations/history/<story>-<when>.json — and handed to this attempt's failure analyst
+# (_escalation_history_for), which re-files it if its own diagnosis agrees. Only a record filed
+# DURING this attempt starts a scoped fix. Live 2026-09-24 (£0 POC on the frozen live state, BREAK
+# 3): the analyst produced nothing usable, and an escalation fired anyway from a record the
+# PREVIOUS run wrote.
+_archive_prior_escalation() {
+    local _id="${1:?story}" _f _hist _when
+    _f="${PROJECT_ROOT}/.epam/escalations/${_id}.json"
+    [ -f "$_f" ] || return 0
+    _hist="${PROJECT_ROOT}/.epam/escalations/history"
+    mkdir -p "$_hist" 2>/dev/null || return 0
+    _when="$(date -u -d "@$(stat -c %Y "$_f" 2>/dev/null || date +%s)" +%Y%m%dT%H%M%SZ 2>/dev/null)"
+    if mv "$_f" "${_hist}/${_id}-${_when}.json" 2>/dev/null; then
+        log "  [Escalation] a record for ${_id} filed ${_when}, before this attempt began, is kept as history (.epam/escalations/history/${_id}-${_when}.json) — this attempt's analyst is shown it; it starts nothing by itself"
+    fi
+    return 0
+}
+
+# _escalation_history_for <story_id> — the escalations filed for this story before, for its analyst.
+_escalation_history_for() {
+    local _id="${1:?story}" _f _any=0
+    for _f in "${PROJECT_ROOT}/.epam/escalations/history/${_id}"-*.json; do
+        [ -f "$_f" ] || continue
+        [ "$_any" -eq 0 ] && printf 'Escalations filed for this story BEFORE this attempt (history — none of them was confirmed by this attempt; re-escalate only if your own diagnosis agrees):\n'
+        _any=1
+        jq -r --arg f "$(basename "$_f")" '"- " + $f + ": " + (.targetFile // "?") + " — " + (.diagnosis // "") + (if (.requiredFix // "") != "" then " | required fix: " + .requiredFix else "" end)' "$_f" 2>/dev/null
+    done
+    return 0
+}
+
 resolve_escalation() {
     local escalating_story_id="$1"
     local escalation_file="${PROJECT_ROOT}/.epam/escalations/${escalating_story_id}.json"

@@ -31,7 +31,14 @@ const path = require('path');
  */
 function storeDir(env) {
   const e = env || process.env;
-  return e.AGENT_IO_DIR || path.join(e.LOG_DIR || '/tmp', 'agent-io');
+  if (e.AGENT_IO_DIR) return e.AGENT_IO_DIR;
+  // NO MACHINE-WIDE FALLBACK. This fell back to /tmp/agent-io whenever LOG_DIR was not exported —
+  // and claude.sh did not export it, so every claude.sh started directly (the one-story harness,
+  // both paid REGI-009a runs of 2026-09-24, the frozen-state POC) shared ONE store with every run,
+  // project and process on the machine; a new run's first attempt was handed evidence a previous
+  // run wrote. A hand-off with no run to belong to is refused, loudly.
+  if (!e.LOG_DIR) throw new Error('[agent-io] no run to scope this hand-off to: LOG_DIR (or AGENT_IO_DIR) is not in the environment — refusing the machine-wide /tmp store');
+  return path.join(e.LOG_DIR, 'agent-io');
 }
 
 /** A filesystem-safe key. Kinds and story ids come from data, so they are never used raw. */

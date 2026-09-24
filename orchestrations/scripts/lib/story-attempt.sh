@@ -1204,6 +1204,8 @@ implement_story() {
     # the rung persisted below is where the next escalation resumes. No budget → no effect.
     while [ $retry_count -le $MAX_RETRIES ] && escalation_budget_allows "$((_total_attempts - _free_attempts))"; do
         _total_attempts=$((_total_attempts + 1))
+        # A record already on the codeline was filed before this attempt: history, not a trigger.
+        declare -F _archive_prior_escalation >/dev/null 2>&1 && _archive_prior_escalation "$story_id"
         # Inference ladder: on retry, escalate to a stronger model + increase reasoning effort.
         # Priority: PRD retryModel > EPAM_RETRY_MODEL env var > built-in get_model_ladder_step().
         # Principle: NEVER retry with the same model — every failure steps up. Logged visibly.

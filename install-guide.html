@@ -266,9 +266,10 @@ never recorded can never be replayed.
 </div>
 <p>Re-running <code>install.sh</code> against an existing <code>--dest</code> is an UPDATE, not a
 fresh install: app code updates, but an operator's edited project config
-(<code>config.env</code>, <code>llm-settings.json</code>, five engine-wide
-<code>orchestrations/config/*.json</code> files) and accumulated run state
-(<code>orchestrations/logs</code>, <code>phase-cost.jsonl</code>, KB files) both survive untouched.</p>
+(<code>config.env</code>, <code>llm-settings.json</code>) and accumulated run state
+(<code>orchestrations/logs</code>, <code>phase-cost.jsonl</code>, KB files) both survive untouched.
+The five engine-wide <code>orchestrations/config/*.json</code> files are merged: every key in your
+copy keeps your value, and every key the new ref adds arrives.</p>
 <p>Prerequisites are listed in full in <a href="#prereq">§1</a> — <code>git</code>,
 <code>jq</code>, <code>node</code> (version <strong>unchecked by the installer</strong>, but 20 is
 required), <code>python3</code>, and the declared stack's own runner.</p>

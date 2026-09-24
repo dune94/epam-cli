@@ -126,6 +126,9 @@ deliberately non-destructive:
 - `operator-config-paths.json` and `generated-run-state-paths.json` are snapshotted before the
   extraction and restored after it, so your `config.env` (and a run's minted agent state) survive an
   update while a *fresh* install still receives them for the first time.
+- A preserved file that is a JSON object on both sides (the engine-wide catalogues under
+  `orchestrations/config/`) is merged rather than restored as-is: every key in your copy keeps your
+  value, and every key the new ref adds arrives. Any other preserved file is restored unchanged.
 
 ### 2c. All flags
 

@@ -11,7 +11,7 @@ _LLM_HANDLER_DIR="$(cd "$(dirname "${BASH_SOURCE[0]}")" && pwd)"
 # Reads prompt from stdin, executes with configured provider, prints text output.
 set -euo pipefail
 
-EPAM_CLI="${EPAM_CLI:-epam}"
+EPAM_CLI="${EPAM_CLI:-$(cd "$(dirname "${BASH_SOURCE[0]}")" && pwd)/bin/epam}"
 CLAUDE_CMD="${CLAUDE_CMD:-claude}"
 AI_MODEL="${AI_MODEL:-}"
 # resolve_primary_provider() now lives in lib/resolve-primary-provider.sh, extracted

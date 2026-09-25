@@ -126,7 +126,7 @@ run_orch_prompt() (
         AI_PROVIDER="$gate_provider" \
         AI_MODEL="$gate_model" \
         CLAUDE_CMD="$CLAUDE_CMD" \
-        EPAM_CLI="${EPAM_CLI:-epam}" \
+        EPAM_CLI="${EPAM_CLI:-$(dirname "${BASH_SOURCE[0]}")/../bin/epam}" \
         EPAM_AGENT_NAME="${EPAM_AGENT_NAME:-$agent_type}" \
         EPAM_STORY_ID="${EPAM_STORY_ID:-$story_id}" \
         ORCH_JSON_RESULT="$json_result_file" \

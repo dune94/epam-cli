@@ -1,0 +1,10 @@
+#!/usr/bin/env bash
+# THIS INSTALL'S CLI — the dist/epam.js of the install this file sits in, never a command on PATH.
+#
+# Every pipeline script called the model through `EPAM_CLI="${EPAM_CLI:-epam}"`, which resolved
+# through PATH to the machine-wide ~/.local/bin/epam shim — pointing at whichever install ran the
+# installer LAST. A run in one install executed another install's CLI, and a £0 test of this
+# repository executed an installed copy's (found 2026-09-25). An install is autonomous: it runs
+# its own. EPAM_CLI still overrides this (a mock, for zero-token testing).
+_install_root="$(cd "$(dirname "${BASH_SOURCE[0]}")/../../.." && pwd)"
+exec "${NODE_BIN:-node}" "$_install_root/dist/epam.js" "$@"

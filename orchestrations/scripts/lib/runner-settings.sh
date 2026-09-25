@@ -245,7 +245,7 @@ runner_bin_for() {
     if [ -n "$_provider" ] && [ -f "$_cfg" ] && command -v jq >/dev/null 2>&1; then
         _bin=$(jq -r --arg p "$_provider" '.cliBinary[$p] // empty' "$_cfg" 2>/dev/null)
         if [ "$_bin" = '$EPAM_CLI' ]; then
-            printf '%s' "${EPAM_CLI:-epam}"; return 0
+            printf '%s' "${EPAM_CLI:-$(dirname "${BASH_SOURCE[0]}")/../bin/epam}"; return 0
         fi
         if [ -n "$_bin" ]; then printf '%s' "$_bin"; return 0; fi
     fi

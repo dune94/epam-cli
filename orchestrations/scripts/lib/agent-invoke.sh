@@ -309,7 +309,7 @@ invoke_agent() {
         "AI_MODEL=${_model:-${AI_MODEL:-}}"
         "AI_PROVIDER=${_provider:-${AI_PROVIDER:-}}"
         "CLAUDE_CMD=${CLAUDE_CMD:-claude}"
-        "EPAM_CLI=${EPAM_CLI:-epam}"
+        "EPAM_CLI=${EPAM_CLI:-$(dirname "${BASH_SOURCE[0]}")/../bin/epam}"
         "EPAM_MAX_OUTPUT_TOKENS=$_out_tok"
         "EPAM_MAX_ITERATIONS=$_max_iter"
         "EPAM_REASONING_EFFORT=$_effort"

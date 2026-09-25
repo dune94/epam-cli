@@ -1587,7 +1587,7 @@ step_emit "22f" "skip" "Step 22f: Perf sentinel" "Phase A/B failed"
                         AI_MODEL="${_gfa_model}" \
                         EPAM_DANGEROUS_SKIP_APPROVAL=1 \
                         CLAUDE_CMD="$CLAUDE_CMD" \
-                        EPAM_CLI="${EPAM_CLI:-epam}" \
+                        EPAM_CLI="${EPAM_CLI:-$(dirname "${BASH_SOURCE[0]}")/../bin/epam}" \
                         "$AI_RUNNER_CMD" \
                             --provider "${ORCH_GATE_PROVIDER:-}" \
                             --model    "${_gfa_model}" \
@@ -1702,7 +1702,7 @@ step_emit "22f" "skip" "Step 22f: Perf sentinel" "Phase A/B failed"
                     _acr_raw=$(echo "$_acr_prompt" | \
                         AI_PROVIDER="${ORCH_GATE_PROVIDER:-}" \
                         AI_MODEL="${_acr_model}" \
-                        EPAM_CLI="${EPAM_CLI:-epam}" \
+                        EPAM_CLI="${EPAM_CLI:-$(dirname "${BASH_SOURCE[0]}")/../bin/epam}" \
                         "$AI_RUNNER_CMD" \
                             --provider "${ORCH_GATE_PROVIDER:-}" \
                             --model    "${_acr_model}" \
@@ -1793,7 +1793,7 @@ $_prof_prompt"
                         EPAM_DANGEROUS_SKIP_APPROVAL=1 \
                         EPAM_MAX_TOOL_CALLS="${PROFILE_AUGMENTOR_MAX_TOOL_CALLS:-10}" \
                         CLAUDE_CMD="$CLAUDE_CMD" \
-                        EPAM_CLI="${EPAM_CLI:-epam}" \
+                        EPAM_CLI="${EPAM_CLI:-$(dirname "${BASH_SOURCE[0]}")/../bin/epam}" \
                         "$AI_RUNNER_CMD" \
                             --provider "${ORCH_GATE_PROVIDER:-}" \
                             --model    "$(seam_model_or_fail "profile-augmentor")" \
@@ -1879,7 +1879,7 @@ $_prof_prompt"
                             $(_render_change_reviewer "gate-remediation" "profile_addendum" "THE CHANGE ITSELF (unified diff of the roster before and after):\n${_profiles_change}")" | \
                                 AI_PROVIDER="${ORCH_GATE_PROVIDER:-}" \
                                 AI_MODEL="${_pa_model}" \
-                                EPAM_CLI="${EPAM_CLI:-epam}" \
+                                EPAM_CLI="${EPAM_CLI:-$(dirname "${BASH_SOURCE[0]}")/../bin/epam}" \
                                 "$AI_RUNNER_CMD" \
                                     --provider "${ORCH_GATE_PROVIDER:-}" \
                                     --model    "${_pa_model}" \

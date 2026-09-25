@@ -1277,7 +1277,7 @@ ${_cpa_after}
 Emit ONLY: {\"verdict\":\"pass|fail\",\"issues\":[],\"reason\":\"\"}" | \
           AI_PROVIDER="${ORCH_GATE_PROVIDER}" \
           AI_MODEL="${EPAM_MODEL:-}" \
-          EPAM_CLI="${EPAM_CLI:-epam}" \
+          EPAM_CLI="${EPAM_CLI:-$SCRIPT_DIR/bin/epam}" \
           EPAM_MAX_OUTPUT_TOKENS="${CPA_GATE_MAX_OUTPUT_TOKENS:-16384}" \
           "$_cpa_ai_runner_cmd" \
               --provider "${ORCH_GATE_PROVIDER}" \

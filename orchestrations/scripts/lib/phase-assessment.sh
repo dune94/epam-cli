@@ -397,7 +397,7 @@ run_pre_phase_assessment() {
         $(_render_change_reviewer "pre-phase-assessment-${phase_id}" "profile_creation" "BEFORE/AFTER DIFF:\n${_pfa_diff}")" | \
                         AI_PROVIDER="${ORCH_GATE_PROVIDER}" \
                         AI_MODEL="$(seam_model_or_fail "prd-change-reviewer")" \
-                        EPAM_CLI="${EPAM_CLI:-epam}" \
+                        EPAM_CLI="${EPAM_CLI:-$(dirname "${BASH_SOURCE[0]}")/../bin/epam}" \
                         "$AI_RUNNER_CMD" \
                             --provider "${ORCH_GATE_PROVIDER}" \
                             --model    "$(seam_model_or_fail "prd-change-reviewer")" \

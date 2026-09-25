@@ -7,6 +7,6 @@
 set -euo pipefail
 SCRIPT_DIR="$(cd "$(dirname "${BASH_SOURCE[0]}")" && pwd)"
 # Ensure epam-run provider cases in claude.sh are reachable for per-story routing
-export EPAM_CLI="${EPAM_CLI:-epam}"
+export EPAM_CLI="${EPAM_CLI:-$SCRIPT_DIR/bin/epam}"
 export CLAUDE_CMD="${CLAUDE_CMD:-claude}"  # fallback for non-epam stories
 exec "$SCRIPT_DIR/claude.sh" "$@"

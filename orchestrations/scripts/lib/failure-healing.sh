@@ -519,7 +519,7 @@ classify_failure_class() {
         # Active crash diagnosis: check API key and binary health
         local _diag_ok=true
         # 1. Check epam binary is executable
-        if ! command -v "${EPAM_CLI:-epam}" >/dev/null 2>&1; then
+        if ! command -v "${EPAM_CLI:-$(dirname "${BASH_SOURCE[0]}")/../bin/epam}" >/dev/null 2>&1; then
             warning "  Coordinator[Diag]: epam binary not found on PATH — check EPAM_CLI or PATH"
             _diag_ok=false
         fi

@@ -37,6 +37,9 @@ set -euo pipefail
 
 SCRIPT_DIR="$(cd "$(dirname "${BASH_SOURCE[0]}")" && pwd)"
 REPO_ROOT="$(cd "$SCRIPT_DIR/../.." && pwd)"
+# A RUN TOUCHES ONLY ITS OWN INSTALL. Tools that cache (the codeline's dependency install among them)
+# write to $XDG_CACHE_HOME, default ~/.cache — outside the install. The run's cache lives in it.
+export XDG_CACHE_HOME="$REPO_ROOT/.cache"
 # shellcheck source=lib/project-config.sh
 . "$SCRIPT_DIR/lib/project-config.sh"
 

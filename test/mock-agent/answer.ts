@@ -50,14 +50,19 @@ const keysOf = (v: unknown): string[] => (v && typeof v === 'object' && !Array.i
 
 /** The exemplar the prompt states for this answer: the JSON object carrying most of the required keys. */
 export function exemplar(prompt: string, contract?: Contract, templateText = ''): Record<string, unknown> | null {
-  // THE TEMPLATE'S OWN EXAMPLE FIRST. A rendered prompt also carries INPUT — evidence, stories,
-  // earlier answers — much of it JSON, often after the stated format; the answer's shape is the one
-  // the template itself shows (retry-extension's evidence block was taken for its format).
-  if (templateText) {
-    const own = exemplarIn(templateText.replace(/__[A-Z][A-Z0-9_]*__/g, ''), contract);
-    if (own) return own;
-  }
-  return exemplarIn(prompt, contract);
+  // THE PROMPT AS SENT IS WHAT A MODEL ANSWERS. A resumed run keeps the project prompts it built,
+  // so the rendered prompt can differ from the template on disk — a model follows the prompt.
+  // The template only tells a FORMAT apart from INPUT (evidence, stories, earlier answers, much of
+  // it JSON): among the prompt's own examples, the one shaped like the template's example wins.
+  const fromPrompt = exemplarIn(prompt, contract);
+  if (!templateText) return fromPrompt;
+  const own = exemplarIn(templateText.replace(/__[A-Z][A-Z0-9_]*__/g, ''), contract);
+  if (!own) return fromPrompt;
+  const shape = (v: unknown) => keysOf(v).sort().join(',');
+  const same = jsonValues(prompt).filter((v) => shape(v) === shape(own)) as Record<string, unknown>[];
+  if (!same.length) return fromPrompt;
+  // Several of that shape ("{pass…} OR {fail…}"): the clean one, as exemplarIn chooses.
+  return exemplarIn(same.map((v) => JSON.stringify(v)).join('\n'), contract) || same[0];
 }
 
 function exemplarIn(prompt: string, contract?: Contract): Record<string, unknown> | null {

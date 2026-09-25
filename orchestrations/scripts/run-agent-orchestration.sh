@@ -1184,7 +1184,7 @@ if ! is_truthy "${SKIP_CPA:-}" && [ -f "$CPA_SCRIPT" ]; then
     # and the case statement below always took the "0) pass" branch.
     # PIPESTATUS[0] captures $CPA_SCRIPT's real exit code regardless of tee's success.
     # shellcheck disable=SC2086
-    CLAUDE_CMD="$CLAUDE_CMD" AI_RUNNER_CMD="$AI_RUNNER_CMD" EPAM_CLI="${EPAM_CLI:-epam}" \
+    CLAUDE_CMD="$CLAUDE_CMD" AI_RUNNER_CMD="$AI_RUNNER_CMD" EPAM_CLI="${EPAM_CLI:-$SCRIPT_DIR/bin/epam}" \
         PREV_PHASE_HANDOFF_FILE="${_prev_handoff:-}" \
         bash "$CPA_SCRIPT" $cpa_flags 2>&1 | tee "$LOG_DIR/cpa-${PHASE}.log"
     cpa_exit="${PIPESTATUS[0]}"
@@ -2002,7 +2002,7 @@ else
             EPAM_DANGEROUS_SKIP_APPROVAL=1 \
             EPAM_MAX_TOOL_CALLS="${PRD_MODEL_COORDINATOR_MAX_TOOL_CALLS:-12}" \
             CLAUDE_CMD="$CLAUDE_CMD" \
-            EPAM_CLI="${EPAM_CLI:-epam}" \
+            EPAM_CLI="${EPAM_CLI:-$SCRIPT_DIR/bin/epam}" \
             "$AI_RUNNER_CMD" \
                 ${ORCH_GATE_PROVIDER:+--provider "$ORCH_GATE_PROVIDER"} \
                 ${EPAM_MODEL:+--model "$EPAM_MODEL"} \
@@ -4001,7 +4001,7 @@ if ! is_truthy "${SKIP_LINT_GATE:-}" && [ -n "$_node_bin" ] && [ -x "$_node_bin"
                 # did. See gate-finding-analyst-dual-mechanism.test.ts.
                 _gate_provider="$(resolve_primary_provider "${ORCH_GATE_PROVIDER:-}")"
                 _lga_raw="$(echo "$_lga_prompt" | \
-                    timeout "${EPAM_GATE_TIMEOUT_SECS}" epam run ${_gate_provider:+--provider "$_gate_provider"} \
+                    timeout "${EPAM_GATE_TIMEOUT_SECS}" "${EPAM_CLI:-$SCRIPT_DIR/bin/epam}" run ${_gate_provider:+--provider "$_gate_provider"} \
                         --model "${_lga_model}" \
                         --json - 2>>"$_lint_rem_log" || echo "")"
                 if [ -n "$_lga_raw" ]; then
@@ -4053,7 +4053,7 @@ if m:
                     fi
                     _gate_provider="$(resolve_primary_provider "${ORCH_GATE_PROVIDER:-}")"
                     _lrem_raw="$(echo "$_lrem_prompt" | \
-                        timeout "${EPAM_GATE_TIMEOUT_SECS}" epam run ${_gate_provider:+--provider "$_gate_provider"} \
+                        timeout "${EPAM_GATE_TIMEOUT_SECS}" "${EPAM_CLI:-$SCRIPT_DIR/bin/epam}" run ${_gate_provider:+--provider "$_gate_provider"} \
                             --model "${_lrem_model}" \
                             --json - 2>>"$_lint_rem_log" || echo "")"
                     if [ -n "$_lrem_raw" ]; then
@@ -4078,14 +4078,14 @@ if m:
                 info "  [lint-gate:augmentor] Recording lint anti-pattern in profile..."
                 _gate_provider="$(resolve_primary_provider "${ORCH_GATE_PROVIDER:-}")"
                 _laug_raw="$(echo "$_lint_finding_raw" | \
-                    timeout "${EPAM_GATE_TIMEOUT_SECS}" epam run ${_gate_provider:+--provider "$_gate_provider"} \
+                    timeout "${EPAM_GATE_TIMEOUT_SECS}" "${EPAM_CLI:-$SCRIPT_DIR/bin/epam}" run ${_gate_provider:+--provider "$_gate_provider"} \
                         --model "$(seam_model_or_fail "gate-finding-analyst")" \
                         --json - 2>>"$_lint_rem_log" || echo "")"
                 if [ -z "$_laug_raw" ]; then
                     warning "  [lint-gate:augmentor] attempt 1 returned no output — retrying"
                     _gate_provider="$(resolve_primary_provider "${ORCH_GATE_PROVIDER:-}")"
                     echo "$_lint_finding_raw" | \
-                        timeout "${EPAM_GATE_TIMEOUT_SECS}" epam run ${_gate_provider:+--provider "$_gate_provider"} \
+                        timeout "${EPAM_GATE_TIMEOUT_SECS}" "${EPAM_CLI:-$SCRIPT_DIR/bin/epam}" run ${_gate_provider:+--provider "$_gate_provider"} \
                             --model "$(seam_model_or_fail "story-ac-remediator")" \
                             --json - 2>>"$_lint_rem_log" || true
                 fi

@@ -137,3 +137,5 @@ orchestrations/scripts/.inlined/
 
 # mock-agent journals: every exchange of a £0 run, kept for diagnosis
 test-results/
+# a run's tool cache lives in its install (tier3-run.sh XDG_CACHE_HOME)
+.cache/

@@ -190,7 +190,7 @@ CURRENT_PHASE=""        # Current phase being executed (for cost tracking)
 
 # Configuration
 CLAUDE_CMD="${CLAUDE_CMD:-claude}"  # Allow override via environment
-EPAM_CLI="${EPAM_CLI:-epam}"        # epam-cli binary; override with mock for testing
+EPAM_CLI="${EPAM_CLI:-$SCRIPT_DIR/bin/epam}"        # epam-cli binary; override with mock for testing
 MAX_RETRIES="${EPAM_MAX_RETRIES:-7}"
 RETRY_DELAY=5
 # Orchestration mode — inherited from run-agent-orchestration.sh or set directly

@@ -143,7 +143,7 @@ run_review_prompt() {
     echo "$prompt_text" | \
         AI_MODEL="$_CRC_MODEL" \
         CLAUDE_CMD="${CLAUDE_CMD:-claude}" \
-        EPAM_CLI="${EPAM_CLI:-epam}" \
+        EPAM_CLI="${EPAM_CLI:-$SCRIPT_DIR/bin/epam}" \
         EPAM_MAX_OUTPUT_TOKENS="${CODE_REVIEW_MAX_OUTPUT_TOKENS:-32768}" \
         "$AI_RUNNER_CMD" "${_crc_provider_flag[@]}" \
             --model "$_CRC_MODEL" 2>&1

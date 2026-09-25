@@ -120,3 +120,21 @@ export function jsonSchemaFields(schema: any, defs: any = schema?.$defs || schem
     return f;
   });
 }
+
+/**
+ * Values a rendered field leaves open, taken from the template's own example of the same field
+ * (`"verdict": "approved|needs_review"` beside a rendered `<string>`) — a model reads both.
+ */
+export function withExampleEnums(fields: Field[], example: unknown): Field[] {
+  const options = new Map<string, string[]>();
+  const walk = (v: unknown) => {
+    if (Array.isArray(v)) v.forEach(walk);
+    else if (v && typeof v === 'object') for (const [k, x] of Object.entries(v)) {
+      if (typeof x === 'string') { const o = x.replace(/\s*\(.*\)\s*$/, '').split('|').map((s) => s.trim()); if (o.length > 1 && o.every((s) => /^[A-Za-z_][\w:-]*$/.test(s))) options.set(k, o); }
+      else walk(x);
+    }
+  };
+  walk(example);
+  const apply = (fs: Field[]): Field[] => fs.map((f) => ({ ...f, enum: f.enum?.length ? f.enum : options.get(f.name), items: f.items && apply(f.items), fields: f.fields && apply(f.fields) }));
+  return options.size ? apply(fields) : fields;
+}

@@ -96,13 +96,15 @@ export class MockAgent {
     // RECONCILED BEFORE SERVED: a correct answer the current contract cannot accommodate is a stale
     // mock. It is recorded and replaced by an HTTP error, so the run shows the mock's fault as the
     // mock's, never as a pipeline defect.
-    const conflict = contractConflict(whole, this.decl.contractOf(seam));
+    const tplText = this.decl.templateText(call.template);
+    const conflict = contractConflict(whole, this.decl.contractOf(seam), tplText);
     if (conflict.length && !this.conflicts.has(call.template)) this.conflicts.set(call.template, { seam, template: call.template, reasons: conflict });
     const neg = (turn as { negative?: string }).negative || '';
-    const stale = !neg && turn.kind === 'text' ? reconcile(turn.text, this.decl.contractOf(seam), whole) : [];
+    const stale = !neg && turn.kind === 'text' ? reconcile(turn.text, this.decl.contractOf(seam), whole, tplText) : [];
+    const refused = stale.length && turn.kind === 'text' ? turn.text : '';
     if (stale.length) { this.stale.push({ n: call.n, seam, reasons: stale }); turn = { kind: 'http-error', status: 599, body: JSON.stringify({ error: { message: `STALE MOCK for ${seam}: ${stale.join('; ')}` } }) }; }
     const file = join(this.journal, `${String(call.n).padStart(4, '0')}-${seam.replace(/[^\w.-]+/g, '_')}${story ? `-${story}` : ''}.json`);
-    writeFileSync(file, JSON.stringify({ n: call.n, path, seam, template: call.template, coverage: call.coverage, story, attempt: call.attempt, negative: neg, stale, turn, error, request: JSON.parse(raw) }, null, 1));
+    writeFileSync(file, JSON.stringify({ n: call.n, path, seam, template: call.template, coverage: call.coverage, story, attempt: call.attempt, negative: neg, stale, refused, turn, error, request: JSON.parse(raw) }, null, 1));
     if (turn.kind === 'hang') return; // the client's own timeout is what is under test
     const out = encode(req, turn);
     res.writeHead(out.status, out.headers); res.end(out.body);

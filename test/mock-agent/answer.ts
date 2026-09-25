@@ -49,22 +49,44 @@ export function jsonValues(text: string): unknown[] {
 const keysOf = (v: unknown): string[] => (v && typeof v === 'object' && !Array.isArray(v) ? Object.keys(v as object) : []);
 
 /** The exemplar the prompt states for this answer: the JSON object carrying most of the required keys. */
-export function exemplar(prompt: string, contract?: Contract): Record<string, unknown> | null {
+export function exemplar(prompt: string, contract?: Contract, templateText = ''): Record<string, unknown> | null {
+  // THE TEMPLATE'S OWN EXAMPLE FIRST. A rendered prompt also carries INPUT — evidence, stories,
+  // earlier answers — much of it JSON, often after the stated format; the answer's shape is the one
+  // the template itself shows (retry-extension's evidence block was taken for its format).
+  if (templateText) {
+    const own = exemplarIn(templateText.replace(/__[A-Z][A-Z0-9_]*__/g, ''), contract);
+    if (own) return own;
+  }
+  return exemplarIn(prompt, contract);
+}
+
+function exemplarIn(prompt: string, contract?: Contract): Record<string, unknown> | null {
   const req = contract?.requiredKeys || [];
   const known = new Set([...(contract?.knownKeys || []), ...req]);
-  let best: { v: Record<string, unknown>; score: number } | null = null;
-  let last: Record<string, unknown> | null = null;
-  for (const v of jsonValues(prompt)) {
-    if (keysOf(v).length) last = v as Record<string, unknown>;
-    const k = keysOf(v); if (!k.length) continue;
-    const score = req.filter((r) => k.includes(r)).length * 10 + k.filter((x) => known.has(x)).length;
-    // With no declared keys, the answer format is the LAST object the prompt shows: prompts end with it.
-    const s2 = req.length || known.size ? score : 1;
-    if (s2 > 0 && (!best || s2 >= best.score)) best = { v: v as Record<string, unknown>, score: s2 };
+  const scored: { v: Record<string, unknown>; score: number; at: number }[] = [];
+  jsonValues(prompt).forEach((v, at) => {
+    const k = keysOf(v); if (!k.length) return;
+    // With no declared keys, every object shown is a candidate format.
+    const score = req.length || known.size ? req.filter((r) => k.includes(r)).length * 10 + k.filter((x) => known.has(x)).length : 1;
+    if (score > 0) scored.push({ v: v as Record<string, unknown>, score, at });
+  });
+  // No shown object carries the contract's keys: the prompt's own LAST stated format is what a model
+  // follows (the disagreement with the contract is reported as a conflict, not papered over).
+  if (!scored.length) {
+    const last = jsonValues(prompt).filter((v) => keysOf(v).length).pop();
+    return (last as Record<string, unknown>) || null;
   }
-  // No example carries the contract's keys: the prompt's own last-stated format is what a model
-  // follows — the disagreement with the contract is reported as a conflict, not papered over.
-  return best ? best.v : last;
+  const top = Math.max(...scored.map((c) => c.score));
+  // Among formats that fit equally, a prompt often shows ALTERNATIVES ("{pass…} OR {fail…}"). The
+  // answer a model gives on sound work is the CLEAN one — no findings listed — so that wins; then
+  // the last shown, since answer formats come after a prompt's input.
+  const filled = (v: Record<string, unknown>) => Object.values(v).filter((x) => Array.isArray(x) && x.length > 0).length;
+  const shapeOf = (v: Record<string, unknown>) => Object.keys(v).sort().join(',');
+  const best = scored.filter((c) => c.score === top);
+  const lastShape = shapeOf(best[best.length - 1].v);
+  const alternatives = best.filter((c) => shapeOf(c.v) === lastShape);
+  alternatives.sort((a, b) => (filled(a.v) - filled(b.v)) || (b.at - a.at));
+  return alternatives[0].v;
 }
 
 /**
@@ -117,7 +139,7 @@ export function storyIds(text: string, known: string[]): string[] {
  * seam's current declared contract; any mismatch is reported as a STALE MOCK and never served.
  * Returns the reasons it does not fit (empty = fits).
  */
-export function reconcile(text: string, contract: Contract | undefined, prompt: string): string[] {
+export function reconcile(text: string, contract: Contract | undefined, prompt: string, templateText = ''): string[] {
   // THE FORMAT THE PROMPT STATES is what the current code asks of the model on this call.
   const rendered = renderedFor(prompt, contract);
   if (rendered && !rendered.tag) {
@@ -133,7 +155,7 @@ export function reconcile(text: string, contract: Contract | undefined, prompt: 
   // A seam whose declared answer is not JSON (it writes an artefact, or declares nothing) is not
   // held to a JSON example that happens to appear in its prompt — builders embed other templates.
   const jsonKinds = ['declared', 'schema', 'verdict', 'per-story-map'];
-  const ex = contract && jsonKinds.includes(contract.kind) ? exemplar(prompt, contract) : null;
+  const ex = contract && jsonKinds.includes(contract.kind) ? exemplar(prompt, contract, templateText) : null;
   if (ex) {
     const v = jsonValues(text).find((x) => x && typeof x === 'object' && !Array.isArray(x)) as Record<string, unknown> | undefined;
     if (!v) return ['no JSON answer, but the prompt shows one'];
@@ -141,7 +163,8 @@ export function reconcile(text: string, contract: Contract | undefined, prompt: 
     const wanted = Object.entries(ex).filter(([, x]) => !/\(optional\b|\bomit\b/i.test(JSON.stringify(x))).map(([k]) => k);
     return contract?.kind === 'per-story-map' ? [] : wanted.filter((k) => !(k in v)).map((k) => `key '${k}' the prompt shows is missing`);
   }
-  if (contract && jsonKinds.includes(contract.kind) && contract.kind !== 'verdict') return [`no JSON answer, but the ${contract.kind} contract expects one`];
+  if (contract && jsonKinds.includes(contract.kind) && contract.kind !== 'verdict'
+      && !jsonValues(text).some((x) => x && typeof x === 'object')) return [`no JSON answer, but the ${contract.kind} contract expects one`];
   return [];
 }
 
@@ -149,12 +172,14 @@ export function reconcile(text: string, contract: Contract | undefined, prompt: 
  * WHERE THE PROMPT AND THE SEAM'S DECLARED CONTRACT DISAGREE — a pipeline finding, not a mock fault:
  * a model that follows the prompt gives an answer the contract rejects (or the reverse).
  */
-export function contractConflict(prompt: string, contract: Contract | undefined): string[] {
+export function contractConflict(prompt: string, contract: Contract | undefined, templateText = ''): string[] {
   if (!contract) return [];
   const rendered = renderedFor(prompt, contract);
-  const shown = rendered ? rendered.fields.map((f) => f.name) : Object.keys(exemplar(prompt, contract) || {});
+  const shown = rendered ? rendered.fields.map((f) => f.name) : Object.keys(exemplar(prompt, contract, templateText) || {});
   const out: string[] = [];
-  if (contract.tag && !prompt.includes(`<${contract.tag}>`)) out.push(`the contract requires a <${contract.tag}> block the prompt never asks for`);
+  // A sub-prompt that renders its OWN tagged block is validated by that tag at its call site, not
+  // by the seam's main tag — only a prompt that asks for no block at all disagrees with the contract.
+  if (contract.tag && !prompt.includes(`<${contract.tag}>`) && !renderedSchemas(prompt).length) out.push(`the contract requires a <${contract.tag}> block the prompt never asks for`);
   if (shown.length && contract.kind !== 'per-story-map') {
     const missing = (contract.requiredKeys || []).filter((k) => !shown.includes(k));
     if (missing.length) out.push(`the prompt asks for {${shown.join(', ')}} but the contract requires ${missing.join(', ')}`);
@@ -192,13 +217,13 @@ export type Filler = (f: Field, path: string) => unknown;
  * THE DEFAULT ANSWER for any seam: the contract the prompt renders, else the JSON exemplar it shows,
  * built with the seam's filler (values from the request). A seam with neither states no format.
  */
-export function defaultAnswer(prompt: string, contract: Contract | undefined, filler: Filler = () => undefined): string | null {
+export function defaultAnswer(prompt: string, contract: Contract | undefined, filler: Filler = () => undefined, templateText = ''): string | null {
   const rendered = renderedFor(prompt, contract);
   if (rendered) {
     const body = JSON.stringify(build(rendered.fields, filler), null, 2);
     return rendered.tag ? `<${rendered.tag}>\n${body}\n</${rendered.tag}>` : withPreferred(body, contract);
   }
-  const ex = exemplar(prompt, contract);
+  const ex = exemplar(prompt, contract, templateText);
   if (ex) return withPreferred(JSON.stringify(fill(ex, (_k, o) => o[0])), contract);
   return null;
 }

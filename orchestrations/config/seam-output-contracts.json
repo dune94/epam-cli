@@ -271,9 +271,14 @@
         "tc_patches",
         "skill_note",
         "tool_spec",
-        "reason"
+        "reason",
+        "evidence",
+        "expected_outcome",
+        "escalation",
+        "provisioning"
       ],
-      "_whyEvidence": "2026-09-20: evidence (what was read/run) and expected_outcome (what changes next attempt) let the ledger and the next analyst judge whether a prescription worked, instead of only whether the diagnosis text repeated."
+      "_whyEvidence": "2026-09-20: evidence (what was read/run) and expected_outcome (what changes next attempt) let the ledger and the next analyst judge whether a prescription worked, instead of only whether the diagnosis text repeated.",
+      "_whyKnownKeys": "evidence, expected_outcome, escalation and provisioning are asked for by the failure-analyst prompt and read by failure-healing.sh (provisioning raises the next attempt's budgets; evidence/expected_outcome reach the healing ledger and the next analyst; escalation is filed by _apply_analyst_escalation). They were missing here while `shapes` already named two of them (found 2026-09-25)."
     },
     "phase-assessment": {
       "kind": "declared",

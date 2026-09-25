@@ -117,10 +117,14 @@ describe('REGRESSION 2026-08-08: the live run returned prose and lost a good inv
   //   Failed to parse JSON for tag ESTATE_SURVEY: Unexpected token '#', "# AMSD-204"...
   // The proposal prompt that DOES work ends with an explicit "respond with ONLY valid JSON"
   // contract. This one ended with prose instructions and no contract at all.
-  it('the prompt ends with an explicit JSON-only output contract', async () => {
+  it('the prompt ends with ONE explicit output contract, and says prose outside it is discarded', async () => {
+    // The body also carried an older bare-JSON example ("Respond with ONLY valid JSON …") above
+    // the rendered <ESTATE_SURVEY> contract — two formats in one prompt (found 2026-09-25). The
+    // rendered contract is the one the consumer parses; it alone states the answer.
     const { prompt } = await survey();
-    expect(prompt).toMatch(/ONLY valid JSON/i);
-    expect(prompt, 'nothing told the agent not to wrap its answer in markdown').toMatch(/no markdown fences/i);
+    expect(prompt).toMatch(/Emit EXACTLY one <ESTATE_SURVEY> block/);
+    expect(prompt, 'nothing told the agent that prose outside the block is lost').toMatch(/Prose outside it is DISCARDED/);
+    expect(prompt, 'a second answer format is still stated').not.toMatch(/Respond with ONLY valid JSON/);
   }, 60_000);
 
   it('the contract names the exact keys the schema requires', async () => {

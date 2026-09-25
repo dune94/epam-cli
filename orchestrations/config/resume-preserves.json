@@ -13,7 +13,7 @@
     "prd-state": "The PRD on disk is the run's own working copy \u2014 never restored from the authored canonical (tier3-run 2026-09-16, pre-flight 2026-09-15).",
     "codeline": "The output directory holds the run's committed work; it is not torn down or reinitialised (tier3-run 2026-09-16).",
     "ledgers": "phase-gates, phase-cost, healing-events, run-guidance, code-reviews and the other JSONL ledgers under LOG_DIR, and the per-story writer-rung (story-rung/) and ladder-state (story-retry-state/) records, are this run's record \u2014 not archived or cleared (pre-run-reset 2026-09-18 and 2026-09-21, pre-flight 2026-09-19).",
-    "roster": "The roster and agent profiles this run minted and reviewed are reused byte-for-byte; the specialiser is not called again (pre-run-reset 2026-09-19).",
+    "roster": "The roster and agent profiles this run minted and reviewed are reused byte-for-byte; the specialiser is not called again (pre-run-reset 2026-09-19). Also across an engine release between pause and resume: an entry whose canonical ancestor changed is kept as reviewed and a canonical agent the release added is adopted verbatim, both recorded in logs/roster-release-drift.json \u2014 the roster is never re-derived (lib/project-roster.js keptAcrossRelease, 2026-09-25).",
     "prompts": "The prompt set built for this run's codeline is reused, not rebuilt (2026-09-19).",
     "fetched-documents": "Referenced documents and the estate survey fetched for this run are kept (pre-run-reset 2026-09-18).",
     "phase-gates": "A phase whose gate already decided GO is recognised as completed and not run again (greenfield-lifecycle 2026-09-16).",

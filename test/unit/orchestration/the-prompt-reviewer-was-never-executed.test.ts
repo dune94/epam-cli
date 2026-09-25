@@ -90,7 +90,9 @@ describe('the prompt reviewer was never executed', () => {
 
   it('FAILS OPEN WHEN IT CANNOT RUN — but SAYS SO', async () => {
     const { review, warnings } = reviewer(new Error('gate unreachable'));
-    expect((await review(ARTEFACT)).ok, 'a reviewer failure condemned a prompt it never read').toBe(true);
+    const out = await review(ARTEFACT);
+    expect(out.ok, 'a reviewer failure condemned a prompt it never read').not.toBe(false);
+    expect(out.reviewed, 'a review that never ran was recorded as reviewed').toBe(false);
     expect(warnings.join('\n'), 'the prompt was installed unreviewed and nothing said so')
       .toMatch(/UNREVIEWED/);
   });
@@ -99,19 +101,40 @@ describe('the prompt reviewer was never executed', () => {
     const { review, warnings } = reviewer(verdict({ falseClaims: [] }), {
       render: () => { throw new Error("missing values for: __TICKET_BLOCK__"); },
     });
-    expect((await review(ARTEFACT)).ok).toBe(true);
+    const out = await review(ARTEFACT);
+    expect(out.ok).not.toBe(false);
+    expect(out.reviewed).toBe(false);
     expect(warnings.join('\n'), 'a values/placeholder mismatch passed silently as approval')
       .toMatch(/could not build the reviewer's prompt.*UNREVIEWED/s);
   });
 
   it('fails open on prose and on invalid JSON, announcing each', async () => {
     const prose = reviewer('I read it and it looks fine to me.');
-    expect((await prose.review(ARTEFACT)).ok).toBe(true);
-    expect(prose.warnings.join('\n')).toMatch(/no parseable verdict/);
+    const p = await prose.review(ARTEFACT);
+    expect(p.ok).not.toBe(false);
+    expect(p.reviewed).toBe(false);
+    expect(prose.warnings.join('\n')).toMatch(/no verdict after \d+ attempt\(s\) — it held no <PROMPT_REVIEW> block/);
 
     const broken = reviewer('<PROMPT_REVIEW>{ not json</PROMPT_REVIEW>');
-    expect((await broken.review(ARTEFACT)).ok).toBe(true);
+    const b = await broken.review(ARTEFACT);
+    expect(b.ok).not.toBe(false);
+    expect(b.reviewed).toBe(false);
     expect(broken.warnings.join('\n')).toMatch(/not valid JSON/);
+  });
+
+  it('ASKS AGAIN when the review does not answer — one unreadable reply is not the end', async () => {
+    const replies = ['I read it and it looks fine to me.', '<PROMPT_REVIEW>{"falseClaims":[]}</PROMPT_REVIEW>'];
+    const asked: string[] = []; const warnings: string[] = [];
+    const review = makePromptReviewer({
+      render: () => 'the review prompt',
+      invoke: async (p: string) => { asked.push(p); return replies[asked.length - 1]; },
+      values: () => ({}), warn: (m: string) => warnings.push(m), projectConfigDir: '/nonexistent',
+    });
+    const out = await review(ARTEFACT);
+    expect(asked.length, 'the reviewer was not asked again after an unreadable reply').toBe(2);
+    expect(asked[1], 'the retry was not told why its first answer was unusable').toMatch(/COULD NOT BE READ: it held no <PROMPT_REVIEW> block/);
+    expect(out).toEqual({ ok: true, reviewed: true });
+    expect(warnings.join('\n'), 'a recovered review still announced itself as unreviewed').not.toMatch(/UNREVIEWED/);
   });
 
   it('tolerates a fenced verdict, which models emit routinely', async () => {
@@ -188,7 +211,8 @@ describe('the render adapter, against the real prompt library', () => {
     });
     const out = await review(ARTEFACT);
     expect(invoked, 'an empty prompt was sent to the model, buying a verdict about nothing').toBe(0);
-    expect(out.ok).toBe(true);
+    expect(out.ok).not.toBe(false);
+    expect(out.reviewed).toBe(false);
     expect(warnings.join('\n'), 'the inert reviewer said nothing').toMatch(/empty prompt.*UNREVIEWED/s);
   });
 });

@@ -186,6 +186,18 @@ _run_agent_mint() {
       log "[mint] deferred decision settled: ${_detected_cl} completed its agents and prompts — kept"
     elif [ "${EPAM_REGENERATE_CODELINE_ASSETS:-0}" != "1" ] \
        && [ -n "$_detected_cl" ] \
+       && [ -f "$EPAM_PROJECT_CONFIG_DIR/.prompt-cache/$(prompt_marker_key "$_detected_cl")" ] \
+       && { declare -F resume_preserves >/dev/null 2>&1 || . "$(dirname "${BASH_SOURCE[0]}")/resume-semantics.sh"; } \
+       && resume_preserves prompts; then
+      # A RESUME KEEPS THE PROMPTS IT BUILT, even when an engine release since the pause changed
+      # their inputs (config/resume-preserves.json: "prompts … reused, not rebuilt"). This branch
+      # used to fall through to the rebuild below on a resume too — a completed step run twice after
+      # every release (found 2026-09-25 by the £0 mocking agent). The drift is said, not hidden;
+      # the next NEW launch rebuilds from the new inputs.
+      log "[mint] deferred decision settled: resuming ${EPAM_RESUME_RUN} — ${_detected_cl}'s prompts were built by this run; their inputs changed since (an engine release) — kept for this run, rebuilt on the next new launch"
+      EPAM_SKIP_AGENT_MINT=1
+    elif [ "${EPAM_REGENERATE_CODELINE_ASSETS:-0}" != "1" ] \
+       && [ -n "$_detected_cl" ] \
        && [ -f "$EPAM_PROJECT_CONFIG_DIR/.prompt-cache/$(prompt_marker_key "$_detected_cl")" ]; then
       # STALE, NOT FOREIGN. The marker names this codeline, so the roster is this codeline's own
       # (the mint's paid work) and is kept; only the prompts are built from inputs that have since

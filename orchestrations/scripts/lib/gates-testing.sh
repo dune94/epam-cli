@@ -1330,10 +1330,16 @@ $perf_prompt"
         # 2026-08-28 nothing read it: a grounded report that the change cannot execute printed
         # "pass" here because the process exited 0.
         if [ $_rb_exit -ne 0 ]; then
-            # No structured output after retries. A gate that could not run is not a confirmed
-            # failure, and is not a pass either.
-            step_emit "22g" "warn" "Step 22g: Runtime boundary" "no structured output (exit ${_rb_exit})"
-            warning "  Runtime-boundary: no structured output after all retries — non-blocking warn"
+            # A GATE THAT NEVER PRODUCED A VERDICT HAS NOT CLEARED THE CHANGE. This branch used to
+            # call it a "non-blocking warn" — so the phase printed "Testing gates PASSED" over a gate
+            # that judged nothing, while sast, spec-validator, review-ranger and mutant-hunter treat
+            # the very same outcome as FAILED. One rule for every QA gate (found 2026-09-25 by the
+            # £0 mocking agent): not a pass; the log goes to remediation like any gate failure.
+            step_emit "22g" "fail" "Step 22g: Runtime boundary" "no verdict after all retries (exit ${_rb_exit})"
+            error "  Runtime-boundary FAILED — could not produce a verdict after all retries"
+            failed=1
+            _failing_logs+=("$_rb_log")
+            _log_labels+=("runtime-boundary")
         else
             case "$(runtime_boundary_verdict "$_rb_log" "$PROJECT_ROOT")" in
                 fail)
@@ -1361,12 +1367,16 @@ $perf_prompt"
         # We downgrade "fail" to "warn" when no vulnerability finding references a file
         # that actually exists under PROJECT_ROOT/src.
         if [ $fuzz_exit -ne 0 ]; then
-            # exit 1 means _run_qa_gate_with_retry exhausted all retries with no
-            # structured output — the model produced nothing parseable. Treat as
-            # non-blocking warn: a gate that couldn't run is NOT a confirmed failure.
-            # Only a grounded "verdict":"fail" in the log (exit 0 path below) blocks.
-            warning "  Fuzz-weaver: no structured output after all retries — treating as non-blocking warn"
-            fuzz_exit=0
+            # A GATE THAT NEVER PRODUCED A VERDICT HAS NOT CLEARED THE CHANGE. This branch used to
+            # call it a "non-blocking warn" — so the phase printed "Testing gates PASSED" over a gate
+            # that judged nothing, while sast, spec-validator, review-ranger and mutant-hunter treat
+            # the very same outcome as FAILED. One rule for every QA gate (found 2026-09-25 by the
+            # £0 mocking agent): not a pass; the log goes to remediation like any gate failure.
+            step_emit "22e" "fail" "Step 22e: Fuzz-weaver" "no verdict after all retries"
+            error "  Fuzz-weaver FAILED — could not produce a verdict after all retries"
+            failed=1
+            _failing_logs+=("$fuzz_log")
+            _log_labels+=("fuzz-weaver")
         else
             if grep -q '"verdict"[[:space:]]*:[[:space:]]*"fail"' "$fuzz_log" 2>/dev/null; then
                 # Ground-truth check, two layers:
@@ -1406,13 +1416,16 @@ $perf_prompt"
         fi
 
         if [ $perf_exit -ne 0 ]; then
-            # exit 1 means _run_qa_gate_with_retry exhausted all retries with no
-            # structured output — the model produced nothing parseable. Treat as
-            # non-blocking warn: a gate that couldn't run is NOT a confirmed failure.
-            # Only a grounded "verdict":"fail" in the log (exit 0 path below) blocks.
-            step_emit "22f" "warn" "Step 22f: Perf sentinel" "no structured output — non-blocking warn"
-            warning "  Perf-sentinel: no structured output after all retries — treating as non-blocking warn"
-            perf_exit=0
+            # A GATE THAT NEVER PRODUCED A VERDICT HAS NOT CLEARED THE CHANGE. This branch used to
+            # call it a "non-blocking warn" — so the phase printed "Testing gates PASSED" over a gate
+            # that judged nothing, while sast, spec-validator, review-ranger and mutant-hunter treat
+            # the very same outcome as FAILED. One rule for every QA gate (found 2026-09-25 by the
+            # £0 mocking agent): not a pass; the log goes to remediation like any gate failure.
+            step_emit "22f" "fail" "Step 22f: Perf sentinel" "no verdict after all retries"
+            error "  Perf-sentinel FAILED — could not produce a verdict after all retries"
+            failed=1
+            _failing_logs+=("$perf_log")
+            _log_labels+=("perf-sentinel")
         else
             if grep -q '"verdict"[[:space:]]*:[[:space:]]*"fail"' "$perf_log" 2>/dev/null; then
                 # Ground-truth check: a "fail" is only valid if the agent found real blocker

@@ -9,7 +9,7 @@
 import { readFileSync, readdirSync, existsSync } from 'node:fs';
 import { join } from 'node:path';
 
-export type Template = { id: string; seams: string[]; segments: string[] };
+export type Template = { id: string; seams: string[]; segments: string[]; text: string };
 export type Contract = {
   kind: 'schema' | 'verdict' | 'declared' | 'artefact' | 'per-story-map' | 'none';
   requiredKeys?: string[]; knownKeys?: string[]; shapes?: unknown; tag?: string; [k: string]: unknown;
@@ -47,7 +47,7 @@ export class Declarations {
       const segments = texts.flatMap((x) => x.split(PLACEHOLDER)).flatMap((s) => s.split('\n'))
         .map((s) => s.trim()).filter((s) => s.length >= 24);
       const seams = [...new Set([...(Array.isArray(t.seams) ? t.seams : []), ...(seamOfTemplate[id] || [])])];
-      if (segments.length) out.push({ id, seams, segments });
+      if (segments.length) out.push({ id, seams, segments, text: texts.join('\n') });
     }
     return out;
   }
@@ -79,6 +79,8 @@ export class Declarations {
   }
 
   contractOf(seam: string): Contract | undefined { return this.contracts[seam]; }
+
+  templateText(id: string): string { return this.templates.find((t) => t.id === id)?.text || ''; }
 
   /**
    * The seam a template speaks for. A template several seams declare is the seam whose registry

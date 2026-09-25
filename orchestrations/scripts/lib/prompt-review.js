@@ -31,7 +31,7 @@ const fs = require('fs');
  * @param {string}   [deps.projectConfigDir]
  * @returns {Function} async ({id, template, generated}) => {ok:boolean, reason?:string}
  */
-function makePromptReviewer({ render, invoke, values, logPathFor, warn, projectConfigDir }) {
+function makePromptReviewer({ render, invoke, values, logPathFor, warn, projectConfigDir, attempts = 2 }) {
   const _warn = typeof warn === 'function' ? warn : (m) => process.stderr.write(`${m}\n`);
   return async function reviewPrompt({ id, template, generated }) {
     let prompt;
@@ -81,7 +81,7 @@ function makePromptReviewer({ render, invoke, values, logPathFor, warn, projectC
         // The strict renderer refuses a values/placeholder mismatch. That is a defect in THIS
         // wiring, not in the artefact under review — say so loudly and install unreviewed.
         _warn(`[prompt-review] ${id}: could not build the reviewer's prompt (${why}) — installing UNREVIEWED`);
-        return { ok: true };
+        return { reviewed: false, reason: `the reviewer's prompt could not be built: ${why}` };
       }
     }
 
@@ -89,33 +89,40 @@ function makePromptReviewer({ render, invoke, values, logPathFor, warn, projectC
     // Sending an empty prompt to the model buys a confident-looking verdict about nothing.
     if (typeof prompt !== 'string' || !prompt.trim()) {
       _warn(`[prompt-review] ${id}: rendered an empty prompt — installing UNREVIEWED`);
-      return { ok: true };
+      return { reviewed: false, reason: 'the reviewer\'s prompt rendered empty' };
     }
-    let out = '';
-    try {
-      out = await invoke(prompt, typeof logPathFor === 'function' ? logPathFor(id) : undefined);
-    } catch (e) {
-      _warn(`[prompt-review] ${id}: reviewer did not run (${e && e.message}) — installing UNREVIEWED`);
-      return { ok: true };
+    // A REVIEW THAT DID NOT ANSWER IS ASKED AGAIN. One unreadable reply used to install the prompt
+    // UNREVIEWED at once — a single flake, and every agent inherited an unexamined brief (found
+    // 2026-09-25 by the £0 mocking agent). The reviewer is retried, told what was wrong; only when
+    // it never produces a verdict is the prompt installed — labelled unreviewed, never condemned,
+    // because a reviewer's own failure is not evidence against the prompt.
+    let verdict; let why = '';
+    for (let attempt = 1; attempt <= attempts && verdict === undefined; attempt += 1) {
+      const asked = why ? `${prompt}\n\nYOUR PREVIOUS ANSWER COULD NOT BE READ: ${why}. Emit the <PROMPT_REVIEW> block exactly as stated above.` : prompt;
+      let out = '';
+      try {
+        out = await invoke(asked, typeof logPathFor === 'function' ? logPathFor(id) : undefined);
+      } catch (e) {
+        why = `the reviewer did not run (${e && e.message})`;
+        continue;
+      }
+      const m = String(out || '').match(/<PROMPT_REVIEW>([\s\S]*?)<\/PROMPT_REVIEW>/);
+      if (!m) { why = 'it held no <PROMPT_REVIEW> block'; continue; }
+      try {
+        verdict = JSON.parse(m[1].trim().replace(/^```(?:json)?/i, '').replace(/```$/, ''));
+      } catch (e) {
+        why = `the verdict was not valid JSON (${e && e.message})`;
+      }
     }
-
-    const m = String(out || '').match(/<PROMPT_REVIEW>([\s\S]*?)<\/PROMPT_REVIEW>/);
-    if (!m) {
-      _warn(`[prompt-review] ${id}: reviewer returned no parseable verdict — installing UNREVIEWED`);
-      return { ok: true };
-    }
-    let verdict;
-    try {
-      verdict = JSON.parse(m[1].trim().replace(/^```(?:json)?/i, '').replace(/```$/, ''));
-    } catch (e) {
-      _warn(`[prompt-review] ${id}: verdict was not valid JSON (${e && e.message}) — installing UNREVIEWED`);
-      return { ok: true };
+    if (verdict === undefined) {
+      _warn(`[prompt-review] ${id}: no verdict after ${attempts} attempt(s) — ${why} — installing UNREVIEWED`);
+      return { reviewed: false, reason: why };
     }
     const bad = Array.isArray(verdict.falseClaims)
       ? verdict.falseClaims.map((c) => (typeof c === 'string' ? c : (c && c.claim) || '')).filter(Boolean)
       : [];
-    if (bad.length) return { ok: false, reason: bad.join('; ') };
-    return { ok: true };
+    if (bad.length) return { ok: false, reviewed: true, reason: bad.join('; ') };
+    return { ok: true, reviewed: true };
   };
 }
 

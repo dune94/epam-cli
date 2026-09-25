@@ -712,10 +712,24 @@ async function buildProjectPrompts({
     // without review is a MISS while review is on; one made WITH review stays a hit, so the cache
     // keeps paying for itself.
     const _reviewNow = typeof reviewPrompt === 'function';
-    if (_hit && _reviewNow && _hit.reviewed !== true) {
-      log(`[prompt-builder] ${id}: cached copy predates prompt review — regenerating so it is reviewed`);
+    const _inputsSame = !!(_hit && _hit.base === _base && (!_hit.usesRoles || _hit.roles === rolesDigest));
+    // WHAT A CACHED, UNREVIEWED PROMPT LACKS IS A REVIEW — NOT A NEW PROMPT. It used to be
+    // regenerated "so it is reviewed": a paid generation repeated (on a resume, a step run twice)
+    // when only the reviewer had not answered. It is reviewed as it stands; regenerated only if
+    // that review finds a false claim.
+    let _useCached = _inputsSame && (!_reviewNow || _hit.reviewed === true);
+    if (_inputsSame && _reviewNow && _hit.reviewed !== true) {
+      const _late = await reviewPrompt({ id, template, generated: _hit.doc });
+      if (_late && _late.ok !== false) {
+        _hit.reviewed = _late.reviewed !== false;
+        cacheWrite(id, _hit);
+        log(`[prompt-builder] ${id}: cached copy ${_hit.reviewed ? 'reviewed now' : 'still unreviewed — the reviewer gave no verdict'} — reused, not regenerated`);
+        _useCached = true;
+      } else {
+        log(`[prompt-builder] ${id}: cached copy failed review (${(_late && _late.reason) || 'no reason'}) — regenerating`);
+      }
     }
-    if (_hit && (!_reviewNow || _hit.reviewed === true) && _hit.base === _base && (!_hit.usesRoles || _hit.roles === rolesDigest)) {
+    if (_useCached) {
       fs.writeFileSync(path.join(outDir, `${id}.json`), JSON.stringify(_hit.doc, null, 2) + '\n');
       built.push(id);
       log(`[prompt-builder] reused ${id} (inputs unchanged${_hit.usesRoles ? ', roster unchanged' : ''})`);
@@ -799,8 +813,9 @@ async function buildProjectPrompts({
         // falsifies a generated brief before any implementer inherits it. reviewPrompt is that
         // reviewer pointed at prompts. It is OPTIONAL — a caller that supplies none provisions
         // exactly as before, so this cannot block a project that has not adopted it.
+        let review = null;
         if (typeof reviewPrompt === 'function') {
-          const review = await reviewPrompt({ id, template, generated: doc });
+          review = await reviewPrompt({ id, template, generated: doc });
           if (review && review.ok === false) {
             refusal = `a review of this prompt found claims about the project that are false: ${review.reason}`;
             log(`[prompt-builder] ! ${id} attempt ${attempt}/${attempts} REVIEW REJECTED: ${review.reason}`);
@@ -816,8 +831,10 @@ async function buildProjectPrompts({
         // Whether this template's OUTPUT depends on the roster is decided by looking at what it
         // produced, not guessed from what it was handed.
         cacheWrite(id, { base: _base, roles: rolesDigest, usesRoles: usesRoles(doc, mintedRoles), doc,
-          // The gate this artefact passed, so a later run cannot reuse an unreviewed prompt.
-          reviewed: typeof reviewPrompt === 'function' });
+          // Whether a reviewer actually JUDGED it — not whether one was configured. A review that
+          // produced no verdict recorded `reviewed: true` here, and a later run reused the prompt as
+          // reviewed (found 2026-09-25).
+          reviewed: !!(review && review.reviewed !== false) });
         log(`[prompt-builder] generated ${id} (attempt ${attempt}/${attempts})`);
         break;
       }

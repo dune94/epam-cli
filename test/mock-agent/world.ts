@@ -63,7 +63,18 @@ export class World {
 
   /** The agents the project's roster holds on disk, by name. */
   rosterAgents(): string[] {
-    try { return Object.keys(JSON.parse(readFileSync(join(this.projectDir, 'roster.json'), 'utf8')).agents || {}); } catch { return []; }
+    try { return Object.keys(JSON.parse(readFileSync(this.rosterFile(), 'utf8')).agents || {}); } catch { return []; }
+  }
+
+  /**
+   * The project's roster file, where the installer's own declaration of a project's generated
+   * artefacts (generated-run-state-paths.json) says it lives — not a name written here.
+   */
+  rosterFile(): string {
+    const install = join(this.projectDir, '..', '..', '..');
+    const declared = (JSON.parse(readFileSync(join(install, 'orchestrations-installer/generated-run-state-paths.json'), 'utf8')).paths as string[])
+      .map((p) => p.match(/^orchestrations\/projects\/\*\/([^/*]*roster[^/*]*)$/)).find(Boolean);
+    return declared ? join(this.projectDir, declared[1]) : '';
   }
 
   /** Names from a candidate list that the prompt offers as a list item ("- name"). */

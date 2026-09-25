@@ -1600,6 +1600,21 @@ function specFastPathExec(execSpec, specModeProvider, logPath, envOverride) {
   return { cmd: execSpec.cmd, args: ['--provider', specModeProvider, '--model', specModel] };
 }
 
+/**
+ * WHAT A CALLER THAT NAMES AN itemsKey IS HANDED: the array under that key.
+ *
+ * runAgentForJson documented "itemsKey: if set, extracts result[itemsKey]" and never did. The tool
+ * schema bound at the provider asks for {items:[…]} / {assignments:[…]}, the validator accepts that
+ * wrapper — and the callers read `Array.isArray(result)`, so a correctly-shaped answer was DROPPED
+ * with no error: the spec coordinator's per-story reviews, its model reviews, and its assignments
+ * (which then fell back to the default agent pair). Found 2026-09-25. A bare array, as the older
+ * template wording asked for, is handed on as it is.
+ */
+function itemsOf(result, itemsKey) {
+  if (!itemsKey || !result || Array.isArray(result) || typeof result !== 'object') return result;
+  return Array.isArray(result[itemsKey]) ? result[itemsKey] : result;
+}
+
 async function runAgentForJson(execSpec, prompt, toolDef, tag, logPath, itemsKey, storyId = '', repoPath = '', envOverride = null) {
   // EVERY SEAM THAT DECLARES A SHAPE BINDS IT, NOT JUST THE ONES THAT REMEMBERED TO.
   //
@@ -1645,7 +1660,7 @@ async function runAgentForJson(execSpec, prompt, toolDef, tag, logPath, itemsKey
   // needed a logDir nobody passed, and Langfuse records no completions at all. Written here,
   // at the one funnel every agent's raw text passes through, it cannot be forgotten per seam.
   recordAgentReply(tag, output);
-  return _validatedOrNull(extractTaggedJson(output, tag), tag, specEnv && specEnv.EPAM_AGENT_NAME);
+  return itemsOf(_validatedOrNull(extractTaggedJson(output, tag), tag, specEnv && specEnv.EPAM_AGENT_NAME), itemsKey);
   }
 
   // THE MINIMAX SPECIAL CASE IS GONE.
@@ -1674,7 +1689,7 @@ async function runAgentForJson(execSpec, prompt, toolDef, tag, logPath, itemsKey
   // needed a logDir nobody passed, and Langfuse records no completions at all. Written here,
   // at the one funnel every agent's raw text passes through, it cannot be forgotten per seam.
   recordAgentReply(tag, output);
-  return _validatedOrNull(extractTaggedJson(output, tag), tag);
+  return itemsOf(_validatedOrNull(extractTaggedJson(output, tag), tag), itemsKey);
 }
 
 const args = process.argv.slice(2);
@@ -2538,10 +2553,15 @@ async function run() {
           // blocks on THIS; the model's missing_manifest_path flag is corroboration only
           // (measured: hallucinated in 1 of 4 samples against an all-EXISTS evidence
           // block). Persisted, not merely logged — a fact the gate needs must be on disk.
-          story.specification.manifestCheck = {
-            missing: manifestMissingPaths([story], prd),
-            checkedAt: new Date().toISOString()
-          };
+          // A PATH NOT ON DISK IS "MISSING" ONLY WHERE THE STORY MUST EDIT IT. On brownfield a
+          // declared file exists or the manifest is wrong. On greenfield the story CREATES its
+          // files: absent is expected, and recording them as missing made the spec-review gate
+          // halt every greenfield run at the scaffold story — invisible until 2026-09-25, because
+          // this review was always dropped before it reached here. Recorded either way, labelled.
+          const _notOnDisk = manifestMissingPaths([story], prd);
+          story.specification.manifestCheck = isBrownfieldReview
+            ? { missing: _notOnDisk, checkedAt: new Date().toISOString() }
+            : { missing: [], toCreate: _notOnDisk, checkedAt: new Date().toISOString() };
           story.specification.coordinatorReview = {
             // A REVIEW THAT RETURNED NOTHING IS NOT AN APPROVAL. This read `|| 'approved'`, so a
             // coordinator review that produced prose, failed, or never really ran was written to

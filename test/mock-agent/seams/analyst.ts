@@ -20,8 +20,8 @@ export function namedFiles(world: World, failure: string): { file: string; owner
   return out;
 }
 
-export function failureAnalyst(world: World, prompt: string, story: string, contract?: Contract): string {
-  const ex = exemplar(prompt, contract) || {};
+export function failureAnalyst(world: World, prompt: string, story: string, contract?: Contract, templateText = ''): string {
+  const ex = exemplar(prompt, contract, templateText) || {};
   const failure = prompt.slice(Math.max(0, prompt.search(/FAILURE|Failure/)));
   const firstLine = (failure.split('\n').map((l) => l.trim()).find((l) => /FAILED|Error|error|missing|not exist|assert/i.test(l)) || 'the verification failed').slice(0, 160);
   const foreign = namedFiles(world, failure).map((n) => ({ ...n, owners: n.owners.filter((o) => o !== story) })).find((n) => n.owners.length && !world.story(story)?.technicalNotes?.files?.includes(n.file));

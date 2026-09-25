@@ -400,7 +400,9 @@ function checkEntry(name, entry, canonical) {
       return { ok: false, reason: `ancestor '${entry.ancestor}' is not in canonical` };
     }
     if (entry.derivedFromSha256 !== personaDigest(canonical[entry.ancestor])) {
-      return { ok: false, reason: `provenance digest does not match ancestor '${entry.ancestor}'` };
+      // `release`: what an engine release causes on its own — the canonical persona changed after
+      // this entry was derived. keptAcrossRelease carries such an entry across a resume.
+      return { ok: false, reason: `provenance digest does not match ancestor '${entry.ancestor}'`, release: 'ancestor-changed' };
     }
   } else if (entry.derivedFromSha256 !== personaDigest(entry.persona)) {
     // The digest still has to be real: self-ancestry means the digest is over its OWN brief, so a
@@ -471,24 +473,62 @@ function faultedAgents(findings, roster) {
   return [...named];
 }
 
+/**
+ * keptAcrossRelease(settled, canonical, issues, logDir) — the settled roster, carried across an
+ * engine release, or null when its contract findings are not ONLY what a release causes.
+ *
+ * What a release causes: an entry whose ancestor's canonical persona changed (provenance digest
+ * mismatch) and a canonical agent the settled roster predates (absent). The first is kept exactly
+ * as it was reviewed; the second is adopted verbatim, with its own digest, as canonical mode adopts
+ * it. Both are written to <logDir>/roster-release-drift.json so the drift is visible, never silent.
+ */
+function keptAcrossRelease(settled, canonical, issues, logDir) {
+  const drifted = []; const added = [];
+  for (const i of issues || []) {
+    if (i.release === 'ancestor-changed') drifted.push(i.name);
+    else if (i.release === 'canonical-added') added.push(i.name);
+    else return null;
+  }
+  if (!drifted.length && !added.length) return null;
+  const agents = { ...((settled && settled.agents) || {}) };
+  const verbatim = rosterFromCanonical(Object.fromEntries(added.map((n) => [n, canonical[n]]))).agents;
+  for (const n of added) {
+    agents[n] = { ...verbatim[n], rationale: 'canonical persona, adopted verbatim: added to canonical by an engine release after this roster was settled' };
+  }
+  const record = path.join(logDir || '.', 'roster-release-drift.json');
+  try {
+    fs.writeFileSync(record, JSON.stringify({ at: new Date().toISOString(), drifted, added,
+      why: 'the engine changed between the settled roster and this resume; the reviewed roster is kept' }, null, 2));
+  } catch { /* the log line still says it */ }
+  return { roster: { ...settled, agents }, drifted, added, record };
+}
+
 function checkRoster(roster, canonical) {
   const entries = (roster && roster.agents) || {};
   const names = Object.keys(entries);
-  if (!names.length) return { ok: false, reason: 'roster declares no agents', bad: [] };
+  if (!names.length) return { ok: false, reason: 'roster declares no agents', bad: [], issues: [] };
   const bad = [];
+  // The same findings, structured: which agent, and whether an engine release alone explains it.
+  const issues = [];
   // THE SET MUST BE COMPLETE. Whatever canonical holds, the roster holds — no subset logic
   // anywhere. The moment a subset is allowed something must decide which agents matter, and a
   // fallback to the engine layer has to exist for the rest; that fallback is what gave a
   // metrolinx review a persona describing this repository.
   for (const n of Object.keys(canonical)) {
     if (typeof canonical[n] !== 'string' || !canonical[n].trim()) continue;
-    if (!Object.prototype.hasOwnProperty.call(entries, n)) bad.push(`${n}: in canonical, absent from the roster`);
+    if (!Object.prototype.hasOwnProperty.call(entries, n)) {
+      bad.push(`${n}: in canonical, absent from the roster`);
+      issues.push({ name: n, release: 'canonical-added' });
+    }
   }
   for (const n of names) {
     const v = checkEntry(n, entries[n], canonical);
-    if (!v.ok) bad.push(`${n}: ${v.reason}`);
+    if (!v.ok) {
+      bad.push(`${n}: ${v.reason}`);
+      issues.push({ name: n, release: v.release || '' });
+    }
   }
-  return { ok: bad.length === 0, reason: bad.join('; '), bad };
+  return { ok: bad.length === 0, reason: bad.join('; '), bad, issues };
 }
 
 /**
@@ -571,6 +611,22 @@ async function buildProjectRoster({
         log(`[roster] reusing the settled roster on disk — ${Object.keys(_settled.agents).length} `
           + 'agent(s), reviewed at this run\'s pause, not re-derived');
         return _settled;
+      }
+      // A RELEASE BETWEEN PAUSE AND RESUME IS NOT A REASON TO RUN THE STEP AGAIN. An engine
+      // upgrade can change a canonical persona (the settled entry's provenance digest no longer
+      // matches) or add a canonical agent (absent from the settled roster). Neither makes the
+      // operator-reviewed roster wrong for THIS run, and re-deriving it is a repeat: on 2026-09-25
+      // one changed persona re-derived all 48 agents on a regintel resume (paid specialiser +
+      // review, a rejection on an agent that never changed) and overwrote the reviewed roster.
+      // So on exactly those two findings the settled roster is kept — drift recorded, added agents
+      // adopted verbatim with no model call — and anything else is judged as before.
+      const _kept = keptAcrossRelease(_settled, _canonForCheck, _ok.issues, logDir);
+      if (_kept) {
+        fs.writeFileSync(outPath, JSON.stringify(_kept.roster, null, 2));
+        log(`[roster] reusing the settled roster on disk — ${Object.keys(_kept.roster.agents).length} agent(s); `
+          + `the engine changed since it was settled: ${_kept.drifted.length} persona(s) drifted from canonical `
+          + `(kept as reviewed), ${_kept.added.length} canonical agent(s) added verbatim — recorded in ${_kept.record}`);
+        return _kept.roster;
       }
       log(`[roster] the roster on disk does not satisfy the contract (${_ok.reason}) — deriving`);
     } catch (e) {

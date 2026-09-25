@@ -1236,7 +1236,16 @@ if (require.main !== module) return;
       } catch { _codelineComplete = false; }
     }
 
-    if (_resumingRun || _codelineComplete) {
+    // SKIPPED ONLY WHEN THE SET IS COMPLETE. A resume used to skip whenever ANY prompt was on disk,
+    // so a build interrupted part-way was never finished: 15 of 43 prompts, no failure-analyst
+    // prompt, and self-heal could not run (regintel, 2026-09-25). An incomplete set on a resume is
+    // COMPLETED — every prompt already installed is kept as it is (keepExisting), only the missing
+    // ones are built. Nothing the run built is rebuilt.
+    if (_resumingRun && !_codelineComplete) {
+      process.stderr.write(`[mint-step] resuming ${_resumingRun}: the prompt set for ${_codelineId || 'this codeline'} is not `
+        + 'complete — keeping every prompt already installed and building only the missing ones\n');
+    }
+    if (_codelineComplete) {
       const _installedDir = path.join(projectConfigDir, 'prompts');
       let _installed = [];
       try {
@@ -1308,6 +1317,7 @@ if (require.main !== module) return;
     const _built = _skipProvisioning
       ? { copied: [], generated: [] }
       : await buildProjectPrompts({
+      keepExisting: !!_resumingRun,
       templatesDir,
       bootstrapFile,
       // ONE UNLUCKY PROMPT MUST NOT ABORT AN OTHERWISE COMPLETE RUN, and raising the budget must

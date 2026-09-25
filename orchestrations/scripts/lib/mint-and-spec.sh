@@ -208,6 +208,16 @@ _run_agent_mint() {
       EPAM_SKIP_AGENT_MINT=1
       EPAM_REBUILD_PROMPTS=1
       export EPAM_REBUILD_PROMPTS
+    elif [ "${EPAM_REGENERATE_CODELINE_ASSETS:-0}" != "1" ] \
+       && { declare -F resume_preserves >/dev/null 2>&1 || . "$(dirname "${BASH_SOURCE[0]}")/resume-semantics.sh"; } \
+       && resume_preserves roster; then
+      # A RESUME NEVER CLEARS WHAT THE RUN BUILT. With no completion marker — a prompt build that
+      # did not finish — this fell through to the clearing below ON A RESUME: the reviewed roster,
+      # the project roles and every prompt were deleted, and the roster was re-derived (regintel,
+      # 2026-09-25). The roster and agents are this run's and are kept; the prompt set is COMPLETED
+      # by the mint step (every installed prompt kept, only the missing ones built).
+      log "[mint] deferred decision settled: resuming ${EPAM_RESUME_RUN} — no completion marker (an earlier prompt build did not finish); keeping this run's roster, agents and prompts, completing the missing prompts"
+      EPAM_SKIP_AGENT_MINT=1
     else
       log "[mint] deferred decision settled: this run is not ${_detected_cl:-<unresolved>}'s completed codeline — clearing the previous run's agents and prompts"
       rm -f "$EPAM_PROJECT_CONFIG_DIR/roster.json" \

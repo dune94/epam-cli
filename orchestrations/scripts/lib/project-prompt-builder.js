@@ -324,6 +324,7 @@ function provisioningList({ bootstrap = {}, registry = {}, templateExists = () =
 async function buildProjectPrompts({
   templatesDir, bootstrapFile, registryFile, projectConfigDir, runText, reviewPrompt,
   projectContext, codelineContext, mintedRoles, attempts = 3, mode = 'generate', log = () => {},
+  keepExisting = false,
 }) {
   // SAY WHICH IT WAS. This reviewer is opt-in (registry: prompt-review.optIn), and a run with no
   // reviewer looked exactly like a run whose reviewer approved everything — 35 prompts
@@ -537,7 +538,13 @@ async function buildProjectPrompts({
 
   // ── Bootstrap: verbatim, byte for byte ──────────────────────────────────
   const copied = [];
+  // A RESUME COMPLETES, IT NEVER REBUILDS. keepExisting (a resumed run): a prompt already installed
+  // for this run is kept byte-for-byte — no call, no rewrite — and only the missing ones are built.
+  // An interrupted build left 15 of 43 prompts and a resume either skipped provisioning (so the
+  // failure analyst had no prompt) or would have rebuilt all of them (found 2026-09-25).
+  const _alreadyInstalled = (id) => keepExisting && fs.existsSync(path.join(outDir, `${id}.json`));
   for (const id of copyVerbatim) {
+    if (_alreadyInstalled(id)) { copied.push(id); log(`[prompt-builder] kept ${id} (installed for this run)`); continue; }
     const src = _tplPath(id);
     const doc = readJson(src);
 
@@ -692,6 +699,7 @@ async function buildProjectPrompts({
       : b === _reviewerTemplate ? 1 : 0));
   }
   for (const id of generated) {
+    if (_alreadyInstalled(id)) { built.push(id); log(`[prompt-builder] kept ${id} (installed for this run)`); continue; }
     const template = readJson(_tplPath(id));
     // Per-template, only when it could matter: a template whose seam name differs from its id is
     // the one case where losing `seams` is visible at all. 36 of 37 hide the same rewrite.

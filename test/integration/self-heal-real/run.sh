@@ -20,6 +20,12 @@ echo "[harness] work dir: $WORK   story: $STORY"
 mkdir -p "$WORK/install"
 tar -C "$SRC_INSTALL" -cf - --exclude='orchestrations/logs' --exclude='node_modules' --exclude='.git' \
     orchestrations 2>/dev/null | tar -C "$WORK/install" -xf -
+# AND THE INSTALL'S OWN CLI. A run executes <install>/dist/epam.js (scripts/bin/epam), never the
+# machine-wide `epam` — so a copy without dist/ could not call a model at all (2026-09-25; it had
+# silently borrowed the source install's CLI through the global shim). dist is copied; the
+# dependencies it loads are the source install's, read-only.
+cp -a "$SRC_INSTALL/dist" "$WORK/install/dist"
+ln -s "$SRC_INSTALL/node_modules" "$WORK/install/node_modules"
 mkdir -p "$WORK/install/orchestrations/logs"
 : > "$WORK/install/orchestrations/logs/healing-events.jsonl"
 # THE RUN STATE A RESUME KEEPS. The logs directory was excluded wholesale, so the copy began with

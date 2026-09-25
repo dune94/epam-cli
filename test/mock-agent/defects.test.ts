@@ -127,4 +127,47 @@ describe(`defects found by the mocking agent, on ${PROJECT}`, () => {
     expect(resumed.some((c) => r.agent.decl.registry[c.seam]?.produces === 'implementation'), 'the resumed run never reached the writer').toBe(true);
     expect(r.agent.stale).toEqual([]);
   });
+  run('a resume whose prompt build was interrupted keeps the roster and completes the prompts', async () => {
+    const journal = join(JOURNALS, `${PROJECT}-interrupted-build-${new Date().toISOString().replace(/[:.]/g, '')}`);
+    mkdirSync(journal, { recursive: true });
+    const r = await startProjectRun({ src: SRC, project: PROJECT, dirs, children, journal });
+    r.agent.on('*', correct(r.world, r.install));
+    const first = await launch(r, { EPAM_PAUSE_BEFORE_WRITER: '1' });
+    const t1 = `${first.stdout}\n${first.stderr}`.replace(/\x1b\[[0-9;]*m/g, '');
+    writeFileSync(join(journal, 'pause.log'), t1);
+    expect(t1, 'the run did not pause before the writer').toMatch(/PAUSED — inputs ready, writer NOT started/);
+    const runId = (t1.match(/RUN NUMBER:\s*\S*?(\d{8}T\d{6}Z)/) || [])[1];
+    expect(runId, 'no run id at the pause').toBeTruthy();
+    const projDir = join(r.install, 'orchestrations/projects', PROJECT);
+    // The project's generated artefacts, as the installer declares them: what a resume must keep.
+    const generated = (JSON.parse(readFileSync(join(r.install, 'orchestrations-installer/generated-run-state-paths.json'), 'utf8')).paths as string[])
+      .map((p) => p.match(/^orchestrations\/projects\/\*\/([^/*]+\.json)$/)?.[1]).filter((f): f is string => !!f && existsSync(join(projDir, f)));
+    expect(generated.length, 'the pause left no generated project artefact — the case proves nothing').toBeGreaterThan(0);
+    const kept = Object.fromEntries(generated.map((f) => [f, readFileSync(join(projDir, f), 'utf8')]));
+    // THE INTERRUPTION: a rebuild killed part-way — the completion marker gone, most prompts gone.
+    const cache = join(projDir, '.prompt-cache');
+    for (const m of readdirSync(cache).filter((f) => f.startsWith('.complete-'))) rmSync(join(cache, m));
+    const promptsDir = join(projDir, 'prompts');
+    const prompts = readdirSync(promptsDir).filter((f) => f.endsWith('.json')).sort();
+    expect(prompts.length, 'the pause built no prompts').toBeGreaterThan(3);
+    for (const f of prompts.slice(Math.ceil(prompts.length / 3))) rmSync(join(promptsDir, f));
+    const callsAtPause = r.agent.calls.length;
+    // Resume the same run.
+    const second = await launch(r, { EPAM_RESUME_RUN: runId! });
+    const t2 = `${second.stdout}\n${second.stderr}`.replace(/\x1b\[[0-9;]*m/g, '');
+    writeFileSync(join(journal, 'resume.log'), t2);
+    for (const [from, to] of [[join(r.install, 'orchestrations/logs'), 'logs'], [r.out, 'codeline']] as const) {
+      try { execFileSync('cp', ['-a', from, join(journal, to)]); } catch { /* absent */ }
+    }
+    const resumed = r.agent.calls.slice(callsAtPause);
+    const produced = (c: { seam: string }) => r.agent.decl.registry[c.seam]?.produces || '';
+    for (const f of generated) {
+      expect(existsSync(join(projDir, f)), `the resume DELETED ${f}`).toBe(true);
+      expect(readFileSync(join(projDir, f), 'utf8'), `the resume rewrote ${f}`).toBe(kept[f]);
+    }
+    expect([...new Set(resumed.filter((c) => /roster/.test(produced(c))).map((c) => c.seam))], 'the resume re-derived the roster').toEqual([]);
+    expect(readdirSync(promptsDir).filter((f) => f.endsWith('.json')).length, 'the interrupted prompt set was not completed').toBeGreaterThanOrEqual(prompts.length);
+    expect(resumed.some((c) => produced(c) === 'implementation'), 'the resumed run never reached the writer').toBe(true);
+    expect(r.agent.stale).toEqual([]);
+  });
 });

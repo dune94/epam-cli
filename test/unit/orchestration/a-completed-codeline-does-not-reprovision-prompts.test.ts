@@ -89,9 +89,19 @@ describe('provisioning is skipped when this codeline already completed it', () =
     ].join('\n')).toBe(true);
   });
 
-  it('resume + installed prompts -> still SKIPPED (unchanged behaviour)', () => {
-    expect(skipsProvisioning({ resume: '20260905T172837Z', installed: 41 }),
-      'the existing resume skip regressed').toBe(true);
+  it('resume + a COMPLETE set (marker) -> SKIPPED', () => {
+    expect(skipsProvisioning({ resume: '20260905T172837Z', codeline: 'next.gotransit.com', installed: 41, marker: 'next.gotransit.com' }),
+      'a resume re-provisioned a prompt set that was complete').toBe(true);
+  });
+
+  it('resume + an INCOMPLETE set (no marker) -> provisioning runs to COMPLETE it', () => {
+    // A resume used to skip whenever any prompt was on disk, so a build interrupted part-way was
+    // never finished (regintel 2026-09-25: 15 of 43, no failure-analyst prompt). It now runs with
+    // keepExisting — every installed prompt kept byte-for-byte, only the missing built. That half is
+    // proven on the real pipeline: test/mock-agent/defects.test.ts, "a resume whose prompt build
+    // was interrupted keeps the roster and completes the prompts".
+    expect(skipsProvisioning({ resume: '20260905T172837Z', installed: 15 }),
+      'an incomplete prompt set was skipped on a resume and never completed').toBe(false);
   });
 
   it('NO marker -> provisions, exactly as today', () => {

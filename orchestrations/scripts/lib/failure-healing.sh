@@ -163,7 +163,17 @@ _apply_analyst_escalation() {
         warning "  [FailureAnalyst] target=escalate but no escalation.targetFile — injecting diagnosis only"
         return 2
     fi
-    if [ -f "$_prd" ] && jq -e --arg id "$_id" --arg f "$_tf" '.stories[] | select(.id == $id) | (.technicalNotes.files // []) | map(. == $f or endswith("/" + $f) or ($f | endswith("/" + .))) | any' "$_prd" >/dev/null 2>&1; then
+    # A FILE SEVERAL STORIES DECLARE: whose fix it is, is the analyst's judgement. Refusing every
+    # escalation of a file in this story's scope turned REGI-009a's correct diagnosis of REGI-005-A's
+    # dedup defect in the three-owner regintel/classifier.py into a skill note for REGI-009a's own
+    # writer (live 2026-09-24: 11.4M tokens on code it did not own). When the analyst names an owner
+    # that also declares the file, the escalation is filed to it. A file only this story declares, or
+    # an owner that does not declare it, stays this story's fix — nothing is guessed.
+    local _decl='(.technicalNotes.files // []) | map(. == $f or endswith("/" + $f) or ($f | endswith("/" + .))) | any'
+    if [ -n "$_owner" ] && [ "$_owner" != "$_id" ] && [ -f "$_prd" ] \
+       && jq -e --arg o "$_owner" --arg f "$_tf" ".stories[] | select(.id == \$o and .status != \"deprecated\") | $_decl" "$_prd" >/dev/null 2>&1; then
+        :
+    elif [ -f "$_prd" ] && jq -e --arg id "$_id" --arg f "$_tf" '.stories[] | select(.id == $id) | (.technicalNotes.files // []) | map(. == $f or endswith("/" + $f) or ($f | endswith("/" + .))) | any' "$_prd" >/dev/null 2>&1; then
         warning "  [FailureAnalyst] target=escalate names $_tf, which is inside $_id's own scope — the fix is this writer's; treating the prescription as a skill note"
         return 1
     fi
@@ -552,7 +562,13 @@ classify_failure_class() {
     # Class B: capability failure — "reached maximum iterations" in result
     local result_text=""
     [ -f "$result_json" ] && result_text=$(jq -r '.result // ""' "$result_json" 2>/dev/null || echo "")
-    if echo "$result_text" | grep -qi "maximum iterations\|max.*iter"; then
+    # HOW THE RUNNER SAYS THE ATTEMPT ENDED, before what the model last said. Only the text was read,
+    # so an attempt that hit its iteration cap with an ordinary last sentence was classed "quality"
+    # (regintel REGI-009a 2026-09-24: 120 iterations, 11.4M tokens, last words "No clear ownership
+    # markers…"). The runner's stop_reason reaches the result (lib/handlers/epam-run-result.py).
+    local stop_reason=""
+    [ -f "$result_json" ] && stop_reason=$(jq -r '.stop_reason // ""' "$result_json" 2>/dev/null || echo "")
+    if [ "$stop_reason" = "max_iterations" ] || echo "$result_text" | grep -qi "maximum iterations\|max.*iter"; then
         COORDINATOR_FAILURE_CLASS="capability"
         COORDINATOR_ESCALATE="yes"
         # Inject a directive so the escalated model doesn't repeat the same

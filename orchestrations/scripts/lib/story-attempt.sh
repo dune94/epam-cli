@@ -266,30 +266,10 @@ normalize_provider_json() {
             # epam: same output format as Claude — nothing to normalize
             ;;
         epam-run)
-            # epam run --json output: {result, cost_usd, usage:{inputTokens,outputTokens}}
-            # Pick the last JSON object that has a "result" field (guards against pino log lines,
-            # which never carry a "result" key). Do NOT filter on result != "" — agents that only
-            # write files produce result:"" legitimately, and excluding them drops real cost data.
-            jq -s '[.[] | select(has("result"))] | last // {result:"",cost_usd:0,usage:{inputTokens:0,outputTokens:0}} | {
-                result:          (.result // ""),
-                total_cost_usd:  (.cost_usd // 0),
-                usage: ({
-                    input_tokens:  (.usage.inputTokens  // 0),
-                    output_tokens: (.usage.outputTokens // 0)
-                }
-                # Carry the cached subset THROUGH. Rebuilding usage from scratch discarded it, so
-                # the cost ledger recorded cache_read_tokens: 0 and the cost line printed
-                # "cached 0 = 0.0%" for an attempt the per-turn trace measured at 98.9% cached
-                # (live 2026-08-10). Caching is the largest efficiency change made to this
-                # pipeline and every cost figure was blind to it.
-                #
-                # `if has` rather than `// 0`: a provider that reports nothing about caching has
-                # not reported ZERO caching, and an unmeasured value recorded as a measured zero
-                # is the defect this pipeline keeps reproducing. Absent stays absent; the display
-                # side is what chooses how to render it.
-                + (if (.usage | has("cached_input_tokens"))
-                   then {cached_input_tokens: .usage.cached_input_tokens} else {} end))
-            }' "$raw_file" > "$out_file" 2>/dev/null || true
+            # The result `epam run --json` reported, however the attempt ended — see
+            # lib/handlers/epam-run-result.py (one non-JSON line used to empty the whole result).
+            python3 "${SCRIPT_DIR:-$(cd "$(dirname "${BASH_SOURCE[0]}")/.." && pwd)}/lib/handlers/epam-run-result.py" "$raw_file" > "$out_file" 2>/dev/null \
+                || printf '{"result":"","total_cost_usd":0,"usage":{"input_tokens":0,"output_tokens":0},"no_result_reported":true}\n' > "$out_file"
             ;;
         *)
             # Claude: already emits normalized JSON; nothing to do
@@ -540,6 +520,10 @@ _rejection_repeat_check() {
     return 1
 }
 
+# _run_project_verification: ONE definition, lib/tsc-baseline-gate.sh (section-aware). A copy here
+# overwrote it and dropped the section (regintel 2026-09-24).
+declare -F _run_project_verification >/dev/null 2>&1 || . "$(dirname "${BASH_SOURCE[0]}")/tsc-baseline-gate.sh"
+
 # run_tsc_verification <story_id> <output_file>
 # Runs `tsc --noEmit` inside the retry loop (not after it) so a TypeScript
 # compile failure re-enters the same failure-analyst/InferenceLadder path as
@@ -548,27 +532,6 @@ _rejection_repeat_check() {
 # run-agent-orchestration.sh remains only as a defensive last-resort check —
 # this function is what actually gives tsc failures a chance to self-heal.
 # Returns 0 (pass or skipped) or 1 (tsc errors found).
-# _run_project_verification <project_root>
-# Runs whatever the project declared in .epam/verification.json, via the verification plugin.
-# Prints the checker's own output; exit status is the checker's. An undeclared project exits
-# non-zero with a clear reason — never a silent pass, which is what the old
-# `[ ! -f tsconfig.json ] && return 0` did for every non-TypeScript stack.
-_run_project_verification() {
-    local _root="${1:-$PROJECT_ROOT}"
-    local _plugin="${AUTOMATION_DIR}/plugins/verification-plugin.js"
-    local _node="${NODE_CMD:-${NODE_BIN:-node}}"
-    if [ ! -f "$_plugin" ]; then
-        echo "verification plugin missing at $_plugin"; return 2
-    fi
-    "$_node" -e '
-      const p = require(process.argv[1]);
-      const r = p.runVerification(process.argv[2]);
-      if (r.status === "unknown") { console.log("verification not declared: " + r.reason); process.exit(2); }
-      if (r.output) console.log(r.output);
-      process.exit(r.status === "pass" ? 0 : (r.exitCode || 1));
-    ' "$_plugin" "$_root"
-}
-
 run_tsc_verification() {
     local story_id="$1"
     local output_file="${2:-/dev/null}"

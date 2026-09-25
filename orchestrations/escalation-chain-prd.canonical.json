@@ -81,7 +81,7 @@
       "dependencies": [
         "ESC-001"
       ],
-      "description": "Add src/esc/registry.py exporting register(greeting: str) -> str that returns the key a greeting is registered under (the greeting itself), and tests/test_registry.py asserting that register(greet(' Bob ')) == 'hello bob'.",
+      "description": "Add src/esc/registry.py exporting register(greeting: str) -> str that returns the key a greeting is registered under (the greeting itself), and tests/test_registry.py asserting that register(greet(' Bob ')) == 'hello bob'. The registry keys greetings by the shared normaliser, so this story also declares src/esc/normalize.py (shared with ESC-001, which owns it).",
       "acceptanceCriteria": [
         "register(greet(' Bob ')) returns 'hello bob'",
         "tests/test_registry.py covers it",
@@ -90,7 +90,8 @@
       "technicalNotes": {
         "files": [
           "src/esc/registry.py",
-          "tests/test_registry.py"
+          "tests/test_registry.py",
+          "src/esc/normalize.py"
         ],
         "workingDir": ".",
         "testCommand": "python -m pytest"

@@ -63,8 +63,11 @@ function validate(dir: string): number {
     // engine names, it calls that helper (which runs the project's DECLARED command). Without it
     // in the harness the call is a missing command, the grep matches nothing, and a spec that
     // does not compile is reported as passing — the harness would prove the opposite of its name.
-    `for f in _run_project_verification _typecheck_written_test _validate_written_test; do ` +
-    `sed -n "/^\${f}() {/,/^}/p" ${JSON.stringify(WRITER_SH)}; done > ${JSON.stringify(fnFile)}`]);
+    // _run_project_verification has ONE home, lib/tsc-baseline-gate.sh, which the writer sources.
+    `sed -n "/^_run_project_verification() {/,/^}/p" ${JSON.stringify(join(REPO, 'orchestrations/scripts/lib/tsc-baseline-gate.sh'))} > ${JSON.stringify(fnFile)}; ` +
+    `for f in _typecheck_written_test _validate_written_test; do ` +
+    `sed -n "/^\${f}() {/,/^}/p" ${JSON.stringify(WRITER_SH)}; done >> ${JSON.stringify(fnFile)}; ` +
+    `grep -q '^_run_project_verification() {' ${JSON.stringify(fnFile)} || { echo 'the verification helper was not extracted' >&2; exit 9; }`]);
   const script = [
     'set -uo pipefail',
     `PROJECT_ROOT=${JSON.stringify(dir)}`,

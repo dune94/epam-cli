@@ -141,20 +141,9 @@ _parse_failing_test_files() {
 # shellcheck source=lib/halt-recovery.sh
 . "$(cd "$(dirname "${BASH_SOURCE[0]}")" && pwd)/lib/halt-recovery.sh"
 
-_run_project_verification() {
-    local _root="${1:-$PROJECT_ROOT}"
-    local _auto="${AUTOMATION_DIR:-$(dirname "$(cd "$(dirname "${BASH_SOURCE[0]}")" && pwd)")}"
-    local _plugin="${_auto}/plugins/verification-plugin.js"
-    local _node="${NODE_CMD:-${NODE_BIN:-node}}"
-    if [ ! -f "$_plugin" ]; then echo "verification plugin missing at $_plugin"; return 2; fi
-    "$_node" -e '
-      const p = require(process.argv[1]);
-      const r = p.runVerification(process.argv[2]);
-      if (r.status === "unknown") { console.log("verification not declared: " + r.reason); process.exit(2); }
-      if (r.output) console.log(r.output);
-      process.exit(r.status === "pass" ? 0 : (r.exitCode || 1));
-    ' "$_plugin" "$_root"
-}
+# _run_project_verification: ONE definition, lib/tsc-baseline-gate.sh (section-aware). A copy here
+# overwrote it and dropped the section (regintel 2026-09-24).
+. "$(cd "$(dirname "${BASH_SOURCE[0]}")" && pwd)/lib/tsc-baseline-gate.sh"
 
 
 SCRIPT_DIR="$(cd "$(dirname "${BASH_SOURCE[0]}")" && pwd)"

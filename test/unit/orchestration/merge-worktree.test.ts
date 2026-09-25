@@ -60,6 +60,9 @@ function makeFixture(lane: 'primary' | 'independent' = 'primary'): {
   const scriptsDir = join(project, 'orchestrations/scripts');
   mkdirSync(scriptsDir, { recursive: true });
   copyFileSync(REAL_SCRIPT, join(scriptsDir, 'merge-worktree.sh'));
+  // It sources lib/tsc-baseline-gate.sh (the one _run_project_verification) — a real install has it.
+  mkdirSync(join(scriptsDir, 'lib'), { recursive: true });
+  copyFileSync(join(REPO_ROOT, 'orchestrations/scripts/lib/tsc-baseline-gate.sh'), join(scriptsDir, 'lib', 'tsc-baseline-gate.sh'));
 
   const worktreePath = join(root, `project-wt-${lane}`);
   const mergeLog = join(root, 'merge-requests.jsonl');

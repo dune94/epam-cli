@@ -3,7 +3,6 @@
   "implement_story",
   "review_and_correct_plan",
   "run_tsc_verification",
-  "_run_project_verification",
   "normalize_provider_json",
   "post_completion_message",
   "check_prerequisites",

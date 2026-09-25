@@ -15,6 +15,11 @@ _bg_count_ids() {
 # _run_project_verification <project_root>
 # The project's declared check (.epam/verification.json) via the verification plugin. The engine
 # names no tool, extension, directory or runtime path. Undeclared -> non-zero with a reason.
+# THE ONE DEFINITION. It was defined six times, and in every real process a copy that dropped the
+# section won (story-guards.sh, story-attempt.sh, run-agent-orchestration.sh), so the "test" baseline
+# ran the typecheck command and every pre-existing failure was charged to the running story
+# (regintel 2026-09-24). Every caller sources this file; test/unit/orchestration/
+# one-definition-per-function.test.ts fails if a second definition appears in either entry point.
 _run_project_verification() {
     local _root="${1:-$PROJECT_ROOT}"
     # THE SECTION IS THE CALLER'S, NOT AN ASSUMPTION. Without it every baseline ran the manifest's
@@ -22,7 +27,7 @@ _run_project_verification() {
     # never built, its cache was deleted, and every pre-existing suite failure was charged to the
     # story. Live 2026-09-02 (AMSD-1919). Empty means "the plugin's default", which is typecheck.
     local _section="${2:-}"
-    local _auto="${AUTOMATION_DIR:-$(dirname "$(cd "$(dirname "${BASH_SOURCE[0]}")" && pwd)")}"
+    local _auto="${AUTOMATION_DIR:-$(cd "$(dirname "${BASH_SOURCE[0]}")/../.." && pwd)}"  # lib/ -> orchestrations/
     local _plugin="${_auto}/plugins/verification-plugin.js"
     local _node="${NODE_CMD:-${NODE_BIN:-node}}"
     if [ ! -f "$_plugin" ]; then echo "verification plugin missing at $_plugin"; return 2; fi

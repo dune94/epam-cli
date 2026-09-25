@@ -27,7 +27,7 @@ import { mkdtempSync, writeFileSync, mkdirSync, rmSync, chmodSync, readFileSync 
 import { execFileSync } from 'node:child_process';
 import { join } from 'node:path';
 import { tmpdir } from 'node:os';
-import { engineSource } from '../../lib/engine-source';
+import { engineSource, shellFunction } from '../../lib/engine-source';
 
 const ORCH = join(__dirname, '../../../orchestrations/scripts/run-agent-orchestration.sh');
 const SRC = engineSource(ORCH);
@@ -138,7 +138,7 @@ function runGate(p: ReturnType<typeof project>, env: Record<string, string> = {}
      ${'. ' + JSON.stringify(join(__dirname, '../../../orchestrations/scripts/lib/bounded-exec.sh'))}
      ${'AUTOMATION_DIR=' + JSON.stringify(join(__dirname, '../../../orchestrations'))}
      ${'NODE_CMD=' + JSON.stringify(process.execPath)}
-     ${lift('_run_project_verification')}
+     ${shellFunction(join(__dirname, '../../../orchestrations/scripts/lib/tsc-baseline-gate.sh'), '_run_project_verification')}
 ${lift('run_unit_tests_gate')}
      run_unit_tests_gate core; echo "RC=$?"`,
   ], { encoding: 'utf8' });

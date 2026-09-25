@@ -1638,8 +1638,9 @@ resolve_escalation() {
     local escalation_file="${PROJECT_ROOT}/.epam/escalations/${escalating_story_id}.json"
     [ -f "$escalation_file" ] || return 1
 
-    local target_file diagnosis required_fix
+    local target_file diagnosis required_fix named_owner
     target_file=$(jq -r '.targetFile // empty' "$escalation_file" 2>/dev/null)
+    named_owner=$(jq -r '.ownerStoryId // empty' "$escalation_file" 2>/dev/null)
     diagnosis=$(jq -r '.diagnosis // empty' "$escalation_file" 2>/dev/null)
     required_fix=$(jq -r '.requiredFix // empty' "$escalation_file" 2>/dev/null)
     if [ -z "$target_file" ] || [ -z "$required_fix" ]; then
@@ -1683,8 +1684,16 @@ resolve_escalation() {
     # name the same file when either equals the other or ends with "/" + the other.
     # A deprecated split parent still lists its pre-split combined files and is
     # never the owner (the write side, run_relative_import_check, excludes it too).
-    local sibling_id
-    sibling_id=$(jq -r --arg parent "$parent_id" --arg file "$target_file" --arg self "$escalating_story_id" \
+    local sibling_id=""
+    # THE OWNER THE ANALYST NAMED, when it declares the file — on a file several stories declare the
+    # array-order lookup below picked whichever came first, whatever the diagnosis said.
+    if [ -n "$named_owner" ] && [ "$named_owner" != "$escalating_story_id" ]; then
+        sibling_id=$(jq -r --arg o "$named_owner" --arg file "$target_file" \
+            'def owns: (.technicalNotes.files // []) | map(. as $c | $c == $file or ($c | endswith("/" + $file)) or ($file | endswith("/" + $c))) | any;
+             .stories[] | select(.id == $o and .status != "deprecated") | select(owns) | .id' \
+            "$prd_target" 2>/dev/null | head -1)
+    fi
+    [ -z "$sibling_id" ] && sibling_id=$(jq -r --arg parent "$parent_id" --arg file "$target_file" --arg self "$escalating_story_id" \
         'def owns: (.technicalNotes.files // []) | map(. as $c | $c == $file or ($c | endswith("/" + $file)) or ($file | endswith("/" + $c))) | any;
          .stories[] | select(($parent != "") and .specification.createdFrom == $parent and .id != $self) | select(.status != "deprecated") | select(owns) | .id' \
         "$prd_target" 2>/dev/null | head -1)

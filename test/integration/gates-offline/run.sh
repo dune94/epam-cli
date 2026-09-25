@@ -28,6 +28,15 @@ mkdir -p "$WORK/install"
 tar -C "$SRC_INSTALL" -cf - --exclude='orchestrations/logs' --exclude='node_modules' --exclude='.git' orchestrations 2>/dev/null \
   | tar -C "$WORK/install" -xf -
 mkdir -p "$WORK/install/orchestrations/logs"
+# THE ENGINE UNDER TEST, on the install's state. ENGINE_UNDER_TEST=<an epam-cli checkout> replaces the
+# copied install's engine (scripts, plugins, engine config, templates, ecosystems) and keeps its
+# state (projects, agents, logs) — so a fix is proven on the real state BEFORE it is released.
+if [ -n "${ENGINE_UNDER_TEST:-}" ]; then
+  for _d in orchestrations/scripts orchestrations/plugins orchestrations/config orchestrations/prompts/templates orchestrations/ecosystems; do
+    rm -rf "$WORK/install/$_d" && cp -a "$ENGINE_UNDER_TEST/$_d" "$WORK/install/$_d" || { echo "[gates] could not install $_d under test"; exit 3; }
+  done
+  echo "[gates] engine under test: $ENGINE_UNDER_TEST ($(git -C "$ENGINE_UNDER_TEST" rev-parse --short HEAD 2>/dev/null)+working tree)"
+fi
 SRC_CODELINE="$(grep -E '^OUTPUT_DIR=' "$SRC_INSTALL/orchestrations/projects/$PROJECT/config.env" | cut -d= -f2-)"
 cp -a "$SRC_CODELINE" "$WORK/codeline"
 
@@ -54,23 +63,35 @@ export EPAM_PROJECT_CONFIG_DIR="$PROJ_DIR"
 export EPAM_PROVIDER_SET="$SET_NAME"
 export NODE_BIN="${NODE_BIN:-node}"
 
-log() { echo "LOG: $*"; }; warning() { echo "WARN: $*"; }; error() { echo "ERR: $*"; }
-success() { echo "OK: $*"; }; info() { :; }; is_truthy() { case "${1:-}" in true|1|yes) return 0;; *) return 1;; esac; }
+# THE CODE AS A RUN LOADS IT. This sourced lib/tsc-baseline-gate.sh alone, so it saw the one
+# section-aware _run_project_verification while every real process ran a later copy that dropped the
+# section: this harness said "baseline subtracted" while live runs built an EMPTY baseline and blamed
+# every story (2026-09-24). claude.sh, sourced, defines exactly what a run defines and stops
+# (it ends with `if (return 0); then return 0; fi`).
+# claude.sh runs under set -e; this harness does its own error handling.
 # shellcheck source=/dev/null
-. "$SCRIPT_DIR/lib/tsc-baseline-gate.sh"
+. "$SCRIPT_DIR/claude.sh" >/dev/null 2>&1
+set +e
 
 rc=0
 echo "== the codeline's own suite, as the pipeline runs it =="
 _cur="$(mktemp)"
 _run_project_verification "$PROJECT_ROOT" test > "$_cur" 2>&1; _cur_exit=$?
-echo "  suite exit=$_cur_exit, $(grep -c '^FAILED' "$_cur" 2>/dev/null || echo 0) FAILED line(s)"
+_n_failed=$(grep -c '^FAILED' "$_cur" 2>/dev/null); echo "  suite exit=$_cur_exit, ${_n_failed:-0} FAILED line(s), $(wc -c < "$_cur") bytes"
+# THE SUITE MUST HAVE RUN. Asked for the `test` section, a copy of _run_project_verification that
+# dropped it ran the typecheck: exit 0, nothing printed — and every check below passed vacuously
+# ("no new failures") while live runs blamed every story for inherited failures (2026-09-24).
+if [ ! -s "$_cur" ]; then
+  echo "FAIL  the test section produced no output — the declared test suite did not run (was the section dropped?)"
+  exit 1
+fi
 
 echo "== the baseline the pipeline would subtract =="
 _sha="$(tr -d '[:space:]' < "$LOG_DIR/phase-baseline-sha.txt" 2>/dev/null)"
 echo "  baseline sha: ${_sha:-<none declared>}"
 _delta="$(baseline_new_failures "$PROJECT_ROOT" "$NODE_BIN" "$LOG_DIR" test "$_cur")"; _delta_rc=$?
 _cache="$LOG_DIR/baseline-failures-test-${_sha:0:12}.txt"
-echo "  cache: $([ -f "$_cache" ] && wc -c < "$_cache" || echo 'absent') bytes, $([ -f "$_cache" ] && grep -c '[^[:space:]]' "$_cache" || echo 0) id(s)"
+_n_ids=$([ -f "$_cache" ] && grep -c '[^[:space:]]' "$_cache" 2>/dev/null); echo "  cache: $([ -f "$_cache" ] && wc -c < "$_cache" || echo 'absent') bytes, ${_n_ids:-0} id(s)"
 echo "  delta rc=$_delta_rc ($([ "$_delta_rc" -eq 0 ] && echo 'no NEW failures — a story would NOT be blamed' || echo 'new failures — a story WOULD be blamed'))"
 
 # THE ASSERTION THIS HARNESS EXISTS FOR. A codeline whose suite fails, judged against a baseline

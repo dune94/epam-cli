@@ -1,0 +1,674 @@
+{"level":30,"time":1790253688702,"pid":2263259,"hostname":"EPCATORW0499","command":"python -c \"\nimport tempfile, os, sys\nsys.path.insert(0, '.')\nfrom regintel import store\nfrom regintel import pipeline\n\ntmp = tempfile.NamedTemporaryFile(suffix='.db', delete=False)\ntmp.close()\ndb_path = tmp.name\n\npipeline.run_all(db_path=db_path, client=None)\nprint('=== events ===')\nfor e in store.list_events(db_path):\n    print(e['event_id'], e['source_id'], e['jurisdiction_name'], 'eff:', e['effective_date'])\nprint('=== classifications ===')\nfor c in store._connect(db_path):\n    break\nimport sqlite3\nconn = sqlite3.connect(db_path)\nfor r in conn.execute('SELECT event_id, bucket, model, duplicate_of FROM classifications').fetchall():\n    print(r)\n\"\n","msg":"RalphWiggumLoop: Skipped (EPAM_RALPH_WIGGUM_ENABLED=0)"}
+{
+  "result": "report_costs works correctly. Summary of changes:\n\n**Files written/modified:**\n\n1. **`regintel/config.py`** — Reconciled with injected content (PRICING, cost_usd, _normalise_model_name, _pricing_rates, confidence_threshold, db_path). All AC1-AC5 already satisfied.\n\n2. **`regintel/classifier.py`** — Reconciled with injected content and **fixed the blocker** by adding `_already_claimed_as_original` helper + guard in `classify_event`'s dedup pass. When the symmetric dedup rule finds a match, we now check if any prior event has already been classified with `duplicate_of == my_event_id` — if so, I'm the canonical original, not the duplicate, and we fall through to the model call. This prevents both halves of a duplicate pair from claiming each other in iteration-order-dependent ways.\n\n3. **`scripts/report_costs.py`** — Reconciled with injected content (covers AC7, AC8): reads SQLite via `db_path()`, prints events/model_calls/tokens/cost/projections + duplicate-exclusion note, writes `evidence/cost-report-<timestamp>.json` with the required keys.\n\n**Results:**\n- `tests/test_costs.py` — 8/8 passing\n- `tests/test_run_pipeline.py` — 5/5 passing\n- The single failing `tests/test_escalation.py::test_no_event_missing_a_classification_after_garbage_responses` is a pre-existing failure documented in `.epam/escalations/REGI-002.json` and REGI-010-B.json (stale bucket assertion; out of REGI-009a's scope).",
+  "model": "MiniMax-M3",
+  "provider": "minimax",
+  "usage": {
+    "inputTokens": 2390835,
+    "outputTokens": 27112,
+    "totalTokens": 2417947,
+    "cached_input_tokens": 2289186
+  },
+  "cost_usd": 0.7498,
+  "cost_is_estimate": true,
+  "toolCallCount": 60,
+  "iterations": 51,
+  "timings": [
+    {
+      "iteration": 1,
+      "modelLatencyMs": 59832,
+      "toolExecMs": 2,
+      "toolCalls": [
+        {
+          "name": "write_file",
+          "resultBytes": 92,
+          "isError": false
+        },
+        {
+          "name": "write_file",
+          "resultBytes": 97,
+          "isError": false
+        },
+        {
+          "name": "write_file",
+          "resultBytes": 97,
+          "isError": false
+        }
+      ]
+    },
+    {
+      "iteration": 2,
+      "modelLatencyMs": 2031,
+      "toolExecMs": 0,
+      "toolCalls": [
+        {
+          "name": "bash",
+          "resultBytes": 267,
+          "isError": true
+        }
+      ]
+    },
+    {
+      "iteration": 3,
+      "modelLatencyMs": 4436,
+      "toolExecMs": 10,
+      "toolCalls": [
+        {
+          "name": "list_files",
+          "resultBytes": 64,
+          "isError": false
+        },
+        {
+          "name": "list_files",
+          "resultBytes": 196,
+          "isError": false
+        },
+        {
+          "name": "list_files",
+          "resultBytes": 19,
+          "isError": false
+        }
+      ]
+    },
+    {
+      "iteration": 4,
+      "modelLatencyMs": 1514,
+      "toolExecMs": 5,
+      "toolCalls": [
+        {
+          "name": "read_file",
+          "resultBytes": 10913,
+          "isError": false
+        },
+        {
+          "name": "read_file",
+          "resultBytes": 14540,
+          "isError": false
+        }
+      ]
+    },
+    {
+      "iteration": 5,
+      "modelLatencyMs": 13739,
+      "toolExecMs": 2,
+      "toolCalls": [
+        {
+          "name": "read_file",
+          "resultBytes": 267,
+          "isError": false
+        },
+        {
+          "name": "read_file",
+          "resultBytes": 6268,
+          "isError": false
+        },
+        {
+          "name": "read_file",
+          "resultBytes": 9227,
+          "isError": false
+        }
+      ]
+    },
+    {
+      "iteration": 6,
+      "modelLatencyMs": 1754,
+      "toolExecMs": 5,
+      "toolCalls": [
+        {
+          "name": "read_file",
+          "resultBytes": 264,
+          "isError": false
+        },
+        {
+          "name": "read_file",
+          "resultBytes": 6782,
+          "isError": false
+        }
+      ]
+    },
+    {
+      "iteration": 7,
+      "modelLatencyMs": 1889,
+      "toolExecMs": 5,
+      "toolCalls": [
+        {
+          "name": "read_file",
+          "resultBytes": 263,
+          "isError": false
+        },
+        {
+          "name": "list_files",
+          "resultBytes": 26,
+          "isError": false
+        }
+      ]
+    },
+    {
+      "iteration": 8,
+      "modelLatencyMs": 1271,
+      "toolExecMs": 6,
+      "toolCalls": [
+        {
+          "name": "read_file",
+          "resultBytes": 10913,
+          "isError": false
+        }
+      ]
+    },
+    {
+      "iteration": 9,
+      "modelLatencyMs": 1470,
+      "toolExecMs": 17,
+      "toolCalls": [
+        {
+          "name": "bash",
+          "resultBytes": 59,
+          "isError": false
+        }
+      ]
+    },
+    {
+      "iteration": 10,
+      "modelLatencyMs": 3060,
+      "toolExecMs": 3,
+      "toolCalls": [
+        {
+          "name": "read_file",
+          "resultBytes": 263,
+          "isError": false
+        }
+      ]
+    },
+    {
+      "iteration": 11,
+      "modelLatencyMs": 1551,
+      "toolExecMs": 15,
+      "toolCalls": [
+        {
+          "name": "bash",
+          "resultBytes": 5196,
+          "isError": false
+        }
+      ]
+    },
+    {
+      "iteration": 12,
+      "modelLatencyMs": 9527,
+      "toolExecMs": 16,
+      "toolCalls": [
+        {
+          "name": "list_files",
+          "resultBytes": 17,
+          "isError": false
+        },
+        {
+          "name": "bash",
+          "resultBytes": 140,
+          "isError": false
+        }
+      ]
+    },
+    {
+      "iteration": 13,
+      "modelLatencyMs": 1348,
+      "toolExecMs": 0,
+      "toolCalls": [
+        {
+          "name": "bash",
+          "resultBytes": 309,
+          "isError": true
+        }
+      ]
+    },
+    {
+      "iteration": 14,
+      "modelLatencyMs": 1326,
+      "toolExecMs": 5,
+      "toolCalls": [
+        {
+          "name": "read_file",
+          "resultBytes": 6682,
+          "isError": false
+        }
+      ]
+    },
+    {
+      "iteration": 15,
+      "modelLatencyMs": 1841,
+      "toolExecMs": 22,
+      "toolCalls": [
+        {
+          "name": "bash",
+          "resultBytes": 3809,
+          "isError": false
+        }
+      ]
+    },
+    {
+      "iteration": 16,
+      "modelLatencyMs": 1672,
+      "toolExecMs": 15,
+      "toolCalls": [
+        {
+          "name": "bash",
+          "resultBytes": 5708,
+          "isError": false
+        }
+      ]
+    },
+    {
+      "iteration": 17,
+      "modelLatencyMs": 2977,
+      "toolExecMs": 15,
+      "toolCalls": [
+        {
+          "name": "bash",
+          "resultBytes": 2445,
+          "isError": false
+        }
+      ]
+    },
+    {
+      "iteration": 18,
+      "modelLatencyMs": 1517,
+      "toolExecMs": 0,
+      "toolCalls": [
+        {
+          "name": "bash",
+          "resultBytes": 356,
+          "isError": true
+        }
+      ]
+    },
+    {
+      "iteration": 19,
+      "modelLatencyMs": 1626,
+      "toolExecMs": 42,
+      "toolCalls": [
+        {
+          "name": "search",
+          "resultBytes": 53,
+          "isError": false
+        }
+      ]
+    },
+    {
+      "iteration": 20,
+      "modelLatencyMs": 2318,
+      "toolExecMs": 2,
+      "toolCalls": [
+        {
+          "name": "read_file",
+          "resultBytes": 1135,
+          "isError": false
+        }
+      ]
+    },
+    {
+      "iteration": 21,
+      "modelLatencyMs": 2752,
+      "toolExecMs": 705,
+      "toolCalls": [
+        {
+          "name": "bash",
+          "resultBytes": 1173,
+          "isError": false
+        }
+      ]
+    },
+    {
+      "iteration": 22,
+      "modelLatencyMs": 1794,
+      "toolExecMs": 881,
+      "toolCalls": [
+        {
+          "name": "bash",
+          "resultBytes": 2359,
+          "isError": false
+        }
+      ]
+    },
+    {
+      "iteration": 23,
+      "modelLatencyMs": 3441,
+      "toolExecMs": 1,
+      "toolCalls": [
+        {
+          "name": "read_file",
+          "resultBytes": 10234,
+          "isError": false
+        }
+      ]
+    },
+    {
+      "iteration": 24,
+      "modelLatencyMs": 2971,
+      "toolExecMs": 3,
+      "toolCalls": [
+        {
+          "name": "read_file",
+          "resultBytes": 262,
+          "isError": false
+        }
+      ]
+    },
+    {
+      "iteration": 25,
+      "modelLatencyMs": 1525,
+      "toolExecMs": 4,
+      "toolCalls": [
+        {
+          "name": "read_file",
+          "resultBytes": 2120,
+          "isError": false
+        }
+      ]
+    },
+    {
+      "iteration": 26,
+      "modelLatencyMs": 2066,
+      "toolExecMs": 6,
+      "toolCalls": [
+        {
+          "name": "read_file",
+          "resultBytes": 13450,
+          "isError": false
+        }
+      ]
+    },
+    {
+      "iteration": 27,
+      "modelLatencyMs": 5060,
+      "toolExecMs": 479,
+      "toolCalls": [
+        {
+          "name": "bash",
+          "resultBytes": 2044,
+          "isError": true
+        }
+      ]
+    },
+    {
+      "iteration": 28,
+      "modelLatencyMs": 3156,
+      "toolExecMs": 496,
+      "toolCalls": [
+        {
+          "name": "bash",
+          "resultBytes": 1468,
+          "isError": false
+        }
+      ]
+    },
+    {
+      "iteration": 29,
+      "modelLatencyMs": 4777,
+      "toolExecMs": 28,
+      "toolCalls": [
+        {
+          "name": "search",
+          "resultBytes": 6051,
+          "isError": false
+        }
+      ]
+    },
+    {
+      "iteration": 30,
+      "modelLatencyMs": 2501,
+      "toolExecMs": 41,
+      "toolCalls": [
+        {
+          "name": "search",
+          "resultBytes": 18,
+          "isError": false
+        }
+      ]
+    },
+    {
+      "iteration": 31,
+      "modelLatencyMs": 2900,
+      "toolExecMs": 27,
+      "toolCalls": [
+        {
+          "name": "search",
+          "resultBytes": 84,
+          "isError": false
+        }
+      ]
+    },
+    {
+      "iteration": 32,
+      "modelLatencyMs": 6923,
+      "toolExecMs": 19,
+      "toolCalls": [
+        {
+          "name": "search",
+          "resultBytes": 383,
+          "isError": false
+        }
+      ]
+    },
+    {
+      "iteration": 33,
+      "modelLatencyMs": 1815,
+      "toolExecMs": 2,
+      "toolCalls": [
+        {
+          "name": "read_file",
+          "resultBytes": 2018,
+          "isError": false
+        }
+      ]
+    },
+    {
+      "iteration": 34,
+      "modelLatencyMs": 5126,
+      "toolExecMs": 481,
+      "toolCalls": [
+        {
+          "name": "bash",
+          "resultBytes": 1054,
+          "isError": false
+        }
+      ]
+    },
+    {
+      "iteration": 35,
+      "modelLatencyMs": 4210,
+      "toolExecMs": 434,
+      "toolCalls": [
+        {
+          "name": "bash",
+          "resultBytes": 584,
+          "isError": false
+        }
+      ]
+    },
+    {
+      "iteration": 36,
+      "modelLatencyMs": 6703,
+      "toolExecMs": 72,
+      "toolCalls": [
+        {
+          "name": "bash",
+          "resultBytes": 277,
+          "isError": false
+        }
+      ]
+    },
+    {
+      "iteration": 37,
+      "modelLatencyMs": 2357,
+      "toolExecMs": 6,
+      "toolCalls": [
+        {
+          "name": "read_file",
+          "resultBytes": 266,
+          "isError": false
+        }
+      ]
+    },
+    {
+      "iteration": 38,
+      "modelLatencyMs": 1914,
+      "toolExecMs": 0,
+      "toolCalls": [
+        {
+          "name": "read_file",
+          "resultBytes": 7048,
+          "isError": false
+        }
+      ]
+    },
+    {
+      "iteration": 39,
+      "modelLatencyMs": 2416,
+      "toolExecMs": 29,
+      "toolCalls": [
+        {
+          "name": "search",
+          "resultBytes": 799,
+          "isError": false
+        }
+      ]
+    },
+    {
+      "iteration": 40,
+      "modelLatencyMs": 1891,
+      "toolExecMs": 7,
+      "toolCalls": [
+        {
+          "name": "read_file",
+          "resultBytes": 261,
+          "isError": false
+        }
+      ]
+    },
+    {
+      "iteration": 41,
+      "modelLatencyMs": 1572,
+      "toolExecMs": 15,
+      "toolCalls": [
+        {
+          "name": "bash",
+          "resultBytes": 2347,
+          "isError": false
+        }
+      ]
+    },
+    {
+      "iteration": 42,
+      "modelLatencyMs": 26781,
+      "toolExecMs": 3,
+      "toolCalls": [
+        {
+          "name": "write_file",
+          "resultBytes": 97,
+          "isError": false
+        }
+      ]
+    },
+    {
+      "iteration": 43,
+      "modelLatencyMs": 3926,
+      "toolExecMs": 453,
+      "toolCalls": [
+        {
+          "name": "bash",
+          "resultBytes": 682,
+          "isError": false
+        }
+      ]
+    },
+    {
+      "iteration": 44,
+      "modelLatencyMs": 1823,
+      "toolExecMs": 948,
+      "toolCalls": [
+        {
+          "name": "bash",
+          "resultBytes": 1606,
+          "isError": false
+        }
+      ]
+    },
+    {
+      "iteration": 45,
+      "modelLatencyMs": 2158,
+      "toolExecMs": 3479,
+      "toolCalls": [
+        {
+          "name": "bash",
+          "resultBytes": 1519,
+          "isError": false
+        }
+      ]
+    },
+    {
+      "iteration": 46,
+      "modelLatencyMs": 2178,
+      "toolExecMs": 26,
+      "toolCalls": [
+        {
+          "name": "search",
+          "resultBytes": 53,
+          "isError": false
+        }
+      ]
+    },
+    {
+      "iteration": 47,
+      "modelLatencyMs": 1656,
+      "toolExecMs": 9,
+      "toolCalls": [
+        {
+          "name": "read_file",
+          "resultBytes": 1354,
+          "isError": false
+        }
+      ]
+    },
+    {
+      "iteration": 48,
+      "modelLatencyMs": 2795,
+      "toolExecMs": 622,
+      "toolCalls": [
+        {
+          "name": "bash",
+          "resultBytes": 539,
+          "isError": false
+        }
+      ]
+    },
+    {
+      "iteration": 49,
+      "modelLatencyMs": 3613,
+      "toolExecMs": 661,
+      "toolCalls": [
+        {
+          "name": "bash",
+          "resultBytes": 1494,
+          "isError": false
+        }
+      ]
+    },
+    {
+      "iteration": 50,
+      "modelLatencyMs": 1732,
+      "toolExecMs": 62,
+      "toolCalls": [
+        {
+          "name": "bash",
+          "resultBytes": 820,
+          "isError": false
+        }
+      ]
+    },
+    {
+      "iteration": 51,
+      "modelLatencyMs": 3591,
+      "toolExecMs": 0,
+      "toolCalls": []
+    }
+  ]
+}

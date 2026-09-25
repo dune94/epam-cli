@@ -4,8 +4,7 @@
   "_engage_write_perimeter",
   "_render_change_reviewer",
   "_codeline_test_command",
-  "_parse_failing_test_files",
-  "_run_project_verification"
+  "_parse_failing_test_files"
  ],
  "gates-testing": [
   "run_testing_gates",

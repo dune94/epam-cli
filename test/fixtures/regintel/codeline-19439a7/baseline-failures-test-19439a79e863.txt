@@ -1,0 +1,5 @@
+tests/test_costs.py::test_duplicate_records_cost_zero
+tests/test_costs.py::test_report_costs_script_end_to_end
+tests/test_run_pipeline.py::test_fake_run_per_fixture_buckets
+tests/test_run_pipeline.py::test_evidence_json_field_completeness
+tests/test_run_pipeline.py::test_fake_client_never_called_for_duplicate_ru006

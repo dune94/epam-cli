@@ -109,11 +109,12 @@ fi
 echo "== the loop must recover =="
 # Not model luck: if a real model cannot finish this story, the cause is what the pipeline gave it,
 # and the artefacts above say which input was missing.
-if python3 - "$W/prd.json" <<'PY'
-import json,sys
-print('completed' if json.load(open(sys.argv[1]))['stories'][0].get('status')=='completed' else 'not')
-PY
-  [ "$(python3 -c "import json;print(json.load(open('$W/prd.json'))['stories'][0].get('status'))")" = "completed" ]; then
+# THE STORY UNDER TEST, by id. This read stories[0] — REGI-001, deprecated — so on 2026-09-24 a run
+# whose REGI-009a completed was reported "did not complete".
+_status="$(python3 -c 'import json,sys
+print(next((s.get("status") for s in json.load(open(sys.argv[1]))["stories"] if s.get("id")==sys.argv[2]), "absent"))' "$W/prd.json" "$STORY")"
+echo "  $STORY: ${_status:-unreadable}"
+if [ "$_status" = "completed" ]; then
   pass "the story completed after self-heal"
 else
   fail "the story did not complete" "see $RUN and $LOGS"

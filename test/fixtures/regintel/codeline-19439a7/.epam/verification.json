@@ -1,0 +1,16 @@
+{
+  "typecheck": {
+    "command": "python3 -m compileall -q -x '(^|/)(\\.venv|venv|\\.tox|node_modules)(/|$)' .",
+    "failurePattern": "File \"([^\"]+)\", line (\\d+)",
+    "failureIdentity": "{1}:{2}",
+    "detected": "requirements.txt (ecosystem requirements.txt)"
+  },
+  "test": {
+    "command": "python3 -m pytest",
+    "scopedCommand": "python3 -m pytest {files}",
+    "testFilePattern": "(^|/)(test_[^/]*|[^/]*_test)\\.py$",
+    "failurePattern": "^(?:FAILED|ERROR)\\s+(\\S+?)::(\\S+?)(?:\\s+-\\s|\\s*$)",
+    "failureIdentity": "{1}::{2}",
+    "detected": "requirements.txt via the requirements.txt ecosystem provider"
+  }
+}

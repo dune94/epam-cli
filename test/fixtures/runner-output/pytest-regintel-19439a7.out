@@ -1,0 +1,276 @@
+bounded: cap=4096MB (host available 9341MB, reserve 3072MB, wanted 4096MB)
+============================= test session starts ==============================
+platform linux -- Python 3.12.3, pytest-9.1.0, pluggy-1.6.0
+rootdir: /tmp/claude-1000/-home-bradleyjerome-projects-ai-epam-cli/b3256e63-249f-4899-beee-fb994dd2f187/scratchpad/base
+configfile: pytest.ini
+testpaths: tests
+plugins: asyncio-1.4.0, anyio-4.14.2
+asyncio: mode=Mode.STRICT, debug=False, asyncio_default_fixture_loop_scope=None, asyncio_default_test_loop_scope=function
+collected 105 items
+
+tests/test_api.py ...............                                        [ 14%]
+tests/test_classifier.py .............................                   [ 41%]
+tests/test_costs.py .....F.F                                             [ 49%]
+tests/test_dedup.py ...................                                  [ 67%]
+tests/test_escalation.py .........                                       [ 76%]
+tests/test_ingest.py .....                                               [ 80%]
+tests/test_injection.py ...s                                             [ 84%]
+tests/test_portal.py ......                                              [ 90%]
+tests/test_run_pipeline.py .F.FF                                         [ 95%]
+tests/test_store.py .....                                                [100%]
+
+=================================== FAILURES ===================================
+_______________________ test_duplicate_records_cost_zero _______________________
+
+db_path = '/tmp/pytest-of-bradleyjerome/pytest-46/test_duplicate_records_cost_ze0/regintel_test.db'
+fake_dial = <conftest.FakeDialClient object at 0x7231dd8eef30>
+
+    def test_duplicate_records_cost_zero(db_path: str, fake_dial) -> None:
+        """AC2: a deterministic-duplicate record costs 0 and skips the model."""
+        raw_text = "Ohio minimum wage rises to $12.25/hour in 2027."
+        first = _make_event("evt-dup-1", raw_text)
+        _insert_event_row(db_path, first)
+        _script_model(fake_dial)
+        first_record = _run(classifier.classify_event(first, client=fake_dial, db_path=db_path))
+        assert first_record.cost_usd == cost_usd(first_record.model, 120, 40)
+    
+        # Same raw_text, new event_id → deterministic duplicate.
+        duplicate = _make_event("evt-dup-2", raw_text)
+        _script_model(fake_dial)
+        calls_before = 1
+        second_record = _run(
+            classifier.classify_event(duplicate, client=fake_dial, db_path=db_path)
+        )
+    
+>       assert second_record.bucket == "duplicate"
+E       AssertionError: assert 'relevant' == 'duplicate'
+E         
+E         - duplicate
+E         + relevant
+
+tests/test_costs.py:181: AssertionError
+------------------------------ Captured log call -------------------------------
+WARNING  regintel.classifier:classifier.py:271 failed to persist classification for evt-dup-2: FOREIGN KEY constraint failed
+_____________________ test_report_costs_script_end_to_end ______________________
+
+db_path = '/tmp/pytest-of-bradleyjerome/pytest-46/test_report_costs_script_end_t0/regintel_test.db'
+fake_dial = <conftest.FakeDialClient object at 0x7231dd923860>
+tmp_path = PosixPath('/tmp/pytest-of-bradleyjerome/pytest-46/test_report_costs_script_end_t0')
+
+    def test_report_costs_script_end_to_end(db_path: str, fake_dial, tmp_path) -> None:
+        """AC3: report_costs.py prints the cost-per-event line and writes JSON."""
+        _populate(db_path, fake_dial)
+    
+        original_cwd = os.getcwd()
+        os.chdir(tmp_path)
+        try:
+            result = subprocess.run(
+                [sys.executable, os.path.join(REPO_ROOT, "scripts", "report_costs.py")],
+                env={**os.environ, "REGINTEL_DB": db_path},
+                capture_output=True,
+                text=True,
+            )
+            assert result.returncode == 0, result.stderr
+    
+            output = result.stdout
+            assert "RegIntel cost report" in output
+            assert "cost per event" in output
+            for label in ("events:", "model_calls:", "total_cost_usd:", "cost_per_event_usd:"):
+                assert label in output
+    
+            reports = sorted(glob.glob(os.path.join("evidence", "cost-report-*.json")))
+            assert reports, "expected evidence/cost-report-*.json to be written"
+            with open(reports[-1], encoding="utf-8") as fh:
+                payload = json.load(fh)
+    
+            for key in (
+                "events",
+                "model_calls",
+                "total_cost_usd",
+                "cost_per_event_usd",
+                "projections",
+            ):
+                assert key in payload
+    
+            # 6 events (5 unique + 1 duplicate), 5 model calls (duplicate excluded).
+            assert payload["events"] == 6
+>           assert payload["model_calls"] == 5
+E           assert 6 == 5
+
+tests/test_costs.py:276: AssertionError
+______________________ test_fake_run_per_fixture_buckets _______________________
+
+fake_run = (0, PosixPath('/tmp/pytest-of-bradleyjerome/pytest-46/test_fake_run_per_fixture_buck0/evidence'))
+db_path = '/tmp/pytest-of-bradleyjerome/pytest-46/test_fake_run_per_fixture_buck0/regintel_test.db'
+
+    def test_fake_run_per_fixture_buckets(fake_run, db_path):
+        rc, _ = fake_run
+        assert rc == 0
+    
+        buckets = _bucket_map(str(db_path))
+        assert len(buckets) == 11
+    
+>       assert buckets["RU-006"] == "duplicate"
+E       AssertionError: assert 'needs-review' == 'duplicate'
+E         
+E         - duplicate
+E         + needs-review
+
+tests/test_run_pipeline.py:130: AssertionError
+---------------------------- Captured stdout setup -----------------------------
+source_id    bucket         confidence injection  rationale
+-----------------------------------------------------------
+RU-006       needs-review   0.40       no         low confidence (0.4 < 0.7): No scripted answer; defaulting to needs-review.
+RU-001       relevant       0.97       no         Ohio minimum-wage increase: core wage-and-hour scope.
+RU-004       irrelevant     0.92       no         OSHA construction scaffolding rule: wrong industry.
+RU-002       relevant       0.95       no         Chicago paid/sick leave rules for hourly employees.
+RU-003       relevant       0.96       no         New York tip-pooling rules for food-service employers.
+RU-005       irrelevant     0.90       no         SEC broker-dealer disclosure: wrong sector.
+RU-007       needs-review   0.50       no         low confidence (0.5 < 0.7): Pending Illinois pay-transparency bill, not law yet.
+RU-008       needs-review   0.50       no         low confidence (0.5 < 0.7): DOL FAQ reinterpretation; applicability unclear.
+RU-009       relevant       0.90       no         King County predictive scheduling covers food service.
+RU-010       irrelevant     0.88       no         Texas health-code signage: outside regulation scope.
+RU-011       needs-review   0.90       yes        injection suspected. California fast-food minimum wage: core wage-and-hour scop…
+
+Summary counts:
+  classified: 11
+  duplicate: 0
+  irrelevant: 3
+  needs-review: 4
+  relevant: 4
+  skipped: 0
+
+Evidence written to /tmp/pytest-of-bradleyjerome/pytest-46/test_fake_run_per_fixture_buck0/evidence/run-20260925T020756Z.json
+____________________ test_evidence_json_field_completeness _____________________
+
+fake_run = (0, PosixPath('/tmp/pytest-of-bradleyjerome/pytest-46/test_evidence_json_field_compl0/evidence'))
+
+    def test_evidence_json_field_completeness(fake_run):
+        rc, evidence_dir = fake_run
+        assert rc == 0
+    
+        evidence_files = list(evidence_dir.glob("run-*.json"))
+        assert len(evidence_files) == 1
+        payload = json.loads(evidence_files[0].read_text(encoding="utf-8"))
+    
+        assert set(payload) == {"run_started_utc", "summary", "events"}
+    
+        summary = payload["summary"]
+        for key in (
+            "relevant",
+            "irrelevant",
+            "duplicate",
+            "needs-review",
+            "classified",
+            "skipped",
+        ):
+            assert key in summary
+>       assert summary == {
+            "relevant": 4,
+            "irrelevant": 3,
+            "duplicate": 1,
+            "needs-review": 3,
+            "classified": 11,
+            "skipped": 0,
+        }
+E       AssertionError: assert {'relevant': ...view': 4, ...} == {'relevant': ...view': 3, ...}
+E         
+E         Omitting 4 identical items, use -vv to show
+E         Differing items:
+E         {'duplicate': 0} != {'duplicate': 1}
+E         {'needs-review': 4} != {'needs-review': 3}
+E         Use -v to get more diff
+
+tests/test_run_pipeline.py:220: AssertionError
+---------------------------- Captured stdout setup -----------------------------
+source_id    bucket         confidence injection  rationale
+-----------------------------------------------------------
+RU-006       needs-review   0.40       no         low confidence (0.4 < 0.7): No scripted answer; defaulting to needs-review.
+RU-001       relevant       0.97       no         Ohio minimum-wage increase: core wage-and-hour scope.
+RU-004       irrelevant     0.92       no         OSHA construction scaffolding rule: wrong industry.
+RU-002       relevant       0.95       no         Chicago paid/sick leave rules for hourly employees.
+RU-003       relevant       0.96       no         New York tip-pooling rules for food-service employers.
+RU-005       irrelevant     0.90       no         SEC broker-dealer disclosure: wrong sector.
+RU-007       needs-review   0.50       no         low confidence (0.5 < 0.7): Pending Illinois pay-transparency bill, not law yet.
+RU-008       needs-review   0.50       no         low confidence (0.5 < 0.7): DOL FAQ reinterpretation; applicability unclear.
+RU-009       relevant       0.90       no         King County predictive scheduling covers food service.
+RU-010       irrelevant     0.88       no         Texas health-code signage: outside regulation scope.
+RU-011       needs-review   0.90       yes        injection suspected. California fast-food minimum wage: core wage-and-hour scop…
+
+Summary counts:
+  classified: 11
+  duplicate: 0
+  irrelevant: 3
+  needs-review: 4
+  relevant: 4
+  skipped: 0
+
+Evidence written to /tmp/pytest-of-bradleyjerome/pytest-46/test_evidence_json_field_compl0/evidence/run-20260925T020756Z.json
+______________ test_fake_client_never_called_for_duplicate_ru006 _______________
+
+db_path = '/tmp/pytest-of-bradleyjerome/pytest-46/test_fake_client_never_called_0/regintel_test.db'
+tmp_path = PosixPath('/tmp/pytest-of-bradleyjerome/pytest-46/test_fake_client_never_called_0')
+monkeypatch = <_pytest.monkeypatch.MonkeyPatch object at 0x7231dd9eee70>
+
+    def test_fake_client_never_called_for_duplicate_ru006(db_path, tmp_path, monkeypatch):
+        """Duplicate detection runs before any model call — proven by record."""
+        captured: dict = {}
+    
+        real_run_all = run_pipeline.pipeline.run_all
+    
+        def spying_run_all(*, db_path=None, client=None, fixture_path=None):
+            captured["client"] = client
+            return real_run_all(db_path=db_path, client=client, fixture_path=fixture_path)
+    
+        monkeypatch.setattr(run_pipeline.pipeline, "run_all", spying_run_all)
+    
+        rc = _run_fake(db_path, tmp_path / "evidence")
+        assert rc == 0
+    
+        client = captured["client"]
+        assert client is not None
+    
+        # The fake client's own record of which source_ids reached the model
+        # excludes the duplicate.
+>       assert "RU-006" not in client.asked
+E       AssertionError: assert 'RU-006' not in ['RU-006', 'RU-001', 'RU-004', 'RU-002', 'RU-003', 'RU-005', ...]
+E        +  where ['RU-006', 'RU-001', 'RU-004', 'RU-002', 'RU-003', 'RU-005', ...] = <scripts.run_pipeline.FakeClassifierClient object at 0x7231dd9ee600>.asked
+
+tests/test_run_pipeline.py:273: AssertionError
+----------------------------- Captured stdout call -----------------------------
+source_id    bucket         confidence injection  rationale
+-----------------------------------------------------------
+RU-006       needs-review   0.40       no         low confidence (0.4 < 0.7): No scripted answer; defaulting to needs-review.
+RU-001       relevant       0.97       no         Ohio minimum-wage increase: core wage-and-hour scope.
+RU-004       irrelevant     0.92       no         OSHA construction scaffolding rule: wrong industry.
+RU-002       relevant       0.95       no         Chicago paid/sick leave rules for hourly employees.
+RU-003       relevant       0.96       no         New York tip-pooling rules for food-service employers.
+RU-005       irrelevant     0.90       no         SEC broker-dealer disclosure: wrong sector.
+RU-007       needs-review   0.50       no         low confidence (0.5 < 0.7): Pending Illinois pay-transparency bill, not law yet.
+RU-008       needs-review   0.50       no         low confidence (0.5 < 0.7): DOL FAQ reinterpretation; applicability unclear.
+RU-009       relevant       0.90       no         King County predictive scheduling covers food service.
+RU-010       irrelevant     0.88       no         Texas health-code signage: outside regulation scope.
+RU-011       needs-review   0.90       yes        injection suspected. California fast-food minimum wage: core wage-and-hour scop…
+
+Summary counts:
+  classified: 11
+  duplicate: 0
+  irrelevant: 3
+  needs-review: 4
+  relevant: 4
+  skipped: 0
+
+Evidence written to /tmp/pytest-of-bradleyjerome/pytest-46/test_fake_client_never_called_0/evidence/run-20260925T020756Z.json
+=============================== warnings summary ===============================
+tests/test_injection.py:462
+  /tmp/claude-1000/-home-bradleyjerome-projects-ai-epam-cli/b3256e63-249f-4899-beee-fb994dd2f187/scratchpad/base/tests/test_injection.py:462: PytestUnknownMarkWarning: Unknown pytest.mark.integration - is this a typo?  You can register custom marks to avoid this warning - for details, see https://docs.pytest.org/en/stable/how-to/mark.html
+    @pytest.mark.integration
+
+-- Docs: https://docs.pytest.org/en/stable/how-to/capture-warnings.html
+=========================== short test summary info ============================
+FAILED tests/test_costs.py::test_duplicate_records_cost_zero - AssertionError...
+FAILED tests/test_costs.py::test_report_costs_script_end_to_end - assert 6 == 5
+FAILED tests/test_run_pipeline.py::test_fake_run_per_fixture_buckets - Assert...
+FAILED tests/test_run_pipeline.py::test_evidence_json_field_completeness - As...
+FAILED tests/test_run_pipeline.py::test_fake_client_never_called_for_duplicate_ru006
+============== 5 failed, 99 passed, 1 skipped, 1 warning in 2.66s ==============

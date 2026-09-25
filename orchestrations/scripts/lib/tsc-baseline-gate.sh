@@ -116,6 +116,15 @@ baseline_new_failures() {
         return 0
     fi
 
+    # A RED CHECK THAT SAID NOTHING HAS NOTHING TO SUBTRACT FROM. Every answer this function gives
+    # travels by exit code and stdout, because every caller runs it inside `$(…)` — a variable set
+    # here dies with the subshell (BASELINE_KNOWN_FAILURES did, 2026-09-24, and failed REGI-009a on
+    # five inherited failures). So the whole verdict is decided HERE, once, for every caller.
+    if [ -z "$(printf '%s' "$check_output" | tr -d '[:space:]')" ]; then
+        echo "[the ${section} check failed and printed nothing — there is no result to judge, so this is not a pass]"
+        return 1
+    fi
+
     local _plugin="${AUTOMATION_DIR:-$(dirname "$(cd "$(dirname "${BASH_SOURCE[0]}")" && pwd)")}/plugins/verification-plugin.js"
     local _node="${node_cmd:-${NODE_CMD:-${NODE_BIN:-node}}}"
 
@@ -270,6 +279,13 @@ baseline_new_failures() {
                     const p = require(process.argv[1]);
                     let s = ""; process.stdin.on("data", (d) => { s += d; }).on("end", () => {
                       const cur = p.parseFailures(process.argv[2], s, process.argv[4]);
+                      // A RED CHECK WITH NO FAILURE RECORDS DID NOT RUN TO A RESULT (pytest exit 2
+                      // on a collection error, 2026-09-22). An empty set is a subset of every
+                      // baseline, so without this it read as "all pre-existing" and passed.
+                      if (Array.isArray(cur) && cur.length === 0) {
+                        process.stdout.write("[the " + process.argv[4] + " check failed but reported no failure records — it did not run to a judgeable result, so nothing here can be called pre-existing]\n" + s);
+                        return;
+                      }
                       let base = [];
                       try { base = fs.readFileSync(process.argv[3], "utf8").split("\n").filter(Boolean); }
                       catch { base = []; }
@@ -289,20 +305,6 @@ baseline_new_failures() {
             fi
         fi
     fi
-
-    # HOW MANY FAILURES THE BASELINE ACTUALLY KNOWS ABOUT, published for the caller.
-    #
-    # An empty delta means "nothing here is new", and a caller reads that as "every failure was
-    # already in the codeline". That inference only holds if the baseline HAS failures. When the
-    # check exited non-zero and the baseline is empty, the truthful reading is the opposite:
-    # nothing the baseline can explain came back — the suite did not produce a judgeable result.
-    # Live 2026-09-22: `pytest` exited 2 on a collection error, emitted no failure records, the
-    # delta was empty, and two stories were marked complete on a suite that never ran.
-    BASELINE_KNOWN_FAILURES=0
-    if [ -n "${baseline_cache:-}" ] && [ -s "${baseline_cache:-}" ]; then
-        BASELINE_KNOWN_FAILURES="$(_bg_count_ids "$baseline_cache")"
-    fi
-    export BASELINE_KNOWN_FAILURES
 
     if [ -z "$(echo "$new_errors" | tr -d '[:space:]')" ]; then
         return 0

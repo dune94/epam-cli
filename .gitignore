@@ -134,3 +134,6 @@ orchestrations/projects/*/prd.json
 orchestrations/projects/*/prd.json.pre-*
 orchestrations/scripts/.preflight-cache/
 orchestrations/scripts/.inlined/
+
+# mock-agent journals: every exchange of a £0 run, kept for diagnosis
+test-results/

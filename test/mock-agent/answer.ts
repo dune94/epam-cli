@@ -165,7 +165,12 @@ export function reconcile(text: string, contract: Contract | undefined, prompt: 
     const v = jsonValues(text).find((x) => x && typeof x === 'object' && !Array.isArray(x)) as Record<string, unknown> | undefined;
     if (!v) return ['no JSON answer, but the prompt shows one'];
     // A key the prompt says may be left out ("(optional", "omit …") is not wanted of every answer.
-    const wanted = Object.entries(ex).filter(([, x]) => !/\(optional\b|\bomit\b/i.test(JSON.stringify(x))).map(([k]) => k);
+    // Judged on the PROMPT'S OWN TEXT for the key, not the parsed value — shape notation like
+    // `<raise ONLY if … omit otherwise>` parses to a number and loses the word that says so.
+    const saysOptional = (k: string) => new RegExp(`"${k.replace(/[.*+?^${}()|[\]\\]/g, '\\$&')}"\\s*:[^\\n]{0,600}?(\\(optional\\b|\\bomit\\b)`, 'i').test(prompt);
+    // …or a rule that includes the key only in some case ("Only include tool_spec when target=tool").
+    const conditional = (k: string) => new RegExp(`only include[^\\n.]*\\b${k.replace(/[.*+?^${}()|[\]\\]/g, '\\$&')}\\b[^\\n.]*\\bwhen\\b`, 'i').test(prompt);
+    const wanted = Object.entries(ex).filter(([k, x]) => !/\(optional\b|\bomit\b/i.test(JSON.stringify(x)) && !saysOptional(k) && !conditional(k)).map(([k]) => k);
     return contract?.kind === 'per-story-map' ? [] : wanted.filter((k) => !(k in v)).map((k) => `key '${k}' the prompt shows is missing`);
   }
   if (contract && jsonKinds.includes(contract.kind) && contract.kind !== 'verdict'

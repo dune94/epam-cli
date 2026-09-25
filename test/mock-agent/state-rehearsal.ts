@@ -60,7 +60,11 @@ export async function startStateRun(opts: { src: string; project: string; ref: s
   const set = config.EPAM_PROVIDER_SET || JSON.parse(readFileSync(join(ROOT, 'orchestrations/config/provider-sets.json'), 'utf8')).defaultSet;
   const installLog = join(opts.journal, 'install.log');
   try {
-    sh(`${JSON.stringify(join(ROOT, 'orchestrations-installer/install.sh'))} --dest ${JSON.stringify(install)} --ref ${JSON.stringify(opts.ref)} --stack ${JSON.stringify(set)} --no-docker > ${JSON.stringify(installLog)} 2>&1 || true`, { cwd: ROOT, timeout: 1_800_000 });
+    // THE INSTALLER RUNS WITH A SANDBOX HOME: it links a machine-wide `epam` command into
+    // ~/.local/bin, and a rehearsal must touch nothing outside its copy (2026-09-25 it re-pointed
+    // the operator's `epam` at a /tmp copy).
+    const sandboxHome = join(tmp, 'home'); mkdirSync(sandboxHome, { recursive: true });
+    sh(`HOME=${JSON.stringify(sandboxHome)} ${JSON.stringify(join(ROOT, 'orchestrations-installer/install.sh'))} --dest ${JSON.stringify(install)} --ref ${JSON.stringify(opts.ref)} --stack ${JSON.stringify(set)} --no-docker > ${JSON.stringify(installLog)} 2>&1 || true`, { cwd: ROOT, timeout: 1_800_000 });
   } catch { /* the log says why; the launch below will too */ }
   // The run to resume: the copy's newest checkpoint names it.
   const checkpoints = readdirSync(join(install, 'orchestrations/logs')).filter((f) => /^checkpoint-.*-(\d{8}T\d{6}Z)\.jsonl$/.test(f)).sort();

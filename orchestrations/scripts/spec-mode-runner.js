@@ -2824,6 +2824,10 @@ async function run() {
     summary.stats.modelUpgrades = modelChanges;
   }
 
+  // Every consume claim names a story that holds the file — checked once the whole pass has split
+  // what it will split, since an owner split after the claim orphans it (lib/consumed-interfaces.js).
+  require('./lib/consumed-interfaces.js').reconcileConsumedInterfaces(prd, {});
+
   // Story-ID-loss invariant — see assertNoStoryIdsLost's docstring.
   assertNoStoryIdsLost(_initialStoryIds, new Set((prd.stories || []).map((s) => s.id)), 'run()');
 
@@ -8942,6 +8946,12 @@ function applySpecChanges(story, payload, newStories, prd, phaseId, runId, logDi
     if (consumed.length) {
       story.consumesInterfaces = consumed;
       if (story.technicalNotes && Array.isArray(story.technicalNotes.files)) {
+        // Recorded, so a claim that does not stand (lib/consumed-interfaces.js) can give them back.
+        const removed = story.technicalNotes.files.filter((f) => consumed.some((c) => norm(c.file) === norm(f)));
+        if (removed.length) {
+          story.specification = story.specification || {};
+          story.specification.consumedFilesRemoved = Array.from(new Set([...(story.specification.consumedFilesRemoved || []), ...removed]));
+        }
         story.technicalNotes.files = story.technicalNotes.files.filter((f) => !consumed.some((c) => norm(c.file) === norm(f)));
       }
       const deps = new Set(Array.isArray(story.dependencies) ? story.dependencies : []);

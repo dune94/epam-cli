@@ -49,6 +49,15 @@ done
 
 info "Remediating PRD: $PRD_FILE"
 
+# A CONSUMED FILE NAMES A STORY THAT HOLDS IT — reconciled FIRST, because the next step drops a
+# story with no files from the phase: regintel 20260926T125158Z's REGI-006 lost its only file to a
+# claim on a split owner, and a resume would have "completed" core without it (lib/consumed-interfaces.js).
+# PRD_CANONICAL is the authored PRD, relative to the install root as config.env declares it.
+_canon="${PRD_CANONICAL:-}"
+[ -n "$_canon" ] && [ "${_canon#/}" = "$_canon" ] && _canon="$SCRIPT_DIR/../../$_canon"
+"${NODE_BIN:-node}" "$SCRIPT_DIR/lib/consumed-interfaces.js" "$PRD_FILE" ${_canon:+"$_canon"} \
+    || fail "consumed-interface reconciliation failed for $PRD_FILE"
+
 # --phase scopes the destructive status-reset step to that phase's stories only —
 # without it, remediation between phases would reset already-completed prior-phase
 # stories back to pending. Omit --phase for a fresh-run full reset (all phases).

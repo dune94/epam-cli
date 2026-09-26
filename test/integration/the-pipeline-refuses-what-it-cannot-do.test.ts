@@ -94,6 +94,7 @@ describe('the pipeline refuses what it cannot do', () => {
        AUTOMATION_DIR="${path.join(REPO, 'orchestrations')}"
        NODE_BIN="${process.env.HOME}/.nvm/versions/node/v20.20.0/bin/node"
        . "${gate}"
+       export EPAM_BROWNFIELD=1  # the baseline subtracts pre-existing failures in BROWNFIELD only (greenfield judges the whole check)
        baseline_new_failures "${repo}" "$NODE_BIN" "${logDir}" test "${outFile}"
        echo "RC=$?"`,
     ], { encoding: 'utf8', timeout: 120_000 });
@@ -162,6 +163,7 @@ describe('the baseline cache, with real inputs', () => {
        NODE_BIN="${process.env.HOME}/.nvm/versions/node/v20.20.0/bin/node"
        JIRA_BASELINE_BRANCH=develop
        . "${gate}"
+       export EPAM_BROWNFIELD=1  # the baseline subtracts pre-existing failures in BROWNFIELD only (greenfield judges the whole check)
        baseline_new_failures "${CODELINE}" "$NODE_BIN" "${logDir}" test "${outFile}" >/dev/null
        echo "RC=$?"`,
     ], { encoding: 'utf8', timeout: 900_000, maxBuffer: 64 * 1024 * 1024 });

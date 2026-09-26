@@ -131,6 +131,7 @@ ${fnBody}
 # on a non-zero return, before this echo ever runs. Using it as an \`if\`
 # condition exempts it from that rule (bash's documented -e exemption for
 # if/while/until conditions and &&/||/! contexts).
+export EPAM_BROWNFIELD=1  # the baseline subtracts pre-existing failures in BROWNFIELD only (greenfield judges the whole check)
 if story_tsc_gate "TEST-STORY"; then
   rc=0
 else

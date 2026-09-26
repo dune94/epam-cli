@@ -114,7 +114,7 @@ function baselineDelta(cl: { root: string; repo: string; cfg: string; sha: strin
   let out = '';
   try {
     out = execFileSync('bash', [script], { encoding: 'utf8', timeout: 120_000,
-      env: { ...process.env, EPAM_PROJECT_CONFIG_DIR: cl.cfg } });
+      env: { ...process.env, EPAM_PROJECT_CONFIG_DIR: cl.cfg, EPAM_BROWNFIELD: '1' /* the baseline subtracts pre-existing failures in BROWNFIELD only (greenfield judges the whole check) */ } });
   } catch (e: any) { out = `${e.stdout || ''}${e.stderr || ''}`; }
   const rc = Number((out.match(/RC=(\d+)/) || [])[1] ?? -1);
   const cache = join(logDir, `baseline-failures-test-${cl.sha.slice(0, 12)}.txt`);

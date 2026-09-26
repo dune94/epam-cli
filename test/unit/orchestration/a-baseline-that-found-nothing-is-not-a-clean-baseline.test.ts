@@ -85,7 +85,7 @@ function build(opts: { baselineRuns: 'fails' | 'cannot' }) {
     shellFunction(GATE, '_bg_vendor_dirs'),
     shellFunction(GATE, '_run_project_verification'),
     shellFunction(GATE, 'baseline_new_failures'),
-    `baseline_new_failures "$PROJECT_ROOT" "$NODE_BIN" "$LOG_DIR" test ${JSON.stringify(current)}; echo "RC=$?"`,
+    `EPAM_BROWNFIELD=1 baseline_new_failures "$PROJECT_ROOT" "$NODE_BIN" "$LOG_DIR" test ${JSON.stringify(current)}; echo "RC=$?"`, // the baseline subtracts pre-existing failures in BROWNFIELD only (greenfield judges the whole check)
   ].join('\n'));
   const r = spawnSync('bash', [script], { encoding: 'utf8', timeout: 60000 });
   const out = (r.stdout || '') + (r.stderr || '');
@@ -145,7 +145,7 @@ function buildWithoutBaselineSha() {
     shellFunction(GATE, '_bg_vendor_dirs'),
     shellFunction(GATE, '_run_project_verification'),
     shellFunction(GATE, 'baseline_new_failures'),
-    `baseline_new_failures "$PROJECT_ROOT" "$NODE_BIN" "$LOG_DIR" test ${JSON.stringify(current)}; echo "RC=$?"`,
+    `EPAM_BROWNFIELD=1 baseline_new_failures "$PROJECT_ROOT" "$NODE_BIN" "$LOG_DIR" test ${JSON.stringify(current)}; echo "RC=$?"`, // the baseline subtracts pre-existing failures in BROWNFIELD only (greenfield judges the whole check)
   ].join('\n'));
   const r = spawnSync('bash', [script], { encoding: 'utf8', timeout: 60000 });
   const out = (r.stdout || '') + (r.stderr || '');

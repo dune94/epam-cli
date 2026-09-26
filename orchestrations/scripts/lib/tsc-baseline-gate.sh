@@ -125,6 +125,18 @@ baseline_new_failures() {
         return 1
     fi
 
+    # GREENFIELD HAS NOTHING "PRE-EXISTING". Subtracting a baseline — "no new failures on top of the
+    # old ones" — is the BROWNFIELD rule: an estate's existing failures are not the story's to fix.
+    # In a greenfield codeline every test was written by this run, so a failing test is the run's
+    # own defect and fails the story; a greenfield project is judged on its whole check passing.
+    # Operator, 2026-09-25: "Green field is not no failures on old ones that is brownfield." — the
+    # live regintel run had passed two stories with 5 tests failing. The mode is the project's own
+    # declaration (EPAM_BROWNFIELD, from its config), never inferred here.
+    if [ "${EPAM_BROWNFIELD:-0}" != "1" ]; then
+        printf '%s\n' "$check_output"
+        return 1
+    fi
+
     local _plugin="${AUTOMATION_DIR:-$(dirname "$(cd "$(dirname "${BASH_SOURCE[0]}")" && pwd)")}/plugins/verification-plugin.js"
     local _node="${node_cmd:-${NODE_CMD:-${NODE_BIN:-node}}}"
 

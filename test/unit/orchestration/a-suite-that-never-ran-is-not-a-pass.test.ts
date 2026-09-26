@@ -64,7 +64,7 @@ function runState(): { root: string; logs: string } {
   return { root, logs };
 }
 
-function judge(opts: { exit: number; output: string }) {
+function judge(opts: { exit: number; output: string; brownfield?: boolean }) {
   const { root, logs } = runState();
   const script = join(root, '..', 'run.sh');
   const outFile = join(root, '..', 'suite.out'); writeFileSync(outFile, opts.output);
@@ -80,6 +80,7 @@ function judge(opts: { exit: number; output: string }) {
     `LOG_DIR=${JSON.stringify(logs)}; PROJECT_ROOT=${JSON.stringify(root)}`,
     `AUTOMATION_DIR=${JSON.stringify(join(REPO_ROOT, 'orchestrations'))}`,
     'NODE_BIN=node',
+    `export EPAM_BROWNFIELD=${opts.brownfield ? 1 : 0}`,
     // What a PARENT shell might hold from an earlier gate — the decision must not read it.
     'unset BASELINE_KNOWN_FAILURES',
     'warning() { echo "WARN: $*"; }',
@@ -105,10 +106,19 @@ describe('a story is judged on what it added', () => {
     for (const id of ids) expect(SUITE_AT_BASELINE).toContain(`FAILED ${id}`);
   });
 
-  it('REPRODUCES REGI-009a attempt 2: a suite whose failures are ALL pre-existing passes the story', () => {
-    const { out } = judge({ exit: 1, output: SUITE_AT_BASELINE });
+  it('BROWNFIELD — REGI-009a attempt 2: a suite whose failures are ALL pre-existing passes the story', () => {
+    const { out } = judge({ exit: 1, output: SUITE_AT_BASELINE, brownfield: true });
     expect(out, `an inherited failure was charged to the story:\n${out}`).toMatch(PASS);
     expect(out).not.toMatch(/judgeable|FELL_THROUGH/);
+  });
+
+  it('GREENFIELD — the same suite FAILS the story: nothing in a greenfield codeline is pre-existing', () => {
+    // Operator, 2026-09-25: "Green field is not no failures on old ones that is brownfield." The
+    // live regintel run passed REGI-009a and REGI-010-A on "only pre-existing baseline failures"
+    // with 5 tests failing. Every test in a greenfield codeline was written by the run itself.
+    const { out } = judge({ exit: 1, output: SUITE_AT_BASELINE, brownfield: false });
+    expect(out, `a greenfield story passed with failing tests:\n${out}`).not.toMatch(PASS);
+    expect(out).toContain('FELL_THROUGH');
   });
 
   it('a genuinely new failure fails the story, and the writer is shown only that one', () => {
@@ -116,7 +126,7 @@ describe('a story is judged on what it added', () => {
       /^(=+ 5 failed)/m,
       'FAILED tests/test_new_story.py::test_it_works - AssertionError\n$1',
     );
-    const { out } = judge({ exit: 1, output });
+    const { out } = judge({ exit: 1, output, brownfield: true });
     expect(out).not.toMatch(PASS);
     expect(out).toContain('FELL_THROUGH');
   });
@@ -125,13 +135,14 @@ describe('a story is judged on what it added', () => {
     const { out } = judge({
       exit: 2,
       output: "ImportError while loading conftest\nE   ModuleNotFoundError: No module named 'dial'\n",
+      brownfield: true,
     });
     expect(out, 'a suite that never executed was reported as having only pre-existing failures').not.toMatch(PASS);
     expect(out).toContain('FELL_THROUGH');
   });
 
   it('a red exit with no output at all is not a pass', () => {
-    const { out } = judge({ exit: 1, output: '' });
+    const { out } = judge({ exit: 1, output: '', brownfield: true });
     expect(out).not.toMatch(PASS);
     expect(out).toContain('FELL_THROUGH');
   });
@@ -144,6 +155,7 @@ describe('baseline_new_failures answers the whole question through what survives
     const r = spawnSync('bash', ['-c', [
       `. ${JSON.stringify(GATE)}`,
       `AUTOMATION_DIR=${JSON.stringify(join(REPO_ROOT, 'orchestrations'))}`,
+      'export EPAM_BROWNFIELD=1',
       `rc=0; d=$(baseline_new_failures ${JSON.stringify(root)} node ${JSON.stringify(logs)} test ${JSON.stringify(f)}) || rc=$?`,
       'printf "RC=%s\\n%s" "$rc" "$d"',
     ].join('\n')], { encoding: 'utf8', timeout: 30000 });

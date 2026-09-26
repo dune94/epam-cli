@@ -269,6 +269,14 @@ describe('a greenfield project runs to completion at £0', () => {
       const first = await run('bash', [launcher, '--project', project, '--yes'], { cwd: install, timeout: 30 * 60_000, env: { ...env, EPAM_PAUSE_BEFORE_WRITER: '1' } });
       const t1 = (first.stdout || '') + (first.stderr || '');
       writeFileSync(join(install, 'greenfield-pause.log'), t1);
+      // KEPT AT THE PAUSE, before anything is asserted: a failure between here and the resume used
+      // to delete the fixture with the only evidence of why (2026-09-25).
+      if (process.env.EPAM_GREENFIELD_TEST_KEEP) {
+        const keep = join(process.env.EPAM_GREENFIELD_TEST_KEEP, `${project}-pause`); rmSync(keep, { recursive: true, force: true }); mkdirSync(keep, { recursive: true });
+        writeFileSync(join(keep, 'pause.log'), t1);
+        try { cpSync(join(install, 'orchestrations/logs'), join(keep, 'logs'), { recursive: true }); } catch { /* no logs */ }
+        try { cpSync(prdPath, join(keep, 'prd.json')); } catch { /* no prd */ }
+      }
       const tail1 = t1.split('\n').slice(-40).join('\n');
       expect(t1, `the run did not pause before the writer — log tail:\n${tail1}`).toMatch(/PAUSED — inputs ready, writer NOT started/);
       const runId = (t1.match(/RUN NUMBER:\s*\S*?(\d{8}T\d{6}Z)/) || [])[1];

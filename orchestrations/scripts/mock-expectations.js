@@ -1690,6 +1690,8 @@ function contractStandIn(seam, override) {
     // an engineer whose brief covers mocka, and assignment refused it — correctly. Stories are
     // matched to roles by position, so each story gets a distinct one wherever enough are declared.
     const _ents = [...projectImplementationRoles()];
+    let _exemplar = null;
+    try { _exemplar = promptExemplar(seam, schema.required || []); } catch { _exemplar = null; }
     const mk = (story, idx) => {
       const o = {};
       for (const k of (schema.required || [])) {
@@ -1719,6 +1721,13 @@ function contractStandIn(seam, override) {
           const minted = mintedRoleNames();
           if (minted.length) { o[k] = minted[(idx || 0) % minted.length]; continue; }
         }
+        // A LIST TAKES THE VALUES THE PROMPT'S OWN EXAMPLE SHOWS. An empty list is a legitimate
+        // answer ("If a story does not need spec work, provide an empty agents array"), and a
+        // stand-in that always gives it tests only the branch where nothing is done — the spec
+        // pass wrote nothing and the resume legs had nothing to resume (2026-09-25). The example's
+        // literal members are the seam's own statement of a real answer; placeholders are not.
+        const lit = _exemplar && Array.isArray(_exemplar[k]) ? _exemplar[k] : null;
+        if (lit && lit.length && lit.every((x) => typeof x === 'string' && !x.includes(STAND_IN_MARK))) { o[k] = [...lit]; continue; }
         o[k] = build(k, (schema.properties || {})[k]);
       }
       nameItForItsKind(o, schema);

@@ -25,6 +25,8 @@ tar -C "$SRC_INSTALL" -cf - --exclude='orchestrations/logs' --exclude='node_modu
 # silently borrowed the source install's CLI through the global shim). dist is copied; the
 # dependencies it loads are the source install's, read-only.
 cp -a "$SRC_INSTALL/dist" "$WORK/install/dist"
+# The CLI finds its install root by the package.json it sits under ("cannot locate the engine root").
+cp -a "$SRC_INSTALL/package.json" "$WORK/install/package.json"
 ln -s "$SRC_INSTALL/node_modules" "$WORK/install/node_modules"
 mkdir -p "$WORK/install/orchestrations/logs"
 : > "$WORK/install/orchestrations/logs/healing-events.jsonl"

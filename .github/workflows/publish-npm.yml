@@ -63,6 +63,26 @@ jobs:
             echo "A published version is immutable; publish a new version to ship changes."
             exit 0
           fi
-          npm publish --access public
+          # THE REGISTRY IS THE VERDICT, NOT npm's EXIT CODE. A version another publisher has
+          # just uploaded is invisible to `npm view` while npm processes it, and publishing over
+          # it fails E409 "previously staged" (every release 2.0.65-2.0.73 went red this way
+          # with the package correctly on the registry). So a failed publish is judged by what
+          # the registry holds once it settles: this version, built from this commit, is green;
+          # a different commit under this version, or no version at all, is red.
+          if npm publish --access public; then exit 0; fi
+          for _i in $(seq 1 24); do
+            HEAD_ON_REGISTRY="$(npm view "${NAME}@${VERSION}" gitHead 2>/dev/null || true)"
+            if [ -n "$HEAD_ON_REGISTRY" ]; then
+              if [ "$HEAD_ON_REGISTRY" = "$GITHUB_SHA" ]; then
+                echo "::notice::${NAME}@${VERSION} is on the registry from this commit (${GITHUB_SHA}) — published by another publisher."
+                exit 0
+              fi
+              echo "::error::${NAME}@${VERSION} is on the registry from ${HEAD_ON_REGISTRY}, not this commit ${GITHUB_SHA}."
+              exit 1
+            fi
+            sleep 10
+          done
+          echo "::error::npm publish failed and ${NAME}@${VERSION} never appeared on the registry."
+          exit 1
         env:
           NODE_AUTH_TOKEN: ${{ secrets.NPM_TOKEN }}

@@ -33,6 +33,7 @@ INVOKE_PYTHON="${INVOKE_PYTHON:-$_SCRIPT_DIR_AIRUN/.venv/bin/python3}"
 
 . "$(cd "$(dirname "${BASH_SOURCE[0]}")" && pwd)/lib/env-file.sh"
 . "$(cd "$(dirname "${BASH_SOURCE[0]}")" && pwd)/lib/runner-settings.sh" 2>/dev/null || true
+. "$(cd "$(dirname "${BASH_SOURCE[0]}")" && pwd)/lib/copilot-runner.sh" 2>/dev/null || true
 . "$_SCRIPT_DIR_AIRUN/lib/story-retry-state.sh"
 # Delegates to lib/env-file.sh: loading configuration must not EXECUTE it. This function
 # used to `. "$env_file"`, and a bare `cd` on line 1 of the repo's .env sent this script —
@@ -434,7 +435,25 @@ run_provider_once() {
     # The tool posture is NOT special-cased. A replayed call carries the same env the recorded
     # call did, so a seam that had tools then has them now — which is what makes the recorded
     # tool calls executable rather than refused.
-    openai|openrouter|cursor|copilot|minimax|replay)
+    copilot)
+      # THE GITHUB COPILOT CLI, NOT epam-cli's HTTP provider. This arm used to fall into the `epam run`
+      # branch below, which reached src/providers/copilot/CopilotProvider.ts: no tool calling and a
+      # hardcoded model list. lib/copilot-runner.sh is the one place a copilot call is built (ladder model
+      # mapped to Copilot's id, effort only where the catalog lists it, the seam's tool grant) and judged
+      # (the CLI exits 0 on refusals; the verdict is read from its JSONL). The result is written in the
+      # claude runner's shape to ORCH_JSON_RESULT, so cost capture reads it like a claude call; the raw
+      # events are kept in the run's logs, the call's own record.
+      local _cp_json _cp_tmp=""
+      if [ -n "${ORCH_JSON_RESULT:-}" ]; then _cp_json="$ORCH_JSON_RESULT"; else _cp_tmp="$(mktemp)"; _cp_json="$_cp_tmp"; fi
+      local _cp_keep=""
+      [ -n "${LOG_DIR:-}" ] && _cp_keep="$LOG_DIR/copilot-calls/$(date -u +%Y%m%dT%H%M%SZ)-${EPAM_AGENT_NAME:-call}-$$.jsonl"
+      if ! copilot_invoke "$PROMPT_FILE" "${AI_MODEL:-}" "${EPAM_REASONING_EFFORT:-}" "$_cp_json" ${_cp_keep:+"$_cp_keep"}; then
+        if [ -n "$_cp_tmp" ]; then rm -f "$_cp_tmp"; fi
+        return 1
+      fi
+      if [ -n "$_cp_tmp" ]; then rm -f "$_cp_tmp"; fi   # an if, not `&&`: a false test would be the arm's exit status
+      ;;
+    openai|openrouter|cursor|minimax|replay)
       # Capture to temp file so pino JSON lines on stdout don't corrupt jq parsing
       local _epam_out
       _epam_out="$(mktemp)"

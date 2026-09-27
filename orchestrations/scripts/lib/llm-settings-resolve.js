@@ -91,6 +91,25 @@ function activeSetFile() {
   return file;
 }
 
+/**
+ * A SET FILE, WITH WHAT IT INHERITS. A set may name keys it takes from another set's file
+ * (`inheritFrom: {file, keys}`) instead of copying them — the copilot set climbs the claude set's
+ * ladders, and two copies of a ladder drift. Only the named keys are taken; the set's own keys win.
+ * A set without `inheritFrom` reads exactly as its file.
+ */
+function readSetFile(file) {
+  const own = readJson(file);
+  if (!own || !own.inheritFrom) return own;
+  const { file: baseName, keys } = own.inheritFrom;
+  const baseFile = path.join(path.dirname(file), baseName || '');
+  const base = baseName ? readJson(baseFile) : null;
+  if (!base) throw new Error("[llm-settings] " + file + " inherits from '" + baseName + "', which cannot be read at " + baseFile);
+  const out = {};
+  for (const k of Array.isArray(keys) ? keys : []) if (base[k] !== undefined) out[k] = base[k];
+  for (const [k, v] of Object.entries(own)) if (k !== 'inheritFrom') out[k] = v;
+  return out;
+}
+
 function readJson(file) {
   try { return JSON.parse(fs.readFileSync(file, 'utf8')); } catch { return null; }
 }
@@ -131,7 +150,7 @@ function resolveLlmSettingsFull({ projectConfigDir, defaultsFile } = {}) {
   let stack = readJson(defaultsPath(defaultsFile)) || {};
   if (!explicit) {
     const setFile = activeSetFile();
-    if (setFile) stack = merge(stack, readJson(setFile) || {});
+    if (setFile) stack = merge(stack, readSetFile(setFile) || {});
   }
   const project = projectConfigDir
     ? readJson(path.join(projectConfigDir, 'llm-settings.json'))
@@ -162,7 +181,7 @@ function resolveLlmSettings({ projectConfigDir, defaultsFile } = {}) {
   let stack = onlyInherited(readJson(defaultsPath(defaultsFile)) || {});
   if (!explicit) {
     const setFile = activeSetFile();
-    if (setFile) stack = merge(stack, onlyInherited(readJson(setFile) || {}));
+    if (setFile) stack = merge(stack, onlyInherited(readSetFile(setFile) || {}));
   }
 
   const project = projectConfigDir
@@ -308,6 +327,6 @@ function runnerValues(runnerName, { projectConfigDir, defaultsFile } = {}) {
 }
 
 module.exports = {
-  resolveLlmSettings, merge, activeSet, activeSetFile, providerSetsPath, projectEnvFiles,
+  resolveLlmSettings, merge, activeSet, activeSetFile, readSetFile, providerSetsPath, projectEnvFiles,
   resolveRunner, runnerSettingNames, runnerValues, declaredRunners,
 };

@@ -1,0 +1,37 @@
+{
+  "$comment": "The GitHub Copilot CLI stack. The ladders are the claude set's, inherited by name so the two cannot drift; the runner is Copilot's own.",
+  "$why": "Operator, 2026-09-27: calls to GitHub Copilot must carry the ladder's settings and work with retry and self-heal, with 'models same as claude map to those if available'. The pipeline keeps claude-set model ids everywhere it records a model (PRD, rung state, overrides); the copilot arms map an id to the one Copilot serves at the moment of the call (lib/copilot-models.js, read from Copilot's own catalog), so nothing upstream of the call changes and no other set can be affected.",
+  "inheritFrom": {
+    "file": "llm-defaults.claude.json",
+    "keys": ["ladderTierOrder", "ladders", "modelOverrides"],
+    "$whyOnlyThese": "The claude RUNNER is not inherited: a set declaring both runners makes `claude` routable, and resolve_primary_provider could route a copilot run to it."
+  },
+  "finalFallback": {
+    "$why": "The claude set's fallback model, served by copilot: the same second answer after ladder exhaustion, on this stack.",
+    "model": "claude-sonnet-5",
+    "provider": "copilot"
+  },
+  "runners": {
+    "copilot": {
+      "$why": "The GitHub Copilot CLI, non-interactive: the prompt on stdin, JSONL events on stdout. Every flag below was checked against `copilot --help` (1.0.85) and exercised against a recording stub on 2026-09-27.",
+      "alwaysFlags": ["--output-format", "json", "--no-auto-update", "--disable-builtin-mcps", "--allow-all-tools"],
+      "$whyAlwaysFlags": "--output-format json: the verdict of a call is in its JSONL (session.error, result.exitCode) — the CLI exits 0 on an unknown model, an unsupported effort and a 402 alike. --no-auto-update: a run never downloads a different CLI mid-flight. --disable-builtin-mcps: the GitHub MCP server is a tool surface no seam was granted. --allow-all-tools: non-interactive mode requires it; the seam's grant narrows the set with --available-tools.",
+      "env": {},
+      "flags": {},
+      "$whyNoFlags": "--model and --reasoning-effort are not plain setting-to-flag copies: the model is mapped to Copilot's id and the effort passed only when Copilot's catalog lists it for that model (an unsupported one is an error the CLI exits 0 on). The copilot arms apply both through lib/copilot-models.js.",
+      "$whyNoTurnCap": "maxIterations is deliberately absent: Copilot's agent loop is its own and the CLI offers no turn cap.",
+      "$whyNoOutputCap": "maxOutputTokens is deliberately unmapped: the CLI has no flag for a Copilot-served model's output cap (only BYOK's COPILOT_PROVIDER_MAX_OUTPUT_TOKENS). A response cut at the cap is continued by the CLI itself (proven against the stub: finish_reason=length → it asks again).",
+      "unsetEnv": [],
+      "emitsTraces": true,
+      "toolNames": {
+        "read_file": ["view"],
+        "list_files": ["glob"],
+        "search": ["grep"],
+        "fetch_url": ["web_fetch"],
+        "bash": ["bash"],
+        "write_file": ["create", "edit"]
+      },
+      "$whyToolNames": "The Copilot CLI's own tool names, read from the tool list it sends the model (spike, 2026-09-27): view, glob, grep, web_fetch, bash, create, edit — and more (task, sql, skill, …) that no seam grant names, so a granted seam never receives them."
+    }
+  }
+}

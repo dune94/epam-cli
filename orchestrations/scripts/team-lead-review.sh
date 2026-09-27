@@ -470,6 +470,13 @@ while IFS= read -r story_id; do
         continue
     fi
     _reviewed_count=$((_reviewed_count + 1))
+    # AN APPROVAL STANDS UNTIL THE CODE CHANGES (lib/review-scope.sh review_stands): the story's last
+    # review approved it after its last commit, so the reviewer has already judged exactly this code.
+    # It counts as reviewed — its approval is the verdict — and is not sent to the reviewer again.
+    if review_stands "$story_id" "$PHASE_ID"; then
+        log "  $story_id: approved at its current commit and unchanged since — the approval stands, not re-reviewed"
+        continue
+    fi
 
     log "  Story: $STORY_TITLE"
     log "  Agent: $STORY_AGENT"

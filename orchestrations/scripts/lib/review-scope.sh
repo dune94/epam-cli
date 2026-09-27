@@ -71,3 +71,26 @@ story_scope_block() {
     render_engine_prompt review-scope-block "$_vals"
     rm -f "$_vals"
 }
+
+# review_stands <story_id> <phase_id> — true when the story's latest review in this phase approved
+# it, completely, AFTER its latest commit: the reviewer judged exactly the code that is there, and
+# there is nothing new to judge. regintel 20260926T125158Z: every round re-reviewed every story in
+# the phase (63 reviews in three rounds for ~21 stories, ~$8), and re-reading approved, unchanged
+# code produced fresh minor findings on stories approved rounds earlier — the issue count went
+# 26 → 13 → 19. Facts only: the commit time from story-changes.jsonl (record_story_changes), the
+# verdict and its time from the review log. No record of either means "review it".
+review_stands() {
+    local _id="${1:-}" _phase="${2:-}" _changes="${LOG_DIR:-}/story-changes.jsonl" _log="${REVIEW_LOG:-}"
+    [ -n "$_id" ] && [ -f "$_changes" ] && [ -f "$_log" ] || return 1
+    local _committed _review _verdict _incomplete _reviewed
+    _committed=$(jq -r --arg id "$_id" 'select(.storyId == $id) | .committedAt // empty' "$_changes" 2>/dev/null | tail -1)
+    _review=$(jq -c --arg id "$_id" --arg ph "$_phase" 'select(.story == $id and (($ph == "") or (.phase_id == $ph)))' "$_log" 2>/dev/null | tail -1)
+    [ -n "$_committed" ] && [ -n "$_review" ] || return 1
+    _verdict=$(printf '%s' "$_review" | jq -r '.verdict // empty')
+    _incomplete=$(printf '%s' "$_review" | jq -r '.reviewIncomplete // false')
+    _reviewed=$(printf '%s' "$_review" | jq -r '.timestamp // empty')
+    [ "$_verdict" = "approved" ] && [ "$_incomplete" = "false" ] && [ -n "$_reviewed" ] || return 1
+    local _c _r
+    _c=$(date -d "$_committed" +%s 2>/dev/null) && _r=$(date -d "$_reviewed" +%s 2>/dev/null) || return 1
+    [ "$_r" -gt "$_c" ]
+}

@@ -5619,32 +5619,34 @@ async function assignAgentRoles({ promptExec, stories, profilesPath, logDir, rep
     );
   }
 
-  const prompt = buildAssignmentPrompt(
-    _stories,
-    candidates.map((r) => ({ name: r, brief: profiles[r] || '' })),
-  );
-
-  // VALIDATE, DO NOT REGENERATE. On a resume the operator has inspected the roster at the
-  // pause and may have edited profiles.json, the project-roles registry, or the stories'
-  // agentRole directly. Re-running the assignment agent would silently discard exactly the
-  // judgement the pause exists to capture. So when every story already carries a role, the
-  // existing assignment is checked against the same rules a fresh one would face and kept.
-  const preassigned = _stories.every((s) => typeof s.agentRole === 'string' && s.agentRole.trim()
-                                            && s.agentRole !== 'unknown');
+  // VALIDATE, DO NOT REGENERATE — PER STORY. On a resume the operator has inspected the roster
+  // at the pause and may have edited profiles.json, the project-roles registry, or the stories'
+  // agentRole directly; a story built and reviewed under its role keeps it. A story that already
+  // carries a role is checked against the same rules a fresh one would face and kept; only the
+  // stories without one are sent to the assigner. This was all-or-nothing: one story added to a
+  // run (regintel 20260926T125158Z, REGI-015/016) sent every story to the assigner and overwrote
+  // every role, completed stories included. A deprecated split parent needs no role.
+  const hasRole = (s) => typeof s.agentRole === 'string' && s.agentRole.trim() && s.agentRole !== 'unknown';
+  const toAssign = validateOnly ? [] : _stories.filter((s) => !hasRole(s) && s.status !== 'deprecated');
+  const keptStories = validateOnly ? _stories : _stories.filter((s) => hasRole(s));
+  const preassigned = toAssign.length === 0;
   const fixed = new Set(fixedRoles);
   const allowed = new Set(candidates);
-  const _pairs = [];
-  for (const s of _stories) {
-    const cls = Array.isArray(s.codelines) && s.codelines.length ? s.codelines : (s.codeline ? [s.codeline] : ['']);
-    for (const cl of cls) _pairs.push({ story: s, codeline: cl });
-  }
+  const pairsOf = (list) => {
+    const out = [];
+    for (const s of list) {
+      const cls = Array.isArray(s.codelines) && s.codelines.length ? s.codelines : (s.codeline ? [s.codeline] : ['']);
+      for (const cl of cls) out.push({ story: s, codeline: cl });
+    }
+    return out;
+  };
 
   // THE ROWS AS THE CONTRACT READS THEM, and whether they cover every story/codeline pair. A row
   // naming a role the roster does not hold, or a process role, is a refusal of the whole answer
   // (the writer would run with an empty system prompt); a missing pair is a refusal too. Either
   // refusal is a sentence the seam loop hands back to the model, not an abort (run 7,
   // 20260916T184851Z: one assignment for ten stories aborted the mint with no retry).
-  const readRows = (rows) => {
+  const readRows = (rows, _pairs) => {
     const byStory = new Map();
     for (const row of rows) {
       if (!row || typeof row.storyId !== 'string' || typeof row.agentRole !== 'string') continue;
@@ -5675,29 +5677,39 @@ async function assignAgentRoles({ promptExec, stories, profilesPath, logDir, rep
     return { byStory, _lookup };
   };
 
-  let read;
-  if (preassigned || validateOnly) {
-    read = readRows(_stories.map((s) => ({
-      storyId: s.id, agentRole: String(s.agentRole || '').trim(), reason: 'pre-assigned (validated, not regenerated)',
-    })));
-    if (read.refusal) throw new Error(`[assign] ${read.refusal}`);
-  } else {
+  const kept = readRows(keptStories.map((s) => ({
+    storyId: s.id, agentRole: String(s.agentRole || '').trim(), reason: 'pre-assigned (validated, not regenerated)',
+  })), pairsOf(keptStories));
+  if (kept.refusal) throw new Error(`[assign] ${kept.refusal}`);
+  let fresh = null;
+  if (!preassigned) {
+    const prompt = buildAssignmentPrompt(
+      toAssign,
+      candidates.map((r) => ({ name: r, brief: profiles[r] || '' })),
+    );
+    const _askPairs = pairsOf(toAssign);
+    const _askIds = new Set(toAssign.map((s) => s.id));
+    // Only rows for the stories asked about are read: an answer that also re-assigns a kept story
+    // does not reach it.
+    const _rowsFor = (payload) => ((payload && Array.isArray(payload.assignments)) ? payload.assignments : [])
+      .filter((r) => r && _askIds.has(r.storyId));
     const asked = await runSeamUntilAccepted({
       seam: 'role-assigner', execSpec: promptExec, prompt, toolDef: TOOL_ROLE_ASSIGNMENTS, tag: 'ROLE_ASSIGNMENTS',
       logPath: logDir ? path.join(logDir, 'role-assignments.log') : null, repoPath: repoPath || '', logDir,
       env: { EPAM_AGENT_NAME: 'role-assigner', EPAM_RESPONSE_SCHEMA: schemaEnv(TOOL_ROLE_ASSIGNMENTS) },
-      accept: (payload) => readRows((payload && Array.isArray(payload.assignments)) ? payload.assignments : []).refusal || null,
+      accept: (payload) => readRows(_rowsFor(payload), _askPairs).refusal || null,
     });
     if (!asked.payload) {
       throw new Error(`[assign] ${asked.refusals[asked.refusals.length - 1]} (${asked.attempts} attempt(s); the seam's ladder is spent)`);
     }
-    read = readRows(asked.payload.assignments);
+    fresh = readRows(_rowsFor(asked.payload), _askPairs);
   }
-  const byStory = read.byStory;
-  const _lookup = read._lookup;
+  const _freshIds = new Set(toAssign.map((s) => s.id));
+  const _lookup = (id, cl) => (fresh && _freshIds.has(id) ? fresh : kept)._lookup(id, cl);
 
   const assigned = [];
   for (const s of _stories) {
+    if (!keptStories.includes(s) && !_freshIds.has(s.id)) continue;   // a deprecated parent without a role
     const cls = Array.isArray(s.codelines) && s.codelines.length ? s.codelines : (s.codeline ? [s.codeline] : ['']);
     const perCodeline = {};
     for (const cl of cls) {

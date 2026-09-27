@@ -34,6 +34,15 @@ describe.skipIf(!SRC || !PROJECT)(`an installed run, upgraded to ${REF} and resu
     const before = realFingerprint(SRC, PROJECT!, realOut);
     const r = await startStateRun({ src: SRC, project: PROJECT!, ref: REF, dirs, children, journal });
     expect(r.runId, 'the install holds no checkpoint to resume').toMatch(/^\d{8}T\d{6}Z$/);
+    // STORIES AUTHORED SINCE THE RUN BEGAN: in the authored PRD, absent from the run's own. The resume
+    // must adopt each one and take it to the writer (lib/adopt-authored-stories.js, via tier3-run.sh).
+    const cfgText = readFileSync(join(r.install, 'orchestrations/projects', PROJECT!, 'config.env'), 'utf8');
+    const canonRel = (cfgText.match(/^PRD_CANONICAL=(.*)$/m) || [, ''])[1].trim();
+    const authoredSince = canonRel ? (() => {
+      const canon = JSON.parse(readFileSync(canonRel.startsWith('/') ? canonRel : join(r.install, canonRel), 'utf8'));
+      const have = new Set((JSON.parse(readFileSync(r.prd, 'utf8')).stories || []).map((s: { id: string }) => s.id));
+      return (canon.stories || []).map((s: { id: string }) => s.id).filter((id: string) => !have.has(id));
+    })() : [];
     r.agent.on('*', correct(r.world, r.install));
     const res = await launch(r, { EPAM_RESUME_RUN: r.runId }, 90 * 60_000);
     const log = `${res.stdout}\n${res.stderr}`.replace(/\x1b\[[0-9;]*m/g, '');
@@ -56,5 +65,10 @@ describe.skipIf(!SRC || !PROJECT)(`an installed run, upgraded to ${REF} and resu
       'the resume re-ran a roster or prompt step the run had completed').toEqual([]);
     expect(r.agent.calls.some((c) => produced(c) === 'implementation'), 'the resumed run never reached the writer').toBe(true);
     expect(log, 'no story reached verification').toMatch(/External verification (passed|failed) for /);
+    for (const id of authoredSince) {
+      expect(log, `the resume did not adopt ${id}, authored since the run began`).toMatch(new RegExp(`adopted authored story ${id} into phase`));
+      expect(r.agent.calls.some((c) => produced(c) === 'implementation' && c.story === id), `${id} was adopted but never reached the writer`).toBe(true);
+    }
+    console.log(`[state-rehearsal] authored since the run began: ${authoredSince.join(', ') || 'none'}`);
   }, 120 * 60_000);
 });

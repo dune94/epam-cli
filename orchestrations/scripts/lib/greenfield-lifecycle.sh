@@ -69,6 +69,21 @@ greenfield_prepare_output_dir() {
 # The authored PRD IS the base state; the run's own writes to PRD_FILE are discarded, not
 # accumulated. A canonical that is declared and missing is a refusal: launching on whatever the
 # previous run left in PRD_FILE is how stale assignments reach a fresh run.
+# greenfield_adopt_authored_stories <canonical> <prd_file> <repo_root>
+#
+# A RESUME TAKES THE STORIES AUTHORED SINCE THE RUN BEGAN (lib/adopt-authored-stories.js): a story in
+# the authored PRD whose id the run's PRD does not hold is appended as pending, in its authored
+# phase. Nothing the run holds is changed. No canonical declared: nothing to adopt.
+greenfield_adopt_authored_stories() {
+    local canonical="${1:-}" prd="${2:?PRD_FILE}" repo="${3:?repo root}"
+    [ -n "$canonical" ] || return 0
+    case "$canonical" in /*) ;; *) canonical="$repo/$canonical" ;; esac
+    [ -f "$canonical" ] || fail "PRD_CANONICAL is declared but not found at $canonical — cannot read the authored stories. Aborting."
+    local _line
+    while IFS= read -r _line; do info "$_line"; done < <("${NODE_BIN:-node}" "$_gfl_dir/adopt-authored-stories.js" "$prd" "$canonical" \
+        || fail "adopting authored stories into $prd failed")
+}
+
 greenfield_restore_prd() {
     local canonical="${1:?PRD_CANONICAL}" prd="${2:?PRD_FILE}" repo="${3:?repo root}"
     case "$canonical" in /*) ;; *) canonical="$repo/$canonical" ;; esac

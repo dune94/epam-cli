@@ -190,6 +190,7 @@ if [ "$GREENFIELD" = "1" ]; then
   # base state, and it happens before anything reads the file.
   if [ "$GREENFIELD_RESUME" = "1" ]; then
     info "Resuming run '${EPAM_RESUME_RUN}': the PRD on disk is the run's own — not restored from the authored canonical"
+    greenfield_adopt_authored_stories "${PRD_CANONICAL:-}" "$PRD_FILE" "$REPO_ROOT"
   elif [ -n "${PRD_CANONICAL:-}" ]; then
     greenfield_restore_prd "$PRD_CANONICAL" "$PRD_FILE" "$REPO_ROOT"
   fi

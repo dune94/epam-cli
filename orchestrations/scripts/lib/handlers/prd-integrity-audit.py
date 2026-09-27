@@ -273,7 +273,12 @@ for sid in active_ids:
     s = by_id.get(sid, {})
     if not s.get('effort'):
         missing_fields.append(f"{sid}: missing effort")
-    if not s.get('aiProvider'):
+    # aiProvider is assigned by the model coordinator (Step 7 of the story's own phase), which runs
+    # AFTER this audit. A pending story the spec pass has not elaborated yet — a story authored since
+    # the run began, adopted by the resume — has not reached it, so it cannot be held to it here; an
+    # elaborated story has, and is.
+    unelaborated = s.get('status') == 'pending' and not s.get('specification')
+    if not s.get('aiProvider') and not unelaborated:
         missing_fields.append(f"{sid}: missing aiProvider")
 if missing_fields:
     err(f"Active stories missing required fields: {missing_fields}")

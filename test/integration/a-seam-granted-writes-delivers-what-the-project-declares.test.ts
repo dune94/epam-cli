@@ -60,19 +60,42 @@ describe('a seam granted writes delivers what the project declares for it', () =
     const values: Record<string, string> = {}; const optional = new Set(doc.mayBeEmpty || []);
     for (const ph of placeholdersIn(doc.body)) values[ph] = optional.has(ph) ? '' : `value of ${ph.replace(/_/g, ' ').trim()}`;
     const prompt = substituteOnce(doc.body, values);
-    const ask = () => new Promise<{ seam: string; body: string }>((resolve, reject) => {
-      const body = JSON.stringify({ model: 'x', max_tokens: 1, stream: true, messages: [{ role: 'user', content: prompt }] });
+    // A WRITER'S REQUEST OFFERS ITS TOOLS — the runner's declared ones, by their declared names. The
+    // self-heal analyst's request quotes the same prompt and offers none; it consumed the delivery
+    // until 2026-09-28 (the £0 brownfield halt), so a request without the write tool is asked below too.
+    const runner = Object.values<any>(JSON.parse(readFileSync(join(ROOT, 'orchestrations/config/llm-defaults.mockserver.json'), 'utf8')).runners)
+      .find((r) => r && r.writeTool && r.writeTool.name);
+    const tools = [runner.readTool, runner.writeTool].filter(Boolean).map((t: any) => ({ name: t.name, description: t.name, input_schema: { type: 'object' } }));
+    const ask = (withTools = true) => new Promise<{ seam: string; body: string }>((resolve, reject) => {
+      const body = JSON.stringify({ model: 'x', max_tokens: 1, stream: true, messages: [{ role: 'user', content: prompt }], ...(withTools ? { tools } : {}) });
       const req = httpRequest(`${own.url}/v1/messages`, { method: 'POST', headers: { 'content-type': 'application/json' } }, (res) => { let b = ''; res.on('data', (d) => { b += d; }); res.on('end', () => resolve({ seam: String(res.headers['x-seam'] || ''), body: b })); });
       req.on('error', reject); req.end(body);
     });
     const events = (sse: string) => sse.split('\n').filter((l) => l.startsWith('data: ')).map((l) => JSON.parse(l.slice(6)));
     const calls = (sse: string) => events(sse).filter((e) => e.type === 'content_block_start' && e.content_block.type === 'tool_use').map((e) => e.content_block.name as string);
-    const inputs = (sse: string) => events(sse).filter((e) => e.type === 'content_block_delta' && e.delta.type === 'input_json_delta').map((e) => JSON.parse(e.delta.partial_json));
+    // A tool input streams as partial JSON over several deltas: assembled per content block, then parsed.
+    const inputs = (sse: string) => {
+      const parts = new Map<number, string>();
+      for (const e of events(sse)) if (e.type === 'content_block_delta' && e.delta.type === 'input_json_delta') parts.set(e.index, (parts.get(e.index) || '') + e.delta.partial_json);
+      return [...parts.values()].map((j) => JSON.parse(j));
+    };
     const turns: { seam: string; calls: string[]; inputs: any[] }[] = [];
-    for (let i = 0; i < 6; i += 1) { const r = await ask(); turns.push({ seam: r.seam, calls: calls(r.body), inputs: inputs(r.body) }); }
+    const take = async (withTools = true) => { const r = await ask(withTools); const t = { seam: r.seam, calls: calls(r.body), inputs: inputs(r.body) }; turns.push(t); return t; };
     const diagnosed = Array.isArray(reg['agent-failure-analyst'] && reg['agent-failure-analyst'].diagnosesAttemptsOf) && reg['agent-failure-analyst'].diagnosesAttemptsOf.includes(SEAM);
-    let i = 0;
-    if (diagnosed) { expect(turns[0].seam, 'the first attempt did not fail on purpose').toMatch(/first-attempt-fails/); expect(turns[0].calls).toEqual([]); i = 1; }
+    if (diagnosed) {
+      const first = await take();
+      expect(first.seam, 'the first attempt did not fail on purpose').toMatch(/first-attempt-fails/);
+      expect(first.calls).toEqual([]);
+      turns.length = 0;
+    }
+    // The analyst's shape: the same prompt quoted, no write tool offered. It must not be handed the
+    // delivery — it cannot execute it, and the writer would never see it again.
+    const quoting = await take(false);
+    expect(quoting.seam, 'a request that cannot write was served the delivery').not.toBe(`${SEAM}:delivers`);
+    expect(quoting.calls, 'a request that cannot write was handed tool calls').toEqual([]);
+    turns.length = 0;
+    for (let n = 0; n < 5; n += 1) await take();
+    const i = 0;
     expect(turns[i].seam, 'no delivery turn').toBe(`${SEAM}:delivers`);
     expect(turns[i].calls, 'the existing file was not read first').toEqual(['Read']);
     expect(turns[i].inputs[0].file_path).toBe(join(codeline, rel));

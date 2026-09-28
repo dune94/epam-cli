@@ -36,7 +36,10 @@ function modelOverridesFor(model, provider, settingsFile) {
   if (!settingsFile) return null;
   let doc;
   try {
-    doc = JSON.parse(fs.readFileSync(settingsFile, 'utf8'));
+    // Through the resolver's own reader: a set that inherits keys from another set's file (the copilot
+    // set takes the claude set's modelOverrides) is read with them. A file without inheritFrom reads as itself.
+    doc = require('./llm-settings-resolve.js').readSetFile(settingsFile);
+    if (!doc) throw new Error('unreadable');
   } catch (_) {
     return null; // an unreadable settings file is the loader's business to report, not ours
   }
@@ -77,7 +80,10 @@ function iterationMap(settingsFile) {
   if (!settingsFile) return '';
   let doc;
   try {
-    doc = JSON.parse(fs.readFileSync(settingsFile, 'utf8'));
+    // Through the resolver's own reader: a set that inherits keys from another set's file (the copilot
+    // set takes the claude set's modelOverrides) is read with them. A file without inheritFrom reads as itself.
+    doc = require('./llm-settings-resolve.js').readSetFile(settingsFile);
+    if (!doc) throw new Error('unreadable');
   } catch (_) {
     return '';
   }

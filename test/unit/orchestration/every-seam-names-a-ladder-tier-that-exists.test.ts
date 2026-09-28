@@ -43,6 +43,7 @@ const sets = JSON.parse(readFileSync(join(CONFIG, 'provider-sets.json'), 'utf8')
 
 // eslint-disable-next-line @typescript-eslint/no-var-requires
 const { resolveTierPosition } = require(join(REPO, 'orchestrations/scripts/lib/seam-invocation.js'));
+const { readSetFile } = require(join(REPO, 'orchestrations/scripts/lib/llm-settings-resolve.js'));
 
 describe('every seam names a ladder position that resolves in every provider set', () => {
   it('there are seams, positions, provider sets and projects to check — otherwise this proves nothing', () => {
@@ -60,7 +61,9 @@ describe('every seam names a ladder position that resolves in every provider set
   it('THE DEFECT: on EVERY provider set, with NOTHING exported, each position lands on a tier that declares a start model', () => {
     const misses: string[] = [];
     for (const [set, cfg] of Object.entries(sets)) {
-      const decl = JSON.parse(readFileSync(join(CONFIG, cfg.settingsFile), 'utf8'));
+      // What the set DECLARES, including keys it inherits from another set's file (inheritFrom) — the
+      // resolver's own reader, the view every engine consumer gets.
+      const decl = readSetFile(join(CONFIG, cfg.settingsFile)) || {};
       const prev = process.env.EPAM_PROVIDER_SET; process.env.EPAM_PROVIDER_SET = set;
       try {
         for (const project of PROJECTS) {

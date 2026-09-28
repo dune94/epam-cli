@@ -206,7 +206,12 @@ export function contractConflict(prompt: string, contract: Contract | undefined,
 /** The rendered contract for this call: the seam's own tag if the prompt renders it, else the last block rendered. */
 export function renderedFor(prompt: string, contract?: Contract): { tag: string; fields: Field[] } | undefined {
   const all = renderedSchemas(prompt);
-  const tagged = all.find((r) => contract?.tag && r.tag === contract.tag) || all[all.length - 1];
+  // THE DECLARATION, NOT AN ECHO OF IT. A prompt can carry a block twice: the task's own typed
+  // declaration, and later a copy the model already wrote — the hub appends the plan call's answer
+  // ("YOUR PLAN (you wrote this a moment ago)"). With no tag in the contract the last tag rendered is
+  // the answer's, but its FIRST occurrence is the declaration; the echo's bare values carry no types.
+  const lastTag = all.length ? all[all.length - 1].tag : '';
+  const tagged = all.find((r) => contract?.tag && r.tag === contract.tag) || all.find((r) => r.tag === lastTag);
   if (tagged) return tagged;
   // A JSON Schema the prompt carries: the last object shaped like one. Untagged — answered as bare JSON.
   const schema = jsonValues(prompt).filter((v: any) => v && v.type === 'object' && v.properties).pop();

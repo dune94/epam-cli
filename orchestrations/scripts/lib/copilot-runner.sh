@@ -4,7 +4,7 @@
 # Called by both paths a model call takes — the seam hub (llm-handler.sh) and the story writer
 # (lib/story-attempt.sh) — so there is one place where a copilot call is built and read.
 #
-#   copilot_invoke <prompt_file> <model> <reasoning_effort> <result_json> [<events_keep>]
+#   copilot_invoke <prompt_file> <model> <reasoning_effort> <result_json> [<events_keep>] [-- <extra args>...]
 #
 #   model / effort   the LADDER's values, in claude-set ids (the copilot set climbs the claude ladders).
 #                    The model is mapped to the id Copilot serves; the effort is passed only when the
@@ -15,6 +15,7 @@
 #   result_json      the call in the claude runner's result shape (lib/copilot-result.js): cost, retry and
 #                    self-heal read it like a claude result. error.class=credit marks an exhausted account.
 #   events_keep      where the raw JSONL is kept (the call's own record); default: beside result_json.
+#   extra args       after `--`: flags the caller owns (the story writer's --add-dir <declared read root>).
 #
 # stdout: the answer. Returns 0 when the call answered, 1 when it did not (the reason on stderr).
 #
@@ -29,19 +30,33 @@ declare -F apply_runner_settings >/dev/null 2>&1 || . "$_copilot_libdir/runner-s
 
 copilot_invoke() {
     local prompt_file="${1:?prompt file}" model="${2:-}" effort="${3:-}" result_json="${4:?result json}"
-    local events_keep="${5:-${result_json%.json}.events.jsonl}"
+    local events_keep="${5:-}"
+    [ "$events_keep" = "--" ] && events_keep=""
+    [ -n "$events_keep" ] || events_keep="${result_json%.json}.events.jsonl"
+    local extra=()
+    shift 4; [ $# -gt 0 ] && [ "$1" != "--" ] && shift
+    [ "${1:-}" = "--" ] && { shift; extra=("$@"); }
     local node="${NODE_BIN:-node}" bin="${COPILOT_CMD:-copilot}"
     local home="${EPAM_COPILOT_HOME:-$(cd "$_copilot_libdir/../.." && pwd)/.copilot-home}"
     mkdir -p "$home" || { echo "[copilot] cannot create the CLI home $home" >&2; return 1; }
     local catalog="${EPAM_COPILOT_CATALOG:-$home/catalog.json}"
 
-    if [ ! -s "$catalog" ]; then
+    # BYOK (COPILOT_PROVIDER_BASE_URL): the CLI sends the model name to the caller's own provider and
+    # uses no GitHub catalog — so there is nothing to map through, and no catalog to say which efforts
+    # the model takes (the CLI refuses every effort in this mode). The ladder's id goes as it is and no
+    # effort is passed; said aloud. With a catalog declared, it is used as always.
+    local byok=0
+    [ -n "${COPILOT_PROVIDER_BASE_URL:-}" ] && [ -z "${EPAM_COPILOT_CATALOG:-}" ] && byok=1
+    if [ "$byok" = 0 ] && [ ! -s "$catalog" ]; then
         "$node" "$_copilot_libdir/copilot-models.js" fetch "$catalog" >&2 \
             || { echo "[copilot] no model catalog at $catalog and it could not be fetched — refusing to guess a model" >&2; return 1; }
     fi
 
     local cmodel="" ceffort=""
-    if [ -n "$model" ]; then
+    if [ "$byok" = 1 ]; then
+        cmodel="$model"
+        [ -n "$effort" ] && echo "[copilot] BYOK provider at $COPILOT_PROVIDER_BASE_URL: no catalog, so effort '$effort' is not passed" >&2
+    elif [ -n "$model" ]; then
         cmodel="$(EPAM_COPILOT_CATALOG="$catalog" "$node" "$_copilot_libdir/copilot-models.js" map "$model")" || return 1
     fi
     if [ -n "$effort" ] && [ -n "$cmodel" ]; then
@@ -53,6 +68,7 @@ copilot_invoke() {
     local args=(${RUNNER_FLAGS[@]+"${RUNNER_FLAGS[@]}"})
     [ -n "$cmodel" ] && args+=(--model "$cmodel")
     [ -n "$ceffort" ] && args+=(--reasoning-effort "$ceffort")
+    [ "${#extra[@]}" -gt 0 ] && args+=("${extra[@]}")
     local tools=""
     if [ "${AI_GATE_ALLOW_TOOLS:-0}" = "1" ] && [ -n "${EPAM_ALLOWED_TOOLS:-}" ] && tools="$(runner_tools_for_grant "$EPAM_ALLOWED_TOOLS")" && [ -n "$tools" ]; then
         args+=("--available-tools=${tools// /,}")

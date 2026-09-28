@@ -139,3 +139,6 @@ orchestrations/scripts/.inlined/
 test-results/
 # a run's tool cache lives in its install (tier3-run.sh XDG_CACHE_HOME)
 .cache/
+
+# GitHub Copilot CLI state (lib/copilot-runner.sh: EPAM_COPILOT_HOME default) — session files and the model catalog
+.copilot-home/

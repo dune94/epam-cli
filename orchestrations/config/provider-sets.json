@@ -71,7 +71,14 @@
           "required": true
         }
       ],
-      "$credentials": "THE ACCOUNT IS PINNED, NOT WHICHEVER ONE `copilot` LAST USED. ~/.copilot can hold several logins (the operator's personal account and a client-provisioned EMU account); COPILOT_GITHUB_TOKEN outranks them all, so a run bills exactly the account whose token the install's .env carries. Operator, 2026-09-27: the personal account."
+      "$credentials": "THE ACCOUNT IS PINNED, NOT WHICHEVER ONE `copilot` LAST USED. ~/.copilot can hold several logins (the operator's personal account and a client-provisioned EMU account); COPILOT_GITHUB_TOKEN outranks them all, so a run bills exactly the account whose token the install's .env carries. Operator, 2026-09-27: the personal account.",
+      "redirect": {
+        "$why": "How a rehearsal points this set at a stand-in model, declared rather than known by any harness: the Copilot CLI's own BYOK redirect (COPILOT_PROVIDER_BASE_URL, an OpenAI-compatible endpoint), offline so it makes no GitHub call (without COPILOT_OFFLINE a BYOK session hangs after its result, 2026-09-27).",
+        "baseUrlEnv": "COPILOT_PROVIDER_BASE_URL",
+        "env": {
+          "COPILOT_OFFLINE": "true"
+        }
+      }
     }
   },
   "$defaultSet": "Chosen by the operator 2026-08-25. codemie is what RUNS; openrouter is the hot-swap target kept fully executable beside it. This field previously read 'openrouter' \u2014 a value nobody chose: it was invented when this registry was written and then read back as if it were a requirement.",

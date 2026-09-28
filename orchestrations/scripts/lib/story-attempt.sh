@@ -1846,7 +1846,31 @@ $_kb_section"
                     invoke_success=true
                 fi
                 ;;
-            copilot|openai|openrouter|cursor|minimax)
+            copilot)
+                # THE GITHUB COPILOT CLI — the same call the seam hub makes (lib/copilot-runner.sh), so a
+                # story written on the copilot set gets the ladder's model (mapped to Copilot's id) and
+                # effort (only where the catalog lists one), and is judged by what the CLI said, not its
+                # exit code. This provider used to fall into the `epam run` arm below: epam-cli's HTTP
+                # CopilotProvider, which has no tool calling — a writer that could not write a file.
+                #   The writer's constitution: the claude arms append it to the system prompt; Copilot has
+                # no such flag, so it opens the prompt. The directories the PRD's configuration declares
+                # readable are passed as --add-dir, as the claude arms pass them.
+                local _cp_prompt _cp_extra=() _cp_root
+                _cp_prompt="$(mktemp "${TMPDIR:-/tmp}/copilot-prompt-XXXXXX")"
+                { [ -n "$effective_constitution" ] && printf '%s\n\n---\n\n' "$effective_constitution"; printf '%s' "$prompt"; } > "$_cp_prompt"
+                while IFS= read -r _cp_root; do
+                    [ -n "$_cp_root" ] && _cp_extra+=(--add-dir "$_cp_root")
+                done <<< "$(_declared_read_roots "$prd_target" 2>/dev/null)"
+                if EPAM_AGENT_NAME="${STORY_WRITER_SEAM}" EPAM_STORY_ID="${story_id}" \
+                        "${_timeout_prefix[@]}" bash -c '. "$1"; shift; copilot_invoke "$@"' _ \
+                        "$SCRIPT_DIR/lib/copilot-runner.sh" "$_cp_prompt" "${STORY_MODEL:-}" "${EPAM_REASONING_EFFORT:-}" \
+                        "$json_result_file" "${json_result_file%.json}.events.jsonl" -- ${_cp_extra[@]+"${_cp_extra[@]}"} \
+                        2>> "$output_file" >> "$output_file"; then
+                    invoke_success=true
+                fi
+                rm -f "$_cp_prompt"
+                ;;
+            openai|openrouter|cursor|minimax)
                 # epam-run providers: invoke via `epam run --provider X --model M --json`
                 # EPAM_CLI can be overridden with a mock for zero-token testing.
                 # Explicitly forward API keys so subshells that didn't inherit them still work.

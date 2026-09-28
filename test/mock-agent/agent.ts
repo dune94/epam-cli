@@ -67,6 +67,8 @@ export class MockAgent {
       if (path === '/build-info.json') return this.json(res, { generatedAt: new Date().toISOString(), metrics: { selfHealing: {} } });
       if (path.startsWith('/api/public/')) return method === 'POST' ? this.json(res, { successes: [], errors: [] }, 207) : this.json(res, { data: [], meta: { totalItems: 0, totalPages: 0 } });
       if (/\/credits$/.test(path)) return this.json(res, { data: { total_credits: 1000, total_usage: 0 } });
+      // An OpenAI-compatible client lists models before it asks (the Copilot CLI's BYOK mode does).
+      if (method === 'GET' && /\/models$/.test(path)) return this.json(res, { object: 'list', data: [] });
       res.writeHead(200, { 'content-type': 'text/plain' }); res.end('ok');
     });
   }

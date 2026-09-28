@@ -48,7 +48,13 @@ const installed = (bin: string) => spawnSync('command', ['-v', bin], { shell: tr
 function rejects(bin: string, flag: string, needsValue: boolean): boolean {
   const args = needsValue ? [flag, 'low', '--print'] : [flag, '--print']
   const r = spawnSync(bin, args, { input: 'hi', encoding: 'utf8', timeout: 25000 })
-  return /unknown option|unrecognized option|invalid option/i.test(String(r.stderr || ''))
+  // THE ERROR MUST NAME THIS FLAG. The probe's own `--print` is a claude flag: the Copilot CLI
+  // rejects IT ("unknown option '--print'"), and a check that did not ask which option was refused
+  // blamed whatever flag stood beside it. Both spellings a CLI uses for a refused option count.
+  const name = flag.split('=')[0]
+  const err = String(r.stderr || '')
+  return /unknown option|unrecognized option|invalid option|unexpected argument/i.test(err)
+    && new RegExp(`['"\`]${name.replace(/[.*+?^${}()|[\]\\]/g, '\\$&')}['"\`]`).test(err)
 }
 
 describe('seam: a declared flag is one the runner accepts', () => {

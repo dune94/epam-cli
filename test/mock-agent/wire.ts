@@ -6,7 +6,7 @@
  * text or tool calls; a tool-call turn ends with the vendor's own stop reason for it, or the client
  * will not execute the calls it was handed.
  */
-export type ToolDef = { name: string; params: Record<string, any> };
+export type ToolDef = { name: string; params: Record<string, any>; description?: string };
 export type ToolCall = { id: string; name: string; input: Record<string, unknown> };
 export type Req = {
   api: 'openai' | 'anthropic'; model: string; stream: boolean;
@@ -35,7 +35,7 @@ export function parse(path: string, raw: string): Req | null {
       if (text || calls.length) messages.push({ role: m.role, text, toolCalls: calls.length ? calls : undefined });
     }
     return { api: 'anthropic', model: b.model || '', stream: !!b.stream, system: textOf(b.system), messages,
-      tools: (b.tools || []).map((t: any) => ({ name: t.name, params: t.input_schema || {} })) };
+      tools: (b.tools || []).map((t: any) => ({ name: t.name, params: t.input_schema || {}, description: t.description || '' })) };
   }
   if (/chat\/completions$/.test(path)) {
     const messages: Req['messages'] = []; let system = '';
@@ -46,7 +46,7 @@ export function parse(path: string, raw: string): Req | null {
       messages.push({ role: m.role, text: textOf(m.content), toolCalls: calls.length ? calls : undefined });
     }
     return { api: 'openai', model: b.model || '', stream: !!b.stream, system, messages,
-      tools: (b.tools || []).map((t: any) => ({ name: t.function?.name || t.name, params: t.function?.parameters || {} })) };
+      tools: (b.tools || []).map((t: any) => ({ name: t.function?.name || t.name, params: t.function?.parameters || {}, description: t.function?.description || t.description || '' })) };
   }
   return null;
 }

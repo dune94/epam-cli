@@ -100,7 +100,8 @@ export async function startProjectRun(opts: { src: string; project: string; dirs
  */
 export function vendorEdge(r: ProjectRun): Record<string, string> {
   const sets = JSON.parse(readFileSync(join(r.install, 'orchestrations/config/provider-sets.json'), 'utf8'));
-  const set = r.config.EPAM_PROVIDER_SET || sets.defaultSet;
+  // MOCK_AGENT_PROVIDER_SET rehearses a set the install is not currently on, without editing its .env.
+  const set = process.env.MOCK_AGENT_PROVIDER_SET || r.config.EPAM_PROVIDER_SET || sets.defaultSet;
   const decl = sets.sets?.[set];
   if (!decl) throw new Error(`the install's current set '${set}' is not declared in provider-sets.json`);
   const env: Record<string, string> = { EPAM_PROVIDER_SET: set };
@@ -110,6 +111,23 @@ export function vendorEdge(r: ProjectRun): Record<string, string> {
     env[c.from] = 'mock-no-spend';
     const vendor = String(c.from).replace(/_API_KEY$/, '');
     if (vendor !== c.from) env[`${vendor}_BASE_URL`] = r.agent.url;
+  }
+  // A SET THAT DECLARES ITS OWN REDIRECT (a runner whose endpoint variable is not <VENDOR>_BASE_URL):
+  // its base-URL variable points at the agent, and its declared env is applied as written.
+  if (decl.redirect?.baseUrlEnv) env[decl.redirect.baseUrlEnv] = r.agent.url;
+  for (const [k, v] of Object.entries(decl.redirect?.env || {})) env[k] = String(v);
+  // A SET THIS HARNESS WOULD REDIRECT NOTHING FOR IS REFUSED — it would reach a real model. 2026-09-27:
+  // the claude set (an OAuth session, no API-key credential, no declared redirect, no runner endpoint)
+  // ran a "£0" rehearsal against the real service for 60 minutes. A set is redirected through an
+  // API-key credential, a declared `redirect`, or a runner whose declared env carries an endpoint setting.
+  let runnerEnv = false;
+  try {
+    const sf = JSON.parse(readFileSync(join(r.install, 'orchestrations/config', decl.settingsFile), 'utf8'));
+    runnerEnv = Object.values(sf.runners || {}).some((rn: any) => rn && rn.env && Object.keys(rn.env).length > 0);
+  } catch { runnerEnv = false; }
+  const redirected = (decl.credentials || []).some((c: { from: string }) => /_API_KEY$/.test(c.from)) || !!decl.redirect?.baseUrlEnv || runnerEnv;
+  if (!redirected) {
+    throw new Error(`provider set '${set}' cannot be rehearsed by the mock agent: nothing it calls is redirected (no API-key credential, no declared redirect, no runner endpoint) — it would reach a real model`);
   }
   return env;
 }

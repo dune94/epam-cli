@@ -57,7 +57,9 @@ describe('a stack swaps by config alone', () => {
   });
 
   it.each(SETS)('%s: resolves a runner, so a swap does not inherit the previous stack\'s', (set) => {
-    const runner = resolve(set, 'm.runnerValues(m.activeSet().name === "codemie" ? "codemie-claude" : "claude", { projectConfigDir })');
+    // The runner the SET declares — asked, not named here (a set's runner is its own fact: claude,
+    // codemie-claude, copilot).
+    const runner = resolve(set, 'm.runnerValues(m.declaredRunners()[0], { projectConfigDir })');
     expect(runner, `the ${set} set resolves no runner at all`).toBeTruthy();
     expect(Array.isArray(runner.alwaysFlags), 'flags are not declared').toBe(true);
     expect(runner.env && typeof runner.env === 'object', 'env is not declared').toBe(true);
@@ -76,7 +78,7 @@ describe('a stack swaps by config alone', () => {
     // to one that no longer exists. Either way the run dies at startup or on the first call.
     const r = spawnSync('bash', ['-c', `
       SCRIPT_DIR=${JSON.stringify(SCRIPTS)}
-      eval "$(sed -n '/^resolve_primary_provider()/,/^}/p' ${JSON.stringify(join(SCRIPTS, 'llm-handler.sh'))})"
+      . ${JSON.stringify(join(SCRIPTS, 'lib/resolve-primary-provider.sh'))}
       resolve_primary_provider 2>/dev/null
     `], { encoding: 'utf8', timeout: 60000, env: { ...process.env, EPAM_PROVIDER_SET: set } });
     const provider = (r.stdout || '').trim();

@@ -112,7 +112,11 @@ describe('every verdict a producer emits is handled by its consumer', () => {
     const sets = readdirSync(CONFIG).filter((f) => /^llm-defaults\..*\.json$/.test(f));
     const missing: string[] = [];
     for (const f of sets) {
-      const cfg = JSON.parse(readFileSync(join(CONFIG, f), 'utf8'));
+      // Read the way the engine reads a set: a set that INHERITS its ladders (inheritFrom — the
+      // copilot set climbs the claude ladders) has them only once the inheritance is applied.
+      // eslint-disable-next-line @typescript-eslint/no-var-requires
+      const { readSetFile } = require(join(REPO, 'orchestrations/scripts/lib/llm-settings-resolve.js'));
+      const cfg = readSetFile(join(CONFIG, f)) || {};
       const tiers = new Set(Object.keys(cfg.ladders || {}));
       const order = (Array.isArray(cfg.ladderTierOrder) ? cfg.ladderTierOrder : [...tiers]).join(' ');
       for (const [name, p] of seams) {

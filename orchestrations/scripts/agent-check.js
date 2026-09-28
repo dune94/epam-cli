@@ -124,10 +124,10 @@ function seams() {
 function checkFillerModel() {
   try {
     // eslint-disable-next-line global-require
-    const { activeSet } = require('./lib/llm-settings-resolve.js');
+    const { activeSet, readSetFile } = require('./lib/llm-settings-resolve.js');
     const a = activeSet();
     if (!a) return '(the run supplies the model)';
-    const j = JSON.parse(fs.readFileSync(path.join(__dirname, '..', 'config', a.cfg.settingsFile), 'utf8'));
+    const j = readSetFile(path.join(__dirname, '..', 'config', a.cfg.settingsFile)) || {};
     for (const tier of Object.values(j.ladders || {})) {
       if (tier && typeof tier.startModel === 'string' && tier.startModel) return tier.startModel;
     }

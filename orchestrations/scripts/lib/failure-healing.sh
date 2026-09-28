@@ -484,6 +484,18 @@ classify_failure_class() {
         warning "  Coordinator[L1]: the attempt was truncated at its output cap (${STORY_MAX_OUTPUT_TOKENS:-?} tokens) — class output_cap; the retry is given the widest budget"
         return 0
     fi
+    # A RESULT THAT SAYS WHY IT FAILED IS READ BEFORE ANYTHING IS INFERRED. A runner whose result
+    # names its failure (lib/copilot-result.js writes error.class from the call's own JSONL) is taken at
+    # its word for credit: an exhausted account fails every rung of a ladder that bills it the same way,
+    # and the copilot set has no balance probe to say so below. A result without error.class (the claude
+    # runner's) is classified exactly as before.
+    if [ -n "$result_json" ] && [ -s "$result_json" ] \
+       && [ "$(jq -r 'select(.is_error == true) | .error.class // empty' "$result_json" 2>/dev/null)" = "credit" ]; then
+        COORDINATOR_FAILURE_CLASS="credit"
+        COORDINATOR_ESCALATE="no"
+        error "  Coordinator[L1]: the call's own result says the account is out of credit ($(jq -r '.error.message // ""' "$result_json" 2>/dev/null)) — every rung bills the same account; halting this story instead of climbing its ladder"
+        return 0
+    fi
     if [ "$exit_code" -ne 0 ]; then
         local _bal; _bal="$(balance_probe_read 2>/dev/null || true)"
         if [ -n "$_bal" ] && awk -v b="$_bal" 'BEGIN{exit !(b+0 <= 0.05)}'; then

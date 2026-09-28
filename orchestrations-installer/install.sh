@@ -477,9 +477,10 @@ _min_bytes="${EPAM_MIN_DIST_BYTES:-51200}"
 
 # WHETHER dist/epam.js MATTERS DEPENDS ON THE STACK, and the stack declares it.
 #
-# claude.sh:1649-1650 routes copilot|openai|openrouter|cursor|minimax|epam to $EPAM_CLI
-# (dist/epam.js), and `claude` to $CLAUDE_CMD. Every provider set declares `claude` or
-# `codemie-claude` as its runner, so on those stacks dist/epam.js is NEVER executed — which is why
+# claude.sh routes openai|openrouter|cursor|minimax|epam to $EPAM_CLI (dist/epam.js), `claude` to
+# $CLAUDE_CMD, and (since 2026-09-27) `copilot` to the GitHub Copilot CLI (providers.json cliBinary).
+# Every provider set declares `claude`, `codemie-claude` or `copilot` as its runner, so on those
+# stacks dist/epam.js is NEVER executed — which is why
 # this repo runs green with a 188-byte "Hello, World!" stub in dist/.
 #
 # So a hard failure here would refuse an install that works. It is reported instead, with what it

@@ -13,7 +13,7 @@
  * error.class names what the attempt's handler should do: credit (halt), rate_limit (retry later),
  * auth, invocation (the call itself was malformed), provider (anything else the service said).
  *
- * CLI: node copilot-result.js <events.jsonl> <stderr.txt> <out.json>
+ * CLI: node copilot-result.js <events.jsonl> <stderr.txt> <out.json> [<COPILOT_HOME/session-state>]
  *   stdout: the answer text; exit 0 when the call answered, 1 when it failed (the reason on stderr).
  */
 const fs = require('fs');
@@ -29,7 +29,37 @@ function classify(statusCode, message) {
   return 'provider';
 }
 
-function judgeCall(jsonlText, stderrText) {
+/**
+ * THIS CALL'S USAGE, FROM ITS OWN SESSION RECORD. Up to 1.0.18 the CLI put outputTokens on each
+ * assistant.message it streamed; 1.0.85 streams none, and records usage only in the session it wrote
+ * under $COPILOT_HOME/session-state/<id>/events.jsonl — the `session.shutdown` event's modelMetrics.
+ * The session is found by an event id this call's own stdout carried (user.message is written to
+ * both), never by "the newest one", so parallel calls sharing a home cannot read each other's usage.
+ */
+function sessionUsage(events, sessionStateDir) {
+  if (!sessionStateDir) return null;
+  const ids = new Set(events.filter((e) => e.type === 'user.message' && e.id).map((e) => e.id));
+  if (!ids.size) return null;
+  let dirs = [];
+  try { dirs = fs.readdirSync(sessionStateDir); } catch { return null; }
+  for (const d of dirs) {
+    const text = read(`${sessionStateDir}/${d}/events.jsonl`);
+    if (!text || ![...ids].some((id) => text.includes(`"id":"${id}"`))) continue;
+    let shutdown = null;
+    for (const line of text.split('\n')) {
+      if (!line.includes('"session.shutdown"')) continue;
+      try { shutdown = JSON.parse(line); } catch { /* a torn line is not a record */ }
+    }
+    if (!shutdown) return null;
+    const metrics = Object.values((shutdown.data && shutdown.data.modelMetrics) || {});
+    const sum = (k) => metrics.reduce((n, m) => n + (Number(m.usage && m.usage[k]) || 0), 0);
+    return { input_tokens: sum('inputTokens'), output_tokens: sum('outputTokens'),
+      premium_requests: Number(shutdown.data.totalPremiumRequests) || 0 };
+  }
+  return null;
+}
+
+function judgeCall(jsonlText, stderrText, sessionStateDir) {
   const events = [];
   for (const line of String(jsonlText || '').split('\n')) {
     const t = line.trim();
@@ -43,7 +73,8 @@ function judgeCall(jsonlText, stderrText) {
   const stderrError = stderr.split('\n').map((l) => l.trim()).find((l) => /^error\b/i.test(l)) || '';
   const answer = messages.length ? String(messages[messages.length - 1].data && messages[messages.length - 1].data.content || '') : '';
   const outputTokens = messages.reduce((n, e) => n + (Number(e.data && e.data.outputTokens) || 0), 0);
-  const premium = Number(resultEv && resultEv.usage && resultEv.usage.premiumRequests) || 0;
+  const fromSession = sessionUsage(events, sessionStateDir);
+  const premium = Math.max(Number(resultEv && resultEv.usage && resultEv.usage.premiumRequests) || 0, fromSession ? fromSession.premium_requests : 0);
   const turns = events.filter((e) => e.type === 'assistant.turn_end').length || messages.length;
 
   let error = null;
@@ -65,7 +96,9 @@ function judgeCall(jsonlText, stderrText) {
     is_error: !!error,
     result: error ? '' : answer,
     stop_reason: error ? 'error' : 'end_turn',
-    usage: { input_tokens: 0, output_tokens: outputTokens },
+    usage: fromSession
+      ? { input_tokens: fromSession.input_tokens, output_tokens: Math.max(outputTokens, fromSession.output_tokens) }
+      : { input_tokens: 0, output_tokens: outputTokens },
     total_cost_usd: 0,
     premium_requests: premium,
     num_turns: turns,
@@ -73,11 +106,11 @@ function judgeCall(jsonlText, stderrText) {
   };
 }
 
-module.exports = { judgeCall, classify };
+module.exports = { judgeCall, classify, sessionUsage };
 
 if (require.main === module) {
-  const [jsonl, stderrFile, out] = process.argv.slice(2);
-  const r = judgeCall(read(jsonl), read(stderrFile));
+  const [jsonl, stderrFile, out, sessionStateDir] = process.argv.slice(2);
+  const r = judgeCall(read(jsonl), read(stderrFile), sessionStateDir);
   if (out) fs.writeFileSync(out, JSON.stringify(r) + '\n');
   if (r.is_error) {
     process.stderr.write(`[copilot] call failed (${r.error.class}${r.error.statusCode ? ' ' + r.error.statusCode : ''}): ${r.error.message}\n`);

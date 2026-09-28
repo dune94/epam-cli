@@ -21,11 +21,11 @@ const ROOT = join(__dirname, '../../../');
 const CLI = join(ROOT, 'orchestrations/scripts/lib/copilot-result.js');
 const F = (n: string) => join(ROOT, 'test/fixtures/copilot', n);
 
-function judge(jsonl: string, stderr: string) {
+function judge(jsonl: string, stderr: string, sessionState?: string) {
   const d = mkdtempSync(join(tmpdir(), 'copilot-result-'));
   try {
     const out = join(d, 'result.json');
-    const r = spawnSync(process.execPath, [CLI, F(jsonl), F(stderr), out], { encoding: 'utf8' });
+    const r = spawnSync(process.execPath, [CLI, F(jsonl), F(stderr), out, ...(sessionState ? [F(sessionState)] : [])], { encoding: 'utf8' });
     let json: Record<string, any> = {};
     try { json = JSON.parse(readFileSync(out, 'utf8')); } catch { /* none written */ }
     return { status: r.status, stdout: r.stdout, stderr: r.stderr, json };
@@ -77,5 +77,25 @@ describe('a call that failed while exiting 0', () => {
     const r = judge('model-unavailable.jsonl', 'empty.stderr');
     expect(r.status).not.toBe(0);
     expect(r.json.is_error).toBe(true);
+  });
+});
+
+/**
+ * 1.0.85 STREAMS NO TOKEN COUNTS. Captured 2026-09-28 against a stub that reported 100 in / 7 out:
+ * no assistant.message carries outputTokens any more; the usage is in the session the CLI wrote, in
+ * its session.shutdown event. A decoy session from another call sits beside it with other numbers.
+ */
+describe('a call on a CLI that records usage only in its session', () => {
+  it('reads THIS call\'s usage from its own session — not zero, not the neighbour\'s', () => {
+    const r = judge('ok-1.0.85.jsonl', 'empty.stderr', 'session-state-1.0.85');
+    expect(r.status, r.stderr).toBe(0);
+    expect(r.json).toMatchObject({ is_error: false, result: 'HELLO' });
+    expect(r.json.usage).toEqual({ input_tokens: 100, output_tokens: 7 });
+  });
+
+  it('without the session record the call still judges — usage is unknown (0), never borrowed', () => {
+    const r = judge('ok-1.0.85.jsonl', 'empty.stderr');
+    expect(r.status).toBe(0);
+    expect(r.json.usage.output_tokens).toBe(0);
   });
 });

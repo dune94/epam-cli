@@ -80,9 +80,12 @@ copilot_invoke() {
     # PIPED, NOT REDIRECTED: the CLI reads a prompt from stdin only when stdin is a pipe. A redirected
     # file (`< prompt`) is answered "No prompt provided ... via standard in" with exit 0 (2026-09-27);
     # -p "<prompt>" would put a whole prompt on the argument list, which a large one exceeds.
-    cat "$prompt_file" | COPILOT_HOME="$home" COPILOT_AUTO_UPDATE=false NO_COLOR=1 "$bin" "${args[@]}" > "$ev" 2> "$err"
+    # NO COPILOT_AUTO_UPDATE=false: like --no-auto-update it pins the loader to the npm-bundled build,
+    # which can be far older than the CLI the operator runs (1.0.18 vs 1.0.85, 2026-09-28) and refuses
+    # current models. The build a call ran on is in the CLI's own log under $home/logs.
+    cat "$prompt_file" | COPILOT_HOME="$home" NO_COLOR=1 "$bin" "${args[@]}" > "$ev" 2> "$err"
     mkdir -p "$(dirname "$events_keep")" 2>/dev/null && cp "$ev" "$events_keep" 2>/dev/null || true
-    "$node" "$_copilot_libdir/copilot-result.js" "$ev" "$err" "$result_json"
+    "$node" "$_copilot_libdir/copilot-result.js" "$ev" "$err" "$result_json" "$home/session-state"
     rc=$?
     rm -f "$ev" "$err"
     return $rc

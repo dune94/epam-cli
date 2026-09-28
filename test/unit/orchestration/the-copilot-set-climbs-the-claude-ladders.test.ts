@@ -55,7 +55,7 @@ describe('the copilot set', () => {
 
   it('the runner asks the CLI for JSONL, maps the pipeline\'s tools to Copilot\'s, and states what it cannot bind', () => {
     const rn = underSet('copilot', 'r.resolveRunner("copilot")');
-    expect(rn.alwaysFlags).toEqual(expect.arrayContaining(['--output-format=json', '--no-auto-update']));
+    expect(rn.alwaysFlags).toEqual(expect.arrayContaining(['--output-format=json', '--allow-all-tools']));
     expect(rn.toolNames.read_file).toEqual(['view']);
     expect(rn.toolNames.write_file).toEqual(expect.arrayContaining(['create', 'edit']));
     expect(rn.toolNames.search).toEqual(['grep']);

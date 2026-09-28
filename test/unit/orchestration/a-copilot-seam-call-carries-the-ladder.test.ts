@@ -122,6 +122,20 @@ describe.skipIf(!COPILOT)('a seam call on the copilot set', () => {
     } finally { mode = 'ok'; }
   }, 180_000);
 
+  it('runs the CLI the operator runs — not the stale bundled build a pin falls back to', async () => {
+    // 2026-09-28: --no-auto-update (and COPILOT_AUTO_UPDATE=false) did not merely stop a download —
+    // they made the loader run the npm-bundled 1.0.18 instead of the current 1.0.85, which does not
+    // know claude-sonnet-5: the first live call was refused "not available". The CLI logs the build
+    // it started as; that must be the build `copilot --version` reports.
+    const want = execSync(`${JSON.stringify(COPILOT)} --version`, { encoding: 'utf8' }).match(/\d+\.\d+\.\d+/)?.[0];
+    expect(want, 'copilot --version reported no version').toBeTruthy();
+    await call({ AI_MODEL: 'claude-sonnet-5' });
+    const logs = join(dir, 'home', 'logs');
+    const started = (existsSync(logs) ? readdirSync(logs) : []).flatMap((f) => readFileSync(join(logs, f), 'utf8').match(/Starting Copilot CLI: (\d+\.\d+\.\d+)/g) || []);
+    expect(started.length, 'the CLI left no start record — nothing to judge').toBeGreaterThan(0);
+    for (const line of started) expect(line).toBe(`Starting Copilot CLI: ${want}`);
+  }, 180_000);
+
   it('a model the account is not served is refused before any request is made', async () => {
     const r = await call({ AI_MODEL: 'claude-opus-9' });
     expect(r.status).not.toBe(0);

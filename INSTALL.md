@@ -38,6 +38,7 @@ The runner is *not* named in any script — it is read from config. As declared 
 | `claude` (**default**) | `claude` | none |
 | `openrouter` | `claude` | `OPENROUTER_API_KEY`, `MINIMAX_API_KEY` |
 | `codemie` | `codemie-claude` | none |
+| `copilot` | `copilot` (GitHub Copilot CLI) | `COPILOT_GITHUB_TOKEN` |
 | `mockserver` | `claude` | none |
 
 Run `./orchestrations-installer/install.sh --check` to have the machine answer this for itself
@@ -208,6 +209,7 @@ credentials and will not work.
 | `JIRA_TOKEN` | The API token that lets the pipeline READ tickets. The pipeline never writes to Jira. | `ATATT3xFfGF0…  (starts ATATT, ~190 characters)` | Your project pulls tickets from Jira | id.atlassian.com → Security → Create and manage API tokens → Create API token. Copy it immediately; Atlassian will not show it again. |
 | `LANGFUSE_PUBLIC_KEY` | Identifies the Langfuse project that records each model call, so a run can be replayed later at no cost. | `pk-lf-epam-dev` | You installed with `--replay on` | Seeded by the stack itself — `docker-compose.observability.yml` creates the project with this exact value. Use it as-is unless you changed the seed. |
 | `LANGFUSE_SECRET_KEY` | The matching secret for that Langfuse project. | `sk-lf-epam-dev` | You installed with `--replay on` | The same seeded pair. |
+| `COPILOT_GITHUB_TOKEN` | The GitHub account the `copilot` stack bills: every model call spends that account's Copilot premium requests. It outranks any login stored by the Copilot CLI, so a run bills exactly this account. | `gho_XXXXXXXX…  (starts gho_, 40 characters)` | You installed with `--stack copilot` | The Copilot CLI's own sign-in token. 1) Install the CLI: `npm install -g @github/copilot` (https://www.npmjs.com/package/@github/copilot). 2) Run `copilot`, type `/login`, open https://github.com/login/device, enter the code it shows, and authorize while signed in to github.com as the account you want billed (check the avatar at https://github.com; sign out at https://github.com/logout if it is another account). 3) Copy the value of `copilotTokens["https://github.com:<your-login>"]` from `~/.copilot/config.json`. A classic personal access token (`ghp_…`) is rejected by the Copilot API (HTTP 401) even when it is valid for github.com. Verify: `curl -s -o /dev/null -w '%{http_code}\n' -H "Authorization: Bearer <token>" -H 'Copilot-Integration-Id: copilot-developer-cli' https://api.githubcopilot.com/models` prints `200`. |
 | `GITHUB_PERSONAL_ACCESS_TOKEN` | Read access to GitHub-hosted client repositories. | `ghp_XXXXXXXX…  (starts ghp_, 36 characters)` | Your codelines are on GitHub and you use the copilot provider | github.com → Settings → Developer settings → Personal access tokens. Read access to the repositories the pipeline will scan is enough. |
 
 #### Launch dashboard — `<install>/launch-dashboard/.env`

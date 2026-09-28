@@ -47,7 +47,7 @@ describe('the mocking agent drives the seeded brownfield project at £0', () => 
     // THE RUN'S OWN PRD AND CODELINE: written by ingest and the launcher under the workspace, found there.
     const newest = () => readdirSync(workspaceRoot).map((d) => join(workspaceRoot, d, 'workspace')).filter(existsSync).sort().pop() || '';
     const prdPath = () => join(newest(), 'synthesized-prd.json');
-    const codelines = () => { const c = join(newest(), 'codelines'); return existsSync(c) ? readdirSync(c).map((d) => ({ path: join(c, d) })) as any : []; };
+    const codelines = () => { const c = join(newest(), 'codelines'); return existsSync(c) ? readdirSync(c, { withFileTypes: true }).filter((d) => d.isDirectory()).map((d) => ({ path: join(c, d.name) })) as any : []; };
     const stories = () => { try { return (JSON.parse(readFileSync(prdPath(), 'utf8')).stories || []).map((s: any) => s.id); } catch { return []; } };
     const agent = new MockAgent(join(install, 'orchestrations'), journal, stories, ['brownfield']);
     await agent.start();

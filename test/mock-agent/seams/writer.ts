@@ -7,11 +7,13 @@
  * each file is the codeline's ecosystem's declared stand-in, so what is written is what that stack's
  * gates can run — no stack is known here.
  */
-import { isAbsolute, dirname } from 'node:path';
+import { isAbsolute, dirname, join } from 'node:path';
+import { existsSync, readFileSync } from 'node:fs';
 import type { Behaviour, Call } from '../agent';
 import type { ToolCall, ToolDef } from '../wire';
 import { newCallId } from '../wire';
 import { deliveries } from '../ecosystem';
+import { quotedLiterals } from './discovery';
 import type { World } from '../world';
 
 /** The tool whose parameters say it writes a file: a path and a content. */
@@ -19,6 +21,20 @@ export const writeTool = (tools: ToolDef[]) => tools.find((t) => {
   const p = Object.keys(t.params?.properties || {});
   return p.some((k) => /path/i.test(k)) && p.some((k) => /content|text/i.test(k));
 });
+
+/**
+ * AN EXISTING FILE IS EDITED, NEVER REPLACED — as a model working a brownfield ticket does. The
+ * ticket's own quoted literals say what changes: one the file holds is replaced by one it does not
+ * (the same reading the fix-plan stand-in makes). With no such pair, the file keeps everything it
+ * had and gains the stack's stand-in content, so its existing exports survive.
+ */
+export function edited(existing: string, prompt: string, standIn: string): string {
+  const literals = quotedLiterals(prompt);
+  const old = literals.find((l) => existing.includes(l));
+  const want = old && literals.find((l) => l !== old && !existing.includes(l) && !l.includes(old) && !old.includes(l));
+  if (old && want) return existing.split(old).join(want);
+  return `${existing.replace(/\n?$/, '\n')}${standIn}`;
+}
 
 const keyLike = (t: ToolDef, re: RegExp) => Object.keys(t.params?.properties || {}).find((k) => re.test(k))!;
 
@@ -44,7 +60,12 @@ export function writerDelivers(world: World, install: string): Behaviour {
     // path the prompt gives wins; otherwise a relative path, which the runner resolves where it runs.
     const prompt = call.req.messages.find((m) => m.role === 'user')?.text || '';
     const given = (f: string) => (prompt.match(new RegExp(`(/[^\\s\`'"]*/${f.replace(/[.*+?^${}()|[\]\\]/g, '\\$&')})(?=[\\s\`'"]|$)`, 'm')) || [])[1];
-    const calls: ToolCall[] = d.map((x) => ({ id: newCallId(), name: tool.name, input: { [pathKey]: isAbsolute(x.path) ? x.path : given(x.path) || x.path, [contentKey]: x.content } }));
+    const calls: ToolCall[] = d.map((x) => {
+      const at = isAbsolute(x.path) ? x.path : given(x.path) || x.path;
+      const onDisk = isAbsolute(at) ? at : join(cwd, at);
+      const content = existsSync(onDisk) ? edited(readFileSync(onDisk, 'utf8'), prompt, x.content) : x.content;
+      return { id: newCallId(), name: tool.name, input: { [pathKey]: at, [contentKey]: content } };
+    });
     // A WRITE TOOL THAT SAYS ITS PARENT DIRECTORIES MUST EXIST (its own description — the GitHub Copilot
     // CLI's `create`) answers a new directory with an error; a model reads that and makes the directory.
     // The model's move, made up front: one shell call creating the new directories, then the writes.

@@ -21,6 +21,9 @@ import { writerDelivers } from './writer';
 import { testCriteria } from './tc';
 import { failureAnalyst } from './analyst';
 import { perStoryList } from './per-story';
+import { codelineSelection } from './discovery';
+import { fixPlan } from './fixplan';
+import { reproWriter } from './repro';
 
 type FillerFor = (world: World, prompt: string, fields: Field[], call: Call) => Filler;
 
@@ -40,6 +43,8 @@ export const WHOLE: Record<string, (world: World, prompt: string, call: Call, co
   'test-criteria': (w, p, _c, k) => testCriteria(w, p, k),
   'project-roster': (w, p) => JSON.stringify(rosterDelta(w, p)),
   'project-prompts': (w, p) => segmented(w, p) ?? 'OK',
+  'codeline-selection': (_w, p) => codelineSelection(p),
+  'fix-plan': (_w, p) => fixPlan(p),
 };
 
 /** A contract that declares a tag is answered inside it, whatever style the prompt rendered its shape in. */
@@ -58,6 +63,7 @@ export const DIAGNOSING: Record<string, (world: World, prompt: string, call: Cal
 /** Seams that ACT through tools, turn by turn, rather than answer in one reply. */
 export const ACTING: Record<string, (world: World, install: string) => Behaviour> = {
   implementation: (w, i) => writerDelivers(w, i),
+  'repro-test': () => reproWriter(),
 };
 
 /** The behaviour of a model that does each seam's job correctly. */
@@ -82,8 +88,18 @@ export function correct(world: World, install: string): Behaviour {
     // Only into an answer SHAPED LIKE A STORY (at least three fields in common with the story), and
     // never into a field with declared values — a KB constraint shares `id` and `status` with a
     // story and took the story's "pending" status and its id.
-    const storyShaped = !!story && fields.filter((f) => f.name in story).length >= 3;
-    const fromStory: Filler = (f) => (storyShaped && !f.enum?.length && f.type !== 'array' && f.type !== 'object' && typeof story![f.name] === 'string' ? story![f.name] : undefined);
+    // An answer ABOUT A STORY (it has a field naming the story) needs only two fields in common: a
+    // brownfield story gains storyKind from the very spec pass that is asking, so at that moment it
+    // shares only its title and description with the answer (hello-dolly 2026-09-28: both came back
+    // as "title from the request" and the writer's prompt could not be rendered).
+    const shared = story ? fields.filter((f) => f.name in story).length : 0;
+    const aboutAStory = fields.some((f) => /story/i.test(f.name) && f.type === 'string');
+    const storyShaped = !!story && (shared >= 3 || (shared >= 2 && aboutAStory));
+    const fromStory: Filler = (f) => {
+      if (!storyShaped || f.enum?.length || f.type === 'array' || f.type === 'object') return undefined;
+      if (/story/i.test(f.name) && /id$/i.test(f.name)) return call.story;
+      return typeof story![f.name] === 'string' ? story![f.name] : undefined;
+    };
     const chain = [FILLERS[produces]?.(world, prompt, fields, call), perStoryList(world, prompt, fields, tplText),
       judges(produces) ? judgeFindsNothing() : undefined, fromStory].filter(Boolean) as Filler[];
     const filler: Filler = (f, path) => { for (const c of chain) { const v = c(f, path); if (v !== undefined) return v; } return undefined; };

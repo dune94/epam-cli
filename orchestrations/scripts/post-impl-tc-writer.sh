@@ -191,8 +191,6 @@ fi
 rm -f "$_tpl_vals"
 
 # ── Run the TC writer agent ────────────────────────────────────────────────────
-LOG_FILE="${SCRIPT_DIR}/../logs/tc-writer-${PHASE}.log"
-mkdir -p "$(dirname "$LOG_FILE")"
 
 echo "  [tc-writer] Invoking TC writer agent..."
 
@@ -229,6 +227,21 @@ set +e
 #
 # AI_GATE_ALLOW_TOOLS=1: the TC writer must read source to write criteria against it, so it
 # needs the tool grant the handler otherwise withholds.
+# THE ANSWER IS READ FROM THE CALL'S OWN STDOUT, NEVER FROM A SHARED LOG.
+#
+# This ran `2>&1 | tee "$LOG_FILE"` and extracted from $LOG_FILE. Every caller ALSO writes that file
+# (lib/tc-writer-gate.sh and run-agent-orchestration.sh tee this script's output into it), so two
+# writers shared it — one appending, one truncating and writing from offset 0 — and the answer landed
+# twice, the first copy cut short: a correct answer judged "no JSON" three times in a row (copilot-set
+# rehearsal, 2026-09-27). Even with one writer, `2>&1` put the handler's stderr INSIDE the answer.
+# Now stdout alone is kept privately and extracted, stderr passes through, and the log is the
+# CALLER's: this script writes none.
+#
+# No process substitution for stderr: the handler's watchdog leaves an orphaned `sleep` of the
+# seam's full timeout behind, and an orphan inherits a process substitution's pipe even with its
+# own output silenced — the caller then waited out the whole timeout (14 min per attempt, £0
+# greenfield, 2026-09-28).
+_tc_answer=$(mktemp "${TMPDIR:-/tmp}/tc-writer-answer-XXXXXX")
 (
   cd "$OUTPUT_DIR" && \
   AI_GATE_ALLOW_TOOLS=1 \
@@ -236,7 +249,7 @@ set +e
   EPAM_DANGEROUS_SKIP_APPROVAL=1 \
   EPAM_MAX_TOOL_CALLS="${TC_WRITER_MAX_TOOL_CALLS:-15}" \
     bash "${EPAM_LLM_HUB:-$SCRIPT_DIR/llm-handler.sh}" --provider "$TC_PROVIDER" --model "$TC_MODEL" <<<"$TC_PROMPT"
-) 2>&1 | tee "$LOG_FILE"
+) | tee "$_tc_answer"
 TC_EXIT=${PIPESTATUS[0]}
 set -e
 
@@ -244,8 +257,9 @@ set -e
 # the object and this turns it into the file the applier reads. On no JSON the destination is
 # REMOVED, so a previous run's file can never stand in for this run's answer — which is exactly
 # what happened on 2026-08-20, when a tc-core.json from 31 July was applied instead.
-python3 "$SCRIPT_DIR/lib/handlers/tc-extract-output.py" "$TC_OUT_FILE" < "$LOG_FILE" \
+python3 "$SCRIPT_DIR/lib/handlers/tc-extract-output.py" "$TC_OUT_FILE" < "$_tc_answer" \
     || echo "  [tc-writer] no criteria extracted from the agent's answer"
+rm -f "$_tc_answer"
 
 
 # ── Validate and apply TCs to prd.json ─────────────────────────────────────────

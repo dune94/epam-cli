@@ -2959,11 +2959,16 @@ elif [ "${_tc_writer_needed:-0}" -gt 0 ]; then
         # `if CMD | tee file; then` checks tee's exit code, not CMD's — tee
         # almost always exits 0, so this previously reported PASS even when
         # the TC writer agent itself failed. Use PIPESTATUS[0] instead.
+        # THIS ATTEMPT'S LOG: emptied BEFORE the call, then only appended to. The script writes this
+        # same file while it runs; a truncating tee here was a second writer from offset 0 that
+        # clobbered the model's answer (see post-impl-tc-writer.sh). The classifier below reads
+        # this attempt's text only, as it did.
+        : > "$LOG_DIR/tc-writer-${PHASE}.log"
         bash "$SCRIPT_DIR/post-impl-tc-writer.sh" \
             --prd "$PRD_FILE" \
             --phase "$PHASE" \
             --output-dir "${OUTPUT_DIR:-$PROJECT_ROOT}" \
-            2>&1 | tee "$LOG_DIR/tc-writer-${PHASE}.log"
+            2>&1 | tee -a "$LOG_DIR/tc-writer-${PHASE}.log"
         _tc_writer_exit=${PIPESTATUS[0]}
 
         if ! jq empty "$PRD_FILE" 2>/dev/null; then

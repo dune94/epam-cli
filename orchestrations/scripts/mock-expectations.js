@@ -2787,13 +2787,22 @@ function endsInToolCall(cap, seam) {
       // the gate that needs the file blocks (£0 brownfield harness run 14, 2026-09-14).
       const _d = seamDelivery(seam);
       const _reads = _d.filter((c) => c.read).map((c) => c.read);
+      // A DELIVERY ANSWERS ONLY A REQUEST THAT CAN EXECUTE IT. The seam's fingerprint also matches
+      // any call whose prompt QUOTES this seam — the self-heal analyst diagnosing it, a tool-free
+      // plan pass — and those consumed the one delivery: the CLI refused the write ("No such tool
+      // available: Write ... disabled for this session"), the writer's own attempts got the plain
+      // answer, no reproducing test was ever written, and the repro gate blocked every £0
+      // brownfield run (2026-09-28, found from the analyst's own transcript). The write tool's
+      // name is the runner's declared one; a request that does not offer it is not this delivery's.
+      const _bodyRxD = bodyMatch.type === 'REGEX' ? bodyMatch.regex.replace(/^\(\?s\)/, '').replace(/\.\*$/, '') : `(?=.*${rx(wireForm(key))})`;
+      const _canWrite = { type: 'REGEX', regex: `(?s)${_bodyRxD}(?=.*${rx(`"name":"${_d[0].name}"`)}).*` };
       for (const proto of PROTOCOLS) {
         for (const turn of (_reads.length ? [_reads, _d] : [_d])) {
           // Below the deliberate first failure (34/36), above the plain answer (30): a seam whose
           // failed attempts reach the analyst fails first, delivers second, answers last.
           await put('/mockserver/expectation', {
             priority: 33 + _tagRank, times: { remainingTimes: 1, unlimited: false },
-            httpRequest: { method: 'POST', path: proto.path, body: bodyMatch },
+            httpRequest: { method: 'POST', path: proto.path, body: _canWrite },
             httpResponse: { statusCode: 200, headers: { 'content-type': ['text/event-stream; charset=utf-8'], 'x-seam': [`${seam}:delivers`] },
               body: proto.calls(turn.map(({ read, ...c }) => c)) },
           });

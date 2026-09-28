@@ -31,12 +31,17 @@ _run_project_verification() {
     local _plugin="${_auto}/plugins/verification-plugin.js"
     local _node="${NODE_CMD:-${NODE_BIN:-node}}"
     if [ ! -f "$_plugin" ]; then echo "verification plugin missing at $_plugin"; return 2; fi
+    # 2 IS RESERVED FOR "NOT DECLARED". tsc exits 2 when it reports errors, so passing the check's
+    # own code through made every TypeScript type error read as an undeclared check: the writer was
+    # told to declare one and never saw the errors (hello-dolly on codemie-web, £0, 2026-09-28).
+    # A declared check that fails with 2 therefore reports 1; any other code is kept.
     "$_node" -e '
       const p = require(process.argv[1]);
       const r = p.runVerification(process.argv[2], undefined, process.argv[3] || undefined);
       if (r.status === "unknown") { console.log("verification not declared: " + r.reason); process.exit(2); }
       if (r.output) console.log(r.output);
-      process.exit(r.status === "pass" ? 0 : (r.exitCode || 1));
+      const code = r.exitCode || 1;
+      process.exit(r.status === "pass" ? 0 : (code === 2 ? 1 : code));
     ' "$_plugin" "$_root" "$_section"
 }
 

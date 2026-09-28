@@ -1870,6 +1870,35 @@ $_kb_section"
                 fi
                 rm -f "$_cp_prompt"
                 ;;
+            codemie-web)
+                # A CODEMIE WEB ASSISTANT — "Pipeline <codeline> <writer seam>" — the same call the seam
+                # hub makes (lib/codemie-web-runner.sh). It reaches the codeline through the development
+                # CodeMie Plugin rooted at PROJECT_ROOT (this attempt's cwd).
+                #   The grant is the runner's WHOLE declared vocabulary: the claude writer runs with its
+                # runner's whole tool set, and this is that set in the codemie-web runner's words
+                # (toolNames, filled by apply_runner_settings above). A runner declaring none is refused
+                # — a writer with no tools answers in prose and writes nothing.
+                #   The constitution opens the prompt, as on copilot: the stored assistant's system prompt
+                # is a fixed persona, so the per-story constitution travels with the message.
+                local _cw_prompt _cw_grant=""
+                if [ "${#RUNNER_TOOL_NAMES[@]}" -gt 0 ]; then
+                    _cw_grant="$(IFS=','; printf '%s' "${!RUNNER_TOOL_NAMES[*]}")"
+                fi
+                if [ -z "$_cw_grant" ]; then
+                    echo "[codemie-web] the codemie-web runner declares no toolNames — a writer without tools cannot write; refusing the attempt" >> "$output_file"
+                else
+                    _cw_prompt="$(mktemp "${TMPDIR:-/tmp}/codemie-web-prompt-XXXXXX")"
+                    { [ -n "$effective_constitution" ] && printf '%s\n\n---\n\n' "$effective_constitution"; printf '%s' "$prompt"; } > "$_cw_prompt"
+                    if EPAM_AGENT_NAME="${STORY_WRITER_SEAM}" EPAM_STORY_ID="${story_id}" \
+                            AI_GATE_ALLOW_TOOLS=1 EPAM_ALLOWED_TOOLS="$_cw_grant" PROJECT_ROOT="$PROJECT_ROOT" \
+                            "${_timeout_prefix[@]}" bash -c '. "$1"; shift; codemie_web_invoke "$@"' _ \
+                            "$SCRIPT_DIR/lib/codemie-web-runner.sh" "$_cw_prompt" "${STORY_MODEL:-}" "$json_result_file" \
+                            2>> "$output_file" >> "$output_file"; then
+                        invoke_success=true
+                    fi
+                    rm -f "$_cw_prompt"
+                fi
+                ;;
             openai|openrouter|cursor|minimax)
                 # epam-run providers: invoke via `epam run --provider X --model M --json`
                 # EPAM_CLI can be overridden with a mock for zero-token testing.
@@ -2560,6 +2589,10 @@ $_kb_section"
             classify_failure_class "$_raw_for_coord" "$json_result_file" "$exit_code" "$story_id" "$output_file"
             if [ "$COORDINATOR_FAILURE_CLASS" = "credit" ]; then
                 update_monitor_status "failed" "$story_id" "provider account has no credit — halted, not retried"
+                return 1
+            fi
+            if [ "$COORDINATOR_FAILURE_CLASS" = "auth" ]; then
+                update_monitor_status "failed" "$story_id" "provider session not authorised — halted, not retried; sign in again"
                 return 1
             fi
             raise_output_budget_after_cap_hit

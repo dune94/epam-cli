@@ -142,3 +142,6 @@ test-results/
 
 # GitHub Copilot CLI state (lib/copilot-runner.sh: EPAM_COPILOT_HOME default) — session files and the model catalog
 .copilot-home/
+
+# CodeMie web provider state: plugin keys (0600), assistant ids, plugin logs. Never committed.
+.codemie-web/

@@ -38,6 +38,8 @@ export class MockAgent {
   readonly conflicts = new Map<string, { seam: string; template: string; reasons: string[] }>();
   private attempts = new Map<string, number>();
   private behaviours = new Map<string, Behaviour>();
+  /** Services a set's runner calls besides the model (codemie.ts: the CodeMie API), served on this URL. */
+  private mounts: ((method: string, path: string, raw: string, res: ServerResponse) => boolean)[] = [];
   port = 0;
 
   constructor(orchestrationsDir: string, readonly journal: string, readonly knownStories: () => string[] = () => [], readonly modes: string[] = []) {
@@ -45,6 +47,9 @@ export class MockAgent {
     mkdirSync(journal, { recursive: true });
     this.server = createServer((req, res) => this.handle(req, res));
   }
+
+  /** Serve another service's routes here; the handler returns true when it answered the request. */
+  mount(h: (method: string, path: string, raw: string, res: ServerResponse) => boolean) { this.mounts.push(h); return this; }
 
   /** Register how a seam answers. The last registration for a seam wins. */
   on(seam: string, b: Behaviour) { this.behaviours.set(seam, b); return this; }
@@ -60,6 +65,7 @@ export class MockAgent {
       const raw = Buffer.concat(chunks).toString('utf8');
       const path = (req.url || '/').split('?')[0];
       const method = (req.method || 'GET').toUpperCase();
+      for (const m of this.mounts) if (m(method, path, raw, res)) return;
       const parsed = method === 'POST' ? parse(path, raw) : null;
       if (parsed) return this.answer(parsed, path, raw, res);
       this.other.push({ method, path });

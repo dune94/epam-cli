@@ -11,7 +11,7 @@ import { readdirSync, readFileSync, writeFileSync, existsSync, rmSync, mkdirSync
 import { join } from 'node:path';
 import { execFileSync, type ChildProcess } from 'node:child_process';
 import { ROOT } from '../integration/lib/fixture-install';
-import { startProjectRun, launch } from './harness';
+import { startProjectRun, launch, rehearsedSet } from './harness';
 import { correct } from './seams';
 import { withScenario, type Rule } from './negatives';
 
@@ -72,6 +72,26 @@ describe('the mocking agent drives a real project at £0', () => {
       expect(res.status, `with every seam answering correctly the pipeline did not complete — log tail:\n${tail}`).toBe(0);
       for (const ph of phases) expect(log, `phase '${ph}' did not complete`).toMatch(new RegExp(`Phase '${ph}' completed`));
       expect(r.agent.calls.length, `no model call reached the agent — log tail:\n${log.split('\n').slice(-40).join('\n')}`).toBeGreaterThan(0);
+      // A SET THAT DECLARES A SIGN-IN PROBE: pre-flight ran it and every check it reports held.
+      const setDecl = JSON.parse(readFileSync(join(r.install, 'orchestrations/config/provider-sets.json'), 'utf8')).sets[rehearsedSet(r.install, r.config)] || {};
+      if (setDecl.signInProbe) {
+        expect(log, 'pre-flight did not report the set\'s sign-in probe').toMatch(/✓ sign-in: /);
+        expect(log).not.toMatch(/✗ sign-in: /);
+      }
+      // A SET WHOSE AGENTS ARE STORED CODEMIE ASSISTANTS: every one the run made is private and named
+      // by the install's own template, and no local plugin (which can run commands) outlived the run.
+      if (r.codemie) {
+        writeFileSync(join(journal, 'codemie-state.json'), JSON.stringify({ assistants: r.codemie.assistants, integrations: r.codemie.integrations.map(({ key, ...i }) => i), chats: r.codemie.chats.length }, null, 1));
+        const tpl = JSON.parse(readFileSync(join(r.install, 'orchestrations/config/codemie-web.json'), 'utf8')).nameTemplate as string;
+        const named = new RegExp(`^${tpl.replace(/[.*+?^${}()|[\]\\]/g, '\\$&').replace('\\{codeline\\}', '\\S+').replace('\\{agent\\}', '\\S+')}$`);
+        expect(r.codemie.assistants.length, 'the run made no CodeMie assistant').toBeGreaterThan(0);
+        for (const a of r.codemie.assistants) {
+          expect(a.name, 'an assistant not named by the template').toMatch(named);
+          expect(a.shared, `${a.name} is shared with the team`).toBe(false);
+        }
+        expect(r.codemie.engine.connections, 'a CodeMie plugin outlived the run').toBe(0);
+        await r.codemie.stop();
+      }
     }, 70 * 60_000);
   }
 });

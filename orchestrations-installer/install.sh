@@ -371,7 +371,16 @@ RUNNER="$("$NODE_BIN" -e '
   const reg = JSON.parse(fs.readFileSync(process.argv[1], "utf8"));
   const set = reg.sets[process.argv[2]];
   const s = JSON.parse(fs.readFileSync(path.join(path.dirname(process.argv[1]), set.settingsFile), "utf8"));
-  process.stdout.write(Object.keys(s.runners || {})[0] || "");
+  const runner = Object.keys(s.runners || {})[0] || "";
+  // THE BINARY THE RUNNER NEEDS, from the map the engine itself reads (providers.json cliBinary).
+  // A runner is usually its own binary (claude, copilot) and then this changes nothing; codemie-web
+  // is not a binary — it needs `codemie` (2026-09-28). $EPAM_CLI entries keep the runner name.
+  let bin = runner;
+  try {
+    const cb = (JSON.parse(fs.readFileSync(path.join(path.dirname(process.argv[1]), "providers.json"), "utf8")).cliBinary || {})[runner];
+    if (cb && !String(cb).startsWith("$")) bin = cb;
+  } catch { /* no map: the runner name is the binary, as before */ }
+  process.stdout.write(bin);
 ' "$CONFIG/provider-sets.json" "$STACK" 2>/dev/null)"
 if [ -n "$RUNNER" ]; then
     if command -v "$RUNNER" >/dev/null 2>&1; then _ok "$RUNNER (the '$STACK' runner)"
@@ -395,6 +404,39 @@ if command -v python3 >/dev/null 2>&1; then
     _ok "python3 ($(python3 -V 2>&1 | awk '{print $2}')) — 88 handlers need it"
 else
     _bad "python3 is not on PATH — 88 pipeline handlers cannot run without it"; FAILED=1
+fi
+
+# A PYTHON ENVIRONMENT THE STACK DECLARES (provider-sets.json pythonEnv): built here, never by hand.
+# codemie-web declares one — the codemie-plugins toolkit its agents reach the codeline through. The
+# path is relative to the install root; the runner reads the same declaration. pip is idempotent, so
+# a re-install converges on the declared (pinned) packages.
+IFS=$'\t' read -r _PYENV_PATH _PYENV_PKGS <<<"$("$NODE_BIN" -e '
+  const reg = require(process.argv[1]);
+  const e = (reg.sets[process.argv[2]] || {}).pythonEnv;
+  if (e && e.path) process.stdout.write(e.path + "\t" + (e.packages || []).join(" "));
+' "$CONFIG/provider-sets.json" "$STACK" 2>/dev/null)"
+if [ -n "${_PYENV_PATH:-}" ] && [ "$CHECK_ONLY" = "1" ]; then
+    # --check builds nothing: the environment and each pinned package must already be there.
+    _pyenv="$ROOT/$_PYENV_PATH"; _pymissing=""
+    for _pkg in ${_PYENV_PKGS:-}; do
+        _want="${_pkg#*==}"; [ "$_want" = "$_pkg" ] && _want=""
+        _have="$("$_pyenv/bin/python" -m pip show "${_pkg%%==*}" 2>/dev/null | sed -n 's/^Version: //p')"
+        { [ -n "$_have" ] && { [ -z "$_want" ] || [ "$_have" = "$_want" ]; }; } || _pymissing="$_pymissing $_pkg"
+    done
+    if [ ! -x "$_pyenv/bin/python" ] || [ -n "$_pymissing" ]; then
+        _bad "the '$STACK' stack's python environment at $_PYENV_PATH is missing or incomplete (${_pymissing# }) — run the installer without --check"; FAILED=1
+    else
+        _ok "python environment for the '$STACK' stack: $_PYENV_PATH (${_PYENV_PKGS:-no packages})"
+    fi
+elif [ -n "${_PYENV_PATH:-}" ]; then
+    _pyenv="$ROOT/$_PYENV_PATH"
+    if [ ! -x "$_pyenv/bin/python" ] && ! python3 -m venv "$_pyenv" >/dev/null 2>&1; then
+        _bad "could not create the '$STACK' stack's python environment at $_pyenv (python3 -m venv)"; FAILED=1
+    elif [ -n "${_PYENV_PKGS:-}" ] && ! "$_pyenv/bin/python" -m pip install -q --disable-pip-version-check $_PYENV_PKGS >/dev/null 2>&1; then
+        _bad "could not install ${_PYENV_PKGS} into $_pyenv — the '$STACK' stack needs them"; FAILED=1
+    else
+        _ok "python environment for the '$STACK' stack: $_PYENV_PATH (${_PYENV_PKGS:-no packages})"
+    fi
 fi
 
 # ── Credentials: what this stack needs, from what it declares ───────────────

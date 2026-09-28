@@ -388,6 +388,38 @@ else
   ok "balance \$${_pf_balance}${_pf_budget:+ covers the declared run budget \$${_pf_budget}}"
 fi
 
+# ── Sign-in: the set's own check that this machine can call its stack ─────────────────────
+# A set whose calls ride a session (CodeMie web: the CLI's SSO) declares signInProbe — a command,
+# relative to orchestrations/, that exits 0 when a call can be made and names what is missing when
+# not. Without it a signed-out session is found by the first story, on every rung of its ladder.
+# A set declaring none is not judged.
+preflight_sign_in() {
+  local _pf_probe_argv=() _a _l _pf_probe_out _pf_probe_err _n=0
+  # One argument per line, each newline-terminated — `read` drops an unterminated last line, and a
+  # probe command without its script is `node` alone, which reads an empty stdin and "passes".
+  while IFS= read -r _a; do [[ -n "$_a" ]] && _pf_probe_argv+=("$_a"); done < <("${NODE_BIN:-node}" -e '
+    const fs=require("fs"),path=require("path");
+    const reg=JSON.parse(fs.readFileSync(path.join(process.argv[1],"..","config","provider-sets.json"),"utf8"));
+    const p=((reg.sets||{})[process.env.EPAM_PROVIDER_SET||reg.defaultSet||""]||{}).signInProbe;
+    if(p&&Array.isArray(p.command)) for(const a of p.command) process.stdout.write(a+"\n");
+  ' "$SCRIPT_DIR" 2>/dev/null || true)
+  if [[ "${#_pf_probe_argv[@]}" -eq 0 ]]; then
+    ok "sign-in: the active provider set (${EPAM_PROVIDER_SET:-default}) declares no sign-in probe — not judged"
+    return 0
+  fi
+  [[ "${_pf_probe_argv[0]}" = "node" ]] && _pf_probe_argv[0]="${NODE_BIN:-node}"
+  _pf_probe_err="$(mktemp)"
+  # stdout: one line per check that held; stderr: the sign-in chatter and, on refusal, the reason last.
+  if _pf_probe_out="$(cd "$SCRIPT_DIR/.." && "${_pf_probe_argv[@]}" 2>"$_pf_probe_err" </dev/null)"; then
+    while IFS= read -r _l; do [[ -n "$_l" ]] && { ok "sign-in: $_l"; _n=$((_n + 1)); }; done <<< "$_pf_probe_out"
+    [[ "$_n" -gt 0 ]] || ok "sign-in: the ${EPAM_PROVIDER_SET:-default} set's probe passed"
+  else
+    fail "sign-in: the ${EPAM_PROVIDER_SET:-default} set's probe refused — $(grep -v '^[[:space:]]*$' "$_pf_probe_err" | tail -1)"
+  fi
+  rm -f "$_pf_probe_err"
+}
+preflight_sign_in
+
 # ── 5. Every assigned model is a rung of a declared ladder ───────────────────
 #
 # A model absent from the chain cannot escalate: the successor lookup returns EMPTY,

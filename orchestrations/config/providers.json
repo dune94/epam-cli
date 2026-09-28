@@ -9,7 +9,8 @@
     "minimax",
     "codemie-claude",
     "copilot",
-    "claude"
+    "claude",
+    "codemie-web"
   ],
   "$effortBadgeComment": "Providers whose viewer badge is driven by the effort tier, so effort=low renders as the cheapest badge. Preflight warns when a story on one of these is assigned effort=low, because the badge then misreports the model actually doing the work.",
   "effortBadged": [
@@ -53,8 +54,10 @@
     "openai": "$EPAM_CLI",
     "openrouter": "$EPAM_CLI",
     "cursor": "$EPAM_CLI",
-    "minimax": "$EPAM_CLI"
+    "minimax": "$EPAM_CLI",
+    "codemie-web": "codemie"
   },
   "$knownDrift": "known must match the list provider_to_cli() ADVERTISES in its own error message — that is the engine's statement of what a PRD may assign. 'epam' was removed 2026-08-25: it is a vestigial case arm mapping to $EPAM_CLI, the same target as copilot/openai/openrouter/cursor/minimax, it names the RUNNER rather than a vendor, nothing assigns it, and the engine does not advertise it. codemie-claude and copilot were ADDED for the opposite reason: both are advertised and accepted, and preflight would have rejected a PRD assigning them. 'anthropic', 'claude' and 'gemini' were removed the same day for the INVERSE reason: they were listed with no case arm at all, so a PRD assigning them passed the gate and died at runtime. brownfield-test-prd.json already assigned \"claude\" and would have failed mid-run; it now fails at preflight, before anything is spent.",
-  "$cliBinaryCopilot": "2026-09-27: copilot runs the GitHub Copilot CLI (`copilot`), not $EPAM_CLI. The pipeline's copilot arms (llm-handler.sh, lib/story-attempt.sh) call lib/copilot-runner.sh; the $EPAM_CLI route reached epam-cli's HTTP CopilotProvider, which has no tool calling. COPILOT_CMD overrides the binary (tests point it at a recording wrapper)."
+  "$cliBinaryCopilot": "2026-09-27: copilot runs the GitHub Copilot CLI (`copilot`), not $EPAM_CLI. The pipeline's copilot arms (llm-handler.sh, lib/story-attempt.sh) call lib/copilot-runner.sh; the $EPAM_CLI route reached epam-cli's HTTP CopilotProvider, which has no tool calling. COPILOT_CMD overrides the binary (tests point it at a recording wrapper).",
+  "$cliBinaryCodemieWeb": "2026-09-28: codemie-web runs CodeMie web assistants through the CodeMie CLI's own authenticated client (lib/codemie-web/); the binary it needs on PATH is `codemie`. The installer's runner check reads this map, so a runner whose name is not its binary is still checked for the binary it needs."
 }

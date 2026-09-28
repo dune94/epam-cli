@@ -489,11 +489,22 @@ classify_failure_class() {
     # its word for credit: an exhausted account fails every rung of a ladder that bills it the same way,
     # and the copilot set has no balance probe to say so below. A result without error.class (the claude
     # runner's) is classified exactly as before.
-    if [ -n "$result_json" ] && [ -s "$result_json" ] \
-       && [ "$(jq -r 'select(.is_error == true) | .error.class // empty' "$result_json" 2>/dev/null)" = "credit" ]; then
+    local _named_class=""
+    if [ -n "$result_json" ] && [ -s "$result_json" ]; then
+        _named_class="$(jq -r 'select(.is_error == true) | .error.class // empty' "$result_json" 2>/dev/null || true)"
+    fi
+    if [ "$_named_class" = "credit" ]; then
         COORDINATOR_FAILURE_CLASS="credit"
         COORDINATOR_ESCALATE="no"
         error "  Coordinator[L1]: the call's own result says the account is out of credit ($(jq -r '.error.message // ""' "$result_json" 2>/dev/null)) — every rung bills the same account; halting this story instead of climbing its ladder"
+        return 0
+    fi
+    # AUTH IS AN ACCOUNT FAILURE TOO. A signed-out session (CodeMie SSO, Copilot's token) refuses
+    # every rung of the ladder identically — climbing it only repeats the refusal at a dearer model.
+    if [ "$_named_class" = "auth" ]; then
+        COORDINATOR_FAILURE_CLASS="auth"
+        COORDINATOR_ESCALATE="no"
+        error "  Coordinator[L1]: the call's own result says the session is not authorised ($(jq -r '.error.message // ""' "$result_json" 2>/dev/null)) — every rung signs in the same way; halting this story instead of climbing its ladder. Sign in again, then resume."
         return 0
     fi
     if [ "$exit_code" -ne 0 ]; then
@@ -516,6 +527,14 @@ classify_failure_class() {
     # that did not follow its escalated model) was never considered. A conclusion drawn from
     # absent evidence is worse than no conclusion: it sends the next step somewhere confident and
     # wrong. Missing stays UNKNOWN, and says so.
+    # A runner that keeps no raw stream (copilot, codemie-web) still named its failure in its result;
+    # that is evidence, not absence — the class is the result's own, and the ladder may climb.
+    if [ "$exit_code" -ne 0 ] && { [ -z "$raw_file" ] || [ ! -f "$raw_file" ]; } && [ -n "$_named_class" ]; then
+        COORDINATOR_FAILURE_CLASS="$_named_class"
+        COORDINATOR_ESCALATE="yes"
+        warning "  Coordinator[L1]: the call's own result names the failure: ${_named_class} ($(jq -r '.error.message // ""' "$result_json" 2>/dev/null | head -c 300))"
+        return 0
+    fi
     if [ "$exit_code" -ne 0 ] && { [ -z "$raw_file" ] || [ ! -f "$raw_file" ]; }; then
         COORDINATOR_FAILURE_CLASS="unknown"
         COORDINATOR_ESCALATE="yes"

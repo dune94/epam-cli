@@ -1,0 +1,32 @@
+{
+  "$comment": "The CodeMie web stack: every agent is a stored CodeMie assistant. The ladders are the claude set's, inherited by name so the two cannot drift; the runner is lib/codemie-web/.",
+  "$why": "Operator, 2026-09-28: pipeline agents as CodeMie web assistants, visible to the team once proven — a HARD REQUIREMENT, equally important as GHCP. The claude ladder ids exist in CodeMie's catalog under the same names (verified against llms.list() on 2026-09-28), so the ladder's model is passed to each chat as it is (llm_model) and checked against the catalog at pre-flight.",
+  "inheritFrom": {
+    "file": "llm-defaults.claude.json",
+    "keys": ["ladderTierOrder", "ladders", "modelOverrides"],
+    "$whyOnlyThese": "The claude RUNNER is not inherited: a set declaring both runners makes `claude` routable, and resolve_primary_provider could route a codemie-web run to it."
+  },
+  "finalFallback": {
+    "$why": "The claude set's fallback model, served by CodeMie: the same second answer after ladder exhaustion, on this stack.",
+    "model": "claude-sonnet-5",
+    "provider": "codemie-web"
+  },
+  "runners": {
+    "codemie-web": {
+      "alwaysFlags": [],
+      "env": {},
+      "flags": {},
+      "$whyNoFlags": "Not a command-line runner: the call is a chat with a stored assistant (lib/codemie-web/). The model travels as llm_model per chat; CodeMie's chat has no reasoning-effort parameter, so the ladder's effort is carried only by its choice of model.",
+      "unsetEnv": [],
+      "emitsTraces": false,
+      "toolNames": {
+        "read_file": ["_read_file_from_file_system"],
+        "list_files": ["_list_files_in_directory", "_get_recursive_file_list"],
+        "search": ["_search_files"],
+        "write_file": ["_write_file_to_file_system"],
+        "bash": ["_run_command_line_tool"]
+      },
+      "$whyToolNames": "The CodeMie Plugin tools an agent can reach. A grant of read_file/list_files/search only binds the pipeline's READ-ONLY plugin (lib/codemie-web/plugin_ro.py); write_file or bash binds the development plugin (read, list, write, git, run-command); no grant binds no plugin at all."
+    }
+  }
+}

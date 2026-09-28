@@ -12,9 +12,12 @@ import { tmpdir } from 'node:os';
 import { fixtureInstall, edgeFor, zeroCostEnv, run, ROOT } from '../integration/lib/fixture-install';
 import { MockAgent } from './agent';
 import { World } from './world';
+import { MockCodeMie } from './codemie';
+import { provisionPythonEnv } from './python-env';
+import { execFileSync } from 'node:child_process';
 import type { ChildProcess } from 'node:child_process';
 
-export type ProjectRun = { install: string; out: string; agent: MockAgent; project: string; prd: string; config: Record<string, string>; realOut: string; world: World };
+export type ProjectRun = { install: string; out: string; agent: MockAgent; project: string; prd: string; config: Record<string, string>; realOut: string; world: World; codemie?: MockCodeMie };
 
 /** Copy a project from another install, leaving behind everything a run generates. */
 export function adoptProject(src: string, project: string, install: string): void {
@@ -89,7 +92,32 @@ export async function startProjectRun(opts: { src: string; project: string; dirs
   await agent.start();
   edgeFor(install, agent.url, opts.children);
   const world = new World(() => [out], () => prd, projDir);
-  return { install, out, agent, project: opts.project, prd, config: currentConfig(opts.src), realOut, world };
+  const config = currentConfig(opts.src);
+  const codemie = await standInsFor(install, agent, opts.journal, config);
+  return { install, out, agent, project: opts.project, prd, config, realOut, world, codemie };
+}
+
+/**
+ * WHAT THE SET NEEDS BESIDES A MODEL, FROM ITS OWN DECLARATION: a plugin engine its runner's local
+ * plugins connect to (redirect.pluginEngineEnv — CodeMie stood in for, whose catalog is what this
+ * install's ladder can climb to), and a python environment the installer would have built (pythonEnv).
+ */
+export async function standInsFor(install: string, agent: MockAgent, journal: string, config: Record<string, string>): Promise<MockCodeMie | undefined> {
+  const set = rehearsedSet(install, config);
+  const decl = JSON.parse(readFileSync(join(install, 'orchestrations/config/provider-sets.json'), 'utf8')).sets?.[set] || {};
+  let codemie: MockCodeMie | undefined;
+  if (decl.redirect?.pluginEngineEnv) {
+    const models = JSON.parse(execFileSync(process.execPath, [join(install, 'orchestrations/scripts/lib/handlers/ladder-models.js')], { encoding: 'utf8', env: { ...process.env, EPAM_PROVIDER_SET: set } }) || '[]');
+    codemie = await new MockCodeMie(agent, journal, models).start();
+  }
+  provisionPythonEnv(install, set);
+  return codemie;
+}
+
+/** The set a rehearsal runs on: MOCK_AGENT_PROVIDER_SET, else the install's own, else the default. */
+export function rehearsedSet(install: string, config: Record<string, string>): string {
+  const sets = JSON.parse(readFileSync(join(install, 'orchestrations/config/provider-sets.json'), 'utf8'));
+  return process.env.MOCK_AGENT_PROVIDER_SET || config.EPAM_PROVIDER_SET || sets.defaultSet;
 }
 
 /**
@@ -101,7 +129,7 @@ export async function startProjectRun(opts: { src: string; project: string; dirs
 export function vendorEdge(r: ProjectRun): Record<string, string> {
   const sets = JSON.parse(readFileSync(join(r.install, 'orchestrations/config/provider-sets.json'), 'utf8'));
   // MOCK_AGENT_PROVIDER_SET rehearses a set the install is not currently on, without editing its .env.
-  const set = process.env.MOCK_AGENT_PROVIDER_SET || r.config.EPAM_PROVIDER_SET || sets.defaultSet;
+  const set = rehearsedSet(r.install, r.config);
   const decl = sets.sets?.[set];
   if (!decl) throw new Error(`the install's current set '${set}' is not declared in provider-sets.json`);
   const env: Record<string, string> = { EPAM_PROVIDER_SET: set };
@@ -115,6 +143,11 @@ export function vendorEdge(r: ProjectRun): Record<string, string> {
   // A SET THAT DECLARES ITS OWN REDIRECT (a runner whose endpoint variable is not <VENDOR>_BASE_URL):
   // its base-URL variable points at the agent, and its declared env is applied as written.
   if (decl.redirect?.baseUrlEnv) env[decl.redirect.baseUrlEnv] = r.agent.url;
+  // A set whose runner's local plugins connect OUT to a plugin engine: that engine is the stand-in's.
+  if (decl.redirect?.pluginEngineEnv) {
+    if (!r.codemie) throw new Error(`provider set '${set}' declares a plugin engine redirect, but no stand-in engine was started for it`);
+    env[decl.redirect.pluginEngineEnv] = r.codemie.engineUri;
+  }
   for (const [k, v] of Object.entries(decl.redirect?.env || {})) env[k] = String(v);
   // A SET THIS HARNESS WOULD REDIRECT NOTHING FOR IS REFUSED — it would reach a real model. 2026-09-27:
   // the claude set (an OAuth session, no API-key credential, no declared redirect, no runner endpoint)

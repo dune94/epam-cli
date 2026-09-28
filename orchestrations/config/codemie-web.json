@@ -1,0 +1,11 @@
+{
+  "$comment": "How the codemie-web stack names, places and shares its assistants. Operator, 2026-09-28: 'Do not share agents codemie web with the Team until we have made brownfield and greenfield green with this new provider. Keep agents local, to my name only. but use a common naming for agents \"Pipeline [codeline] [agent name]\".'",
+  "project": "",
+  "$project": "The CodeMie project the assistants and plugin integrations live in. Empty = the operator's personal project, read from the CodeMie login (the SSO username). Never a team project until the operator says so.",
+  "shared": false,
+  "$shared": "false until a green greenfield AND a green brownfield run on this stack, and then only on the operator's word.",
+  "nameTemplate": "Pipeline {codeline} {agent}",
+  "$nameTemplate": "{codeline}: the lane's codeline, or the project name for an agent that serves the whole project (ingest, mint, roster review). {agent}: the seam, or the minted role.",
+  "pluginEngineUri": "nats://nats-codemie.epmd-edp-anthos.eu.gcp.cloudapp.epam.com:443",
+  "$pluginEngineUri": "The CodeMie plugin engine the local plugins connect OUT to (codemie-plugins' own default; proven against codemie.lab.epam.com 2026-09-28)."
+}

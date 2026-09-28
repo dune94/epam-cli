@@ -36,6 +36,11 @@ _release_write_perimeter() {
 # shellcheck source=lib/exit-handlers.sh
 . "$(cd "$(dirname "${BASH_SOURCE[0]}")" && pwd)/lib/exit-handlers.sh"
 add_exit_handler _release_write_perimeter
+# A CodeMie web call starts a local plugin that connects out to CodeMie and — on a writer's grant —
+# can run commands on this machine. None may outlive the run that started it, however it ends.
+# shellcheck source=lib/codemie-web-runner.sh
+. "$(cd "$(dirname "${BASH_SOURCE[0]}")" && pwd)/lib/codemie-web-runner.sh"
+add_exit_handler codemie_web_stop_plugins
 
 # ── Take them, on every run ──────────────────────────────────────────────────
 # The other half of the pair above, and it lived in ONE launcher. Sealing was an inline loop in

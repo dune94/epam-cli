@@ -68,15 +68,32 @@ describe('the copilot set', () => {
   });
 });
 
-describe('no other set moves', () => {
+describe('every other set resolves as its own file declares — inheriting only the keys it names', () => {
+  // Derived from each set's own settings file, not a list of names: a set that inherits (copilot, and
+  // codemie-web since 2026-09-28) must resolve every named key exactly as the file it names does, and
+  // declare only its own runners; a set that inherits nothing must resolve exactly as declared.
+  const setOfFile = (f: string) => Object.keys(SETS.sets).find((k) => SETS.sets[k].settingsFile === f);
   for (const set of Object.keys(SETS.sets).filter((s) => s !== 'copilot')) {
-    it(`${set}: resolves exactly as its own file declares — no inheritance in play`, () => {
-      const file = JSON.parse(readFileSync(join(ROOT, 'orchestrations/config', SETS.sets[set].settingsFile), 'utf8'));
-      expect(file.inheritFrom).toBeUndefined();
-      const runners = underSet(set, 'r.declaredRunners()');
-      expect(runners).toEqual(Object.keys(file.runners || {}));
-      const ladders = underSet(set, 'r.resolveLlmSettings().ladders');
-      for (const [tier, def] of Object.entries(file.ladders || {})) expect(ladders[tier]).toMatchObject(def as object);
+    const file = JSON.parse(readFileSync(join(ROOT, 'orchestrations/config', SETS.sets[set].settingsFile), 'utf8'));
+    if (!file.inheritFrom) {
+      it(`${set}: resolves exactly as its own file declares — no inheritance in play`, () => {
+        const runners = underSet(set, 'r.declaredRunners()');
+        expect(runners).toEqual(Object.keys(file.runners || {}));
+        const ladders = underSet(set, 'r.resolveLlmSettings().ladders');
+        for (const [tier, def] of Object.entries(file.ladders || {})) expect(ladders[tier]).toMatchObject(def as object);
+      });
+      continue;
+    }
+    it(`${set}: inherits exactly the keys it names from ${file.inheritFrom.file}, and declares only its own runner`, () => {
+      const source = setOfFile(file.inheritFrom.file);
+      expect(source, `no set declares ${file.inheritFrom.file}`).toBeTruthy();
+      const mine = underSet(set, 'r.resolveLlmSettings()'); const theirs = underSet(source!, 'r.resolveLlmSettings()');
+      expect(file.inheritFrom.keys.length).toBeGreaterThan(0);
+      for (const k of file.inheritFrom.keys) expect(mine[k], `${set}.${k}`).toEqual(theirs[k]);
+      expect(underSet(set, 'r.declaredRunners()')).toEqual(Object.keys(file.runners || {}));
+      const r = spawnSync(process.execPath, [LADDER_PROVIDERS], { encoding: 'utf8', env: { ...process.env, EPAM_PROVIDER_SET: set } });
+      expect(r.status, r.stderr).toBe(0);
+      expect(JSON.parse(r.stdout)).toEqual(Object.keys(file.runners || {}));
     });
   }
 });

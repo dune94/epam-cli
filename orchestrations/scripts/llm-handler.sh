@@ -34,6 +34,7 @@ INVOKE_PYTHON="${INVOKE_PYTHON:-$_SCRIPT_DIR_AIRUN/.venv/bin/python3}"
 . "$(cd "$(dirname "${BASH_SOURCE[0]}")" && pwd)/lib/env-file.sh"
 . "$(cd "$(dirname "${BASH_SOURCE[0]}")" && pwd)/lib/runner-settings.sh" 2>/dev/null || true
 . "$(cd "$(dirname "${BASH_SOURCE[0]}")" && pwd)/lib/copilot-runner.sh" 2>/dev/null || true
+. "$(cd "$(dirname "${BASH_SOURCE[0]}")" && pwd)/lib/codemie-web-runner.sh" 2>/dev/null || true
 . "$_SCRIPT_DIR_AIRUN/lib/story-retry-state.sh"
 # Delegates to lib/env-file.sh: loading configuration must not EXECUTE it. This function
 # used to `. "$env_file"`, and a bare `cd` on line 1 of the repo's .env sent this script —
@@ -452,6 +453,20 @@ run_provider_once() {
         return 1
       fi
       if [ -n "$_cp_tmp" ]; then rm -f "$_cp_tmp"; fi   # an if, not `&&`: a false test would be the arm's exit status
+      ;;
+    codemie-web)
+      # A CODEMIE WEB ASSISTANT ("Pipeline <codeline> <agent>", private to the operator until the stack
+      # is proven green). lib/codemie-web-runner.sh is the one place the call is built — the ladder's
+      # model per chat, the seam's grant bound to a local CodeMie Plugin on the codeline, the seam's
+      # output schema — and judged (lib/codemie-web/result.js; an empty "success" is a failure). The
+      # result is written in the claude runner's shape to ORCH_JSON_RESULT, like the copilot arm.
+      local _cw_json _cw_tmp=""
+      if [ -n "${ORCH_JSON_RESULT:-}" ]; then _cw_json="$ORCH_JSON_RESULT"; else _cw_tmp="$(mktemp)"; _cw_json="$_cw_tmp"; fi
+      if ! codemie_web_invoke "$PROMPT_FILE" "${AI_MODEL:-}" "$_cw_json"; then
+        if [ -n "$_cw_tmp" ]; then rm -f "$_cw_tmp"; fi
+        return 1
+      fi
+      if [ -n "$_cw_tmp" ]; then rm -f "$_cw_tmp"; fi   # an if, not `&&`: a false test would be the arm's exit status
       ;;
     openai|openrouter|cursor|minimax|replay)
       # Capture to temp file so pino JSON lines on stdout don't corrupt jq parsing

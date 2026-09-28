@@ -79,6 +79,32 @@
           "COPILOT_OFFLINE": "true"
         }
       }
+    },
+    "codemie-web": {
+      "settingsFile": "llm-defaults.codemie-web.json",
+      "projectEnvSuffix": "codemie-web",
+      "description": "CodeMie web assistants (the operator's own CodeMie account): every pipeline agent is a stored assistant named 'Pipeline <codeline> <agent>', reaching the codeline through a local CodeMie Plugin. Climbs the claude set's ladders.",
+      "credentials": [],
+      "$credentials": "NONE at this layer. Calls ride the CodeMie CLI's SSO login (the same client mx-tracker uses); plugin keys are minted and registered by the set's own runner, kept in the install, never in .env templates.",
+      "signInProbe": {
+        "command": [
+          "node",
+          "scripts/lib/codemie-web/probe.js"
+        ],
+        "_why": "Pre-flight runs it (path relative to orchestrations/). A signed-out CodeMie session, a ladder model missing from CodeMie's catalog, or a missing codemie-plugins environment fails every rung of every story mid-run; this refuses the launch instead."
+      },
+      "pythonEnv": {
+        "path": ".codemie-web/venv",
+        "packages": [
+          "codemie-plugins==0.2.0"
+        ],
+        "_why": "The local CodeMie Plugin a codemie-web agent reaches the codeline through (lib/codemie-web/plugins.js). The installer provisions it (python3 -m venv + pip, path relative to the install root); the runner reads the path from here. Pinned: 0.2.0 is the version proven 2026-09-28."
+      },
+      "redirect": {
+        "$why": "How a rehearsal points this set at CodeMie stood in for, declared rather than known by any harness: the runner's CodeMie API (EPAM_CODEMIE_WEB_URL \u2014 a plain SDK client, no SSO) and the plugin engine its local plugins connect to (EPAM_CODEMIE_PLUGIN_ENGINE_URI).",
+        "baseUrlEnv": "EPAM_CODEMIE_WEB_URL",
+        "pluginEngineEnv": "EPAM_CODEMIE_PLUGIN_ENGINE_URI"
+      }
     }
   },
   "$defaultSet": "Chosen by the operator 2026-08-25. codemie is what RUNS; openrouter is the hot-swap target kept fully executable beside it. This field previously read 'openrouter' \u2014 a value nobody chose: it was invented when this registry was written and then read back as if it were a requirement.",

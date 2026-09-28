@@ -169,6 +169,9 @@ not recorded cannot be replayed. Recorded runs are archived to <code>orchestrati
   ./orchestrations/scripts/pipeline --jira AMSD-1234</code></pre>
 <p>At each pause the run prints the files to inspect and the exact command to continue.</p>
 
+<h3 id="estimation-manifest">Informing a brownfield run with an estimation assessment</h3>
+<p>Set <code>EPAM_ESTIMATION_MANIFEST</code> in the project's <code>config.env</code> to the folder the estimation application wrote its output to. After ingest the run prints <code>[estimation] N ticket(s) assessed</code>; each ticket's record is at <code>orchestrations/logs/estimation/&lt;KEY&gt;.json</code>, and the spec agent, detective, CPA, writer, reproducing-test writer and reviewer receive it. At either pause, that record is the assessment the agents worked from.</p>
+
 <h2 id="resume">5. Resuming a paused or interrupted run</h2>
 <p>A resume continues the SAME run from its checkpoint. It does not re-mint the roster and does not
 re-assign over your edits.</p>

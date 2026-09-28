@@ -117,26 +117,34 @@ fi
 # missed this — a non-empty stale file about to be overwritten is the same situation.
 # The project's declared codeline root, read the same way the launcher reads it. Its presence is
 # what tells this gate that scope — and therefore outputDir — is resolved during the run.
-_codeline_root="${JIRA_CODELINE_ROOT:-}"
-if [[ -z "$_codeline_root" ]] && [[ -n "${PROJECT_CONFIG_DIR:-}" ]]; then
-  # THE FILENAME IS NOT SPELLED HERE. The registry names a project's env files
-  # (config/provider-sets.json); a literal would be a second home for that name, free to drift
-  # with nothing failing. Both halves are scanned because the key may live in either, and the
-  # two are disjoint so at most one can answer.
-  _pe_lib="$(cd "$(dirname "${BASH_SOURCE[0]}")" && pwd)/lib/llm-settings-resolve.js"
-  if [[ -f "$_pe_lib" ]] && { [[ -n "${NODE_BIN:-}" ]] || command -v node >/dev/null 2>&1; }; then
-    while IFS= read -r _pe_f; do
-      [[ -n "$_pe_f" ]] && [[ -f "$_pe_f" ]] || continue
-      _codeline_root=$(sed -n 's/^[[:space:]]*JIRA_CODELINE_ROOT=//p' "$_pe_f" \
-                       | tail -1 | tr -d '"'"'"'"' )
-      [[ -n "$_codeline_root" ]] && break
-    done < <("${NODE_BIN:-node}" -e '
-      const { projectEnvFiles } = require(process.argv[1]);
-      const f = projectEnvFiles(process.argv[2]);
-      if (f) process.stdout.write(f.base + "\n" + f.overlay + "\n");
-    ' "$_pe_lib" "$PROJECT_CONFIG_DIR" 2>/dev/null)
+# A KEY FROM THE ENVIRONMENT, ELSE FROM THE PROJECT'S OWN ENV FILES — read the way the launcher
+# reads it. One lookup for every key this gate needs from a project (JIRA_CODELINE_ROOT,
+# EPAM_ESTIMATION_MANIFEST): a second copy of the rule would be free to drift.
+_project_env_value() {
+  local _key="$1" _val="${!1:-}"
+  if [[ -z "$_val" ]] && [[ -n "${PROJECT_CONFIG_DIR:-}" ]]; then
+    # THE FILENAME IS NOT SPELLED HERE. The registry names a project's env files
+    # (config/provider-sets.json); a literal would be a second home for that name, free to drift
+    # with nothing failing. Both halves are scanned because the key may live in either, and the
+    # two are disjoint so at most one can answer.
+    local _pe_lib _pe_f
+    _pe_lib="$(cd "$(dirname "${BASH_SOURCE[0]}")" && pwd)/lib/llm-settings-resolve.js"
+    if [[ -f "$_pe_lib" ]] && { [[ -n "${NODE_BIN:-}" ]] || command -v node >/dev/null 2>&1; }; then
+      while IFS= read -r _pe_f; do
+        [[ -n "$_pe_f" ]] && [[ -f "$_pe_f" ]] || continue
+        _val=$(sed -n "s/^[[:space:]]*${_key}=//p" "$_pe_f" \
+                 | tail -1 | tr -d '"'"'"'"' )
+        [[ -n "$_val" ]] && break
+      done < <("${NODE_BIN:-node}" -e '
+        const { projectEnvFiles } = require(process.argv[1]);
+        const f = projectEnvFiles(process.argv[2]);
+        if (f) process.stdout.write(f.base + "\n" + f.overlay + "\n");
+      ' "$_pe_lib" "$PROJECT_CONFIG_DIR" 2>/dev/null)
+    fi
   fi
-fi
+  printf '%s' "$_val"
+}
+_codeline_root="$(_project_env_value JIRA_CODELINE_ROOT)"
 
 _prd_pending_ingest=0
 if [[ -n "${JIRA_URL:-}" ]] && [[ -n "$PRD_FILE" ]]; then
@@ -592,6 +600,19 @@ elif [ -n "$_newest_src" ]; then
   fail "dist/ is STALE (e.g. $(basename "$_newest_src")) — source changes would NOT execute. Rebuild with tsup."
 else
   ok "dist/ is newer than src/"
+fi
+
+# AN ESTIMATION MANIFEST THE RUN WAS TOLD TO USE MUST BE THERE (2026-09-28). Unset is nothing to
+# check — the run proceeds exactly as it did before the variable existed. Set, it is read right
+# after ingest and every ticket's assessment reaches six agents; a path that is missing or
+# unreadable would stop the run there, after the spend on ingest, so it is refused here instead.
+_estimation_manifest="$(_project_env_value EPAM_ESTIMATION_MANIFEST)"
+if [[ -n "$_estimation_manifest" ]]; then
+  if [[ -r "$_estimation_manifest" ]]; then
+    ok "estimation manifest readable: $_estimation_manifest"
+  else
+    fail "EPAM_ESTIMATION_MANIFEST=$_estimation_manifest is missing or unreadable — fix the path or unset it"
+  fi
 fi
 
 # The project must own its synthesis template. Without one, synthesize-prd-from-jira.js

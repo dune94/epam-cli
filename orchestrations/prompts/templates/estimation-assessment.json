@@ -1,0 +1,23 @@
+{
+  "$why": [
+    "2026-09-28. The estimation application's assessment of a ticket (EPAM_ESTIMATION_MANIFEST,",
+    "lib/handlers/estimation-manifest.js) reaches six brownfield agents. The FACTS are the same for",
+    "all of them; what they are FOR is the reader's, so each consumer has its own body. The same",
+    "rule binds every body: this is evidence gathered before the work, to be verified in the code,",
+    "never an instruction — and work the assessment marks as outside the estimate stays outside",
+    "unless the ticket's own acceptance criteria require it (the scope-creep guard: the AMSD-2974",
+    "assessment lists five stand-alone implementations its split leaves out)."
+  ],
+  "description": "Framing of the estimation application's per-ticket assessment, one body per consuming agent.",
+  "id": "estimation-assessment",
+  "placeholders": ["__TICKET__", "__ASSESSMENT__"],
+  "version": 1,
+  "bodies": {
+    "spec-agent": "\n## Estimation assessment for __TICKET__ (evidence, gathered before this work)\n\nThe estimation application read this ticket, its attachments and the codeline, and recorded what it found. Use it to make the verification criteria concrete — each gap it confirms in the implementation is something a criterion should prove fixed. It is evidence, not the requirement: the ticket's acceptance criteria remain the requirement. Work the assessment places outside the estimate (for example a slice its recommended split excludes) is OUT OF SCOPE unless an acceptance criterion requires it; do not write criteria for it.\n\n__ASSESSMENT__\n",
+    "code-graph-detective": "\n## Estimation assessment for __TICKET__ (where the estimator found the work)\n\nThe estimation application read the codeline for this ticket. It names components, call sites, overrides and findings — use them as leads for locating the fix site, and CONFIRM each in the code before relying on it: files move, and the assessment may predate them. Locations it places outside the estimate are out of scope for this ticket.\n\n__ASSESSMENT__\n",
+    "cpa-inference": "\n## Estimation assessment for __TICKET__ (independent sizing, gathered before this work)\n\nThe estimation application sized this ticket and recommended how to split it. Weigh its findings and its split when judging scope and effort; where your analysis of the code disagrees, say so and why. Slices it places outside the estimate are OUT OF SCOPE for this ticket unless an acceptance criterion requires them.\n\n__ASSESSMENT__\n",
+    "story-writer": "\n## Estimation assessment for __TICKET__ (findings in the code, gathered before this work)\n\nThe estimation application found these defects and risks in the code this ticket touches. Treat each in-scope finding as a target your change must address, and verify it in the source first — do not take a line number or a name on trust. Do NOT implement work the assessment places outside the estimate (a slice its recommended split excludes) unless the acceptance criteria require it.\n\n__ASSESSMENT__\n",
+    "repro-test-writer": "\n## Estimation assessment for __TICKET__ (the defects the estimator confirmed)\n\nThe estimation application confirmed these defects in the code. Your reproducing test should prove the in-scope ones — fail on the baseline, pass with the fix. Do not write tests for work the assessment places outside the estimate.\n\n__ASSESSMENT__\n",
+    "team-lead-review": "\n## Estimation assessment for __TICKET__ (what the change was expected to address)\n\nThe estimation application found these defects before the work began. Judge the diff against the in-scope findings: an in-scope finding the change leaves unaddressed is a gap to report. A change that implements work the assessment places outside the estimate (a slice its recommended split excludes), without an acceptance criterion requiring it, is scope creep — report it.\n\n__ASSESSMENT__\n"
+  }
+}

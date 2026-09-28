@@ -198,6 +198,11 @@ function buildPrompt(input) {
   const sections = [
     buildModeSection(input),
     `## Story Under Review\n\`\`\`json\n${storyJson}\n\`\`\``,
+    // The estimation application's own sizing and split of this ticket (EPAM_ESTIMATION_MANIFEST),
+    // framed for CPA by the engine template estimation-assessment. '' — and so no section, no
+    // separator — when the run has none.
+    // eslint-disable-next-line global-require
+    require('./handlers/estimation-manifest.js').forStory(story.id, { stories: [story] }, 'cpa-inference').trim(),
     `## Formula Baseline Estimate\n\`\`\`json\n${JSON.stringify(formulaEstimate, null, 2)}\n\`\`\``,
     kbSection,
     codeSection,

@@ -1,0 +1,24 @@
+<!DOCTYPE html>
+<html lang="en"><head><meta charset="utf-8"><title>How MOCK-HW-1 was estimated</title>
+<style>body{font-family:sans-serif}</style></head>
+<body>
+<!-- Test fixture shaped like the estimation application's per-story page
+     (ai-estimate-story-<KEY>.html): h2/h3 sections, an "In one paragraph" box, tables. -->
+<h1>How MOCK-HW-1 was estimated</h1>
+<div class="box blue"><div class="kicker">In one paragraph</div>
+<p>The estimation application sized a one-line defect: <code>getGreeting()</code> returns the wrong string. 1 SP.</p></div>
+<h2>How the Number Was Reached</h2>
+<h3>Fetch the ticket</h3><p>Read live from the tracker: status To Do.</p>
+<h3>Recommended split</h3>
+<table><tr><th>Slice</th><th>SP</th><th>Scope</th></tr>
+<tr><td>A &mdash; correct the greeting</td><td>1 SP</td><td>src/hello.ts only.</td></tr>
+<tr><td>B &mdash; localised greetings</td><td>3 SP</td><td>not in 1 SP &mdash; separate ticket if brought into scope.</td></tr></table>
+<h3>Store &mdash; nothing written to the tracker</h3><p>Nothing was written back.</p>
+<h2>Code Assessment (estimation application)</h2>
+<p>The estimation application read src/hello.ts and its one caller.</p>
+<table><tr><th>Finding</th><th>Severity</th><th>Detail</th></tr>
+<tr><td>EST-FINDING-HW-7Q hardcoded greeting</td><td>high</td><td>getGreeting() in src/hello.ts returns the literal 'hello world'.</td></tr>
+<tr><td>No test pins the greeting</td><td>medium</td><td>src/greeting.test.ts does not assert the returned value.</td></tr></table>
+<h2>What Would Change the Number</h2><p>A second caller that depends on the old string.</p>
+<h2>Appendix &mdash; Terms</h2><p>SP: story points.</p>
+</body></html>

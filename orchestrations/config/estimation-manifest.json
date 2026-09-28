@@ -1,0 +1,21 @@
+{
+  "$comment": "WHAT AN ESTIMATION MANIFEST LOOKS LIKE, declared here so no format fact lives in code (lib/handlers/estimation-manifest.js reads this and nothing else about the format). EPAM_ESTIMATION_MANIFEST names a file or a directory; for each ingested ticket the handler finds that ticket's entry, keeps the declared sections, and persists one record per ticket under $LOG_DIR/estimation/. Operator, 2026-09-28: estimation manifests will commonly inform the brownfield pipeline — a new source is an edit here.",
+  "html": {
+    "$why": "The estimation application's per-story page (ai-estimate-story-<KEY>.html). Hand-authored pages vary in their headings (AMSD-1494 vs AMSD-2974), so sections are chosen by heading TEXT, case-insensitive, and a section runs to the next heading of the same or a higher level. A page none of these match is reported, never passed on empty.",
+    "fileName": "ai-estimate-story-{KEY}.html",
+    "sections": [
+      { "heading": "code assessment", "label": "Code assessment — findings in the source" },
+      { "heading": "^acceptance criteria:|map acceptance criteria to implementation", "label": "Acceptance criteria against the implementation" },
+      { "heading": "attachment assessment", "label": "Attachment assessment" },
+      { "heading": "recommended split|recommend the split", "label": "Recommended split — scope" },
+      { "heading": "nobody has written down", "label": "Gaps nobody has written down" },
+      { "heading": "rewritten into|rewrote them into|as testable statements", "label": "Criteria rewritten as testable statements" },
+      { "heading": "what would (change|move) the number", "label": "What would change the estimate (risks)" }
+    ],
+    "summaryBox": { "kicker": "In one paragraph", "label": "Summary" }
+  },
+  "json": {
+    "$why": "The estimation engine's manifest, keyed by ticket (pi12-engine-estimates-*.json). Every field of the ticket's entry is kept; these are the ones rendered first, in this order.",
+    "fields": ["sp", "o", "m", "p", "pert", "confidence", "acStatus", "basis", "anchors_full", "anchor"]
+  }
+}

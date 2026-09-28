@@ -6431,6 +6431,18 @@ function detectiveAnswerIsGrounded({ findings, kind } = {}) {
 // error, timeout) returns [] so the spec pass proceeds unblocked.
 // Lazy require: this module is loaded by tools that never invoke an agent.
 let _promptLibraryMod = null;
+/**
+ * THE ESTIMATION APPLICATION'S ASSESSMENT OF A STORY'S TICKET, in the consumer's own frame
+ * (EPAM_ESTIMATION_MANIFEST → lib/handlers/estimation-manifest.js). '' when this run has none — the
+ * placeholder is mayBeEmpty and sits beside its neighbour, so the prompt is then what it was.
+ * A record that exists and will not render throws: evidence the run was told to use is not dropped.
+ */
+function estimationAssessmentBlock(story, prd, consumer) {
+  // eslint-disable-next-line global-require
+  const { forStory } = require('./lib/handlers/estimation-manifest.js');
+  return forStory(story.id, prd || { stories: [story] }, consumer);
+}
+
 function _promptLibrary() {
   if (!_promptLibraryMod) _promptLibraryMod = require('./lib/prompt-library');
   return _promptLibraryMod;
@@ -6787,6 +6799,8 @@ async function runCodeGraphDetective(story, logDir, opts = {}) {
       // What the estate survey already found here — a hypothesis for the detective to verify,
       // empty when there is nothing trustworthy to hand over. See surveyHypothesisBlock.
       __SURVEY_HYPOTHESIS__: surveyHypothesisBlock(story && story.codeline, logDir),
+      // The estimation application's assessment of this ticket — leads for the fix site, to confirm.
+      __ESTIMATION_ASSESSMENT__: estimationAssessmentBlock(story, null, 'code-graph-detective'),
       __PRESEED_BLOCK__: preseedBlock,
       __PRESCRIPTION_RULES__: detectivePrescription(_kindHint),
       // The configuration this codeline actually carries, resolved from its OWN manifest by
@@ -7670,6 +7684,7 @@ async function runSpecAgent({ promptExec, agent, story, phase, runId, logDir, fo
     __PRIOR_GAPS_BLOCK__: priorGapsBlock,
     __SEMBLE_CONTEXT__: sembleContext,
     __REFERENCED_DOCS_EVIDENCE__: referencedDocsEvidence,
+    __ESTIMATION_ASSESSMENT__: estimationAssessmentBlock(story, prd, 'spec-agent'),
     __FIX_SITE_BLOCK__: fixSiteBlock,
     __DECLARED_FILE_BLOCK__: declaredFileBlock,
     __SHARED_FILE_OWNERSHIP_BLOCK__: sharedFileBlock(story, prd),

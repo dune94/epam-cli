@@ -395,6 +395,45 @@ _pause_after_agent_mint() {
   fi
 }
 
+# THE ESTIMATION APPLICATION'S ASSESSMENT OF EACH TICKET, FOR THE AGENTS THAT WORK ON IT.
+#
+# Operator, 2026-09-28: estimation manifests will commonly inform the brownfield pipeline —
+# EPAM_ESTIMATION_MANIFEST names one (a file or a directory; the format is declared in
+# config/estimation-manifest.json). Each ingested ticket's entry becomes one record under
+# $LOG_DIR/estimation/, exported as EPAM_ESTIMATION_DIR for every stage after this one; six agents
+# render it through lib/handlers/estimation-manifest.js (the spec agent, the detective, CPA, the
+# writer, the repro-test writer, the reviewer). It is evidence for them, never an edit to the PRD.
+#
+# UNSET IS NOTHING: no output, no directory, no export — a run without a manifest is the run it
+# was. Runs on a resume too (ingest is skipped there, the records are not: each run's logs are its
+# own). A manifest the operator named but that cannot be read stops the run here, before any agent
+# is spent on it; a ticket the manifest does not cover is said aloud and the run goes on.
+_read_estimation_manifest() {
+  local _prd="$1" _log_file="$2"
+  [ -n "${EPAM_ESTIMATION_MANIFEST:-}" ] || return 0
+  if [ ! -r "$EPAM_ESTIMATION_MANIFEST" ]; then
+    error "[estimation] EPAM_ESTIMATION_MANIFEST=$EPAM_ESTIMATION_MANIFEST cannot be read — refusing to run without the assessment the run was told to use"
+    return 1
+  fi
+  local _dir="${LOG_DIR:?LOG_DIR must be set}/estimation" _key _rc _found=0 _missing=()
+  mkdir -p "$_dir" || return 1
+  export EPAM_ESTIMATION_DIR="$_dir"
+  while IFS= read -r _key; do
+    [ -n "$_key" ] || continue
+    "${NODE_BIN:-node}" "$SCRIPT_DIR/lib/handlers/estimation-manifest.js" extract \
+        "$EPAM_ESTIMATION_MANIFEST" "$_key" "$_dir/${_key//[^A-Za-z0-9._-]/_}.json" 2>&1 | tee -a "$_log_file"
+    _rc="${PIPESTATUS[0]}"
+    case "$_rc" in
+      0) _found=$((_found + 1)) ;;
+      3) _missing+=("$_key") ;;
+      *) error "[estimation] the manifest could not be read for $_key (exit $_rc) — see the line above"; return 1 ;;
+    esac
+  done < <(jq -r '[.stories[]? | (.jiraKey // empty)] | unique | .[]' "$_prd" 2>/dev/null)
+  log "[estimation] $_found ticket(s) assessed from $EPAM_ESTIMATION_MANIFEST → $_dir"
+  [ "${#_missing[@]}" -eq 0 ] || warning "[estimation] the manifest holds NOTHING for: ${_missing[*]} — those tickets run without an assessment"
+  return 0
+}
+
 _run_jira_pipeline() {
   local _jira_dir="$AUTOMATION_DIR/jira"
   local _log_file
@@ -511,6 +550,8 @@ _run_jira_pipeline() {
   # rather than proceed on unknown state.
   # The skip guard travels with the mint now — see _run_agent_mint — so neither path can skip
   # into a roster that was never minted.
+  _read_estimation_manifest "$_synth_prd" "$_log_file" || return 1
+
   _run_agent_mint "$_synth_prd" "$_log_file" || return 1
 
   _pause_after_agent_mint

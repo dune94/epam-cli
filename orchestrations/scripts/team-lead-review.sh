@@ -748,6 +748,17 @@ $(render_engine_prompt story-diff-not-inlined "$_sdni_vals" excluded)"
         _review_prior_block=""
     fi
 
+    # The estimation application's assessment of this ticket (EPAM_ESTIMATION_MANIFEST): the reviewer
+    # judges the diff against its in-scope findings and reports work it places outside the estimate.
+    # '' when the run has none — the prompt is then what it was. Top level, like the prior-review
+    # block above: NOT `local`.
+    _review_estimation_block=""
+    if ! _review_estimation_block=$("${NODE_BIN:-node}" "$SCRIPT_DIR/lib/handlers/estimation-manifest.js" \
+            for-story "$story_id" "$PRD_FILE" team-lead-review); then
+        echo "[team-lead-review] FATAL: the estimation assessment did not render for $story_id" >&2
+        exit 1
+    fi
+
     _review_vals=$(mktemp)
     jq_vals \
         --arg profile "${REVIEW_PROFILE:-}" \
@@ -768,6 +779,7 @@ $(render_engine_prompt story-diff-not-inlined "$_sdni_vals" excluded)"
         --arg learned "${_review_learned_block:-}" \
         --arg tools "${_review_project_tools_block:-}" \
         --arg prior_review "${_review_prior_block:-}" \
+        --arg estimation "${_review_estimation_block:-}" \
         '{"__REVIEW_PROFILE__":$profile,"__BLOCKER_DISCIPLINE__":$blocker,
           "__TEST_OWNERSHIP__":$ownership,"__STORY_ID__":$story_id,"__STORY_TITLE__":$title,
           "__STORY_DESC__":$desc,"__STORY_ACS__":$acs,"__STORY_DIFF__":$diff,
@@ -775,7 +787,7 @@ $(render_engine_prompt story-diff-not-inlined "$_sdni_vals" excluded)"
           "__FIX_ANALYSIS_BLOCK__":$fix_analysis,"__UNCOVERED_VC_BLOCK__":$uncovered,
           "__VC_BLOCK__":$vc,"__CODEGRAPH_TOOL_BLOCK__":$codegraph,
           "__LEARNED_RULES_BLOCK__":$learned,"__PROJECT_TOOLS_BLOCK__":$tools,
-          "__PRIOR_REVIEW__":$prior_review}' > "$_review_vals"
+          "__PRIOR_REVIEW__":$prior_review,"__ESTIMATION_ASSESSMENT__":$estimation}' > "$_review_vals"
     if ! REVIEW_PROMPT=$("${NODE_BIN:-node}" "$SCRIPT_DIR/lib/prompt-library.js" \
             render team-lead-review "${EPAM_PROJECT_CONFIG_DIR:-}" "$_review_vals"); then
         rm -f "$_review_vals"

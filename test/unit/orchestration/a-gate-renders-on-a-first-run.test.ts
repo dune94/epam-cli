@@ -55,6 +55,11 @@ const ORDINARY_ABSENCES: Record<string, Record<string, string>> = {
       + 'code-review-cycle already declares. Undeclared, the reviewer could not render for any '
       + 'greenfield story and the phase halted after six no-verdict cycles (£0 greenfield harness, '
       + '2026-09-13)',
+    __ESTIMATION_ASSESSMENT__: 'the estimation application\'s assessment of the ticket exists only '
+      + 'when the run names an estimation manifest (EPAM_ESTIMATION_MANIFEST, 2026-09-28) and that '
+      + 'manifest covers the ticket; a run without one — every greenfield run, most brownfield runs '
+      + '— is the ordinary case, and the producer (lib/handlers/estimation-manifest.js for-story) '
+      + 'returns nothing for it rather than a heading over nothing',
   },
   'failure-analyst': {
     __SKILL_ADDENDUM__: 'a role may carry no accumulated skill notes',

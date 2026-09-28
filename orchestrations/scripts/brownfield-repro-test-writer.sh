@@ -418,9 +418,18 @@ _prompt_values=$(mktemp)
 # and the story still shipped with no reproducing test. lib/jq-vals.sh already solves exactly this
 # for jq, by moving values through --rawfile written by printf, a shell builtin. The migration
 # covered jq and missed node; this is that site.
+# The estimation application's assessment of this ticket (EPAM_ESTIMATION_MANIFEST): the defects it
+# confirmed are the ones a reproducing test should prove. '' when the run has none — the prompt is
+# then what it was. A record that exists and will not render is refused, not dropped.
+_estimation_assessment=$("${NODE_BIN:-node}" "$SCRIPT_DIR/lib/handlers/estimation-manifest.js" \
+    for-story "$STORY_ID" "${PRD_FILE:-}" repro-test-writer) || {
+    log "FATAL: the estimation assessment did not render for $STORY_ID — refusing to invoke a test writer without it"
+    exit 1
+}
 jq_vals \
   --arg project_root "$PROJECT_ROOT" \
   --arg script_dir "$SCRIPT_DIR" \
+  --arg estimation_assessment "$_estimation_assessment" \
   --arg diff_heading "$_diff_heading" \
   --arg example_block "$_example_block" \
   --arg ext "$_ext" \
@@ -434,7 +443,8 @@ jq_vals \
     "__DIFF_HEADING__":$diff_heading,"__EXAMPLE_BLOCK__":$example_block,
     "__EXT__":$ext,"__FIX_DIFF__":$fix_diff,"__PROMPT_ROLE__":$prompt_role,
     "__REQ_PROOF__":$req_proof,"__TARGET_REL__":$target_rel,
-    "__TYPECHECK_COMMAND__":$typecheck_command,"__VCS__":$vcs}' > "$_prompt_values"
+    "__TYPECHECK_COMMAND__":$typecheck_command,"__VCS__":$vcs,
+    "__ESTIMATION_ASSESSMENT__":$estimation_assessment}' > "$_prompt_values"
 
 _prompt=$("${NODE_BIN:-node}" "$SCRIPT_DIR/lib/prompt-library.js" \
     render repro-test-writer "${EPAM_PROJECT_CONFIG_DIR:-}" "$_prompt_values") || {

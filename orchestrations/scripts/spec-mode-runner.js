@@ -4836,7 +4836,8 @@ async function reviewSurvey({
   ].filter(Boolean).join('\n')).join('\n');
 
   const prompt = renderEngineTemplate('survey-review', {
-    __PERSONA__: 'You are reviewing an estate survey before a team is assembled from it.',
+    // WHO REVIEWS: the persona the seam declares (invocation-profiles.json), never a sentence here.
+    __PERSONA__: profilesWithProjectBriefs(logDir)[require('./lib/seam-invocation.js').seamPersonaAgent('survey-review')] || '',
     __SURVEY_BLOCK__: surveyBlock,
     __CODELINE_BLOCK__: _named.map((c) => `- ${c.name} (${c.path})`).join('\n') || '- (none)',
     __TICKET_BLOCK__: (Array.isArray(tickets) ? tickets : [])

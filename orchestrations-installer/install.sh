@@ -237,8 +237,17 @@ if [ -n "$DEST" ]; then
         fi
     fi
     _PKG_REF="${REF:-HEAD}"
-    # FETCH FIRST: a colleague packaging a release just tagged by someone else may not have it yet.
-    git -C "$_GIT_ROOT" fetch --tags --quiet >/dev/null 2>&1 || true
+    # FETCH ONLY FOR A REF THAT IS NOT HERE: a colleague packaging a release just tagged by someone
+    # else may not have it yet. Never for a ref this checkout already holds, and never unbounded or
+    # interactive — an unconditional `git fetch --tags` over ssh sat for 20 minutes with no output
+    # while packaging a local HEAD (amsd-2974 install, 2026-09-28). A fetch that cannot finish in
+    # EPAM_INSTALL_FETCH_TIMEOUT seconds is reported, and the ref check below decides.
+    if ! git -C "$_GIT_ROOT" rev-parse --verify "${_PKG_REF}^{commit}" >/dev/null 2>&1; then
+        _warn "ref '$_PKG_REF' is not in this checkout — fetching tags (at most ${EPAM_INSTALL_FETCH_TIMEOUT:-120}s)"
+        GIT_TERMINAL_PROMPT=0 GIT_SSH_COMMAND="${GIT_SSH_COMMAND:-ssh} -o BatchMode=yes -o ConnectTimeout=15" \
+            timeout "${EPAM_INSTALL_FETCH_TIMEOUT:-120}" git -C "$_GIT_ROOT" fetch --tags --quiet >/dev/null 2>&1 \
+            || _warn "fetching tags did not complete"
+    fi
     if ! git -C "$_GIT_ROOT" rev-parse --verify "${_PKG_REF}^{commit}" >/dev/null 2>&1; then
         _bad "ref '$_PKG_REF' does not exist in this checkout, even after fetching tags"
         exit 1
@@ -650,13 +659,19 @@ if [ -n "$EPAM_PROJECT" ] && [ -d "$ROOT/orchestrations/projects/$EPAM_PROJECT" 
         if [ -n "$_missing" ]; then
             _warn "project '$EPAM_PROJECT' not configured — missing:$_missing"
         else
-            {
-                echo "# Written by install.sh. NON-SECRET VALUES ONLY — credentials live in .env."
-                echo "PROJECT_NAME=$EPAM_PROJECT"
-                echo "JIRA_URL=$JIRA_URL"
-                echo "JIRA_PROJECT_KEY=$JIRA_PROJECT_KEY"
-                echo "JIRA_CODELINE_ROOT=$JIRA_CODELINE_ROOT"
-            } > "$_cfg"
+            # SET THESE KEYS, KEEP EVERYTHING ELSE. This replaced the whole file: a project's
+            # config.env carries its pauses, baseline branch, JQL and field mappings, and every one
+            # of them was lost to five lines. Each key is replaced where it stands, or appended.
+            "$NODE_BIN" -e '
+              const fs = require("fs"); const [file, ...kv] = process.argv.slice(1);
+              let lines = fs.existsSync(file) ? fs.readFileSync(file, "utf8").split("\n") : [];
+              for (let i = 0; i < kv.length; i += 2) {
+                const k = kv[i], line = k + "=" + kv[i + 1];
+                const at = lines.findIndex((l) => new RegExp("^(export\\s+)?" + k + "=").test(l));
+                if (at >= 0) lines[at] = line; else lines.splice(lines.length && lines[lines.length - 1] === "" ? lines.length - 1 : lines.length, 0, line);
+              }
+              fs.writeFileSync(file, lines.join("\n").replace(/\n*$/, "\n"));
+            ' "$_cfg" PROJECT_NAME "$EPAM_PROJECT" JIRA_URL "$JIRA_URL" JIRA_PROJECT_KEY "$JIRA_PROJECT_KEY" JIRA_CODELINE_ROOT "$JIRA_CODELINE_ROOT"
             _ok "wrote $_cfg (JIRA_URL, JIRA_PROJECT_KEY, JIRA_CODELINE_ROOT)"
         fi
     fi

@@ -1815,7 +1815,7 @@ $_kb_section"
             { [ -n "$effective_constitution" ] && printf '%s\n\n---\n\n' "$effective_constitution"; printf '%s' "$prompt"; } > "$_pp_prompt"
             _pp_roots="$(_declared_read_roots "$prd_target" 2>/dev/null || true)"
             if EPAM_AGENT_NAME="${STORY_WRITER_SEAM}" EPAM_STORY_ID="${story_id}" AI_MODEL="${STORY_MODEL:-}" \
-                    EPAM_READ_ROOTS="$_pp_roots" PROJECT_ROOT="$PROJECT_ROOT" AI_GATE_ALLOW_TOOLS=0 EPAM_ALLOWED_TOOLS= \
+                    EPAM_READ_ROOTS="$_pp_roots" PROJECT_ROOT="$PROJECT_ROOT" AI_GATE_ALLOW_TOOLS=0 EPAM_ALLOWED_TOOLS="" \
                     "${_timeout_prefix[@]}" bash -c '. "$1"; shift; provider_plugin_call "$@"' _ \
                     "$SCRIPT_DIR/lib/provider-plugin.sh" "$STORY_PROVIDER" "$_pp_prompt" "$json_result_file" \
                     2>> "$output_file" >> "$output_file"; then

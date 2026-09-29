@@ -37,11 +37,11 @@ provider_plugin_dir() {
 }
 
 # provider_plugin_call <provider> <prompt_file> <result_json> — one call through the provider's plugin,
-# in a subshell so nothing the plugin defines leaks into the caller.
+# in a subshell so nothing the plugin defines leaks into the caller. Callers reach it only after
+# provider_plugin_dir answered, so it refuses nothing of its own (no gates — operator, 2026-09-29).
 provider_plugin_call() {
-    local _p="${1:?provider}" _prompt="${2:?prompt file}" _result="${3:?result json}" _dir
-    _dir="$(provider_plugin_dir "$_p")" || { echo "[provider-plugin] '$_p' declares no runner plugin" >&2; return 1; }
-    ( . "$_dir/runner.sh" && provider_call "$_prompt" "$_result" )
+    local _p="${1:?provider}" _prompt="${2:?prompt file}" _result="${3:?result json}"
+    ( . "$(provider_plugin_dir "$_p")/runner.sh" && provider_call "$_prompt" "$_result" )
 }
 
 # provider_plugins_stop — the run's exit handler: every declared plugin that can stop, stops.

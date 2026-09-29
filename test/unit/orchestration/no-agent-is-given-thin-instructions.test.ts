@@ -48,6 +48,14 @@ describe('every seam declares a full persona', () => {
     expect(seams[seam].persona, `${seam} declares no persona — its instructions would be its description alone`).toBeTruthy();
   });
 
+  it.each(SEAMS)('%s: the agent it speaks as resolves to a seam — the mint refuses one that resolves to none', (seam) => {
+    // eslint-disable-next-line @typescript-eslint/no-var-requires
+    const { resolveSeam, registryPath } = require(join(ROOT, 'orchestrations/scripts/lib/seam-invocation.js'));
+    const who = seams[seam].persona || '';
+    const back = (() => { try { return resolveSeam(who, registryPath(AGENTS)); } catch (e) { return `none (${(e as Error).message.slice(0, 80)})`; } })();
+    expect(Object.keys(seams), `'${who}' resolves to ${back}`).toContain(back);
+  });
+
   it.each(SEAMS)('%s: that persona resolves to text in the install\'s profiles', (seam) => {
     expect(personaOf(seam), `${seam} speaks as '${seams[seam].persona}', which the profiles do not carry`).not.toBe('');
   });

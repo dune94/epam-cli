@@ -418,6 +418,8 @@ case "${EPAM_ORCHESTRATION_PROVIDER:-${CLAUDE_CMD}}" in
     # a flag Claude Code 2.1.245 no longer accepts, so it would have failed outright.
     # Provider selection still comes from config; only the wrapper mapping changed.
     codemie-claude) CLAUDE_SH="$SCRIPT_DIR/claude.sh" ;;
+    # CodeMie web assistants: the story arm and the seam hub carry it (lib/codemie-web-runner.sh).
+    codemie-web)    CLAUDE_SH="$SCRIPT_DIR/claude.sh" ;;
     copilot)        CLAUDE_SH="$SCRIPT_DIR/copilot.sh" ;;
     openai)         CLAUDE_SH="$SCRIPT_DIR/openai.sh" ;;
     # this was always an alias. What made the rename urgent is that the dispatch REJECTED
@@ -432,7 +434,7 @@ case "${EPAM_ORCHESTRATION_PROVIDER:-${CLAUDE_CMD}}" in
     # profile and would demand credentials the mock has no business holding.
     claude)         CLAUDE_SH="$SCRIPT_DIR/claude.sh" ;;
     *)
-        error "Unknown EPAM_ORCHESTRATION_PROVIDER '${EPAM_ORCHESTRATION_PROVIDER:-}'. Set it to one of: openrouter|openai|copilot|cursor|codex|codemie-claude|claude in your .env file."
+        error "Unknown EPAM_ORCHESTRATION_PROVIDER '${EPAM_ORCHESTRATION_PROVIDER:-}'. Set it to one of: openrouter|openai|copilot|cursor|codex|codemie-claude|codemie-web|claude in your .env file."
         exit 1
         ;;
 esac

@@ -17,7 +17,7 @@ import { ROOT, fixtureInstall, edgeFor, zeroCostEnv, run } from '../integration/
 import { MockAgent } from './agent';
 import { World } from './world';
 import { correct } from './seams';
-import { currentConfig, standInsFor, vendorEdge, rehearsedSet, type ProjectRun } from './harness';
+import { currentConfig, configFor, standInsFor, vendorEdge, rehearsedSet, type ProjectRun } from './harness';
 
 const SRC = process.env.MOCK_AGENT_INSTALL || ROOT;
 const JOURNALS = process.env.MOCK_AGENT_JOURNAL || join(ROOT, 'test-results/mock-agent');
@@ -57,7 +57,7 @@ describe('the mocking agent drives the seeded brownfield project at £0', () => 
     const config = currentConfig(SRC);
     const codemie = await standInsFor(install, agent, journal, config);
     const r = { install, out: '', agent, project, prd: '', config, realOut: '', world, codemie } as ProjectRun;
-    const env = zeroCostEnv(bin, agent.url, { ...config, ...vendorEdge(r), EPAM_FREE_RUN: '1', MOCK1_WORKSPACE_ROOT: workspaceRoot, EPAM_PROJECT_CONFIG_DIR: '' });
+    const env = zeroCostEnv(bin, agent.url, { ...configFor(install, project, config), ...vendorEdge(r), EPAM_FREE_RUN: '1', MOCK1_WORKSPACE_ROOT: workspaceRoot, EPAM_PROJECT_CONFIG_DIR: '' });
     const keep = (name: string, text: string) => {
       writeFileSync(join(journal, `${name}.log`), text);
       for (const [from, to] of [[join(install, 'orchestrations/logs'), `${name}-logs`], [newest(), `${name}-workspace`]] as const) {

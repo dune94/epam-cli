@@ -114,6 +114,22 @@ export async function standInsFor(install: string, agent: MockAgent, journal: st
   return codemie;
 }
 
+/**
+ * THE INSTALL'S CONFIGURATION, MINUS WHAT THE REHEARSED SET'S OVERLAY OWNS. A project's
+ * config.<set>.env is, by declaration, the provider-dependent half; a value the operator's .env
+ * carries for another stack (EPAM_ORCHESTRATION_PROVIDER=openrouter) outranks it and rehearses a
+ * different dispatch than a real install runs — which hid an unrouted provider from every
+ * codemie-web rehearsal until the first live launch (AMSD-2974, 2026-09-29).
+ */
+export function configFor(install: string, project: string, config: Record<string, string>): Record<string, string> {
+  const reg = JSON.parse(readFileSync(join(install, 'orchestrations/config/provider-sets.json'), 'utf8'));
+  const suffix = reg.sets?.[rehearsedSet(install, config)]?.projectEnvSuffix;
+  const overlay = suffix ? join(install, 'orchestrations/projects', project, `config.${suffix}.env`) : '';
+  if (!overlay || !existsSync(overlay)) return config;
+  const owned = new Set(readFileSync(overlay, 'utf8').split('\n').map((l) => (/^(?:export\s+)?([A-Za-z_][A-Za-z0-9_]*)=/.exec(l) || [])[1]).filter(Boolean));
+  return Object.fromEntries(Object.entries(config).filter(([k]) => !owned.has(k)));
+}
+
 /** The set a rehearsal runs on: MOCK_AGENT_PROVIDER_SET, else the install's own, else the default. */
 export function rehearsedSet(install: string, config: Record<string, string>): string {
   const sets = JSON.parse(readFileSync(join(install, 'orchestrations/config/provider-sets.json'), 'utf8'));
@@ -168,7 +184,7 @@ export function vendorEdge(r: ProjectRun): Record<string, string> {
 /** Launch the project through its real launcher, on the install's current configuration. */
 export function launch(r: ProjectRun, extra: Record<string, string> = {}, timeoutMs = 60 * 60_000) {
   const env = zeroCostEnv(join(r.install, '.edge-bin'), r.agent.url, {
-    ...r.config,
+    ...configFor(r.install, r.project, r.config),
     ...vendorEdge(r),
     EPAM_FREE_RUN: '1',
     OUTPUT_DIR: r.out, EPAM_PAUSE_AFTER_AGENT_MINT: '0', EPAM_PAUSE_BEFORE_WRITER: '0',

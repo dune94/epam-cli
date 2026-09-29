@@ -14,7 +14,7 @@
   "description": "The brownfield clause appended to a spec-agent prompt: what it may read, and the JSON it must answer with.",
   "id": "spec-brownfield-mode",
   "seams": [
-    "ac-elaboration"
+    "spec-agent"
   ],
   "placeholders": [
     "__AC_PREAMBLE__",
@@ -29,5 +29,6 @@
   "mayBeEmpty": [
     "__UNREACHABLE_EXTERNALS__",
     "__VC_FORM_SAMPLES__"
-  ]
+  ],
+  "$whySeams": "It is appended to the spec agent's prompt (spec-mode-runner.js), so it runs as spec-agent; it declared ac-elaboration, and the rehearsal filed spec-agent calls under that seam (2026-09-29)."
 }

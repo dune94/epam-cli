@@ -1879,6 +1879,7 @@ $_prof_prompt"
                             $(_render_change_reviewer "gate-remediation" "profile_addendum" "THE CHANGE ITSELF (unified diff of the roster before and after):\n${_profiles_change}")" | \
                                 AI_PROVIDER="${ORCH_GATE_PROVIDER:-}" \
                                 AI_MODEL="${_pa_model}" \
+                                EPAM_AGENT_NAME="prd-change-reviewer" \
                                 EPAM_CLI="${EPAM_CLI:-$(dirname "${BASH_SOURCE[0]}")/../bin/epam}" \
                                 "$AI_RUNNER_CMD" \
                                     --provider "${ORCH_GATE_PROVIDER:-}" \

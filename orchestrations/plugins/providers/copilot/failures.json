@@ -1,0 +1,15 @@
+{
+  "$comment": "The GitHub Copilot CLI's structured failure fields (session.error data) → the pipeline's classes (config/failure-classes.json). Values seen in recorded session-state events: errorType quota/authorization/authentication/system_econnreset/query/model, errorCode quota_exceeded. A value not listed falls to statusCode, then to the default.",
+  "fields": {
+    "errorCode": {
+      "quota_exceeded": "credit"
+    },
+    "errorType": {
+      "quota": "credit",
+      "authorization": "auth",
+      "authentication": "auth",
+      "rate_limit": "rate_limit",
+      "system_econnreset": "transient"
+    }
+  }
+}

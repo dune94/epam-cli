@@ -485,7 +485,7 @@ classify_failure_class() {
         return 0
     fi
     # A RESULT THAT SAYS WHY IT FAILED IS READ BEFORE ANYTHING IS INFERRED. A runner whose result
-    # names its failure (lib/copilot-result.js writes error.class from the call's own JSONL) is taken at
+    # names its failure (plugins/providers/copilot/copilot-result.js writes error.class from the call's own JSONL) is taken at
     # its word for credit: an exhausted account fails every rung of a ladder that bills it the same way,
     # and the copilot set has no balance probe to say so below. A result without error.class (the claude
     # runner's) is classified exactly as before.

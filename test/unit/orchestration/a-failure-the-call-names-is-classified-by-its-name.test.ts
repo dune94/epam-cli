@@ -7,7 +7,7 @@
  * rung refused the same way.
  *
  * Executed: the real classify_failure_class (lib/failure-healing.sh) on results written by the real
- * codemie-web judge (lib/codemie-web/result.js) from the errors the CodeMie SDK throws.
+ * codemie-web judge (plugins/providers/codemie-web/result.js) from the errors the CodeMie SDK throws.
  */
 import { describe, it, expect } from 'vitest';
 import { spawnSync } from 'node:child_process';
@@ -17,7 +17,7 @@ import { tmpdir } from 'node:os';
 
 const ROOT = join(__dirname, '../../../');
 const HEAL = join(ROOT, 'orchestrations/scripts/lib/failure-healing.sh');
-const JUDGE = join(ROOT, 'orchestrations/scripts/lib/codemie-web/result.js');
+const JUDGE = join(ROOT, 'orchestrations/plugins/providers/codemie-web/result.js');
 
 /** The result the codemie-web runner writes for a call that threw `err` (an SDK ApiError's shape). */
 function judged(dir: string, err: { statusCode?: number; message: string }): string {

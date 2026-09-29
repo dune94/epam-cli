@@ -1,7 +1,7 @@
 /**
  * CODEMIE, STOOD IN FOR — the service side of the codemie-web set at £0.
  *
- * The codemie-web runner (orchestrations/scripts/lib/codemie-web/) talks to two things CodeMie runs:
+ * The codemie-web runner (orchestrations/plugins/providers/codemie-web/) talks to two things CodeMie runs:
  *
  *   the API      users, the LLM catalog, Plugin integrations, stored assistants, and the assistant
  *                chat — which is CodeMie's own agent loop: the model is called with the assistant's

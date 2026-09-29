@@ -43,10 +43,17 @@ function resolve(set: string, expr: string) {
   try { return JSON.parse(r.stdout || 'null'); } catch { return null; }
 }
 
-/** The providers the orchestrator's dispatch table will accept. */
+/** The providers the orchestrator's dispatch will accept: its wrapper arms, and every provider the
+ *  dispatch's first question — provider_plugin_dir, run here as the orchestrator runs it — answers
+ *  with a runner plugin (config/providers.json `runnerPlugin`). */
 function acceptedProviders(): string[] {
   const src = engineSource(join(SCRIPTS, 'run-agent-orchestration.sh'));
-  return [...src.matchAll(/^\s{4,}([a-z][a-z0-9-]*)\)\s+CLAUDE_SH=/gm)].map((m) => m[1]);
+  const arms = [...src.matchAll(/^\s{4,}([a-z][a-z0-9-]*)\)\s+CLAUDE_SH=/gm)].map((m) => m[1]);
+  const declared = Object.keys(JSON.parse(readFileSync(join(CONFIG, 'providers.json'), 'utf8')).runnerPlugin || {});
+  const plugins = declared.filter((p) => spawnSync('bash', ['-c',
+    `. ${JSON.stringify(join(SCRIPTS, 'lib/provider-plugin.sh'))}; provider_plugin_dir ${JSON.stringify(p)} >/dev/null`],
+    { env: { ...process.env, NODE_BIN: process.execPath } }).status === 0);
+  return [...arms, ...plugins];
 }
 
 describe('a stack swaps by config alone', () => {

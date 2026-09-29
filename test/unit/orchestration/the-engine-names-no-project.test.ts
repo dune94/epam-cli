@@ -30,21 +30,24 @@ import { join } from 'node:path';
 import { engineSource } from '../../lib/engine-source';
 
 const SCRIPTS = join(__dirname, '../../../orchestrations/scripts');
+/** Provider runner plugins are engine too: a call's code moved out of scripts/ is still on every run's path. */
+const PROVIDER_PLUGINS = join(__dirname, '../../../orchestrations/plugins/providers');
 
 /** Every engine file, excluding the per-project launchers, which ARE per project. */
 function engineFiles(): string[] {
   const out: string[] = [];
-  const walk = (dir: string) => {
+  const walk = (dir: string, ext = /\.(sh|js)$/) => {
     for (const e of readdirSync(dir)) {
       const p = join(dir, e);
-      if (statSync(p).isDirectory()) { walk(p); continue; }
-      if (!/\.(sh|js)$/.test(e)) continue;
+      if (statSync(p).isDirectory()) { walk(p, ext); continue; }
+      if (!ext.test(e)) continue;
       if (/^tier3-[a-z0-9-]+-run\.sh$/.test(e)) continue;   // a launcher per project is the design
       if (/^run-[a-z0-9-]+-test\.sh$/.test(e)) continue;    // ditto, per-project test drivers
       out.push(p);
     }
   };
   walk(SCRIPTS);
+  walk(PROVIDER_PLUGINS, /\.(sh|js|py)$/);
   return out;
 }
 
@@ -56,7 +59,7 @@ function codeLinesNaming(literal: RegExp): Array<{ file: string; line: number; t
     lines.forEach((text, i) => {
       const t = text.trim();
       if (t.startsWith('#') || t.startsWith('//') || t.startsWith('*') || t.startsWith('/*')) return;
-      if (literal.test(text)) hits.push({ file: f.replace(SCRIPTS, ''), line: i + 1, text: t.slice(0, 120) });
+      if (literal.test(text)) hits.push({ file: f.replace(SCRIPTS, '').replace(PROVIDER_PLUGINS, 'plugins/providers'), line: i + 1, text: t.slice(0, 120) });
     });
   }
   return hits;
@@ -67,6 +70,8 @@ describe('no project name is baked into the engine', () => {
     const files = engineFiles();
     expect(files.length).toBeGreaterThan(20);
     expect(files.some((f) => f.endsWith('run-agent-orchestration.sh'))).toBe(true);
+    expect(files.filter((f) => f.startsWith(PROVIDER_PLUGINS) && f.endsWith('runner.sh')).length,
+      'the provider runner plugins are not scanned').toBeGreaterThan(1);
   });
 
   it('names no current project', () => {

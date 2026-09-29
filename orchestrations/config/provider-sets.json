@@ -89,7 +89,7 @@
       "signInProbe": {
         "command": [
           "node",
-          "scripts/lib/codemie-web/probe.js"
+          "plugins/providers/codemie-web/probe.js"
         ],
         "_why": "Pre-flight runs it (path relative to orchestrations/). A signed-out CodeMie session, a ladder model missing from CodeMie's catalog, or a missing codemie-plugins environment fails every rung of every story mid-run; this refuses the launch instead."
       },
@@ -98,7 +98,7 @@
         "packages": [
           "codemie-plugins==0.2.0"
         ],
-        "_why": "The local CodeMie Plugin a codemie-web agent reaches the codeline through (lib/codemie-web/plugins.js). The installer provisions it (python3 -m venv + pip, path relative to the install root); the runner reads the path from here. Pinned: 0.2.0 is the version proven 2026-09-28."
+        "_why": "The local CodeMie Plugin a codemie-web agent reaches the codeline through (plugins/providers/codemie-web/plugins.js). The installer provisions it (python3 -m venv + pip, path relative to the install root); the runner reads the path from here. Pinned: 0.2.0 is the version proven 2026-09-28."
       },
       "redirect": {
         "$why": "How a rehearsal points this set at CodeMie stood in for, declared rather than known by any harness: the runner's CodeMie API (EPAM_CODEMIE_WEB_URL \u2014 a plain SDK client, no SSO) and the plugin engine its local plugins connect to (EPAM_CODEMIE_PLUGIN_ENGINE_URI).",

@@ -23,7 +23,7 @@ import { newCallId, type Turn } from '../../mock-agent/wire';
 
 const ROOT = join(__dirname, '../../../');
 const HANDLER = join(ROOT, 'orchestrations/scripts/llm-handler.sh');
-const RUNNER = join(ROOT, 'orchestrations/scripts/lib/codemie-web-runner.sh');
+const RUNNER = join(ROOT, 'orchestrations/plugins/providers/codemie-web/runner.sh');
 const CODEMIE = (() => { try { return execSync('command -v codemie', { encoding: 'utf8', shell: '/bin/bash' }).trim(); } catch { return ''; } })();
 const MODELS = ['claude-haiku-4-5-20251001', 'claude-sonnet-5', 'claude-opus-5', 'claude-opus-4-8'];
 
@@ -94,8 +94,8 @@ function call(prompt: string, env: Record<string, string>) {
 }
 
 describe.skipIf(!CODEMIE)('a seam call on the codemie-web set', () => {
-  it('is a chat with the operator\'s private assistant "Pipeline <codeline> <agent>", on the ladder\'s model, with no tools when the seam grants none', async () => {
-    const r = await call('Summarise the plan.', { EPAM_AGENT_NAME: 'plan-reviewer' });
+  it('is a chat with the operator\'s private assistant "Pipeline <codeline> <agent>", on the ladder\'s model; a call whose tool budget is 0 (the hub\'s plan pass) gets no tools', async () => {
+    const r = await call('Summarise the plan.', { EPAM_AGENT_NAME: 'plan-reviewer', EPAM_MAX_TOOL_CALLS: '0' });
     expect(r.stderr, r.stderr.slice(-1500)).not.toMatch(/call failed/);
     expect(r.status, r.stderr.slice(-2000)).toBe(0);
     expect(r.stdout).toContain('ANSWER tools-offered=0');
@@ -109,6 +109,15 @@ describe.skipIf(!CODEMIE)('a seam call on the codemie-web set', () => {
     expect(chat.model).toBe('claude-sonnet-5');
     expect(chat.tools).toEqual([]);
     expect(cm.integrations).toHaveLength(0);              // nothing registered for a tool-free seam
+  }, 180_000);
+
+  it('a seam that grants nothing gets the runner\'s full set — as on the claude runner, where no grant keeps the default tools', async () => {
+    const r = await call('WRITE full-set.txt WRITTEN-WITH-NO-GRANT', { EPAM_AGENT_NAME: 'plan-author', EPAM_PLAN_EXECUTE: '0' });
+    expect(r.status, r.stderr.slice(-1500)).toBe(0);
+    expect(readFileSync(join(codeline, 'full-set.txt'), 'utf8')).toBe('WRITTEN-WITH-NO-GRANT');
+    const chat = cm.chats[cm.chats.length - 1];
+    expect(chat.tools).toContain('_write_file_to_file_system');
+    expect(chat.tools).toContain('_run_command_line_tool');
   }, 180_000);
 
   it('a read-only grant binds the read-only plugin: the file is read from the codeline, and no write or command tool is offered', async () => {
@@ -126,8 +135,9 @@ describe.skipIf(!CODEMIE)('a seam call on the codemie-web set', () => {
 
   it('a read-only grant cannot write: asked to, the model finds no write tool and nothing lands on disk', async () => {
     const r = await call('WRITE leak.txt SHOULD-NOT-EXIST', { EPAM_AGENT_NAME: 'code-reader', AI_GATE_ALLOW_TOOLS: '1', EPAM_ALLOWED_TOOLS: 'read_file' });
-    expect(r.stdout).toContain('NO-WRITE-TOOL');
-    expect(existsSync(join(codeline, 'leak.txt'))).toBe(false);
+    const seen = JSON.stringify(cm.chats[cm.chats.length - 1]);
+    expect(r.stdout, seen).toContain('NO-WRITE-TOOL');
+    expect(existsSync(join(codeline, 'leak.txt')), seen).toBe(false);
   }, 180_000);
 
   it('a write grant binds the development plugin: the file is written in the codeline by the plugin', async () => {
@@ -183,7 +193,7 @@ describe.skipIf(!CODEMIE)('a seam call on the codemie-web set', () => {
     const pids = Object.values(state).map((s) => s.pid);
     expect(pids.length).toBeGreaterThanOrEqual(2);   // the ro and rw plugins above
     expect(cm.engine.connections).toBeGreaterThanOrEqual(2);
-    execSync(`bash -c '. ${JSON.stringify(RUNNER)}; codemie_web_stop_plugins'`, { env: baseEnv() });
+    execSync(`bash -c '. ${JSON.stringify(RUNNER)}; provider_stop'`, { env: baseEnv() });
     const alive = (pid: number) => { try { process.kill(pid, 0); return true; } catch { return false; } };
     expect(pids.filter(alive)).toEqual([]);
     for (let i = 0; i < 20 && cm.engine.connections > 0; i += 1) await new Promise((ok) => setTimeout(ok, 250));

@@ -523,6 +523,8 @@ _rejection_repeat_check() {
 # _run_project_verification: ONE definition, lib/tsc-baseline-gate.sh (section-aware). A copy here
 # overwrote it and dropped the section (regintel 2026-09-24).
 declare -F _run_project_verification >/dev/null 2>&1 || . "$(dirname "${BASH_SOURCE[0]}")/tsc-baseline-gate.sh"
+# Providers that are plugins (config/providers.json runnerPlugin) — the writer's generic arm reads it.
+declare -F provider_plugin_dir >/dev/null 2>&1 || . "$(dirname "${BASH_SOURCE[0]}")/provider-plugin.sh"
 
 # run_tsc_verification <story_id> <output_file>
 # Runs `tsc --noEmit` inside the retry loop (not after it) so a TypeScript
@@ -1801,6 +1803,26 @@ $_kb_section"
         [ -n "$_attempt_wall" ] && _timeout_prefix=(timeout "$_attempt_wall")
 
         STORY_PROVIDER="$(resolve_primary_provider "${STORY_PROVIDER:-}")"
+        # A PROVIDER THAT IS A PLUGIN writes the story through its plugin — the same call the seam hub
+        # makes (config/providers.json runnerPlugin; lib/provider-plugin.sh), so no engine file names
+        # it. The writer's constitution opens the prompt: a plugin runner has no system-prompt flag of
+        # the claude CLI's kind. No tool grant is passed — the runner's full set, as the claude writer
+        # runs with its runner's whole tool set. The directories the PRD declares readable travel as
+        # EPAM_READ_ROOTS, as the claude arms pass them as --add-dir.
+        if provider_plugin_dir "$STORY_PROVIDER" >/dev/null 2>&1; then
+            local _pp_prompt _pp_roots
+            _pp_prompt="$(mktemp "${TMPDIR:-/tmp}/story-prompt-XXXXXX")"
+            { [ -n "$effective_constitution" ] && printf '%s\n\n---\n\n' "$effective_constitution"; printf '%s' "$prompt"; } > "$_pp_prompt"
+            _pp_roots="$(_declared_read_roots "$prd_target" 2>/dev/null || true)"
+            if EPAM_AGENT_NAME="${STORY_WRITER_SEAM}" EPAM_STORY_ID="${story_id}" AI_MODEL="${STORY_MODEL:-}" \
+                    EPAM_READ_ROOTS="$_pp_roots" PROJECT_ROOT="$PROJECT_ROOT" AI_GATE_ALLOW_TOOLS=0 EPAM_ALLOWED_TOOLS= \
+                    "${_timeout_prefix[@]}" bash -c '. "$1"; shift; provider_plugin_call "$@"' _ \
+                    "$SCRIPT_DIR/lib/provider-plugin.sh" "$STORY_PROVIDER" "$_pp_prompt" "$json_result_file" \
+                    2>> "$output_file" >> "$output_file"; then
+                invoke_success=true
+            fi
+            rm -f "$_pp_prompt"
+        else
         case "$STORY_PROVIDER" in
             opencode)
                 # OpenCode: pass prompt via temp file (prompts can exceed arg limits)
@@ -1844,59 +1866,6 @@ $_kb_section"
                         "${model_flag[@]}" "${RUNNER_FLAGS[@]}" "${effective_permissions[@]}" \
                         2>>"$output_file" > "$json_result_file"; then
                     invoke_success=true
-                fi
-                ;;
-            copilot)
-                # THE GITHUB COPILOT CLI — the same call the seam hub makes (lib/copilot-runner.sh), so a
-                # story written on the copilot set gets the ladder's model (mapped to Copilot's id) and
-                # effort (only where the catalog lists one), and is judged by what the CLI said, not its
-                # exit code. This provider used to fall into the `epam run` arm below: epam-cli's HTTP
-                # CopilotProvider, which has no tool calling — a writer that could not write a file.
-                #   The writer's constitution: the claude arms append it to the system prompt; Copilot has
-                # no such flag, so it opens the prompt. The directories the PRD's configuration declares
-                # readable are passed as --add-dir, as the claude arms pass them.
-                local _cp_prompt _cp_extra=() _cp_root
-                _cp_prompt="$(mktemp "${TMPDIR:-/tmp}/copilot-prompt-XXXXXX")"
-                { [ -n "$effective_constitution" ] && printf '%s\n\n---\n\n' "$effective_constitution"; printf '%s' "$prompt"; } > "$_cp_prompt"
-                while IFS= read -r _cp_root; do
-                    [ -n "$_cp_root" ] && _cp_extra+=(--add-dir "$_cp_root")
-                done <<< "$(_declared_read_roots "$prd_target" 2>/dev/null)"
-                if EPAM_AGENT_NAME="${STORY_WRITER_SEAM}" EPAM_STORY_ID="${story_id}" \
-                        "${_timeout_prefix[@]}" bash -c '. "$1"; shift; copilot_invoke "$@"' _ \
-                        "$SCRIPT_DIR/lib/copilot-runner.sh" "$_cp_prompt" "${STORY_MODEL:-}" "${EPAM_REASONING_EFFORT:-}" \
-                        "$json_result_file" "${json_result_file%.json}.events.jsonl" -- ${_cp_extra[@]+"${_cp_extra[@]}"} \
-                        2>> "$output_file" >> "$output_file"; then
-                    invoke_success=true
-                fi
-                rm -f "$_cp_prompt"
-                ;;
-            codemie-web)
-                # A CODEMIE WEB ASSISTANT — "Pipeline <codeline> <writer seam>" — the same call the seam
-                # hub makes (lib/codemie-web-runner.sh). It reaches the codeline through the development
-                # CodeMie Plugin rooted at PROJECT_ROOT (this attempt's cwd).
-                #   The grant is the runner's WHOLE declared vocabulary: the claude writer runs with its
-                # runner's whole tool set, and this is that set in the codemie-web runner's words
-                # (toolNames, filled by apply_runner_settings above). A runner declaring none is refused
-                # — a writer with no tools answers in prose and writes nothing.
-                #   The constitution opens the prompt, as on copilot: the stored assistant's system prompt
-                # is a fixed persona, so the per-story constitution travels with the message.
-                local _cw_prompt _cw_grant=""
-                if [ "${#RUNNER_TOOL_NAMES[@]}" -gt 0 ]; then
-                    _cw_grant="$(IFS=','; printf '%s' "${!RUNNER_TOOL_NAMES[*]}")"
-                fi
-                if [ -z "$_cw_grant" ]; then
-                    echo "[codemie-web] the codemie-web runner declares no toolNames — a writer without tools cannot write; refusing the attempt" >> "$output_file"
-                else
-                    _cw_prompt="$(mktemp "${TMPDIR:-/tmp}/codemie-web-prompt-XXXXXX")"
-                    { [ -n "$effective_constitution" ] && printf '%s\n\n---\n\n' "$effective_constitution"; printf '%s' "$prompt"; } > "$_cw_prompt"
-                    if EPAM_AGENT_NAME="${STORY_WRITER_SEAM}" EPAM_STORY_ID="${story_id}" \
-                            AI_GATE_ALLOW_TOOLS=1 EPAM_ALLOWED_TOOLS="$_cw_grant" PROJECT_ROOT="$PROJECT_ROOT" \
-                            "${_timeout_prefix[@]}" bash -c '. "$1"; shift; codemie_web_invoke "$@"' _ \
-                            "$SCRIPT_DIR/lib/codemie-web-runner.sh" "$_cw_prompt" "${STORY_MODEL:-}" "$json_result_file" \
-                            2>> "$output_file" >> "$output_file"; then
-                        invoke_success=true
-                    fi
-                    rm -f "$_cw_prompt"
                 fi
                 ;;
             openai|openrouter|cursor|minimax)
@@ -2326,6 +2295,7 @@ $_kb_section"
                 fi
                 ;;
         esac
+        fi
 
         # Log THIS attempt's real token/cost usage unconditionally (success or
         # failure) — previously only the FINAL attempt's json_result_file

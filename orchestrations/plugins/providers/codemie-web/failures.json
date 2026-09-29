@@ -1,0 +1,12 @@
+{
+  "$comment": "CodeMie's structured failure codes → the pipeline's classes (config/failure-classes.json). The field is AgentErrorDetails.error_code (codemie-sdk ErrorCode). Codes not listed fall to the call's HTTP status, then to the default.",
+  "fields": {
+    "error_code": {
+      "agent_budget_exceeded": "credit",
+      "agent_timeout": "transient",
+      "agent_network_error": "transient",
+      "llm_rate_limited": "rate_limit",
+      "llm_unavailable": "transient"
+    }
+  }
+}

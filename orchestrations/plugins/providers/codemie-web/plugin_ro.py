@@ -4,11 +4,9 @@ The stock `development` toolkit always exposes write, diff-update, git and run-c
 pipeline grants read-only must not receive those. Built on the codemie-plugins framework (its core
 file tools, confined to root_dir by get_validated_relative_path).
 
-    PLUGIN_KEY=<key> PLUGIN_ENGINE_URI=<nats uri> python plugin_ro.py <root_dir>
-
-Started and stopped by lib/codemie-web/plugins.js; never run by hand in a pipeline.
+Hosted by plugin_host.py (`ro` mode), which plugins.js (this directory) starts and stops; never run by
+hand in a pipeline.
 """
-import asyncio
 import os
 import re
 import subprocess
@@ -16,7 +14,6 @@ import sys
 from pathlib import Path
 from typing import Optional, Type
 
-from codemie.client import PluginClient
 from codemie.toolkit import RemoteInput, RemoteTool
 from pydantic import Field
 from toolkits.core.file_system_tools import ListDirectoryTool, ReadFileTool, RecursiveFileRetrieval
@@ -95,13 +92,7 @@ class SearchFilesTool(RemoteTool):
         return "\n".join(out) or "no matches"
 
 
-async def main(root: str):
+def ro_tools(root: str) -> list:
+    """The read-only toolkit rooted at `root` (plugin_host.py runs it)."""
     root = str(Path(root).resolve())
-    tools = [ListDirectoryTool(root_dir=root), RecursiveFileRetrieval(root_dir=root), ReadFileTool(root_dir=root), SearchFilesTool(root_dir=root)]
-    await PluginClient(tools=tools).connect()
-
-
-if __name__ == "__main__":
-    if len(sys.argv) != 2 or not os.path.isdir(sys.argv[1]):
-        sys.exit("usage: plugin_ro.py <root_dir>")
-    asyncio.run(main(sys.argv[1]))
+    return [ListDirectoryTool(root_dir=root), RecursiveFileRetrieval(root_dir=root), ReadFileTool(root_dir=root), SearchFilesTool(root_dir=root)]

@@ -1,0 +1,23 @@
+{
+  "$comment": "What a failed model call's STRUCTURED cause means to the pipeline — one place, read by every runner plugin (plugins/providers/failure-class.js). A class names what the attempt's handler does: credit and auth halt the story (every rung bills and signs in the same way), rate_limit and transient retry, the rest climb. A failure's WORDS are never read for its class (review of 2026-09-29): a vendor rewording, a translated message, or a model's prose quoted in an error must not flip a story into or out of a halt. A vendor's own codes live beside its plugin (plugins/providers/<name>/failures.json).",
+  "byStatus": {
+    "$comment": "HTTP status → class. A key of the form Nxx covers the whole hundred.",
+    "401": "auth",
+    "402": "credit",
+    "403": "auth",
+    "429": "rate_limit",
+    "5xx": "transient"
+  },
+  "bySystemCode": {
+    "$comment": "Node's system error `code` on a thrown error (the request never got an HTTP answer).",
+    "ECONNREFUSED": "transient",
+    "ECONNRESET": "transient",
+    "ETIMEDOUT": "transient",
+    "ENOTFOUND": "transient",
+    "EAI_AGAIN": "transient",
+    "EPIPE": "transient",
+    "UND_ERR_SOCKET": "transient",
+    "UND_ERR_CONNECT_TIMEOUT": "transient"
+  },
+  "default": "provider"
+}

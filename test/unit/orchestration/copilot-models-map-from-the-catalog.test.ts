@@ -8,7 +8,7 @@
  * supports. Found by the spike: `--reasoning-effort` on a model without it prints an error and exits
  * 0, so an unsupported effort must never reach the command line.
  *
- * Executed through lib/copilot-models.js's command line (what the shell arms call), on the catalog
+ * Executed through plugins/providers/copilot/copilot-models.js's command line (what the shell arms call), on the catalog
  * the dune94 account was served on 2026-09-27.
  */
 import { describe, it, expect } from 'vitest';
@@ -16,7 +16,7 @@ import { spawnSync } from 'node:child_process';
 import { join } from 'node:path';
 
 const ROOT = join(__dirname, '../../../');
-const CLI = join(ROOT, 'orchestrations/scripts/lib/copilot-models.js');
+const CLI = join(ROOT, 'orchestrations/plugins/providers/copilot/copilot-models.js');
 const CATALOG = join(ROOT, 'test/fixtures/copilot/models-20260927.json');
 
 function run(...args: string[]) {

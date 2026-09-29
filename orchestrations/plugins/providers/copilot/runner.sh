@@ -1,21 +1,18 @@
 #!/usr/bin/env bash
-# copilot-runner.sh — ONE call to the GitHub Copilot CLI, with the ladder's settings, judged by what it said.
+# The copilot provider plugin (config/providers.json runnerPlugin) — ONE call to the GitHub Copilot
+# CLI, with the ladder's settings, judged by what it said. The engine calls provider_call from the
+# seam hub and the story writer alike (lib/provider-plugin.sh): one place a copilot call is built.
 #
-# Called by both paths a model call takes — the seam hub (llm-handler.sh) and the story writer
-# (lib/story-attempt.sh) — so there is one place where a copilot call is built and read.
+#   provider_call <prompt_file> <result_json>
 #
-#   copilot_invoke <prompt_file> <model> <reasoning_effort> <result_json> [<events_keep>] [-- <extra args>...]
-#
-#   model / effort   the LADDER's values, in claude-set ids (the copilot set climbs the claude ladders).
-#                    The model is mapped to the id Copilot serves; the effort is passed only when the
-#                    catalog lists it for that model (lib/copilot-models.js). An unsupported one would be
-#                    an error the CLI exits 0 on.
+#   model / effort   AI_MODEL / EPAM_REASONING_EFFORT — the LADDER's values, in claude-set ids (the
+#                    copilot set climbs the claude ladders). The model is mapped to the id Copilot serves;
+#                    the effort is passed only when the catalog lists it for that model (copilot-models.js).
 #   tool grant       EPAM_ALLOWED_TOOLS with AI_GATE_ALLOW_TOOLS=1, translated through the runner's
-#                    declared toolNames and passed as --available-tools (proven: only those reach the model).
-#   result_json      the call in the claude runner's result shape (lib/copilot-result.js): cost, retry and
-#                    self-heal read it like a claude result. error.class=credit marks an exhausted account.
-#   events_keep      where the raw JSONL is kept (the call's own record); default: beside result_json.
-#   extra args       after `--`: flags the caller owns (the story writer's --add-dir <declared read root>).
+#                    declared toolNames and passed as --available-tools; no grant, the CLI's full set.
+#   read roots       EPAM_READ_ROOTS (one per line): directories the PRD declares readable, as --add-dir.
+#   result_json      the call in the claude runner's result shape (copilot-result.js).
+#   the call's record  the raw JSONL, kept under $LOG_DIR/copilot-calls/ (beside result_json without one).
 #
 # stdout: the answer. Returns 0 when the call answered, 1 when it did not (the reason on stderr).
 #
@@ -25,8 +22,16 @@
 # The call runs under the caller's own timeout: the CLI retries a 429 by itself, for minutes.
 
 _copilot_libdir="$(cd "$(dirname "${BASH_SOURCE[0]}")" && pwd)"
-# shellcheck source=runner-settings.sh
-declare -F apply_runner_settings >/dev/null 2>&1 || . "$_copilot_libdir/runner-settings.sh"
+_copilot_orch="$(cd "$_copilot_libdir/../../.." && pwd)"
+# shellcheck source=../../../scripts/lib/runner-settings.sh
+declare -F apply_runner_settings >/dev/null 2>&1 || . "$_copilot_orch/scripts/lib/runner-settings.sh"
+
+provider_call() {
+    local prompt_file="${1:?prompt file}" result_json="${2:?result json}" keep="" root extra=()
+    if [ -n "${LOG_DIR:-}" ]; then keep="$LOG_DIR/copilot-calls/$(date -u +%Y%m%dT%H%M%SZ)-${EPAM_AGENT_NAME:-call}-$$.jsonl"; fi
+    while IFS= read -r root; do [ -n "$root" ] && extra+=(--add-dir "$root"); done <<< "${EPAM_READ_ROOTS:-}"
+    copilot_invoke "$prompt_file" "${AI_MODEL:-}" "${EPAM_REASONING_EFFORT:-}" "$result_json" "${keep:---}" -- ${extra[@]+"${extra[@]}"}
+}
 
 copilot_invoke() {
     local prompt_file="${1:?prompt file}" model="${2:-}" effort="${3:-}" result_json="${4:?result json}"
@@ -37,7 +42,7 @@ copilot_invoke() {
     shift 4; [ $# -gt 0 ] && [ "$1" != "--" ] && shift
     [ "${1:-}" = "--" ] && { shift; extra=("$@"); }
     local node="${NODE_BIN:-node}" bin="${COPILOT_CMD:-copilot}"
-    local home="${EPAM_COPILOT_HOME:-$(cd "$_copilot_libdir/../.." && pwd)/.copilot-home}"
+    local home="${EPAM_COPILOT_HOME:-$_copilot_orch/.copilot-home}"
     mkdir -p "$home" || { echo "[copilot] cannot create the CLI home $home" >&2; return 1; }
     local catalog="${EPAM_COPILOT_CATALOG:-$home/catalog.json}"
 
@@ -70,7 +75,14 @@ copilot_invoke() {
     [ -n "$ceffort" ] && args+=(--reasoning-effort "$ceffort")
     [ "${#extra[@]}" -gt 0 ] && args+=("${extra[@]}")
     local tools=""
-    if [ "${AI_GATE_ALLOW_TOOLS:-0}" = "1" ] && [ -n "${EPAM_ALLOWED_TOOLS:-}" ] && tools="$(runner_tools_for_grant "$EPAM_ALLOWED_TOOLS")" && [ -n "$tools" ]; then
+    if [ "${EPAM_MAX_TOOL_CALLS:-}" = "0" ]; then
+        # A TOOL BUDGET OF 0 IS NO TOOLS — the hub's plan pass declares itself so. It was offered the
+        # CLI's whole set (17 tools, bash among them) until 2026-09-29. The CLI reads an EMPTY
+        # --available-tools as unset (every tool offered), so the list names a tool that does not
+        # exist: nothing matches, nothing is offered (proven against the real CLI, copilot 1.0.85).
+        args+=("--available-tools=__none__")
+        tools="<none: budget 0>"
+    elif [ "${AI_GATE_ALLOW_TOOLS:-0}" = "1" ] && [ -n "${EPAM_ALLOWED_TOOLS:-}" ] && tools="$(runner_tools_for_grant "$EPAM_ALLOWED_TOOLS")" && [ -n "$tools" ]; then
         args+=("--available-tools=${tools// /,}")
     fi
     echo "[copilot] model ${model:-<default>} -> ${cmodel:-<default>}; effort ${effort:-<none>} -> ${ceffort:-<not passed>}${tools:+; tools ${tools// /,}}" >&2

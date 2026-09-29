@@ -34,6 +34,10 @@ const LIVE_PATH = [
   'contextualize-stories.sh',
   'lib/model-ladders.sh',
   'lib/seam-ladder.sh',
+  // Every declared provider runner plugin (config/providers.json runnerPlugin) — a model call's
+  // code outside scripts/ is still on every run's path; discovered, not listed.
+  ...Object.values<string>(JSON.parse(readFileSync(join(SCRIPTS, '../config/providers.json'), 'utf8')).runnerPlugin || {})
+    .flatMap((dir) => readdirSync(join(SCRIPTS, '..', dir)).filter((f) => /\.(sh|js|py)$/.test(f)).map((f) => join('..', dir, f))),
 ];
 
 /**

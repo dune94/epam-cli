@@ -33,8 +33,8 @@ INVOKE_PYTHON="${INVOKE_PYTHON:-$_SCRIPT_DIR_AIRUN/.venv/bin/python3}"
 
 . "$(cd "$(dirname "${BASH_SOURCE[0]}")" && pwd)/lib/env-file.sh"
 . "$(cd "$(dirname "${BASH_SOURCE[0]}")" && pwd)/lib/runner-settings.sh" 2>/dev/null || true
-. "$(cd "$(dirname "${BASH_SOURCE[0]}")" && pwd)/lib/copilot-runner.sh" 2>/dev/null || true
-. "$(cd "$(dirname "${BASH_SOURCE[0]}")" && pwd)/lib/codemie-web-runner.sh" 2>/dev/null || true
+# Providers that are plugins (config/providers.json runnerPlugin) — see lib/provider-plugin.sh.
+. "$(cd "$(dirname "${BASH_SOURCE[0]}")" && pwd)/lib/provider-plugin.sh"
 . "$_SCRIPT_DIR_AIRUN/lib/story-retry-state.sh"
 # Delegates to lib/env-file.sh: loading configuration must not EXECUTE it. This function
 # used to `. "$env_file"`, and a bare `cd` on line 1 of the repo's .env sent this script —
@@ -287,6 +287,18 @@ run_provider_once() {
     fi
 
 
+  # A PROVIDER THAT IS A PLUGIN answers through its plugin (config/providers.json runnerPlugin;
+  # lib/provider-plugin.sh). Its vendor facts live in the plugin; this names no provider. The result
+  # is written in the claude runner's shape to ORCH_JSON_RESULT, so cost capture, retry and self-heal
+  # read it as they read a claude call.
+  if provider_plugin_dir "$provider" >/dev/null; then
+    local _pp_json _pp_tmp="" _pp_rc=0
+    if [ -n "${ORCH_JSON_RESULT:-}" ]; then _pp_json="$ORCH_JSON_RESULT"; else _pp_tmp="$(mktemp)"; _pp_json="$_pp_tmp"; fi
+    provider_plugin_call "$provider" "$PROMPT_FILE" "$_pp_json" || _pp_rc=$?
+    if [ -n "$_pp_tmp" ]; then rm -f "$_pp_tmp"; fi
+    return $_pp_rc
+  fi
+
   case "$provider" in
     claude)
       if [ "${EPAM_SDK_INVOKE:-0}" = "1" ] && [ -f "$INVOKE_PY" ]; then
@@ -436,38 +448,6 @@ run_provider_once() {
     # The tool posture is NOT special-cased. A replayed call carries the same env the recorded
     # call did, so a seam that had tools then has them now — which is what makes the recorded
     # tool calls executable rather than refused.
-    copilot)
-      # THE GITHUB COPILOT CLI, NOT epam-cli's HTTP provider. This arm used to fall into the `epam run`
-      # branch below, which reached src/providers/copilot/CopilotProvider.ts: no tool calling and a
-      # hardcoded model list. lib/copilot-runner.sh is the one place a copilot call is built (ladder model
-      # mapped to Copilot's id, effort only where the catalog lists it, the seam's tool grant) and judged
-      # (the CLI exits 0 on refusals; the verdict is read from its JSONL). The result is written in the
-      # claude runner's shape to ORCH_JSON_RESULT, so cost capture reads it like a claude call; the raw
-      # events are kept in the run's logs, the call's own record.
-      local _cp_json _cp_tmp=""
-      if [ -n "${ORCH_JSON_RESULT:-}" ]; then _cp_json="$ORCH_JSON_RESULT"; else _cp_tmp="$(mktemp)"; _cp_json="$_cp_tmp"; fi
-      local _cp_keep=""
-      [ -n "${LOG_DIR:-}" ] && _cp_keep="$LOG_DIR/copilot-calls/$(date -u +%Y%m%dT%H%M%SZ)-${EPAM_AGENT_NAME:-call}-$$.jsonl"
-      if ! copilot_invoke "$PROMPT_FILE" "${AI_MODEL:-}" "${EPAM_REASONING_EFFORT:-}" "$_cp_json" ${_cp_keep:+"$_cp_keep"}; then
-        if [ -n "$_cp_tmp" ]; then rm -f "$_cp_tmp"; fi
-        return 1
-      fi
-      if [ -n "$_cp_tmp" ]; then rm -f "$_cp_tmp"; fi   # an if, not `&&`: a false test would be the arm's exit status
-      ;;
-    codemie-web)
-      # A CODEMIE WEB ASSISTANT ("Pipeline <codeline> <agent>", private to the operator until the stack
-      # is proven green). lib/codemie-web-runner.sh is the one place the call is built — the ladder's
-      # model per chat, the seam's grant bound to a local CodeMie Plugin on the codeline, the seam's
-      # output schema — and judged (lib/codemie-web/result.js; an empty "success" is a failure). The
-      # result is written in the claude runner's shape to ORCH_JSON_RESULT, like the copilot arm.
-      local _cw_json _cw_tmp=""
-      if [ -n "${ORCH_JSON_RESULT:-}" ]; then _cw_json="$ORCH_JSON_RESULT"; else _cw_tmp="$(mktemp)"; _cw_json="$_cw_tmp"; fi
-      if ! codemie_web_invoke "$PROMPT_FILE" "${AI_MODEL:-}" "$_cw_json"; then
-        if [ -n "$_cw_tmp" ]; then rm -f "$_cw_tmp"; fi
-        return 1
-      fi
-      if [ -n "$_cw_tmp" ]; then rm -f "$_cw_tmp"; fi   # an if, not `&&`: a false test would be the arm's exit status
-      ;;
     openai|openrouter|cursor|minimax|replay)
       # Capture to temp file so pino JSON lines on stdout don't corrupt jq parsing
       local _epam_out

@@ -36,11 +36,11 @@ _release_write_perimeter() {
 # shellcheck source=lib/exit-handlers.sh
 . "$(cd "$(dirname "${BASH_SOURCE[0]}")" && pwd)/lib/exit-handlers.sh"
 add_exit_handler _release_write_perimeter
-# A CodeMie web call starts a local plugin that connects out to CodeMie and — on a writer's grant —
-# can run commands on this machine. None may outlive the run that started it, however it ends.
-# shellcheck source=lib/codemie-web-runner.sh
-. "$(cd "$(dirname "${BASH_SOURCE[0]}")" && pwd)/lib/codemie-web-runner.sh"
-add_exit_handler codemie_web_stop_plugins
+# Providers that are plugins (config/providers.json runnerPlugin) may start processes — CodeMie's local
+# plugins can run commands on this machine. Every declared plugin stops when the run ends, however.
+# shellcheck source=lib/provider-plugin.sh
+. "$(cd "$(dirname "${BASH_SOURCE[0]}")" && pwd)/lib/provider-plugin.sh"
+add_exit_handler provider_plugins_stop
 
 # ── Take them, on every run ──────────────────────────────────────────────────
 # The other half of the pair above, and it lived in ONE launcher. Sealing was an inline loop in
@@ -412,14 +412,13 @@ case "$PROFILES_REL" in
   ../*) PROFILES_REL="$(realpath "$AGENT_PROFILES_FILE" 2>/dev/null || echo "$AGENT_PROFILES_FILE")" ;;
 esac
 # Select wrapper script based on PROVIDER override or CLAUDE_CMD
+if provider_plugin_dir "${EPAM_ORCHESTRATION_PROVIDER:-${CLAUDE_CMD}}" >/dev/null; then CLAUDE_SH="$SCRIPT_DIR/claude.sh"; else   # a plugin provider (config/providers.json runnerPlugin): the maintained wrapper
 case "${EPAM_ORCHESTRATION_PROVIDER:-${CLAUDE_CMD}}" in
     # Repointed 2026-08-25 at the MAINTAINED script. codemie-claude.sh was a fork of
     # claude.sh that had fallen 10,712 lines behind, and it set STORY_MAX_TURNS=10/30 —
     # a flag Claude Code 2.1.245 no longer accepts, so it would have failed outright.
     # Provider selection still comes from config; only the wrapper mapping changed.
     codemie-claude) CLAUDE_SH="$SCRIPT_DIR/claude.sh" ;;
-    # CodeMie web assistants: the story arm and the seam hub carry it (lib/codemie-web-runner.sh).
-    codemie-web)    CLAUDE_SH="$SCRIPT_DIR/claude.sh" ;;
     copilot)        CLAUDE_SH="$SCRIPT_DIR/copilot.sh" ;;
     openai)         CLAUDE_SH="$SCRIPT_DIR/openai.sh" ;;
     # this was always an alias. What made the rename urgent is that the dispatch REJECTED
@@ -434,10 +433,11 @@ case "${EPAM_ORCHESTRATION_PROVIDER:-${CLAUDE_CMD}}" in
     # profile and would demand credentials the mock has no business holding.
     claude)         CLAUDE_SH="$SCRIPT_DIR/claude.sh" ;;
     *)
-        error "Unknown EPAM_ORCHESTRATION_PROVIDER '${EPAM_ORCHESTRATION_PROVIDER:-}'. Set it to one of: openrouter|openai|copilot|cursor|codex|codemie-claude|codemie-web|claude in your .env file."
+        error "Unknown EPAM_ORCHESTRATION_PROVIDER '${EPAM_ORCHESTRATION_PROVIDER:-}'. Set it to one of: openrouter|openai|copilot|cursor|codex|codemie-claude|claude in your .env file."
         exit 1
         ;;
 esac
+fi
 # Run logs default to orchestrations/logs/ so the nginx-served dashboard can see
 # them. OUTPUT_DIR is for generated app code, not run telemetry.
 #

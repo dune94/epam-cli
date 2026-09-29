@@ -5,7 +5,7 @@
  * copilot set has no balance probe (premium requests are not a dollar balance), so an exhausted account
  * would have been classed like any other failure and the ladder climbed — every rung on the same account,
  * every rung failing the same way (the MiniMax 402s of regintel run 20260926T125158Z burned attempts the
- * same way). The call's own result now says why it failed (lib/copilot-result.js: error.class), and the
+ * same way). The call's own result now says why it failed (plugins/providers/copilot/copilot-result.js: error.class), and the
  * classifier reads that first.
  *
  * Executed: the real classify_failure_class (lib/failure-healing.sh) on the result the real normaliser
@@ -20,7 +20,7 @@ import { tmpdir } from 'node:os';
 
 const ROOT = join(__dirname, '../../../');
 const HEAL = join(ROOT, 'orchestrations/scripts/lib/failure-healing.sh');
-const NORMALISE = join(ROOT, 'orchestrations/scripts/lib/copilot-result.js');
+const NORMALISE = join(ROOT, 'orchestrations/plugins/providers/copilot/copilot-result.js');
 const F = (n: string) => join(ROOT, 'test/fixtures/copilot', n);
 
 function classify(resultJson: string) {

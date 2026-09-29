@@ -4,7 +4,7 @@
  * The GitHub Copilot CLI exits 0 when it refuses an unknown model, refuses an unsupported reasoning
  * effort, and when the provider answers 402 (spike, 2026-09-27). A runner that trusted the exit code
  * would record each of those as a successful call with an empty answer — the pipeline's worst case,
- * a failure that looks like a result. lib/copilot-result.js reads the call's own JSONL and stderr and
+ * a failure that looks like a result. plugins/providers/copilot/copilot-result.js reads the call's own JSONL and stderr and
  * writes the result in the shape the claude runner produces, so cost, retry and self-heal read a
  * copilot call exactly as they read a claude one; a credit failure is marked (error.class = credit)
  * so the attempt halts instead of climbing a ladder whose every rung bills the same exhausted account.
@@ -18,7 +18,7 @@ import { join } from 'node:path';
 import { tmpdir } from 'node:os';
 
 const ROOT = join(__dirname, '../../../');
-const CLI = join(ROOT, 'orchestrations/scripts/lib/copilot-result.js');
+const CLI = join(ROOT, 'orchestrations/plugins/providers/copilot/copilot-result.js');
 const F = (n: string) => join(ROOT, 'test/fixtures/copilot', n);
 
 function judge(jsonl: string, stderr: string, sessionState?: string) {

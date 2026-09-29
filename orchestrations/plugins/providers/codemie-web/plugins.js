@@ -7,7 +7,8 @@
  * process only once its key is registered as a `Plugin` integration.
  *
  *   rw  the codemie-plugins `development` toolkit (read, list, recursive list, write, git, run-command)
- *   ro  lib/codemie-web/plugin_ro.py (list, recursive list, read, search) — nothing that writes or runs
+ *   ro  plugin_ro.py (this directory) (list, recursive list, read, search) — nothing that writes or runs
+ *   both hosted by plugin_host.py, which writes a ready file when the plugin engine has its tools
  *
  * Per (codeline, mode): a key minted once and kept in the install (0600, never printed); an
  * integration named like the assistants ("Pipeline <codeline> <mode>"); a process rooted at the
@@ -60,25 +61,27 @@ function venvDir(env = process.env) {
   return path.resolve(INSTALL_ROOT, set.pythonEnv.path);
 }
 
-/** The command that runs a plugin of `mode` rooted at `root`. */
-function command(mode, root, env = process.env) {
-  const venv = venvDir(env);
-  if (mode === 'rw') return [path.join(venv, 'bin', 'codemie-plugins'), ['development', 'run', '--repo-path', root]];
-  if (mode === 'ro') return [path.join(venv, 'bin', 'python'), [path.join(__dirname, 'plugin_ro.py'), root]];
-  throw new Error(`[codemie-web] unknown plugin mode '${mode}'`);
+/** The command that runs a plugin of `mode` rooted at `root`, signalling readiness through `ready`. */
+function command(mode, root, ready, env = process.env) {
+  if (mode !== 'rw' && mode !== 'ro') throw new Error(`[codemie-web] unknown plugin mode '${mode}'`);
+  return [path.join(venvDir(env), 'bin', 'python'), [path.join(__dirname, 'plugin_host.py'), mode, root, ready]];
 }
 
-/** Wait until the plugin engine has the process's tools, or fail with what the log said. */
-async function waitConnected(log, pid, timeoutMs) {
+/**
+ * Wait until the plugin says it is ready (plugin_host.py writes `ready` once the plugin engine's
+ * subjects are subscribed), or fail on its failed file, its exit, or the configured time. The log is
+ * where a person reads more; its wording decides nothing.
+ */
+async function waitReady(ready, log, pid, timeoutMs) {
   const t0 = Date.now();
   while (Date.now() - t0 < timeoutMs) {
-    const text = fs.existsSync(log) ? fs.readFileSync(log, 'utf8') : '';
-    if (/connected \d+ tools|ready to serve \d+ tools/.test(text)) return;
-    if (/Authorization Violation|NATS error/.test(text)) throw new Error(`[codemie-web] plugin refused by the plugin engine — see ${log}`);
-    if (!alive(pid)) throw new Error(`[codemie-web] plugin exited before connecting — see ${log}`);
-    await new Promise((ok) => setTimeout(ok, 1000));
+    if (fs.existsSync(ready)) return;
+    const failed = readJson(`${ready}.failed`, null);
+    if (failed) throw new Error(`[codemie-web] plugin failed to connect (${failed.error || 'unknown'}) — see ${log}`);
+    if (!alive(pid)) throw new Error(`[codemie-web] plugin exited before it was ready — see ${log}`);
+    await new Promise((ok) => setTimeout(ok, 250));
   }
-  throw new Error(`[codemie-web] plugin did not connect within ${Math.round(timeoutMs / 1000)} s — see ${log}`);
+  throw new Error(`[codemie-web] plugin did not signal ready within ${Math.round(timeoutMs / 1000)} s — see ${log}`);
 }
 
 /** A running, connected plugin of `mode` for `codeline`, rooted at `root`; returns its integration. */
@@ -97,7 +100,9 @@ async function ensurePlugin(c, { codeline, mode, root }, env = process.env) {
   fs.mkdirSync(pluginHome, { recursive: true });
   fs.mkdirSync(path.join(h, 'logs'), { recursive: true });
   const log = path.join(h, 'logs', `${slug(k)}.log`);
-  const [bin, args] = command(mode, realRoot, env);
+  const ready = path.join(h, 'logs', `${slug(k)}.ready`);
+  for (const f of [ready, `${ready}.failed`]) fs.rmSync(f, { force: true });
+  const [bin, args] = command(mode, realRoot, ready, env);
   if (!fs.existsSync(bin)) throw new Error(`[codemie-web] ${bin} is missing — the installer provisions codemie-plugins for the codemie-web stack`);
   const out = fs.openSync(log, 'w');
   const child = spawn(bin, args, {
@@ -105,9 +110,9 @@ async function ensurePlugin(c, { codeline, mode, root }, env = process.env) {
     env: { ...env, HOME: pluginHome, PLUGIN_KEY: keyFor(codeline, mode, env), PLUGIN_ENGINE_URI: env.EPAM_CODEMIE_PLUGIN_ENGINE_URI || readConfig().pluginEngineUri, EPAM_CODEMIE_SEARCH_MAX_MATCHES: String(readConfig().searchMaxMatches ?? 0) },
   });
   child.unref();
-  state[k] = { pid: child.pid, root: realRoot, mode, codeline, log, startedAt: new Date().toISOString() };
+  state[k] = { pid: child.pid, root: realRoot, mode, codeline, log, ready, startedAt: new Date().toISOString() };
   writeJson(statePath, state);
-  await waitConnected(log, child.pid, Number(env.EPAM_CODEMIE_PLUGIN_CONNECT_MS || 90000));
+  await waitReady(ready, log, child.pid, Number(env.EPAM_CODEMIE_PLUGIN_CONNECT_MS) || readConfig().pluginConnectSeconds * 1000);
   return integration;
 }
 

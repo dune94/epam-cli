@@ -88,6 +88,8 @@ describe.skipIf(!COPILOT)('a seam call on the copilot set', () => {
     const av = argvs();
     expect(av.length).toBeGreaterThan(1);
     for (const a of av) { expect(a[a.indexOf('--model') + 1]).toBe('claude-opus-4.8'); expect(a[a.indexOf('--reasoning-effort') + 1]).toBe('xhigh'); }
+    // THE PLAN PASS IS TOOL-FREE: the hub declares it with a tool budget of 0 (EPAM_MAX_TOOL_CALLS=0).
+    expect((requests[0].tools || []).map((t) => t.function.name), 'the plan request was offered tools').toEqual([]);
     const q = requests[requests.length - 1];
     expect(q.model).toBe('claude-opus-4.8');
     expect((q.tools || []).map((t) => t.function.name).sort()).toEqual(['grep', 'view']);

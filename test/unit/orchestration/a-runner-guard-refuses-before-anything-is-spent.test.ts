@@ -6,8 +6,8 @@
  * run here against the case it exists to stop, from its real file, and the assertion is on both the
  * verdict and what did NOT happen after it:
  *
- *   codemie_web_invoke         no agent or no codeline to name an assistant after → refused; no call
- *   copilot_invoke             a model the catalog does not list → refused; the CLI never runs
+ *   codemie-web provider_call  no agent or no codeline to name an assistant after → refused; no call
+ *   copilot provider_call      a model the catalog does not list → refused; the CLI never runs
  *   _read_estimation_manifest  a manifest the operator named that cannot be read → the run stops;
  *                              unset → nothing at all (no directory, no export)
  */
@@ -20,16 +20,17 @@ import { shellFunction } from '../../lib/engine-source';
 
 const ROOT = join(__dirname, '../../../');
 const LIB = join(ROOT, 'orchestrations/scripts/lib');
+const PROVIDERS = join(ROOT, 'orchestrations/plugins/providers');
 const dirs: string[] = [];
 afterAll(() => { for (const d of dirs) rmSync(d, { recursive: true, force: true }); });
 const tmp = () => { const d = mkdtempSync(join(tmpdir(), 'guard-')); dirs.push(d); return d; };
 const bash = (script: string, env: Record<string, string> = {}) => spawnSync('bash', ['-c', script], { encoding: 'utf8', env: { ...process.env, NODE_BIN: process.execPath, ...env } });
 
-describe('codemie_web_invoke', () => {
+describe('the codemie-web plugin\'s provider_call', () => {
   const run = (env: Record<string, string>) => {
     const d = tmp(); const prompt = join(d, 'p.txt'); writeFileSync(prompt, 'hello');
     const result = join(d, 'r.json');
-    const r = bash(`. ${JSON.stringify(join(LIB, 'codemie-web-runner.sh'))}; codemie_web_invoke ${JSON.stringify(prompt)} claude-sonnet-5 ${JSON.stringify(result)}; echo "RC=$?"`,
+    const r = bash(`. ${JSON.stringify(join(PROVIDERS, 'codemie-web/runner.sh'))}; AI_MODEL=claude-sonnet-5 provider_call ${JSON.stringify(prompt)} ${JSON.stringify(result)}; echo "RC=$?"`,
       { EPAM_AGENT_NAME: '', EPAM_CODELINE: '', PROJECT_NAME: '', EPAM_CODEMIE_WEB_URL: 'http://127.0.0.1:9', ...env });
     return { rc: Number((/RC=(\d+)/.exec(r.stdout) || [])[1]), err: r.stderr, called: existsSync(result) };
   };
@@ -47,12 +48,12 @@ describe('codemie_web_invoke', () => {
   });
 });
 
-describe('copilot_invoke', () => {
+describe('the copilot plugin\'s provider_call', () => {
   it('a model the catalog does not list is refused — the CLI is never started', () => {
     const d = tmp(); const prompt = join(d, 'p.txt'); writeFileSync(prompt, 'hello');
     const marker = join(d, 'cli-ran'); const cli = join(d, 'copilot');
     writeFileSync(cli, `#!/usr/bin/env bash\ntouch ${JSON.stringify(marker)}\n`); chmodSync(cli, 0o755);
-    const r = bash(`. ${JSON.stringify(join(LIB, 'copilot-runner.sh'))}; copilot_invoke ${JSON.stringify(prompt)} no-such-model-anywhere '' ${JSON.stringify(join(d, 'r.json'))}; echo "RC=$?"`,
+    const r = bash(`. ${JSON.stringify(join(PROVIDERS, 'copilot/runner.sh'))}; AI_MODEL=no-such-model-anywhere provider_call ${JSON.stringify(prompt)} ${JSON.stringify(join(d, 'r.json'))}; echo "RC=$?"`,
       { COPILOT_CMD: cli, EPAM_COPILOT_HOME: join(d, 'home'), EPAM_COPILOT_CATALOG: join(ROOT, 'test/fixtures/copilot/models-20260927.json'), COPILOT_PROVIDER_BASE_URL: '' });
     expect(Number((/RC=(\d+)/.exec(r.stdout) || [])[1])).toBe(1);
     expect(existsSync(marker), 'the CLI ran for a model the catalog does not list').toBe(false);

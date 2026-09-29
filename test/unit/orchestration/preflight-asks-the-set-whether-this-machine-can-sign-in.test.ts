@@ -7,13 +7,13 @@
  * every rung of every story mid-run.
  *
  * Executed: preflight_sign_in, taken from preflight-check.sh as the script defines it, running the
- * real probe (lib/codemie-web/probe.js) through the real SDK against CodeMie stood in for
+ * real probe (plugins/providers/codemie-web/probe.js) through the real SDK against CodeMie stood in for
  * (test/mock-agent/codemie.ts). The first version of this section ran `node` with no script — the
  * probe's last argument was dropped — and printed nothing at all; every case here asserts a line.
  */
 import { describe, it, expect, beforeAll, afterAll } from 'vitest';
 import { spawn, spawnSync, execSync } from 'node:child_process';
-import { readFileSync, mkdtempSync, rmSync } from 'node:fs';
+import { readFileSync, mkdtempSync, rmSync, mkdirSync, symlinkSync } from 'node:fs';
 import { join } from 'node:path';
 import { tmpdir } from 'node:os';
 import { MockAgent } from '../../mock-agent/agent';
@@ -83,7 +83,15 @@ describe('pre-flight sign-in', () => {
 
     it('a missing codemie-plugins environment refuses the launch, naming what to do', async () => {
       const r = await signIn(cw(full, fullAgent, { EPAM_CODEMIE_PLUGINS_VENV: join(dir, 'no-such-venv') }));
-      expect(r.out).toMatch(/✗ sign-in: .*codemie-plugins is missing — the installer provisions/);
+      expect(r.out).toMatch(/✗ sign-in: .*codemie-plugins environment cannot host a plugin .*ENOENT.* — the installer provisions/);
+    });
+
+    it('an interpreter without codemie-plugins refuses the launch too — present is not the same as able to host', async () => {
+      const bare = join(dir, 'bare-venv'); mkdirSync(join(bare, 'bin'), { recursive: true });
+      symlinkSync(execSync('command -v python3', { encoding: 'utf8', shell: '/bin/bash' }).trim(), join(bare, 'bin/python'));
+      expect(spawnSync(join(bare, 'bin/python'), ['-c', 'import codemie']).status, 'this machine\'s python3 has codemie-plugins — the case proves nothing here').not.toBe(0);
+      const r = await signIn(cw(full, fullAgent, { EPAM_CODEMIE_PLUGINS_VENV: bare }));
+      expect(r.out).toMatch(/✗ sign-in: .*codemie-plugins environment cannot host a plugin .*exit 1.* — the installer provisions/);
     });
   });
 });

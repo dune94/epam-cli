@@ -8,8 +8,8 @@
  * automated software delivery pipeline…"). Each seam now DECLARES whose persona it speaks as
  * (agents/invocation-profiles.json `persona`) — the name its call site used to spell out — and the
  * assistant's instructions are that agent's generated persona (the project roster once it exists,
- * the install's profiles before) followed by the seam's description (`_what`). A seam that declares
- * no persona carries its description alone; a changed persona updates the stored assistant.
+ * the install's profiles before) followed by the seam's description (`_what`); a changed persona
+ * updates the stored assistant.
  *
  * Executed: the real llm-handler.sh on the codemie-web set against CodeMie stood in for
  * (test/mock-agent/codemie.ts), which records what each assistant was created or updated with, and
@@ -30,9 +30,9 @@ const CODEMIE = (() => { try { return execSync('command -v codemie', { encoding:
 const MODELS = ['claude-haiku-4-5-20251001', 'claude-sonnet-5', 'claude-opus-5', 'claude-opus-4-8'];
 const seams = JSON.parse(readFileSync(REGISTRY, 'utf8')).profiles as Record<string, { _what: string; persona?: string }>;
 
-/** A seam that declares a persona, and one that declares none — read from the registry, not named here. */
+/** A seam that declares a persona — read from the registry, not named here. Every seam declares one
+ *  (no-agent-is-given-thin-instructions proves that for all of them). */
 const WITH = Object.keys(seams).find((k) => seams[k].persona && !k.includes(':'))!;
-const WITHOUT = Object.keys(seams).find((k) => !seams[k].persona && !k.includes(':'))!;
 
 let dir = ''; let agents = ''; let agent: MockAgent; let cm: MockCodeMie; const systems: string[] = [];
 
@@ -70,9 +70,8 @@ function call(agentName: string, extra: Record<string, string> = {}) {
 const stored = (agentName: string) => cm.assistants.find((a) => a.name === `Pipeline shop-web ${agentName}`) as any;
 
 describe.skipIf(!CODEMIE)('a codemie assistant speaks as its agent', () => {
-  it('the registry has both kinds of seam to prove this on', () => {
+  it('the registry has a seam to prove this on', () => {
     expect(WITH, 'no seam declares a persona').toBeTruthy();
-    expect(WITHOUT, 'every seam declares a persona').toBeTruthy();
   });
 
   it('a seam that declares a persona: the assistant carries that agent\'s generated persona, then the seam\'s description', async () => {
@@ -113,13 +112,5 @@ describe.skipIf(!CODEMIE)('a codemie assistant speaks as its agent', () => {
     expect(r.status, r.stderr.slice(-1500)).toBe(0);
     expect(stored(WITH).system_prompt).toContain(`ROSTER-PERSONA-OF-${who}`);
     expect(stored(WITH).system_prompt).not.toContain('-v2: sharper.');
-  });
-
-  it('a seam that declares no persona carries its description alone — no other agent\'s persona', async () => {
-    const r = await call(WITHOUT);
-    expect(r.status, r.stderr.slice(-1500)).toBe(0);
-    const a = stored(WITHOUT);
-    expect(a.system_prompt.trim()).toBe(seams[WITHOUT]._what);
-    expect(a.system_prompt).not.toMatch(/PERSONA-OF/);
   });
 });

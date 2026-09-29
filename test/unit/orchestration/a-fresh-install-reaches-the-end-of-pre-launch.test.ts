@@ -51,8 +51,10 @@ function sh(cmd: string, args: string[], opts: Record<string, unknown> = {}) {
   return spawnSync(cmd, args, { encoding: 'utf8', timeout: 600_000, ...opts });
 }
 
-describe('a fresh install reaches the end of pre-launch with the operator\'s own credentials', () => {
-  it.skipIf(!haveEnv)('installs, takes the operator\'s envs, and passes every pre-launch gate', async () => {
+/** One flow per stack: the stack installed, keys the stack does not use dropped, the launcher's extra env. */
+type Case = { stack?: string; dropKeys?: string[]; env?: () => Record<string, string> };
+
+async function reachesPrelaunch(c: Case): Promise<string> {
     const dest = fs.mkdtempSync(path.join(os.tmpdir(), 'e2e-prelaunch-'));
 
     // ── Install for real. node_modules is SYMLINKED (minutes of npm install buys no signal here);
@@ -68,6 +70,12 @@ describe('a fresh install reaches the end of pre-launch with the operator\'s own
     for (const f of ENV_FILES) {
       fs.copyFileSync(path.join(ENV_SOURCE, f), path.join(dest, f));
     }
+    // A STACK THAT DECLARES NO VENDOR KEY IS PROVEN WITHOUT ONE: the operator's .env carries keys
+    // for stacks this case does not run, and a launcher that demanded them would pass on that alone.
+    for (const k of c.dropKeys || []) {
+      const env = path.join(dest, '.env');
+      fs.writeFileSync(env, fs.readFileSync(env, 'utf8').split('\n').filter((l) => !new RegExp(`^(export\\s+)?${k}=`).test(l)).join('\n'));
+    }
 
     cleanups.push(() => {
       sh('bash', [path.join(REPO, 'orchestrations-installer/install.sh'), '--uninstall', '--dest', dest]);
@@ -75,7 +83,7 @@ describe('a fresh install reaches the end of pre-launch with the operator\'s own
     });
 
     const install = sh('bash', [path.join(REPO, 'orchestrations-installer/install.sh'),
-      '--dest', dest, '--ref', 'HEAD', '--docker'], {
+      '--dest', dest, '--ref', 'HEAD', ...(c.stack ? ['--stack', c.stack] : []), '--docker'], {
       cwd: REPO,
       env: { ...process.env, EPAM_NONINTERACTIVE: '1', EPAM_BIN_DIR: path.join(dest, 'bin-shim') },
     });
@@ -102,7 +110,7 @@ describe('a fresh install reaches the end of pre-launch with the operator\'s own
     const child = spawn('bash', [path.join(dest, 'orchestrations/scripts/tier3-metrolinx-run.sh'), '--yes'], {
       // detached: its own process GROUP, so the kill below reaches every node/claude child the
       // launcher spawns. Without it a killed parent leaves a live model call behind.
-      cwd: dest, env: { ...process.env }, stdio: ['ignore', 'pipe', 'pipe'], detached: true,
+      cwd: dest, env: { ...process.env, ...(c.env ? c.env() : {}) }, stdio: ['ignore', 'pipe', 'pipe'], detached: true,
     });
     const killTree = () => {
       // The launcher spawns node/claude children that outlive a plain kill of the parent — the
@@ -154,5 +162,37 @@ describe('a fresh install reaches the end of pre-launch with the operator\'s own
       .not.toMatch(/PRD project\.outputDir = /);
     // The run must have been stopped BEFORE it could spend anything.
     expect(out, 'the run got past pre-launch and started spending').not.toMatch(/\[ingest\] Pulling tickets/);
+    return out;
+}
+
+const CODEMIE = spawnSync('bash', ['-c', 'command -v codemie'], { encoding: 'utf8' }).status === 0;
+
+describe('a fresh install reaches the end of pre-launch with the operator\'s own credentials', () => {
+  it.skipIf(!haveEnv)('installs, takes the operator\'s envs, and passes every pre-launch gate', async () => {
+    await reachesPrelaunch({});
+  }, 600_000);
+
+  // THE CODEMIE-WEB STACK, WITH NO VENDOR KEY IN THE ENV. The metrolinx launcher demanded
+  // MINIMAX_API_KEY and OPENROUTER_API_KEY on every set; AMSD-2974's first launch on codemie-web
+  // stopped there (2026-09-28). CodeMie is stood in for, so the set's sign-in probe runs against
+  // it rather than the operator's account.
+  it.skipIf(!haveEnv || !CODEMIE)('on the codemie-web stack, with no vendor key at all, passes every pre-launch gate including its sign-in', async () => {
+    const { MockAgent } = await import('../../mock-agent/agent');
+    const { MockCodeMie } = await import('../../mock-agent/codemie');
+    const journal = fs.mkdtempSync(path.join(os.tmpdir(), 'e2e-codemie-'));
+    const agent = new MockAgent(path.join(REPO, 'orchestrations'), journal);
+    await agent.start();
+    const models = JSON.parse(sh(process.execPath, [path.join(REPO, 'orchestrations/scripts/lib/handlers/ladder-models.js')], { env: { ...process.env, EPAM_PROVIDER_SET: 'codemie-web' } }).stdout || '[]');
+    const cm = await new MockCodeMie(agent, journal, models).start();
+    cleanups.push(() => { void cm.stop(); void agent.stop(); fs.rmSync(journal, { recursive: true, force: true }); });
+    const out = await reachesPrelaunch({
+      stack: 'codemie-web',
+      dropKeys: ['MINIMAX_API_KEY', 'OPENROUTER_API_KEY'],
+      env: () => ({ EPAM_PROVIDER_SET: 'codemie-web', MINIMAX_API_KEY: '', OPENROUTER_API_KEY: '', EPAM_CODEMIE_WEB_URL: agent.url, EPAM_CODEMIE_PLUGIN_ENGINE_URI: cm.engineUri }),
+    });
+    expect(out).not.toMatch(/MINIMAX_API_KEY is not set|OPENROUTER_API_KEY is not set/);
+    expect(out).toMatch(/✓ sign-in: signed in/);
+    expect(out).toMatch(/✓ sign-in: every ladder model is in the catalog/);
+    expect(out).toMatch(/✓ sign-in: codemie-plugins environment present/);
   }, 600_000);
 });

@@ -32,15 +32,11 @@ export EPAM_PROJECT_CONFIG_DIR
 # Phases:
 #   core only (scaffold is a no-op for brownfield)
 #
-# Model assignment:
-#   Story agents : z-ai/glm-5.2 (OpenRouter)
-#   Gates/analyst: z-ai/glm-5.2
-#   Retry ladder : glm-5.2 → glm-5.1 → kimi-k3 (HIGH ceiling)
+# Models: the active provider set's ladders (EPAM_PROVIDER_SET; config/provider-sets.json).
 #
 # Prerequisites:
-#   - MINIMAX_API_KEY set (MiniMax-M3 story agents)
-#   - OPENROUTER_API_KEY set (GLM-5.x, Kimi K3 via OpenRouter)
-#   - JIRA_TOKEN set (Metrolinx Atlassian API token)
+#   - the credentials the active set declares (config/provider-sets.json; many declare none)
+#   - JIRA_TOKEN / JIRA_EMAIL in orchestrations/jira/metrolinx.env (Metrolinx Atlassian API token)
 #
 # Usage:
 #   source .env && bash orchestrations/scripts/tier3-metrolinx-run.sh [--yes]
@@ -150,8 +146,19 @@ load_project_env "$SCRIPT_DIR/../projects/metrolinx" preserve || fail "project e
 export EPAM_PROJECT_CONFIG_DIR="$SCRIPT_DIR/../projects/metrolinx"
 
 # ── Required key checks ───────────────────────────────────────────────────────
-[ -z "${MINIMAX_API_KEY:-}" ]    && fail "MINIMAX_API_KEY is not set. Export it or add it to .env"
-[ -z "${OPENROUTER_API_KEY:-}" ] && fail "OPENROUTER_API_KEY is not set. Export it or add it to .env"
+# THE ACTIVE SET SAYS WHICH KEYS A RUN NEEDS (config/provider-sets.json, via lib/set-credentials.sh
+# — the same declaration pre-flight and orchestrate.sh read). This demanded MINIMAX_API_KEY and
+# OPENROUTER_API_KEY on every set: the claude set only passed because an old .env happened to hold
+# them, and the codemie-web and copilot sets, which use neither, could not launch at all
+# (AMSD-2974, 2026-09-28). Jira is the project's own requirement, on any set.
+# shellcheck source=lib/set-credentials.sh
+. "$SCRIPT_DIR/lib/set-credentials.sh"
+_t3_set_keys="$(set_required_keys)" || fail "the provider set '${EPAM_PROVIDER_SET:-}' is not declared in config/provider-sets.json"
+IFS=',' read -ra _t3_keys <<< "$_t3_set_keys"
+for _t3_key in "${_t3_keys[@]}"; do
+  [ -n "$_t3_key" ] || continue
+  [ -n "${!_t3_key:-}" ] || fail "$_t3_key is not set — the '${EPAM_PROVIDER_SET:-default}' set requires it. Export it or add it to .env"
+done
 [ -z "${JIRA_TOKEN:-}" ]         && fail "JIRA_TOKEN is not set. Export it before launching."
 
 # ── Auto-confirm ──────────────────────────────────────────────────────────────
@@ -180,7 +187,7 @@ for arg in "$@"; do [[ "$arg" == "--yes" || "$arg" == "-y" ]] && AUTO_YES=true; 
 # path now derives from the project identity that already exists a few lines up.
 PRD_FILE="$(project_config_dir metrolinx "$REPO_ROOT")/prd.json" || exit 1
 
-info "Tier 3 Metrolinx brownfield run — GLM + Kimi multi-model pipeline (USES CREDITS)"
+info "Tier 3 Metrolinx brownfield run on the '${EPAM_PROVIDER_SET:-default}' stack (USES CREDITS)"
 info "  Jira:    ${JIRA_URL} / project ${JIRA_PROJECT_KEY}"
 info "  Codeline root: ${JIRA_CODELINE_ROOT}"
 info "  Baseline: ${JIRA_BASELINE_BRANCH}"
@@ -191,7 +198,7 @@ echo ""
 if [ "$AUTO_YES" = true ]; then
   info "Auto-confirmed (--yes flag)"
 else
-  read -rp "$(echo -e "${YELLOW}Confirm: spend MiniMax + OpenRouter credits for Metrolinx? [yes/N]${NC} ")" confirm
+  read -rp "$(echo -e "${YELLOW}Confirm: spend credits on the '${EPAM_PROVIDER_SET:-default}' stack for Metrolinx? [yes/N]${NC} ")" confirm
   [ "$confirm" != "yes" ] && { info "Aborted."; exit 0; }
 fi
 
@@ -199,7 +206,7 @@ cd "$REPO_ROOT"
 
 # ── Capture spend baseline ────────────────────────────────────────────────────
 _usage_before="$(spend_probe_read)"
-info "OpenRouter usage before: \$$_usage_before"
+info "Provider usage before ('${EPAM_PROVIDER_SET:-default}' stack): \$${_usage_before:-n/a}"
 
 # ── Pre-flight: the built CLI must not be older than its source ──────────────
 #
@@ -319,14 +326,14 @@ fi
 # that pre-run-reset deletes. The run report is generated from $LOG_FILE, so a
 # balance recorded only on stdout leaves every report saying "Billed by
 # provider $?" — the one number that is ground truth rather than our own tally.
-printf 'OpenRouter usage before: $%s\n' "$_usage_before" >> "$LOG_FILE" 2>/dev/null || true
+printf 'Provider usage before: $%s\n' "${_usage_before:-n/a}" >> "$LOG_FILE" 2>/dev/null || true
 echo ""
 
 # ── Export all env vars so subprocesses inherit them ─────────────────────────
-export MINIMAX_API_KEY
-export EPAM_API_KEY_MINIMAX="$MINIMAX_API_KEY"
-export OPENROUTER_API_KEY
-export EPAM_API_KEY_OPENROUTER="$OPENROUTER_API_KEY"
+# Exactly the EPAM_API_KEY_* the active set declares, and the source keys it requires — no other
+# stack's key is exported (one present in the environment outranks the OAuth session on disk).
+export_set_credentials
+for _t3_key in "${_t3_keys[@]}"; do [ -n "$_t3_key" ] && export "${_t3_key?}"; done
 export JIRA_TOKEN
 export EPAM_BROWNFIELD=1
 export JIRA_PIPELINE=1
@@ -645,12 +652,12 @@ run_phase "core"
 # ── Report spend ──────────────────────────────────────────────────────────────
 _usage_after="$(spend_probe_read)"
 _spent=$(node -e "console.log(($_usage_after-$_usage_before).toFixed(4))" 2>/dev/null || echo "?")
-info "OpenRouter usage after: \$$_usage_after"
+info "Provider usage after ('${EPAM_PROVIDER_SET:-default}' stack): \$${_usage_after:-n/a}"
 # Also into $LOG_FILE: the line above goes to stdout, which is the launch log
 # that pre-run-reset deletes. The run report is generated from $LOG_FILE, so a
 # balance recorded only on stdout leaves every report saying "Billed by
 # provider $?" — the one number that is ground truth rather than our own tally.
-printf 'OpenRouter usage after: $%s\n' "$_usage_after" >> "$LOG_FILE" 2>/dev/null || true
+printf 'Provider usage after: $%s\n' "${_usage_after:-n/a}" >> "$LOG_FILE" 2>/dev/null || true
 info "Total spent this run:   \$$_spent"
 echo ""
 
@@ -701,4 +708,4 @@ _archive_run_artifacts "PASSED: ${PASS:-0} stories complete"
 echo ""
 echo "  Codeline: $JIRA_CODELINE_ROOT"
 echo "  Log:      $LOG_FILE"
-echo "  Check OpenRouter dashboard for actual token costs."
+echo "  Check the '${EPAM_PROVIDER_SET:-default}' provider's own usage for actual token costs."

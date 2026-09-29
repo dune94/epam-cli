@@ -14,8 +14,23 @@
 // the point: two paths rendering one prompt cannot drift.
 
 import { readFileSync } from 'node:fs';
+import { createRequire } from 'node:module';
 import { templatesDir } from '../prompts/templatesDir';
 import { join } from 'node:path';
+
+/**
+ * The persona a template's `__PERSONA__` slot carries — asked of the pipeline's own resolver
+ * (orchestrations/scripts/lib/template-persona.js, beside the template layer this module reads), so
+ * the three renderers of the template layer cannot disagree about who an agent is.
+ */
+function templatePersona(id: string): string | undefined {
+  const lib = join(templatesDir(), '..', '..', 'scripts', 'lib', 'template-persona.js');
+  try {
+    return (createRequire(lib)(lib) as { templatePersona: (t: string) => string | undefined }).templatePersona(id);
+  } catch {
+    return undefined;                                  // left unreplaced below, and said so
+  }
+}
 
 import { FIXED_AGENT_ROLES } from './prdTypes.js';
 import { mintNameRule } from './seamVocabulary.js';
@@ -41,6 +56,12 @@ function render(id: string, values: Record<string, string> = {}): string {
   if (!doc.body) throw new Error(`[prompts] template '${id}' has no body`);
 
   let out = doc.body;
+  // THE AGENT'S PERSONA, FROM ITS DECLARATION, when the caller supplies none — the same rule as the
+  // pipeline's renderers (engine-prompt.js, prompt-library.js).
+  if (out.includes('__PERSONA__') && !('__PERSONA__' in values)) {
+    const persona = templatePersona(id);
+    if (persona !== undefined) values = { ...values, __PERSONA__: persona };
+  }
   for (const [key, value] of Object.entries(values)) {
     if (!out.includes(key)) throw new Error(`[prompts] template '${id}' has no placeholder ${key}`);
     out = out.split(key).join(value);

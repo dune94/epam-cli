@@ -225,7 +225,11 @@ function renderGeneratorPrompt({ generatorBody, template, projectContext, codeli
     //
     // An absent refusal substitutes empty, so a first attempt carries no heading for a refusal
     // that never happened.
-    .split('__GEN_PREVIOUS_REFUSAL__').join(refusalBlock(refusal, 'prompt'));
+    .split('__GEN_PREVIOUS_REFUSAL__').join(refusalBlock(refusal, 'prompt'))
+    // THE BUILDER'S OWN PERSONA, from its seam's declaration (template-persona.js) — before the
+    // template body goes in, so a __PERSONA__ slot in the template being specialised stays intact.
+    // eslint-disable-next-line global-require
+    .split('__PERSONA__').join(require('./template-persona.js').templatePersona(PROJECT_PROMPT_GENERATOR_ID) || '');
 
   // THE TEMPLATE BODY GOES IN LAST, AND THIS ORDER IS THE WHOLE POINT.
   //

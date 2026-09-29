@@ -22,9 +22,17 @@ function templatePersona(templateId, env = process.env) {
   const { registryPath } = require('./seam-invocation.js');
   let profiles;
   try { profiles = JSON.parse(fs.readFileSync(registryPath(agentsDir), 'utf8')).profiles || {}; } catch { return undefined; }
-  const who = [...new Set(Object.values(profiles)
-    .filter((p) => p && p.template === templateId && p.persona)
-    .map((p) => p.persona))];
+  // The seams that render this template: the registry's `template` for a seam, and the template's
+  // own `seams` declaration (a seam may render several templates — the writer's main prompt, the
+  // speckit author, the post-phase assessment).
+  let declared = [];
+  try {
+    // eslint-disable-next-line global-require
+    const { templatePathFor } = require('./engine-prompt.js');
+    declared = JSON.parse(fs.readFileSync(templatePathFor(templateId), 'utf8')).seams || [];
+  } catch { declared = []; }
+  const seams = Object.keys(profiles).filter((k) => profiles[k] && (profiles[k].template === templateId || declared.includes(k)));
+  const who = [...new Set(seams.map((k) => profiles[k].persona).filter(Boolean))];
   if (who.length !== 1) return undefined;
   // eslint-disable-next-line global-require
   const text = require('./agent-roster.js').agentPersona(who[0], agentsDir, env.EPAM_PROJECT_CONFIG_DIR);

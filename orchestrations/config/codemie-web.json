@@ -7,5 +7,7 @@
   "nameTemplate": "Pipeline {codeline} {agent}",
   "$nameTemplate": "{codeline}: the lane's codeline, or the project name for an agent that serves the whole project (ingest, mint, roster review). {agent}: the seam, or the minted role.",
   "pluginEngineUri": "nats://nats-codemie.epmd-edp-anthos.eu.gcp.cloudapp.epam.com:443",
-  "$pluginEngineUri": "The CodeMie plugin engine the local plugins connect OUT to (codemie-plugins' own default; proven against codemie.lab.epam.com 2026-09-28)."
+  "$pluginEngineUri": "The CodeMie plugin engine the local plugins connect OUT to (codemie-plugins' own default; proven against codemie.lab.epam.com 2026-09-28).",
+  "searchMaxMatches": 200,
+  "$searchMaxMatches": "The most matches a read-only plugin's search returns in one call; beyond it the answer says how many more there were (never a silent cut). 0 = no limit."
 }

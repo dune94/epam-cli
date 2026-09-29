@@ -26,8 +26,18 @@ codemie_web_invoke() {
     [ -n "$agent" ] || { echo "[codemie-web] EPAM_AGENT_NAME is unset — refusing to name an assistant after nobody" >&2; return 1; }
     local codeline="${EPAM_CODELINE:-${PROJECT_NAME:-}}"
     [ -n "$codeline" ] || { echo "[codemie-web] neither EPAM_CODELINE nor PROJECT_NAME is set — no codeline to name the assistant for" >&2; return 1; }
-    local grant="" root="${PROJECT_ROOT:-$PWD}"
+    local grant="" root="${PROJECT_ROOT:-$PWD}" read_root=""
     [ "${AI_GATE_ALLOW_TOOLS:-0}" = "1" ] && grant="${EPAM_ALLOWED_TOOLS:-}"
+    # A READ-ONLY PLUGIN SEES THE RUN'S WHOLE ESTATE. A claude-runner call works in the codeline but
+    # its tools read any path, so a call about several codelines (the estate survey) reads them all.
+    # A CodeMie plugin is confined to its root: rooted at one codeline, the survey could open only
+    # that one and reported every other "failed" (AMSD-2974, 2026-09-29). When the codeline sits in
+    # the run's estate (JIRA_CODELINE_ROOT), reading is rooted there; writing stays in the codeline.
+    if [ -n "${JIRA_CODELINE_ROOT:-}" ] && [ -d "$JIRA_CODELINE_ROOT" ]; then
+        local _est _cl
+        _est="$(cd "$JIRA_CODELINE_ROOT" && pwd -P)"; _cl="$(cd "$root" 2>/dev/null && pwd -P)"
+        case "$_cl/" in "$_est"/*) read_root="$_est" ;; esac
+    fi
     local schema_file=""
     if [ -n "${EPAM_RESPONSE_SCHEMA:-}" ] && command -v jq >/dev/null 2>&1; then
         schema_file="$(mktemp "${TMPDIR:-/tmp}/codemie-web-schema-XXXXXX")"
@@ -38,6 +48,7 @@ codemie_web_invoke() {
     "$node" "$_codemie_web_libdir/codemie-web/invoke.js" \
         --prompt-file "$prompt_file" --model "$model" --agent "$agent" --codeline "$codeline" \
         --result "$result_json" ${grant:+--grant "$grant"} ${grant:+--root "$root"} \
+        ${grant:+${read_root:+--read-root "$read_root"}} \
         ${schema_file:+--schema "$schema_file"} || rc=$?
     if [ -n "$schema_file" ]; then rm -f "$schema_file"; fi
     return $rc

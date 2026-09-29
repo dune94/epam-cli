@@ -3,7 +3,7 @@
  * ONE PIPELINE CALL AS A CODEMIE WEB ASSISTANT — the codemie-web stack's runner.
  *
  *   node invoke.js --prompt-file F --model M --agent A --codeline C --result R.json
- *                  [--grant "read_file,search,…"] [--root DIR] [--schema S.json]
+ *                  [--grant "read_file,search,…"] [--root DIR] [--read-root DIR] [--schema S.json]
  *
  * Called by both paths a model call takes — the seam hub (llm-handler.sh) and the story writer
  * (lib/story-attempt.sh), through lib/codemie-web-runner.sh — so a codemie-web call is built and read
@@ -54,10 +54,14 @@ async function invoke(a, env = process.env) {
   let integration = null;
   if (mode) {
     if (!a.root || !fs.existsSync(a.root)) throw Object.assign(new Error(`a ${mode} grant needs the codeline root (--root), got '${a.root || ''}'`), { statusCode: null });
-    integration = await ensurePlugin(c, { codeline: a.codeline, mode, root: a.root }, env);
+    // Reading may span the run's estate (--read-root, see codemie-web-runner.sh); writing never
+    // leaves the codeline.
+    const root = mode === 'ro' && a['read-root'] && fs.existsSync(a['read-root']) ? a['read-root'] : a.root;
+    a.pluginRoot = root;
+    integration = await ensurePlugin(c, { codeline: a.codeline, mode, root }, env);
   }
   const { id, name } = await ensureAssistant(c, { codeline: a.codeline, agent: a.agent, integration, model: a.model }, env);
-  process.stderr.write(`[codemie-web] ${name} (${id}) model ${a.model}${mode ? `; plugin ${mode} at ${a.root}` : '; no tools'}\n`);
+  process.stderr.write(`[codemie-web] ${name} (${id}) model ${a.model}${mode ? `; plugin ${mode} at ${a.pluginRoot}` : '; no tools'}\n`);
   const params = { text: prompt, llm_model: a.model, history: [], stream: false, save_history: false };
   if (a.schema) params.output_schema = JSON.parse(fs.readFileSync(a.schema, 'utf8'));
   return c.assistants.chat(id, params);

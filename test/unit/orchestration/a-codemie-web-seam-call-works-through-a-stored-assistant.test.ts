@@ -51,6 +51,13 @@ function obliging(call: Call): Turn {
     if (!tool) return { kind: 'text', text: 'NO-READ-TOOL' };
     return { kind: 'tools', calls: [{ id: newCallId(), name: tool.name, input: { [Object.keys(tool.params.properties).find((k) => /path/i.test(k))!]: r[1] } }] };
   }
+  const q = /SEARCH (\S+) IN (\S+)/.exec(prompt);
+  if (q) {
+    const tool = byParams([/pattern/i, /dir|path/i]);
+    if (!tool) return { kind: 'text', text: 'NO-SEARCH-TOOL' };
+    const p = Object.keys(tool.params.properties);
+    return { kind: 'tools', calls: [{ id: newCallId(), name: tool.name, input: { [p.find((k) => /pattern/i.test(k))!]: q[1], [p.find((k) => /dir|path/i.test(k))!]: q[2] } }] };
+  }
   if (/SAY-NOTHING/.test(prompt)) return { kind: 'text', text: '' };
   return { kind: 'text', text: `ANSWER tools-offered=${call.req.tools.length}` };
 }
@@ -132,6 +139,37 @@ describe.skipIf(!CODEMIE)('a seam call on the codemie-web set', () => {
     expect(chat.tools).toContain('_write_file_to_file_system');
     expect(chat.toolCalls).toEqual([expect.objectContaining({ name: '_write_file_to_file_system', error: '' })]);
     expect(cm.integrations.map((i) => i.alias)).toContain('Pipeline shop-web rw');
+  }, 180_000);
+
+  it('with a codeline estate, a read-only call reads a SIBLING codeline — as a claude-runner call can', async () => {
+    // The estate survey is one call about every codeline; rooted at one, it could open only that one.
+    const sibling = join(dir, 'sibling'); mkdirSync(sibling, { recursive: true });
+    writeFileSync(join(sibling, 'other.txt'), 'SIBLING-CONTENT-19c2');
+    const r = await call(`READ ${join(sibling, 'other.txt')}`, { EPAM_AGENT_NAME: 'estate-survey', AI_GATE_ALLOW_TOOLS: '1', EPAM_ALLOWED_TOOLS: 'read_file,list_files,search', JIRA_CODELINE_ROOT: dir });
+    expect(r.status, r.stderr.slice(-1500)).toBe(0);
+    expect(r.stdout).toContain('SIBLING-CONTENT-19c2');
+    expect(r.stderr).toMatch(new RegExp(`plugin ro at ${dir.replace(/[.*+?^${}()|[\]\\]/g, '\\$&')}`));
+  }, 180_000);
+
+  it('with a codeline estate, a write-granted call still cannot write outside its own codeline', async () => {
+    const outside = join(dir, 'sibling', 'written-outside.txt');
+    await call(`WRITE ${outside} MUST-NOT-LAND`, { EPAM_AGENT_NAME: 'story-writer', AI_GATE_ALLOW_TOOLS: '1', EPAM_ALLOWED_TOOLS: 'read_file,write_file,bash', JIRA_CODELINE_ROOT: dir });
+    expect(existsSync(outside), 'the development plugin wrote outside the codeline').toBe(false);
+  }, 180_000);
+
+  it('search reads what the repository tracks — never a gitignored file, never a binary one', async () => {
+    // Run 20260929T094305Z: search returned the binary .codegraph/codegraph.db and ignored .gitignore.
+    const repo = join(dir, 'searched'); mkdirSync(join(repo, 'src'), { recursive: true }); mkdirSync(join(repo, 'build'), { recursive: true });
+    writeFileSync(join(repo, '.gitignore'), 'build/\n');
+    writeFileSync(join(repo, 'src', 'kept.ts'), 'export const NEEDLE_4b1 = 1;\n');
+    writeFileSync(join(repo, 'build', 'ignored.js'), 'NEEDLE_4b1 in a build output\n');
+    writeFileSync(join(repo, 'src', 'index.db'), Buffer.concat([Buffer.from([0, 1, 2, 0]), Buffer.from('NEEDLE_4b1 in a binary')]));
+    execSync(`git -C ${JSON.stringify(repo)} init -q && git -C ${JSON.stringify(repo)} add -A`);
+    const r = await call(`SEARCH NEEDLE_4b1 IN ${repo}`, { EPAM_AGENT_NAME: 'code-reader', AI_GATE_ALLOW_TOOLS: '1', EPAM_ALLOWED_TOOLS: 'read_file,list_files,search', JIRA_CODELINE_ROOT: dir });
+    expect(r.status, r.stderr.slice(-1500)).toBe(0);
+    expect(r.stdout).toMatch(/src\/kept\.ts:1:/);
+    expect(r.stdout).not.toMatch(/ignored\.js/);
+    expect(r.stdout).not.toMatch(/index\.db/);
   }, 180_000);
 
   it('an answer with nothing in it is a failure the ladder can act on, not a success', async () => {

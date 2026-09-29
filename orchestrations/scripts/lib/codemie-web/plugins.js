@@ -102,7 +102,7 @@ async function ensurePlugin(c, { codeline, mode, root }, env = process.env) {
   const out = fs.openSync(log, 'w');
   const child = spawn(bin, args, {
     detached: true, stdio: ['ignore', out, out],
-    env: { ...env, HOME: pluginHome, PLUGIN_KEY: keyFor(codeline, mode, env), PLUGIN_ENGINE_URI: env.EPAM_CODEMIE_PLUGIN_ENGINE_URI || readConfig().pluginEngineUri },
+    env: { ...env, HOME: pluginHome, PLUGIN_KEY: keyFor(codeline, mode, env), PLUGIN_ENGINE_URI: env.EPAM_CODEMIE_PLUGIN_ENGINE_URI || readConfig().pluginEngineUri, EPAM_CODEMIE_SEARCH_MAX_MATCHES: String(readConfig().searchMaxMatches ?? 0) },
   });
   child.unref();
   state[k] = { pid: child.pid, root: realRoot, mode, codeline, log, startedAt: new Date().toISOString() };

@@ -161,21 +161,16 @@ describe('the mint refuses a brief that is not grounded in its codeline', () => 
     expect(res.minted.map((m: any) => m.name)).toEqual(['some-investigator']);
   });
 
-  it('THE DEFECT: a brief citing a sibling codeline\'s file is rejected', () => {
+  // NO DETERMINISTIC PATH GATE (operator, 2026-09-29: "I only want agentic not any of your guards
+  // or gates"). The mint used to refuse a brief its path reading judged ungrounded; that reading
+  // misread prose three times and killed the mint each time. A brief citing a sibling's file is
+  // minted, and whether it is grounded is the roster reviewer's judgement — an agent that opens
+  // the code.
+  it('the mint no longer refuses a brief on a path reading — the reviewer judges it', () => {
     const { layout } = estate();
     const res = mint('gamma', `Start at ${layout.alpha[1]}.`);
-    expect(
-      res.minted,
-      'an investigator was dispatched to a file its own repository does not contain',
-    ).toEqual([]);
-    expect(res.rejected.length).toBe(1);
-  });
-
-  it('the rejection names the offending paths, so a corrective cycle can act on it', () => {
-    const { layout } = estate();
-    const res = mint('gamma', `Start at ${layout.alpha[1]}.`);
-    expect(res.rejected[0].reason).toContain(layout.alpha[1]);
-    expect(res.rejected[0].reason).toMatch(/do not exist/i);
+    expect(res.rejected).toEqual([]);
+    expect(res.minted.map((m: any) => m.name)).toEqual(['some-investigator']);
   });
 
   it('and it is not written into profiles.json', () => {

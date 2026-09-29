@@ -470,20 +470,12 @@ function mergeProjectAgents(opts) {
     const _unroutable = unroutableName(p);
     if (_unroutable) { rejected.push({ name: p.name, reason: _unroutable }); continue; }
 
-    // A brief is inherited whole and re-checked by nothing, so a path it names becomes an
-    // instruction. Refused here rather than surfaced later: the correction cycle re-mints on
-    // a rejection, and the reason names the exact paths so the replacement can be grounded.
-    const _ungrounded = ungroundedBriefPaths(p, codelines, declaredPaths);
-    if (_ungrounded.length) {
-      rejected.push({
-        name: p.name,
-        reason:
-          `brief names ${_ungrounded.length} path(s) that do not exist in ` +
-          `${(p.codeline && p.codeline !== PROJECT_WIDE) ? `codeline '${p.codeline}'` : 'any codeline'}: ` +
-          `${_ungrounded.join(', ')}`,
-      });
-      continue;
-    }
+    // NO DETERMINISTIC PATH GATE HERE. ungroundedBriefPaths refused any agent whose brief it
+    // read as naming a missing file; it misread prose three times and killed the mint each time
+    // ("React/Next.js" 2026-09-08; "toast.success/toast.error/toast.info" refused the cx-shared
+    // implementer on AMSD-2974, 2026-09-29). Operator, 2026-09-29: "I only want agentic not any of
+    // your guards or gates." Whether a brief is grounded is the roster reviewer's judgement — an
+    // agent that opens the code.
     if (Object.prototype.hasOwnProperty.call(profiles, p.name)) {
       // Convergence: an existing entry may carry run-accumulated skill notes.
       unchanged.push(p.name);

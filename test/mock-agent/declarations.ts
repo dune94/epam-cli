@@ -83,6 +83,26 @@ export class Declarations {
   templateText(id: string): string { return this.templates.find((t) => t.id === id)?.text || ''; }
 
   /**
+   * The value a request carries in one of a template's slots, read by the template's OWN fixed text
+   * around that slot — never by wording copied here. The anchor before the slot is the text between
+   * the previous slot (or line start) and this one; the anchor after is the text up to the next slot
+   * (or line end). Returns '' when the anchors are not found in the request.
+   */
+  slot(templateId: string, placeholder: string, request: string): string {
+    const text = this.templateText(templateId);
+    const at = text.indexOf(placeholder);
+    if (at < 0) return '';
+    const before = text.slice(0, at).split(/__[A-Z][A-Z0-9_]*__/).pop()!.split('\n').filter((l) => l.trim()).pop() || '';
+    const afterRaw = text.slice(at + placeholder.length).split(/__[A-Z][A-Z0-9_]*__/)[0];
+    const after = afterRaw.split('\n').map((l) => l).find((l) => l.trim()) || '';
+    const i = before ? request.indexOf(before.trim()) : 0;
+    if (i < 0) return '';
+    const from = before ? i + before.trim().length : 0;
+    const j = after ? request.indexOf(after.trim(), from) : request.length;
+    return request.slice(from, j < 0 ? request.length : j).trim();
+  }
+
+  /**
    * The seam a template speaks for. A template several seams declare is the seam whose registry
    * entry names it; else the first that applies to this project's modes (registry `appliesTo`).
    */

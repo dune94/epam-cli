@@ -38,27 +38,29 @@ async function project(c, cfg = readConfig()) {
 const SCRIPTS_LIB = path.join(__dirname, '..', '..', '..', 'scripts', 'lib');
 
 /**
- * WHO THE ASSISTANT IS: its agent's own generated persona, then its seam's description.
- *
- * The seam is the agent's (seam-invocation.js resolveSeam); the persona is the one that seam declares
- * it speaks as (invocation-profiles.json `persona`), read where the pipeline's personas live
- * (agent-roster.js agentPersona: the project roster once it carries the agent, the install's profiles
- * before); the description is the seam's `_what`. A seam that declares no persona — its persona varies
- * per call and travels in the prompt — is its description alone. Nothing is invented for an agent
- * the registry does not know: its instructions are empty.
+ * WHO THE ASSISTANT IS: the standing instructions si-author wrote for this seam on this project and
+ * si-review checked (lib/assistant-instructions.js, `assistant-instructions`). Where none have been
+ * authored — a seam run outside a pipeline run, or the two authoring seams themselves, whose
+ * instructions are their canonical personas — the agent's recorded persona is laid out the same way
+ * (role line first), and the call says so on stderr. The description is the seam's `_what`.
  */
 function instructionsFor(agent, env = process.env) {
   const agentsDir = env.EPAM_AGENTS_DIR || path.join(SCRIPTS_LIB, '..', '..', 'agents');
   const { resolveSeam, registryPath } = require(path.join(SCRIPTS_LIB, 'seam-invocation.js'));
   const { agentPersona } = require(path.join(SCRIPTS_LIB, 'agent-roster.js'));
-  let entry = {};
+  const lib = require(path.join(SCRIPTS_LIB, 'assistant-instructions.js'));
+  let seam = ''; let entry = {};
   try {
     const file = registryPath(agentsDir);
-    entry = (JSON.parse(fs.readFileSync(file, 'utf8')).profiles || {})[resolveSeam(agent, file)] || {};
+    seam = resolveSeam(agent, file);
+    entry = (JSON.parse(fs.readFileSync(file, 'utf8')).profiles || {})[seam] || {};
   } catch { entry = {}; }
   const description = String(entry._what || '').trim();
+  const authored = seam ? lib.readAuthored(seam, env) : undefined;
+  if (authored) return { system_prompt: authored.rendered, description, authored: true };
   const persona = entry.persona ? String(agentPersona(entry.persona, agentsDir, env.EPAM_PROJECT_CONFIG_DIR) || '').trim() : '';
-  return { system_prompt: [persona, description].filter(Boolean).join('\n\n'), description };
+  process.stderr.write(`[codemie-web] ${seam || agent}: no authored instructions for this project — its recorded persona is used\n`);
+  return { system_prompt: lib.layoutDeclared(description, persona), description, authored: false };
 }
 
 const cachePath = (env = process.env) => path.join(home(env), 'assistants.json');

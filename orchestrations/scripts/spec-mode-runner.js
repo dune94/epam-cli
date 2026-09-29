@@ -10849,6 +10849,9 @@ module.exports = {
     TOOL_PROJECT_AGENTS,
     TOOL_ROSTER_REVIEW,
     TOOL_ROLE_ASSIGNMENTS,
+    // The standing-instructions pair (lib/assistant-instructions.js) — validated by tag like the rest.
+    TOOL_SI_AUTHOR: require('./lib/assistant-instructions.js').TOOL_SI_AUTHOR,
+    TOOL_SI_REVIEW: require('./lib/assistant-instructions.js').TOOL_SI_REVIEW,
   },
   specAgentEnv,
   surveyToolBudget,

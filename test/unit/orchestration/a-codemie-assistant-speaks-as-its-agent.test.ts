@@ -8,8 +8,10 @@
  * automated software delivery pipeline…"). Each seam now DECLARES whose persona it speaks as
  * (agents/invocation-profiles.json `persona`) — the name its call site used to spell out — and the
  * assistant's instructions are that agent's generated persona (the project roster once it exists,
- * the install's profiles before) followed by the seam's description (`_what`); a changed persona
- * updates the stored assistant.
+ * the install's profiles before), under a one-line role taken from the seam's description (`_what`);
+ * a changed persona updates the stored assistant. This is the layout before si-author has written a
+ * project's instructions (templates/assistant-instructions.json `declared`); once it has, the
+ * authored ones are stored instead (no-agent-is-given-thin-instructions.test.ts).
  *
  * Executed: the real llm-handler.sh on the codemie-web set against CodeMie stood in for
  * (test/mock-agent/codemie.ts), which records what each assistant was created or updated with, and
@@ -74,7 +76,7 @@ describe.skipIf(!CODEMIE)('a codemie assistant speaks as its agent', () => {
     expect(WITH, 'no seam declares a persona').toBeTruthy();
   });
 
-  it('a seam that declares a persona: the assistant carries that agent\'s generated persona, then the seam\'s description', async () => {
+  it('a seam that declares a persona: the assistant carries the seam\'s one-line role, then that agent\'s generated persona', async () => {
     const who = seams[WITH].persona!;
     profiles({ [who]: `PERSONA-OF-${who}-v1: you judge with care.`, 'some-other-agent': 'OTHER-PERSONA-must-not-appear' });
     const r = await call(WITH);
@@ -83,7 +85,8 @@ describe.skipIf(!CODEMIE)('a codemie assistant speaks as its agent', () => {
     expect(a, cm.assistants.map((x) => x.name).join(', ')).toBeTruthy();
     expect(a.system_prompt).toContain(`PERSONA-OF-${who}-v1: you judge with care.`);
     expect(a.system_prompt).toContain(seams[WITH]._what);
-    expect(a.system_prompt.indexOf('PERSONA-OF')).toBeLessThan(a.system_prompt.indexOf(seams[WITH]._what));
+    expect(a.system_prompt.startsWith(`**Role:** ${seams[WITH]._what}`), 'the one-line role comes first').toBe(true);
+    expect(a.system_prompt.indexOf(seams[WITH]._what)).toBeLessThan(a.system_prompt.indexOf('PERSONA-OF'));
     expect(a.system_prompt).not.toContain('OTHER-PERSONA-must-not-appear');
     expect(a.system_prompt).not.toMatch(/You are an agent of an automated software delivery pipeline/);
     expect(a.description).toBe(seams[WITH]._what);

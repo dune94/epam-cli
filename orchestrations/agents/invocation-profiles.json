@@ -841,6 +841,73 @@
       "_whyAlwaysOn": "ON BY DEFAULT. This was declared opt-in behind EPAM_PROMPT_REVIEW_ENABLED and no project ever set it, so the one artefact every downstream agent inherits WHOLE \u2014 its prompt \u2014 was the only generated thing installed unexamined. Operator, 2026-08-27: prompt review is the single review that makes the most sense. A run that wants it off says so; absence is no longer silence.",
       "_whyMaxOutputTokens": "4096, down from 32768. The deliverable is a JSON block that is 52 characters when clean and a few hundred when it has findings; 32768 was room to narrate, and the model used it \u2014 3,366 output tokens per call, of which the consumer reads about 13. The budget still holds a verdict with several evidenced findings many times over, and no longer pays for prose that is discarded unread."
     },
+    "si-author": {
+      "persona": "instruction-author",
+      "layer": "bootstrap",
+      "_why_bootstrap": "Authors the standing instructions of every seam, including those that run before the project prompt layer exists (ingest, the mint). It cannot render from a project copy it precedes.",
+      "_what": "Authors one pipeline agent's standing system instructions for this project, from the seam's task prompt, its declaration, the agent's persona and the project's context.",
+      "_why": "Operator 2026-09-29: \"We cannot have thin SI\" and \"YOU need to do this agentically.\" Instructions written once by hand were either thin or carried another project's facts; authored per project from the seam's own inputs, and falsified by si-review, they are neither.",
+      "ladder": "top",
+      "temperature": "0.3",
+      "maxOutputTokens": 16384,
+      "timeoutSecs": 900,
+      "toolGrant": "read-only",
+      "produces": "assistant-instructions",
+      "consumes": [
+        {
+          "kind": "template",
+          "required": true,
+          "authority": "the task prompt the instructions serve"
+        },
+        {
+          "kind": "roster",
+          "required": false,
+          "authority": "the agent's persona once the project roster carries it"
+        },
+        {
+          "kind": "canonical-roster",
+          "required": false,
+          "authority": "the agent's persona before the project roster exists"
+        },
+        {
+          "kind": "codeline-facts",
+          "required": false,
+          "authority": "the only project facts the instructions may state"
+        }
+      ],
+      "template": "si-author"
+    },
+    "si-review": {
+      "persona": "instruction-reviewer",
+      "layer": "bootstrap",
+      "_why_bootstrap": "Reviews what si-author wrote, at the same point in the run; it runs before the project prompt layer exists.",
+      "_what": "Falsifies one agent's authored standing instructions against the seam's task prompt, its declared tools and the project's code.",
+      "_why": "Nothing may reach an agent unchallenged. A blocking finding sends the seam back to si-author; after the declared number of cycles the last authored instructions are kept and the findings are recorded, never a halt.",
+      "ladder": "top",
+      "temperature": "0.1",
+      "maxOutputTokens": 16384,
+      "timeoutSecs": 900,
+      "toolGrant": "read-only",
+      "produces": "instructions-review",
+      "consumes": [
+        {
+          "kind": "assistant-instructions",
+          "required": true,
+          "authority": "the artefact under review"
+        },
+        {
+          "kind": "template",
+          "required": true,
+          "authority": "the task prompt they must not contradict"
+        },
+        {
+          "kind": "codeline-facts",
+          "required": false,
+          "authority": "the ground truth project claims are checked against"
+        }
+      ],
+      "template": "si-review"
+    },
     "survey-review": {
       "persona": "survey-reviewer",
       "layer": "bootstrap",
@@ -1005,6 +1072,8 @@
     "The engine holds none of these names. Adding an agent kind is an edit HERE."
   ],
   "seamPatterns": [
+    { "match": "^instruction-author$", "seam": "si-author", "$why": "the persona this seam declares (profiles.persona) — named exactly, ahead of every family pattern" },
+    { "match": "^instruction-reviewer$", "seam": "si-review", "$why": "the persona this seam declares (profiles.persona) — named exactly, ahead of every family pattern" },
     { "match": "^repro\\-test\\-engineer$", "seam": "repro-test-writer", "$why": "the persona this seam declares (profiles.persona) — named exactly, ahead of every family pattern" },
     { "match": "^cpa\\-estimator$", "seam": "cpa-inference", "$why": "the persona this seam declares (profiles.persona) — named exactly, ahead of every family pattern" },
     { "match": "^prd\\-change\\-summarizer\\-agent$", "seam": "prd-change-summarizer", "$why": "the persona this seam declares (profiles.persona) — named exactly, ahead of every family pattern" },
@@ -1287,6 +1356,8 @@
   ],
   "$engineConsumesWhy": "What the ENGINE reads out of an agent, as opposed to what another AGENT reads. The registry could say what a seam produces and what a seam consumes, and what the engine PRODUCES, but had no way to say what the engine CONSUMES. So twenty-one artefacts that the orchestrator parses inline or reads from disk appeared to have no consumer at all, and an audit driven by these declarations would certify a pipeline that drops them. Each entry carries the token it is read as and the files that read it, so a declaration cannot outlive the code it describes.",
   "engineConsumes": {
+    "assistant-instructions": {"readsAs": "assistant-instructions", "readBy": ["orchestrations/scripts/lib/assistant-instructions.js", "orchestrations/scripts/lib/template-persona.js", "orchestrations/plugins/providers/codemie-web/registry.js"]},
+    "instructions-review": {"readsAs": "instructions-review", "readBy": ["orchestrations/scripts/lib/assistant-instructions.js"]},
     "ac-classification": {
       "readsAs": "ac-classification",
       "readBy": [

@@ -4,6 +4,7 @@
   "$boundary": "run-state-paths.json already covers what LOOKS like evidence \u2014 logs, runs, spool, kb. These are evidence too: each is the product of a paid model call and cannot be reproduced without paying again. They are listed here rather than there because they are tracked and a first install needs them.",
   "paths": [
     "orchestrations/projects/*/roster.json",
+    "orchestrations/projects/*/assistant-instructions/*.json",
     "orchestrations/projects/*/agent-profiles.json",
     "orchestrations/projects/*/project-roles.json",
     "orchestrations/projects/*/project-investigators.json",

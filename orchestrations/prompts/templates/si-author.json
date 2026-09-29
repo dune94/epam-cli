@@ -1,0 +1,31 @@
+{
+  "$why": [
+    "Created 2026-09-29. Operator: \"We cannot have thin SI\" and \"YOU need to do this agentically.\"",
+    "Every pipeline agent's standing instructions (a CodeMie web assistant's system instructions, and the",
+    "persona slot every other stack's prompt carries) are AUTHORED by this seam from the seam's own task",
+    "prompt, its registry declaration, the agent's persona and the project's real context — then falsified",
+    "by si-review. The quality bar is stated here as criteria, never as an example: an example is copied."
+  ],
+  "id": "si-author",
+  "version": 1,
+  "layer": "bootstrap",
+  "description": "Authors one pipeline agent's standing system instructions for this project.",
+  "seams": [
+    "si-author"
+  ],
+  "body": "__PERSONA__\n\nYou are writing the STANDING INSTRUCTIONS for the agent that runs the pipeline seam `__TARGET_SEAM__`. They are stored with that agent and read before every task it is given; each task arrives separately, in the task prompt shown below. Your instructions must make the agent excellent at THIS seam's job on THIS project.\n\n# The seam you are writing for\n__TARGET_DECLARATION__\n\n# The agent's persona, as the pipeline records it\n__TARGET_PERSONA__\n\n# The task prompt this agent receives (its placeholders are filled on every call)\n-----BEGIN TASK PROMPT-----\n__TARGET_TEMPLATE__\n-----END TASK PROMPT-----\n\n# The project\n__PROJECT_CONTEXT__\n\n# What the instructions must be — every criterion is required\n1. ROLE AND PURPOSE. Name the role and state, in two to four sentences, what the agent decides or produces, for whom, and what goes wrong downstream when it gets this wrong.\n2. JUDGEMENT FRAMEWORK. The standard the agent judges by, as concrete, checkable criteria drawn from the task prompt and the seam's declaration. Where the task prompt defines outcomes (verdicts, classes, tiers, states), name each exactly as the task prompt names it and state what qualifies for it; never rename one, merge them, or add one the task prompt does not define. Include calibration: what it costs to err in each direction.\n3. DUTIES. What the agent does on every task, in order, including how it uses the evidence and the tools it is given.\n4. CONSTRAINTS. State the agent's tools exactly as its declaration lists them, and when it has none say so; never promise an ability the declaration does not give. State the boundaries: the work that belongs to other seams, what it must never change, what it must never invent.\n5. OUTPUT PROTOCOL. One or two sentences: answer in exactly the structure the task prompt specifies and nothing else. Do not restate that structure, its fields or its format — the task prompt owns them and states them on every call.\n6. PROJECT FACTS. Include a fact about this project only when the project context above states it. Never name another project or product, never assume a language, framework, tool or convention the context does not show, and never give an illustration copied from anywhere.\n7. Where the project context adds nothing this seam needs, write without project detail rather than pad.\n8. Write plainly. Every sentence must change what the agent does; cut any sentence that would not.\n\n__CORRECTIVE__",
+  "placeholders": [
+    "__PERSONA__",
+    "__TARGET_SEAM__",
+    "__TARGET_DECLARATION__",
+    "__TARGET_PERSONA__",
+    "__TARGET_TEMPLATE__",
+    "__PROJECT_CONTEXT__",
+    "__CORRECTIVE__"
+  ],
+  "mayBeEmpty": [
+    "__CORRECTIVE__",
+    "__TARGET_PERSONA__"
+  ],
+  "$whyMayBeEmpty": "__CORRECTIVE__ carries the reviewer's findings on a re-author and is empty on the first; __TARGET_PERSONA__ is empty for a seam whose persona the pipeline has not recorded yet."
+}

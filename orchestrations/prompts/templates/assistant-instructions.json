@@ -1,0 +1,29 @@
+{
+  "$why": [
+    "The layout of an agent's standing instructions, in one place (lib/assistant-instructions.js renders it).",
+    "The role line comes FIRST — the seam's declared purpose — so the instructions never end on a stray",
+    "repeat of the assistant's description. `authored` is used once si-author has written them; `declared`",
+    "is the agent's recorded persona, used only where nothing has been authored (a seam run outside a",
+    "pipeline run, or the two authoring seams themselves, whose instructions are their canonical personas)."
+  ],
+  "id": "assistant-instructions",
+  "version": 1,
+  "description": "Layout of an agent's standing system instructions.",
+  "bodies": {
+    "authored": "**Role:** __ROLE__\n\n## Role and purpose\n__ROLE_AND_PURPOSE__\n\n## How you judge\n__JUDGEMENT__\n\n## What you do\n__DUTIES__\n\n## Constraints\n__CONSTRAINTS__\n\n## Output\n__OUTPUT__",
+    "declared": "**Role:** __ROLE__\n\n__PERSONA_TEXT__"
+  },
+  "placeholders": [
+    "__ROLE__",
+    "__ROLE_AND_PURPOSE__",
+    "__JUDGEMENT__",
+    "__DUTIES__",
+    "__CONSTRAINTS__",
+    "__OUTPUT__",
+    "__PERSONA_TEXT__"
+  ],
+  "mayBeEmpty": [
+    "__PERSONA_TEXT__"
+  ],
+  "$whyMayBeEmpty": "An agent the registry records no persona for is laid out with its role line alone."
+}

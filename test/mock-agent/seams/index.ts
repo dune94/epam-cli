@@ -6,7 +6,7 @@
  * values. Adding a seam's realism is adding one entry here — the format, the contract and the
  * reconciliation are shared and read from the code at call time.
  */
-import type { Behaviour, Call } from '../agent';
+import type { Behaviour, Call, MockAgent } from '../agent';
 import { defaultAnswer, renderedFor, exemplar, type Filler } from '../answer';
 import { withExampleEnums, type Field } from '../rendered-schema';
 import type { World } from '../world';
@@ -24,8 +24,9 @@ import { perStoryList } from './per-story';
 import { codelineSelection } from './discovery';
 import { fixPlan } from './fixplan';
 import { reproWriter } from './repro';
+import { standingInstructions } from './instructions';
 
-type FillerFor = (world: World, prompt: string, fields: Field[], call: Call) => Filler;
+type FillerFor = (world: World, prompt: string, fields: Field[], call: Call, agent?: MockAgent) => Filler;
 
 /**
  * Every map below is keyed by what a seam PRODUCES (the registry's declaration), never by a seam's
@@ -36,6 +37,7 @@ export const FILLERS: Record<string, FillerFor> = {
   'estate-survey': (w, p) => estateSurvey(w, p),
   'agent-roster': (w, p, f) => agentMint(w, p, f),
   'role-assignments': (w, p, f) => roleAssigner(w, p, f),
+  'assistant-instructions': (_w, p, _f, c, a) => standingInstructions(p, c, a!),
 };
 
 /** Seams whose whole answer is built from the world rather than from a rendered schema. */
@@ -100,7 +102,7 @@ export function correct(world: World, install: string): Behaviour {
       if (/story/i.test(f.name) && /id$/i.test(f.name)) return call.story;
       return typeof story![f.name] === 'string' ? story![f.name] : undefined;
     };
-    const chain = [FILLERS[produces]?.(world, prompt, fields, call), perStoryList(world, prompt, fields, tplText),
+    const chain = [FILLERS[produces]?.(world, prompt, fields, call, agent), perStoryList(world, prompt, fields, tplText),
       judges(produces) ? judgeFindsNothing() : undefined, fromStory].filter(Boolean) as Filler[];
     const filler: Filler = (f, path) => { for (const c of chain) { const v = c(f, path); if (v !== undefined) return v; } return undefined; };
     const text = defaultAnswer(prompt, contract, filler, tplText);

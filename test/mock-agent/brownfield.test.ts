@@ -17,6 +17,7 @@ import { ROOT, fixtureInstall, edgeFor, zeroCostEnv, run } from '../integration/
 import { MockAgent } from './agent';
 import { World } from './world';
 import { correct } from './seams';
+import { personaGaps, personasNow } from './persona';
 import { currentConfig, configFor, standInsFor, vendorEdge, rehearsedSet, type ProjectRun } from './harness';
 
 const SRC = process.env.MOCK_AGENT_INSTALL || ROOT;
@@ -50,6 +51,7 @@ describe('the mocking agent drives the seeded brownfield project at £0', () => 
     const codelines = () => { const c = join(newest(), 'codelines'); return existsSync(c) ? readdirSync(c, { withFileTypes: true }).filter((d) => d.isDirectory()).map((d) => ({ path: join(c, d.name) })) as any : []; };
     const stories = () => { try { return (JSON.parse(readFileSync(prdPath(), 'utf8')).stories || []).map((s: any) => s.id); } catch { return []; } };
     const agent = new MockAgent(join(install, 'orchestrations'), journal, stories, ['brownfield']);
+    const atStart = personasNow(install);
     await agent.start();
     const { bin } = edgeFor(install, agent.url, children);
     const world = new World(() => codelines().map((c: { path: string }) => c.path), prdPath, projDir);
@@ -85,6 +87,10 @@ describe('the mocking agent drives the seeded brownfield project at £0', () => 
     expect(resumed.some((c) => c.seam === WRITER), `the writer was never invoked on resume — log tail:\n${tail(text2)}`).toBe(true);
     expect(r2.status, `resume exited ${r2.status} — log tail:\n${tail(text2)}`).toBe(0);
     const prd = JSON.parse(readFileSync(prdPath(), 'utf8'));
+    // NO THIN INSTRUCTIONS: every call carried its seam's declared persona to the model, on this set.
+    const gaps = personaGaps(install, projDir, agent.calls, atStart, !!codemie);
+    writeFileSync(join(journal, 'persona-gaps.json'), JSON.stringify(gaps, null, 1));
+    expect(gaps, `calls that reached the model without their agent's persona:\n${gaps.map((g) => `  #${g.n} ${g.seam} (${g.persona}) — missing from the ${g.where}`).join('\n')}`).toEqual([]);
     const incomplete = (prd.stories || []).filter((st: any) => !st.completed).map((st: any) => st.id);
     expect(incomplete, `stories not completed — log tail:\n${tail(text2)}`).toEqual([]);
     const gates = readFileSync(join(install, 'orchestrations/logs/phase-gates.jsonl'), 'utf8').split('\n').filter(Boolean).map((l) => JSON.parse(l));

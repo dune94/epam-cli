@@ -11,12 +11,13 @@
     "section removes its separator too, and a template cannot express that without becoming a",
     "program."
   ],
-  "body": "__SYSTEM_PROMPT__\n\n---\n\n__SECTIONS__\n\n---\n\nRespond with ONLY the JSON object as specified in your instructions. No prose, no markdown fences.",
+  "body": "__PERSONA__\n\n__SYSTEM_PROMPT__\n\n---\n\n__SECTIONS__\n\n---\n\nRespond with ONLY the JSON object as specified in your instructions. No prose, no markdown fences.",
   "description": "Ask the estimator for an iteration count, given the story and everything known about it.",
   "id": "cpa-inference",
   "placeholders": [
     "__SECTIONS__",
-    "__SYSTEM_PROMPT__"
+    "__SYSTEM_PROMPT__",
+    "__PERSONA__"
   ],
   "version": 1,
   "seams": [

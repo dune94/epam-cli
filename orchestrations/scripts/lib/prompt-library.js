@@ -170,7 +170,17 @@ function render(doc, values) {
     throw new Error(`prompt '${doc.id}' declares placeholders it never uses: ${orphanDeclared.join(', ')}`);
   }
 
-  const supplied = values && typeof values === 'object' ? values : {};
+  const supplied = { ...(values && typeof values === 'object' ? values : {}) };
+
+  // THE AGENT'S PERSONA, FROM ITS DECLARATION. A prompt carries the identity in one slot; when the
+  // caller supplies none, the seam that renders this prompt says whose persona it is
+  // (template-persona.js). A caller's own value wins — a site that knows better keeps saying so.
+  // eslint-disable-next-line global-require
+  const { templatePersona, SLOT } = require('./template-persona.js');
+  if (present.includes(SLOT) && (supplied[SLOT] === undefined || supplied[SLOT] === null)) {
+    const persona = templatePersona(doc.id);
+    if (persona !== undefined) supplied[SLOT] = persona;
+  }
 
   // A VALUE NOTHING CONSUMES IS EVIDENCE THROWN AWAY.
   //

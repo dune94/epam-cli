@@ -18,7 +18,7 @@
     "IDENTICAL PLACEHOLDERS TO THE BASE, deliberately: the renderer supplies the same seventeen",
     "named blocks either way, so switching variant cannot fail on a token nobody computed."
   ],
-  "body": "__FORCED_RETRY_BLOCK__You are the __AGENT__ specification agent for EPAM CLI. Phase __PHASE__, story __STORY_ID__.__SPLIT_WARNING____PRIOR_GAPS_BLOCK____SEMBLE_CONTEXT____REFERENCED_DOCS_EVIDENCE____ESTIMATION_ASSESSMENT____FIX_SITE_BLOCK____DECLARED_FILE_BLOCK____SHARED_FILE_OWNERSHIP_BLOCK____BROWNFIELD_ARCHAEOLOGY_BLOCK__\n__GENERATE_INSTRUCTION__\n{\n  \"storyId\":\"__STORY_ID__\",\n  \"agent\":\"__AGENT__\",\n  \"notes\":\"context\",\n  \"description\":\"...\",\n  \"title\":\"...\",__LOCATION_HINT_SCHEMA_LINE____SPLIT_SCHEMA_FIELD__\n}\nDo NOT produce acceptance criteria. This story is judged on its verification criteria; any\nacceptance criteria you emit are discarded unread, so producing them only costs output.\nUse existing text when no change is needed.__SPLIT_RULES_BLOCK__\n__PRD_CONFIGURATION_BLOCK__\nStory context:\n__STORY_PAYLOAD____PUBLISHED_CONTRACTS__\n",
+  "body": "__FORCED_RETRY_BLOCK____PERSONA__\n\nYou are writing the __AGENT__ specification. Phase __PHASE__, story __STORY_ID__.__SPLIT_WARNING____PRIOR_GAPS_BLOCK____SEMBLE_CONTEXT____REFERENCED_DOCS_EVIDENCE____ESTIMATION_ASSESSMENT____FIX_SITE_BLOCK____DECLARED_FILE_BLOCK____SHARED_FILE_OWNERSHIP_BLOCK____BROWNFIELD_ARCHAEOLOGY_BLOCK__\n__GENERATE_INSTRUCTION__\n{\n  \"storyId\":\"__STORY_ID__\",\n  \"agent\":\"__AGENT__\",\n  \"notes\":\"context\",\n  \"description\":\"...\",\n  \"title\":\"...\",__LOCATION_HINT_SCHEMA_LINE____SPLIT_SCHEMA_FIELD__\n}\nDo NOT produce acceptance criteria. This story is judged on its verification criteria; any\nacceptance criteria you emit are discarded unread, so producing them only costs output.\nUse existing text when no change is needed.__SPLIT_RULES_BLOCK__\n__PRD_CONFIGURATION_BLOCK__\nStory context:\n__STORY_PAYLOAD____PUBLISHED_CONTRACTS__\n",
   "description": "Produce or revise the specification for one story on a BROWNFIELD ticket, as the openspec agent.",
   "id": "spec-agent-openspec.brownfield",
   "placeholders": [
@@ -41,7 +41,8 @@
     "__SPLIT_SCHEMA_FIELD__",
     "__SPLIT_WARNING__",
     "__STORY_ID__",
-    "__STORY_PAYLOAD__"
+    "__STORY_PAYLOAD__",
+    "__PERSONA__"
   ],
   "version": 3,
   "seams": [

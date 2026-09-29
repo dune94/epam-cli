@@ -333,6 +333,15 @@ function renderEngineTemplate(id, values, bodyKey) {
     }
   }
 
+  // THE AGENT'S PERSONA, FROM ITS DECLARATION — the same rule prompt-library applies to a project
+  // copy (template-persona.js), for a template this renderer executes itself (a bootstrap seam).
+  // eslint-disable-next-line global-require
+  const { templatePersona, SLOT } = require('./template-persona.js');
+  if (declared.includes(SLOT) && !supplied.includes(SLOT)) {
+    const persona = templatePersona(id);
+    if (persona !== undefined) { values[SLOT] = persona; supplied.push(SLOT); }
+  }
+
   // Absence in JavaScript is `undefined`, and a key holding it is still a key: Object.keys lists
   // it, so a failed lookup passed this check and rendered the word "undefined" into the prompt.
   const missing = declared.filter((p) => !supplied.includes(p)

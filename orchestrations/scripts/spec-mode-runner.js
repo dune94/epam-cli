@@ -10319,6 +10319,11 @@ async function reviewPrdChange({ aiRunnerCmd, profiles, storyId, changeType, bef
     // check it. Reuses the same shared read-only allowlist every other
     // gate agent draws from.
     const output = await runClaude(gateExec, prompt, logPath, {
+      // NAMED AT THE CALL. runClaude names an agent from costAgent only when the process has no
+      // EPAM_AGENT_NAME, and spec-mode inherits one from the step that launched it — so this review
+      // ran as that step's agent (cpa-inference): its ladder, its tool grant, and on codemie-web its
+      // stored assistant, whose instructions are the estimator's (£0 rehearsal, 2026-09-29).
+      EPAM_AGENT_NAME: 'prd-change-reviewer',
       AI_GATE_ALLOW_TOOLS: '1',
       EPAM_ALLOWED_TOOLS: process.env.ORCH_GATE_ALLOWED_TOOLS || 'bash,read_file,list_files,search',
       EPAM_MAX_TOOL_CALLS: process.env.PRD_CHANGE_REVIEWER_MAX_TOOL_CALLS || String(specModeDefaults().perSeam.prdChangeReviewer),

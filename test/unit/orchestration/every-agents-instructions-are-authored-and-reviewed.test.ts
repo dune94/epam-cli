@@ -88,7 +88,12 @@ describe.skipIf(!CODEMIE)('every agent\'s standing instructions are authored and
     cm = await new MockCodeMie(agent, join(dir, 'journal'), ladderModels()).start();
     venv = builtPythonEnv(ROOT, 'codemie-web')!.env;
   }, 900_000);
-  afterAll(async () => { await cm?.stop(); await agent?.stop(); if (dir) rmSync(dir, { recursive: true, force: true }); });
+  afterAll(async () => {
+    // The plugins the calls started are this test's: stopped before their fixture goes.
+    // eslint-disable-next-line @typescript-eslint/no-var-requires
+    if (dir) require(join(ROOT, 'orchestrations/plugins/providers/codemie-web/plugins.js')).stopAll({ ...process.env, EPAM_CODEMIE_WEB_HOME: join(dir, 'home') });
+    await cm?.stop(); await agent?.stop(); if (dir) rmSync(dir, { recursive: true, force: true });
+  });
 
   it('authors every seam the run uses — each laid out in full, reviewed, and stored exactly on its assistant', async () => {
     const r = await author();

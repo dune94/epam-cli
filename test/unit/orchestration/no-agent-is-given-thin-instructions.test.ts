@@ -119,7 +119,12 @@ describe.skipIf(!CODEMIE)('a codemie-web assistant carries its seam\'s authored 
     // JSON object, since a seam whose contract is JSON is not answered in prose.
     agent.on('*', (c) => { lastSystem = c.req.system.trim(); return { kind: 'text', text: '{"ok": true}' }; });
   }, 1_800_000);
-  afterAll(async () => { await cm?.stop(); await agent?.stop(); if (dir) rmSync(dir, { recursive: true, force: true }); });
+  afterAll(async () => {
+    // The plugins the calls started are this test's: stopped before their fixture goes.
+    // eslint-disable-next-line @typescript-eslint/no-var-requires
+    if (dir) require(join(ROOT, 'orchestrations/plugins/providers/codemie-web/plugins.js')).stopAll({ ...process.env, EPAM_CODEMIE_WEB_HOME: join(dir, 'home') });
+    await cm?.stop(); await agent?.stop(); if (dir) rmSync(dir, { recursive: true, force: true });
+  });
 
   it('the authoring seams were found, and the layout has sections to check', () => {
     expect(AUTHORING.length).toBe(2);

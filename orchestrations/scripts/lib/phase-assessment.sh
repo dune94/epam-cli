@@ -591,7 +591,7 @@ run_phase_assessment() {
         if [ "$_pa_attempt" -ge 1 ]; then
             # Climb the assessor's own chain — see the QA-gate retry for why assigning
             # ORCH_GATE_MODEL no longer does anything.
-            ORCH_AGENT_MODEL_CLIMB=$(seam_next_model "team-lead-agent" "$(seam_model_or_fail "team-lead-agent" 2>/dev/null)")
+            ORCH_AGENT_MODEL_CLIMB=$(seam_next_model "phase-assessment-post" "$(seam_model_or_fail "phase-assessment-post" 2>/dev/null)")
             export ORCH_AGENT_MODEL_CLIMB
             _rp_vals=$(mktemp "${TMPDIR:-/tmp}/retry-vals-XXXXXX.json")
             jq_vals \
@@ -605,7 +605,11 @@ run_phase_assessment() {
             rm -f "$_rp_vals"
         fi
         local _assessment_rc=0
-        run_orch_prompt "$_pa_prompt" "team-lead-agent" > "$assessment_log" 2>&1 || _assessment_rc=$?
+        # ITS OWN SEAM (phase-assessment-post, 2026-09-29). This passed "team-lead-agent", which
+        # resolves to cpa-inference: the post-phase judgment ran on the ESTIMATOR's grant and
+        # ladder, and on codemie-web its assistant carried the estimator's instructions. It has no
+        # tools — the evidence is pre-computed above and assess-apply.py performs every write.
+        run_orch_prompt "$_pa_prompt" "phase-assessment-post" > "$assessment_log" 2>&1 || _assessment_rc=$?
         _pa_raw=$(cat "$assessment_log" 2>/dev/null)
 
         if [ "$_assessment_rc" -ne 0 ]; then

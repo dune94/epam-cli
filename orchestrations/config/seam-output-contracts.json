@@ -306,6 +306,15 @@
         "added_by"
       ]
     },
+    "phase-assessment-post": {
+      "kind": "declared",
+      "requiredKeys": [
+        "notes",
+        "agent_recommendations",
+        "role_reassignments"
+      ],
+      "_why": "The three judgment fields skill-assessment-postphase asks for; assess-apply.py builds the record from them and the pre-computed totals."
+    },
     "prd-model-coordinator": {
       "kind": "none"
     },

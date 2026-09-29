@@ -791,6 +791,19 @@
       "toolGrant": "write-file",
       "_toolGrantWhy": "write-file, not write: this seam produces one JSON file from what it reads. With bash in its grant the roster specialiser did the scaffold story's work and wrote no roster (2026-09-12, three paid attempts)."
     },
+    "phase-assessment-post": {
+      "persona": "skill-assessor",
+      "_what": "Judges a finished phase from its pre-computed cost and variance, and recommends role reassignments for stories still pending. Answers JSON; the engine applies it.",
+      "_why": "The post-phase half of the skill assessor's job, as a seam of its own (operator decision, 2026-09-29). It was called as team-lead-agent, which resolves to cpa-inference, so it ran on the estimator's grant and ladder and its codemie-web assistant carried the estimator's instructions. It is not phase-assessment either: that seam writes profiles.json; this one only judges evidence handed to it.",
+      "ladder": "mid",
+      "timeoutSecs": 300,
+      "_whyTimeout": "lib/phase-assessment.sh bounds this call with PHASE_ASSESSMENT_TIMEOUT_SECS (300): a text-in, JSON-out judgment.",
+      "produces": "phase-variance-judgment",
+      "consumes": [],
+      "template": "skill-assessment-postphase",
+      "toolGrant": "none",
+      "_toolGrantWhy": "Everything it judges is pre-computed and injected (assess-precompute.py), and the engine performs every write (assess-apply.py). A tool would only let it rediscover evidence it was given, or write what the engine must apply."
+    },
     "prd-model-coordinator": {
       "persona": "prd-model-coordinator",
       "_what": "Assigns every pending story its model, provider and reasoning effort, and writes them into the PRD.",
@@ -1356,7 +1369,8 @@
   ],
   "$engineConsumesWhy": "What the ENGINE reads out of an agent, as opposed to what another AGENT reads. The registry could say what a seam produces and what a seam consumes, and what the engine PRODUCES, but had no way to say what the engine CONSUMES. So twenty-one artefacts that the orchestrator parses inline or reads from disk appeared to have no consumer at all, and an audit driven by these declarations would certify a pipeline that drops them. Each entry carries the token it is read as and the files that read it, so a declaration cannot outlive the code it describes.",
   "engineConsumes": {
-    "assistant-instructions": {"readsAs": "assistant-instructions", "readBy": ["orchestrations/scripts/lib/assistant-instructions.js", "orchestrations/scripts/lib/template-persona.js", "orchestrations/plugins/providers/codemie-web/registry.js"]},
+    "assistant-instructions": {"readsAs": "assistant-instructions", "readBy": ["orchestrations/scripts/lib/assistant-instructions.js", "orchestrations/plugins/providers/codemie-web/registry.js"]},
+    "phase-variance-judgment": {"readsAs": "phase-variance-judgment", "readBy": ["orchestrations/scripts/lib/phase-assessment.sh", "orchestrations/scripts/lib/handlers/assess-apply.py"]},
     "instructions-review": {"readsAs": "instructions-review", "readBy": ["orchestrations/scripts/lib/assistant-instructions.js"]},
     "ac-classification": {
       "readsAs": "ac-classification",

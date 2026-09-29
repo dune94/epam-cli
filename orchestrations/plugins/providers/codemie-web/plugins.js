@@ -84,36 +84,8 @@ async function waitReady(ready, log, pid, timeoutMs) {
   throw new Error(`[codemie-web] plugin did not signal ready within ${Math.round(timeoutMs / 1000)} s — see ${log}`);
 }
 
-/**
- * ONE PLUGIN START AT A TIME PER INSTALL. Calls that run in parallel share a plugin — the instruction
- * author works several seams at once, all on the project's codeline — and two starts of one
- * (codeline, mode) raced: both saw no running plugin, both registered and spawned, and one call failed
- * (lib/assistant-instructions.js at concurrency 4, 2026-09-29). The lock is a directory (mkdir is
- * atomic) holding its owner's pid; a lock whose owner is gone, or that has been held past twice the
- * connect wait, is taken over — the lock orders starts, it never stops a call.
- */
-async function withStartLock(h, waitMs, fn) {
-  const lock = path.join(h, 'plugins.lock');
-  const t0 = Date.now();
-  for (;;) {
-    try { fs.mkdirSync(lock); fs.writeFileSync(path.join(lock, 'pid'), String(process.pid)); break; } catch (e) {
-      if (e.code !== 'EEXIST') throw e;
-      const owner = Number((readJson(path.join(lock, 'pid'), null)) || 0);
-      if (owner && !alive(owner)) { fs.rmSync(lock, { recursive: true, force: true }); continue; }
-      if (Date.now() - t0 > waitMs) { fs.rmSync(lock, { recursive: true, force: true }); continue; }
-      await new Promise((ok) => setTimeout(ok, 200));
-    }
-  }
-  try { return await fn(); } finally { fs.rmSync(lock, { recursive: true, force: true }); }
-}
-
 /** A running, connected plugin of `mode` for `codeline`, rooted at `root`; returns its integration. */
-async function ensurePlugin(c, spec, env = process.env) {
-  const waitMs = 2 * (Number(env.EPAM_CODEMIE_PLUGIN_CONNECT_MS) || readConfig().pluginConnectSeconds * 1000);
-  return withStartLock(home(env), waitMs, () => startPlugin(c, spec, env));
-}
-
-async function startPlugin(c, { codeline, mode, root }, env = process.env) {
+async function ensurePlugin(c, { codeline, mode, root }, env = process.env) {
   const h = home(env);
   const statePath = path.join(h, 'plugins.json');
   const state = readJson(statePath, {});

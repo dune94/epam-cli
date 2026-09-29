@@ -1949,7 +1949,7 @@ else
         # checkSplitMandateViolation's existing precedent in spec-mode-runner.js.
         for _mc_attempt in 1 2 3; do
         _mc_role_file=$(mktemp "${TMPDIR:-/tmp}/mc-role-XXXXXX.txt")
-        jq -r --arg r "$(seam_persona_agent prd-model-coordinator)" '.[$r] // ""' "$_mc_profiles_file" > "$_mc_role_file" 2>/dev/null || : > "$_mc_role_file"
+        jq -r '.["prd-model-coordinator"] // ""' "$_mc_profiles_file" > "$_mc_role_file" 2>/dev/null || : > "$_mc_role_file"
         _cp_vals=$(mktemp "${TMPDIR:-/tmp}/prd-model-coordinator-vals-XXXXXX.json")
           # THE STACK'S OWN VOCABULARY, NOT THE PERSONA'S. The persona named MiniMax-M3 and
           # {minimax, openrouter} in prose, so on the claude stack the coordinator wrote a model no claude

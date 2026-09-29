@@ -664,7 +664,7 @@ $(render_engine_prompt story-diff-not-inlined "$_sdni_vals" excluded)"
     # No fallback now. A reviewer with no identity is not a reviewer, and inventing one in code
     # is how a client codeline came to be judged by this repository's reviewer.
     REVIEW_PROFILE=""
-    if ! REVIEW_PROFILE=$(roster_persona "$(seam_persona_agent team-lead-review)" 2>&1); then
+    if ! REVIEW_PROFILE=$(roster_persona review-agent 2>&1); then
         error "  cannot resolve the review-agent persona from this project's roster:"
         error "  ${REVIEW_PROFILE}"
         error "  Refusing to review with an identity nobody chose."

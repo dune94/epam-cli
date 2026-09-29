@@ -17,7 +17,7 @@ const CONFIG = path.join(__dirname, '..', '..', 'config', 'failure-classes.json'
 const readJson = (f) => { try { return JSON.parse(fs.readFileSync(f, 'utf8')); } catch { return {}; } };
 
 function failureClass(pluginDir, { status, systemCode, fields } = {}) {
-  const shared = JSON.parse(fs.readFileSync(CONFIG, 'utf8'));  // the declaration is the install's; unreadable is a broken install, said loudly
+  const shared = readJson(CONFIG);
   const vendor = readJson(path.join(pluginDir, 'failures.json')).fields || {};
   for (const [field, map] of Object.entries(vendor)) {
     const v = fields && fields[field];
@@ -31,7 +31,7 @@ function failureClass(pluginDir, { status, systemCode, fields } = {}) {
     if (byStatus[hundred]) return byStatus[hundred];
   }
   if (systemCode && (shared.bySystemCode || {})[systemCode]) return shared.bySystemCode[systemCode];
-  return shared.default;
+  return shared.default || 'provider';
 }
 
 module.exports = { failureClass };

@@ -63,16 +63,6 @@
       "tag": "ROSTER_REVIEW",
       "_why_tag": "Judged by validateTaggedOutput against TOOL_ROSTER_REVIEW; the verdict vocabulary is that tool's enum, and the rehearsal stand-in reads it from there."
     },
-    "si-author": {
-      "kind": "schema",
-      "tag": "ASSISTANT_INSTRUCTIONS",
-      "_why": "The authored instructions as named parts; lib/assistant-instructions.js renders them through one layout (templates/assistant-instructions.json)."
-    },
-    "si-review": {
-      "kind": "schema",
-      "tag": "INSTRUCTIONS_REVIEW",
-      "_why": "A verdict and its findings; a blocking finding sends the seam back to si-author."
-    },
     "survey-review": {
       "kind": "verdict"
     },
@@ -305,15 +295,6 @@
         "context",
         "added_by"
       ]
-    },
-    "phase-assessment-post": {
-      "kind": "declared",
-      "requiredKeys": [
-        "notes",
-        "agent_recommendations",
-        "role_reassignments"
-      ],
-      "_why": "The three judgment fields skill-assessment-postphase asks for; assess-apply.py builds the record from them and the pre-computed totals."
     },
     "prd-model-coordinator": {
       "kind": "none"

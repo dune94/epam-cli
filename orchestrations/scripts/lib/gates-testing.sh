@@ -1276,7 +1276,7 @@ $perf_prompt"
         {
             local _rb_log="$LOG_DIR/runtime-boundary-${phase_id}.log"
             local _rb_profile=""
-            [ -f "$profiles_file" ] && _rb_profile=$(jq -r --arg r "$(seam_persona_agent qa-gate:runtime-boundary)" '.[$r] // ""' "$profiles_file")
+            [ -f "$profiles_file" ] && _rb_profile=$(jq -r '.["runtime-boundary"] // ""' "$profiles_file")
             # The configuration this codeline carries, resolved from its OWN manifest by the
             # adapter that already knows the stack. Empty for a stack no adapter recognises.
             local _rb_config
@@ -1879,7 +1879,6 @@ $_prof_prompt"
                             $(_render_change_reviewer "gate-remediation" "profile_addendum" "THE CHANGE ITSELF (unified diff of the roster before and after):\n${_profiles_change}")" | \
                                 AI_PROVIDER="${ORCH_GATE_PROVIDER:-}" \
                                 AI_MODEL="${_pa_model}" \
-                                EPAM_AGENT_NAME="prd-change-reviewer" \
                                 EPAM_CLI="${EPAM_CLI:-$(dirname "${BASH_SOURCE[0]}")/../bin/epam}" \
                                 "$AI_RUNNER_CMD" \
                                     --provider "${ORCH_GATE_PROVIDER:-}" \

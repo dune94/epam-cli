@@ -13,11 +13,6 @@
       "prdChangeReviewer": 6
     }
   },
-  "assistantInstructions": {
-    "$why": "si-author writes each seam's standing instructions and si-review falsifies them (lib/assistant-instructions.js). reviewCycles: how many author→review rounds a seam gets before its last instructions are kept with the findings recorded (never a halt). concurrency: seams authored at once.",
-    "reviewCycles": 2,
-    "concurrency": 4
-  },
   "tools": {
     "$comment": "The read-only builtin floor granted to every spec-mode agent. Kept here rather than derived as 'every safe builtin' because fetch_url is also safe, and granting network access to the spec pass is a separate decision that must be made deliberately. Plugin tools are NOT listed: they are derived from each codeline's .epam/settings.json, so a codeline provisioned with the codegraph plugin grants codegraph_query automatically.",
     "readOnlyBuiltins": [

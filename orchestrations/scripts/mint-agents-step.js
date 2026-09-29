@@ -1423,7 +1423,7 @@ if (require.main !== module) return;
           // fine — the template's persona section is then simply empty.
           __PERSONA__: (() => {
             try {
-              return JSON.parse(fs.readFileSync(path.join(AGENTS_DIR, 'profiles.json'), 'utf8'))[require('./lib/seam-invocation.js').seamPersonaAgent('prompt-review')] || '';
+              return JSON.parse(fs.readFileSync(path.join(AGENTS_DIR, 'profiles.json'), 'utf8'))['prompt-review'] || '';
             } catch { return ''; }
           })(),
           // THE ROSTER, so a claim naming an agent can be CHECKED rather than refused. Built from the

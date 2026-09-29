@@ -13,7 +13,6 @@ import { execFileSync, type ChildProcess } from 'node:child_process';
 import { ROOT } from '../integration/lib/fixture-install';
 import { startProjectRun, launch, rehearsedSet } from './harness';
 import { correct } from './seams';
-import { personaGaps, personasNow } from './persona';
 import { withScenario, type Rule } from './negatives';
 
 const SRC = process.env.MOCK_AGENT_INSTALL || ROOT;
@@ -44,7 +43,6 @@ describe('the mocking agent drives a real project at £0', () => {
       const journal = join(JOURNALS, `${project}-${new Date().toISOString().replace(/[:.]/g, '')}`);
       mkdirSync(journal, { recursive: true });
       const r = await startProjectRun({ src: SRC, project, dirs, children, journal });
-      const atStart = personasNow(r.install);
       const before = fingerprint(r.realOut);
 
       // Every seam answered as a model that does its job correctly would answer it.
@@ -56,8 +54,7 @@ describe('the mocking agent drives a real project at £0', () => {
       writeFileSync(join(journal, 'run.log'), log);
       // WHAT THE RUN LEFT BEHIND is kept with the journal before the fixture is removed: the run's
       // logs and its codeline are the evidence a failure is diagnosed from.
-      for (const [from, to] of [[join(r.install, 'orchestrations/logs'), 'logs'], [r.out, 'codeline'],
-        [join(r.install, 'orchestrations/projects', project, 'assistant-instructions'), 'assistant-instructions']] as const) {
+      for (const [from, to] of [[join(r.install, 'orchestrations/logs'), 'logs'], [r.out, 'codeline']] as const) {
         try { execFileSync('cp', ['-a', from, join(journal, to)]); } catch { /* absent */ }
       }
       const seams = [...new Set(r.agent.calls.map((c) => c.seam))];
@@ -65,10 +62,6 @@ describe('the mocking agent drives a real project at £0', () => {
 
       writeFileSync(join(journal, 'conflicts.json'), JSON.stringify([...r.agent.conflicts.values()], null, 1));
       for (const c of r.agent.conflicts.values()) console.log(`[mock-agent] CONTRACT CONFLICT ${c.seam} (${c.template}): ${c.reasons.join('; ')}`);
-      // NO THIN INSTRUCTIONS: every call carried its seam's declared persona to the model, on this set.
-      const gaps = personaGaps(r.install, join(r.install, 'orchestrations/projects', project), r.agent.calls, atStart, !!r.codemie);
-      writeFileSync(join(journal, 'persona-gaps.json'), JSON.stringify(gaps, null, 1));
-      expect(gaps, `calls that reached the model without their agent's persona or authored instructions:\n${gaps.map((g) => `  #${g.n} ${g.seam} (${g.persona}) — missing from the ${g.where}${g.why ? `: ${g.why}` : ''}`).join('\n')}`).toEqual([]);
       expect(fingerprint(r.realOut), `the run changed the project's REAL codeline ${r.realOut}`).toBe(before);
       expect(r.agent.stale, `the agent generated answers the current code cannot accommodate`).toEqual([]);
       // THE CLAIM ITSELF: with every seam answering correctly, the project completes — every phase it
@@ -92,9 +85,6 @@ describe('the mocking agent drives a real project at £0', () => {
         const tpl = JSON.parse(readFileSync(join(r.install, 'orchestrations/config/codemie-web.json'), 'utf8')).nameTemplate as string;
         const named = new RegExp(`^${tpl.replace(/[.*+?^${}()|[\]\\]/g, '\\$&').replace('\\{codeline\\}', '\\S+').replace('\\{agent\\}', '\\S+')}$`);
         expect(r.codemie.assistants.length, 'the run made no CodeMie assistant').toBeGreaterThan(0);
-        // NOT VACUOUS: the run authored its agents' instructions, so the check above compared them.
-        const siDir = join(journal, 'assistant-instructions');
-        expect(existsSync(siDir) && readdirSync(siDir).length, 'the run authored no standing instructions').toBeGreaterThan(0);
         for (const a of r.codemie.assistants) {
           expect(a.name, 'an assistant not named by the template').toMatch(named);
           expect(a.shared, `${a.name} is shared with the team`).toBe(false);

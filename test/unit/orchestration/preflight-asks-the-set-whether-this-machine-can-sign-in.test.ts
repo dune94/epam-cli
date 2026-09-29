@@ -86,13 +86,12 @@ describe('pre-flight sign-in', () => {
       expect(r.out).toMatch(/✗ sign-in: .*codemie-plugins environment cannot host a plugin .*ENOENT.* — the installer provisions/);
     });
 
-    it('an interpreter without codemie-plugins is REPORTED, not refused — no new gate (operator, 2026-09-29)', async () => {
+    it('an interpreter without codemie-plugins refuses the launch too — present is not the same as able to host', async () => {
       const bare = join(dir, 'bare-venv'); mkdirSync(join(bare, 'bin'), { recursive: true });
       symlinkSync(execSync('command -v python3', { encoding: 'utf8', shell: '/bin/bash' }).trim(), join(bare, 'bin/python'));
       expect(spawnSync(join(bare, 'bin/python'), ['-c', 'import codemie']).status, 'this machine\'s python3 has codemie-plugins — the case proves nothing here').not.toBe(0);
       const r = await signIn(cw(full, fullAgent, { EPAM_CODEMIE_PLUGINS_VENV: bare }));
-      expect(r.out).toMatch(/WARNING: the codemie-plugins environment at .* could not build the plugin toolkits \(exit 1\)/);
-      expect(r.out).not.toMatch(/✗/);
+      expect(r.out).toMatch(/✗ sign-in: .*codemie-plugins environment cannot host a plugin .*exit 1.* — the installer provisions/);
     });
   });
 });

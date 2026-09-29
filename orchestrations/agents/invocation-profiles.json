@@ -74,10 +74,8 @@
     "allowedTools": "",
     "temperature": ""
   },
-  "$personaWhy": "WHOSE PERSONA A SEAM SPEAKS AS, declared once (review of 2026-09-29, item 3). The call sites spelled the agent out (roster_persona review-agent, profiles['guard-vocabulary-agent'], …) and nothing else could ask; a CodeMie web assistant is keyed by seam and its system instructions are that agent's generated persona followed by the seam's _what (plugins/providers/codemie-web/registry.js), so the name must be readable here. EVERY seam declares one (operator, 2026-09-29: \"We cannot have thin SI\"); where a call also carries a per-call role (the writer's story role, the e2e route's agent), that travels in the prompt beside it.",
   "profiles": {
     "team-lead-review": {
-      "persona": "review-agent",
       "_what": "Reviews the story's code change AND its test; emits a verdict.",
       "maxOutputTokens": 32768,
       "maxToolCalls": 24,
@@ -104,7 +102,6 @@
       "toolGrant": "execute"
     },
     "code-review-cycle": {
-      "persona": "review-agent",
       "_what": "Per-iteration code review pass.",
       "maxOutputTokens": 32768,
       "timeoutSecs": 900,
@@ -123,7 +120,6 @@
       "toolGrant": "execute"
     },
     "agent-failure-analyst": {
-      "persona": "failure-analyst",
       "_what": "Diagnoses a no-output/failed agent attempt, prescribes a corrective directive.",
       "_whyDiagnosesAttemptsOf": "The seams whose failed attempts reach this analyst through agent-attempt-analyst.sh (lib/tc-writer-gate.sh, brownfield-repro-test-writer.sh, spec-mode-runner's detective via lib/self-heal.js). Declared so the \u00a30 rehearsal can fail one first attempt of each on purpose and execute this seam.",
       "diagnosesAttemptsOf": [
@@ -149,7 +145,6 @@
       "toolGrant": "execute"
     },
     "repro-test-writer": {
-      "persona": "repro-test-engineer",
       "appliesTo": [
         "brownfield"
       ],
@@ -182,7 +177,6 @@
       }
     },
     "tc-writer": {
-      "persona": "tc-writer-agent",
       "_what": "Writes post-implementation test criteria into the PRD.",
       "maxOutputTokens": 32768,
       "timeoutSecs": 900,
@@ -201,7 +195,6 @@
       "toolGrant": "read-only"
     },
     "cpa-inference": {
-      "persona": "cpa-estimator",
       "_what": "Produces the cost/effort estimate for a story.",
       "maxOutputTokens": 16384,
       "timeoutSecs": 900,
@@ -222,7 +215,6 @@
       "_outputShapeInWhy": "Its own template defers: \"the JSON object as specified in your instructions\". contextualize-stories.sh renders cpa-system into __SYSTEM_PROMPT__, and that is where the Output schema block lives."
     },
     "prd-change-reviewer": {
-      "persona": "prd-change-reviewer",
       "_what": "Reviews a proposed PRD mutation before it is applied.",
       "maxOutputTokens": 32768,
       "temperature": "0.7",
@@ -239,7 +231,6 @@
       "toolGrant": "read-only"
     },
     "prd-change-summarizer": {
-      "persona": "prd-change-summarizer-agent",
       "runsOnRejectionBy": [
         "prd-change-reviewer"
       ],
@@ -261,7 +252,6 @@
       "_outputIsArtefact": "Produces PROSE. Its template is prd-change-summarizer-text and the caller caps it with head -c and prints it verbatim into the rejection text \u2014 a JSON envelope would have to be stripped before use."
     },
     "impl-failure-analyst": {
-      "persona": "failure-analyst",
       "_what": "Diagnoses why an implementation attempt failed.",
       "maxOutputTokens": 32768,
       "temperature": "0.7",
@@ -287,7 +277,6 @@
       "toolGrant": "execute"
     },
     "ac-classification": {
-      "persona": "ac-sufficiency-assessor",
       "appliesTo": [
         "brownfield"
       ],
@@ -310,7 +299,6 @@
       "_why_timeout": "Holds a plan pass AND an execute pass. It declared 90s \u2014 exactly the plan pass's own budget (EPAM_PLAN_TIMEOUT_SECS), so the plan alone could consume the whole window and the answer had none left. The caller then reported an empty response rather than a timeout."
     },
     "ac-elaboration": {
-      "persona": "ac-writer",
       "appliesTo": [
         "brownfield"
       ],
@@ -337,7 +325,6 @@
       "_why_timeout": "Same reason as ac-classification, with more work to do: 180s left too little behind a 90s plan pass. It was also being bounded by ac-classification's clock, which is fixed in ac-gate.js."
     },
     "codeline-discovery": {
-      "persona": "codeline-discovery-agent",
       "appliesTo": [
         "brownfield"
       ],
@@ -359,7 +346,6 @@
       "_why_bootstrap": "renders during Jira ingest, from lib/codeline-discovery.js \u2014 before the mint provisions any project prompt, and after pre-run-reset has removed the previous run's."
     },
     "roster-review": {
-      "persona": "roster-reviewer",
       "_what": "Falsifies the claims in a generated agent roster before any implementer inherits them.",
       "ladder": "top",
       "temperature": "0.1",
@@ -381,7 +367,6 @@
       "_whyCachedBy": "Runs only when the roster is minted. A launch that reuses a codeline's settled roster (the cache the operator requires) does not execute it, and the \u00a30 rehearsal expects that (install-copy rehearsal #26, 2026-09-20)."
     },
     "code-graph-detective": {
-      "persona": "code-graph-detective",
       "appliesTo": [
         "brownfield"
       ],
@@ -409,7 +394,6 @@
       "toolGrant": "execute"
     },
     "guard-vocabulary": {
-      "persona": "guard-vocabulary-agent",
       "_what": "Derives the vocabulary the verification-criteria guard enforces. A guard armed with the wrong terms reports clean.",
       "ladder": "top",
       "temperature": "0.1",
@@ -426,7 +410,6 @@
       "toolGrant": "read-only"
     },
     "estate-survey": {
-      "persona": "estate-surveyor",
       "_what": "Surveys every codeline BEFORE the roster is minted: which ones the work actually reaches, and which need their own investigator. Breadth, never fix sites.",
       "ladder": "top",
       "temperature": "0.7",
@@ -445,7 +428,6 @@
       "_why_bootstrap": "surveys the codelines before anything is minted. A prompt that runs before the project prompt layer exists cannot be a project prompt."
     },
     "story-writer": {
-      "persona": "story-writer-agent",
       "_what": "Implements a story: writes the code that satisfies its criteria. The archetype every minted -engineer is an instance of.",
       "ladder": "top",
       "temperature": "0.2",
@@ -494,7 +476,6 @@
       "_outputIsArtefact": "Delivers the implementation through the filesystem (toolGrant execute, produces \"implementation\"). Nothing parses its stdout as a payload, so there is no shape to declare and a declared one would be fiction."
     },
     "vc-coverage": {
-      "persona": "coverage-judge",
       "appliesTo": [
         "brownfield"
       ],
@@ -516,7 +497,6 @@
       "toolGrant": "read-only"
     },
     "qa-gate:sast": {
-      "persona": "sast-sentinel",
       "_what": "Static application security scan over the change.",
       "maxOutputTokens": 16384,
       "timeoutSecs": 900,
@@ -531,7 +511,6 @@
       "toolGrant": "execute"
     },
     "qa-gate:spec-validator": {
-      "persona": "spec-validator",
       "_what": "Checks the change satisfies the story\u2019s acceptance criteria.",
       "maxOutputTokens": 16384,
       "timeoutSecs": 900,
@@ -549,7 +528,6 @@
       "toolGrant": "execute"
     },
     "qa-gate:review-ranger": {
-      "persona": "review-ranger",
       "_what": "Reviews the change for defects the team-lead review may not reach.",
       "maxOutputTokens": 16384,
       "timeoutSecs": 900,
@@ -564,7 +542,6 @@
       "toolGrant": "execute"
     },
     "qa-gate:mutant-hunter": {
-      "persona": "mutant-hunter",
       "_what": "Assesses whether the tests would fail if the change were broken.",
       "maxOutputTokens": 16384,
       "timeoutSecs": 900,
@@ -582,7 +559,6 @@
       "toolGrant": "execute"
     },
     "qa-gate:fuzz-weaver": {
-      "persona": "fuzz-weaver",
       "_what": "Probes the change with adversarial inputs.",
       "maxOutputTokens": 16384,
       "timeoutSecs": 900,
@@ -597,7 +573,6 @@
       "toolGrant": "execute"
     },
     "qa-gate:perf-sentinel": {
-      "persona": "perf-sentinel",
       "_what": "Assesses the change for runtime and startup cost.",
       "maxOutputTokens": 16384,
       "timeoutSecs": 900,
@@ -612,7 +587,6 @@
       "toolGrant": "execute"
     },
     "prompt-builder": {
-      "persona": "prompt-builder-agent",
       "_what": "Provisions this project's prompt library: reads the generic templates and decorates each one for the project and the roster just minted. Runs at mint time, as part of the same stage that creates the agents the prompts are for \u2014 the only stage that knows both what the project is and who will work on it.",
       "ladder": "mid",
       "temperature": "0.2",
@@ -640,7 +614,6 @@
       "$whyLadder": "Moved off 'top' 2026-08-26 (operator decision, cost). This seam DECORATES a template \u2014 it reads the generic body and rewrites it for this project. It judges nothing, so the rule that a reviewer runs on the writer's rung does not bind it. Measured that day: 29 calls, $5.48, 80% of a run's cost before a story was touched, and a measured haiku-vs-sonnet comparison put sonnet at ~11x the cost per unit of output. 'mid' starts on the cheap rung and escalates.\n\nSAFE BECAUSE THE OUTPUT IS CHECKED, NOT TRUSTED: project-prompt-contract.js refuses a generation that drops a placeholder, a paired output tag or an output field, feeds the reason back, and reviewPrompt runs a second adversarial pass. A weaker model that fumbles is caught and escalated, never shipped. The residual risk is a prompt that is structurally valid and substantively worse, which only the review pass can see \u2014 watch the refusal counts in the log."
     },
     "codeline-bridge-agent": {
-      "persona": "codeline-bridge-agent",
       "appliesTo": [
         "multi-codeline"
       ],
@@ -663,7 +636,6 @@
       "_outputIsArtefact": "Delivers a FILE, not a payload: run-agent-orchestration.sh requires it to call WriteFile and then checks the contract file exists and is non-empty, correcting the agent by name when it does not. There is no response body to shape."
     },
     "qa-gate:e2e": {
-      "persona": "e2e-route-checker",
       "_what": "Browser end-to-end routing check for one route.",
       "ladder": "top",
       "temperature": "0.1",
@@ -685,7 +657,6 @@
       }
     },
     "agent-mint": {
-      "persona": "agent-minter",
       "_what": "Proposes the roster of agents this project needs, from its tickets and its codelines.",
       "maxOutputTokens": 65536,
       "_why_maxOutputTokens": "The mint now reads the roster it is adding to \u2014 all 57 canonical agents by name, plus whatever this project has minted \u2014 so its prompt and the reasoning it has to do both grew. It also emits a 150-300 word systemPrompt per proposed role. Raised with its siblings that handle the roster; a truncated proposal is refused by mergeProjectAgents and the attempt is spent either way.",
@@ -704,7 +675,6 @@
       "_whyCachedBy": "Runs only when the roster is minted. A launch that reuses a codeline's settled roster (the cache the operator requires) does not execute it, and the \u00a30 rehearsal expects that (install-copy rehearsal #26, 2026-09-20)."
     },
     "role-assigner": {
-      "persona": "role-assigner-agent",
       "_what": "Assigns every story one of the minted roles.",
       "maxOutputTokens": 32768,
       "timeoutSecs": 900,
@@ -722,7 +692,6 @@
       "_why_bootstrap": "assigns minted roles to stories, before prompt generation. A prompt that runs before the project prompt layer exists cannot be a project prompt."
     },
     "spec-coordinator": {
-      "persona": "spec-coordinator-agent",
       "_what": "Assigns the spec work for a phase, then reviews the specs and the model choices it produced.",
       "maxOutputTokens": 32768,
       "timeoutSecs": 900,
@@ -738,7 +707,6 @@
       "toolGrant": "read-only"
     },
     "spec-agent": {
-      "persona": "spec-author",
       "_what": "Writes one story's specification \u2014 the openspec or speckit author.",
       "maxOutputTokens": 32768,
       "timeoutSecs": 900,
@@ -754,7 +722,6 @@
       "toolGrant": "read-only"
     },
     "ticket-links": {
-      "persona": "ticket-link-agent",
       "appliesTo": [
         "brownfield"
       ],
@@ -774,7 +741,6 @@
       "toolGrant": "read-network"
     },
     "phase-assessment": {
-      "persona": "skill-assessor",
       "_what": "Augments every agent profile with this project's skills before a phase runs. Writes profiles.json.",
       "maxOutputTokens": 65536,
       "_why_maxOutputTokens": "DOUBLED WITH THE ARTEFACT IT HANDLES. roster-specialiser was raised to 65536 so it could emit all 57 canonical agents in one file; this seam handles that same artefact and was left at 32768. On 2026-08-24 two review batches were TRUNCATED mid-JSON (62,648 and 38,432 bytes) and reported as unexamined, which is indistinguishable from a malformed reply, so the judge was retried identically and failed the same way. A budget belongs to the artefact, not to one seam: a reviewer quotes canonical AND derived text, so it needs at least what the writer needs.",
@@ -791,21 +757,7 @@
       "toolGrant": "write-file",
       "_toolGrantWhy": "write-file, not write: this seam produces one JSON file from what it reads. With bash in its grant the roster specialiser did the scaffold story's work and wrote no roster (2026-09-12, three paid attempts)."
     },
-    "phase-assessment-post": {
-      "persona": "skill-assessor",
-      "_what": "Judges a finished phase from its pre-computed cost and variance, and recommends role reassignments for stories still pending. Answers JSON; the engine applies it.",
-      "_why": "The post-phase half of the skill assessor's job, as a seam of its own (operator decision, 2026-09-29). It was called as team-lead-agent, which resolves to cpa-inference, so it ran on the estimator's grant and ladder and its codemie-web assistant carried the estimator's instructions. It is not phase-assessment either: that seam writes profiles.json; this one only judges evidence handed to it.",
-      "ladder": "mid",
-      "timeoutSecs": 300,
-      "_whyTimeout": "lib/phase-assessment.sh bounds this call with PHASE_ASSESSMENT_TIMEOUT_SECS (300): a text-in, JSON-out judgment.",
-      "produces": "phase-variance-judgment",
-      "consumes": [],
-      "template": "skill-assessment-postphase",
-      "toolGrant": "none",
-      "_toolGrantWhy": "Everything it judges is pre-computed and injected (assess-precompute.py), and the engine performs every write (assess-apply.py). A tool would only let it rediscover evidence it was given, or write what the engine must apply."
-    },
     "prd-model-coordinator": {
-      "persona": "prd-model-coordinator",
       "_what": "Assigns every pending story its model, provider and reasoning effort, and writes them into the PRD.",
       "maxOutputTokens": 16384,
       "timeoutSecs": 900,
@@ -824,7 +776,6 @@
       "_toolGrantWhy": "write-file, not write: this seam produces one JSON file from what it reads. With bash in its grant the roster specialiser did the scaffold story's work and wrote no roster (2026-09-12, three paid attempts)."
     },
     "prompt-review": {
-      "persona": "prompt-reviewer",
       "_what": "Falsifies what a generated project prompt claims about this project, before any agent inherits it.",
       "ladder": "mid",
       "temperature": "0.1",
@@ -854,75 +805,7 @@
       "_whyAlwaysOn": "ON BY DEFAULT. This was declared opt-in behind EPAM_PROMPT_REVIEW_ENABLED and no project ever set it, so the one artefact every downstream agent inherits WHOLE \u2014 its prompt \u2014 was the only generated thing installed unexamined. Operator, 2026-08-27: prompt review is the single review that makes the most sense. A run that wants it off says so; absence is no longer silence.",
       "_whyMaxOutputTokens": "4096, down from 32768. The deliverable is a JSON block that is 52 characters when clean and a few hundred when it has findings; 32768 was room to narrate, and the model used it \u2014 3,366 output tokens per call, of which the consumer reads about 13. The budget still holds a verdict with several evidenced findings many times over, and no longer pays for prose that is discarded unread."
     },
-    "si-author": {
-      "persona": "instruction-author",
-      "layer": "bootstrap",
-      "_why_bootstrap": "Authors the standing instructions of every seam, including those that run before the project prompt layer exists (ingest, the mint). It cannot render from a project copy it precedes.",
-      "_what": "Authors one pipeline agent's standing system instructions for this project, from the seam's task prompt, its declaration, the agent's persona and the project's context.",
-      "_why": "Operator 2026-09-29: \"We cannot have thin SI\" and \"YOU need to do this agentically.\" Instructions written once by hand were either thin or carried another project's facts; authored per project from the seam's own inputs, and falsified by si-review, they are neither.",
-      "ladder": "top",
-      "temperature": "0.3",
-      "maxOutputTokens": 16384,
-      "timeoutSecs": 900,
-      "toolGrant": "read-only",
-      "produces": "assistant-instructions",
-      "consumes": [
-        {
-          "kind": "template",
-          "required": true,
-          "authority": "the task prompt the instructions serve"
-        },
-        {
-          "kind": "roster",
-          "required": false,
-          "authority": "the agent's persona once the project roster carries it"
-        },
-        {
-          "kind": "canonical-roster",
-          "required": false,
-          "authority": "the agent's persona before the project roster exists"
-        },
-        {
-          "kind": "codeline-facts",
-          "required": false,
-          "authority": "the only project facts the instructions may state"
-        }
-      ],
-      "template": "si-author"
-    },
-    "si-review": {
-      "persona": "instruction-reviewer",
-      "layer": "bootstrap",
-      "_why_bootstrap": "Reviews what si-author wrote, at the same point in the run; it runs before the project prompt layer exists.",
-      "_what": "Falsifies one agent's authored standing instructions against the seam's task prompt, its declared tools and the project's code.",
-      "_why": "Nothing may reach an agent unchallenged. A blocking finding sends the seam back to si-author; after the declared number of cycles the last authored instructions are kept and the findings are recorded, never a halt.",
-      "ladder": "top",
-      "temperature": "0.1",
-      "maxOutputTokens": 16384,
-      "timeoutSecs": 900,
-      "toolGrant": "read-only",
-      "produces": "instructions-review",
-      "consumes": [
-        {
-          "kind": "assistant-instructions",
-          "required": true,
-          "authority": "the artefact under review"
-        },
-        {
-          "kind": "template",
-          "required": true,
-          "authority": "the task prompt they must not contradict"
-        },
-        {
-          "kind": "codeline-facts",
-          "required": false,
-          "authority": "the ground truth project claims are checked against"
-        }
-      ],
-      "template": "si-review"
-    },
     "survey-review": {
-      "persona": "survey-reviewer",
       "layer": "bootstrap",
       "_why_bootstrap": "Runs inside the mint immediately after the estate survey, before the project prompt layer exists \u2014 like the survey it reviews. Undeclared, it rendered from a project copy that was not yet generated (\"project-authority prompt missing\") and the survey stood UNREVIEWED in every \u00a30 greenfield rehearsal (2026-09-14).",
       "_what": "Falsifies what the estate survey claims about the codelines, before a roster is minted from it.",
@@ -955,7 +838,6 @@
       "_whyCachedBy": "Runs only when the roster is minted. A launch that reuses a codeline's settled roster (the cache the operator requires) does not execute it, and the \u00a30 rehearsal expects that (install-copy rehearsal #26, 2026-09-20)."
     },
     "qa-gate:runtime-boundary": {
-      "persona": "runtime-boundary",
       "_what": "Asks whether a change can execute in the runtime it targets, given the codeline's own configuration.",
       "_why": "Live metrolinx AMSD-2041: two defects survived three runs and three implementations because no seam owned execution. A page-level module imported a service that throws at load in a context where its credentials are absent, and the codeline's configuration forbade the embedding the feature required. The code reviewer judges the diff; SAST judges vulnerabilities; the client/server scanner reads changed files only. This asks the question none of them asks.",
       "maxOutputTokens": 32768,
@@ -972,7 +854,6 @@
       "toolGrant": "read-only"
     },
     "roster-specialiser": {
-      "persona": "roster-specialiser-agent",
       "_what": "Specialises the canonical roster into this project's own roster, writing it with its tools.",
       "_why": "The canonical roster belongs to no project, so running it unchanged gave every project the same personas \u2014 a reviewer judged one codeline while describing another. This is the derivation step, and it is agentic because deciding what an agent must know about a codeline is judgement, not substitution.",
       "ladder": "top",
@@ -999,7 +880,6 @@
       "_whyCachedBy": "Runs only when the roster is minted. A launch that reuses a codeline's settled roster (the cache the operator requires) does not execute it, and the \u00a30 rehearsal expects that (install-copy rehearsal #26, 2026-09-20)."
     },
     "project-roster-review": {
-      "persona": "project-roster-reviewer",
       "_what": "Falsifies the project roster against canonical before any agent is invoked from it.",
       "_why": "An unreviewed roster is a run whose agent identities nobody vouched for. Given BOTH the derivation and its source, so it can check that a rule was not weakened rather than that the text reads well.",
       "ladder": "top",
@@ -1021,7 +901,6 @@
       "_whyCachedBy": "Runs only when the roster is minted. A launch that reuses a codeline's settled roster (the cache the operator requires) does not execute it, and the \u00a30 rehearsal expects that (install-copy rehearsal #26, 2026-09-20)."
     },
     "topology-router": {
-      "persona": "topology-router-agent",
       "appliesTo": [
         "multi-story"
       ],
@@ -1051,7 +930,6 @@
       }
     },
     "kb-synthesizer": {
-      "persona": "kb-synthesizer-agent",
       "_what": "Synthesises repeated healing events into KB entries.",
       "_why": "It made LLM calls while declaring nothing, so its timeout and output budget lived as literals in lib/kb-synthesizer.js and no run could see or change them. Declared here with the values it was already using, so the numbers are visible and the code reads them instead of carrying its own.",
       "ladder": "base",
@@ -1085,29 +963,6 @@
     "The engine holds none of these names. Adding an agent kind is an edit HERE."
   ],
   "seamPatterns": [
-    { "match": "^instruction-author$", "seam": "si-author", "$why": "the persona this seam declares (profiles.persona) — named exactly, ahead of every family pattern" },
-    { "match": "^instruction-reviewer$", "seam": "si-review", "$why": "the persona this seam declares (profiles.persona) — named exactly, ahead of every family pattern" },
-    { "match": "^repro\\-test\\-engineer$", "seam": "repro-test-writer", "$why": "the persona this seam declares (profiles.persona) — named exactly, ahead of every family pattern" },
-    { "match": "^cpa\\-estimator$", "seam": "cpa-inference", "$why": "the persona this seam declares (profiles.persona) — named exactly, ahead of every family pattern" },
-    { "match": "^prd\\-change\\-summarizer\\-agent$", "seam": "prd-change-summarizer", "$why": "the persona this seam declares (profiles.persona) — named exactly, ahead of every family pattern" },
-    { "match": "^ac\\-sufficiency\\-assessor$", "seam": "ac-classification", "$why": "the persona this seam declares (profiles.persona) — named exactly, ahead of every family pattern" },
-    { "match": "^ac\\-writer$", "seam": "ac-elaboration", "$why": "the persona this seam declares (profiles.persona) — named exactly, ahead of every family pattern" },
-    { "match": "^codeline\\-discovery\\-agent$", "seam": "codeline-discovery", "$why": "the persona this seam declares (profiles.persona) — named exactly, ahead of every family pattern" },
-    { "match": "^estate\\-surveyor$", "seam": "estate-survey", "$why": "the persona this seam declares (profiles.persona) — named exactly, ahead of every family pattern" },
-    { "match": "^story\\-writer\\-agent$", "seam": "story-writer", "$why": "the persona this seam declares (profiles.persona) — named exactly, ahead of every family pattern" },
-    { "match": "^coverage\\-judge$", "seam": "vc-coverage", "$why": "the persona this seam declares (profiles.persona) — named exactly, ahead of every family pattern" },
-    { "match": "^prompt\\-builder\\-agent$", "seam": "prompt-builder", "$why": "the persona this seam declares (profiles.persona) — named exactly, ahead of every family pattern" },
-    { "match": "^agent\\-minter$", "seam": "agent-mint", "$why": "the persona this seam declares (profiles.persona) — named exactly, ahead of every family pattern" },
-    { "match": "^role\\-assigner\\-agent$", "seam": "role-assigner", "$why": "the persona this seam declares (profiles.persona) — named exactly, ahead of every family pattern" },
-    { "match": "^spec\\-author$", "seam": "spec-agent", "$why": "the persona this seam declares (profiles.persona) — named exactly, ahead of every family pattern" },
-    { "match": "^skill\\-assessor$", "seam": "phase-assessment", "$why": "the persona this seam declares (profiles.persona) — named exactly, ahead of every family pattern" },
-    { "match": "^survey\\-reviewer$", "seam": "survey-review", "$why": "the persona this seam declares (profiles.persona) — named exactly, ahead of every family pattern" },
-    { "match": "^roster\\-specialiser\\-agent$", "seam": "roster-specialiser", "$why": "the persona this seam declares (profiles.persona) — named exactly, ahead of every family pattern" },
-    { "match": "^project\\-roster\\-reviewer$", "seam": "project-roster-review", "$why": "the persona this seam declares (profiles.persona) — named exactly, ahead of every family pattern" },
-    { "match": "^topology\\-router\\-agent$", "seam": "topology-router", "$why": "the persona this seam declares (profiles.persona) — named exactly, ahead of every family pattern" },
-    { "match": "^kb\\-synthesizer\\-agent$", "seam": "kb-synthesizer", "$why": "the persona this seam declares (profiles.persona) — named exactly, ahead of every family pattern" },
-    { "match": "^e2e\\-route\\-checker$", "seam": "qa-gate:e2e", "$why": "the persona this seam declares (profiles.persona) — named exactly, ahead of every family pattern" },
-    { "match": "^prompt\\-reviewer$", "seam": "prompt-review", "$why": "the persona this seam declares (profiles.persona) — named exactly, ahead of every family pattern" },
     {
       "match": "^(story-)?plan-",
       "seam": "cpa-inference",
@@ -1369,9 +1224,6 @@
   ],
   "$engineConsumesWhy": "What the ENGINE reads out of an agent, as opposed to what another AGENT reads. The registry could say what a seam produces and what a seam consumes, and what the engine PRODUCES, but had no way to say what the engine CONSUMES. So twenty-one artefacts that the orchestrator parses inline or reads from disk appeared to have no consumer at all, and an audit driven by these declarations would certify a pipeline that drops them. Each entry carries the token it is read as and the files that read it, so a declaration cannot outlive the code it describes.",
   "engineConsumes": {
-    "assistant-instructions": {"readsAs": "assistant-instructions", "readBy": ["orchestrations/scripts/lib/assistant-instructions.js", "orchestrations/plugins/providers/codemie-web/registry.js"]},
-    "phase-variance-judgment": {"readsAs": "phase-variance-judgment", "readBy": ["orchestrations/scripts/lib/phase-assessment.sh", "orchestrations/scripts/lib/handlers/assess-apply.py"]},
-    "instructions-review": {"readsAs": "instructions-review", "readBy": ["orchestrations/scripts/lib/assistant-instructions.js"]},
     "ac-classification": {
       "readsAs": "ac-classification",
       "readBy": [

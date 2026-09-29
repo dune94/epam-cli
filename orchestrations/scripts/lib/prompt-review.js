@@ -69,16 +69,7 @@ function makePromptReviewer({ render, invoke, values, logPathFor, warn, projectC
           const tplDoc = JSON.parse(fs.readFileSync(ep.templatePathFor('prompt-review'), 'utf8'));
           const tplBody = tplDoc.body
             || Object.values(tplDoc.bodies || {}).filter((b) => typeof b === 'string').join('\n');
-          // substituteOnce takes (body, KEYS, values). Called as (body, values) it replaced nothing:
-          // every bootstrap review was sent its placeholders literally — the template under review,
-          // the prompt it judged, its own persona (rehearsal persona check, 2026-09-29).
-          const v = { ...values({ id, template, generated }) };
-          if (!v.__PERSONA__) {
-            // eslint-disable-next-line global-require
-            const p = require('./template-persona.js').templatePersona('prompt-review');
-            if (p !== undefined) v.__PERSONA__ = p;
-          }
-          prompt = ep.substituteOnce(tplBody, ep.placeholdersIn(tplBody).filter((k) => v[k] !== undefined && v[k] !== null), v);
+          prompt = ep.substituteOnce(tplBody, values({ id, template, generated }));
           _warn(`[prompt-review] ${id}: this project has no reviewer prompt yet — reviewing from `
             + 'the TEMPLATE for this bootstrap generation; the project copy takes over once minted');
         } catch (e2) {

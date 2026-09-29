@@ -86,17 +86,6 @@ append_pipeline_cost_record() {
     ) 200>"$lock_file"
 }
 
-# THE AGENTS' STANDING INSTRUCTIONS — authored by si-author, falsified by si-review, per project and per
-# seam (lib/assistant-instructions.js). Called before ingest and at mint start, from what exists then,
-# so the seams that run before the roster have authored instructions; and again after the mint, when the
-# roster and the codelines are known. A digest of every input means only what changed is re-authored.
-# NEVER FATAL: a seam that could not be authored keeps what it had and its consumer says so.
-_author_assistant_instructions() {
-    local _log="${1:-/dev/null}"
-    "$NODE_BIN" "$SCRIPT_DIR/lib/assistant-instructions.js" 2>&1 | tee -a "$_log" || true
-    return 0
-}
-
 # ── The agent mint ────────────────────────────────────────────────────────────
 # EVERY PROJECT MINTS ITS OWN AGENTS, however its PRD arrived.
 #
@@ -113,7 +102,6 @@ _author_assistant_instructions() {
 #   $2 — the log file to tee into
 _run_agent_mint() {
   local _prd="$1" _log="${2:-/dev/null}"
-  _author_assistant_instructions "$_log"
 
   # THE SCAFFOLD PHASE, first. It carries no implementation stories; its only job is to make the
   # phase loop fire the pre-phase skill assessment over every story, so each agent's profile gains
@@ -310,7 +298,6 @@ _run_agent_mint() {
       return 1
     fi
   }
-  _author_assistant_instructions "$_log"
   return 0
 }
 
@@ -490,7 +477,6 @@ _run_jira_pipeline() {
   # one project does not fail when it is wrong, it succeeds against that project's data —
   # which is exactly how every Jira-driven run once synthesized into one shared PRD
   # (2026-07-25 clobber). Absent is an error, not a substitution.
-  _author_assistant_instructions "$_log_file"
   local _synth_prd="${JIRA_SYNTH_PRD_PATH:-${PRD_FILE:-}}"
   if [ -z "$_synth_prd" ]; then
     error "[jira] no PRD path: set JIRA_SYNTH_PRD_PATH or PRD_FILE. Refusing to guess — the engine names no project."

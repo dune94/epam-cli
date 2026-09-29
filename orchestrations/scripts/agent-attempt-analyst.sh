@@ -144,9 +144,7 @@ fi
 # Reuse the failure-analyst profile (the crown-jewel role instructions) when present.
 _profile=""
 _profiles_file="$(dirname "$SCRIPT_DIR")/agents/profiles.json"
-# Whose persona: the seam registry's declaration (invocation-profiles.json `persona`), not a name here.
-. "$SCRIPT_DIR/lib/roster-read.sh"
-[ -f "$_profiles_file" ] && _profile=$(jq -r --arg r "$(seam_persona_agent agent-failure-analyst)" '.[$r] // ""' "$_profiles_file" 2>/dev/null || echo "")
+[ -f "$_profiles_file" ] && _profile=$(jq -r '."failure-analyst" // ""' "$_profiles_file" 2>/dev/null || echo "")
 # THE PROMPT, AND THE FIVE CLASS HINTS, FROM THE TEMPLATE LAYER.
 #
 # All of it used to sit here: the fallback role line, a five-arm case statement whose every arm

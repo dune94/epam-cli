@@ -76,9 +76,6 @@ const TAG_TO_TOOL = {
   GUARD_VOCABULARY: { tool: 'TOOL_GUARD_VOCABULARY', itemsKey: null },
   // Ticket links enter an EVIDENCE path — a prose answer cannot be persisted or acted on.
   TICKET_LINKS: { tool: 'TOOL_TICKET_LINKS', itemsKey: 'links' },
-  // Every agent's standing instructions (lib/assistant-instructions.js): the authored parts and their review.
-  ASSISTANT_INSTRUCTIONS: { tool: 'TOOL_SI_AUTHOR', itemsKey: null },
-  INSTRUCTIONS_REVIEW: { tool: 'TOOL_SI_REVIEW', itemsKey: null },
 
   // THE FOUR THAT WERE BOUND AND NEVER VALIDATED.
   //

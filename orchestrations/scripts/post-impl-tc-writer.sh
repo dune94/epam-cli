@@ -118,9 +118,7 @@ fi
 PROFILES_FILE="$(dirname "$SCRIPT_DIR")/agents/profiles.json"
 TC_WRITER_PROFILE=""
 if [ -f "$PROFILES_FILE" ]; then
-  # Whose persona: the seam registry's declaration (invocation-profiles.json `persona`), not a name here.
-  . "$SCRIPT_DIR/lib/roster-read.sh"
-  TC_WRITER_PROFILE=$(jq -r --arg r "$(seam_persona_agent tc-writer)" '.[$r] // ""' "$PROFILES_FILE" 2>/dev/null || echo "")
+  TC_WRITER_PROFILE=$(jq -r '."tc-writer-agent" // ""' "$PROFILES_FILE" 2>/dev/null || echo "")
 fi
 # NO FALLBACK PROMPT. This substituted a one-line description of the job for the agent's real
 # profile whenever profiles.json could not be read — silently. The writer then produced

@@ -1754,7 +1754,7 @@ async function run() {
   const profilesPath = path.join(automationDir, 'agents', 'profiles.json');
   let profiles = {};
   try { profiles = JSON.parse(fs.readFileSync(profilesPath, 'utf8')); } catch { /* no profiles */ }
-  const specCoordinatorProfile = profiles[require('./lib/seam-invocation.js').seamPersonaAgent('spec-coordinator')] || '';
+  const specCoordinatorProfile = profiles['spec-coordinator-agent'] || '';
 
   const phaseStories = Array.isArray(prd.implementationOrder?.[opts.phase])
     ? prd.implementationOrder[opts.phase]
@@ -3318,7 +3318,7 @@ async function deriveGuardVocabulary({ promptExec, rule, statements, story, find
     .join('\n');
 
   const profiles = profilesWithProjectBriefs(logDir);
-  const persona = profiles[require('./lib/seam-invocation.js').seamPersonaAgent('guard-vocabulary')] || '';
+  const persona = profiles['guard-vocabulary-agent'] || '';
 
   const prompt = buildGuardVocabularyPrompt({ persona, seam, rule, _statements, manifest, docBlock, evidence, story, codegraphTool, repoPath });
 
@@ -4758,8 +4758,20 @@ function pipelineStagesBlock(modes) {
  * One definition, because three copies is how the first fix reached one of them and not the others.
  */
 function profilesWithProjectBriefs(logDir) {
-  // eslint-disable-next-line global-require
-  return require('./lib/agent-roster.js').profilesWithProjectBriefs(path.join(automationDirFromLogDir(logDir), 'agents'));
+  let out = {};
+  try {
+    out = JSON.parse(fs.readFileSync(
+      path.join(automationDirFromLogDir(logDir), 'agents', 'profiles.json'), 'utf8'));
+  } catch { out = {}; }
+  try {
+    // eslint-disable-next-line global-require
+    const _r = require('./lib/agent-roster.js');
+    const pp = JSON.parse(fs.readFileSync(
+      _r.projectProfilesPath(path.join(automationDirFromLogDir(logDir), 'agents')), 'utf8'));
+    // The project's own briefs WIN: a name it minted is its own, whatever the canonical set says.
+    out = { ...out, ...(pp.profiles || pp) };
+  } catch { /* a project with no minted briefs keeps the canonical set, exactly as before */ }
+  return out;
 }
 
 function buildRosterReviewPrompt({ persona, briefBlock, clBlock, ticketBlock, docBlock, toolLine, coverageBlock }) {
@@ -4836,8 +4848,7 @@ async function reviewSurvey({
   ].filter(Boolean).join('\n')).join('\n');
 
   const prompt = renderEngineTemplate('survey-review', {
-    // WHO REVIEWS: the persona the seam declares (invocation-profiles.json), never a sentence here.
-    __PERSONA__: profilesWithProjectBriefs(logDir)[require('./lib/seam-invocation.js').seamPersonaAgent('survey-review')] || '',
+    __PERSONA__: 'You are reviewing an estate survey before a team is assembled from it.',
     __SURVEY_BLOCK__: surveyBlock,
     __CODELINE_BLOCK__: _named.map((c) => `- ${c.name} (${c.path})`).join('\n') || '- (none)',
     __TICKET_BLOCK__: (Array.isArray(tickets) ? tickets : [])
@@ -5419,7 +5430,7 @@ async function reviewRoster({
       return body ? '- ' + d.url + '\n' + body : '- ' + d.url + ' (retrieved, no readable text)';
     }).join('\n\n');
 
-  const persona = (profiles && profiles[require('./lib/seam-invocation.js').seamPersonaAgent('roster-review')]) || '';
+  const persona = (profiles && profiles['roster-reviewer']) || '';
   const toolLine = toolGrant
     ? 'Your tools: ' + toolGrant + '. Open the repositories. Resolve the packages and symbols these '
       + 'briefs name. Confirm the files and directories they claim to own exist.'
@@ -6695,7 +6706,7 @@ async function runCodeGraphDetective(story, logDir, opts = {}) {
   })();
   const detectiveProfile = _mintedDetective
     ? _mintedDetective.brief
-    : (profiles[require('./lib/seam-invocation.js').seamPersonaAgent('code-graph-detective')] || '');
+    : (profiles['code-graph-detective'] || '');
   if (_mintedDetective) {
     console.log(`spec-mode: detective for ${(story && story.codeline) || 'story'} = ${_mintedDetective.name} (minted for this codeline)`);
   }
@@ -7350,7 +7361,7 @@ async function reviewTicketLinks({ promptExec, story, logDir, docPaths = [] }) {
   if (!links.length) return [];
 
   const profiles = profilesWithProjectBriefs(logDir);
-  const persona = profiles[require('./lib/seam-invocation.js').seamPersonaAgent('ticket-links')] || '';
+  const persona = profiles['ticket-link-agent'] || '';
 
   const linkBlock = links.map((l, i) => {
     // "ticket body" rather than "description": a link found outside a comment. The word is
@@ -10268,7 +10279,7 @@ async function reviewPrdChange({ aiRunnerCmd, profiles, storyId, changeType, bef
   const gateProvider = process.env.ORCH_GATE_PROVIDER || '';
   if (!gateProvider) return { verdict: 'pass', issues: [] };
 
-  const reviewerProfile = profiles[require('./lib/seam-invocation.js').seamPersonaAgent('prd-change-reviewer')] || '';
+  const reviewerProfile = profiles['prd-change-reviewer'] || '';
   if (!reviewerProfile) return { verdict: 'pass', issues: [] };
 
   // When a split occurred alongside other field changes (description/title),
@@ -10319,11 +10330,6 @@ async function reviewPrdChange({ aiRunnerCmd, profiles, storyId, changeType, bef
     // check it. Reuses the same shared read-only allowlist every other
     // gate agent draws from.
     const output = await runClaude(gateExec, prompt, logPath, {
-      // NAMED AT THE CALL. runClaude names an agent from costAgent only when the process has no
-      // EPAM_AGENT_NAME, and spec-mode inherits one from the step that launched it — so this review
-      // ran as that step's agent (cpa-inference): its ladder, its tool grant, and on codemie-web its
-      // stored assistant, whose instructions are the estimator's (£0 rehearsal, 2026-09-29).
-      EPAM_AGENT_NAME: 'prd-change-reviewer',
       AI_GATE_ALLOW_TOOLS: '1',
       EPAM_ALLOWED_TOOLS: process.env.ORCH_GATE_ALLOWED_TOOLS || 'bash,read_file,list_files,search',
       EPAM_MAX_TOOL_CALLS: process.env.PRD_CHANGE_REVIEWER_MAX_TOOL_CALLS || String(specModeDefaults().perSeam.prdChangeReviewer),
@@ -10849,9 +10855,6 @@ module.exports = {
     TOOL_PROJECT_AGENTS,
     TOOL_ROSTER_REVIEW,
     TOOL_ROLE_ASSIGNMENTS,
-    // The standing-instructions pair (lib/assistant-instructions.js) — validated by tag like the rest.
-    TOOL_SI_AUTHOR: require('./lib/assistant-instructions.js').TOOL_SI_AUTHOR,
-    TOOL_SI_REVIEW: require('./lib/assistant-instructions.js').TOOL_SI_REVIEW,
   },
   specAgentEnv,
   surveyToolBudget,

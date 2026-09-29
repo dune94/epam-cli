@@ -260,7 +260,7 @@ fi
 # correction and why: a default naming the engine roster, `// ""` hiding a missing entry, and a
 # one-line reviewer written in code that fired whenever either failed.
 _REVIEW_PROFILE=""
-if ! _REVIEW_PROFILE=$(roster_persona "$(seam_persona_agent code-review-cycle)" 2>&1); then
+if ! _REVIEW_PROFILE=$(roster_persona review-agent 2>&1); then
     echo "[code-review-cycle] cannot resolve the review-agent persona: ${_REVIEW_PROFILE}" >&2
     echo "[code-review-cycle] Refusing to review with an identity nobody chose." >&2
     exit 1

@@ -758,4 +758,18 @@ function seamInvocationEnv(agent, agentsDir, opts) {
 
 // resolveTierPosition is exported because the SHELL side needs the same answer: a profile
 // declares a position, and two places must not each decide what a position means.
-module.exports = { seamInvocationEnv, resolveSeam, registryPath, resolveTierPosition, seamLadderFor };
+/**
+ * WHOSE PERSONA A SEAM SPEAKS AS — its registry declaration (`persona`), the one place the name is
+ * written. '' for a seam whose persona varies per call. A seam the registry does not declare is
+ * reported on stderr and answered '' — never a halt (operator, 2026-09-29: no gates unapproved).
+ */
+function seamPersonaAgent(seam, registryFile) {
+  const profiles = readRegistry(registryFile || registryPath()).profiles || {};
+  if (!profiles[seam]) {
+    process.stderr.write(`[seam-invocation] WARNING: no seam '${seam}' in the registry — no persona declared for it\n`);
+    return '';
+  }
+  return String(profiles[seam].persona || '');
+}
+
+module.exports = { seamInvocationEnv, resolveSeam, registryPath, resolveTierPosition, seamLadderFor, seamPersonaAgent };

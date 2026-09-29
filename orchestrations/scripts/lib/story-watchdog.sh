@@ -390,7 +390,7 @@ run_story_recovery_analyst() {
         # and the only trace was a profile that happened to be missing. Every canonical agent is
         # specialised into the roster, so an absence here is a defect in the roster.
         local _src_reviewer_profile
-        if ! _src_reviewer_profile=$(roster_persona prd-change-reviewer 2>&1); then
+        if ! _src_reviewer_profile=$(roster_persona "$(seam_persona_agent prd-change-reviewer)" 2>&1); then
             error "  [prd-change-review] cannot resolve the reviewer's persona: ${_src_reviewer_profile}"
             error "  [prd-change-review] Refusing to certify a PRD change with no reviewer."
             return 1

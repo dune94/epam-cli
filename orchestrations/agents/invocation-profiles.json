@@ -74,8 +74,10 @@
     "allowedTools": "",
     "temperature": ""
   },
+  "$personaWhy": "WHOSE PERSONA A SEAM SPEAKS AS, declared once (review of 2026-09-29, item 3). The call sites spelled the agent out (roster_persona review-agent, profiles['guard-vocabulary-agent'], …) and nothing else could ask; a CodeMie web assistant is keyed by seam and its system instructions are that agent's generated persona followed by the seam's _what (plugins/providers/codemie-web/registry.js), so the name must be readable here. A seam whose persona varies per call (the writer's story role, the e2e route) declares none; its instructions are its _what alone.",
   "profiles": {
     "team-lead-review": {
+      "persona": "review-agent",
       "_what": "Reviews the story's code change AND its test; emits a verdict.",
       "maxOutputTokens": 32768,
       "maxToolCalls": 24,
@@ -102,6 +104,7 @@
       "toolGrant": "execute"
     },
     "code-review-cycle": {
+      "persona": "review-agent",
       "_what": "Per-iteration code review pass.",
       "maxOutputTokens": 32768,
       "timeoutSecs": 900,
@@ -120,6 +123,7 @@
       "toolGrant": "execute"
     },
     "agent-failure-analyst": {
+      "persona": "failure-analyst",
       "_what": "Diagnoses a no-output/failed agent attempt, prescribes a corrective directive.",
       "_whyDiagnosesAttemptsOf": "The seams whose failed attempts reach this analyst through agent-attempt-analyst.sh (lib/tc-writer-gate.sh, brownfield-repro-test-writer.sh, spec-mode-runner's detective via lib/self-heal.js). Declared so the \u00a30 rehearsal can fail one first attempt of each on purpose and execute this seam.",
       "diagnosesAttemptsOf": [
@@ -177,6 +181,7 @@
       }
     },
     "tc-writer": {
+      "persona": "tc-writer-agent",
       "_what": "Writes post-implementation test criteria into the PRD.",
       "maxOutputTokens": 32768,
       "timeoutSecs": 900,
@@ -215,6 +220,7 @@
       "_outputShapeInWhy": "Its own template defers: \"the JSON object as specified in your instructions\". contextualize-stories.sh renders cpa-system into __SYSTEM_PROMPT__, and that is where the Output schema block lives."
     },
     "prd-change-reviewer": {
+      "persona": "prd-change-reviewer",
       "_what": "Reviews a proposed PRD mutation before it is applied.",
       "maxOutputTokens": 32768,
       "temperature": "0.7",
@@ -252,6 +258,7 @@
       "_outputIsArtefact": "Produces PROSE. Its template is prd-change-summarizer-text and the caller caps it with head -c and prints it verbatim into the rejection text \u2014 a JSON envelope would have to be stripped before use."
     },
     "impl-failure-analyst": {
+      "persona": "failure-analyst",
       "_what": "Diagnoses why an implementation attempt failed.",
       "maxOutputTokens": 32768,
       "temperature": "0.7",
@@ -346,6 +353,7 @@
       "_why_bootstrap": "renders during Jira ingest, from lib/codeline-discovery.js \u2014 before the mint provisions any project prompt, and after pre-run-reset has removed the previous run's."
     },
     "roster-review": {
+      "persona": "roster-reviewer",
       "_what": "Falsifies the claims in a generated agent roster before any implementer inherits them.",
       "ladder": "top",
       "temperature": "0.1",
@@ -367,6 +375,7 @@
       "_whyCachedBy": "Runs only when the roster is minted. A launch that reuses a codeline's settled roster (the cache the operator requires) does not execute it, and the \u00a30 rehearsal expects that (install-copy rehearsal #26, 2026-09-20)."
     },
     "code-graph-detective": {
+      "persona": "code-graph-detective",
       "appliesTo": [
         "brownfield"
       ],
@@ -394,6 +403,7 @@
       "toolGrant": "execute"
     },
     "guard-vocabulary": {
+      "persona": "guard-vocabulary-agent",
       "_what": "Derives the vocabulary the verification-criteria guard enforces. A guard armed with the wrong terms reports clean.",
       "ladder": "top",
       "temperature": "0.1",
@@ -614,6 +624,7 @@
       "$whyLadder": "Moved off 'top' 2026-08-26 (operator decision, cost). This seam DECORATES a template \u2014 it reads the generic body and rewrites it for this project. It judges nothing, so the rule that a reviewer runs on the writer's rung does not bind it. Measured that day: 29 calls, $5.48, 80% of a run's cost before a story was touched, and a measured haiku-vs-sonnet comparison put sonnet at ~11x the cost per unit of output. 'mid' starts on the cheap rung and escalates.\n\nSAFE BECAUSE THE OUTPUT IS CHECKED, NOT TRUSTED: project-prompt-contract.js refuses a generation that drops a placeholder, a paired output tag or an output field, feeds the reason back, and reviewPrompt runs a second adversarial pass. A weaker model that fumbles is caught and escalated, never shipped. The residual risk is a prompt that is structurally valid and substantively worse, which only the review pass can see \u2014 watch the refusal counts in the log."
     },
     "codeline-bridge-agent": {
+      "persona": "codeline-bridge-agent",
       "appliesTo": [
         "multi-codeline"
       ],
@@ -692,6 +703,7 @@
       "_why_bootstrap": "assigns minted roles to stories, before prompt generation. A prompt that runs before the project prompt layer exists cannot be a project prompt."
     },
     "spec-coordinator": {
+      "persona": "spec-coordinator-agent",
       "_what": "Assigns the spec work for a phase, then reviews the specs and the model choices it produced.",
       "maxOutputTokens": 32768,
       "timeoutSecs": 900,
@@ -722,6 +734,7 @@
       "toolGrant": "read-only"
     },
     "ticket-links": {
+      "persona": "ticket-link-agent",
       "appliesTo": [
         "brownfield"
       ],
@@ -758,6 +771,7 @@
       "_toolGrantWhy": "write-file, not write: this seam produces one JSON file from what it reads. With bash in its grant the roster specialiser did the scaffold story's work and wrote no roster (2026-09-12, three paid attempts)."
     },
     "prd-model-coordinator": {
+      "persona": "prd-model-coordinator",
       "_what": "Assigns every pending story its model, provider and reasoning effort, and writes them into the PRD.",
       "maxOutputTokens": 16384,
       "timeoutSecs": 900,
@@ -776,6 +790,7 @@
       "_toolGrantWhy": "write-file, not write: this seam produces one JSON file from what it reads. With bash in its grant the roster specialiser did the scaffold story's work and wrote no roster (2026-09-12, three paid attempts)."
     },
     "prompt-review": {
+      "persona": "prompt-review",
       "_what": "Falsifies what a generated project prompt claims about this project, before any agent inherits it.",
       "ladder": "mid",
       "temperature": "0.1",
@@ -838,6 +853,7 @@
       "_whyCachedBy": "Runs only when the roster is minted. A launch that reuses a codeline's settled roster (the cache the operator requires) does not execute it, and the \u00a30 rehearsal expects that (install-copy rehearsal #26, 2026-09-20)."
     },
     "qa-gate:runtime-boundary": {
+      "persona": "runtime-boundary",
       "_what": "Asks whether a change can execute in the runtime it targets, given the codeline's own configuration.",
       "_why": "Live metrolinx AMSD-2041: two defects survived three runs and three implementations because no seam owned execution. A page-level module imported a service that throws at load in a context where its credentials are absent, and the codeline's configuration forbade the embedding the feature required. The code reviewer judges the diff; SAST judges vulnerabilities; the client/server scanner reads changed files only. This asks the question none of them asks.",
       "maxOutputTokens": 32768,

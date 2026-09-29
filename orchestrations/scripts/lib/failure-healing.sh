@@ -955,7 +955,7 @@ run_failure_analyst() {
     # Load failure-analyst profile from profiles.json (role-level instructions)
     local analyst_profile=""
     if [ -f "$profiles_file" ]; then
-        analyst_profile=$(require_profile "failure-analyst" "$profiles_file" || true)
+        analyst_profile=$(require_profile "$(seam_persona_agent impl-failure-analyst)" "$profiles_file" || true)
     fi
 
     # Dependency contract injection (added 2026-07-07): same ground-truth

@@ -305,7 +305,7 @@ _run_codeline_bridge() {
   # Load the codeline-bridge-agent profile
   local _bridge_profile=""
   if [ -f "$_profiles_file" ]; then
-    _bridge_profile=$(python3 "$SCRIPT_DIR/lib/handlers/bridge-profile.py" "$_profiles_file" 2>/dev/null || true)
+    _bridge_profile=$(python3 "$SCRIPT_DIR/lib/handlers/bridge-profile.py" "$_profiles_file" "$(seam_persona_agent codeline-bridge-agent)" 2>/dev/null || true)
   fi
   if [ -z "$_bridge_profile" ]; then
     warning "[bridge] codeline-bridge-agent profile not found in profiles.json — skipping"

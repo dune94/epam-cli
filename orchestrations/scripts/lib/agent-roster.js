@@ -967,7 +967,43 @@ function kindOfAgent(agent, agentsDir) {
   return '';
 }
 
+/**
+ * THE INSTALL'S AGENT PROFILES WITH THE PROJECT'S MINTED BRIEFS OVER THEM — one definition, read by
+ * spec-mode-runner's seams and by the codemie-web runner's assistant instructions. The project's own
+ * briefs WIN: a name it minted is its own, whatever the canonical set says. Moved here from
+ * spec-mode-runner.js (2026-09-29) so a second reader did not become a second copy.
+ */
+function profilesWithProjectBriefs(agentsDir) {
+  let out = {};
+  try { out = JSON.parse(fs.readFileSync(path.join(agentsDir, 'profiles.json'), 'utf8')); } catch { out = {}; }
+  try {
+    const pp = JSON.parse(fs.readFileSync(projectProfilesPath(agentsDir), 'utf8'));
+    out = { ...out, ...(pp.profiles || pp) };
+  } catch { /* a project with no minted briefs keeps the canonical set, exactly as before */ }
+  return out;
+}
+
+/**
+ * AN AGENT'S GENERATED PERSONA: the project roster's once the roster carries the agent (the
+ * roster-specialiser writes it each run), the profiles above before that — the stage of the run
+ * decides which exists, not a preference. '' when neither carries the agent.
+ */
+function agentPersona(agent, agentsDir, projectConfigDir = process.env.EPAM_PROJECT_CONFIG_DIR) {
+  if (!agent) return '';
+  if (projectConfigDir) {
+    try {
+      // eslint-disable-next-line global-require
+      const entry = (require('./project-roster.js').loadRoster(projectConfigDir).agents || {})[agent];
+      if (entry && typeof entry.persona === 'string' && entry.persona.trim()) return entry.persona;
+    } catch { /* no roster yet: the profiles are this stage's personas */ }
+  }
+  const v = profilesWithProjectBriefs(agentsDir)[agent];
+  return typeof v === 'string' ? v : String((v && (v.persona || v.brief)) || '');
+}
+
 module.exports = {
+  profilesWithProjectBriefs,
+  agentPersona,
   declaredPathsOf,
   kindOfAgent,
   partitionRosterFindings,

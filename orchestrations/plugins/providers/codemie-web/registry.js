@@ -9,9 +9,11 @@
  * config/codemie-web.json decides the name template, the project (empty = the signed-in user's
  * personal project) and `shared`. An assistant is created on first use and updated when its binding
  * changes; ids are cached in the install so a run does not list every assistant on every call. The
- * stored assistant carries the persona and the toolkit binding only — the rendered prompt travels
- * with each chat, so a template change never needs an assistant rewrite.
+ * stored assistant carries its agent's instructions (instructionsFor) and the toolkit binding — the
+ * rendered prompt travels with each chat, so a template change never needs an assistant rewrite, and
+ * a changed persona (the roster is regenerated each run) updates the assistant on its next call.
  */
+const crypto = require('crypto');
 const fs = require('fs');
 const path = require('path');
 const { home } = require('./paths.js');
@@ -33,9 +35,31 @@ async function project(c, cfg = readConfig()) {
   return me.username;
 }
 
-const PERSONA = 'You are an agent of an automated software delivery pipeline. Each message carries your full '
-  + 'instructions for one task; follow them exactly and answer in the form they ask for. When a Plugin tool '
-  + 'is available it works on the codeline the task names — use it to read and change files there.';
+const SCRIPTS_LIB = path.join(__dirname, '..', '..', '..', 'scripts', 'lib');
+
+/**
+ * WHO THE ASSISTANT IS: its agent's own generated persona, then its seam's description.
+ *
+ * The seam is the agent's (seam-invocation.js resolveSeam); the persona is the one that seam declares
+ * it speaks as (invocation-profiles.json `persona`), read where the pipeline's personas live
+ * (agent-roster.js agentPersona: the project roster once it carries the agent, the install's profiles
+ * before); the description is the seam's `_what`. A seam that declares no persona — its persona varies
+ * per call and travels in the prompt — is its description alone. Nothing is invented for an agent
+ * the registry does not know: its instructions are empty.
+ */
+function instructionsFor(agent, env = process.env) {
+  const agentsDir = env.EPAM_AGENTS_DIR || path.join(SCRIPTS_LIB, '..', '..', 'agents');
+  const { resolveSeam, registryPath } = require(path.join(SCRIPTS_LIB, 'seam-invocation.js'));
+  const { agentPersona } = require(path.join(SCRIPTS_LIB, 'agent-roster.js'));
+  let entry = {};
+  try {
+    const file = registryPath(agentsDir);
+    entry = (JSON.parse(fs.readFileSync(file, 'utf8')).profiles || {})[resolveSeam(agent, file)] || {};
+  } catch { entry = {}; }
+  const description = String(entry._what || '').trim();
+  const persona = entry.persona ? String(agentPersona(entry.persona, agentsDir, env.EPAM_PROJECT_CONFIG_DIR) || '').trim() : '';
+  return { system_prompt: [persona, description].filter(Boolean).join('\n\n'), description };
+}
 
 const cachePath = (env = process.env) => path.join(home(env), 'assistants.json');
 const readCache = (p) => { try { return JSON.parse(fs.readFileSync(p, 'utf8')); } catch { return {}; } };
@@ -58,21 +82,24 @@ async function ensureAssistant(c, { codeline, agent, integration, model }, env =
   const cp = cachePath(env);
   const cache = readCache(cp);
   const hit = cache[name];
-  if (hit && hit.binding === binding && hit.project === proj) return { id: hit.id, name };
-
+  const { system_prompt, description } = instructionsFor(agent, env);
   const spec = {
-    name, description: `Pipeline agent '${agent}' for codeline '${codeline}'.`, system_prompt: PERSONA,
+    name, description, system_prompt,
     project: proj, llm_model_type: model, context: [], toolkits: toolkitsFor(integration),
     conversation_starters: [], mcp_servers: [], assistant_ids: [], shared: cfg.shared === true,
   };
+  // What the stored assistant says of itself — the model travels per chat, so it is not part of it.
+  const digest = crypto.createHash('sha256').update(JSON.stringify({ ...spec, llm_model_type: undefined })).digest('hex');
+  if (hit && hit.digest === digest && hit.project === proj) return { id: hit.id, name };
+
   const find = async () => ((await c.assistants.list({ minimal_response: true, per_page: 500 })) || []).find((a) => a.name === name && (!a.project || a.project === proj));
   let found = hit ? { id: hit.id } : await find();
   if (found) await c.assistants.update(found.id, spec);
   else { await c.assistants.create(spec); found = await find(); }
   if (!found || !found.id) throw new Error(`[codemie-web] assistant '${name}' was not found after it was created`);
-  cache[name] = { id: found.id, binding, project: proj };
+  cache[name] = { id: found.id, binding, project: proj, digest };
   fs.writeFileSync(cp, `${JSON.stringify(cache, null, 1)}\n`);
   return { id: found.id, name };
 }
 
-module.exports = { assistantName, ensureAssistant, project, readConfig, toolkitsFor, PERSONA };
+module.exports = { assistantName, ensureAssistant, project, readConfig, toolkitsFor, instructionsFor };

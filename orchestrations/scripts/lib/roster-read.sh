@@ -56,6 +56,18 @@ roster_persona() {
     ' "$_ROSTER_READ_LIB_DIR/project-roster.js" "$_agent" "$_d"
 }
 
+# seam_persona_agent <seam> — the agent whose persona <seam> speaks as, from the seam registry
+# (invocation-profiles.json `persona`), the one place that name is written. A seam the registry does
+# not declare is warned about and answered empty, as in seam-invocation.js, which this delegates to.
+seam_persona_agent() {
+    local _seam="${1:?usage: seam_persona_agent <seam>}"
+    "${NODE_BIN:-node}" -e '
+      const m = require(process.argv[1]);
+      try { process.stdout.write(m.seamPersonaAgent(process.argv[2], process.argv[3] ? m.registryPath(process.argv[3]) : undefined)); }
+      catch (e) { process.stderr.write((e && e.message ? e.message : String(e)) + "\n"); process.exit(1); }
+    ' "$_ROSTER_READ_LIB_DIR/seam-invocation.js" "$_seam" "${EPAM_AGENTS_DIR:-}"
+}
+
 # roster_agents_of_kind <implementer|investigator|seam> — newline separated.
 #
 # This is the write perimeter's question. It had its own registry file; the roster answers it from

@@ -1276,7 +1276,7 @@ $perf_prompt"
         {
             local _rb_log="$LOG_DIR/runtime-boundary-${phase_id}.log"
             local _rb_profile=""
-            [ -f "$profiles_file" ] && _rb_profile=$(jq -r '.["runtime-boundary"] // ""' "$profiles_file")
+            [ -f "$profiles_file" ] && _rb_profile=$(jq -r --arg r "$(seam_persona_agent qa-gate:runtime-boundary)" '.[$r] // ""' "$profiles_file")
             # The configuration this codeline carries, resolved from its OWN manifest by the
             # adapter that already knows the stack. Empty for a stack no adapter recognises.
             local _rb_config

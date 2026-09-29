@@ -41,12 +41,18 @@ async function probe(env = process.env) {
   lines.push(`every ladder model is in the catalog (${want.join(', ')})`);
 
   const [python, [host]] = command('ro', path.sep, '', env);
+  // Refuses only what it always refused — no plugin environment at all. An environment that is
+  // present but cannot build the toolkits is REPORTED, not refused (operator, 2026-09-29: no new
+  // gates unapproved).
   const hosted = require('child_process').spawnSync(python, [host, '--check'], { encoding: 'utf8', env });
-  if (hosted.status !== 0) {
-    const why = hosted.error ? hosted.error.code : `exit ${hosted.status}`;
-    throw new Error(`the codemie-plugins environment cannot host a plugin (${python}: ${why}) — the installer provisions codemie-plugins for the codemie-web stack; re-run it`);
+  if (hosted.error) {
+    throw new Error(`the codemie-plugins environment cannot host a plugin (${python}: ${hosted.error.code}) — the installer provisions codemie-plugins for the codemie-web stack; re-run it`);
   }
-  lines.push('codemie-plugins environment present');
+  if (hosted.status !== 0) {
+    lines.push(`WARNING: the codemie-plugins environment at ${python} could not build the plugin toolkits (exit ${hosted.status}) — tool-granted calls will fail; re-run the installer`);
+  } else {
+    lines.push('codemie-plugins environment present');
+  }
   return lines;
 }
 

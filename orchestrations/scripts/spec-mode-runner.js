@@ -1754,7 +1754,7 @@ async function run() {
   const profilesPath = path.join(automationDir, 'agents', 'profiles.json');
   let profiles = {};
   try { profiles = JSON.parse(fs.readFileSync(profilesPath, 'utf8')); } catch { /* no profiles */ }
-  const specCoordinatorProfile = profiles['spec-coordinator-agent'] || '';
+  const specCoordinatorProfile = profiles[require('./lib/seam-invocation.js').seamPersonaAgent('spec-coordinator')] || '';
 
   const phaseStories = Array.isArray(prd.implementationOrder?.[opts.phase])
     ? prd.implementationOrder[opts.phase]
@@ -3318,7 +3318,7 @@ async function deriveGuardVocabulary({ promptExec, rule, statements, story, find
     .join('\n');
 
   const profiles = profilesWithProjectBriefs(logDir);
-  const persona = profiles['guard-vocabulary-agent'] || '';
+  const persona = profiles[require('./lib/seam-invocation.js').seamPersonaAgent('guard-vocabulary')] || '';
 
   const prompt = buildGuardVocabularyPrompt({ persona, seam, rule, _statements, manifest, docBlock, evidence, story, codegraphTool, repoPath });
 
@@ -4758,20 +4758,8 @@ function pipelineStagesBlock(modes) {
  * One definition, because three copies is how the first fix reached one of them and not the others.
  */
 function profilesWithProjectBriefs(logDir) {
-  let out = {};
-  try {
-    out = JSON.parse(fs.readFileSync(
-      path.join(automationDirFromLogDir(logDir), 'agents', 'profiles.json'), 'utf8'));
-  } catch { out = {}; }
-  try {
-    // eslint-disable-next-line global-require
-    const _r = require('./lib/agent-roster.js');
-    const pp = JSON.parse(fs.readFileSync(
-      _r.projectProfilesPath(path.join(automationDirFromLogDir(logDir), 'agents')), 'utf8'));
-    // The project's own briefs WIN: a name it minted is its own, whatever the canonical set says.
-    out = { ...out, ...(pp.profiles || pp) };
-  } catch { /* a project with no minted briefs keeps the canonical set, exactly as before */ }
-  return out;
+  // eslint-disable-next-line global-require
+  return require('./lib/agent-roster.js').profilesWithProjectBriefs(path.join(automationDirFromLogDir(logDir), 'agents'));
 }
 
 function buildRosterReviewPrompt({ persona, briefBlock, clBlock, ticketBlock, docBlock, toolLine, coverageBlock }) {
@@ -5430,7 +5418,7 @@ async function reviewRoster({
       return body ? '- ' + d.url + '\n' + body : '- ' + d.url + ' (retrieved, no readable text)';
     }).join('\n\n');
 
-  const persona = (profiles && profiles['roster-reviewer']) || '';
+  const persona = (profiles && profiles[require('./lib/seam-invocation.js').seamPersonaAgent('roster-review')]) || '';
   const toolLine = toolGrant
     ? 'Your tools: ' + toolGrant + '. Open the repositories. Resolve the packages and symbols these '
       + 'briefs name. Confirm the files and directories they claim to own exist.'
@@ -6706,7 +6694,7 @@ async function runCodeGraphDetective(story, logDir, opts = {}) {
   })();
   const detectiveProfile = _mintedDetective
     ? _mintedDetective.brief
-    : (profiles['code-graph-detective'] || '');
+    : (profiles[require('./lib/seam-invocation.js').seamPersonaAgent('code-graph-detective')] || '');
   if (_mintedDetective) {
     console.log(`spec-mode: detective for ${(story && story.codeline) || 'story'} = ${_mintedDetective.name} (minted for this codeline)`);
   }
@@ -7361,7 +7349,7 @@ async function reviewTicketLinks({ promptExec, story, logDir, docPaths = [] }) {
   if (!links.length) return [];
 
   const profiles = profilesWithProjectBriefs(logDir);
-  const persona = profiles['ticket-link-agent'] || '';
+  const persona = profiles[require('./lib/seam-invocation.js').seamPersonaAgent('ticket-links')] || '';
 
   const linkBlock = links.map((l, i) => {
     // "ticket body" rather than "description": a link found outside a comment. The word is
@@ -10279,7 +10267,7 @@ async function reviewPrdChange({ aiRunnerCmd, profiles, storyId, changeType, bef
   const gateProvider = process.env.ORCH_GATE_PROVIDER || '';
   if (!gateProvider) return { verdict: 'pass', issues: [] };
 
-  const reviewerProfile = profiles['prd-change-reviewer'] || '';
+  const reviewerProfile = profiles[require('./lib/seam-invocation.js').seamPersonaAgent('prd-change-reviewer')] || '';
   if (!reviewerProfile) return { verdict: 'pass', issues: [] };
 
   // When a split occurred alongside other field changes (description/title),

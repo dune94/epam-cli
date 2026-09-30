@@ -94,6 +94,19 @@ def import_sdk():
 # Build messages array from stdin prompt
 # ---------------------------------------------------------------------------
 
+def resolve_system_prompt(cli_system_prompt=""):
+    """The system prompt for this call: an explicit --system-prompt, else the agent's standing
+    instructions the pipeline's hub resolved for the call (EPAM_SI_FILE — lib/agent-si.js), else
+    none. Operator, 2026-09-29: "Ensure each provider has a proper agent si transit." """
+    if cli_system_prompt and cli_system_prompt.strip():
+        return cli_system_prompt
+    si_file = os.environ.get("EPAM_SI_FILE", "")
+    if si_file and os.path.isfile(si_file):
+        with open(si_file, encoding="utf-8") as fh:
+            return fh.read()
+    return ""
+
+
 def build_messages(prompt_text, cache_system, system_prompt=""):
     """
     Returns (system_block_or_None, messages_list).
@@ -243,7 +256,7 @@ def main():
     anthropic = import_sdk()
     client = anthropic.Anthropic(api_key=api_key)
 
-    system, messages = build_messages(prompt_text, args.cache_system, args.system_prompt)
+    system, messages = build_messages(prompt_text, args.cache_system, resolve_system_prompt(args.system_prompt))
 
     # ── Token count pre-check (no generation) ──────────────────────────────
     if args.count_tokens_only:

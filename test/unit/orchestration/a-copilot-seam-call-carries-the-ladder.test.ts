@@ -78,6 +78,22 @@ function call(env: Record<string, string>) {
 }
 
 describe.skipIf(!COPILOT)('a seam call on the copilot set', () => {
+  it('the model receives ITS agent\'s standing instructions — and no other agent\'s', async () => {
+    // Operator, 2026-09-29: "Ensure each provider has a proper agent si transit." Asserted on the
+    // requests the real CLI sent, so what is proven is that Copilot folded the instructions file the
+    // declared channel named into what the MODEL received. No project roster: the seam's base SI.
+    const reg = JSON.parse(readFileSync(join(ROOT, 'orchestrations/agents/invocation-profiles.json'), 'utf8')).profiles;
+    const [mine, other] = Object.keys(reg).filter((s) => reg[s].si);
+    const r = await call({ EPAM_AGENT_NAME: mine, AI_MODEL: 'claude-opus-4-8' });
+    expect(r.status, r.stderr).toBe(0);
+    expect(requests.length, 'the CLI never reached the model').toBeGreaterThan(0);
+    const sent = requests.map((q) => JSON.stringify(q)).join('\n');
+    const firstLine = (s: string) => s.split('\n').find((l) => l.trim().length > 20) as string;
+    expect(sent, 'the agent\'s SI never reached the model').toContain(JSON.stringify(firstLine(reg[mine].si)).slice(1, -1));
+    expect(sent, 'another agent\'s SI reached the model').not.toContain(JSON.stringify(firstLine(reg[other].si)).slice(1, -1));
+  }, 180_000);
+
+
   it('reaches the model as Copilot\'s id for the ladder\'s model, at the ladder\'s effort, with only the granted tools', async () => {
     const r = await call({ AI_MODEL: 'claude-opus-4-8', EPAM_REASONING_EFFORT: 'xhigh', AI_GATE_ALLOW_TOOLS: '1', EPAM_ALLOWED_TOOLS: 'read_file,search' });
     expect(r.status, r.stderr).toBe(0);

@@ -146,6 +146,8 @@
   },
   "runners": {
     "claude": {
+      "siChannel": {"flag": "--append-system-prompt-file"},
+      "$whySiChannel": "Claude Code's own --append-system-prompt-file (claude --help, 2.1.282): the agent's SI as a system prompt, separate from the task on stdin.",
       "$why": "Plain Claude Code. No CodeMie, no SSO, no spend.",
       "$whyNoBaseUrlFlag": "--base-url is ABSENT on purpose: on the wrapper it means 'use this SSO profile'. The redirect is ANTHROPIC_BASE_URL, which plain claude honours.",
       "alwaysFlags": [],

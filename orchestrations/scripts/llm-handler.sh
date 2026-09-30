@@ -36,6 +36,17 @@ INVOKE_PYTHON="${INVOKE_PYTHON:-$_SCRIPT_DIR_AIRUN/.venv/bin/python3}"
 # Providers that are plugins (config/providers.json runnerPlugin) — see lib/provider-plugin.sh.
 . "$(cd "$(dirname "${BASH_SOURCE[0]}")" && pwd)/lib/provider-plugin.sh"
 . "$_SCRIPT_DIR_AIRUN/lib/story-retry-state.sh"
+# THE HUB READS ITS OWN CLOCKS. Every call path used EPAM_TIMEOUT_SECS / EPAM_PLAN_TIMEOUT_SECS and
+# relied on the CALLER having loaded them; a caller that had not (a harness, a one-off, a seam run
+# outside the orchestrator) died under `set -u` before the runner was reached. They are loaded
+# here from the same declaration the orchestrator reads (config/llm-defaults.json timeouts,
+# project first) — only when the caller exported none, so an operator's value still wins.
+if [ -z "${EPAM_TIMEOUT_SECS:-}" ] || [ -z "${EPAM_PLAN_TIMEOUT_SECS:-}" ]; then
+  AUTOMATION_DIR="${AUTOMATION_DIR:-$(dirname "$_SCRIPT_DIR_AIRUN")}"
+  if . "$_SCRIPT_DIR_AIRUN/lib/model-ladder.sh" 2>/dev/null; then
+    load_llm_settings_json >/dev/null 2>&1 || true
+  fi
+fi
 # Delegates to lib/env-file.sh: loading configuration must not EXECUTE it. This function
 # used to `. "$env_file"`, and a bare `cd` on line 1 of the repo's .env sent this script —
 # the agent invoker — to $HOME every time it started.
@@ -173,6 +184,25 @@ if [ -z "${EPAM_AGENT_NAME:-}" ] && [ -r "/proc/$PPID/cmdline" ]; then
 fi
 export EPAM_AGENT_NAME="${EPAM_AGENT_NAME:-agent}"
 
+# ── The agent's standing instructions ───────────────────────────────────────
+# Operator, 2026-09-29: "Ensure each provider has a proper agent si transit." Resolved ONCE per
+# call (lib/agent-si.js: the project roster's entry for this agent or its seam; before the roster
+# exists, the seam's base) and handed to the runner on the channel its declaration names
+# (runner-settings.sh, siChannel). A nested call of this same agent — the plan pass — inherits it.
+# An agent with no standing instructions is a stated failure, never an empty system prompt.
+_SI_OWNED=""
+if [ -z "${EPAM_SI_FILE:-}" ]; then
+  EPAM_SI_FILE="$(mktemp "${TMPDIR:-/tmp}/epam-si-XXXXXX")"
+  _SI_OWNED=1
+  if ! _si_err="$("${NODE_BIN:-node}" "$_SCRIPT_DIR_AIRUN/lib/agent-si.js" \
+        "$EPAM_AGENT_NAME" "${EPAM_PROJECT_CONFIG_DIR:-}" "$EPAM_SI_FILE" 2>&1)"; then
+    echo "[llm-handler] refusing the call: ${_si_err}" >&2
+    rm -f "$EPAM_SI_FILE"
+    exit 1
+  fi
+  export EPAM_SI_FILE
+fi
+
 PROMPT_FILE="$(mktemp)"
 # RAW STREAM CAPTURE FOR EVERY CALL. The CLI appends the SSE payloads it read to
 # EPAM_STREAM_CAPTURE_DIR when set (src/providers/minimax/MiniMaxProvider.ts). regintel 140717Z
@@ -182,7 +212,7 @@ if [ -n "${LOG_DIR:-}" ] && [ -z "${EPAM_STREAM_CAPTURE_DIR:-}" ]; then
   EPAM_STREAM_CAPTURE_DIR="${LOG_DIR}/stream-captures"
   mkdir -p "$EPAM_STREAM_CAPTURE_DIR" 2>/dev/null && export EPAM_STREAM_CAPTURE_DIR || unset EPAM_STREAM_CAPTURE_DIR
 fi
-trap 'rm -f "$PROMPT_FILE"' EXIT
+trap 'rm -f "$PROMPT_FILE"; [ -n "$_SI_OWNED" ] && rm -f "$EPAM_SI_FILE"' EXIT
 cat > "$PROMPT_FILE"
 
 retryable_failure() {

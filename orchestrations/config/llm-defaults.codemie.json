@@ -143,6 +143,8 @@
   },
   "runners": {
     "codemie-claude": {
+      "siChannel": {"flag": "--append-system-prompt-file"},
+      "$whySiChannel": "codemie-claude passes its arguments to Claude Code (codemie-claude --help: 'Arguments to pass to Claude Code'), so the same flag. Not verified end to end: on 2026-09-29 codemie-claude refused to start against Claude Code 2.1.282 (supported 2.1.218).",
       "$whyAlwaysFlags": "-s is a CORRECTNESS requirement, not a preference. Without it the wrapper opens an INTERACTIVE menu about the Claude Code version gap and exits 13 \u2014 in a pipeline that is a HANG, not a failure: the run waits for a keypress until its timeout.",
       "$whyNoBaseUrl": "--base-url is deliberately absent. It selects an SSO PROFILE rather than redirecting: pointing it elsewhere fails with 'SSO credentials not found'. Declaring it would break the run, not redirect it.",
       "alwaysFlags": [

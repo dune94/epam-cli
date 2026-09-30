@@ -109,6 +109,9 @@ apply_runner_settings() {
       for (const [k, v] of Object.entries(r.env))   process.stdout.write("E " + k + " " + v + "\n");
       for (const [k, v] of Object.entries(r.flags)) process.stdout.write("F " + k + " " + v + "\n");
       for (const [k, v] of Object.entries(r.toolNames || {})) process.stdout.write("T " + k + " " + [].concat(v).join(",") + "\n");
+      const s = r.siChannel || {};
+      if (s.flag) process.stdout.write("S flag " + s.flag + "\n");
+      else if (s.env && s.file) process.stdout.write("S env " + s.env + " " + s.file + "\n");
     ' "$_resolver" "$_runner" "$_projdir" 2>/dev/null) || return 0
     [ -n "$_decl" ] || return 0
 
@@ -119,6 +122,19 @@ apply_runner_settings() {
             # T <pipeline tool> <runner tool[,runner tool]> — the runner's vocabulary for a tool the
             # pipeline grants by its own name. Read by runner_tools_for_grant.
             T)  RUNNER_TOOL_NAMES["$_a"]="$_b" ;;
+            # THE AGENT'S STANDING INSTRUCTIONS, on the channel this runner declares. EPAM_SI_FILE
+            # is written once per call by the hub (lib/agent-si.js); a runner declaring no channel
+            # receives nothing here, exactly as before.
+            S)  if [ -n "${EPAM_SI_FILE:-}" ] && [ -s "${EPAM_SI_FILE}" ]; then
+                    read -r _si_name _si_file <<< "$_b"
+                    case "$_a" in
+                        flag) RUNNER_FLAGS+=("$_si_name" "$EPAM_SI_FILE") ;;
+                        env)  _si_dir="$(mktemp -d "${TMPDIR:-/tmp}/epam-si-XXXXXX")"
+                              cp "$EPAM_SI_FILE" "$_si_dir/$_si_file"
+                              export "${_si_name}=${_si_dir}" ;;
+                    esac
+                fi
+                ;;
             # A CREDENTIAL THE RUNNER PREFERS IS NOT REMOVED BY SETTING ANYTHING.
             # Claude Code picks ANTHROPIC_API_KEY over the OAuth credentials on disk, so with
             # the key present the subscription never pays — which is the only reason this

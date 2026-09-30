@@ -257,6 +257,8 @@ function resolveRunner(runnerName, { projectConfigDir, defaultsFile } = {}) {
     // grant (EPAM_ALLOWED_TOOLS) is translated through this at the hub and bound with the
     // runner's own restriction flag; a name absent here does not exist on this runner.
     toolNames: declared.toolNames && typeof declared.toolNames === 'object' ? declared.toolNames : {},
+    // How this runner carries an agent's standing instructions, separate from the task.
+    siChannel: declared.siChannel && typeof declared.siChannel === 'object' ? declared.siChannel : null,
   };
 }
 /** Every runner the active stack declares, by name. */
@@ -320,7 +322,7 @@ function runnerValues(runnerName, { projectConfigDir, defaultsFile } = {}) {
   // unsetEnv carries NAMES ONLY — there is no value to resolve, because the whole point is
   // that the variable must not be there. It passes through untouched.
   const out = { env: {}, flags: {}, alwaysFlags: runner.alwaysFlags, unsetEnv: runner.unsetEnv,
-                envNames: {}, flagNames: {}, toolNames: runner.toolNames };
+                envNames: {}, flagNames: {}, toolNames: runner.toolNames, siChannel: runner.siChannel };
   for (const [k, name] of Object.entries(runner.env)) { out.env[k] = valueFor(name); out.envNames[k] = name; }
   for (const [k, name] of Object.entries(runner.flags)) { out.flags[k] = valueFor(name); out.flagNames[k] = name; }
   return out;

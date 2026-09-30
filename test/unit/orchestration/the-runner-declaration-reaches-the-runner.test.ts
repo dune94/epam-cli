@@ -31,6 +31,8 @@ import { stackNames } from '../../support/llm-settings';
 const ROOT = join(__dirname, '../../..');
 const HUB = join(ROOT, 'orchestrations/scripts/llm-handler.sh');
 const NODE_BIN = join(process.env.HOME || '', '.nvm/versions/node/v20.20.0/bin/node');
+const REG = JSON.parse(require('node:fs').readFileSync(join(ROOT, 'orchestrations/agents/invocation-profiles.json'), 'utf8')).profiles;
+const A_SEAM = Object.keys(REG).find((s) => REG[s].si) as string;
 
 /** Run the hub with a stubbed runner binary; return the argv it was handed. */
 function argvFor(opts: { set: string; runnerName: string; env?: Record<string, string> }) {
@@ -57,7 +59,8 @@ function argvFor(opts: { set: string; runnerName: string; env?: Record<string, s
         CLAUDE_CMD: stub,
         NODE_BIN,
         EPAM_PROVIDER_SET: opts.set,
-        EPAM_AGENT_NAME: 'runner-declaration-test',
+        // A REAL agent: the hub now refuses a call from a name that has no standing instructions.
+        EPAM_AGENT_NAME: A_SEAM,
         ...(opts.env || {}),
       },
     });

@@ -145,6 +145,8 @@
   },
   "runners": {
     "claude": {
+      "siChannel": {"flag": "--append-system-prompt-file"},
+      "$whySiChannel": "Claude Code's own --append-system-prompt-file (claude --help, 2.1.282): the agent's SI as a system prompt, separate from the task on stdin.",
       "$why": "Plain Claude Code. No CodeMie, no SSO, no spend.",
       "alwaysFlags": [],
       "env": {},

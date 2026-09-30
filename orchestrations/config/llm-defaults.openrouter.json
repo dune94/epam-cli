@@ -216,6 +216,8 @@
   },
   "runners": {
     "claude": {
+      "siChannel": {"flag": "--append-system-prompt-file"},
+      "$whySiChannel": "Claude Code's own --append-system-prompt-file (claude --help, 2.1.282): the agent's SI as a system prompt, separate from the task on stdin.",
       "$whyFlags": "The same two knobs every stack exposes, so a seam's declared effort and compaction reach the runner here exactly as they do on the others. Naming them per set rather than in engine code is what makes a swap a config edit.",
       "alwaysFlags": [],
       "env": {},

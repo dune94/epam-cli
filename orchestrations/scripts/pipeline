@@ -109,13 +109,19 @@ OVERLAY="$PROJECTS_DIR/$PROJECT/config.$SET_NAME.env"
 [ -f "$OVERLAY" ] || note_problem "project '$PROJECT' has no overlay for the '$SET_NAME' stack ($OVERLAY)"
 
 # The runner the set declares must actually be on PATH — this is the commonest real failure.
+# THE PROGRAM THE RUNNER DECLARES (providers.json cliBinary), not the runner's name: codemie-web's
+# runner is a plugin that needs the CodeMie CLI (live AMSD-2974, 2026-09-30, refused on its own name).
+# A program given as a variable ($EPAM_CLI) is resolved at run time, not by PATH.
 RUNNER="$("${NODE_BIN:-node}" -e '
   try {
     const fs = require("fs"), path = require("path");
     const reg = JSON.parse(fs.readFileSync(process.argv[1], "utf8"));
     const set = reg.sets[process.argv[2]];
     const s = JSON.parse(fs.readFileSync(path.join(path.dirname(process.argv[1]), set.settingsFile), "utf8"));
-    process.stdout.write(Object.keys(s.runners || {})[0] || "");
+    const runner = Object.keys(s.runners || {})[0] || "";
+    let prog = runner;
+    try { const cb = JSON.parse(fs.readFileSync(path.join(path.dirname(process.argv[1]), "providers.json"), "utf8")).cliBinary || {}; if (cb[runner]) prog = cb[runner]; } catch {}
+    process.stdout.write(String(prog).startsWith("$") ? "" : prog);
   } catch { process.stdout.write(""); }
 ' "$REPO_ROOT/orchestrations/config/provider-sets.json" "$SET_NAME" 2>/dev/null)"
 if [ -n "$RUNNER" ] && ! command -v "$RUNNER" >/dev/null 2>&1; then

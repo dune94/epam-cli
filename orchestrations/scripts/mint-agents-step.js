@@ -637,15 +637,17 @@ if (require.main !== module) return;
   //
   // Regenerated every launch, resume included.
   const runRosterStage = async (mintedDetail) => {
-    const { buildProjectRoster } = require('./lib/project-roster.js');
-    const { seamInvocationEnv } = require('./lib/seam-invocation.js');
+    const { buildProjectRoster, seamBaseForRun } = require('./lib/project-roster.js');
+    const { seamInvocationEnv, registryPath } = require('./lib/seam-invocation.js');
     const projectConfigDir = process.env.EPAM_PROJECT_CONFIG_DIR || '';
     if (!projectConfigDir) {
       throw new Error(
         'cannot build the project roster: EPAM_PROJECT_CONFIG_DIR is unset. The roster is the '
         + 'only place an agent\'s identity comes from, and there is no engine fallback to read.');
     }
-    const canonicalPath = path.join(AGENTS_DIR, 'profiles.canonical.json');
+    // THE BASE IS EACH SEAM'S OWN SI, from the registry — never the agent-named profiles
+    // (operator, 2026-09-29: "Bases and derived si must be matched to each seam").
+    const canonicalPath = seamBaseForRun(registryPath(AGENTS_DIR), LOG_DIR);
 
     // Required HERE, not at module load: engine-prompt routes seam prompts through
     // prompt-library, and pulling that chain in at load time would give one of them a

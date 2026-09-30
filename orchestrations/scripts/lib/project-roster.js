@@ -91,6 +91,32 @@ function copyCanonicalForRun(canonicalPath, logDir) {
 }
 
 /**
+ * THE BASE EVERY PROJECT SI DERIVES FROM: each seam's own standing instructions.
+ *
+ * Operator, 2026-09-29: "Bases and derived si must be matched to each seam. No deviations." The
+ * base was profiles.canonical.json — personas keyed by AGENT name, covering a minority of the
+ * seams, several resolving by name to the wrong one. The registry now declares one `si` per seam,
+ * and that is the base: keyed by seam, read from the one place it is declared.
+ *
+ * Written into the run beside the copy it feeds, so the specialiser works against a snapshot of
+ * the declaration taken at launch. A seam that declares no `si` has no base and is absent here;
+ * an agent invoked through it has nothing to derive from, and that is reported where it is asked.
+ */
+function seamBaseForRun(registryFile, logDir) {
+  const reg = JSON.parse(fs.readFileSync(registryFile, 'utf8'));
+  const profiles = (reg && reg.profiles) || {};
+  const base = {};
+  for (const [seam, p] of Object.entries(profiles)) {
+    if (p && typeof p.si === 'string' && p.si.trim()) base[seam] = p.si;
+  }
+  if (!Object.keys(base).length) throw new Error(`[roster] the registry declares no seam si: ${registryFile}`);
+  const out = path.join(String(logDir || ''), 'seam-base-si.json');
+  fs.mkdirSync(path.dirname(out), { recursive: true });
+  fs.writeFileSync(out, JSON.stringify(base, null, 2), 'utf8');
+  return out;
+}
+
+/**
  * THE DELTA IN A REPLY. The specialiser answers with one JSON object; a model may still wrap it in a
  * fence or a sentence, so the outermost {...} carrying an `agents` object is what is taken. Nothing
  * parseable, or no `agents`, is null — the caller then reports "wrote no roster", the same refusal
@@ -961,6 +987,7 @@ function classifyReviewVerdict(verdict) {
   };
 }
 module.exports = {
+  seamBaseForRun,
   classifyReviewVerdict,
   withMintedAgents,
   buildProjectRoster,

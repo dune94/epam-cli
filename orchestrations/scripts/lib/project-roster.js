@@ -102,7 +102,8 @@ function copyCanonicalForRun(canonicalPath, logDir) {
  * the declaration taken at launch. A seam that declares no `si` has no base and is absent here;
  * an agent invoked through it has nothing to derive from, and that is reported where it is asked.
  */
-function seamBaseForRun(registryFile, logDir) {
+/** Each seam's base SI, from the registry: {seam: si}. */
+function seamBase(registryFile) {
   const reg = JSON.parse(fs.readFileSync(registryFile, 'utf8'));
   const profiles = (reg && reg.profiles) || {};
   const base = {};
@@ -110,6 +111,26 @@ function seamBaseForRun(registryFile, logDir) {
     if (p && typeof p.si === 'string' && p.si.trim()) base[seam] = p.si;
   }
   if (!Object.keys(base).length) throw new Error(`[roster] the registry declares no seam si: ${registryFile}`);
+  return base;
+}
+
+/**
+ * IS A ROSTER ON DISK DERIVED FROM TODAY'S SEAM BASES? The same contract the roster stage holds a
+ * fresh roster to (checkRoster): every seam present, every entry's derivedFromSha256 matching its
+ * ancestor's current base. A roster written before the seam convergence, or from bases that have
+ * since changed, is not — and a kept roster that is not would hand every seam call before the
+ * roster stage an SI that does not exist (pre-run-reset clears it; the roster stage re-derives).
+ */
+function rosterIsCurrent(rosterFile, registryFile) {
+  try {
+    return checkRoster(JSON.parse(fs.readFileSync(rosterFile, 'utf8')), seamBase(registryFile));
+  } catch (e) {
+    return { ok: false, reason: `unreadable: ${(e && e.message) || e}` };
+  }
+}
+
+function seamBaseForRun(registryFile, logDir) {
+  const base = seamBase(registryFile);
   const out = path.join(String(logDir || ''), 'seam-base-si.json');
   fs.mkdirSync(path.dirname(out), { recursive: true });
   fs.writeFileSync(out, JSON.stringify(base, null, 2), 'utf8');
@@ -1028,4 +1049,14 @@ module.exports = {
   checkRoster,
   structureFor,
   agentKinds,
+  seamBase,
+  rosterIsCurrent,
 };
+
+// node project-roster.js --is-current <roster.json>   exit 0 when derived from today's seam bases
+if (require.main === module && process.argv[2] === '--is-current') {
+  const { registryPath } = require('./seam-invocation.js');
+  const v = rosterIsCurrent(process.argv[3], registryPath());
+  if (!v.ok) process.stderr.write(`${v.reason}\n`);
+  process.exit(v.ok ? 0 : 1);
+}

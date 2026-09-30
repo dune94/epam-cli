@@ -843,9 +843,23 @@ fi
 # checkpoint existed to skip — 17 of 39 regenerated on the 2026-09-01 resume for no other reason.
 # The log said both things at once: "roster carried over from <run> — reviewed in that run, not
 # re-reviewed here", immediately followed by the specialiser accepting a freshly derived roster.
-if [ "$_CODELINE_ASSETS_REUSED" = "1" ] && [ -n "$_ROSTER_FILE" ] && [ -f "$_ROSTER_FILE" ]; then
+#
+# KEPT ONLY WHEN IT DERIVES FROM TODAY'S SEAM BASES (operator, 2026-09-30: "re-derive stale
+# rosters"). Every seam call reads its SI from the roster once one exists (lib/agent-si.js). A
+# roster written before the seam convergence, or from bases since changed, answers no seam — so
+# it is cleared: the seams before the roster stage read the registry base, as on a first run, and
+# the roster stage re-derives it (mint-agents-step runRosterStage, every launch).
+_ROSTER_CURRENT=0
+if [ -n "$_ROSTER_FILE" ] && [ -f "$_ROSTER_FILE" ]; then
+    if _roster_why=$("${NODE_BIN:-node}" "$SCRIPT_DIR/lib/project-roster.js" --is-current "$_ROSTER_FILE" 2>&1); then
+        _ROSTER_CURRENT=1
+    elif [ "$_CODELINE_ASSETS_REUSED" = "1" ] || [ "${_IS_RESUMED_RUN:-0}" = "1" ]; then
+        info "  The kept roster does not derive from today's seam bases — clearing it; the roster stage re-derives it (${_roster_why%%$'\n'*})"
+    fi
+fi
+if [ "$_ROSTER_CURRENT" = "1" ] && [ "$_CODELINE_ASSETS_REUSED" = "1" ]; then
     info "  Keeping the roster — this codeline's completed agents are reused"
-elif [ "${_IS_RESUMED_RUN:-0}" = "1" ] && [ -n "$_ROSTER_FILE" ] && [ -f "$_ROSTER_FILE" ]; then
+elif [ "$_ROSTER_CURRENT" = "1" ] && [ "${_IS_RESUMED_RUN:-0}" = "1" ]; then
     info "  Resuming — keeping this run's own reviewed roster; it is not re-derived"
 elif [ -n "$_ROSTER_FILE" ] && [ -f "$_ROSTER_FILE" ]; then
     if rm -f "$_ROSTER_FILE" 2>/dev/null && [ ! -f "$_ROSTER_FILE" ]; then

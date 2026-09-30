@@ -30,18 +30,27 @@ function siForAgent(agent, projectConfigDir, registryFile, invocationSeam) {
   const rosterFile = path.join(String(projectConfigDir || ''), 'roster.json');
   const seamOf = () => (invocationSeam && String(invocationSeam).trim())
     || resolveSeam(agent, regFile, { ignoreXref: true });
+  // A SEAM'S SI IS FOR THE AGENTS THAT ARE THAT SEAM: its own name, or a call explicitly invoked as
+  // it. A name that reaches the seam only by the registry's name mapping borrows its LADDER, not its
+  // role — the planning family is mapped to the estimator seam for its model — and never receives
+  // that seam's SI (2026-09-30). A roster agent's own entry is answered above, before any seam.
+  const reg = () => JSON.parse(fs.readFileSync(regFile, 'utf8'));
+  const isSeam = (seam) => agent === seam
+    || (!!invocationSeam && seam !== resolveSeam(agent, regFile, { ignoreXref: true }));
   if (projectConfigDir && fs.existsSync(rosterFile)) {
     const agents = (JSON.parse(fs.readFileSync(rosterFile, 'utf8')) || {}).agents || {};
     const own = agents[agent];
     if (own && typeof own.persona === 'string' && own.persona.trim()) return own.persona;
     const seam = seamOf();
+    if (!isSeam(seam)) return '';
     const bySeam = seam && agents[seam];
     if (bySeam && typeof bySeam.persona === 'string' && bySeam.persona.trim()) return bySeam.persona;
     throw new Error(`[agent-si] '${agent}' (seam '${seam || '?'}') has no standing instructions in the project roster ${rosterFile}`);
   }
   const seam = seamOf();
-  const reg = JSON.parse(fs.readFileSync(regFile, 'utf8'));
-  const si = seam && reg.profiles && reg.profiles[seam] && reg.profiles[seam].si;
+  if (!isSeam(seam)) return '';
+  const profiles = reg().profiles || {};
+  const si = seam && profiles[seam] && profiles[seam].si;
   if (typeof si === 'string' && si.trim()) return si;
   throw new Error(`[agent-si] seam '${seam || '?'}' of '${agent}' declares no si in ${regFile}`);
 }
@@ -51,7 +60,7 @@ function composedSi(agent, projectConfigDir, registryFile, invocationSeam, proje
   const { constitution } = require('./agent-contract.js');
   const rules = constitution(projectRoot);
   const si = siForAgent(agent, projectConfigDir, registryFile, invocationSeam);
-  return rules ? `${si}\n\n${rules}` : si;
+  return [si, rules].filter(Boolean).join('\n\n');
 }
 
 module.exports = { siForAgent, composedSi };

@@ -15,7 +15,7 @@
  * (ingest-jira-tickets.sh, or resolve-codeline-scope.sh) and BOTH call paths pass through that one
  * function — and it runs before any profile is generated.
  */
-import { describe, it, expect, afterAll } from 'vitest';
+import { describe, it, expect, afterAll, beforeAll } from 'vitest';
 import { execFileSync } from 'node:child_process';
 import { mkdtempSync, mkdirSync, writeFileSync, rmSync, existsSync, readFileSync, chmodSync, readdirSync } from 'node:fs';
 import { tmpdir } from 'node:os';
@@ -36,6 +36,32 @@ const NOT_CLEARED_BY_RESET = 'project-profiles.json';
 const dirs: string[] = [];
 afterAll(() => { for (const d of dirs) rmSync(d, { recursive: true, force: true }); });
 
+// A COMPLETED RUN'S ROSTER, as the pipeline writes it: built by the real roster library from today's
+// seam bases. A hand-written roster is one no run produces, and the reset rightly clears a roster
+// that does not derive from the current seam bases (2026-09-30).
+const LIB = join(__dirname, '../../../orchestrations/scripts/lib');
+let COMPLETED_ROSTER = '';
+beforeAll(async () => {
+  // eslint-disable-next-line @typescript-eslint/no-var-requires
+  const rosterLib = require(join(LIB, 'project-roster.js'));
+  // eslint-disable-next-line @typescript-eslint/no-var-requires
+  const { registryPath } = require(join(LIB, 'seam-invocation.js'));
+  const work = mkdtempSync(join(tmpdir(), 'order-roster-')); dirs.push(work);
+  const logs = join(work, 'logs'); const proj = join(work, 'proj');
+  mkdirSync(logs, { recursive: true }); mkdirSync(proj, { recursive: true });
+  const base = rosterLib.seamBaseForRun(registryPath(), logs);
+  const produce = async ({ outPath }: any) => writeFileSync(outPath, JSON.stringify({ agents: {} }));
+  const prev = process.env.EPAM_PROJECT_CONFIG_DIR;
+  process.env.EPAM_PROJECT_CONFIG_DIR = proj;
+  try {
+    await rosterLib.buildProjectRoster({ canonicalPath: base, logDir: logs, projectConfigDir: proj,
+      produce, review: async () => ({ verdict: 'approved' }), attempts: 1, log: () => {} });
+  } finally {
+    if (prev === undefined) delete process.env.EPAM_PROJECT_CONFIG_DIR; else process.env.EPAM_PROJECT_CONFIG_DIR = prev;
+  }
+  COMPLETED_ROSTER = readFileSync(join(proj, 'roster.json'), 'utf8');
+});
+
 /** A project as a COMPLETED run leaves it: roster, registries, prompts, cache, marker. */
 function project(opts: { marker?: string | null } = {}) {
   const root = mkdtempSync(join(tmpdir(), 'order-'));
@@ -43,8 +69,8 @@ function project(opts: { marker?: string | null } = {}) {
   const cfg = join(root, 'projects', 'metrolinx');
   mkdirSync(join(cfg, 'prompts'), { recursive: true });
   mkdirSync(join(cfg, '.prompt-cache'), { recursive: true });
-  writeFileSync(join(cfg, 'roster.json'),
-    JSON.stringify({ agents: { 'checkout-forms-engineer': { role: 'implementer' } } }));
+  expect(COMPLETED_ROSTER, 'the completed roster was not built').not.toBe('');
+  writeFileSync(join(cfg, 'roster.json'), COMPLETED_ROSTER);
   for (const f of [...REGISTRIES, NOT_CLEARED_BY_RESET]) {
     writeFileSync(join(cfg, f), JSON.stringify({ from: 'the completed run' }));
   }

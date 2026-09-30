@@ -50,7 +50,11 @@ export const WHOLE: Record<string, (world: World, prompt: string, call: Call, co
 /** A contract that declares a tag is answered inside it, whatever style the prompt rendered its shape in. */
 export const wrapped = (text: string, contract?: Contract) => (contract?.tag && !text.includes(`<${contract.tag}>`) ? `<${contract.tag}>\n${text}\n</${contract.tag}>` : text);
 
-export const promptOf = (call: Call) => `${call.req.system}\n${call.req.messages.find((m) => m.role === 'user')?.text || ''}`;
+// THE TASK, NOT THE STANDING INSTRUCTIONS. A model answers the task it is given; the system prompt
+// now carries the agent's SI, and a stand-in that searched it quoted the SI back as its answer (the
+// failure analyst's "diagnosis" was a line of its own SI, which self-heal then appended to another
+// agent's SI — £0 brownfield, 2026-09-30).
+export const promptOf = (call: Call) => call.req.messages.find((m) => m.role === 'user')?.text || '';
 
 /**
  * Answers keyed by TEMPLATE, for a seam reached through several templates with different formats

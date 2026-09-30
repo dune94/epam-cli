@@ -261,13 +261,6 @@ step_emit "23"  "skip" "Step 23: Browser E2E" "SKIP_TESTING_GATES=true"
     "$SCRIPT_DIR/update-monitor.sh" event "testing_gate_start" \
         "Starting testing gates for $phase_id" "" "main" "test-coordinator-agent" 2>/dev/null || true
 
-    # Load browser E2E profiles for routing execution (Step 4.6).
-    local lightpanda_profile=""
-    local playwright_profile=""
-    if [ -f "$profiles_file" ]; then
-        lightpanda_profile=$(jq -r '.["lightpanda-agent"] // ""' "$profiles_file")
-        playwright_profile=$(jq -r '.["playwright-agent"] // ""' "$profiles_file")
-    fi
     local e2e_route_runs=0
     local e2e_route_lightpanda=0
     local e2e_route_playwright=0
@@ -318,7 +311,6 @@ step_emit "23"  "skip" "Step 23: Browser E2E" "SKIP_TESTING_GATES=true"
         local route_reason
         local route_score
         local story_log
-        local agent_profile
         local story_title
         local prompt
         local rc
@@ -362,16 +354,6 @@ step_emit "23"  "skip" "Step 23: Browser E2E" "SKIP_TESTING_GATES=true"
                 route_reason="complexity_medium"
             fi
 
-            if [ "$route" = "playwright-agent" ] && [ -z "$playwright_profile" ]; then
-                route="lightpanda-agent"
-                route_reason="fallback_playwright_profile_missing"
-                warning "  Step 4.6: playwright-agent profile missing; falling back to lightpanda-agent for $story_id"
-            fi
-            if [ "$route" = "lightpanda-agent" ] && [ -z "$lightpanda_profile" ]; then
-                warning "  Step 4.6: lightpanda-agent profile missing; skipping $story_id"
-                continue
-            fi
-
             story_title=$(jq -r --arg id "$story_id" '.stories[] | select(.id==$id) | (.title // $id)' "$PRD_FILE" 2>/dev/null || echo "$story_id")
             "$SCRIPT_DIR/update-monitor.sh" event "e2e_route" \
                 "Routed $story_id to $route (score=$route_score, reason=$route_reason)" "$story_id" "main" "test-coordinator-agent" 2>/dev/null || true
@@ -380,23 +362,20 @@ step_emit "23"  "skip" "Step 23: Browser E2E" "SKIP_TESTING_GATES=true"
             e2e_route_runs=$((e2e_route_runs + 1))
             if [ "$route" = "playwright-agent" ]; then
                 e2e_route_playwright=$((e2e_route_playwright + 1))
-                agent_profile="$playwright_profile"
             else
                 e2e_route_lightpanda=$((e2e_route_lightpanda + 1))
-                agent_profile="$lightpanda_profile"
             fi
 
             story_log="$LOG_DIR/${route}-${phase_id}-${story_id}.log"
             _cp_vals=$(mktemp "${TMPDIR:-/tmp}/e2e-route-check-vals-XXXXXX.json")
             jq_vals \
-                  --arg agent_profile "$agent_profile" \
                   --arg route_reason "$route_reason" \
                   --arg story_title "$story_title" \
                   --arg route_score "$route_score" \
                   --arg phase_id "$phase_id" \
                   --arg story_id "$story_id" \
                   --arg route "$route" \
-                  '{"__AGENT_PROFILE__":$agent_profile,"__ROUTE_REASON__":$route_reason,"__STORY_TITLE__":$story_title,"__ROUTE_SCORE__":$route_score,"__PHASE_ID__":$phase_id,"__STORY_ID__":$story_id,"__ROUTE__":$route}' > "$_cp_vals"
+                  '{"__ROUTE_REASON__":$route_reason,"__STORY_TITLE__":$story_title,"__ROUTE_SCORE__":$route_score,"__PHASE_ID__":$phase_id,"__STORY_ID__":$story_id,"__ROUTE__":$route}' > "$_cp_vals"
             prompt="$(render_engine_prompt e2e-route-check "$_cp_vals")"
             rm -f "$_cp_vals"
 
@@ -459,13 +438,6 @@ step_emit "23"  "skip" "Step 23: Browser E2E" "SKIP_TESTING_GATES=true"
     local sast_exit=0
     local spec_exit=0
 
-    # Load QA gate agent profiles
-    local sast_profile=""
-    local spec_profile=""
-    if [ -f "$profiles_file" ]; then
-        sast_profile=$(jq -r '.["sast-sentinel"] // ""' "$profiles_file")
-        spec_profile=$(jq -r '.["spec-validator"] // ""' "$profiles_file")
-    fi
 
     # ── SAST Sentinel ──
     step_emit "22a" "running" "Step 22a: SAST sentinel"
@@ -489,11 +461,6 @@ step_emit "23"  "skip" "Step 23: Browser E2E" "SKIP_TESTING_GATES=true"
         fi
         rm -f "$_qa_vals"
 
-        if [ -n "$sast_profile" ]; then
-            sast_prompt="$sast_profile
-
-$sast_prompt"
-        fi
 
         # ── Semgrep Oracle: inject static analysis evidence before LLM invocation ──
         local semgrep_json="$LOG_DIR/semgrep-oracle-${phase_id}.json"
@@ -694,11 +661,6 @@ $_spec_file_excerpts"
         fi
         rm -f "$_qa_vals"
 
-        if [ -n "$spec_profile" ]; then
-            spec_prompt="$spec_profile
-
-$spec_prompt"
-        fi
 
         # ── Test Oracle: inject hard vitest evidence before LLM invocation ──
         local oracle_json="$LOG_DIR/vitest-oracle-${phase_id}.json"
@@ -882,12 +844,6 @@ $spec_prompt"
         local review_log="$LOG_DIR/review-ranger-${phase_id}.log"
         local mutant_log="$LOG_DIR/mutant-hunter-${phase_id}.log"
 
-        local review_profile=""
-        local mutant_profile=""
-        if [ -f "$profiles_file" ]; then
-            review_profile=$(jq -r '.["review-ranger"] // ""' "$profiles_file")
-            mutant_profile=$(jq -r '.["mutant-hunter"] // ""' "$profiles_file")
-        fi
 
         # ── Review Ranger ──
         step_emit "22c" "running" "Step 22c: Review ranger"
@@ -950,11 +906,6 @@ $spec_prompt"
             fi
             rm -f "$_qa_vals"
 
-            if [ -n "$review_profile" ]; then
-                review_prompt="$review_profile
-
-$review_prompt"
-            fi
 
             _run_qa_gate_with_retry "$review_prompt" "qa-gate:review-ranger" "${PHASE:-unknown}" "$review_log"
         } &
@@ -1082,11 +1033,6 @@ $(qa_gate_excerpt "$PROJECT_ROOT" "$LOG_DIR" "$_tf" mutationTestLines)${_mut_tes
             fi
             rm -f "$_qa_vals"
 
-            if [ -n "$mutant_profile" ]; then
-                mutant_prompt="$mutant_profile
-
-$mutant_prompt"
-            fi
 
             _run_qa_gate_with_retry "$mutant_prompt" "qa-gate:mutant-hunter" "${PHASE:-unknown}" "$mutant_log"
         } &
@@ -1188,12 +1134,6 @@ $mutant_prompt"
         local fuzz_log="$LOG_DIR/fuzz-weaver-${phase_id}.log"
         local perf_log="$LOG_DIR/perf-sentinel-${phase_id}.log"
 
-        local fuzz_profile=""
-        local perf_profile=""
-        if [ -f "$profiles_file" ]; then
-            fuzz_profile=$(jq -r '.["fuzz-weaver"] // ""' "$profiles_file")
-            perf_profile=$(jq -r '.["perf-sentinel"] // ""' "$profiles_file")
-        fi
 
         # ── Fuzz Weaver ──
         step_emit "22e" "running" "Step 22e: Fuzz-weaver"
@@ -1221,11 +1161,6 @@ $mutant_prompt"
             fi
             rm -f "$_qa_vals"
 
-            if [ -n "$fuzz_profile" ]; then
-                fuzz_prompt="$fuzz_profile
-
-$fuzz_prompt"
-            fi
 
             _run_qa_gate_with_retry "$fuzz_prompt" "qa-gate:fuzz-weaver" "${PHASE:-unknown}" "$fuzz_log"
         } &
@@ -1252,11 +1187,6 @@ $fuzz_prompt"
             fi
             rm -f "$_qa_vals"
 
-            if [ -n "$perf_profile" ]; then
-                perf_prompt="$perf_profile
-
-$perf_prompt"
-            fi
 
             _run_qa_gate_with_retry "$perf_prompt" "qa-gate:perf-sentinel" "${PHASE:-unknown}" "$perf_log"
         } &

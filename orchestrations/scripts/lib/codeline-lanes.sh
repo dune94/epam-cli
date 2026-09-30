@@ -302,24 +302,16 @@ _run_codeline_bridge() {
 
   log "[bridge] Extracting cross-codeline contract for '${_bcl}' → ${_bridge_out}"
 
-  # Load the codeline-bridge-agent profile
-  local _bridge_profile=""
-  if [ -f "$_profiles_file" ]; then
-    _bridge_profile=$(python3 "$SCRIPT_DIR/lib/handlers/bridge-profile.py" "$_profiles_file" 2>/dev/null || true)
-  fi
-  if [ -z "$_bridge_profile" ]; then
-    warning "[bridge] codeline-bridge-agent profile not found in profiles.json — skipping"
-    return 0
-  fi
+  # The bridge agent's identity is its SI (seam codeline-bridge-agent), resolved by the hub — never a
+  # persona pasted into the prompt (operator, 2026-09-30: one path).
 
   _cp_vals=$(mktemp "${TMPDIR:-/tmp}/codeline-bridge-vals-XXXXXX.json")
   jq_vals \
-        --arg bridge_profile "${_bridge_profile}" \
         --arg bridge_out "${_bridge_out}" \
         --arg bprd "${_bprd}" \
         --arg bcl "${_bcl}" \
         --arg bwt "${_bwt}" \
-        '{"__BRIDGE_PROFILE__":$bridge_profile,"__BRIDGE_OUT__":$bridge_out,"__BPRD__":$bprd,"__BCL__":$bcl,"__BWT__":$bwt}' > "$_cp_vals"
+        '{"__BRIDGE_OUT__":$bridge_out,"__BPRD__":$bprd,"__BCL__":$bcl,"__BWT__":$bwt}' > "$_cp_vals"
   local _base_prompt
   _base_prompt="$(render_engine_prompt codeline-bridge "$_cp_vals")"
   rm -f "$_cp_vals"

@@ -127,8 +127,10 @@ async function maybeSynthesize(store, {
     // reaches the closing brace and is quarantined as 'unparseable'.
     env: {
       ORCH_JSON_RESULT: _costFile,
-      EPAM_AGENT_NAME: 'kb-synthesizer',
       ...process.env,
+      // AFTER the inherited environment: this runs inside the failure analyst's process, and its
+      // name — spread over this one — handed the synthesizer the analyst's SI (£0 brownfield, 2026-09-30).
+      EPAM_AGENT_NAME: 'kb-synthesizer',
       EPAM_MAX_OUTPUT_TOKENS: _seamDeclared().maxOutputTokens,
       // Bind this step's own output space. It is the one place an LLM re-enters
       // the self-heal loop, so it should be the LAST place a reply has to be

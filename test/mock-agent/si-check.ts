@@ -9,6 +9,8 @@
  *   - the SI of the seam the call was made for: its registry base, or the project roster's entry
  *     for that seam or for an agent ancestored to it;
  *   - no other seam's SI;
+ *   - no SI or persona inside the PROMPT: one path — an agent's identity travels as its SI only
+ *     (operator, 2026-09-30: "I want only one path - not two or more");
  *   - none of the HOST's Claude Code configuration: the install's and the user's CLAUDE.md, the names of
  *     the skills installed on this machine, the working directory's own commit subjects (a runner's
  *     git status). Each marker is read from the host itself, never spelled here.
@@ -39,17 +41,18 @@ export function siFindings(call: Call, orchestrationsDir: string): string[] {
 
   const profiles = JSON.parse(readFileSync(join(orchestrationsDir, 'agents/invocation-profiles.json'), 'utf8')).profiles || {};
   const seam = call.seam;
-  if (!profiles[seam]) { out.push(`call not attributable to a declared seam (${seam})`); return out; }
+  // A CALL THE MOCK CANNOT ATTRIBUTE (its prompt matches no template it recognises) still carries
+  // exactly one seam's SI — which one is not knowable here, but none, or several, is a defect.
+  if (!profiles[seam]) {
+    const carried = Object.keys(profiles).filter((s) => profiles[s].si && system.includes(firstLine(profiles[s].si)));
+    const persona = rosterPersonas(orchestrationsDir).some((p) => system.includes(p));
+    if (!carried.length && !persona) out.push('no SI of any seam');
+    if (carried.length > 1) out.push(`SIs of more than one seam (${carried.join(', ')})`);
+    return out;
+  }
   const expected: string[] = [];
   if (profiles[seam].si) expected.push(profiles[seam].si);
-  const projects = join(orchestrationsDir, 'projects');
-  for (const p of existsSync(projects) ? readdirSync(projects) : []) {
-    const f = join(projects, p, 'roster.json');
-    if (!existsSync(f)) continue;
-    let agents: Record<string, { persona?: string; ancestor?: string }> = {};
-    try { agents = JSON.parse(readFileSync(f, 'utf8')).agents || {}; } catch { continue; }
-    for (const [name, e] of Object.entries(agents)) if ((name === seam || e.ancestor === seam) && e.persona) expected.push(e.persona);
-  }
+  for (const [name, e] of rosterEntries(orchestrationsDir)) if ((name === seam || e.ancestor === seam) && e.persona) expected.push(e.persona);
   if (!expected.some((si) => system.includes(si))) out.push(`no SI of seam ${seam}`);
   for (const [s, p] of Object.entries<any>(profiles)) {
     if (s === seam || !p.si) continue;
@@ -57,6 +60,58 @@ export function siFindings(call: Call, orchestrationsDir: string): string[] {
     if (l && system.includes(l) && !expected.some((si) => si.includes(l))) out.push(`carries ${s}'s SI`);
   }
   return out;
+}
+
+/** Every project roster entry in the install: [name, entry]. */
+function rosterEntries(orchestrationsDir: string): [string, { persona?: string; ancestor?: string }][] {
+  const out: [string, { persona?: string; ancestor?: string }][] = [];
+  const projects = join(orchestrationsDir, 'projects');
+  for (const p of existsSync(projects) ? readdirSync(projects) : []) {
+    const f = join(projects, p, 'roster.json');
+    if (!existsSync(f)) continue;
+    try { out.push(...Object.entries<{ persona?: string; ancestor?: string }>(JSON.parse(readFileSync(f, 'utf8')).agents || {})); } catch { /* unreadable */ }
+  }
+  return out;
+}
+const rosterPersonas = (dir: string) => rosterEntries(dir).map(([, e]) => e.persona || '').filter(Boolean);
+
+/**
+ * The call's OWN identity texts: its seam's SI, the roster entries of that seam (or ancestored to it),
+ * and every profiles.json persona whose name the registry resolves to that seam. Other agents' SIs may
+ * be the SUBJECT of a prompt (a roster reviewer reads the roster); the call's own identity may not.
+ */
+function ownIdentities(seam: string, orchestrationsDir: string): { who: string; line: string }[] {
+  const out: { who: string; line: string }[] = [];
+  const add = (who: string, text: unknown) => { const l = typeof text === 'string' ? firstLine(text) : ''; if (l.length > 40) out.push({ who, line: l }); };
+  const regFile = join(orchestrationsDir, 'agents/invocation-profiles.json');
+  try { add(`seam ${seam}`, (JSON.parse(readFileSync(regFile, 'utf8')).profiles || {})[seam]?.si); } catch { /* none */ }
+  for (const [n, e] of rosterEntries(orchestrationsDir)) if (n === seam || e.ancestor === seam) add(`roster ${n}`, e.persona);
+  // eslint-disable-next-line @typescript-eslint/no-var-requires
+  const { resolveSeam } = require(join(orchestrationsDir, 'scripts/lib/seam-invocation.js'));
+  for (const f of ['agents/profiles.json', 'agents/profiles.canonical.json']) {
+    let profiles: Record<string, any> = {};
+    try { profiles = JSON.parse(readFileSync(join(orchestrationsDir, f), 'utf8')); } catch { continue; }
+    for (const [n, v] of Object.entries(profiles)) {
+      let s2 = ''; try { s2 = resolveSeam(n, regFile, { ignoreXref: true }); } catch { continue; }
+      if (s2 === seam) add(`profile ${n}`, typeof v === 'string' ? v : v && v.persona);
+    }
+  }
+  return out;
+}
+
+/** The call's own SI or persona pasted into the PROMPT — the second path the operator forbids. */
+export function personaInPrompt(call: Call, orchestrationsDir: string): string[] {
+  const prompt = call.req.messages.filter((m) => m.role === 'user').map((m) => m.text || '').join('\n');
+  const hit = ownIdentities(call.seam, orchestrationsDir).find((i) => prompt.includes(i.line));
+  if (!hit) return [];
+  // A PASTED IDENTITY IS ONE IDENTITY. A prompt whose subject is the roster (a roster reviewer) carries
+  // many seams' SIs — its own among them — as the material under review, not as who it is.
+  let others = 0;
+  try {
+    const profiles = JSON.parse(readFileSync(join(orchestrationsDir, 'agents/invocation-profiles.json'), 'utf8')).profiles || {};
+    others = Object.keys(profiles).filter((x) => x !== call.seam && profiles[x].si && prompt.includes(firstLine(profiles[x].si))).length;
+  } catch { others = 0; }
+  return others ? [] : [`an SI or persona inside the prompt (${hit.who})`];
 }
 
 const lineOf = (f: string) => { try { return readFileSync(f, 'utf8').split('\n').map((l) => l.trim()).find((l) => l.length > 12) || ''; } catch { return ''; } };
@@ -79,7 +134,9 @@ let SKILLS: string[] | null = null;
 
 /** Host configuration the runner added to the request — what the pipeline never sent. */
 export function hostFindings(call: Call, orchestrationsDir: string): string[] {
-  const text = `${call.req.system || ''}\n${call.req.messages.map((m) => m.text || '').join('\n')}`;
+  // THE TASK SIDE ONLY. The runner's own system prompt is the runner's (Claude Code's built-in text
+  // names its built-in skills); host configuration arrived in the user turn (£0 brownfield, 2026-09-30).
+  const text = call.req.messages.filter((m) => m.role === 'user').map((m) => m.text || '').join('\n');
   const out: string[] = [];
   for (const f of [join(dirname(orchestrationsDir), 'CLAUDE.md'), join(homedir(), '.claude/CLAUDE.md')]) {
     const l = lineOf(f); if (l && text.includes(l)) out.push(`host CLAUDE.md in the request (${f})`);

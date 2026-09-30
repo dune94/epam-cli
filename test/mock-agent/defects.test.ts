@@ -172,4 +172,30 @@ describe(`defects found by the mocking agent, on ${PROJECT}`, () => {
     expect(resumed.some((c) => produced(c) === 'implementation'), 'the resumed run never reached the writer').toBe(true);
     expect(r.agent.stale).toEqual([]);
   });
+
+  // ── FAILURE PATHS — never a happy run (operator, 2026-09-30: "I don't want happy path runs to be used
+  // as baselines"). Each drives agents only a failing run reaches; runWith asserts every call carried
+  // its own SI and prompt. What each must have reached is asserted too, so a scenario that never
+  // took its path cannot pass.
+  const reached = (r: ProjectRun, produces: string) => r.agent.calls.filter((c) => r.agent.decl.registry[c.seam]?.produces === produces).length;
+
+  run('failure path: the writer fails its first attempts — the analyst diagnoses and the story recovers', async () => {
+    const { r } = await runWith('fp-writer-fails', [{ produces: 'implementation', attempts: [1, 2], negative: 'empty' }]);
+    expect(reached(r, 'diagnosis'), 'no failure analyst was reached — the path was not taken').toBeGreaterThan(0);
+  });
+
+  run('failure path: the QA gates find a defect — remediation runs', async () => {
+    const { r } = await runWith('fp-gate-finds', [{ produces: 'qa-verdict', negative: 'rejects' }]);
+    expect(reached(r, 'qa-verdict'), 'no QA gate was reached').toBeGreaterThan(0);
+  });
+
+  run('failure path: the reviewer rejects every cycle — the review escalates', async () => {
+    const { r } = await runWith('fp-review-rejects', [{ produces: 'review-feedback', negative: 'rejects' }]);
+    expect(reached(r, 'review-feedback'), 'the reviewer was never reached').toBeGreaterThan(1);
+  });
+
+  run('failure path: the writer fails every attempt — the retry budget is exhausted', async () => {
+    const { r } = await runWith('fp-retries-exhausted', [{ produces: 'implementation', negative: 'empty' }]);
+    expect(reached(r, 'implementation'), 'the writer was barely asked').toBeGreaterThan(2);
+  });
 });

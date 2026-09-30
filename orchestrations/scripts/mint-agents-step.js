@@ -1421,13 +1421,6 @@ if (require.main !== module) return;
           return spec.runClaude(promptExec, prompt, logPath, seamEnv, { costAgent: 'prompt-review' });
         },
         values: ({ id, template, generated }) => ({
-          // The reviewer's own brief, from the canonical roster it is registered in. Absent is
-          // fine — the template's persona section is then simply empty.
-          __PERSONA__: (() => {
-            try {
-              return JSON.parse(fs.readFileSync(path.join(AGENTS_DIR, 'profiles.json'), 'utf8'))['prompt-review'] || '';
-            } catch { return ''; }
-          })(),
           // THE ROSTER, so a claim naming an agent can be CHECKED rather than refused. Built from the
           // same minted detail the generator is handed, so the two cannot disagree about who exists.
           __ROSTER_BLOCK__: (Array.isArray(_mintedDetail) && _mintedDetail.length

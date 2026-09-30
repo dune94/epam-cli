@@ -44,10 +44,22 @@ export class Declarations {
       const texts: string[] = typeof t.body === 'string' ? [t.body]
         : Object.entries(t).filter(([k, v]) => typeof v === 'string' && !k.startsWith('$') && !k.startsWith('_')
           && !['id', 'description', 'layer', 'extractedFrom', 'version'].includes(k)).map(([, v]) => v as string);
-      const segments = texts.flatMap((x) => x.split(PLACEHOLDER)).flatMap((s) => s.split('\n'))
+      const segs = (xs: string[]) => xs.flatMap((x) => x.split(PLACEHOLDER)).flatMap((s) => s.split('\n'))
         .map((s) => s.trim()).filter((s) => s.length >= 24);
       const seams = [...new Set([...(Array.isArray(t.seams) ? t.seams : []), ...(seamOfTemplate[id] || [])])];
+      const segments = segs(texts);
       if (segments.length) out.push({ id, seams, segments, text: texts.join('\n') });
+      // A MULTI-SECTION TEMPLATE (`bodies`) renders ONE section per call, so each section is its own
+      // candidate — whole-template coverage would never reach the threshold. Without this the
+      // agent-failure-analyst and spec-story-block prompts were unrecognisable, and the template a
+      // prompt QUOTED (the failed agent's own prompt) was taken for the caller (£0 brownfield, 2026-09-30).
+      if (t.bodies && typeof t.bodies === 'object') {
+        for (const v of Object.values<unknown>(t.bodies)) {
+          if (typeof v !== 'string') continue;
+          const sg = segs([v]);
+          if (sg.length) out.push({ id, seams, segments: sg, text: v });
+        }
+      }
     }
     return out;
   }
@@ -58,7 +70,7 @@ export class Declarations {
    * fixed text encloses the others — the widest span — is the one that called.
    */
   identify(text: string, modes: string[] = []): { template: Template; score: number; coverage: number } | null {
-    const found: { template: Template; score: number; coverage: number; span: number }[] = [];
+    const found: { template: Template; score: number; coverage: number; span: number; lo: number }[] = [];
     for (const t of this.templates) {
       let score = 0; let hits = 0; let lo = Infinity; let hi = -1;
       for (const s of t.segments) {
@@ -67,11 +79,17 @@ export class Declarations {
         score += s.length; hits += 1; lo = Math.min(lo, at); hi = Math.max(hi, at + s.length);
       }
       const coverage = hits / t.segments.length;
-      if (hits && coverage >= 0.3) found.push({ template: t, score, coverage, span: hi - lo });
+      if (hits && coverage >= 0.3) found.push({ template: t, score, coverage, span: hi - lo, lo });
     }
     // Fully present beats partly present (templates share rule blocks); among templates equally
-    // present, the one enclosing the others is the caller.
-    found.sort((a, b) => (Math.round(b.coverage * 20) - Math.round(a.coverage * 20)) || (b.span - a.span) || (b.score - a.score));
+    // present, the one that STARTS FIRST is the caller: what a prompt quotes — a template a builder
+    // specialises, the failed prompt an analyst diagnoses — comes after the caller's own opening.
+    // Widest span decided this before, and an analyst quoting a long failed prompt was taken for the
+    // agent it was diagnosing (£0 brownfield, 2026-09-30).
+    // A SEAM'S OWN TEMPLATE (the registry names it as the seam's template) beats a FRAGMENT several
+    // prompts include — a shared evidence block may open a gate's prompt and would otherwise start first.
+    const owns = (t: Template) => Object.values(this.registry).some((p) => p && p.template === t.id) ? 1 : 0;
+    found.sort((a, b) => (Math.round(b.coverage * 20) - Math.round(a.coverage * 20)) || (owns(b.template) - owns(a.template)) || (a.lo - b.lo) || (b.span - a.span) || (b.score - a.score));
     // A FRAGMENT embedded in another seam's prompt can span as widely as its host; a template whose
     // seam does not apply to this project's modes cannot be the caller, so the next candidate is.
     const pick = found.find((f) => this.applies(this.seamOf(f.template, modes), modes)) || found[0];

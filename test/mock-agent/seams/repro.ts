@@ -40,7 +40,7 @@ export function reproWriter(): Behaviour {
     const tool = writeTool(call.req.tools);
     const t = reproTest(prompt);
     if (!tool || !t) return { kind: 'text', text: `I could not write a reproducing test: ${!tool ? 'no write tool was offered' : 'the prompt gave no readable example, diff or path'}.` };
-    const [pathKey, contentKey] = [keyLike(tool.params, /path/i)!, keyLike(tool.params, /content|text/i)!];
+    const [pathKey, contentKey] = [keyLike(tool.params, /path/i)!, keyLike(tool.params, /(^|_)(content|text)$/i)!];
     const calls: ToolCall[] = [{ id: newCallId(), name: tool.name, input: { [pathKey]: t.path, [contentKey]: t.content } }];
     return { kind: 'tools', calls };
   };

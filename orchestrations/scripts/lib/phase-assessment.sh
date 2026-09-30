@@ -388,29 +388,24 @@ run_pre_phase_assessment() {
             _pfa_has_changes=$(echo "$_pfa_diff" | python3 -c "import sys,json; d=json.load(sys.stdin); print(1 if d['new_profiles'] or d['changed_profiles'] else 0)" 2>/dev/null || echo 0)
 
             if [ "${_pfa_has_changes:-0}" = "1" ]; then
-                local _pfa_reviewer_profile
-                _pfa_reviewer_profile=$(jq -r '."prd-change-reviewer" // ""' "$profiles_file" 2>/dev/null || echo "")
-                if [ -n "$_pfa_reviewer_profile" ]; then
-                    local _pfa_verdict
-                    _pfa_verdict=$(echo "${_pfa_reviewer_profile}
-
-        $(_render_change_reviewer "pre-phase-assessment-${phase_id}" "profile_creation" "BEFORE/AFTER DIFF:\n${_pfa_diff}")" | \
-                        EPAM_AGENT_NAME="prd-change-reviewer" \
-                        AI_PROVIDER="${ORCH_GATE_PROVIDER}" \
-                        AI_MODEL="$(seam_model_or_fail "prd-change-reviewer")" \
-                        EPAM_CLI="${EPAM_CLI:-$(dirname "${BASH_SOURCE[0]}")/../bin/epam}" \
-                        "$AI_RUNNER_CMD" \
-                            --provider "${ORCH_GATE_PROVIDER}" \
-                            --model    "$(seam_model_or_fail "prd-change-reviewer")" \
-                        2>/dev/null | \
-                        python3 "$SCRIPT_DIR/lib/handlers/run-pre-phase-assessment.py" 2>/dev/null || echo "pass")
-                    if [ "$_pfa_verdict" = "fail" ]; then
-                        _pfa_violated=1
-                        _pfa_violation_reason="${_pfa_violation_reason}profiles.json content was rejected by the reviewer (bad/vague skill rule content); "
-                    else
-                        success "  [pre-phase-assessment] Profile changes approved by reviewer"
-                    fi
-                fi
+                # Identity = the reviewer's SI (seam prd-change-reviewer), never a persona in the prompt.
+                  local _pfa_verdict
+                  _pfa_verdict=$(echo "$(_render_change_reviewer "pre-phase-assessment-${phase_id}" "profile_creation" "BEFORE/AFTER DIFF:\n${_pfa_diff}")" | \
+                      EPAM_AGENT_NAME="prd-change-reviewer" \
+                      AI_PROVIDER="${ORCH_GATE_PROVIDER}" \
+                      AI_MODEL="$(seam_model_or_fail "prd-change-reviewer")" \
+                      EPAM_CLI="${EPAM_CLI:-$(dirname "${BASH_SOURCE[0]}")/../bin/epam}" \
+                      "$AI_RUNNER_CMD" \
+                          --provider "${ORCH_GATE_PROVIDER}" \
+                          --model    "$(seam_model_or_fail "prd-change-reviewer")" \
+                      2>/dev/null | \
+                      python3 "$SCRIPT_DIR/lib/handlers/run-pre-phase-assessment.py" 2>/dev/null || echo "pass")
+                  if [ "$_pfa_verdict" = "fail" ]; then
+                      _pfa_violated=1
+                      _pfa_violation_reason="${_pfa_violation_reason}profiles.json content was rejected by the reviewer (bad/vague skill rule content); "
+                  else
+                      success "  [pre-phase-assessment] Profile changes approved by reviewer"
+                  fi
             fi
         fi
 
@@ -702,10 +697,18 @@ _escalate_review_story() {
     local _fb_role _fb_blockers
     _fb_role=$(jq -r --arg id "$_fb_story" '.stories[] | select(.id == $id) | .agentRole // ""' "$PRD_FILE" 2>/dev/null)
     _fb_blockers=$(jq -r '.issues[]? | select((.severity // "") == "blocker") | "- " + (.description // "")' "$_fb" 2>/dev/null)
+    # THE RUN'S LEDGER, FOR THE ROLE (2026-09-30). This wrote into profiles.json, which since the SI
+    # convergence reaches no agent, and an engine file outliving the run breaks the operator's rule
+    # of 2026-08-12 (nothing lingers across runs). Every later story of this role in this run now
+    # receives the lesson in its prompt (lib/knowledge-base.sh run_guidance_for_story).
     if [ -n "$_fb_role" ] && [ -n "$_fb_blockers" ]; then
-        _persist_skill_note_simple "$AGENT_PROFILES_FILE" "$_fb_role" \
-            "Review REPEATEDLY rejected ${_fb_story} (ladder exhausted) for:
+        local _fb_note="Review REPEATEDLY rejected ${_fb_story} (ladder exhausted) for:
 ${_fb_blockers}"
+        if _fb_bad=$(_text_violates_anti_pattern "$_fb_note" 2>/dev/null) && [ -n "$_fb_bad" ]; then
+            warning "  [review-escalation] lesson for ${_fb_role} contradicts a known anti-pattern — not recorded: ${_fb_bad}"
+        else
+            record_run_guidance_for_role "$_fb_role" "$_fb_note" "review-escalation"
+        fi
     fi
     local _tmp_prd
     _tmp_prd="$(mktemp)"; jq --arg id "$_fb_story" \

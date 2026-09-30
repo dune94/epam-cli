@@ -749,10 +749,12 @@ if [ "${EPAM_PLAN_EXECUTE:-1}" = "1" ] && [ "${_EPAM_IN_PLAN_PASS:-0}" != "1" ];
   # output, so a hypothesis can be formed without spending a call — and a plan
   # made BEFORE looking is the more useful artefact, because the answer can be
   # checked against it. The execute pass keeps the full budget.
+  # The plan pass is this same agent: named "<agent>:plan", and told the SI file it inherits is its own.
+  _plan_agent="${EPAM_AGENT_NAME:-agent}:plan"
   _plan_text="$(
     _EPAM_IN_PLAN_PASS=1 \
-    EPAM_SI_AGENT="${EPAM_AGENT_NAME:-agent}:plan" \
-    EPAM_AGENT_NAME="${EPAM_AGENT_NAME:-agent}:plan" \
+    EPAM_SI_AGENT="$_plan_agent" \
+    EPAM_AGENT_NAME="$_plan_agent" \
     EPAM_ALLOWED_TOOLS="" \
     EPAM_MAX_TOOL_CALLS=0 \
     ORCH_JSON_RESULT="$_plan_json" \

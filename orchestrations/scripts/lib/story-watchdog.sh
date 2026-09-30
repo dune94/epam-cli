@@ -389,45 +389,37 @@ run_story_recovery_analyst() {
         # _verdict still "pass" — so a PRD change was certified by a reviewer that never ran,
         # and the only trace was a profile that happened to be missing. Every canonical agent is
         # specialised into the roster, so an absence here is a defect in the roster.
-        local _src_reviewer_profile
-        if ! _src_reviewer_profile=$(roster_persona prd-change-reviewer 2>&1); then
-            error "  [prd-change-review] cannot resolve the reviewer's persona: ${_src_reviewer_profile}"
-            error "  [prd-change-review] Refusing to certify a PRD change with no reviewer."
-            return 1
-        fi
-        if [ -n "$_src_reviewer_profile" ]; then
-            local _rev_raw="" _rev_attempt=0
-            while [ "$_rev_attempt" -lt 2 ] && [ -z "$_rev_raw" ]; do
-                local _corrective_rev=""
-                [ "$_rev_attempt" -gt 0 ] && _corrective_rev="CORRECTION: Your previous response did not contain parseable JSON with a verdict field. Emit ONLY: {\"verdict\":\"pass|fail\",\"issues\":[],\"reason\":\"\"}
+        # The reviewer's identity is its SI (seam prd-change-reviewer), resolved by the hub — never a
+        # persona pasted into the prompt (operator, 2026-09-30: one path).
+        local _rev_raw="" _rev_attempt=0
+        while [ "$_rev_attempt" -lt 2 ] && [ -z "$_rev_raw" ]; do
+            local _corrective_rev=""
+            [ "$_rev_attempt" -gt 0 ] && _corrective_rev="CORRECTION: Your previous response did not contain parseable JSON with a verdict field. Emit ONLY: {\"verdict\":\"pass|fail\",\"issues\":[],\"reason\":\"\"}
 
 "
-                # Its seam's model, then one rung up ITS OWN chain on retry. This read a run-wide
-                # pin behind a vendor literal, and escalated to a single run-wide "high" model that
-                # every agent shared regardless of where it started. That is a pin, not a ladder.
-                local _rev_model
-                _rev_model=$(seam_model_or_fail "prd-change-reviewer") || _rev_model=""
-                [ "$_rev_attempt" -ge 1 ] && _rev_model=$(seam_next_model "prd-change-reviewer" "$_rev_model")
-                _rev_raw=$(echo "${_corrective_rev}${_src_reviewer_profile}
-
-                $(_render_change_reviewer "$story_id" "ac_patch" "BEFORE:\n${_before_acs}\n\nAFTER:\n${_candidate}")" | \
-                    EPAM_AGENT_NAME="prd-change-reviewer" \
-                    AI_PROVIDER="${ORCH_GATE_PROVIDER}" \
-                    AI_MODEL="${_rev_model}" \
-                    EPAM_CLI="${EPAM_CLI:-$(dirname "${BASH_SOURCE[0]}")/../bin/epam}" \
-                    "$AI_RUNNER_CMD" \
-                        --provider "${ORCH_GATE_PROVIDER}" \
-                        --model    "${_rev_model}" \
-                    2>/dev/null | \
-                    python3 "$SCRIPT_DIR/lib/handlers/run-story-recovery-analyst.py" 2>/dev/null || true)
-                _rev_attempt=$(( _rev_attempt + 1 ))
-            done
-            if [ "$_rev_raw" = "pass" ] || [ "$_rev_raw" = "fail" ]; then
-                _verdict="$_rev_raw"
-            else
-                warning "  [StoryRecovery] Reviewer failed to produce a valid verdict after 2 attempt(s) — defaulting to fail (fail-safe)"
-                _verdict="fail"
-            fi
+            # Its seam's model, then one rung up ITS OWN chain on retry. This read a run-wide
+            # pin behind a vendor literal, and escalated to a single run-wide "high" model that
+            # every agent shared regardless of where it started. That is a pin, not a ladder.
+            local _rev_model
+            _rev_model=$(seam_model_or_fail "prd-change-reviewer") || _rev_model=""
+            [ "$_rev_attempt" -ge 1 ] && _rev_model=$(seam_next_model "prd-change-reviewer" "$_rev_model")
+            _rev_raw=$(echo "${_corrective_rev}            $(_render_change_reviewer "$story_id" "ac_patch" "BEFORE:\n${_before_acs}\n\nAFTER:\n${_candidate}")" | \
+                EPAM_AGENT_NAME="prd-change-reviewer" \
+                AI_PROVIDER="${ORCH_GATE_PROVIDER}" \
+                AI_MODEL="${_rev_model}" \
+                EPAM_CLI="${EPAM_CLI:-$(dirname "${BASH_SOURCE[0]}")/../bin/epam}" \
+                "$AI_RUNNER_CMD" \
+                    --provider "${ORCH_GATE_PROVIDER}" \
+                    --model    "${_rev_model}" \
+                2>/dev/null | \
+                python3 "$SCRIPT_DIR/lib/handlers/run-story-recovery-analyst.py" 2>/dev/null || true)
+            _rev_attempt=$(( _rev_attempt + 1 ))
+        done
+        if [ "$_rev_raw" = "pass" ] || [ "$_rev_raw" = "fail" ]; then
+            _verdict="$_rev_raw"
+        else
+            warning "  [StoryRecovery] Reviewer failed to produce a valid verdict after 2 attempt(s) — defaulting to fail (fail-safe)"
+            _verdict="fail"
         fi
     fi
     if [ "$_verdict" = "fail" ]; then

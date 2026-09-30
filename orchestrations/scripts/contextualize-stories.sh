@@ -1261,11 +1261,9 @@ if [ "$APPLY_MODE" = true ] && [ "$DRY_RUN" != true ]; then
     # (iteration/token budget) and prd-model-coordinator's reasoningEffort default.
     if [ -n "${ORCH_GATE_PROVIDER:-}" ] && [ -f "$_cpa_profiles_file" ]; then
       _cpa_after=$(jq --arg id "$sid" '.stories[] | select(.id==$id) | {estimatedAiMinutes,estimatedCost,estimatedTokens,estimatedTurns,estimatedHours,effort,cpaConfidence,cpaGate}' "$PRD_FILE" 2>/dev/null || echo '{}')
-      _cpa_reviewer_profile=$(jq -r '."prd-change-reviewer" // ""' "$_cpa_profiles_file" 2>/dev/null || echo "")
-      if [ -n "$_cpa_reviewer_profile" ]; then
-        _cpa_verdict=$(echo "${_cpa_reviewer_profile}
-
-STORY: ${sid}
+      # The reviewer's identity is its SI (seam prd-change-reviewer), resolved by the hub — never a
+      # persona pasted into the prompt (operator, 2026-09-30: one path).
+      _cpa_verdict=$(echo "STORY: ${sid}
 CHANGE TYPE: cpa_estimate
 
 BEFORE:
@@ -1275,22 +1273,21 @@ AFTER:
 ${_cpa_after}
 
 Emit ONLY: {\"verdict\":\"pass|fail\",\"issues\":[],\"reason\":\"\"}" | \
-          EPAM_AGENT_NAME="prd-change-reviewer" \
-          AI_PROVIDER="${ORCH_GATE_PROVIDER}" \
-          AI_MODEL="${EPAM_MODEL:-}" \
-          EPAM_CLI="${EPAM_CLI:-$SCRIPT_DIR/bin/epam}" \
-          EPAM_MAX_OUTPUT_TOKENS="${CPA_GATE_MAX_OUTPUT_TOKENS:-16384}" \
-          "$_cpa_ai_runner_cmd" \
-              --provider "${ORCH_GATE_PROVIDER}" \
-              --model    "${EPAM_MODEL:-}" \
-          2>/dev/null | \
-          python3 "$SCRIPT_DIR/lib/handlers/cpa-review-verdict.py" 2>/dev/null || echo "fail")
-        if [ "$_cpa_verdict" = "fail" ]; then
-          warning "  $sid: CPA estimate REJECTED by reviewer — reverting to pre-CPA values"
-          jq --arg id "$sid" --argjson before "$_cpa_before" \
-             '(.stories[] | select(.id==$id)) |= (. + $before)' \
-             "$PRD_FILE" > "${PRD_FILE}.tmp" && mv "${PRD_FILE}.tmp" "$PRD_FILE"
-        fi
+        EPAM_AGENT_NAME="prd-change-reviewer" \
+        AI_PROVIDER="${ORCH_GATE_PROVIDER}" \
+        AI_MODEL="${EPAM_MODEL:-}" \
+        EPAM_CLI="${EPAM_CLI:-$SCRIPT_DIR/bin/epam}" \
+        EPAM_MAX_OUTPUT_TOKENS="${CPA_GATE_MAX_OUTPUT_TOKENS:-16384}" \
+        "$_cpa_ai_runner_cmd" \
+            --provider "${ORCH_GATE_PROVIDER}" \
+            --model    "${EPAM_MODEL:-}" \
+        2>/dev/null | \
+        python3 "$SCRIPT_DIR/lib/handlers/cpa-review-verdict.py" 2>/dev/null || echo "fail")
+      if [ "$_cpa_verdict" = "fail" ]; then
+        warning "  $sid: CPA estimate REJECTED by reviewer — reverting to pre-CPA values"
+        jq --arg id "$sid" --argjson before "$_cpa_before" \
+           '(.stories[] | select(.id==$id)) |= (. + $before)' \
+           "$PRD_FILE" > "${PRD_FILE}.tmp" && mv "${PRD_FILE}.tmp" "$PRD_FILE"
       fi
     fi
 

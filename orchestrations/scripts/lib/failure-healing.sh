@@ -952,11 +952,8 @@ run_failure_analyst() {
             grep '\[Self-Heal\]' || echo "")
     fi
 
-    # Load failure-analyst profile from profiles.json (role-level instructions)
-    local analyst_profile=""
-    if [ -f "$profiles_file" ]; then
-        analyst_profile=$(require_profile "failure-analyst" "$profiles_file" || true)
-    fi
+    # The analyst's identity is its SI (its own seam), resolved by the hub — never a persona pasted
+    # into the prompt (operator, 2026-09-30: one path).
 
     # Dependency contract injection (added 2026-07-07): same ground-truth
     # mechanism already proven for build_implementation_prompt() — the
@@ -1049,7 +1046,6 @@ $(cat "$_fa_vendor_contract")
     # deliberately: no agent input is cut mid-meaning. So the transport has to carry the
     # whole thing. --rawfile reads each value from a file and never touches argv.
     local _av_dir; _av_dir=$(mktemp -d "${TMPDIR:-/tmp}/analyst-args-XXXXXX")
-    printf '%s' "${analyst_profile:-}"                  > "$_av_dir/profile"
     printf '%s' "${story_acs:-}"                        > "$_av_dir/acs"
     printf '%s' "${skill_addendum:-}"                   > "$_av_dir/addendum"
     printf '%s' "${dependency_contracts:-}"             > "$_av_dir/contracts"
@@ -1106,7 +1102,6 @@ $(cat "$_fa_vendor_contract")
     local _analyst_skill_note_max; _analyst_skill_note_max=$(_skill_note_max_chars) || return 1
 
     if ! jq -n \
-        --rawfile profile "$_av_dir/profile" \
         --arg story_id "$story_id" \
         --arg story_role "$story_role" \
         --rawfile story_acs "$_av_dir/acs" \
@@ -1119,7 +1114,7 @@ $(cat "$_fa_vendor_contract")
         --rawfile healing_history "$_av_dir/history" \
         --arg manifest_file "$_analyst_manifest_file" \
         --arg skill_note_max "$_analyst_skill_note_max" \
-        '{"__ANALYST_PROFILE__":$profile,
+        '{
           "__MANIFEST_FILE__":$manifest_file,
           "__SKILL_NOTE_MAX__":$skill_note_max,
           "__STORY_ID__":$story_id,

@@ -11,5 +11,8 @@
   "pluginConnectSeconds": 90,
   "$pluginConnectSeconds": "How long a starting plugin has to signal ready (plugin_host.py's ready file) before the call fails. EPAM_CODEMIE_PLUGIN_CONNECT_MS overrides it (tests).",
   "searchMaxMatches": 200,
-  "$searchMaxMatches": "The most matches a read-only plugin's search returns in one call; beyond it the answer says how many more there were (never a silent cut). 0 = no limit."
+  "$searchMaxMatches": "The most matches a read-only plugin's search returns in one call; beyond it the answer says how many more there were (never a silent cut). 0 = no limit.",
+  "namePrefixFrom": "JIRA_PROJECT_KEY",
+  "namePrefixFormat": "[{key}] ",
+  "$whyNamePrefix": "Operator, 2026-09-30: every assistant a run creates carries its project's tracker prefix ([AMSD] ...). The key is the project's own (projects/<p>/config.env, exported by load_project_env); this names only the variable and the form. No key, no prefix."
 }

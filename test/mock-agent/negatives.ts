@@ -12,7 +12,7 @@ import { negative } from './agent';
 import { jsonValues } from './answer';
 import type { Turn } from './wire';
 
-export type NegativeName = 'prose' | 'empty' | 'truncated' | 'fenced' | 'drop-required' | 'bad-enum' | 'http-500' | 'http-429' | 'hang';
+export type NegativeName = 'prose' | 'empty' | 'truncated' | 'fenced' | 'drop-required' | 'bad-enum' | 'http-500' | 'http-429' | 'hang' | 'rejects';
 
 const textOf = (t: Turn) => (t.kind === 'text' ? t.text : '');
 
@@ -30,6 +30,28 @@ export const NEGATIVES: Record<NegativeName, (correct: Turn, call: Call) => Turn
   'http-500': () => negative({ kind: 'http-error', status: 500, body: '{"error":{"message":"upstream provider error"}}' }, 'vendor 500'),
   'http-429': () => negative({ kind: 'http-error', status: 429, body: '{"error":{"message":"rate limited"}}' }, 'vendor 429'),
   hang: () => negative({ kind: 'hang' }, 'the call never answers'),
+  // A JUDGE THAT FINDS A REAL DEFECT — the path a happy run never takes (gate remediation, review
+  // escalation). Built from the prompt it was given: the verdict value is the non-passing option the
+  // prompt itself declares ("verdict": "pass|fail"), and the one blocker names a file the prompt names.
+  rejects: (c, call) => {
+    const prompt = call.req.messages.find((m) => m.role === 'user')?.text || '';
+    const text = textOf(c);
+    const m = /"(verdict|decision|status)"\s*:\s*"([A-Za-z_]+(?:\|[A-Za-z_]+)+)"/.exec(prompt);
+    if (!m) return c;
+    const options = m[2].split('|');
+    const passing = /^(pass|passed|approved|approve|go|ok|accept(ed)?)$/i;
+    const failing = options.find((o) => !passing.test(o));
+    if (!failing) return c;
+    const file = (prompt.match(/[\w./-]+\.[A-Za-z]{1,5}\b/) || [])[0] || 'the change';
+    const issue = { severity: 'blocker', description: `${file} does not satisfy the story's acceptance criteria` };
+    const v = jsonValues(text).find((x) => x && typeof x === 'object' && !Array.isArray(x)) as Record<string, unknown> | undefined;
+    if (!v) return c;
+    const out: Record<string, unknown> = { ...v, [m[1]]: failing };
+    for (const k of ['issues', 'findings', 'blockers']) if (k in v || k === 'issues') out[k] = [issue];
+    const changed = text.replace(JSON.stringify(v, null, 2), JSON.stringify(out, null, 2)).replace(JSON.stringify(v), JSON.stringify(out));
+    // An edit that did not apply is not a rejection — never label an unchanged answer as one.
+    return changed === text ? c : negative({ kind: 'text', text: changed }, `the judge found a blocker (${failing})`);
+  },
 };
 
 /**

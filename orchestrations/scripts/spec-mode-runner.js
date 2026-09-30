@@ -1750,11 +1750,8 @@ async function run() {
   const prd = JSON.parse(fs.readFileSync(prdPath, 'utf8'));
   const _initialStoryIds = new Set((prd.stories || []).map((s) => s.id));
 
-  // Load agent profiles — spec-coordinator-agent provides the system-level role instruction
-  const profilesPath = path.join(automationDir, 'agents', 'profiles.json');
-  let profiles = {};
-  try { profiles = JSON.parse(fs.readFileSync(profilesPath, 'utf8')); } catch { /* no profiles */ }
-  const specCoordinatorProfile = profiles['spec-coordinator-agent'] || '';
+  // The coordinator's identity is its SI, from its own seam (lib/agent-si.js) — never a persona pasted
+  // into the prompt (operator, 2026-09-30: "I want only one path").
 
   const phaseStories = Array.isArray(prd.implementationOrder?.[opts.phase])
     ? prd.implementationOrder[opts.phase]
@@ -1819,7 +1816,6 @@ async function run() {
   );
 
   const coordinatorPrompt = renderEngineTemplate('spec-coordinator', {
-    __PROFILE_PREFIX__: specCoordinatorProfile ? specCoordinatorProfile + '\n\n' : '',
     __PHASE__: opts.phase,
     __STORIES_PAYLOAD__: storiesPayload,
   });
@@ -2122,7 +2118,7 @@ async function run() {
         console.log(`spec-mode: skipping prd-change-reviewer for ${story.id} — split-only change (delegation marker is deterministic, already structurally verified)`);
       } else if (anyFieldChanged) {
         let reviewResult = await reviewPrdChange({
-          aiRunnerCmd, profiles, storyId: story.id, changeType: 'spec_pass',
+          aiRunnerCmd, storyId: story.id, changeType: 'spec_pass',
           before: beforeSnapshot, after: afterSnapshot, logDir,
           splitOccurred: changes.splitCount > 0
         });
@@ -2148,7 +2144,7 @@ async function run() {
             + `(${acReviewUnjudged}/2)`);
           // eslint-disable-next-line no-await-in-loop
           reviewResult = await reviewPrdChange({
-            aiRunnerCmd, profiles, storyId: story.id, changeType: 'spec_pass',
+            aiRunnerCmd, storyId: story.id, changeType: 'spec_pass',
             before: beforeSnapshot, after: afterSnapshot, logDir,
             splitOccurred: changes.splitCount > 0
           });
@@ -2192,7 +2188,7 @@ async function run() {
           afterSnapshot = captureStorySnapshot(story);
 
           reviewResult = await reviewPrdChange({
-            aiRunnerCmd, profiles, storyId: story.id, changeType: 'spec_pass',
+            aiRunnerCmd, storyId: story.id, changeType: 'spec_pass',
             before: beforeSnapshot, after: afterSnapshot, logDir,
             splitOccurred: changes.splitCount > 0
           });
@@ -2516,8 +2512,7 @@ async function run() {
       'spec-review-criteria', {}, isBrownfieldReview ? 'brownfield' : 'greenfield');
 
     const reviewPrompt = renderEngineTemplate('spec-coordinator-review', {
-      __PROFILE_PREFIX__: specCoordinatorProfile ? specCoordinatorProfile + '\n\n' : '',
-      __PHASE__: opts.phase,
+        __PHASE__: opts.phase,
       __REVIEW_CRITERIA__: reviewCriteria,
       __MANIFEST_EVIDENCE__: manifestEvidence(specifiedStories, prd),
       __CODELINE_SCOPE__: codelineScopeBlock(prd, specifiedStories),
@@ -2699,8 +2694,7 @@ async function run() {
       });
 
     const modelReviewPrompt = renderEngineTemplate('spec-model-review', {
-      __PROFILE_PREFIX__: specCoordinatorProfile ? specCoordinatorProfile + '\n\n' : '',
-      __PHASE__: opts.phase,
+        __PHASE__: opts.phase,
       __MINI_MODEL__: miniModel,
       __UPGRADE_MODEL__: upgradeModel,
       __STORY_CONTEXT__: JSON.stringify(storyContextForReview, null, 2),
@@ -3268,12 +3262,11 @@ function buildGuardEvidence(findings) {
  * The guard-vocabulary prompt. Extracted verbatim from deriveGuardVocabulary so its
  * migration into the template layer can be proven byte-for-byte.
  */
-function buildGuardVocabularyPrompt({ persona, seam, rule, _statements, manifest, docBlock, evidence, story, codegraphTool, repoPath }) {
+function buildGuardVocabularyPrompt({ seam, rule, _statements, manifest, docBlock, evidence, story, codegraphTool, repoPath }) {
   // RENDERED FROM THE TEMPLATE LAYER. Four sections are conditional and are assembled here:
   // present, each points the agent at real evidence; absent, the prompt must not carry an
   // empty heading implying evidence exists. A template cannot branch.
   return renderEngineTemplate('guard-vocabulary', {
-    __PERSONA_PREFIX__: persona ? persona + '\n\n' : '',
     __SEAM__: seam || 'unspecified',
     __RULE__: rule,
     __STATEMENT_LIST__: _statements.map((c, i) => `${i + 1}. ${c}`).join('\n'),
@@ -3317,10 +3310,7 @@ async function deriveGuardVocabulary({ promptExec, rule, statements, story, find
     .map((d) => `- ${d.url}\n${d.quotes.map((q) => `    "${String(q).replace(/\s+/g, ' ')}"`).join('\n')}`)
     .join('\n');
 
-  const profiles = profilesWithProjectBriefs(logDir);
-  const persona = profiles['guard-vocabulary-agent'] || '';
-
-  const prompt = buildGuardVocabularyPrompt({ persona, seam, rule, _statements, manifest, docBlock, evidence, story, codegraphTool, repoPath });
+  const prompt = buildGuardVocabularyPrompt({ seam, rule, _statements, manifest, docBlock, evidence, story, codegraphTool, repoPath });
 
   // Real tools when there is a repo to check against — the agent must VERIFY a candidate
   // term, not assert it. Inherits ladder/retry/self-heal from runAgentForJson like every
@@ -4774,12 +4764,11 @@ function profilesWithProjectBriefs(logDir) {
   return out;
 }
 
-function buildRosterReviewPrompt({ persona, briefBlock, clBlock, ticketBlock, docBlock, toolLine, coverageBlock }) {
+function buildRosterReviewPrompt({ briefBlock, clBlock, ticketBlock, docBlock, toolLine, coverageBlock }) {
   // RENDERED FROM THE TEMPLATE LAYER. The documentation section is assembled here because it
   // is conditional prose — present, it points the reviewer at the vendor's own text; absent,
   // it tells the reviewer that any vendor claim is unverifiable. A template cannot branch.
   return renderEngineTemplate('roster-review', {
-    __PERSONA__: persona,
     __PIPELINE_STAGES__: pipelineStagesBlock(),
     __BRIEF_BLOCK__: briefBlock,
     __COVERAGE_BLOCK__: coverageBlock || '- (coverage could not be derived)',
@@ -4848,7 +4837,6 @@ async function reviewSurvey({
   ].filter(Boolean).join('\n')).join('\n');
 
   const prompt = renderEngineTemplate('survey-review', {
-    __PERSONA__: 'You are reviewing an estate survey before a team is assembled from it.',
     __SURVEY_BLOCK__: surveyBlock,
     __CODELINE_BLOCK__: _named.map((c) => `- ${c.name} (${c.path})`).join('\n') || '- (none)',
     __TICKET_BLOCK__: (Array.isArray(tickets) ? tickets : [])
@@ -5430,7 +5418,6 @@ async function reviewRoster({
       return body ? '- ' + d.url + '\n' + body : '- ' + d.url + ' (retrieved, no readable text)';
     }).join('\n\n');
 
-  const persona = (profiles && profiles['roster-reviewer']) || '';
   const toolLine = toolGrant
     ? 'Your tools: ' + toolGrant + '. Open the repositories. Resolve the packages and symbols these '
       + 'briefs name. Confirm the files and directories they claim to own exist.'
@@ -5456,7 +5443,7 @@ async function reviewRoster({
   }
 
   const prompt = buildRosterReviewPrompt({
-    persona, briefBlock, clBlock, ticketBlock, docBlock, toolLine, coverageBlock,
+    briefBlock, clBlock, ticketBlock, docBlock, toolLine, coverageBlock,
   });
 
   // THE IDENTITY TRAVELS WITH THE SEAM. This relied on the caller having set
@@ -6704,9 +6691,9 @@ async function runCodeGraphDetective(story, logDir, opts = {}) {
       return null;
     } catch { return null; }
   })();
-  const detectiveProfile = _mintedDetective
-    ? _mintedDetective.brief
-    : (profiles['code-graph-detective'] || '');
+  // THE MINTED INVESTIGATOR IS CALLED BY ITS OWN NAME: its identity is its roster SI (derived from the
+  // code-graph-detective seam), resolved by the hub — never its brief pasted into the prompt.
+  const detectiveName = _mintedDetective ? _mintedDetective.name : 'code-graph-detective';
   if (_mintedDetective) {
     console.log(`spec-mode: detective for ${(story && story.codeline) || 'story'} = ${_mintedDetective.name} (minted for this codeline)`);
   }
@@ -6782,7 +6769,6 @@ async function runCodeGraphDetective(story, logDir, opts = {}) {
     'code-graph-detective',
     process.env.EPAM_PROJECT_CONFIG_DIR || '',
     {
-      __DETECTIVE_PROFILE__: detectiveProfile ? detectiveProfile + '\n\n' : '',
       __REPO_PATH__: repoPath,
       __TOOL_PATH__: toolPath,
       __STORY_TITLE__: story.title || '',
@@ -6924,7 +6910,7 @@ async function runCodeGraphDetective(story, logDir, opts = {}) {
         // It was set TWICE in this same object literal, once for each reason, neither addition
         // aware of the other. Same value, so nothing misbehaved — but the second silently won,
         // and a future edit to the first would have had no effect at all.
-        EPAM_AGENT_NAME: 'code-graph-detective',
+        EPAM_AGENT_NAME: detectiveName,
         EPAM_STORY_ID: (story && story.id) || '',
         // The detective TRACES the causal fix site + picks the helper to reuse —
         // correctness is paramount and it must reason carefully. With story-point-
@@ -7360,8 +7346,6 @@ async function reviewTicketLinks({ promptExec, story, logDir, docPaths = [] }) {
   const links = Array.isArray(story && story.ticketLinks) && story.ticketLinks.length ? story.ticketLinks : [];
   if (!links.length) return [];
 
-  const profiles = profilesWithProjectBriefs(logDir);
-  const persona = profiles['ticket-link-agent'] || '';
 
   const linkBlock = links.map((l, i) => {
     // "ticket body" rather than "description": a link found outside a comment. The word is
@@ -7380,7 +7364,6 @@ async function reviewTicketLinks({ promptExec, story, logDir, docPaths = [] }) {
     .map((c) => `- ${c.author || 'unknown'}: ${String(c.text || '')}`).join('\n');
 
   const prompt = renderEngineTemplate('spec-story-block', {
-    __PERSONA__: persona ? persona + '\n\n' : '',
     __TITLE__: story.title || '',
     __DESCRIPTION__: String(story.description || ''),
     __COMPONENTS__: (Array.isArray(story.components) ? story.components : []).join(', ') || '(none)',
@@ -10275,12 +10258,11 @@ function reviewOutcomeKeepsChange(verdict) {
   return verdict === 'pass';
 }
 
-async function reviewPrdChange({ aiRunnerCmd, profiles, storyId, changeType, before, after, logDir, splitOccurred }) {
+async function reviewPrdChange({ aiRunnerCmd, storyId, changeType, before, after, logDir, splitOccurred }) {
   const gateProvider = process.env.ORCH_GATE_PROVIDER || '';
   if (!gateProvider) return { verdict: 'pass', issues: [] };
 
-  const reviewerProfile = profiles['prd-change-reviewer'] || '';
-  if (!reviewerProfile) return { verdict: 'pass', issues: [] };
+  // The reviewer's identity is its SI (seam prd-change-reviewer) — never a persona in the prompt.
 
   // When a split occurred alongside other field changes (description/title),
   // the parent's acceptanceCriteria is a deterministic engine-written
@@ -10311,7 +10293,7 @@ async function reviewPrdChange({ aiRunnerCmd, profiles, storyId, changeType, bef
   const reviewMode = process.env.EPAM_BROWNFIELD === '1' ? 'brownfield' : 'greenfield';
   const modeRules = renderEngineTemplate('prd-change-reviewer-mode-rules', {}, reviewMode);
   const prompt = renderEngineTemplate('prd-change-reviewer-spec', {
-    __REVIEWER_PROFILE__: `${reviewerProfile}\n\n${modeRules}`,
+    __MODE_RULES__: modeRules,
     __STORY_ID__: storyId,
     __CHANGE_TYPE__: changeType,
     __SPLIT_NOTE__: splitNote,

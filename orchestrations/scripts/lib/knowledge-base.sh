@@ -85,12 +85,25 @@ record_run_guidance() {
         '{storyId:$s, note:$n, target:$t, ts:$ts}' >> "$_f"
 }
 
-# run_guidance_for_story <story_id> — the notes recorded for this story, newest last, unique.
+# record_run_guidance_for_role <agent_role> <note> <target>
+# A lesson about a ROLE rather than one story (a review that exhausted its ladder): every later story
+# of that role in THIS run receives it. Same ledger, same lifetime — nothing lingers across runs.
+record_run_guidance_for_role() {
+    local _role="${1:?agent role}" _note="${2:-}" _target="${3:-role}"
+    [ -n "$_note" ] || return 0
+    local _f; _f=$(_run_guidance_file) || return 1
+    jq -cn --arg r "$_role" --arg n "$_note" --arg t "$_target" --arg ts "$(date -u +%Y-%m-%dT%H:%M:%SZ)" \
+        '{role:$r, note:$n, target:$t, ts:$ts}' >> "$_f"
+}
+
+# run_guidance_for_story <story_id> — the notes recorded for this story AND for its agent role,
+# newest last, unique.
 run_guidance_for_story() {
-    local _sid="${1:?story id}" _f
+    local _sid="${1:?story id}" _f _role
     _f=$(_run_guidance_file 2>/dev/null) || return 0
     [ -f "$_f" ] || return 0
-    jq -r --arg s "$_sid" 'select(.storyId == $s) | .note' "$_f" 2>/dev/null | awk '!seen[$0]++'
+    _role=$(jq -r --arg id "$_sid" '.stories[]? | select(.id == $id) | .agentRole // ""' "${MAIN_PRD_FILE:-${PRD_FILE:-/dev/null}}" 2>/dev/null || echo "")
+    jq -r --arg s "$_sid" --arg r "$_role" 'select(.storyId == $s or ($r != "" and .role == $r)) | .note' "$_f" 2>/dev/null | awk '!seen[$0]++'
 }
 
 build_kb_prompt_section() {

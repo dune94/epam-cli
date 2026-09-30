@@ -23,10 +23,15 @@ const { home } = require('./paths.js');
 const CONFIG = path.join(__dirname, '..', '..', '..', 'config', 'codemie-web.json');
 const readConfig = () => JSON.parse(fs.readFileSync(CONFIG, 'utf8'));
 
-/** "Pipeline {codeline} {agent}" with the parts filled; whitespace-normalised. */
-function assistantName(codeline, agent, cfg = readConfig()) {
+/**
+ * "Pipeline {codeline} {agent}" with the parts filled; whitespace-normalised — opened by the project's
+ * tracker prefix ("[AMSD] ") when the run carries the key the config names (namePrefixFrom).
+ */
+function assistantName(codeline, agent, cfg = readConfig(), env = process.env) {
   if (!codeline || !agent) throw new Error(`[codemie-web] an assistant needs a codeline and an agent (got '${codeline}', '${agent}')`);
-  return cfg.nameTemplate.replace('{codeline}', codeline).replace('{agent}', agent).replace(/\s+/g, ' ').trim();
+  const key = cfg.namePrefixFrom ? String(env[cfg.namePrefixFrom] || '').trim() : '';
+  const prefix = key && cfg.namePrefixFormat ? cfg.namePrefixFormat.replace('{key}', key) : '';
+  return `${prefix}${cfg.nameTemplate.replace('{codeline}', codeline).replace('{agent}', agent)}`.replace(/\s+/g, ' ').trim();
 }
 
 /** The project assistants live in: the configured one, else the signed-in user's personal project. */
@@ -55,7 +60,7 @@ function toolkitsFor(integration) {
 async function ensureAssistant(c, { codeline, agent, integration, model, si }, env = process.env) {
   if (typeof si !== 'string' || !si.trim()) throw new Error(`[codemie-web] no standing instructions for '${agent}' — an assistant is never stored without them`);
   const cfg = readConfig();
-  const name = assistantName(codeline, agent, cfg);
+  const name = assistantName(codeline, agent, cfg, env);
   const proj = await project(c, cfg);
   const binding = integration ? integration.id : 'none';
   const cp = cachePath(env);

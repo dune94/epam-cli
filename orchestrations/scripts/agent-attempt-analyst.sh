@@ -141,10 +141,8 @@ if [ -z "$_model" ]; then
     exit 0
 fi
 
-# Reuse the failure-analyst profile (the crown-jewel role instructions) when present.
-_profile=""
-_profiles_file="$(dirname "$SCRIPT_DIR")/agents/profiles.json"
-[ -f "$_profiles_file" ] && _profile=$(jq -r '."failure-analyst" // ""' "$_profiles_file" 2>/dev/null || echo "")
+# The analyst's identity is its SI (seam agent-failure-analyst), resolved by the hub — never a persona
+# pasted into the prompt (operator, 2026-09-30: one path).
 # THE PROMPT, AND THE FIVE CLASS HINTS, FROM THE TEMPLATE LAYER.
 #
 # All of it used to sit here: the fallback role line, a five-arm case statement whose every arm
@@ -159,7 +157,6 @@ _body() { "${NODE_BIN:-node}" -e '
   process.stdout.write(String((d.bodies || {})[process.argv[2]] || ""));
 ' "$_tpl" "$1"; }
 
-[ -z "$_profile" ] && _profile="$(_body role_fallback)"
 
 _failed_output=$(cat "$FAILED_OUTPUT_FILE" 2>/dev/null || echo "")
 _context=$(cat "$CONTEXT_FILE" 2>/dev/null || echo "")
@@ -176,12 +173,11 @@ esac
 # Values via a FILE, never argv: a failed agent's output is routinely megabytes and argv is
 # capped at ARG_MAX. This is the same crash that took out the failure analyst on 2026-08-15.
 _aa_vals=$(mktemp "${TMPDIR:-/tmp}/agent-failure-analyst-vals-XXXXXX.json")
-jq_vals --arg profile "$_profile" \
-      --arg class_hint "$_class_hint" \
+jq_vals --arg class_hint "$_class_hint" \
       --arg failure_class "$FAILURE_CLASS" \
       --arg failed_output "${_failed_output:-(empty — it produced nothing)}" \
       --arg context "${_context:-(not provided)}" \
-      '{"__PROFILE__":$profile,"__CLASS_HINT__":$class_hint,"__FAILURE_CLASS__":$failure_class,"__FAILED_OUTPUT__":$failed_output,"__CONTEXT__":$context}' \
+      '{"__CLASS_HINT__":$class_hint,"__FAILURE_CLASS__":$failure_class,"__FAILED_OUTPUT__":$failed_output,"__CONTEXT__":$context}' \
       > "$_aa_vals"
 if ! _prompt=$(render_engine_prompt agent-failure-analyst "$_aa_vals" prompt); then
     rm -f "$_aa_vals"

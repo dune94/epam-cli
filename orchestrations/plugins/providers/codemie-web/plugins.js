@@ -41,7 +41,7 @@ function keyFor(codeline, mode, env = process.env) {
 
 /** The Plugin integration holding that key, registered once. */
 async function ensureIntegration(c, codeline, mode, env = process.env) {
-  const alias = assistantName(codeline, mode);
+  const alias = assistantName(codeline, mode, undefined, {});   // an integration, not an agent: no tracker prefix
   const find = async () => ((await c.integrations.list({ setting_type: 'user' })) || []).find((i) => i.alias === alias);
   let integ = await find();
   if (!integ) {

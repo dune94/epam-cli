@@ -20,7 +20,7 @@ import { join } from 'node:path';
 import { Declarations } from './declarations';
 import { parse, encode, type Req, type Turn } from './wire';
 import { reconcile, contractConflict } from './answer';
-import { siFindings, hostFindings } from './si-check';
+import { siFindings, hostFindings, personaInPrompt } from './si-check';
 
 export type Call = { n: number; seam: string; template: string; coverage: number; story: string; attempt: number; req: Req };
 /** A seam's behaviour: given the call, the next turn. Returning null falls through to the default. */
@@ -100,7 +100,7 @@ export class MockAgent {
     if (fresh) this.attempts.set(key, (this.attempts.get(key) || 0) + 1);
     const call: Call = { n: this.calls.length + 1, seam, template: id?.template.id || '', coverage: id?.coverage || 0, story, attempt: this.attempts.get(key) || 1, req };
     this.calls.push(call);
-    const si = [...siFindings(call, this.decl.orchestrationsDir), ...hostFindings(call, this.decl.orchestrationsDir)];
+    const si = [...siFindings(call, this.decl.orchestrationsDir), ...hostFindings(call, this.decl.orchestrationsDir), ...personaInPrompt(call, this.decl.orchestrationsDir)];
     if (si.length) this.siMissing.push({ n: call.n, seam, template: call.template, story, findings: si });
 
     let turn: Turn | null = null; let error = '';

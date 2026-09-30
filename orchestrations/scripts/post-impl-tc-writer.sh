@@ -114,25 +114,9 @@ if [[ -z "$OUTPUT_DIR" || ! -d "$OUTPUT_DIR" ]]; then
   echo "  [tc-writer] ERROR: --output-dir not found: $OUTPUT_DIR" >&2; exit 1
 fi
 
-# ── Load tc-writer-agent profile ───────────────────────────────────────────────
-PROFILES_FILE="$(dirname "$SCRIPT_DIR")/agents/profiles.json"
-TC_WRITER_PROFILE=""
-if [ -f "$PROFILES_FILE" ]; then
-  TC_WRITER_PROFILE=$(jq -r '."tc-writer-agent" // ""' "$PROFILES_FILE" 2>/dev/null || echo "")
-fi
-# NO FALLBACK PROMPT. This substituted a one-line description of the job for the agent's real
-# profile whenever profiles.json could not be read — silently. The writer then produced
-# testCriteria from a sentence instead of from its minted instructions, and those criteria go on
-# to gate the phase, so the degradation is invisible and durable.
-#
-# The profile is minted for every project and prompts/templates/tc-writer.json is its source, so
-# an empty one means the mint did not run or the file is wrong. Refusing is contained: the caller
-# retries three times, records writer_exit_nonzero, and blocks the affected stories rather than
-# aborting the phase — so this reports a real problem instead of hiding it.
-if [ -z "$TC_WRITER_PROFILE" ]; then
-  echo "  [tc-writer] no 'tc-writer-agent' profile in ${PROFILES_FILE:-<unset>} — refusing to write test criteria from a placeholder prompt" >&2
-  exit 1
-fi
+# ── The tc-writer's identity is its SI (seam tc-writer), resolved by the hub from the project roster —
+# never a persona pasted into the prompt (operator, 2026-09-30: "I want only one path"). A roster
+# that cannot answer it refuses the call at the hub, loudly, so there is no silent placeholder here.
 
 # ── Find test stories in this phase that need TCs ──────────────────────────────
 TC_NEEDED=$(python3 "$SCRIPT_DIR/lib/handlers/tc-stories-needing-criteria.py" "$PRD_FILE" "$PHASE" "$STORY"
@@ -179,11 +163,10 @@ ${TC_CORRECTIVE_NOTE}
 
 "
 jq_vals --arg story_context "$STORY_CONTEXT" \
-      --arg tc_writer_profile "$TC_WRITER_PROFILE" \
       --arg test_file_conventions "$_tc_conventions" \
       --arg test_command "$_tc_command" \
       --arg corrective_note "$_tc_corrective_block" \
-      '{"__STORY_CONTEXT__":$story_context,"__TC_WRITER_PROFILE__":$tc_writer_profile,"__TEST_FILE_CONVENTIONS__":$test_file_conventions,"__TEST_COMMAND__":$test_command,"__CORRECTIVE_NOTE__":$corrective_note}' > "$_tpl_vals" 2>/dev/null
+      '{"__STORY_CONTEXT__":$story_context,"__TEST_FILE_CONVENTIONS__":$test_file_conventions,"__TEST_COMMAND__":$test_command,"__CORRECTIVE_NOTE__":$corrective_note}' > "$_tpl_vals" 2>/dev/null
 if ! TC_PROMPT=$(render_engine_prompt tc-writer "$_tpl_vals"); then
     echo "[tc-writer] cannot render its prompt — refusing to run with no instructions" >&2
     rm -f "$_tpl_vals"; exit 1

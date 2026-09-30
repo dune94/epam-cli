@@ -52,6 +52,21 @@ def searchable_files(base: Path) -> list:
     return files
 
 
+def _rel(p: Path, root: Path) -> str:
+    """`p` relative to the root BY ITS OWN NAME — a link is not followed (a codeline's virtualenv
+    links its interpreter out of the root, and resolving it named a path outside)."""
+    return str(Path(os.path.abspath(p)).relative_to(root))
+
+
+def _inside(p: Path, root: Path) -> bool:
+    """Whether what `p` really is lies under the root — a read never follows a link out of it."""
+    try:
+        p.resolve().relative_to(root)
+        return True
+    except ValueError:
+        return False
+
+
 def _is_binary(p: Path) -> bool:
     """A NUL byte in the first 8000 bytes — the test git itself applies."""
     try:
@@ -76,7 +91,7 @@ class SearchFilesTool(RemoteTool):
         rx = re.compile(pattern)
         out, more = [], 0
         for p in searchable_files(base):
-            if not p.is_file() or _is_binary(p):
+            if not p.is_file() or not _inside(p, root) or _is_binary(p):
                 continue
             try:
                 for n, line in enumerate(p.read_text(errors="ignore").splitlines(), 1):
@@ -84,7 +99,7 @@ class SearchFilesTool(RemoteTool):
                         if self.max_matches and len(out) >= self.max_matches:
                             more += 1
                         else:
-                            out.append(f"{p.resolve().relative_to(root)}:{n}: {line}")
+                            out.append(f"{_rel(p, root)}:{n}: {line}")
             except OSError:
                 continue
         if more:
@@ -92,7 +107,23 @@ class SearchFilesTool(RemoteTool):
         return "\n".join(out) or "no matches"
 
 
+class GitFileList(RecursiveFileRetrieval):
+    """The library's recursive listing (its name, description and input), answered with the files a
+    search reads: what git shows. The library walks every file and logs the whole list — over an
+    estate of codelines that is every node_modules and .git: the plugin grew past the run's memory
+    bound and the kernel killed the run (live AMSD-2974, 2026-09-30)."""
+
+    def _run(self, dir_path: str = ".", *args, **kwargs) -> str:
+        try:
+            base = Path(get_relative_path(self.root_dir, dir_path))
+        except Exception:
+            return f"Invalid dir_path: {dir_path}"
+        root = Path(self.root_dir).resolve()
+        files = [_rel(p, root) for p in searchable_files(base) if p.is_file() or p.is_symlink()]
+        return "\n".join(files) or f"No files found in directory {dir_path}"
+
+
 def ro_tools(root: str) -> list:
     """The read-only toolkit rooted at `root` (plugin_host.py runs it)."""
     root = str(Path(root).resolve())
-    return [ListDirectoryTool(root_dir=root), RecursiveFileRetrieval(root_dir=root), ReadFileTool(root_dir=root), SearchFilesTool(root_dir=root)]
+    return [ListDirectoryTool(root_dir=root), GitFileList(root_dir=root), ReadFileTool(root_dir=root), SearchFilesTool(root_dir=root)]

@@ -13,7 +13,7 @@
  */
 import { describe, it, expect, beforeAll, afterAll } from 'vitest';
 import { spawn, execSync } from 'node:child_process';
-import { mkdtempSync, writeFileSync, readFileSync, rmSync, existsSync, mkdirSync } from 'node:fs';
+import { mkdtempSync, writeFileSync, readFileSync, rmSync, existsSync, mkdirSync, symlinkSync } from 'node:fs';
 import { join } from 'node:path';
 import { tmpdir } from 'node:os';
 import { createServer } from 'node:net';
@@ -58,6 +58,12 @@ function obliging(call: Call): Turn {
     if (!tool) return { kind: 'text', text: 'NO-SEARCH-TOOL' };
     const p = Object.keys(tool.params.properties);
     return { kind: 'tools', calls: [{ id: newCallId(), name: tool.name, input: { [p.find((k) => /pattern/i.test(k))!]: q[1], [p.find((k) => /dir|path/i.test(k))!]: q[2] } }] };
+  }
+  const l = /LIST (\S+)/.exec(prompt);
+  if (l) {
+    const tool = call.req.tools.find((t) => /recursive/i.test(t.name) && Object.keys(t.params?.properties || {}).some((k) => /dir|path/i.test(k)));
+    if (!tool) return { kind: 'text', text: 'NO-LIST-TOOL' };
+    return { kind: 'tools', calls: [{ id: newCallId(), name: tool.name, input: { [Object.keys(tool.params.properties).find((k) => /dir|path/i.test(k))!]: l[1] } }] };
   }
   if (/SAY-NOTHING/.test(prompt)) return { kind: 'text', text: '' };
   return { kind: 'text', text: `ANSWER tools-offered=${call.req.tools.length}` };
@@ -213,6 +219,44 @@ describe.skipIf(!CODEMIE)('a seam call on the codemie-web set', () => {
     expect(r.stdout).toMatch(/src\/kept\.ts:1:/);
     expect(r.stdout).not.toMatch(/ignored\.js/);
     expect(r.stdout).not.toMatch(/index\.db/);
+  }, 180_000);
+
+  it('a recursive listing shows what git shows — never an ignored dependency tree, never .git — across an estate too', async () => {
+    // Live AMSD-2974, 2026-09-30: the discovery agent listed the codeline estate recursively; the
+    // library's listing walked every node_modules and .git in 9.7 GB of codelines, and the plugin grew
+    // past the run's memory bound (4 GB) — the kernel killed the whole run.
+    const estate = join(dir, 'estate'); const a = join(estate, 'app-a'); const b = join(estate, 'app-b');
+    for (const r of [a, b]) {
+      mkdirSync(join(r, 'src'), { recursive: true });
+      writeFileSync(join(r, '.gitignore'), 'node_modules/\n');
+      writeFileSync(join(r, 'src', 'kept.ts'), 'export const x = 1;\n');
+      execSync(`git -C ${JSON.stringify(r)} init -q && git -C ${JSON.stringify(r)} add -A`);
+      writeFileSync(join(r, 'src', 'new-untracked.ts'), 'export const y = 2;\n');
+      for (let i = 0; i < 40; i += 1) {
+        mkdirSync(join(r, 'node_modules', `dep-${i}`), { recursive: true });
+        for (let j = 0; j < 50; j += 1) writeFileSync(join(r, 'node_modules', `dep-${i}`, `f${j}.js`), '');
+      }
+    }
+    // A link out of the estate (a codeline's virtualenv links its interpreter to the system's): listed
+    // by its own name, never followed out of the root, never read.
+    const outside = mkdtempSync(join(tmpdir(), 'outside-the-root-'));
+    writeFileSync(join(outside, 'target.txt'), 'OUTSIDE-CONTENT-5d1e\n');
+    symlinkSync(join(outside, 'target.txt'), join(a, 'src', 'linked-out.txt'));
+    const r = await call(`LIST ${estate}`, { EPAM_AGENT_NAME: READ_ONLY_SEAM, AI_GATE_ALLOW_TOOLS: '1', EPAM_ALLOWED_TOOLS: 'read_file,list_files,search', JIRA_CODELINE_ROOT: dir });
+    expect(r.status, r.stderr.slice(-1500)).toBe(0);
+    expect(r.stdout).not.toContain('NO-LIST-TOOL');
+    for (const repo of ['app-a', 'app-b']) {
+      expect(r.stdout).toMatch(new RegExp(`${repo}/src/kept\\.ts`));
+      expect(r.stdout).toMatch(new RegExp(`${repo}/src/new-untracked\\.ts`));
+    }
+    expect(r.stdout).not.toMatch(/node_modules/);
+    expect(r.stdout).not.toMatch(/\.git\//);
+    expect(r.stdout).toMatch(/app-a\/src\/linked-out\.txt/);
+    // …and a search over the same estate neither fails on the link nor reads what it points at.
+    const q = await call(`SEARCH OUTSIDE-CONTENT IN ${estate}`, { EPAM_AGENT_NAME: READ_ONLY_SEAM, AI_GATE_ALLOW_TOOLS: '1', EPAM_ALLOWED_TOOLS: 'read_file,list_files,search', JIRA_CODELINE_ROOT: dir });
+    expect(q.status, q.stderr.slice(-1500)).toBe(0);
+    expect(q.stdout, q.stdout.slice(0, 600)).toMatch(/TOOL-RESULTS: .*no matches/);
+    rmSync(outside, { recursive: true, force: true });
   }, 180_000);
 
   it('an answer with nothing in it is a failure the ladder can act on, not a success', async () => {

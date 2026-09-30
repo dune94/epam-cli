@@ -24,7 +24,7 @@
  */
 import { describe, it, expect, afterEach } from 'vitest';
 import { spawnSync } from 'node:child_process';
-import { mkdtempSync, mkdirSync, writeFileSync, chmodSync, rmSync, readFileSync } from 'node:fs';
+import { mkdtempSync, mkdirSync, writeFileSync, chmodSync, rmSync, readFileSync, existsSync } from 'node:fs';
 import { join } from 'node:path';
 import { tmpdir } from 'node:os';
 
@@ -78,6 +78,8 @@ function invoke(s: ReturnType<typeof setup>, extraEnv: Record<string, string> = 
       PATH: `${s.binDir}:${process.env.HOME}/.local/bin:/usr/bin:/bin`,
       HOME: process.env.HOME,
       LOG_DIR: s.logDir,
+      // This run's failures are recorded in its OWN knowledge base, never the engine's.
+      KB_ROOT: join(s.dir, 'kb'),
       PROJECT_ROOT: s.dir,
       EPAM_CLI: s.epamStub,
       EPAM_PROVIDER_SET: 'openrouter',
@@ -104,6 +106,20 @@ function calls(s: ReturnType<typeof setup>): string[] {
 }
 
 describe('a climbing ladder calls the provider that serves the model', () => {
+  it('THE TEST WRITES NOTHING INTO THE ENGINE\'S OWN KNOWLEDGE BASE', () => {
+    // Found 2026-09-30: every run of this file appended six "model call produced no usable
+    // output" episodes for story S-1 to orchestrations/agents/kb/healing-events.jsonl — the
+    // engine's knowledge base, which real agents read. A test's failures belong in its own dir.
+    const engineKb = join(__dirname, '../../../orchestrations/agents/kb/healing-events.jsonl');
+    const before = existsSync(engineKb) ? readFileSync(engineKb, 'utf8') : null;
+    const s = setup();
+    invoke(s);
+    expect(calls(s).length, 'the hub never reached the runner, so this proves nothing').toBeGreaterThan(0);
+    const after = existsSync(engineKb) ? readFileSync(engineKb, 'utf8') : null;
+    expect(after, 'the test wrote into the engine knowledge base').toBe(before);
+  });
+
+
   it('IN-PROCESS: the escalated rung is called on ITS OWN provider, never on the launch provider', () => {
     const s = setup();
     invoke(s);

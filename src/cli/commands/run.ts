@@ -1,4 +1,5 @@
 import { Command } from 'commander';
+import { existsSync, readFileSync } from 'node:fs';
 import { getActivityLogger } from '../../logging/AgentActivityLogger';
 import { resolveConfig } from '../../config/ConfigResolver.js';
 import { AuthManager } from '../../auth/AuthManager.js';
@@ -82,8 +83,12 @@ export function createRunCommand(): Command {
         ? applyToolAllowlist([...createTools()], process.env.EPAM_ALLOWED_TOOLS)
         : [];
 
+      // THE AGENT'S STANDING INSTRUCTIONS: the pipeline's hub resolves them per call and names the
+      // file in EPAM_SI_FILE. Read here, appended to the session prompt (ContextBuilder).
+      const siFile = process.env.EPAM_SI_FILE;
+      const agentInstructions = siFile && existsSync(siFile) ? readFileSync(siFile, 'utf8') : null;
       const systemPrompt = await buildSessionSystemPrompt(config, authManager,
-        tools.map(t => t.name));
+        tools.map(t => t.name), agentInstructions);
       const userMessage = config.projectRoot
         ? await consumeConsultationContext(prompt, config.projectRoot)
         : prompt;

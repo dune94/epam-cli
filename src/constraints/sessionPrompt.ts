@@ -14,7 +14,9 @@ export async function buildSessionSystemPrompt(
   authManager: AuthManager,
   // The tools this session will actually offer. Forwarded so the prompt's capability sentence
   // describes the real grant instead of asserting one over it.
-  toolNames?: string[]
+  toolNames?: string[],
+  // The agent's standing instructions for this call (see ContextBuilder agentInstructions).
+  agentInstructions?: string | null
 ): Promise<string> {
   let blockConstraints: Constraint[] = [];
   let warnConstraints: Constraint[] = [];
@@ -35,5 +37,6 @@ export async function buildSessionSystemPrompt(
     blockConstraints,
     warnConstraints,
     toolNames,
+    agentInstructions,
   });
 }

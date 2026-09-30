@@ -13,6 +13,13 @@ interface ContextBuildOptions {
    */
   toolNames?: string[];
   systemPromptFile?: string | null;
+  /**
+   * THE AGENT'S STANDING INSTRUCTIONS, as the pipeline's hub resolved them for this call (the file
+   * EPAM_SI_FILE names — orchestrations/scripts/lib/agent-si.js). Appended after the session
+   * prompt, which still states this agent's tools, as Claude Code's --append-system-prompt-file
+   * does; absent for a session no pipeline agent runs in.
+   */
+  agentInstructions?: string | null;
   projectRoot?: string | null;
   blockConstraints?: Constraint[];
   warnConstraints?: Constraint[];
@@ -87,6 +94,10 @@ export async function buildSystemPrompt(opts: ContextBuildOptions): Promise<stri
     parts.push(custom || basePrompt);
   } else {
     parts.push(basePrompt);
+  }
+
+  if (opts.agentInstructions && opts.agentInstructions.trim()) {
+    parts.push(`\n${opts.agentInstructions.trim()}`);
   }
 
   // Project context

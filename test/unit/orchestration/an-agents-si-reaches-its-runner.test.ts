@@ -65,7 +65,7 @@ beforeAll(async () => {
 afterAll(() => { rmSync(work, { recursive: true, force: true }); });
 
 /** Run the hub as `agent`; return what the stand-in runner received. */
-function call(agent: string, projectDir: string) {
+function call(agent: string, projectDir: string, extraEnv: Record<string, string> = {}) {
   const dir = mkdtempSync(join(tmpdir(), 'si-runner-'));
   try {
     const rec = join(dir, 'rec');
@@ -82,7 +82,7 @@ function call(agent: string, projectDir: string) {
     const res = spawnSync('bash', [HUB, '--provider', RUNNER], {
       input: TASK, encoding: 'utf8', cwd: ROOT,
       env: { ...process.env, PATH: `${dir}:${process.env.PATH}`, CLAUDE_CMD: stub, NODE_BIN,
-        EPAM_PROVIDER_SET: SET, EPAM_AGENT_NAME: agent, EPAM_PROJECT_CONFIG_DIR: projectDir },
+        EPAM_PROVIDER_SET: SET, EPAM_AGENT_NAME: agent, EPAM_PROJECT_CONFIG_DIR: projectDir, ...extraEnv },
     });
     const read = (f: string) => (existsSync(f) ? readFileSync(f, 'utf8') : null);
     return { argv: (read(rec + '.argv') || '').split('\n').filter(Boolean), stdin: read(rec + '.stdin'),
@@ -126,6 +126,18 @@ describe('an agent\'s SI reaches its runner', () => {
     expect(r.files).toContain(personaOf(MINTED));
     expect(JSON.parse(readFileSync(join(projWithRoster, 'roster.json'), 'utf8')).agents[MINTED].ancestor)
       .toBe(seamForKind('implementer', REGISTRY));
+  });
+
+  it('the SEAM THE INVOCATION RESOLVED decides the SI — not a label that names another seam', () => {
+    // spec-mode-runner uses a call's cost label as its agent name when none is set; a label such as
+    // 'vc-agent' resolves by name to a different seam. seamInvocationEnv exports EPAM_SEAM — the
+    // seam that decided this call's ladder and budget — and that is the seam whose SI it receives.
+    const label = 'vc-agent';
+    // eslint-disable-next-line @typescript-eslint/no-var-requires
+    const { resolveSeam } = require(join(LIB, 'seam-invocation.js'));
+    expect(resolveSeam(label, REGISTRY, { ignoreXref: true }), 'the label must resolve elsewhere, or this proves nothing').not.toBe(SPECIALISED);
+    const r = call(label, projWithRoster, { EPAM_SEAM: SPECIALISED });
+    expect(r.files).toContain(personaOf(SPECIALISED));
   });
 
   it('BEFORE the roster exists, a seam gets its BASE SI from the registry', () => {

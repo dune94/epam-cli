@@ -121,12 +121,12 @@ describe.skipIf(!CODEMIE)('a seam call on the codemie-web set', () => {
   }, 180_000);
 
   it('a read-only grant binds the read-only plugin: the file is read from the codeline, and no write or command tool is offered', async () => {
-    const r = await call('READ sentinel.txt', { EPAM_AGENT_NAME: 'code-reader', AI_GATE_ALLOW_TOOLS: '1', EPAM_ALLOWED_TOOLS: 'read_file,list_files,search' });
+    const r = await call('READ sentinel.txt', { EPAM_AGENT_NAME: 'estate-survey', AI_GATE_ALLOW_TOOLS: '1', EPAM_ALLOWED_TOOLS: 'read_file,list_files,search' });
     expect(r.stderr, r.stderr.slice(-1500)).not.toMatch(/call failed/);
     expect(r.status, r.stderr.slice(-2000)).toBe(0);
     expect(r.stdout).toContain('SENTINEL-CONTENT-7f3a');
     const chat = cm.chats[cm.chats.length - 1];
-    expect(chat.assistant).toBe('Pipeline shop-web code-reader');
+    expect(chat.assistant).toBe('Pipeline shop-web estate-survey');
     expect(chat.tools).toContain('_read_file_from_file_system');
     expect(chat.tools).not.toContain('_write_file_to_file_system');
     expect(chat.tools).not.toContain('_run_command_line_tool');
@@ -134,7 +134,7 @@ describe.skipIf(!CODEMIE)('a seam call on the codemie-web set', () => {
   }, 180_000);
 
   it('a read-only grant cannot write: asked to, the model finds no write tool and nothing lands on disk', async () => {
-    const r = await call('WRITE leak.txt SHOULD-NOT-EXIST', { EPAM_AGENT_NAME: 'code-reader', AI_GATE_ALLOW_TOOLS: '1', EPAM_ALLOWED_TOOLS: 'read_file' });
+    const r = await call('WRITE leak.txt SHOULD-NOT-EXIST', { EPAM_AGENT_NAME: 'estate-survey', AI_GATE_ALLOW_TOOLS: '1', EPAM_ALLOWED_TOOLS: 'read_file' });
     const seen = JSON.stringify(cm.chats[cm.chats.length - 1]);
     expect(r.stdout, seen).toContain('NO-WRITE-TOOL');
     expect(existsSync(join(codeline, 'leak.txt')), seen).toBe(false);
@@ -175,7 +175,7 @@ describe.skipIf(!CODEMIE)('a seam call on the codemie-web set', () => {
     writeFileSync(join(repo, 'build', 'ignored.js'), 'NEEDLE_4b1 in a build output\n');
     writeFileSync(join(repo, 'src', 'index.db'), Buffer.concat([Buffer.from([0, 1, 2, 0]), Buffer.from('NEEDLE_4b1 in a binary')]));
     execSync(`git -C ${JSON.stringify(repo)} init -q && git -C ${JSON.stringify(repo)} add -A`);
-    const r = await call(`SEARCH NEEDLE_4b1 IN ${repo}`, { EPAM_AGENT_NAME: 'code-reader', AI_GATE_ALLOW_TOOLS: '1', EPAM_ALLOWED_TOOLS: 'read_file,list_files,search', JIRA_CODELINE_ROOT: dir });
+    const r = await call(`SEARCH NEEDLE_4b1 IN ${repo}`, { EPAM_AGENT_NAME: 'estate-survey', AI_GATE_ALLOW_TOOLS: '1', EPAM_ALLOWED_TOOLS: 'read_file,list_files,search', JIRA_CODELINE_ROOT: dir });
     expect(r.status, r.stderr.slice(-1500)).toBe(0);
     expect(r.stdout).toMatch(/src\/kept\.ts:1:/);
     expect(r.stdout).not.toMatch(/ignored\.js/);

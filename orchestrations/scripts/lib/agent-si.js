@@ -5,24 +5,28 @@
  * Operator, 2026-09-29: "Bases and derived si must be matched to each seam. No deviations." and
  * "Ensure each provider has a proper agent si transit." An agent's SI is its entry in the project
  * roster: a seam's derived SI (keyed by the seam) or a minted agent's own (ancestored to its seam).
- * An agent named by neither resolves to its seam through the registry's own resolver.
+ * Otherwise the SEAM is the one this call's invocation resolved (seamInvocationEnv exports it as
+ * EPAM_SEAM — the seam that decided its ladder and budget); only a call with no invocation env
+ * resolves one from the agent's name, through the registry's own resolver. A cost label used as a
+ * name (spec-mode-runner does this) would otherwise hand the agent another seam's SI.
  *
  * BEFORE THE ROSTER EXISTS the project has no derived SI yet — the seams that build it run first —
  * so the seam's BASE SI from the registry is what it receives. Once the roster exists, an agent it
  * cannot answer is a stated failure: there is no fallback to the base, or to nothing.
  *
- *   node agent-si.js <agent> <projectConfigDir> <outFile>   writes the SI to outFile
+ *   node agent-si.js <agent> <projectConfigDir> <outFile>   writes the SI to outFile (EPAM_SEAM honoured)
  */
 'use strict';
 const fs = require('fs');
 const path = require('path');
 
-function siForAgent(agent, projectConfigDir, registryFile) {
+function siForAgent(agent, projectConfigDir, registryFile, invocationSeam) {
   if (!agent) throw new Error('[agent-si] no agent named — an anonymous call has no standing instructions');
   const { registryPath, resolveSeam } = require('./seam-invocation.js');
   const regFile = registryFile || registryPath();
   const rosterFile = path.join(String(projectConfigDir || ''), 'roster.json');
-  const seamOf = () => resolveSeam(agent, regFile, { ignoreXref: true });
+  const seamOf = () => (invocationSeam && String(invocationSeam).trim())
+    || resolveSeam(agent, regFile, { ignoreXref: true });
   if (projectConfigDir && fs.existsSync(rosterFile)) {
     const agents = (JSON.parse(fs.readFileSync(rosterFile, 'utf8')) || {}).agents || {};
     const own = agents[agent];
@@ -44,7 +48,7 @@ module.exports = { siForAgent };
 if (require.main === module) {
   const [agent, projectConfigDir, outFile] = process.argv.slice(2);
   try {
-    const si = siForAgent(agent, projectConfigDir);
+    const si = siForAgent(agent, projectConfigDir, undefined, process.env.EPAM_SEAM);
     fs.writeFileSync(outFile, si, 'utf8');
   } catch (e) {
     process.stderr.write(`${(e && e.message) || e}\n`);

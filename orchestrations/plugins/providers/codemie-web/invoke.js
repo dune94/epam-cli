@@ -80,7 +80,10 @@ async function invoke(a, env = process.env) {
     a.pluginRoot = root;
     integration = await ensurePlugin(c, { codeline: a.codeline, mode, root }, env);
   }
-  const { id, name } = await ensureAssistant(c, { codeline: a.codeline, agent: a.agent, integration, model: a.model }, env);
+  // THE AGENT'S STANDING INSTRUCTIONS, as the hub resolved them for this call (lib/agent-si.js).
+  const siFile = env.EPAM_SI_FILE || '';
+  const si = siFile && fs.existsSync(siFile) ? fs.readFileSync(siFile, 'utf8') : '';
+  const { id, name } = await ensureAssistant(c, { codeline: a.codeline, agent: a.agent, integration, model: a.model, si }, env);
   process.stderr.write(`[codemie-web] ${name} (${id}) model ${a.model}${mode ? `; plugin ${mode} at ${a.pluginRoot}` : '; no tools'}\n`);
   const params = { text: prompt, llm_model: a.model, history: [], stream: false, save_history: false };
   if (a.schema) params.output_schema = JSON.parse(fs.readFileSync(a.schema, 'utf8'));

@@ -94,6 +94,24 @@ function call(prompt: string, env: Record<string, string>) {
 }
 
 describe.skipIf(!CODEMIE)('a seam call on the codemie-web set', () => {
+  it('the stored assistant carries ITS agent\'s standing instructions — never one literal shared by every agent', async () => {
+    // Operator, 2026-09-29: "Ensure each provider has a proper agent si transit." Before, every
+    // assistant stored the same PERSONA literal. No project roster here, so each seam's BASE SI.
+    // eslint-disable-next-line @typescript-eslint/no-var-requires
+    const reg = JSON.parse(readFileSync(join(ROOT, 'orchestrations/agents/invocation-profiles.json'), 'utf8')).profiles;
+    const seams = Object.keys(reg).filter((s) => reg[s].si && s !== 'story-writer').slice(0, 2);
+    for (const s of seams) {
+      const r = await call('Summarise the plan.', { EPAM_AGENT_NAME: s, EPAM_MAX_TOOL_CALLS: '0' });
+      expect(r.status, r.stderr.slice(-1500)).toBe(0);
+      const a = cm.assistants.find((x) => x.name === `Pipeline shop-web ${s}`);
+      expect(a, `no assistant for ${s}`).toBeTruthy();
+      expect(a!.system_prompt).toBe(reg[s].si);
+    }
+    const prompts = seams.map((s) => cm.assistants.find((x) => x.name === `Pipeline shop-web ${s}`)!.system_prompt);
+    expect(new Set(prompts).size, 'two agents share one system prompt').toBe(seams.length);
+  }, 300_000);
+
+
   it('is a chat with the operator\'s private assistant "Pipeline <codeline> <agent>", on the ladder\'s model; a call whose tool budget is 0 (the hub\'s plan pass) gets no tools', async () => {
     const r = await call('Summarise the plan.', { EPAM_AGENT_NAME: 'plan-reviewer', EPAM_MAX_TOOL_CALLS: '0' });
     expect(r.stderr, r.stderr.slice(-1500)).not.toMatch(/call failed/);

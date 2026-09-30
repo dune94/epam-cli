@@ -9,8 +9,12 @@
  * config/codemie-web.json decides the name template, the project (empty = the signed-in user's
  * personal project) and `shared`. An assistant is created on first use and updated when its binding
  * changes; ids are cached in the install so a run does not list every assistant on every call. The
- * stored assistant carries the persona and the toolkit binding only — the rendered prompt travels
- * with each chat, so a template change never needs an assistant rewrite.
+ * stored assistant carries the AGENT'S STANDING INSTRUCTIONS and the toolkit binding only — the
+ * rendered prompt travels with each chat, so a template change never needs an assistant rewrite.
+ *
+ * Operator, 2026-09-29: "Ensure each provider has a proper agent si transit." The system prompt was
+ * one literal shared by every agent. It is now the SI the hub resolved for this call (EPAM_SI_FILE,
+ * lib/agent-si.js), and a changed SI updates the stored assistant: the cache keys on its digest.
  */
 const fs = require('fs');
 const path = require('path');
@@ -33,9 +37,7 @@ async function project(c, cfg = readConfig()) {
   return me.username;
 }
 
-const PERSONA = 'You are an agent of an automated software delivery pipeline. Each message carries your full '
-  + 'instructions for one task; follow them exactly and answer in the form they ask for. When a Plugin tool '
-  + 'is available it works on the codeline the task names — use it to read and change files there.';
+const siDigest = (si) => require('crypto').createHash('sha256').update(String(si)).digest('hex');
 
 const cachePath = (env = process.env) => path.join(home(env), 'assistants.json');
 const readCache = (p) => { try { return JSON.parse(fs.readFileSync(p, 'utf8')); } catch { return {}; } };
@@ -50,7 +52,8 @@ function toolkitsFor(integration) {
  * The id of the assistant for (codeline, agent), created or updated so that it is bound to
  * `integration` (a CodeMie Plugin integration object, or null for a tool-free agent).
  */
-async function ensureAssistant(c, { codeline, agent, integration, model }, env = process.env) {
+async function ensureAssistant(c, { codeline, agent, integration, model, si }, env = process.env) {
+  if (typeof si !== 'string' || !si.trim()) throw new Error(`[codemie-web] no standing instructions for '${agent}' — an assistant is never stored without them`);
   const cfg = readConfig();
   const name = assistantName(codeline, agent, cfg);
   const proj = await project(c, cfg);
@@ -58,10 +61,11 @@ async function ensureAssistant(c, { codeline, agent, integration, model }, env =
   const cp = cachePath(env);
   const cache = readCache(cp);
   const hit = cache[name];
-  if (hit && hit.binding === binding && hit.project === proj) return { id: hit.id, name };
+  const sha = siDigest(si);
+  if (hit && hit.binding === binding && hit.project === proj && hit.si === sha) return { id: hit.id, name };
 
   const spec = {
-    name, description: `Pipeline agent '${agent}' for codeline '${codeline}'.`, system_prompt: PERSONA,
+    name, description: `Pipeline agent '${agent}' for codeline '${codeline}'.`, system_prompt: si,
     project: proj, llm_model_type: model, context: [], toolkits: toolkitsFor(integration),
     conversation_starters: [], mcp_servers: [], assistant_ids: [], shared: cfg.shared === true,
   };
@@ -70,9 +74,9 @@ async function ensureAssistant(c, { codeline, agent, integration, model }, env =
   if (found) await c.assistants.update(found.id, spec);
   else { await c.assistants.create(spec); found = await find(); }
   if (!found || !found.id) throw new Error(`[codemie-web] assistant '${name}' was not found after it was created`);
-  cache[name] = { id: found.id, binding, project: proj };
+  cache[name] = { id: found.id, binding, project: proj, si: sha };
   fs.writeFileSync(cp, `${JSON.stringify(cache, null, 1)}\n`);
   return { id: found.id, name };
 }
 
-module.exports = { assistantName, ensureAssistant, project, readConfig, toolkitsFor, PERSONA };
+module.exports = { assistantName, ensureAssistant, project, readConfig, toolkitsFor };

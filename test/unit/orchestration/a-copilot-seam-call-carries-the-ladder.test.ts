@@ -17,6 +17,16 @@ import { tmpdir } from 'node:os';
 
 const ROOT = join(__dirname, '../../../');
 const HANDLER = join(ROOT, 'orchestrations/scripts/llm-handler.sh');
+const SET = 'copilot';
+/** The model this set's own ladder starts on — resolved as the pipeline resolves it, never named. */
+const ladderStart = (): string => {
+  const prev = process.env.EPAM_PROVIDER_SET; process.env.EPAM_PROVIDER_SET = SET;
+  try {
+    // eslint-disable-next-line @typescript-eslint/no-var-requires
+    const s = require(join(ROOT, 'orchestrations/scripts/lib/llm-settings-resolve.js')).resolveLlmSettings({});
+    return (Object.values<any>(s.ladders || {})[0] || {}).startModel;
+  } finally { if (prev === undefined) delete process.env.EPAM_PROVIDER_SET; else process.env.EPAM_PROVIDER_SET = prev; }
+};
 const CATALOG = join(ROOT, 'test/fixtures/copilot/models-20260927.json');
 const COPILOT = (() => { try { return execSync('command -v copilot', { encoding: 'utf8', shell: '/bin/bash' }).trim(); } catch { return ''; } })();
 
@@ -63,7 +73,7 @@ function call(env: Record<string, string>) {
   const logs = join(dir, 'logs'); const out = join(dir, `result-${Date.now()}.json`);
   return new Promise<{ status: number | null; stdout: string; stderr: string; json: Record<string, any>; logs: string }>((resolve) => {
     const p = spawn('bash', [HANDLER, '--provider', 'copilot'], { cwd: dir, env: {
-      ...process.env, EPAM_PROVIDER_SET: 'copilot', COPILOT_CMD: shim,
+      ...process.env, EPAM_PROVIDER_SET: SET, COPILOT_CMD: shim,
       COPILOT_PROVIDER_BASE_URL: `http://127.0.0.1:${port}/v1`, COPILOT_PROVIDER_API_KEY: 'recorder', COPILOT_OFFLINE: 'true',
       EPAM_COPILOT_HOME: join(dir, 'home'), EPAM_COPILOT_CATALOG: CATALOG, LOG_DIR: logs, ORCH_JSON_RESULT: out,
       EPAM_CALL_MAX_ATTEMPTS: '1', EPAM_TIMEOUT_SECS: '120', EPAM_PLAN_TIMEOUT_SECS: '90', EPAM_DANGEROUS_SKIP_APPROVAL: '1', ...env } });
@@ -84,7 +94,9 @@ describe.skipIf(!COPILOT)('a seam call on the copilot set', () => {
     // declared channel named into what the MODEL received. No project roster: the seam's base SI.
     const reg = JSON.parse(readFileSync(join(ROOT, 'orchestrations/agents/invocation-profiles.json'), 'utf8')).profiles;
     const [mine, other] = Object.keys(reg).filter((s) => reg[s].si);
-    const r = await call({ EPAM_AGENT_NAME: mine, AI_MODEL: 'claude-opus-4-8' });
+    const model = ladderStart();
+    expect(model, 'the set resolves no ladder start').toBeTruthy();
+    const r = await call({ EPAM_AGENT_NAME: mine, AI_MODEL: model });
     expect(r.status, r.stderr).toBe(0);
     expect(requests.length, 'the CLI never reached the model').toBeGreaterThan(0);
     const sent = requests.map((q) => JSON.stringify(q)).join('\n');

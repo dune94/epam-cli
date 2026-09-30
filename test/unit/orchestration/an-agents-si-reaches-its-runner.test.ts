@@ -29,11 +29,17 @@ const { seamForKind } = require(join(LIB, 'seam-invocation.js'));
 // eslint-disable-next-line @typescript-eslint/no-var-requires
 const { resolveRunner } = require(join(LIB, 'llm-settings-resolve.js'));
 
-const SET = 'claude';
-const RUNNER = 'claude';
-const reg = JSON.parse(readFileSync(REGISTRY, 'utf8')).profiles;
+// Every name below is read from a declaration: the provider sets' declared default, the runner in
+// it that declares an SI flag, a seam that carries an si, a minted agent of a declared kind.
+const SETS = JSON.parse(readFileSync(join(ROOT, 'orchestrations/config/provider-sets.json'), 'utf8'));
+const SET: string = SETS.defaultSet;
+const SET_RUNNERS = JSON.parse(readFileSync(join(ROOT, 'orchestrations/config', SETS.sets[SET].settingsFile), 'utf8')).runners || {};
+const RUNNER = Object.keys(SET_RUNNERS).find((r) => SET_RUNNERS[r].siChannel && SET_RUNNERS[r].siChannel.flag) as string;
+const REG_DOC = JSON.parse(readFileSync(REGISTRY, 'utf8'));
+const reg = REG_DOC.profiles;
 const SPECIALISED = Object.keys(reg).find((s) => reg[s].si) as string;
-const MINTED = 'acme-engineer';
+const MINTED_KIND = (REG_DOC.agentKinds as string[]).find((k) => { try { return !!seamForKind(k, REGISTRY); } catch { return false; } }) as string;
+const MINTED = `minted-${MINTED_KIND}`;
 const TASK = 'THE TASK TEXT ONLY';
 
 let work = '';
@@ -50,7 +56,7 @@ beforeAll(async () => {
     const c = JSON.parse(readFileSync(canonicalCopyPath, 'utf8'));
     writeFileSync(outPath, JSON.stringify({ agents: {
       [SPECIALISED]: { persona: `[project] ${c[SPECIALISED]}` },
-      [MINTED]: { persona: '[project] You implement this codeline.', kind: 'implementer' },
+      [MINTED]: { persona: '[project] A minted agent of this codeline.', kind: MINTED_KIND },
     } }));
   };
   const prev = process.env.EPAM_PROJECT_CONFIG_DIR;
@@ -125,14 +131,15 @@ describe('an agent\'s SI reaches its runner', () => {
     const r = call(MINTED, projWithRoster);
     expect(r.files).toContain(personaOf(MINTED));
     expect(JSON.parse(readFileSync(join(projWithRoster, 'roster.json'), 'utf8')).agents[MINTED].ancestor)
-      .toBe(seamForKind('implementer', REGISTRY));
+      .toBe(seamForKind(MINTED_KIND, REGISTRY));
   });
 
   it('the SEAM THE INVOCATION RESOLVED decides the SI — not a label that names another seam', () => {
-    // spec-mode-runner uses a call's cost label as its agent name when none is set; a label such as
-    // 'vc-agent' resolves by name to a different seam. seamInvocationEnv exports EPAM_SEAM — the
+    // spec-mode-runner uses a call's cost label as its agent name when none is set, and a label can
+    // resolve by name to a different seam. seamInvocationEnv exports EPAM_SEAM — the
     // seam that decided this call's ladder and budget — and that is the seam whose SI it receives.
-    const label = 'vc-agent';
+    // A declared agent name that the registry maps to a DIFFERENT seam (its agentSeams).
+    const label = Object.keys(REG_DOC.agentSeams).find((n) => REG_DOC.agentSeams[n] !== SPECIALISED) as string;
     // eslint-disable-next-line @typescript-eslint/no-var-requires
     const { resolveSeam } = require(join(LIB, 'seam-invocation.js'));
     expect(resolveSeam(label, REGISTRY, { ignoreXref: true }), 'the label must resolve elsewhere, or this proves nothing').not.toBe(SPECIALISED);

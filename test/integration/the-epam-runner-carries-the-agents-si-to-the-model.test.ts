@@ -2,7 +2,7 @@
  * THE EPAM RUNNER CARRIES THE AGENT'S STANDING INSTRUCTIONS TO THE MODEL.
  *
  * Operator, 2026-09-29: "Ensure each provider has a proper agent si transit." The openrouter set
- * (OpenRouter and MiniMax through `epam run`) sent the model epam's own session prompt and nothing
+ * (its vendors through `epam run`) sent the model epam's own session prompt and nothing
  * of the agent. The hub now resolves the agent's SI into EPAM_SI_FILE; `epam run` appends it to its
  * system prompt, after the session prompt (which still states the tools this agent has).
  *
@@ -23,7 +23,21 @@ const EPAM = join(ROOT, 'dist/epam.js');
 // eslint-disable-next-line @typescript-eslint/no-var-requires
 const b = require(join(ROOT, 'orchestrations/scripts/mock-expectations.js'));
 const reg = JSON.parse(readFileSync(join(ROOT, 'orchestrations/agents/invocation-profiles.json'), 'utf8')).profiles;
-const [MINE, OTHER] = Object.keys(reg).filter((s) => reg[s].si && s !== 'story-writer');
+const [MINE, OTHER] = Object.keys(reg).filter((s) => reg[s].si);
+// Read from the declarations: the providers config/providers.json runs through the epam CLI, the
+// provider set among them, and that set's own ladder start — never spelled here.
+const CLI_BIN = JSON.parse(readFileSync(join(ROOT, 'orchestrations/config/providers.json'), 'utf8')).cliBinary;
+const EPAM_PROVIDERS = Object.keys(CLI_BIN).filter((p) => CLI_BIN[p] === '$EPAM_CLI');
+const SETS = JSON.parse(readFileSync(join(ROOT, 'orchestrations/config/provider-sets.json'), 'utf8')).sets;
+const SET = Object.keys(SETS).find((s) => EPAM_PROVIDERS.includes(s)) as string;
+const LADDERS = JSON.parse(readFileSync(join(ROOT, 'orchestrations/config', SETS[SET].settingsFile), 'utf8')).ladders;
+const MODEL = LADDERS[Object.keys(LADDERS)[0]].startModel as string;
+// Every epam-routed provider points at the stand-in vendor, so wherever the hub routes MODEL, the
+// request is recorded.
+const VENDOR_ENV = (url: string) => Object.fromEntries(EPAM_PROVIDERS.flatMap((p) => {
+  const P = p.toUpperCase().replace(/-/g, '_');
+  return [[`${P}_BASE_URL`, url], [`${P}_API_KEY`, 'stand-in']];
+}));
 const firstLine = (s: string) => s.split('\n').find((l) => l.trim().length > 20) as string;
 
 const mock = new MiniMockServer();
@@ -46,9 +60,9 @@ async function viaHub(agent: string, extra: Record<string, string> = {}): Promis
   const cli = join(dir, 'epam'); writeFileSync(cli, `#!/usr/bin/env bash\nexec ${JSON.stringify(process.execPath)} ${JSON.stringify(EPAM)} "$@"\n`); chmodSync(cli, 0o755);
   const before = mock.hits.length;
   return new Promise((resolve) => {
-    const c = spawn('bash', [HUB, '--provider', 'openrouter', '--model', 'z-ai/glm-5.2'], {
-      cwd: dir, env: { ...process.env, EPAM_PROVIDER_SET: 'openrouter', EPAM_CLI: cli, EPAM_AGENT_NAME: agent,
-        OPENROUTER_BASE_URL: `${mock.url}/api/v1`, OPENROUTER_API_KEY: 'stand-in', EPAM_PLAN_EXECUTE: '0',
+    const c = spawn('bash', [HUB, '--provider', SET, '--model', MODEL], {
+      cwd: dir, env: { ...process.env, EPAM_PROVIDER_SET: SET, EPAM_CLI: cli, EPAM_AGENT_NAME: agent,
+        ...VENDOR_ENV(`${mock.url}/api/v1`), EPAM_PLAN_EXECUTE: '0',
         EPAM_CALL_MAX_ATTEMPTS: '1', EPAM_DANGEROUS_SKIP_APPROVAL: '1', LANGFUSE_SECRET_KEY: '', LANGFUSE_PUBLIC_KEY: '',
         EPAM_PROJECT_CONFIG_DIR: '', NODE_OPTIONS: '--max-old-space-size=1024', ...extra },
     });

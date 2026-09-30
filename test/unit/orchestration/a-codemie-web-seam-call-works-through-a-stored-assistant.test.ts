@@ -93,13 +93,17 @@ function call(prompt: string, env: Record<string, string>) {
   });
 }
 
+// A real seam whose declared grant is read-only — the agent the read-only cases stand for.
+const REG_PROFILES = JSON.parse(readFileSync(join(ROOT, 'orchestrations/agents/invocation-profiles.json'), 'utf8')).profiles;
+const READ_ONLY_SEAM = Object.keys(REG_PROFILES).find((s) => REG_PROFILES[s].si && REG_PROFILES[s].toolGrant === 'read-only') as string;
+
 describe.skipIf(!CODEMIE)('a seam call on the codemie-web set', () => {
   it('the stored assistant carries ITS agent\'s standing instructions — never one literal shared by every agent', async () => {
     // Operator, 2026-09-29: "Ensure each provider has a proper agent si transit." Before, every
     // assistant stored the same PERSONA literal. No project roster here, so each seam's BASE SI.
     // eslint-disable-next-line @typescript-eslint/no-var-requires
     const reg = JSON.parse(readFileSync(join(ROOT, 'orchestrations/agents/invocation-profiles.json'), 'utf8')).profiles;
-    const seams = Object.keys(reg).filter((s) => reg[s].si && s !== 'story-writer').slice(0, 2);
+    const seams = Object.keys(reg).filter((s) => reg[s].si).slice(0, 2);
     for (const s of seams) {
       const r = await call('Summarise the plan.', { EPAM_AGENT_NAME: s, EPAM_MAX_TOOL_CALLS: '0' });
       expect(r.status, r.stderr.slice(-1500)).toBe(0);
@@ -139,12 +143,12 @@ describe.skipIf(!CODEMIE)('a seam call on the codemie-web set', () => {
   }, 180_000);
 
   it('a read-only grant binds the read-only plugin: the file is read from the codeline, and no write or command tool is offered', async () => {
-    const r = await call('READ sentinel.txt', { EPAM_AGENT_NAME: 'estate-survey', AI_GATE_ALLOW_TOOLS: '1', EPAM_ALLOWED_TOOLS: 'read_file,list_files,search' });
+    const r = await call('READ sentinel.txt', { EPAM_AGENT_NAME: READ_ONLY_SEAM, AI_GATE_ALLOW_TOOLS: '1', EPAM_ALLOWED_TOOLS: 'read_file,list_files,search' });
     expect(r.stderr, r.stderr.slice(-1500)).not.toMatch(/call failed/);
     expect(r.status, r.stderr.slice(-2000)).toBe(0);
     expect(r.stdout).toContain('SENTINEL-CONTENT-7f3a');
     const chat = cm.chats[cm.chats.length - 1];
-    expect(chat.assistant).toBe('Pipeline shop-web estate-survey');
+    expect(chat.assistant).toBe(`Pipeline shop-web ${READ_ONLY_SEAM}`);
     expect(chat.tools).toContain('_read_file_from_file_system');
     expect(chat.tools).not.toContain('_write_file_to_file_system');
     expect(chat.tools).not.toContain('_run_command_line_tool');
@@ -152,7 +156,7 @@ describe.skipIf(!CODEMIE)('a seam call on the codemie-web set', () => {
   }, 180_000);
 
   it('a read-only grant cannot write: asked to, the model finds no write tool and nothing lands on disk', async () => {
-    const r = await call('WRITE leak.txt SHOULD-NOT-EXIST', { EPAM_AGENT_NAME: 'estate-survey', AI_GATE_ALLOW_TOOLS: '1', EPAM_ALLOWED_TOOLS: 'read_file' });
+    const r = await call('WRITE leak.txt SHOULD-NOT-EXIST', { EPAM_AGENT_NAME: READ_ONLY_SEAM, AI_GATE_ALLOW_TOOLS: '1', EPAM_ALLOWED_TOOLS: 'read_file' });
     const seen = JSON.stringify(cm.chats[cm.chats.length - 1]);
     expect(r.stdout, seen).toContain('NO-WRITE-TOOL');
     expect(existsSync(join(codeline, 'leak.txt')), seen).toBe(false);
@@ -173,7 +177,7 @@ describe.skipIf(!CODEMIE)('a seam call on the codemie-web set', () => {
     // The estate survey is one call about every codeline; rooted at one, it could open only that one.
     const sibling = join(dir, 'sibling'); mkdirSync(sibling, { recursive: true });
     writeFileSync(join(sibling, 'other.txt'), 'SIBLING-CONTENT-19c2');
-    const r = await call(`READ ${join(sibling, 'other.txt')}`, { EPAM_AGENT_NAME: 'estate-survey', AI_GATE_ALLOW_TOOLS: '1', EPAM_ALLOWED_TOOLS: 'read_file,list_files,search', JIRA_CODELINE_ROOT: dir });
+    const r = await call(`READ ${join(sibling, 'other.txt')}`, { EPAM_AGENT_NAME: READ_ONLY_SEAM, AI_GATE_ALLOW_TOOLS: '1', EPAM_ALLOWED_TOOLS: 'read_file,list_files,search', JIRA_CODELINE_ROOT: dir });
     expect(r.status, r.stderr.slice(-1500)).toBe(0);
     expect(r.stdout).toContain('SIBLING-CONTENT-19c2');
     expect(r.stderr).toMatch(new RegExp(`plugin ro at ${dir.replace(/[.*+?^${}()|[\]\\]/g, '\\$&')}`));
@@ -193,7 +197,7 @@ describe.skipIf(!CODEMIE)('a seam call on the codemie-web set', () => {
     writeFileSync(join(repo, 'build', 'ignored.js'), 'NEEDLE_4b1 in a build output\n');
     writeFileSync(join(repo, 'src', 'index.db'), Buffer.concat([Buffer.from([0, 1, 2, 0]), Buffer.from('NEEDLE_4b1 in a binary')]));
     execSync(`git -C ${JSON.stringify(repo)} init -q && git -C ${JSON.stringify(repo)} add -A`);
-    const r = await call(`SEARCH NEEDLE_4b1 IN ${repo}`, { EPAM_AGENT_NAME: 'estate-survey', AI_GATE_ALLOW_TOOLS: '1', EPAM_ALLOWED_TOOLS: 'read_file,list_files,search', JIRA_CODELINE_ROOT: dir });
+    const r = await call(`SEARCH NEEDLE_4b1 IN ${repo}`, { EPAM_AGENT_NAME: READ_ONLY_SEAM, AI_GATE_ALLOW_TOOLS: '1', EPAM_ALLOWED_TOOLS: 'read_file,list_files,search', JIRA_CODELINE_ROOT: dir });
     expect(r.status, r.stderr.slice(-1500)).toBe(0);
     expect(r.stdout).toMatch(/src\/kept\.ts:1:/);
     expect(r.stdout).not.toMatch(/ignored\.js/);

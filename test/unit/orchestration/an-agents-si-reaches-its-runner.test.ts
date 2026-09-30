@@ -21,7 +21,8 @@ const ROOT = join(__dirname, '../../..');
 const HUB = join(ROOT, 'orchestrations/scripts/llm-handler.sh');
 const LIB = join(ROOT, 'orchestrations/scripts/lib');
 const REGISTRY = join(ROOT, 'orchestrations/agents/invocation-profiles.json');
-const NODE_BIN = join(process.env.HOME || '', '.nvm/versions/node/v20.20.0/bin/node');
+// The node this suite runs on — the pipeline's own runtime, never a path written here.
+const NODE_BIN = process.execPath;
 // eslint-disable-next-line @typescript-eslint/no-var-requires
 const roster = require(join(LIB, 'project-roster.js'));
 // eslint-disable-next-line @typescript-eslint/no-var-requires
@@ -41,6 +42,11 @@ const SPECIALISED = Object.keys(reg).find((s) => reg[s].si) as string;
 const MINTED_KIND = (REG_DOC.agentKinds as string[]).find((k) => { try { return !!seamForKind(k, REGISTRY); } catch { return false; } }) as string;
 const MINTED = `minted-${MINTED_KIND}`;
 const TASK = 'THE TASK TEXT ONLY';
+// The pipeline-wide constitution, as the catalog declares it; its placeholders filled from the
+// catalog's own values and the run's root.
+const CONTRACT = JSON.parse(readFileSync(join(ROOT, 'orchestrations/config/agent-contract.json'), 'utf8'));
+const constitutionFor = (root: string) => (CONTRACT.constitution.rules as string[]).map((r) =>
+  r.replace(/\{(\w+)\}/g, (w, k) => (k in CONTRACT && typeof CONTRACT[k] === 'string' ? CONTRACT[k] : k === 'projectRoot' ? root : w)));
 
 let work = '';
 let projWithRoster = '';
@@ -81,7 +87,10 @@ function call(agent: string, projectDir: string, extraEnv: Record<string, string
       '#!/usr/bin/env bash',
       `printf '%s\\n' "$@" > ${JSON.stringify(rec + '.argv')}`,
       `cat > ${JSON.stringify(rec + '.stdin')}`,
-      `for a in "$@"; do [ -f "$a" ] && cat "$a" >> ${JSON.stringify(rec + '.files')}; done`,
+      // One record per invocation: the hub may call the runner more than once (a plan pass, then
+      // the execution), and each call must carry exactly its own SI.
+      `n=$(ls ${JSON.stringify(dir)} | grep -c '^rec\\.files\\.' || true)`,
+      `for a in "$@"; do [ -f "$a" ] && cat "$a" >> ${JSON.stringify(rec + '.files.')}"$n"; done`,
       `printf '%s' '{"result":"ok","total_cost_usd":0,"usage":{"input_tokens":1,"output_tokens":1}}'`,
     ].join('\n'));
     chmodSync(stub, 0o755);
@@ -91,8 +100,10 @@ function call(agent: string, projectDir: string, extraEnv: Record<string, string
         EPAM_PROVIDER_SET: SET, EPAM_AGENT_NAME: agent, EPAM_PROJECT_CONFIG_DIR: projectDir, ...extraEnv },
     });
     const read = (f: string) => (existsSync(f) ? readFileSync(f, 'utf8') : null);
+    const perCall: string[] = [];
+    for (let n = 0; existsSync(`${rec}.files.${n}`); n++) perCall.push(readFileSync(`${rec}.files.${n}`, 'utf8'));
     return { argv: (read(rec + '.argv') || '').split('\n').filter(Boolean), stdin: read(rec + '.stdin'),
-      files: read(rec + '.files') || '', status: res.status, stderr: res.stderr || '' };
+      files: perCall.join(''), perCall, status: res.status, stderr: res.stderr || '' };
   } finally { rmSync(dir, { recursive: true, force: true }); }
 }
 
@@ -151,5 +162,21 @@ describe('an agent\'s SI reaches its runner', () => {
     const r = call(SPECIALISED, projWithout);
     expect(r.argv).toContain(channel().flag);
     expect(r.files).toContain(reg[SPECIALISED].si);
+  });
+
+  it('every agent receives the pipeline-wide constitution with its SI — and nothing else', () => {
+    const root = join(work, 'codeline');
+    const r = call(SPECIALISED, projWithRoster, { PROJECT_ROOT: root });
+    const rules = constitutionFor(root);
+    expect(rules.length, 'the catalog declares no constitution').toBeGreaterThan(0);
+    expect(r.perCall.length, `the hub never reached the runner: ${r.stderr.slice(0, 400)}`).toBeGreaterThan(0);
+    for (const got of r.perCall) {
+      expect(got.startsWith(personaOf(SPECIALISED)), 'the SI does not open with the agent\'s own').toBe(true);
+      for (const rule of rules) expect(got).toContain(rule);
+      // Over-inclusion: strip the SI, the header and each rule — only numbering and spacing remain.
+      let rest = got.replace(personaOf(SPECIALISED), '').replace(CONTRACT.constitution.header, '');
+      for (const rule of rules) rest = rest.replace(rule, '');
+      expect(rest.replace(/\d+\.\s/g, '').trim(), 'something beyond the SI and the constitution travelled').toBe('');
+    }
   });
 });

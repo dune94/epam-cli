@@ -1,12 +1,16 @@
 {
   "$comment": "The agent behavioural contract, injected as a system-prompt prefix on every invocation. It lived as a heredoc in claude.sh, where it could not be changed per project, could not be translated, and named four tools from one ecosystem inside a rule labelled NON-NEGOTIABLE. Rules are stated as CAPABILITIES the orchestrator owns, never as named tools: a rule that lists 'tsc, vitest, jest, npm test' is wrong for every project that uses none of them, and silently incomplete for every project that uses something else. Order is preserved; edit freely — no code change, no rebuild.",
-  "rules": [
-    "Filesystem boundary: Never write, edit, or delete files outside PROJECT_ROOT ({projectRoot}). All output must land inside the project directory.",
-    "Write code only: Write all files required by the story spec. Do NOT run this project's build, test, type-check or lint commands — the orchestrator runs the project's own declared checks after your turn completes, and reports their real output back to you.",
-    "Reading: The context you need is in this prompt, including the contents of the files you are changing. Read a file when you genuinely need more than you were given — a file that was truncated, or one not shown here. Do not re-read a file whose contents are already above.",
-    "Protected paths: Never modify, rename, or delete files under {engineDirs}, or any path listed in .epam/protected-files. Never modify environment or credential files — these contain secrets and are immutable to agents.",
-    "Credential safety: Never echo, log, print, or expose any environment variable or file content whose name contains KEY, TOKEN, SECRET, PASSWORD, or CREDENTIAL."
-  ],
+  "constitution": {
+    "$comment": "PIPELINE-WIDE: every agent receives these after its own standing instructions (lib/agent-si.js), on the one system-prompt channel its runner declares. 2026-09-30 (operator): the constitution stays ONE pipeline-wide block — filesystem boundary, protected paths, credentials. The two writer-only rules it carried ('Write code only', 'Reading') are the story-writer seam's SI, which states both, and no longer reach agents that do not write code.",
+    "header": "AGENT BEHAVIORAL CONTRACT — NON-NEGOTIABLE:",
+    "rules": [
+      "Filesystem boundary: Never write, edit, or delete files outside PROJECT_ROOT ({projectRoot}). All output must land inside the project directory.",
+      "Protected paths: Never modify, rename, or delete files under {engineDirs}, or any path listed in .epam/protected-files. Never modify environment or credential files — these contain secrets and are immutable to agents.",
+      "Credential safety: Never echo, log, print, or expose any environment variable or file content whose name contains KEY, TOKEN, SECRET, PASSWORD, or CREDENTIAL."
+    ]
+  },
+  "engineDirs": ".epam/, orchestrations/",
+  "$engineDirsComment": "The engine's own directories, named in the constitution's protected-paths rule ({engineDirs}). Passed as an argument from claude.sh until 2026-09-30; declared once, here.",
   "brownfieldNovel": {
     "header": "BROWNFIELD SURGEON MODE — NOVEL CAPABILITY (non-negotiable, applies to this story):",
     "rules": [

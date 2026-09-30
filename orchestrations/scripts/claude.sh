@@ -309,17 +309,12 @@ source "$SCRIPT_DIR/lib/story-cost-record.sh"
 #
 # Falls back to empty rather than to a built-in default: a contract nobody can read is a contract
 # that should be visibly absent, not silently replaced by whatever was compiled in.
-AGENT_CONSTITUTION="$("${NODE_BIN:-node}" -e '
-  try {
-    const c = require(process.argv[1]);
-    const rules = Array.isArray(c.rules) ? c.rules : [];
-    if (!rules.length) { process.stdout.write(""); process.exit(0); }
-    const filled = rules.map((r, i) => `${i + 1}. ` + String(r)
-      .replace(/\{projectRoot\}/g, process.argv[2] || "")
-      .replace(/\{engineDirs\}/g, process.argv[3] || ""));
-    process.stdout.write("AGENT BEHAVIORAL CONTRACT — NON-NEGOTIABLE:\n" + filled.join("\n"));
-  } catch (_) { process.stdout.write(""); }
-' "$SCRIPT_DIR/../config/agent-contract.json" "${PROJECT_ROOT:-}" ".epam/, orchestrations/" 2>/dev/null || echo "")"
+#
+# ONE RENDERER (lib/agent-contract.js, 2026-09-30). The constitution is pipeline-wide: every agent
+# receives it after its own SI (lib/agent-si.js); the writer's copy is composed into its SI file in
+# implement_story. Kept here for the SDK planning pass (lib/cli-commands.sh), which passes it as
+# --system-prompt.
+AGENT_CONSTITUTION="$("${NODE_BIN:-node}" "$SCRIPT_DIR/lib/agent-contract.js" "${PROJECT_ROOT:-}" 2>/dev/null || echo "")"
 
 # Claude CLI permission flags
 # These allow Claude to read/write files and execute commands without prompting.
@@ -331,10 +326,12 @@ AGENT_CONSTITUTION="$("${NODE_BIN:-node}" -e '
 # was refused with "you haven't granted it yet", the writer reported the wall, and the story
 # failed after 8 attempts (regintel 20260916T200108Z, three resumes, 2026-09-17). Restored
 # verbatim. The cross-file read is what the split-program shellcheck exists to see.
+#
+# The constitution no longer rides here: it is part of the writer's SI file, on the one channel its
+# runner declares (runners.<name>.siChannel). Claude Code refuses --append-system-prompt beside
+# --append-system-prompt-file ("Cannot use both"), so a second channel would fail every writer.
 CLAUDE_PERMISSIONS=(
     "--dangerously-skip-permissions"
-    "--append-system-prompt"
-    "$AGENT_CONSTITUTION"
 )
 
 # Alternative: Use granular permissions (uncomment if preferred over skip-permissions)

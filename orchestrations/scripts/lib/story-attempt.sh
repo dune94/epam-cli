@@ -1065,7 +1065,7 @@ implement_story() {
     # Resolve dynamic constitution rules for this story (appends to AGENT_CONSTITUTION)
     resolve_dynamic_constitution "$story_id"
     # Brownfield surgeon preamble — injected when EPAM_BROWNFIELD=1; never active in greenfield.
-    # Rules numbered from 6 to extend the five already in AGENT_CONSTITUTION without overlap.
+    # Rules numbered on from the constitution's own (lib/agent-contract.js --count), without overlap.
     if [ "${EPAM_BROWNFIELD:-0}" = "1" ]; then
         # Rules 6-9 branch on storyKind — same lookup already used above for reasoning
         # effort (line ~5402), same story, reused rather than a second query. Found live
@@ -1092,7 +1092,8 @@ implement_story() {
         _bfw_section="brownfieldExisting"
         [ "$_bfw_story_kind" = "novel" ] && _bfw_section="brownfieldNovel"
         _bfw_rules=$("${NODE_BIN:-node}" "$SCRIPT_DIR/lib/render-prompt-section.js" \
-            "$SCRIPT_DIR/../config/agent-contract.json" "$_bfw_section" "_startIndex=6" 2>/dev/null || echo "")
+            "$SCRIPT_DIR/../config/agent-contract.json" "$_bfw_section" \
+            "_startIndex=$(( $("${NODE_BIN:-node}" "$SCRIPT_DIR/lib/agent-contract.js" --count 2>/dev/null || echo 0) + 1 ))" 2>/dev/null || echo "")
         if [ -n "$_bfw_rules" ]; then
             DYNAMIC_CONSTITUTION="${DYNAMIC_CONSTITUTION}"$'\n\n'"${_bfw_rules}"
         fi
@@ -1108,17 +1109,28 @@ implement_story() {
         schema_block=$'\n\nOUTPUT SCHEMA REQUIREMENT:\nYou MUST conclude your response with a JSON object that conforms to the following JSON Schema. Wrap it in a ```json code block.\n```json\n'"$story_output_schema"$'\n```'
         log "  OutputSchema: structured output required for $story_id"
     fi
-    # Build effective constitution = static base + dynamic rules + optional schema block.
-    # Mirrors CLAUDE_PERMISSIONS: empty in interactive mode (no skip-permissions).
-    local effective_constitution="${AGENT_CONSTITUTION}${DYNAMIC_CONSTITUTION}${schema_block}"
-    local effective_permissions=()
-    if [ ${#CLAUDE_PERMISSIONS[@]} -gt 0 ]; then
-        effective_permissions=(
-            "--dangerously-skip-permissions"
-            "--append-system-prompt"
-            "$effective_constitution"
-        )
+    # THE WRITER'S STANDING INSTRUCTIONS — ONE FILE, ONE CHANNEL (2026-09-30).
+    # Its role's SI (the roster's entry for the story's role, else the writer seam's — resolved by
+    # lib/agent-si.js exactly as the hub resolves every other agent), the pipeline-wide
+    # constitution, this story's dynamic rules and its output schema. It travels on the channel
+    # the runner declares (runners.<name>.siChannel), handed to each arm as EPAM_SI_FILE — never
+    # exported, so no later call in this process inherits the writer's SI. Persisted under LOG_DIR:
+    # what the writer was told is evidence. A roster that cannot answer the writer refuses the
+    # attempt, as the hub refuses any call with no SI.
+    local writer_si_file="${LOG_DIR}/writer-si-${story_id}.md" _ws_role _ws_err
+    _ws_role=$(jq -r --arg id "$story_id" --arg cl "${EPAM_CODELINE:-}" \
+        '.stories[] | select(.id == $id) | (.agentRoles[$cl] // .agentRole // "")' \
+        "${MAIN_PRD_FILE:-$PRD_FILE}" 2>/dev/null || echo "")
+    if ! _ws_err=$(PROJECT_ROOT="${PROJECT_ROOT:-}" EPAM_SEAM="$STORY_WRITER_SEAM" \
+            "${NODE_BIN:-node}" "$SCRIPT_DIR/lib/agent-si.js" "${_ws_role:-$STORY_WRITER_SEAM}" \
+            "${EPAM_PROJECT_CONFIG_DIR:-}" "$writer_si_file" 2>&1); then
+        error "Story ${story_id}: the writer has no standing instructions — refusing the attempt."
+        error "  ${_ws_err}"
+        return 1
     fi
+    printf '%s' "${DYNAMIC_CONSTITUTION}${schema_block}" >> "$writer_si_file"
+    # Empty in interactive mode (no skip-permissions); the SI still travels.
+    local effective_permissions=(${CLAUDE_PERMISSIONS[@]+"${CLAUDE_PERMISSIONS[@]}"})
     local model_flag=()
     [ -n "${STORY_MODEL:-}" ] && model_flag=(--model "$STORY_MODEL")
 
@@ -1132,7 +1144,7 @@ implement_story() {
     # takes, and apply_runner_settings passes exactly those. A runner that declares nothing
     # gets nothing, so every other path behaves exactly as before.
     RUNNER_FLAGS=()
-    apply_runner_settings "$(runner_name_for "${STORY_PROVIDER:-}" "$(basename "${CLAUDE_CMD:-}")")" "${EPAM_PROJECT_CONFIG_DIR:-}" || true
+    EPAM_SI_FILE="$writer_si_file" apply_runner_settings "$(runner_name_for "${STORY_PROVIDER:-}" "$(basename "${CLAUDE_CMD:-}")")" "${EPAM_PROJECT_CONFIG_DIR:-}" || true
     local story_cli
     STORY_PROVIDER="$(resolve_primary_provider "${STORY_PROVIDER:-}")"
     story_cli=$(provider_to_cli "$STORY_PROVIDER")
@@ -1805,17 +1817,17 @@ $_kb_section"
         STORY_PROVIDER="$(resolve_primary_provider "${STORY_PROVIDER:-}")"
         # A PROVIDER THAT IS A PLUGIN writes the story through its plugin — the same call the seam hub
         # makes (config/providers.json runnerPlugin; lib/provider-plugin.sh), so no engine file names
-        # it. The writer's constitution opens the prompt: a plugin runner has no system-prompt flag of
-        # the claude CLI's kind. No tool grant is passed — the runner's full set, as the claude writer
+        # it. The writer's SI (constitution included) travels as EPAM_SI_FILE, which each plugin
+        # carries on its own system channel — never inside the task. No tool grant is passed — the runner's full set, as the claude writer
         # runs with its runner's whole tool set. The directories the PRD declares readable travel as
         # EPAM_READ_ROOTS, as the claude arms pass them as --add-dir.
         if provider_plugin_dir "$STORY_PROVIDER" >/dev/null 2>&1; then
             local _pp_prompt _pp_roots
             _pp_prompt="$(mktemp "${TMPDIR:-/tmp}/story-prompt-XXXXXX")"
-            { [ -n "$effective_constitution" ] && printf '%s\n\n---\n\n' "$effective_constitution"; printf '%s' "$prompt"; } > "$_pp_prompt"
+            printf '%s' "$prompt" > "$_pp_prompt"
             _pp_roots="$(_declared_read_roots "$prd_target" 2>/dev/null || true)"
             if EPAM_AGENT_NAME="${STORY_WRITER_SEAM}" EPAM_STORY_ID="${story_id}" AI_MODEL="${STORY_MODEL:-}" \
-                    EPAM_READ_ROOTS="$_pp_roots" PROJECT_ROOT="$PROJECT_ROOT" AI_GATE_ALLOW_TOOLS=0 EPAM_ALLOWED_TOOLS="" \
+                    EPAM_SI_FILE="$writer_si_file" EPAM_READ_ROOTS="$_pp_roots" PROJECT_ROOT="$PROJECT_ROOT" AI_GATE_ALLOW_TOOLS=0 EPAM_ALLOWED_TOOLS="" \
                     "${_timeout_prefix[@]}" bash -c '. "$1"; shift; provider_plugin_call "$@"' _ \
                     "$SCRIPT_DIR/lib/provider-plugin.sh" "$STORY_PROVIDER" "$_pp_prompt" "$json_result_file" \
                     2>> "$output_file" >> "$output_file"; then
@@ -2225,6 +2237,7 @@ $_kb_section"
                         EPAM_RALPH_WIGGUM_AGENTS="${EPAM_RALPH_WIGGUM_AGENTS:-}" \
                         EPAM_RALPH_WIGGUM_TIMEOUT_MS="${EPAM_RALPH_WIGGUM_TIMEOUT_MS:-}" \
                         EPAM_SANDBOX_TARGET_CMD="${_epam_sandbox_target}" \
+                        EPAM_SI_FILE="$writer_si_file" \
                         "${_timeout_prefix[@]}" "$_epam_run_binary" run \
                         --provider "$STORY_PROVIDER" \
                         "${epam_model_flag[@]}" \
@@ -2249,10 +2262,9 @@ $_kb_section"
                         [ -n "$precount" ] && log "  Token pre-count: ${precount} input tokens"
                         STORY_PRECOUNT_TOKENS="${precount:-0}"
                     fi
-                    if echo "$prompt" | "${_timeout_prefix[@]}" "$INVOKE_PYTHON" "$INVOKE_PY" \
+                    if echo "$prompt" | EPAM_SI_FILE="$writer_si_file" "${_timeout_prefix[@]}" "$INVOKE_PYTHON" "$INVOKE_PY" \
                             --cache-system \
                             "${sdk_model_arg[@]}" "${sdk_think_arg[@]}" \
-                            --system-prompt "$effective_constitution" \
                             --output "$json_result_file" 2>>"$output_file"; then
                         invoke_success=true
                     fi
@@ -2279,10 +2291,9 @@ $_kb_section"
                         [ -n "$precount" ] && log "  Token pre-count: ${precount} input tokens"
                         STORY_PRECOUNT_TOKENS="${precount:-0}"
                     fi
-                    if echo "$prompt" | "${_timeout_prefix[@]}" "$INVOKE_PYTHON" "$INVOKE_PY" \
+                    if echo "$prompt" | EPAM_SI_FILE="$writer_si_file" "${_timeout_prefix[@]}" "$INVOKE_PYTHON" "$INVOKE_PY" \
                             --cache-system \
                             "${sdk_model_arg[@]}" \
-                            --system-prompt "$effective_constitution" \
                             --output "$json_result_file" 2>>"$output_file"; then
                         invoke_success=true
                     fi

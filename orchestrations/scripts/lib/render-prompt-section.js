@@ -95,4 +95,6 @@ function main() {
   process.exit(0);
 }
 
-main();
+module.exports = { render, fill };
+
+if (require.main === module) main();

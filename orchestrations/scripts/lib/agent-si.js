@@ -14,7 +14,10 @@
  * so the seam's BASE SI from the registry is what it receives. Once the roster exists, an agent it
  * cannot answer is a stated failure: there is no fallback to the base, or to nothing.
  *
- *   node agent-si.js <agent> <projectConfigDir> <outFile>   writes the SI to outFile (EPAM_SEAM honoured)
+ * WHAT TRAVELS is the agent's SI followed by the pipeline-wide constitution (lib/agent-contract.js,
+ * filled with PROJECT_ROOT) — the one system-prompt channel a runner has carries both.
+ *
+ *   node agent-si.js <agent> <projectConfigDir> <outFile>   writes SI + constitution to outFile (EPAM_SEAM honoured)
  */
 'use strict';
 const fs = require('fs');
@@ -43,12 +46,20 @@ function siForAgent(agent, projectConfigDir, registryFile, invocationSeam) {
   throw new Error(`[agent-si] seam '${seam || '?'}' of '${agent}' declares no si in ${regFile}`);
 }
 
-module.exports = { siForAgent };
+/** The standing instructions as they travel: the agent's SI, then the pipeline-wide constitution. */
+function composedSi(agent, projectConfigDir, registryFile, invocationSeam, projectRoot) {
+  const { constitution } = require('./agent-contract.js');
+  const rules = constitution(projectRoot);
+  const si = siForAgent(agent, projectConfigDir, registryFile, invocationSeam);
+  return rules ? `${si}\n\n${rules}` : si;
+}
+
+module.exports = { siForAgent, composedSi };
 
 if (require.main === module) {
   const [agent, projectConfigDir, outFile] = process.argv.slice(2);
   try {
-    const si = siForAgent(agent, projectConfigDir, undefined, process.env.EPAM_SEAM);
+    const si = composedSi(agent, projectConfigDir, undefined, process.env.EPAM_SEAM, process.env.PROJECT_ROOT);
     fs.writeFileSync(outFile, si, 'utf8');
   } catch (e) {
     process.stderr.write(`${(e && e.message) || e}\n`);

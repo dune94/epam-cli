@@ -109,7 +109,17 @@ describe.skipIf(!CODEMIE)('a seam call on the codemie-web set', () => {
       expect(r.status, r.stderr.slice(-1500)).toBe(0);
       const a = cm.assistants.find((x) => x.name === `Pipeline shop-web ${s}`);
       expect(a, `no assistant for ${s}`).toBeTruthy();
-      expect(a!.system_prompt).toBe(reg[s].si);
+      // Its SI, then the pipeline-wide constitution (config/agent-contract.json) — and nothing else.
+      const got = a!.system_prompt as string;
+      expect(got.startsWith(reg[s].si), `${s}'s assistant does not open with its SI`).toBe(true);
+      const contract = JSON.parse(readFileSync(join(ROOT, 'orchestrations/config/agent-contract.json'), 'utf8'));
+      let rest = got.replace(reg[s].si, '').replace(contract.constitution.header, '');
+      for (const rule of contract.constitution.rules as string[]) {
+        const filled = rule.replace(/\{(\w+)\}/g, (w, k) => (k in contract && typeof contract[k] === 'string' ? contract[k] : k === 'projectRoot' ? codeline : w));
+        expect(got).toContain(filled);
+        rest = rest.replace(filled, '');
+      }
+      expect(rest.replace(/\d+\.\s/g, '').trim(), 'something beyond the SI and the constitution was stored').toBe('');
     }
     const prompts = seams.map((s) => cm.assistants.find((x) => x.name === `Pipeline shop-web ${s}`)!.system_prompt);
     expect(new Set(prompts).size, 'two agents share one system prompt').toBe(seams.length);

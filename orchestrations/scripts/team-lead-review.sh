@@ -653,23 +653,10 @@ $(render_engine_prompt story-diff-not-inlined "$_sdni_vals" excluded)"
     fi
     [ -z "$STORY_DIFF" ] && STORY_DIFF="(no diff available — review source files directly)"
 
-    # THE REVIEWER'S IDENTITY COMES FROM THE PROJECT ROSTER.
-    #
-    # This read `jq -r '.["review-agent"] // ""' "$AGENT_PROFILES_FILE"` and, when that came back
-    # empty, substituted a one-line reviewer written here in code. Three defects in four lines:
-    # the file defaulted to the roster SHARED WITH THE ENGINE, `// ""` made a missing entry
-    # indistinguishable from a terse one, and the literal below meant neither failure was ever
-    # visible. Live 20260821T212250Z the reviewer ran with a persona describing epam-cli.
-    #
-    # No fallback now. A reviewer with no identity is not a reviewer, and inventing one in code
-    # is how a client codeline came to be judged by this repository's reviewer.
-    REVIEW_PROFILE=""
-    if ! REVIEW_PROFILE=$(roster_persona review-agent 2>&1); then
-        error "  cannot resolve the review-agent persona from this project's roster:"
-        error "  ${REVIEW_PROFILE}"
-        error "  Refusing to review with an identity nobody chose."
-        exit 1
-    fi
+    # THE REVIEWER'S IDENTITY IS ITS SI, delivered by the hub as the system prompt from its own seam
+    # (lib/agent-si.js) — never pasted into the task. This read the roster's 'review-agent' persona
+    # into __REVIEW_PROFILE__; the roster is keyed by seam since the SI convergence, so the lookup
+    # refused every review and greenfield stopped at Step 3.6 (£0 run, 2026-09-30).
 
     # Agent-level KB (self-heal for the reviewer): reusable review lessons that
     # ALL past review-agent runs learned (e.g. "reject a fix that adds new code
@@ -761,7 +748,6 @@ $(render_engine_prompt story-diff-not-inlined "$_sdni_vals" excluded)"
 
     _review_vals=$(mktemp)
     jq_vals \
-        --arg profile "${REVIEW_PROFILE:-}" \
         --arg blocker "${BLOCKER_DISCIPLINE_BLOCK:-}" \
         --arg ownership "${TEST_OWNERSHIP_BLOCK:-}" \
         --arg story_id "$story_id" \
@@ -780,7 +766,7 @@ $(render_engine_prompt story-diff-not-inlined "$_sdni_vals" excluded)"
         --arg tools "${_review_project_tools_block:-}" \
         --arg prior_review "${_review_prior_block:-}" \
         --arg estimation "${_review_estimation_block:-}" \
-        '{"__REVIEW_PROFILE__":$profile,"__BLOCKER_DISCIPLINE__":$blocker,
+        '{"__BLOCKER_DISCIPLINE__":$blocker,
           "__TEST_OWNERSHIP__":$ownership,"__STORY_ID__":$story_id,"__STORY_TITLE__":$title,
           "__STORY_DESC__":$desc,"__STORY_ACS__":$acs,"__STORY_DIFF__":$diff,
           "__STORY_FILES__":$files,"__TEST_FILES__":$test_files,"__PROJECT_ROOT__":$project_root,

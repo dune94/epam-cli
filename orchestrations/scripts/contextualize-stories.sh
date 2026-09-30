@@ -1275,6 +1275,7 @@ AFTER:
 ${_cpa_after}
 
 Emit ONLY: {\"verdict\":\"pass|fail\",\"issues\":[],\"reason\":\"\"}" | \
+          EPAM_AGENT_NAME="prd-change-reviewer" \
           AI_PROVIDER="${ORCH_GATE_PROVIDER}" \
           AI_MODEL="${EPAM_MODEL:-}" \
           EPAM_CLI="${EPAM_CLI:-$SCRIPT_DIR/bin/epam}" \

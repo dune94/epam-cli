@@ -188,19 +188,26 @@ export EPAM_AGENT_NAME="${EPAM_AGENT_NAME:-agent}"
 # Operator, 2026-09-29: "Ensure each provider has a proper agent si transit." Resolved ONCE per
 # call (lib/agent-si.js: the project roster's entry for this agent or its seam; before the roster
 # exists, the seam's base) and handed to the runner on the channel its declaration names
-# (runner-settings.sh, siChannel). A nested call of this same agent — the plan pass — inherits it.
+# (runner-settings.sh, siChannel). A nested call of this SAME agent — the plan pass — reuses it.
 # An agent with no standing instructions is a stated failure, never an empty system prompt.
+#
+# WHOSE SI AN INHERITED FILE IS. A call made inside another agent's run inherits that agent's
+# environment — the PRD reviewer runs after a write to the PRD, in the writing agent's process — and
+# reusing any inherited file sent the reviewer the estimator's SI (£0 greenfield, 2026-09-30). The
+# file and the seam are stamped with the agent they were resolved for, and honoured only for it.
 _SI_OWNED=""
-if [ -z "${EPAM_SI_FILE:-}" ]; then
+if [ -z "${EPAM_SI_FILE:-}" ] || [ "${EPAM_SI_AGENT:-}" != "$EPAM_AGENT_NAME" ]; then
   EPAM_SI_FILE="$(mktemp "${TMPDIR:-/tmp}/epam-si-XXXXXX")"
   _SI_OWNED=1
-  if ! _si_err="$("${NODE_BIN:-node}" "$_SCRIPT_DIR_AIRUN/lib/agent-si.js" \
+  _si_seam=""
+  [ "${EPAM_SEAM_FOR:-}" = "$EPAM_AGENT_NAME" ] && _si_seam="${EPAM_SEAM:-}"
+  if ! _si_err="$(EPAM_SEAM="$_si_seam" "${NODE_BIN:-node}" "$_SCRIPT_DIR_AIRUN/lib/agent-si.js" \
         "$EPAM_AGENT_NAME" "${EPAM_PROJECT_CONFIG_DIR:-}" "$EPAM_SI_FILE" 2>&1)"; then
     echo "[llm-handler] refusing the call: ${_si_err}" >&2
     rm -f "$EPAM_SI_FILE"
     exit 1
   fi
-  export EPAM_SI_FILE
+  export EPAM_SI_FILE EPAM_SI_AGENT="$EPAM_AGENT_NAME" EPAM_SEAM_FOR="$EPAM_AGENT_NAME"
 fi
 
 PROMPT_FILE="$(mktemp)"
@@ -744,6 +751,7 @@ if [ "${EPAM_PLAN_EXECUTE:-1}" = "1" ] && [ "${_EPAM_IN_PLAN_PASS:-0}" != "1" ];
   # checked against it. The execute pass keeps the full budget.
   _plan_text="$(
     _EPAM_IN_PLAN_PASS=1 \
+    EPAM_SI_AGENT="${EPAM_AGENT_NAME:-agent}:plan" \
     EPAM_AGENT_NAME="${EPAM_AGENT_NAME:-agent}:plan" \
     EPAM_ALLOWED_TOOLS="" \
     EPAM_MAX_TOOL_CALLS=0 \

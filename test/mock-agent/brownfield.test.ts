@@ -70,6 +70,9 @@ describe('the mocking agent drives the seeded brownfield project at £0', () => 
     const tail = (t: string) => t.replace(/\x1b\[[0-9;]*m/g, '').split('\n').slice(-50).join('\n');
     console.log(`[mock-agent] brownfield ${project} on '${rehearsedSet(install, config)}': pause exit ${r1.status}; ${agent.calls.length} model call(s)\n  journal: ${journal}`);
     expect(agent.calls.length, `no model call reached the agent — log tail:\n${tail(text)}`).toBeGreaterThan(0);
+    // EVERY CALL CARRIED ITS SI AND ITS TASK (si-check.ts), through the pause.
+    writeFileSync(join(journal, 'si-missing-pause.json'), JSON.stringify(agent.siMissing, null, 1));
+    expect(agent.siMissing, `calls without their SI or task — journal: ${journal}`).toEqual([]);
     expect(text, `the specification pass did not complete — log tail:\n${tail(text)}`).toMatch(/Specification pass completed/);
     expect(text, `the run did not pause before the writer — log tail:\n${tail(text)}`).toMatch(/STOPPED before the writer/);
     expect(r1.status, `launcher exited ${r1.status} — log tail:\n${tail(text)}`).toBe(0);
@@ -92,6 +95,9 @@ describe('the mocking agent drives the seeded brownfield project at £0', () => 
     const clone = codelines()[0]?.path;
     const commits = spawnSync('git', ['-C', clone, 'log', '--oneline'], { encoding: 'utf8' }).stdout.trim().split('\n');
     expect(commits.length, 'the codeline holds no committed work beyond the seed').toBeGreaterThan(1);
+    // …and through the resume, the writer included.
+    writeFileSync(join(journal, 'si-missing.json'), JSON.stringify(agent.siMissing, null, 1));
+    expect(agent.siMissing, `calls without their SI or task — journal: ${journal}`).toEqual([]);
     expect(agent.stale, 'the agent generated answers the current code cannot accommodate').toEqual([]);
 
     if (codemie) {

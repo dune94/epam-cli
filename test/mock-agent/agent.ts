@@ -20,6 +20,7 @@ import { join } from 'node:path';
 import { Declarations } from './declarations';
 import { parse, encode, type Req, type Turn } from './wire';
 import { reconcile, contractConflict } from './answer';
+import { siFindings, hostFindings } from './si-check';
 
 export type Call = { n: number; seam: string; template: string; coverage: number; story: string; attempt: number; req: Req };
 /** A seam's behaviour: given the call, the next turn. Returning null falls through to the default. */
@@ -36,6 +37,8 @@ export class MockAgent {
   readonly stale: { n: number; seam: string; reasons: string[] }[] = [];
   /** Where a prompt and its seam's declared contract disagree — pipeline findings, one per template. */
   readonly conflicts = new Map<string, { seam: string; template: string; reasons: string[] }>();
+  /** Calls that reached the model without their SI or their task (si-check.ts) — must stay empty. */
+  readonly siMissing: { n: number; seam: string; template: string; story: string; findings: string[] }[] = [];
   private attempts = new Map<string, number>();
   private behaviours = new Map<string, Behaviour>();
   /** Services a set's runner calls besides the model (codemie.ts: the CodeMie API), served on this URL. */
@@ -97,6 +100,8 @@ export class MockAgent {
     if (fresh) this.attempts.set(key, (this.attempts.get(key) || 0) + 1);
     const call: Call = { n: this.calls.length + 1, seam, template: id?.template.id || '', coverage: id?.coverage || 0, story, attempt: this.attempts.get(key) || 1, req };
     this.calls.push(call);
+    const si = [...siFindings(call, this.decl.orchestrationsDir), ...hostFindings(call, this.decl.orchestrationsDir)];
+    if (si.length) this.siMissing.push({ n: call.n, seam, template: call.template, story, findings: si });
 
     let turn: Turn | null = null; let error = '';
     try { turn = (this.behaviours.get(seam) || this.behaviours.get('*'))?.(call, this) ?? null; } catch (e) { error = String((e as Error).stack || e); }
@@ -112,7 +117,7 @@ export class MockAgent {
     const refused = stale.length && turn.kind === 'text' ? turn.text : '';
     if (stale.length) { this.stale.push({ n: call.n, seam, reasons: stale }); turn = { kind: 'http-error', status: 599, body: JSON.stringify({ error: { message: `STALE MOCK for ${seam}: ${stale.join('; ')}` } }) }; }
     const file = join(this.journal, `${String(call.n).padStart(4, '0')}-${seam.replace(/[^\w.-]+/g, '_')}${story ? `-${story}` : ''}.json`);
-    writeFileSync(file, JSON.stringify({ n: call.n, path, seam, template: call.template, coverage: call.coverage, story, attempt: call.attempt, negative: neg, stale, refused, turn, error, request: JSON.parse(raw) }, null, 1));
+    writeFileSync(file, JSON.stringify({ n: call.n, path, seam, template: call.template, coverage: call.coverage, story, attempt: call.attempt, negative: neg, stale, refused, si, turn, error, request: JSON.parse(raw) }, null, 1));
     if (turn.kind === 'hang') return; // the client's own timeout is what is under test
     const out = encode(req, turn);
     res.writeHead(out.status, out.headers); res.end(out.body);

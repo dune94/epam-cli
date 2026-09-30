@@ -62,6 +62,11 @@ describe('the mocking agent drives a real project at £0', () => {
 
       writeFileSync(join(journal, 'conflicts.json'), JSON.stringify([...r.agent.conflicts.values()], null, 1));
       for (const c of r.agent.conflicts.values()) console.log(`[mock-agent] CONTRACT CONFLICT ${c.seam} (${c.template}): ${c.reasons.join('; ')}`);
+      // EVERY CALL CARRIED ITS SI AND ITS TASK (si-check.ts) — asserted before anything else can stop the
+      // test, so a run that failed elsewhere still reports every call that went without either.
+      writeFileSync(join(journal, 'si-missing.json'), JSON.stringify(r.agent.siMissing, null, 1));
+      expect(r.agent.calls.length, 'no model call reached the agent — the SI check proves nothing').toBeGreaterThan(0);
+      expect(r.agent.siMissing, `calls without their SI or task — journal: ${journal}`).toEqual([]);
       expect(fingerprint(r.realOut), `the run changed the project's REAL codeline ${r.realOut}`).toBe(before);
       expect(r.agent.stale, `the agent generated answers the current code cannot accommodate`).toEqual([]);
       // THE CLAIM ITSELF: with every seam answering correctly, the project completes — every phase it

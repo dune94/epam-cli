@@ -111,7 +111,7 @@ describe.skipIf(!COPILOT)('a seam call on the copilot set', () => {
     expect(r.status, r.stderr).toBe(0);
     // The hub asks for a plan first (tool-free), then the answer: every request carries the ladder's
     // model and effort; the answer call carries the grant.
-    expect(requests.length).toBeGreaterThan(1);
+    expect(requests.length, `plan + answer expected — hub stderr:\n${r.stderr.slice(-1500)}`).toBeGreaterThan(1);
     for (const x of requests) expect(x.model).toBe('claude-opus-4.8');
     const av = argvs();
     expect(av.length).toBeGreaterThan(1);

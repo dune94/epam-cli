@@ -43,6 +43,8 @@ async function runWith(name: string, rules: Rule[]): Promise<{ r: ProjectRun; lo
   // Every case is about the pipeline, never the mock: a correct answer the code refused is a mock fault.
   expect(r.agent.stale, 'the agent served answers the current code cannot accommodate').toEqual([]);
   expect(r.agent.calls.length, 'no model call reached the agent').toBeGreaterThan(0);
+  writeFileSync(join(journal, 'si-missing.json'), JSON.stringify(r.agent.siMissing, null, 1));
+  expect(r.agent.siMissing, `calls without their SI or task — journal: ${journal}`).toEqual([]);
   return { r, log, status: res.status, journal };
 }
 

@@ -219,7 +219,8 @@
       "siChannel": {"flag": "--append-system-prompt-file"},
       "$whySiChannel": "Claude Code's own --append-system-prompt-file (claude --help, 2.1.282): the agent's SI as a system prompt, separate from the task on stdin.",
       "$whyFlags": "The same two knobs every stack exposes, so a seam's declared effort and compaction reach the runner here exactly as they do on the others. Naming them per set rather than in engine code is what makes a swap a config edit.",
-      "alwaysFlags": [],
+      "alwaysFlags": ["--safe-mode", "--disable-slash-commands", "--settings", "{\"includeGitInstructions\":false}"],
+      "$whyAlwaysFlags": "The agent receives the pipeline's SI and task, nothing of the host. Without these the CLI prepended the operator's own Claude Code configuration to every agent's task: user hooks, the installed skills, the working folder's CLAUDE.md, a git status naming other stories, attribution text (seen at the £0 edge, 2026-09-30). --safe-mode drops CLAUDE.md, hooks, plugins, MCP servers and custom agents; --disable-slash-commands drops the skills; includeGitInstructions:false drops the git status. Sign-in survives --safe-mode (proven on the subscription, 2026-09-30); --bare would not (it never reads OAuth).",
       "env": {},
       "flags": {
         "--effort": "reasoningEffort",

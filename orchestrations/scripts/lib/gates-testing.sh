@@ -1275,8 +1275,6 @@ $perf_prompt"
         log "  Step 4.4c: Running runtime-boundary review..."
         {
             local _rb_log="$LOG_DIR/runtime-boundary-${phase_id}.log"
-            local _rb_profile=""
-            [ -f "$profiles_file" ] && _rb_profile=$(jq -r '.["runtime-boundary"] // ""' "$profiles_file")
             # The configuration this codeline carries, resolved from its OWN manifest by the
             # adapter that already knows the stack. Empty for a stack no adapter recognises.
             local _rb_config
@@ -1303,8 +1301,7 @@ $perf_prompt"
                   --arg story_diff "$(qa_gate_diff "$PROJECT_ROOT" "$LOG_DIR")" \
                   --arg config_surface "$_rb_config" \
                   --arg project_root "$PROJECT_ROOT" \
-                  --arg review_profile "$_rb_profile" \
-                  '{"__STORY_ID__":$story_id,"__GATE_SCOPE__":$gate_scope,"__STORY_DIFF__":$story_diff,"__CONFIG_SURFACE__":$config_surface,"__PROJECT_ROOT__":$project_root,"__REVIEW_PROFILE__":$review_profile}' > "$_rb_vals" 2>/dev/null
+                  '{"__STORY_ID__":$story_id,"__GATE_SCOPE__":$gate_scope,"__STORY_DIFF__":$story_diff,"__CONFIG_SURFACE__":$config_surface,"__PROJECT_ROOT__":$project_root}' > "$_rb_vals" 2>/dev/null
             local _rb_prompt
             if ! _rb_prompt=$(render_engine_prompt runtime-boundary-review "$_rb_vals"); then
                 error "  [runtime-boundary] cannot render its prompt — refusing to gate with no instructions" >&2
@@ -1588,7 +1585,7 @@ step_emit "22f" "skip" "Step 22f: Perf sentinel" "Phase A/B failed"
                         EPAM_DANGEROUS_SKIP_APPROVAL=1 \
                         CLAUDE_CMD="$CLAUDE_CMD" \
                         EPAM_CLI="${EPAM_CLI:-$(dirname "${BASH_SOURCE[0]}")/../bin/epam}" \
-                        "$AI_RUNNER_CMD" \
+                        EPAM_AGENT_NAME="gate-finding-analyst" "$AI_RUNNER_CMD" \
                             --provider "${ORCH_GATE_PROVIDER:-}" \
                             --model    "${_gfa_model}" \
                         2>&1 | tee -a "$_rem_log")
@@ -1703,7 +1700,7 @@ step_emit "22f" "skip" "Step 22f: Perf sentinel" "Phase A/B failed"
                         AI_PROVIDER="${ORCH_GATE_PROVIDER:-}" \
                         AI_MODEL="${_acr_model}" \
                         EPAM_CLI="${EPAM_CLI:-$(dirname "${BASH_SOURCE[0]}")/../bin/epam}" \
-                        "$AI_RUNNER_CMD" \
+                        EPAM_AGENT_NAME="story-ac-remediator" "$AI_RUNNER_CMD" \
                             --provider "${ORCH_GATE_PROVIDER:-}" \
                             --model    "${_acr_model}" \
                         2>&1 | tee -a "$_rem_log")
@@ -1794,7 +1791,7 @@ $_prof_prompt"
                         EPAM_MAX_TOOL_CALLS="${PROFILE_AUGMENTOR_MAX_TOOL_CALLS:-10}" \
                         CLAUDE_CMD="$CLAUDE_CMD" \
                         EPAM_CLI="${EPAM_CLI:-$(dirname "${BASH_SOURCE[0]}")/../bin/epam}" \
-                        "$AI_RUNNER_CMD" \
+                        EPAM_AGENT_NAME="profile-augmentor" "$AI_RUNNER_CMD" \
                             --provider "${ORCH_GATE_PROVIDER:-}" \
                             --model    "$(seam_model_or_fail "profile-augmentor")" \
                         2>&1 | tee -a "$_rem_log")
@@ -1877,6 +1874,7 @@ $_prof_prompt"
                             _pa_rev_raw=$(echo "${_pa_corrective}${_reviewer_profile}
 
                             $(_render_change_reviewer "gate-remediation" "profile_addendum" "THE CHANGE ITSELF (unified diff of the roster before and after):\n${_profiles_change}")" | \
+                                EPAM_AGENT_NAME="prd-change-reviewer" \
                                 AI_PROVIDER="${ORCH_GATE_PROVIDER:-}" \
                                 AI_MODEL="${_pa_model}" \
                                 EPAM_CLI="${EPAM_CLI:-$(dirname "${BASH_SOURCE[0]}")/../bin/epam}" \

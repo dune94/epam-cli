@@ -39,6 +39,7 @@ const RUNNER = Object.keys(SET_RUNNERS).find((r) => SET_RUNNERS[r].siChannel && 
 const REG_DOC = JSON.parse(readFileSync(REGISTRY, 'utf8'));
 const reg = REG_DOC.profiles;
 const SPECIALISED = Object.keys(reg).find((s) => reg[s].si) as string;
+const OTHER_SEAM = Object.keys(reg).filter((s) => reg[s].si)[1] as string;
 const MINTED_KIND = (REG_DOC.agentKinds as string[]).find((k) => { try { return !!seamForKind(k, REGISTRY); } catch { return false; } }) as string;
 const MINTED = `minted-${MINTED_KIND}`;
 const TASK = 'THE TASK TEXT ONLY';
@@ -154,8 +155,14 @@ describe('an agent\'s SI reaches its runner', () => {
     // eslint-disable-next-line @typescript-eslint/no-var-requires
     const { resolveSeam } = require(join(LIB, 'seam-invocation.js'));
     expect(resolveSeam(label, REGISTRY, { ignoreXref: true }), 'the label must resolve elsewhere, or this proves nothing').not.toBe(SPECIALISED);
-    const r = call(label, projWithRoster, { EPAM_SEAM: SPECIALISED });
+    // Stamped FOR this name by its invocation (seamInvocationEnv → EPAM_SEAM_FOR): honoured.
+    const r = call(label, projWithRoster, { EPAM_SEAM: SPECIALISED, EPAM_SEAM_FOR: label });
     expect(r.files).toContain(personaOf(SPECIALISED));
+    // The same seam with NO stamp for this name — inherited from an enclosing process: never taken.
+    // The £0 greenfield run, 2026-09-30: the PRD reviewer, run inside the estimator's process, was
+    // handed the estimator's seam and SI this way.
+    const inherited = call(label, projWithRoster, { EPAM_SEAM: SPECIALISED });
+    expect(inherited.files, 'an unstamped, inherited seam decided the SI').not.toContain(personaOf(SPECIALISED));
   });
 
   it('BEFORE the roster exists, a seam gets its BASE SI from the registry', () => {
@@ -178,5 +185,25 @@ describe('an agent\'s SI reaches its runner', () => {
       for (const rule of rules) rest = rest.replace(rule, '');
       expect(rest.replace(/\d+\.\s/g, '').trim(), 'something beyond the SI and the constitution travelled').toBe('');
     }
+  });
+
+  // A CALL MADE FROM INSIDE ANOTHER AGENT'S RUN inherits that agent's environment: the PRD reviewer
+  // runs after a write to the PRD, inside the process of whichever agent wrote it. £0 greenfield,
+  // 2026-09-30: the reviewer was sent the estimator's SI, because the hub reused ANY inherited SI file.
+  it('a call inside ANOTHER agent\'s run gets its OWN SI — never the inherited one', () => {
+    const outer = call(OTHER_SEAM, projWithRoster);
+    expect(outer.files).toContain(personaOf(OTHER_SEAM));
+    const inheritedFile = join(work, 'inherited-si');
+    writeFileSync(inheritedFile, personaOf(OTHER_SEAM));
+    const r = call(SPECIALISED, projWithRoster, { EPAM_SI_FILE: inheritedFile, EPAM_SI_AGENT: OTHER_SEAM, EPAM_SEAM: OTHER_SEAM, EPAM_SEAM_FOR: OTHER_SEAM });
+    expect(r.files, 'the inherited SI reached the runner').not.toContain(personaOf(OTHER_SEAM));
+    expect(r.files).toContain(personaOf(SPECIALISED));
+  });
+
+  it('a nested call of the SAME agent (the plan pass) reuses the SI resolved for it', () => {
+    const inheritedFile = join(work, 'same-agent-si');
+    writeFileSync(inheritedFile, `${personaOf(SPECIALISED)}\nRESOLVED ONCE FOR THIS AGENT`);
+    const r = call(SPECIALISED, projWithRoster, { EPAM_SI_FILE: inheritedFile, EPAM_SI_AGENT: SPECIALISED });
+    expect(r.files).toContain('RESOLVED ONCE FOR THIS AGENT');
   });
 });

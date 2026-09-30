@@ -239,7 +239,7 @@ _choose_target() {
         return 1
     fi
     _ans=$(printf '%s' "$_ask" | EPAM_MAX_OUTPUT_TOKENS="$_mq_toks" \
-        "$AI_RUNNER_CMD" 2>/dev/null | tr -d '\r' | grep -oE '[A-Za-z0-9_./-]+\.[A-Za-z]+' | head -1)
+        EPAM_AGENT_NAME="repro-test-writer" "$AI_RUNNER_CMD" 2>/dev/null | tr -d '\r' | grep -oE '[A-Za-z0-9_./-]+\.[A-Za-z]+' | head -1)
     [ -n "$_ans" ] || return 1
     _is_testable_source "$_ans" || { warning "target choice '"'"'$_ans'"'"' is not testable source — ignoring"; return 1; }
     local _f
@@ -765,7 +765,7 @@ for _attempt in $(seq 1 "$_max_attempts"); do
       EPAM_MAX_ITERATIONS="${EPAM_MAX_ITERATIONS:-${REPRO_TEST_WRITER_MAX_ITERATIONS:-30}}" \
       EPAM_MAX_OUTPUT_TOKENS="${EPAM_MAX_OUTPUT_TOKENS:-${REPRO_TEST_WRITER_MAX_OUTPUT_TOKENS:-32768}}" \
       AI_MODEL="$_model" \
-      bash "$AI_RUNNER_CMD" "${_srw_provider_flag[@]}" --model "$_model" > "$_writer_log" 2>&1 || true
+      EPAM_AGENT_NAME="repro-test-writer" bash "$AI_RUNNER_CMD" "${_srw_provider_flag[@]}" --model "$_model" > "$_writer_log" 2>&1 || true
 
     # A file existing is NOT success. The agent can (and live, on 2026-07-24, DID)
     # write a test with a syntax error; committing it both proves nothing and

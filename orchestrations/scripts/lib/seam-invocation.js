@@ -468,6 +468,10 @@ function seamInvocationEnv(agent, agentsDir, opts) {
   // Resolved, not declared: this is the seam the invocation ACTUALLY entered, including via a
   // seamPattern, so it stays correct for a minted agent whose name nobody wrote down anywhere.
   env.EPAM_SEAM = seam;
+  // STAMPED FOR THE AGENT IT WAS RESOLVED FOR. llm-handler.sh honours EPAM_SEAM only for that name: a
+  // process that received it may make other agents' calls (a PRD write triggers the PRD reviewer
+  // inside the writer's process), and those must never inherit this seam or its SI (2026-09-30).
+  env.EPAM_SEAM_FOR = agent;
 
   // REASONING EFFORT BELONGS TO THE LADDER, NOT THE SEAM.
   //

@@ -183,7 +183,7 @@ _uit_rc=0
 _reply="$(printf '%s' "$_prompt" | \
     EPAM_ALLOWED_WRITE_PATHS="$(printf '%s' "$_preexisting" | tr '\n' ',')" \
     ORCH_JSON_RESULT="$_uit_result" \
-    bash "$AI_RUNNER_CMD" 2>"$_agent_log")" || _uit_rc=$?
+    EPAM_AGENT_NAME="update-invalidated-tests" bash "$AI_RUNNER_CMD" 2>"$_agent_log")" || _uit_rc=$?
 if [ -s "$_uit_result" ] && [ -f "$SCRIPT_DIR/lib/handlers/emit-cost.js" ]; then
     "${NODE_BIN:-node}" "$SCRIPT_DIR/lib/handlers/emit-cost.js" \
         "$_uit_result" "$_SEAM_NAME" 2>/dev/null || true

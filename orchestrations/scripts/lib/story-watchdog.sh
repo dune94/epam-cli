@@ -411,6 +411,7 @@ run_story_recovery_analyst() {
                 _rev_raw=$(echo "${_corrective_rev}${_src_reviewer_profile}
 
                 $(_render_change_reviewer "$story_id" "ac_patch" "BEFORE:\n${_before_acs}\n\nAFTER:\n${_candidate}")" | \
+                    EPAM_AGENT_NAME="prd-change-reviewer" \
                     AI_PROVIDER="${ORCH_GATE_PROVIDER}" \
                     AI_MODEL="${_rev_model}" \
                     EPAM_CLI="${EPAM_CLI:-$(dirname "${BASH_SOURCE[0]}")/../bin/epam}" \

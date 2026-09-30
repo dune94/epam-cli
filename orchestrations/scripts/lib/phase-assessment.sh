@@ -395,6 +395,7 @@ run_pre_phase_assessment() {
                     _pfa_verdict=$(echo "${_pfa_reviewer_profile}
 
         $(_render_change_reviewer "pre-phase-assessment-${phase_id}" "profile_creation" "BEFORE/AFTER DIFF:\n${_pfa_diff}")" | \
+                        EPAM_AGENT_NAME="prd-change-reviewer" \
                         AI_PROVIDER="${ORCH_GATE_PROVIDER}" \
                         AI_MODEL="$(seam_model_or_fail "prd-change-reviewer")" \
                         EPAM_CLI="${EPAM_CLI:-$(dirname "${BASH_SOURCE[0]}")/../bin/epam}" \

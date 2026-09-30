@@ -19,6 +19,11 @@ import { tmpdir } from 'node:os'
 
 const ROOT = join(__dirname, '../../..')
 const LIB = join(ROOT, 'orchestrations/scripts/lib/project-roster.js')
+const REGISTRY = join(ROOT, 'orchestrations/agents/invocation-profiles.json')
+// eslint-disable-next-line @typescript-eslint/no-var-requires
+const lib = require(LIB)
+// eslint-disable-next-line @typescript-eslint/no-var-requires
+const { seamForKind } = require(join(ROOT, 'orchestrations/scripts/lib/seam-invocation.js'))
 const dirs: string[] = []
 afterEach(() => { for (const d of dirs.splice(0)) rmSync(d, { recursive: true, force: true }) })
 
@@ -30,18 +35,20 @@ function merge(opts: { canonical: Record<string, unknown>; minted: Record<string
   writeFileSync(join(proj, 'project-investigators.json'),
     JSON.stringify({ _what: 'x', investigators: opts.investigators ?? [] }))
 
-  const src = readFileSync(LIB, 'utf8')
-  const i = src.indexOf('function withMintedAgents')
-  expect(i, 'withMintedAgents is gone — canonical mode has stopped keeping the mint').toBeGreaterThan(-1)
-  const body = src.slice(i, src.indexOf('\n}\n', i) + 3)
-  // eslint-disable-next-line no-eval
-  const fn = eval(`(function(fs, path, crypto, personaDigest, require){ ${body}; return withMintedAgents })`)(
-    // eslint-disable-next-line global-require, @typescript-eslint/no-var-requires
-    require('node:fs'), require('node:path'), require('node:crypto'),
-    (t: string) => require('node:crypto').createHash('sha256').update(String(t)).digest('hex'),
-    (m: string) => require(m.startsWith('./') ? join(ROOT, 'orchestrations/scripts/lib', m.slice(2)) : m),
-  )
-  return fn({ agents: { ...opts.canonical } }, proj)
+  // THE REAL exported function, and the REAL base beneath the entries the case names (operator,
+  // 2026-09-29: base and derived SIs are matched to each seam, so a minted agent derives from its
+  // seam's base, which must be present). Lifting the body out of the source text tested a copy.
+  const prev = process.env.EPAM_PROJECT_CONFIG_DIR
+  process.env.EPAM_PROJECT_CONFIG_DIR = proj
+  try {
+    const base = JSON.parse(readFileSync(lib.seamBaseForRun(REGISTRY, proj), 'utf8'))
+    const agents: Record<string, unknown> = {}
+    for (const [s, text] of Object.entries(base)) agents[s] = { persona: text, kind: 'seam', ancestor: s, derivedFromSha256: lib.personaDigest(text) }
+    return lib.withMintedAgents({ agents: { ...agents, ...opts.canonical } }, proj)
+  } finally {
+    if (prev === undefined) delete process.env.EPAM_PROJECT_CONFIG_DIR
+    else process.env.EPAM_PROJECT_CONFIG_DIR = prev
+  }
 }
 
 describe('canonical mode skips the specialiser, not the mint', () => {
@@ -65,10 +72,11 @@ describe('canonical mode skips the specialiser, not the mint', () => {
     expect(r.agents['a-detective'].kind).toBe('investigator')
   })
 
-  it('a minted agent is its OWN ancestor — provenance is not invented', () => {
+  it('a minted agent derives from ITS SEAM — never from itself', () => {
     const r = merge({ canonical: {}, minted: { eng: 'brief text' }, roles: ['eng'] })
-    expect(r.agents.eng.ancestor, 'a canonical ancestor it never had would be a false claim').toBe('eng')
-    expect(r.agents.eng.derivedFromSha256).toMatch(/^[0-9a-f]{64}$/)
+    const seam = seamForKind('implementer', REGISTRY)
+    expect(r.agents.eng.ancestor, 'a minted agent must name the seam it is an instance of').toBe(seam)
+    expect(r.agents.eng.derivedFromSha256).toBe(lib.personaDigest(r.agents[seam].persona))
   })
 
   it('canonical WINS a name collision — the mint never shadows a process role', () => {
@@ -88,6 +96,7 @@ describe('canonical mode skips the specialiser, not the mint', () => {
 
   it('a project with no minted briefs is unchanged', () => {
     const r = merge({ canonical: { a: { persona: 'p', kind: 'seam' } }, minted: {} })
-    expect(Object.keys(r.agents)).toEqual(['a'])
+    const kinds = Object.values(r.agents).map((e: any) => e.kind)
+    expect(kinds.filter((k) => k !== 'seam'), 'no minted agent may appear from nowhere').toEqual([])
   })
 })

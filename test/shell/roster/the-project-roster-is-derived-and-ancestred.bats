@@ -24,15 +24,23 @@ setup() {
     command -v "$NODE" >/dev/null 2>&1 || NODE=node
     WORK="$(mktemp -d)"
     CANON="$WORK/canonical.json"
-    # A canonical stand-in, not the real one: this asserts the CONTRACT, and pinning it to the
-    # live file would make it fail whenever a persona is edited for unrelated reasons.
-    cat > "$CANON" <<'JSON'
-{
-  "review-agent": "You review a change against its criteria and emit a verdict.",
-  "typescript-engineer": "You implement changes in TypeScript.",
-  "code-graph-detective": "You locate the site of a defect and report it."
-}
-JSON
+    # A base stand-in, not the real texts: this asserts the CONTRACT, and pinning it to the live
+    # SIs would fail whenever one is edited. Its KEYS are real seams, read from the registry
+    # (operator, 2026-09-29: base and derived SIs are matched to each seam): the implementer
+    # seam, the investigator seam, and one more seam that carries an si.
+    read -r IMPL_SEAM INV_SEAM REV_SEAM < <("$NODE" -e '
+      const { seamForKind } = require(process.argv[1]); const reg = require(process.argv[2]).profiles;
+      const i = seamForKind("implementer", process.argv[2]), v = seamForKind("investigator", process.argv[2]);
+      const r = Object.keys(reg).find((s) => reg[s].si && s !== i && s !== v);
+      process.stdout.write([i, v, r].join(" ") + "\n");' "$SCRIPTS/lib/seam-invocation.js" "$REPO_ROOT/orchestrations/agents/invocation-profiles.json")
+    export IMPL_SEAM INV_SEAM REV_SEAM
+    [ -n "$REV_SEAM" ] || { echo "could not derive the stand-in seams"; false; }
+    "$NODE" -e '
+      const e = process.env; const o = {};
+      o[e.REV_SEAM] = "You review a change against its criteria and emit a verdict.";
+      o[e.IMPL_SEAM] = "You implement the change.";
+      o[e.INV_SEAM] = "You locate the site of a defect and report it.";
+      require("fs").writeFileSync(process.argv[1], JSON.stringify(o));' "$CANON"
 }
 teardown() { rm -rf "$WORK"; }
 
@@ -49,17 +57,17 @@ build() {  # $1 = mode
         for (const [n, persona] of Object.entries(canonical)) {
           agents[n] = {
             persona: `[project] ${persona} Codeline specifics here.`,
-            kind: n.includes("engineer") ? "implementer" : n.includes("detective") ? "investigator" : "seam",
+            kind: "seam",
             ancestor: n,
             derivedFromSha256: m.personaDigest(persona),
           };
         }
-        if (mode === "bad-kind") agents["review-agent"].kind = "wizard";
-        if (mode === "empty-persona") agents["review-agent"].persona = "   ";
-        if (mode === "no-ancestor") agents["review-agent"].ancestor = "";
+        if (mode === "bad-kind") agents[process.env.REV_SEAM].kind = "wizard";
+        if (mode === "empty-persona") agents[process.env.REV_SEAM].persona = "   ";
+        if (mode === "no-ancestor") agents[process.env.REV_SEAM].ancestor = "";
         if (mode === "minted" || mode === "minted-no-ancestor" || mode === "minted-bad-ancestor") {
           const anc = mode === "minted-no-ancestor" ? ""
-                    : mode === "minted-bad-ancestor" ? "no-such-agent" : "typescript-engineer";
+                    : mode === "minted-bad-ancestor" ? "no-such-agent" : process.env.IMPL_SEAM;
           agents[mode === "minted" ? "acme-payments-engineer" : mode === "minted-bad-ancestor" ? "impostor-agent" : "orphan-agent"] = {
             persona: "You implement payments on this codeline.", kind: "implementer",
             ancestor: anc, derivedFromSha256: m.personaDigest(canonical[anc] || ""),
@@ -107,7 +115,7 @@ roster() { cat "$WORK/project/roster.json"; }
 @test "CONTENT may diverge from the ancestor without being refused" {
     run build normal
     [ "$output" = "BUILT" ]
-    p=$(jq -r '.agents["review-agent"].persona' "$WORK/project/roster.json")
+    p=$(jq -r --arg n "$REV_SEAM" '.agents[$n].persona' "$WORK/project/roster.json")
     [[ "$p" == "[project]"* ]] || { echo "the project's persona was not kept: $p"; false; }
     [[ "$p" == *"Codeline specifics here."* ]]
 }
@@ -120,25 +128,25 @@ roster() { cat "$WORK/project/roster.json"; }
     [ ! -f "$WORK/project/roster.json" ]
 }
 
-@test "an ancestor that is not in canonical is refused" {
-    # Only reachable through a MINTED agent now: a canonical-derived entry cannot name a foreign
-    # ancestor, because the builder sets it from what it actually derived from.
+@test "a MINTED agent's claimed ancestor is ignored — the engine names its seam" {
+    # Operator, 2026-09-29: "Bases and derived si must be matched to each seam. No deviations."
+    # A minted agent used to be refused for naming a foreign ancestor, and to be its own ancestor
+    # otherwise. The engine now records the seam its declared kind belongs to, whatever it claims.
     run build minted-bad-ancestor
-    [[ "$output" == REFUSED* ]] || { echo "a fabricated ancestor was accepted: $output"; false; }
-    [[ "$output" == *"not in canonical"* ]] || { echo "the reason does not name the problem: $output"; false; }
-    [ ! -f "$WORK/project/roster.json" ]
+    [ "$output" = "BUILT" ] || { echo "$output"; false; }
+    [ "$(jq -r '.agents["impostor-agent"].ancestor' "$WORK/project/roster.json")" = "$IMPL_SEAM" ]
 }
 
-@test "a MINTED agent must name an ancestor too — that is the whole point" {
+@test "a MINTED agent always has an ancestor — its seam — named by the engine" {
     run build minted
     [ "$output" = "BUILT" ] || { echo "$output"; false; }
-    [ "$(jq -r '.agents["acme-payments-engineer"].ancestor' "$WORK/project/roster.json")" = "typescript-engineer" ]
+    [ "$(jq -r '.agents["acme-payments-engineer"].ancestor' "$WORK/project/roster.json")" = "$IMPL_SEAM" ]
 
+    # A settled roster is reused by design, so the second build starts from none.
+    rm -f "$WORK/project/roster.json"
     run build minted-no-ancestor
-    [[ "$output" == REFUSED* ]] || {
-        echo "an agent invented from nothing was accepted — it has no ladder and no tool grant"
-        false
-    }
+    [ "$output" = "BUILT" ] || { echo "$output"; false; }
+    [ "$(jq -r '.agents["orphan-agent"].ancestor' "$WORK/project/roster.json")" = "$IMPL_SEAM" ]
 }
 
 @test "an unrecognised kind and an empty persona are both refused" {
@@ -162,10 +170,10 @@ roster() { cat "$WORK/project/roster.json"; }
     run "$NODE" -e '
       const m = require(process.argv[1]);
       const roster = JSON.parse(require("fs").readFileSync(process.argv[2], "utf8"));
-      const registry = { profiles: { "typescript-engineer": { ladder: "mid", toolGrant: "write" } } };
+      const registry = { profiles: { [process.env.IMPL_SEAM]: { ladder: "mid", toolGrant: "write" } } };
       const s = m.structureFor("acme-payments-engineer", roster, registry);
       process.stdout.write(JSON.stringify(s));' "$LIB" "$WORK/project/roster.json"
-    [[ "$output" == *'"from":"typescript-engineer"'* ]] || { echo "structure did not come from the ancestor: $output"; false; }
+    [[ "$output" == *"\"from\":\"$IMPL_SEAM\""* ]] || { echo "structure did not come from the ancestor: $output"; false; }
     [[ "$output" == *'"ladder":"mid"'* ]]
     [[ "$output" == *'"toolGrant":"write"'* ]]
 }
@@ -194,7 +202,7 @@ roster() { cat "$WORK/project/roster.json"; }
 
       const before = m.checkRoster(roster, canonical);
       // Canonical moves on — exactly what happened to the reviewer template on 2026-08-19.
-      canonical["review-agent"] += " And you must cite the evidence you read.";
+      canonical[process.env.REV_SEAM] += " And you must cite the evidence you read.";
       const after = m.checkRoster(roster, canonical);
 
       process.stdout.write(JSON.stringify({
@@ -205,7 +213,7 @@ roster() { cat "$WORK/project/roster.json"; }
 
     [[ "$output" == *'"beforeOk":true'* ]]  || { echo "the roster was not valid to begin with: $output"; false; }
     [[ "$output" == *'"afterOk":false'* ]]  || { echo "canonical moved and the roster still passed — staleness is invisible"; false; }
-    [[ "$output" == *"review-agent"* ]]     || { echo "the stale entry is not named: $output"; false; }
+    [[ "$output" == *"$REV_SEAM"* ]]     || { echo "the stale entry is not named: $output"; false; }
     # and ONLY the entry whose ancestor moved
-    [[ "$output" != *"typescript-engineer"* ]] || { echo "unrelated entries were flagged stale too"; false; }
+    [[ "$output" != *"$IMPL_SEAM"* ]] || { echo "unrelated entries were flagged stale too"; false; }
 }

@@ -39,6 +39,9 @@ import { tmpdir } from 'node:os';
 const REPO = process.cwd();
 // eslint-disable-next-line @typescript-eslint/no-var-requires
 const roster = require(join(REPO, 'orchestrations/scripts/lib/project-roster.js'));
+// eslint-disable-next-line @typescript-eslint/no-var-requires
+const { seamForKind } = require(join(REPO, 'orchestrations/scripts/lib/seam-invocation.js'));
+const REGISTRY = join(REPO, 'orchestrations/agents/invocation-profiles.json');
 
 const MINTED = 'fixture-payments-engineer';
 const MINTED_BRIEF = 'You are a payments engineer minted for this project fixture.';
@@ -60,11 +63,11 @@ function project(rosterMode?: string) {
   }));
   if (rosterMode) writeFileSync(join(dir, 'llm-settings.json'), JSON.stringify({ rosterMode }));
 
-  // A canonical roster the specialiser will copy verbatim.
-  const canonical = { 'team-lead-agent': 'You are the team lead.', 'review-agent': 'You review.' };
-  const canonicalPath = join(dir, 'profiles.canonical.json');
-  writeFileSync(canonicalPath, JSON.stringify(canonical));
-  return { dir, logDir, canonicalPath, canonical };
+  // THE REAL BASE — each seam's si from the registry (operator, 2026-09-29: base and derived SIs
+  // are matched to each seam). The specialiser copies it verbatim.
+  const canonicalPath = roster.seamBaseForRun(REGISTRY, logDir);
+  const canonical: Record<string, string> = JSON.parse(readFileSync(canonicalPath, 'utf8'));
+  return { dir, logDir, canonicalPath, canonical, anySeam: Object.keys(canonical)[0] };
 }
 
 /** The specialiser: writes a roster that copies canonical verbatim, as a passing one does. */
@@ -95,7 +98,7 @@ async function build(rosterMode?: string) {
       log: () => {},
     });
     const onDisk = JSON.parse(readFileSync(roster.projectRosterPath(p.dir), 'utf8'));
-    return { returned: out, onDisk };
+    return { returned: out, onDisk, anySeam: p.anySeam };
   } finally {
     if (prev === undefined) delete process.env.EPAM_PROJECT_CONFIG_DIR;
     else process.env.EPAM_PROJECT_CONFIG_DIR = prev;
@@ -105,10 +108,10 @@ async function build(rosterMode?: string) {
 describe('a minted agent survives into the settled roster', () => {
   it('the fixture is real — canonical agents come through on the derive path', async () => {
     // Non-vacuity: if the build produced nothing, every assertion below passes on an empty roster.
-    const { returned } = await build();
+    const { returned, anySeam } = await build();
     expect(Object.keys(returned.agents).length,
       'the fixture specialiser produced no roster').toBeGreaterThan(1);
-    expect(returned.agents['team-lead-agent'], 'a canonical agent was lost').toBeTruthy();
+    expect(returned.agents[anySeam], 'a base seam entry was lost').toBeTruthy();
   });
 
   it('CANONICAL mode carries the minted agent (the path that already worked)', async () => {
@@ -140,6 +143,11 @@ describe('a minted agent survives into the settled roster', () => {
     expect(e && e.persona, 'no persona').toBe(MINTED_BRIEF);
     expect(e && e.kind, 'the minted agent has no declared kind').toBe('implementer');
     expect(e && e.ancestor, 'no ancestor recorded').toBeTruthy();
+    // Its ancestor is the seam its kind belongs to, and its provenance that seam's base SI.
+    const seam = seamForKind('implementer', REGISTRY);
+    expect(e.ancestor).toBe(seam);
+    expect(e.derivedFromSha256).toBe(roster.personaDigest(JSON.parse(readFileSync(
+      roster.seamBaseForRun(REGISTRY, mkdtempSync(join(tmpdir(), 'base-'))), 'utf8'))[seam]));
   });
 
   it('canonical still wins a name collision — the mint never shadows a process role', async () => {
@@ -147,9 +155,9 @@ describe('a minted agent survives into the settled roster', () => {
     // minting one with the same name.
     const p = project();
     writeFileSync(join(p.dir, 'agent-profiles.json'), JSON.stringify({
-      profiles: { 'team-lead-agent': 'HIJACKED BY THE MINT' },
+      profiles: { [p.anySeam]: 'HIJACKED BY THE MINT' },
     }));
-    writeFileSync(join(p.dir, 'project-roles.json'), JSON.stringify({ roles: ['team-lead-agent'] }));
+    writeFileSync(join(p.dir, 'project-roles.json'), JSON.stringify({ roles: [p.anySeam] }));
     const prev = process.env.EPAM_PROJECT_CONFIG_DIR;
     process.env.EPAM_PROJECT_CONFIG_DIR = p.dir;
     try {
@@ -157,8 +165,8 @@ describe('a minted agent survives into the settled roster', () => {
         canonicalPath: p.canonicalPath, logDir: p.logDir, projectConfigDir: p.dir,
         produce: produceFrom(p.canonical), log: () => {},
       });
-      expect(out.agents['team-lead-agent'].persona,
-        'a minted agent overwrote a canonical process role').toBe('You are the team lead.');
+      expect(out.agents[p.anySeam].persona,
+        'a minted agent overwrote a base seam').toBe(p.canonical[p.anySeam]);
     } finally {
       if (prev === undefined) delete process.env.EPAM_PROJECT_CONFIG_DIR;
       else process.env.EPAM_PROJECT_CONFIG_DIR = prev;

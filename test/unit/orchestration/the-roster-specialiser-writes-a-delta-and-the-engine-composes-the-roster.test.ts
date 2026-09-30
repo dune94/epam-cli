@@ -23,6 +23,9 @@ import { createHash } from 'node:crypto';
 const ROOT = join(__dirname, '../../../');
 // eslint-disable-next-line @typescript-eslint/no-var-requires
 const roster = require(join(ROOT, 'orchestrations/scripts/lib/project-roster.js'));
+// eslint-disable-next-line @typescript-eslint/no-var-requires
+const { seamForKind } = require(join(ROOT, 'orchestrations/scripts/lib/seam-invocation.js'));
+const REGISTRY = join(ROOT, 'orchestrations/agents/invocation-profiles.json');
 const dirs: string[] = [];
 afterAll(() => { for (const d of dirs) rmSync(d, { recursive: true, force: true }); });
 const tmp = (p: string) => { const d = mkdtempSync(join(tmpdir(), p)); dirs.push(d); return d; };
@@ -67,26 +70,29 @@ describe('composeFromDelta', () => {
     const { roster: r } = roster.composeFromDelta({ agents: { alpha: { persona: 'x', derivedFromSha256: 'REPLACE_WITH_SHA256' } } }, CANON);
     expect(r.agents.alpha.derivedFromSha256).toBe(sha(CANON.alpha));
   });
-  it('THE DEFECT: a MINTED agent added by the delta — its ancestor is itself — takes the engine\'s digest of its OWN persona, and the contract accepts it', () => {
-    // Run 5 (2026-09-13, $0.34): "0 specialised, 2 added" — the pure minted case. composeFromDelta
-    // set a digest only when the ancestor was found in canonical; a minted agent's ancestor is
-    // itself, not canonical, so no digest was set, and checkEntry then demanded the digest of its
-    // own persona: refused three times, and no retry could supply a SHA-256 the agent cannot compute.
-    // The two other digest sites (rosterFromCanonical, the canonical-mode mint adoption) already do
-    // this; the delta path is judged by the contract here, not by a copy of its rule.
+  it('THE DEFECT: a MINTED agent added by the delta is composed into a roster the contract accepts — derived from ITS SEAM', () => {
+    // Run 5 (2026-09-13, $0.34): "0 specialised, 2 added" — the pure minted case was refused three
+    // times because no digest was set. Operator, 2026-09-29: "Bases and derived si must be matched
+    // to each seam" — so the engine now names the seam the agent's kind belongs to as its ancestor,
+    // with the digest of that seam's base SI, whatever ancestor the agent claimed. Against the REAL
+    // base, since a minted agent's seam must be in it.
     const d = tmp('minted-');
     writeFileSync(join(d, 'project-roles.json'), JSON.stringify({ roles: ['regintel-core-engineer'] }));
     writeFileSync(join(d, 'project-investigators.json'), JSON.stringify({ investigators: ['regintel-build-investigator'] }));
     const prev = process.env.EPAM_PROJECT_CONFIG_DIR; process.env.EPAM_PROJECT_CONFIG_DIR = d;
     try {
+      const BASE = JSON.parse(readFileSync(roster.seamBaseForRun(REGISTRY, d), 'utf8'));
       const { roster: r, added } = roster.composeFromDelta({ agents: {
         'regintel-core-engineer': { persona: 'builds the core', ancestor: 'regintel-core-engineer', kind: 'implementer' },
         'regintel-build-investigator': { persona: 'investigates the build', ancestor: 'regintel-build-investigator', kind: 'investigator' },
-      } }, CANON);
+      } }, BASE);
       expect(added).toBe(2);
-      expect(r.agents['regintel-core-engineer'].derivedFromSha256).toBe(sha('builds the core'));
-      expect(r.agents['regintel-build-investigator'].derivedFromSha256).toBe(sha('investigates the build'));
-      const check = roster.checkRoster(r, CANON);
+      for (const [name, kind] of [['regintel-core-engineer', 'implementer'], ['regintel-build-investigator', 'investigator']]) {
+        const seam = seamForKind(kind, REGISTRY);
+        expect(r.agents[name].ancestor).toBe(seam);
+        expect(r.agents[name].derivedFromSha256).toBe(sha(BASE[seam]));
+      }
+      const check = roster.checkRoster(r, BASE);
       expect(check.ok, `the contract refused the composed roster: ${check.reason}`).toBe(true);
     } finally { if (prev === undefined) delete process.env.EPAM_PROJECT_CONFIG_DIR; else process.env.EPAM_PROJECT_CONFIG_DIR = prev; }
   });
@@ -95,7 +101,11 @@ describe('composeFromDelta', () => {
     const { roster: r } = roster.composeFromDelta({ agents: { omega: { persona: 'x', ancestor: 'nobody', kind: 'implementer' } } }, CANON);
     const v = roster.checkRoster(r, CANON);
     expect(v.ok).toBe(false);
-    expect(v.reason).toMatch(/ancestor 'nobody' is not in canonical/);
+    // The engine names the seam the kind belongs to (never the agent's claim), and a base without
+    // that seam is refused BY NAME.
+    const seam = seamForKind('implementer', REGISTRY);
+    expect(r.agents.omega.ancestor).toBe(seam);
+    expect(v.reason).toContain(`ancestor '${seam}' is not in canonical`);
   });
 });
 

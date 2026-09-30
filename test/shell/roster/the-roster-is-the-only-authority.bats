@@ -36,24 +36,25 @@ make_roster() {  # $1 = dir
       const fs = require("fs"), path = require("path");
       const m = require(process.argv[1]);
       const dir = process.argv[2];
-      const canonical = { "review-agent": "You review a change.", "typescript-engineer": "You implement." };
+      // THE REAL BASE: the si of each seam, from the registry (operator, 2026-09-29: base and derived
+      // SIs are matched to each seam). The delta specialises one seam and adds one minted agent of
+      // each kind; the engine names their seams as ancestors.
       fs.mkdirSync(dir + "/logs", { recursive: true });
-      fs.writeFileSync(dir + "/canonical.json", JSON.stringify(canonical));
+      const base = m.seamBaseForRun(process.argv[3], dir + "/logs");
       const produce = async ({ canonicalCopyPath, outPath }) => {
         const c = JSON.parse(fs.readFileSync(canonicalCopyPath, "utf8"));
-        const agents = {};
-        for (const [n, p] of Object.entries(c))
-          agents[n] = { persona: "[project] " + p, kind: n.includes("engineer") ? "implementer" : "seam",
-                        ancestor: n, derivedFromSha256: m.personaDigest(p) };
-        agents["acme-detective"] = { persona: "You investigate this codeline.", kind: "investigator",
-                                     ancestor: "review-agent", derivedFromSha256: m.personaDigest(c["review-agent"]) };
+        const agents = {
+          "team-lead-review": { persona: "[project] " + c["team-lead-review"] },
+          "acme-engineer":  { persona: "You implement this codeline.", kind: "implementer" },
+          "acme-detective": { persona: "You investigate this codeline.", kind: "investigator" },
+        };
         fs.mkdirSync(path.dirname(outPath), { recursive: true });
         fs.writeFileSync(outPath, JSON.stringify({ agents }, null, 2));
       };
-      m.buildProjectRoster({ canonicalPath: dir + "/canonical.json", logDir: dir + "/logs",
+      m.buildProjectRoster({ canonicalPath: base, logDir: dir + "/logs",
         projectConfigDir: dir + "/project", produce, review: async () => ({ verdict: "approved" }),
         attempts: 1, log: () => {} }).then(() => process.stdout.write("ok"));
-    ' "$LIB" "$1"
+    ' "$LIB" "$1" "$REPO_ROOT/orchestrations/agents/invocation-profiles.json"
 }
 
 # ── the read path ────────────────────────────────────────────────────────────
@@ -63,7 +64,7 @@ make_roster() {  # $1 = dir
     [ "$output" = "ok" ]
     run "$NODE" -e '
       const m = require(process.argv[1]);
-      process.stdout.write(m.personaFor("review-agent", process.argv[2]) || "");' "$LIB" "$WORK/project"
+      process.stdout.write(m.personaFor("team-lead-review", process.argv[2]) || "");' "$LIB" "$WORK/project"
     [[ "$output" == "[project]"* ]] || { echo "the roster's persona was not returned: $output"; false; }
 }
 
@@ -107,7 +108,7 @@ make_roster() {  # $1 = dir
 @test "KIND is a field on the entry, not a separate registry" {
     run make_roster "$WORK"
     [ "$(jq -r '.agents["acme-detective"].kind' "$WORK/project/roster.json")" = "investigator" ]
-    [ "$(jq -r '.agents["typescript-engineer"].kind' "$WORK/project/roster.json")" = "implementer" ]
+    [ "$(jq -r '.agents["acme-engineer"].kind' "$WORK/project/roster.json")" = "implementer" ]
 }
 
 @test "the library answers WHO MAY AUTHOR CODE from the roster" {
@@ -117,7 +118,7 @@ make_roster() {  # $1 = dir
     run "$NODE" -e '
       const m = require(process.argv[1]);
       process.stdout.write(m.agentsOfKind("implementer", process.argv[2]).join(","));' "$LIB" "$WORK/project"
-    [ "$output" = "typescript-engineer" ] || { echo "implementers: $output"; false; }
+    [ "$output" = "acme-engineer" ] || { echo "implementers: $output"; false; }
     run "$NODE" -e '
       const m = require(process.argv[1]);
       process.stdout.write(m.agentsOfKind("investigator", process.argv[2]).join(","));' "$LIB" "$WORK/project"
@@ -163,7 +164,7 @@ load_helper() {
     run make_roster "$WORK"
     load_helper
     run env_run NODE_BIN="$NODE" EPAM_PROJECT_CONFIG_DIR="$WORK/project" \
-        bash -c ". '$SCRIPTS/lib/roster-read.sh'; roster_persona review-agent"
+        bash -c ". '$SCRIPTS/lib/roster-read.sh'; roster_persona team-lead-review"
     [ "$status" -eq 0 ] || { echo "$output"; false; }
     [[ "$output" == "[project]"* ]]
 
@@ -190,7 +191,7 @@ load_helper() {
     run env_run NODE_BIN="$NODE" EPAM_PROJECT_CONFIG_DIR="$WORK/project" \
         bash -c ". '$SCRIPTS/lib/roster-read.sh'; roster_agents_of_kind implementer"
     [ "$status" -eq 0 ]
-    [ "$output" = "typescript-engineer" ]
+    [ "$output" = "acme-engineer" ]
 
     run env_run NODE_BIN="$NODE" EPAM_PROJECT_CONFIG_DIR="$WORK/nowhere" \
         bash -c ". '$SCRIPTS/lib/roster-read.sh'; roster_agents_of_kind implementer"

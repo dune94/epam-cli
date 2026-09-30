@@ -758,4 +758,19 @@ function seamInvocationEnv(agent, agentsDir, opts) {
 
 // resolveTierPosition is exported because the SHELL side needs the same answer: a profile
 // declares a position, and two places must not each decide what a position means.
-module.exports = { seamInvocationEnv, resolveSeam, registryPath, resolveTierPosition, seamLadderFor };
+/**
+ * THE SEAM A MINTED AGENT OF THIS KIND IS AN INSTANCE OF — read from the registry's seam patterns,
+ * each of which may declare the kind it names. Exactly one seam per kind; anything else is a
+ * registry defect and is said so, because a minted agent's standing instructions derive from it.
+ */
+function seamForKind(kind, file) {
+  const reg = readRegistry(file || registryPath());
+  const seams = [...new Set((Array.isArray(reg && reg.seamPatterns) ? reg.seamPatterns : [])
+    .filter((p) => p && p.kind === kind && p.seam).map((p) => p.seam))];
+  if (seams.length !== 1) {
+    throw new Error(`[seam] kind '${kind}' maps to ${seams.length ? seams.join(', ') : 'no seam'} in the registry's seamPatterns — exactly one is required`);
+  }
+  return seams[0];
+}
+
+module.exports = { seamForKind, seamInvocationEnv, resolveSeam, registryPath, resolveTierPosition, seamLadderFor };

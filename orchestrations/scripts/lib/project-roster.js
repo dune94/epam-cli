@@ -185,8 +185,13 @@ function composeFromDelta(delta, canonical) {
   for (const [name, entry] of Object.entries(written)) {
     if (!entry || typeof entry !== 'object') continue;
     const inCanonical = Object.prototype.hasOwnProperty.call(canonical, name);
-    const ancestor = (typeof entry.ancestor === 'string' && entry.ancestor.trim())
-      ? entry.ancestor.trim() : (inCanonical ? name : '');
+    // A MINTED AGENT DERIVES FROM ITS SEAM (operator, 2026-09-29: "Bases and derived si must be
+    // matched to each seam"). The engine records it — the seam its declared kind belongs to —
+    // rather than taking the agent's word, which used to make a minted agent its own ancestor.
+    const mintedSeam = inCanonical ? '' : seamOfMinted(name, entry);
+    const ancestor = mintedSeam
+      || ((typeof entry.ancestor === 'string' && entry.ancestor.trim())
+        ? entry.ancestor.trim() : (inCanonical ? name : ''));
     const ancestorPersona = ancestor && typeof canonical[ancestor] === 'string' ? canonical[ancestor] : null;
     // A MINTED AGENT'S ANCESTOR IS ITSELF, so its digest is of its OWN persona — the rule
     // rosterFromCanonical and the canonical-mode adoption already apply, and the one checkEntry
@@ -310,16 +315,34 @@ function withMintedAgents(roster, projectConfigDir) {
     let kind = '';
     try { kind = kindOfAgent(name, projectConfigDir); } catch { kind = ''; }
     if (!kind) continue;                  // an agent in no registry has no declared kind to record
+    // Its ancestor is the seam its kind belongs to, and its provenance that seam's base SI.
+    const seam = seamOfMinted(name, { kind });
+    const seamBase = seam && roster.agents[seam] ? roster.agents[seam].persona : '';
+    if (!seamBase) continue;              // no seam base to derive from: never self-ancestored
     roster.agents[name] = {
       persona,
       kind,
-      ancestor: name,
-      derivedFromSha256: personaDigest(persona),
+      ancestor: seam,
+      derivedFromSha256: personaDigest(seamBase),
       rationale: 'minted for this project and adopted verbatim: this project declares '
         + 'rosterMode=canonical, which skips the specialiser, not the mint',
     };
   }
   return roster;
+}
+
+/**
+ * The seam a minted agent is an instance of: the one its declared kind belongs to in the registry
+ * (seam-invocation.js seamForKind). '' when the agent states no kind the registry maps — the entry
+ * is then judged by checkEntry exactly as before, never given an invented ancestor.
+ */
+function seamOfMinted(name, entry) {
+  let kind = entry && typeof entry.kind === 'string' ? entry.kind.trim() : '';
+  if (!kind) {
+    try { kind = require('./agent-roster.js').kindOfAgent(name, process.env.EPAM_PROJECT_CONFIG_DIR || ''); } catch { kind = ''; }
+  }
+  if (!kind || kind === 'seam') return '';
+  try { return require('./seam-invocation.js').seamForKind(kind); } catch { return ''; }
 }
 
 /** Seam names the registry declares. Read once — this is asked for every entry in the roster. */

@@ -39,14 +39,23 @@ function keyFor(codeline, mode, env = process.env) {
   return keys[k];
 }
 
-/** The Plugin integration holding that key, registered once. */
-async function ensureIntegration(c, codeline, mode, env = process.env) {
+/**
+ * The Plugin integration holding this install's key. `claim`: the integration is about to carry a
+ * plugin this install starts, so it must hold THIS install's key — one of the same name may have been
+ * registered by another install with its own (live AMSD-2974, 2026-09-30: an integration registered
+ * the day before was used as it stood, and CodeMie refused the plugin 266 times). CodeMie masks a
+ * stored key, so it cannot be compared: it is set.
+ */
+async function ensureIntegration(c, codeline, mode, env = process.env, { claim = false } = {}) {
   const alias = assistantName(codeline, mode, undefined, {});   // an integration, not an agent: no tracker prefix
   const find = async () => ((await c.integrations.list({ setting_type: 'user' })) || []).find((i) => i.alias === alias);
+  const credential_values = [{ key: 'plugin_key', value: keyFor(codeline, mode, env) }];
   let integ = await find();
   if (!integ) {
-    await c.integrations.create({ project_name: await project(c), credential_type: 'Plugin', setting_type: 'user', alias, credential_values: [{ key: 'plugin_key', value: keyFor(codeline, mode, env) }] });
+    await c.integrations.create({ project_name: await project(c), credential_type: 'Plugin', setting_type: 'user', alias, credential_values });
     integ = await find();
+  } else if (claim) {
+    await c.integrations.update(integ.id, { project_name: integ.project_name || await project(c), credential_type: 'Plugin', setting_type: 'user', alias, credential_values });
   }
   if (!integ) throw new Error(`[codemie-web] integration '${alias}' was not found after it was created`);
   return integ;
@@ -91,10 +100,13 @@ async function ensurePlugin(c, { codeline, mode, root }, env = process.env) {
   const state = readJson(statePath, {});
   const k = `${codeline}:${mode}`;
   const realRoot = fs.realpathSync(root);
-  const integration = await ensureIntegration(c, codeline, mode, env);
   const cur = state[k];
-  if (cur && cur.root === realRoot && alive(cur.pid)) return integration;
+  // REUSED ONLY WHEN IT SAID IT WAS READY. A live process is not a connected plugin: one CodeMie
+  // refused stays alive, retrying, and every later call found it and sent an assistant to work with
+  // no tools (live AMSD-2974, 2026-09-30). Anything else is stopped and started afresh.
+  if (cur && cur.root === realRoot && alive(cur.pid) && cur.ready && fs.existsSync(cur.ready)) return ensureIntegration(c, codeline, mode, env);
   if (cur && alive(cur.pid) && stop([cur.pid]).length) throw new Error(`[codemie-web] the ${k} plugin at ${cur.root} would not stop (pid ${cur.pid}) — refusing to start a second one`);
+  const integration = await ensureIntegration(c, codeline, mode, env, { claim: true });
 
   const pluginHome = path.join(h, 'plugin-home', slug(k));
   fs.mkdirSync(pluginHome, { recursive: true });
@@ -112,7 +124,15 @@ async function ensurePlugin(c, { codeline, mode, root }, env = process.env) {
   child.unref();
   state[k] = { pid: child.pid, root: realRoot, mode, codeline, log, ready, startedAt: new Date().toISOString() };
   writeJson(statePath, state);
-  await waitReady(ready, log, child.pid, Number(env.EPAM_CODEMIE_PLUGIN_CONNECT_MS) || readConfig().pluginConnectSeconds * 1000);
+  try {
+    await waitReady(ready, log, child.pid, Number(env.EPAM_CODEMIE_PLUGIN_CONNECT_MS) || readConfig().pluginConnectSeconds * 1000);
+  } catch (err) {
+    // Not ready is not running: the process is stopped and forgotten, so no later call finds it.
+    stop([child.pid]);
+    delete state[k];
+    writeJson(statePath, state);
+    throw err;
+  }
   return integration;
 }
 

@@ -16,6 +16,7 @@ import { spawn, execSync } from 'node:child_process';
 import { mkdtempSync, writeFileSync, readFileSync, rmSync, existsSync, mkdirSync } from 'node:fs';
 import { join } from 'node:path';
 import { tmpdir } from 'node:os';
+import { createServer } from 'node:net';
 import { MockAgent, type Call } from '../../mock-agent/agent';
 import { MockCodeMie } from '../../mock-agent/codemie';
 import { builtPythonEnv } from '../../mock-agent/python-env';
@@ -218,6 +219,49 @@ describe.skipIf(!CODEMIE)('a seam call on the codemie-web set', () => {
     const r = await call('SAY-NOTHING', { EPAM_AGENT_NAME: 'plan-reviewer' });
     expect(r.status).not.toBe(0);
     expect(r.json).toMatchObject({ is_error: true, error: { class: 'empty' } });
+  }, 180_000);
+
+  it('an integration of the same name holding ANOTHER install\'s key is re-keyed to this install\'s: the plugin connects and the call reads the codeline', async () => {
+    // Live AMSD-2974, 2026-09-30: "Pipeline metrolinx ro" had been registered on 2026-09-29 by an
+    // earlier install. This install minted its own key, found the integration by name and used it as
+    // it stood: CodeMie refused the plugin ("Authorization Violation") 266 times, and every assistant
+    // ran with no tools.
+    const home = join(dir, 'home-rekey');
+    cm.integrations.push({ id: 'earlier-install', alias: 'Pipeline rekey-web ro', project_name: cm.user, credential_type: 'Plugin', setting_type: 'user', key: 'an-earlier-installs-key' });
+    const env = { EPAM_CODEMIE_WEB_HOME: home, EPAM_CODELINE: 'rekey-web', EPAM_CODEMIE_PLUGIN_CONNECT_MS: '20000' };
+    try {
+      const r = await call('READ sentinel.txt', { ...env, EPAM_AGENT_NAME: READ_ONLY_SEAM, AI_GATE_ALLOW_TOOLS: '1', EPAM_ALLOWED_TOOLS: 'read_file,list_files,search' });
+      expect(r.status, r.stderr.slice(-1500)).toBe(0);
+      expect(r.stdout).toContain('SENTINEL-CONTENT-7f3a');
+      expect(cm.integrations.filter((i) => i.alias === 'Pipeline rekey-web ro'), 'a second integration of the same name').toHaveLength(1);
+    } finally {
+      execSync(`bash -c '. ${JSON.stringify(RUNNER)}; provider_stop'`, { env: { ...baseEnv(), ...env } });
+    }
+  }, 180_000);
+
+  it('a plugin that never became ready is not reused: the next call fails too, and no assistant is asked to work without its tools', async () => {
+    // The same run: the first call's plugin never connected, and every later call found its process
+    // alive and used it. CodeMie answered each with a model that had no tools — it narrated tool
+    // calls it never made, and the survey and roster had nothing to work from.
+    const silent = createServer(() => { /* accepts, never answers: a plugin engine that never lets it in */ });
+    await new Promise<void>((ok) => silent.listen(0, '127.0.0.1', () => ok()));
+    const port = (silent.address() as { port: number }).port;
+    const env = { EPAM_CODEMIE_WEB_HOME: join(dir, 'home-never-ready'), EPAM_CODELINE: 'never-web', EPAM_CODEMIE_PLUGIN_ENGINE_URI: `nats://127.0.0.1:${port}`, EPAM_CODEMIE_PLUGIN_CONNECT_MS: '5000' };
+    const ask = () => call('READ sentinel.txt', { ...env, EPAM_AGENT_NAME: READ_ONLY_SEAM, AI_GATE_ALLOW_TOOLS: '1', EPAM_ALLOWED_TOOLS: 'read_file,list_files,search' });
+    // The agent's own assistant — the one bound to the plugin; its tool-free plan pass is another.
+    const bound = () => cm.chats.filter((c) => c.assistant === `Pipeline never-web ${READ_ONLY_SEAM}`).length;
+    try {
+      const chats = bound();
+      const first = await ask();
+      expect(first.status).not.toBe(0);
+      expect(first.stderr).toMatch(/did not signal ready/);
+      const second = await ask();
+      expect(second.status, 'the second call succeeded on a plugin that never connected').not.toBe(0);
+      expect(bound(), 'an assistant was asked to work on a plugin that never connected').toBe(chats);
+    } finally {
+      execSync(`bash -c '. ${JSON.stringify(RUNNER)}; provider_stop'`, { env: { ...baseEnv(), ...env } });
+      silent.close();
+    }
   }, 180_000);
 
   it('the run\'s exit handler stops every plugin: none stays connected, none stays alive', async () => {

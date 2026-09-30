@@ -168,6 +168,15 @@ export class MockCodeMie {
         this.send(res, { message: 'created' }); return true;
       }
     }
+    const setting = /^\/v1\/settings\/user\/([^/]+)$/.exec(path);
+    if (setting && method === 'PUT') {
+      const i = this.integrations.findIndex((x) => x.id === setting[1]);
+      if (i < 0) { this.send(res, { error: { message: 'setting not found' } }, 404); return true; }
+      const b = body();
+      const key = String((b.credential_values || []).find((v: any) => v.key === 'plugin_key')?.value || '');
+      this.integrations[i] = { ...this.integrations[i], alias: b.alias ?? this.integrations[i].alias, ...(key ? { key } : {}) };
+      this.send(res, { message: 'updated' }); return true;
+    }
     if (path === '/v1/assistants') {
       if (method === 'GET') { this.send(res, { data: this.assistants.map((a) => ({ id: a.id, name: a.name, project: a.project, shared: a.shared })) }); return true; }
       if (method === 'POST') { const b = body(); const a = { ...b, id: this.id() } as Assistant; this.assistants.push(a); this.send(res, { message: 'created', assistant_id: a.id }); return true; }

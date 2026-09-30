@@ -41,7 +41,7 @@ function venvWith(body: string) {
 function ensure(d: string, mode = 'ro') {
   const r = spawnSync(process.execPath, ['-e', `
     const { ensurePlugin } = require(${JSON.stringify(PLUGINS)});
-    const c = { integrations: { list: async () => [{ alias: 'Pipeline cl ${mode}', id: 'i1' }], create: async () => {} }, users: { aboutMe: async () => ({ username: 'u' }) } };
+    const c = { integrations: { list: async () => [{ alias: 'Pipeline cl ${mode}', id: 'i1' }], create: async () => {}, update: async () => {} }, users: { aboutMe: async () => ({ username: 'u' }) } };
     ensurePlugin(c, { codeline: 'cl', mode: ${JSON.stringify(mode)}, root: ${JSON.stringify(join(d, 'root'))} })
       .then((i) => { console.log('READY', i.id); }, (e) => { console.log('REFUSED', e.message); });
   `], { encoding: 'utf8', timeout: 60_000, env: { ...process.env, EPAM_CODEMIE_WEB_HOME: join(d, 'home'), EPAM_CODEMIE_PLUGINS_VENV: join(d, 'venv'), EPAM_CODEMIE_PLUGIN_CONNECT_MS: '4000' } });
